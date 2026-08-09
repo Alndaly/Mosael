@@ -146,12 +146,22 @@ def _cache_roots(engine: str) -> list[Path]:
 
 
 def _dir_size(path: Path) -> int:
+    """目录占的磁盘,**符号链接不跟**。
+
+    HuggingFace 缓存里 `snapshots/<rev>/model.bin` 是指回 `blobs/<sha>` 的符号链接;`is_file()`
+    和 `stat()` 默认都跟着链接走,于是每个 blob 被数两遍 —— 实测正是整两倍(du 说 464MB,这里
+    报 972MB)。
+
+    后果不只是数字难看:`_is_installed` 的判据是"实测 ≥ 期望的某个比例",量翻倍意味着**下到
+    一半的模型也会被判成已安装**,而它要到运行时才炸。
+    """
     total = 0
     try:
         for child in path.rglob("*"):
             try:
-                if child.is_file():
-                    total += child.stat().st_size
+                if child.is_symlink() or not child.is_file():
+                    continue
+                total += child.stat().st_size
             except OSError:
                 continue
     except OSError:
@@ -263,7 +273,9 @@ def _status_dict(entry: ModelEntry) -> dict[str, Any]:
             **base,
             "status": "downloading",
             "downloaded_bytes": live.downloaded,
-            "total_bytes": live.total or entry.expected_bytes,
+            # **不回落到模型大小**:装运行环境那一阶段没有可报的总量(跑的是 pip),
+            # 顶一个模型的字节数上去,界面就会画出"0 MB / 500 MB"这种量错了东西的进度条。
+            "total_bytes": live.total,
             "speed_bps": live.speed,
             "eta_seconds": live.eta,
             "message": live.message,

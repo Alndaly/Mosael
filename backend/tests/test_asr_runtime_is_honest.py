@@ -169,3 +169,31 @@ def test_the_runtime_phase_does_not_borrow_the_model_size(monkeypatch) -> None:
 
     live = asr_models._store.get("funasr-zh")
     assert live.total == 0, f"借用了模型的大小:{live.total}"
+
+
+# ---------------- 量的是磁盘,不是幻觉 ----------------
+
+
+def test_symlinked_snapshots_are_not_counted_twice(tmp_path) -> None:
+    """HuggingFace 缓存里 `snapshots/*` 是指回 `blobs/` 的符号链接。
+
+    跟着链接走的话每个 blob 被数两遍 —— 实测正是整两倍(du 说 464MB,而它报 972MB)。后果不只是
+    数字难看:`_is_installed` 的判据是"实测 ≥ 期望的某个比例",量翻倍意味着**下到一半的模型
+    也会被判成已安装**,然后转写在运行时炸。
+    """
+    model = tmp_path / "models--X--y"
+    (model / "blobs").mkdir(parents=True)
+    (model / "snapshots" / "rev").mkdir(parents=True)
+    blob = model / "blobs" / "abc"
+    blob.write_bytes(b"x" * 1000)
+    (model / "snapshots" / "rev" / "model.bin").symlink_to(blob)
+
+    assert asr_models._dir_size(model) == 1000, "符号链接把同一份数据数了两遍"
+
+
+def test_a_half_downloaded_model_is_not_reported_installed(tmp_path, monkeypatch) -> None:
+    """量翻倍最坏的后果 —— 半个模型被判成已安装。"""
+    entry = asr_models.CATALOG[0]
+    monkeypatch.setattr(asr_models, "_measure", lambda e: int(e.expected_bytes * 0.5))
+
+    assert asr_models._is_installed(entry) is False
