@@ -18,6 +18,7 @@ import { CurveEditor } from "@/features/editor/CurveEditor";
 import type { ColorCurves } from "@/features/editor/colorCurves";
 import { COLOR_PRESETS, matchColorPreset, presetColorPayload } from "@/features/editor/colorPresets";
 import { LutPicker } from "@/features/editor/LutPicker";
+import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 
 const PIP_POSITIONS: Array<{ key: string; x: number; y: number }> = [
@@ -41,6 +42,9 @@ const GRADE_GROUPS = [
 const POSITIVE_ONLY = new Set(["fade", "sharpen", "vignette"]);
 const GRADE_KEYS = GRADE_GROUPS.flatMap((group) => group.keys);
 type GradeKey = (typeof GRADE_KEYS)[number];
+
+
+const INSPECTOR_TABS = ["props", "color"] as const;
 
 export function Inspector({
   sequence,
@@ -85,7 +89,8 @@ export function Inspector({
   onClose?: () => void;
 }) {
   const t = useI18n();
-  const [tab, setTab] = React.useState<"props" | "color">("props");
+  // 同上:切走再回来还在这一栏。
+  const [tab, setTab] = usePersistentTab<"props" | "color">("editor-inspector", "props", INSPECTOR_TABS);
   const asset = selectedClip?.asset_id ? assets.find((item) => item.id === selectedClip.asset_id) : null;
   const isTextClip = Boolean(selectedClip && !selectedClip.asset_id && selectedClip.text_override != null);
   const effects = (selectedClip?.effects ?? {}) as {

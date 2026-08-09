@@ -69,6 +69,7 @@ import { SubtitlePanel } from "./SubtitlePanel";
 import { TranscriptPanel } from "./TranscriptPanel";
 import { VoicePanel } from "./VoicePanel";
 import { Timeline, trackAcceptsAsset, type TrimPayload } from "./timeline/Timeline";
+import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useSensor, useSensors, type DragStartEvent } from "@dnd-kit/core";
 
@@ -108,7 +109,8 @@ export function EditorView({
 
 const PANEL_SIZES_KEY = "openstudio.editor.panels.v2";
 
-type LeftTab = "media" | "transcript" | "subtitle" | "voice";
+const LEFT_TABS = ["media", "transcript", "subtitle", "voice"] as const;
+type LeftTab = (typeof LEFT_TABS)[number];
 
 /** 素材是缩略图列表,窄即可;逐字稿是整篇文档,需要宽栏。宽度按页签分别记忆。 */
 const LEFT_WIDTH_BOUNDS: Record<LeftTab, { min: number; max: number; fallback: number }> = {
@@ -168,7 +170,10 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const t = useI18n();
   const qc = useQueryClient();
   const selectedClipId = useEditorStore((state) => state.selectedClipId);
-  const [leftTab, setLeftTab] = React.useState<LeftTab>("media");
+  // 在哪个 tab 是**这个人怎么用这个工具**的一部分,不是这一刻的临时值 —— 切走再回来不该重置
+  // (面板宽度早就是这么存的,见 PANEL_SIZES_KEY)。用项目里已有的那个钩子,它自带白名单:
+  // 哪天某个 tab 被删掉,存着旧值的用户不会卡在一个不存在的页面上。
+  const [leftTab, setLeftTab] = usePersistentTab<LeftTab>("editor-left", "media", LEFT_TABS);
   const [panels, setPanels] = React.useState(readPanelSizes);
   const compact = useCompact();
   const leftWidth = Math.min(panels.left[leftTab], compact ? 300 : Number.POSITIVE_INFINITY);
