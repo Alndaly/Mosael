@@ -3,6 +3,7 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import { AudioLines, Languages, Loader2, MessageSquareText, Mic, Scissors, Sparkles, Split, SplitSquareVertical, Trash2, X } from "lucide-react";
 
 import { API_BASE, fetchJob, getAuthToken, transcribeAsset, type Sequence } from "@/api/client";
+import { pendingTranscribeIds } from "@/features/editor/transcribeQueue";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { formatTimecode } from "@/domain/timeline/geometry";
@@ -148,16 +149,55 @@ export function TranscriptPanel({
   // Selection keys go stale whenever the sequence changes underneath us.
   React.useEffect(() => setSelected(new Map()), [sequence.revision]);
 
-  // ASR: kick a transcribe job for the first video clip's asset, poll it,
-  // then refetch transcripts so word tokens appear.
+  // ASR:**把这条时间线上所有转得了的素材都转一遍**,一个接一个。
+  //
+  // 此前只转第一个 —— 而下面的逐字稿是把所有素材的结果拼起来显示的,读是多个、写是一个,
+  // 这不一致。串行是因为后端本来就有并发闸(转写吃满 CPU/显存),并排发只会排队,还让
+  // "是哪一个失败了"变难说清。
+  //
+  // 一个失败不拖累其余:没有音轨的素材(屏幕录制、无声的生成视频)会被后端拒绝,那是正常输入,
+  // 不该让整条队列停在那儿。失败的攒起来,最后一并说。
+  const [queue, setQueue] = React.useState<string[]>([]);
+  const [queueTotal, setQueueTotal] = React.useState(0);
+  const [failures, setFailures] = React.useState<string[]>([]);
+  const hasTranscript = React.useCallback(
+    (assetId: string) => (segmentsByAsset.get(assetId)?.length ?? 0) > 0,
+    [segmentsByAsset],
+  );
+
   const startAsr = useMutation({
     mutationFn: (assetId: string) => transcribeAsset(assetId),
     onSuccess: (job) => {
       setAsrError(null);
       setAsrJobId(job.id);
     },
-    onError: (error) => setAsrError(String((error as Error).message)),
+    // 这一个转不了(多半是没有音轨)就跳过它,继续下一个。
+    onError: (error) => {
+      setFailures((prev) => [...prev, String((error as Error).message)]);
+      setQueue((prev) => prev.slice(1));
+    },
   });
+
+  // 队头有活、又没有在跑的任务时,发下一个。
+  React.useEffect(() => {
+    if (asrJobId || startAsr.isPending || queue.length === 0) return;
+    startAsr.mutate(queue[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queue, asrJobId, startAsr.isPending]);
+
+  const startAll = React.useCallback(() => {
+    const pending = pendingTranscribeIds(assetIds, hasTranscript);
+    setFailures([]);
+    setAsrError(null);
+    // 全都转过了 → 点下去什么都不会发生。**说一声** —— 一个没有反应的按钮比一句话更让人困惑,
+    // 而这一屏此刻显示的正是那些已有的逐字稿,他要的东西其实已经在眼前了。
+    if (pending.length === 0) {
+      setAsrError(t("transcribeAllDone"));
+      return;
+    }
+    setQueueTotal(pending.length);
+    setQueue(pending);
+  }, [assetIds, hasTranscript, t]);
   const asrJob = useQuery({
     queryKey: ["job", asrJobId],
     enabled: Boolean(asrJobId),
@@ -171,24 +211,37 @@ export function TranscriptPanel({
   React.useEffect(() => {
     if (asrJob.data?.status === "succeeded") {
       setAsrJobId(null);
+      setQueue((prev) => prev.slice(1));
       void qc.invalidateQueries({ queryKey: ["transcript"] });
     } else if (asrJob.data?.status === "failed") {
       setAsrJobId(null);
-      setAsrError(asrJob.data.error ?? t("transcribeFailed"));
+      setFailures((prev) => [...prev, asrJob.data?.error ?? t("transcribeFailed")]);
+      setQueue((prev) => prev.slice(1));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [asrJob.data?.status]);
-  const asrRunning = startAsr.isPending || Boolean(asrJobId);
-  const firstAssetId = assetIds[0] ?? null;
-  const transcribeButton = firstAssetId && (
+
+  // 队列跑完了才把失败一并说出来 —— 中途弹一条会盖住后面还在跑的进度。
+  React.useEffect(() => {
+    if (queue.length === 0 && !asrJobId && failures.length > 0) {
+      setAsrError(failures.join("\n"));
+      setFailures([]);
+      setQueueTotal(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queue.length, asrJobId, failures.length]);
+  const asrRunning = startAsr.isPending || Boolean(asrJobId) || queue.length > 0;
+  // 进度按**素材**数报,不按任务数 —— 用户看的是"这条时间线转到哪了"。
+  const asrProgress = queueTotal > 1 ? `${Math.min(queueTotal - queue.length + 1, queueTotal)}/${queueTotal}` : "";
+  const transcribeButton = assetIds.length > 0 && (
     <button
       type="button"
       className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums"
       disabled={asrRunning}
-      onClick={() => startAsr.mutate(firstAssetId)}
+      onClick={startAll}
     >
       {asrRunning ? <Loader2 size={12} className="animate-openstudio-spin" /> : <Mic size={12} />}
-      {asrRunning ? (asrJob.data?.message ?? t("transcribing")) : t("aiTranscribe")}
+      {asrRunning ? `${asrJob.data?.message ?? t("transcribing")}${asrProgress ? ` ${asrProgress}` : ""}` : t("aiTranscribe")}
     </button>
   );
 
