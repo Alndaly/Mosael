@@ -33,3 +33,21 @@ os.environ["OPEN_STUDIO_TEXT_RASTERIZE"] = "0"
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _reset_asr_runtime_probe():
+    """`asr_models.runtime_ready` / `service.resolve_asr_runtime` 都带进程级缓存,而它们探测的是
+    **真实机器**(起子进程 import funasr)。不清的话,一个用例 monkeypatch 出来的结果会渗给下一个,
+    表现是单独跑全绿、全量跑红。"""
+    from app.audio import asr_models, service
+
+    def reset() -> None:
+        asr_models.runtime_ready.cache_clear()
+        service.resolve_asr_runtime.cache_clear()
+        # 下载状态也是进程级的:一个用例留下的 "downloading" 会让后面的用例读到别人的状态
+        # (而 start_download 还会因此拒绝服务:「已有模型正在下载」)。
+        with asr_models._store._lock:
+            asr_models._store._live.clear()
+
+    reset()
+    yield
+    reset()

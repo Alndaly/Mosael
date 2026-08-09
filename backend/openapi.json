@@ -13602,6 +13602,11 @@
             "type": "string",
             "title": "Status"
           },
+          "runtime_ready": {
+            "type": "boolean",
+            "title": "Runtime Ready",
+            "default": false
+          },
           "downloaded_bytes": {
             "type": "integer",
             "title": "Downloaded Bytes",

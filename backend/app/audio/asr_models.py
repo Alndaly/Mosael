@@ -21,8 +21,10 @@ import logging
 
 import json
 import os
+import sys
 import subprocess
 import threading
+from functools import lru_cache
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -63,6 +65,24 @@ class ModelEntry:
     @property
     def expected_bytes(self) -> int:
         return sum(sub.expected_bytes for sub in self.sub_models)
+
+
+#: 每个引擎的运行依赖。装到托管 venv 里 —— 重的那些(torch 2GB+)落在用户数据目录而不是安装包里。
+#: 和 TTS 那边同一个做法(见 audio/tts_models.ensure_engine_runtime),理由也同一条:让用户
+#: **不必**去设置里指定 Python 解释器。
+ENGINE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
+    "funasr": ("funasr", "torch", "torchaudio", "modelscope"),
+    "whisperx": ("whisperx",),
+}
+
+#: 托管的 ASR 运行环境。和 TTS 那个分开:两边的依赖会打架(不同的 torch 版本),而共用一个
+#: venv 意味着装一边可能弄坏另一边。
+MANAGED_ASR_VENV = settings.data_dir / "asr" / "venv"
+
+
+def managed_venv_python() -> Path:
+    windows = os.name == "nt"
+    return MANAGED_ASR_VENV / ("Scripts" if windows else "bin") / ("python.exe" if windows else "python")
 
 
 # funasr aliases → their ModelScope cache directory names (funasr materialises
@@ -206,6 +226,25 @@ class _Store:
 _store = _Store()
 
 
+@lru_cache(maxsize=4)
+def runtime_ready(engine: str) -> bool:
+    """有没有一个解释器能 `import <engine>` —— 也就是**跑不跑得起来**。
+
+    这和"模型文件在不在盘上"是两件独立的事,而它们完全可以一真一假:模型缓存在
+    `~/.cache/modelscope`、`~/.cache/huggingface` 里,别的工具下过就在那儿;而这个应用的解释器
+    里可能从来没装过 funasr/whisperx。用户撞到的正是这一种:三行「已安装」,一转写就报
+    「未找到可用的转写环境」—— 两句话都没说谎,只是在回答不同的问题。
+
+    缓存住:探测要起一次子进程,而这个函数在列表页每行都会被问一遍。装好环境之后调
+    `runtime_ready.cache_clear()`。
+    """
+    try:
+        _resolve_python(engine)
+    except Exception:  # noqa: BLE001 — 探测失败就是"跑不起来",原因由调用方另行呈现
+        return False
+    return True
+
+
 def _status_dict(entry: ModelEntry) -> dict[str, Any]:
     live = _store.get(entry.id)
     installed = _is_installed(entry)
@@ -215,6 +254,9 @@ def _status_dict(entry: ModelEntry) -> dict[str, Any]:
         "label": entry.label,
         "detail": entry.detail,
         "expected_bytes": entry.expected_bytes,
+        # **两件事分开报**:文件在不在(status)、跑不跑得起来(runtime_ready)。
+        # 把它们合成一个"已安装"是这一页此前说谎的原因。
+        "runtime_ready": runtime_ready(entry.engine),
     }
     if live is not None and live.status == "downloading":
         return {
@@ -230,8 +272,10 @@ def _status_dict(entry: ModelEntry) -> dict[str, Any]:
         return {**base, "status": "failed", "downloaded_bytes": _measure(entry),
                 "total_bytes": entry.expected_bytes, "message": live.message}
     if installed:
+        ready = base["runtime_ready"]
         return {**base, "status": "installed", "downloaded_bytes": _measure(entry),
-                "total_bytes": entry.expected_bytes, "message": "已安装,转写即刻可用"}
+                "total_bytes": entry.expected_bytes,
+                "message": "已安装,转写即刻可用" if ready else "模型已在磁盘上,但还没有能运行它的 Python 环境"}
     return {**base, "status": "missing", "downloaded_bytes": _measure(entry),
             "total_bytes": entry.expected_bytes, "message": "未下载"}
 
@@ -259,13 +303,53 @@ def _resolve_python(engine: str) -> str:
     runtime probe but pins the provider to this entry's engine."""
     from app.audio.service import _candidate_pythons  # local: avoid cycle
 
-    for python in _candidate_pythons():
+    for python in [managed_venv_python(), *_candidate_pythons()]:
         if not python.is_file():
             continue
         probe = subprocess.run([str(python), "-c", f"import {engine}"], capture_output=True, timeout=120)
         if probe.returncode == 0:
             return str(python)
     raise RuntimeError(f"未找到安装了 {engine} 的 Python 解释器,请设置 OPEN_STUDIO_ASR_PYTHON")
+
+
+def ensure_engine_runtime(engine: str) -> None:
+    """确保有一个解释器能 `import <engine>`;没有就建一个托管 venv 并装进去。
+
+    这一步的存在,就是为了让用户**不必**去设置里指定 Python 解释器 —— 和 TTS 那边同一个做法
+    (见 audio/tts_models.ensure_engine_runtime)。此前 ASR 没有这条路:模型下好了、页面写着
+    「已安装」,而转写照样报「未找到可用的转写环境」,唯一的出路是自己去装 funasr 再设环境变量。
+
+    已经跑得起来就直接返回 —— **不碰用户自带的环境**。
+    """
+    if runtime_ready(engine):
+        return
+    requirements = ENGINE_REQUIREMENTS.get(engine)
+    if not requirements:
+        raise RuntimeError(f"不认识的转写引擎:{engine}")
+
+    venv_python = managed_venv_python()
+    if not venv_python.is_file():
+        _store.set(engine, _Live(status="downloading", message="创建运行环境…"))
+        MANAGED_ASR_VENV.parent.mkdir(parents=True, exist_ok=True)
+        created = subprocess.run(
+            [sys.executable, "-m", "venv", str(MANAGED_ASR_VENV)],
+            capture_output=True, text=True, timeout=600,
+        )
+        if created.returncode != 0 or not venv_python.is_file():
+            raise RuntimeError(f"创建运行环境失败:{(created.stderr or created.stdout)[-300:]}")
+
+    _store.set(engine, _Live(status="downloading", message=f"安装 {engine} 运行依赖(数 GB,首次较慢)…"))
+    # --upgrade 让重试能修好装了一半的环境;超时给足 —— torch 在慢网络下很久。
+    result = subprocess.run(
+        [str(venv_python), "-m", "pip", "install", "--upgrade", *requirements],
+        capture_output=True, text=True, timeout=7200,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"安装 {engine} 运行依赖失败:{(result.stderr or result.stdout)[-300:]}")
+    runtime_ready.cache_clear()
+    from app.audio.service import resolve_asr_runtime
+
+    resolve_asr_runtime.cache_clear()
 
 
 def start_download(model_id: str) -> dict[str, Any]:
@@ -275,7 +359,9 @@ def start_download(model_id: str) -> dict[str, Any]:
     entry = _BY_ID.get(model_id)
     if entry is None:
         raise KeyError(model_id)
-    if _is_installed(entry):
+    # **"文件都在了"不等于"没事可做"**:还可能缺运行环境,而那正是这个按钮此时要装的东西。
+    # 这里一律早返回的话,那个按钮点了没有任何反应 —— 比报错更让人摸不着头脑。
+    if _is_installed(entry) and runtime_ready(entry.engine):
         return _status_dict(entry)
     if _store.downloading():
         raise RuntimeError("已有模型正在下载,请等待其完成(共用 CPU/带宽,串行下载)")
@@ -311,6 +397,9 @@ def _download_body(model_id: str) -> None:
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     output_path = settings.data_dir / f"asr-warmup-{model_id}.json"
     try:
+        # **先把环境建好**。此前这里直接探测解释器、没有就报错 —— 于是缺环境的机器上,
+        # 这一页显示着「已安装」,而点任何一个按钮都失败。
+        ensure_engine_runtime(entry.engine)
         python = _resolve_python(entry.engine)
     except Exception as exc:  # noqa: BLE001
         _store.set(model_id, _Live(status="failed", message=str(exc)[:400]))

@@ -4645,6 +4645,11 @@ export interface components {
             /** Status */
             status: string;
             /**
+             * Runtime Ready
+             * @default false
+             */
+            runtime_ready: boolean;
+            /**
              * Downloaded Bytes
              * @default 0
              */

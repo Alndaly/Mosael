@@ -30,7 +30,10 @@ def test_start_download_guards(monkeypatch: pytest.MonkeyPatch) -> None:
         asr_models.start_download("nope")
 
     # Installed model → no-op, returns installed status without spawning a thread.
+    # **环境也得就绪**:文件在盘上但没有解释器装了 funasr/whisperx 时,这个入口要放行去装环境
+    # (见 tests/test_asr_runtime_is_honest)—— 否则那个按钮点了没有任何反应。
     monkeypatch.setattr(asr_models, "_measure", lambda e: 10**12)
+    monkeypatch.setattr(asr_models, "runtime_ready", lambda engine: True)
     assert asr_models.start_download("funasr-zh")["status"] == "installed"
 
 

@@ -1073,6 +1073,10 @@ class AsrModelOut(BaseModel):
     label: str
     detail: str
     status: str  # "installed" | "missing" | "downloading" | "failed"
+    #: **模型文件在不在盘上,和跑不跑得起来是两件事。** status 说前者,这个说后者:有没有一个
+    #: Python 解释器装了 funasr/whisperx。两者完全可以一真一假(模型缓存是别的工具下的),
+    #: 而把它们合成一个「已安装」正是这一页此前说谎的原因。
+    runtime_ready: bool = False
     downloaded_bytes: int = 0
     total_bytes: int = 0
     expected_bytes: int = 0

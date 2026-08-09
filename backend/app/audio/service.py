@@ -59,9 +59,13 @@ def resolve_asr_runtime() -> tuple[str, str]:
             )
             if probe.returncode == 0:
                 return str(python), provider
+    # **说清缺的是哪一半**。模型权重和运行环境是两件独立的事,而这条报错此前只提后者 ——
+    # 用户看到"未找到转写环境"、又看到设置页三行「已安装」,最容易做的事是去重下已经在盘上的
+    # 那 6GB 模型。缺的从来不是它们。
     raise AsrError(
-        "未找到可用的转写环境:请安装 funasr 或 whisperx,"
-        "或设置 OPEN_STUDIO_ASR_PYTHON 指向已安装它们的 Python 解释器"
+        "缺的是**运行环境**,不是模型:模型权重已经下载好的话它们不用再下一遍,"
+        "但还没有任何 Python 解释器装了 funasr 或 whisperx。"
+        "去「转写模型」那一页装一下运行环境,或设置 OPEN_STUDIO_ASR_PYTHON 指向一个已装好的解释器。"
     )
 
 
