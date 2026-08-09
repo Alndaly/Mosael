@@ -236,3 +236,27 @@ def test_the_error_is_plain_text(monkeypatch) -> None:
         assert "**" not in str(exc), f"报错里有没被渲染的 markdown:{exc}"
     else:
         raise AssertionError("该报错的没报")
+
+
+# ---------------- 全局过一遍时顺手钉的 ----------------
+
+
+def test_the_page_copy_does_not_promise_an_automatic_runtime() -> None:
+    """页面说"首次转写会自动下载" —— 那对**模型**成立,对**运行环境**不成立。
+
+    转写路径只探测解释器,探不到就报错;它不会自己去装几 GB 的 torch(那也不该在用户没点头的
+    情况下发生)。文案不改的话,用户会一直等一件不会发生的事。
+    """
+    import pathlib
+
+    messages = (pathlib.Path(__file__).resolve().parents[2] / "frontend/src/app/messages.ts")
+    text = messages.read_text()
+    line = next(l for l in text.splitlines() if "asrModelsDesc" in l and "语音模型" in l)
+    assert "运行环境" in line, f"文案没说清运行环境要手动装:{line.strip()}"
+
+
+def test_transcribe_does_not_silently_install_gigabytes() -> None:
+    """转写不该在用户没点头时装几 GB 依赖 —— 它只探测,缺了就说清楚去哪装。"""
+    import inspect
+
+    assert "ensure_engine_runtime" not in inspect.getsource(service.resolve_asr_runtime)
