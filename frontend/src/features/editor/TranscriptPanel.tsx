@@ -35,8 +35,14 @@ type TokenSelection = Map<string, { clipId: string; srcStart: number; srcEnd: nu
 const PILL =
   "inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums";
 
-/** 时间码那一栏的宽度。句子和静音块共用它 —— 对齐是**结构**给的,不是手调出来的边距。 */
-const GUTTER = "grid-cols-[50px_minmax(0,1fr)]";
+/**
+ * 时间码那一栏。句子和静音块共用它 —— 对齐是**结构**给的,不是手调出来的边距。
+ *
+ * 宽度按**最长**的时间码定(`1:23:45.6`,JetBrains Mono 10.5px 实测 58px):按 `00:06.6`
+ * 那种短的定宽,一条超过一小时的时间线就会把这一栏撑破、正好吃掉它和正文之间的空隙。
+ * 栏内右对齐,于是不论几位数,时间码到正文的距离都一样。
+ */
+const GUTTER = "grid-cols-[58px_minmax(0,1fr)]";
 
 export function TranscriptPanel({
   sequence,
@@ -559,9 +565,9 @@ export function TranscriptPanel({
         </span>
       </div>
 
-      <p className="m-0 px-2.5 pt-1.5 text-[11px] leading-[1.5] text-muted-foreground/80">{t("transcriptUsage")}</p>
+      <p className="m-0 px-3 pb-0.5 pt-2 text-[11px] leading-[1.5] text-muted-foreground/80">{t("transcriptUsage")}</p>
       <div
-        className="flex min-h-0 flex-1 select-none flex-col gap-1 overflow-y-auto px-2.5 pb-3 pt-2"
+        className="flex min-h-0 flex-1 select-none flex-col gap-1.5 overflow-y-auto px-2 pb-3 pt-2"
         onPointerOver={(event) => {
           if (!(event.buttons & 1) || !dragRef.current) return;
           const el = (event.target as HTMLElement).closest("[data-flat]");
@@ -575,7 +581,7 @@ export function TranscriptPanel({
             return (
               // 静音块走**同一套栅格**:空掉时间码那一栏,正文那一栏自然对齐。
               // 此前是 `ml-[46px]` —— 一个照着时间码宽度手调出来的数,时间码一改就错开。
-              <div key={gapKey} className={cn("grid items-center gap-1.5 pl-1.5", GUTTER)}>
+              <div key={gapKey} className={cn("grid items-center gap-2.5 pl-3", GUTTER)}>
                 <span aria-hidden />
                 <button
                   type="button"
@@ -599,15 +605,21 @@ export function TranscriptPanel({
               key={key}
               ref={active ? activeSentenceRef : undefined}
               className={cn(
-                "group/sentence relative grid items-baseline gap-1.5 rounded-md border-l-2 border-transparent py-[3px] pl-1.5 transition-[background,border-color] duration-100 hover:bg-[color-mix(in_oklab,var(--foreground)_4%,transparent)]",
+                "group/sentence relative grid items-baseline gap-2.5 rounded-md py-1 pl-3 transition-[background] duration-100 hover:bg-[color-mix(in_oklab,var(--foreground)_4%,transparent)]",
                 GUTTER,
                 // 右边给悬停按钮留位:一个是 22px,两个就得是 40px —— 少留的那 18px 会让
                 // 「切一刀」压在正文最后几个字上,而那几个字是可以点的。
                 onSplitPoints ? "pr-[40px]" : "pr-[22px]",
-                active && "border-l-primary bg-[color-mix(in_oklab,var(--primary)_8%,transparent)]",
+                active && "bg-[color-mix(in_oklab,var(--primary)_7%,transparent)]",
               )}
             >
-              <div className="grid justify-items-start gap-[3px]">
+              {/* 当前句的指示条:上下内缩的圆角条,而不是贴着行高的直角边框。
+                  边框还得在每一行都占着 2px 透明位置(不占就会在切换时整行横跳),
+                  一个绝对定位的条子既不参与布局,也能圆角。 */}
+              {active && (
+                <span aria-hidden className="pointer-events-none absolute bottom-[5px] left-[3px] top-[5px] w-[3px] rounded-full bg-primary" />
+              )}
+              <div className="grid justify-items-end gap-[3px]">
                 <button
                   type="button"
                   className={cn(
@@ -661,11 +673,17 @@ export function TranscriptPanel({
                         activeSrc.src >= token.start_time &&
                         activeSrc.src < token.end_time;
                       const classes = cn(
-                        "m-0 inline cursor-pointer rounded-sm border-0 bg-transparent p-px text-foreground [font:inherit] hover:bg-accent",
-                        isFillerToken(token.text) && "bg-[color-mix(in_oklab,#eab308_18%,transparent)]",
-                        current && "bg-[color-mix(in_oklab,var(--primary)_22%,transparent)] shadow-[0_1px_0_var(--primary)]",
+                        // 悬停用**中性**灰。此前用 `bg-accent`,而深色下 accent 是 #2b2542 ——
+                        // 一块紫色,和播放头所在词的高亮长得一模一样:鼠标扫过哪个词,哪个词就
+                        // 像"正在播"。一种颜色不能同时表示两件事。
+                        "m-0 inline cursor-pointer rounded-[3px] border-0 bg-transparent p-px text-foreground [font:inherit] [box-decoration-break:clone] hover:bg-[color-mix(in_oklab,var(--foreground)_10%,transparent)]",
+                        isFillerToken(token.text) && "bg-[color-mix(in_oklab,#eab308_20%,transparent)]",
+                        // 播放头所在的词:实心一点、字重一点,不再拿 1px 硬阴影当下划线 ——
+                        // 那道线在换行处断开,看着像输入框的边。
+                        current && "bg-[color-mix(in_oklab,var(--primary)_28%,transparent)] font-medium",
+                        // 标记要删的词:8% 在深色下几乎看不出来,全靠那道删除线撑着。
                         selected.has(tokenKey) &&
-                          "bg-[color-mix(in_oklab,var(--destructive)_8%,transparent)] text-muted-foreground line-through [text-decoration-color:var(--destructive)] [text-decoration-thickness:1.5px]",
+                          "bg-[color-mix(in_oklab,var(--destructive)_16%,transparent)] text-muted-foreground line-through [text-decoration-color:var(--destructive)] [text-decoration-thickness:1.5px]",
                       );
                       return (
                         <button
@@ -686,9 +704,9 @@ export function TranscriptPanel({
                       <button
                         type="button"
                         className={cn(
-                          "m-0 inline cursor-pointer rounded-sm border-0 bg-transparent p-px text-left text-foreground [font:inherit] hover:bg-accent",
+                          "m-0 inline cursor-pointer rounded-[3px] border-0 bg-transparent p-px text-left text-foreground [font:inherit] [box-decoration-break:clone] hover:bg-[color-mix(in_oklab,var(--foreground)_10%,transparent)]",
                           selected.has(`${key}:all`) &&
-                            "bg-[color-mix(in_oklab,var(--destructive)_8%,transparent)] text-muted-foreground line-through [text-decoration-color:var(--destructive)] [text-decoration-thickness:1.5px]",
+                            "bg-[color-mix(in_oklab,var(--destructive)_16%,transparent)] text-muted-foreground line-through [text-decoration-color:var(--destructive)] [text-decoration-thickness:1.5px]",
                         )}
                         title={t("markSentenceHint")}
                         onClick={() => useEditorStore.getState().setPlayhead(sentence.timelineStart)}

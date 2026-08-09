@@ -108,7 +108,7 @@ describe("逐字稿列表", () => {
 
     await screen.findByText("第0句");
     const row = container.querySelector(".group\\/sentence");
-    expect(row?.className).toContain("grid-cols-[50px_minmax(0,1fr)]");
+    expect(row?.className).toContain("grid-cols-[58px_minmax(0,1fr)]");
     expect(row?.className).not.toContain("ml-[46px]");
   });
 });
