@@ -21,6 +21,7 @@ from app.db.models import Asset, Job
 from app.domain.jobs import create_job, dispatch_job, emit_job_event
 from app.domain.transcripts.operations import SegmentIn, TokenIn, attach_transcript
 from app.media.paths import resolve_key
+from app.media.probe import probe_has_audio
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +149,15 @@ def start_transcription(db: Session, asset_id: str, *, created_by: str | None) -
         raise AsrError("只有视频或音频素材可以转写")
     if not asset.file_key:
         raise AsrError("素材没有本地文件")
+    # **没有音轨就当场说** —— 屏幕录制、无声的生成视频本来就没有音频,这是正常输入不是异常。
+    # 不挡的话它会一路走到 ffmpeg:提取命令带 `-vn`,源里又没有音频,于是输出一条流都没有,
+    # 用户看到的是「Output file does not contain any stream … Invalid argument」。
+    # 判据项目里早就有(渲染路径一直在用),只是这条路没用它。
+    #
+    # 挡在**建任务之前**:起一个注定失败的任务,等于把这句话藏进任务列表里让他自己去翻。
+    source = resolve_key(asset.file_key)
+    if source.exists() and not probe_has_audio(source):
+        raise AsrError(f"「{asset.name}」没有音轨,没有可以转写的声音。")
     job = create_job(
         db,
         workspace_id=asset.workspace_id,
