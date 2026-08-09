@@ -120,17 +120,28 @@ function AsrModelCard({
       </div>
       {downloading && (
         <div className="grid gap-[5px]">
-          <Progress value={pct} />
-          <div className="flex items-center justify-between gap-2 text-[11px] tabular-nums text-muted-foreground">
-            <span>
-              {fmtBytes(model.downloaded_bytes)} / {fmtBytes(model.total_bytes)}
-            </span>
-            <span>
-              {fmtSpeed(model.speed_bps)}
-              {model.speed_bps > 0 && model.message ? " · " : ""}
-              {model.message}
-            </span>
-          </div>
+          {/* **装运行环境和下模型是两件事**,量纲也不同:前者跑的是 pip(装 torch 等,几 GB
+              但我们不知道总量),后者才是这个模型的 2.2GB。没有分母时就别画进度条、也别摆
+              「0 MB / 2.2 GB」—— 那个数是模型的,而此刻在跑的不是它。 */}
+          {model.total_bytes > 0 ? (
+            <>
+              <Progress value={pct} />
+              <div className="flex items-center justify-between gap-2 text-[11px] tabular-nums text-muted-foreground">
+                <span>
+                  {fmtBytes(model.downloaded_bytes)} / {fmtBytes(model.total_bytes)}
+                </span>
+                <span>
+                  {fmtSpeed(model.speed_bps)}
+                  {model.speed_bps > 0 && model.message ? " · " : ""}
+                  {model.message}
+                </span>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
+              <Loader2 size={12} className="animate-openstudio-spin" /> {model.message}
+            </div>
+          )}
         </div>
       )}
       {model.status === "failed" && (

@@ -312,7 +312,7 @@ def _resolve_python(engine: str) -> str:
     raise RuntimeError(f"未找到安装了 {engine} 的 Python 解释器,请设置 OPEN_STUDIO_ASR_PYTHON")
 
 
-def ensure_engine_runtime(engine: str) -> None:
+def ensure_engine_runtime(engine: str, *, progress_key: str | None = None) -> None:
     """确保有一个解释器能 `import <engine>`;没有就建一个托管 venv 并装进去。
 
     这一步的存在,就是为了让用户**不必**去设置里指定 Python 解释器 —— 和 TTS 那边同一个做法
@@ -320,16 +320,24 @@ def ensure_engine_runtime(engine: str) -> None:
     「已安装」,而转写照样报「未找到可用的转写环境」,唯一的出路是自己去装 funasr 再设环境变量。
 
     已经跑得起来就直接返回 —— **不碰用户自带的环境**。
+
+    `progress_key` 是这次进度写在**哪一行**上(模型 id)。此前这里按引擎名写,而界面按模型 id 读,
+    于是这两句阶段文字一次都没显示过 —— 用户看到的是一条不动的进度条配一句"准备下载…"。
+
+    这一阶段**不报字节**:跑的是 pip(装 torch 等),它一个字节都不会落进模型缓存目录,而进度是按
+    那个目录的增长算的。借用模型的 2.2GB 当分母,结果就是永远 0 MB / 2.2 GB。两件事量纲不同,
+    就别共用一个进度条 —— 只报"在做哪一步"。
     """
     if runtime_ready(engine):
         return
+    key = progress_key or engine
     requirements = ENGINE_REQUIREMENTS.get(engine)
     if not requirements:
         raise RuntimeError(f"不认识的转写引擎:{engine}")
 
     venv_python = managed_venv_python()
     if not venv_python.is_file():
-        _store.set(engine, _Live(status="downloading", message="创建运行环境…"))
+        _store.set(key, _Live(status="downloading", message="创建运行环境…"))
         MANAGED_ASR_VENV.parent.mkdir(parents=True, exist_ok=True)
         created = subprocess.run(
             [sys.executable, "-m", "venv", str(MANAGED_ASR_VENV)],
@@ -338,7 +346,7 @@ def ensure_engine_runtime(engine: str) -> None:
         if created.returncode != 0 or not venv_python.is_file():
             raise RuntimeError(f"创建运行环境失败:{(created.stderr or created.stdout)[-300:]}")
 
-    _store.set(engine, _Live(status="downloading", message=f"安装 {engine} 运行依赖(数 GB,首次较慢)…"))
+    _store.set(key, _Live(status="downloading", message=f"安装 {engine} 运行依赖(数 GB,首次较慢)…"))
     # --upgrade 让重试能修好装了一半的环境;超时给足 —— torch 在慢网络下很久。
     result = subprocess.run(
         [str(venv_python), "-m", "pip", "install", "--upgrade", *requirements],
@@ -365,7 +373,8 @@ def start_download(model_id: str) -> dict[str, Any]:
         return _status_dict(entry)
     if _store.downloading():
         raise RuntimeError("已有模型正在下载,请等待其完成(共用 CPU/带宽,串行下载)")
-    _store.set(model_id, _Live(status="downloading", total=entry.expected_bytes, message="准备下载…"))
+    # 分母先留空:接下来可能是"装运行环境"(pip,量纲完全不同),真正开始拉模型时再填上。
+    _store.set(model_id, _Live(status="downloading", message="准备中…"))
     threading.Thread(target=_run_download, args=(model_id,), daemon=True).start()
     return _status_dict(entry)
 
@@ -399,7 +408,7 @@ def _download_body(model_id: str) -> None:
     try:
         # **先把环境建好**。此前这里直接探测解释器、没有就报错 —— 于是缺环境的机器上,
         # 这一页显示着「已安装」,而点任何一个按钮都失败。
-        ensure_engine_runtime(entry.engine)
+        ensure_engine_runtime(entry.engine, progress_key=model_id)
         python = _resolve_python(entry.engine)
     except Exception as exc:  # noqa: BLE001
         _store.set(model_id, _Live(status="failed", message=str(exc)[:400]))

@@ -125,3 +125,47 @@ def test_installing_the_runtime_works_on_an_already_downloaded_model(monkeypatch
     asr_models.start_download("funasr-zh")
 
     assert started == ["funasr-zh"], "文件在盘上时,装运行环境这条路被挡住了"
+
+
+# ---------------- 装环境 ≠ 下模型 ----------------
+
+
+def test_installing_the_runtime_reports_on_the_row_being_installed(monkeypatch) -> None:
+    """状态要写在**正在装的那一行**上。
+
+    此前它按引擎名写(`funasr`),而界面按模型 id 读(`funasr-zh`)—— 于是"创建运行环境…"
+    "安装依赖…"这两句一次都没显示过,用户看到的是一条不动的进度条配一句"准备下载…"。
+    """
+    monkeypatch.setattr(asr_models, "runtime_ready", lambda engine: False)
+    monkeypatch.setattr(asr_models, "managed_venv_python", lambda: __import__("pathlib").Path("/nope/python"))
+    monkeypatch.setattr(asr_models.subprocess, "run",
+                        lambda *a, **k: type("R", (), {"returncode": 1, "stderr": "x", "stdout": ""})())
+
+    try:
+        asr_models.ensure_engine_runtime("funasr", progress_key="funasr-zh")
+    except RuntimeError:
+        pass
+
+    live = asr_models._store.get("funasr-zh")
+    assert live is not None, "状态没写在那一行上"
+    assert "环境" in live.message
+
+
+def test_the_runtime_phase_does_not_borrow_the_model_size(monkeypatch) -> None:
+    """装环境时不该显示模型的字节数。
+
+    2.2GB 是**模型**的大小;这一阶段跑的是 pip(装 torch 等),它一个字节都不会落进模型缓存目录
+    —— 于是进度条永远停在 0 MB / 2.2 GB。两件事的量纲不一样,就别共用一个进度条。
+    """
+    monkeypatch.setattr(asr_models, "runtime_ready", lambda engine: False)
+    monkeypatch.setattr(asr_models, "managed_venv_python", lambda: __import__("pathlib").Path("/nope/python"))
+    monkeypatch.setattr(asr_models.subprocess, "run",
+                        lambda *a, **k: type("R", (), {"returncode": 1, "stderr": "x", "stdout": ""})())
+
+    try:
+        asr_models.ensure_engine_runtime("funasr", progress_key="funasr-zh")
+    except RuntimeError:
+        pass
+
+    live = asr_models._store.get("funasr-zh")
+    assert live.total == 0, f"借用了模型的大小:{live.total}"
