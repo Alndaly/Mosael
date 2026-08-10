@@ -20,8 +20,8 @@ from app.domain import tts_config
 
 def test_managed_venv_is_probed_before_this_interpreter() -> None:
     """托管 venv 必须排在本进程解释器之前——否则用户点完下载,探测仍旧命中装不了引擎的后端解释器。"""
-    candidates = tts_models.candidate_pythons()
-    managed = tts_config.managed_venv_python()
+    candidates = tts_models.candidate_pythons("f5-tts")
+    managed = tts_config.managed_venv_python("f5-tts")
     assert managed in candidates
     import sys
 
@@ -37,9 +37,9 @@ def test_explicit_override_still_wins(monkeypatch: pytest.MonkeyPatch) -> None:
             fish_repo_dir="", fish_model_dir="",
         ),
     )
-    candidates = tts_models.candidate_pythons()
+    candidates = tts_models.candidate_pythons("f5-tts")
     assert candidates[0] == Path("/custom/bin/python")
-    assert candidates.index(Path("/custom/bin/python")) < candidates.index(tts_config.managed_venv_python())
+    assert candidates.index(Path("/custom/bin/python")) < candidates.index(tts_config.managed_venv_python("f5-tts"))
 
 
 def test_base_python_prefers_the_injected_bundled_interpreter(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -72,7 +72,7 @@ def test_provision_is_skipped_when_an_interpreter_already_works(monkeypatch: pyt
 def test_provision_reports_a_readable_error_when_no_base_python(monkeypatch: pytest.MonkeyPatch) -> None:
     """连建 venv 的解释器都没有时,要给一句用户能照做的话,而不是 FileNotFoundError。"""
     monkeypatch.setattr(tts_models, "probe_interpreter", lambda _id: {"worker_ready": False, "worker_python": ""})
-    monkeypatch.setattr(tts_config, "managed_venv_python", lambda: Path("/nope/bin/python"))
+    monkeypatch.setattr(tts_config, "managed_venv_python", lambda engine=None: Path("/nope/bin/python"))
     monkeypatch.setattr(tts_config, "base_python", lambda: "")
     with pytest.raises(RuntimeError) as excinfo:
         tts_models.ensure_engine_runtime("f5-tts")
@@ -85,7 +85,7 @@ def test_provision_installs_declared_requirements(monkeypatch: pytest.MonkeyPatc
     venv_python.parent.mkdir(parents=True)
     venv_python.write_text("#!/bin/sh\n")
     monkeypatch.setattr(tts_models, "probe_interpreter", lambda _id: {"worker_ready": False, "worker_python": ""})
-    monkeypatch.setattr(tts_config, "managed_venv_python", lambda: venv_python)
+    monkeypatch.setattr(tts_config, "managed_venv_python", lambda engine=None: venv_python)
 
     calls: list[list[str]] = []
 
@@ -106,7 +106,7 @@ def test_provision_surfaces_pip_failure(monkeypatch: pytest.MonkeyPatch, tmp_pat
     venv_python.parent.mkdir(parents=True)
     venv_python.write_text("#!/bin/sh\n")
     monkeypatch.setattr(tts_models, "probe_interpreter", lambda _id: {"worker_ready": False, "worker_python": ""})
-    monkeypatch.setattr(tts_config, "managed_venv_python", lambda: venv_python)
+    monkeypatch.setattr(tts_config, "managed_venv_python", lambda engine=None: venv_python)
     monkeypatch.setattr(
         tts_models.subprocess, "run",
         lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1, "", "no matching distribution"),
@@ -122,7 +122,7 @@ def test_pip_mirror_is_passed_to_pip(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     venv_python.parent.mkdir(parents=True)
     venv_python.write_text("#!/bin/sh\n")
     monkeypatch.setattr(tts_models, "probe_interpreter", lambda _id: {"worker_ready": False, "worker_python": ""})
-    monkeypatch.setattr(tts_config, "managed_venv_python", lambda: venv_python)
+    monkeypatch.setattr(tts_config, "managed_venv_python", lambda engine=None: venv_python)
     monkeypatch.setattr(
         tts_config, "get",
         lambda: tts_config.TtsRuntimeConfig(
@@ -146,7 +146,7 @@ def test_default_pip_index_passes_no_index_url(monkeypatch: pytest.MonkeyPatch, 
     venv_python.parent.mkdir(parents=True)
     venv_python.write_text("#!/bin/sh\n")
     monkeypatch.setattr(tts_models, "probe_interpreter", lambda _id: {"worker_ready": False, "worker_python": ""})
-    monkeypatch.setattr(tts_config, "managed_venv_python", lambda: venv_python)
+    monkeypatch.setattr(tts_config, "managed_venv_python", lambda engine=None: venv_python)
     calls: list[list[str]] = []
     monkeypatch.setattr(
         tts_models.subprocess, "run",

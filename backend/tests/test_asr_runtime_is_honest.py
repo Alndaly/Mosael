@@ -137,7 +137,7 @@ def test_installing_the_runtime_reports_on_the_row_being_installed(monkeypatch) 
     "安装依赖…"这两句一次都没显示过,用户看到的是一条不动的进度条配一句"准备下载…"。
     """
     monkeypatch.setattr(asr_models, "runtime_ready", lambda engine: False)
-    monkeypatch.setattr(asr_models, "managed_venv_python", lambda: __import__("pathlib").Path("/nope/python"))
+    monkeypatch.setattr(asr_models, "managed_venv_python", lambda engine=None: __import__("pathlib").Path("/nope/python"))
     monkeypatch.setattr(asr_models.subprocess, "run",
                         lambda *a, **k: type("R", (), {"returncode": 1, "stderr": "x", "stdout": ""})())
 
@@ -158,7 +158,7 @@ def test_the_runtime_phase_does_not_borrow_the_model_size(monkeypatch) -> None:
     —— 于是进度条永远停在 0 MB / 2.2 GB。两件事的量纲不一样,就别共用一个进度条。
     """
     monkeypatch.setattr(asr_models, "runtime_ready", lambda engine: False)
-    monkeypatch.setattr(asr_models, "managed_venv_python", lambda: __import__("pathlib").Path("/nope/python"))
+    monkeypatch.setattr(asr_models, "managed_venv_python", lambda engine=None: __import__("pathlib").Path("/nope/python"))
     monkeypatch.setattr(asr_models.subprocess, "run",
                         lambda *a, **k: type("R", (), {"returncode": 1, "stderr": "x", "stdout": ""})())
 
@@ -210,8 +210,8 @@ def test_the_managed_venv_is_visible_to_transcription() -> None:
     后端自己的)。**同一个问题问了两遍,两个函数给了不同答案** —— 和「文件在盘上 vs 跑不跑得起来」
     是同一种缺陷,只是这次两边都在回答后者。
     """
-    managed = str(asr_models.managed_venv_python())
-    candidates = [str(p) for p in asr_models.candidate_pythons()]
+    managed = str(asr_models.managed_venv_python("funasr"))
+    candidates = [str(p) for p in asr_models.candidate_pythons("funasr")]
 
     assert managed in candidates, f"转写看不到托管 venv:{candidates}"
 
@@ -222,7 +222,7 @@ def test_the_two_probes_share_one_list() -> None:
 
     # 探测只有一份实现:service 不再自己探,它调 asr_models 那一个。
     assert "subprocess" not in inspect.getsource(service.resolve_asr_runtime), "service 又自己探测了一遍"
-    assert "candidate_pythons()" in inspect.getsource(asr_models._resolve_python)
+    assert "candidate_pythons(engine)" in inspect.getsource(asr_models._resolve_python)
 
 
 def test_the_error_is_plain_text(monkeypatch) -> None:

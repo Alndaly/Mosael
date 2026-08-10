@@ -31,7 +31,7 @@ def test_the_runtime_phase_does_not_borrow_the_weights_size(monkeypatch) -> None
     monkeypatch.setattr(tts_models.subprocess, "run", lambda *a, **k: _Failed())
     from app.domain import tts_config
 
-    monkeypatch.setattr(tts_config, "managed_venv_python", lambda: pathlib.Path("/nope/python"))
+    monkeypatch.setattr(tts_config, "managed_venv_python", lambda engine_id: pathlib.Path("/nope/python"))
     tts_models._store.clear("f5-tts")
 
     try:

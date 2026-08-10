@@ -84,7 +84,7 @@ def test_one_question_one_answer(monkeypatch) -> None:
 
     此前是两处:探测说"没有",解析说"就用后端自己这个" —— 合成于是照跑,跑出占位音。
     """
-    monkeypatch.setattr(tts_models, "candidate_pythons", list)  # 一个候选都没有
+    monkeypatch.setattr(tts_models, "candidate_pythons", lambda engine_id: [])  # 一个候选都没有
 
     assert tts_models.resolve_engine_python("f5-tts") is None
     assert tts_models.probe_interpreter("f5-tts") == {"worker_ready": False, "worker_python": ""}

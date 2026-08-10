@@ -78,12 +78,70 @@ ENGINE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
 
 #: 托管的 ASR 运行环境。和 TTS 那个分开:两边的依赖会打架(不同的 torch 版本),而共用一个
 #: venv 意味着装一边可能弄坏另一边。
-MANAGED_ASR_VENV = settings.data_dir / "asr" / "venv"
+#:
+#: **这句话此前只写在注释里,没有兑现**:funasr 和 whisperx 仍然共用同一个 venv,而它们
+#: 正是"两边依赖会打架"的两边。克隆那边差点为此付账(fish 钉 torch==2.8,f5 装的是 2.13),
+#: 所以这里也按引擎分开。
+MANAGED_ASR_ROOT = settings.data_dir / "asr"
+
+#: 分开之前那个共用的。**不留作兼容候选**,由 migrate_shared_venv 一次性搬走或删掉。
+LEGACY_SHARED_VENV = MANAGED_ASR_ROOT / "venv"
 
 
-def managed_venv_python() -> Path:
+def _venv_python(venv: Path) -> Path:
     windows = os.name == "nt"
-    return MANAGED_ASR_VENV / ("Scripts" if windows else "bin") / ("python.exe" if windows else "python")
+    return venv / ("Scripts" if windows else "bin") / ("python.exe" if windows else "python")
+
+
+def managed_venv_dir(engine: str) -> Path:
+    safe = engine.replace("/", "-").replace("..", "-")
+    return MANAGED_ASR_ROOT / f"venv-{safe}"
+
+
+def managed_venv_python(engine: str) -> Path:
+    return _venv_python(managed_venv_dir(engine))
+
+
+def _engines_a_venv_can_run(python: Path) -> list[str]:
+    """这个解释器能跑哪些转写引擎。"""
+    able: list[str] = []
+    for engine in ENGINE_REQUIREMENTS:
+        try:
+            probe = run_logged([str(python), "-c", f"import {engine}"], capture_output=True, timeout=180,
+                               what="迁移前探测转写引擎", level=logging.DEBUG)
+        except (subprocess.SubprocessError, OSError):
+            continue
+        if probe.returncode == 0:
+            able.append(engine)
+    return able
+
+
+def migrate_shared_venv() -> None:
+    """把分开之前那个共用 venv 搬到它实际服务的引擎名下,搬完删掉旧路径。
+
+    和克隆那边同一条规矩(见 domain/tts_config.migrate_shared_venv):**不留兼容候选** ——
+    留着就是两条路并存,而一个环境同时被两个引擎装东西,正是"装一边弄坏另一边"的机制本身。
+    """
+    import shutil
+
+    legacy = LEGACY_SHARED_VENV
+    python = _venv_python(legacy)
+    if not legacy.is_dir():
+        return
+    able = _engines_a_venv_can_run(python) if python.is_file() else []
+    if not able:
+        logger.info("删掉跑不了任何转写引擎的旧共用 venv:%s", legacy)
+        shutil.rmtree(legacy, ignore_errors=True)
+        return
+    preferred = settings.asr_provider.strip().lower()
+    target_engine = preferred if preferred in able else able[0]
+    target = managed_venv_dir(target_engine)
+    if target.exists():
+        shutil.rmtree(legacy, ignore_errors=True)
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    legacy.rename(target)
+    logger.info("旧的共用 venv 归给 %s:%s → %s", target_engine, legacy, target)
 
 
 # funasr aliases → their ModelScope cache directory names (funasr materialises
@@ -325,7 +383,7 @@ def any_downloading() -> bool:
 # ---------------------------------------------------------------------------
 # Download orchestration
 # ---------------------------------------------------------------------------
-def candidate_pythons() -> list[Path]:
+def candidate_pythons(engine: str) -> list[Path]:
     """可能装了 funasr/whisperx 的解释器,按优先级。**这是唯一一份名单。**
 
     托管 venv 排在最前:那是应用自己建、自己装的那个(见 audio/asr_models.ensure_engine_runtime),
@@ -335,7 +393,7 @@ def candidate_pythons() -> list[Path]:
     一份,而托管 venv 只加进了后者 —— 于是模型页显示「已安装」、一点转写就报"没有运行环境",
     同一个问题两个答案。
     """
-    candidates: list[Path] = [managed_venv_python()]
+    candidates: list[Path] = [managed_venv_python(engine)]
     if settings.asr_python:
         candidates.append(Path(settings.asr_python).expanduser())
     import sys
@@ -354,7 +412,7 @@ def _resolve_python(engine: str) -> str:
 
     探测要起子进程,所以缓存;装完环境后调 `clear_runtime_probes()`。
     """
-    for python in candidate_pythons():
+    for python in candidate_pythons(engine):
         if not python.is_file():
             continue
         probe = run_logged([str(python), "-c", f"import {engine}"], capture_output=True, timeout=120, what="转写引擎探测", level=logging.DEBUG)
@@ -386,12 +444,14 @@ def ensure_engine_runtime(engine: str, *, progress_key: str | None = None) -> No
     if not requirements:
         raise RuntimeError(f"不认识的转写引擎:{engine}")
 
-    venv_python = managed_venv_python()
+    # **装,一律进这个引擎自己的目录。** 共用的那个只在探测里读(见 candidate_pythons)。
+    venv_dir = managed_venv_dir(engine)
+    venv_python = managed_venv_python(engine)
     if not venv_python.is_file():
         _store.set(key, _Live(status="downloading", message="创建运行环境…"))
-        MANAGED_ASR_VENV.parent.mkdir(parents=True, exist_ok=True)
+        venv_dir.parent.mkdir(parents=True, exist_ok=True)
         created = run_logged(
-            [sys.executable, "-m", "venv", str(MANAGED_ASR_VENV)],
+            [sys.executable, "-m", "venv", str(venv_dir)],
             capture_output=True, text=True, timeout=600, what="创建转写运行环境")
         if created.returncode != 0 or not venv_python.is_file():
             raise RuntimeError(f"创建运行环境失败:{(created.stderr or created.stdout)[-300:]}")

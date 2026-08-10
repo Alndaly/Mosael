@@ -6,9 +6,12 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass
+import logging
 from pathlib import Path
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 _WINDOWS = __import__("sys").platform == "win32"
 
@@ -63,7 +66,15 @@ def migrate_legacy_sources() -> None:
 # 为什么不把引擎包直接打进安装包:f5-tts / fish-speech 都要 torch + torchaudio + transformers,
 # 实测 2.5–3.5 GB。预装会让安装包从 ~700MB 涨到约 4GB,而绝大多数用户根本不用声音克隆。
 # 随包只带一个 ~40MB 的解释器,重的部分按需落到用户数据目录,是同样"零配置"下便宜十倍的做法。
-MANAGED_TTS_VENV = settings.data_dir / "tts" / "venv"
+#: 运行环境**一个引擎一份**。共用一份的代价这次差点兑现:fish 的上游 pyproject 钉着
+#: torch==2.8.0 / transformers<=4.57.3,而同一个 venv 里 f5 装的是 torch 2.13 —— 照钉子装
+#: 会把 f5 当场废掉。最后是把版本钉子全去掉才让两边同时跑起来,那不是解决,是赌两边的 API
+#: 恰好兼容;赌注会在上游某次更新时兑现,而症状是"我只动了 A,B 怎么坏了"。
+MANAGED_TTS_ROOT = settings.data_dir / "tts"
+
+#: 分开之前那个共用的。**不留作兼容候选** —— 多路兼容本身就是负担。它由 migrate_shared_venv
+#: 一次性搬走或删掉,搬完之后这个路径就不该再出现在任何判断里。
+LEGACY_SHARED_VENV = MANAGED_TTS_ROOT / "venv"
 
 # App-managed Fish Speech install: the one-click download fetches the official source
 # checkout + s2-pro weights here, so real synthesis works on a fresh machine without any
@@ -72,9 +83,79 @@ MANAGED_FISH_REPO = settings.data_dir / "tts" / "fish-speech-src"
 MANAGED_FISH_MODEL = settings.data_dir / "tts" / "fish-speech-s2-pro"
 
 
-def managed_venv_python() -> Path:
-    """托管 venv 里的解释器路径(不保证存在)。"""
-    return MANAGED_TTS_VENV / ("Scripts" if _WINDOWS else "bin") / ("python.exe" if _WINDOWS else "python")
+def managed_venv_dir(engine_id: str) -> Path:
+    """这个引擎自己的托管 venv 目录。名字里带引擎 id,出问题时一眼看得出该删哪个。"""
+    safe = engine_id.replace("/", "-").replace("..", "-")
+    return MANAGED_TTS_ROOT / f"venv-{safe}"
+
+
+def managed_venv_python(engine_id: str) -> Path:
+    """这个引擎的托管解释器路径(不保证存在)。"""
+    return _venv_python(managed_venv_dir(engine_id))
+
+
+def _venv_python(venv: Path) -> Path:
+    return venv / ("Scripts" if _WINDOWS else "bin") / ("python.exe" if _WINDOWS else "python")
+
+
+def _selected_engine() -> str:
+    return get().engine
+
+
+def _engines_a_venv_can_run(python: Path) -> list[str]:
+    """这个解释器能跑哪些引擎。判据和运行时用的是同一份(合成真正 import 的那几行)。"""
+    import logging as _logging
+
+    from app.audio import tts_models
+    from app.core.child_process import run_logged
+
+    able: list[str] = []
+    for engine in tts_models.CATALOG:
+        code = tts_models._probe_code(engine.id)
+        if not code:
+            continue
+        try:
+            probe = run_logged([str(python), "-c", code], capture_output=True, timeout=180,
+                               what="迁移前探测克隆引擎", level=_logging.DEBUG)
+        except (OSError, RuntimeError, ValueError):
+            continue
+        if probe.returncode == 0:
+            able.append(engine.id)
+    return able
+
+
+def migrate_shared_venv() -> None:
+    """把分开之前那个共用 venv 搬到它实际服务的引擎名下,搬完删掉旧路径。
+
+    为什么是迁移而不是"留着当候选":留着就意味着两条路并存,而**两条路正是这次的病根** ——
+    一个环境同时被两个引擎装东西,谁先装谁定版本。多留一天,就多一天可能有人往里装。
+
+    规则:
+      - 只跑得了一个引擎 → 归它。
+      - 两个都跑得了(用户机器上就是这样)→ 归当前选中的那个;另一个按需自己装一份。
+      - 一个都跑不了 → 没用的数据,删掉。
+      - 目标已经存在 → 不覆盖(那是用户后来装好的),旧的直接删。
+    """
+    import shutil
+
+    legacy = LEGACY_SHARED_VENV
+    python = _venv_python(legacy)
+    if not legacy.is_dir():
+        return
+    able = _engines_a_venv_can_run(python) if python.is_file() else []
+    if not able:
+        logger.info("删掉跑不了任何引擎的旧共用 venv:%s", legacy)
+        shutil.rmtree(legacy, ignore_errors=True)
+        return
+    target_engine = _selected_engine() if _selected_engine() in able else able[0]
+    target = managed_venv_dir(target_engine)
+    if target.exists():
+        logger.info("%s 已经有自己的运行环境了,直接删掉旧的共用 venv", target_engine)
+        shutil.rmtree(legacy, ignore_errors=True)
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    legacy.rename(target)
+    logger.info("旧的共用 venv 归给 %s:%s → %s", target_engine, legacy, target)
 
 
 def base_python() -> str:

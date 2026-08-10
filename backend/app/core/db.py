@@ -955,6 +955,17 @@ def init_db() -> None:
     # 必须在 create_all 之后:resource_shares 是新表。
     _migrate_resource_ownership()
     _migrate_legacy_tts_sources()
+    _migrate_shared_venvs()
+
+
+def _migrate_shared_venvs() -> None:
+    """一个引擎一个运行环境。分开之前那个共用 venv 搬到它实际服务的引擎名下 —— 不留兼容路径,
+    因为"一个环境被两个引擎装东西"正是「装一边弄坏另一边」的机制本身。"""
+    from app.audio import asr_models
+    from app.domain import tts_config
+
+    tts_config.migrate_shared_venv()
+    asr_models.migrate_shared_venv()
 
 
 def _migrate_legacy_tts_sources() -> None:

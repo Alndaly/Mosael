@@ -265,11 +265,14 @@ def _worker_env() -> dict[str, str]:
     return env
 
 
-def candidate_pythons() -> list[Path]:
-    """探测顺序:用户显式覆盖 → App 托管 venv → 本进程解释器。
+def candidate_pythons(engine_id: str) -> list[Path]:
+    """探测顺序:用户显式覆盖 → **这个引擎自己的** venv → 本进程解释器。
 
     托管 venv 排在自动位:用户点过「下载」之后就该直接可用,不必再去设置里填路径——
     那个输入框只是留给"我自己装好了、想用我的环境"的高级用法。
+
+    分开之前那个共用 venv **不在这里** —— 它由 `tts_config.migrate_shared_venv()` 一次性
+    搬到它实际服务的引擎名下。留着当候选就是两条路并存,而两条路正是这次的病根。
     """
     from app.domain import tts_config
 
@@ -277,7 +280,7 @@ def candidate_pythons() -> list[Path]:
     configured = tts_config.get().python_path
     if configured:
         candidates.append(Path(configured).expanduser())
-    candidates.append(tts_config.managed_venv_python())
+    candidates.append(tts_config.managed_venv_python(engine_id))
     import sys
 
     candidates.append(Path(sys.executable))
@@ -317,7 +320,7 @@ def _resolve_engine_python(engine_id: str) -> str | None:
     code = _probe_code(engine_id)
     if code is None:  # 依赖的资源(fish 检出/权重)不齐,谈不上就绪
         return None
-    for python in candidate_pythons():
+    for python in candidate_pythons(engine_id):
         if not python.is_file():
             continue
         try:
@@ -539,7 +542,10 @@ def ensure_engine_runtime(engine_id: str) -> None:
     if probe_interpreter(engine_id)["worker_ready"]:
         return
 
-    venv_python = tts_config.managed_venv_python()
+    # **装,一律进这个引擎自己的目录。** 共用的那个只在探测里读,不再往里装新东西 ——
+    # 只要还有一条路会往里装,"装一边弄坏另一边"就没消除。
+    venv_dir = tts_config.managed_venv_dir(engine_id)
+    venv_python = tts_config.managed_venv_python(engine_id)
     if not venv_python.is_file():
         base = tts_config.base_python()
         if not base:
@@ -547,9 +553,9 @@ def ensure_engine_runtime(engine_id: str) -> None:
                 "找不到可用于创建运行环境的 Python。请重装应用,或在设置里手动指定一个 TTS 解释器。"
             )
         _store.set(engine_id, _Live(status="downloading", message="创建运行环境…"))
-        tts_config.MANAGED_TTS_VENV.parent.mkdir(parents=True, exist_ok=True)
+        venv_dir.parent.mkdir(parents=True, exist_ok=True)
         result = run_logged(
-            [base, "-m", "venv", str(tts_config.MANAGED_TTS_VENV)],
+            [base, "-m", "venv", str(venv_dir)],
             capture_output=True, text=True, timeout=600, what="创建克隆运行环境")
         if result.returncode != 0 or not venv_python.is_file():
             raise RuntimeError(f"创建运行环境失败:{(result.stderr or result.stdout)[-300:]}")
@@ -604,12 +610,12 @@ def _ensure_fish_source() -> None:
         raise RuntimeError(f"拉取 Fish Speech 源码失败:{(result.stderr or '')[-300:]}")
 
 
-def _download_python() -> str:
+def _download_python(engine_id: str) -> str:
     """First existing candidate interpreter — the TTS env that has huggingface_hub, used to
     run the weights snapshot. Falls back to this process's interpreter."""
     import sys
 
-    for python in candidate_pythons():
+    for python in candidate_pythons(engine_id):
         if python.is_file():
             return str(python)
     return sys.executable
@@ -653,11 +659,11 @@ def _download_body(engine_id: str) -> None:
         progress_dir = tts_config.MANAGED_FISH_MODEL
         progress_dir.mkdir(parents=True, exist_ok=True)
         env["OPEN_STUDIO_FISH_MODEL_DIR"] = str(progress_dir)
-        python = _download_python()
+        python = _download_python(engine_id)
     else:
         # 预热是**去下权重**:优先能跑引擎的那个解释器,没有就退到第一个存在的候选
         # (装了 f5-tts 但还没下权重时,它就是那一个)。跑不起来由预热自己的状态去报。
-        python = resolve_engine_python(engine.id) or _download_python()
+        python = resolve_engine_python(engine.id) or _download_python(engine.id)
 
     def measure() -> int:
         return _dir_size(progress_dir) if progress_dir is not None else _measure(engine)
