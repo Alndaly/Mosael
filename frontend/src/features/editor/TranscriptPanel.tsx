@@ -1,9 +1,10 @@
 import React from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AudioLines, Languages, Loader2, MessageSquareText, Mic, Scissors, Sparkles, Split, SplitSquareVertical, Trash2, X } from "lucide-react";
+import { AudioLines, Captions, Loader2, MessageSquareText, Mic, Scissors, Sparkles, Split, SplitSquareVertical, Trash2, X } from "lucide-react";
 
 import { API_BASE, api, fetchJob, getAuthToken, transcribeAsset, type Job, type Sequence } from "@/api/client";
 import { pendingTranscribeIds } from "@/features/editor/transcribeQueue";
+import { tokenTimelineRange } from "@/domain/timeline/karaoke";
 import { speakerChipStyle, speakerLabel, speakerShort, speakersAreMeaningful } from "@/features/editor/transcriptSpeakers";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
@@ -14,10 +15,6 @@ import {
   projectTranscript,
   type SegmentLike,
 } from "@/domain/timeline/transcriptProjection";
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { TRANSLATE_LANGS } from "@/features/editor/subtitleStyle";
 import { useEditorStore } from "@/stores/editorStore";
 import { cn } from "@/lib/utils";
 
@@ -49,16 +46,14 @@ export function TranscriptPanel({
   onCutSegment,
   onCutRanges,
   onSplitPoints,
-  onTranslateToSubtitles,
-  translating,
+  onGenerateSubtitles,
+  generatingSubtitles,
 }: {
   sequence: Sequence;
   onCutSegment: (clipId: string, srcStart: number, srcEnd: number) => void;
-  /** Generate the subtitle track from this transcript, translated into `lang` on the way.
-      The transcript is a read-only projection of the clips, so a translation has no home
-      here — the subtitle track is where it belongs, and this produces it in one step. */
-  onTranslateToSubtitles?: (lang: string) => void;
-  translating?: boolean;
+  /** 从这份逐字稿生成字幕轨。**不带语言** —— 翻译是字幕那一页的事(见 SubtitlePanel)。 */
+  onGenerateSubtitles?: () => void;
+  generatingSubtitles?: boolean;
   onCutRanges?: (cuts: Array<{ clipId: string; ranges: CutRange[] }>) => void;
   // Split (not remove) the named clips at these source-time points → 按句切分 / 单句独立 / 切一刀.
   onSplitPoints?: (cuts: Array<{ clipId: string; srcTimes: number[] }>) => void;
@@ -68,8 +63,6 @@ export function TranscriptPanel({
   const playhead = useEditorStore((state) => state.playhead);
   const [selected, setSelected] = React.useState<TokenSelection>(new Map());
   const [showSilences, setShowSilences] = React.useState(false);
-  const [translateOpen, setTranslateOpen] = React.useState(false);
-  const [lang, setLang] = React.useState("zh-CN");
   const [asrJobId, setAsrJobId] = React.useState<string | null>(null);
   const [asrError, setAsrError] = React.useState<string | null>(null);
 
@@ -514,44 +507,14 @@ export function TranscriptPanel({
             </button>
           </>
         )}
-        {onTranslateToSubtitles && (
-          <Popover open={translateOpen} onOpenChange={setTranslateOpen}>
-            <PopoverTrigger asChild>
-              <button type="button" className={PILL} disabled={translating} title={t("transcriptTranslateNote")}>
-                {translating ? <Loader2 size={12} className="animate-openstudio-spin" /> : <Languages size={12} />}
-                {t("transcriptTranslateToSubtitles")}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="flex w-[220px] flex-col gap-2 p-2.5 [&>strong]:text-[12.5px]" align="start">
-              <strong>{t("transcriptTranslateToSubtitles")}</strong>
-              <label className="grid gap-1 text-xs text-muted-foreground">
-                <span>{t("subtitleTranslateTo")}</span>
-                <Select value={lang} onValueChange={setLang}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TRANSLATE_LANGS.map((code) => (
-                      <SelectItem key={code} value={code}>
-                        {t(("lang_" + code.replace("-", "_")) as never)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
-              <Button
-                size="sm"
-                disabled={translating}
-                onClick={() => {
-                  setTranslateOpen(false);
-                  onTranslateToSubtitles(lang);
-                }}
-              >
-                <Languages size={13} /> {t("transcriptTranslateGo")}
-              </Button>
-              <small className="text-[11px] leading-[1.4] text-muted-foreground">{t("transcriptTranslateNote")}</small>
-            </PopoverContent>
-          </Popover>
+        {/* 逐字稿这边只做一件事:**把它变成字幕**。
+            翻译是字幕的事(译的是已经成型的字幕),放在字幕那一页 —— 逐字稿是"这段音频说了什么"
+            的记录,给它挂一个语言选择器,等于让人在记录里做译制。 */}
+        {onGenerateSubtitles && (
+          <button type="button" className={PILL} disabled={generatingSubtitles} title={t("transcriptGenerateSubtitlesHint")} onClick={onGenerateSubtitles}>
+            {generatingSubtitles ? <Loader2 size={12} className="animate-openstudio-spin" /> : <Captions size={12} />}
+            {t("transcriptGenerateSubtitles")}
+          </button>
         )}
         {showSilences && silences.length > 0 && (
           <button type="button" className={PILL} title={t("removeAllSilences")} onClick={selectAllSilences}>
@@ -668,15 +631,19 @@ export function TranscriptPanel({
                   ? sentence.tokens.map((token, index) => {
                       const tokenKey = `${sentence.clipId}:${sentence.segmentId}:${index}`;
                       const flatIndex = flatIndexByKey.get(tokenKey) ?? -1;
-                      const current =
-                        activeSrc?.clipId === sentence.clipId &&
-                        activeSrc.src >= token.start_time &&
-                        activeSrc.src < token.end_time;
+                      // 问"这个词落在时间线的哪一段",而不是"当前是哪个片段" ——
+                      // 视频轨和音频轨时间上重叠,而逐字稿来自音频片段,按"第一个覆盖
+                      // 播放头的片段"去比对,命中的永远是排在前面的视频片段。
+                      const span = tokenTimelineRange(clipById.get(sentence.clipId), token);
+                      const current = span !== null && playhead >= span[0] && playhead < span[1];
                       const classes = cn(
                         // 悬停用**中性**灰。此前用 `bg-accent`,而深色下 accent 是 #2b2542 ——
                         // 一块紫色,和播放头所在词的高亮长得一模一样:鼠标扫过哪个词,哪个词就
                         // 像"正在播"。一种颜色不能同时表示两件事。
-                        "m-0 inline cursor-pointer rounded-[3px] border-0 bg-transparent p-px text-foreground [font:inherit] [box-decoration-break:clone] hover:bg-[color-mix(in_oklab,var(--foreground)_10%,transparent)]",
+                        // **横向不留内边距**:中文每个词就是一两个字,左右各 1px 会把
+                        // 「喂喂喂喂喂」拆成「喂 喂 喂 喂 喂」—— 一句话被排版成了五个字。
+                        // 纵向留着:行内元素的上下内边距不参与布局,只把高亮的底色撑高一点。
+                        "m-0 inline cursor-pointer rounded-[3px] border-0 bg-transparent px-0 py-px text-foreground [font:inherit] [box-decoration-break:clone] hover:bg-[color-mix(in_oklab,var(--foreground)_10%,transparent)]",
                         isFillerToken(token.text) && "bg-[color-mix(in_oklab,#eab308_20%,transparent)]",
                         // 播放头所在的词:实心一点、字重一点,不再拿 1px 硬阴影当下划线 ——
                         // 那道线在换行处断开,看着像输入框的边。
@@ -704,7 +671,7 @@ export function TranscriptPanel({
                       <button
                         type="button"
                         className={cn(
-                          "m-0 inline cursor-pointer rounded-[3px] border-0 bg-transparent p-px text-left text-foreground [font:inherit] [box-decoration-break:clone] hover:bg-[color-mix(in_oklab,var(--foreground)_10%,transparent)]",
+                          "m-0 inline cursor-pointer rounded-[3px] border-0 bg-transparent px-0 py-px text-left text-foreground [font:inherit] [box-decoration-break:clone] hover:bg-[color-mix(in_oklab,var(--foreground)_10%,transparent)]",
                           selected.has(`${key}:all`) &&
                             "bg-[color-mix(in_oklab,var(--destructive)_16%,transparent)] text-muted-foreground line-through [text-decoration-color:var(--destructive)] [text-decoration-thickness:1.5px]",
                         )}

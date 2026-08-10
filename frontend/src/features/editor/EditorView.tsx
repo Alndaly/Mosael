@@ -955,8 +955,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
               onCutSegment={(clipId, srcStart, srcEnd) => cutRangeMutation.mutate({ clipId, srcStart, srcEnd })}
               onCutRanges={(cuts) => cutRangesMutation.mutate(cuts)}
               onSplitPoints={(cuts) => splitPointsMutation.mutate(cuts)}
-              onTranslateToSubtitles={(lang) => generateSubtitlesMutation.mutate(lang)}
-              translating={generateSubtitlesMutation.isPending}
+              onGenerateSubtitles={() => generateSubtitlesMutation.mutate(undefined)}
+              generatingSubtitles={generateSubtitlesMutation.isPending}
             />
           ) : (
             <SubtitlePanel
