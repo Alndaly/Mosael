@@ -22,6 +22,7 @@ from typing import Any
 
 from app.core.child_process import ChildProcess, run_logged
 from app.core.config import settings
+from app.core.text import strip_ansi
 
 logger = logging.getLogger(__name__)
 
@@ -322,7 +323,8 @@ def _explain_failure(stderr: str) -> str:
     stderr 空,于是永远走后半句。那是一句**猜测**,还猜错了方向:用户会去重装引擎,
     而真正坏掉的是下载源。
     """
-    text = (stderr or "").strip()
+    # 先去掉终端颜色码:子进程以为自己在终端里,而这句话的去处是浏览器。
+    text = strip_ansi(stderr or "").strip()
     if not text:
         return "下载没有完成,而子进程没有留下原因 —— 请重试一次;若仍然如此请反馈。"
     # traceback 的最后一行就是异常本身,比尾部 400 个字符可读得多。
@@ -331,11 +333,28 @@ def _explain_failure(stderr: str) -> str:
         from app.domain import tts_config
 
         endpoint = tts_config.get().hf_endpoint
+        # 截断只截**错误本身**,不截后面那半句 —— 那是整条消息里唯一能行动的部分。
         return (
-            f"连不上模型下载源({endpoint}):{last[:200]}"
+            f"连不上模型下载源({endpoint}):{_clip(last, 220)}"
             " —— 在上面的「模型下载源」换一个(镜像下不动时,官方直连往往反而是通的)再重试。"
         )
-    return last[:400]
+    return _clip(last, 400)
+
+
+def _clip(text: str, limit: int) -> str:
+    return text if len(text) <= limit else f"{text[:limit]}…"
+
+
+def forget_failures() -> None:
+    """丢掉所有"失败"状态,不动正在下的那些。
+
+    改了下载源 / 解释器之后叫一声:上一次失败说的是**改之前**那套配置,而它长得像当前状态 ——
+    用户照着它去排查一个已经不存在的设置(实测:源已经换成 ModelScope,卡片还在说 hf-mirror)。
+    """
+    for engine in CATALOG:
+        live = _store.get(engine.id)
+        if live is not None and live.status == "failed":
+            _store.clear(engine.id)
 
 
 def _fmt_eta(seconds: float | None) -> str:

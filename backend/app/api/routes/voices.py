@@ -260,8 +260,10 @@ def set_tts_config(body: TtsConfigUpdate, db: DbSession, user: CurrentUser) -> d
     row.fish_model_dir = body.fish_model_dir.strip()
     db.commit()
     tts_config.refresh()
-    # 解释器路径/fish 目录刚改过 —— 探测缓存里的答案是按旧配置算的。
+    # 解释器路径/下载源/fish 目录刚改过 —— 探测缓存里的答案是按旧配置算的,
+    # 而上一次的失败消息说的也是改之前那套(源已经换掉了,卡片还在说旧的那个)。
     tts_models.clear_runtime_probes()
+    tts_models.forget_failures()
     return _tts_config_out()
 
 

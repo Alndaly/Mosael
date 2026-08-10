@@ -89,3 +89,26 @@ def test_it_is_a_drop_in_for_subprocess_run() -> None:
     result = run_logged(["/bin/echo", "x"], what="t", capture_output=True, text=True)
     assert result.stdout.strip() == "x"
     assert hasattr(result, "returncode") and hasattr(result, "stderr")
+
+
+def test_the_captured_output_is_plain_text(tmp_path) -> None:
+    """子进程说的话会被端到界面上(任务的 error、下载失败提示),那就不能带终端颜色码。
+
+    十来个调用点各自 `raise XxxError(f"…{result.stderr[-400:]}")`,在每一处再记得 strip 一次
+    是不可能长久的 —— 所以在**唯一的出口**上做掉。
+    """
+    result = run_logged(
+        ["/bin/sh", "-c", "printf '\\033[1;35mBoom\\033[0m: 出事了\\n' >&2; exit 1"],
+        what="带颜色的",
+        capture_output=True,
+        text=True,
+    )
+
+    assert "\x1b" not in result.stderr, f"颜色码原样传给了调用方:{result.stderr!r}"
+    assert "Boom: 出事了" in result.stderr
+
+
+def test_binary_output_is_left_alone() -> None:
+    """没开 text 的调用方拿的是 bytes —— 别替他解码。"""
+    result = run_logged(["/bin/echo", "x"], what="二进制", capture_output=True)
+    assert isinstance(result.stdout, bytes)

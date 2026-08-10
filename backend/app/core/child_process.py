@@ -22,6 +22,8 @@ import time
 from collections import deque
 from collections.abc import Iterator, Sequence
 
+from app.core.text import strip_ansi
+
 logger = logging.getLogger(__name__)
 
 
@@ -93,7 +95,8 @@ class ChildProcess:
         yield from self._process.stdout
 
     def stderr_tail(self, limit: int = 2000) -> str:
-        return "".join(self._stderr)[-limit:]
+        # 同样会被端到界面上(下载失败那句话就来自这里)。
+        return strip_ansi("".join(self._stderr))[-limit:]
 
     def finish(self, limit: int = 2000) -> str:
         """Stop the watchdog, reap the child, and return the tail of its stderr."""
@@ -140,6 +143,15 @@ def _took(seconds: float) -> str:
     return f"{seconds * 1000:.0f}ms" if seconds < 1 else f"{seconds:.1f}s"
 
 
+def _plain(result: subprocess.CompletedProcess) -> subprocess.CompletedProcess:
+    """把 text 模式下捕获到的输出去掉终端转义序列。bytes 原样留着 —— 那是调用方要的原始数据。"""
+    for field in ("stdout", "stderr"):
+        value = getattr(result, field, None)
+        if isinstance(value, str):
+            setattr(result, field, strip_ansi(value))
+    return result
+
+
 def run_logged(args, *, what: str, level: int = logging.INFO, **kwargs) -> subprocess.CompletedProcess:
     """`subprocess.run`,外加一行日志。**外部命令只从这一个口子出去。**
 
@@ -166,6 +178,10 @@ def run_logged(args, *, what: str, level: int = logging.INFO, **kwargs) -> subpr
     except OSError as exc:
         logger.warning("%s 起不来:%s(%s)", what, exc, line)
         raise
+    # 子进程默认当自己在终端里,输出带 ANSI 颜色码;而这些文字的去处常常是浏览器
+    # (任务的 error 字段、下载失败提示)。在**唯一的出口**上去掉一次,好过在十来个
+    # `raise XxxError(f"…{result.stderr}")` 里各记得一次。
+    result = _plain(result)
     took = _took(time.monotonic() - started)
     if result.returncode == 0:
         logger.log(level, "%s 完成(%s):%s", what, took, line)

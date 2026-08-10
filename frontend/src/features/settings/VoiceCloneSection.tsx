@@ -82,6 +82,10 @@ export function VoiceCloneSection() {
     onError: (error: Error) => toast.error(error.message),
   });
   const busy = download.isPending || (models.data ?? []).some((m) => m.status === "downloading");
+  // **上面选的 ≠ 已经生效的。** 下载用的是后端存着的那份配置,而不是这个表单里选中的。
+  // 用户把「模型下载源」从镜像换成别的、没点保存就去点「重试」—— 跑的还是旧源,失败消息
+  // 还是旧源那句,于是"我明明换了源"。改了没存时就直说,而不是让他去撞。
+  const unsaved = form.formState.isDirty;
   // worker_ready 是后端针对「已保存」的引擎算的。选了别的引擎但还没保存时,对新引擎无从谈就绪
   // (要保存后 config 重取才知道)——所以选中引擎 ≠ 已保存引擎时按未就绪处理,顶部提醒也随之
   // 对应下拉里「选中」的引擎,而不再固定显示旧的已保存引擎(选 Fish Speech 却提示 F5-TTS 的根因)。
@@ -158,7 +162,10 @@ export function VoiceCloneSection() {
                       <SelectContent>
                         <SelectItem value="hf-mirror">HF 镜像 (hf-mirror.com)</SelectItem>
                         <SelectItem value="hf">HuggingFace</SelectItem>
-                        <SelectItem value="modelscope">ModelScope</SelectItem>
+                        {/* 名字要说实话:F5-TTS 的权重只在 HuggingFace 上,选 ModelScope 时后端用的其实是
+                            官方 HF 端点(见 tts_config.HF_ENDPOINTS)。一个做的和名字不一样的选项,
+                            比没有这个选项更糟。 */}
+                        <SelectItem value="modelscope">{t("ttsSourceModelScope")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </FormControl>
@@ -202,7 +209,7 @@ export function VoiceCloneSection() {
       <SettingsBlock>
         <div className="grid gap-2">
           {models.data?.map((model) => (
-            <EngineCard key={model.id} model={model} busy={busy} onDownload={() => download.mutate(model.id)} />
+            <EngineCard key={model.id} model={model} busy={busy} unsaved={unsaved} onDownload={() => download.mutate(model.id)} />
           ))}
         </div>
       </SettingsBlock>
@@ -210,7 +217,7 @@ export function VoiceCloneSection() {
   );
 }
 
-function EngineCard({ model, busy, onDownload }: { model: TtsEngine; busy?: boolean; onDownload: () => void }) {
+function EngineCard({ model, busy, unsaved, onDownload }: { model: TtsEngine; busy?: boolean; unsaved?: boolean; onDownload: () => void }) {
   const t = useI18n();
   const pct = model.total_bytes > 0 ? Math.min(100, Math.round((model.downloaded_bytes / model.total_bytes) * 100)) : 0;
   const downloading = model.status === "downloading";
@@ -226,6 +233,7 @@ function EngineCard({ model, busy, onDownload }: { model: TtsEngine; busy?: bool
           {model.status === "installed" && !model.runtime_ready && (
             <small className="text-[11.5px] text-destructive">{t("voiceModelNoRuntime")}</small>
           )}
+          {unsaved && <small className="text-[11.5px] text-muted-foreground">{t("ttsSaveFirst")}</small>}
         </div>
         <div className="shrink-0">
           {/* **两件事分开说**:权重在不在盘上(status),和跑不跑得起来(runtime_ready)。
@@ -237,12 +245,12 @@ function EngineCard({ model, busy, onDownload }: { model: TtsEngine; busy?: bool
             </span>
           )}
           {model.status === "installed" && !model.runtime_ready && (
-            <Button size="sm" variant="outline" disabled={busy} onClick={onDownload}>
+            <Button size="sm" variant="outline" disabled={busy || unsaved} title={unsaved ? t("ttsSaveFirst") : undefined} onClick={onDownload}>
               <Download size={13} /> {t("asrModelInstallRuntime")}
             </Button>
           )}
           {model.status === "missing" && (
-            <Button size="sm" variant="outline" disabled={busy} onClick={onDownload}>
+            <Button size="sm" variant="outline" disabled={busy || unsaved} title={unsaved ? t("ttsSaveFirst") : undefined} onClick={onDownload}>
               <Download size={13} /> {t("asrModelDownload")}
             </Button>
           )}
@@ -254,7 +262,7 @@ function EngineCard({ model, busy, onDownload }: { model: TtsEngine; busy?: bool
             </span>
           )}
           {model.status === "failed" && (
-            <Button size="sm" variant="outline" disabled={busy} onClick={onDownload}>
+            <Button size="sm" variant="outline" disabled={busy || unsaved} title={unsaved ? t("ttsSaveFirst") : undefined} onClick={onDownload}>
               <RotateCw size={13} /> {t("asrModelRetry")}
             </Button>
           )}
