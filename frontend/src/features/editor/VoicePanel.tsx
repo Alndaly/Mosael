@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AudioLines, Loader2, Mic, Pause, Pencil, Play, Square, Trash2, Upload, UsersRound, Wand2, X } from "lucide-react";
+import { AudioLines, Loader2, Mic, Pause, Pencil, Play, Sparkles, Square, Trash2, Upload, UsersRound, Wand2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -15,6 +15,7 @@ import {
   listVoices,
   synthesizeVoice,
   synthesizeWithEngine,
+  recognizeReference,
   updateVoice,
   uploadVoice,
   voiceFromSpeaker,
@@ -216,6 +217,15 @@ export function VoicePanel({
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["voices", workspace.id] });
       setEditing(null);
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const recognize = useMutation({
+    mutationFn: () => recognizeReference(editing as string),
+    onSuccess: (voice) => {
+      setEditText(voice.reference_text ?? "");
+      void qc.invalidateQueries({ queryKey: ["voices", workspace.id] });
+      toast.success(t("voiceRecognizeDone"));
     },
     onError: (error: Error) => toast.error(error.message),
   });

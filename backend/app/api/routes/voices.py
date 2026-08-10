@@ -9,6 +9,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
 
 from app.api.deps import CurrentUser, DbSession
+from app.audio.service import AsrError
 from app.db.models import Voice
 from app.api.schemas import (
     EngineSynthesizeRequest,
@@ -100,6 +101,19 @@ def update_voice(voice_id: str, body: VoiceUpdate, db: DbSession, user: CurrentU
     try:
         return voices.update_voice(db, voice, name=body.name, reference_text=body.reference_text)
     except voices.VoiceError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/voices/{voice_id}/recognize-reference", response_model=VoiceOut)
+def recognize_reference(voice_id: str, db: DbSession, user: CurrentUser) -> Voice:
+    """用本机的转写引擎听一遍参考音频,把参考文本填上。"""
+    voice = voices.get_voice(db, voice_id)
+    if voice is None:
+        raise HTTPException(status_code=404, detail="音色不存在")
+    ensure_workspace_perm(db, user, voice.workspace_id, "ai")
+    try:
+        return voices.recognize_reference_text(db, voice)
+    except (voices.VoiceError, AsrError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 

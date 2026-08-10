@@ -166,6 +166,10 @@ export function uploadVoice(args: { workspaceId: string; name: string; reference
 export function updateVoice(id: string, body: { name?: string; reference_text?: string }): Promise<Voice> {
   return api<Voice>(`/api/voices/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 }
+/** 让本机的转写引擎听一遍参考音频,把参考文本填上 —— 比让用户打一遍自己说过的话强。 */
+export function recognizeReference(id: string): Promise<Voice> {
+  return api<Voice>(`/api/voices/${id}/recognize-reference`, { method: "POST" });
+}
 export function deleteVoice(id: string): Promise<void> {
   return api<void>(`/api/voices/${id}`, { method: "DELETE" });
 }

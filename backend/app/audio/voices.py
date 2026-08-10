@@ -239,6 +239,31 @@ def get_voice(db: Session, voice_id: str) -> Voice | None:
     return db.get(Voice, voice_id)
 
 
+def recognize_reference_text(db: Session, voice: Voice) -> Voice:
+    """让应用自己听一遍参考音频,把参考文本填上。
+
+    Fish Speech 要求参考文本,而用户手里是一段自己录的音频 —— 让他打一遍自己说过的话,
+    是把一件应用能做的事推给了人。而 F5 的"自动识别"要先下 1.6 GB 的 Whisper,更是绕远:
+    **这个应用里已经装着转写引擎**,它就是干这个的。
+
+    转不了就明说(转写引擎没装),而不是留个空文本让合成出去丢人。
+    """
+    from app.audio import service
+
+    reference = reference_path(voice)
+    if not reference.is_file():
+        raise VoiceError("这条音色的参考音频不在了,没法识别")
+    python, provider = service.resolve_asr_runtime()  # 没装转写引擎时它自己会说清楚
+    output = service.run_asr(reference, python, provider)
+    text = "".join(str(segment.get("text") or "") for segment in (output.get("segments") or [])).strip()
+    if not text:
+        raise VoiceError("没听出内容 —— 参考音频可能太轻或没有人声,换一段再试")
+    voice.reference_text = text
+    db.commit()
+    db.refresh(voice)
+    return voice
+
+
 def update_voice(db: Session, voice: Voice, *, name: str | None, reference_text: str | None) -> Voice:
     """补填/更正音色的说明性字段。
 

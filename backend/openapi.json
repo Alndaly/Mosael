@@ -3150,6 +3150,49 @@
         }
       }
     },
+    "/api/voices/{voice_id}/recognize-reference": {
+      "post": {
+        "tags": [
+          "voices"
+        ],
+        "summary": "Recognize Reference",
+        "description": "用本机的转写引擎听一遍参考音频,把参考文本填上。",
+        "operationId": "recognize_reference_api_voices__voice_id__recognize_reference_post",
+        "parameters": [
+          {
+            "name": "voice_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Voice Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/voices/{voice_id}/sample": {
       "get": {
         "tags": [

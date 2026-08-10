@@ -1146,6 +1146,26 @@ export interface paths {
         patch: operations["update_voice_api_voices__voice_id__patch"];
         trace?: never;
     };
+    "/api/voices/{voice_id}/recognize-reference": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Recognize Reference
+         * @description 用本机的转写引擎听一遍参考音频,把参考文本填上。
+         */
+        post: operations["recognize_reference_api_voices__voice_id__recognize_reference_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/voices/{voice_id}/sample": {
         parameters: {
             query?: never;
@@ -10532,6 +10552,37 @@ export interface operations {
                 "application/json": components["schemas"]["VoiceUpdate"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoiceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recognize_reference_api_voices__voice_id__recognize_reference_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voice_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
