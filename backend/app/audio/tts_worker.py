@@ -91,6 +91,7 @@ def run_f5(request: dict[str, Any], output_path: str) -> str:
         _progress("load", 0.1, f"首次加载权重({device})")
         # 走 ModelScope 下下来的那份在我们自己的目录里,F5TTS 不会自己去找 —— 显式指过去。
         # 声码器仍由它自己从 HF 拉(ModelScope 上没有 vocos)。
+        announce_f5_fetch()
         managed = os.environ.get("OPEN_STUDIO_F5_MODEL_DIR", "").strip()
         ckpt = Path(managed) / F5_CHECKPOINT if managed else None
         vocab = Path(managed) / F5_VOCAB if managed else None
@@ -230,6 +231,46 @@ def _modelscope_file(repo: str, path: str, local_dir: str) -> str:
 
     root = snapshot_download(repo, local_dir=local_dir, allow_patterns=[path])
     return str(Path(root) / path)
+
+
+#: F5 还要的声码器。它只在 HuggingFace 上(ModelScope 三个命名空间都是 404)。
+F5_VOCODER_CACHE = "models--charactr--vocos-mel-24khz"
+
+
+def _hf_cache_roots() -> list[Path]:
+    roots = []
+    for env in ("HF_HUB_CACHE", "HUGGINGFACE_HUB_CACHE"):
+        if os.environ.get(env):
+            roots.append(Path(os.environ[env]))
+    if os.environ.get("HF_HOME"):
+        roots.append(Path(os.environ["HF_HOME"]) / "hub")
+    roots.append(Path.home() / ".cache" / "huggingface" / "hub")
+    return [r for r in roots if r.is_dir()]
+
+
+def _hf_cached(cache_dir_name: str) -> bool:
+    """这个仓库**真的**在缓存里(有字节,不只是一个空目录)。
+
+    只判目录在不在会被下载失败的残骸骗过去:fish 那次就是目录在、里面只有一个空的 refs/main。
+    """
+    for root in _hf_cache_roots():
+        blobs = root / cache_dir_name / "blobs"
+        if blobs.is_dir() and any(f.stat().st_size > 1_000_000 for f in blobs.glob("*") if f.is_file()):
+            return True
+    return False
+
+
+def announce_f5_fetch() -> None:
+    """要下东西就说在**下**,别说成"加载"。
+
+    用户选了 F5,界面十几分钟停在「首次加载权重」,而那段时间进程 CPU 0.1% —— 它在下载
+    声码器(约 55 MB;这台机器上 HuggingFace 是 46 KB/s)。两件事的等待理由完全不同:
+    加载是本地的、只能等;下载慢是网络问题,用户可以换源、可以先去干别的、可以判断
+    "这不正常"。**说成"加载"就把一个可判断的处境变成了不可判断的处境。**
+    """
+    if not _hf_cached(F5_VOCODER_CACHE):
+        _progress("download", 0.08,
+                  "正在从 HuggingFace 下载声码器(约 55 MB);网络慢时这一步要十几分钟,只下这一次")
 
 
 def fetch_f5_weights() -> None:
