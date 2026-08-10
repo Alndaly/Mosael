@@ -58,3 +58,32 @@ def test_the_cache_check_looks_for_real_bytes(tmp_path, monkeypatch) -> None:
     (blobs / "abc").write_bytes(b"x" * 20_000_000)
 
     assert tts_worker._hf_cached("models--charactr--vocos-mel-24khz") is True
+
+
+def test_it_warns_before_f5_pulls_whisper_to_auto_transcribe(monkeypatch) -> None:
+    """参考文本留空时,F5 的"自动识别"= 下一个 1.6 GB 的 Whisper。
+
+    现场:用户按我的建议改用 F5(理由正是"它会自己识别"),然后卡在「生成中」——
+    实际在下 openai/whisper-large-v3-turbo,这台机器上 46 KB/s ≈ 十小时。
+
+    "自动"这个词让它听起来是免费的。**代价要在付出之前说**,而且要说清怎么绕开
+    (填上参考文本就完全跳过这一步)。
+    """
+    said: list[str] = []
+    monkeypatch.setattr(tts_worker, "_progress", lambda phase, fraction, message="": said.append(message))
+    monkeypatch.setattr(tts_worker, "_hf_cached", lambda name: name != tts_worker.F5_ASR_CACHE)
+
+    tts_worker.announce_f5_fetch(reference_text="")
+
+    joined = " ".join(said)
+    assert "识别" in joined and ("1.6" in joined or "GB" in joined), said
+    assert "参考文本" in joined, f"没说清怎么绕开:{said}"
+
+
+def test_no_whisper_warning_when_the_reference_text_is_given() -> None:
+    """填了文本就不会走那条路 —— 别吓唬人。"""
+    said: list[str] = []
+    tts_worker._progress = lambda phase, fraction, message="": said.append(message)  # type: ignore[assignment]
+    tts_worker.announce_f5_fetch(reference_text="今天是个好天气")
+
+    assert not any("识别" in line for line in said), said

@@ -24,6 +24,8 @@ import math
 import os
 import struct
 import sys
+import threading
+import time
 import traceback
 import wave
 from pathlib import Path
@@ -91,7 +93,7 @@ def run_f5(request: dict[str, Any], output_path: str) -> str:
         _progress("load", 0.1, f"首次加载权重({device})")
         # 走 ModelScope 下下来的那份在我们自己的目录里,F5TTS 不会自己去找 —— 显式指过去。
         # 声码器仍由它自己从 HF 拉(ModelScope 上没有 vocos)。
-        announce_f5_fetch()
+        announce_f5_fetch(request.get("reference_text") or "")
         managed = os.environ.get("OPEN_STUDIO_F5_MODEL_DIR", "").strip()
         ckpt = Path(managed) / F5_CHECKPOINT if managed else None
         vocab = Path(managed) / F5_VOCAB if managed else None
@@ -235,6 +237,8 @@ def _modelscope_file(repo: str, path: str, local_dir: str) -> str:
 
 #: F5 还要的声码器。它只在 HuggingFace 上(ModelScope 三个命名空间都是 404)。
 F5_VOCODER_CACHE = "models--charactr--vocos-mel-24khz"
+#: 参考文本留空时,F5 用它来"自动识别"参考音频 —— 约 1.6 GB,也只在 HuggingFace 上。
+F5_ASR_CACHE = "models--openai--whisper-large-v3-turbo"
 
 
 def _hf_cache_roots() -> list[Path]:
@@ -260,7 +264,7 @@ def _hf_cached(cache_dir_name: str) -> bool:
     return False
 
 
-def announce_f5_fetch() -> None:
+def announce_f5_fetch(reference_text: str = "") -> None:
     """要下东西就说在**下**,别说成"加载"。
 
     用户选了 F5,界面十几分钟停在「首次加载权重」,而那段时间进程 CPU 0.1% —— 它在下载
@@ -271,6 +275,12 @@ def announce_f5_fetch() -> None:
     if not _hf_cached(F5_VOCODER_CACHE):
         _progress("download", 0.08,
                   "正在从 HuggingFace 下载声码器(约 55 MB);网络慢时这一步要十几分钟,只下这一次")
+    # "自动识别"听起来是免费的,实际是再下一个 1.6 GB 的模型。**代价要在付出之前说**,
+    # 而且要说清怎么绕开 —— 填上参考文本就完全不走这条路。
+    if not (reference_text or "").strip() and not _hf_cached(F5_ASR_CACHE):
+        _progress("download", 0.08,
+                  "参考文本留空,F5 要先下载识别模型(Whisper,约 1.6 GB)来听参考音频说了什么;"
+                  "给音色填上参考文本可以完全跳过这一步")
 
 
 def fetch_f5_weights() -> None:
@@ -348,8 +358,23 @@ def warmup(request: dict[str, Any], output_path: str) -> str:
         raise
 
 
+def _watch_parent(original_ppid: int) -> None:
+    """父进程没了就自己走。
+
+    现场抓到过一个 PPID=1、抱着 2.2 GB 跑了 35 分钟的孤儿:后端热重载把池子连同 kill()
+    一起带走了,而子进程没人管。**不能指望父进程记得清理** —— 它被 SIGKILL 时不会执行
+    任何清理代码。stdin 关闭是常规信号,但一个正卡在下载里的 worker 要等下载结束才读得到
+    EOF,所以另加这条:被过继给 init 就退出。
+    """
+    while True:
+        time.sleep(1.0)
+        if os.getppid() != original_ppid:
+            os._exit(0)  # 不做清理:权重还挂在内存里,越快还给系统越好
+
+
 def serve() -> None:
     """按行收请求,权重留在内存里。一个进程只服务一个引擎(两套权重同时挂是 30 GB)。"""
+    threading.Thread(target=_watch_parent, args=(os.getppid(),), daemon=True).start()
     for line in sys.stdin:
         line = line.strip()
         if not line:
