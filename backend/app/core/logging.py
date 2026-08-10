@@ -18,6 +18,43 @@ from app.core.config import settings
 
 _configured = False
 
+#: 定时轮询的端点在这个仓库里有统一的形状:`/<域>/worker/<动作>`(claim / heartbeat /
+#: claim-check),由 sidecar 按秒发。用**结构**而不是一张路径名单来认它们 —— 名单会在
+#: 下一个 worker 端点加进来时悄悄失效,而命名约定不会。
+_POLL_MARKER = "/worker/"
+
+
+class AccessLogFilter(logging.Filter):
+    """压掉"什么都没发生"的轮询访问日志。
+
+    用户的终端里一屏全是这个:
+
+        INFO: 127.0.0.1 - "POST /api/browser/worker/claim HTTP/1.1" 200 OK
+        INFO: 127.0.0.1 - "POST /api/publish/worker/heartbeat HTTP/1.1" 200 OK
+
+    sidecar 每秒问一次"有活吗"、"我还活着",成功时一个字都不值得说 —— 说了反而把真正
+    要看的那几行(任务失败、子进程 stderr)冲走。
+
+    只压**成功**的:heartbeat 返 500 恰恰是最该看见的一行。看不懂形状的记录一律放行 ——
+    过滤器宁可少压一条,也不能吃掉一条不认识的日志。
+    """
+
+    def __init__(self, *, quiet: bool) -> None:
+        super().__init__()
+        self.quiet = quiet
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if not self.quiet:
+            return True
+        args = record.args
+        # uvicorn.access 的形状:(client, method, path, http_version, status)
+        if not isinstance(args, tuple) or len(args) < 5:
+            return True
+        path, status = args[2], args[4]
+        if not isinstance(path, str) or not isinstance(status, int):
+            return True
+        return not (_POLL_MARKER in path and status < 400)
+
 # 每请求一行 INFO 的库,压到 WARNING 免得淹没业务日志。
 _NOISY_LIBRARIES = ("httpx", "httpcore", "urllib3", "openai", "PIL")
 
@@ -46,3 +83,8 @@ def configure_logging() -> None:
 
     for noisy in _NOISY_LIBRARIES:
         logging.getLogger(noisy).setLevel(logging.WARNING)
+
+    # 轮询请求不刷屏。OPEN_STUDIO_LOG_ACCESS=all 恢复全量 —— 排查 sidecar 本身时就要看它们。
+    access = logging.getLogger("uvicorn.access")
+    access.filters = [f for f in access.filters if not isinstance(f, AccessLogFilter)]
+    access.addFilter(AccessLogFilter(quiet=settings.log_access.strip().lower() != "all"))

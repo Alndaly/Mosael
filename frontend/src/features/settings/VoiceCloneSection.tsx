@@ -65,6 +65,12 @@ export function VoiceCloneSection() {
     }
   }, [config.data]);
   const isFish = form.watch("engine") === "fish-speech";
+  // 引擎切到 F5-TTS 时,已保存的 modelscope 在下拉里已经没有对应项了(会显示成空白)。
+  // 它和「HuggingFace」本来就解析到同一个端点,落到那一项上,显示的和实际做的才一致。
+  const source = form.watch("source");
+  React.useEffect(() => {
+    if (!isFish && source === "modelscope") form.setValue("source", "hf", { shouldDirty: false });
+  }, [isFish, source, form]);
 
   const save = useMutation({
     mutationFn: (values: ConfigForm) => updateTtsConfig(values),
@@ -162,10 +168,10 @@ export function VoiceCloneSection() {
                       <SelectContent>
                         <SelectItem value="hf-mirror">HF 镜像 (hf-mirror.com)</SelectItem>
                         <SelectItem value="hf">HuggingFace</SelectItem>
-                        {/* 名字要说实话:F5-TTS 的权重只在 HuggingFace 上,选 ModelScope 时后端用的其实是
-                            官方 HF 端点(见 tts_config.HF_ENDPOINTS)。一个做的和名字不一样的选项,
-                            比没有这个选项更糟。 */}
-                        <SelectItem value="modelscope">{t("ttsSourceModelScope")}</SelectItem>
+                        {/* F5-TTS 的权重只在 HuggingFace 上,ModelScope 这一项对它没有意义
+                            (后端会把它解析成官方 HF 端点)。**没有意义的就不显示** —— 与其挂一个
+                            长长的括号解释它其实不是它,不如让选项跟着引擎变。 */}
+                        {isFish && <SelectItem value="modelscope">ModelScope</SelectItem>}
                       </SelectContent>
                     </Select>
                   </FormControl>
