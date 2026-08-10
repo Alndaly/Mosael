@@ -29,6 +29,20 @@ type ConfigForm = { engine: string; python_path: string; source: string; pip_ind
 
 /** Settings → 声音克隆:选引擎、指定装了 f5-tts 的 Python 解释器、下载源,并下载
     引擎权重。装好并配好后合成即为真实音色;否则回退占位音。 */
+/**
+ * 受控下拉的值**必须**是列得出来的某一项 —— 这是 Radix Select 的硬约束:找不到对应 Item 时
+ * 它会把值清成空串并回调出来,而 react-hook-form 把那记成一次"用户改动"。用户报的
+ * 「每次刷新页面下载源都会变动,导致要重新保存」就是这么来的:表单一进页面自己变脏,
+ * 顶上常驻「改了还没保存」,下拉还显示成一片空白。
+ *
+ * 「ModelScope」已经删掉了 —— 它和「HuggingFace」指向同一个端点,从来没做过任何不同的事
+ * (见 backend/app/domain/tts_config.HF_ENDPOINTS)。库里的老值由后端迁移,这里再兜一次:
+ * 前端拿到的可能是迁移之前缓存下来的那一份。
+ */
+export function normalizeSource(source: string): string {
+  return source === "modelscope" ? "hf" : source;
+}
+
 export function VoiceCloneSection() {
   const t = useI18n();
   const qc = useQueryClient();
@@ -57,7 +71,7 @@ export function VoiceCloneSection() {
       form.reset({
         engine: config.data.engine,
         python_path: config.data.python_path,
-        source: config.data.source,
+        source: normalizeSource(config.data.source),
         pip_index: config.data.pip_index ?? "",
         fish_repo_dir: config.data.fish_repo_dir ?? "",
         fish_model_dir: config.data.fish_model_dir ?? "",
@@ -65,15 +79,11 @@ export function VoiceCloneSection() {
     }
   }, [config.data]);
   const isFish = form.watch("engine") === "fish-speech";
-  // 引擎切到 F5-TTS 时,已保存的 modelscope 在下拉里已经没有对应项了(会显示成空白)。
-  // 它和「HuggingFace」本来就解析到同一个端点,落到那一项上,显示的和实际做的才一致。
-  const source = form.watch("source");
-  React.useEffect(() => {
-    if (!isFish && source === "modelscope") form.setValue("source", "hf", { shouldDirty: false });
-  }, [isFish, source, form]);
 
   const save = useMutation({
-    mutationFn: (values: ConfigForm) => updateTtsConfig(values),
+    // 存下去的就是显示出来的那一个 —— 归一化只有一处实现。
+    mutationFn: (values: ConfigForm) =>
+      updateTtsConfig({ ...values, source: normalizeSource(values.source) }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["tts-config"] });
       toast.success(t("saved"));
@@ -161,17 +171,13 @@ export function VoiceCloneSection() {
                 <FormItem>
                   <FormLabel>{t("voiceCloneSource")}</FormLabel>
                   <FormControl>
-                    <Select value={field.value} onValueChange={field.onChange}>
+                    <Select value={normalizeSource(field.value)} onValueChange={field.onChange}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="hf-mirror">HF 镜像 (hf-mirror.com)</SelectItem>
                         <SelectItem value="hf">HuggingFace</SelectItem>
-                        {/* F5-TTS 的权重只在 HuggingFace 上,ModelScope 这一项对它没有意义
-                            (后端会把它解析成官方 HF 端点)。**没有意义的就不显示** —— 与其挂一个
-                            长长的括号解释它其实不是它,不如让选项跟着引擎变。 */}
-                        {isFish && <SelectItem value="modelscope">ModelScope</SelectItem>}
                       </SelectContent>
                     </Select>
                   </FormControl>

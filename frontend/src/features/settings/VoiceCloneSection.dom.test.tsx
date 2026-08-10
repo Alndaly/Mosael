@@ -73,3 +73,27 @@ describe("声音克隆设置", () => {
     await waitFor(() => expect(screen.queryByText(/ttsSaveFirst/)).toBeNull());
   });
 });
+
+
+describe("已保存 fish-speech + modelscope(用户库里的真实那一行)", () => {
+  it("老值 modelscope 落到等价的 HuggingFace 上,而不是一片空白", async () => {
+    config.engine = "fish-speech";
+    config.source = "modelscope";
+    (window as any).__DEBUG_TTS__ = true;
+    renderSection();
+
+    await screen.findByRole("button", { name: /asrModelDownload/ });
+    // 触发器上显示的就是它 —— 不是一片空白。(下拉项本身也叫这个名字,所以用 getAllBy。)
+    await waitFor(() => expect(screen.getAllByText("HuggingFace").length).toBeGreaterThan(0));
+  });
+
+  it("一个字没动,就不该是「改了还没保存」—— 否则每次刷新都要重存一遍", async () => {
+    config.engine = "fish-speech";
+    config.source = "modelscope";
+    (window as any).__DEBUG_TTS__ = true;
+    renderSection();
+
+    await screen.findByRole("button", { name: /asrModelDownload/ });
+    await waitFor(() => expect(screen.queryByText(/ttsSaveFirst/)).toBeNull());
+  });
+});

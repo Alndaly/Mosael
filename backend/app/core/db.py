@@ -954,6 +954,14 @@ def init_db() -> None:
     _backfill_plugin_instances()
     # 必须在 create_all 之后:resource_shares 是新表。
     _migrate_resource_ownership()
+    _migrate_legacy_tts_sources()
+
+
+def _migrate_legacy_tts_sources() -> None:
+    """「ModelScope」这个下载源和「HuggingFace」指向同一个端点,已删除;已存的值迁到 hf。"""
+    from app.domain import tts_config
+
+    tts_config.migrate_legacy_sources()
 
 
 def now() -> datetime:

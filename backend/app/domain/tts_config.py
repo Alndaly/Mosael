@@ -24,11 +24,36 @@ PIP_INDEXES = {
 }
 
 # Model-download source → the HF endpoint the worker/download subprocess should use.
+# 「ModelScope」曾经也在这里,指向 https://huggingface.co —— 和上面第一项**一模一样**。
+# 两个引擎都一样:F5 的权重只在 HF 上;Fish 的源码从 GitHub 拉、权重走 snapshot_download,
+# 认的还是 HF_ENDPOINT。一个不做事的选项,却让用户按名字做出错误判断,还养出了三层补丁
+# (加长括号解释 → 按引擎条件渲染 → 撞上 Radix 清空受控值,于是每次刷新表单自己变脏)。
+# 删了,已存的值由 migrate_legacy_sources 迁到等价的 "hf"。
 HF_ENDPOINTS = {
     "hf": "https://huggingface.co",
     "hf-mirror": "https://hf-mirror.com",
-    "modelscope": "https://huggingface.co",  # f5-tts pulls from HF; modelscope is a fish path
 }
+
+#: 已经不存在的下载源 → 与它**等价**的那一个。等价才迁,否则就是替用户改了设置。
+_LEGACY_SOURCES = {"modelscope": "hf"}
+
+
+def migrate_legacy_sources() -> None:
+    """把库里存着的老下载源换成等价的新值。
+
+    不迁的话它会落到 `hf_endpoint` 的兜底(hf-mirror)上 —— 那是**另一个**端点:用户什么都
+    没改,下载源却悄悄换了人,而这台机器上镜像恰恰是下不动的那个。
+    """
+    from app.core.db import SessionLocal
+    from app.db.models import TtsConfig
+
+    with SessionLocal() as db:
+        rows = db.query(TtsConfig).filter(TtsConfig.source.in_(tuple(_LEGACY_SOURCES))).all()
+        for row in rows:
+            row.source = _LEGACY_SOURCES[row.source]
+        if rows:
+            db.commit()
+    refresh()
 
 # App 托管的 TTS 运行环境:两个引擎(f5-tts / fish-speech)共用这一个 venv。
 #
