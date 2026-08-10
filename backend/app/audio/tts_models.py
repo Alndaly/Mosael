@@ -59,7 +59,11 @@ CATALOG: tuple[TtsEngine, ...] = (
         label="Fish Speech S2 Pro",
         detail="零样本克隆,支持情感标签;一键下载源码 + 权重,占用更大",
         cache_dirs=("models--fishaudio--s2-pro",),
-        expected_bytes=4_000_000_000,
+        # 11.01 GB —— 照 Hub 上 fishaudio/s2-pro 的文件清单实测(两个 4~5 GB 的 safetensors
+        # + 1.87 GB 的 codec.pth),`snapshot_download` 是整仓拉。此前写的 4.0 GB 是拍出来的:
+        # 卡片上那句「4.0 GB」是用户据以决定要不要下的数字,而 `_is_installed` 的 0.6 倍判据
+        # 意味着只下了两成就会被判成"已安装",然后合成在运行时炸。
+        expected_bytes=11_000_000_000,
         module="fish_speech",
         pip_requirements=("torch", "torchaudio", "transformers", "huggingface_hub", "hydra-core", "loguru"),
     ),
@@ -272,11 +276,15 @@ def _status_dict(engine: TtsEngine) -> dict[str, Any]:
     base = {"id": engine.id, "label": engine.label, "detail": engine.detail,
             "expected_bytes": engine.expected_bytes, **_source_fields(engine)}
     if live is not None and live.status == "downloading":
+        # **实测越过估计值 = 这个估计已经被证伪**,那一刻起就不该再拿它当分母:界面会画出一根
+        # 满的条(用户截图里是 `5.2 GB / 4.0 GB`、100%,而它还在下),而"满"说的是"下完了"。
+        # 和装运行环境那一阶段同一条规矩:没有诚实的分母就不报分母,只报下了多少、在做什么。
+        total = 0 if live.total and live.downloaded > live.total else live.total
         return {**base, "status": "downloading", "downloaded_bytes": live.downloaded,
                 # **不回落到权重大小**:装运行环境那一阶段没有可报的总量(跑的是 pip),
                 # 顶一个权重的字节数上去,界面就会画出"0 MB / 1.5 GB"这种量错了东西的进度条。
                 # 光在 _Live 里置 0 不够 —— 这个 `or` 会把它填回来,转写那边就是这么被填回来的。
-                "total_bytes": live.total, "speed_bps": live.speed,
+                "total_bytes": total, "speed_bps": live.speed,
                 "eta_seconds": live.eta, "message": live.message}
     if live is not None and live.status == "failed":
         return {**base, "status": "failed", "downloaded_bytes": _measure(engine),

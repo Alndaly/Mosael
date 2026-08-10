@@ -203,7 +203,11 @@ export function VoiceCloneSection() {
                 </FormItem>
               )}
             />
-            <div className="mt-1 flex justify-end gap-1.5">
+            {/* 「改了还没保存」讲的是**这个表单**的状态,所以只说一次、说在「保存」旁边。
+                此前每张引擎卡片下面各挂一遍,同一句话在一屏里出现两三次,读起来像是每个引擎
+                各自出了问题。 */}
+            <div className="mt-1 flex items-center justify-end gap-2">
+              {unsaved && <small className="text-[11.5px] text-muted-foreground">{t("ttsSaveFirst")}</small>}
               <Button type="submit" size="sm" loading={save.isPending}>
                 {t("save")}
               </Button>
@@ -239,7 +243,7 @@ function EngineCard({ model, busy, unsaved, onDownload }: { model: TtsEngine; bu
           {model.status === "installed" && !model.runtime_ready && (
             <small className="text-[11.5px] text-destructive">{t("voiceModelNoRuntime")}</small>
           )}
-          {unsaved && <small className="text-[11.5px] text-muted-foreground">{t("ttsSaveFirst")}</small>}
+
         </div>
         <div className="shrink-0">
           {/* **两件事分开说**:权重在不在盘上(status),和跑不跑得起来(runtime_ready)。
@@ -295,7 +299,13 @@ function EngineCard({ model, busy, unsaved, onDownload }: { model: TtsEngine; bu
             </>
           ) : (
             <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
-              <Loader2 size={12} className="animate-openstudio-spin" /> {model.message}
+              {/* 没有分母时,分子仍然值得说 —— 「已下载 5.2 GB」比一个光转的圈有用得多。
+                  (估计值被实测越过时也走这里:那时分母已经被证伪,而下了多少是实打实的。) */}
+              <Loader2 size={12} className="shrink-0 animate-openstudio-spin" />
+              {model.downloaded_bytes > 0 && (
+                <span className="tabular-nums">{formatBytes(model.downloaded_bytes)}</span>
+              )}
+              <span className="min-w-0 truncate">{model.message}</span>
             </div>
           )}
         </div>
