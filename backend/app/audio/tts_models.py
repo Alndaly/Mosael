@@ -46,6 +46,12 @@ class TtsEngine:
     #: 这个引擎的权重在 ModelScope 上的仓库 id。空 = ModelScope 上没有(或只有一部分),
     #: 那就不该把它列进这个引擎的下载源里 —— 只供一半的源不是源。
     modelscope_repo: str = ""
+    #: 合成**真正**会 import 的模块。探测跑的就是这几行 —— 写顶层包名等于没探
+    #: (`import fish_speech` 命中一个空的 __init__,永远成功,而合成 import 的是它的子模块)。
+    imports: tuple[str, ...] = ()
+    #: 需不需要参考文本。F5 不需要(它自己会转写参考音频);Fish Speech 需要 —— 我们用
+    #: `mode="tts"` 构造它,不带 ASR,空文本就是空文本,合成出来听不懂。
+    needs_reference_text: bool = False
 
 
 CATALOG: tuple[TtsEngine, ...] = (
@@ -64,6 +70,8 @@ CATALOG: tuple[TtsEngine, ...] = (
         # 所以这条路是"大的走快路,小的还走 HF" —— 在 46 KB/s 的网络上,那 1.35 GB
         # 是八小时和三分钟的区别,而 55 MB 就算慢也只有二十分钟。
         modelscope_repo="AI-ModelScope/F5-TTS",
+        imports=("f5_tts.api",),
+        needs_reference_text=False,
     ),
     TtsEngine(
         id="fish-speech",
@@ -91,22 +99,12 @@ CATALOG: tuple[TtsEngine, ...] = (
                           # 而 HuggingFace 与 hf-mirror 都是 46 KB/s —— 两百倍。
                           "modelscope"),
         modelscope_repo="fishaudio/s2-pro",
+        imports=("fish_speech.utils.schema", "tools.server.inference", "tools.server.model_manager"),
+        needs_reference_text=True,
     ),
 )
 
 _BY_ID = {engine.id: engine for engine in CATALOG}
-
-#: 合成**真正**会 import 的模块,按引擎列。探测跑的就是这几行。
-#:
-#: 为什么不是"顶层包名":`import fish_speech` 命中的是一个空的 `__init__`,永远成功;
-#: 而合成走的 `fish_speech.utils.schema` / `tools.server.inference` 才会去拉 natsort、
-#: lightning、audiotools、dac 这一串。用户点生成配音时拿到的
-#: `ModuleNotFoundError: No module named 'natsort'`,而同一刻设置页写着「引擎已就绪」——
-#: 两句话查的不是同一件事。**探测查得比真实路径浅,就等于没查。**
-ENGINE_IMPORTS: dict[str, tuple[str, ...]] = {
-    "f5-tts": ("f5_tts.api",),
-    "fish-speech": ("fish_speech.utils.schema", "tools.server.inference", "tools.server.model_manager"),
-}
 
 #: 谁都能走的那几条(HuggingFace 官方 + 它的镜像)。ModelScope 按引擎有没有对应仓库来加。
 _UNIVERSAL_SOURCES = ("hf", "hf-mirror")
@@ -320,7 +318,8 @@ def _probe_code(engine_id: str) -> str | None:
     此前 fish 探的是 `import fish_speech`(一个空的 __init__,永远成功),f5 探的是
     `import f5_tts`(同理)。于是设置页说「已就绪」,而一点合成就 ModuleNotFoundError。
     """
-    imports = ENGINE_IMPORTS.get(engine_id)
+    engine = _BY_ID.get(engine_id)
+    imports = engine.imports if engine else ()
     if not imports:
         return None
     body = "; ".join(f"import {module}" for module in imports)

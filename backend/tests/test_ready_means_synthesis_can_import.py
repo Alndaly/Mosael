@@ -65,10 +65,9 @@ def test_f5_probes_the_class_it_actually_constructs() -> None:
 def test_every_engine_declares_what_synthesis_imports() -> None:
     """新加引擎时,这张表必须跟着写 —— 否则它的探测又会退化成"包在不在"。"""
     for engine in tts_models.CATALOG:
-        imports = tts_models.ENGINE_IMPORTS.get(engine.id)
-        assert imports, f"{engine.id} 没声明合成要 import 什么"
-        assert all("." in module for module in imports), (
-            f"{engine.id} 只写了顶层包名({imports}) —— 那正是这条测试要挡的东西"
+        assert engine.imports, f"{engine.id} 没声明合成要 import 什么"
+        assert all("." in module for module in engine.imports), (
+            f"{engine.id} 只写了顶层包名({engine.imports}) —— 那正是这条测试要挡的东西"
         )
 
 

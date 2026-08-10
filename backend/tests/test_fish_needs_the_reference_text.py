@@ -81,6 +81,10 @@ def test_f5_still_accepts_an_empty_reference_text(monkeypatch) -> None:
 
 
 def test_the_engines_that_need_it_are_declared_not_hardcoded_at_the_callsite() -> None:
-    """哪个引擎需要参考文本,是引擎的属性 —— 写在目录里,而不是散在判断里。"""
-    assert "fish-speech" in voices.ENGINES_NEEDING_REFERENCE_TEXT
-    assert "f5-tts" not in voices.ENGINES_NEEDING_REFERENCE_TEXT
+    """哪个引擎需要参考文本,是引擎的属性 —— 写在**引擎目录**里,而不是散在判断里,
+    也不是在 voices 里另存一份名单(那份已经收回目录了,见
+    test_engine_capabilities_live_in_one_table)。"""
+    needing = voices.engines_needing_reference_text()
+
+    assert "fish-speech" in needing
+    assert "f5-tts" not in needing

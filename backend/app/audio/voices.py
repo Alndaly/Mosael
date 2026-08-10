@@ -44,12 +44,13 @@ REFERENCE_TOO_SHORT_HINT = (
 )
 
 
-#: 哪些引擎**必须**有参考文本。写在这里而不是散在判断里:它是引擎的属性。
-#:
-#: F5 不在其中,因为它自己会转写参考音频(f5_tts 的 api 里 ref_text="" 就是这个意思)。
-#: Fish Speech 在:我们用 `mode="tts"` 构造它的 ModelManager,**不带 ASR**,空文本就是空文本
-#: —— 而我们自己的代码注释早就写着「a wrong/empty one garbles output」。
-ENGINES_NEEDING_REFERENCE_TEXT = frozenset({"fish-speech"})
+def engines_needing_reference_text() -> set[str]:
+    """哪些引擎必须有参考文本 —— **从引擎目录读**,不在这里另存一份。
+
+    此前这里是一个 frozenset 字面量:一张"关于引擎的知识"流落在声明它的表之外。
+    今天所有 bug 的共同根就是这个形状(同一件事两处各说各的),所以连这种小的也收回去。
+    """
+    return {engine.id for engine in tts_models.CATALOG if engine.needs_reference_text}
 
 REFERENCE_TEXT_REQUIRED_HINT = (
     "这个音色没有填参考文本,而 {label} 不会自己识别 —— 它需要知道那段参考音频说的是什么,"
@@ -337,7 +338,7 @@ def start_synthesis(
         clone_engine = resolve_clone_engine(clone_engine)
         # 「留空则自动识别」这句话只有 F5 兑现。Fish Speech 拿到空文本就是空文本 ——
         # 在建任务之前说,而不是等一次十分钟的合成之后交一段听不懂的东西。
-        if clone_engine in ENGINES_NEEDING_REFERENCE_TEXT and not (voice.reference_text or "").strip():
+        if clone_engine in engines_needing_reference_text() and not (voice.reference_text or "").strip():
             raise VoiceError(REFERENCE_TEXT_REQUIRED_HINT.format(label=clone_engine))
         # 本地克隆跑不跑得起来,**建任务之前**就知道:探一次解释器、看一眼权重目录而已。
         # 不挡的话它会一路跑到 worker:导不进引擎就写一段正弦音(用户说的「根本克隆不了」),
