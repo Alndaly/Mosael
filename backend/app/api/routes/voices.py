@@ -22,7 +22,7 @@ from app.api.schemas import (
     VoiceFromSpeakerRequest,
     VoiceOut,
 )
-from app.audio import tts_models, voices
+from app.audio import tts_daemon, tts_models, voices
 from app.core.permissions import ensure_workspace_perm, ensure_deployment_admin, ensure_workspace_access
 from app.domain import tts_config
 
@@ -267,6 +267,9 @@ def set_tts_config(body: TtsConfigUpdate, db: DbSession, user: CurrentUser) -> d
     # 而上一次的失败消息说的也是改之前那套(源已经换掉了,卡片还在说旧的那个)。
     tts_models.clear_runtime_probes()
     tts_models.forget_failures()
+    # 常驻的合成进程是**带着旧 env 起来的**(检出目录、权重目录、下载源都在里面)。
+    # 配置刚改过,让它重起一个 —— 否则下一次合成还按改之前那套跑。
+    tts_daemon.pool().drop_all()
     return _tts_config_out()
 
 

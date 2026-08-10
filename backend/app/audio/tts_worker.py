@@ -30,6 +30,32 @@ from pathlib import Path
 from typing import Any
 
 
+# ---------------------------------------------------------------------------
+# 常驻模式
+# ---------------------------------------------------------------------------
+#: 和宿主约定的协议前缀(见 audio/tts_daemon)。引擎自己会往这个通道打 tqdm 和 loguru,
+#: 所以只有带前缀的行才是协议。
+EVENT_PREFIX = "@@OPEN-STUDIO-TTS "
+
+#: 已经加载好的引擎。**常驻模式存在的全部理由就是这个字典** —— 实测一次 Fish Speech 的
+#: 权重加载要 511.9 秒,而解码本身只有几十秒。
+_LOADED: dict[str, Any] = {}
+
+
+def _emit(payload: dict[str, Any]) -> None:
+    sys.stdout.write(EVENT_PREFIX + json.dumps(payload, ensure_ascii=False) + "\n")
+    sys.stdout.flush()
+
+
+def _progress(phase: str, fraction: float, message: str = "") -> None:
+    """报**在做哪一步**,以及一个粗粒度的比例。
+
+    不编细粒度的百分比:LLM 解码的 token 数事先不知道(上限 1023,通常远早于此停),
+    拿"当前 token / 上限"当进度,会画出一条永远走不到头的条 —— 那是另一种说谎。
+    """
+    _emit({"event": "progress", "phase": phase, "fraction": round(fraction, 3), "message": message})
+
+
 def _estimate_seconds(text: str) -> float:
     # ~4 chars/sec for CJK-ish pacing; clamp to a sane range.
     return max(1.0, min(30.0, len(text.strip()) * 0.22 + 0.6))
@@ -58,17 +84,14 @@ def write_marker_wav(path: str, text: str, sr: int = 24000) -> None:
 def run_f5(request: dict[str, Any], output_path: str) -> str:
     from f5_tts.api import F5TTS  # heavy, only in the TTS interpreter
 
-    device = "cpu"
-    try:
-        import torch
-
-        if torch.cuda.is_available():
-            device = "cuda"
-        elif torch.backends.mps.is_available():
-            device = "mps"
-    except Exception:  # noqa: BLE001
-        pass
-    model = F5TTS(device=device)
+    # 和 fish 一样只加载一次 —— F5 的权重比 fish 小,但加载同样以分钟计。
+    model = _LOADED.get("f5-tts")
+    if model is None:
+        device = _pick_device()
+        _progress("load", 0.1, f"首次加载权重({device})")
+        model = F5TTS(device=device)
+        _LOADED["f5-tts"] = model
+    _progress("generate", 0.35, "生成中")
     model.infer(
         ref_file=request["reference_wav"],
         ref_text=request.get("reference_text") or "",  # empty → F5 auto-transcribes the ref
@@ -130,16 +153,22 @@ def run_fish(request: dict[str, Any], output_path: str) -> str:
     from tools.server.inference import inference_wrapper  # type: ignore
     from tools.server.model_manager import ModelManager  # type: ignore
 
-    device = _pick_device()
-    manager = ModelManager(
-        mode="tts",
-        device=device,
-        half=device.startswith("cuda"),
-        compile=False,
-        llama_checkpoint_path=str(model_dir),
-        decoder_checkpoint_path=str(model_dir / "codec.pth"),
-        decoder_config_name="modded_dac_vq",
-    )
+    # **加载一次**。实测这一步 511.9 秒(18 GB 权重),而解码本身只有几十秒 ——
+    # 每次合成重建一个 ModelManager,等于把用户的十分钟花在读同一份文件上。
+    manager = _LOADED.get("fish-speech")
+    if manager is None:
+        device = _pick_device()
+        _progress("load", 0.1, f"首次加载权重({device},约几分钟)")
+        manager = ModelManager(
+            mode="tts",
+            device=device,
+            half=device.startswith("cuda"),
+            compile=False,
+            llama_checkpoint_path=str(model_dir),
+            decoder_checkpoint_path=str(model_dir / "codec.pth"),
+            decoder_config_name="modded_dac_vq",
+        )
+        _LOADED["fish-speech"] = manager
 
     reference_wav = request.get("reference_wav")
     if not reference_wav:
@@ -152,7 +181,9 @@ def run_fish(request: dict[str, Any], output_path: str) -> str:
         )
     ]
     payload = ServeTTSRequest(text=request["text"], references=references, format="wav", streaming=False)
+    _progress("generate", 0.35, "生成中")
     audio = next(inference_wrapper(payload, manager.tts_inference_engine))
+    _progress("encode", 0.9, "写出音频")
     sample_rate = int(manager.tts_inference_engine.decoder_model.sample_rate)
 
     import soundfile as sf  # type: ignore
@@ -235,7 +266,28 @@ def warmup(request: dict[str, Any], output_path: str) -> str:
         raise
 
 
+def serve() -> None:
+    """按行收请求,权重留在内存里。一个进程只服务一个引擎(两套权重同时挂是 30 GB)。"""
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            request = json.loads(line)
+            output_path = request["output_path"]
+            engine = (request.get("engine") or "f5-tts").strip().lower()
+            _progress("load", 0.05, "准备引擎")
+            engine_used = synthesize(request, output_path)
+            _emit({"event": "done", "engine": engine_used, "output": output_path})
+        except Exception as exc:  # noqa: BLE001 — 常驻进程要**活下去**,把失败报回去就行
+            traceback.print_exc(file=sys.stderr)
+            _emit({"event": "error", "message": f"{type(exc).__name__}: {exc}"})
+
+
 def main() -> None:
+    if "--serve" in sys.argv[1:]:
+        serve()
+        return
     request = json.loads(sys.stdin.read())
     output_path = sys.argv[1]
     action = (request.get("action") or "synthesize").strip().lower()

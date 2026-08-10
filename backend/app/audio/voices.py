@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.domain import provider_models
 from app.domain.usage import billable
-from app.audio import tts_models
+from app.audio import tts_daemon, tts_models
 from app.audio.tts_models import WORKER_PATH
 from app.core.db import SessionLocal
 from app.domain.jobs import TTS_SLOTS, run_job_guarded
@@ -365,6 +365,25 @@ def _run_synthesis(
         run_job_guarded(job_id, lambda: _run_synthesis_body(*args), what="配音")
 
 
+def _update_progress(job_id: str, event: dict) -> None:
+    """把 worker 报的阶段落到任务上。
+
+    **只报它真的知道的**:阶段名 + 一个粗粒度比例。不拿"当前 token / 上限"编细进度 ——
+    解码通常远早于上限就停,那条进度会永远走不到头,又是一个答非所问的数字。
+    """
+    fraction = event.get("fraction")
+    message = event.get("message") or ""
+    with SessionLocal() as db:
+        job = db.get(Job, job_id)
+        if job is None or job.status != "running":
+            return
+        if isinstance(fraction, (int, float)):
+            job.progress = max(job.progress or 0.0, min(0.95, float(fraction)))
+        if message:
+            job.message = message
+        db.commit()
+
+
 def _run_synthesis_body(
     job_id: str,
     voice_id: str | None,
@@ -425,16 +444,24 @@ def _run_synthesis_body(
                     "reference_text": voice.reference_text,
                     "text": text,
                 }
-                proc = run_logged(
-                    [python, str(WORKER_PATH), str(out_wav)], input=json.dumps(request),
-                    capture_output=True, text=True, timeout=TTS_TIMEOUT_SECONDS, env=worker_env, what="语音合成 worker")
-                if proc.returncode != 0 or not out_wav.exists():
-                    # 完整 traceback 进日志,界面只拿那一句(run_logged 已经记过命令与 stderr 尾巴)。
-                    logger.warning("语音合成失败(%s):%s", engine, (proc.stderr or "")[-2000:])
-                    raise VoiceError(f"语音合成失败:{explain_worker_failure(proc.stderr)}")
-                meta = Path(str(out_wav) + ".json")
-                used = json.loads(meta.read_text()).get("engine", engine) if meta.exists() else engine
-                job.progress = 0.85
+                request["output_path"] = str(out_wav)
+
+                # 进度从 worker 一路报回来。此前这里只有一个开头写死的 0.2 —— 用户看到的
+                # 「20% 卡了 14 分钟」不是进度慢,是**根本没有进度上报**。
+                def report(event: dict) -> None:
+                    _update_progress(job_id, event)
+
+                try:
+                    result = tts_daemon.pool().request(
+                        engine, python, request, on_progress=report, timeout=TTS_TIMEOUT_SECONDS, env=worker_env,
+                    )
+                except RuntimeError as exc:
+                    raise VoiceError(f"语音合成失败:{explain_worker_failure(str(exc))}") from exc
+                if not out_wav.exists():
+                    raise VoiceError("语音合成失败:worker 报成功却没有产出音频")
+                used = result.get("engine", engine)
+                job = db.get(Job, job_id)
+                job.progress = 0.95
                 db.commit()
                 asset = register_file_asset(
                     db,
