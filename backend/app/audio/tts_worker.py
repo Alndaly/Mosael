@@ -174,20 +174,50 @@ def synthesize(request: dict[str, Any], output_path: str) -> str:
     return run_f5(request, output_path)
 
 
+#: fishaudio/s2-pro 在两边的仓库 id 恰好同名,但别把它当成规律 —— 分开写着。
+FISH_HF_REPO = "fishaudio/s2-pro"
+FISH_MODELSCOPE_REPO = "fishaudio/s2-pro"
+
+
+def _modelscope_snapshot(model_id: str, local_dir: str) -> str:
+    from modelscope import snapshot_download  # type: ignore
+
+    return snapshot_download(model_id, local_dir=local_dir)
+
+
+def _hf_snapshot(**kwargs: Any) -> str:
+    from huggingface_hub import snapshot_download  # type: ignore
+
+    return snapshot_download(**kwargs)
+
+
+def fetch_fish_weights() -> None:
+    """把 Fish Speech 的权重拉到托管目录。
+
+    走哪条路由宿主通过 `OPEN_STUDIO_MODEL_SOURCE` 告诉这里。ModelScope **不是** HF 兼容端点,
+    `HF_ENDPOINT` 那一套对它无效,得换一个客户端 —— 此前"选 ModelScope"只是把 HF_ENDPOINT
+    设成了 huggingface.co,于是那个选项列在那里、选得中、却什么都不改变。
+
+    这条路值多少:用户机器上实测 ModelScope ~9 MB/s,而 HuggingFace 和 hf-mirror 都是
+    46 KB/s —— 9 GB 是 14 分钟和 55 小时的区别。
+    """
+    # 落成扁平目录(codec.pth + config 在根上,run_fish 就是这么读的);没给目标目录就退到各自的缓存。
+    target = os.environ.get("OPEN_STUDIO_FISH_MODEL_DIR", "").strip()
+    if os.environ.get("OPEN_STUDIO_MODEL_SOURCE", "").strip() == "modelscope":
+        _modelscope_snapshot(FISH_MODELSCOPE_REPO, local_dir=target)
+        return
+    if target:
+        _hf_snapshot(repo_id=FISH_HF_REPO, local_dir=target)
+    else:
+        _hf_snapshot(repo_id=FISH_HF_REPO)  # → HF cache;进度由宿主轮询目录
+
+
 def warmup(request: dict[str, Any], output_path: str) -> str:
     """Construct the engine so its weights download; write a tiny marker wav."""
     engine = (request.get("engine") or "f5-tts").strip().lower()
     try:
         if engine == "fish-speech":
-            from huggingface_hub import snapshot_download  # type: ignore
-
-            # Managed install: land weights flat in OPEN_STUDIO_FISH_MODEL_DIR (codec.pth + config
-            # at its root, which run_fish reads). Without a target, fall back to the HF cache.
-            target = os.environ.get("OPEN_STUDIO_FISH_MODEL_DIR", "").strip()
-            if target:
-                snapshot_download(repo_id="fishaudio/s2-pro", local_dir=target)
-            else:
-                snapshot_download(repo_id="fishaudio/s2-pro")  # → HF cache; progress polled by host
+            fetch_fish_weights()
         else:
             from f5_tts.api import F5TTS
 

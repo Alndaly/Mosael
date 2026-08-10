@@ -29,18 +29,25 @@ type ConfigForm = { engine: string; python_path: string; source: string; pip_ind
 
 /** Settings → 声音克隆:选引擎、指定装了 f5-tts 的 Python 解释器、下载源,并下载
     引擎权重。装好并配好后合成即为真实音色;否则回退占位音。 */
+const SOURCE_LABELS: Record<string, string> = {
+  "hf-mirror": "HF 镜像 (hf-mirror.com)",
+  hf: "HuggingFace",
+  modelscope: "ModelScope",
+};
+
 /**
  * 受控下拉的值**必须**是列得出来的某一项 —— 这是 Radix Select 的硬约束:找不到对应 Item 时
  * 它会把值清成空串并回调出来,而 react-hook-form 把那记成一次"用户改动"。用户报的
  * 「每次刷新页面下载源都会变动,导致要重新保存」就是这么来的:表单一进页面自己变脏,
  * 顶上常驻「改了还没保存」,下拉还显示成一片空白。
  *
- * 「ModelScope」已经删掉了 —— 它和「HuggingFace」指向同一个端点,从来没做过任何不同的事
- * (见 backend/app/domain/tts_config.HF_ENDPOINTS)。库里的老值由后端迁移,这里再兜一次:
- * 前端拿到的可能是迁移之前缓存下来的那一份。
+ * 所以:哪些源能选**由后端按引擎给**(ModelScope 上没有 F5 要的 vocos,列出来就是陷阱),
+ * 而当前值一旦不在其中就落到第一项上。加上给 Select 一个随引擎变的 key —— 换引擎时整个
+ * 重挂,不存在"值还在、对应项已经没了"的那一帧。
  */
-export function normalizeSource(source: string): string {
-  return source === "modelscope" ? "hf" : source;
+export function normalizeSource(source: string, sources: readonly string[]): string {
+  if (sources.length === 0) return source; // 还没拉到,先别动
+  return sources.includes(source) ? source : sources[0];
 }
 
 export function VoiceCloneSection() {
@@ -71,19 +78,22 @@ export function VoiceCloneSection() {
       form.reset({
         engine: config.data.engine,
         python_path: config.data.python_path,
-        source: normalizeSource(config.data.source),
+        source: config.data.source,
         pip_index: config.data.pip_index ?? "",
         fish_repo_dir: config.data.fish_repo_dir ?? "",
         fish_model_dir: config.data.fish_model_dir ?? "",
       });
     }
   }, [config.data]);
-  const isFish = form.watch("engine") === "fish-speech";
+  const engineValue = form.watch("engine");
+  // 这个引擎能用哪些下载源,后端说了算 —— F5 要的 vocos 在 ModelScope 上没有。
+  const sources = (models.data ?? []).find((item) => item.id === engineValue)?.sources ?? [];
+  const engineLabel = (models.data ?? []).find((item) => item.id === engineValue)?.label ?? engineValue;
 
   const save = useMutation({
     // 存下去的就是显示出来的那一个 —— 归一化只有一处实现。
     mutationFn: (values: ConfigForm) =>
-      updateTtsConfig({ ...values, source: normalizeSource(values.source) }),
+      updateTtsConfig({ ...values, source: normalizeSource(values.source, sources) }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["tts-config"] });
       toast.success(t("saved"));
@@ -123,8 +133,8 @@ export function VoiceCloneSection() {
               {ready
                 ? t("voiceCloneReady").replace("{python}", config.data.worker_python)
                 : runtimeReady
-                  ? t("voiceCloneWeightsMissing").replace("{engine}", isFish ? "Fish Speech" : "F5-TTS")
-                  : t("voiceCloneNotReady").replace("{engine}", isFish ? "Fish Speech" : "F5-TTS")}
+                  ? t("voiceCloneWeightsMissing").replace("{engine}", engineLabel)
+                  : t("voiceCloneNotReady").replace("{engine}", engineLabel)}
             </AlertDescription>
           </Alert>
         )}
@@ -171,13 +181,20 @@ export function VoiceCloneSection() {
                 <FormItem>
                   <FormLabel>{t("voiceCloneSource")}</FormLabel>
                   <FormControl>
-                    <Select value={normalizeSource(field.value)} onValueChange={field.onChange}>
+                    <Select
+                      key={engineValue}
+                      value={normalizeSource(field.value, sources)}
+                      onValueChange={field.onChange}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="hf-mirror">HF 镜像 (hf-mirror.com)</SelectItem>
-                        <SelectItem value="hf">HuggingFace</SelectItem>
+                        {sources.map((id) => (
+                          <SelectItem key={id} value={id}>
+                            {SOURCE_LABELS[id] ?? id}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </FormControl>

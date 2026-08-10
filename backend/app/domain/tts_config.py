@@ -24,18 +24,18 @@ PIP_INDEXES = {
 }
 
 # Model-download source → the HF endpoint the worker/download subprocess should use.
-# 「ModelScope」曾经也在这里,指向 https://huggingface.co —— 和上面第一项**一模一样**。
-# 两个引擎都一样:F5 的权重只在 HF 上;Fish 的源码从 GitHub 拉、权重走 snapshot_download,
-# 认的还是 HF_ENDPOINT。一个不做事的选项,却让用户按名字做出错误判断,还养出了三层补丁
-# (加长括号解释 → 按引擎条件渲染 → 撞上 Radix 清空受控值,于是每次刷新表单自己变脏)。
-# 删了,已存的值由 migrate_legacy_sources 迁到等价的 "hf"。
+# 只有 HuggingFace 系的源在这里 —— 它们的区别就是一个 base URL。
+# ModelScope 不在:它不是 HF 兼容端点,走的是另一个客户端(见 audio/tts_worker),
+# 所以它是"哪条路"的选择,不是"哪个 URL"的选择。曾经把它塞进这张表、指向 huggingface.co,
+# 于是那个选项列在那里、选得中、却什么都不改变。
 HF_ENDPOINTS = {
     "hf": "https://huggingface.co",
     "hf-mirror": "https://hf-mirror.com",
 }
 
 #: 已经不存在的下载源 → 与它**等价**的那一个。等价才迁,否则就是替用户改了设置。
-_LEGACY_SOURCES = {"modelscope": "hf"}
+#: (ModelScope 现在是真的了,所以它不在这里。)
+_LEGACY_SOURCES: dict[str, str] = {}
 
 
 def migrate_legacy_sources() -> None:
@@ -137,7 +137,9 @@ class TtsRuntimeConfig:
 
     @property
     def hf_endpoint(self) -> str:
-        return HF_ENDPOINTS.get(self.source, "https://hf-mirror.com")
+        # ModelScope 不走这条 —— 它有自己的客户端;这里给它一个能用的 HF 兜底,
+        # 免得同一次下载里别的 HF 调用(比如源码检出之外的小文件)没有端点可用。
+        return HF_ENDPOINTS.get(self.source, "https://huggingface.co")
 
     @property
     def resolved_fish_repo(self) -> str:

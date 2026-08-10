@@ -34,10 +34,15 @@ const config = {
   worker_python: "/x/python",
 };
 
+const base = {
+  detail: "d", status: "missing", runtime_ready: false, downloaded_bytes: 0, total_bytes: 0,
+  speed_bps: 0, eta_seconds: null, message: "未下载", needs_source: false, source_ready: false, source_dir: "",
+};
+// 每个引擎能用哪些下载源由后端给 —— ModelScope 上没有 F5 要的 vocos,所以 F5 没有它。
 const models = [
-  { id: "f5-tts", label: "F5-TTS", detail: "d", status: "missing", runtime_ready: false,
-    downloaded_bytes: 0, total_bytes: 0, expected_bytes: 1_500_000_000, speed_bps: 0,
-    eta_seconds: null, message: "未下载", needs_source: false, source_ready: false, source_dir: "" },
+  { ...base, id: "f5-tts", label: "F5-TTS", expected_bytes: 1_500_000_000, sources: ["hf", "hf-mirror"] },
+  { ...base, id: "fish-speech", label: "Fish Speech", expected_bytes: 11_000_000_000,
+    sources: ["hf", "hf-mirror", "modelscope"] },
 ];
 
 vi.mock("@/api/client", () => ({
@@ -62,29 +67,37 @@ describe("声音克隆设置", () => {
   it("刚进页面、一个字没动时,下载点得动", async () => {
     renderSection();
 
-    const button = await screen.findByRole("button", { name: /asrModelDownload/ });
+    const [button] = await screen.findAllByRole("button", { name: /asrModelDownload/ });
     await waitFor(() => expect(button).not.toBeDisabled());
   });
 
   it("没动过就不该说「改了还没保存」", async () => {
     renderSection();
 
-    await screen.findByRole("button", { name: /asrModelDownload/ });
+    await screen.findAllByRole("button", { name: /asrModelDownload/ });
     await waitFor(() => expect(screen.queryByText(/ttsSaveFirst/)).toBeNull());
   });
 });
 
 
 describe("已保存 fish-speech + modelscope(用户库里的真实那一行)", () => {
-  it("老值 modelscope 落到等价的 HuggingFace 上,而不是一片空白", async () => {
+  it("显示得出「ModelScope」,而不是一片空白 —— 它对 Fish Speech 是真的源", async () => {
     config.engine = "fish-speech";
     config.source = "modelscope";
-    (window as any).__DEBUG_TTS__ = true;
     renderSection();
 
-    await screen.findByRole("button", { name: /asrModelDownload/ });
-    // 触发器上显示的就是它 —— 不是一片空白。(下拉项本身也叫这个名字,所以用 getAllBy。)
+    await screen.findAllByRole("button", { name: /asrModelDownload/ });
+    await waitFor(() => expect(screen.getAllByText("ModelScope").length).toBeGreaterThan(0));
+  });
+
+  it("引擎不支持的源落到该引擎的第一个源上,而不是空白", async () => {
+    config.engine = "f5-tts"; // ModelScope 上没有它要的 vocos
+    config.source = "modelscope";
+    renderSection();
+
+    await screen.findAllByRole("button", { name: /asrModelDownload/ });
     await waitFor(() => expect(screen.getAllByText("HuggingFace").length).toBeGreaterThan(0));
+    expect(screen.queryByText("ModelScope")).toBeNull();
   });
 
   it("一个字没动,就不该是「改了还没保存」—— 否则每次刷新都要重存一遍", async () => {
@@ -93,7 +106,7 @@ describe("已保存 fish-speech + modelscope(用户库里的真实那一行)", (
     (window as any).__DEBUG_TTS__ = true;
     renderSection();
 
-    await screen.findByRole("button", { name: /asrModelDownload/ });
+    await screen.findAllByRole("button", { name: /asrModelDownload/ });
     await waitFor(() => expect(screen.queryByText(/ttsSaveFirst/)).toBeNull());
   });
 });

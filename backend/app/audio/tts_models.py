@@ -43,6 +43,9 @@ class TtsEngine:
     #: 装进托管 venv 的 pip 依赖。fish-speech 的 fish_speech 包不在 PyPI(靠 git 检出),
     #: 所以这里只列它运行所需的第三方依赖。
     pip_requirements: tuple[str, ...] = ()
+    #: 这个引擎的权重在 ModelScope 上的仓库 id。空 = ModelScope 上没有(或只有一部分),
+    #: 那就不该把它列进这个引擎的下载源里 —— 只供一半的源不是源。
+    modelscope_repo: str = ""
 
 
 CATALOG: tuple[TtsEngine, ...] = (
@@ -54,6 +57,9 @@ CATALOG: tuple[TtsEngine, ...] = (
         expected_bytes=1_500_000_000,
         module="f5_tts",
         pip_requirements=("f5-tts",),
+        # F5 还要 charactr/vocos-mel-24khz,而 ModelScope 上没有它(实测 404):
+        # 只能供一半的源列出来就是个陷阱,所以这里留空。
+        modelscope_repo="",
     ),
     TtsEngine(
         id="fish-speech",
@@ -66,11 +72,38 @@ CATALOG: tuple[TtsEngine, ...] = (
         # 意味着只下了两成就会被判成"已安装",然后合成在运行时炸。
         expected_bytes=11_000_000_000,
         module="fish_speech",
-        pip_requirements=("torch", "torchaudio", "transformers", "huggingface_hub", "hydra-core", "loguru"),
+        pip_requirements=("torch", "torchaudio", "transformers", "huggingface_hub", "hydra-core", "loguru",
+                          # 走 ModelScope 下权重要用它。用户机器上实测 ~9 MB/s,
+                          # 而 HuggingFace 与 hf-mirror 都是 46 KB/s —— 两百倍。
+                          "modelscope"),
+        modelscope_repo="fishaudio/s2-pro",
     ),
 )
 
 _BY_ID = {engine.id: engine for engine in CATALOG}
+
+#: 谁都能走的那几条(HuggingFace 官方 + 它的镜像)。ModelScope 按引擎有没有对应仓库来加。
+_UNIVERSAL_SOURCES = ("hf", "hf-mirror")
+
+
+def sources_for(engine_id: str) -> tuple[str, ...]:
+    """这个引擎**真的**能用的下载源。
+
+    界面据此渲染下拉,而不是自己猜。让界面猜的下场就是这个选项最早的样子:列在那里、选得中、
+    却什么都不改变。
+    """
+    engine = _BY_ID.get(engine_id)
+    if engine is None or not engine.modelscope_repo:
+        return _UNIVERSAL_SOURCES
+    return (*_UNIVERSAL_SOURCES, "modelscope")
+
+
+def effective_source(engine_id: str, source: str) -> str:
+    """把"用户选的源"落到"这个引擎能走的源"上。
+
+    库里存着 modelscope、而当前引擎是 F5 时,不能就这么去 ModelScope 上找一个不存在的仓库。
+    """
+    return source if source in sources_for(engine_id) else "hf"
 
 
 def _hf_roots() -> list[Path]:
@@ -99,15 +132,21 @@ def _dir_size(path: Path) -> int:
     return total
 
 
+def _fish_model_dir() -> Path | None:
+    """Fish Speech 的权重目录(配置的 / App 托管的),没有解析出来就是 None。"""
+    from app.domain import tts_config
+
+    model = tts_config.get().resolved_fish_model
+    return Path(model) if model and Path(model).is_dir() else None
+
+
 def _measure(engine: TtsEngine) -> int:
     # Fish Speech reuses a local weights dir (configured / app-managed), not the
     # HF hub cache — measure that so a reused setup reads as installed, not "missing".
     if engine.id == "fish-speech":
-        from app.domain import tts_config
-
-        model = tts_config.get().resolved_fish_model
-        if model and Path(model).is_dir():
-            return _dir_size(Path(model))
+        model = _fish_model_dir()
+        if model is not None:
+            return _dir_size(model)
     total = 0
     for name in engine.cache_dirs:
         for root in _hf_roots():
@@ -118,7 +157,67 @@ def _measure(engine: TtsEngine) -> int:
     return total
 
 
+#: safetensors 分片清单的文件名。模型自己带着"我需要哪些文件、合起来多大"的答案。
+_SHARD_INDEX = "model.safetensors.index.json"
+
+
+def _fish_manifest_complete(model: Path) -> bool | None:
+    """按 `model.safetensors.index.json` 核 Fish Speech 的权重齐不齐。
+
+    返回 None = 这个目录没有清单(别的工具下的老目录),交给调用方回退到体积判据 ——
+    读不到清单不等于"没装好",不能把一个已经能用的环境说成坏的。
+    """
+    index = model / _SHARD_INDEX
+    if not index.is_file():
+        return None
+    try:
+        manifest = json.loads(index.read_text(encoding="utf-8"))
+        shards = set((manifest.get("weight_map") or {}).values())
+        expected = int((manifest.get("metadata") or {}).get("total_size") or 0)
+    except (OSError, ValueError, TypeError):
+        return None
+    if not shards:
+        return None
+    if not (model / "codec.pth").is_file():  # 合成要加载的另一半
+        return False
+    actual = 0
+    for name in shards:
+        shard = model / name
+        if not shard.is_file():
+            return False
+        actual += shard.stat().st_size
+    # 少一个字节都不算:一个写了一半的 safetensors 加载时才会炸,而那时错误指向"文件损坏",
+    # 没人会想到是"还没下完"。
+    return actual >= expected if expected else True
+
+
+def _has_partial_downloads(engine: TtsEngine) -> bool:
+    """HuggingFace 缓存里下载中的 blob 叫 `*.incomplete` —— 它在就说明还没下完。"""
+    for name in engine.cache_dirs:
+        for root in _hf_roots():
+            found = root / name
+            if found.is_dir() and any(found.rglob("*.incomplete")):
+                return True
+    return False
+
+
 def _is_installed(engine: TtsEngine) -> bool:
+    """装没装,**看该有的文件在不在**,不是看体积够不够。
+
+    此前的判据是"实测 ≥ 期望 × 0.6"。比例回答不了"能不能用":用户机器上抓到过分片 2 才下
+    三分之一、总量已经过线的情形,于是设置页写着「已安装,声音克隆可用」,而合成会在加载权重
+    时炸。转写那边踩过同一个根的另一种形态(符号链接把体积翻倍)。
+
+    体积判据留作**兜底**:老目录、别的工具下的缓存没有清单可核,那时它仍然是唯一能问的东西。
+    """
+    if engine.id == "fish-speech":
+        model = _fish_model_dir()
+        if model is not None:
+            complete = _fish_manifest_complete(model)
+            if complete is not None:
+                return complete
+    elif _has_partial_downloads(engine):
+        return False
     return _measure(engine) >= int(engine.expected_bytes * _INSTALLED_FRACTION)
 
 
@@ -134,6 +233,9 @@ def _worker_env() -> dict[str, str]:
     cfg = tts_config.get()
     env = dict(os.environ)
     env["HF_ENDPOINT"] = cfg.hf_endpoint
+    # 下载跑在 worker 子进程里,它得知道这一次走哪条路 —— ModelScope 不是 HF 兼容端点,
+    # HF_ENDPOINT 那一套对它无效,得换一个客户端。
+    env["OPEN_STUDIO_MODEL_SOURCE"] = effective_source(cfg.engine, cfg.source)
     if cfg.resolved_fish_repo:
         env["OPEN_STUDIO_FISH_REPO_DIR"] = cfg.resolved_fish_repo
     if cfg.resolved_fish_model:
@@ -275,7 +377,8 @@ def _source_fields(engine: TtsEngine) -> dict[str, Any]:
 def _status_dict(engine: TtsEngine) -> dict[str, Any]:
     live = _store.get(engine.id)
     base = {"id": engine.id, "label": engine.label, "detail": engine.detail,
-            "expected_bytes": engine.expected_bytes, **_source_fields(engine)}
+            "expected_bytes": engine.expected_bytes, "sources": list(sources_for(engine.id)),
+            **_source_fields(engine)}
     if live is not None and live.status == "downloading":
         # **实测越过估计值 = 这个估计已经被证伪**,那一刻起就不该再拿它当分母:界面会画出一根
         # 满的条(用户截图里是 `5.2 GB / 4.0 GB`、100%,而它还在下),而"满"说的是"下完了"。
@@ -581,4 +684,4 @@ def _download_body(engine_id: str) -> None:
 
 
 __all__ = ["CATALOG", "list_status", "get_status", "start_download", "is_installed",
-           "resolve_engine_python", "clear_runtime_probes"]
+           "resolve_engine_python", "clear_runtime_probes", "sources_for", "effective_source"]

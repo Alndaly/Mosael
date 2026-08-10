@@ -7588,6 +7588,11 @@ export interface components {
              */
             source_dir: string;
             /**
+             * Sources
+             * @default []
+             */
+            sources: string[];
+            /**
              * Runtime Ready
              * @default false
              */

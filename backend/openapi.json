@@ -20544,6 +20544,14 @@
             "title": "Source Dir",
             "default": ""
           },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sources",
+            "default": []
+          },
           "runtime_ready": {
             "type": "boolean",
             "title": "Runtime Ready",
