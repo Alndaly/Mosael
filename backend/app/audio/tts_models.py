@@ -56,7 +56,9 @@ CATALOG: tuple[TtsEngine, ...] = (
         cache_dirs=("models--SWivid--F5-TTS", "models--charactr--vocos-mel-24khz"),
         expected_bytes=1_500_000_000,
         module="f5_tts",
-        pip_requirements=("f5-tts",),
+        # modelscope:走 ModelScope 拉那 1.35 GB 检查点要用它。**列了源就得带上客户端** ——
+        # 真机上正是漏了它,拉权重时 ModuleNotFoundError。
+        pip_requirements=("f5-tts", "modelscope"),
         # 检查点(1.35 GB)和 vocab 在 ModelScope 上;声码器 vocos(约 55 MB)只在 HF
         # (AI-ModelScope / charactr / iic 三个命名空间都查过,都是 404)。
         # 所以这条路是"大的走快路,小的还走 HF" —— 在 46 KB/s 的网络上,那 1.35 GB
@@ -459,8 +461,12 @@ def _status_dict(engine: TtsEngine) -> dict[str, Any]:
                 "downloaded_bytes": _measure(engine), "total_bytes": engine.expected_bytes,
                 "message": "已安装,声音克隆可用" if ready
                 else "权重已下好,但还没有解释器装了它 —— 再点一次「下载」会把运行环境补上"}
-    return {**base, "status": "missing", "runtime_ready": False, "downloaded_bytes": _measure(engine),
-            "total_bytes": engine.expected_bytes, "message": "未下载"}
+    # runtime_ready 说的是"跑不跑得起来",和"权重下没下"是两件事 —— 别因为在"未下载"这条
+    # 分支上就无条件写 False。装好了运行环境、只差权重,是一个该说清楚的状态。
+    ready = resolve_engine_python(engine.id) is not None
+    return {**base, "status": "missing", "runtime_ready": ready, "downloaded_bytes": _measure(engine),
+            "total_bytes": engine.expected_bytes,
+            "message": "运行环境已就绪,还差模型权重" if ready else "未下载"}
 
 
 def list_status() -> list[dict[str, Any]]:

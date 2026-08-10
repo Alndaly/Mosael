@@ -75,3 +75,17 @@ def test_a_managed_dir_without_the_checkpoint_is_not_installed(tmp_path, monkeyp
     monkeypatch.setattr(tts_models, "_hf_roots", lambda: [])
 
     assert tts_models._is_installed(tts_models._BY_ID["f5-tts"]) is False
+
+
+def test_an_engine_offering_modelscope_can_actually_talk_to_it() -> None:
+    """列了 ModelScope 这个源,venv 里就得有那个客户端。
+
+    真机上撞到:F5 的依赖表里只有 `f5-tts`,而我给它开了 ModelScope 源 —— 于是拉权重时
+    `ModuleNotFoundError: No module named 'modelscope'`。**声明了一种能力,却没带上它需要的
+    东西**,和"探测查得比真实路径浅"是同一个形状:两处各说各的。
+    """
+    for engine in tts_models.CATALOG:
+        if "modelscope" in tts_models.sources_for(engine.id):
+            assert "modelscope" in engine.pip_requirements, (
+                f"{engine.id} 列了 ModelScope 源,但它的运行环境里没有 modelscope 客户端"
+            )
