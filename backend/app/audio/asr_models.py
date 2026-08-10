@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.child_process import ChildProcess, run_logged
+from app.core.rate import DownloadRate
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -460,7 +461,7 @@ def _download_body(model_id: str) -> None:
         return
 
     started = time.monotonic()
-    last_bytes, last_time = _measure(entry), started
+    last_bytes = _measure(entry)
     proc = subprocess.Popen(
         [python, str(WORKER_PATH), str(output_path)],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
@@ -477,14 +478,16 @@ def _download_body(model_id: str) -> None:
     child = ChildProcess(proc)
     threading.Thread(target=lambda: [None for _ in child.raw_lines()], daemon=True).start()
 
+    # 速度按**最近一段**算,不是按最近一次采样:下载器成块写盘,单窗口读数会在 0 和几百 MB/s
+    # 之间跳,而 ETA 在跳到 0 的那一瞬就消失。和克隆那条下载路共用一份实现(core.rate)。
+    rate = DownloadRate()
+    rate.update(last_bytes, at=started)
     while proc.poll() is None:
         time.sleep(_POLL_SECONDS)
         now = time.monotonic()
         current = _measure(entry)
-        dt = max(now - last_time, 1e-3)
-        speed = max(0.0, (current - last_bytes) / dt)
-        remaining = max(0, entry.expected_bytes - current)
-        eta = remaining / speed if speed > 100 else None
+        speed = rate.update(current, at=now)
+        eta = rate.eta(remaining=max(0, entry.expected_bytes - current))
         # Some backends (HuggingFace) finalize large blobs atomically, so bytes
         # jump only at the end — fall back to an elapsed-time heartbeat so the UI
         # never looks frozen.
@@ -493,7 +496,6 @@ def _download_body(model_id: str) -> None:
         _store.set(model_id, _Live(
             status="downloading", downloaded=current, total=entry.expected_bytes,
             speed=speed, eta=eta, message=message))
-        last_bytes, last_time = current, now
 
     stderr = child.finish(600)
     if proc.returncode == 0 and _is_installed(entry):

@@ -132,12 +132,13 @@ function AsrModelCard({
             </>
           ) : (
             <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
-              {/* 没有分母时,分子仍然值得说 —— 「已下载 5.2 GB」比一个光转的圈有用得多。
-                  (估计值被实测越过时也走这里:那时分母已经被证伪,而下了多少是实打实的。) */}
+              {/* 没有分母时,分子和速度仍然值得说 —— 「已下载 5.2 GB · 12.4 MB/s」比一个
+                  光转的圈有用得多,而且它是判断"卡住没有"的唯一依据。 */}
               <Loader2 size={12} className="shrink-0 animate-openstudio-spin" />
               {model.downloaded_bytes > 0 && (
                 <span className="tabular-nums">{formatBytes(model.downloaded_bytes)}</span>
               )}
+              {model.speed_bps > 0 && <span className="tabular-nums">{formatSpeed(model.speed_bps)}</span>}
               <span className="min-w-0 truncate">{model.message}</span>
             </div>
           )}

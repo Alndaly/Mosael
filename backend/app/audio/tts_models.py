@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.child_process import ChildProcess, run_logged
+from app.core.rate import DownloadRate
 from app.core.config import settings
 from app.core.text import strip_ansi
 
@@ -530,7 +531,7 @@ def _download_body(engine_id: str) -> None:
         return _dir_size(progress_dir) if progress_dir is not None else _measure(engine)
 
     started = time.monotonic()
-    last_bytes, last_time = measure(), started
+    last_bytes = measure()
     proc = subprocess.Popen(
         [python, str(WORKER_PATH), str(output_path)],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env,
@@ -543,19 +544,20 @@ def _download_body(engine_id: str) -> None:
     child = ChildProcess(proc)
     threading.Thread(target=lambda: [None for _ in child.raw_lines()], daemon=True).start()
 
+    # 速度按**最近一段**算,不是按最近 1.5 秒:下载器成块写盘,单窗口读数会在 0 和几百 MB/s
+    # 之间跳,而 ETA 在跳到 0 的那一瞬就消失 —— 用户看到的那一眼恰好是 0 的那一眼。
+    rate = DownloadRate()
+    rate.update(last_bytes, at=started)
     while proc.poll() is None:
         time.sleep(_POLL_SECONDS)
         now = time.monotonic()
         current = measure()
-        dt = max(now - last_time, 1e-3)
-        speed = max(0.0, (current - last_bytes) / dt)
-        remaining = max(0, engine.expected_bytes - current)
-        eta = remaining / speed if speed > 100 else None
+        speed = rate.update(current, at=now)
+        eta = rate.eta(remaining=max(0, engine.expected_bytes - current))
         elapsed = int(now - started)
         message = _fmt_eta(eta) or f"下载中(已用 {elapsed // 60}分{elapsed % 60:02d}秒)"
         _store.set(engine.id, _Live(status="downloading", downloaded=current, total=engine.expected_bytes,
                                     speed=speed, eta=eta, message=message))
-        last_bytes, last_time = current, now
 
     stderr = child.finish(600)
     if engine_id == "fish-speech":
