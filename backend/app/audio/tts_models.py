@@ -57,9 +57,11 @@ CATALOG: tuple[TtsEngine, ...] = (
         expected_bytes=1_500_000_000,
         module="f5_tts",
         pip_requirements=("f5-tts",),
-        # F5 还要 charactr/vocos-mel-24khz,而 ModelScope 上没有它(实测 404):
-        # 只能供一半的源列出来就是个陷阱,所以这里留空。
-        modelscope_repo="",
+        # 检查点(1.35 GB)和 vocab 在 ModelScope 上;声码器 vocos(约 55 MB)只在 HF
+        # (AI-ModelScope / charactr / iic 三个命名空间都查过,都是 404)。
+        # 所以这条路是"大的走快路,小的还走 HF" —— 在 46 KB/s 的网络上,那 1.35 GB
+        # 是八小时和三分钟的区别,而 55 MB 就算慢也只有二十分钟。
+        modelscope_repo="AI-ModelScope/F5-TTS",
     ),
     TtsEngine(
         id="fish-speech",
@@ -162,6 +164,14 @@ def _fish_model_dir() -> Path | None:
     return Path(model) if model and Path(model).is_dir() else None
 
 
+def _f5_model_dir() -> Path | None:
+    """F5 走 ModelScope 时权重落的地方(没有就是 None,那说明走的是 HF 缓存那条路)。"""
+    from app.domain import tts_config
+
+    path = tts_config.MANAGED_F5_MODEL
+    return path if path.is_dir() else None
+
+
 def _measure(engine: TtsEngine) -> int:
     # Fish Speech reuses a local weights dir (configured / app-managed), not the
     # HF hub cache — measure that so a reused setup reads as installed, not "missing".
@@ -169,6 +179,10 @@ def _measure(engine: TtsEngine) -> int:
         model = _fish_model_dir()
         if model is not None:
             return _dir_size(model)
+    if engine.id == "f5-tts":
+        managed = _f5_model_dir()
+        if managed is not None and _dir_size(managed) > 0:
+            return _dir_size(managed)
     total = 0
     for name in engine.cache_dirs:
         for root in _hf_roots():
@@ -238,7 +252,16 @@ def _is_installed(engine: TtsEngine) -> bool:
             complete = _fish_manifest_complete(model)
             if complete is not None:
                 return complete
-    elif _has_partial_downloads(engine):
+    elif engine.id == "f5-tts" and (managed := _f5_model_dir()) is not None:
+        # 走 ModelScope 落在我们自己目录里的那份:检查点 + vocab 都在才算。
+        # 只看体积会把"只下到 vocab"也算成装好了。
+        has_ckpt = any(managed.glob("*.safetensors")) or any(managed.glob("*.pt"))
+        has_vocab = (managed / "vocab.txt").is_file()
+        if has_ckpt and has_vocab:
+            return True
+        if has_ckpt or has_vocab:
+            return False
+    if _has_partial_downloads(engine):
         return False
     return _measure(engine) >= int(engine.expected_bytes * _INSTALLED_FRACTION)
 
@@ -262,6 +285,8 @@ def _worker_env() -> dict[str, str]:
         env["OPEN_STUDIO_FISH_REPO_DIR"] = cfg.resolved_fish_repo
     if cfg.resolved_fish_model:
         env["OPEN_STUDIO_FISH_MODEL_DIR"] = cfg.resolved_fish_model
+    # F5 走 ModelScope 时权重落在这里,worker 据此显式指给 F5TTS。
+    env["OPEN_STUDIO_F5_MODEL_DIR"] = str(tts_config.MANAGED_F5_MODEL)
     return env
 
 

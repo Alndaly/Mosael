@@ -44,6 +44,10 @@ class _Worker:
         self.python = python
         self.started_at = time.monotonic()
         self.last_used = time.monotonic()
+        #: 有请求在飞。**回收的判据是"闲着",不是"上次用完过了多久"** —— 首次加载权重要
+        #: 511 秒,比闲置超时还长,只看时间戳会把一个正在干活的进程当成闲置的杀掉
+        #: (真机第一次验证就死在这儿)。
+        self.busy = False
         self.process = subprocess.Popen(
             [python, worker_path, "--serve"],
             stdin=subprocess.PIPE,
@@ -76,6 +80,7 @@ class _Worker:
         timeout: float,
     ) -> dict:
         assert self.process.stdin is not None and self.process.stdout is not None
+        self.busy = True
         self.last_used = time.monotonic()
         self.process.stdin.write(json.dumps(payload, ensure_ascii=False) + "\n")
         self.process.stdin.flush()
@@ -94,15 +99,18 @@ class _Worker:
                     on_progress(event)
                 continue
             if kind == "error":
+                self.busy = False
                 raise RuntimeError(event.get("message") or "合成失败")
             if kind == "done":
                 self.last_used = time.monotonic()
+                self.busy = False
                 return event
             logger.debug("未知事件:%s", event)
             if time.monotonic() > deadline:
                 break
         # 走到这里 = stdout 关了(进程死了)或超时。**最坏的失败是没有回音** ——
         # 那看起来和"还在跑"一模一样,所以必须变成一个明确的错误。
+        self.busy = False
         self.kill()
         raise RuntimeError("合成进程中途退出,没有给出结果")
 
@@ -193,7 +201,7 @@ class WorkerPool:
         while not self._stop.wait(1.0):
             cutoff = time.monotonic() - self._idle_seconds
             with self._lock:
-                stale = [key for key, w in self._workers.items() if w.last_used < cutoff]
+                stale = [key for key, w in self._workers.items() if not w.busy and w.last_used < cutoff]
                 dropped = [self._workers.pop(key) for key in stale]
             for worker in dropped:
                 logger.info("%s 的合成进程闲置超时,放掉(把内存还回去)", worker.engine)

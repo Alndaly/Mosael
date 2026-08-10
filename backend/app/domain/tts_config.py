@@ -82,6 +82,10 @@ LEGACY_SHARED_VENV = MANAGED_TTS_ROOT / "venv"
 MANAGED_FISH_REPO = settings.data_dir / "tts" / "fish-speech-src"
 MANAGED_FISH_MODEL = settings.data_dir / "tts" / "fish-speech-s2-pro"
 
+#: F5 走 ModelScope 时权重落在这里(HF 那条路由 f5_tts 自己落进 HF 缓存)。
+#: 分开放是因为两条路的目录布局本来就不一样,硬凑成一个会让"装没装"更难判。
+MANAGED_F5_MODEL = settings.data_dir / "tts" / "f5-tts-weights"
+
 
 def managed_venv_dir(engine_id: str) -> Path:
     """这个引擎自己的托管 venv 目录。名字里带引擎 id,出问题时一眼看得出该删哪个。"""

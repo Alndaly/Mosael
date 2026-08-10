@@ -89,7 +89,16 @@ def run_f5(request: dict[str, Any], output_path: str) -> str:
     if model is None:
         device = _pick_device()
         _progress("load", 0.1, f"首次加载权重({device})")
-        model = F5TTS(device=device)
+        # 走 ModelScope 下下来的那份在我们自己的目录里,F5TTS 不会自己去找 —— 显式指过去。
+        # 声码器仍由它自己从 HF 拉(ModelScope 上没有 vocos)。
+        managed = os.environ.get("OPEN_STUDIO_F5_MODEL_DIR", "").strip()
+        ckpt = Path(managed) / F5_CHECKPOINT if managed else None
+        vocab = Path(managed) / F5_VOCAB if managed else None
+        if ckpt and ckpt.is_file():
+            model = F5TTS(device=device, ckpt_file=str(ckpt),
+                          vocab_file=str(vocab) if vocab and vocab.is_file() else "")
+        else:
+            model = F5TTS(device=device)
         _LOADED["f5-tts"] = model
     _progress("generate", 0.35, "生成中")
     model.infer(
@@ -209,6 +218,37 @@ def synthesize(request: dict[str, Any], output_path: str) -> str:
 FISH_HF_REPO = "fishaudio/s2-pro"
 FISH_MODELSCOPE_REPO = "fishaudio/s2-pro"
 
+#: F5 在 ModelScope 上的仓库和要取的那两个文件。整仓有五个 1.35 GB 的检查点(不同版本),
+#: 只取当前 f5_tts 默认用的那一个 —— 整仓拉是 6.7 GB,而我们只需要其中一份。
+F5_MODELSCOPE_REPO = "AI-ModelScope/F5-TTS"
+F5_CHECKPOINT = "F5TTS_v1_Base/model_1250000.safetensors"
+F5_VOCAB = "F5TTS_v1_Base/vocab.txt"
+
+
+def _modelscope_file(repo: str, path: str, local_dir: str) -> str:
+    from modelscope import snapshot_download  # type: ignore
+
+    root = snapshot_download(repo, local_dir=local_dir, allow_patterns=[path])
+    return str(Path(root) / path)
+
+
+def fetch_f5_weights() -> None:
+    """F5 的大文件走 ModelScope,小的(vocos 声码器)仍然走 HF。
+
+    实测这台机器上 HF 和 hf-mirror 都是 46 KB/s,ModelScope ~9 MB/s:1.35 GB 的检查点
+    是八小时和三分钟的区别。而 vocos(约 55 MB)在 ModelScope 上没有(AI-ModelScope /
+    charactr / iic 三个命名空间都是 404),就算慢也只有二十分钟 —— 留给 f5_tts 自己去拉。
+
+    选 HF 时这里什么都不做:F5TTS 构造时自己会拉,抢着下一份只会下两遍。
+    """
+    if os.environ.get("OPEN_STUDIO_MODEL_SOURCE", "").strip() != "modelscope":
+        return
+    target = os.environ.get("OPEN_STUDIO_F5_MODEL_DIR", "").strip()
+    if not target:
+        return
+    for path in (F5_CHECKPOINT, F5_VOCAB):
+        _modelscope_file(F5_MODELSCOPE_REPO, path, target)
+
 
 def _modelscope_snapshot(model_id: str, local_dir: str) -> str:
     from modelscope import snapshot_download  # type: ignore
@@ -250,6 +290,7 @@ def warmup(request: dict[str, Any], output_path: str) -> str:
         if engine == "fish-speech":
             fetch_fish_weights()
         else:
+            fetch_f5_weights()  # ModelScope 那条路先把大文件拿下来
             from f5_tts.api import F5TTS
 
             F5TTS(device="cpu")

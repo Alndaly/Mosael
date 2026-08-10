@@ -28,12 +28,19 @@ def test_modelscope_is_offered_for_fish() -> None:
     assert "modelscope" in tts_models.sources_for("fish-speech")
 
 
-def test_modelscope_is_not_offered_for_f5() -> None:
-    """F5 要 charactr/vocos-mel-24khz,而 ModelScope 上没有它(实测 404)。
+def test_modelscope_is_offered_for_f5_too() -> None:
+    """这一条推翻了它自己的上一版。
 
-    只供一半的源不是源 —— 与其列出来再解释"它对这个引擎其实不生效",不如不列。
+    上一版写的是「ModelScope 对 F5 无效,所以不该列出来」,理由是 F5 还要
+    charactr/vocos-mel-24khz 而 ModelScope 上没有它(实测 404,三个命名空间都查过)。
+    那个事实没变,但由它推出的结论错了:F5 的**大头**是 1.35 GB 的检查点,
+    而它在 AI-ModelScope/F5-TTS 上。在这台 46 KB/s 的网络上,那是八小时和三分钟的区别;
+    剩下的 vocos 只有 55 MB,慢也只有二十分钟。
+
+    判据仍然是「选项要么真的改变什么」—— 它改变了那 1.35 GB 的去处,所以它成立。
+    "只能供一半"不等于"不该有",要看是哪一半。
     """
-    assert "modelscope" not in tts_models.sources_for("f5-tts")
+    assert "modelscope" in tts_models.sources_for("f5-tts")
 
 
 def test_every_engine_can_always_fall_back_to_huggingface() -> None:
@@ -53,8 +60,10 @@ def test_the_worker_is_told_which_source_to_use(monkeypatch) -> None:
 def test_an_inapplicable_source_falls_back_instead_of_failing() -> None:
     """库里存着 modelscope、而当前引擎是 F5 时,不能就这么去 ModelScope 上找一个不存在的仓库 ——
     落到该引擎支持的源上。"""
-    assert tts_models.effective_source("f5-tts", "modelscope") == "hf"
+    assert tts_models.effective_source("f5-tts", "modelscope") == "modelscope"
     assert tts_models.effective_source("fish-speech", "modelscope") == "modelscope"
+    # 引擎不认识时才落回去 —— 这才是这个函数存在的理由。
+    assert tts_models.effective_source("nope", "modelscope") == "hf"
     assert tts_models.effective_source("f5-tts", "hf-mirror") == "hf-mirror"
 
 
