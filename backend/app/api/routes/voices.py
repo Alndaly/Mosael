@@ -9,6 +9,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
 
 from app.api.deps import CurrentUser, DbSession
+from app.db.models import Voice
 from app.api.schemas import (
     EngineSynthesizeRequest,
     TtsEngineChoiceOut,
@@ -21,6 +22,7 @@ from app.api.schemas import (
     TtsEngineOut,
     VoiceFromSpeakerRequest,
     VoiceOut,
+    VoiceUpdate,
 )
 from app.audio import tts_daemon, tts_models, voices
 from app.core.permissions import ensure_workspace_perm, ensure_deployment_admin, ensure_workspace_access
@@ -87,6 +89,18 @@ def voice_from_speaker(body: VoiceFromSpeakerRequest, db: DbSession, user: Curre
     except voices.VoiceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return _voice_out(voice)
+
+
+@router.patch("/voices/{voice_id}", response_model=VoiceOut)
+def update_voice(voice_id: str, body: VoiceUpdate, db: DbSession, user: CurrentUser) -> Voice:
+    voice = voices.get_voice(db, voice_id)
+    if voice is None:
+        raise HTTPException(status_code=404, detail="音色不存在")
+    ensure_workspace_perm(db, user, voice.workspace_id, "ai")
+    try:
+        return voices.update_voice(db, voice, name=body.name, reference_text=body.reference_text)
+    except voices.VoiceError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.delete("/voices/{voice_id}", status_code=204)

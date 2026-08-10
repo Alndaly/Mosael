@@ -1142,7 +1142,8 @@ export interface paths {
         delete: operations["delete_voice_api_voices__voice_id__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update Voice */
+        patch: operations["update_voice_api_voices__voice_id__patch"];
         trace?: never;
     };
     "/api/voices/{voice_id}/sample": {
@@ -7793,6 +7794,17 @@ export interface components {
              */
             created_at: string;
         };
+        /**
+         * VoiceUpdate
+         * @description 改音色。**只改说明性的字段** —— 参考音频不在其中:换了音频就是另一个音色了,
+         *     而已经用它生成过的配音还在时间线上,让同一个 id 底下的声音悄悄换人比新建一条更糟。
+         */
+        VoiceUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Reference Text */
+            reference_text?: string | null;
+        };
         /** WorkflowAiEditRequest */
         WorkflowAiEditRequest: {
             /** Instruction */
@@ -10494,6 +10506,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_voice_api_voices__voice_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voice_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoiceUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoiceOut"];
+                };
             };
             /** @description Validation Error */
             422: {

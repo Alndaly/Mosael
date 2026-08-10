@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AudioLines, Loader2, Mic, Pause, Play, Square, Trash2, Upload, UsersRound, Wand2, X } from "lucide-react";
+import { AudioLines, Loader2, Mic, Pause, Pencil, Play, Square, Trash2, Upload, UsersRound, Wand2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -15,6 +15,7 @@ import {
   listVoices,
   synthesizeVoice,
   synthesizeWithEngine,
+  updateVoice,
   uploadVoice,
   voiceFromSpeaker,
   voiceSampleUrl,
@@ -203,6 +204,18 @@ export function VoicePanel({
       setFile(null);
       setSelected(voice.id);
       toast.success(t("voiceCreated"));
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+  // 音色能改的只有说明性字段:换了参考音频就是另一个音色,而用它生成过的配音还在时间线上。
+  const [editing, setEditing] = React.useState<string | null>(null);
+  const [editName, setEditName] = React.useState("");
+  const [editText, setEditText] = React.useState("");
+  const saveVoice = useMutation({
+    mutationFn: () => updateVoice(editing as string, { name: editName, reference_text: editText }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["voices", workspace.id] });
+      setEditing(null);
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -653,10 +666,29 @@ export function VoicePanel({
                 <Mic size={13} />
                 <div className="grid min-w-0 [&_small]:truncate [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:text-[12.5px]">
                   <strong>{voice.name}</strong>
-                  {voice.reference_text && <small>{voice.reference_text}</small>}
+                  {/* 没有参考文本时**说出来**,而不是留一片空白:Fish Speech 拿不到它就合成不出
+                      能听的东西,而这条音色在下拉里看起来和别的一样正常。 */}
+                  {voice.reference_text ? (
+                    <small>{voice.reference_text}</small>
+                  ) : (
+                    <small className="text-destructive!">{t("voiceNoReferenceText")}</small>
+                  )}
                 </div>
               </div>
               <div className="flex shrink-0 gap-0.5 [&_button]:grid [&_button]:h-6 [&_button]:w-6 [&_button]:cursor-pointer [&_button]:place-items-center [&_button]:rounded [&_button]:border-0 [&_button]:bg-transparent [&_button]:text-muted-foreground [&_button:hover]:bg-secondary [&_button:hover]:text-foreground">
+                <button
+                  type="button"
+                  title={t("voiceEdit")}
+                  aria-label={t("voiceEdit")}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setEditing(voice.id);
+                    setEditName(voice.name);
+                    setEditText(voice.reference_text ?? "");
+                  }}
+                >
+                  <Pencil size={12} />
+                </button>
                 <button
                   type="button"
                   title={sample.playingId === voice.id ? t("voiceStopPreview") : t("voicePlay")}

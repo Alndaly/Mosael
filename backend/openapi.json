@@ -3066,6 +3066,56 @@
       }
     },
     "/api/voices/{voice_id}": {
+      "patch": {
+        "tags": [
+          "voices"
+        ],
+        "summary": "Update Voice",
+        "operationId": "update_voice_api_voices__voice_id__patch",
+        "parameters": [
+          {
+            "name": "voice_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Voice Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoiceUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "tags": [
           "voices"
@@ -20904,6 +20954,35 @@
           "created_at"
         ],
         "title": "VoiceOut"
+      },
+      "VoiceUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "reference_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Text"
+          }
+        },
+        "type": "object",
+        "title": "VoiceUpdate",
+        "description": "改音色。**只改说明性的字段** —— 参考音频不在其中:换了音频就是另一个音色了,\n而已经用它生成过的配音还在时间线上,让同一个 id 底下的声音悄悄换人比新建一条更糟。"
       },
       "WorkflowAiEditRequest": {
         "properties": {

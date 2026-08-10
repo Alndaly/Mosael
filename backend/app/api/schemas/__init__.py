@@ -966,6 +966,14 @@ class VoiceOut(BaseModel):
     created_at: datetime
 
 
+class VoiceUpdate(BaseModel):
+    """改音色。**只改说明性的字段** —— 参考音频不在其中:换了音频就是另一个音色了,
+    而已经用它生成过的配音还在时间线上,让同一个 id 底下的声音悄悄换人比新建一条更糟。"""
+
+    name: str | None = None
+    reference_text: str | None = None
+
+
 class TtsEngineOut(BaseModel):
     id: str
     label: str

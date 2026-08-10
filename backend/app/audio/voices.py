@@ -239,6 +239,25 @@ def get_voice(db: Session, voice_id: str) -> Voice | None:
     return db.get(Voice, voice_id)
 
 
+def update_voice(db: Session, voice: Voice, *, name: str | None, reference_text: str | None) -> Voice:
+    """补填/更正音色的说明性字段。
+
+    为什么必须有这个:参考文本刚变成 Fish Speech 的必填项(它不带 ASR,空文本会让输出
+    听不懂),而此前音色只有 upload / delete —— 于是一条已经录好的音色只因为当初没填文本
+    就得删了重录。**一个新加的必填项,如果没有补填入口,就是在逼用户重做已经做过的事。**
+    """
+    if name is not None:
+        cleaned = name.strip()
+        if not cleaned:
+            raise VoiceError("音色名称不能为空")
+        voice.name = cleaned
+    if reference_text is not None:
+        voice.reference_text = reference_text.strip()
+    db.commit()
+    db.refresh(voice)
+    return voice
+
+
 def delete_voice(db: Session, voice: Voice) -> None:
     ref_dir = resolve_key(voice.reference_key).parent if voice.reference_key else None
     db.delete(voice)

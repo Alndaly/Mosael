@@ -162,6 +162,10 @@ export function uploadVoice(args: { workspaceId: string; name: string; reference
   form.append("file", args.file);
   return api<Voice>("/api/voices/upload", { method: "POST", body: form });
 }
+/** 改音色的说明性字段。参考音频不能改 —— 换了音频就是另一个音色,而用它生成过的配音还在时间线上。 */
+export function updateVoice(id: string, body: { name?: string; reference_text?: string }): Promise<Voice> {
+  return api<Voice>(`/api/voices/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+}
 export function deleteVoice(id: string): Promise<void> {
   return api<void>(`/api/voices/${id}`, { method: "DELETE" });
 }
