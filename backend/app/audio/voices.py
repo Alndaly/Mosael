@@ -44,6 +44,20 @@ REFERENCE_TOO_SHORT_HINT = (
 )
 
 
+#: 哪些引擎**必须**有参考文本。写在这里而不是散在判断里:它是引擎的属性。
+#:
+#: F5 不在其中,因为它自己会转写参考音频(f5_tts 的 api 里 ref_text="" 就是这个意思)。
+#: Fish Speech 在:我们用 `mode="tts"` 构造它的 ModelManager,**不带 ASR**,空文本就是空文本
+#: —— 而我们自己的代码注释早就写着「a wrong/empty one garbles output」。
+ENGINES_NEEDING_REFERENCE_TEXT = frozenset({"fish-speech"})
+
+REFERENCE_TEXT_REQUIRED_HINT = (
+    "这个音色没有填参考文本,而 {label} 不会自己识别 —— 它需要知道那段参考音频说的是什么,"
+    "才能学到音色;没有的话合成出来会是一段听不懂的声音。"
+    "在音色库里重建这个音色时把参考文本填上,或者改用 F5-TTS(它会自己转写参考音频)。"
+)
+
+
 def check_reference_duration(seconds: float) -> None:
     """够不够长。**在建音色之前问** —— 一条注定合成不出东西的音色会出现在音色库里,
     像个能用的选项;而它的代价要等到一次十分钟的合成之后才显现。"""
@@ -274,10 +288,16 @@ def start_synthesis(
         reference = reference_path(voice)
         if reference.is_file():
             check_reference_duration(float(probe_media(reference).get("duration") or 0.0))
+        # 先把引擎定下来:下面几条判据都跟引擎走,而请求不带引擎时它是空串 ——
+        # 在解析之前判,等于对"用默认引擎"的那一半请求什么都没判。
+        clone_engine = resolve_clone_engine(clone_engine)
+        # 「留空则自动识别」这句话只有 F5 兑现。Fish Speech 拿到空文本就是空文本 ——
+        # 在建任务之前说,而不是等一次十分钟的合成之后交一段听不懂的东西。
+        if clone_engine in ENGINES_NEEDING_REFERENCE_TEXT and not (voice.reference_text or "").strip():
+            raise VoiceError(REFERENCE_TEXT_REQUIRED_HINT.format(label=clone_engine))
         # 本地克隆跑不跑得起来,**建任务之前**就知道:探一次解释器、看一眼权重目录而已。
         # 不挡的话它会一路跑到 worker:导不进引擎就写一段正弦音(用户说的「根本克隆不了」),
         # 权重缺席就顺手下 2GB(用户说的「不该自动开启下载」)。
-        clone_engine = resolve_clone_engine(clone_engine)
         _require_local_engine(clone_engine)
         workspace_id = voice.workspace_id
         label = voice.name
