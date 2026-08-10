@@ -151,7 +151,10 @@ def _dir_size(path: Path) -> int:
                     total += child.stat().st_size
             except OSError:
                 continue
-    except OSError:
+    except OSError as exc:
+        # 目录读不动时返回的是**残缺的**总量,而这个数会被 `_is_installed` 当判据用 ——
+        # 一个权限问题会表现成"模型没装好"。量不全就说一声。
+        logger.debug("量 %s 的大小时读不动:%s", path, exc)
         return total
     return total
 
@@ -210,7 +213,10 @@ def _fish_manifest_complete(model: Path) -> bool | None:
         manifest = json.loads(index.read_text(encoding="utf-8"))
         shards = set((manifest.get("weight_map") or {}).values())
         expected = int((manifest.get("metadata") or {}).get("total_size") or 0)
-    except (OSError, ValueError, TypeError):
+    except (OSError, ValueError, TypeError) as exc:
+        # 读不出清单就退回体积判据(见下),但**要说一声**:一个坏掉的清单和"老目录没有清单"
+        # 走的是同一条路,而前者说明这份权重可能是坏的。
+        logger.warning("权重清单读不出来,退回按体积判断:%s(%s)", index, exc)
         return None
     if not shards:
         return None
@@ -682,6 +688,7 @@ def _download_body(engine_id: str) -> None:
         try:
             _ensure_fish_source()
         except RuntimeError as exc:
+            logger.warning("拉取 %s 源码失败:%s", engine.id, exc)
             _store.set(engine.id, _Live(status="failed", message=str(exc)[:400]))
             return
         # Snapshot weights into the managed model dir (flat: codec.pth at root) and measure it

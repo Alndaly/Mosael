@@ -261,9 +261,11 @@ def _load() -> TtsRuntimeConfig:
                     fish_repo_dir=row.fish_repo_dir or "",
                     fish_model_dir=row.fish_model_dir or "",
                 )
-    except SQLAlchemyError:
-        # Table not migrated yet (fresh DB) — the singleton is optional; env defaults apply.
-        pass
+    except SQLAlchemyError as exc:
+        # 新库还没迁移出这张表时是正常的(那时本来就没有已保存的配置)。但**任何别的**
+        # 数据库错误意味着用户存的引擎/下载源被无声忽略、悄悄换成默认值 —— 那是他改了设置
+        # 却不生效的形状,得留下痕迹。
+        logger.warning("读取 TTS 配置失败,这一次用默认值:%s: %s", type(exc).__name__, exc)
     return TtsRuntimeConfig(
         engine=settings.tts_engine,
         python_path=settings.tts_python,

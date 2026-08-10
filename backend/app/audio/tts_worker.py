@@ -129,8 +129,10 @@ def _pick_device() -> str:
             return "cuda"
         if torch.backends.mps.is_available():
             return "mps"
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as exc:  # noqa: BLE001
+        # 掉回 CPU 的代价是十倍速度,不是一个细节。此前这里 `pass`,于是"为什么这么慢"
+        # 在日志里没有任何线索 —— 而这正是今天查了半天的那类问题。
+        print(f"挑选计算设备失败,回落到 CPU(会慢很多):{type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
     return "cpu"
 
 

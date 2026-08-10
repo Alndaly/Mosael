@@ -552,6 +552,9 @@ def _run_synthesis_body(
                 job.error = str(exc)[:600]
                 emit_job_event(db, job.id, "job.failed", {})
                 db.commit()
+            # 失败落进任务行是给用户看的;日志是给排查的人看的。此前只有前者,于是一次
+            # 失败在日志里一个字都没有 —— 而这一整天的排查全靠日志。
+            logger.warning("配音任务 %s 失败(%s):%s", job_id, engine, str(exc)[:400])
 
 
 __all__ = [
