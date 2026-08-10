@@ -725,6 +725,30 @@ export function VoicePanel({
               </div>
             </div>
           ))}
+          {editing && (
+            <div className="grid gap-1.5 rounded-md border border-dashed border-border-strong p-2.5">
+              <Input value={editName} placeholder={t("voiceName")} onChange={(event) => setEditName(event.target.value)} />
+              <Textarea
+                value={editText}
+                rows={2}
+                placeholder={t("voiceRefText")}
+                onChange={(event) => setEditText(event.target.value)}
+              />
+              <small className="text-[11px] leading-[1.4] text-muted-foreground">{t("voiceEditHint")}</small>
+              <div className="flex items-center justify-end gap-1.5">
+                {/* 应用自己就有转写引擎 —— 让用户打一遍自己说过的话没道理。 */}
+                <Button size="sm" variant="outline" loading={recognize.isPending} onClick={() => recognize.mutate()}>
+                  <Sparkles size={12} /> {t("voiceRecognizeReference")}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
+                  {t("cancel")}
+                </Button>
+                <Button size="sm" loading={saveVoice.isPending} onClick={() => saveVoice.mutate()}>
+                  {t("save")}
+                </Button>
+              </div>
+            </div>
+          )}
           {list.length === 0 && !voices.isLoading && <p className="m-0 px-2 py-4 text-center text-xs text-muted-foreground">{t("voiceEmpty")}</p>}
         </div>
       </div>
