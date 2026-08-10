@@ -7,7 +7,9 @@ import wave
 from tests.util import add_provider, fresh_client
 
 
-def _tiny_wav(seconds: int = 1) -> bytes:
+#: 8 秒:够得着参考音频的下限(见 voices.REFERENCE_MIN_SECONDS)。此前这里是 1 秒,
+#: 而那正是用户那条 2.6 秒音色的同类 —— 测试用的夹具比真实要求还宽,下限就测不出来。
+def _tiny_wav(seconds: int = 8) -> bytes:
     buf = io.BytesIO()
     with wave.open(buf, "w") as handle:
         handle.setnchannels(1)

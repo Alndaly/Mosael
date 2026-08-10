@@ -25,12 +25,30 @@ from app.db.models import Asset, Job, Voice
 from app.domain.assets.importer import register_file_asset
 from app.domain.jobs import create_job, dispatch_job, emit_job_event
 from app.media.paths import resolve_key, voice_dir, voice_key
+from app.media.probe import probe_media
 from app.core.child_process import run_logged
 from app.core.text import strip_ansi
 
 logger = logging.getLogger(__name__)
 
 REFERENCE_MAX_SECONDS = 15
+#: 零样本克隆靠这几秒把音色条件化。给不够就条件化不起来,模型会一路漫游到 token 上限,
+#: 出来是几十秒的胡话 —— 用户实测:2.6 秒的参考,换来四十多秒听不懂的东西。
+#: 这个下限本来就写在界面提示里(「5–15 秒」),只是从来没有人执行它。
+REFERENCE_MIN_SECONDS = 5.0
+
+REFERENCE_TOO_SHORT_HINT = (
+    f"参考音频太短(只有 {{actual:.1f}} 秒)。零样本克隆要听够才能学到音色,"
+    f"请给 {REFERENCE_MIN_SECONDS:.0f}–{REFERENCE_MAX_SECONDS} 秒连续清晰的人声 —— "
+    "太短的话合成出来会是一段听不懂的声音。"
+)
+
+
+def check_reference_duration(seconds: float) -> None:
+    """够不够长。**在建音色之前问** —— 一条注定合成不出东西的音色会出现在音色库里,
+    像个能用的选项;而它的代价要等到一次十分钟的合成之后才显现。"""
+    if seconds < REFERENCE_MIN_SECONDS:
+        raise VoiceError(REFERENCE_TOO_SHORT_HINT.format(actual=seconds))
 TTS_TIMEOUT_SECONDS = 1200
 
 
@@ -114,6 +132,9 @@ def _transcode_reference(source: Path, target: Path) -> None:
 def create_from_upload(db: Session, *, workspace_id: str, source: Path, name: str, reference_text: str) -> Voice:
     from app.db.models import new_id
 
+    # 时长从**转码之前**的原文件量:转码会截到 15 秒上限,量转码后的等于用我们自己的裁剪
+    # 结果去判用户给了多长。
+    check_reference_duration(float(probe_media(source).get("duration") or 0.0))
     voice_id = new_id()
     target_dir = voice_dir(workspace_id, voice_id)
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -247,6 +268,12 @@ def start_synthesis(
         voice = db.get(Voice, voice_id or "")
         if voice is None:
             raise VoiceError("音色不存在")
+        # 参考音频够不够长,先查 —— 这是**用户自己的输入**,和这台机器装没装引擎无关,
+        # 所以排在引擎检查前面。库里已经有的短音色(下限是后加的)也要挡在这儿,否则它会
+        # 安安静静换来一次十分钟的合成和一段听不懂的声音。
+        reference = reference_path(voice)
+        if reference.is_file():
+            check_reference_duration(float(probe_media(reference).get("duration") or 0.0))
         # 本地克隆跑不跑得起来,**建任务之前**就知道:探一次解释器、看一眼权重目录而已。
         # 不挡的话它会一路跑到 worker:导不进引擎就写一段正弦音(用户说的「根本克隆不了」),
         # 权重缺席就顺手下 2GB(用户说的「不该自动开启下载」)。
