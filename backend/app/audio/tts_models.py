@@ -72,7 +72,17 @@ CATALOG: tuple[TtsEngine, ...] = (
         # 意味着只下了两成就会被判成"已安装",然后合成在运行时炸。
         expected_bytes=11_000_000_000,
         module="fish_speech",
+        # 这张表是**实测**补出来的,不是照上游 pyproject 抄的:在一台干净机器上依次撞出
+        # natsort → pytorch_lightning → lightning → audiotools → dac 五轮,而其中
+        # descript-audiotools / descript-audio-codec **连 fish 自己的 pyproject 都没声明**。
+        # 所以"照它的清单装"同样不够,判据只能是 ENGINE_IMPORTS 那几行导得动。
+        #
+        # 一律不写版本钉子:上游 pin 了 torch==2.8.0,而这个 venv 是两个引擎共用的,
+        # 照 pin 装会把 f5(torch 2.13)一起弄坏。实测不钉版本时两边都能跑。
         pip_requirements=("torch", "torchaudio", "transformers", "huggingface_hub", "hydra-core", "loguru",
+                          "natsort", "pyrootutils", "loralib", "resampy", "einops", "librosa",
+                          "pytorch-lightning", "lightning", "tensorboard", "grpcio", "kui",
+                          "descript-audiotools", "descript-audio-codec",
                           # 走 ModelScope 下权重要用它。用户机器上实测 ~9 MB/s,
                           # 而 HuggingFace 与 hf-mirror 都是 46 KB/s —— 两百倍。
                           "modelscope"),
@@ -81,6 +91,18 @@ CATALOG: tuple[TtsEngine, ...] = (
 )
 
 _BY_ID = {engine.id: engine for engine in CATALOG}
+
+#: 合成**真正**会 import 的模块,按引擎列。探测跑的就是这几行。
+#:
+#: 为什么不是"顶层包名":`import fish_speech` 命中的是一个空的 `__init__`,永远成功;
+#: 而合成走的 `fish_speech.utils.schema` / `tools.server.inference` 才会去拉 natsort、
+#: lightning、audiotools、dac 这一串。用户点生成配音时拿到的
+#: `ModuleNotFoundError: No module named 'natsort'`,而同一刻设置页写着「引擎已就绪」——
+#: 两句话查的不是同一件事。**探测查得比真实路径浅,就等于没查。**
+ENGINE_IMPORTS: dict[str, tuple[str, ...]] = {
+    "f5-tts": ("f5_tts.api",),
+    "fish-speech": ("fish_speech.utils.schema", "tools.server.inference", "tools.server.model_manager"),
+}
 
 #: 谁都能走的那几条(HuggingFace 官方 + 它的镜像)。ModelScope 按引擎有没有对应仓库来加。
 _UNIVERSAL_SOURCES = ("hf", "hf-mirror")
@@ -263,18 +285,25 @@ def candidate_pythons() -> list[Path]:
 
 
 def _probe_code(engine_id: str) -> str | None:
-    """Python one-liner proving the engine is importable, or None if a required
-    resource (Fish Speech checkout / weights) is missing → not ready."""
+    """一行 Python:把**合成真正 import 的那几个模块**导一遍。资源不齐时返回 None。
+
+    此前 fish 探的是 `import fish_speech`(一个空的 __init__,永远成功),f5 探的是
+    `import f5_tts`(同理)。于是设置页说「已就绪」,而一点合成就 ModuleNotFoundError。
+    """
+    imports = ENGINE_IMPORTS.get(engine_id)
+    if not imports:
+        return None
+    body = "; ".join(f"import {module}" for module in imports)
     if engine_id != "fish-speech":
-        return "import f5_tts"
+        return body
     from app.domain import tts_config
 
     cfg = tts_config.get()
     repo, model = cfg.resolved_fish_repo, cfg.resolved_fish_model
     if not repo or not model:
         return None
-    # fish_speech lives in the source checkout, not a pip package — put it on sys.path first.
-    return f"import sys; sys.path.insert(0, {repo!r}); import fish_speech"
+    # fish_speech 和 tools 都在源码检出里,不是 pip 包 —— 先把它挂上 sys.path。
+    return f"import sys; sys.path.insert(0, {repo!r}); {body}"
 
 
 @lru_cache(maxsize=8)

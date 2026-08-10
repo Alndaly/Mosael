@@ -6,6 +6,7 @@ the timeline like any other clip.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
 import tempfile
@@ -25,6 +26,9 @@ from app.domain.assets.importer import register_file_asset
 from app.domain.jobs import create_job, dispatch_job, emit_job_event
 from app.media.paths import resolve_key, voice_dir, voice_key
 from app.core.child_process import run_logged
+from app.core.text import strip_ansi
+
+logger = logging.getLogger(__name__)
 
 REFERENCE_MAX_SECONDS = 15
 TTS_TIMEOUT_SECONDS = 1200
@@ -59,6 +63,28 @@ def resolve_clone_engine(requested: str = "") -> str:
     if engine not in {item.id for item in tts_models.CATALOG}:
         raise VoiceError(f"不认识的本地引擎:{engine}")
     return engine
+
+
+def explain_worker_failure(stderr: str) -> str:
+    """把 worker 的 traceback 变成界面上那**一句**话。
+
+    用户截图里那张卡片是四行文件路径 + 一排 `^^^^`(终端里指向出错列的记号,换到浏览器里
+    只是噪声)+ 最后才是真正有用的 `ModuleNotFoundError: No module named 'natsort'`。
+    traceback 的最后一行就是异常本身,前面那些是给读代码的人看的,不是给点了「生成配音」的人。
+
+    完整 traceback 仍然进日志 —— 排查要它,界面不要。
+    """
+    text = strip_ansi(stderr or "").strip()
+    if not text:
+        return "合成失败,而子进程没有留下原因 —— 请重试一次;若仍然如此请反馈。"
+    last = next((line.strip() for line in reversed(text.splitlines()) if line.strip()), text)
+    if "ModuleNotFoundError" in last or "ImportError" in last:
+        # 缺依赖是**能行动**的:光扔一个模块名,用户只能去搜。
+        return (
+            f"{last[:200]} —— 引擎的运行环境不完整。"
+            "去设置的「声音克隆」那一页点「下载」,它会把缺的依赖补上。"
+        )
+    return last[:400]
 
 
 def _require_local_engine(engine: str) -> None:
@@ -376,7 +402,9 @@ def _run_synthesis_body(
                     [python, str(WORKER_PATH), str(out_wav)], input=json.dumps(request),
                     capture_output=True, text=True, timeout=TTS_TIMEOUT_SECONDS, env=worker_env, what="语音合成 worker")
                 if proc.returncode != 0 or not out_wav.exists():
-                    raise VoiceError(f"语音合成失败: {proc.stderr[-400:]}")
+                    # 完整 traceback 进日志,界面只拿那一句(run_logged 已经记过命令与 stderr 尾巴)。
+                    logger.warning("语音合成失败(%s):%s", engine, (proc.stderr or "")[-2000:])
+                    raise VoiceError(f"语音合成失败:{explain_worker_failure(proc.stderr)}")
                 meta = Path(str(out_wav) + ".json")
                 used = json.loads(meta.read_text()).get("engine", engine) if meta.exists() else engine
                 job.progress = 0.85
