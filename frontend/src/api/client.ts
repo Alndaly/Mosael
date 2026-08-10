@@ -179,7 +179,8 @@ export function voiceFromSpeaker(body: { asset_id: string; speaker?: string | nu
 export function synthesizeVoice(
   id: string,
   /** clone_engine 空 = 用设置页那个默认。设置页是默认,不是唯一。 */
-  body: { text: string; project_id?: string | null; clone_engine?: string },
+  /** speed 只在引擎吃它时才发(见 TtsEngine.supports_speed)—— 发了却被忽略是另一种谎。 */
+  body: { text: string; project_id?: string | null; clone_engine?: string; speed?: number },
 ): Promise<Job> {
   return api<Job>(`/api/voices/${id}/synthesize`, { method: "POST", body: JSON.stringify(body) });
 }

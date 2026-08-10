@@ -993,6 +993,8 @@ class TtsEngineOut(BaseModel):
     #: 这个引擎**真的**能用的下载源,按顺序给。界面据此渲染,而不是自己猜哪个引擎配哪些源
     #: —— 让界面猜的下场就是「ModelScope」最早的样子:列在那里、选得中、却什么都不改变。
     sources: list[str] = []
+    #: 这个引擎吃不吃语速。界面据此决定显不显示那个下拉 —— 摆一个拨不动的旋钮比不摆更糟。
+    supports_speed: bool = False
     #: **权重在不在盘上,和跑不跑得起来是两件事。** status 说前者,这个说后者:有没有一个
     #: Python 解释器能 import 这个引擎。两者完全可以一真一假(权重是别的工具下的、或者
     #: 托管 venv 被删了),而把它们合成一句「已安装,声音克隆可用」正是这一页说谎的方式。
@@ -1005,6 +1007,9 @@ class SynthesizeRequest(BaseModel):
     #: 这一次用哪个本地引擎(f5-tts / fish-speech)。空 = 用设置页那个默认 ——
     #: 设置页是默认,不是唯一。
     clone_engine: str = Field(default="", max_length=40)
+    #: 语速。**只有声明支持的引擎会用它**(见 TtsEngine.supports_speed):F5 的 infer 吃,
+    #: fish 的请求结构里根本没有这一项。收下但不转发,好过让界面以为发了就生效。
+    speed: float = Field(default=1.0, ge=0.5, le=2.0)
 
 
 class EngineSynthesizeRequest(BaseModel):

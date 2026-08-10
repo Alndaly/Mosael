@@ -247,7 +247,13 @@ export function VoicePanel({
             speed,
           })
         : engine === "clone"
-        ? synthesizeVoice(activeVoice as string, { text, project_id: project.id, clone_engine: cloneEngine })
+        ? synthesizeVoice(activeVoice as string, {
+            text,
+            project_id: project.id,
+            clone_engine: cloneEngine,
+            // 引擎不吃的时候不发 —— 发了也只会被忽略,而"传了却没用"正是那种谎。
+            ...(cloneModel?.supports_speed ? { speed } : {}),
+          })
         : synthesizeWithEngine({
             workspace_id: workspace.id,
             text,
@@ -379,7 +385,7 @@ export function VoicePanel({
             {/* 这里**没有语速** —— 本地克隆的 worker 不吃这个参数(上面 speed 那段注释说的就是
                 它)。摆一个拨不动的旋钮,比不摆更糟。 */}
             {engine === "clone" && (
-              <div className="grid grid-cols-2 gap-1.5">
+              <div className={cn("grid gap-1.5", cloneModel?.supports_speed ? "grid-cols-[minmax(0,1fr)_minmax(0,1fr)_88px]" : "grid-cols-2")}>
                 {/* 设置页那个是默认,这一次用哪个由这一次说了算 —— 想换引擎不必跑去改全局。
                     没装好的照样列出来但标明白,而不是藏起来让人猜为什么少了一个。 */}
                 <VoiceField label={t("voicePanelCloneEngine")}>
@@ -415,6 +421,14 @@ export function VoicePanel({
                     <p className="m-0 text-[11px] leading-[26px] text-muted-foreground">{t("voiceLibraryPickEmpty")}</p>
                   )}
                 </VoiceField>
+                {/* 语速跟着**引擎能力**走:F5 的 infer 吃 speed,fish 的请求结构里根本没有
+                    这一项。此前我用一句「本地克隆的 worker 不吃这个参数」把两个引擎一起判了,
+                    于是 F5 能调的东西被一并删掉 —— 而给 fish 摆一个拨不动的旋钮同样糟。 */}
+                {cloneModel?.supports_speed && (
+                  <VoiceField label={t("voiceSpeed")}>
+                    <SpeedPicker value={speed} onChange={setSpeed} ariaLabel={t("voiceSpeed")} />
+                  </VoiceField>
+                )}
               </div>
             )}
             {/* 单人远程引擎:音色 + 语速 同行,标签说明谁是谁 */}

@@ -20645,6 +20645,11 @@
             "title": "Sources",
             "default": []
           },
+          "supports_speed": {
+            "type": "boolean",
+            "title": "Supports Speed",
+            "default": false
+          },
           "runtime_ready": {
             "type": "boolean",
             "title": "Runtime Ready",

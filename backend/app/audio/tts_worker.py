@@ -108,6 +108,7 @@ def run_f5(request: dict[str, Any], output_path: str) -> str:
         ref_file=request["reference_wav"],
         ref_text=request.get("reference_text") or "",  # empty → F5 auto-transcribes the ref
         gen_text=request["text"],
+        speed=float(request.get("speed") or 1.0),
         file_wave=output_path,
         remove_silence=False,
         seed=0,

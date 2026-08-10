@@ -52,6 +52,10 @@ class TtsEngine:
     #: 需不需要参考文本。F5 不需要(它自己会转写参考音频);Fish Speech 需要 —— 我们用
     #: `mode="tts"` 构造它,不带 ASR,空文本就是空文本,合成出来听不懂。
     needs_reference_text: bool = False
+    #: 吃不吃语速。实测:`F5TTS.infer(..., speed=...)` 吃;fish 的 `ServeTTSRequest` 字段里
+    #: 根本没有这一项 —— 给它一个语速等于假装能调。此前我用一句「本地克隆的 worker 不吃这个
+    #: 参数」把两个引擎一起判了,而那句话只对 fish 成立。
+    supports_speed: bool = False
 
 
 CATALOG: tuple[TtsEngine, ...] = (
@@ -72,6 +76,7 @@ CATALOG: tuple[TtsEngine, ...] = (
         modelscope_repo="AI-ModelScope/F5-TTS",
         imports=("f5_tts.api",),
         needs_reference_text=False,
+        supports_speed=True,
     ),
     TtsEngine(
         id="fish-speech",
@@ -101,6 +106,7 @@ CATALOG: tuple[TtsEngine, ...] = (
         modelscope_repo="fishaudio/s2-pro",
         imports=("fish_speech.utils.schema", "tools.server.inference", "tools.server.model_manager"),
         needs_reference_text=True,
+        supports_speed=False,
     ),
 )
 
@@ -442,6 +448,7 @@ def _status_dict(engine: TtsEngine) -> dict[str, Any]:
     live = _store.get(engine.id)
     base = {"id": engine.id, "label": engine.label, "detail": engine.detail,
             "expected_bytes": engine.expected_bytes, "sources": list(sources_for(engine.id)),
+            "supports_speed": engine.supports_speed,
             **_source_fields(engine)}
     if live is not None and live.status == "downloading":
         # **实测越过估计值 = 这个估计已经被证伪**,那一刻起就不该再拿它当分母:界面会画出一根

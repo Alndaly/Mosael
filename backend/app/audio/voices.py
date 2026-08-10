@@ -510,6 +510,10 @@ def _run_synthesis_body(
                     "text": text,
                 }
                 request["output_path"] = str(out_wav)
+                # 语速按引擎传:fish 的请求结构里没有这一项,塞进去只会被忽略,
+                # 而"传了却没用"正是今天反复出现的那种谎。
+                if tts_models._BY_ID[engine].supports_speed:
+                    request["speed"] = speed
 
                 # 进度从 worker 一路报回来。此前这里只有一个开头写死的 0.2 —— 用户看到的
                 # 「20% 卡了 14 分钟」不是进度慢,是**根本没有进度上报**。

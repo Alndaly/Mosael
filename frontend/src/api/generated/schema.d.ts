@@ -7614,6 +7614,11 @@ export interface components {
              */
             sources: string[];
             /**
+             * Supports Speed
+             * @default false
+             */
+            supports_speed: boolean;
+            /**
              * Runtime Ready
              * @default false
              */
