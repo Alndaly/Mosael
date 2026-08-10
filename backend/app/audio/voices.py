@@ -24,6 +24,7 @@ from app.db.models import Asset, Job, Voice
 from app.domain.assets.importer import register_file_asset
 from app.domain.jobs import create_job, dispatch_job, emit_job_event
 from app.media.paths import resolve_key, voice_dir, voice_key
+from app.core.child_process import run_logged
 
 REFERENCE_MAX_SECONDS = 15
 TTS_TIMEOUT_SECONDS = 1200
@@ -51,11 +52,10 @@ def _require_local_engine() -> None:
 
 def _transcode_reference(source: Path, target: Path) -> None:
     """Normalize any uploaded audio/video to 24k mono WAV, capped at 15s."""
-    result = subprocess.run(
+    result = run_logged(
         ["ffmpeg", "-y", "-v", "error", "-i", str(source), "-vn", "-ac", "1", "-ar", "24000",
          "-t", str(REFERENCE_MAX_SECONDS), str(target)],
-        capture_output=True, text=True, timeout=300,
-    )
+        capture_output=True, text=True, timeout=300, what="参考音频转码")
     if result.returncode != 0 or not target.exists():
         raise VoiceError(f"参考音频处理失败: {result.stderr[-300:]}")
 
@@ -120,11 +120,10 @@ def create_from_speaker(db: Session, *, workspace_id: str, asset_id: str, speake
     ref = target_dir / "reference.wav"
     # Select just this speaker's ranges in one pass and re-stamp timestamps.
     expr = "+".join(f"between(t,{seg.start_time:.3f},{seg.end_time:.3f})" for seg in picked)
-    result = subprocess.run(
+    result = run_logged(
         ["ffmpeg", "-y", "-v", "error", "-i", str(resolve_key(asset.file_key)), "-vn",
          "-af", f"aselect='{expr}',asetpts=N/SR/TB", "-ac", "1", "-ar", "24000", str(ref)],
-        capture_output=True, text=True, timeout=300,
-    )
+        capture_output=True, text=True, timeout=300, what="说话人片段提取")
     if result.returncode != 0 or not ref.exists():
         raise VoiceError(f"提取说话人音频失败: {result.stderr[-300:]}")
 
@@ -340,10 +339,9 @@ def _run_synthesis_body(
                     "reference_text": voice.reference_text,
                     "text": text,
                 }
-                proc = subprocess.run(
+                proc = run_logged(
                     [python, str(WORKER_PATH), str(out_wav)], input=json.dumps(request),
-                    capture_output=True, text=True, timeout=TTS_TIMEOUT_SECONDS, env=worker_env,
-                )
+                    capture_output=True, text=True, timeout=TTS_TIMEOUT_SECONDS, env=worker_env, what="语音合成 worker")
                 if proc.returncode != 0 or not out_wav.exists():
                     raise VoiceError(f"语音合成失败: {proc.stderr[-400:]}")
                 meta = Path(str(out_wav) + ".json")

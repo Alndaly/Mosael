@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+from app.core.child_process import run_logged
 
 THUMBNAIL_NAME = "thumbnail.jpg"
 
@@ -23,7 +24,7 @@ def generate_thumbnail(source: Path, kind: str, asset_directory: Path) -> Path |
             args += ["-ss", seek]
         args += ["-i", str(source), "-frames:v", "1", "-vf", "scale=320:-2", str(target)]
         try:
-            subprocess.run(args, check=True, capture_output=True, timeout=30)
+            run_logged(args, check=True, capture_output=True, timeout=30, what="缩略图生成")
         except Exception:
             continue
         if target.exists() and target.stat().st_size > 0:

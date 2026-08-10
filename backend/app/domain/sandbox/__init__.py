@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import logging
 import json
 import shutil
 import subprocess
@@ -8,6 +9,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
+
+from app.core.child_process import run_logged
 
 """跑别人写的代码。
 
@@ -82,9 +85,8 @@ def _spawn(argv: list[str], payload: bytes, timeout: float) -> Attempt:
     输出**在这里截断**而不是让沙箱自己管:一个能写出 500MB 的程序不该先把这个进程撑爆再被发现。
     """
     try:
-        completed = subprocess.run(
-            argv, input=payload, capture_output=True, timeout=timeout, env=dict(_MINIMAL_ENV)
-        )
+        completed = run_logged(
+            argv, input=payload, capture_output=True, timeout=timeout, env=dict(_MINIMAL_ENV), what="沙箱执行")
     except subprocess.TimeoutExpired as exc:
         raise SandboxError(f"代码执行超时({timeout:g}s)") from exc
     return Attempt(completed.returncode, completed.stdout[: OUTPUT_CAP + 1], completed.stderr)
@@ -158,7 +160,7 @@ class _DockerSandbox:
         if not docker:
             return False
         try:
-            probe = subprocess.run([docker, "info"], capture_output=True, timeout=5)
+            probe = run_logged([docker, "info"], capture_output=True, timeout=5, what="docker 探测", level=logging.DEBUG)
         except (OSError, subprocess.TimeoutExpired):
             return False
         return probe.returncode == 0

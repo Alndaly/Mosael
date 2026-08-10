@@ -24,6 +24,7 @@ import math
 import os
 import struct
 import sys
+import traceback
 import wave
 from pathlib import Path
 from typing import Any
@@ -193,9 +194,15 @@ def warmup(request: dict[str, Any], output_path: str) -> str:
             F5TTS(device="cpu")
         write_marker_wav(output_path, "预热")
         return engine
-    except Exception:  # noqa: BLE001
-        write_marker_wav(output_path, "预热")
-        return "placeholder"  # 预热失败;是否装上由宿主按字节数判定
+    except Exception:
+        # **不吞**。此前这里 `except Exception: return "placeholder"` —— 退出码 0、stderr 空,
+        # 宿主手里两样东西同时为空,只好在界面上猜一句「下载未完成,可能引擎未安装」。
+        # 而被扔掉的那句话恰好是唯一有用的:
+        #     LocalEntryNotFoundError: ... Please check your connection
+        # (实测就是「模型下载源」选的镜像在这台机器上下不动。)
+        # 一个吞掉的异常就是一次删掉的证据。
+        traceback.print_exc(file=sys.stderr)
+        raise
 
 
 def main() -> None:

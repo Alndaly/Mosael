@@ -23,6 +23,8 @@ from app.db.models import Asset, ProviderProfile
 from app.domain import provider_credentials
 from app.domain.provider_credentials import ResolvedProvider
 from app.media.paths import resolve_key
+from app.core.child_process import run_logged
+import logging
 
 """
 Asset analysis via OpenAI-compatible multimodal chat completions.
@@ -114,20 +116,18 @@ def extract_video_frames(path: Path, count: int | None = None) -> list[bytes]:
     with tempfile.TemporaryDirectory(prefix="open-studio-frames-") as tmp:
         pattern = Path(tmp) / "frame-%02d.jpg"
         try:
-            probe = subprocess.run(
+            probe = run_logged(
                 ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)],
-                check=True, capture_output=True, text=True, timeout=20,
-            )
+                check=True, capture_output=True, text=True, timeout=20, what="抽帧探测", level=logging.DEBUG)
             duration = max(float(probe.stdout.strip() or 1.0), 0.2)
             frame_count = count if count is not None else adaptive_frame_count(duration)
-            subprocess.run(
+            run_logged(
                 [
                     "ffmpeg", "-y", "-v", "error", "-i", str(path),
                     "-vf", f"fps={frame_count / duration}:round=up,scale={FRAME_WIDTH}:-2",
                     "-frames:v", str(frame_count), "-q:v", "5", str(pattern),
                 ],
-                check=True, capture_output=True, timeout=120,
-            )
+                check=True, capture_output=True, timeout=120, what="视频抽帧")
         except subprocess.SubprocessError as exc:
             raise AnalysisError("视频抽帧失败") from exc
         frames = sorted(Path(tmp).glob("frame-*.jpg"))

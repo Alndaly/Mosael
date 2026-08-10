@@ -28,6 +28,7 @@ from app.core.db import SessionLocal
 from app.db.models import Asset, Job
 from app.domain.jobs import create_job, emit_job_event, run_job_guarded
 from app.media.paths import resolve_key
+from app.core.child_process import run_logged
 
 PROXY_NAME = "proxy.mp4"
 # Height cap for the proxy. The compositor decodes this, not the original, so a
@@ -95,7 +96,7 @@ def build_proxy(source: Path, target: Path) -> bool:
         str(target),
     ]
     try:
-        subprocess.run(args, check=True, capture_output=True, timeout=600)
+        run_logged(args, check=True, capture_output=True, timeout=600, what="代理转码")
     except Exception:
         target.unlink(missing_ok=True)
         return False

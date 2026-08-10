@@ -85,7 +85,13 @@ export function VoiceCloneSection() {
   // worker_ready 是后端针对「已保存」的引擎算的。选了别的引擎但还没保存时,对新引擎无从谈就绪
   // (要保存后 config 重取才知道)——所以选中引擎 ≠ 已保存引擎时按未就绪处理,顶部提醒也随之
   // 对应下拉里「选中」的引擎,而不再固定显示旧的已保存引擎(选 Fish Speech 却提示 F5-TTS 的根因)。
-  const ready = (config.data?.worker_ready ?? false) && form.watch("engine") === config.data?.engine;
+  const runtimeReady = (config.data?.worker_ready ?? false) && form.watch("engine") === config.data?.engine;
+  // **解释器就绪 ≠ 能合成出真实音色**:前者只证明 `import f5_tts` 通得过,后者还要权重在盘上。
+  // 此前横幅只看前者,于是这台机器上出现了自相矛盾的一页:顶上说「引擎已就绪,合成为真实音色」,
+  // 底下同一页的卡片说「下载未完成,可能引擎未安装」—— 而权重目录里确实只有一个空的 refs/main。
+  const weightsReady =
+    (models.data ?? []).find((item) => item.id === form.watch("engine"))?.status === "installed";
+  const ready = runtimeReady && weightsReady;
 
   return (
     <SettingsGroup title={t("voiceCloneTitle")} description={t("voiceCloneDesc")}>
@@ -96,7 +102,9 @@ export function VoiceCloneSection() {
             <AlertDescription>
               {ready
                 ? t("voiceCloneReady").replace("{python}", config.data.worker_python)
-                : t("voiceCloneNotReady").replace("{engine}", isFish ? "Fish Speech" : "F5-TTS")}
+                : runtimeReady
+                  ? t("voiceCloneWeightsMissing").replace("{engine}", isFish ? "Fish Speech" : "F5-TTS")
+                  : t("voiceCloneNotReady").replace("{engine}", isFish ? "Fish Speech" : "F5-TTS")}
             </AlertDescription>
           </Alert>
         )}
@@ -239,8 +247,10 @@ function EngineCard({ model, busy, onDownload }: { model: TtsEngine; busy?: bool
             </Button>
           )}
           {downloading && (
+            // 没有分母的阶段(装运行环境)不报百分比 —— 一个恒定的「0%」和"卡住了"长得一样。
             <span className="inline-flex items-center gap-[5px] text-xs tabular-nums text-muted-foreground">
-              <Loader2 size={13} className="animate-openstudio-spin" /> {pct}%
+              <Loader2 size={13} className="animate-openstudio-spin" />
+              {model.total_bytes > 0 ? `${pct}%` : ""}
             </span>
           )}
           {model.status === "failed" && (
@@ -252,17 +262,28 @@ function EngineCard({ model, busy, onDownload }: { model: TtsEngine; busy?: bool
       </div>
       {downloading && (
         <div className="grid gap-[5px]">
-          <Progress value={pct} />
-          <div className="flex items-center justify-between gap-2 text-[11px] tabular-nums text-muted-foreground">
-            <span>
-              {formatBytes(model.downloaded_bytes)} / {formatBytes(model.total_bytes)}
-            </span>
-            <span>
-              {formatSpeed(model.speed_bps)}
-              {model.speed_bps > 0 && model.message ? " · " : ""}
-              {model.message}
-            </span>
-          </div>
+          {/* **装运行环境和下权重是两件事**,量纲也不同:前者跑的是 pip(装 torch 等,几 GB
+              但我们不知道总量),后者才是这个引擎的 1.5GB。没有分母时就别画进度条、也别摆
+              「0 MB / 1.5 GB」—— 那个数是权重的,而此刻在跑的不是它,于是它看着就像卡住了。 */}
+          {model.total_bytes > 0 ? (
+            <>
+              <Progress value={pct} />
+              <div className="flex items-center justify-between gap-2 text-[11px] tabular-nums text-muted-foreground">
+                <span>
+                  {formatBytes(model.downloaded_bytes)} / {formatBytes(model.total_bytes)}
+                </span>
+                <span>
+                  {formatSpeed(model.speed_bps)}
+                  {model.speed_bps > 0 && model.message ? " · " : ""}
+                  {model.message}
+                </span>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
+              <Loader2 size={12} className="animate-openstudio-spin" /> {model.message}
+            </div>
+          )}
         </div>
       )}
       {model.status === "failed" && (

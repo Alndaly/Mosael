@@ -20,7 +20,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from app.core.child_process import ChildProcess
+from app.core.child_process import ChildProcess, run_logged
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -184,7 +184,7 @@ def _resolve_engine_python(engine_id: str) -> str | None:
         if not python.is_file():
             continue
         try:
-            probe = subprocess.run([str(python), "-c", code], capture_output=True, timeout=120)
+            probe = run_logged([str(python), "-c", code], capture_output=True, timeout=120, what="克隆引擎探测", level=logging.DEBUG)
         except (subprocess.SubprocessError, OSError):
             continue
         if probe.returncode == 0:
@@ -272,7 +272,10 @@ def _status_dict(engine: TtsEngine) -> dict[str, Any]:
             "expected_bytes": engine.expected_bytes, **_source_fields(engine)}
     if live is not None and live.status == "downloading":
         return {**base, "status": "downloading", "downloaded_bytes": live.downloaded,
-                "total_bytes": live.total or engine.expected_bytes, "speed_bps": live.speed,
+                # **不回落到权重大小**:装运行环境那一阶段没有可报的总量(跑的是 pip),
+                # 顶一个权重的字节数上去,界面就会画出"0 MB / 1.5 GB"这种量错了东西的进度条。
+                # 光在 _Live 里置 0 不够 —— 这个 `or` 会把它填回来,转写那边就是这么被填回来的。
+                "total_bytes": live.total, "speed_bps": live.speed,
                 "eta_seconds": live.eta, "message": live.message}
     if live is not None and live.status == "failed":
         return {**base, "status": "failed", "downloaded_bytes": _measure(engine),
@@ -306,6 +309,35 @@ def is_installed(engine_id: str) -> bool:
     return bool(engine and _is_installed(engine))
 
 
+#: HuggingFace 连不上时抛的那几个名字。命中就多说一句 —— 这台机器上镜像下不动、
+#: 而直连官方是通的,而用户没有任何线索能想到去动「模型下载源」。
+_HUB_UNREACHABLE = ("LocalEntryNotFoundError", "ConnectionError", "ReadTimeout", "ProxyError",
+                    "check your connection", "Max retries exceeded")
+
+
+def _explain_failure(stderr: str) -> str:
+    """把子进程的最后一句话变成卡片上那句话。
+
+    此前这里是 `stderr or "下载未完成,可能引擎未安装"` —— 而 worker 把异常吞了、退出码 0、
+    stderr 空,于是永远走后半句。那是一句**猜测**,还猜错了方向:用户会去重装引擎,
+    而真正坏掉的是下载源。
+    """
+    text = (stderr or "").strip()
+    if not text:
+        return "下载没有完成,而子进程没有留下原因 —— 请重试一次;若仍然如此请反馈。"
+    # traceback 的最后一行就是异常本身,比尾部 400 个字符可读得多。
+    last = next((line.strip() for line in reversed(text.splitlines()) if line.strip()), text)
+    if any(marker in text for marker in _HUB_UNREACHABLE):
+        from app.domain import tts_config
+
+        endpoint = tts_config.get().hf_endpoint
+        return (
+            f"连不上模型下载源({endpoint}):{last[:200]}"
+            " —— 在上面的「模型下载源」换一个(镜像下不动时,官方直连往往反而是通的)再重试。"
+        )
+    return last[:400]
+
+
 def _fmt_eta(seconds: float | None) -> str:
     if not seconds or seconds <= 0:
         return ""
@@ -321,7 +353,7 @@ def start_download(engine_id: str) -> dict[str, Any]:
         return _status_dict(engine)
     if _store.downloading():
         raise RuntimeError("已有引擎正在下载,请等待其完成")
-    _store.set(engine.id, _Live(status="downloading", total=engine.expected_bytes, message="准备下载…"))
+    _store.set(engine.id, _Live(status="downloading", message="准备下载…"))
     threading.Thread(target=_run_download, args=(engine.id,), daemon=True).start()
     return _status_dict(engine)
 
@@ -354,18 +386,20 @@ def ensure_engine_runtime(engine_id: str) -> None:
             raise RuntimeError(
                 "找不到可用于创建运行环境的 Python。请重装应用,或在设置里手动指定一个 TTS 解释器。"
             )
-        _store.set(engine_id, _Live(status="downloading", total=engine.expected_bytes, message="创建运行环境…"))
+        _store.set(engine_id, _Live(status="downloading", message="创建运行环境…"))
         tts_config.MANAGED_TTS_VENV.parent.mkdir(parents=True, exist_ok=True)
-        result = subprocess.run(
+        result = run_logged(
             [base, "-m", "venv", str(tts_config.MANAGED_TTS_VENV)],
-            capture_output=True, text=True, timeout=600,
-        )
+            capture_output=True, text=True, timeout=600, what="创建克隆运行环境")
         if result.returncode != 0 or not venv_python.is_file():
             raise RuntimeError(f"创建运行环境失败:{(result.stderr or result.stdout)[-300:]}")
 
     _store.set(
         engine_id,
-        _Live(status="downloading", total=engine.expected_bytes, message=f"安装 {engine.label} 运行依赖(数 GB,首次较慢)…"),
+        # 这一阶段**不报字节**:跑的是 pip(装 torch 等),它一个字节都不会落进权重缓存,
+        # 而进度是按那个目录的增长算的。借用权重的 1.5GB 当分母,结果就是永远 0 MB / 1.5 GB。
+        # 两件事量纲不同,就别共用一个进度条 —— 只报"在做哪一步"。
+        _Live(status="downloading", message=f"安装 {engine.label} 运行依赖(数 GB,首次较慢)…"),
     )
     # 装到托管 venv 里。--upgrade 让重试能修好装了一半的环境;超时给足——torch 在慢网络下很久。
     # pip 镜像来自设置页(与「模型下载源」分开:那个管 HF 权重,这个管 Python 包)。
@@ -374,10 +408,9 @@ def ensure_engine_runtime(engine_id: str) -> None:
     index_url = tts_config.get().pip_index_url
     if index_url:
         pip_args += ["--index-url", index_url]
-    result = subprocess.run(
+    result = run_logged(
         [*pip_args, *engine.pip_requirements],
-        capture_output=True, text=True, timeout=7200, env=_worker_env(),
-    )
+        capture_output=True, text=True, timeout=7200, env=_worker_env(), what="安装克隆运行依赖")
     if result.returncode != 0:
         raise RuntimeError(f"安装 {engine.label} 运行依赖失败:{(result.stderr or result.stdout)[-300:]}")
 
@@ -391,8 +424,8 @@ def _ensure_fish_source() -> None:
     repo = tts_config.MANAGED_FISH_REPO
     if (repo / tts_config.FISH_REPO_MARKER).is_file():
         return
-    _store.set("fish-speech", _Live(status="downloading", total=_BY_ID["fish-speech"].expected_bytes,
-                                    message="拉取 Fish Speech 源码…"))
+    # 同上:拉的是 git 源码,不是权重 —— 没有分母就别摆一个。
+    _store.set("fish-speech", _Live(status="downloading", message="拉取 Fish Speech 源码…"))
     repo.parent.mkdir(parents=True, exist_ok=True)
     if repo.is_dir() and any(repo.iterdir()):
         # A prior half-clone — wipe so `git clone` into it succeeds.
@@ -400,10 +433,9 @@ def _ensure_fish_source() -> None:
 
         shutil.rmtree(repo, ignore_errors=True)
     try:
-        result = subprocess.run(
+        result = run_logged(
             ["git", "clone", "--depth", "1", _FISH_SOURCE_URL, str(repo)],
-            capture_output=True, text=True, timeout=600,
-        )
+            capture_output=True, text=True, timeout=600, what="拉取 Fish Speech 源码")
     except FileNotFoundError as exc:
         raise RuntimeError("未找到 git,无法拉取 Fish Speech 源码") from exc
     except subprocess.SubprocessError as exc:
@@ -509,7 +541,9 @@ def _download_body(engine_id: str) -> None:
     if _is_installed(engine):
         _store.clear(engine.id)
     else:
-        _store.set(engine.id, _Live(status="failed", message=(stderr or "下载未完成,可能引擎未安装")[:400]))
+        reason = _explain_failure(stderr)
+        logger.warning("下载 %s 失败:%s", engine.id, (stderr or "(子进程什么都没说)")[-1200:])
+        _store.set(engine.id, _Live(status="failed", message=reason))
     for path in (output_path, Path(str(output_path) + ".json")):
         try:
             path.unlink(missing_ok=True)

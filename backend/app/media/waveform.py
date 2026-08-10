@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
+from app.core.child_process import run_logged
 
 """
 Waveform cache (plan §8): peak buckets computed once at import time and
@@ -23,7 +24,7 @@ def generate_waveform(source: Path, kind: str, asset_directory: Path) -> Path | 
     if kind not in ("audio", "video"):
         return None
     try:
-        proc = subprocess.run(
+        proc = run_logged(
             [
                 "ffmpeg", "-v", "error",
                 "-i", str(source),
@@ -35,8 +36,7 @@ def generate_waveform(source: Path, kind: str, asset_directory: Path) -> Path | 
             ],
             check=True,
             capture_output=True,
-            timeout=60,
-        )
+            timeout=60, what="波形生成")
     except Exception:
         return None
     pcm = proc.stdout

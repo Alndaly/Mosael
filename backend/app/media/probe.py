@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import settings
+from app.core.child_process import run_logged
+import logging
 
 
 AUDIO_EXTENSIONS = {".m4a", ".mp3", ".wav", ".aac", ".flac", ".ogg", ".opus", ".wma"}
@@ -27,7 +29,7 @@ def guess_kind(path: Path, content_type: str | None = None) -> str:
 
 def probe_media(path: Path) -> dict[str, Any]:
     try:
-        proc = subprocess.run(
+        proc = run_logged(
             [
                 settings.ffprobe,
                 "-v",
@@ -41,8 +43,7 @@ def probe_media(path: Path) -> dict[str, Any]:
             check=True,
             capture_output=True,
             text=True,
-            timeout=20,
-        )
+            timeout=20, what="媒体探测", level=logging.DEBUG)
     except Exception:
         return {}
     try:
@@ -80,12 +81,11 @@ def remux_in_place(path: Path) -> bool:
         attempts.append(["-f", "matroska"])
     for extra in attempts:
         try:
-            subprocess.run(
+            run_logged(
                 [settings.ffmpeg, "-y", "-v", "error", "-i", str(path), "-c", "copy", *extra, str(tmp)],
                 check=True,
                 capture_output=True,
-                timeout=120,
-            )
+                timeout=120, what="音轨探测", level=logging.DEBUG)
         except Exception:
             tmp.unlink(missing_ok=True)
             continue
@@ -102,13 +102,12 @@ _MAX_PARALLEL_PROBES = 8
 
 def probe_has_audio(path: Path) -> bool:
     try:
-        proc = subprocess.run(
+        proc = run_logged(
             [settings.ffprobe, "-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", str(path)],
             check=True,
             capture_output=True,
             text=True,
-            timeout=20,
-        )
+            timeout=20, what="封面提取", level=logging.DEBUG)
     except Exception:
         return False
     return bool(proc.stdout.strip())

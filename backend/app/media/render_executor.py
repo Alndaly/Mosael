@@ -8,7 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import NamedTuple
 
-from app.core.child_process import ChildProcess
+from app.core.child_process import ChildProcess, run_logged
 
 from app.core.config import settings
 from app.media.probe import guess_kind, probe_has_audio_many
@@ -606,12 +606,11 @@ def _available_hw_encoder() -> str | None:
     所以真正编码失败时 execute_render 会回落到软件 libx264 再跑一遍。探测本身失败(ffmpeg
     缺失等)按“无硬件”处理。"""
     try:
-        proc = subprocess.run(
+        proc = run_logged(
             [settings.ffmpeg, "-hide_banner", "-encoders"],
             capture_output=True,
             text=True,
-            timeout=20,
-        )
+            timeout=20, what="硬件编码器探测", level=logging.DEBUG)
     except Exception:
         return None
     listed = proc.stdout or ""

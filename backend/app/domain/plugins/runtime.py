@@ -26,6 +26,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
+from app.core.child_process import run_logged
 
 PLUGIN_TIMEOUT_SECONDS = 60
 MAX_OUTPUT_BYTES = 1_000_000
@@ -82,15 +83,14 @@ def execute_tool(
     }
     started = time.monotonic()
     try:
-        result = subprocess.run(
+        result = run_logged(
             [sys.executable, str(entry_path)],
             input=request,
             capture_output=True,
             text=True,
             timeout=PLUGIN_TIMEOUT_SECONDS,
             cwd=entry_path.parent,
-            env=env,
-        )
+            env=env, what="插件命令")
     except subprocess.TimeoutExpired as exc:
         raise PluginRuntimeError(f"插件执行超时({PLUGIN_TIMEOUT_SECONDS}s)") from exc
     duration_ms = int((time.monotonic() - started) * 1000)

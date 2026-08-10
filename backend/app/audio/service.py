@@ -22,6 +22,7 @@ from app.domain.jobs import create_job, dispatch_job, emit_job_event
 from app.domain.transcripts.operations import SegmentIn, TokenIn, attach_transcript
 from app.media.paths import resolve_key
 from app.media.probe import probe_has_audio
+from app.core.child_process import run_logged
 
 logger = logging.getLogger(__name__)
 
@@ -56,13 +57,12 @@ def resolve_asr_runtime() -> tuple[str, str]:
 
 
 def _extract_audio(source: Path, target: Path) -> None:
-    result = subprocess.run(
+    result = run_logged(
         ["ffmpeg", "-y", "-v", "error", "-i", str(source), "-vn",
          "-ac", "1", "-ar", "16000", "-f", "wav", str(target)],
         capture_output=True,
         text=True,
-        timeout=600,
-    )
+        timeout=600, what="音频提取")
     if result.returncode != 0:
         raise AsrError(f"音频提取失败: {result.stderr[-400:]}")
 
@@ -76,13 +76,12 @@ def run_asr(audio_path: Path, python: str, provider: str) -> dict:
     # Results travel via a file: funasr and hub downloads write progress bars
     # straight to stdout, which would corrupt an inline JSON pipe.
     output_path = audio_path.with_name("asr-result.json")
-    result = subprocess.run(
+    result = run_logged(
         [python, str(WORKER_PATH), str(output_path)],
         input=json.dumps(request),
         capture_output=True,
         text=True,
-        timeout=ASR_TIMEOUT_SECONDS,
-    )
+        timeout=ASR_TIMEOUT_SECONDS, what="转写 worker")
     if result.returncode != 0:
         raise AsrError(f"转写失败 ({provider}): {result.stderr[-600:]}")
     try:

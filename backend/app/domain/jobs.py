@@ -122,11 +122,29 @@ def finish_job(db: Session, job: Job, **fields: Any) -> bool:
     for key, value in fields.items():
         setattr(job, key, value)
     status = fields.get("status")
+    # 「这个任务慢」是最常见的一类反馈,而排查它需要的第一个数字就是耗时。此前这两行只有
+    # id 和 kind:要知道一个转写跑了三分钟还是三十秒,只能自己去数据库里减两个时间戳。
+    took = _elapsed(job)
     if status == "failed":
-        logger.warning("job %s [%s] failed: %s", job.id, job.kind, fields.get("error") or fields.get("message") or "")
+        logger.warning("job %s [%s] failed after %s: %s", job.id, job.kind, took,
+                       fields.get("error") or fields.get("message") or "")
     elif status == "succeeded":
-        logger.info("job %s [%s] succeeded", job.id, job.kind)
+        logger.info("job %s [%s] succeeded in %s", job.id, job.kind, took)
     return True
+
+
+def _elapsed(job: Job) -> str:
+    """从建任务到现在。**含排队时间** —— 那正是"慢"最常见的去处。"""
+    created = getattr(job, "created_at", None)
+    if created is None:
+        return "?"
+    # models_now 是这个仓库里「现在」的唯一写法(naive UTC,和列里存的一致)。
+    seconds = max(0.0, (models_now() - created).total_seconds())
+    if seconds < 1:
+        return f"{seconds * 1000:.0f}ms"
+    if seconds < 90:
+        return f"{seconds:.1f}s"
+    return f"{int(seconds) // 60}m{int(seconds) % 60:02d}s"
 # Retention (plan §12.3): active jobs keep every event; terminal jobs keep the
 # most recent few; terminal jobs older than the window lose all detail events.
 TERMINAL_KEEP_EVENTS = 5

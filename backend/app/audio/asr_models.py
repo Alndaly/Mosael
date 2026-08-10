@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from app.core.child_process import ChildProcess
+from app.core.child_process import ChildProcess, run_logged
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -356,7 +356,7 @@ def _resolve_python(engine: str) -> str:
     for python in candidate_pythons():
         if not python.is_file():
             continue
-        probe = subprocess.run([str(python), "-c", f"import {engine}"], capture_output=True, timeout=120)
+        probe = run_logged([str(python), "-c", f"import {engine}"], capture_output=True, timeout=120, what="转写引擎探测", level=logging.DEBUG)
         if probe.returncode == 0:
             return str(python)
     raise RuntimeError(f"未找到安装了 {engine} 的 Python 解释器,请设置 OPEN_STUDIO_ASR_PYTHON")
@@ -389,19 +389,17 @@ def ensure_engine_runtime(engine: str, *, progress_key: str | None = None) -> No
     if not venv_python.is_file():
         _store.set(key, _Live(status="downloading", message="创建运行环境…"))
         MANAGED_ASR_VENV.parent.mkdir(parents=True, exist_ok=True)
-        created = subprocess.run(
+        created = run_logged(
             [sys.executable, "-m", "venv", str(MANAGED_ASR_VENV)],
-            capture_output=True, text=True, timeout=600,
-        )
+            capture_output=True, text=True, timeout=600, what="创建转写运行环境")
         if created.returncode != 0 or not venv_python.is_file():
             raise RuntimeError(f"创建运行环境失败:{(created.stderr or created.stdout)[-300:]}")
 
     _store.set(key, _Live(status="downloading", message=f"安装 {engine} 运行依赖(数 GB,首次较慢)…"))
     # --upgrade 让重试能修好装了一半的环境;超时给足 —— torch 在慢网络下很久。
-    result = subprocess.run(
+    result = run_logged(
         [str(venv_python), "-m", "pip", "install", "--upgrade", *requirements],
-        capture_output=True, text=True, timeout=7200,
-    )
+        capture_output=True, text=True, timeout=7200, what="安装转写运行依赖")
     if result.returncode != 0:
         raise RuntimeError(f"安装 {engine} 运行依赖失败:{(result.stderr or result.stdout)[-300:]}")
     clear_runtime_probes()

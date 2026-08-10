@@ -98,8 +98,10 @@ function AsrModelCard({
             </Button>
           )}
           {downloading && (
+            // 没有分母的阶段(装运行环境)不报百分比 —— 一个恒定的「0%」和"卡住了"长得一样。
             <span className="inline-flex items-center gap-[5px] text-xs tabular-nums text-muted-foreground">
-              <Loader2 size={13} className="animate-openstudio-spin" /> {pct}%
+              <Loader2 size={13} className="animate-openstudio-spin" />
+              {model.total_bytes > 0 ? `${pct}%` : ""}
             </span>
           )}
           {model.status === "failed" && (
