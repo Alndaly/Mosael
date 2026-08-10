@@ -168,7 +168,11 @@ export function deleteVoice(id: string): Promise<void> {
 export function voiceFromSpeaker(body: { asset_id: string; speaker?: string | null; name?: string }): Promise<Voice> {
   return api<Voice>("/api/voices/from-speaker", { method: "POST", body: JSON.stringify(body) });
 }
-export function synthesizeVoice(id: string, body: { text: string; project_id?: string | null }): Promise<Job> {
+export function synthesizeVoice(
+  id: string,
+  /** clone_engine 空 = 用设置页那个默认。设置页是默认,不是唯一。 */
+  body: { text: string; project_id?: string | null; clone_engine?: string },
+): Promise<Job> {
   return api<Job>(`/api/voices/${id}/synthesize`, { method: "POST", body: JSON.stringify(body) });
 }
 /** An engine the 配音 panel can offer. Distinct from TtsEngine, which is a downloadable LOCAL

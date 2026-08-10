@@ -118,7 +118,10 @@ def synthesize(voice_id: str, body: SynthesizeRequest, db: DbSession, user: Curr
         raise HTTPException(status_code=404, detail="音色不存在")
     ensure_workspace_perm(db, user, voice.workspace_id, "ai")
     try:
-        return voices.start_synthesis(db, voice_id=voice_id, text=body.text, project_id=body.project_id, created_by=user.id)
+        return voices.start_synthesis(
+            db, voice_id=voice_id, text=body.text, project_id=body.project_id,
+            created_by=user.id, clone_engine=body.clone_engine,
+        )
     except voices.VoiceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

@@ -991,6 +991,9 @@ class TtsEngineOut(BaseModel):
 class SynthesizeRequest(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
     project_id: str | None = None
+    #: 这一次用哪个本地引擎(f5-tts / fish-speech)。空 = 用设置页那个默认 ——
+    #: 设置页是默认,不是唯一。
+    clone_engine: str = Field(default="", max_length=40)
 
 
 class EngineSynthesizeRequest(BaseModel):

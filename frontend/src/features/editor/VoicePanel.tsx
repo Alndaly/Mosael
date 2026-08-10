@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AudioLines, Loader2, Mic, Play, Square, Trash2, Upload, UsersRound, Wand2, X } from "lucide-react";
+import { AudioLines, Loader2, Mic, Pause, Play, Square, Trash2, Upload, UsersRound, Wand2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -8,7 +8,9 @@ import {
   deleteVoice,
   listAssets,
   generatePodcast,
+  getTtsConfig,
   listTtsEngines,
+  listTtsModels,
   listTtsVoices,
   listVoices,
   synthesizeVoice,
@@ -27,6 +29,7 @@ import { Combobox } from "@/components/app/combobox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useSamplePlayer } from "@/features/editor/useSamplePlayer";
 import { formatBytes } from "@/lib/bytes";
 import { cn } from "@/lib/utils";
 
@@ -113,6 +116,14 @@ export function VoicePanel({
   // staleTime 不能是 Infinity:这份数据里带着"本地引擎装了没有",而用户就是会在另一个页面
   // 把它装上再回来。装完了界面还说"没装",比一开始就没说更让人不知道该干嘛。
   const engines = useQuery({ queryKey: ["tts-engines"], queryFn: listTtsEngines, staleTime: 30_000 });
+  // 本地引擎的就绪情况(解释器 + 权重)。设置页那个只是**默认**,这里可以按次覆盖。
+  const localEngines = useQuery({ queryKey: ["tts-models"], queryFn: listTtsModels, staleTime: 30_000 });
+  const ttsConfig = useQuery({ queryKey: ["tts-config"], queryFn: getTtsConfig, staleTime: 30_000 });
+  const [cloneEngineChoice, setCloneEngineChoice] = React.useState("");
+  const cloneEngine = cloneEngineChoice || ttsConfig.data?.engine || "f5-tts";
+  const cloneModel = (localEngines.data ?? []).find((item) => item.id === cloneEngine);
+  // 能出声要两件事都成立:有解释器能 import 它(runtime_ready),权重在盘上(status=installed)。
+  const cloneUsable = Boolean(cloneModel && cloneModel.status === "installed" && cloneModel.runtime_ready);
   const activeEngine = engines.data?.find((item) => item.id === engine);
   // Fetched per engine rather than bundled with the engine list: 火山's catalogue depends on
   // the account, so it is a live lookup that can change without the engine list changing.
@@ -133,9 +144,10 @@ export function VoicePanel({
   const [refText, setRefText] = React.useState("");
   const [file, setFile] = React.useState<File | null>(null);
   const fileRef = React.useRef<HTMLInputElement>(null);
-  const audioRef = React.useRef<HTMLAudioElement | null>(null);
 
   const [dragOver, setDragOver] = React.useState(false);
+  // 试听是开关,不是单向动作 —— 见 useSamplePlayer。
+  const sample = useSamplePlayer(voiceSampleUrl);
   const [recording, setRecording] = React.useState(false);
   const [recordSecs, setRecordSecs] = React.useState(0);
   const recorderRef = React.useRef<MediaRecorder | null>(null);
@@ -212,7 +224,7 @@ export function VoicePanel({
             speed,
           })
         : engine === "clone"
-        ? synthesizeVoice(activeVoice as string, { text, project_id: project.id })
+        ? synthesizeVoice(activeVoice as string, { text, project_id: project.id, clone_engine: cloneEngine })
         : synthesizeWithEngine({
             workspace_id: workspace.id,
             text,
@@ -239,7 +251,7 @@ export function VoicePanel({
   const engineReady =
     engine === "clone"
       // 装没装引擎,和选没选音色,是两件都得成立的事。
-      ? Boolean(activeVoice) && activeEngine?.ready !== false
+      ? Boolean(activeVoice) && cloneUsable
       : isPodcast
         ? podcastMode === "read"
           ? Boolean(podcastSpeakers[0])
@@ -268,12 +280,6 @@ export function VoicePanel({
       if (ticks++ < 200) window.setTimeout(tick, 1500);
     };
     window.setTimeout(tick, 1500);
-  };
-
-  const play = (id: string) => {
-    if (!audioRef.current) audioRef.current = new Audio();
-    audioRef.current.src = voiceSampleUrl(id);
-    void audioRef.current.play().catch(() => undefined);
   };
 
   // Clone from a transcribed speaker: pick a transcribed asset → its speaker.
@@ -350,7 +356,24 @@ export function VoicePanel({
             {/* 这里**没有语速** —— 本地克隆的 worker 不吃这个参数(上面 speed 那段注释说的就是
                 它)。摆一个拨不动的旋钮,比不摆更糟。 */}
             {engine === "clone" && (
-              <div className="grid gap-1.5">
+              <div className="grid grid-cols-2 gap-1.5">
+                {/* 设置页那个是默认,这一次用哪个由这一次说了算 —— 想换引擎不必跑去改全局。
+                    没装好的照样列出来但标明白,而不是藏起来让人猜为什么少了一个。 */}
+                <VoiceField label={t("voicePanelCloneEngine")}>
+                  <Select value={cloneEngine} onValueChange={setCloneEngineChoice}>
+                    <SelectTrigger className="w-full min-w-0" aria-label={t("voicePanelCloneEngine")}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(localEngines.data ?? []).map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.label}
+                          {item.status === "installed" && item.runtime_ready ? "" : ` · ${t("voiceCloneEngineUnready")}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </VoiceField>
                 <VoiceField label={t("voiceLibraryPick")}>
                   {list.length > 0 ? (
                     <Select value={activeVoice ?? ""} onValueChange={setSelected}>
@@ -636,13 +659,15 @@ export function VoicePanel({
               <div className="flex shrink-0 gap-0.5 [&_button]:grid [&_button]:h-6 [&_button]:w-6 [&_button]:cursor-pointer [&_button]:place-items-center [&_button]:rounded [&_button]:border-0 [&_button]:bg-transparent [&_button]:text-muted-foreground [&_button:hover]:bg-secondary [&_button:hover]:text-foreground">
                 <button
                   type="button"
-                  title={t("voicePlay")}
+                  title={sample.playingId === voice.id ? t("voiceStopPreview") : t("voicePlay")}
+                  aria-label={sample.playingId === voice.id ? t("voiceStopPreview") : t("voicePlay")}
+                  className={cn(sample.playingId === voice.id && "text-primary!")}
                   onClick={(event) => {
                     event.stopPropagation();
-                    play(voice.id);
+                    sample.toggle(voice.id);
                   }}
                 >
-                  <Play size={12} />
+                  {sample.playingId === voice.id ? <Pause size={12} /> : <Play size={12} />}
                 </button>
                 <button
                   type="button"

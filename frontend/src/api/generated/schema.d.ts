@@ -7233,6 +7233,11 @@ export interface components {
             text: string;
             /** Project Id */
             project_id?: string | null;
+            /**
+             * Clone Engine
+             * @default
+             */
+            clone_engine: string;
         };
         /** TaskEventOut */
         TaskEventOut: {

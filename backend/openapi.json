@@ -19880,6 +19880,12 @@
               }
             ],
             "title": "Project Id"
+          },
+          "clone_engine": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Clone Engine",
+            "default": ""
           }
         },
         "type": "object",

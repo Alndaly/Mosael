@@ -44,6 +44,17 @@ def _session(client):
     return client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()["id"]
 
 
+def _wait_until(predicate, seconds: float = 8) -> None:
+    """等一个**具体的事实**成立。
+
+    「看起来空闲了」是间接判据,而间接判据在并发里会在错误的一瞬成立(见 _wait_idle 的注释,
+    以及它挡不住的那一瞬:出队之后、状态翻成 running 之前)。断言什么就等什么。
+    """
+    deadline = time.time() + seconds
+    while time.time() < deadline and not predicate():
+        time.sleep(0.02)
+
+
 def _wait_idle(session_id: str, seconds: float = 8) -> str:
     """真正空闲 = 状态非 running **且**队列已空。
 
@@ -122,6 +133,11 @@ def test_a_queued_message_keeps_hidden_context(monkeypatch) -> None:
 
     queued = client.get(f"/api/agent/sessions/{sid}/queue").json()
     assert [m["content"] for m in queued] == ["two"]
+    # 等的是**这两个 turn 都跑过了**,不是"看起来空闲了"。
+    # 出队和「状态翻成 running」之间有一瞬:在那一瞬采样,队列已空、状态还没翻,
+    # `_wait_idle` 就会提前返回,而第二个 turn 其实还没开始 —— 于是 prompts 只有一条。
+    # 这条按机器负载概率性变红(实测跑三遍全量红两遍),等错了东西比等得不够久更难查。
+    _wait_until(lambda: len(prompts) == 2)
     assert _wait_idle(sid) == "idle"
     assert prompts == ["one", "当前工作流 workflow_id=w1\n\n用户消息:\ntwo"], prompts
 

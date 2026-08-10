@@ -34,20 +34,45 @@ class VoiceError(RuntimeError):
     pass
 
 
-#: 纯文本,不要 markdown —— 这句话会原样显示在界面上。
-_NO_ENGINE = (
-    "本地音色克隆还没有可用的引擎:没有任何 Python 解释器装了 F5-TTS 或 Fish Speech。"
+#: 纯文本,不要 markdown —— 这几句会原样显示在界面上。
+_NO_RUNTIME = (
+    "{label} 还没有运行环境:没有任何 Python 解释器装了它。"
     "去设置的「声音克隆」那一页点「下载」,装一次就好;"
     "想马上出声可以先在上面的引擎里选「Edge 免费在线合成」,它不需要安装。"
 )
+_NO_WEIGHTS = (
+    "{label} 的模型权重还没下好,现在合成不出声音。"
+    "去设置的「声音克隆」那一页点「下载」补上 —— "
+    "这里不会替你下:那是几个 GB 的事,该由你决定什么时候开始。"
+)
 
 
-def _require_local_engine() -> None:
-    """跑得了才让建任务。跑不了是**现在**就能知道的事,那就现在说。"""
+def resolve_clone_engine(requested: str = "") -> str:
+    """这一次用哪个本地引擎。
+
+    设置页那个是**默认**,不是唯一 —— 配音面板每次生成都可能想换一个(F5 快、Fish 支持情感
+    标签),而此前想换只能跑去设置页改全局。请求带了就用请求的,没带才回落到默认。
+    """
     from app.domain import tts_config
 
-    if tts_models.resolve_engine_python(tts_config.get().engine) is None:
-        raise VoiceError(_NO_ENGINE)
+    engine = (requested or "").strip() or tts_config.get().engine
+    if engine not in {item.id for item in tts_models.CATALOG}:
+        raise VoiceError(f"不认识的本地引擎:{engine}")
+    return engine
+
+
+def _require_local_engine(engine: str) -> None:
+    """跑得了**而且**出得了声,才让建任务。
+
+    两件事:解释器能不能 import 这个引擎,以及权重在不在盘上。此前只挡前者 —— 于是权重缺席时
+    任务照建,worker 在首次合成里顺手下 2GB:界面上是一个看不出在干嘛、卡几十分钟的任务。
+    下载是用户在设置页按「下载」时明确要做的事,不该由一次"生成配音"顺带触发。
+    """
+    label = next((item.label for item in tts_models.CATALOG if item.id == engine), engine)
+    if tts_models.resolve_engine_python(engine) is None:
+        raise VoiceError(_NO_RUNTIME.format(label=label))
+    if not tts_models.is_installed(engine):
+        raise VoiceError(_NO_WEIGHTS.format(label=label))
 
 
 def _transcode_reference(source: Path, target: Path) -> None:
@@ -181,6 +206,7 @@ def start_synthesis(
     provider_profile_id: str | None = None,
     engine_model: str = "",
     speed: float = 1.0,
+    clone_engine: str = "",
 ) -> Job:
     """Queue a synthesis job.
 
@@ -195,10 +221,11 @@ def start_synthesis(
         voice = db.get(Voice, voice_id or "")
         if voice is None:
             raise VoiceError("音色不存在")
-        # 本地克隆跑不跑得起来,**建任务之前**就知道:探一次解释器而已。
-        # 不挡的话它会一路跑到 worker,worker 导不进引擎就写一段正弦音、宿主把任务标成成功,
-        # 于是素材库里多一段"嘟——",而用户以为那是自己的声音。这是用户说的「根本克隆不了」。
-        _require_local_engine()
+        # 本地克隆跑不跑得起来,**建任务之前**就知道:探一次解释器、看一眼权重目录而已。
+        # 不挡的话它会一路跑到 worker:导不进引擎就写一段正弦音(用户说的「根本克隆不了」),
+        # 权重缺席就顺手下 2GB(用户说的「不该自动开启下载」)。
+        clone_engine = resolve_clone_engine(clone_engine)
+        _require_local_engine(clone_engine)
         workspace_id = voice.workspace_id
         label = voice.name
     else:
@@ -215,6 +242,7 @@ def start_synthesis(
             "project_id": project_id,
             "text": text[:200],
             "engine": engine,
+            "clone_engine": clone_engine if engine == "clone" else "",
             "engine_voice": engine_voice,
             "provider_profile_id": provider_profile_id,
             "engine_model": engine_model,
@@ -237,6 +265,7 @@ def start_synthesis(
             engine_voice_resource,
             provider_profile_id,
             engine_model,
+            clone_engine,
         ),
     )
     return job
@@ -254,6 +283,7 @@ def _run_synthesis(
     engine_voice_resource: str = "",
     provider_profile_id: str | None = None,
     engine_model: str = "",
+    clone_engine: str = "",
 ) -> None:
     """Take an admission slot before touching the database — see run_job_guarded.
 
@@ -273,6 +303,7 @@ def _run_synthesis(
         engine_voice_resource,
         provider_profile_id,
         engine_model,
+        clone_engine,
     )
     if engine == "clone":
         with TTS_SLOTS:
@@ -293,6 +324,7 @@ def _run_synthesis_body(
     engine_voice_resource: str = "",
     provider_profile_id: str | None = None,
     engine_model: str = "",
+    clone_engine: str = "",
 ) -> None:
     with SessionLocal() as db:
         job = db.get(Job, job_id)
@@ -323,10 +355,11 @@ def _run_synthesis_body(
                 raise VoiceError("音色参考音频缺失")
             from app.domain import tts_config
 
-            engine = tts_config.get().engine
+            # 用**建任务时**定下的那个引擎:中途有人去设置页改了默认,这一单不该跟着漂。
+            engine = clone_engine or tts_config.get().engine
             python = tts_models.resolve_engine_python(engine)
             if python is None:  # 建任务时还在,跑起来时被卸了
-                raise VoiceError(_NO_ENGINE)
+                raise VoiceError(_NO_RUNTIME.format(label=engine))
             # env 也只有一份:此前这里手拼 `{**os.environ, "HF_ENDPOINT": …}`,漏了 fish-speech
             # 要的检出目录和权重目录 —— 于是装好了 fish 的机器也照样导不进引擎、照样出占位音。
             worker_env = tts_models._worker_env()
