@@ -113,29 +113,41 @@ export function VoiceCloneSection() {
   // 用户把「模型下载源」从镜像换成别的、没点保存就去点「重试」—— 跑的还是旧源,失败消息
   // 还是旧源那句,于是"我明明换了源"。改了没存时就直说,而不是让他去撞。
   const unsaved = form.formState.isDirty;
-  // worker_ready 是后端针对「已保存」的引擎算的。选了别的引擎但还没保存时,对新引擎无从谈就绪
-  // (要保存后 config 重取才知道)——所以选中引擎 ≠ 已保存引擎时按未就绪处理,顶部提醒也随之
-  // 对应下拉里「选中」的引擎,而不再固定显示旧的已保存引擎(选 Fish Speech 却提示 F5-TTS 的根因)。
-  const runtimeReady = (config.data?.worker_ready ?? false) && form.watch("engine") === config.data?.engine;
+  // **横幅和底下的卡片必须给同一个答案。** 两者都问 models 里**被选中那个引擎**的那一行:
+  // `status` 说权重在不在盘上,`runtime_ready` 说跑不跑得起来,`runtime_checked` 说这个
+  // 答案算出来了没有。
+  //
+  // 此前横幅问的是配置级的 `worker_ready` —— 后端只对**已保存**的那个引擎算它,于是"在下拉
+  // 里换一个引擎"必然得到"未就绪"。真机上就是这一幕:选 Fish Speech,横幅红着说它没装、
+  // 让人去点下载,而同一页底下写着「Fish Speech S2 Pro · 11.0 GB · 已安装」,后端也回
+  // `runtime_ready: true`。**拿一个回答不了这个问题的来源去回答它,只会得到假话。**
+  const selected = form.watch("engine");
+  const row = (models.data ?? []).find((item) => item.id === selected);
   // **解释器就绪 ≠ 能合成出真实音色**:前者只证明 `import f5_tts` 通得过,后者还要权重在盘上。
-  // 此前横幅只看前者,于是这台机器上出现了自相矛盾的一页:顶上说「引擎已就绪,合成为真实音色」,
-  // 底下同一页的卡片说「下载未完成,可能引擎未安装」—— 而权重目录里确实只有一个空的 refs/main。
-  const weightsReady =
-    (models.data ?? []).find((item) => item.id === form.watch("engine"))?.status === "installed";
+  const weightsReady = row?.status === "installed";
+  const runtimeReady = Boolean(row?.runtime_ready);
+  // 探测是后台跑的。**"还不知道"不能显示成"不行"** —— 那会让人去重下一个已经在盘上的模型。
+  const runtimeChecking = Boolean(row) && !row?.runtime_checked;
   const ready = runtimeReady && weightsReady;
+  // 解释器路径只对**已保存**的那个引擎成立(后端就是按它算的),换了还没存就别拿它当证据。
+  const showsPython = ready && selected === config.data?.engine;
 
   return (
     <SettingsGroup title={t("voiceCloneTitle")} description={t("voiceCloneDesc")}>
       <SettingsBlock>
         {config.data && (
-          <Alert variant={ready ? "default" : "destructive"}>
+          <Alert variant={ready || runtimeChecking ? "default" : "destructive"}>
             {ready ? <CheckCircle2 size={14} /> : <CircleAlert size={14} />}
             <AlertDescription>
               {ready
-                ? t("voiceCloneReady").replace("{python}", config.data.worker_python)
-                : runtimeReady
-                  ? t("voiceCloneWeightsMissing").replace("{engine}", engineLabel)
-                  : t("voiceCloneNotReady").replace("{engine}", engineLabel)}
+                ? showsPython
+                  ? t("voiceCloneReady").replace("{python}", config.data.worker_python)
+                  : t("voiceCloneReadyOther").replace("{engine}", engineLabel)
+                : runtimeChecking
+                  ? t("runtimeChecking")
+                  : runtimeReady
+                    ? t("voiceCloneWeightsMissing").replace("{engine}", engineLabel)
+                    : t("voiceCloneNotReady").replace("{engine}", engineLabel)}
             </AlertDescription>
           </Alert>
         )}
@@ -148,17 +160,17 @@ export function VoiceCloneSection() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t("voiceCloneEngine")}</FormLabel>
-                  <FormControl>
-                    <Select value={field.value} onValueChange={field.onChange}>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="f5-tts">F5-TTS</SelectItem>
-                        <SelectItem value="fish-speech">Fish Speech</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </FormControl>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="f5-tts">F5-TTS</SelectItem>
+                      <SelectItem value="fish-speech">Fish Speech</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </FormItem>
               )}
             />
@@ -181,24 +193,24 @@ export function VoiceCloneSection() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t("voiceCloneSource")}</FormLabel>
-                  <FormControl>
-                    <Select
-                      key={engineValue}
-                      value={normalizeSource(field.value, sources)}
-                      onValueChange={field.onChange}
-                    >
+                  <Select
+                    key={engineValue}
+                    value={normalizeSource(field.value, sources)}
+                    onValueChange={field.onChange}
+                  >
+                    <FormControl>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
-                        {sources.map((id) => (
-                          <SelectItem key={id} value={id}>
-                            {SOURCE_LABELS[id] ?? id}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </FormControl>
+                    </FormControl>
+                    <SelectContent>
+                      {sources.map((id) => (
+                        <SelectItem key={id} value={id}>
+                          {SOURCE_LABELS[id] ?? id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </FormItem>
               )}
             />
@@ -210,19 +222,19 @@ export function VoiceCloneSection() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t("voiceClonePipIndex")}</FormLabel>
-                  <FormControl>
-                    <Select value={field.value || "pypi"} onValueChange={(value) => field.onChange(value === "pypi" ? "" : value)}>
+                  <Select value={field.value || "pypi"} onValueChange={(value) => field.onChange(value === "pypi" ? "" : value)}>
+                    <FormControl>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pypi">{t("voiceClonePipPypi")}</SelectItem>
-                        <SelectItem value="tsinghua">{t("voiceClonePipTsinghua")}</SelectItem>
-                        <SelectItem value="aliyun">{t("voiceClonePipAliyun")}</SelectItem>
-                        <SelectItem value="tencent">{t("voiceClonePipTencent")}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </FormControl>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="pypi">{t("voiceClonePipPypi")}</SelectItem>
+                      <SelectItem value="tsinghua">{t("voiceClonePipTsinghua")}</SelectItem>
+                      <SelectItem value="aliyun">{t("voiceClonePipAliyun")}</SelectItem>
+                      <SelectItem value="tencent">{t("voiceClonePipTencent")}</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <FormDescription>{t("voiceClonePipIndexHint")}</FormDescription>
                 </FormItem>
               )}

@@ -1,8 +1,9 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import React from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * 「改了还没保存」必须真的是改了。
@@ -111,6 +112,54 @@ describe("已保存 fish-speech + modelscope(用户库里的真实那一行)", (
   });
 });
 
+
+/**
+ * 顶上的横幅和底下的卡片必须给**同一个答案**。
+ *
+ * 真机上抓到的一页:下拉里选 Fish Speech(还没保存),横幅红着说「『Fish Speech S2 Pro』
+ * 尚未就绪,现在合成会被当场拒绝……点下方的『下载』即可」,而同一页底下那张卡写着
+ * 「Fish Speech S2 Pro · 11.0 GB · 已安装」,后端 /api/tts/models 也回
+ * `runtime_ready: true, message: "已安装,声音克隆可用"`。
+ *
+ * 根因:横幅问的是**配置级**的 `worker_ready`(后端只对「已保存」的那个引擎算),而
+ * 「这个引擎跑不跑得起来」现在是**逐引擎**有答案的(models 里的 runtime_ready)。
+ * 拿一个回答不了这个问题的来源去回答它,就只能得到"选了别的引擎 = 未就绪"这种假话 ——
+ * 它会让人去下载一个已经躺在盘上的 11 GB 模型。
+ */
+describe("横幅说的是被选中那个引擎的真实状态", () => {
+  beforeEach(() => {
+    Object.assign(Element.prototype, {
+      hasPointerCapture: () => false,
+      setPointerCapture: () => {},
+      releasePointerCapture: () => {},
+      scrollIntoView: () => {},
+    });
+    config.engine = "f5-tts";
+    config.source = "hf";
+    config.worker_ready = true;
+    models[0] = { ...base, id: "f5-tts", label: "F5-TTS", expected_bytes: 1_500_000_000, sources: ["hf", "hf-mirror"], status: "installed", runtime_ready: true, runtime_checked: true };
+    models[1] = { ...base, id: "fish-speech", label: "Fish Speech", expected_bytes: 11_000_000_000, sources: ["hf", "hf-mirror", "modelscope"], status: "installed", runtime_ready: true, runtime_checked: true };
+  });
+
+  it("选了另一个装好的引擎(还没保存)时,不说它「尚未就绪」", async () => {
+    const user = userEvent.setup();
+    renderSection();
+    const picker = await screen.findByRole("combobox", { name: "voiceCloneEngine" });
+
+    await user.click(picker);
+    await user.click(await screen.findByRole("option", { name: "Fish Speech" }));
+
+    await waitFor(() => expect(screen.queryByText(/voiceCloneNotReady/)).toBeNull());
+  });
+
+  it("那个引擎还没探完时说「正在检查」,不说「未就绪」—— 不知道不等于不行", async () => {
+    models[0] = { ...models[0], runtime_checked: false, runtime_ready: false };
+    renderSection();
+
+    await waitFor(() => expect(screen.getAllByText(/runtimeChecking/).length).toBeGreaterThan(0));
+    expect(screen.queryByText(/voiceCloneNotReady/)).toBeNull();
+  });
+});
 
 describe("探测还没答完时", () => {
   it("卡片说「正在检查」,而不是说「未就绪」", async () => {
