@@ -263,7 +263,10 @@ function EngineCard({ model, busy, unsaved, onDownload }: { model: TtsEngine; bu
             <span className="text-[11px] tabular-nums text-muted-foreground">{formatBytes(model.expected_bytes)}</span>
           </div>
           <small className="text-[11.5px] text-muted-foreground">{model.detail}</small>
-          {model.status === "installed" && !model.runtime_ready && (
+          {model.status === "installed" && !model.runtime_checked && (
+            <small className="text-[11.5px] text-muted-foreground">{t("runtimeChecking")}</small>
+          )}
+          {model.status === "installed" && model.runtime_checked && !model.runtime_ready && (
             <small className="text-[11.5px] text-destructive">{t("voiceModelNoRuntime")}</small>
           )}
 
@@ -272,12 +275,12 @@ function EngineCard({ model, busy, unsaved, onDownload }: { model: TtsEngine; bu
           {/* **两件事分开说**:权重在不在盘上(status),和跑不跑得起来(runtime_ready)。
               转写那边刚修过同一个坑:此前这里只看前者,页面写着「已安装」,一点合成却说
               「没有可用的引擎」—— 而用户最容易做的事是去重下已经在盘上的那几个 GB。 */}
-          {model.status === "installed" && model.runtime_ready && (
+          {model.status === "installed" && model.runtime_checked && model.runtime_ready && (
             <span className="inline-flex items-center gap-[5px] text-xs font-medium text-primary">
               <CheckCircle2 size={14} /> {t("asrModelInstalled")}
             </span>
           )}
-          {model.status === "installed" && !model.runtime_ready && (
+          {model.status === "installed" && model.runtime_checked && !model.runtime_ready && (
             <Button size="sm" variant="outline" disabled={busy || unsaved} title={unsaved ? t("ttsSaveFirst") : undefined} onClick={onDownload}>
               <Download size={13} /> {t("asrModelInstallRuntime")}
             </Button>

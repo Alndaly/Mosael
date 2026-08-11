@@ -370,6 +370,58 @@ def _resolve_engine_python(engine_id: str) -> str | None:
     return None
 
 
+#: 探测过的结果。**列状态只读这里,永远不等** —— 探测要起子进程 import torch,而列状态是
+#: 一次纯读的请求。这个仓库修过同一个形状:列供应商曾经在返回前替过期令牌去联网刷新
+#: (见 test_listing_connections_does_not_block),判据是"这个接口要回答的问题,不需要出网
+#: 就能回答";这里是同一句话的另一半 —— 不需要起子进程就能回答。
+_PROBED: dict[str, str | None] = {}
+_PROBING: set[str] = set()
+_PROBE_LOCK = threading.Lock()
+
+
+def probe_in_background(engine_id: str) -> None:
+    """确保这个引擎被探过一次。已经在探的不重复起线程。"""
+    with _PROBE_LOCK:
+        if engine_id in _PROBED or engine_id in _PROBING:
+            return
+        _PROBING.add(engine_id)
+
+    def run() -> None:
+        python = None
+        try:
+            python = _resolve_engine_python(engine_id)
+        finally:
+            with _PROBE_LOCK:
+                _PROBING.discard(engine_id)
+                _PROBED[engine_id] = python
+
+    threading.Thread(target=run, daemon=True).start()
+
+
+def runtime_status(engine_id: str) -> tuple[bool, bool]:
+    """(跑得起来吗, 测过了吗)。**不等** —— 没测过就顺手在后台起一次,先把已知的给出去。
+
+    "还没测过"和"测过了、跑不起来"是两回事。把前者说成后者,就是拿一个未知冒充一个结论:
+    界面会写着「未就绪」,而其实只是还没问。
+    """
+    with _PROBE_LOCK:
+        if engine_id in _PROBED:
+            return bool(_PROBED[engine_id]), True
+    probe_in_background(engine_id)
+    return False, False
+
+
+def refresh_runtime_status(engine_id: str) -> bool:
+    """**现在就探一次**并记下来。装完引擎之后调它 —— 否则下一次列状态还得等后台那一轮,
+    用户刚点完「下载」看到的仍是"正在检查"。测试里也用它拿一个确定的答案。
+    """
+    # 走**公开的**那个:它是这件事唯一的入口,打桩/替换也都替它(私有的那个只是缓存层)。
+    python = resolve_engine_python(engine_id)
+    with _PROBE_LOCK:
+        _PROBED[engine_id] = python
+    return bool(python)
+
+
 def resolve_engine_python(engine_id: str) -> str | None:
     """能真的跑这个引擎的解释器,**没有就是没有**。
 
@@ -385,7 +437,11 @@ def resolve_engine_python(engine_id: str) -> str | None:
 
 def clear_runtime_probes() -> None:
     """装完引擎、改完解释器路径之后叫一声,否则答案会停在"装之前"。"""
-    _resolve_engine_python.cache_clear()
+    # getattr:测试会把探测换成一个普通函数(没有 cache_clear)。作废缓存是清理动作,
+    # 不该因为"被替换过"就炸。
+    getattr(_resolve_engine_python, "cache_clear", lambda: None)()
+    with _PROBE_LOCK:
+        _PROBED.clear()
 
 
 def probe_interpreter(engine_id: str) -> dict[str, Any]:
@@ -468,17 +524,18 @@ def _status_dict(engine: TtsEngine) -> dict[str, Any]:
         # 权重齐了不等于跑得起来:pip 包可能压根没装(权重是别的工具下的,或者托管 venv 被删了)。
         # 此前这里一律说「已安装,声音克隆可用」,而合成那边探测解释器失败 —— 页面说可用,
         # 一点就说不可用。两句话得出自同一次判断。
-        ready = resolve_engine_python(engine.id) is not None
-        return {**base, "status": "installed", "runtime_ready": ready,
+        ready, checked = runtime_status(engine.id)
+        return {**base, "status": "installed", "runtime_ready": ready, "runtime_checked": checked,
                 "downloaded_bytes": _measure(engine), "total_bytes": engine.expected_bytes,
-                "message": "已安装,声音克隆可用" if ready
+                "message": "正在检查运行环境…" if not checked else "已安装,声音克隆可用" if ready
                 else "权重已下好,但还没有解释器装了它 —— 再点一次「下载」会把运行环境补上"}
     # runtime_ready 说的是"跑不跑得起来",和"权重下没下"是两件事 —— 别因为在"未下载"这条
     # 分支上就无条件写 False。装好了运行环境、只差权重,是一个该说清楚的状态。
-    ready = resolve_engine_python(engine.id) is not None
-    return {**base, "status": "missing", "runtime_ready": ready, "downloaded_bytes": _measure(engine),
+    ready, checked = runtime_status(engine.id)
+    return {**base, "status": "missing", "runtime_ready": ready, "runtime_checked": checked, "downloaded_bytes": _measure(engine),
             "total_bytes": engine.expected_bytes,
-            "message": "运行环境已就绪,还差模型权重" if ready else "未下载"}
+            "message": ("正在检查运行环境…" if not checked else
+                        "运行环境已就绪,还差模型权重" if ready else "未下载")}
 
 
 def list_status() -> list[dict[str, Any]]:
@@ -749,6 +806,7 @@ def _download_body(engine_id: str) -> None:
 
         tts_config.refresh()
     clear_runtime_probes()  # 刚装完,探测结果必须重算
+    refresh_runtime_status(engine_id)  # 并且**现在**就算,别让用户对着"正在检查"再等一轮
     if _is_installed(engine):
         _store.clear(engine.id)
     else:

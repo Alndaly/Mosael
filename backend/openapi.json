@@ -13700,6 +13700,11 @@
             "title": "Runtime Ready",
             "default": false
           },
+          "runtime_checked": {
+            "type": "boolean",
+            "title": "Runtime Checked",
+            "default": true
+          },
           "downloaded_bytes": {
             "type": "integer",
             "title": "Downloaded Bytes",
@@ -19979,6 +19984,13 @@
             "maxLength": 40,
             "title": "Clone Engine",
             "default": ""
+          },
+          "speed": {
+            "type": "number",
+            "maximum": 2.0,
+            "minimum": 0.5,
+            "title": "Speed",
+            "default": 1.0
           }
         },
         "type": "object",
@@ -20654,6 +20666,11 @@
             "type": "boolean",
             "title": "Runtime Ready",
             "default": false
+          },
+          "runtime_checked": {
+            "type": "boolean",
+            "title": "Runtime Checked",
+            "default": true
           }
         },
         "type": "object",

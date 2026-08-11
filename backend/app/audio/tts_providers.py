@@ -339,7 +339,9 @@ def describe_engines() -> list[dict[str, object]]:
     from app.audio import tts_models
     from app.domain import tts_config
 
-    clone_ready = tts_models.resolve_engine_python(tts_config.get().engine) is not None
+    # **不等探测**:这个接口只是"引擎选择器要什么",而探测要起子进程 import torch。
+    # 没测过时按"还没就绪"渲染,后台探完下一次拉列表就对了(见 tts_models.runtime_status)。
+    clone_ready, _checked = tts_models.runtime_status(tts_config.get().engine)
     return [
         {
             "id": "clone",

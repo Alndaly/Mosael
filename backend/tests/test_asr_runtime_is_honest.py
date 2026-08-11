@@ -39,6 +39,10 @@ def test_the_status_says_whether_it_can_actually_run(monkeypatch) -> None:
 def test_a_fully_ready_model_says_so(monkeypatch) -> None:
     monkeypatch.setattr(asr_models, "_is_installed", lambda entry: True)
     monkeypatch.setattr(asr_models, "runtime_ready", lambda engine: True)
+    # 探测现在是**后台**跑的(列模型不该卡在 import funasr 上,见
+    # test_status_endpoints_do_not_probe_inline)。要确定答案就显式探一次。
+    asr_models.clear_runtime_probes()
+    asr_models.refresh_runtime_status("funasr")
 
     row = {r["id"]: r for r in asr_models.list_status()}["funasr-zh"]
 
@@ -119,8 +123,14 @@ def test_installing_the_runtime_works_on_an_already_downloaded_model(monkeypatch
     started: list[str] = []
     monkeypatch.setattr(asr_models, "_is_installed", lambda entry: True)
     monkeypatch.setattr(asr_models, "runtime_ready", lambda engine: False)
-    monkeypatch.setattr(asr_models.threading, "Thread",
-                        lambda target, args, daemon: type("T", (), {"start": lambda self: started.append(args[0])})())
+    # 桩要能接住**所有**起线程的调用:后台探测也走 threading.Thread,而它不带 args
+    # (见 asr_models.probe_in_background)。一个卡死参数形状的桩,会在别处加线程时炸。
+    monkeypatch.setattr(
+        asr_models.threading, "Thread",
+        lambda target, args=None, daemon=None: type(
+            "T", (), {"start": lambda self: started.append(args[0]) if args else None}
+        )(),
+    )
 
     asr_models.start_download("funasr-zh")
 

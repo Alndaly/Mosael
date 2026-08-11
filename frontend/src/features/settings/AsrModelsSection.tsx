@@ -73,7 +73,12 @@ function AsrModelCard({
             <span className="text-[11px] tabular-nums text-muted-foreground">{formatBytes(model.expected_bytes)}</span>
           </div>
           <small className="text-[11.5px] text-muted-foreground">{model.detail}</small>
-          {model.status === "installed" && !model.runtime_ready && (
+          {/* 「还没测过」和「测过了、跑不起来」是两回事 —— 探测要起子进程 import torch,
+              不能卡在请求里,所以刚打开时可能还没有答案。说成"未就绪"是拿未知冒充结论。 */}
+          {model.status === "installed" && !model.runtime_checked && (
+            <small className="text-[11.5px] text-muted-foreground">{t("runtimeChecking")}</small>
+          )}
+          {model.status === "installed" && model.runtime_checked && !model.runtime_ready && (
             <small className="text-[11.5px] text-destructive">{t("asrModelNoRuntime")}</small>
           )}
         </div>
@@ -82,12 +87,12 @@ function AsrModelCard({
               它们完全可以一真一假 —— 模型缓存是别的工具下的,而这台机器上没有任何解释器装了
               funasr/whisperx。此前这里只看前者,于是页面写着「已安装」、一转写就报「未找到
               转写环境」,而用户最容易做的事是去重下已经在盘上的那几个 GB。 */}
-          {model.status === "installed" && model.runtime_ready && (
+          {model.status === "installed" && model.runtime_checked && model.runtime_ready && (
             <span className="inline-flex items-center gap-[5px] text-xs font-medium text-primary">
               <CheckCircle2 size={14} /> {t("asrModelInstalled")}
             </span>
           )}
-          {model.status === "installed" && !model.runtime_ready && (
+          {model.status === "installed" && model.runtime_checked && !model.runtime_ready && (
             <Button size="sm" variant="outline" disabled={busy} onClick={onDownload}>
               <Download size={13} /> {t("asrModelInstallRuntime")}
             </Button>

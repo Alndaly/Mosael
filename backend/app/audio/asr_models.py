@@ -303,10 +303,58 @@ def resolve_engine_python(engine: str) -> str | None:
         return None
 
 
+#: 探测过的结果。**列状态只读这里,永远不等** —— 探测要起子进程 import funasr(它会把
+#: torch 一起拉起来),而列模型是一次纯读的请求。用户那一页停在「正在连接后端…」就是这个。
+#: 克隆那边同一套(见 audio/tts_models),判据也是同一句:这个接口要回答的问题,不需要起
+#: 子进程就能回答。
+_PROBED: dict[str, bool] = {}
+_PROBING: set[str] = set()
+_PROBE_LOCK = threading.Lock()
+
+
+def probe_in_background(engine: str) -> None:
+    with _PROBE_LOCK:
+        if engine in _PROBED or engine in _PROBING:
+            return
+        _PROBING.add(engine)
+
+    def run() -> None:
+        ok = False
+        try:
+            ok = runtime_ready(engine)
+        finally:
+            with _PROBE_LOCK:
+                _PROBING.discard(engine)
+                _PROBED[engine] = ok
+
+    threading.Thread(target=run, daemon=True).start()
+
+
+def refresh_runtime_status(engine: str) -> bool:
+    """现在就探一次并记下来(装完之后调,以及测试里要确定答案时)。"""
+    ok = runtime_ready(engine)
+    with _PROBE_LOCK:
+        _PROBED[engine] = ok
+    return ok
+
+
+def runtime_status(engine: str) -> tuple[bool, bool]:
+    """(跑得起来吗, 测过了吗)。没测过就在后台起一次,先把已知的给出去。"""
+    with _PROBE_LOCK:
+        if engine in _PROBED:
+            return _PROBED[engine], True
+    probe_in_background(engine)
+    return False, False
+
+
 def clear_runtime_probes() -> None:
     """装好环境之后把探测缓存清掉 —— 只有一处要清,因为只有一份缓存。"""
-    _resolve_python.cache_clear()
-    runtime_ready.cache_clear()
+    # getattr:测试会把探测换成普通函数(没有 cache_clear)。清缓存是清理动作,不是判据,
+    # 不该因为"被替换过"就炸。
+    getattr(_resolve_python, "cache_clear", lambda: None)()
+    getattr(runtime_ready, "cache_clear", lambda: None)()
+    with _PROBE_LOCK:
+        _PROBED.clear()
 
 
 @lru_cache(maxsize=4)
@@ -339,7 +387,9 @@ def _status_dict(entry: ModelEntry) -> dict[str, Any]:
         "expected_bytes": entry.expected_bytes,
         # **两件事分开报**:文件在不在(status)、跑不跑得起来(runtime_ready)。
         # 把它们合成一个"已安装"是这一页此前说谎的原因。
-        "runtime_ready": runtime_ready(entry.engine),
+        # **不等探测**:它要起子进程 import funasr。没测过就先说"还没测",后台去问。
+        "runtime_ready": runtime_status(entry.engine)[0],
+        "runtime_checked": runtime_status(entry.engine)[1],
     }
     if live is not None and live.status == "downloading":
         return {

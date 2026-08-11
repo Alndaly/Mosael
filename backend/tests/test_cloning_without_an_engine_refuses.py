@@ -25,6 +25,7 @@ import wave
 import pytest
 
 from app.audio import tts_models, voices
+from app.domain import tts_config
 from app.core.db import SessionLocal
 from app.db.models import Job
 from tests.util import fresh_client
@@ -113,11 +114,17 @@ def test_the_engine_picker_says_it_up_front(monkeypatch) -> None:
     from app.audio import tts_providers
 
     monkeypatch.setattr(tts_models, "resolve_engine_python", lambda engine_id: None)
+    tts_models.clear_runtime_probes()
+    tts_models.refresh_runtime_status(tts_config.get().engine)
     clone = next(row for row in tts_providers.describe_engines() if row["id"] == "clone")
     assert clone["ready"] is False
     assert "下载" in clone["note"]
 
+    # 探测挪到后台之后,引擎列表读的是缓存(它不该卡在 import torch 上,见
+    # test_status_endpoints_do_not_probe_inline)。换了答案就显式重探一次。
     monkeypatch.setattr(tts_models, "resolve_engine_python", lambda engine_id: "/usr/bin/python3")
+    tts_models.clear_runtime_probes()
+    tts_models.refresh_runtime_status(tts_config.get().engine)
     clone = next(row for row in tts_providers.describe_engines() if row["id"] == "clone")
     assert clone["ready"] is True
     assert "下载" not in clone["note"]
@@ -156,6 +163,7 @@ def test_installed_does_not_mean_runnable(monkeypatch) -> None:
     monkeypatch.setattr(tts_models, "_is_installed", lambda engine: True)
     monkeypatch.setattr(tts_models, "resolve_engine_python", lambda engine_id: None)
 
+    tts_models.refresh_runtime_status("f5-tts")
     row = tts_models.get_status("f5-tts")
 
     assert row["status"] == "installed"  # 字节数说的
@@ -167,6 +175,9 @@ def test_installed_and_runnable_says_so(monkeypatch) -> None:
     monkeypatch.setattr(tts_models, "_is_installed", lambda engine: True)
     monkeypatch.setattr(tts_models, "resolve_engine_python", lambda engine_id: "/usr/bin/python3")
 
+    # 探测现在是**后台**跑的(列状态不该卡在 import torch 上,见
+    # test_status_endpoints_do_not_probe_inline)。要一个确定答案就显式探一次。
+    tts_models.refresh_runtime_status("f5-tts")
     row = tts_models.get_status("f5-tts")
 
     assert row["runtime_ready"] is True

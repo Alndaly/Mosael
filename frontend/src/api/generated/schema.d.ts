@@ -4671,6 +4671,11 @@ export interface components {
              */
             runtime_ready: boolean;
             /**
+             * Runtime Checked
+             * @default true
+             */
+            runtime_checked: boolean;
+            /**
              * Downloaded Bytes
              * @default 0
              */
@@ -7259,6 +7264,11 @@ export interface components {
              * @default
              */
             clone_engine: string;
+            /**
+             * Speed
+             * @default 1
+             */
+            speed: number;
         };
         /** TaskEventOut */
         TaskEventOut: {
@@ -7623,6 +7633,11 @@ export interface components {
              * @default false
              */
             runtime_ready: boolean;
+            /**
+             * Runtime Checked
+             * @default true
+             */
+            runtime_checked: boolean;
         };
         /**
          * TtsVoiceOut

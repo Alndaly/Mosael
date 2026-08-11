@@ -999,6 +999,10 @@ class TtsEngineOut(BaseModel):
     #: Python 解释器能 import 这个引擎。两者完全可以一真一假(权重是别的工具下的、或者
     #: 托管 venv 被删了),而把它们合成一句「已安装,声音克隆可用」正是这一页说谎的方式。
     runtime_ready: bool = False
+    #: 探过了没有。**"还没测过"和"测过了、跑不起来"是两回事** —— 探测要起子进程 import
+    #: torch,不能卡在请求里,所以列状态时可能还没有答案。把未知说成"未就绪"就是拿一个未知
+    #: 冒充一个结论。
+    runtime_checked: bool = True
 
 
 class SynthesizeRequest(BaseModel):
@@ -1106,6 +1110,10 @@ class AsrModelOut(BaseModel):
     #: Python 解释器装了 funasr/whisperx。两者完全可以一真一假(模型缓存是别的工具下的),
     #: 而把它们合成一个「已安装」正是这一页此前说谎的原因。
     runtime_ready: bool = False
+    #: 探过了没有。**"还没测过"和"测过了、跑不起来"是两回事** —— 探测要起子进程 import
+    #: torch,不能卡在请求里,所以列状态时可能还没有答案。把未知说成"未就绪"就是拿一个未知
+    #: 冒充一个结论。
+    runtime_checked: bool = True
     downloaded_bytes: int = 0
     total_bytes: int = 0
     expected_bytes: int = 0
