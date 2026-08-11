@@ -20,7 +20,7 @@ from app.api.schemas import (
     UserProfileUpdate,
 )
 from app.core.config import settings
-from app.core.permissions import ensure_deployment_admin
+from app.domain.permissions import ensure_deployment_admin
 from app.core.security import find_session, hash_password, mint_login_session, new_session_token, verify_password
 from app.domain import deployment
 from app.db.models import AuthSession, RegistrationInvite, User, Workspace, WorkspaceMember, now

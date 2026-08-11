@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
-from app.core.permissions import ensure_deployment_admin
+from app.domain.permissions import ensure_deployment_admin
 from app.ai.agent.login import (
     LoginError,
     answer as answer_login,

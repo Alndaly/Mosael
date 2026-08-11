@@ -21,7 +21,7 @@ from app.api.schemas import (
     WorkflowRunRequest,
     WorkflowUpdate,
 )
-from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
+from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import Job, Workflow
 from app.domain.workflows import (
     NODE_CATEGORIES,

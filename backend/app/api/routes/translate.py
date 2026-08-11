@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import TranslateRequest, TranslateResponse
-from app.core.permissions import ensure_workspace_member
+from app.domain.permissions import ensure_workspace_member
 from app.domain.translate import TranslateError, translate_many
 
 router = APIRouter(tags=["translate"])

@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import AsrModelOut
-from app.core.permissions import ensure_deployment_admin
+from app.domain.permissions import ensure_deployment_admin
 from app.audio import asr_models
 
 router = APIRouter(tags=["asr"])

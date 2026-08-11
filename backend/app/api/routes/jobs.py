@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import JobOut, TaskEventOut
-from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
+from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import Job, TaskEvent
 from app.domain.jobs import cancel_job, clear_finished_jobs
 

@@ -12,7 +12,7 @@ from sqlalchemy import select
 from app.domain import sharing
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import BrowserProfileCreate, BrowserProfileOut, BrowserProfileUpdate
-from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
+from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import BrowserProfile, PublishAccount, User
 from app.domain import browser
 

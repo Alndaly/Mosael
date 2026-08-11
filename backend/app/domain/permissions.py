@@ -1,95 +1,39 @@
+"""授权:这个人能不能碰这个工作区/这份素材。
+
+**从 `app/core/permissions.py` 搬出来的。** 它原本住在 core —— 一个被二十几处 import 的底座,
+却在对业务表(WorkspaceMember / Asset / Sequence)做鉴权。同一个文件里还挤着 FastAPI 的认证
+插头(`Depends` / `Request` / `Query`),那部分现在在 `api/deps/auth.py`。
+
+**为什么不整体搬进 api**(那里有 27/29 个调用点):授权必须能从**非 HTTP 入口**调用。飞书的
+卡片回调不走路由,它和 HTTP 路由共用同一个 `authorize_and_approve`,而后者就在领域层调
+`ensure_workspace_perm`(见 domain/agent/confirmations 的说明:两个入口各抄一遍校验时,
+漏掉一处等于越权)。
+
+**为什么抛领域异常而不是 HTTPException**:领域层此前 HTTPException 是 0 处。把 FastAPI 引进来
+是拿一个倒置换另一个,而且换来的更糟 —— 领域逻辑正是要能脱离 HTTP 被 worker / MCP / 飞书复用。
+状态码由 `api` 那一侧统一翻(见 main.py 的异常处理器),两个异常各自对应一个**故意的**答案:
+
+- `NotVisible` → **404**:不是这个工作区的人,连"它存在"都不告诉他;
+- `PermissionDenied` → **403**:是这里的人,但角色不够。
+"""
+
 from __future__ import annotations
 
-import contextvars
-import re
-
-from fastapi import Depends, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.db import session_scope
 from app.core.roles import role_at_least
-from app.core.security import find_session, renew_if_stale
 from app.core.usage_scope import bind_workspace
-from app.db.models import Asset, AuthSession, Sequence, User, WorkspaceMember, now
-
-"""
-Single permission entry point (plan §9.3).
-
-- Authentication: opaque bearer token (Authorization header) resolved to a
-  local user. Media endpoints may pass ?token= because <video>/<img> cannot
-  set headers.
-- Workspace scoping: unknown or foreign resources return 404, never 403,
-  to avoid leaking existence.
-"""
+from app.db.models import Asset, Sequence, User, WorkspaceMember
 
 
-def presented_token(
-    request: Request,
-    token: str | None = Query(default=None, include_in_schema=False),
-) -> str:
-    """这次请求带进来的凭据本身(Bearer 头,或 ?token= 那条给 <video>/<img> 用的旁路)。
-
-    只做提取,不做校验 —— 校验是 get_current_user 的事,两者读的是同一处,所以不会出现
-    「按一个来源认人、按另一个来源取值」。给需要**把调用方凭据继续往下传**的路由用:
-    工具通道要让工具体回连本 API,它需要的正是调用方这一份,而不是另铸一份没人回收的新令牌。
-    """
-    header = request.headers.get("authorization", "")
-    bearer = header.removeprefix("Bearer ").strip() if header.startswith("Bearer ") else None
-    return bearer or token or ""
+class PermissionDenied(Exception):
+    """是这个工作区的人,但角色不够。api 翻成 403。"""
 
 
-#: 客户端自报版本的请求头。前端在 api/client 里统一带上(见 __APP_VERSION__)。
-CLIENT_VERSION_HEADER = "X-Open-Studio-Client"
-
-
-def get_current_user(
-    request: Request,
-    db: Session = Depends(session_scope),
-    token: str | None = Query(default=None, include_in_schema=False),
-) -> User:
-    candidate = presented_token(request, token)
-    if not candidate:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    session = find_session(db, candidate)
-    if session is not None and session.expires_at <= now():
-        # 撞见就顺手删掉:过期的行不该在库里等着某次清理。铸造时的批量清理管的是"没人再碰的
-        # 那些",这一条管的是"正好被碰到的那一条"——两者合起来,表不会因为无人重启而涨。
-        db.delete(session)
-        db.commit()
-        session = None
-    if session is None:
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-    user = db.get(User, session.user_id)
-    if user is None:
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-    renew_if_stale(db, session)
-    _record_client(db, session, request)
-    return user
-
-
-#: 版本号里能出现的字符。请求头是**外部输入** —— 只收像版本号的东西,别让这一栏变成一条
-#: 能塞任意文本的通道(它会被原样显示在管理员的表格里)。
-_VERSION_SHAPE = re.compile(r"^[0-9A-Za-z.+\-]{1,32}$")
-
-
-def _record_client(db: Session, session: AuthSession, request: Request) -> None:
-    """记下"这个人现在跑的是哪一版、最近一次是什么时候"。
-
-    放在这里是因为它是**唯一**的登录身份收口点:每一个带凭据的请求都经过它,所以不需要在
-    任何路由上再挂一次,也就不会有"这条路由忘了记"。
-    """
-    reported = (request.headers.get(CLIENT_VERSION_HEADER) or "").strip()
-    version = reported if _VERSION_SHAPE.match(reported) else ""
-    stamp = now()
-    # 每个请求都写一次太吵(登录会话一天几千个请求)。只在版本变了、或上次记录已经过了一分钟
-    # 时才写 —— "最近在用"这件事不需要秒级精度。
-    if version and version != session.client_version:
-        session.client_version = version
-    elif session.last_seen_at is not None and (stamp - session.last_seen_at).total_seconds() < 60:
-        return
-    session.last_seen_at = stamp
-    db.commit()
+class NotVisible(Exception):
+    """对他来说这个东西不存在(不是成员、或行本身没有)。api 翻成 **404 而不是 403** ——
+    403 会告诉他"这个 id 是存在的",那正是要避免的泄漏。"""
 
 
 def _membership(db: Session, user: User, workspace_id: str) -> WorkspaceMember:
@@ -101,7 +45,7 @@ def _membership(db: Session, user: User, workspace_id: str) -> WorkspaceMember:
     )
     if member is None:
         # Non-members get 404, never 403 — don't leak that the workspace exists.
-        raise HTTPException(status_code=404, detail="Not found")
+        raise NotVisible("Not found")
     return member
 
 
@@ -152,7 +96,7 @@ def ensure_workspace_role(db: Session, user: User, workspace_id: str, minimum: s
     """Member must hold at least `minimum` role. Returns the caller's role."""
     member = _membership(db, user, workspace_id)
     if not role_at_least(member.role, minimum):
-        raise HTTPException(status_code=403, detail="Insufficient workspace role")
+        raise PermissionDenied("Insufficient workspace role")
     return member.role
 
 
@@ -180,7 +124,7 @@ def ensure_workspace_perm(db: Session, user: User, workspace_id: str, perm: str)
     minimum = _PERM_ROLE.get(perm, "admin")
     member = _membership(db, user, workspace_id)
     if not role_at_least(member.role, minimum):
-        raise HTTPException(status_code=403, detail=f"Permission denied: {perm}")
+        raise PermissionDenied(f"Permission denied: {perm}")
     bind_workspace(workspace_id)
 
 
@@ -201,7 +145,7 @@ def ensure_deployment_admin(db: Session, user: User) -> None:
     单机安装不受影响:那个人就是引导账号,库里第一个用户自动持有这一列。
     """
     if not user.is_deployment_admin:
-        raise HTTPException(status_code=403, detail="这项设置属于整个部署,只有部署管理员能改")
+        raise PermissionDenied("这项设置属于整个部署,只有部署管理员能改")
 
 
 
@@ -211,7 +155,7 @@ def require_asset(db: Session, user: User, asset_id: str, *, perm: str | None = 
     只读路由不传,拿到的就是只读闸。"""
     asset = db.get(Asset, asset_id)
     if asset is None:
-        raise HTTPException(status_code=404, detail="Not found")
+        raise NotVisible("Not found")
     if perm is None:
         ensure_workspace_access(db, user, asset.workspace_id)
     else:
@@ -223,7 +167,7 @@ def require_sequence_access(db: Session, user: User, sequence_id: str, *, perm: 
     """取序列并过闸。写路由传 `perm="edit"` —— 权限写在调用点上,而不是从请求方法推。"""
     sequence = db.get(Sequence, sequence_id)
     if sequence is None:
-        raise HTTPException(status_code=404, detail="Not found")
+        raise NotVisible("Not found")
     if perm is None:
         ensure_workspace_access(db, user, sequence.workspace_id)
     else:

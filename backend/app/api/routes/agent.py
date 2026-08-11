@@ -27,7 +27,7 @@ from app.api.schemas import (
     ProviderUsageEventOut,
 )
 from app.core.config import app_version
-from app.core.permissions import ensure_workspace_access, ensure_workspace_perm, ensure_workspace_role
+from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, ensure_workspace_role
 from app.db.models import AgentMessage, AgentSession, ProviderUsageEvent, now
 from app.domain.agent import list_agent_skills
 from app.domain.agent import memory as agent_memory

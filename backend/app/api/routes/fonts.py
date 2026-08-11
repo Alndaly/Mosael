@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import FontOut
-from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
+from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import Font
 from app.domain.fonts import FontError, delete_font_files, import_uploaded_font
 from app.media.paths import resolve_key

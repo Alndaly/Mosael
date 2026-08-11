@@ -15,7 +15,7 @@ from app.api.schemas import (
     PromptOptimizeRequest,
     PromptOptimizeResponse,
 )
-from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
+from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import GenerationJob, GenerationSession, Job, ProviderUsageEvent
 from app.domain import sharing
 from app.domain.generation import create_generation_job, generation_options

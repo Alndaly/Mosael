@@ -12,7 +12,7 @@ from app.api.schemas import (
     ScheduledTaskRunOut,
     ScheduledTaskUpdate,
 )
-from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
+from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import ScheduledTask, ScheduledTaskRun
 from app.domain.scheduler import create_scheduled_task, run_scheduled_task, update_scheduled_task
 from app.domain.scheduler.operations import SchedulerDomainError

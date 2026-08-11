@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.core.db import session_scope
 from app.core.worker_key import WORKER_KEY_HEADER, verify_worker_key
-from app.core.permissions import ensure_deployment_admin, get_current_user, presented_token
+from app.api.deps.auth import get_current_user, presented_token
+from app.domain.permissions import ensure_deployment_admin
 from app.db.models import User
 
 DbSession = Annotated[Session, Depends(session_scope)]

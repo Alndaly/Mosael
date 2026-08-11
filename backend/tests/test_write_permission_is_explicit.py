@@ -24,7 +24,7 @@ import pathlib
 import pytest
 
 from app.core.db import SessionLocal
-from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
+from app.domain.permissions import PermissionDenied, ensure_workspace_access, ensure_workspace_perm
 from app.db.models import User
 from fastapi import HTTPException
 from tests.util import fresh_client, second_client
@@ -140,7 +140,7 @@ def test_every_mutating_route_names_the_permission_it_needs() -> None:
 
 def test_the_read_gate_no_longer_guesses_from_the_request_method() -> None:
     """闸门不该读「当前请求是不是 POST」—— 那是环境,不是这次调用的意图。"""
-    source = pathlib.Path("app/core/permissions.py").read_text()
+    source = pathlib.Path("app/domain/permissions.py").read_text(encoding="utf-8")
     for ghost in ("_request_method", "bind_request_method", "_MUTATING"):
         assert ghost not in source, f"{ghost} 还在:写权限又会取决于调用它的是不是 HTTP 请求"
 
@@ -159,9 +159,30 @@ def test_a_viewer_cannot_write_even_off_the_http_path() -> None:
         # 读:通过 —— viewer 本来就该读得到。
         ensure_workspace_access(db, person, workspace["id"])
         # 写:拒绝,而且**与是不是 HTTP 请求无关**。
-        with pytest.raises(HTTPException) as caught:
+        # 抛的是领域异常(授权规则住在 domain,要能被飞书回调这类非 HTTP 入口调用);
+        # 用户看到的状态码由 api 那侧统一翻,下面那条测试守着。
+        with pytest.raises(PermissionDenied):
             ensure_workspace_perm(db, person, workspace["id"], "edit")
-        assert caught.value.status_code == 403
+
+
+def test_the_domain_error_still_reaches_the_user_as_403_and_404() -> None:
+    """领域异常必须被翻回原来的状态码 —— 少了这一步,29 个调用点抛出来的全是 500。
+
+    404 那条尤其不能丢:不是成员时故意不给 403,否则等于告诉他"这个 id 是存在的"。
+    """
+    owner = fresh_client()
+    workspace = owner.post("/api/workspaces", json={"name": "W"}).json()
+    viewer = second_client("viewer")
+    owner.post(f"/api/workspaces/{workspace['id']}/invitations", json={"username": "viewer", "role": "viewer"})
+    invitation = viewer.get("/api/invitations").json()["invitations"][0]
+    viewer.post(f"/api/invitations/{invitation['id']}/accept")
+    stranger = second_client("stranger")
+
+    denied = viewer.post("/api/projects", json={"workspace_id": workspace["id"], "name": "P"})
+    hidden = stranger.get(f"/api/projects?workspace_id={workspace['id']}")
+
+    assert denied.status_code == 403, denied.text
+    assert hidden.status_code == 404, hidden.text
 
 
 def test_an_editor_still_writes() -> None:

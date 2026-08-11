@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import NotificationListOut, NotificationOut, NotifyRequest
-from app.core.permissions import ensure_workspace_access
+from app.domain.permissions import ensure_workspace_access
 from app.db.models import Notification
 from app.domain.notifications import mark_all_read, mark_read, notify
 

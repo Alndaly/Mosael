@@ -15,7 +15,7 @@ from app.api.schemas import (
     PublishPlatformOut,
     PublishTaskOut,
 )
-from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
+from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import Asset, PublishAccount, PublishTask
 from app.domain.publish import (
     PUBLISH_PLATFORMS,

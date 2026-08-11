@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.api.deps import CurrentUser, DbSession
-from app.core.permissions import ensure_workspace_access
+from app.domain.permissions import ensure_workspace_access
 from app.domain import sharing
 
 router = APIRouter(tags=["shares"])

@@ -17,13 +17,7 @@ from app.api.schemas import (
     InvitationOut,
     InvitationListOut,
 )
-from app.core.permissions import (
-    ensure_deployment_admin,
-    ensure_workspace_access,
-    ensure_workspace_perm,
-    ensure_workspace_role,
-    workspace_role,
-)
+from app.domain.permissions import PermissionDenied, ensure_deployment_admin, ensure_workspace_access, ensure_workspace_perm, ensure_workspace_role, workspace_role
 from app.core.roles import ROLES
 from app.db.models import (
     Asset,
@@ -111,7 +105,7 @@ def set_autopilot_rules(
     if incoming["run_code"] == "judge" and autopilot_rules.normalize(workspace.autopilot_rules)["run_code"] != "judge":
         try:
             ensure_workspace_role(db, user, workspace_id, "admin")
-        except HTTPException as exc:
+        except PermissionDenied as exc:
             raise HTTPException(
                 status_code=403,
                 detail="把「本机执行代码」交给判断者需要这台机器的管理员权限 —— 它和工作流里的代码节点是同一个能力",

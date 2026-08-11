@@ -37,7 +37,7 @@ from app.api.schemas import (
     TrimClipRequest,
 )
 from app.db.models import Job, Project, Sequence, Track
-from app.core.permissions import ensure_workspace_access, ensure_workspace_perm, require_sequence_access
+from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, require_sequence_access
 from app.domain.render import start_export
 from app.domain.sequences.errors import SequenceDomainError
 from app.domain.sequences.history import can_redo, can_undo, redo as redo_operation, undo as undo_operation

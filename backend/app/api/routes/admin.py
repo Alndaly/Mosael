@@ -13,7 +13,7 @@ from app.api.schemas import (
     DaySeriesPoint,
     UserSpendPoint,
 )
-from app.core.permissions import ensure_deployment_admin
+from app.domain.permissions import ensure_deployment_admin
 from app.domain import deployment, members
 from app.db.models import (
     Asset,

@@ -26,7 +26,7 @@ from app.api.schemas import (
     PluginToolOut,
 )
 from app.core.config import settings
-from app.core.permissions import ensure_deployment_admin
+from app.domain.permissions import ensure_deployment_admin
 from app.db.models import PluginInstance, PluginInvocation, PluginPackage
 from app.domain.plugins import PluginDomainError
 from app.domain.plugins import instances as inst

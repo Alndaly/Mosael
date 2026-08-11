@@ -4,8 +4,9 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from fastapi import Depends
 
@@ -51,7 +52,8 @@ from app.core.db import SessionLocal
 from app.db.migrations import init_db
 
 logger = logging.getLogger(__name__)
-from app.core.permissions import get_current_user
+from app.api.deps.auth import get_current_user
+from app.domain.permissions import NotVisible, PermissionDenied
 from app.domain.assets import reconcile_broken_media_info
 from app.ai.agent.host import reconcile_orphaned_agent_sessions
 from app.domain.browser import reconcile_browser_state
@@ -141,8 +143,28 @@ def _prepare_network() -> None:
             set_max_retries(runtime.max_retries)
 
 
+def _install_permission_handlers(app: FastAPI) -> None:
+    """把授权层的领域异常翻成 HTTP 状态码。
+
+    授权规则住在 `domain/permissions`(它必须能被飞书回调这类非 HTTP 入口调用,所以不能抛
+    HTTPException)。翻译收在这一处,**29 个调用点一行都不用改** —— 它们照旧只写
+    `ensure_workspace_perm(...)`。
+
+    两个状态码都是**故意**的:不是成员给 404 而不是 403,因为 403 等于告诉他"这个 id 存在"。
+    """
+
+    @app.exception_handler(NotVisible)
+    async def _not_visible(_request: Request, exc: NotVisible) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": str(exc) or "Not found"})
+
+    @app.exception_handler(PermissionDenied)
+    async def _denied(_request: Request, exc: PermissionDenied) -> JSONResponse:
+        return JSONResponse(status_code=403, content={"detail": str(exc)})
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="Open Studio API", version="0.1.0", lifespan=lifespan)
+    _install_permission_handlers(app)
     # Auth is bearer-token (no cookies) and the packaged Electron shell loads the frontend
     # from file://, whose fetches carry Origin: null — hence an explicit "null" here rather
     # than a same-origin policy.

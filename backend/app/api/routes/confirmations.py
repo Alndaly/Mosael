@@ -5,7 +5,7 @@ from sqlalchemy import or_, select
 
 from app.api.deps import CurrentUser, DbSession, PresentedToken
 from app.api.schemas import ConfirmationCreate, ConfirmationOut
-from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
+from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import ToolConfirmation, now
 from app.integrations.feishu.service import announce_confirmation
 from app.domain.agent import autopilot

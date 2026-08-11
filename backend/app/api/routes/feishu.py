@@ -12,7 +12,7 @@ from app.api.schemas import (
     FeishuBotUpdate,
     FeishuOnboardingOut,
 )
-from app.core.permissions import ensure_workspace_access, ensure_workspace_perm
+from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import FeishuBot
 from app.integrations.feishu import service
 

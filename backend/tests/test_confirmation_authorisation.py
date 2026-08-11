@@ -14,9 +14,8 @@ from __future__ import annotations
 
 import threading
 
-from fastapi import HTTPException
-
 from app.core.db import SessionLocal
+from app.domain.permissions import PermissionDenied
 from app.db.models import Sequence, ToolConfirmation, User
 from tests.util import fresh_client, second_client
 
@@ -82,8 +81,8 @@ def test_viewer_cannot_approve_off_the_request_thread() -> None:
 
     error = _approve_off_the_request_thread(card_id, "mate")
 
-    assert isinstance(error, HTTPException), f"viewer 的批准没有被挡住:{error!r}"
-    assert error.status_code == 403, error.detail
+    assert isinstance(error, PermissionDenied), f"viewer 的批准没有被挡住:{error!r}"
+    assert "Permission denied" in str(error), str(error)
     # 光看异常不够:门禁失效时卡片是**连同执行一起**通过的,时间线真的会多一条轨。
     assert _track_count(owner, sequence_id) == before, "viewer 的批准把编辑执行掉了"
     with SessionLocal() as db:
@@ -138,7 +137,7 @@ def test_viewer_cannot_reject_either() -> None:
 
     error = _reject_off_the_request_thread(card_id, "mate")
 
-    assert isinstance(error, HTTPException) and error.status_code == 403, f"{error!r}"
+    assert isinstance(error, PermissionDenied), f"{error!r}"
     with SessionLocal() as db:
         assert db.get(ToolConfirmation, card_id).status == "pending"
 

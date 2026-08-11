@@ -33,7 +33,7 @@ from pydantic import BaseModel
 
 from app.api.deps import CurrentUser, DbSession, PresentedToken
 from app.db.models import AuthSession
-from app.core.permissions import ensure_workspace_member
+from app.domain.permissions import ensure_workspace_member
 from app.core.security import find_session
 # 清单本身在领域层 —— 上下文水位也要按它算"工具定义占了多少",而那段代码在 api 层之下。
 # 这里重新导出,是因为它们此前就叫这些名字(测试、mcp_server 的注释都指着这里)。

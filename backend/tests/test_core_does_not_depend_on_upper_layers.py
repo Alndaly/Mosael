@@ -61,6 +61,32 @@ def test_core_imports_nothing_from_above() -> None:
     )
 
 
+def test_core_does_not_authorise_over_business_tables() -> None:
+    """鉴权不该住在底座里。
+
+    `core/permissions.py` 曾经对 WorkspaceMember / Asset / Sequence 做鉴权 —— 一个被二十几处
+    import 的底座,却认识业务表;同一个文件里还挤着 FastAPI 的认证插头。现在拆成两半:
+    授权规则在 `domain/permissions`(要能被飞书回调这类非 HTTP 入口调用),HTTP 插头在
+    `api/deps/auth`。
+
+    这里盯的是**别搬回去**:core 里不许再出现对这几张业务表的引用。`core/security` 仍然会
+    引 AuthSession —— 那是登录会话本身,属于认证基础设施,不是业务。
+    """
+    business = {"WorkspaceMember", "Asset", "Sequence", "Project", "Job"}
+    offenders: list[str] = []
+    for path in sorted(pathlib.Path("app/core").rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module == "app.db.models":
+                for alias in node.names:
+                    if alias.name in business:
+                        offenders.append(f"{path}:{node.lineno} → {alias.name}")
+
+    assert offenders == [], (
+        "底座又开始认识业务表了 —— 鉴权/业务判断该住在 domain:\n  " + "\n  ".join(offenders)
+    )
+
+
 def test_media_is_an_adapter_not_a_domain() -> None:
     """`media` 只会转码/取帧/算路径。**它不该知道"任务"这回事。**
 

@@ -17,7 +17,7 @@
 **可逆**:真需要逐位配置时再加回来,那时会有真实用例说清楚要哪几位 —— 而不是先摆一个矩阵在这儿
 等人来用。
 
-这个模块是纯逻辑(不碰 DB、不碰 FastAPI),执行在 app/core/permissions.py。
+这个模块是纯逻辑(不碰 DB、不碰 FastAPI),执行在 app/domain/permissions.py。
 """
 from __future__ import annotations
 

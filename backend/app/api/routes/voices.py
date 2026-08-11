@@ -26,7 +26,7 @@ from app.api.schemas import (
     VoiceUpdate,
 )
 from app.audio import tts_daemon, tts_models, voices
-from app.core.permissions import ensure_workspace_perm, ensure_deployment_admin, ensure_workspace_access
+from app.domain.permissions import ensure_workspace_perm, ensure_deployment_admin, ensure_workspace_access
 from app.domain import tts_config
 
 logger = logging.getLogger(__name__)
