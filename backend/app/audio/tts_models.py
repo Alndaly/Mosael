@@ -20,6 +20,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from app.core import interpreter
 from app.core.child_process import ChildProcess, popen_text, run_logged
 from app.core.rate import DownloadRate
 from app.core.config import settings
@@ -318,9 +319,11 @@ def candidate_pythons(engine_id: str) -> list[Path]:
     if configured:
         candidates.append(Path(configured).expanduser())
     candidates.append(tts_config.managed_venv_python(engine_id))
-    import sys
-
-    candidates.append(Path(sys.executable))
+    # 探测要**执行**候选解释器。打包版里"自己"是应用的 exe —— 拿它探等于再起一个后端
+    # (Windows 上真的会撞在 8800 上),所以冻结时这里什么都不加。
+    mine = interpreter.self_python()
+    if mine:
+        candidates.append(Path(mine))
     return candidates
 
 
@@ -647,7 +650,7 @@ def ensure_engine_runtime(engine_id: str) -> None:
     venv_dir = tts_config.managed_venv_dir(engine_id)
     venv_python = tts_config.managed_venv_python(engine_id)
     if not venv_python.is_file():
-        base = tts_config.base_python()
+        base = interpreter.base_python()
         if not base:
             raise RuntimeError(
                 "找不到可用于创建运行环境的 Python。请重装应用,或在设置里手动指定一个 TTS 解释器。"
@@ -712,13 +715,12 @@ def _ensure_fish_source() -> None:
 
 def _download_python(engine_id: str) -> str:
     """First existing candidate interpreter — the TTS env that has huggingface_hub, used to
-    run the weights snapshot. Falls back to this process's interpreter."""
-    import sys
-
+    run the weights snapshot. 一个都没有就退回"能建 venv 的那个"(打包版里是随包带的解释器);
+    再没有就是真的没有,让调用方拿到一个说得清的失败,而不是拿应用自己去跑下载。"""
     for python in candidate_pythons(engine_id):
         if python.is_file():
             return str(python)
-    return sys.executable
+    return interpreter.base_python()
 
 
 def _run_download(engine_id: str) -> None:

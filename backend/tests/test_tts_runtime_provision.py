@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from app.audio import tts_models
+from app.core import interpreter
 from app.domain import tts_config
 
 
@@ -47,7 +48,7 @@ def test_base_python_prefers_the_injected_bundled_interpreter(monkeypatch: pytes
     fake = tmp_path / "python3"
     fake.write_text("#!/bin/sh\n")
     monkeypatch.setenv("OPEN_STUDIO_TTS_BASE_PYTHON", str(fake))
-    assert tts_config.base_python() == str(fake)
+    assert interpreter.base_python() == str(fake)
 
 
 def test_base_python_ignores_a_missing_injected_path(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -55,7 +56,7 @@ def test_base_python_ignores_a_missing_injected_path(monkeypatch: pytest.MonkeyP
     monkeypatch.setenv("OPEN_STUDIO_TTS_BASE_PYTHON", "/nope/python3")
     import sys
 
-    assert tts_config.base_python() == sys.executable
+    assert interpreter.base_python() == sys.executable
 
 
 def test_provision_is_skipped_when_an_interpreter_already_works(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -73,7 +74,7 @@ def test_provision_reports_a_readable_error_when_no_base_python(monkeypatch: pyt
     """连建 venv 的解释器都没有时,要给一句用户能照做的话,而不是 FileNotFoundError。"""
     monkeypatch.setattr(tts_models, "probe_interpreter", lambda _id: {"worker_ready": False, "worker_python": ""})
     monkeypatch.setattr(tts_config, "managed_venv_python", lambda engine=None: Path("/nope/bin/python"))
-    monkeypatch.setattr(tts_config, "base_python", lambda: "")
+    monkeypatch.setattr(interpreter, "base_python", lambda: "")
     with pytest.raises(RuntimeError) as excinfo:
         tts_models.ensure_engine_runtime("f5-tts")
     assert "Python" in str(excinfo.value)

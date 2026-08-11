@@ -162,24 +162,6 @@ def migrate_shared_venv() -> None:
     logger.info("旧的共用 venv 归给 %s:%s → %s", target_engine, legacy, target)
 
 
-def base_python() -> str:
-    """用来**创建**托管 venv 的解释器。找不到可用的返回空串。
-
-    打包版的后端是 PyInstaller 冻结二进制,`sys.executable` 指向它自己,建不了 venv——所以壳
-    会把随包分发的独立解释器路径经 OPEN_STUDIO_TTS_BASE_PYTHON 注入进来。开发时退回本后端的
-    venv 解释器(它是真 Python,建得了 venv);都没有再退到系统 python3。
-    """
-    import os
-    import shutil
-    import sys
-
-    injected = os.environ.get("OPEN_STUDIO_TTS_BASE_PYTHON", "").strip()
-    if injected and Path(injected).is_file():
-        return injected
-    if not getattr(sys, "frozen", False) and Path(sys.executable).is_file():
-        return sys.executable
-    found = shutil.which("python3") or shutil.which("python")
-    return found or ""
 # Marker files that prove each managed dir is a real checkout / real weights (not a
 # half-cloned or empty dir): a module the worker actually imports, and the codec weights.
 # (fish_speech is an implicit-namespace package — no root __init__.py — so anchor deeper.)

@@ -5,7 +5,6 @@ import logging
 import re
 import secrets
 import subprocess
-import sys
 import threading
 import time
 from collections import OrderedDict
@@ -17,6 +16,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core import interpreter
 from app.ai.agent.adapters import AdapterError, run_turn
 from app.ai.agent.host import (
     SYSTEM_PROMPT_TEMPLATE,
@@ -540,7 +540,7 @@ def start_connection(bot_id: str) -> None:
             return
         write_status(bot_id, "connecting")
         process = popen_text(
-            [str(python if python.exists() else sys.executable), "-m", "app.integrations.feishu.worker", bot_id],
+            [str(python) if python.exists() else interpreter.base_python(), "-m", "app.integrations.feishu.worker", bot_id],
             cwd=backend_dir,
         )
         _processes[bot_id] = process

@@ -21,7 +21,6 @@ import logging
 
 import json
 import os
-import sys
 import subprocess
 import threading
 from functools import lru_cache
@@ -30,6 +29,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from app.core import interpreter
 from app.core.child_process import ChildProcess, popen_text, run_logged
 from app.core.rate import DownloadRate
 from app.core.config import settings
@@ -446,9 +446,10 @@ def candidate_pythons(engine: str) -> list[Path]:
     candidates: list[Path] = [managed_venv_python(engine)]
     if settings.asr_python:
         candidates.append(Path(settings.asr_python).expanduser())
-    import sys
-
-    candidates.append(Path(sys.executable))
+    # 见 core/interpreter:打包版里"自己"是应用的 exe,拿它探测会再起一个后端。
+    mine = interpreter.self_python()
+    if mine:
+        candidates.append(Path(mine))
     return candidates
 
 
@@ -500,8 +501,13 @@ def ensure_engine_runtime(engine: str, *, progress_key: str | None = None) -> No
     if not venv_python.is_file():
         _store.set(key, _Live(status="downloading", message="创建运行环境…"))
         venv_dir.parent.mkdir(parents=True, exist_ok=True)
+        # **不能用 sys.executable**:打包版里它是应用自己,`-m venv` 会把后端再启动一遍,
+        # 然后把 uvicorn "端口已占用" 的日志当成"创建失败的原因"端给用户。
+        base = interpreter.base_python()
+        if not base:
+            raise RuntimeError("找不到可用于创建运行环境的 Python 解释器")
         created = run_logged(
-            [sys.executable, "-m", "venv", str(venv_dir)],
+            [base, "-m", "venv", str(venv_dir)],
             capture_output=True, text=True, timeout=600, what="创建转写运行环境")
         if created.returncode != 0 or not venv_python.is_file():
             raise RuntimeError(f"创建运行环境失败:{(created.stderr or created.stdout)[-300:]}")

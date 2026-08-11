@@ -22,10 +22,10 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import Any
+from app.core.interpreter import base_python
 from app.core.child_process import run_logged
 
 PLUGIN_TIMEOUT_SECONDS = 60
@@ -83,8 +83,12 @@ def execute_tool(
     }
     started = time.monotonic()
     try:
+        # 打包版里 sys.executable 是应用自己 —— 拿它跑插件等于再起一个后端(见 core/interpreter)。
+        python = base_python()
+        if not python:
+            raise PluginRuntimeError("找不到可用于运行插件的 Python 解释器")
         result = run_logged(
-            [sys.executable, str(entry_path)],
+            [python, str(entry_path)],
             input=request,
             capture_output=True,
             text=True,

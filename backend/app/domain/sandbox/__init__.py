@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+from app.core.interpreter import base_python
 from app.core.child_process import run_logged
 
 """跑别人写的代码。
@@ -139,7 +140,7 @@ class _DarwinSandbox:
                 encoding="utf-8",
             )
             return _spawn(
-                ["/usr/bin/sandbox-exec", "-f", str(profile), sys.executable, "-I", "-c", _WRAPPER],
+                ["/usr/bin/sandbox-exec", "-f", str(profile), base_python(), "-I", "-c", _WRAPPER],
                 payload,
                 timeout,
             )
