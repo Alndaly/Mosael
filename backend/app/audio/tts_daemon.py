@@ -18,6 +18,8 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
+
+from app.core.child_process import popen_text
 import threading
 import time
 from collections.abc import Callable
@@ -50,7 +52,7 @@ class _Worker:
         self.busy = False
         #: 是被看门狗杀的,还是自己死的。两者给用户的话不一样。
         self.timed_out = False
-        self.process = subprocess.Popen(
+        self.process = popen_text(
             [python, worker_path, "--serve"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,

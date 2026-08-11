@@ -27,6 +27,7 @@ from app.ai.agent.host import (
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.security import mint_service_session
+from app.core.child_process import popen_text
 from app.db.models import (
     AgentSession,
     FeishuBindCode,
@@ -538,7 +539,7 @@ def start_connection(bot_id: str) -> None:
         if existing is not None and existing.poll() is None:
             return
         write_status(bot_id, "connecting")
-        process = subprocess.Popen(
+        process = popen_text(
             [str(python if python.exists() else sys.executable), "-m", "app.integrations.feishu.worker", bot_id],
             cwd=backend_dir,
         )

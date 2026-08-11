@@ -26,6 +26,35 @@ from app.core.text import strip_ansi
 
 logger = logging.getLogger(__name__)
 
+#: 文本模式的子进程一律 UTF-8。
+#:
+#: **不给 `encoding` 就是问平台要**:mac/Linux 上恰好是 UTF-8,中文 Windows 上是 GBK。而这个
+#: 仓库的子进程 —— Node sidecar、Python worker、ffmpeg、pip、git —— 都按 UTF-8 说话。用户在
+#: Windows 上和智能体说的第一句中文就是这么炸的:
+#:
+#:     'gbk' codec can't decode byte 0x88 in position 52: illegal multibyte sequence
+#:
+#: `errors="replace"`:这条通道上同时走**日志**(pip / git 在中文 Windows 上真的会吐 GBK 字节)。
+#: 为一行读不懂的日志把整轮对话炸掉,是比几个问号更坏的结果 —— 而协议行是我们自己的 worker 发的,
+#: 它们本来就是 UTF-8,替换不会落在上面。
+TEXT_IO: dict[str, str] = {"encoding": "utf-8", "errors": "replace"}
+
+
+def popen_text(args, **kwargs) -> subprocess.Popen:
+    """按行说话的子进程**只从这一个口子起**。
+
+    `subprocess.run` 那条路早就收进了 `run_logged`,而常驻/流式的那些一直在各自裸调 `Popen` ——
+    于是"文本模式用什么编码"这件事有二十来份答案,每一份都是"问平台要"。
+    """
+    # 显式要 bytes 的照办,别硬塞一个 encoding 把它偷偷变回文本
+    # (subprocess 里只要给了 encoding 就是文本模式,`text=False` 拦不住)。
+    if kwargs.get("text") is False or kwargs.get("universal_newlines") is False:
+        return subprocess.Popen(args, **kwargs)
+    kwargs.setdefault("text", True)
+    for key, value in TEXT_IO.items():
+        kwargs.setdefault(key, value)
+    return subprocess.Popen(args, **kwargs)
+
 
 class ChildProcess:
     """Iterate a child's stdout while its stderr drains and a deadline is enforced.
@@ -183,6 +212,11 @@ def run_logged(args, *, what: str, level: int = logging.INFO, **kwargs) -> subpr
     `level` 只影响**成功**那条:每导入一个素材就跑一次的 ffprobe、每次都问一遍的 docker 探测
     压到 DEBUG,否则真正值得看的那几行会被淹掉。失败一律 WARNING —— 频繁不是不报的理由。
     """
+    # 文本模式默认 UTF-8(见 TEXT_IO)。调用方只说了「我要字符串」,没说"按这台机器的
+    # locale 猜一个编码" —— 而后者在中文 Windows 上是 GBK,ffprobe 报一个中文文件名就炸。
+    if kwargs.get("text") or kwargs.get("universal_newlines"):
+        for key, value in TEXT_IO.items():
+            kwargs.setdefault(key, value)
     line = _describe(args)
     started = time.monotonic()
     try:

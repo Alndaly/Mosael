@@ -8,7 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import NamedTuple
 
-from app.core.child_process import ChildProcess, run_logged
+from app.core.child_process import ChildProcess, popen_text, run_logged
 
 from app.core.config import settings
 from app.media.probe import guess_kind, probe_has_audio_many
@@ -991,7 +991,7 @@ def execute_render(
         command = build_ffmpeg_command(
             plan, resolve, output_path, force_software=force_software, text_pngs=text_pngs
         )
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        process = popen_text(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         # ffmpeg's stderr must be drained WHILE we read progress off stdout. A source it cannot
         # fully decode emits an error per frame even at -v error; once that fills the pipe ffmpeg
         # blocks writing it, stops emitting progress, and both sides wait forever with the job

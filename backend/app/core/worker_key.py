@@ -49,7 +49,7 @@ def issue_worker_key() -> str:
     # Write then chmod, and open with 0600 from the start — writing world-readable and
     # tightening afterwards leaves a window where any local process can read it.
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, stat.S_IRUSR | stat.S_IWUSR)
-    with os.fdopen(fd, "w") as handle:
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
         handle.write(_key)
     try:
         os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)  # in case the file already existed

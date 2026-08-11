@@ -135,7 +135,8 @@ class _DarwinSandbox:
                     scratch=str(Path(scratch).resolve()),
                     home=str(Path.home().resolve()),
                     interpreter=interpreter,
-                )
+                ),
+                encoding="utf-8",
             )
             return _spawn(
                 ["/usr/bin/sandbox-exec", "-f", str(profile), sys.executable, "-I", "-c", _WRAPPER],

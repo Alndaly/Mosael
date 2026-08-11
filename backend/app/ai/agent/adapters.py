@@ -16,7 +16,7 @@ Open Studio's MCP server (with a session token) as its tool surface; mutations s
 flow through the confirmation cards.
 """
 
-from app.core.child_process import ChildProcess
+from app.core.child_process import ChildProcess, popen_text
 
 TURN_TIMEOUT_SECONDS = 600
 
@@ -242,7 +242,7 @@ def _run_pi(
         env["ELECTRON_RUN_AS_NODE"] = "1"
     # 出站代理:Node 默认不认这几个变量,sidecar 自己会装 EnvHttpProxyAgent 来读(见 proxy.ts)。
     env = _proxy_env(env)
-    process = subprocess.Popen(
+    process = popen_text(
         [node, sidecar], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env
     )
     assert process.stdin is not None and process.stdout is not None
@@ -382,7 +382,7 @@ def compact_session(
     if os.environ.get("OPEN_STUDIO_AGENT_BIN_NODE"):
         env["ELECTRON_RUN_AS_NODE"] = "1"
     env = _proxy_env(env)
-    process = subprocess.Popen(
+    process = popen_text(
         [node, sidecar], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env
     )
     assert process.stdin is not None and process.stdout is not None
@@ -432,7 +432,7 @@ def refresh_oauth_credential(*, api_base: str, token: str, pi_provider: str, pro
     if os.environ.get("OPEN_STUDIO_AGENT_BIN_NODE"):
         env["ELECTRON_RUN_AS_NODE"] = "1"
     env = _proxy_env(env)
-    process = subprocess.Popen(
+    process = popen_text(
         [node, sidecar], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env
     )
     assert process.stdin is not None and process.stdout is not None

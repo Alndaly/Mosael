@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from app.core.child_process import ChildProcess, run_logged
+from app.core.child_process import ChildProcess, popen_text, run_logged
 from app.core.rate import DownloadRate
 from app.core.config import settings
 
@@ -572,7 +572,7 @@ def _download_body(model_id: str) -> None:
 
     started = time.monotonic()
     last_bytes = _measure(entry)
-    proc = subprocess.Popen(
+    proc = popen_text(
         [python, str(WORKER_PATH), str(output_path)],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
     )

@@ -46,7 +46,9 @@ def generate_waveform(source: Path, kind: str, asset_directory: Path) -> Path | 
     peaks = compute_peaks(pcm, BUCKETS)
     duration = (len(pcm) // 2) / SAMPLE_RATE
     target = waveform_path(asset_directory)
-    target.write_text(json.dumps({"version": 1, "duration": round(duration, 3), "peaks": peaks}))
+    target.write_text(
+        json.dumps({"version": 1, "duration": round(duration, 3), "peaks": peaks}), encoding="utf-8"
+    )
     return target
 
 
