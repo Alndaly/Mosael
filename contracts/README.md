@@ -6,7 +6,7 @@
 
 ## 为什么需要它
 
-有些语义天生只能有一份定义,却必然有多份实现。目前只有一个:
+有些语义天生只能有一份定义,却必然有多份实现。
 
 ### `scene-cases.json` —— 场景契约
 
@@ -30,6 +30,24 @@
   同一条时间线两种取景。
 
 两个 bug 都不是谁写错了代码,是**两份实现各自自洽而互不相识**。
+
+### `subtitle-cases.json` —— 字幕契约
+
+「同一份 `subtitle_style` 在同一画幅下,字幕框解析出来的几何与用色是什么、这个框放在画面的哪个像素上。」
+
+| 实现 | 位置 | 测试 |
+| --- | --- | --- |
+| 预览 | `frontend/src/features/editor/subtitleStyle.ts` | `subtitleStyle.parity.test.ts` |
+| 导出 | `backend/app/media/text_render.py` + `render_executor._subtitle_overlay_pos` | `backend/tests/test_subtitle_parity.py` |
+
+**为什么不共用一份实现**:同上 —— 预览要跟着显示尺寸缩放(字号用 `cqw`、定位用百分比,交给浏览器解析),
+导出要在原生帧上无头渲染(px 与 overlay 坐标)。两种写法**在画幅原生宽度上解析到同一个像素值**,
+所以语料记的是**解析后的结果**,不是 CSS 写法。
+
+**建立契约之前它是这样的**:圆角 `0.33em`、内边距 `0.16em 0.55em`、行高 `1.45`、最大宽 `86%`、投影 ——
+这六组数字在 `Monitor.tsx` 的 `className` 里和 `_subtitle_style_css` 里各手写一遍;竖直定位也是两份,
+后端那份的注释就写着「镜像预览 subtitleCss」。**"靠注释提醒对方"不是机制。** 建立契约时两侧恰好还是
+一致的,所以这次没有换来 bug —— 它防的是下一次。
 
 ## 改语义的正确顺序
 

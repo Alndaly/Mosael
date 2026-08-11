@@ -61,11 +61,54 @@ export function readSubtitleStyle(raw: Record<string, unknown> | undefined | nul
   };
 }
 
+/** 无空格的 `rgba(r,g,b,a)` —— 导出侧(text_render)按这个格式产出,两边写法一致,契约里
+    就能直接比字符串,不必各写一个颜色解析器。 */
 function hexToRgba(hex: string, alpha: number): string {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
   if (!m) return `rgba(0,0,0,${alpha})`;
   const n = parseInt(m[1], 16);
-  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+}
+
+/**
+ * 字幕框的固定几何。**这几个数字是契约**(contracts/subtitle-cases.json)。
+ *
+ * 导出侧 `backend/app/media/text_render._subtitle_style_css` 有一份对应的 —— 它们决定
+ * 预览里看到的和导出的成片是不是同一个画面,改一个必须两侧一起改,`subtitleStyle.parity.test.ts`
+ * 与 `test_subtitle_parity.py` 会同时红。
+ *
+ * 用 em 而不是固定 px:预览按显示尺寸缩、导出按帧原生渲染,固定 px 会让框和文字的间距在两边对不上。
+ */
+export const SUBTITLE_BOX = {
+  maxWidthPct: 86,
+  borderRadius: "0.33em",
+  padding: "0.16em 0.55em",
+  lineHeight: "1.45",
+  textAlign: "center",
+  textShadow: "0 0.055em 0.11em rgba(0,0,0,0.7)",
+  whiteSpace: "pre-wrap",
+} as const;
+
+/** 解析后的字幕框 —— 契约比的就是这个形状(见 contracts/subtitle-cases.json)。
+ *
+ *  预览的 CSS 由它派生:字号写成 cqw 是为了跟着预览缩放,而在画幅**原生宽度**上
+ *  `(font_size / frameWidth) * 100` cqw 正好解析成 `font_size` px,与导出侧相同。 */
+export function subtitleBox(style: SubtitleStyle, frameWidth: number) {
+  return {
+    font_size_px: style.font_size,
+    color: style.color,
+    font_weight: style.bold ? 700 : 400,
+    background: style.bg_opacity > 0 ? hexToRgba(style.bg_color, style.bg_opacity) : "transparent",
+    // 导出侧写的是 px(`int(frame_w * 0.86)`),预览写的是百分比 —— 同一个比例两种写法,
+    // 契约钉的是解析后的像素,所以这里按同样的截断取整。
+    max_width_px: Math.trunc((frameWidth * SUBTITLE_BOX.maxWidthPct) / 100),
+    border_radius: SUBTITLE_BOX.borderRadius,
+    padding: SUBTITLE_BOX.padding,
+    line_height: SUBTITLE_BOX.lineHeight,
+    text_align: SUBTITLE_BOX.textAlign,
+    text_shadow: SUBTITLE_BOX.textShadow,
+    white_space: SUBTITLE_BOX.whiteSpace,
+  };
 }
 
 /** Inline CSS for the preview subtitle. Font size is expressed in cqw so it scales with the
@@ -73,12 +116,22 @@ function hexToRgba(hex: string, alpha: number): string {
  *  its aspect-ratio-derived height to 0). frameWidth is the sequence's native width; since the
  *  frame keeps a fixed aspect ratio, scaling by width matches the intended height ratio. */
 export function subtitleCss(style: SubtitleStyle, frameWidth: number): React.CSSProperties {
+  const box = subtitleBox(style, frameWidth);
   const css: React.CSSProperties = {
+    // 字号是唯一按预览尺寸缩放的一项(cqw);其余几何全部从 subtitleBox 派生,**不要再在
+    // className 里写一份** —— 那正是它和导出侧漂移的方式。
     fontSize: `${(style.font_size / Math.max(frameWidth, 1)) * 100}cqw`,
-    color: style.color,
+    color: box.color,
     fontFamily: style.font_family,
-    fontWeight: style.bold ? 700 : 400,
-    background: style.bg_opacity > 0 ? hexToRgba(style.bg_color, style.bg_opacity) : "transparent",
+    fontWeight: box.font_weight,
+    background: box.background,
+    maxWidth: `${SUBTITLE_BOX.maxWidthPct}%`,
+    borderRadius: box.border_radius,
+    padding: box.padding,
+    lineHeight: box.line_height,
+    textAlign: box.text_align,
+    textShadow: box.text_shadow,
+    whiteSpace: box.white_space,
     left: "50%",
     // 绝对定位 + left:50% 的收缩适配宽度只有画框的一半,长句会提前折行;
     // 按内容定宽(max-w 类仍封顶 86%),translateX(-50%) 再居中。

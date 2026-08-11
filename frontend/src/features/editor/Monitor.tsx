@@ -416,9 +416,10 @@ export function Monitor({
             // 定位类:Tailwind v4 的 -translate-x-1/2 编译成独立的 translate 属性,会和行内
             // transform 叠加成双重位移(字幕整体左偏半个画框宽,曾以此形态返场过一次)。
             <div
-              // 背景框的内边距/圆角/投影用 em(随字号缩放),不用固定 px:预览按显示尺寸缩、
-              // 导出按帧原生渲染,固定 px 会让框和文字的间距在两边对不上。em 让两边都随字号等比。
-              className="pointer-events-none absolute z-[3] max-w-[86%] whitespace-pre-wrap rounded-[0.33em] bg-[rgb(0_0_0/0.62)] px-[0.55em] py-[0.16em] text-center text-[clamp(12px,2.4cqw,20px)] leading-[1.45] text-white [text-shadow:0_0.055em_0.11em_rgb(0_0_0/0.7)]"
+              // 盒子几何(最大宽/圆角/内边距/行高/对齐/投影)**全部来自 subtitleCss**,
+              // 类里一个都不要写:它们是和导出侧的契约(contracts/subtitle-cases.json),
+              // 在这里重写一份就等于给同一个问题准备了第二个答案。
+              className="pointer-events-none absolute z-[3]"
               style={subtitleCss(
                 readSubtitleStyle(
                   (subtitleStyleOverride ?? sequence.subtitle_style) as Record<string, unknown>,

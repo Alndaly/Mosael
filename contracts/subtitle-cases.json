@@ -1,0 +1,193 @@
+{
+  "contract": "subtitle",
+  "version": 1,
+  "readme": "contracts/README.md",
+  "description": "预览与导出必须字面一致的字幕语义:同一份 subtitle_style 在同一画幅下,字幕框解析出来的几何与用色是什么、这个框放在画面的哪个像素上。后端 backend/tests/test_subtitle_parity.py 与前端 subtitleStyle.parity.test.ts 跑同一份语料。",
+  "notes": [
+    "box 是**解析后**的值,不是 CSS 写法:预览按容器查询单位(cqw)写字号、导出按帧原生 px 写,两种写法在画幅原生宽度上解析到同一个像素值,所以语料记像素。",
+    "placement 给的是字幕框左上角在画面里的像素坐标。预览用 CSS 百分比表达(浏览器负责解析),导出直接算 overlay 坐标 —— 语料记两者共同的那个结果。",
+    "颜色一律写成无空格的 rgba(r,g,b,a);两侧都按这个格式产出,免得比较时还要各写一个解析器。"
+  ],
+  "cases": [
+    {
+      "name": "defaults-bottom-1080p",
+      "why": "最常见的一条:默认样式、默认底部位置。这些数字一动,所有既有工程的成片都跟着变。",
+      "frame": { "w": 1920, "h": 1080 },
+      "style": {
+        "font_size": 32,
+        "color": "#ffffff",
+        "bg_color": "#000000",
+        "bg_opacity": 0.5,
+        "bold": true,
+        "position": "bottom",
+        "offset": 8,
+        "font_family": "",
+        "font_id": ""
+      },
+      "box": {
+        "font_size_px": 32,
+        "color": "#ffffff",
+        "font_weight": 700,
+        "background": "rgba(0,0,0,0.5)",
+        "max_width_px": 1651,
+        "border_radius": "0.33em",
+        "padding": "0.16em 0.55em",
+        "line_height": "1.45",
+        "text_align": "center",
+        "text_shadow": "0 0.055em 0.11em rgba(0,0,0,0.7)",
+        "white_space": "pre-wrap"
+      },
+      "placement": { "box_w": 800, "box_h": 60, "x": 560, "y": 934 }
+    },
+    {
+      "name": "transparent-background",
+      "why": "不透明度为 0 时必须是**真的没有框**。一侧画出一个黑底、另一侧没有,是最刺眼的那种不一致。",
+      "frame": { "w": 1920, "h": 1080 },
+      "style": {
+        "font_size": 32,
+        "color": "#ffffff",
+        "bg_color": "#000000",
+        "bg_opacity": 0,
+        "bold": true,
+        "position": "bottom",
+        "offset": 8,
+        "font_family": "",
+        "font_id": ""
+      },
+      "box": {
+        "font_size_px": 32,
+        "color": "#ffffff",
+        "font_weight": 700,
+        "background": "transparent",
+        "max_width_px": 1651,
+        "border_radius": "0.33em",
+        "padding": "0.16em 0.55em",
+        "line_height": "1.45",
+        "text_align": "center",
+        "text_shadow": "0 0.055em 0.11em rgba(0,0,0,0.7)",
+        "white_space": "pre-wrap"
+      },
+      "placement": { "box_w": 800, "box_h": 60, "x": 560, "y": 934 }
+    },
+    {
+      "name": "custom-colour-and-weight",
+      "why": "字号/颜色/粗细各走一遍非默认值:bold=false 必须解析成 400,而不是漏写一项、让某一侧继承别的默认。",
+      "frame": { "w": 1920, "h": 1080 },
+      "style": {
+        "font_size": 48,
+        "color": "#ffcc00",
+        "bg_color": "#1a2b3c",
+        "bg_opacity": 0.75,
+        "bold": false,
+        "position": "bottom",
+        "offset": 12,
+        "font_family": "",
+        "font_id": ""
+      },
+      "box": {
+        "font_size_px": 48,
+        "color": "#ffcc00",
+        "font_weight": 400,
+        "background": "rgba(26,43,60,0.75)",
+        "max_width_px": 1651,
+        "border_radius": "0.33em",
+        "padding": "0.16em 0.55em",
+        "line_height": "1.45",
+        "text_align": "center",
+        "text_shadow": "0 0.055em 0.11em rgba(0,0,0,0.7)",
+        "white_space": "pre-wrap"
+      },
+      "placement": { "box_w": 900, "box_h": 90, "x": 510, "y": 860 }
+    },
+    {
+      "name": "position-top",
+      "why": "顶部:offset 是**画幅高**的百分比,从上往下量。",
+      "frame": { "w": 1920, "h": 1080 },
+      "style": {
+        "font_size": 32,
+        "color": "#ffffff",
+        "bg_color": "#000000",
+        "bg_opacity": 0.5,
+        "bold": true,
+        "position": "top",
+        "offset": 8,
+        "font_family": "",
+        "font_id": ""
+      },
+      "box": {
+        "font_size_px": 32,
+        "color": "#ffffff",
+        "font_weight": 700,
+        "background": "rgba(0,0,0,0.5)",
+        "max_width_px": 1651,
+        "border_radius": "0.33em",
+        "padding": "0.16em 0.55em",
+        "line_height": "1.45",
+        "text_align": "center",
+        "text_shadow": "0 0.055em 0.11em rgba(0,0,0,0.7)",
+        "white_space": "pre-wrap"
+      },
+      "placement": { "box_w": 800, "box_h": 60, "x": 560, "y": 86 }
+    },
+    {
+      "name": "position-center",
+      "why": "居中是唯一一处 offset 的基准**不是画幅高而是元素自身高**(对齐前端 translate 的 % 语义)。抄错基准两侧就会差出一整个字幕高。",
+      "frame": { "w": 1920, "h": 1080 },
+      "style": {
+        "font_size": 32,
+        "color": "#ffffff",
+        "bg_color": "#000000",
+        "bg_opacity": 0.5,
+        "bold": true,
+        "position": "center",
+        "offset": 8,
+        "font_family": "",
+        "font_id": ""
+      },
+      "box": {
+        "font_size_px": 32,
+        "color": "#ffffff",
+        "font_weight": 700,
+        "background": "rgba(0,0,0,0.5)",
+        "max_width_px": 1651,
+        "border_radius": "0.33em",
+        "padding": "0.16em 0.55em",
+        "line_height": "1.45",
+        "text_align": "center",
+        "text_shadow": "0 0.055em 0.11em rgba(0,0,0,0.7)",
+        "white_space": "pre-wrap"
+      },
+      "placement": { "box_w": 800, "box_h": 60, "x": 560, "y": 515 }
+    },
+    {
+      "name": "vertical-1080x1920",
+      "why": "竖屏:最大宽度是**画幅宽**的比例,不是一个写死的像素数。",
+      "frame": { "w": 1080, "h": 1920 },
+      "style": {
+        "font_size": 40,
+        "color": "#ffffff",
+        "bg_color": "#000000",
+        "bg_opacity": 0.5,
+        "bold": true,
+        "position": "bottom",
+        "offset": 10,
+        "font_family": "",
+        "font_id": ""
+      },
+      "box": {
+        "font_size_px": 40,
+        "color": "#ffffff",
+        "font_weight": 700,
+        "background": "rgba(0,0,0,0.5)",
+        "max_width_px": 928,
+        "border_radius": "0.33em",
+        "padding": "0.16em 0.55em",
+        "line_height": "1.45",
+        "text_align": "center",
+        "text_shadow": "0 0.055em 0.11em rgba(0,0,0,0.7)",
+        "white_space": "pre-wrap"
+      },
+      "placement": { "box_w": 700, "box_h": 80, "x": 190, "y": 1648 }
+    }
+  ]
+}
