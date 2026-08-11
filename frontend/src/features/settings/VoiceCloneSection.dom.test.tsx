@@ -35,7 +35,7 @@ const config = {
 };
 
 const base = {
-  detail: "d", status: "missing", runtime_ready: false, downloaded_bytes: 0, total_bytes: 0,
+  detail: "d", status: "missing", runtime_ready: false, runtime_checked: true, downloaded_bytes: 0, total_bytes: 0,
   speed_bps: 0, eta_seconds: null, message: "未下载", needs_source: false, source_ready: false, source_dir: "",
 };
 // 每个引擎能用哪些下载源由后端给 —— ModelScope 上没有 F5 要的 vocos,所以 F5 没有它。
@@ -109,4 +109,16 @@ describe("已保存 fish-speech + modelscope(用户库里的真实那一行)", (
     await screen.findAllByRole("button", { name: /asrModelDownload/ });
     await waitFor(() => expect(screen.queryByText(/ttsSaveFirst/)).toBeNull());
   });
+});
+
+
+describe("探测还没答完时", () => {
+  it("卡片说「正在检查」,而不是说「未就绪」", async () => {
+    models[0] = { ...models[0], status: "installed", runtime_checked: false, runtime_ready: false };
+    renderSection();
+
+    await waitFor(() => expect(screen.getAllByText(/runtimeChecking/).length).toBeGreaterThan(0));
+    expect(screen.queryByText(/voiceModelNoRuntime/)).toBeNull();
+  });
+
 });

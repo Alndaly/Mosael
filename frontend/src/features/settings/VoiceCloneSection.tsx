@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
 import { formatBytes, formatSpeed } from "@/lib/bytes";
+import { pollWhileUnsettled } from "@/features/settings/pollWhileUnsettled";
 
 
 type ConfigForm = { engine: string; python_path: string; source: string; pip_index: string; fish_repo_dir: string; fish_model_dir: string };
@@ -57,7 +58,7 @@ export function VoiceCloneSection() {
   const models = useQuery({
     queryKey: ["tts-models"],
     queryFn: listTtsModels,
-    refetchInterval: (query) => ((query.state.data ?? []).some((m) => m.status === "downloading") ? 1200 : false),
+    refetchInterval: (query) => pollWhileUnsettled(query.state.data),
   });
 
   const form = useForm<ConfigForm>({

@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
 import { formatBytes, formatSpeed } from "@/lib/bytes";
+import { pollWhileUnsettled } from "@/features/settings/pollWhileUnsettled";
 
 
 
@@ -21,9 +22,7 @@ export function AsrModelsSection() {
   const models = useQuery({
     queryKey: ["asr-models"],
     queryFn: listAsrModels,
-    // Poll fast while any model is downloading, otherwise idle.
-    refetchInterval: (query) =>
-      (query.state.data ?? []).some((m) => m.status === "downloading") ? 1200 : false,
+    refetchInterval: (query) => pollWhileUnsettled(query.state.data),
   });
   const download = useMutation({
     mutationFn: (id: string) => downloadAsrModel(id),
