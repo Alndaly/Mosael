@@ -56,7 +56,7 @@ from app.domain.assets import reconcile_broken_media_info
 from app.ai.agent.host import reconcile_orphaned_agent_sessions
 from app.domain.browser import reconcile_browser_state
 from app.domain.jobs import reconcile_orphaned_jobs, register_external_kind
-from app.media.proxy import reconcile_missing_proxies
+from app.domain.assets.proxies import reconcile_missing_proxies
 from app.workers.scheduler import start_scheduler_loop, stop_scheduler_loop
 
 

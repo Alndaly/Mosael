@@ -10,6 +10,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.db.models import Asset, Job
+from app.domain.assets import proxies as proxyjobs
 from app.media import proxy as proxymod
 from app.media.probe import probe_media
 from tests.util import fresh_client
@@ -73,7 +74,7 @@ def test_import_queues_proxy_and_job_runs(tmp_path: Path, monkeypatch: pytest.Mo
     # conftest disables proxies suite-wide; turn them on for this test but keep the
     # transcode synchronous (fake the thread) so the assertions are deterministic.
     monkeypatch.setattr(settings, "generate_proxies", True)
-    monkeypatch.setattr(proxymod.threading, "Thread", _FakeThread)
+    monkeypatch.setattr(proxyjobs.threading, "Thread", _FakeThread)
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
@@ -91,7 +92,7 @@ def test_import_queues_proxy_and_job_runs(tmp_path: Path, monkeypatch: pytest.Mo
     with SessionLocal() as db:
         job = db.scalars(select(Job).where(Job.kind == "proxy")).first()
         assert job is not None
-    proxymod._run_proxy(job.id, asset["id"])  # run the (faked) worker synchronously
+    proxyjobs._run_proxy(job.id, asset["id"])  # run the (faked) worker synchronously
 
     # Asset now reports ready + carries a proxy_key; the endpoint serves the file.
     refreshed = next(a for a in client.get(f"/api/assets?workspace_id={ws['id']}").json() if a["id"] == asset["id"])
@@ -109,7 +110,7 @@ def test_import_queues_proxy_and_job_runs(tmp_path: Path, monkeypatch: pytest.Mo
 
 def test_non_video_import_skips_proxy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "generate_proxies", True)
-    monkeypatch.setattr(proxymod.threading, "Thread", _FakeThread)
+    monkeypatch.setattr(proxyjobs.threading, "Thread", _FakeThread)
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     img = tmp_path / "pic.png"

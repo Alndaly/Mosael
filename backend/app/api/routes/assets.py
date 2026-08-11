@@ -17,7 +17,8 @@ from app.domain.assets import import_uploaded_asset, register_file_asset
 from app.domain.transcripts import attach_transcript, get_transcript_for_asset
 from app.domain.transcripts.operations import SegmentIn, TokenIn, TranscriptDomainError
 from app.media.paths import resolve_key
-from app.media.proxy import proxy_path, start_proxy_job
+from app.domain.assets.proxies import start_proxy_job
+from app.media.proxy import proxy_path
 from app.media.thumbnails import generate_thumbnail, thumbnail_path
 from app.media.waveform import waveform_path
 

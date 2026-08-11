@@ -19,13 +19,25 @@ from __future__ import annotations
 import ast
 import pathlib
 
-#: core 不许 import 的层。db 不在其中:models/迁移都建立在 core 的 Base 之上,方向是对的。
-UPPER_LAYERS = {"domain", "audio", "media", "ai", "api", "integrations", "workers"}
+#: 「这个包不许认识哪些包」。**只声明真正成立的**:
+#:
+#: - `core` 是底座,被二十几处 import,不许认识任何上层(db 除外 —— models/迁移建立在 Base
+#:   之上,方向是对的);
+#: - `media` 是 ffmpeg 适配器,只该会干活,不许认识业务(domain / api)。
+#:
+#: **`ai` 与 `audio` 故意不在这里。** 它们在这套代码库里并不是纯适配器 —— 智能体宿主、声音
+#: 克隆里都有实打实的业务判断,现在各有二十多处 import domain。给它们声明一条立刻需要几十条
+#: 豁免的规则,等于写一条没人当真的规则;要不要拆是另一个决定,得先做那个决定。
+PURE_PACKAGES: dict[str, set[str]] = {
+    "core": {"domain", "audio", "media", "ai", "api", "integrations", "workers"},
+    "media": {"domain", "api"},
+}
 
 
-def _upward_imports() -> list[str]:
+def _upward_imports(package: str = "core") -> list[str]:
+    UPPER_LAYERS = PURE_PACKAGES[package]
     offenders: list[str] = []
-    for path in sorted(pathlib.Path("app/core").rglob("*.py")):
+    for path in sorted(pathlib.Path(f"app/{package}").rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and node.module:
@@ -41,10 +53,27 @@ def _upward_imports() -> list[str]:
 
 
 def test_core_imports_nothing_from_above() -> None:
-    offenders = _upward_imports()
+    offenders = _upward_imports("core")
 
     assert offenders == [], (
         "最底层反过来依赖上层了。写在函数里也算 —— 那只是把环推迟到运行时:\n  "
+        + "\n  ".join(offenders)
+    )
+
+
+def test_media_is_an_adapter_not_a_domain() -> None:
+    """`media` 只会转码/取帧/算路径。**它不该知道"任务"这回事。**
+
+    此前 `media/proxy.py` 自己建任务、发任务事件、改素材状态(`from app.domain.jobs import
+    create_job, emit_job_event, run_job_guarded`)。方向反了的直接代价是这个包用不了:想在
+    一个离线脚本里只调一次 `build_proxy`,会把整个任务系统和 DB 会话一起拖进来。
+
+    业务侧现在住在 `domain/assets/proxies.py`,转码留在这边。
+    """
+    offenders = _upward_imports("media")
+
+    assert offenders == [], (
+        "media 是适配器,不该认识业务(谁该转码、算不算一次任务、素材状态怎么改):\n  "
         + "\n  ".join(offenders)
     )
 

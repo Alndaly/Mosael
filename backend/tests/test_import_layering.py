@@ -135,16 +135,18 @@ def test_top_level_imports_are_acyclic() -> None:
     assert not _cycles(_graph(include_lazy=False))
 
 
-def test_only_the_sqlalchemy_base_cycle_survives_lazy_imports() -> None:
-    """把函数内延迟导入也算上,只允许 core.db ⇄ db.models 这一个环。
+def test_no_cycle_survives_even_lazy_imports() -> None:
+    """把函数内延迟导入也算上,**一个环都不许有**。
 
-    那个环是 SQLAlchemy 的标准形态:Base 定义在 core.db,models 依赖它,而 init_db 又要回头
-    import models 才能 create_all —— 无法消除,也无害。
+    这里曾经允许过一个:core.db ⇄ db.models —— Base 定义在 core.db,models 依赖它,而 init_db
+    又要回头 import models 才能 create_all,当时判成"SQLAlchemy 的标准形态,无法消除"。
 
-    除它之外的任何环都说明有人用延迟导入绕过了分层。允许它「暂时能跑」正是循环依赖的危险之处,
-    所以这里用白名单而不是计数。
+    **那个判断是错的**:环的根源不是 Base,是 `core/db.py` 同时当了底座和迁移编排器。迁移搬去
+    `app/db/migrations.py` 之后,init_db 不再需要从底座回头引 models,环自己就没了。
+
+    所以白名单清空。留着一个已经不存在的豁免,等于给它留一扇随时可以走回来的门。
     """
-    allowed = {("app.core.db", "app.db.models")}
+    allowed: set[tuple[str, ...]] = set()
     actual = {tuple(c) for c in _cycles(_graph(include_lazy=True))}
     unexpected = actual - allowed
     assert not unexpected, (

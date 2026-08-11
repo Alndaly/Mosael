@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Asset, Clip, Sequence, SequenceOperation, SequenceRevision, Track
 from app.domain.sequences.errors import SequenceDomainError
+from app.media.render_plan import TRANSFORM_BOUNDS, TRANSFORM_DEFAULTS
 
 
 @dataclass(frozen=True)
@@ -916,18 +917,6 @@ def set_clip_effects(db: Session, sequence_id: str, op: SetClipEffects) -> Seque
     return sequence
 
 
-#: 「什么样的 transform 是合法的」—— **全项目唯一一份**,由 contracts/transform-cases.json 钉住。
-#: 此前后端内部就有三份互不相同的:这里(写入,scale≤4)、render_plan._read_transform(导出,
-#: scale≤10)、render_plan._KF_RANGES(关键帧,rotation±3600),而前端一处都不钳。写入这份最严,
-#: 于是另外两份从来没咬到过 —— "上游恰好挡住"不是一致。
-TRANSFORM_DEFAULTS: dict[str, float] = {"scale": 1.0, "x": 0.0, "y": 0.0, "rotation": 0.0, "opacity": 1.0}
-TRANSFORM_BOUNDS: dict[str, tuple[float, float]] = {
-    "scale": (0.1, 4.0),
-    "x": (-2.0, 2.0),
-    "y": (-2.0, 2.0),
-    "rotation": (-180.0, 180.0),
-    "opacity": (0.0, 1.0),
-}
 
 
 def _clean_keyframes(raw: Any) -> list[dict[str, float]]:

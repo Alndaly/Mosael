@@ -4,7 +4,6 @@ import hashlib
 import json
 import re
 
-from app.domain.sequences.operations import TRANSFORM_BOUNDS, TRANSFORM_DEFAULTS
 from dataclasses import asdict, dataclass, field
 
 """
@@ -55,6 +54,21 @@ class Transform:
     def animates(self) -> bool:
         return any(len(self.keyed(p)) >= 2 for p in ("scale", "x", "y", "opacity"))
 
+
+#: 「什么样的 transform 是合法的」—— **全项目唯一一份**,由 contracts/transform-cases.json 钉住。
+#: 放在 Transform 类型旁边:范围是这个类型定义的一部分。写入侧(domain.sequences.operations
+#: 的 clean_transform)引它做校验,读取侧(_read_transform / _read_keyframes)引它做防御 ——
+#: 方向是 domain → media,和这个仓库里其余 16 处一致。
+#:
+#: 此前有三份互不相同的:写入 scale≤4、这里 scale≤10、关键帧 rotation±3600,而前端一处都不钳。
+TRANSFORM_DEFAULTS: dict[str, float] = {"scale": 1.0, "x": 0.0, "y": 0.0, "rotation": 0.0, "opacity": 1.0}
+TRANSFORM_BOUNDS: dict[str, tuple[float, float]] = {
+    "scale": (0.1, 4.0),
+    "x": (-2.0, 2.0),
+    "y": (-2.0, 2.0),
+    "rotation": (-180.0, 180.0),
+    "opacity": (0.0, 1.0),
+}
 
 IDENTITY_TRANSFORM = Transform()
 

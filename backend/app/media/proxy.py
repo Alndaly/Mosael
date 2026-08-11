@@ -12,23 +12,20 @@ compositor decodes so a single canvas renderer drives both preview and export
 (see docs/superpowers/specs/2026-07-27-preview-export-parity-design.md, 路 C).
 Built on demand at export time and cache-reused; it is an intermediate that the
 final encode re-compresses, hence the low CRF to keep generational loss negligible.
+
+**这个模块只会转码。** 「什么时候该转、转完算不算一次任务成功、素材的状态怎么改」都不在这里
+—— 那是业务决策,住在 `domain/assets/proxies.py`。此前它们挤在一起,于是 media 这个适配器
+反过来 import 了 domain.jobs:一个只该会干活的层认识了业务,`media` 也就没法脱离任务系统
+单独用(想在一个离线脚本里只调 build_proxy,会把 DB 会话和事件总线一起拖进来)。
 """
 
 from __future__ import annotations
 
-import subprocess
 import threading
 from pathlib import Path
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-
-from app.core.config import settings
-from app.core.db import SessionLocal
-from app.db.models import Asset, Job
-from app.domain.jobs import create_job, emit_job_event, run_job_guarded
-from app.media.paths import resolve_key
 from app.core.child_process import run_logged
+from app.core.config import settings
 
 PROXY_NAME = "proxy.mp4"
 # Height cap for the proxy. The compositor decodes this, not the original, so a
@@ -38,42 +35,11 @@ PROXY_HEIGHT = 720
 # near-visually-lossless CRF because the final export pass re-encodes it — the extra generation must
 # not show. Sibling to the asset like the preview proxy; larger, but temporary and cache-reused.
 # Bound concurrent ffmpeg transcodes (a startup backfill can queue one job per video at once).
-_TRANSCODE_SLOTS = threading.Semaphore(2)
+TRANSCODE_SLOTS = threading.Semaphore(2)
 
 
 def proxy_path(asset_directory: Path) -> Path:
     return asset_directory / PROXY_NAME
-
-
-def proxy_key_for(asset: Asset) -> str:
-    """Storage key of the proxy sibling to the asset's own file."""
-    return str(Path(asset.file_key).parent / PROXY_NAME)
-
-
-def proxy_status(asset: Asset) -> str:
-    """pending | ready | failed | none (not a video, or proxies disabled)."""
-    return str((asset.media_info or {}).get("proxy_status") or "none")
-
-
-
-
-
-
-
-
-def _set_proxy_meta(db: Session, asset_id: str, status: str, *, key: str | None = None) -> None:
-    """Reassign media_info (a plain JSON column) so SQLAlchemy tracks the change."""
-    asset = db.get(Asset, asset_id)
-    if asset is None:
-        return
-    info = dict(asset.media_info or {})
-    info["proxy_status"] = status
-    if key is not None:
-        info["proxy_key"] = key
-    elif status != "ready":
-        info.pop("proxy_key", None)
-    asset.media_info = info
-    db.commit()
 
 
 def build_proxy(source: Path, target: Path) -> bool:
@@ -103,126 +69,4 @@ def build_proxy(source: Path, target: Path) -> bool:
     return target.is_file()
 
 
-
-
-def start_proxy_job(db: Session, asset: Asset, *, created_by: str | None, force: bool = False) -> Job | None:
-    """Queue proxy generation for a video asset (in-process daemon thread).
-
-    No-op (returns None) when proxies are disabled, the asset isn't a file-backed
-    video, or a proxy is already ready/in-flight (unless `force`).
-    """
-    if not settings.generate_proxies or asset.kind != "video" or not asset.file_key:
-        return None
-    if not force and proxy_status(asset) in ("ready", "pending"):
-        return None
-    job = create_job(
-        db,
-        workspace_id=asset.workspace_id,
-        kind="proxy",
-        created_by=created_by,
-        payload={"asset_id": asset.id},
-        message="生成预览代理排队中",
-    )
-    info = dict(asset.media_info or {})
-    info["proxy_status"] = "pending"
-    info.pop("proxy_key", None)
-    asset.media_info = info
-    db.commit()
-    threading.Thread(target=_run_proxy, args=(job.id, asset.id), daemon=True).start()
-    return job
-
-
-def _run_proxy(job_id: str, asset_id: str) -> None:
-    """Wait for a transcode slot BEFORE opening a database session.
-
-    The slot used to be taken inside the session, so every queued worker sat in the semaphore
-    while holding a pooled connection. The pool is 5 + 10 overflow with a 30s checkout timeout,
-    so a startup backfill of 60 videos put 45 threads into that timeout — each dying with its
-    job still `queued` and nothing to reconcile it. Queueing on the semaphore costs a sleeping
-    thread; queueing on the connection pool costs the job.
-    """
-    with _TRANSCODE_SLOTS:
-        run_job_guarded(job_id, lambda: _proxy_body(job_id, asset_id), what="代理生成")
-
-
-def _proxy_body(job_id: str, asset_id: str) -> None:
-    with SessionLocal() as db:
-        job = db.get(Job, job_id)
-        if job is None:
-            return
-        try:
-            job.status = "running"
-            job.message = "生成预览代理中"
-            job.progress = 0.1
-            emit_job_event(db, job.id, "job.running", {})
-            db.commit()
-
-            asset = db.get(Asset, asset_id)
-            if asset is None or not asset.file_key:
-                _fail(db, job_id, asset_id, "素材文件缺失")
-                return
-            source = resolve_key(asset.file_key)
-            target = proxy_path(source.parent)
-            ok = build_proxy(source, target)  # slot already held by _run_proxy
-            if ok:
-                key = proxy_key_for(asset)
-                _set_proxy_meta(db, asset_id, "ready", key=key)
-                job = db.get(Job, job_id)
-                job.status = "succeeded"
-                job.progress = 1.0
-                job.message = "预览代理完成"
-                job.result = {"proxy_key": key}
-                emit_job_event(db, job.id, "job.succeeded", {"proxy_key": key})
-                db.commit()
-            else:
-                _fail(db, job_id, asset_id, "ffmpeg 代理转码失败")
-        except Exception as exc:  # a worker thread must record failure, never die silently
-            db.rollback()
-            _fail(db, job_id, asset_id, str(exc)[:500])
-
-
-def _fail(db: Session, job_id: str, asset_id: str, reason: str) -> None:
-    _set_proxy_meta(db, asset_id, "failed")
-    job = db.get(Job, job_id)
-    if job is not None:
-        job.status = "failed"
-        job.message = "预览代理生成失败"
-        job.error = reason
-        emit_job_event(db, job.id, "job.failed", {"reason": reason})
-        db.commit()
-
-
-def reconcile_missing_proxies(db: Session) -> int:
-    """Startup: (re)queue proxies for video assets without a ready one on disk.
-
-    A backend restart orphans the daemon thread, leaving media_info stuck at
-    "pending"; here we re-drive anything whose proxy file is actually missing,
-    and repair the status of proxies that exist on disk but lost their flag.
-    """
-    if not settings.generate_proxies:
-        return 0
-    queued = 0
-    for asset in db.scalars(select(Asset).where(Asset.kind == "video")):
-        if not asset.file_key:
-            continue
-        directory = resolve_key(asset.file_key).parent
-        if proxy_path(directory).is_file():
-            if proxy_status(asset) != "ready":
-                _set_proxy_meta(db, asset.id, "ready", key=proxy_key_for(asset))
-            continue
-        if start_proxy_job(db, asset, created_by=None, force=True):  # 启动时的补齐扫描,没有操作人
-            queued += 1
-    return queued
-
-
-
-
-__all__ = [
-    "PROXY_NAME",
-    "build_proxy",
-    "proxy_path",
-    "proxy_key_for",
-    "proxy_status",
-    "start_proxy_job",
-    "reconcile_missing_proxies",
-]
+__all__ = ["PROXY_NAME", "PROXY_HEIGHT", "TRANSCODE_SLOTS", "build_proxy", "proxy_path"]

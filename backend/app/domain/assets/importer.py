@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Asset, new_id
 from app.media.paths import asset_dir, asset_key, resolve_key
 from app.media.probe import guess_kind, probe_media, remux_in_place
-from app.media.proxy import start_proxy_job
+from app.domain.assets.proxies import start_proxy_job
 from app.media.thumbnails import generate_thumbnail, thumbnail_path
 from app.media.waveform import generate_waveform, waveform_path
 
