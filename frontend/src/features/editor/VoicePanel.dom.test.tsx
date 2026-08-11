@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 /**
  * 点了那支笔要**真的打开**编辑表单。
@@ -24,17 +24,37 @@ import { VoicePanel } from "@/features/editor/VoicePanel";
 
 const voices = [{ id: "v1", name: "我的", reference_text: "", source: "upload", created_at: "2026-01-01T00:00:00Z", has_reference: true }];
 
+// jsdom 没有 Pointer Capture,而 Radix 的 Select 在 pointerdown 里就要用它 —— 不补上,
+// 展开下拉这件事在测试里根本做不到(它会抛 `hasPointerCapture is not a function`)。
+beforeAll(() => {
+  Object.assign(Element.prototype, {
+    hasPointerCapture: () => false,
+    setPointerCapture: () => {},
+    releasePointerCapture: () => {},
+    scrollIntoView: () => {},
+  });
+});
+
 const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; });
+
+const localEngines = [
+  { id: "f5-tts", label: "F5-TTS", status: "installed", runtime_ready: true, supports_speed: true },
+  { id: "fish-speech", label: "Fish Speech S2 Pro", status: "installed", runtime_ready: true, supports_speed: false },
+];
 
 function renderPanel() {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
-    const body = url.includes("/api/voices") && !url.includes("tts")
-      ? voices
-      : url.includes("/tts/engines")
-        ? [{ id: "clone", label: "本地音色克隆", needs_key: false, needs_voice_id: false, voices: [], note: "", ready: true }]
-        : [];
+    const body = url.includes("/api/tts/models")
+      ? localEngines
+      : url.includes("/api/settings/tts")
+        ? { engine: "f5-tts", python_path: "", source: "modelscope" }
+        : url.includes("/tts/engines")
+          ? [{ id: "clone", label: "本地音色克隆", needs_key: false, needs_voice_id: false, voices: [], note: "", ready: true }]
+          : url.includes("/api/voices")
+            ? voices
+            : [];
     return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
   }) as never;
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -70,5 +90,44 @@ describe("音色库", () => {
     renderPanel();
 
     expect(await screen.findByText("voiceNoReferenceText")).toBeInTheDocument();
+  });
+});
+
+/**
+ * 配音面板是**可拖宽的侧栏**,默认只有 250px 上下。把「克隆引擎 / 音色 / 语速」写成
+ * `grid-cols-[1fr_1fr_88px]` 之后,引擎那一格实测只剩 65px —— 触发器显示成「F5-…」,
+ * 展开的菜单被 SelectContent 的 `max-w-[trigger-width]` 一起压成 60px,两个选项变成
+ * 「F5…」「Fi…」。**一个读不出选项的选择器等于没有这个功能**,而它正是这一轮加的。
+ *
+ * 根因不是"列宽给少了",是**用固定列数去排一个宽度会变的容器**:换成 3 列同样会在别的
+ * 宽度上错。所以这里的判据是"这一行按内容需要换行",而不是"这一行是几列"。
+ */
+describe("配音面板的控件行(响应式)", () => {
+  it("克隆的那一行会换行,而不是写死列数把每格挤成 65px", async () => {
+    renderPanel();
+    const picker = await screen.findByRole("combobox", { name: "voicePanelCloneEngine" });
+
+    const row = picker.closest("div.flex-wrap");
+
+    expect(row, "克隆引擎所在的行不会换行 —— 面板一窄就把三个控件挤成看不清的宽度").not.toBeNull();
+    expect(row!.className, "行里还留着写死的列轨道").not.toMatch(/grid-cols-\[/);
+  });
+
+  it("引擎名有下限宽度 —— 它是这一行里最长的一个,不能被平均分配", async () => {
+    renderPanel();
+    const picker = await screen.findByRole("combobox", { name: "voicePanelCloneEngine" });
+
+    const field = picker.closest("div.flex-wrap")!.querySelector<HTMLElement>(":scope > div");
+
+    expect(field!.className).toMatch(/min-w-\[/);
+  });
+
+  it("两个引擎都在下拉里,没装好的标出来", async () => {
+    const user = userEvent.setup();
+    renderPanel();
+
+    await user.click(await screen.findByRole("combobox", { name: "voicePanelCloneEngine" }));
+
+    expect(await screen.findByRole("option", { name: "Fish Speech S2 Pro" })).toBeInTheDocument();
   });
 });

@@ -37,14 +37,28 @@ import { cn } from "@/lib/utils";
 
 /** 带小标签的紧凑表单格:配音面板的下拉全长一个样,没有标签就分不清
     「音色」「语速」「发音人 B」谁是谁 —— 标签贴在控件上方而不是靠占位符。 */
-function VoiceField({ label, children }: { label: string; children: React.ReactNode }) {
+function VoiceField({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className="grid min-w-0 content-start gap-1">
+    <div className={cn("grid min-w-0 content-start gap-1", className)}>
       <span className="text-[10.5px] font-medium leading-none text-muted-foreground">{label}</span>
       {children}
     </div>
   );
 }
+
+/** 一行控件。**这个面板的宽度是会变的**(左侧栏可拖、窗口可缩),所以行按内容需要换行,
+    不按写死的列数排 —— 后者在任何一个别的宽度上都会错一次:实测 250px 的默认宽度下,
+    `grid-cols-[1fr_1fr_88px]` 把引擎那一格压到 65px,触发器只剩「F5-…」,展开的菜单
+    跟着塌成 60px,两个选项变成「F5…」「Fi…」。**读不出选项的选择器等于没有这个功能。** */
+function FieldRow({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <div className={cn("flex flex-wrap items-start gap-1.5", className)}>{children}</div>;
+}
+
+//: 一格下拉挤到什么宽度就该换行了。引擎名(「Fish Speech S2 Pro · 未就绪」)最长,给得多些。
+const FIELD = "min-w-[9rem] flex-1";
+const FIELD_WIDE = "min-w-[10.5rem] flex-1";
+//: 语速永远是「1.25×」这种两三个字符,给固定窄宽,不参与瓜分。
+const FIELD_SPEED = "w-[76px] shrink-0";
 
 function VoicePicker({
   value,
@@ -382,13 +396,11 @@ export function VoicePanel({
                 此前这一格是空的 —— 唯一的选法是滚到下面的音色库点一张卡,而在没点之前
                 `activeVoice` 会悄悄取列表第一个。于是"我到底在用哪个音色"这件事,界面上
                 一个字都没写。远程引擎的音色就在这个位置,克隆没有理由长得不一样。 */}
-            {/* 这里**没有语速** —— 本地克隆的 worker 不吃这个参数(上面 speed 那段注释说的就是
-                它)。摆一个拨不动的旋钮,比不摆更糟。 */}
             {engine === "clone" && (
-              <div className={cn("grid gap-1.5", cloneModel?.supports_speed ? "grid-cols-[minmax(0,1fr)_minmax(0,1fr)_88px]" : "grid-cols-2")}>
+              <FieldRow>
                 {/* 设置页那个是默认,这一次用哪个由这一次说了算 —— 想换引擎不必跑去改全局。
                     没装好的照样列出来但标明白,而不是藏起来让人猜为什么少了一个。 */}
-                <VoiceField label={t("voicePanelCloneEngine")}>
+                <VoiceField label={t("voicePanelCloneEngine")} className={FIELD_WIDE}>
                   <Select value={cloneEngine} onValueChange={setCloneEngineChoice}>
                     <SelectTrigger className="w-full min-w-0" aria-label={t("voicePanelCloneEngine")}>
                       <SelectValue />
@@ -403,58 +415,62 @@ export function VoicePanel({
                     </SelectContent>
                   </Select>
                 </VoiceField>
-                <VoiceField label={t("voiceLibraryPick")}>
-                  {list.length > 0 ? (
-                    <Select value={activeVoice ?? ""} onValueChange={setSelected}>
-                      <SelectTrigger className="w-full min-w-0" aria-label={t("voiceLibraryPick")}>
-                        <SelectValue placeholder={t("voiceLibraryPickPlaceholder")} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {list.map((voice) => (
-                          <SelectItem key={voice.id} value={voice.id}>
-                            {voice.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <p className="m-0 text-[11px] leading-[26px] text-muted-foreground">{t("voiceLibraryPickEmpty")}</p>
-                  )}
-                </VoiceField>
-                {/* 语速跟着**引擎能力**走:F5 的 infer 吃 speed,fish 的请求结构里根本没有
-                    这一项。此前我用一句「本地克隆的 worker 不吃这个参数」把两个引擎一起判了,
-                    于是 F5 能调的东西被一并删掉 —— 而给 fish 摆一个拨不动的旋钮同样糟。 */}
-                {cloneModel?.supports_speed && (
-                  <VoiceField label={t("voiceSpeed")}>
-                    <SpeedPicker value={speed} onChange={setSpeed} ariaLabel={t("voiceSpeed")} />
+                {/* 音色和语速**一起**换行:语速只有「1.25×」那么宽,把它单独甩到下一行
+                    是三行控件里最难看的一种。 */}
+                <FieldRow className="min-w-[12rem] flex-1 flex-nowrap">
+                  <VoiceField label={t("voiceLibraryPick")} className="min-w-0 flex-1">
+                    {list.length > 0 ? (
+                      <Select value={activeVoice ?? ""} onValueChange={setSelected}>
+                        <SelectTrigger className="w-full min-w-0" aria-label={t("voiceLibraryPick")}>
+                          <SelectValue placeholder={t("voiceLibraryPickPlaceholder")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {list.map((voice) => (
+                            <SelectItem key={voice.id} value={voice.id}>
+                              {voice.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <p className="m-0 text-[11px] leading-[26px] text-muted-foreground">{t("voiceLibraryPickEmpty")}</p>
+                    )}
                   </VoiceField>
-                )}
-              </div>
+                  {/* 语速跟着**引擎能力**走:F5 的 infer 吃 speed,fish 的请求结构里根本没有
+                      这一项。此前我用一句「本地克隆的 worker 不吃这个参数」把两个引擎一起判了,
+                      于是 F5 能调的东西被一并删掉 —— 而给 fish 摆一个拨不动的旋钮同样糟。 */}
+                  {cloneModel?.supports_speed && (
+                    <VoiceField label={t("voiceSpeed")} className={FIELD_SPEED}>
+                      <SpeedPicker value={speed} onChange={setSpeed} ariaLabel={t("voiceSpeed")} />
+                    </VoiceField>
+                  )}
+                </FieldRow>
+              </FieldRow>
             )}
             {/* 单人远程引擎:音色 + 语速 同行,标签说明谁是谁 */}
             {engine !== "clone" && !isPodcast && voiceChoices.length > 0 && (
-              <div className="grid grid-cols-[minmax(0,1fr)_88px] gap-1.5">
-                <VoiceField label={t("voiceEngineVoice")}>
+              <FieldRow className="flex-nowrap">
+                <VoiceField label={t("voiceEngineVoice")} className="min-w-0 flex-1">
                   <VoicePicker value={engineVoice || voiceChoices[0].value} onChange={setEngineVoice} choices={voiceChoices} ariaLabel={t("voiceEngineVoice")} />
                 </VoiceField>
-                <VoiceField label={t("voiceSpeed")}>
+                <VoiceField label={t("voiceSpeed")} className={FIELD_SPEED}>
                   <SpeedPicker value={speed} onChange={setSpeed} ariaLabel={t("voiceSpeed")} />
                 </VoiceField>
-              </div>
+              </FieldRow>
             )}
             {/* 播客:两个发音人一行(A/B 一目了然),对话方式 + 语速一行 */}
             {isPodcast && voiceChoices.length > 0 && (
               <>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <VoiceField label={t("voicePodcastSpeakerA")}>
+                <FieldRow>
+                  <VoiceField label={t("voicePodcastSpeakerA")} className={FIELD}>
                     <VoicePicker value={engineVoice || voiceChoices[0]?.value || ""} onChange={setEngineVoice} choices={voiceChoices} ariaLabel={t("voicePodcastSpeakerA")} />
                   </VoiceField>
-                  <VoiceField label={t("voicePodcastSpeakerB")}>
+                  <VoiceField label={t("voicePodcastSpeakerB")} className={FIELD}>
                     <VoicePicker value={speakerB || voiceChoices[1]?.value || ""} onChange={setSpeakerB} choices={voiceChoices} ariaLabel={t("voicePodcastSpeakerB")} />
                   </VoiceField>
-                </div>
-                <div className="grid grid-cols-[minmax(0,1fr)_88px] gap-1.5">
-                  <VoiceField label={t("voicePodcastMode")}>
+                </FieldRow>
+                <FieldRow className="flex-nowrap">
+                  <VoiceField label={t("voicePodcastMode")} className="min-w-0 flex-1">
                     <Select value={podcastMode} onValueChange={(value) => setPodcastMode(value as typeof podcastMode)}>
                       <SelectTrigger className="w-full min-w-0" aria-label={t("voicePodcastMode")}>
                         <SelectValue />
@@ -466,17 +482,17 @@ export function VoicePanel({
                       </SelectContent>
                     </Select>
                   </VoiceField>
-                  <VoiceField label={t("voiceSpeed")}>
+                  <VoiceField label={t("voiceSpeed")} className={FIELD_SPEED}>
                     <SpeedPicker value={speed} onChange={setSpeed} ariaLabel={t("voiceSpeed")} />
                   </VoiceField>
-                </div>
+                </FieldRow>
               </>
             )}
             {/* 目录拉不到、需要手填音色 id 的引擎:输入框 + 语速 */}
             {engine !== "clone" && !isPodcast && voiceChoices.length === 0 && (
-              <div className="grid grid-cols-[minmax(0,1fr)_88px] gap-1.5">
-                {activeEngine?.needs_voice_id ? (
-                  <VoiceField label={t("voiceEngineVoiceId")}>
+              <FieldRow className="flex-nowrap">
+                {activeEngine?.needs_voice_id && (
+                  <VoiceField label={t("voiceEngineVoiceId")} className="min-w-0 flex-1">
                     <Input
                       className="min-w-0"
                       value={engineVoice}
@@ -485,13 +501,11 @@ export function VoicePanel({
                       onChange={(event) => setEngineVoice(event.target.value)}
                     />
                   </VoiceField>
-                ) : (
-                  <div />
                 )}
-                <VoiceField label={t("voiceSpeed")}>
+                <VoiceField label={t("voiceSpeed")} className={FIELD_SPEED}>
                   <SpeedPicker value={speed} onChange={setSpeed} ariaLabel={t("voiceSpeed")} />
                 </VoiceField>
-              </div>
+              </FieldRow>
             )}
           </div>
           <Textarea

@@ -74,7 +74,12 @@ const SelectContent = React.forwardRef<
       ref={ref}
       className={cn(
         "relative z-50 max-h-[--radix-select-content-available-height] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border bg-popover text-popover-foreground  data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-[--radix-select-content-transform-origin]",
-        position === "popper" && "min-w-[var(--radix-select-trigger-width)] max-w-[var(--radix-select-trigger-width)]",
+        // 菜单**不窄于**字段(对齐好看),但也**不被字段封顶**:此前这里是
+        // `max-w-[trigger-width]`,于是任何一个窄字段都会把自己的菜单压成一样窄 ——
+        // 配音面板 65px 的引擎格里,「F5-TTS」「Fish Speech S2 Pro」实测显示成
+        // 「F5…」「Fi…」。**读不出选项的菜单等于没有菜单**,对齐再齐也没用。
+        // 上限交给 Radix 算出来的可用宽度,这样它仍然不会顶出屏幕。
+        position === "popper" && "min-w-[var(--radix-select-trigger-width)] max-w-[--radix-select-content-available-width]",
         position === "popper" &&
           "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
         className
