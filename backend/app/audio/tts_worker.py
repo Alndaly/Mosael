@@ -370,9 +370,12 @@ def _watch_parent(original_ppid: int) -> None:
     EOF,所以另加这条:被过继给 init 就退出。
     """
     while True:
-        time.sleep(1.0)
-        if os.getppid() != original_ppid:
-            os._exit(0)  # 不做清理:权重还挂在内存里,越快还给系统越好
+        try:
+            time.sleep(1.0)
+            if os.getppid() != original_ppid:
+                os._exit(0)  # 不做清理:权重还挂在内存里,越快还给系统越好
+        except Exception:  # noqa: BLE001 — 它一死,孤儿进程就回来了,而没人会发现
+            time.sleep(5.0)
 
 
 def serve() -> None:

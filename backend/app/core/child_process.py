@@ -62,10 +62,25 @@ class ChildProcess:
             self._killer.start()
 
     def _read_stderr(self) -> None:
+        """一直把 stderr 读空。
+
+        **这个线程死了,这个类就退回它当初要解决的那个死锁**(见文件开头):没人读,管道写满,
+        子进程卡在 write 上,而父进程卡在读 stdout 上。
+
+        子进程往 stderr 写什么不由我们决定 —— ffmpeg 在坏源上逐帧报错、pip 打进度条、
+        torch 打警告,其中任何一段非法字节都会让 `for line in ...` 抛 UnicodeDecodeError。
+        所以这里**排空比读懂重要**:解码不了就丢弃原始字节继续读。
+        """
         if self._process.stderr is None:
             return
-        for line in self._process.stderr:
-            self._stderr.append(line)
+        try:
+            for line in self._process.stderr:
+                self._stderr.append(line)
+        except Exception:  # noqa: BLE001 — 读不懂也得读完
+            try:
+                self._process.stderr.detach().read()  # 只丢弃,不解码
+            except Exception:  # noqa: BLE001
+                pass  # 管道已经关了:子进程结束了,没什么可堵的了
 
     def _kill(self) -> None:
         self.timed_out = True

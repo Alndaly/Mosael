@@ -17,7 +17,9 @@ import { SettingsGroup, SettingsRow } from "./ui";
  */
 export function BuiltinTtsSection({ onOpenVoiceClone }: { onOpenVoiceClone: () => void }) {
   const t = useI18n();
-  const engines = useQuery({ queryKey: ["tts-engines"], queryFn: listTtsEngines, staleTime: Infinity });
+  // staleTime 不能是 Infinity:这份数据里带着"本地引擎装了没有",而用户就是会在另一个页面
+  // 把它装上再回来(和 VoicePanel 同一个 query key —— 那边已经因此改过一次,这边漏了)。
+  const engines = useQuery({ queryKey: ["tts-engines"], queryFn: listTtsEngines, staleTime: 30_000 });
   const builtin = (engines.data ?? []).filter((engine) => !engine.needs_key);
   if (builtin.length === 0) return null;
   return (
