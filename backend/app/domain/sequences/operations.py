@@ -916,8 +916,12 @@ def set_clip_effects(db: Session, sequence_id: str, op: SetClipEffects) -> Seque
     return sequence
 
 
-_TRANSFORM_DEFAULTS: dict[str, float] = {"scale": 1.0, "x": 0.0, "y": 0.0, "rotation": 0.0, "opacity": 1.0}
-_TRANSFORM_BOUNDS: dict[str, tuple[float, float]] = {
+#: 「什么样的 transform 是合法的」—— **全项目唯一一份**,由 contracts/transform-cases.json 钉住。
+#: 此前后端内部就有三份互不相同的:这里(写入,scale≤4)、render_plan._read_transform(导出,
+#: scale≤10)、render_plan._KF_RANGES(关键帧,rotation±3600),而前端一处都不钳。写入这份最严,
+#: 于是另外两份从来没咬到过 —— "上游恰好挡住"不是一致。
+TRANSFORM_DEFAULTS: dict[str, float] = {"scale": 1.0, "x": 0.0, "y": 0.0, "rotation": 0.0, "opacity": 1.0}
+TRANSFORM_BOUNDS: dict[str, tuple[float, float]] = {
     "scale": (0.1, 4.0),
     "x": (-2.0, 2.0),
     "y": (-2.0, 2.0),
@@ -943,7 +947,7 @@ def _clean_keyframes(raw: Any) -> list[dict[str, float]]:
         except (KeyError, TypeError, ValueError):
             continue
         point: dict[str, float] = {"t": max(0.0, min(1.0, t))}
-        for key, (lo, hi) in _TRANSFORM_BOUNDS.items():
+        for key, (lo, hi) in TRANSFORM_BOUNDS.items():
             if key not in item:
                 continue
             try:
@@ -960,12 +964,12 @@ def _clean_keyframes(raw: Any) -> list[dict[str, float]]:
 def clean_transform(raw: dict[str, Any]) -> dict[str, Any]:
     """归一化片段变换:补默认、转 float、按范围钳制;保留并清洗关键帧轨。"""
     out: dict[str, Any] = {}
-    for key, default in _TRANSFORM_DEFAULTS.items():
+    for key, default in TRANSFORM_DEFAULTS.items():
         try:
             value = float(raw.get(key, default))
         except (TypeError, ValueError) as exc:
             raise SequenceDomainError(f"transform.{key} 必须是数字") from exc
-        lo, hi = _TRANSFORM_BOUNDS[key]
+        lo, hi = TRANSFORM_BOUNDS[key]
         out[key] = max(lo, min(hi, value))
     keyframes = _clean_keyframes(raw.get("keyframes"))
     if keyframes:

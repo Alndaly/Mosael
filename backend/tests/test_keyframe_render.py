@@ -29,8 +29,10 @@ class TestReadKeyframes:
     def test_flattens_clamps_and_sorts(self) -> None:
         raw = [{"t": 1.0, "x": 9.0}, {"t": 0.0, "x": -9.0, "opacity": 2.0}]
         kfs = _read_keyframes(raw)
-        # x clamped to ±4, opacity to ≤1, flattened to (t, prop, value), sorted by t
-        assert kfs == ((0.0, "opacity", 1.0), (0.0, "x", -4.0), (1.0, "x", 4.0))
+        # 钳制范围是 TRANSFORM_BOUNDS(全项目唯一一份,由 contracts/transform-cases.json 钉住):
+        # x ±2、opacity ≤1。此前这里写的是 ±4 —— 那是导出侧自己那份更宽的表,而写入路径钳的是
+        # ±2,于是这条测试一直在给一个从来没生效过的范围背书。
+        assert kfs == ((0.0, "opacity", 1.0), (0.0, "x", -2.0), (1.0, "x", 2.0))
 
     def test_transform_keyed_pulls_one_track(self) -> None:
         tf = Transform(keyframes=((0.0, "x", -1.0), (1.0, "x", 1.0), (0.5, "opacity", 0.3)))

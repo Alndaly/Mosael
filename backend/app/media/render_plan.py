@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+
+from app.domain.sequences.operations import TRANSFORM_BOUNDS, TRANSFORM_DEFAULTS
 from dataclasses import asdict, dataclass, field
 
 """
@@ -588,37 +590,51 @@ def _read_gain_keyframes(effects: dict) -> tuple[tuple[float, float], ...]:
 
 
 def _read_transform(clip: dict) -> Transform:
-    """clip.transform → a clamped Transform. Mirrors the frontend readTransform defaults so
-    export matches preview; out-of-range/garbage values fall back to identity components."""
+    """clip.transform → a clamped Transform.
+
+    钳制范围与默认值来自 `domain.sequences.operations.TRANSFORM_BOUNDS` —— **全项目唯一一份**,
+    Mirrors the frontend readTransform,
+    由 `contracts/transform-cases.json` 钉住,前端 `readTransform` 跑同一份语料。此前这里自己
+    写了一套更宽的(scale≤10、x/y±4、rotation % 360),而前端一处都不钳:同一个 clip,预览放
+    20 倍、导出放 10 倍。没发作只因为写入路径先钳过一道 —— 那是上游挡住,不是两侧一致。
+    """
     raw = clip.get("transform") or {}
     if not isinstance(raw, dict):
         return IDENTITY_TRANSFORM
 
-    def num(key: str, default: float) -> float:
+    def num(key: str) -> float:
+        default = TRANSFORM_DEFAULTS[key]
+        got = raw.get(key, default)
+        # **布尔不是数字。** Python 里 `float(True) == 1.0`(bool 是 int 的子类),于是
+        # `{"y": true}` 会被读成 y=1.0,把片段挪到画面外;JS 那侧则当垃圾退回默认。
+        # 这是契约逼出来的一处 —— 两侧对"什么算数字"要有同一个答案。
+        if isinstance(got, bool):
+            return default
         try:
-            return float(raw.get(key, default))
+            value = float(got)
         except (TypeError, ValueError):
             return default
+        lo, hi = TRANSFORM_BOUNDS[key]
+        return max(lo, min(hi, value))
 
     return Transform(
-        scale=max(0.01, min(10.0, num("scale", 1.0))),
-        x=max(-4.0, min(4.0, num("x", 0.0))),
-        y=max(-4.0, min(4.0, num("y", 0.0))),
-        rotation=num("rotation", 0.0) % 360.0,
-        opacity=max(0.0, min(1.0, num("opacity", 1.0))),
+        scale=num("scale"),
+        x=num("x"),
+        y=num("y"),
+        rotation=num("rotation"),
+        opacity=num("opacity"),
         keyframes=_read_keyframes(raw.get("keyframes")),
     )
 
 
-_KF_RANGES = {"scale": (0.01, 10.0), "x": (-4.0, 4.0), "y": (-4.0, 4.0), "opacity": (0.0, 1.0), "rotation": (-3600.0, 3600.0)}
 
 
 def _read_keyframes(raw: object) -> tuple[tuple[float, str, float], ...]:
     """[{t, scale?, x?, y?, opacity?}] → flat, clamped, sorted (t, prop, value) tuple.
 
     Flattened per-property so the executor can pull one property's track and compile it to a
-    time expression; clamped to the same ranges as the static scalars so a hostile payload
-    can't inject wild values (rotation is intentionally not keyframable)."""
+    time expression; clamped to the same ranges as the static scalars(TRANSFORM_BOUNDS)so a
+    hostile payload can't inject wild values."""
     if not isinstance(raw, list):
         return ()
     out: list[tuple[float, str, float]] = []
@@ -629,7 +645,7 @@ def _read_keyframes(raw: object) -> tuple[tuple[float, str, float], ...]:
             t = max(0.0, min(1.0, float(kf.get("t"))))
         except (TypeError, ValueError):
             continue
-        for prop, (lo, hi) in _KF_RANGES.items():
+        for prop, (lo, hi) in TRANSFORM_BOUNDS.items():
             value = kf.get(prop)
             if isinstance(value, (int, float)):
                 out.append((round(t, 6), prop, max(lo, min(hi, float(value)))))

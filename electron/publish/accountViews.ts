@@ -10,7 +10,8 @@ const noop = (): void => undefined;
 const ACCOUNT_VIEW_PRELOAD = path.join(__dirname, "account-view-preload.cjs");
 
 /** 发布账号登录分区前缀(完整名 persist:<PARTITION_PREFIX>-<accountId>)。
- *  必须与后端 app/core/db.py 的 PARTITION_PREFIX 一致 —— 两边拼的是同一个磁盘目录。 */
+ *  必须与后端 app/core/db.py 的 PARTITION_PREFIX 一致 —— 两边拼的是同一个磁盘目录。
+ *  由 contracts/shared-constants.json 钉住。 */
 export const PARTITION_PREFIX = "openstudio";
 
 
@@ -35,7 +36,8 @@ const PANEL = {
    *  R=12 → 3.5px,取 4px。原生 View 没有 setBorderRadius(Electron 32 只有 setBackgroundColor /
    *  setBounds / setVisible),圆角与阴影只能由渲染层画在视图**下方**(子视图永远盖在宿主页面之上)。 */
   inset: 4,
-  /** 卡片圆角,渲染层与这里必须一致(经 IPC 下发,见 emitPanels)。 */
+  /** 卡片圆角。**只有这一份**:经 IPC 随面板状态下发(见 emitPanels),渲染层用收到的值,
+   *  不自己写一个 —— 这里改了前端跟着变,不存在两边要记得一起改的问题。 */
   radius: 12,
   margin: 16,
   stackOffset: 22,

@@ -1,0 +1,126 @@
+{
+  "contract": "transform",
+  "version": 1,
+  "readme": "contracts/README.md",
+  "description": "片段变换:一份 clip.transform 读出来是什么(默认值、钳制范围、垃圾值怎么退),以及关键帧在某个进度处采样成什么。预览用它摆画中画/花字,导出用它生成 ffmpeg 表达式与 ASS 标签 —— 两边算出不同的数,预览和成片就是两个画面。后端 backend/tests/test_transform_parity.py 与前端 transform.parity.test.ts 跑同一份语料。",
+  "notes": [
+    "bounds 是**全项目唯一一份**合法范围。写入(domain.sequences.operations.clean_transform)、导出读取(media.render_plan._read_transform)、预览读取(TransformOverlay.readTransform)都用它。此前后端内部就有三份互不相同的,而前端一处都不钳。",
+    "x/y 是相对半个画幅的偏移(预览里 translate(x*50%, y*50%),导出里 (0.5 + x*0.5) * 画幅)。",
+    "数字字符串按数字读:写入路径存的是 float,出现字符串说明数据是别处写进来的,能读回来就别丢。读不出数的退回默认值,而不是抛错 —— 读取路径是防御性的,不是校验器。"
+  ],
+  "defaults": { "scale": 1.0, "x": 0.0, "y": 0.0, "rotation": 0.0, "opacity": 1.0 },
+  "bounds": {
+    "scale": [0.1, 4.0],
+    "x": [-2.0, 2.0],
+    "y": [-2.0, 2.0],
+    "rotation": [-180.0, 180.0],
+    "opacity": [0.0, 1.0]
+  },
+  "normalize": [
+    {
+      "name": "empty",
+      "why": "没写 transform 就是恒等变换 —— 不是缺字段、也不是 0。",
+      "raw": {},
+      "transform": { "scale": 1.0, "x": 0.0, "y": 0.0, "rotation": 0.0, "opacity": 1.0 }
+    },
+    {
+      "name": "plain-values-pass-through",
+      "why": "范围内的值原样读出。",
+      "raw": { "scale": 1.5, "x": 0.25, "y": -0.5, "rotation": 30.0, "opacity": 0.8 },
+      "transform": { "scale": 1.5, "x": 0.25, "y": -0.5, "rotation": 30.0, "opacity": 0.8 }
+    },
+    {
+      "name": "out-of-range-clamps",
+      "why": "**这条就是那个分歧**:后端钳、前端不钳时,scale=20 会预览放 20 倍、导出放 4 倍 —— 同一个工程两个画面。",
+      "raw": { "scale": 20, "x": 9, "y": -9, "rotation": 400, "opacity": 3 },
+      "transform": { "scale": 4.0, "x": 2.0, "y": -2.0, "rotation": 180.0, "opacity": 1.0 }
+    },
+    {
+      "name": "zero-opacity-is-a-real-value",
+      "why": "opacity: 0 是「这条被藏起来了」,不能被当成缺省而变回 1。",
+      "raw": { "opacity": 0 },
+      "transform": { "scale": 1.0, "x": 0.0, "y": 0.0, "rotation": 0.0, "opacity": 0.0 }
+    },
+    {
+      "name": "numeric-strings-are-read-as-numbers",
+      "why": "写入路径存 float,出现字符串说明这条是别处写进来的(插件、导入、手改库)。能读回来就别丢 —— 丢了会静默变回默认值,画面对不上而没有任何提示。",
+      "raw": { "scale": "1.5", "x": "-0.5" },
+      "transform": { "scale": 1.5, "x": -0.5, "y": 0.0, "rotation": 0.0, "opacity": 1.0 }
+    },
+    {
+      "name": "garbage-falls-back-to-the-default",
+      "why": "读不出数的退回默认值,而不是抛错或读成 0:读取路径是防御性的。",
+      "raw": { "scale": "abc", "x": null, "y": true, "opacity": {} },
+      "transform": { "scale": 1.0, "x": 0.0, "y": 0.0, "rotation": 0.0, "opacity": 1.0 }
+    }
+  ],
+  "sample": [
+    {
+      "name": "no-keyframes-holds-the-base",
+      "why": "没有关键帧就一直是静态值。",
+      "keyframes": [],
+      "prop": "scale",
+      "base": 1.5,
+      "progress": 0.5,
+      "value": 1.5
+    },
+    {
+      "name": "single-point-holds-everywhere",
+      "why": "只有一个点 = 没有动画,全程取那个值(而不是在它和 base 之间插值)。",
+      "keyframes": [{ "t": 0.5, "scale": 2.0 }],
+      "prop": "scale",
+      "base": 1.0,
+      "progress": 0.0,
+      "value": 2.0
+    },
+    {
+      "name": "linear-between-two-points",
+      "why": "分段线性 —— 两侧都必须是同一条直线,不是缓动。",
+      "keyframes": [{ "t": 0.0, "x": 0.0 }, { "t": 1.0, "x": 1.0 }],
+      "prop": "x",
+      "base": 0.0,
+      "progress": 0.25,
+      "value": 0.25
+    },
+    {
+      "name": "holds-before-the-first-point",
+      "why": "端点外保持端点值,不外推。",
+      "keyframes": [{ "t": 0.4, "opacity": 0.2 }, { "t": 0.8, "opacity": 1.0 }],
+      "prop": "opacity",
+      "base": 0.0,
+      "progress": 0.1,
+      "value": 0.2
+    },
+    {
+      "name": "holds-after-the-last-point",
+      "why": "同上,另一端。",
+      "keyframes": [{ "t": 0.4, "opacity": 0.2 }, { "t": 0.8, "opacity": 1.0 }],
+      "prop": "opacity",
+      "base": 0.0,
+      "progress": 0.95,
+      "value": 1.0
+    },
+    {
+      "name": "only-points-that-define-this-prop-count",
+      "why": "一条关键帧可以只写某几个属性。算 x 时不能把没写 x 的那些点当成 0。",
+      "keyframes": [
+        { "t": 0.0, "x": 0.0, "scale": 1.0 },
+        { "t": 0.5, "scale": 2.0 },
+        { "t": 1.0, "x": 2.0 }
+      ],
+      "prop": "x",
+      "base": 0.0,
+      "progress": 0.5,
+      "value": 1.0
+    },
+    {
+      "name": "unsorted-points-are-sorted-first",
+      "why": "语料里故意乱序:两侧都必须先按 t 排序,否则插值段会取错。",
+      "keyframes": [{ "t": 1.0, "y": 2.0 }, { "t": 0.0, "y": 0.0 }],
+      "prop": "y",
+      "base": 0.0,
+      "progress": 0.5,
+      "value": 1.0
+    }
+  ]
+}

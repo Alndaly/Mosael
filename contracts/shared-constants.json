@@ -1,0 +1,29 @@
+{
+  "contract": "shared-constants",
+  "version": 1,
+  "readme": "contracts/README.md",
+  "description": "少数几个「两个运行时都要认、而谁也不拥有」的常量。不一致时没有任何报错 —— 只是行为悄悄错开,所以每一条都写清了错开之后用户会看到什么。",
+  "notes": [
+    "只放**没法单向下发**的常量。能由一侧算出来再传给另一侧的(例如面板圆角经 IPC 下发)不属于这里 —— 那种本来就只有一份。"
+  ],
+  "constants": [
+    {
+      "name": "publish_partition_prefix",
+      "value": "openstudio",
+      "why": "发布账号的登录分区名(persist:<前缀>-<accountId>)。两边拼的是**同一个磁盘目录**:后端按它清理/迁移账号目录,Electron 按它创建会话分区。改了其中一个,所有已登录的发布账号的 cookie 会凭空消失,用户得重新登录每一个平台 —— 而且不会有任何报错。",
+      "implementations": [
+        { "runtime": "python", "location": "backend/app/core/db.py", "symbol": "PARTITION_PREFIX" },
+        { "runtime": "electron", "location": "electron/publish/accountViews.ts", "symbol": "PARTITION_PREFIX" }
+      ]
+    },
+    {
+      "name": "embed_header_height_px",
+      "value": 48,
+      "why": "内嵌发布视图从顶部这么多像素处开始铺,上方那条留给「登录中 · 返回」工具栏。Electron 按它定视图边界,前端按它定那条栏的高度。两者不等就会露出一条缝,缝里是 App 自己的顶栏 —— 看着像画面穿帮,而不像一个 bug,所以很容易被当成本来就长这样。",
+      "implementations": [
+        { "runtime": "electron", "location": "electron/publish/types.ts", "symbol": "EMBED_HEADER_HEIGHT" },
+        { "runtime": "frontend", "location": "frontend/src/app/App.tsx", "symbol": "PUBLISH_BAR_HEIGHT" }
+      ]
+    }
+  ]
+}

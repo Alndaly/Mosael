@@ -5,7 +5,9 @@
 模型、上一轮失败了,这些时候都没有新的一轮可以回报。挂在消息 payload 上等于"必须先成功跑一轮
 才看得到",而想知道"还能聊多久"的时刻恰恰在那之前。
 
-两份实现必须保持同一套锚点规则,所以这里逐条对齐 compaction.ts,改一处就要改另一处:
+两份实现必须保持同一套锚点规则。**这件事由 contracts/context-meter-cases.json 钉住**,
+sidecar 的 test/context-meter.parity.test.mjs 跑同一份语料 —— 早先这里只写着「改一处就要改
+另一处」,而它没做到:后端补了 cacheRead,sidecar 那份没跟上。规则是:
 
   1. 以最近一条带 usage 的 assistant 消息为锚,取它的 input+output —— 那是供应商上次
      **实际看到**的量,比我们估算准得多;

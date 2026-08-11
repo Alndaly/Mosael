@@ -99,8 +99,12 @@ export function App() {
   );
 }
 
+/** 这条工具栏的高度。**内嵌发布视图正是从这个像素处开始铺**(Electron 侧的
+ *  EMBED_HEADER_HEIGHT),两者不等就会露出一条缝、缝里是 App 自己的顶栏。
+ *  由 contracts/shared-constants.json 钉住。 */
+export const PUBLISH_BAR_HEIGHT = 48;
+
 /** Electron 内嵌发布视图可见时的顶部浏览器工具栏:后退/前进/刷新 + 地址栏 + 返回 Open Studio。
- *  内嵌视图从 48px 处铺开,这条必须恰好 48px 高,否则中间露出 App 顶栏穿帮。
  *  条底可拖窗(-webkit-app-region: drag),控件各自 no-drag。 */
 function PublishViewBar() {
   const t = useI18n();
@@ -126,7 +130,9 @@ function PublishViewBar() {
   };
 
   return (
-    <div className="fixed inset-x-0 top-0 z-[200] flex h-12 items-center gap-2 border-b border-border-strong bg-panel px-2.5 [-webkit-app-region:drag] supports-[backdrop-filter]:bg-[var(--glass-chrome)] supports-[backdrop-filter]:[-webkit-backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[backdrop-filter:blur(14px)_saturate(1.4)] [.is-desktop.is-mac_&]:pl-[88px]">
+    <div
+      style={{ height: PUBLISH_BAR_HEIGHT }}
+      className="fixed inset-x-0 top-0 z-[200] flex items-center gap-2 border-b border-border-strong bg-panel px-2.5 [-webkit-app-region:drag] supports-[backdrop-filter]:bg-[var(--glass-chrome)] supports-[backdrop-filter]:[-webkit-backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[backdrop-filter:blur(14px)_saturate(1.4)] [.is-desktop.is-mac_&]:pl-[88px]">
       <div className="[-webkit-app-region:no-drag] inline-flex items-center gap-0.5">
         <button
           type="button"

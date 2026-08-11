@@ -12,18 +12,42 @@ export type Transform = {
   keyframes?: Keyframe[];
 };
 
+/** 变换的默认值与合法范围 —— **和后端是同一份**,由 contracts/transform-cases.json 钉住
+ *  (后端在 domain/sequences/operations.TRANSFORM_BOUNDS)。
+ *
+ *  此前这里一处都不钳,而后端钳:同一个 clip,预览按 scale=20 放大、导出钳到 4 —— 预览和
+ *  成片是两个画面。没发作只因为唯一的写入路径先钳过一道,那是上游挡住,不是两侧一致。 */
+export const TRANSFORM_DEFAULTS = { scale: 1, x: 0, y: 0, rotation: 0, opacity: 1 } as const;
+export const TRANSFORM_BOUNDS: Record<keyof typeof TRANSFORM_DEFAULTS, [number, number]> = {
+  scale: [0.1, 4],
+  x: [-2, 2],
+  y: [-2, 2],
+  rotation: [-180, 180],
+  opacity: [0, 1],
+};
+
 export function readTransform(raw: Record<string, unknown> | undefined | null): Transform {
   const tf = raw ?? {};
   // API dicts arrive untyped ({[key]: unknown}); coerce defensively while preserving a real 0
   // (e.g. opacity: 0 is a legitimately hidden clip, so we can't use `Number(v) || fallback`).
-  const num = (key: string, fallback: number) => (typeof tf[key] === "number" ? (tf[key] as number) : fallback);
+  const num = (key: keyof typeof TRANSFORM_DEFAULTS) => {
+    const fallback = TRANSFORM_DEFAULTS[key];
+    const got = tf[key];
+    // 数字字符串按数字读(写入路径存 float,出现字符串说明是别处写进来的 —— 能读回来就别丢);
+    // **布尔不是数字**:`Number(true) === 1` 会把片段挪到画面外。
+    const value =
+      typeof got === "number" ? got : typeof got === "string" && got.trim() !== "" ? Number(got) : NaN;
+    if (!Number.isFinite(value)) return fallback;
+    const [lo, hi] = TRANSFORM_BOUNDS[key];
+    return Math.max(lo, Math.min(hi, value));
+  };
   const keyframes = Array.isArray(tf.keyframes) ? (tf.keyframes as Keyframe[]) : undefined;
   return {
-    scale: num("scale", 1),
-    x: num("x", 0),
-    y: num("y", 0),
-    rotation: num("rotation", 0),
-    opacity: num("opacity", 1),
+    scale: num("scale"),
+    x: num("x"),
+    y: num("y"),
+    rotation: num("rotation"),
+    opacity: num("opacity"),
     ...(keyframes ? { keyframes } : {}),
   };
 }

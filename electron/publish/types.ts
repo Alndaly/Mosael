@@ -18,7 +18,8 @@ export type TaskStatus =
   | "failed";
 
 // 内嵌视图从顶部这么多像素处开始铺(上方留给「登录中·返回」条)。必须与 PublishViewBar 的
-// 高度一致(h-12 = 48px),否则中间空档会露出 App 自己的顶栏,看着穿帮。
+// 高度一致,否则中间空档会露出 App 自己的顶栏,看着穿帮。
+// 由 contracts/shared-constants.json 钉住(前端那份是 App.tsx 的 PUBLISH_BAR_HEIGHT)。
 /**
  * 实时视图通道(IPC `browser:frame`)的线上格式。
  *

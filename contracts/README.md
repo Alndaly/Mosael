@@ -69,6 +69,37 @@ sidecar 那份没跟上。开着 prompt caching 时 `input` 只剩新增的一�
 契约还顺带抓出第二处:Python 的 `json.dumps` 默认在冒号后加空格、JS 的 `JSON.stringify` 不加,
 每个工具入参都系统性差出几个字符。**靠注释提醒对方不是机制。**
 
+### `transform-cases.json` —— 片段变换契约
+
+「一份 `clip.transform` 读出来是什么(默认、钳制、垃圾值怎么退),关键帧在某进度处采样成什么。」
+
+| 实现 | 位置 | 测试 |
+| --- | --- | --- |
+| 预览 | `frontend/src/features/editor/TransformOverlay.ts` + `keyframes.ts` | `transform.parity.test.ts` |
+| 导出 | `backend/app/media/render_plan.py` + `render_executor._kf_sample` | `backend/tests/test_transform_parity.py` |
+
+**建立契约时它已经是四份互不相同的答案**:写入钳到 `scale≤4`、导出读取钳到 `scale≤10`、
+关键帧那份 `rotation` 允许 ±3600,而预览**一处都不钳**、数字字符串还会静默退回默认值。
+写入那份最严,所以另外几份从来没咬到过 —— 但那是「上游恰好挡住」,不是两侧一致。合法范围
+现在只有一份(`domain.sequences.operations.TRANSFORM_BOUNDS`),两侧跑同一份语料。
+
+### `shared-constants.json` —— 共享常量
+
+几个「两个运行时都要认、而谁也不拥有」的值。不一致时**都不会报错**,只会悄悄错开:发布账号的
+登录分区前缀(不一致 = 所有平台的登录态凭空消失)、内嵌视图顶部偏移(不一致 = 露出一条缝,
+缝里是 App 自己的顶栏)。测试:`backend/tests/test_shared_constants_parity.py`。
+
+只放**没法单向下发**的常量 —— 能由一侧算好再传过去的(例如面板圆角经 IPC 下发)本来就只有一份。
+
+## 怎么保证"该进契约的都进了"
+
+`backend/tests/test_cross_runtime_claims_name_a_contract.py`:凡是源码里写下
+「Mirrors the frontend」「必须与…一致」「锁步一致」这类话的地方,**必须在同一段注释里点名
+`contracts/xxx.json`**,否则 CI 红。
+
+它挡不住有人换一个全新说法 —— 这是一条措辞扫描,不是定理。但七处历史证据里,作者**每一次
+都自己写下了这句话**,只是没人负责去查。它把"得有人记得"降级成了"得有人换个词"。
+
 ## 改语义的正确顺序
 
 1. **先改 `contracts/*.json`**

@@ -875,6 +875,7 @@ def compact_session_context(db: Session, session: AgentSession, user: User) -> d
 
 #: 目录查不到、也没手动设时的窗口。**必须与 sidecar 的 FALLBACK_CONTEXT_WINDOW 一致** ——
 #: 运行时压缩用的就是那个数,界面显示另一个数会让水位和实际行为对不上。
+#: 由 contracts/context-meter-cases.json 钉住,两侧测试跑同一份语料。
 FALLBACK_CONTEXT_WINDOW = 32000
 
 

@@ -418,7 +418,8 @@ def _kf_sample(points: tuple[tuple[float, float], ...], base: float, t: float) -
 def _text_overlay_dialogues(item: "TextOverlayItem", w: int, h: int) -> list[str]:
     """一条花字 → 一条或多条 ASS Dialogue。静态时 \\an5+\\pos 单条;打了关键帧时按所有属性的
     关键帧时间点切段,每段一条:位置用 \\move 线性,缩放/旋转/透明度取段首值再用 \\t 渐变到段末,
-    拼接成分段线性动画——与预览 sampleTransform(同为分段线性、端点保持)锁步一致。"""
+    拼接成分段线性动画——与预览 sampleTransform(同为分段线性、端点保持)锁步一致。
+    由 contracts/transform-cases.json 钉住,前端 transform.parity.test.ts 跑同一份语料。"""
     tf, st = item.transform, item.style
     x_pts, y_pts = tf.keyed("x"), tf.keyed("y")
     s_pts, r_pts, o_pts = tf.keyed("scale"), tf.keyed("rotation"), tf.keyed("opacity")
@@ -529,6 +530,8 @@ def _escape_filter_path(path: Path) -> str:
 
 def _subtitle_overlay_pos(style, pw: int, ph: int, w: int, h: int) -> tuple[int, int]:
     """字幕 PNG 左上角坐标:水平居中 + 按 position/offset 竖直定位(镜像预览 subtitleCss)。
+
+    由 contracts/subtitle-cases.json 钉住,前端 subtitleStyle.parity.test.ts 跑同一份语料。
     offset 是画幅高百分比;center 位置里 offset 是相对元素高(与前端 translate 的 % 语义一致)。"""
     x = max(0, (w - pw) // 2)
     off = style.offset / 100.0
