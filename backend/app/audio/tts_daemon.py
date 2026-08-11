@@ -48,6 +48,8 @@ class _Worker:
         #: 511 秒,比闲置超时还长,只看时间戳会把一个正在干活的进程当成闲置的杀掉
         #: (真机第一次验证就死在这儿)。
         self.busy = False
+        #: 是被看门狗杀的,还是自己死的。两者给用户的话不一样。
+        self.timed_out = False
         self.process = subprocess.Popen(
             [python, worker_path, "--serve"],
             stdin=subprocess.PIPE,
@@ -62,11 +64,24 @@ class _Worker:
         threading.Thread(target=self._drain_stderr, daemon=True).start()
 
     def _drain_stderr(self) -> None:
+        """把子进程的 stderr 一直读空。
+
+        **这个线程死了就是死锁**:没人读,管道写满(约 64KB),子进程卡在 write 上永远不返回
+        —— 正是 core/child_process 开头记的那个"同一个错误在四个地方各犯一次"。所以它必须
+        扛得住一切:子进程写什么都可能(非法 UTF-8、二进制),而没人 join 它、没人会发现它没了。
+        """
         assert self.process.stderr is not None
-        for line in self.process.stderr:
-            text = line.rstrip()
-            if text:
-                logger.debug("[%s worker] %s", self.engine, text[:400])
+        try:
+            for line in self.process.stderr:
+                text = line.rstrip()
+                if text:
+                    logger.debug("[%s worker] %s", self.engine, text[:400])
+        except Exception as exc:  # noqa: BLE001 — 排空比读懂重要
+            logger.warning("%s 的 stderr 读不下去了(%s),继续排空以免子进程卡死", self.engine, exc)
+            try:
+                self.process.stderr.detach().read()  # 只丢弃,不解码
+            except Exception:  # noqa: BLE001
+                logger.debug("%s 的 stderr 已经关了", self.engine)
 
     @property
     def alive(self) -> bool:
@@ -85,7 +100,25 @@ class _Worker:
         self.process.stdin.write(json.dumps(payload, ensure_ascii=False) + "\n")
         self.process.stdin.flush()
 
-        deadline = time.monotonic() + timeout
+        # **超时靠杀进程兑现,不靠循环里检查。** `for line in stdout` 阻塞在 readline 上:
+        # worker 活着却不说话时(卡在一次下载、卡在 torch 的某个锁上),这个循环永远不返回,
+        # 于是任务永远不失败、busy 永远为真、TTS_SLOTS 的名额被一直占着 —— 之后所有配音
+        # 永久排队。看门狗到点就 kill,readline 随即读到 EOF,走下面那条明确的错误路径。
+        watchdog = threading.Timer(timeout, self._kill_for_timeout)
+        watchdog.daemon = True
+        watchdog.start()
+        try:
+            return self._read_until_done(on_progress)
+        finally:
+            watchdog.cancel()
+
+    def _kill_for_timeout(self) -> None:
+        logger.warning("%s 的合成进程 %ss 没有回音,杀掉", self.engine, DEFAULT_TIMEOUT_SECONDS)
+        self.timed_out = True
+        self.kill()
+
+    def _read_until_done(self, on_progress: Callable[[dict], None] | None) -> dict:
+        assert self.process.stdout is not None
         for line in self.process.stdout:
             if not line.startswith(EVENT_PREFIX):
                 text = line.rstrip()
@@ -106,12 +139,12 @@ class _Worker:
                 self.busy = False
                 return event
             logger.debug("未知事件:%s", event)
-            if time.monotonic() > deadline:
-                break
         # 走到这里 = stdout 关了(进程死了)或超时。**最坏的失败是没有回音** ——
         # 那看起来和"还在跑"一模一样,所以必须变成一个明确的错误。
         self.busy = False
         self.kill()
+        if self.timed_out:
+            raise RuntimeError("合成超时,没有回音 —— 进程已被终止")
         raise RuntimeError("合成进程中途退出,没有给出结果")
 
     def kill(self) -> None:
@@ -198,14 +231,23 @@ class WorkerPool:
             return worker
 
     def _reap_idle(self) -> None:
+        """闲置回收。**一次意外不能让它死掉** —— 它一死,闲置的十几 GB 就再也回不来,
+        而没有任何东西会变红:没人 join 它,traceback 打到 stderr 就完了。"""
         while not self._stop.wait(1.0):
-            cutoff = time.monotonic() - self._idle_seconds
-            with self._lock:
-                stale = [key for key, w in self._workers.items() if not w.busy and w.last_used < cutoff]
-                dropped = [self._workers.pop(key) for key in stale]
-            for worker in dropped:
-                logger.info("%s 的合成进程闲置超时,放掉(把内存还回去)", worker.engine)
-                worker.kill()
+            try:
+                self._reap_once()
+            except Exception:  # noqa: BLE001 — 这一轮出错就跳过这一轮,别把线程赔进去
+                logger.exception("闲置回收这一轮出错,跳过")
+
+    def _reap_once(self) -> None:
+        cutoff = time.monotonic() - self._idle_seconds
+        with self._lock:
+            stale = [key for key, w in self._workers.items()
+                     if not getattr(w, "busy", False) and getattr(w, "last_used", 0.0) < cutoff]
+            dropped = [self._workers.pop(key) for key in stale]
+        for worker in dropped:
+            logger.info("%s 的合成进程闲置超时,放掉(把内存还回去)", getattr(worker, "engine", "?"))
+            worker.kill()
 
 
 #: 进程级的那一个。合成本来就被 TTS_SLOTS 串行化,不需要每个调用方各建一个池。
