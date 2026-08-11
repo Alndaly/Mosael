@@ -362,12 +362,12 @@ def delete_memory(memory_id: str, db: DbSession, user: CurrentUser) -> None:
 
 
 @router.get("/agent/skills", response_model=list[AgentSkillOut])
-def get_agent_skills(db: DbSession) -> list[dict]:
+def get_agent_skills(db: DbSession, user: CurrentUser) -> list[dict]:
     return list_agent_skills(db, user.id)
 
 
 @router.get("/agent/manifest", response_model=AgentManifestOut)
-def get_agent_manifest(db: DbSession) -> AgentManifestOut:
+def get_agent_manifest(db: DbSession, user: CurrentUser) -> AgentManifestOut:
     return AgentManifestOut(
         app="open-studio",
         version=app_version(),
