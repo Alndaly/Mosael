@@ -11,7 +11,8 @@ from fastapi.testclient import TestClient
 from app.ai.agent.host import wait_for_idle_turns
 from app.domain.agent.autopilot import wait_for_idle_autopilot
 from app.core.config import settings
-from app.core.db import Base, engine, init_db
+from app.core.db import Base, engine
+from app.db.migrations import init_db
 from app.core.worker_key import WORKER_KEY_HEADER, current_worker_key, issue_worker_key
 from app.main import app
 

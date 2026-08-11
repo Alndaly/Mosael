@@ -168,7 +168,8 @@ def test_the_migration_hands_existing_keys_to_the_deployment_admin() -> None:
     而且只有他能用;别人各配各的(没有"共享钥匙"这回事)。"""
     from sqlalchemy import text
 
-    from app.core.db import _migrate_provider_credentials, engine
+    from app.core.db import engine
+    from app.db.migrations import _migrate_provider_credentials
 
     admin, mate = _deployment_admin_and_member()
     profile_id = _connection(admin)
@@ -199,7 +200,8 @@ def test_the_migration_adds_missing_columns_to_an_existing_credential_table() ->
     """
     from sqlalchemy import text
 
-    from app.core.db import _migrate_provider_credentials, engine
+    from app.core.db import engine
+    from app.db.migrations import _migrate_provider_credentials
 
     admin, _mate = _deployment_admin_and_member()
     profile_id = _connection(admin)

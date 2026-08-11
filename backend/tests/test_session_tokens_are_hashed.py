@@ -58,7 +58,8 @@ def test_the_credential_still_works() -> None:
 
 def test_an_old_plaintext_row_is_migrated_in_place() -> None:
     """老库里那些明文行要就地哈希掉,而且人不掉线 —— 他手上那串还是原来那串。"""
-    from app.core.db import _migrate_hash_session_tokens, engine
+    from app.core.db import engine
+    from app.db.migrations import _migrate_hash_session_tokens
     from sqlalchemy import text
 
     client = fresh_client()
@@ -78,7 +79,7 @@ def test_an_old_plaintext_row_is_migrated_in_place() -> None:
 
 def test_running_the_migration_twice_does_not_double_hash() -> None:
     """迁移会被每次启动跑一遍。哈希两次的话,所有人一次性掉线。"""
-    from app.core.db import _migrate_hash_session_tokens
+    from app.db.migrations import _migrate_hash_session_tokens
 
     client = fresh_client()
     before = _stored_tokens()

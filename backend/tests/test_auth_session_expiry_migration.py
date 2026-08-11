@@ -17,7 +17,8 @@ from sqlalchemy import text
 
 from app.core.config import LOGIN_SESSION_TTL
 from app.core.tokens import token_digest
-from app.core.db import _migrate_auth_session_expiry, engine
+from app.core.db import engine
+from app.db.migrations import _migrate_auth_session_expiry
 from tests.util import fresh_client
 
 

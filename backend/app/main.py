@@ -47,7 +47,8 @@ from app.core.config import settings
 from app.api.deps import require_worker_key
 from app.core.logging import configure_logging
 from app.core.worker_key import issue_worker_key
-from app.core.db import SessionLocal, init_db
+from app.core.db import SessionLocal
+from app.db.migrations import init_db
 
 logger = logging.getLogger(__name__)
 from app.core.permissions import get_current_user
@@ -114,8 +115,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 def _prepare_network() -> None:
     """把库里的出站代理设置装进本进程的环境变量,后端自己的 httpx 调用随即生效。
 
-    放在这里而不是 init_db:`core.db` 去 import 领域层会形成
-    core.db ⇄ db.models ⇄ domain.network 的环(分层测试会拦)。启动装配本来就是组装根的事。
+    放在这里而不是 init_db:**这不是迁移,是启动装配** —— 它把库里已有的设置装进本进程的
+    环境,每次启动都要做一遍,而迁移是"把老数据改成新形状",跑过就不该再跑。组装根本来就是
+    干这个的。(早先的理由写的是"core.db 不能 import 领域层"——迁移搬去 app/db/migrations
+    之后那条已经不成立了,但结论不变。)
 
     顺带给 v0.5.0 已经建过的空行补上默认绕过列表 —— 列默认值只对新建行生效,而那批行是
     在有默认值之前建的。只在用户还没配过代理时补,填过就不动他的。

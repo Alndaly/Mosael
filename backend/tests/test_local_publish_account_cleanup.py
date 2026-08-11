@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from sqlalchemy import text
 
-from app.core.db import _migrate_drop_local_publish_accounts, engine
+from app.core.db import engine
+from app.db.migrations import _migrate_drop_local_publish_accounts
 from tests.util import fresh_client
 
 

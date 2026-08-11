@@ -189,7 +189,8 @@ def test_existing_rows_stay_visible_after_the_migration() -> None:
     迁移给每一条已存在的记录建一行「共享给它当前所在的工作区」,所以行为完全一致;
     **从此以后新建的默认私有**。
     """
-    from app.core.db import _migrate_resource_ownership, engine
+    from app.core.db import engine
+    from app.db.migrations import _migrate_resource_ownership
     from sqlalchemy import text
 
     owner, workspace, mate = _team()
@@ -206,7 +207,8 @@ def test_existing_rows_stay_visible_after_the_migration() -> None:
 
 
 def test_the_migration_is_idempotent() -> None:
-    from app.core.db import _migrate_resource_ownership, engine
+    from app.core.db import engine
+    from app.db.migrations import _migrate_resource_ownership
     from sqlalchemy import text
 
     owner, workspace, _mate = _team()

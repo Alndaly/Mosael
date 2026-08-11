@@ -46,7 +46,8 @@ def test_the_env_var_only_seeds_the_first_row(monkeypatch) -> None:
 
     不做"两边都读":那样一个部署会同时有两个答案,而谁赢取决于代码里的顺序。
     """
-    from app.core.db import _migrate_deployment_config, engine
+    from app.core.db import engine
+    from app.db.migrations import _migrate_deployment_config
     from sqlalchemy import text
 
     admin = fresh_client()

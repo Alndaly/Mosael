@@ -181,7 +181,7 @@ def test_an_unreadable_secret_reads_as_absent_instead_of_garbage(monkeypatch) ->
 
 def test_the_migration_encrypts_what_is_already_there() -> None:
     """老库里躺着的明文得被就地加密 —— 升级之后盘上不该还留着看得懂的密钥。"""
-    from app.core.db import _migrate_encrypt_secrets
+    from app.db.migrations import _migrate_encrypt_secrets
 
     client = fresh_client()
     client.post("/api/workspaces", json={"name": "W"})
@@ -205,7 +205,7 @@ def test_the_migration_encrypts_what_is_already_there() -> None:
 
 def test_the_migration_is_idempotent() -> None:
     """跑两次不该把密文再加密一层。"""
-    from app.core.db import _migrate_encrypt_secrets
+    from app.db.migrations import _migrate_encrypt_secrets
 
     client = fresh_client()
     client.post("/api/workspaces", json={"name": "W"})

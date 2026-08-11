@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.core.db import PARTITION_PREFIX, SessionLocal, _backfill_browser_pool
+from app.core.db import PARTITION_PREFIX, SessionLocal
+from app.db.migrations import _backfill_browser_pool
 from app.db.models import BrowserProfile, BrowserSession, PublishAccount, User, Workflow
 from app.domain import browser
 from app.domain.publish import create_account

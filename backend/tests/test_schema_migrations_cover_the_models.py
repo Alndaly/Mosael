@@ -29,7 +29,7 @@ BASELINE = pathlib.Path(__file__).parent / "schema_baseline.json"
 
 def _added_by_migrations() -> set[tuple[str, str]]:
     """db.py 里所有 `ALTER TABLE <表> ADD COLUMN <列>`。"""
-    source = pathlib.Path("app/core/db.py").read_text()
+    source = pathlib.Path("app/db/migrations.py").read_text(encoding="utf-8")
     pattern = re.compile(r"ALTER TABLE\s+(?:\{table\}|(\w+))\s+ADD COLUMN\s+(\w+)", re.IGNORECASE)
     out: set[tuple[str, str]] = set()
     for table, column in pattern.findall(source):
@@ -58,7 +58,7 @@ def test_every_model_column_is_reachable_on_an_existing_database() -> None:
     assert not unreachable, (
         "这些列只存在于模型里 —— 新装的机器有,升级的机器没有,后端会起不到一半就炸:\n  "
         + "\n  ".join(sorted(unreachable))
-        + "\n给它们在 app/core/db.py 里补一条 ADD COLUMN 迁移(参考 _migrate_job_actor)。"
+        + "\n给它们在 app/db/migrations.py 里补一条 ADD COLUMN 迁移(参考 _migrate_job_actor)。"
     )
 
 

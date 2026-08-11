@@ -147,8 +147,8 @@ def test_both_migrations_run_at_startup() -> None:
     """它们得**有人叫** —— 只写一个函数而没人调用,和没写一样。"""
     import inspect
 
-    from app.core import db
+    from app.db import migrations
 
-    source = inspect.getsource(db)
+    source = inspect.getsource(migrations)
 
     assert "migrate_shared_venv" in source, "启动时没有人跑这两个迁移"

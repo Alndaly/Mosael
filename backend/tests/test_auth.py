@@ -3,7 +3,8 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from app.core.db import Base, engine, init_db
+from app.core.db import Base, engine
+from app.db.migrations import init_db
 from app.core.security import hash_password
 from app.main import app
 from tests.util import PASSWORD, fresh_client, second_client
