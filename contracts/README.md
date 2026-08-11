@@ -49,6 +49,26 @@
 后端那份的注释就写着「镜像预览 subtitleCss」。**"靠注释提醒对方"不是机制。** 建立契约时两侧恰好还是
 一致的,所以这次没有换来 bug —— 它防的是下一次。
 
+### `context-meter-cases.json` —— 上下文水位契约
+
+「一组 pi 消息占了多少 token。」
+
+| 实现 | 位置 | 测试 |
+| --- | --- | --- |
+| 决定压不压 | `agent-sidecar/src/compaction.ts` | `test/context-meter.parity.test.mjs` |
+| 显示还能聊多久 | `backend/app/domain/context_meter.py` | `backend/tests/test_context_meter_parity.py` |
+
+**为什么不共用一份实现**:压缩发生在 Node 侧的 pi 循环里,展示发生在 Python 侧的 HTTP 响应里,
+中间隔着一次进程边界;而水位要在「还没开口」时就能看(打开旧会话、刚换模型、上一轮失败),
+那些时刻根本没有新的一轮可以回报。
+
+**建立契约时它已经坏了**。`context_meter.py` 的模块注释写着「两份实现必须保持同一套锚点规则,
+改一处就要改另一处」—— 而它没做到:后端补上了 `cacheRead`(缓存命中的部分照样占窗口),
+sidecar 那份没跟上。开着 prompt caching 时 `input` 只剩新增的一小段、绝大部分记在 `cacheRead` 上,
+于是 sidecar 看到的水位只有真实值的零头:**界面显示 90%,压缩迟迟不触发,直到某一轮直接超窗失败**。
+契约还顺带抓出第二处:Python 的 `json.dumps` 默认在冒号后加空格、JS 的 `JSON.stringify` 不加,
+每个工具入参都系统性差出几个字符。**靠注释提醒对方不是机制。**
+
 ## 改语义的正确顺序
 
 1. **先改 `contracts/*.json`**

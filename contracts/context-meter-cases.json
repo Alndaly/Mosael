@@ -1,0 +1,84 @@
+{
+  "contract": "context-meter",
+  "version": 1,
+  "readme": "contracts/README.md",
+  "description": "上下文水位:一组 pi 消息占了多少 token。sidecar 用它决定**压不压**,后端用它在界面上显示**还能聊多久**。两边算出不同的数,就会出现「水位显示 90% 而压缩迟迟不触发」。后端 backend/tests/test_context_meter_parity.py 与 sidecar test/context-meter.parity.test.mjs 跑同一份语料。",
+  "notes": [
+    "锚点规则:从后往前找**最近一条带 usage 的 assistant 消息**;它的 usage 就是供应商上次实际看到的量,锚之后的消息才需要估算;一条 usage 都没有就整段估算。",
+    "usage 里 input/output 都为空(或都是 0)的不算锚 —— 那种消息说明不了供应商看到了多少。",
+    "语料里的文本刻意只用 BMP 字符(ASCII 与常用汉字):Python 的 len() 数码点、JS 的 .length 数 UTF-16 码元,两者只在非 BMP(emoji、罕用字)上分叉。那是一个估算器可以接受的近似,写进契约只会逼两侧互相迁就,所以不放进来 —— 与 ADR-0004 把调色留在契约之外是同一类取舍。"
+  ],
+  "constants": {
+    "chars_per_token": 3.5,
+    "fallback_context_window": 32000
+  },
+  "cases": [
+    {
+      "name": "empty",
+      "why": "没有消息就是 0,不是抛错。",
+      "messages": [],
+      "context_tokens": 0
+    },
+    {
+      "name": "no-usage-anywhere",
+      "why": "首轮、或供应商不回报用量时整段估算 —— 两侧必须用同一个 chars_per_token 和同一个向上取整。",
+      "messages": [
+        { "role": "user", "content": "1234567" },
+        { "role": "assistant", "content": "12345678901234" }
+      ],
+      "context_tokens": 6
+    },
+    {
+      "name": "anchor-is-the-last-assistant-with-usage",
+      "why": "锚之前的消息一概不再估算 —— 它们已经含在供应商回报的数字里了。抄成「从头累加」会把长对话越算越离谱。",
+      "messages": [
+        { "role": "user", "content": "这是一段很早以前的提问,不该被再数一遍" },
+        { "role": "assistant", "content": "早期回复", "usage": { "input": 100, "output": 20 } },
+        { "role": "user", "content": "后来又问了一句" },
+        { "role": "assistant", "content": "后来的回复", "usage": { "input": 500, "output": 40 } }
+      ],
+      "context_tokens": 540
+    },
+    {
+      "name": "cache-read-counts-toward-the-window",
+      "why": "**缓存命中的部分照样占窗口。** 它在计价上另算(便宜十倍),但「还能装多少」问的是占地方。开了 prompt caching 之后 input 只剩新增的一小段、绝大部分记在 cacheRead 上 —— 漏掉它,水位会系统性偏乐观,压缩迟迟不触发,最后某一轮直接超窗失败。",
+      "messages": [
+        { "role": "user", "content": "问题" },
+        { "role": "assistant", "content": "回答", "usage": { "input": 300, "output": 50, "cacheRead": 12000 } }
+      ],
+      "context_tokens": 12350
+    },
+    {
+      "name": "messages-after-the-anchor-are-estimated",
+      "why": "锚之后新增的用户提问与工具结果还没被供应商看到过,只能估。",
+      "messages": [
+        { "role": "assistant", "content": "锚", "usage": { "input": 1000, "output": 0 } },
+        { "role": "user", "content": "1234567" }
+      ],
+      "context_tokens": 1002
+    },
+    {
+      "name": "empty-usage-is-not-an-anchor",
+      "why": "usage 存在但 input/output 全为 0,说明不了供应商看到了多少 —— 继续往前找,找不到就整段估算。",
+      "messages": [
+        { "role": "user", "content": "1234567" },
+        { "role": "assistant", "content": "12345678901234", "usage": { "input": 0, "output": 0 } }
+      ],
+      "context_tokens": 6
+    },
+    {
+      "name": "tool-payloads-count",
+      "why": "工具的入参与结果往往是最占地方的那部分,不能因为它不是纯文本就漏算。顺带钉住 JSON 的写法:Python 的 json.dumps 默认在冒号后加一个空格,JS 的 JSON.stringify 不加 —— 不统一的话每个入参都会系统性差出几个字符。",
+      "messages": [
+        {
+          "role": "assistant",
+          "content": [
+            { "type": "text", "text": "好的" },
+            { "type": "tool_use", "input": { "a": "1", "b": "2", "c": "3" } }
+          ]
+        }
+      ],
+      "context_tokens": 8
+    }
+  ]
+}

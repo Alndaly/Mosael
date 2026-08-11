@@ -25,6 +25,8 @@
 export interface Usage {
   input?: number;
   output?: number;
+  /** 缓存命中的部分。**计价另算,但照样占窗口** —— 见 contextTokens。 */
+  cacheRead?: number;
 }
 
 export interface Message {
@@ -42,7 +44,18 @@ export const KEEP_RECENT = 8;
 
 /** 没有真实计量时的每 token 字符数。中英混排的粗略经验值 —— 只用于"最近几条新增了多少",
  *  估偏一点不影响判断,真实数字下一轮就由供应商纠正回来。 */
-const CHARS_PER_TOKEN = 3.5;
+export const CHARS_PER_TOKEN = 3.5;
+
+/** 端点没告诉我们上下文窗口时的回退。
+ *
+ * 取**小**值是刻意的:这个数只用于决定何时压缩上下文,估大了会把超窗的请求原样发出去,
+ * 由服务端拒掉(用户看到的是一次失败的对话);估小了只是压缩得早一点。以前硬编 128000,
+ * 配 8k 上下文的本地模型时就是前一种。真实值由后端从供应商 /models 目录取。
+ *
+ * **和后端 `ai/agent/host.FALLBACK_CONTEXT_WINDOW` 是同一个数**,由
+ * `contracts/context-meter-cases.json` 钉住:运行时压缩用这个数,界面显示另一个数,
+ * 水位就会和实际行为对不上。 */
+export const FALLBACK_CONTEXT_WINDOW = 32000;
 
 function textOf(message: Message): string {
   const content = message.content;
@@ -79,8 +92,12 @@ export function estimateAll(messages: readonly Message[]): number {
 /**
  * 当前上下文占了多少 token。
  *
- * 以最近一条带 usage 的 assistant 消息为锚:那条 usage 的 input+output 就是供应商上次
- * 实际看到的量。锚之后的消息(新的用户提问、工具结果)才需要估算。
+ * 以最近一条带 usage 的 assistant 消息为锚:那条 usage 的 input+output+cacheRead 就是
+ * 供应商上次实际看到的量。锚之后的消息(新的用户提问、工具结果)才需要估算。
+ *
+ * 语义由 `contracts/context-meter-cases.json` 钉住,后端 `domain/context_meter.py` 跑同一份
+ * 语料 —— 这一份决定压不压,那一份显示还能聊多久,两边算出不同的数就会出现"水位 90% 而
+ * 压缩不触发"。
  *
  * 一条 usage 都没有(首轮、或供应商不回报)就整段估算。
  */
@@ -95,7 +112,10 @@ export function contextTokens(messages: readonly Message[]): number {
   }
   if (anchor < 0) return messages.reduce((sum, message) => sum + estimateTokens(message), 0);
   const usage = messages[anchor].usage!;
-  let total = (usage.input ?? 0) + (usage.output ?? 0);
+  // **cacheRead 也占窗口。** 它在计价上另算(便宜十倍),但"还能装多少"问的是占地方,两者
+  // 没有区别。开着 prompt caching 时 input 只剩新增的一小段、绝大部分记在 cacheRead 上,
+  // 漏掉它这里看到的水位就只有真实值的零头 —— 压缩迟迟不触发,直到某一轮直接超窗失败。
+  let total = (usage.input ?? 0) + (usage.output ?? 0) + (usage.cacheRead ?? 0);
   for (let i = anchor + 1; i < messages.length; i += 1) total += estimateTokens(messages[i]);
   return total;
 }

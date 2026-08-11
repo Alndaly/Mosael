@@ -26,6 +26,15 @@ from typing import Any
 CHARS_PER_TOKEN = 3.5
 
 
+def _compact(value: Any) -> str:
+    """紧凑 JSON —— **和 JS 的 `JSON.stringify` 逐字一致**。
+
+    Python 的 `json.dumps` 默认在冒号和逗号后各加一个空格,JS 不加。这里量的是"占多少字符",
+    多出来的空格会让每个工具入参都系统性偏大几个字符(契约里那条用例实测差了 2 个 token)。
+    """
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
 def _text_of(message: Any) -> str:
     if not isinstance(message, dict):
         return ""
@@ -43,9 +52,9 @@ def _text_of(message: Any) -> str:
                 else:
                     # 工具参数与结果往往是最占地方的那部分,不能漏算。
                     payload = part.get("input") or part.get("output") or part.get("result") or ""
-                    parts.append(json.dumps(payload, ensure_ascii=False) if payload else "")
+                    parts.append(_compact(payload) if payload else "")
         return " ".join(parts)
-    return "" if content is None else json.dumps(content, ensure_ascii=False)
+    return "" if content is None else _compact(content)
 
 
 def estimate_tokens(message: Any) -> int:

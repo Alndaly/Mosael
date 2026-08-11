@@ -25,6 +25,7 @@ import {
   type Message as CompactionMessage,
   SUMMARY_PROMPT,
   compact,
+  FALLBACK_CONTEXT_WINDOW,
   contextTokens,
 } from "./compaction";
 import { readOnlyTools, runSubagent, subagentToolSpec } from "./subagent.js";
@@ -124,7 +125,7 @@ async function prepareContext(
  * 取**小**值是刻意的:这个数只用于 pi 决定何时压缩上下文,估大了会把超窗的请求原样发出去,
  * 由服务端拒掉(用户看到的是一次失败的对话);估小了只是压缩得早一点。以前这里硬编 128000,
  * 配 8k 上下文的本地模型时就是前一种。真实值现在由后端从供应商 /models 目录取。 */
-const FALLBACK_CONTEXT_WINDOW = 32000;
+
 const FALLBACK_MAX_TOKENS = 4096;
 
 /** A single-provider Models collection targeting an OpenAI-compatible endpoint. */
