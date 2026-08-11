@@ -36,40 +36,32 @@ import { BrandMark } from "@/components/layout/BrandMark";
 import { RenameDialog } from "@/components/app/modals";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { MessageKey } from "@/app/messages";
+import { NAV_ITEMS, navLabelKey, type StudioView } from "@/components/layout/navLabels";
 import { cn } from "@/lib/utils";
 
-export type StudioView =
-  | "home"
-  | "media"
-  | "editor"
-  | "ai"
-  | "publish"
-  | "settings"
-  | "workflows"
-  | "scheduler"
-  | "plugins"
-  | "browser-pool"
-  | "admin";
+export type { StudioView } from "@/components/layout/navLabels";
 
-const PRIMARY_NAV: Array<{ view: StudioView; icon: React.ReactNode; labelKey: MessageKey }> = [
-  { view: "home", icon: <Home size={17} />, labelKey: "navHome" },
-  { view: "media", icon: <FolderOpen size={17} />, labelKey: "navMedia" },
-  { view: "editor", icon: <Scissors size={17} />, labelKey: "navEditor" },
-  { view: "ai", icon: <Bot size={17} />, labelKey: "navAi" },
-  { view: "publish", icon: <Rocket size={17} />, labelKey: "navPublish" },
-  { view: "settings", icon: <Settings size={17} />, labelKey: "navSettings" },
-];
+/** 图标是**侧栏**的事(面包屑不画图标),所以只有它留在这里;
+    「哪些页面、各叫什么」在 navLabels 那一份里。 */
+const ICONS: Record<StudioView, React.ReactNode> = {
+  home: <Home size={17} />,
+  media: <FolderOpen size={17} />,
+  editor: <Scissors size={17} />,
+  ai: <Bot size={17} />,
+  publish: <Rocket size={17} />,
+  settings: <Settings size={17} />,
+  workflows: <Workflow size={17} />,
+  "browser-pool": <Boxes size={17} />,
+  scheduler: <CalendarClock size={17} />,
+  plugins: <Plug size={17} />,
+  admin: <ShieldCheck size={17} />,
+};
 
-const SECONDARY_NAV: Array<{ view: StudioView; icon: React.ReactNode; labelKey: MessageKey }> = [
-  { view: "workflows", icon: <Workflow size={17} />, labelKey: "navWorkflows" },
-  { view: "browser-pool", icon: <Boxes size={17} />, labelKey: "navBrowserPool" },
-  { view: "scheduler", icon: <CalendarClock size={17} />, labelKey: "schedulerTitle" },
-  { view: "plugins", icon: <Plug size={17} />, labelKey: "pluginsTitle" },
-];
-
-/** 只对部署管理员显示的那一格。**藏起来的入口不是权限** —— 后端每条 /api/admin 路由各自把关,
- *  这里只是不给不相干的人添乱。 */
-const ADMIN_NAV = { view: "admin" as StudioView, icon: <ShieldCheck size={17} />, labelKey: "navAdmin" as MessageKey };
+const PRIMARY_NAV = NAV_ITEMS.filter((item) => item.group === "primary");
+/** admin 那一格只对部署管理员显示。**藏起来的入口不是权限** —— 后端每条 /api/admin 路由
+ *  各自把关,这里只是不给不相干的人添乱。 */
+const SECONDARY_NAV = NAV_ITEMS.filter((item) => item.group === "secondary");
+const ADMIN_NAV = NAV_ITEMS.filter((item) => item.group === "admin");
 
 /** 只有「剪辑」工作在"当前项目"语境 —— 它编辑的就是某个项目的时间线。
     其余页面的面包屑显示页面名,否则设置/插件页也挂着项目名,既不合理也容易误解。
@@ -138,9 +130,9 @@ export function AppShell({
           // 面包屑必须始终暴露"当前页面";项目语境的页面再把项目名接成第三段。
           // 早先的写法在 media/editor/ai 无项目时只显示"还没有项目",页面身份被抹掉
           // (三个项目页面看起来一模一样),这里修正。页面名是本页唯一的 h1。
-          const pageLabel = t(
-            [...PRIMARY_NAV, ...SECONDARY_NAV].find((item) => item.view === view)?.labelKey ?? "navHome",
-          );
+          // 查不到就空着,**不兜成「首页」** —— 那正是 #/admin 顶着别人名字的原因。
+          const labelKey = navLabelKey(view);
+          const pageLabel = labelKey ? t(labelKey) : "";
           const scoped = PROJECT_SCOPED_VIEWS.includes(view);
           return (
             <div className="flex min-w-0 items-center gap-[7px] text-[13px] text-muted-foreground">
@@ -229,18 +221,18 @@ export function AppShell({
             active={view === item.view}
             onClick={() => onViewChange(item.view)}
           >
-            {item.icon}
+            {ICONS[item.view]}
           </RailButton>
         ))}
         <div className="my-2 h-px w-6 bg-border" />
-        {[...SECONDARY_NAV, ...(isDeploymentAdmin ? [ADMIN_NAV] : [])].map((item) => (
+        {[...SECONDARY_NAV, ...(isDeploymentAdmin ? ADMIN_NAV : [])].map((item) => (
           <RailButton
             key={item.view}
             label={t(item.labelKey)}
             active={view === item.view}
             onClick={() => onViewChange(item.view)}
           >
-            {item.icon}
+            {ICONS[item.view]}
           </RailButton>
         ))}
         <div className="flex-1" />

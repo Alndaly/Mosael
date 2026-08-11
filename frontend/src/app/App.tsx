@@ -10,6 +10,7 @@ import { PreferencesProvider, useI18n, usePreferences } from "@/app/preferences"
 import { Toaster, toast } from "sonner";
 import { LoginView } from "@/features/auth/LoginView";
 import { AppShell, type StudioView } from "@/components/layout/AppShell";
+import { STUDIO_VIEWS } from "@/components/layout/navLabels";
 import { CommandPalette } from "@/components/layout/CommandPalette";
 import { ConfirmationCenter } from "@/components/layout/ConfirmationCenter";
 import { Button } from "@/components/ui/button";
@@ -287,13 +288,14 @@ function WorkspaceGate() {
   return <Studio workspace={workspace} workspaces={list ?? []} onSelectWorkspace={selectWorkspace} />;
 }
 
-const VALID_VIEWS: StudioView[] = ["home", "media", "editor", "ai", "publish", "settings", "workflows", "scheduler", "plugins", "browser-pool", "admin"];
+// 路由认哪些页面,和侧栏/面包屑认哪些页面,是同一件事 —— 手抄第三遍就会漏第三次。
+const VALID_VIEWS: readonly string[] = STUDIO_VIEWS;
 
 function readHash(): { view: StudioView; projectId: string | null } {
   // Hash routing survives file:// packaging — the fragment never hits HTTP.
   const raw = window.location.hash.replace(/^#\/?/, "");
   const [path, query] = raw.split("?");
-  const view = (VALID_VIEWS as string[]).includes(path) ? (path as StudioView) : "home";
+  const view = VALID_VIEWS.includes(path) ? (path as StudioView) : "home";
   const projectId = new URLSearchParams(query ?? "").get("p");
   return { view, projectId };
 }
