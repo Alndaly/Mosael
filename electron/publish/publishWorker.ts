@@ -368,8 +368,14 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
  *  导航抖动)不下线用户,保留原状态,下个 ttl 再查。 */
 async function checkAccountStatus(acc: backend.CheckAccount): Promise<void> {
   if (!views) return;
-  // 用户已开始登录接管:放弃本次复检,别和登录抢同一个视图 goto。
-  if (loginAccounts.has(acc.account_id)) return;
+  // 用户已开始登录接管:放弃本次复检,别和登录抢同一个视图 goto。放弃也要把认领时写下的
+  // checking 放回去 —— 认领了不回报,账号就挂在「检测中」出不来(与 loop 里那条同一个理由)。
+  if (loginAccounts.has(acc.account_id)) {
+    await backend
+      .patchAccount(acc.account_id, { binding_status: acc.binding_status ?? "unknown" })
+      .catch(() => undefined);
+    return;
+  }
   const platform = resolvePlatform(acc.platform).id;
   const stub: PublishTask = {
     id: `check-${acc.account_id}`,
@@ -438,8 +444,14 @@ async function loop(gen: number): Promise<void> {
     // 没有更多待发任务、且完全空闲(无发布/复检并发、前台无视图占用)时,后台静默复检一个到期账号。
     if (running.size === 0 && rechecking.size === 0 && !views?.visibleAccountId) {
       const { account } = await backend.claimCheck();
-      // 用户正在登录接管的账号跳过复检(否则抢同一个视图 goto → 空白)。
-      if (account && !loginAccounts.has(account.account_id)) {
+      // 用户正在登录接管的账号跳过复检(否则抢同一个视图 goto → 空白)。但**认领已经把它翻成
+      // checking 了** —— 跳过就等于认领了不回报,账号会挂在「检测中」直到 10 分钟的悬挂自愈。
+      // 不查就得放回去。
+      if (account && loginAccounts.has(account.account_id)) {
+        await backend
+          .patchAccount(account.account_id, { binding_status: account.binding_status ?? "unknown" })
+          .catch(() => undefined);
+      } else if (account) {
         didWork = true;
         rechecking.add(account.account_id);
         try {
@@ -502,10 +514,24 @@ export function stopPublishWorker(): void {
   onSettled = null;
 }
 
-/** 结束一次登录轮询:停定时器。若已进入新一代(stop→reactivate),共享状态归新代管,这里不碰。
- *  前台可见槽由 views.visibleAccountId 表达——登录视图留在前台(原行为),用户 Esc/返回自行收起。 */
-function endLogin(gen: number, accountId?: string): void {
+/**
+ * 结束一次登录轮询:停定时器,并且**把过渡态收干净**。
+ *
+ * openLogin 一进来就把账号写成 `checking`(界面显示「检测中」),而在此之前只有"登录成功"这一条
+ * 路把它改回去 —— 超时、用户放弃、导航失败三个出口都把它留在 checking。而 checking 不在任何认领
+ * 条件里(要等满 10 分钟的悬挂自愈),于是卡片就一直转:线上 TikTok 那条正是这样,日志里只有
+ * 反复的登录页 goto,一条 recheck start 都没有。
+ *
+ * 没登上就写回 `unknown` —— 字面意思就是「还不知道」,是此刻唯一诚实的值,而且它**立刻可被复检
+ * 认领**(claim_check 的第一个条件),下一拍就会去问出真实状态。不猜 bound,也不武断判 login_required。
+ */
+function endLogin(gen: number, accountId?: string, loggedIn = false): void {
   if (accountId) loginAccounts.delete(accountId);
+  if (accountId && !loggedIn) {
+    void backend
+      .patchAccount(accountId, { binding_status: "unknown" })
+      .catch(() => undefined); // 回写失败:下个 ttl 的复检照样会纠正
+  }
   if (gen !== generation) return;
   if (loginPollTimer) {
     clearTimeout(loginPollTimer);
@@ -582,6 +608,12 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
         endLogin(gen, accountId);
         return;
       }
+      // 用户把这个视图收起来了(返回 / 双击 Esc / 切去别的账号)= 他不打算登了。继续轮询没有意义,
+      // 而且 loginAccounts 里挂着它会让复检一直跳过这个账号 —— 状态就永远停在「检测中」。
+      if (views.visibleAccountId !== accountId) {
+        endLogin(gen, accountId);
+        return;
+      }
       let ok = false;
       try {
         ok = await adapter.checkLogin();
@@ -602,7 +634,7 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
         // 登上了 = 这个内嵌浏览器的差事办完了,自己收回去。此前它会一直挂在前台,用户得再点一次
         // 「返回 Open Studio」才能回来 —— 而他刚做完的事本来就以"回到账号池看到已登录"为终点。
         if (views?.visibleAccountId === accountId) views.hide();
-        endLogin(gen, accountId);
+        endLogin(gen, accountId, true);
         return;
       }
       loginPollTimer = setTimeout(poll, 5000);
