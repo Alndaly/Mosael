@@ -659,15 +659,15 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   if (selected && nodeTypes.data) {
     return (
       <div className="flex h-full min-h-0 flex-col items-stretch overflow-hidden p-3.5 [&>*]:shrink-0">
-        <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-1.5">
-          <button
-            type="button"
-            className="inline-flex w-fit cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-1 py-0.5 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
-            onClick={() => setSelectedId(null)}
-          >
-            <ChevronLeft size={13} /> {t("navWorkflows")}
-          </button>
-          <WorkflowEditor key={selected.id} workflow={selected} nodeTypes={nodeTypes.data} workspaceId={workspace.id} />
+        {/* 这一层给编辑器高度:页面容器是 [&>*]:shrink-0,不套 flex-1 的话画布会塌成 0。 */}
+        <div className="grid min-h-0 flex-1">
+          <WorkflowEditor
+            key={selected.id}
+            workflow={selected}
+            nodeTypes={nodeTypes.data}
+            workspaceId={workspace.id}
+            onBack={() => setSelectedId(null)}
+          />
         </div>
         {importControl}
         </div>
@@ -902,10 +902,13 @@ function WorkflowEditor({
   workflow,
   nodeTypes,
   workspaceId,
+  onBack,
 }: {
   workflow: Workflow;
   nodeTypes: WorkflowNodeType[];
   workspaceId: string;
+  /** 返回列表。**和标题同一行** —— 单独占一行会把整条工具栏挤下去(第一版就是这么做的)。 */
+  onBack: () => void;
 }) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -1610,7 +1613,16 @@ function WorkflowEditor({
   return (
     <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-1.5">
       <div className="flex flex-wrap items-center justify-between gap-2.5 px-0.5 pb-2 pt-0.5">
-        <button type="button" className="inline-flex cursor-pointer items-center gap-[9px] rounded-md border-0 bg-transparent py-[3px] pl-[3px] pr-1.5 text-left text-foreground hover:bg-secondary" onClick={() => setRenaming(true)} title={t("rename")}>
+        <button
+          type="button"
+          className="-ml-1 grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          onClick={onBack}
+          title={t("navWorkflows")}
+          aria-label={t("navWorkflows")}
+        >
+          <ChevronLeft size={16} />
+        </button>
+        <button type="button" className="mr-auto inline-flex cursor-pointer items-center gap-[9px] rounded-md border-0 bg-transparent py-[3px] pl-[3px] pr-1.5 text-left text-foreground hover:bg-secondary" onClick={() => setRenaming(true)} title={t("rename")}>
           <span className="grid h-7 w-7 place-items-center rounded-md bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary">
             <WorkflowIcon size={14} />
           </span>
