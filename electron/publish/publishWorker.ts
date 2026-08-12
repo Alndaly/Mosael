@@ -560,6 +560,16 @@ export async function openPoolLogin(opts: {
   });
 }
 
+/** 渲染层重新加载之后,把当前内嵌视图状态补播一次(见 AccountViewManager.republish)。 */
+export function republishViewState(): void {
+  views?.republish();
+}
+
+/** 内嵌视图此刻是否占着前台 —— 主进程据此决定 ⌘R 刷的是内嵌页面还是应用本身。 */
+export function embeddedViewVisible(): boolean {
+  return Boolean(views?.visibleAccountId);
+}
+
 /** 触发某账号登录:亮出其视图、打开登录页,轮询登录态并回写后端(最多 10 分钟)。 */
 export async function openLogin(accountId: string, platform: string): Promise<void> {
   if (!views) return;

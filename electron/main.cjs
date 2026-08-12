@@ -277,8 +277,25 @@ function buildAppMenu() {
     {
       label: "视图",
       submenu: [
-        { role: "reload", label: "重新加载" },
-        { role: "forceReload", label: "强制重新加载" },
+        // **⌘R 刷的是「你正在看的那一页」。** role:"reload" 永远刷主窗口,而内嵌浏览器占着前台时
+        // 用户看到的是平台页面 —— 刷掉主窗口既不符合预期,还会把渲染层重置成"没有内嵌视图"的
+        // 初始状态(顶部工具条随之消失,而原生视图还盖在窗口上)。
+        {
+          label: "重新加载",
+          accelerator: "CmdOrCtrl+R",
+          click: () => {
+            if (publish?.embeddedViewVisible?.()) publish.viewReload();
+            else BrowserWindow.getFocusedWindow()?.webContents.reload();
+          },
+        },
+        {
+          label: "强制重新加载",
+          accelerator: "Shift+CmdOrCtrl+R",
+          click: () => {
+            if (publish?.embeddedViewVisible?.()) publish.viewReload();
+            else BrowserWindow.getFocusedWindow()?.webContents.reloadIgnoringCache();
+          },
+        },
         { role: "toggleDevTools", label: "开发者工具" },
         { type: "separator" },
         { role: "resetZoom", label: "实际大小" },
@@ -345,6 +362,12 @@ function createWindow() {
   win.on("enter-full-screen", sendFullscreen);
   win.on("leave-full-screen", sendFullscreen);
   win.webContents.on("did-finish-load", sendFullscreen);
+  // 视图状态是**推的**,渲染层没法主动问。它一旦重新加载(⌘R、HMR、崩溃恢复),PublishViewBar
+  // 就回到初始的 visible:false —— 而原生视图还盖在窗口上,表现为「内嵌浏览器还在,顶部工具条没了」。
+  // 和上面的全屏状态同一个道理,补播一次。
+  win.webContents.on("did-finish-load", () => {
+    if (!win.isDestroyed()) publish?.republishViewState?.();
+  });
   // 外链(如供应商控制台"获取密钥")走系统浏览器,不在应用内开无控制的新窗口。
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url);

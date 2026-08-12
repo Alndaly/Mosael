@@ -11,6 +11,8 @@ export {
   viewBack,
   viewForward,
   viewReload,
+  republishViewState,
+  embeddedViewVisible,
   hidePublishView,
   setPanelLayout,
   closePanel,

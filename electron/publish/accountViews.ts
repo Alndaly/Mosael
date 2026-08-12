@@ -441,6 +441,18 @@ export class AccountViewManager {
     return this.visibleId;
   }
 
+  /** 把当前视图状态再播一次。
+   *
+   * 状态是**推的**(变化时 emit),渲染层没有办法主动问。于是渲染层一旦重新加载(⌘R、HMR、
+   * 崩溃恢复),它的 PublishViewBar 就回到初始的 visible:false —— 而原生视图还好端端盖在窗口上,
+   * 表现为「内嵌浏览器还在,顶部工具条没了」。主窗口 did-finish-load 时补播一次即可。
+   * 主进程里的全屏状态早就是这么做的(win.webContents.on("did-finish-load", sendFullscreen)),
+   * 这一份当时漏了。 */
+  republish(): void {
+    this.emit();
+    this.layout(); // 顺带把悬浮卡片几何也重播一次(layout 末尾会 onPanelsChanged)
+  }
+
   private visibleWebContents(): Electron.WebContents | null {
     const view = this.visibleId ? this.views.get(this.visibleId) : null;
     return this.alive(view) ? view.webContents : null;
