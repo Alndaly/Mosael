@@ -22,6 +22,7 @@ from app.domain.publish import (
     PublishDomainError,
     create_account,
     list_tasks,
+    option_specs,
     start_publish,
     task_with_status,
 )
@@ -39,6 +40,8 @@ def platforms() -> list[dict]:
             "config": meta["config"],
             "title_max": meta.get("title_max", 300),
             "short_title": meta.get("short_title", False),
+            # 平台自己的发布选项:前端照这份**自动**把控件画出来,不为每个平台写一段表单。
+            "options": option_specs(key),
         }
         for key, meta in PUBLISH_PLATFORMS.items()
     ]
@@ -146,6 +149,7 @@ def create_publish_task(body: PublishCreate, db: DbSession, user: CurrentUser) -
             tags=body.tags,
             created_by=user.id,
             short_title=body.short_title,
+            options=body.options,
         )
     except PublishDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

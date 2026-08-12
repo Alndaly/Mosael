@@ -808,6 +808,8 @@ export function createPublishTask(body: {
   description: string;
   tags: string[];
   short_title?: string;
+  /** 平台自己的发布选项(可见性等)。键与取值由 /api/publish/platforms 的 options 声明,后端校验。 */
+  options?: Record<string, unknown>;
 }): Promise<PublishTask> {
   return api<PublishTask>("/api/publish/tasks", { method: "POST", body: JSON.stringify(body) });
 }

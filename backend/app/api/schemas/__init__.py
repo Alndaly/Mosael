@@ -1526,6 +1526,22 @@ class BrowserProfileUpdate(BaseModel):
     enabled: bool | None = None
 
 
+class PublishOptionChoice(BaseModel):
+    value: str
+    label: str
+
+
+class PublishOptionSpec(BaseModel):
+    """一个平台专属发布选项的声明。**前端照它渲染控件,后端照它校验** —— 只有这一份。"""
+
+    key: str
+    label: str
+    type: Literal["enum", "bool"]
+    default: Any
+    choices: list[PublishOptionChoice] = Field(default_factory=list)
+    description: str = ""
+
+
 class PublishPlatformOut(BaseModel):
     platform: str
     label: str
@@ -1533,6 +1549,8 @@ class PublishPlatformOut(BaseModel):
     config: dict
     title_max: int = 300
     short_title: bool = False
+    #: 该平台自己的发布选项声明(可见性…)。前端照它渲染控件,别处不硬编码。
+    options: list[PublishOptionSpec] = Field(default_factory=list)
 
 
 class PublishAccountCreate(BaseModel):
@@ -1574,6 +1592,9 @@ class PublishCreate(BaseModel):
     description: str = Field(default="", max_length=5000)
     tags: list[str] = Field(default_factory=list, max_length=24)
     short_title: str = Field(default="", max_length=80)
+    #: 平台自己的发布选项(可见性等)。取值范围由 domain/publish.PLATFORM_OPTIONS 校验 —— 不认识的键
+    #: 会 422,而不是被静默丢掉(那会让用户以为自己设了公开、发出来却是私享)。
+    options: dict[str, Any] = Field(default_factory=dict)
 
 
 class PublishTaskOut(BaseModel):

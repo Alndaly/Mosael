@@ -104,7 +104,7 @@ describe("第三方授权页上,cookie 不算数", () => {
       url: "https://accounts.google.com/o/oauth2/v2/auth?client_id=tiktok",
       cookies: ["sessionid"],
     });
-    expect(await new TiktokAdapter(driver).checkLogin()).toBe(false);
+    expect(await new TiktokAdapter(driver, task).checkLogin()).toBe(false);
   });
 
   it("停在 about:blank 时同样不算数", async () => {
@@ -121,12 +121,12 @@ describe("第三方授权页上,cookie 不算数", () => {
 describe("TikTok 登录态判定", () => {
   it("登完停在 www.tiktok.com 信息流也要认得出来", async () => {
     const { driver } = fakeDriver({ url: "https://www.tiktok.com/foryou", cookies: ["sessionid"] });
-    expect(await new TiktokAdapter(driver).checkLogin()).toBe(true);
+    expect(await new TiktokAdapter(driver, task).checkLogin()).toBe(true);
   });
 
   it("**在登录页就是未登录**,残留 cookie 不能翻案", async () => {
     const { driver } = fakeDriver({ url: "https://www.tiktok.com/login", cookies: ["sessionid"] });
-    expect(await new TiktokAdapter(driver).checkLogin()).toBe(false);
+    expect(await new TiktokAdapter(driver, task).checkLogin()).toBe(false);
   });
 
   it("页面上挂着登录页的 data-e2e 标记时,同样判未登录", async () => {
@@ -135,11 +135,11 @@ describe("TikTok 登录态判定", () => {
       cookies: ["sessionid"],
       css: ['[data-e2e="login-title"], [data-e2e="channel-item"]'],
     });
-    expect(await new TiktokAdapter(driver).checkLogin()).toBe(false);
+    expect(await new TiktokAdapter(driver, task).checkLogin()).toBe(false);
   });
 
   it("没 cookie 没标志 —— 判未登录", async () => {
     const { driver } = fakeDriver({ url: "https://www.tiktok.com/foryou" });
-    expect(await new TiktokAdapter(driver).checkLogin()).toBe(false);
+    expect(await new TiktokAdapter(driver, task).checkLogin()).toBe(false);
   });
 });

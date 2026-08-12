@@ -138,6 +138,21 @@ const stringOption = (task: PublishTask, key: string): string | null => {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 };
 
+/**
+ * 平台自己的发布选项(可见性、允许评论…),取值范围由后端 PLATFORM_OPTIONS 定义并在建任务时校验,
+ * 所以这里拿到的一定是合法值。**兜底值必须取最保守的那档** —— 万一真拿不到(老任务、字段缺失),
+ * 宁可发成私享让用户去改,也不能默认公开:误发公开是收不回的。
+ */
+const enumOption = <T extends string>(task: PublishTask, key: string, fallback: T, allowed: readonly T[]): T => {
+  const value = task.platformOptions[key];
+  return typeof value === "string" && (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
+};
+
+const boolOption = (task: PublishTask, key: string, fallback: boolean): boolean => {
+  const value = task.platformOptions[key];
+  return typeof value === "boolean" ? value : fallback;
+};
+
 export class MockAdapter implements PublishAdapter {
   constructor(
     private readonly driver: PageDriver,
@@ -1451,9 +1466,11 @@ export class BilibiliAdapter implements PublishAdapter {
 export class TiktokAdapter implements PublishAdapter {
   private readonly s = SELECTORS.tiktok;
 
-  // createAdapter 统一传 (driver, task);TikTok 的文案全部走 fillTitle/fillTags 的入参,
-  // 所以这里不留 task 成员 —— 留一个没人读的字段只会让下一个人以为它有用。
-  constructor(private readonly driver: PageDriver) {}
+  // 文案走 fillTitle/fillTags 的入参,但**发布选项要从 task 上取**(可见性),所以两个都留。
+  constructor(
+    private readonly driver: PageDriver,
+    private readonly task: PublishTask,
+  ) {}
 
   async openCreatorPage(): Promise<void> {
     await this.driver.goto(this.s.uploadUrl);
@@ -1559,13 +1576,13 @@ export class TiktokAdapter implements PublishAdapter {
   }
 
   /**
-   * 把可见性设成「仅自己可见」,**设不上就不许发**。
+   * 按发布选项设可见性,**设不上就不许发**。
    *
-   * TikTok 默认 Everyone —— 自动发布一旦误发公开是收不回的(别人已经看到、可以转存)。与 YouTube
-   * 默认私享同一条理由:想公开由人到平台上改一次,代价远小于反过来。所以这里的失败必须是硬失败,
-   * 绝不能"设不上就照发"。
+   * TikTok 默认 Everyone,而我们的兜底是「仅自己可见」—— 自动发布一旦误发公开是收不回的(别人
+   * 已经看到、可以转存)。所以这里的失败必须是硬失败,绝不能"设不上就照发":用户要的是私享而
+   * 页面还停在 Everyone,照发就等于把它公开了。
    */
-  private async selectOnlyMe(): Promise<void> {
+  private async selectVisibility(): Promise<void> {
     // 上传页会弹「是否开启自动内容检查」之类的模态,挡住真实点击。先关掉(点取消,不替用户改设置)。
     for (const text of this.s.dismissTexts) {
       await clickTextPreferTrusted(this.driver, text, { exact: true }).catch(() => undefined);
@@ -1586,7 +1603,9 @@ export class TiktokAdapter implements PublishAdapter {
       });
     });
     await wait(900);
-    for (const text of this.s.onlyMeTexts) {
+    const visibility = enumOption(this.task, "visibility", "private", ["private", "friends", "public"] as const);
+    const wanted = this.s.visibilityTexts[visibility];
+    for (const text of wanted) {
       const picked = await clickTextPreferTrusted(this.driver, text, {
         exact: true,
         selector: this.s.visibilityOption,
@@ -1599,17 +1618,17 @@ export class TiktokAdapter implements PublishAdapter {
     // 回读校验:控件上显示的必须已经是「仅自己可见」。这一步不能省 —— 点没点中和设没设上是两件事,
     // 而它们的区别就是"公开发了一条"。
     const shown = ((await this.driver.cssValue(this.s.visibilityValue)) ?? "").replace(/\s+/g, " ");
-    if (!this.s.onlyMeTexts.some((text) => shown.includes(text))) {
-      await plogPageState("TikTok visibility not set to private:", this.driver);
+    if (!wanted.some((text) => shown.includes(text))) {
+      await plogPageState("TikTok visibility not applied:", this.driver);
       throw new Error(
-        `TikTok visibility is still ${JSON.stringify(shown.slice(0, 60))}; refusing to post publicly.`,
+        `TikTok visibility is still ${JSON.stringify(shown.slice(0, 60))}, wanted ${visibility}; refusing to post.`,
       );
     }
-    plog("tiktok 可见性已设为仅自己可见");
+    plog("tiktok 可见性:", visibility);
   }
 
   async submit(): Promise<void> {
-    await this.selectOnlyMe();
+    await this.selectVisibility();
     if (!(await this.driver.waitCssEnabled(this.s.postButton, ACTION_TIMEOUT).catch(() => false))) {
       // 结构选择器失配时退回文案(界面语言跟账号走,中英各试一遍)。
       for (const text of this.s.postTexts) {
@@ -1815,10 +1834,12 @@ export class YoutubeAdapter implements PublishAdapter {
   }
 
   async submit(): Promise<void> {
-    // 「面向儿童」是必答项,不选就走不到下一步。这里选「否」—— 素材来自用户自己的时间线,
-    // 由他在 YouTube 上按实际情况改,而默认"是"会关掉评论等一堆功能。
-    if (await this.driver.cssVisible(this.s.notMadeForKids, 5_000)) {
-      await this.driver.clickCss(this.s.notMadeForKids).catch(() => undefined);
+    // 「面向儿童」是必答项,不选就走不到下一步。默认「否」,但由发布选项决定 —— 选「是」会关掉
+    // 评论等一批功能,那是内容属性,该由用户按素材实际情况定,不是我们替他定。
+    const forKids = boolOption(this.task, "made_for_kids", false);
+    const kidsRadio = forKids ? this.s.madeForKids : this.s.notMadeForKids;
+    if (await this.driver.cssVisible(kidsRadio, 5_000)) {
+      await this.driver.clickCss(kidsRadio).catch(() => undefined);
       await wait(300);
     }
     // 详情 → 视频元素 → 检查 → 可见性,共三次「下一步」。
@@ -1829,12 +1850,25 @@ export class YoutubeAdapter implements PublishAdapter {
       await this.driver.clickCss(this.s.nextButton);
       await wait(800);
     }
-    if (!(await this.driver.cssVisible(this.s.privateRadio, ACTION_TIMEOUT))) {
+    // 可见性按发布选项来;**兜底是私享**(见 enumOption 的说明:拿不到就选最保守的那档)。
+    const visibility = enumOption(this.task, "visibility", "private", ["private", "unlisted", "public"] as const);
+    const radio = this.s.visibilityRadio[visibility];
+    if (!(await this.driver.cssVisible(radio, ACTION_TIMEOUT))) {
       await plogPageState("YouTube visibility step not reached:", this.driver);
-      throw new Error("YouTube visibility step was not reached (private option missing).");
+      throw new Error(`YouTube visibility step was not reached (${visibility} option missing).`);
     }
-    await this.driver.clickCss(this.s.privateRadio);
+    await this.driver.clickCss(radio);
     await wait(400);
+    // 回读校验:选中的必须就是要的那一档。**选没选中和点没点到是两件事**,而它们的区别可能是
+    // "本该私享的片子公开了"。
+    const chosen = await this.driver
+      .evaluate<boolean>(`Boolean(document.querySelector(${JSON.stringify(radio)})?.getAttribute('aria-checked') === 'true')`)
+      .catch(() => false);
+    if (!chosen) {
+      await plogPageState("YouTube visibility not applied:", this.driver);
+      throw new Error(`YouTube visibility ${visibility} was not applied.`);
+    }
+    plog("youtube 可见性:", visibility, "面向儿童:", forKids);
     if (!(await this.driver.waitCssEnabled(this.s.doneButton, ACTION_TIMEOUT).catch(() => false))) {
       await plogPageState("YouTube done button unavailable:", this.driver);
       throw new Error("YouTube done button never became clickable.");
@@ -1893,7 +1927,7 @@ export const createAdapter = (
     return new BilibiliAdapter(driver, task);
   }
   if (normalizedPlatform === "tiktok") {
-    return new TiktokAdapter(driver);
+    return new TiktokAdapter(driver, task);
   }
   if (normalizedPlatform === "youtube") {
     return new YoutubeAdapter(driver, task);

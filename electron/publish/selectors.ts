@@ -122,7 +122,12 @@ export const SELECTORS = {
     visibilityValue: '[data-e2e="video_visibility_container"]',
     // 下拉项:Select 组件的选项,中英各列一份(界面语言跟账号走)。
     visibilityOption: '[role="option"], .Select__item, li',
-    onlyMeTexts: ["Only you", "仅自己可见", "仅自己"], // i18n-ok
+    // 可见性三档的选项文案(实测下拉里是 div[role=option].Select__item;界面语言跟账号走)。
+    visibilityTexts: {
+      private: ["Only you", "仅自己可见", "仅自己"], // i18n-ok
+      friends: ["Friends", "好友"], // i18n-ok
+      public: ["Everyone", "所有人"], // i18n-ok
+    } as const,
     // 上传页会弹「是否开启自动内容检查」;它是个模态,挡住真实点击。**点取消**——不替用户改账号设置。
     dismissTexts: ["Cancel", "取消", "Got it", "知道了"], // i18n-ok
     postTexts: ["Post", "发布"], // i18n-ok
@@ -154,7 +159,14 @@ export const SELECTORS = {
     titleBox: '#title-textarea #textbox, ytcp-social-suggestions-textbox[id="title-textarea"] #textbox',
     descBox: '#description-textarea #textbox, ytcp-social-suggestions-textbox[id="description-textarea"] #textbox',
     notMadeForKids: 'tp-yt-paper-radio-button[name="VIDEO_MADE_FOR_KIDS_NOT_MFK"]',
+    madeForKids: 'tp-yt-paper-radio-button[name="VIDEO_MADE_FOR_KIDS_MFK"]',
     nextButton: "#next-button",
+    // 可见性三档:name 是 Studio 自己的枚举,比文案稳(界面语言跟账号走)。
+    visibilityRadio: {
+      private: 'tp-yt-paper-radio-button[name="PRIVATE"]',
+      unlisted: 'tp-yt-paper-radio-button[name="UNLISTED"]',
+      public: 'tp-yt-paper-radio-button[name="PUBLIC"]',
+    } as const,
     privateRadio: 'tp-yt-paper-radio-button[name="PRIVATE"]',
     doneButton: "#done-button",
     closeDialog: "#close-button",

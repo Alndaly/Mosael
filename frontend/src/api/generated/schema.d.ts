@@ -6866,6 +6866,41 @@ export interface components {
              * @default
              */
             short_title: string;
+            /** Options */
+            options?: {
+                [key: string]: unknown;
+            };
+        };
+        /** PublishOptionChoice */
+        PublishOptionChoice: {
+            /** Value */
+            value: string;
+            /** Label */
+            label: string;
+        };
+        /**
+         * PublishOptionSpec
+         * @description 一个平台专属发布选项的声明。**前端照它渲染控件,后端照它校验** —— 只有这一份。
+         */
+        PublishOptionSpec: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "enum" | "bool";
+            /** Default */
+            default: unknown;
+            /** Choices */
+            choices?: components["schemas"]["PublishOptionChoice"][];
+            /**
+             * Description
+             * @default
+             */
+            description: string;
         };
         /** PublishPlatformOut */
         PublishPlatformOut: {
@@ -6889,6 +6924,8 @@ export interface components {
              * @default false
              */
             short_title: boolean;
+            /** Options */
+            options?: components["schemas"]["PublishOptionSpec"][];
         };
         /** PublishTaskOut */
         PublishTaskOut: {

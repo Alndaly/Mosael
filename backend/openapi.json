@@ -18984,6 +18984,11 @@
             "maxLength": 80,
             "title": "Short Title",
             "default": ""
+          },
+          "options": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Options"
           }
         },
         "type": "object",
@@ -18993,6 +18998,68 @@
           "asset_id"
         ],
         "title": "PublishCreate"
+      },
+      "PublishOptionChoice": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "PublishOptionChoice"
+      },
+      "PublishOptionSpec": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "enum",
+              "bool"
+            ],
+            "title": "Type"
+          },
+          "default": {
+            "title": "Default"
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/PublishOptionChoice"
+            },
+            "type": "array",
+            "title": "Choices"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "type",
+          "default"
+        ],
+        "title": "PublishOptionSpec",
+        "description": "一个平台专属发布选项的声明。**前端照它渲染控件,后端照它校验** —— 只有这一份。"
       },
       "PublishPlatformOut": {
         "properties": {
@@ -19022,6 +19089,13 @@
             "type": "boolean",
             "title": "Short Title",
             "default": false
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/PublishOptionSpec"
+            },
+            "type": "array",
+            "title": "Options"
           }
         },
         "type": "object",

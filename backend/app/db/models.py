@@ -593,6 +593,9 @@ class PublishTask(Base):
     tags: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
     # 视频号等平台的短标题;浏览器平台任务的富状态(老版 TASK_STATUSES 词汇)。
     short_title: Mapped[str] = mapped_column(String(80), nullable=False, default="")
+    #: 平台自己的发布选项(可见性、允许评论…)。取值范围由 domain/publish.PLATFORM_OPTIONS 定义并校验;
+    #: 建任务时就收敛成完整字典(补默认值),执行器直接消费,不必再猜"没写这个键是什么意思"。
+    options: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="pending")
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     screenshot_path: Mapped[str | None] = mapped_column(Text, nullable=True)

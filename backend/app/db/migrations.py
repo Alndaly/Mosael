@@ -114,6 +114,21 @@ def _migrate_resource_ownership() -> None:
             )
 
 
+def _migrate_publish_task_options() -> None:
+    """publish_tasks 新增 options 列(平台自己的发布选项:可见性、允许评论…)。
+
+    create_all 只建新表,不给已有表补列。老任务留空字典 —— 执行器把「没有这个键」当成用默认值,
+    而默认值一律是最保守的那档(可见性 = 私享 / 仅自己可见),所以老数据不会因为升级而突然公开。
+    """
+    inspector = inspect(engine)
+    if "publish_tasks" not in set(inspector.get_table_names()):
+        return
+    if "options" in {c["name"] for c in inspector.get_columns("publish_tasks")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE publish_tasks ADD COLUMN options JSON NOT NULL DEFAULT '{}'"))
+
+
 def _drop_member_perm_overrides() -> None:
     """删掉 workspace_member_perms 整张表(ADR 0008 D4:角色即权限)。
 
@@ -957,6 +972,7 @@ def init_db() -> None:
     _backfill_plugin_instances()
     # 必须在 create_all 之后:resource_shares 是新表。
     _migrate_resource_ownership()
+    _migrate_publish_task_options()
     _migrate_legacy_tts_sources()
     _migrate_shared_venvs()
 

@@ -130,6 +130,7 @@ def claim_next_pending(db: Session, exclude_accounts: list[str]) -> dict[str, An
         "tags": list(task.tags or []),
         "description": task.description,
         "short_title": task.short_title,
+        "options": dict(task.options or {}),
         "dry_run": False,
         "status": task.status,
     }

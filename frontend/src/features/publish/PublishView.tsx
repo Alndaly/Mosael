@@ -23,6 +23,7 @@ import { Combobox } from "@/components/app/combobox";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { dayGroupOf, groupByLocalDay } from "@/lib/dayGroups";
@@ -473,6 +474,9 @@ function CreatePublishDialog({
   const [shortTitle, setShortTitle] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [tagsText, setTagsText] = React.useState("");
+  // 平台自己的发布选项(可见性等)。**不在这里写死任何平台的选项** —— 有哪些、什么类型、默认是什么,
+  // 全部来自 /api/publish/platforms 的声明(后端 PLATFORM_OPTIONS)。加一个平台属性不需要动这里。
+  const [options, setOptions] = React.useState<Record<string, unknown>>({});
 
   const assets = useQuery({
     queryKey: ["assets", workspace.id],
@@ -490,6 +494,12 @@ function CreatePublishDialog({
   const platformMeta =
     (platforms.data ?? []).find((item) => item.platform === selectedAccount?.platform) ?? null;
   const titleMax = platformMeta?.title_max ?? 300;
+  const optionSpecs = platformMeta?.options ?? [];
+  // 换平台就按新平台的声明重置:选项的键是平台专属的,带着上一个平台的键提交会被后端拒掉
+  // (那是对的 —— 静默丢掉才会让人以为自己设了公开)。
+  React.useEffect(() => {
+    setOptions(Object.fromEntries(optionSpecs.map((spec) => [spec.key, spec.default])));
+  }, [platformMeta?.platform]);
 
   const aiCopy = useMutation({
     mutationFn: () => generatePublishCopy({ workspace_id: workspace.id, asset_id: assetId }),
@@ -514,6 +524,7 @@ function CreatePublishDialog({
           .map((tag) => tag.trim())
           .filter(Boolean),
         short_title: shortTitle.trim(),
+        options,
       }),
     onSuccess: (task) => {
       setTitle("");
@@ -589,6 +600,41 @@ function CreatePublishDialog({
           <span>{t("publishTags")}</span>
           <Input value={tagsText} placeholder={t("publishTagsPlaceholder")} onChange={(event) => setTagsText(event.target.value)} />
         </label>
+        {optionSpecs.length > 0 && (
+          <div className="grid gap-1.5 rounded border border-border bg-panel-subtle p-2">
+            <span className="text-xs font-semibold text-foreground">
+              {(platformMeta?.label ?? "") + t("publishPlatformOptions")}
+            </span>
+            {optionSpecs.map((spec) => (
+              <label key={spec.key} className="grid gap-0.5">
+                <span className="text-[11.5px] text-muted-foreground">{spec.label}</span>
+                {spec.type === "enum" ? (
+                  <select
+                    className="rounded border border-border bg-field p-1.5 text-[12.5px] text-foreground focus-visible:border-primary focus-visible:outline-none"
+                    value={String(options[spec.key] ?? spec.default)}
+                    onChange={(event) => setOptions((prev) => ({ ...prev, [spec.key]: event.target.value }))}
+                  >
+                    {(spec.choices ?? []).map((choice) => (
+                      <option key={choice.value} value={choice.value}>
+                        {choice.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="flex items-center gap-1.5">
+                    <Switch
+                      checked={Boolean(options[spec.key] ?? spec.default)}
+                      onCheckedChange={(next: boolean) => setOptions((prev) => ({ ...prev, [spec.key]: next }))}
+                    />
+                  </span>
+                )}
+                {spec.description && (
+                  <small className="text-[11px] leading-[1.4] text-muted-foreground">{spec.description}</small>
+                )}
+              </label>
+            ))}
+          </div>
+        )}
         <div className="mt-1 flex items-center justify-end gap-1.5">
           <Button variant="outline" size="sm" disabled={!assetId} loading={aiCopy.isPending} onClick={() => aiCopy.mutate()}>
             <Sparkles size={13} /> {t("publishAiCopy")}

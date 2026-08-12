@@ -202,6 +202,8 @@ function toAdapterTask(t: backend.BackendTask): PublishTask {
     title: t.title,
     tags: t.tags || [],
     platformOptions: {
+      // 平台自己的选项在前(可见性、允许评论…);下面三个是所有平台共用的,放后面免得被同名键盖掉。
+      ...(t.options ?? {}),
       dryRun: t.dry_run,
       description: t.description || "",
       shortTitle: t.short_title || "",
