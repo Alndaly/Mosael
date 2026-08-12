@@ -1,4 +1,11 @@
-export type SupportedPlatform = "mock" | "douyin" | "xiaohongshu" | "weixin-channels" | "bilibili";
+export type SupportedPlatform =
+  | "mock"
+  | "douyin"
+  | "xiaohongshu"
+  | "weixin-channels"
+  | "bilibili"
+  | "tiktok"
+  | "youtube";
 
 export interface PlatformDefinition {
   id: SupportedPlatform;
@@ -83,6 +90,36 @@ export const PLATFORM_DEFINITIONS: PlatformDefinition[] = [
     publishUrl: "https://member.bilibili.com/platform/upload/video/frame",
     manageUrl: "https://member.bilibili.com/platform/upload-manager/article",
     titleMaxLength: 80,
+    supportsShortTitle: false,
+    supportsDescription: true,
+    supportsTags: true,
+  },
+  {
+    id: "tiktok",
+    label: "TikTok",
+    // **别把 tiktok 和 douyin 混成一个** —— 两个平台、两套账号,后端的别名表里曾经把
+    // "tiktok" 指向抖音,说"发到 tiktok"会静默发进抖音。
+    aliases: ["tiktok", "tk", "抖音国际版"], // i18n-ok
+    loginUrl: "https://www.tiktok.com/login",
+    dashboardUrl: "https://www.tiktok.com/tiktokstudio",
+    publishUrl: "https://www.tiktok.com/tiktokstudio/upload",
+    manageUrl: "https://www.tiktok.com/tiktokstudio/content",
+    // TikTok 没有独立标题栏,这一栏是**文案**(caption)。
+    titleMaxLength: 2200,
+    supportsShortTitle: false,
+    supportsDescription: false,
+    supportsTags: true,
+  },
+  {
+    id: "youtube",
+    label: "YouTube",
+    aliases: ["youtube", "yt", "油管"], // i18n-ok
+    // 未登录时 studio.youtube.com 会跳到 accounts.google.com —— checkLogin 据此判定。
+    loginUrl: "https://accounts.google.com/ServiceLogin?service=youtube",
+    dashboardUrl: "https://studio.youtube.com/",
+    publishUrl: "https://studio.youtube.com/",
+    manageUrl: "https://studio.youtube.com/",
+    titleMaxLength: 100,
     supportsShortTitle: false,
     supportsDescription: true,
     supportsTags: true,

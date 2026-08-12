@@ -335,6 +335,10 @@ const PLATFORM_COLORS = [
   "var(--chart-fail)",
 ] as const;
 
+// 平台 → 图表上的短标签。**这是第三份平台表**(后端 PUBLISH_PLATFORMS、Electron
+// PLATFORM_DEFINITIONS 各一份),但它要的是"短到能塞进图例"的名字,和另两份的用途不同:
+// 后端那份是给下拉和说明用的完整名。加新平台时三处都要加 —— 漏了这里的后果很轻(退回显示裸
+// id,见下面的 fallback),所以没有为它单开一条契约。
 const PLATFORM_LABELS: Record<string, { zh: string; en: string }> = {
   folder: { zh: "本地目录", en: "Folder" },
   webhook: { zh: "Webhook", en: "Webhook" },
@@ -342,6 +346,8 @@ const PLATFORM_LABELS: Record<string, { zh: string; en: string }> = {
   bilibili: { zh: "B站", en: "Bilibili" },
   xiaohongshu: { zh: "小红书", en: "Xiaohongshu" },
   "weixin-channels": { zh: "视频号", en: "Channels" },
+  tiktok: { zh: "TikTok", en: "TikTok" },
+  youtube: { zh: "YouTube", en: "YouTube" },
 };
 
 function platformLabel(platform: string, locale: string): string {

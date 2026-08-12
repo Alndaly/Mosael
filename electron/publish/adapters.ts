@@ -1404,6 +1404,292 @@ export class BilibiliAdapter implements PublishAdapter {
   }
 }
 
+
+/**
+ * TikTok。**和抖音是两个平台、两套账号** —— 后端的别名表里曾经把 "tiktok" 指向 douyin,
+ * 说"发到 tiktok"会静默发进抖音;接进来时那条已经拆掉。
+ *
+ * 界面语言跟账号走,所以判定尽量走结构(`data-e2e`)而不是文案;文案作为兜底且中英各一份。
+ *
+ * **境内需要可用的出站代理** —— 连不上时表现为登录页打不开,而不是"登录失败";这一点写进了
+ * 平台说明,免得用户在"为什么一直要我登录"上耗时间。
+ */
+export class TiktokAdapter implements PublishAdapter {
+  private readonly s = SELECTORS.tiktok;
+
+  // createAdapter 统一传 (driver, task);TikTok 的文案全部走 fillTitle/fillTags 的入参,
+  // 所以这里不留 task 成员 —— 留一个没人读的字段只会让下一个人以为它有用。
+  constructor(private readonly driver: PageDriver) {}
+
+  async openCreatorPage(): Promise<void> {
+    await this.driver.goto(this.s.uploadUrl);
+    // 同 B 站:持久视图复用同一个 WebContents,上一次发完可能停在结果态,goto 同一 URL 常被
+    // SPA abort。没探到文件输入就先断开再回来。
+    if (!(await this.driver.fileInputAttached(this.s.fileInput, 6_000))) {
+      await this.driver.goto("about:blank");
+      await this.driver.goto(this.s.uploadUrl);
+    }
+  }
+
+  async checkLogin(): Promise<boolean> {
+    if (this.s.isLoginUrl(this.driver.url())) {
+      return false;
+    }
+    // 结构优先:登录页的 data-e2e 标记比句子稳。
+    if (await this.driver.cssAttached(this.s.loggedOutMarks, 2_000)) {
+      return false;
+    }
+    if (await this.driver.fileInputAttached(this.s.fileInput, 8_000)) {
+      return true;
+    }
+    for (const text of this.s.loggedInTexts) {
+      if (await this.driver.hasTextDeep(text)) {
+        return true;
+      }
+    }
+    for (const text of this.s.loggedOutTexts) {
+      if (await this.driver.hasTextDeep(text)) {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  async uploadVideo(videoPath: string): Promise<void> {
+    if (!(await this.driver.fileInputAttached(this.s.fileInput, ACTION_TIMEOUT))) {
+      throw new Error("TikTok upload input not found.");
+    }
+    await this.driver.setFiles(this.s.fileInput, videoPath);
+
+    // 文案编辑器出现 = 表单渲染了,**不等于视频传完**(同 B 站那一课)。真正的完成信号是
+    // 「发布按钮可用」:TikTok 在转码完成前一直禁用它。
+    if (!(await this.driver.cssVisible(this.s.captionEditor, UPLOAD_TIMEOUT))) {
+      throw new Error("TikTok editor did not appear after upload (caption box missing).");
+    }
+    const failedPattern = this.s.uploadFailedTexts.join("|");
+    const deadline = Date.now() + UPLOAD_TIMEOUT;
+    while (Date.now() < deadline) {
+      const failed = await this.driver
+        .evaluate<boolean>(`new RegExp(${JSON.stringify(failedPattern)}).test(document.body?.innerText || '')`)
+        .catch(() => false);
+      if (failed) {
+        await plogPageState("TikTok upload failed:", this.driver);
+        throw new Error("TikTok reported an upload failure.");
+      }
+      if (await this.driver.waitButtonEnabled(this.s.postButton, 2_000).catch(() => false)) {
+        return;
+      }
+      await wait(1_000);
+    }
+    await plogPageState("TikTok upload did not settle:", this.driver);
+    throw new Error("TikTok upload did not finish in time (post button stayed disabled).");
+  }
+
+  async fillTitle(title: string): Promise<void> {
+    // TikTok 没有独立标题栏,这一栏是**文案**;标签在 fillTags 里接到同一段文字后面。
+    await this.driver.focusAndClearField(this.s.captionEditor);
+    await this.driver.insertText(this.s.captionEditor, title);
+    await wait(500);
+  }
+
+  async fillTags(tags: string[]): Promise<void> {
+    if (tags.length === 0) {
+      return;
+    }
+    // 话题写进文案末尾:TikTok 的标签本来就是文案里的 #hashtag,没有独立标签框。
+    // 逐个敲进去而不是一次性插入 —— 站内的话题联想面板会在输入时弹出,一次性插入常常
+    // 让最后一个话题停在"未确认"状态。
+    await this.driver.focusEnd(this.s.captionEditor);
+    for (const tag of tags) {
+      const clean = tag.replace(/^#/, "").trim();
+      if (!clean) continue;
+      await this.driver.insertText(this.s.captionEditor, ` #${clean}`);
+      await wait(600);
+      // 关掉联想面板,免得它把下一次输入吃掉。
+      await this.driver.pressKey("Escape").catch(() => undefined);
+      await wait(200);
+    }
+  }
+
+  async submit(): Promise<void> {
+    if (!(await this.driver.waitButtonEnabled(this.s.postButton, ACTION_TIMEOUT).catch(() => false))) {
+      // 结构选择器失配时退回文案(界面语言跟账号走,中英各试一遍)。
+      for (const text of this.s.postTexts) {
+        try {
+          await clickTextPreferTrusted(this.driver, text);
+          return;
+        } catch {
+          // 换下一种说法
+        }
+      }
+      await plogPageState("TikTok submit button unavailable:", this.driver);
+      throw new Error("TikTok post button never became clickable.");
+    }
+    await this.driver.clickCss(this.s.postButton);
+  }
+
+  async waitResult(): Promise<void> {
+    const donePattern = this.s.publishDoneTexts.join("|");
+    const ok = await this.driver.waitForFunction(
+      `(${JSON.stringify(this.s.isManageUrl.toString())} && false) ||
+       new RegExp(${JSON.stringify(donePattern)}).test(document.body?.innerText || '') ||
+       /tiktokstudio\\/content/.test(location.href)`,
+      RESULT_TIMEOUT,
+      1_000,
+    );
+    if (!ok) {
+      await plogPageState("waitResult failed (tiktok):", this.driver);
+      throw new Error("TikTok did not confirm the post (no success text or redirect to content list).");
+    }
+  }
+}
+
+/**
+ * YouTube Studio。
+ *
+ * **可见性一律先发 Private**:自动上传误发公开是收不回来的,而"发完自己去改公开"代价小得多。
+ * 这条也写进了后端的平台说明,用户在新建发布时看得到。
+ *
+ * 标签走**描述里的 #hashtag** 而不是「更多选项」里的关键词框:后者要多展开一层折叠面板,
+ * 是这条链路上最容易因改版而断的一环;而 hashtag 在 YouTube 上本来就是创作者实际在用的形式。
+ *
+ * **境内需要可用的出站代理**;另外 Google 会拒绝在部分内嵌浏览器里登录 —— 应用已经把 UA 里的
+ * `Electron/x.y.z` 抹掉(见 accountViews.platformUserAgent),但这一关只有真登录一次才知道。
+ */
+export class YoutubeAdapter implements PublishAdapter {
+  private readonly s = SELECTORS.youtube;
+
+  constructor(
+    private readonly driver: PageDriver,
+    private readonly task: PublishTask,
+  ) {}
+
+  async openCreatorPage(): Promise<void> {
+    await this.driver.goto(this.s.uploadUrl);
+    if (!(await this.driver.fileInputAttached(this.s.fileInput, 8_000))) {
+      await this.driver.goto("about:blank");
+      await this.driver.goto(this.s.uploadUrl);
+    }
+  }
+
+  async checkLogin(): Promise<boolean> {
+    // 未登录时 Google 直接把你送去登录页 —— 比找文案可靠。
+    if (this.s.isLoginUrl(this.driver.url())) {
+      return false;
+    }
+    if (await this.driver.fileInputAttached(this.s.fileInput, 8_000)) {
+      return true;
+    }
+    for (const text of this.s.loggedInTexts) {
+      if (await this.driver.hasTextDeep(text)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  async uploadVideo(videoPath: string): Promise<void> {
+    if (!(await this.driver.fileInputAttached(this.s.fileInput, ACTION_TIMEOUT))) {
+      throw new Error("YouTube upload input not found.");
+    }
+    await this.driver.setFiles(this.s.fileInput, videoPath);
+
+    // 标题框出现 = 详情表单渲染了,视频仍在后台上传/处理。YouTube 会一直在页面上写
+    // 「Uploading x%」/「Processing」,完成后变成「Upload complete」「Checks complete」之类。
+    if (!(await this.driver.cssVisible(this.s.titleBox, UPLOAD_TIMEOUT))) {
+      throw new Error("YouTube details form did not appear after upload (title box missing).");
+    }
+    const failedPattern = this.s.uploadFailedTexts.join("|");
+    const deadline = Date.now() + UPLOAD_TIMEOUT;
+    while (Date.now() < deadline) {
+      const failed = await this.driver
+        .evaluate<boolean>(`new RegExp(${JSON.stringify(failedPattern)}).test(document.body?.innerText || '')`)
+        .catch(() => false);
+      if (failed) {
+        await plogPageState("YouTube upload failed:", this.driver);
+        throw new Error("YouTube reported an upload failure.");
+      }
+      // 「下一步」可用即说明这一步的必填项齐了、上传也推进到可继续的程度。
+      if (await this.driver.waitButtonEnabled(this.s.nextButton, 2_000).catch(() => false)) {
+        return;
+      }
+      await wait(1_000);
+    }
+    await plogPageState("YouTube upload did not settle:", this.driver);
+    throw new Error("YouTube upload did not finish in time (next button stayed disabled).");
+  }
+
+  async fillTitle(title: string): Promise<void> {
+    await this.driver.focusAndClearField(this.s.titleBox);
+    await this.driver.insertText(this.s.titleBox, title);
+    await wait(400);
+    const description = stringOption(this.task, "description");
+    if (description && (await this.driver.cssVisible(this.s.descBox, 5_000))) {
+      await this.driver.focusAndClearField(this.s.descBox);
+      await this.driver.insertText(this.s.descBox, description);
+      await wait(300);
+    }
+  }
+
+  async fillTags(tags: string[]): Promise<void> {
+    if (tags.length === 0) {
+      return;
+    }
+    if (!(await this.driver.cssVisible(this.s.descBox, 5_000))) {
+      return;
+    }
+    const hashtags = tags
+      .map((tag) => `#${tag.replace(/^#/, "").replace(/\s+/g, "")}`)
+      .filter((tag) => tag.length > 1)
+      .join(" ");
+    await this.driver.focusEnd(this.s.descBox);
+    await this.driver.insertText(this.s.descBox, `\n\n${hashtags}`);
+    await wait(300);
+  }
+
+  async submit(): Promise<void> {
+    // 「面向儿童」是必答项,不选就走不到下一步。这里选「否」—— 素材来自用户自己的时间线,
+    // 由他在 YouTube 上按实际情况改,而默认"是"会关掉评论等一堆功能。
+    if (await this.driver.cssVisible(this.s.notMadeForKids, 5_000)) {
+      await this.driver.clickCss(this.s.notMadeForKids).catch(() => undefined);
+      await wait(300);
+    }
+    // 详情 → 视频元素 → 检查 → 可见性,共三次「下一步」。
+    for (let step = 0; step < 3; step += 1) {
+      if (!(await this.driver.waitButtonEnabled(this.s.nextButton, ACTION_TIMEOUT).catch(() => false))) {
+        break;
+      }
+      await this.driver.clickCss(this.s.nextButton);
+      await wait(800);
+    }
+    if (!(await this.driver.cssVisible(this.s.privateRadio, ACTION_TIMEOUT))) {
+      await plogPageState("YouTube visibility step not reached:", this.driver);
+      throw new Error("YouTube visibility step was not reached (private option missing).");
+    }
+    await this.driver.clickCss(this.s.privateRadio);
+    await wait(400);
+    if (!(await this.driver.waitButtonEnabled(this.s.doneButton, ACTION_TIMEOUT).catch(() => false))) {
+      await plogPageState("YouTube done button unavailable:", this.driver);
+      throw new Error("YouTube done button never became clickable.");
+    }
+    await this.driver.clickCss(this.s.doneButton);
+  }
+
+  async waitResult(): Promise<void> {
+    const donePattern = this.s.publishDoneTexts.join("|");
+    const ok = await this.driver.waitForFunction(
+      `new RegExp(${JSON.stringify(donePattern)}).test(document.body?.innerText || '') ||
+       /studio\\.youtube\\.com\\/channel\\/[^/]+\\/videos/.test(location.href)`,
+      RESULT_TIMEOUT,
+      1_000,
+    );
+    if (!ok) {
+      await plogPageState("waitResult failed (youtube):", this.driver);
+      throw new Error("YouTube did not confirm the upload (no success text or redirect to the video list).");
+    }
+  }
+}
+
 export const createAdapter = (
   platform: string,
   driver: PageDriver,
@@ -1421,6 +1707,12 @@ export const createAdapter = (
   }
   if (normalizedPlatform === "bilibili") {
     return new BilibiliAdapter(driver, task);
+  }
+  if (normalizedPlatform === "tiktok") {
+    return new TiktokAdapter(driver);
+  }
+  if (normalizedPlatform === "youtube") {
+    return new YoutubeAdapter(driver, task);
   }
   return new MockAdapter(driver, task);
 };

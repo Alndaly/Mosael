@@ -17,6 +17,8 @@ export const MANAGE_URL_PATTERNS = {
   xiaohongshu: /creator\.xiaohongshu\.com\/(new\/notes|publish\/success)/,
   weixinChannels: /platform\/post\/list/,
   bilibili: /upload-manager|content-manager|article/,
+  tiktok: /tiktokstudio\/content|tiktokstudio\/upload\?.*posted/,
+  youtube: /studio\.youtube\.com\/channel\/[^/]+\/videos/,
 } as const;
 
 export const SELECTORS = {
@@ -98,5 +100,57 @@ export const SELECTORS = {
     publishDoneTexts: ["投稿成功", "提交成功", "发布成功", "审核中", "稿件投递成功"], // i18n-ok
     isLoginUrl: (u: string): boolean => /passport\.bilibili\.com|\/login/.test(u),
     isManageUrl: (u: string): boolean => MANAGE_URL_PATTERNS.bilibili.test(u),
+  },
+  /**
+   * TikTok。**界面语言跟账号走**(英文 / 中文 / 其它),所以能用结构就不用文案:
+   * TikTok 站内大量使用 `data-e2e` 属性,实测登录页上就有 `login-title`、`tiktok-logo` 等 —— 它们
+   * 比 "Log in to TikTok" 这种句子稳得多。文案只作为兜底,且中英各列一份。
+   */
+  tiktok: {
+    uploadUrl: resolvePlatform("tiktok").publishUrl,
+    manageUrl: resolvePlatform("tiktok").manageUrl,
+    fileInput: 'input[type="file"]',
+    // 文案编辑器是 DraftJS,不是 <input>。
+    captionEditor:
+      '.public-DraftEditor-content[contenteditable="true"], div[contenteditable="true"][role="combobox"], div[contenteditable="true"]',
+    postButton: '[data-e2e="post_video_button"], button[data-e2e="post_video_button"]',
+    postTexts: ["Post", "发布"], // i18n-ok
+    loggedOutMarks: '[data-e2e="login-title"], [data-e2e="channel-item"]',
+    loggedOutTexts: ["Log in to TikTok", "Use QR code", "登录 TikTok", "扫码登录"], // i18n-ok
+    loggedInTexts: ["Upload video", "Select video", "上传视频", "选择视频"], // i18n-ok
+    uploadingTexts: ["Uploading", "上传中", "%"], // i18n-ok
+    uploadFailedTexts: ["Upload failed", "上传失败", "Failed to upload"], // i18n-ok
+    publishDoneTexts: ["Your video is being uploaded", "posted", "已发布", "发布成功", "Manage your posts"], // i18n-ok
+    isLoginUrl: (u: string): boolean => /\/login|accounts\.tiktok\.com/.test(u),
+    isManageUrl: (u: string): boolean => MANAGE_URL_PATTERNS.tiktok.test(u),
+  },
+  /**
+   * YouTube Studio。**未登录会跳到 accounts.google.com** —— 这是最可靠的登录判据,实测过。
+   *
+   * Studio 是 Polymer 应用,节点大多带稳定 id(`#title-textarea`、`#next-button`…),
+   * 这些 id 在公开的自动上传项目里长期有效,比文案稳。
+   *
+   * **可见性默认发为 Private**:自动上传一旦误发公开是收不回的。想公开由人到 YouTube 上改一次,
+   * 代价远小于反过来。这一点也写进了后端的平台说明,用户在界面上看得到。
+   */
+  youtube: {
+    // /upload 会直接把 Studio 带进上传对话框,比先进 Studio 再点「创建」少两跳。
+    uploadUrl: "https://www.youtube.com/upload",
+    fileInput: 'input[type="file"]',
+    titleBox: '#title-textarea #textbox, ytcp-social-suggestions-textbox[id="title-textarea"] #textbox',
+    descBox: '#description-textarea #textbox, ytcp-social-suggestions-textbox[id="description-textarea"] #textbox',
+    notMadeForKids: 'tp-yt-paper-radio-button[name="VIDEO_MADE_FOR_KIDS_NOT_MFK"]',
+    nextButton: "#next-button",
+    privateRadio: 'tp-yt-paper-radio-button[name="PRIVATE"]',
+    doneButton: "#done-button",
+    closeDialog: "#close-button",
+    uploadingTexts: ["Uploading", "上传中", "Processing", "处理中"], // i18n-ok
+    uploadDoneTexts: ["Upload complete", "上传完成", "Processing complete", "Checks complete", "检查完成"], // i18n-ok
+    uploadFailedTexts: ["Upload failed", "上传失败", "Daily upload limit reached"], // i18n-ok
+    publishDoneTexts: ["Video published", "Video uploaded", "视频已发布", "已上传"], // i18n-ok
+    loggedInTexts: ["YouTube Studio", "Channel dashboard", "创作者工作室", "频道数据"], // i18n-ok
+    // 未登录时 Google 会把你送去登录页;这比找文案可靠得多。
+    isLoginUrl: (u: string): boolean => /accounts\.google\.com|\/ServiceLogin|signin/.test(u),
+    isManageUrl: (u: string): boolean => MANAGE_URL_PATTERNS.youtube.test(u),
   },
 } as const;

@@ -59,11 +59,32 @@ PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
         "title_max": 80,
         "short_title": False,
     },
+    # TikTok 与 YouTube 都在境外:登录和上传都要能连上它们,通常得配好出站代理(设置 → 本地后端 /
+    # 浏览器档案各自的代理)。连不上时表现为登录页打不开,而不是"登录失败"。
+    "tiktok": {
+        "label": "TikTok",
+        "description": "由桌面端发布器用已登录的 TikTok 账号自动上传;首次使用需登录,境内需要可用的代理。",
+        "config": {},
+        # TikTok 没有独立标题,发布时那一栏是**文案**(caption),上限 2200。
+        "title_max": 2200,
+        "short_title": False,
+    },
+    "youtube": {
+        "label": "YouTube",
+        "description": "由桌面端发布器用已登录的 YouTube 账号上传;首次使用需登录,境内需要可用的代理。默认发为私享,确认无误后再自行改公开。",
+        "config": {},
+        "title_max": 100,
+        "short_title": False,
+    },
 }
 
 # 别名 → 规范 id(智能体/用户口语直达,老版同款)。
+# **`tiktok` 曾经指向 douyin** —— 那是 TikTok 还没接进来时的权宜,而两者是不同平台、不同账号:
+# 说"发到 tiktok"会静默发进抖音。TikTok 独立之后这条必须拆掉。
 PLATFORM_ALIASES = {
-    "抖音": "douyin", "dy": "douyin", "tiktok": "douyin",
+    "抖音": "douyin", "dy": "douyin",
+    "tk": "tiktok", "TikTok": "tiktok", "抖音国际版": "tiktok",
+    "yt": "youtube", "YouTube": "youtube", "油管": "youtube",
     "小红书": "xiaohongshu", "xhs": "xiaohongshu", "rednote": "xiaohongshu",
     "视频号": "weixin-channels", "微信视频号": "weixin-channels", "channels": "weixin-channels",
     "wechat": "weixin-channels", "weixin": "weixin-channels",
