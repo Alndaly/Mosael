@@ -57,6 +57,12 @@ export const SELECTORS = {
     submitHost: "xhs-publish-btn",
     // 「原创声明」:实测是 .original-wrapper 里的 input[type=checkbox],默认不勾。
     originalSwitch: ".original-wrapper input[type=checkbox]",
+    // 可见性(实测):`.permission-card-select` 是小红书自己的 d-select,**合成事件和可信点击都打不开它**,
+    // 只有「聚焦 + 回车」能展开(那个 wrapper 带 tabindex="1")。展开后三档渲染成 .group-info .name。
+    visibilityTrigger: ".permission-card-select",
+    visibilityValue: ".permission-card-wrapper",
+    visibilityOption: ".group-info .name",
+    visibilityTexts: { public: ["公开可见"], friends: ["仅互关好友可见"], private: ["仅自己可见"] } as const, // i18n-ok
     submitText: "发布", // i18n-ok
     uploadProgressTexts: ["正在上传视频", "视频上传中", "上传中"], // i18n-ok
     publishDoneTexts: ["发布成功", "发布完成", "审核中", "笔记发布成功", "提交成功"], // i18n-ok

@@ -589,8 +589,49 @@ export class XiaohongshuAdapter implements PublishAdapter {
     plog("xiaohongshu 原创声明:", wanted);
   }
 
+  /**
+   * 按发布选项设可见性,**设不上就不许发**。
+   *
+   * 这个下拉是小红书自己的 d-select,打开它花了五轮探查才找对路子:合成事件(哪怕完整指针序列
+   * 打到 .d-select-main 上)不行,**可信鼠标点击也不行**(点确实落到了,浮层就是不出现),
+   * 只有「聚焦 + 回车」能展开 —— 那个 wrapper 带 tabindex="1",它认的是键盘。
+   * 展开后三档渲染成 `.group-info .name`:公开可见 / 仅互关好友可见 / 仅自己可见。
+   */
+  private async applyVisibility(): Promise<void> {
+    const visibility = enumOption(this.task, "visibility", "private", ["private", "friends", "public"] as const);
+    const wanted = this.s.visibilityTexts[visibility];
+    await this.driver
+      .evaluate(`(() => {
+        const w = document.querySelector(${JSON.stringify(this.s.visibilityTrigger)});
+        if (w && typeof w.focus === 'function') w.focus();
+        return Boolean(w);
+      })()`)
+      .catch(() => false);
+    await this.driver.pressKey("Enter").catch(() => undefined);
+    await wait(700);
+    for (const text of wanted) {
+      const picked = await clickTextPreferTrusted(this.driver, text, {
+        exact: true,
+        selector: this.s.visibilityOption,
+      })
+        .then(() => true)
+        .catch(() => false);
+      if (picked) break;
+    }
+    await wait(500);
+    const shown = ((await this.driver.cssValue(this.s.visibilityValue)) ?? "").replace(/\s+/g, " ");
+    if (!wanted.some((text) => shown.includes(text))) {
+      await plogPageState("Xiaohongshu visibility not applied:", this.driver);
+      throw new Error(
+        `Xiaohongshu visibility is still ${JSON.stringify(shown.slice(0, 40))}, wanted ${visibility}; refusing to post.`,
+      );
+    }
+    plog("xiaohongshu 可见性:", visibility);
+  }
+
   async submit(): Promise<void> {
     await this.applyOriginal();
+    await this.applyVisibility();
     const ready =
       (await this.driver.waitCssEnabled(this.s.submitButton, ACTION_TIMEOUT)) ||
       (await this.driver.waitTextEnabledDeep(this.s.submitText, 1_000, {

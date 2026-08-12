@@ -49,12 +49,12 @@ def test_platform_without_options_takes_none(platform: str) -> None:
         normalize_options(platform, {"visibility": "private"})
 
 
-def test_xiaohongshu_declares_only_what_was_verified() -> None:
-    """小红书发布页上实测有「原创声明」(input[type=checkbox])—— 声明它;
-    也确有「公开可见」那个下拉,但它是小红书自己的 d-select,合成事件打不开浮层,选项枚举不出来。
-    **猜着写会更糟**:默认值设不上就得拒发,小红书就整个发不出去了。所以这里只有 original。"""
-    assert [spec["key"] for spec in option_specs("xiaohongshu")] == ["original"]
-    assert normalize_options("xiaohongshu", None) == {"original": False}
+def test_xiaohongshu_options() -> None:
+    """小红书两项都实测过:原创声明是 input[type=checkbox];可见性那个 d-select 只有「聚焦 + 回车」
+    能展开(合成事件与可信鼠标点击都打不开),展开后三档是 公开可见 / 仅互关好友可见 / 仅自己可见。"""
+    keys = [spec["key"] for spec in option_specs("xiaohongshu")]
+    assert keys == ["original", "visibility"]
+    assert normalize_options("xiaohongshu", None) == {"original": False, "visibility": "private"}
 
 
 def test_douyin_visibility_is_declared() -> None:
