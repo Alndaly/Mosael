@@ -26,6 +26,7 @@ import {
 import { api, listPublishTasks, listWorkflows, type Asset, type ProjectWithStats, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n, usePreferences } from "@/app/preferences";
+import { Highlight } from "@/components/app/Highlight";
 import type { StudioView } from "@/components/layout/AppShell";
 import {
   CommandDialog,
@@ -252,7 +253,7 @@ export function CommandPalette({
             {navMatches.map((entry) => (
               <CommandItem key={entry.view} value={`nav-${entry.view}`} onSelect={() => run(() => onNavigate(entry.view))}>
                 {entry.icon}
-                {t(entry.labelKey as never)}
+                <Highlight text={t(entry.labelKey as never)} query={query} />
               </CommandItem>
             ))}
           </CommandGroup>
@@ -267,7 +268,7 @@ export function CommandPalette({
                 onSelect={() => run(() => onOpenProject(project.id))}
               >
                 <Clapperboard size={14} />
-                <span className="min-w-0 flex-1 truncate">{project.name}</span>
+                <Highlight className="min-w-0 flex-1 truncate" text={project.name} query={query} />
                 <span className="text-[11px] text-muted-foreground">
                   {t("projectStatAssets").replace("{n}", String(project.asset_count))}
                 </span>
@@ -290,7 +291,7 @@ export function CommandPalette({
                 }
               >
                 <Workflow size={14} />
-                <span className="min-w-0 flex-1 truncate">{workflow.name}</span>
+                <Highlight className="min-w-0 flex-1 truncate" text={workflow.name} query={query} />
                 <span className="text-[11px] tabular-nums text-muted-foreground">
                   {t("wfNodeCount").replace("{n}", String(((workflow.graph as { nodes?: unknown[] }).nodes ?? []).length))}
                 </span>
@@ -313,7 +314,7 @@ export function CommandPalette({
                 }
               >
                 <Rocket size={14} />
-                <span className="min-w-0 flex-1 truncate">{task.title || task.asset_name}</span>
+                <Highlight className="min-w-0 flex-1 truncate" text={task.title || task.asset_name} query={query} />
                 <span className="text-[11px] text-muted-foreground">{t(`batchStatus_${task.status}` as never)}</span>
               </CommandItem>
             ))}
@@ -335,7 +336,7 @@ export function CommandPalette({
                 }
               >
                 {ASSET_ICONS[asset.kind] ?? <FileVideo size={14} />}
-                <span className="min-w-0 flex-1 truncate">{asset.name}</span>
+                <Highlight className="min-w-0 flex-1 truncate" text={asset.name} query={query} />
                 <span className="text-[11px] uppercase text-muted-foreground">{asset.kind}</span>
               </CommandItem>
             ))}

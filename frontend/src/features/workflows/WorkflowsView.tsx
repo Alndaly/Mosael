@@ -756,7 +756,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
               <ContextMenuTrigger asChild>
                 <button
                   type="button"
-                  className="relative text-left"
+                  className="relative h-full text-left"
                   onClick={() => (selectMode ? toggle(workflow.id) : setSelectedId(workflow.id))}
                 >
                   <WorkflowCard workflow={workflow} />
@@ -818,7 +818,8 @@ function WorkflowCard({ workflow }: { workflow: Workflow }) {
   const { locale } = usePreferences();
   const nodes = (workflow.graph as unknown as WorkflowGraph).nodes ?? [];
   return (
-    <article className="grid h-full content-start gap-1.5 rounded-lg border border-border bg-panel p-2.5 shadow-[var(--shadow-panel)] transition-colors hover:border-border-strong">
+    // 同 PublishCard:名字贴顶、"几个节点 · 多久前"贴底,中间留给长短不一的说明。
+    <article className="flex h-full flex-col gap-1.5 rounded-lg border border-border bg-panel p-2.5 shadow-[var(--shadow-panel)] transition-colors hover:border-border-strong">
       <div className="flex items-center gap-1.5">
         <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary">
           <WorkflowIcon size={13} />
@@ -832,7 +833,7 @@ function WorkflowCard({ workflow }: { workflow: Workflow }) {
       ) : (
         <p className="m-0 text-[11.5px] text-muted-foreground/60">{t("wfNoDescription")}</p>
       )}
-      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+      <div className="mt-auto flex items-center gap-1.5 pt-0.5 text-[11px] text-muted-foreground">
         <span className="tabular-nums">{t("wfNodeCount").replace("{n}", String(nodes.length))}</span>
         <span aria-hidden>·</span>
         <span className="truncate">{relativeTime(workflow.updated_at, locale)}</span>

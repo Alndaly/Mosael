@@ -247,10 +247,10 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
                     <ContextMenuTrigger asChild>
                       <button
                         type="button"
-                        className="relative text-left"
+                        className="relative h-full text-left"
                         onClick={() => (selectMode ? toggle(task.id) : setOpenId(task.id))}
                       >
-                        <PublishCard task={task} />
+                        <PublishCard task={task} selecting={selectMode} />
                         {selectMode && <SelectionCheck selected={selectedIds.has(task.id)} />}
                       </button>
                     </ContextMenuTrigger>
@@ -300,29 +300,37 @@ function localTime(iso: string, locale: string): string {
  * 记录卡片。**卡面上要能判断"这条要不要点开"** —— 所以给的是状态、什么时候、发到哪个号、
  * 发的哪条成片;失败时把原因头一行也带出来,那通常就是他要找的东西。
  */
-function PublishCard({ task }: { task: PublishTask }) {
+function PublishCard({ task, selecting = false }: { task: PublishTask; selecting?: boolean }) {
   const t = useI18n();
   const { locale } = usePreferences();
   const { Icon, tone, spin } = statusTone(task.status);
   return (
-    <article className="grid h-full content-start gap-1.5 rounded-lg border border-border bg-panel p-2.5 shadow-[var(--shadow-panel)] transition-colors hover:border-border-strong">
+    // **同一种信息落在同一个位置**:状态行贴顶、元信息贴底(mt-auto),中间留给长短不一的标题。
+    // 此前全部顺排,于是标题一行和两行的卡片里,"发到哪个号""哪条成片"各自落在不同高度 ——
+    // 同一排卡片横着看过去像三种模板。
+    <article className="flex h-full flex-col gap-1.5 rounded-lg border border-border bg-panel p-2.5 shadow-[var(--shadow-panel)] transition-colors hover:border-border-strong">
       <div className="flex items-center gap-1.5">
         <Icon size={13} className={cn("shrink-0", tone, spin && "animate-openstudio-spin")} />
         <span className={cn("text-[11.5px] font-semibold", tone)}>{t(`batchStatus_${task.status}` as never)}</span>
-        <span className="ml-auto shrink-0 tabular-nums text-[11px] text-muted-foreground">
-          {localTime(task.created_at, locale)}
-        </span>
+        {/* 选择态下右上角让给勾选圈 —— 两者叠在一起时间会被盖掉一半,不如干脆不显示。 */}
+        {!selecting && (
+          <span className="ml-auto shrink-0 tabular-nums text-[11px] text-muted-foreground">
+            {localTime(task.created_at, locale)}
+          </span>
+        )}
       </div>
       <strong className="line-clamp-2 text-[13px] font-[650] leading-[1.4] text-foreground [overflow-wrap:anywhere]">
         {task.title || task.asset_name}
       </strong>
-      <p className="m-0 truncate text-[11.5px] text-muted-foreground">
-        {task.platform} · {task.account_name}
-      </p>
-      <code className="truncate font-mono text-[11px] text-muted-foreground/80">{task.asset_name}</code>
-      {task.status === "failed" && task.error && (
-        <p className="m-0 line-clamp-2 text-[11px] leading-[1.45] text-destructive [overflow-wrap:anywhere]">{task.error}</p>
-      )}
+      <div className="mt-auto grid gap-1.5 pt-0.5">
+        <p className="m-0 truncate text-[11.5px] text-muted-foreground">
+          {task.platform} · {task.account_name}
+        </p>
+        <code className="truncate font-mono text-[11px] text-muted-foreground/80">{task.asset_name}</code>
+        {task.status === "failed" && task.error && (
+          <p className="m-0 line-clamp-2 text-[11px] leading-[1.45] text-destructive [overflow-wrap:anywhere]">{task.error}</p>
+        )}
+      </div>
     </article>
   );
 }
