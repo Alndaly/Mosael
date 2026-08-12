@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, CircleAlert, ExternalLink, FolderOutput, Loader2, Plus, Rocket, Sparkles, Trash2, Users } from "lucide-react";
+import { Check, CheckCircle2, CircleAlert, ExternalLink, FolderOutput, ListChecks, Loader2, Plus, Rocket, Sparkles, Trash2, Users, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -24,7 +24,9 @@ import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { dayGroupOf, groupByLocalDay } from "@/lib/dayGroups";
+import { useMultiSelect } from "@/lib/useMultiSelect";
 import { gotoRecord } from "@/lib/deepLink";
 import { useNow } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -64,6 +66,27 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   });
   const refresh = () => void qc.invalidateQueries({ queryKey: ["publish-tasks", workspace.id] });
 
+  const batchRemove = useMutation({
+    mutationFn: async () => {
+      // 没有批量接口:逐条删,失败的留下来报出去(和素材页同一种做法)。
+      const failures: string[] = [];
+      for (const id of selectedIds) {
+        try {
+          await deletePublishTask(id);
+        } catch (error) {
+          failures.push(String((error as Error).message));
+        }
+      }
+      return failures;
+    },
+    onSuccess: (failures) => {
+      setBatchDeleting(false);
+      clear();
+      if (failures.length > 0) toast.error(failures.join("\n"));
+      refresh();
+    },
+  });
+
   const remove = useMutation({
     mutationFn: (id: string) => deletePublishTask(id),
     onSuccess: () => {
@@ -87,6 +110,10 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
     [tasks.data],
   );
   const now = useNow(60_000);
+  // 多选与素材页同一份状态机(见 lib/useMultiSelect)。
+  const { selectMode, setSelectMode, selectedIds, toggle, selectAll, allSelected, clear, exit } =
+    useMultiSelect(tasks.data ?? [], (task) => task.id);
+  const [batchDeleting, setBatchDeleting] = React.useState(false);
 
   const dialogs = (
     <>
@@ -112,6 +139,13 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
         }}
       />
       <ConfirmDialog
+        open={batchDeleting}
+        title={t("deleteConfirmTitle")}
+        body={t("publishDeleteBody")}
+        onCancel={() => setBatchDeleting(false)}
+        onConfirm={() => batchRemove.mutate()}
+      />
+      <ConfirmDialog
         open={deleting !== null}
         title={t("deleteConfirmTitle")}
         body={t("publishDeleteBody")}
@@ -127,9 +161,39 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
       <h2 className="m-0 inline-flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
         <Rocket size={13} /> {t("publishTabRecords")}
       </h2>
-      <Button variant="outline" size="sm" onClick={() => setCreating(true)}>
-        <Plus size={13} /> {t("publishCreate")}
-      </Button>
+      <span className="flex flex-wrap items-center gap-1.5">
+        {selectMode ? (
+          <>
+            <span className="whitespace-nowrap text-xs text-muted-foreground">
+              {t("mediaSelectedCount").replace("{n}", String(selectedIds.size))}
+            </span>
+            <Button variant="outline" size="sm" onClick={() => selectAll(tasks.data ?? [])}>
+              <ListChecks size={13} /> {allSelected(tasks.data ?? []) ? t("mediaDeselectAll") : t("mediaSelectAll")}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="hover:border-destructive/50 hover:text-destructive"
+              disabled={selectedIds.size === 0}
+              onClick={() => setBatchDeleting(true)}
+            >
+              <Trash2 size={13} /> {t("delete")}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={exit}>
+              <X size={13} /> {t("cancel")}
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button variant="outline" size="sm" onClick={() => setSelectMode(true)}>
+              <Check size={13} /> {t("mediaSelectMode")}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setCreating(true)}>
+              <Plus size={13} /> {t("publishCreate")}
+            </Button>
+          </>
+        )}
+      </span>
     </div>
   );
 
@@ -181,8 +245,13 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
                 {group.items.map((task) => (
                   <ContextMenu key={task.id}>
                     <ContextMenuTrigger asChild>
-                      <button type="button" className="text-left" onClick={() => setOpenId(task.id)}>
+                      <button
+                        type="button"
+                        className="relative text-left"
+                        onClick={() => (selectMode ? toggle(task.id) : setOpenId(task.id))}
+                      >
                         <PublishCard task={task} />
+                        {selectMode && <SelectionCheck selected={selectedIds.has(task.id)} />}
                       </button>
                     </ContextMenuTrigger>
                     <ContextMenuContent>

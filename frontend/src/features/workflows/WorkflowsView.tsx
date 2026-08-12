@@ -22,7 +22,7 @@ import {
   type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { AlertTriangle, AlignLeft, AppWindow, ArrowLeft, AudioLines, Bell, BookOpen, Bot, Boxes, Braces, CaseSensitive, CheckCircle2, ChevronLeft, ChevronRight, CircleCheck, Code2, Download, FileOutput, FileUp, Filter, Flag, FolderInput, FolderPlus, GitBranch, Globe, History, Hourglass, Keyboard, Languages, Link2, Loader2, Mic, MousePointer2, MousePointerClick, PanelTopClose, PenLine, Pencil, Play, Plus, Redo2, RefreshCw, Repeat, Rocket, ScanText, Search, SkipForward, Sparkles, Spline, Tags, Timer, Trash2, Type, Undo2, Wand2, Waypoints, Workflow as WorkflowIcon, Wrench, X, XCircle, type LucideIcon } from "lucide-react";
+import { AlertTriangle, AlignLeft, AppWindow, ArrowLeft, AudioLines, Bell, BookOpen, Bot, Boxes, Braces, CaseSensitive, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleCheck, Code2, Download, FileOutput, FileUp, Filter, Flag, FolderInput, FolderPlus, GitBranch, Globe, History, Hourglass, Keyboard, Languages, Link2, ListChecks, Loader2, Mic, MousePointer2, MousePointerClick, PanelTopClose, PenLine, Pencil, Play, Plus, Redo2, RefreshCw, Repeat, Rocket, ScanText, Search, SkipForward, Sparkles, Spline, Tags, Timer, Trash2, Type, Undo2, Wand2, Waypoints, Workflow as WorkflowIcon, Wrench, X, XCircle, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -80,7 +80,9 @@ import {
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
 import { cn } from "@/lib/utils";
+import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { relativeTime } from "@/lib/time";
+import { useMultiSelect } from "@/lib/useMultiSelect";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 
 const AGENT_MODES = ["docked", "floating"] as const;
@@ -601,6 +603,31 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   // 这个动作无处可去(一松手又跳回某一条的画布)。
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const selected = (workflows.data ?? []).find((w) => w.id === selectedId) ?? null;
+  // 多选与素材页同一份状态机(见 lib/useMultiSelect)。
+  const { selectMode, setSelectMode, selectedIds, toggle, selectAll, allSelected, clear, exit } =
+    useMultiSelect(workflows.data ?? [], (workflow) => workflow.id);
+  const [batchDeleting, setBatchDeleting] = React.useState(false);
+  const batchRemove = useMutation({
+    mutationFn: async () => {
+      // 没有批量接口:逐条删,失败的报出去(和素材页同一种做法)。
+      const failures: string[] = [];
+      for (const id of selectedIds) {
+        try {
+          await deleteWorkflow(id);
+        } catch (error) {
+          failures.push(String((error as Error).message));
+        }
+      }
+      return failures;
+    },
+    onSuccess: (failures) => {
+      setBatchDeleting(false);
+      clear();
+      if (failures.length > 0) toast.error(failures.join("\n"));
+      void qc.invalidateQueries({ queryKey: ["workflows", workspace.id] });
+    },
+  });
+
   // 选中的那条被删掉时回到列表,而不是停在一张空画布上。
   React.useEffect(() => {
     if (selectedId && workflows.isSuccess && !(workflows.data ?? []).some((w) => w.id === selectedId)) {
@@ -682,13 +709,41 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
         <h2 className="m-0 inline-flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
           <WorkflowIcon size={13} /> {t("navWorkflows")}
         </h2>
-        <span className="inline-flex items-center gap-1.5">
-          <Button variant="outline" size="sm" loading={importFile.isPending} onClick={() => importInputRef.current?.click()}>
-            <FileUp size={13} /> {t("wfImport")}
-          </Button>
-          <Button size="sm" loading={create.isPending} onClick={() => create.mutate()}>
-            <Plus size={13} /> {t("wfCreate")}
-          </Button>
+        <span className="flex flex-wrap items-center gap-1.5">
+          {selectMode ? (
+            <>
+              <span className="whitespace-nowrap text-xs text-muted-foreground">
+                {t("mediaSelectedCount").replace("{n}", String(selectedIds.size))}
+              </span>
+              <Button variant="outline" size="sm" onClick={() => selectAll(workflows.data ?? [])}>
+                <ListChecks size={13} /> {allSelected(workflows.data ?? []) ? t("mediaDeselectAll") : t("mediaSelectAll")}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="hover:border-destructive/50 hover:text-destructive"
+                disabled={selectedIds.size === 0}
+                onClick={() => setBatchDeleting(true)}
+              >
+                <Trash2 size={13} /> {t("delete")}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={exit}>
+                <X size={13} /> {t("cancel")}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" size="sm" onClick={() => setSelectMode(true)}>
+                <Check size={13} /> {t("mediaSelectMode")}
+              </Button>
+              <Button variant="outline" size="sm" loading={importFile.isPending} onClick={() => importInputRef.current?.click()}>
+                <FileUp size={13} /> {t("wfImport")}
+              </Button>
+              <Button size="sm" loading={create.isPending} onClick={() => create.mutate()}>
+                <Plus size={13} /> {t("wfCreate")}
+              </Button>
+            </>
+          )}
         </span>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -699,8 +754,13 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
           {(workflows.data ?? []).map((workflow) => (
             <ContextMenu key={workflow.id}>
               <ContextMenuTrigger asChild>
-                <button type="button" className="text-left" onClick={() => setSelectedId(workflow.id)}>
+                <button
+                  type="button"
+                  className="relative text-left"
+                  onClick={() => (selectMode ? toggle(workflow.id) : setSelectedId(workflow.id))}
+                >
                   <WorkflowCard workflow={workflow} />
+                  {selectMode && <SelectionCheck selected={selectedIds.has(workflow.id)} />}
                 </button>
               </ContextMenuTrigger>
               <ContextMenuContent>
@@ -729,6 +789,13 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
         initialValue={menuRenaming?.name ?? ""}
         onCancel={() => setMenuRenaming(null)}
         onSubmit={(name) => menuRenaming && menuRename.mutate({ id: menuRenaming.id, name })}
+      />
+      <ConfirmDialog
+        open={batchDeleting}
+        title={t("deleteConfirmTitle")}
+        body={t("wfDeleteBody")}
+        onCancel={() => setBatchDeleting(false)}
+        onConfirm={() => batchRemove.mutate()}
       />
       <ConfirmDialog
         open={menuDeleting !== null}

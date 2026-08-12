@@ -16,6 +16,8 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { Recorder } from "@/features/editor/Recorder";
 import { AssetPreviewModal } from "@/features/media/AssetPreviewModal";
 import { TagsDialog } from "@/features/media/TagsDialog";
+import { SelectionCheck } from "@/components/app/SelectionCheck";
+import { useMultiSelect } from "@/lib/useMultiSelect";
 import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 
@@ -59,8 +61,6 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const [kindFilter, setKindFilter] = usePersistentTab<KindFilter>("media-kind", "all", KIND_FILTERS);
   const [search, setSearch] = React.useState("");
   const [sortKey, setSortKey] = usePersistentTab<SortKey>("media-sort", "created", SORT_KEYS);
-  const [selectMode, setSelectMode] = React.useState(false);
-  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [comparing, setComparing] = React.useState(false);
   const [batchTagging, setBatchTagging] = React.useState(false);
   const [batchDeleting, setBatchDeleting] = React.useState(false);
@@ -70,6 +70,9 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     queryKey: ["assets", workspace.id],
     queryFn: () => api<Asset[]>(`/api/assets?workspace_id=${workspace.id}`),
   });
+  // 多选的状态机是共用的(见 lib/useMultiSelect)—— 素材、发布记录、工作流三处同一份。
+  const { selectMode, setSelectMode, selectedIds, toggle: toggleSelected, selectAll, allSelected, clear: clearSelection, exit: exitSelectMode } =
+    useMultiSelect(assets.data ?? [], (asset) => asset.id);
   /** 选中项里能参与对比的(只有图片)。 */
   const comparable = React.useMemo(
     () => (assets.data ?? []).filter((asset) => selectedIds.has(asset.id) && asset.kind === "image"),
@@ -161,7 +164,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     },
     onSuccess: (failures) => {
       setBatchDeleting(false);
-      setSelectedIds(new Set());
+      clearSelection();
       if (failures.length > 0) setDeleteError(failures.join("\n"));
       void refresh();
     },
@@ -190,18 +193,6 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     return [...matched].sort((a, b) => compareAssets(a, b, sortKey));
   }, [assets.data, kindFilter, tagFilter, search, sortKey]);
 
-  const toggleSelected = (id: string) => {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-  const exitSelectMode = () => {
-    setSelectMode(false);
-    setSelectedIds(new Set());
-  };
 
   const kindLabel: Record<KindFilter, string> = {
     all: t("kindAll"),
@@ -281,16 +272,10 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  // 切换:当前可见项已全选则取消全选,否则全选(再点一下能取消)。
-                  const allSelected = visible.length > 0 && visible.every((asset) => selectedIds.has(asset.id));
-                  setSelectedIds(allSelected ? new Set() : new Set(visible.map((asset) => asset.id)));
-                }}
+                onClick={() => selectAll(visible)}
               >
                 <ListChecks size={13} />{" "}
-                {visible.length > 0 && visible.every((asset) => selectedIds.has(asset.id))
-                  ? t("mediaDeselectAll")
-                  : t("mediaSelectAll")}
+                {allSelected(visible) ? t("mediaDeselectAll") : t("mediaSelectAll")}
               </Button>
               {/* 对比只对图片有意义;视频要同步播放/逐帧,是另一套设计。少于两张时禁用并说明原因。 */}
               <Button
@@ -364,18 +349,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                   }}
                 >
                   <AssetTile asset={asset} selected={selectMode && selectedIds.has(asset.id)} />
-                  {selectMode && (
-                    <span
-                      className={cn(
-                        "pointer-events-none absolute left-2 top-2 z-[2] grid size-5 place-items-center rounded-full border",
-                        selectedIds.has(asset.id)
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border-strong bg-panel text-transparent",
-                      )}
-                    >
-                      <Check size={12} />
-                    </span>
-                  )}
+                  {selectMode && <SelectionCheck selected={selectedIds.has(asset.id)} />}
                 </div>
               </ContextMenuTrigger>
               <ContextMenuContent>
