@@ -16,7 +16,7 @@ import {
   type PublishTask,
   type Workspace,
 } from "@/api/client";
-import { useI18n } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Combobox } from "@/components/app/combobox";
@@ -24,8 +24,9 @@ import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { dayGroupOf, groupByLocalDay } from "@/lib/dayGroups";
 import { gotoRecord } from "@/lib/deepLink";
-import { usePersistentSelection } from "@/lib/usePersistentTab";
+import { useNow } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
 const ACTIVE = new Set(["queued", "running", "pending"]);
@@ -37,6 +38,7 @@ const BLOCKED = new Set(["login_required", "waiting_manual", "permission_require
  *  由桌面端 persist: 分区持久化,重启不丢。 */
 export function PublishView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
+  const { locale } = usePreferences();
   const qc = useQueryClient();
 
   // 任务中心深链(openstudio:open-* 事件通道):直接选中那条发布记录。
@@ -44,7 +46,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
     const onOpenTask = (event: Event) => {
       const id = (event as CustomEvent<string>).detail;
       if (typeof id === "string" && id) {
-        setSelectedId(id);
+        setOpenId(id);
       }
     };
     window.addEventListener("openstudio:open-publish-task", onOpenTask);
@@ -75,10 +77,16 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
     },
   });
 
-  // 选中的那一个**活过导航** —— 切走再回来还停在他刚才看的那条(见 lib/usePersistentTab)。
-  // 它被删掉时自动回落到列表第一条,那正是下面这行本来就在做的事。
-  const [selectedId, setSelectedId] = usePersistentSelection("publish", (tasks.data ?? []).map((task) => task.id));
-  const selected = (tasks.data ?? []).find((task) => task.id === selectedId) ?? (tasks.data ?? [])[0] ?? null;
+  // 详情走弹窗:记录本身是一条条独立的东西,列表 + 常驻右栏会把整页宽度让给"当前这一条",
+  // 而多数时候人是在**扫一遍**,不是在盯着一条看。
+  const [openId, setOpenId] = React.useState<string | null>(null);
+  const opened = (tasks.data ?? []).find((task) => task.id === openId) ?? null;
+  // 按天分栏。时间是无时区标记的 UTC 串,分组必须按本地日历天算(见 lib/dayGroups)。
+  const groups = React.useMemo(
+    () => groupByLocalDay(tasks.data ?? [], (task) => task.created_at),
+    [tasks.data],
+  );
+  const now = useNow(60_000);
 
   const dialogs = (
     <>
@@ -88,12 +96,19 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
         onClose={() => setCreating(false)}
         onCreated={(task) => {
           setCreating(false);
-          setSelectedId(task.id);
+          setOpenId(task.id);
           refresh();
         }}
         onManageAccounts={() => {
           setCreating(false);
           gotoRecord("/browser-pool"); // 账号管理归口浏览器池;没账号时引导过去添加
+        }}
+      />
+      <PublishDetailDialog
+        task={opened}
+        onClose={() => setOpenId(null)}
+        onDelete={() => {
+          if (opened) setDeleting(opened);
         }}
       />
       <ConfirmDialog
@@ -152,51 +167,106 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
     <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
       <div className="flex h-full min-h-0 flex-col gap-1.5">
       {seg}
-      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)] overflow-y-auto">
-        <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
-          <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
-            <h2>{t("publishListTitle")}</h2>
-          </div>
-          <div className="grid grid-cols-[minmax(0,1fr)] content-start gap-1 overflow-y-auto overflow-x-hidden p-1.5 [&:has(>.empty-inline:only-child)]:content-stretch max-[880px]:order-1 max-[880px]:flex max-[880px]:min-w-0 max-[880px]:flex-1 max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:overflow-x-auto max-[880px]:p-0">
-            {(tasks.data ?? []).map((task) => (
-              <ContextMenu key={task.id}>
-                <ContextMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className={cn("flex min-w-0 cursor-pointer items-center gap-[9px] rounded-md border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted max-[880px]:w-auto max-[880px]:shrink-0 max-[880px]:py-1", selected?.id === task.id && "bg-accent hover:bg-accent")}
-                    onClick={() => setSelectedId(task.id)}
-                  >
-                    <span className={cn("h-[7px] w-[7px] shrink-0 rounded-full bg-border-strong", ACTIVE.has(task.status) && "bg-[#22c55e]")} />
-                    <span className="min-w-0 flex-1 [&_small]:block [&_small]:truncate [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-[12.5px] [&_strong]:font-semibold max-[880px]:[&_small]:hidden">
-                      <strong>{task.title || task.asset_name}</strong>
-                      <small>
-                        {task.account_name} · {t(`batchStatus_${task.status}` as never)}
-                      </small>
-                    </span>
-                  </button>
-                </ContextMenuTrigger>
-                <ContextMenuContent>
-                  <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting(task)}>
-                    <Trash2 /> {t("delete")}
-                  </ContextMenuItem>
-                </ContextMenuContent>
-              </ContextMenu>
-            ))}
-          </div>
-        </aside>
-        <div className="grid min-w-0 overflow-y-auto overflow-x-hidden">
-          {selected ? (
-            <PublishDetail key={selected.id} task={selected} onDelete={() => setDeleting(selected)} />
-          ) : (
-            <div className="grid min-h-full place-items-center">
-              <EmptyState icon={<Rocket size={22} />} title={t("pickDetailTitle")} body={t("pickDetailBody")} />
-            </div>
-          )}
-        </div>
+      <div className="min-h-0 flex-1 overflow-y-auto pt-1">
+        {groups.map((group) => {
+          const day = dayGroupOf(group.key, now, locale);
+          return (
+            <section key={group.key || "unknown"} className="grid gap-2 pb-4">
+              {/* 日期栏头贴顶:滚很长时也知道现在看的是哪一天。 */}
+              <h3 className="sticky top-0 z-[1] m-0 bg-background/92 py-1 text-[11.5px] font-semibold text-muted-foreground backdrop-blur-sm">
+                {day.kind === "today" ? t("dateToday") : day.kind === "yesterday" ? t("dateYesterday") : day.text}
+                <span className="ml-1.5 font-normal tabular-nums text-muted-foreground/70">{group.items.length}</span>
+              </h3>
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(232px,1fr))] gap-2">
+                {group.items.map((task) => (
+                  <ContextMenu key={task.id}>
+                    <ContextMenuTrigger asChild>
+                      <button type="button" className="text-left" onClick={() => setOpenId(task.id)}>
+                        <PublishCard task={task} />
+                      </button>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent>
+                      <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting(task)}>
+                        <Trash2 /> {t("delete")}
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
+                ))}
+              </div>
+            </section>
+          );
+        })}
       </div>
       </div>
       {dialogs}
     </div>
+  );
+}
+
+
+/** 一条记录的状态归成四档:进行中 / 成了 / 卡住了(可人工恢复)/ 没成。
+ *  颜色和图标只在这里定一次 —— 卡片和详情弹窗都读它,免得两处各挑一套。 */
+function statusTone(status: string) {
+  if (ACTIVE.has(status)) return { Icon: Loader2, tone: "text-muted-foreground", spin: true };
+  if (status === "succeeded" || status === "success" || status === "prepared") {
+    return { Icon: CheckCircle2, tone: "text-[#16a34a]", spin: false };
+  }
+  if (BLOCKED.has(status)) return { Icon: CircleAlert, tone: "text-[#d97706]", spin: false };
+  return { Icon: CircleAlert, tone: "text-destructive", spin: false };
+}
+
+/** 后端时间无时区标记,补 Z 再按本地时区显示(与 lib/time、lib/dayGroups 同一约定)。 */
+function localTime(iso: string, locale: string): string {
+  const normalized = /Z|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`;
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+}
+
+/**
+ * 记录卡片。**卡面上要能判断"这条要不要点开"** —— 所以给的是状态、什么时候、发到哪个号、
+ * 发的哪条成片;失败时把原因头一行也带出来,那通常就是他要找的东西。
+ */
+function PublishCard({ task }: { task: PublishTask }) {
+  const t = useI18n();
+  const { locale } = usePreferences();
+  const { Icon, tone, spin } = statusTone(task.status);
+  return (
+    <article className="grid h-full content-start gap-1.5 rounded-lg border border-border bg-panel p-2.5 shadow-[var(--shadow-panel)] transition-colors hover:border-border-strong">
+      <div className="flex items-center gap-1.5">
+        <Icon size={13} className={cn("shrink-0", tone, spin && "animate-openstudio-spin")} />
+        <span className={cn("text-[11.5px] font-semibold", tone)}>{t(`batchStatus_${task.status}` as never)}</span>
+        <span className="ml-auto shrink-0 tabular-nums text-[11px] text-muted-foreground">
+          {localTime(task.created_at, locale)}
+        </span>
+      </div>
+      <strong className="line-clamp-2 text-[13px] font-[650] leading-[1.4] text-foreground [overflow-wrap:anywhere]">
+        {task.title || task.asset_name}
+      </strong>
+      <p className="m-0 truncate text-[11.5px] text-muted-foreground">
+        {task.platform} · {task.account_name}
+      </p>
+      <code className="truncate font-mono text-[11px] text-muted-foreground/80">{task.asset_name}</code>
+      {task.status === "failed" && task.error && (
+        <p className="m-0 line-clamp-2 text-[11px] leading-[1.45] text-destructive [overflow-wrap:anywhere]">{task.error}</p>
+      )}
+    </article>
+  );
+}
+
+/** 详情弹窗。点开一条才看细节 —— 常驻右栏会把整页宽度让给"当前这一条",而多数时候人是在扫一遍。 */
+function PublishDetailDialog({ task, onClose, onDelete }: { task: PublishTask | null; onClose: () => void; onDelete: () => void }) {
+  const t = useI18n();
+  return (
+    <ModalShell
+      open={task !== null}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      title={task ? task.title || task.asset_name : t("publishListTitle")}
+      className="w-[min(620px,calc(100vw-32px))]"
+    >
+      {task && <PublishDetail task={task} onDelete={onDelete} />}
+    </ModalShell>
   );
 }
 
@@ -219,17 +289,13 @@ function PublishDetail({ task, onDelete }: { task: PublishTask; onDelete: () => 
   // 不再需要问「这个平台是不是浏览器平台」:发布任务只可能是平台账号发布。
   const ok = task.status === "succeeded" || task.status === "success" || task.status === "prepared";
   return (
-    // 标题与下面的字段是同一个对象的两部分,所以共用一张卡:标题当卡头(略深底色 + 分隔线),
-    // 而不是浮在卡外面——那样读起来像页面/标签级标题,和表单割裂。
-    <div className="grid w-full content-start gap-3 px-0.5 pb-4 pt-0.5">
-      <section className="overflow-hidden rounded-lg border border-border bg-panel shadow-[var(--shadow-panel)]">
-        <header className="flex items-start justify-between gap-3 border-b border-border bg-panel-subtle px-3 py-2.5">
-          <div className="min-w-0">
-            <h2 className="m-0 text-[16px] font-[650] leading-[1.35] tracking-[-0.01em] [overflow-wrap:anywhere]">{task.title || task.asset_name}</h2>
-            <p className="mb-0 mt-1 text-[12.5px] text-muted-foreground">
-              {task.account_name} · {task.platform} · {t(`batchStatus_${task.status}` as never)}
-            </p>
-          </div>
+    // 外框和标题由弹窗提供 —— 这里再套一张卡就是盒中盒,标题也会重复一遍。
+    <div className="grid w-full content-start gap-2.5">
+      <section>
+        <header className="flex items-start justify-between gap-3 pb-2.5">
+          <p className="m-0 min-w-0 text-[12.5px] text-muted-foreground">
+            {task.account_name} · {task.platform} · {t(`batchStatus_${task.status}` as never)}
+          </p>
           <div className="flex shrink-0 items-center gap-1.5">
             {ACTIVE.has(task.status) ? (
               <Loader2 size={14} className="animate-openstudio-spin" />
@@ -258,7 +324,7 @@ function PublishDetail({ task, onDelete }: { task: PublishTask; onDelete: () => 
             </Button>
           </div>
         </header>
-        <dl className="m-0 grid [&>*+*]:border-t [&>*+*]:border-border">
+        <dl className="m-0 grid overflow-hidden rounded-lg border border-border [&>*+*]:border-t [&>*+*]:border-border">
           <InfoRow label={t("publishAsset")} description={t("publishAssetDesc")}>
             <code className="timecode text-xs text-muted-foreground [overflow-wrap:anywhere]">{task.asset_name}</code>
           </InfoRow>

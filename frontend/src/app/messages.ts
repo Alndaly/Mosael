@@ -298,6 +298,8 @@ export const messages = {
     toolStatusRunning: "运行中",
     toolStatusFailed: "失败",
     publishListTitle: "发布记录",
+    dateToday: "今天",
+    dateYesterday: "昨天",
     attachFile: "上传附件",
     // 监视器走带一律有可读 aria(此前是英文裸串)。
     monStart: "回到开头",
@@ -1982,6 +1984,8 @@ export const messages = {
     toolStatusRunning: "Running",
     toolStatusFailed: "Failed",
     publishListTitle: "Publish records",
+    dateToday: "Today",
+    dateYesterday: "Yesterday",
     attachFile: "Attach file",
     monStart: "Jump to start",
     monEnd: "Jump to end",
