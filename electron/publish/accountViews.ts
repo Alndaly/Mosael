@@ -218,6 +218,7 @@ export class AccountViewManager {
     this.drivers.delete(accountId);
     if (this.visibleId === accountId) {
       this.visibleId = null;
+      this.syncAudio();
       this.emit();
     }
   }
@@ -246,7 +247,37 @@ export class AccountViewManager {
       childCount: this.window.contentView.children.length,
       url: view.webContents.getURL(),
     });
+    this.syncAudio();
     this.emit();
+  }
+
+  /**
+   * 只有**前台那个视图**允许出声,其余(隐藏的、悬浮面板里的)一律静音。
+   *
+   * hide() 只是把视图从窗口摘掉 —— WebContents 还在跑,而且我们特意关掉了 backgroundThrottling,
+   * 于是 TikTok 信息流这种自动播放的页面在你回到应用之后还在响。静音走 Electron 这一层而不是往页面
+   * 里注 JS:页面改不掉它,SPA 也没法在下一次渲染时把自己恢复出声。
+   *
+   * 判据只在这一个方法里算,show/hide/panelAttach/panelDetach 都调它 —— 不在四个地方各写一遍
+   * 「现在该不该静音」。
+   */
+  private syncAudio(): void {
+    for (const [id, view] of this.views) {
+      if (!this.alive(view)) continue;
+      view.webContents.setAudioMuted(id !== this.visibleId);
+    }
+  }
+
+  /** 尽力暂停页面里正在播的音视频。失败无所谓 —— 静音才是那条硬的。 */
+  private pauseMedia(accountId: string): void {
+    const view = this.views.get(accountId);
+    if (!this.alive(view)) return;
+    void view.webContents
+      .executeJavaScript(
+        `document.querySelectorAll('video,audio').forEach((el) => { try { el.pause(); } catch (e) {} })`,
+        true,
+      )
+      .catch(() => undefined);
   }
 
   /** Hide whatever view is currently shown (returns the window to the React UI). */
@@ -257,6 +288,10 @@ export class AccountViewManager {
       const previous = this.visibleId;
       this.visibleId = null;
       this.demote(previous);
+      // 静音之外再按一次暂停:光静音的话视频仍在解码、仍在拉流,只是你听不见。这一步是尽力而为
+      // (页面随时可能自己再播),真正兜底的是上面的静音。
+      this.pauseMedia(previous);
+      this.syncAudio();
       this.emit();
     }
   }
@@ -280,6 +315,7 @@ export class AccountViewManager {
     const { view } = this.ensure(accountId);
     this.window.contentView.addChildView(view);
     view.webContents.setZoomFactor(this.panelZoom());
+    this.syncAudio();
     this.layout();
     return true;
   }
@@ -503,6 +539,8 @@ export class AccountViewManager {
         },
       });
       view.webContents.setUserAgent(platformUserAgent(view.webContents.getUserAgent()));
+      // 新视图默认静音:它此刻不在前台。show() 会按 syncAudio 的唯一判据放开。
+      view.webContents.setAudioMuted(true);
       view.webContents.setWindowOpenHandler(({ url }) => {
         // **弹窗要真的开成弹窗**,不能塞进本视图导航。
         //
