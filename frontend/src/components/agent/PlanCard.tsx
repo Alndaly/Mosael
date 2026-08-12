@@ -1,7 +1,7 @@
 import React from "react";
-import { Circle, CircleCheck, CircleDot, ListChecks } from "lucide-react";
-
+import { ListChecks } from "lucide-react";
 import { useI18n } from "@/app/preferences";
+import { AgentStatusIcon, toAgentStatus } from "@/components/agent/StatusIcon";
 import { InspectorCard } from "@/components/agent/InspectorCard";
 import { cn } from "@/lib/utils";
 
@@ -48,13 +48,7 @@ export function PlanCard({ plan, className }: { plan: PlanStep[] | null | undefi
               className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-1.5 text-[11.5px] leading-[1.5]"
               key={`${index}-${step.step}`}
             >
-              {step.status === "done" ? (
-                <CircleCheck size={12} className="mt-[3px] shrink-0 text-success" />
-              ) : step.status === "in_progress" ? (
-                <CircleDot size={12} className="mt-[3px] shrink-0 animate-pulse text-primary" />
-              ) : (
-                <Circle size={12} className="mt-[3px] shrink-0 text-muted-foreground/60" />
-              )}
+              <AgentStatusIcon status={toAgentStatus(step.status)} className="mt-[3px]" />
               <span
                 className={cn(
                   "min-w-0 break-words",

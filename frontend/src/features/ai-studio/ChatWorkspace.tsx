@@ -25,6 +25,7 @@ import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem, type ToolCall } from "@/components/agent/ToolCalls";
 import { formatElapsedSeconds } from "@/lib/time";
 import { SessionShareMenuItem } from "@/features/ai-studio/SessionShareMenuItem";
+import { AgentStatusIcon, ToolName, toAgentStatus } from "@/components/agent/StatusIcon";
 import { cn } from "@/lib/utils";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
@@ -697,7 +698,9 @@ function ChatInspector({
         }
       >
         {recentTools.length > 0 ? (
-          <ul className="m-0 grid list-none p-0">
+          // gap-1 和「任务计划」同一个节奏。此前这里没有 gap、靠每行一条 border-b 分开 ——
+          // **分隔线是在补缺失的间距**,而它又是整个检查器里唯一一处横线,三块并排就格格不入。
+          <ul className="m-0 grid list-none gap-1 p-0">
             {recentTools.map(({ key, call }) => (
               <RecentToolRow key={key} call={call} />
             ))}
@@ -726,22 +729,15 @@ function RecentToolRow({ call }: { call: ToolCall }) {
   const seconds = call.usage?.duration_seconds;
   const hasDetail = call.args != null || call.result != null;
   return (
-    <li className="grid min-w-0 border-b border-border/40 last:border-b-0">
+    <li className="grid min-w-0">
       <button
         type="button"
-        className="-mx-1 grid min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 rounded border-0 bg-transparent px-1 py-1.5 text-left text-[11.5px] text-foreground transition-colors hover:bg-panel"
+        className="-mx-1 grid min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 rounded border-0 bg-transparent px-1 py-1 text-left text-[11.5px] text-foreground transition-colors hover:bg-panel"
         onClick={() => setOpen((value) => !value)}
       >
-        <span
-          className={cn(
-            "h-[7px] w-[7px] rounded-full bg-muted-foreground",
-            call.status === "done" && "bg-success",
-            call.status === "running" && "bg-primary",
-            call.status === "error" && "bg-destructive",
-          )}
-        />
-        <span className="truncate" title={call.name}>{call.name}</span>
-        <em className="not-italic tabular-nums text-[10.5px] text-muted-foreground">
+        <AgentStatusIcon status={toAgentStatus(call.status)} />
+        <ToolName name={call.name} />
+        <em className="not-italic tabular-nums text-[11px] text-muted-foreground">
           {call.status === "error"
             ? t("toolStatusFailed")
             : call.status === "running"
@@ -750,10 +746,10 @@ function RecentToolRow({ call }: { call: ToolCall }) {
                 ? `${seconds}s`
                 : t("toolStatusDone")}
         </em>
-        <ChevronDown size={11} className={cn("shrink-0 text-muted-foreground/70 transition-transform", open && "rotate-180")} />
+        <ChevronDown size={12} className={cn("shrink-0 text-muted-foreground/70 transition-transform", open && "rotate-180")} />
       </button>
       {open && (
-        <div className="grid gap-1 pb-1.5 pl-[13px]">
+        <div className="grid gap-1 pb-1.5 pl-[18px]">
           {hasDetail ? (
             <>
               {call.args != null && <ToolPayload label={t("agentToolArgs")} value={call.args} />}
@@ -791,7 +787,7 @@ function ToolBrowserRow({ tool }: { tool: AgentTool }) {
       onClick={() => setOpen((value) => !value)}
     >
       <span className="flex min-w-0 items-center gap-1.5">
-        <strong className="min-w-0 truncate font-mono text-[12px] font-[650] text-foreground">{tool.name}</strong>
+        <ToolName name={tool.name} />
         {tool.confirmation && (
           <span className="shrink-0 rounded-full border border-border px-1.5 py-px text-[10px] font-normal text-muted-foreground">
             {t("agentToolNeedsConfirm")}
