@@ -46,6 +46,10 @@ const PANEL = {
   /** 页面要按这个宽度布局(桌面版)。缩放由「视图实际宽度 / 这个值」反算,而不是写死 0.3 —— 卡片
    *  尺寸一改,写死的比例就会让布局视口偏掉。 */
   layoutWidth: 1280,
+  /** 页面布局视口的高。与 layoutWidth 一起定死面板的宽高比 —— 面板里永远是完整的桌面版视口。 */
+  layoutHeight: 800,
+  /** 面板最大占窗口的比例。它是「边跑边看」的东西,不该把整个应用吞掉。 */
+  maxWindowFraction: 0.6,
 } as const;
 
 /**
@@ -324,17 +328,49 @@ export class AccountViewManager {
    * 用户拖动/缩放面板后调这个。x/y 传绝对坐标(卡片左上角),不传则保持「贴右下角」。
    * 会夹到窗口内并尊重最小尺寸,然后落盘,重启后接着用。
    */
+  /**
+   * 面板几何。**尺寸是一个标量,不是两个** —— 宽高按页面的布局比例联动。
+   *
+   * 为什么:面板里的页面布局视口恒为 1280 宽(见 PANEL.layoutWidth),缩放 = 面板宽 / 1280。
+   * 于是"改宽"是把页面放大缩小,"改高"是多露一点少露一点 —— 两件毫不相干的事,用一个对角手柄
+   * 同时驱动,拖起来就是没道理的:斜着拉一下,画面既变大又变形。锁住比例之后,拖动只有一个含义:
+   * 这块面板要多大。
+   *
+   * 比例取 layoutWidth : layoutHeight(1280×800),与页面本身一致 —— 于是面板里看到的永远是完整
+   * 的桌面版视口,不会出现"下面空一截"或"底部被切掉"。
+   */
   setPanelLayout(patch: { x?: number; y?: number; width?: number; height?: number }): void {
     const next = { ...this.panelLayout };
-    if (patch.width !== undefined) next.width = Math.max(PANEL_MIN.width, Math.round(patch.width));
-    if (patch.height !== undefined) next.height = Math.max(PANEL_MIN.height, Math.round(patch.height));
+    const ratio = PANEL.layoutHeight / PANEL.layoutWidth;
+    // 宽是主动的那一维:给了宽就按比例算高;只给了高就反推宽。两个都给以宽为准。
+    if (patch.width !== undefined) {
+      next.width = Math.max(PANEL_MIN.width, Math.round(patch.width));
+      next.height = Math.round((next.width - PANEL.inset * 2) * ratio) + PANEL.header + PANEL.inset;
+    } else if (patch.height !== undefined) {
+      const inner = Math.max(1, Math.round(patch.height) - PANEL.header - PANEL.inset);
+      next.width = Math.max(PANEL_MIN.width, Math.round(inner / ratio) + PANEL.inset * 2);
+      next.height = Math.round((next.width - PANEL.inset * 2) * ratio) + PANEL.header + PANEL.inset;
+    }
     if (patch.x !== undefined) next.x = Math.round(patch.x);
     if (patch.y !== undefined) next.y = Math.round(patch.y);
 
     if (this.window && !this.window.isDestroyed()) {
       const [w, h] = this.window.getContentSize();
-      next.width = Math.min(next.width, w - PANEL.margin * 2);
-      next.height = Math.min(next.height, h - EMBED_HEADER_HEIGHT - PANEL.margin);
+      // 上限留出余地:面板是"边跑边看"的,不该把整个应用吞掉(实测拖到几乎满屏,什么都点不了)。
+      const maxWidth = Math.min(w - PANEL.margin * 2, Math.round(w * PANEL.maxWindowFraction));
+      const maxHeight = Math.min(
+        h - EMBED_HEADER_HEIGHT - PANEL.margin,
+        Math.round(h * PANEL.maxWindowFraction),
+      );
+      if (next.width > maxWidth) {
+        next.width = maxWidth;
+        next.height = Math.round((next.width - PANEL.inset * 2) * ratio) + PANEL.header + PANEL.inset;
+      }
+      if (next.height > maxHeight) {
+        next.height = maxHeight;
+        const inner = Math.max(1, next.height - PANEL.header - PANEL.inset);
+        next.width = Math.round(inner / ratio) + PANEL.inset * 2;
+      }
       if (next.x !== null) next.x = Math.min(Math.max(0, next.x), Math.max(0, w - next.width));
       if (next.y !== null) {
         next.y = Math.min(Math.max(EMBED_HEADER_HEIGHT, next.y), Math.max(EMBED_HEADER_HEIGHT, h - next.height));

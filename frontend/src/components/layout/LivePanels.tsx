@@ -103,17 +103,24 @@ export function LivePanels() {
               </div>
 
               {isTop && (
-                /* 缩放:标题条右端的手柄。卡片其余边缘都被原生视图盖住,收不到鼠标,只能放这儿。 */
+                /*
+                 * 缩放:标题条右端的手柄。卡片其余边缘都被原生视图盖住,收不到鼠标,只能放这儿。
+                 *
+                 * **只沿水平方向驱动一个标量。** 之前是 dx→宽、dy→高的对角拉伸,而这里有两处说不通:
+                 * 手柄在**右上角**,往下拖时它根本不跟着走(高往下长,手柄留在原地);而宽和高在
+                 * 面板里是两件不相干的事(页面布局宽恒为 1280:改宽=缩放,改高=多露/少露一截),
+                 * 斜着拉一下画面既变大又变形。鼠标样式还写着 nwse-resize,等于在骗人。
+                 *
+                 * 现在比例由主进程锁死(见 setPanelLayout),这里只送宽度:往右拖变大、往左变小,
+                 * 手柄始终跟着指针走 —— 一个动作一个含义。
+                 */
                 <button
                   type="button"
                   aria-label={t("livePanelResize")}
-                  className="pointer-events-auto grid h-5 w-4 shrink-0 cursor-nwse-resize place-items-center rounded border-0 bg-transparent text-muted-foreground hover:text-foreground"
+                  className="pointer-events-auto grid h-5 w-4 shrink-0 cursor-ew-resize place-items-center rounded border-0 bg-transparent text-muted-foreground hover:text-foreground"
                   onPointerDown={(event) =>
-                    startDrag(event, (dx, dy) =>
-                      void window.openStudioPublish?.setPanelLayout?.({
-                        width: top.width + dx,
-                        height: top.height + dy,
-                      }),
+                    startDrag(event, (dx) =>
+                      void window.openStudioPublish?.setPanelLayout?.({ width: top.width + dx }),
                     )
                   }
                 >
