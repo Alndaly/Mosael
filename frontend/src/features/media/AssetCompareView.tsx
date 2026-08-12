@@ -148,7 +148,7 @@ function Pane({
   return (
     <div
       className={cn(
-        "relative grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden rounded-lg border bg-black",
+        "relative grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden rounded-lg border border-border bg-panel-subtle",
         active ? "border-primary" : "border-border",
       )}
     >
@@ -261,7 +261,7 @@ function SplitPane({
   return (
     <div
       ref={ref}
-      className="relative h-full w-full cursor-grab overflow-hidden rounded-lg border border-border bg-black active:cursor-grabbing"
+      className="relative h-full w-full cursor-grab overflow-hidden rounded-lg border border-border bg-panel-subtle active:cursor-grabbing"
       onWheel={onWheel}
       onPointerDown={startPan}
     >
@@ -357,14 +357,18 @@ export function AssetCompareView({ assets, onClose }: { assets: Asset[]; onClose
     // 不管用,z-index 与绘制顺序对它无效,只有显式 no-drag 能把这块减掉。不加的话这一层
     // 最左 56px 是一条纵贯的死区:候选条第一张的左半边点不动、悬浮态也出不来。
     // 顶栏自己再声明回 drag(它在 DOM 里更靠后,后者生效),盖住标题栏后窗口才还能拖。
-    <div className="fixed inset-0 z-[140] grid grid-rows-[auto_minmax(0,1fr)] bg-[rgb(10_10_12)] [.is-desktop_&]:[-webkit-app-region:no-drag]">
+    // 配色**跟随主题**。此前这一层混着两种来源:底色写死成近黑(bg-[rgb(10_10_12)])、
+    // 图片台面写死 bg-black,而边框用 border-border、按钮用 outline 变体 —— 后者是跟着
+    // 主题走的。深色下碰巧一致,浅色下就打架:每张图外面套一圈刺眼的白框,工具栏按钮
+    // 也和黑底对不上。一块表面只能有一个色源,这里统一交给令牌。
+    <div className="fixed inset-0 z-[140] grid grid-rows-[auto_minmax(0,1fr)] bg-background text-foreground [.is-desktop_&]:[-webkit-app-region:no-drag]">
       {/* 系统窗口控件避让:沿用 AppShell 顶栏的同一套约定 —— macOS 红绿灯在左上、Windows 控件在
           右上,全屏时都收回。这层是全屏覆盖,顶到了标题栏位置,不让位就会压在系统按钮上。
           顺带让它可拖窗(按钮自身 no-drag),否则盖住标题栏后窗口就挪不动了。 */}
       <div className="flex items-center gap-1.5 border-b border-border px-3 py-2 [.is-desktop_&]:[-webkit-app-region:drag] [.is-desktop_&_:is(button,a,input,[role=button])]:[-webkit-app-region:no-drag] [.is-desktop.is-mac_&]:pl-[88px] [.is-desktop.is-mac.is-fullscreen_&]:pl-3 [.is-desktop.is-win_&]:pr-[148px] [.is-desktop.is-win.is-fullscreen_&]:pr-3">
-        <span className="mr-auto text-[12.5px] font-semibold text-white">
+        <span className="mr-auto text-[12.5px] font-semibold text-foreground">
           {t("mediaCompare")}
-          <span className="ml-1.5 font-normal text-white/55">{images.length}</span>
+          <span className="ml-1.5 font-normal text-muted-foreground">{images.length}</span>
         </span>
         {/* 三种形态平铺,不做成"切换"按钮:用户要的是随时跳到某一种,而不是猜下一次点会变成什么。 */}
         {(["two", "split", "grid"] as const).map((item) => (
@@ -463,7 +467,7 @@ export function AssetCompareView({ assets, onClose }: { assets: Asset[]; onClose
                 key={asset.id}
                 title={asset.name || asset.original_filename}
                 className={cn(
-                  "group relative h-12 w-16 shrink-0 overflow-hidden rounded border bg-black",
+                  "group relative h-12 w-16 shrink-0 overflow-hidden rounded border border-border bg-panel-subtle",
                   slot === null ? "border-border opacity-60 hover:opacity-100" : "border-primary",
                 )}
               >
