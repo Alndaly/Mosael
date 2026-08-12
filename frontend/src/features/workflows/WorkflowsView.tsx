@@ -83,7 +83,7 @@ import { cn } from "@/lib/utils";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { relativeTime } from "@/lib/time";
 import { useMultiSelect } from "@/lib/useMultiSelect";
-import { usePersistentTab } from "@/lib/usePersistentTab";
+import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab";
 
 const AGENT_MODES = ["docked", "floating"] as const;
 import { blurFloatingPanels, hasFocusedFloatingPanel } from "@/features/workflows/useFloatingPanel";
@@ -599,9 +599,14 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
     onError: (error: Error) => toast.error(t("wfRunFailed"), { description: error.message }),
   });
 
-  // 列表页 / 详情页两态:**没选中就是列表**,不再自动回落到第一条 —— 那会让"返回列表"
-  // 这个动作无处可去(一松手又跳回某一条的画布)。
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  // 列表页 / 详情页两态:**没选中就是列表**。
+  //
+  // 用 usePersistentSelection 而不是普通 state:页面是条件挂载的(切走整棵卸载),纯 state
+  // 会让"进了详情、去别的页面看一眼、回来"变成回到列表 —— 用户报过。
+  //
+  // 之前我为了去掉"回落到第一条"把这个 hook 一起换掉了,那是看错了地方:回落写在下面那句
+  // `?? list[0]` 里,hook 本身返回 null 就是 null(存的是空 = 列表页),正是这里要的。
+  const [selectedId, setSelectedId] = usePersistentSelection("workflows", (workflows.data ?? []).map((w) => w.id));
   const selected = (workflows.data ?? []).find((w) => w.id === selectedId) ?? null;
   // 多选与素材页同一份状态机(见 lib/useMultiSelect)。
   const { selectMode, setSelectMode, selectedIds, toggle, selectAll, allSelected, clear, exit } =
@@ -627,13 +632,6 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
       void qc.invalidateQueries({ queryKey: ["workflows", workspace.id] });
     },
   });
-
-  // 选中的那条被删掉时回到列表,而不是停在一张空画布上。
-  React.useEffect(() => {
-    if (selectedId && workflows.isSuccess && !(workflows.data ?? []).some((w) => w.id === selectedId)) {
-      setSelectedId(null);
-    }
-  }, [selectedId, workflows.data, workflows.isSuccess]);
 
   if (workflows.isSuccess && (workflows.data ?? []).length === 0) {
     return (
