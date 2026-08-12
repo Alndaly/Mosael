@@ -14,6 +14,8 @@ const ACCOUNT_VIEW_PRELOAD = path.join(__dirname, "account-view-preload.cjs");
  *  由 contracts/shared-constants.json 钉住。 */
 export const PARTITION_PREFIX = "openstudio";
 
+/** 连按两次 Esc 判定为「退出内嵌浏览器」的时间窗(见 ensure() 里的 before-input-event)。 */
+const DOUBLE_ESCAPE_MS = 700;
 
 /**
  * 后台任务的「悬浮面板」几何。
@@ -486,10 +488,25 @@ export class AccountViewManager {
           url: validatedURL,
         });
       });
-      // Esc 从内嵌视图内可靠返回:顶栏「返回」是主窗口 HTML,内嵌视图抢焦点后首次点击常被 macOS
-      // 吃掉(时灵时不灵)。Esc 直接在视图 webContents 上收——无论焦点在谁那儿都稳。
+      // 从内嵌视图内可靠返回:顶栏「返回」是主窗口 HTML,内嵌视图抢焦点后首次点击常被 macOS
+      // 吃掉(时灵时不灵)。键盘直接在视图 webContents 上收——无论焦点在谁那儿都稳。
+      //
+      // 但**单击 Esc 不能用**:Esc 在网页里是「关掉当前这层」的通用键 —— 弹窗、下拉、验证浮层
+      // 全靠它。我们不 preventDefault,于是一次 Esc 同时被页面和这里收走:用户想关掉 Google 登录
+      // 的验证浮层,结果整个内嵌浏览器缩回了 app,登录被打断。实测就是这么发生的。
+      //
+      // 改成**连按两次**(700ms 内):第一次纯粹留给页面,第二次才是「我要退出这个内嵌浏览器」。
+      // 网页几乎不会把连按 Esc 定义成别的操作,而用户想退出时连按两下是自然动作。
+      let lastEscapeAt = 0;
       view.webContents.on("before-input-event", (_event, input) => {
-        if (input.type === "keyDown" && input.key === "Escape") this.hide();
+        if (input.type !== "keyDown" || input.key !== "Escape") return;
+        const now = Date.now();
+        if (now - lastEscapeAt <= DOUBLE_ESCAPE_MS) {
+          lastEscapeAt = 0;
+          this.hide();
+          return;
+        }
+        lastEscapeAt = now;
       });
       // 地址/加载态变化 → 刷新工具栏(仅当前可见视图才广播)。
       const sync = () => {
