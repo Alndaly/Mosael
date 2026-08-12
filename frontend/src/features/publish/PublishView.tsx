@@ -600,41 +600,34 @@ function CreatePublishDialog({
           <span>{t("publishTags")}</span>
           <Input value={tagsText} placeholder={t("publishTagsPlaceholder")} onChange={(event) => setTagsText(event.target.value)} />
         </label>
-        {optionSpecs.length > 0 && (
-          <div className="grid gap-1.5 rounded border border-border bg-panel-subtle p-2">
-            <span className="text-xs font-semibold text-foreground">
-              {(platformMeta?.label ?? "") + t("publishPlatformOptions")}
-            </span>
-            {optionSpecs.map((spec) => (
-              <label key={spec.key} className="grid gap-0.5">
-                <span className="text-[11.5px] text-muted-foreground">{spec.label}</span>
-                {spec.type === "enum" ? (
-                  <select
-                    className="rounded border border-border bg-field p-1.5 text-[12.5px] text-foreground focus-visible:border-primary focus-visible:outline-none"
-                    value={String(options[spec.key] ?? spec.default)}
-                    onChange={(event) => setOptions((prev) => ({ ...prev, [spec.key]: event.target.value }))}
-                  >
-                    {(spec.choices ?? []).map((choice) => (
-                      <option key={choice.value} value={choice.value}>
-                        {choice.label}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <span className="flex items-center gap-1.5">
-                    <Switch
-                      checked={Boolean(options[spec.key] ?? spec.default)}
-                      onCheckedChange={(next: boolean) => setOptions((prev) => ({ ...prev, [spec.key]: next }))}
-                    />
-                  </span>
-                )}
-                {spec.description && (
-                  <small className="text-[11px] leading-[1.4] text-muted-foreground">{spec.description}</small>
-                )}
-              </label>
-            ))}
-          </div>
-        )}
+        {/*
+          * 平台专属选项。**和上面几栏长一个样**:同样的 label + 控件,不套边框、不加小标题 ——
+          * 它们本来就是这次发布的字段("发到哪、谁能看"),不是附属于别处的一组设置。框起来反而
+          * 像是从别的地方嵌进来的东西。
+          *
+          * 控件用应用自己的 Combobox / Switch,不用原生 <select>:原生控件的弹层由系统绘制,
+          * 配色、圆角、字体都和应用对不上,深色模式下尤其突兀。
+          */}
+        {optionSpecs.map((spec) => (
+          <label key={spec.key} className={"grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground"}>
+            <span>{spec.label}</span>
+            {spec.type === "enum" ? (
+              <Combobox
+                value={String(options[spec.key] ?? spec.default)}
+                options={(spec.choices ?? []).map((choice) => ({ value: choice.value, label: choice.label }))}
+                emptyText={t("cmdkEmpty")}
+                className="w-full"
+                onValueChange={(next) => setOptions((prev) => ({ ...prev, [spec.key]: next }))}
+              />
+            ) : (
+              <Switch
+                checked={Boolean(options[spec.key] ?? spec.default)}
+                onCheckedChange={(next: boolean) => setOptions((prev) => ({ ...prev, [spec.key]: next }))}
+              />
+            )}
+            {spec.description && <small>{spec.description}</small>}
+          </label>
+        ))}
         <div className="mt-1 flex items-center justify-end gap-1.5">
           <Button variant="outline" size="sm" disabled={!assetId} loading={aiCopy.isPending} onClick={() => aiCopy.mutate()}>
             <Sparkles size={13} /> {t("publishAiCopy")}
