@@ -71,7 +71,14 @@ PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
     },
     "youtube": {
         "label": "YouTube",
-        "description": "由桌面端发布器用已登录的 YouTube 账号上传;首次使用需登录,境内需要可用的代理。默认发为私享,确认无误后再自行改公开。",
+        # 「通行密钥」这一句不是啰嗦:内嵌视图里 isUserVerifyingPlatformAuthenticatorAvailable()
+        # 实测为 false(没有平台认证器),Google 只会给「用另一台设备上的通行密钥」——那条要扫码 + 蓝牙,
+        # Electron 走不通,页面会一直转。用户不知道就会干等,所以把出路直接写在他添加账号时看得见的地方。
+        "description": (
+            "由桌面端发布器用已登录的 YouTube 账号上传;首次使用需登录,境内需要可用的代理。"
+            "默认发为私享,确认无误后再自行改公开。"
+            "登录时若卡在通行密钥(passkey)验证,点「试试其他方式」改用密码或短信——内嵌浏览器不支持通行密钥。"
+        ),
         "config": {},
         "title_max": 100,
         "short_title": False,
