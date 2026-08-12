@@ -156,6 +156,24 @@ export class PageDriver {
     return this.wc.getURL();
   }
 
+  /**
+   * 这个账号分区里有没有指定的会话 cookie —— **和当前显示哪一页无关**。
+   *
+   * 走 Electron 的 session API 而不是 `document.cookie`:后者读不到 HttpOnly,而且只能读当前
+   * 页面所属的域。登录轮询恰恰是在「用户此刻停在哪就问哪」的前提下工作的,页面无关是必要条件。
+   * `cookies.get({ url })` 由 Chromium 按域/路径/Secure 规则筛选,不必自己拼域名。
+   */
+  async hasCookie(url: string, names: readonly string[]): Promise<boolean> {
+    try {
+      const jar = await this.wc.session.cookies.get({ url });
+      return jar.some((cookie) => names.includes(cookie.name) && cookie.value.trim() !== "");
+    } catch (error) {
+      // 读 cookie 失败不能当成「未登录」——那会把用户从已登录状态踢下线。交给其它判据。
+      plog("hasCookie failed:", url, String(error).slice(0, 120));
+      return false;
+    }
+  }
+
   async goto(url: string): Promise<void> {
     plog("goto:", url);
     // loadURL 的 promise 等 did-finish-load;B 站等重前端页面可能长期不触发(未登录重定向 +

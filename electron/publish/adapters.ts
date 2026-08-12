@@ -1,4 +1,5 @@
 import type { PublishTask } from "./types";
+import type { SupportedPlatform } from "./platforms";
 import { resolvePlatform } from "./platforms";
 import type { PageDriver } from "./pageDriver";
 import { AutomationBlockedError } from "./errors";
@@ -92,6 +93,24 @@ async function clickTextPreferTrusted(
   } catch {
     await driver.clickByText(text, options);
   }
+}
+
+/**
+ * 「这个账号分区里存着登录态吗」——**页面无关**的那一条判据。
+ *
+ * 登录轮询在用户此刻停留的页面上反复问 `checkLogin()`,而各平台登录完落在哪一页由它们自己决定:
+ * YouTube 走完 Google 登录会把人送到 `www.youtube.com`(看视频那个站),那里既没有文件输入、
+ * 也没有任何 Studio 字样 —— 只认创作页长相的判据在这里必然答错,于是**登上了却一直显示未登录**。
+ *
+ * 只用作正向补充,且必须排在「当前在登录页」之后:会话过期时平台会把人重定向回登录页,那一条
+ * 先命中,残留 cookie 不会把已失效的会话说成有效。没配 `session` 的平台原样返回 false。
+ */
+async function hasStoredSession(driver: PageDriver, platform: SupportedPlatform): Promise<boolean> {
+  const { session } = resolvePlatform(platform);
+  if (!session) return false;
+  const ok = await driver.hasCookie(session.url, session.cookies);
+  if (ok) plog(`${platform} checkLogin: 会话 cookie 命中(与当前页面无关)`);
+  return ok;
 }
 
 const normalizeTag = (tag: string): string => tag.replace(/^#/, "").trim();
@@ -1439,6 +1458,10 @@ export class TiktokAdapter implements PublishAdapter {
     if (await this.driver.cssAttached(this.s.loggedOutMarks, 2_000)) {
       return false;
     }
+    // 页面无关的一条:登录成功后 TikTok 常把人留在 www.tiktok.com 的信息流,不是 Studio。
+    if (await hasStoredSession(this.driver, "tiktok")) {
+      return true;
+    }
     if (await this.driver.fileInputAttached(this.s.fileInput, 8_000)) {
       return true;
     }
@@ -1573,9 +1596,15 @@ export class YoutubeAdapter implements PublishAdapter {
   }
 
   async checkLogin(): Promise<boolean> {
-    // 未登录时 Google 直接把你送去登录页 —— 比找文案可靠。
+    // 未登录时 Google 直接把你送去登录页 —— 比找文案可靠。会话过期同样走这条,所以它必须排在
+    // cookie 判据前面:否则残留 cookie 会把已失效的会话说成有效。
     if (this.s.isLoginUrl(this.driver.url())) {
       return false;
+    }
+    // 页面无关的一条,必须排在页面判据之前:登录流程结束后人停在 www.youtube.com,那里没有任何
+    // Studio 标志,下面两条一个也命中不了,而 8 秒的文件输入等待还会让每轮轮询白等 8 秒。
+    if (await hasStoredSession(this.driver, "youtube")) {
+      return true;
     }
     if (await this.driver.fileInputAttached(this.s.fileInput, 8_000)) {
       return true;
