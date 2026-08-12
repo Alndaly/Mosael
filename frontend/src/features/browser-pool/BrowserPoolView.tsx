@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Boxes, Globe, LogIn, Plus, RefreshCcw, Trash2, Users, Users2 } from "lucide-react";
+import { Boxes, ExternalLink, Globe, LogIn, Plus, RefreshCcw, Trash2, Users, Users2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -138,6 +138,15 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
       toast.info(t("publishNeedDesktop"));
     }
   };
+  // 已登录的账号点主按钮是「打开」——**不是**再登一次。openLogin 会导航到平台登录页并起
+  // 十分钟登录轮询,对一个登录态好好的账号做这件事纯属倒退:平台通常把已登录的人从登录页
+  // 弹走,用户看到的是一次莫名其妙的跳转,而账号还会被标成 checking。openPage 则直接亮出
+  // 它的视图(有页面就恢复,没有就进创作首页),这才是「我想看看这个账号」要的东西。
+  const openPage = (p: BrowserProfile) => {
+    window.openStudioPublish
+      ?.openPage(p.bound_account_id!, p.platform!)
+      .catch((e: Error) => toast.error(e.message));
+  };
 
   const items = profiles.data ?? [];
 
@@ -174,6 +183,8 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
             ))}
           {items.map((p) => {
             const bound = Boolean(p.bound_account_id);
+            // 「已登录」只认 bound 这一个状态:checking/unknown 是"还不知道",不能当成"能用"。
+            const loggedIn = bound && p.binding_status === "bound";
             const platformLabel = (platforms.data ?? []).find((m) => m.platform === p.platform)?.label ?? p.platform;
             return (
               <ContextMenu key={p.id}>
@@ -231,15 +242,30 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                       {p.last_error ?? " "}
                     </small>
                     <div className="mt-auto flex min-h-[33px] items-center gap-1 pt-[5px]">
+                      {/* 登录态决定主按钮是什么:已登录 → 打开;其余(需登录/待人工/检测中) → 去登录。 */}
                       <Button
                         size="sm"
                         variant="outline"
                         title={window.openStudioPublish || window.openStudioBrowser?.openLogin ? undefined : t("publishNeedDesktop")}
                         disabled={bound ? !window.openStudioPublish : !window.openStudioBrowser?.openLogin}
-                        onClick={() => login(p)}
+                        onClick={() => (loggedIn ? openPage(p) : login(p))}
                       >
-                        <LogIn size={13} /> {t("poolLogin")}
+                        {loggedIn ? (
+                          <>
+                            <ExternalLink size={13} /> {t("poolOpen")}
+                          </>
+                        ) : (
+                          <>
+                            <LogIn size={13} /> {t("poolLogin")}
+                          </>
+                        )}
                       </Button>
+                      {/* 已登录时「重新登录」退居次要动作:换号/掉线自查还需要它,但它不该是默认那一下。 */}
+                      {loggedIn && (
+                        <Button size="sm" variant="ghost" onClick={() => login(p)}>
+                          <LogIn size={13} /> {t("poolRelogin")}
+                        </Button>
+                      )}
                       {bound && (
                         <Button
                           size="sm"
