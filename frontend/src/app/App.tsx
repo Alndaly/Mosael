@@ -19,6 +19,8 @@ import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { BrowserPreview } from "@/components/layout/BrowserPreview";
 import { LivePanels } from "@/components/layout/LivePanels";
 import { Input } from "@/components/ui/input";
+import { WINDOW_CHROME_INSET } from "@/lib/windowChrome";
+import { cn } from "@/lib/utils";
 import { listenDesktopDeepLinks } from "@/lib/deepLink";
 import { useCreateProject } from "@/lib/useCreateProject";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -132,7 +134,10 @@ function PublishViewBar() {
   return (
     <div
       style={{ height: PUBLISH_BAR_HEIGHT }}
-      className="fixed inset-x-0 top-0 z-[200] flex items-center gap-2 border-b border-border-strong bg-panel px-2.5 [-webkit-app-region:drag] supports-[backdrop-filter]:bg-[var(--glass-chrome)] supports-[backdrop-filter]:[-webkit-backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[backdrop-filter:blur(14px)_saturate(1.4)] [.is-desktop.is-mac_&]:pl-[88px]">
+      className={cn(
+        "fixed inset-x-0 top-0 z-[200] flex items-center gap-2 border-b border-border-strong bg-panel px-2.5 [-webkit-app-region:drag] supports-[backdrop-filter]:bg-[var(--glass-chrome)] supports-[backdrop-filter]:[-webkit-backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[backdrop-filter:blur(14px)_saturate(1.4)]",
+        WINDOW_CHROME_INSET,
+      )}>
       <div className="[-webkit-app-region:no-drag] inline-flex items-center gap-0.5">
         <button
           type="button"

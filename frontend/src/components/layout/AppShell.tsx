@@ -38,6 +38,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import type { MessageKey } from "@/app/messages";
 import { NAV_ITEMS, navLabelKey, type StudioView } from "@/components/layout/navLabels";
 import { cn } from "@/lib/utils";
+import { WINDOW_CHROME_INSET } from "@/lib/windowChrome";
 
 export type { StudioView } from "@/components/layout/navLabels";
 
@@ -125,7 +126,10 @@ export function AppShell({
 
   return (
     <div className="grid h-screen grid-cols-[56px_minmax(0,1fr)] grid-rows-[44px_minmax(0,1fr)]">
-      <header className="col-span-full flex items-center justify-between border-b border-border bg-panel px-2.5 supports-[backdrop-filter]:bg-[var(--glass-chrome)] supports-[backdrop-filter]:[-webkit-backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[[data-appearance=glass]_&]:[-webkit-backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] supports-[backdrop-filter]:[[data-appearance=glass]_&]:[backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] [.is-desktop_&]:[-webkit-app-region:drag] [.is-desktop_&_:is(button,a,input,[role=button])]:[-webkit-app-region:no-drag] [.is-desktop.is-mac_&]:pl-[88px] [.is-desktop.is-mac.is-fullscreen_&]:pl-2.5 [.is-desktop.is-win_&]:pr-[148px] [.is-desktop.is-win.is-fullscreen_&]:pr-2.5">
+      <header className={cn(
+        "col-span-full flex items-center justify-between border-b border-border bg-panel px-2.5 supports-[backdrop-filter]:bg-[var(--glass-chrome)] supports-[backdrop-filter]:[-webkit-backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[[data-appearance=glass]_&]:[-webkit-backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] supports-[backdrop-filter]:[[data-appearance=glass]_&]:[backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] [.is-desktop_&]:[-webkit-app-region:drag] [.is-desktop_&_:is(button,a,input,[role=button])]:[-webkit-app-region:no-drag]",
+        WINDOW_CHROME_INSET,
+      )}>
         {(() => {
           // 面包屑必须始终暴露"当前页面";项目语境的页面再把项目名接成第三段。
           // 早先的写法在 media/editor/ai 无项目时只显示"还没有项目",页面身份被抹掉
