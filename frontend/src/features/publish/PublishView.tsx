@@ -608,10 +608,35 @@ function CreatePublishDialog({
           * 控件用应用自己的 Combobox / Switch,不用原生 <select>:原生控件的弹层由系统绘制,
           * 配色、圆角、字体都和应用对不上,深色模式下尤其突兀。
           */}
-        {optionSpecs.map((spec) => (
-          <label key={spec.key} className={"grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground"}>
-            <span>{spec.label}</span>
-            {spec.type === "enum" ? (
+        {optionSpecs.map((spec) =>
+          spec.type === "bool" ? (
+            /*
+             * 开关型选项**不走「标签在上、控件在下」**那套:那是给输入框/下拉用的,它们占满整行,
+             * 标签放上面才对得齐。开关只有 36px 宽,单独占一行会孤零零吊在标签底下,而且旁边留一
+             * 大片空白 —— 应用里设置页早就用的是另一种形状(SettingsRow:标签与说明在左、控件在右),
+             * 这里照它,只是按对话框的字号与行距收紧。
+             *
+             * 加边框是为了让它看起来**也是一栏表单**:同一个对话框里其它控件(输入框、下拉)都有边框,
+             * 光秃秃一个开关会像是漏在表单外面的东西。
+             */
+            <label
+              key={spec.key}
+              className="flex items-center justify-between gap-4 rounded border border-border bg-field px-2.5 py-2"
+            >
+              <span className="grid min-w-0 gap-0.5">
+                <span className="text-xs font-semibold text-foreground">{spec.label}</span>
+                {spec.description && (
+                  <small className="text-[11px] leading-[1.4] text-muted-foreground">{spec.description}</small>
+                )}
+              </span>
+              <Switch
+                checked={Boolean(options[spec.key] ?? spec.default)}
+                onCheckedChange={(next: boolean) => setOptions((prev) => ({ ...prev, [spec.key]: next }))}
+              />
+            </label>
+          ) : (
+            <label key={spec.key} className={"grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground"}>
+              <span>{spec.label}</span>
               <Combobox
                 value={String(options[spec.key] ?? spec.default)}
                 options={(spec.choices ?? []).map((choice) => ({ value: choice.value, label: choice.label }))}
@@ -619,15 +644,10 @@ function CreatePublishDialog({
                 className="w-full"
                 onValueChange={(next) => setOptions((prev) => ({ ...prev, [spec.key]: next }))}
               />
-            ) : (
-              <Switch
-                checked={Boolean(options[spec.key] ?? spec.default)}
-                onCheckedChange={(next: boolean) => setOptions((prev) => ({ ...prev, [spec.key]: next }))}
-              />
-            )}
-            {spec.description && <small>{spec.description}</small>}
-          </label>
-        ))}
+              {spec.description && <small>{spec.description}</small>}
+            </label>
+          ),
+        )}
         <div className="mt-1 flex items-center justify-end gap-1.5">
           <Button variant="outline" size="sm" disabled={!assetId} loading={aiCopy.isPending} onClick={() => aiCopy.mutate()}>
             <Sparkles size={13} /> {t("publishAiCopy")}
