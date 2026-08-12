@@ -116,13 +116,25 @@ export const SELECTORS = {
     captionEditor:
       '.public-DraftEditor-content[contenteditable="true"], div[contenteditable="true"][role="combobox"], div[contenteditable="true"]',
     postButton: '[data-e2e="post_video_button"], button[data-e2e="post_video_button"]',
+    // 可见性(实测 DOM):容器带 data-e2e,里面是个 Select 的 combobox 按钮,默认值 Everyone。
+    visibilityTrigger:
+      '[data-e2e="video_visibility_container"] [role="combobox"], [data-e2e="video_visibility_container"] button',
+    visibilityValue: '[data-e2e="video_visibility_container"]',
+    // 下拉项:Select 组件的选项,中英各列一份(界面语言跟账号走)。
+    visibilityOption: '[role="option"], .Select__item, li',
+    onlyMeTexts: ["Only you", "仅自己可见", "仅自己"], // i18n-ok
+    // 上传页会弹「是否开启自动内容检查」;它是个模态,挡住真实点击。**点取消**——不替用户改账号设置。
+    dismissTexts: ["Cancel", "取消", "Got it", "知道了"], // i18n-ok
     postTexts: ["Post", "发布"], // i18n-ok
     loggedOutMarks: '[data-e2e="login-title"], [data-e2e="channel-item"]',
     loggedOutTexts: ["Log in to TikTok", "Use QR code", "登录 TikTok", "扫码登录"], // i18n-ok
     loggedInTexts: ["Upload video", "Select video", "上传视频", "选择视频"], // i18n-ok
     uploadingTexts: ["Uploading", "上传中", "%"], // i18n-ok
     uploadFailedTexts: ["Upload failed", "上传失败", "Failed to upload"], // i18n-ok
-    publishDoneTexts: ["Your video is being uploaded", "posted", "已发布", "发布成功", "Manage your posts"], // i18n-ok
+    // **别放宽泛词。** 原先这里有 "posted" 和 "Manage your posts" —— 前者是内容列表的列名,后者是
+    // 导航项,两者在**点发布之前**就在页面上,判定因此恒真(YouTube 那边的「已上传」栽过同一个跟头,
+    // 表现是提交后几毫秒即"成功",而什么都还没发生)。只留发布完成后才会出现的完整说法。
+    publishDoneTexts: ["Your video is being uploaded", "视频正在上传", "发布成功", "已发布", "Video posted"], // i18n-ok
     isLoginUrl: (u: string): boolean => /\/login|accounts\.tiktok\.com/.test(u),
     isManageUrl: (u: string): boolean => MANAGE_URL_PATTERNS.tiktok.test(u),
   },

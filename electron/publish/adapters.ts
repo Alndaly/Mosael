@@ -1525,9 +1525,18 @@ export class TiktokAdapter implements PublishAdapter {
 
   async fillTitle(title: string): Promise<void> {
     // TikTok 没有独立标题栏,这一栏是**文案**;标签在 fillTags 里接到同一段文字后面。
+    // 和 YouTube 一样:TikTok 用**文件名**预填文案,清不干净就会发出一条叫 3cce8622… 的片子,
+    // 而且是静默的。填完回读校验一次。
     await this.driver.focusAndClearField(this.s.captionEditor);
     await this.driver.insertText(this.s.captionEditor, title);
     await wait(500);
+    const actual = ((await this.driver.cssValue(this.s.captionEditor)) ?? "").trim();
+    if (!actual.includes(title.trim())) {
+      await plogPageState("TikTok caption mismatch:", this.driver);
+      throw new Error(
+        `TikTok caption did not accept the text (expected ${JSON.stringify(title.slice(0, 40))}, got ${JSON.stringify(actual.slice(0, 80))}).`,
+      );
+    }
   }
 
   async fillTags(tags: string[]): Promise<void> {
@@ -1549,7 +1558,58 @@ export class TiktokAdapter implements PublishAdapter {
     }
   }
 
+  /**
+   * 把可见性设成「仅自己可见」,**设不上就不许发**。
+   *
+   * TikTok 默认 Everyone —— 自动发布一旦误发公开是收不回的(别人已经看到、可以转存)。与 YouTube
+   * 默认私享同一条理由:想公开由人到平台上改一次,代价远小于反过来。所以这里的失败必须是硬失败,
+   * 绝不能"设不上就照发"。
+   */
+  private async selectOnlyMe(): Promise<void> {
+    // 上传页会弹「是否开启自动内容检查」之类的模态,挡住真实点击。先关掉(点取消,不替用户改设置)。
+    for (const text of this.s.dismissTexts) {
+      await clickTextPreferTrusted(this.driver, text, { exact: true }).catch(() => undefined);
+    }
+    if (!(await this.driver.cssVisible(this.s.visibilityTrigger, ACTION_TIMEOUT))) {
+      await plogPageState("TikTok visibility control missing:", this.driver);
+      throw new Error("TikTok visibility control not found; refusing to post publicly.");
+    }
+    // 打开下拉:先真实鼠标事件,再完整指针序列,最后 el.click()。
+    //
+    // 三条都要:这个 Select 的触发器只认 pointerdown/mousedown 一类事件,单发 el.click() 打不开
+    // (实测第一次跑就是这样:下拉根本没开,于是可见性停在 Everyone,被回读校验挡下)。而可信
+    // 指针点击又会被**话题联想面板**遮住(实测 hit:false,命中的是那个浮层里的 #OpenStudio),
+    // 所以它也不能是唯一手段。
+    await this.driver.pointerClickCss(this.s.visibilityTrigger).catch(async () => {
+      await this.driver.dispatchFullClickCss(this.s.visibilityTrigger).catch(async () => {
+        await this.driver.clickCss(this.s.visibilityTrigger).catch(() => undefined);
+      });
+    });
+    await wait(900);
+    for (const text of this.s.onlyMeTexts) {
+      const picked = await clickTextPreferTrusted(this.driver, text, {
+        exact: true,
+        selector: this.s.visibilityOption,
+      })
+        .then(() => true)
+        .catch(() => false);
+      if (picked) break;
+    }
+    await wait(600);
+    // 回读校验:控件上显示的必须已经是「仅自己可见」。这一步不能省 —— 点没点中和设没设上是两件事,
+    // 而它们的区别就是"公开发了一条"。
+    const shown = ((await this.driver.cssValue(this.s.visibilityValue)) ?? "").replace(/\s+/g, " ");
+    if (!this.s.onlyMeTexts.some((text) => shown.includes(text))) {
+      await plogPageState("TikTok visibility not set to private:", this.driver);
+      throw new Error(
+        `TikTok visibility is still ${JSON.stringify(shown.slice(0, 60))}; refusing to post publicly.`,
+      );
+    }
+    plog("tiktok 可见性已设为仅自己可见");
+  }
+
   async submit(): Promise<void> {
+    await this.selectOnlyMe();
     if (!(await this.driver.waitCssEnabled(this.s.postButton, ACTION_TIMEOUT).catch(() => false))) {
       // 结构选择器失配时退回文案(界面语言跟账号走,中英各试一遍)。
       for (const text of this.s.postTexts) {
@@ -1567,15 +1627,21 @@ export class TiktokAdapter implements PublishAdapter {
   }
 
   async waitResult(): Promise<void> {
+    // 判据:完成文案,或跳到了内容管理页。**外加「发布按钮已经不在了」** —— 光看文案会被页面上
+    // 早就存在的词命中(原先的 "posted" 是列表列名、"Manage your posts" 是导航项,两者在点发布
+    // 之前就在,判定恒真)。另外原来还挂着一段 `(函数源码 && false) ||` 的死表达式,一并删掉。
     const donePattern = this.s.publishDoneTexts.join("|");
-    const ok = await this.driver.waitForFunction(
-      `(${JSON.stringify(this.s.isManageUrl.toString())} && false) ||
-       new RegExp(${JSON.stringify(donePattern)}).test(document.body?.innerText || '') ||
-       /tiktokstudio\\/content/.test(location.href)`,
-      RESULT_TIMEOUT,
-      1_000,
-    );
-    if (!ok) {
+    const probe = `(() => {
+      const text = document.body?.innerText || '';
+      const formGone = !document.querySelector(${JSON.stringify(this.s.postButton)});
+      const hasDoneText = new RegExp(${JSON.stringify(donePattern)}).test(text);
+      const listed = /tiktokstudio\\/content/.test(location.href);
+      return { ok: listed || (hasDoneText && formGone), hasDoneText: hasDoneText, formGone: formGone, listed: listed, url: location.href };
+    })()`;
+    const settled = await this.driver.waitForFunction(`(${probe}).ok`, RESULT_TIMEOUT, 1_000);
+    const state = await this.driver.evaluate<Record<string, unknown>>(probe).catch(() => null);
+    plog("tiktok waitResult:", { settled, ...(state ?? {}) });
+    if (!settled) {
       await plogPageState("waitResult failed (tiktok):", this.driver);
       throw new Error("TikTok did not confirm the post (no success text or redirect to content list).");
     }
