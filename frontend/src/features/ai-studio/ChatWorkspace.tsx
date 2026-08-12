@@ -26,6 +26,7 @@ import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem, type ToolCall
 import { formatElapsedSeconds } from "@/lib/time";
 import { SessionShareMenuItem } from "@/features/ai-studio/SessionShareMenuItem";
 import { AgentStatusIcon, ToolName, toAgentStatus } from "@/components/agent/StatusIcon";
+import { readToolPayload } from "@/features/ai-studio/toolPayload";
 import { cn } from "@/lib/utils";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
@@ -756,7 +757,7 @@ function RecentToolRow({ call }: { call: ToolCall }) {
               {call.result != null && <ToolPayload label={t("agentToolResult")} value={call.result} />}
             </>
           ) : (
-            <p className="m-0 text-[10.5px] text-muted-foreground">{t("agentToolNoDetail")}</p>
+            <p className="m-0 text-[11px] text-muted-foreground">{t("agentToolNoDetail")}</p>
           )}
         </div>
       )}
@@ -766,11 +767,13 @@ function RecentToolRow({ call }: { call: ToolCall }) {
 
 /** 参数/结果都可能很长(read_kb_document 能回几千字),所以限高可滚,不让它撑开整个侧栏。 */
 function ToolPayload({ label, value }: { label: string; value: unknown }) {
-  const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+  // 拆掉 MCP 信封再显示 —— 直接 stringify 会把里层 JSON 二次转义成满屏 \n 和 \"。
+  // 见 toolPayload.ts;那一步是纯函数,有单测。
+  const text = readToolPayload(value);
   return (
     <div className="grid gap-0.5">
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
-      <pre className="m-0 max-h-28 overflow-auto whitespace-pre-wrap break-words rounded border border-border bg-panel p-1.5 text-[10.5px] leading-[1.45] text-muted-foreground">
+      <span className="text-[11px] text-muted-foreground">{label}</span>
+      <pre className="m-0 max-h-28 overflow-auto whitespace-pre-wrap break-words rounded border border-border bg-panel p-1.5 font-mono text-[11px] leading-[1.5] text-muted-foreground">
         {text}
       </pre>
     </div>
