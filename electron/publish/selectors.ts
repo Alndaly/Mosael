@@ -18,7 +18,9 @@ export const MANAGE_URL_PATTERNS = {
   weixinChannels: /platform\/post\/list/,
   bilibili: /upload-manager|content-manager|article/,
   tiktok: /tiktokstudio\/content|tiktokstudio\/upload\?.*posted/,
-  youtube: /studio\.youtube\.com\/channel\/[^/]+\/videos/,
+  // **不能只写 /videos/** —— 上传页本身就是 `.../videos/upload?...`,那样这条在点提交之前就已经
+  // 为真,收尾判定等于没做(实测:提交后 3 毫秒就"确认成功")。排除掉 /upload 才是"回到了列表页"。
+  youtube: /studio\.youtube\.com\/channel\/[^/]+\/videos(?!\/upload)/,
 } as const;
 
 export const SELECTORS = {
@@ -147,9 +149,17 @@ export const SELECTORS = {
     // 「还在传」的痕迹。**只认上传那一段**,不含 Processing/处理中 —— 处理可以长达几十分钟,而
     // YouTube 允许在处理期间就把稿件发出去;把处理也算成"没传完"会让流程白等到超时。
     uploadProgressPattern: "Uploading|上传中|正在上传|\\d+%", // i18n-ok
-    uploadDoneTexts: ["Upload complete", "上传完成", "Processing complete", "Checks complete", "检查完成", "处理完成"], // i18n-ok
+    // 实测中文界面的真实文案(2026-08 抓的现场):**「检查完毕」不是「检查完成」**,而最强的一条是
+    // 「已保存为私享视频」—— 草稿一落库就出现,正是"传完了"的意思。原先那份是照着英文猜的翻译,
+    // 一条都没命中,于是判据只能靠超时收场。
+    uploadDoneTexts: [
+      "已保存为私享视频", "已保存为草稿", "上传完毕", "上传完成", "检查完毕", "检查完成", "处理完毕", "处理完成", // i18n-ok
+      "Saved as private", "Saved as draft", "Upload complete", "Checks complete", "Processing complete",
+    ],
     uploadFailedTexts: ["Upload failed", "上传失败", "Daily upload limit reached"], // i18n-ok
-    publishDoneTexts: ["Video published", "Video uploaded", "视频已发布", "已上传"], // i18n-ok
+    // 「已上传」删掉:Studio 列表页上到处都是这两个字,留着等于判定恒真。只认发布完成对话框里
+    // 那句完整的话。
+    publishDoneTexts: ["视频已发布", "视频已上传", "Video published", "Video uploaded"], // i18n-ok
     loggedInTexts: ["YouTube Studio", "Channel dashboard", "创作者工作室", "频道数据"], // i18n-ok
     // 未登录时 Google 会把你送去登录页;这比找文案可靠得多。
     isLoginUrl: (u: string): boolean => /accounts\.google\.com|\/ServiceLogin|signin/.test(u),

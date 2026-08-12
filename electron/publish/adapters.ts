@@ -1596,6 +1596,8 @@ export class TiktokAdapter implements PublishAdapter {
  */
 export class YoutubeAdapter implements PublishAdapter {
   private readonly s = SELECTORS.youtube;
+  /** 本次上传拿到的视频 ID(详情页会显示 youtu.be 链接)。收尾判定靠它认「**这一支**发出去了」。 */
+  private uploadedId: string | null = null;
 
   constructor(
     private readonly driver: PageDriver,
@@ -1653,16 +1655,23 @@ export class YoutubeAdapter implements PublishAdapter {
     const failedPattern = this.s.uploadFailedTexts.join("|");
     const donePattern = this.s.uploadDoneTexts.join("|");
     const progressExpr = `new RegExp(${JSON.stringify(this.s.uploadProgressPattern)}).test(document.body?.innerText || '')`;
-    const started = await this.driver.waitForFunction(progressExpr, 20_000, 500);
 
-    // 「进度消失」必须**连续数拍**都成立才算数:进度区文案是跳变的(百分比、剩余时间轮换),
-    // 单拍不匹配太常见,按单拍判会在刚开始几秒就误判完成。
-    const STABLE_POLLS = 3;
+    // 判据只有两条:完成文案,或**进度痕迹连续数拍都不在**。
+    //
+    // 这里曾经还有第三个状态:先花 20 秒等进度痕迹出现,没等到就把状态记成 no-signal。那是从
+    // B 站那段照搬来的,而它在这里是个**死状态** —— 8MB 的片子两秒就传完,等我们去看时进度文字
+    // 早没了,于是 no-signal 恒成立、quietPolls 永远不累加,循环唯一的出口只剩超时:实测就是
+    // 卡满 10 分钟然后报「上传超时」,而视频其实早已传好并存成了私享草稿。
+    //
+    // 「见过进度」本来就不该是前提:没见过恰恰说明它在我们看之前就传完了。连续数拍安静已经足够,
+    // 而"连续"这一条不能省 —— 进度区文案是跳变的(百分比、剩余时间轮换),按单拍判会在刚开始
+    // 几秒就误判完成。
+    const STABLE_POLLS = 4;
     const stateExpr = `(() => {
       const text = document.body?.innerText || '';
       if (new RegExp(${JSON.stringify(failedPattern)}).test(text)) return 'failed';
       if (new RegExp(${JSON.stringify(donePattern)}).test(text)) return 'done-text';
-      return ${started ? `(${progressExpr}) ? 'in-progress' : 'quiet'` : "'no-signal'"};
+      return (${progressExpr}) ? 'in-progress' : 'quiet';
     })()`;
     const deadline = Date.now() + UPLOAD_TIMEOUT;
     let quietPolls = 0;
@@ -1688,13 +1697,33 @@ export class YoutubeAdapter implements PublishAdapter {
       await plogPageState("YouTube upload did not settle:", this.driver);
       throw new Error("YouTube upload did not finish in time.");
     }
-    plog("youtube uploadVideo settled:", { started, reason: settleReason });
+    plog("youtube uploadVideo settled:", { reason: settleReason });
+    // 详情页会给出这条稿件的 youtu.be 链接 —— 抓下来,收尾判定要靠它区分「我这支发出去了」和
+    // 「列表里本来就有一支同名的」。抓不到不算错,收尾会退回文案判据。
+    this.uploadedId = await this.driver
+      .evaluate<string | null>(`(() => {
+        const a = document.querySelector('a[href*="youtu.be/"]');
+        const m = a && a.getAttribute('href') ? a.getAttribute('href').match(/youtu\\.be\\/([\\w-]{6,})/) : null;
+        return m ? m[1] : null;
+      })()`)
+      .catch(() => null);
+    plog("youtube uploadVideo id:", this.uploadedId);
   }
 
   async fillTitle(title: string): Promise<void> {
+    // YouTube **用文件名预填标题**。清不干净的后果是发出一个叫 `3cce86226e01…` 的视频,而且是
+    // 静默的:表单合法、流程照走完。所以填完必须回读校验,宁可当场失败(草稿是私享的,重来即可)。
+    const value = title.slice(0, resolvePlatform("youtube").titleMaxLength ?? 100);
     await this.driver.focusAndClearField(this.s.titleBox);
-    await this.driver.insertText(this.s.titleBox, title);
+    await this.driver.insertText(this.s.titleBox, value);
     await wait(400);
+    const actual = ((await this.driver.cssValue(this.s.titleBox)) ?? "").trim();
+    if (actual !== value) {
+      await plogPageState("YouTube title mismatch:", this.driver);
+      throw new Error(
+        `YouTube title box did not accept the title (expected ${JSON.stringify(value)}, got ${JSON.stringify(actual.slice(0, 80))}).`,
+      );
+    }
     const description = stringOption(this.task, "description");
     if (description && (await this.driver.cssVisible(this.s.descBox, 5_000))) {
       await this.driver.focusAndClearField(this.s.descBox);
@@ -1748,16 +1777,33 @@ export class YoutubeAdapter implements PublishAdapter {
   }
 
   async waitResult(): Promise<void> {
+    // 「发出去了」= 上传对话框已关闭 **且** 这一支稿件出现在频道内容里。
+    //
+    // 这一条判据换过三次,前两次都是「恒真」:
+    //  ・URL 判据原先写成 `/videos/`,而上传页本身就是 `.../videos/upload` —— 点提交之前就为真,
+    //    实测提交后 3 毫秒即"确认成功",而那时什么都还没发生;
+    //  ・改成 `(?!\/upload)` 之后又永远不成立:YouTube 关掉对话框**并不换路由**,还留在 /upload;
+    //  ・文案判据里曾有「已上传」,那两个字在列表页上到处都是。
+    //
+    // 所以认**视频 ID**:它来自本次上传的详情页,列表里那一行的链接带着它。同名的旧稿件不会
+    // 让它误判 —— 而"什么都没发却报成功"是这里最坏的失败模式,值得多这一道。
     const donePattern = this.s.publishDoneTexts.join("|");
-    const ok = await this.driver.waitForFunction(
-      `new RegExp(${JSON.stringify(donePattern)}).test(document.body?.innerText || '') ||
-       /studio\\.youtube\\.com\\/channel\\/[^/]+\\/videos/.test(location.href)`,
-      RESULT_TIMEOUT,
-      1_000,
-    );
-    if (!ok) {
+    const idSelector = this.uploadedId ? `a[href*="${this.uploadedId}"]` : null;
+    const probe = `(() => {
+      const text = document.body?.innerText || '';
+      const dialogGone = !document.querySelector(${JSON.stringify(this.s.doneButton)});
+      const hasDoneText = new RegExp(${JSON.stringify(donePattern)}).test(text);
+      const listed = ${idSelector ? `Boolean(document.querySelector(${JSON.stringify(idSelector)}))` : "false"};
+      return { ok: dialogGone && (listed || hasDoneText), listed: listed, hasDoneText: hasDoneText, dialogGone: dialogGone };
+    })()`;
+    const settled = await this.driver.waitForFunction(`(${probe}).ok`, RESULT_TIMEOUT, 1_000);
+    const state = await this.driver
+      .evaluate<Record<string, unknown>>(probe)
+      .catch(() => null);
+    plog("youtube waitResult:", { settled, id: this.uploadedId, ...(state ?? {}) });
+    if (!settled) {
       await plogPageState("waitResult failed (youtube):", this.driver);
-      throw new Error("YouTube did not confirm the upload (no success text or redirect to the video list).");
+      throw new Error("YouTube did not confirm the upload (video not listed and no success text).");
     }
   }
 }
