@@ -189,6 +189,39 @@ export class AccountViewManager {
     return this.drivers.get(viewId) ?? null;
   }
 
+  /**
+   * 这个视图还能用吗 —— **`views` 里有没有 ≠ 它还活着**。
+   *
+   * WebContents 可以在我们的 destroy() 之外没掉:渲染进程崩溃、页面自己 window.close()、系统
+   * 回收。此后 `view.webContents` 直接是 undefined,于是任何一处 `view.webContents.xxx` 都会抛
+   * 「Cannot read properties of undefined」——线上就是点「去登录」时报 setZoomFactor 那一条。
+   * 所有拿到视图之后要用它的地方,都得先过这一关。
+   */
+  private alive(view: WebContentsView | undefined | null): view is WebContentsView {
+    return Boolean(view?.webContents && !view.webContents.isDestroyed());
+  }
+
+  /**
+   * 视图没了之后的收尾:从窗口摘掉、忘掉它,并且**绝不让 visibleId 指着一个尸体**。
+   *
+   * visibleId 指着已经没了的视图,就是那条「登录完顶部 header 还赖着不走」:emit() 只看
+   * `visibleId !== null` 就报 visible=true,渲染层照着画工具条,而它底下已经什么都没有了。
+   * 幂等 —— destroy() 主动关闭时会再触发一次 webContents 的 destroyed 事件,两条路进来结果一样。
+   */
+  private forget(accountId: string): void {
+    this.detachView(accountId);
+    const index = this.panels.indexOf(accountId);
+    if (index >= 0) this.panels.splice(index, 1);
+    this.panelIdleMs.delete(accountId);
+    this.panelTouchedAt.delete(accountId);
+    this.views.delete(accountId);
+    this.drivers.delete(accountId);
+    if (this.visibleId === accountId) {
+      this.visibleId = null;
+      this.emit();
+    }
+  }
+
   /** Bring an account's view to the front of the window and size it. */
   show(accountId: string): void {
     const { view, driver } = this.ensure(accountId);
@@ -339,7 +372,7 @@ export class AccountViewManager {
   private applyPanelZoom(accountId: string): void {
     if (this.visibleId === accountId || !this.panels.includes(accountId)) return;
     const view = this.views.get(accountId);
-    if (!view || view.webContents.isDestroyed()) return;
+    if (!this.alive(view)) return;
     const zoom = this.panelZoom();
     if (Math.abs(view.webContents.getZoomFactor() - zoom) > 1e-6) {
       view.webContents.setZoomFactor(zoom);
@@ -354,7 +387,7 @@ export class AccountViewManager {
     this.panelTouchedAt.delete(accountId);
     if (this.visibleId === accountId) return;
     const view = this.views.get(accountId);
-    if (view) view.webContents.setZoomFactor(1);
+    if (this.alive(view)) view.webContents.setZoomFactor(1);
     this.detachView(accountId);
     this.layout();
   }
@@ -374,7 +407,7 @@ export class AccountViewManager {
 
   private visibleWebContents(): Electron.WebContents | null {
     const view = this.visibleId ? this.views.get(this.visibleId) : null;
-    return view && !view.webContents.isDestroyed() ? view.webContents : null;
+    return this.alive(view) ? view.webContents : null;
   }
 
   /** 工具栏导航:全部作用于当前可见视图,内部动作发生在「已聚焦的视图」里,稳。 */
@@ -405,7 +438,7 @@ export class AccountViewManager {
   openDevTools(accountId?: string): boolean {
     const id = accountId ?? this.visibleId;
     const view = id ? this.views.get(id) : null;
-    if (!view || view.webContents.isDestroyed()) {
+    if (!this.alive(view)) {
       return false;
     }
     const wc = view.webContents;
@@ -418,22 +451,18 @@ export class AccountViewManager {
   }
 
   destroy(accountId: string): void {
-    this.detachView(accountId);
     this.drivers.get(accountId)?.detach();
     const view = this.views.get(accountId);
-    if (view) {
+    if (this.alive(view)) {
       try {
         view.webContents.close();
       } catch {
         // already gone
       }
     }
-    this.views.delete(accountId);
-    this.drivers.delete(accountId);
-    if (this.visibleId === accountId) {
-      this.visibleId = null;
-      this.emit();
-    }
+    // 关闭会触发 webContents 的 destroyed → forget;这里再走一次,是为了不依赖那个事件一定到达
+    // (视图本来就已经没了的情况下它不会再来)。forget 幂等。
+    this.forget(accountId);
   }
 
   /** Wipe the account's persisted login state (cookies, localStorage, caches). */
@@ -458,6 +487,11 @@ export class AccountViewManager {
 
   private ensure(accountId: string): { view: WebContentsView; driver: PageDriver } {
     let view = this.views.get(accountId);
+    // 尸体等于没有:留着它,下一次 show()/getDriver() 就会在 undefined 上取属性而炸。
+    if (view && !this.alive(view)) {
+      this.forget(accountId);
+      view = undefined;
+    }
     if (!view) {
       view = new WebContentsView({
         webPreferences: {
@@ -480,6 +514,9 @@ export class AccountViewManager {
         }
         return { action: "deny" };
       });
+      // 视图在我们之外没掉(渲染进程崩溃 / 页面自己 window.close())时,账本要跟着清 ——
+      // 否则 visibleId 会一直指着它,顶部工具条永远收不回去,而复用它的每一处都在 undefined 上取属性。
+      view.webContents.on("destroyed", () => this.forget(accountId));
       view.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
         console.warn("[open-studio:view] load failed", {
           accountId,
@@ -538,8 +575,11 @@ export class AccountViewManager {
 
   private detachView(accountId: string): void {
     const view = this.views.get(accountId);
-    if (view && this.window && !this.window.isDestroyed()) {
+    if (!view || !this.window || this.window.isDestroyed()) return;
+    try {
       this.window.contentView.removeChildView(view);
+    } catch {
+      // 视图已经没了 —— 摘不掉也无所谓,forget 接着往下清账本。
     }
   }
 
@@ -551,7 +591,7 @@ export class AccountViewManager {
 
     // 前台全屏视图:铺满内容区(顶部留出渲染层自己画的工具条)。
     const visible = this.visibleId ? this.views.get(this.visibleId) : null;
-    if (visible) {
+    if (this.alive(visible)) {
       visible.setBounds({
         x: 0,
         y: EMBED_HEADER_HEIGHT,
@@ -571,7 +611,7 @@ export class AccountViewManager {
     this.panels.forEach((accountId, index) => {
       if (accountId === this.visibleId) return; // 已在前台全屏,别再按面板摆
       const view = this.views.get(accountId);
-      if (!view) return;
+      if (!this.alive(view)) return;
       const depth = Math.min(this.panels.length - 1 - index, maxStack - 1);
       // 卡片外廓:渲染层照这个矩形画圆角、边框、阴影和标题条。
       const card = {

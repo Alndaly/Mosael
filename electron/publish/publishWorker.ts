@@ -599,6 +599,9 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
         } catch {
           /* 回写失败下个 ttl 再纠正 */
         }
+        // 登上了 = 这个内嵌浏览器的差事办完了,自己收回去。此前它会一直挂在前台,用户得再点一次
+        // 「返回 Open Studio」才能回来 —— 而他刚做完的事本来就以"回到账号池看到已登录"为终点。
+        if (views?.visibleAccountId === accountId) views.hide();
         endLogin(gen, accountId);
         return;
       }
