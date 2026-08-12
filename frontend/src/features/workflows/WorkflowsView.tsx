@@ -22,67 +22,7 @@ import {
   type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import {
-  XCircle,
-  SkipForward,
-  CheckCircle2,
-  ChevronRight,
-  AlignLeft,
-  AlertTriangle,
-  AudioLines,
-  Bell,
-  BookOpen,
-  Bot,
-  Boxes,
-  Braces,
-  CaseSensitive,
-  CircleCheck,
-  Code2,
-  Download,
-  Flag,
-  GitBranch,
-  Globe,
-  History,
-  Languages,
-  Repeat,
-  RefreshCw,
-  Filter,
-  ArrowLeft,
-  Link2,
-  Loader2,
-  Mic,
-  Pencil,
-  Timer,
-  PenLine,
-  Play,
-  Plus,
-  Rocket,
-  Redo2,
-  Search,
-  Undo2,
-  Sparkles,
-  Trash2,
-  X,
-  Type,
-  FileUp,
-  Wand2,
-  Workflow as WorkflowIcon,
-  Wrench,
-  Tags,
-  FolderInput,
-  FolderPlus,
-  AppWindow,
-  MousePointerClick,
-  Keyboard,
-  ScanText,
-  MousePointer2,
-  Hourglass,
-  PanelTopClose,
-  FileOutput,
-  Spline,
-  Waypoints,
-  type LucideIcon,
-} from "lucide-react";
+import { AlertTriangle, AlignLeft, AppWindow, ArrowLeft, AudioLines, Bell, BookOpen, Bot, Boxes, Braces, CaseSensitive, CheckCircle2, ChevronLeft, ChevronRight, CircleCheck, Code2, Download, FileOutput, FileUp, Filter, Flag, FolderInput, FolderPlus, GitBranch, Globe, History, Hourglass, Keyboard, Languages, Link2, Loader2, Mic, MousePointer2, MousePointerClick, PanelTopClose, PenLine, Pencil, Play, Plus, Redo2, RefreshCw, Repeat, Rocket, ScanText, Search, SkipForward, Sparkles, Spline, Tags, Timer, Trash2, Type, Undo2, Wand2, Waypoints, Workflow as WorkflowIcon, Wrench, X, XCircle, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -110,7 +50,7 @@ import {
   type Workspace,
 } from "@/api/client";
 import type { components } from "@/api/generated/schema";
-import { useI18n } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -140,7 +80,8 @@ import {
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
 import { cn } from "@/lib/utils";
-import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab";
+import { relativeTime } from "@/lib/time";
+import { usePersistentTab } from "@/lib/usePersistentTab";
 
 const AGENT_MODES = ["docked", "floating"] as const;
 import { blurFloatingPanels, hasFocusedFloatingPanel } from "@/features/workflows/useFloatingPanel";
@@ -656,10 +597,16 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
     onError: (error: Error) => toast.error(t("wfRunFailed"), { description: error.message }),
   });
 
-  // 选中的那一个**活过导航** —— 切走再回来还停在他刚才看的那条(见 lib/usePersistentTab)。
-  // 它被删掉时自动回落到列表第一条,那正是下面这行本来就在做的事。
-  const [selectedId, setSelectedId] = usePersistentSelection("workflows", (workflows.data ?? []).map((w) => w.id));
-  const selected = (workflows.data ?? []).find((w) => w.id === selectedId) ?? (workflows.data ?? [])[0] ?? null;
+  // 列表页 / 详情页两态:**没选中就是列表**,不再自动回落到第一条 —— 那会让"返回列表"
+  // 这个动作无处可去(一松手又跳回某一条的画布)。
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const selected = (workflows.data ?? []).find((w) => w.id === selectedId) ?? null;
+  // 选中的那条被删掉时回到列表,而不是停在一张空画布上。
+  React.useEffect(() => {
+    if (selectedId && workflows.isSuccess && !(workflows.data ?? []).some((w) => w.id === selectedId)) {
+      setSelectedId(null);
+    }
+  }, [selectedId, workflows.data, workflows.isSuccess]);
 
   if (workflows.isSuccess && (workflows.data ?? []).length === 0) {
     return (
@@ -694,94 +641,88 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
     );
   }
 
+  const importControl = (
+    <input
+      ref={importInputRef}
+      type="file"
+      accept=".json,application/json"
+      className="hidden"
+      onChange={(event) => {
+        const file = event.target.files?.[0];
+        event.target.value = ""; // 同一文件可再次选择
+        if (file) importFile.mutate(file);
+      }}
+    />
+  );
+
+  // ── 详情页:整页给画布。返回列表是**唯一**的出口,所以放在最左、和标题同一行。
+  if (selected && nodeTypes.data) {
+    return (
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-hidden p-3.5 [&>*]:shrink-0">
+        <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-1.5">
+          <button
+            type="button"
+            className="inline-flex w-fit cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-1 py-0.5 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
+            onClick={() => setSelectedId(null)}
+          >
+            <ChevronLeft size={13} /> {t("navWorkflows")}
+          </button>
+          <WorkflowEditor key={selected.id} workflow={selected} nodeTypes={nodeTypes.data} workspaceId={workspace.id} />
+        </div>
+        {importControl}
+        </div>
+      );
+  }
+
+  // ── 列表页:卡片 grid。卡面上给的是**判断"是不是这一条"所需的**:名字、说明、
+  //     多少个节点、上次改动是什么时候。
   return (
     <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
-      <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]">
-        <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
-          <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
-            <h2>{t("navWorkflows")}</h2>
-            <span className="inline-flex items-center gap-1">
-              <Button variant="outline" size="icon" className="h-7 w-7" title={t("wfImport")} aria-label={t("wfImport")} loading={importFile.isPending} onClick={() => importInputRef.current?.click()}>
-                <FileUp size={14} />
-              </Button>
-              <Button variant="outline" size="icon" className="h-7 w-7" title={t("wfCreate")} aria-label={t("wfCreate")} loading={create.isPending} onClick={() => create.mutate()}>
-                <Plus size={14} />
-              </Button>
-            </span>
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".json,application/json"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                event.target.value = ""; // 同一文件可再次选择
-                if (file) importFile.mutate(file);
-              }}
-            />
-          </div>
-          <div className="grid content-start gap-1 overflow-y-auto p-1.5 [&:has(>.empty-inline:only-child)]:content-stretch max-[880px]:order-1 max-[880px]:flex max-[880px]:min-w-0 max-[880px]:flex-1 max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:overflow-x-auto max-[880px]:p-0">
-            {workflows.isLoading &&
-              (workflows.data ?? []).length === 0 &&
-              [0, 1, 2, 3].map((i) => (
-                <div key={`sk${i}`} className="flex items-center gap-[9px] px-2 py-1.5" aria-hidden>
-                  <div className="min-w-0 flex-1 space-y-1.5">
-                    <Skeleton className="h-3.5 w-3/4 rounded" />
-                    <Skeleton className="h-2.5 w-1/3 rounded" />
-                  </div>
-                </div>
-              ))}
-            {(workflows.data ?? []).map((workflow) => (
-              <ContextMenu key={workflow.id}>
-                <ContextMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className={cn("flex cursor-pointer items-center gap-[9px] rounded-md border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted max-[880px]:shrink-0 max-[880px]:py-1", selected?.id === workflow.id && "bg-accent hover:bg-accent")}
-                    onClick={() => setSelectedId(workflow.id)}
-                  >
-                    <span className="min-w-0 [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-[12.5px] [&_strong]:font-semibold max-[880px]:[&_small]:hidden">
-                      <strong>{workflow.name}</strong>
-                      <small>
-                        {t("wfNodeCount").replace("{n}", String((workflow.graph as unknown as WorkflowGraph).nodes?.length ?? 0))}
-                      </small>
-                    </span>
-                  </button>
-                </ContextMenuTrigger>
-                <ContextMenuContent>
-                  <ContextMenuItem onSelect={() => menuRun.mutate(workflow.id)}>
-                    <Play /> {t("wfRun")}
-                  </ContextMenuItem>
-                  <ContextMenuItem onSelect={() => setMenuRenaming(workflow)}>
-                    <Pencil /> {t("rename")}
-                  </ContextMenuItem>
-                  <ContextMenuItem onSelect={() => menuExport.mutate(workflow)}>
-                    <Download /> {t("wfExport")}
-                  </ContextMenuItem>
-                  <ContextMenuItem onSelect={() => importInputRef.current?.click()}>
-                    <FileUp /> {t("wfImport")}
-                  </ContextMenuItem>
-                  <ContextMenuSeparator />
-                  <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setMenuDeleting(workflow)}>
-                    <Trash2 /> {t("delete")}
-                  </ContextMenuItem>
-                </ContextMenuContent>
-              </ContextMenu>
-            ))}
-          </div>
-        </aside>
-        <div className="grid min-w-0 overflow-y-auto">
-          {selected && nodeTypes.data ? (
-            <WorkflowEditor
-              key={selected.id}
-              workflow={selected}
-              nodeTypes={nodeTypes.data}
-              workspaceId={workspace.id}
-            />
-          ) : (
-            <EmptyState icon={<WorkflowIcon size={22} />} title={t("pickDetailTitle")} body={t("pickDetailBody")} />
-          )}
+      <div className="flex items-center justify-between pb-2">
+        <h2 className="m-0 inline-flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
+          <WorkflowIcon size={13} /> {t("navWorkflows")}
+        </h2>
+        <span className="inline-flex items-center gap-1.5">
+          <Button variant="outline" size="sm" loading={importFile.isPending} onClick={() => importInputRef.current?.click()}>
+            <FileUp size={13} /> {t("wfImport")}
+          </Button>
+          <Button size="sm" loading={create.isPending} onClick={() => create.mutate()}>
+            <Plus size={13} /> {t("wfCreate")}
+          </Button>
+        </span>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(232px,1fr))] gap-2">
+          {workflows.isLoading &&
+            (workflows.data ?? []).length === 0 &&
+            [0, 1, 2, 3].map((i) => <Skeleton key={`sk${i}`} className="h-[104px] rounded-lg" />)}
+          {(workflows.data ?? []).map((workflow) => (
+            <ContextMenu key={workflow.id}>
+              <ContextMenuTrigger asChild>
+                <button type="button" className="text-left" onClick={() => setSelectedId(workflow.id)}>
+                  <WorkflowCard workflow={workflow} />
+                </button>
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <ContextMenuItem onSelect={() => menuRun.mutate(workflow.id)}>
+                  <Play /> {t("wfRun")}
+                </ContextMenuItem>
+                <ContextMenuItem onSelect={() => setMenuRenaming(workflow)}>
+                  <Pencil /> {t("rename")}
+                </ContextMenuItem>
+                <ContextMenuItem onSelect={() => menuExport.mutate(workflow)}>
+                  <Download /> {t("wfExport")}
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setMenuDeleting(workflow)}>
+                  <Trash2 /> {t("delete")}
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
+          ))}
         </div>
       </div>
+      {importControl}
       <RenameDialog
         open={menuRenaming !== null}
         title={t("rename")}
@@ -797,6 +738,39 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
         onConfirm={() => menuDeleting && menuRemove.mutate(menuDeleting.id)}
       />
     </div>
+  );
+}
+
+
+/**
+ * 工作流卡片。**卡面上要能认出"是不是这一条"** —— 名字、一句说明、多大(几个节点)、
+ * 上次改动是什么时候。此前列表只给名字和节点数,同名的「新工作流」并排五个时分不出来。
+ */
+function WorkflowCard({ workflow }: { workflow: Workflow }) {
+  const t = useI18n();
+  const { locale } = usePreferences();
+  const nodes = (workflow.graph as unknown as WorkflowGraph).nodes ?? [];
+  return (
+    <article className="grid h-full content-start gap-1.5 rounded-lg border border-border bg-panel p-2.5 shadow-[var(--shadow-panel)] transition-colors hover:border-border-strong">
+      <div className="flex items-center gap-1.5">
+        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary">
+          <WorkflowIcon size={13} />
+        </span>
+        <strong className="min-w-0 truncate text-[13px] font-[650] text-foreground">{workflow.name}</strong>
+      </div>
+      {workflow.description ? (
+        <p className="m-0 line-clamp-2 text-[11.5px] leading-[1.45] text-muted-foreground [overflow-wrap:anywhere]">
+          {workflow.description}
+        </p>
+      ) : (
+        <p className="m-0 text-[11.5px] text-muted-foreground/60">{t("wfNoDescription")}</p>
+      )}
+      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <span className="tabular-nums">{t("wfNodeCount").replace("{n}", String(nodes.length))}</span>
+        <span aria-hidden>·</span>
+        <span className="truncate">{relativeTime(workflow.updated_at, locale)}</span>
+      </div>
+    </article>
   );
 }
 
