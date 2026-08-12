@@ -501,7 +501,6 @@ const FIELD_LABEL_KEYS: Record<string, MessageKey> = {
   tool_name: "wffTool",
   input: "wffInput",
   asset_id: "wffAsset",
-  dataset_id: "wffDataset",
   sequence_id: "wffSequence",
   provider: "wffProvider",
   kind: "wffKind",
