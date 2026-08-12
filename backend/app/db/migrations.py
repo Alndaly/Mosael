@@ -50,7 +50,22 @@ def _migrate_resource_ownership() -> None:
     对话从他们眼前一次性拿走 —— 那不是收紧权限,那是弄坏了正在用的东西。
 
     归属回填成**该工作区的 owner**:老数据里没有记谁建的,而工作区的 owner 是现在对它们负责的人。
-    幂等:只填空的那些,共享行靠唯一约束去重。
+
+    ## 共享回填**只能跑一次**,不是「幂等」
+
+    这两件事听起来像一回事,其实相反。共享是**用户随时在改的状态**:第一次跑到这里时「某条记录
+    没有共享行」意味着它是拆分之前的老数据、要一次性迁过来;而从此以后,「没有共享行」意味着
+    **主人把它收回了**。原先每次启动都补上缺的那些,于是:
+
+      ・新建的账号本该默认私有(domain/sharing.KINDS 明写 False),下次启动就被改成了团队共享;
+      ・在界面上点「收回」确实删掉了那一行,重启之后它又回来了 —— 表现为「收回无效」。
+
+    两个症状同一个根因。判据取**这一轮是否真的新加了 `owner_user_id` 列**:加列的那一次就是这台
+    机器第一次跑到归属拆分,老数据只在那一刻迁移。全新安装由 create_all 直接建出带列的表,永远
+    不走这条路,所以新库里的默认私有是真的默认私有。
+
+    归属回填(owner_user_id)则**照旧每次都跑**:它不是用户可改的状态,是派生值,而 owner 为空的
+    记录连主人自己都看不见 —— 那种行该修就修,且修它不会把任何东西暴露给别人。
     """
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
@@ -61,12 +76,15 @@ def _migrate_resource_ownership() -> None:
         "generation_session": "generation_sessions",
         "scheduled_task": "scheduled_tasks",
     }
+    # 这一轮真正新加了列的表 —— 只有它们的老数据需要一次性迁移共享。
+    upgraded: set[str] = set()
     for table in kinds.values():
         if table not in tables:
             continue
         if "owner_user_id" not in {c["name"] for c in inspector.get_columns(table)}:
             with engine.begin() as conn:
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN owner_user_id VARCHAR(64)"))
+            upgraded.add(table)
     if "resource_shares" not in set(inspect(engine).get_table_names()):
         return  # create_all 还没跑到(首次装机),下次启动再补
     with engine.begin() as conn:
@@ -81,6 +99,8 @@ def _migrate_resource_ownership() -> None:
                     "LIMIT 1) WHERE owner_user_id IS NULL"
                 )
             )
+            if table not in upgraded:
+                continue  # 列早就在了 = 老数据当年已经迁完;此后的「没有共享行」是主人收回了
             conn.execute(
                 text(
                     "INSERT INTO resource_shares (id, kind, resource_id, workspace_id, shared_by, created_at) "
