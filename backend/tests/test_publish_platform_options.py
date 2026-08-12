@@ -49,6 +49,14 @@ def test_platform_without_options_takes_none(platform: str) -> None:
         normalize_options(platform, {"visibility": "private"})
 
 
+def test_xiaohongshu_declares_only_what_was_verified() -> None:
+    """小红书发布页上实测有「原创声明」(input[type=checkbox])—— 声明它;
+    也确有「公开可见」那个下拉,但它是小红书自己的 d-select,合成事件打不开浮层,选项枚举不出来。
+    **猜着写会更糟**:默认值设不上就得拒发,小红书就整个发不出去了。所以这里只有 original。"""
+    assert [spec["key"] for spec in option_specs("xiaohongshu")] == ["original"]
+    assert normalize_options("xiaohongshu", None) == {"original": False}
+
+
 def test_douyin_visibility_is_declared() -> None:
     """抖音发布页上实测有「谁可以看:公开 / 好友可见 / 仅自己可见」,默认公开 —— 我们默认最保守那档。"""
     values = [c["value"] for c in option_specs("douyin")[0]["choices"]]
@@ -58,7 +66,7 @@ def test_douyin_visibility_is_declared() -> None:
 
 def test_every_declared_option_is_well_formed() -> None:
     """声明本身的形状:前端照它渲染控件,少一个字段就是一个画不出来的控件。"""
-    for platform, specs in ((p, option_specs(p)) for p in ("youtube", "tiktok", "douyin")):
+    for platform, specs in ((p, option_specs(p)) for p in ("youtube", "tiktok", "douyin", "xiaohongshu")):
         for spec in specs:
             assert {"key", "label", "type", "default"} <= spec.keys(), (platform, spec)
             assert spec["type"] in ("enum", "bool")

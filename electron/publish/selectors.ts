@@ -55,6 +55,8 @@ export const SELECTORS = {
     // Recent Xiaohongshu builds do not expose an open shadow root, so submit is
     // triggered through the host node contract instead of coordinate clicks.
     submitHost: "xhs-publish-btn",
+    // 「原创声明」:实测是 .original-wrapper 里的 input[type=checkbox],默认不勾。
+    originalSwitch: ".original-wrapper input[type=checkbox]",
     submitText: "发布", // i18n-ok
     uploadProgressTexts: ["正在上传视频", "视频上传中", "上传中"], // i18n-ok
     publishDoneTexts: ["发布成功", "发布完成", "审核中", "笔记发布成功", "提交成功"], // i18n-ok

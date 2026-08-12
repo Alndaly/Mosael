@@ -66,6 +66,18 @@ PLATFORM_OPTIONS: dict[str, list[dict[str, Any]]] = {
             "description": "YouTube 的必答项。选「是」会关掉评论等一批功能,按素材实际情况填。",
         },
     ],
+    "xiaohongshu": [
+        {
+            "key": "original",
+            "label": "原创声明",
+            "type": "bool",
+            "default": False,
+            "description": "勾了就是向平台声明这条笔记为原创,按实际情况填。",
+        },
+        # 可见性**先不声明**:发布页上确有「公开可见」那个下拉(.permission-card-select),但它是
+        # 小红书自己的 d-select,合成事件(哪怕打到 .d-select-main 上)打不开浮层,选项枚举不出来。
+        # 猜着写会有更坏的后果:默认值设不上就得拒发,小红书就整个发不出去了。
+    ],
     "douyin": [
         {
             "key": "visibility",

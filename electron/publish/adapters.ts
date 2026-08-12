@@ -558,7 +558,39 @@ export class XiaohongshuAdapter implements PublishAdapter {
     }
   }
 
+  /**
+   * 「原创声明」按发布选项勾/不勾,并**回读校验**。
+   *
+   * 它是内容属性(这条笔记是不是原创),该由用户定,不是我们替他定 —— 而且勾错了是要担责任的,
+   * 所以设不上就抛错,不做"设不上就照发"。
+   */
+  private async applyOriginal(): Promise<void> {
+    const wanted = boolOption(this.task, "original", false);
+    const sel = JSON.stringify(this.s.originalSwitch);
+    const current = await this.driver
+      .evaluate<boolean | null>(`(() => { const i = document.querySelector(${sel}); return i ? i.checked : null; })()`)
+      .catch(() => null);
+    if (current === null) {
+      if (!wanted) return; // 页面上没有这一项,而用户也没要求勾 —— 不必大惊小怪
+      await plogPageState("Xiaohongshu original switch missing:", this.driver);
+      throw new Error("Xiaohongshu 原创声明 control not found.");
+    }
+    if (current !== wanted) {
+      await this.driver.clickCss(this.s.originalSwitch).catch(() => undefined);
+      await wait(400);
+    }
+    const after = await this.driver
+      .evaluate<boolean | null>(`(() => { const i = document.querySelector(${sel}); return i ? i.checked : null; })()`)
+      .catch(() => null);
+    if (after !== wanted) {
+      await plogPageState("Xiaohongshu original not applied:", this.driver);
+      throw new Error(`Xiaohongshu 原创声明 stayed ${after}, wanted ${wanted}.`);
+    }
+    plog("xiaohongshu 原创声明:", wanted);
+  }
+
   async submit(): Promise<void> {
+    await this.applyOriginal();
     const ready =
       (await this.driver.waitCssEnabled(this.s.submitButton, ACTION_TIMEOUT)) ||
       (await this.driver.waitTextEnabledDeep(this.s.submitText, 1_000, {
