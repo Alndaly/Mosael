@@ -34,7 +34,21 @@ export interface PlatformDefinition {
    * 只给「登录后不落在创作页」的平台配置。抖音/B 站/小红书登完就回创作页,页面判据已经够用,
    * 再叠一层只会让「会话失效但 cookie 还在」有机会被误报成已登录。
    */
-  session?: { url: string; cookies: readonly string[] };
+  session?: {
+    /** 读 cookie 用的 URL(Chromium 按域/路径/Secure 规则筛选)。 */
+    url: string;
+    cookies: readonly string[];
+    /**
+     * 这条判据**只在平台自己的站上算数**的域名后缀。
+     *
+     * cookie 说的是「这个分区里存着一个会话」,它不解释当前这一页是什么。用户点「用 Google 继续」
+     * 时人在 accounts.google.com,而分区里可能躺着一枚过期的旧 cookie —— 那一刻判成"已登录"是错的,
+     * 而且代价很实在:登录成功会自动收起内嵌浏览器,于是浏览器在人还在登录时凭空消失。
+     * 限定在平台自己的域上,既保住了原本要解决的问题(登完停在 www.youtube.com / tiktok 信息流),
+     * 又不必去枚举有哪些第三方授权方。
+     */
+    hosts: readonly string[];
+  };
 }
 
 export const PLATFORM_DEFINITIONS: PlatformDefinition[] = [
@@ -126,7 +140,11 @@ export const PLATFORM_DEFINITIONS: PlatformDefinition[] = [
     supportsDescription: false,
     supportsTags: true,
     // 登录成功后 TikTok 常把人留在 www.tiktok.com 的信息流,而不是 Studio。
-    session: { url: "https://www.tiktok.com/", cookies: ["sessionid", "sessionid_ss"] },
+    session: {
+      url: "https://www.tiktok.com/",
+      cookies: ["sessionid", "sessionid_ss"],
+      hosts: ["tiktok.com"],
+    },
   },
   {
     id: "youtube",
@@ -147,6 +165,7 @@ export const PLATFORM_DEFINITIONS: PlatformDefinition[] = [
     session: {
       url: "https://www.youtube.com/",
       cookies: ["SAPISID", "__Secure-3PAPISID", "__Secure-1PAPISID"],
+      hosts: ["youtube.com"],
     },
   },
 ];

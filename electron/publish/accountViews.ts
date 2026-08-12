@@ -504,15 +504,45 @@ export class AccountViewManager {
       });
       view.webContents.setUserAgent(platformUserAgent(view.webContents.getUserAgent()));
       view.webContents.setWindowOpenHandler(({ url }) => {
-        // 弹窗只允许 http(s) 在本视图内导航;javascript:/file:/data: 等危险 scheme 一律不加载,
-        // 免得平台页面的 window.open 把已登录会话视图导到任意/危险目标。
+        // **弹窗要真的开成弹窗**,不能塞进本视图导航。
+        //
+        // 第三方登录(TikTok 的「用 Google 继续」、各家的微信/QQ 授权)全靠 window.open:授权页
+        // 办完事要 postMessage 回 `window.opener`,然后自己 window.close()。把它改成在本视图里
+        // 导航,这两件事同时坏掉 —— opener 被顶掉了,回调没人接;而那句 window.close() 关掉的是
+        // 整个账号视图,用户看到的就是"转了一会儿,内嵌浏览器自己退出了"。实测 TikTok 的 Google
+        // 登录正是这样。
+        //
+        // 安全那一半保持不变:危险 scheme(javascript:/file:/data: …)一律不开 —— 当初拦的是
+        // scheme,不是"弹窗"这件事本身。
+        //
+        // 代价:平台若用新窗口打开某个页面,驱动仍然只盯着原视图。目前各适配器都是自己 goto 到
+        // 明确 URL、不依赖"页面替我导航",所以不受影响。
         try {
           const proto = new URL(url).protocol;
-          if (proto === "http:" || proto === "https:") void view?.webContents.loadURL(url);
+          if (proto === "http:" || proto === "https:") {
+            return {
+              action: "allow",
+              overrideBrowserWindowOptions: {
+                width: 520,
+                height: 700,
+                autoHideMenuBar: true,
+                // 分区必须显式写死:授权拿到的 cookie 要落在**这个账号**的分区里,而不是默认会话。
+                webPreferences: {
+                  partition: this.partitionFor(accountId),
+                  preload: ACCOUNT_VIEW_PRELOAD,
+                  contextIsolation: true,
+                },
+              },
+            };
+          }
         } catch {
           /* 非法 URL,忽略 */
         }
         return { action: "deny" };
+      });
+      // 弹窗也要抹掉 UA 里的 Electron 字样 —— 授权页同样会读 UA 做风控。
+      view.webContents.on("did-create-window", (child) => {
+        child.webContents.setUserAgent(platformUserAgent(child.webContents.getUserAgent()));
       });
       // 视图在我们之外没掉(渲染进程崩溃 / 页面自己 window.close())时,账本要跟着清 ——
       // 否则 visibleId 会一直指着它,顶部工具条永远收不回去,而复用它的每一处都在 undefined 上取属性。

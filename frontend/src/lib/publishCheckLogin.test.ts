@@ -95,6 +95,29 @@ describe("YouTube 登录态判定", () => {
   });
 });
 
+describe("第三方授权页上,cookie 不算数", () => {
+  // 这条是被一次真实故障换来的:TikTok 的「用 Google 继续」把人带到 accounts.google.com,
+  // 而分区里可能还躺着一枚过期的 sessionid。判成已登录不只是显示错 —— 登录成功会自动收起
+  // 内嵌浏览器,于是人还在输密码,窗口就没了。
+  it("停在 accounts.google.com 时,TikTok 的残留 cookie 不能判成已登录", async () => {
+    const { driver } = fakeDriver({
+      url: "https://accounts.google.com/o/oauth2/v2/auth?client_id=tiktok",
+      cookies: ["sessionid"],
+    });
+    expect(await new TiktokAdapter(driver).checkLogin()).toBe(false);
+  });
+
+  it("停在 about:blank 时同样不算数", async () => {
+    const { driver } = fakeDriver({ url: "about:blank", cookies: ["SAPISID"] });
+    expect(await new YoutubeAdapter(driver, task).checkLogin()).toBe(false);
+  });
+
+  it("子域算平台自己的站(studio.youtube.com)", async () => {
+    const { driver } = fakeDriver({ url: "https://studio.youtube.com/", cookies: ["SAPISID"] });
+    expect(await new YoutubeAdapter(driver, task).checkLogin()).toBe(true);
+  });
+});
+
 describe("TikTok 登录态判定", () => {
   it("登完停在 www.tiktok.com 信息流也要认得出来", async () => {
     const { driver } = fakeDriver({ url: "https://www.tiktok.com/foryou", cookies: ["sessionid"] });

@@ -108,9 +108,24 @@ async function clickTextPreferTrusted(
 async function hasStoredSession(driver: PageDriver, platform: SupportedPlatform): Promise<boolean> {
   const { session } = resolvePlatform(platform);
   if (!session) return false;
+  // **只在平台自己的站上算数。** cookie 说的是「分区里存着一个会话」,它不解释当前这一页是什么:
+  // 用户点「用 Google 继续」时人在 accounts.google.com,而分区里可能还躺着一枚过期的旧 cookie。
+  // 那一刻判成已登录不只是显示错 —— 登录成功会自动收起内嵌浏览器,人还在登录,窗口就没了。
+  if (!onPlatformSite(driver.url(), session.hosts)) return false;
   const ok = await driver.hasCookie(session.url, session.cookies);
   if (ok) plog(`${platform} checkLogin: 会话 cookie 命中(与当前页面无关)`);
   return ok;
+}
+
+/** 当前页面是不是这个平台自己的站(按域名后缀,子域算)。 */
+function onPlatformSite(url: string, hosts: readonly string[]): boolean {
+  let hostname: string;
+  try {
+    hostname = new URL(url).hostname.toLowerCase();
+  } catch {
+    return false; // about:blank / 空串 —— 谈不上"在平台站上"
+  }
+  return hosts.some((host) => hostname === host || hostname.endsWith(`.${host}`));
 }
 
 const normalizeTag = (tag: string): string => tag.replace(/^#/, "").trim();
