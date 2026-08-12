@@ -144,8 +144,10 @@ export const SELECTORS = {
     privateRadio: 'tp-yt-paper-radio-button[name="PRIVATE"]',
     doneButton: "#done-button",
     closeDialog: "#close-button",
-    uploadingTexts: ["Uploading", "上传中", "Processing", "处理中"], // i18n-ok
-    uploadDoneTexts: ["Upload complete", "上传完成", "Processing complete", "Checks complete", "检查完成"], // i18n-ok
+    // 「还在传」的痕迹。**只认上传那一段**,不含 Processing/处理中 —— 处理可以长达几十分钟,而
+    // YouTube 允许在处理期间就把稿件发出去;把处理也算成"没传完"会让流程白等到超时。
+    uploadProgressPattern: "Uploading|上传中|正在上传|\\d+%", // i18n-ok
+    uploadDoneTexts: ["Upload complete", "上传完成", "Processing complete", "Checks complete", "检查完成", "处理完成"], // i18n-ok
     uploadFailedTexts: ["Upload failed", "上传失败", "Daily upload limit reached"], // i18n-ok
     publishDoneTexts: ["Video published", "Video uploaded", "视频已发布", "已上传"], // i18n-ok
     loggedInTexts: ["YouTube Studio", "Channel dashboard", "创作者工作室", "频道数据"], // i18n-ok

@@ -1514,7 +1514,7 @@ export class TiktokAdapter implements PublishAdapter {
         await plogPageState("TikTok upload failed:", this.driver);
         throw new Error("TikTok reported an upload failure.");
       }
-      if (await this.driver.waitButtonEnabled(this.s.postButton, 2_000).catch(() => false)) {
+      if (await this.driver.waitCssEnabled(this.s.postButton, 2_000).catch(() => false)) {
         return;
       }
       await wait(1_000);
@@ -1550,7 +1550,7 @@ export class TiktokAdapter implements PublishAdapter {
   }
 
   async submit(): Promise<void> {
-    if (!(await this.driver.waitButtonEnabled(this.s.postButton, ACTION_TIMEOUT).catch(() => false))) {
+    if (!(await this.driver.waitCssEnabled(this.s.postButton, ACTION_TIMEOUT).catch(() => false))) {
       // 结构选择器失配时退回文案(界面语言跟账号走,中英各试一遍)。
       for (const text of this.s.postTexts) {
         try {
@@ -1643,24 +1643,52 @@ export class YoutubeAdapter implements PublishAdapter {
     if (!(await this.driver.cssVisible(this.s.titleBox, UPLOAD_TIMEOUT))) {
       throw new Error("YouTube details form did not appear after upload (title box missing).");
     }
+    // **不能拿「下一步可点」当上传完成。** YouTube 用文件名预填标题,详情页一开始就是合法的,
+    // 于是「下一步」几乎立刻可点,而视频还在传。那样走完流程去点「完成」,YouTube 给的是
+    // "传完后自动发布"的提示,而不是发布成功的文案 —— waitResult 认不出来,一次成功的发布被
+    // 报成失败,用户重发就成了重复投稿。B 站那边踩过同一个坑(见 BilibiliAdapter.uploadVideo)。
+    //
+    // 真信号两个,任一即可:完成文案,或「进度痕迹出现过又连续几拍消失」。只认文案会在 YouTube
+    // 改文案时全线挂死;只认进度会在它不渲染百分比时退化回旧行为。
     const failedPattern = this.s.uploadFailedTexts.join("|");
+    const donePattern = this.s.uploadDoneTexts.join("|");
+    const progressExpr = `new RegExp(${JSON.stringify(this.s.uploadProgressPattern)}).test(document.body?.innerText || '')`;
+    const started = await this.driver.waitForFunction(progressExpr, 20_000, 500);
+
+    // 「进度消失」必须**连续数拍**都成立才算数:进度区文案是跳变的(百分比、剩余时间轮换),
+    // 单拍不匹配太常见,按单拍判会在刚开始几秒就误判完成。
+    const STABLE_POLLS = 3;
+    const stateExpr = `(() => {
+      const text = document.body?.innerText || '';
+      if (new RegExp(${JSON.stringify(failedPattern)}).test(text)) return 'failed';
+      if (new RegExp(${JSON.stringify(donePattern)}).test(text)) return 'done-text';
+      return ${started ? `(${progressExpr}) ? 'in-progress' : 'quiet'` : "'no-signal'"};
+    })()`;
     const deadline = Date.now() + UPLOAD_TIMEOUT;
+    let quietPolls = 0;
+    let settleReason = "";
     while (Date.now() < deadline) {
-      const failed = await this.driver
-        .evaluate<boolean>(`new RegExp(${JSON.stringify(failedPattern)}).test(document.body?.innerText || '')`)
-        .catch(() => false);
-      if (failed) {
+      const state = await this.driver.evaluate<string>(stateExpr).catch(() => "unknown");
+      if (state === "failed") {
         await plogPageState("YouTube upload failed:", this.driver);
         throw new Error("YouTube reported an upload failure.");
       }
-      // 「下一步」可用即说明这一步的必填项齐了、上传也推进到可继续的程度。
-      if (await this.driver.waitButtonEnabled(this.s.nextButton, 2_000).catch(() => false)) {
-        return;
+      if (state === "done-text") {
+        settleReason = state;
+        break;
+      }
+      quietPolls = state === "quiet" ? quietPolls + 1 : 0;
+      if (quietPolls >= STABLE_POLLS) {
+        settleReason = `quiet x${quietPolls}`;
+        break;
       }
       await wait(1_000);
     }
-    await plogPageState("YouTube upload did not settle:", this.driver);
-    throw new Error("YouTube upload did not finish in time (next button stayed disabled).");
+    if (!settleReason) {
+      await plogPageState("YouTube upload did not settle:", this.driver);
+      throw new Error("YouTube upload did not finish in time.");
+    }
+    plog("youtube uploadVideo settled:", { started, reason: settleReason });
   }
 
   async fillTitle(title: string): Promise<void> {
@@ -1700,7 +1728,7 @@ export class YoutubeAdapter implements PublishAdapter {
     }
     // 详情 → 视频元素 → 检查 → 可见性,共三次「下一步」。
     for (let step = 0; step < 3; step += 1) {
-      if (!(await this.driver.waitButtonEnabled(this.s.nextButton, ACTION_TIMEOUT).catch(() => false))) {
+      if (!(await this.driver.waitCssEnabled(this.s.nextButton, ACTION_TIMEOUT).catch(() => false))) {
         break;
       }
       await this.driver.clickCss(this.s.nextButton);
@@ -1712,7 +1740,7 @@ export class YoutubeAdapter implements PublishAdapter {
     }
     await this.driver.clickCss(this.s.privateRadio);
     await wait(400);
-    if (!(await this.driver.waitButtonEnabled(this.s.doneButton, ACTION_TIMEOUT).catch(() => false))) {
+    if (!(await this.driver.waitCssEnabled(this.s.doneButton, ACTION_TIMEOUT).catch(() => false))) {
       await plogPageState("YouTube done button unavailable:", this.driver);
       throw new Error("YouTube done button never became clickable.");
     }

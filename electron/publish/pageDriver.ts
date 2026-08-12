@@ -937,7 +937,10 @@ export class PageDriver {
       const rect = el.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) return false;
       const cls = (el.className || '').toString();
+      // hasAttribute('disabled') 这一条是给**自定义元素**的:ytcp-button 之类的禁用态只体现在
+      // 属性上,el.disabled 这个 DOM 属性对它们可能压根不存在,只看属性名才判得准。
       return !el.disabled &&
+        !el.hasAttribute('disabled') &&
         !/disabled/i.test(cls) &&
         el.getAttribute('aria-disabled') !== 'true' &&
         el.getAttribute('submit-disabled') !== 'true' &&
@@ -946,8 +949,21 @@ export class PageDriver {
     return this.waitForFunction(expr, timeout, 1_000);
   }
 
-  /** Wait until a button whose exact text === `text` exists and is not disabled. */
+  /**
+   * Wait until a button whose exact text === `text` exists and is not disabled.
+   *
+   * **参数是文案,不是选择器。** 驱动上其它方法几乎都收 CSS 选择器,所以这里最容易被顺手传进
+   * 一个选择器 —— 而那样它只会去找「文本恰好等于 `#next-button` 的按钮」,永远找不到,于是**静默
+   * 恒假**:调用方要么干等满超时再报一句"没就绪",要么直接跳过整段流程。TikTok 与 YouTube 两个
+   * 适配器都这么写过,而两处的表现分别是"上传等满 10 分钟超时"和"没走到可见性步骤",谁也看不出
+   * 病根在参数上。所以宁可当场炸:选择器请走 waitCssEnabled。
+   */
   async waitButtonEnabled(text: string, timeout = 30_000): Promise<boolean> {
+    if (/^[#.[]/.test(text.trim())) {
+      throw new Error(
+        `waitButtonEnabled 收的是按钮文案,不是选择器(收到 ${JSON.stringify(text.slice(0, 40))});选择器请用 waitCssEnabled`,
+      );
+    }
     const t = JSON.stringify(text);
     const expr = `(() => {
       const collect = (root, out = []) => {
