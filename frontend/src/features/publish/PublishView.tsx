@@ -215,6 +215,11 @@ function statusTone(status: string) {
   return { Icon: CircleAlert, tone: "text-destructive", spin: false };
 }
 
+function StatusIcon({ status }: { status: string }) {
+  const { Icon, tone, spin } = statusTone(status);
+  return <Icon size={13} className={cn("shrink-0", tone, spin && "animate-openstudio-spin")} aria-hidden />;
+}
+
 /** 后端时间无时区标记,补 Z 再按本地时区显示(与 lib/time、lib/dayGroups 同一约定)。 */
 function localTime(iso: string, locale: string): string {
   const normalized = /Z|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`;
@@ -265,26 +270,35 @@ function PublishDetailDialog({ task, onClose, onDelete }: { task: PublishTask | 
       title={task ? task.title || task.asset_name : t("publishListTitle")}
       className="w-[min(620px,calc(100vw-32px))]"
     >
-      {task && <PublishDetail task={task} onDelete={onDelete} />}
+      {task && <PublishDetail task={task} onDelete={onDelete} onLeave={onClose} />}
     </ModalShell>
   );
 }
 
 /** 详情行:标签固定窄列 + 值紧随其右、左对齐填满剩余宽度(读起来是"字段:内容",
  *  而不是设置页那种"标签左、控件甩到最右"、中间一大片空白)。窄屏改成上下堆叠。 */
-function InfoRow({ label, description, children }: { label: string; description?: string; children: React.ReactNode }) {
+/** 详情里的一行事实。**没有边框、没有底色、不画横线** —— 弹窗本身已经是一张卡,里面再套一张
+ *  带框的表就是盒中盒,而行与行之间靠间距分开就够了(素材预览弹窗里的同类就是这么排的,
+ *  两处保持一致)。 */
+function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[124px_minmax(0,1fr)] items-start gap-4 px-3.5 py-2.5 max-[520px]:grid-cols-1 max-[520px]:gap-1">
-      <dt className="grid content-start gap-0.5 pt-px">
-        <span className="text-[12.5px] font-medium text-foreground">{label}</span>
-        {description && <span className="text-[11px] leading-[1.4] text-muted-foreground">{description}</span>}
-      </dt>
-      <dd className="m-0 min-w-0 text-[12.5px] leading-[1.6] text-foreground">{children}</dd>
+    <div className="grid grid-cols-[76px_minmax(0,1fr)] items-baseline gap-3 max-[520px]:grid-cols-1 max-[520px]:gap-1">
+      <dt className="text-[11px] text-muted-foreground">{label}</dt>
+      <dd className="m-0 min-w-0 text-[12.5px] leading-[1.6] text-foreground [overflow-wrap:anywhere]">{children}</dd>
     </div>
   );
 }
 
-function PublishDetail({ task, onDelete }: { task: PublishTask; onDelete: () => void }) {
+function PublishDetail({
+  task,
+  onDelete,
+  onLeave,
+}: {
+  task: PublishTask;
+  onDelete: () => void;
+  /** 跳去内嵌浏览器之后调用 —— 弹窗留在原地的话,从平台页返回 Open Studio 还要再点一次关闭。 */
+  onLeave: () => void;
+}) {
   const t = useI18n();
   // 不再需要问「这个平台是不是浏览器平台」:发布任务只可能是平台账号发布。
   const ok = task.status === "succeeded" || task.status === "success" || task.status === "prepared";
@@ -293,28 +307,27 @@ function PublishDetail({ task, onDelete }: { task: PublishTask; onDelete: () => 
     <div className="grid w-full content-start gap-2.5">
       <section>
         <header className="flex items-start justify-between gap-3 pb-2.5">
-          <p className="m-0 min-w-0 text-[12.5px] text-muted-foreground">
-            {task.account_name} · {task.platform} · {t(`batchStatus_${task.status}` as never)}
+          {/* 状态只说一次:此前这一行写着「失败」,右边还浮着一个同义的红色图标。 */}
+          <p className="m-0 flex min-w-0 items-center gap-1.5 text-[12.5px] text-muted-foreground">
+            <StatusIcon status={task.status} />
+            <span className="truncate">
+              {task.account_name} · {task.platform} ·{" "}
+              <span className={statusTone(task.status).tone}>{t(`batchStatus_${task.status}` as never)}</span>
+            </span>
           </p>
           <div className="flex shrink-0 items-center gap-1.5">
-            {ACTIVE.has(task.status) ? (
-              <Loader2 size={14} className="animate-openstudio-spin" />
-            ) : ok ? (
-              <CheckCircle2 size={14} className="text-[#16a34a]" />
-            ) : BLOCKED.has(task.status) ? (
-              <CircleAlert size={14} className="text-[#d97706]" />
-            ) : (
-              <CircleAlert size={14} className="text-destructive" />
-            )}
             {window.openStudioPublish && (
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() =>
+                onClick={() => {
+                  // 先关弹窗再跳:跳过去之后这个弹窗就在内嵌视图**背后**,用户从平台页
+                  // 返回时会撞见一个自己没打开过的东西,还得多点一次。
+                  onLeave();
                   window.openStudioPublish
                     ?.openPage(task.account_id, task.platform)
-                    .catch((error: Error) => toast.error(error.message))
-                }
+                    .catch((error: Error) => toast.error(error.message));
+                }}
               >
                 <ExternalLink size={13} /> {t("publishOpenPage")}
               </Button>
@@ -324,8 +337,8 @@ function PublishDetail({ task, onDelete }: { task: PublishTask; onDelete: () => 
             </Button>
           </div>
         </header>
-        <dl className="m-0 grid overflow-hidden rounded-lg border border-border [&>*+*]:border-t [&>*+*]:border-border">
-          <InfoRow label={t("publishAsset")} description={t("publishAssetDesc")}>
+        <dl className="m-0 grid gap-2.5">
+          <InfoRow label={t("publishAsset")}>
             <code className="timecode text-xs text-muted-foreground [overflow-wrap:anywhere]">{task.asset_name}</code>
           </InfoRow>
           {task.description && (
@@ -345,7 +358,7 @@ function PublishDetail({ task, onDelete }: { task: PublishTask; onDelete: () => 
             </InfoRow>
           )}
           {task.status === "succeeded" && task.result.target != null && (
-            <InfoRow label={t("publishResult")} description={t("publishResultDesc")}>
+            <InfoRow label={t("publishResult")}>
               <code className="timecode inline-flex items-center gap-[5px] text-xs text-muted-foreground [overflow-wrap:anywhere]" title={String(task.result.target)}>
                 <FolderOutput size={12} className="shrink-0" /> {String(task.result.target)}
               </code>
