@@ -23,7 +23,7 @@ import {
   Workflow,
 } from "lucide-react";
 
-import { api, type Asset, type ProjectWithStats, type Workspace } from "@/api/client";
+import { api, listPublishTasks, listWorkflows, type Asset, type ProjectWithStats, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n, usePreferences } from "@/app/preferences";
 import type { StudioView } from "@/components/layout/AppShell";
@@ -114,6 +114,20 @@ export function CommandPalette({
     staleTime: 30_000,
   });
 
+  // 工作流与发布记录都有现成的深链通道(openstudio:open-*),接进来就能跳。
+  const workflows = useQuery({
+    queryKey: ["workflows", workspace.id],
+    queryFn: () => listWorkflows(workspace.id),
+    enabled: open && query.length > 0,
+    staleTime: 30_000,
+  });
+  const publishTasks = useQuery({
+    queryKey: ["publish-tasks", workspace.id],
+    queryFn: () => listPublishTasks(workspace.id),
+    enabled: open && query.length > 0,
+    staleTime: 30_000,
+  });
+
   const q = query.toLowerCase();
   const navMatches = q
     ? NAV_ENTRIES.filter(
@@ -133,13 +147,40 @@ export function CommandPalette({
         .slice(0, 6)
     : [];
 
+  // 名字之外也搜说明/账号/成片名 —— 记不住标题但记得"发到哪个号"的时候,那才是他手上的线索。
+  const workflowMatches = q
+    ? (workflows.data ?? [])
+        .filter(
+          (workflow) =>
+            workflow.name.toLowerCase().includes(q) || (workflow.description ?? "").toLowerCase().includes(q),
+        )
+        .slice(0, 6)
+    : [];
+  const publishMatches = q
+    ? (publishTasks.data ?? [])
+        .filter(
+          (task) =>
+            task.title.toLowerCase().includes(q) ||
+            task.asset_name.toLowerCase().includes(q) ||
+            task.account_name.toLowerCase().includes(q),
+        )
+        .slice(0, 6)
+    : [];
+
   const run = (action: () => void) => {
     setOpen(false);
     action();
   };
 
-  const searching = assets.isFetching || input.trim() !== query;
-  const hasAnyResult = navMatches.length > 0 || projectMatches.length > 0 || assetMatches.length > 0;
+  // 空态是手工判的(关掉了 cmdk 内建过滤),所以**每加一类结果都要加进这两行** ——
+  // 漏掉的话「没有匹配的结果」会和结果同时显示出来(加发布记录时就这么漏过一次)。
+  const searching = assets.isFetching || workflows.isFetching || publishTasks.isFetching || input.trim() !== query;
+  const hasAnyResult =
+    navMatches.length > 0 ||
+    projectMatches.length > 0 ||
+    assetMatches.length > 0 ||
+    workflowMatches.length > 0 ||
+    publishMatches.length > 0;
 
   // 关掉内建过滤后 cmdk 不再自动高亮第一项(Enter 会没有目标)— 受控高亮:
   // 结果集头名变化(=输入变化)时重置到第一项,方向键仍经 onValueChange 自由移动。
@@ -230,6 +271,50 @@ export function CommandPalette({
                 <span className="text-[11px] text-muted-foreground">
                   {t("projectStatAssets").replace("{n}", String(project.asset_count))}
                 </span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        )}
+
+        {workflowMatches.length > 0 && (
+          <CommandGroup heading={t("navWorkflows")}>
+            {workflowMatches.map((workflow) => (
+              <CommandItem
+                key={workflow.id}
+                value={`workflow-${workflow.id}`}
+                onSelect={() =>
+                  run(() => {
+                    onNavigate("workflows");
+                    emitOpenEvent("openstudio:open-workflow", workflow.id);
+                  })
+                }
+              >
+                <Workflow size={14} />
+                <span className="min-w-0 flex-1 truncate">{workflow.name}</span>
+                <span className="text-[11px] tabular-nums text-muted-foreground">
+                  {t("wfNodeCount").replace("{n}", String(((workflow.graph as { nodes?: unknown[] }).nodes ?? []).length))}
+                </span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        )}
+
+        {publishMatches.length > 0 && (
+          <CommandGroup heading={t("publishListTitle")}>
+            {publishMatches.map((task) => (
+              <CommandItem
+                key={task.id}
+                value={`publish-${task.id}`}
+                onSelect={() =>
+                  run(() => {
+                    onNavigate("publish");
+                    emitOpenEvent("openstudio:open-publish-task", task.id);
+                  })
+                }
+              >
+                <Rocket size={14} />
+                <span className="min-w-0 flex-1 truncate">{task.title || task.asset_name}</span>
+                <span className="text-[11px] text-muted-foreground">{t(`batchStatus_${task.status}` as never)}</span>
               </CommandItem>
             ))}
           </CommandGroup>

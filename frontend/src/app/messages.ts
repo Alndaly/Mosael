@@ -453,9 +453,9 @@ export const messages = {
     // Publish
 
     cmdkTitle: "全局搜索",
-    cmdkPlaceholder: "搜索页面、项目、素材…",
+    cmdkPlaceholder: "搜索页面、项目、素材、工作流、发布记录…",
     cmdkEmpty: "没有匹配的结果",
-    cmdkEmptyHint: "换个关键词试试,可搜索页面、项目与素材。",
+    cmdkEmptyHint: "换个关键词试试 —— 页面、项目、素材、工作流、发布记录都能搜。",
     cmdkQuickActions: "快捷操作",
     cmdkPages: "页面",
     cmdkProjects: "项目",
@@ -2138,9 +2138,9 @@ export const messages = {
     // Publish
 
     cmdkTitle: "Global search",
-    cmdkPlaceholder: "Search pages, projects, assets…",
+    cmdkPlaceholder: "Search pages, projects, assets, workflows, publish records…",
     cmdkEmpty: "No results",
-    cmdkEmptyHint: "Try another keyword — pages, projects and assets are searchable.",
+    cmdkEmptyHint: "Try another keyword — pages, projects, assets, workflows and publish records are searchable.",
     cmdkQuickActions: "Quick actions",
     cmdkPages: "Pages",
     cmdkProjects: "Projects",
