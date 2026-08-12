@@ -6,8 +6,8 @@
 //    挂载 = 参与合成 = 有真实布局与命中测试,于是可信指针输入(isTrusted=true)可用、画面也是真的。
 //    多条并发就叠成卡片堆;实测被完全遮挡的那层照样有布局、照样点得中。同时最多 MAX_CONCURRENT 条。
 //  - 一个账号共享一个内嵌视图,不能并发两条任务:认领时把「正在跑的账号」传给后端排除(claimTask)。
-//  - 「前台可见槽」至多一个(视图 attach 到窗口):留给需要用户在场的时刻——登录扫码、dry_run 准备好
-//    待确认、失败/受阻现场。用 views.visibleAccountId 表达前台是否被占;被占时后台任务不抢,视图仍在,
+//  - 「前台可见槽」至多一个(视图 attach 到窗口):留给需要用户在场的时刻——登录扫码、
+//    失败/受阻现场。用 views.visibleAccountId 表达前台是否被占;被占时后台任务不抢,视图仍在,
 //    用户可稍后从任务行「查看页面」再亮出来。
 import { app, type BaseWindow } from "electron";
 import { mkdir } from "node:fs/promises";
@@ -44,7 +44,7 @@ let generation = 0;
 let loginPollTimer: ReturnType<typeof setTimeout> | null = null;
 
 // 一条任务跑到终态/受阻时回调主进程(发系统通知 + 更新 dock 角标)。
-export type SettleInfo = { status: string; title: string; accountName: string; dryRun: boolean };
+export type SettleInfo = { status: string; title: string; accountName: string };
 let onSettled: ((info: SettleInfo) => void) | null = null;
 
 let onFrame: ((frame: LiveViewFrame) => void) | null = null;
@@ -158,9 +158,9 @@ class LiveMirror {
     onFrame({ sessionId: this.accountId, dataUrl, label: this.label, url, settled: this.settled });
   }
 }
-function settle(t: PublishTask, status: string, dryRun: boolean): void {
+function settle(t: PublishTask, status: string): void {
   try {
-    onSettled?.({ status, title: t.title, accountName: t.accountName, dryRun });
+    onSettled?.({ status, title: t.title, accountName: t.accountName });
   } catch {
     /* 通知失败不影响发布主流程 */
   }
@@ -204,7 +204,6 @@ function toAdapterTask(t: backend.BackendTask): PublishTask {
     platformOptions: {
       // 平台自己的选项在前(可见性、允许评论…);下面三个是所有平台共用的,放后面免得被同名键盖掉。
       ...(t.options ?? {}),
-      dryRun: t.dry_run,
       description: t.description || "",
       shortTitle: t.short_title || "",
     },
@@ -279,7 +278,7 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
         status: "login_required",
         error_message: tr("账号未登录。在发布控制台点该账号「登录」完成扫码后重试。"),
       });
-      settle(t, "login_required", t.platformOptions.dryRun === true);
+      settle(t, "login_required");
       return;
     }
     await backend.patchAccount(t.accountId, { binding_status: "bound", last_error: null });
@@ -294,14 +293,6 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     await adapter.fillTags(t.tags);
     await delay(stepDelay());
 
-    if (t.platformOptions.dryRun === true) {
-      step(tr("已填好,待确认"));
-      await backend.reportTask(t.id, { status: "prepared" });
-      settle(t, "prepared", true);
-      // 准备好待确认:请求前台让用户直接确认 / 点真发。抢不到前台也无妨(表单已填好,任务行可再亮)。
-      requestFront(t.accountId);
-      return;
-    }
     step(tr("提交投稿"));
     await adapter.submit();
     await delay(stepDelay());
@@ -310,7 +301,7 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     step(tr("发布成功"), true);
     await backend.reportTask(t.id, { status: "success" });
     plog("runTask success:", t.id);
-    settle(t, "success", false);
+    settle(t, "success");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     plog("runTask error:", t.id, error instanceof Error ? error : message);
@@ -341,7 +332,7 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
       error_message: message,
       screenshot_path: screenshot,
     });
-    settle(t, blocked ?? "failed", t.platformOptions.dryRun === true);
+    settle(t, blocked ?? "failed");
     // 失败/受阻且现场还在(验证码、审核提示、报错弹窗):请求前台亮出来供用户查看。抢不到就算了,
     // 任务行的「查看页面」可再亮。现场已没了(webContents 已销毁/空白)就不请求。
     const hasLive = (() => {
@@ -387,7 +378,7 @@ async function checkAccountStatus(acc: backend.CheckAccount): Promise<void> {
     videoPath: "",
     title: "",
     tags: [],
-    platformOptions: { dryRun: true, description: "", shortTitle: "" },
+    platformOptions: { description: "", shortTitle: "" },
     scheduledAt: null,
     status: "running",
     errorMessage: null,
@@ -410,7 +401,7 @@ async function checkAccountStatus(acc: backend.CheckAccount): Promise<void> {
     // 从「已登录」变「失效」才通知:后台静默复检没有前台现场,用户不主动看发布台就不知道掉线——
     // 补一条系统通知 + dock 角标。对本就 login_required 的账号不重复弹(只认 bound→失效这一次跳变)。
     if (acc.binding_status === "bound" && !loggedIn) {
-      settle(stub, "login_required", false);
+      settle(stub, "login_required");
     }
   } catch (error) {
     // 抖动别误判下线;把账号翻回复检前的状态(绝不能留在 checking——那不在任何

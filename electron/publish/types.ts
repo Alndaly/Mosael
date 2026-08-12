@@ -8,7 +8,6 @@ export type Platform = SupportedPlatform;
 export type TaskStatus =
   | "pending"
   | "running"
-  | "prepared"
   | "waiting_manual"
   | "login_required"
   | "permission_required"
@@ -56,7 +55,7 @@ export interface ViewState {
   loading?: boolean;
 }
 
-/** 适配器消费的任务形状(与桌面版一致):videoPath / title / tags / platformOptions{dryRun,description,shortTitle}。 */
+/** 适配器消费的任务形状(与桌面版一致):videoPath / title / tags / platformOptions{description,shortTitle,…平台选项}。 */
 export interface PublishTask {
   id: string;
   accountId: string;

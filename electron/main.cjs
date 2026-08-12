@@ -402,7 +402,7 @@ function createWindow() {
         },
         // 只报**任务中心看不到的那些状态**。
         //
-        // 发布状态会被映射到 job(见 domain/publish/worker._sync_job):success/prepared →
+        // 发布状态会被映射到 job(见 domain/publish/worker._sync_job):success →
         // succeeded,failed/cancelled → failed,其余一律停在 running。而渲染层的 TaskCenter
         // 是按 job 的终态跃迁发通知的 —— 所以这四个成败状态两边都会报,同一件事弹两条系统通知。
         //
@@ -410,7 +410,6 @@ function createWindow() {
         // TaskCenter 永远看不到,只有这里能报。按这条线切开,两边就没有重叠了。
         onTaskSettled: (info) => {
           const titles = {
-            prepared: "发布已准备好,待确认",
             login_required: "账号需要登录",
             waiting_manual: "发布需要人工处理",
             permission_required: "账号权限不足",

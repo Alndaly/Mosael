@@ -131,7 +131,6 @@ def claim_next_pending(db: Session, exclude_accounts: list[str]) -> dict[str, An
         "description": task.description,
         "short_title": task.short_title,
         "options": dict(task.options or {}),
-        "dry_run": False,
         "status": task.status,
     }
 
@@ -159,7 +158,7 @@ def report_task(
     _sync_job(db, task)
     if status != previous:
         _notify_status(db, task)
-        if status in ("success", "prepared"):
+        if status == "success":
             logger.info("publish task %s → %s: %s", task_id, status, task.title)
         elif status != "running":
             # failed / login_required / blocked / permission_required / waiting_manual…
@@ -172,7 +171,6 @@ def report_task(
 # 状态跃迁 → 通知文案;running/pending 之类的中间态不打扰。
 _NOTIFY_TITLES = {
     "success": "发布成功",
-    "prepared": "发布已就绪(待手动确认)",
     "failed": "发布失败",
     "login_required": "发布需要重新登录",
     "waiting_manual": "发布等待人工处理",
@@ -204,7 +202,7 @@ def _sync_job(db: Session, task: PublishTask) -> None:
     job = db.get(Job, task.job_id)
     if job is None:
         return
-    if task.status in ("success", "prepared"):
+    if task.status == "success":
         job.status = "succeeded"
         job.progress = 1.0
         job.message = f"发布完成: {task.title}"

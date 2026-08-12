@@ -223,10 +223,10 @@ PLATFORM_ALIASES = {
 
 # 老版任务状态词汇 1:1,移植的适配器直接映射。
 TASK_STATUSES = (
-    "pending", "running", "prepared", "success", "failed",
+    "pending", "running", "success", "failed",
     "login_required", "waiting_manual", "permission_required", "blocked", "cancelled",
 )
-TERMINAL_TASK_STATUSES = frozenset({"prepared", "success", "failed", "cancelled"})
+TERMINAL_TASK_STATUSES = frozenset({"success", "failed", "cancelled"})
 BINDING_STATUSES = ("unknown", "checking", "bound", "login_required", "manual_required", "permission_required")
 
 

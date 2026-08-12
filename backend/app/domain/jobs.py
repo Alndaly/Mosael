@@ -286,7 +286,7 @@ def _cancel_job_row(db: Session, job: Job) -> bool:
         from app.db.models import PublishTask
 
         task = db.scalar(select(PublishTask).where(PublishTask.job_id == job.id))
-        if task is not None and task.status not in ("success", "prepared", "failed", "cancelled"):
+        if task is not None and task.status not in ("success", "failed", "cancelled"):
             task.status = "cancelled"  # 桌面发布器下次 report/heartbeat 读到 cancelled 即中止自动化
     return True
 

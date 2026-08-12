@@ -22,7 +22,6 @@ interface BackendTask {
   short_title: string;
   /** 平台自己的发布选项(可见性等)。后端建任务时已补全默认值,这里拿到的一定是完整字典。 */
   options?: Record<string, unknown>;
-  dry_run: boolean;
   status: string;
 }
 

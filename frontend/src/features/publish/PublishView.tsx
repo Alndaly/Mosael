@@ -278,7 +278,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
  *  颜色和图标只在这里定一次 —— 卡片和详情弹窗都读它,免得两处各挑一套。 */
 function statusTone(status: string) {
   if (ACTIVE.has(status)) return { Icon: Loader2, tone: "text-muted-foreground", spin: true };
-  if (status === "succeeded" || status === "success" || status === "prepared") {
+  if (status === "succeeded" || status === "success") {
     return { Icon: CheckCircle2, tone: "text-[#16a34a]", spin: false };
   }
   if (BLOCKED.has(status)) return { Icon: CircleAlert, tone: "text-[#d97706]", spin: false };
@@ -379,7 +379,7 @@ function PublishDetail({
 }) {
   const t = useI18n();
   // 不再需要问「这个平台是不是浏览器平台」:发布任务只可能是平台账号发布。
-  const ok = task.status === "succeeded" || task.status === "success" || task.status === "prepared";
+  const ok = task.status === "succeeded" || task.status === "success";
   return (
     // 外框和标题由弹窗提供 —— 这里再套一张卡就是盒中盒,标题也会重复一遍。
     <div className="grid w-full content-start gap-2.5">

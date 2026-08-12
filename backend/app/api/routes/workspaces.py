@@ -35,7 +35,7 @@ from app.domain import members as members_svc
 
 router = APIRouter(tags=["workspaces"])
 
-PUBLISH_ACTIVE_STATUSES = frozenset({"pending", "queued", "running", "prepared"})
+PUBLISH_ACTIVE_STATUSES = frozenset({"pending", "queued", "running"})
 PUBLISH_BLOCKED_STATUSES = frozenset({"login_required", "waiting_manual", "permission_required", "blocked"})
 
 

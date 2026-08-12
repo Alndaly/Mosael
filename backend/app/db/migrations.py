@@ -129,6 +129,23 @@ def _migrate_publish_task_options() -> None:
         conn.execute(text("ALTER TABLE publish_tasks ADD COLUMN options JSON NOT NULL DEFAULT '{}'"))
 
 
+def _migrate_prepared_publish_tasks() -> None:
+    """把老的 `prepared` 发布任务迁成 `cancelled`。
+
+    `prepared`(表单填好、等人确认)只由 dry_run 那条路产生,而 dry_run 从来没有任何办法被触发
+    ——后端的认领载荷把它写死成 False。整条路已删,`prepared` 随之退出状态枚举。
+
+    库里可能还留着这个状态的行(本机就有两条)。留着它们等于留下一个**没人认得的状态**:
+    界面查不到对应文案、任务总线的终态集合也不含它,于是那些行会永远显示成中间态。
+    迁成 cancelled 是诚实的:它们当年停在"等人确认"那一步,而现在没有任何东西会再推它们一把。
+    """
+    inspector = inspect(engine)
+    if "publish_tasks" not in set(inspector.get_table_names()):
+        return
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE publish_tasks SET status = 'cancelled' WHERE status = 'prepared'"))
+
+
 def _drop_member_perm_overrides() -> None:
     """删掉 workspace_member_perms 整张表(ADR 0008 D4:角色即权限)。
 
@@ -973,6 +990,7 @@ def init_db() -> None:
     # 必须在 create_all 之后:resource_shares 是新表。
     _migrate_resource_ownership()
     _migrate_publish_task_options()
+    _migrate_prepared_publish_tasks()
     _migrate_legacy_tts_sources()
     _migrate_shared_venvs()
 
