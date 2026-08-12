@@ -314,7 +314,45 @@ export class DouyinAdapter implements PublishAdapter {
     await this.driver.pressKey("Escape");
   }
 
+  /**
+   * 按发布选项设「谁可以看」,**设不上就不许发**。
+   *
+   * 抖音默认公开,而我们的兜底是仅自己可见 —— 误发公开收不回。三档各是一个 label 包着
+   * input[type=checkbox](不是 radio),所以点完必须回读那个 input 的 checked:点没点到和选没选中
+   * 是两件事,而它们的区别就是"本该只给自己看的片子公开了"。
+   */
+  private async selectVisibility(): Promise<void> {
+    const visibility = enumOption(this.task, "visibility", "private", ["private", "friends", "public"] as const);
+    const wanted = JSON.stringify(this.s.visibilityTexts[visibility]);
+    const find = `[...document.querySelectorAll('label')].find((el) => ${wanted}.includes((el.textContent || '').trim()))`;
+    await this.driver
+      .evaluate(`(() => {
+        const label = ${find};
+        if (!label) return false;
+        label.scrollIntoView({ block: 'center', inline: 'nearest' });
+        const input = label.querySelector('input');
+        if (input && !input.checked) input.click();
+        else label.click();
+        return true;
+      })()`)
+      .catch(() => false);
+    await wait(400);
+    const ok = await this.driver
+      .evaluate<boolean>(`(() => {
+        const label = ${find};
+        const input = label && label.querySelector('input');
+        return Boolean(input && input.checked);
+      })()`)
+      .catch(() => false);
+    if (!ok) {
+      await plogPageState("Douyin visibility not applied:", this.driver);
+      throw new Error(`Douyin visibility ${visibility} was not applied; refusing to post.`);
+    }
+    plog("douyin 可见性:", visibility);
+  }
+
   async submit(): Promise<void> {
+    await this.selectVisibility();
     await this.dismissOnboarding();
     await commitClick({
       what: "douyin submit",

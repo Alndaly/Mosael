@@ -38,6 +38,12 @@ class PublishDomainError(ValueError):
 #:
 #: `default` 同时是「用户没选」时的值。可见性一律默认最保守的那档 —— 自动发布误发公开是收不回的,
 #: 而想公开只是到平台上改一次(YouTube 的私享、TikTok 的仅自己可见都是这条理由)。
+#:
+#: **没有声明 = 那个平台上真的没有**,不是还没做:
+#:   ・B 站投稿页(实测):只有「定时发布」和「存草稿 / 立即投稿」,没有可见范围控件;
+#:   ・微信视频号发表动态页(实测,穿 shadow DOM 查过):只有「位置 / 添加到合集 / 定时发表」;
+#:   ・小红书:本工作区没有已登录账号,没法核对真实界面 —— 不猜。
+#: 声明一个平台上不存在的选项,等于让用户设一个不会生效的东西。
 PLATFORM_OPTIONS: dict[str, list[dict[str, Any]]] = {
     "youtube": [
         {
@@ -58,6 +64,20 @@ PLATFORM_OPTIONS: dict[str, list[dict[str, Any]]] = {
             "type": "bool",
             "default": False,
             "description": "YouTube 的必答项。选「是」会关掉评论等一批功能,按素材实际情况填。",
+        },
+    ],
+    "douyin": [
+        {
+            "key": "visibility",
+            "label": "谁可以看",
+            "type": "enum",
+            "default": "private",
+            "choices": [
+                {"value": "private", "label": "仅自己可见"},
+                {"value": "friends", "label": "好友可见"},
+                {"value": "public", "label": "公开"},
+            ],
+            "description": "默认仅自己可见,确认无误后再改公开。",
         },
     ],
     "tiktok": [

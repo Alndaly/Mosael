@@ -35,6 +35,9 @@ export const SELECTORS = {
     uploadFailedText: "上传失败", // i18n-ok
     loggedOutTexts: ["扫码登录", "手机号登录", "二维码失效"], // i18n-ok
     loggedInTexts: ["高清发布", "发布视频", "作品管理", "内容管理", "创作者中心"], // i18n-ok
+    // 可见性(实测):三档各是一个 label 包着 input[type=checkbox],默认「公开」已选中。
+    // **按文案找,不按类名** —— radio-d4zkru 这种是构建期哈希,下次发版就变。
+    visibilityTexts: { public: ["公开"], friends: ["好友可见"], private: ["仅自己可见"] } as const, // i18n-ok
     isPublishUrl: (u: string): boolean => /content\/(publish|post\/video)/.test(u),
     isManageUrl: (u: string): boolean => MANAGE_URL_PATTERNS.douyin.test(u),
   },
