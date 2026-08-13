@@ -660,14 +660,6 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     [sequence],
   );
   const selectedClip = allClips.find((clip) => clip.id === selectedClipId) ?? null;
-  const isOverlayClip = React.useMemo(() => {
-    if (!selectedClip || !sequence) return false;
-    const videoTracks = (sequence.tracks ?? [])
-      .filter((track) => track.kind === "video")
-      .sort((a, b) => a.position - b.position);
-    // Base = bottom-most video track (see Monitor z-order); every track above it is an overlay.
-    return videoTracks.slice(0, -1).some((track) => track.id === selectedClip.track_id);
-  }, [selectedClip, sequence]);
   // 花字 = video 轨上的文本片段(无 asset、有 text_override)。它复用画面元素的 transform(定位/
   // 缩放/旋转/透明度 + 关键帧);而字幕轨的文本走序列级统一样式,不做 per-clip transform。
   const isTitleText = React.useMemo(() => {
@@ -999,7 +991,6 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
               workspaceId={workspace.id}
               selectedClip={selectedClip}
               assets={assets.data ?? []}
-              isOverlayClip={isOverlayClip}
               isTitleText={isTitleText}
               onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
               onSetEffects={(clipId, effects) => setEffectsMutation.mutate({ clipId, effects })}

@@ -21,13 +21,6 @@ import { LutPicker } from "@/features/editor/LutPicker";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 
-const PIP_POSITIONS: Array<{ key: string; x: number; y: number }> = [
-  { key: "↖", x: 0.05, y: 0.06 },
-  { key: "↗", x: 0.62, y: 0.06 },
-  { key: "↙", x: 0.05, y: 0.6 },
-  { key: "↘", x: 0.62, y: 0.6 },
-];
-const PIP_SIZES = [0.25, 0.33, 0.5];
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
 /** 调色面板的完整参数集,沿用前身项目的分组。 */
@@ -51,7 +44,6 @@ export function Inspector({
   workspaceId,
   selectedClip,
   assets,
-  isOverlayClip,
   isTitleText,
   onDeleteClip,
   onSetEffects,
@@ -70,7 +62,6 @@ export function Inspector({
   workspaceId: string;
   selectedClip: Clip | null;
   assets: Asset[];
-  isOverlayClip: boolean;
   /** 花字(video 轨上的文本元素):复用画面元素的 transform 面板(定位/缩放/旋转 + 关键帧)。 */
   isTitleText?: boolean;
   onDeleteClip: (clipId: string) => void;
@@ -109,16 +100,6 @@ export function Inspector({
     if (!selectedClip) return;
     const value = Math.max(0, Number(raw) || 0);
     onSetEffects(selectedClip.id, { ...selectedClip.effects, [key]: value });
-  };
-  const pip = {
-    x: 0.62,
-    y: 0.06,
-    scale: 0.33,
-    ...(((selectedClip?.effects as { pip?: { x?: number; y?: number; scale?: number } })?.pip) ?? {}),
-  };
-  const applyPip = (patch: Partial<typeof pip>) => {
-    if (!selectedClip) return;
-    onSetEffects(selectedClip.id, { ...selectedClip.effects, pip: { ...pip, ...patch } });
   };
 
   const rawTransform = (selectedClip?.transform as Record<string, unknown>) ?? {};
@@ -460,40 +441,6 @@ export function Inspector({
                   </div>
                 )}
                 <span className="text-[10.5px] leading-[1.4] text-muted-foreground">{anyKeyframes ? t("kfHintActive") : t("kfHintEmpty")}</span>
-              </div>
-            )}
-            {isOverlayClip && (
-              <div className="grid gap-1.5 border-t border-border pt-2.5">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("pipPosition")}</span>
-                <div className="flex flex-wrap gap-1">
-                  {PIP_POSITIONS.map((position) => (
-                    <button
-                      key={position.key}
-                      type="button"
-                      className={
-                        Math.abs(pip.x - position.x) < 0.01 && Math.abs(pip.y - position.y) < 0.01
-                          ? "pip-btn active"
-                          : "pip-btn"
-                      }
-                      onClick={() => applyPip({ x: position.x, y: position.y })}
-                    >
-                      {position.key}
-                    </button>
-                  ))}
-                </div>
-                <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("pipSize")}</span>
-                <div className="flex flex-wrap gap-1">
-                  {PIP_SIZES.map((size) => (
-                    <button
-                      key={size}
-                      type="button"
-                      className={cn("min-w-[34px] cursor-pointer rounded-md border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", Math.abs(pip.scale - size) < 0.01 && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
-                      onClick={() => applyPip({ scale: size })}
-                    >
-                      {Math.round(size * 100)}%
-                    </button>
-                  ))}
-                </div>
               </div>
             )}
           </div>
