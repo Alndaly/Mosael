@@ -16130,7 +16130,8 @@
           "created_at",
           "updated_at"
         ],
-        "title": "JobOut"
+        "title": "JobOut",
+        "description": "任务出口。**message 在这里按请求方的语言翻**。\n\n翻译放在序列化这一层,而不是十二个返回 JobOut 的路由里各翻一次 —— 那是同一个问题十二个答案,\n漏一个,那一屏的任务就还是另一种语言。语言由中间件放进 ContextVar(见 core/i18n)。\n\n老任务没有 key(它们只留下了当年渲染的那句话),原样返回 —— 那是数据本身的界限。"
       },
       "LeaseOut": {
         "properties": {

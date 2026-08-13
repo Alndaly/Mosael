@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
 from app.core.db import SessionLocal
-from app.domain.jobs import RENDER_SLOTS, dispatch_job, run_job_guarded
+from app.domain.jobs import RENDER_SLOTS, dispatch_job, run_job_guarded, say
 from app.db.models import Asset, Font, Job, Lut, Sequence, Track
 from app.domain.assets.importer import register_file_asset
 from app.domain.jobs import create_job, emit_job_event, finish_job, register_job_child, unregister_job_child
@@ -373,7 +373,7 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
             if not finish_job(db, job, status="running"):
                 db.commit()
                 return
-            job.message = "整理输出…"
+            say(job, "jobMsg_renderFinishing")
             db.commit()
             sequence = db.get(Sequence, plan.sequence_id)
             asset = register_file_asset(
@@ -388,7 +388,7 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
                 job,
                 status="succeeded",
                 progress=1.0,
-                message="导出完成",
+                message="jobMsg_renderDone",
                 result={"asset_id": asset.id, "output_key": f"exports/{job_id}.mp4"},
             ):
                 emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
@@ -403,13 +403,13 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
         except RenderExecutionError as exc:
             # A cancelled render fails because we killed ffmpeg; finish_job keeps the
             # cancellation's own message rather than relabelling it "导出失败".
-            if not finish_job(db, job, status="failed", message="导出失败", error=_friendly_render_error(exc)):
+            if not finish_job(db, job, status="failed", message="jobMsg_renderFailed", error=_friendly_render_error(exc)):
                 db.commit()
                 unregister_job_child(job_id)
                 return
             emit_job_event(db, job.id, "job.failed", {"stderr_tail": exc.stderr_tail, "render_plan_hash": plan.render_plan_hash})
         except Exception as exc:  # defensive: a worker thread must never die silently
-            if finish_job(db, job, status="failed", message="导出失败", error=str(exc)[:500]):
+            if finish_job(db, job, status="failed", message="jobMsg_renderFailed", error=str(exc)[:500]):
                 emit_job_event(db, job.id, "job.failed", {})
         finally:
             # The registry must not outlive the run, or a later cancel would kill a dead

@@ -45,6 +45,7 @@ from app.api.routes.publish_worker import router as publish_worker_router
 from app.api.routes.workflows import router as workflows_router
 from app.api.routes.workspaces import router as workspaces_router
 from app.core.config import settings
+from app.core.i18n import normalize_locale, set_current_locale
 from app.api.deps import require_worker_key
 from app.core.logging import configure_logging
 from app.core.worker_key import issue_worker_key
@@ -179,6 +180,16 @@ def create_app() -> FastAPI:
     # This bounds disclosure, not side effects: a simple cross-origin POST still reaches the
     # handler even when the browser refuses to hand back the body. Authenticating the worker
     # channel is the actual fix and needs a change on the Electron side too.
+    @app.middleware("http")
+    async def _carry_locale(request, call_next):  # type: ignore[no-untyped-def]
+        """把这次请求的语言放进 ContextVar,序列化那一层照它翻(见 core/i18n)。
+
+        **放在中间件而不是各路由里**:任务消息由十几个接口返回,每处各取一次请求头就是同一个问题
+        十几个答案 —— 漏一个,那一屏的任务就还是另一种语言。
+        """
+        set_current_locale(normalize_locale(request.headers.get("accept-language")))
+        return await call_next(request)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[

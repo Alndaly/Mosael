@@ -173,3 +173,81 @@ def test_download_progress_messages_take_params() -> None:
         assert "message_params" not in zh
     finally:
         tts_models._store.clear("f5-tts")
+
+
+def test_job_messages_follow_the_caller_language() -> None:
+    """任务消息按**请求方**的语言返回,而不是写入时的语言。
+
+    这一条是这批里最要紧的:任务消息**落库**,记录活得比一次请求久。如果在写入时就翻,语言会被
+    冻死在那一刻 —— 用户后来切成英文,历史任务仍是中文。所以库里存 key + 参数,出口才翻。
+
+    翻译点在 JobOut(序列化那一层),不在十二个返回 JobOut 的路由里 —— 那会是同一个问题十二个
+    答案,漏一个那一屏就还是另一种语言。
+    """
+    from app.core.db import SessionLocal
+    from app.db.models import Job
+
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+    with SessionLocal() as db:
+        job = Job(workspace_id=workspace["id"], kind="test", payload={}, created_by=None)
+        from app.domain.jobs import say
+
+        say(job, "jobMsg_asrRunning", provider="funasr")
+        db.add(job)
+        db.commit()
+        # 库里存的是 key + 参数,外加一份缺省语言的渲染结果(给不翻译的消费者)。
+        assert job.message_key == "jobMsg_asrRunning"
+        assert job.message_params == {"provider": "funasr"}
+        assert job.message == "funasr 转写中(首次会自动下载模型)"
+        job_id = job.id
+
+    seen = {}
+    for header, locale in (("zh-CN", "zh"), ("en-US", "en")):
+        rows = client.get(f"/api/jobs?workspace_id={workspace['id']}", headers={"Accept-Language": header}).json()
+        row = next(r for r in rows if r["id"] == job_id)
+        seen[locale] = row["message"]
+        # 内部字段只服务于翻译,不该出现在响应里。
+        assert "message_key" not in row and "message_params" not in row
+    assert seen["zh"] == "funasr 转写中(首次会自动下载模型)"
+    assert seen["en"] == "Transcribing with funasr (the model downloads automatically the first time)"
+
+
+def test_old_jobs_without_a_key_are_returned_as_written() -> None:
+    """升级前的任务只留下了当年渲染的那句话,反推不出 key —— 原样返回,不假装能翻。
+
+    这是**数据本身的界限**,不是兼容分支:那些行确实只有一句中文。
+    """
+    from app.core.db import SessionLocal
+    from app.db.models import Job
+
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+    with SessionLocal() as db:
+        job = Job(workspace_id=workspace["id"], kind="test", payload={}, created_by=None, message="老任务的原话")
+        db.add(job)
+        db.commit()
+        job_id = job.id
+    rows = client.get(f"/api/jobs?workspace_id={workspace['id']}", headers={"Accept-Language": "en"}).json()
+    assert next(r for r in rows if r["id"] == job_id)["message"] == "老任务的原话"
+
+
+def test_nobody_writes_prose_into_job_message() -> None:
+    """任务消息只能经 `say()` 写(它同时写下 key、参数和渲染结果)。
+
+    直接 `job.message = "转写完成"` 的那条从此不会被翻译,而且**没有任何东西会提示写的人** ——
+    它在 diff 里就是一行普通赋值。这条棘轮就是那个提示。
+    """
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parent.parent / "app"
+    offenders: list[str] = []
+    for path in root.rglob("*.py"):
+        for lineno, line in enumerate(path.read_text().splitlines(), 1):
+            if ".message = " not in line or not CJK.search(line):
+                continue
+            # 允许:say() 内部那一行(它才是渲染的地方),以及局部变量/异常的 message。
+            if "job.message" not in line and "self.message" not in line:
+                continue
+            offenders.append(f"{path.relative_to(root)}:{lineno}")
+    assert offenders == [], "这些地方直接给 job.message 写了中文,应改用 domain.jobs.say()"

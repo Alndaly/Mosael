@@ -20,7 +20,7 @@ from app.domain.usage import billable
 from app.audio import tts_daemon, tts_models
 from app.audio.tts_models import WORKER_PATH
 from app.core.db import SessionLocal
-from app.domain.jobs import TTS_SLOTS, run_job_guarded
+from app.domain.jobs import TTS_SLOTS, run_job_guarded, say
 from app.db.models import Asset, Job, Voice
 from app.domain.assets.importer import register_file_asset
 from app.domain.jobs import create_job, dispatch_job, emit_job_event
@@ -365,7 +365,7 @@ def start_synthesis(
             "provider_profile_id": provider_profile_id,
             "engine_model": engine_model,
         },
-        message=f"合成《{label}》配音中",
+        message="jobMsg_ttsRunning", message_params={"voice": label},
     )
     job_id = job.id
     dispatch_job(
@@ -473,7 +473,7 @@ def _run_synthesis_body(
                 raise VoiceError("音色不存在")
             job.status = "running"
             job.progress = 0.2
-            job.message = f"合成《{voice.name if voice else (engine_voice or engine)}》配音中"
+            say(job, "jobMsg_ttsRunning", voice=voice.name if voice else (engine_voice or engine))
             emit_job_event(db, job.id, "job.running", {})
             db.commit()
 
@@ -543,7 +543,7 @@ def _run_synthesis_body(
             job = db.get(Job, job_id)
             job.status = "succeeded"
             job.progress = 1.0
-            job.message = "配音已生成"
+            say(job, "jobMsg_ttsDone")
             job.result = {"asset_id": asset.id, "engine": used}
             emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
             db.commit()
@@ -552,7 +552,7 @@ def _run_synthesis_body(
             job = db.get(Job, job_id)
             if job is not None:
                 job.status = "failed"
-                job.message = "配音生成失败"
+                say(job, "jobMsg_ttsFailed")
                 job.error = str(exc)[:600]
                 emit_job_event(db, job.id, "job.failed", {})
                 db.commit()
@@ -640,7 +640,7 @@ def _synthesize_remote(
     job = db.get(Job, job.id)
     job.status = "succeeded"
     job.progress = 1.0
-    job.message = "配音已生成"
+    say(job, "jobMsg_ttsDone")
     job.result = {"asset_id": asset.id, "engine": engine}
     emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
     db.commit()
@@ -686,7 +686,7 @@ def start_podcast(
             "topic": topic,
             "provider_profile_id": provider_profile_id,
         },
-        message="生成播客中",
+        message="jobMsg_podcastRunning",
     )
     job_id = job.id
     action = actions[mode]
@@ -781,7 +781,7 @@ def _run_podcast_body(
         job = db.get(Job, job_id)
         job.status = "succeeded"
         job.progress = 1.0
-        job.message = "播客已生成"
+        say(job, "jobMsg_podcastDone")
         # The dialogue text is returned without timings, and inventing them from character
         # counts would produce subtitles that drift audibly. Callers that need a timed
         # transcript can run the normal 转写 over the generated audio, which measures them.

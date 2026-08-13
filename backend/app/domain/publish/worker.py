@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, Job, PublishAccount, PublishTask, now
-from app.domain.jobs import emit_job_event
+from app.domain.jobs import emit_job_event, say
 from app.domain.notifications import notify
 from app.domain.publish import (
     BINDING_STATUSES,
@@ -117,7 +117,7 @@ def claim_next_pending(db: Session, exclude_accounts: list[str]) -> dict[str, An
         job = db.get(Job, task.job_id)
         if job is not None:
             job.status = "running"
-            job.message = f"桌面发布器执行中: {task.title or asset.name}"
+            say(job, "jobMsg_publishRunning", title=task.title or asset.name)
     db.commit()
     return {
         "id": task.id,
@@ -205,17 +205,17 @@ def _sync_job(db: Session, task: PublishTask) -> None:
     if task.status == "success":
         job.status = "succeeded"
         job.progress = 1.0
-        job.message = f"发布完成: {task.title}"
+        say(job, "jobMsg_publishDone", title=task.title)
         job.result = {"platform_status": task.status}
         emit_job_event(db, job.id, "publish.finished", {"status": task.status})
     elif task.status in ("failed", "cancelled"):
         job.status = "failed"
         job.error = task.error_message or task.status
-        job.message = "发布失败" if task.status == "failed" else "发布已取消"
+        say(job, "jobMsg_publishFailed" if task.status == "failed" else "jobMsg_publishCancelled")
         emit_job_event(db, job.id, "publish.failed", {"status": task.status, "error": job.error})
     else:
         job.status = "running"
-        job.message = f"发布 {task.status}: {task.title}"
+        say(job, "jobMsg_publishStatus", status=task.status, title=task.title)
         emit_job_event(db, job.id, "publish.status", {"status": task.status})
 
 

@@ -459,7 +459,16 @@ class Job(Base):
     parent_job_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="queued")
     progress: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    #: 给人看的那句话。**它是渲染结果**(缺省语言),留着是因为不翻译的消费者也读它:
+    #: 工作流把子任务的 message 拼进自己的错误里、日志、直接读库的运维脚本。
     message: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    #: 同一句话的 key 与参数(见 core/i18n)。**接口按请求语言翻的是这两个**,message 只是兜底。
+    #:
+    #: 为什么不只存 key:这一列会**落库**,而任务记录活得比一次请求久。写入时就翻会把语言冻死在
+    #: 那一刻 —— 用户切成英文之后,历史任务仍是中文,而那正是这次要修的毛病。
+    #: 老行没有 key(它们只留下了当年渲染的那句话),接口照旧原样返回 message。
+    message_key: Mapped[str] = mapped_column(String(80), nullable=False, default="")
+    message_params: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     result: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)

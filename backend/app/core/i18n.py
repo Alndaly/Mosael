@@ -14,6 +14,7 @@ PLATFORM_OPTIONS 这种被后端校验、前端渲染、执行器消费的表不
 
 from __future__ import annotations
 
+from contextvars import ContextVar
 from typing import Any
 
 #: 支持的语言。第一个是缺省。
@@ -99,6 +100,39 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Weights are downloaded, but no interpreter has the engine installed — click Download again to add the runtime",
     },
     "modelMsg_runtimeNoWeights": {"zh": "运行环境已就绪,还差模型权重", "en": "The runtime is ready; the model weights are still missing"},
+    # ---- 任务消息(任务中心 / 飞书 / 工作流都读它)----
+    "jobMsg_asrQueued": {"zh": "转写排队中", "en": "Transcription queued"},
+    "jobMsg_asrDownloading": {"zh": "首次转写:下载模型中 {percent}%", "en": "First transcription: downloading the model, {percent}%"},
+    "jobMsg_asrRunning": {"zh": "{provider} 转写中(首次会自动下载模型)", "en": "Transcribing with {provider} (the model downloads automatically the first time)"},
+    "jobMsg_asrDone": {"zh": "转写完成", "en": "Transcription complete"},
+    "jobMsg_asrFailed": {"zh": "转写失败", "en": "Transcription failed"},
+    "jobMsg_ttsRunning": {"zh": "合成《{voice}》配音中", "en": "Synthesising voiceover with “{voice}”"},
+    "jobMsg_ttsDone": {"zh": "配音已生成", "en": "Voiceover generated"},
+    "jobMsg_ttsFailed": {"zh": "配音生成失败", "en": "Voiceover generation failed"},
+    "jobMsg_podcastRunning": {"zh": "生成播客中", "en": "Generating the podcast"},
+    "jobMsg_podcastDone": {"zh": "播客已生成", "en": "Podcast generated"},
+    "jobMsg_renderFinishing": {"zh": "整理输出…", "en": "Finalising the output…"},
+    "jobMsg_renderDone": {"zh": "导出完成", "en": "Export complete"},
+    "jobMsg_renderFailed": {"zh": "导出失败", "en": "Export failed"},
+    "jobMsg_genericFailed": {"zh": "{what} 失败", "en": "{what} failed"},
+    "jobMsg_waitingWorker": {"zh": "等待执行器认领", "en": "Waiting for a worker to claim it"},
+    "jobMsg_interrupted": {"zh": "已中断", "en": "Interrupted"},
+    "jobMsg_cancelled": {"zh": "已取消", "en": "Cancelled"},
+    "jobMsg_claimed": {"zh": "执行器已认领", "en": "Claimed by a worker"},
+    "jobMsg_workflowQueued": {"zh": "工作流排队中: {name}", "en": "Workflow queued: {name}"},
+    "jobMsg_workflowRunning": {"zh": "工作流运行中: {name}", "en": "Workflow running: {name}"},
+    "jobMsg_workflowDone": {"zh": "工作流完成: {name}", "en": "Workflow complete: {name}"},
+    "jobMsg_workflowFailed": {"zh": "工作流失败", "en": "Workflow failed"},
+    "jobMsg_publishWaiting": {"zh": "等待桌面发布器认领: {title}", "en": "Waiting for the desktop publisher: {title}"},
+    "jobMsg_publishRunning": {"zh": "桌面发布器执行中: {title}", "en": "Desktop publisher running: {title}"},
+    "jobMsg_publishDone": {"zh": "发布完成: {title}", "en": "Published: {title}"},
+    "jobMsg_publishFailed": {"zh": "发布失败", "en": "Publishing failed"},
+    "jobMsg_publishCancelled": {"zh": "发布已取消", "en": "Publishing cancelled"},
+    "jobMsg_publishStatus": {"zh": "发布 {status}: {title}", "en": "Publish {status}: {title}"},
+    "jobMsg_proxyQueued": {"zh": "生成预览代理排队中", "en": "Proxy generation queued"},
+    "jobMsg_proxyRunning": {"zh": "生成预览代理中", "en": "Generating the preview proxy"},
+    "jobMsg_proxyDone": {"zh": "预览代理完成", "en": "Preview proxy ready"},
+    "jobMsg_proxyFailed": {"zh": "预览代理生成失败", "en": "Preview proxy generation failed"},
     # ---- 下载/安装过程中的进度句 ----
     # 带 {} 的是**模板**:参数在产生它的地方算好、跟着 key 传出来,不把值拼进句子(拼进去就没法翻了)。
     "dlMsg_preparing": {"zh": "准备下载…", "en": "Preparing the download…"},
@@ -156,6 +190,23 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Best Chinese voices. Set the account AK/SK to pull every voice on the account.",
     },
 }
+
+
+#: 本次请求的语言。由中间件按 Accept-Language 设定(见 app/main.py)。
+#:
+#: **为什么要有它**:任务消息由 12 个接口返回,若在每个路由里各取一次请求头再翻,就是同一个问题
+#: 十二个答案 —— 漏一个,那一屏的任务就还是另一种语言。序列化那一层拿不到 Request,ContextVar 是
+#: 让它知道"这一次是谁在问"的唯一办法。
+#: 没有请求上下文时(飞书机器人、定时任务、后台线程)取缺省 —— 那正是它该给的答案。
+_current_locale: ContextVar[str] = ContextVar("openstudio_locale", default=DEFAULT_LOCALE)
+
+
+def set_current_locale(locale: str) -> None:
+    _current_locale.set(locale)
+
+
+def get_current_locale() -> str:
+    return _current_locale.get()
 
 
 def normalize_locale(raw: str | None) -> str:

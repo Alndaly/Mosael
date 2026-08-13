@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db import SessionLocal
-from app.domain.jobs import ASR_SLOTS, run_job_guarded
+from app.domain.jobs import ASR_SLOTS, run_job_guarded, say
 from app.db.models import Asset, Job
 from app.domain.jobs import create_job, dispatch_job, emit_job_event
 from app.domain.transcripts.operations import SegmentIn, TokenIn, attach_transcript
@@ -133,7 +133,7 @@ def _watch_model_download(job_id: str, provider: str) -> threading.Event:
                 if job is None or job.status != "running":
                     return
                 job.progress = round(0.25 + fraction * 0.6, 4)  # 0.25..0.85
-                job.message = f"首次转写:下载模型中 {int(fraction * 100)}%"
+                say(job, "jobMsg_asrDownloading", percent=int(fraction * 100))
                 db.commit()
 
     threading.Thread(target=_loop, daemon=True).start()
@@ -163,7 +163,7 @@ def start_transcription(db: Session, asset_id: str, *, created_by: str | None) -
         kind="transcribe",
         payload={"asset_id": asset_id},
         created_by=created_by,
-        message="转写排队中",
+        message="jobMsg_asrQueued",
     )
     dispatch_job(db, job, lambda: _run_transcription(job.id, asset_id))
     return job
@@ -183,7 +183,7 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
         try:
             python, provider = resolve_asr_runtime()
             job.status = "running"
-            job.message = f"{provider} 转写中(首次会自动下载模型)"
+            say(job, "jobMsg_asrRunning", provider=provider)
             job.progress = 0.1
             emit_job_event(db, job.id, "job.running", {"provider": provider})
             db.commit()
@@ -217,7 +217,7 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
             job = db.get(Job, job_id)
             job.status = "succeeded"
             job.progress = 1.0
-            job.message = "转写完成"
+            say(job, "jobMsg_asrDone")
             job.result = {"transcript_id": transcript.id, "segments": len(segments)}
             emit_job_event(db, job.id, "job.succeeded", {"transcript_id": transcript.id})
             db.commit()
@@ -227,7 +227,7 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
             job = db.get(Job, job_id)
             if job is not None:
                 job.status = "failed"
-                job.message = "转写失败"
+                say(job, "jobMsg_asrFailed")
                 job.error = str(exc)[:800]
                 emit_job_event(db, job.id, "job.failed", {})
                 db.commit()

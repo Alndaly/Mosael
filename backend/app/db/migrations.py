@@ -146,6 +146,23 @@ def _migrate_prepared_publish_tasks() -> None:
         conn.execute(text("UPDATE publish_tasks SET status = 'cancelled' WHERE status = 'prepared'"))
 
 
+def _migrate_job_message_i18n() -> None:
+    """jobs 新增 message_key / message_params(任务消息的多语言)。
+
+    老行留空 —— 它们只留下了当年渲染的那句话,反推不出 key。接口见到空 key 就原样返回 message,
+    所以历史任务显示成写入时的语言;**新任务从此跟着请求语言走**。这是数据本身的界限,不是兼容分支。
+    """
+    inspector = inspect(engine)
+    if "jobs" not in set(inspector.get_table_names()):
+        return
+    existing = {c["name"] for c in inspector.get_columns("jobs")}
+    with engine.begin() as conn:
+        if "message_key" not in existing:
+            conn.execute(text("ALTER TABLE jobs ADD COLUMN message_key VARCHAR(80) NOT NULL DEFAULT ''"))
+        if "message_params" not in existing:
+            conn.execute(text("ALTER TABLE jobs ADD COLUMN message_params JSON NOT NULL DEFAULT '{}'"))
+
+
 def _drop_member_perm_overrides() -> None:
     """删掉 workspace_member_perms 整张表(ADR 0008 D4:角色即权限)。
 
@@ -990,6 +1007,7 @@ def init_db() -> None:
     # 必须在 create_all 之后:resource_shares 是新表。
     _migrate_resource_ownership()
     _migrate_publish_task_options()
+    _migrate_job_message_i18n()
     _migrate_prepared_publish_tasks()
     _migrate_legacy_tts_sources()
     _migrate_shared_venvs()

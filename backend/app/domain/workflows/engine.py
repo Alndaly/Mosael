@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
 from app.db.models import Job, Workflow
-from app.domain.jobs import create_job, emit_job_event, reset_parent_job, set_parent_job
+from app.domain.jobs import create_job, emit_job_event, reset_parent_job, set_parent_job, say
 from app.domain.notifications import notify
 from app.domain.workflows import (
     NODE_TYPES,
@@ -53,7 +53,7 @@ def start_workflow_job(
             kind="workflow",
             created_by=created_by,
             payload={"workflow_id": workflow.id, "params": params or {}},
-            message=f"工作流排队中: {workflow.name}",
+            message="jobMsg_workflowQueued", message_params={"name": workflow.name},
         )
         db.commit()
     threading.Thread(
@@ -79,7 +79,7 @@ def _run_workflow_thread(workflow_id: str, job_id: str, params: dict[str, Any]) 
             logger.exception("workflow job %s ('%s') crashed", job_id, workflow.name)
             job.status = "failed"
             job.error = str(exc)[:500]
-            job.message = "工作流失败"
+            say(job, "jobMsg_workflowFailed")
             emit_job_event(db, job.id, "workflow.failed", {"error": str(exc)[:500]})
             notify(
                 db,
@@ -262,7 +262,7 @@ def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, An
     graph = workflow.graph
     node_types = {str(node["id"]): str(node.get("type")) for node in (graph.get("nodes") or [])}
     job.status = "running"
-    job.message = f"工作流运行中: {workflow.name}"
+    say(job, "jobMsg_workflowRunning", name=workflow.name)
     db.commit()
 
     context, cancelled = execute_graph(graph, wf_id=workflow.id, params=params, job=job, db=db)
@@ -277,7 +277,7 @@ def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, An
 
     job.status = "succeeded"
     job.progress = 1.0
-    job.message = f"工作流完成: {workflow.name}"
+    say(job, "jobMsg_workflowDone", name=workflow.name)
     job.result = {
         "context": {nid: _trim_outputs(out) for nid, out in context.items()},
         "output": output_values,

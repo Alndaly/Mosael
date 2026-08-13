@@ -101,11 +101,28 @@ def run_job_guarded(job_id: str, body: Callable[[], None], *, what: str = "job")
                 if job is not None and job.status not in TERMINAL_STATUSES:
                     job.status = "failed"
                     job.error = str(exc)[:500]
-                    job.message = f"{what} 失败"
+                    say(job, "jobMsg_genericFailed", what=what)
                     db.add(TaskEvent(job_id=job.id, type="job.failed", payload={"stage": "worker"}))
                     db.commit()
         except Exception:  # noqa: BLE001 — the DB is what failed; nothing left to try
             logger.exception("could not record the failure of %s %s", what, job_id)
+
+
+def say(job: Job, key: str, **params: object) -> None:
+    """给任务写一句「给人看的话」。**只有这一个入口。**
+
+    同时写三样:key、参数、以及用缺省语言渲染出来的 message。
+      ・key + 参数 → 接口按**请求方的语言**翻(见 core/i18n 与 JobOut);
+      ・message → 给不翻译的消费者(工作流把子任务消息拼进自己的错误里、日志、直接读库的脚本)。
+
+    为什么不只存 key:这一列**落库**,任务记录活得比一次请求久,写入时就翻会把语言冻死在那一刻 ——
+    用户切成英文后历史任务仍是中文,而那正是这次要修的毛病。
+    """
+    from app.core.i18n import DEFAULT_LOCALE, t
+
+    job.message_key = key
+    job.message_params = {k: str(v) for k, v in params.items()}
+    job.message = t(key, DEFAULT_LOCALE, **job.message_params)
 
 
 def finish_job(db: Session, job: Job, **fields: Any) -> bool:
@@ -187,7 +204,7 @@ def dispatch_job(db: Session, job: Job, thread_target: Callable[[], None]) -> bo
     Returns True when a thread was started in-process.
     """
     if execution_mode(job.kind) == "external":
-        job.message = "等待执行器认领"
+        say(job, "jobMsg_waitingWorker")
         db.add(TaskEvent(job_id=job.id, type="job.awaiting_worker", payload={}))
         db.commit()
         logger.info("job %s [%s] queued for external worker", job.id, job.kind)
@@ -216,6 +233,7 @@ def create_job(
     payload: dict[str, Any],
     created_by: str | None,
     message: str = "Queued",
+    message_params: dict[str, Any] | None = None,
     parent_job_id: str | None = None,
 ) -> Job:
     """建一个后台任务。
@@ -227,9 +245,12 @@ def create_job(
     # 显式传入优先;否则取当前工作流上下文(工作流节点里派生的子任务自动归到父 job 下)。
     parent = parent_job_id if parent_job_id is not None else _current_parent_job.get()
     job = Job(
-        workspace_id=workspace_id, kind=kind, payload=payload, message=message,
+        workspace_id=workspace_id, kind=kind, payload=payload,
         parent_job_id=parent, created_by=created_by,
     )
+    # `message` 收的是 i18n 的 key(见 say 的说明);认不出来就当成字面量,原样存下 ——
+    # "Queued" 这种缺省值、以及外部塞进来的自由文本都还能用。
+    say(job, message, **(message_params or {}))
     db.add(job)
     db.flush()
     db.add(TaskEvent(job_id=job.id, type="job.queued", payload={"message": message}))
@@ -263,7 +284,7 @@ def reconcile_orphaned_jobs(db: Session) -> int:
     ).all()
     for job in stale:
         job.status = "failed"
-        job.message = "已中断"
+        say(job, "jobMsg_interrupted")
         job.error = "后端重启导致任务中断,请重新发起"
         db.add(TaskEvent(job_id=job.id, type="job.failed", payload={"reason": "backend_restart"}))
     if stale:
@@ -277,7 +298,7 @@ def _cancel_job_row(db: Session, job: Job) -> bool:
         return False
     job.status = "failed"
     job.error = "已取消"
-    job.message = "已取消"
+    say(job, "jobMsg_cancelled")
     db.add(TaskEvent(job_id=job.id, type="job.cancelled", payload={}))
     # Stop the actual work, not just the row describing it.
     if kill_job_child(job.id):
@@ -349,10 +370,17 @@ def claim_next_job(db: Session, *, kinds: list[str] | None = None, worker: str =
         ).first()
         if job is None:
             return None
+        # 这里走的是 UPDATE 语句(不是 ORM 对象),所以不能用 say();两栏一起写,含义与它一致。
+        from app.core.i18n import DEFAULT_LOCALE, t
+
         claimed = db.execute(
             Job.__table__.update()
             .where(Job.id == job.id, Job.status.in_(CLAIMABLE_STATUSES))
-            .values(status="running", message="执行器已认领")
+            .values(
+                status="running",
+                message_key="jobMsg_claimed",
+                message=t("jobMsg_claimed", DEFAULT_LOCALE),
+            )
         ).rowcount
         if claimed:
             db.add(TaskEvent(job_id=job.id, type="job.claimed", payload={"worker": worker}))

@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.db.models import Asset, Job
-from app.domain.jobs import create_job, emit_job_event, run_job_guarded
+from app.domain.jobs import create_job, emit_job_event, run_job_guarded, say
 from app.media.paths import resolve_key
 from app.media.proxy import PROXY_NAME, TRANSCODE_SLOTS, build_proxy, proxy_path
 
@@ -64,7 +64,7 @@ def start_proxy_job(db: Session, asset: Asset, *, created_by: str | None, force:
         kind="proxy",
         created_by=created_by,
         payload={"asset_id": asset.id},
-        message="生成预览代理排队中",
+        message="jobMsg_proxyQueued",
     )
     info = dict(asset.media_info or {})
     info["proxy_status"] = "pending"
@@ -95,7 +95,7 @@ def _proxy_body(job_id: str, asset_id: str) -> None:
             return
         try:
             job.status = "running"
-            job.message = "生成预览代理中"
+            say(job, "jobMsg_proxyRunning")
             job.progress = 0.1
             emit_job_event(db, job.id, "job.running", {})
             db.commit()
@@ -113,7 +113,7 @@ def _proxy_body(job_id: str, asset_id: str) -> None:
                 job = db.get(Job, job_id)
                 job.status = "succeeded"
                 job.progress = 1.0
-                job.message = "预览代理完成"
+                say(job, "jobMsg_proxyDone")
                 job.result = {"proxy_key": key}
                 emit_job_event(db, job.id, "job.succeeded", {"proxy_key": key})
                 db.commit()
@@ -129,7 +129,7 @@ def _fail(db: Session, job_id: str, asset_id: str, reason: str) -> None:
     job = db.get(Job, job_id)
     if job is not None:
         job.status = "failed"
-        job.message = "预览代理生成失败"
+        say(job, "jobMsg_proxyFailed")
         job.error = reason
         emit_job_event(db, job.id, "job.failed", {"reason": reason})
         db.commit()

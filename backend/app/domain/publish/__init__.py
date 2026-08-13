@@ -294,7 +294,7 @@ def start_publish(
         kind="publish",
         created_by=created_by,
         payload={"account_id": account.id, "asset_id": asset.id, "platform": account.platform},
-        message=f"等待桌面发布器认领: {title or asset.name}",
+        message="jobMsg_publishWaiting", message_params={"title": title or asset.name},
     )
     task = PublishTask(
         workspace_id=workspace_id,
