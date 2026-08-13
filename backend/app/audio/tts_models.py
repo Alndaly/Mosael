@@ -63,7 +63,7 @@ CATALOG: tuple[TtsEngine, ...] = (
     TtsEngine(
         id="f5-tts",
         label="F5-TTS",
-        detail="零样本声音克隆,给一段参考音频即可合成同音色语音(推荐)",
+        detail="ttsDetail_f5",
         cache_dirs=("models--SWivid--F5-TTS", "models--charactr--vocos-mel-24khz"),
         expected_bytes=1_500_000_000,
         module="f5_tts",
@@ -82,7 +82,7 @@ CATALOG: tuple[TtsEngine, ...] = (
     TtsEngine(
         id="fish-speech",
         label="Fish Speech S2 Pro",
-        detail="零样本克隆,支持情感标签;一键下载源码 + 权重,占用更大",
+        detail="ttsDetail_fishSpeech",
         cache_dirs=("models--fishaudio--s2-pro",),
         # 11.01 GB —— 照 Hub 上 fishaudio/s2-pro 的文件清单实测(两个 4~5 GB 的 safetensors
         # + 1.87 GB 的 codec.pth),`snapshot_download` 是整仓拉。此前写的 4.0 GB 是拍出来的:
@@ -530,15 +530,15 @@ def _status_dict(engine: TtsEngine) -> dict[str, Any]:
         ready, checked = runtime_status(engine.id)
         return {**base, "status": "installed", "runtime_ready": ready, "runtime_checked": checked,
                 "downloaded_bytes": _measure(engine), "total_bytes": engine.expected_bytes,
-                "message": "正在检查运行环境…" if not checked else "已安装,声音克隆可用" if ready
-                else "权重已下好,但还没有解释器装了它 —— 再点一次「下载」会把运行环境补上"}
+                "message": "modelMsg_checkingRuntime" if not checked else "modelMsg_cloneReady" if ready
+                else "modelMsg_weightsNoRuntime"}
     # runtime_ready 说的是"跑不跑得起来",和"权重下没下"是两件事 —— 别因为在"未下载"这条
     # 分支上就无条件写 False。装好了运行环境、只差权重,是一个该说清楚的状态。
     ready, checked = runtime_status(engine.id)
     return {**base, "status": "missing", "runtime_ready": ready, "runtime_checked": checked, "downloaded_bytes": _measure(engine),
             "total_bytes": engine.expected_bytes,
-            "message": ("正在检查运行环境…" if not checked else
-                        "运行环境已就绪,还差模型权重" if ready else "未下载")}
+            "message": ("modelMsg_checkingRuntime" if not checked else
+                        "modelMsg_runtimeNoWeights" if ready else "modelMsg_notDownloaded")}
 
 
 def list_status() -> list[dict[str, Any]]:

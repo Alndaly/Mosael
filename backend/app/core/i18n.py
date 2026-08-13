@@ -85,6 +85,65 @@ MESSAGES: dict[str, dict[str, str]] = {
     "publishVis_friendsVisible": {"zh": "好友可见", "en": "Friends"},
     "publishVis_mutuals": {"zh": "仅互关好友可见", "en": "Mutual follows only"},
     "publishVis_everyone": {"zh": "所有人", "en": "Everyone"},
+    # ---- 模型/引擎的状态句 ----
+    "modelMsg_asrReady": {"zh": "已安装,转写即刻可用", "en": "Installed — transcription is ready to use"},
+    "modelMsg_asrNoRuntime": {
+        "zh": "模型已在磁盘上,但还没有能运行它的 Python 环境",
+        "en": "The model files are on disk, but no Python environment here can run them yet",
+    },
+    "modelMsg_notDownloaded": {"zh": "未下载", "en": "Not downloaded"},
+    "modelMsg_checkingRuntime": {"zh": "正在检查运行环境…", "en": "Checking the runtime…"},
+    "modelMsg_cloneReady": {"zh": "已安装,声音克隆可用", "en": "Installed — voice cloning is ready"},
+    "modelMsg_weightsNoRuntime": {
+        "zh": "权重已下好,但还没有解释器装了它 —— 再点一次「下载」会把运行环境补上",
+        "en": "Weights are downloaded, but no interpreter has the engine installed — click Download again to add the runtime",
+    },
+    "modelMsg_runtimeNoWeights": {"zh": "运行环境已就绪,还差模型权重", "en": "The runtime is ready; the model weights are still missing"},
+    # ---- 转写模型目录 ----
+    "asrLabel_funasrZh": {"zh": "FunASR 中文套件", "en": "FunASR Chinese bundle"},
+    "asrDetail_funasrZh": {
+        "zh": "Paraformer 识别 + VAD 断句 + 标点 + 说话人分离,中文转写默认引擎",
+        "en": "Paraformer ASR + VAD segmentation + punctuation + speaker diarisation — the default engine for Chinese.",
+    },
+    "asrDetail_whisperSmall": {"zh": "多语种,速度与精度均衡(默认)", "en": "Multilingual; balanced speed and accuracy (default)"},
+    "asrDetail_whisperMedium": {"zh": "多语种,精度更高、更慢", "en": "Multilingual; more accurate, slower"},
+    "asrDetail_whisperLarge": {"zh": "多语种最高精度,占用最大", "en": "Multilingual; highest accuracy, largest footprint"},
+    # ---- 声音克隆引擎目录 ----
+    "ttsDetail_f5": {
+        "zh": "零样本声音克隆,给一段参考音频即可合成同音色语音(推荐)",
+        "en": "Zero-shot voice cloning — give it one reference clip and it speaks in that voice (recommended).",
+    },
+    "ttsDetail_fishSpeech": {
+        "zh": "零样本克隆,支持情感标签;一键下载源码 + 权重,占用更大",
+        "en": "Zero-shot cloning with emotion tags; downloads source and weights in one go, larger footprint.",
+    },
+    # ---- 语音引擎(供应商)----
+    "ttsProvider_clone": {"zh": "本地音色克隆", "en": "Local voice clone"},
+    "ttsProviderNote_cloneReady": {"zh": "用音色库里的克隆音色,完全本地。", "en": "Uses cloned voices from your library — fully local."},
+    "ttsProviderNote_cloneMissing": {
+        "zh": "本地引擎还没装:去设置的「声音克隆」点「下载」装一次;只想马上出声的话,下面的「Edge 免费在线合成」不用装。",
+        "en": "The local engine isn't installed yet — install it once from Settings → Voice clone. If you just want sound now, Edge below needs no setup.",
+    },
+    "ttsProviderNote_edge": {
+        "zh": "免费在线合成,无需任何配置;需联网,微软 Edge 同款音色。",
+        "en": "Free online synthesis, no setup; needs internet. Same voices as Microsoft Edge.",
+    },
+    "ttsProviderNote_openai": {
+        "zh": "预置音色,不需要参考音频。自建 /audio/speech 兼容端点填档案里的 Endpoint 即可,不必另建一项。",
+        "en": "Preset voices, no reference audio needed. For a self-hosted /audio/speech endpoint just set Endpoint on the profile — no separate entry required.",
+    },
+    "ttsProvider_openai": {"zh": "OpenAI 语音合成(含兼容端点)", "en": "OpenAI speech (incl. compatible endpoints)"},
+    "ttsProvider_edge": {"zh": "Edge 免费语音(微软)", "en": "Edge free voices (Microsoft)"},
+    "ttsProvider_volcano": {"zh": "火山方舟(豆包)", "en": "Volcano Ark (Doubao)"},
+    "ttsProvider_volcanoPodcast": {"zh": "火山播客(双人对话)", "en": "Volcano Podcast (two speakers)"},
+    "ttsProviderNote_volcanoPodcast": {
+        "zh": "两个发音人对谈;配置是 App ID + Access Token,不是方舟 API Key。",
+        "en": "A two-speaker conversation; configured with App ID + Access Token, not an Ark API key.",
+    },
+    "ttsProviderNote_volcano": {
+        "zh": "中文音色最好。配置账号 AK/SK 后可拉取账号内全部音色。",
+        "en": "Best Chinese voices. Set the account AK/SK to pull every voice on the account.",
+    },
 }
 
 

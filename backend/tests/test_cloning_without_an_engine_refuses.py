@@ -118,7 +118,9 @@ def test_the_engine_picker_says_it_up_front(monkeypatch) -> None:
     tts_models.refresh_runtime_status(tts_config.get().engine)
     clone = next(row for row in tts_providers.describe_engines() if row["id"] == "clone")
     assert clone["ready"] is False
-    assert "下载" in clone["note"]
+    # 目录里存的是 key(见 core/i18n:领域数据不必知道语言),出口才翻。这里断言的是**说了哪句**,
+    # 而不是那句话长什么样 —— 换个说法或者加一种语言都不该让这条用例红。
+    assert clone["note"] == "ttsProviderNote_cloneMissing"
 
     # 探测挪到后台之后,引擎列表读的是缓存(它不该卡在 import torch 上,见
     # test_status_endpoints_do_not_probe_inline)。换了答案就显式重探一次。
@@ -181,4 +183,5 @@ def test_installed_and_runnable_says_so(monkeypatch) -> None:
     row = tts_models.get_status("f5-tts")
 
     assert row["runtime_ready"] is True
-    assert "可用" in row["message"]
+    # 同上:领域里存 key,出口才翻。断言"说了哪句",不断言那句长什么样。
+    assert row["message"] == "modelMsg_cloneReady"

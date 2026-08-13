@@ -31,6 +31,30 @@ def test_every_key_has_every_locale() -> None:
     assert missing == {}
 
 
+def test_asr_tts_catalogs_store_keys_not_prose() -> None:
+    """ASR / TTS 引擎目录、TTS 供应商目录同样是**给人看的文案**,同样该存 key。
+
+    这一条把扫描范围从发布平台扩到它们仨。范围就是待迁清单 —— 与其在别处记一份"还有哪些没迁",
+    不如让棘轮自己说,它不会忘也不会过期。
+    """
+    from app.audio import asr_models, tts_models, tts_providers
+
+    offenders: list[str] = []
+    for entry in asr_models.CATALOG:
+        for field in ("label", "detail"):
+            if CJK.search(str(getattr(entry, field, "") or "")):
+                offenders.append(f"asr:{entry.id}.{field}")
+    for entry in tts_models.CATALOG:
+        for field in ("label", "detail"):
+            if CJK.search(str(getattr(entry, field, "") or "")):
+                offenders.append(f"tts:{entry.id}.{field}")
+    for provider in tts_providers.describe_engines():
+        for field in ("label", "note"):
+            if CJK.search(str(provider.get(field) or "")):
+                offenders.append(f"provider:{provider['id']}.{field}")
+    assert offenders == []
+
+
 def test_catalog_stores_keys_not_prose() -> None:
     """目录里存 key、出口才翻。**这里出现中文就说明有人又直接写了文案** —— 那条从此不会被翻译,
     而且没有任何东西会提示他。"""
@@ -84,3 +108,44 @@ def test_platforms_endpoint_speaks_the_caller_language() -> None:
         assert not visibility["label"].startswith("publishOpt_")
     assert seen["zh"] == ("可见性", ["私享(仅自己)", "不公开列出(有链接可看)", "公开"])
     assert seen["en"] == ("Visibility", ["Private (only you)", "Unlisted (anyone with the link)", "Public"])
+
+
+def test_engine_catalogs_speak_the_caller_language() -> None:
+    """转写模型 / 声音克隆引擎 / 语音引擎三个目录也随请求语言走。
+
+    它们是**同一个机制的第二、三、四个落点** —— 存 key、出口翻译。这条用例盯的是"出口那一步
+    有没有真的接上":目录改成 key 之后如果忘了在路由里翻,界面上就会直接显示 `asrDetail_...`。
+    """
+    client = fresh_client()
+    zh = client.get("/api/asr/models", headers={"Accept-Language": "zh-CN"}).json()
+    en = client.get("/api/asr/models", headers={"Accept-Language": "en-US"}).json()
+    small_zh = next(row for row in zh if row["id"] == "whisperx-small")
+    small_en = next(row for row in en if row["id"] == "whisperx-small")
+    assert small_zh["detail"] == "多语种,速度与精度均衡(默认)"
+    assert small_en["detail"] == "Multilingual; balanced speed and accuracy (default)"
+
+    engines_en = client.get("/api/tts/engines", headers={"Accept-Language": "en"}).json()
+    clone = next(row for row in engines_en if row["id"] == "clone")
+    assert clone["label"] == "Local voice clone"
+    # 翻过之后不该再有 key 的样子 —— 忘了接出口翻译正是这个形状。
+    assert not any(str(row.get("label", "")).startswith("ttsProvider_") for row in engines_en)
+
+    models_en = client.get("/api/tts/models", headers={"Accept-Language": "en"}).json()
+    assert not any(str(row.get("detail", "")).startswith("ttsDetail_") for row in models_en)
+
+
+def test_status_messages_are_translated_too() -> None:
+    """状态句(「已安装,声音克隆可用」「正在检查运行环境…」)也随语言走。
+
+    它们和目录不同:是按分支**拼**出来的,而不是查表 —— 所以迁移时最容易漏掉出口那一步,
+    漏了界面上就直接显示 `modelMsg_cloneReady`。这条盯的就是它。
+
+    下载过程中那些**动态**进度句(「安装 X 运行依赖…」)还没迁:它们带插值,形状是 key + 参数,
+    不是一个 key 能表达的。它们只在下载时一闪而过,现状是中文,行为未变。
+    """
+    client = fresh_client()
+    for path in ("/api/asr/models", "/api/tts/models"):
+        rows = client.get(path, headers={"Accept-Language": "en"}).json()
+        keyish = [row["message"] for row in rows if str(row.get("message", "")).startswith("modelMsg_")]
+        assert keyish == [], f"{path} 漏了出口翻译:{keyish}"
+        assert not any(CJK.search(str(row.get("message") or "")) for row in rows), f"{path} 英文请求里还有中文"

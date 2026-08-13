@@ -150,8 +150,8 @@ def migrate_shared_venv() -> None:
 _FUNASR_BUNDLE = ModelEntry(
     id="funasr-zh",
     engine="funasr",
-    label="FunASR 中文套件",
-    detail="Paraformer 识别 + VAD 断句 + 标点 + 说话人分离,中文转写默认引擎",
+    label="asrLabel_funasrZh",
+    detail="asrDetail_funasrZh",
     sub_models=(
         SubModel("speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch", 1_000_000_000),
         SubModel("speech_fsmn_vad_zh-cn-16k-common-pytorch", 5_000_000),
@@ -175,9 +175,9 @@ def _whisperx_entry(size: str, label: str, detail: str, expected: int) -> ModelE
 
 CATALOG: tuple[ModelEntry, ...] = (
     _FUNASR_BUNDLE,
-    _whisperx_entry("small", "WhisperX Small", "多语种,速度与精度均衡(默认)", 500_000_000),
-    _whisperx_entry("medium", "WhisperX Medium", "多语种,精度更高、更慢", 1_530_000_000),
-    _whisperx_entry("large-v3", "WhisperX Large v3", "多语种最高精度,占用最大", 3_100_000_000),
+    _whisperx_entry("small", "WhisperX Small", "asrDetail_whisperSmall", 500_000_000),
+    _whisperx_entry("medium", "WhisperX Medium", "asrDetail_whisperMedium", 1_530_000_000),
+    _whisperx_entry("large-v3", "WhisperX Large v3", "asrDetail_whisperLarge", 3_100_000_000),
 )
 
 _BY_ID = {entry.id: entry for entry in CATALOG}
@@ -410,9 +410,9 @@ def _status_dict(entry: ModelEntry) -> dict[str, Any]:
         ready = base["runtime_ready"]
         return {**base, "status": "installed", "downloaded_bytes": _measure(entry),
                 "total_bytes": entry.expected_bytes,
-                "message": "已安装,转写即刻可用" if ready else "模型已在磁盘上,但还没有能运行它的 Python 环境"}
+                "message": "modelMsg_asrReady" if ready else "modelMsg_asrNoRuntime"}
     return {**base, "status": "missing", "downloaded_bytes": _measure(entry),
-            "total_bytes": entry.expected_bytes, "message": "未下载"}
+            "total_bytes": entry.expected_bytes, "message": "modelMsg_notDownloaded"}
 
 
 def list_status() -> list[dict[str, Any]]:

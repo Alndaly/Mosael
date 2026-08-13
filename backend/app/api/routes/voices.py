@@ -5,11 +5,12 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile, Request
 from fastapi.responses import FileResponse
 
 from app.api.deps import CurrentUser, DbSession
 from app.audio.service import AsrError
+from app.core.i18n import normalize_locale, translate_fields
 from app.db.models import Voice
 from app.api.schemas import (
     EngineSynthesizeRequest,
@@ -155,11 +156,12 @@ def synthesize(voice_id: str, body: SynthesizeRequest, db: DbSession, user: Curr
 
 
 @router.get("/tts/engines", response_model=list[TtsEngineChoiceOut])
-def list_tts_engines(user: CurrentUser) -> list[dict]:
+def list_tts_engines(request: Request, user: CurrentUser) -> list[dict]:
     """Engines the配音 UI can offer, and what each one needs from the user."""
     from app.audio.tts_providers import describe_engines
 
-    return describe_engines()
+    locale = normalize_locale(request.headers.get("accept-language"))
+    return [translate_fields(row, ("label", "note"), locale) for row in describe_engines()]
 
 
 @router.post("/tts/podcast", response_model=JobOut)
@@ -302,8 +304,9 @@ def set_tts_config(body: TtsConfigUpdate, db: DbSession, user: CurrentUser) -> d
 
 
 @router.get("/tts/models", response_model=list[TtsEngineOut])
-def list_tts_models(user: CurrentUser) -> list[dict]:
-    return tts_models.list_status()
+def list_tts_models(request: Request, user: CurrentUser) -> list[dict]:
+    locale = normalize_locale(request.headers.get("accept-language"))
+    return [translate_fields(row, ("label", "detail", "message"), locale) for row in tts_models.list_status()]
 
 
 @router.post("/tts/models/{engine_id}/download", response_model=TtsEngineOut)

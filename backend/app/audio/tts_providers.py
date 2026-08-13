@@ -69,7 +69,7 @@ class OpenAITTS:
     #: 合并成 "openai" 之前这里有三个:openai-tts 与 openai-compatible-tts —— 而后者存在的
     #: 理由只是"要填自定义 endpoint",可 openai 档案本来就有 base_url 字段。
     id = "openai"
-    label = "OpenAI 语音合成(含兼容端点)"
+    label = "ttsProvider_openai"
     parallel_safe = True
     VOICES = ("alloy", "echo", "fable", "onyx", "nova", "shimmer")
 
@@ -118,7 +118,7 @@ class EdgeTTS:
     """
 
     id = "edge"
-    label = "Edge 免费语音(微软)"
+    label = "ttsProvider_edge"
     parallel_safe = True
 
     def __init__(self, voice: str = "") -> None:
@@ -213,7 +213,7 @@ class VolcanoTTS:
     """
 
     id = "volcano"
-    label = "火山方舟(豆包)"
+    label = "ttsProvider_volcano"
     parallel_safe = True
 
     def __init__(self, api_key: str, voice: str = "", model: str = "", base_url: str = "") -> None:
@@ -345,17 +345,12 @@ def describe_engines() -> list[dict[str, object]]:
     return [
         {
             "id": "clone",
-            "label": "本地音色克隆",
+            "label": "ttsProvider_clone",
             "needs_key": False,
             "needs_voice_id": False,
             "voices": [],
             "ready": clone_ready,
-            "note": (
-                "用音色库里的克隆音色,完全本地。"
-                if clone_ready
-                else "本地引擎还没装:去设置的「声音克隆」点「下载」装一次;"
-                "只想马上出声的话,下面的「Edge 免费在线合成」不用装。"
-            ),
+            "note": "ttsProviderNote_cloneReady" if clone_ready else "ttsProviderNote_cloneMissing",
         },
         {
             "id": EdgeTTS.id,
@@ -363,7 +358,7 @@ def describe_engines() -> list[dict[str, object]]:
             "needs_key": False,
             "needs_voice_id": False,
             "voices": [voice for voice, _ in EDGE_BUILTIN_VOICES],
-            "note": "免费在线合成,无需任何配置;需联网,微软 Edge 同款音色。",
+            "note": "ttsProviderNote_edge",
         },
         {
             "id": OpenAITTS.id,
@@ -371,15 +366,15 @@ def describe_engines() -> list[dict[str, object]]:
             "needs_key": True,
             "needs_voice_id": False,
             "voices": list(OpenAITTS.VOICES),
-            "note": "预置音色,不需要参考音频。自建 /audio/speech 兼容端点填档案里的 Endpoint 即可,不必另建一项。",
+            "note": "ttsProviderNote_openai",
         },
         {
             "id": "volcano-podcast",
-            "label": "火山播客(双人对话)",
+            "label": "ttsProvider_volcanoPodcast",
             "needs_key": True,
             "needs_voice_id": False,
             "voices": [voice for voice, _ in PODCAST_SPEAKERS],
-            "note": "两个发音人对谈;配置是 App ID + Access Token,不是方舟 API Key。",
+            "note": "ttsProviderNote_volcanoPodcast",
         },
         {
             "id": VolcanoTTS.id,
@@ -390,7 +385,7 @@ def describe_engines() -> list[dict[str, object]]:
             # the panel offers a dropdown rather than asking the user to type an opaque id.
             "needs_voice_id": False,
             "voices": [voice for voice, _ in VOLCANO_BUILTIN_VOICES],
-            "note": "中文音色最好。配置账号 AK/SK 后可拉取账号内全部音色。",
+            "note": "ttsProviderNote_volcano",
         },
     ]
 
