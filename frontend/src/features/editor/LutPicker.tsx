@@ -105,7 +105,7 @@ export function LutPicker({
           event.target.value = ""; // 允许再次选同名文件
         }}
       />
-      <p className="m-0 text-[10.5px] leading-normal text-muted-foreground">{t("lutHint")}</p>
+      <p className="m-0 text-ui-2xs leading-normal text-muted-foreground">{t("lutHint")}</p>
     </div>
   );
 }

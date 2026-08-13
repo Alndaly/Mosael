@@ -35,8 +35,8 @@ export function EmptyState({
       className={cn(
         "empty-state m-auto grid justify-items-center text-center",
         compact
-          ? "max-w-[260px] gap-1 px-3 py-4 [&_h2]:m-0 [&_h2]:text-[12.5px] [&_h2]:font-[620] [&_p]:m-0 [&_p]:text-[11.5px] [&_p]:leading-[1.5] [&_p]:text-muted-foreground"
-          : "max-w-[420px] gap-2 px-5 py-8 [&_h2]:mt-0.5 [&_h2]:text-sm [&_h2]:font-[650] [&_p]:mb-1.5 [&_p]:mt-0 [&_p]:text-[13px] [&_p]:leading-[1.55] [&_p]:text-muted-foreground",
+          ? "max-w-[260px] gap-1 px-3 py-4 [&_h2]:m-0 [&_h2]:text-ui-sm [&_h2]:font-[620] [&_p]:m-0 [&_p]:text-ui-xs [&_p]:leading-[1.5] [&_p]:text-muted-foreground"
+          : "max-w-[420px] gap-2 px-5 py-8 [&_h2]:mt-0.5 [&_h2]:text-sm [&_h2]:font-[650] [&_p]:mb-1.5 [&_p]:mt-0 [&_p]:text-ui-md [&_p]:leading-[1.55] [&_p]:text-muted-foreground",
         className,
       )}
     >
@@ -49,7 +49,7 @@ export function EmptyState({
         {icon}
       </div>
       {badge && (
-        <span className="rounded-full border border-border bg-secondary px-[9px] py-px text-[11px] font-semibold text-muted-foreground">
+        <span className="rounded-full border border-border bg-secondary px-[9px] py-px text-ui-xs font-semibold text-muted-foreground">
           {badge}
         </span>
       )}

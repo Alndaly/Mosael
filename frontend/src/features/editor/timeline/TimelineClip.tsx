@@ -94,7 +94,7 @@ export function TimelineClip({
           if (event.button === 0) onTrimPointerDown(event, "start");
         }}
       />
-      <span className="pointer-events-none relative z-[1] flex-1 truncate px-1.5 text-[11px] font-semibold">{name}</span>
+      <span className="pointer-events-none relative z-[1] flex-1 truncate px-1.5 text-ui-xs font-semibold">{name}</span>
       <span
         className="absolute bottom-0 top-0 z-[2] w-2.5 cursor-ew-resize touch-none bg-[color-mix(in_srgb,currentColor_22%,transparent)] opacity-0 transition-opacity duration-100 after:absolute after:top-1/2 after:h-3 after:w-0.5 after:-translate-y-1/2 after:rounded-full after:bg-current after:opacity-75 after:content-[''] group-hover/clip:opacity-100 group-data-[selected]/clip:opacity-100 [[data-tool=blade]_&]:hidden right-0 rounded-r-md after:right-[3px]"
         onPointerDown={(event) => {

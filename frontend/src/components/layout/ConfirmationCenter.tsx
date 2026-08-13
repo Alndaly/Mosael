@@ -57,12 +57,12 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
       {items.map((item) => (
         <div className="animate-confirm-in rounded-lg border border-border-strong bg-popover px-3 py-2.5 shadow-[var(--shadow-raised)]" key={item.id}>
           <div className="mb-1.5 flex items-center justify-between gap-1.5">
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5 text-ui-xs font-semibold uppercase tracking-[0.04em] text-muted-foreground">
               <ShieldAlert size={13} /> {t("confirmTitle")} · {item.requested_by}
             </span>
             <PermissionBadge permission={item.permission} />
           </div>
-          <p className="mb-2 mt-0 text-[13px] font-semibold leading-[1.45]">{item.summary}</p>
+          <p className="mb-2 mt-0 text-ui-md font-semibold leading-[1.45]">{item.summary}</p>
           {/* The whole payload, expanded. This card is the only thing standing between an
               agent-proposed mutation and it happening, and the summary alone was not enough to
               consent to: "1 个工作流编辑: add_node" hides a code node whose body is arbitrary
@@ -70,8 +70,8 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
               keep the same problem, since nobody expands. Bounded height so a large graph
               scrolls instead of pushing the buttons off screen. */}
           <details open>
-            <summary className="cursor-pointer select-none text-[11px] text-muted-foreground">{t("confirmPayload")}</summary>
-            <pre className="mt-1.5 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted p-2 font-mono text-[11px] leading-[1.5] [word-break:break-word]">{JSON.stringify(item.payload, null, 2)}</pre>
+            <summary className="cursor-pointer select-none text-ui-xs text-muted-foreground">{t("confirmPayload")}</summary>
+            <pre className="mt-1.5 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted p-2 font-mono text-ui-xs leading-[1.5] [word-break:break-word]">{JSON.stringify(item.payload, null, 2)}</pre>
           </details>
           <div className="flex gap-1.5">
             {/* 转的只有被点的那一个;同一张卡的另一个禁掉 —— 一张卡只能有一个结论。 */}

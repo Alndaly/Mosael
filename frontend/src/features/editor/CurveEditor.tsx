@@ -166,7 +166,7 @@ export function CurveEditor({
             key={c.key}
             type="button"
             className={cn(
-            "flex-1 cursor-pointer rounded-md border border-border bg-panel py-0.5 text-[11px] font-semibold text-muted-foreground transition-[border-color,color] duration-100",
+            "flex-1 cursor-pointer rounded-md border border-border bg-panel py-0.5 text-ui-xs font-semibold text-muted-foreground transition-[border-color,color] duration-100",
             channel === c.key && "bg-[color-mix(in_srgb,currentColor_8%,transparent)]",
           )}
             style={channel === c.key ? { color: c.stroke, borderColor: c.stroke } : undefined}
@@ -175,7 +175,7 @@ export function CurveEditor({
             {c.label}
           </button>
         ))}
-        <button type="button" className="cursor-pointer border-0 bg-transparent px-1 py-0 text-[10.5px] text-muted-foreground hover:text-foreground" onClick={resetChannel} title={t("curveResetChannel")}>
+        <button type="button" className="cursor-pointer border-0 bg-transparent px-1 py-0 text-ui-2xs text-muted-foreground hover:text-foreground" onClick={resetChannel} title={t("curveResetChannel")}>
           {t("gradeReset")}
         </button>
       </div>
@@ -211,7 +211,7 @@ export function CurveEditor({
           />
         ))}
       </svg>
-      <p className="m-0 text-[10.5px] leading-normal text-muted-foreground">{t("curveHint")}</p>
+      <p className="m-0 text-ui-2xs leading-normal text-muted-foreground">{t("curveHint")}</p>
     </div>
   );
 }

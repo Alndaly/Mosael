@@ -31,7 +31,7 @@ function EventLine({ event }: { event: Record<string, unknown> }) {
     const uri = String(event.verificationUri ?? "");
     return (
       <div className="grid gap-1.5 rounded-md border border-border bg-panel p-2.5">
-        <span className="text-[11.5px] text-muted-foreground">{t("providerOauthDeviceCode")}</span>
+        <span className="text-ui-xs text-muted-foreground">{t("providerOauthDeviceCode")}</span>
         <div className="flex items-center gap-1.5">
           <code className="flex-1 rounded bg-field px-2 py-1 text-[15px] font-semibold tracking-[0.18em] text-foreground">
             {code}
@@ -52,7 +52,7 @@ function EventLine({ event }: { event: Record<string, unknown> }) {
         </div>
         {uri && (
           <a
-            className="inline-flex w-fit items-center gap-1 text-[11.5px] font-medium text-primary no-underline hover:underline"
+            className="inline-flex w-fit items-center gap-1 text-ui-xs font-medium text-primary no-underline hover:underline"
             href={uri}
             target="_blank"
             rel="noreferrer noopener"
@@ -70,10 +70,10 @@ function EventLine({ event }: { event: Record<string, unknown> }) {
     return (
       <div className="grid gap-1.5 rounded-md border border-border bg-panel p-2.5">
         {typeof event.instructions === "string" && (
-          <span className="text-[11.5px] leading-[1.5] text-muted-foreground">{event.instructions}</span>
+          <span className="text-ui-xs leading-[1.5] text-muted-foreground">{event.instructions}</span>
         )}
         <a
-          className="inline-flex w-fit items-center gap-1 text-[11.5px] font-medium text-primary no-underline hover:underline"
+          className="inline-flex w-fit items-center gap-1 text-ui-xs font-medium text-primary no-underline hover:underline"
           href={url}
           target="_blank"
           rel="noreferrer noopener"
@@ -87,7 +87,7 @@ function EventLine({ event }: { event: Record<string, unknown> }) {
 
   // progress / info / 上游新增的类型:退回纯文本,总比空白强。
   const message = typeof event.message === "string" ? event.message : JSON.stringify(event);
-  return <p className="m-0 text-[11.5px] leading-[1.5] text-muted-foreground">{message}</p>;
+  return <p className="m-0 text-ui-xs leading-[1.5] text-muted-foreground">{message}</p>;
 }
 
 type Prompt = NonNullable<LoginState["prompt"]>;
@@ -117,7 +117,7 @@ export function AuthPromptField({
       {/* 提问要比弹窗顶部那句说明重:它是此刻唯一要用户做决定的东西,同灰同字号会让视线
           找不到落点。文案来自 pi(常为英文),不翻译 —— 选项 id 是照它的原文提交的,
           改字面等于把用户看到的和实际提交的对不上。 */}
-      <span className="text-[12px] font-medium text-foreground">{prompt.message}</span>
+      <span className="text-ui-sm font-medium text-foreground">{prompt.message}</span>
       {prompt.prompt_type === "select" ? (
         // 提交的是选项 id,不是它的显示文案。
         <div className="grid gap-1">
@@ -139,8 +139,8 @@ export function AuthPromptField({
                 onClick={() => onSubmit(id)}
               >
                 <span className="grid min-w-0 flex-1 gap-px">
-                  <span className="truncate text-[12px] font-medium text-foreground">{label}</span>
-                  {description && <span className="text-[10.5px] text-muted-foreground">{description}</span>}
+                  <span className="truncate text-ui-sm font-medium text-foreground">{label}</span>
+                  {description && <span className="text-ui-2xs text-muted-foreground">{description}</span>}
                 </span>
                 <ChevronRight size={13} className="shrink-0 text-muted-foreground" />
               </button>
@@ -235,7 +235,7 @@ export function ProviderOAuthDialog({
   return (
     <ModalShell open={open} onOpenChange={(next) => !next && close()} title={`${t("providerOauthTitle")} · ${profileName}`}>
       <div className="grid gap-2.5">
-        <p className="m-0 text-[11.5px] leading-[1.5] text-muted-foreground">{t("providerOauthHint")}</p>
+        <p className="m-0 text-ui-xs leading-[1.5] text-muted-foreground">{t("providerOauthHint")}</p>
 
         {(state.data?.events ?? []).map((event, index) => (
           <EventLine key={index} event={event as Record<string, unknown>} />
@@ -251,19 +251,19 @@ export function ProviderOAuthDialog({
         )}
 
         {status === "running" && !prompt && (
-          <p className="m-0 flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
+          <p className="m-0 flex items-center gap-1.5 text-ui-xs text-muted-foreground">
             <Loader2 size={12} className="animate-spin" />
             {t("providerOauthWaiting")}
           </p>
         )}
 
         {status === "done" && (
-          <p className="m-0 text-[11.5px] font-medium text-primary">
+          <p className="m-0 text-ui-xs font-medium text-primary">
             {t("providerOauthDone").replace("{count}", String(state.data?.models?.length ?? 0))}
           </p>
         )}
         {(status === "error" || status === "cancelled") && (
-          <p className="m-0 text-[11.5px] text-destructive">
+          <p className="m-0 text-ui-xs text-destructive">
             {t("providerOauthFailed")}
             {state.data?.error ? `:${state.data.error}` : ""}
           </p>

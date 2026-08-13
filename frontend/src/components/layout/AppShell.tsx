@@ -139,7 +139,7 @@ export function AppShell({
           const pageLabel = labelKey ? t(labelKey) : "";
           const scoped = PROJECT_SCOPED_VIEWS.includes(view);
           return (
-            <div className="flex min-w-0 items-center gap-[7px] text-[13px] text-muted-foreground">
+            <div className="flex min-w-0 items-center gap-[7px] text-ui-md text-muted-foreground">
               <WorkspaceSwitcher
                 workspaceId={workspaceId}
                 workspaceName={workspaceName}
@@ -147,7 +147,7 @@ export function AppShell({
                 onSelectWorkspace={onSelectWorkspace}
               />
               <span className="text-border-strong">/</span>
-              <h1 className={cn("m-0 shrink-0 text-[13px] font-semibold text-foreground", scoped && "font-medium text-muted-foreground")}>{pageLabel}</h1>
+              <h1 className={cn("m-0 shrink-0 text-ui-md font-semibold text-foreground", scoped && "font-medium text-muted-foreground")}>{pageLabel}</h1>
               {scoped && (
                 <>
                   <span className="text-border-strong">/</span>
@@ -175,7 +175,7 @@ export function AppShell({
           {actions}
           <button
             type="button"
-            className="inline-flex h-[26px] cursor-pointer items-center gap-1.5 rounded-md border border-border bg-transparent px-[9px] text-xs text-muted-foreground transition-[border-color,color] duration-100 hover:border-border-strong hover:text-foreground max-[760px]:[&_kbd]:hidden max-[760px]:[&_span]:hidden [&_kbd]:rounded-sm [&_kbd]:border [&_kbd]:border-border [&_kbd]:px-1 [&_kbd]:text-[10px] [&_kbd]:leading-[15px] [&_kbd]:text-muted-foreground [&_kbd]:[font-family:inherit]"
+            className="inline-flex h-[26px] cursor-pointer items-center gap-1.5 rounded-md border border-border bg-transparent px-[9px] text-xs text-muted-foreground transition-[border-color,color] duration-100 hover:border-border-strong hover:text-foreground max-[760px]:[&_kbd]:hidden max-[760px]:[&_span]:hidden [&_kbd]:rounded-sm [&_kbd]:border [&_kbd]:border-border [&_kbd]:px-1 [&_kbd]:text-ui-2xs [&_kbd]:leading-[15px] [&_kbd]:text-muted-foreground [&_kbd]:[font-family:inherit]"
             onClick={() => window.dispatchEvent(new CustomEvent("openstudio:open-cmdk"))}
           >
             <Search size={13} />
@@ -280,13 +280,13 @@ function ProjectSwitcher({
         </button>
       </PopoverTrigger>
       <PopoverContent className="grid max-h-[min(60vh,360px)] w-64 gap-0.5 overflow-auto p-1.5" align="start" sideOffset={8}>
-        <div className="px-2 pb-1.5 pt-1 text-[11px] font-semibold tracking-[0.02em] text-muted-foreground">{t("timelineSwitch")}</div>
+        <div className="px-2 pb-1.5 pt-1 text-ui-xs font-semibold tracking-[0.02em] text-muted-foreground">{t("timelineSwitch")}</div>
         {projects.map((p) => (
           <button
             key={p.id}
             type="button"
             className={cn(
-              "flex cursor-pointer items-center justify-between gap-2 rounded-md border-0 bg-transparent px-2 py-[7px] text-left text-[12.5px] text-foreground transition-colors duration-100 hover:bg-secondary [&_svg]:shrink-0 [&_svg]:text-primary",
+              "flex cursor-pointer items-center justify-between gap-2 rounded-md border-0 bg-transparent px-2 py-[7px] text-left text-ui-sm text-foreground transition-colors duration-100 hover:bg-secondary [&_svg]:shrink-0 [&_svg]:text-primary",
               p.id === currentProjectId && "font-semibold text-primary",
             )}
             onClick={() => {
@@ -304,7 +304,7 @@ function ProjectSwitcher({
             <button
               type="button"
               disabled={creatingProject}
-              className="flex cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2 py-[7px] text-left text-[12.5px] text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-60 [&_svg]:shrink-0"
+              className="flex cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2 py-[7px] text-left text-ui-sm text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-60 [&_svg]:shrink-0"
               onClick={() => {
                 setOpen(false);
                 onCreateProject();
@@ -362,13 +362,13 @@ function WorkspaceSwitcher({
           </button>
         </PopoverTrigger>
         <PopoverContent className="grid w-60 gap-0.5 p-1.5" align="start" sideOffset={8}>
-          <div className="px-2 pb-1.5 pt-1 text-[11px] font-semibold tracking-[0.02em] text-muted-foreground">{t("workspaceSwitch")}</div>
+          <div className="px-2 pb-1.5 pt-1 text-ui-xs font-semibold tracking-[0.02em] text-muted-foreground">{t("workspaceSwitch")}</div>
           {workspaces.map((ws) => (
             <button
               key={ws.id}
               type="button"
               className={cn(
-              "flex cursor-pointer items-center justify-between gap-2 rounded-md border-0 bg-transparent px-2 py-[7px] text-left text-[12.5px] text-foreground transition-colors duration-100 hover:bg-secondary [&_svg]:shrink-0 [&_svg]:text-primary",
+              "flex cursor-pointer items-center justify-between gap-2 rounded-md border-0 bg-transparent px-2 py-[7px] text-left text-ui-sm text-foreground transition-colors duration-100 hover:bg-secondary [&_svg]:shrink-0 [&_svg]:text-primary",
               ws.id === workspaceId && "font-semibold text-primary",
             )}
               onClick={() => {
@@ -383,7 +383,7 @@ function WorkspaceSwitcher({
           <div className="mx-0.5 my-1 h-px bg-border" />
           <button
             type="button"
-            className="flex cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2 py-[7px] text-left text-[12.5px] text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-foreground [&_svg]:shrink-0"
+            className="flex cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2 py-[7px] text-left text-ui-sm text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-foreground [&_svg]:shrink-0"
             onClick={() => {
               setOpen(false);
               setCreating(true);
@@ -420,21 +420,21 @@ function RailUserMenu({ onOpenSettings }: { onOpenSettings: () => void }) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button type="button" className="mx-auto mb-2.5 mt-1.5 grid h-[34px] w-[34px] cursor-pointer place-items-center overflow-hidden rounded-full border border-border bg-secondary text-[13px] font-bold text-foreground transition-[border-color] duration-100 hover:border-primary" aria-label={displayName}>
+        <button type="button" className="mx-auto mb-2.5 mt-1.5 grid h-[34px] w-[34px] cursor-pointer place-items-center overflow-hidden rounded-full border border-border bg-secondary text-ui-md font-bold text-foreground transition-[border-color] duration-100 hover:border-primary" aria-label={displayName}>
           {avatarSrc ? <img src={avatarSrc} className="h-full w-full object-cover" alt="" /> : initial}
         </button>
       </PopoverTrigger>
       <PopoverContent className="grid w-[220px] gap-1.5 p-2" side="right" align="end" sideOffset={10}>
         <div className="flex items-center gap-2 px-1 py-0.5">
-          <span className="grid h-8 w-8 place-items-center overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-[13px] font-bold text-primary">
+          <span className="grid h-8 w-8 place-items-center overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-ui-md font-bold text-primary">
             {avatarSrc ? <img src={avatarSrc} className="h-full w-full object-cover" alt="" /> : initial}
           </span>
-          <div className="grid [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:text-[13px]">
+          <div className="grid [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:text-ui-md">
             <strong>{displayName}</strong>
             <small>{user?.username ? `@${user.username} · ${t("railLocalAccount")}` : t("railLocalAccount")}</small>
           </div>
         </div>
-        <div className="grid gap-0.5 border-t border-border pt-2 [&_button]:flex [&_button]:cursor-pointer [&_button]:items-center [&_button]:gap-1.5 [&_button]:rounded [&_button]:border-0 [&_button]:bg-transparent [&_button]:px-1.5 [&_button]:py-[7px] [&_button]:text-left [&_button]:text-[12.5px] [&_button]:text-foreground [&_button]:transition-colors [&_button]:duration-100 [&_button:hover]:bg-secondary">
+        <div className="grid gap-0.5 border-t border-border pt-2 [&_button]:flex [&_button]:cursor-pointer [&_button]:items-center [&_button]:gap-1.5 [&_button]:rounded [&_button]:border-0 [&_button]:bg-transparent [&_button]:px-1.5 [&_button]:py-[7px] [&_button]:text-left [&_button]:text-ui-sm [&_button]:text-foreground [&_button]:transition-colors [&_button]:duration-100 [&_button:hover]:bg-secondary">
           <button
             type="button"
             onClick={() => {
@@ -455,7 +455,7 @@ function RailUserMenu({ onOpenSettings }: { onOpenSettings: () => void }) {
             <LogOut size={13} /> {t("signOut")}
           </button>
         </div>
-        <div className="border-t border-border pt-2 text-center text-[10.5px] tabular-nums text-muted-foreground">Open Studio v{__APP_VERSION__}</div>
+        <div className="border-t border-border pt-2 text-center text-ui-2xs tabular-nums text-muted-foreground">Open Studio v{__APP_VERSION__}</div>
       </PopoverContent>
     </Popover>
   );

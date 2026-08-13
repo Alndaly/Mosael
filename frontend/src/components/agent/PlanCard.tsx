@@ -45,7 +45,7 @@ export function PlanCard({ plan, className }: { plan: PlanStep[] | null | undefi
         <ol className="m-0 grid list-none gap-1 p-0">
           {steps.map((step, index) => (
             <li
-              className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-1.5 text-[11.5px] leading-[1.5]"
+              className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-1.5 text-ui-xs leading-[1.5]"
               key={`${index}-${step.step}`}
             >
               <AgentStatusIcon status={toAgentStatus(step.status)} className="mt-[3px]" />

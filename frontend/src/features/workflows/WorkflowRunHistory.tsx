@@ -191,7 +191,7 @@ export function WorkflowRunHistory({
         <div className="overflow-y-auto border-b border-border p-1">
           {runs.data && runs.data.length === 0 && (
             <div className="grid h-full place-items-center">
-              <p className="m-0 px-2 text-center text-[11.5px] text-muted-foreground">{t("wfHistoryEmpty")}</p>
+              <p className="m-0 px-2 text-center text-ui-xs text-muted-foreground">{t("wfHistoryEmpty")}</p>
             </div>
           )}
           {(runs.data ?? []).map((run) => (
@@ -207,7 +207,7 @@ export function WorkflowRunHistory({
               <RunIcon status={run.status} />
               <span className="flex min-w-0 flex-1 flex-col gap-px">
                 <span className="truncate text-xs">{run.message || run.status}</span>
-                <span className="timecode text-[10.5px] text-muted-foreground">
+                <span className="timecode text-ui-2xs text-muted-foreground">
                   {run.created_at ? relTime(run.created_at, now) : ""}
                   {run.created_at && RUNNING.has(run.status)
                     ? ` · ${Math.max(0, (now - parseIso(run.created_at)) / 1000).toFixed(0)}s`
@@ -221,11 +221,11 @@ export function WorkflowRunHistory({
         <div className="overflow-y-auto px-2.5 py-2">
           {!selected ? (
             <div className="grid h-full place-items-center">
-              <p className="m-0 px-2 text-center text-[11.5px] text-muted-foreground">{t("wfHistoryPick")}</p>
+              <p className="m-0 px-2 text-center text-ui-xs text-muted-foreground">{t("wfHistoryPick")}</p>
             </div>
           ) : (
             <>
-              {selected.error && <p className="mb-2 mt-0 whitespace-pre-wrap text-[11.5px] text-destructive">{selected.error}</p>}
+              {selected.error && <p className="mb-2 mt-0 whitespace-pre-wrap text-ui-xs text-destructive">{selected.error}</p>}
               <ol className="m-0 flex list-none flex-col gap-0.5 p-0">
                 {steps.map((s) => {
                   const hasDetail = (s.outputs && Object.keys(s.outputs).length > 0) || Boolean(s.error);
@@ -252,13 +252,13 @@ export function WorkflowRunHistory({
                         )}
                         <span className="min-w-0 flex-1 truncate">{s.name}</span>
                         {s.status === "skipped" ? (
-                          <span className="timecode inline-flex items-center gap-[3px] text-[10.5px] text-muted-foreground">{t("wfStepSkipped")}</span>
+                          <span className="timecode inline-flex items-center gap-[3px] text-ui-2xs text-muted-foreground">{t("wfStepSkipped")}</span>
                         ) : s.status === "running" && s.startAt != null ? (
-                          <span className="timecode inline-flex items-center gap-[3px] text-[10.5px] text-muted-foreground">
+                          <span className="timecode inline-flex items-center gap-[3px] text-ui-2xs text-muted-foreground">
                             <Clock size={10} /> {Math.max(0, (now - s.startAt) / 1000).toFixed(0)}s
                           </span>
                         ) : s.ms != null ? (
-                          <span className="timecode inline-flex items-center gap-[3px] text-[10.5px] text-muted-foreground">
+                          <span className="timecode inline-flex items-center gap-[3px] text-ui-2xs text-muted-foreground">
                             <Clock size={10} /> {(s.ms / 1000).toFixed(2)}s
                           </span>
                         ) : null}
@@ -267,7 +267,7 @@ export function WorkflowRunHistory({
                         )}
                       </button>
                       {open && s.error && (
-                        <p className="mx-1.5 mb-1 mt-0.5 whitespace-pre-wrap break-words rounded-md bg-[color-mix(in_oklab,var(--destructive)_12%,transparent)] px-2 py-1.5 text-[10.5px] leading-[1.5] text-destructive">
+                        <p className="mx-1.5 mb-1 mt-0.5 whitespace-pre-wrap break-words rounded-md bg-[color-mix(in_oklab,var(--destructive)_12%,transparent)] px-2 py-1.5 text-ui-2xs leading-[1.5] text-destructive">
                           {s.error}
                         </p>
                       )}
@@ -275,14 +275,14 @@ export function WorkflowRunHistory({
                         <StepAssets assetIds={assetOutputs(nodeTypeById[s.nid] ?? "", s.outputs)} />
                       )}
                       {open && s.outputs && Object.keys(s.outputs).length > 0 && (
-                        <pre className="mx-1.5 mb-1 mt-0.5 max-h-44 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-muted px-2 py-1.5 font-mono text-[10.5px] leading-[1.55] text-muted-foreground">
+                        <pre className="mx-1.5 mb-1 mt-0.5 max-h-44 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-muted px-2 py-1.5 font-mono text-ui-2xs leading-[1.55] text-muted-foreground">
                           {outputsText(s.outputs)}
                         </pre>
                       )}
                     </li>
                   );
                 })}
-                {steps.length === 0 && events.isFetched && <p className="px-2 py-3 text-center text-[11.5px] text-muted-foreground">{t("wfHistoryNoSteps")}</p>}
+                {steps.length === 0 && events.isFetched && <p className="px-2 py-3 text-center text-ui-xs text-muted-foreground">{t("wfHistoryNoSteps")}</p>}
               </ol>
             </>
           )}

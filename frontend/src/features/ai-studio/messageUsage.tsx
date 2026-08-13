@@ -152,7 +152,7 @@ export function MessageUsageFooter({
     <div className={cn("mt-1.5 flex min-h-[18px] items-center gap-1.5", className)}>
       <button
         type="button"
-        className="inline-flex cursor-pointer items-center gap-1 rounded-sm border-0 bg-transparent px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-foreground"
+        className="inline-flex cursor-pointer items-center gap-1 rounded-sm border-0 bg-transparent px-1.5 py-0.5 text-ui-xs text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-foreground"
         title={t("copyMessage")}
         onClick={copy}
       >
@@ -160,16 +160,16 @@ export function MessageUsageFooter({
         {copied ? t("copied") : t("copyMessage")}
       </button>
       {typeof duration === "number" && (
-        <span className="timecode text-[11px] text-muted-foreground">
+        <span className="timecode text-ui-xs text-muted-foreground">
           {t("usageDuration").replace("{t}", formatElapsedSeconds(duration))}
         </span>
       )}
       {tokenLabel && (
-        <span className="text-[11px] text-muted-foreground" title={tokenTitle}>
+        <span className="text-ui-xs text-muted-foreground" title={tokenTitle}>
           {tokenLabel}
         </span>
       )}
-      {costLabel && <span className="text-[11px] text-muted-foreground">{costLabel}</span>}
+      {costLabel && <span className="text-ui-xs text-muted-foreground">{costLabel}</span>}
     </div>
   );
 }

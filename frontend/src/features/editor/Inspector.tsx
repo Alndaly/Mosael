@@ -146,7 +146,7 @@ export function Inspector({
 
   return (
     <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-      <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
+      <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
         {selectedClip && !isTextClip ? (
           <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border" role="tablist">
             <button
@@ -227,10 +227,10 @@ export function Inspector({
             </dl>
             {isTextClip && onSetText && (
               <div className="grid gap-1.5 border-t border-border pt-2.5">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{isTitleText ? t("titleText") : t("subtitleText")}</span>
+                <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{isTitleText ? t("titleText") : t("subtitleText")}</span>
                 <Textarea
                   key={`text-${selectedClip.id}`}
-                  className="w-full resize-y rounded-md border border-border bg-field px-[9px] py-[7px] text-[12.5px] leading-normal text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
+                  className="w-full resize-y rounded-md border border-border bg-field px-[9px] py-[7px] text-ui-sm leading-normal text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
                   rows={3}
                   defaultValue={selectedClip.text_override ?? ""}
                   onBlur={(event) => {
@@ -252,7 +252,7 @@ export function Inspector({
             )}
             {!isTextClip && onSetSpeed && (
               <div className="grid gap-1.5 border-t border-border pt-2.5">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("speed")}</span>
+                <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("speed")}</span>
                 <div className="flex flex-wrap gap-1">
                   {SPEED_OPTIONS.map((option) => (
                     <button
@@ -279,7 +279,7 @@ export function Inspector({
                 return (
                   <div className="grid gap-1.5 border-t border-border pt-2.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("clipAudio")}</span>
+                      <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("clipAudio")}</span>
                       <button
                         type="button"
                         className={cn("min-w-[34px] cursor-pointer rounded-md border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", selectedClip.muted && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
@@ -289,7 +289,7 @@ export function Inspector({
                       </button>
                     </div>
                     <div className="grid grid-cols-[52px_1fr_40px_20px] items-center gap-2">
-                      <span className="text-[11px] text-muted-foreground">{t("gain")}</span>
+                      <span className="text-ui-xs text-muted-foreground">{t("gain")}</span>
                       <Slider
                         key={`gain-${selectedClip.id}-${shownGain.toFixed(3)}-${gainKfs.length}`}
                         min={0}
@@ -302,7 +302,7 @@ export function Inspector({
                           else onSetGain(selectedClip.id, value, selectedClip.muted);
                         }}
                       />
-                      <span className="timecode text-right text-[11px] text-muted-foreground">{Math.round(shownGain * 100)}%</span>
+                      <span className="timecode text-right text-ui-xs text-muted-foreground">{Math.round(shownGain * 100)}%</span>
                       <button
                         type="button"
                         title={onGainKf ? t("kfRemoveHere") : t("kfAddHere")}
@@ -326,7 +326,7 @@ export function Inspector({
                   ] as const
                 ).map((grp) => (
                   <div key={grp.title} className="grid gap-1">
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{grp.title}</span>
+                    <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{grp.title}</span>
                     <div className="grid grid-cols-2 gap-1.5">
                       {(
                         [
@@ -335,7 +335,7 @@ export function Inspector({
                         ] as const
                       ).map((f) => (
                         <label key={f.key} className="grid grid-cols-[auto_1fr] items-center gap-1.5">
-                          <span className="text-[11px] text-muted-foreground">{f.label}</span>
+                          <span className="text-ui-xs text-muted-foreground">{f.label}</span>
                           <div className="relative">
                             <Input
                               key={`${f.key}-${selectedClip.id}`}
@@ -347,7 +347,7 @@ export function Inspector({
                               onBlur={(event) => applyFade(f.key, event.target.value)}
                               aria-label={`${grp.title} · ${f.label}`}
                             />
-                            <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">s</span>
+                            <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-ui-2xs text-muted-foreground">s</span>
                           </div>
                         </label>
                       ))}
@@ -359,20 +359,20 @@ export function Inspector({
             {(!isTextClip || isTitleText) && onSetTransform && (
               <div className="flex flex-col gap-1.5 border-t border-border pt-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5 text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
                     {t("transformTitle")}
                     {animated && <Diamond size={10} className="text-primary" fill="currentColor" />}
                   </span>
                   <div className="flex items-center gap-2">
                     {anyKeyframes && (
-                      <button type="button" className="cursor-pointer border-0 bg-transparent text-[11px] text-muted-foreground hover:text-destructive" onClick={clearKeyframes}>
+                      <button type="button" className="cursor-pointer border-0 bg-transparent text-ui-xs text-muted-foreground hover:text-destructive" onClick={clearKeyframes}>
                         {t("kfClear")}
                       </button>
                     )}
                     {!isIdentityTransform && (
                       <button
                         type="button"
-                        className="cursor-pointer border-0 bg-transparent text-[11px] text-muted-foreground hover:text-foreground"
+                        className="cursor-pointer border-0 bg-transparent text-ui-xs text-muted-foreground hover:text-foreground"
                         onClick={() => commitTransform({ scale: 1, x: 0, y: 0, rotation: 0, opacity: 1 })}
                       >
                         {t("transformReset")}
@@ -394,7 +394,7 @@ export function Inspector({
                   const onKf = keyed && propTimes(keyframes, row.key as KfProp).some((tt) => Math.abs(tt - progress) < 0.02);
                   return (
                     <div key={row.key} className="grid grid-cols-[52px_1fr_40px_20px] items-center gap-2">
-                      <span className="text-[11px] text-muted-foreground">{row.label}</span>
+                      <span className="text-ui-xs text-muted-foreground">{row.label}</span>
                       <Slider
                         // 值/进度入 key:改画幅、重置、或移动播放头(采样值变)后重挂非受控滑块。
                         key={`${row.key}-${selectedClip.id}-${shown[row.key].toFixed(3)}-${keyframes.length}`}
@@ -404,7 +404,7 @@ export function Inspector({
                         defaultValue={[shown[row.key]]}
                         onValueCommit={([value]) => setProp(row.key as KfProp, value)}
                       />
-                      <span className="timecode text-right text-[11px] text-muted-foreground">{row.fmt(shown[row.key])}</span>
+                      <span className="timecode text-right text-ui-xs text-muted-foreground">{row.fmt(shown[row.key])}</span>
                       {row.kf ? (
                         <button
                           type="button"
@@ -431,7 +431,7 @@ export function Inspector({
                           key={tt}
                           type="button"
                           title={`${Math.round(tt * 100)}%`}
-                          className={cn("timecode cursor-pointer rounded-full border px-1.5 py-0.5 text-[10px]", near ? "border-primary bg-accent text-accent-foreground" : "border-border text-muted-foreground hover:border-primary")}
+                          className={cn("timecode cursor-pointer rounded-full border px-1.5 py-0.5 text-ui-2xs", near ? "border-primary bg-accent text-accent-foreground" : "border-border text-muted-foreground hover:border-primary")}
                           onClick={() => seekToKeyframe(tt)}
                         >
                           {Math.round(tt * 100)}%
@@ -440,7 +440,7 @@ export function Inspector({
                     })}
                   </div>
                 )}
-                <span className="text-[10.5px] leading-[1.4] text-muted-foreground">{anyKeyframes ? t("kfHintActive") : t("kfHintEmpty")}</span>
+                <span className="text-ui-2xs leading-[1.4] text-muted-foreground">{anyKeyframes ? t("kfHintActive") : t("kfHintEmpty")}</span>
               </div>
             )}
           </div>
@@ -459,7 +459,7 @@ export function Inspector({
           </dl>
           {onReframe && (
             <div className="grid gap-1.5 border-t border-border pt-2.5">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("reframeTitle")}</span>
+              <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("reframeTitle")}</span>
               <div className="flex flex-wrap gap-1">
                 {(
                   [
@@ -482,7 +482,7 @@ export function Inspector({
                   );
                 })}
               </div>
-              <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("reframeFill")}</span>
+              <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("reframeFill")}</span>
               <div className="flex flex-wrap gap-1">
                 {(
                   [
@@ -587,14 +587,14 @@ function ColorGradePanel({
         <strong title={targetName}>{targetName}</strong>
         <div className="inline-flex items-center gap-1">
           {hasGrade && (
-            <button type="button" className="inline-flex cursor-pointer items-center gap-[3px] whitespace-nowrap border-0 bg-transparent p-0 text-[11px] text-muted-foreground hover:text-destructive" onClick={resetAll} title={t("gradeResetAllHint")}>
+            <button type="button" className="inline-flex cursor-pointer items-center gap-[3px] whitespace-nowrap border-0 bg-transparent p-0 text-ui-xs text-muted-foreground hover:text-destructive" onClick={resetAll} title={t("gradeResetAllHint")}>
               <RotateCcw size={11} /> {t("gradeReset")}
             </button>
           )}
         </div>
       </div>
       <div className="grid gap-1.5 border-t border-border pt-2.5">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("stylePresets")}</span>
+        <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("stylePresets")}</span>
         <div className="flex flex-wrap gap-1">
           <button
             type="button"
@@ -619,9 +619,9 @@ function ColorGradePanel({
       </div>
       {GRADE_GROUPS.map((group) => (
         <div className="grid gap-1.5 border-t border-border pt-2.5" key={group.label}>
-          <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t(group.label as never)}</span>
+          <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t(group.label as never)}</span>
           {group.keys.map((key) => (
-            <div className="grid grid-cols-[44px_minmax(0,1fr)_30px] items-center gap-1.5 text-[11.5px] text-muted-foreground [&_em]:text-right [&_em]:text-[10.5px] [&_em]:not-italic" key={`${key}-${clip.id}`}>
+            <div className="grid grid-cols-[44px_minmax(0,1fr)_30px] items-center gap-1.5 text-ui-xs text-muted-foreground [&_em]:text-right [&_em]:text-ui-2xs [&_em]:not-italic" key={`${key}-${clip.id}`}>
               <span>{t(`grade_${key}` as never)}</span>
               <Slider
                 // 值入 key:套预设后重挂,让非受控滑杆的滑块跳到预设值。
@@ -639,7 +639,7 @@ function ColorGradePanel({
         </div>
       ))}
       <div className="grid gap-1.5 border-t border-border pt-2.5">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("gradeGroupCurves")}</span>
+        <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("gradeGroupCurves")}</span>
         <CurveEditor
           key={clip.id}
           curves={curColor.curves as ColorCurves | undefined}
@@ -649,10 +649,10 @@ function ColorGradePanel({
         />
       </div>
       <div className="grid gap-1.5 border-t border-border pt-2.5">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("gradeGroupLut")}</span>
+        <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("gradeGroupLut")}</span>
         <LutPicker workspaceId={workspaceId} value={curColor.lut as string | undefined} onChange={setLut} />
       </div>
-      <p className="mb-0 mt-1 text-[11px] leading-normal text-muted-foreground">{t("colorScopeHint")}</p>
+      <p className="mb-0 mt-1 text-ui-xs leading-normal text-muted-foreground">{t("colorScopeHint")}</p>
     </div>
   );
 }
@@ -698,7 +698,7 @@ function TextStylePanel({
   ];
   return (
     <div className="grid gap-2 border-t border-border pt-2.5">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("textStyleTitle")}</span>
+      <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("textStyleTitle")}</span>
       <div className="flex flex-wrap gap-1">
         {TEXT_PRESETS.map((preset) => (
           <button key={preset.key} type="button" className={iconBtn(false)} onClick={() => set(preset.style)}>
@@ -707,7 +707,7 @@ function TextStylePanel({
         ))}
       </div>
       <div className="grid grid-cols-[40px_1fr] items-center gap-2">
-        <span className="text-[11px] text-muted-foreground">{t("textFont")}</span>
+        <span className="text-ui-xs text-muted-foreground">{t("textFont")}</span>
         <Select
           value={style.font_id ? `${FONT_UPLOAD_PREFIX}${style.font_id}` : style.font_family}
           onValueChange={(value) => {
@@ -739,14 +739,14 @@ function TextStylePanel({
       </div>
       {onUploadFont && (
         <div className="flex items-center gap-1 pl-[48px]">
-          <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[11px]" disabled={uploadingFont} onClick={() => fileRef.current?.click()}>
+          <Button variant="ghost" size="sm" className="h-6 px-1.5 text-ui-xs" disabled={uploadingFont} onClick={() => fileRef.current?.click()}>
             {uploadingFont ? <Loader2 size={12} className="animate-openstudio-spin" /> : <Upload size={12} />} {t("subFontUpload")}
           </Button>
           {style.font_id && onDeleteFont && (
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 px-1.5 text-[11px]"
+              className="h-6 px-1.5 text-ui-xs"
               onClick={() => {
                 const removing = style.font_id;
                 set({ font_id: "", font_family: SUBTITLE_FONTS[0].value });
@@ -770,7 +770,7 @@ function TextStylePanel({
         </div>
       )}
       <div className="grid grid-cols-[40px_1fr_34px] items-center gap-2">
-        <span className="text-[11px] text-muted-foreground">{t("textSize")}</span>
+        <span className="text-ui-xs text-muted-foreground">{t("textSize")}</span>
         <Slider
           key={`fs-${clip.id}-${Math.round(style.font_size)}`}
           min={12}
@@ -779,21 +779,21 @@ function TextStylePanel({
           defaultValue={[style.font_size]}
           onValueCommit={([value]) => set({ font_size: value })}
         />
-        <span className="timecode text-right text-[11px] text-muted-foreground">{Math.round(style.font_size)}</span>
+        <span className="timecode text-right text-ui-xs text-muted-foreground">{Math.round(style.font_size)}</span>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <label className="flex items-center justify-between gap-1.5 text-[11px] text-muted-foreground">
+        <label className="flex items-center justify-between gap-1.5 text-ui-xs text-muted-foreground">
           {t("textColor")}
           <input type="color" className={swatch} value={style.color} onChange={(event) => set({ color: event.target.value })} />
         </label>
-        <label className="flex items-center justify-between gap-1.5 text-[11px] text-muted-foreground">
+        <label className="flex items-center justify-between gap-1.5 text-ui-xs text-muted-foreground">
           {t("textStrokeColor")}
           <input type="color" className={swatch} value={style.stroke_color} onChange={(event) => set({ stroke_color: event.target.value })} />
         </label>
       </div>
       {bars.map((bar) => (
         <div key={bar.key} className="grid grid-cols-[40px_1fr_34px] items-center gap-2">
-          <span className="text-[11px] text-muted-foreground">{bar.label}</span>
+          <span className="text-ui-xs text-muted-foreground">{bar.label}</span>
           <Slider
             key={`${bar.key}-${clip.id}-${style[bar.key]}`}
             min={0}
@@ -802,7 +802,7 @@ function TextStylePanel({
             defaultValue={[style[bar.key]]}
             onValueCommit={([value]) => set({ [bar.key]: value } as Partial<TextStyle>)}
           />
-          <span className="timecode text-right text-[11px] text-muted-foreground">{Math.round(style[bar.key])}</span>
+          <span className="timecode text-right text-ui-xs text-muted-foreground">{Math.round(style[bar.key])}</span>
         </div>
       ))}
       <div className="flex items-center gap-1">

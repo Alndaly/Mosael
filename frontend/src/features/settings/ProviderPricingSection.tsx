@@ -292,7 +292,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
     >
       <ModalShell open={prefillOpen} onOpenChange={setPrefillOpen} title={t("pricingPrefill")}>
         <div className="grid gap-2.5">
-          <p className="m-0 text-[11.5px] leading-[1.5] text-muted-foreground">{t("pricingPrefillHint")}</p>
+          <p className="m-0 text-ui-xs leading-[1.5] text-muted-foreground">{t("pricingPrefillHint")}</p>
           <div className="grid gap-1.5">
             {(profiles.data ?? []).map((profile) => (
               <Button
@@ -309,7 +309,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
             ))}
           </div>
           {prefillResult && (
-            <p className="m-0 text-[11.5px] leading-[1.5] text-foreground">
+            <p className="m-0 text-ui-xs leading-[1.5] text-foreground">
               {(prefillResult.created > 0 ? t("pricingPrefillDone") : t("pricingPrefillNone"))
                 .replace("{created}", String(prefillResult.created))
                 .replace("{priced}", String(prefillResult.models_with_price))
@@ -329,7 +329,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
         title={editing ? t("pricingRuleEdit") : t("pricingRuleAdd")}
       >
         <form
-          className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none"
+          className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none"
           onSubmit={(event) => {
             event.preventDefault();
             if (!canSubmit) return;
@@ -476,7 +476,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
               <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-accent-foreground">
                 <ReceiptText size={13} />
               </span>
-              <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-[13px] [&_strong]:font-semibold">
+              <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-ui-md [&_strong]:font-semibold">
                 <strong>
                   {capabilityLabel(rule.capability)} · {profileLabel(rule.provider_profile_id, rule.provider)}
                 </strong>

@@ -938,7 +938,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         <VoicePanel workspace={workspace} project={project} tabs={<LeftTabs tab={leftTab} onChange={setLeftTab} />} />
       ) : (
         <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
-          <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
+          <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
             <LeftTabs tab={leftTab} onChange={setLeftTab} />
           </div>
           {leftTab === "transcript" ? (
@@ -1158,7 +1158,7 @@ function LeftTabs({
           type="button"
           data-active={item.key === tab || undefined}
           className={cn(
-            "shrink-0 cursor-pointer whitespace-nowrap rounded-full border-0 bg-transparent px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.03em] text-muted-foreground transition-[background-color,color] duration-100 hover:text-foreground",
+            "shrink-0 cursor-pointer whitespace-nowrap rounded-full border-0 bg-transparent px-2 py-1 text-ui-xs font-semibold uppercase tracking-[0.03em] text-muted-foreground transition-[background-color,color] duration-100 hover:text-foreground",
             item.key === tab && "bg-secondary text-foreground hover:bg-secondary",
           )}
           onClick={() => onChange(item.key)}
@@ -1234,18 +1234,18 @@ function ExportControl({
   return (
     <span className="mr-2 inline-flex items-center gap-1.5">
       {status === "running" && (
-        <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground" title={job.data?.message ?? undefined}>
+        <span className="inline-flex items-center gap-1.5 text-ui-xs text-muted-foreground" title={job.data?.message ?? undefined}>
           {job.data?.message && <span className="max-w-[190px] truncate">{job.data.message}</span>}
           <span className="timecode tabular-nums">{Math.round((job.data?.progress ?? 0) * 100)}%</span>
         </span>
       )}
       {status === "succeeded" && (
-        <span className="inline-flex items-center gap-1 text-[11px] text-[var(--track-audio-text)]">
+        <span className="inline-flex items-center gap-1 text-ui-xs text-[var(--track-audio-text)]">
           <CircleCheck size={13} /> {t("exportDone")}
         </span>
       )}
       {status === "failed" && (
-        <span className="inline-flex items-center gap-1 text-[11px] text-destructive" title={job.data?.error ?? undefined}>
+        <span className="inline-flex items-center gap-1 text-ui-xs text-destructive" title={job.data?.error ?? undefined}>
           <CircleAlert size={13} /> {t("exportFailed")}
         </span>
       )}
@@ -1303,7 +1303,7 @@ function ExportControl({
             >
               <Download size={13} /> {t("exportStart")}
             </Button>
-            <span className="text-[11.5px] text-muted-foreground">{t("exportConfigHint")}</span>
+            <span className="text-ui-xs text-muted-foreground">{t("exportConfigHint")}</span>
           </div>
         </div>
       </ModalShell>

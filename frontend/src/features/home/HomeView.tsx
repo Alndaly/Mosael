@@ -246,7 +246,7 @@ export function HomeView({
             >
               <span className="row-span-2 inline-flex text-muted-foreground">{tile.icon}</span>
               <strong className="text-base font-[650] leading-[1.2] tabular-nums">{tile.value}</strong>
-              <span className="truncate text-[11px] text-muted-foreground">
+              <span className="truncate text-ui-xs text-muted-foreground">
                 {t(tile.key)}
                 {"extra" in tile && tile.extra ? <em className="not-italic text-destructive"> · {tile.extra}</em> : null}
               </span>
@@ -340,10 +340,10 @@ export function HomeView({
                 <ContextMenuTrigger asChild>
                   <article className="grid grid-cols-[minmax(0,1fr)] gap-2 rounded-lg border border-border bg-panel p-3 shadow-[var(--shadow-panel)] transition-[border-color] duration-100 hover:border-border-strong [[data-appearance=glass]_&]:[-webkit-backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] [[data-appearance=glass]_&]:[backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)]" onDoubleClick={() => onOpenProject(project.id)}>
                     <div className="min-w-0">
-                      <strong className="block truncate text-[13px] font-semibold">{project.name}</strong>
+                      <strong className="block truncate text-ui-md font-semibold">{project.name}</strong>
                       <small className="mt-0.5 block text-xs text-muted-foreground">{displayWorkspaceName(workspace.name, t)}</small>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2.5 text-[11.5px] text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-2.5 text-ui-xs text-muted-foreground">
                       <span className="inline-flex items-center gap-1 whitespace-nowrap" title={t("projectStatDuration")}>
                         <Clock3 size={11} />
                         <em className="timecode not-italic">{formatSeconds(project.timeline_duration ?? 0)}</em>
@@ -358,7 +358,7 @@ export function HomeView({
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-1.5 border-t border-border pt-2.5">
-                      <small className="m-0 min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
+                      <small className="m-0 min-w-0 flex-1 truncate text-ui-xs text-muted-foreground">
                         {project.created_at && (
                           <>{t("projectCreatedAt").replace("{t}", formatShortDate(project.created_at))} · </>
                         )}

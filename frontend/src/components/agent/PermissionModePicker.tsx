@@ -101,7 +101,7 @@ export function PermissionModePicker({ session }: { session: AgentSession | null
             >
               <span className="grid gap-0.5">
                 <span className={value === "bypass" ? "text-destructive" : undefined}>{t(LABEL[value])}</span>
-                <span className="text-[11px] leading-snug text-muted-foreground">{t(HINT[value])}</span>
+                <span className="text-ui-xs leading-snug text-muted-foreground">{t(HINT[value])}</span>
               </span>
             </SelectItem>
           ))}

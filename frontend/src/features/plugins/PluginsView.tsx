@@ -84,7 +84,7 @@ export function PluginsView() {
     <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
       <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]">
         <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
-          <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
+          <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
             <h2>{t("installed")}</h2>
             <ScanButton pending={scan.isPending} onScan={() => scan.mutate()} />
           </div>
@@ -112,7 +112,7 @@ export function PluginsView() {
                   onClick={() => setSelectedId(item.id)}
                 >
                   <span className={cn("h-[7px] w-[7px] shrink-0 rounded-full bg-border-strong", live > 0 && "bg-[#22c55e]")} />
-                  <span className="min-w-0 [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-[12.5px] [&_strong]:font-semibold max-[880px]:[&_small]:hidden">
+                  <span className="min-w-0 [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-ui-sm [&_strong]:font-semibold max-[880px]:[&_small]:hidden">
                     <strong>{item.name}</strong>
                     <small>
                       v{item.version} · {t("pluginConnectionCount").replace("{n}", String((item.instances ?? []).length))}
@@ -449,7 +449,7 @@ function CapabilityPicker({
 
   return (
     <SettingsBlock>
-      <p className="m-0 text-[11.5px] text-muted-foreground">{t("pluginCapabilitiesDesc")}</p>
+      <p className="m-0 text-ui-xs text-muted-foreground">{t("pluginCapabilitiesDesc")}</p>
       {tools.length === 0 ? (
         <p className="m-0 text-xs text-muted-foreground">{t("noTools")}</p>
       ) : (
@@ -632,12 +632,12 @@ const ToolRow = React.memo(function ToolRow({
           onClick={() => setOpen((value) => !value)}
         >
           <Terminal size={14} className="shrink-0" />
-          <div className="min-w-0 flex-1 [&_small]:block [&_small]:truncate [&_small]:text-[11.5px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-[12.5px] [&_strong]:font-semibold">
+          <div className="min-w-0 flex-1 [&_small]:block [&_small]:truncate [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-ui-sm [&_strong]:font-semibold">
             <strong>{tool.label || tool.name}</strong>
             <small>{tool.description}</small>
           </div>
           {tool.read_only && (
-            <small className="whitespace-nowrap rounded-full bg-secondary px-1.5 py-px text-[10.5px] text-muted-foreground">
+            <small className="whitespace-nowrap rounded-full bg-secondary px-1.5 py-px text-ui-2xs text-muted-foreground">
               {t("pluginToolReadOnly")}
             </small>
           )}
@@ -652,7 +652,7 @@ const ToolRow = React.memo(function ToolRow({
         <div className="grid gap-1.5 border-t border-border p-2">
           {fields.map(([key, spec]) => (
             <label
-              className="grid gap-1 [&>span]:text-[11.5px] [&>span]:text-muted-foreground [&_em]:not-italic [&_em]:text-destructive"
+              className="grid gap-1 [&>span]:text-ui-xs [&>span]:text-muted-foreground [&_em]:not-italic [&_em]:text-destructive"
               key={key}
             >
               <span>
@@ -702,7 +702,7 @@ function InvocationList({ instanceId }: { instanceId: string }) {
   return (
     <SettingsBlock>
       <div className="flex items-center justify-between">
-        <p className="m-0 text-[11.5px] text-muted-foreground">{t("invocationsGroupDesc")}</p>
+        <p className="m-0 text-ui-xs text-muted-foreground">{t("invocationsGroupDesc")}</p>
         <Button variant="outline" size="sm" loading={clear.isPending} onClick={() => clear.mutate()}>
           <Trash2 size={13} /> {t("invocationsClear")}
         </Button>
@@ -727,7 +727,7 @@ function InvocationRow({ invocation, onDelete }: { invocation: PluginInvocation;
           onClick={() => setOpen((value) => !value)}
         >
           {ok ? <CheckCircle2 size={14} className="text-[#16a34a]" /> : <CircleAlert size={14} className="text-destructive" />}
-          <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:text-[11.5px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:text-[12.5px] [&_strong]:font-semibold">
+          <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:block [&_strong]:text-ui-sm [&_strong]:font-semibold">
             <strong>{invocation.tool_name}</strong>
             <small>{invocation.status}</small>
           </div>
@@ -768,7 +768,7 @@ function ResultBlock({ ok, body }: { ok: boolean; body: unknown }) {
     <div className="grid gap-1">
       <pre
         className={cn(
-          "m-0 max-h-[200px] overflow-auto whitespace-pre-wrap rounded-md px-2 py-1.5 font-mono text-[11px] leading-[1.5] [word-break:break-word]",
+          "m-0 max-h-[200px] overflow-auto whitespace-pre-wrap rounded-md px-2 py-1.5 font-mono text-ui-xs leading-[1.5] [word-break:break-word]",
           ok
             ? "border border-[color-mix(in_oklab,#22c55e_30%,var(--border))] bg-[color-mix(in_oklab,#22c55e_8%,var(--background))]"
             : "border border-[color-mix(in_oklab,var(--destructive)_30%,var(--border))] bg-[color-mix(in_oklab,var(--destructive)_7%,var(--background))] text-destructive",
@@ -777,7 +777,7 @@ function ResultBlock({ ok, body }: { ok: boolean; body: unknown }) {
         {shown}
       </pre>
       {clipped && (
-        <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+        <div className="flex items-center justify-between gap-2 text-ui-xs text-muted-foreground">
           <span>
             {t("pluginResultClipped")
               .replace("{shown}", String(RESULT_RENDER_LIMIT))
@@ -786,7 +786,7 @@ function ResultBlock({ ok, body }: { ok: boolean; body: unknown }) {
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 px-2 text-[11px]"
+            className="h-6 px-2 text-ui-xs"
             onClick={() => void navigator.clipboard?.writeText(full)}
           >
             <Copy size={11} /> {t("pluginResultCopyAll")}

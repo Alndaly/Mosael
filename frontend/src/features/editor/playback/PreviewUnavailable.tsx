@@ -61,11 +61,11 @@ export function PreviewUnavailable({
         ) : (
           <TriangleAlert className="text-[rgb(255_255_255/0.55)]" size={20} />
         )}
-        <span className="text-[13px] font-medium text-[rgb(255_255_255/0.9)]">{copy.title}</span>
-        <span className="text-[12px] leading-relaxed text-[rgb(255_255_255/0.5)]">{copy.hint}</span>
+        <span className="text-ui-md font-medium text-[rgb(255_255_255/0.9)]">{copy.title}</span>
+        <span className="text-ui-sm leading-relaxed text-[rgb(255_255_255/0.5)]">{copy.hint}</span>
         {/* 点名是哪个素材:一条时间线上几十个片段,不说名字用户无从下手。 */}
         {assets.length > 0 && (
-          <span className="max-w-full truncate text-[11.5px] text-[rgb(255_255_255/0.38)]" title={assets.map((a) => a.name).join("、")}>
+          <span className="max-w-full truncate text-ui-xs text-[rgb(255_255_255/0.38)]" title={assets.map((a) => a.name).join("、")}>
             {assets.map((asset) => asset.name).join("、")}
           </span>
         )}
@@ -75,7 +75,7 @@ export function PreviewUnavailable({
             {retrying ? t("previewRetrying") : t("previewRetryProxy")}
           </Button>
         )}
-        {retryError && <span className="text-[11.5px] text-destructive">{t("previewRetryFailed")}</span>}
+        {retryError && <span className="text-ui-xs text-destructive">{t("previewRetryFailed")}</span>}
       </div>
     </div>
   );

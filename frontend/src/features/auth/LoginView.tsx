@@ -108,7 +108,7 @@ export function LoginView() {
 
       <main className="grid min-h-screen grid-rows-[minmax(0,1fr)_auto] justify-items-center overflow-y-auto px-6 py-8">
         <div className="grid w-[min(340px,100%)] content-center gap-6">
-          <div className="grid gap-2.5 [&_h1]:m-0 [&_h1]:text-[22px] [&_h1]:font-[640] [&_h1]:leading-[1.15] [&_h1]:tracking-[-0.02em] [&_h1]:text-foreground [&_p]:m-0 [&_p]:text-[13px] [&_p]:leading-normal [&_p]:text-muted-foreground">
+          <div className="grid gap-2.5 [&_h1]:m-0 [&_h1]:text-[22px] [&_h1]:font-[640] [&_h1]:leading-[1.15] [&_h1]:tracking-[-0.02em] [&_h1]:text-foreground [&_p]:m-0 [&_p]:text-ui-md [&_p]:leading-normal [&_p]:text-muted-foreground">
             <div className="mb-1.5 grid h-11 w-11 place-items-center rounded-xl bg-primary text-primary-foreground">
               <Film size={21} />
             </div>
@@ -210,7 +210,7 @@ export function LoginView() {
                 {mode === "login" ? t("signIn") : t("createAccount")}
               </Button>
               {mode === "register" && (
-                <p className="m-0 text-[11.5px] leading-[1.6] text-muted-foreground [&_button]:cursor-pointer [&_button]:border-0 [&_button]:bg-transparent [&_button]:p-0 [&_button]:text-[length:inherit] [&_button]:text-foreground [&_button]:underline [&_button]:underline-offset-2 [&_button:hover]:text-primary">
+                <p className="m-0 text-ui-xs leading-[1.6] text-muted-foreground [&_button]:cursor-pointer [&_button]:border-0 [&_button]:bg-transparent [&_button]:p-0 [&_button]:text-[length:inherit] [&_button]:text-foreground [&_button]:underline [&_button]:underline-offset-2 [&_button:hover]:text-primary">
                   {t("authConsentPrefix")}
                   <button type="button" onClick={() => setLegalDoc("terms")}>{t("legalTerms")}</button>
                   {t("authConsentAnd")}
@@ -223,7 +223,7 @@ export function LoginView() {
 
           <button
             type="button"
-            className="-mt-2 cursor-pointer justify-self-start border-0 bg-transparent p-0.5 text-[12.5px] text-muted-foreground hover:text-accent-foreground hover:underline"
+            className="-mt-2 cursor-pointer justify-self-start border-0 bg-transparent p-0.5 text-ui-sm text-muted-foreground hover:text-accent-foreground hover:underline"
             onClick={switchMode}
           >
             {mode === "login" ? t("switchToRegister") : t("switchToLogin")}
@@ -287,7 +287,7 @@ function OAuthButtons() {
 
   return (
     <div className="grid gap-2.5">
-      <div className="flex items-center gap-2.5 text-[11px] text-muted-foreground before:h-px before:flex-1 before:bg-border before:content-[''] after:h-px after:flex-1 after:bg-border after:content-['']">
+      <div className="flex items-center gap-2.5 text-ui-xs text-muted-foreground before:h-px before:flex-1 before:bg-border before:content-[''] after:h-px after:flex-1 after:bg-border after:content-['']">
         {t("authOr")}
       </div>
       {list.includes("google") && (
@@ -303,14 +303,14 @@ function OAuthButtons() {
         </Button>
       )}
       {pendingId && (
-        <p className="m-0 flex items-center justify-between gap-2 text-[11.5px] leading-normal text-muted-foreground">
+        <p className="m-0 flex items-center justify-between gap-2 text-ui-xs leading-normal text-muted-foreground">
           {t("authOauthWaiting")}
           <button type="button" className="cursor-pointer border-0 bg-transparent p-0 text-[length:inherit] text-primary underline underline-offset-2" onClick={() => setPendingId(null)}>
             {t("authOauthCancel")}
           </button>
         </p>
       )}
-      {failure && <p className="m-0 text-[11.5px] text-destructive">{failure}</p>}
+      {failure && <p className="m-0 text-ui-xs text-destructive">{failure}</p>}
     </div>
   );
 }
@@ -339,7 +339,7 @@ function LoginHero() {
       )}
       {/* 底部压暗渐变保证文字可读(图片场景);纯渐变兜底时同样成立。 */}
       <div className="absolute inset-x-0 bottom-0 h-[46%] bg-[linear-gradient(to_top,rgba(10,8,16,0.62)_0%,rgba(10,8,16,0.32)_55%,transparent_100%)]" />
-      <div className="absolute inset-x-0 bottom-0 grid gap-1.5 p-10 [&_p]:m-0 [&_p]:max-w-[42ch] [&_p]:text-[13.5px] [&_p]:leading-relaxed [&_p]:text-white/85 [&_strong]:text-[21px] [&_strong]:font-[640] [&_strong]:leading-tight [&_strong]:tracking-[-0.015em] [&_strong]:text-white">
+      <div className="absolute inset-x-0 bottom-0 grid gap-1.5 p-10 [&_p]:m-0 [&_p]:max-w-[42ch] [&_p]:text-ui-md [&_p]:leading-relaxed [&_p]:text-white/85 [&_strong]:text-[21px] [&_strong]:font-[640] [&_strong]:leading-tight [&_strong]:tracking-[-0.015em] [&_strong]:text-white">
         <strong>{t("loginHeroTitle")}</strong>
         <p>{t("loginHeroBody")}</p>
       </div>

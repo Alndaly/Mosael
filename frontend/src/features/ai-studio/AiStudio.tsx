@@ -330,13 +330,13 @@ function GenerateWorkspace({
     const visibleParams = (comfyParams.data ?? []).filter((param) => !param.role || !hiddenRoles.has(param.role));
     return (
       <>
-        <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
+        <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
           <span>{t("comfyWorkflow")}</span>
           <Select
             value={generationConfig.workflow || "__default__"}
             onValueChange={(value) => setConfigValue("workflow", value === "__default__" ? "" : value)}
           >
-            <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-[12.5px] font-medium text-foreground">
+            <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -348,7 +348,7 @@ function GenerateWorkspace({
               ))}
             </SelectContent>
           </Select>
-          <span className="text-[10.5px] font-normal text-muted-foreground">
+          <span className="text-ui-2xs font-normal text-muted-foreground">
             {comfyWorkflows.isError
               ? t("comfyWorkflowError")
               : comfyWorkflows.data && comfyWorkflows.data.length === 0
@@ -358,12 +358,12 @@ function GenerateWorkspace({
         </label>
         {generationConfig.workflow && visibleParams.length > 0 && (
           <div className="grid gap-2 rounded-lg border border-border bg-panel/50 p-2.5">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("comfyParams")}</span>
+            <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("comfyParams")}</span>
             {visibleParams.map((param) => {
               const current = workflowParams[param.node_id]?.[param.name] ?? param.value;
               const label = `${param.title || param.class_type} · ${param.name}`;
               return (
-                <label key={`${param.node_id}:${param.name}`} className="grid grid-cols-[1fr_130px] items-center gap-2 text-[11.5px] text-muted-foreground">
+                <label key={`${param.node_id}:${param.name}`} className="grid grid-cols-[1fr_130px] items-center gap-2 text-ui-xs text-muted-foreground">
                   <span className="truncate" title={label}>{label}</span>
                   {param.type === "COMBO" ? (
                     <SearchableSelect
@@ -381,7 +381,7 @@ function GenerateWorkspace({
                     />
                   ) : param.type === "INT" || param.type === "FLOAT" ? (
                     <Input
-                      className="h-7 w-full rounded-md border-border bg-field text-[12px] text-foreground"
+                      className="h-7 w-full rounded-md border-border bg-field text-ui-sm text-foreground"
                       type="number"
                       value={String(current ?? "")}
                       min={param.min}
@@ -397,7 +397,7 @@ function GenerateWorkspace({
                     />
                   ) : (
                     <Input
-                      className="h-7 w-full rounded-md border-border bg-field text-[12px] text-foreground"
+                      className="h-7 w-full rounded-md border-border bg-field text-ui-sm text-foreground"
                       value={String(current ?? "")}
                       onChange={(event) => setWorkflowParam(param.node_id, param.name, event.target.value)}
                     />
@@ -692,7 +692,7 @@ function GenerateWorkspace({
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)_300px] grid-rows-[minmax(0,1fr)] gap-2 max-[1180px]:grid-cols-[220px_minmax(0,1fr)] max-[820px]:grid-cols-[minmax(0,1fr)]">
       <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[820px]:hidden">
-        <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
+        <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
           <h2>{t("generationSessionsTitle")}</h2>
           <Button variant="outline" size="icon" className="h-7 w-7" title={t("generationNewSession")} aria-label={t("generationNewSession")} onClick={() => createSession.mutate()} loading={createSession.isPending}>
             <Plus size={14} />
@@ -786,7 +786,7 @@ function GenerateWorkspace({
         >
           <Textarea
             rows={2}
-            className="max-h-[220px] min-h-11 w-full min-w-0 resize-none border-0 bg-transparent px-0 py-0.5 pb-1.5 text-[13.5px] leading-[1.55] shadow-none outline-none focus-visible:ring-0"
+            className="max-h-[220px] min-h-11 w-full min-w-0 resize-none border-0 bg-transparent px-0 py-0.5 pb-1.5 text-ui-md leading-[1.55] shadow-none outline-none focus-visible:ring-0"
             value={prompt}
             placeholder={t("promptPlaceholder")}
             onChange={(event) => {
@@ -840,7 +840,7 @@ function GenerateWorkspace({
       </section>
 
       <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] flex min-w-0 flex-col gap-[9px] overflow-y-auto px-3 pb-3.5 max-[1180px]:col-span-full max-[1180px]:grid max-[1180px]:max-h-[220px] max-[1180px]:grid-cols-2 max-[1180px]:content-start max-[820px]:grid-cols-1">
-        <div className="-mx-3 flex min-h-[38px] items-center justify-between border-b border-border px-3 py-2.5 max-[1180px]:col-span-full [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
+        <div className="-mx-3 flex min-h-[38px] items-center justify-between border-b border-border px-3 py-2.5 max-[1180px]:col-span-full [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
           <h2 className="text-xs tracking-[0.02em] text-muted-foreground">{t("generationEngineSettings")}</h2>
         </div>
         {selectedModel && selectedCapabilityMissing && (
@@ -848,29 +848,29 @@ function GenerateWorkspace({
             message={t("aiCapabilityNotConfigured").replace("{capability}", capabilityLabel(selectedModel.kind))}
             actionLabel={t("wfGoConfigure")}
             section={`providers:${selectedModel.kind}`}
-            className="items-center gap-[7px] rounded-lg px-[9px] py-2 text-[11.5px] leading-[1.45]"
+            className="items-center gap-[7px] rounded-lg px-[9px] py-2 text-ui-xs leading-[1.45]"
             textClassName="line-clamp-2"
             actionClassName="self-center"
           />
         )}
         {selectedModel && !selectedAdapterAvailable && (
-          <div className="flex items-center gap-1.5 text-[11.5px] text-destructive">
+          <div className="flex items-center gap-1.5 text-ui-xs text-destructive">
             <CircleAlert size={13} />
             {t("generationAdapterUnavailable").replace("{engine}", `${selectedModel.provider} · ${selectedModel.model}`)}
           </div>
         )}
         {selectedModel && (
           <>
-            <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
+            <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
               <span>{t("wfModelPreset")}</span>
               <Select value={selectedModel.value} onValueChange={selectEngine}>
-                <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-[12.5px] font-medium text-foreground">
+                <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="max-h-[min(320px,var(--radix-select-content-available-height))] w-[var(--radix-select-trigger-width)] p-1.5">
                   {modelGroups.map((group) => (
                     <React.Fragment key={group.kind}>
-                      <div className="px-2 pb-1 pt-[7px] text-[10.5px] font-bold leading-none text-muted-foreground">
+                      <div className="px-2 pb-1 pt-[7px] text-ui-2xs font-bold leading-none text-muted-foreground">
                         {capabilityLabel(group.kind)}
                       </div>
                       {group.models.map((model) => (
@@ -890,10 +890,10 @@ function GenerateWorkspace({
             {selectedModel.kind === "image" ? (
               <>
                 {supportsParameter(selectedModel, "size") && selectedImageSizes.length > 0 && (
-                  <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
+                  <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
                     <span>{t("genSize")}</span>
                     <Select value={generationConfig.size} onValueChange={(value) => setConfigValue("size", value)}>
-                      <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-[12.5px] font-medium text-foreground">
+                      <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -907,10 +907,10 @@ function GenerateWorkspace({
                   </label>
                 )}
                 {supportsParameter(selectedModel, "num_images") && (
-                  <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
+                  <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
                     <span>{t("genNumImages")}</span>
                     <Input
-                      className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-[12.5px] font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+                      className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-ui-sm font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
                       type="number"
                       min={1}
                       max={maxImages(selectedModel)}
@@ -920,10 +920,10 @@ function GenerateWorkspace({
                   </label>
                 )}
                 {supportsParameter(selectedModel, "seed") && (
-                  <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
+                  <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
                     <span>{t("genSeed")}</span>
                     <Input
-                      className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-[12.5px] font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+                      className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-ui-sm font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
                       type="number"
                       placeholder="auto"
                       value={generationConfig.seed}
@@ -932,17 +932,17 @@ function GenerateWorkspace({
                   </label>
                 )}
                 {supportsNegativePrompt && (
-                  <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
+                  <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
                     <span>{t("genNegativePrompt")}</span>
                     <Input
-                      className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-[12.5px] font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+                      className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-ui-sm font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
                       value={generationConfig.negativePrompt}
                       onChange={(event) => setConfigValue("negativePrompt", event.target.value)}
                     />
                   </label>
                 )}
                 {supportsReferenceImage && (
-                  <div className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
+                  <div className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
                     <span>{t("genReferenceImage")}</span>
                     <input
                       ref={referenceImageInputRef}
@@ -1004,11 +1004,11 @@ function GenerateWorkspace({
             ) : (
               <>
                 {supportsParameter(selectedModel, "duration_seconds") && (
-                  <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
+                  <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
                     <span>{t("genDuration")}</span>
                     {selectedDurations.length > 1 ? (
                       <Select value={generationConfig.durationSeconds} onValueChange={(value) => setConfigValue("durationSeconds", value)}>
-                        <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-[12.5px] font-medium text-foreground">
+                        <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -1021,7 +1021,7 @@ function GenerateWorkspace({
                       </Select>
                     ) : (
                       <Input
-                        className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-[12.5px] font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+                        className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-ui-sm font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
                         type="number"
                         min={1}
                         max={capabilityNumber(selectedModel, "max_duration_seconds", 10)}
@@ -1032,10 +1032,10 @@ function GenerateWorkspace({
                   </label>
                 )}
                 {supportsParameter(selectedModel, "resolution") && selectedResolutions.length > 0 && (
-                  <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
+                  <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
                     <span>{t("genResolution")}</span>
                     <Select value={generationConfig.resolution} onValueChange={(value) => setConfigValue("resolution", value)}>
-                      <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-[12.5px] font-medium text-foreground">
+                      <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1049,10 +1049,10 @@ function GenerateWorkspace({
                   </label>
                 )}
                 {supportsParameter(selectedModel, "aspect_ratio") && selectedAspectRatios.length > 0 && (
-                  <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
+                  <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
                     <span>{t("genAspectRatio")}</span>
                     <Select value={generationConfig.aspectRatio} onValueChange={(value) => setConfigValue("aspectRatio", value)}>
-                      <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-[12.5px] font-medium text-foreground">
+                      <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1066,7 +1066,7 @@ function GenerateWorkspace({
                   </label>
                 )}
                 {supportsFirstFrame && (
-                  <div className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
+                  <div className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
                     <span>{t("genFirstFrame")}</span>
                     <input
                       ref={firstFrameInputRef}
@@ -1115,10 +1115,10 @@ function GenerateWorkspace({
                   </div>
                 )}
                 {supportsFirstFrame && (
-                  <label className="grid gap-1.5 text-[11.5px] font-semibold text-muted-foreground">
+                  <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
                     <span>{t("genFirstFrameUrl")}</span>
                     <Input
-                      className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-[12.5px] font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+                      className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-ui-sm font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
                       placeholder="https://..."
                       value={generationConfig.firstFrameUrl}
                       onChange={(event) => setFirstFrameUrl(event.target.value)}
@@ -1175,11 +1175,11 @@ function GenerationTurn({
   return (
     <article className="grid w-full max-w-[780px] shrink-0 gap-2.5 self-center">
       <div className="grid justify-items-end gap-1">
-        <div className="w-fit max-w-[min(560px,82%)] justify-self-end whitespace-pre-wrap break-words rounded-lg rounded-br bg-secondary px-3 py-[9px] text-[13.5px] leading-[1.65] text-foreground">
+        <div className="w-fit max-w-[min(560px,82%)] justify-self-end whitespace-pre-wrap break-words rounded-lg rounded-br bg-secondary px-3 py-[9px] text-ui-md leading-[1.65] text-foreground">
           {String(generation.request.prompt ?? "")}
         </div>
         {timestamp ? (
-          <time className="text-[11px] leading-tight text-muted-foreground" dateTime={timestamp}>
+          <time className="text-ui-xs leading-tight text-muted-foreground" dateTime={timestamp}>
             {timestampLabel}
           </time>
         ) : null}
@@ -1215,11 +1215,11 @@ function GenerationTurn({
         ) : status === "failed" ? (
           <GenerationFailureCard error={job?.error ?? ""} />
         ) : (
-          <span className="inline-flex items-center gap-1.5 py-2 text-[12.5px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5 py-2 text-ui-sm text-muted-foreground">
             <Loader2 size={13} className="animate-openstudio-spin" /> {status === "running" ? t("generating") : t("genQueued")}
           </span>
         )}
-        <small className="flex flex-wrap items-center gap-2 justify-self-start text-[11.5px] text-muted-foreground [&_span+span:before]:mr-2 [&_span+span:before]:content-['·']">
+        <small className="flex flex-wrap items-center gap-2 justify-self-start text-ui-xs text-muted-foreground [&_span+span:before]:mr-2 [&_span+span:before]:content-['·']">
           <span>
             {generation.provider} · {generation.model}
           </span>
@@ -1247,23 +1247,23 @@ function GenerationFailureCard({ error }: { error: string }) {
       <div className="flex min-w-0 items-start gap-2 text-destructive">
         <CircleAlert size={14} className="mt-0.5 shrink-0" />
         <div className="grid min-w-0 gap-0.5">
-          <strong className="text-[12.5px] leading-[1.35] text-destructive">{t("generationFailedTitle")}</strong>
-          <span className="[overflow-wrap:anywhere] text-[12.5px] leading-[1.55] text-[color-mix(in_srgb,var(--destructive)_82%,var(--foreground))]">
+          <strong className="text-ui-sm leading-[1.35] text-destructive">{t("generationFailedTitle")}</strong>
+          <span className="[overflow-wrap:anywhere] text-ui-sm leading-[1.55] text-[color-mix(in_srgb,var(--destructive)_82%,var(--foreground))]">
             {summary}
           </span>
         </div>
       </div>
       {error ? (
         <div className="flex items-start justify-between gap-2">
-          <details className="min-w-0 text-[11.5px] text-muted-foreground">
+          <details className="min-w-0 text-ui-xs text-muted-foreground">
             <summary className="w-fit cursor-pointer list-none after:ml-1 after:inline-block after:content-['›'] [&::-webkit-details-marker]:hidden">
               {t("generationErrorDetail")}
             </summary>
-            <pre className="mt-[7px] max-h-40 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-[color-mix(in_srgb,var(--background)_72%,var(--card))] p-2 font-mono text-[11px] leading-normal text-muted-foreground">
+            <pre className="mt-[7px] max-h-40 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-[color-mix(in_srgb,var(--background)_72%,var(--card))] p-2 font-mono text-ui-xs leading-normal text-muted-foreground">
               {error}
             </pre>
           </details>
-          <Button type="button" variant="ghost" size="sm" className="h-6 shrink-0 px-[7px] text-[11px]" onClick={copy}>
+          <Button type="button" variant="ghost" size="sm" className="h-6 shrink-0 px-[7px] text-ui-xs" onClick={copy}>
             {copied ? <Check size={12} /> : <Copy size={12} />}
             {copied ? t("copied") : t("copyMessage")}
           </Button>

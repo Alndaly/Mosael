@@ -167,7 +167,7 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
                 <span className="grid h-8 w-8 place-items-center rounded-lg bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-primary">
                   <MessageSquare size={15} />
                 </span>
-                <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:font-mono [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-[13px] [&_strong]:font-semibold">
+                <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:font-mono [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-ui-md [&_strong]:font-semibold">
                   <div className="flex min-w-0 items-center gap-2">
                     <strong>{bot.name}</strong>
                     <StatusBadge status={bot.status} />
@@ -254,7 +254,7 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
 
       <ModalShell open={manualOpen} onOpenChange={(next) => !next && setManualOpen(false)} title={t("feishuManualToggle")}>
         <div className="grid gap-3">
-          <p className="text-[13px] text-muted-foreground">{t("feishuManualBody")}</p>
+          <p className="text-ui-md text-muted-foreground">{t("feishuManualBody")}</p>
           <Input placeholder={t("feishuAppId")} value={appId} onChange={(event) => setAppId(event.target.value)} autoFocus />
           <Input
             type="password"
@@ -284,15 +284,15 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
         title={t("feishuBindTitle")}
       >
         <div className="grid gap-3">
-          <p className="text-[13px] text-muted-foreground">{t("feishuBindHint")}</p>
+          <p className="text-ui-md text-muted-foreground">{t("feishuBindHint")}</p>
           <code className="block rounded-lg border border-border bg-background p-2.5 text-center text-[22px] font-semibold tracking-[0.22em] tabular-nums">{bindCode?.code}</code>
           <div className="grid gap-1.5">
-            <small className="text-[12px] text-muted-foreground">{t("feishuBindMembers")}</small>
+            <small className="text-ui-sm text-muted-foreground">{t("feishuBindMembers")}</small>
             {(bindings.data ?? []).length === 0 ? (
-              <small className="text-[12px] text-muted-foreground">{t("feishuBindNobody")}</small>
+              <small className="text-ui-sm text-muted-foreground">{t("feishuBindNobody")}</small>
             ) : (
               (bindings.data ?? []).map((binding) => (
-                <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-2 py-1 text-[13px]" key={binding.open_id}>
+                <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-2 py-1 text-ui-md" key={binding.open_id}>
                   <span className="truncate">{binding.username}</span>
                   <Button
                     variant="ghost"
@@ -334,7 +334,7 @@ function StatusBadge({ status }: { status: string }) {
           ? "bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] text-destructive"
           : "bg-secondary text-muted-foreground";
   return (
-    <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-px text-[10.5px] font-semibold ${tone}`}>
+    <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-px text-ui-2xs font-semibold ${tone}`}>
       <i className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
       {label}
     </span>

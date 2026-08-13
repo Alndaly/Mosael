@@ -220,7 +220,7 @@ export function CommandPalette({
         {/* cmdk 的 <CommandEmpty> 依赖内建过滤计数,关掉过滤后永不触发 — 手工空态。
             检索请求在途时不闪空态。 */}
         {!hasAnyResult && !searching && (
-          <div className="grid justify-items-center gap-1 px-3 pb-[30px] pt-[26px] text-center [&>span:last-child]:max-w-80 [&>span:last-child]:text-[11.5px] [&>span:last-child]:leading-normal [&>span:last-child]:text-muted-foreground [&_strong]:text-[12.5px] [&_strong]:font-semibold [&_strong]:text-foreground">
+          <div className="grid justify-items-center gap-1 px-3 pb-[30px] pt-[26px] text-center [&>span:last-child]:max-w-80 [&>span:last-child]:text-ui-xs [&>span:last-child]:leading-normal [&>span:last-child]:text-muted-foreground [&_strong]:text-ui-sm [&_strong]:font-semibold [&_strong]:text-foreground">
             <span className="mb-1 grid h-9 w-9 place-items-center rounded-lg bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary">
               <SearchX size={17} />
             </span>
@@ -269,7 +269,7 @@ export function CommandPalette({
               >
                 <Clapperboard size={14} />
                 <Highlight className="min-w-0 flex-1 truncate" text={project.name} query={query} />
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-ui-xs text-muted-foreground">
                   {t("projectStatAssets").replace("{n}", String(project.asset_count))}
                 </span>
               </CommandItem>
@@ -292,7 +292,7 @@ export function CommandPalette({
               >
                 <Workflow size={14} />
                 <Highlight className="min-w-0 flex-1 truncate" text={workflow.name} query={query} />
-                <span className="text-[11px] tabular-nums text-muted-foreground">
+                <span className="text-ui-xs tabular-nums text-muted-foreground">
                   {t("wfNodeCount").replace("{n}", String(((workflow.graph as { nodes?: unknown[] }).nodes ?? []).length))}
                 </span>
               </CommandItem>
@@ -315,7 +315,7 @@ export function CommandPalette({
               >
                 <Rocket size={14} />
                 <Highlight className="min-w-0 flex-1 truncate" text={task.title || task.asset_name} query={query} />
-                <span className="text-[11px] text-muted-foreground">{t(`batchStatus_${task.status}` as never)}</span>
+                <span className="text-ui-xs text-muted-foreground">{t(`batchStatus_${task.status}` as never)}</span>
               </CommandItem>
             ))}
           </CommandGroup>
@@ -337,7 +337,7 @@ export function CommandPalette({
               >
                 {ASSET_ICONS[asset.kind] ?? <FileVideo size={14} />}
                 <Highlight className="min-w-0 flex-1 truncate" text={asset.name} query={query} />
-                <span className="text-[11px] uppercase text-muted-foreground">{asset.kind}</span>
+                <span className="text-ui-xs uppercase text-muted-foreground">{asset.kind}</span>
               </CommandItem>
             ))}
           </CommandGroup>

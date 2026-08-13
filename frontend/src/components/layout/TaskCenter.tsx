@@ -144,12 +144,12 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
       </Tooltip>
 
       <PopoverContent className="w-[340px] overflow-hidden" aria-label={t("taskCenter")}>
-        <div className="flex items-center justify-between border-b border-border px-2.5 py-2 [&_strong]:text-[12.5px]">
+        <div className="flex items-center justify-between border-b border-border px-2.5 py-2 [&_strong]:text-ui-sm">
           <strong>{t("taskCenter")}</strong>
           {finished.length > 0 && (
             <button
               type="button"
-              className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent text-[11px] text-muted-foreground hover:text-destructive"
+              className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent text-ui-xs text-muted-foreground hover:text-destructive"
               disabled={clearFinished.isPending}
               onClick={() => clearFinished.mutate()}
             >
@@ -231,7 +231,7 @@ function JobRow({ job, onOpen, onCancel }: { job: Job; onOpen?: () => void; onCa
       <div className="grid min-w-0 gap-[3px]">
         <div className="flex items-center justify-between gap-1.5 [&_strong]:text-xs [&_strong]:font-semibold">
           <strong>{t(meta.labelKey as never)}</strong>
-          <span className="inline-flex items-center text-[10.5px] tabular-nums text-muted-foreground">
+          <span className="inline-flex items-center text-ui-2xs tabular-nums text-muted-foreground">
             {job.status === "succeeded" ? (
               <CheckCircle2 size={12} className="text-[#16a34a]" />
             ) : job.status === "failed" ? (
@@ -256,7 +256,7 @@ function JobRow({ job, onOpen, onCancel }: { job: Job; onOpen?: () => void; onCa
           </span>
         </div>
         {running && <Progress value={Math.round(job.progress * 100)} />}
-        <small className={cn("truncate text-[11px] text-muted-foreground", failed && "text-destructive")} title={job.error ?? job.message}>
+        <small className={cn("truncate text-ui-xs text-muted-foreground", failed && "text-destructive")} title={job.error ?? job.message}>
           {job.status === "failed" ? (job.error ?? job.message) : job.message}
         </small>
       </div>

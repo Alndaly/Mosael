@@ -169,7 +169,7 @@ function PublishViewBar() {
           {state.loading ? <X size={15} /> : <RotateCw size={14} />}
         </button>
       </div>
-      <form className="[-webkit-app-region:no-drag] flex h-[30px] min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-border bg-panel-inset px-2.5 focus-within:border-ring [&_input]:min-w-0 [&_input]:flex-1 [&_input]:border-0 [&_input]:bg-transparent [&_input]:text-[12.5px] [&_input]:text-foreground [&_input]:outline-none [&_input:focus-visible]:ring-0" onSubmit={submit}>
+      <form className="[-webkit-app-region:no-drag] flex h-[30px] min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-border bg-panel-inset px-2.5 focus-within:border-ring [&_input]:min-w-0 [&_input]:flex-1 [&_input]:border-0 [&_input]:bg-transparent [&_input]:text-ui-sm [&_input]:text-foreground [&_input]:outline-none [&_input:focus-visible]:ring-0" onSubmit={submit}>
         {state.loading && <Loader2 size={13} className="flex-none animate-openstudio-spin text-muted-foreground" />}
         <Input
           value={address}
@@ -188,7 +188,7 @@ function PublishViewBar() {
       </form>
       <button
         type="button"
-        className="[-webkit-app-region:no-drag] inline-flex cursor-pointer items-center gap-[5px] whitespace-nowrap rounded-md border border-border bg-transparent px-2.5 py-[5px] text-[12.5px] text-foreground hover:border-border-strong hover:bg-secondary"
+        className="[-webkit-app-region:no-drag] inline-flex cursor-pointer items-center gap-[5px] whitespace-nowrap rounded-md border border-border bg-transparent px-2.5 py-[5px] text-ui-sm text-foreground hover:border-border-strong hover:bg-secondary"
         onClick={() => void window.openStudioPublish?.hideView()}
       >
         <ArrowLeft size={14} /> {t("publishBackToApp")}
@@ -200,7 +200,7 @@ function PublishViewBar() {
 /** Sonner 跟随应用主题;样式对齐全平面(细边框、无投影由 CSS 覆盖)。 */
 function AppToaster() {
   const { theme } = usePreferences();
-  return <Toaster theme={theme} position="bottom-right" gap={8} toastOptions={{ className: "rounded-lg! border! border-border-strong! bg-popover! text-[12.5px]! text-foreground! shadow-none!" }} />;
+  return <Toaster theme={theme} position="bottom-right" gap={8} toastOptions={{ className: "rounded-lg! border! border-border-strong! bg-popover! text-ui-sm! text-foreground! shadow-none!" }} />;
 }
 
 /**

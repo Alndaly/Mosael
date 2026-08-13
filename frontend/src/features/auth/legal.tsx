@@ -53,7 +53,7 @@ export function LegalDialog({ doc, onClose }: { doc: LegalDoc | null; onClose: (
   const title = doc === "privacy" ? (zh ? "隐私政策" : "Privacy Policy") : zh ? "用户协议" : "Terms of Service";
   return (
     <ModalShell open={doc !== null} onOpenChange={(next) => !next && onClose()} title={title} className="w-[460px]">
-      <div className="grid max-h-[min(420px,60vh)] gap-3 overflow-y-auto pr-1 [&_h3]:m-0 [&_h3]:text-[12.5px] [&_h3]:font-semibold [&_h3]:text-foreground [&_p]:m-0 [&_p]:text-xs [&_p]:leading-[1.7] [&_p]:text-muted-foreground">
+      <div className="grid max-h-[min(420px,60vh)] gap-3 overflow-y-auto pr-1 [&_h3]:m-0 [&_h3]:text-ui-sm [&_h3]:font-semibold [&_h3]:text-foreground [&_p]:m-0 [&_p]:text-xs [&_p]:leading-[1.7] [&_p]:text-muted-foreground">
         {sections.map((section) => (
           <section className="grid gap-1" key={section.heading}>
             <h3>{section.heading}</h3>

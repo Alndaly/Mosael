@@ -35,7 +35,7 @@ export function SettingsGroup({
       <header className="flex items-start justify-between gap-4 px-0.5">
         <div className="min-w-0">
           <h2 className="m-0 text-[17px] font-[650] leading-[1.3] tracking-[-0.015em]">{title}</h2>
-          {description && <p className="mb-0 mt-[5px] text-[12.5px] leading-[1.55] text-muted-foreground">{description}</p>}
+          {description && <p className="mb-0 mt-[5px] text-ui-sm leading-[1.55] text-muted-foreground">{description}</p>}
         </div>
         {actions && <div className="flex shrink-0 items-center gap-2 pt-0.5">{actions}</div>}
       </header>
@@ -66,7 +66,7 @@ export function SettingsRow({
   return (
     <div id={id} className={cn("grid grid-cols-[minmax(0,1fr)_auto] items-center gap-5 px-3.5 py-3", className)}>
       <div className="grid min-w-0 gap-0.5">
-        <span className="text-[13px] font-medium">{label}</span>
+        <span className="text-ui-md font-medium">{label}</span>
         {description && <small className="text-xs leading-[1.45] text-muted-foreground">{description}</small>}
       </div>
       {children && <div className={cn("flex shrink-0 items-center gap-1.5", controlClassName)}>{children}</div>}

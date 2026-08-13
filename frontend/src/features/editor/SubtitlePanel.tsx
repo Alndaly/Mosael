@@ -85,7 +85,7 @@ export function SubtitlePanel({
       )}
       <div className="grid content-start gap-1.5 overflow-y-auto p-1.5">
         {subtitles.length === 0 && (
-          <div className="empty-inline m-auto grid max-w-60 place-items-center px-3 py-5 text-center text-[13px] leading-[1.6] text-muted-foreground">
+          <div className="empty-inline m-auto grid max-w-60 place-items-center px-3 py-5 text-center text-ui-md leading-[1.6] text-muted-foreground">
             <Type size={16} />
             {t("subtitleEmptyBody")}
           </div>
@@ -100,7 +100,7 @@ export function SubtitlePanel({
               <div className="flex items-center justify-between">
                 <button
                   type="button"
-                  className="timecode cursor-pointer border-0 bg-transparent p-0 pt-0.5 text-[11px] text-muted-foreground"
+                  className="timecode cursor-pointer border-0 bg-transparent p-0 pt-0.5 text-ui-xs text-muted-foreground"
                   title={t("seekToSubtitle")}
                   onClick={() => {
                     useEditorStore.getState().setPlayhead(clip.timeline_start);
@@ -121,7 +121,7 @@ export function SubtitlePanel({
               </div>
               <Textarea
                 key={`sub-${clip.id}-${clip.text_override}`}
-                className="w-full resize-y rounded-md border border-border bg-field px-[9px] py-[7px] text-[12.5px] leading-normal text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
+                className="w-full resize-y rounded-md border border-border bg-field px-[9px] py-[7px] text-ui-sm leading-normal text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
                 rows={2}
                 defaultValue={clip.text_override ?? ""}
                 onBlur={(event) => {
@@ -135,11 +135,11 @@ export function SubtitlePanel({
       </div>
       <div className="flex flex-wrap justify-center gap-1.5 border-t border-border px-2 py-1.5">
         {onGenerate && (
-          <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums" title={t("subtitleGenerateHint")} onClick={onGenerate} disabled={generating}>
+          <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-ui-xs text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-ui-2xs [&_em]:not-italic [&_em]:tabular-nums" title={t("subtitleGenerateHint")} onClick={onGenerate} disabled={generating}>
             {generating ? <Loader2 size={12} className="animate-openstudio-spin" /> : <Sparkles size={12} />} {t("subtitleGenerate")}
           </button>
         )}
-        <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums" title={t("addSubtitleAtPlayhead")} onClick={onAddSubtitle}>
+        <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-ui-xs text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-ui-2xs [&_em]:not-italic [&_em]:tabular-nums" title={t("addSubtitleAtPlayhead")} onClick={onAddSubtitle}>
           <Plus size={12} /> {t("addSubtitleAtPlayhead")}
         </button>
         {subtitles.length > 0 && onApplyTexts && (
@@ -208,11 +208,11 @@ function SubtitleTranslate({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums" title={t("subtitleTranslate")}>
+        <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-ui-xs text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-ui-2xs [&_em]:not-italic [&_em]:tabular-nums" title={t("subtitleTranslate")}>
           <Languages size={12} /> {t("subtitleTranslate")}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="flex w-[220px] flex-col gap-2 p-2.5 [&>strong]:text-[12.5px]" align="end">
+      <PopoverContent className="flex w-[220px] flex-col gap-2 p-2.5 [&>strong]:text-ui-sm" align="end">
         <strong>{t("subtitleTranslate")}</strong>
         <label className="grid gap-1 text-xs text-muted-foreground">
           <span>{t("subtitleTranslateTo")}</span>
@@ -246,7 +246,7 @@ function SubtitleTranslate({
             String(targets.length),
           )}
         </Button>
-        <small className="text-[11px] leading-[1.4] text-muted-foreground">
+        <small className="text-ui-xs leading-[1.4] text-muted-foreground">
           {bilingual ? t("subtitleTranslateNoteBilingual") : t("subtitleTranslateNote")}
         </small>
       </PopoverContent>

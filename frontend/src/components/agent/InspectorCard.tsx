@@ -40,11 +40,11 @@ export function InspectorCard({
   return (
     <section className={cn("grid gap-2 rounded-lg border border-border bg-panel-subtle p-2.5", className)}>
       {/* 排版**只挂在 h3 上**,可折叠时按钮放进去继承它。
-          不能把 text-[11.5px] font-bold 写在裸 <button> 上:design/tokens.css 里那条
+          不能把 text-ui-xs font-bold 写在裸 <button> 上:design/tokens.css 里那条
           `button { font: inherit }` 不在任何 layer 内,而 Tailwind 的工具类在 @layer utilities ——
           未分层的规则整体赢过分层的,与选择器特异性无关。于是那两个类静默失效,标题掉回 body 的
           13px/400,和邻座的 11.5px/700 差出一截(这正是「任务计划」比其它两块大一号的原因)。 */}
-      <h3 className="m-0 text-[11.5px] font-bold text-muted-foreground">
+      <h3 className="m-0 text-ui-xs font-bold text-muted-foreground">
         {onToggle ? (
           <button
             type="button"
@@ -66,8 +66,8 @@ export function InspectorCard({
 export function InspectorRow({ label, value, title }: { label: string; value: React.ReactNode; title?: string }) {
   return (
     <div className="grid grid-cols-[56px_minmax(0,1fr)] items-center gap-2">
-      <span className="truncate text-[11px] text-muted-foreground">{label}</span>
-      <span className="min-w-0 truncate text-[11.5px] font-[650] text-foreground" title={title}>
+      <span className="truncate text-ui-xs text-muted-foreground">{label}</span>
+      <span className="min-w-0 truncate text-ui-xs font-[650] text-foreground" title={title}>
         {value}
       </span>
     </div>

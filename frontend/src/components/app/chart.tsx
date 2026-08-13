@@ -46,7 +46,7 @@ function ChartContainer({
   return (
     <ChartContext.Provider value={{ config }}>
       <div data-chart={chartId} className={cn(
-          "w-full [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground [&_.recharts-cartesian-axis-tick_text]:text-[10px] [&_.recharts-cartesian-axis-tick_text]:tabular-nums [&_.recharts-cartesian-grid_line]:stroke-border",
+          "w-full [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground [&_.recharts-cartesian-axis-tick_text]:text-ui-2xs [&_.recharts-cartesian-axis-tick_text]:tabular-nums [&_.recharts-cartesian-grid_line]:stroke-border",
           className,
         )} {...props}>
         <ChartStyle id={chartId} config={config} />
@@ -97,7 +97,7 @@ function ChartTooltipContent({
   const { config } = useChart();
   if (!active || !payload?.length) return null;
   return (
-    <div className="grid min-w-[130px] gap-1 rounded-md border border-border-strong bg-panel px-2.5 py-1.5 text-[11px]">
+    <div className="grid min-w-[130px] gap-1 rounded-md border border-border-strong bg-panel px-2.5 py-1.5 text-ui-xs">
       {!hideLabel && (
         <div className="font-[650]">{labelFormatter ? labelFormatter(label) : String(label ?? "")}</div>
       )}
@@ -130,7 +130,7 @@ function ChartLegendContent({
   const { config } = useChart();
   if (!payload?.length) return null;
   return (
-    <div className="flex flex-wrap gap-3 pt-1 text-[11px] text-muted-foreground">
+    <div className="flex flex-wrap gap-3 pt-1 text-ui-xs text-muted-foreground">
       {payload.map((item) => {
         const key = String(item.dataKey ?? item.value ?? "");
         const entry = config[key];

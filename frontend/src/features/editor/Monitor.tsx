@@ -402,7 +402,7 @@ export function Monitor({
           )}
           {!activeClip && (
             <div className="grid h-full w-full place-items-center bg-black object-contain">
-              <span className="px-5 text-center text-[12.5px] text-[rgb(255_255_255/0.4)]">{t("monitorBlankHint")}</span>
+              <span className="px-5 text-center text-ui-sm text-[rgb(255_255_255/0.4)]">{t("monitorBlankHint")}</span>
             </div>
           )}
           {vignette > 0 && (
@@ -556,7 +556,7 @@ export function Monitor({
           >
             <Repeat size={13} />
           </Button>
-          <button type="button" className="timecode cursor-pointer rounded-md border border-[rgb(255_255_255/0.18)] bg-transparent px-[7px] py-0.5 text-[11px] text-[#c6cbd2] hover:bg-[rgb(255_255_255/0.08)] hover:text-white" onClick={cyclePlaybackRate} aria-label={t("monRate")}>
+          <button type="button" className="timecode cursor-pointer rounded-md border border-[rgb(255_255_255/0.18)] bg-transparent px-[7px] py-0.5 text-ui-xs text-[#c6cbd2] hover:bg-[rgb(255_255_255/0.08)] hover:text-white" onClick={cyclePlaybackRate} aria-label={t("monRate")}>
             {playbackRate}x
           </button>
         </div>

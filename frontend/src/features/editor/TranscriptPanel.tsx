@@ -30,7 +30,7 @@ type TokenSelection = Map<string, { clipId: string; srcStart: number; srcEnd: nu
 
 /** 工具条上的胶囊按钮。**一份** —— 此前这串类名在这个文件里抄了九遍。 */
 const PILL =
-  "inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-[11.5px] text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-[10.5px] [&_em]:not-italic [&_em]:tabular-nums";
+  "inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-ui-xs text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-ui-2xs [&_em]:not-italic [&_em]:tabular-nums";
 
 /**
  * 时间码那一栏。句子和静音块共用它 —— 对齐是**结构**给的,不是手调出来的边距。
@@ -462,12 +462,12 @@ export function TranscriptPanel({
       <div className="m-auto grid max-w-[260px] content-center justify-items-center gap-1.5 px-3.5 py-5 text-center text-muted-foreground [&_p]:m-0 [&_p]:text-xs [&_p]:leading-[1.55] [&>button]:mt-1">
         <MessageSquareText size={18} />
         <p>{t("transcriptEmpty")}</p>
-        <p className="max-w-[220px] text-[11.5px] leading-[1.6] text-muted-foreground">{t("transcriptFlowHint")}</p>
+        <p className="max-w-[220px] text-ui-xs leading-[1.6] text-muted-foreground">{t("transcriptFlowHint")}</p>
         {transcribeButton}
         {/* 后端那句状态单独一行:它会长(下模型、装环境、第几段),而且**会变** —— 放在按钮里
             意味着控件的宽度跟着它跳。 */}
         {asrRunning && asrJob.data?.message && (
-          <p className="m-0 max-w-[240px] text-[11.5px] leading-[1.5] text-muted-foreground">{asrJob.data.message}</p>
+          <p className="m-0 max-w-[240px] text-ui-xs leading-[1.5] text-muted-foreground">{asrJob.data.message}</p>
         )}
         {asrError && <p className="m-0 max-w-[240px] whitespace-pre-line text-xs text-destructive">{asrError}</p>}
       </div>
@@ -521,14 +521,14 @@ export function TranscriptPanel({
             {t("selectAllSilences")}
           </button>
         )}
-        <span className="ml-auto self-center whitespace-nowrap text-[11px] text-muted-foreground">
+        <span className="ml-auto self-center whitespace-nowrap text-ui-xs text-muted-foreground">
           {t("transcriptStats")
             .replace("{n}", String(projected.length))
             .replace("{c}", String(projected.reduce((sum, item) => sum + item.text.length, 0)))}
         </span>
       </div>
 
-      <p className="m-0 px-3 pb-0.5 pt-2 text-[11px] leading-[1.5] text-muted-foreground/80">{t("transcriptUsage")}</p>
+      <p className="m-0 px-3 pb-0.5 pt-2 text-ui-xs leading-[1.5] text-muted-foreground/80">{t("transcriptUsage")}</p>
       <div
         className="flex min-h-0 flex-1 select-none flex-col gap-1.5 overflow-y-auto px-2 pb-3 pt-2"
         onPointerOver={(event) => {
@@ -549,7 +549,7 @@ export function TranscriptPanel({
                 <button
                   type="button"
                   className={cn(
-                    "inline-flex cursor-pointer items-center gap-1 justify-self-start rounded-full border border-dashed border-border-strong bg-secondary px-[9px] py-px text-[11px] text-muted-foreground hover:border-destructive hover:text-destructive",
+                    "inline-flex cursor-pointer items-center gap-1 justify-self-start rounded-full border border-dashed border-border-strong bg-secondary px-[9px] py-px text-ui-xs text-muted-foreground hover:border-destructive hover:text-destructive",
                     selected.has(gapKey) && "border-destructive bg-[color-mix(in_oklab,var(--destructive)_8%,transparent)] text-destructive line-through",
                   )}
                   title={t("silenceGapHint")}
@@ -586,7 +586,7 @@ export function TranscriptPanel({
                 <button
                   type="button"
                   className={cn(
-                    "timecode cursor-pointer whitespace-nowrap border-0 bg-transparent p-0 text-[10.5px] leading-[1.9] tabular-nums text-muted-foreground hover:text-primary",
+                    "timecode cursor-pointer whitespace-nowrap border-0 bg-transparent p-0 text-ui-2xs leading-[1.9] tabular-nums text-muted-foreground hover:text-primary",
                     active && "font-medium text-primary",
                   )}
                   title={t("seekToSentence")}
@@ -598,7 +598,7 @@ export function TranscriptPanel({
                     夹在正文里时它每行都把第一句话往右顶,还会跟着文字重排。 */}
                 {showSpeakers && sentence.speaker && (
                   <span
-                    className="max-w-full truncate rounded-full px-[6px] text-[10px] font-semibold leading-[15px] tabular-nums"
+                    className="max-w-full truncate rounded-full px-[6px] text-ui-2xs font-semibold leading-[15px] tabular-nums"
                     style={speakerChipStyle(sentence.speaker)}
                     title={speakerLabel(sentence.speaker)}
                   >
@@ -626,7 +626,7 @@ export function TranscriptPanel({
               >
                 <X size={11} />
               </button>
-              <p className="m-0 text-[13px] leading-[1.9] [word-break:break-word]">
+              <p className="m-0 text-ui-md leading-[1.9] [word-break:break-word]">
                 {sentence.tokens.length > 0
                   ? sentence.tokens.map((token, index) => {
                       const tokenKey = `${sentence.clipId}:${sentence.segmentId}:${index}`;

@@ -136,7 +136,7 @@ export function AttachmentChips({ attachments, className }: { attachments: Compo
       {files.map((file, index) => (
         <Chip key={`${file.name}-${index}`} label={file.name} onRemove={() => removeFile(index)} />
       ))}
-      {uploading && <span className="text-[11px] text-muted-foreground">{t("composerUploading")}</span>}
+      {uploading && <span className="text-ui-xs text-muted-foreground">{t("composerUploading")}</span>}
     </div>
   );
 }
@@ -145,7 +145,7 @@ function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
   const t = useI18n();
   return (
     <span
-      className="inline-flex max-w-40 items-center gap-1 rounded-md border border-border bg-secondary py-0.5 pl-1.5 pr-1 text-[11px] text-foreground"
+      className="inline-flex max-w-40 items-center gap-1 rounded-md border border-border bg-secondary py-0.5 pl-1.5 pr-1 text-ui-xs text-foreground"
       title={label}
     >
       <Paperclip size={11} className="shrink-0" />

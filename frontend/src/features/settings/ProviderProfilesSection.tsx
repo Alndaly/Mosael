@@ -72,7 +72,7 @@ function MenuItem({
     <button
       type="button"
       className={cn(
-        "flex w-full cursor-pointer items-center gap-2 rounded-sm border-0 bg-transparent px-2 py-[6px] text-left text-[12.5px] hover:bg-secondary",
+        "flex w-full cursor-pointer items-center gap-2 rounded-sm border-0 bg-transparent px-2 py-[6px] text-left text-ui-sm hover:bg-secondary",
         destructive ? "text-destructive" : "text-foreground",
       )}
       onClick={onSelect}
@@ -315,7 +315,7 @@ export function ProviderProfilesSection({
         title={editing ? t("providerEdit") : t("providerAdd")}
       >
         <Form {...form}>
-          <form className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none" onSubmit={submit} noValidate>
+          <form className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none" onSubmit={submit} noValidate>
             <FormField
               control={form.control}
               name="vendor"
@@ -361,7 +361,7 @@ export function ProviderProfilesSection({
               )}
             />
             {preset?.auth?.includes("oauth") && (preset?.fields ?? []).length === 0 && (
-              <p className="m-0 rounded-md border border-border bg-panel p-2 text-[11.5px] leading-[1.5] text-muted-foreground">
+              <p className="m-0 rounded-md border border-border bg-panel p-2 text-ui-xs leading-[1.5] text-muted-foreground">
                 {t("providerOauthHint")}
                 {!editing && ` ${t("providerOauthSaveFirst")}`}
               </p>
@@ -376,7 +376,7 @@ export function ProviderProfilesSection({
                     <FormLabel className="flex items-center gap-2">
                       {spec.label}
                       {spec.storage === "api_key" && docsUrl && (
-                        <a className="ml-auto inline-flex items-center gap-[3px] text-[11px] font-medium text-primary no-underline hover:underline" href={docsUrl} target="_blank" rel="noreferrer noopener">
+                        <a className="ml-auto inline-flex items-center gap-[3px] text-ui-xs font-medium text-primary no-underline hover:underline" href={docsUrl} target="_blank" rel="noreferrer noopener">
                           {t("providerGetKey")}
                           <ExternalLink size={11} />
                         </a>
@@ -488,7 +488,7 @@ export function ProviderProfilesSection({
               <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-accent-foreground">
                 <KeyRound size={13} />
               </span>
-              <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-[13px] [&_strong]:font-semibold">
+              <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-ui-md [&_strong]:font-semibold">
                 <strong>{profile.name}</strong>
                 <small>
                   {vendorLabel(profile.vendor)}

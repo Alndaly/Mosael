@@ -145,7 +145,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
               key={item.id}
               type="button"
               className={cn(
-                "flex cursor-pointer items-center gap-[9px] rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-[13px] text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-foreground max-[880px]:shrink-0 max-[880px]:gap-1.5 max-[880px]:whitespace-nowrap max-[880px]:rounded-none max-[880px]:px-2.5 max-[880px]:py-[5px] max-[880px]:text-[12.5px]",
+                "flex cursor-pointer items-center gap-[9px] rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-ui-md text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-foreground max-[880px]:shrink-0 max-[880px]:gap-1.5 max-[880px]:whitespace-nowrap max-[880px]:rounded-none max-[880px]:px-2.5 max-[880px]:py-[5px] max-[880px]:text-ui-sm",
                 section === item.id && "bg-accent font-[550] text-accent-foreground hover:bg-accent hover:text-accent-foreground",
               )}
               onClick={() => {
@@ -371,7 +371,7 @@ function AccountSection() {
       </SettingsBlock>
       <SettingsBlock>
         <div className="grid grid-cols-2 gap-3">
-          <label className="grid min-w-0 gap-1.5 [&>span]:text-[12.5px] [&>span]:font-semibold [&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground">
+          <label className="grid min-w-0 gap-1.5 [&>span]:text-ui-sm [&>span]:font-semibold [&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground">
             <span>{t("settingsUsername")}</span>
             <small>{t("settingsUsernameDesc")}</small>
             <Input
@@ -380,7 +380,7 @@ function AccountSection() {
               onChange={(event) => setProfile((current) => ({ ...current, username: event.target.value }))}
             />
           </label>
-          <label className="grid min-w-0 gap-1.5 [&>span]:text-[12.5px] [&>span]:font-semibold [&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground">
+          <label className="grid min-w-0 gap-1.5 [&>span]:text-ui-sm [&>span]:font-semibold [&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground">
             <span>{t("displayName")}</span>
             <small>{t("displayNameDesc")}</small>
             <Input
@@ -389,7 +389,7 @@ function AccountSection() {
               onChange={(event) => setProfile((current) => ({ ...current, display_name: event.target.value }))}
             />
           </label>
-          <label className="col-span-full grid min-w-0 gap-1.5 [&>span]:text-[12.5px] [&>span]:font-semibold [&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground">
+          <label className="col-span-full grid min-w-0 gap-1.5 [&>span]:text-ui-sm [&>span]:font-semibold [&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground">
             <span>{t("signature")}</span>
             <small>{t("signatureDesc")}</small>
             <Textarea
@@ -410,7 +410,7 @@ function AccountSection() {
             <small>{t("settingsPasswordDesc")}</small>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <label className="grid min-w-0 gap-1.5 [&>span]:text-[12.5px] [&>span]:font-semibold [&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground">
+            <label className="grid min-w-0 gap-1.5 [&>span]:text-ui-sm [&>span]:font-semibold [&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground">
               <span>{t("currentPassword")}</span>
               <Input
                 type="password"
@@ -419,7 +419,7 @@ function AccountSection() {
                 onChange={(event) => setPasswords((current) => ({ ...current, current: event.target.value }))}
               />
             </label>
-            <label className="grid min-w-0 gap-1.5 [&>span]:text-[12.5px] [&>span]:font-semibold [&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground">
+            <label className="grid min-w-0 gap-1.5 [&>span]:text-ui-sm [&>span]:font-semibold [&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground">
               <span>{t("newPassword")}</span>
               <Input
                 type="password"
@@ -428,7 +428,7 @@ function AccountSection() {
                 onChange={(event) => setPasswords((current) => ({ ...current, next: event.target.value }))}
               />
             </label>
-            <label className="grid min-w-0 gap-1.5 [&>span]:text-[12.5px] [&>span]:font-semibold [&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground">
+            <label className="grid min-w-0 gap-1.5 [&>span]:text-ui-sm [&>span]:font-semibold [&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground">
               <span>{t("confirmPassword")}</span>
               <Input
                 type="password"
@@ -645,7 +645,7 @@ function BackgroundSection() {
                 key={preset.id}
                 type="button"
                 className={cn(
-                  "relative h-14 cursor-pointer overflow-hidden rounded-lg border border-border bg-cover bg-center transition-[box-shadow,transform] duration-[120ms] hover:-translate-y-px [&>span]:absolute [&>span]:bottom-1.5 [&>span]:left-[7px] [&>span]:text-[11px] [&>span]:font-semibold [&>span]:text-white [&>span]:[text-shadow:0_1px_3px_rgba(0,0,0,0.55)]",
+                  "relative h-14 cursor-pointer overflow-hidden rounded-lg border border-border bg-cover bg-center transition-[box-shadow,transform] duration-[120ms] hover:-translate-y-px [&>span]:absolute [&>span]:bottom-1.5 [&>span]:left-[7px] [&>span]:text-ui-xs [&>span]:font-semibold [&>span]:text-white [&>span]:[text-shadow:0_1px_3px_rgba(0,0,0,0.55)]",
                   appearance.preset === preset.id && "border-primary shadow-[0_0_0_2px_var(--primary)]",
                 )}
                 style={{ backgroundImage: preset.css }}
@@ -664,7 +664,7 @@ function BackgroundSection() {
             {appearance.image ? (
               <div className="h-[72px] w-32 shrink-0 rounded-lg border border-border bg-cover bg-center" style={{ backgroundImage: `url(${appearance.image})` }} />
             ) : (
-              <div className="flex h-[72px] w-32 shrink-0 items-center gap-1.5 rounded-lg border border-dashed border-border-strong px-2.5 text-[11.5px] text-muted-foreground">
+              <div className="flex h-[72px] w-32 shrink-0 items-center gap-1.5 rounded-lg border border-dashed border-border-strong px-2.5 text-ui-xs text-muted-foreground">
                 <ImageIcon size={16} /> {t("appearanceBgNoImage")}
               </div>
             )}

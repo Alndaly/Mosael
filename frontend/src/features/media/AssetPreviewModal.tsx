@@ -28,8 +28,8 @@ function aspectRatio(w: number, h: number): string {
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="grid grid-cols-[76px_minmax(0,1fr)] items-baseline gap-3">
-      <dt className="text-[11px] text-muted-foreground">{label}</dt>
-      <dd className="m-0 min-w-0 text-[12.5px] text-foreground [overflow-wrap:anywhere]">{children}</dd>
+      <dt className="text-ui-xs text-muted-foreground">{label}</dt>
+      <dd className="m-0 min-w-0 text-ui-sm text-foreground [overflow-wrap:anywhere]">{children}</dd>
     </div>
   );
 }
@@ -83,7 +83,7 @@ export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onC
                 onClick={() => openImagePreview({ src, title: asset.name })}
               >
                 <img className="max-h-[86vh] max-w-full object-contain" src={src} alt={asset.name} />
-                <span className="pointer-events-none absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 rounded-md bg-[rgba(10,12,15,0.7)] px-2 py-1 text-[11px] text-white opacity-0 transition-opacity duration-100 group-hover/zoom:opacity-100">
+                <span className="pointer-events-none absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 rounded-md bg-[rgba(10,12,15,0.7)] px-2 py-1 text-ui-xs text-white opacity-0 transition-opacity duration-100 group-hover/zoom:opacity-100">
                   <Maximize2 size={12} /> {t("assetClickToZoom")}
                 </span>
               </button>
@@ -107,11 +107,11 @@ export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onC
             </div>
             {tags.length > 0 && (
               <div className="grid gap-1">
-                <span className="text-[11px] text-muted-foreground">{t("assetTagsLabel")}</span>
+                <span className="text-ui-xs text-muted-foreground">{t("assetTagsLabel")}</span>
                 <div className="flex flex-wrap gap-1">
                   {tags.map((tag) => (
                     <span
-                      className="inline-flex items-center rounded-full border border-border bg-panel-subtle px-2 py-px text-[11px] text-muted-foreground"
+                      className="inline-flex items-center rounded-full border border-border bg-panel-subtle px-2 py-px text-ui-xs text-muted-foreground"
                       key={tag}
                     >
                       {tag}
@@ -151,7 +151,7 @@ export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onC
                 <button
                   type="button"
                   onClick={copyId}
-                  className="group/id inline-flex max-w-full items-center gap-1 rounded-sm text-left font-mono text-[11.5px] tabular-nums text-muted-foreground transition-colors hover:text-foreground"
+                  className="group/id inline-flex max-w-full items-center gap-1 rounded-sm text-left font-mono text-ui-xs tabular-nums text-muted-foreground transition-colors hover:text-foreground"
                   title={copied ? t("assetIdCopied") : "复制 ID"}
                 >
                   <span className="truncate">{asset.id}</span>

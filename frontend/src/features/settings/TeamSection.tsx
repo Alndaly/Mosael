@@ -104,10 +104,10 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
             </span>
             <div className="grid min-w-0 gap-0.5">
               <div className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-[13.5px] font-[600]">{workspace.name}</span>
+                <span className="truncate text-ui-md font-[600]">{workspace.name}</span>
                 <Badge variant="outline">{roleLabel(myRole)}</Badge>
               </div>
-              <span className="text-[11.5px] text-muted-foreground">
+              <span className="text-ui-xs text-muted-foreground">
                 {t("workspaceMemberCount").replace("{n}", String(members.data?.members.length ?? "…"))}
               </span>
             </div>
@@ -210,7 +210,7 @@ function MemberRow({
         <span className="inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-[color-mix(in_oklab,var(--primary)_16%,var(--background))] text-xs font-semibold text-primary" aria-hidden>
           {memberName.slice(0, 1).toUpperCase()}
         </span>
-        <span className="truncate text-[13px]">{memberName}</span>
+        <span className="truncate text-ui-md">{memberName}</span>
         {memberName !== member.username && <span className="truncate text-xs text-muted-foreground">@{member.username}</span>}
         {isSelf && <Badge variant="secondary">{t("teamYou")}</Badge>}
       </div>
@@ -329,7 +329,7 @@ function InviteMemberForm({ onInvite }: { onInvite: (body: { username: string; r
           <Button type="submit" size="sm" disabled={form.formState.isSubmitting}>
             <UserPlus size={13} /> {t("teamInvite")}
           </Button>
-          <span className="text-[11px] text-muted-foreground">{t("teamInviteHint")}</span>
+          <span className="text-ui-xs text-muted-foreground">{t("teamInviteHint")}</span>
         </div>
       </form>
     </Form>

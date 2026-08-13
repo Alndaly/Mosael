@@ -170,17 +170,17 @@ function Pane({
           }}
         />
         {label && (
-          <span className="absolute left-2 top-2 rounded-full bg-[rgb(0_0_0/0.55)] px-2 py-0.5 text-[10.5px] font-semibold text-white backdrop-blur-[6px]">
+          <span className="absolute left-2 top-2 rounded-full bg-[rgb(0_0_0/0.55)] px-2 py-0.5 text-ui-2xs font-semibold text-white backdrop-blur-[6px]">
             {label}
           </span>
         )}
       </div>
       {/* 元信息贴在窗格里而不是侧栏:挑图时视线在图上,把名字和尺寸放远了等于没有。 */}
       <div className="grid gap-px border-t border-border bg-panel px-2.5 py-1.5">
-        <span className="truncate text-[12px] font-semibold text-foreground" title={asset.name || asset.original_filename}>
+        <span className="truncate text-ui-sm font-semibold text-foreground" title={asset.name || asset.original_filename}>
           {asset.name || asset.original_filename}
         </span>
-        <span className="timecode text-[10.5px] text-muted-foreground">
+        <span className="timecode text-ui-2xs text-muted-foreground">
           {dim ? `${dim.w}×${dim.h}` : t("mediaCompareNoSize")}
           {asset.tags?.length ? ` · ${asset.tags.slice(0, 3).join(" ")}` : ""}
         </span>
@@ -285,8 +285,8 @@ function SplitPane({
           <FlipHorizontal size={13} />
         </span>
       </div>
-      <span className="pointer-events-none absolute left-2 top-2 rounded-full bg-[rgb(0_0_0/0.55)] px-2 py-0.5 text-[10.5px] font-semibold text-white">A</span>
-      <span className="pointer-events-none absolute right-2 top-2 rounded-full bg-[rgb(0_0_0/0.55)] px-2 py-0.5 text-[10.5px] font-semibold text-white">B</span>
+      <span className="pointer-events-none absolute left-2 top-2 rounded-full bg-[rgb(0_0_0/0.55)] px-2 py-0.5 text-ui-2xs font-semibold text-white">A</span>
+      <span className="pointer-events-none absolute right-2 top-2 rounded-full bg-[rgb(0_0_0/0.55)] px-2 py-0.5 text-ui-2xs font-semibold text-white">B</span>
     </div>
   );
 }
@@ -370,7 +370,7 @@ export function AssetCompareView({ assets, onClose }: { assets: Asset[]; onClose
         "flex items-center gap-1.5 border-b border-border px-3 py-2 [.is-desktop_&]:[-webkit-app-region:drag] [.is-desktop_&_:is(button,a,input,[role=button])]:[-webkit-app-region:no-drag]",
         WINDOW_CHROME_INSET,
       )}>
-        <span className="mr-auto text-[12.5px] font-semibold text-foreground">
+        <span className="mr-auto text-ui-sm font-semibold text-foreground">
           {t("mediaCompare")}
           <span className="ml-1.5 font-normal text-muted-foreground">{images.length}</span>
         </span>
@@ -488,7 +488,7 @@ export function AssetCompareView({ assets, onClose }: { assets: Asset[]; onClose
                       type="button"
                       aria-label={`${side === 0 ? "A" : "B"} · ${asset.name || asset.original_filename}`}
                       className={cn(
-                        "grid flex-1 cursor-pointer place-items-center bg-[rgb(0_0_0/0.55)] text-[11px] font-bold text-white hover:bg-[rgb(0_0_0/0.75)]",
+                        "grid flex-1 cursor-pointer place-items-center bg-[rgb(0_0_0/0.55)] text-ui-xs font-bold text-white hover:bg-[rgb(0_0_0/0.75)]",
                         side === 0 ? "border-r border-white/25" : "",
                       )}
                       onClick={() => assignSlot(side, index)}

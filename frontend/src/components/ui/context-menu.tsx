@@ -27,7 +27,7 @@ const ContextMenuSubTrigger = React.forwardRef<
   <ContextMenuPrimitive.SubTrigger
     ref={ref}
     className={cn(
-      "flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-[5px] text-[13px] outline-none focus:bg-accent focus:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground [&_svg]:size-3.5 [&_svg]:shrink-0 [&_svg]:opacity-70",
+      "flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-[5px] text-ui-md outline-none focus:bg-accent focus:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground [&_svg]:size-3.5 [&_svg]:shrink-0 [&_svg]:opacity-70",
       inset && "pl-7",
       className
     )}
@@ -81,7 +81,7 @@ const ContextMenuItem = React.forwardRef<
     ref={ref}
     className={cn(
       // 图标统一 14px、随行文字变色(destructive/focus 一起变),透明度压出「哑」感。
-      "relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-[5px] text-[13px] outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-3.5 [&_svg]:shrink-0 [&_svg]:opacity-70",
+      "relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-[5px] text-ui-md outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-3.5 [&_svg]:shrink-0 [&_svg]:opacity-70",
       inset && "pl-7",
       className
     )}
@@ -97,7 +97,7 @@ const ContextMenuCheckboxItem = React.forwardRef<
   <ContextMenuPrimitive.CheckboxItem
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center gap-2 rounded-sm py-[5px] pl-7 pr-2 text-[13px] outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex cursor-default select-none items-center gap-2 rounded-sm py-[5px] pl-7 pr-2 text-ui-md outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className
     )}
     checked={checked}
@@ -121,7 +121,7 @@ const ContextMenuRadioItem = React.forwardRef<
   <ContextMenuPrimitive.RadioItem
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center gap-2 rounded-sm py-[5px] pl-7 pr-2 text-[13px] outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex cursor-default select-none items-center gap-2 rounded-sm py-[5px] pl-7 pr-2 text-ui-md outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className
     )}
     {...props}
@@ -145,7 +145,7 @@ const ContextMenuLabel = React.forwardRef<
   <ContextMenuPrimitive.Label
     ref={ref}
     className={cn(
-      "px-2 py-1 text-[11.5px] font-medium text-muted-foreground",
+      "px-2 py-1 text-ui-xs font-medium text-muted-foreground",
       inset && "pl-7",
       className
     )}
@@ -173,7 +173,7 @@ const ContextMenuShortcut = ({
   return (
     <span
       className={cn(
-        "ml-auto pl-4 text-[11px] tabular-nums tracking-wide text-muted-foreground",
+        "ml-auto pl-4 text-ui-xs tabular-nums tracking-wide text-muted-foreground",
         className
       )}
       {...props}

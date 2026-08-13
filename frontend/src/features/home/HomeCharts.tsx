@@ -117,7 +117,7 @@ export function UsageCostChart({
         action={
           <button
             type="button"
-            className="cursor-pointer border-0 bg-transparent text-[11.5px] text-primary hover:underline"
+            className="cursor-pointer border-0 bg-transparent text-ui-xs text-primary hover:underline"
             onClick={() => gotoSettings("provider-pricing")}
           >
             {t("homeChartUsageConfigurePricing")}
@@ -268,18 +268,18 @@ export function AssetKindsChart({ assetKinds }: { assetKinds: WorkspaceSummary["
         </ChartContainer>
         <div className="pointer-events-none absolute inset-0 grid place-content-center justify-items-center gap-0">
           <strong className="text-lg leading-tight tabular-nums">{total}</strong>
-          <span className="text-[10px] text-muted-foreground">{t("homeStatAssets")}</span>
+          <span className="text-ui-2xs text-muted-foreground">{t("homeStatAssets")}</span>
         </div>
       </div>
       {/* 直接标注计数与占比:不用悬停就能读数 */}
       <div className="grid content-center gap-1.5">
         {segments.map((segment) => (
-          <div className="flex items-center gap-2 text-[11.5px]" key={segment.kind}>
+          <div className="flex items-center gap-2 text-ui-xs" key={segment.kind}>
             <i className="inline-block h-2 w-2 flex-none rounded-full" style={{ background: segment.color }} />
             <span className="truncate text-muted-foreground">{segment.name}</span>
             <span className="ml-auto flex-none tabular-nums">
               <em className="not-italic text-foreground">{segment.count}</em>
-              <em className="ml-1.5 not-italic text-[10.5px] text-muted-foreground">
+              <em className="ml-1.5 not-italic text-ui-2xs text-muted-foreground">
                 {Math.round((segment.count / total) * 100)}%
               </em>
             </span>
@@ -401,9 +401,9 @@ export function PublishPlatformsChart({ platforms }: { platforms: WorkspaceSumma
       <div className="grid min-w-0 gap-2">
         <div className="flex items-baseline gap-1.5">
           <strong className="text-xl tabular-nums">{total}</strong>
-          <span className="text-[11px] text-muted-foreground">{t("publishTabRecords")}</span>
+          <span className="text-ui-xs text-muted-foreground">{t("publishTabRecords")}</span>
         </div>
-        <div className="flex flex-col flex-wrap items-start gap-1 text-[11px] text-muted-foreground">
+        <div className="flex flex-col flex-wrap items-start gap-1 text-ui-xs text-muted-foreground">
           {segments.map((segment) => (
             <span className="inline-flex items-center gap-[5px]" key={segment.platform}>
               <i className="inline-block h-2 w-2 flex-none rounded-full" style={{ background: segment.color }} /> {segment.name}{" "}

@@ -95,7 +95,7 @@ export function ServerPicker() {
         />
       )}
       {failed && (
-        <p className="m-0 text-[11px] text-destructive">
+        <p className="m-0 text-ui-xs text-destructive">
           {t("serverTestFailed")}
           {failed ? ` — ${failed}` : ""}
         </p>
@@ -120,7 +120,7 @@ export function ServerPicker() {
           {t("cancel")}
         </Button>
       </div>
-      <p className="m-0 text-[11px] leading-normal text-muted-foreground">{t("serverPickerHint")}</p>
+      <p className="m-0 text-ui-xs leading-normal text-muted-foreground">{t("serverPickerHint")}</p>
     </div>
   );
 }

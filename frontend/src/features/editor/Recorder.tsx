@@ -298,7 +298,7 @@ export function Recorder({
               <Square size={11} /> {t("recordStop")}
             </Button>
           )}
-          <span className="text-[11.5px] text-muted-foreground">{t(`record_${source}_hint` as never) as string}</span>
+          <span className="text-ui-xs text-muted-foreground">{t(`record_${source}_hint` as never) as string}</span>
         </div>
       </div>
     </ModalShell>

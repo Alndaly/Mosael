@@ -121,7 +121,7 @@ export function AdminView() {
         ) : (
           <ul className="m-0 grid w-full list-none gap-1 p-0">
             {spend.map((row) => (
-              <li key={row.user_id || "unknown"} className="flex items-center gap-2 text-[12px]">
+              <li key={row.user_id || "unknown"} className="flex items-center gap-2 text-ui-sm">
                 <span className="w-28 shrink-0 truncate">{row.username || t("adminNoOwner")}</span>
                 <span className="h-2 flex-1 overflow-hidden rounded-full bg-secondary">
                   <span
@@ -152,7 +152,7 @@ export function AdminView() {
           >
             <span className="flex items-center gap-2">
               {/* 版本由客户端自报;报不上来的老客户端显示"未知",不编一个号出来。 */}
-              <code className="timecode text-[11px] text-muted-foreground">
+              <code className="timecode text-ui-xs text-muted-foreground">
                 {row.client_version ? `v${row.client_version}` : t("adminUnknownVersion")}
               </code>
               {row.is_deployment_admin && (
@@ -201,9 +201,9 @@ export function AdminView() {
 function Stat({ label, value, hint }: { label: string; value?: number; hint?: string }) {
   return (
     <div className="grid gap-0.5 rounded-lg border border-border bg-panel p-3">
-      <span className="text-[11px] text-muted-foreground">{label}</span>
+      <span className="text-ui-xs text-muted-foreground">{label}</span>
       <strong className="text-[22px] font-semibold tabular-nums leading-none">{value ?? "—"}</strong>
-      {hint && <span className="text-[10.5px] text-muted-foreground">{hint}</span>}
+      {hint && <span className="text-ui-2xs text-muted-foreground">{hint}</span>}
     </div>
   );
 }

@@ -91,7 +91,7 @@ export function SearchableSelect({
             type="button"
             disabled={disabled}
             className={cn(
-              "flex h-8 w-full min-w-0 items-center justify-between gap-1 rounded-md border border-input bg-field px-2.5 text-[12.5px] text-foreground focus-visible:border-primary focus-visible:outline-none disabled:cursor-default disabled:opacity-50",
+              "flex h-8 w-full min-w-0 items-center justify-between gap-1 rounded-md border border-input bg-field px-2.5 text-ui-sm text-foreground focus-visible:border-primary focus-visible:outline-none disabled:cursor-default disabled:opacity-50",
               className,
             )}
           >
@@ -133,7 +133,7 @@ export function SearchableSelect({
                   <span className="grid min-w-0 flex-1 gap-px leading-[1.35]">
                     <span className="truncate">{item.label}</span>
                     {item.description && (
-                      <span className="truncate text-[11px] text-muted-foreground">{item.description}</span>
+                      <span className="truncate text-ui-xs text-muted-foreground">{item.description}</span>
                     )}
                   </span>
                   {item.value === value && <Check size={14} className="shrink-0 text-primary" />}

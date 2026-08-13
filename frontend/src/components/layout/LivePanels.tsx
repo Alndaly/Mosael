@@ -79,7 +79,7 @@ export function LivePanels() {
             }}
           >
             <div
-              className="flex items-center gap-1 pl-1.5 pr-1 text-[11px] text-muted-foreground"
+              className="flex items-center gap-1 pl-1.5 pr-1 text-ui-xs text-muted-foreground"
               style={{ height: card.header }}
             >
               {/* 拖动:整条标题条都可拖(不只手柄图标),手感更好 */}

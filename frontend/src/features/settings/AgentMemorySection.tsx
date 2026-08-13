@@ -151,11 +151,11 @@ export function AgentMemorySection({ workspace }: { workspace: Workspace }) {
                     // 点正文即改 —— 记忆是要被修的东西(模型记岔了是常态),多一个铅笔图标只是多一次瞄准。
                     <button
                       type="button"
-                      className="min-w-0 cursor-pointer border-0 bg-transparent p-0 text-left text-[12.5px] leading-[1.55] text-foreground"
+                      className="min-w-0 cursor-pointer border-0 bg-transparent p-0 text-left text-ui-sm leading-[1.55] text-foreground"
                       onClick={() => setEditing({ id: row.id, content: row.content })}
                     >
                       {row.content}
-                      <span className="ml-1.5 whitespace-nowrap text-[10.5px] text-muted-foreground">
+                      <span className="ml-1.5 whitespace-nowrap text-ui-2xs text-muted-foreground">
                         {row.source === "user" ? t("agentMemoryFromUser") : t("agentMemoryFromAgent")}
                       </span>
                     </button>

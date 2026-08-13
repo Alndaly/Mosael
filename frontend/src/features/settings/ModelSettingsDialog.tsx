@@ -75,20 +75,20 @@ function AdvancedToggle({
     // 一片留白上时,读者要自己在脑子里划分组,而背景把"这是一项"直接说出来。
     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-border bg-panel px-3 py-2.5">
       <div className="grid min-w-0 gap-0.5">
-        <span className="flex items-center gap-1.5 text-[12.5px] font-medium text-foreground">
+        <span className="flex items-center gap-1.5 text-ui-sm font-medium text-foreground">
           {label}
           {/* 设过之后才给「跟随默认」——没设过时它本来就是跟随,常驻只会让人以为漏了什么。 */}
           {set && (
             <button
               type="button"
-              className="cursor-pointer border-0 bg-transparent p-0 text-[10.5px] font-normal text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+              className="cursor-pointer border-0 bg-transparent p-0 text-ui-2xs font-normal text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
               onClick={() => onChange(null)}
             >
               {t("modelSettingsFollowDefault")}
             </button>
           )}
         </span>
-        <span className="text-[11px] leading-[1.45] text-muted-foreground">{hint}</span>
+        <span className="text-ui-xs leading-[1.45] text-muted-foreground">{hint}</span>
       </div>
       <Switch className="shrink-0" checked={Boolean(value)} onCheckedChange={(next) => onChange(next)} />
     </div>
@@ -173,12 +173,12 @@ export function ModelSettingsDialog({
         }}
       >
         {/* 模型 id 单独一行:它常常很长(doubao-seedream-4-0-250828),挤进标题会把整行顶掉。 */}
-        <p className="m-0 truncate font-mono text-[12px] text-muted-foreground" title={modelId}>
+        <p className="m-0 truncate font-mono text-ui-sm text-muted-foreground" title={modelId}>
           {modelId}
         </p>
 
         <div className="grid gap-1.5">
-          <span className="text-[13px] font-medium text-foreground">{t("modelCapabilities")}</span>
+          <span className="text-ui-md font-medium text-foreground">{t("modelCapabilities")}</span>
           {/* 能力放在最前:它决定下面显示什么 —— 生图模型没有上下文窗口,也不认 developer 角色。
               留空表示跟随 vendor 预设。 */}
           <div className="flex flex-wrap gap-1.5">
@@ -193,7 +193,7 @@ export function ModelSettingsDialog({
                   key={capability}
                   type="button"
                   className={cn(
-                    "cursor-pointer rounded-full border px-2.5 py-1 text-[11.5px] transition-colors",
+                    "cursor-pointer rounded-full border px-2.5 py-1 text-ui-xs transition-colors",
                     explicit && "border-primary bg-primary text-primary-foreground",
                     inherited && "border-primary/50 bg-[color-mix(in_srgb,var(--primary)_14%,transparent)] text-foreground",
                     !explicit && !inherited && "border-border bg-panel text-muted-foreground hover:border-border-strong",
@@ -235,7 +235,7 @@ export function ModelSettingsDialog({
         {isChat && (
           <div className="grid gap-1.5">
             <div className="grid gap-1">
-              <label className="text-[13px] font-medium text-foreground" htmlFor="ctx">
+              <label className="text-ui-md font-medium text-foreground" htmlFor="ctx">
                 {t("modelSettingsContextWindow")}
               </label>
               <Input
@@ -273,8 +273,8 @@ export function ModelSettingsDialog({
               className="flex w-full cursor-pointer items-center justify-between gap-2 border-0 bg-transparent p-0 text-left"
               onClick={() => setAdvancedOpen((v) => !v)}
             >
-              <span className="text-[12.5px] font-medium text-foreground">{t("modelSettingsAdvanced")}</span>
-              <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <span className="text-ui-sm font-medium text-foreground">{t("modelSettingsAdvanced")}</span>
+              <span className="flex items-center gap-1 text-ui-xs text-muted-foreground">
                 {t("modelSettingsAdvancedHint")}
                 <ChevronDown size={13} className={cn("transition-transform", advancedOpen && "rotate-180")} />
               </span>

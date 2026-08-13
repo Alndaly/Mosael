@@ -45,13 +45,13 @@ export function TagsDialog({
 
   return (
     <ModalShell open={open} onOpenChange={(next) => !next && onCancel()} title={title}>
-      {body && <p className="mb-3 text-[13px] text-muted-foreground">{body}</p>}
+      {body && <p className="mb-3 text-ui-md text-muted-foreground">{body}</p>}
       <div className="grid gap-3">
         {tags.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {tags.map((tag) => (
               <span
-                className="inline-flex items-center gap-[3px] rounded-full border border-border bg-panel px-[9px] py-px text-[11px] text-muted-foreground transition-colors"
+                className="inline-flex items-center gap-[3px] rounded-full border border-border bg-panel px-[9px] py-px text-ui-xs text-muted-foreground transition-colors"
                 key={tag}
               >
                 {tag}

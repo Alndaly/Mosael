@@ -650,7 +650,7 @@ export function Timeline({
             </button>
           </div>
           <PlayheadReadout total={sequenceDuration(allClips)} />
-          <span className="whitespace-nowrap text-[11px] text-muted-foreground">
+          <span className="whitespace-nowrap text-ui-xs text-muted-foreground">
             {t("clipCount").replace("{n}", String(allClips.length))} · {sequence.width}×{sequence.height} ·{" "}
             {Math.round(sequence.fps)}fps
           </span>
@@ -735,15 +735,15 @@ export function Timeline({
           <span className="mx-[3px] h-4 w-px bg-border" />
           {onAddTrack && (
             <>
-              <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[3px] whitespace-nowrap rounded-md border-0 bg-transparent px-1.5 text-[11.5px] text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground" title={t("addVideoTrackHint")} onClick={() => onAddTrack("video")}>
+              <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[3px] whitespace-nowrap rounded-md border-0 bg-transparent px-1.5 text-ui-xs text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground" title={t("addVideoTrackHint")} onClick={() => onAddTrack("video")}>
                 <Plus size={11} />
                 <Film size={12} /> {t("trackVideoShort")}
               </button>
-              <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[3px] whitespace-nowrap rounded-md border-0 bg-transparent px-1.5 text-[11.5px] text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground" title={t("addAudioTrackHint")} onClick={() => onAddTrack("audio")}>
+              <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[3px] whitespace-nowrap rounded-md border-0 bg-transparent px-1.5 text-ui-xs text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground" title={t("addAudioTrackHint")} onClick={() => onAddTrack("audio")}>
                 <Plus size={11} />
                 <AudioLines size={12} /> {t("trackAudioShort")}
               </button>
-              <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[3px] whitespace-nowrap rounded-md border-0 bg-transparent px-1.5 text-[11.5px] text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground" title={t("addSubtitleTrackHint")} onClick={() => onAddTrack("subtitle")}>
+              <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[3px] whitespace-nowrap rounded-md border-0 bg-transparent px-1.5 text-ui-xs text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground" title={t("addSubtitleTrackHint")} onClick={() => onAddTrack("subtitle")}>
                 <Plus size={11} />
                 <Type size={12} /> {t("trackSubtitleShort")}
               </button>
@@ -806,7 +806,7 @@ export function Timeline({
                 [t("hintDragLabel"), t("hintDragBody")],
                 ["↕", t("hintVerticalDrag")],
               ].map(([key, body]) => (
-                <div className="grid grid-cols-[92px_minmax(0,1fr)] items-baseline gap-1.5 text-xs [&_kbd]:justify-self-start [&_kbd]:whitespace-nowrap [&_kbd]:rounded-sm [&_kbd]:border [&_kbd]:border-b-2 [&_kbd]:border-border [&_kbd]:bg-secondary [&_kbd]:px-1.5 [&_kbd]:py-px [&_kbd]:font-mono [&_kbd]:text-[10.5px] [&_span]:text-muted-foreground" key={key}>
+                <div className="grid grid-cols-[92px_minmax(0,1fr)] items-baseline gap-1.5 text-xs [&_kbd]:justify-self-start [&_kbd]:whitespace-nowrap [&_kbd]:rounded-sm [&_kbd]:border [&_kbd]:border-b-2 [&_kbd]:border-border [&_kbd]:bg-secondary [&_kbd]:px-1.5 [&_kbd]:py-px [&_kbd]:font-mono [&_kbd]:text-ui-2xs [&_span]:text-muted-foreground" key={key}>
                   <kbd>{key}</kbd>
                   <span>{body}</span>
                 </div>
@@ -819,7 +819,7 @@ export function Timeline({
         <div className="overflow-hidden border-r border-border bg-panel" ref={labelsRef}>
           <div className="sticky top-0 z-[6] border-b border-border bg-panel" style={{ height: RULER_HEIGHT }} />
           {tracks.map((track, trackIndex) => (
-            <div className="group/label flex flex-col justify-center gap-1 border-b border-[var(--track-lane-line)] px-2 text-[11px] font-semibold text-muted-foreground" key={track.id} style={{ height: TRACK_HEIGHT }}>
+            <div className="group/label flex flex-col justify-center gap-1 border-b border-[var(--track-lane-line)] px-2 text-ui-xs font-semibold text-muted-foreground" key={track.id} style={{ height: TRACK_HEIGHT }}>
               <div className="flex min-w-0 items-center gap-1.5">
                 <span className={cn("h-[7px] w-[7px] rounded-sm bg-[var(--track-video-border)]", track.kind === "audio" && "bg-[var(--track-audio-border)]", track.kind === "subtitle" && "bg-[#a855f7]")} />
                 <span className="truncate">{track.name}</span>
@@ -922,7 +922,7 @@ export function Timeline({
               {ticks.map((tick) => (
                 <div
                   key={tick.time}
-                  className={cn("absolute bottom-0 h-[5px] w-px bg-[var(--ruler-tick)]", tick.major && "h-[9px] [&_span]:absolute [&_span]:bottom-2 [&_span]:left-1 [&_span]:whitespace-nowrap [&_span]:text-[10px] [&_span]:text-[var(--ruler-text)]")}
+                  className={cn("absolute bottom-0 h-[5px] w-px bg-[var(--ruler-tick)]", tick.major && "h-[9px] [&_span]:absolute [&_span]:bottom-2 [&_span]:left-1 [&_span]:whitespace-nowrap [&_span]:text-ui-2xs [&_span]:text-[var(--ruler-text)]")}
                   style={{ left: timeToPx(tick.time, pxPerSecond) }}
                 >
                   {tick.major && <span className="timecode">{formatRulerLabel(tick.time)}</span>}
@@ -930,7 +930,7 @@ export function Timeline({
               ))}
             </div>
             {newLayerDrag && (
-              <div className="pointer-events-none absolute inset-x-0 z-[4] flex h-[22px] items-center justify-center gap-[5px] border-y-[1.5px] border-dashed border-primary bg-[color-mix(in_srgb,var(--primary)_16%,transparent)] text-[11px] font-semibold text-primary" style={{ top: RULER_HEIGHT }}>
+              <div className="pointer-events-none absolute inset-x-0 z-[4] flex h-[22px] items-center justify-center gap-[5px] border-y-[1.5px] border-dashed border-primary bg-[color-mix(in_srgb,var(--primary)_16%,transparent)] text-ui-xs font-semibold text-primary" style={{ top: RULER_HEIGHT }}>
                 <Plus size={12} /> {t("dropNewLayer")}
               </div>
             )}
@@ -1101,7 +1101,7 @@ export function Timeline({
                 if (trackIndex < 0) return null;
                 return (
                   <div
-                    className="pointer-events-none absolute top-[-1px] z-[8] -translate-x-1/2 whitespace-nowrap rounded-md border border-border-strong bg-popover px-[7px] py-px text-[10.5px] tabular-nums text-foreground"
+                    className="pointer-events-none absolute top-[-1px] z-[8] -translate-x-1/2 whitespace-nowrap rounded-md border border-border-strong bg-popover px-[7px] py-px text-ui-2xs tabular-nums text-foreground"
                     style={{
                       left: timeToPx(edgeTime, pxPerSecond),
                       top: RULER_HEIGHT + trackIndex * TRACK_HEIGHT - 10,

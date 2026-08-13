@@ -108,7 +108,7 @@ export function InlineConfirmations({ workspaceId, allowKey }: { workspaceId: st
     // 与消息内容列同宽(780px 居中):此前裸 grid 吃满整个滚动区,确认卡横跨全屏。
     <div className="mx-auto grid w-full max-w-[780px] gap-2" role="region" aria-label={t("confirmTitle")}>
       {items.map((item) => (
-        <div className="grid gap-1.5 rounded-lg border border-border-strong border-l-[3px] border-l-primary bg-panel px-3 py-2.5 text-[12.5px]" key={item.id}>
+        <div className="grid gap-1.5 rounded-lg border border-border-strong border-l-[3px] border-l-primary bg-panel px-3 py-2.5 text-ui-sm" key={item.id}>
           <div className="flex items-center justify-between gap-2">
             <span className="inline-flex min-w-0 items-center gap-1.5 font-semibold">
               <ShieldAlert size={13} /> {item.summary}
@@ -118,8 +118,8 @@ export function InlineConfirmations({ workspaceId, allowKey }: { workspaceId: st
           {/* 载荷保持展开:这张卡是智能体写操作与执行之间唯一的闸,摘要不足以构成知情同意
               (例如 add_node 可能藏着一段任意本地 Python)。高度有界,大图滚动而不是把按钮挤走。 */}
           <details open>
-            <summary className="cursor-pointer select-none text-[11px] text-muted-foreground">{t("confirmPayload")}</summary>
-            <pre className="mt-1.5 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted p-2 font-mono text-[11px] leading-[1.5] [word-break:break-word]">{JSON.stringify(item.payload, null, 2)}</pre>
+            <summary className="cursor-pointer select-none text-ui-xs text-muted-foreground">{t("confirmPayload")}</summary>
+            <pre className="mt-1.5 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted p-2 font-mono text-ui-xs leading-[1.5] [word-break:break-word]">{JSON.stringify(item.payload, null, 2)}</pre>
           </details>
           {/* 转的只有被点的那一个;同一张卡的另外两个禁掉(一张卡只能有一个结论),
               别的卡完全不受影响 —— 它等的不是同一件事。 */}

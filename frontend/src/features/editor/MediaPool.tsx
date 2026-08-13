@@ -106,7 +106,7 @@ export function MediaPool({
   return (
     // 三行:头 / 筛选条 / 列表(列表占满余高并自滚)。
     <section className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)]">
-      <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
+      <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
         {tabs ?? <h2>{t("media")}</h2>}
         <div className="flex shrink-0 gap-1">
           {/* Icon-only so the four CJK tabs + these two actions fit the narrow media panel. */}
@@ -172,7 +172,7 @@ export function MediaPool({
                   aria-pressed={active}
                   onClick={() => toggleTag(tag)}
                   className={cn(
-                    "inline-flex max-w-full cursor-pointer items-center truncate rounded-full border border-border bg-panel px-2 py-[2px] text-[11px] text-muted-foreground transition-colors duration-100 hover:border-border-strong hover:text-foreground",
+                    "inline-flex max-w-full cursor-pointer items-center truncate rounded-full border border-border bg-panel px-2 py-[2px] text-ui-xs text-muted-foreground transition-colors duration-100 hover:border-border-strong hover:text-foreground",
                     active &&
                       "border-[color-mix(in_srgb,var(--primary)_45%,transparent)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary hover:text-primary",
                   )}
@@ -212,8 +212,8 @@ export function MediaPool({
             </ContextMenuContent>
           </ContextMenu>
         ))}
-        {assets.length === 0 && <div className="empty-inline m-auto grid max-w-60 place-items-center px-3 py-5 text-center text-[13px] leading-[1.6] text-muted-foreground">{t("mediaEmptyBody")}</div>}
-        {assets.length > 0 && visibleAssets.length === 0 && <div className="empty-inline m-auto grid max-w-60 place-items-center px-3 py-5 text-center text-[13px] leading-[1.6] text-muted-foreground">{t("mediaNoMatchingAssets")}</div>}
+        {assets.length === 0 && <div className="empty-inline m-auto grid max-w-60 place-items-center px-3 py-5 text-center text-ui-md leading-[1.6] text-muted-foreground">{t("mediaEmptyBody")}</div>}
+        {assets.length > 0 && visibleAssets.length === 0 && <div className="empty-inline m-auto grid max-w-60 place-items-center px-3 py-5 text-center text-ui-md leading-[1.6] text-muted-foreground">{t("mediaNoMatchingAssets")}</div>}
       </div>
 
       <RenameDialog
@@ -275,7 +275,7 @@ function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
       >
         {hasThumb ? <img src={assetThumbnailUrl(asset.id)} alt="" loading="lazy" onError={() => setThumbFailed(true)} /> : kindIcon(asset.kind)}
       </div>
-      <div className="min-w-0 [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-xs [&_strong]:font-semibold">
+      <div className="min-w-0 [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-xs [&_strong]:font-semibold">
         <strong>{asset.name}</strong>
         <small className="timecode">{duration != null ? formatTimecode(duration) : asset.kind}</small>
       </div>

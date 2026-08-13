@@ -124,7 +124,7 @@ export function ProviderModelList({
   return (
     <div className="grid gap-1.5">
       {models.isPending && (
-        <span className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
+        <span className="flex items-center gap-1.5 text-ui-xs text-muted-foreground">
           <Loader2 size={12} className="animate-spin" />
           {t("modelListLoading")}
         </span>
@@ -168,19 +168,19 @@ export function ProviderModelList({
           )}
           <div className="grid min-w-0 gap-0.5">
             <span className="flex min-w-0 items-center gap-1.5">
-              <span className="truncate text-[12.5px] font-medium text-foreground">{row.display_name || row.id}</span>
+              <span className="truncate text-ui-sm font-medium text-foreground">{row.display_name || row.id}</span>
               {/* 目录里已经没有它了:不删,别名与私有部署仍要能用,但得说出来 —— 否则用户
                   只会看到"模型突然不工作了"却不知道端点那边已经下线了它。 */}
               {!row.in_catalog && <Badge variant="outline">{unit.gone}</Badge>}
             </span>
             <span className="flex flex-wrap items-center gap-1">
               {(row.effective_capability_ids ?? []).map((capability) => (
-                <span className="rounded bg-secondary px-1 py-px text-[10px] text-muted-foreground" key={capability}>
+                <span className="rounded bg-secondary px-1 py-px text-ui-2xs text-muted-foreground" key={capability}>
                   {capability}
                 </span>
               ))}
               {row.context_window ? (
-                <span className="timecode text-[10px] text-muted-foreground">
+                <span className="timecode text-ui-2xs text-muted-foreground">
                   {Math.round(row.context_window / 1000)}k
                   {row.context_window_source === "override" ? ` · ${t("modelWindowManual")}` : ""}
                 </span>
@@ -229,7 +229,7 @@ export function ProviderModelList({
         emptyText={unit.empty}
         allowCustomValue
         customValueLabel={(query) => unit.custom.replace("{id}", query)}
-        className="h-8 w-full text-[12px]"
+        className="h-8 w-full text-ui-sm"
         onValueChange={(modelId) => {
           const trimmed = modelId.trim();
           if (trimmed) add.mutate(trimmed);

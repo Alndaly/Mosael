@@ -57,11 +57,11 @@ function MetricRow({ metric }: { metric: Metric }) {
     return (
       <div className="grid gap-1">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="truncate text-[11.5px] text-foreground">
+          <span className="truncate text-ui-xs text-foreground">
             {label}
             {window && <span className="text-muted-foreground"> · {window}</span>}
           </span>
-          <span className="timecode shrink-0 text-[11px] text-muted-foreground">{pct.toFixed(0)}%</span>
+          <span className="timecode shrink-0 text-ui-xs text-muted-foreground">{pct.toFixed(0)}%</span>
         </div>
         <div className="h-1.5 overflow-hidden rounded-full bg-field">
           {/* 90% 起转红:额度这种东西,"快没了"要比"还有多少"更显眼。 */}
@@ -71,7 +71,7 @@ function MetricRow({ metric }: { metric: Metric }) {
           />
         </div>
         {metric.resets_at && (
-          <span className="text-[10.5px] text-muted-foreground">
+          <span className="text-ui-2xs text-muted-foreground">
             {t("quotaResetsAt").replace("{t}", new Date(metric.resets_at).toLocaleString())}
           </span>
         )}
@@ -83,11 +83,11 @@ function MetricRow({ metric }: { metric: Metric }) {
   const amount = (value: number) => (metric.unit === "USD" ? `$${value.toFixed(2)}` : value.toLocaleString());
   return (
     <div className="flex items-baseline justify-between gap-2">
-      <span className="truncate text-[11.5px] text-foreground">
+      <span className="truncate text-ui-xs text-foreground">
         {label}
         {window && <span className="text-muted-foreground"> · {window}</span>}
       </span>
-      <span className="timecode shrink-0 text-[11px] text-muted-foreground">
+      <span className="timecode shrink-0 text-ui-xs text-muted-foreground">
         {metric.used != null ? amount(metric.used) : "—"}
         {metric.limit != null ? ` / ${amount(metric.limit)}` : metric.unlimited ? ` · ${t("quotaUnlimited")}` : ""}
       </span>
@@ -120,13 +120,13 @@ export function ProviderQuota({ profileId }: { profileId: string }) {
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[280px] p-2.5">
         {quota.isFetching ? (
-          <span className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
+          <span className="flex items-center gap-1.5 text-ui-xs text-muted-foreground">
             <Loader2 size={12} className="animate-spin" />
             {t("quotaLoading")}
           </span>
         ) : quota.isError ? (
           <div className="grid gap-1.5">
-            <span className="text-[11.5px] text-destructive">{String(quota.error)}</span>
+            <span className="text-ui-xs text-destructive">{String(quota.error)}</span>
             <Button variant="outline" size="sm" className="w-fit" onClick={() => void quota.refetch()}>
               {t("quotaRefresh")}
             </Button>
@@ -134,7 +134,7 @@ export function ProviderQuota({ profileId }: { profileId: string }) {
         ) : quota.data?.error ? (
           // 「这次没查成」要能重试;「这家查不了」不该给重试按钮 —— 见下一分支。
           <div className="grid gap-1.5">
-            <span className="text-[11.5px] text-destructive">{quota.data.error}</span>
+            <span className="text-ui-xs text-destructive">{quota.data.error}</span>
             <Button variant="outline" size="sm" className="w-fit" onClick={() => void quota.refetch()}>
               {t("quotaRefresh")}
             </Button>
@@ -144,12 +144,12 @@ export function ProviderQuota({ profileId }: { profileId: string }) {
             {/* 计划名与「重新查询」同处一行:标题行右侧本来就是放操作的地方,而把刷新挂在
                 列表末尾会让它跟最后一条指标黏在一起,像是那一条的附属。 */}
             <div className="flex items-center justify-between gap-2 border-b border-border pb-1.5">
-              <span className="min-w-0 truncate text-[10.5px] uppercase tracking-wide text-muted-foreground">
+              <span className="min-w-0 truncate text-ui-2xs uppercase tracking-wide text-muted-foreground">
                 {quota.data?.plan ? humanizePlan(quota.data.plan) : t("agentContextTitle")}
               </span>
               <button
                 type="button"
-                className="shrink-0 cursor-pointer border-0 bg-transparent p-0 text-[10.5px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                className="shrink-0 cursor-pointer border-0 bg-transparent p-0 text-ui-2xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
                 onClick={() => void quota.refetch()}
               >
                 {t("quotaRefresh")}

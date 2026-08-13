@@ -150,7 +150,7 @@ export function VarTextarea({
               role="option"
               aria-selected={index === menu.index}
               className={cn(
-                "block cursor-pointer truncate rounded-md border-0 bg-transparent px-1.5 py-1 text-left font-mono text-[11px]",
+                "block cursor-pointer truncate rounded-md border-0 bg-transparent px-1.5 py-1 text-left font-mono text-ui-xs",
                 index === menu.index && "bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary",
               )}
               onMouseDown={(event) => event.preventDefault()}

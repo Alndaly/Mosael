@@ -30,6 +30,19 @@
   --color-input: var(--input);
   --color-field: var(--field);
   --color-ring: var(--ring);
+  /* 界面字号:**跟屏幕走**。
+   *
+   * 此前全应用有 673 处写死的 `text-[Npx]` —— 在 13" 上勉强够看的 11px,到 27" 上就成了一片蚂蚁;
+   * 而且 8 种相近尺寸(10/10.5/11/11.5/12/12.5/13/13.5)混着用,同一层级的东西在不同页面不一样大。
+   *
+   * clamp() 的三个值分别是:小屏下限、随视口线性变化的中项、大屏上限。中项用 vw + 常数,
+   * 于是 1280 宽时约等于原来的像素值 —— 层级关系一点没变,只是两头会收放。四档覆盖那 8 种,
+   * 相差半个像素的那些本就该是同一档(它们的差别不是设计,是各写各的)。 */
+  --text-ui-2xs: clamp(9.5px, 0.16vw + 8px, 11.5px);
+  --text-ui-xs: clamp(10.5px, 0.18vw + 8.7px, 12.5px);
+  --text-ui-sm: clamp(11.5px, 0.2vw + 9.9px, 14px);
+  --text-ui-md: clamp(12.5px, 0.23vw + 10.6px, 15.5px);
+
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: var(--radius);
   --radius-lg: calc(var(--radius) + 2px);

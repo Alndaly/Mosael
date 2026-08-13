@@ -159,7 +159,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   // 账号的「增」和「管」都归口「浏览器池」tab;发布页只做发布(记录 + 新建发布)。
   const seg = (
     <div className="flex items-center justify-between">
-      <h2 className="m-0 inline-flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
+      <h2 className="m-0 inline-flex items-center gap-1.5 text-ui-md font-semibold text-foreground">
         <Rocket size={13} /> {t("publishTabRecords")}
       </h2>
       <span className="flex flex-wrap items-center gap-1.5">
@@ -238,7 +238,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
           return (
             <section key={group.key || "unknown"} className="grid gap-2 pb-4">
               {/* 日期栏头贴顶:滚很长时也知道现在看的是哪一天。 */}
-              <h3 className="sticky top-0 z-[1] m-0 bg-background/92 py-1 text-[11.5px] font-semibold text-muted-foreground backdrop-blur-sm">
+              <h3 className="sticky top-0 z-[1] m-0 bg-background/92 py-1 text-ui-xs font-semibold text-muted-foreground backdrop-blur-sm">
                 {day.kind === "today" ? t("dateToday") : day.kind === "yesterday" ? t("dateYesterday") : day.text}
                 <span className="ml-1.5 font-normal tabular-nums text-muted-foreground/70">{group.items.length}</span>
               </h3>
@@ -312,24 +312,24 @@ function PublishCard({ task, selecting = false }: { task: PublishTask; selecting
     <article className="flex h-full flex-col gap-1.5 rounded-lg border border-border bg-panel p-2.5 shadow-[var(--shadow-panel)] transition-colors hover:border-border-strong">
       <div className="flex items-center gap-1.5">
         <Icon size={13} className={cn("shrink-0", tone, spin && "animate-openstudio-spin")} />
-        <span className={cn("text-[11.5px] font-semibold", tone)}>{t(`batchStatus_${task.status}` as never)}</span>
+        <span className={cn("text-ui-xs font-semibold", tone)}>{t(`batchStatus_${task.status}` as never)}</span>
         {/* 选择态下右上角让给勾选圈 —— 两者叠在一起时间会被盖掉一半,不如干脆不显示。 */}
         {!selecting && (
-          <span className="ml-auto shrink-0 tabular-nums text-[11px] text-muted-foreground">
+          <span className="ml-auto shrink-0 tabular-nums text-ui-xs text-muted-foreground">
             {localTime(task.created_at, locale)}
           </span>
         )}
       </div>
-      <strong className="line-clamp-2 text-[13px] font-[650] leading-[1.4] text-foreground [overflow-wrap:anywhere]">
+      <strong className="line-clamp-2 text-ui-md font-[650] leading-[1.4] text-foreground [overflow-wrap:anywhere]">
         {task.title || task.asset_name}
       </strong>
       <div className="mt-auto grid gap-1.5 pt-0.5">
-        <p className="m-0 truncate text-[11.5px] text-muted-foreground">
+        <p className="m-0 truncate text-ui-xs text-muted-foreground">
           {task.platform} · {task.account_name}
         </p>
-        <code className="truncate font-mono text-[11px] text-muted-foreground/80">{task.asset_name}</code>
+        <code className="truncate font-mono text-ui-xs text-muted-foreground/80">{task.asset_name}</code>
         {task.status === "failed" && task.error && (
-          <p className="m-0 line-clamp-2 text-[11px] leading-[1.45] text-destructive [overflow-wrap:anywhere]">{task.error}</p>
+          <p className="m-0 line-clamp-2 text-ui-xs leading-[1.45] text-destructive [overflow-wrap:anywhere]">{task.error}</p>
         )}
       </div>
     </article>
@@ -361,8 +361,8 @@ function PublishDetailDialog({ task, onClose, onDelete }: { task: PublishTask | 
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="grid grid-cols-[76px_minmax(0,1fr)] items-baseline gap-3 max-[520px]:grid-cols-1 max-[520px]:gap-1">
-      <dt className="text-[11px] text-muted-foreground">{label}</dt>
-      <dd className="m-0 min-w-0 text-[12.5px] leading-[1.6] text-foreground [overflow-wrap:anywhere]">{children}</dd>
+      <dt className="text-ui-xs text-muted-foreground">{label}</dt>
+      <dd className="m-0 min-w-0 text-ui-sm leading-[1.6] text-foreground [overflow-wrap:anywhere]">{children}</dd>
     </div>
   );
 }
@@ -386,7 +386,7 @@ function PublishDetail({
       <section>
         <header className="flex items-start justify-between gap-3 pb-2.5">
           {/* 状态只说一次:此前这一行写着「失败」,右边还浮着一个同义的红色图标。 */}
-          <p className="m-0 flex min-w-0 items-center gap-1.5 text-[12.5px] text-muted-foreground">
+          <p className="m-0 flex min-w-0 items-center gap-1.5 text-ui-sm text-muted-foreground">
             <StatusIcon status={task.status} />
             <span className="truncate">
               {task.account_name} · {task.platform} ·{" "}
@@ -428,7 +428,7 @@ function PublishDetail({
             <InfoRow label={t("publishTags")}>
               <div className="flex flex-wrap gap-1">
                 {task.tags.map((tag) => (
-                  <span className="inline-flex items-center gap-[3px] rounded-full border border-border bg-panel-subtle px-1.5 py-px text-[11px] text-muted-foreground" key={tag}>
+                  <span className="inline-flex items-center gap-[3px] rounded-full border border-border bg-panel-subtle px-1.5 py-px text-ui-xs text-muted-foreground" key={tag}>
                     {tag}
                   </span>
                 ))}
@@ -538,8 +538,8 @@ function CreatePublishDialog({
 
   return (
     <ModalShell open={open} onOpenChange={(next) => !next && onClose()} title={t("publishCreate")}>
-      <div className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
-        <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
+      <div className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
+        <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
           <span>{t("publishAsset")}</span>
           <Combobox
             value={assetId ?? ""}
@@ -551,7 +551,7 @@ function CreatePublishDialog({
           />
           {videos.length === 0 && assets.isSuccess && <small>{t("publishNoVideos")}</small>}
         </label>
-        <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
+        <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
           <span>{t("publishAccount")}</span>
           <Combobox
             value={accountId ?? ""}
@@ -570,7 +570,7 @@ function CreatePublishDialog({
             </small>
           )}
         </label>
-        <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
+        <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
           <span>
             {t("publishTitle")}
             <em className={cn(
@@ -583,12 +583,12 @@ function CreatePublishDialog({
           <Input value={title} maxLength={titleMax + 20} onChange={(event) => setTitle(event.target.value)} />
         </label>
         {platformMeta?.short_title && (
-          <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
+          <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
             <span>{t("publishShortTitle")}</span>
             <Input value={shortTitle} maxLength={20} onChange={(event) => setShortTitle(event.target.value)} />
           </label>
         )}
-        <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
+        <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
           <span>{t("publishDescription")}</span>
           <Textarea
             rows={3}
@@ -596,7 +596,7 @@ function CreatePublishDialog({
             onChange={(event) => setDescription(event.target.value)}
           />
         </label>
-        <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-[12.5px] [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
+        <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
           <span>{t("publishTags")}</span>
           <Input value={tagsText} placeholder={t("publishTagsPlaceholder")} onChange={(event) => setTagsText(event.target.value)} />
         </label>
@@ -626,7 +626,7 @@ function CreatePublishDialog({
               <span className="grid min-w-0 gap-0.5">
                 <span className="text-xs font-semibold text-foreground">{spec.label}</span>
                 {spec.description && (
-                  <small className="text-[11px] leading-[1.4] text-muted-foreground">{spec.description}</small>
+                  <small className="text-ui-xs leading-[1.4] text-muted-foreground">{spec.description}</small>
                 )}
               </span>
               <Switch
@@ -635,7 +635,7 @@ function CreatePublishDialog({
               />
             </label>
           ) : (
-            <label key={spec.key} className={"grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-[11px] [&_small]:leading-[1.4] [&_small]:text-muted-foreground"}>
+            <label key={spec.key} className={"grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground"}>
               <span>{spec.label}</span>
               <Combobox
                 value={String(options[spec.key] ?? spec.default)}

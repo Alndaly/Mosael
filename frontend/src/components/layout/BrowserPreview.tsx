@@ -51,9 +51,9 @@ export function BrowserPreview() {
       className="fixed right-4 z-[80] w-[320px] max-w-[calc(100vw-32px)] overflow-hidden rounded-lg border border-border-strong bg-panel shadow-[var(--shadow-raised)]">
       <div className="flex items-center gap-1.5 border-b border-border px-2.5 py-1.5">
         <MonitorPlay size={13} className="shrink-0 text-primary" />
-        <span className="shrink-0 text-[12px] font-semibold">{t("browserPreviewTitle")}</span>
+        <span className="shrink-0 text-ui-sm font-semibold">{t("browserPreviewTitle")}</span>
         {frame.label && (
-          <span className="min-w-0 flex-1 truncate text-[11.5px] tabular-nums text-muted-foreground">
+          <span className="min-w-0 flex-1 truncate text-ui-xs tabular-nums text-muted-foreground">
             {frame.label}
           </span>
         )}
@@ -73,7 +73,7 @@ export function BrowserPreview() {
         // 后台视图取不到像素是常态(见 electron/publish/publishWorker.ts 的 LiveMirror),此时面板退化成「步骤 + 地址」。
         // 整块消失反而更糟:那正是用户以为「卡死了」的时刻,更需要看到它还在跑。
         <div className="grid gap-1 px-2.5 py-3">
-          <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
+          <div className="flex items-center gap-1.5 text-ui-xs text-muted-foreground">
             {/* 终态(成功/失败)就别再转圈了 —— 之前「失败」配着「后台运行中」的正文自相矛盾。 */}
             {settled ? (
               <Square size={12} className="shrink-0" />
@@ -82,7 +82,7 @@ export function BrowserPreview() {
             )}
             <span>{settled ? t("browserPreviewNoPixelsDone") : t("browserPreviewNoPixels")}</span>
           </div>
-          {frame.url && <div className="truncate text-[11px] text-muted-foreground/80">{frame.url}</div>}
+          {frame.url && <div className="truncate text-ui-xs text-muted-foreground/80">{frame.url}</div>}
         </div>
       )}
     </div>

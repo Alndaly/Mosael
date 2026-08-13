@@ -63,7 +63,7 @@ export function JobDetailDialog({
           <div className="flex items-center gap-2">
             <span
               className={cn(
-                "inline-flex items-center gap-1 rounded-full bg-secondary px-[9px] py-px text-[11px] text-muted-foreground",
+                "inline-flex items-center gap-1 rounded-full bg-secondary px-[9px] py-px text-ui-xs text-muted-foreground",
                 (active || current.status === "running" || current.status === "pending" || current.status === "queued") &&
                   "bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-primary",
                 !active && current.status === "succeeded" && "bg-[color-mix(in_srgb,#16a34a_12%,transparent)] text-[#16a34a]",
@@ -79,23 +79,23 @@ export function JobDetailDialog({
               )}
               {t(`runStatus_${active ? "running" : current.status}` as never)}
             </span>
-            <span className="text-[11px] text-muted-foreground">{t(`jobKind${kindKey(current.kind)}` as never)}</span>
+            <span className="text-ui-xs text-muted-foreground">{t(`jobKind${kindKey(current.kind)}` as never)}</span>
           </div>
 
           {active && <Progress className="my-0.5" value={Math.round(current.progress * 100)} />}
           <div className="flex items-baseline justify-between gap-2">
             <p className="m-0 text-xs text-foreground">{current.message}</p>
             {active && (
-              <span className="timecode shrink-0 text-[11px] tabular-nums text-muted-foreground">
+              <span className="timecode shrink-0 text-ui-xs tabular-nums text-muted-foreground">
                 {Math.round(current.progress * 100)}%
               </span>
             )}
           </div>
-          {current.error && <p className="m-0 text-[11.5px] text-destructive">{current.error}</p>}
+          {current.error && <p className="m-0 text-ui-xs text-destructive">{current.error}</p>}
 
           {(children.data ?? []).length > 0 && (
             <div className="grid gap-1 border-t border-border pt-2">
-              <span className="text-[11px] font-semibold text-muted-foreground">{t("jobDetailChildren")}</span>
+              <span className="text-ui-xs font-semibold text-muted-foreground">{t("jobDetailChildren")}</span>
               <ul className="m-0 grid list-none gap-0 p-0">
                 {(children.data ?? []).map((child) => {
                   const childActive = ACTIVE.has(child.status);
@@ -110,12 +110,12 @@ export function JobDetailDialog({
                       key={child.id}
                     >
                       <div className="grid min-w-0 gap-px">
-                        <span className="text-[11.5px] text-foreground">{t(`jobKind${kindKey(child.kind)}` as never)}</span>
-                        {child.message && <small className="truncate text-[11px] text-muted-foreground">{child.message}</small>}
+                        <span className="text-ui-xs text-foreground">{t(`jobKind${kindKey(child.kind)}` as never)}</span>
+                        {child.message && <small className="truncate text-ui-xs text-muted-foreground">{child.message}</small>}
                       </div>
                       <span
                         className={cn(
-                          "shrink-0 text-[10.5px]",
+                          "shrink-0 text-ui-2xs",
                           childActive
                             ? "text-primary"
                             : child.status === "succeeded"
@@ -133,17 +133,17 @@ export function JobDetailDialog({
           )}
 
           <div className="grid gap-1 border-t border-border pt-2">
-            <span className="text-[11px] font-semibold text-muted-foreground">{t("jobDetailEvents")}</span>
+            <span className="text-ui-xs font-semibold text-muted-foreground">{t("jobDetailEvents")}</span>
             {(events.data ?? []).length === 0 && <EmptyState size="compact" icon={<Activity size={15} />} title={t("jobDetailNoEvents")} />}
             <ol className="m-0 grid max-h-60 list-none gap-0 overflow-y-auto p-0">
               {(events.data ?? []).map((event) => (
                 <li className="grid grid-cols-[12px_minmax(0,1fr)_auto] items-baseline gap-2 py-[5px] [&+&]:border-t [&+&]:border-border" key={event.id}>
                   <i className="mt-[5px] h-1.5 w-1.5 rounded-full bg-border-strong" />
                   <div className="grid min-w-0 gap-px">
-                    <span className="text-[11.5px] text-foreground">{event.type}</span>
-                    {eventText(event.payload) && <small className="truncate text-[11px] text-muted-foreground">{eventText(event.payload)}</small>}
+                    <span className="text-ui-xs text-foreground">{event.type}</span>
+                    {eventText(event.payload) && <small className="truncate text-ui-xs text-muted-foreground">{eventText(event.payload)}</small>}
                   </div>
-                  <time className="timecode text-[10.5px] text-muted-foreground">{relativeTime(event.created_at, locale)}</time>
+                  <time className="timecode text-ui-2xs text-muted-foreground">{relativeTime(event.created_at, locale)}</time>
                 </li>
               ))}
             </ol>

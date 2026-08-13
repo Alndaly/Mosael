@@ -41,7 +41,7 @@ import { cn } from "@/lib/utils";
 function VoiceField({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
     <div className={cn("grid min-w-0 content-start gap-1", className)}>
-      <span className="text-[10.5px] font-medium leading-none text-muted-foreground">{label}</span>
+      <span className="text-ui-2xs font-medium leading-none text-muted-foreground">{label}</span>
       {children}
     </div>
   );
@@ -375,7 +375,7 @@ export function VoicePanel({
 
   return (
     <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
-      <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">{tabs}</div>
+      <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">{tabs}</div>
       <div className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto p-2.5">
         <div className="grid gap-[7px] rounded-lg border border-border bg-panel p-2.5">
           <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
@@ -453,7 +453,7 @@ export function VoicePanel({
                         </SelectContent>
                       </Select>
                     ) : (
-                      <p className="m-0 text-[11px] leading-[26px] text-muted-foreground">{t("voiceLibraryPickEmpty")}</p>
+                      <p className="m-0 text-ui-xs leading-[26px] text-muted-foreground">{t("voiceLibraryPickEmpty")}</p>
                     )}
                   </VoiceField>
                   {/* 语速跟着**引擎能力**走:F5 的 infer 吃 speed,fish 的请求结构里根本没有
@@ -542,15 +542,15 @@ export function VoicePanel({
           >
             <Wand2 size={13} /> {t("voiceGenerate")}
           </Button>
-          {engine === "clone" && !activeVoice && <p className="m-0 text-[11px] leading-[1.45] text-muted-foreground">{t("voiceNeedVoice")}</p>}
+          {engine === "clone" && !activeVoice && <p className="m-0 text-ui-xs leading-[1.45] text-muted-foreground">{t("voiceNeedVoice")}</p>}
           {engine !== "clone" && voiceChoices.length === 0 && activeEngine?.needs_voice_id && !engineVoice.trim() && (
-            <p className="m-0 text-[11px] leading-[1.45] text-muted-foreground">{t("voiceNeedEngineVoice")}</p>
+            <p className="m-0 text-ui-xs leading-[1.45] text-muted-foreground">{t("voiceNeedEngineVoice")}</p>
           )}
-          {isPodcast && !engineReady && <p className="m-0 text-[11px] leading-[1.45] text-muted-foreground">{t("voicePodcastNeedTwo")}</p>}
+          {isPodcast && !engineReady && <p className="m-0 text-ui-xs leading-[1.45] text-muted-foreground">{t("voicePodcastNeedTwo")}</p>}
           {/* 克隆这一条的 note 会随"装没装"变 —— 以前不显示它,于是"没装"这件事只能等到
               点了生成、收到一句拒绝才知道。 */}
           {activeEngine?.note && (
-            <p className={cn("m-0 text-[11px] leading-[1.45] text-muted-foreground", activeEngine.ready === false && "text-destructive")}>
+            <p className={cn("m-0 text-ui-xs leading-[1.45] text-muted-foreground", activeEngine.ready === false && "text-destructive")}>
               {activeEngine.note}
             </p>
           )}
@@ -597,7 +597,7 @@ export function VoicePanel({
             />
             {spAsset &&
               (transcript.isError ? (
-                <p className="m-0 text-[11px] leading-[1.45] text-muted-foreground">{t("voiceNoTranscript")}</p>
+                <p className="m-0 text-ui-xs leading-[1.45] text-muted-foreground">{t("voiceNoTranscript")}</p>
               ) : speakers.length > 0 ? (
                 <Select value={spSpeaker} onValueChange={setSpSpeaker}>
                   <SelectTrigger>
@@ -612,11 +612,11 @@ export function VoicePanel({
                   </SelectContent>
                 </Select>
               ) : transcript.isLoading ? null : (
-                <p className="m-0 text-[11px] leading-[1.45] text-muted-foreground">{t("voiceNoSpeakers")}</p>
+                <p className="m-0 text-ui-xs leading-[1.45] text-muted-foreground">{t("voiceNoSpeakers")}</p>
               ))}
             <Input placeholder={t("voiceName")} value={spName} onChange={(event) => setSpName(event.target.value)} />
             <div className="flex items-center justify-between gap-2">
-              <span className="m-0 text-[11px] leading-[1.45] text-muted-foreground">{t("voiceFromSpeakerHint")}</span>
+              <span className="m-0 text-ui-xs leading-[1.45] text-muted-foreground">{t("voiceFromSpeakerHint")}</span>
               <Button
                 size="sm"
                 disabled={!spAsset || !spSpeaker} loading={fromSpeaker.isPending}
@@ -667,8 +667,8 @@ export function VoicePanel({
             {file && !recording && (
               <div className="flex items-center gap-1.5 rounded-md border border-border bg-secondary px-2 py-1">
                 <AudioLines size={12} className="shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1 truncate text-[11.5px]" title={file.name}>{file.name}</span>
-                <span className="shrink-0 text-[10.5px] tabular-nums text-muted-foreground">{formatBytes(file.size)}</span>
+                <span className="min-w-0 flex-1 truncate text-ui-xs" title={file.name}>{file.name}</span>
+                <span className="shrink-0 text-ui-2xs tabular-nums text-muted-foreground">{formatBytes(file.size)}</span>
                 <button
                   type="button"
                   className="shrink-0 cursor-pointer rounded-sm border-0 bg-transparent p-0.5 leading-none text-muted-foreground hover:text-destructive"
@@ -705,7 +705,7 @@ export function VoicePanel({
             </div>
             {/* 「确认」灰着的时候要说**还差什么**。以前这里永远是同一句通用说明,
                 于是按钮为什么点不动只能靠猜。 */}
-            <p className={cn("m-0 text-[11px] leading-[1.45] text-muted-foreground", cloneBlocker && "text-destructive")}>
+            <p className={cn("m-0 text-ui-xs leading-[1.45] text-muted-foreground", cloneBlocker && "text-destructive")}>
               {recording ? t("voiceRecording") : cloneBlocker ? t(cloneBlocker) : t("voiceUploadHint")}
             </p>
           </div>
@@ -722,7 +722,7 @@ export function VoicePanel({
             >
               <div className="flex min-w-0 items-center gap-2 [&>svg]:shrink-0 [&>svg]:text-primary">
                 <Mic size={13} />
-                <div className="grid min-w-0 [&_small]:truncate [&_small]:text-[11px] [&_small]:text-muted-foreground [&_strong]:text-[12.5px]">
+                <div className="grid min-w-0 [&_small]:truncate [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:text-ui-sm">
                   <strong>{voice.name}</strong>
                   {/* 没有参考文本时**说出来**,而不是留一片空白:Fish Speech 拿不到它就合成不出
                       能听的东西,而这条音色在下拉里看起来和别的一样正常。 */}
@@ -782,7 +782,7 @@ export function VoicePanel({
                 placeholder={t("voiceRefText")}
                 onChange={(event) => setEditText(event.target.value)}
               />
-              <small className="text-[11px] leading-[1.4] text-muted-foreground">{t("voiceEditHint")}</small>
+              <small className="text-ui-xs leading-[1.4] text-muted-foreground">{t("voiceEditHint")}</small>
               <div className="flex items-center justify-end gap-1.5">
                 {/* 应用自己就有转写引擎 —— 让用户打一遍自己说过的话没道理。 */}
                 <Button size="sm" variant="outline" loading={recognize.isPending} onClick={() => recognize.mutate()}>

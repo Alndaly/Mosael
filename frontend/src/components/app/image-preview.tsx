@@ -60,7 +60,7 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
         // 点击 —— 表现为「关掉大图后有一小段时间画布点不动、节点拖不了」。不可见就不该拦事件。
         className={cn(
           !visible && "pointer-events-none!",
-          "z-[150]! [&_.PhotoView-Slider\_\_BannerWrap]:h-12! [&_.PhotoView-Slider\_\_BannerWrap]:bg-[linear-gradient(to_bottom,rgb(0_0_0/0.42),transparent)]! [&_.PhotoView-Slider\_\_Counter]:font-mono! [&_.PhotoView-Slider\_\_Counter]:text-[11px]! [&_.PhotoView-Slider\_\_Counter]:text-[rgb(255_255_255/0.68)]! [&_.PhotoView-Slider\_\_toolbarIcon]:h-9! [&_.PhotoView-Slider\_\_toolbarIcon]:w-9! [&_.PhotoView-Slider\_\_toolbarIcon]:text-[rgb(255_255_255/0.82)]! [&_:is(.PhotoView-Slider\_\_ArrowLeft,.PhotoView-Slider\_\_ArrowRight)]:text-[rgb(255_255_255/0.78)]!",
+          "z-[150]! [&_.PhotoView-Slider\_\_BannerWrap]:h-12! [&_.PhotoView-Slider\_\_BannerWrap]:bg-[linear-gradient(to_bottom,rgb(0_0_0/0.42),transparent)]! [&_.PhotoView-Slider\_\_Counter]:font-mono! [&_.PhotoView-Slider\_\_Counter]:text-ui-xs! [&_.PhotoView-Slider\_\_Counter]:text-[rgb(255_255_255/0.68)]! [&_.PhotoView-Slider\_\_toolbarIcon]:h-9! [&_.PhotoView-Slider\_\_toolbarIcon]:w-9! [&_.PhotoView-Slider\_\_toolbarIcon]:text-[rgb(255_255_255/0.82)]! [&_:is(.PhotoView-Slider\_\_ArrowLeft,.PhotoView-Slider\_\_ArrowRight)]:text-[rgb(255_255_255/0.78)]!",
         )}
         maskClassName="will-change-[opacity]"
         photoClassName="rounded-lg will-change-[transform,opacity] [outline:1px_solid_rgb(255_255_255/0.12)]"
@@ -82,7 +82,7 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
         }}
         overlayRender={({ overlay }) =>
           overlay ? (
-            <div className="fixed bottom-[22px] left-1/2 max-w-[min(760px,calc(100vw-64px))] -translate-x-1/2 truncate rounded-full border border-[rgb(255_255_255/0.14)] bg-[rgb(0_0_0/0.38)] px-[13px] py-[7px] text-[12.5px] font-semibold text-white backdrop-blur-[10px]">
+            <div className="fixed bottom-[22px] left-1/2 max-w-[min(760px,calc(100vw-64px))] -translate-x-1/2 truncate rounded-full border border-[rgb(255_255_255/0.14)] bg-[rgb(0_0_0/0.38)] px-[13px] py-[7px] text-ui-sm font-semibold text-white backdrop-blur-[10px]">
               {overlay}
             </div>
           ) : null

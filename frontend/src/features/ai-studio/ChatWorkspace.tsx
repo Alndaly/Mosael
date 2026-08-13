@@ -366,7 +366,7 @@ export function ChatWorkspace({
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)_300px] grid-rows-[minmax(0,1fr)] gap-2 max-[1180px]:grid-cols-[220px_minmax(0,1fr)] max-[820px]:grid-cols-[minmax(0,1fr)] max-[760px]:grid-rows-[minmax(0,1fr)_auto]">
       <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[820px]:hidden">
-        <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-[11px] [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
+        <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
           {/* 模式切换只保留输入框里的那一个;列表头恒定为标题,不再挤一个 seg。 */}
           <h2>{t("chatSessionsTitle")}</h2>
           <Button variant="outline" size="icon" className="h-7 w-7" title={t("chatNewSession")} aria-label={t("chatNewSession")} onClick={() => createSession.mutate()} loading={createSession.isPending}>
@@ -440,22 +440,22 @@ export function ChatWorkspace({
                 <ChatBubble key={message.id} message={message} usageEvents={usageByMessage.get(message.id) ?? []} />
               ))}
               {running && streamText && (
-                <div className="relative mx-auto w-full max-w-[780px] shrink-0 text-[13.5px] leading-[1.65] [word-break:break-word]">
+                <div className="relative mx-auto w-full max-w-[780px] shrink-0 text-ui-md leading-[1.65] [word-break:break-word]">
                   <AgentTurnContent timeline={streamTimeline} />
                   <div className="mt-1.5 flex min-h-[18px] items-center gap-1.5 text-muted-foreground">
                     <Loader2 size={11} className="animate-openstudio-spin" />
-                    <span className="timecode text-[11px] text-muted-foreground">
+                    <span className="timecode text-ui-xs text-muted-foreground">
                       {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
                     </span>
                   </div>
                 </div>
               )}
               {running && !streamText && (
-                <div className="relative mx-auto flex w-full max-w-[780px] shrink-0 flex-col items-stretch gap-[7px] text-[13.5px] leading-[1.65] text-muted-foreground [word-break:break-word]">
+                <div className="relative mx-auto flex w-full max-w-[780px] shrink-0 flex-col items-stretch gap-[7px] text-ui-md leading-[1.65] text-muted-foreground [word-break:break-word]">
                   <AgentTurnContent timeline={streamTimeline} />
                   <span className="inline-flex items-center gap-1.5 self-start whitespace-nowrap">
                     <Loader2 size={13} className="animate-openstudio-spin" /> {t("chatThinking")}
-                    <span className="timecode ml-0.5 text-[11px] text-muted-foreground">
+                    <span className="timecode ml-0.5 text-ui-xs text-muted-foreground">
                       {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
                     </span>
                   </span>
@@ -482,7 +482,7 @@ export function ChatWorkspace({
                 </span>
                 <button
                   type="button"
-                  className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-[7px] py-[3px] text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                  className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-[7px] py-[3px] text-ui-xs text-muted-foreground hover:bg-muted hover:text-foreground"
                   disabled={steerQueued.isPending}
                   onClick={() => steerQueued.mutate(message.id)}
                   title={t("chatSteerHint")}
@@ -491,7 +491,7 @@ export function ChatWorkspace({
                 </button>
                 <button
                   type="button"
-                  className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-[7px] py-[3px] text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                  className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-[7px] py-[3px] text-ui-xs text-muted-foreground hover:bg-muted hover:text-foreground"
                   disabled={cancelQueued.isPending}
                   onClick={() => cancelQueued.mutate(message.id)}
                   aria-label={t("chatQueuedCancel")}
@@ -508,7 +508,7 @@ export function ChatWorkspace({
               <AttachmentChips attachments={attach} className="flex flex-wrap gap-1.5 px-0.5 pb-1" />
               <Textarea
                 rows={2}
-                className="max-h-[220px] min-h-11 w-full min-w-0 resize-none border-0 bg-transparent px-0.5 pb-1.5 pt-0.5 text-[13.5px] leading-[1.55] shadow-none outline-none placeholder:text-muted-foreground placeholder:opacity-100 focus-visible:ring-0"
+                className="max-h-[220px] min-h-11 w-full min-w-0 resize-none border-0 bg-transparent px-0.5 pb-1.5 pt-0.5 text-ui-md leading-[1.55] shadow-none outline-none placeholder:text-muted-foreground placeholder:opacity-100 focus-visible:ring-0"
                 value={draft}
                 placeholder={t("chatPlaceholder")}
                 onChange={(event) => {
@@ -650,7 +650,7 @@ function ChatInspector({
         <h2 className="m-0 text-xs font-bold">{t("agentInspectorTitle")}</h2>
         <span
           className={cn(
-            "inline-flex shrink-0 items-center gap-[5px] rounded-full border border-border bg-panel-subtle px-2 py-0.5 text-[11px] font-semibold text-muted-foreground",
+            "inline-flex shrink-0 items-center gap-[5px] rounded-full border border-border bg-panel-subtle px-2 py-0.5 text-ui-xs font-semibold text-muted-foreground",
             running && "border-[color-mix(in_srgb,var(--primary)_42%,var(--border))] text-primary",
           )}
         >
@@ -668,7 +668,7 @@ function ChatInspector({
         {/* 排队只在真有东西排队时出现 —— 一个常驻的 0 不构成信息。 */}
         {queue.length > 0 && <InspectorRow label={t("agentMetricQueue")} value={queue.length} />}
         {failedCount > 0 && (
-          <p className="m-0 text-[11.5px] leading-normal text-destructive">
+          <p className="m-0 text-ui-xs leading-normal text-destructive">
             {t("agentFailedTurns").replace("{n}", String(failedCount))}
           </p>
         )}
@@ -707,7 +707,7 @@ function ChatInspector({
             ))}
           </ul>
         ) : (
-          <p className="m-0 text-[11.5px] leading-normal text-muted-foreground">{t("agentNoRecentTools")}</p>
+          <p className="m-0 text-ui-xs leading-normal text-muted-foreground">{t("agentNoRecentTools")}</p>
         )}
         <ToolBrowser
           open={toolBrowser}
@@ -733,12 +733,12 @@ function RecentToolRow({ call }: { call: ToolCall }) {
     <li className="grid min-w-0">
       <button
         type="button"
-        className="-mx-1 grid min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 rounded border-0 bg-transparent px-1 py-1 text-left text-[11.5px] text-foreground transition-colors hover:bg-panel"
+        className="-mx-1 grid min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 rounded border-0 bg-transparent px-1 py-1 text-left text-ui-xs text-foreground transition-colors hover:bg-panel"
         onClick={() => setOpen((value) => !value)}
       >
         <AgentStatusIcon status={toAgentStatus(call.status)} />
         <ToolName name={call.name} />
-        <em className="not-italic tabular-nums text-[11px] text-muted-foreground">
+        <em className="not-italic tabular-nums text-ui-xs text-muted-foreground">
           {call.status === "error"
             ? t("toolStatusFailed")
             : call.status === "running"
@@ -757,7 +757,7 @@ function RecentToolRow({ call }: { call: ToolCall }) {
               {call.result != null && <ToolPayload label={t("agentToolResult")} value={call.result} />}
             </>
           ) : (
-            <p className="m-0 text-[11px] text-muted-foreground">{t("agentToolNoDetail")}</p>
+            <p className="m-0 text-ui-xs text-muted-foreground">{t("agentToolNoDetail")}</p>
           )}
         </div>
       )}
@@ -772,8 +772,8 @@ function ToolPayload({ label, value }: { label: string; value: unknown }) {
   const text = readToolPayload(value);
   return (
     <div className="grid gap-0.5">
-      <span className="text-[11px] text-muted-foreground">{label}</span>
-      <pre className="m-0 max-h-28 overflow-auto whitespace-pre-wrap break-words rounded border border-border bg-panel p-1.5 font-mono text-[11px] leading-[1.5] text-muted-foreground">
+      <span className="text-ui-xs text-muted-foreground">{label}</span>
+      <pre className="m-0 max-h-28 overflow-auto whitespace-pre-wrap break-words rounded border border-border bg-panel p-1.5 font-mono text-ui-xs leading-[1.5] text-muted-foreground">
         {text}
       </pre>
     </div>
@@ -792,14 +792,14 @@ function ToolBrowserRow({ tool }: { tool: AgentTool }) {
       <span className="flex min-w-0 items-center gap-1.5">
         <ToolName name={tool.name} />
         {tool.confirmation && (
-          <span className="shrink-0 rounded-full border border-border px-1.5 py-px text-[10px] font-normal text-muted-foreground">
+          <span className="shrink-0 rounded-full border border-border px-1.5 py-px text-ui-2xs font-normal text-muted-foreground">
             {t("agentToolNeedsConfirm")}
           </span>
         )}
       </span>
       <span
         className={cn(
-          "min-w-0 break-words text-[11px] leading-[1.5] text-muted-foreground",
+          "min-w-0 break-words text-ui-xs leading-[1.5] text-muted-foreground",
           !open && "line-clamp-2",
         )}
       >
@@ -857,7 +857,7 @@ function ToolBrowser({
           )}
         </div>
         {version && (
-          <p className="m-0 text-right text-[10.5px] text-muted-foreground">
+          <p className="m-0 text-right text-ui-2xs text-muted-foreground">
             {t("agentVersion")} {version}
           </p>
         )}
@@ -902,8 +902,8 @@ function ChatBubble({ message, usageEvents }: { message: AgentMessage; usageEven
     <div
       className={
         message.role === "assistant"
-          ? "group/bubble relative mx-auto w-full max-w-[780px] shrink-0 text-[13.5px] leading-[1.65] [word-break:break-word]"
-          : "ml-auto mr-[max(calc((100%-780px)/2),0px)] w-fit max-w-[min(560px,82%)] shrink-0 whitespace-pre-wrap rounded-lg rounded-br-[6px] bg-secondary px-3 py-[9px] text-[13.5px] leading-[1.65] text-foreground [word-break:break-word]"
+          ? "group/bubble relative mx-auto w-full max-w-[780px] shrink-0 text-ui-md leading-[1.65] [word-break:break-word]"
+          : "ml-auto mr-[max(calc((100%-780px)/2),0px)] w-fit max-w-[min(560px,82%)] shrink-0 whitespace-pre-wrap rounded-lg rounded-br-[6px] bg-secondary px-3 py-[9px] text-ui-md leading-[1.65] text-foreground [word-break:break-word]"
       }
     >
       {/* 自动压缩发生在这一轮开始前,标记就排在这条回复之前 —— 位置本身在说"从这里往前被整理过"。 */}

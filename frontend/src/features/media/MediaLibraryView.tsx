@@ -320,7 +320,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
               type="button"
               aria-pressed={tagFilter === tag}
               className={cn(
-                "inline-flex max-w-full items-center gap-[3px] truncate rounded-full border border-border bg-panel px-[9px] py-px text-[11px] text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground",
+                "inline-flex max-w-full items-center gap-[3px] truncate rounded-full border border-border bg-panel px-[9px] py-px text-ui-xs text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground",
                 tagFilter === tag && "border-primary bg-accent text-accent-foreground hover:text-accent-foreground",
               )}
               onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
@@ -450,7 +450,7 @@ function AssetTile({ asset, selected = false }: { asset: Asset; selected?: boole
         )}
         {/* 时长角标只对有时基的素材(视频/音频)有意义;图片 duration 恒为 0,别显示 00:00。 */}
         {asset.kind !== "image" && duration != null && (
-          <span className="absolute bottom-1.5 right-1.5 rounded-sm bg-[rgba(10,12,15,0.75)] px-[5px] py-px font-mono text-[11px] tabular-nums text-[#e8eaed]">
+          <span className="absolute bottom-1.5 right-1.5 rounded-sm bg-[rgba(10,12,15,0.75)] px-[5px] py-px font-mono text-ui-xs tabular-nums text-[#e8eaed]">
             {formatSeconds(duration)}
           </span>
         )}
@@ -461,14 +461,14 @@ function AssetTile({ asset, selected = false }: { asset: Asset; selected?: boole
               .slice(0, 2)
               .map((tag) => (
                 <span
-                  className="max-w-full truncate rounded-sm bg-[rgba(10,12,15,0.72)] px-[5px] py-px text-[10.5px] text-[#e8eaed]"
+                  className="max-w-full truncate rounded-sm bg-[rgba(10,12,15,0.72)] px-[5px] py-px text-ui-2xs text-[#e8eaed]"
                   key={tag}
                 >
                   {tag}
                 </span>
               ))}
             {assetTags(asset).length > 2 && (
-              <span className="rounded-sm bg-[rgba(10,12,15,0.72)] px-[5px] py-px text-[10.5px] text-[#e8eaed]">
+              <span className="rounded-sm bg-[rgba(10,12,15,0.72)] px-[5px] py-px text-ui-2xs text-[#e8eaed]">
                 +{assetTags(asset).length - 2}
               </span>
             )}
@@ -481,9 +481,9 @@ function AssetTile({ asset, selected = false }: { asset: Asset; selected?: boole
         </strong>
         <div className="flex items-center gap-1.5">
           <Badge variant="secondary">{asset.kind}</Badge>
-          <small className="text-[11px] text-muted-foreground">{asset.source === "generated" ? t("mediaSourceGenerated") : asset.source === "exported" ? t("mediaSourceExported") : t("mediaSourceImported")}</small>
+          <small className="text-ui-xs text-muted-foreground">{asset.source === "generated" ? t("mediaSourceGenerated") : asset.source === "exported" ? t("mediaSourceExported") : t("mediaSourceImported")}</small>
         </div>
-        <span className="truncate font-mono text-[11px] tabular-nums text-muted-foreground">
+        <span className="truncate font-mono text-ui-xs tabular-nums text-muted-foreground">
           {width ? `${width}×${asset.media_info.height}` : "—"}
           {asset.kind === "video" && fps ? ` · ${Math.round(Number(fps))}fps` : ""}
           {asset.created_at ? ` · ${formatShortDate(asset.created_at)}` : ""}

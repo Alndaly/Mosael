@@ -42,7 +42,7 @@ export function AsrModelsSection() {
               onDownload={() => download.mutate(model.id)}
             />
           ))}
-          {models.isLoading && <p className="text-[12.5px] text-muted-foreground">{t("connecting")}</p>}
+          {models.isLoading && <p className="text-ui-sm text-muted-foreground">{t("connecting")}</p>}
         </div>
       </SettingsBlock>
     </SettingsGroup>
@@ -66,19 +66,19 @@ function AsrModelCard({
     <div className={cn("grid gap-2 rounded-lg border border-border bg-background px-3 py-2.5", model.status === "installed" && "border-[color-mix(in_oklab,var(--primary)_30%,var(--border))]")}>
       <div className="flex items-start justify-between gap-3">
         <div className="grid min-w-0 gap-[3px]">
-          <div className="flex flex-wrap items-center gap-2 [&_strong]:text-[13px]">
+          <div className="flex flex-wrap items-center gap-2 [&_strong]:text-ui-md">
             <strong>{model.label}</strong>
-            <span className="rounded-md border border-border px-[5px] text-[10.5px] uppercase leading-4 tracking-[0.03em] text-muted-foreground">{model.engine}</span>
-            <span className="text-[11px] tabular-nums text-muted-foreground">{formatBytes(model.expected_bytes)}</span>
+            <span className="rounded-md border border-border px-[5px] text-ui-2xs uppercase leading-4 tracking-[0.03em] text-muted-foreground">{model.engine}</span>
+            <span className="text-ui-xs tabular-nums text-muted-foreground">{formatBytes(model.expected_bytes)}</span>
           </div>
-          <small className="text-[11.5px] text-muted-foreground">{model.detail}</small>
+          <small className="text-ui-xs text-muted-foreground">{model.detail}</small>
           {/* 「还没测过」和「测过了、跑不起来」是两回事 —— 探测要起子进程 import torch,
               不能卡在请求里,所以刚打开时可能还没有答案。说成"未就绪"是拿未知冒充结论。 */}
           {model.status === "installed" && !model.runtime_checked && (
-            <small className="text-[11.5px] text-muted-foreground">{t("runtimeChecking")}</small>
+            <small className="text-ui-xs text-muted-foreground">{t("runtimeChecking")}</small>
           )}
           {model.status === "installed" && model.runtime_checked && !model.runtime_ready && (
-            <small className="text-[11.5px] text-destructive">{t("asrModelNoRuntime")}</small>
+            <small className="text-ui-xs text-destructive">{t("asrModelNoRuntime")}</small>
           )}
         </div>
         <div className="shrink-0">
@@ -123,7 +123,7 @@ function AsrModelCard({
           {model.total_bytes > 0 ? (
             <>
               <Progress value={pct} />
-              <div className="flex items-center justify-between gap-2 text-[11px] tabular-nums text-muted-foreground">
+              <div className="flex items-center justify-between gap-2 text-ui-xs tabular-nums text-muted-foreground">
                 <span>
                   {formatBytes(model.downloaded_bytes)} / {formatBytes(model.total_bytes)}
                 </span>
@@ -135,7 +135,7 @@ function AsrModelCard({
               </div>
             </>
           ) : (
-            <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-ui-xs text-muted-foreground">
               {/* 没有分母时,分子和速度仍然值得说 —— 「已下载 5.2 GB · 12.4 MB/s」比一个
                   光转的圈有用得多,而且它是判断"卡住没有"的唯一依据。 */}
               <Loader2 size={12} className="shrink-0 animate-openstudio-spin" />
@@ -149,7 +149,7 @@ function AsrModelCard({
         </div>
       )}
       {model.status === "failed" && (
-        <div className="flex items-center gap-1.5 text-[11.5px] text-destructive">
+        <div className="flex items-center gap-1.5 text-ui-xs text-destructive">
           <AlertCircle size={13} /> {model.message}
         </div>
       )}

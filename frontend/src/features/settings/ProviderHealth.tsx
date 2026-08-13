@@ -48,7 +48,7 @@ export function ProviderHealth({ profileId, className }: { profileId: string; cl
     <button
       type="button"
       className={cn(
-        "inline-flex shrink-0 cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-[11px] tabular-nums text-muted-foreground transition-colors hover:text-foreground",
+        "inline-flex shrink-0 cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-ui-xs tabular-nums text-muted-foreground transition-colors hover:text-foreground",
         className,
       )}
       title={health.data?.detail || t("providerHealthRecheck")}

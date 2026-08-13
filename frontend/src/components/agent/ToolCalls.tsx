@@ -80,14 +80,14 @@ function MediaPreview({ assetId }: { assetId: string }) {
   });
   if (asset.isLoading) {
     return (
-      <div className="m-0 flex max-w-[240px] items-center gap-1.5 rounded-lg border border-border bg-muted px-2.5 py-2 text-[11.5px] text-muted-foreground">
+      <div className="m-0 flex max-w-[240px] items-center gap-1.5 rounded-lg border border-border bg-muted px-2.5 py-2 text-ui-xs text-muted-foreground">
         <Loader2 size={13} className="animate-openstudio-spin" />
       </div>
     );
   }
   if (asset.isError || !asset.data) {
     return (
-      <div className="m-0 flex max-w-[240px] items-center gap-1.5 rounded-lg border border-border bg-muted px-2.5 py-2 text-[11.5px] text-muted-foreground">
+      <div className="m-0 flex max-w-[240px] items-center gap-1.5 rounded-lg border border-border bg-muted px-2.5 py-2 text-ui-xs text-muted-foreground">
         <FileWarning size={13} /> {t("agentMediaMissing")}
       </div>
     );
@@ -108,11 +108,11 @@ function MediaPreview({ assetId }: { assetId: string }) {
       ) : asset.data.kind === "audio" ? (
         <audio className="w-[240px]" src={src} controls preload="metadata" />
       ) : (
-        <div className="m-0 flex max-w-[240px] items-center gap-1.5 rounded-lg border border-border bg-muted px-2.5 py-2 text-[11.5px] text-muted-foreground">
+        <div className="m-0 flex max-w-[240px] items-center gap-1.5 rounded-lg border border-border bg-muted px-2.5 py-2 text-ui-xs text-muted-foreground">
           <FileWarning size={13} /> {asset.data.name}
         </div>
       )}
-      <figcaption className="truncate text-[11px] text-muted-foreground">{asset.data.name}</figcaption>
+      <figcaption className="truncate text-ui-xs text-muted-foreground">{asset.data.name}</figcaption>
     </figure>
   );
 }
@@ -181,11 +181,11 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
         </span>
         <Wrench size={11} className="flex-none text-muted-foreground" aria-hidden />
         <span className="flex-none font-mono text-foreground">{tool.name}</span>
-        {preview && !open && <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-muted-foreground">{preview}</span>}
-        <span className={cn("ml-auto flex-none text-[11px] text-muted-foreground", tool.status === "error" && "text-destructive")}>
+        {preview && !open && <span className="min-w-0 flex-1 truncate font-mono text-ui-xs text-muted-foreground">{preview}</span>}
+        <span className={cn("ml-auto flex-none text-ui-xs text-muted-foreground", tool.status === "error" && "text-destructive")}>
           {tool.status === "running" ? t("toolRunning") : tool.status === "error" ? t("toolFailed") : t("toolDone")}
         </span>
-        {elapsed && <span className="flex-none text-[11px] text-muted-foreground">{t("usageDuration").replace("{t}", elapsed)}</span>}
+        {elapsed && <span className="flex-none text-ui-xs text-muted-foreground">{t("usageDuration").replace("{t}", elapsed)}</span>}
         {hasBody && (
           <ChevronRight
             size={13}
@@ -200,14 +200,14 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
         <div className="flex flex-col gap-2 border-t border-border px-[9px] py-2">
           {argText && (
             <div className="flex flex-col gap-[3px]">
-              <span className="text-[10.5px] uppercase tracking-[0.04em] text-muted-foreground">{t("toolInput")}</span>
-              <pre className="m-0 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-panel px-2 py-1.5 font-mono text-[11.5px] leading-[1.5] text-foreground [word-break:break-word]">{argText}</pre>
+              <span className="text-ui-2xs uppercase tracking-[0.04em] text-muted-foreground">{t("toolInput")}</span>
+              <pre className="m-0 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-panel px-2 py-1.5 font-mono text-ui-xs leading-[1.5] text-foreground [word-break:break-word]">{argText}</pre>
             </div>
           )}
           {resultText && (
             <div className="flex flex-col gap-[3px]">
-              <span className="text-[10.5px] uppercase tracking-[0.04em] text-muted-foreground">{t("toolResult")}</span>
-              <pre className="m-0 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-panel px-2 py-1.5 font-mono text-[11.5px] leading-[1.5] text-foreground [word-break:break-word]">{resultText}</pre>
+              <span className="text-ui-2xs uppercase tracking-[0.04em] text-muted-foreground">{t("toolResult")}</span>
+              <pre className="m-0 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-panel px-2 py-1.5 font-mono text-ui-xs leading-[1.5] text-foreground [word-break:break-word]">{resultText}</pre>
             </div>
           )}
         </div>
@@ -276,7 +276,7 @@ function ThinkingBlock({ text, done }: { text: string; done?: boolean }) {
     <div className="grid gap-1 rounded-md border border-dashed border-border bg-panel-subtle px-2.5 py-1.5">
       <button
         type="button"
-        className="flex cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-left text-[11.5px] text-muted-foreground hover:text-foreground"
+        className="flex cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-left text-ui-xs text-muted-foreground hover:text-foreground"
         onClick={() => setOpen((v) => !v)}
       >
         {done ? <Brain size={11} className="shrink-0" /> : <Loader2 size={11} className="shrink-0 animate-spin" />}
@@ -284,7 +284,7 @@ function ThinkingBlock({ text, done }: { text: string; done?: boolean }) {
         <ChevronDown size={11} className={cn("shrink-0 transition-transform", open && "rotate-180")} />
       </button>
       {open && text && (
-        <p className="m-0 whitespace-pre-wrap text-[12px] leading-[1.6] text-muted-foreground">{text}</p>
+        <p className="m-0 whitespace-pre-wrap text-ui-sm leading-[1.6] text-muted-foreground">{text}</p>
       )}
     </div>
   );
@@ -320,16 +320,16 @@ export function AgentErrorCard({ content, error }: { content: string; error?: st
   const [open, setOpen] = React.useState(false);
   return (
     <div className="flex flex-col gap-[5px] rounded-lg border border-[color-mix(in_srgb,var(--destructive)_40%,var(--border))] bg-[color-mix(in_srgb,var(--destructive)_8%,var(--muted))] px-2.5 py-2">
-      <div className="flex items-center gap-1.5 text-[12.5px] text-destructive">
+      <div className="flex items-center gap-1.5 text-ui-sm text-destructive">
         <CircleAlert size={14} />
         <span>{content || t("agentFailedTitle")}</span>
       </div>
       {error && (
         <>
-          <button type="button" className="self-start text-[11px] text-muted-foreground underline" onClick={() => setOpen((value) => !value)}>
+          <button type="button" className="self-start text-ui-xs text-muted-foreground underline" onClick={() => setOpen((value) => !value)}>
             {t("chatErrorDetail")}
           </button>
-          {open && <pre className="m-0 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-panel px-2 py-1.5 font-mono text-[11.5px] leading-[1.5] text-foreground [word-break:break-word]">{error}</pre>}
+          {open && <pre className="m-0 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-panel px-2 py-1.5 font-mono text-ui-xs leading-[1.5] text-foreground [word-break:break-word]">{error}</pre>}
         </>
       )}
     </div>

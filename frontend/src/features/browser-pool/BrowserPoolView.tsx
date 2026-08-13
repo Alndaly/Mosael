@@ -156,7 +156,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
         <h2 className="m-0 inline-flex items-center gap-1.5 text-[15px] font-semibold text-foreground">
           <Boxes size={17} /> {t("poolTitle")}
         </h2>
-        <small className="text-[11.5px] text-muted-foreground">{t("poolSubtitle")}</small>
+        <small className="text-ui-xs text-muted-foreground">{t("poolSubtitle")}</small>
         <span className="flex-1" />
         <Button variant="outline" size="sm" onClick={() => setAddingAccount(true)}>
           <Users size={14} /> {t("publishAccountAdd")}
@@ -196,12 +196,12 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                     )}
                   >
                     <div className="flex items-center gap-1.5">
-                      <span className="mr-auto text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">
+                      <span className="mr-auto text-ui-2xs font-semibold uppercase tracking-[0.04em] text-muted-foreground">
                         {bound ? platformLabel : t("poolGeneric")}
                       </span>
                       {p.proxy && (
                         <em
-                          className="inline-flex max-w-[130px] items-center gap-[3px] overflow-hidden whitespace-nowrap rounded-full bg-[color-mix(in_oklab,var(--primary)_10%,transparent)] px-1.5 text-[10px] not-italic text-primary"
+                          className="inline-flex max-w-[130px] items-center gap-[3px] overflow-hidden whitespace-nowrap rounded-full bg-[color-mix(in_oklab,var(--primary)_10%,transparent)] px-1.5 text-ui-2xs not-italic text-primary"
                           title={p.proxy}
                         >
                           <Globe size={10} /> {t("publishProxyOn")}
@@ -209,7 +209,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                       )}
                       {p.shared && (
                         <em
-                          className="rounded-full bg-secondary px-1.5 text-[10px] not-italic text-muted-foreground"
+                          className="rounded-full bg-secondary px-1.5 text-ui-2xs not-italic text-muted-foreground"
                           title={t("poolSharedHint")}
                         >
                           <Users2 size={10} className="inline align-[-1px]" />
@@ -218,7 +218,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                       {bound && (
                         <em
                           className={cn(
-                            "rounded-full bg-secondary px-1.5 text-[10px] not-italic text-muted-foreground",
+                            "rounded-full bg-secondary px-1.5 text-ui-2xs not-italic text-muted-foreground",
                             p.binding_status === "bound" && "bg-[color-mix(in_srgb,#16a34a_12%,transparent)] text-[#16a34a]",
                             ["login_required", "manual_required", "permission_required"].includes(p.binding_status ?? "") &&
                               "bg-[color-mix(in_srgb,#d97706_12%,transparent)] text-[#d97706]",
@@ -228,8 +228,8 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                         </em>
                       )}
                     </div>
-                    <strong className="truncate text-[13px]">{p.name}</strong>
-                    <small className="text-[11px] text-muted-foreground">
+                    <strong className="truncate text-ui-md">{p.name}</strong>
+                    <small className="text-ui-xs text-muted-foreground">
                       {bound
                         ? p.last_checked_at
                           ? t("publishLastChecked").replace("{t}", relativeTime(p.last_checked_at, locale))
@@ -238,7 +238,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                           ? t("poolLastUsed").replace("{t}", relativeTime(p.last_used_at, locale))
                           : t("poolNeverUsed")}
                     </small>
-                    <small className={cn("truncate text-[11px] text-destructive", !p.last_error && "invisible")}>
+                    <small className={cn("truncate text-ui-xs text-destructive", !p.last_error && "invisible")}>
                       {p.last_error ?? " "}
                     </small>
                     <div className="mt-auto flex min-h-[33px] items-center gap-1 pt-[5px]">
@@ -371,7 +371,7 @@ function LoginUrlDialog({
           autoFocus
           onKeyDown={(e) => e.key === "Enter" && open()}
         />
-        <small className="text-[11px] text-muted-foreground">{t("poolLoginHint")}</small>
+        <small className="text-ui-xs text-muted-foreground">{t("poolLoginHint")}</small>
         <div className="mt-1 flex justify-end gap-2">
           <Button variant="outline" size="sm" onClick={onCancel}>
             {t("cancel")}
@@ -438,7 +438,7 @@ function ProxyDialog({
     <ModalShell open onOpenChange={(next) => !next && onCancel()} title={t("publishProxySet")}>
       <div className="grid gap-2.5">
         <Input value={proxy} onChange={(e) => setProxy(e.target.value)} placeholder="socks5://host:port" autoFocus />
-        <small className="text-[11px] text-muted-foreground">{t("poolProxyHint")}</small>
+        <small className="text-ui-xs text-muted-foreground">{t("poolProxyHint")}</small>
         <div className="mt-1 flex justify-end gap-2">
           <Button variant="outline" size="sm" onClick={onCancel}>
             {t("cancel")}

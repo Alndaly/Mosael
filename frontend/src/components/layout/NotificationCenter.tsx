@@ -104,12 +104,12 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
       </Tooltip>
 
       <PopoverContent className="w-[340px] overflow-hidden" aria-label={t("notifTitle")}>
-        <div className="flex items-center justify-between border-b border-border px-2.5 py-2 [&_strong]:text-[12.5px]">
+        <div className="flex items-center justify-between border-b border-border px-2.5 py-2 [&_strong]:text-ui-sm">
           <strong>{t("notifTitle")}</strong>
           {unread > 0 && (
             <button
               type="button"
-              className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent text-[11px] text-muted-foreground hover:text-destructive"
+              className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent text-ui-xs text-muted-foreground hover:text-destructive"
               disabled={readAll.isPending}
               onClick={() => readAll.mutate()}
             >
@@ -126,7 +126,7 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
               <span className="text-xs font-semibold">
                 {t("notifInviteTitle").replace("{ws}", inv.workspace_name)}
               </span>
-              <small className="text-[11px] text-muted-foreground">
+              <small className="text-ui-xs text-muted-foreground">
                 {t("notifInviteBody").replace("{name}", inv.inviter_name).replace("{role}", t(`role_${inv.role}` as never))}
               </small>
               <div className="flex gap-1.5">
@@ -167,8 +167,8 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
               </span>
               <span className="grid min-w-0 gap-0.5">
                 <span className={cn("truncate text-xs", !item.read_at && "font-semibold")}>{item.title}</span>
-                {item.body && <small className="truncate text-[11px] text-muted-foreground">{item.body}</small>}
-                <small className="text-[10.5px] text-muted-foreground">{relativeTime(item.created_at, locale)}</small>
+                {item.body && <small className="truncate text-ui-xs text-muted-foreground">{item.body}</small>}
+                <small className="text-ui-2xs text-muted-foreground">{relativeTime(item.created_at, locale)}</small>
               </span>
               {!item.read_at && <i className="mt-[5px] h-1.5 w-1.5 rounded-full bg-primary" />}
             </button>

@@ -97,7 +97,7 @@ export function ContextMeter({
           />
         )}
       </span>
-      <span className={cn("timecode shrink-0 text-[10.5px]", warn ? "text-destructive" : "text-muted-foreground")}>
+      <span className={cn("timecode shrink-0 text-ui-2xs", warn ? "text-destructive" : "text-muted-foreground")}>
         {t("agentContextLeft").replace("{n}", String(left))}
       </span>
       {compacting && <Loader2 size={11} className="shrink-0 animate-spin text-muted-foreground" />}
@@ -142,8 +142,8 @@ export function ContextBreakdown({ context }: { context: ContextInfo }) {
   return (
     <div className="grid gap-1.5">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[11.5px] font-[620]">{t("agentContextBreakdown")}</span>
-        <span className="timecode text-[10.5px] text-muted-foreground">
+        <span className="text-ui-xs font-[620]">{t("agentContextBreakdown")}</span>
+        <span className="timecode text-ui-2xs text-muted-foreground">
           {formatTokens(context.used ?? context.tokens)} / {formatTokens(context.window)}
         </span>
       </div>
@@ -151,7 +151,7 @@ export function ContextBreakdown({ context }: { context: ContextInfo }) {
         {rows.map((kind) => {
           const tokens = byKind.get(kind) ?? 0;
           return (
-            <li key={kind} className="flex items-center gap-1.5 text-[11px]">
+            <li key={kind} className="flex items-center gap-1.5 text-ui-xs">
               <span
                 className={cn(
                   "h-2 w-2 shrink-0 rounded-sm",
@@ -166,7 +166,7 @@ export function ContextBreakdown({ context }: { context: ContextInfo }) {
           );
         })}
       </ul>
-      <p className="m-0 text-[10.5px] leading-[1.5] text-muted-foreground">{t("agentContextFixedHint")}</p>
+      <p className="m-0 text-ui-2xs leading-[1.5] text-muted-foreground">{t("agentContextFixedHint")}</p>
     </div>
   );
 }
@@ -190,7 +190,7 @@ export function CompactionNotice({ info }: { info: CompactionInfo }) {
 
   return (
     <div className="grid gap-1 rounded-md border border-dashed border-border bg-panel-subtle px-2.5 py-1.5">
-      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+      <div className="flex items-center gap-1.5 text-ui-xs text-muted-foreground">
         <Scissors size={11} className="shrink-0" />
         <span className="min-w-0 flex-1 truncate">
           {t("agentCompacted")
@@ -200,7 +200,7 @@ export function CompactionNotice({ info }: { info: CompactionInfo }) {
         {info.summary && (
           <button
             type="button"
-            className="shrink-0 cursor-pointer border-0 bg-transparent p-0 text-[10.5px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            className="shrink-0 cursor-pointer border-0 bg-transparent p-0 text-ui-2xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
             onClick={() => setOpen((v) => !v)}
           >
             {open ? t("collapse") : t("expand")}
@@ -208,7 +208,7 @@ export function CompactionNotice({ info }: { info: CompactionInfo }) {
         )}
       </div>
       {open && info.summary && (
-        <p className="m-0 whitespace-pre-wrap text-[11.5px] leading-[1.6] text-foreground">{info.summary}</p>
+        <p className="m-0 whitespace-pre-wrap text-ui-xs leading-[1.6] text-foreground">{info.summary}</p>
       )}
     </div>
   );

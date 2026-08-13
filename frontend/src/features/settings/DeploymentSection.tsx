@@ -138,7 +138,7 @@ export function DeploymentSection({ showAdmins = true }: { showAdmins?: boolean 
               {(invites.data ?? []).map((invite) => (
                 <li
                   key={invite.code}
-                  className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-panel px-2.5 py-1.5 text-[11.5px]"
+                  className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-panel px-2.5 py-1.5 text-ui-xs"
                 >
                   <code className="timecode select-all">{invite.code}</code>
                   {invite.note && <span className="text-muted-foreground">{invite.note}</span>}
@@ -196,7 +196,7 @@ export function DeploymentSection({ showAdmins = true }: { showAdmins?: boolean 
       {/* 这是一条**规则说明**,不是列表里的一个人。此前它被摆成同一组里的第三行、右边还配
           一个绿勾,读起来像"最后一个不能收回"是某位管理员的名字、而那个勾是他的开关。 */}
       {showAdmins && (
-        <p className="mt-1.5 px-0.5 text-[11px] leading-relaxed text-muted-foreground">
+        <p className="mt-1.5 px-0.5 text-ui-xs leading-relaxed text-muted-foreground">
           {t("deployLastAdminDesc")}
         </p>
       )}

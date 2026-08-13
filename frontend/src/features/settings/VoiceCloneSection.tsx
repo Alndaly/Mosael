@@ -153,7 +153,7 @@ export function VoiceCloneSection() {
         )}
 
         <Form {...form}>
-          <form className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-[12.5px] [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none" onSubmit={submit} noValidate>
+          <form className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none" onSubmit={submit} noValidate>
             <FormField
               control={form.control}
               name="engine"
@@ -243,7 +243,7 @@ export function VoiceCloneSection() {
                 此前每张引擎卡片下面各挂一遍,同一句话在一屏里出现两三次,读起来像是每个引擎
                 各自出了问题。 */}
             <div className="mt-1 flex items-center justify-end gap-2">
-              {unsaved && <small className="text-[11.5px] text-muted-foreground">{t("ttsSaveFirst")}</small>}
+              {unsaved && <small className="text-ui-xs text-muted-foreground">{t("ttsSaveFirst")}</small>}
               <Button type="submit" size="sm" loading={save.isPending}>
                 {t("save")}
               </Button>
@@ -271,16 +271,16 @@ function EngineCard({ model, busy, unsaved, onDownload }: { model: TtsEngine; bu
     <div className={cn("grid gap-2 rounded-lg border border-border bg-background px-3 py-2.5", model.status === "installed" && "border-[color-mix(in_oklab,var(--primary)_30%,var(--border))]")}>
       <div className="flex items-start justify-between gap-3">
         <div className="grid min-w-0 gap-[3px]">
-          <div className="flex flex-wrap items-center gap-2 [&_strong]:text-[13px]">
+          <div className="flex flex-wrap items-center gap-2 [&_strong]:text-ui-md">
             <strong>{model.label}</strong>
-            <span className="text-[11px] tabular-nums text-muted-foreground">{formatBytes(model.expected_bytes)}</span>
+            <span className="text-ui-xs tabular-nums text-muted-foreground">{formatBytes(model.expected_bytes)}</span>
           </div>
-          <small className="text-[11.5px] text-muted-foreground">{model.detail}</small>
+          <small className="text-ui-xs text-muted-foreground">{model.detail}</small>
           {model.status === "installed" && !model.runtime_checked && (
-            <small className="text-[11.5px] text-muted-foreground">{t("runtimeChecking")}</small>
+            <small className="text-ui-xs text-muted-foreground">{t("runtimeChecking")}</small>
           )}
           {model.status === "installed" && model.runtime_checked && !model.runtime_ready && (
-            <small className="text-[11.5px] text-destructive">{t("voiceModelNoRuntime")}</small>
+            <small className="text-ui-xs text-destructive">{t("voiceModelNoRuntime")}</small>
           )}
 
         </div>
@@ -325,7 +325,7 @@ function EngineCard({ model, busy, unsaved, onDownload }: { model: TtsEngine; bu
           {model.total_bytes > 0 ? (
             <>
               <Progress value={pct} />
-              <div className="flex items-center justify-between gap-2 text-[11px] tabular-nums text-muted-foreground">
+              <div className="flex items-center justify-between gap-2 text-ui-xs tabular-nums text-muted-foreground">
                 <span>
                   {formatBytes(model.downloaded_bytes)} / {formatBytes(model.total_bytes)}
                 </span>
@@ -337,7 +337,7 @@ function EngineCard({ model, busy, unsaved, onDownload }: { model: TtsEngine; bu
               </div>
             </>
           ) : (
-            <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-ui-xs text-muted-foreground">
               {/* 没有分母时,分子和速度仍然值得说 —— 「已下载 5.2 GB · 12.4 MB/s」比一个
                   光转的圈有用得多,而且它是判断"卡住没有"的唯一依据。 */}
               <Loader2 size={12} className="shrink-0 animate-openstudio-spin" />
@@ -351,7 +351,7 @@ function EngineCard({ model, busy, unsaved, onDownload }: { model: TtsEngine; bu
         </div>
       )}
       {model.status === "failed" && (
-        <div className="flex items-center gap-1.5 text-[11.5px] text-destructive">
+        <div className="flex items-center gap-1.5 text-ui-xs text-destructive">
           <AlertCircle size={13} /> {model.message}
         </div>
       )}

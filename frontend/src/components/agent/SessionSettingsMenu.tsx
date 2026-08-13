@@ -69,18 +69,18 @@ export function SessionSettingsMenu({
       <PopoverContent align="start" className="grid w-[260px] gap-2.5 p-2.5">
         {/* 权限模式排在最前:它决定智能体能不问就做什么,是这里分量最重的一项。 */}
         <div className="grid gap-1.5">
-          <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+          <span className="flex items-center gap-1.5 text-ui-xs font-medium text-muted-foreground">
             <ModeIcon size={12} className={ACCENT[mode]} /> {t("permModeLabel")}
           </span>
           <PermissionModePicker session={session} />
         </div>
         <div className="grid gap-1.5">
-          <span className="text-[11px] font-medium text-muted-foreground">{t("agentThinkingLevel")}</span>
+          <span className="text-ui-xs font-medium text-muted-foreground">{t("agentThinkingLevel")}</span>
           <ThinkingLevelPicker session={session} />
         </div>
         {showAnalysis && (
           <div className="grid gap-1.5">
-            <span className="text-[11px] font-medium text-muted-foreground">{t("analysisModeLabel")}</span>
+            <span className="text-ui-xs font-medium text-muted-foreground">{t("analysisModeLabel")}</span>
             <AnalysisModePicker session={session} />
           </div>
         )}
@@ -90,7 +90,7 @@ export function SessionSettingsMenu({
         {context && context.window > 0 && (
           <div className="grid gap-2 border-t border-border pt-2.5">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] font-medium text-muted-foreground">{t("agentContextTitle")}</span>
+              <span className="text-ui-xs font-medium text-muted-foreground">{t("agentContextTitle")}</span>
               <ContextMeter context={context} compacting={compacting} />
             </div>
             {onCompact && (

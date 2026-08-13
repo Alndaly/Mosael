@@ -83,7 +83,7 @@ export function AutopilotRulesSection({ workspace }: { workspace: Workspace }) {
             {t("save")}
           </Button>
         ) : (
-          <span className="inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5 text-ui-xs text-muted-foreground">
             <Lock size={12} /> {t("autopilotAdminOnly")}
           </span>
         )
@@ -122,7 +122,7 @@ export function AutopilotRulesSection({ workspace }: { workspace: Workspace }) {
         />
       </SettingsRow>
       <SettingsRow label={t("autopilotJudgeTitle")} description={t("autopilotJudgeDesc")}>
-        <span className="inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5 text-ui-xs text-muted-foreground">
           <ShieldCheck size={13} /> {t("autopilotJudgeBadge")}
         </span>
       </SettingsRow>

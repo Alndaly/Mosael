@@ -435,7 +435,7 @@ export function WorkflowAgentChat({
                   >
                     <button
                       type="button"
-                      className="flex min-w-0 cursor-pointer items-center justify-between gap-2.5 border-0 bg-transparent py-2 pl-2.5 pr-2 text-left text-[13px] text-inherit [&_span]:min-w-0 [&_span]:truncate [&_svg]:shrink-0 [&_svg]:text-primary"
+                      className="flex min-w-0 cursor-pointer items-center justify-between gap-2.5 border-0 bg-transparent py-2 pl-2.5 pr-2 text-left text-ui-md text-inherit [&_span]:min-w-0 [&_span]:truncate [&_svg]:shrink-0 [&_svg]:text-primary"
                       onClick={() => {
                         setSessionMenuOpen(false);
                         switchSession(item.id);
@@ -519,8 +519,8 @@ export function WorkflowAgentChat({
               key={message.id}
               className={
                 message.role === "assistant"
-                  ? "relative w-full min-w-0 max-w-full text-[13.5px] leading-[1.65] [word-break:break-word]"
-                  : "ml-auto mr-0 w-fit min-w-0 max-w-[min(560px,88%)] justify-self-end whitespace-pre-wrap rounded-lg rounded-br-[6px] bg-secondary px-3 py-[9px] text-[13.5px] leading-[1.65] text-foreground [word-break:break-word]"
+                  ? "relative w-full min-w-0 max-w-full text-ui-md leading-[1.65] [word-break:break-word]"
+                  : "ml-auto mr-0 w-fit min-w-0 max-w-[min(560px,88%)] justify-self-end whitespace-pre-wrap rounded-lg rounded-br-[6px] bg-secondary px-3 py-[9px] text-ui-md leading-[1.65] text-foreground [word-break:break-word]"
               }
             >
               {message.role === "assistant" && payload?.compaction && (
@@ -549,22 +549,22 @@ export function WorkflowAgentChat({
           );
         })}
         {running && streamText && (
-          <div className="relative w-full min-w-0 max-w-full text-[13.5px] leading-[1.65] [word-break:break-word]">
+          <div className="relative w-full min-w-0 max-w-full text-ui-md leading-[1.65] [word-break:break-word]">
             <AgentTurnContent timeline={streamTimeline} />
             <div className="mt-1.5 flex min-h-[18px] items-center gap-1.5 text-muted-foreground">
               <Loader2 size={11} className="animate-openstudio-spin" />
-              <span className="timecode text-[11px] text-muted-foreground">
+              <span className="timecode text-ui-xs text-muted-foreground">
                 {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
               </span>
             </div>
           </div>
         )}
         {running && !streamText && (
-          <div className="relative flex w-full min-w-0 max-w-full flex-col items-stretch gap-1.5 text-[13.5px] leading-[1.65] text-muted-foreground [word-break:break-word]">
+          <div className="relative flex w-full min-w-0 max-w-full flex-col items-stretch gap-1.5 text-ui-md leading-[1.65] text-muted-foreground [word-break:break-word]">
             <AgentTurnContent timeline={streamTimeline} />
             <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
               <Loader2 size={12} className="animate-openstudio-spin" /> {t("chatThinking")}
-              <span className="timecode text-[11px] text-muted-foreground">
+              <span className="timecode text-ui-xs text-muted-foreground">
                 {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
               </span>
             </span>
@@ -583,7 +583,7 @@ export function WorkflowAgentChat({
           </span>
           <button
             type="button"
-            className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-[7px] py-[3px] text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-[7px] py-[3px] text-ui-xs text-muted-foreground hover:bg-muted hover:text-foreground"
             disabled={steerQueued.isPending}
             onClick={() => steerQueued.mutate(message.id)}
             title={t("chatSteerHint")}
@@ -592,7 +592,7 @@ export function WorkflowAgentChat({
           </button>
           <button
             type="button"
-            className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-[7px] py-[3px] text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-[7px] py-[3px] text-ui-xs text-muted-foreground hover:bg-muted hover:text-foreground"
             disabled={cancelQueued.isPending}
             onClick={() => cancelQueued.mutate(message.id)}
             aria-label={t("chatQueuedCancel")}
@@ -616,7 +616,7 @@ export function WorkflowAgentChat({
         {/* 内层去底色/边框/焦点环:外层输入卡已是表面,双层盒子叠着难看(对话页同款处理)。 */}
         <Textarea
           rows={1}
-          className="max-h-[220px] min-h-9 w-full min-w-0 resize-none border-0 bg-transparent px-0.5 pb-1.5 pt-0.5 text-[13.5px] leading-[1.55] shadow-none outline-none placeholder:text-muted-foreground placeholder:opacity-100 focus-visible:ring-0"
+          className="max-h-[220px] min-h-9 w-full min-w-0 resize-none border-0 bg-transparent px-0.5 pb-1.5 pt-0.5 text-ui-md leading-[1.55] shadow-none outline-none placeholder:text-muted-foreground placeholder:opacity-100 focus-visible:ring-0"
           value={draft}
           placeholder={t("wfAgentPlaceholder")}
           onChange={(event) => setDraft(event.target.value)}

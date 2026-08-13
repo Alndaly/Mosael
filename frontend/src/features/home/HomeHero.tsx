@@ -108,7 +108,7 @@ export function HomeHero({
           <span className="text-xs font-normal text-muted-foreground">{workspaceName}</span>
           {holiday && HolidayIcon && (
             <span
-              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-ui-xs font-medium"
               style={{ color: accent, background: `color-mix(in srgb, ${accent} 12%, transparent)` }}
             >
               <HolidayIcon size={11} />
@@ -140,12 +140,12 @@ export function HomeHero({
         </span>
         <div className="min-w-0 flex-1">
           {poemEgg ? (
-            <blockquote className="m-0 text-[13px] leading-normal">{poemEgg}</blockquote>
+            <blockquote className="m-0 text-ui-md leading-normal">{poemEgg}</blockquote>
           ) : (
             <>
-              <blockquote className="m-0 line-clamp-2 text-[13px] leading-normal">{poem.text}</blockquote>
+              <blockquote className="m-0 line-clamp-2 text-ui-md leading-normal">{poem.text}</blockquote>
               {(poem.author || poem.source) && (
-                <figcaption className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                <figcaption className="mt-0.5 truncate text-ui-xs text-muted-foreground">
                   {[poem.author, poem.source && `《${poem.source}》`].filter(Boolean).join(" · ")}
                 </figcaption>
               )}

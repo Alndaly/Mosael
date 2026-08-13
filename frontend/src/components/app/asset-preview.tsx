@@ -77,7 +77,7 @@ export function AssetInlinePreview({
     );
   }
   return (
-    <span className="inline-flex max-w-full items-center gap-[5px] rounded-lg border border-border bg-panel px-2 py-1 text-[11.5px] text-muted-foreground">
+    <span className="inline-flex max-w-full items-center gap-[5px] rounded-lg border border-border bg-panel px-2 py-1 text-ui-xs text-muted-foreground">
       <Paperclip size={12} className="shrink-0" />
       <span className="min-w-0 truncate" title={name}>
         {name}
