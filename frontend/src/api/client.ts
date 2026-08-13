@@ -26,6 +26,13 @@ const TOKEN_KEY = "openstudio.auth.token";
 let authToken: string | null = typeof window === "undefined" ? null : window.localStorage.getItem(TOKEN_KEY);
 let onUnauthorized: (() => void) | null = null;
 
+/** 当前界面语言。由 preferences 推进来(与 setAuthToken 同一个路子)——**client 不反向依赖界面层**。 */
+let apiLocale = "zh";
+
+export function setApiLocale(locale: string): void {
+  apiLocale = locale;
+}
+
 export function setAuthToken(token: string | null): void {
   authToken = token;
   if (typeof window !== "undefined") {
@@ -297,6 +304,10 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   // 各不相同,而"某人还停在旧版"正是管理员要看的:它解释了为什么只有他撞得到那个早修好的 bug。
   const auth: Record<string, string> = {
     "X-Open-Studio-Client": __APP_VERSION__,
+    // 界面语言随每个请求带上:后端也有自己要翻的文案(平台说明、发布选项、引擎目录…),而它是
+    // 多租户、可远程部署的 —— 没有"服务端语言"这回事,只有"这个请求是谁发的、他看哪种语言"。
+    // 放在这一处而不是各调用点各带一次:漏一处就是那一屏突然变回另一种语言。
+    "Accept-Language": apiLocale,
     ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
   };
   const headers =

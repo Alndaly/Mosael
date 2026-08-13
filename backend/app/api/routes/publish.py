@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Response, Request
 from sqlalchemy import select
 
 from app.domain import sharing
@@ -17,6 +17,7 @@ from app.api.schemas import (
 )
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import Asset, PublishAccount, PublishTask
+from app.core.i18n import normalize_locale, t
 from app.domain.publish import (
     PUBLISH_PLATFORMS,
     PublishDomainError,
@@ -31,17 +32,27 @@ router = APIRouter(tags=["publish"])
 
 
 @router.get("/publish/platforms", response_model=list[PublishPlatformOut])
-def platforms() -> list[dict]:
+def platforms(request: Request) -> list[dict]:
+    # 目录里存的是 key,**在出口翻译** —— 领域数据不必知道语言(见 core/i18n)。
+    locale = normalize_locale(request.headers.get("accept-language"))
     return [
         {
             "platform": key,
             "label": meta["label"],
-            "description": meta["description"],
+            "description": t(meta["description"], locale),
             "config": meta["config"],
             "title_max": meta.get("title_max", 300),
             "short_title": meta.get("short_title", False),
             # 平台自己的发布选项:前端照这份**自动**把控件画出来,不为每个平台写一段表单。
-            "options": option_specs(key),
+            "options": [
+                {
+                    **spec,
+                    "label": t(spec["label"], locale),
+                    "description": t(spec["description"], locale) if spec.get("description") else "",
+                    "choices": [{**c, "label": t(c["label"], locale)} for c in spec.get("choices", [])],
+                }
+                for spec in option_specs(key)
+            ],
         }
         for key, meta in PUBLISH_PLATFORMS.items()
     ]

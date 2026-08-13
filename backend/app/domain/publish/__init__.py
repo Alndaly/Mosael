@@ -48,71 +48,71 @@ PLATFORM_OPTIONS: dict[str, list[dict[str, Any]]] = {
     "youtube": [
         {
             "key": "visibility",
-            "label": "可见性",
+            "label": "publishOpt_visibility",
             "type": "enum",
             "default": "private",
             "choices": [
-                {"value": "private", "label": "私享(仅自己)"},
-                {"value": "unlisted", "label": "不公开列出(有链接可看)"},
-                {"value": "public", "label": "公开"},
+                {"value": "private", "label": "publishVis_ytPrivate"},
+                {"value": "unlisted", "label": "publishVis_ytUnlisted"},
+                {"value": "public", "label": "publishVis_public"},
             ],
-            "description": "默认私享。自动发布误发公开收不回,想公开发完再改一次即可。",
+            "description": "publishOptDesc_ytVisibility",
         },
         {
             "key": "made_for_kids",
-            "label": "面向儿童的内容",
+            "label": "publishOpt_madeForKids",
             "type": "bool",
             "default": False,
-            "description": "YouTube 的必答项。选「是」会关掉评论等一批功能,按素材实际情况填。",
+            "description": "publishOptDesc_madeForKids",
         },
     ],
     "xiaohongshu": [
         {
             "key": "original",
-            "label": "原创声明",
+            "label": "publishOpt_original",
             "type": "bool",
             "default": False,
-            "description": "勾了就是向平台声明这条笔记为原创,按实际情况填。",
+            "description": "publishOptDesc_original",
         },
         {
             "key": "visibility",
-            "label": "可见性",
+            "label": "publishOpt_visibility",
             "type": "enum",
             "default": "private",
             "choices": [
-                {"value": "private", "label": "仅自己可见"},
-                {"value": "friends", "label": "仅互关好友可见"},
-                {"value": "public", "label": "公开可见"},
+                {"value": "private", "label": "publishVis_onlyMe"},
+                {"value": "friends", "label": "publishVis_mutuals"},
+                {"value": "public", "label": "publishVis_publicVisible"},
             ],
-            "description": "默认仅自己可见,确认无误后再改公开。",
+            "description": "publishOptDesc_privateFirst",
         },
     ],
     "douyin": [
         {
             "key": "visibility",
-            "label": "谁可以看",
+            "label": "publishOpt_whoCanSee",
             "type": "enum",
             "default": "private",
             "choices": [
-                {"value": "private", "label": "仅自己可见"},
-                {"value": "friends", "label": "好友可见"},
-                {"value": "public", "label": "公开"},
+                {"value": "private", "label": "publishVis_onlyMe"},
+                {"value": "friends", "label": "publishVis_friendsVisible"},
+                {"value": "public", "label": "publishVis_public"},
             ],
-            "description": "默认仅自己可见,确认无误后再改公开。",
+            "description": "publishOptDesc_privateFirst",
         },
     ],
     "tiktok": [
         {
             "key": "visibility",
-            "label": "谁可以看",
+            "label": "publishOpt_whoCanSee",
             "type": "enum",
             "default": "private",
             "choices": [
-                {"value": "private", "label": "仅自己可见"},
-                {"value": "friends", "label": "好友"},
-                {"value": "public", "label": "所有人"},
+                {"value": "private", "label": "publishVis_onlyMe"},
+                {"value": "friends", "label": "publishVis_friends"},
+                {"value": "public", "label": "publishVis_everyone"},
             ],
-            "description": "默认仅自己可见,确认无误后再改公开。",
+            "description": "publishOptDesc_privateFirst",
         },
         # 评论/合拍/拼接这几个开关**先不声明**:还没在真实页面上确认它们的结构。声明了却不生效,
         # 比不声明糟得多 —— 用户设了、界面上认了,发出去却没变,而且什么都不会提示。
@@ -156,28 +156,28 @@ def normalize_options(platform: str, raw: dict[str, Any] | None) -> dict[str, An
 PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
     "douyin": {
         "label": "抖音",
-        "description": "由桌面端发布器用你已登录的抖音创作者账号自动上传;首次使用需在弹出的窗口里登录。",
+        "description": "platformDesc_douyin",
         "config": {},
         "title_max": 30,
         "short_title": False,
     },
     "xiaohongshu": {
         "label": "小红书",
-        "description": "由桌面端发布器用已登录的小红书账号自动上传;首次使用需登录。",
+        "description": "platformDesc_xiaohongshu",
         "config": {},
         "title_max": 20,
         "short_title": False,
     },
     "weixin-channels": {
         "label": "微信视频号",
-        "description": "由桌面端发布器用已登录的视频号助手账号自动上传;支持短标题。",
+        "description": "platformDesc_weixinChannels",
         "config": {},
         "title_max": 16,
         "short_title": True,
     },
     "bilibili": {
         "label": "Bilibili",
-        "description": "由桌面端发布器用已登录的 B 站账号自动上传;首次使用需登录。",
+        "description": "platformDesc_bilibili",
         "config": {},
         "title_max": 80,
         "short_title": False,
@@ -186,7 +186,7 @@ PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
     # 浏览器档案各自的代理)。连不上时表现为登录页打不开,而不是"登录失败"。
     "tiktok": {
         "label": "TikTok",
-        "description": "由桌面端发布器用已登录的 TikTok 账号自动上传;首次使用需登录,境内需要可用的代理。",
+        "description": "platformDesc_tiktok",
         "config": {},
         # TikTok 没有独立标题,发布时那一栏是**文案**(caption),上限 2200。
         "title_max": 2200,
@@ -197,11 +197,7 @@ PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
         # 「通行密钥」这一句不是啰嗦:内嵌视图里 isUserVerifyingPlatformAuthenticatorAvailable()
         # 实测为 false(没有平台认证器),Google 只会给「用另一台设备上的通行密钥」——那条要扫码 + 蓝牙,
         # Electron 走不通,页面会一直转。用户不知道就会干等,所以把出路直接写在他添加账号时看得见的地方。
-        "description": (
-            "由桌面端发布器用已登录的 YouTube 账号上传;首次使用需登录,境内需要可用的代理。"
-            "默认发为私享,确认无误后再自行改公开。"
-            "登录时若卡在通行密钥(passkey)验证,点「试试其他方式」改用密码或短信——内嵌浏览器不支持通行密钥。"
-        ),
+        "description": "platformDesc_youtube",
         "config": {},
         "title_max": 100,
         "short_title": False,

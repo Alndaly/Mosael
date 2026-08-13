@@ -1,6 +1,7 @@
 import React from "react";
 
 import { messages, type MessageKey } from "@/app/messages";
+import { setApiLocale } from "@/api/client";
 
 type Theme = "light" | "dark" | "system";
 type Locale = "zh-CN" | "en-US";
@@ -23,6 +24,8 @@ const PreferencesContext = React.createContext<PreferencesContextValue | null>(n
 export function PreferencesProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = React.useState<Theme>(() => readPreferences().theme);
   const [locale, setLocaleState] = React.useState<Locale>(() => readPreferences().locale);
+  // 语言变了要告诉 api client:后端也有自己要翻的文案,而它靠请求头知道该说哪一种。
+  React.useEffect(() => setApiLocale(locale), [locale]);
 
   React.useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
