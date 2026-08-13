@@ -15,7 +15,7 @@ import os
 import subprocess
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -464,6 +464,8 @@ class _Live:
     speed: float = 0.0
     eta: float | None = None
     message: str = ""
+    #: message 是 key 时的模板参数(见 core/i18n.t)。翻译在出口做,这里只负责把值带出来。
+    params: dict[str, str] = field(default_factory=dict)
 
 
 class _Store:
@@ -519,10 +521,10 @@ def _status_dict(engine: TtsEngine) -> dict[str, Any]:
                 # 顶一个权重的字节数上去,界面就会画出"0 MB / 1.5 GB"这种量错了东西的进度条。
                 # 光在 _Live 里置 0 不够 —— 这个 `or` 会把它填回来,转写那边就是这么被填回来的。
                 "total_bytes": total, "speed_bps": live.speed,
-                "eta_seconds": live.eta, "message": live.message}
+                "eta_seconds": live.eta, "message": live.message, "message_params": live.params}
     if live is not None and live.status == "failed":
         return {**base, "status": "failed", "downloaded_bytes": _measure(engine),
-                "total_bytes": engine.expected_bytes, "message": live.message}
+                "total_bytes": engine.expected_bytes, "message": live.message, "message_params": live.params}
     if _is_installed(engine):
         # 权重齐了不等于跑得起来:pip 包可能压根没装(权重是别的工具下的,或者托管 venv 被删了)。
         # 此前这里一律说「已安装,声音克隆可用」,而合成那边探测解释器失败 —— 页面说可用,
@@ -619,7 +621,7 @@ def start_download(engine_id: str) -> dict[str, Any]:
         return _status_dict(engine)
     if _store.downloading():
         raise RuntimeError("已有引擎正在下载,请等待其完成")
-    _store.set(engine.id, _Live(status="downloading", message="准备下载…"))
+    _store.set(engine.id, _Live(status="downloading", message="dlMsg_preparing"))
     threading.Thread(target=_run_download, args=(engine.id,), daemon=True).start()
     return _status_dict(engine)
 
@@ -655,7 +657,7 @@ def ensure_engine_runtime(engine_id: str) -> None:
             raise RuntimeError(
                 "找不到可用于创建运行环境的 Python。请重装应用,或在设置里手动指定一个 TTS 解释器。"
             )
-        _store.set(engine_id, _Live(status="downloading", message="创建运行环境…"))
+        _store.set(engine_id, _Live(status="downloading", message="dlMsg_creatingRuntime"))
         venv_dir.parent.mkdir(parents=True, exist_ok=True)
         result = run_logged(
             [base, "-m", "venv", str(venv_dir)],
@@ -668,7 +670,7 @@ def ensure_engine_runtime(engine_id: str) -> None:
         # 这一阶段**不报字节**:跑的是 pip(装 torch 等),它一个字节都不会落进权重缓存,
         # 而进度是按那个目录的增长算的。借用权重的 1.5GB 当分母,结果就是永远 0 MB / 1.5 GB。
         # 两件事量纲不同,就别共用一个进度条 —— 只报"在做哪一步"。
-        _Live(status="downloading", message=f"安装 {engine.label} 运行依赖(数 GB,首次较慢)…"),
+        _Live(status="downloading", message="dlMsg_installingDeps", params={"engine": engine.label}),
     )
     # 装到托管 venv 里。--upgrade 让重试能修好装了一半的环境;超时给足——torch 在慢网络下很久。
     # pip 镜像来自设置页(与「模型下载源」分开:那个管 HF 权重,这个管 Python 包)。
@@ -694,7 +696,7 @@ def _ensure_fish_source() -> None:
     if (repo / tts_config.FISH_REPO_MARKER).is_file():
         return
     # 同上:拉的是 git 源码,不是权重 —— 没有分母就别摆一个。
-    _store.set("fish-speech", _Live(status="downloading", message="拉取 Fish Speech 源码…"))
+    _store.set("fish-speech", _Live(status="downloading", message="dlMsg_fetchingFishSource"))
     repo.parent.mkdir(parents=True, exist_ok=True)
     if repo.is_dir() and any(repo.iterdir()):
         # A prior half-clone — wipe so `git clone` into it succeeds.

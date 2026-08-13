@@ -158,7 +158,9 @@ def test_installing_the_runtime_reports_on_the_row_being_installed(monkeypatch) 
 
     live = asr_models._store.get("funasr-zh")
     assert live is not None, "状态没写在那一行上"
-    assert "环境" in live.message
+    # 领域里存 key,出口才翻(见 core/i18n)。断言"说的是哪一句",不断言那句长什么样 ——
+    # 换个说法或加一种语言都不该让这条红。
+    assert live.message == "dlMsg_creatingRuntime"
 
 
 def test_the_runtime_phase_does_not_borrow_the_model_size(monkeypatch) -> None:

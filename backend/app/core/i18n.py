@@ -99,6 +99,17 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Weights are downloaded, but no interpreter has the engine installed — click Download again to add the runtime",
     },
     "modelMsg_runtimeNoWeights": {"zh": "运行环境已就绪,还差模型权重", "en": "The runtime is ready; the model weights are still missing"},
+    # ---- 下载/安装过程中的进度句 ----
+    # 带 {} 的是**模板**:参数在产生它的地方算好、跟着 key 传出来,不把值拼进句子(拼进去就没法翻了)。
+    "dlMsg_preparing": {"zh": "准备下载…", "en": "Preparing the download…"},
+    "dlMsg_preparingShort": {"zh": "准备中…", "en": "Preparing…"},
+    "dlMsg_creatingRuntime": {"zh": "创建运行环境…", "en": "Creating the runtime…"},
+    "dlMsg_installingDeps": {
+        "zh": "安装 {engine} 运行依赖(数 GB,首次较慢)…",
+        "en": "Installing the {engine} runtime dependencies (several GB; the first time is slow)…",
+    },
+    "dlMsg_fetchingFishSource": {"zh": "拉取 Fish Speech 源码…", "en": "Fetching the Fish Speech source…"},
+    "dlMsg_processDied": {"zh": "下载进程异常退出", "en": "The download process exited unexpectedly"},
     # ---- 转写模型目录 ----
     "asrLabel_funasrZh": {"zh": "FunASR 中文套件", "en": "FunASR Chinese bundle"},
     "asrDetail_funasrZh": {
@@ -163,18 +174,45 @@ def normalize_locale(raw: str | None) -> str:
     return DEFAULT_LOCALE
 
 
-def t(key: str, locale: str = DEFAULT_LOCALE) -> str:
-    """翻一个 key。
+def t(key: str, locale: str = DEFAULT_LOCALE, **params: object) -> str:
+    """翻一个 key,可带参数。
 
     **查不到就原样返回 key**,不抛错:一条文案缺翻译不该让整个接口 500。它会以 key 的样子出现在
     界面上——难看,但看得见,而棘轮保证它进不了主干。
+
+    带参数的句子(「安装 {engine} 运行依赖…」)是模板 —— **参数在产生它的地方就算好、跟着 key 一起
+    传出来**,而不是把值直接拼进句子。拼进去就没法翻了:那句话从此只有一种语言。
+    格式化失败(模板少写了一个占位符)同样不抛错,退回未格式化的原句 —— 少个词好过整页 500。
     """
     entry = MESSAGES.get(key)
     if entry is None:
         return key
-    return entry.get(locale) or entry.get(DEFAULT_LOCALE) or key
+    text = entry.get(locale) or entry.get(DEFAULT_LOCALE) or key
+    if not params:
+        return text
+    try:
+        return text.format(**params)
+    except (KeyError, IndexError, ValueError):
+        return text
+
+
+#: 状态字典里放模板参数的那一栏。翻完就摘掉 —— 它是给翻译用的,不该出现在 API 响应里。
+PARAMS_FIELD = "message_params"
 
 
 def translate_fields(payload: dict[str, Any], keys: tuple[str, ...], locale: str) -> dict[str, Any]:
-    """把一个字典里指定的几个字段就地翻掉(返回新字典,不改原数据)。"""
-    return {**payload, **{k: t(payload[k], locale) for k in keys if isinstance(payload.get(k), str)}}
+    """把一个字典里指定的几个字段就地翻掉(返回新字典,不改原数据)。
+
+    `message` 这一栏如果带模板参数(见 PARAMS_FIELD),用它来格式化,然后把参数栏摘掉。
+    """
+    params = payload.get(PARAMS_FIELD) or {}
+    out = {
+        **payload,
+        **{
+            k: t(payload[k], locale, **(params if k == "message" else {}))
+            for k in keys
+            if isinstance(payload.get(k), str)
+        },
+    }
+    out.pop(PARAMS_FIELD, None)
+    return out

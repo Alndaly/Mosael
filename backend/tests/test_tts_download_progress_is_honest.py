@@ -41,7 +41,8 @@ def test_the_runtime_phase_does_not_borrow_the_weights_size(monkeypatch) -> None
 
     live = tts_models._store.get("f5-tts")
     assert live is not None, "这一阶段一个字都没往界面上写"
-    assert "环境" in live.message or "依赖" in live.message
+    # 同上:断言说的是哪一句(建环境 / 装依赖两句都算这一阶段),不断言字面。
+    assert live.message in ("dlMsg_creatingRuntime", "dlMsg_installingDeps")
     assert live.total == 0, f"借用了权重的大小当分母:{live.total}"
 
 

@@ -25,7 +25,7 @@ import subprocess
 import threading
 from functools import lru_cache
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -267,6 +267,8 @@ class _Live:
     speed: float = 0.0  # bytes/sec
     eta: float | None = None  # seconds remaining
     message: str = ""
+    #: message 是 key 时的模板参数(见 core/i18n.t)。翻译在出口做,这里只负责把值带出来。
+    params: dict[str, str] = field(default_factory=dict)
 
 
 class _Store:
@@ -401,11 +403,11 @@ def _status_dict(entry: ModelEntry) -> dict[str, Any]:
             "total_bytes": live.total,
             "speed_bps": live.speed,
             "eta_seconds": live.eta,
-            "message": live.message,
+            "message": live.message, "message_params": live.params,
         }
     if live is not None and live.status == "failed":
         return {**base, "status": "failed", "downloaded_bytes": _measure(entry),
-                "total_bytes": entry.expected_bytes, "message": live.message}
+                "total_bytes": entry.expected_bytes, "message": live.message, "message_params": live.params}
     if installed:
         ready = base["runtime_ready"]
         return {**base, "status": "installed", "downloaded_bytes": _measure(entry),
@@ -499,7 +501,7 @@ def ensure_engine_runtime(engine: str, *, progress_key: str | None = None) -> No
     venv_dir = managed_venv_dir(engine)
     venv_python = managed_venv_python(engine)
     if not venv_python.is_file():
-        _store.set(key, _Live(status="downloading", message="创建运行环境…"))
+        _store.set(key, _Live(status="downloading", message="dlMsg_creatingRuntime"))
         venv_dir.parent.mkdir(parents=True, exist_ok=True)
         # **不能用 sys.executable**:打包版里它是应用自己,`-m venv` 会把后端再启动一遍,
         # 然后把 uvicorn "端口已占用" 的日志当成"创建失败的原因"端给用户。
@@ -512,7 +514,7 @@ def ensure_engine_runtime(engine: str, *, progress_key: str | None = None) -> No
         if created.returncode != 0 or not venv_python.is_file():
             raise RuntimeError(f"创建运行环境失败:{(created.stderr or created.stdout)[-300:]}")
 
-    _store.set(key, _Live(status="downloading", message=f"安装 {engine} 运行依赖(数 GB,首次较慢)…"))
+    _store.set(key, _Live(status="downloading", message="dlMsg_installingDeps", params={"engine": engine}))
     # --upgrade 让重试能修好装了一半的环境;超时给足 —— torch 在慢网络下很久。
     result = run_logged(
         [str(venv_python), "-m", "pip", "install", "--upgrade", *requirements],
@@ -536,7 +538,7 @@ def start_download(model_id: str) -> dict[str, Any]:
     if _store.downloading():
         raise RuntimeError("已有模型正在下载,请等待其完成(共用 CPU/带宽,串行下载)")
     # 分母先留空:接下来可能是"装运行环境"(pip,量纲完全不同),真正开始拉模型时再填上。
-    _store.set(model_id, _Live(status="downloading", message="准备中…"))
+    _store.set(model_id, _Live(status="downloading", message="dlMsg_preparingShort"))
     threading.Thread(target=_run_download, args=(model_id,), daemon=True).start()
     return _status_dict(entry)
 
@@ -617,7 +619,7 @@ def _download_body(model_id: str) -> None:
     if proc.returncode == 0 and _is_installed(entry):
         _store.clear(model_id)  # disk detection now reports "installed"
     else:
-        _store.set(model_id, _Live(status="failed", message=(stderr or "下载进程异常退出")[:400]))
+        _store.set(model_id, _Live(status="failed", message=(stderr[:400] if stderr else "dlMsg_processDied")))
     try:
         output_path.unlink(missing_ok=True)
     except OSError:

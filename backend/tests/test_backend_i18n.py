@@ -149,3 +149,27 @@ def test_status_messages_are_translated_too() -> None:
         keyish = [row["message"] for row in rows if str(row.get("message", "")).startswith("modelMsg_")]
         assert keyish == [], f"{path} 漏了出口翻译:{keyish}"
         assert not any(CJK.search(str(row.get("message") or "")) for row in rows), f"{path} 英文请求里还有中文"
+
+
+def test_download_progress_messages_take_params() -> None:
+    """下载进度句里带插值的那种(「安装 X 运行依赖…」)也能翻。
+
+    它们和别的不同:是**模板**。值必须在产生它的地方算好、跟着 key 一起传出来 —— 直接拼进句子
+    的话那句话从此只有一种语言,而这正是它们此前一直是中文的原因。
+    """
+    from app.audio import tts_models
+
+    tts_models._store.set(
+        "f5-tts",
+        tts_models._Live(status="downloading", message="dlMsg_installingDeps", params={"engine": "F5-TTS"}),
+    )
+    try:
+        client = fresh_client()
+        zh = next(r for r in client.get("/api/tts/models", headers={"Accept-Language": "zh"}).json() if r["id"] == "f5-tts")
+        en = next(r for r in client.get("/api/tts/models", headers={"Accept-Language": "en"}).json() if r["id"] == "f5-tts")
+        assert zh["message"] == "安装 F5-TTS 运行依赖(数 GB,首次较慢)…"
+        assert en["message"] == "Installing the F5-TTS runtime dependencies (several GB; the first time is slow)…"
+        # 参数栏是给翻译用的,翻完就该摘掉,不出现在响应里。
+        assert "message_params" not in zh
+    finally:
+        tts_models._store.clear("f5-tts")
