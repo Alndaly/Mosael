@@ -25,6 +25,7 @@ import {
   type Transcript,
   type Workspace,
 } from "@/api/client";
+import { pollWhileUnsettled } from "@/features/settings/pollWhileUnsettled";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/app/combobox";
@@ -133,12 +134,24 @@ export function VoicePanel({
   // 把它装上再回来。装完了界面还说"没装",比一开始就没说更让人不知道该干嘛。
   const engines = useQuery({ queryKey: ["tts-engines"], queryFn: listTtsEngines, staleTime: 30_000 });
   // 本地引擎的就绪情况(解释器 + 权重)。设置页那个只是**默认**,这里可以按次覆盖。
-  const localEngines = useQuery({ queryKey: ["tts-models"], queryFn: listTtsModels, staleTime: 30_000 });
+  // **探测没完就接着问。** runtime_ready 是后台探出来的(起子进程 import f5-tts / fish-speech),
+  // 第一次拿到的必然是「还没测过」。不轮询的话这一栏会一直停在那个未知上,直到用户碰巧去了设置页
+  // 把这份缓存刷新掉 —— 线上就是这个现象:明明装了却写着「未装好」,进一次设置就好了。
+  // 判据与设置页共用 pollWhileUnsettled,不在这里另写一套。
+  const localEngines = useQuery({
+    queryKey: ["tts-models"],
+    queryFn: listTtsModels,
+    staleTime: 30_000,
+    refetchInterval: (query) => pollWhileUnsettled(query.state.data),
+  });
   const ttsConfig = useQuery({ queryKey: ["tts-config"], queryFn: getTtsConfig, staleTime: 30_000 });
   const [cloneEngineChoice, setCloneEngineChoice] = React.useState("");
   const cloneEngine = cloneEngineChoice || ttsConfig.data?.engine || "f5-tts";
   const cloneModel = (localEngines.data ?? []).find((item) => item.id === cloneEngine);
   // 能出声要两件事都成立:有解释器能 import 它(runtime_ready),权重在盘上(status=installed)。
+  // 探测未完时这里是 false,于是生成按钮暂时不可点 —— **这是有意的**:那一刻确实不知道跑不跑得起来,
+  // 而按下去的代价是一次必然失败的合成。用户看到的不是干瞪眼:上面那一栏同时写着「检测中」,
+  // 而且探测一完轮询就把它翻过来(通常一两秒)。
   const cloneUsable = Boolean(cloneModel && cloneModel.status === "installed" && cloneModel.runtime_ready);
   const activeEngine = engines.data?.find((item) => item.id === engine);
   // Fetched per engine rather than bundled with the engine list: 火山's catalogue depends on
@@ -409,7 +422,14 @@ export function VoicePanel({
                       {(localEngines.data ?? []).map((item) => (
                         <SelectItem key={item.id} value={item.id}>
                           {item.label}
-                          {item.status === "installed" && item.runtime_ready ? "" : ` · ${t("voiceCloneEngineUnready")}`}
+                          {/* **「还没测过」不能显示成「未装好」** —— 那是拿一个未知冒充结论。
+                              后端把这两件事分开给了(runtime_checked / runtime_ready),设置页早就
+                              照着分三态显示,这里当时只看了后者。 */}
+                          {!item.runtime_checked
+                            ? ` · ${t("runtimeChecking")}`
+                            : item.status === "installed" && item.runtime_ready
+                              ? ""
+                              : ` · ${t("voiceCloneEngineUnready")}`}
                         </SelectItem>
                       ))}
                     </SelectContent>

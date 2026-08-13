@@ -39,8 +39,8 @@ const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; });
 
 const localEngines = [
-  { id: "f5-tts", label: "F5-TTS", status: "installed", runtime_ready: true, supports_speed: true },
-  { id: "fish-speech", label: "Fish Speech S2 Pro", status: "installed", runtime_ready: true, supports_speed: false },
+  { id: "f5-tts", label: "F5-TTS", status: "installed", runtime_ready: true, runtime_checked: true, supports_speed: true },
+  { id: "fish-speech", label: "Fish Speech S2 Pro", status: "installed", runtime_ready: true, runtime_checked: true, supports_speed: false },
 ];
 
 function renderPanel() {
