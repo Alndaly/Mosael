@@ -228,6 +228,40 @@ export function TranscriptPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runningTranscribes.data]);
 
+  /**
+   * **这些素材上有没有正在跑的转写 —— 问后端,不问自己。**
+   *
+   * 原先只认 `asrJobId`(这个面板自己发起的那一次):从素材页发起、或者切走再回来,面板就一无所知,
+   * 于是转写正跑着,它却显示「时间线上的素材还没有转写结果」—— 一句在字面上成立、但把用户引向
+   * "是不是没点上"的话。任务的真相在后端。
+   */
+  const transcribeJobs = useQuery({
+    queryKey: ["jobs", sequence.workspace_id, "transcribe"],
+    queryFn: () => api<Job[]>(`/api/jobs?workspace_id=${sequence.workspace_id}&kind=transcribe`),
+    refetchInterval: (query) =>
+      query.state.data?.some((job) => job.status === "queued" || job.status === "running") ? 1500 : false,
+    refetchOnWindowFocus: true,
+  });
+  const runningJob = React.useMemo(() => {
+    const ids = new Set(assetIds);
+    return (transcribeJobs.data ?? []).find(
+      (job) =>
+        (job.status === "queued" || job.status === "running") &&
+        ids.has(String((job.payload as { asset_id?: string } | undefined)?.asset_id ?? "")),
+    );
+  }, [transcribeJobs.data, assetIds]);
+
+  // 后端那边跑完了,这边得**自己**去把结果取回来 —— 否则又变成"跑完了界面不知道",
+  // 用户只能靠切页面或刷新触发一次重取。跟着"有没有在跑"这件事的边沿走:由跑到不跑就重取。
+  const wasRunning = React.useRef(false);
+  React.useEffect(() => {
+    const now = Boolean(runningJob);
+    if (wasRunning.current && !now) {
+      assetIds.forEach((assetId) => void qc.invalidateQueries({ queryKey: ["transcript", assetId] }));
+    }
+    wasRunning.current = now;
+  }, [runningJob, assetIds, qc]);
+
   const asrJob = useQuery({
     queryKey: ["job", asrJobId],
     enabled: Boolean(asrJobId),
@@ -462,16 +496,22 @@ export function TranscriptPanel({
   };
 
   if (projected.length === 0) {
+    // **正在转写时不说「还没有转写结果」。** 那句话字面上成立,却把用户引向"是不是没点上" ——
+    // 而任务正跑着。转写中就说转写中,并把后端那句状态原样带上(下模型、装环境、第几段)。
+    const busy = asrRunning || Boolean(runningJob);
+    const busyMessage = asrJob.data?.message || runningJob?.message || "";
     return (
       <div className="m-auto grid max-w-[260px] content-center justify-items-center gap-1.5 px-3.5 py-5 text-center text-muted-foreground [&_p]:m-0 [&_p]:text-xs [&_p]:leading-[1.55] [&>button]:mt-1">
-        <MessageSquareText size={18} />
-        <p>{t("transcriptEmpty")}</p>
-        <p className="max-w-[220px] text-ui-xs leading-[1.6] text-muted-foreground">{t("transcriptFlowHint")}</p>
+        {busy ? <Loader2 size={18} className="animate-openstudio-spin" /> : <MessageSquareText size={18} />}
+        <p>{busy ? t("transcribing") : t("transcriptEmpty")}</p>
+        {!busy && (
+          <p className="max-w-[220px] text-ui-xs leading-[1.6] text-muted-foreground">{t("transcriptFlowHint")}</p>
+        )}
         {transcribeButton}
         {/* 后端那句状态单独一行:它会长(下模型、装环境、第几段),而且**会变** —— 放在按钮里
             意味着控件的宽度跟着它跳。 */}
-        {asrRunning && asrJob.data?.message && (
-          <p className="m-0 max-w-[240px] text-ui-xs leading-[1.5] text-muted-foreground">{asrJob.data.message}</p>
+        {busy && busyMessage && (
+          <p className="m-0 max-w-[240px] text-ui-xs leading-[1.5] text-muted-foreground">{busyMessage}</p>
         )}
         {asrError && <p className="m-0 max-w-[240px] whitespace-pre-line text-xs text-destructive">{asrError}</p>}
       </div>
