@@ -42,13 +42,35 @@ class DubError(RuntimeError):
     pass
 
 
-def _subtitle_clips(db: Session, sequence_id: str, clip_ids: list[str]) -> list[Clip]:
-    """按时间顺序返回要配音的字幕条。**只认有文本的** —— 空字幕合成出来是一段静音。"""
+def dub_text(text: str, line: str = "all") -> str:
+    """这一条字幕里**真正要念出来的**那部分。
+
+    双语字幕是「原文\n译文」两行(翻译功能勾了「保留原文」就是这个形状)。整段丢给合成,
+    结果是先念一遍日文再念一遍中文 —— 一条 3 秒的字幕配出 12 秒的音,而且没人想听那个。
+    所以「念哪一行」必须是个能选的东西,默认全念(单语字幕就该全念,那是绝大多数情况)。
+    """
+    lines = [part.strip() for part in (text or "").splitlines() if part.strip()]
+    if not lines:
+        return ""
+    if line == "first":
+        return lines[0]
+    if line == "last":
+        return lines[-1]
+    return "\n".join(lines)
+
+
+def _subtitle_clips(db: Session, sequence_id: str, clip_ids: list[str], line: str = "all") -> list[Clip]:
+    """按时间顺序返回要配音的字幕条。
+
+    **只认念得出东西的** —— 空字幕合成出来是一段静音,它不会报错,只会安静地占住时间线上一格。
+    判据用的是 `dub_text` 之后的文本:选了「只念第二行」而某条只有一行时,那条就是没得念,
+    按整段判会把它当成有文本,然后配出一段和别的行对不上的音。
+    """
     clips = [clip for clip in (db.get(Clip, cid) for cid in clip_ids) if clip is not None]
     chosen = [
         clip
         for clip in clips
-        if clip.sequence_id == sequence_id and (clip.text_override or "").strip()
+        if clip.sequence_id == sequence_id and dub_text(clip.text_override or "", line)
     ]
     return sorted(chosen, key=lambda clip: clip.timeline_start)
 
@@ -61,12 +83,13 @@ def start_subtitle_dub(
     match_duration: bool,
     created_by: str | None,
     synthesis: dict,
+    line: str = "all",
 ) -> Job:
     """给这些字幕条排一次配音。`synthesis` 原样转交 voices.start_synthesis(音色/引擎那一套)。"""
     sequence = db.get(Sequence, sequence_id)
     if sequence is None:
         raise DubError("时间线不存在")
-    clips = _subtitle_clips(db, sequence_id, clip_ids)
+    clips = _subtitle_clips(db, sequence_id, clip_ids, line)
     if not clips:
         raise DubError("选中的字幕里没有可配音的文本")
 
@@ -79,6 +102,7 @@ def start_subtitle_dub(
             "sequence_id": sequence_id,
             "clip_ids": [clip.id for clip in clips],
             "match_duration": match_duration,
+            "line": line,
             "synthesis": synthesis,
         },
         message="jobMsg_dubRunning",
@@ -132,6 +156,7 @@ def _run_dub(job_id: str) -> None:
         sequence_id = str(payload.get("sequence_id") or "")
         clip_ids = list(payload.get("clip_ids") or [])
         match_duration = bool(payload.get("match_duration"))
+        line = str(payload.get("line") or "all")
         synthesis = dict(payload.get("synthesis") or {})
         # 现在取出来:commit 之后这些属性会过期,而 job 出了这个 with 就是 detached 的 ——
         # 到下一个 session 里再读 job.created_by 会去刷一个已经关掉的连接。
@@ -153,7 +178,7 @@ def _run_dub(job_id: str) -> None:
                 if clip is None:
                     failed += 1
                     continue
-                text = (clip.text_override or "").strip()
+                text = dub_text(clip.text_override or "", line)
                 slot_seconds = max(0.0, (clip.src_out - clip.src_in) / (clip.speed or 1.0))
                 timeline_start = clip.timeline_start
                 sequence = db.get(Sequence, sequence_id)

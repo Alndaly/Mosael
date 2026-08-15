@@ -253,7 +253,18 @@ def create_job(
     say(job, message, **(message_params or {}))
     db.add(job)
     db.flush()
-    db.add(TaskEvent(job_id=job.id, type="job.queued", payload={"message": message}))
+    # 事件里存 **key + 参数 + 缺省语言渲染的那句**,不是光存 key:界面上「执行记录」直接显示
+    # payload.message,只存 key 的话用户看到的就是 `jobMsg_ttsRunning` 这种东西(真出过)。
+    # 三样都留着,出口才能按请求方的语言重翻,而不翻的消费者也有一句人话可读 —— 与 say 同构。
+    db.add(TaskEvent(
+        job_id=job.id,
+        type="job.queued",
+        payload={
+            "message_key": job.message_key,
+            "message_params": job.message_params,
+            "message": job.message,
+        },
+    ))
     logger.info("job %s [%s] created (workspace=%s)", job.id, kind, workspace_id)
     return job
 

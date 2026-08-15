@@ -258,6 +258,8 @@ export function dubSubtitles(
   body: {
     clip_ids: string[];
     match_duration?: boolean;
+    /** 双语字幕念哪一行:整段 / 只念第一行 / 只念最后一行。 */
+    line?: "all" | "first" | "last";
     engine?: string;
     voice_id?: string | null;
     clone_engine?: string;

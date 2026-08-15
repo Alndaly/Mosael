@@ -1047,6 +1047,9 @@ class SubtitleDubRequest(BaseModel):
     #: 把配音拉伸/压缩到字幕段落的长度。**默认关** —— 变速会改变语速听感,超出 ±20% 就开始
     #: 明显不自然,值不值这个代价由用户按素材决定,而不是替他默认承受。
     match_duration: bool = False
+    #: 双语字幕(「原文\n译文」)念哪一行。整段念的话是先念一遍原文再念一遍译文 ——
+    #: 一条 3 秒的字幕能配出 12 秒的音。默认全念:单语字幕就该全念,那是绝大多数情况。
+    line: str = Field(default="all", pattern="^(all|first|last)$")
     engine: str = Field(default="clone", max_length=40)
     #: 克隆引擎要一个音色行;远端引擎不需要,它自带发音人。
     voice_id: str | None = None

@@ -88,3 +88,31 @@ def test_dubbing_needs_both_edit_and_ai_permission() -> None:
     )
     # 这个用户是工作区所有者,两道权限都有 —— 挡下来的会是"没配供应商",而不是 403。
     assert response.status_code != 403, response.text
+
+
+def test_bilingual_cue_reads_only_the_line_you_picked() -> None:
+    """双语字幕是「原文\\n译文」两行。
+
+    整段丢给合成 = 先念一遍日文再念一遍中文,一条 3 秒的字幕配出十几秒的音,而且没人想听
+    那个。默认全念是对的(单语字幕占绝大多数),但双语时必须能选。
+    """
+    from app.audio.subtitle_dub import dub_text
+
+    cue = "The.\n这。"
+    assert dub_text(cue) == "The.\n这。"
+    assert dub_text(cue, "first") == "The."
+    assert dub_text(cue, "last") == "这。"
+    # 单语字幕选「只念第二行」不该念出空气 —— 只有一行时那一行就是首也是尾。
+    assert dub_text("只有一行", "last") == "只有一行"
+    # 空行不算行:翻译留下的尾随换行不该把「最后一行」变成空串。
+    assert dub_text("The.\n这。\n\n", "last") == "这。"
+
+
+def test_cue_without_the_chosen_line_is_not_dubbed() -> None:
+    """选了「只念第二行」而这条只有一行时,按整段判会把它当成有文本。
+
+    那样配出来的是原文,和其他条念的译文对不上 —— 一条混进去的错音比少一条难发现得多。
+    """
+    from app.audio.subtitle_dub import dub_text
+
+    assert dub_text("   \n  ", "last") == ""

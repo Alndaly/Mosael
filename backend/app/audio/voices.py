@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -98,6 +99,10 @@ def resolve_clone_engine(requested: str = "") -> str:
     return engine
 
 
+#: 长得像「异常那一行」的:`ModuleNotFoundError: ...`、`OSError: ...`、`RuntimeError: ...`。
+_EXCEPTION_LINE = re.compile(r"\b\w*(Error|Exception)\b\s*:")
+
+
 def explain_worker_failure(stderr: str) -> str:
     """把 worker 的 traceback 变成界面上那**一句**话。
 
@@ -110,7 +115,20 @@ def explain_worker_failure(stderr: str) -> str:
     text = strip_ansi(stderr or "").strip()
     if not text:
         return "合成失败,而子进程没有留下原因 —— 请重试一次;若仍然如此请反馈。"
-    last = next((line.strip() for line in reversed(text.splitlines()) if line.strip()), text)
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    # **最后一行不一定是异常。** torchcodec 加载失败时会打一段自己的诊断,以
+    # `[end of libtorchcodec loading traceback].` 收尾 —— 用户看到的就是这句话,而真正的原因
+    # (哪个库没加载上)在它上面几行。从后往前找第一行长得像异常的,找不到才退回最后一行。
+    last = next((line for line in reversed(lines) if _EXCEPTION_LINE.search(line)), lines[-1])
+    if "libtorchcodec" in text or "torchcodec" in last:
+        # 这个错在 macOS 上有确定的成因:torchcodec 的 dylib 按 FFmpeg 大版本编译,而 0.16 起
+        # 它们不带 rpath,dlopen 自己找不到 libavutil。应用会在启动 worker 时把可用的 FFmpeg
+        # 库目录注进去(见 tts_models._ffmpeg_runtime_dir);走到这儿说明没找到能配对的那一份。
+        return (
+            "音频解码库(torchcodec)加载不了:它需要一份版本对得上的 FFmpeg。"
+            "升级引擎依赖通常就能解决(设置 →「声音克隆」→ 下载);"
+            "若仍然如此,装一个 Homebrew 的 ffmpeg 即可,系统那份不会被改动。"
+        )
     if "ModuleNotFoundError" in last or "ImportError" in last:
         # 缺依赖是**能行动**的:光扔一个模块名,用户只能去搜。
         return (
@@ -499,7 +517,9 @@ def _run_synthesis_body(
                 raise VoiceError(_NO_RUNTIME.format(label=engine))
             # env 也只有一份:此前这里手拼 `{**os.environ, "HF_ENDPOINT": …}`,漏了 fish-speech
             # 要的检出目录和权重目录 —— 于是装好了 fish 的机器也照样导不进引擎、照样出占位音。
-            worker_env = tts_models._worker_env()
+            # 把**这次要跑的解释器**交出去:torchcodec 的 FFmpeg 库路径按那个 venv 里装的版本定,
+            # 而不同引擎的 venv 装的 torchcodec 可以不是一个版本。
+            worker_env = tts_models._worker_env(python)
             with tempfile.TemporaryDirectory(prefix="open-studio-tts-") as tmp:
                 out_wav = Path(tmp) / "speech.wav"
                 request = {

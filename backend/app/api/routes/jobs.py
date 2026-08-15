@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import JobOut, TaskEventOut
+from app.core.i18n import normalize_locale, t
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import Job, TaskEvent
 from app.domain.jobs import cancel_job, clear_finished_jobs
@@ -71,7 +72,7 @@ def cancel_job_route(job_id: str, db: DbSession, user: CurrentUser) -> Job:
 
 
 @router.get("/jobs/{job_id}/events", response_model=list[TaskEventOut])
-def list_job_events(job_id: str, db: DbSession, user: CurrentUser, limit: int = 500) -> list[TaskEvent]:
+def list_job_events(request: Request, job_id: str, db: DbSession, user: CurrentUser, limit: int = 500) -> list[dict]:
     """一次运行的事件流(按时间正序)。
 
     上限按**最早**截断,不是最新 30 条。工作流详情靠 workflow.node.started / finished 配对还原
@@ -90,4 +91,21 @@ def list_job_events(job_id: str, db: DbSession, user: CurrentUser, limit: int = 
             .limit(max(1, min(limit, 2000)))
         )
     )
-    return events
+    # 出口才翻:事件里存的是 key + 参数(见 domain/jobs.create_job),这里按请求方的
+    # Accept-Language 渲染。没有 key 的事件(自由文本、外部 worker 写的)原样过。
+    locale = normalize_locale(request.headers.get("accept-language"))
+    out: list[dict] = []
+    for event in events:
+        payload = dict(event.payload or {})
+        key = payload.get("message_key")
+        if isinstance(key, str) and key:
+            params = payload.get("message_params")
+            payload["message"] = t(key, locale, **(params if isinstance(params, dict) else {}))
+        out.append({
+            "id": event.id,
+            "job_id": event.job_id,
+            "type": event.type,
+            "payload": payload,
+            "created_at": event.created_at,
+        })
+    return out

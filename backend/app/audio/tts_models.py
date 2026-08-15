@@ -12,6 +12,7 @@ import logging
 
 import json
 import os
+import sys
 import subprocess
 import threading
 import time
@@ -69,7 +70,11 @@ CATALOG: tuple[TtsEngine, ...] = (
         module="f5_tts",
         # modelscope:走 ModelScope 拉那 1.35 GB 检查点要用它。**列了源就得带上客户端** ——
         # 真机上正是漏了它,拉权重时 ModuleNotFoundError。
-        pip_requirements=("f5-tts", "modelscope"),
+        # torchcodec 显式列出来:它是 torchaudio 的**间接**依赖,不写在这儿的话
+        # `pip install --upgrade f5-tts` 不会带着它升。而它恰恰是最容易过期的一环 ——
+        # 每个版本只支持到当时的 FFmpeg,系统 ffmpeg 一升级就集体加载失败(0.15 支持到
+        # FFmpeg 8,而这台机器上是 9)。不钉版本:要的就是当下最新的那个。
+        pip_requirements=("f5-tts", "modelscope", "torchcodec"),
         # 检查点(1.35 GB)和 vocab 在 ModelScope 上;声码器 vocos(约 55 MB)只在 HF
         # (AI-ModelScope / charactr / iic 三个命名空间都查过,都是 404)。
         # 所以这条路是"大的走快路,小的还走 HF" —— 在 46 KB/s 的网络上,那 1.35 GB
@@ -282,7 +287,60 @@ def _is_installed(engine: TtsEngine) -> bool:
 # ---------------------------------------------------------------------------
 # Interpreter resolution (mirrors ASR)
 # ---------------------------------------------------------------------------
-def _worker_env() -> dict[str, str]:
+#: torchcodec(torchaudio 2.9+ 唯一的解码后端)带的是**按 FFmpeg 大版本编译**的一组动态库:
+#: libtorchcodec_core4…core9,每个硬依赖一个 libavutil 主版本。而 0.16 起这些 dylib **不带
+#: LC_RPATH** —— dlopen 解析 `@rpath/libavutil.NN.dylib` 时无路可查,只能靠外部给库搜索路径。
+#: 于是 ffmpeg 装得好好的、版本也对得上,合成照样报「语音合成失败」。
+#:
+#: coreN 与 libavutil 主版本差一个常数(core9→61、core8→60…core4→56)。**从盘上实际有哪几个
+#: coreN 推**,而不是写死一张表:torchcodec 每升一版就多支持一个 FFmpeg,写死的表会在下一次
+#: 升级后开始说谎。
+_CORE_TO_AVUTIL_OFFSET = 52
+
+
+def _torchcodec_avutil_majors(engine_python: str) -> tuple[int, ...]:
+    """这套 torchcodec 认得的 libavutil 主版本,从高到低。装的时候带了什么就是什么。"""
+    interpreter = Path(engine_python)
+    majors: set[int] = set()
+    for site in interpreter.parent.parent.glob("lib/python*/site-packages/torchcodec"):
+        for lib in site.glob("libtorchcodec_core*.dylib"):
+            digits = "".join(ch for ch in lib.stem.rsplit("core", 1)[-1] if ch.isdigit())
+            if digits:
+                majors.add(int(digits) + _CORE_TO_AVUTIL_OFFSET)
+    return tuple(sorted(majors, reverse=True))
+
+
+def _ffmpeg_lib_roots() -> list[Path]:
+    """Homebrew 的安装前缀(Apple Silicon / Intel)。单独一个函数是为了测试能换掉它。"""
+    return [Path("/opt/homebrew/opt"), Path("/usr/local/opt")]
+
+
+def _ffmpeg_runtime_dir(engine_python: str) -> str:
+    """一个这套 torchcodec 认得的 FFmpeg 库目录,没有就返回空串。
+
+    **系统那份排在最前**:它通常是最新的,而新版 torchcodec 恰好也支持到最新的 FFmpeg ——
+    先看系统的,才不会为了一个能解决的问题去回退到老版本库。系统那份太新时(torchcodec 还没
+    跟上)才退到 Homebrew 的版本化 formula,它们与主 ffmpeg 并存,不影响渲染用的那一份。
+    """
+    if sys.platform != "darwin":
+        return ""
+    majors = _torchcodec_avutil_majors(engine_python)
+    if not majors:
+        return ""
+    roots: list[Path] = []
+    for base in _ffmpeg_lib_roots():
+        roots.append(base / "ffmpeg" / "lib")
+        # formula 名字不等于里面装的版本(这台机器上 `ffmpeg@8` 装的是 libavutil.61),
+        # 所以只拿它们当候选目录,版本一律看盘上的 libavutil。
+        roots.extend(sorted((entry / "lib" for entry in base.glob("ffmpeg@*")), reverse=True))
+    for major in majors:
+        for lib in roots:
+            if (lib / f"libavutil.{major}.dylib").exists():
+                return str(lib)
+    return ""
+
+
+def _worker_env(engine_python: str = "") -> dict[str, str]:
     """Env for the TTS worker subprocess: point HuggingFace at the configured
     mirror so first-use model downloads work (e.g. hf-mirror in CN), and pass the
     resolved Fish Speech source-checkout + weights dirs the worker runs from."""
@@ -300,6 +358,13 @@ def _worker_env() -> dict[str, str]:
         env["OPEN_STUDIO_FISH_MODEL_DIR"] = cfg.resolved_fish_model
     # F5 走 ModelScope 时权重落在这里,worker 据此显式指给 F5TTS。
     env["OPEN_STUDIO_F5_MODEL_DIR"] = str(tts_config.MANAGED_F5_MODEL)
+    # 让 torchcodec 找得到一份它认得的 FFmpeg。排在最前:dlopen 按这个顺序找,而系统里那份
+    # 太新的正是加载不上的那个。找不到就什么都不做 —— 那种机器上错误信息会说清楚要装什么。
+    ffmpeg_lib = _ffmpeg_runtime_dir(engine_python) if engine_python else ""
+    if ffmpeg_lib:
+        for key in ("DYLD_LIBRARY_PATH", "DYLD_FALLBACK_LIBRARY_PATH"):
+            existing = env.get(key, "")
+            env[key] = f"{ffmpeg_lib}:{existing}" if existing else ffmpeg_lib
     return env
 
 
@@ -749,7 +814,7 @@ def _download_body(engine_id: str) -> None:
     ensure_engine_runtime(engine_id)
     output_path = settings.data_dir / f"tts-warmup-{engine_id}.wav"
 
-    env = _worker_env()
+    env = _worker_env(resolve_engine_python(engine_id) or "")
     progress_dir: Path | None = None
     if engine_id == "fish-speech":
         from app.domain import tts_config

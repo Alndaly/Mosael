@@ -84,7 +84,14 @@ export function SubtitlePanel({
           onSetStyle={onSetStyle}
         />
       )}
-      <div className="grid content-start gap-1.5 overflow-y-auto p-1.5">
+      <div
+        className={cn(
+          "grid gap-1.5 overflow-y-auto p-1.5",
+          // 空态整块居中,有内容时才贴顶 —— `content-start` 恒定的话,空状态会钉在顶上,
+          // 下面留一屏空白(会话列表、轨迹视图都是这个处理)。
+          subtitles.length === 0 ? "content-center justify-items-center" : "content-start",
+        )}
+      >
         {subtitles.length === 0 && (
           <div className="empty-inline m-auto grid max-w-60 place-items-center px-3 py-5 text-center text-ui-md leading-[1.6] text-muted-foreground">
             <Type size={16} />
@@ -110,15 +117,19 @@ export function SubtitlePanel({
                 >
                   {formatTimecode(clip.timeline_start)} – {formatTimecode(clipEnd(clip))}
                 </button>
-                <button
-                  type="button"
-                  className="cursor-pointer rounded-sm border-0 bg-transparent p-0.5 text-muted-foreground hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
-                  title={t("deleteClip")}
-                  aria-label={t("deleteClip")}
-                  onClick={() => onDeleteClip(clip.id)}
-                >
-                  <Trash2 size={12} />
-                </button>
+                <span className="flex items-center gap-0.5">
+                  {/* 段落配音:你点的这一条就是范围,不必先去时间线上选中它。 */}
+                  <SubtitleDub sequence={sequence} subtitles={subtitles} only={clip} />
+                  <button
+                    type="button"
+                    className="cursor-pointer rounded-sm border-0 bg-transparent p-0.5 text-muted-foreground hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
+                    title={t("deleteClip")}
+                    aria-label={t("deleteClip")}
+                    onClick={() => onDeleteClip(clip.id)}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </span>
               </div>
               <Textarea
                 key={`sub-${clip.id}-${clip.text_override}`}
@@ -160,7 +171,16 @@ export function SubtitlePanel({
  * 选择器在「配音」标签页里 —— 在这儿再实现一遍就是同一个问题两处答案。这里要的是「用我已经
  * 建好的那个声音,把这几条念出来」。
  */
-function SubtitleDub({ sequence, subtitles }: { sequence: Sequence; subtitles: Clip[] }) {
+function SubtitleDub({
+  sequence,
+  subtitles,
+  only,
+}: {
+  sequence: Sequence;
+  subtitles: Clip[];
+  /** 只配这一条(字幕卡片上的入口)。给了它就不再谈「选中的几条」—— 你点的就是范围。 */
+  only?: Clip;
+}) {
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
   const [voiceId, setVoiceId] = React.useState("");
@@ -173,8 +193,13 @@ function SubtitleDub({ sequence, subtitles }: { sequence: Sequence; subtitles: C
     [subtitles, selectedClipIds],
   );
   const [selectedOnly, setSelectedOnly] = React.useState(true);
+  // 双语字幕是「原文\n译文」两行。整段念 = 先念一遍原文再念一遍译文,一条 3 秒的字幕配出
+  // 12 秒的音。默认全念(单语字幕就该全念),有多行时才把这个选择摆出来。
+  const [line, setLine] = React.useState<"all" | "first" | "last">("all");
   const scoped = selectedOnly && selectedSubtitles.length > 0;
-  const targets = (scoped ? selectedSubtitles : subtitles).filter((clip) => (clip.text_override ?? "").trim());
+  const pool = only ? [only] : scoped ? selectedSubtitles : subtitles;
+  const targets = pool.filter((clip) => (clip.text_override ?? "").trim());
+  const hasBilingual = targets.some((clip) => (clip.text_override ?? "").trim().includes("\n"));
 
   const voices = useQuery({
     queryKey: ["voices", sequence.workspace_id],
@@ -190,6 +215,7 @@ function SubtitleDub({ sequence, subtitles }: { sequence: Sequence; subtitles: C
       dubSubtitles(sequence.id, {
         clip_ids: targets.map((clip) => clip.id),
         match_duration: matchDuration,
+        line,
         engine: "clone",
         voice_id: voiceId,
       }),
@@ -204,9 +230,20 @@ function SubtitleDub({ sequence, subtitles }: { sequence: Sequence; subtitles: C
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button type="button" className={PILL} title={t("subtitleDub")}>
-          <AudioLines size={12} /> {t("subtitleDub")}
-        </button>
+        {only ? (
+          <button
+            type="button"
+            className="cursor-pointer rounded-sm border-0 bg-transparent p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+            title={t("subtitleDubThis")}
+            aria-label={t("subtitleDubThis")}
+          >
+            <AudioLines size={12} />
+          </button>
+        ) : (
+          <button type="button" className={PILL} title={t("subtitleDub")}>
+            <AudioLines size={12} /> {t("subtitleDub")}
+          </button>
+        )}
       </PopoverTrigger>
       <PopoverContent className="flex w-[240px] flex-col gap-2 p-2.5 [&>strong]:text-ui-sm" align="end">
         <strong>{t("subtitleDub")}</strong>
@@ -230,10 +267,26 @@ function SubtitleDub({ sequence, subtitles }: { sequence: Sequence; subtitles: C
             </Select>
           </label>
         )}
-        {selectedSubtitles.length > 0 && (
+        {!only && selectedSubtitles.length > 0 && (
           <label className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
             <span>{t("subtitleTranslateSelectedOnly").replace("{n}", String(selectedSubtitles.length))}</span>
             <Switch checked={selectedOnly} onCheckedChange={setSelectedOnly} />
+          </label>
+        )}
+        {/* 只在真有双语字幕时出现 —— 单语字幕摆一个「念哪一行」只会让人以为自己漏配了什么。 */}
+        {hasBilingual && (
+          <label className="grid gap-1 text-xs text-muted-foreground">
+            <span>{t("subtitleDubLine")}</span>
+            <Select value={line} onValueChange={(next) => setLine(next as "all" | "first" | "last")}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("subtitleDubLineAll")}</SelectItem>
+                <SelectItem value="first">{t("subtitleDubLineFirst")}</SelectItem>
+                <SelectItem value="last">{t("subtitleDubLineLast")}</SelectItem>
+              </SelectContent>
+            </Select>
           </label>
         )}
         <label className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -242,7 +295,7 @@ function SubtitleDub({ sequence, subtitles }: { sequence: Sequence; subtitles: C
         </label>
         <p className="m-0 text-ui-2xs leading-[1.5] text-muted-foreground">{t("subtitleDubTrackNote")}</p>
         <Button size="sm" disabled={targets.length === 0 || !voiceId} loading={run.isPending} onClick={() => run.mutate()}>
-          {t("subtitleDubApply").replace("{n}", String(targets.length))}
+          {only ? t("subtitleDubApplyOne") : t("subtitleDubApply").replace("{n}", String(targets.length))}
         </Button>
       </PopoverContent>
     </Popover>
