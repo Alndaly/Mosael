@@ -238,8 +238,11 @@ export function TranscriptPanel({
   const transcribeJobs = useQuery({
     queryKey: ["jobs", sequence.workspace_id, "transcribe"],
     queryFn: () => api<Job[]>(`/api/jobs?workspace_id=${sequence.workspace_id}&kind=transcribe`),
+    // **一直轮询,不是"有在跑才轮询"。** 后者是个死结:挂载那一刻没有在跑的任务,它就再也不查了,
+    // 而"转写是在面板挂载之后才开始的"恰恰是最常见的情形 —— 从素材页发起,或者切一下标签页
+    // (这个面板在标签里,切走即卸载)。跑起来之后收紧到 1.5 秒,好让进度看着是活的。
     refetchInterval: (query) =>
-      query.state.data?.some((job) => job.status === "queued" || job.status === "running") ? 1500 : false,
+      query.state.data?.some((job) => job.status === "queued" || job.status === "running") ? 1500 : 4000,
     refetchOnWindowFocus: true,
   });
   const runningJob = React.useMemo(() => {
