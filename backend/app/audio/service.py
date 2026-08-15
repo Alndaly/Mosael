@@ -83,29 +83,18 @@ def run_asr(audio_path: Path, python: str, provider: str, language: str = "") ->
         "provider": provider,
         "whisper_model": settings.asr_whisper_model,
         # 空 = 让引擎自己检测(两个引擎都会:WhisperX 自带检测,SenseVoice 收 language="auto")。
+        # 现在 FunASR 只有多语种这一个模型,所以"没说"就是"自动",不再有第二种含义。
         "language": language or "",
     }
     if provider == "funasr":
-        request["funasr_model"] = funasr_model_for(language)
+        request["funasr_model"] = FUNASR_MODEL
     return _run_asr_request(audio_path, python, request)
 
 
-#: FunASR 的两套模型。**语言选的是这个,不是引擎** —— FunASR 本身支持 50+ 语种(SenseVoice),
-#: 中文另有更强的 Paraformer 预设,所以按语言挑,而不是把非中文推给别的引擎。
-FUNASR_ZH_MODEL = "paraformer-zh"
-FUNASR_MULTILINGUAL_MODEL = "iic/SenseVoiceSmall"
-
-
-def funasr_model_for(language: str) -> str:
-    """中文(或没说)用 Paraformer 中文预设,其余用 SenseVoice 多语种。
-
-    没说语言时仍走中文预设:这是这个产品的主场景,而 Paraformer 在中文上确实更强。想让它自动
-    判语种的话,把语言显式设成 auto —— **"没说"和"要自动"是两件事**,不该由我们替用户合并。
-    """
-    lang = (language or "").strip().lower()
-    if not lang or lang.startswith("zh") or lang in ("chinese", "中文"):
-        return FUNASR_ZH_MODEL
-    return FUNASR_MULTILINGUAL_MODEL
+#: FunASR 用的识别模型。**只有一个,而且是多语种的** ——「支持超过 50 种语言」(官方说明)。
+#: 曾经这里按语言在「中文预设 / 多语种」之间挑,那是把"我们当初只装了中文权重"当成了产品结构:
+#: 用户于是要在两个 FunASR 之间选一个,而这个选择本不该存在。
+FUNASR_MODEL = "iic/SenseVoiceSmall"
 
 
 def _run_asr_request(audio_path: Path, python: str, request: dict[str, Any]) -> dict:

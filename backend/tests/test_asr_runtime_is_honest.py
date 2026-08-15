@@ -31,7 +31,7 @@ def test_the_status_says_whether_it_can_actually_run(monkeypatch) -> None:
 
     rows = {row["id"]: row for row in asr_models.list_status()}
 
-    row = rows["funasr-zh"]
+    row = rows["funasr"]
     assert row["status"] == "installed", "文件确实在,这一半不该被改掉"
     assert row["runtime_ready"] is False, "没说「跑不起来」"
 
@@ -44,7 +44,7 @@ def test_a_fully_ready_model_says_so(monkeypatch) -> None:
     asr_models.clear_runtime_probes()
     asr_models.refresh_runtime_status("funasr")
 
-    row = {r["id"]: r for r in asr_models.list_status()}["funasr-zh"]
+    row = {r["id"]: r for r in asr_models.list_status()}["funasr"]
 
     assert row["status"] == "installed" and row["runtime_ready"] is True
 
@@ -132,9 +132,9 @@ def test_installing_the_runtime_works_on_an_already_downloaded_model(monkeypatch
         )(),
     )
 
-    asr_models.start_download("funasr-zh")
+    asr_models.start_download("funasr")
 
-    assert started == ["funasr-zh"], "文件在盘上时,装运行环境这条路被挡住了"
+    assert started == ["funasr"], "文件在盘上时,装运行环境这条路被挡住了"
 
 
 # ---------------- 装环境 ≠ 下模型 ----------------
@@ -143,7 +143,7 @@ def test_installing_the_runtime_works_on_an_already_downloaded_model(monkeypatch
 def test_installing_the_runtime_reports_on_the_row_being_installed(monkeypatch) -> None:
     """状态要写在**正在装的那一行**上。
 
-    此前它按引擎名写(`funasr`),而界面按模型 id 读(`funasr-zh`)—— 于是"创建运行环境…"
+    此前它按引擎名写(`funasr`),而界面按模型 id 读(`funasr`)—— 于是"创建运行环境…"
     "安装依赖…"这两句一次都没显示过,用户看到的是一条不动的进度条配一句"准备下载…"。
     """
     monkeypatch.setattr(asr_models, "runtime_ready", lambda engine: False)
@@ -152,11 +152,11 @@ def test_installing_the_runtime_reports_on_the_row_being_installed(monkeypatch) 
                         lambda *a, **k: type("R", (), {"returncode": 1, "stderr": "x", "stdout": ""})())
 
     try:
-        asr_models.ensure_engine_runtime("funasr", progress_key="funasr-zh")
+        asr_models.ensure_engine_runtime("funasr", progress_key="funasr")
     except RuntimeError:
         pass
 
-    live = asr_models._store.get("funasr-zh")
+    live = asr_models._store.get("funasr")
     assert live is not None, "状态没写在那一行上"
     # 领域里存 key,出口才翻(见 core/i18n)。断言"说的是哪一句",不断言那句长什么样 ——
     # 换个说法或加一种语言都不该让这条红。
@@ -175,11 +175,11 @@ def test_the_runtime_phase_does_not_borrow_the_model_size(monkeypatch) -> None:
                         lambda *a, **k: type("R", (), {"returncode": 1, "stderr": "x", "stdout": ""})())
 
     try:
-        asr_models.ensure_engine_runtime("funasr", progress_key="funasr-zh")
+        asr_models.ensure_engine_runtime("funasr", progress_key="funasr")
     except RuntimeError:
         pass
 
-    live = asr_models._store.get("funasr-zh")
+    live = asr_models._store.get("funasr")
     assert live.total == 0, f"借用了模型的大小:{live.total}"
 
 

@@ -1,14 +1,14 @@
-"""语言决定用**哪个模型**,不决定用哪个引擎。
+"""FunASR 就是多语种的,不存在「中文预设 / 多语种」这种分法。
 
-FunASR 不是中文引擎:它的 SenseVoice 按官方说明「支持超过 50 种语言,识别效果上优于 Whisper」。
-此前目录里只有中文预设(paraformer-zh),于是两件事被混为一谈 ——
+这里踩过两次坑,都是同一个根源 —— 把「我们当初只装了中文权重」当成了 FunASR 的属性:
 
-  ・命名上,FunASR 看起来就是"中文那个";
-  ・逻辑上,非中文素材要么被中文权重转坏(转出来一堆错字、还被标成 language=zh),
-    要么被推给别的引擎。
+  1. 最早目录里只有中文那套(paraformer-zh),于是非中文素材被中文权重转坏,结果还被标成
+     language=zh,下游全按中文处理;
+  2. 第一次修的时候改成「非中文一律走 WhisperX」—— 那是把命名上的绑定搬进了路由逻辑;
+  3. 第二次改成「中文预设 / 多语种」两个目录项 —— 那是把一次打包选择变成了要用户做的选择。
 
-修法不是给 FunASR 降级,而是把"我们装了哪套权重"和"这个引擎能做什么"分开:引擎按可用性选,
-语言在**模型**这一层承担。
+FunASR 的 SenseVoice 按官方说明「支持超过 50 种语言,识别效果上优于 Whisper 模型」,而且自带
+标点与逆文本规整。所以只留一个:**FunASR = 多语种**,语言交给模型自己判。
 """
 
 from __future__ import annotations
@@ -24,30 +24,30 @@ def _both_engines_available(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(service.settings, "asr_provider", "auto")
 
 
-@pytest.mark.parametrize("language", ["", "zh", "zh-CN", "Chinese", "中文"])
-def test_chinese_uses_the_paraformer_preset(language: str) -> None:
-    """中文(或没说)用中文预设 —— Paraformer 在中文上确实更强,这也是这个产品的主场景。"""
-    assert service.funasr_model_for(language) == service.FUNASR_ZH_MODEL
+def test_there_is_exactly_one_funasr_entry() -> None:
+    """一个引擎一个入口。两个 FunASR 会逼用户回答一个他不该被问的问题:该装哪套权重。"""
+    funasr = [entry for entry in asr_models.CATALOG if entry.engine == "funasr"]
+    assert [entry.id for entry in funasr] == ["funasr"]
 
 
-@pytest.mark.parametrize("language", ["en", "en-US", "ja", "ko", "fr", "auto"])
-def test_other_languages_use_funasr_multilingual_model(language: str) -> None:
-    """**非中文不该被赶去别的引擎** —— FunASR 自己就有 50+ 语种的模型,换模型即可。"""
-    assert service.funasr_model_for(language) == service.FUNASR_MULTILINGUAL_MODEL
+def test_the_funasr_model_is_multilingual() -> None:
+    assert service.FUNASR_MODEL == "iic/SenseVoiceSmall"
 
 
-@pytest.mark.parametrize("language", ["", "zh", "en", "ja"])
-def test_language_never_changes_the_engine(language: str) -> None:
-    """引擎只看装没装。曾经这里写过「非中文一律走 WhisperX」—— 那是把"我们只装了中文预设"
-    错记成了"FunASR 只能中文",等于把一次打包选择固化成了引擎的属性。"""
+@pytest.mark.parametrize("language", ["", "zh", "en", "ja", "auto"])
+def test_language_changes_neither_engine_nor_model(language: str) -> None:
+    """**语言不再分流**:识别模型本来就支持 50+ 语种,把语言传给它即可,不必换模型、更不必换引擎。"""
     assert service.resolve_asr_runtime(language)[1] == "funasr"
+    assert service.FUNASR_MODEL == "iic/SenseVoiceSmall"
 
 
-def test_the_multilingual_model_is_in_the_catalog() -> None:
-    """能选它,就得能装它 —— 否则第一次用非中文素材时它会在转写中途现下 937MB。"""
-    entry = next(e for e in asr_models.CATALOG if e.id == "funasr-sensevoice")
-    assert entry.engine == "funasr"
-    assert entry.request["funasr_model"] == service.FUNASR_MULTILINGUAL_MODEL
+def test_speaker_diarisation_survives_the_switch() -> None:
+    """换识别模型不能把说话人分离弄丢 —— 它是独立阶段(按 VAD 切段后聚类),而转写面板的
+    说话人标签、按人筛选全靠它。cam++ 的权重必须还在要下载的清单里。"""
+    entry = next(e for e in asr_models.CATALOG if e.id == "funasr")
+    names = [sub.cache_dir for sub in entry.sub_models]
+    assert any("campplus" in name for name in names), names
+    assert any("vad" in name for name in names), names
 
 
 def test_an_explicit_setting_still_wins(monkeypatch: pytest.MonkeyPatch) -> None:

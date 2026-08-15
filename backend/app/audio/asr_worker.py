@@ -79,7 +79,7 @@ def run_funasr(request: dict[str, Any]) -> dict[str, Any]:
     except Exception:  # noqa: BLE001 — odd torch build → cpu
         pass
 
-    model_name = request.get("funasr_model", "paraformer-zh")
+    model_name = request.get("funasr_model", "iic/SenseVoiceSmall")
     # SenseVoice 是**一体模型**:标点、逆文本规整都在它内部,再挂 punc_model / spk_model 会重复处理
     # (而且它不产出说话人分离所需的中间结果)。中文预设那套则是 识别+VAD+标点+说话人分离 四件套。
     sensevoice = "sensevoice" in str(model_name).lower()
@@ -90,11 +90,13 @@ def run_funasr(request: dict[str, Any]) -> dict[str, Any]:
         device=device,
         disable_update=True,
     )
+    # SenseVoice 自带标点与逆文本规整,再挂 punc_model 是重复处理;而**说话人分离要留着** ——
+    # 它是独立阶段(按 VAD 切段后聚类),与识别模型无关,转写面板的说话人标签全靠它。
     if not sensevoice:
         kwargs["punc_model"] = request.get("funasr_punc_model", "ct-punc")
-        spk_model = request.get("funasr_spk_model", "cam++")
-        if spk_model:
-            kwargs["spk_model"] = spk_model
+    spk_model = request.get("funasr_spk_model", "cam++")
+    if spk_model:
+        kwargs["spk_model"] = spk_model
     model = AutoModel(**kwargs)
     generate_kwargs: dict[str, Any] = dict(input=request["audio_path"], batch_size_s=300, sentence_timestamp=True)
     if sensevoice:

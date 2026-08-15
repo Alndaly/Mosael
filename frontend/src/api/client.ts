@@ -897,8 +897,11 @@ export function deleteAsset(assetId: string): Promise<unknown> {
   return api(`/api/assets/${assetId}`, { method: "DELETE" });
 }
 
-export function transcribeAsset(assetId: string): Promise<Job> {
-  return api<Job>(`/api/assets/${assetId}/transcribe`, { method: "POST" });
+/** `language` 空 = 按中文预设转(主场景);"auto" = 让引擎自己判语种;具体语言 = 按它选模型。
+ *  **"没说"和"要自动"是两件事**,后端据此挑 FunASR 的中文预设还是多语种模型。 */
+export function transcribeAsset(assetId: string, language = ""): Promise<Job> {
+  const query = language ? `?language=${encodeURIComponent(language)}` : "";
+  return api<Job>(`/api/assets/${assetId}/transcribe${query}`, { method: "POST" });
 }
 
 export function fetchJob(jobId: string): Promise<Job> {

@@ -165,13 +165,17 @@ export function TranscriptPanel({
   const [queue, setQueue] = React.useState<string[]>([]);
   const [queueTotal, setQueueTotal] = React.useState(0);
   const [failures, setFailures] = React.useState<string[]>([]);
+  // 转写语言。**默认空 = 让引擎自己判** —— FunASR 的 SenseVoice 支持 50+ 语种,WhisperX 也自带
+  // 检测,所以不必先问用户。留着这个入参是给"我知道它是什么语言、别猜"的场合用的(接口收
+  // ?language=),界面上暂不摆控件:多数时候它只会变成一个要人回答的多余问题。
+  const [asrLanguage] = React.useState("");
   const hasTranscript = React.useCallback(
     (assetId: string) => (segmentsByAsset.get(assetId)?.length ?? 0) > 0,
     [segmentsByAsset],
   );
 
   const startAsr = useMutation({
-    mutationFn: (assetId: string) => transcribeAsset(assetId),
+    mutationFn: (assetId: string) => transcribeAsset(assetId, asrLanguage),
     onSuccess: (job) => {
       setAsrError(null);
       setAsrJobId(job.id);

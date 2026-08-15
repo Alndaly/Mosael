@@ -148,33 +148,21 @@ def migrate_shared_venv() -> None:
 # under <modelscope_cache>/**/iic/<dir>). Sizes are approximate — used only for
 # the percentage denominator.
 _FUNASR_BUNDLE = ModelEntry(
-    id="funasr-zh",
+    id="funasr",
     engine="funasr",
-    label="asrLabel_funasrZh",
-    detail="asrDetail_funasrZh",
+    label="asrLabel_funasr",
+    detail="asrDetail_funasr",
     sub_models=(
-        SubModel("speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch", 1_000_000_000),
+        # SenseVoice:按官方说明「超过 40 万小时数据训练,支持超过 50 种语言,识别效果上优于 Whisper」,
+        # 标点与逆文本规整都在模型内部。体积从 ModelScope 文件接口**实测**(model.pt 936.3 MB)——
+        # 它是下载进度的分母,猜错了进度条就是错的。
+        SubModel("SenseVoiceSmall", 937_000_000),
+        # VAD 断句与说话人分离是**独立阶段**,与识别模型无关:它们按音频切段/聚类,换识别模型照样用。
+        # 说话人分离不能丢 —— 转写面板的说话人标签、按人筛选都靠它。
         SubModel("speech_fsmn_vad_zh-cn-16k-common-pytorch", 5_000_000),
-        SubModel("punc_ct-transformer_cn-en-common-vocab471067-large", 1_150_000_000),
         SubModel("speech_campplus_sv_zh-cn_16k-common", 30_000_000),
     ),
     request={"provider": "funasr", "action": "warmup"},
-)
-
-
-#: FunASR 的多语种模型。**FunASR 不是中文引擎** —— 官方说明:SenseVoice「采用超过 40 万小时数据
-#: 训练,支持超过 50 种语言,识别效果上优于 Whisper 模型」。此前目录里只有中文预设,于是它看起来
-#: 像个中文专用引擎,而非中文素材要么被中文权重转坏、要么被推给别的引擎。
-#:
-#: 体积是从 ModelScope 的文件接口实测来的(model.pt 936.3 MB),不是估的 —— 这个数字是下载进度的
-#: 分母,猜错了进度条就是错的。
-_FUNASR_MULTILINGUAL = ModelEntry(
-    id="funasr-sensevoice",
-    engine="funasr",
-    label="asrLabel_funasrSenseVoice",
-    detail="asrDetail_funasrSenseVoice",
-    sub_models=(SubModel("SenseVoiceSmall", 937_000_000),),
-    request={"provider": "funasr", "action": "warmup", "funasr_model": "iic/SenseVoiceSmall"},
 )
 
 
@@ -191,7 +179,6 @@ def _whisperx_entry(size: str, label: str, detail: str, expected: int) -> ModelE
 
 CATALOG: tuple[ModelEntry, ...] = (
     _FUNASR_BUNDLE,
-    _FUNASR_MULTILINGUAL,
     _whisperx_entry("small", "WhisperX Small", "asrDetail_whisperSmall", 500_000_000),
     _whisperx_entry("medium", "WhisperX Medium", "asrDetail_whisperMedium", 1_530_000_000),
     _whisperx_entry("large-v3", "WhisperX Large v3", "asrDetail_whisperLarge", 3_100_000_000),
