@@ -121,8 +121,9 @@ def test_engine_catalogs_speak_the_caller_language() -> None:
     en = client.get("/api/asr/models", headers={"Accept-Language": "en-US"}).json()
     small_zh = next(row for row in zh if row["id"] == "whisperx-small")
     small_en = next(row for row in en if row["id"] == "whisperx-small")
-    assert small_zh["detail"] == "多语种,速度与精度均衡(默认)"
-    assert small_en["detail"] == "Multilingual; balanced speed and accuracy (default)"
+    # 断言的是"这一条按语言给了不同的字",不是那句话的字面 —— 文案会改,而这条守的是翻译接上了没有。
+    assert small_zh["detail"] != small_en["detail"]
+    assert CJK.search(small_zh["detail"]) and not CJK.search(small_en["detail"])
 
     engines_en = client.get("/api/tts/engines", headers={"Accept-Language": "en"}).json()
     clone = next(row for row in engines_en if row["id"] == "clone")

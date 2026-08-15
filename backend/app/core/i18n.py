@@ -145,12 +145,17 @@ MESSAGES: dict[str, dict[str, str]] = {
     "dlMsg_fetchingFishSource": {"zh": "拉取 Fish Speech 源码…", "en": "Fetching the Fish Speech source…"},
     "dlMsg_processDied": {"zh": "下载进程异常退出", "en": "The download process exited unexpectedly"},
     # ---- 转写模型目录 ----
-    "asrLabel_funasrZh": {"zh": "FunASR 中文套件", "en": "FunASR Chinese bundle"},
-    "asrDetail_funasrZh": {
-        "zh": "Paraformer 识别 + VAD 断句 + 标点 + 说话人分离,中文转写默认引擎",
-        "en": "Paraformer ASR + VAD segmentation + punctuation + speaker diarisation — the default engine for Chinese.",
+    "asrLabel_funasrZh": {"zh": "FunASR · 中文预设", "en": "FunASR · Chinese preset"},
+    "asrLabel_funasrSenseVoice": {"zh": "FunASR · 多语种(SenseVoice)", "en": "FunASR · multilingual (SenseVoice)"},
+    "asrDetail_funasrSenseVoice": {
+        "zh": "支持 50+ 种语言,官方称识别效果优于 Whisper;另带声音事件检测。非中文素材用它。",
+        "en": "50+ languages, reported by its authors to beat Whisper on accuracy; also detects audio events. Use it for non-Chinese material.",
     },
-    "asrDetail_whisperSmall": {"zh": "多语种,速度与精度均衡(默认)", "en": "Multilingual; balanced speed and accuracy (default)"},
+    "asrDetail_funasrZh": {
+        "zh": "Paraformer 识别 + VAD 断句 + 标点 + 说话人分离,中文效果最好。**这是 FunASR 的中文预设,不是它的全部能力** —— 多语种见上面的 SenseVoice。",
+        "en": "Paraformer ASR + VAD + punctuation + speaker diarisation — the strongest option for Chinese. **This is FunASR's Chinese preset, not the limit of what FunASR does** — see the SenseVoice entry for 50+ languages.",
+    },
+    "asrDetail_whisperSmall": {"zh": "多语种,自动检测语言;速度与精度均衡", "en": "Multilingual with automatic language detection; balanced speed and accuracy"},
     "asrDetail_whisperMedium": {"zh": "多语种,精度更高、更慢", "en": "Multilingual; more accurate, slower"},
     "asrDetail_whisperLarge": {"zh": "多语种最高精度,占用最大", "en": "Multilingual; highest accuracy, largest footprint"},
     # ---- 声音克隆引擎目录 ----

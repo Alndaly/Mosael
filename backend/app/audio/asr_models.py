@@ -162,6 +162,22 @@ _FUNASR_BUNDLE = ModelEntry(
 )
 
 
+#: FunASR 的多语种模型。**FunASR 不是中文引擎** —— 官方说明:SenseVoice「采用超过 40 万小时数据
+#: 训练,支持超过 50 种语言,识别效果上优于 Whisper 模型」。此前目录里只有中文预设,于是它看起来
+#: 像个中文专用引擎,而非中文素材要么被中文权重转坏、要么被推给别的引擎。
+#:
+#: 体积是从 ModelScope 的文件接口实测来的(model.pt 936.3 MB),不是估的 —— 这个数字是下载进度的
+#: 分母,猜错了进度条就是错的。
+_FUNASR_MULTILINGUAL = ModelEntry(
+    id="funasr-sensevoice",
+    engine="funasr",
+    label="asrLabel_funasrSenseVoice",
+    detail="asrDetail_funasrSenseVoice",
+    sub_models=(SubModel("SenseVoiceSmall", 937_000_000),),
+    request={"provider": "funasr", "action": "warmup", "funasr_model": "iic/SenseVoiceSmall"},
+)
+
+
 def _whisperx_entry(size: str, label: str, detail: str, expected: int) -> ModelEntry:
     return ModelEntry(
         id=f"whisperx-{size}",
@@ -175,6 +191,7 @@ def _whisperx_entry(size: str, label: str, detail: str, expected: int) -> ModelE
 
 CATALOG: tuple[ModelEntry, ...] = (
     _FUNASR_BUNDLE,
+    _FUNASR_MULTILINGUAL,
     _whisperx_entry("small", "WhisperX Small", "asrDetail_whisperSmall", 500_000_000),
     _whisperx_entry("medium", "WhisperX Medium", "asrDetail_whisperMedium", 1_530_000_000),
     _whisperx_entry("large-v3", "WhisperX Large v3", "asrDetail_whisperLarge", 3_100_000_000),

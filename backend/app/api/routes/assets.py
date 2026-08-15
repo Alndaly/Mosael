@@ -220,11 +220,16 @@ def put_transcript(asset_id: str, body: TranscriptAttachRequest, db: DbSession, 
 
 
 @router.post("/assets/{asset_id}/transcribe", response_model=JobOut)
-def transcribe_asset(asset_id: str, db: DbSession, user: CurrentUser):
+def transcribe_asset(asset_id: str, db: DbSession, user: CurrentUser, language: str = ""):
+    """`language` 空 = 自动:WhisperX 自己检测,中文素材走 FunASR 的中文预设。
+
+    说了具体语言就按它选引擎 —— FunASR 装的那套是中文权重,拿它转英文只会出一堆错字
+    (见 service.resolve_asr_runtime)。
+    """
     asset = require_asset(db, user, asset_id)
     ensure_workspace_perm(db, user, asset.workspace_id, "ai")
     try:
-        return start_transcription(db, asset_id, created_by=user.id)
+        return start_transcription(db, asset_id, created_by=user.id, language=language)
     except AsrError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

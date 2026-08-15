@@ -79,19 +79,29 @@ def run_funasr(request: dict[str, Any]) -> dict[str, Any]:
     except Exception:  # noqa: BLE001 — odd torch build → cpu
         pass
 
+    model_name = request.get("funasr_model", "paraformer-zh")
+    # SenseVoice 是**一体模型**:标点、逆文本规整都在它内部,再挂 punc_model / spk_model 会重复处理
+    # (而且它不产出说话人分离所需的中间结果)。中文预设那套则是 识别+VAD+标点+说话人分离 四件套。
+    sensevoice = "sensevoice" in str(model_name).lower()
     kwargs: dict[str, Any] = dict(
-        model=request.get("funasr_model", "paraformer-zh"),
+        model=model_name,
         vad_model=request.get("funasr_vad_model", "fsmn-vad"),
-        punc_model=request.get("funasr_punc_model", "ct-punc"),
         hub=request.get("funasr_hub", "ms"),
         device=device,
         disable_update=True,
     )
-    spk_model = request.get("funasr_spk_model", "cam++")
-    if spk_model:
-        kwargs["spk_model"] = spk_model
+    if not sensevoice:
+        kwargs["punc_model"] = request.get("funasr_punc_model", "ct-punc")
+        spk_model = request.get("funasr_spk_model", "cam++")
+        if spk_model:
+            kwargs["spk_model"] = spk_model
     model = AutoModel(**kwargs)
-    result = model.generate(input=request["audio_path"], batch_size_s=300, sentence_timestamp=True)
+    generate_kwargs: dict[str, Any] = dict(input=request["audio_path"], batch_size_s=300, sentence_timestamp=True)
+    if sensevoice:
+        # SenseVoice 按语言取值:给了就按它转,没给用 "auto" 让它自己判(它支持 50+ 语种)。
+        generate_kwargs["language"] = request.get("language") or "auto"
+        generate_kwargs["use_itn"] = True
+    result = model.generate(**generate_kwargs)
     item = result[0] if result else {}
     sentences = item.get("sentence_info") or []
     if not sentences:
@@ -103,7 +113,11 @@ def run_funasr(request: dict[str, Any]) -> dict[str, Any]:
             "start": spans[0][0] if spans else None,
             "end": spans[-1][1] if spans else None,
         }]
-    return {"language": "zh", "segments": funasr_sentences_to_segments(sentences)}
+    # **不硬写 "zh"**:此前无论请求什么语言,这里都把结果标成中文 —— 于是英文素材转出来的字幕
+    # 带着 language=zh,下游(字幕对齐、翻译、导出)都按中文处理。我们装的预设确实是中文的
+    # (paraformer-zh),但"用的是中文模型"和"这段音频是中文"是两件事;请求里说了什么就报什么,
+    # 没说才回落到预设的语言。
+    return {"language": request.get("language") or "zh", "segments": funasr_sentences_to_segments(sentences)}
 
 
 def whisperx_segments(aligned: dict[str, Any]) -> list[dict[str, Any]]:

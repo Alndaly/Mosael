@@ -2620,6 +2620,7 @@
           "assets"
         ],
         "summary": "Transcribe Asset",
+        "description": "`language` 空 = 自动:WhisperX 自己检测,中文素材走 FunASR 的中文预设。\n\n说了具体语言就按它选引擎 —— FunASR 装的那套是中文权重,拿它转英文只会出一堆错字\n(见 service.resolve_asr_runtime)。",
         "operationId": "transcribe_asset_api_assets__asset_id__transcribe_post",
         "parameters": [
           {
@@ -2629,6 +2630,16 @@
             "schema": {
               "type": "string",
               "title": "Asset Id"
+            }
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Language"
             }
           }
         ],

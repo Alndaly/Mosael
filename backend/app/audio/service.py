@@ -8,6 +8,7 @@ import json
 import logging
 import subprocess
 import tempfile
+from typing import Any
 import threading
 from functools import lru_cache
 from pathlib import Path
@@ -34,11 +35,20 @@ class AsrError(RuntimeError):
     pass
 
 
-def resolve_asr_runtime() -> tuple[str, str]:
+def resolve_asr_runtime(language: str = "") -> tuple[str, str]:  # noqa: ARG001 — 语言不选引擎,见下
     """(解释器路径, 引擎)。探测与缓存都在 asr_models —— **这件事只有一份实现**。
 
     此前这里自己又探测了一遍,和 asr_models 那份各带一份缓存。两份实现意味着两个答案:托管 venv
     加进了那一份、漏了这一份,于是模型页显示「已安装」而一点转写就报"没有运行环境"。
+
+    ## 语言不决定**引擎**,只决定**模型**
+
+    FunASR 不是中文引擎 —— 它的 SenseVoice 系列按官方说明支持 50+ 种语言。是我们此前只装了一套
+    中文预设(paraformer-zh),于是"英文素材转出一堆错字"看起来像 FunASR 的毛病,其实是拿错了模型。
+
+    所以这里只管"哪个引擎装好了",语言留给 run_asr 去挑模型(见那里的 funasr_model)。
+    曾经在这里写过「非中文一律走 WhisperX」—— 那是把"我们装的是中文预设"错记成了"FunASR 只能中文",
+    等于把一个包装选择固化成了引擎的属性。
     """
     from app.audio.asr_models import resolve_engine_python
 
@@ -67,12 +77,38 @@ def _extract_audio(source: Path, target: Path) -> None:
         raise AsrError(f"音频提取失败: {result.stderr[-400:]}")
 
 
-def run_asr(audio_path: Path, python: str, provider: str) -> dict:
-    request = {
+def run_asr(audio_path: Path, python: str, provider: str, language: str = "") -> dict:
+    request: dict[str, Any] = {
         "audio_path": str(audio_path),
         "provider": provider,
         "whisper_model": settings.asr_whisper_model,
+        # 空 = 让引擎自己检测(两个引擎都会:WhisperX 自带检测,SenseVoice 收 language="auto")。
+        "language": language or "",
     }
+    if provider == "funasr":
+        request["funasr_model"] = funasr_model_for(language)
+    return _run_asr_request(audio_path, python, request)
+
+
+#: FunASR 的两套模型。**语言选的是这个,不是引擎** —— FunASR 本身支持 50+ 语种(SenseVoice),
+#: 中文另有更强的 Paraformer 预设,所以按语言挑,而不是把非中文推给别的引擎。
+FUNASR_ZH_MODEL = "paraformer-zh"
+FUNASR_MULTILINGUAL_MODEL = "iic/SenseVoiceSmall"
+
+
+def funasr_model_for(language: str) -> str:
+    """中文(或没说)用 Paraformer 中文预设,其余用 SenseVoice 多语种。
+
+    没说语言时仍走中文预设:这是这个产品的主场景,而 Paraformer 在中文上确实更强。想让它自动
+    判语种的话,把语言显式设成 auto —— **"没说"和"要自动"是两件事**,不该由我们替用户合并。
+    """
+    lang = (language or "").strip().lower()
+    if not lang or lang.startswith("zh") or lang in ("chinese", "中文"):
+        return FUNASR_ZH_MODEL
+    return FUNASR_MULTILINGUAL_MODEL
+
+
+def _run_asr_request(audio_path: Path, python: str, request: dict[str, Any]) -> dict:
     # Results travel via a file: funasr and hub downloads write progress bars
     # straight to stdout, which would corrupt an inline JSON pipe.
     output_path = audio_path.with_name("asr-result.json")
@@ -140,7 +176,7 @@ def _watch_model_download(job_id: str, provider: str) -> threading.Event:
     return stop
 
 
-def start_transcription(db: Session, asset_id: str, *, created_by: str | None) -> Job:
+def start_transcription(db: Session, asset_id: str, *, created_by: str | None, language: str = "") -> Job:
     asset = db.get(Asset, asset_id)
     if asset is None:
         raise AsrError("Asset not found")
@@ -161,7 +197,7 @@ def start_transcription(db: Session, asset_id: str, *, created_by: str | None) -
         db,
         workspace_id=asset.workspace_id,
         kind="transcribe",
-        payload={"asset_id": asset_id},
+        payload={"asset_id": asset_id, "language": (language or "").strip()},
         created_by=created_by,
         message="jobMsg_asrQueued",
     )
@@ -181,7 +217,8 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
         if job is None:
             return
         try:
-            python, provider = resolve_asr_runtime()
+            language = str((job.payload or {}).get("language") or "")
+            python, provider = resolve_asr_runtime(language)
             job.status = "running"
             say(job, "jobMsg_asrRunning", provider=provider)
             job.progress = 0.1
@@ -200,7 +237,7 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
                 # library — surface that as job progress instead of a frozen 25%.
                 stop = _watch_model_download(job_id, provider)
                 try:
-                    output = run_asr(wav, python, provider)
+                    output = run_asr(wav, python, provider, language)
                 finally:
                     stop.set()
 

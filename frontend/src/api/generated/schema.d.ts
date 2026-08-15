@@ -954,7 +954,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Transcribe Asset */
+        /**
+         * Transcribe Asset
+         * @description `language` 空 = 自动:WhisperX 自己检测,中文素材走 FunASR 的中文预设。
+         *
+         *     说了具体语言就按它选引擎 —— FunASR 装的那套是中文权重,拿它转英文只会出一堆错字
+         *     (见 service.resolve_asr_runtime)。
+         */
         post: operations["transcribe_asset_api_assets__asset_id__transcribe_post"];
         delete?: never;
         options?: never;
@@ -10233,7 +10239,9 @@ export interface operations {
     };
     transcribe_asset_api_assets__asset_id__transcribe_post: {
         parameters: {
-            query?: never;
+            query?: {
+                language?: string;
+            };
             header?: never;
             path: {
                 asset_id: string;
