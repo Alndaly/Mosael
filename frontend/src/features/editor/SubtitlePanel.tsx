@@ -4,6 +4,7 @@ import { AudioLines, ChevronDown, ChevronRight, Languages, Loader2, Plus, Sparkl
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
@@ -13,8 +14,19 @@ import { readSubtitleStyle, SUBTITLE_FONTS, TRANSLATE_LANGS, type SubtitleStyle 
 import { uploadedFontStack } from "@/features/editor/FontFaces";
 import type { Font } from "@/api/client";
 
-import { api, dubSubtitles, listVoices, translateTexts, type Clip, type Job, type Sequence } from "@/api/client";
+import {
+  api,
+  dubSubtitles,
+  listTtsEngines,
+  listTtsVoices,
+  listVoices,
+  translateTexts,
+  type Clip,
+  type Job,
+  type Sequence,
+} from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { dubEngineChoices } from "@/features/editor/dubEngines";
 import { clipEnd, formatTimecode } from "@/domain/timeline/geometry";
 import { PILL } from "@/features/editor/pill";
 import { useEditorStore } from "@/stores/editorStore";
@@ -183,7 +195,11 @@ function SubtitleDub({
 }) {
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
+  // 引擎:克隆(用自己建的音色)或某个远端引擎(自带发音人)。此前这里写死了克隆 ——
+  // 于是没建过音色的人一个字都配不出来,而他明明配好了火山。
+  const [engine, setEngine] = React.useState("clone");
   const [voiceId, setVoiceId] = React.useState("");
+  const [engineVoice, setEngineVoice] = React.useState("");
   // 匹配段落长度默认**关**:变速会改语速听感,超出 ±20% 就明显不自然。值不值这个代价由用户
   // 按素材决定,而不是替他默认承受。开着时用的是片段自己的 speed,无损、可撤销、事后能微调。
   const [matchDuration, setMatchDuration] = React.useState(false);
@@ -204,11 +220,30 @@ function SubtitleDub({
   const voices = useQuery({
     queryKey: ["voices", sequence.workspace_id],
     queryFn: () => listVoices(sequence.workspace_id),
-    enabled: open,
+    enabled: open && engine === "clone",
   });
+  const engines = useQuery({ queryKey: ["tts-engines"], queryFn: listTtsEngines, staleTime: 30_000, enabled: open });
+  // 发音人按引擎现拉:火山的目录跟着账号走,不是引擎列表的一部分。
+  const engineVoices = useQuery({
+    queryKey: ["tts-voices", engine],
+    queryFn: () => listTtsVoices(engine),
+    enabled: open && engine !== "clone",
+  });
+  const voiceChoices = engineVoices.data ?? [];
+  const activeEngine = engines.data?.find((item) => item.id === engine);
+  const engineChoices = dubEngineChoices(engines.data);
   React.useEffect(() => {
-    if (!voiceId && voices.data?.length) setVoiceId(voices.data[0].id);
-  }, [voices.data, voiceId]);
+    if (engine === "clone" && !voiceId && voices.data?.length) setVoiceId(voices.data[0].id);
+  }, [voices.data, voiceId, engine]);
+  React.useEffect(() => {
+    setEngineVoice("");
+  }, [engine]);
+  const chosenVoice = voiceChoices.find((item) => item.value === (engineVoice || voiceChoices[0]?.value));
+  // 能不能配:克隆要有音色;远端引擎要么有目录、要么它自己说需要手填 id 而用户填了。
+  const ready =
+    engine === "clone"
+      ? Boolean(voiceId)
+      : voiceChoices.length > 0 || Boolean(engineVoice) || !activeEngine?.needs_voice_id;
 
   // 配音是个后台任务:发起时时间线上什么都不会变,音频要等它跑完才落轨。**得有人盯着它** ——
   // 不盯的话用户看到的是「点了没反应」,过一会儿也不会自己出现,除非手动切走再切回来。
@@ -240,8 +275,15 @@ function SubtitleDub({
         clip_ids: targets.map((clip) => clip.id),
         match_duration: matchDuration,
         line,
-        engine: "clone",
-        voice_id: voiceId,
+        engine,
+        ...(engine === "clone"
+          ? { voice_id: voiceId }
+          : {
+              // 下拉在没选时**显示**第一个,那就提交同一个 —— 否则引擎会安静地用它自己的默认音。
+              engine_voice: engineVoice || voiceChoices[0]?.value || "",
+              // 只有目录知道的资源族;不带的话火山回一个 55000000。
+              engine_voice_resource: chosenVoice?.resource_id ?? "",
+            }),
       }),
     onSuccess: (queued) => {
       setOpen(false);
@@ -272,26 +314,70 @@ function SubtitleDub({
       </PopoverTrigger>
       <PopoverContent className="flex w-[240px] flex-col gap-2 p-2.5 [&>strong]:text-ui-sm" align="end">
         <strong>{t("subtitleDub")}</strong>
-        {voices.isSuccess && (voices.data ?? []).length === 0 ? (
-          // 没有音色时不摆一个空下拉让人点 —— 直说下一步在哪。
-          <p className="m-0 text-xs leading-[1.6] text-muted-foreground">{t("subtitleDubNoVoice")}</p>
-        ) : (
+        <label className="grid gap-1 text-xs text-muted-foreground">
+          <span>{t("subtitleDubEngine")}</span>
+          <Select value={engine} onValueChange={setEngine}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {engineChoices.map((item) => (
+                <SelectItem key={item.id} value={item.id}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+        {engine === "clone" ? (
+          voices.isSuccess && (voices.data ?? []).length === 0 ? (
+            // 没有音色时不摆一个空下拉让人点 —— 直说下一步在哪。
+            <p className="m-0 text-xs leading-[1.6] text-muted-foreground">{t("subtitleDubNoVoice")}</p>
+          ) : (
+            <label className="grid gap-1 text-xs text-muted-foreground">
+              <span>{t("subtitleDubVoice")}</span>
+              <Select value={voiceId} onValueChange={setVoiceId}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(voices.data ?? []).map((voice) => (
+                    <SelectItem key={voice.id} value={voice.id}>
+                      {voice.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+          )
+        ) : voiceChoices.length > 0 ? (
           <label className="grid gap-1 text-xs text-muted-foreground">
             <span>{t("subtitleDubVoice")}</span>
-            <Select value={voiceId} onValueChange={setVoiceId}>
+            <Select value={engineVoice || voiceChoices[0].value} onValueChange={setEngineVoice}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {(voices.data ?? []).map((voice) => (
-                  <SelectItem key={voice.id} value={voice.id}>
-                    {voice.name}
+                {voiceChoices.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </label>
-        )}
+        ) : activeEngine?.needs_voice_id ? (
+          // 目录拉不到(没配密钥、或这个引擎本来就要手填)时给输入框,而不是一个空下拉。
+          <label className="grid gap-1 text-xs text-muted-foreground">
+            <span>{t("voiceEngineVoiceId")}</span>
+            <Input
+              className="h-7"
+              value={engineVoice}
+              placeholder={t("voiceEngineVoiceIdHint")}
+              onChange={(event) => setEngineVoice(event.target.value)}
+            />
+          </label>
+        ) : null}
         {!only && selectedSubtitles.length > 0 && (
           <label className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
             <span>{t("subtitleTranslateSelectedOnly").replace("{n}", String(selectedSubtitles.length))}</span>
@@ -319,7 +405,7 @@ function SubtitleDub({
           <Switch checked={matchDuration} onCheckedChange={setMatchDuration} />
         </label>
         <p className="m-0 text-ui-2xs leading-[1.5] text-muted-foreground">{t("subtitleDubTrackNote")}</p>
-        <Button size="sm" disabled={targets.length === 0 || !voiceId} loading={run.isPending} onClick={() => run.mutate()}>
+        <Button size="sm" disabled={targets.length === 0 || !ready} loading={run.isPending} onClick={() => run.mutate()}>
           {only ? t("subtitleDubApplyOne") : t("subtitleDubApply").replace("{n}", String(targets.length))}
         </Button>
       </PopoverContent>

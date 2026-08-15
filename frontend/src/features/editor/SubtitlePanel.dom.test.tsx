@@ -53,14 +53,20 @@ function sequenceWith(texts: string[]) {
   } as never;
 }
 
-/** 音色列表:配音弹层打开时才请求。 */
-function serveVoices() {
-  globalThis.fetch = vi.fn(async () =>
-    new Response(JSON.stringify([{ id: "v1", name: "我的音色" }]), {
+/** 弹层打开后会问三样:克隆音色、引擎目录、某个引擎的发音人。 */
+function serveVoices(engines: Array<Record<string, unknown>> = [], engineVoices: Array<Record<string, unknown>> = []) {
+  globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    const body = url.includes("/tts/engines")
+      ? [{ id: "clone", label: "本地音色克隆", needs_key: false, needs_voice_id: false, ready: true }, ...engines]
+      : url.includes("/tts/voices")
+        ? engineVoices
+        : [{ id: "v1", name: "我的音色" }];
+    return new Response(JSON.stringify(body), {
       status: 200,
       headers: { "content-type": "application/json" },
-    }),
-  ) as never;
+    });
+  }) as never;
 }
 
 function renderPanel(texts: string[]) {
@@ -117,6 +123,13 @@ describe("字幕配音入口", () => {
     // 弹层确实开了(音色那一栏在),只是不该有「念哪一行」。
     await waitFor(() => expect(screen.getByText("subtitleDubVoice")).toBeTruthy());
     expect(screen.queryByText("subtitleDubLine")).toBeNull();
+  });
+
+  it("引擎可选,而不是写死克隆 —— 没建过音色的人也配得出来", async () => {
+    serveVoices([{ id: "volcano", label: "火山引擎", needs_key: true, needs_voice_id: false, ready: true }]);
+    renderPanel(["只有一行"]);
+    await userEvent.click(screen.getAllByLabelText("subtitleDubThis")[0]);
+    await waitFor(() => expect(screen.getByText("subtitleDubEngine")).toBeTruthy());
   });
 
   it("缩放到段落长度默认关 —— 变速会改语速听感,值不值由用户按素材定", async () => {
