@@ -286,6 +286,26 @@ export function Monitor({
     }
     return [...seen.values()];
   }, [activeClip, activeOverlayClips, assetById]);
+  // **代理换了就重新判一次。**「本机解不动」说的是"这一份代理文件这台机器解不了",不是这个素材
+  // 永远解不了 —— 重新生成一份通常就好了(界面上那个按钮正是干这个的)。可这个标记原先只进不出:
+  // 代理换好了,画面仍旧黑着,只有刷新整页才活过来。而刷新之所以有效,恰恰是因为它把这个 Set 清空了。
+  //
+  // 判据取代理的**指纹**(素材 id + proxy_key + proxy_status):它一变就说明盘上换了一份文件,
+  // 上一次的失败结论随之作废。不用定时重试 —— 那会在真解不动时每隔几秒黑一下。
+  const proxyFingerprint = React.useMemo(
+    () =>
+      activeVisualAssets
+        .map((asset) => {
+          const info = (asset.media_info ?? {}) as { proxy_key?: string; proxy_status?: string };
+          return `${asset.id}:${info.proxy_key ?? ""}:${info.proxy_status ?? ""}`;
+        })
+        .join("|"),
+    [activeVisualAssets],
+  );
+  React.useEffect(() => {
+    setUndecodable((current) => (current.size ? new Set() : current));
+  }, [proxyFingerprint]);
+
   // 画不出来的原因(全部就绪则为 null)。环境不支持 WebCodecs 时压过一切:那是整个预览引擎缺失,
   // 报某个素材"转码中"会把用户引到错误的方向。
   const previewBlock = React.useMemo(
@@ -397,6 +417,9 @@ export function Monitor({
             className="absolute inset-0 z-[1] h-full w-full bg-black object-contain"
             style={fitStyle}
           />
+          {/* 画不出来时它必须在**最上层**:变换手柄是 z-[4]、文字片段的拖动层是 z-[3] 且排在更后面,
+              两者都会压住这块提示 —— 线上的表现是「重新生成代理」那个按钮点不到,指针落在拖动层上。
+              抬 z 只是止血,真正的修法在下面:画面都出不来时,那些操作层根本不该存在。 */}
           {previewBlock && (
             <PreviewUnavailable state={previewBlock.state} assets={previewBlock.assets} onRetried={onRefreshAssets} />
           )}
@@ -431,7 +454,10 @@ export function Monitor({
             </div>
           )}
           {/* 花字:每条按自身 transform 定位、随关键帧动画,DOM 叠加在视频之上(与导出的 ASS 一致)。 */}
-          {activeTextClips.map((clip) => {
+          {/* 同上:画不出来时,文字片段的拖动/编辑层也不该在 —— 它是 z-[3] 且排在提示之后,
+              正是压住那个按钮的另一层。 */}
+          {!previewBlock &&
+            activeTextClips.map((clip) => {
             // 拖外框(TransformOverlay)时 draft 实时驱动,花字与手柄同步动;否则按关键帧采样。
             const tf = draftFor(clip.id) ?? sampleTransform(readTransform(clip.transform), clipProgress(clip, playhead));
             const elStyle = textStyleCss(readTextStyle((clip.effects as { text_style?: unknown } | undefined)?.text_style), tf, sequence.width);
@@ -494,7 +520,10 @@ export function Monitor({
               </div>
             );
           })}
-          {selectedActive && onSetTransform && (
+          {/* **画不出来时不给操作层。** 你没法去拖一个看不见的东西,而它们只会挡住那块提示上的
+              按钮(线上就是「重新生成代理」点不到)。这比单纯抬 z 更对:不是遮挡顺序的问题,
+              是这些控件此刻本就不该在。 */}
+          {selectedActive && onSetTransform && !previewBlock && (
             <div className="pointer-events-none absolute inset-0 z-[4]" onClick={(event) => event.stopPropagation()}>
               <TransformOverlay
                 frameRef={stageRef}

@@ -54,7 +54,9 @@ export function PreviewUnavailable({
   }[state];
 
   return (
-    <div className="absolute inset-0 z-[3] grid place-items-center bg-black/85 px-6">
+    // z 必须高过监视器里所有可交互的层(变换手柄 z-4、文字编辑 z-5):画不出来时,这块提示
+    // 和它上面的按钮是此刻**唯一**该能点的东西。
+    <div className="absolute inset-0 z-[6] grid place-items-center bg-black/85 px-6">
       <div className="grid max-w-[380px] justify-items-center gap-2 text-center">
         {state === "transcoding" ? (
           <Loader2 className="animate-spin text-[rgb(255_255_255/0.55)]" size={20} />
