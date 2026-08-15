@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import pytest
+from sqlalchemy import select
 
 from app.audio.subtitle_dub import DubError, _speed_for, start_subtitle_dub
 from app.core.db import SessionLocal
@@ -116,3 +117,136 @@ def test_cue_without_the_chosen_line_is_not_dubbed() -> None:
     from app.audio.subtitle_dub import dub_text
 
     assert dub_text("   \n  ", "last") == ""
+
+
+def test_dub_track_is_reused_not_stacked() -> None:
+    """再配一次要回到**同一条**配音轨。
+
+    每配一次新建一条的话,改几句台词重配几段,时间线上就摞起一叠只有一两段音频的轨。
+    """
+    from app.audio.subtitle_dub import _dub_track
+    from app.core.db import SessionLocal
+    from app.db.models import Track
+
+    client = fresh_client()
+    sequence_id, _ = _sequence_with_subtitle(client)
+    with SessionLocal() as db:
+        first = _dub_track(db, sequence_id, None)
+        second = _dub_track(db, sequence_id, None)
+        assert first == second
+        assert db.get(Track, first).role == "dub"
+        audio = [t for t in db.scalars(select(Track).where(Track.sequence_id == sequence_id)) if t.kind == "audio"]
+        assert len([t for t in audio if t.role == "dub"]) == 1
+
+
+def test_a_plain_audio_track_is_not_mistaken_for_the_dub_track() -> None:
+    """用户自己加的音轨(BGM、旁白素材)不该被配音占用 —— 认的是 role,不是「最后一条音频轨」。"""
+    from app.audio.subtitle_dub import _dub_track
+    from app.core.db import SessionLocal
+    from app.db.models import Track
+
+    client = fresh_client()
+    sequence_id, _ = _sequence_with_subtitle(client)
+    added = client.post(f"/api/sequences/{sequence_id}/tracks", json={"kind": "audio"})
+    assert added.status_code == 200, added.text
+    with SessionLocal() as db:
+        dub = _dub_track(db, sequence_id, None)
+        plain = [
+            t
+            for t in db.scalars(select(Track).where(Track.sequence_id == sequence_id))
+            if t.kind == "audio" and t.id != dub
+        ]
+        assert plain, "用户那条音轨还在"
+        assert all(t.role == "" for t in plain)
+
+
+def test_renaming_the_dub_track_does_not_lose_it() -> None:
+    """把配音轨改名成「旁白」之后,再配一次仍然回到它 —— 名字是给人看的,认的是 role。"""
+    from app.audio.subtitle_dub import _dub_track
+    from app.core.db import SessionLocal
+    from app.db.models import Track
+
+    client = fresh_client()
+    sequence_id, _ = _sequence_with_subtitle(client)
+    with SessionLocal() as db:
+        first = _dub_track(db, sequence_id, None)
+        db.get(Track, first).name = "旁白"
+        db.commit()
+        assert _dub_track(db, sequence_id, None) == first
+
+
+def _audio_track_with(db, sequence_id: str, sources: list[str]) -> str:
+    """造一条音频轨,轨上每段各引一个指定 source 的素材。空列表 = 空轨。"""
+    from app.audio.subtitle_dub import _dub_track
+    from app.db.models import Asset, Clip, Track
+
+    track_id = _dub_track(db, sequence_id, None)
+    db.get(Track, track_id).role = ""  # 造「上线前」的样子:没有标记
+    for index, source in enumerate(sources):
+        asset = Asset(
+            workspace_id=db.get(Track, track_id).sequence.workspace_id,
+            kind="audio",
+            source=source,
+            name=f"a{index}",
+        )
+        db.add(asset)
+        db.flush()
+        db.add(Clip(
+            workspace_id=asset.workspace_id,
+            sequence_id=sequence_id,
+            track_id=track_id,
+            asset_id=asset.id,
+            timeline_start=index * 5.0,
+            src_in=0.0,
+            src_out=2.0,
+        ))
+    db.commit()
+    return track_id
+
+
+def test_backfill_marks_tracks_that_hold_only_tts_output() -> None:
+    """上线前配过的音要认出来 —— 判据是轨上放的**是什么**,不是它叫什么、排第几。"""
+    from app.core.db import SessionLocal
+    from app.db.migrations import backfill_dub_tracks
+    from app.db.models import Track
+
+    client = fresh_client()
+    sequence_id, _ = _sequence_with_subtitle(client)
+    with SessionLocal() as db:
+        track_id = _audio_track_with(db, sequence_id, ["tts", "tts"])
+    backfill_dub_tracks()
+    with SessionLocal() as db:
+        assert db.get(Track, track_id).role == "dub"
+
+
+def test_backfill_leaves_ordinary_audio_tracks_alone() -> None:
+    """BGM / 录音 / 原声轨不是配音轨 —— 哪怕它上面也有一段 TTS 产物。
+
+    占用用户自己的音轨比多建一条轨糟得多:下一次配音会往里插段落,而他放的东西还在里面。
+    """
+    from app.core.db import SessionLocal
+    from app.db.migrations import backfill_dub_tracks
+    from app.db.models import Track
+
+    client = fresh_client()
+    sequence_id, _ = _sequence_with_subtitle(client)
+    with SessionLocal() as db:
+        mixed = _audio_track_with(db, sequence_id, ["tts", "imported"])
+    backfill_dub_tracks()
+    with SessionLocal() as db:
+        assert db.get(Track, mixed).role == ""
+
+
+def test_backfill_does_not_promote_an_empty_track() -> None:
+    """空轨恰恰是失败的配音留下的残骸,把它认成配音轨等于把垃圾扶正。"""
+    from app.core.db import SessionLocal
+    from app.db.migrations import backfill_dub_tracks
+    from app.db.models import Track
+
+    client = fresh_client()
+    sequence_id, _ = _sequence_with_subtitle(client)
+    with SessionLocal() as db:
+        empty = _audio_track_with(db, sequence_id, [])
+    backfill_dub_tracks()
+    with SessionLocal() as db:
+        assert db.get(Track, empty).role == ""

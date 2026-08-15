@@ -372,6 +372,9 @@ class Track(Base):
     muted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     solo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     duck: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)  # 有其它音频时压低本轨
+    #: 这条轨**是干什么的**,空 = 一条普通轨。目前只有 "dub"(字幕配音落地的地方)。
+    #: 不靠名字认:名字是给人看的、可以随便改,而"再配一次要放回同一条轨"必须认得准。
+    role: Mapped[str] = mapped_column(String(24), nullable=False, default="")
 
     sequence: Mapped[Sequence] = relationship(back_populates="tracks")
     clips: Mapped[list["Clip"]] = relationship(back_populates="track", cascade="all, delete-orphan", order_by="Clip.timeline_start")

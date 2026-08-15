@@ -129,6 +129,47 @@ def _migrate_publish_task_options() -> None:
         conn.execute(text("ALTER TABLE publish_tasks ADD COLUMN options JSON NOT NULL DEFAULT '{}'"))
 
 
+def backfill_dub_tracks() -> None:
+    """把**已经存在的**配音轨标出来。
+
+    这个功能上线时已经有人配过音了;不认它们的话,下一次配音会在旁边再建一条,而用户看到的是
+    「说好的复用呢」。
+
+    判据是事实,不是猜:一条音频轨上的片段**全部**来自 TTS 产物(asset.source='tts'),且至少
+    有一段。BGM / 录音 / 原声轨不会满足;**空轨也不会** —— 空轨恰恰是失败的配音留下的残骸,
+    把它认成配音轨等于把垃圾扶正。
+    """
+    with engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE tracks SET role = 'dub'
+            WHERE kind = 'audio'
+              AND role = ''
+              AND EXISTS (SELECT 1 FROM clips WHERE clips.track_id = tracks.id)
+              AND NOT EXISTS (
+                    SELECT 1 FROM clips
+                    LEFT JOIN assets ON assets.id = clips.asset_id
+                    WHERE clips.track_id = tracks.id
+                      AND (assets.source IS NULL OR assets.source <> 'tts')
+              )
+        """))
+
+
+def _migrate_track_role() -> None:
+    """给轨道补 `role` 列。
+
+    配音要能回到**同一条**配音轨上,而不是每配一次多一条空轨。认哪条轨不能靠名字 —— 名字是
+    给人看的,用户随时会改成「旁白」「解说」。
+    """
+    inspector = inspect(engine)
+    if "tracks" not in set(inspector.get_table_names()):
+        return
+    if "role" in {c["name"] for c in inspector.get_columns("tracks")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE tracks ADD COLUMN role VARCHAR(24) NOT NULL DEFAULT ''"))
+    backfill_dub_tracks()
+
+
 def _migrate_prepared_publish_tasks() -> None:
     """把老的 `prepared` 发布任务迁成 `cancelled`。
 
@@ -1009,6 +1050,7 @@ def init_db() -> None:
     _migrate_publish_task_options()
     _migrate_job_message_i18n()
     _migrate_prepared_publish_tasks()
+    _migrate_track_role()
     _migrate_legacy_tts_sources()
     _migrate_shared_venvs()
 

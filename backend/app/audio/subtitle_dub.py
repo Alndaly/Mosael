@@ -182,12 +182,6 @@ def _run_dub(job_id: str) -> None:
                 slot_seconds = max(0.0, (clip.src_out - clip.src_in) / (clip.speed or 1.0))
                 timeline_start = clip.timeline_start
                 sequence = db.get(Sequence, sequence_id)
-                # 配音轨在**第一条真的要落地时**才建:先建再合成的话,一次全军覆没的配音会留下
-                # 一条空轨要用户自己去删。
-                if not track_id:
-                    add_track(db, sequence_id, AddTrack(kind="audio", actor_id=created_by))
-                    db.commit()
-                    track_id = _latest_audio_track(db, sequence_id)
                 child = start_synthesis(
                     db,
                     text=text,
@@ -212,6 +206,14 @@ def _run_dub(job_id: str) -> None:
                 if audio_seconds <= 0:
                     failed += 1
                     continue
+                # 落哪条轨:**已有配音轨就用它**,没有才新建。每配一次多一条轨的话,改几句台词
+                # 重配几段,时间线上就摞起一叠只有一两段音频的轨。
+                #
+                # 而且只在**第一条音频真的要落地的这一刻**才建。建在合成之前的话,一次全军覆没的
+                # 配音会留下一条空轨 —— 空轨看起来和「配音没生成」一模一样,用户先怀疑的是功能坏了,
+                # 不是那次失败(这条 bug 就是这么被报上来的)。
+                if not track_id:
+                    track_id = _dub_track(db, sequence_id, created_by)
                 sequence = insert_clip(
                     db,
                     sequence_id,
@@ -268,13 +270,28 @@ def _run_dub(job_id: str) -> None:
                 db.commit()
 
 
-def _latest_audio_track(db: Session, sequence_id: str) -> str:
-    tracks = [
+def _dub_track(db: Session, sequence_id: str, created_by: str | None) -> str:
+    """这条时间线的配音轨,没有就建一条。
+
+    认的是 `Track.role == "dub"`,**不是名字** —— 名字是给人看的,用户随时会把它改成「旁白」
+    「解说」;按名字认的话,改完名再配一次就又多一条轨。
+    """
+    tracks = list(db.scalars(select(Track).where(Track.sequence_id == sequence_id)))
+    existing = [track for track in tracks if track.kind == "audio" and track.role == "dub"]
+    if existing:
+        # 有多条(历史数据、或用户自己复制过)时用最上面那条,至少是稳定的选择。
+        return min(existing, key=lambda track: track.position).id
+    add_track(db, sequence_id, AddTrack(kind="audio", actor_id=created_by))
+    db.flush()
+    fresh = [
         track
         for track in db.scalars(select(Track).where(Track.sequence_id == sequence_id))
         if track.kind == "audio"
     ]
-    return max(tracks, key=lambda track: track.position).id if tracks else ""
+    track = max(fresh, key=lambda track: track.position)
+    track.role = "dub"
+    db.commit()
+    return track.id
 
 
 def _clip_at(db: Session, track_id: str, timeline_start: float) -> Clip | None:

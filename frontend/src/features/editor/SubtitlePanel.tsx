@@ -1,5 +1,5 @@
 import React from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AudioLines, ChevronDown, ChevronRight, Languages, Loader2, Plus, Sparkles, Trash2, Type, Upload } from "lucide-react";
 import { toast } from "sonner";
 
@@ -13,7 +13,7 @@ import { readSubtitleStyle, SUBTITLE_FONTS, TRANSLATE_LANGS, type SubtitleStyle 
 import { uploadedFontStack } from "@/features/editor/FontFaces";
 import type { Font } from "@/api/client";
 
-import { dubSubtitles, listVoices, translateTexts, type Clip, type Sequence } from "@/api/client";
+import { api, dubSubtitles, listVoices, translateTexts, type Clip, type Job, type Sequence } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { clipEnd, formatTimecode } from "@/domain/timeline/geometry";
 import { PILL } from "@/features/editor/pill";
@@ -210,6 +210,30 @@ function SubtitleDub({
     if (!voiceId && voices.data?.length) setVoiceId(voices.data[0].id);
   }, [voices.data, voiceId]);
 
+  // 配音是个后台任务:发起时时间线上什么都不会变,音频要等它跑完才落轨。**得有人盯着它** ——
+  // 不盯的话用户看到的是「点了没反应」,过一会儿也不会自己出现,除非手动切走再切回来。
+  // 这条 bug 就是这么被报上来的:配音其实成功了,只是那条新轨没进到界面里。
+  const qc = useQueryClient();
+  const [jobId, setJobId] = React.useState<string | null>(null);
+  const job = useQuery({
+    queryKey: ["job", jobId],
+    enabled: Boolean(jobId),
+    queryFn: () => api<Job>(`/api/jobs/${jobId}`),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "succeeded" || status === "failed" ? false : 1000;
+    },
+  });
+  const jobStatus = job.data?.status ?? null;
+  React.useEffect(() => {
+    if (jobStatus !== "succeeded" && jobStatus !== "failed") return;
+    // 成功要刷时间线(新轨在那儿),失败也要刷 —— 部分成功时已经落地的那几段同样得看得见。
+    void qc.invalidateQueries({ queryKey: ["sequences"] });
+    if (jobStatus === "succeeded") toast.success(job.data?.message ?? t("subtitleDubDone"));
+    else toast.error(job.data?.message ?? t("subtitleDubFailed"), { description: job.data?.error ?? undefined });
+    setJobId(null);
+  }, [jobStatus, job.data, qc, t]);
+
   const run = useMutation({
     mutationFn: () =>
       dubSubtitles(sequence.id, {
@@ -219,9 +243,10 @@ function SubtitleDub({
         engine: "clone",
         voice_id: voiceId,
       }),
-    onSuccess: () => {
+    onSuccess: (queued) => {
       setOpen(false);
-      // 配音是个会跑一阵的批任务,进度在任务中心 —— 这里只确认"排上了",不假装已经配好。
+      setJobId(queued.id);
+      // 只确认"排上了",不假装已经配好 —— 真正配好由上面那个 effect 在任务终态时说。
       toast.success(t("subtitleDubQueued").replace("{n}", String(targets.length)));
     },
     onError: (error: Error) => toast.error(t("subtitleDubFailed"), { description: error.message }),

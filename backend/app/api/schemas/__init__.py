@@ -327,6 +327,8 @@ class TrackOut(OrmModel):
     muted: bool
     solo: bool = False
     duck: bool = False
+    #: 这条轨的用途;空 = 普通轨。界面据此认出「配音轨」并把再一次的配音放回同一条。
+    role: str = ""
     clips: list[ClipOut] = Field(default_factory=list)
 
 
