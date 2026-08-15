@@ -15,7 +15,7 @@ import type { AgentUsageEvent } from "@/features/ai-studio/messageUsage";
 import { summarizeMessageUsage } from "@/features/ai-studio/messageUsage";
 
 /** 轨迹里的一步。kind 决定行首那个标签,也决定 Inspector 里能看什么。 */
-export type TraceEventKind = "user" | "text" | "thinking" | "tool" | "compaction" | "error";
+export type TraceEventKind = "system" | "context" | "user" | "text" | "thinking" | "tool" | "compaction" | "error";
 
 export type TraceEvent = {
   /** 稳定 key:消息 id + 轮内序号。流式那一轮用 "stream" 作消息 id。 */
@@ -43,6 +43,10 @@ export type TraceTurn = {
   /** 这一轮的提问。可能没有(会话以助手消息开头的历史数据)。 */
   prompt: string;
   events: TraceEvent[];
+  /** 这一轮涉及的消息 id —— 用量事件按 agent_message_id 归集,靠它把 token 摊回到轮上。 */
+  messageIds: string[];
+  /** 这一轮的 token 明细。没有用量事件就是 null(未知),不是全零。 */
+  usage: { input: number | null; output: number | null; cacheRead: number | null } | null;
   /** 整轮墙钟耗时,来自助手消息的 usage.duration_seconds。 */
   durationSeconds: number | null;
   /** 首 token 延迟(秒),来自 usage.first_token_seconds。老会话没有这个键 —— 那是未知,不是 0。 */
@@ -120,6 +124,10 @@ type TraceMessage = {
 
 type MessagePayload = {
   timeline?: AgentTimelineItem[];
+  /** 用户消息:随消息一起发出去的上下文(编辑器状态等)。模型收到的是它和正文拼起来的那一份。 */
+  context?: string;
+  /** 助手消息:这一轮的系统提示快照,**只在它变了的那一轮才有**(见 host._prompt_snapshot)。 */
+  prompt?: { system?: string; hash?: string };
   usage?: { duration_seconds?: number; first_token_seconds?: number };
   compaction?: unknown;
 };
@@ -138,6 +146,7 @@ function readPayload(message: TraceMessage): MessagePayload {
 export function buildTurns(
   messages: TraceMessage[],
   streamTimeline: AgentTimelineItem[] = [],
+  usageEvents: AgentUsageEvent[] = [],
 ): TraceTurn[] {
   const turns: TraceTurn[] = [];
   let current: TraceTurn | null = null;
@@ -147,6 +156,8 @@ export function buildTurns(
       turn: turns.length + 1,
       prompt,
       events: [],
+      messageIds: [],
+      usage: null,
       durationSeconds: null,
       firstTokenSeconds: null,
       startedAt: null,
@@ -220,6 +231,22 @@ export function buildTurns(
     const payload = readPayload(message);
     if (message.role === "user") {
       current = openTurn(message.content);
+      current.messageIds.push(message.id);
+      // 上下文注入单独成条:它不是用户打的字,但模型收到的确实是「正文 + 这一段」。
+      // 混在提问里看不出来,而「它凭什么知道我选中了哪个素材」的答案往往就在这儿。
+      if (payload.context) {
+        current.events.push({
+          key: `${message.id}:context`,
+          turn: current.turn,
+          step: current.events.length + 1,
+          kind: "context",
+          messageId: message.id,
+          summary: oneLine(payload.context),
+          text: payload.context,
+          startedAt: null,
+          durationSeconds: null,
+        });
+      }
       continue;
     }
     if (!current) current = openTurn("");
@@ -239,6 +266,22 @@ export function buildTurns(
         });
       }
       continue;
+    }
+
+    current.messageIds.push(message.id);
+    // 系统提示排在这一轮的执行之前 —— 它是输入,不是产物。只有变化的那一轮才有这一条。
+    if (payload.prompt?.system) {
+      current.events.push({
+        key: `${message.id}:system`,
+        turn: current.turn,
+        step: current.events.length + 1,
+        kind: "system",
+        messageId: message.id,
+        summary: oneLine(payload.prompt.system),
+        text: payload.prompt.system,
+        startedAt: null,
+        durationSeconds: null,
+      });
     }
 
     pushTimeline(current, payload.timeline, message.id);
@@ -294,6 +337,17 @@ export function buildTurns(
   }
 
   for (const turn of turns) {
+    // 轮级 token:把这一轮涉及的消息对应的用量事件加起来。一条都没有 = 未知,不是 0 ——
+    // 会话可能根本没开计量,那和「这一轮没花 token」是两回事。
+    const own = usageEvents.filter((event) => event.agent_message_id && turn.messageIds.includes(event.agent_message_id));
+    if (own.length > 0) {
+      const summary = summarizeMessageUsage(own);
+      turn.usage = {
+        input: summary.inputTokens,
+        output: summary.outputTokens,
+        cacheRead: cacheTokens(own, "cache_read"),
+      };
+    }
     const durations = turn.events
       .filter((event) => event.kind === "tool")
       .map((event) => event.durationSeconds)

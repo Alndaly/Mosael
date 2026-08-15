@@ -125,6 +125,57 @@ describe("轨迹统计", () => {
   });
 });
 
+describe("送进模型的那一半", () => {
+  it("上下文注入单独成条,不混在提问里", () => {
+    // 实际发出去的是 `_prompt_with_context(content, context)` —— content 只是它的一半。
+    // 不单独记的话,「它凭什么知道我选中了哪个素材」在轨迹上无迹可寻。
+    const turns = buildTurns([
+      message({ id: "u1", role: "user", content: "改一下这段", payload: { context: "当前在编辑器,选中 clip-7" } }),
+    ]);
+    expect(turns[0].events.map((event) => event.kind)).toEqual(["user", "context"]);
+    expect(turns[0].events[1].text).toContain("clip-7");
+  });
+
+  it("系统提示排在这一轮的执行之前 —— 它是输入不是产物", () => {
+    const turns = buildTurns([
+      message({ id: "u1", role: "user", content: "问" }),
+      message({
+        id: "a1",
+        payload: { prompt: { system: "你是助手…", hash: "abc" }, timeline: [tool()] },
+      }),
+    ]);
+    expect(turns[0].events.map((event) => event.kind)).toEqual(["user", "system", "tool"]);
+  });
+
+  it("没变的那些轮不会各自多出一条系统提示", () => {
+    // 后端只在变化时写 prompt 键(host._prompt_snapshot),这里验证前端照此渲染 —— 三轮一条。
+    const turns = buildTurns([
+      message({ id: "u1", role: "user", content: "a" }),
+      message({ id: "a1", payload: { prompt: { system: "S", hash: "h1" } } }),
+      message({ id: "u2", role: "user", content: "b" }),
+      message({ id: "a2", payload: {} }),
+      message({ id: "u3", role: "user", content: "c" }),
+      message({ id: "a3", payload: {} }),
+    ]);
+    expect(turns.flatMap((turn) => turn.events).filter((event) => event.kind === "system")).toHaveLength(1);
+  });
+
+  it("没有用量事件时轮级 token 是未知,不是全零", () => {
+    const turns = buildTurns([
+      message({ id: "u1", role: "user", content: "a" }),
+      message({ id: "a1", payload: {} }),
+    ]);
+    expect(turns[0].usage).toBeNull();
+
+    const withUsage = buildTurns(
+      [message({ id: "u1", role: "user", content: "a" }), message({ id: "a1", payload: {} })],
+      [],
+      [{ ...usage({ input_tokens: 120, output_tokens: 30 }), agent_message_id: "a1" }],
+    );
+    expect(withUsage[0].usage).toEqual({ input: 120, output: 30, cacheRead: null });
+  });
+});
+
 describe("轨迹概览投影", () => {
   it("一条时间戳都没有时,顺序投影照样画得出来", () => {
     const turns = buildTurns([

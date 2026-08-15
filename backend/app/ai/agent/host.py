@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import math
@@ -493,7 +494,15 @@ def post_user_message(
         db.commit()
         db.refresh(message)
         return message
-    message = AgentMessage(session_id=session.id, role="user", content=content)
+    # context 也要存:发出去的是 `_prompt_with_context(content, context)`,而 content 只是它的一半。
+    # 排队那条路一直存着,直发这条没存 —— 于是同一件事有两种记录,轨迹上看到的提问不是模型
+    # 收到的提问。不存的话这段上下文除了当场生效之外不留任何痕迹,事后无从复盘。
+    message = AgentMessage(
+        session_id=session.id,
+        role="user",
+        content=content,
+        payload={"context": context.strip()} if context and context.strip() else {},
+    )
     session.status = "running"
     if session.title == "新对话" and content.strip():
         session.title = content.strip()[:60]
@@ -581,12 +590,15 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                 )
             usage = _usage_from_started(turn_started, stream_state.get("first_token_at"))
             usage["metering"] = _turn_metering(prompt, final_text, result.usage)
+            prompt_snapshot = _prompt_snapshot(db, session.id, system_prompt)
             assistant_message = AgentMessage(
                 session_id=session.id,
                 role="assistant",
                 content=final_text,
                 payload={
                     "usage": usage,
+                    # 系统提示变了才记 —— 轨迹上的每条 SYSTEM 都是一次真实变化。
+                    **({"prompt": prompt_snapshot} if prompt_snapshot else {}),
                     # 上下文水位挂在最近一条助手消息上,前端据此画进度条 —— 不另建一张表:
                     # 它天然随对话推进而更新,且历史消息保留着当时的水位,回看时也说得通。
                     **({"context": result.context} if result.context else {}),
@@ -905,6 +917,35 @@ def compact_session_context(db: Session, session: AgentSession, user: User) -> d
 #: 运行时压缩用的就是那个数,界面显示另一个数会让水位和实际行为对不上。
 #: 由 contracts/context-meter-cases.json 钉住,两侧测试跑同一份语料。
 FALLBACK_CONTEXT_WINDOW = 32000
+
+
+def _prompt_fingerprint(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def _prompt_snapshot(db: Session, session_id: str, system_prompt: str) -> dict | None:
+    """这一轮实际发出去的系统提示 —— **只在它变了的时候记一份**。
+
+    系统提示不是常量:跨会话记忆、当前任务计划、视频分析方式都拼在里面,每一轮都可能不一样。
+    而排查「它为什么突然改了做法」时,这恰恰是第一现场,偏偏对话里一个字都看不到它。
+
+    也不能每轮存全文:这份提示 4KB 起步(记忆上限还有 4000 字),50 轮就是 200KB 的重复内容。
+    存指纹、变了才存全文 —— 于是轨迹上出现的每一条 SYSTEM 都真的是一次变化,而不是噪音。
+    """
+    fingerprint = _prompt_fingerprint(system_prompt)
+    previous = db.scalars(
+        select(AgentMessage)
+        .where(AgentMessage.session_id == session_id, AgentMessage.role == "assistant")
+        .order_by(AgentMessage.created_at.desc())
+        .limit(50)
+    )
+    for row in previous:
+        snapshot = (row.payload or {}).get("prompt")
+        if isinstance(snapshot, dict) and snapshot.get("hash"):
+            # 和上一次记下的那份一样 —— 这一轮没有变化可报。
+            return None if snapshot["hash"] == fingerprint else {"system": system_prompt, "hash": fingerprint}
+    # 一次都没记过(会话的第一轮,或历史数据):这就是那份基线,必须留下。
+    return {"system": system_prompt, "hash": fingerprint}
 
 
 def build_system_prompt(db: Session, session: AgentSession) -> str:

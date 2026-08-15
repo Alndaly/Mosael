@@ -47,6 +47,8 @@ function tokens(value: number | null): string {
 }
 
 const KIND_LABEL: Record<TraceEvent["kind"], string> = {
+  system: "traceKindSystem",
+  context: "traceKindContext",
   user: "traceKindUser",
   text: "traceKindAssistant",
   thinking: "traceKindThinking",
@@ -57,6 +59,9 @@ const KIND_LABEL: Record<TraceEvent["kind"], string> = {
 
 /** 行首那枚标签的配色。工具用主色、错误用危险色,其余中性 —— 扫一眼就能定位到工具那几行。 */
 const KIND_TONE: Record<TraceEvent["kind"], string> = {
+  // 送进模型的那三类(系统提示/上下文/提问)用虚线边框,与模型产出的实线区分开。
+  system: "border-dashed border-border text-muted-foreground",
+  context: "border-dashed border-border text-muted-foreground",
   user: "border-border text-muted-foreground",
   text: "border-border text-foreground",
   thinking: "border-dashed border-border text-muted-foreground",
@@ -196,8 +201,9 @@ function pretty(value: unknown): string {
 function TraceInspector({ event, turn, onClose }: { event: TraceEvent; turn: TraceTurn | undefined; onClose: () => void }) {
   const t = useI18n();
   const tabs: DetailTab[] = ["summary"];
-  if (event.tool?.args !== undefined) tabs.push("payload");
-  if (event.tool?.result !== undefined || event.text) tabs.push("result");
+  const inputOnly = event.kind === "system" || event.kind === "context";
+  if (event.tool?.args !== undefined || inputOnly) tabs.push("payload");
+  if (event.tool?.result !== undefined || (event.text && !inputOnly)) tabs.push("result");
   if (event.startedAt != null || event.durationSeconds != null) tabs.push("timing");
   const [tab, setTab] = React.useState<DetailTab>("summary");
   React.useEffect(() => setTab("summary"), [event.key]);
@@ -255,7 +261,7 @@ function TraceInspector({ event, turn, onClose }: { event: TraceEvent; turn: Tra
         )}
         {active === "payload" && (
           <pre className="m-0 whitespace-pre-wrap break-words rounded-md border border-border bg-muted px-2 py-1.5 font-mono text-ui-xs leading-[1.5]">
-            {pretty(event.tool?.args)}
+            {pretty(event.tool?.args ?? event.text)}
           </pre>
         )}
         {active === "result" && (
@@ -294,7 +300,10 @@ export function TraceView({
   const [query, setQuery] = React.useState("");
   const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
 
-  const turns = React.useMemo(() => buildTurns(messages, streamTimeline), [messages, streamTimeline]);
+  const turns = React.useMemo(
+    () => buildTurns(messages, streamTimeline, usageEvents),
+    [messages, streamTimeline, usageEvents],
+  );
   const allEvents = React.useMemo(() => turns.flatMap((turn) => turn.events), [turns]);
   const needle = query.trim().toLowerCase();
   const visible = needle
@@ -342,7 +351,13 @@ export function TraceView({
 
         <TraceOverview turns={turns} mode={mode} selectedKey={selectedKey} onSelect={setSelectedKey} />
 
-        <div className="min-h-0 overflow-auto">
+        <div
+          className={cn(
+            "grid min-h-0 content-start overflow-auto",
+            // 空状态要居中在整块空白里,而不是贴在顶上留一屏空 —— 与会话列表同一处理。
+            visible.length === 0 && "content-center justify-items-center",
+          )}
+        >
           {visible.length === 0 && (
             <EmptyState
               size="compact"
@@ -361,8 +376,18 @@ export function TraceView({
               <React.Fragment key={event.key}>
                 {first && (
                   // 轮头是分隔,上间距要比行距**大**才分得开。此前它比行距还小,反倒像被挤扁的一行。
-                  <div className="sticky top-0 z-[1] mt-2 border-t border-border bg-panel px-3 pb-1 pt-2 text-ui-2xs uppercase tracking-[0.06em] text-muted-foreground first:mt-0 first:border-t-0">
-                    {t("traceTurn").replace("{n}", String(event.turn))}
+                  <div className="sticky top-0 z-[1] mt-2 flex items-center gap-2 border-t border-border bg-panel px-3 pb-1 pt-2 text-ui-2xs uppercase tracking-[0.06em] text-muted-foreground first:mt-0 first:border-t-0">
+                    <span>{t("traceTurn").replace("{n}", String(event.turn))}</span>
+                    {(() => {
+                      const usage = turns.find((item) => item.turn === event.turn)?.usage;
+                      return usage ? (
+                        <span className="normal-case tracking-normal">
+                          {t("traceStatInput").replace("{n}", tokens(usage.input))} ·{" "}
+                          {t("traceStatOutput").replace("{n}", tokens(usage.output))}
+                          {usage.cacheRead != null && ` · ${t("traceTurnCacheRead").replace("{n}", tokens(usage.cacheRead))}`}
+                        </span>
+                      ) : null;
+                    })()}
                   </div>
                 )}
                 <button

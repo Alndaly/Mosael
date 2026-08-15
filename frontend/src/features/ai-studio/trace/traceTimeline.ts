@@ -47,7 +47,8 @@ export type TraceTimelineModel = {
 
 function laneFor(kind: TraceEvent["kind"]): TraceLane {
   if (kind === "tool") return 2;
-  if (kind === "user") return 0;
+  // 系统提示、上下文注入和提问一样,都是**送进去**的东西,不是模型产出的。
+  if (kind === "user" || kind === "system" || kind === "context") return 0;
   return 1;
 }
 

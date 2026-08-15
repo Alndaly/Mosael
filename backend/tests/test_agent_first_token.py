@@ -55,3 +55,37 @@ def test_usage_omits_first_token_when_never_stamped() -> None:
     assert usage["first_token_seconds"] == 1.5
     # 从轮开始算起,所以它必然落在总时长之内。
     assert usage["first_token_seconds"] <= usage["duration_seconds"] + 1.5
+
+
+def test_prompt_snapshot_only_records_changes() -> None:
+    """系统提示只在**变了**的那一轮记一份。
+
+    它不是常量:跨会话记忆、当前任务计划都拼在里面,每轮都可能不一样,而对话里一个字都看不到
+    它 —— 排查「它为什么突然改了做法」时,这恰恰是第一现场。
+
+    但每轮存全文就是每轮几 KB 的重复内容(记忆上限还有 4000 字),50 轮就是一份 200KB 的
+    payload。存指纹、变了才存全文,于是轨迹上出现的每条 SYSTEM 都真的是一次变化。
+    """
+    from app.core.db import SessionLocal
+    from app.db.models import AgentMessage
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+    session = client.post("/api/agent/sessions", json={"workspace_id": workspace["id"]}).json()
+
+    with SessionLocal() as db:
+        # 第一轮:一次都没记过 —— 这就是基线,必须留下,否则轨迹上永远看不到系统提示。
+        first = host._prompt_snapshot(db, session["id"], "系统提示 A")
+        assert first is not None and first["system"] == "系统提示 A"
+
+        db.add(AgentMessage(session_id=session["id"], role="assistant", content="", payload={"prompt": first}))
+        db.commit()
+
+        # 没变:不再记一份。轨迹上多一条一模一样的 SYSTEM 只是噪音。
+        assert host._prompt_snapshot(db, session["id"], "系统提示 A") is None
+
+        # 变了(比如刚 remember 了一条、或计划推进了一步):记新的全文。
+        changed = host._prompt_snapshot(db, session["id"], "系统提示 A + 新记忆")
+        assert changed is not None and changed["system"] == "系统提示 A + 新记忆"
+        assert changed["hash"] != first["hash"]
