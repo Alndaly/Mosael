@@ -65,6 +65,41 @@ def funasr_sentences_to_segments(sentences: list[dict[str, Any]]) -> list[dict[s
     return segments
 
 
+#: FunASR 的默认识别模型。**多语种**:官方说明「支持超过 50 种语言,识别效果上优于 Whisper 模型」,
+#: 标点与逆文本规整都在模型内部。与后端的 service.FUNASR_MODEL 是同一个值。
+DEFAULT_FUNASR_MODEL = "iic/SenseVoiceSmall"
+
+
+def _is_sensevoice(model_name: object) -> bool:
+    return "sensevoice" in str(model_name).lower()
+
+
+def _funasr_kwargs(request: dict[str, Any], *, device: str) -> dict[str, Any]:
+    """构建 AutoModel 的入参 —— **预热和转写共用这一份**。
+
+    分成两份写过一次:目录换成 SenseVoice 之后,预热仍按老的中文四件套拉 paraformer + punc,
+    于是"下载"下的是目录里根本没列的权重,进度停着不动、最后报失败。预热要预热的,必须正是
+    转写要用的那些。
+
+    SenseVoice 自带标点与逆文本规整,所以不挂 punc_model(重复处理);**说话人分离要留着** ——
+    它是独立阶段(按 VAD 切段后聚类),与识别模型无关,而转写面板的说话人标签全靠它。
+    """
+    model_name = request.get("funasr_model") or DEFAULT_FUNASR_MODEL
+    kwargs: dict[str, Any] = dict(
+        model=model_name,
+        vad_model=request.get("funasr_vad_model", "fsmn-vad"),
+        hub=request.get("funasr_hub", "ms"),
+        device=device,
+        disable_update=True,
+    )
+    if not _is_sensevoice(model_name):
+        kwargs["punc_model"] = request.get("funasr_punc_model", "ct-punc")
+    spk_model = request.get("funasr_spk_model", "cam++")
+    if spk_model:
+        kwargs["spk_model"] = spk_model
+    return kwargs
+
+
 def run_funasr(request: dict[str, Any]) -> dict[str, Any]:
     from funasr import AutoModel  # heavy, only in the ASR interpreter
 
@@ -79,25 +114,9 @@ def run_funasr(request: dict[str, Any]) -> dict[str, Any]:
     except Exception:  # noqa: BLE001 — odd torch build → cpu
         pass
 
-    model_name = request.get("funasr_model", "iic/SenseVoiceSmall")
-    # SenseVoice 是**一体模型**:标点、逆文本规整都在它内部,再挂 punc_model / spk_model 会重复处理
-    # (而且它不产出说话人分离所需的中间结果)。中文预设那套则是 识别+VAD+标点+说话人分离 四件套。
-    sensevoice = "sensevoice" in str(model_name).lower()
-    kwargs: dict[str, Any] = dict(
-        model=model_name,
-        vad_model=request.get("funasr_vad_model", "fsmn-vad"),
-        hub=request.get("funasr_hub", "ms"),
-        device=device,
-        disable_update=True,
-    )
-    # SenseVoice 自带标点与逆文本规整,再挂 punc_model 是重复处理;而**说话人分离要留着** ——
-    # 它是独立阶段(按 VAD 切段后聚类),与识别模型无关,转写面板的说话人标签全靠它。
-    if not sensevoice:
-        kwargs["punc_model"] = request.get("funasr_punc_model", "ct-punc")
-    spk_model = request.get("funasr_spk_model", "cam++")
-    if spk_model:
-        kwargs["spk_model"] = spk_model
+    kwargs = _funasr_kwargs(request, device=device)
     model = AutoModel(**kwargs)
+    sensevoice = _is_sensevoice(kwargs["model"])
     generate_kwargs: dict[str, Any] = dict(input=request["audio_path"], batch_size_s=300, sentence_timestamp=True)
     if sensevoice:
         # SenseVoice 按语言取值:给了就按它转,没给用 "auto" 让它自己判(它支持 50+ 语种)。
@@ -167,22 +186,15 @@ def run_whisperx(request: dict[str, Any]) -> dict[str, Any]:
 
 
 def warmup_funasr(request: dict[str, Any]) -> dict[str, Any]:
-    """Construct the FunASR pipeline so its sub-models (paraformer/vad/punc/spk)
-    download to the ModelScope cache, without running inference."""
+    """把 FunASR 的流水线构建一次,让权重落进 ModelScope 缓存,但不跑推理。
+
+    **和转写用同一份构建逻辑**(_funasr_kwargs)—— 分成两份写过一次,代价很实在:目录已经换成
+    SenseVoice,而预热还在按老的中文四件套拉 paraformer + punc,于是"下载"下的是一套目录里根本
+    没列的权重,进度停在 33/972 MB 不动,最后报失败。预热要预热的,必须正是转写要用的那些。
+    """
     from funasr import AutoModel
 
-    kwargs: dict[str, Any] = dict(
-        model=request.get("funasr_model", "paraformer-zh"),
-        vad_model=request.get("funasr_vad_model", "fsmn-vad"),
-        punc_model=request.get("funasr_punc_model", "ct-punc"),
-        hub=request.get("funasr_hub", "ms"),
-        device="cpu",
-        disable_update=True,
-    )
-    spk_model = request.get("funasr_spk_model", "cam++")
-    if spk_model:
-        kwargs["spk_model"] = spk_model
-    AutoModel(**kwargs)
+    AutoModel(**_funasr_kwargs(request, device="cpu"))
     return {"ok": True}
 
 

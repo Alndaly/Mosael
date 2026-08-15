@@ -606,11 +606,12 @@ def forget_failures() -> None:
             _store.clear(engine.id)
 
 
-def _fmt_eta(seconds: float | None) -> str:
+def _fmt_eta(seconds: float | None) -> tuple[str, dict[str, str]]:
+    """(key, 参数)—— **不拼句子**:拼进去那句话就只有一种语言了(见 core/i18n.t)。"""
     if not seconds or seconds <= 0:
-        return ""
+        return "", {}
     m, s = divmod(int(seconds), 60)
-    return f"剩余 {m}分{s:02d}秒" if m else f"剩余 {s}秒"
+    return ("dlMsg_etaMinutes", {"m": str(m), "s": f"{s:02d}"}) if m else ("dlMsg_etaSeconds", {"s": str(s)})
 
 
 def start_download(engine_id: str) -> dict[str, Any]:
@@ -798,9 +799,11 @@ def _download_body(engine_id: str) -> None:
         speed = rate.update(current, at=now)
         eta = rate.eta(remaining=max(0, engine.expected_bytes - current))
         elapsed = int(now - started)
-        message = _fmt_eta(eta) or f"下载中(已用 {elapsed // 60}分{elapsed % 60:02d}秒)"
+        key, params = _fmt_eta(eta)
+        if not key:
+            key, params = "dlMsg_elapsed", {"m": str(elapsed // 60), "s": f"{elapsed % 60:02d}"}
         _store.set(engine.id, _Live(status="downloading", downloaded=current, total=engine.expected_bytes,
-                                    speed=speed, eta=eta, message=message))
+                                    speed=speed, eta=eta, message=key, params=params))
 
     stderr = child.finish(600)
     if engine_id == "fish-speech":

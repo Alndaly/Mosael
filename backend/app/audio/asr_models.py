@@ -234,13 +234,23 @@ def _dir_size(path: Path) -> int:
 
 def _find_sub_dir(engine: str, cache_dir: str) -> Path | None:
     """Locate a sub-model's directory anywhere under the engine's cache roots
-    (cache layouts drift across library versions, so we glob by dir name)."""
+    (cache layouts drift across library versions, so we glob by dir name).
+
+    **命名空间前缀那一种也要认**:同一个模型在不同版本的 modelscope 下可能落成
+    `hub/models/iic/<dir>`,也可能落成 `models/iic--<dir>/snapshots/master`。只按裸名找的话,
+    后一种会被当成"没下载" —— 实测 SenseVoice 就是这样:901MB 已经在盘上,界面却还写着未下载,
+    点下载又拉一遍。这不是某个模型的特例,是布局漂移本身,所以在这里认,而不是给某个 id 开后门。
+    """
     for root in _cache_roots(engine):
         direct = root / cache_dir
         if direct.is_dir():
             return direct
-        # iic/<dir> and hub/**/<dir> layouts
+        # iic/<dir> 与 hub/**/<dir>
         for match in root.rglob(cache_dir):
+            if match.is_dir():
+                return match
+        # models/<namespace>--<dir>
+        for match in root.rglob(f"*--{cache_dir}"):
             if match.is_dir():
                 return match
     return None
@@ -547,11 +557,12 @@ def start_download(model_id: str) -> dict[str, Any]:
     return _status_dict(entry)
 
 
-def _fmt_eta(seconds: float | None) -> str:
+def _fmt_eta(seconds: float | None) -> tuple[str, dict[str, str]]:
+    """(key, 参数)—— **不拼句子**:拼进去那句话就只有一种语言了(见 core/i18n.t)。"""
     if not seconds or seconds <= 0:
-        return ""
+        return "", {}
     m, s = divmod(int(seconds), 60)
-    return f"剩余 {m}分{s:02d}秒" if m else f"剩余 {s}秒"
+    return ("dlMsg_etaMinutes", {"m": str(m), "s": f"{s:02d}"}) if m else ("dlMsg_etaSeconds", {"s": str(s)})
 
 
 def _run_download(model_id: str) -> None:
@@ -614,10 +625,12 @@ def _download_body(model_id: str) -> None:
         # jump only at the end — fall back to an elapsed-time heartbeat so the UI
         # never looks frozen.
         elapsed = int(now - started)
-        message = _fmt_eta(eta) or f"下载中(已用 {elapsed // 60}分{elapsed % 60:02d}秒)"
+        key, params = _fmt_eta(eta)
+        if not key:
+            key, params = "dlMsg_elapsed", {"m": str(elapsed // 60), "s": f"{elapsed % 60:02d}"}
         _store.set(model_id, _Live(
             status="downloading", downloaded=current, total=entry.expected_bytes,
-            speed=speed, eta=eta, message=message))
+            speed=speed, eta=eta, message=key, params=params))
 
     stderr = child.finish(600)
     if proc.returncode == 0 and _is_installed(entry):

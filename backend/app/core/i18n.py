@@ -143,6 +143,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Installing the {engine} runtime dependencies (several GB; the first time is slow)…",
     },
     "dlMsg_fetchingFishSource": {"zh": "拉取 Fish Speech 源码…", "en": "Fetching the Fish Speech source…"},
+    "dlMsg_etaMinutes": {"zh": "剩余 {m}分{s}秒", "en": "{m}m {s}s left"},
+    "dlMsg_etaSeconds": {"zh": "剩余 {s}秒", "en": "{s}s left"},
+    "dlMsg_elapsed": {"zh": "下载中(已用 {m}分{s}秒)", "en": "Downloading (elapsed {m}m {s}s)"},
     "dlMsg_processDied": {"zh": "下载进程异常退出", "en": "The download process exited unexpectedly"},
     # ---- 转写模型目录 ----
     "asrLabel_funasr": {"zh": "FunASR(SenseVoice)", "en": "FunASR (SenseVoice)"},

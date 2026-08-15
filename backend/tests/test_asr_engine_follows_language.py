@@ -53,3 +53,37 @@ def test_speaker_diarisation_survives_the_switch() -> None:
 def test_an_explicit_setting_still_wins(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(service.settings, "asr_provider", "whisperx")
     assert service.resolve_asr_runtime("zh")[1] == "whisperx"
+
+
+def test_warmup_and_transcribe_build_the_same_pipeline() -> None:
+    """**预热要预热的,必须正是转写要用的那些。**
+
+    这两处曾经各写一份 AutoModel 入参:目录换成 SenseVoice 之后,预热仍按老的中文四件套拉
+    paraformer + punc —— 于是点「下载」下的是目录里根本没列的权重,进度停在 33/972 MB 不动,
+    最后报失败。而且它下完也没用:转写要的 SenseVoice 一个字节都没拉。
+    """
+    import ast
+    from pathlib import Path
+
+    source = Path("app/audio/asr_worker.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    builders = {
+        node.name: node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name in ("run_funasr", "warmup_funasr")
+    }
+    assert set(builders) == {"run_funasr", "warmup_funasr"}
+    for name, node in builders.items():
+        calls = [
+            call
+            for call in ast.walk(node)
+            if isinstance(call, ast.Call) and getattr(call.func, "id", "") == "_funasr_kwargs"
+        ]
+        assert calls, f"{name} 没走共用的 _funasr_kwargs —— 又变成两份实现了"
+
+
+def test_the_default_model_matches_the_backend() -> None:
+    """worker 的默认模型和后端挑的必须是同一个 —— 不然"装了却用不上"会再来一次。"""
+    from app.audio import asr_worker
+
+    assert asr_worker.DEFAULT_FUNASR_MODEL == service.FUNASR_MODEL
