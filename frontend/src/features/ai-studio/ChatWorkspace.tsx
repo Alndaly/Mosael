@@ -27,6 +27,8 @@ import { formatElapsedSeconds } from "@/lib/time";
 import { SessionShareMenuItem } from "@/features/ai-studio/SessionShareMenuItem";
 import { AgentStatusIcon, ToolName, toAgentStatus } from "@/components/agent/StatusIcon";
 import { readToolPayload } from "@/features/ai-studio/toolPayload";
+import { TraceView } from "@/features/ai-studio/trace/TraceView";
+import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
@@ -62,6 +64,8 @@ export function ChatWorkspace({
   });
   const [streamText, setStreamText] = React.useState<string>("");
   const [streamTimeline, setStreamTimeline] = React.useState<AgentTimelineItem[]>([]);
+  //「对话」读答案,「轨迹」读执行。记住选择:排查问题的人往往连着看好几个会话的轨迹。
+  const [view, setView] = usePersistentTab<"chat" | "trace">("agent-view", "chat", ["chat", "trace"]);
   const streamingRef = React.useRef<string | null>(null);
   const threadRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -364,7 +368,14 @@ export function ChatWorkspace({
   }, [usageEvents.data]);
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)_300px] grid-rows-[minmax(0,1fr)] gap-2 max-[1180px]:grid-cols-[220px_minmax(0,1fr)] max-[820px]:grid-cols-[minmax(0,1fr)] max-[760px]:grid-rows-[minmax(0,1fr)_auto]">
+    // 轨迹视图下右侧那栏让位:排查时要的是一行行看得清的步骤和一屏放得下的详情,
+    // 而「智能体环境」是开工前的配置视图 —— 两者在同一屏上争的是同一份宽度。
+    <div className={cn(
+      "grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] gap-2 max-[820px]:grid-cols-[minmax(0,1fr)] max-[760px]:grid-rows-[minmax(0,1fr)_auto]",
+      view === "trace"
+        ? "grid-cols-[240px_minmax(0,1fr)] max-[1180px]:grid-cols-[220px_minmax(0,1fr)]"
+        : "grid-cols-[240px_minmax(0,1fr)_300px] max-[1180px]:grid-cols-[220px_minmax(0,1fr)]",
+    )}>
       <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[820px]:hidden">
         <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
           {/* 模式切换只保留输入框里的那一个;列表头恒定为标题,不再挤一个 seg。 */}
@@ -429,12 +440,39 @@ export function ChatWorkspace({
         />
       </aside>
 
-      <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[minmax(0,1fr)_auto]">
-        {/* 生成页同款:没有会话也常驻输入框,空状态居中在消息区,首次发送自动建会话。 */}
+      <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)_auto]">
+        <div className="flex items-center gap-2 border-b border-border px-3 py-1.5">
+          <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border" role="tablist">
+            {(["chat", "trace"] as const).map((item) => (
+              <button
+                key={item}
+                type="button"
+                role="tab"
+                aria-selected={view === item}
+                onClick={() => setView(item)}
+                className={cn(
+                  "inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground",
+                  view === item && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground",
+                )}
+              >
+                {t(item === "chat" ? "chatTabConversation" : "chatTabTrace")}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* 生成页同款:没有会话也常驻输入框,空状态居中在消息区,首次发送自动建会话。
+            输入框在两个视图下都在 —— 看轨迹时想到要补一句,不该先切回对话。 */}
         {
           <>
-            {/* 横向和纵向一起锁:flex 子项默认 min-width:auto,一段长代码块或长 URL 会把这一列
-                 撑宽,整个对话区就能左右滚。代码块自己的 overflow-x-auto 只在父容器被约束时生效。 */}
+            {view === "trace" ? (
+              <TraceView
+                messages={visibleMessages}
+                streamTimeline={running ? streamTimeline : []}
+                usageEvents={usageEvents.data ?? []}
+              />
+            ) : (
+            /* 横向和纵向一起锁:flex 子项默认 min-width:auto,一段长代码块或长 URL 会把这一列
+                 撑宽,整个对话区就能左右滚。代码块自己的 overflow-x-auto 只在父容器被约束时生效。 */
             <div className="flex min-w-0 flex-col gap-3.5 overflow-y-auto overflow-x-hidden px-4 pb-2.5 pt-7" ref={threadRef}>
               {visibleMessages.map((message) => (
                 <ChatBubble key={message.id} message={message} usageEvents={usageByMessage.get(message.id) ?? []} />
@@ -468,6 +506,7 @@ export function ChatWorkspace({
               )}
               {sessionId && <InlineConfirmations workspaceId={workspace.id} allowKey={sessionId} />}
             </div>
+            )}
             {/* Pending strip, above the composer: these have not been sent yet, so they do not
                 belong in the transcript. Each one can be steered into the running turn or
                 dropped — the Codex arrangement. */}
@@ -582,7 +621,7 @@ export function ChatWorkspace({
         }
       </section>
 
-      <ChatInspector
+      {view === "chat" && <ChatInspector
         workspace={workspace}
         session={session.data ?? activeSession}
         messages={visibleMessages}
@@ -592,7 +631,7 @@ export function ChatWorkspace({
         streamTimeline={streamTimeline}
         manifest={manifest.data ?? null}
         tools={tools.data ?? []}
-      />
+      />}
     </div>
   );
 }

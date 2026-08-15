@@ -179,7 +179,18 @@ def get_stream_state(session_id: str) -> dict:
 
 def _stream_reset(session_id: str) -> None:
     with _streams_lock:
-        _streams[session_id] = {"text": "", "done": False, "seq": 0, "timeline": [], "tool_starts": {}}
+        # first_token_at:这一轮**第一个** token(正文或思考,谁先算谁)到达的 monotonic 时刻。
+        # 它和轮总时长一起,才把「等模型」拆成了「等第一个字」和「后面一路吐完」——只有总时长的话,
+        # 一轮 30 秒既可能是模型想了 29 秒,也可能是它稳稳吐了 30 秒的长文,而这两件事该做的
+        # 优化正好相反。None 表示这一轮还没吐过任何 token(或者根本没跑起来)。
+        _streams[session_id] = {
+            "text": "",
+            "done": False,
+            "seq": 0,
+            "timeline": [],
+            "tool_starts": {},
+            "first_token_at": None,
+        }
 
 
 def _close_open_thinking(timeline: list[dict]) -> None:
@@ -257,6 +268,7 @@ def _stream_thinking(session_id: str, event: dict) -> None:
             delta = str(event.get("delta", ""))
             if not delta:
                 return
+            _mark_first_token(state)
             # 未结束的那一块继续追加;已结束的不能再追加 —— 那是下一段思考。
             if timeline and timeline[-1].get("type") == "thinking" and not timeline[-1].get("done"):
                 timeline[-1]["text"] = str(timeline[-1].get("text", "")) + delta
@@ -264,10 +276,21 @@ def _stream_thinking(session_id: str, event: dict) -> None:
                 timeline.append({"type": "thinking", "text": delta, "done": False})
         state["seq"] += 1
 
+
+def _mark_first_token(state: dict) -> None:
+    """记下这一轮第一个 token 的时刻。**只记第一次** —— 后面的 delta 不该把它往后推。
+
+    思考也算:对着一个「思考中…」等了八秒的人,不会因为那八秒吐的是思考就觉得自己没在等。
+    """
+    if state.get("first_token_at") is None:
+        state["first_token_at"] = time.monotonic()
+
+
 def _stream_append(session_id: str, delta: str) -> None:
     with _streams_lock:
         state = _streams.get(session_id)
         if state is not None:
+            _mark_first_token(state)
             state["text"] += delta
             timeline: list[dict] = state.setdefault("timeline", [])
             # 正文开始 = 思考结束,不等供应商发 thinking_end(有的根本不发)。
@@ -332,8 +355,13 @@ def _timeline_for_payload(stream_state: dict, final_text: str) -> list[dict]:
     return timeline
 
 
-def _usage_from_started(started: float) -> dict:
-    return {"duration_seconds": round(max(0.0, time.monotonic() - started), 1)}
+def _usage_from_started(started: float, first_token_at: float | None = None) -> dict:
+    """这一轮的耗时。**测不到的不写进去** —— 缺键和 0 是两回事,前端据此显示「—」而不是「0.0s」。"""
+    usage = {"duration_seconds": round(max(0.0, time.monotonic() - started), 1)}
+    if isinstance(first_token_at, (int, float)):
+        # 从轮开始算起,而不是从请求发出算起:准备提示词、装配上下文的时间,用户也在等。
+        usage["first_token_seconds"] = round(max(0.0, first_token_at - started), 2)
+    return usage
 
 
 def _turn_metering(prompt: str, text: str, adapter_usage: dict | None = None) -> dict:
@@ -551,7 +579,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                     "模型没有返回任何内容。请检查 AI 供应商配置:base_url 是否完整"
                     "(含端口与 /v1,如 http://localhost:11434/v1)、模型名是否存在、服务是否可达。"
                 )
-            usage = _usage_from_started(turn_started)
+            usage = _usage_from_started(turn_started, stream_state.get("first_token_at"))
             usage["metering"] = _turn_metering(prompt, final_text, result.usage)
             assistant_message = AgentMessage(
                 session_id=session.id,
