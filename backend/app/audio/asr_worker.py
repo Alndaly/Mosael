@@ -17,6 +17,7 @@ Errors exit non-zero with the message on stderr.
 from __future__ import annotations
 
 import json
+import re
 import sys
 import unicodedata
 from typing import Any
@@ -36,13 +37,38 @@ def _is_timed_char(ch: str) -> bool:
     return not (ch.isspace() or unicodedata.category(ch).startswith("P"))
 
 
+#: SenseVoice 把语种、情感、事件、是否 ITN 以特殊标记塞在文本开头:
+#: `<|zh|><|NEUTRAL|><|Speech|><|withitn|>你真不错。`
+_TAG = re.compile(r"<\|([^|]*)\|>")
+
+
+def strip_funasr_tags(text: str) -> tuple[str, str]:
+    """(正文, 语种)。**标记必须剥掉** —— 不剥的话字幕上会直接出现 `<|zh|><|NEUTRAL|>…`。
+
+    第一个标记是 SenseVoice 检测到的语种,顺手取出来:它比"猜一个默认值"准得多,而下游
+    (对齐、翻译、导出)都按这个语种走。
+    """
+    tags = _TAG.findall(text or "")
+    language = ""
+    for tag in tags:
+        lowered = tag.strip().lower()
+        if len(lowered) in (2, 3) and lowered.isalpha() and lowered not in ("nospeech",):
+            language = lowered
+            break
+    return _TAG.sub("", text or "").strip(), language
+
+
 def funasr_sentences_to_segments(sentences: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Map FunASR sentence_info (Paraformer spans + cam++ spk) to the segment
     contract. Per-char timestamps become word tokens; punctuation stays only in
     the sentence display text."""
     segments: list[dict[str, Any]] = []
     for sentence in sentences:
-        text = (sentence.get("text") or "").strip()
+        # **两种模型的字段名不同**:Paraformer 给 "text",SenseVoice 给 "sentence"。
+        # 只读前者的那段时间里,SenseVoice 的每一句都取到空串,于是整条转写产出 0 段 ——
+        # 界面上报的是「转写结果为空」,看不出是字段名对不上。
+        raw = sentence.get("sentence") or sentence.get("text") or ""
+        text, _lang = strip_funasr_tags(raw)
         spans = sentence.get("timestamp") or []
         timed_chars = [ch for ch in text if _is_timed_char(ch)]
         words: list[dict[str, Any]] = []
@@ -138,7 +164,18 @@ def run_funasr(request: dict[str, Any]) -> dict[str, Any]:
     # 带着 language=zh,下游(字幕对齐、翻译、导出)都按中文处理。我们装的预设确实是中文的
     # (paraformer-zh),但"用的是中文模型"和"这段音频是中文"是两件事;请求里说了什么就报什么,
     # 没说才回落到预设的语言。
-    return {"language": request.get("language") or "zh", "segments": funasr_sentences_to_segments(sentences)}
+    # 语种优先取**模型检测出来的那个**(SenseVoice 以 <|zh|> 这类标记给出),其次用请求指定的,
+    # 最后才回落。此前这里硬写 "zh":英文素材转出来的字幕也标成中文,下游全按中文处理。
+    detected = ""
+    for sentence in sentences:
+        _text, lang = strip_funasr_tags(sentence.get("sentence") or sentence.get("text") or "")
+        if lang:
+            detected = lang
+            break
+    return {
+        "language": detected or request.get("language") or "zh",
+        "segments": funasr_sentences_to_segments(sentences),
+    }
 
 
 def whisperx_segments(aligned: dict[str, Any]) -> list[dict[str, Any]]:
