@@ -360,7 +360,8 @@ export function TraceView({
             return (
               <React.Fragment key={event.key}>
                 {first && (
-                  <div className="sticky top-0 z-[1] bg-panel px-3 py-1 text-ui-2xs uppercase tracking-[0.06em] text-muted-foreground">
+                  // 轮头是分隔,上间距要比行距**大**才分得开。此前它比行距还小,反倒像被挤扁的一行。
+                  <div className="sticky top-0 z-[1] mt-2 border-t border-border bg-panel px-3 pb-1 pt-2 text-ui-2xs uppercase tracking-[0.06em] text-muted-foreground first:mt-0 first:border-t-0">
                     {t("traceTurn").replace("{n}", String(event.turn))}
                   </div>
                 )}
@@ -368,17 +369,22 @@ export function TraceView({
                   type="button"
                   onClick={() => setSelectedKey(event.key === selectedKey ? null : event.key)}
                   className={cn(
-                    "grid w-full cursor-pointer grid-cols-[64px_auto_minmax(0,1fr)_auto_auto] items-center gap-2 border-0 border-b border-border/40 bg-transparent px-3 py-1 text-left hover:bg-muted",
+                    // 三列定死:标签 / 内容 / 耗时。**工具名不能自成一列** —— 每一行都是独立的 grid,
+                    // auto 列各算各的宽度,于是摘要的左边缘跟着工具名长短来回跳(get_workflow 那行
+                    // 比 list_workflow_node_types 那行靠左一大截)。名字和摘要同流,左边缘才对得齐。
+                    "grid w-full cursor-pointer grid-cols-[68px_minmax(0,1fr)_auto_16px] items-center gap-2 border-0 border-b border-border/40 bg-transparent px-3 py-1.5 text-left hover:bg-muted",
                     event.key === selectedKey && "bg-accent",
                   )}
                 >
                   <span className={cn("justify-self-start rounded-full border px-1.5 py-px text-ui-2xs", KIND_TONE[event.kind])}>
                     {t(KIND_LABEL[event.kind] as never)}
                   </span>
-                  <span className="font-mono text-ui-xs text-foreground">{event.name ?? ""}</span>
-                  <span className="min-w-0 truncate font-mono text-ui-xs text-muted-foreground">{event.summary}</span>
+                  <span className="min-w-0 truncate font-mono text-ui-xs text-muted-foreground">
+                    {event.name && <span className="text-foreground">{event.name} </span>}
+                    {event.summary}
+                  </span>
                   <span className="timecode text-ui-2xs text-muted-foreground">{seconds(event.durationSeconds)}</span>
-                  <ChevronRight size={12} className="text-muted-foreground" aria-hidden />
+                  <ChevronRight size={12} className="justify-self-end text-muted-foreground" aria-hidden />
                 </button>
               </React.Fragment>
             );
