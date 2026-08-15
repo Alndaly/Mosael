@@ -1,12 +1,12 @@
 """Text translation with two backends:
 
-- **google**: Google's free (unofficial) translate endpoint — no API key, good for quick
-  subtitle/caption translation. Returns the concatenated translated segments.
-- **ai**: handled by the caller via an LLM provider (see the workflow translate node), so this
-  module only owns the Google path + the shared language list.
+- **google**: Google's free (unofficial) translate endpoint — no API key, good enough for a
+  quick subtitle pass, but it translates cue by cue with no context.
+- **ai**: an LLM through the workspace's provider profile — slower and billed, but it reads
+  the sentence rather than the words. Same call shape, so a caller only picks `engine`.
 
-Kept dependency-light (httpx only) so it can be reused by workflow nodes and, later, editor
-subtitle translation.
+Both live here so every caller (workflow translate node, editor subtitle panel) gets the same
+two choices from one place. Kept dependency-light (httpx only).
 """
 from __future__ import annotations
 
@@ -42,7 +42,19 @@ _LANG_NAMES = dict(LANGUAGES)
 
 
 class TranslateError(RuntimeError):
-    pass
+    """带 key 的错误。
+
+    领域里不拼句子 —— 存 key + 参数,出口(路由)按请求方语言翻。`str(exc)` 仍给一句默认语言的
+    人话,好让日志和不走 HTTP 的调用方(工作流节点)有东西可看;上游 AiChatError 转过来的消息
+    不是 key,`t` 查不到就原样返回,正好。
+    """
+
+    def __init__(self, key: str, **params: object) -> None:
+        from app.core.i18n import DEFAULT_LOCALE, t
+
+        self.key = key
+        self.params = params
+        super().__init__(t(key, DEFAULT_LOCALE, **params))
 
 
 def language_label(code: str) -> str:
@@ -63,10 +75,10 @@ def resolve_ai_provider(db, profile_id: str | None, user_id: str | None) -> Chat
             select(ProviderProfile).where(ProviderProfile.enabled.is_(True)).order_by(ProviderProfile.created_at)
         ).first()
     if profile is None or not profile.enabled:
-        raise TranslateError("没有可用的 AI 供应商,请先在设置里添加")
+        raise TranslateError("translateErr_noProvider")
     resolved = provider_credentials.resolve(db, profile, user_id)
     if resolved is None:
-        raise TranslateError(f"供应商「{profile.name}」还没有配置你的密钥,请先在设置里填写")
+        raise TranslateError("translateErr_noCredential", name=profile.name)
     try:
         return target_for(db, resolved)
     except AiChatError as exc:

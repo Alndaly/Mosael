@@ -164,6 +164,10 @@ function SubtitleTranslate({
   const [open, setOpen] = React.useState(false);
   const [lang, setLang] = React.useState<string>("en");
   const [bilingual, setBilingual] = React.useState(false);
+  // 翻译引擎。后端两条路早就都在(domain/translate 的 google / ai),缺的只是界面上的这个选择 ——
+  // 于是字幕永远走免费的 Google:它快、不要密钥,但整句直译、不看上下文,人名和口语常年翻车。
+  // 走 LLM 则用当前工作区配好的模型,能顺着上下文润色。默认仍是 google:它不花钱也不要配置。
+  const [engine, setEngine] = React.useState<"google" | "ai">("google");
   const selectedClipIds = useEditorStore((state) => state.selectedClipIds);
   // Only cues that are actually selected count — selecting a video clip should not silently
   // narrow a translation down to nothing.
@@ -182,6 +186,7 @@ function SubtitleTranslate({
         workspaceId,
         items.map((clip) => clip.text_override ?? ""),
         lang,
+        engine,
       );
       const texts = items.flatMap((clip, i) => {
         const original = clip.text_override ?? "";
@@ -226,6 +231,18 @@ function SubtitleTranslate({
                   {t(("lang_" + code.replace("-", "_")) as never)}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+        </label>
+        <label className="grid gap-1 [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground">
+          <span>{t("subtitleTranslateEngine")}</span>
+          <Select value={engine} onValueChange={(next) => setEngine(next as "google" | "ai")}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="google">{t("subtitleTranslateEngineGoogle")}</SelectItem>
+              <SelectItem value="ai">{t("subtitleTranslateEngineAi")}</SelectItem>
             </SelectContent>
           </Select>
         </label>

@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from app.api.deps import CurrentUser, DbSession
+from app.core.i18n import get_current_locale, t
 from app.api.schemas import TranslateRequest, TranslateResponse
 from app.domain.permissions import ensure_workspace_member
 from app.domain.translate import TranslateError, translate_many
@@ -26,7 +27,8 @@ def translate_texts(body: TranslateRequest, db: DbSession, user: CurrentUser) ->
             profile_id=body.profile_id,
         )
     except TranslateError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        # 出口才翻:领域抛的是 key,这里按请求方的 Accept-Language 渲染。
+        raise HTTPException(status_code=502, detail=t(exc.key, get_current_locale(), **exc.params)) from exc
     # 翻译本身不改这个工作区的数据,但 AI 引擎记了一笔账 —— 记账跟着调用方的事务走
     # (见 domain/usage.billable 里为什么必须这样),所以只读接口也得落一次盘。
     db.commit()

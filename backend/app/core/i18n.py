@@ -192,6 +192,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "中文音色最好。配置账号 AK/SK 后可拉取账号内全部音色。",
         "en": "Best Chinese voices. Set the account AK/SK to pull every voice on the account.",
     },
+    "translateErr_noProvider": {
+        "zh": "没有可用的 AI 供应商,请先在设置里添加",
+        "en": "No AI provider is available — add one in Settings first",
+    },
+    "translateErr_noCredential": {
+        "zh": "供应商「{name}」还没有配置你的密钥,请先在设置里填写",
+        "en": "Provider \u300c{name}\u300d has no key of yours yet — set it in Settings first",
+    },
 }
 
 
