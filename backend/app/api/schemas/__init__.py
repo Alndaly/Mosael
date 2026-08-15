@@ -1039,6 +1039,25 @@ class SynthesizeRequest(BaseModel):
     speed: float = Field(default=1.0, ge=0.5, le=2.0)
 
 
+class SubtitleDubRequest(BaseModel):
+    """给选中的字幕条配音。音色/引擎那一套与 /tts/synthesize 同构 —— 配音就是合成,只是文本
+    来自字幕、产物直接落到时间线上。"""
+
+    clip_ids: list[str] = Field(min_length=1, max_length=500)
+    #: 把配音拉伸/压缩到字幕段落的长度。**默认关** —— 变速会改变语速听感,超出 ±20% 就开始
+    #: 明显不自然,值不值这个代价由用户按素材决定,而不是替他默认承受。
+    match_duration: bool = False
+    engine: str = Field(default="clone", max_length=40)
+    #: 克隆引擎要一个音色行;远端引擎不需要,它自带发音人。
+    voice_id: str | None = None
+    clone_engine: str = Field(default="", max_length=40)
+    provider_profile_id: str | None = None
+    engine_model: str = Field(default="", max_length=120)
+    engine_voice: str = Field(default="", max_length=120)
+    engine_voice_resource: str = Field(default="", max_length=60)
+    speed: float = Field(default=1.0, ge=0.25, le=3.0)
+
+
 class EngineSynthesizeRequest(BaseModel):
     """Synthesis through a remote engine, which speaks in a stock voice and so has no Voice row."""
 

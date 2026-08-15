@@ -33,6 +33,7 @@ from app.api.schemas import (
     GenerateSubtitlesRequest,
     MoveTrackRequest,
     SplitClipPointsRequest,
+    SubtitleDubRequest,
     SplitClipRequest,
     TrimClipRequest,
 )
@@ -447,6 +448,42 @@ def redo_sequence(sequence_id: str, db: DbSession, user: CurrentUser) -> Respons
     require_sequence_access(db, user, sequence_id, perm="edit")
     _apply(lambda: redo_operation(db, sequence_id))
     return _sequence_response(_get_sequence(db, sequence_id))
+
+
+@router.post("/sequences/{sequence_id}/dub-subtitles", response_model=JobOut)
+def dub_subtitles(sequence_id: str, body: SubtitleDubRequest, db: DbSession, user: CurrentUser) -> Job:
+    """给选中的字幕条配音,产物落到一条新的音频轨。
+
+    两道闸门都要过:配音**改这条时间线**(edit),也**花 AI 的钱**(ai)。少判一个,就等于让
+    只读成员消费工作区的额度、或者让有额度的人改别人的片子。
+    """
+    sequence = require_sequence_access(db, user, sequence_id, perm="edit")
+    ensure_workspace_perm(db, user, sequence.workspace_id, "ai")
+    from app.audio.subtitle_dub import DubError, start_subtitle_dub
+
+    synthesis = body.model_dump(exclude={"clip_ids", "match_duration"})
+    # 克隆引擎才认 voice_id,远端引擎才认 workspace_id —— 两边都传的话
+    # start_synthesis 会收到它这条路上根本没有的参数。
+    if body.engine == "clone":
+        synthesis.pop("provider_profile_id", None)
+        synthesis.pop("engine_model", None)
+        synthesis.pop("engine_voice", None)
+        synthesis.pop("engine_voice_resource", None)
+    else:
+        synthesis.pop("voice_id", None)
+        synthesis.pop("clone_engine", None)
+        synthesis["workspace_id"] = sequence.workspace_id
+    try:
+        return start_subtitle_dub(
+            db,
+            sequence_id=sequence_id,
+            clip_ids=list(body.clip_ids),
+            match_duration=body.match_duration,
+            created_by=user.id,
+            synthesis=synthesis,
+        )
+    except DubError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/sequences/{sequence_id}/export", response_model=JobOut)

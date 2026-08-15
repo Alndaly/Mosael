@@ -109,6 +109,11 @@ MESSAGES: dict[str, dict[str, str]] = {
     "jobMsg_ttsRunning": {"zh": "合成《{voice}》配音中", "en": "Synthesising voiceover with “{voice}”"},
     "jobMsg_ttsDone": {"zh": "配音已生成", "en": "Voiceover generated"},
     "jobMsg_ttsFailed": {"zh": "配音生成失败", "en": "Voiceover generation failed"},
+    "jobMsg_dubRunning": {"zh": "字幕配音中({done}/{total})", "en": "Dubbing subtitles ({done}/{total})"},
+    "jobMsg_dubDone": {"zh": "字幕配音完成:{done} 条", "en": "Dubbed {done} subtitle(s)"},
+    # 部分失败单独一句:把「10 条里成了 9 条」说成「配音完成」,用户要到时间线上一段段找才发现少了一条。
+    "jobMsg_dubPartial": {"zh": "字幕配音完成:{done} 条成功,{failed} 条失败", "en": "Dubbed {done} subtitle(s), {failed} failed"},
+    "jobMsg_dubFailed": {"zh": "字幕配音失败", "en": "Subtitle dubbing failed"},
     "jobMsg_podcastRunning": {"zh": "生成播客中", "en": "Generating the podcast"},
     "jobMsg_podcastDone": {"zh": "播客已生成", "en": "Podcast generated"},
     "jobMsg_renderFinishing": {"zh": "整理输出…", "en": "Finalising the output…"},

@@ -252,6 +252,25 @@ export function synthesizeWithEngine(body: {
   return api<Job>("/api/tts/synthesize", { method: "POST", body: JSON.stringify(body) });
 }
 
+/** 给选中的字幕条配音,产物落到一条新的音频轨。返回编排任务(内部逐条排合成子任务)。 */
+export function dubSubtitles(
+  sequenceId: string,
+  body: {
+    clip_ids: string[];
+    match_duration?: boolean;
+    engine?: string;
+    voice_id?: string | null;
+    clone_engine?: string;
+    engine_voice?: string;
+    speed?: number;
+  },
+): Promise<Job> {
+  return api<Job>(`/api/sequences/${sequenceId}/dub-subtitles`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export function voiceSampleUrl(id: string): string {
   const suffix = authToken ? `?token=${authToken}` : "";
   return `${API_BASE}/api/voices/${id}/sample${suffix}`;

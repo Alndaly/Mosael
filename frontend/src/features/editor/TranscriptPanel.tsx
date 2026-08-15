@@ -15,6 +15,7 @@ import {
   projectTranscript,
   type SegmentLike,
 } from "@/domain/timeline/transcriptProjection";
+import { PILL } from "@/features/editor/pill";
 import { useEditorStore } from "@/stores/editorStore";
 import { cn } from "@/lib/utils";
 
@@ -27,10 +28,6 @@ export interface CutRange {
 
 /** Selected word key → its cut payload. */
 type TokenSelection = Map<string, { clipId: string; srcStart: number; srcEnd: number }>;
-
-/** 工具条上的胶囊按钮。**一份** —— 此前这串类名在这个文件里抄了九遍。 */
-const PILL =
-  "inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-ui-xs text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-ui-2xs [&_em]:not-italic [&_em]:tabular-nums";
 
 /**
  * 时间码那一栏。句子和静音块共用它 —— 对齐是**结构**给的,不是手调出来的边距。

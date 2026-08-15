@@ -1,6 +1,6 @@
 import React from "react";
-import { useMutation } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, Languages, Loader2, Plus, Sparkles, Trash2, Type, Upload } from "lucide-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { AudioLines, ChevronDown, ChevronRight, Languages, Loader2, Plus, Sparkles, Trash2, Type, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -13,9 +13,10 @@ import { readSubtitleStyle, SUBTITLE_FONTS, TRANSLATE_LANGS, type SubtitleStyle 
 import { uploadedFontStack } from "@/features/editor/FontFaces";
 import type { Font } from "@/api/client";
 
-import { translateTexts, type Sequence } from "@/api/client";
+import { dubSubtitles, listVoices, translateTexts, type Clip, type Sequence } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { clipEnd, formatTimecode } from "@/domain/timeline/geometry";
+import { PILL } from "@/features/editor/pill";
 import { useEditorStore } from "@/stores/editorStore";
 import { cn } from "@/lib/utils";
 
@@ -135,22 +136,119 @@ export function SubtitlePanel({
       </div>
       <div className="flex flex-wrap justify-center gap-1.5 border-t border-border px-2 py-1.5">
         {onGenerate && (
-          <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-ui-xs text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-ui-2xs [&_em]:not-italic [&_em]:tabular-nums" title={t("subtitleGenerateHint")} onClick={onGenerate} disabled={generating}>
+          <button type="button" className={PILL} title={t("subtitleGenerateHint")} onClick={onGenerate} disabled={generating}>
             {generating ? <Loader2 size={12} className="animate-openstudio-spin" /> : <Sparkles size={12} />} {t("subtitleGenerate")}
           </button>
         )}
-        <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-ui-xs text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-ui-2xs [&_em]:not-italic [&_em]:tabular-nums" title={t("addSubtitleAtPlayhead")} onClick={onAddSubtitle}>
+        <button type="button" className={PILL} title={t("addSubtitleAtPlayhead")} onClick={onAddSubtitle}>
           <Plus size={12} /> {t("addSubtitleAtPlayhead")}
         </button>
         {subtitles.length > 0 && onApplyTexts && (
           <SubtitleTranslate workspaceId={sequence.workspace_id} subtitles={subtitles} onApplyTexts={onApplyTexts} />
         )}
+        {subtitles.length > 0 && <SubtitleDub sequence={sequence} subtitles={subtitles} />}
       </div>
     </div>
   );
 }
 
 /** 一键翻译:把整轨字幕批量译成目标语言(Google 免费),一次提交、一步撤销。 */
+/**
+ * 字幕配音:选中的字幕条 → 逐条合成 → 落到一条新的音频轨。
+ *
+ * **只列克隆音色**。远端引擎(火山等)的发音人挑选牵着资源族、模型、供应商三层选择,那套完整的
+ * 选择器在「配音」标签页里 —— 在这儿再实现一遍就是同一个问题两处答案。这里要的是「用我已经
+ * 建好的那个声音,把这几条念出来」。
+ */
+function SubtitleDub({ sequence, subtitles }: { sequence: Sequence; subtitles: Clip[] }) {
+  const t = useI18n();
+  const [open, setOpen] = React.useState(false);
+  const [voiceId, setVoiceId] = React.useState("");
+  // 匹配段落长度默认**关**:变速会改语速听感,超出 ±20% 就明显不自然。值不值这个代价由用户
+  // 按素材决定,而不是替他默认承受。开着时用的是片段自己的 speed,无损、可撤销、事后能微调。
+  const [matchDuration, setMatchDuration] = React.useState(false);
+  const selectedClipIds = useEditorStore((state) => state.selectedClipIds);
+  const selectedSubtitles = React.useMemo(
+    () => subtitles.filter((clip) => selectedClipIds.includes(clip.id)),
+    [subtitles, selectedClipIds],
+  );
+  const [selectedOnly, setSelectedOnly] = React.useState(true);
+  const scoped = selectedOnly && selectedSubtitles.length > 0;
+  const targets = (scoped ? selectedSubtitles : subtitles).filter((clip) => (clip.text_override ?? "").trim());
+
+  const voices = useQuery({
+    queryKey: ["voices", sequence.workspace_id],
+    queryFn: () => listVoices(sequence.workspace_id),
+    enabled: open,
+  });
+  React.useEffect(() => {
+    if (!voiceId && voices.data?.length) setVoiceId(voices.data[0].id);
+  }, [voices.data, voiceId]);
+
+  const run = useMutation({
+    mutationFn: () =>
+      dubSubtitles(sequence.id, {
+        clip_ids: targets.map((clip) => clip.id),
+        match_duration: matchDuration,
+        engine: "clone",
+        voice_id: voiceId,
+      }),
+    onSuccess: () => {
+      setOpen(false);
+      // 配音是个会跑一阵的批任务,进度在任务中心 —— 这里只确认"排上了",不假装已经配好。
+      toast.success(t("subtitleDubQueued").replace("{n}", String(targets.length)));
+    },
+    onError: (error: Error) => toast.error(t("subtitleDubFailed"), { description: error.message }),
+  });
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" className={PILL} title={t("subtitleDub")}>
+          <AudioLines size={12} /> {t("subtitleDub")}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="flex w-[240px] flex-col gap-2 p-2.5 [&>strong]:text-ui-sm" align="end">
+        <strong>{t("subtitleDub")}</strong>
+        {voices.isSuccess && (voices.data ?? []).length === 0 ? (
+          // 没有音色时不摆一个空下拉让人点 —— 直说下一步在哪。
+          <p className="m-0 text-xs leading-[1.6] text-muted-foreground">{t("subtitleDubNoVoice")}</p>
+        ) : (
+          <label className="grid gap-1 text-xs text-muted-foreground">
+            <span>{t("subtitleDubVoice")}</span>
+            <Select value={voiceId} onValueChange={setVoiceId}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(voices.data ?? []).map((voice) => (
+                  <SelectItem key={voice.id} value={voice.id}>
+                    {voice.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
+        )}
+        {selectedSubtitles.length > 0 && (
+          <label className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+            <span>{t("subtitleTranslateSelectedOnly").replace("{n}", String(selectedSubtitles.length))}</span>
+            <Switch checked={selectedOnly} onCheckedChange={setSelectedOnly} />
+          </label>
+        )}
+        <label className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span title={t("subtitleDubMatchHint")}>{t("subtitleDubMatch")}</span>
+          <Switch checked={matchDuration} onCheckedChange={setMatchDuration} />
+        </label>
+        <p className="m-0 text-ui-2xs leading-[1.5] text-muted-foreground">{t("subtitleDubTrackNote")}</p>
+        <Button size="sm" disabled={targets.length === 0 || !voiceId} loading={run.isPending} onClick={() => run.mutate()}>
+          {t("subtitleDubApply").replace("{n}", String(targets.length))}
+        </Button>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function SubtitleTranslate({
   workspaceId,
   subtitles,
@@ -213,7 +311,7 @@ function SubtitleTranslate({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[5px] rounded-full border border-border bg-background px-[9px] text-ui-xs text-muted-foreground transition-[color,border-color,background] duration-[120ms] enabled:hover:border-ring enabled:hover:text-foreground disabled:cursor-default disabled:opacity-45 [&_em]:rounded-full [&_em]:bg-[color-mix(in_oklab,currentColor_14%,transparent)] [&_em]:px-[5px] [&_em]:text-ui-2xs [&_em]:not-italic [&_em]:tabular-nums" title={t("subtitleTranslate")}>
+        <button type="button" className={PILL} title={t("subtitleTranslate")}>
           <Languages size={12} /> {t("subtitleTranslate")}
         </button>
       </PopoverTrigger>
