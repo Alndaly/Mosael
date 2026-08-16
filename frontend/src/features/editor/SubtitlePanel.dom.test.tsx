@@ -132,6 +132,21 @@ describe("字幕配音入口", () => {
     await waitFor(() => expect(screen.getByText("subtitleDubEngine")).toBeTruthy());
   });
 
+  it("日文字幕配本地克隆时**当场**警告 —— 不必等排队后收到一条错误", async () => {
+    serveVoices();
+    renderPanel(["お漏らし。", "ここに寝てるんでしょ？"]);
+    await userEvent.click(screen.getAllByLabelText("subtitleDubThis")[0]);
+    await waitFor(() => expect(screen.getByText("subtitleDubLangJa")).toBeTruthy());
+  });
+
+  it("中文字幕不触发警告 —— 一条错误的警告会让人开始怀疑所有警告", async () => {
+    serveVoices();
+    renderPanel(["这是中文字幕"]);
+    await userEvent.click(screen.getAllByLabelText("subtitleDubThis")[0]);
+    await waitFor(() => expect(screen.getByText("subtitleDubVoice")).toBeTruthy());
+    expect(screen.queryByText("subtitleDubLangJa")).toBeNull();
+  });
+
   it("缩放到段落长度默认关 —— 变速会改语速听感,值不值由用户按素材定", async () => {
     serveVoices();
     renderPanel(["只有一行"]);

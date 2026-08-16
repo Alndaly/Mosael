@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.domain import provider_models
 from app.domain.usage import billable
 from app.audio import tts_daemon, tts_models
+from app.audio.tts_language import clone_supports, detect_script, edge_voice_language
 from app.audio.tts_models import WORKER_PATH
 from app.core.db import SessionLocal
 from app.domain.jobs import TTS_SLOTS, run_job_guarded, say
@@ -136,6 +137,49 @@ def explain_worker_failure(stderr: str) -> str:
             "去设置的「声音克隆」那一页点「下载」,它会把缺的依赖补上。"
         )
     return last[:400]
+
+
+#: 音色 id 的语言前缀 —— 火山的内置音色叫 `zh_female_cancan_…`,语言就写在名字里。
+#: **白名单**,不是「任意两个字母 + 下划线」:后者会把 `my_custom_voice` 里的 `my_` 当成语言
+#: 代码,于是用户自己起名的音色被无端挡下(测试抓到过)。拿不准时放行,是这道闸门的底线。
+_VOICE_ID_LANGS = frozenset({"zh", "en", "ja", "ko", "es", "fr", "de", "ru", "pt", "it", "ar", "hi", "th", "vi", "id"})
+_VOICE_ID_LANG = re.compile(r"^([a-z]{2})_")
+
+
+def _refuse_if_unspeakable(text: str, engine: str, engine_voice: str, clone_engine: str) -> None:
+    """这段文本,这个音色念得了吗 —— 念不了就**现在**说,别等它交出一段废音。
+
+    引擎在语言不匹配时不会报错:它按自己认识的发音规则硬念一遍,产出一段听起来像中文又不像
+    中文的东西。用户等几十秒拿到废音,而且没有任何线索指向原因(这条 bug 就是这么报上来的:
+    「明明是日文,配出来是中文和听不懂的声音」)。
+
+    只在**能确证**时拦(见 tts_language:假名、谚文是硬证据),而且只拦确知的不匹配 ——
+    音色语言未知(账号自定义音色、OpenAI 那种多语言引擎)一律放行。宁可漏拦不可错拦:
+    错拦挡住的是一次本来能成的合成。
+    """
+    script = detect_script(text)
+    if not script:
+        return
+    label = {"ja": "日文", "ko": "韩文"}[script]
+    if engine == "clone":
+        if not clone_supports(script):
+            raise VoiceError(
+                f"这段文本是{label},而本地音色克隆用的模型只认中英文 —— 它不会报错,只会念出一段"
+                f"听不懂的声音。改用 Edge TTS 的 {label}音色,或 OpenAI TTS。"
+            )
+        return
+    if engine == "edge":
+        voice_lang = edge_voice_language(engine_voice)
+        if voice_lang and voice_lang != script:
+            raise VoiceError(f"这段文本是{label},而选中的 Edge 音色是 {voice_lang} 的 —— 请换一个 {script}- 开头的音色。")
+        return
+    # 别的引擎按音色 id 的语言前缀判(火山:zh_female_…)。前缀不认识就放行。
+    prefix = _VOICE_ID_LANG.match(engine_voice or "")
+    if prefix and prefix.group(1) in _VOICE_ID_LANGS and prefix.group(1) != script:
+        raise VoiceError(
+            f"这段文本是{label},而选中的音色是 {prefix.group(1)} 的 —— 它念出来会是一段听不懂的声音,"
+            f"请换一个能念{label}的音色。"
+        )
 
 
 def _require_local_engine(engine: str) -> None:
@@ -340,6 +384,9 @@ def start_synthesis(
     """
     if not text.strip():
         raise VoiceError("合成文本不能为空")
+    # 语言对不上就现在拦 —— 建了任务再失败,用户已经等了几十秒;而它根本不会"失败",
+    # 只会安静地交出一段念不对的音频。
+    _refuse_if_unspeakable(text, engine, engine_voice, clone_engine)
     voice = None
     if engine == "clone":
         voice = db.get(Voice, voice_id or "")

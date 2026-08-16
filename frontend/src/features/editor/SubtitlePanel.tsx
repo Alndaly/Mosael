@@ -27,6 +27,7 @@ import {
 } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { dubEngineChoices } from "@/features/editor/dubEngines";
+import { dubTextOf, unspeakable } from "@/features/editor/dubLanguage";
 import { clipEnd, formatTimecode } from "@/domain/timeline/geometry";
 import { PILL } from "@/features/editor/pill";
 import { useEditorStore } from "@/stores/editorStore";
@@ -239,6 +240,13 @@ function SubtitleDub({
     setEngineVoice("");
   }, [engine]);
   const chosenVoice = voiceChoices.find((item) => item.value === (engineVoice || voiceChoices[0]?.value));
+  // 语言对不上时,引擎**不会报错** —— 它按自己那套发音规则硬念一遍,交出一段听不懂的声音。
+  // 后端会拦(audio/tts_language),但那是在排队之后;文本就在眼前,这一刻就该说。
+  const mismatch = unspeakable(
+    targets.map((clip) => dubTextOf(clip, line)),
+    engine,
+    engine === "clone" ? "" : engineVoice || voiceChoices[0]?.value || "",
+  );
   // 能不能配:克隆要有音色;远端引擎要么有目录、要么它自己说需要手填 id 而用户填了。
   const ready =
     engine === "clone"
@@ -404,6 +412,11 @@ function SubtitleDub({
           <span title={t("subtitleDubMatchHint")}>{t("subtitleDubMatch")}</span>
           <Switch checked={matchDuration} onCheckedChange={setMatchDuration} />
         </label>
+        {mismatch && (
+          <p className="m-0 rounded-md border border-[color-mix(in_srgb,var(--destructive)_35%,var(--border))] bg-[color-mix(in_srgb,var(--destructive)_8%,transparent)] px-2 py-1.5 text-ui-2xs leading-[1.5] text-foreground">
+            {t(mismatch === "ja" ? "subtitleDubLangJa" : "subtitleDubLangKo")}
+          </p>
+        )}
         <p className="m-0 text-ui-2xs leading-[1.5] text-muted-foreground">{t("subtitleDubTrackNote")}</p>
         <Button size="sm" disabled={targets.length === 0 || !ready} loading={run.isPending} onClick={() => run.mutate()}>
           {only ? t("subtitleDubApplyOne") : t("subtitleDubApply").replace("{n}", String(targets.length))}
