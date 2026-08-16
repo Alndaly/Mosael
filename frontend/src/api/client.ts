@@ -252,6 +252,28 @@ export function synthesizeWithEngine(body: {
   return api<Job>("/api/tts/synthesize", { method: "POST", body: JSON.stringify(body) });
 }
 
+export type F5Model = {
+  id: string;
+  label: string;
+  languages: string[];
+  note: string;
+  expected_bytes: number;
+  installed: boolean;
+  status: string;
+  progress: number;
+  message: string;
+  error: string;
+};
+
+/** 本地克隆能用哪几份权重 —— 引擎什么语言都支持,支持范围由权重决定。 */
+export function listF5Models(): Promise<F5Model[]> {
+  return api<F5Model[]>("/api/tts/f5-models");
+}
+
+export function downloadF5Model(modelId: string): Promise<F5Model> {
+  return api<F5Model>(`/api/tts/f5-models/${modelId}/download`, { method: "POST" });
+}
+
 /** 给选中的字幕条配音,产物落到一条新的音频轨。返回编排任务(内部逐条排合成子任务)。 */
 export function dubSubtitles(
   sequenceId: string,

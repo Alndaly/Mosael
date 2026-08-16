@@ -51,11 +51,18 @@ export function voiceLanguage(engine: string, voice: string): string {
  * **拿不准一律当能念**:多语言引擎、账号里的自定义音色都属于这一类。提示是帮忙,不是设卡,
  * 而一条错误的警告会让用户开始怀疑所有警告。
  */
-export function unspeakable(texts: string[], engine: string, voice: string): DubScript {
+export function unspeakable(
+  texts: string[],
+  engine: string,
+  voice: string,
+  /** 本地克隆**现在**念得了的书写系统 —— 由这台机器上装了哪几份权重决定(见 /api/tts/f5-models)。 */
+  cloneLanguages: readonly string[] = [],
+): DubScript {
   const script = detectScript(texts.join("\n"));
   if (!script) return "";
-  // 本地克隆用的是 F5TTS_v1_Base:中英语料训练,vocab 里没有假名、没有谚文。
-  if (engine === "clone") return script;
+  // 克隆引擎不是「只认中英」—— 那是**权重**的属性,而权重可以再下一份。写死在这里的话,
+  // 用户下完日语模型仍然会被告知念不了(后端已经改成按权重判,前端一度还写着死的)。
+  if (engine === "clone") return cloneLanguages.includes(script) ? "" : script;
   const language = voiceLanguage(engine, voice);
   return language && language !== script ? script : "";
 }

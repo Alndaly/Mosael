@@ -340,6 +340,22 @@ def _ffmpeg_runtime_dir(engine_python: str) -> str:
     return ""
 
 
+def weights_for(engine_id: str, text: str) -> dict[str, str]:
+    """这次合成该用**哪一份权重**。
+
+    只有 F5 有多份(按语言分,见 audio/f5_models);别的引擎一份权重走天下,返回空字典。
+    判断放在这个文件里,是因为"哪个引擎有多份权重"本身就是关于引擎的知识 —— 它属于目录,
+    不属于调用方(棘轮 test_engine_capabilities_live_in_one_table 盯的正是这个)。
+    """
+    if engine_id != "f5-tts":
+        return {}
+    from app.audio import f5_models
+    from app.audio.tts_language import detect_script
+
+    chosen = f5_models.for_language(detect_script(text))
+    return {"checkpoint": chosen.checkpoint, "vocab": chosen.vocab} if chosen is not None else {}
+
+
 def _worker_env(engine_python: str = "") -> dict[str, str]:
     """Env for the TTS worker subprocess: point HuggingFace at the configured
     mirror so first-use model downloads work (e.g. hf-mirror in CN), and pass the

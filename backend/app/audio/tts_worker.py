@@ -87,7 +87,10 @@ def run_f5(request: dict[str, Any], output_path: str) -> str:
     from f5_tts.api import F5TTS  # heavy, only in the TTS interpreter
 
     # 和 fish 一样只加载一次 —— F5 的权重比 fish 小,但加载同样以分钟计。
-    model = _LOADED.get("f5-tts")
+    # 缓存键带上权重路径:不带的话,切到日语模型时会命中上一次加载的中英模型 ——
+    # 一切正常、只是念出来还是听不懂,而这正是这一整轮要修的那种失败。
+    cache_key = f"f5-tts:{request.get('checkpoint') or F5_CHECKPOINT}"
+    model = _LOADED.get(cache_key)
     if model is None:
         device = _pick_device()
         _progress("load", 0.1, f"首次加载权重({device})")
@@ -95,14 +98,16 @@ def run_f5(request: dict[str, Any], output_path: str) -> str:
         # 声码器仍由它自己从 HF 拉(ModelScope 上没有 vocos)。
         announce_f5_fetch(request.get("reference_text") or "")
         managed = os.environ.get("OPEN_STUDIO_F5_MODEL_DIR", "").strip()
-        ckpt = Path(managed) / F5_CHECKPOINT if managed else None
-        vocab = Path(managed) / F5_VOCAB if managed else None
+        # 用**这次请求指定的**那份权重。语言支持是模型的属性,不是引擎的(见 audio/f5_models);
+        # 没指定就还是基础模型 —— 老请求、以及从别处直接调 worker 的路径原样能跑。
+        ckpt = Path(managed) / (request.get("checkpoint") or F5_CHECKPOINT) if managed else None
+        vocab = Path(managed) / (request.get("vocab") or F5_VOCAB) if managed else None
         if ckpt and ckpt.is_file():
             model = F5TTS(device=device, ckpt_file=str(ckpt),
                           vocab_file=str(vocab) if vocab and vocab.is_file() else "")
         else:
             model = F5TTS(device=device)
-        _LOADED["f5-tts"] = model
+        _LOADED[cache_key] = model
     _progress("generate", 0.35, "生成中")
     model.infer(
         ref_file=request["reference_wav"],
@@ -304,6 +309,35 @@ def fetch_f5_weights() -> None:
         _modelscope_file(F5_MODELSCOPE_REPO, path, target)
 
 
+def _hf_file(repo: str, path: str, local_dir: str) -> str:
+    from huggingface_hub import hf_hub_download  # type: ignore
+
+    return hf_hub_download(repo_id=repo, filename=path, local_dir=local_dir)
+
+
+def fetch_named_model(request: dict[str, Any]) -> str:
+    """按名字拉一份 F5 权重(检查点 + vocab)到托管目录。
+
+    走哪条源由**这一次的请求**说了算:ModelScope 上有就走它(实测比 HF 快两个数量级),
+    没有的社区微调只能走 HF。两个文件逐个拉,不拉整仓 —— `Jmica/F5TTS` 整仓有四份检查点,
+    而我们只要其中一份。
+    """
+    target = request.get("target") or os.environ.get("OPEN_STUDIO_F5_MODEL_DIR", "").strip()
+    if not target:
+        raise RuntimeError("没有指定权重目录")
+    files = [path for path in (request.get("checkpoint"), request.get("vocab")) if path]
+    modelscope_repo = (request.get("modelscope_repo") or "").strip()
+    use_modelscope = bool(modelscope_repo) and os.environ.get("OPEN_STUDIO_MODEL_SOURCE", "").strip() == "modelscope"
+    for index, path in enumerate(files):
+        _progress("download", 0.1 + 0.8 * index / max(1, len(files)), f"下载 {path}")
+        if use_modelscope:
+            _modelscope_file(modelscope_repo, path, target)
+        else:
+            _hf_file(str(request.get("hf_repo") or ""), path, target)
+    _progress("download", 1.0, "下载完成")
+    return "f5-tts"
+
+
 def _modelscope_snapshot(model_id: str, local_dir: str) -> str:
     from modelscope import snapshot_download  # type: ignore
 
@@ -404,7 +438,12 @@ def main() -> None:
     request = json.loads(sys.stdin.read())
     output_path = sys.argv[1]
     action = (request.get("action") or "synthesize").strip().lower()
-    engine_used = warmup(request, output_path) if action == "warmup" else synthesize(request, output_path)
+    if action == "fetch_model":
+        engine_used = fetch_named_model(request)
+    elif action == "warmup":
+        engine_used = warmup(request, output_path)
+    else:
+        engine_used = synthesize(request, output_path)
     # Sidecar result file so the host knows which engine actually ran.
     with open(output_path + ".json", "w", encoding="utf-8") as handle:
         json.dump({"engine": engine_used}, handle)

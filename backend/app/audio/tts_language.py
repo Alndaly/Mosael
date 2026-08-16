@@ -55,9 +55,16 @@ def edge_voice_language(voice: str) -> str:
 
 
 def clone_supports(script: str) -> bool:
-    """本地克隆(F5-TTS 的 F5TTS_v1_Base)认不认这套书写系统。
+    """本地克隆**现在**念不念得了这套书写系统。
 
-    这个检查点的**权威**是模型本身:v1_Base 在中英语料上训练,vocab 里没有假名,也没有谚文。
-    换一个日语微调模型的话这里要跟着改 —— 所以判据写在这一处,而不是散在调用点。
+    答案不在这里 —— 它取决于这台机器上装了哪几份权重(见 audio/f5_models)。引擎什么语言都
+    支持,支持范围由模型决定;此前这里写死"不认日韩",等于把一个可以通过下载解决的问题
+    说成了引擎的固有限制。
+
+    没有硬证据(空 script)一律放行:那是中英文或拿不准,默认模型就是为这种情况准备的。
     """
-    return script not in ("ja", "ko")
+    if not script:
+        return True
+    from app.audio import f5_models
+
+    return script in f5_models.installed_languages()

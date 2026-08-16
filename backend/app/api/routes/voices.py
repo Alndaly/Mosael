@@ -155,6 +155,33 @@ def synthesize(voice_id: str, body: SynthesizeRequest, db: DbSession, user: Curr
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.get("/tts/f5-models")
+def list_f5_models(request: Request, user: CurrentUser) -> list[dict]:
+    """本地克隆能用哪几份权重,各自认得什么语言、装没装。
+
+    这是「引擎 / 模型」分开之后新长出来的一层:引擎什么语言都支持,支持范围由权重决定
+    (见 audio/f5_models)。
+    """
+    from app.audio import f5_models
+
+    locale = normalize_locale(request.headers.get("accept-language"))
+    return [translate_fields(row, ("label", "note"), locale) for row in f5_models.list_status()]
+
+
+@router.post("/tts/f5-models/{model_id}/download")
+def download_f5_model(model_id: str, db: DbSession, user: CurrentUser) -> dict:
+    # 和引擎下载同一道闸门:往**后端主机**上装 1.4 GB 权重是部署级动作,不属于任何工作区。
+    ensure_deployment_admin(db, user)
+    from app.audio import f5_models
+
+    try:
+        return f5_models.start_download(model_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="没有这个模型") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
 @router.get("/tts/engines", response_model=list[TtsEngineChoiceOut])
 def list_tts_engines(request: Request, user: CurrentUser) -> list[dict]:
     """Engines the配音 UI can offer, and what each one needs from the user."""

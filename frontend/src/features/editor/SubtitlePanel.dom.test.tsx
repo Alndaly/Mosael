@@ -54,14 +54,24 @@ function sequenceWith(texts: string[]) {
 }
 
 /** 弹层打开后会问三样:克隆音色、引擎目录、某个引擎的发音人。 */
-function serveVoices(engines: Array<Record<string, unknown>> = [], engineVoices: Array<Record<string, unknown>> = []) {
+function serveVoices(
+  engines: Array<Record<string, unknown>> = [],
+  engineVoices: Array<Record<string, unknown>> = [],
+  //: 默认只装了中英基础模型 —— 这台机器上最常见的样子,也是「日文念不了」的那个前提。
+  f5Models: Array<Record<string, unknown>> = [
+    { id: "base", label: "基础模型", languages: ["zh", "en"], installed: true, status: "installed", expected_bytes: 1e9, progress: 1, message: "", note: "" },
+    { id: "ja", label: "日语模型", languages: ["ja"], installed: false, status: "missing", expected_bytes: 1.4e9, progress: 0, message: "", note: "" },
+  ],
+) {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
-    const body = url.includes("/tts/engines")
-      ? [{ id: "clone", label: "本地音色克隆", needs_key: false, needs_voice_id: false, ready: true }, ...engines]
-      : url.includes("/tts/voices")
-        ? engineVoices
-        : [{ id: "v1", name: "我的音色" }];
+    const body = url.includes("/tts/f5-models")
+      ? f5Models
+      : url.includes("/tts/engines")
+        ? [{ id: "clone", label: "本地音色克隆", needs_key: false, needs_voice_id: false, ready: true }, ...engines]
+        : url.includes("/tts/voices")
+          ? engineVoices
+          : [{ id: "v1", name: "我的音色" }];
     return new Response(JSON.stringify(body), {
       status: 200,
       headers: { "content-type": "application/json" },
@@ -132,28 +142,27 @@ describe("字幕配音入口", () => {
     await waitFor(() => expect(screen.getByText("subtitleDubEngine")).toBeTruthy());
   });
 
-  it("日文字幕配本地克隆时**当场**警告 —— 不必等排队后收到一条错误", async () => {
+  it("日文字幕 + 本地克隆:当场说缺哪份权重,并把下载放在手边", async () => {
+    // 「F5 不支持日文」是个错误的说法 —— 引擎什么语言都支持,支持范围由权重决定。所以这里
+    // 该说的是「还缺一份日语权重」,并且让用户当场能下,而不是把他打发去设置页找。
     serveVoices();
     renderPanel(["お漏らし。", "ここに寝てるんでしょ？"]);
     await userEvent.click(screen.getAllByLabelText("subtitleDubThis")[0]);
-    await waitFor(() => expect(screen.getByText("subtitleDubLangJa")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/subtitleDubModelMissing/)).toBeTruthy());
+    expect(screen.getByText("subtitleDubModelDownload")).toBeTruthy();
   });
 
-  it("日文字幕选 Edge 时自动落在日语音色上,警告随之消失", async () => {
-    serveVoices(
-      [{ id: "edge", label: "Edge 免费语音(微软)", needs_key: false, needs_voice_id: false, ready: true }],
-      [
-        { value: "zh-CN-XiaoxiaoNeural", label: "晓晓(女·温暖)" },
-        { value: "ja-JP-NanamiNeural", label: "Nanami(日·女)" },
-      ],
-    );
+  it("日语权重已经装上之后,提示和下载入口一起消失", async () => {
+    // 判据跟着盘上的权重走:装了就是能念,不该再拦、也不该再劝下载。
+    serveVoices([], [], [
+      { id: "base", label: "基础模型", languages: ["zh", "en"], installed: true, status: "installed", expected_bytes: 1e9, progress: 1, message: "", note: "" },
+      { id: "ja", label: "日语模型", languages: ["ja"], installed: true, status: "installed", expected_bytes: 1.4e9, progress: 1, message: "", note: "" },
+    ]);
     renderPanel(["お漏らし。", "ここに寝てるんでしょ？"]);
     await userEvent.click(screen.getAllByLabelText("subtitleDubThis")[0]);
-    await waitFor(() => expect(screen.getByText("subtitleDubEngine")).toBeTruthy());
-    // 组件里换引擎要走 radix 的下拉(jsdom 点不开),所以直接验证挑选逻辑本身在这份目录上的结果:
-    // 见 dubLanguage.test.ts「默认就选对」。这里守住的是**克隆引擎下警告仍然出现**,
-    // 也就是自动挑选没有把警告一并吞掉。
-    expect(screen.getByText("subtitleDubLangJa")).toBeTruthy();
+    await waitFor(() => expect(screen.getByText("subtitleDubVoice")).toBeTruthy());
+    expect(screen.queryByText("subtitleDubModelDownload")).toBeNull();
+    expect(screen.queryByText(/subtitleDubLangJa/)).toBeNull();
   });
 
   it("中文字幕不触发警告 —— 一条错误的警告会让人开始怀疑所有警告", async () => {

@@ -17,6 +17,8 @@ import type { Font } from "@/api/client";
 import {
   api,
   dubSubtitles,
+  downloadF5Model,
+  listF5Models,
   listTtsEngines,
   listTtsVoices,
   listVoices,
@@ -240,8 +242,26 @@ function SubtitleDub({
     setEngineVoice("");
   }, [engine]);
   const chosenVoice = voiceChoices.find((item) => item.value === (engineVoice || voiceChoices[0]?.value));
+  // 本地克隆的语言能力由**装了哪几份权重**决定,不是引擎的固有属性 —— 所以要问一下这台机器。
+  const f5Models = useQuery({
+    queryKey: ["f5-models"],
+    queryFn: listF5Models,
+    enabled: open && engine === "clone",
+    // 下载中就跟着刷:用户点完下载不该盯着一个不动的界面猜它有没有在跑。
+    refetchInterval: (query) => (query.state.data?.some((item) => item.status === "downloading") ? 1500 : false),
+  });
   // 这段字幕是什么文字。每次算,不缓存 —— 判据只扫几行字符,比维护一个依赖数组便宜。
   const wantScript = detectScript(targets.map((clip) => dubTextOf(clip, line)).join("\n"));
+  // 能念这段文字、但还没下的那份权重 —— 有它就把「下载」直接摆在这儿,而不是让用户去设置页找。
+  const missingModel = (f5Models.data ?? []).find(
+    // `?? []`:一个字段缺失的响应不该把整个字幕面板炸掉(测试里的桩就这么炸过一次)。
+    (model) => wantScript && (model.languages ?? []).includes(wantScript) && !model.installed,
+  );
+  const downloadModel = useMutation({
+    mutationFn: (modelId: string) => downloadF5Model(modelId),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["f5-models"] }),
+    onError: (error: Error) => toast.error(error.message),
+  });
   // **默认就选对**,而不是先落在第一个音色上再弹警告让用户猜要改什么。只在用户还没手动选过
   // (engineVoice 为空)时动手,选过就不再覆盖 —— 那是他的决定。
   React.useEffect(() => {
@@ -251,10 +271,13 @@ function SubtitleDub({
   }, [engine, engineVoice, voiceChoices, wantScript]);
   // 语言对不上时,引擎**不会报错** —— 它按自己那套发音规则硬念一遍,交出一段听不懂的声音。
   // 后端会拦(audio/tts_language),但那是在排队之后;文本就在眼前,这一刻就该说。
+  // 克隆能念什么,取决于这台机器上装了哪几份权重 —— 现算,不写死。
+  const cloneLanguages = (f5Models.data ?? []).filter((m) => m.installed).flatMap((m) => m.languages ?? []);
   const mismatch = unspeakable(
     targets.map((clip) => dubTextOf(clip, line)),
     engine,
     engine === "clone" ? "" : engineVoice || voiceChoices[0]?.value || "",
+    cloneLanguages,
   );
   // 能不能配:克隆要有音色;远端引擎要么有目录、要么它自己说需要手填 id 而用户填了。
   const ready =
@@ -425,9 +448,27 @@ function SubtitleDub({
           <p className="m-0 rounded-md border border-[color-mix(in_srgb,var(--destructive)_35%,var(--border))] bg-[color-mix(in_srgb,var(--destructive)_8%,transparent)] px-2 py-1.5 text-ui-2xs leading-[1.5] text-foreground">
             {/* 说清楚**下一步动哪儿**:这个引擎里有能念的音色就让他换音色 —— 已经选对引擎却被
                 告知「换引擎」,只会让人以为选的这个不行(用户就是这么被绕进去的)。 */}
-            {hasVoiceFor(mismatch, engine, voiceChoices)
-              ? t(mismatch === "ja" ? "subtitleDubLangJaVoice" : "subtitleDubLangKoVoice")
-              : t(mismatch === "ja" ? "subtitleDubLangJa" : "subtitleDubLangKo")}
+            {engine === "clone" && missingModel
+              ? // 同一个占位符出现两次,replace 只换第一个 —— 界面上会留一个字面的 {lang}(真出过)。
+                t("subtitleDubModelMissing")
+                  .replaceAll("{lang}", t(mismatch === "ja" ? "langName_ja" : "langName_ko"))
+                  .replace("{size}", (missingModel.expected_bytes / 1_000_000_000).toFixed(1))
+              : hasVoiceFor(mismatch, engine, voiceChoices)
+                ? t(mismatch === "ja" ? "subtitleDubLangJaVoice" : "subtitleDubLangKoVoice")
+                : t(mismatch === "ja" ? "subtitleDubLangJa" : "subtitleDubLangKo")}
+            {engine === "clone" && missingModel && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-1.5 w-full"
+                loading={downloadModel.isPending || missingModel.status === "downloading"}
+                onClick={() => downloadModel.mutate(missingModel.id)}
+              >
+                {missingModel.status === "downloading"
+                  ? t("subtitleDubModelDownloading").replace("{n}", String(Math.round(missingModel.progress * 100)))
+                  : t("subtitleDubModelDownload")}
+              </Button>
+            )}
           </p>
         )}
         <p className="m-0 text-ui-2xs leading-[1.5] text-muted-foreground">{t("subtitleDubTrackNote")}</p>

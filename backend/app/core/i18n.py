@@ -114,6 +114,16 @@ MESSAGES: dict[str, dict[str, str]] = {
     # 部分失败单独一句:把「10 条里成了 9 条」说成「配音完成」,用户要到时间线上一段段找才发现少了一条。
     "jobMsg_dubPartial": {"zh": "字幕配音完成:{done} 条成功,{failed} 条失败", "en": "Dubbed {done} subtitle(s), {failed} failed"},
     "jobMsg_dubFailed": {"zh": "字幕配音失败", "en": "Subtitle dubbing failed"},
+    "f5Model_base": {"zh": "基础模型(中文 / 英文)", "en": "Base model (Chinese / English)"},
+    "f5Model_ja": {"zh": "日语模型", "en": "Japanese model"},
+    "f5ModelNote_base": {
+        "zh": "F5-TTS 官方权重,中英双语。装了它就能用自己的音色念中文和英文。",
+        "en": "The official F5-TTS weights, Chinese + English. Enough to read Chinese and English in your own voice.",
+    },
+    "f5ModelNote_community": {
+        "zh": "社区微调权重(F5-TTS 官方清单收录)。装了之后,日文字幕也能用你自己的音色念。",
+        "en": "A community finetune listed by F5-TTS upstream. Once installed, Japanese is read in your own cloned voice too.",
+    },
     "jobMsg_podcastRunning": {"zh": "生成播客中", "en": "Generating the podcast"},
     "jobMsg_podcastDone": {"zh": "播客已生成", "en": "Podcast generated"},
     "jobMsg_renderFinishing": {"zh": "整理输出…", "en": "Finalising the output…"},

@@ -46,8 +46,12 @@ describe("音色语言", () => {
 describe("念不念得了", () => {
   const ja = ["お漏らし。", "ここに寝てるんでしょ？"];
 
-  it("日文交给本地克隆 —— 念不了,它只会产出一段听不懂的声音", () => {
-    expect(unspeakable(ja, "clone", "")).toBe("ja");
+  it("日文交给只装了中英权重的本地克隆 —— 念不了", () => {
+    expect(unspeakable(ja, "clone", "", ["zh", "en"])).toBe("ja");
+  });
+
+  it("装上日语权重之后就念得了 —— 语言能力是**权重**的属性,不是引擎的", () => {
+    expect(unspeakable(ja, "clone", "", ["zh", "en", "ja"])).toBe("");
   });
 
   it("日文配 ja 音色 —— 正是该放行的情形", () => {
@@ -65,7 +69,7 @@ describe("念不念得了", () => {
   });
 
   it("中文字幕不触发任何提示", () => {
-    expect(unspeakable(["这是中文", "第二条"], "clone", "")).toBe("");
+    expect(unspeakable(["这是中文", "第二条"], "clone", "", ["zh", "en"])).toBe("");
   });
 });
 
@@ -90,5 +94,14 @@ describe("默认就选对,而不是先选错再警告", () => {
   it("有没有能念的,决定提示说「换音色」还是「换引擎」", () => {
     expect(hasVoiceFor("ja", "edge", edgeVoices)).toBe(true);
     expect(hasVoiceFor("ja", "volcano", [{ value: "zh_female_cancan_mars_bigtts" }])).toBe(false);
+  });
+});
+
+describe("占位符替换", () => {
+  it("同名占位符出现两次时要全换掉", () => {
+    // `.replace()` 只换第一个 —— 界面上会留一个字面的 {lang}(真出过,截图为证)。
+    const template = "这些字幕是{lang},…下一份{lang}模型(约 {size} GB)";
+    expect(template.replaceAll("{lang}", "日语").replace("{size}", "1.4")).not.toContain("{lang}");
+    expect(template.replace("{lang}", "日语")).toContain("{lang}");
   });
 });

@@ -163,9 +163,20 @@ def _refuse_if_unspeakable(text: str, engine: str, engine_voice: str, clone_engi
     label = {"ja": "日文", "ko": "韩文"}[script]
     if engine == "clone":
         if not clone_supports(script):
+            from app.audio import f5_models
+
+            missing = f5_models.missing_for_language(script)
+            if missing is not None:
+                # **能下就说下什么** —— 这不是引擎的固有限制,是这台机器上还缺一份权重。
+                size = round(missing.expected_bytes / 1_000_000_000, 1)
+                raise VoiceError(
+                    f"这段文本是{label},而本地克隆现在装的权重念不了它。"
+                    f"去设置的「声音克隆」下载{label}模型(约 {size} GB)后就能用你自己的音色念;"
+                    f"不想等的话,改用 Edge TTS 的{label}音色或 OpenAI TTS。"
+                )
             raise VoiceError(
-                f"这段文本是{label},而本地音色克隆用的模型只认中英文 —— 它不会报错,只会念出一段"
-                f"听不懂的声音。改用 Edge TTS 的 {label}音色,或 OpenAI TTS。"
+                f"这段文本是{label},而本地音色克隆没有能念它的模型 —— 它不会报错,只会念出一段"
+                f"听不懂的声音。改用 Edge TTS 的{label}音色,或 OpenAI TTS。"
             )
         return
     if engine == "edge":
@@ -576,6 +587,9 @@ def _run_synthesis_body(
                     "reference_text": voice.reference_text,
                     "text": text,
                 }
+                # 按这段文本该用哪份权重 —— 无条件问一句,**这里不需要知道哪个引擎有多份**。
+                # 有多份的引擎自己回答(tts_models.weights_for),没有的返回空,原样跑。
+                request.update(tts_models.weights_for(engine, text))
                 request["output_path"] = str(out_wav)
                 # 语速按引擎传:fish 的请求结构里没有这一项,塞进去只会被忽略,
                 # 而"传了却没用"正是今天反复出现的那种谎。
