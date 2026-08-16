@@ -307,6 +307,54 @@ Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the
   outrank floating panels — React Flow's viewport `transform` creates its own stacking context.
 - **Workflow edges** offer two shapes (bezier / smoothstep), persisted per user.
 
+### 2026-08-16: publish matrix on real accounts, backend i18n, trajectory view, subtitle dubbing
+
+- **Per-platform publish options** (`domain/publish.PLATFORM_OPTIONS`): visibility, YouTube's
+  `made_for_kids`, Xiaohongshu's originality declaration — declared once, the form renders from the
+  declaration. **B站 and 视频号 declare an empty set with a comment saying the control was looked for
+  and is not there**; an option that silently does nothing is worse than a missing one. TikTok and
+  YouTube publishing were driven end-to-end on real accounts (private / only-me posts), which is where
+  most of the fixes below came from: `waitButtonEnabled` was being handed CSS selectors and silently
+  answered "not ready" for ten minutes; YouTube's completion check matched the upload page itself and
+  reported success in 3 ms; a disabled `ytcp-button` read as clickable.
+- **The backend does its own i18n** (`core/i18n.py`): domain stores keys, the exit translates by
+  `Accept-Language`. Job messages carry `message_key` + `message_params` **in columns**, because a job
+  record outlives the request that wrote it — translating on write freezes the language at that moment,
+  which was the actual bug. Four ratchets keep it from drifting back.
+- **Type scale follows the screen**: 673 hardcoded font sizes collapsed into four `clamp()` tokens.
+- **FunASR is one multilingual entry, not a Chinese one.** The catalogue had bound it to Chinese and
+  then to two presets; both were wrong — the engine is multilingual, and *language picks the weights,
+  not the engine*. Collapsed to a single 972 MB SenseVoice bundle (was a 2.2 GB Chinese set), warmup
+  and transcribe now build the request through one shared function (they had drifted: warmup was
+  re-downloading 2 GB of weights the other path never used).
+- **Trajectory view for agent sessions** (`features/ai-studio/trace/`): three lanes (input / model /
+  tools) over the whole session, a step ledger below, per-step payload / result / timing. Two
+  projections — equal-width (needs no timestamps, always drawable) and real duration with idle
+  compressed — because *not every record has an absolute time*, and inventing one would be a lie.
+  Unknown is `null` everywhere, never `0`: "no usage events" and "spent nothing" are different facts.
+  The backend gained the other half: a **system-prompt snapshot recorded only on turns where it
+  changed** (cross-session memory and the task plan are interpolated into it, so it differs almost
+  every turn), and context injection stored on the user message — it was being interpolated into the
+  prompt and never persisted, so the trajectory showed a question the model never received.
+- **Subtitle dubbing** (`audio/subtitle_dub.py`): per-cue and batch, landing on a dedicated track
+  (`Track.role == "dub"`, migrated, backfilled by what is *on* the track — all-TTS clips and at least
+  one, so BGM tracks and the empty remains of a failed run are not promoted). "Fit to cue length" uses
+  the clip's own `speed` — the render already chains atempo — so it stays lossless and undoable.
+  Bilingual cues ask which line to read: feeding both to TTS reads the source and then the translation,
+  turning a 3-second cue into twelve.
+- **F5-TTS: language belongs to the weights, not the engine** (`audio/f5_models.py`). Two constants had
+  pinned the checkpoint, so "what languages does F5 support" got answered as "what languages does the
+  engine support" — and the user heard gibberish. The runtime was always ready (`F5TTS(ckpt_file=…,
+  vocab_file=…)`); it just had those two values nailed down. Ten languages are now a table; adding one
+  is a row plus a download. Each model lands in its own directory because **every community repo names
+  its vocab `vocab.txt`** — sharing a directory means the second download silently overwrites the
+  first's vocab, and the only symptom is "it still reads it wrong".
+- **A language guard in front of synthesis** (`audio/tts_language.py`): the engine does not error on a
+  script it cannot read, it just produces gibberish and reports success. The test is writing-system
+  only — kana / hangul / Cyrillic / Arabic / Devanagari are hard evidence; **Latin letters prove
+  nothing**, so French, German, Spanish, Italian and Finnish can only be chosen explicitly. Refusing
+  wrongly blocks a synthesis that would have worked, so anything unproven is let through.
+
 ## Next
 
 - Precise preview ("render preview"): render a selected range through the real export pipeline so a

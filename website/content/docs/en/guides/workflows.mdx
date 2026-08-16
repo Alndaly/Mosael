@@ -15,7 +15,17 @@ Workflows orchestrate a chain of actions (retrieval, generation, transcription, 
 ![Demo: add nodes, connect them, configure the LLM node](/media/gifs/workflows.gif)
 
 - The left column lists workflows; the rest is a React Flow canvas with a toolbar on top.
-- **Add node** from the toolbar. Types include: start, LLM, knowledge-base search, plugin tool, transcribe asset, export timeline, AI-generate asset, publish, condition, HTTP request, code, text template.
+- **Add node** from the toolbar, grouped roughly by what they are for:
+
+  | Group | Nodes |
+  | --- | --- |
+  | Flow | start, output, condition, delay, notify |
+  | Text & models | LLM, text template, text transform, translate, JSON extract, code |
+  | Loops & reuse | for-each, while, subgraph, call workflow |
+  | Media & cuts | AI-generate asset, synthesize speech, transcribe asset, export timeline, publish |
+  | Asset library | asset query, asset tag, asset update, create project |
+  | External | HTTP request, plugin tool |
+  | Browser | open / navigate / click / input / extract / scroll / upload / wait / evaluate / close |
 - **Edges** define execution order; drag from a node's right port to a downstream node's left port. The **condition** node has "true / false" outlets. The toolbar switches **edge shape** between curved (bezier) and stepped (right-angle); your choice is remembered.
 - Click a node to open its **inspector** (icon + inline rename + type in the header).
 

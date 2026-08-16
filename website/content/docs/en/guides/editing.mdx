@@ -42,8 +42,51 @@ The **Grading** tab on the right:
 
 ## Subtitles & filters
 
-- Add a subtitle at the playhead on the subtitle track and edit the text in place.
+- Add a subtitle at the playhead on the subtitle track and edit the text in place, or generate the
+  whole track from the transcript.
 - Filters and subtitles are burned into the exported cut.
+
+### Translation
+
+"Translate" works on the whole track or only the selected cues; tick "keep the original" to get a
+two-line "source / translation" cue. Two engines: **Google** is free and needs no setup, but it
+translates cue by cue with no context; the **AI model** uses the provider configured for this
+workspace and reads the sentence. Google is the default — it costs nothing and needs no key.
+
+### Dubbing
+
+![Subtitle dubbing: a per-cue entry point, landing on a dedicated dub track](/media/screens/subtitle-dub.png)
+
+![Demo: open the dub popover and turn on "fit to cue length"](/media/gifs/subtitle-dub.gif)
+
+Every cue carries its own dub button, and you can dub a batch. The audio lands on a dedicated **dub
+track**: the original audio is untouched, delete the track and you are back where you started, and
+dubbing again returns to that same track rather than stacking up a pile of one-clip tracks.
+
+- **Fit to cue length** (off by default): stretch or squeeze the voiceover to that cue's duration. It
+  uses the clip's own speed, so the render applies atempo — lossless, undoable, still adjustable in the
+  inspector afterwards. Past ±20% the pacing starts to sound off, so whether it is worth it is yours
+  to decide per clip.
+- **Bilingual cues** ask which line to read. Feeding the whole cue to TTS reads the source and then the
+  translation — a 3-second cue turns into twelve.
+- **Engine** is either local voice cloning or a remote engine (Edge / OpenAI / Volcano). For remote
+  engines the voice list is fetched per engine — Volcano's catalogue follows your account.
+
+> **When the language does not match, the engine does not error** — it reads the text with the rules
+> it knows, produces gibberish, and reports success. So it is caught at the moment you pick the engine,
+> with a way out, instead of after you listen to it.
+
+### Reading other languages in your own voice
+
+What local cloning can read **depends on which weights are installed**, not on the engine. The base
+weights are Chinese + English; Japanese, French, German, Spanish, Italian, Russian, Hindi, Arabic and
+Finnish each have a community finetune, and whichever is missing gets a download button right in the
+dub popover (~1.4 GB each).
+
+Japanese, Korean, Russian, Arabic and Hindi are recognised from the script itself — install the weights
+and they just work. French, German, Spanish, Italian and Finnish share the Latin alphabet with English:
+**no character can prove "this is French rather than English"**, so those are picked explicitly in the
+"Weights" dropdown.
 
 ## Export
 

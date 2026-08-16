@@ -14,42 +14,57 @@ Workflows nest (subgraphs / call-workflow / marquee-collapse), and every persist
 
 ### Recently added
 
-**Providers and models are now two levels** — a "provider" is **one endpoint plus one credential**,
-and it can hold any number of models; capabilities (chat / image / video / audio), context window,
-and the reasoning/vision switches all live on the **model**. A profile used to carry exactly one
-model, so one endpoint's chat model and image model could never appear in two capability sections —
-people ended up naming profiles after models and pasting the same key five times. Expanding a
-provider now lists its models; adding one is a searchable input (DashScope's catalog has 233 entries,
-which is neither scrollable nor findable as a flat list), and models missing from the catalog
-(private deployments, aliases) can be typed by hand.
+**Subtitle dubbing, and engines split from models** — every cue in the subtitle panel carries its own
+dub button, and you can also dub a batch. The audio lands on a dedicated dub track (the original audio
+is untouched; delete the track and you are back where you started), and dubbing again returns to that
+same track rather than stacking up a pile. "Fit to cue length" is optional — it uses the clip's own
+speed, so the render applies atempo: lossless, undoable, still adjustable afterwards.
 
-**Context meter and automatic compaction** — how much room is left is shown in the composer's session
-settings; past 80% of the window, older turns are summarized by the model and the recent ones kept.
-You can also compact on demand. Compaction is recorded in the conversation (how many messages moved
-out, how many tokens freed) rather than happening silently. Each model's context window is editable,
-defaulting to the vendor catalog.
+The thing that matters most on this path: **when the language does not match, the engine does not
+error**. It reads the text with the pronunciation rules it knows, hands back something that sounds
+almost-but-not-quite Chinese, and reports success. Now it is said at the moment you pick the engine,
+not after you listen to it. The test uses writing systems only (kana, hangul, Cyrillic, Arabic and
+Devanagari are hard evidence; Latin letters prove nothing, so those languages are chosen explicitly
+in the "Weights" dropdown).
 
-**Thinking mode** — off / low / medium / high per session, streamed into a block that collapses when
-done. "Off" only means we don't ask for it: models that think regardless (k3, DeepSeek reasoner) still
-have their thinking shown.
+Following that thread, F5-TTS's **language support moved from the engine onto the weights**: the engine
+speaks anything, the weights decide what. Ten languages (Chinese+English / Japanese / French / German /
+Spanish / Italian / Russian / Hindi / Arabic / Finnish) download on demand, and whichever one is missing
+gets a download button right there in the dub popover — reading Japanese in your own cloned voice is
+just one more checkpoint away.
 
-**Subscription quota** — Claude, Codex, Kimi Code, xAI, OpenRouter and Copilot plans can report their
-current quota and reset window on demand. Expired tokens refresh themselves; you're only asked to
-re-authorize when a refresh actually fails.
+![Subtitle dubbing: a per-cue entry point, landing on a dedicated dub track](docs/media/subtitle-dub.png)
 
-**Runs in the tray** — closing the window no longer quits. Scheduled tasks run inside the local
-backend, which is a child process of the app: on Windows/Linux, closing the window used to stop
-them silently while users assumed they were still running. The tray icon is the visible proof the
-app is alive; turn on **Launch at login** in Settings to have it standing by from boot. While a
-task is running the app blocks system sleep (a laptop closing mid-render suspends ffmpeg with it),
-and finished tasks raise a system notification — but **not while the window is focused**, so the
-same event is never announced twice.
+**A "Trajectory" view for agent sessions** — the conversation answers "what it said"; the trajectory
+answers **"what it did, and where the time went"**: three lanes (input / model / tools) compress the
+whole session into blocks, with a step-by-step ledger below and per-step arguments, results and timing.
+The system prompt is recorded **only on the turns where it changed** (cross-session memory and the task
+plan are both baked into it, so it differs almost every turn), and context injection is its own row —
+the prompt you see is the one the model actually received.
 
-**Approve confirmation cards inside Feishu** — when a turn is driven from Feishu, changes that
-need confirmation arrive as a card in that same chat; approve or reject without switching back to
-the desktop app. Who may approve follows the account binding: the person tapping the button must
-already be bound to an Open Studio account and still be a member of the workspace. Everyone in a
-group chat can see the card; seeing it is not permission to approve it.
+![Trajectory view: three lanes, a step ledger, and session totals](docs/media/agent-trace.png)
+
+**Per-platform publish options** — visibility (private / unlisted / public), YouTube's "made for kids",
+Xiaohongshu's originality declaration; declared in one place, and the form follows the platform.
+TikTok and YouTube automated publishing are verified end-to-end on real accounts; Bilibili and WeChat
+Channels were checked and have no visibility control, so we do not pretend they do.
+
+**The backend speaks your language too** — job messages, engine catalogs and download progress lines
+all follow the request's `Accept-Language`. Keys and params are stored, translation happens at the exit:
+a job record outlives the request that created it, and translating on write freezes the language forever.
+
+**Type scale follows the screen** — 673 hardcoded pixel sizes collapsed into four tokens.
+
+**Providers and models are two levels** — a "provider" is **one endpoint plus one credential** and can
+hold any number of models; capabilities, context window and the reasoning/vision switches live on the
+**model**.
+
+**Context headroom and auto-compaction** — the session settings show what is left; past 80% of the
+window the earlier turns are summarised and the recent ones kept. Compaction stays visible as a record.
+
+**Thinking levels / subscription quota / desktop residency / approving from Feishu** — per-session
+thinking budget; quota and reset windows for subscription providers; closing the window means the tray,
+not exit (scheduled jobs run in the local backend); confirmation cards can be approved in Feishu.
 
 **Workflow nesting (à la ComfyUI / dify)** — marquee-select nodes on the canvas and collapse them into a subgraph in one click; boundary references rewire automatically. Subgraphs nest arbitrarily, `call_workflow` reuses a whole flow as a tool, and loop bodies run on the same parallel engine as the top level.
 
@@ -174,7 +189,6 @@ cd frontend && pnpm gen:api              # regenerate TS types after backend Ope
 | --- | --- |
 | `~/.open-studio/open-studio.db` | Main SQLite DB (workspaces / projects / assets / sequences / jobs / accounts…) |
 | `~/.open-studio/media/` | Imported and exported media files |
-| `~/.open-studio/kb_vectors.db` | Knowledge-base vectors (Milvus Lite; remote configurable) |
 | `<userData>/logs/publisher.log` | Full publishing-executor trace (claim/goto/login/patrol/report) |
 | `<userData>/logs/backend.log` | Packaged-backend stdout/stderr |
 | `<userData>/Partitions/` | Persistent login sessions per publishing account |

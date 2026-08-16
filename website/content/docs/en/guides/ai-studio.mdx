@@ -45,6 +45,30 @@ summary itself.
 - The meter is anchored on **real usage reported by the vendor** (the last call's input + output);
   only messages newer than that are estimated.
 
+### Trajectory: what it did, and where the time went
+
+![Trajectory view: three lanes, a step ledger, and session totals](/media/screens/agent-trace.png)
+
+![Demo: switch from the conversation to the trajectory, then to the duration projection](/media/gifs/agent-trace.gif)
+
+The conversation answers "what it said". The **Trajectory** tab answers a different question: **what it
+did, and where the time went.**
+
+Three lanes (input / model / tools) compress the whole session into blocks, with two projections:
+**sequence** gives every record equal width (needs no timestamps, so it is always drawable), and
+**duration** lays them out by real elapsed time with the idle gaps squeezed out. Below is a
+step-by-step ledger; open a step to see its arguments, result and timing.
+
+The trajectory also carries the half the conversation never shows:
+
+- The **system prompt**, recorded only on the turns where it changed. It is not a constant —
+  cross-session memory and the current task plan are interpolated into it, so it differs almost every
+  turn, and when you are asking "why did it suddenly do that", this is the first place to look.
+- **Context injection** as its own row. What goes to the model is "what you typed + this context", so
+  the question you see in the trajectory is the one the model actually received.
+- Per-turn token detail (input / output / cache reads) on the turn header. With no usage records it is
+  blank rather than 0 — "not recorded" and "spent nothing" are different facts.
+
 ## Generate: text-to-image / text-to-video
 
 In **Generate** mode the left column is the **generation model** catalog, the middle is the results feed, and the composer takes your prompt:
