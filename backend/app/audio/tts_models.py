@@ -340,20 +340,26 @@ def _ffmpeg_runtime_dir(engine_python: str) -> str:
     return ""
 
 
-def weights_for(engine_id: str, text: str) -> dict[str, str]:
+def weights_for(engine_id: str, text: str, model_id: str = "") -> dict[str, str]:
     """这次合成该用**哪一份权重**。
 
     只有 F5 有多份(按语言分,见 audio/f5_models);别的引擎一份权重走天下,返回空字典。
     判断放在这个文件里,是因为"哪个引擎有多份权重"本身就是关于引擎的知识 —— 它属于目录,
     不属于调用方(棘轮 test_engine_capabilities_live_in_one_table 盯的正是这个)。
+
+    `model_id` 是**用户明说的**那一份,优先于按文字自动挑。这不是可选的锦上添花:法语、德语、
+    西班牙语、意大利语、芬兰语都写拉丁字母,没有任何字符能证明"这是法语而不是英语"——
+    自动挑永远挑不中它们,只能由人来说。
     """
     if engine_id != "f5-tts":
         return {}
     from app.audio import f5_models
     from app.audio.tts_language import detect_script
 
-    chosen = f5_models.for_language(detect_script(text))
-    return {"checkpoint": chosen.checkpoint, "vocab": chosen.vocab} if chosen is not None else {}
+    explicit = f5_models.get(model_id) if model_id else None
+    chosen = explicit if explicit is not None and f5_models.installed(explicit) else f5_models.for_language(detect_script(text))
+    # 给 worker 的是**本地**相对路径(每个模型在自己的子目录里),不是仓库内路径。
+    return {"checkpoint": chosen.local_checkpoint, "vocab": chosen.local_vocab} if chosen is not None else {}
 
 
 def _worker_env(engine_python: str = "") -> dict[str, str]:

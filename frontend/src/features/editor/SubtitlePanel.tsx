@@ -203,6 +203,9 @@ function SubtitleDub({
   const [engine, setEngine] = React.useState("clone");
   const [voiceId, setVoiceId] = React.useState("");
   const [engineVoice, setEngineVoice] = React.useState("");
+  //: 用哪份克隆权重。空 = 按文字自动挑 —— 中日韩俄阿印能自动认出来,而法德西意芬都写拉丁
+  //: 字母,没有任何字符能证明"这是法语而不是英语",只能由用户明说。
+  const [cloneModel, setCloneModel] = React.useState("");
   // 匹配段落长度默认**关**:变速会改语速听感,超出 ±20% 就明显不自然。值不值这个代价由用户
   // 按素材决定,而不是替他默认承受。开着时用的是片段自己的 speed,无损、可撤销、事后能微调。
   const [matchDuration, setMatchDuration] = React.useState(false);
@@ -317,7 +320,7 @@ function SubtitleDub({
         line,
         engine,
         ...(engine === "clone"
-          ? { voice_id: voiceId }
+          ? { voice_id: voiceId, clone_model: cloneModel }
           : {
               // 下拉在没选时**显示**第一个,那就提交同一个 —— 否则引擎会安静地用它自己的默认音。
               engine_voice: engineVoice || voiceChoices[0]?.value || "",
@@ -369,6 +372,27 @@ function SubtitleDub({
             </SelectContent>
           </Select>
         </label>
+        {engine === "clone" && (f5Models.data ?? []).filter((m) => m.installed).length > 1 && (
+          <label className="grid gap-1 text-xs text-muted-foreground">
+            <span>{t("subtitleDubWeights")}</span>
+            <Select value={cloneModel} onValueChange={setCloneModel}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {/* 「自动」排第一:中日韩俄阿印能按文字认出来,那是绝大多数情况。 */}
+                <SelectItem value="">{t("subtitleDubWeightsAuto")}</SelectItem>
+                {(f5Models.data ?? [])
+                  .filter((model) => model.installed)
+                  .map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      {model.label}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </label>
+        )}
         {engine === "clone" ? (
           voices.isSuccess && (voices.data ?? []).length === 0 ? (
             // 没有音色时不摆一个空下拉让人点 —— 直说下一步在哪。
@@ -451,11 +475,11 @@ function SubtitleDub({
             {engine === "clone" && missingModel
               ? // 同一个占位符出现两次,replace 只换第一个 —— 界面上会留一个字面的 {lang}(真出过)。
                 t("subtitleDubModelMissing")
-                  .replaceAll("{lang}", t(mismatch === "ja" ? "langName_ja" : "langName_ko"))
+                  .replaceAll("{lang}", t(`langName_${mismatch}` as never))
                   .replace("{size}", (missingModel.expected_bytes / 1_000_000_000).toFixed(1))
-              : hasVoiceFor(mismatch, engine, voiceChoices)
-                ? t(mismatch === "ja" ? "subtitleDubLangJaVoice" : "subtitleDubLangKoVoice")
-                : t(mismatch === "ja" ? "subtitleDubLangJa" : "subtitleDubLangKo")}
+                : hasVoiceFor(mismatch, engine, voiceChoices)
+                  ? t("subtitleDubLangVoice").replaceAll("{lang}", t(`langName_${mismatch}` as never))
+                  : t("subtitleDubLangEngine").replaceAll("{lang}", t(`langName_${mismatch}` as never))}
             {engine === "clone" && missingModel && (
               <Button
                 size="sm"

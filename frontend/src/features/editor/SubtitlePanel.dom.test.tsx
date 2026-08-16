@@ -162,7 +162,7 @@ describe("字幕配音入口", () => {
     await userEvent.click(screen.getAllByLabelText("subtitleDubThis")[0]);
     await waitFor(() => expect(screen.getByText("subtitleDubVoice")).toBeTruthy());
     expect(screen.queryByText("subtitleDubModelDownload")).toBeNull();
-    expect(screen.queryByText(/subtitleDubLangJa/)).toBeNull();
+    expect(screen.queryByText(/subtitleDubLang/)).toBeNull();
   });
 
   it("中文字幕不触发警告 —— 一条错误的警告会让人开始怀疑所有警告", async () => {

@@ -472,6 +472,7 @@ def dub_subtitles(sequence_id: str, body: SubtitleDubRequest, db: DbSession, use
     else:
         synthesis.pop("voice_id", None)
         synthesis.pop("clone_engine", None)
+        synthesis.pop("clone_model", None)
         synthesis["workspace_id"] = sequence.workspace_id
     try:
         return start_subtitle_dub(

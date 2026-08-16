@@ -62,3 +62,52 @@ def test_model_paths_do_not_collide() -> None:
     """
     paths = [model.checkpoint for model in f5_models.F5_MODELS]
     assert len(paths) == len(set(paths))
+
+
+def test_latin_script_languages_cannot_be_detected() -> None:
+    """法语、德语、西语、意语、芬兰语和英语共用拉丁字母 —— **没有任何字符能证明是哪一门**。
+
+    所以它们的权重永远自动挑不中,只能由用户明说(weights_for 的 model_id)。装作能认出来的
+    代价是给英文文本套上一份法语权重,而那同样是一段念不对的音频。
+    """
+    from app.audio.tts_language import detect_script
+
+    for text in ("Bonjour tout le monde", "Guten Tag alle zusammen", "Hola a todos", "Hello world"):
+        assert detect_script(text) == "", text
+
+
+def test_scripts_that_do_give_evidence() -> None:
+    from app.audio.tts_language import detect_script
+
+    assert detect_script("Привет, как дела") == "ru"
+    assert detect_script("مرحبا كيف حالك") == "ar"
+    assert detect_script("नमस्ते कैसे हैं आप") == "hi"
+
+
+def test_an_explicit_model_beats_the_guess(monkeypatch: pytest.MonkeyPatch) -> None:
+    """用户明说要哪份权重时,不再看文字 —— 这是拉丁字母那几门语言唯一的用法。"""
+    from app.audio import tts_models
+
+    monkeypatch.setattr(f5_models, "installed", lambda model: True)
+    picked = tts_models.weights_for("f5-tts", "Bonjour tout le monde", "fr")
+    assert picked["checkpoint"].startswith("fr/")
+
+    # 明说的那份没装 → 退回按文字挑(而不是拿一份不存在的权重去合成)。
+    monkeypatch.setattr(f5_models, "installed", lambda model: model.id == "base")
+    fallback = tts_models.weights_for("f5-tts", "Bonjour tout le monde", "fr")
+    assert fallback["checkpoint"].startswith("F5TTS_v1_Base/")
+
+
+def test_each_model_gets_its_own_directory_except_the_base() -> None:
+    """这些社区权重的 vocab **全叫 `vocab.txt`** —— 共用一个目录就会互相覆盖。
+
+    症状是"下完了还是念不对":装了法语再装德语,其中一个从此配着别人的 vocab 念,而两份文件
+    大小相近、名字相同,从盘上看不出任何异常。
+    """
+    local_vocabs = [model.local_vocab for model in f5_models.F5_MODELS]
+    assert len(local_vocabs) == len(set(local_vocabs))
+    local_ckpts = [model.local_checkpoint for model in f5_models.F5_MODELS]
+    assert len(local_ckpts) == len(set(local_ckpts))
+    # 基础模型仍落在根目录:已经下好它的机器不该因为这次改动重下 1.35 GB。
+    base = f5_models.get("base")
+    assert base is not None and base.local_checkpoint == base.checkpoint

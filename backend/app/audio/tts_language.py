@@ -21,6 +21,13 @@ import re
 _KANA = re.compile(r"[぀-ゟ゠-ヺー-ヿ]")
 #: 谚文音节 + 字母。
 _HANGUL = re.compile(r"[가-힣ᄀ-ᇿ㄰-㆏]")
+#: 西里尔(俄语等)、阿拉伯、天城文(印地语)—— 同样是**只属于某一族语言**的字母表。
+#: 注意这三条给出的是"字母系统",不是具体语言:西里尔也写乌克兰语、塞尔维亚语,天城文也写
+#: 马拉地语。所以它们只够回答「基础模型念不了这个」,不够回答「这一定是俄语」——
+#: 而这里要的正是前者。
+_CYRILLIC = re.compile(r"[а-џҊ-ԧ]")
+_ARABIC = re.compile(r"[؀-ۿݐ-ݿ]")
+_DEVANAGARI = re.compile(r"[ऀ-ॿ]")
 #: 计入分母的「实字」:去掉空白、数字、标点之后剩下的。
 _MEANINGFUL = re.compile(r"[^\s\d\W_]", re.UNICODE)
 
@@ -32,7 +39,12 @@ _MIN_COUNT = 2
 
 
 def detect_script(text: str) -> str:
-    """能确证的书写系统:`"ja"` / `"ko"`,证明不了就返回 `""`。
+    """能确证的书写系统:`"ja"` / `"ko"` / `"ru"` / `"ar"` / `"hi"`,证明不了就返回 `""`。
+
+    **拉丁字母的语言(法语、德语、西班牙语、意大利语、芬兰语)永远返回 `""`** —— 它们和英语
+    共用一套字母,没有任何字符能证明"这是法语而不是英语"。所以那几门语言的权重选不出来,
+    只能由用户明说要用哪一份(见 tts_models.weights_for 的 `model_id`)。装作能认出来的话,
+    代价是给英文文本套上一份法语权重,而那同样是一段念不对的音频。
 
     返回空串**不代表是中文或英文**,只代表「这段文本没有给出任何硬证据」—— 调用方据此放行,
     因为这里的职责是抓确凿的不匹配,不是给每段文本贴一个语言标签。
@@ -41,7 +53,13 @@ def detect_script(text: str) -> str:
     total = len(_MEANINGFUL.findall(body))
     if total == 0:
         return ""
-    for script, pattern in (("ja", _KANA), ("ko", _HANGUL)):
+    for script, pattern in (
+        ("ja", _KANA),
+        ("ko", _HANGUL),
+        ("ru", _CYRILLIC),
+        ("ar", _ARABIC),
+        ("hi", _DEVANAGARI),
+    ):
         hits = len(pattern.findall(body))
         if hits >= _MIN_COUNT and hits / total >= _MIN_SHARE:
             return script

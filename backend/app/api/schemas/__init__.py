@@ -1035,6 +1035,7 @@ class SynthesizeRequest(BaseModel):
     project_id: str | None = None
     #: 这一次用哪个本地引擎(f5-tts / fish-speech)。空 = 用设置页那个默认 ——
     #: 设置页是默认,不是唯一。
+    clone_model: str = Field(default="", max_length=40)
     clone_engine: str = Field(default="", max_length=40)
     #: 语速。**只有声明支持的引擎会用它**(见 TtsEngine.supports_speed):F5 的 infer 吃,
     #: fish 的请求结构里根本没有这一项。收下但不转发,好过让界面以为发了就生效。
@@ -1056,6 +1057,9 @@ class SubtitleDubRequest(BaseModel):
     #: 克隆引擎要一个音色行;远端引擎不需要,它自带发音人。
     voice_id: str | None = None
     clone_engine: str = Field(default="", max_length=40)
+    #: 明说要用哪一份克隆权重(见 audio/f5_models)。空 = 按文字自动挑。
+    #: 法语/德语/西语/意语/芬兰语都写拉丁字母,自动挑**永远挑不中**,只能由人来说。
+    clone_model: str = Field(default="", max_length=40)
     provider_profile_id: str | None = None
     engine_model: str = Field(default="", max_length=120)
     engine_voice: str = Field(default="", max_length=120)

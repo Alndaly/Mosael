@@ -149,7 +149,8 @@ def synthesize(voice_id: str, body: SynthesizeRequest, db: DbSession, user: Curr
     try:
         return voices.start_synthesis(
             db, voice_id=voice_id, text=body.text, project_id=body.project_id,
-            created_by=user.id, clone_engine=body.clone_engine, speed=body.speed,
+            created_by=user.id, clone_engine=body.clone_engine, clone_model=getattr(body, "clone_model", ""),
+            speed=body.speed,
         )
     except voices.VoiceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

@@ -42,7 +42,24 @@ class F5Model:
     #: ModelScope 上的同一份(有就优先走它:实测比 HF 快两个数量级)。空 = 只有 HF。
     modelscope_repo: str = ""
     note: str = ""
+    #: 文件直接落在托管目录根下。**只有基础模型是这样** —— 它的仓库路径自带 `F5TTS_v1_Base/`
+    #: 前缀,而且已经有机器下好了,改布局等于让它们重下 1.35 GB。
+    #: 其余模型一律落进自己的子目录:它们的 vocab **全叫 `vocab.txt`**,共用一个目录就会
+    #: 互相覆盖 —— 装了法语再装德语,其中一个从此配着别人的 vocab 念(测试抓到过)。
+    shared_root: bool = False
     extra: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def local_dir(self) -> str:
+        return "" if self.shared_root else self.id
+
+    @property
+    def local_checkpoint(self) -> str:
+        return self.checkpoint if self.shared_root else f"{self.id}/{self.checkpoint}"
+
+    @property
+    def local_vocab(self) -> str:
+        return self.vocab if self.shared_root else f"{self.id}/{self.vocab}"
 
 
 #: 出厂就认得的模型。加一门语言 = 在这里加一行 + 用户点一次下载,不改任何逻辑。
@@ -59,6 +76,7 @@ F5_MODELS: tuple[F5Model, ...] = (
         expected_bytes=1_350_000_000,
         modelscope_repo="AI-ModelScope/F5-TTS",
         note="f5ModelNote_base",
+        shared_root=True,
     ),
     F5Model(
         id="ja",
@@ -67,6 +85,90 @@ F5_MODELS: tuple[F5Model, ...] = (
         hf_repo="Jmica/F5TTS",
         checkpoint="JA_21999120/model_21999120.pt",
         vocab="JA_21999120/vocab_japanese.txt",
+        expected_bytes=1_400_000_000,
+        note="f5ModelNote_community",
+    ),
+    # 下面几门语言来自 F5-TTS 官方 SHARED.md 的社区微调清单。**文件名以仓库的真实文件列表为准**:
+    # 文档里有 `model_*.safetensors` 这种通配符,也有和仓库对不上的路径(日语那条就是)。
+    # 一律优先 .safetensors:它不执行 pickle,而这些权重来自第三方账号。
+    F5Model(
+        id="fr",
+        label="f5Model_fr",
+        languages=("fr",),
+        hf_repo="RASPIAUDIO/F5-French-MixedSpeakers-reduced",
+        checkpoint="model_last_reduced.pt",  # 这个仓库只有 .pt
+        vocab="vocab.txt",
+        expected_bytes=1_400_000_000,
+        note="f5ModelNote_community",
+    ),
+    F5Model(
+        id="de",
+        label="f5Model_de",
+        languages=("de",),
+        hf_repo="hvoss-techfak/F5-TTS-German",
+        checkpoint="model_f5tts_german.safetensors",
+        vocab="vocab.txt",
+        expected_bytes=1_400_000_000,
+        note="f5ModelNote_community",
+    ),
+    F5Model(
+        id="es",
+        label="f5Model_es",
+        languages=("es",),
+        hf_repo="jpgallegoar/F5-Spanish",
+        # 仓库里有 1200000 和 1250000 两份,取新的那份(文档写的是通配符)。
+        checkpoint="model_1250000.safetensors",
+        vocab="vocab.txt",
+        expected_bytes=1_400_000_000,
+        note="f5ModelNote_community",
+    ),
+    F5Model(
+        id="it",
+        label="f5Model_it",
+        languages=("it",),
+        hf_repo="alien79/F5-TTS-italian",
+        checkpoint="model_159600.safetensors",
+        vocab="vocab.txt",
+        expected_bytes=1_400_000_000,
+        note="f5ModelNote_community",
+    ),
+    F5Model(
+        id="ru",
+        label="f5Model_ru",
+        languages=("ru",),
+        hf_repo="hotstone228/F5-TTS-Russian",
+        checkpoint="model_last.safetensors",
+        vocab="vocab.txt",
+        expected_bytes=1_400_000_000,
+        note="f5ModelNote_community",
+    ),
+    F5Model(
+        id="hi",
+        label="f5Model_hi",
+        languages=("hi",),
+        hf_repo="SPRINGLab/F5-Hindi-24KHz",
+        checkpoint="model_2500000.safetensors",
+        vocab="vocab.txt",
+        expected_bytes=1_400_000_000,
+        note="f5ModelNote_community",
+    ),
+    F5Model(
+        id="ar",
+        label="f5Model_ar",
+        languages=("ar",),
+        hf_repo="silma-ai/silma-tts",
+        checkpoint="model.pt",  # 这个仓库只有 .pt
+        vocab="vocab.txt",
+        expected_bytes=1_400_000_000,
+        note="f5ModelNote_community",
+    ),
+    F5Model(
+        id="fi",
+        label="f5Model_fi",
+        languages=("fi",),
+        hf_repo="AsmoKoskinen/F5-TTS_Finnish_Model",
+        checkpoint="model_common_voice_fi_vox_populi_fi_20241206.safetensors",
+        vocab="vocab.txt",
         expected_bytes=1_400_000_000,
         note="f5ModelNote_community",
     ),
@@ -89,7 +191,7 @@ def root() -> Path:
 
 
 def checkpoint_path(model: F5Model) -> Path:
-    return root() / model.checkpoint
+    return root() / model.local_checkpoint
 
 
 def installed(model: F5Model) -> bool:
@@ -213,6 +315,7 @@ def _run_download(model_id: str) -> None:
             "checkpoint": model.checkpoint,
             "vocab": model.vocab,
             "target": str(root()),
+            "subdir": model.local_dir,
         }
         root().mkdir(parents=True, exist_ok=True)
 

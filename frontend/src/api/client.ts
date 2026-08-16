@@ -285,6 +285,8 @@ export function dubSubtitles(
     engine?: string;
     voice_id?: string | null;
     clone_engine?: string;
+    /** 明说用哪份克隆权重;空 = 按文字自动挑(拉丁字母的语言自动挑不中,只能明说)。 */
+    clone_model?: string;
     engine_voice?: string;
     speed?: number;
   },

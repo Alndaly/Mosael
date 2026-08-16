@@ -12,19 +12,34 @@
 const KANA = /[぀-ヿ]/g;
 /** 谚文。 */
 const HANGUL = /[가-힯ᄀ-ᇿ]/g;
+/** 西里尔、阿拉伯、天城文 —— 同样是只属于某一族语言的字母表(与后端 tts_language 同一套)。 */
+const CYRILLIC = /[а-џҊ-ԧ]/g;
+const ARABIC = /[؀-ۿݐ-ݿ]/g;
+const DEVANAGARI = /[ऀ-ॿ]/g;
 /** 计入分母的「实字」:去掉空白、数字、标点。 */
 const MEANINGFUL = /[^\s\d\p{P}\p{S}_]/gu;
 
 const MIN_SHARE = 0.1;
 const MIN_COUNT = 2;
 
-export type DubScript = "ja" | "ko" | "";
+/**
+ * 能确证的书写系统。**拉丁字母的语言不在其中** —— 法语、德语、西班牙语、意大利语、芬兰语
+ * 和英语共用一套字母,没有任何字符能证明"这是法语而不是英语",所以它们只能由用户明说
+ * (配音弹层里的「权重」下拉)。
+ */
+export type DubScript = "ja" | "ko" | "ru" | "ar" | "hi" | "";
 
 /** 能确证的书写系统;证明不了就是空串(**不代表是中文**,只代表没有硬证据)。 */
 export function detectScript(text: string): DubScript {
   const total = (text.match(MEANINGFUL) ?? []).length;
   if (total === 0) return "";
-  for (const [script, pattern] of [["ja", KANA], ["ko", HANGUL]] as const) {
+  for (const [script, pattern] of [
+    ["ja", KANA],
+    ["ko", HANGUL],
+    ["ru", CYRILLIC],
+    ["ar", ARABIC],
+    ["hi", DEVANAGARI],
+  ] as const) {
     const hits = (text.match(pattern) ?? []).length;
     if (hits >= MIN_COUNT && hits / total >= MIN_SHARE) return script;
   }

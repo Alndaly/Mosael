@@ -386,6 +386,7 @@ def start_synthesis(
     engine_model: str = "",
     speed: float = 1.0,
     clone_engine: str = "",
+    clone_model: str = "",
 ) -> Job:
     """Queue a synthesis job.
 
@@ -437,6 +438,7 @@ def start_synthesis(
             "text": text[:200],
             "engine": engine,
             "clone_engine": clone_engine if engine == "clone" else "",
+            "clone_model": clone_model,
             "engine_voice": engine_voice,
             "provider_profile_id": provider_profile_id,
             "engine_model": engine_model,
@@ -460,6 +462,7 @@ def start_synthesis(
             provider_profile_id,
             engine_model,
             clone_engine,
+            clone_model,
         ),
     )
     return job
@@ -478,6 +481,7 @@ def _run_synthesis(
     provider_profile_id: str | None = None,
     engine_model: str = "",
     clone_engine: str = "",
+    clone_model: str = "",
 ) -> None:
     """Take an admission slot before touching the database — see run_job_guarded.
 
@@ -498,6 +502,7 @@ def _run_synthesis(
         provider_profile_id,
         engine_model,
         clone_engine,
+        clone_model,
     )
     if engine == "clone":
         with TTS_SLOTS:
@@ -538,6 +543,7 @@ def _run_synthesis_body(
     provider_profile_id: str | None = None,
     engine_model: str = "",
     clone_engine: str = "",
+    clone_model: str = "",
 ) -> None:
     with SessionLocal() as db:
         job = db.get(Job, job_id)
@@ -589,7 +595,7 @@ def _run_synthesis_body(
                 }
                 # 按这段文本该用哪份权重 —— 无条件问一句,**这里不需要知道哪个引擎有多份**。
                 # 有多份的引擎自己回答(tts_models.weights_for),没有的返回空,原样跑。
-                request.update(tts_models.weights_for(engine, text))
+                request.update(tts_models.weights_for(engine, text, clone_model))
                 request["output_path"] = str(out_wav)
                 # 语速按引擎传:fish 的请求结构里没有这一项,塞进去只会被忽略,
                 # 而"传了却没用"正是今天反复出现的那种谎。

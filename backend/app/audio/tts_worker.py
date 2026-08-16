@@ -325,6 +325,10 @@ def fetch_named_model(request: dict[str, Any]) -> str:
     target = request.get("target") or os.environ.get("OPEN_STUDIO_F5_MODEL_DIR", "").strip()
     if not target:
         raise RuntimeError("没有指定权重目录")
+    # 每个模型落进自己的子目录:这些社区权重的 vocab **全叫 vocab.txt**,共用一个目录会互相覆盖。
+    subdir = (request.get("subdir") or "").strip()
+    if subdir:
+        target = str(Path(target) / subdir)
     files = [path for path in (request.get("checkpoint"), request.get("vocab")) if path]
     modelscope_repo = (request.get("modelscope_repo") or "").strip()
     use_modelscope = bool(modelscope_repo) and os.environ.get("OPEN_STUDIO_MODEL_SOURCE", "").strip() == "modelscope"
