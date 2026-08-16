@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, CheckCircle2, CircleAlert, ExternalLink, FolderOutput, ListChecks, Loader2, Plus, Rocket, Sparkles, Trash2, Users, X } from "lucide-react";
 import { toast } from "sonner";
 
+import { deleteWarningKey } from "@/features/publish/publishDeleteWarning";
 import {
   api,
   createPublishTask,
@@ -142,14 +143,18 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
       <ConfirmDialog
         open={batchDeleting}
         title={t("deleteConfirmTitle")}
-        body={t("publishDeleteBody")}
+        // 选中的里面只要有一条已经发出去了,就按"发过"的说法警告 —— 批量删最容易顺手把
+        // 成功记录一起带走,而那本账没了之后,"我发过什么"就只剩记忆了。
+        body={t(
+          deleteWarningKey((tasks.data ?? []).filter((task) => selectedIds.has(task.id)).map((task) => task.status)) as never,
+        )}
         onCancel={() => setBatchDeleting(false)}
         onConfirm={() => batchRemove.mutate()}
       />
       <ConfirmDialog
         open={deleting !== null}
         title={t("deleteConfirmTitle")}
-        body={t("publishDeleteBody")}
+        body={t(deleteWarningKey(deleting ? [deleting.status] : []) as never)}
         onCancel={() => setDeleting(null)}
         onConfirm={() => deleting && remove.mutate(deleting.id)}
       />
