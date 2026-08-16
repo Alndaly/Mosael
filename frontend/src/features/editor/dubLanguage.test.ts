@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { detectScript, unspeakable, voiceLanguage } from "./dubLanguage";
+import { detectScript, hasVoiceFor, pickVoiceFor, unspeakable, voiceLanguage } from "./dubLanguage";
 
 describe("书写系统识别", () => {
   it("假名是日文的硬证据", () => {
@@ -66,5 +66,29 @@ describe("念不念得了", () => {
 
   it("中文字幕不触发任何提示", () => {
     expect(unspeakable(["这是中文", "第二条"], "clone", "")).toBe("");
+  });
+});
+
+
+describe("默认就选对,而不是先选错再警告", () => {
+  const edgeVoices = [
+    { value: "zh-CN-XiaoxiaoNeural" },
+    { value: "en-US-AriaNeural" },
+    { value: "ja-JP-NanamiNeural" },
+  ];
+
+  it("日文字幕 + Edge → 直接落在日语音色上", () => {
+    // 用户选了 Edge 却看到「晓晓」和一条警告,只会以为选错了引擎 —— 他没错,是默认值错了。
+    expect(pickVoiceFor("ja", "edge", edgeVoices)).toBe("ja-JP-NanamiNeural");
+  });
+
+  it("挑不出来时返回空串 —— 保持引擎自己的默认,不硬塞一个", () => {
+    expect(pickVoiceFor("ja", "volcano", [{ value: "zh_female_cancan_mars_bigtts" }])).toBe("");
+    expect(pickVoiceFor("", "edge", edgeVoices)).toBe("");
+  });
+
+  it("有没有能念的,决定提示说「换音色」还是「换引擎」", () => {
+    expect(hasVoiceFor("ja", "edge", edgeVoices)).toBe(true);
+    expect(hasVoiceFor("ja", "volcano", [{ value: "zh_female_cancan_mars_bigtts" }])).toBe(false);
   });
 });

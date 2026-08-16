@@ -69,3 +69,24 @@ export function dubTextOf(clip: { text_override?: string | null }, line: "all" |
   if (line === "last") return lines[lines.length - 1];
   return lines.join("\n");
 }
+
+
+/**
+ * 从这个引擎的音色里挑一个**念得了这段文本**的。挑不出来返回空串。
+ *
+ * 有它才不必让用户自己去对:选了 Edge、字幕是日文,就该直接落在日语音色上,而不是先落在
+ * 「晓晓」上、再弹一条警告让他猜要改什么(用户就是这么被绕进去的)。
+ */
+export function pickVoiceFor(
+  script: DubScript,
+  engine: string,
+  choices: readonly { value: string }[],
+): string {
+  if (!script) return "";
+  return choices.find((item) => voiceLanguage(engine, item.value) === script)?.value ?? "";
+}
+
+/** 这个引擎的音色里,有没有念得了这段文本的 —— 决定提示该说「换音色」还是「换引擎」。 */
+export function hasVoiceFor(script: DubScript, engine: string, choices: readonly { value: string }[]): boolean {
+  return Boolean(pickVoiceFor(script, engine, choices));
+}

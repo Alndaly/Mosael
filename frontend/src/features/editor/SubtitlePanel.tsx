@@ -27,7 +27,7 @@ import {
 } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { dubEngineChoices } from "@/features/editor/dubEngines";
-import { dubTextOf, unspeakable } from "@/features/editor/dubLanguage";
+import { detectScript, dubTextOf, hasVoiceFor, pickVoiceFor, unspeakable } from "@/features/editor/dubLanguage";
 import { clipEnd, formatTimecode } from "@/domain/timeline/geometry";
 import { PILL } from "@/features/editor/pill";
 import { useEditorStore } from "@/stores/editorStore";
@@ -240,6 +240,15 @@ function SubtitleDub({
     setEngineVoice("");
   }, [engine]);
   const chosenVoice = voiceChoices.find((item) => item.value === (engineVoice || voiceChoices[0]?.value));
+  // 这段字幕是什么文字。每次算,不缓存 —— 判据只扫几行字符,比维护一个依赖数组便宜。
+  const wantScript = detectScript(targets.map((clip) => dubTextOf(clip, line)).join("\n"));
+  // **默认就选对**,而不是先落在第一个音色上再弹警告让用户猜要改什么。只在用户还没手动选过
+  // (engineVoice 为空)时动手,选过就不再覆盖 —— 那是他的决定。
+  React.useEffect(() => {
+    if (engine === "clone" || engineVoice || voiceChoices.length === 0) return;
+    const match = pickVoiceFor(wantScript, engine, voiceChoices);
+    if (match) setEngineVoice(match);
+  }, [engine, engineVoice, voiceChoices, wantScript]);
   // 语言对不上时,引擎**不会报错** —— 它按自己那套发音规则硬念一遍,交出一段听不懂的声音。
   // 后端会拦(audio/tts_language),但那是在排队之后;文本就在眼前,这一刻就该说。
   const mismatch = unspeakable(
@@ -414,7 +423,11 @@ function SubtitleDub({
         </label>
         {mismatch && (
           <p className="m-0 rounded-md border border-[color-mix(in_srgb,var(--destructive)_35%,var(--border))] bg-[color-mix(in_srgb,var(--destructive)_8%,transparent)] px-2 py-1.5 text-ui-2xs leading-[1.5] text-foreground">
-            {t(mismatch === "ja" ? "subtitleDubLangJa" : "subtitleDubLangKo")}
+            {/* 说清楚**下一步动哪儿**:这个引擎里有能念的音色就让他换音色 —— 已经选对引擎却被
+                告知「换引擎」,只会让人以为选的这个不行(用户就是这么被绕进去的)。 */}
+            {hasVoiceFor(mismatch, engine, voiceChoices)
+              ? t(mismatch === "ja" ? "subtitleDubLangJaVoice" : "subtitleDubLangKoVoice")
+              : t(mismatch === "ja" ? "subtitleDubLangJa" : "subtitleDubLangKo")}
           </p>
         )}
         <p className="m-0 text-ui-2xs leading-[1.5] text-muted-foreground">{t("subtitleDubTrackNote")}</p>

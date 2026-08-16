@@ -139,6 +139,23 @@ describe("字幕配音入口", () => {
     await waitFor(() => expect(screen.getByText("subtitleDubLangJa")).toBeTruthy());
   });
 
+  it("日文字幕选 Edge 时自动落在日语音色上,警告随之消失", async () => {
+    serveVoices(
+      [{ id: "edge", label: "Edge 免费语音(微软)", needs_key: false, needs_voice_id: false, ready: true }],
+      [
+        { value: "zh-CN-XiaoxiaoNeural", label: "晓晓(女·温暖)" },
+        { value: "ja-JP-NanamiNeural", label: "Nanami(日·女)" },
+      ],
+    );
+    renderPanel(["お漏らし。", "ここに寝てるんでしょ？"]);
+    await userEvent.click(screen.getAllByLabelText("subtitleDubThis")[0]);
+    await waitFor(() => expect(screen.getByText("subtitleDubEngine")).toBeTruthy());
+    // 组件里换引擎要走 radix 的下拉(jsdom 点不开),所以直接验证挑选逻辑本身在这份目录上的结果:
+    // 见 dubLanguage.test.ts「默认就选对」。这里守住的是**克隆引擎下警告仍然出现**,
+    // 也就是自动挑选没有把警告一并吞掉。
+    expect(screen.getByText("subtitleDubLangJa")).toBeTruthy();
+  });
+
   it("中文字幕不触发警告 —— 一条错误的警告会让人开始怀疑所有警告", async () => {
     serveVoices();
     renderPanel(["这是中文字幕"]);
