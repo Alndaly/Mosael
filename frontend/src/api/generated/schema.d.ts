@@ -1206,6 +1206,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tts/f5-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List F5 Models
+         * @description 本地克隆能用哪几份权重,各自认得什么语言、装没装。
+         *
+         *     这是「引擎 / 模型」分开之后新长出来的一层:引擎什么语言都支持,支持范围由权重决定
+         *     (见 audio/f5_models)。
+         */
+        get: operations["list_f5_models_api_tts_f5_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tts/f5-models/{model_id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Download F5 Model */
+        post: operations["download_f5_model_api_tts_f5_models__model_id__download_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tts/engines": {
         parameters: {
             query?: never;
@@ -2041,6 +2081,29 @@ export interface paths {
         put?: never;
         /** Redo Sequence */
         post: operations["redo_sequence_api_sequences__sequence_id__redo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sequences/{sequence_id}/dub-subtitles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dub Subtitles
+         * @description 给选中的字幕条配音,产物落到一条新的音频轨。
+         *
+         *     两道闸门都要过:配音**改这条时间线**(edit),也**花 AI 的钱**(ai)。少判一个,就等于让
+         *     只读成员消费工作区的额度、或者让有额度的人改别人的片子。
+         */
+        post: operations["dub_subtitles_api_sequences__sequence_id__dub_subtitles_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7304,12 +7367,75 @@ export interface components {
             /** Duration */
             duration: number;
         };
+        /**
+         * SubtitleDubRequest
+         * @description 给选中的字幕条配音。音色/引擎那一套与 /tts/synthesize 同构 —— 配音就是合成,只是文本
+         *     来自字幕、产物直接落到时间线上。
+         */
+        SubtitleDubRequest: {
+            /** Clip Ids */
+            clip_ids: string[];
+            /**
+             * Match Duration
+             * @default false
+             */
+            match_duration: boolean;
+            /**
+             * Line
+             * @default all
+             */
+            line: string;
+            /**
+             * Engine
+             * @default clone
+             */
+            engine: string;
+            /** Voice Id */
+            voice_id?: string | null;
+            /**
+             * Clone Engine
+             * @default
+             */
+            clone_engine: string;
+            /**
+             * Clone Model
+             * @default
+             */
+            clone_model: string;
+            /** Provider Profile Id */
+            provider_profile_id?: string | null;
+            /**
+             * Engine Model
+             * @default
+             */
+            engine_model: string;
+            /**
+             * Engine Voice
+             * @default
+             */
+            engine_voice: string;
+            /**
+             * Engine Voice Resource
+             * @default
+             */
+            engine_voice_resource: string;
+            /**
+             * Speed
+             * @default 1
+             */
+            speed: number;
+        };
         /** SynthesizeRequest */
         SynthesizeRequest: {
             /** Text */
             text: string;
             /** Project Id */
             project_id?: string | null;
+            /**
+             * Clone Model
+             * @default
+             */
+            clone_model: string;
             /**
              * Clone Engine
              * @default
@@ -7401,6 +7527,11 @@ export interface components {
              * @default false
              */
             duck: boolean;
+            /**
+             * Role
+             * @default
+             */
+            role: string;
             /** Clips */
             clips?: components["schemas"]["ClipOut"][];
         };
@@ -8100,6 +8231,10 @@ export interface components {
              * @default 0
              */
             usage_unknown_cost_events: number;
+            /** Usage Unpriced */
+            usage_unpriced?: {
+                [key: string]: unknown;
+            }[];
             /**
              * Usage Duration Seconds
              * @default 0
@@ -10743,6 +10878,70 @@ export interface operations {
             };
         };
     };
+    list_f5_models_api_tts_f5_models_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_f5_model_api_tts_f5_models__model_id__download_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_tts_engines_api_tts_engines_get: {
         parameters: {
             query?: never;
@@ -12435,6 +12634,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dub_subtitles_api_sequences__sequence_id__dub_subtitles_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubtitleDubRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
                 };
             };
             /** @description Validation Error */

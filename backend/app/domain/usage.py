@@ -43,6 +43,10 @@ class UsageSummary:
     token_daily: list[dict[str, Any]]
     by_capability: dict[str, int]
     by_provider: dict[str, int]
+    #: 哪几个「供应商 + 模型 + 能力」的用量没能定价,各多少次。
+    #: **有它才说得出人话**:此前界面只知道"有 N 次没价",于是写成「暂无价格规则」——
+    #: 而用户明明配了九条,只是没有一条对上他实际在用的那个模型。笼统的否定让人以为功能坏了。
+    unpriced: list[dict[str, Any]]
 
 
 #: 计价单位。带 `million_` 前缀的由 _quantity_for_unit 自动换算,不必单列。
@@ -351,6 +355,7 @@ def summarize_usage(db: Session, *, workspace_id: str, days: int = 14) -> UsageS
     }
     by_capability: dict[str, int] = {}
     by_provider: dict[str, int] = {}
+    unpriced_index: dict[tuple[str, str, str], int] = {}
     total_cost = 0
     unknown = 0
     duration = 0.0
@@ -373,6 +378,8 @@ def summarize_usage(db: Session, *, workspace_id: str, days: int = 14) -> UsageS
             currency = event.currency or currency
         else:
             unknown += 1
+            key = (event.provider or "", event.model or "", event.capability or "")
+            unpriced_index[key] = unpriced_index.get(key, 0) + 1
         if event.duration_seconds:
             duration += float(event.duration_seconds)
         day = str(event.created_at.date())
@@ -414,6 +421,13 @@ def summarize_usage(db: Session, *, workspace_id: str, days: int = 14) -> UsageS
         ],
         by_capability=by_capability,
         by_provider=by_provider,
+        # 次数多的排前面:要补价的话,先补这几个最划算。
+        unpriced=[
+            {"provider": provider, "model": model, "capability": capability, "events": count}
+            for (provider, model, capability), count in sorted(
+                unpriced_index.items(), key=lambda item: item[1], reverse=True
+            )
+        ],
     )
 
 

@@ -275,7 +275,12 @@ export function HomeView({
           </div>
           <div className="grid content-start gap-1.5 rounded-lg border border-border bg-panel px-3.5 pb-2 pt-2.5">
             <h2 className="m-0 text-xs font-[650] text-muted-foreground">{t("homeChartUsage")}</h2>
-            <UsageCostChart daily={stats.usage_daily} currency={stats.usage_currency} unknown={stats.usage_unknown_cost_events} />
+            <UsageCostChart
+              daily={stats.usage_daily}
+              currency={stats.usage_currency}
+              unknown={stats.usage_unknown_cost_events}
+              unpriced={stats.usage_unpriced}
+            />
           </div>
           <div className="grid content-start gap-1.5 rounded-lg border border-border bg-panel px-3.5 pb-2 pt-2.5">
             <h2 className="m-0 flex items-center justify-between gap-2 text-xs font-[650] text-muted-foreground">

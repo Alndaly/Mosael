@@ -1933,6 +1933,9 @@ class WorkspaceSummaryOut(BaseModel):
     usage_currency: str = "USD"
     usage_event_count: int = 0
     usage_unknown_cost_events: int = 0
+    #: 没能定价的「供应商 + 模型 + 能力」及其次数。界面据此说清**缺哪个模型的价**,
+    #: 而不是笼统一句「暂无价格规则」——后者在用户配了规则、只是没配这个模型时是错的。
+    usage_unpriced: list[dict] = Field(default_factory=list)
     usage_duration_seconds: float = 0
     usage_token_count: int = 0
     usage_cache_read_tokens: int = 0

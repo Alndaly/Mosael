@@ -3296,6 +3296,87 @@
         }
       }
     },
+    "/api/tts/f5-models": {
+      "get": {
+        "tags": [
+          "voices"
+        ],
+        "summary": "List F5 Models",
+        "description": "本地克隆能用哪几份权重,各自认得什么语言、装没装。\n\n这是「引擎 / 模型」分开之后新长出来的一层:引擎什么语言都支持,支持范围由权重决定\n(见 audio/f5_models)。",
+        "operationId": "list_f5_models_api_tts_f5_models_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "type": "array",
+                  "title": "Response List F5 Models Api Tts F5 Models Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tts/f5-models/{model_id}/download": {
+      "post": {
+        "tags": [
+          "voices"
+        ],
+        "summary": "Download F5 Model",
+        "operationId": "download_f5_model_api_tts_f5_models__model_id__download_post",
+        "parameters": [
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Model Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Download F5 Model Api Tts F5 Models  Model Id  Download Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/tts/engines": {
       "get": {
         "tags": [
@@ -5815,6 +5896,59 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SequenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{sequence_id}/dub-subtitles": {
+      "post": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Dub Subtitles",
+        "description": "给选中的字幕条配音,产物落到一条新的音频轨。\n\n两道闸门都要过:配音**改这条时间线**(edit),也**花 AI 的钱**(ai)。少判一个,就等于让\n只读成员消费工作区的额度、或者让有额度的人改别人的片子。",
+        "operationId": "dub_subtitles_api_sequences__sequence_id__dub_subtitles_post",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubtitleDubRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
                 }
               }
             }
@@ -20046,6 +20180,101 @@
         ],
         "title": "SubtitleCueInput"
       },
+      "SubtitleDubRequest": {
+        "properties": {
+          "clip_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Clip Ids"
+          },
+          "match_duration": {
+            "type": "boolean",
+            "title": "Match Duration",
+            "default": false
+          },
+          "line": {
+            "type": "string",
+            "pattern": "^(all|first|last)$",
+            "title": "Line",
+            "default": "all"
+          },
+          "engine": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Engine",
+            "default": "clone"
+          },
+          "voice_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Id"
+          },
+          "clone_engine": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Clone Engine",
+            "default": ""
+          },
+          "clone_model": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Clone Model",
+            "default": ""
+          },
+          "provider_profile_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Profile Id"
+          },
+          "engine_model": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Engine Model",
+            "default": ""
+          },
+          "engine_voice": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Engine Voice",
+            "default": ""
+          },
+          "engine_voice_resource": {
+            "type": "string",
+            "maxLength": 60,
+            "title": "Engine Voice Resource",
+            "default": ""
+          },
+          "speed": {
+            "type": "number",
+            "maximum": 3.0,
+            "minimum": 0.25,
+            "title": "Speed",
+            "default": 1.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "clip_ids"
+        ],
+        "title": "SubtitleDubRequest",
+        "description": "给选中的字幕条配音。音色/引擎那一套与 /tts/synthesize 同构 —— 配音就是合成,只是文本\n来自字幕、产物直接落到时间线上。"
+      },
       "SynthesizeRequest": {
         "properties": {
           "text": {
@@ -20064,6 +20293,12 @@
               }
             ],
             "title": "Project Id"
+          },
+          "clone_model": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Clone Model",
+            "default": ""
           },
           "clone_engine": {
             "type": "string",
@@ -20210,6 +20445,11 @@
             "type": "boolean",
             "title": "Duck",
             "default": false
+          },
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "default": ""
           },
           "clips": {
             "items": {
@@ -21559,6 +21799,14 @@
             "type": "integer",
             "title": "Usage Unknown Cost Events",
             "default": 0
+          },
+          "usage_unpriced": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Usage Unpriced"
           },
           "usage_duration_seconds": {
             "type": "number",

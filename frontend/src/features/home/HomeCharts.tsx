@@ -96,10 +96,13 @@ export function UsageCostChart({
   daily,
   currency,
   unknown,
+  unpriced,
 }: {
   daily: WorkspaceSummary["usage_daily"];
   currency: string;
   unknown: number;
+  /** 没能定价的「供应商 + 模型」及次数,由后端聚合(见 domain/usage.summarize_usage)。 */
+  unpriced?: WorkspaceSummary["usage_unpriced"];
 }) {
   const t = useI18n();
   const rows = daily ?? [];
@@ -109,11 +112,21 @@ export function UsageCostChart({
     return <EmptyState size="compact" icon={<Coins size={15} />} title={t("homeChartEmptyUsage")} />;
   }
   if (maxCost === 0 && unknown > 0) {
+    // **说清缺的是哪个模型的价**,而不是笼统一句「暂无价格规则」——用户配了九条规则却被这么告知,
+    // 只会以为功能坏了。真相通常是"这个模型没配":规则挂在别的档案 / 别的模型上。
+    const missing = (unpriced ?? []).slice(0, 3).map((row) => row.model || row.provider || "?");
     return (
       <EmptyState
         size="compact"
         icon={<Coins size={15} />}
         title={t("homeChartUsageUnpriced").replace("{n}", String(unknown || totalEvents))}
+        body={
+          missing.length > 0
+            ? t("homeChartUsageUnpricedModels")
+                .replace("{models}", missing.join("、"))
+                .replace("{more}", (unpriced?.length ?? 0) > 3 ? t("homeChartUsageUnpricedMore").replace("{n}", String((unpriced?.length ?? 0) - 3)) : "")
+            : undefined
+        }
         action={
           <button
             type="button"

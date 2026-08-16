@@ -368,6 +368,7 @@ def workspace_summary(workspace_id: str, db: DbSession, user: CurrentUser) -> Wo
         usage_currency=usage.currency,
         usage_event_count=usage.event_count,
         usage_unknown_cost_events=usage.unknown_cost_events,
+        usage_unpriced=usage.unpriced,
         usage_duration_seconds=usage.duration_seconds,
         usage_token_count=usage.token_count,
         usage_cache_read_tokens=usage.cache_read_tokens,
