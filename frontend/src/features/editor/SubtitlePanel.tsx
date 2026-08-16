@@ -305,8 +305,11 @@ function SubtitleDub({
   const jobStatus = job.data?.status ?? null;
   React.useEffect(() => {
     if (jobStatus !== "succeeded" && jobStatus !== "failed") return;
-    // 成功要刷时间线(新轨在那儿),失败也要刷 —— 部分成功时已经落地的那几段同样得看得见。
+    // 时间线和**素材库**都要刷。只刷时间线的话,新片段引用的素材前端还不知道 ——
+    // 片段标题会回退成一串 id、波形也无从查起(它是按 asset.media_info.has_waveform 拉的),
+    // 看起来就像"配音没有波形"。失败也刷:部分成功时已经落地的那几段同样得看得见。
     void qc.invalidateQueries({ queryKey: ["sequences"] });
+    void qc.invalidateQueries({ queryKey: ["assets"] });
     if (jobStatus === "succeeded") toast.success(job.data?.message ?? t("subtitleDubDone"));
     else toast.error(job.data?.message ?? t("subtitleDubFailed"), { description: job.data?.error ?? undefined });
     setJobId(null);
