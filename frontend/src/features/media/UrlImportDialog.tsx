@@ -5,8 +5,10 @@ import { toast } from "sonner";
 
 import { importFromUrl, listBrowserProfiles, probeUrl, type UrlProbe, type Workspace } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { NONE, optionalValue } from "@/components/ui/selectSentinel";
 import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -41,7 +43,7 @@ export function UrlImportDialog({
   const [kind, setKind] = React.useState<"video" | "audio">("video");
   //: 借哪个登录身份。会员视频、私享列表不带登录态就只能看到"不可用" —— 而这个应用本来就把
   //: 所有持久登录攒在浏览器池里,没有理由让用户去别处导一份 cookie 出来。
-  const [profileId, setProfileId] = React.useState("");
+  const [profileId, setProfileId] = React.useState(NONE);
   const profiles = useQuery({
     queryKey: ["browser-profiles", workspace.id],
     queryFn: () => listBrowserProfiles(workspace.id),
@@ -57,7 +59,7 @@ export function UrlImportDialog({
   }, [open]);
 
   const probe = useMutation({
-    mutationFn: () => probeUrl(workspace.id, url.trim(), profileId || null),
+    mutationFn: () => probeUrl(workspace.id, url.trim(), optionalValue(profileId)),
     onSuccess: (result) => {
       setListing(result);
       // 单条视频就是用户想要的那一条,直接勾上 —— 让他为一条结果再点一次是纯仪式。
@@ -73,7 +75,7 @@ export function UrlImportDialog({
         workspace_id: workspace.id,
         project_id: projectId ?? null,
         kind,
-        profile_id: profileId || null,
+        profile_id: optionalValue(profileId),
         items: (listing?.entries ?? [])
           .filter((entry) => selected.has(entry.url))
           .map((entry) => ({ url: entry.url, title: entry.title })),
@@ -92,22 +94,35 @@ export function UrlImportDialog({
     setSelected(allSelected ? new Set() : new Set(entries.map((entry) => entry.url)));
 
   return (
-    <ModalShell open={open} onOpenChange={onOpenChange} title={t("urlImportTitle")}>
+    <ModalShell
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t("urlImportTitle")}
+      className="w-[min(560px,92vw)] max-w-none"
+    >
       <div className="grid min-w-0 gap-2.5">
         <form
-          className="flex items-center gap-1.5"
+          className="flex min-w-0 items-center gap-1.5"
           onSubmit={(event) => {
             event.preventDefault();
             if (url.trim()) probe.mutate();
           }}
         >
           <Input
+            className="min-w-0 flex-1"
             value={url}
             placeholder={t("urlImportPlaceholder")}
             onChange={(event) => setUrl(event.target.value)}
             autoFocus
           />
-          <Button type="submit" size="sm" variant="outline" loading={probe.isPending} disabled={!url.trim()}>
+          <Button
+            type="submit"
+            size="sm"
+            variant="outline"
+            className="shrink-0"
+            loading={probe.isPending}
+            disabled={!url.trim()}
+          >
             {t("urlImportProbe")}
           </Button>
         </form>
@@ -121,7 +136,7 @@ export function UrlImportDialog({
               </SelectTrigger>
               <SelectContent>
                 {/* 「不用」排第一:绝大多数链接是公开内容,借登录态既没必要也多一次占用。 */}
-                <SelectItem value="">{t("urlImportProfileNone")}</SelectItem>
+                <SelectItem value={NONE}>{t("urlImportProfileNone")}</SelectItem>
                 {(profiles.data ?? [])
                   .filter((profile) => profile.enabled)
                   .map((profile) => (
@@ -142,11 +157,11 @@ export function UrlImportDialog({
 
         {listing && (
           <>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="min-w-0 truncate text-ui-sm font-semibold text-foreground">
+            <div className="flex min-w-0 items-center justify-between gap-2">
+              <span className="min-w-0 flex-1 truncate text-ui-sm font-semibold text-foreground">
                 {listing.title || t("urlImportUntitled")}
               </span>
-              <span className="text-ui-xs text-muted-foreground">
+              <span className="shrink-0 text-ui-xs text-muted-foreground">
                 {t("urlImportCount").replace("{n}", String(entries.length))}
               </span>
             </div>
@@ -176,13 +191,7 @@ export function UrlImportDialog({
                     }
                     aria-pressed={checked}
                   >
-                    <span
-                      className={cn(
-                        "inline-block h-3.5 w-3.5 rounded-[4px] border border-border-strong",
-                        checked && "border-primary bg-primary",
-                      )}
-                      aria-hidden
-                    />
+                    <Checkbox checked={checked} tabIndex={-1} aria-hidden className="pointer-events-none" />
                     <span className="grid min-w-0 gap-px">
                       <span className="truncate text-ui-xs text-foreground">{entry.title}</span>
                       {entry.uploader && (
