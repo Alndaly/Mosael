@@ -46,6 +46,7 @@ def start_url_import(
     created_by: str | None,
     profile_id: str | None = None,
     max_height: int = 0,
+    section: tuple[float, float | None] | None = None,
 ) -> Job:
     """给这些链接排一次下载。`items` 是 `[{url, title}]` —— 标题来自探测,用于任务消息。"""
     chosen = [item for item in items if str(item.get("url") or "").strip()]
@@ -55,6 +56,9 @@ def start_url_import(
         raise UrlImportError(f"一次最多下载 {MAX_ITEMS} 条,先分几次来")
     if kind not in ("video", "audio"):
         raise UrlImportError("只能下载视频或音频")
+    if section is not None and len(chosen) > 1:
+        # 同一个时间段套在不同视频上,截出来的是各不相干的片段 —— 那不是用户要的"这一段"。
+        raise UrlImportError("截取时间段时一次只能下载一条")
 
     job = create_job(
         db,
@@ -67,6 +71,7 @@ def start_url_import(
             "kind": kind,
             "profile_id": profile_id or "",
             "max_height": max_height,
+            "section": list(section) if section else None,
         },
         message="jobMsg_urlImportRunning",
         message_params={"done": 0, "total": len(chosen)},
@@ -89,6 +94,14 @@ def _run(job_id: str) -> None:
         kind = str(payload.get("kind") or "video")
         profile_id = str(payload.get("profile_id") or "")
         max_height = int(payload.get("max_height") or 0)
+        raw_section = payload.get("section")
+        # 「到结尾」在库里是 null —— `float("inf")` 不是合法 JSON,写进去会变成一个读不回来的
+        # `Infinity`。只在交给 yt-dlp 的那一刻才变成 inf。
+        section = (
+            (float(raw_section[0]), float(raw_section[1]) if raw_section[1] is not None else float("inf"))
+            if raw_section
+            else None
+        )
         job.status = "running"
         emit_job_event(db, job.id, "job.running", {})
         db.commit()
@@ -121,6 +134,7 @@ def _run(job_id: str) -> None:
                     on_progress=report,
                     cookie_file=cookie_file,
                     max_height=max_height,
+                    section=section,
                 )
             except ytdlp.YtdlpError as exc:
                 failed += 1

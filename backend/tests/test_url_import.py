@@ -170,3 +170,81 @@ def test_heights_are_unknown_not_empty_for_flat_entries() -> None:
     界面据此给通用档位,而不是说"这条只有这几档"。"""
     assert ytdlp._heights({"id": "x"}) == ()
     assert ytdlp._heights({"formats": [{"height": 1080}, {"height": 720}, {"height": None}]}) == (1080, 720)
+
+
+def test_signed_in_does_not_pin_a_client() -> None:
+    """有登录态时**不指定客户端** —— 交给 yt-dlp 自己挑。
+
+    实测很反直觉:同一份 cookie,写死 `web_safari/web/mweb` 只拿到 360p,而什么都不写反而拿到
+    33 个格式、最高 1440p。写死的那串是为「匿名会被 403」准备的经验值,套到有登录态的情形上,
+    等于用一个旧结论盖掉 yt-dlp 一直在更新的判断。
+    """
+    from pathlib import Path
+
+    assert ytdlp._youtube_extractor_args(Path("/tmp/cookies.txt")) == {}
+    anonymous = ytdlp._youtube_extractor_args(None)
+    assert anonymous["youtube"]["player_client"][0] == "android"
+
+
+def test_a_section_only_makes_sense_for_one_item() -> None:
+    """同一个时间段套在不同视频上,截出来的是各不相干的片段 —— 那不是用户要的「这一段」。"""
+    client = fresh_client()
+    workspace_id = _workspace(client)
+    items = [{"url": "https://example.com/a", "title": "a"}, {"url": "https://example.com/b", "title": "b"}]
+    with SessionLocal() as db:
+        with pytest.raises(UrlImportError):
+            start_url_import(
+                db, workspace_id=workspace_id, project_id=None, items=items,
+                kind="video", created_by=None, section=(10.0, 20.0),
+            )
+
+
+def test_open_ended_section_survives_the_database() -> None:
+    """「到结尾」在库里必须是 null。
+
+    `float("inf")` 不是合法 JSON —— 写进 payload 会变成一个读不回来的 `Infinity`,而任务在
+    重新读取时才炸,那时用户已经等了一轮。只在交给 yt-dlp 的那一刻才变成 inf。
+    """
+    import json
+
+    client = fresh_client()
+    workspace_id = _workspace(client)
+    with SessionLocal() as db:
+        job = start_url_import(
+            db, workspace_id=workspace_id, project_id=None,
+            items=[{"url": "https://example.com/a", "title": "a"}],
+            kind="video", created_by=None, section=(30.0, None),
+        )
+        payload = job.payload
+    # 能被 json 往返 = 能安全落库
+    assert json.loads(json.dumps(payload))["section"] == [30.0, None]
+
+
+def test_probe_start_shifts_the_window() -> None:
+    """频道能有上万条。一次探 200 条,往后翻靠 `start` —— 第 201 条之后并非取不到,只是要再问一次。"""
+    captured: dict = {}
+
+    class FakeYDL:
+        def __init__(self, options):
+            captured.update(options)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def extract_info(self, url, download=False):
+            return {"id": "x", "title": "t"}
+
+    import sys
+    import types
+
+    fake = types.ModuleType("yt_dlp")
+    fake.YoutubeDL = FakeYDL  # type: ignore[attr-defined]
+    sys.modules["yt_dlp"] = fake
+    try:
+        ytdlp.probe("https://example.com/list", start=201)
+        assert captured["playlist_items"] == f"201-{200 + ytdlp.MAX_ENTRIES}"
+    finally:
+        sys.modules.pop("yt_dlp", None)

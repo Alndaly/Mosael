@@ -1047,6 +1047,8 @@ class UrlProbeRequest(BaseModel):
     url: str = Field(min_length=4, max_length=2000)
     #: 探测也可能需要登录态:私享列表不登录就是"不可用"。
     profile_id: str | None = None
+    #: 从列表的第几条开始(1 起)。频道能有上万条,一次探 200 条,往后翻靠它。
+    start: int = Field(default=1, ge=1)
 
 
 class RemoteEntryOut(BaseModel):
@@ -1064,6 +1066,8 @@ class UrlProbeResponse(BaseModel):
     title: str
     is_playlist: bool
     entries: list[RemoteEntryOut]
+    #: 这一批从第几条开始(1 起)。界面据此说「第 201–400 条」,而不是让人以为总共这么多。
+    start: int = 1
     #: 清单被截断了吗。**要如实说** —— 否则用户以为这就是全部,勾完发现少了一半。
     truncated: bool = False
 
@@ -1083,6 +1087,9 @@ class UrlImportRequest(BaseModel):
     profile_id: str | None = None
     #: 画质上限(0 = 不限)。**上限而不是精确值**:同一批里每条能给的画质不一样。
     max_height: int = Field(default=0, ge=0, le=4320)
+    #: 只要 [起, 止] 这一段(秒)。只在单条时有意义 —— 同一段落在不同视频上是不相干的内容。
+    section_start: float | None = Field(default=None, ge=0)
+    section_end: float | None = Field(default=None, ge=0)
 
 
 class SubtitleDubRequest(BaseModel):

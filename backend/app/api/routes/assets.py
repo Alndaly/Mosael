@@ -78,7 +78,7 @@ def probe_url(body: UrlProbeRequest, db: DbSession, user: CurrentUser) -> dict:
         workdir = _Path(tempfile.mkdtemp(prefix="open-studio-probe-"))
         cookie_file = _cookie_file(body.workspace_id, body.profile_id, workdir)
     try:
-        listing = ytdlp.probe(body.url.strip(), cookie_file=cookie_file)
+        listing = ytdlp.probe(body.url.strip(), cookie_file=cookie_file, start=body.start)
     except ytdlp.YtdlpError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     finally:
@@ -90,6 +90,7 @@ def probe_url(body: UrlProbeRequest, db: DbSession, user: CurrentUser) -> dict:
         "title": listing.title,
         "is_playlist": listing.is_playlist,
         "truncated": listing.truncated,
+        "start": listing.start,
         "entries": [
             {
                 "id": entry.id,
@@ -121,6 +122,11 @@ def import_from_url(body: UrlImportRequest, db: DbSession, user: CurrentUser) ->
             created_by=user.id,
             profile_id=body.profile_id,
             max_height=body.max_height,
+            section=(
+                (body.section_start or 0.0, body.section_end)
+                if (body.section_start is not None or body.section_end is not None)
+                else None
+            ),
         )
     except UrlImportError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

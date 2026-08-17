@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { knownBestHeight, qualityOptions } from "@/features/media/urlImportQuality";
+import { toSection } from "@/features/media/urlImportTime";
 import { formatTimecode } from "@/domain/timeline/geometry";
 import { cn } from "@/lib/utils";
 
@@ -44,6 +45,11 @@ export function UrlImportDialog({
   const [kind, setKind] = React.useState<"video" | "audio">("video");
   //: 画质上限。0 = 不限 —— 4K 素材动辄几个 GB,而多数剪辑只需要 1080p。
   const [maxHeight, setMaxHeight] = React.useState(0);
+  //: 只要某一段。**只在单条时给** —— 同一个时间段套在不同视频上,截出来的是各不相干的片段。
+  const [sectionStart, setSectionStart] = React.useState("");
+  const [sectionEnd, setSectionEnd] = React.useState("");
+  //: 列表翻页的起点。频道能有上万条,而一次探 200 条已经要翻好几页。
+  const [pageStart, setPageStart] = React.useState(1);
   //: 借哪个登录身份。会员视频、私享列表不带登录态就只能看到"不可用" —— 而这个应用本来就把
   //: 所有持久登录攒在浏览器池里,没有理由让用户去别处导一份 cookie 出来。
   const [profileId, setProfileId] = React.useState(NONE);
@@ -62,7 +68,9 @@ export function UrlImportDialog({
   }, [open]);
 
   const probe = useMutation({
-    mutationFn: () => probeUrl(workspace.id, url.trim(), optionalValue(profileId)),
+    // 起点**当参数传**,不从 state 读:setState 是异步的,翻页时读到的会是上一次的值 ——
+    // 表现为"点了下一批还停在原地"。
+    mutationFn: (from: number = 1) => probeUrl(workspace.id, url.trim(), optionalValue(profileId), from),
     onSuccess: (result) => {
       setListing(result);
       // 单条视频就是用户想要的那一条,直接勾上 —— 让他为一条结果再点一次是纯仪式。
@@ -80,6 +88,8 @@ export function UrlImportDialog({
         kind,
         max_height: maxHeight,
         profile_id: optionalValue(profileId),
+        section_start: section?.start ?? null,
+        section_end: section && Number.isFinite(section.end) ? section.end : null,
         items: (listing?.entries ?? [])
           .filter((entry) => selected.has(entry.url))
           .map((entry) => ({ url: entry.url, title: entry.title })),
@@ -94,6 +104,8 @@ export function UrlImportDialog({
 
   const entries = listing?.entries ?? [];
   const bestKnown = knownBestHeight(entries);
+  const single = entries.length === 1 && !listing?.is_playlist;
+  const section = single ? toSection(sectionStart, sectionEnd) : null;
   const allSelected = entries.length > 0 && entries.every((entry) => selected.has(entry.url));
   const toggleAll = () =>
     setSelected(allSelected ? new Set() : new Set(entries.map((entry) => entry.url)));
@@ -110,7 +122,10 @@ export function UrlImportDialog({
           className="flex min-w-0 items-center gap-1.5"
           onSubmit={(event) => {
             event.preventDefault();
-            if (url.trim()) probe.mutate();
+            if (url.trim()) {
+              setPageStart(1); // 换链接就从头开始,而不是接着上一条的页码
+              probe.mutate(1);
+            }
           }}
         >
           <Input
@@ -170,9 +185,46 @@ export function UrlImportDialog({
                 {t("urlImportCount").replace("{n}", String(entries.length))}
               </span>
             </div>
-            {listing.truncated && (
+            {(listing.truncated || (listing.start ?? 1) > 1) && (
               // 截断必须说出来 —— 否则用户以为这就是全部,勾完发现少了一半。
-              <p className="m-0 text-ui-2xs leading-[1.5] text-muted-foreground">{t("urlImportTruncated")}</p>
+              // 而且要给得出「往后翻」的出口:第 201 条之后并非取不到,只是要再问一次。
+              <div className="flex min-w-0 flex-wrap items-center justify-between gap-1.5">
+                <span className="min-w-0 flex-1 text-ui-2xs leading-[1.5] text-muted-foreground">
+                  {t("urlImportRange")
+                    .replace("{from}", String(listing.start ?? 1))
+                    .replace("{to}", String((listing.start ?? 1) + entries.length - 1))}
+                </span>
+                <span className="flex shrink-0 gap-1">
+                  {(listing.start ?? 1) > 1 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      loading={probe.isPending}
+                      onClick={() => {
+                        const previous = Math.max(1, (listing.start ?? 1) - 200);
+                        setPageStart(previous);
+                        probe.mutate(previous);
+                      }}
+                    >
+                      {t("urlImportPrevPage")}
+                    </Button>
+                  )}
+                  {listing.truncated && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      loading={probe.isPending}
+                      onClick={() => {
+                        const next = (listing.start ?? 1) + 200;
+                        setPageStart(next);
+                        probe.mutate(next);
+                      }}
+                    >
+                      {t("urlImportNextPage")}
+                    </Button>
+                  )}
+                </span>
+              </div>
             )}
 
             <div className="grid max-h-[38vh] min-w-0 gap-px overflow-y-auto overflow-x-hidden">
@@ -238,6 +290,28 @@ export function UrlImportDialog({
                     {t("urlImportQualityKnown").replace("{n}", String(bestKnown))}
                   </span>
                 )}
+              </label>
+            )}
+
+            {single && kind === "video" && (
+              <label className="grid gap-1 text-xs text-muted-foreground">
+                <span>{t("urlImportSection")}</span>
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <Input
+                    className="h-7 min-w-0 flex-1"
+                    value={sectionStart}
+                    placeholder={t("urlImportSectionFrom")}
+                    onChange={(event) => setSectionStart(event.target.value)}
+                  />
+                  <span className="shrink-0 text-muted-foreground">–</span>
+                  <Input
+                    className="h-7 min-w-0 flex-1"
+                    value={sectionEnd}
+                    placeholder={t("urlImportSectionTo")}
+                    onChange={(event) => setSectionEnd(event.target.value)}
+                  />
+                </div>
+                <span className="text-ui-2xs leading-[1.5] text-muted-foreground">{t("urlImportSectionHint")}</span>
               </label>
             )}
 

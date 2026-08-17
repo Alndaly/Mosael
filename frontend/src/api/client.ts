@@ -268,13 +268,20 @@ export type UrlProbe = {
   is_playlist: boolean;
   entries: RemoteEntry[];
   truncated: boolean;
+  /** 这一批从第几条开始(1 起)。 */
+  start?: number;
 };
 
 /** 这个链接后面有什么 —— 只读元数据,不下载任何媒体流。 */
-export function probeUrl(workspaceId: string, url: string, profileId?: string | null): Promise<UrlProbe> {
+export function probeUrl(
+  workspaceId: string,
+  url: string,
+  profileId?: string | null,
+  start = 1,
+): Promise<UrlProbe> {
   return api<UrlProbe>("/api/assets/probe-url", {
     method: "POST",
-    body: JSON.stringify({ workspace_id: workspaceId, url, profile_id: profileId || null }),
+    body: JSON.stringify({ workspace_id: workspaceId, url, profile_id: profileId || null, start }),
   });
 }
 
@@ -288,6 +295,9 @@ export function importFromUrl(body: {
   max_height?: number;
   /** 借哪个浏览器池档案的登录态;空 = 按公开内容下载。 */
   profile_id?: string | null;
+  /** 只要这一段(秒)。只在单条时有意义。 */
+  section_start?: number | null;
+  section_end?: number | null;
 }): Promise<Job> {
   return api<Job>("/api/assets/import-url", { method: "POST", body: JSON.stringify(body) });
 }
