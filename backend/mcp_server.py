@@ -187,17 +187,21 @@ READ_ONLY_TOOLS = frozenset(
         "browser_wait",
         "fetch_url",
         "get_confirmation",
+        "get_current_time",
         "get_job",
+        "get_transcript",
         "get_workflow",
         "inspect_sequence",
         "list_assets",
         "list_generation_models",
+        "list_jobs",
         "list_memories",
         "list_plugin_tools",
         "list_projects",
         "list_publish_accounts",
         "list_workflow_node_types",
         "list_workflows",
+        "list_workspaces",
         "sleep",
         "translate_text",
         "web_search",
@@ -221,6 +225,8 @@ MUTATING_TOOLS = frozenset(
         "browser_upload",
         "create_project",
         "forget",
+        # 往素材库里写东西(而且是一次可能很大的下载),不是只读。
+        "import_media_from_url",
         "invoke_plugin_tool",
         "notify_workspace",
         "remember",
@@ -1292,6 +1298,171 @@ def run_code(code: str, inputs: dict[str, Any] | None = None) -> dict[str, Any]:
         },
     )
     return _confirmation_reply(confirmation)
+
+
+@mcp.tool()
+def get_current_time(timezone: str = "") -> dict[str, Any]:
+    """Read-only: what time is it right now, on the machine running this studio.
+
+    **Use this before anything that depends on "now"** — naming a file by date, deciding
+    what "最近/today/this week" means when filtering assets or jobs, scheduling a publish,
+    or writing a date into a caption. You were trained with a knowledge cutoff and have no
+    other way to know today's date; guessing it produces wrong filenames and wrong filters.
+
+    timezone is an IANA name ("Asia/Shanghai", "UTC"); leave empty for the machine's own zone.
+    Returns local ISO time, UTC ISO time, the zone's name and UTC offset, weekday, and the
+    Unix timestamp.
+    """
+    from datetime import datetime, timezone as _tz
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    now_utc = datetime.now(_tz.utc)
+    zone_error = ""
+    if timezone.strip():
+        try:
+            local = now_utc.astimezone(ZoneInfo(timezone.strip()))
+        except (ZoneInfoNotFoundError, ValueError):
+            # 认不出的时区**不能悄悄回落到本机** —— 那会让"按东京时间"这类要求静静地按错的
+            # 时区算完,而结果看起来完全正常。说出来,并如实标明用的是哪一个。
+            zone_error = f"不认识时区 {timezone!r},用的是本机时区"
+            local = now_utc.astimezone()
+    else:
+        local = now_utc.astimezone()
+    offset = local.utcoffset()
+    minutes = int(offset.total_seconds() // 60) if offset else 0
+    return {
+        "local": local.isoformat(timespec="seconds"),
+        "utc": now_utc.isoformat(timespec="seconds"),
+        "timezone": str(local.tzinfo),
+        "utc_offset": f"{'+' if minutes >= 0 else '-'}{abs(minutes) // 60:02d}:{abs(minutes) % 60:02d}",
+        "weekday": local.strftime("%A"),
+        "date": local.strftime("%Y-%m-%d"),
+        "unix": int(now_utc.timestamp()),
+        **({"warning": zone_error} if zone_error else {}),
+    }
+
+
+@mcp.tool()
+def list_jobs(workspace_id: str = "", kind: str = "", limit: int = 20) -> list[dict[str, Any]]:
+    """Read-only: list recent background jobs (renders, transcriptions, generations, imports).
+
+    Use when the user asks how something is going ("渲染好了吗", "下载完了吗") and you do
+    **not** have a job id — get_job needs one, and without this tool there was no way to
+    find it. Also use to check whether work you started earlier in the conversation finished.
+    Filter with kind ("render", "transcribe", "url_import", "generation"…). Newest first.
+    """
+    params = {"workspace_id": workspace_id or _default_workspace_id(), "top_level": "true"}
+    if kind:
+        params["kind"] = kind
+    jobs = _get("/api/jobs", params=params)
+    return jobs[: max(1, min(int(limit), 100))]
+
+
+@mcp.tool()
+def import_media_from_url(
+    url: str,
+    kind: str = "video",
+    max_height: int = 0,
+    workspace_id: str = "",
+    project_id: str = "",
+) -> dict[str, Any]:
+    """Runs directly: download a video or audio from a link into the asset library.
+
+    Use when the user gives a link to media they want as material ("把这个视频下下来"). The
+    site is probed first, so a playlist link brings in its entries; `kind` is "video" or
+    "audio" (audio-only skips downloading the video stream entirely); `max_height` caps the
+    resolution (0 = best available). Returns a job — poll it with get_job.
+
+    Sites needing a login are not handled here: that borrows a browser-pool profile and is
+    the media library's 「从链接导入」 dialog. Say so rather than retrying.
+    """
+    if kind not in ("video", "audio"):
+        raise ValueError('kind must be "video" or "audio"')
+    workspace = workspace_id or _default_workspace_id()
+    listing = _post("/api/assets/probe-url", {"workspace_id": workspace, "url": url})
+    entries = listing.get("entries") or []
+    if not entries:
+        # 探不出条目就**不要**硬下:那多半是链接不对或站点不支持,而"下了个空"比报错更难查。
+        raise ValueError(f"这个链接探不到可下载的内容:{listing.get('title') or url}")
+    job = _post(
+        "/api/assets/import-url",
+        {
+            "workspace_id": workspace,
+            "project_id": project_id or None,
+            "kind": kind,
+            "max_height": max_height,
+            "items": [{"url": entry["url"], "title": entry.get("title") or ""} for entry in entries],
+        },
+    )
+    return {"job": job, "queued": len(entries), "playlist": bool(listing.get("is_playlist")),
+            "truncated": bool(listing.get("truncated"))}
+
+
+#: 一次最多回多少条转写片段。一小时的视频有几千段,连同逐词 token 全塞回去会把上下文吃干,
+#: 而模型真正要的往往是某一段。截断了**一定要说**(返回 total 和 truncated),
+#: 不然"就这些了"和"还有很多"在模型眼里是一样的。
+TRANSCRIPT_SEGMENT_CAP = 200
+
+
+@mcp.tool()
+def get_transcript(
+    asset_id: str,
+    start_seconds: float = 0.0,
+    end_seconds: float = 0.0,
+    max_segments: int = TRANSCRIPT_SEGMENT_CAP,
+) -> dict[str, Any]:
+    """Read-only: read the transcript/subtitles of an asset — timed segments with speakers.
+
+    **This is how you find out what was actually said.** Use it before cutting by content
+    ("剪掉口误/删掉这段废话"), summarising a video, locating a quote, or writing captions:
+    every segment carries start_time/end_time, so a segment maps straight to a cut you can
+    hand to edit_timeline. transcribe_asset only *starts* the work; this reads the result.
+
+    Narrow with start_seconds/end_seconds (both in seconds; end 0 means "to the end") rather
+    than pulling a long video whole. Per-word tokens are dropped — segment timing is what
+    cutting needs. Returns 404 if the asset has no transcript yet: run transcribe_asset first.
+    """
+    data = _get(f"/api/assets/{asset_id}/transcript")
+    segments = data.get("segments") or []
+    if start_seconds or end_seconds:
+        end = float(end_seconds) if end_seconds else float("inf")
+        segments = [
+            seg for seg in segments
+            if float(seg.get("end_time") or 0) > float(start_seconds) and float(seg.get("start_time") or 0) < end
+        ]
+    total = len(segments)
+    cap = max(1, min(int(max_segments), 1000))
+    kept = segments[:cap]
+    return {
+        "asset_id": asset_id,
+        "language": data.get("language"),
+        "status": data.get("status"),
+        "total_segments": total,
+        "truncated": total > cap,
+        "segments": [
+            {
+                "start_time": seg.get("start_time"),
+                "end_time": seg.get("end_time"),
+                "text": seg.get("text"),
+                **({"speaker": seg["speaker"]} if seg.get("speaker") else {}),
+            }
+            for seg in kept
+        ],
+        "text": " ".join((seg.get("text") or "").strip() for seg in kept).strip(),
+    }
+
+
+@mcp.tool()
+def list_workspaces() -> list[dict[str, Any]]:
+    """Read-only: list the workspaces this user has, newest first.
+
+    Every other tool takes an optional workspace_id and falls back to **the first one**.
+    That fallback is invisible: with more than one workspace you can spend a whole
+    conversation operating on the wrong one and never see a sign of it. Use this when the
+    user mentions a workspace by name, or when a listing comes back emptier than expected,
+    then pass the right workspace_id explicitly.
+    """
+    return _get("/api/workspaces")
 
 
 if __name__ == "__main__":

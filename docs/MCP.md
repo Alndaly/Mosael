@@ -7,7 +7,7 @@ summaries — never raw internal schemas.
 
 <!-- BEGIN generated: tools -->
 
-共 **51** 个工具,其中 **15** 个走确认卡。
+共 **56** 个工具,其中 **15** 个走确认卡。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -35,19 +35,24 @@ summaries — never raw internal schemas.
 | `generate_podcast` | 确认卡 | Confirmation required: generate a NEW two-speaker podcast/dialogue audio asset. |
 | `generate_video` | 确认卡 | Confirmation required: generate a NEW video asset from a text prompt. |
 | `get_confirmation` | 直接执行 | Read-only: poll one confirmation card by confirmation_id. |
+| `get_current_time` | 直接执行 | Read-only: what time is it right now, on the machine running this studio. |
 | `get_job` | 直接执行 | Read-only: poll one background job (transcription, render, generation) by id. |
+| `get_transcript` | 直接执行 | Read-only: read the transcript/subtitles of an asset — timed segments with speakers. |
 | `get_workflow` | 直接执行 | Read-only: inspect one VISUAL WORKFLOW graph in full. |
 | `http_request` | 确认卡 | Confirmation required: call an external HTTP API (POST/PUT/PATCH/DELETE). |
+| `import_media_from_url` | 直接执行 | Runs directly: download a video or audio from a link into the asset library. |
 | `inspect_sequence` | 直接执行 | Read-only: inspect a VIDEO TIMELINE sequence — format, revision, duration, tracks, clips. |
 | `invoke_plugin_tool` | 直接执行 | Runs directly: invoke one plugin tool returned by list_plugin_tools. |
 | `list_assets` | 直接执行 | Read-only: list media assets in a workspace (id, name, kind, source, duration). |
 | `list_generation_models` | 直接执行 | List the AI generation engines available to generate_image / generate_video. |
+| `list_jobs` | 直接执行 | Read-only: list recent background jobs (renders, transcriptions, generations, imports). |
 | `list_memories` | 直接执行 | Read-only: list what you already remember in this workspace. |
 | `list_plugin_tools` | 直接执行 | Read-only: list tools exposed by the user's enabled plugin connections. |
 | `list_projects` | 直接执行 | Read-only: list video projects in a workspace (id, name, active_sequence_id). |
 | `list_publish_accounts` | 直接执行 | Read-only: the platform accounts already logged in, for publish_asset. |
 | `list_workflow_node_types` | 直接执行 | Read-only: list allowed workflow node types, config fields, and outputs. |
 | `list_workflows` | 直接执行 | Read-only: list VISUAL WORKFLOWS in a workspace. |
+| `list_workspaces` | 直接执行 | Read-only: list the workspaces this user has, newest first. |
 | `notify_workspace` | 直接执行 | Runs directly: push an in-app notification to the workspace members. |
 | `publish_asset` | 确认卡 | Confirmation required: publish an asset to a platform with a logged-in account. |
 | `remember` | 直接执行 | Runs directly: save a durable fact or convention to cross-session memory. |

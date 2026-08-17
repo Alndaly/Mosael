@@ -26,6 +26,9 @@ from tests.util import fresh_client
 #: 参数里的资源 id 故意用不存在的值:我们要验的是**载荷形状**,不是数据。
 ARGS: dict[str, dict[str, Any]] = {
     "list_projects": {},
+    "list_workspaces": {},
+    "list_jobs": {},
+    "get_current_time": {},
     "list_assets": {},
     "list_workflows": {},
     "list_workflow_node_types": {},
@@ -45,6 +48,7 @@ ARGS: dict[str, dict[str, Any]] = {
     "inspect_sequence": {"sequence_id": "no-such-sequence"},
     "analyze_asset": {"asset_id": "no-such-asset", "question": "这是什么"},
     "transcribe_asset": {"asset_id": "no-such-asset"},
+    "get_transcript": {"asset_id": "no-such-asset"},
     "update_asset": {"asset_id": "no-such-asset", "name": "改个名"},
     "update_asset_tags": {"asset_id": "no-such-asset", "tags": ["a"]},
     "forget": {"memory_id": "no-such-memory"},
@@ -65,6 +69,9 @@ ARGS: dict[str, dict[str, Any]] = {
 SKIP: dict[str, str] = {
     "web_search": "会打真实外网。",
     "fetch_url": "会打真实外网。",
+    # 探测链接这一步就要打外网(yt-dlp 去问站点),而且没探到条目会先抛,根本走不到发载荷那步。
+    # 它发的两个载荷由 tests/test_url_import.py 直接盯着后端那一侧。
+    "import_media_from_url": "探测链接要打真实外网。",
 }
 
 

@@ -389,6 +389,31 @@ Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the
   anyway: cutting has ffmpeg open the media URL directly and seek, which is a different network path
   from the download — the stream yt-dlp pulls at 5 MB/s times out for ffmpeg.
 
+### 2026-08-18: five things the agent could not reach
+
+Reported as "缺少一些必须的工具,比如获取当前时间". The registry had 51 tools and each of these
+was a thing the model could only guess at or quietly give up on:
+
+- **`get_current_time`** — it has a knowledge cutoff and no other way to learn today's date,
+  so naming a file by date, reading 「最近的素材」, or writing a date into a caption were all
+  guesses. Returns local + UTC ISO, zone, offset, weekday, unix. An unrecognised zone
+  **says so** instead of silently falling back to the machine's — 「按东京时间」 computed in
+  the wrong zone looks completely normal in the output.
+- **`get_transcript`** — the largest gap. `transcribe_asset` only *starts* the work; there
+  was no way to read the result, so cutting by content, summarising a video, or locating a
+  quote were impossible. Segments carry start/end, so one maps straight to an `edit_timeline`
+  cut. Per-word tokens are dropped and the segment list is capped at 200 — with `truncated`
+  reported, because "that's all of it" and "there's much more" are otherwise identical to a model.
+- **`list_jobs`** — `get_job` needs an id, and when the user asks 「渲染好了吗」 nobody has one.
+- **`list_workspaces`** — every tool's `workspace_id` falls back to *the first workspace*, and
+  that fallback is invisible: a whole conversation can run against the wrong one with no sign.
+- **`import_media_from_url`** — the yt-dlp import added in 0.18 existed only in the UI.
+
+`scripts/sync-tool-docs.py` regenerated docs/MCP.md (51 → 56). Ratchets pin that each new tool
+reaches both the MCP registry *and* `/api/agent/tools` (two hand-maintained lists drifting
+silently is what that file exists to prevent), and that each description says *when* to use it —
+a model that picks the wrong tool does not report a missing one, it improvises.
+
 ### 2026-08-18: installing engine runtimes on Windows — and an error that could not be diagnosed
 
 Two reports from a Windows machine, both on the "download the model / runtime" button:
