@@ -97,9 +97,13 @@ def test_provision_installs_declared_requirements(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(tts_models.subprocess, "run", _fake_run)
     tts_models.ensure_engine_runtime("f5-tts")
 
-    assert len(calls) == 1, "venv 已存在时不该再建一次"
-    assert calls[0][:4] == [str(venv_python), "-m", "pip", "install"]
-    assert "f5-tts" in calls[0]
+    # 断言的是**意图**而不是调用次数:装依赖前会先把 venv 里的 pip 升一下
+    # (ensurepip 里那个是打包 CPython 时冻结的,见 core/pip_install._upgrade_pip),
+    # 数次数的话,每加一步准备动作这条测试就假红一次。
+    assert not any("venv" in part for call in calls for part in call), "venv 已存在时不该再建一次"
+    installs = [call for call in calls if call[1:4] == ["-m", "pip", "install"] and "f5-tts" in call]
+    assert len(installs) == 1
+    assert installs[0][0] == str(venv_python)
 
 
 def test_provision_surfaces_pip_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

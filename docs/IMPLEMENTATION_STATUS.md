@@ -389,6 +389,53 @@ Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the
   anyway: cutting has ffmpeg open the media URL directly and seek, which is a different network path
   from the download — the stream yt-dlp pulls at 5 MB/s times out for ffmpeg.
 
+### 2026-08-18: installing engine runtimes on Windows — and an error that could not be diagnosed
+
+Two reports from a Windows machine, both on the "download the model / runtime" button:
+
+- transcription (FunASR/SenseVoice): `安装 funasr 运行依赖失败:1(n) ^^^^^ File "...\resources\python\Lib\zipfile\__init__.py", line 1068, in _read1 ... MemoryError: Unable to allocate output buffer.`
+- voice cloning (F5-TTS): ``安装 f5-tts 运行依赖失败:note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace``
+
+**The second one is the real defect.** Both call sites ended the pip failure with
+`(stderr or stdout)[-300:]` — cutting by *position*. pip's output ends with closing notes
+(`note: …`, `[end of output]`) as a matter of course, so cutting from the tail lands on the one
+part that carries no information; the actual verdict sits dozens of lines above. And the full
+output survived nowhere — `run_logged` also keeps only the last 800 characters — so this report
+could not be diagnosed at all. This is the *second* occurrence of the same shape:
+`audio/voices.explain_worker_failure` had taken `[end of libtorchcodec loading traceback]`, a
+separator line, as the cause.
+
+New `core/pip_install.py` is now the only door to pip:
+
+- **picks the verdict lines** (`ERROR:` / `error:` / a bare `XxxError:` closing a traceback)
+  instead of taking the tail, ranking vague ones like `Failed building wheel for X` last rather
+  than dropping them — the first version *did* drop them, and the ratchet caught it;
+- translates known causes into a next step (out of memory, out of disk, needs a Rust/C++
+  toolchain, no matching distribution, resolution conflict, network) and **says so plainly when it
+  recognises nothing**, rather than inventing a reason;
+- **writes the whole output to `~/.open-studio/logs/pip-*.log`** and names the file in the error.
+
+Two root causes found behind the reports:
+
+- **`--prefer-binary`.** `f5-tts` depends on `rjieba` (jieba's Rust implementation). rjieba ships
+  an sdist for *every* release while the Windows + CPython 3.12 wheel is not on every one — pip
+  picks by version number, lands on a release with no wheel, and compiles Rust in an environment
+  that has no Rust. Not `--only-binary=:all:`: `transformers_stream_generator`, also in that tree,
+  is sdist-only, so a blanket ban makes f5-tts uninstallable. What needs blocking is *compiling for
+  the sake of a newer version number*, not compiling.
+- **The MemoryError is the machine.** The traceback's caller line is `data = self._read1(n)` — the
+  bounded branch, i.e. pip's 1 MB `copyfileobj` block. Failing to allocate 1 MB means it was out of
+  memory, not that something asked for an absurd buffer. Nothing to fix in code; the message now
+  says so and points at the page file.
+
+Two more differences that existed only because the same logic had been written twice:
+transcription never passed the configured **pip mirror** (cloning did — and the setting reads
+「装引擎依赖时用的 pip 索引」), and neither passed a usable `--timeout`/`--retries` for a 2.5 GB
+download over a mirror. Both call sites now go through the one installer, with a ratchet that
+fails if any module outside it spells `"pip", "install"`. The venv's pip is also upgraded first:
+it comes from `ensurepip`, frozen when the CPython bundle was built, and it is the program doing
+the downloading and unpacking.
+
 ### 2026-08-16: costs that were priced but reported as unpriced, and publish records that were deleted
 
 - **`summarize_usage` now returns `unpriced`** — which provider+model+capability failed to price and

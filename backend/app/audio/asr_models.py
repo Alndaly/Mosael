@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from app.core import interpreter
+from app.core import interpreter, pip_install
 from app.core.child_process import ChildProcess, popen_text, run_logged
 from app.core.rate import DownloadRate
 from app.core.config import settings
@@ -529,12 +529,23 @@ def ensure_engine_runtime(engine: str, *, progress_key: str | None = None) -> No
             raise RuntimeError(f"创建运行环境失败:{(created.stderr or created.stdout)[-300:]}")
 
     _store.set(key, _Live(status="downloading", message="dlMsg_installingDeps", params={"engine": engine}))
-    # --upgrade 让重试能修好装了一半的环境;超时给足 —— torch 在慢网络下很久。
-    result = run_logged(
-        [str(venv_python), "-m", "pip", "install", "--upgrade", *requirements],
-        capture_output=True, text=True, timeout=7200, what="安装转写运行依赖")
-    if result.returncode != 0:
-        raise RuntimeError(f"安装 {engine} 运行依赖失败:{(result.stderr or result.stdout)[-300:]}")
+    # **和克隆走同一个安装器**,包括设置页那个 pip 镜像 —— 此前这里没带,于是同一台机器上
+    # 「声音克隆走镜像、转写直连 PyPI」,而设置项写的是「装引擎依赖时用的 pip 索引」。
+    # 超时给足:torch 在慢网络下很久。
+    #
+    # 这个设置存在 tts_config 里(历史上克隆先有了它),但它管的是 pip 而不是克隆 ——
+    # 两个引擎装依赖用的是同一个索引。在函数里 import:core/audio 不该在模块层依赖 domain。
+    from app.domain import tts_config
+
+    try:
+        pip_install.install(
+            venv_python,
+            requirements,
+            what="安装转写运行依赖",
+            index_url=tts_config.get().pip_index_url,
+        )
+    except pip_install.PipInstallError as exc:
+        raise RuntimeError(f"安装 {engine} 运行依赖失败:{exc}") from exc
     clear_runtime_probes()
 
 

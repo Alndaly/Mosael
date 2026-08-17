@@ -21,7 +21,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from app.core import interpreter
+from app.core import interpreter, pip_install
 from app.core.child_process import ChildProcess, popen_text, run_logged
 from app.core.rate import DownloadRate
 from app.core.config import settings
@@ -760,18 +760,19 @@ def ensure_engine_runtime(engine_id: str) -> None:
         # 两件事量纲不同,就别共用一个进度条 —— 只报"在做哪一步"。
         _Live(status="downloading", message="dlMsg_installingDeps", params={"engine": engine.label}),
     )
-    # 装到托管 venv 里。--upgrade 让重试能修好装了一半的环境;超时给足——torch 在慢网络下很久。
+    # 装到托管 venv 里。超时给足 —— torch 在慢网络下很久。
     # pip 镜像来自设置页(与「模型下载源」分开:那个管 HF 权重,这个管 Python 包)。
     # 直连 PyPI 拉 2.5–3.5GB 在国内常常慢到不可用,所以这一项值得单独可切。
-    pip_args = [str(venv_python), "-m", "pip", "install", "--upgrade"]
-    index_url = tts_config.get().pip_index_url
-    if index_url:
-        pip_args += ["--index-url", index_url]
-    result = run_logged(
-        [*pip_args, *engine.pip_requirements],
-        capture_output=True, text=True, timeout=7200, env=_worker_env(), what="安装克隆运行依赖")
-    if result.returncode != 0:
-        raise RuntimeError(f"安装 {engine.label} 运行依赖失败:{(result.stderr or result.stdout)[-300:]}")
+    try:
+        pip_install.install(
+            venv_python,
+            engine.pip_requirements,
+            what="安装克隆运行依赖",
+            index_url=tts_config.get().pip_index_url,
+            env=_worker_env(),
+        )
+    except pip_install.PipInstallError as exc:
+        raise RuntimeError(f"安装 {engine.label} 运行依赖失败:{exc}") from exc
 
 
 def _ensure_fish_source() -> None:
