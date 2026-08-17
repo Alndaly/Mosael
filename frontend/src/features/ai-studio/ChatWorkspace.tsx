@@ -21,6 +21,7 @@ import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection"
 import { CompactionNotice, type CompactionInfo, type ContextInfo } from "@/components/agent/ContextMeter";
 import { InspectorCard, InspectorRow } from "@/components/agent/InspectorCard";
 import { PlanCard, type PlanStep } from "@/components/agent/PlanCard";
+import { JumpToLatest, useStickToBottom } from "@/components/agent/stickToBottom";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem, type ToolCall } from "@/components/agent/ToolCalls";
 import { formatElapsedSeconds } from "@/lib/time";
@@ -67,7 +68,6 @@ export function ChatWorkspace({
   //「对话」读答案,「轨迹」读执行。记住选择:排查问题的人往往连着看好几个会话的轨迹。
   const [view, setView] = usePersistentTab<"chat" | "trace">("agent-view", "chat", ["chat", "trace"]);
   const streamingRef = React.useRef<string | null>(null);
-  const threadRef = React.useRef<HTMLDivElement | null>(null);
 
   // Aborts whatever stream is open. The reader used to run `for(;;) await reader.read()` with
   // no way to stop it: unmounting the view or switching session left it reading forever, each
@@ -147,6 +147,8 @@ export function ChatWorkspace({
   });
   const activeSession =
     (sessions.data ?? []).find((session) => session.id === sessionId) ?? (sessions.data ?? [])[0] ?? null;
+  //: 贴底跟随。resetKey 用会话 id:换会话该从底部重新开始。
+  const stick = useStickToBottom<HTMLDivElement>(activeSession?.id);
 
   const messages = useQuery({
     queryKey: ["agent-messages", activeSession?.id],
@@ -299,33 +301,12 @@ export function ChatWorkspace({
     };
   }, []);
 
-  // 贴底跟随:初次加载与流式输出都钉在底部;用户往上翻阅历史时不打断,
-  // 翻回底部附近后恢复跟随。用 MutationObserver 是因为 markdown 渲染是
-  // 异步长高的,一次性 scrollTo 会落在半截。
-  React.useEffect(() => {
-    const el = threadRef.current;
-    if (!el) return;
-    let stick = true;
-    const onScroll = () => {
-      stick = el.scrollHeight - el.scrollTop - el.clientHeight < 140;
-    };
-    el.addEventListener("scroll", onScroll, { passive: true });
-    const observer = new MutationObserver(() => {
-      if (stick) el.scrollTop = el.scrollHeight;
-    });
-    observer.observe(el, { childList: true, subtree: true, characterData: true });
-    el.scrollTop = el.scrollHeight;
-    return () => {
-      el.removeEventListener("scroll", onScroll);
-      observer.disconnect();
-    };
-  }, [activeSession?.id]);
-
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     // `running` is deliberately NOT a guard any more: a message typed while the agent works
     // is a correction, and the backend injects it into the running turn (pi steering queue).
     if ((!draft.trim() && attach.isEmpty) || sendMessage.isPending) return;
+    stick.scrollToBottom(); // 自己发的消息一定要看得见
     // 文本文件内联成围栏上下文、媒体编码成附件标记 —— 与工作流助手同一种拼法,
     // 于是两边发出来的气泡也长得一样。
     const fileBlock = textAttachmentBlock(attach.files, t("chatAttached"));
@@ -473,7 +454,8 @@ export function ChatWorkspace({
             ) : (
             /* 横向和纵向一起锁:flex 子项默认 min-width:auto,一段长代码块或长 URL 会把这一列
                  撑宽,整个对话区就能左右滚。代码块自己的 overflow-x-auto 只在父容器被约束时生效。 */
-            <div className="flex min-w-0 flex-col gap-3.5 overflow-y-auto overflow-x-hidden px-4 pb-2.5 pt-7" ref={threadRef}>
+            <div className="relative grid min-h-0 min-w-0">
+            <div className="flex min-w-0 flex-col gap-3.5 overflow-y-auto overflow-x-hidden px-4 pb-2.5 pt-7" ref={stick.ref}>
               {visibleMessages.map((message) => (
                 <ChatBubble key={message.id} message={message} usageEvents={usageByMessage.get(message.id) ?? []} />
               ))}
@@ -505,6 +487,8 @@ export function ChatWorkspace({
                 </div>
               )}
               {sessionId && <InlineConfirmations workspaceId={workspace.id} allowKey={sessionId} />}
+            </div>
+            <JumpToLatest stick={stick} label={t("chatJumpToLatest")} newLabel={t("chatNewBelow")} />
             </div>
             )}
             {/* Pending strip, above the composer: these have not been sent yet, so they do not

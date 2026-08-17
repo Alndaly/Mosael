@@ -37,6 +37,7 @@ import {
   type GenerationOption,
 } from "@/api/client";
 import type { components } from "@/api/generated/schema";
+import { JumpToLatest, useStickToBottom } from "@/components/agent/stickToBottom";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -218,7 +219,6 @@ function GenerateWorkspace({
   const [generationConfig, setGenerationConfig] = React.useState<GenerationConfig>(() => defaultGenerationConfig(null));
   const [renamingSession, setRenamingSession] = React.useState<GenerationSession | null>(null);
   const [deletingSession, setDeletingSession] = React.useState<GenerationSession | null>(null);
-  const threadRef = React.useRef<HTMLDivElement | null>(null);
   const firstFrameInputRef = React.useRef<HTMLInputElement | null>(null);
   const referenceImageInputRef = React.useRef<HTMLInputElement | null>(null);
 
@@ -251,6 +251,8 @@ function GenerateWorkspace({
   });
   const activeSession =
     (sessions.data ?? []).find((session) => session.id === sessionId) ?? (sessions.data ?? [])[0] ?? null;
+  //: 贴底跟随(见 components/agent/stickToBottom)。
+  const stick = useStickToBottom<HTMLDivElement>(activeSession?.id);
   const sessionJobs = useQuery({
     queryKey: ["generation-jobs", workspace.id, activeSession?.id],
     enabled: Boolean(activeSession),
@@ -664,28 +666,10 @@ function GenerateWorkspace({
     }
   }, [succeededCount, qc, workspace.id, activeSession?.id]);
 
-  React.useEffect(() => {
-    const el = threadRef.current;
-    if (!el) return;
-    let stick = true;
-    const onScroll = () => {
-      stick = el.scrollHeight - el.scrollTop - el.clientHeight < 140;
-    };
-    el.addEventListener("scroll", onScroll, { passive: true });
-    const observer = new MutationObserver(() => {
-      if (stick) el.scrollTop = el.scrollHeight;
-    });
-    observer.observe(el, { childList: true, subtree: true, characterData: true });
-    el.scrollTop = el.scrollHeight;
-    return () => {
-      el.removeEventListener("scroll", onScroll);
-      observer.disconnect();
-    };
-  }, [activeSession?.id]);
-
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     if (!prompt.trim() || !selectedModel || !selectedAdapterAvailable || createGeneration.isPending) return;
+    stick.scrollToBottom(); // 自己发的消息一定要看得见
     createGeneration.mutate();
   };
 
@@ -754,7 +738,8 @@ function GenerateWorkspace({
       </aside>
 
       <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid min-w-0 grid-rows-[minmax(0,1fr)_auto]">
-        <div className="flex flex-col gap-3.5 overflow-y-auto px-4 pb-2.5 pt-7" ref={threadRef}>
+        <div className="relative grid min-h-0 min-w-0">
+        <div className="flex min-w-0 flex-col gap-3.5 overflow-y-auto overflow-x-hidden px-4 pb-2.5 pt-7" ref={stick.ref}>
           {/* First load: skeleton turns instead of flashing the "no jobs yet" empty state. */}
           {activeSession && sessionJobs.isLoading && ordered.length === 0 && (
             <div className="flex flex-col gap-3.5" aria-hidden>
@@ -779,6 +764,8 @@ function GenerateWorkspace({
               gallery={sessionGallery}
             />
           ))}
+        </div>
+        <JumpToLatest stick={stick} label={t("chatJumpToLatest")} newLabel={t("chatNewBelow")} />
         </div>
         <form
           className="mx-auto mb-3.5 mt-1.5 flex w-[min(780px,calc(100%-32px))] flex-col gap-1 rounded-[22px] border border-input bg-panel px-2.5 pb-1.5 pl-3 pt-2.5 shadow-[var(--shadow-raised)] transition-[border-color,box-shadow] duration-100 focus-within:border-ring focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--ring)_35%,transparent)]"

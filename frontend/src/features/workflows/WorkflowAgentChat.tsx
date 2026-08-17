@@ -30,6 +30,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { ModelPicker } from "@/features/ai-studio/ModelPicker";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/components/agent/ToolCalls";
+import { JumpToLatest, useStickToBottom } from "@/components/agent/stickToBottom";
 import { ConfirmDialog } from "@/components/app/modals";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { formatElapsedSeconds } from "@/lib/time";
@@ -77,7 +78,6 @@ export function WorkflowAgentChat({
   const fileRef = React.useRef<HTMLInputElement | null>(null);
 
   const streamingRef = React.useRef<string | null>(null);
-  const threadRef = React.useRef<HTMLDivElement | null>(null);
   const isFloating = mode === "floating";
 
   // 悬浮窗的拖动/缩放/位置记忆走共用 hook —— 执行历史面板用的是同一套。
@@ -100,6 +100,9 @@ export function WorkflowAgentChat({
   const [sessionMenuOpen, setSessionMenuOpen] = React.useState(false);
   const sessionList = sessions.data ?? [];
   const activeSession = sessionList.find((item) => item.id === selectedId) ?? sessionList[0] ?? null;
+  //: 贴底跟随(见 components/agent/stickToBottom)。此前这里是无条件 scrollTop = scrollHeight
+  //: —— 用户往上翻历史会被每一次内容更新硬拽回底部。
+  const stick = useStickToBottom<HTMLDivElement>(activeSession?.id);
   const sessionId = activeSession?.id ?? null;
   const switchSession = (nextId: string) => {
     if (nextId === selectedId) return;
@@ -333,11 +336,6 @@ export function WorkflowAgentChat({
     };
   }, []);
 
-  React.useEffect(() => {
-    const el = threadRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.data?.length, streamText]);
-
   const send = useMutation({
     mutationFn: async ({
       text,
@@ -487,6 +485,7 @@ export function WorkflowAgentChat({
           <X size={13} />
         </button>
       </div>
+      <div className="relative grid min-h-0 min-w-0">
       <div
         className={cn(
           // 横向必须一起锁死。grid 子项默认 min-width:auto —— 一段长代码块 / 一条长 URL 会把
@@ -496,7 +495,7 @@ export function WorkflowAgentChat({
           "grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-2 overflow-y-auto overflow-x-hidden p-2.5",
           (messages.data ?? []).length === 0 && !running && "content-center justify-items-center",
         )}
-        ref={threadRef}
+        ref={stick.ref}
       >
         {(messages.data ?? []).length === 0 && !running && (
           <div className="grid justify-items-center gap-1.5 p-2.5 text-center text-xs text-muted-foreground [&_svg]:text-primary [&_svg]:opacity-70">
@@ -571,6 +570,8 @@ export function WorkflowAgentChat({
           </div>
         )}
         {activeSession && <InlineConfirmations workspaceId={workspaceId} allowKey={activeSession.id} />}
+      </div>
+      <JumpToLatest stick={stick} label={t("chatJumpToLatest")} newLabel={t("chatNewBelow")} />
       </div>
       {(queue.data ?? []).map((message) => (
         <div

@@ -227,7 +227,7 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
 export function ToolCalls({ tools }: { tools: ToolCall[] | undefined }) {
   if (!tools || tools.length === 0) return null;
   return (
-    <div className="flex w-full flex-col gap-1 self-stretch">
+    <div className="flex w-full min-w-0 flex-col gap-1 self-stretch">
       {tools.map((tool) => (
         <ToolCallCard key={tool.id} tool={tool} />
       ))}
@@ -300,7 +300,11 @@ export function AgentTurnContent({
     // **间距由容器统一给**。此前每种块自带下外边距(思考 10px、工具卡 8px),而正文的
     // 末段被 `last-child:mb-0` 清零 —— 于是三种块之间的缝隙各不相同,正文后面紧跟一张卡时
     // 干脆贴在一起。grid + gap 一处说了算,也符合仓库里"纵向堆叠一律 grid/flex + gap"的约定。
-    <div className="grid w-full gap-2.5">
+    // `grid-cols-[minmax(0,1fr)]` 不是装饰:单列 grid 的隐式列是 `auto`,也就是 **max-content**
+    // —— 一个长 URL 或 32 位 session id 会把这一列撑到内容宽度,冲破外面那层 780px,而**同一个
+    // grid 里的其它块(思考、正文)跟着一起变宽**,看起来像"整条消息比别的宽"。子项自己的
+    // truncate 救不了:truncate 要父级先有确定宽度,而这里父级宽度正是由它的内容定的。
+    <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-2.5">
       {agentTurnParts(timeline).map((item, index) =>
         item.type === "tool" && item.tool ? (
           <ToolCalls key={`tool-${item.tool.id}-${index}`} tools={[item.tool]} />

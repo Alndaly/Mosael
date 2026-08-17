@@ -64,3 +64,27 @@ describe("智能体对话的滚动容器锁死横向", () => {
     expect(stale).toEqual([]);
   });
 });
+
+/**
+ * 结构性约束:**智能体正文的单列 grid 必须显式给轨道。**
+ *
+ * `grid` 不写 `grid-template-columns` 时,隐式列是 `auto` —— 也就是
+ * `minmax(min-content, max-content)`。一段不可断的长串(一条 URL、一个 32 位 session id)
+ * 会把轨道撑到 max-content 并**溢出**外层那 780px 的气泡;更要命的是同一个 grid 里的其它块
+ * (思考块、工具卡)被拉伸到同一个轨道宽度,于是**一起**变宽,而正文因为自己会断词仍是 780。
+ * 呈现出来就是"一条消息里几块内容宽度不一,中间那几块凸出来"。
+ *
+ * 真机上量过:摘掉轨道声明后,同一段长 URL 把子项撑到 1511px(外层气泡仍是 780)。
+ * 子项自己的 truncate 救不了 —— truncate 要父级先有确定宽度,而这里父级宽度正由内容决定。
+ */
+describe("智能体正文的单列 grid 显式约束轨道", () => {
+  const AGENT_TURN = path.join(SRC, "components/agent/ToolCalls.tsx");
+
+  it("AgentTurnContent 的容器给了 minmax(0,1fr)", () => {
+    const text = fs.readFileSync(AGENT_TURN, "utf8");
+    const body = text.slice(text.indexOf("export function AgentTurnContent"));
+    const root = body.match(/className="(grid[^"]*)"/);
+    expect(root, "AgentTurnContent 的根容器不再是 grid?那这条约束要跟着改").not.toBeNull();
+    expect(root![1]).toContain("grid-cols-[minmax(0,1fr)]");
+  });
+});
