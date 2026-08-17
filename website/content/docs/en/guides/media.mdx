@@ -1,0 +1,54 @@
+---
+title: Media library
+description: Import, record, download from a link, tags and filters.
+order: 5
+---
+
+The media library is where every file enters Open Studio: local uploads, screen/camera recordings,
+downloads from a link, and the output of renders, dubbing and AI generation. They all go through
+**the same import path**, so thumbnails, waveforms and duration probing are there no matter the source.
+
+![Media library: grid view, tag filters, multi-select](/media/screens/media.png)
+
+## Importing
+
+- **Upload** a file, or drag it onto the window.
+- **Record** the screen or a camera; the recording lands in the library.
+- **From a link** — see below.
+
+## From a link
+
+Paste a video or playlist link, look at what is behind it, then decide what to download.
+
+![Import from a link: the listing, multi-select, quality and audio/video choice](/media/screens/url-import.png)
+
+**Probing before downloading is deliberate**: a link may be one video, or a whole playlist —
+hundreds of items and tens of gigabytes. So pasting fetches metadata only (no media streams) and
+shows the listing: a single video is ticked for you, a playlist starts with nothing ticked.
+
+- **Audio or video** is chosen *before* downloading. Someone who only wants the voice for
+  transcription should not pay for hundreds of megabytes and a transcode.
+- **Max quality** lists only the steps this link **actually has** — probing already knows what it
+  tops out at, and offering a step that does nothing is letting the UI lie for the site. It is a
+  ceiling, not an exact match: items in one batch don't all offer the same quality.
+- **Paging**: 200 items at a time, with "Next" for the rest. A channel can hold thousands.
+
+### Content that needs a sign-in
+
+Members-only videos, private playlists and region-locked content read as "unavailable" without a
+session. This app already keeps every persistent login in the
+[browser pool](/en/docs/guides/publishing), so just **borrow one of those identities** — no need to
+export a cookie jar from somewhere else.
+
+> YouTube makes this obvious: anonymously it now tops out at 360p (measured), and 1440p with a
+> session. So the line "this link tops out at N" is not a guess but a probed fact — if it looks low,
+> that is usually the cue to pick a signed-in identity.
+
+Downloads run as a background job with progress in the task centre. One failure does not sink the
+batch: what downloaded stays in the library, and the failed count is reported.
+
+## Tags and filters
+
+- Filter by type (video / audio / image) or by tag from the toolbar.
+- Multi-select to tag or delete in bulk.
+- "Compare" puts two assets side by side for picking between versions.

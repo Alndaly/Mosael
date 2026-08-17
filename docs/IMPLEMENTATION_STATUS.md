@@ -355,6 +355,55 @@ Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the
   nothing**, so French, German, Spanish, Italian and Finnish can only be chosen explicitly. Refusing
   wrongly blocks a synthesis that would have worked, so anything unproven is let through.
 
+### 2026-08-17: media from a link (yt-dlp), and two places where the UI was lying
+
+- **Import media from a link** (`media/ytdlp.py` + `domain/assets/from_url.py`). Probe first, then
+  download what was ticked: a link may be one video or a whole playlist — one real playlist probed
+  back **186 items**. Single video ticks itself; a playlist starts with nothing ticked, because a
+  default-select-all on hundreds of items is one misclick from tens of gigabytes. Audio/video is a
+  fork **before** downloading, not an extraction after it. Landing goes through `register_file_asset`,
+  the same path as upload / local register / render output, so thumbnails, waveform and duration
+  probing come for free (verified: a 10-minute video lands with `duration=634.6s`, `has_waveform=True`).
+- **Login state is borrowed from the browser pool**, not exported by hand: a new `cookies` browser
+  action reads the whole jar from the profile's partition (**not filtered by url** — video sites serve
+  media from a different domain, and page-domain cookies alone still 403) and returns Netscape lines
+  for the backend to write as cookies.txt.
+- Three YouTube facts, each of which cost a debugging round and is written down where it is used:
+  1. the default player client is **403** now; `android` works but only returns low-res formats;
+  2. with cookies, **pinning a client is wrong** — the same jar gives 360p when pinned to
+     `web_safari/web/mweb`, and 33 formats up to 1440p when nothing is pinned. The pinned list was an
+     empirical answer to the anonymous-403 problem, and applying it to the signed-in case overrides a
+     judgement yt-dlp keeps updating;
+  3. YouTube now gates streams behind a **JS challenge**; unsolved, the formats are stripped entirely
+     and yt-dlp reports `Only images are available`. Solving it needs a JS runtime plus yt-dlp's
+     solver script, which is fetched on demand (`remote_components: ejs:github`) — a deliberate
+     "download and run remote code" call, documented at the constant.
+- **Quality is a ceiling, and the steps are the ones this link actually has.** Probing a single video
+  already returns `formats`; the picker is built from them, so a link that tops out at 360p does not
+  offer 2160p. Unknown (playlist flat-probe) falls back to generic steps — there "unknown" is honest
+  and "only these" would be invented.
+- Two UI lies fixed on the way: `<SelectItem value="">` (radix treats the empty string as "nothing
+  selected", so picking 「不用」 left the trigger blank — the same pattern had been written twice), and
+  a CJK title with no spaces widening the whole dialog (`min-width: auto` on flex/grid children).
+- **Time-range cutting was built and then removed** at the user's request. It never worked here
+  anyway: cutting has ffmpeg open the media URL directly and seek, which is a different network path
+  from the download — the stream yt-dlp pulls at 5 MB/s times out for ffmpeg.
+
+### 2026-08-16: costs that were priced but reported as unpriced, and publish records that were deleted
+
+- **`summarize_usage` now returns `unpriced`** — which provider+model+capability failed to price and
+  how many times. The home chart said 「暂无价格规则」 to a user who had configured nine of them; the
+  truth was that none matched the model actually in use (rules are keyed by `profile.vendor`, and his
+  `deepseek-v4-pro` rules hung off an `openai-compatible` profile while the calls ran on the
+  `deepseek` one). A blanket denial is worse than no hint: it turns "add one rule" into "the feature
+  is broken".
+- **Deleting a published record now says what it costs.** 20 publish jobs from one debugging session
+  (Xiaohongshu 7, TikTok 4, YouTube 4, Douyin 2, Channels 2, Bilibili 1) had their records deleted;
+  the jobs, assets and accounts were all still there. There is exactly one `db.delete(task)` in the
+  codebase and it is user-triggered — the path was simply too smooth. The confirmation said "produced
+  files are untouched", which is about local files and neatly avoids the half that matters: the post
+  stays up on the platform, and your own account of what you published is gone.
+
 ## Next
 
 - Precise preview ("render preview"): render a selected range through the real export pipeline so a

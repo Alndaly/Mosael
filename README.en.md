@@ -14,6 +14,19 @@ Workflows nest (subgraphs / call-workflow / marquee-collapse), and every persist
 
 ### Recently added
 
+**Import media from a link** — paste a video or playlist URL, look at what is behind it, then decide
+what to download. **Probing before downloading is deliberate**: a link may be one video or a whole
+playlist (hundreds of items, tens of gigabytes). Audio or video is chosen *before* downloading
+(someone who only wants the voice for transcription should not pay for hundreds of megabytes and a
+transcode), and the quality ceiling lists only the steps this link **actually has** — probing already
+knows what it tops out at, and offering a step that does nothing is letting the UI lie for the site.
+
+For content that needs a sign-in, **borrow an identity from the browser pool** instead of exporting a
+cookie jar from somewhere else. YouTube makes this obvious: anonymously it now tops out at 360p
+(measured), and 1440p with a session.
+
+![Import from a link: the listing, multi-select, quality and audio/video choice](docs/media/url-import.png)
+
 **Subtitle dubbing, and engines split from models** — every cue in the subtitle panel carries its own
 dub button, and you can also dub a batch. The audio lands on a dedicated dub track (the original audio
 is untouched; delete the track and you are back where you started), and dubbing again returns to that

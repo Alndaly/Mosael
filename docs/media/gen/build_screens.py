@@ -69,6 +69,22 @@ SHOTS: dict[str, dict] = {
             "document.querySelector('button[aria-label=\"给这一条配音\"]')?.click()",
         ],
     },
+    "url-import": {
+        "route": "#/media",
+        # 从链接导入:探测一条真实视频,让截图里有内容而不是空表单。
+        "steps": [
+            "[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='从链接导入')?.click()",
+            """(() => {
+              const input = [...document.querySelectorAll('input')].find(i => (i.placeholder||'').includes('链接'));
+              const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+              setter.call(input, 'https://www.youtube.com/watch?v=aqz-KE-bpKQ');
+              input.dispatchEvent(new Event('input', {bubbles: true}));
+              [...document.querySelectorAll('button')].find(b => b.textContent.trim() === '获取列表')?.click();
+            })()""",
+        ],
+        # 探测要出网,给它比别的截图更长的等待。
+        "settle_ms": 14000,
+    },
     "workflows": {"route": "#/workflows"},
     "publish": {"route": "#/publish"},
     "settings": {"route": "#/settings"},
@@ -121,7 +137,8 @@ def capture(base: str, token: str, names: list[str], theme: str = "light") -> No
                 page.evaluate(step)
                 page.wait_for_timeout(900)
             # 网络静默之后再等一拍:图表、波形、缩略图是拿到数据之后才画的。
-            page.wait_for_timeout(1200)
+            # 要出网的那几张(探测链接)自己声明更长的等待 —— 写死一个大值会让每张都慢。
+            page.wait_for_timeout(int(shot.get("settle_ms", 1200)))
             if theme == "dark":
                 target = OUT_SITE_DARK / f"{name}.png"
                 page.screenshot(path=str(target))
