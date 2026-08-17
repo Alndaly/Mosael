@@ -1087,9 +1087,6 @@ class UrlImportRequest(BaseModel):
     profile_id: str | None = None
     #: 画质上限(0 = 不限)。**上限而不是精确值**:同一批里每条能给的画质不一样。
     max_height: int = Field(default=0, ge=0, le=4320)
-    #: 只要 [起, 止] 这一段(秒)。只在单条时有意义 —— 同一段落在不同视频上是不相干的内容。
-    section_start: float | None = Field(default=None, ge=0)
-    section_end: float | None = Field(default=None, ge=0)
 
 
 class SubtitleDubRequest(BaseModel):

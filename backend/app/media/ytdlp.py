@@ -189,7 +189,6 @@ def download(
     on_progress: Callable[[float, str], None] | None = None,
     cookie_file: Path | None = None,
     max_height: int = 0,
-    section: tuple[float, float] | None = None,
 ) -> Path:
     """把一条下到 `target_dir`,返回落地的文件路径。
 
@@ -200,10 +199,6 @@ def download(
     `max_height`:画质上限(0 = 不限)。**上限而不是精确值** —— 同一个播放列表里每条能给的
     画质并不一样,要求"正好 1080p"会让没有这一档的那些直接失败;要"不超过 1080p"则每条都
     取它自己能给的最好的那一档。4K 素材动辄几个 GB,而多数剪辑只需要 1080p。
-
-    `section`:只要 `(起, 止)` 这一段(秒)。一条两小时的直播回放里要 30 秒,没有理由先下满
-    两小时。**切在最近的关键帧上**,不强制重编码 —— 误差几帧,而素材拖上时间线后本来就要再修;
-    强制精确切的代价是整段重编码,既慢又掉一次画质。
     """
     import yt_dlp
 
@@ -234,10 +229,6 @@ def download(
     }
     if cookie_file is not None:
         options["cookiefile"] = str(cookie_file)
-    if section is not None:
-        from yt_dlp.utils import download_range_func
-
-        options["download_ranges"] = download_range_func(None, [section])
     if kind == "audio":
         options["format"] = "bestaudio/best"
     else:
@@ -291,12 +282,8 @@ def _explain(exc: Exception) -> str:
     if "unavailable" in lowered or "removed" in lowered:
         return "这条内容已下架或在当前地区不可用。"
     if "ffmpeg exited" in lowered:
-        # 截取时间段是 ffmpeg **直接去拉媒体流**并 seek,而不是 yt-dlp 下完再切。它走的是另一条
-        # 网络路径:实测这台机器上 yt-dlp 能 5 MB/s 下完的流,ffmpeg 直连同一个地址却超时。
-        return (
-            "截取这一段失败了 —— 截取要由 ffmpeg 直接连媒体地址,而它走的网络路径和下载不是同一条。"
-            "把时间段留空整条下载,再到时间线上裁剪,通常更稳。"
-        )
+        # 视频和声音是两条流,合并由 ffmpeg 做。它失败时报的是一个退出码,对用户毫无意义。
+        return "音视频合并失败(ffmpeg)。改成「只要音频」通常能绕开;若一直如此,可能是这条流的格式特殊。"
     if "timed out" in lowered or "timeout" in lowered:
         return "连接超时 —— 网络到这个站点不通,或者需要代理。"
     # 兜底:取最后一行(yt-dlp 把结论放在最后),砍到能读的长度。

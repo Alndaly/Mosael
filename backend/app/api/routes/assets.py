@@ -122,11 +122,6 @@ def import_from_url(body: UrlImportRequest, db: DbSession, user: CurrentUser) ->
             created_by=user.id,
             profile_id=body.profile_id,
             max_height=body.max_height,
-            section=(
-                (body.section_start or 0.0, body.section_end)
-                if (body.section_start is not None or body.section_end is not None)
-                else None
-            ),
         )
     except UrlImportError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

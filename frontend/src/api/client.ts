@@ -295,9 +295,6 @@ export function importFromUrl(body: {
   max_height?: number;
   /** 借哪个浏览器池档案的登录态;空 = 按公开内容下载。 */
   profile_id?: string | null;
-  /** 只要这一段(秒)。只在单条时有意义。 */
-  section_start?: number | null;
-  section_end?: number | null;
 }): Promise<Job> {
   return api<Job>("/api/assets/import-url", { method: "POST", body: JSON.stringify(body) });
 }

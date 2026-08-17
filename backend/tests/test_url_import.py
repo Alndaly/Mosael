@@ -186,40 +186,6 @@ def test_signed_in_does_not_pin_a_client() -> None:
     assert anonymous["youtube"]["player_client"][0] == "android"
 
 
-def test_a_section_only_makes_sense_for_one_item() -> None:
-    """同一个时间段套在不同视频上,截出来的是各不相干的片段 —— 那不是用户要的「这一段」。"""
-    client = fresh_client()
-    workspace_id = _workspace(client)
-    items = [{"url": "https://example.com/a", "title": "a"}, {"url": "https://example.com/b", "title": "b"}]
-    with SessionLocal() as db:
-        with pytest.raises(UrlImportError):
-            start_url_import(
-                db, workspace_id=workspace_id, project_id=None, items=items,
-                kind="video", created_by=None, section=(10.0, 20.0),
-            )
-
-
-def test_open_ended_section_survives_the_database() -> None:
-    """「到结尾」在库里必须是 null。
-
-    `float("inf")` 不是合法 JSON —— 写进 payload 会变成一个读不回来的 `Infinity`,而任务在
-    重新读取时才炸,那时用户已经等了一轮。只在交给 yt-dlp 的那一刻才变成 inf。
-    """
-    import json
-
-    client = fresh_client()
-    workspace_id = _workspace(client)
-    with SessionLocal() as db:
-        job = start_url_import(
-            db, workspace_id=workspace_id, project_id=None,
-            items=[{"url": "https://example.com/a", "title": "a"}],
-            kind="video", created_by=None, section=(30.0, None),
-        )
-        payload = job.payload
-    # 能被 json 往返 = 能安全落库
-    assert json.loads(json.dumps(payload))["section"] == [30.0, None]
-
-
 def test_probe_start_shifts_the_window() -> None:
     """频道能有上万条。一次探 200 条,往后翻靠 `start` —— 第 201 条之后并非取不到,只是要再问一次。"""
     captured: dict = {}
