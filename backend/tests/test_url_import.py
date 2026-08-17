@@ -84,3 +84,89 @@ def test_error_messages_say_what_to_do() -> None:
 def test_titles_with_glob_characters_can_still_be_found() -> None:
     """视频标题里 `[]` 很常见(`[Official MV]`)。不转义的话,找回落地文件那一步会匹配不到自己。"""
     assert ytdlp.glob_escape("Song [Official MV]") == "Song [[]Official MV[]]"
+
+
+def test_quality_is_a_ceiling_not_an_exact_match(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`height<=N` 而不是 `height=N`。
+
+    同一个播放列表里每条能给的画质并不一样。要求"正好 1080p"会让没有这一档的那些直接
+    「没有可用格式」;要"不超过 1080p"则每条都取它自己能给的最好的那一档。
+    """
+    captured: dict = {}
+
+    class FakeYDL:
+        def __init__(self, options):
+            captured.update(options)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def extract_info(self, url, download=False):
+            return {"id": "x", "title": "t", "ext": "mp4"}
+
+        def prepare_filename(self, info):
+            return str(tmp / "t.mp4")
+
+    import sys
+    import types
+    from pathlib import Path
+    import tempfile
+
+    tmp = Path(tempfile.mkdtemp())
+    (tmp / "t.mp4").write_bytes(b"x")
+    fake = types.ModuleType("yt_dlp")
+    fake.YoutubeDL = FakeYDL  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "yt_dlp", fake)
+
+    ytdlp.download("https://example.com/v", kind="video", target_dir=tmp, max_height=1080)
+    assert "[height<=1080]" in captured["format"]
+    assert "height=1080" not in captured["format"]
+
+    # 不限时不带任何高度条件 —— 否则"最高画质"会被一个隐形的上限悄悄砍掉。
+    ytdlp.download("https://example.com/v", kind="video", target_dir=tmp, max_height=0)
+    assert "height<=" not in captured["format"]
+
+
+def test_audio_ignores_the_quality_ceiling(monkeypatch: pytest.MonkeyPatch) -> None:
+    """只要声轨时,画质上限没有意义 —— 把它拼进格式表达式会筛掉所有纯音频流。"""
+    captured: dict = {}
+
+    class FakeYDL:
+        def __init__(self, options):
+            captured.update(options)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def extract_info(self, url, download=False):
+            return {"id": "x", "title": "t", "ext": "m4a"}
+
+        def prepare_filename(self, info):
+            return str(tmp / "t.m4a")
+
+    import sys
+    import types
+    from pathlib import Path
+    import tempfile
+
+    tmp = Path(tempfile.mkdtemp())
+    (tmp / "t.m4a").write_bytes(b"x")
+    fake = types.ModuleType("yt_dlp")
+    fake.YoutubeDL = FakeYDL  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "yt_dlp", fake)
+
+    ytdlp.download("https://example.com/v", kind="audio", target_dir=tmp, max_height=720)
+    assert captured["format"] == "bestaudio/best"
+
+
+def test_heights_are_unknown_not_empty_for_flat_entries() -> None:
+    """浅层探测(播放列表)拿不到 formats。**空表示未知,不表示没有** ——
+    界面据此给通用档位,而不是说"这条只有这几档"。"""
+    assert ytdlp._heights({"id": "x"}) == ()
+    assert ytdlp._heights({"formats": [{"height": 1080}, {"height": 720}, {"height": None}]}) == (1080, 720)

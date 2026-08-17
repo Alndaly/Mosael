@@ -98,6 +98,7 @@ def probe_url(body: UrlProbeRequest, db: DbSession, user: CurrentUser) -> dict:
                 "duration": entry.duration,
                 "uploader": entry.uploader,
                 "thumbnail": entry.thumbnail,
+                "heights": list(entry.heights),
             }
             for entry in listing.entries
         ],
@@ -119,6 +120,7 @@ def import_from_url(body: UrlImportRequest, db: DbSession, user: CurrentUser) ->
             kind=body.kind,
             created_by=user.id,
             profile_id=body.profile_id,
+            max_height=body.max_height,
         )
     except UrlImportError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

@@ -45,6 +45,7 @@ def start_url_import(
     kind: str,
     created_by: str | None,
     profile_id: str | None = None,
+    max_height: int = 0,
 ) -> Job:
     """给这些链接排一次下载。`items` 是 `[{url, title}]` —— 标题来自探测,用于任务消息。"""
     chosen = [item for item in items if str(item.get("url") or "").strip()]
@@ -60,7 +61,13 @@ def start_url_import(
         workspace_id=workspace_id,
         kind="url_import",
         created_by=created_by,
-        payload={"project_id": project_id, "items": chosen, "kind": kind, "profile_id": profile_id or ""},
+        payload={
+            "project_id": project_id,
+            "items": chosen,
+            "kind": kind,
+            "profile_id": profile_id or "",
+            "max_height": max_height,
+        },
         message="jobMsg_urlImportRunning",
         message_params={"done": 0, "total": len(chosen)},
     )
@@ -81,6 +88,7 @@ def _run(job_id: str) -> None:
         items: list[dict[str, Any]] = list(payload.get("items") or [])
         kind = str(payload.get("kind") or "video")
         profile_id = str(payload.get("profile_id") or "")
+        max_height = int(payload.get("max_height") or 0)
         job.status = "running"
         emit_job_event(db, job.id, "job.running", {})
         db.commit()
@@ -107,7 +115,12 @@ def _run(job_id: str) -> None:
                         progress_db.commit()
 
                 path = ytdlp.download(
-                    item["url"], kind=kind, target_dir=workdir, on_progress=report, cookie_file=cookie_file,
+                    item["url"],
+                    kind=kind,
+                    target_dir=workdir,
+                    on_progress=report,
+                    cookie_file=cookie_file,
+                    max_height=max_height,
                 )
             except ytdlp.YtdlpError as exc:
                 failed += 1

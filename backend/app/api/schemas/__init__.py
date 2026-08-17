@@ -1056,6 +1056,8 @@ class RemoteEntryOut(BaseModel):
     duration: float | None = None
     uploader: str = ""
     thumbnail: str = ""
+    #: 这一条实际拿得到的画质高度(从高到低)。空 = 未知(播放列表只做浅层探测),不是"没有"。
+    heights: list[int] = Field(default_factory=list)
 
 
 class UrlProbeResponse(BaseModel):
@@ -1079,6 +1081,8 @@ class UrlImportRequest(BaseModel):
     kind: str = Field(default="video", pattern="^(video|audio)$")
     #: 借哪个浏览器池档案的登录态(会员视频、私享列表需要)。空 = 按公开内容下载。
     profile_id: str | None = None
+    #: 画质上限(0 = 不限)。**上限而不是精确值**:同一批里每条能给的画质不一样。
+    max_height: int = Field(default=0, ge=0, le=4320)
 
 
 class SubtitleDubRequest(BaseModel):

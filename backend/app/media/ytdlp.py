@@ -50,6 +50,9 @@ class RemoteEntry:
     duration: float | None
     uploader: str
     thumbnail: str
+    #: 这一条**实际拿得到**的画质高度,从高到低。空 = 还不知道(播放列表只做浅层探测)。
+    #: 有它才谈得上"选像素":否则用户选了 1080p、下回来一个 360p,而没人告诉他为什么。
+    heights: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -62,6 +65,17 @@ class RemoteListing:
     #: 清单被 MAX_ENTRIES 截断了吗。**要说出来** —— 否则用户以为这就是全部,
     #: 勾完发现少了一半。
     truncated: bool
+
+
+def _heights(raw: dict[str, Any]) -> tuple[int, ...]:
+    """这条视频有哪几档画质。浅层探测(播放列表)拿不到 formats,那时就是空的 —— **空表示未知,
+    不表示没有**,所以界面在空的时候给通用档位,而不是说"只有这几档"。"""
+    seen = {
+        int(fmt["height"])
+        for fmt in (raw.get("formats") or [])
+        if isinstance(fmt, dict) and isinstance(fmt.get("height"), (int, float)) and fmt["height"]
+    }
+    return tuple(sorted(seen, reverse=True))
 
 
 def _entry(raw: dict[str, Any], fallback_url: str) -> RemoteEntry:
@@ -78,6 +92,7 @@ def _entry(raw: dict[str, Any], fallback_url: str) -> RemoteEntry:
         duration=float(duration) if isinstance(duration, (int, float)) else None,
         uploader=str(raw.get("uploader") or raw.get("channel") or ""),
         thumbnail=str(raw.get("thumbnail") or ""),
+        heights=_heights(raw),
     )
 
 
@@ -132,12 +147,17 @@ def download(
     target_dir: Path,
     on_progress: Callable[[float, str], None] | None = None,
     cookie_file: Path | None = None,
+    max_height: int = 0,
 ) -> Path:
     """把一条下到 `target_dir`,返回落地的文件路径。
 
     `kind`:`"video"` 取画面 + 声音并合流,`"audio"` 只取声轨。**不做二次转码** —— 直接要
     对应的流,省掉一次全片重编码(那既慢又掉画质)。容器交给 yt-dlp 按流选,ffmpeg 只在需要
     合并音视频轨时介入。
+
+    `max_height`:画质上限(0 = 不限)。**上限而不是精确值** —— 同一个播放列表里每条能给的
+    画质并不一样,要求"正好 1080p"会让没有这一档的那些直接失败;要"不超过 1080p"则每条都
+    取它自己能给的最好的那一档。4K 素材动辄几个 GB,而多数剪辑只需要 1080p。
     """
     import yt_dlp
 
@@ -170,7 +190,10 @@ def download(
     if kind == "audio":
         options["format"] = "bestaudio/best"
     else:
-        options["format"] = "bestvideo*+bestaudio/best"
+        limit = f"[height<={max_height}]" if max_height > 0 else ""
+        # 三段回退:分离流合流 → 带上限的单文件 → 兜底。缺了后两段的话,只有单文件格式的站点
+        # (以及只剩低清的 YouTube)会直接"没有可用格式"。
+        options["format"] = f"bestvideo{limit}+bestaudio/best{limit}/best"
         # 合流容器固定 mp4:时间线和导出链路对它最熟,而 webm 在某些解码路径上要另做转码。
         options["merge_output_format"] = "mp4"
 

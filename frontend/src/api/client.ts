@@ -259,6 +259,8 @@ export type RemoteEntry = {
   duration: number | null;
   uploader: string;
   thumbnail: string;
+  /** 实际拿得到的画质高度(从高到低);空 = 未知(播放列表只做浅层探测)。 */
+  heights?: number[];
 };
 
 export type UrlProbe = {
@@ -282,6 +284,8 @@ export function importFromUrl(body: {
   project_id?: string | null;
   items: { url: string; title: string }[];
   kind: "video" | "audio";
+  /** 画质上限(0 = 不限)。上限而不是精确值:同一批里每条能给的画质不一样。 */
+  max_height?: number;
   /** 借哪个浏览器池档案的登录态;空 = 按公开内容下载。 */
   profile_id?: string | null;
 }): Promise<Job> {

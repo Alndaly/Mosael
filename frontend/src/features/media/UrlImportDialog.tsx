@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { knownBestHeight, qualityOptions } from "@/features/media/urlImportQuality";
 import { formatTimecode } from "@/domain/timeline/geometry";
 import { cn } from "@/lib/utils";
 
@@ -41,6 +42,8 @@ export function UrlImportDialog({
   const [listing, setListing] = React.useState<UrlProbe | null>(null);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [kind, setKind] = React.useState<"video" | "audio">("video");
+  //: 画质上限。0 = 不限 —— 4K 素材动辄几个 GB,而多数剪辑只需要 1080p。
+  const [maxHeight, setMaxHeight] = React.useState(0);
   //: 借哪个登录身份。会员视频、私享列表不带登录态就只能看到"不可用" —— 而这个应用本来就把
   //: 所有持久登录攒在浏览器池里,没有理由让用户去别处导一份 cookie 出来。
   const [profileId, setProfileId] = React.useState(NONE);
@@ -75,6 +78,7 @@ export function UrlImportDialog({
         workspace_id: workspace.id,
         project_id: projectId ?? null,
         kind,
+        max_height: maxHeight,
         profile_id: optionalValue(profileId),
         items: (listing?.entries ?? [])
           .filter((entry) => selected.has(entry.url))
@@ -89,6 +93,7 @@ export function UrlImportDialog({
   });
 
   const entries = listing?.entries ?? [];
+  const bestKnown = knownBestHeight(entries);
   const allSelected = entries.length > 0 && entries.every((entry) => selected.has(entry.url));
   const toggleAll = () =>
     setSelected(allSelected ? new Set() : new Set(entries.map((entry) => entry.url)));
@@ -210,6 +215,31 @@ export function UrlImportDialog({
               <span>{t("urlImportSelectAll").replace("{n}", String(entries.length))}</span>
               <Switch checked={allSelected} onCheckedChange={toggleAll} />
             </label>
+
+            {kind === "video" && (
+              <label className="grid gap-1 text-xs text-muted-foreground">
+                <span>{t("urlImportQuality")}</span>
+                <Select value={String(maxHeight)} onValueChange={(next) => setMaxHeight(Number(next))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {qualityOptions(entries.flatMap((entry) => entry.heights ?? [])).map((height) => (
+                      <SelectItem key={height} value={String(height)}>
+                        {height === 0 ? t("urlImportQualityBest") : `${height}p`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {bestKnown > 0 && (
+                  // 站点实际能给多少,要说出来 —— 不带登录态的 YouTube 现在只给到 360p,
+                  // 而用户会以为是这个功能不行。
+                  <span className="text-ui-2xs leading-[1.5] text-muted-foreground">
+                    {t("urlImportQualityKnown").replace("{n}", String(bestKnown))}
+                  </span>
+                )}
+              </label>
+            )}
 
             <label className="grid gap-1 text-xs text-muted-foreground">
               <span>{t("urlImportKind")}</span>
