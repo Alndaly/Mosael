@@ -85,6 +85,11 @@ export async function executeBrowserAction(
       await driver.evaluate(expr);
       return { lastUrl: driver.url() };
     }
+    case "cookies": {
+      // 把这个分区的登录态借给外部工具(yt-dlp 下载需要登录的视频)。返回 Netscape 行,
+      // 后端只负责写文件 —— 格式转换在看得见 Chromium cookie 对象的这一侧做。
+      return { value: await driver.cookieLines() };
+    }
     case "screenshot": {
       const dataUrl = await driver.captureBase64();
       return { value: dataUrl, lastUrl: driver.url() };

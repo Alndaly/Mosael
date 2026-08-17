@@ -252,6 +252,42 @@ export function synthesizeWithEngine(body: {
   return api<Job>("/api/tts/synthesize", { method: "POST", body: JSON.stringify(body) });
 }
 
+export type RemoteEntry = {
+  id: string;
+  url: string;
+  title: string;
+  duration: number | null;
+  uploader: string;
+  thumbnail: string;
+};
+
+export type UrlProbe = {
+  title: string;
+  is_playlist: boolean;
+  entries: RemoteEntry[];
+  truncated: boolean;
+};
+
+/** 这个链接后面有什么 —— 只读元数据,不下载任何媒体流。 */
+export function probeUrl(workspaceId: string, url: string, profileId?: string | null): Promise<UrlProbe> {
+  return api<UrlProbe>("/api/assets/probe-url", {
+    method: "POST",
+    body: JSON.stringify({ workspace_id: workspaceId, url, profile_id: profileId || null }),
+  });
+}
+
+/** 把选中的条目下载进素材库。返回任务 —— 下载要跑一阵。 */
+export function importFromUrl(body: {
+  workspace_id: string;
+  project_id?: string | null;
+  items: { url: string; title: string }[];
+  kind: "video" | "audio";
+  /** 借哪个浏览器池档案的登录态;空 = 按公开内容下载。 */
+  profile_id?: string | null;
+}): Promise<Job> {
+  return api<Job>("/api/assets/import-url", { method: "POST", body: JSON.stringify(body) });
+}
+
 export type F5Model = {
   id: string;
   label: string;

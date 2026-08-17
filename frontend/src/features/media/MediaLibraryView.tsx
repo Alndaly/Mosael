@@ -1,8 +1,9 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, ListChecks, Pencil, Tag, Tags, Trash2, X } from "lucide-react";
+import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, Link2, ListChecks, Pencil, Tag, Tags, Trash2, X } from "lucide-react";
 
 import { api, assetThumbnailUrl, deleteAsset, importAsset, renameAsset, setAssetTags, type Asset, type Workspace } from "@/api/client";
+import { UrlImportDialog } from "@/features/media/UrlImportDialog";
 import { saveAssetToDisk } from "@/lib/download";
 import { useI18n } from "@/app/preferences";
 import { AssetCompareView } from "@/features/media/AssetCompareView";
@@ -65,6 +66,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const [batchTagging, setBatchTagging] = React.useState(false);
   const [batchDeleting, setBatchDeleting] = React.useState(false);
   const [recorderOpen, setRecorderOpen] = React.useState(false);
+  const [urlImportOpen, setUrlImportOpen] = React.useState(false);
 
   const assets = useQuery({
     queryKey: ["assets", workspace.id],
@@ -223,6 +225,9 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
               <ImagePlus size={13} /> {t("import")}
             </label>
           </Button>
+          <Button variant="outline" size="sm" onClick={() => setUrlImportOpen(true)}>
+            <Link2 size={13} /> {t("urlImport")}
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setRecorderOpen(true)}>
             <CircleDot size={13} /> {t("record")}
           </Button>
@@ -332,6 +337,14 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
       )}
       </div>
       <Recorder open={recorderOpen} onOpenChange={setRecorderOpen} onRecorded={(file) => uploadAsset.mutate(file)} />
+      <UrlImportDialog
+        open={urlImportOpen}
+        onOpenChange={setUrlImportOpen}
+        workspace={workspace}
+        // 下载跑在后台任务里,完成时素材库要自己刷新 —— 不刷的话新素材要切走再切回来才看得见
+        // (配音那条路正是这么被报上来的)。
+        onQueued={() => void qc.invalidateQueries({ queryKey: ["assets"] })}
+      />
 
       {(assets.data ?? []).length === 0 ? (
         <EmptyState icon={<FolderOpen size={22} />} title={t("mediaEmptyTitle")} body={t("mediaEmptyBody")} />

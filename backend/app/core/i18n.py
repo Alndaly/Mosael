@@ -114,6 +114,17 @@ MESSAGES: dict[str, dict[str, str]] = {
     # 部分失败单独一句:把「10 条里成了 9 条」说成「配音完成」,用户要到时间线上一段段找才发现少了一条。
     "jobMsg_dubPartial": {"zh": "字幕配音完成:{done} 条成功,{failed} 条失败", "en": "Dubbed {done} subtitle(s), {failed} failed"},
     "jobMsg_dubFailed": {"zh": "字幕配音失败", "en": "Subtitle dubbing failed"},
+    "jobMsg_urlImportRunning": {"zh": "从链接下载({done}/{total})", "en": "Downloading from links ({done}/{total})"},
+    "jobMsg_urlImportItem": {
+        "zh": "下载第 {n}/{total} 条:{title}",
+        "en": "Downloading {n}/{total}: {title}",
+    },
+    "jobMsg_urlImportDone": {"zh": "已导入 {done} 条素材", "en": "Imported {done} item(s)"},
+    "jobMsg_urlImportPartial": {
+        "zh": "已导入 {done} 条,{failed} 条失败",
+        "en": "Imported {done} item(s), {failed} failed",
+    },
+    "jobMsg_urlImportFailed": {"zh": "从链接下载失败", "en": "Downloading from links failed"},
     "f5Model_base": {"zh": "基础模型(中文 / 英文)", "en": "Base model (Chinese / English)"},
     "f5Model_ja": {"zh": "日语模型", "en": "Japanese model"},
     "f5ModelNote_base": {

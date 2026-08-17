@@ -174,6 +174,29 @@ export class PageDriver {
     }
   }
 
+  /**
+   * 这个分区里对某个站点生效的**整罐 cookie**,已经转成 Netscape 格式的行。
+   *
+   * `hasCookie` 回答"登录了吗",这个回答"把登录态借给别人用" —— yt-dlp 这类外部工具只认
+   * cookies.txt。转换放在这里而不是后端,是因为只有这一侧看得见 Chromium 的 cookie 对象
+   * (hostOnly / expirationDate 这些字段过一趟 JSON 就只剩猜)。
+   *
+   * **不带 url 参数**:取整个分区的 cookie。视频站的媒体流常常挂在另一个域(googlevideo.com、
+   * bilivideo.com),只给页面域的那几条,下载照样 403。
+   */
+  async cookieLines(): Promise<string[]> {
+    const jar = await this.wc.session.cookies.get({});
+    return jar.map((cookie) => {
+      // Netscape 格式:domain \t includeSubdomains \t path \t secure \t expiry \t name \t value
+      const domain = cookie.domain ?? "";
+      const includeSub = domain.startsWith(".") ? "TRUE" : "FALSE";
+      const secure = cookie.secure ? "TRUE" : "FALSE";
+      // 会话 cookie 没有 expirationDate;0 表示"随会话结束",yt-dlp 认这个。
+      const expiry = Math.floor(cookie.expirationDate ?? 0);
+      return [domain, includeSub, cookie.path || "/", secure, expiry, cookie.name, cookie.value].join("\t");
+    });
+  }
+
   async goto(url: string): Promise<void> {
     plog("goto:", url);
     // loadURL 的 promise 等 did-finish-load;B 站等重前端页面可能长期不触发(未登录重定向 +

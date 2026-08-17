@@ -1042,6 +1042,45 @@ class SynthesizeRequest(BaseModel):
     speed: float = Field(default=1.0, ge=0.5, le=2.0)
 
 
+class UrlProbeRequest(BaseModel):
+    workspace_id: str
+    url: str = Field(min_length=4, max_length=2000)
+    #: 探测也可能需要登录态:私享列表不登录就是"不可用"。
+    profile_id: str | None = None
+
+
+class RemoteEntryOut(BaseModel):
+    id: str
+    url: str
+    title: str
+    duration: float | None = None
+    uploader: str = ""
+    thumbnail: str = ""
+
+
+class UrlProbeResponse(BaseModel):
+    title: str
+    is_playlist: bool
+    entries: list[RemoteEntryOut]
+    #: 清单被截断了吗。**要如实说** —— 否则用户以为这就是全部,勾完发现少了一半。
+    truncated: bool = False
+
+
+class UrlImportItem(BaseModel):
+    url: str = Field(min_length=4, max_length=2000)
+    title: str = Field(default="", max_length=300)
+
+
+class UrlImportRequest(BaseModel):
+    workspace_id: str
+    project_id: str | None = None
+    items: list[UrlImportItem] = Field(min_length=1, max_length=50)
+    #: 下画面还是只下声轨。**不是下完再抽** —— 只要声音的人不该为此付几百 MB 和一次转码。
+    kind: str = Field(default="video", pattern="^(video|audio)$")
+    #: 借哪个浏览器池档案的登录态(会员视频、私享列表需要)。空 = 按公开内容下载。
+    profile_id: str | None = None
+
+
 class SubtitleDubRequest(BaseModel):
     """给选中的字幕条配音。音色/引擎那一套与 /tts/synthesize 同构 —— 配音就是合成,只是文本
     来自字幕、产物直接落到时间线上。"""

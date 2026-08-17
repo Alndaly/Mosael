@@ -1,0 +1,226 @@
+import React from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Link2, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+
+import { importFromUrl, listBrowserProfiles, probeUrl, type UrlProbe, type Workspace } from "@/api/client";
+import { useI18n } from "@/app/preferences";
+import { ModalShell } from "@/components/app/modals";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { formatTimecode } from "@/domain/timeline/geometry";
+import { cn } from "@/lib/utils";
+
+/**
+ * 从链接导入素材。
+ *
+ * **先探再下**:一个链接可能是一条视频,也可能是一整个播放列表(几百条、几十 GB)。粘完先探
+ * 元数据,把清单摆出来勾 —— 直接开下在单条时顺手,在播放列表上就是一次没人要的批量下载。
+ *
+ * **音频 / 视频在下载前选**,不是下完再抽:只要人声去转写的人,不该为此付几百 MB 和一次转码。
+ */
+export function UrlImportDialog({
+  open,
+  onOpenChange,
+  workspace,
+  projectId,
+  onQueued,
+}: {
+  open: boolean;
+  onOpenChange: (next: boolean) => void;
+  workspace: Workspace;
+  projectId?: string | null;
+  onQueued?: () => void;
+}) {
+  const t = useI18n();
+  const [url, setUrl] = React.useState("");
+  const [listing, setListing] = React.useState<UrlProbe | null>(null);
+  const [selected, setSelected] = React.useState<Set<string>>(new Set());
+  const [kind, setKind] = React.useState<"video" | "audio">("video");
+  //: 借哪个登录身份。会员视频、私享列表不带登录态就只能看到"不可用" —— 而这个应用本来就把
+  //: 所有持久登录攒在浏览器池里,没有理由让用户去别处导一份 cookie 出来。
+  const [profileId, setProfileId] = React.useState("");
+  const profiles = useQuery({
+    queryKey: ["browser-profiles", workspace.id],
+    queryFn: () => listBrowserProfiles(workspace.id),
+    enabled: open,
+  });
+
+  React.useEffect(() => {
+    if (!open) {
+      setUrl("");
+      setListing(null);
+      setSelected(new Set());
+    }
+  }, [open]);
+
+  const probe = useMutation({
+    mutationFn: () => probeUrl(workspace.id, url.trim(), profileId || null),
+    onSuccess: (result) => {
+      setListing(result);
+      // 单条视频就是用户想要的那一条,直接勾上 —— 让他为一条结果再点一次是纯仪式。
+      // 播放列表则一个都不勾:几百条默认全选,一次误点就是几十 GB。
+      setSelected(new Set(result.is_playlist ? [] : result.entries.map((entry) => entry.url)));
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const start = useMutation({
+    mutationFn: () =>
+      importFromUrl({
+        workspace_id: workspace.id,
+        project_id: projectId ?? null,
+        kind,
+        profile_id: profileId || null,
+        items: (listing?.entries ?? [])
+          .filter((entry) => selected.has(entry.url))
+          .map((entry) => ({ url: entry.url, title: entry.title })),
+      }),
+    onSuccess: () => {
+      onOpenChange(false);
+      toast.success(t("urlImportQueued").replace("{n}", String(selected.size)));
+      onQueued?.();
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const entries = listing?.entries ?? [];
+  const allSelected = entries.length > 0 && entries.every((entry) => selected.has(entry.url));
+  const toggleAll = () =>
+    setSelected(allSelected ? new Set() : new Set(entries.map((entry) => entry.url)));
+
+  return (
+    <ModalShell open={open} onOpenChange={onOpenChange} title={t("urlImportTitle")}>
+      <div className="grid min-w-0 gap-2.5">
+        <form
+          className="flex items-center gap-1.5"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (url.trim()) probe.mutate();
+          }}
+        >
+          <Input
+            value={url}
+            placeholder={t("urlImportPlaceholder")}
+            onChange={(event) => setUrl(event.target.value)}
+            autoFocus
+          />
+          <Button type="submit" size="sm" variant="outline" loading={probe.isPending} disabled={!url.trim()}>
+            {t("urlImportProbe")}
+          </Button>
+        </form>
+
+        {(profiles.data ?? []).length > 0 && (
+          <label className="grid gap-1 text-xs text-muted-foreground">
+            <span>{t("urlImportProfile")}</span>
+            <Select value={profileId} onValueChange={setProfileId}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {/* 「不用」排第一:绝大多数链接是公开内容,借登录态既没必要也多一次占用。 */}
+                <SelectItem value="">{t("urlImportProfileNone")}</SelectItem>
+                {(profiles.data ?? [])
+                  .filter((profile) => profile.enabled)
+                  .map((profile) => (
+                    <SelectItem key={profile.id} value={profile.id}>
+                      {profile.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </label>
+        )}
+
+        {probe.isPending && (
+          <p className="m-0 flex items-center gap-1.5 text-ui-xs text-muted-foreground">
+            <Loader2 size={12} className="animate-openstudio-spin" /> {t("urlImportProbing")}
+          </p>
+        )}
+
+        {listing && (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="min-w-0 truncate text-ui-sm font-semibold text-foreground">
+                {listing.title || t("urlImportUntitled")}
+              </span>
+              <span className="text-ui-xs text-muted-foreground">
+                {t("urlImportCount").replace("{n}", String(entries.length))}
+              </span>
+            </div>
+            {listing.truncated && (
+              // 截断必须说出来 —— 否则用户以为这就是全部,勾完发现少了一半。
+              <p className="m-0 text-ui-2xs leading-[1.5] text-muted-foreground">{t("urlImportTruncated")}</p>
+            )}
+
+            <div className="grid max-h-[38vh] min-w-0 gap-px overflow-y-auto overflow-x-hidden">
+              {entries.map((entry) => {
+                const checked = selected.has(entry.url);
+                return (
+                  <button
+                    key={entry.url}
+                    type="button"
+                    className={cn(
+                      "grid w-full cursor-pointer grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2 rounded-md border-0 bg-transparent px-1.5 py-1.5 text-left hover:bg-muted",
+                      checked && "bg-accent hover:bg-accent",
+                    )}
+                    onClick={() =>
+                      setSelected((current) => {
+                        const next = new Set(current);
+                        if (next.has(entry.url)) next.delete(entry.url);
+                        else next.add(entry.url);
+                        return next;
+                      })
+                    }
+                    aria-pressed={checked}
+                  >
+                    <span
+                      className={cn(
+                        "inline-block h-3.5 w-3.5 rounded-[4px] border border-border-strong",
+                        checked && "border-primary bg-primary",
+                      )}
+                      aria-hidden
+                    />
+                    <span className="grid min-w-0 gap-px">
+                      <span className="truncate text-ui-xs text-foreground">{entry.title}</span>
+                      {entry.uploader && (
+                        <span className="truncate text-ui-2xs text-muted-foreground">{entry.uploader}</span>
+                      )}
+                    </span>
+                    <span className="timecode text-ui-2xs text-muted-foreground">
+                      {entry.duration ? formatTimecode(entry.duration) : ""}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <label className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+              <span>{t("urlImportSelectAll").replace("{n}", String(entries.length))}</span>
+              <Switch checked={allSelected} onCheckedChange={toggleAll} />
+            </label>
+
+            <label className="grid gap-1 text-xs text-muted-foreground">
+              <span>{t("urlImportKind")}</span>
+              <Select value={kind} onValueChange={(next) => setKind(next as "video" | "audio")}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="video">{t("urlImportKindVideo")}</SelectItem>
+                  <SelectItem value="audio">{t("urlImportKindAudio")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </label>
+
+            <Button size="sm" disabled={selected.size === 0} loading={start.isPending} onClick={() => start.mutate()}>
+              <Link2 size={13} /> {t("urlImportStart").replace("{n}", String(selected.size))}
+            </Button>
+          </>
+        )}
+      </div>
+    </ModalShell>
+  );
+}

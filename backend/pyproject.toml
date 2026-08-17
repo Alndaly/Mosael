@@ -21,6 +21,11 @@ dependencies = [
   # 落盘加密(见 core/secrets_at_rest)。lark-oapi 也会装它,但依赖别人的传递依赖意味着
   # 对方换实现时这里会静默失效 —— 密钥读不出来的失效方式尤其难查,所以显式声明。
   "cryptography>=42.0",
+  # 从链接导入素材(见 media/ytdlp)。合并音视频轨要 ffmpeg,渲染那条链路本来就依赖它。
+  "yt-dlp>=2026.1.1",
+  # 联网搜索解析网页用(domain/websearch)。此前一直没声明,靠环境里碰巧装着 —— 一次
+  # `uv sync` 就把它清掉了,而后端从那一刻起连启动都启动不了。
+  "beautifulsoup4>=4.12",
 ]
 
 [dependency-groups]

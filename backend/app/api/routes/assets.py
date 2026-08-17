@@ -8,10 +8,10 @@ from fastapi.responses import FileResponse
 from sqlalchemy import or_, select
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, AssetUpdate, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut
+from app.api.schemas import AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, AssetUpdate, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse
 from app.audio.service import AsrError, start_transcription
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, require_asset
-from app.db.models import Asset, Clip, Transcript, Project
+from app.db.models import Asset, Clip, Job, Transcript, Project
 from app.core.config import settings
 from app.domain.assets import import_uploaded_asset, register_file_asset
 from app.domain.transcripts import attach_transcript, get_transcript_for_asset
@@ -52,6 +52,76 @@ def import_asset(
         name=name,
         upload=file,
     )
+
+
+@router.post("/assets/probe-url", response_model=UrlProbeResponse)
+def probe_url(body: UrlProbeRequest, db: DbSession, user: CurrentUser) -> dict:
+    """这个链接后面有什么 —— 只读元数据,不下载任何媒体流。
+
+    **先探再下**:一个链接可能是一条视频,也可能是一整个播放列表。直接「粘链接就下」在单条时
+    顺手,在播放列表上就是一次没人要的几十 GB。
+
+    权限按 `upload` 判:探测本身只是出网读一份公开元数据,但它是导入的第一步,而能看的人不等于
+    能往这个工作区里塞东西。
+    """
+    ensure_workspace_perm(db, user, body.workspace_id, "upload")
+    from app.media import ytdlp
+
+    cookie_file = None
+    workdir = None
+    if body.profile_id:
+        import tempfile
+        from pathlib import Path as _Path
+
+        from app.domain.assets.from_url import _cookie_file
+
+        workdir = _Path(tempfile.mkdtemp(prefix="open-studio-probe-"))
+        cookie_file = _cookie_file(body.workspace_id, body.profile_id, workdir)
+    try:
+        listing = ytdlp.probe(body.url.strip(), cookie_file=cookie_file)
+    except ytdlp.YtdlpError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    finally:
+        if workdir is not None:
+            import shutil
+
+            shutil.rmtree(workdir, ignore_errors=True)
+    return {
+        "title": listing.title,
+        "is_playlist": listing.is_playlist,
+        "truncated": listing.truncated,
+        "entries": [
+            {
+                "id": entry.id,
+                "url": entry.url,
+                "title": entry.title,
+                "duration": entry.duration,
+                "uploader": entry.uploader,
+                "thumbnail": entry.thumbnail,
+            }
+            for entry in listing.entries
+        ],
+    }
+
+
+@router.post("/assets/import-url", response_model=JobOut)
+def import_from_url(body: UrlImportRequest, db: DbSession, user: CurrentUser) -> Job:
+    """把选中的条目下载进素材库。返回任务 —— 下载要跑一阵,不该占着一个请求。"""
+    ensure_workspace_perm(db, user, body.workspace_id, "upload")
+    from app.domain.assets.from_url import UrlImportError, start_url_import
+
+    try:
+        return start_url_import(
+            db,
+            workspace_id=body.workspace_id,
+            project_id=body.project_id,
+            items=[item.model_dump() for item in body.items],
+            kind=body.kind,
+            created_by=user.id,
+            profile_id=body.profile_id,
+        )
+    except UrlImportError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 # 桌面端拖进来的文件能有的后缀。白名单而不是"什么都收":这个接口收的是一个由客户端指定的
