@@ -105,3 +105,72 @@ def test_a_failing_refresh_never_reaches_the_response(monkeypatch) -> None:
 
     assert listed.status_code == 200, listed.text
     assert any(row["name"] == "掉线的订阅" for row in listed.json())
+
+
+# ---------------------------------------------------------------------------
+# 「过期」不是「要你重新授权」
+# ---------------------------------------------------------------------------
+def _listed(client) -> dict:
+    rows = client.get("/api/settings/providers").json()
+    return next(row for row in rows if row["name"] == "掉线的订阅")
+
+
+def test_an_expired_token_being_refreshed_does_not_cry_wolf(monkeypatch) -> None:
+    """用户撞到的:「明明授权成功了,界面却显示需要再次授权」。
+
+    订阅计划的 access token 普遍只有几小时,过期后由后台自动刷 —— 这是协议里就有的一步,
+    不是一件用户需要知道的事。而 `oauth_expired` 此前就是 `is_expired(...)`,界面把它渲染成
+    红字「令牌刷新失败 · 需重新授权」。于是只要在过期窗口里打开设置页,就会看到一句
+    **不成立**的话:它几秒后自己就好了。
+
+    「过期了,正在刷」和「刷不动了,要你处理」被压成了同一个布尔值。这条钉住前者不报警。
+    """
+    monkeypatch.setattr(settings_routes, "refresh_oauth_credential", lambda **kw: True)
+    settings_routes._refresh_failed_at.clear()
+
+    client = fresh_client()
+    _expired_subscription(client)
+    row = _listed(client)
+    assert row["oauth_linked"] is True
+    assert row["oauth_expired"] is False, "过期但刷得动,不该让用户去重新授权"
+
+
+def test_a_token_that_really_cannot_be_refreshed_does_say_so(monkeypatch) -> None:
+    """反过来:真的刷不动就必须说。不然「需重新授权」这个状态等于没有了。"""
+    from app.ai.agent.adapters import AdapterError
+
+    def refuse(**kwargs):
+        raise AdapterError("OAuth refresh failed for anthropic: fetch failed")
+
+    monkeypatch.setattr(settings_routes, "refresh_oauth_credential", refuse)
+    settings_routes._refresh_failed_at.clear()
+
+    client = fresh_client()
+    _expired_subscription(client)
+    profile_id = _listed(client)["id"]
+
+    # 第一次拉列表只是**触发**后台刷新,那时还没有"刷不动"这个事实 —— 所以先等它失败。
+    deadline = time.time() + 5
+    while time.time() < deadline and profile_id not in settings_routes._refresh_failed_at:
+        time.sleep(0.02)
+    assert profile_id in settings_routes._refresh_failed_at, "后台刷新压根没跑"
+
+    assert _listed(client)["oauth_expired"] is True, "刷不动了却不说,用户无从知道要重新授权"
+
+
+def test_a_healthy_subscription_is_never_flagged(monkeypatch) -> None:
+    """没过期的连接,无论后台发生过什么,都不该显示需要重新授权。"""
+    monkeypatch.setattr(settings_routes, "refresh_oauth_credential", lambda **kw: True)
+    settings_routes._refresh_failed_at.clear()
+
+    client = fresh_client()
+    future = int((time.time() + 7200) * 1000)
+    with SessionLocal() as db:
+        add_provider(
+            db, name="好好的订阅", vendor="anthropic", base_url="", api_key="", auth_type="oauth",
+            oauth_credential={"type": "oauth", "access": "tok", "refresh": "r", "expires": future},
+            model="claude", capability_ids=["chat"], make_default=False,
+        )
+        db.commit()
+    row = next(r for r in client.get("/api/settings/providers").json() if r["name"] == "好好的订阅")
+    assert row["oauth_linked"] is True and row["oauth_expired"] is False

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.ai.agent.adapters import AdapterError, TurnResult, abort_turn, compact_session, run_turn, steer_turn
 from app.ai.agent.textclean import decode_byte_fallback
-from app.ai.model_catalog import find_model
+from app.ai.model_catalog import cached_model
 from app.domain.provider_auth import read_credential
 from app.domain import provider_models
 from app.domain.agent import memory as agent_memory
@@ -159,7 +159,10 @@ def resolve_chat_provider(
         provider_dict["credential"] = profile.oauth_credential
     else:
         # 上下文窗口来自供应商目录(带 TTL 缓存);端点没列出这个模型就留 None,由 sidecar 用保守回退。
-        catalog = find_model(profile.base_url or "", profile.api_key or "", agent_model)
+        # **只读缓存,不在这里等网络**:这是每一轮对话的必经之路,而目录请求打不通要等满 8 秒。
+        # 为了一个"取不到就留空、下游本来就有保守回退、还被用户自己填的值压在上面"的可选元数据,
+        # 让每句话都先卡八秒不值当 —— 缺了就让 cached_model 在后台取,下一轮自然就有了。
+        catalog = cached_model(profile.base_url or "", profile.api_key or "", agent_model)
         provider_dict["context_window"] = catalog.context_window if catalog else None
         provider_dict["max_output_tokens"] = catalog.max_output_tokens if catalog else None
     # 模型行上的显式设置压在最后:目录取不到(自定义模型名、私有部署)或给得不准时,

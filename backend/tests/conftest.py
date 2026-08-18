@@ -50,3 +50,31 @@ def _reset_asr_runtime_probe():
     reset()
     yield
     reset()
+
+
+@pytest.fixture(autouse=True)
+def _no_model_catalog_network():
+    """**测试套不许去问真实的模型目录。**
+
+    对话启动会顺手查一下端点的模型列表(拿上下文窗口)。测试里配的都是假地址,而这台机器
+    走代理时,连不上的地址不会立刻被拒,要挂满 8 秒才超时 —— 恰好等于 `_wait_idle` 的 8 秒,
+    于是两个 8 秒赛跑,谁先到看当时网络。表现出来就是 agent 那一批**概率性**变红:
+    单独跑绿(目录被前一个用例缓存了),随机顺序跑红(缓存键对不上,真的出网)。
+    倒下的那个还会连累后面几个——`fresh_client` 只等 5 秒就重建库,而线程还卡在网络上。
+
+    进程级缓存也一并清掉:跨用例渗漏正是"单独跑全绿、全量跑红"的另一半原因。
+    """
+    from app.ai import model_catalog
+
+    model_catalog.clear_cache()
+    yield
+    model_catalog.clear_cache()
+
+
+@pytest.fixture(autouse=True)
+def _catalog_returns_nothing(monkeypatch):
+    """默认让目录查询直接返回空 —— 要测目录本身的用例自己 monkeypatch `httpx.get`
+    (见 tests/test_model_catalog.py,它 stub 的是更底下那一层,不受这条影响)。"""
+    from app.ai import model_catalog
+
+    monkeypatch.setattr(model_catalog, "cached_model", lambda *a, **kw: None)

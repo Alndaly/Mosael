@@ -109,7 +109,16 @@ def _profile_out(db: DbSession, profile: ProviderProfile, user: CurrentUser) -> 
     # 令牌本身不下发,只说「登上了没有」——UI 需要的也只有这个。
     out.oauth_linked = bool(credential and credential.oauth_credential)
     out.quota_supported = supports_quota(pi_provider_id(profile.vendor))
-    out.oauth_expired = out.oauth_linked and is_expired(read_credential(credential))
+    # **「过期」不等于「要你重新授权」。** 订阅计划的 access token 普遍只有几小时,刷新是协议
+    # 里就有的一步,后台会自己做(见 _auto_refresh_expired)。只按 is_expired 报的话,任何人
+    # 只要在过期窗口里打开设置页,就会看到一行红字说「令牌刷新失败 · 需重新授权」——
+    # 而它几秒后自己就好了。前端那句注释("走到这里说明后端已经替它刷过且没刷动")描述的是
+    # 意图,这里才把它兑现:过期**且**最近真的刷不动,才是需要人来处理的事。
+    out.oauth_expired = (
+        out.oauth_linked
+        and is_expired(read_credential(credential))
+        and refresh_recently_failed(profile.id)
+    )
     return out
 
 
@@ -322,6 +331,17 @@ _REFRESH_COOLDOWN_SECONDS = 300.0
 _refresh_failed_at: dict[str, float] = {}
 
 
+def refresh_recently_failed(profile_id: str) -> bool:
+    """这条连接最近一次自动刷新令牌失败了没有。
+
+    进程级内存:重启后是空的,于是重启后第一次拉列表会说「已授权」,哪怕它其实刷不动 ——
+    下一次就对了。这个方向是**有意选的**:把"还不知道"说成"已授权"只会晚一次发现,
+    而把它说成"需重新授权"是在没坏的时候喊坏,后者用户已经撞上了。
+    """
+    failed_at = _refresh_failed_at.get(profile_id)
+    return failed_at is not None and time.monotonic() - failed_at < _REFRESH_COOLDOWN_SECONDS
+
+
 def _auto_refresh_expired(db: DbSession, user: CurrentUser, profiles) -> None:
     """过期就去刷一次 —— **在后台**,不占着这次请求。
 
@@ -364,8 +384,7 @@ def _refresh_in_background(token: str, pending: list[tuple[str, str, str, dict]]
     """后台把过期的订阅令牌刷一遍。失败只记日志 —— 它本来就是"顺手做的事"。"""
     now = time.monotonic()
     for profile_id, name, vendor, credential in pending:
-        failed_at = _refresh_failed_at.get(profile_id)
-        if failed_at is not None and now - failed_at < _REFRESH_COOLDOWN_SECONDS:
+        if refresh_recently_failed(profile_id):
             continue
         try:
             refresh_oauth_credential(

@@ -389,6 +389,46 @@ Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the
   anyway: cutting has ffmpeg open the media URL directly and seek, which is a different network path
   from the download — the stream yt-dlp pulls at 5 MB/s times out for ffmpeg.
 
+### 2026-08-18: a turn that waited 8 seconds on optional metadata, and "已授权" reported as "需重新授权"
+
+Two findings that started from one question — why `tests/test_agent_queue.py` failed only under
+random ordering. The answer was not the queue at all. A thread dump at the timeout showed:
+
+```
+httpcore/_backends/sync.py:128 in read          ← blocked on a socket, via http_proxy
+  app/ai/model_catalog.py:99 in fetch_models
+  app/ai/agent/host.py:162 in resolve_chat_provider
+  app/ai/agent/host.py:554 in _run_turn_thread
+```
+
+**Starting a turn was making a real network call.** `resolve_chat_provider` looked up the
+endpoint's model catalog to get `context_window` — optional metadata that already falls back to
+`None`, already has a conservative default downstream, and is already overridden by whatever the
+user typed on the model row. With an unreachable endpoint that lookup blocks for the full
+`_FETCH_TIMEOUT = 8`. In the suite, `_wait_idle`'s timeout is *also* 8 — two equal timeouts
+racing, which is exactly why it failed probabilistically. In production it means every message
+sits for 8 seconds before the agent starts, whenever the configured base_url is slow or wrong.
+
+- `cached_models` / `cached_model` read the cache and **never** fetch on the caller's thread;
+  a miss returns `None` (still unknown) and schedules a background refresh. `None` vs `[]` is
+  load-bearing: "haven't asked yet" and "asked, endpoint lists nothing" pick different fallbacks.
+- Failures are cached too (`_FAILURE_TTL_SECONDS = 60`). Without that, an unreachable endpoint
+  was retried on *every* call, each paying the full 8 seconds.
+- `fetch_models` stays blocking for the settings page's model picker — there the user is waiting
+  on the result, so blocking is correct. `find_model` had no callers left and was deleted.
+- The suite no longer reaches the network at all: two autouse fixtures in conftest. Agent tests
+  went from 2–3 probabilistic failures in 85s to green in 37s; the full suite 365s → 270s.
+
+Separately, from 「明明授权成功却显示需要再次授权」: `oauth_expired` was plain
+`is_expired(credential)`, and the UI renders that as a red 「令牌刷新失败 · 需重新授权」.
+Subscription access tokens expire every few hours by design and the backend already refreshes
+them in the background — so merely opening the settings page inside that window produced a
+warning that was **not true**, and would have resolved itself seconds later. "Expired, being
+refreshed" and "cannot be refreshed, needs you" had been flattened into one boolean. The backend
+already tracked the second one in `_refresh_failed_at` but never consulted it; `oauth_expired`
+now requires both. The frontend comment already claimed this ("走到这里说明后端已经替它刷过且
+没刷动") — it described intent the backend had not implemented.
+
 ### 2026-08-18: five things the agent could not reach
 
 Reported as "缺少一些必须的工具,比如获取当前时间". The registry had 51 tools and each of these

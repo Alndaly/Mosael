@@ -20,6 +20,10 @@ import httpx
 #: 目录变动很慢(供应商上新模型),但也不能永不刷新。
 _TTL_SECONDS = 300
 _FETCH_TIMEOUT = 8
+#: 端点不可达时也记一笔,时长短得多。**不记的话每一次都要等满 _FETCH_TIMEOUT** ——
+#: 而调用方里有"每轮对话都要问一次"的那种,于是配了个连不通的地址,每句话都先卡八秒。
+#: 短是因为端点恢复了不该等五分钟才发现。
+_FAILURE_TTL_SECONDS = 60
 
 
 @dataclass(frozen=True)
@@ -35,8 +39,12 @@ class CatalogModel:
     cache_write_cost: float | None = None
 
 
-_cache: dict[tuple[str, str], tuple[float, list[CatalogModel]]] = {}
+#: (取到的时刻, 模型, 这次是不是取成功了)。第三项决定用哪个 TTL —— 失败也要记,
+#: 否则连不通的端点会被反复重试。
+_cache: dict[tuple[str, str], tuple[float, list[CatalogModel], bool]] = {}
 _cache_lock = threading.Lock()
+#: 正在后台刷新的键。去重用:同一个端点没必要同时有十个线程去问。
+_refreshing: set[tuple[str, str]] = set()
 
 
 def _positive_int(value: object) -> int | None:
@@ -89,12 +97,10 @@ def fetch_models(base_url: str, api_key: str, *, use_cache: bool = True) -> list
     if not base:
         return []
     key = (base, api_key or "")
-    now = time.monotonic()
     if use_cache:
-        with _cache_lock:
-            hit = _cache.get(key)
-        if hit and now - hit[0] < _TTL_SECONDS:
-            return hit[1]
+        fresh = _fresh(key)
+        if fresh is not None:
+            return fresh
     try:
         resp = httpx.get(
             f"{base}/models",
@@ -104,21 +110,80 @@ def fetch_models(base_url: str, api_key: str, *, use_cache: bool = True) -> list
         resp.raise_for_status()
         models = _parse(resp.json().get("data"))
     except Exception:  # noqa: BLE001 - 端点不可达/不实现 /models 都只是「没有目录」,不是错误
+        with _cache_lock:
+            _cache[key] = (time.monotonic(), [], False)
         return []
     with _cache_lock:
-        _cache[key] = (now, models)
+        _cache[key] = (time.monotonic(), models, True)
     return models
 
 
-def find_model(base_url: str, api_key: str, model_id: str) -> CatalogModel | None:
-    """目录里这一个模型的元数据;端点没列出它就是 None(自定义/别名模型很常见)。"""
+def _fresh(key: tuple[str, str]) -> list[CatalogModel] | None:
+    """缓存里还没过期的那份;没有就 None。失败记录的有效期短得多(见 _FAILURE_TTL_SECONDS)。"""
+    with _cache_lock:
+        hit = _cache.get(key)
+    if hit is None:
+        return None
+    stamped, models, ok = hit
+    ttl = _TTL_SECONDS if ok else _FAILURE_TTL_SECONDS
+    return models if time.monotonic() - stamped < ttl else None
+
+
+def cached_models(base_url: str, api_key: str) -> list[CatalogModel] | None:
+    """**只看缓存,绝不在调用方线程里发请求**;缺了就在后台去取,并返回 None。
+
+    `None` 和 `[]` 是两回事:`[]` 是「问过了,这个端点没列出模型」,`None` 是「还没问到」。
+    调用方据此选保守回退,而不是把"不知道"当成"没有"。
+
+    给的是**对话启动**这类路径用的:那里要的只是上下文窗口这种可选元数据(端点没列出来时
+    本来就留空由下游回退),而一次问不通的目录请求要等满 _FETCH_TIMEOUT —— 让每一句话都先
+    卡八秒去拿一个可有可无的数,不值当。设置页的模型选择器仍然用 `fetch_models`:
+    那里用户正等着结果,阻塞才是对的。
+    """
+    base = (base_url or "").rstrip("/")
+    if not base:
+        return []
+    key = (base, api_key or "")
+    fresh = _fresh(key)
+    if fresh is not None:
+        return fresh
+    _refresh_soon(key)
+    return None
+
+
+def _refresh_soon(key: tuple[str, str]) -> None:
+    """在后台把这个端点的目录取回来。同一个键同时只有一个在跑。"""
+    with _cache_lock:
+        if key in _refreshing:
+            return
+        _refreshing.add(key)
+
+    def run() -> None:
+        try:
+            fetch_models(key[0], key[1], use_cache=False)
+        except Exception:  # noqa: BLE001 — 后台刷新失败只是"还是没有目录"
+            pass
+        finally:
+            with _cache_lock:
+                _refreshing.discard(key)
+
+    threading.Thread(target=run, daemon=True, name="model-catalog-refresh").start()
+
+
+def cached_model(base_url: str, api_key: str, model_id: str) -> CatalogModel | None:
+    """目录里这一个模型的元数据。取不到(还没问到 / 端点没列出它)一律 None ——
+    自定义名、私有部署、别名模型都很常见,那不是错误。"""
     target = (model_id or "").strip()
     if not target:
         return None
-    return next((m for m in fetch_models(base_url, api_key) if m.id == target), None)
+    models = cached_models(base_url, api_key)
+    if not models:
+        return None
+    return next((m for m in models if m.id == target), None)
 
 
 def clear_cache() -> None:
     """测试用;生产不需要 —— TTL 到了自然刷新。"""
     with _cache_lock:
         _cache.clear()
+        _refreshing.clear()
