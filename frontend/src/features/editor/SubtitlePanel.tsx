@@ -544,35 +544,61 @@ function SubtitleTranslate({
   const scoped = selectedOnly && selectedSubtitles.length > 0;
   const targets = scoped ? selectedSubtitles : subtitles;
 
+  //: 进行到哪了。null = 没在翻。分母是**要翻的条数**,不是批次数 —— 用户数的是字幕。
+  const [progress, setProgress] = React.useState<{ done: number; total: number } | null>(null);
+  //: 已经写进轨道的条数。中途失败时靠它把话说全:「前 N 条已写入」—— 只报"失败"的话,
+  //: 用户不知道轨道此刻是半翻译状态,更不知道该从哪续。
+  const appliedRef = React.useRef(0);
+
   const run = useMutation({
     mutationFn: async () => {
       const items = targets.filter((clip) => (clip.text_override ?? "").trim());
-      const { translations } = await translateTexts(
-        workspaceId,
-        items.map((clip) => clip.text_override ?? ""),
-        lang,
-        engine,
-      );
-      const texts = items.flatMap((clip, i) => {
-        const original = clip.text_override ?? "";
-        const translated = translations[i];
-        if (!translated || translated === original) return [];
-        // Bilingual keeps the source line above the translation. The subtitle renders with
-        // white-space: pre-wrap, so the newline is a real second line in the preview and,
-        // via the ASS \N we emit at export, in the burned-in output too.
-        return [{ clip_id: clip.id, text: bilingual ? `${original}\n${translated}` : translated }];
-      });
-      if (texts.length === 0) return 0;
-      // One request, one revision, one undo — and nothing is written unless every cue resolves,
-      // so a failure can no longer leave the track half in each language.
-      await onApplyTexts(texts);
-      return texts.length;
+      appliedRef.current = 0;
+      setProgress({ done: 0, total: items.length });
+      try {
+        // **边翻边落地**:每一批译完立即写进轨道,而不是攒到全部翻完。上千条字幕走 LLM
+        // 引擎是分钟级的 —— 攒到最后意味着这几分钟里界面毫无动静,而中途一个失败会把
+        // 已经译好的几百条一起扔掉。代价是撤销从"一步"变成"一批一步",以及中途失败时
+        // 轨道处于部分翻译状态 —— 所以失败提示必须说清写到了第几条。
+        await translateTexts(
+          workspaceId,
+          items.map((clip) => clip.text_override ?? ""),
+          lang,
+          engine,
+          async (batch, offset) => {
+            const texts = batch.flatMap((translated, j) => {
+              const clip = items[offset + j];
+              const original = clip.text_override ?? "";
+              if (!clip || !translated || translated === original) return [];
+              // Bilingual keeps the source line above the translation. The subtitle renders with
+              // white-space: pre-wrap, so the newline is a real second line in the preview and,
+              // via the ASS \N we emit at export, in the burned-in output too.
+              return [{ clip_id: clip.id, text: bilingual ? `${original}\n${translated}` : translated }];
+            });
+            if (texts.length > 0) {
+              await onApplyTexts(texts);
+              appliedRef.current += texts.length;
+            }
+            setProgress({ done: Math.min(offset + batch.length, items.length), total: items.length });
+          },
+        );
+        return appliedRef.current;
+      } finally {
+        setProgress(null);
+      }
     },
     onSuccess: (applied) => {
       setOpen(false);
       toast.success(t("subtitleTranslateDone").replace("{n}", String(applied)));
     },
-    onError: (error: Error) => toast.error(t("subtitleTranslateFailed"), { description: error.message }),
+    onError: (error: Error) =>
+      toast.error(t("subtitleTranslateFailed"), {
+        // 半路失败时已写入的留在轨道上(这是"边翻边落地"的另一面),必须说出来 ——
+        // 否则用户以为一条都没动,而轨道已经是两种语言各一半。
+        description: appliedRef.current > 0
+          ? `${t("subtitleTranslatePartial").replace("{n}", String(appliedRef.current))} ${error.message}`
+          : error.message,
+      }),
   });
 
   return (
@@ -623,10 +649,14 @@ function SubtitleTranslate({
         </label>
         <Button size="sm" loading={run.isPending} onClick={() => run.mutate()}>
           <Languages size={13} />
-          {(scoped ? t("subtitleTranslateApplySelected") : t("subtitleTranslateApply")).replace(
-            "{n}",
-            String(targets.length),
-          )}
+          {progress
+            ? t("subtitleTranslateProgress")
+                .replace("{done}", String(progress.done))
+                .replace("{total}", String(progress.total))
+            : (scoped ? t("subtitleTranslateApplySelected") : t("subtitleTranslateApply")).replace(
+                "{n}",
+                String(targets.length),
+              )}
         </Button>
         <small className="text-ui-xs leading-[1.4] text-muted-foreground">
           {bilingual ? t("subtitleTranslateNoteBilingual") : t("subtitleTranslateNote")}

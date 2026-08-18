@@ -71,3 +71,52 @@ describe("翻译分批", () => {
     }
   });
 });
+
+describe("边翻边落地", () => {
+  it("每一批译完就回调,偏移对得上 —— 调用方靠它把这一批立即写进轨道", async () => {
+    const { translateTexts } = await import("@/api/client");
+    fetchMock.mockImplementation(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String((init as RequestInit).body));
+      return reply({ translations: (body.texts as string[]).map((x: string) => `T:${x}`) });
+    });
+
+    const texts = Array.from({ length: 900 }, (_, i) => `cue-${i}`);
+    const handed: Array<{ offset: number; first: string; count: number }> = [];
+    await translateTexts("w1", texts, "en", "google", async (batch, offset) => {
+      handed.push({ offset, first: batch[0], count: batch.length });
+    });
+
+    expect(handed.length).toBeGreaterThan(1);
+    expect(handed[0].offset).toBe(0);
+    expect(handed[0].first).toBe("T:cue-0");
+    // 第二批的偏移 = 第一批的条数;拼起来正好盖满全部。
+    expect(handed[1].offset).toBe(handed[0].count);
+    expect(handed.reduce((n, h) => n + h.count, 0)).toBe(900);
+  });
+
+  it("落地失败就停:不再发后面的批次 —— 写不进去还接着翻是白花钱", async () => {
+    const { translateTexts } = await import("@/api/client");
+    fetchMock.mockImplementation(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String((init as RequestInit).body));
+      return reply({ translations: (body.texts as string[]).map(() => "x") });
+    });
+
+    const texts = Array.from({ length: 900 }, (_, i) => `cue-${i}`);
+    let calls = 0;
+    await expect(
+      translateTexts("w1", texts, "en", "google", async () => {
+        calls += 1;
+        if (calls === 1) throw new Error("轨道写入失败");
+      }),
+    ).rejects.toThrow("轨道写入失败");
+    // 第一批落地失败后,第二批的 HTTP 请求不该再发。
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("不传回调时行为不变 —— 转写生成字幕那条路不受影响", async () => {
+    const { translateTexts } = await import("@/api/client");
+    fetchMock.mockResolvedValue(reply({ translations: ["a"] }));
+    const { translations } = await translateTexts("w1", ["x"], "en");
+    expect(translations).toEqual(["a"]);
+  });
+});

@@ -389,6 +389,23 @@ Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the
   anyway: cutting has ffmpeg open the media URL directly and seek, which is a different network path
   from the download — the stream yt-dlp pulls at 5 MB/s times out for ffmpeg.
 
+### 2026-08-19: batch translation shows progress and lands as it goes
+
+Two asks on the subtitle batch translate: live progress, and incremental application. Previously
+the panel translated everything, then applied everything in one revision — deliberately, "one
+request, one undo, never half-translated". The cost surfaced at scale: a thousand-cue track
+through the LLM engine runs for minutes with a silent spinner, and one failure in the last batch
+threw away every batch before it.
+
+`translateTexts` (still the single batching exit) gained an awaited `onBatch(translations,
+offset)` — the panel writes each batch into the track as it completes and shows 「翻译中
+{done}/{total}…」 on the button. A landing failure stops further batches (translating what cannot
+be written is wasted spend). The traded-away properties are handled by saying them out loud:
+undo is now one step per batch, and a mid-run failure leaves the track partially translated — the
+error toast reports 「前 N 条已写入轨道,其余保持原文」 rather than a bare "failed". Ratchets pin
+the offset handoff and the stop-on-failure; verified live against the demo track (progress label
+appeared, PATCH per batch, one undo reverted the batch).
+
 ### 2026-08-18: an audit for *more of the same*, and what it found
 
 After the download work, a pass over the codebase looking for further instances of the shapes

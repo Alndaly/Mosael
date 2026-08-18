@@ -691,6 +691,9 @@ export async function translateTexts(
   texts: string[],
   targetLang: string,
   engine: "google" | "ai" = "google",
+  /** 每一批译完就交出去(带这一批在 `texts` 里的起始偏移)。**会被 await**:调用方在这里
+   *  把这一批写进轨道,写失败就中止后面的批次 —— 已写进去的留着,没翻的保持原文。 */
+  onBatch?: (translations: string[], offset: number) => void | Promise<void>,
 ): Promise<{ translations: string[] }> {
   // **分批是这一层的事,不是调用方的。** 出口只有这一个,放在这里两个调用点都不用知道有批次;
   // 让每个调用方各自切一遍,就是同一件事写两遍,而漏掉一处就是一条"超过 N 条就报错"。
@@ -704,6 +707,7 @@ export async function translateTexts(
       body: JSON.stringify({ workspace_id: workspaceId, texts: batch, target_lang: targetLang, engine }),
     });
     translations.push(...result.translations);
+    await onBatch?.(result.translations, start);
   }
   return { translations };
 }
