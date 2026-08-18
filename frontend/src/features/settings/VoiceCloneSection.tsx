@@ -74,22 +74,42 @@ export function VoiceCloneSection() {
     ),
     defaultValues: { engine: "f5-tts", python_path: "", source: "hf-mirror", pip_index: "", fish_repo_dir: "", fish_model_dir: "" },
   });
-  React.useEffect(() => {
-    if (config.data) {
-      form.reset({
-        engine: config.data.engine,
-        python_path: config.data.python_path,
-        source: config.data.source,
-        pip_index: config.data.pip_index ?? "",
-        fish_repo_dir: config.data.fish_repo_dir ?? "",
-        fish_model_dir: config.data.fish_model_dir ?? "",
-      });
-    }
-  }, [config.data]);
   const engineValue = form.watch("engine");
   // 这个引擎能用哪些下载源,后端说了算 —— F5 要的 vocos 在 ModelScope 上没有。
   const sources = (models.data ?? []).find((item) => item.id === engineValue)?.sources ?? [];
   const engineLabel = (models.data ?? []).find((item) => item.id === engineValue)?.label ?? engineValue;
+
+  // **归一化放在 reset 这一步**,让表单里存的就是下拉显示得出来的那个值。
+  //
+  // 此前是把归一化包在下拉的 `value=` 上,于是表单里是 modelscope、下拉显示 hf —— 两者不一致。
+  // Radix Select 会用一次 `onValueChange("")` 来"纠正"这种不一致,而 react-hook-form 把它
+  // 记成一次用户改动:一个字没动,页面却说「改了还没保存」,而下拉显示的又不是存着的那个值。
+  // 用户看到的就是「保存点了没用」「每次进来都要再存一次」。真机上抓到的渲染序列:
+  //   source='hf-mirror'(默认值) → 'modelscope'(reset) → ''(Radix 纠正) + dirty
+  //
+  // 等 sources 到齐再落:它是异步来的,空着的时候归一化不出任何东西(见 normalizeSource)。
+  //: 归一化要用**配置里那个引擎**的选项,不是表单当前那个。表单的 engine 也要等 reset,
+  //: 所以第一次 reset 时 `sources` 还是默认引擎(f5)的 —— 拿它去归一化 fish 存着的
+  //: modelscope,会落成 hf,然后引擎一变又 reset 一次成 modelscope,而下拉早已挂载,
+  //: 于是又撞上"挂载后从外部改 value"那一下。
+  const savedSources = (models.data ?? []).find((item) => item.id === config.data?.engine)?.sources ?? [];
+  const sourceKey = savedSources.join(",");
+  //: 配置**已经落进表单**了没有。不是"数据到了没有"——数据到达和 reset 之间隔着一帧,
+  //: 而下拉正是在那一帧挂载的(实测:sources 与 config 同帧到齐,Select 挂载时表单里还是默认值)。
+  const [loaded, setLoaded] = React.useState(false);
+  React.useEffect(() => {
+    if (!config.data || savedSources.length === 0) return;
+    form.reset({
+      engine: config.data.engine,
+      python_path: config.data.python_path,
+      source: normalizeSource(config.data.source, savedSources),
+      pip_index: config.data.pip_index ?? "",
+      fish_repo_dir: config.data.fish_repo_dir ?? "",
+      fish_model_dir: config.data.fish_model_dir ?? "",
+    });
+    setLoaded(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.data, sourceKey]);
 
   const save = useMutation({
     // 存下去的就是显示出来的那一个 —— 归一化只有一处实现。
@@ -202,24 +222,41 @@ export function VoiceCloneSection() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t("voiceCloneSource")}</FormLabel>
-                  <Select
-                    key={engineValue}
-                    value={normalizeSource(field.value, sources)}
-                    onValueChange={field.onChange}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {sources.map((id) => (
-                        <SelectItem key={id} value={id}>
-                          {SOURCE_LABELS[id] ?? id}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {/* **选项和配置都到齐之前不挂载它。**
+                      Radix Select 对「挂载之后从外部改 value」反应不正常:实测渲染序列是
+                      `hf-mirror`(默认值) → `hf`(配置落下) → `''`(它自己清空并回调),
+                      而 react-hook-form 把最后那一下记成用户改动。于是一个字没动,页面却说
+                      「改了还没保存」,下拉显示的也不是存着的值 —— 用户看到的就是
+                      「保存点了没用」「每次进来都要再存一次」。
+                      等 reset **真的落进表单**了再挂(不是等数据到达——那中间隔着一帧,
+                      下拉正好在那一帧挂载),它的 value 从一开始就是最终值,不存在"事后被改"。
+                      不用「加 key 让它重挂」那招:重挂本身同样会带出一次 change。 */}
+                  {!loaded ? (
+                    // 占位不能用 SelectTrigger —— 它必须长在 Select 里面。
+                    <div className="flex h-9 w-full items-center rounded-md border border-input bg-transparent px-3 py-2 text-sm text-muted-foreground">
+                      {t("optionsLoading")}
+                    </div>
+                  ) : (
+                    <Select
+                      key={engineValue}
+                      // 直接用表单里的值:reset 那一步已经归一化过,两者不再有不一致可言。
+                      value={field.value}
+                      onValueChange={field.onChange}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {sources.map((id) => (
+                          <SelectItem key={id} value={id}>
+                            {SOURCE_LABELS[id] ?? id}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </FormItem>
               )}
             />

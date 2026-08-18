@@ -30,10 +30,11 @@ from pathlib import Path
 from typing import Any
 
 from app.audio import remote_size
-from app.core import interpreter, pip_install
+from app.core import interpreter, pip_install, run_log
 from app.core.child_process import ChildProcess, popen_text, run_logged
 from app.core.rate import DownloadRate
 from app.core.config import settings
+from app.core.text import blame_line
 
 logger = logging.getLogger(__name__)
 
@@ -683,7 +684,18 @@ def _download_body(model_id: str) -> None:
     if proc.returncode == 0 and _is_installed(entry):
         _store.clear(model_id)  # disk detection now reports "installed"
     else:
-        _store.set(model_id, _Live(status="failed", message=(stderr[:400] if stderr else "dlMsg_processDied")))
+        # 此前是 `stderr[:400]` —— 按**位置**裁的又一处(克隆那边裁的是尾巴)。开头 400 字符
+        # 通常是进度条和一堆下载提示,真正的异常在后面。挑结论行(core/text.blame_line),
+        # 完整输出落盘 —— 否则"进程没了"这种报错除了让用户重跑一遍之外无法诊断。
+        path = run_log.save(
+            f"模型 {model_id} · 引擎 {entry.engine}\n退出码 {proc.returncode}\n\n{stderr or '(子进程什么都没说)'}\n",
+            kind="worker", what=f"asr-{model_id}",
+        )
+        reason = blame_line(stderr or "") or "dlMsg_processDied"
+        if path is not None and reason != "dlMsg_processDied":
+            reason = f"{reason[:400]}\n完整日志:{path}"
+        logger.warning("下载 %s 失败(完整输出见 %s)", model_id, path)
+        _store.set(model_id, _Live(status="failed", message=reason))
     try:
         output_path.unlink(missing_ok=True)
     except OSError:

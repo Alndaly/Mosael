@@ -21,7 +21,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from app.core import interpreter, pip_install
+from app.core import interpreter, pip_install, run_log
 from app.core.child_process import ChildProcess, popen_text, run_logged
 from app.core.rate import DownloadRate
 from app.core.config import settings
@@ -986,8 +986,17 @@ def _download_body(engine_id: str) -> None:
     if _is_installed(engine):
         _store.clear(engine.id)
     else:
+        # **完整输出落盘。** 界面上只放一句话,而排查要全文 —— 此前全文哪儿都没有(日志里也只
+        # 留 1200 字符),于是"下载没有完成,而子进程没有留下原因"这种报错除了让用户重跑一遍
+        # 并录屏之外无法诊断。装依赖那条路已经这么做了,这里是同一件事的第二处。
+        path = run_log.save(
+            f"引擎 {engine.id} · 源 {_download_source(engine.id)}\n\n{stderr or '(子进程什么都没说)'}\n",
+            kind="worker", what=f"download-{engine.id}",
+        )
         reason = _explain_failure(stderr)
-        logger.warning("下载 %s 失败:%s", engine.id, (stderr or "(子进程什么都没说)")[-1200:])
+        if path is not None:
+            reason = f"{reason}\n完整日志:{path}"
+        logger.warning("下载 %s 失败(完整输出见 %s):%s", engine.id, path, (stderr or "(空)")[-800:])
         _store.set(engine.id, _Live(status="failed", message=reason))
     for path in (output_path, Path(str(output_path) + ".json")):
         try:

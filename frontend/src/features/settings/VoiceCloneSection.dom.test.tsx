@@ -189,3 +189,44 @@ describe("改了设置之后点重试", () => {
     expect(retry).not.toBeDisabled();
   });
 });
+
+describe("下载源的下拉显示的是**存着的那个值**", () => {
+  // 前面几个 describe 会把 models 改成 installed / failed 且不还原(它们各自只关心自己那一幕)。
+  // 这一组要的是"刚进页面、什么都没装"的样子,所以自己还原一次。
+  beforeEach(() => {
+    models[0] = { ...base, id: "f5-tts", label: "F5-TTS", expected_bytes: 1_500_000_000, sources: ["hf", "hf-mirror"] };
+    models[1] = { ...base, id: "fish-speech", label: "Fish Speech", expected_bytes: 11_000_000_000,
+      sources: ["hf", "hf-mirror", "modelscope"] };
+    config.python_path = "";
+    config.worker_ready = true;
+  });
+
+  it("选项异步到达之后,显示的是配置里那一项,不是表单默认值", async () => {
+    // 真机那一幕:库里存着 hf,而 defaultValues 是 hf-mirror。选项(sources)跟模型列表一起
+    // 异步来,第一帧 SelectContent 是空的 —— Radix 记不住任何选中项,等 value 变成 hf 之后
+    // 它显示的仍是挂载那一刻的旧值「HF 镜像」。用户看到存的和显示的对不上,就再点一次保存,
+    // 于是「每次进入都要重新点一次保存」「保存按钮点了没用」。
+    // **存着的源不在当前引擎的选项里** —— 这正是真机那一幕的条件。F5 的选项里没有
+    // modelscope,归一化后该落到 hf;而下拉若在配置落进表单之前就挂载,Radix 会用一次
+    // onValueChange("") 来"纠正"这个它没见过的值,表单于是无端变脏、显示也不对。
+    config.engine = "f5-tts";
+    config.source = "modelscope";
+    renderSection();
+
+    await screen.findAllByRole("button", { name: /asrModelDownload/ });
+    // 只看**触发器上显示的那一行**。用 getByText 会匹配到 Radix 在 jsdom 里额外渲染的
+    // 隐藏 <option> 列表 —— 那里面每个选项都在,断言不出"显示的是哪一个"。
+    const picker = await screen.findByRole("combobox", { name: "voiceCloneSource" });
+    await waitFor(() => expect(picker.textContent).toContain("HuggingFace"));
+    expect(picker.textContent).not.toContain("镜像");
+  });
+
+  it("一个字没动,所以不该显示「改了还没保存」", async () => {
+    config.engine = "f5-tts";
+    config.source = "modelscope"; // 同上:F5 的选项里没有它,归一化会落到 hf
+    renderSection();
+
+    await screen.findAllByRole("button", { name: /asrModelDownload/ });
+    await waitFor(() => expect(screen.queryByText(/ttsSaveAndDownload/)).toBeNull());
+  });
+});

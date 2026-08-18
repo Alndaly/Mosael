@@ -118,7 +118,7 @@ def test_install_prefers_prebuilt_but_does_not_forbid_source(monkeypatch, tmp_pa
     后者会把 `transformers_stream_generator` 这种**只有源码包**的依赖一并挡死,
     于是 f5-tts 彻底装不上。要挡的是"为了新版本去编译",不是"编译"本身。
     """
-    from app.core import pip_install
+    from app.core import pip_install, run_log
 
     seen: list[list[str]] = []
 
@@ -127,7 +127,7 @@ def test_install_prefers_prebuilt_but_does_not_forbid_source(monkeypatch, tmp_pa
         return __import__("subprocess").CompletedProcess(args, 0, "ok", "")
 
     monkeypatch.setattr(pip_install, "run_logged", fake_run)
-    monkeypatch.setattr(pip_install.settings, "data_dir", tmp_path)
+    monkeypatch.setattr(run_log.settings, "data_dir", tmp_path)  # 落盘搬去了 core/run_log
     pip_install.install("py", ["f5-tts"], what="装", index_url="https://mirror.example/simple")
 
     install_call = seen[-1]
@@ -142,13 +142,13 @@ def test_a_failed_install_keeps_the_whole_output_on_disk(monkeypatch, tmp_path) 
     于是真机上的报错除了让用户重跑一遍并录屏之外无法诊断。"""
     import subprocess
 
-    from app.core import pip_install
+    from app.core import pip_install, run_log
 
     monkeypatch.setattr(
         pip_install, "run_logged",
         lambda args, **kw: subprocess.CompletedProcess(args, 1, "", RUST_OUTPUT),
     )
-    monkeypatch.setattr(pip_install.settings, "data_dir", tmp_path)
+    monkeypatch.setattr(run_log.settings, "data_dir", tmp_path)  # 落盘搬去了 core/run_log
     with pytest.raises(pip_install.PipInstallError) as excinfo:
         pip_install.install("py", ["f5-tts"], what="装克隆依赖")
 

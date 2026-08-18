@@ -20,12 +20,12 @@ from __future__ import annotations
 
 import logging
 import re
-import time
+
 from pathlib import Path
 from typing import Sequence
 
+from app.core import run_log
 from app.core.child_process import run_logged
-from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -148,28 +148,6 @@ def explain(output: str, *, log_path: Path | None = None) -> str:
     return "\n".join(parts)
 
 
-def _log_path(what: str) -> Path:
-    """这次安装的完整输出写到哪。按时间命名 —— 重试时上一次的还在,能对比。"""
-    directory = settings.data_dir / "logs"
-    directory.mkdir(parents=True, exist_ok=True)
-    slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", what).strip("-") or "pip"
-    return directory / f"pip-{slug}-{time.strftime('%Y%m%d-%H%M%S')}.log"
-
-
-#: 只留最近这么多份 pip 日志。一份几十 KB,留太多是往用户的数据目录里堆垃圾;
-#: 而只留一份的话,「上次成功、这次失败,差在哪」就没得比。
-_KEEP_LOGS = 20
-
-
-def _prune_logs(directory: Path) -> None:
-    try:
-        logs = sorted(directory.glob("pip-*.log"), key=lambda p: p.stat().st_mtime, reverse=True)
-        for stale in logs[_KEEP_LOGS:]:
-            stale.unlink(missing_ok=True)
-    except OSError:  # 清理失败不该让安装失败 —— 它只是在打扫
-        logger.debug("清理 pip 日志失败", exc_info=True)
-
-
 def _common_args(index_url: str) -> list[str]:
     return [
         "--no-input",                    # 装依赖是后台任务,没有人能回答它的提问
@@ -244,14 +222,8 @@ def install(
         args, capture_output=True, text=True, timeout=timeout, env=env, what=what,
     )
     output = f"{result.stdout or ''}\n{result.stderr or ''}".strip()
-    path = _log_path(what)
-    try:
-        header = f"$ {' '.join(args)}\n退出码 {result.returncode}\n\n"
-        path.write_text(header + output + "\n", encoding="utf-8")
-        _prune_logs(path.parent)
-    except OSError:
-        logger.warning("写 pip 日志失败:%s", path, exc_info=True)
-        path = None  # type: ignore[assignment]  # 写不下就别在错误里指一个不存在的文件
+    header = f"$ {' '.join(args)}\n退出码 {result.returncode}\n\n"
+    path = run_log.save(header + output + "\n", kind="pip", what=what)
     if result.returncode != 0:
         raise PipInstallError(explain(output, log_path=path))
     return path
