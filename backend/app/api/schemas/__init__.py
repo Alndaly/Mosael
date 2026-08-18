@@ -1193,6 +1193,9 @@ class TtsConfigOut(BaseModel):
     fish_model_dir: str = ""  # Fish Speech weights dir (contains codec.pth)
     worker_ready: bool = False  # an interpreter with the engine installed was found
     worker_python: str = ""  # the resolved interpreter path (for display)
+    #: 探过了没有。**「还没测过」和「测过了、跑不起来」是两回事** —— 探测要起子进程
+    #: import f5_tts(连带 torch,实测 7 秒),所以这个接口不等它。同 AsrModelOut.runtime_checked。
+    worker_checked: bool = True
 
 
 class TtsConfigUpdate(BaseModel):

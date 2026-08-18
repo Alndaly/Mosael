@@ -256,6 +256,33 @@ def _has_partial_downloads(engine: TtsEngine) -> bool:
     return False
 
 
+def _install_verdict(engine: TtsEngine) -> str:
+    """把「装没装好」这个判断的**依据**摊开成几行字,给失败日志用。
+
+    判成"没装好"而子进程又什么都没说错时,用户和我手上都只剩一句结论、没有任何过程。
+    这几行就是那个过程:量到多少、要求多少、该有的文件在不在。
+    """
+    lines = [f"判定:{'已装好' if _is_installed(engine) else '未装好'}"]
+    try:
+        total, estimated = measured_total(engine, _download_source(engine.id))
+        measured = _measure(engine)
+        lines.append(f"  量到 {measured:,} 字节 / 需要 {int(total * _INSTALLED_FRACTION):,}"
+                     f"(总量 {total:,},{'估算' if estimated else '实测'})")
+        if engine.id == "f5-tts" and (managed := _f5_model_dir()) is not None:
+            ckpt = [str(x.relative_to(managed)) for x in managed.rglob("*.safetensors")]
+            ckpt += [str(x.relative_to(managed)) for x in managed.rglob("*.pt")]
+            vocab = [str(x.relative_to(managed)) for x in managed.rglob("vocab*.txt")]
+            lines.append(f"  权重目录 {managed}")
+            lines.append(f"  检查点 {ckpt or '(没有)'}")
+            lines.append(f"  vocab {vocab or '(没有)'}")
+        if _has_partial_downloads(engine):
+            lines.append("  **有没下完的分片(*.incomplete)**")
+    except Exception as exc:  # noqa: BLE001 — 诊断信息取不到不该盖住真正的失败
+        logger.debug("取 %s 的安装判定依据时出错", engine.id, exc_info=True)
+        lines.append(f"  (取判定依据时出错:{exc})")
+    return "\n".join(lines)
+
+
 def _is_installed(engine: TtsEngine) -> bool:
     """装没装,**看该有的文件在不在**,不是看体积够不够。
 
@@ -274,8 +301,13 @@ def _is_installed(engine: TtsEngine) -> bool:
     elif engine.id == "f5-tts" and (managed := _f5_model_dir()) is not None:
         # 走 ModelScope 落在我们自己目录里的那份:检查点 + vocab 都在才算。
         # 只看体积会把"只下到 vocab"也算成装好了。
-        has_ckpt = any(managed.glob("*.safetensors")) or any(managed.glob("*.pt"))
-        has_vocab = (managed / "vocab.txt").is_file()
+        #
+        # **rglob 不是 glob**:ModelScope 是按仓库内路径落盘的,文件在
+        # `F5TTS_v1_Base/model_1250000.safetensors`,而顶层 glob 一个也匹配不到 ——
+        # 这两个判据于是从来没成立过,一直悄悄落到底下的体积兜底上。
+        # (基础模型 shared_root=True 才落在根下,别的语言各有自己的子目录。)
+        has_ckpt = any(managed.rglob("*.safetensors")) or any(managed.rglob("*.pt"))
+        has_vocab = any(managed.rglob("vocab.txt")) or any(managed.rglob("vocab_*.txt"))
         if has_ckpt and has_vocab:
             return True
         if has_ckpt or has_vocab:
@@ -539,9 +571,22 @@ def clear_runtime_probes() -> None:
 
 
 def probe_interpreter(engine_id: str) -> dict[str, Any]:
-    """设置页要的形状。答案来自上面那一处,不另算一遍。"""
-    python = resolve_engine_python(engine_id)
-    return {"worker_ready": bool(python), "worker_python": python or ""}
+    """设置页要的形状。答案来自上面那一处,不另算一遍。
+
+    **不等探测。** 它要起一个子进程 import f5_tts(连带 torch),实测 7 秒 —— 而这是
+    「打开设置页」和「点保存」都必经的一次请求:打开时表单要等它回来才填得上值(下拉于是
+    一直显示默认值),保存更糟,PUT 里刚 clear_runtime_probes() 过,于是**每次**都重探一遍,
+    按钮转四秒。真机反馈就是「下载源加载很久」「保存点了 loading 很久」。
+
+    「还没测过」和「测过了、跑不起来」是两回事(同 runtime_status)——所以多给一个
+    `worker_checked`,而不是把未知说成"没就绪"。
+    """
+    with _PROBE_LOCK:
+        if engine_id in _PROBED:
+            python = _PROBED[engine_id]
+            return {"worker_ready": bool(python), "worker_python": python or "", "worker_checked": True}
+    probe_in_background(engine_id)
+    return {"worker_ready": False, "worker_python": "", "worker_checked": False}
 
 
 # ---------------------------------------------------------------------------
@@ -989,8 +1034,12 @@ def _download_body(engine_id: str) -> None:
         # **完整输出落盘。** 界面上只放一句话,而排查要全文 —— 此前全文哪儿都没有(日志里也只
         # 留 1200 字符),于是"下载没有完成,而子进程没有留下原因"这种报错除了让用户重跑一遍
         # 并录屏之外无法诊断。装依赖那条路已经这么做了,这里是同一件事的第二处。
+        # 判据本身也写进去。**子进程一切正常、而我们判它"没装好"时,原因全在判据里** ——
+        # 真机上就是这一幕:两个文件都下完了、没有任何异常,而界面说"下载没有完成"。
+        # 只留子进程的输出,等于把唯一有用的那部分排除在外。
         path = run_log.save(
-            f"引擎 {engine.id} · 源 {_download_source(engine.id)}\n\n{stderr or '(子进程什么都没说)'}\n",
+            f"引擎 {engine.id} · 源 {_download_source(engine.id)}\n"
+            f"{_install_verdict(engine)}\n\n{stderr or '(子进程什么都没说)'}\n",
             kind="worker", what=f"download-{engine.id}",
         )
         reason = _explain_failure(stderr)

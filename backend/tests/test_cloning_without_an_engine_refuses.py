@@ -90,7 +90,12 @@ def test_one_question_one_answer(monkeypatch) -> None:
     monkeypatch.setattr(tts_models, "candidate_pythons", lambda engine_id: [])  # 一个候选都没有
 
     assert tts_models.resolve_engine_python("f5-tts") is None
-    assert tts_models.probe_interpreter("f5-tts") == {"worker_ready": False, "worker_python": ""}
+    # 探测是后台跑的(起子进程 import f5_tts,实测 7 秒),所以这里先探一次拿到确定的答案 ——
+    # 否则读到的是「还没测过」,而这条测试要钉的是"测过之后两边说同一句话"。
+    tts_models.refresh_runtime_status("f5-tts")
+    probed = tts_models.probe_interpreter("f5-tts")
+    assert probed["worker_ready"] is False and probed["worker_python"] == ""
+    assert probed["worker_checked"] is True
 
 
 def test_the_worker_no_longer_invents_audio(tmp_path) -> None:

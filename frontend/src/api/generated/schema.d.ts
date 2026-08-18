@@ -7760,6 +7760,11 @@ export interface components {
              * @default
              */
             worker_python: string;
+            /**
+             * Worker Checked
+             * @default true
+             */
+            worker_checked: boolean;
         };
         /** TtsConfigUpdate */
         TtsConfigUpdate: {

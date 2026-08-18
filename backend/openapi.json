@@ -20950,6 +20950,11 @@
             "type": "string",
             "title": "Worker Python",
             "default": ""
+          },
+          "worker_checked": {
+            "type": "boolean",
+            "title": "Worker Checked",
+            "default": true
           }
         },
         "type": "object",

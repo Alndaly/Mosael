@@ -54,7 +54,13 @@ export function normalizeSource(source: string, sources: readonly string[]): str
 export function VoiceCloneSection() {
   const t = useI18n();
   const qc = useQueryClient();
-  const config = useQuery({ queryKey: ["tts-config"], queryFn: getTtsConfig });
+  const config = useQuery({
+    queryKey: ["tts-config"],
+    queryFn: getTtsConfig,
+    // 解释器探测是后台跑的(要起子进程 import f5_tts,实测 7 秒),所以这个接口**不等**它,
+    // 先回「还没测」。没测完就隔一会儿再问一次,否则那句「已就绪 · 解释器 …」永远补不上。
+    refetchInterval: (query) => (query.state.data && query.state.data.worker_checked === false ? 1500 : false),
+  });
   const models = useQuery({
     queryKey: ["tts-models"],
     queryFn: listTtsModels,
@@ -159,7 +165,9 @@ export function VoiceCloneSection() {
   const runtimeChecking = Boolean(row) && !row?.runtime_checked;
   const ready = runtimeReady && weightsReady;
   // 解释器路径只对**已保存**的那个引擎成立(后端就是按它算的),换了还没存就别拿它当证据。
-  const showsPython = ready && selected === config.data?.engine;
+  // 还要求真的拿到了路径:探测没跑完时后端回的是空串,而「已就绪 · 解释器 」后面跟一片空白
+  // 比不显示更糟 —— 那看起来像解释器路径丢了。
+  const showsPython = ready && selected === config.data?.engine && Boolean(config.data?.worker_python);
 
   return (
     <SettingsGroup title={t("voiceCloneTitle")} description={t("voiceCloneDesc")}>
@@ -344,12 +352,20 @@ function EngineCard({ model, busy, unsaved, onDownload }: { model: TtsEngine; bu
             </span>
           )}
           {model.status === "installed" && model.runtime_checked && !model.runtime_ready && (
-            <Button size="sm" variant="outline" disabled={busy} title={unsaved ? t("ttsSaveAndDownload") : undefined} onClick={onDownload}>
+            <Button size="sm" variant="outline" disabled={busy}
+              // **禁用了就要说为什么。** 一次只让一个引擎下载(它们各自要拉几个 GB,并行只是
+              // 一起变慢),但按钮此前只是静静地变灰 —— 用户看到的是"点了没反应",而不是
+              // "另一个正在下"。和「重试点不动」是同一类:不给理由的禁用等于坏掉。
+              title={busy ? t("ttsAnotherDownloading") : unsaved ? t("ttsSaveAndDownload") : undefined} onClick={onDownload}>
               <Download size={13} /> {t("asrModelInstallRuntime")}
             </Button>
           )}
           {model.status === "missing" && (
-            <Button size="sm" variant="outline" disabled={busy} title={unsaved ? t("ttsSaveAndDownload") : undefined} onClick={onDownload}>
+            <Button size="sm" variant="outline" disabled={busy}
+              // **禁用了就要说为什么。** 一次只让一个引擎下载(它们各自要拉几个 GB,并行只是
+              // 一起变慢),但按钮此前只是静静地变灰 —— 用户看到的是"点了没反应",而不是
+              // "另一个正在下"。和「重试点不动」是同一类:不给理由的禁用等于坏掉。
+              title={busy ? t("ttsAnotherDownloading") : unsaved ? t("ttsSaveAndDownload") : undefined} onClick={onDownload}>
               <Download size={13} /> {t("asrModelDownload")}
             </Button>
           )}
@@ -361,7 +377,11 @@ function EngineCard({ model, busy, unsaved, onDownload }: { model: TtsEngine; bu
             </span>
           )}
           {model.status === "failed" && (
-            <Button size="sm" variant="outline" disabled={busy} title={unsaved ? t("ttsSaveAndDownload") : undefined} onClick={onDownload}>
+            <Button size="sm" variant="outline" disabled={busy}
+              // **禁用了就要说为什么。** 一次只让一个引擎下载(它们各自要拉几个 GB,并行只是
+              // 一起变慢),但按钮此前只是静静地变灰 —— 用户看到的是"点了没反应",而不是
+              // "另一个正在下"。和「重试点不动」是同一类:不给理由的禁用等于坏掉。
+              title={busy ? t("ttsAnotherDownloading") : unsaved ? t("ttsSaveAndDownload") : undefined} onClick={onDownload}>
               <RotateCw size={13} /> {t("asrModelRetry")}
             </Button>
           )}
