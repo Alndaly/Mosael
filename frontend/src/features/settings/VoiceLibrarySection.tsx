@@ -22,7 +22,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { useSamplePlayer } from "@/features/editor/useSamplePlayer";
 import { formatBytes } from "@/lib/bytes";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
-import { cn } from "@/lib/utils";
 
 /**
  * Settings →「声音克隆」里的音色库。
@@ -64,10 +63,9 @@ export function VoiceLibrarySection({ workspace }: { workspace: Workspace }) {
   return (
     <SettingsGroup title={t("voiceLibrary")} description={t("voiceLibrarySettingsDesc")}>
       <SettingsBlock>
-        {/* 缩进 px-3 是为了**和上面那几张引擎卡片的文字对齐**:它们各自有边框和内边距,文字因此
-            落在容器左缘 +13px;音色是无边框列表,不缩进的话文字就顶在 +0,上下两块看着差一截。
-            分隔线跟着内容一起缩进,而不是横贯整块 —— 线和字对不齐同样显脏。 */}
-        <div className="grid gap-2 px-3">
+        {/* **不跟着引擎卡片缩进。** 那些卡片的 13px 在自己的边框**里面**,看着是合理的留白;
+            无边框的列表照抄那个缩进,就只是左边空一条(真机上一眼就看出来了)。 */}
+        <div className="grid gap-2">
         {voices.data && list.length === 0 ? (
           // 空状态要说清**去哪儿建另一种** —— 否则"这里不做说话人克隆"就成了死胡同。
           <EmptyState icon={<Mic size={20} />} title={t("voiceLibraryEmpty")} body={t("voiceLibraryEmptyHint")} />
@@ -154,7 +152,7 @@ function VoiceRow({
   const dirty = name.trim() !== voice.name || text !== voice.reference_text;
 
   return (
-    <div className="group relative grid min-w-0 gap-0.5 py-2 first:pt-0 last:pb-0">
+    <div className="grid min-w-0 gap-0.5 py-2 first:pt-0 last:pb-0">
       <div className="flex min-w-0 items-center gap-2">
         {editing ? (
           <Input
@@ -166,49 +164,33 @@ function VoiceRow({
         ) : (
           <span className="min-w-0 flex-1 truncate text-ui-sm text-foreground">{voice.name}</span>
         )}
-        {/* 来源和操作**占同一块地方**,hover 时对调。
-            此前操作是 opacity-0 却仍占位 —— 不 hover 时右边就永远空着一条(真机量到 66px),
-            看着像排版漏了个洞。让操作脱离正常流,来源才能真正靠右;顺带把播放按钮也挪进去,
-            名字于是贴着左边缘,不再被它顶出 36px(那正是这一块和上面引擎卡片对不上线的原因)。 */}
-        <span
-          className={cn(
-            "shrink-0 text-ui-2xs text-muted-foreground transition-opacity duration-100",
-            "group-hover:opacity-0 group-focus-within:opacity-0",
-            editing && "opacity-0",
-          )}
-        >
-          {origin}
-        </span>
-      </div>
-      <div
-        className={cn(
-          "absolute right-0 top-1 flex items-center gap-0.5 opacity-0 transition-opacity duration-100",
-          "group-hover:opacity-100 group-focus-within:opacity-100",
-          editing && "opacity-100",
-        )}
-      >
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7"
-          disabled={!voice.has_reference}
-          aria-label={playing ? t("voiceStopPreview") : t("voicePlay")}
-          onClick={onPlay}
-        >
-          {playing ? <Pause size={13} /> : <Play size={13} />}
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7"
-          aria-label={editing ? t("cancel") : t("rename")}
-          onClick={onToggleEdit}
-        >
-          {editing ? <X size={13} /> : <Pencil size={13} />}
-        </Button>
-        <Button size="icon" variant="ghost" className="h-7 w-7" aria-label={t("delete")} onClick={onDelete}>
-          <Trash2 size={13} />
-        </Button>
+        {/* **常驻显示,不藏在 hover 后面。** 藏起来省的是一点视觉噪声,代价是"这一行能干什么"
+            要靠试出来 —— 而这三件事(试听、改名、删)正是来这一页的理由。ghost + 小尺寸
+            已经够轻,不至于抢掉名字的视线。 */}
+        <div className="flex shrink-0 items-center gap-0.5">
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7"
+            disabled={!voice.has_reference}
+            aria-label={playing ? t("voiceStopPreview") : t("voicePlay")}
+            onClick={onPlay}
+          >
+            {playing ? <Pause size={13} /> : <Play size={13} />}
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7"
+            aria-label={editing ? t("cancel") : t("rename")}
+            onClick={onToggleEdit}
+          >
+            {editing ? <X size={13} /> : <Pencil size={13} />}
+          </Button>
+          <Button size="icon" variant="ghost" className="h-7 w-7" aria-label={t("delete")} onClick={onDelete}>
+            <Trash2 size={13} />
+          </Button>
+        </div>
       </div>
 
       {editing ? (
@@ -231,11 +213,11 @@ function VoiceRow({
           </div>
         </div>
       ) : (
-        voice.reference_text && (
-          <p className="m-0 truncate text-ui-2xs leading-[1.5] text-muted-foreground" title={voice.reference_text}>
-            {voice.reference_text}
-          </p>
-        )
+        // 第二行是这条音色的"说明":来源 + 参考文本。首行只留名字和操作,读起来才有主次。
+        <p className="m-0 truncate text-ui-2xs leading-[1.5] text-muted-foreground" title={voice.reference_text}>
+          <span className="text-muted-foreground/70">{origin}</span>
+          {voice.reference_text ? ` · ${voice.reference_text}` : ""}
+        </p>
       )}
     </div>
   );
