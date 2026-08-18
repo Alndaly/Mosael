@@ -29,7 +29,7 @@ from app.domain.jobs import create_job, dispatch_job, emit_job_event
 from app.media.paths import resolve_key, voice_dir, voice_key
 from app.media.probe import probe_media
 from app.core.child_process import run_logged
-from app.core.text import strip_ansi
+from app.core.text import blame_line, strip_ansi
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +101,6 @@ def resolve_clone_engine(requested: str = "") -> str:
 
 
 #: 长得像「异常那一行」的:`ModuleNotFoundError: ...`、`OSError: ...`、`RuntimeError: ...`。
-_EXCEPTION_LINE = re.compile(r"\b\w*(Error|Exception)\b\s*:")
 
 
 def explain_worker_failure(stderr: str) -> str:
@@ -113,14 +112,15 @@ def explain_worker_failure(stderr: str) -> str:
 
     完整 traceback 仍然进日志 —— 排查要它,界面不要。
     """
+    unknown = "合成失败,而子进程没有留下原因 —— 请重试一次;若仍然如此请反馈。"
     text = strip_ansi(stderr or "").strip()
     if not text:
-        return "合成失败,而子进程没有留下原因 —— 请重试一次;若仍然如此请反馈。"
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    # **最后一行不一定是异常。** torchcodec 加载失败时会打一段自己的诊断,以
-    # `[end of libtorchcodec loading traceback].` 收尾 —— 用户看到的就是这句话,而真正的原因
-    # (哪个库没加载上)在它上面几行。从后往前找第一行长得像异常的,找不到才退回最后一行。
-    last = next((line for line in reversed(lines) if _EXCEPTION_LINE.search(line)), lines[-1])
+        return unknown
+    # **最后一行不一定是异常**(torchcodec 会以 `[end of ... traceback].` 这样的分隔线收尾)。
+    # 判据搬到了 core/text.blame_line —— 同一个毛病在下载权重、装依赖那两条路上又各犯过一次。
+    last = blame_line(text)
+    if not last:
+        return unknown  # 全是进度条 / 分隔线时,说不出原因就别硬编一个
     if "libtorchcodec" in text or "torchcodec" in last:
         # 这个错在 macOS 上有确定的成因:torchcodec 的 dylib 按 FFmpeg 大版本编译,而 0.16 起
         # 它们不带 rpath,dlopen 自己找不到 libavutil。应用会在启动 worker 时把可用的 FFmpeg

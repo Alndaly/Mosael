@@ -18,3 +18,58 @@ def strip_ansi(text: str) -> str:
     所以凡是"子进程说的话 → 界面"这条路上,都要先过这里一次。
     """
     return _ANSI.sub("", text)
+
+
+#: 长得像异常的那一行:`ModuleNotFoundError: No module named 'natsort'`。
+_EXCEPTION_LINE = re.compile(r"\b\w*(Error|Exception)\b\s*:")
+
+#: tqdm / rich 的进度条。形态是 `Downloading: 100%|██████| 1/1 [00:00<00:00, 1.39file/s]`。
+#: **它写在 stderr 上**,所以"取 stderr 最后一行当错误原因"撞上的往往就是它。
+_PROGRESS_LINE = re.compile(r"\d+%\s*\||\|\s*\d+/\d+\s*\[|\d+(\.\d+)?\s*(it|file|[kMG]?B)/s")
+
+#: 说不出原因的行。挑"最后一行"时撞上的就是这些。
+_NOISE_LINE = re.compile(
+    r"^(?:"
+    r"[\^~]+"                                  # 终端里指向出错列的记号,到了浏览器只是噪声
+    r"|[-=_]{3,}"                              # 分隔线
+    r"|note:.*|hint:.*"
+    r"|\[end of [^\]]*\]\.?"                   # `[end of libtorchcodec loading traceback].`
+    r"|File \".*\", line \d+.*"                # traceback 的位置行
+    r"|Traceback \(most recent call last\):"
+    r"|During handling of the above exception.*"
+    r"|The above exception was the direct cause.*"
+    r")$",
+    re.I,
+)
+
+
+def blame_line(output: str, *, fallback: str = "") -> str:
+    """从子进程的输出里挑出**说明失败原因**的那一行。
+
+    **不是最后一行。** 这一条已经踩过三次,每次都是同一个形状:
+
+    - 合成失败时取到 `[end of libtorchcodec loading traceback].` —— 一条分隔线;
+    - 装依赖失败时取到 ``note: run with `RUST_BACKTRACE=1` ...`` —— 一句纯提示;
+    - 下载权重失败时取到 `Downloading: 100%|██████| 1/1 [00:00<00:00, 1.39file/s]` ——
+      一根**进度条**(huggingface_hub 的 tqdm 写在 stderr 上,下完就停在那儿)。
+
+    三次都让用户对着一句和病因毫无关系的话发愣。所以判据放在一处:先从后往前找长得像异常的
+    那一行,找不到再从后往前找第一行**不是噪声也不是进度条**的。都没有就用 `fallback` ——
+    编一个原因比说不知道更糟。
+
+    完整输出仍然进日志。界面要的是一句话,排查要的是全文,两者不是同一个东西。
+    """
+    text = strip_ansi(output or "")
+    # `splitlines()` 把 `\r` 也当行分隔符,所以 tqdm 在同一行里重画的那十几帧本来就被拆开了 ——
+    # 不需要再拆一次(试过,是段死代码)。
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if not lines:
+        return fallback
+    exception = next((line for line in reversed(lines) if _EXCEPTION_LINE.search(line)), None)
+    if exception:
+        return exception
+    meaningful = next(
+        (line for line in reversed(lines) if not _NOISE_LINE.match(line) and not _PROGRESS_LINE.search(line)),
+        None,
+    )
+    return meaningful or fallback

@@ -76,7 +76,7 @@ describe("声音克隆设置", () => {
     renderSection();
 
     await screen.findAllByRole("button", { name: /asrModelDownload/ });
-    await waitFor(() => expect(screen.queryByText(/ttsSaveFirst/)).toBeNull());
+    await waitFor(() => expect(screen.queryByText(/ttsSaveAndDownload/)).toBeNull());
   });
 });
 
@@ -108,7 +108,7 @@ describe("已保存 fish-speech + modelscope(用户库里的真实那一行)", (
     renderSection();
 
     await screen.findAllByRole("button", { name: /asrModelDownload/ });
-    await waitFor(() => expect(screen.queryByText(/ttsSaveFirst/)).toBeNull());
+    await waitFor(() => expect(screen.queryByText(/ttsSaveAndDownload/)).toBeNull());
   });
 });
 
@@ -170,4 +170,22 @@ describe("探测还没答完时", () => {
     expect(screen.queryByText(/voiceModelNoRuntime/)).toBeNull();
   });
 
+});
+
+describe("改了设置之后点重试", () => {
+  it("按钮不再因为「没保存」而点不动", async () => {
+    // 真机反馈:F5-TTS 下载失败 → 想换个下载源再试 → 一改,「重试」就灰了,提示去页顶点保存。
+    // 而改下载源**正是为了**重下 —— 意图很清楚,不该让他多走一步,更不该给一个点不动的按钮。
+    models[0].status = "failed";
+    models[0].message = "下载没有完成";
+    renderSection();
+
+    const [retry] = await screen.findAllByRole("button", { name: /asrModelRetry/ });
+    // **真的把表单改脏** —— 不改的话 unsaved 本来就是 false,这条测试等于什么都没验。
+    const python = await screen.findByPlaceholderText("/path/to/venv/bin/python");
+    await userEvent.type(python, "/tmp/py");
+    await waitFor(() => expect(screen.getAllByText(/ttsSaveAndDownload/).length).toBeGreaterThan(0));
+
+    expect(retry).not.toBeDisabled();
+  });
 });

@@ -104,7 +104,16 @@ export function VoiceCloneSection() {
   const submit = form.handleSubmit((values) => save.mutate(values));
 
   const download = useMutation({
-    mutationFn: (id: string) => downloadTtsModel(id),
+    // **有未保存的改动就先存再下。** 下载读的是后端存着的配置,所以此前这里的做法是把按钮
+    // 禁用掉、让用户先去页顶点「保存」。但用户改下载源**正是为了**重下 —— 意图很清楚,
+    // 而他看到的是一个点不动的「重试」和一条离得老远的横幅(真机上的反馈就是"无法点击")。
+    // 两步并成一步,顺序仍然是先存后下,读到的配置还是那份存下去的。
+    mutationFn: async (id: string) => {
+      if (form.formState.isDirty) {
+        await save.mutateAsync(form.getValues());
+      }
+      return downloadTtsModel(id);
+    },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["tts-models"] }),
     onError: (error: Error) => toast.error(error.message),
   });
@@ -243,7 +252,7 @@ export function VoiceCloneSection() {
                 此前每张引擎卡片下面各挂一遍,同一句话在一屏里出现两三次,读起来像是每个引擎
                 各自出了问题。 */}
             <div className="mt-1 flex items-center justify-end gap-2">
-              {unsaved && <small className="text-ui-xs text-muted-foreground">{t("ttsSaveFirst")}</small>}
+              {unsaved && <small className="text-ui-xs text-muted-foreground">{t("ttsSaveAndDownload")}</small>}
               <Button type="submit" size="sm" loading={save.isPending}>
                 {t("save")}
               </Button>
@@ -294,12 +303,12 @@ function EngineCard({ model, busy, unsaved, onDownload }: { model: TtsEngine; bu
             </span>
           )}
           {model.status === "installed" && model.runtime_checked && !model.runtime_ready && (
-            <Button size="sm" variant="outline" disabled={busy || unsaved} title={unsaved ? t("ttsSaveFirst") : undefined} onClick={onDownload}>
+            <Button size="sm" variant="outline" disabled={busy} title={unsaved ? t("ttsSaveAndDownload") : undefined} onClick={onDownload}>
               <Download size={13} /> {t("asrModelInstallRuntime")}
             </Button>
           )}
           {model.status === "missing" && (
-            <Button size="sm" variant="outline" disabled={busy || unsaved} title={unsaved ? t("ttsSaveFirst") : undefined} onClick={onDownload}>
+            <Button size="sm" variant="outline" disabled={busy} title={unsaved ? t("ttsSaveAndDownload") : undefined} onClick={onDownload}>
               <Download size={13} /> {t("asrModelDownload")}
             </Button>
           )}
@@ -311,7 +320,7 @@ function EngineCard({ model, busy, unsaved, onDownload }: { model: TtsEngine; bu
             </span>
           )}
           {model.status === "failed" && (
-            <Button size="sm" variant="outline" disabled={busy || unsaved} title={unsaved ? t("ttsSaveFirst") : undefined} onClick={onDownload}>
+            <Button size="sm" variant="outline" disabled={busy} title={unsaved ? t("ttsSaveAndDownload") : undefined} onClick={onDownload}>
               <RotateCw size={13} /> {t("asrModelRetry")}
             </Button>
           )}

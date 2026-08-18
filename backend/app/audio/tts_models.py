@@ -25,7 +25,7 @@ from app.core import interpreter, pip_install
 from app.core.child_process import ChildProcess, popen_text, run_logged
 from app.core.rate import DownloadRate
 from app.core.config import settings
-from app.core.text import strip_ansi
+from app.core.text import blame_line, strip_ansi
 
 logger = logging.getLogger(__name__)
 
@@ -661,10 +661,17 @@ def _explain_failure(stderr: str) -> str:
     """
     # 先去掉终端颜色码:子进程以为自己在终端里,而这句话的去处是浏览器。
     text = strip_ansi(stderr or "").strip()
+    unknown = "下载没有完成,而子进程没有留下原因 —— 请重试一次;若仍然如此请反馈。"
     if not text:
-        return "下载没有完成,而子进程没有留下原因 —— 请重试一次;若仍然如此请反馈。"
-    # traceback 的最后一行就是异常本身,比尾部 400 个字符可读得多。
-    last = next((line.strip() for line in reversed(text.splitlines()) if line.strip()), text)
+        return unknown
+    # **不取最后一行。** huggingface_hub 的 tqdm 进度条写在 stderr 上,下完就停在那儿,
+    # 于是最后一行是 `Downloading: 100%|██████| 1/1 [00:00<00:00, 1.39file/s]` ——
+    # 用户看到的报错是一根进度条。判据在 core/text.blame_line 一处(那里记着这三次发作)。
+    # **fallback 不能是原文**:输出全是进度条时,那等于把进度条又端了一遍(就是这次的 bug)。
+    # 说不出原因就说不出来。
+    last = blame_line(text)
+    if not last:
+        return unknown
     if any(marker in text for marker in _HUB_UNREACHABLE):
         from app.domain import tts_config
 
