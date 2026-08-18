@@ -27,5 +27,15 @@
   "include": [
     "publish/**/*.ts",
     "system/**/*.ts"
+  ],
+  "// exclude 说明": [
+    "测试文件不归这道闸管。它们 import vitest —— 而 vitest 是 frontend 的 devDependency,",
+    "pnpm 的严格 node_modules 布局下,从 electron/ 这个目录解析不到它(本地扁平能解析、CI 不能,",
+    "于是本地全绿、推了 tag 才炸 —— 实际发生过一次)。",
+    "测试的类型由 vitest 自己跑的时候负责:它跑得起来,就说明依赖解析得到。"
+  ],
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.spec.ts"
   ]
 }
