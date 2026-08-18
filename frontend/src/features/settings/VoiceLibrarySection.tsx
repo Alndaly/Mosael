@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Mic, Trash2, Wand2 } from "lucide-react";
+import { AudioLines, Mic, Plus, Trash2, Upload, Wand2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -8,6 +8,7 @@ import {
   listVoices,
   recognizeReference,
   updateVoice,
+  uploadVoice,
   voiceSampleUrl,
   type Voice,
   type Workspace,
@@ -17,6 +18,8 @@ import { ConfirmDialog } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { formatBytes } from "@/lib/bytes";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 
 /**
@@ -26,9 +29,9 @@ import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
  * 项目、进剪辑、找到那块面板。而这一页管的正是克隆这件事的其余部分(引擎、权重、解释器),
  * 唯独"用哪把嗓子"不在这儿。
  *
- * **不做创建。** 建音色要一段参考音频,而挑音频的上下文在剪辑页(时间线上的片段、转写出来的
- * 说话人)。把它搬过来就得把素材选择器一起搬,那是另一个页面的活。这里管的是**已有的那些**:
- * 改名、补参考文本、试听、删掉。
+ * 新建走**上传一段参考音频** —— 它不需要任何项目上下文,一个音频文件就够。
+ * 「从转写出的说话人建」仍然只在剪辑页:那条路要求素材**已经转写过**(后端
+ * `create_from_speaker` 上来就找 Transcript),而转写和素材的上下文都在那边。
  */
 export function VoiceLibrarySection({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
@@ -52,6 +55,7 @@ export function VoiceLibrarySection({ workspace }: { workspace: Workspace }) {
   return (
     <SettingsGroup title={t("voiceLibrary")} description={t("voiceLibrarySettingsDesc")}>
       <SettingsBlock>
+        <NewVoiceForm workspace={workspace} onCreated={invalidate} />
         {voices.data && voices.data.length === 0 ? (
           // 空状态要说清**去哪儿建**:这一页故意不做创建(见文件头),不指路就成了死胡同。
           <EmptyState icon={<Mic size={20} />} title={t("voiceLibraryEmpty")} body={t("voiceLibraryEmptyHint")} />
@@ -155,6 +159,94 @@ function VoiceRow({ voice, onChanged, onDelete }: { voice: Voice; onChanged: () 
         >
           {t("save")}
         </Button>
+      </div>
+    </div>
+  );
+}
+
+
+/** 新建音色:传一段参考音频。**参考文本可以留空** —— 建完用行里那个「识别」让本机转写引擎
+    听一遍填上,比让用户当场打一遍自己说过的话强。 */
+function NewVoiceForm({ workspace, onCreated }: { workspace: Workspace; onCreated: () => void }) {
+  const t = useI18n();
+  const [open, setOpen] = React.useState(false);
+  const [name, setName] = React.useState("");
+  const [refText, setRefText] = React.useState("");
+  const [file, setFile] = React.useState<File | null>(null);
+  const fileRef = React.useRef<HTMLInputElement | null>(null);
+
+  const upload = useMutation({
+    mutationFn: () => uploadVoice({ workspaceId: workspace.id, name, referenceText: refText, file: file as File }),
+    onSuccess: () => {
+      onCreated();
+      setOpen(false);
+      setName("");
+      setRefText("");
+      setFile(null);
+      toast.success(t("voiceCreated"));
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  if (!open) {
+    return (
+      <Button size="sm" variant="outline" className="justify-self-start" onClick={() => setOpen(true)}>
+        <Plus size={13} /> {t("voiceNewTitle")}
+      </Button>
+    );
+  }
+  return (
+    <div className="grid gap-1.5 rounded-lg border border-dashed border-border-strong p-2.5">
+      <Input placeholder={t("voiceName")} value={name} onChange={(event) => setName(event.target.value)} autoFocus />
+      <Textarea
+        rows={2}
+        placeholder={t("voiceReferenceTextOptional")}
+        value={refText}
+        onChange={(event) => setRefText(event.target.value)}
+      />
+      <input
+        ref={fileRef}
+        type="file"
+        accept="audio/*,video/*"
+        className="hidden"
+        onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+      />
+      {/* 选好的音频要**看得见、去得掉** —— 只把按钮文字换成文件名的话,既看不出选没选,
+          也没有反悔的路(剪辑页那处踩过这个)。 */}
+      {file && (
+        <div className="flex min-w-0 items-center gap-1.5 rounded-md border border-border bg-secondary px-2 py-1">
+          <AudioLines size={12} className="shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1 truncate text-ui-xs" title={file.name}>{file.name}</span>
+          <span className="shrink-0 text-ui-2xs tabular-nums text-muted-foreground">{formatBytes(file.size)}</span>
+          <button
+            type="button"
+            className="shrink-0 cursor-pointer rounded-sm border-0 bg-transparent p-0.5 leading-none text-muted-foreground hover:text-destructive"
+            aria-label={t("voiceClearFile")}
+            onClick={() => setFile(null)}
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
+      <div className="flex items-center justify-between gap-2">
+        <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
+          <Upload size={12} /> {file ? t("voiceReplaceFile") : t("voicePickFile")}
+        </Button>
+        <div className="flex items-center gap-1.5">
+          <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+            {t("cancel")}
+          </Button>
+          <Button
+            size="sm"
+            // 缺什么就说缺什么 —— 一个点不动而不给理由的按钮,和坏了没区别。
+            title={!file ? t("voiceNeedRefAudioHere") : !name.trim() ? t("voiceNeedName") : undefined}
+            disabled={!name.trim() || !file}
+            loading={upload.isPending}
+            onClick={() => upload.mutate()}
+          >
+            {t("voiceCreate")}
+          </Button>
+        </div>
       </div>
     </div>
   );
