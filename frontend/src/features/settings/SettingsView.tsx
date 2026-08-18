@@ -473,26 +473,39 @@ function profileKey(profile: { username: string; display_name: string; signature
 /** 开机自启(仅桌面端渲染,且开发模式下主进程不暴露——那时 execPath 是裸 Electron)。
  *  和「关窗收进托盘」是一对:后者让应用关窗后还活着,前者让它开机就活着。定时任务依赖
  *  后端进程存活(后端是主进程 spawn 的子进程),两者缺一,到点就不会触发。 */
-function StartupRow() {
+export function StartupRow() {
   const t = useI18n();
   const get = window.openStudioDesktop?.getOpenAtLogin;
   const set = window.openStudioDesktop?.setOpenAtLogin;
-  // null = 还没问到;false/true = 支持且当前值;"unsupported" = 主进程说这个环境不提供
-  // (开发模式:execPath 是裸 Electron,写进登录项会污染开发机)。
-  const [enabled, setEnabled] = React.useState<boolean | null | "unsupported">(null);
+  // null = 还没问到;"unsupported" = 主进程说这个环境不提供(开发模式:execPath 是裸
+  // Electron,写进登录项会污染开发机);其余是系统回读的状态。
+  type State = { enabled: boolean; needsApproval: boolean };
+  const [state, setState] = React.useState<State | null | "unsupported">(null);
   React.useEffect(() => {
     if (!get) return;
-    void get().then((value) => setEnabled(value === null || value === undefined ? "unsupported" : value));
+    void get().then((value) => setState(value ?? "unsupported"));
   }, [get]);
-  if (!get || !set || enabled === "unsupported") return null;
+  if (!get || !set || state === "unsupported") return null;
+  const settled = state === null ? null : state;
   return (
-    <SettingsRow label={t("settingsStartup")} description={t("settingsStartupDesc")}>
+    <SettingsRow
+      label={t("settingsStartup")}
+      // **「要你去批准」不是「没开成」。** macOS 13 起这件事走 SMAppService:写进去之后
+      // 系统会把它挂成待批准,而在批准之前回读到的仍是"没开"。此前界面据此把开关弹回去,
+      // 用户看到的就是「点了没反应」——而系统设置里其实已经躺着一条待办。
+      description={settled?.needsApproval ? t("settingsStartupNeedsApproval") : t("settingsStartupDesc")}
+    >
       <Switch
-        checked={enabled ?? false}
-        disabled={enabled === null}
+        checked={settled?.enabled ?? false}
+        disabled={state === null}
         // 用系统回读的值落地,而不是乐观置位:写登录项可能被系统策略拒绝(受管理的设备上
         // 常见),那时开关该弹回去,而不是显示成开着、实际没生效。
-        onCheckedChange={(next) => void set(next).then((value) => setEnabled(value ?? "unsupported"))}
+        onCheckedChange={(next) =>
+          void set(next).then((value) => {
+            setState(value ?? "unsupported");
+            if (next && value && !value.enabled) toast.error(t("settingsStartupRefused"));
+          })
+        }
       />
     </SettingsRow>
   );

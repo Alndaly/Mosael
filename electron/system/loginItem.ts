@@ -23,21 +23,45 @@ export function isHiddenLaunch(): boolean {
   }
 }
 
-export function getOpenAtLogin(): boolean {
+/**
+ * 登录项此刻的状态。
+ *
+ * **不是一个 boolean。** macOS 13 起这件事走 SMAppService:写进去之后系统可能把它挂成
+ * 「等用户批准」(系统设置 → 通用 → 登录项),而在批准之前 `openAtLogin` 仍然是 false。
+ * 只回一个 boolean 的话,界面拿到 false 就把开关弹回去 —— 用户点了、系统里确实多了一条待批准
+ * 的记录,而界面说什么都没发生。真机反馈就是「开机时启动点击无效」。
+ *
+ * 「要你去批准」和「没开成」是两件事,得分开说。
+ */
+export type LoginItemState = {
+  /** 系统里这一项现在真的生效了没有。 */
+  enabled: boolean;
+  /** macOS:注册上了,但**还等用户在系统设置里点允许**。 */
+  needsApproval: boolean;
+};
+
+function readState(): LoginItemState {
   try {
-    return app.getLoginItemSettings().openAtLogin === true;
+    const settings = app.getLoginItemSettings();
+    // status 只有 macOS 给;别的平台按 openAtLogin 判断就够了。
+    const needsApproval = (settings as { status?: string }).status === "requires-approval";
+    return { enabled: settings.openAtLogin === true || needsApproval, needsApproval };
   } catch {
-    return false;
+    return { enabled: false, needsApproval: false };
   }
 }
 
-export function setOpenAtLogin(enabled: boolean): boolean {
+export function getOpenAtLogin(): LoginItemState {
+  return readState();
+}
+
+export function setOpenAtLogin(enabled: boolean): LoginItemState {
   app.setLoginItemSettings({
     openAtLogin: enabled,
     openAsHidden: enabled,
     args: enabled ? [HIDDEN_FLAG] : [],
   });
-  return getOpenAtLogin();
+  return readState();
 }
 
 // 注:这里没有导出 Capability。开机自启不需要在启动时"注册"任何东西,它只是三个按需调用的

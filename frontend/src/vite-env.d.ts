@@ -87,7 +87,8 @@ interface Window {
     reportStatus?: (status: { runningJobs: number; progress?: number | null }) => void;
     /** 任务结束时告知系统层;窗口有焦点时主进程会跳过(应用内已有 toast)。 */
     notifyTask?: (notice: { title: string; body?: string }) => void;
-    getOpenAtLogin?: () => Promise<boolean | null>;
-    setOpenAtLogin?: (enabled: boolean) => Promise<boolean | null>;
+    /** null = 这个环境不提供(开发模式)。`needsApproval` 见 electron/system/loginItem。 */
+    getOpenAtLogin?: () => Promise<{ enabled: boolean; needsApproval: boolean } | null>;
+    setOpenAtLogin?: (enabled: boolean) => Promise<{ enabled: boolean; needsApproval: boolean } | null>;
   };
 }
