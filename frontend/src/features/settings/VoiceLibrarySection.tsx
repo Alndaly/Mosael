@@ -64,6 +64,10 @@ export function VoiceLibrarySection({ workspace }: { workspace: Workspace }) {
   return (
     <SettingsGroup title={t("voiceLibrary")} description={t("voiceLibrarySettingsDesc")}>
       <SettingsBlock>
+        {/* 缩进 px-3 是为了**和上面那几张引擎卡片的文字对齐**:它们各自有边框和内边距,文字因此
+            落在容器左缘 +13px;音色是无边框列表,不缩进的话文字就顶在 +0,上下两块看着差一截。
+            分隔线跟着内容一起缩进,而不是横贯整块 —— 线和字对不齐同样显脏。 */}
+        <div className="grid gap-2 px-3">
         {voices.data && list.length === 0 ? (
           // 空状态要说清**去哪儿建另一种** —— 否则"这里不做说话人克隆"就成了死胡同。
           <EmptyState icon={<Mic size={20} />} title={t("voiceLibraryEmpty")} body={t("voiceLibraryEmptyHint")} />
@@ -85,6 +89,7 @@ export function VoiceLibrarySection({ workspace }: { workspace: Workspace }) {
           </div>
         )}
         <NewVoiceForm workspace={workspace} onCreated={invalidate} />
+        </div>
       </SettingsBlock>
       <ConfirmDialog
         open={deleting !== null}
@@ -149,18 +154,8 @@ function VoiceRow({
   const dirty = name.trim() !== voice.name || text !== voice.reference_text;
 
   return (
-    <div className="group grid min-w-0 gap-1 py-2 first:pt-0 last:pb-0">
+    <div className="group relative grid min-w-0 gap-0.5 py-2 first:pt-0 last:pb-0">
       <div className="flex min-w-0 items-center gap-2">
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7 shrink-0"
-          disabled={!voice.has_reference}
-          aria-label={playing ? t("voiceStopPreview") : t("voicePlay")}
-          onClick={onPlay}
-        >
-          {playing ? <Pause size={13} /> : <Play size={13} />}
-        </Button>
         {editing ? (
           <Input
             className="h-7 min-w-0 flex-1"
@@ -171,34 +166,53 @@ function VoiceRow({
         ) : (
           <span className="min-w-0 flex-1 truncate text-ui-sm text-foreground">{voice.name}</span>
         )}
-        <span className="shrink-0 text-ui-2xs text-muted-foreground">{origin}</span>
-        {/* 操作平时不占视线,hover / 键盘聚焦时才亮 —— 几条音色各挂两个按钮常驻,这一栏就成了
-            按钮墙。用 opacity 而不是条件渲染:后者会让行宽在 hover 时跳一下。 */}
-        <div
+        {/* 来源和操作**占同一块地方**,hover 时对调。
+            此前操作是 opacity-0 却仍占位 —— 不 hover 时右边就永远空着一条(真机量到 66px),
+            看着像排版漏了个洞。让操作脱离正常流,来源才能真正靠右;顺带把播放按钮也挪进去,
+            名字于是贴着左边缘,不再被它顶出 36px(那正是这一块和上面引擎卡片对不上线的原因)。 */}
+        <span
           className={cn(
-            "flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-100",
-            "group-hover:opacity-100 group-focus-within:opacity-100",
-            editing && "opacity-100",
+            "shrink-0 text-ui-2xs text-muted-foreground transition-opacity duration-100",
+            "group-hover:opacity-0 group-focus-within:opacity-0",
+            editing && "opacity-0",
           )}
         >
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7"
-            aria-label={editing ? t("cancel") : t("rename")}
-            onClick={onToggleEdit}
-          >
-            {editing ? <X size={13} /> : <Pencil size={13} />}
-          </Button>
-          <Button size="icon" variant="ghost" className="h-7 w-7" aria-label={t("delete")} onClick={onDelete}>
-            <Trash2 size={13} />
-          </Button>
-        </div>
+          {origin}
+        </span>
+      </div>
+      <div
+        className={cn(
+          "absolute right-0 top-1 flex items-center gap-0.5 opacity-0 transition-opacity duration-100",
+          "group-hover:opacity-100 group-focus-within:opacity-100",
+          editing && "opacity-100",
+        )}
+      >
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7"
+          disabled={!voice.has_reference}
+          aria-label={playing ? t("voiceStopPreview") : t("voicePlay")}
+          onClick={onPlay}
+        >
+          {playing ? <Pause size={13} /> : <Play size={13} />}
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7"
+          aria-label={editing ? t("cancel") : t("rename")}
+          onClick={onToggleEdit}
+        >
+          {editing ? <X size={13} /> : <Pencil size={13} />}
+        </Button>
+        <Button size="icon" variant="ghost" className="h-7 w-7" aria-label={t("delete")} onClick={onDelete}>
+          <Trash2 size={13} />
+        </Button>
       </div>
 
       {editing ? (
-        // 缩进对齐名字那一列,让它看起来是"这一行的展开",而不是又一块独立的东西。
-        <div className="grid gap-1.5 pl-9">
+        <div className="mt-1 grid gap-1.5">
           <Textarea
             rows={2}
             value={text}
@@ -218,7 +232,7 @@ function VoiceRow({
         </div>
       ) : (
         voice.reference_text && (
-          <p className="m-0 truncate pl-9 text-ui-2xs leading-[1.5] text-muted-foreground" title={voice.reference_text}>
+          <p className="m-0 truncate text-ui-2xs leading-[1.5] text-muted-foreground" title={voice.reference_text}>
             {voice.reference_text}
           </p>
         )
