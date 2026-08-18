@@ -830,8 +830,13 @@ def start_download(engine_id: str) -> dict[str, Any]:
         raise KeyError(engine_id)
     if _is_installed(engine):
         return _status_dict(engine)
-    if _store.downloading():
-        raise RuntimeError("已有引擎正在下载,请等待其完成")
+    # **并行是允许的。** 每个引擎有自己的 venv、自己的权重目录,下载跑在各自的一次性子进程里
+    # (不共用常驻进程),所以两个引擎同时装不会互相弄坏 —— 只是抢带宽和磁盘。
+    # 此前这里拒绝一切并发,理由是两个引擎共用一个 venv(装一边弄坏另一边);venv 后来按引擎
+    # 拆开了,那个理由就没了,而限制留了下来。
+    live = _store.get(engine.id)
+    if live is not None and live.status == "downloading":
+        raise RuntimeError(f"{engine.label} 已经在下载中")
     _store.set(engine.id, _Live(status="downloading", message="dlMsg_preparing"))
     threading.Thread(target=_run_download, args=(engine.id,), daemon=True).start()
     return _status_dict(engine)

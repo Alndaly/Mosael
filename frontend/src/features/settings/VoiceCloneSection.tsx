@@ -143,7 +143,9 @@ export function VoiceCloneSection() {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["tts-models"] }),
     onError: (error: Error) => toast.error(error.message),
   });
-  const busy = download.isPending || (models.data ?? []).some((m) => m.status === "downloading");
+  // **只看这一个引擎自己在不在下**,不看别人。它们各有各的 venv 和权重目录、跑在各自的
+  // 一次性子进程里,同时装不会互相弄坏 —— 而"一个在下,所有按钮都变灰"此前正是这么来的。
+  const startingId = download.isPending ? download.variables : null;
   // **上面选的 ≠ 已经生效的。** 下载用的是后端存着的那份配置,而不是这个表单里选中的。
   // 用户把「模型下载源」从镜像换成别的、没点保存就去点「重试」—— 跑的还是旧源,失败消息
   // 还是旧源那句,于是"我明明换了源"。改了没存时就直说,而不是让他去撞。
@@ -309,7 +311,8 @@ export function VoiceCloneSection() {
       <SettingsBlock>
         <div className="grid gap-2">
           {models.data?.map((model) => (
-            <EngineCard key={model.id} model={model} busy={busy} unsaved={unsaved} onDownload={() => download.mutate(model.id)} />
+            <EngineCard key={model.id} model={model} busy={startingId === model.id || model.status === "downloading"}
+                unsaved={unsaved} onDownload={() => download.mutate(model.id)} />
           ))}
         </div>
       </SettingsBlock>
@@ -356,7 +359,7 @@ function EngineCard({ model, busy, unsaved, onDownload }: { model: TtsEngine; bu
               // **禁用了就要说为什么。** 一次只让一个引擎下载(它们各自要拉几个 GB,并行只是
               // 一起变慢),但按钮此前只是静静地变灰 —— 用户看到的是"点了没反应",而不是
               // "另一个正在下"。和「重试点不动」是同一类:不给理由的禁用等于坏掉。
-              title={busy ? t("ttsAnotherDownloading") : unsaved ? t("ttsSaveAndDownload") : undefined} onClick={onDownload}>
+              title={busy ? t("ttsThisDownloading") : unsaved ? t("ttsSaveAndDownload") : undefined} onClick={onDownload}>
               <Download size={13} /> {t("asrModelInstallRuntime")}
             </Button>
           )}
@@ -365,7 +368,7 @@ function EngineCard({ model, busy, unsaved, onDownload }: { model: TtsEngine; bu
               // **禁用了就要说为什么。** 一次只让一个引擎下载(它们各自要拉几个 GB,并行只是
               // 一起变慢),但按钮此前只是静静地变灰 —— 用户看到的是"点了没反应",而不是
               // "另一个正在下"。和「重试点不动」是同一类:不给理由的禁用等于坏掉。
-              title={busy ? t("ttsAnotherDownloading") : unsaved ? t("ttsSaveAndDownload") : undefined} onClick={onDownload}>
+              title={busy ? t("ttsThisDownloading") : unsaved ? t("ttsSaveAndDownload") : undefined} onClick={onDownload}>
               <Download size={13} /> {t("asrModelDownload")}
             </Button>
           )}
@@ -381,7 +384,7 @@ function EngineCard({ model, busy, unsaved, onDownload }: { model: TtsEngine; bu
               // **禁用了就要说为什么。** 一次只让一个引擎下载(它们各自要拉几个 GB,并行只是
               // 一起变慢),但按钮此前只是静静地变灰 —— 用户看到的是"点了没反应",而不是
               // "另一个正在下"。和「重试点不动」是同一类:不给理由的禁用等于坏掉。
-              title={busy ? t("ttsAnotherDownloading") : unsaved ? t("ttsSaveAndDownload") : undefined} onClick={onDownload}>
+              title={busy ? t("ttsThisDownloading") : unsaved ? t("ttsSaveAndDownload") : undefined} onClick={onDownload}>
               <RotateCw size={13} /> {t("asrModelRetry")}
             </Button>
           )}

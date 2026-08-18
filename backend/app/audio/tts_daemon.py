@@ -39,9 +39,20 @@ DEFAULT_IDLE_SECONDS = 600
 
 
 class _Worker:
-    """一个常驻子进程。**同一时刻只服务一个请求** —— 外面有 TTS_SLOTS 串行化。"""
+    """一个常驻子进程。**同一时刻只服务一个请求** —— 由它自己保证。
+
+    此前这句话靠"外面有 TTS_SLOTS 串行化"兑现,而那个信号量只在合成那条路上
+    (`audio/voices`)。下 F5 多语言权重走的是同一个常驻进程,却**绕过了它** ——
+    一边下语言包一边点配音,两个请求就一起写进同一个 stdin,两个线程一起读同一个 stdout,
+    响应串到别人手里。一个不变量交给 N 个调用方各自记得,迟早有一个不记得。
+
+    所以锁放在这里:谁来都排队,不用知道别人存不存在。
+    """
 
     def __init__(self, engine: str, python: str, worker_path: str, env: dict[str, str] | None) -> None:
+        #: 一次只让一个请求进 stdin/stdout。**不是** TTS_SLOTS 那种"限制并发合成数"的名额,
+        #: 这条只保护这一个进程的管道不被两个请求同时用。
+        self._pipe_lock = threading.Lock()
         self.engine = engine
         self.python = python
         self.started_at = time.monotonic()
@@ -97,6 +108,16 @@ class _Worker:
         timeout: float,
     ) -> dict:
         assert self.process.stdin is not None and self.process.stdout is not None
+        with self._pipe_lock:
+            return self._request_locked(payload, on_progress=on_progress, timeout=timeout)
+
+    def _request_locked(
+        self,
+        payload: dict,
+        *,
+        on_progress: Callable[[dict], None] | None,
+        timeout: float,
+    ) -> dict:
         self.busy = True
         self.last_used = time.monotonic()
         self.process.stdin.write(json.dumps(payload, ensure_ascii=False) + "\n")

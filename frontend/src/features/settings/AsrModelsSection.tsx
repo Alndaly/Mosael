@@ -38,7 +38,8 @@ export function AsrModelsSection() {
             <AsrModelCard
               key={model.id}
               model={model}
-              busy={download.isPending || models.data?.some((m) => m.status === "downloading")}
+              // 只看这一行自己在不在下 —— 每个引擎有自己的 venv,同时装不会互相弄坏。
+              busy={(download.isPending && download.variables === model.id) || model.status === "downloading"}
               onDownload={() => download.mutate(model.id)}
             />
           ))}

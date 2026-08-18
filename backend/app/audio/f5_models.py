@@ -313,9 +313,13 @@ def start_download(model_id: str) -> dict[str, Any]:
         raise KeyError(model_id)
     if installed(model):
         return status(model)
+    # **这条不放开并行**,和引擎/转写模型那两条不一样:它们各自起一次性子进程,而语言权重是
+    # 向**常驻的那个 f5-tts 进程**要的(要用它 venv 里的 huggingface_hub)。同一个进程的
+    # 管道现在有锁(见 tts_daemon._Worker),并发请求不会串,但也只会排队 —— 那是假的并行,
+    # 界面上两个都写着"下载中"而实际一个一个来,比老老实实说"等它下完"更误导。
     busy = downloading()
     if busy:
-        raise RuntimeError(f"已有模型正在下载({busy}),请等它完成")
+        raise RuntimeError(f"已有语言包正在下载({busy}),请等它完成")
     set_live(model.id, status="downloading", progress=0.0, message="dlMsg_preparing", error="")
     threading.Thread(target=_run_download, args=(model.id,), daemon=True).start()
     return status(model)

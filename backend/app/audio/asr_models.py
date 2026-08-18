@@ -594,8 +594,11 @@ def start_download(model_id: str) -> dict[str, Any]:
     # 这里一律早返回的话,那个按钮点了没有任何反应 —— 比报错更让人摸不着头脑。
     if _is_installed(entry) and runtime_ready(entry.engine):
         return _status_dict(entry)
-    if _store.downloading():
-        raise RuntimeError("已有模型正在下载,请等待其完成(共用 CPU/带宽,串行下载)")
+    # **并行是允许的**(同 tts_models.start_download):每个引擎有自己的 venv,下载跑在各自的
+    # 一次性子进程里,同时装不会互相弄坏。只拒绝"这一个已经在下了"。
+    live = _store.get(model_id)
+    if live is not None and live.status == "downloading":
+        raise RuntimeError(f"{entry.label} 已经在下载中")
     # 分母先留空:接下来可能是"装运行环境"(pip,量纲完全不同),真正开始拉模型时再填上。
     _store.set(model_id, _Live(status="downloading", message="dlMsg_preparingShort"))
     threading.Thread(target=_run_download, args=(model_id,), daemon=True).start()
