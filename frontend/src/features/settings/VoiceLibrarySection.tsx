@@ -60,8 +60,21 @@ export function VoiceLibrarySection({ workspace }: { workspace: Workspace }) {
   const [editing, setEditing] = React.useState<string | null>(null);
 
   const list = voices.data ?? [];
+  const [creating, setCreating] = React.useState(false);
   return (
-    <SettingsGroup title={t("voiceLibrary")} description={t("voiceLibrarySettingsDesc")}>
+    <SettingsGroup
+      title={t("voiceLibrary")}
+      description={t("voiceLibrarySettingsDesc")}
+      // **动作归到这一节的标题旁**。放在列表下面时它排在最后一条音色之后,看着像"列表的最后
+      // 一项",而不是这一节的入口 —— 而这一节本来就有 actions 插槽,别处的分组都这么用。
+      actions={
+        !creating && (
+          <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
+            <Plus size={13} /> {t("voiceNewTitle")}
+          </Button>
+        )
+      }
+    >
       <SettingsBlock>
         {/* **不跟着引擎卡片缩进。** 那些卡片的 13px 在自己的边框**里面**,看着是合理的留白;
             无边框的列表照抄那个缩进,就只是左边空一条(真机上一眼就看出来了)。 */}
@@ -86,7 +99,9 @@ export function VoiceLibrarySection({ workspace }: { workspace: Workspace }) {
             ))}
           </div>
         )}
-        <NewVoiceForm workspace={workspace} onCreated={invalidate} />
+        {creating && (
+          <NewVoiceForm workspace={workspace} onCreated={invalidate} onClose={() => setCreating(false)} />
+        )}
         </div>
       </SettingsBlock>
       <ConfirmDialog
@@ -167,28 +182,34 @@ function VoiceRow({
         {/* **常驻显示,不藏在 hover 后面。** 藏起来省的是一点视觉噪声,代价是"这一行能干什么"
             要靠试出来 —— 而这三件事(试听、改名、删)正是来这一页的理由。ghost + 小尺寸
             已经够轻,不至于抢掉名字的视线。 */}
-        <div className="flex shrink-0 items-center gap-0.5">
+        <div className="flex shrink-0 items-center gap-0">
           <Button
             size="icon"
             variant="ghost"
-            className="h-7 w-7"
+            className="h-6 w-6 text-muted-foreground hover:text-foreground"
             disabled={!voice.has_reference}
             aria-label={playing ? t("voiceStopPreview") : t("voicePlay")}
             onClick={onPlay}
           >
-            {playing ? <Pause size={13} /> : <Play size={13} />}
+            {playing ? <Pause size={12} /> : <Play size={12} />}
           </Button>
           <Button
             size="icon"
             variant="ghost"
-            className="h-7 w-7"
+            className="h-6 w-6 text-muted-foreground hover:text-foreground"
             aria-label={editing ? t("cancel") : t("rename")}
             onClick={onToggleEdit}
           >
-            {editing ? <X size={13} /> : <Pencil size={13} />}
+            {editing ? <X size={12} /> : <Pencil size={12} />}
           </Button>
-          <Button size="icon" variant="ghost" className="h-7 w-7" aria-label={t("delete")} onClick={onDelete}>
-            <Trash2 size={13} />
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-6 w-6 text-muted-foreground hover:text-destructive"
+            aria-label={t("delete")}
+            onClick={onDelete}
+          >
+            <Trash2 size={12} />
           </Button>
         </div>
       </div>
@@ -225,9 +246,16 @@ function VoiceRow({
 
 /** 新建音色:传一段参考音频。**参考文本可以留空** —— 建完点那一行的编辑、再点「识别」,
     让本机转写引擎听一遍填上,比让用户当场打一遍自己说过的话强。 */
-function NewVoiceForm({ workspace, onCreated }: { workspace: Workspace; onCreated: () => void }) {
+function NewVoiceForm({
+  workspace,
+  onCreated,
+  onClose,
+}: {
+  workspace: Workspace;
+  onCreated: () => void;
+  onClose: () => void;
+}) {
   const t = useI18n();
-  const [open, setOpen] = React.useState(false);
   const [name, setName] = React.useState("");
   const [refText, setRefText] = React.useState("");
   const [file, setFile] = React.useState<File | null>(null);
@@ -237,24 +265,14 @@ function NewVoiceForm({ workspace, onCreated }: { workspace: Workspace; onCreate
     mutationFn: () => uploadVoice({ workspaceId: workspace.id, name, referenceText: refText, file: file as File }),
     onSuccess: () => {
       onCreated();
-      setOpen(false);
-      setName("");
-      setRefText("");
-      setFile(null);
+      onClose();
       toast.success(t("voiceCreated"));
     },
     onError: (error: Error) => toast.error(error.message),
   });
 
-  if (!open) {
-    return (
-      <Button size="sm" variant="outline" className="mt-1.5 justify-self-start" onClick={() => setOpen(true)}>
-        <Plus size={13} /> {t("voiceNewTitle")}
-      </Button>
-    );
-  }
   return (
-    <div className="mt-1.5 grid gap-1.5 rounded-lg border border-dashed border-border-strong p-2.5">
+    <div className="grid gap-1.5 rounded-lg border border-dashed border-border-strong p-2.5">
       <Input placeholder={t("voiceName")} value={name} onChange={(event) => setName(event.target.value)} autoFocus />
       <Textarea
         rows={2}
@@ -291,7 +309,7 @@ function NewVoiceForm({ workspace, onCreated }: { workspace: Workspace; onCreate
           <Upload size={12} /> {file ? t("voiceReplaceFile") : t("voicePickFile")}
         </Button>
         <div className="flex items-center gap-1.5">
-          <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+          <Button size="sm" variant="ghost" onClick={onClose}>
             {t("cancel")}
           </Button>
           <Button
