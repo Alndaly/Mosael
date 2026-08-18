@@ -305,9 +305,16 @@ export type F5Model = {
   languages: string[];
   note: string;
   expected_bytes: number;
+  /** 上面那个体积是问下载源问出来的,还是写死的估算(同 TtsEngine)。 */
+  total_is_estimate: boolean;
   installed: boolean;
   status: string;
   progress: number;
+  /** 下载中实测的字节 / 总量 / 速度 / 剩余秒数 —— 和引擎权重、转写模型报的是同一套。 */
+  downloaded_bytes: number;
+  total_bytes: number;
+  speed_bps: number;
+  eta_seconds: number | null;
   message: string;
   error: string;
 };

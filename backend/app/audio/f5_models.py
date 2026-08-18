@@ -22,11 +22,21 @@
 from __future__ import annotations
 
 import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import logging
+
 from app.audio import remote_size
+from app.core.rate import DownloadRate
+
+logger = logging.getLogger(__name__)
+
+#: 量一次盘的间隔。和引擎权重、转写模型那两条路取同一个值 —— 三处报的是同一种东西,
+#: 刷新快慢不该各不相同。
+_POLL_SECONDS = 1.5
 
 
 @dataclass(frozen=True)
@@ -277,6 +287,12 @@ def status(model: F5Model) -> dict[str, Any]:
         "installed": installed(model),
         "status": live.get("status", "installed" if installed(model) else "missing"),
         "progress": live.get("progress", 1.0 if installed(model) else 0.0),
+        # 和引擎权重、转写模型那两条路报同样的东西 —— 三处报的是同一种事,形状不同只会让
+        # 界面各写一套(而"三处两种做法"正是这条路进度不动的由来)。
+        "downloaded_bytes": live.get("downloaded", 0),
+        "total_bytes": live.get("total", 0),
+        "speed_bps": live.get("speed", 0.0),
+        "eta_seconds": live.get("eta"),
         "message": live.get("message", ""),
         "error": live.get("error", ""),
     }
@@ -325,6 +341,61 @@ def start_download(model_id: str) -> dict[str, Any]:
     return status(model)
 
 
+class _ByteWatcher:
+    """下载期间在旁边数盘上的字节,把进度报出去。
+
+    **不指望被观测方主动汇报**:worker 那边一次下载只报三次(每个文件开始前),中间隔着
+    几个 GB。引擎权重和转写模型那两条路早就是这么量的,这里是第三处 —— 同一件事此前
+    三处有两种做法,而那个例外正是"点了没反应"的那条。
+    """
+
+    def __init__(self, model: F5Model, model_id: str, stage: dict[str, str]) -> None:
+        self._model = model
+        self._model_id = model_id
+        self._stage = stage
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True, name="f5-download-watch")
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    def _measure(self) -> int:
+        # 只量这个模型自己的目录。基础模型 shared_root=True 落在根下,那就量检查点本身 ——
+        # 量整个根目录会把别的语言包一起算进来,进度于是从一开始就是满的。
+        target = root() / self._model.local_dir if self._model.local_dir else checkpoint_path(self._model)
+        try:
+            if target.is_file():
+                return target.stat().st_size
+            if target.is_dir():
+                return sum(f.stat().st_size for f in target.rglob("*") if f.is_file())
+        except OSError:
+            logger.debug("量 %s 的下载进度时读不动", target, exc_info=True)
+        return 0
+
+    def _run(self) -> None:
+        total, _estimated = measured_total(self._model, blocking=True)
+        rate = DownloadRate()
+        started = time.monotonic()
+        rate.update(self._measure(), at=started)
+        while not self._stop.wait(_POLL_SECONDS):
+            now = time.monotonic()
+            current = self._measure()
+            speed = rate.update(current, at=now)
+            eta = rate.eta(remaining=max(0, total - current))
+            set_live(
+                self._model_id,
+                progress=min(current / total, 0.99) if total else 0.0,
+                downloaded=current,
+                total=total,
+                speed=speed,
+                eta=eta,
+                message=self._stage["message"],
+            )
+
+
 def _run_download(model_id: str) -> None:
     from app.audio import tts_daemon, tts_models
 
@@ -347,13 +418,26 @@ def _run_download(model_id: str) -> None:
         }
         root().mkdir(parents=True, exist_ok=True)
 
-        def report(event: dict) -> None:
-            set_live(model_id, progress=float(event.get("progress") or 0.0), message=str(event.get("message") or ""))
+        # worker 只在**每个文件开始前**报一次(两个文件:检查点、vocab),所以它报出来的进度是
+        # 0.1 → 0.5 → 1.0 三跳。而那 0.1 之后要下 1.3–5.4 GB,几分钟到几十分钟一动不动 ——
+        # 用户看到的就是「点了下载,加载一会儿就没反应了」。
+        #
+        # 所以进度**在这边量**:数盘上多了多少字节,和引擎权重、转写模型那两条路同一个做法
+        # (见 tts_models._download_body)。worker 的事件只用来更新那句阶段文字。
+        stage = {"message": "dlMsg_preparing"}
 
-        tts_daemon.pool().request(
-            "f5-tts", python, request,
-            on_progress=report, timeout=7200, env=tts_models._worker_env(python),
-        )
+        def report(event: dict) -> None:
+            stage["message"] = str(event.get("message") or stage["message"])
+
+        watcher = _ByteWatcher(model, model_id, stage)
+        watcher.start()
+        try:
+            tts_daemon.pool().request(
+                "f5-tts", python, request,
+                on_progress=report, timeout=7200, env=tts_models._worker_env(python),
+            )
+        finally:
+            watcher.stop()
         if not installed(model):
             raise RuntimeError("下载报成功,但检查点不在盘上")
         clear_live(model_id)

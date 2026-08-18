@@ -34,6 +34,7 @@ import { detectScript, dubTextOf, hasVoiceFor, pickVoiceFor, unspeakable } from 
 import { clipEnd, formatTimecode } from "@/domain/timeline/geometry";
 import { PILL } from "@/features/editor/pill";
 import { useEditorStore } from "@/stores/editorStore";
+import { formatBytes } from "@/lib/bytes";
 import { cn } from "@/lib/utils";
 
 
@@ -492,8 +493,15 @@ function SubtitleDub({
                 loading={downloadModel.isPending || missingModel.status === "downloading"}
                 onClick={() => downloadModel.mutate(missingModel.id)}
               >
+                {/* 光有百分比不够:这些权重 1.3–5.4 GB,慢网络下一个百分点要好几分钟,
+                    而"看不出还要多久"和"卡住了"在用户眼里是同一件事。有实测总量就一并报出来。 */}
                 {missingModel.status === "downloading"
-                  ? t("subtitleDubModelDownloading").replace("{n}", String(Math.round(missingModel.progress * 100)))
+                  ? missingModel.total_bytes > 0
+                    ? t("subtitleDubModelDownloadingSize")
+                        .replace("{n}", String(Math.round(missingModel.progress * 100)))
+                        .replace("{done}", formatBytes(missingModel.downloaded_bytes))
+                        .replace("{total}", formatBytes(missingModel.total_bytes))
+                    : t("subtitleDubModelDownloading").replace("{n}", String(Math.round(missingModel.progress * 100)))
                   : t("subtitleDubModelDownload")}
               </Button>
             )}
