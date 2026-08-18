@@ -471,6 +471,9 @@ class TranslateRequest(BaseModel):
     #: 而用量表的 workspace_id 是 NOT NULL,AI 翻译因此一条账都记不了。补的是建模缺失,
     #: 不是一道闸门:它同时把这个接口纳入了工作区权限体系。
     workspace_id: str
+    #: 一次请求的条数上限。这是**防止一次请求打垮自己**的安全阀,不是「能翻多少字幕」的答案 ——
+    #: 一条一小时视频的字幕轨轻松上千条。分批在客户端做(见 frontend/src/api/client.translateTexts,
+    #: 那是唯一出口),所以这里不必为了迁就轨道长度把它调大:每一批都在这个数以内。
     texts: list[str] = Field(min_length=1, max_length=500)
     target_lang: str
     engine: str = Field(default="google", pattern="^(google|ai)$")

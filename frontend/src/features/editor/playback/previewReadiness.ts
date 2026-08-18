@@ -26,10 +26,14 @@ function proxyStatus(asset: Asset): string {
 export function assetPreviewState(asset: Asset, undecodable: ReadonlySet<string>): AssetPreviewState {
   // 图片直接用原图,不经代理与解码器。
   if (asset.kind === "image") return "ready";
-  // 本机解不动优先于后端状态:后端说 ready 只代表**文件在**,不代表这台机器放得了。
-  if (undecodable.has(asset.id)) return "undecodable";
   const status = proxyStatus(asset);
-  if (status === "ready") return "ready";
+  // 「本机解不动」**只有代理确实在盘上时才成立**。合成器对任何视频片段都会去取代理 URL,
+  // 代理还没转好时那就是一个 404 —— 而 404 说的是"文件还没生成",不是"这台机器缺编解码器"。
+  // 此前这一条排在状态判断之前,于是新导入的素材一拖进时间线就报「本机无法解码这个素材」,
+  // 配一个「重新生成代理」的按钮 —— 让用户去重做一件正在做的事,而它其实只需要等。
+  //
+  // 后端说 ready 仍然只代表**文件在**,不代表这台机器放得了 —— 那一层判断保留在下面。
+  if (status === "ready") return undecodable.has(asset.id) ? "undecodable" : "ready";
   if (status === "failed") return "failed";
   // "pending"、空、以及任何没见过的值都当作「还在转」——把未知状态显示成错误会让用户去点
   // 一个其实不需要的重试;显示成「转码中」最多是多等一会儿,而轮询会自己纠正。

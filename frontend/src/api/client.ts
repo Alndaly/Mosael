@@ -673,16 +673,32 @@ export function setSubtitleStyle(sequenceId: string, style: Record<string, unkno
   });
 }
 
-export function translateTexts(
+/** 一次请求最多送多少条。**和后端的上限对齐**(api/schemas.TranslateRequest.texts)。
+ *
+ * 那个上限是防止一次请求打垮后端的安全阀,不是"能翻多少字幕"的答案 —— 而一条一小时视频的
+ * 字幕轨轻松上千条。此前超过就直接 422 报错,用户看到的是"翻译失败"而不是"分两次"。 */
+const TRANSLATE_BATCH = 400;
+
+export async function translateTexts(
   workspaceId: string,
   texts: string[],
   targetLang: string,
   engine: "google" | "ai" = "google",
 ): Promise<{ translations: string[] }> {
-  return api<{ translations: string[] }>("/api/translate", {
-    method: "POST",
-    body: JSON.stringify({ workspace_id: workspaceId, texts, target_lang: targetLang, engine }),
-  });
+  // **分批是这一层的事,不是调用方的。** 出口只有这一个,放在这里两个调用点都不用知道有批次;
+  // 让每个调用方各自切一遍,就是同一件事写两遍,而漏掉一处就是一条"超过 N 条就报错"。
+  const translations: string[] = [];
+  for (let start = 0; start < texts.length; start += TRANSLATE_BATCH) {
+    const batch = texts.slice(start, start + TRANSLATE_BATCH);
+    // 串行而不是并发:后端对每一批**内部**已经开了线程池并发跑,再并发几批只是把同一个
+    // 上游端点打得更狠(google 那条免费路尤其容易限流),而总时长省不下多少。
+    const result = await api<{ translations: string[] }>("/api/translate", {
+      method: "POST",
+      body: JSON.stringify({ workspace_id: workspaceId, texts: batch, target_lang: targetLang, engine }),
+    });
+    translations.push(...result.translations);
+  }
+  return { translations };
 }
 
 export function insertTextClip(

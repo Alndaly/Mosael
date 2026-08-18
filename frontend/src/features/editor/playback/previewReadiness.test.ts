@@ -64,3 +64,22 @@ describe("blockingPreviewState", () => {
     expect(got?.assets.map((a) => a.id)).toEqual(["a", "b"]);
   });
 });
+
+describe("代理还没转好时,别说「本机无法解码」", () => {
+  it("代理在转 + 解码失败 → 说的是「转码中」", () => {
+    // 真机反馈:新建时间线、拖进刚导入的素材,监视器上默认就是「本机无法解码这个素材」。
+    // 合成器对任何视频片段都会去取代理 URL,代理还没生成时那是个 404 —— 它说的是"文件
+    // 还没好",不是"这台机器缺编解码器"。而后者还配着一个「重新生成代理」按钮,
+    // 等于请用户去重做一件正在做的事。
+    expect(assetPreviewState(asset("v", "video", "pending"), new Set(["v"]))).toBe("transcoding");
+    expect(assetPreviewState(asset("v", "video", undefined), new Set(["v"]))).toBe("transcoding");
+  });
+
+  it("后端转码失败 + 解码失败 → 说的是后端那一条,它更靠上游", () => {
+    expect(assetPreviewState(asset("v", "video", "failed"), new Set(["v"]))).toBe("failed");
+  });
+
+  it("代理已就绪 + 解码失败 → 这才真是「本机解不动」", () => {
+    expect(assetPreviewState(asset("v", "video", "ready"), new Set(["v"]))).toBe("undecodable");
+  });
+});

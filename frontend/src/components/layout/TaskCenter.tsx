@@ -110,6 +110,15 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
       // it's never seen active — without this it would silently skip its completion toast.
       const shouldToast = terminal && (prev === undefined || ACTIVE.has(prev));
       if (shouldToast) {
+        // **任务做完了,它改动的东西就得跟着刷新。** 此前这里只弹一句 toast:从链接下完的
+        // 视频不会出现在素材库,渲染产出、配音产出同理 —— 都要用户自己刷新页面才看得见,
+        // 而"任务完成"的提示就在眼前。逐个页面各自轮询是同一件事写十遍,所以放在这里一处:
+        // 任务中心本来就是唯一知道"哪个任务刚变成完成态"的地方。
+        if (job.status === "succeeded") {
+          for (const key of TOUCHES[job.kind] ?? DEFAULT_TOUCHES) {
+            void qc.invalidateQueries({ queryKey: [key] });
+          }
+        }
         const label = t((KIND_META[job.kind]?.labelKey ?? "jobKindOther") as never);
         if (job.status === "succeeded") toast.success(`${label} · ${t("jobDone")}`);
         else toast.error(`${label} · ${t("jobFailed")}`, { description: job.error ?? undefined });
@@ -122,7 +131,7 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
       }
       prevStatuses.current.set(job.id, job.status);
     }
-  }, [jobs.data, t]);
+  }, [jobs.data, t, qc]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -178,6 +187,22 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
     </Popover>
   );
 }
+
+/** 某种任务做完后,可能被它改动过的查询。
+ *
+ * **默认就含 assets**(见 DEFAULT_TOUCHES):绝大多数任务的产物都落进素材库,而漏掉一个 kind
+ * 的代价是"做完了却要刷新页面才看得见"。新增任务类型时不写这张表也是对的,写了才是更准。 */
+const TOUCHES: Record<string, string[]> = {
+  url_import: ["assets"],
+  render: ["assets", "sequences"],
+  subtitle_dub: ["assets", "sequences"],
+  transcribe: ["assets", "transcript"],
+  workflow: ["assets", "sequences", "workflows"],
+  publish: ["publish-tasks"],
+  ai_generation: ["assets", "generation-jobs", "generation-sessions"],
+};
+
+const DEFAULT_TOUCHES = ["assets"];
 
 const KIND_META: Record<string, { icon: React.ReactNode; labelKey: string }> = {
   render: { icon: <Download size={13} />, labelKey: "jobKindRender" },

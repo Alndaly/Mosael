@@ -97,16 +97,16 @@ export function CanvasCompositor({
     // seek path, flushed and closed every buffered frame, and returned null. Neither layer ever
     // accumulated a frame: both stayed black forever while the decoder thrashed at 60Hz.
     // Images stay keyed by asset — an <img> has no position, so sharing one is correct.
-    const wantVideo = new Map<string, string>(); // clip id -> asset id
+    const wantVideo = new Map<string, string>(); // source key -> asset id
     const wantImage = new Set<string>();
     for (const layer of layers) {
       if (layer.asset.kind === "image") wantImage.add(layer.asset.id);
-      else wantVideo.set(layer.clip.id, layer.asset.id);
+      else wantVideo.set(sourceKey(layer), layer.asset.id);
     }
     // Upcoming clips keep their decoder too — created here so the fetch/parse starts ahead of the
     // playhead; the draw loop then primes their first frame. (Video only; images decode instantly.)
     for (const layer of prewarmLayers ?? []) {
-      if (layer.asset.kind !== "image") wantVideo.set(layer.clip.id, layer.asset.id);
+      if (layer.asset.kind !== "image") wantVideo.set(sourceKey(layer), layer.asset.id);
     }
     for (const [id, source] of sourcesRef.current) {
       if (!wantVideo.has(id)) {
@@ -210,7 +210,7 @@ export function CanvasCompositor({
         // Looked up per clip, reported per asset: the source is the clip's, but "this machine
         // cannot decode that proxy" is a property of the asset, and that is what the fallback
         // decision keys on.
-        const source = sourcesRef.current.get(layer.clip.id);
+        const source = sourcesRef.current.get(sourceKey(layer));
         if (source && !source.ok && !reportedFailures.current.has(layer.asset.id)) {
           reportedFailures.current.add(layer.asset.id);
           onSourceFailedRef.current?.(layer.asset.id);
@@ -223,7 +223,7 @@ export function CanvasCompositor({
       // this settles to a no-op. Kept above the settle early-return for the same reason mediaFor is:
       // it is what drives decoding, and a paused playhead parked just before a cut still needs it.
       for (const layer of prewarmRef.current ?? []) {
-        const source = sourcesRef.current.get(layer.clip.id);
+        const source = sourcesRef.current.get(sourceKey(layer));
         if (source && source.ok) source.frameAt(layer.clip.src_in);
       }
 
@@ -298,6 +298,16 @@ function mediaKey(source: CanvasImageSource): string {
   return "?";
 }
 
+/** 一个解码源的身份 = 这个片段 **+ 它此刻指向的那份代理**。
+ *
+ * 只按 clip.id 缓存的话,代理重转过之后旧 source 里那份失败的解析结果会一直留着 ——
+ * 「重新生成代理」成功了,画面照样黑着,只有刷新整页才活过来(而刷新之所以有效,正是因为
+ * 它把这些 source 全丢了)。代理的指纹一变,键就变,旧的自然被淘汰、新的重新建。 */
+function sourceKey(layer: CompositorLayer): string {
+  const info = (layer.asset.media_info ?? {}) as { proxy_key?: string; proxy_status?: string };
+  return `${layer.clip.id}::${info.proxy_key ?? ""}:${info.proxy_status ?? ""}`;
+}
+
 function mediaFor(
   layer: CompositorLayer,
   playhead: number,
@@ -309,7 +319,7 @@ function mediaFor(
     if (!img || !img.complete || img.naturalWidth === 0) return null;
     return { source: img, w: img.naturalWidth, h: img.naturalHeight };
   }
-  const source = sources.get(layer.clip.id);
+  const source = sources.get(sourceKey(layer));
   if (!source) return null;
   const speed = layer.clip.speed || 1;
   const mediaSec = layer.clip.src_in + (playhead - layer.clip.timeline_start) * speed;
