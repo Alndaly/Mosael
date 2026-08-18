@@ -29,15 +29,16 @@ export function SettingsGroup({
 }) {
   return (
     <section className="grid gap-2 [[data-appearance=glass]_&]:[-webkit-backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] [[data-appearance=glass]_&]:[backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)]">
-      {/* 动作**对齐标题那一行**,不对齐整块的底边。`items-end` 在说明只有一行时看不出区别,
-          说明一长就把按钮拖到最后一行旁边 —— 它看起来像是那句话的一部分,而不是这一节的动作
-          (自动放行准则那一屏的说明有三行,按钮正卡在换行处)。 */}
-      <header className="flex items-start justify-between gap-4 px-0.5">
+      {/* 动作**对齐整个抬头的竖向中心**,不是对齐标题那一行,也不是对齐整块的底边。
+          三种都试过:`items-end` 在说明一长时把按钮拖到最后一行旁边,看着像那句话的一部分;
+          `items-start` 则在说明有两三行时把按钮顶在最上面,右边空出一大块。
+          `items-center` 两头都不沾 —— 按钮始终落在这一节抬头的视觉重心上。 */}
+      <header className="flex items-center justify-between gap-4 px-0.5">
         <div className="min-w-0">
           <h2 className="m-0 text-[17px] font-[650] leading-[1.3] tracking-[-0.015em]">{title}</h2>
           {description && <p className="mb-0 mt-[5px] text-ui-sm leading-[1.55] text-muted-foreground">{description}</p>}
         </div>
-        {actions && <div className="flex shrink-0 items-center gap-2 pt-0.5">{actions}</div>}
+        {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
       </header>
       {React.Children.toArray(children).some(Boolean) && (
         <div className="grid overflow-hidden rounded-lg border border-border bg-panel shadow-[var(--shadow-panel)] [&>*+*]:border-t [&>*+*]:border-border">

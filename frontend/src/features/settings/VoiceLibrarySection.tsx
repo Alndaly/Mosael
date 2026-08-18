@@ -167,79 +167,84 @@ function VoiceRow({
   const dirty = name.trim() !== voice.name || text !== voice.reference_text;
 
   return (
-    <div className="grid min-w-0 gap-0.5 py-2 first:pt-0 last:pb-0">
-      <div className="flex min-w-0 items-center gap-2">
+    // 按钮相对**整行**(名字 + 底下那句说明)居中,而不是贴着名字那一行 —— 所以文字自成一列、
+    // 按钮是另一列,由 items-center 管这两列的竖向关系。
+    <div className="flex min-w-0 items-center gap-2 py-2 first:pt-0 last:pb-0">
+      <div className="grid min-w-0 flex-1 gap-0.5">
         {editing ? (
           <Input
-            className="h-7 min-w-0 flex-1"
+            className="h-7 min-w-0"
             value={name}
             onChange={(event) => setName(event.target.value)}
             autoFocus
           />
         ) : (
-          <span className="min-w-0 flex-1 truncate text-ui-sm text-foreground">{voice.name}</span>
+          <span className="min-w-0 truncate text-ui-sm text-foreground">{voice.name}</span>
         )}
-        {/* **常驻显示,不藏在 hover 后面。** 藏起来省的是一点视觉噪声,代价是"这一行能干什么"
-            要靠试出来 —— 而这三件事(试听、改名、删)正是来这一页的理由。ghost + 小尺寸
-            已经够轻,不至于抢掉名字的视线。 */}
-        <div className="flex shrink-0 items-center gap-0">
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-6 w-6 text-muted-foreground hover:text-foreground"
-            disabled={!voice.has_reference}
-            aria-label={playing ? t("voiceStopPreview") : t("voicePlay")}
-            onClick={onPlay}
-          >
-            {playing ? <Pause size={12} /> : <Play size={12} />}
-          </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-6 w-6 text-muted-foreground hover:text-foreground"
-            aria-label={editing ? t("cancel") : t("rename")}
-            onClick={onToggleEdit}
-          >
-            {editing ? <X size={12} /> : <Pencil size={12} />}
-          </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-6 w-6 text-muted-foreground hover:text-destructive"
-            aria-label={t("delete")}
-            onClick={onDelete}
-          >
-            <Trash2 size={12} />
-          </Button>
-        </div>
-      </div>
-
-      {editing ? (
-        <div className="mt-1 grid gap-1.5">
-          <Textarea
-            rows={2}
-            value={text}
-            placeholder={t("voiceReferenceTextOptional")}
-            onChange={(event) => setText(event.target.value)}
-          />
-          <div className="flex items-center justify-between gap-2">
-            {/* 让本机的转写引擎听一遍参考音频把文本填上 —— 比让用户打一遍自己说过的话强。 */}
-            <Button size="sm" variant="ghost" loading={recognize.isPending} onClick={() => recognize.mutate()}>
-              <Wand2 size={12} /> {t("voiceRecognize")}
-            </Button>
-            <Button size="sm" disabled={!dirty} loading={save.isPending}
-              onClick={() => save.mutate({ name: name.trim(), reference_text: text })}>
-              <Check size={12} /> {t("save")}
-            </Button>
+        {editing ? (
+          <div className="mt-1 grid gap-1.5">
+            <Textarea
+              rows={2}
+              value={text}
+              placeholder={t("voiceReferenceTextOptional")}
+              onChange={(event) => setText(event.target.value)}
+            />
+            <div className="flex items-center justify-between gap-2">
+              {/* 让本机的转写引擎听一遍参考音频把文本填上 —— 比让用户打一遍自己说过的话强。 */}
+              <Button size="sm" variant="ghost" loading={recognize.isPending} onClick={() => recognize.mutate()}>
+                <Wand2 size={12} /> {t("voiceRecognize")}
+              </Button>
+              <Button
+                size="sm"
+                disabled={!dirty}
+                loading={save.isPending}
+                onClick={() => save.mutate({ name: name.trim(), reference_text: text })}
+              >
+                <Check size={12} /> {t("save")}
+              </Button>
+            </div>
           </div>
-        </div>
-      ) : (
-        // 第二行是这条音色的"说明":来源 + 参考文本。首行只留名字和操作,读起来才有主次。
-        <p className="m-0 truncate text-ui-2xs leading-[1.5] text-muted-foreground" title={voice.reference_text}>
-          <span className="text-muted-foreground/70">{origin}</span>
-          {voice.reference_text ? ` · ${voice.reference_text}` : ""}
-        </p>
-      )}
+        ) : (
+          // 第二行是这条音色的"说明":来源 + 参考文本。首行只留名字,读起来才有主次。
+          <p className="m-0 truncate text-ui-2xs leading-[1.5] text-muted-foreground" title={voice.reference_text}>
+            <span className="text-muted-foreground/70">{origin}</span>
+            {voice.reference_text ? ` · ${voice.reference_text}` : ""}
+          </p>
+        )}
+      </div>
+      {/* **常驻显示,不藏在 hover 后面。** 藏起来省的是一点视觉噪声,代价是"这一行能干什么"
+          要靠试出来 —— 而这三件事(试听、改名、删)正是来这一页的理由。
+          按钮之间留 gap-1:图标只有 12px,挨在一起时三个图标读起来像一团。 */}
+      <div className="flex shrink-0 items-center gap-1">
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-6 w-6 text-muted-foreground hover:text-foreground"
+          disabled={!voice.has_reference}
+          aria-label={playing ? t("voiceStopPreview") : t("voicePlay")}
+          onClick={onPlay}
+        >
+          {playing ? <Pause size={12} /> : <Play size={12} />}
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-6 w-6 text-muted-foreground hover:text-foreground"
+          aria-label={editing ? t("cancel") : t("rename")}
+          onClick={onToggleEdit}
+        >
+          {editing ? <X size={12} /> : <Pencil size={12} />}
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-6 w-6 text-muted-foreground hover:text-destructive"
+          aria-label={t("delete")}
+          onClick={onDelete}
+        >
+          <Trash2 size={12} />
+        </Button>
+      </div>
     </div>
   );
 }
