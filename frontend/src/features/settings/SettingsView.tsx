@@ -17,6 +17,7 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import { FeishuSection } from "@/features/settings/FeishuSection";
 import { AsrModelsSection } from "@/features/settings/AsrModelsSection";
 import { VoiceCloneSection } from "@/features/settings/VoiceCloneSection";
+import { VoiceLibrarySection } from "@/features/settings/VoiceLibrarySection";
 import { AgentMemorySection } from "@/features/settings/AgentMemorySection";
 import { AutopilotRulesSection } from "@/features/settings/AutopilotRulesSection";
 import { AiRuntimeSection } from "@/features/settings/AiRuntimeSection";
@@ -216,7 +217,14 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
           )}
           {section === "provider-pricing" && <ProviderPricingSection workspace={workspace} />}
           {section === "transcribe" && <AsrModelsSection />}
-          {section === "voice" && <VoiceCloneSection />}
+          {section === "voice" && (
+            <>
+              <VoiceCloneSection />
+              {/* 引擎/权重是这一页的上半截,音色是下半截 —— 此前只有上半截,而"用哪把嗓子"
+                  得去剪辑页的配音面板里管(要先打开一个项目才够得着)。 */}
+              <VoiceLibrarySection workspace={workspace} />
+            </>
+          )}
           {section === "feishu" && <FeishuSection workspace={workspace} />}
           {section === "backend" && <BackendSection workspace={workspace} />}
         </div>
