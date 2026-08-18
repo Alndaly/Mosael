@@ -58,7 +58,9 @@ export const tray: Capability = {
                 {
                   label: "开机时启动",
                   type: "checkbox" as const,
-                  checked: getOpenAtLogin(),
+                  // 待批准也勾上:系统里已经登记了,只差用户去「系统设置 → 登录项」点允许。
+                  // 显示成没勾就是把一件待办说成一次失败(见 loginItem.LoginItemState)。
+                  checked: getOpenAtLogin().enabled,
                   click: (item: { checked: boolean }) => {
                     setOpenAtLogin(item.checked);
                     rebuild();
