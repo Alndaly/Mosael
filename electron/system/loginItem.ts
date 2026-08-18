@@ -42,10 +42,27 @@ export type LoginItemState = {
 
 function readState(): LoginItemState {
   try {
-    const settings = app.getLoginItemSettings();
-    // status 只有 macOS 给;别的平台按 openAtLogin 判断就够了。
-    const needsApproval = (settings as { status?: string }).status === "requires-approval";
-    return { enabled: settings.openAtLogin === true || needsApproval, needsApproval };
+    // **读的时候必须带上和写时同样的 args。** Electron 文档原话:「If you provided `path`
+    // and `args` options to `app.setLoginItemSettings`, then you need to pass the same
+    // arguments here for `openAtLogin` to be set correctly.」
+    //
+    // 我们写的时候带了 `--hidden`(自启时静默驻留托盘),而这里此前不带 —— 于是 Windows 上
+    // `openAtLogin` 永远读回 false。注册表其实已经写进去了、开机真的会自启,而界面把开关
+    // 弹了回去。真机反馈的「开机时启动点击无效」就是这么来的:功能生效了,界面在说谎。
+    const settings = app.getLoginItemSettings({ args: [HIDDEN_FLAG] });
+
+    // Windows 专有的两个字段是更结实的判据:
+    //   executableWillLaunchAtLogin —— **忽略 args**,只问"这个可执行文件会不会开机启动";
+    //   launchItems[].enabled —— 注册表项在,但用户在任务管理器/设置里把它关掉了。
+    // 后者正是 Windows 版的「登记了、还没生效」,和 macOS 的 requires-approval 是一回事。
+    const willLaunch = (settings as { executableWillLaunchAtLogin?: boolean }).executableWillLaunchAtLogin === true;
+    const items = (settings as { launchItems?: { enabled?: boolean }[] }).launchItems ?? [];
+    const deactivated = items.length > 0 && items.every((item) => item.enabled === false);
+
+    const needsApproval =
+      (settings as { status?: string }).status === "requires-approval" || (willLaunch && deactivated);
+    // 登记上了就把开关显示成开 —— 「还差你去批准/启用」不是「没开成」。
+    return { enabled: settings.openAtLogin === true || willLaunch || needsApproval, needsApproval };
   } catch {
     return { enabled: false, needsApproval: false };
   }
