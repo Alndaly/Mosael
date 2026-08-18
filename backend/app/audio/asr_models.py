@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from app.audio import remote_size
 from app.core import interpreter, pip_install
 from app.core.child_process import ChildProcess, popen_text, run_logged
 from app.core.rate import DownloadRate
@@ -50,6 +51,12 @@ class SubModel:
     name the library materialises under its cache root."""
 
     cache_dir: str
+    #: 体积**问源要**时用的那个仓库 id(见 audio/remote_size)。`cache_dir` 是库在本地
+    #: 摊开成的目录名,不一定等于仓库 id —— HuggingFace 那边是 `models--A--B` 这种转写。
+    repo: str
+    #: 源:"modelscope" 或 "hf"。
+    source: str
+    #: 问不到时退回的估算。写死的数会随上游改文件而失准,所以它只是兜底。
     expected_bytes: int
 
 
@@ -65,6 +72,7 @@ class ModelEntry:
 
     @property
     def expected_bytes(self) -> int:
+        """问不到源时的兜底总量。**优先用 `measured_total`** —— 那才是实际要下多少。"""
         return sum(sub.expected_bytes for sub in self.sub_models)
 
 
@@ -154,13 +162,15 @@ _FUNASR_BUNDLE = ModelEntry(
     detail="asrDetail_funasr",
     sub_models=(
         # SenseVoice:按官方说明「超过 40 万小时数据训练,支持超过 50 种语言,识别效果上优于 Whisper」,
-        # 标点与逆文本规整都在模型内部。体积从 ModelScope 文件接口**实测**(model.pt 936.3 MB)——
-        # 它是下载进度的分母,猜错了进度条就是错的。
-        SubModel("SenseVoiceSmall", 937_000_000),
+        # 标点与逆文本规整都在模型内部。体积现在**问 ModelScope 要**(见 audio/remote_size);
+        # 这里的数字只是问不到时的兜底,而它注定会随上游改文件而失准。
+        SubModel("SenseVoiceSmall", "iic/SenseVoiceSmall", "modelscope", 937_000_000),
         # VAD 断句与说话人分离是**独立阶段**,与识别模型无关:它们按音频切段/聚类,换识别模型照样用。
         # 说话人分离不能丢 —— 转写面板的说话人标签、按人筛选都靠它。
-        SubModel("speech_fsmn_vad_zh-cn-16k-common-pytorch", 5_000_000),
-        SubModel("speech_campplus_sv_zh-cn_16k-common", 30_000_000),
+        SubModel("speech_fsmn_vad_zh-cn-16k-common-pytorch",
+                 "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch", "modelscope", 5_000_000),
+        SubModel("speech_campplus_sv_zh-cn_16k-common",
+                 "iic/speech_campplus_sv_zh-cn_16k-common", "modelscope", 30_000_000),
     ),
     request={"provider": "funasr", "action": "warmup"},
 )
@@ -172,7 +182,8 @@ def _whisperx_entry(size: str, label: str, detail: str, expected: int) -> ModelE
         engine="whisperx",
         label=label,
         detail=detail,
-        sub_models=(SubModel(f"models--Systran--faster-whisper-{size}", expected),),
+        sub_models=(SubModel(f"models--Systran--faster-whisper-{size}",
+                             f"Systran/faster-whisper-{size}", "hf", expected),),
         request={"provider": "whisperx", "action": "warmup", "whisper_model": size},
     )
 
@@ -185,6 +196,24 @@ CATALOG: tuple[ModelEntry, ...] = (
 )
 
 _BY_ID = {entry.id: entry for entry in CATALOG}
+
+
+def measured_total(entry: ModelEntry, *, blocking: bool = False) -> tuple[int, bool]:
+    """(这个条目要下的总字节, 这个数是不是估算)。
+
+    此前用的是目录里写死的估算,而它同时当着卡片体积、进度分母、和"装好了没有"的判据 ——
+    上游改一次文件三样一起失准。按源上的**实际文件**算(见 audio/remote_size);
+    任何一份问不到,整个总量就退回估算并说出来 —— 报一个残缺的总数比报估算更糟:
+    它看起来精确,而进度条会提前走满。
+    """
+    total = 0
+    for sub in entry.sub_models:
+        files = (remote_size.files_for if blocking else remote_size.cached_files)(sub.source, sub.repo)
+        size = remote_size.total_bytes(files)
+        if not size:
+            return entry.expected_bytes, True
+        total += size
+    return total, False
 
 
 # ---------------------------------------------------------------------------
@@ -267,7 +296,9 @@ def _measure(entry: ModelEntry) -> int:
 
 
 def _is_installed(entry: ModelEntry) -> bool:
-    return _measure(entry) >= int(entry.expected_bytes * _INSTALLED_FRACTION)
+    # 判据用实测总量:上游把文件改大之后,拿旧估算当分母会把"才下了一半"判成"已安装"。
+    total, _estimated = measured_total(entry)
+    return _measure(entry) >= int(total * _INSTALLED_FRACTION)
 
 
 # ---------------------------------------------------------------------------
@@ -395,12 +426,14 @@ def runtime_ready(engine: str) -> bool:
 def _status_dict(entry: ModelEntry) -> dict[str, Any]:
     live = _store.get(entry.id)
     installed = _is_installed(entry)
+    total, estimated = measured_total(entry)
     base = {
         "id": entry.id,
         "engine": entry.engine,
         "label": entry.label,
         "detail": entry.detail,
-        "expected_bytes": entry.expected_bytes,
+        "expected_bytes": total,
+        "total_is_estimate": estimated,
         # **两件事分开报**:文件在不在(status)、跑不跑得起来(runtime_ready)。
         # 把它们合成一个"已安装"是这一页此前说谎的原因。
         # **不等探测**:它要起子进程 import funasr。没测过就先说"还没测",后台去问。
@@ -421,14 +454,14 @@ def _status_dict(entry: ModelEntry) -> dict[str, Any]:
         }
     if live is not None and live.status == "failed":
         return {**base, "status": "failed", "downloaded_bytes": _measure(entry),
-                "total_bytes": entry.expected_bytes, "message": live.message, "message_params": live.params}
+                "total_bytes": total, "message": live.message, "message_params": live.params}
     if installed:
         ready = base["runtime_ready"]
         return {**base, "status": "installed", "downloaded_bytes": _measure(entry),
-                "total_bytes": entry.expected_bytes,
+                "total_bytes": total,
                 "message": "modelMsg_asrReady" if ready else "modelMsg_asrNoRuntime"}
     return {**base, "status": "missing", "downloaded_bytes": _measure(entry),
-            "total_bytes": entry.expected_bytes, "message": "modelMsg_notDownloaded"}
+            "total_bytes": total, "message": "modelMsg_notDownloaded"}
 
 
 def list_status() -> list[dict[str, Any]]:
@@ -626,12 +659,15 @@ def _download_body(model_id: str) -> None:
     # 之间跳,而 ETA 在跳到 0 的那一瞬就消失。和克隆那条下载路共用一份实现(core.rate)。
     rate = DownloadRate()
     rate.update(last_bytes, at=started)
+    # **分母问源要**,不用目录里那个写死的估算。用户已经在等这次下载,所以这里可以阻塞去问
+    # (超时 6 秒);问不到就退回估算 —— 那正是此前一直在用的数,不会更糟。
+    download_total, _estimated = measured_total(entry, blocking=True)
     while proc.poll() is None:
         time.sleep(_POLL_SECONDS)
         now = time.monotonic()
         current = _measure(entry)
         speed = rate.update(current, at=now)
-        eta = rate.eta(remaining=max(0, entry.expected_bytes - current))
+        eta = rate.eta(remaining=max(0, download_total - current))
         # Some backends (HuggingFace) finalize large blobs atomically, so bytes
         # jump only at the end — fall back to an elapsed-time heartbeat so the UI
         # never looks frozen.
@@ -640,7 +676,7 @@ def _download_body(model_id: str) -> None:
         if not key:
             key, params = "dlMsg_elapsed", {"m": str(elapsed // 60), "s": f"{elapsed % 60:02d}"}
         _store.set(model_id, _Live(
-            status="downloading", downloaded=current, total=entry.expected_bytes,
+            status="downloading", downloaded=current, total=download_total,
             speed=speed, eta=eta, message=key, params=params))
 
     stderr = child.finish(600)
@@ -665,9 +701,10 @@ def entry_for_transcribe(provider: str) -> ModelEntry | None:
 
 
 def measure_fraction(entry: ModelEntry) -> float:
-    if not entry.expected_bytes:
+    total, _estimated = measured_total(entry)
+    if not total:
         return 0.0
-    return min(_measure(entry) / entry.expected_bytes, 0.99)
+    return min(_measure(entry) / total, 0.99)
 
 
 def is_installed(model_id_or_entry: str | ModelEntry) -> bool:

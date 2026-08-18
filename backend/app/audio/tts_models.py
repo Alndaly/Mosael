@@ -26,6 +26,7 @@ from app.core.child_process import ChildProcess, popen_text, run_logged
 from app.core.rate import DownloadRate
 from app.core.config import settings
 from app.core.text import blame_line, strip_ansi
+from app.audio import remote_size
 
 logger = logging.getLogger(__name__)
 
@@ -281,7 +282,10 @@ def _is_installed(engine: TtsEngine) -> bool:
             return False
     if _has_partial_downloads(engine):
         return False
-    return _measure(engine) >= int(engine.expected_bytes * _INSTALLED_FRACTION)
+    # 判据也用实测总量:上游把文件改大之后,拿旧估算当分母会把"才下了一半"判成"已安装",
+    # 然后合成在运行时炸(fish-speech 那条 4.0 GB 的旧估算就是这么坑过一次)。
+    total, _estimated = measured_total(engine, _download_source(engine.id))
+    return _measure(engine) >= int(total * _INSTALLED_FRACTION)
 
 
 # ---------------------------------------------------------------------------
@@ -592,10 +596,77 @@ def _source_fields(engine: TtsEngine) -> dict[str, Any]:
     return {"needs_source": True, "source_ready": bool(repo), "source_dir": repo}
 
 
+def _download_source(engine_id: str) -> str:
+    """这个引擎此刻**实际**会走的下载源(把库里存的值落到它支持的那几个上)。"""
+    from app.domain import tts_config
+
+    return effective_source(engine_id, tts_config.get().source)
+
+
+#: 这次下载**真正要取的东西**:(源, 仓库, 文件通配)。通配为空表示整仓。
+#:
+#: 体积必须按这个算,而不是按仓库总量:AI-ModelScope/F5-TTS 整仓有四份 1.35 GB 的检查点
+#: (不同版本),而我们只要其中一份 —— 拿整仓当分母,进度条会永远走不到头。
+def download_parts(engine_id: str, source: str) -> tuple[tuple[str, str, tuple[str, ...]], ...]:
+    """这一次下载会从哪些源、哪些仓库、取哪些文件。
+
+    和 `tts_worker.fetch_f5_weights` / `fetch_fish_weights` 是同一件事的两面 —— 那边负责取,
+    这边负责说清楚"要取多少"。两边一起改,否则分母又和实际下的东西对不上。
+    """
+    if engine_id == "f5-tts":
+        # 声码器 vocos 只在 HuggingFace 上(ModelScope 三个命名空间都是 404),
+        # 所以无论主源选谁,它这一份都走 HF。
+        vocoder = ("hf" if source == "modelscope" else source, "charactr/vocos-mel-24khz", ())
+        if source == "modelscope":
+            return (
+                ("modelscope", "AI-ModelScope/F5-TTS",
+                 ("F5TTS_v1_Base/model_1250000.safetensors", "F5TTS_v1_Base/vocab.txt")),
+                vocoder,
+            )
+        return ((source, "SWivid/F5-TTS", ("F5TTS_v1_Base/*",)), vocoder)
+    if engine_id == "fish-speech":
+        return ((source if source == "modelscope" else source, "fishaudio/s2-pro", ()),)
+    return ()
+
+
+def measured_total(engine: TtsEngine, source: str, *, blocking: bool = False) -> tuple[int, bool]:
+    """(要下的总字节, 这个数是不是估算)。
+
+    目录里那个 `expected_bytes` 是**当初抄下来的快照**,而它同时当着三样东西用:卡片上给用户
+    看的体积、进度条的分母、以及"装好了没有"的判据。上游改一次文件它就失准 —— F5 走
+    ModelScope 实际是 1.40 GB,而写死的是 1.5 GB,于是进度走到 93% 就完成了。
+
+    所以先问源。问不到(离线、源变了、接口改了)就退回估算,并**说出它是估算** ——
+    一个猜出来的数字装成实测值,比承认不知道更糟。
+
+    `blocking=False` 时只读缓存、缺了在后台补:列卡片是每开一次设置页都跑的路径,不能让它
+    等网络(同一个教训在 ai/model_catalog 上吃过一次)。下载正要开始时用 blocking=True,
+    那时用户本来就在等。
+    """
+    parts = download_parts(engine.id, source)
+    if not parts:
+        return engine.expected_bytes, True
+    total = 0
+    for part_source, repo, patterns in parts:
+        files = (remote_size.files_for if blocking else remote_size.cached_files)(part_source, repo)
+        size = remote_size.total_bytes(files, patterns)
+        # 任何一部分问不到,整个总量就不是实测的 —— 报一个残缺的总数比报估算更糟:
+        # 它看起来精确,而进度条会提前走满。
+        if size is None:
+            return engine.expected_bytes, True
+        total += size
+    return total, False
+
+
 def _status_dict(engine: TtsEngine) -> dict[str, Any]:
+    from app.domain import tts_config
+
     live = _store.get(engine.id)
+    source = effective_source(engine.id, tts_config.get().source)
+    total, estimated = measured_total(engine, source)
     base = {"id": engine.id, "label": engine.label, "detail": engine.detail,
-            "expected_bytes": engine.expected_bytes, "sources": list(sources_for(engine.id)),
+            "expected_bytes": total, "total_is_estimate": estimated,
+            "sources": list(sources_for(engine.id)),
             "supports_speed": engine.supports_speed,
             **_source_fields(engine)}
     if live is not None and live.status == "downloading":
@@ -611,21 +682,21 @@ def _status_dict(engine: TtsEngine) -> dict[str, Any]:
                 "eta_seconds": live.eta, "message": live.message, "message_params": live.params}
     if live is not None and live.status == "failed":
         return {**base, "status": "failed", "downloaded_bytes": _measure(engine),
-                "total_bytes": engine.expected_bytes, "message": live.message, "message_params": live.params}
+                "total_bytes": total, "message": live.message, "message_params": live.params}
     if _is_installed(engine):
         # 权重齐了不等于跑得起来:pip 包可能压根没装(权重是别的工具下的,或者托管 venv 被删了)。
         # 此前这里一律说「已安装,声音克隆可用」,而合成那边探测解释器失败 —— 页面说可用,
         # 一点就说不可用。两句话得出自同一次判断。
         ready, checked = runtime_status(engine.id)
         return {**base, "status": "installed", "runtime_ready": ready, "runtime_checked": checked,
-                "downloaded_bytes": _measure(engine), "total_bytes": engine.expected_bytes,
+                "downloaded_bytes": _measure(engine), "total_bytes": total,
                 "message": "modelMsg_checkingRuntime" if not checked else "modelMsg_cloneReady" if ready
                 else "modelMsg_weightsNoRuntime"}
     # runtime_ready 说的是"跑不跑得起来",和"权重下没下"是两件事 —— 别因为在"未下载"这条
     # 分支上就无条件写 False。装好了运行环境、只差权重,是一个该说清楚的状态。
     ready, checked = runtime_status(engine.id)
     return {**base, "status": "missing", "runtime_ready": ready, "runtime_checked": checked, "downloaded_bytes": _measure(engine),
-            "total_bytes": engine.expected_bytes,
+            "total_bytes": total,
             "message": ("modelMsg_checkingRuntime" if not checked else
                         "modelMsg_runtimeNoWeights" if ready else "modelMsg_notDownloaded")}
 
@@ -887,17 +958,20 @@ def _download_body(engine_id: str) -> None:
     # 之间跳,而 ETA 在跳到 0 的那一瞬就消失 —— 用户看到的那一眼恰好是 0 的那一眼。
     rate = DownloadRate()
     rate.update(last_bytes, at=started)
+    # **分母问源要,不用目录里那个写死的估算。** 用户已经在等这次下载了,所以这里可以阻塞去问
+    # (超时 6 秒);问不到就退回估算 —— 那正是此前一直在用的数,不会更糟。
+    total_bytes, _estimated = measured_total(engine, _download_source(engine.id), blocking=True)
     while proc.poll() is None:
         time.sleep(_POLL_SECONDS)
         now = time.monotonic()
         current = measure()
         speed = rate.update(current, at=now)
-        eta = rate.eta(remaining=max(0, engine.expected_bytes - current))
+        eta = rate.eta(remaining=max(0, total_bytes - current))
         elapsed = int(now - started)
         key, params = _fmt_eta(eta)
         if not key:
             key, params = "dlMsg_elapsed", {"m": str(elapsed // 60), "s": f"{elapsed % 60:02d}"}
-        _store.set(engine.id, _Live(status="downloading", downloaded=current, total=engine.expected_bytes,
+        _store.set(engine.id, _Live(status="downloading", downloaded=current, total=total_bytes,
                                     speed=speed, eta=eta, message=key, params=params))
 
     stderr = child.finish(600)

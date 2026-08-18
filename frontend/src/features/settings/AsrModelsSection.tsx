@@ -69,7 +69,10 @@ function AsrModelCard({
           <div className="flex flex-wrap items-center gap-2 [&_strong]:text-ui-md">
             <strong>{model.label}</strong>
             <span className="rounded-md border border-border px-[5px] text-ui-2xs uppercase leading-4 tracking-[0.03em] text-muted-foreground">{model.engine}</span>
-            <span className="text-ui-xs tabular-nums text-muted-foreground">{formatBytes(model.expected_bytes)}</span>
+            {/* 「约」不是客套:问不到下载源时这个数是写死的估算,而用户会拿它当准数。 */}
+            <span className="text-ui-xs tabular-nums text-muted-foreground">
+              {model.total_is_estimate ? t("sizeApprox").replace("{size}", formatBytes(model.expected_bytes)) : formatBytes(model.expected_bytes)}
+            </span>
           </div>
           <small className="text-ui-xs text-muted-foreground">{model.detail}</small>
           {/* 「还没测过」和「测过了、跑不起来」是两回事 —— 探测要起子进程 import torch,

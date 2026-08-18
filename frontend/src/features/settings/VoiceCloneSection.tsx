@@ -282,7 +282,11 @@ function EngineCard({ model, busy, unsaved, onDownload }: { model: TtsEngine; bu
         <div className="grid min-w-0 gap-[3px]">
           <div className="flex flex-wrap items-center gap-2 [&_strong]:text-ui-md">
             <strong>{model.label}</strong>
-            <span className="text-ui-xs tabular-nums text-muted-foreground">{formatBytes(model.expected_bytes)}</span>
+            {/* 「约」不是客套:这个数问不到下载源时退回的是目录里写死的估算,而用户会拿它当准数
+                (然后发现进度条走到 93% 就完成了)。问到了就不带「约」—— 那才是实测。 */}
+            <span className="text-ui-xs tabular-nums text-muted-foreground">
+              {model.total_is_estimate ? t("sizeApprox").replace("{size}", formatBytes(model.expected_bytes)) : formatBytes(model.expected_bytes)}
+            </span>
           </div>
           <small className="text-ui-xs text-muted-foreground">{model.detail}</small>
           {model.status === "installed" && !model.runtime_checked && (

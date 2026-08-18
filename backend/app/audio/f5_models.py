@@ -26,6 +26,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from app.audio import remote_size
+
 
 @dataclass(frozen=True)
 class F5Model:
@@ -241,15 +243,37 @@ _lock = threading.Lock()
 _live: dict[str, dict[str, Any]] = {}
 
 
+def measured_total(model: F5Model, *, blocking: bool = False) -> tuple[int, bool]:
+    """(这份权重的总字节, 这个数是不是估算)。
+
+    目录里那个 `expected_bytes` 是拍出来的 —— 十个社区模型全写着同一个 1_400_000_000,
+    而它们的检查点从 1.2 GB 到 1.5 GB 都有。按源上的**实际文件**算(检查点 + vocab 两个,
+    不是整仓:Jmica/F5TTS 整仓有四份检查点,而我们只取一份)。
+
+    问不到就退回估算并说出来 —— 理由见 audio/remote_size 的模块说明。
+    """
+    source, repo = (("modelscope", model.modelscope_repo) if model.modelscope_repo
+                    else ("hf", model.hf_repo))
+    files = (remote_size.files_for if blocking else remote_size.cached_files)(source, repo)
+    size = remote_size.total_bytes(files, (model.checkpoint, model.vocab))
+    # 0 不是"这份权重是空的",是**路径没对上**(社区仓库改过文件名)。当成问不到 ——
+    # 否则界面上会出现一个 0 字节的模型,而进度条的分母成了 0。
+    if not size:
+        return model.expected_bytes, True
+    return size, False
+
+
 def status(model: F5Model) -> dict[str, Any]:
     with _lock:
         live = dict(_live.get(model.id) or {})
+    total, estimated = measured_total(model)
     return {
         "id": model.id,
         "label": model.label,
         "languages": list(model.languages),
         "note": model.note,
-        "expected_bytes": model.expected_bytes,
+        "expected_bytes": total,
+        "total_is_estimate": estimated,
         "installed": installed(model),
         "status": live.get("status", "installed" if installed(model) else "missing"),
         "progress": live.get("progress", 1.0 if installed(model) else 0.0),

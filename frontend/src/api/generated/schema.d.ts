@@ -867,6 +867,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assets/probe-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Probe Url
+         * @description 这个链接后面有什么 —— 只读元数据,不下载任何媒体流。
+         *
+         *     **先探再下**:一个链接可能是一条视频,也可能是一整个播放列表。直接「粘链接就下」在单条时
+         *     顺手,在播放列表上就是一次没人要的几十 GB。
+         *
+         *     权限按 `upload` 判:探测本身只是出网读一份公开元数据,但它是导入的第一步,而能看的人不等于
+         *     能往这个工作区里塞东西。
+         */
+        post: operations["probe_url_api_assets_probe_url_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assets/import-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import From Url
+         * @description 把选中的条目下载进素材库。返回任务 —— 下载要跑一阵,不该占着一个请求。
+         */
+        post: operations["import_from_url_api_assets_import_url_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/assets/import-local": {
         parameters: {
             query?: never;
@@ -4760,6 +4806,11 @@ export interface components {
              */
             expected_bytes: number;
             /**
+             * Total Is Estimate
+             * @default true
+             */
+            total_is_estimate: boolean;
+            /**
              * Speed Bps
              * @default 0
              */
@@ -7064,6 +7115,29 @@ export interface components {
             /** Open */
             open: boolean;
         };
+        /** RemoteEntryOut */
+        RemoteEntryOut: {
+            /** Id */
+            id: string;
+            /** Url */
+            url: string;
+            /** Title */
+            title: string;
+            /** Duration */
+            duration?: number | null;
+            /**
+             * Uploader
+             * @default
+             */
+            uploader: string;
+            /**
+             * Thumbnail
+             * @default
+             */
+            thumbnail: string;
+            /** Heights */
+            heights?: number[];
+        };
         /** RenameRequest */
         RenameRequest: {
             /** Name */
@@ -7774,6 +7848,11 @@ export interface components {
              */
             expected_bytes: number;
             /**
+             * Total Is Estimate
+             * @default true
+             */
+            total_is_estimate: boolean;
+            /**
              * Speed Bps
              * @default 0
              */
@@ -7837,6 +7916,70 @@ export interface components {
              * @default
              */
             resource_id: string;
+        };
+        /** UrlImportItem */
+        UrlImportItem: {
+            /** Url */
+            url: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+        };
+        /** UrlImportRequest */
+        UrlImportRequest: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Project Id */
+            project_id?: string | null;
+            /** Items */
+            items: components["schemas"]["UrlImportItem"][];
+            /**
+             * Kind
+             * @default video
+             */
+            kind: string;
+            /** Profile Id */
+            profile_id?: string | null;
+            /**
+             * Max Height
+             * @default 0
+             */
+            max_height: number;
+        };
+        /** UrlProbeRequest */
+        UrlProbeRequest: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Url */
+            url: string;
+            /** Profile Id */
+            profile_id?: string | null;
+            /**
+             * Start
+             * @default 1
+             */
+            start: number;
+        };
+        /** UrlProbeResponse */
+        UrlProbeResponse: {
+            /** Title */
+            title: string;
+            /** Is Playlist */
+            is_playlist: boolean;
+            /** Entries */
+            entries: components["schemas"]["RemoteEntryOut"][];
+            /**
+             * Start
+             * @default 1
+             */
+            start: number;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
         };
         /** UserOut */
         UserOut: {
@@ -10130,6 +10273,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    probe_url_api_assets_probe_url_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UrlProbeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UrlProbeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_from_url_api_assets_import_url_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UrlImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
                 };
             };
             /** @description Validation Error */

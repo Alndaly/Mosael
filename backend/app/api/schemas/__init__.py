@@ -1010,6 +1010,10 @@ class TtsEngineOut(BaseModel):
     downloaded_bytes: int = 0
     total_bytes: int = 0
     expected_bytes: int = 0
+    #: 上面那个体积是**问下载源问出来的**,还是目录里写死的估算。
+    #: 界面据此决定要不要说「约」—— 把一个猜出来的数字显示成实测值,用户会拿它当准数
+    #: (然后发现进度条走到 93% 就完成了,或者反过来永远差最后几个百分点)。
+    total_is_estimate: bool = True
     speed_bps: float = 0.0
     eta_seconds: float | None = None
     message: str = ""
@@ -1218,6 +1222,8 @@ class AsrModelOut(BaseModel):
     downloaded_bytes: int = 0
     total_bytes: int = 0
     expected_bytes: int = 0
+    #: 上面那个体积是问下载源问出来的,还是写死的估算(同 TtsEngineOut.total_is_estimate)。
+    total_is_estimate: bool = True
     speed_bps: float = 0.0
     eta_seconds: float | None = None
     message: str = ""
