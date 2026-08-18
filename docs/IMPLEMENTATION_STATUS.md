@@ -389,6 +389,33 @@ Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the
   anyway: cutting has ffmpeg open the media URL directly and seek, which is a different network path
   from the download — the stream yt-dlp pulls at 5 MB/s times out for ffmpeg.
 
+### 2026-08-18: an audit for *more of the same*, and what it found
+
+After the download work, a pass over the codebase looking for further instances of the shapes
+already fixed today — on the theory that a defect that recurred three times has not finished
+recurring.
+
+**"The last line is the reason" had six more sites.** Transcription failure, audio extraction,
+transcript parsing, reference-audio processing, speaker extraction, venv creation, the Fish Speech
+checkout, plugin exit codes — and, found by the ratchet rather than by reading, **the `run_code`
+sandbox**. All of them `stderr[-N:]`. funasr and whisperx use tqdm too, ffmpeg prints its own
+progress lines, and user-supplied code can print anything, so these were failures waiting for the
+right output. All now go through `core/text.blame_line`, which grew ffmpeg's progress shape
+(`frame= … speed=1.02x`) alongside tqdm's. A ratchet fails on a seventh: the allow-list holds
+three entries, each with a reason (fallback echo, log line, JSON parse error wanting raw text),
+and stale entries fail it too.
+
+What the audit did **not** find, worth recording so the next pass can skip it: no route does slow
+work synchronously any more (`probe_url` / `probe_provider_health` block deliberately — the user
+is waiting on those); `SelectItem value=""` and unconditional `scrollTop = scrollHeight` are both
+gone and both have ratchets; the remaining `opacity-0` controls are in-row and occupy space on
+purpose (stopping row height from jumping), unlike the voice-library one that left a 66px gap at
+the right edge. All nine routes render with zero console errors.
+
+Also verified on the new code rather than assumed: `remote_size`'s background refresh dedupes
+(50 concurrent asks → one request, thread count returns to baseline) and its negative cache
+actually stops the retry storm (a further 30 asks after a failure → still one request).
+
 ### 2026-08-18: the download path, end to end (0.18.1 → 0.18.13)
 
 A run of reports about downloading engines, weights and models. Almost all of them turned out to
