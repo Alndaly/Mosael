@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+from app.core.text import blame_line
 from app.core.interpreter import base_python
 from app.core.child_process import run_logged
 
@@ -218,7 +219,10 @@ def run_code(code: str, inputs: dict[str, Any], *, timeout: float = TIMEOUT_SECO
     if len(attempt.stdout) > OUTPUT_CAP:
         raise SandboxError(f"代码输出超过上限({OUTPUT_CAP // 1024} KiB)")
     if attempt.returncode != 0:
-        raise SandboxError(f"代码执行出错: {attempt.stderr.decode(errors='replace')[-500:]}")
+        # 挑出说明原因的那一行,而不是恰好排在最后的那一行 —— 用户跑的代码里打个进度条、
+        # 或者 traceback 后面还有输出,取尾巴就报了个和错误无关的东西(见 core/text.blame_line)。
+        why = blame_line(attempt.stderr.decode(errors="replace"), fallback="子进程没有留下原因")
+        raise SandboxError(f"代码执行出错:{why}")
     try:
         return {"output": json.loads(attempt.stdout.decode())["output"]}
     except (ValueError, KeyError) as exc:

@@ -16,6 +16,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.text import blame_line
 from app.core.db import SessionLocal
 from app.domain.jobs import ASR_SLOTS, run_job_guarded, say
 from app.db.models import Asset, Job
@@ -74,7 +75,7 @@ def _extract_audio(source: Path, target: Path) -> None:
         text=True,
         timeout=600, what="音频提取")
     if result.returncode != 0:
-        raise AsrError(f"音频提取失败: {result.stderr[-400:]}")
+        raise AsrError(f"音频提取失败:{blame_line(result.stderr, fallback='ffmpeg 没有说明原因')}")
 
 
 def run_asr(audio_path: Path, python: str, provider: str, language: str = "") -> dict:
@@ -108,11 +109,11 @@ def _run_asr_request(audio_path: Path, python: str, request: dict[str, Any]) -> 
         text=True,
         timeout=ASR_TIMEOUT_SECONDS, what="转写 worker")
     if result.returncode != 0:
-        raise AsrError(f"转写失败 ({provider}): {result.stderr[-600:]}")
+        raise AsrError(f"转写失败({provider}):{blame_line(result.stderr, fallback='子进程没有留下原因')}")
     try:
         return json.loads(output_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise AsrError(f"转写输出无法解析: {result.stdout[-300:]}") from exc
+        raise AsrError(f"转写输出无法解析:{blame_line(result.stdout, fallback='输出是空的')}") from exc
 
 
 def to_segment_ins(segments: list[dict]) -> list[SegmentIn]:

@@ -214,7 +214,7 @@ def _transcode_reference(source: Path, target: Path) -> None:
          "-t", str(REFERENCE_MAX_SECONDS), str(target)],
         capture_output=True, text=True, timeout=300, what="参考音频转码")
     if result.returncode != 0 or not target.exists():
-        raise VoiceError(f"参考音频处理失败: {result.stderr[-300:]}")
+        raise VoiceError(f"参考音频处理失败:{blame_line(result.stderr, fallback='ffmpeg 没有说明原因')}")
 
 
 def create_from_upload(db: Session, *, workspace_id: str, source: Path, name: str, reference_text: str) -> Voice:
@@ -285,7 +285,7 @@ def create_from_speaker(db: Session, *, workspace_id: str, asset_id: str, speake
          "-af", f"aselect='{expr}',asetpts=N/SR/TB", "-ac", "1", "-ar", "24000", str(ref)],
         capture_output=True, text=True, timeout=300, what="说话人片段提取")
     if result.returncode != 0 or not ref.exists():
-        raise VoiceError(f"提取说话人音频失败: {result.stderr[-300:]}")
+        raise VoiceError(f"提取说话人音频失败:{blame_line(result.stderr, fallback='ffmpeg 没有说明原因')}")
 
     voice = Voice(
         id=voice_id,

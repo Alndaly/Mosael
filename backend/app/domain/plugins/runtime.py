@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any
 from app.core.interpreter import base_python
 from app.core.child_process import run_logged
+from app.core.text import blame_line
 
 PLUGIN_TIMEOUT_SECONDS = 60
 MAX_OUTPUT_BYTES = 1_000_000
@@ -100,8 +101,9 @@ def execute_tool(
     duration_ms = int((time.monotonic() - started) * 1000)
 
     if result.returncode != 0:
-        tail = (result.stderr or result.stdout or "").strip()[-500:]
-        raise PluginRuntimeError(f"插件进程退出码 {result.returncode}: {tail}")
+        # 取尾巴会撞上进度条 / 收尾提示 —— 判据收在 core/text.blame_line 一处(那里记着它踩过几次)。
+        why = blame_line(result.stderr or result.stdout, fallback="插件没有留下原因")
+        raise PluginRuntimeError(f"插件进程退出码 {result.returncode}:{why}")
     stdout = result.stdout.strip()
     if len(stdout) > MAX_OUTPUT_BYTES:
         raise PluginRuntimeError("插件输出超过大小限制 (1MB)")

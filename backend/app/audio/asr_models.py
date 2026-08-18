@@ -560,7 +560,7 @@ def ensure_engine_runtime(engine: str, *, progress_key: str | None = None) -> No
             [base, "-m", "venv", str(venv_dir)],
             capture_output=True, text=True, timeout=600, what="创建转写运行环境")
         if created.returncode != 0 or not venv_python.is_file():
-            raise RuntimeError(f"创建运行环境失败:{(created.stderr or created.stdout)[-300:]}")
+            raise RuntimeError(f"创建运行环境失败:{blame_line(created.stderr or created.stdout, fallback='没有留下原因')}")
 
     _store.set(key, _Live(status="downloading", message="dlMsg_installingDeps", params={"engine": engine}))
     # **和克隆走同一个安装器**,包括设置页那个 pip 镜像 —— 此前这里没带,于是同一台机器上

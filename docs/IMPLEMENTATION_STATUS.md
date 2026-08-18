@@ -389,6 +389,79 @@ Per-clip color lives in `clip.effects.color`; the Inspector's 调色 tab and the
   anyway: cutting has ffmpeg open the media URL directly and seek, which is a different network path
   from the download — the stream yt-dlp pulls at 5 MB/s times out for ffmpeg.
 
+### 2026-08-18: the download path, end to end (0.18.1 → 0.18.13)
+
+A run of reports about downloading engines, weights and models. Almost all of them turned out to
+be the same three shapes, each in a place the previous fix had not reached.
+
+**"The last line is the reason" — third occurrence.** F5-TTS download failed with
+`Downloading: 100%|██████████| 1/1 [00:00<00:00, 1.39file/s]` on the card: huggingface_hub's tqdm
+writes to stderr and stops there, and `_explain_failure` took the last non-empty line. The first
+occurrence took `[end of libtorchcodec loading traceback]` (a separator), the second took
+``note: run with `RUST_BACKTRACE=1` `` (a closing hint). The rule now lives once, in
+`core/text.blame_line`: find the line that looks like an exception, else the last line that is
+neither noise nor a progress bar, else **say there was no reason** — the first version's fallback
+was the raw text, which handed the progress bar straight back.
+
+**Sizes and progress were hardcoded guesses.** Every model carried an `expected_bytes` snapshot
+that simultaneously served as the size shown to the user, the progress denominator, and the
+"is it installed" test. Measured against the sources: F5-TTS is 1.40 GB (written: 1.50 — so the
+bar "finished" at 93%), and the **Japanese pack is 5.4 GB against a written 1.4 GB** (it ships a
+`.pt` with optimiser state) — that bar simply overflowed. `audio/remote_size` now asks the source,
+counting **only the files this download takes** (AI-ModelScope/F5-TTS holds four 1.35 GB
+checkpoints; billing the whole repo means the bar never fills). Unreachable → fall back to the
+guess **and say it is one**; a half-answer counts as a guess too, since a partial sum looks
+precise while filling early.
+
+**Progress that depended on the worker volunteering it.** Language packs reported 0.1 → 0.5 → 1.0
+(once per file, two files) with 1.3–5.4 GB in between — minutes to tens of minutes of nothing,
+reported as "点了下载,加载一会儿就没反应了". Engine weights and transcription models had long since
+been measured from bytes on disk by the host; this was the third path and the only exception,
+and the exception was the broken one.
+
+**An install verdict with no visible reason.** The worker finished cleanly, both files landed,
+and the UI still said "下载没有完成" — because the f5-tts check used a **top-level** glob while
+ModelScope lays files out by repo path (`F5TTS_v1_Base/model_1250000.safetensors`). Those two
+conditions had never once been true; the size fallback underneath had been carrying the decision
+all along. Failure logs now also carry the verdict itself (bytes measured / bytes required / which
+files are present) — when the subprocess says nothing is wrong, the criteria *are* the reason.
+
+**Parallel downloads.** `start_download` refused any concurrency; the original reason was that
+both engines shared one venv (installing one broke the other), and the venvs were split per engine
+later while the restriction stayed. Engine weights and transcription models now run in parallel
+(own venv, own weights dir, own one-shot subprocess). **Language packs stay serialised** — they
+ask the *resident* f5-tts process, so parallel would only queue, and two rows both claiming
+"downloading" while one actually runs is worse than saying "wait for it". That resident worker
+also grew a pipe lock: `TTS_SLOTS` only covered synthesis, so downloading a pack while dubbing
+put two requests into one stdin and let the replies cross.
+
+### 2026-08-18: settings that lied about being slow, and a voice library that was out of reach
+
+**7 seconds to open the page, 4 seconds per save.** `GET /api/settings/tts` probed the interpreter
+synchronously — a subprocess that imports f5_tts (and torch). The form waits on that response to
+`reset()`, so for those seconds the source dropdown showed its *default* rather than the saved
+value; users read that as "保存按钮没用" and saved again. `PUT` was worse: it cleared the probe
+cache and then re-probed on the way out, **every time**. Now it answers with `worker_checked:
+false` and probes in the background, the same rule the model list has followed all along.
+Measured: 7.0s → 0.05s, 4.1s → 0.003s.
+
+**A dropdown that showed a value nobody saved.** Its options arrive asynchronously; on the first
+frame `SelectContent` is empty, so Radix cannot match anything, and once the options and the reset
+value both arrived it still displayed the value from mount. Keying the `Select` on the options
+fixes it — the saved source and the displayed source are the same thing again.
+
+**Voice library moved into Settings.** Voices could only be managed from the editor's dubbing
+panel — renaming one meant opening a project first. Settings → 声音克隆 now lists them (preview,
+rename, fill in reference text, delete) and creates from uploaded reference audio. Cloning from a
+transcribed speaker stays in the editor: `create_from_speaker` requires the asset to be
+transcribed, and that context lives there. Four rounds of UI feedback on it are worth recording as
+one lesson — **a list is not a stack of forms**: per-row card borders, two inputs and a native
+`<audio>` per row became a flat list with the row's actions on the right; `opacity-0` actions that
+still occupied space left a permanent 66px gap; and "centred" meant centred on the *header block*,
+not on the title line (`SettingsGroup` now uses `items-center`, which is neither `start` — button
+pinned to the top of a three-line description — nor `end` — button dragged down beside the last
+line).
+
 ### 2026-08-18: a turn that waited 8 seconds on optional metadata, and "已授权" reported as "需重新授权"
 
 Two findings that started from one question — why `tests/test_agent_queue.py` failed only under

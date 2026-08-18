@@ -879,7 +879,7 @@ def ensure_engine_runtime(engine_id: str) -> None:
             [base, "-m", "venv", str(venv_dir)],
             capture_output=True, text=True, timeout=600, what="创建克隆运行环境")
         if result.returncode != 0 or not venv_python.is_file():
-            raise RuntimeError(f"创建运行环境失败:{(result.stderr or result.stdout)[-300:]}")
+            raise RuntimeError(f"创建运行环境失败:{blame_line(result.stderr or result.stdout, fallback='没有留下原因')}")
 
     _store.set(
         engine_id,
@@ -929,7 +929,7 @@ def _ensure_fish_source() -> None:
     except subprocess.SubprocessError as exc:
         raise RuntimeError(f"拉取 Fish Speech 源码失败:{exc}") from exc
     if result.returncode != 0 or not (repo / tts_config.FISH_REPO_MARKER).is_file():
-        raise RuntimeError(f"拉取 Fish Speech 源码失败:{(result.stderr or '')[-300:]}")
+        raise RuntimeError(f"拉取 Fish Speech 源码失败:{blame_line(result.stderr, fallback='git 没有说明原因')}")
 
 
 def _download_python(engine_id: str) -> str:

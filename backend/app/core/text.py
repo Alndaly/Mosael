@@ -23,9 +23,19 @@ def strip_ansi(text: str) -> str:
 #: 长得像异常的那一行:`ModuleNotFoundError: No module named 'natsort'`。
 _EXCEPTION_LINE = re.compile(r"\b\w*(Error|Exception)\b\s*:")
 
-#: tqdm / rich 的进度条。形态是 `Downloading: 100%|██████| 1/1 [00:00<00:00, 1.39file/s]`。
-#: **它写在 stderr 上**,所以"取 stderr 最后一行当错误原因"撞上的往往就是它。
-_PROGRESS_LINE = re.compile(r"\d+%\s*\||\|\s*\d+/\d+\s*\[|\d+(\.\d+)?\s*(it|file|[kMG]?B)/s")
+#: 进度行。**它们写在 stderr 上**,所以"取 stderr 最后一行当错误原因"撞上的往往就是它们。
+#:
+#: 两种形态都要认:tqdm / rich 的
+#: `Downloading: 100%|██████| 1/1 [00:00<00:00, 1.39file/s]`,以及 ffmpeg 的
+#: `frame=  100 fps= 25 q=28.0 size=  256kB time=00:00:04.00 bitrate= 524.3kbits/s speed=1.02x`
+#: —— 后者出现在音频提取、参考音频处理这几条路上,而它们同样在拿 stderr 的尾巴报错。
+_PROGRESS_LINE = re.compile(
+    r"\d+%\s*\|"                                   # tqdm 的百分比 + 条
+    r"|\|\s*\d+/\d+\s*\["                          # `| 1/1 [`
+    r"|\d+(\.\d+)?\s*(it|file|[kMG]?i?[Bb])/s"      # 1.39file/s、12.3MB/s、524.3kbits/s
+    r"|^frame=\s*\d+.*\bspeed=",                    # ffmpeg 的进度行
+    re.M,
+)
 
 #: 说不出原因的行。挑"最后一行"时撞上的就是这些。
 _NOISE_LINE = re.compile(
