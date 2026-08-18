@@ -27,8 +27,10 @@ ALLOWED: dict[str, str] = {
     "core/pip_install.py": "explain() 的兜底分支,前面已经说了「pip 没有说明原因」",
     # 日志不是给用户看的那句话:它要的是上下文,而完整输出另有 run_log 落盘。
     "core/child_process.py": "写日志,不是错误消息;完整输出走 core/run_log",
-    # JSON 解析失败要看的是**原文**,不是"哪一行像异常" —— 那不是一段人写的错误输出。
+    # JSON 解析失败要看的是**原文**,不是"哪一行像异常" —— 那不是一段人写的错误输出,
+    # 而一段截断的 JSON 里一行都不像错误,挑出来只会说成"没有原因"。
     "domain/plugins/runtime.py": "插件输出不是合法 JSON 时回显原文尾部",
+    "audio/service.py": "转写输出不是合法 JSON 时回显原文尾部(同上)",
 }
 
 

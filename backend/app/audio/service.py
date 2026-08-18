@@ -113,7 +113,12 @@ def _run_asr_request(audio_path: Path, python: str, request: dict[str, Any]) -> 
     try:
         return json.loads(output_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise AsrError(f"转写输出无法解析:{blame_line(result.stdout, fallback='输出是空的')}") from exc
+        # **这一处回显原文,不挑行**:读不出 JSON 时想看的就是"它到底吐了什么",而
+        # blame_line 挑的是"哪一行像错误" —— 一段截断的 JSON 里一行都不像,反倒会说成
+        # 「输出是空的」,而它并不空。和插件那处同一个判断(见 plugins/runtime)。
+        # worker 真打了 traceback 时,异常行本来就在这段原文的末尾。
+        raw = (result.stdout or "").strip()
+        raise AsrError(f"转写输出无法解析:{raw[-300:] if raw else '子进程什么都没输出'}") from exc
 
 
 def to_segment_ins(segments: list[dict]) -> list[SegmentIn]:

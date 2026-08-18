@@ -402,8 +402,19 @@ sandbox**. All of them `stderr[-N:]`. funasr and whisperx use tqdm too, ffmpeg p
 progress lines, and user-supplied code can print anything, so these were failures waiting for the
 right output. All now go through `core/text.blame_line`, which grew ffmpeg's progress shape
 (`frame= … speed=1.02x`) alongside tqdm's. A ratchet fails on a seventh: the allow-list holds
-three entries, each with a reason (fallback echo, log line, JSON parse error wanting raw text),
-and stale entries fail it too.
+four entries, each with a reason, and stale entries fail it too.
+
+One of those four is a correction to this very pass. **A JSON parse failure wants the raw text,
+not a picked line** — a truncated JSON body has no line that looks like an error, so `blame_line`
+would report "no reason given" about output that is plainly not empty. The plugin path already
+echoed raw; the transcription path had been converted along with the rest and was converted back.
+The distinction is what the output *is*: a subprocess's error stream is prose to be read (pick the
+line), a malformed payload is data to be shown (echo it).
+
+Verified against real output rather than a fixture: a genuine ffmpeg failure used to surface as
+`'p,3g2,mj2 detected only with low score of 1, misdetection possible!\n[in#0…] moov atom not
+found\n[in#0 @ 0xa'` — a mid-sentence slice starting on half a word — and now reads
+`Error opening input files: Invalid data found when processing input`.
 
 What the audit did **not** find, worth recording so the next pass can skip it: no route does slow
 work synchronously any more (`probe_url` / `probe_provider_health` block deliberately — the user
