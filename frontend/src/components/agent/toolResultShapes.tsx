@@ -187,7 +187,9 @@ function GenericRecordList({ rows }: { rows: Record<string, unknown>[] }) {
         const meta = String(row.kind ?? row.type ?? row.status ?? row.plugin_id ?? "");
         const snippet = String(row.description ?? row.snippet ?? row.summary ?? row.content ?? "");
         return (
-          <li className="grid gap-0.5 text-xs" key={String(row.id ?? row.tool_name ?? row.title ?? index)}>
+          // key 里不能有 title:标题天然会重复(比如好几个会话都叫「你是？」)。这是静态的
+          // 工具结果列表,不重排,兜底用 index 是安全的。
+          <li className="grid gap-0.5 text-xs" key={String(row.id ?? row.session_id ?? row.tool_name ?? index)}>
             <span className="flex w-full min-w-0 items-center gap-2 border-0 bg-transparent p-0 text-left">
               <span className="min-w-0 flex-1 truncate text-foreground" title={title}>{title}</span>
               {meta && <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{meta}</span>}
