@@ -4,16 +4,25 @@
 // 按 `typeof content === "string"` 取正文永远取不到,表现是子智能体明明答了,却回
 // 「没有产出结论」(真机两次派发全中)。这个测试直接吃打包产物里的行为:把 subagent.ts
 // 单独打出来跑,免得测试和实现各自理解一遍消息形状。
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import assert from "node:assert";
+// esbuild 走 JS API,不 spawn 子进程:Windows 上 `npx` 其实是 `npx.cmd`,
+// spawnSync("npx") 直接 ENOENT —— v0.19.0 首跑就折在 win runner 这一步。
+import { buildSync } from "esbuild";
 
 const dir = mkdtempSync(join(tmpdir(), "subagent-test-"));
 try {
-  execFileSync("npx", ["esbuild", "src/subagent.ts", "--bundle", "--platform=node", "--format=esm",
-    "--external:@earendil-works/*", `--outfile=${join(dir, "subagent.mjs")}`], { stdio: "pipe" });
+  buildSync({
+    entryPoints: [fileURLToPath(new URL("../src/subagent.ts", import.meta.url))],
+    bundle: true,
+    platform: "node",
+    format: "esm",
+    external: ["@earendil-works/*"],
+    outfile: join(dir, "subagent.mjs"),
+  });
   // assistantText 未导出 —— 通过 runSubagent 走完整路径成本高(要假 Agent),这里退一步:
   // 断言源码不再按字符串取(防退化),行为由下面的形状断言覆盖。
   const { readFileSync } = await import("node:fs");

@@ -7,13 +7,13 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { buildSync } from "esbuild";
 
 const outDir = mkdtempSync(join(tmpdir(), "subagent-manager-"));
 const outFile = join(outDir, "subagent.mjs");
 buildSync({
-  entryPoints: [new URL("../src/subagent.ts", import.meta.url).pathname],
+  entryPoints: [fileURLToPath(new URL("../src/subagent.ts", import.meta.url))],
   bundle: true,
   format: "esm",
   platform: "node",
