@@ -375,6 +375,10 @@ def _timeline_for_payload(stream_state: dict, final_text: str) -> list[dict]:
                 timeline.append({"type": "text", "text": text})
         elif item.get("type") == "tool" and isinstance(item.get("tool"), dict):
             timeline.append({"type": "tool", "tool": dict(item["tool"])})
+        elif item.get("type") == "subtool" and isinstance(item.get("tool"), dict):
+            # 子智能体的步骤要活过刷新 —— 这里此前只认三种类型,subtool 落库时被静默丢掉,
+            # 于是流式期间嵌套卡都在,一刷新全没了。
+            timeline.append({"type": "subtool", "parent_id": item.get("parent_id"), "tool": dict(item["tool"])})
         elif item.get("type") == "thinking":
             text = decode_byte_fallback(str(item.get("text", "")))
             if text:
@@ -670,10 +674,11 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                         "currency": event.currency,
                         "confidence": event.cost_confidence,
                     }
-                assistant_message.payload = {
-                    "usage": usage,
-                    **({"timeline": timeline} if timeline else {}),
-                }
+                # **只更新 usage(它多了 cost),不重建整个 payload。** 这里曾经写成
+                # `{"usage": ..., "timeline": ...}` —— 把第一次构造时写进去的 prompt 快照、
+                # 上下文水位、压缩标记整个覆盖丢了。表现是轨迹里永远见不到 SYSTEM/CONTEXT 行,
+                # 而写入代码、读取代码单看都是对的(真机上最近 300 条消息里快照 0 条)。
+                assistant_message.payload = {**(assistant_message.payload or {}), "usage": usage}
         except AdapterError as exc:
             usage = _usage_from_started(turn_started)
             usage["metering"] = _turn_metering(prompt, "", None)

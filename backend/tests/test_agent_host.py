@@ -417,3 +417,66 @@ def test_子智能体的每一步进时间线_并嵌在父调用名下() -> None
         assert state["timeline"][-1]["tool"]["status"] == "error"
     finally:
         host._stream_reset(session_id)
+
+
+def test_记账之后prompt快照和水位不被覆盖丢掉(monkeypatch) -> None:
+    """真机上最近 300 条消息里 prompt 快照 0 条 —— 写入代码、读取代码单看都对,
+    丢在中间:billable 记完账为了把成本写进 usage,把整个 payload 重新赋值成
+    {usage, timeline},第一次构造时的 prompt / context / compaction 全被覆盖。
+    轨迹里的 SYSTEM / CONTEXT 行因此从来没出现过。"""
+    from app.ai.agent import host
+    from app.ai.agent.adapters import TurnResult
+    from tests.util import fresh_client
+
+    monkeypatch.setattr(
+        host, "run_turn",
+        lambda *a, **kw: TurnResult(text="好的", context={"tokens": 1200, "window": 128000}),
+    )
+    client = fresh_client()
+    # 部署得先有一个可用的对话模型:解析供应商发生在 run_turn 之前,没配就走错误分支 ——
+    # 那条兜底消息的 payload 天生只有 usage,测不到要测的东西。
+    from tests.util import add_provider
+
+    with SessionLocal() as db:
+        add_provider(
+            db, name="P", vendor="openai-compatible", base_url="http://localhost:1/v1",
+            api_key="k", model="m", capability_ids=["chat"],
+        )
+        db.commit()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"], "title": "t"}).json()
+    client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "hi"})
+    assert host.wait_for_idle_turns()
+
+    from app.db.models import AgentMessage
+
+    with SessionLocal() as db:
+        rows = db.query(AgentMessage).filter_by(session_id=session["id"], role="assistant").all()
+        assert len(rows) == 1
+        # 先确认这条不是「执行异常」兜底 —— 那条的 payload 天生只有 usage,断言会误导。
+        assert rows[0].error is None, rows[0].error
+        payload = rows[0].payload or {}
+        # 第一轮必有系统提示快照 —— 它是这条轨迹的基线
+        assert isinstance(payload.get("prompt"), dict) and payload["prompt"].get("system"), payload.keys()
+        # 上下文水位也得活下来(前端进度条读它)
+        assert payload.get("context") == {"tokens": 1200, "window": 128000}
+        # 记账补写的 usage 仍然在
+        assert "usage" in payload
+
+
+def test_落库时subtool不被丢掉() -> None:
+    """流式期间嵌套卡都在,一刷新全没了 —— _timeline_for_payload 只认三种类型,
+    subtool 被静默丢弃。真机上第一次派发就撞上:存档在、时间线里却零条子步。"""
+    from app.ai.agent.host import _timeline_for_payload
+
+    stream_state = {
+        "timeline": [
+            {"type": "tool", "tool": {"id": "p1", "name": "run_subagent", "status": "done"}},
+            {"type": "subtool", "parent_id": "p1", "tool": {"id": "c1", "name": "list_assets", "status": "done"}},
+            {"type": "text", "text": "结论"},
+        ]
+    }
+    timeline = _timeline_for_payload(stream_state, "结论")
+    kinds = [item["type"] for item in timeline]
+    assert kinds == ["tool", "subtool", "text"], kinds
+    assert timeline[1]["parent_id"] == "p1"
