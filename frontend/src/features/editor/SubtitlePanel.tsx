@@ -103,7 +103,9 @@ export function SubtitlePanel({
       )}
       <div
         className={cn(
-          "grid gap-1.5 overflow-y-auto p-1.5",
+          // 行与行之间用细分隔线,不用逐行边框(行自己是无框的)。**行不带圆角**:
+          // 圆角 + 横贯的分隔线拼在一起,看上去就是一摞缺了口的卡片(试过,被打回)。
+          "grid content-start divide-y divide-border/40 overflow-y-auto px-1.5 py-1",
           // 空态整块居中,有内容时才贴顶 —— `content-start` 恒定的话,空状态会钉在顶上,
           // 下面留一屏空白(会话列表、轨迹视图都是这个处理)。
           subtitles.length === 0 ? "content-center justify-items-center" : "content-start",
@@ -115,17 +117,21 @@ export function SubtitlePanel({
             {t("subtitleEmptyBody")}
           </div>
         )}
+        {/* 一条字幕是一行,不是一张卡片:此前每条都是「卡片边框套输入框边框」的双层框,
+            三十条字幕就是六十个框。改成分隔线列表 + 点进去才像输入框的正文 ——
+            绝大多数时候用户在**读**这一列,编辑是偶发的。 */}
         {subtitles.map((clip) => {
           const active = playhead >= clip.timeline_start && playhead < clipEnd(clip);
           return (
             <div key={clip.id} className={cn(
-              "grid gap-[5px] rounded-md border border-border bg-panel px-[9px] py-1.5",
-              active && "border-[color-mix(in_oklab,var(--primary)_50%,var(--border))] bg-[color-mix(in_oklab,var(--primary)_5%,var(--panel))]",
+              "grid gap-0 border-l-2 border-l-transparent py-1.5 pl-2 pr-1",
+              // 播放头所在的那条用左侧色条 + 轻底色点亮 —— 直角的,和分隔线拼得上。
+              active && "border-l-primary bg-[color-mix(in_oklab,var(--primary)_5%,transparent)]",
             )}>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <button
                   type="button"
-                  className="timecode cursor-pointer border-0 bg-transparent p-0 pt-0.5 text-ui-xs text-muted-foreground"
+                  className="timecode cursor-pointer border-0 bg-transparent p-0 pl-1 text-ui-2xs text-muted-foreground hover:text-foreground"
                   title={t("seekToSubtitle")}
                   onClick={() => {
                     useEditorStore.getState().setPlayhead(clip.timeline_start);
@@ -134,7 +140,7 @@ export function SubtitlePanel({
                 >
                   {formatTimecode(clip.timeline_start)} – {formatTimecode(clipEnd(clip))}
                 </button>
-                <span className="flex items-center gap-0.5">
+                <span className="flex shrink-0 items-center gap-1">
                   {/* 段落配音:你点的这一条就是范围,不必先去时间线上选中它。 */}
                   <SubtitleDub sequence={sequence} subtitles={subtitles} only={clip} />
                   <button
@@ -148,10 +154,15 @@ export function SubtitlePanel({
                   </button>
                 </span>
               </div>
-              <Textarea
+              {/* 原生 textarea,不走 <Textarea>:基础组件的 border-input 在 twMerge 里赢过
+                  border-transparent(实测计算样式里边框还在),而这里要的是**零装饰** ——
+                  静止时它就是一行正文,聚焦才垫一块浅底 + ring 说明"正在编辑"。
+                  `field-sizing:content` 让高度贴内容走(实测生效,单行字幕一行高);
+                  padding 恒定,聚焦时不会发生文字跳位。 */}
+              <textarea
                 key={`sub-${clip.id}-${clip.text_override}`}
-                className="w-full resize-y rounded-md border border-border bg-field px-[9px] py-[7px] text-ui-sm leading-normal text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
-                rows={2}
+                className="w-full resize-none rounded-sm border-0 bg-transparent px-1 py-0.5 text-ui-sm leading-[1.55] text-foreground transition-colors duration-100 [field-sizing:content] hover:bg-[color-mix(in_oklab,var(--foreground)_4%,transparent)] focus-visible:bg-field focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                rows={1}
                 defaultValue={clip.text_override ?? ""}
                 onBlur={(event) => {
                   const value = event.target.value.trim();
@@ -701,9 +712,11 @@ function SubtitleStyleControls({
         {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />} {t("subtitleStyle")}
       </button>
       {open && (
-        <div className="grid gap-2 px-2.5 pb-2.5 pt-1">
-          <label className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-2 text-xs text-foreground [&>span:first-child]:text-muted-foreground [&_em]:min-w-[30px] [&_em]:text-right [&_em]:not-italic [&_em]:tabular-nums [&_em]:text-muted-foreground [&_input[type=color]]:h-[22px] [&_input[type=color]]:w-7 [&_input[type=color]]:cursor-pointer [&_input[type=color]]:rounded [&_input[type=color]]:border [&_input[type=color]]:border-border [&_input[type=color]]:bg-transparent [&_input[type=color]]:p-0">
-            <span>{t("subFont")}</span>
+        // 样式是**设一次**的东西,列表才是天天碰的 —— 它不该占掉大半个面板。
+        // 此前 8 行、每行一个吃满宽度的大控件(3 个选项的「位置」也占满一行,「上传字体」
+        // 独占一行还带一格空缩进);收成 5 行紧凑排布,相关的项并到同一行。
+        <div className="grid gap-1.5 px-2.5 pb-2.5 pt-0.5">
+          <StyleRow label={t("subFont")}>
             <Select
               value={s.font_id ? `${UPLOAD_PREFIX}${s.font_id}` : s.font_family}
               onValueChange={(v) => {
@@ -716,7 +729,7 @@ function SubtitleStyleControls({
                 if (picked) patch({ font_id: id, font_family: uploadedFontStack(picked.family) });
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger className="h-7 min-w-0 flex-1 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -736,28 +749,39 @@ function SubtitleStyleControls({
                 ))}
               </SelectContent>
             </Select>
-          </label>
-          {onUploadFont && (
-            <div className="grid grid-cols-[42px_auto_auto_minmax(0,1fr)] items-center gap-1 text-xs text-foreground [&>span:first-child]:text-muted-foreground">
-              <span />
-              <Button variant="ghost" size="sm" disabled={uploadingFont} onClick={() => fileRef.current?.click()}>
-                {uploadingFont ? <Loader2 size={12} className="animate-openstudio-spin" /> : <Upload size={12} />} {t("subFontUpload")}
+            {/* 上传/移除跟在字体选择器旁边,而不是独占一行 —— 它们就是对这个选择器的操作。 */}
+            {onUploadFont && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+                disabled={uploadingFont}
+                aria-label={t("subFontUpload")}
+                title={t("subFontUpload")}
+                onClick={() => fileRef.current?.click()}
+              >
+                {uploadingFont ? <Loader2 size={12} className="animate-openstudio-spin" /> : <Upload size={12} />}
               </Button>
-              {s.font_id && onDeleteFont && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    // Point the style back at a built-in BEFORE the font goes away, so the
-                    // sequence never references a font id that no longer resolves.
-                    const removing = s.font_id;
-                    patch({ font_id: "", font_family: SUBTITLE_FONTS[0].value });
-                    onDeleteFont(removing);
-                  }}
-                >
-                  <Trash2 size={12} /> {t("subFontRemove")}
-                </Button>
-              )}
+            )}
+            {s.font_id && onDeleteFont && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                aria-label={t("subFontRemove")}
+                title={t("subFontRemove")}
+                onClick={() => {
+                  // Point the style back at a built-in BEFORE the font goes away, so the
+                  // sequence never references a font id that no longer resolves.
+                  const removing = s.font_id;
+                  patch({ font_id: "", font_family: SUBTITLE_FONTS[0].value });
+                  onDeleteFont(removing);
+                }}
+              >
+                <Trash2 size={12} />
+              </Button>
+            )}
+            {onUploadFont && (
               <input
                 ref={fileRef}
                 type="file"
@@ -769,10 +793,9 @@ function SubtitleStyleControls({
                   event.target.value = ""; // re-selecting the same file must fire change again
                 }}
               />
-            </div>
-          )}
-          <label className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-2 text-xs text-foreground [&>span:first-child]:text-muted-foreground [&_em]:min-w-[30px] [&_em]:text-right [&_em]:not-italic [&_em]:tabular-nums [&_em]:text-muted-foreground [&_input[type=color]]:h-[22px] [&_input[type=color]]:w-7 [&_input[type=color]]:cursor-pointer [&_input[type=color]]:rounded [&_input[type=color]]:border [&_input[type=color]]:border-border [&_input[type=color]]:bg-transparent [&_input[type=color]]:p-0">
-            <span>{t("subFontSize")}</span>
+            )}
+          </StyleRow>
+          <StyleRow label={t("subFontSize")}>
             <Slider
               min={10}
               max={120}
@@ -781,15 +804,14 @@ function SubtitleStyleControls({
               onValueChange={([v]) => preview({ font_size: v })}
               onValueCommit={([v]) => patch({ font_size: v })}
             />
-            <em>{Math.round(s.font_size)}</em>
-          </label>
-          <label className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-2 text-xs text-foreground [&>span:first-child]:text-muted-foreground [&_em]:min-w-[30px] [&_em]:text-right [&_em]:not-italic [&_em]:tabular-nums [&_em]:text-muted-foreground [&_input[type=color]]:h-[22px] [&_input[type=color]]:w-7 [&_input[type=color]]:cursor-pointer [&_input[type=color]]:rounded [&_input[type=color]]:border [&_input[type=color]]:border-border [&_input[type=color]]:bg-transparent [&_input[type=color]]:p-0">
-            <span>{t("subColor")}</span>
-            <input type="color" className="h-7! w-10! cursor-pointer rounded-lg! border! border-input! bg-transparent! p-0.5! [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0" value={s.color} onChange={(e) => patch({ color: e.target.value })} />
-          </label>
-          <label className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-2 text-xs text-foreground [&>span:first-child]:text-muted-foreground [&_em]:min-w-[30px] [&_em]:text-right [&_em]:not-italic [&_em]:tabular-nums [&_em]:text-muted-foreground [&_input[type=color]]:h-[22px] [&_input[type=color]]:w-7 [&_input[type=color]]:cursor-pointer [&_input[type=color]]:rounded [&_input[type=color]]:border [&_input[type=color]]:border-border [&_input[type=color]]:bg-transparent [&_input[type=color]]:p-0">
-            <span>{t("subBg")}</span>
-            <input type="color" className="h-7! w-10! cursor-pointer rounded-lg! border! border-input! bg-transparent! p-0.5! [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0" value={s.bg_color} onChange={(e) => patch({ bg_color: e.target.value })} />
+            <StyleValue>{Math.round(s.font_size)}</StyleValue>
+          </StyleRow>
+          {/* 前景色、背景色(带透明度)一行:它们是同一件事 —— 字长什么样 —— 的两半,
+              各占一行只会让两个 28px 的色块各自漂在一整行空白里。 */}
+          <StyleRow label={t("subColor")}>
+            <ColorSwatch value={s.color} onChange={(v) => patch({ color: v })} />
+            <span className="shrink-0 whitespace-nowrap pl-2 text-xs text-muted-foreground">{t("subBg")}</span>
+            <ColorSwatch value={s.bg_color} onChange={(v) => patch({ bg_color: v })} />
             <Slider
               min={0}
               max={1}
@@ -798,15 +820,11 @@ function SubtitleStyleControls({
               onValueChange={([v]) => preview({ bg_opacity: v })}
               onValueCommit={([v]) => patch({ bg_opacity: v })}
             />
-          </label>
-          <label className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-2 text-xs text-foreground [&>span:first-child]:text-muted-foreground [&_em]:min-w-[30px] [&_em]:text-right [&_em]:not-italic [&_em]:tabular-nums [&_em]:text-muted-foreground [&_input[type=color]]:h-[22px] [&_input[type=color]]:w-7 [&_input[type=color]]:cursor-pointer [&_input[type=color]]:rounded [&_input[type=color]]:border [&_input[type=color]]:border-border [&_input[type=color]]:bg-transparent [&_input[type=color]]:p-0">
-            <span>{t("subBold")}</span>
-            <Switch checked={s.bold} onCheckedChange={(v) => patch({ bold: v })} />
-          </label>
-          <label className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-2 text-xs text-foreground [&>span:first-child]:text-muted-foreground [&_em]:min-w-[30px] [&_em]:text-right [&_em]:not-italic [&_em]:tabular-nums [&_em]:text-muted-foreground [&_input[type=color]]:h-[22px] [&_input[type=color]]:w-7 [&_input[type=color]]:cursor-pointer [&_input[type=color]]:rounded [&_input[type=color]]:border [&_input[type=color]]:border-border [&_input[type=color]]:bg-transparent [&_input[type=color]]:p-0">
-            <span>{t("subPosition")}</span>
+          </StyleRow>
+          {/* 位置只有三个值,给一整行下拉是浪费 —— 和加粗并排,两个都是"摆哪儿/什么形态"。 */}
+          <StyleRow label={t("subPosition")}>
             <Select value={s.position} onValueChange={(v) => patch({ position: v as SubtitleStyle["position"] })}>
-              <SelectTrigger>
+              <SelectTrigger className="h-7 w-auto min-w-24 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -815,9 +833,10 @@ function SubtitleStyleControls({
                 <SelectItem value="top">{t("subPosTop")}</SelectItem>
               </SelectContent>
             </Select>
-          </label>
-          <label className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-2 text-xs text-foreground [&>span:first-child]:text-muted-foreground [&_em]:min-w-[30px] [&_em]:text-right [&_em]:not-italic [&_em]:tabular-nums [&_em]:text-muted-foreground [&_input[type=color]]:h-[22px] [&_input[type=color]]:w-7 [&_input[type=color]]:cursor-pointer [&_input[type=color]]:rounded [&_input[type=color]]:border [&_input[type=color]]:border-border [&_input[type=color]]:bg-transparent [&_input[type=color]]:p-0">
-            <span>{t("subOffset")}</span>
+            <span className="ml-auto shrink-0 whitespace-nowrap text-xs text-muted-foreground">{t("subBold")}</span>
+            <Switch checked={s.bold} onCheckedChange={(v) => patch({ bold: v })} />
+          </StyleRow>
+          <StyleRow label={t("subOffset")}>
             <Slider
               min={0}
               max={45}
@@ -826,10 +845,37 @@ function SubtitleStyleControls({
               onValueChange={([v]) => preview({ offset: v })}
               onValueCommit={([v]) => patch({ offset: v })}
             />
-            <em>{Math.round(s.offset)}%</em>
-          </label>
+            <StyleValue>{Math.round(s.offset)}%</StyleValue>
+          </StyleRow>
         </div>
       )}
     </div>
+  );
+}
+
+/** 样式面板的一行:左边 42px 标签列,右边内容横排。此前这段布局类(连同色块、数值的样式)
+    在每一行上原样抄了七遍 —— 一坨 400 字符的 className,改一处漏六处。 */
+function StyleRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="grid grid-cols-[42px_minmax(0,1fr)] items-center gap-2 text-xs text-foreground">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="flex min-w-0 items-center gap-1.5">{children}</span>
+    </label>
+  );
+}
+
+/** 滑杆右侧的数值读出:定宽 + 等宽数字,拖动时数字变长不挤动滑杆。 */
+function StyleValue({ children }: { children: React.ReactNode }) {
+  return <em className="min-w-[30px] shrink-0 text-right text-xs not-italic tabular-nums text-muted-foreground">{children}</em>;
+}
+
+function ColorSwatch({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <input
+      type="color"
+      className="h-7 w-9 shrink-0 cursor-pointer rounded-lg border border-input bg-transparent p-0.5 [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    />
   );
 }
