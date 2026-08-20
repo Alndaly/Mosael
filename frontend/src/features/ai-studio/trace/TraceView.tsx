@@ -159,42 +159,43 @@ export function TraceStatsBar({
   const t = useI18n();
   const stats = React.useMemo(() => traceStats(turns, usageEvents), [turns, usageEvents]);
   if (turns.length === 0) return null; // 空会话没有体征可报,「0 轮 · 0 步」只是噪声
-  const parts: string[] = [
-    `${t("traceStatTurns").replace("{n}", String(stats.turns))} · ${t("traceStatSteps").replace("{n}", String(stats.steps))}`,
+  const parts: { text: string; title?: string }[] = [
+    { text: `${t("traceStatTurns").replace("{n}", String(stats.turns))} · ${t("traceStatSteps").replace("{n}", String(stats.steps))}` },
   ];
   if (stats.llmSeconds != null || stats.toolSeconds != null) {
-    parts.push(
-      `${t("traceStatModel").replace("{t}", seconds(stats.llmSeconds))} · ${t("traceStatTools").replace("{t}", seconds(stats.toolSeconds))}`,
-    );
+    parts.push({
+      text: `${t("traceStatModel").replace("{t}", seconds(stats.llmSeconds))} · ${t("traceStatTools").replace("{t}", seconds(stats.toolSeconds))}`,
+      // 「模型」是总时长减工具**算**出来的,不是单独测的 —— 推算不冒充测量,但一行常驻
+      // 括号说明太吵,收进悬停。
+      title: t("traceStatDerived"),
+    });
   }
   if (stats.firstTokenSeconds != null) {
-    parts.push(t("traceStatFirstToken").replace("{t}", seconds(stats.firstTokenSeconds)));
+    parts.push({ text: t("traceStatFirstToken").replace("{t}", seconds(stats.firstTokenSeconds)) });
   }
   if (stats.outputTokensPerSecond != null) {
-    parts.push(t("traceStatThroughput").replace("{n}", stats.outputTokensPerSecond.toFixed(0)));
+    parts.push({ text: t("traceStatThroughput").replace("{n}", stats.outputTokensPerSecond.toFixed(0)) });
   }
   if (stats.cacheHitRate != null) {
-    parts.push(t("traceStatCache").replace("{n}", (stats.cacheHitRate * 100).toFixed(0)));
+    parts.push({ text: t("traceStatCache").replace("{n}", (stats.cacheHitRate * 100).toFixed(0)) });
   }
   if (stats.inputTokens != null || stats.outputTokens != null) {
-    parts.push(
-      `${t("traceStatInput").replace("{n}", tokens(stats.inputTokens))} · ${t("traceStatOutput").replace("{n}", tokens(stats.outputTokens))}`,
-    );
+    parts.push({
+      text: `${t("traceStatInput").replace("{n}", tokens(stats.inputTokens))} · ${t("traceStatOutput").replace("{n}", tokens(stats.outputTokens))}`,
+    });
   }
   if (stats.failedToolCalls > 0) {
-    parts.push(t("traceStatFailed").replace("{n}", String(stats.failedToolCalls)));
+    parts.push({ text: t("traceStatFailed").replace("{n}", String(stats.failedToolCalls)) });
   }
 
   return (
     <div className={cn("flex flex-wrap items-center gap-x-2 gap-y-0.5 text-ui-2xs text-muted-foreground", className)}>
       {parts.map((part, index) => (
-        <React.Fragment key={part}>
+        <React.Fragment key={part.text}>
           {index > 0 && <span aria-hidden className="opacity-40">|</span>}
-          <span>{part}</span>
+          <span title={part.title}>{part.text}</span>
         </React.Fragment>
       ))}
-      {/* 「模型」那一栏是总时长减工具算出来的,不是单独测的。不标出来就是把推算冒充测量。 */}
-      {stats.llmSeconds != null && <span className="opacity-60">({t("traceStatDerived")})</span>}
     </div>
   );
 }
