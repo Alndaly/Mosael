@@ -16,7 +16,7 @@
     "build": "esbuild src/index.ts --bundle --platform=node --format=cjs --ignore-annotations --outfile=dist/sidecar.cjs",
     "typecheck": "tsc --noEmit",
     "test:bundle": "node test/bundle.smoke.mjs",
-    "test": "node test/usage.test.mjs && node test/compaction.test.mjs && node test/context-meter.parity.test.mjs && node test/credentials.test.mjs && node test/proxy.test.mjs && node test/thinking.test.mjs && node test/thinking-wire.test.mjs && node test/bundle.smoke.mjs"
+    "test": "node test/subagent-report.test.mjs && node test/usage.test.mjs && node test/compaction.test.mjs && node test/context-meter.parity.test.mjs && node test/credentials.test.mjs && node test/proxy.test.mjs && node test/thinking.test.mjs && node test/thinking-wire.test.mjs && node test/bundle.smoke.mjs"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "^0.83.0",

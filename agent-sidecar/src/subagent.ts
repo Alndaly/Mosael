@@ -54,6 +54,21 @@ export function readOnlyTools(tools: AgentTool[]): AgentTool[] {
  */
 /** 子智能体内部一步工具调用的实时上报。start 带参数,end 带结果 —— 主时间线据此
  *  在 run_subagent 卡下面嵌套显示"它此刻在干什么",而不是一段几十秒的静默。 */
+/** assistant 消息的正文。**content 是块数组**((TextContent|ThinkingContent|ToolCall)[]),
+ *  不是字符串 —— 按 `typeof content === "string"` 取,永远取不到,表现是子智能体明明答了
+ *  却报「没有产出结论」(真机两次派发全中)。 */
+function assistantText(message: unknown): string {
+  const content = (message as { role?: string; content?: unknown }).content;
+  if (typeof content === "string") return content.trim(); // 兼容万一有适配层递字符串进来
+  if (!Array.isArray(content)) return "";
+  return content
+    .filter((block): block is { type: "text"; text: string } =>
+      (block as { type?: string }).type === "text" && typeof (block as { text?: unknown }).text === "string")
+    .map((block) => block.text)
+    .join("\n")
+    .trim();
+}
+
 export type SubagentToolEvent =
   | { phase: "start"; toolCallId: string; toolName: string; args: unknown }
   | { phase: "end"; toolCallId: string; toolName: string; result: unknown; isError: boolean };
@@ -111,10 +126,9 @@ export async function runSubagent(input: {
     } else if (event?.type === "message_end") {
       // 子智能体自己的阶段性文字也进轨迹:没有它,存档只是一串工具调用,
       // 看不出它每一步**为什么**这么查。
-      const message = event.message as { role?: string; content?: unknown } | undefined;
-      if (message?.role === "assistant" && typeof message.content === "string" && message.content.trim()) {
-        trace.push({ type: "text", text: message.content });
-      }
+      const message = event.message as { role?: string } | undefined;
+      const text = message?.role === "assistant" ? assistantText(message) : "";
+      if (text) trace.push({ type: "text", text });
     }
   });
 
@@ -130,10 +144,7 @@ export async function runSubagent(input: {
   const messages = (agent.state?.messages ?? []) as AgentMessage[];
   const report = [...messages]
     .reverse()
-    .map((message) => {
-      const record = message as { role?: string; content?: unknown };
-      return record.role === "assistant" && typeof record.content === "string" ? record.content.trim() : "";
-    })
+    .map((message) => ((message as { role?: string }).role === "assistant" ? assistantText(message) : ""))
     .find((text) => text.length > 0) ?? "";
   if (!report) return { report: "", steps, trace, error: "子智能体没有产出结论" };
   return { report, steps, trace };
@@ -149,7 +160,11 @@ export function subagentToolSpec(): { name: string; description: string; paramet
       "Use when the work would otherwise flood this conversation with intermediate output: scanning many assets, " +
       "reading many documents, researching across many pages. The sub-agent has READ-ONLY tools — it cannot edit the " +
       "timeline, generate media or publish, so do not delegate changes. It cannot ask you questions, so the task must " +
-      "be self-contained: say what to look at, what to decide, and what to report back.",
+      "be self-contained: say what to look at, what to decide, and what to report back. " +
+      // 并发是宿主(pi-agent-core)按"同一条消息里的多个调用"并行执行的 —— 模型不知道这一点
+      // 就会一个接一个串行派,三个独立调查白白排队。这句话是在教它用对这个能力。
+      "Independent investigations should be dispatched TOGETHER: issue multiple run_subagent calls in the same " +
+      "message and they run concurrently; results come back as each finishes.",
     parameters: {
       type: "object",
       properties: {
