@@ -86,7 +86,7 @@ export function ActivityChart({ daily }: { daily: WorkspaceSummary["daily"] }) {
         {/* 堆叠:成功在下、失败在上;radius 只圆数据端(顶),基线端直角 */}
         <Bar dataKey="succeeded" stackId="jobs" fill="var(--color-succeeded)" maxBarSize={14} />
         <Bar dataKey="failed" stackId="jobs" fill="var(--color-failed)" maxBarSize={14} radius={[2, 2, 0, 0]} />
-        <ChartLegend content={<ChartLegendContent extra={<span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground">max {max}</span>} />} />
+        <ChartLegend content={<ChartLegendContent extra={<span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground" title={t("homeChartPeakHint")}>{t("homeChartPeak")} {max}</span>} />} />
       </BarChart>
     </ChartContainer>
   );
@@ -168,7 +168,7 @@ export function UsageCostChart({
           content={<ChartTooltipContent valueFormatter={(value) => formatMicros(Number(value), currency)} />}
         />
         <Bar dataKey="cost" fill="var(--color-cost)" maxBarSize={14} radius={[2, 2, 0, 0]} />
-        <ChartLegend content={<ChartLegendContent extra={<span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground">max {maxLabel}</span>} />} />
+        <ChartLegend content={<ChartLegendContent extra={<span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground" title={t("homeChartPeakHint")}>{t("homeChartPeak")} {maxLabel}</span>} />} />
       </BarChart>
     </ChartContainer>
   );
@@ -221,7 +221,7 @@ export function UsageTokensChart({ daily }: { daily: WorkspaceSummary["usage_tok
         <Bar dataKey="output" stackId="tokens" fill="var(--color-output)" maxBarSize={14} />
         <Bar dataKey="other" stackId="tokens" fill="var(--color-other)" maxBarSize={14} radius={[2, 2, 0, 0]} />
         <ChartLegend
-          content={<ChartLegendContent extra={<span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground">max {formatCount(maxTokens)}</span>} />}
+          content={<ChartLegendContent extra={<span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground" title={t("homeChartPeakHint")}>{t("homeChartPeak")} {formatCount(maxTokens)}</span>} />}
         />
       </BarChart>
     </ChartContainer>
@@ -334,7 +334,7 @@ export function PublishActivityChart({ daily }: { daily: WorkspaceSummary["publi
         <Bar dataKey="active" stackId="publish" fill="var(--color-active)" maxBarSize={14} />
         <Bar dataKey="blocked" stackId="publish" fill="var(--color-blocked)" maxBarSize={14} />
         <Bar dataKey="failed" stackId="publish" fill="var(--color-failed)" maxBarSize={14} radius={[2, 2, 0, 0]} />
-        <ChartLegend content={<ChartLegendContent extra={<span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground">max {max}</span>} />} />
+        <ChartLegend content={<ChartLegendContent extra={<span className="ml-auto inline-flex items-center gap-[5px] tabular-nums text-muted-foreground" title={t("homeChartPeakHint")}>{t("homeChartPeak")} {max}</span>} />} />
       </BarChart>
     </ChartContainer>
   );

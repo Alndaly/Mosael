@@ -853,6 +853,10 @@ export function readAllNotifications(workspaceId: string): Promise<{ read: numbe
   return api(`/api/notifications/read-all?workspace_id=${workspaceId}`, { method: "POST" });
 }
 
+export function clearReadNotifications(workspaceId: string): Promise<{ removed: number }> {
+  return api(`/api/notifications/read?workspace_id=${workspaceId}`, { method: "DELETE" });
+}
+
 export function listPublishPlatforms(): Promise<PublishPlatform[]> {
   return api<PublishPlatform[]>("/api/publish/platforms");
 }

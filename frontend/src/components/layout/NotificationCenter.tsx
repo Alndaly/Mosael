@@ -1,8 +1,9 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, BellOff, Bot, Check, CheckCheck, GitBranch, Send, Users, X } from "lucide-react";
+import { Bell, BellOff, Bot, Check, CheckCheck, GitBranch, Send, Trash2, Users, X } from "lucide-react";
 
 import {
+  clearReadNotifications,
   listNotifications,
   myInvitations,
   readAllNotifications,
@@ -45,6 +46,10 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
   const readOne = useMutation({ mutationFn: readNotification, onSuccess: invalidate });
   const readAll = useMutation({
     mutationFn: () => readAllNotifications(workspaceId),
+    onSuccess: invalidate,
+  });
+  const clearRead = useMutation({
+    mutationFn: () => clearReadNotifications(workspaceId),
     onSuccess: invalidate,
   });
 
@@ -106,16 +111,30 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
       <PopoverContent className="w-[340px] overflow-hidden" aria-label={t("notifTitle")}>
         <div className="flex items-center justify-between border-b border-border px-2.5 py-2 [&_strong]:text-ui-sm">
           <strong>{t("notifTitle")}</strong>
-          {unread > 0 && (
-            <button
-              type="button"
-              className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent text-ui-xs text-muted-foreground hover:text-destructive"
-              disabled={readAll.isPending}
-              onClick={() => readAll.mutate()}
-            >
-              <CheckCheck size={11} /> {t("notifReadAll")}
-            </button>
-          )}
+          <span className="flex items-center gap-2.5">
+            {unread > 0 && (
+              <button
+                type="button"
+                className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent text-ui-xs text-muted-foreground hover:text-foreground"
+                disabled={readAll.isPending}
+                onClick={() => readAll.mutate()}
+              >
+                <CheckCheck size={11} /> {t("notifReadAll")}
+              </button>
+            )}
+            {/* 全是已读时头部原来空空如也 —— 50 条旧通知只能一直霸着面板。
+                清空只删已读:未读是还没送达的信息,不该被顺手带走。 */}
+            {items.some((item) => item.read_at) && (
+              <button
+                type="button"
+                className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent text-ui-xs text-muted-foreground hover:text-destructive"
+                disabled={clearRead.isPending}
+                onClick={() => clearRead.mutate()}
+              >
+                <Trash2 size={11} /> {t("notifClearRead")}
+              </button>
+            )}
+          </span>
         </div>
         <div className="grid max-h-[380px] gap-1 overflow-y-auto p-1.5">
           {pendingInvites.map((inv) => (

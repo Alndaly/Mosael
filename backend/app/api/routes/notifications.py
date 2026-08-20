@@ -7,7 +7,7 @@ from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import NotificationListOut, NotificationOut, NotifyRequest
 from app.domain.permissions import ensure_workspace_access
 from app.db.models import Notification
-from app.domain.notifications import mark_all_read, mark_read, notify
+from app.domain.notifications import clear_read, mark_all_read, mark_read, notify
 
 router = APIRouter(tags=["notifications"])
 
@@ -76,3 +76,12 @@ def read_all_notifications(workspace_id: str, db: DbSession, user: CurrentUser) 
     count = mark_all_read(db, workspace_id, user.id)
     db.commit()
     return {"read": count}
+
+
+@router.delete("/notifications/read")
+def delete_read_notifications(workspace_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """清空自己已读的通知。读过的没有第二次价值,却会把面板一直占满;未读的不动。"""
+    ensure_workspace_access(db, user, workspace_id)
+    count = clear_read(db, workspace_id, user.id)
+    db.commit()
+    return {"removed": count}

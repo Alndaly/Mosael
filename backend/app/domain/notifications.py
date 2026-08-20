@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.db.models import Notification, WorkspaceMember, now
@@ -98,3 +98,16 @@ def mark_all_read(db: Session, workspace_id: str, user_id: str) -> int:
         item.read_at = stamp
         count += 1
     return count
+
+
+def clear_read(db: Session, workspace_id: str, user_id: str) -> int:
+    """删掉自己已读的通知。读过的通知没有第二次价值,却会把面板一直占满 ——
+    未读的不动:清空不该顺手把还没看的也带走。"""
+    result = db.execute(
+        delete(Notification).where(
+            Notification.workspace_id == workspace_id,
+            Notification.user_id == user_id,
+            Notification.read_at.is_not(None),
+        )
+    )
+    return int(result.rowcount or 0)
