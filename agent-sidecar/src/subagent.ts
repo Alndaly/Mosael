@@ -52,14 +52,26 @@ export function readOnlyTools(tools: AgentTool[]): AgentTool[] {
  * 失败不抛给主智能体的工具调用之外:子任务失败是**结果的一种**,主智能体应当读到"没做成、
  * 原因是什么"并据此决定下一步,而不是整轮对话跟着崩掉。
  */
+/** 子智能体内部一步工具调用的实时上报。start 带参数,end 带结果 —— 主时间线据此
+ *  在 run_subagent 卡下面嵌套显示"它此刻在干什么",而不是一段几十秒的静默。 */
+export type SubagentToolEvent =
+  | { phase: "start"; toolCallId: string; toolName: string; args: unknown }
+  | { phase: "end"; toolCallId: string; toolName: string; result: unknown; isError: boolean };
+
+/** 子智能体轨迹里的一条:它自己的阶段性文字,或一步工具调用。给 UI 存档用 ——
+ *  **不回填给主模型**(那正是子智能体要省的上下文),只让人能事后查看它做了什么。 */
+export type SubagentTraceItem =
+  | { type: "text"; text: string }
+  | { type: "tool"; id: string; name: string; args: unknown; result?: unknown; isError?: boolean };
+
 export async function runSubagent(input: {
   task: string;
   tools: AgentTool[];
   model: Model<Api>;
   streamFn: any;
   signal?: AbortSignal;
-  onStep?: (toolName: string) => void;
-}): Promise<{ report: string; steps: number; error?: string }> {
+  onToolEvent?: (event: SubagentToolEvent) => void;
+}): Promise<{ report: string; steps: number; trace: SubagentTraceItem[]; error?: string }> {
   const agent = new Agent({
     initialState: {
       systemPrompt: SUBAGENT_PROMPT,
@@ -83,10 +95,26 @@ export async function runSubagent(input: {
   });
 
   let steps = 0;
+  const trace: SubagentTraceItem[] = [];
   agent.subscribe((event: any) => {
     if (event?.type === "tool_execution_start") {
       steps += 1;
-      input.onStep?.(String(event.toolName ?? ""));
+      trace.push({ type: "tool", id: String(event.toolCallId ?? ""), name: String(event.toolName ?? ""), args: event.args });
+      input.onToolEvent?.({ phase: "start", toolCallId: String(event.toolCallId ?? ""), toolName: String(event.toolName ?? ""), args: event.args });
+    } else if (event?.type === "tool_execution_end") {
+      const entry = trace.find((item) => item.type === "tool" && item.id === String(event.toolCallId ?? ""));
+      if (entry && entry.type === "tool") {
+        entry.result = event.result;
+        entry.isError = Boolean(event.isError);
+      }
+      input.onToolEvent?.({ phase: "end", toolCallId: String(event.toolCallId ?? ""), toolName: String(event.toolName ?? ""), result: event.result, isError: Boolean(event.isError) });
+    } else if (event?.type === "message_end") {
+      // 子智能体自己的阶段性文字也进轨迹:没有它,存档只是一串工具调用,
+      // 看不出它每一步**为什么**这么查。
+      const message = event.message as { role?: string; content?: unknown } | undefined;
+      if (message?.role === "assistant" && typeof message.content === "string" && message.content.trim()) {
+        trace.push({ type: "text", text: message.content });
+      }
     }
   });
 
@@ -95,7 +123,7 @@ export async function runSubagent(input: {
   } catch (err) {
     const message = String(err);
     log("subagent failed:", message);
-    return { report: "", steps, error: message };
+    return { report: "", steps, trace, error: message };
   }
   // AgentMessage 是个联合类型(assistant / toolResult / bash 执行…),不是每一支都有 content。
   // 取最后一条**带文本正文**的 assistant 消息 —— 那就是它写给主智能体的结论。
@@ -107,8 +135,8 @@ export async function runSubagent(input: {
       return record.role === "assistant" && typeof record.content === "string" ? record.content.trim() : "";
     })
     .find((text) => text.length > 0) ?? "";
-  if (!report) return { report: "", steps, error: "子智能体没有产出结论" };
-  return { report, steps };
+  if (!report) return { report: "", steps, trace, error: "子智能体没有产出结论" };
+  return { report, steps, trace };
 }
 
 /** 主智能体看到的那个工具。参数刻意只有两个 —— 派活儿要说清「做什么」和「要什么结果」,

@@ -159,6 +159,18 @@ export type Event =
   | { type: "tool_start"; turnId: string; toolCallId: string; name: string; args: unknown }
   | { type: "tool_end"; turnId: string; toolCallId: string; result: unknown; isError: boolean }
   | {
+      /** 子智能体内部的一步工具调用,挂在发起它的 run_subagent 调用(parentCallId)名下。 */
+      type: "subtool";
+      turnId: string;
+      parentCallId: string;
+      phase: "start" | "end";
+      toolCallId: string;
+      toolName: string;
+      args?: unknown;
+      result?: unknown;
+      isError?: boolean;
+    }
+  | {
       type: "turn_done";
       turnId: string;
       text: string;

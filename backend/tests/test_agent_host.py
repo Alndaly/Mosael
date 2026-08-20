@@ -374,3 +374,46 @@ def test_一轮结束时不会留下思考中() -> None:
     host._stream_finish(session_id, "")
     timeline = host.get_stream_state(session_id)["timeline"]
     assert timeline == [{"type": "thinking", "text": "想了但没说", "done": True}]
+
+
+def test_子智能体的每一步进时间线_并嵌在父调用名下() -> None:
+    """subtool 事件 → 时间线条目。没有它,run_subagent 是一段几十秒的静默 ——
+    旧的 onSubagentStep 回调从来没被接线,这次直接换成完整的 start/end 事件流。"""
+    from app.ai.agent import host
+
+    session_id = "sub-trace-test"
+    host._stream_reset(session_id)
+    try:
+        host._stream_tool_event(session_id, {
+            "type": "subtool", "phase": "start", "parentCallId": "parent-1",
+            "toolCallId": "c1", "toolName": "list_assets", "args": {"kind": "video"},
+        })
+        state = host.get_stream_state(session_id)
+        assert state["timeline"][-1]["type"] == "subtool"
+        assert state["timeline"][-1]["parent_id"] == "parent-1"
+        assert state["timeline"][-1]["tool"]["status"] == "running"
+
+        host._stream_tool_event(session_id, {
+            "type": "subtool", "phase": "end", "parentCallId": "parent-1",
+            "toolCallId": "c1", "toolName": "list_assets", "result": {"ok": True}, "isError": False,
+        })
+        state = host.get_stream_state(session_id)
+        entry = state["timeline"][-1]
+        assert entry["tool"]["status"] == "done"
+        assert entry["tool"]["result"] == {"ok": True}
+        # 耗时来自 start→end 的真实间隔,不是猜的
+        assert isinstance(entry["tool"]["usage"].get("duration_seconds"), float)
+
+        # 失败的一步要标成 error —— 子智能体里的失败不该被压平成"done"
+        host._stream_tool_event(session_id, {
+            "type": "subtool", "phase": "start", "parentCallId": "parent-1",
+            "toolCallId": "c2", "toolName": "fetch_url", "args": {},
+        })
+        host._stream_tool_event(session_id, {
+            "type": "subtool", "phase": "end", "parentCallId": "parent-1",
+            "toolCallId": "c2", "toolName": "fetch_url", "result": "boom", "isError": True,
+        })
+        state = host.get_stream_state(session_id)
+        assert state["timeline"][-1]["tool"]["status"] == "error"
+    finally:
+        host._stream_reset(session_id)

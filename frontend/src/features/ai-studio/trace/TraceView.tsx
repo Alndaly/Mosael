@@ -53,6 +53,7 @@ const KIND_LABEL: Record<TraceEvent["kind"], string> = {
   text: "traceKindAssistant",
   thinking: "traceKindThinking",
   tool: "traceKindTool",
+  subtool: "traceKindSubtool",
   compaction: "traceKindCompaction",
   error: "traceKindError",
 };
@@ -66,6 +67,8 @@ const KIND_TONE: Record<TraceEvent["kind"], string> = {
   text: "border-border text-foreground",
   thinking: "border-dashed border-border text-muted-foreground",
   tool: "border-[color-mix(in_srgb,var(--primary)_40%,var(--border))] text-primary",
+  // 子工具:和工具同色系但淡一档 —— 它是工具行的"内层",不该和父级抢同一个视觉重量。
+  subtool: "border-[color-mix(in_srgb,var(--primary)_22%,var(--border))] text-[color-mix(in_srgb,var(--primary)_70%,var(--muted-foreground))]",
   compaction: "border-dashed border-border text-muted-foreground",
   error: "border-[color-mix(in_srgb,var(--destructive)_45%,var(--border))] text-destructive",
 };
@@ -141,10 +144,21 @@ function TraceOverview({
   );
 }
 
-/** 底部统计条。缺的项直接不出现,而不是占个位显示 0。 */
-function TraceStatsBar({ turns, usageEvents }: { turns: TraceTurn[]; usageEvents: AgentUsageEvent[] }) {
+/** 会话统计。**渲染在输入框下方**(见 ChatWorkspace),不再挂在轨迹列表底部 ——
+    挂在列表底部时它随内容滚动、只在轨迹页有,而这组数字(几轮、耗时、缓存命中、失败数)
+    是整个会话的体征,对话页同样该看得到。缺的项直接不出现,而不是占个位显示 0。 */
+export function TraceStatsBar({
+  turns,
+  usageEvents,
+  className,
+}: {
+  turns: TraceTurn[];
+  usageEvents: AgentUsageEvent[];
+  className?: string;
+}) {
   const t = useI18n();
   const stats = React.useMemo(() => traceStats(turns, usageEvents), [turns, usageEvents]);
+  if (turns.length === 0) return null; // 空会话没有体征可报,「0 轮 · 0 步」只是噪声
   const parts: string[] = [
     `${t("traceStatTurns").replace("{n}", String(stats.turns))} · ${t("traceStatSteps").replace("{n}", String(stats.steps))}`,
   ];
@@ -172,7 +186,7 @@ function TraceStatsBar({ turns, usageEvents }: { turns: TraceTurn[]; usageEvents
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-t border-border px-3 py-1.5 text-ui-2xs text-muted-foreground">
+    <div className={cn("flex flex-wrap items-center gap-x-2 gap-y-0.5 text-ui-2xs text-muted-foreground", className)}>
       {parts.map((part, index) => (
         <React.Fragment key={part}>
           {index > 0 && <span aria-hidden className="opacity-40">|</span>}
@@ -401,7 +415,8 @@ export function TraceView({
                     event.key === selectedKey && "bg-accent",
                   )}
                 >
-                  <span className={cn("justify-self-start rounded-full border px-1.5 py-px text-ui-2xs", KIND_TONE[event.kind])}>
+                  {/* 子工具的徽章右移一格:同一列里凭缩进就能看出层级(参考 DSH 的 SUBTOOL 行)。 */}
+                  <span className={cn("justify-self-start rounded-full border px-1.5 py-px text-ui-2xs", KIND_TONE[event.kind], event.kind === "subtool" && "ml-3")}>
                     {t(KIND_LABEL[event.kind] as never)}
                   </span>
                   <span className="min-w-0 truncate font-mono text-ui-xs text-muted-foreground">
@@ -416,7 +431,6 @@ export function TraceView({
           })}
         </div>
 
-        <TraceStatsBar turns={turns} usageEvents={usageEvents} />
       </div>
 
       {selected && (

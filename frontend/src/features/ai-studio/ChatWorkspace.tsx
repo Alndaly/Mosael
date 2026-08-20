@@ -28,7 +28,9 @@ import { formatElapsedSeconds } from "@/lib/time";
 import { SessionShareMenuItem } from "@/features/ai-studio/SessionShareMenuItem";
 import { AgentStatusIcon, ToolName, toAgentStatus } from "@/components/agent/StatusIcon";
 import { readToolPayload } from "@/features/ai-studio/toolPayload";
-import { TraceView } from "@/features/ai-studio/trace/TraceView";
+import { TraceStatsBar, TraceView } from "@/features/ai-studio/trace/TraceView";
+import { buildTurns } from "@/features/ai-studio/trace/traceModel";
+import { SubagentButton } from "@/components/agent/SubagentPanel";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 
@@ -317,6 +319,24 @@ export function ChatWorkspace({
   };
 
   const visibleMessages = (messages.data ?? []).filter((message) => !queuedIds.has(message.id));
+  //: 「N 个子代理」的数据源:历史消息的 timeline 摊平,再接上正在流的这一轮 ——
+  //: 子代理跑到一半时就该在列表里(转着圈),不是等它跑完才出现。
+  const subagentSourceTimeline = React.useMemo(
+    () => [
+      ...visibleMessages.flatMap(
+        (message) => (message.payload as { timeline?: AgentTimelineItem[] } | null)?.timeline ?? [],
+      ),
+      ...(running ? streamTimeline : []),
+    ],
+    [visibleMessages, running, streamTimeline],
+  );
+
+  //: 会话统计用的轮次结构。和轨迹视图同一个构建函数 —— 两处各写一套的话,
+  //: 底下报的「3 轮 · 23 步」和轨迹里数出来的迟早对不上。
+  const statsTurns = React.useMemo(
+    () => buildTurns(visibleMessages, running ? streamTimeline : [], usageEvents.data ?? []),
+    [visibleMessages, running, streamTimeline, usageEvents.data],
+  );
 
   /** 水位由会话详情**现算**给出,不从消息 payload 里翻。
    *  挂在消息上等于"必须先成功跑一轮才看得到" —— 而想知道"还能聊多久"的时刻恰恰在开口之前:
@@ -440,6 +460,10 @@ export function ChatWorkspace({
               </button>
             ))}
           </div>
+          {/* 「N 个子代理」:这个会话派出过的子智能体入口(DSH 同款位置)。没派过就不渲染。 */}
+          <span className="ml-auto">
+            <SubagentButton timeline={subagentSourceTimeline} />
+          </span>
         </div>
         {/* 生成页同款:没有会话也常驻输入框,空状态居中在消息区,首次发送自动建会话。
             输入框在两个视图下都在 —— 看轨迹时想到要补一句,不该先切回对话。 */}
@@ -601,6 +625,14 @@ export function ChatWorkspace({
                 )}
               </div>
             </form>
+            {/* 会话体征常驻在输入框下方,两个视图都在 —— 此前它挂在轨迹列表底部,随内容滚、
+                只有轨迹页有。宽度和输入框同一个公式,左右边缘对齐;px-3 让文字对上输入框的
+                圆角内缘,而不是顶着圆角外壳。 */}
+            <TraceStatsBar
+              turns={statsTurns}
+              usageEvents={usageEvents.data ?? []}
+              className="mx-auto -mt-2 mb-2 w-[min(780px,calc(100%-32px))] px-3"
+            />
           </>
         }
       </section>

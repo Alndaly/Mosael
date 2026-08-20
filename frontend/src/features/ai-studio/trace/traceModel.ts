@@ -15,7 +15,7 @@ import type { AgentUsageEvent } from "@/features/ai-studio/messageUsage";
 import { summarizeMessageUsage } from "@/features/ai-studio/messageUsage";
 
 /** 轨迹里的一步。kind 决定行首那个标签,也决定 Inspector 里能看什么。 */
-export type TraceEventKind = "system" | "context" | "user" | "text" | "thinking" | "tool" | "compaction" | "error";
+export type TraceEventKind = "system" | "context" | "user" | "text" | "thinking" | "tool" | "subtool" | "compaction" | "error";
 
 export type TraceEvent = {
   /** 稳定 key:消息 id + 轮内序号。流式那一轮用 "stream" 作消息 id。 */
@@ -199,6 +199,23 @@ export function buildTurns(
           durationSeconds: typeof tool.usage?.duration_seconds === "number" ? tool.usage.duration_seconds : null,
           status: tool.status,
         });
+      } else if (item.type === "subtool") {
+        // 子智能体内部的一步。**耗时不计入工具总时长**(见 traceStats):它发生在父
+        // run_subagent 的计时里,双计会把「工具 2m」虚增将近一倍。
+        const tool = item.tool;
+        turn.events.push({
+          key: `${messageId}:${turn.events.length}`,
+          turn: turn.turn,
+          step: turn.events.length + 1,
+          kind: "subtool",
+          messageId,
+          name: tool.name,
+          summary: toolSummary(tool),
+          tool,
+          startedAt: parseTime(tool.usage?.started_at),
+          durationSeconds: typeof tool.usage?.duration_seconds === "number" ? tool.usage.duration_seconds : null,
+          status: tool.status,
+        });
       } else if (item.type === "thinking") {
         turn.events.push({
           key: `${messageId}:${turn.events.length}`,
@@ -369,6 +386,8 @@ export function buildTurns(
  */
 export function traceStats(turns: TraceTurn[], usageEvents: AgentUsageEvent[]): TraceStats {
   const events = turns.flatMap((turn) => turn.events);
+  // **只算顶层工具**:subtool 的时间发生在父 run_subagent 的计时里,一起累计会把
+  // 「工具 2m」虚增将近一倍 —— 同一段时间被父子各记了一遍。
   const toolEvents = events.filter((event) => event.kind === "tool");
 
   const turnDurations = turns

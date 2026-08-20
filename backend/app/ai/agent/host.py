@@ -213,12 +213,46 @@ def _close_open_thinking(timeline: list[dict]) -> None:
 
 
 def _stream_tool_event(session_id: str, event: dict) -> None:
-    """pi 工具事件 → 流里的工具卡:tool_start 建卡(running),tool_end 更新(done/error)。"""
+    """pi 工具事件 → 流里的工具卡:tool_start 建卡(running),tool_end 更新(done/error)。
+
+    subtool 是子智能体内部的一步,同样建卡/收卡,只是条目带 parent_id(发起它的
+    run_subagent 调用)—— 界面据此嵌套在父卡下显示,轨迹里render成 SUBTOOL 行。
+    """
     with _streams_lock:
         state = _streams.get(session_id)
         if state is None:
             return
         timeline: list[dict] = state.setdefault("timeline", [])
+        if event.get("type") == "subtool":
+            call_id = str(event.get("toolCallId") or "")
+            starts = state.setdefault("tool_starts", {})
+            if event.get("phase") == "start":
+                starts[f"sub:{call_id}"] = time.monotonic()
+                timeline.append({
+                    "type": "subtool",
+                    "parent_id": str(event.get("parentCallId") or ""),
+                    "tool": {
+                        "id": call_id,
+                        "name": event.get("toolName"),
+                        "args": event.get("args"),
+                        "status": "running",
+                        "usage": {"started_at": now().isoformat()},
+                    },
+                })
+            else:
+                started = starts.pop(f"sub:{call_id}", None)
+                usage = {"finished_at": now().isoformat()}
+                if isinstance(started, (int, float)):
+                    usage["duration_seconds"] = round(max(0.0, time.monotonic() - started), 1)
+                for item in timeline:
+                    tool = item.get("tool")
+                    if item.get("type") == "subtool" and isinstance(tool, dict) and tool.get("id") == call_id:
+                        tool["status"] = "error" if event.get("isError") else "done"
+                        tool["result"] = event.get("result")
+                        tool["usage"] = {**(tool.get("usage") if isinstance(tool.get("usage"), dict) else {}), **usage}
+                        break
+            state["seq"] += 1
+            return
         if event.get("type") == "tool_start":
             _close_open_thinking(timeline)
             tool_call_id = str(event.get("toolCallId") or "")

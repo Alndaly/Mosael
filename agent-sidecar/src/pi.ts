@@ -28,7 +28,7 @@ import {
   FALLBACK_CONTEXT_WINDOW,
   contextTokens,
 } from "./compaction";
-import { readOnlyTools, runSubagent, subagentToolSpec } from "./subagent.js";
+import { readOnlyTools, runSubagent, subagentToolSpec, type SubagentToolEvent } from "./subagent.js";
 
 const PROVIDER_ID = "open-studio";
 
@@ -46,7 +46,7 @@ function buildSubagentTool(
     label: "子智能体",
     description: spec.description,
     parameters: spec.parameters as never,
-    execute: async (_id: string, rawParams: unknown, signal?: AbortSignal) => {
+    execute: async (parentCallId: string, rawParams: unknown, signal?: AbortSignal) => {
       const args = (rawParams ?? {}) as { task?: string; expected_output?: string };
       const task = (args.task ?? "").trim();
       if (!task) throw new Error("task 不能为空");
@@ -57,14 +57,21 @@ function buildSubagentTool(
         model,
         streamFn,
         signal,
-        onStep: (toolName) => handlers.onSubagentStep?.(toolName),
+        // 每一步实时外发,挂在**这次 run_subagent 调用**名下 —— 界面据此在父卡下嵌套
+        // 显示子步,而不是一段几十秒的静默。(旧的 onSubagentStep 从来没被接线,删了。)
+        onToolEvent: (event: SubagentToolEvent) => handlers.onSubtool?.({ parentCallId, ...event }),
       });
       // 失败照常返回给模型(而不是抛):子任务没做成是**结果的一种**,主智能体应当读到
       // "没做成、原因是什么"再决定下一步,而不是整轮对话跟着崩。
       const payload = result.error
         ? { ok: false, error: result.error, steps: result.steps }
         : { ok: true, report: result.report, steps: result.steps };
-      return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }], details: { data: payload } };
+      // 完整轨迹只进 details(UI 存档),**不进 content** —— content 会回填给主模型,
+      // 而省下那份上下文正是派子智能体的意义。task 一起存:列表里靠它认出这是哪个子代理。
+      return {
+        content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
+        details: { data: payload, subagent: { task, steps: result.steps, error: result.error ?? null, trace: result.trace } },
+      };
     },
   };
 }
@@ -361,8 +368,8 @@ export interface PiTurnHandlers {
   onThinkingEnd: () => void;
   onToolStart: (toolCallId: string, name: string, args: unknown) => void;
   onToolEnd: (toolCallId: string, result: unknown, isError: boolean) => void;
-  /** 子智能体每调一次工具就报一次。可选 —— 界面用它把那张卡从"运行中"变成"运行中·第 N 步"。 */
-  onSubagentStep?: (toolName: string) => void;
+  /** 子智能体的一步工具调用(start/end),挂在发起它的 run_subagent 调用名下。 */
+  onSubtool?: (event: { parentCallId: string } & SubagentToolEvent) => void;
 }
 
 /** Run one turn through pi's Agent; stream text + tool events, return text + new state. */

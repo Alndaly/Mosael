@@ -28,6 +28,9 @@ export type ToolCall = {
 export type AgentTimelineItem =
   | { type: "text"; text: string }
   | { type: "tool"; tool: ToolCall }
+  /** 子智能体内部的一步工具调用,挂在发起它的 run_subagent 调用(parent_id)名下。
+      嵌套显示在父卡之后 —— 没有它,run_subagent 是一段几十秒的静默。 */
+  | { type: "subtool"; parent_id?: string; tool: ToolCall }
   /** 思考块。`done=false` 表示正在思考(展开并转圈),结束后默认收起。 */
   | { type: "thinking"; text: string; done?: boolean };
 
@@ -245,6 +248,8 @@ export function agentTurnParts(
       parts.push({ type: "text", text: item.text });
     } else if (item.type === "thinking") {
       parts.push({ type: "thinking", text: item.text, done: item.done });
+    } else if (item.type === "subtool") {
+      parts.push({ type: "subtool", parent_id: item.parent_id, tool: item.tool });
     } else {
       parts.push({ type: "tool", tool: item.tool });
     }
@@ -308,6 +313,11 @@ export function AgentTurnContent({
       {agentTurnParts(timeline).map((item, index) =>
         item.type === "tool" && item.tool ? (
           <ToolCalls key={`tool-${item.tool.id}-${index}`} tools={[item.tool]} />
+        ) : item.type === "subtool" && item.tool ? (
+          // 子智能体的一步:缩进 + 左边线,读作"这是上面那张 run_subagent 卡的内部动作"。
+          <div key={`subtool-${item.tool.id}-${index}`} className="border-l-2 border-border/70 pl-2.5 ml-2">
+            <ToolCalls tools={[item.tool]} />
+          </div>
         ) : item.type === "thinking" ? (
           <ThinkingBlock key={`thinking-${index}`} text={item.text} done={item.done} />
         ) : item.type === "text" && item.text ? (

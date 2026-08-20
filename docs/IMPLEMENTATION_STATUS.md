@@ -406,6 +406,38 @@ error toast reports 「前 N 条已写入轨道,其余保持原文」 rather tha
 the offset handoff and the stop-on-failure; verified live against the demo track (progress label
 appeared, PATCH per batch, one undo reverted the batch).
 
+### 2026-08-19: subagents made visible, and a DSH parity pass with reasons for what was skipped
+
+Re-read the DeepSeek Harness source (fresh clone) against our trace. Their row kinds are
+`system | user | context | compacted | message | tool | subtool`; ours covered everything except
+**subtool** — and the comparison exposed that our subagent was a black box *and* a dead wire:
+`onSubagentStep` ("运行中·第 N 步") was never hooked up in index.ts, so a `run_subagent` call has
+always rendered as tens of seconds of silence.
+
+Built the full chain instead of the dead progress callback:
+
+- **sidecar**: the subagent's `tool_execution_start/end` events stream out as `subtool` protocol
+  messages carrying the parent `run_subagent` call id; on finish, the subagent's complete trace
+  (its own interim texts + every tool step with args/result) is archived into the tool result's
+  `details.subagent` — **details only, never content**, since keeping that out of the parent
+  model's context is the whole point of a subagent.
+- **backend**: `subtool` events land in the stream timeline as nested entries (`parent_id`),
+  timed start→end like top-level tools.
+- **frontend**: chat renders subtool cards indented under the parent card; the trace gets a
+  SUBTOOL row (indented badge, softer tone — DSH's visual); `traceStats` counts **top-level tools
+  only** for 工具耗时 — a subtool's time is inside its parent's, and summing both nearly doubles
+  the number. A DSH-style「N 个子代理」header button lists every run (task, steps, duration,
+  status; pulsing while running) and opens the archived trace — old sessions without an archive
+  are still listed and say so, rather than being hidden.
+
+Also moved the trace stats bar under the composer (both views, aligned to its width): it is the
+session's vital signs, and it used to scroll away with the trace list and exist only on that tab.
+
+Skipped from DSH, with reasons recorded so the next pass doesn't re-litigate: their
+"(tool call only)" assistant rows need **per-request boundaries** which our stream does not carry
+— synthesising them from tool-run adjacency would be inventing request counts; their toolbar
+"Calls" is a fold/expand toggle for tool calls under each assistant, not a third projection.
+
 ### 2026-08-18: an audit for *more of the same*, and what it found
 
 After the download work, a pass over the codebase looking for further instances of the shapes
