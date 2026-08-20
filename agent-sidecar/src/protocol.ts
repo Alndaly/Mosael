@@ -171,6 +171,13 @@ export type Event =
       isError?: boolean;
     }
   | {
+      /** 后台派发的子智能体跑完了:把存档填回发起它的 run_subagent 卡(parentCallId)。 */
+      type: "subagent_result";
+      turnId: string;
+      parentCallId: string;
+      archive: { task: string; steps: number; error: string | null; trace: unknown[] };
+    }
+  | {
       type: "turn_done";
       turnId: string;
       text: string;

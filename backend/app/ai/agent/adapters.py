@@ -273,7 +273,7 @@ def _run_pi(
             on_delta(str(event.get("delta", "")))
         elif kind in ("thinking_delta", "thinking_end") and on_thinking is not None:
             on_thinking(event)
-        elif kind in ("tool_start", "tool_end", "subtool"):
+        elif kind in ("tool_start", "tool_end", "subtool", "subagent_result"):
             # subtool 走同一条工具事件通道:它就是一次工具调用,只是发生在子智能体里、
             # 挂在 run_subagent 那张卡名下(parentCallId)。
             saw_tool = True

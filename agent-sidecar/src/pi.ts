@@ -28,52 +28,117 @@ import {
   FALLBACK_CONTEXT_WINDOW,
   contextTokens,
 } from "./compaction";
-import { readOnlyTools, runSubagent, subagentToolSpec, type SubagentToolEvent } from "./subagent.js";
+import {
+  SubagentManager,
+  readOnlyTools,
+  runSubagent,
+  subagentToolSpec,
+  waitSubagentsToolSpec,
+  type SubagentOutcome,
+  type SubagentToolEvent,
+} from "./subagent.js";
 
 const PROVIDER_ID = "open-studio";
 
 /** 主智能体手里的 run_subagent。子智能体只拿只读工具(理由见 subagent.ts),
  *  它的每一步都当作父工具卡的进度上报 —— 否则界面上是一段几十秒的静默。 */
-function buildSubagentTool(
+function buildSubagentTools(
   allTools: AgentTool[],
   model: Model<Api>,
   streamFn: unknown,
   handlers: PiTurnHandlers,
-): AgentTool {
+  manager: SubagentManager,
+): AgentTool[] {
   const spec = subagentToolSpec();
-  return {
+  const waitSpec = waitSubagentsToolSpec();
+  const archiveOf = (task: string, outcome: SubagentOutcome) => ({
+    task,
+    steps: outcome.steps,
+    error: outcome.error ?? null,
+    trace: outcome.trace,
+  });
+  const dispatchTool: AgentTool = {
     name: spec.name,
     label: "子智能体",
     description: spec.description,
     parameters: spec.parameters as never,
     execute: async (parentCallId: string, rawParams: unknown, signal?: AbortSignal) => {
-      const args = (rawParams ?? {}) as { task?: string; expected_output?: string };
+      const args = (rawParams ?? {}) as { task?: string; expected_output?: string; wait?: boolean };
       const task = (args.task ?? "").trim();
       if (!task) throw new Error("task 不能为空");
       const prompt = args.expected_output ? `${task}\n\n【期望的输出形式】${args.expected_output}` : task;
-      const result = await runSubagent({
+      const running = runSubagent({
         task: prompt,
         tools: readOnlyTools(allTools),
         model,
         streamFn,
         signal,
-        // 每一步实时外发,挂在**这次 run_subagent 调用**名下 —— 界面据此在父卡下嵌套
-        // 显示子步,而不是一段几十秒的静默。(旧的 onSubagentStep 从来没被接线,删了。)
+        // 每一步实时外发,挂在**这次 run_subagent 调用**名下 —— 界面据此把子步
+        // 归到发起它的那张卡,而不是一段几十秒的静默。
         onToolEvent: (event: SubagentToolEvent) => handlers.onSubtool?.({ parentCallId, ...event }),
       });
-      // 失败照常返回给模型(而不是抛):子任务没做成是**结果的一种**,主智能体应当读到
-      // "没做成、原因是什么"再决定下一步,而不是整轮对话跟着崩。
-      const payload = result.error
-        ? { ok: false, error: result.error, steps: result.steps }
-        : { ok: true, report: result.report, steps: result.steps };
-      // 完整轨迹只进 details(UI 存档),**不进 content** —— content 会回填给主模型,
-      // 而省下那份上下文正是派子智能体的意义。task 一起存:列表里靠它认出这是哪个子代理。
+      if (args.wait === true) {
+        // 阻塞路径:等到报告直接返回 —— 模型明说"这一个不等到没法继续"。
+        const result = await running;
+        const payload = result.error
+          ? { ok: false, error: result.error, steps: result.steps }
+          : { ok: true, report: result.report, steps: result.steps };
+        // 完整轨迹只进 details(UI 存档),**不进 content** —— content 会回填给主模型,
+        // 而省下那份上下文正是派子智能体的意义。task 一起存:列表里靠它认出这是哪个子代理。
+        return {
+          content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
+          details: { data: payload, subagent: archiveOf(task, result) },
+        };
+      }
+      // 默认路径:立即返回,子智能体在后台跑。id 就用这次调用的 toolCallId ——
+      // UI 时间线已经拿它当锚,模型拿它来 wait,两边天然对上。
+      manager.dispatch(parentCallId, task, running);
+      void running.then((outcome) => {
+        // 跑完就把存档发给宿主,让界面上这张卡从「进行中」翻成完整档案 ——
+        // 不等模型来取:看得见过程是 UI 的事,和模型什么时候读报告无关。
+        handlers.onSubagentResult?.(parentCallId, archiveOf(task, outcome));
+      });
+      const payload = {
+        ok: true,
+        dispatched: true,
+        subagent_id: parentCallId,
+        note: "Sub-agent is running in the background. Keep working; call wait_subagents when you need its report, or finish your reply and the report will be delivered to you.",
+      };
       return {
         content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
-        details: { data: payload, subagent: { task, steps: result.steps, error: result.error ?? null, trace: result.trace } },
+        details: { data: payload, subagent_dispatched: true },
       };
     },
   };
+  const waitTool: AgentTool = {
+    name: waitSpec.name,
+    label: "等待子智能体",
+    description: waitSpec.description,
+    parameters: waitSpec.parameters as never,
+    execute: async (_callId: string, rawParams: unknown) => {
+      const args = (rawParams ?? {}) as { subagent_ids?: string[] };
+      if (manager.size() === 0) {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ ok: false, error: "没有在跑的子智能体" }) }],
+          details: {},
+        };
+      }
+      const settled = await manager.wait(args.subagent_ids);
+      // 报告走 content 进模型上下文 —— wait 的意义就是"把答案拿进来"。
+      const payload = settled.map(({ id, outcome }) => ({
+        subagent_id: id,
+        ok: !outcome.error,
+        report: outcome.report || undefined,
+        error: outcome.error,
+        steps: outcome.steps,
+      }));
+      return {
+        content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
+        details: { data: payload },
+      };
+    },
+  };
+  return [dispatchTool, waitTool];
 }
 
 // 轮内兜底:一轮里工具调用可能连着追加十几条消息,而按 token 的压缩只在**轮与轮之间**做
@@ -370,6 +435,11 @@ export interface PiTurnHandlers {
   onToolEnd: (toolCallId: string, result: unknown, isError: boolean) => void;
   /** 子智能体的一步工具调用(start/end),挂在发起它的 run_subagent 调用名下。 */
   onSubtool?: (event: { parentCallId: string } & SubagentToolEvent) => void;
+  /** 后台派发的子智能体跑完了:把完整存档交给宿主,填回发起那张卡。 */
+  onSubagentResult?: (
+    parentCallId: string,
+    archive: { task: string; steps: number; error: string | null; trace: unknown[] },
+  ) => void;
 }
 
 /** Run one turn through pi's Agent; stream text + tool events, return text + new state. */
@@ -407,7 +477,8 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
   );
   // 子智能体挂在这里而不是 buildAllTools 里:它要用的 model/streamFn 到这一步才解析出来,
   // 而它跑在同一个进程里(见 subagent.ts —— 另起进程就得把供应商解析整套再传一遍)。
-  const tools = [...input.tools, buildSubagentTool(input.tools, model as Model<Api>, streamFn, handlers)];
+  const subagents = new SubagentManager();
+  const tools = [...input.tools, ...buildSubagentTools(input.tools, model as Model<Api>, streamFn, handlers, subagents)];
   const agent = new Agent({
     initialState: {
       systemPrompt: input.systemPrompt,
@@ -447,6 +518,21 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
   let aborted = false;
   try {
     await agent.prompt(input.prompt);
+    // 收尾清算:模型答完了,但后台可能还有子智能体在跑、或报告还没进过它的上下文。
+    // 等全部跑完,把没送达的报告作为一条通知消息续一轮 —— 模型消化完(可能因此又派新的,
+    // 所以是循环)才算真正结束。丢报告是不可接受的:sidecar 是回合级进程,这轮不送,永远没了。
+    for (;;) {
+      if (agent.signal?.aborted) break;
+      const settled = await subagents.drain();
+      if (settled.length === 0) break;
+      const notice = settled
+        .map(({ id, task, outcome }) => {
+          const head = `【子智能体完成通知】subagent_id=${id}\n任务:${task.split("\n")[0]}`;
+          return outcome.error ? `${head}\n结果:失败 —— ${outcome.error}` : `${head}\n报告:\n${outcome.report}`;
+        })
+        .join("\n\n");
+      await agent.prompt(`${notice}\n\n请基于以上报告继续:该转述的转述,该行动的行动。`);
+    }
   } catch (err) {
     // An aborted run rejects. The text streamed so far is real output the user watched
     // arrive, so it is returned rather than discarded.

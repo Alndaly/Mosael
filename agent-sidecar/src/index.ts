@@ -55,6 +55,7 @@ async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promi
         onToolEnd: (toolCallId, result, isError) => send({ type: "tool_end", turnId, toolCallId, result, isError }),
         // 子智能体的每一步。result 原样带上 —— 截断是展示层的事,传输层截了就再也补不回来。
         onSubtool: (event) => send({ type: "subtool", turnId, ...event }),
+        onSubagentResult: (parentCallId, archive) => send({ type: "subagent_result", turnId, parentCallId, archive }),
       },
     );
     if (result.aborted) send({ type: "aborted", turnId });

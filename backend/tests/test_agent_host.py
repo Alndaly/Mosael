@@ -419,6 +419,37 @@ def test_子智能体的每一步进时间线_并嵌在父调用名下() -> None
         host._stream_reset(session_id)
 
 
+def test_后台子智能体跑完_存档填回发起那张卡() -> None:
+    """subagent_result 事件 → run_subagent 卡的 details.subagent。非阻塞派发的卡瞬间
+    就 done 了(回执是「已派发」),存档要等子智能体真跑完才回填 —— 丢了这个事件,
+    界面上那张卡永远停在「已派发、无档案」。"""
+    from app.ai.agent import host
+
+    session_id = "subagent-result-test"
+    host._stream_reset(session_id)
+    try:
+        # 派发:工具卡开卡、立即收卡(dispatched 回执)
+        host._stream_tool_event(session_id, {
+            "type": "tool_start", "toolCallId": "parent-1", "name": "run_subagent", "args": {"task": "查素材"},
+        })
+        host._stream_tool_event(session_id, {
+            "type": "tool_end", "toolCallId": "parent-1",
+            "result": {"content": [], "details": {"subagent_dispatched": True}}, "isError": False,
+        })
+        # 后台跑完:存档回填,不动原 content/details 里已有的东西
+        archive = {"task": "查素材", "steps": 2, "error": None, "trace": [{"type": "text", "text": "结论"}]}
+        host._stream_tool_event(session_id, {
+            "type": "subagent_result", "parentCallId": "parent-1", "archive": archive,
+        })
+        state = host.get_stream_state(session_id)
+        card = state["timeline"][-1]["tool"]
+        assert card["result"]["details"]["subagent"] == archive
+        assert card["result"]["details"]["subagent_dispatched"] is True  # 原有标记不被洗掉
+        assert card["status"] == "done"
+    finally:
+        host._stream_reset(session_id)
+
+
 def test_记账之后prompt快照和水位不被覆盖丢掉(monkeypatch) -> None:
     """真机上最近 300 条消息里 prompt 快照 0 条 —— 写入代码、读取代码单看都对,
     丢在中间:billable 记完账为了把成本写进 usage,把整个 payload 重新赋值成

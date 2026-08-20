@@ -223,6 +223,25 @@ def _stream_tool_event(session_id: str, event: dict) -> None:
         if state is None:
             return
         timeline: list[dict] = state.setdefault("timeline", [])
+        if event.get("type") == "subagent_result":
+            # 后台派发的子智能体跑完了:把存档填回发起它的那张 run_subagent 卡。
+            # 卡的 content(模型看的那份「已派发」回执)不动 —— 历史不能改;details 是 UI 的。
+            parent_id = str(event.get("parentCallId") or "")
+            for item in timeline:
+                tool = item.get("tool")
+                if item.get("type") == "tool" and isinstance(tool, dict) and tool.get("id") == parent_id:
+                    result = tool.get("result")
+                    if not isinstance(result, dict):
+                        result = {"content": result} if result is not None else {}
+                    details = result.get("details")
+                    if not isinstance(details, dict):
+                        details = {}
+                    details["subagent"] = event.get("archive")
+                    result["details"] = details
+                    tool["result"] = result
+                    break
+            state["seq"] += 1
+            return
         if event.get("type") == "subtool":
             call_id = str(event.get("toolCallId") or "")
             starts = state.setdefault("tool_starts", {})
@@ -507,10 +526,19 @@ def _prompt_with_context(content: str, context: str | None) -> str:
 
 
 def post_user_message(
-    db: Session, session: AgentSession, content: str, user: User, *, context: str | None = None
+    db: Session,
+    session: AgentSession,
+    content: str,
+    user: User,
+    *,
+    context: str | None = None,
+    origin_session_id: str | None = None,
 ) -> AgentMessage:
     """Store the user message and run the agent turn on a worker thread."""
     prompt = _prompt_with_context(content, context)
+    # 另一个智能体会话发来的通知:落库带结构化来源(前端画徽章靠它),
+    # 且**不参与**会话自动命名 —— 标题应当是人提的第一件事,不是别的智能体的信封。
+    origin_marker = {"from_agent_session": origin_session_id} if origin_session_id else {}
     if session.status == "running":
         # Queued, not steered. These are two different things and only one of them should be
         # the default: queuing waits for the whole reason-act loop to finish and then runs as
@@ -529,6 +557,7 @@ def post_user_message(
                 "queued": True,
                 "queued_by": user.id,
                 **({"context": context.strip()} if context and context.strip() else {}),
+                **origin_marker,
             },
         )
         db.add(message)
@@ -542,10 +571,13 @@ def post_user_message(
         session_id=session.id,
         role="user",
         content=content,
-        payload={"context": context.strip()} if context and context.strip() else {},
+        payload={
+            **({"context": context.strip()} if context and context.strip() else {}),
+            **origin_marker,
+        },
     )
     session.status = "running"
-    if session.title == "新对话" and content.strip():
+    if session.title == "新对话" and content.strip() and not origin_session_id:
         session.title = content.strip()[:60]
     db.add(message)
     db.commit()

@@ -150,6 +150,71 @@ export async function runSubagent(input: {
   return { report, steps, trace };
 }
 
+export type SubagentOutcome = { report: string; steps: number; trace: SubagentTraceItem[]; error?: string };
+
+type BackgroundRun = {
+  id: string;
+  task: string;
+  promise: Promise<SubagentOutcome>;
+  settled: SubagentOutcome | null;
+  /** 结果是否已经进过主模型的上下文(wait_subagents 返回过,或收尾通知带过)。 */
+  notified: boolean;
+};
+
+/**
+ * 后台子智能体的记录簿,每轮一个。
+ *
+ * 派发默认**不阻塞**:run_subagent 立即返回,主智能体接着干别的;要不要等、什么时候等,
+ * 由它自己决定(调 wait_subagents)。它不等的话,轮子也不能让报告掉地上 —— 主循环收尾时
+ * (runPiTurn 尾部)清算这本账:还没跑完的等跑完,结果没进过上下文的用一条通知消息续一轮,
+ * 让模型消化完再真正结束。这里刻意**不做轮中打断**:steering 注入存在"最后一次取队列之后
+ * settle"的竞态窗口,通知丢了报告就永远到不了模型;收尾清算没有竞态,语义也和
+ * Claude Code 的任务完成通知一致 —— 通知在模型下一次开口前到。
+ */
+export class SubagentManager {
+  private runs = new Map<string, BackgroundRun>();
+
+  dispatch(id: string, task: string, promise: Promise<SubagentOutcome>): void {
+    const run: BackgroundRun = { id, task, promise, settled: null, notified: false };
+    this.runs.set(id, run);
+    void promise.then((outcome) => {
+      run.settled = outcome;
+    });
+  }
+
+  get(id: string): { task: string; settled: SubagentOutcome | null } | undefined {
+    const run = this.runs.get(id);
+    return run ? { task: run.task, settled: run.settled } : undefined;
+  }
+
+  size(): number {
+    return this.runs.size;
+  }
+
+  /** 等指定(缺省=全部)子智能体跑完并返回结果,同时记为"已进上下文"。 */
+  async wait(ids?: string[]): Promise<Array<{ id: string; task: string; outcome: SubagentOutcome }>> {
+    const targets = (ids?.length ? ids : [...this.runs.keys()])
+      .map((id) => this.runs.get(id))
+      .filter((run): run is BackgroundRun => Boolean(run));
+    const outcomes = await Promise.all(targets.map((run) => run.promise));
+    return targets.map((run, index) => {
+      run.notified = true;
+      return { id: run.id, task: run.task, outcome: outcomes[index] };
+    });
+  }
+
+  /** 收尾清算:等全部跑完,取出所有还没进过上下文的结果。空数组 = 不用续轮。 */
+  async drain(): Promise<Array<{ id: string; task: string; outcome: SubagentOutcome }>> {
+    await Promise.all([...this.runs.values()].map((run) => run.promise));
+    return [...this.runs.values()]
+      .filter((run) => !run.notified)
+      .map((run) => {
+        run.notified = true;
+        return { id: run.id, task: run.task, outcome: run.settled! };
+      });
+  }
+}
+
 /** 主智能体看到的那个工具。参数刻意只有两个 —— 派活儿要说清「做什么」和「要什么结果」,
  *  再多的旋钮只会让主智能体去调参而不是描述任务。 */
 export function subagentToolSpec(): { name: string; description: string; parameters: Record<string, unknown> } {
@@ -161,10 +226,13 @@ export function subagentToolSpec(): { name: string; description: string; paramet
       "reading many documents, researching across many pages. The sub-agent has READ-ONLY tools — it cannot edit the " +
       "timeline, generate media or publish, so do not delegate changes. It cannot ask you questions, so the task must " +
       "be self-contained: say what to look at, what to decide, and what to report back. " +
-      // 并发是宿主(pi-agent-core)按"同一条消息里的多个调用"并行执行的 —— 模型不知道这一点
-      // 就会一个接一个串行派,三个独立调查白白排队。这句话是在教它用对这个能力。
-      "Independent investigations should be dispatched TOGETHER: issue multiple run_subagent calls in the same " +
-      "message and they run concurrently; results come back as each finishes.",
+      // 派发默认不阻塞 + 多个调用并发执行 —— 模型不知道这两点就会一个一个串行派、干等。
+      // 这几句是在教它用对这个能力:派完接着干别的,要结果时再 wait_subagents。
+      "Dispatch is NON-BLOCKING by default: the call returns a subagent_id immediately while the sub-agent runs in " +
+      "the background — keep working on other things, then call wait_subagents when you need the reports. If you " +
+      "finish your reply while sub-agents are still running, their reports are delivered to you automatically. " +
+      "Independent investigations should be dispatched together (multiple calls in the same message run " +
+      "concurrently). Pass wait=true only when you cannot do anything useful until this one answer arrives.",
     parameters: {
       type: "object",
       properties: {
@@ -177,8 +245,34 @@ export function subagentToolSpec(): { name: string; description: string; paramet
           type: "string",
           description: "What the answer should look like, e.g. 'the asset id plus one sentence of reasoning'.",
         },
+        wait: {
+          type: "boolean",
+          description:
+            "Block until this sub-agent finishes and return its report directly (default false: return immediately, collect via wait_subagents or the automatic completion notice).",
+        },
       },
       required: ["task"],
+    },
+  };
+}
+
+/** 等待后台子智能体的工具。报告走它的返回值进上下文 —— 这是模型"决定等"的那只手。 */
+export function waitSubagentsToolSpec(): { name: string; description: string; parameters: Record<string, unknown> } {
+  return {
+    name: "wait_subagents",
+    description:
+      "Wait for background sub-agents dispatched with run_subagent and return their reports. " +
+      "With no arguments it waits for ALL of them; pass subagent_ids to wait for specific ones. " +
+      "Call this when you have run out of other useful work and need the answers to continue.",
+    parameters: {
+      type: "object",
+      properties: {
+        subagent_ids: {
+          type: "array",
+          items: { type: "string" },
+          description: "The subagent_id values returned by run_subagent. Omit to wait for all outstanding sub-agents.",
+        },
+      },
     },
   };
 }
