@@ -2,7 +2,7 @@ import React from "react";
 import { Bot, ChevronDown, ChevronRight, CircleAlert, Loader2, X } from "lucide-react";
 
 import type { AgentTimelineItem, ToolCall } from "@/components/agent/ToolCalls";
-import { AgentTurnContent } from "@/components/agent/ToolCalls";
+import { ChatBubble, type AgentMessage as ChatMessage } from "@/features/ai-studio/ChatBubble";
 import { TraceView } from "@/features/ai-studio/trace/TraceView";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,8 @@ export type SubagentRun = {
   /** run_subagent 那次调用的 ToolCall(状态、耗时都在它身上)。 */
   call: ToolCall;
   archive: SubagentArchive | null;
+  /** 还在跑:工具卡本身 running,或已派发(非阻塞)但存档还没回填。 */
+  running: boolean;
 };
 
 /** 从时间线里挑出所有 run_subagent 调用,并尽力解出各自的存档。 */
@@ -42,9 +44,26 @@ export function collectSubagentRuns(timeline: AgentTimelineItem[] | undefined): 
   const runs: SubagentRun[] = [];
   for (const item of timeline ?? []) {
     if (item.type !== "tool" || item.tool?.name !== "run_subagent") continue;
-    runs.push({ call: item.tool, archive: readArchive(item.tool.result) });
+    const archive = readArchive(item.tool.result);
+    // 非阻塞派发:卡本身立刻 done(回执是「已派发」),子智能体还在后台跑,
+    // 存档(details.subagent)要等它跑完才回填 —— 这段时间也是「进行中」。
+    const dispatched = readDispatched(item.tool.result);
+    runs.push({ call: item.tool, archive, running: item.tool.status === "running" || (dispatched && !archive) });
   }
   return runs;
+}
+
+function readDispatched(result: unknown): boolean {
+  if (result == null) return false;
+  let value: unknown = result;
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return false;
+    }
+  }
+  return Boolean((value as { details?: { subagent_dispatched?: boolean } }).details?.subagent_dispatched);
 }
 
 function readArchive(result: unknown): SubagentArchive | null {
@@ -69,7 +88,15 @@ export function subagentRunLabel(run: SubagentRun): string {
   return task.split("\n")[0].trim() || run.call.id;
 }
 
-function StatusDot({ status }: { status?: string }) {
+function StatusDot({ run }: { run: SubagentRun }) {
+  // 后台派发的卡瞬间就 done 了,点的颜色要跟**子智能体**的死活走,不是跟那张回执卡。
+  const status = run.running
+    ? "running"
+    : run.archive?.error || run.call.status === "error"
+      ? "error"
+      : run.archive
+        ? "done"
+        : run.call.status;
   return (
     <span
       className={cn(
@@ -89,7 +116,7 @@ function RunMeta({ run }: { run: SubagentRun }) {
     <>
       {run.archive
         ? t("chatSubagentSteps").replace("{n}", String(run.archive.steps))
-        : run.call.status === "running"
+        : run.running
           ? t("chatSubagentRunning")
           : t("chatSubagentNoTrace")}
       {run.archive?.error ? ` · ${run.archive.error.slice(0, 60)}` : ""}
@@ -109,7 +136,7 @@ export function SubagentButton({
   const runs = React.useMemo(() => collectSubagentRuns(timeline), [timeline]);
   const [open, setOpen] = React.useState(false);
   if (runs.length === 0) return null;
-  const running = runs.some((run) => run.call.status === "running");
+  const running = runs.some((run) => run.running);
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -136,7 +163,7 @@ export function SubagentButton({
             >
               {/* 状态点和第一行文字对中:点自身 6px,首行行高约 17px,垫出差值的一半。 */}
               <span className="flex pt-[5px]">
-                <StatusDot status={run.call.status} />
+                <StatusDot run={run} />
               </span>
               <span className="min-w-0 text-ui-xs leading-snug text-foreground line-clamp-2 [word-break:break-word]">
                 {subagentRunLabel(run)}
@@ -187,7 +214,7 @@ export function InspectorSubagentList({
               onClick={() => onOpen(run)}
               title={label}
             >
-              <StatusDot status={run.call.status} />
+              <StatusDot run={run} />
               <span className="min-w-0 truncate">{label}</span>
               {run.archive && (
                 <span className="shrink-0 tabular-nums text-ui-2xs text-muted-foreground">
@@ -257,9 +284,18 @@ function synthesize(run: SubagentRun): { timeline: AgentTimelineItem[]; messages
           } as ToolCall,
         },
   );
+  // 结论正文 = 轨迹里最后一段助手文字(脚注的复制按钮复制的就是它)。
+  const lastText = [...archive.trace].reverse().find((item) => item.type === "text");
   const messages = [
     { id: `${run.call.id}:task`, role: "user", content: archive.task, payload: {}, created_at: null },
-    { id: `${run.call.id}:run`, role: "assistant", content: "", payload: { timeline }, created_at: null },
+    {
+      id: `${run.call.id}:run`,
+      role: "assistant",
+      content: lastText?.type === "text" ? lastText.text : "",
+      error: archive.error,
+      payload: { timeline, usage: { duration_seconds: run.call.usage?.duration_seconds } },
+      created_at: null,
+    },
   ];
   return { timeline, messages };
 }
@@ -275,7 +311,7 @@ export function SubagentSessionView({ run }: { run: SubagentRun }) {
       <div className="grid min-h-0 place-items-center p-6">
         <p className="m-0 flex items-center gap-1.5 text-ui-sm text-muted-foreground">
           <CircleAlert size={13} />
-          {run.call.status === "running" ? t("chatSubagentRunning") : t("chatSubagentNoTrace")}
+          {run.running ? t("chatSubagentRunning") : t("chatSubagentNoTrace")}
         </p>
       </div>
     );
@@ -301,23 +337,17 @@ export function SubagentSessionView({ run }: { run: SubagentRun }) {
             </button>
           ))}
         </div>
-        {run.archive.error && (
-          <span className="min-w-0 flex-1 truncate text-ui-2xs text-destructive" title={run.archive.error}>
-            {run.archive.error}
-          </span>
-        )}
       </div>
       {view === "trace" ? (
         <TraceView messages={messages as never} streamTimeline={[]} usageEvents={[]} />
       ) : (
-        <div className="min-h-0 min-w-0 overflow-y-auto overflow-x-hidden px-4 py-4">
-          <div className="mx-auto grid w-full min-w-0 max-w-[780px] gap-3">
-            {/* 它收到的任务原文 —— 相当于这段会话的"提问"。UUID 是一整个不可断词,得允许折行。 */}
-            <p className="m-0 whitespace-pre-wrap rounded-lg bg-secondary px-3 py-2 text-ui-sm leading-[1.6] text-foreground [word-break:break-word]">
-              {run.archive.task}
-            </p>
-            <AgentTurnContent timeline={timeline} />
-          </div>
+        /* 主对话同一套容器与同一个 ChatBubble:子智能体本质就是一个新的聊天智能体,
+           它的对话就该长得和主对话一模一样 —— 任务是右侧的用户气泡,产出是带工具卡
+           和悬停脚注的助手消息,失败走同一张错误卡(所以 tabs 行不再单独挂红字)。 */
+        <div className="flex min-w-0 flex-col gap-3.5 overflow-y-auto overflow-x-hidden px-4 pb-4 pt-7">
+          {(messages as ChatMessage[]).map((message) => (
+            <ChatBubble key={message.id} message={message} usageEvents={[]} />
+          ))}
         </div>
       )}
     </div>

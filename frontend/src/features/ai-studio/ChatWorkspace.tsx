@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, ModalShell, RenameDialog } from "@/components/app/modals";
+import { ChatBubble } from "@/features/ai-studio/ChatBubble";
 import { UserMessageContent, attachmentToken } from "@/features/ai-studio/userMessage";
 import { MessageUsageFooter, type AgentUsageEvent } from "@/features/ai-studio/messageUsage";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -1054,50 +1055,3 @@ function collectRecentToolCalls(messages: AgentMessage[], streamTimeline: AgentT
 }
 
 
-function ChatBubble({ message, usageEvents }: { message: AgentMessage; usageEvents: AgentUsageEvent[] }) {
-  const payload = message.payload as
-    | { usage?: { duration_seconds?: number }; timeline?: AgentTimelineItem[]; compaction?: CompactionInfo }
-    | null;
-  // 手动压缩留下的是一条 role=system、内容为空的消息,只承载压缩标记。
-  if (message.role === "system") {
-    return payload?.compaction ? (
-      <div className="mx-auto w-full max-w-[780px] shrink-0">
-        <CompactionNotice info={payload.compaction} />
-      </div>
-    ) : null;
-  }
-  return (
-    <div
-      className={
-        message.role === "assistant"
-          ? "group/bubble relative mx-auto w-full max-w-[780px] shrink-0 text-ui-md leading-[1.65] [word-break:break-word]"
-          : "ml-auto mr-[max(calc((100%-780px)/2),0px)] w-fit max-w-[min(560px,82%)] shrink-0 whitespace-pre-wrap rounded-lg rounded-br-[6px] bg-secondary px-3 py-[9px] text-ui-md leading-[1.65] text-foreground [word-break:break-word]"
-      }
-    >
-      {/* 自动压缩发生在这一轮开始前,标记就排在这条回复之前 —— 位置本身在说"从这里往前被整理过"。 */}
-      {message.role === "assistant" && payload?.compaction && (
-        <div className="mb-1.5">
-          <CompactionNotice info={payload.compaction} />
-        </div>
-      )}
-      {message.role === "assistant" ? (
-        message.error ? (
-          <AgentErrorCard content={message.content} error={message.error} />
-        ) : (
-          <AgentTurnContent timeline={payload?.timeline} />
-        )
-      ) : (
-        <UserMessageContent content={message.content} />
-      )}
-      {/* 脚注只给助手回答:用户消息没有复制/耗时,免得药丸下方留一条空的悬停占位。 */}
-      {message.role === "assistant" && (
-        <MessageUsageFooter
-          content={message.content}
-          usageEvents={usageEvents}
-          durationOverride={payload?.usage?.duration_seconds}
-          className="opacity-0 transition-opacity duration-[120ms] group-hover/bubble:opacity-100"
-        />
-      )}
-    </div>
-  );
-}
