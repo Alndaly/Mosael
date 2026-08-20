@@ -540,7 +540,15 @@ export function ChatWorkspace({
               onBack={() => setViewingSubagent(null)}
             />
           ) : (
-          <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border" role="tablist">
+          <>
+          {/* 当前会话名常驻头部:和子代理视图的面包屑首段(父会话名)是同一个东西 ——
+              进了子代理它变成面包屑的第一段,回来它就是标题本身。没有会话时不占位。 */}
+          {activeSession && (
+            <span className="min-w-0 max-w-[260px] truncate text-ui-sm font-medium text-foreground" title={activeSession.title}>
+              {activeSession.title}
+            </span>
+          )}
+          <div className="inline-flex h-7 shrink-0 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border" role="tablist">
             {(["chat", "trace"] as const).map((item) => (
               <button
                 key={item}
@@ -557,6 +565,7 @@ export function ChatWorkspace({
               </button>
             ))}
           </div>
+          </>
           )}
           {/* 「N 个子代理」:这个会话派出过的子智能体入口(DSH 同款位置)。没派过就不渲染。 */}
           {!viewingSubagent && (
