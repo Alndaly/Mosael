@@ -14,6 +14,18 @@ Workflows nest (subgraphs / call-workflow / marquee-collapse), and every persist
 
 ### Recently added
 
+**Subagents & multi-agent collaboration** — the main agent can hand a self-contained
+investigation to a **subagent** (read-only tools; the intermediate steps stay in its own context
+and only the conclusion comes back — it saves context, not compute). Dispatch is
+**non-blocking by default**: the agent gets a receipt immediately and keeps working, deciding for
+itself whether and when to wait; multiple dispatches in one message run concurrently, and any
+un-collected reports are delivered automatically at the end of the turn — none are ever lost.
+Every subagent is a **session you can click into** (the exact same UI as the main conversation),
+reachable from the header and the inspector panel, with every step visible live. Agents in
+different sessions can also **@-notify each other**: an idle target starts a turn immediately, a
+busy one queues the message, and it arrives wearing a "from another agent" badge.
+
+
 **Import media from a link** — paste a video or playlist URL, look at what is behind it, then decide
 what to download. **Probing before downloading is deliberate**: a link may be one video or a whole
 playlist (hundreds of items, tens of gigabytes). Audio or video is chosen *before* downloading

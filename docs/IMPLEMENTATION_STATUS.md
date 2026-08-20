@@ -406,6 +406,100 @@ error toast reports 「前 N 条已写入轨道,其余保持原文」 rather tha
 the offset handoff and the stop-on-failure; verified live against the demo track (progress label
 appeared, PATCH per batch, one undo reverted the batch).
 
+### 2026-08-20: subagents become sessions — non-blocking dispatch, cross-session @-notify
+
+Three user asks landed in one arc: "a subagent is fundamentally just another chat agent, so its
+UI must be identical to the main agent's"; "dispatch must not block — the agent decides whether
+to wait"; "agents should be able to @-notify each other".
+
+**Subagent as a session.** `ChatBubble` was extracted out of `ChatWorkspace` into a shared module
+(SubagentPanel is imported *by* ChatWorkspace, so reaching back would cycle), and the subagent
+view now synthesizes messages and feeds the *same* renderer: the task is the right-aligned user
+bubble, the report is an assistant message with tool cards and the hover footer, failure is the
+same error card. Breadcrumb `父会话 / 子代理名` up top (min-w-0 chain so long tasks ellipsize,
+not blow out the header); the main view now shows the session title in the same slot, so entering
+a subagent just extends the title into a breadcrumb. The right inspector's subagent block became
+an InspectorCard like its neighbors.
+
+**Non-blocking dispatch.** `run_subagent` returns immediately with a `subagent_id` while the
+subagent runs in-process; the model keeps working and calls `wait_subagents` when it needs the
+reports (they enter context through that tool's result). If the model finishes its reply with
+subagents still running, `runPiTurn`'s tail settles the books: wait for all, deliver undelivered
+reports as a notice message, and re-prompt — looping, since the model may dispatch again. This is
+deliberately **not** mid-turn steering injection: steering has a race window (a result settling
+after the last queue check is lost forever, and the sidecar is a per-turn process — this turn is
+the only chance). `SubagentManager` tracks who ran and whose report already reached context, so
+wait-ed reports are not re-delivered at settlement (unit-tested). `wait=true` opts back into the
+old blocking behavior. Parallelism was already free — pi-agent-core runs a message's tool calls
+under `Promise.all` unless a tool declares `executionMode: "sequential"`, which none do — so the
+tool description now *teaches* the model to dispatch independent investigations in one message
+(verified live: two dispatches started 4ms apart, ran 9.1s/4.1s fully overlapped). On completion
+a `subagent_result` protocol event backfills the archive into the originating card, so the UI
+flips from 「进行中」 to the full archive without waiting for the model to read the report.
+
+**Cross-session @-notify.** Two new registry tools: `list_agent_sessions` (read-only; id, title,
+busy/idle) and `notify_agent_session` — which is just `POST /sessions/{id}/messages` with its
+existing semantics: idle target starts a turn immediately, busy target queues. Sender identity
+comes from the turn token's `_SESSION_ID`, not from an argument. The origin travels as a
+structured field (`origin_session_id` → `payload.from_agent_session`): auto-titling skips these
+messages (a notification must not steal a 「新对话」's name — regression-pinned), and the user
+bubble wears a 「来自其他智能体」 badge off the same field, no envelope-text matching anywhere.
+
+Two root causes found on the way, both of the shape "written correctly, destroyed in the middle":
+
+- **SYSTEM/CONTEXT rows never appeared** (0 of the last 300 messages had prompt snapshots): the
+  post-metering billable block reassigned the entire assistant payload to `{usage, timeline}`,
+  wiping the snapshot/context/compaction written at construction. Fix is a merge, not a rebuild;
+  test pins it.
+- **「子智能体没有产出结论」 on every run**: pi-ai's `AssistantMessage.content` is a block array
+  (`(TextContent|ThinkingContent|ToolCall)[]`), and the report extractor checked
+  `typeof content === "string"` — never true, so the report was always empty. `assistantText()`
+  now joins text blocks; a sidecar test bundles the real source and pins the extraction.
+
+### 2026-08-20: a full-surface sweep — every page walked, and what it shook out
+
+Walked every page (home, media, editor, AI studio, publish, pool, workflows, scheduler, plugins,
+settings, admin, both header popovers) looking for misleading interactions. Confirmed bugs were
+fixed on the spot; the sweep also caught one real backend defect by *reading the UI it produced*:
+
+- **Task center rows can answer "whose work is this"**: every job creation site now writes
+  `payload.subject` (asset/sequence/workflow name, prompt prefix) — the object's name only exists
+  at creation time, and the frontend reads exactly one key instead of guessing per kind. Rows
+  show kind + subject + relative time; `proxy`/`url_import`/`subtitle_dub`/`tts` got their own
+  icons and labels instead of all rendering as 「任务」; finished jobs collapse by
+  (kind, subject, outcome) into one ×N row — the same asset failing transcode five times is one
+  fact, not five; 「清除已完成」 renamed 「清空已结束」 (the endpoint always deleted all terminal
+  states, including failures).
+- **The ×1232 row**: aggregation made an infinite retry visible — the startup reconcile sweep
+  re-queued proxies with `force=True` for assets whose proxy *had already been judged failed*,
+  once per dev hot-reload. `failed` is now terminal for the sweep (pending orphans and never-ran
+  still get rescued; manual retry remains the human's call). Regression test, break-verified.
+- **Scheduler detail speaks**: empty schedules no longer render as a bare `{}` (manual/webhook
+  named as such), `manual` was an i18n value that *was English*, timestamps localized, the bound-
+  workflow button got an icon + hover (users name workflows 「新工作流」, which reads as a
+  create-action button).
+- **Publish failures speak Chinese**: all 34 adapter throw messages translated (platform + stage
+  + evidence structure kept); the internal fallback-chain sentinel stays English by design.
+- **Notifications can be cleared**: new `DELETE /notifications/read` — read-only-deletes, unread
+  is undelivered information and must survive (regression-pinned); the panel shows 「清空已读」
+  whenever read items exist, next to 「全部已读」 which only appears with unread ones.
+- Small honesty fixes: chart legends say 「峰值 150」 with a hover explanation instead of
+  `max 150`, token legend 「未拆分」→「其他」; admin's asset stat declares its scope (全部工作区)
+  so it stops contradicting the home page's per-workspace count; the spend empty-state names the
+  usual culprit (usage matched no pricing rule); the profile save indicator gained an idle state
+  (announcing 「资料已保存」 before anything was edited mistakes a result for a state); the
+  browser-pool enable switch explains on hover what it enables; `GenericRecordList` keys no
+  longer fall back to titles (several sessions named 「你是？」 → duplicate-key warnings).
+
+Also in this arc: the editor's subtitle panel was rebuilt (style controls collapsed to five
+labeled rows; cue rows are flat with a `::before` active accent — reserved borders lost to the
+parent's `divide-*` specificity, measured before believing); the AI studio got editor-style
+resizable three-pane splits (localStorage-persisted, clamped on read and write, breakpoints moved
+into JS because inline `gridTemplateColumns` silently overrides class media queries); the trace
+stats bar moved under the composer and dropped its permanent "(模型耗时为总时长减工具所得)"
+caption into a hover title; Feishu interrupt notices are sent exactly once per interruption
+(marker on the message, set on success, not set on send failure so it retries next boot).
+
 ### 2026-08-19: subagents made visible, and a DSH parity pass with reasons for what was skipped
 
 Re-read the DeepSeek Harness source (fresh clone) against our trace. Their row kinds are

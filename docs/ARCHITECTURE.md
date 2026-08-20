@@ -279,6 +279,32 @@ f5-tts / fish-speech 都要 torch + torchaudio + transformers,**2.5–3.5 GB**�
 工作流画布里的 AI 编辑也是同一套:每条工作流一个常驻智能体会话(`external_key = workflow:<id>`),
 有记忆,改图走 `update_workflow` 工具 + 确认卡,画布检测到 `updated_at` 变化自动同步(未脏时)。
 
+### 子智能体
+
+`run_subagent` 把一段独立调查派给**同进程内**的子智能体(sidecar 里另起一个 pi Agent,
+不另起进程——它要的 models/streamFn 已在手上)。它只拿**只读工具**(manifest 的 `read_only`
+标记,唯一名单在后端注册表):确认卡是对用户说的话,而卡上的发起方是用户看不见的子智能体,
+这样的卡没法批;调查本来也不需要写权限。
+
+派发**默认不阻塞**:调用立即返回 `subagent_id`,主智能体接着干别的,要结果时调
+`wait_subagents`(报告经工具返回值进上下文);它不等的话,回合收尾时统一清算——等全部跑完,
+把没送达的报告作为通知消息续一轮,模型消化完才真正结束。刻意不做轮中 steering 注入:
+steering 存在「最后一次取队列之后 settle」的竞态,而 sidecar 是回合级进程,这轮不送报告就
+永远没了。同一条消息里的多个 `run_subagent` 天然并发(pi-agent-core 并行执行工具批)。
+
+过程全程可见:子智能体的每步工具调用以 `subtool` 协议事件外发(挂发起调用的 id),
+跑完由 `subagent_result` 事件把完整存档(阶段性文字 + 每步工具)填回发起那张卡的
+`details.subagent`——**只进 details 不进 content**,省下父模型的上下文正是派子智能体的意义。
+前端把存档合成为一段"会话"(任务=用户气泡,产出=助手消息),与主对话共用同一个 ChatBubble。
+
+### 智能体互通
+
+`list_agent_sessions` 列出本工作区的会话(忙/闲);`notify_agent_session` 给另一个会话发
+消息——就是 `POST /sessions/{id}/messages` 的原有语义:对方空闲立即开新一轮,忙则排队。
+发起方身份取自 turn 令牌链上的 `_SESSION_ID`(不由参数转述,转述可伪造);来源走结构化字段
+`origin_session_id` → `payload.from_agent_session`——标题自动命名跳过它,前端靠它画
+「来自其他智能体」徽章,任何地方都不做信封文案匹配。
+
 ## 服务器切换(团队模式)
 
 `API_BASE` 在**模块加载时**从 `localStorage["openstudio.server.url"]` 解析一次,默认 `http://127.0.0.1:8800`。
