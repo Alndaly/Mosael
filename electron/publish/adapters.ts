@@ -253,10 +253,10 @@ export class DouyinAdapter implements PublishAdapter {
       1_500,
     );
     if (!settled) {
-      throw new Error("Douyin upload did not complete in time.");
+      throw new Error("抖音上传超时,未在时限内完成。");
     }
     if (await this.driver.hasText(this.s.uploadFailedText)) {
-      throw new Error("Douyin reported video upload failure (上传失败)."); // i18n-ok
+      throw new Error("抖音报告视频上传失败(页面出现「上传失败」)。");
     }
   }
 
@@ -409,7 +409,7 @@ export class DouyinAdapter implements PublishAdapter {
     const ok = await this.driver.waitForUrl(this.s.isManageUrl, RESULT_TIMEOUT);
     if (!ok) {
       await plogPageState("waitResult failed (douyin):", this.driver);
-      throw new Error("Douyin did not confirm publish (no redirect to content management).");
+      throw new Error("抖音未确认发布(没有跳转到内容管理页)。");
     }
   }
 }
@@ -449,7 +449,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
     // Editor fields render once the upload is accepted; wait for the title.
     const ready = await this.driver.cssVisible(this.s.titleInput, UPLOAD_TIMEOUT);
     if (!ready) {
-      throw new Error("Xiaohongshu editor did not appear after upload (title field missing).");
+      throw new Error("小红书上传后编辑器未出现(找不到标题输入框)。");
     }
     const publishReady =
       (await this.driver.waitCssEnabled(this.s.submitButton, UPLOAD_TIMEOUT)) ||
@@ -479,7 +479,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
     );
     const current = await this.driver.cssValue(this.s.titleInput);
     if (!accepted || current !== value) {
-      throw new Error("Xiaohongshu title input did not accept the filled value.");
+      throw new Error("小红书标题输入框没有接受填入的内容。");
     }
   }
 
@@ -500,7 +500,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
         200,
       );
       if (!accepted) {
-        throw new Error("Xiaohongshu content editor did not accept the description.");
+        throw new Error("小红书正文编辑器没有接受填入的描述。");
       }
     }
     if (!tags.length) {
@@ -573,7 +573,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
     if (current === null) {
       if (!wanted) return; // 页面上没有这一项,而用户也没要求勾 —— 不必大惊小怪
       await plogPageState("Xiaohongshu original switch missing:", this.driver);
-      throw new Error("Xiaohongshu 原创声明 control not found.");
+      throw new Error("小红书「原创声明」控件未找到。");
     }
     if (current !== wanted) {
       await this.driver.clickCss(this.s.originalSwitch).catch(() => undefined);
@@ -638,7 +638,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
         hostSelector: this.s.submitHost,
       }));
     if (!ready) {
-      throw new Error("Xiaohongshu publish button is not clickable.");
+      throw new Error("小红书发布按钮不可点击。");
     }
 
     // 四条降级路径互为兜底:发布按钮是 shadow DOM 里的自定义元素,外面 querySelector 不到,
@@ -865,7 +865,7 @@ export class WeixinChannelsAdapter implements PublishAdapter {
       attached = await this.driver.fileInputAttached(this.s.fileInput, ACTION_TIMEOUT);
     }
     if (!attached) {
-      throw new Error("WeChat Channels upload input not found.");
+      throw new Error("微信视频号未找到上传入口。");
     }
     await this.driver.setFiles(this.s.fileInput, videoPath);
     await this.waitForHumanGateIfNeeded();
@@ -875,9 +875,9 @@ export class WeixinChannelsAdapter implements PublishAdapter {
     const ok = await this.driver.waitButtonEnabled(this.s.submitText, UPLOAD_TIMEOUT);
     if (!ok) {
       if (await this.driver.cssVisible(this.s.uploadFailed, 500)) {
-        throw new Error("WeChat Channels reported an upload error (status-msg.error).");
+        throw new Error("微信视频号报告上传出错(status-msg.error)。");
       }
-      throw new Error("WeChat Channels upload did not complete in time.");
+      throw new Error("微信视频号上传超时,未在时限内完成。");
     }
   }
 
@@ -922,7 +922,7 @@ export class WeixinChannelsAdapter implements PublishAdapter {
     await this.assertCanPublish();
     const ready = await this.driver.waitButtonEnabled(this.s.submitText, ACTION_TIMEOUT);
     if (!ready) {
-      throw new Error("WeChat Channels publish button is not clickable.");
+      throw new Error("微信视频号发表按钮不可点击。");
     }
     await commitClick({
       what: "weixin-channels submit",
@@ -967,7 +967,7 @@ export class WeixinChannelsAdapter implements PublishAdapter {
       ));
     if (!ok) {
       await plogPageState("waitResult failed (weixin-channels):", this.driver);
-      throw new Error("WeChat Channels did not confirm publish (no redirect to post list).");
+      throw new Error("微信视频号未确认发布(没有跳转到动态列表)。");
     }
   }
 
@@ -1040,13 +1040,13 @@ export class BilibiliAdapter implements PublishAdapter {
   async uploadVideo(videoPath: string): Promise<void> {
     const attached = await this.driver.fileInputAttached(this.s.fileInput, ACTION_TIMEOUT);
     if (!attached) {
-      throw new Error("Bilibili upload input not found.");
+      throw new Error("B站未找到上传入口。");
     }
     await this.driver.setFiles(this.s.fileInput, videoPath);
 
     const editorReady = await this.driver.cssVisible(this.s.titleInput, UPLOAD_TIMEOUT);
     if (!editorReady) {
-      throw new Error("Bilibili editor did not appear after upload (title field missing).");
+      throw new Error("B站上传后编辑器未出现(找不到标题输入框)。");
     }
 
     const donePattern = this.s.uploadDoneTexts.join("|");
@@ -1097,7 +1097,7 @@ export class BilibiliAdapter implements PublishAdapter {
         .evaluate<string>(`(document.body?.innerText || '').slice(0, 400)`)
         .catch(() => "");
       plog("uploadVideo not settled, page text:", JSON.stringify(seen));
-      throw new Error("Bilibili upload did not complete in time.");
+      throw new Error("B站上传超时,未在时限内完成。");
     }
     plog("uploadVideo settled:", { started, reason: settleReason });
     if (
@@ -1107,7 +1107,7 @@ export class BilibiliAdapter implements PublishAdapter {
         100,
       )
     ) {
-      throw new Error("Bilibili reported video upload failure.");
+      throw new Error("B站报告视频上传失败。");
     }
   }
 
@@ -1119,7 +1119,7 @@ export class BilibiliAdapter implements PublishAdapter {
     );
     const current = await this.driver.cssValue(this.s.titleInput);
     if (!current?.includes(value)) {
-      throw new Error("Bilibili title input did not accept the filled value.");
+      throw new Error("B站标题输入框没有接受填入的内容。");
     }
   }
 
@@ -1317,7 +1317,7 @@ export class BilibiliAdapter implements PublishAdapter {
     plog("waitResult:", { settled, ...state });
     if (state.ok) return;
     if (state.fail) throw new Error(`B 站投稿被拒:${state.fail}`);
-    throw new Error("Bilibili did not confirm publish (no success page or manager redirect).");
+    throw new Error("B站未确认投稿(没有出现成功页,也没有跳转到稿件管理)。");
   }
 
   private async inputTag(tag: string): Promise<boolean> {
@@ -1389,7 +1389,7 @@ export class BilibiliAdapter implements PublishAdapter {
       250,
     );
     if (!accepted) {
-      throw new Error("Bilibili creation statement did not become selected.");
+      throw new Error("B站创作声明未能选中。");
     }
   }
 
@@ -1536,7 +1536,7 @@ export class BilibiliAdapter implements PublishAdapter {
 
     const selected = await this.driver.cssVisible(this.s.coverSelected, 5_000);
     if (!selected) {
-      throw new Error("Bilibili recommended cover did not become selected.");
+      throw new Error("B站推荐封面未能选中。");
     }
     // 选中 ≠ 处理完:B 站选完封面还要上传/裁切一下,期间点投稿同样静默无反应。等它安静下来。
     const quiet = await this.driver.waitForFunction(
@@ -1623,14 +1623,14 @@ export class TiktokAdapter implements PublishAdapter {
 
   async uploadVideo(videoPath: string): Promise<void> {
     if (!(await this.driver.fileInputAttached(this.s.fileInput, ACTION_TIMEOUT))) {
-      throw new Error("TikTok upload input not found.");
+      throw new Error("TikTok 未找到上传入口。");
     }
     await this.driver.setFiles(this.s.fileInput, videoPath);
 
     // 文案编辑器出现 = 表单渲染了,**不等于视频传完**(同 B 站那一课)。真正的完成信号是
     // 「发布按钮可用」:TikTok 在转码完成前一直禁用它。
     if (!(await this.driver.cssVisible(this.s.captionEditor, UPLOAD_TIMEOUT))) {
-      throw new Error("TikTok editor did not appear after upload (caption box missing).");
+      throw new Error("TikTok 上传后编辑器未出现(找不到描述输入框)。");
     }
     const failedPattern = this.s.uploadFailedTexts.join("|");
     const deadline = Date.now() + UPLOAD_TIMEOUT;
@@ -1640,7 +1640,7 @@ export class TiktokAdapter implements PublishAdapter {
         .catch(() => false);
       if (failed) {
         await plogPageState("TikTok upload failed:", this.driver);
-        throw new Error("TikTok reported an upload failure.");
+        throw new Error("TikTok 报告上传失败。");
       }
       if (await this.driver.waitCssEnabled(this.s.postButton, 2_000).catch(() => false)) {
         return;
@@ -1648,7 +1648,7 @@ export class TiktokAdapter implements PublishAdapter {
       await wait(1_000);
     }
     await plogPageState("TikTok upload did not settle:", this.driver);
-    throw new Error("TikTok upload did not finish in time (post button stayed disabled).");
+    throw new Error("TikTok 上传超时(发布按钮一直不可用)。");
   }
 
   async fillTitle(title: string): Promise<void> {
@@ -1700,7 +1700,7 @@ export class TiktokAdapter implements PublishAdapter {
     }
     if (!(await this.driver.cssVisible(this.s.visibilityTrigger, ACTION_TIMEOUT))) {
       await plogPageState("TikTok visibility control missing:", this.driver);
-      throw new Error("TikTok visibility control not found; refusing to post publicly.");
+      throw new Error("TikTok 可见范围控件未找到,为避免误公开发布已中止。");
     }
     // 打开下拉:先真实鼠标事件,再完整指针序列,最后 el.click()。
     //
@@ -1751,7 +1751,7 @@ export class TiktokAdapter implements PublishAdapter {
         }
       }
       await plogPageState("TikTok submit button unavailable:", this.driver);
-      throw new Error("TikTok post button never became clickable.");
+      throw new Error("TikTok 发布按钮始终不可点击。");
     }
     await this.driver.clickCss(this.s.postButton);
   }
@@ -1773,7 +1773,7 @@ export class TiktokAdapter implements PublishAdapter {
     plog("tiktok waitResult:", { settled, ...(state ?? {}) });
     if (!settled) {
       await plogPageState("waitResult failed (tiktok):", this.driver);
-      throw new Error("TikTok did not confirm the post (no success text or redirect to content list).");
+      throw new Error("TikTok 未确认发布(没有成功提示,也没有跳转到内容列表)。");
     }
   }
 }
@@ -1832,14 +1832,14 @@ export class YoutubeAdapter implements PublishAdapter {
 
   async uploadVideo(videoPath: string): Promise<void> {
     if (!(await this.driver.fileInputAttached(this.s.fileInput, ACTION_TIMEOUT))) {
-      throw new Error("YouTube upload input not found.");
+      throw new Error("YouTube 未找到上传入口。");
     }
     await this.driver.setFiles(this.s.fileInput, videoPath);
 
     // 标题框出现 = 详情表单渲染了,视频仍在后台上传/处理。YouTube 会一直在页面上写
     // 「Uploading x%」/「Processing」,完成后变成「Upload complete」「Checks complete」之类。
     if (!(await this.driver.cssVisible(this.s.titleBox, UPLOAD_TIMEOUT))) {
-      throw new Error("YouTube details form did not appear after upload (title box missing).");
+      throw new Error("YouTube 上传后详情表单未出现(找不到标题输入框)。");
     }
     // **不能拿「下一步可点」当上传完成。** YouTube 用文件名预填标题,详情页一开始就是合法的,
     // 于是「下一步」几乎立刻可点,而视频还在传。那样走完流程去点「完成」,YouTube 给的是
@@ -1876,7 +1876,7 @@ export class YoutubeAdapter implements PublishAdapter {
       const state = await this.driver.evaluate<string>(stateExpr).catch(() => "unknown");
       if (state === "failed") {
         await plogPageState("YouTube upload failed:", this.driver);
-        throw new Error("YouTube reported an upload failure.");
+        throw new Error("YouTube 报告上传失败。");
       }
       if (state === "done-text") {
         settleReason = state;
@@ -1891,7 +1891,7 @@ export class YoutubeAdapter implements PublishAdapter {
     }
     if (!settleReason) {
       await plogPageState("YouTube upload did not settle:", this.driver);
-      throw new Error("YouTube upload did not finish in time.");
+      throw new Error("YouTube 上传超时,未在时限内完成。");
     }
     plog("youtube uploadVideo settled:", { reason: settleReason });
     // 详情页会给出这条稿件的 youtu.be 链接 —— 抓下来,收尾判定要靠它区分「我这支发出去了」和
@@ -1982,7 +1982,7 @@ export class YoutubeAdapter implements PublishAdapter {
     plog("youtube 可见性:", visibility, "面向儿童:", forKids);
     if (!(await this.driver.waitCssEnabled(this.s.doneButton, ACTION_TIMEOUT).catch(() => false))) {
       await plogPageState("YouTube done button unavailable:", this.driver);
-      throw new Error("YouTube done button never became clickable.");
+      throw new Error("YouTube 完成按钮始终不可点击。");
     }
     await this.driver.clickCss(this.s.doneButton);
   }
@@ -2014,7 +2014,7 @@ export class YoutubeAdapter implements PublishAdapter {
     plog("youtube waitResult:", { settled, id: this.uploadedId, ...(state ?? {}) });
     if (!settled) {
       await plogPageState("waitResult failed (youtube):", this.driver);
-      throw new Error("YouTube did not confirm the upload (video not listed and no success text).");
+      throw new Error("YouTube 未确认上传(列表里没有该视频,也没有成功提示)。");
     }
   }
 }
