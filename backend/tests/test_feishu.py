@@ -256,3 +256,70 @@ def test_被重启打断的飞书会话会收到中断说明(monkeypatch) -> Non
         assert service.notify_interrupted_chats(db) == 1
 
     assert sent == [("oc_r", "上一轮对话因后端重启而中断,请重新发送。")]
+
+
+def test_中断说明只发一次_不随每次重启重发(monkeypatch) -> None:
+    """真机反馈:开发模式 --reload 频繁重启,飞书那头每次都收到一遍「请重新发送」。
+
+    根因:挑要通知的会话时看的是「最后一条消息带中断标记」,而聊天里之后没人说话,
+    它就一直是最后一条 —— 发过与否没有任何记号。发成功要标记,下次启动跳过。
+    """
+    from app.ai.agent.host import reconcile_orphaned_agent_sessions
+
+    client = fresh_client()
+    sent: list = []
+    _, bot = _bound_bot(client, monkeypatch, sent)
+    monkeypatch.setattr(service, "run_turn", lambda *a, **k: TurnResult(text="好的"))
+    service.handle_incoming(bot["id"], "oc_once", "msg-o", "ou_img", content_json=json.dumps({"text": "hi"}))
+    sent.clear()
+
+    with SessionLocal() as db:
+        session = db.query(AgentSession).filter_by(external_key=f"feishu:{bot['id']}:oc_once").one()
+        session.status = "running"
+        db.commit()
+        reconcile_orphaned_agent_sessions(db)
+        assert service.notify_interrupted_chats(db) == 1
+
+    # 第二次启动:没有新的中断,聊天里也没人说话 —— **不能**再发。
+    with SessionLocal() as db:
+        assert reconcile_orphaned_agent_sessions(db) == 0
+        assert service.notify_interrupted_chats(db) == 0
+    assert len(sent) == 1, f"同一条中断说明发了 {len(sent)} 次"
+
+    # 但**又一次真的被打断**时,要再通知 —— 去重挡的是重复播报,不是后续的真中断。
+    with SessionLocal() as db:
+        session = db.query(AgentSession).filter_by(external_key=f"feishu:{bot['id']}:oc_once").one()
+        session.status = "running"
+        db.commit()
+        assert reconcile_orphaned_agent_sessions(db) == 1
+        assert service.notify_interrupted_chats(db) == 1
+    assert len(sent) == 2
+
+
+def test_发送失败不标记_下次启动重试(monkeypatch) -> None:
+    """失败多半是网络/令牌暂时不行,和「已送达」是两回事 —— 标了就永远沉默。"""
+    from app.ai.agent.host import reconcile_orphaned_agent_sessions
+
+    client = fresh_client()
+    sent: list = []
+    _, bot = _bound_bot(client, monkeypatch, sent)
+    monkeypatch.setattr(service, "run_turn", lambda *a, **k: TurnResult(text="好的"))
+    service.handle_incoming(bot["id"], "oc_fail", "msg-f", "ou_img", content_json=json.dumps({"text": "hi"}))
+    sent.clear()
+
+    with SessionLocal() as db:
+        session = db.query(AgentSession).filter_by(external_key=f"feishu:{bot['id']}:oc_fail").one()
+        session.status = "running"
+        db.commit()
+        reconcile_orphaned_agent_sessions(db)
+
+    def boom(*a, **k):
+        raise service.FeishuError("token 过期")
+
+    real_send = service.send_text
+    monkeypatch.setattr(service, "send_text", boom)
+    with SessionLocal() as db:
+        assert service.notify_interrupted_chats(db) == 0  # 发失败
+    monkeypatch.setattr(service, "send_text", real_send)
+    with SessionLocal() as db:
+        assert service.notify_interrupted_chats(db) == 1  # 恢复后补上

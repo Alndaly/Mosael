@@ -790,22 +790,39 @@ def reconcile_orphaned_agent_sessions(db: Session) -> int:
 INTERRUPTED_NOTICE = "上一轮对话因后端重启而中断,请重新发送。"
 
 
-def interrupted_external_sessions(db: Session, origin: str) -> list[tuple[str, str]]:
-    """刚被拨回 idle、且来自某个外部渠道的会话 → [(external_key, 通知文案)]。
+def interrupted_external_sessions(db: Session, origin: str) -> list[tuple[str, str, str]]:
+    """刚被拨回 idle、且来自某个外部渠道的会话 → [(external_key, 通知文案, 消息 id)]。
 
     给调用方(main.py 的启动流程)去把中断说明发回原聊天。**不在 host 里直接发**:
     host 属于 ai 层,而渠道在 integrations 层 —— 反过来 import 就成了环(领域层回调集成层
     那个环这个仓库已经踩过一次)。所以这里只报告"谁被中断了",发不发、怎么发由组合层决定。
+
+    **发过的不再报。** 判据是"最后一条消息带中断标记",而聊天里之后没人说话的话,它就
+    一直是最后一条 —— 开发模式 --reload 频繁重启,每次启动都把同一句话再发一遍,飞书那头
+    收到的是一串「请重新发送」(真机反馈)。所以调用方发成功后要调 mark_interrupt_notified,
+    这里跳过已标记的。
     """
     sessions = db.scalars(
         select(AgentSession).where(AgentSession.origin == origin, AgentSession.external_key.isnot(None))
     ).all()
-    out: list[tuple[str, str]] = []
+    out: list[tuple[str, str, str]] = []
     for session in sessions:
         last = session.messages[-1] if session.messages else None
-        if last is not None and last.error == "backend restarted mid-turn":
-            out.append((session.external_key or "", INTERRUPTED_NOTICE))
+        if last is None or last.error != "backend restarted mid-turn":
+            continue
+        if (last.payload or {}).get("interrupt_notified"):
+            continue
+        out.append((session.external_key or "", INTERRUPTED_NOTICE, last.id))
     return out
+
+
+def mark_interrupt_notified(db: Session, message_id: str) -> None:
+    """记下「这条中断说明已经发到外部渠道了」,下次启动不再重发。"""
+    message = db.get(AgentMessage, message_id)
+    if message is None:
+        return
+    message.payload = {**(message.payload or {}), "interrupt_notified": True}
+    db.commit()
 
 
 def cancel_queued_message(db: Session, session: AgentSession, message_id: str) -> list[str]:

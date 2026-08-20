@@ -446,22 +446,27 @@ def notify_interrupted_chats(db: Session) -> int:
     只写进了库。桌面端看得到它,而在飞书里发消息的那个人只看到一片沉默,和"还在处理中"
     分辨不出来,于是一直等。开发时 --reload 尤其频繁,这就是"卡死"的另一半。
     """
-    from app.ai.agent.host import interrupted_external_sessions
+    from app.ai.agent.host import interrupted_external_sessions, mark_interrupt_notified
 
     sent = 0
-    for external_key, notice in interrupted_external_sessions(db, "feishu"):
+    for external_key, notice, message_id in interrupted_external_sessions(db, "feishu"):
         # external_key 形如 feishu:<bot_id>:<chat_id>;chat_id 里不含冒号。
         parts = external_key.split(":", 2)
         if len(parts) != 3 or parts[0] != "feishu":
             continue
         bot = db.get(FeishuBot, parts[1])
         if bot is None or not bot.enabled:
+            # 机器人已删/已停用,这条通知**永远**发不出去 —— 也标掉,否则每次启动都白试一遍。
+            mark_interrupt_notified(db, message_id)
             continue
         try:
             send_text(bot, parts[2], notice)
             sent += 1
         except Exception:  # noqa: BLE001 —— 通知失败不该拖垮启动
+            # **发失败不标**:下次启动该再试 —— 失败多半是网络/令牌暂时不行,和"已送达"不同。
             logger.warning("feishu interrupt notice failed key=%s", external_key, exc_info=True)
+        else:
+            mark_interrupt_notified(db, message_id)
     return sent
 
 
