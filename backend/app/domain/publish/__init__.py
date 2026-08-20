@@ -293,7 +293,7 @@ def start_publish(
         workspace_id=workspace_id,
         kind="publish",
         created_by=created_by,
-        payload={"account_id": account.id, "asset_id": asset.id, "platform": account.platform},
+        payload={"account_id": account.id, "asset_id": asset.id, "platform": account.platform, "subject": title or asset.name},
         message="jobMsg_publishWaiting", message_params={"title": title or asset.name},
     )
     task = PublishTask(

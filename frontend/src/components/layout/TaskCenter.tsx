@@ -1,14 +1,15 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, CheckCircle2, CircleAlert, Download, GitBranch, ListChecks, Loader2, Mic, Send, Sparkles, Timer, Trash2, X } from "lucide-react";
+import { Activity, AudioLines, Captions, CheckCircle2, CircleAlert, Clapperboard, Download, GitBranch, Link as LinkIcon, ListChecks, Loader2, Mic, Send, Sparkles, Timer, Trash2, X } from "lucide-react";
 
 import { toast } from "sonner";
 
 import { api, type Job } from "@/api/client";
 import { EmptyState } from "@/components/layout/EmptyState";
-import { useI18n } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
 import { JobDetailDialog } from "@/components/layout/JobDetailDialog";
 import { gotoRecord } from "@/lib/deepLink";
+import { relativeTime } from "@/lib/time";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
@@ -52,7 +53,20 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
 
   const all = jobs.data ?? [];
   const active = all.filter((job) => ACTIVE.has(job.status));
-  const finished = all.filter((job) => !ACTIVE.has(job.status)).slice(0, 12);
+  // 已结束的按「种类 + 对象 + 结果文本」收拢:同一个素材的代理转码失败重试了五次,
+  // 是一件事发生了五次,不是五件事 —— 平铺成五行只会把别的任务挤出视野。
+  // 代表取最新一条(点开看的详情、行上的时间都是它的),其余只留一个 ×N。
+  const finished = React.useMemo(() => {
+    const groups = new Map<string, { job: Job; count: number }>();
+    for (const job of all.filter((item) => !ACTIVE.has(item.status))) {
+      const subject = String((job.payload as Record<string, unknown> | null)?.subject ?? "");
+      const key = `${job.kind}|${job.status}|${subject}|${job.error ?? job.message}`;
+      const seen = groups.get(key);
+      if (seen) seen.count += 1;
+      else groups.set(key, { job, count: 1 });
+    }
+    return [...groups.values()].slice(0, 12);
+  }, [all]);
 
   // 点任务行 → 打开该 job 的执行详情弹层(状态 + 事件时间线)。
   const openJob = (job: Job) => {
@@ -162,7 +176,7 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
               disabled={clearFinished.isPending}
               onClick={() => clearFinished.mutate()}
             >
-              <Trash2 size={11} /> {t("clearFinished")}
+              <Trash2 size={11} /> {t("clearEnded")}
             </button>
           )}
         </div>
@@ -171,8 +185,8 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
             <JobRow key={job.id} job={job} onOpen={() => openJob(job)} onCancel={() => cancelJob.mutate(job.id)} />
           ))}
           {active.length > 0 && finished.length > 0 && <div className="mx-1.5 my-1 h-px bg-border" />}
-          {finished.map((job) => (
-            <JobRow key={job.id} job={job} onOpen={() => openJob(job)} />
+          {finished.map(({ job, count }) => (
+            <JobRow key={job.id} job={job} count={count} onOpen={() => openJob(job)} />
           ))}
           {all.length === 0 && (
             <EmptyState size="compact" icon={<ListChecks size={15} />} title={t("noJobsTitle")} body={t("noJobs")} />
@@ -211,6 +225,12 @@ const KIND_META: Record<string, { icon: React.ReactNode; labelKey: string }> = {
   scheduled: { icon: <Timer size={13} />, labelKey: "jobKindScheduled" },
   workflow: { icon: <GitBranch size={13} />, labelKey: "jobKindWorkflow" },
   publish: { icon: <Send size={13} />, labelKey: "jobKindPublish" },
+  // 这些种类真实存在(proxy 还是失败大户),没有条目就全落到「任务」—— 一列
+  // 十二条「任务 · 失败」,分不清是谁的什么活,这正是任务中心巡检里最响的一声。
+  proxy: { icon: <Clapperboard size={13} />, labelKey: "jobKindProxy" },
+  url_import: { icon: <LinkIcon size={13} />, labelKey: "jobKindUrlImport" },
+  subtitle_dub: { icon: <Captions size={13} />, labelKey: "jobKindSubtitleDub" },
+  tts: { icon: <AudioLines size={13} />, labelKey: "jobKindTts" },
 };
 
 /** 任务 → 对应详情页;payload 里有 project_id 就带上,编辑器直接落到项目。 */
@@ -230,11 +250,13 @@ function jobRoute(job: Job): string | null {
   return `/${view}${typeof projectId === "string" && projectId ? `?p=${projectId}` : ""}`;
 }
 
-function JobRow({ job, onOpen, onCancel }: { job: Job; onOpen?: () => void; onCancel?: () => void }) {
+function JobRow({ job, count = 1, onOpen, onCancel }: { job: Job; count?: number; onOpen?: () => void; onCancel?: () => void }) {
   const t = useI18n();
+  const { locale } = usePreferences();
   const meta = KIND_META[job.kind] ?? { icon: <Activity size={13} />, labelKey: "jobKindOther" };
   const running = ACTIVE.has(job.status);
   const failed = !running && job.status === "failed";
+  const subject = String((job.payload as Record<string, unknown> | null)?.subject ?? "");
   return (
     <div
       className="grid cursor-pointer grid-cols-[26px_minmax(0,1fr)] items-start gap-1.5 rounded-md px-1.5 py-[7px] hover:bg-secondary"
@@ -255,8 +277,24 @@ function JobRow({ job, onOpen, onCancel }: { job: Job; onOpen?: () => void; onCa
       </span>
       <div className="grid min-w-0 gap-[3px]">
         <div className="flex items-center justify-between gap-1.5 [&_strong]:text-xs [&_strong]:font-semibold">
-          <strong>{t(meta.labelKey as never)}</strong>
-          <span className="inline-flex items-center text-ui-2xs tabular-nums text-muted-foreground">
+          <span className="flex min-w-0 items-baseline gap-1.5">
+            <strong className="shrink-0">{t(meta.labelKey as never)}</strong>
+            {/* 干的是谁的活:素材名/序列名/提示词。没有它,一列失败全长一个样。 */}
+            {subject && (
+              <span className="min-w-0 truncate text-ui-xs text-muted-foreground" title={subject}>
+                {subject}
+              </span>
+            )}
+            {count > 1 && (
+              <span className="shrink-0 rounded-full bg-secondary px-1.5 text-ui-2xs tabular-nums text-muted-foreground">
+                ×{count}
+              </span>
+            )}
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-1 text-ui-2xs tabular-nums text-muted-foreground">
+            {!running && (
+              <span title={job.updated_at}>{relativeTime(job.updated_at, locale)}</span>
+            )}
             {job.status === "succeeded" ? (
               <CheckCircle2 size={12} className="text-[#16a34a]" />
             ) : job.status === "failed" ? (

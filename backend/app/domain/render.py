@@ -255,6 +255,7 @@ def start_export(db: Session, sequence_id: str, export_params: dict | None = Non
         created_by=created_by,
         payload={
             "sequence_id": sequence_id,
+            "subject": sequence.name,
             "sequence_revision": plan.sequence_revision,
             "render_plan_hash": plan.render_plan_hash,
             **({"export_params": export_params} if export_params else {}),

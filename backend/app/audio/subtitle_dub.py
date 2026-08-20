@@ -99,6 +99,7 @@ def start_subtitle_dub(
         kind="subtitle_dub",
         created_by=created_by,
         payload={
+            "subject": sequence.name,
             "sequence_id": sequence_id,
             "clip_ids": [clip.id for clip in clips],
             "match_duration": match_duration,

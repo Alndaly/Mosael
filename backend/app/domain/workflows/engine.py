@@ -52,7 +52,7 @@ def start_workflow_job(
             workspace_id=workflow.workspace_id,
             kind="workflow",
             created_by=created_by,
-            payload={"workflow_id": workflow.id, "params": params or {}},
+            payload={"workflow_id": workflow.id, "params": params or {}, "subject": workflow.name},
             message="jobMsg_workflowQueued", message_params={"name": workflow.name},
         )
         db.commit()

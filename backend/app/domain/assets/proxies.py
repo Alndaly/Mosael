@@ -63,7 +63,7 @@ def start_proxy_job(db: Session, asset: Asset, *, created_by: str | None, force:
         workspace_id=asset.workspace_id,
         kind="proxy",
         created_by=created_by,
-        payload={"asset_id": asset.id},
+        payload={"asset_id": asset.id, "subject": asset.name},
         message="jobMsg_proxyQueued",
     )
     info = dict(asset.media_info or {})

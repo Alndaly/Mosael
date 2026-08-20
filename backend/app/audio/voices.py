@@ -433,6 +433,7 @@ def start_synthesis(
         kind="tts",
         created_by=created_by,
         payload={
+            "subject": text[:80],
             "voice_id": voice_id,
             "project_id": project_id,
             "text": text[:200],

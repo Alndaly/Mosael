@@ -192,7 +192,7 @@ def start_transcription(db: Session, asset_id: str, *, created_by: str | None, l
         db,
         workspace_id=asset.workspace_id,
         kind="transcribe",
-        payload={"asset_id": asset_id, "language": (language or "").strip()},
+        payload={"asset_id": asset_id, "language": (language or "").strip(), "subject": asset.name},
         created_by=created_by,
         message="jobMsg_asrQueued",
     )

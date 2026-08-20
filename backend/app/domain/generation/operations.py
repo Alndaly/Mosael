@@ -57,6 +57,7 @@ def create_generation_job(
         kind="ai_generation",
         created_by=created_by,
         payload={
+            "subject": prompt[:80],
             "provider_profile_id": provider_profile.id if provider_profile else None,
             "provider": provider,
             "model": model,

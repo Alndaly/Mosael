@@ -76,6 +76,7 @@ def run_scheduled_task(db: Session, task: ScheduledTask) -> tuple[ScheduledTaskR
         created_by=task.owner_user_id,
         kind=task.kind,
         payload={
+            "subject": task.name,
             "scheduled_task_id": task.id,
             "scheduled_task_run_id": run.id,
             "project_id": task.project_id,

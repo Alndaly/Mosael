@@ -63,6 +63,8 @@ def start_url_import(
         created_by=created_by,
         payload={
             "project_id": project_id,
+            "subject": str(chosen[0].get("title") or chosen[0].get("url") or "")[:80]
+            + (f" 等 {len(chosen)} 条" if len(chosen) > 1 else ""),
             "items": chosen,
             "kind": kind,
             "profile_id": profile_id or "",
