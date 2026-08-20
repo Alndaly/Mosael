@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, CheckCircle2, CircleAlert, Copy, Loader2, Play, Plus, Power, Timer, Trash2, Users2 } from "lucide-react";
+import { GitBranch, CalendarClock, CheckCircle2, CircleAlert, Copy, Loader2, Play, Plus, Power, Timer, Trash2, Users2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -229,8 +229,10 @@ function BoundWorkflowRow({ task, workspaceId }: { task: ScheduledTask; workspac
       label={t("wfBoundWorkflow")}
       description={workflow?.description || t("taskWorkflowDesc")}
     >
-      <Button size="sm" variant="outline" onClick={() => (window.location.hash = "#/workflows")}>
-        {workflow?.name ?? workflowId ?? "—"}
+      {/* 按钮内容是工作流的**名字**,而用户的工作流常叫「新工作流」—— 光秃秃一个名字
+          看起来像「新建工作流」动作按钮。图标 + 悬停说明把它钉回「这是当前绑定,点击去看」。 */}
+      <Button size="sm" variant="outline" title={t("taskOpenWorkflow")} onClick={() => (window.location.hash = "#/workflows")}>
+        <GitBranch size={13} /> {workflow ? workflow.name : workflowId || t("taskNoWorkflow")}
       </Button>
     </SettingsRow>
   );
@@ -397,6 +399,7 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
       void qc.invalidateQueries({ queryKey: ["jobs", workspaceId, "all"] });
     },
   });
+  const { locale } = usePreferences();
   const deleteTask = useMutation({
     mutationFn: () => api(`/api/scheduled-tasks/${task.id}`, { method: "DELETE" }),
     onSuccess: () => {
@@ -405,10 +408,27 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
     },
   });
 
+  // 计划一栏说人话:手动/Webhook 任务的 schedule 本来就是空的,把 `{}` 原样端给用户
+  // 只会让人以为坏了。真有结构而这里不认识的,才退回 JSON —— 那时原文就是信息。
   const scheduleLabel =
     task.trigger_type === "interval" && task.schedule?.seconds
       ? t("everySeconds").replace("{s}", String(task.schedule.seconds))
-      : JSON.stringify(task.schedule ?? {});
+      : task.trigger_type === "manual"
+        ? t("trigger_manual")
+        : task.trigger_type === "webhook"
+          ? t("trigger_webhook")
+          : Object.keys(task.schedule ?? {}).length === 0
+            ? t("schedNone")
+            : JSON.stringify(task.schedule);
+
+  // 后端时间是 UTC 无时区标记的 ISO 串;补 Z 再按本地时区、当前语言给人读。
+  const localTime = (iso: string | null | undefined) => {
+    if (!iso) return null;
+    const normalized = /Z|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`;
+    return new Date(normalized).toLocaleString(locale, {
+      month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+    });
+  };
 
   return (
     <div className="grid w-full content-start gap-3 px-0.5 pb-4 pt-0.5">
@@ -433,10 +453,12 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
           <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">{scheduleLabel}</code>
         </SettingsRow>
         <SettingsRow label={t("taskNextRun")} description={t("taskNextRunDesc")}>
-          <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">{task.next_run_at ?? t("manual")}</code>
+          <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">
+            {localTime(task.next_run_at) ?? t("manualNoSchedule")}
+          </code>
         </SettingsRow>
         <SettingsRow label={t("taskLastRun")}>
-          <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">{task.last_run_at ?? "—"}</code>
+          <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">{localTime(task.last_run_at) ?? "—"}</code>
         </SettingsRow>
         <SettingsRow label={t("deleteTask")} description={t("deleteTaskDesc")}>
           <Button size="sm" variant="outline" className="hover:border-[color-mix(in_oklab,var(--destructive)_45%,var(--border))] hover:text-destructive" onClick={() => setDeleting(true)}>

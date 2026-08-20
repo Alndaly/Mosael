@@ -1708,7 +1708,11 @@ export const messages = {
     tasks: "任务",
     recentJobs: "最近 Job",
     noTasks: "还没有定时任务",
-    manual: "manual",
+    manual: "手动",
+    schedNone: "未设置",
+    manualNoSchedule: "手动触发,不排期",
+    taskOpenWorkflow: "打开工作流页面",
+    taskNoWorkflow: "未绑定",
 
     // Plugins
     pluginsTitle: "插件",
@@ -3537,7 +3541,11 @@ export const messages = {
     tasks: "Tasks",
     recentJobs: "Recent jobs",
     noTasks: "No scheduled tasks",
-    manual: "manual",
+    manual: "Manual",
+    schedNone: "Not set",
+    manualNoSchedule: "Manual — not scheduled",
+    taskOpenWorkflow: "Open workflows page",
+    taskNoWorkflow: "Not bound",
 
     // Plugins
     pluginsTitle: "Plugins",
