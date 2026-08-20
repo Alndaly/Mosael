@@ -314,10 +314,9 @@ export function AgentTurnContent({
         item.type === "tool" && item.tool ? (
           <ToolCalls key={`tool-${item.tool.id}-${index}`} tools={[item.tool]} />
         ) : item.type === "subtool" && item.tool ? (
-          // 子智能体的一步:缩进 + 左边线,读作"这是上面那张 run_subagent 卡的内部动作"。
-          <div key={`subtool-${item.tool.id}-${index}`} className="border-l-2 border-border/70 pl-2.5 ml-2">
-            <ToolCalls tools={[item.tool]} />
-          </div>
+          // 子步卡与其它卡同宽平铺,不内嵌(间距要一致);它属于哪个子代理,点头部
+          // 「N 个子代理」或右侧面板进它自己的会话视图看全貌。
+          <ToolCalls key={`subtool-${item.tool.id}-${index}`} tools={[item.tool]} />
         ) : item.type === "thinking" ? (
           <ThinkingBlock key={`thinking-${index}`} text={item.text} done={item.done} />
         ) : item.type === "text" && item.text ? (

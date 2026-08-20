@@ -31,7 +31,7 @@ import { readToolPayload } from "@/features/ai-studio/toolPayload";
 import { TraceStatsBar, TraceView } from "@/features/ai-studio/trace/TraceView";
 import { buildTurns } from "@/features/ai-studio/trace/traceModel";
 import { useMediaMatch } from "@/lib/useMediaMatch";
-import { SubagentButton } from "@/components/agent/SubagentPanel";
+import { InspectorSubagentList, SubagentBreadcrumb, SubagentButton, SubagentSessionView, type SubagentRun } from "@/components/agent/SubagentPanel";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 
@@ -344,6 +344,11 @@ export function ChatWorkspace({
   const visibleMessages = (messages.data ?? []).filter((message) => !queuedIds.has(message.id));
   //: 「N 个子代理」的数据源:历史消息的 timeline 摊平,再接上正在流的这一轮 ——
   //: 子代理跑到一半时就该在列表里(转着圈),不是等它跑完才出现。
+  //: 正在查看的子代理(DSH 形态:进它自己的会话视图,面包屑返回)。换会话就退出 ——
+  //: 面包屑上写的是**当前**会话的名字,挂着上一个会话的子代理只会指鹿为马。
+  const [viewingSubagent, setViewingSubagent] = React.useState<SubagentRun | null>(null);
+  React.useEffect(() => setViewingSubagent(null), [activeSession?.id]);
+
   const subagentSourceTimeline = React.useMemo(
     () => [
       ...visibleMessages.flatMap(
@@ -524,7 +529,16 @@ export function ChatWorkspace({
       </aside>
 
       <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)_auto]">
-        <div className="flex items-center gap-2 border-b border-border px-3 py-1.5">
+        {/* min-w-0:这行是 grid 子项,默认 min-width:auto —— 面包屑里的长任务名会把它撑到
+            section 的 overflow-hidden 上被硬裁,而不是走内部的 truncate 省略号。 */}
+        <div className="flex min-w-0 items-center gap-2 border-b border-border px-3 py-1.5">
+          {viewingSubagent ? (
+            <SubagentBreadcrumb
+              sessionTitle={activeSession?.title || t("chatSessionsTitle")}
+              run={viewingSubagent}
+              onBack={() => setViewingSubagent(null)}
+            />
+          ) : (
           <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border" role="tablist">
             {(["chat", "trace"] as const).map((item) => (
               <button
@@ -542,14 +556,21 @@ export function ChatWorkspace({
               </button>
             ))}
           </div>
+          )}
           {/* 「N 个子代理」:这个会话派出过的子智能体入口(DSH 同款位置)。没派过就不渲染。 */}
-          <span className="ml-auto">
-            <SubagentButton timeline={subagentSourceTimeline} />
-          </span>
+          {!viewingSubagent && (
+            <span className="ml-auto">
+              <SubagentButton timeline={subagentSourceTimeline} onOpen={setViewingSubagent} />
+            </span>
+          )}
         </div>
         {/* 生成页同款:没有会话也常驻输入框,空状态居中在消息区,首次发送自动建会话。
-            输入框在两个视图下都在 —— 看轨迹时想到要补一句,不该先切回对话。 */}
-        {
+            输入框在两个视图下都在 —— 看轨迹时想到要补一句,不该先切回对话。
+            查看子代理时整个主区换成它的会话视图(无输入框:它的进程已结束,不可继续 ——
+            装一个发不出去的输入框比没有更糟)。 */}
+        {viewingSubagent ? (
+          <SubagentSessionView run={viewingSubagent} />
+        ) : (
           <>
             {view === "trace" ? (
               <TraceView
@@ -716,7 +737,7 @@ export function ChatWorkspace({
               className="mx-auto -mt-2 mb-2 w-[min(780px,calc(100%-32px))] px-3"
             />
           </>
-        }
+        )}
       </section>
 
       {view === "chat" && <ChatInspector
@@ -729,6 +750,8 @@ export function ChatWorkspace({
         streamTimeline={streamTimeline}
         manifest={manifest.data ?? null}
         tools={tools.data ?? []}
+        subagentTimeline={subagentSourceTimeline}
+        onOpenSubagent={setViewingSubagent}
       />}
     </div>
   );
@@ -744,6 +767,8 @@ function ChatInspector({
   streamTimeline,
   manifest,
   tools,
+  subagentTimeline,
+  onOpenSubagent,
 }: {
   workspace: Workspace;
   session: AgentSession | null;
@@ -754,6 +779,8 @@ function ChatInspector({
   streamTimeline: AgentTimelineItem[];
   manifest: AgentManifest | null;
   tools: AgentTool[];
+  subagentTimeline: AgentTimelineItem[];
+  onOpenSubagent: (run: SubagentRun) => void;
 }) {
   const t = useI18n();
   // 会话没显式设模型时,后端按供应商默认回退——与底部模型选择器同源,取生效模型而不是裸 session.model
@@ -814,6 +841,10 @@ function ChatInspector({
       {/* 计划排在工具之前:等待时最想知道的是"它打算做什么、做到哪了",
           而不是"刚才调了哪个工具"。没有计划时整块不渲染。 */}
       <PlanCard plan={(session?.plan ?? null) as PlanStep[] | null} />
+
+      {/* 子代理排在计划之后、工具之前:它是"派出去的活",粒度介于计划和单次调用之间。
+          没派过就不渲染 —— 和计划同一条规矩。 */}
+      <InspectorSubagentList timeline={subagentTimeline} onOpen={onOpenSubagent} />
 
       {/* 「最近工具」与「能力」原本是两块 —— 一块只有名字和状态(看不出做了什么),另一块把
           36 个工具铺成四行胶囊(占掉半个侧栏,而那 8 个只是注册表顺序的前 8 个)。

@@ -415,8 +415,9 @@ export function TraceView({
                     event.key === selectedKey && "bg-accent",
                   )}
                 >
-                  {/* 子工具的徽章右移一格:同一列里凭缩进就能看出层级(参考 DSH 的 SUBTOOL 行)。 */}
-                  <span className={cn("justify-self-start rounded-full border px-1.5 py-px text-ui-2xs", KIND_TONE[event.kind], event.kind === "subtool" && "ml-3")}>
+                  {/* 子工具行**不缩进**:DSH 的 SUBTOOL 行也是与 TOOL 平铺左对齐,靠徽章分层 ——
+                      缩进会让这一列的行距忽宽忽窄(试过,被打回)。 */}
+                  <span className={cn("justify-self-start rounded-full border px-1.5 py-px text-ui-2xs", KIND_TONE[event.kind])}>
                     {t(KIND_LABEL[event.kind] as never)}
                   </span>
                   <span className="min-w-0 truncate font-mono text-ui-xs text-muted-foreground">
