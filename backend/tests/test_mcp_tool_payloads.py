@@ -40,6 +40,8 @@ ARGS: dict[str, dict[str, Any]] = {
     "translate_text": {"text": "hello", "target": "zh"},
     "create_project": {"name": "冒烟项目"},
     "notify_workspace": {"title": "冒烟通知", "body": "正文"},
+    "list_agent_sessions": {},
+    "notify_agent_session": {"session_id": "no-such-session", "message": "冒烟通知"},
     "remember": {"content": "冒烟记忆"},
     "sleep": {"seconds": 0},
     "get_job": {"job_id": "no-such-job"},

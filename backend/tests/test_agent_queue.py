@@ -311,3 +311,36 @@ def test_a_steered_message_also_lands_at_the_moment_it_was_sent(monkeypatch) -> 
         assert steered.created_at >= original.created_at
         assert not (steered.payload or {}).get("queued")
     assert _wait_idle(sid) == "idle"
+
+
+def test_另一个智能体发来的通知_不夺标题_且带结构化来源(monkeypatch) -> None:
+    """notify_agent_session 的消息走同一个 /messages 端点,但它不是"人提的第一件事":
+    「新对话」的自动命名要跳过它,payload 要带 from_agent_session —— 前端徽章、
+    以及一切"这条是谁发的"的判断,都以这个结构化字段为准,不做信封文案匹配。"""
+    monkeypatch.setattr(host, "run_turn", lambda *a, **k: TurnResult(text="ok"))
+
+    client = fresh_client()
+    sid = _session(client)
+    client.post(
+        f"/api/agent/sessions/{sid}/messages",
+        json={"content": "【通知】请汇报进展", "origin_session_id": "peer-session-1"},
+    )
+    assert _wait_idle(sid) == "idle"
+
+    with SessionLocal() as db:
+        session = db.get(AgentSession, sid)
+        assert session.title == "新对话", "通知不该顶掉待命名的会话标题"
+        message = (
+            db.query(AgentMessage)
+            .filter(AgentMessage.session_id == sid, AgentMessage.role == "user")
+            .order_by(AgentMessage.created_at.desc())
+            .first()
+        )
+        assert (message.payload or {}).get("from_agent_session") == "peer-session-1"
+
+    # 对照:人发的第一条消息仍然照旧命名会话
+    sid2 = _session(client)
+    client.post(f"/api/agent/sessions/{sid2}/messages", json={"content": "帮我剪个片"})
+    assert _wait_idle(sid2) == "idle"
+    with SessionLocal() as db:
+        assert db.get(AgentSession, sid2).title == "帮我剪个片"

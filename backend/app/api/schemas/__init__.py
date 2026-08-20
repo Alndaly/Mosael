@@ -1818,6 +1818,9 @@ class AgentMemoryUpdate(BaseModel):
 class AgentMessageCreate(BaseModel):
     content: str = Field(min_length=1, max_length=8000)
     context: str | None = Field(default=None, max_length=4000)
+    #: 发起方是另一个智能体会话时带上它的 id(notify_agent_session)。结构化而不是靠文案前缀:
+    #: 标题自动命名要跳过它,前端要给它画来源徽章 —— 两件事都不该建立在字符串匹配上。
+    origin_session_id: str | None = Field(default=None, max_length=64)
 
 
 class AgentMessageOut(OrmModel):

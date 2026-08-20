@@ -192,6 +192,7 @@ READ_ONLY_TOOLS = frozenset(
         "get_transcript",
         "get_workflow",
         "inspect_sequence",
+        "list_agent_sessions",
         "list_assets",
         "list_generation_models",
         "list_jobs",
@@ -228,6 +229,7 @@ MUTATING_TOOLS = frozenset(
         # 往素材库里写东西(而且是一次可能很大的下载),不是只读。
         "import_media_from_url",
         "invoke_plugin_tool",
+        "notify_agent_session",
         "notify_workspace",
         "remember",
         "transcribe_asset",
@@ -1194,6 +1196,58 @@ def notify_workspace(title: str, body: str = "", workspace_id: str = "") -> dict
         "/api/notifications",
         {"workspace_id": workspace_id or _default_workspace_id(), "title": title, "body": body},
     )
+
+
+@mcp.tool()
+def list_agent_sessions(workspace_id: str = "") -> list[dict[str, Any]]:
+    """Runs directly: list the agent sessions in this workspace (id, title, status).
+
+    Use before notify_agent_session to find who to notify. status "running" means that
+    agent is mid-turn right now; your notice would be queued behind its current work.
+    """
+    sessions = _get("/api/agent/sessions", {"workspace_id": workspace_id or _default_workspace_id()})
+    me = _SESSION_ID.get()
+    return [
+        {
+            "session_id": item.get("id"),
+            "title": item.get("title"),
+            "status": item.get("status"),
+            "is_self": item.get("id") == me,
+        }
+        for item in sessions
+    ]
+
+
+@mcp.tool()
+def notify_agent_session(session_id: str, message: str) -> dict[str, Any]:
+    """Runs directly: send a message to ANOTHER agent session (@-mention style).
+
+    The target agent receives it as a message: if it is idle this starts a new turn for it
+    immediately; if it is mid-turn the message is queued and handled right after. Use for
+    handing work to, or reporting results back to, a different conversation's agent.
+    Do NOT use to talk to the current conversation — just write your reply.
+    """
+    me = _SESSION_ID.get()
+    if session_id == me:
+        return {"error": "这是当前会话自己 —— 想说什么直接写在回复里,不用发通知。"}
+    text = (message or "").strip()
+    if not text:
+        return {"error": "message 不能为空"}
+    # 信封写明来源:收到的那边(模型和用户)一眼看出这不是人发的,而是哪个会话的智能体发的。
+    # 来源同时走结构化字段(origin_session_id):标题自动命名跳过它、前端靠它画徽章 ——
+    # 这两件事都不该建立在信封文案的字符串匹配上。
+    envelope = f"【来自另一个智能体会话的通知】发起会话 id:{me or '(未知)'}\n\n{text}"
+    result = _post(
+        f"/api/agent/sessions/{session_id}/messages",
+        {"content": envelope, "origin_session_id": me or None},
+    )
+    queued = bool((result.get("payload") or {}).get("queued")) if isinstance(result, dict) else False
+    return {
+        "delivered": True,
+        "target_session_id": session_id,
+        # queued=True:对方正忙,这条会排在它当前回合之后;False:对方是空闲的,已直接开跑。
+        "queued": queued,
+    }
 
 
 @mcp.tool()
