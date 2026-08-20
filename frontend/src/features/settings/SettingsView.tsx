@@ -237,7 +237,8 @@ function AccountSection() {
   const t = useI18n();
   const { user, updateProfile, changePassword, updateAvatar, logout } = useAuth();
   const [profile, setProfile] = React.useState(() => profileFromUser(user));
-  const [saveState, setSaveState] = React.useState<"saved" | "saving" | "error">("saved");
+  // idle:还没改过任何东西 —— 这时说「资料已保存」是把结果当状态,第一眼就是误导。
+  const [saveState, setSaveState] = React.useState<"idle" | "saved" | "saving" | "error">("idle");
   const [passwords, setPasswords] = React.useState({ current: "", next: "", confirm: "" });
   const [passwordPending, setPasswordPending] = React.useState(false);
   const lastSavedRef = React.useRef(profileKey(profile));
@@ -363,7 +364,7 @@ function AccountSection() {
             )}
             aria-live="polite"
           >
-            {saveState === "saving" ? (
+            {saveState === "idle" ? null : saveState === "saving" ? (
               <>
                 <Loader2 size={12} className="animate-openstudio-spin" /> {t("profileSaving")}
               </>

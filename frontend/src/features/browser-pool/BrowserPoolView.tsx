@@ -277,11 +277,15 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                         </Button>
                       )}
                       <span className="flex-1" />
-                      <Switch
-                        checked={p.enabled}
-                        onCheckedChange={(next) => setEnabled.mutate({ p, enabled: next })}
-                        aria-label={t("publishAccountEnabled")}
-                      />
+                      {/* 开关控制的是「智能体/发布还能不能用这个账号」—— 光一个无字开关猜不出来,
+                          把作用写在悬停里(卡上没地方常驻一行说明)。 */}
+                      <span title={t("publishAccountEnabledHint")}>
+                        <Switch
+                          checked={p.enabled}
+                          onCheckedChange={(next) => setEnabled.mutate({ p, enabled: next })}
+                          aria-label={t("publishAccountEnabled")}
+                        />
+                      </span>
                     </div>
                   </div>
                 </ContextMenuTrigger>

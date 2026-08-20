@@ -153,6 +153,11 @@ def reconcile_missing_proxies(db: Session) -> int:
             if proxy_status(asset) != "ready":
                 _set_proxy_meta(db, asset.id, "ready", key=proxy_key_for(asset))
             continue
+        # failed 是**判定过的终态**,不是"还没跑":源文件坏的素材每次转必败,启动扫描再替它
+        # 排队只会无限重试 —— dev 模式每次热重启跑一轮,两个坏素材曾这样滚出上千条失败任务。
+        # 这里只救 pending 孤儿(重启害死的)和从没跑过的;想再试坏素材走手动重试(那是人的判断)。
+        if proxy_status(asset) == "failed":
+            continue
         if start_proxy_job(db, asset, created_by=None, force=True):  # 启动时的补齐扫描,没有操作人
             queued += 1
     return queued
