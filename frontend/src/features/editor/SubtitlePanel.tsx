@@ -124,9 +124,12 @@ export function SubtitlePanel({
           const active = playhead >= clip.timeline_start && playhead < clipEnd(clip);
           return (
             <div key={clip.id} className={cn(
-              "grid gap-0 border-l-2 border-l-transparent py-1.5 pl-2 pr-1",
-              // 播放头所在的那条用左侧色条 + 轻底色点亮 —— 直角的,和分隔线拼得上。
-              active && "border-l-primary bg-[color-mix(in_oklab,var(--primary)_5%,transparent)]",
+              // **不在行上留 border-l**:父容器的 divide-border 选择器特异性更高,会把子项的
+              // 整圈 border-color 一起改掉 —— "透明的左边框"于是显形成一条实线(实测计算样式
+              // 里 border-l-transparent 被覆盖成了主题边框色)。选中态的色条用绝对定位画,
+              // 不占边框,谁也覆盖不了它。
+              "relative grid gap-0 py-1.5 pl-2 pr-1",
+              active && "bg-[color-mix(in_oklab,var(--primary)_5%,transparent)] before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-primary",
             )}>
               <div className="flex items-center justify-between gap-2">
                 <button
