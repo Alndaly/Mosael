@@ -70,6 +70,7 @@ import { TranscriptPanel } from "./TranscriptPanel";
 import { VoicePanel } from "./VoicePanel";
 import { Timeline, trackAcceptsAsset, type TrimPayload } from "./timeline/Timeline";
 import { usePersistentTab } from "@/lib/usePersistentTab";
+import { useMediaMatch } from "@/lib/useMediaMatch";
 import { cn } from "@/lib/utils";
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useSensor, useSensors, type DragStartEvent } from "@dnd-kit/core";
 
@@ -133,15 +134,7 @@ function clampLeft(tab: LeftTab, value: unknown): number {
 
 /** 紧凑断点(Global rhythm):≤1000px 时编辑器收成两列,检查器改为浮动抽屉。 */
 function useCompact(): boolean {
-  const query = "(max-width: 1000px)";
-  return React.useSyncExternalStore(
-    (notify) => {
-      const media = window.matchMedia(query);
-      media.addEventListener("change", notify);
-      return () => media.removeEventListener("change", notify);
-    },
-    () => window.matchMedia(query).matches,
-  );
+  return useMediaMatch("(max-width: 1000px)");
 }
 
 function readPanelSizes(): PanelSizes {
