@@ -1,11 +1,12 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Brain, Check, ChevronDown, ChevronRight, CircleAlert, FileWarning, Loader2, Wrench } from "lucide-react";
+import { Brain, Check, ChevronDown, ChevronRight, CircleAlert, FileWarning, Loader2 } from "lucide-react";
 
 import { api, assetFileUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { AgentMarkdown } from "@/components/agent/Markdown";
 import { useImagePreview } from "@/components/app/image-preview";
+import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { decodeByteFallback } from "@/lib/byteFallback";
 import { formatElapsedSeconds } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -142,6 +143,8 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
   const data = React.useMemo(() => toolResultData(tool.result), [tool.result]);
   const card = tool.status === "error" ? null : <ToolResultCard value={data} />;
   const resultText = format(data ?? tool.result);
+  // card 是 JSX 元素,恒为真 —— 不能拿它当"有没有内容"的判据(那会让空结果的箭头变成死键)。
+  // 有富卡就必有 data,也就必有 resultText,所以这两个足够。
   const hasBody = Boolean(argText || resultText);
   const elapsed =
     typeof tool.usage?.duration_seconds === "number" ? formatElapsedSeconds(tool.usage.duration_seconds) : null;
@@ -152,55 +155,73 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
     [tool.args, data, tool.status],
   );
 
+  const statusWord =
+    tool.status === "running" ? t("toolRunning") : tool.status === "error" ? t("toolFailed") : t("toolDone");
+
   return (
-    <div
-      className={cn(
-        "overflow-hidden rounded-lg border border-border bg-muted",
-        tool.status === "error" && "border-[color-mix(in_srgb,var(--destructive)_40%,var(--border))]",
-      )}
-    >
-      <button
-        type="button"
-        className="flex w-full items-center gap-1.5 px-[9px] py-1.5 text-left text-xs text-muted-foreground transition-colors duration-100 enabled:cursor-pointer enabled:hover:bg-[color-mix(in_srgb,var(--foreground)_5%,transparent)]"
-        onClick={() => hasBody && setOpen((value) => !value)}
-        aria-expanded={hasBody ? open : undefined}
-        disabled={!hasBody}
-      >
-        <span
-          className={cn(
-            "inline-flex flex-none text-muted-foreground",
-            tool.status === "done" && "text-success",
-            tool.status === "error" && "text-destructive",
-          )}
-          aria-hidden
-        >
-          {tool.status === "running" ? (
-            <Loader2 size={12} className="animate-openstudio-spin" />
-          ) : tool.status === "error" ? (
-            <CircleAlert size={12} />
-          ) : (
-            <Check size={12} />
-          )}
-        </span>
-        <Wrench size={11} className="flex-none text-muted-foreground" aria-hidden />
-        <span className="flex-none font-mono text-foreground">{tool.name}</span>
-        {preview && !open && <span className="min-w-0 flex-1 truncate font-mono text-ui-xs text-muted-foreground">{preview}</span>}
-        <span className={cn("ml-auto flex-none text-ui-xs text-muted-foreground", tool.status === "error" && "text-destructive")}>
-          {tool.status === "running" ? t("toolRunning") : tool.status === "error" ? t("toolFailed") : t("toolDone")}
-        </span>
-        {elapsed && <span className="flex-none text-ui-xs text-muted-foreground">{t("usageDuration").replace("{t}", elapsed)}</span>}
-        {hasBody && (
-          <ChevronRight
-            size={13}
-            className={cn("flex-none text-muted-foreground transition-transform duration-[120ms]", open && "rotate-90")}
-            aria-hidden
-          />
+    // 一次工具调用是对话里的**一条行内标记**,不是一张与正文并列的卡片 —— 所以用 Marker:
+    // 折叠态就是安静的一行(没有填充、没有整圈边框),不再和旁边的正文抢分量;展开的明细挂在
+    // 一条左竖线下面,读起来是"这一步的细节",而不是又一个内容块。
+    <div className="w-full min-w-0">
+      <Marker
+        asChild
+        className={cn(
+          "rounded-md px-1.5 py-1 transition-colors duration-100",
+          hasBody && "enabled:cursor-pointer enabled:hover:bg-muted",
+          tool.status === "error" && "text-destructive",
         )}
-      </button>
-      {/* 富结果卡(如 list_assets 的素材列表)可能几十条 → 封顶高度、内部滚动,别把整张卡撑到几屏高。 */}
-      {card && <div className="max-h-[360px] min-w-0 overflow-y-auto overflow-x-hidden border-t border-border px-2.5 py-2">{card}</div>}
+      >
+        <button
+          type="button"
+          onClick={() => hasBody && setOpen((value) => !value)}
+          aria-expanded={hasBody ? open : undefined}
+          disabled={!hasBody}
+        >
+          <MarkerIcon
+            className={cn(
+              "inline-flex items-center justify-center",
+              tool.status === "done" && "text-success",
+              tool.status === "error" && "text-destructive",
+            )}
+          >
+            {/* 图标显式带 size-3:Marker 会把没有 size- 类的 svg 统一撑到 16px,
+                而这一行的节奏是按 12px 图标定的。 */}
+            {tool.status === "running" ? (
+              <Loader2 className="size-3 animate-openstudio-spin" />
+            ) : tool.status === "error" ? (
+              <CircleAlert className="size-3" />
+            ) : (
+              <Check className="size-3" />
+            )}
+          </MarkerIcon>
+          <MarkerContent className="flex min-w-0 flex-1 items-center gap-1.5">
+            <span className="flex-none font-mono text-foreground">{tool.name}</span>
+            {preview && !open && <span className="min-w-0 flex-1 truncate font-mono">{preview}</span>}
+          </MarkerContent>
+          {/* 字号挂在 span 上:根是 button,那条全局 `button{font:inherit}` 会吃掉根上的字号。 */}
+          <span className="flex-none text-ui-xs">{statusWord}</span>
+          {elapsed && (
+            <span className="flex-none text-ui-xs tabular-nums">{t("usageDuration").replace("{t}", elapsed)}</span>
+          )}
+          {hasBody && (
+            <ChevronRight
+              className={cn("size-3 flex-none transition-transform duration-[120ms]", open && "rotate-90")}
+              aria-hidden
+            />
+          )}
+        </button>
+      </Marker>
+      {/* 明细挂在左竖线下。富结果卡**跟着折叠走** —— 它此前在 open 之外,于是折叠只收得起
+          原始 JSON,而真正占版面的那几十行结果一直摊着:头上明明有个收拢箭头,点了却不动。
+          结果可能几十条 → 封顶高度、内部滚动,别把一步撑到几屏高。 */}
       {open && hasBody && (
-        <div className="flex flex-col gap-2 border-t border-border px-[9px] py-2">
+        <div
+          className={cn(
+            "ml-[13px] mt-1 flex min-w-0 flex-col gap-2 border-l border-border pl-3",
+            tool.status === "error" && "border-[color-mix(in_srgb,var(--destructive)_40%,var(--border))]",
+          )}
+        >
+          {card && <div className="max-h-[360px] min-w-0 overflow-y-auto overflow-x-hidden">{card}</div>}
           {argText && (
             <div className="flex flex-col gap-[3px]">
               <span className="text-ui-2xs uppercase tracking-[0.04em] text-muted-foreground">{t("toolInput")}</span>
@@ -215,8 +236,9 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
           )}
         </div>
       )}
+      {/* 媒体产出**不跟着折叠** —— 生成出来的那张图是这一步的成果,不是它的明细。 */}
       {assetIds.length > 0 && (
-        <div className="flex flex-wrap gap-2 border-t border-border px-[9px] py-2">
+        <div className="ml-[13px] mt-1.5 flex flex-wrap gap-2 border-l border-border pl-3">
           {assetIds.map((id) => (
             <MediaPreview key={id} assetId={id} />
           ))}

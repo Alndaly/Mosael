@@ -318,6 +318,15 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* 表单控件继承应用字体,而不是浏览器的系统字体。
+ *
+ * **这条是无层级(unlayered)的,于是它压过 @layer utilities —— 也就是说 button / input /
+ * select / textarea 上的字号工具类(text-xs、text-ui-xs…)一律不生效**,元素会静默回落到
+ * 继承来的大小,而 class 还老老实实挂在 DOM 上。全站的按钮与输入框都是在这个前提下调出来的
+ * (Button 基类里那个 text-sm、Input 的 text-base 从来没生效过),所以**不要**顺手把它挪进
+ * @layer base:那会一次性把一批没人审视过的 shadcn 默认字号铺满全站。
+ * 要改就单独做一轮:挪层级 + 把 ui/ 下的组件重新按本项目的 ui-* 刻度定一遍。
+ * 在那之前,需要精确字号的地方把类挂在**内部的 span** 上(见 components/ui/marker.tsx)。 */
 button,
 input,
 select,

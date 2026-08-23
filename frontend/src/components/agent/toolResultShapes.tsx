@@ -276,6 +276,39 @@ function NamedList({ rows }: { rows: Record<string, unknown>[] }) {
   );
 }
 
+/** 生成引擎列表(list_generation_models)。
+ *
+ * 它的每一行是 {provider, model, kind, profile, available} —— **一个名字键都没有**,落到
+ * 通用列表(名字链是 name/title/label/tool_name/id)就只剩兜底的「条目 N」:真机上九行
+ * 「条目 N … image」,读不出任何东西。模型名才是这里的身份,供应商和档案是它的限定语。
+ */
+function GenerationModelList({ rows }: { rows: Record<string, unknown>[] }) {
+  return (
+    <ul className="m-0 grid list-none gap-1 p-0">
+      {rows.map((row, index) => (
+        <li
+          className="flex w-full min-w-0 items-center gap-2 text-xs"
+          key={`${String(row.provider ?? "")}:${String(row.model ?? index)}`}
+        >
+          <span className="min-w-0 flex-1 truncate font-mono text-foreground" title={String(row.model ?? "")}>
+            {String(row.model ?? "")}
+          </span>
+          <span className="shrink-0 truncate text-ui-xs text-muted-foreground" title={String(row.profile ?? "")}>
+            {String(row.provider ?? "")}
+          </span>
+          {/* 配置了但连不上的要看得出来 —— 否则模型会挑一个用不了的引擎去生成。 */}
+          {row.available === false && (
+            <span className="shrink-0 rounded-full bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] px-1.5 text-ui-2xs text-destructive">
+              不可用
+            </span>
+          )}
+          <span className="shrink-0 text-ui-2xs text-muted-foreground">{String(row.kind ?? "")}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function WorkflowCard({ value }: { value: Record<string, unknown> }) {
   const graph = value.graph as { nodes: Record<string, unknown>[]; edges: unknown[] };
   const nodes = graph.nodes ?? [];
@@ -495,6 +528,7 @@ export type ResultShape =
   | "pluginOutput"
   | "nestedResults"
   | "docref"
+  | "genModels"
   | "records"
   | "empty"
   | "summary"
@@ -517,6 +551,7 @@ export function detectShape(value: unknown): ResultShape {
   if (everyRecordHas(value, "id", "name", "kind")) return "assets";
   if (everyRecordHas(value, "url", "title")) return "search";
   if (everyRecordHas(value, "id", "name", "active_sequence_id")) return "projects";
+  if (everyRecordHas(value, "provider", "model", "kind")) return "genModels";
   if (everyRecordHas(value, "id", "name") || everyRecordHas(value, "type", "label")) return "named";
   if (Array.isArray(value) && value.every(isRecord)) return "records";
 
@@ -589,6 +624,8 @@ export function ToolResultCard({ value }: { value: unknown }): React.ReactElemen
       return <NestedResults value={value as Record<string, unknown>} />;
     case "docref":
       return <DocRef value={value as Record<string, unknown>} />;
+    case "genModels":
+      return <GenerationModelList rows={value as Record<string, unknown>[]} />;
     case "records":
       return <GenericRecordList rows={value as Record<string, unknown>[]} />;
     case "empty":
