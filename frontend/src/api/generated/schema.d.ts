@@ -4142,6 +4142,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agent/sessions/reorder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reorder Sessions
+         * @description 把一次拖放落库:这一摞现在是这些人、这个顺序。
+         */
+        post: operations["reorder_sessions_api_agent_sessions_reorder_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agent/session-groups": {
         parameters: {
             query?: never;
@@ -4172,10 +4192,7 @@ export interface paths {
         post?: never;
         /**
          * Delete Session Group
-         * @description 删掉分组,**里面的对话留着**(退回未分组)。
-         *
-         *     分组是收纳方式,不是所有权 —— 删一个文件夹不该连着删掉里面的对话。清空成员这一步在这里
-         *     显式做,不指望数据库级联:老库的 group_id 是迁移加的列,没有外键约束(见 migrations)。
+         * @description 删掉分组,**里面的对话留着**(退回未分组,见 domain/agent/groups)。
          */
         delete: operations["delete_session_group_api_agent_session_groups__group_id__delete"];
         options?: never;
@@ -4789,6 +4806,21 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /**
+         * AgentSessionReorder
+         * @description 一次拖放的结果:**这一摞现在是这些人、这个顺序**。
+         *
+         *     移进分组和组内排序是同一件事的两半,所以是一个接口 —— 拖一下产生的事实就是这一句话。
+         *     group_id 空 = 未分组那一摞。
+         */
+        AgentSessionReorder: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Group Id */
+            group_id?: string | null;
+            /** Ordered Ids */
+            ordered_ids: string[];
         };
         /** AgentSessionUpdate */
         AgentSessionUpdate: {
@@ -17370,6 +17402,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentSessionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reorder_sessions_api_agent_sessions_reorder_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentSessionReorder"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */

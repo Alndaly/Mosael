@@ -72,3 +72,50 @@ def test_改名是一次操作_不必挨个改成员() -> None:
     assert [g["name"] for g in groups] == ["新名"]
     for sid in sids:
         assert client.get(f"/api/agent/sessions/{sid}").json()["group_id"] == group["id"]
+
+
+def test_拖放落库_顺序生效而updated_at不被顶掉() -> None:
+    """拖动是整理,不是活动。
+
+    让 updated_at 跟着涨的话,被拖过的对话会显得"刚聊过" —— 而"最近更新"正是没排过的那些人
+    赖以排序的东西(默认顺序就是它),整理一次就把别人的顺序搅了。
+    """
+    from app.core.db import SessionLocal
+    from app.db.models import AgentSession
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    ids = [_session(client, ws["id"]) for _ in range(3)]
+    for index, sid in enumerate(ids):
+        client.patch(f"/api/agent/sessions/{sid}", json={"title": f"第{index}个"})
+
+    with SessionLocal() as db:
+        before = {s.id: s.updated_at for s in db.query(AgentSession).filter(AgentSession.id.in_(ids))}
+
+    # 倒过来排
+    reversed_ids = list(reversed(ids))
+    assert client.post(
+        "/api/agent/sessions/reorder",
+        json={"workspace_id": ws["id"], "group_id": "", "ordered_ids": reversed_ids},
+    ).json() == {"ordered": 3}
+
+    listed = [s["id"] for s in client.get(f"/api/agent/sessions?workspace_id={ws['id']}").json()]
+    assert listed == reversed_ids, "拖出来的顺序没生效"
+
+    with SessionLocal() as db:
+        after = {s.id: s.updated_at for s in db.query(AgentSession).filter(AgentSession.id.in_(ids))}
+    assert after == before, "拖一下就把 updated_at 顶成了现在 —— 对话会显得刚聊过"
+
+
+def test_没排过的时候就是最近更新在前() -> None:
+    """默认顺序不变:sort_order 全是 0,退化成纯粹的 updated_at desc。"""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    first = _session(client, ws["id"])
+    second = _session(client, ws["id"])
+    # 动一下第一个,它就该回到最前
+    client.patch(f"/api/agent/sessions/{first}", json={"title": "刚改过"})
+
+    listed = [s["id"] for s in client.get(f"/api/agent/sessions?workspace_id={ws['id']}").json()]
+    assert listed[0] == first, f"默认排序不是最近更新在前:{listed}"
+    assert second in listed

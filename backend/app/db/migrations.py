@@ -829,6 +829,20 @@ def _migrate_agent_session_groups() -> None:
         conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN group_id VARCHAR(64)"))
 
 
+def _migrate_agent_session_order() -> None:
+    """agent_sessions 新增 sort_order —— 手动拖出来的位次。
+
+    默认 0 = 没排过。列表按 (sort_order, updated_at desc) 取,所以老库全是 0 时顺序不变。
+    """
+    inspector = inspect(engine)
+    if "agent_sessions" not in set(inspector.get_table_names()):
+        return
+    if "sort_order" in {c["name"] for c in inspector.get_columns("agent_sessions")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0"))
+
+
 def _migrate_agent_session_plan() -> None:
     """加列迁移:agent_sessions 增加 plan(任务计划)。老会话留 NULL = 还没有计划。"""
     inspector = inspect(engine)
@@ -1047,6 +1061,7 @@ def init_db() -> None:
     _migrate_agent_thinking_level()
     _migrate_agent_session_plan()
     _migrate_agent_session_groups()
+    _migrate_agent_session_order()
     _drop_generation_models()
     _adopt_deepseek_vendor()
     _merge_split_vendors()

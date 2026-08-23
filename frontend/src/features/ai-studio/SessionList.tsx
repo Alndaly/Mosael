@@ -1,6 +1,9 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, FolderPlus, ListChecks, MessageSquarePlus, Pencil, Plus, Trash2, X } from "lucide-react";
+import { DndContext, DragOverlay, PointerSensor, pointerWithin, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { ChevronRight, FolderInput, FolderPlus, ListChecks, MessageSquarePlus, Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -11,6 +14,7 @@ import {
   listSessionGroups,
   moveSessionToGroup,
   renameSessionGroup,
+  reorderSessions,
   type AgentSessionGroup,
 } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -155,6 +159,13 @@ export function SessionList({
     onSuccess: refresh,
   });
 
+  const reorder = useMutation({
+    mutationFn: ({ groupId, orderedIds }: { groupId: string | null; orderedIds: string[] }) =>
+      reorderSessions(workspaceId, groupId, orderedIds),
+    // 乐观更新已经把界面摆好了(见 onDragEnd),这里只在落库后对一次账。
+    onSettled: refresh,
+  });
+
   const groupList = groups.data ?? [];
   // 分组内 / 未分组两摞。会话本身的顺序(后端按 updated_at 倒序)在每一摞里保持不变。
   const byGroup = React.useMemo(() => {
@@ -171,61 +182,69 @@ export function SessionList({
     return { map, loose };
   }, [sessions, groupList]);
 
+  // 未分组那一摞的容器键。用一个不可能撞上 id 的常量,免得和真实分组 id 混在一起。
+  const UNGROUPED = "__ungrouped__";
+  const containers = React.useMemo(() => {
+    const map: Record<string, string[]> = { [UNGROUPED]: byGroup.loose.map((session) => session.id) };
+    for (const group of groupList) map[group.id] = (byGroup.map.get(group.id) ?? []).map((session) => session.id);
+    return map;
+  }, [byGroup, groupList]);
+
+  const [draggingId, setDraggingId] = React.useState<string | null>(null);
+  // 6px 起手:和剪辑页拖素材同一套 —— 不吃普通点击,也不吃右键菜单。
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  const containerOf = (id: string) =>
+    Object.keys(containers).find((key) => containers[key].includes(id)) ?? UNGROUPED;
+
+  const onDragEnd = (event: DragEndEvent) => {
+    setDraggingId(null);
+    const activeId = String(event.active.id);
+    const over = event.over;
+    if (!over) return;
+    const overId = String(over.id);
+    const from = containerOf(activeId);
+    // 落在分组标题上 = 收进那个分组的末尾(空分组、折叠着的分组都只能这样接)。
+    const to = overId.startsWith("group:") ? overId.slice("group:".length) : containerOf(overId);
+    const target = [...(containers[to] ?? [])].filter((id) => id !== activeId);
+    const index = overId.startsWith("group:") ? target.length : Math.max(0, target.indexOf(overId));
+    target.splice(index, 0, activeId);
+    if (from === to && target.join() === (containers[to] ?? []).join()) return;
+
+    // 先把界面摆好再落库:等一个来回的话,松手那一刻会看到它弹回原位。
+    const groupId = to === UNGROUPED ? null : to;
+    qc.setQueryData<AgentSession[]>(["agent-sessions", workspaceId], (old) => {
+      if (!old) return old;
+      const byId = new Map(old.map((session) => [session.id, session]));
+      const next: AgentSession[] = [];
+      const order = { ...containers, [to]: target, [from]: containers[from].filter((id) => id !== activeId) };
+      for (const key of [...groupList.map((group) => group.id), UNGROUPED]) {
+        for (const id of order[key] ?? []) {
+          const session = byId.get(id);
+          if (session) next.push({ ...session, group_id: key === UNGROUPED ? null : key });
+        }
+      }
+      return next;
+    });
+    reorder.mutate({ groupId, orderedIds: target });
+  };
+
   const renderSession = (session: AgentSession) => (
-    <ContextMenu key={session.id}>
-      <ContextMenuTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)] items-center gap-px rounded-md border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted",
-            selectMode && "grid-cols-[auto_minmax(0,1fr)] gap-1.5",
-            !selectMode && activeSessionId === session.id && "bg-accent shadow-[inset_2px_0_0_var(--primary)] hover:bg-accent",
-          )}
-          onClick={() => (selectMode ? toggle(session.id) : onSelect(session.id))}
-        >
-          {/* 列表行用**前导勾选框**,不是卡片那种右上角浮标(components/app/SelectionCheck):
-              那个是为卡片定的位置与尺寸,压在一行 28px 高的标题上会把字盖掉。 */}
-          {selectMode && (
-            <Checkbox checked={selectedIds.has(session.id)} className="pointer-events-none" tabIndex={-1} />
-          )}
-          <strong className="truncate text-xs font-semibold">{session.title}</strong>
-        </button>
-      </ContextMenuTrigger>
-      <ContextMenuContent>
-        <ContextMenuItem onSelect={() => setRenamingSession(session)}>
-          <Pencil /> {t("rename")}
-        </ContextMenuItem>
-        <ContextMenuSub>
-          <ContextMenuSubTrigger>{t("chatMoveToGroup")}</ContextMenuSubTrigger>
-          <ContextMenuSubContent>
-            {groupList.map((group) => (
-              <ContextMenuItem
-                key={group.id}
-                disabled={session.group_id === group.id}
-                onSelect={() => moveSession.mutate({ id: session.id, groupId: group.id })}
-              >
-                {group.name}
-              </ContextMenuItem>
-            ))}
-            {groupList.length > 0 && <ContextMenuSeparator />}
-            <ContextMenuItem
-              disabled={!session.group_id}
-              onSelect={() => moveSession.mutate({ id: session.id, groupId: null })}
-            >
-              {t("chatUngrouped")}
-            </ContextMenuItem>
-            <ContextMenuItem onSelect={() => setCreatingGroup(true)}>
-              <FolderPlus /> {t("chatNewGroup")}
-            </ContextMenuItem>
-          </ContextMenuSubContent>
-        </ContextMenuSub>
-        <SessionShareMenuItem session={session} kind="agent_session" workspaceId={workspaceId} queryKey="agent-sessions" />
-        <ContextMenuSeparator />
-        <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeletingSession(session)}>
-          <Trash2 /> {t("delete")}
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
+    <SessionRow
+      key={session.id}
+      session={session}
+      groups={groupList}
+      active={!selectMode && activeSessionId === session.id}
+      selectMode={selectMode}
+      checked={selectedIds.has(session.id)}
+      dragging={draggingId === session.id}
+      workspaceId={workspaceId}
+      onOpen={() => (selectMode ? toggle(session.id) : onSelect(session.id))}
+      onRename={() => setRenamingSession(session)}
+      onDelete={() => setDeletingSession(session)}
+      onMove={(groupId) => moveSession.mutate({ id: session.id, groupId })}
+      onNewGroup={() => setCreatingGroup(true)}
+    />
   );
 
   return (
@@ -302,6 +321,13 @@ export function SessionList({
           </>
         )}
       </div>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={pointerWithin}
+        onDragStart={(event: DragStartEvent) => setDraggingId(String(event.active.id))}
+        onDragEnd={onDragEnd}
+        onDragCancel={() => setDraggingId(null)}
+      >
       <div
         className={cn(
           "grid content-start gap-1 overflow-auto p-1.5 [scrollbar-gutter:stable] [scrollbar-width:none] hover:[scrollbar-color:color-mix(in_srgb,var(--muted-foreground)_35%,transparent)_transparent] hover:[scrollbar-width:thin] focus-within:[scrollbar-color:color-mix(in_srgb,var(--muted-foreground)_35%,transparent)_transparent] focus-within:[scrollbar-width:thin] [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0 hover:[&::-webkit-scrollbar]:h-1.5 hover:[&::-webkit-scrollbar]:w-1.5 focus-within:[&::-webkit-scrollbar]:h-1.5 focus-within:[&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[color-mix(in_srgb,var(--muted-foreground)_35%,transparent)]",
@@ -315,7 +341,7 @@ export function SessionList({
           const members = byGroup.map.get(group.id) ?? [];
           const isCollapsed = collapsed.has(group.id);
           return (
-            <div className="grid gap-0.5" key={group.id}>
+            <GroupSection key={group.id} groupId={group.id}>
               <ContextMenu>
                 <ContextMenuTrigger asChild>
                   <button
@@ -353,8 +379,12 @@ export function SessionList({
                   </ContextMenuItem>
                 </ContextMenuContent>
               </ContextMenu>
-              {!isCollapsed && <div className="grid gap-1 pl-2">{members.map(renderSession)}</div>}
-            </div>
+              {!isCollapsed && (
+                <SortableContext items={containers[group.id] ?? []} strategy={verticalListSortingStrategy}>
+                  <div className="grid gap-1 pl-2">{members.map(renderSession)}</div>
+                </SortableContext>
+              )}
+            </GroupSection>
           );
         })}
         {/* 「未分组」这个小标题只在**真有分组**时才出现 —— 一个分组都没建过的人不该被告知
@@ -364,8 +394,19 @@ export function SessionList({
             {t("chatUngrouped")}
           </span>
         )}
-        {byGroup.loose.map(renderSession)}
+        <SortableContext items={containers[UNGROUPED] ?? []} strategy={verticalListSortingStrategy}>
+          {byGroup.loose.map(renderSession)}
+        </SortableContext>
       </div>
+      {/* 拖起来时跟手的那一片 —— 没有它,拖动中的行只是原地变淡,看不出自己在拖什么。 */}
+      <DragOverlay dropAnimation={null}>
+        {draggingId ? (
+          <div className="truncate rounded-md border border-border bg-panel px-2 py-1.5 text-xs font-semibold shadow-[var(--shadow-raised)]">
+            {sessions.find((session) => session.id === draggingId)?.title}
+          </div>
+        ) : null}
+      </DragOverlay>
+      </DndContext>
 
       <RenameDialog
         open={creatingGroup}
@@ -410,5 +451,118 @@ export function SessionList({
         onConfirm={() => batchRemove.mutate()}
       />
     </>
+  );
+}
+
+/** 分组的一段:标题 + 成员。整段是放置目标 —— 拖到标题上(或空分组上)就收进来。 */
+function GroupSection({ groupId, children }: { groupId: string; children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `group:${groupId}` });
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "grid gap-0.5 rounded-md",
+        isOver && "bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] ring-1 ring-[color-mix(in_srgb,var(--primary)_45%,transparent)]",
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** 会话行。可拖(排序 / 换组),可右键,选择模式下点它是勾选而不是打开。 */
+function SessionRow({
+  session,
+  groups,
+  active,
+  selectMode,
+  checked,
+  dragging,
+  workspaceId,
+  onOpen,
+  onRename,
+  onDelete,
+  onMove,
+  onNewGroup,
+}: {
+  session: AgentSession;
+  groups: AgentSessionGroup[];
+  active: boolean;
+  selectMode: boolean;
+  checked: boolean;
+  dragging: boolean;
+  workspaceId: string;
+  onOpen: () => void;
+  onRename: () => void;
+  onDelete: () => void;
+  onMove: (groupId: string | null) => void;
+  onNewGroup: () => void;
+}) {
+  const t = useI18n();
+  // 选择模式下不许拖:那时的点击是"勾选",两种手势叠在一起谁都做不好。
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
+    id: session.id,
+    disabled: selectMode,
+  });
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <button
+          ref={setNodeRef}
+          type="button"
+          style={{ transform: CSS.Transform.toString(transform), transition }}
+          className={cn(
+            "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)] items-center gap-px rounded-md border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted",
+            selectMode && "grid-cols-[auto_minmax(0,1fr)] gap-1.5",
+            active && "bg-accent shadow-[inset_2px_0_0_var(--primary)] hover:bg-accent",
+            // 拖起来的那一条留个淡影占位,别让列表塌下去。
+            dragging && "opacity-40",
+          )}
+          onClick={onOpen}
+          {...attributes}
+          {...listeners}
+        >
+          {/* 列表行用**前导勾选框**,不是卡片那种右上角浮标(components/app/SelectionCheck):
+              那个是为卡片定的位置与尺寸,压在一行 28px 高的标题上会把字盖掉。 */}
+          {selectMode && <Checkbox checked={checked} className="pointer-events-none" tabIndex={-1} />}
+          <strong className="truncate text-xs font-semibold">{session.title}</strong>
+        </button>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={onRename}>
+          <Pencil /> {t("rename")}
+        </ContextMenuItem>
+        <ContextMenuSub>
+          {/* 图标不能省:SubTrigger 和普通项共用 gap-2 + 图标槽的排版,没图标时标签会顶到
+              图标列上,和上下两条对不齐(真机可见)。 */}
+          <ContextMenuSubTrigger>
+            <FolderInput /> {t("chatMoveToGroup")}
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent>
+            {groups.map((group) => (
+              <ContextMenuItem
+                key={group.id}
+                disabled={session.group_id === group.id}
+                onSelect={() => onMove(group.id)}
+              >
+                {group.name}
+              </ContextMenuItem>
+            ))}
+            {groups.length > 0 && <ContextMenuSeparator />}
+            <ContextMenuItem disabled={!session.group_id} onSelect={() => onMove(null)}>
+              {t("chatUngrouped")}
+            </ContextMenuItem>
+            <ContextMenuItem onSelect={onNewGroup}>
+              <FolderPlus /> {t("chatNewGroup")}
+            </ContextMenuItem>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+        <SessionShareMenuItem session={session} kind="agent_session" workspaceId={workspaceId} queryKey="agent-sessions" />
+        <ContextMenuSeparator />
+        <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onDelete}>
+          <Trash2 /> {t("delete")}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }

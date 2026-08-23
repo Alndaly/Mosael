@@ -5,7 +5,7 @@ import json
 
 from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.ai.agent import host
 from app.domain import sharing
@@ -16,6 +16,7 @@ from app.api.schemas import (
     AgentSessionGroupCreate,
     AgentSessionGroupOut,
     AgentSessionGroupUpdate,
+    AgentSessionReorder,
     AgentMemoryOut,
     AgentMemoryUpdate,
     AgentPlanUpdate,
@@ -33,6 +34,7 @@ from app.core.config import app_version
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, ensure_workspace_role
 from app.db.models import AgentMessage, AgentSession, AgentSessionGroup, ProviderUsageEvent, now
 from app.domain.agent import list_agent_skills
+from app.domain.agent import groups as agent_groups
 from app.domain.agent import memory as agent_memory
 from app.domain.agent import plan as agent_plan
 
@@ -67,7 +69,8 @@ def list_agent_sessions(workspace_id: str, db: DbSession, user: CurrentUser) -> 
             AgentSession.origin == "ui",
             sharing.visible_filter("agent_session", user, workspace_id),
         )
-        .order_by(AgentSession.updated_at.desc())
+        # 手动位次优先,其次最近活跃。全是 0(没人拖过)时就是纯粹的"最近活跃在前"。
+        .order_by(AgentSession.sort_order, AgentSession.updated_at.desc())
         .limit(50)
     )
     return sharing.annotate(db, "agent_session", list(db.scalars(stmt)), user, workspace_id)
@@ -322,6 +325,20 @@ def set_agent_plan(session_id: str, body: AgentPlanUpdate, db: DbSession, user: 
 # 两份清单会立刻漂移,而"模型到底记住了什么"是用户唯一想确认的事。
 
 
+@router.post("/agent/sessions/reorder")
+def reorder_sessions(body: AgentSessionReorder, db: DbSession, user: CurrentUser) -> dict:
+    """把一次拖放落库:这一摞现在是这些人、这个顺序。"""
+    ensure_workspace_perm(db, user, body.workspace_id, "ai")
+    group_id = body.group_id or None
+    if group_id:
+        group = db.get(AgentSessionGroup, group_id)
+        if group is None or group.workspace_id != body.workspace_id:
+            raise HTTPException(status_code=404, detail="分组不存在")
+    return {"ordered": agent_groups.apply_order(
+        db, workspace_id=body.workspace_id, group_id=group_id, ordered_ids=body.ordered_ids
+    )}
+
+
 @router.get("/agent/session-groups", response_model=list[AgentSessionGroupOut])
 def list_session_groups(workspace_id: str, db: DbSession, user: CurrentUser) -> list[AgentSessionGroup]:
     ensure_workspace_access(db, user, workspace_id)
@@ -336,12 +353,8 @@ def list_session_groups(workspace_id: str, db: DbSession, user: CurrentUser) -> 
 
 @router.post("/agent/session-groups", response_model=AgentSessionGroupOut, status_code=201)
 def create_session_group(body: AgentSessionGroupCreate, db: DbSession, user: CurrentUser) -> AgentSessionGroup:
-    ensure_workspace_access(db, user, body.workspace_id)
-    group = AgentSessionGroup(workspace_id=body.workspace_id, owner_user_id=user.id, name=body.name.strip())
-    db.add(group)
-    db.commit()
-    db.refresh(group)
-    return group
+    ensure_workspace_perm(db, user, body.workspace_id, "ai")
+    return agent_groups.create_group(db, workspace_id=body.workspace_id, name=body.name, owner_user_id=user.id)
 
 
 @router.patch("/agent/session-groups/{group_id}", response_model=AgentSessionGroupOut)
@@ -349,26 +362,20 @@ def update_session_group(
     group_id: str, body: AgentSessionGroupUpdate, db: DbSession, user: CurrentUser
 ) -> AgentSessionGroup:
     group = _require_group(db, user, group_id)
+    ensure_workspace_perm(db, user, group.workspace_id, "ai")
     if body.name is not None:
-        group.name = body.name.strip()
+        agent_groups.rename_group(db, group, body.name)
     if body.sort_order is not None:
-        group.sort_order = body.sort_order
-    db.commit()
-    db.refresh(group)
+        agent_groups.set_group_order(db, group, body.sort_order)
     return group
 
 
 @router.delete("/agent/session-groups/{group_id}", status_code=204)
 def delete_session_group(group_id: str, db: DbSession, user: CurrentUser) -> Response:
-    """删掉分组,**里面的对话留着**(退回未分组)。
-
-    分组是收纳方式,不是所有权 —— 删一个文件夹不该连着删掉里面的对话。清空成员这一步在这里
-    显式做,不指望数据库级联:老库的 group_id 是迁移加的列,没有外键约束(见 migrations)。
-    """
+    """删掉分组,**里面的对话留着**(退回未分组,见 domain/agent/groups)。"""
     group = _require_group(db, user, group_id)
-    db.query(AgentSession).filter(AgentSession.group_id == group.id).update({AgentSession.group_id: None})
-    db.delete(group)
-    db.commit()
+    ensure_workspace_perm(db, user, group.workspace_id, "ai")
+    agent_groups.delete_group(db, group)
     return Response(status_code=204)
 
 

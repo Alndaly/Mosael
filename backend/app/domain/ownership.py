@@ -74,6 +74,7 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "TtsConfig": ("app/domain/tts_config.py",),
     # 智能体/集成
     "AgentSession": ("app/ai/agent/", "app/domain/agent/"),
+    "AgentSessionGroup": ("app/domain/agent/",),
     "AgentMessage": ("app/ai/agent/", "app/domain/agent/"),
     "AgentMemory": ("app/domain/agent/",),
     "ToolConfirmation": ("app/domain/agent/",),

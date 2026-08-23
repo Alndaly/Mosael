@@ -12258,6 +12258,50 @@
         }
       }
     },
+    "/api/agent/sessions/reorder": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Reorder Sessions",
+        "description": "把一次拖放落库:这一摞现在是这些人、这个顺序。",
+        "operationId": "reorder_sessions_api_agent_sessions_reorder_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentSessionReorder"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Reorder Sessions Api Agent Sessions Reorder Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/agent/session-groups": {
       "get": {
         "tags": [
@@ -12399,7 +12443,7 @@
           "agent"
         ],
         "summary": "Delete Session Group",
-        "description": "删掉分组,**里面的对话留着**(退回未分组)。\n\n分组是收纳方式,不是所有权 —— 删一个文件夹不该连着删掉里面的对话。清空成员这一步在这里\n显式做,不指望数据库级联:老库的 group_id 是迁移加的列,没有外键约束(见 migrations)。",
+        "description": "删掉分组,**里面的对话留着**(退回未分组,见 domain/agent/groups)。",
         "operationId": "delete_session_group_api_agent_session_groups__group_id__delete",
         "parameters": [
           {
@@ -14022,6 +14066,40 @@
           "updated_at"
         ],
         "title": "AgentSessionOut"
+      },
+      "AgentSessionReorder": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "group_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Id"
+          },
+          "ordered_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Ordered Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "ordered_ids"
+        ],
+        "title": "AgentSessionReorder",
+        "description": "一次拖放的结果:**这一摞现在是这些人、这个顺序**。\n\n移进分组和组内排序是同一件事的两半,所以是一个接口 —— 拖一下产生的事实就是这一句话。\ngroup_id 空 = 未分组那一摞。"
       },
       "AgentSessionUpdate": {
         "properties": {

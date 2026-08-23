@@ -1074,6 +1074,10 @@ class AgentSession(Base):
     #: 收在哪个分组里。空 = 未分组(列表里单独一段)。删分组时由路由显式清空 —— 老库那一列
     #: 是迁移加的、没有外键约束,不能指望数据库替我们 SET NULL。
     group_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    #: 手动拖出来的位次。**0 = 没排过**,列表按 (sort_order, updated_at desc) 取:全是 0 时
+    #: 就是原来的"最近活跃在前",一条都没拖过的人看到的顺序和以前一模一样。拖过之后那一摞
+    #: 被赋成 1..N;新建的会话仍是 0,所以它照旧落在最上面。
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     title: Mapped[str] = mapped_column(String(200), nullable=False, default="新对话")
     origin: Mapped[str] = mapped_column(String(24), nullable=False, default="ui")  # ui | feishu
     external_key: Mapped[str | None] = mapped_column(String(200), nullable=True, unique=True)

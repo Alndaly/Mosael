@@ -1747,6 +1747,18 @@ class AgentSessionCreate(BaseModel):
     model: str | None = Field(default=None, max_length=120)
 
 
+class AgentSessionReorder(BaseModel):
+    """一次拖放的结果:**这一摞现在是这些人、这个顺序**。
+
+    移进分组和组内排序是同一件事的两半,所以是一个接口 —— 拖一下产生的事实就是这一句话。
+    group_id 空 = 未分组那一摞。
+    """
+
+    workspace_id: str
+    group_id: str | None = Field(default=None, max_length=64)
+    ordered_ids: list[str]
+
+
 class AgentSessionGroupCreate(BaseModel):
     workspace_id: str
     name: str = Field(min_length=1, max_length=80)
