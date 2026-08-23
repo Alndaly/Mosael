@@ -126,25 +126,30 @@ describe("轨迹统计", () => {
 });
 
 describe("送进模型的那一半", () => {
-  it("上下文注入单独成条,不混在提问里", () => {
-    // 实际发出去的是 `_prompt_with_context(content, context)` —— content 只是它的一半。
-    // 不单独记的话,「它凭什么知道我选中了哪个素材」在轨迹上无迹可寻。
+  it("上下文注入单独成条,且排在提问之前", () => {
+    // 实际发出去的是 `_prompt_with_context(content, context)` = 「上下文 \n\n 用户消息:正文」——
+    // 上下文在**前**。不单独记的话,「它凭什么知道我选中了哪个素材」在轨迹上无迹可寻。
     const turns = buildTurns([
       message({ id: "u1", role: "user", content: "改一下这段", payload: { context: "当前在编辑器,选中 clip-7" } }),
     ]);
-    expect(turns[0].events.map((event) => event.kind)).toEqual(["user", "context"]);
-    expect(turns[0].events[1].text).toContain("clip-7");
+    expect(turns[0].events.map((event) => event.kind)).toEqual(["context", "user"]);
+    expect(turns[0].events[0].text).toContain("clip-7");
   });
 
-  it("系统提示排在这一轮的执行之前 —— 它是输入不是产物", () => {
+  it("系统提示排在这一轮最前面 —— 模型收到的顺序就是它在最先", () => {
+    // 线上 system 是 messages[0](pi-ai 先 push system 再遍历消息)。它存在**助手**消息的
+    // payload 里只是存储位置,轨迹按存储位置画的话会排到提问后面,读起来就成了
+    // 「问完之后才注入系统提示」—— 这条钉的正是"显示顺序 = 真实顺序"。
     const turns = buildTurns([
-      message({ id: "u1", role: "user", content: "问" }),
+      message({ id: "u1", role: "user", content: "问", payload: { context: "选中 clip-7" } }),
       message({
         id: "a1",
         payload: { prompt: { system: "你是助手…", hash: "abc" }, timeline: [tool()] },
       }),
     ]);
-    expect(turns[0].events.map((event) => event.kind)).toEqual(["user", "system", "tool"]);
+    expect(turns[0].events.map((event) => event.kind)).toEqual(["system", "context", "user", "tool"]);
+    // 序号跟着显示走 —— 插队之后按 push 顺序算的 step 会全错位。
+    expect(turns[0].events.map((event) => event.step)).toEqual([1, 2, 3, 4]);
   });
 
   it("没变的那些轮不会各自多出一条系统提示", () => {

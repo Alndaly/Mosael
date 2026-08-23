@@ -151,7 +151,7 @@ export function buildTurns(
   const turns: TraceTurn[] = [];
   let current: TraceTurn | null = null;
 
-  const openTurn = (prompt: string): TraceTurn => {
+  const openTurn = (prompt: string, context = "", contextMessageId = ""): TraceTurn => {
     const turn: TraceTurn = {
       turn: turns.length + 1,
       prompt,
@@ -164,13 +164,28 @@ export function buildTurns(
       toolSeconds: null,
     };
     turns.push(turn);
-    // 提问本身也是轨迹上的一条记录 —— 它是这一轮的由头,读轨迹时第一个要看的就是它。
-    // 无提问的轮(历史数据里以助手消息开头的会话)不造一条空的出来。
+    // **上下文排在提问之前** —— 模型实际收到的就是这个次序:后端发出去的是
+    // `_prompt_with_context()`,拼出来是「上下文 \n\n 用户消息:正文」,不是反过来。
+    // 单独成条是因为它不是用户打的字,而「它凭什么知道我选中了哪个素材」的答案往往就在这儿。
+    if (context) {
+      turn.events.push({
+        key: `${contextMessageId}:context`,
+        turn: turn.turn,
+        step: 0,
+        kind: "context",
+        messageId: contextMessageId,
+        summary: oneLine(context),
+        text: context,
+        startedAt: null,
+        durationSeconds: null,
+      });
+    }
+    // 提问是这一轮的由头。无提问的轮(历史数据里以助手消息开头的会话)不造一条空的出来。
     if (prompt) {
       turn.events.push({
         key: `turn-${turn.turn}:user`,
         turn: turn.turn,
-        step: 1,
+        step: 0,
         kind: "user",
         messageId: "",
         summary: oneLine(prompt),
@@ -247,23 +262,8 @@ export function buildTurns(
   for (const message of messages) {
     const payload = readPayload(message);
     if (message.role === "user") {
-      current = openTurn(message.content);
+      current = openTurn(message.content, payload.context ?? "", message.id);
       current.messageIds.push(message.id);
-      // 上下文注入单独成条:它不是用户打的字,但模型收到的确实是「正文 + 这一段」。
-      // 混在提问里看不出来,而「它凭什么知道我选中了哪个素材」的答案往往就在这儿。
-      if (payload.context) {
-        current.events.push({
-          key: `${message.id}:context`,
-          turn: current.turn,
-          step: current.events.length + 1,
-          kind: "context",
-          messageId: message.id,
-          summary: oneLine(payload.context),
-          text: payload.context,
-          startedAt: null,
-          durationSeconds: null,
-        });
-      }
       continue;
     }
     if (!current) current = openTurn("");
@@ -286,12 +286,15 @@ export function buildTurns(
     }
 
     current.messageIds.push(message.id);
-    // 系统提示排在这一轮的执行之前 —— 它是输入,不是产物。只有变化的那一轮才有这一条。
+    // 系统提示插到**这一轮最前面**,因为模型收到的顺序就是它在最先 —— 线上它是 messages[0]
+    // (pi-ai 的 openai-completions 先 push system,再遍历消息;Anthropic 那条路是顶层 system
+    // 字段)。它存在助手消息的 payload 里只是**存储位置**,不是发生顺序:跟着存储位置渲染
+    // 会把它画在提问之后,读起来就成了「问完之后才注入系统提示」。只有变化的那一轮才有这条。
     if (payload.prompt?.system) {
-      current.events.push({
+      current.events.unshift({
         key: `${message.id}:system`,
         turn: current.turn,
-        step: current.events.length + 1,
+        step: 0,
         kind: "system",
         messageId: message.id,
         summary: oneLine(payload.prompt.system),
@@ -354,6 +357,11 @@ export function buildTurns(
   }
 
   for (const turn of turns) {
+    // step 最后统一编号:系统提示那条是**插到队首**的,一插队,按 push 顺序算出来的序号
+    // 就全错位了。序号跟着显示走 —— 而显示顺序现在就是模型实际收到的顺序。
+    turn.events.forEach((event, index) => {
+      event.step = index + 1;
+    });
     // 轮级 token:把这一轮涉及的消息对应的用量事件加起来。一条都没有 = 未知,不是 0 ——
     // 会话可能根本没开计量,那和「这一轮没花 token」是两回事。
     const own = usageEvents.filter((event) => event.agent_message_id && turn.messageIds.includes(event.agent_message_id));
