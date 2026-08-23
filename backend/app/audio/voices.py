@@ -527,7 +527,7 @@ def _update_progress(job_id: str, event: dict) -> None:
         if isinstance(fraction, (int, float)):
             job.progress = max(job.progress or 0.0, min(0.95, float(fraction)))
         if message:
-            job.message = message
+            say(job, message)
         db.commit()
 
 

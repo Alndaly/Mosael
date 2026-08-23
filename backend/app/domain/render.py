@@ -311,7 +311,7 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
         if job is None:
             return
         job.status = "running"
-        job.message = _export_message(PHASE_PREPARE, None)
+        say(job, _export_message(PHASE_PREPARE, None))
         emit_job_event(db, job.id, "job.running", {"render_plan_hash": plan.render_plan_hash})
         db.commit()
         started = time.monotonic()
@@ -326,7 +326,7 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
                 if progress_job is not None:
                     if fraction is not None:
                         progress_job.progress = round(fraction, 4)
-                    progress_job.message = message
+                    say(progress_job, message)
                     progress_db.commit()
 
         def on_phase(name: str) -> None:
@@ -339,7 +339,7 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
                     fb_job = fb_db.get(Job, job_id)
                     if fb_job is not None:
                         fb_job.progress = 0.0
-                        fb_job.message = _export_message(name, None)
+                        say(fb_job, _export_message(name, None))
                         emit_job_event(fb_db, job_id, "job.encode_fallback", {})
                         fb_db.commit()
             elif name == PHASE_FINALIZE:

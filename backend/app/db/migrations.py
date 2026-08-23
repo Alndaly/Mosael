@@ -810,6 +810,40 @@ def _drop_generation_models() -> None:
         conn.execute(text("DROP TABLE generation_models"))
 
 
+def _migrate_generation_job_message_keys() -> None:
+    """把生成任务里那句**被当成 key 的英文**换成真正的 key。
+
+    `create_job(message=...)` 收的是 i18n key,而生成流程一直传的是字面量
+    "Queued for generation provider" —— 它被原样存进 message_key,而接口是按 key 重翻的,
+    于是这些任务**从建出来到跑完**返回的都是这一句:任务早就成功了,界面还写着"已提交给
+    生成服务"。用户据此以为任务卡在排队里(真机反馈)。
+
+    新任务由代码修好了(runner 全部走 say());这里把已经落库的那些按终态补上正确的 key。
+    只认那一句字面量,认不出的不动 —— 别人手写的自由文本本来就该原样留着。
+    """
+    inspector = inspect(engine)
+    if "jobs" not in set(inspector.get_table_names()):
+        return
+    columns = {c["name"] for c in inspector.get_columns("jobs")}
+    if "message_key" not in columns:
+        return
+    mapping = {
+        "succeeded": "jobMsg_generationDone",
+        "failed": "jobMsg_generationFailed",
+        "running": "jobMsg_generationRunning",
+        "queued": "jobMsg_generationQueued",
+    }
+    with engine.begin() as conn:
+        for status, key in mapping.items():
+            conn.execute(
+                text(
+                    "UPDATE jobs SET message_key = :key "
+                    "WHERE message_key = 'Queued for generation provider' AND status = :status"
+                ),
+                {"key": key, "status": status},
+            )
+
+
 def _migrate_agent_session_groups() -> None:
     """agent_sessions 新增 group_id —— 会话分组。
 
@@ -1061,6 +1095,7 @@ def init_db() -> None:
     _migrate_agent_thinking_level()
     _migrate_agent_session_plan()
     _migrate_agent_session_groups()
+    _migrate_generation_job_message_keys()
     _migrate_agent_session_order()
     _drop_generation_models()
     _adopt_deepseek_vendor()

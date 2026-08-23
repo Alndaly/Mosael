@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
-from app.domain.jobs import prune_task_events
+from app.domain.jobs import prune_task_events, say
 from app.db.models import Job, ScheduledTask, ScheduledTaskRun, now
 from app.domain.scheduler.operations import run_scheduled_task
 
@@ -138,7 +138,7 @@ def dispatch_job_for_task(db: Session, task: ScheduledTask, run: ScheduledTaskRu
                 source_asset_ids=[str(item) for item in payload.get("source_asset_ids") or []],
             )
             job.status = "running"
-            job.message = f"Dispatched generation {generation.id}"
+            say(job, f"Dispatched generation {generation.id}")
             run.status = "running"
             job.result = {"generation_id": generation.id, "generation_job_id": generation.job_id}
             db.commit()
@@ -149,12 +149,12 @@ def dispatch_job_for_task(db: Session, task: ScheduledTask, run: ScheduledTaskRu
             sequence_id = str(payload.get("sequence_id", ""))
             export_job = start_export(db, sequence_id, created_by=task.owner_user_id)
             job.status = "running"
-            job.message = f"Dispatched export {export_job.id}"
+            say(job, f"Dispatched export {export_job.id}")
             run.status = "running"
             job.result = {"export_job_id": export_job.id}
             db.commit()
         else:
-            job.message = f"No executor for task kind {task.kind}"
+            say(job, f"No executor for task kind {task.kind}")
             db.commit()
     except Exception as exc:
         job.status = "failed"
@@ -196,5 +196,5 @@ def _sync_run_states(db: Session) -> None:
             run.error = source.error
             run.finished_at = now()
             job.status = source.status
-            job.message = source.message
+            say(job, source.message)
     db.commit()

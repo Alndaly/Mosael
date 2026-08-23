@@ -11,7 +11,7 @@ from app.ai.providers.base import sanitize_provider_error
 from app.core.db import SessionLocal
 from app.db.models import Asset, GeneratedAsset, GenerationJob, Job
 from app.domain import provider_models
-from app.domain.jobs import dispatch_job, emit_job_event
+from app.domain.jobs import dispatch_job, emit_job_event, say
 from app.domain.assets.importer import register_file_asset
 from app.media.paths import resolve_key
 from app.domain.usage import billable
@@ -69,7 +69,7 @@ def _run_generation(generation_id: str) -> None:
             extra=dict(profile.extra or {}) if profile is not None else {},
         )
         job.status = "running"
-        job.message = "Generating"
+        say(job, "jobMsg_generationRunning")
         emit_job_event(db, job.id, "job.running", {"provider": generation.provider})
         db.commit()
         logger.info(
@@ -118,7 +118,7 @@ def _run_generation(generation_id: str) -> None:
             generation.result_asset_id = asset.id
             job.status = "succeeded"
             job.progress = 1.0
-            job.message = "Generation complete"
+            say(job, "jobMsg_generationDone")
             job.result = {"asset_id": asset.id}
             _record_generation_usage(db, generation, job, request, context, result, started, "succeeded")
             emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
@@ -157,7 +157,7 @@ def _job_callbacks(db, job: Job):
     def on_progress(fraction: float, message: str) -> None:
         job.progress = min(0.95, max(float(job.progress or 0.0), float(fraction)))
         if message:
-            job.message = message[:200]
+            say(job, message[:200])
         db.commit()
 
     def is_cancelled() -> bool:
@@ -169,7 +169,7 @@ def _job_callbacks(db, job: Job):
 
 def _fail(db, job: Job, message: str) -> None:
     job.status = "failed"
-    job.message = "Generation failed"
+    say(job, "jobMsg_generationFailed")
     job.error = message[:500]
     emit_job_event(db, job.id, "job.failed", {})
     db.commit()

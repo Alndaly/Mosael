@@ -426,12 +426,12 @@ def report_job(
         if progress is not None:
             job.progress = max(0.0, min(1.0, float(progress)))
         if message is not None:
-            job.message = message
+            say(job, message)
         db.add(TaskEvent(job_id=job.id, type="job.progress", payload={"progress": job.progress}))
     else:
         job.status = status
         if message is not None:
-            job.message = message
+            say(job, message)
         if status == "failed":
             job.error = (error or message or "worker 报告失败")[:500]
             logger.warning("job %s [%s] failed (external worker): %s", job.id, job.kind, job.error)

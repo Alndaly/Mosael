@@ -64,7 +64,7 @@ def create_generation_job(
             "kind": kind,
             "request": request,
         },
-        message="Queued for generation provider",
+        message="jobMsg_generationQueued",
     )
     generation = GenerationJob(
         workspace_id=workspace_id,
