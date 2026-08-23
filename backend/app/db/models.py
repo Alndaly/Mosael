@@ -1038,6 +1038,29 @@ class GenerationJob(Base):
     session: Mapped[GenerationSession | None] = relationship(back_populates="generations")
 
 
+class AgentSessionGroup(Base):
+    """对话分组:给会话列表分个类,便于管理。
+
+    **是一张表而不是会话上的一个名字字符串**:分组要能空着存在(先建「客户 A」,再往里挪对话),
+    改名要是一次操作而不是把 N 行的字符串挨个改一遍 —— 名字当键的话,这两件事都做不到。
+
+    删掉分组**不删里面的对话**(路由里先把成员的 group_id 清空):分组是收纳方式,不是所有权。
+    """
+
+    __tablename__ = "agent_session_groups"
+    __table_args__ = (Index("idx_agent_session_groups_ws", "workspace_id"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    #: 谁建的。和会话同一条规矩:不设外键,账号没了归属仍是审计信息。
+    owner_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
+    #: 手动排序位。越小越靠前;相同就按建立时间。
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
 class AgentSession(Base):
     __tablename__ = "agent_sessions"
     __table_args__ = (Index("idx_agent_sessions_ws_updated", "workspace_id", "updated_at"),)
@@ -1048,6 +1071,9 @@ class AgentSession(Base):
     #: (归属与共享见 domain/sharing)。
     owner_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    #: 收在哪个分组里。空 = 未分组(列表里单独一段)。删分组时由路由显式清空 —— 老库那一列
+    #: 是迁移加的、没有外键约束,不能指望数据库替我们 SET NULL。
+    group_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(200), nullable=False, default="新对话")
     origin: Mapped[str] = mapped_column(String(24), nullable=False, default="ui")  # ui | feishu
     external_key: Mapped[str | None] = mapped_column(String(200), nullable=True, unique=True)

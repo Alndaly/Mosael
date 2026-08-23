@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Check, ChevronDown, ChevronRight, CircleDot, Copy, CornerDownRight, Database, Loader2, MessageSquarePlus, Paperclip, Pencil, Plus, SearchX, Send, Sparkles, Square, Trash2, Wrench, X } from "lucide-react";
+import { Bot, Check, ChevronDown, ChevronRight, CircleDot, Copy, CornerDownRight, Database, Loader2, Paperclip, SearchX, Send, Sparkles, Square, Trash2, Wrench, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { API_BASE, api, getAuthToken, importAsset, type Asset, type Project, type Workspace } from "@/api/client";
@@ -10,9 +10,9 @@ import { AttachmentChips, textAttachmentBlock, useComposerAttachments } from "@/
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { ConfirmDialog, ModalShell, RenameDialog } from "@/components/app/modals";
+import { ModalShell } from "@/components/app/modals";
 import { ChatBubble } from "@/features/ai-studio/ChatBubble";
+import { SessionList } from "@/features/ai-studio/SessionList";
 import { UserMessageContent, attachmentToken } from "@/features/ai-studio/userMessage";
 import { MessageUsageFooter, type AgentUsageEvent } from "@/features/ai-studio/messageUsage";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -26,7 +26,6 @@ import { JumpToLatest, useStickToBottom } from "@/components/agent/stickToBottom
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem, type ToolCall } from "@/components/agent/ToolCalls";
 import { formatElapsedSeconds } from "@/lib/time";
-import { SessionShareMenuItem } from "@/features/ai-studio/SessionShareMenuItem";
 import { AgentStatusIcon, ToolName, toAgentStatus } from "@/components/agent/StatusIcon";
 import { readToolPayload } from "@/features/ai-studio/toolPayload";
 import { TraceStatsBar, TraceView } from "@/features/ai-studio/trace/TraceView";
@@ -75,8 +74,6 @@ export function ChatWorkspace({
   const sessionKey = agentSessionSelectionKey(workspace.id);
   const [sessionId, setSessionId] = React.useState<string | null>(() => window.localStorage.getItem(sessionKey));
   const [draft, setDraft] = React.useState("");
-  const [renamingSession, setRenamingSession] = React.useState<AgentSession | null>(null);
-  const [deletingSession, setDeletingSession] = React.useState<AgentSession | null>(null);
   // 附件三种入口(选文件 / 拖放 / 粘贴)与工作流助手共用同一套逻辑,见 composerAttachments。
   const attach = useComposerAttachments(workspace.id);
   const manifest = useQuery({
@@ -291,25 +288,6 @@ export function ChatWorkspace({
     },
   });
 
-  const renameSession = useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) =>
-      api<AgentSession>(`/api/agent/sessions/${id}`, { method: "PATCH", body: JSON.stringify({ title: name }) }),
-    onSuccess: () => {
-      setRenamingSession(null);
-      void qc.invalidateQueries({ queryKey: ["agent-sessions", workspace.id] });
-    },
-  });
-  const deleteSession = useMutation({
-    mutationFn: (id: string) => api(`/api/agent/sessions/${id}`, { method: "DELETE" }),
-    onSuccess: (_data, id) => {
-      setDeletingSession(null);
-      if (sessionId === id) {
-        setSessionId(null);
-        window.localStorage.removeItem(sessionKey);
-      }
-      void qc.invalidateQueries({ queryKey: ["agent-sessions", workspace.id] });
-    },
-  });
 
   // Reconnect to an in-flight turn (e.g. after switching sessions or reload).
   React.useEffect(() => {
@@ -466,66 +444,24 @@ export function ChatWorkspace({
         />
       )}
       <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[820px]:hidden">
-        <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
-          {/* 模式切换只保留输入框里的那一个;列表头恒定为标题,不再挤一个 seg。 */}
-          <h2>{t("chatSessionsTitle")}</h2>
-          <Button variant="outline" size="icon" className="h-7 w-7" title={t("chatNewSession")} aria-label={t("chatNewSession")} onClick={() => createSession.mutate()} loading={createSession.isPending}>
-            <Plus size={14} />
-          </Button>
-        </div>
-        <div
-          className={cn(
-            "grid content-start gap-1 overflow-auto p-1.5 [scrollbar-gutter:stable] [scrollbar-width:none] hover:[scrollbar-color:color-mix(in_srgb,var(--muted-foreground)_35%,transparent)_transparent] hover:[scrollbar-width:thin] focus-within:[scrollbar-color:color-mix(in_srgb,var(--muted-foreground)_35%,transparent)_transparent] focus-within:[scrollbar-width:thin] [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0 hover:[&::-webkit-scrollbar]:h-1.5 hover:[&::-webkit-scrollbar]:w-1.5 focus-within:[&::-webkit-scrollbar]:h-1.5 focus-within:[&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[color-mix(in_srgb,var(--muted-foreground)_35%,transparent)]",
-            sessions.isSuccess && (sessions.data ?? []).length === 0 && "content-center justify-items-center",
-          )}
-        >
-          {sessions.isSuccess && (sessions.data ?? []).length === 0 && (
-            <EmptyState size="compact" icon={<MessageSquarePlus size={15} />} title={t("chatNoSessions")} />
-          )}
-          {(sessions.data ?? []).map((item) => (
-            <ContextMenu key={item.id}>
-              <ContextMenuTrigger asChild>
-                <button
-                  type="button"
-                  className={cn(
-                    "grid w-full cursor-pointer gap-px rounded-md border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted",
-                    activeSession?.id === item.id && "bg-accent shadow-[inset_2px_0_0_var(--primary)] hover:bg-accent",
-                  )}
-                  onClick={() => {
-                    setSessionId(item.id);
-                    window.localStorage.setItem(sessionKey, item.id);
-                  }}
-                >
-                  <strong className="truncate text-xs font-semibold">{item.title}</strong>
-                </button>
-              </ContextMenuTrigger>
-              <ContextMenuContent>
-                <ContextMenuItem onSelect={() => setRenamingSession(item)}>
-                  <Pencil /> {t("rename")}
-                </ContextMenuItem>
-                <SessionShareMenuItem session={item} kind="agent_session" workspaceId={workspace.id} queryKey="agent-sessions" />
-                <ContextMenuSeparator />
-                <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeletingSession(item)}>
-                  <Trash2 /> {t("delete")}
-                </ContextMenuItem>
-              </ContextMenuContent>
-            </ContextMenu>
-          ))}
-        </div>
-
-        <RenameDialog
-          open={renamingSession !== null}
-          title={t("renameSession")}
-          initialValue={renamingSession?.title ?? ""}
-          onCancel={() => setRenamingSession(null)}
-          onSubmit={(name) => renamingSession && renameSession.mutate({ id: renamingSession.id, name })}
-        />
-        <ConfirmDialog
-          open={deletingSession !== null}
-          title={t("deleteConfirmTitle")}
-          body={t("deleteSessionBody")}
-          onCancel={() => setDeletingSession(null)}
-          onConfirm={() => deletingSession && deleteSession.mutate(deletingSession.id)}
+        <SessionList
+          workspaceId={workspace.id}
+          sessions={sessions.data ?? []}
+          loaded={sessions.isSuccess}
+          activeSessionId={activeSession?.id ?? null}
+          onSelect={(id) => {
+            setSessionId(id);
+            window.localStorage.setItem(sessionKey, id);
+          }}
+          onCreate={() => createSession.mutate()}
+          creating={createSession.isPending}
+          onDeleted={(ids) => {
+            // 删掉的里面有正开着的那个,就把视图放下 —— 否则右侧还停在一个已经不存在的会话上。
+            if (sessionId && ids.includes(sessionId)) {
+              setSessionId(null);
+              window.localStorage.removeItem(sessionKey);
+            }
+          }}
         />
       </aside>
 

@@ -13,6 +13,9 @@ from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
     AgentManifestOut,
     AgentMemoryCreate,
+    AgentSessionGroupCreate,
+    AgentSessionGroupOut,
+    AgentSessionGroupUpdate,
     AgentMemoryOut,
     AgentMemoryUpdate,
     AgentPlanUpdate,
@@ -28,7 +31,7 @@ from app.api.schemas import (
 )
 from app.core.config import app_version
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, ensure_workspace_role
-from app.db.models import AgentMessage, AgentSession, ProviderUsageEvent, now
+from app.db.models import AgentMessage, AgentSession, AgentSessionGroup, ProviderUsageEvent, now
 from app.domain.agent import list_agent_skills
 from app.domain.agent import memory as agent_memory
 from app.domain.agent import plan as agent_plan
@@ -190,6 +193,14 @@ def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSessio
         session.thinking_level = body.thinking_level
     if body.permission_mode is not None:
         _set_permission_mode(db, user, session, body.permission_mode)
+    if body.group_id is not None:
+        # 空串 = 移出分组。非空则必须是**本工作区**的分组 —— 否则就能把对话塞进别人的分组里,
+        # 而分组是按工作区列出来的,那条对话会在两边都显得不知从哪来。
+        if body.group_id:
+            group = db.get(AgentSessionGroup, body.group_id)
+            if group is None or group.workspace_id != session.workspace_id:
+                raise HTTPException(status_code=404, detail="分组不存在")
+        session.group_id = body.group_id or None
     if body.auto_allow_tools is not None:
         # 记下是谁定的:与模式同一条规则 —— 授权只对做出授权的那个人生效(见 domain/agent/autopilot)。
         ensure_workspace_perm(db, user, session.workspace_id, "ai")
@@ -309,6 +320,64 @@ def set_agent_plan(session_id: str, body: AgentPlanUpdate, db: DbSession, user: 
 #
 # 设置页与智能体共用这组接口:用户在设置里看到的清单,就是每轮注入模型的那一份。
 # 两份清单会立刻漂移,而"模型到底记住了什么"是用户唯一想确认的事。
+
+
+@router.get("/agent/session-groups", response_model=list[AgentSessionGroupOut])
+def list_session_groups(workspace_id: str, db: DbSession, user: CurrentUser) -> list[AgentSessionGroup]:
+    ensure_workspace_access(db, user, workspace_id)
+    return list(
+        db.scalars(
+            select(AgentSessionGroup)
+            .where(AgentSessionGroup.workspace_id == workspace_id)
+            .order_by(AgentSessionGroup.sort_order, AgentSessionGroup.created_at)
+        )
+    )
+
+
+@router.post("/agent/session-groups", response_model=AgentSessionGroupOut, status_code=201)
+def create_session_group(body: AgentSessionGroupCreate, db: DbSession, user: CurrentUser) -> AgentSessionGroup:
+    ensure_workspace_access(db, user, body.workspace_id)
+    group = AgentSessionGroup(workspace_id=body.workspace_id, owner_user_id=user.id, name=body.name.strip())
+    db.add(group)
+    db.commit()
+    db.refresh(group)
+    return group
+
+
+@router.patch("/agent/session-groups/{group_id}", response_model=AgentSessionGroupOut)
+def update_session_group(
+    group_id: str, body: AgentSessionGroupUpdate, db: DbSession, user: CurrentUser
+) -> AgentSessionGroup:
+    group = _require_group(db, user, group_id)
+    if body.name is not None:
+        group.name = body.name.strip()
+    if body.sort_order is not None:
+        group.sort_order = body.sort_order
+    db.commit()
+    db.refresh(group)
+    return group
+
+
+@router.delete("/agent/session-groups/{group_id}", status_code=204)
+def delete_session_group(group_id: str, db: DbSession, user: CurrentUser) -> Response:
+    """删掉分组,**里面的对话留着**(退回未分组)。
+
+    分组是收纳方式,不是所有权 —— 删一个文件夹不该连着删掉里面的对话。清空成员这一步在这里
+    显式做,不指望数据库级联:老库的 group_id 是迁移加的列,没有外键约束(见 migrations)。
+    """
+    group = _require_group(db, user, group_id)
+    db.query(AgentSession).filter(AgentSession.group_id == group.id).update({AgentSession.group_id: None})
+    db.delete(group)
+    db.commit()
+    return Response(status_code=204)
+
+
+def _require_group(db: DbSession, user: CurrentUser, group_id: str) -> AgentSessionGroup:
+    group = db.get(AgentSessionGroup, group_id)
+    if group is None:
+        raise HTTPException(status_code=404, detail="分组不存在")
+    ensure_workspace_access(db, user, group.workspace_id)
+    return group
 
 
 @router.get("/agent/memories", response_model=list[AgentMemoryOut])

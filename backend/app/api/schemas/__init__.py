@@ -1747,6 +1747,26 @@ class AgentSessionCreate(BaseModel):
     model: str | None = Field(default=None, max_length=120)
 
 
+class AgentSessionGroupCreate(BaseModel):
+    workspace_id: str
+    name: str = Field(min_length=1, max_length=80)
+
+
+class AgentSessionGroupUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+    sort_order: int | None = None
+
+
+class AgentSessionGroupOut(OrmModel):
+    id: str
+    workspace_id: str
+    owner_user_id: str | None = None
+    name: str
+    sort_order: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
 class AgentSessionUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     provider_profile_id: str | None = None
@@ -1758,6 +1778,9 @@ class AgentSessionUpdate(BaseModel):
     permission_mode: str | None = None
     #: 「本会话始终允许」的工具名单。整份替换 —— 它就是用户在卡上点出来的那份清单。
     auto_allow_tools: list[str] | None = None
+    #: 收进哪个分组。**空串 = 移出分组**(与 provider_profile_id 同一套约定):这套 schema 用
+    #: None 表示"这次没改",所以"改成没有"必须另有说法。
+    group_id: str | None = Field(default=None, max_length=64)
 
 
 class AgentSessionOut(OrmModel):
@@ -1768,6 +1791,7 @@ class AgentSessionOut(OrmModel):
     is_mine: bool = True
     shared: bool = False
     project_id: str | None
+    group_id: str | None = None
     title: str
     origin: str
     adapter: str

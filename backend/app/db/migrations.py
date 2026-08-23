@@ -810,6 +810,25 @@ def _drop_generation_models() -> None:
         conn.execute(text("DROP TABLE generation_models"))
 
 
+def _migrate_agent_session_groups() -> None:
+    """agent_sessions 新增 group_id —— 会话分组。
+
+    **必须排在 create_all 之前**没有硬要求(它只加一列),但排在前面语义更顺:create_all 建出
+    agent_session_groups 那张新表时,成员列已经在了。
+
+    列上**不加外键**:老库用 ALTER TABLE 加列,SQLite 没法事后补约束,新老两种库会长得不一样。
+    删分组时由路由显式把成员置空(见 routes/agent.delete_session_group),两种库行为一致。
+    """
+    inspector = inspect(engine)
+    if "agent_sessions" not in set(inspector.get_table_names()):
+        return
+    existing = {c["name"] for c in inspector.get_columns("agent_sessions")}
+    if "group_id" in existing:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN group_id VARCHAR(64)"))
+
+
 def _migrate_agent_session_plan() -> None:
     """加列迁移:agent_sessions 增加 plan(任务计划)。老会话留 NULL = 还没有计划。"""
     inspector = inspect(engine)
@@ -1027,6 +1046,7 @@ def init_db() -> None:
     _migrate_tts_pip_index()
     _migrate_agent_thinking_level()
     _migrate_agent_session_plan()
+    _migrate_agent_session_groups()
     _drop_generation_models()
     _adopt_deepseek_vendor()
     _merge_split_vendors()

@@ -783,6 +783,45 @@ export interface WorkflowGraph {
 }
 
 
+/* ---------- 对话分组 ---------- */
+
+export type AgentSessionGroup = components["schemas"]["AgentSessionGroupOut"];
+
+export function listSessionGroups(workspaceId: string): Promise<AgentSessionGroup[]> {
+  return api<AgentSessionGroup[]>(`/api/agent/session-groups?workspace_id=${workspaceId}`);
+}
+
+export function createSessionGroup(workspaceId: string, name: string): Promise<AgentSessionGroup> {
+  return api<AgentSessionGroup>("/api/agent/session-groups", {
+    method: "POST",
+    body: JSON.stringify({ workspace_id: workspaceId, name }),
+  });
+}
+
+export function renameSessionGroup(groupId: string, name: string): Promise<AgentSessionGroup> {
+  return api<AgentSessionGroup>(`/api/agent/session-groups/${groupId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
+  });
+}
+
+/** 删分组不删对话 —— 成员退回未分组(后端显式清空,见 routes/agent)。 */
+export function deleteSessionGroup(groupId: string): Promise<unknown> {
+  return api(`/api/agent/session-groups/${groupId}`, { method: "DELETE" });
+}
+
+/** 收进分组;`null` = 移出分组(接口用空串表达"改成没有",见 AgentSessionUpdate)。 */
+export function moveSessionToGroup(sessionId: string, groupId: string | null): Promise<unknown> {
+  return api(`/api/agent/sessions/${sessionId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ group_id: groupId ?? "" }),
+  });
+}
+
+export function deleteAgentSession(sessionId: string): Promise<unknown> {
+  return api(`/api/agent/sessions/${sessionId}`, { method: "DELETE" });
+}
+
 export function listWorkflows(workspaceId: string): Promise<Workflow[]> {
   return api<Workflow[]>(`/api/workflows?workspace_id=${workspaceId}`);
 }
