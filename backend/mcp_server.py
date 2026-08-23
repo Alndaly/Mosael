@@ -384,8 +384,8 @@ def edit_timeline(sequence_id: str, operations: list[dict[str, Any]], workspace_
     """Confirmation required: propose edits to a VIDEO TIMELINE sequence.
 
     Use ONLY for clips/tracks/cuts/trims/effects on a sequence_id after
-    inspect_sequence. This creates a confirmation card; no edit is applied until
-    the user approves it in Open Studio, then get_confirmation returns the result.
+    inspect_sequence. Requires the user's approval; no edit is applied unless
+    they approve it in Open Studio.
     Do NOT use for workflow canvas nodes/edges such as add_node, connect,
     set_node_config, remove_node, or remove_edge — use edit_workflow for those.
 
@@ -425,9 +425,8 @@ def render_sequence(sequence_id: str, workspace_id: str = "") -> dict[str, Any]:
     """Confirmation required: export an existing VIDEO TIMELINE sequence to mp4.
 
     Use after inspect_sequence/edit_timeline when the user wants a rendered video
-    file from a sequence_id. This creates a confirmation card because rendering
-    may spend time/resources; after approval get_confirmation returns the render
-    job id. Do NOT use for running visual workflows — use run_workflow.
+    file from a sequence_id. Requires the user's approval because rendering
+    may spend time/resources; the render job starts only if they approve. Do NOT use for running visual workflows — use run_workflow.
     """
     confirmation = _post(
         "/api/confirmations",
@@ -454,9 +453,8 @@ def generate_image(
     Use without source_asset_ids for text-to-image. Use source_asset_ids with
     existing image asset ids when the user asks to edit/transform/continue from
     a specific image, for example "把这张图里的女孩变成男孩" or "按上一张图继续改"。
-    This creates a confirmation card because it may spend AI budget; after
-    approval get_confirmation returns the job_id and the finished image appears
-    in the media pool. Leave provider/model empty only when the user wants the
+    Requires the user's approval because it may spend AI
+    budget; once approved the finished image appears in the media pool. Leave provider/model empty only when the user wants the
     configured image-generation default. When the user names an engine (e.g.
     "用 ComfyUI 画"), call list_generation_models to see valid provider/model
     pairs; local ComfyUI is provider="comfyui", model="workflow" and needs no
@@ -543,9 +541,8 @@ def generate_audio(
     """Confirmation required: generate a NEW spoken-audio asset from text.
 
     Use when the user asks for narration, voiceover, TTS, or other single-speaker
-    generated audio. This creates a confirmation card because it may spend AI
-    budget; after approval get_confirmation returns the audio job_id and the
-    generated audio appears in the media pool. Leave engine/model empty only
+    generated audio. Requires the user's approval because it may spend AI
+    budget; once approved the generated audio appears in the media pool. Leave engine/model empty only
     when the configured speech default should be used. Do NOT use for two-host podcast/dialogue
     audio — use generate_podcast for that. Do NOT use for
     analyzing existing audio/video assets — use analyze_asset.
@@ -1055,8 +1052,7 @@ def run_workflow(workflow_id: str, params: dict[str, Any] | None = None, workspa
 
     Use after get_workflow when the user wants to run the workflow automation.
     params supplies start/input variables. This may spend AI/render budget, so it
-    creates a confirmation card; after approval get_confirmation returns the job
-    id. Do NOT use to edit the workflow graph (edit_workflow/update_workflow) or
+    requires the user's approval; the run starts only if they approve. Do NOT use to edit the workflow graph (edit_workflow/update_workflow) or
     export a video timeline (render_sequence).
     """
     confirmation = _post(

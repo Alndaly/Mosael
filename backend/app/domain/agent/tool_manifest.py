@@ -75,6 +75,30 @@ def _plugin_tool_specs(db: Any, user_id: str | None = None) -> list[ToolSpec]:
     ]
 
 
+#: 确认门控工具在**这条路**上的真实协议。工具自己的描述只说事实(要用户批准、可能花钱),
+#: 不说「怎么等」—— 怎么等每条运行时都不一样,写死在描述里就必然对另一条说谎:
+#:
+#:   · 走 sidecar(应用自己):sidecar 建卡后**阻塞轮询**确认卡,用户批完才把**最终结果**
+#:     交给模型(见 agent-sidecar/src/tools.ts)。模型从头到尾看不到 confirmation_id。
+#:   · 直连 MCP(Claude CLI 等):调用立刻拿到 {confirmation_id, status: pending},自己去
+#:     get_confirmation 轮询 —— 这个协议由回包里的 message 字段当场说清,不必写进描述。
+#:
+#: 描述里留着「after approval get_confirmation returns the job_id」的后果是真机可见的:
+#: 模型按它去找一个永远收不到的 confirmation_id,在对话里说「我没有收到 confirmation_id」,
+#: 然后多跑 get_job / sleep 两步去查一件已经做完的事。
+_CONFIRMATION_PROTOCOL = (
+    "This call BLOCKS until the user approves or rejects it, and then returns the final "
+    "result directly — there is no confirmation_id for you to poll and no need to call "
+    "get_confirmation or get_job afterwards. A returned result means it already happened."
+)
+
+
+def _describe(description: str, gated: bool) -> str:
+    if not gated:
+        return description
+    return f"{description.rstrip()}\n\n{_CONFIRMATION_PROTOCOL}"
+
+
 def agent_tool_specs(db: Any, user_id: str | None = None) -> list[ToolSpec]:
     """同一份清单,不经 HTTP —— 上下文水位要按它算「工具定义占了多少」。
 
@@ -86,7 +110,7 @@ def agent_tool_specs(db: Any, user_id: str | None = None) -> list[ToolSpec]:
     specs = [
         ToolSpec(
             name=tool.name,
-            description=tool.description or "",
+            description=_describe(tool.description or "", tool.name in registry.CONFIRMATION_TOOLS),
             # mcp 2.0 起字段名统一为 snake_case(原 inputSchema)。
             parameters=tool.input_schema or {"type": "object", "properties": {}},
             confirmation=tool.name in registry.CONFIRMATION_TOOLS,
