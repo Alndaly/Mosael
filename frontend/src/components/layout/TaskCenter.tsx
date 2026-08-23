@@ -180,7 +180,10 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
             </button>
           )}
         </div>
-        <div className="grid max-h-[380px] gap-1 overflow-y-auto p-1.5">
+        {/* `grid-cols-[minmax(0,1fr)]` 不是装饰:单列 grid 的隐式列是 `auto`,也就是 **max-content**
+            —— 一条长提示词(AI 生成任务的 subject)会把这一列撑到内容宽度,整个弹层于是能左右滚,
+            而行内那些 truncate 全都失效(它们要一个有定数的列宽才截得动)。 */}
+        <div className="grid max-h-[380px] grid-cols-[minmax(0,1fr)] gap-1 overflow-y-auto overflow-x-hidden p-1.5">
           {active.map((job) => (
             <JobRow key={job.id} job={job} onOpen={() => openJob(job)} onCancel={() => cancelJob.mutate(job.id)} />
           ))}
@@ -275,7 +278,10 @@ function JobRow({ job, count = 1, onOpen, onCancel }: { job: Job; count?: number
       >
         {meta.icon}
       </span>
-      <div className="grid min-w-0 gap-[3px]">
+      {/* 又一处单列 grid:`min-w-0` 管的是这个 div 自身的最小宽度,管不住**轨道** ——
+          隐式列仍是 max-content,于是里面的 truncate 没有定数可截,内容直接顶出去。
+          真机量到:容器已锁到 284px,而每一行的 scrollWidth 还有 992px。 */}
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-[3px]">
         <div className="flex items-center justify-between gap-1.5 [&_strong]:text-xs [&_strong]:font-semibold">
           <span className="flex min-w-0 items-baseline gap-1.5">
             <strong className="shrink-0">{t(meta.labelKey as never)}</strong>
@@ -299,8 +305,13 @@ function JobRow({ job, count = 1, onOpen, onCancel }: { job: Job; count?: number
               <CheckCircle2 size={12} className="text-[#16a34a]" />
             ) : job.status === "failed" ? (
               <CircleAlert size={12} className="text-destructive" />
-            ) : (
+            ) : job.progress > 0 ? (
               `${Math.round(job.progress * 100)}%`
+            ) : (
+              // 一次没报过进度就**别报数**。视频生成这类活儿,供应商只在做完时回一次结果,
+              // 中间没有百分比可言 —— 而一个挂了五分钟的「0%」读起来就是"卡死了"
+              // (真机反馈原话:一直挂在这个状态上没动)。这时有用的是**已经跑了多久**。
+              <span title={job.created_at}>{t("jobRunningFor").replace("{t}", relativeTime(job.created_at, locale))}</span>
             )}
             {running && onCancel && (
               <button
@@ -318,7 +329,7 @@ function JobRow({ job, count = 1, onOpen, onCancel }: { job: Job; count?: number
             )}
           </span>
         </div>
-        {running && <Progress value={Math.round(job.progress * 100)} />}
+        {running && job.progress > 0 && <Progress value={Math.round(job.progress * 100)} />}
         <small className={cn("truncate text-ui-xs text-muted-foreground", failed && "text-destructive")} title={job.error ?? job.message}>
           {job.status === "failed" ? (job.error ?? job.message) : job.message}
         </small>

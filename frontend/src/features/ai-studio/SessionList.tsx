@@ -33,6 +33,7 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { Marker, MarkerContent } from "@/components/ui/marker";
 import { SessionShareMenuItem } from "@/features/ai-studio/SessionShareMenuItem";
 import { useMultiSelect } from "@/lib/useMultiSelect";
 import { cn } from "@/lib/utils";
@@ -330,7 +331,7 @@ export function SessionList({
       >
       <div
         className={cn(
-          "grid content-start gap-1 overflow-auto p-1.5 [scrollbar-gutter:stable] [scrollbar-width:none] hover:[scrollbar-color:color-mix(in_srgb,var(--muted-foreground)_35%,transparent)_transparent] hover:[scrollbar-width:thin] focus-within:[scrollbar-color:color-mix(in_srgb,var(--muted-foreground)_35%,transparent)_transparent] focus-within:[scrollbar-width:thin] [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0 hover:[&::-webkit-scrollbar]:h-1.5 hover:[&::-webkit-scrollbar]:w-1.5 focus-within:[&::-webkit-scrollbar]:h-1.5 focus-within:[&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[color-mix(in_srgb,var(--muted-foreground)_35%,transparent)]",
+          "grid grid-cols-[minmax(0,1fr)] content-start gap-1 overflow-y-auto overflow-x-hidden p-1.5 [scrollbar-gutter:stable] [scrollbar-width:none] hover:[scrollbar-color:color-mix(in_srgb,var(--muted-foreground)_35%,transparent)_transparent] hover:[scrollbar-width:thin] focus-within:[scrollbar-color:color-mix(in_srgb,var(--muted-foreground)_35%,transparent)_transparent] focus-within:[scrollbar-width:thin] [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0 hover:[&::-webkit-scrollbar]:h-1.5 hover:[&::-webkit-scrollbar]:w-1.5 focus-within:[&::-webkit-scrollbar]:h-1.5 focus-within:[&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[color-mix(in_srgb,var(--muted-foreground)_35%,transparent)]",
           loaded && sessions.length === 0 && groupList.length === 0 && "content-center justify-items-center",
         )}
       >
@@ -390,9 +391,13 @@ export function SessionList({
         {/* 「未分组」这个小标题只在**真有分组**时才出现 —— 一个分组都没建过的人不该被告知
             他的对话"未分组"。 */}
         {groupList.length > 0 && byGroup.loose.length > 0 && (
-          <span className="px-1.5 pt-1 text-ui-2xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-            {t("chatUngrouped")}
-          </span>
+          // separator 变体 = 左右两条细线夹住中间那几个字。它本来就是 Marker 的
+          //「带标签的分隔线」那一档 —— 这一段不是标题,是"下面这些没归到任何分组"的分界。
+          <Marker variant="separator" className="px-1.5 pt-1">
+            <MarkerContent className="text-ui-2xs font-semibold uppercase tracking-[0.06em]">
+              {t("chatUngrouped")}
+            </MarkerContent>
+          </Marker>
         )}
         <SortableContext items={containers[UNGROUPED] ?? []} strategy={verticalListSortingStrategy}>
           {byGroup.loose.map(renderSession)}

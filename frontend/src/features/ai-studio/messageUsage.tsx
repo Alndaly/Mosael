@@ -149,10 +149,13 @@ export function MessageUsageFooter({
   };
 
   return (
-    <div className={cn("mt-1.5 flex min-h-[18px] items-center gap-1.5", className)}>
+        // 字号设在**行容器**上,不设在按钮上。tokens.css 里那条无层级的 `button{font:inherit}`
+    // 会压掉按钮自己的字号类(class 还在,尺寸静默回落到继承值)—— 而它继承的正是这里。
+    // 所以顺着它写:容器定 11px,按钮跟着 11px,和旁边的耗时/Token 一样齐。
+    <div className={cn("mt-1.5 flex min-h-[18px] items-center gap-1.5 text-ui-xs", className)}>
       <button
         type="button"
-        className="inline-flex cursor-pointer items-center gap-1 rounded-sm border-0 bg-transparent px-1.5 py-0.5 text-ui-xs text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-foreground"
+        className="inline-flex cursor-pointer items-center gap-1 rounded-sm border-0 bg-transparent px-1.5 py-0.5 text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-foreground"
         title={t("copyMessage")}
         onClick={copy}
       >

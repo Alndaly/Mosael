@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ModalShell } from "@/components/app/modals";
+import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { ChatBubble } from "@/features/ai-studio/ChatBubble";
 import { SessionList } from "@/features/ai-studio/SessionList";
 import { UserMessageContent, attachmentToken } from "@/features/ai-studio/userMessage";
@@ -535,23 +536,32 @@ export function ChatWorkspace({
               {running && streamText && (
                 <div className="relative mx-auto w-full max-w-[780px] shrink-0 text-ui-md leading-[1.65] [word-break:break-word]">
                   <AgentTurnContent timeline={streamTimeline} />
-                  <div className="mt-1.5 flex min-h-[18px] items-center gap-1.5 text-muted-foreground">
-                    <Loader2 size={11} className="animate-openstudio-spin" />
-                    <span className="timecode text-ui-xs text-muted-foreground">
+                  {/* 「还在跑」是一条**状态标记**,不是一段内容 —— 走 Marker,和工具行、
+                      分隔线同一种语汇。图标显式 size-3:Marker 会把没有 size- 类的 svg 撑到 16px。 */}
+                  <Marker className="mt-1.5 min-h-[18px]">
+                    <MarkerIcon>
+                      <Loader2 className="size-3 animate-openstudio-spin" />
+                    </MarkerIcon>
+                    <MarkerContent className="timecode">
                       {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
-                    </span>
-                  </div>
+                    </MarkerContent>
+                  </Marker>
                 </div>
               )}
               {running && !streamText && (
                 <div className="relative mx-auto flex w-full max-w-[780px] shrink-0 flex-col items-stretch gap-[7px] text-ui-md leading-[1.65] text-muted-foreground [word-break:break-word]">
                   <AgentTurnContent timeline={streamTimeline} />
-                  <span className="inline-flex items-center gap-1.5 self-start whitespace-nowrap">
-                    <Loader2 size={13} className="animate-openstudio-spin" /> {t("chatThinking")}
-                    <span className="timecode ml-0.5 text-ui-xs text-muted-foreground">
-                      {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
-                    </span>
-                  </span>
+                  <Marker>
+                    <MarkerIcon>
+                      <Loader2 className="size-3 animate-openstudio-spin" />
+                    </MarkerIcon>
+                    <MarkerContent className="flex items-center gap-1.5 whitespace-nowrap">
+                      {t("chatThinking")}
+                      <span className="timecode">
+                        {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
+                      </span>
+                    </MarkerContent>
+                  </Marker>
                 </div>
               )}
               {(messages.data ?? []).length === 0 && !running && (
