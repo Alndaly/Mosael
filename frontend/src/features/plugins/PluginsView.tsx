@@ -144,10 +144,29 @@ function invalidatePlugins(qc: ReturnType<typeof useQueryClient>) {
 /** 扫描按钮:pending 时图标转起来、文案改成「扫描中」—— 以前只是 disabled,点下去像没点上。 */
 function ScanButton({ pending, onScan, size = "sm" }: { pending: boolean; onScan: () => void; size?: "sm" | "default" }) {
   const t = useI18n();
+  const label = pending ? t("scanningPlugins") : t("scanPlugins");
+  // 列表头上是**只有图标的圆钮**:那一行已经有「已安装」在说这是什么,再写一遍"扫描插件"
+  // 只是把标题挤窄。空状态里那个是主动作(整页就它一个按钮),文案得留着。
+  // 两处都在扫描时禁用并转圈 —— 扫描要走磁盘,连点两下就是两趟。
+  if (size === "sm") {
+    return (
+      <Button
+        variant="outline"
+        size="icon"
+        className="h-7 w-7 rounded-full"
+        title={label}
+        aria-label={label}
+        disabled={pending}
+        onClick={onScan}
+      >
+        <RefreshCcw size={13} className={pending ? "animate-openstudio-spin" : undefined} />
+      </Button>
+    );
+  }
   return (
-    <Button variant={size === "sm" ? "outline" : "default"} size={size} disabled={pending} onClick={onScan}>
-      <RefreshCcw size={size === "sm" ? 13 : 15} className={pending ? "animate-openstudio-spin" : undefined} />
-      {pending ? t("scanningPlugins") : t("scanPlugins")}
+    <Button size="default" disabled={pending} onClick={onScan}>
+      <RefreshCcw size={15} className={pending ? "animate-openstudio-spin" : undefined} />
+      {label}
     </Button>
   );
 }

@@ -151,7 +151,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
   const items = profiles.data ?? [];
 
   return (
-    <div className="grid min-h-full grid-rows-[auto_minmax(0,1fr)] gap-2 p-3">
+    <div className="grid min-h-full grid-rows-[auto_minmax(0,1fr)] gap-2 p-2">
       <div className="flex items-center gap-2">
         <h2 className="m-0 inline-flex items-center gap-1.5 text-[15px] font-semibold text-foreground">
           <Boxes size={17} /> {t("poolTitle")}

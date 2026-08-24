@@ -13345,6 +13345,11 @@
             "type": "array",
             "title": "Spend By User"
           },
+          "currency": {
+            "type": "string",
+            "title": "Currency",
+            "default": "USD"
+          },
           "window_days": {
             "type": "integer",
             "title": "Window Days",

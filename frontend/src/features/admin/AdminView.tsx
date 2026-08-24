@@ -18,6 +18,7 @@ import {
   type ChartConfig,
 } from "@/components/app/chart";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { formatMicros } from "@/lib/money";
 import { DeploymentSection } from "@/features/settings/DeploymentSection";
 import { SettingsGroup, SettingsRow } from "@/features/settings/ui";
 import { relativeTime } from "@/lib/time";
@@ -75,7 +76,7 @@ export function AdminView() {
   const spend = (stats?.spend_by_user ?? []).filter((row) => row.cost_micros > 0);
 
   return (
-    <div className="grid h-full min-h-0 content-start gap-4 overflow-y-auto p-4">
+    <div className="grid h-full min-h-0 content-start gap-4 overflow-y-auto p-2">
       {/* `overflow-y-auto` 只有在**高度被约束**时才会滚:没有 h-full/min-h-0,这个 grid 会一直
           长下去、把溢出甩给外层,而外层并没在滚 —— 于是整页卡住。仓库里能滚的几页都是这个写法。 */}
       {/* 四个数放在最上面:它们是"这台部署现在多大"的一句话回答。 */}
@@ -119,18 +120,25 @@ export function AdminView() {
             body={t("adminNoSpend")}
           />
         ) : (
-          <ul className="m-0 grid w-full list-none gap-1 p-0">
+          /* 和这一页其它段落同一种壳:卡片 + 行。此前这一摞是**裸的** —— 上下都是带边框的卡,
+             中间夹一条没有容器的进度条,读起来像掉出去的一行。 */
+          <ul className="m-0 grid w-full list-none gap-2.5 rounded-md border border-border bg-panel p-2.5">
             {spend.map((row) => (
-              <li key={row.user_id || "unknown"} className="flex items-center gap-2 text-ui-sm">
-                <span className="w-28 shrink-0 truncate">{row.username || t("adminNoOwner")}</span>
-                <span className="h-2 flex-1 overflow-hidden rounded-full bg-secondary">
+              <li
+                key={row.user_id || "unknown"}
+                className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-2 gap-y-1 text-ui-sm"
+              >
+                <span className="min-w-0 truncate">{row.username || t("adminNoOwner")}</span>
+                {/* 金额**不设固定宽、不换行**:此前 w-24 装不下「0.0007 USD · 6」,
+                    调用次数被挤到第二行(真机截图)。 */}
+                <span className="whitespace-nowrap text-right text-ui-xs tabular-nums text-muted-foreground">
+                  {formatMicros(row.cost_micros, stats?.currency ?? "USD")} · {row.calls}
+                </span>
+                <span className="col-span-2 h-1.5 overflow-hidden rounded-full bg-secondary">
                   <span
                     className="block h-full rounded-full bg-primary"
-                    style={{ width: `${Math.max(2, (row.cost_micros / spend[0].cost_micros) * 100)}%` }}
+                    style={{ width: `${Math.max(2, (row.cost_micros / (spend[0]?.cost_micros || 1)) * 100)}%` }}
                   />
-                </span>
-                <span className="w-24 shrink-0 text-right tabular-nums text-muted-foreground">
-                  ¥{(row.cost_micros / 1_000_000).toFixed(2)} · {row.calls}
                 </span>
               </li>
             ))}

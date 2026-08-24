@@ -4,6 +4,7 @@ import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis } from "rechar
 
 import type { WorkspaceSummary } from "@/api/client";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { formatMicros } from "@/lib/money";
 import { useI18n, usePreferences } from "@/app/preferences";
 import {
   ChartContainer,
@@ -43,14 +44,6 @@ const tokenConfigBase = {
   output: { label: "", color: "var(--chart-audio)" },
   other: { label: "", color: "var(--chart-image)" },
 } satisfies ChartConfig;
-
-function formatMicros(value: number, currency: string): string {
-  if (value <= 0) return `0 ${currency}`;
-  const amount = value / 1_000_000;
-  if (amount < 1) return `${amount.toFixed(4)} ${currency}`;
-  if (amount < 100) return `${amount.toFixed(2)} ${currency}`;
-  return `${Math.round(amount).toLocaleString()} ${currency}`;
-}
 
 function formatCount(value: number): string {
   if (value < 1_000) return String(value);

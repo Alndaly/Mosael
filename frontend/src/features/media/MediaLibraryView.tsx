@@ -204,7 +204,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto px-3.5 pb-3.5 [&>*]:shrink-0">
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto px-2 pb-2 [&>*]:shrink-0">
       {/* 顶部工具条 + 标签筛选 sticky 吸顶:滚动素材网格时保持可见。顶部内边距放在本 sticky 头上
           (滚动容器不留 pt),吸顶时才能严丝合缝贴顶、不露出上一行卡片;-mx 铺满宽度,bg 盖住滚上来的卡片。 */}
       <div className="sticky top-0 z-20 -mx-3.5 flex flex-col gap-2 bg-background px-3.5 pt-3.5 pb-2">

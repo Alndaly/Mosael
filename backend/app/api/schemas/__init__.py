@@ -77,6 +77,8 @@ class AdminOverviewOut(BaseModel):
     assets: int = 0
     jobs_by_day: list[DaySeriesPoint] = Field(default_factory=list)
     spend_by_user: list[UserSpendPoint] = Field(default_factory=list)
+    #: 金额的币种。此前没有这一栏,界面只好硬写 ¥ —— 一个按 USD 计价的部署会看到人民币符号。
+    currency: str = "USD"
     window_days: int = 30
 
 

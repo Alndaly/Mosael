@@ -683,7 +683,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   // ── 详情页:整页给画布。返回列表是**唯一**的出口,所以放在最左、和标题同一行。
   if (selected && nodeTypes.data) {
     return (
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-hidden p-3.5 [&>*]:shrink-0">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-hidden p-2 [&>*]:shrink-0">
         {/* 这一层给编辑器高度:页面容器是 [&>*]:shrink-0,不套 flex-1 的话画布会塌成 0。 */}
         <div className="grid min-h-0 flex-1">
           <WorkflowEditor

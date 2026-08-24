@@ -4504,6 +4504,11 @@ export interface components {
             /** Spend By User */
             spend_by_user?: components["schemas"]["UserSpendPoint"][];
             /**
+             * Currency
+             * @default USD
+             */
+            currency: string;
+            /**
              * Window Days
              * @default 30
              */

@@ -873,7 +873,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       onDragCancel={onAssetDragStop}
     >
     <div
-      className="relative grid h-full grid-cols-[252px_minmax(0,1fr)_264px] grid-rows-[minmax(0,1fr)_252px] gap-2 p-3"
+      className="relative grid h-full grid-cols-[252px_minmax(0,1fr)_264px] grid-rows-[minmax(0,1fr)_252px] gap-2 p-2"
       style={{
         gridTemplateColumns: inspectorInGrid
           ? `${leftWidth}px minmax(0, 1fr) ${panels.right}px`

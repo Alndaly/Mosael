@@ -17,23 +17,36 @@ export type PlanStep = { step: string; status: "pending" | "in_progress" | "done
  *
  * 全部做完就折叠成一行:计划的用处在**进行中**,做完之后它只是历史。
  */
-/** 从时间线里的 update_plan 调用还原出「历次计划」。
+/** 从时间线里的 update_plan 调用还原出「做过的那几件事」。
  *
- * **不为此新开一张表**:每次改计划都会留下一次工具调用,参数里就是那一版的步骤列表 ——
- * 历史本来就在,只是没人去读。相邻两次内容一样的合并掉(模型常连着提交同一份)。 */
+ * **不为此新开一张表**:每次改计划都会留下一次工具调用,参数里就是当时那张清单 ——
+ * 历史本来就在,只是没人去读。
+ *
+ * 关键是**归并**:模型在同一件事里会反复调 update_plan 来推进状态(做完一步就报一次),
+ * 那些是同一份计划的连续快照,不是"第 1 版、第 2 版"—— 把每次调用都陈列出来,得到的是
+ * 同样三行、只有勾变了的一摞噪音。所以相邻两次只要**步骤文本有一半以上重合**就算同一份,
+ * 只留最后那次(也就是它最终的样子);换了新活儿(清单整体不同)才另起一份。
+ */
 export function planHistory(timelines: (AgentTimelineItem[] | undefined)[]): PlanStep[][] {
-  const versions: PlanStep[][] = [];
+  const plans: PlanStep[][] = [];
   for (const timeline of timelines) {
     for (const item of timeline ?? []) {
       if (item.type !== "tool" || item.tool?.name !== "update_plan") continue;
       const steps = readSteps(item.tool.args);
       if (steps.length === 0) continue;
-      const last = versions[versions.length - 1];
-      if (last && JSON.stringify(last) === JSON.stringify(steps)) continue;
-      versions.push(steps);
+      const last = plans[plans.length - 1];
+      if (last && samePlan(last, steps)) plans[plans.length - 1] = steps;
+      else plans.push(steps);
     }
   }
-  return versions;
+  return plans;
+}
+
+/** 两张清单是不是同一份计划的两次快照:步骤文本重合过半就算。 */
+function samePlan(a: PlanStep[], b: PlanStep[]): boolean {
+  const texts = new Set(a.map((step) => step.step));
+  const shared = b.filter((step) => texts.has(step.step)).length;
+  return shared * 2 >= Math.min(a.length, b.length);
 }
 
 function readSteps(args: unknown): PlanStep[] {
@@ -92,12 +105,13 @@ export function PlanCard({
       {open && showingHistory && (
         // 历次计划,新的在上。每一份就是当时那张清单,原样陈列。
         <div className="grid gap-2">
-          {[...history].reverse().map((version, index) => (
+          {[...history].reverse().map((past, index) => (
             <div className="grid gap-1" key={index}>
-              <span className="text-ui-2xs text-muted-foreground">
-                {t("agentPlanVersion").replace("{n}", String(history.length - index))}
+              {/* 不编号 —— 它们不是"版本",是先后做过的几件事。标完成度就够了。 */}
+              <span className="text-ui-2xs tabular-nums text-muted-foreground">
+                {past.filter((step) => step.status === "done").length}/{past.length}
               </span>
-              <PlanSteps steps={version} />
+              <PlanSteps steps={past} />
             </div>
           ))}
         </div>

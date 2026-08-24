@@ -159,7 +159,15 @@ def overview(db: DbSession, user: CurrentUser) -> AdminOverviewOut:
             .limit(20)
         ).all()
     ]
+    # 币种取这段窗口里最近一条**计过价**的事件 —— 和工作区概览同一判据(domain/usage)。
+    currency = db.scalar(
+        select(ProviderUsageEvent.currency)
+        .where(ProviderUsageEvent.created_at >= since, ProviderUsageEvent.cost_micros.is_not(None))
+        .order_by(ProviderUsageEvent.created_at.desc())
+        .limit(1)
+    )
     return AdminOverviewOut(
+        currency=currency or "USD",
         users=db.scalar(select(func.count()).select_from(User)) or 0,
         active_users_7d=int(active or 0),
         workspaces=db.scalar(select(func.count()).select_from(Workspace)) or 0,
