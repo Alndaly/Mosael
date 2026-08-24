@@ -6,6 +6,7 @@ import { api, assetFileUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { AgentMarkdown } from "@/components/agent/Markdown";
 import { useImagePreview } from "@/components/app/image-preview";
+import { HighlightedCode } from "@/components/agent/HighlightedCode";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { decodeByteFallback } from "@/lib/byteFallback";
 import { formatElapsedSeconds } from "@/lib/time";
@@ -225,13 +226,19 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
           {argText && (
             <div className="flex flex-col gap-[3px]">
               <span className="text-ui-2xs uppercase tracking-[0.04em] text-muted-foreground">{t("toolInput")}</span>
-              <pre className="m-0 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-panel px-2 py-1.5 font-mono text-ui-xs leading-[1.5] text-foreground [word-break:break-word]">{argText}</pre>
+              <HighlightedCode
+                code={argText}
+                className="max-h-[220px] rounded-md border border-border bg-panel px-2 py-1.5 text-ui-xs text-foreground"
+              />
             </div>
           )}
           {resultText && (
             <div className="flex flex-col gap-[3px]">
               <span className="text-ui-2xs uppercase tracking-[0.04em] text-muted-foreground">{t("toolResult")}</span>
-              <pre className="m-0 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-panel px-2 py-1.5 font-mono text-ui-xs leading-[1.5] text-foreground [word-break:break-word]">{resultText}</pre>
+              <HighlightedCode
+                code={resultText}
+                className="max-h-[220px] rounded-md border border-border bg-panel px-2 py-1.5 text-ui-xs text-foreground"
+              />
             </div>
           )}
         </div>
