@@ -3,6 +3,7 @@ import { Loader2, Scissors } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Marker, MarkerContent } from "@/components/ui/marker";
 import { cn } from "@/lib/utils";
 
 /**
@@ -189,26 +190,31 @@ export function CompactionNotice({ info }: { info: CompactionInfo }) {
   const saved = Math.max(0, info.tokensBefore - info.tokensAfter);
 
   return (
-    <div className="grid gap-1 rounded-md border border-dashed border-border bg-panel-subtle px-2.5 py-1.5">
-      <div className="flex items-center gap-1.5 text-ui-xs text-muted-foreground">
-        <Scissors size={11} className="shrink-0" />
-        <span className="min-w-0 flex-1 truncate">
+    // 「从这里往前被整理过」本质上是**对话流里的一道分界**,不是一块内容 —— 正是 Marker 的
+    // separator 那一档(左右两条线夹住中间那句话)。此前它是一个虚线框,在一列没有框的正文里
+    // 反而比它要标记的那件事还显眼。
+    <div className="grid gap-1">
+      <Marker variant="separator">
+        <MarkerContent className="flex items-center gap-1.5">
+          <Scissors size={11} className="shrink-0" />
           {t("agentCompacted")
             .replace("{n}", String(info.droppedMessages))
             .replace("{saved}", formatTokens(saved))}
-        </span>
-        {info.summary && (
-          <button
-            type="button"
-            className="shrink-0 cursor-pointer border-0 bg-transparent p-0 text-ui-2xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-            onClick={() => setOpen((v) => !v)}
-          >
-            {open ? t("collapse") : t("expand")}
-          </button>
-        )}
-      </div>
+          {info.summary && (
+            <button
+              type="button"
+              className="shrink-0 cursor-pointer border-0 bg-transparent p-0 text-ui-2xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+              onClick={() => setOpen((v) => !v)}
+            >
+              {open ? t("collapse") : t("expand")}
+            </button>
+          )}
+        </MarkerContent>
+      </Marker>
       {open && info.summary && (
-        <p className="m-0 whitespace-pre-wrap text-ui-xs leading-[1.6] text-foreground">{info.summary}</p>
+        <p className="m-0 whitespace-pre-wrap rounded-md bg-panel-subtle px-2.5 py-2 text-ui-xs leading-[1.6] text-foreground">
+          {info.summary}
+        </p>
       )}
     </div>
   );

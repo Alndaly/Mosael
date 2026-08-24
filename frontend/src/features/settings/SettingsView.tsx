@@ -138,7 +138,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
   ];
 
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
       <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] items-stretch gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]">
         <nav className="grid content-start gap-0.5 rounded-lg border border-border bg-panel p-1.5 max-[880px]:inline-flex max-[880px]:w-fit max-[880px]:max-w-full max-[880px]:gap-0 max-[880px]:overflow-x-auto max-[880px]:overflow-y-hidden max-[880px]:rounded max-[880px]:p-0 max-[880px]:[&>*+*]:border-l max-[880px]:[&>*+*]:border-border" aria-label={t("settingsTitle")}>
           {nav.map((item) => (

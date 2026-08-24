@@ -91,7 +91,7 @@ export function EditorView({
     // `projects.length > 0` 才挂),这个按钮就是剪辑页唯一能新建的地方——否则用户
     // 只看到「没有项目」,得自己猜要回首页。
     return (
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
         <EmptyState
           icon={<Scissors size={22} />}
           title={t("emptyProject")}
@@ -841,7 +841,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
 
   if (!sequence) {
     return (
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
         <EmptyState
           icon={<Scissors size={22} />}
           title={t("emptyTimeline")}

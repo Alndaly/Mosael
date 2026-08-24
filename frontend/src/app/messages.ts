@@ -287,6 +287,8 @@ export const messages = {
     agentToolResult: "结果",
     agentToolNoDetail: "这次调用没有留下参数或结果",
     agentPlan: "任务计划",
+    agentPlanHistory: "任务计划 · 历史",
+    agentPlanVersion: "第 {n} 版",
 
     // 跨会话记忆(设置 → 智能体记忆)
     agentMemoryTitle: "智能体记忆",
@@ -2139,6 +2141,8 @@ export const messages = {
     agentToolResult: "Result",
     agentToolNoDetail: "This call recorded no arguments or result",
     agentPlan: "Plan",
+    agentPlanHistory: "Task plan · history",
+    agentPlanVersion: "Version {n}",
 
     // Cross-session memory (Settings → Agent memory)
     agentMemoryTitle: "Agent memory",

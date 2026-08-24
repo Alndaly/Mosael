@@ -190,7 +190,7 @@ export function AiStudio({ workspace }: { workspace: Workspace }) {
 
   return (
     // 聊天/生成只在线程内部滚动,页面本身不滚(overflow-hidden)。
-    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0 gap-0 overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0 gap-0 overflow-hidden">
       {tab === "chat" ? (
         <ChatWorkspace workspace={workspace} switcher={switcher} />
       ) : (

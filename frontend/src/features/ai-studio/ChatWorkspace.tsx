@@ -22,7 +22,7 @@ import { SessionSettingsMenu } from "@/components/agent/SessionSettingsMenu";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { CompactionNotice, type CompactionInfo, type ContextInfo } from "@/components/agent/ContextMeter";
 import { InspectorCard, InspectorRow } from "@/components/agent/InspectorCard";
-import { PlanCard, type PlanStep } from "@/components/agent/PlanCard";
+import { PlanCard, planHistory, type PlanStep } from "@/components/agent/PlanCard";
 import { JumpToLatest, useStickToBottom } from "@/components/agent/stickToBottom";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem, type ToolCall } from "@/components/agent/ToolCalls";
@@ -751,11 +751,19 @@ function ChatInspector({
   });
   const defaultChatModel = (defaults.data ?? []).find((item) => item.capability === "chat")?.model ?? "";
   const effectiveModel = session?.model || defaultChatModel;
+  // 历次计划:从消息时间线里的 update_plan 调用还原(见 PlanCard.planHistory)。
+  const plans = React.useMemo(
+    () => planHistory(messages.map((message) => (message.payload as { timeline?: AgentTimelineItem[] } | null)?.timeline)),
+    [messages],
+  );
   const recentTools = React.useMemo(
     () => collectRecentToolCalls(messages, running ? streamTimeline : []).slice(0, 6),
     [messages, running, streamTimeline],
   );
   const [toolBrowser, setToolBrowser] = React.useState(false);
+  // 「最近工具」和「任务计划」一样可以收成一行 —— 侧栏里三块常驻,
+  // 不看的时候能折起来才谈得上"看得下去"。
+  const [toolsOpen, setToolsOpen] = React.useState(true);
   const failedCount = messages.filter((message) => message.error).length;
   const status = session?.status ?? (running ? "running" : "idle");
   const statusLabel = running
@@ -799,7 +807,7 @@ function ChatInspector({
 
       {/* 计划排在工具之前:等待时最想知道的是"它打算做什么、做到哪了",
           而不是"刚才调了哪个工具"。没有计划时整块不渲染。 */}
-      <PlanCard plan={(session?.plan ?? null) as PlanStep[] | null} />
+      <PlanCard plan={(session?.plan ?? null) as PlanStep[] | null} history={plans} />
 
       {/* 子代理排在计划之后、工具之前:它是"派出去的活",粒度介于计划和单次调用之间。
           没派过就不渲染 —— 和计划同一条规矩。 */}
@@ -812,6 +820,8 @@ function ChatInspector({
       <InspectorCard
         icon={Wrench}
         title={t("agentInspectorRecentTools")}
+        onToggle={() => setToolsOpen((value) => !value)}
+        open={toolsOpen}
         aside={
           // 「看全部工具」是次要动作,所以走标题行右侧那个位 —— 和计划的 3/3 同一个位置、同一种
           // 分量。整宽 outline 按钮会和这块的主内容(最近调用)一样重,而它其实是偶尔才点的。
@@ -825,10 +835,12 @@ function ChatInspector({
           </button>
         }
       >
-        {recentTools.length > 0 ? (
+        {!toolsOpen ? null : recentTools.length > 0 ? (
           // gap-1 和「任务计划」同一个节奏。此前这里没有 gap、靠每行一条 border-b 分开 ——
           // **分隔线是在补缺失的间距**,而它又是整个检查器里唯一一处横线,三块并排就格格不入。
-          <ul className="m-0 grid list-none gap-1 p-0">
+          // gap-0.5 + 更浅的行内边距:这是一列"扫一眼"的记录,不是需要逐条阅读的内容,
+          // 行与行贴近反而更好数。
+          <ul className="m-0 grid list-none gap-0.5 p-0">
             {recentTools.map(({ key, call }) => (
               <RecentToolRow key={key} call={call} />
             ))}
@@ -860,11 +872,11 @@ function RecentToolRow({ call }: { call: ToolCall }) {
     <li className="grid min-w-0">
       <button
         type="button"
-        className="-mx-1 grid min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 rounded border-0 bg-transparent px-1 py-1 text-left text-ui-xs text-foreground transition-colors hover:bg-panel"
+        className="-mx-1 grid min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 rounded border-0 bg-transparent px-1 py-0.5 text-left text-ui-xs text-foreground transition-colors hover:bg-panel"
         onClick={() => setOpen((value) => !value)}
       >
         <AgentStatusIcon status={toAgentStatus(call.status)} />
-        <ToolName name={call.name} />
+        <ToolName name={call.name} className="text-ui-xs font-normal" />
         <em className="not-italic tabular-nums text-ui-xs text-muted-foreground">
           {call.status === "error"
             ? t("toolStatusFailed")

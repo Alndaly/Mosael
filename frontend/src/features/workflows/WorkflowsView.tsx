@@ -635,7 +635,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
 
   if (workflows.isSuccess && (workflows.data ?? []).length === 0) {
     return (
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
         <EmptyState
           icon={<WorkflowIcon size={22} />}
           title={t("wfEmptyTitle")}
@@ -702,7 +702,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   // ── 列表页:卡片 grid。卡面上给的是**判断"是不是这一条"所需的**:名字、说明、
   //     多少个节点、上次改动是什么时候。
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
       <div className="flex items-center justify-between pb-2">
         <h2 className="m-0 inline-flex items-center gap-1.5 text-ui-md font-semibold text-foreground">
           <WorkflowIcon size={13} /> {t("navWorkflows")}

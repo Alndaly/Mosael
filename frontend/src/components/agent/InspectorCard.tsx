@@ -1,5 +1,5 @@
 import React from "react";
-import type { LucideIcon } from "lucide-react";
+import { ChevronRight, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -17,6 +17,7 @@ export function InspectorCard({
   title,
   aside,
   onToggle,
+  open = true,
   className,
   children,
 }: {
@@ -25,17 +26,23 @@ export function InspectorCard({
   aside?: React.ReactNode;
   /** 给可折叠的块用(计划)。传了它标题行才是按钮。 */
   onToggle?: () => void;
+  /** 折叠态。只在传了 onToggle 时有意义 —— 标题行的箭头据此转向。 */
+  open?: boolean;
   className?: string;
   children?: React.ReactNode;
 }) {
-  const header = (
-    <>
-      <span className="flex min-w-0 items-center gap-1.5">
-        <Icon size={13} className="shrink-0" />
-        {title}
-      </span>
-      {aside != null && <span className="ml-auto font-normal tabular-nums">{aside}</span>}
-    </>
+  const label = (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <Icon size={13} className="shrink-0" />
+      {title}
+      {onToggle && (
+        <ChevronRight
+          size={11}
+          className={cn("shrink-0 opacity-50 transition-transform duration-[120ms]", open && "rotate-90")}
+          aria-hidden
+        />
+      )}
+    </span>
   );
   return (
         // **不描边、圆角比外框小**。此前是 `rounded-lg border border-border` —— 边框色和外面
@@ -48,18 +55,22 @@ export function InspectorCard({
           `button { font: inherit }` 不在任何 layer 内,而 Tailwind 的工具类在 @layer utilities ——
           未分层的规则整体赢过分层的,与选择器特异性无关。于是那两个类静默失效,标题掉回 body 的
           13px/400,和邻座的 11.5px/700 差出一截(这正是「任务计划」比其它两块大一号的原因)。 */}
-      <h3 className="m-0 text-ui-xs font-bold text-muted-foreground">
+      {/* aside **在折叠按钮之外**:它可能自己就是个按钮(「全部 61 个 ›」),
+          套在折叠按钮里就是 button 套 button —— HTML 非法,点击行为也不可靠。 */}
+      <h3 className="m-0 flex items-center gap-1.5 text-ui-xs font-bold text-muted-foreground">
         {onToggle ? (
           <button
             type="button"
-            className="flex w-full cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-left"
+            className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-left"
             onClick={onToggle}
+            aria-expanded={open}
           >
-            {header}
+            {label}
           </button>
         ) : (
-          <span className="flex items-center gap-1.5">{header}</span>
+          <span className="flex min-w-0 flex-1 items-center gap-1.5">{label}</span>
         )}
+        {aside != null && <span className="shrink-0 font-normal tabular-nums">{aside}</span>}
       </h3>
       {children}
     </section>

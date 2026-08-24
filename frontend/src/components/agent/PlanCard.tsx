@@ -3,6 +3,7 @@ import { ListChecks } from "lucide-react";
 import { useI18n } from "@/app/preferences";
 import { AgentStatusIcon, toAgentStatus } from "@/components/agent/StatusIcon";
 import { InspectorCard } from "@/components/agent/InspectorCard";
+import type { AgentTimelineItem } from "@/components/agent/ToolCalls";
 import { cn } from "@/lib/utils";
 
 export type PlanStep = { step: string; status: "pending" | "in_progress" | "done" | string };
@@ -16,32 +17,100 @@ export type PlanStep = { step: string; status: "pending" | "in_progress" | "done
  *
  * 全部做完就折叠成一行:计划的用处在**进行中**,做完之后它只是历史。
  */
-export function PlanCard({ plan, className }: { plan: PlanStep[] | null | undefined; className?: string }) {
+/** 从时间线里的 update_plan 调用还原出「历次计划」。
+ *
+ * **不为此新开一张表**:每次改计划都会留下一次工具调用,参数里就是那一版的步骤列表 ——
+ * 历史本来就在,只是没人去读。相邻两次内容一样的合并掉(模型常连着提交同一份)。 */
+export function planHistory(timelines: (AgentTimelineItem[] | undefined)[]): PlanStep[][] {
+  const versions: PlanStep[][] = [];
+  for (const timeline of timelines) {
+    for (const item of timeline ?? []) {
+      if (item.type !== "tool" || item.tool?.name !== "update_plan") continue;
+      const steps = readSteps(item.tool.args);
+      if (steps.length === 0) continue;
+      const last = versions[versions.length - 1];
+      if (last && JSON.stringify(last) === JSON.stringify(steps)) continue;
+      versions.push(steps);
+    }
+  }
+  return versions;
+}
+
+function readSteps(args: unknown): PlanStep[] {
+  let value: unknown = args;
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return [];
+    }
+  }
+  const steps = (value as { steps?: unknown } | null)?.steps;
+  if (!Array.isArray(steps)) return [];
+  return steps
+    .map((step) =>
+      typeof step === "string"
+        ? { step, status: "pending" }
+        : { step: String((step as PlanStep).step ?? ""), status: String((step as PlanStep).status ?? "pending") },
+    )
+    .filter((step) => step.step);
+}
+
+export function PlanCard({
+  plan,
+  history = [],
+  className,
+}: {
+  plan: PlanStep[] | null | undefined;
+  /** 历次计划(旧→新)。当前这份做完之后,卡片改为陈列它们。 */
+  history?: PlanStep[][];
+  className?: string;
+}) {
   const t = useI18n();
   const steps = plan ?? [];
   const done = steps.filter((step) => step.status === "done").length;
   const allDone = steps.length > 0 && done === steps.length;
   const [open, setOpen] = React.useState(true);
-  // 全做完之后自动收起一次(用户仍可再展开)。放 effect 里而不是直接用 allDone 当 open,
-  // 是为了不夺走用户手动展开的权利。
-  const wasAllDone = React.useRef(allDone);
-  React.useEffect(() => {
-    if (allDone && !wasAllDone.current) setOpen(false);
-    wasAllDone.current = allDone;
-  }, [allDone]);
 
-  if (steps.length === 0) return null;
+  // 计划的用处在**进行中**。全做完(或压根没有)之后,当前这份就只是上一件事的残留 ——
+  // 模型本该 update_plan([]) 清掉,但它常常忘,于是下一轮开口时侧栏还挂着上一件事的清单
+  // (真机反馈:「所有任务都完成之后还显示着之前的任务」)。
+  // 这时卡片改为陈列**历次计划**:默认折叠,想回看再展开。两者都没有才整块不渲染。
+  const showingHistory = steps.length === 0 || allDone;
+  if (showingHistory && history.length === 0) return null;
 
   return (
     // 外壳与检查器其余各块共用 —— 此前它自己写了一份几乎一样但又不完全一样的标题行。
     <InspectorCard
       icon={ListChecks}
-      title={t("agentPlan")}
-      aside={`${done}/${steps.length}`}
+      title={showingHistory ? t("agentPlanHistory") : t("agentPlan")}
+      aside={showingHistory ? String(history.length) : `${done}/${steps.length}`}
       onToggle={() => setOpen((value) => !value)}
+      open={open}
       className={className}
     >
-      {open && (
+      {open && showingHistory && (
+        // 历次计划,新的在上。每一份就是当时那张清单,原样陈列。
+        <div className="grid gap-2">
+          {[...history].reverse().map((version, index) => (
+            <div className="grid gap-1" key={index}>
+              <span className="text-ui-2xs text-muted-foreground">
+                {t("agentPlanVersion").replace("{n}", String(history.length - index))}
+              </span>
+              <PlanSteps steps={version} />
+            </div>
+          ))}
+        </div>
+      )}
+      {open && !showingHistory && <PlanSteps steps={steps} />}
+    </InspectorCard>
+  );
+}
+
+function PlanSteps({ steps }: { steps: PlanStep[] }) {
+  return (
+    <>
+      {(
         <ol className="m-0 grid list-none gap-1 p-0">
           {steps.map((step, index) => (
             <li
@@ -63,6 +132,6 @@ export function PlanCard({ plan, className }: { plan: PlanStep[] | null | undefi
           ))}
         </ol>
       )}
-    </InspectorCard>
+    </>
   );
 }

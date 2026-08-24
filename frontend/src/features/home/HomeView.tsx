@@ -220,7 +220,7 @@ export function HomeView({
     : [];
 
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
       <HomeHero
         greeting={t(greetingKey)}
         workspaceName={displayWorkspaceName(workspace.name, t)}

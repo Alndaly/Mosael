@@ -205,7 +205,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
 
   if (tasks.isSuccess && (tasks.data ?? []).length === 0) {
     return (
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
         <div className="flex h-full min-h-0 flex-col gap-1.5">
           {seg}
           {/* 高度由 flex-1 撑满剩余空间;不能再叠 min-h-full——那是「父容器整高」,
@@ -234,7 +234,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-3.5 [&>*]:shrink-0">
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
       <div className="flex h-full min-h-0 flex-col gap-1.5">
       {seg}
       <div className="min-h-0 flex-1 overflow-y-auto pt-1">
