@@ -442,3 +442,38 @@ def test_内置目录里的模型不该被标成已不存在() -> None:
     assert _is_known_model("alibaba", "qwen-max", {"qwen-max": {}}) is True
     # 两处都没有 → 这才是真正的"已不存在",警告要留着
     assert _is_known_model("alibaba", "wan-something-removed", {}) is False
+
+
+def test_档位名要映射成像素对() -> None:
+    """生成面板的**视频**分支发的是 `resolution`(720p 这种档位名)——那是按火山/可灵定的形状。
+    万相收的是像素对,把 "720p" 原样当尺寸发过去会被百炼拒掉。"""
+    from app.ai.providers.wan_video import resolve_size
+
+    assert resolve_size({"resolution": "720p"}) == "1280*720"
+    assert resolve_size({"resolution": "480p"}) == "832*480"
+    # 显式 size 优先,且 1280x720 这种写法也接得住。
+    assert resolve_size({"size": "1280x720", "resolution": "480p"}) == "1280*720"
+    # 都没给就**不发这个字段**,让百炼用自己的默认,而不是我们替它猜一个。
+    assert resolve_size({}) == ""
+
+
+def test_首帧走仓库既有约定_而不是只看上传文件(tmp_path) -> None:
+    """生成面板发的是 `first_frame_url`(seedance / kling 都这么取)。只读 source_files 的话,
+    界面上填的首帧会被静默忽略 —— 图生视频退化成文生视频,而用户看不出发生了什么。"""
+    payload = build_submit_payload(_req(parameters={"first_frame_url": "https://x/a.png"}))
+    assert payload["input"]["img_url"] == "https://x/a.png"
+
+    png = tmp_path / "f.png"
+    png.write_bytes(bytes.fromhex("89504e470d0a1a0a"))
+    payload = build_submit_payload(_req(source_files=[png]))
+    assert payload["input"]["img_url"].startswith("data:image/"), "上传的文件也要能当首帧"
+
+
+def test_共享约定住在base里_不住在某一家() -> None:
+    """first_frame_value 此前定义在 kling.py:wan_video 得反过来 import 那一家,seedance 抄了
+    一遍。一个三家共用的约定住在某个供应商的文件里,读的人只会以为它是那家特有的。"""
+    from app.ai.providers import base, kling, wan_video
+
+    assert hasattr(base, "first_frame_value")
+    assert kling.first_frame_value is base.first_frame_value
+    assert wan_video.first_frame_value is base.first_frame_value

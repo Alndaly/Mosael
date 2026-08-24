@@ -14,7 +14,7 @@ from app.ai.providers.base import (
     GenerationResult,
     ProviderContext,
     ProviderError,
-    image_file_to_data_url,
+    first_frame_value,
     metering_from_request,
     provider_http_error,
 )
@@ -41,6 +41,25 @@ SUBMIT_PATH = "/api/v1/services/aigc/video-generation/video-synthesis"
 _TERMINAL_FAILURES = ("FAILED", "CANCELED", "UNKNOWN")
 
 
+#: 档位名 → 万相收的像素对。生成面板的**视频**分支发的是 `resolution`(720p 这种档位名),
+#: 那是按火山/可灵那几家的形状定的;万相收的是像素对,直接把 "720p" 当尺寸发过去会被拒。
+#: 竖屏没有单独的档位名可选,所以这里只映射横屏 —— 要竖屏就在 size 里显式写 `720*1280`。
+_RESOLUTION_SIZES = {"480p": "832*480", "720p": "1280*720", "1080p": "1920*1080"}
+
+
+def resolve_size(parameters: dict[str, Any]) -> str:
+    """把界面给的尺寸归一成万相收的 `宽*高`。
+
+    三种来源都要接住:显式的 `size`(可能写成 `1280x720`)、档位名 `resolution`、以及都没给。
+    都没给就**不发这个字段** —— 让百炼用它自己的默认,而不是我们替它猜一个。
+    """
+    raw = str(parameters.get("size") or "").strip()
+    if raw:
+        return raw.replace("x", "*")
+    label = str(parameters.get("resolution") or "").strip().lower()
+    return _RESOLUTION_SIZES.get(label, "")
+
+
 def build_submit_payload(request: GenerationRequest) -> dict[str, Any]:
     """把内部请求翻成万相的提交体。
 
@@ -49,10 +68,9 @@ def build_submit_payload(request: GenerationRequest) -> dict[str, Any]:
     路径分支,只在 input 上加字段。
     """
     parameters: dict[str, Any] = {}
-    size = str(request.parameters.get("size") or request.parameters.get("resolution") or "").strip()
+    size = resolve_size(request.parameters)
     if size:
-        # 万相和 qwen-image 一样用 `宽*高`,而界面上到处写的是 `1280x720`。
-        parameters["size"] = size.replace("x", "*")
+        parameters["size"] = size
     duration = request.parameters.get("duration_seconds") or request.parameters.get("duration")
     if duration is not None:
         parameters["duration"] = int(duration)
@@ -62,9 +80,12 @@ def build_submit_payload(request: GenerationRequest) -> dict[str, Any]:
     payload: dict[str, Any] = {"model": request.model, "input": {"prompt": request.prompt}}
     if request.negative_prompt:
         payload["input"]["negative_prompt"] = request.negative_prompt
-    # 首帧图:本地文件转 data URL(与 qwen-image 的编辑模式同一条路),省掉一次外部图床。
-    if request.source_files:
-        payload["input"]["img_url"] = image_file_to_data_url(request.source_files[0])
+    # 首帧图:**先看参数里的 url,再回落本地文件** —— 这是仓库里既有的约定
+    # (seedance / kling 都是这么取的),而生成面板的视频分支发的正是 `first_frame_url`。
+    # 只读 source_files 的话,界面上填的首帧会被静默忽略,图生视频退化成文生视频。
+    first_frame = first_frame_value(request)
+    if first_frame:
+        payload["input"]["img_url"] = first_frame
     if parameters:
         payload["parameters"] = parameters
     return payload

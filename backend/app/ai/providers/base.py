@@ -169,3 +169,18 @@ def image_file_to_data_url(path: Path) -> str:
     """Return a data URL for providers that accept image URLs or base64-like image fields."""
     mime_type, data = image_file_to_base64(path)
     return f"data:{mime_type};base64,{data}"
+
+
+def first_frame_value(request: GenerationRequest) -> str | None:
+    """图生视频的首帧:**先看参数里的 url,再回落上传的文件**。
+
+    住在这里而不是某一家的模块里 —— 三家(可灵 / 火山 seedance / 万相)取法完全一样,而它此前
+    定义在 kling.py:wan_video 得反过来 import 那一家,seedance 干脆整段抄了一遍。一个共享
+    约定住在某个供应商的文件里,读的人只会以为它是那家特有的东西。
+    """
+    first_frame = request.parameters.get("first_frame_url") or request.parameters.get("image_url")
+    if first_frame:
+        return str(first_frame)
+    if request.source_files:
+        return image_file_to_data_url(request.source_files[0])
+    return None

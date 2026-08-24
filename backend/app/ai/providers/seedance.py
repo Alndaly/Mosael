@@ -14,7 +14,7 @@ from app.ai.providers.base import (
     GenerationResult,
     ProviderContext,
     ProviderError,
-    image_file_to_data_url,
+    first_frame_value,
     metering_from_request,
     provider_http_error,
 )
@@ -60,9 +60,8 @@ def build_submit_payload(request: GenerationRequest, context: ProviderContext | 
     resolution = str(request.parameters.get("resolution", "720p"))
     ratio = str(request.parameters.get("aspect_ratio", "16:9"))
     content: list[dict[str, Any]] = [{"type": "text", "text": request.prompt.strip()}]
-    first_frame = request.parameters.get("first_frame_url") or request.parameters.get("image_url")
-    if not first_frame and request.source_files:
-        first_frame = image_file_to_data_url(request.source_files[0])
+    # 三家共用的约定,住在 base 里 —— 这里此前是整段抄写的。
+    first_frame = first_frame_value(request)
     if first_frame:
         image: dict[str, Any] = {"type": "image_url", "image_url": {"url": str(first_frame)}}
         if _is_seedance2(model):

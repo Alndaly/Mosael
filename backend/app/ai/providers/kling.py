@@ -18,7 +18,7 @@ from app.ai.providers.base import (
     GenerationResult,
     ProviderContext,
     ProviderError,
-    image_file_to_data_url,
+    first_frame_value,
     metering_from_request,
     provider_http_error,
 )
@@ -68,15 +68,6 @@ def build_submit_payload(request: GenerationRequest, context: ProviderContext | 
 
 def endpoint_for(request: GenerationRequest) -> str:
     return "/v1/videos/image2video" if first_frame_value(request) else "/v1/videos/text2video"
-
-
-def first_frame_value(request: GenerationRequest) -> str | None:
-    first_frame = request.parameters.get("first_frame_url") or request.parameters.get("image_url")
-    if first_frame:
-        return str(first_frame)
-    if request.source_files:
-        return image_file_to_data_url(request.source_files[0])
-    return None
 
 
 def extract_video_url(task_payload: dict[str, Any]) -> str | None:
