@@ -49,7 +49,7 @@ def describe_engines() -> list[dict[str, object]]:
     在这里说,是因为这是用户**挑引擎**的那一刻 —— 比让他填完文本、点了生成、再收到一句
     「还没有可用的引擎」要早得多。
     """
-    from app.audio import tts_models
+    from app.ai.runtime import tts_models
     from app.domain import tts_config
 
     # **不等探测**:这个接口只是"引擎选择器要什么",而探测要起子进程 import torch。

@@ -35,7 +35,7 @@ from typing import Any
 # ---------------------------------------------------------------------------
 # 常驻模式
 # ---------------------------------------------------------------------------
-#: 和宿主约定的协议前缀(见 audio/tts_daemon)。引擎自己会往这个通道打 tqdm 和 loguru,
+#: 和宿主约定的协议前缀(见 ai/runtime/tts_daemon)。引擎自己会往这个通道打 tqdm 和 loguru,
 #: 所以只有带前缀的行才是协议。
 EVENT_PREFIX = "@@OPEN-STUDIO-TTS "
 
@@ -98,7 +98,7 @@ def run_f5(request: dict[str, Any], output_path: str) -> str:
         # 声码器仍由它自己从 HF 拉(ModelScope 上没有 vocos)。
         announce_f5_fetch(request.get("reference_text") or "")
         managed = os.environ.get("OPEN_STUDIO_F5_MODEL_DIR", "").strip()
-        # 用**这次请求指定的**那份权重。语言支持是模型的属性,不是引擎的(见 audio/f5_models);
+        # 用**这次请求指定的**那份权重。语言支持是模型的属性,不是引擎的(见 ai/runtime/f5_models);
         # 没指定就还是基础模型 —— 老请求、以及从别处直接调 worker 的路径原样能跑。
         ckpt = Path(managed) / (request.get("checkpoint") or F5_CHECKPOINT) if managed else None
         vocab = Path(managed) / (request.get("vocab") or F5_VOCAB) if managed else None

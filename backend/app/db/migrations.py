@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import inspect, text
 
-from app.audio import asr_models
+from app.ai.runtime import asr_models
 from app.core.config import LOGIN_SESSION_TTL, settings
 from app.core.db import Base, PARTITION_PREFIX, engine, now
 from app.core.tokens import TOKEN_SCHEME, token_digest
@@ -746,7 +746,7 @@ def _merge_split_vendors() -> None:
 def _merge_openai_tts_engine() -> None:
     """语音引擎 id `openai-tts` / `openai-compatible-tts` → `openai`。
 
-    引擎 id 不只是个显示名:audio/voices.py 拿它当 vendor 去 resolve_profile,所以它同时
+    引擎 id 不只是个显示名:domain/voices/voices.py 拿它当 vendor 去 resolve_profile,所以它同时
     存在于**三处**——tts_config.engine、历史任务的 payload、以及任务结果里记录的"实际用了
     哪个引擎"。只改预设不改这三处,已有配置会在下次合成时找不到档案。
 

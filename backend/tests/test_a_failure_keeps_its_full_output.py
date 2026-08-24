@@ -81,11 +81,11 @@ def test_all_three_failure_paths_save_their_output() -> None:
     """
     import inspect
 
-    from app.audio import asr_models, tts_models
+    from app.ai.runtime import asr_models, tts_models
     from app.core import pip_install
 
     for module, name in ((pip_install, "core/pip_install"),
-                         (tts_models, "audio/tts_models"),
-                         (asr_models, "audio/asr_models")):
+                         (tts_models, "ai/runtime/tts_models"),
+                         (asr_models, "ai/runtime/asr_models")):
         source = inspect.getsource(module)
         assert "run_log.save(" in source, f"{name} 的失败路径没有把完整输出落盘"

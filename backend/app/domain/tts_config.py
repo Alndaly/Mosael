@@ -28,7 +28,7 @@ PIP_INDEXES = {
 
 # Model-download source → the HF endpoint the worker/download subprocess should use.
 # 只有 HuggingFace 系的源在这里 —— 它们的区别就是一个 base URL。
-# ModelScope 不在:它不是 HF 兼容端点,走的是另一个客户端(见 audio/tts_worker),
+# ModelScope 不在:它不是 HF 兼容端点,走的是另一个客户端(见 ai/runtime/tts_worker),
 # 所以它是"哪条路"的选择,不是"哪个 URL"的选择。曾经把它塞进这张表、指向 huggingface.co,
 # 于是那个选项列在那里、选得中、却什么都不改变。
 HF_ENDPOINTS = {
@@ -110,7 +110,7 @@ def _engines_a_venv_can_run(python: Path) -> list[str]:
     """这个解释器能跑哪些引擎。判据和运行时用的是同一份(合成真正 import 的那几行)。"""
     import logging as _logging
 
-    from app.audio import tts_models
+    from app.ai.runtime import tts_models
     from app.core.child_process import run_logged
 
     able: list[str] = []

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.audio import asr_models, f5_models, tts_models
+from app.ai.runtime import asr_models, f5_models, tts_models
 
 
 def _recording_thread(started: list[str]):
@@ -102,7 +102,7 @@ def test_one_worker_serialises_its_own_pipe() -> None:
     此前那句"外面有 TTS_SLOTS 串行化"只对合成成立;下语言权重走同一个常驻进程却绕过了它 ——
     一边下一边配音,两个请求一起写进同一个 stdin、两个线程一起读同一个 stdout,响应会串。
     """
-    from app.audio import tts_daemon
+    from app.ai.runtime import tts_daemon
 
     import inspect
 

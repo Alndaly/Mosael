@@ -15,7 +15,7 @@ def _install_llm_transport(monkeypatch, module, handler) -> None:
     换掉 httpx.post 既拦不住它,也把重试逻辑一起绕过去了。"""
     import httpx as _httpx
 
-    from app.domain import ai_retry
+    from app.core import http_retry as ai_retry
 
     transport = _httpx.MockTransport(handler)
     real = ai_retry.RetryingClient

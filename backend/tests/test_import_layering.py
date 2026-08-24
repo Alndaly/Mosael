@@ -18,7 +18,7 @@ BACKEND = Path(__file__).resolve().parents[1]
 APP = "app"
 
 #: 底层不许认识上层。api 是组合层,可以认识所有人;反过来不行。
-LOWER_LAYERS = ("app.domain", "app.core", "app.media", "app.ai", "app.audio", "app.integrations")
+LOWER_LAYERS = ("app.domain", "app.core", "app.media", "app.ai", "app.ai.runtime", "app.integrations")
 
 
 def _modules() -> list[tuple[str, Path]]:

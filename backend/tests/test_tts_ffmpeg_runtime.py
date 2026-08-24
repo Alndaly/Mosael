@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from app.audio import tts_models
+from app.ai.runtime import tts_models
 
 
 def _fake_venv(tmp_path: Path, cores: list[int]) -> str:

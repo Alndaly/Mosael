@@ -15,8 +15,8 @@ import threading
 
 import pytest
 
-from app.audio import podcast
-from app.audio.podcast_protocol import (
+from app.domain.voices import podcast
+from app.domain.voices.podcast_protocol import (
     EventType,
     Message,
     MsgType,

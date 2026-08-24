@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.audio import remote_size, tts_models
+from app.ai.runtime import remote_size, tts_models
 
 #: 真实形状:ModelScope 递归列文件,目录项 Type=tree、Size=0。
 MODELSCOPE_FILES = {

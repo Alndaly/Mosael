@@ -20,7 +20,7 @@ from __future__ import annotations
 import ast
 import pathlib
 
-from app.audio import tts_models
+from app.ai.runtime import tts_models
 
 
 def test_every_engine_declares_every_capability() -> None:
@@ -41,7 +41,7 @@ def test_the_imports_are_submodules_not_top_level_packages() -> None:
 
 def test_the_reference_text_rule_comes_from_the_table() -> None:
     """voices 那边不再自己维护一份名单。"""
-    from app.audio import voices
+    from app.domain.voices import voices
 
     assert voices.engines_needing_reference_text() == {
         engine.id for engine in tts_models.CATALOG if engine.needs_reference_text
@@ -54,7 +54,7 @@ def test_no_engine_id_is_hardcoded_outside_the_catalog() -> None:
 
     别处出现一个 `== "fish-speech"`,就是又长出了一处"关于这个引擎的知识"。
     """
-    allowed = {"app/audio/tts_models.py", "app/audio/tts_worker.py"}
+    allowed = {"app/ai/runtime/tts_models.py", "app/ai/runtime/tts_worker.py"}
     engine_ids = {"fish-speech", "f5-tts"}
     offenders: list[str] = []
     for path in sorted(pathlib.Path("app").rglob("*.py")):

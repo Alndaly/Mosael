@@ -13,7 +13,7 @@
 
 from __future__ import annotations
 
-from app.audio import tts_models
+from app.ai.runtime import tts_models
 
 
 def test_f5_supports_speed() -> None:
@@ -38,7 +38,8 @@ def test_speed_rides_along_to_the_worker(monkeypatch) -> None:
     import io
     import wave
 
-    from app.audio import tts_daemon, voices
+    from app.ai.runtime import tts_daemon
+    from app.domain.voices import voices
     from app.core.db import SessionLocal
     from tests.util import fresh_client
 

@@ -6,7 +6,7 @@
 - 转写:一段 zipfile 的 traceback 尾巴
 
 两处当时都是 `(stderr or stdout)[-300:]`。pip 的输出以收尾提示结束是常态,于是**按位置裁**
-必然裁到没信息的那一头 —— 和 `audio/voices.explain_worker_failure` 里把
+必然裁到没信息的那一头 —— 和 `domain/voices/voices.explain_worker_failure` 里把
 `[end of libtorchcodec loading traceback]` 当成错误原因,是同一个毛病的第二次发作。
 
 所以这里钉的不是"有没有报错",而是「挑出来的那几行**是不是**说明原因的那几行」。

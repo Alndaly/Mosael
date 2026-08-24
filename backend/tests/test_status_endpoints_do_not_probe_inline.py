@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import time
 
-from app.audio import asr_models, tts_models
+from app.ai.runtime import asr_models, tts_models
 
 
 def test_listing_tts_models_does_not_wait_for_a_probe(monkeypatch) -> None:

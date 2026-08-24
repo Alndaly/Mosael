@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import select
 
-from app.audio.subtitle_dub import DubError, _speed_for, start_subtitle_dub
+from app.domain.voices.subtitle_dub import DubError, _speed_for, start_subtitle_dub
 from app.core.db import SessionLocal
 from tests.util import fresh_client
 
@@ -97,7 +97,7 @@ def test_bilingual_cue_reads_only_the_line_you_picked() -> None:
     整段丢给合成 = 先念一遍日文再念一遍中文,一条 3 秒的字幕配出十几秒的音,而且没人想听
     那个。默认全念是对的(单语字幕占绝大多数),但双语时必须能选。
     """
-    from app.audio.subtitle_dub import dub_text
+    from app.domain.voices.subtitle_dub import dub_text
 
     cue = "The.\n这。"
     assert dub_text(cue) == "The.\n这。"
@@ -114,7 +114,7 @@ def test_cue_without_the_chosen_line_is_not_dubbed() -> None:
 
     那样配出来的是原文,和其他条念的译文对不上 —— 一条混进去的错音比少一条难发现得多。
     """
-    from app.audio.subtitle_dub import dub_text
+    from app.domain.voices.subtitle_dub import dub_text
 
     assert dub_text("   \n  ", "last") == ""
 
@@ -124,7 +124,7 @@ def test_dub_track_is_reused_not_stacked() -> None:
 
     每配一次新建一条的话,改几句台词重配几段,时间线上就摞起一叠只有一两段音频的轨。
     """
-    from app.audio.subtitle_dub import _dub_track
+    from app.domain.voices.subtitle_dub import _dub_track
     from app.core.db import SessionLocal
     from app.db.models import Track
 
@@ -141,7 +141,7 @@ def test_dub_track_is_reused_not_stacked() -> None:
 
 def test_a_plain_audio_track_is_not_mistaken_for_the_dub_track() -> None:
     """用户自己加的音轨(BGM、旁白素材)不该被配音占用 —— 认的是 role,不是「最后一条音频轨」。"""
-    from app.audio.subtitle_dub import _dub_track
+    from app.domain.voices.subtitle_dub import _dub_track
     from app.core.db import SessionLocal
     from app.db.models import Track
 
@@ -162,7 +162,7 @@ def test_a_plain_audio_track_is_not_mistaken_for_the_dub_track() -> None:
 
 def test_renaming_the_dub_track_does_not_lose_it() -> None:
     """把配音轨改名成「旁白」之后,再配一次仍然回到它 —— 名字是给人看的,认的是 role。"""
-    from app.audio.subtitle_dub import _dub_track
+    from app.domain.voices.subtitle_dub import _dub_track
     from app.core.db import SessionLocal
     from app.db.models import Track
 
@@ -177,7 +177,7 @@ def test_renaming_the_dub_track_does_not_lose_it() -> None:
 
 def _audio_track_with(db, sequence_id: str, sources: list[str]) -> str:
     """造一条音频轨,轨上每段各引一个指定 source 的素材。空列表 = 空轨。"""
-    from app.audio.subtitle_dub import _dub_track
+    from app.domain.voices.subtitle_dub import _dub_track
     from app.db.models import Asset, Clip, Track
 
     track_id = _dub_track(db, sequence_id, None)

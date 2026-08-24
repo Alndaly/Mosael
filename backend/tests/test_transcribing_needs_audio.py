@@ -23,7 +23,7 @@ import subprocess
 
 import pytest
 
-from app.audio import service
+from app.domain.voices import service
 from app.core.db import SessionLocal
 from app.db.models import Asset, Job
 from tests.util import fresh_client

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import pathlib
 
-from app.audio import tts_models
+from app.ai.runtime import tts_models
 
 
 class _Failed:

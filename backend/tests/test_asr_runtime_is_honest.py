@@ -15,13 +15,14 @@
 
 顺带:那一页的「下载」按钮也走同一条解释器探测(`_resolve_python`),所以在缺环境的机器上,
 点下载同样只会报错 —— 页面上没有任何一个动作是能成的。TTS 那边早就解决了这个问题(托管 venv,
-点下载时后端自己把环境建好,见 audio/tts_models.ensure_engine_runtime),ASR 还停在"请你自己
+点下载时后端自己把环境建好,见 ai/runtime/tts_models.ensure_engine_runtime),ASR 还停在"请你自己
 去设置 OPEN_STUDIO_ASR_PYTHON"。
 """
 
 from __future__ import annotations
 
-from app.audio import asr_models, service
+from app.ai.runtime import asr_models
+from app.domain.voices import service
 
 
 def test_the_status_says_whether_it_can_actually_run(monkeypatch) -> None:

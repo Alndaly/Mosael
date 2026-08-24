@@ -18,9 +18,9 @@ from sqlalchemy.orm import Session
 
 from app.domain import provider_models
 from app.domain.usage import billable
-from app.audio import tts_daemon, tts_models
-from app.audio.tts_language import clone_supports, detect_script, edge_voice_language
-from app.audio.tts_models import WORKER_PATH
+from app.ai.runtime import tts_daemon, tts_models
+from app.ai.runtime.tts_language import clone_supports, detect_script, edge_voice_language
+from app.ai.runtime.tts_models import WORKER_PATH
 from app.core.db import SessionLocal
 from app.domain.jobs import TTS_SLOTS, run_job_guarded, say
 from app.db.models import Asset, Job, Voice
@@ -163,7 +163,7 @@ def _refuse_if_unspeakable(text: str, engine: str, engine_voice: str, clone_engi
     label = {"ja": "日文", "ko": "韩文"}[script]
     if engine == "clone":
         if not clone_supports(script):
-            from app.audio import f5_models
+            from app.ai.runtime import f5_models
 
             missing = f5_models.missing_for_language(script)
             if missing is not None:
@@ -322,7 +322,7 @@ def recognize_reference_text(db: Session, voice: Voice) -> Voice:
 
     转不了就明说(转写引擎没装),而不是留个空文本让合成出去丢人。
     """
-    from app.audio import service
+    from app.domain.voices import service
 
     reference = reference_path(voice)
     if not reference.is_file():
@@ -680,7 +680,7 @@ def _synthesize_remote(
     No reference clip and no local model, so none of the worker-subprocess machinery applies —
     but the outcome has to look identical to the caller: an audio asset on the job's result.
     """
-    from app.audio.tts import SpeechRequest, build_remote_provider
+    from app.ai.providers.speech import SpeechRequest, build_remote_provider
     from app.domain.providers import resolve_profile
 
     # The profile carries base_url too. Reading only the key would send a proxy user's request
@@ -688,7 +688,7 @@ def _synthesize_remote(
     # 这次配音替谁干,job 上记着 —— 后台线程手里只有它(见 Job.created_by)。
     # 引擎 id 通常就是 vendor id,百炼是唯一的例外:qwen-tts 与 CosyVoice 是两个引擎、
     # 一条连接、一把 Key(见 audio.tts.vendor_for_engine)。
-    from app.audio.tts import REMOTE_ENGINES, vendor_for_engine
+    from app.ai.providers.speech import REMOTE_ENGINES, vendor_for_engine
 
     profile = resolve_profile(db, vendor_for_engine(engine), provider_profile_id, user_id=job.created_by)
     api_key = (profile.api_key if profile else None) or ""
@@ -767,7 +767,7 @@ def start_podcast(
     credential and a different shape of request — one call produces a whole dialogue, not one
     utterance in a chosen voice.
     """
-    from app.audio.podcast import Action
+    from app.domain.voices.podcast import Action
 
     actions = {"summarize": Action.SUMMARIZE, "read": Action.READ, "research": Action.RESEARCH}
     if mode not in actions:
@@ -825,7 +825,7 @@ def _run_podcast_body(
     speed: float,
     provider_profile_id: str | None = None,
 ) -> None:
-    from app.audio.podcast import synthesize_podcast
+    from app.domain.voices.podcast import synthesize_podcast
     from app.domain.providers import profile_extra, resolve_profile
 
     with SessionLocal() as db:

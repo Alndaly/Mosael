@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from app.audio.asr_worker import funasr_sentences_to_segments, whisperx_segments
-from app.audio.service import to_segment_ins
+from app.ai.runtime.asr_worker import funasr_sentences_to_segments, whisperx_segments
+from app.domain.voices.service import to_segment_ins
 from tests.util import fresh_client
 
 
@@ -61,7 +61,7 @@ def test_transcribe_endpoint_creates_job(monkeypatch) -> None:
         return T()
 
     monkeypatch.setattr("app.domain.jobs.threading.Thread", fake_thread)
-    monkeypatch.setattr("app.audio.service._run_transcription", lambda job_id, asset_id: started.append(asset_id))
+    monkeypatch.setattr("app.domain.voices.service._run_transcription", lambda job_id, asset_id: started.append(asset_id))
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     asset = client.post(

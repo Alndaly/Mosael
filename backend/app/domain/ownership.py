@@ -35,7 +35,7 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "TranscriptToken": ("app/domain/transcripts/", "app/audio/"),
     "ClipTranscriptRef": ("app/domain/transcripts/", "app/domain/sequences/"),
     # 资源库
-    "Voice": ("app/audio/voices.py",),
+    "Voice": ("app/domain/voices/voices.py",),
     "Lut": ("app/domain/luts.py",),
     "Font": ("app/domain/fonts.py",),
     "GeneratedAsset": ("app/domain/generation/",),

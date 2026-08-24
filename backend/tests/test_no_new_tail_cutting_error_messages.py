@@ -33,7 +33,7 @@ ALLOWED: dict[str, str] = {
     # JSON 解析失败要看的是**原文**,不是"哪一行像异常" —— 那不是一段人写的错误输出,
     # 而一段截断的 JSON 里一行都不像错误,挑出来只会说成"没有原因"。
     "domain/plugins/runtime.py": "插件输出不是合法 JSON 时回显原文尾部",
-    "audio/service.py": "转写输出不是合法 JSON 时回显原文尾部(同上)",
+    "domain/voices/service.py": "转写输出不是合法 JSON 时回显原文尾部(同上)",
 }
 
 

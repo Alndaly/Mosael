@@ -1,6 +1,6 @@
 """装引擎依赖:声音克隆和转写共用的那一步。
 
-两处此前各写一遍(`audio/tts_models.ensure_engine_runtime`、`audio/asr_models.ensure_runtime`),
+两处此前各写一遍(`ai/runtime/tts_models.ensure_engine_runtime`、`ai/runtime/asr_models.ensure_runtime`),
 逐行几乎相同 —— 而**只有克隆那边带了 pip 镜像**。转写引擎于是一直在直连 PyPI 拉 torch,
 在国内常常慢到超时,尽管设置页那一项写着「装引擎依赖时用的 pip 索引」。同一段逻辑抄两遍,
 差异就是这么来的。
@@ -112,7 +112,7 @@ def verdict_lines(output: str) -> list[str]:
     """从 pip 输出里挑出说明失败原因的那几行。
 
     **不取尾巴**:pip 的输出以 ``note: run with RUST_BACKTRACE=1``、``[end of output]``
-    这类收尾提示结束是常态,而结论在它们上面。这和 `audio/voices.explain_worker_failure`
+    这类收尾提示结束是常态,而结论在它们上面。这和 `domain/voices/voices.explain_worker_failure`
     里修过的是同一个毛病 —— 那次是把 ``[end of libtorchcodec loading traceback]``
     这条分隔线当成了错误原因。
     """

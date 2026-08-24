@@ -39,7 +39,8 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.domain.provider_credentials import ResolvedProvider
-from app.domain import ai_retry, provider_models
+from app.core import http_retry as ai_retry
+from app.domain import provider_models
 from app.domain.usage import BillableCall
 
 logger = logging.getLogger(__name__)

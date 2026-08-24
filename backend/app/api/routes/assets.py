@@ -9,7 +9,7 @@ from sqlalchemy import or_, select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, AssetUpdate, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse
-from app.audio.service import AsrError, start_transcription
+from app.domain.voices.service import AsrError, start_transcription
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, require_asset
 from app.db.models import Asset, Clip, Job, Transcript, Project
 from app.core.config import settings

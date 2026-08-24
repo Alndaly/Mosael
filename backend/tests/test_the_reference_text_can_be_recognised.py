@@ -17,7 +17,7 @@ import wave
 
 import pytest
 
-from app.audio import service, voices
+from app.domain.voices import service, voices
 from tests.util import fresh_client
 
 
@@ -101,7 +101,7 @@ def test_a_missing_reference_is_refused() -> None:
 
 def test_the_recognised_text_actually_unblocks_fish(monkeypatch) -> None:
     """识别完就该能合成了 —— 这条把功能和它存在的理由连起来。"""
-    from app.audio import tts_models
+    from app.ai.runtime import tts_models
     from app.core.db import SessionLocal
 
     monkeypatch.setattr(service, "resolve_asr_runtime", lambda: ("/usr/bin/python3", "funasr"))

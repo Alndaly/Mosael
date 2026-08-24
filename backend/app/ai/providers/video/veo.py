@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx
 
-from app.domain.ai_retry import RetryingClient
+from app.core.http_retry import RetryingClient
 
 from app.ai.providers.base import (
     poll_until_ready,

@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.audio.tts_language import clone_supports, detect_script, edge_voice_language
-from app.audio.voices import VoiceError, _refuse_if_unspeakable
+from app.ai.runtime.tts_language import clone_supports, detect_script, edge_voice_language
+from app.domain.voices.voices import VoiceError, _refuse_if_unspeakable
 
 
 def test_kana_is_hard_evidence_of_japanese() -> None:

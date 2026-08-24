@@ -23,7 +23,7 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from app.audio.podcast_protocol import EventType, Message, MsgType, MsgTypeFlag, unmarshal
+from app.domain.voices.podcast_protocol import EventType, Message, MsgType, MsgTypeFlag, unmarshal
 
 logger = logging.getLogger(__name__)
 

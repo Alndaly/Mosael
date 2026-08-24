@@ -6,7 +6,7 @@ from pathlib import Path
 
 import httpx
 
-from app.domain.ai_retry import RetryingClient
+from app.core.http_retry import RetryingClient
 
 from app.ai.providers.speech.base import REMOTE_TIMEOUT_SECONDS, SpeechRequest, TTSError
 
@@ -14,7 +14,7 @@ from app.ai.providers.speech.base import REMOTE_TIMEOUT_SECONDS, SpeechRequest, 
 class OpenAITTS:
     """OpenAI's speech endpoint. Stock voices, no reference clip, no local model."""
 
-    #: 引擎 id **就是 vendor id**(audio/voices.py 拿 engine 去 resolve_profile)。
+    #: 引擎 id **就是 vendor id**(domain/voices/voices.py 拿 engine 去 resolve_profile)。
     #: 合并成 "openai" 之前这里有三个:openai-tts 与 openai-compatible-tts —— 而后者存在的
     #: 理由只是"要填自定义 endpoint",可 openai 档案本来就有 base_url 字段。
     id = "openai"

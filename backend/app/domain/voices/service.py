@@ -13,8 +13,10 @@ import threading
 from functools import lru_cache
 from pathlib import Path
 
+
 from sqlalchemy.orm import Session
 
+from app.ai.runtime import asr_models
 from app.core.config import settings
 from app.core.text import blame_line
 from app.core.db import SessionLocal
@@ -28,7 +30,11 @@ from app.core.child_process import run_logged
 
 logger = logging.getLogger(__name__)
 
-WORKER_PATH = Path(__file__).with_name("asr_worker.py")
+# worker 住在 ai/runtime(它是"在这台机器上跑模型"的那一层),这个文件是领域流程 —— 不同目录。
+# **从 runtime 那边取,而不是在这里拼路径**:那个模块自己知道 worker 在哪,而打包检查
+# (test_frozen_build_is_not_a_python_interpreter)也是顺着 `__file__.with_name` 去发现
+# "哪些脚本要被当文件打开"的 —— 在这里另拼一份,它就会去找一个不存在的路径。
+WORKER_PATH = asr_models.WORKER_PATH
 ASR_TIMEOUT_SECONDS = 3600
 
 
@@ -51,7 +57,7 @@ def resolve_asr_runtime(language: str = "") -> tuple[str, str]:  # noqa: ARG001 
     曾经在这里写过「非中文一律走 WhisperX」—— 那是把"我们装的是中文预设"错记成了"FunASR 只能中文",
     等于把一个包装选择固化成了引擎的属性。
     """
-    from app.audio.asr_models import resolve_engine_python
+    from app.ai.runtime.asr_models import resolve_engine_python
 
     preferred = settings.asr_provider.strip().lower()
     engines = ["funasr", "whisperx"] if preferred in ("", "auto") else [preferred]
@@ -149,7 +155,7 @@ def to_segment_ins(segments: list[dict]) -> list[SegmentIn]:
 def _watch_model_download(job_id: str, provider: str) -> threading.Event:
     """While a transcribe is running, if its model isn't installed yet, poll the
     download and map it onto job progress 0.25→0.9. Returns a stop Event."""
-    from app.audio import asr_models
+    from app.ai.runtime import asr_models
 
     stop = threading.Event()
     entry = asr_models.entry_for_transcribe(provider)

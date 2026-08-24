@@ -13,7 +13,7 @@ test_every_download_source_does_something):它改变了那 1.35 GB 的去处,所
 
 from __future__ import annotations
 
-from app.audio import tts_models
+from app.ai.runtime import tts_models
 
 
 def test_modelscope_is_offered_for_f5_now() -> None:
@@ -26,7 +26,7 @@ def test_the_repo_id_is_the_modelscope_one() -> None:
 
 
 def test_the_worker_fetches_the_checkpoint_from_modelscope(monkeypatch, tmp_path) -> None:
-    from app.audio import tts_worker
+    from app.ai.runtime import tts_worker
 
     grabbed: list[tuple[str, str]] = []
     monkeypatch.setattr(
@@ -44,7 +44,7 @@ def test_the_worker_fetches_the_checkpoint_from_modelscope(monkeypatch, tmp_path
 
 def test_it_does_not_touch_modelscope_on_the_hf_path(monkeypatch, tmp_path) -> None:
     """选 HF 时就老老实实走 HF —— F5TTS 自己会拉,不该在这里抢着下一份。"""
-    from app.audio import tts_worker
+    from app.ai.runtime import tts_worker
 
     called = []
     monkeypatch.setattr(tts_worker, "_modelscope_file", lambda *a, **k: called.append(a))

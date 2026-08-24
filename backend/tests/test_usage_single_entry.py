@@ -62,7 +62,7 @@ def test_翻译走的是记账链路而不是又一份实现(monkeypatch) -> Non
     import httpx
 
     from app.db.models import ProviderUsageEvent
-    from app.domain import ai_retry
+    from app.core import http_retry as ai_retry
     from tests.util import add_provider, fresh_client
     from app.core.db import SessionLocal
 

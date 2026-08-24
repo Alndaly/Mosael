@@ -38,7 +38,7 @@ def _has_implementation(vendor: str, capability: str) -> bool:
 
         return get_provider(vendor, capability) is not None
     if capability == "tts":
-        from app.audio.tts import REMOTE_ENGINES
+        from app.ai.providers.speech import REMOTE_ENGINES
 
         return vendor in REMOTE_ENGINES
     if capability == "podcast":
@@ -48,7 +48,7 @@ def _has_implementation(vendor: str, capability: str) -> bool:
         # 为真,于是给别人加一个 podcast 也不会红。破坏性验证当场把这一点抓了出来。
         import re
 
-        source = (Path(__file__).resolve().parents[1] / "app" / "audio" / "voices.py").read_text(encoding="utf-8")
+        source = (Path(__file__).resolve().parents[1] / "app" / "domain" / "voices" / "voices.py").read_text(encoding="utf-8")
         return bool(re.search(rf'resolve_profile\(db, "{re.escape(vendor)}"', source))
     raise AssertionError(f"新能力 {capability!r} 还没说清谁来执行它 —— 请在这里补上判据")
 

@@ -20,7 +20,7 @@
 
 from __future__ import annotations
 
-from app.audio import tts_models
+from app.ai.runtime import tts_models
 from app.domain import tts_config
 
 
@@ -79,7 +79,7 @@ def test_the_worker_pulls_from_modelscope_when_told_to(monkeypatch, tmp_path) ->
 
     这个选项最早的毛病正是后者:配置里写着 ModelScope,拉的却是 HuggingFace。
     """
-    from app.audio import tts_worker
+    from app.ai.runtime import tts_worker
 
     called: dict[str, object] = {}
 
@@ -104,7 +104,7 @@ def test_the_worker_pulls_from_modelscope_when_told_to(monkeypatch, tmp_path) ->
 
 
 def test_the_worker_pulls_from_huggingface_otherwise(monkeypatch, tmp_path) -> None:
-    from app.audio import tts_worker
+    from app.ai.runtime import tts_worker
 
     called: dict[str, object] = {}
     monkeypatch.setattr(tts_worker, "_modelscope_snapshot", lambda *a, **k: called.setdefault("backend", "modelscope"))

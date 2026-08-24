@@ -166,7 +166,7 @@ def _run_dub(job_id: str) -> None:
         emit_job_event(db, job.id, "job.running", {})
         db.commit()
 
-    from app.audio.voices import start_synthesis
+    from app.domain.voices.voices import start_synthesis
 
     done = 0
     failed = 0

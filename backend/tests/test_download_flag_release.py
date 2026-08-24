@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.audio import asr_models, tts_models
+from app.ai.runtime import asr_models, tts_models
 
 
 @pytest.mark.parametrize(

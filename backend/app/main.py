@@ -137,7 +137,7 @@ def _prepare_network() -> None:
         apply_from_db(db)
         # 重试次数同理:进程级状态,启动时从库里装配一次。
         from app.db.models import AiRuntimeConfig
-        from app.domain.ai_retry import set_max_retries
+        from app.core.http_retry import set_max_retries
 
         runtime = db.get(AiRuntimeConfig, "default")
         if runtime is not None:

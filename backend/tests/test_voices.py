@@ -142,7 +142,7 @@ def test_自建兼容端点的_base_url_能走到引擎() -> None:
     sent to api.openai.com with a key that is not valid there — a 401 whose cause is invisible."""
     import time
 
-    import app.audio.tts as providers
+    import app.ai.providers.speech as providers
     from app.core.db import SessionLocal
     from app.db.models import ProviderProfile
 
@@ -196,7 +196,7 @@ def test_the_voice_resource_survives_the_hand_off_to_the_job_thread() -> None:
     of them is silent until synthesis fails with an opaque 55000000 — so pin the whole path."""
     import time
 
-    import app.audio.tts as providers
+    import app.ai.providers.speech as providers
     from app.core.db import SessionLocal
     from app.db.models import ProviderProfile
 

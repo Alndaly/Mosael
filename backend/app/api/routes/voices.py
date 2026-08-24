@@ -9,7 +9,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile, 
 from fastapi.responses import FileResponse
 
 from app.api.deps import CurrentUser, DbSession
-from app.audio.service import AsrError
+from app.domain.voices.service import AsrError
 from app.core.i18n import normalize_locale, translate_fields
 from app.db.models import Voice
 from app.api.schemas import (
@@ -26,7 +26,8 @@ from app.api.schemas import (
     VoiceOut,
     VoiceUpdate,
 )
-from app.audio import tts_daemon, tts_models, voices
+from app.ai.runtime import tts_daemon, tts_models
+from app.domain.voices import voices
 from app.domain.permissions import ensure_workspace_perm, ensure_deployment_admin, ensure_workspace_access
 from app.domain import tts_config
 
@@ -161,9 +162,9 @@ def list_f5_models(request: Request, user: CurrentUser) -> list[dict]:
     """本地克隆能用哪几份权重,各自认得什么语言、装没装。
 
     这是「引擎 / 模型」分开之后新长出来的一层:引擎什么语言都支持,支持范围由权重决定
-    (见 audio/f5_models)。
+    (见 ai/runtime/f5_models)。
     """
-    from app.audio import f5_models
+    from app.ai.runtime import f5_models
 
     locale = normalize_locale(request.headers.get("accept-language"))
     return [translate_fields(row, ("label", "note"), locale) for row in f5_models.list_status()]
@@ -173,7 +174,7 @@ def list_f5_models(request: Request, user: CurrentUser) -> list[dict]:
 def download_f5_model(model_id: str, db: DbSession, user: CurrentUser) -> dict:
     # 和引擎下载同一道闸门:往**后端主机**上装 1.4 GB 权重是部署级动作,不属于任何工作区。
     ensure_deployment_admin(db, user)
-    from app.audio import f5_models
+    from app.ai.runtime import f5_models
 
     try:
         return f5_models.start_download(model_id)
@@ -186,7 +187,7 @@ def download_f5_model(model_id: str, db: DbSession, user: CurrentUser) -> dict:
 @router.get("/tts/engines", response_model=list[TtsEngineChoiceOut])
 def list_tts_engines(request: Request, user: CurrentUser) -> list[dict]:
     """Engines the配音 UI can offer, and what each one needs from the user."""
-    from app.audio.tts import describe_engines
+    from app.domain.voices.engine_catalog import describe_engines
 
     locale = normalize_locale(request.headers.get("accept-language"))
     return [translate_fields(row, ("label", "note"), locale) for row in describe_engines()]
@@ -222,20 +223,21 @@ def list_tts_voices(engine: str, db: DbSession, user: CurrentUser) -> list[dict]
     account and each voice carries its family. Without them, the built-in list still works;
     it is smaller and can go stale, which is a far better failure than an empty dropdown.
     """
-    from app.audio.tts import EDGE_BUILTIN_VOICES, PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES, describe_engines
+    from app.ai.providers.speech import EDGE_BUILTIN_VOICES, PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES
+    from app.domain.voices.engine_catalog import describe_engines
     from app.domain.providers import resolve_profile, profile_extra
 
     # **固定音色的引擎不在这里再写一遍。** 这个函数原本是逐引擎的 if 分支,末尾一句
     # `if engine != "volcano": return []` —— 于是加一个引擎要改两处(引擎目录 + 这里),
     # 漏掉第二处的表现是"引擎选得出来,但音色下拉是空的"。百炼刚接进来时就是这样。
     # 音色清单只有一个产地:describe_engines()。这里只负责**火山那条实时的**。
-    from app.audio.tts import REMOTE_ENGINES, BailianTTS
+    from app.ai.providers.speech import REMOTE_ENGINES, BailianTTS
 
     if engine in (BailianTTS.id, "alibaba-cosyvoice"):
         # 百炼的音色**跟着模型走**(qwen3-tts-flash 有 qwen-tts 没有的几个,CosyVoice 的
         # id 更是完全另一套)。这里解析模型必须和合成时**同一条路径**,否则下拉列的是 A 的
         # 音色、发出去的是 B 的请求 —— 用户选了个看着合法的音色,拿回一句"音色不存在"。
-        from app.audio.tts import active_model_for
+        from app.domain.voices.engine_catalog import active_model_for
 
         engine_cls = REMOTE_ENGINES[engine]
         return [{"value": v, "label": v} for v in engine_cls.voices_for(active_model_for(engine_cls))]

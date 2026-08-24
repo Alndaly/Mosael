@@ -29,7 +29,7 @@ from typing import Any
 
 import logging
 
-from app.audio import remote_size
+from app.ai.runtime import remote_size
 from app.core.rate import DownloadRate
 
 logger = logging.getLogger(__name__)
@@ -260,7 +260,7 @@ def measured_total(model: F5Model, *, blocking: bool = False) -> tuple[int, bool
     而它们的检查点从 1.2 GB 到 1.5 GB 都有。按源上的**实际文件**算(检查点 + vocab 两个,
     不是整仓:Jmica/F5TTS 整仓有四份检查点,而我们只取一份)。
 
-    问不到就退回估算并说出来 —— 理由见 audio/remote_size 的模块说明。
+    问不到就退回估算并说出来 —— 理由见 ai/runtime/remote_size 的模块说明。
     """
     source, repo = (("modelscope", model.modelscope_repo) if model.modelscope_repo
                     else ("hf", model.hf_repo))
@@ -397,7 +397,7 @@ class _ByteWatcher:
 
 
 def _run_download(model_id: str) -> None:
-    from app.audio import tts_daemon, tts_models
+    from app.ai.runtime import tts_daemon, tts_models
 
     model = _BY_ID[model_id]
     try:

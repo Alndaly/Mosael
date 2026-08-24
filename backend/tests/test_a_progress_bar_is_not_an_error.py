@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.audio.tts_models import _explain_failure
-from app.audio.voices import explain_worker_failure
+from app.ai.runtime.tts_models import _explain_failure
+from app.domain.voices.voices import explain_worker_failure
 from app.core.text import blame_line
 
 #: 真机上那一次(0.18.1,Windows):卡片上的红字就是这根进度条。

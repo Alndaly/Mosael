@@ -63,7 +63,7 @@ from app.domain.network import apply_to_process, effective_no_proxy, get_config 
 from app.ai.agent.adapters import AdapterError, refresh_oauth_credential
 from app.ai.agent.host import mint_tool_token
 from app.domain import provider_models
-from app.domain.ai_retry import set_max_retries
+from app.core.http_retry import set_max_retries
 from app.domain.provider_quota import QuotaUnavailable, fetch_quota, is_expired, supports_quota
 from app.domain import provider_health
 from app.domain.provider_auth import acquire_lease, commit_credential, read_credential

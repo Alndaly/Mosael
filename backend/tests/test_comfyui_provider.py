@@ -91,7 +91,7 @@ def _mock_comfy(monkeypatch, handler) -> None:
     打桩点是模块里的 RetryingClient 而不是 httpx.Client:重试统一在 RetryingClient 里做,
     替换 httpx.Client 既拦不住它(子类在导入期就绑定了真类),也等于把被测的重试逻辑绕过去。
     """
-    from app.domain import ai_retry
+    from app.core import http_retry as ai_retry
 
     transport = httpx.MockTransport(handler)
     real = ai_retry.RetryingClient

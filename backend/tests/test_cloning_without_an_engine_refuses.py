@@ -24,7 +24,8 @@ import wave
 
 import pytest
 
-from app.audio import tts_models, voices
+from app.ai.runtime import tts_models
+from app.domain.voices import voices
 from app.domain import tts_config
 from app.core.db import SessionLocal
 from app.db.models import Job
@@ -109,14 +110,14 @@ def test_the_worker_no_longer_invents_audio(tmp_path) -> None:
 
 
 def voices_worker_synthesize(out) -> None:
-    from app.audio import tts_worker
+    from app.ai.runtime import tts_worker
 
     tts_worker.synthesize({"engine": "f5-tts", "text": "你好,测试一段语音合成。"}, str(out))
 
 
 def test_the_engine_picker_says_it_up_front(monkeypatch) -> None:
     """挑引擎的那一刻就说清楚 —— 而不是等他填完文本、点了生成才拒绝。"""
-    from app.audio import tts
+    from app.domain.voices import engine_catalog as tts
 
     monkeypatch.setattr(tts_models, "resolve_engine_python", lambda engine_id: None)
     tts_models.clear_runtime_probes()

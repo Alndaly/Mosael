@@ -24,7 +24,7 @@ pyproject 都没声明**。也就是说"照它的清单装"同样不够。唯一
 
 from __future__ import annotations
 
-from app.audio import tts_models
+from app.ai.runtime import tts_models
 
 
 def test_the_probe_imports_what_synthesis_imports(monkeypatch) -> None:

@@ -278,7 +278,7 @@ def test_generate_audio_confirmation_uses_tts_default(monkeypatch) -> None:
         captured.update(kwargs)
         return SimpleNamespace(id="tts-job-1")
 
-    monkeypatch.setattr("app.audio.voices.start_synthesis", lambda _db, **kwargs: fake_start_synthesis(**kwargs))
+    monkeypatch.setattr("app.domain.voices.voices.start_synthesis", lambda _db, **kwargs: fake_start_synthesis(**kwargs))
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     profile = client.post(

@@ -14,14 +14,14 @@ from pathlib import Path
 
 import pytest
 
-from app.audio.tts import (
+from app.ai.providers.speech import (
     EDGE_BUILTIN_VOICES,
     EdgeTTS,
     SpeechRequest,
     TTSError,
     build_remote_provider,
-    describe_engines,
 )
+from app.domain.voices.engine_catalog import describe_engines
 from tests.util import fresh_client
 
 

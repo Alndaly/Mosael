@@ -19,7 +19,7 @@ from dataclasses import dataclass
 
 import httpx
 
-from app.domain.ai_retry import RetryingClient
+from app.core.http_retry import RetryingClient
 
 TOKEN_URL = "https://v2.jinrishici.com/token"
 SENTENCE_URL = "https://v2.jinrishici.com/sentence"

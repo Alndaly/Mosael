@@ -6,7 +6,7 @@ from pathlib import Path
 
 import httpx
 
-from app.domain.ai_retry import RetryingClient
+from app.core.http_retry import RetryingClient
 
 from app.ai.providers.speech.base import REMOTE_TIMEOUT_SECONDS, SpeechRequest, TTSError
 

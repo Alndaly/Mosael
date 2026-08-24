@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import json
 
-from app.audio import tts_models
+from app.ai.runtime import tts_models
 
 
 def _fish_dir(root, *, shards: dict[str, int], total_size: int, codec: bool = True):

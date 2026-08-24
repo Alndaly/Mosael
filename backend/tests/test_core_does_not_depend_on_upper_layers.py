@@ -2,7 +2,7 @@
 
 此前它反向依赖着上层:
 
-    app/core/db.py:964  from app.audio import asr_models
+    app/core/db.py:964  from app.ai.runtime import asr_models
     app/core/db.py:965  from app.domain import tts_config
 
 而且是**写在函数体里**的 import —— 那不是技巧,是"层分错了"的自白:写在文件顶上会立刻成环

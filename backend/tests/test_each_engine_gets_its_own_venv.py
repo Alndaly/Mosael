@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.audio import asr_models, tts_models
+from app.ai.runtime import asr_models, tts_models
 from app.domain import tts_config
 
 

@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.audio import f5_models
-from app.audio.tts_language import clone_supports
+from app.ai.runtime import f5_models
+from app.ai.runtime.tts_language import clone_supports
 
 
 def test_language_support_comes_from_installed_weights(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -70,14 +70,14 @@ def test_latin_script_languages_cannot_be_detected() -> None:
     所以它们的权重永远自动挑不中,只能由用户明说(weights_for 的 model_id)。装作能认出来的
     代价是给英文文本套上一份法语权重,而那同样是一段念不对的音频。
     """
-    from app.audio.tts_language import detect_script
+    from app.ai.runtime.tts_language import detect_script
 
     for text in ("Bonjour tout le monde", "Guten Tag alle zusammen", "Hola a todos", "Hello world"):
         assert detect_script(text) == "", text
 
 
 def test_scripts_that_do_give_evidence() -> None:
-    from app.audio.tts_language import detect_script
+    from app.ai.runtime.tts_language import detect_script
 
     assert detect_script("Привет, как дела") == "ru"
     assert detect_script("مرحبا كيف حالك") == "ar"
@@ -86,7 +86,7 @@ def test_scripts_that_do_give_evidence() -> None:
 
 def test_an_explicit_model_beats_the_guess(monkeypatch: pytest.MonkeyPatch) -> None:
     """用户明说要哪份权重时,不再看文字 —— 这是拉丁字母那几门语言唯一的用法。"""
-    from app.audio import tts_models
+    from app.ai.runtime import tts_models
 
     monkeypatch.setattr(f5_models, "installed", lambda model: True)
     picked = tts_models.weights_for("f5-tts", "Bonjour tout le monde", "fr")

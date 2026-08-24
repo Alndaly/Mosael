@@ -5,7 +5,7 @@ from urllib.parse import quote
 
 import httpx
 
-from app.domain.ai_retry import RetryingClient
+from app.core.http_retry import RetryingClient
 
 """
 ComfyUI 深度接入的隔离层:所有「ComfyUI 内部格式」知识只在这一个模块里。

@@ -16,7 +16,7 @@ import httpx
 
 from app.core.usage_scope import run_in_scope
 from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
-from app.domain import ai_retry
+from app.core import http_retry as ai_retry
 from app.domain.usage import BillableCall, billable
 
 _GOOGLE_URL = "https://translate.googleapis.com/translate_a/single"

@@ -23,7 +23,7 @@
 
 from __future__ import annotations
 
-from app.audio import tts_models
+from app.ai.runtime import tts_models
 
 
 def test_the_fish_estimate_matches_the_real_repo() -> None:

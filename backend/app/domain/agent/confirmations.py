@@ -523,7 +523,7 @@ def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
         start_generation_thread(generation.id)
         return {"job_id": job.id, "generation_id": generation.id}
     if confirmation.tool == "generate_audio":
-        from app.audio.voices import start_synthesis
+        from app.domain.voices.voices import start_synthesis
         from app.domain import provider_models
 
         profile_id = str(payload.get("provider_profile_id") or "").strip()
@@ -552,7 +552,7 @@ def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
         )
         return {"job_id": job.id}
     if confirmation.tool == "generate_podcast":
-        from app.audio.voices import start_podcast
+        from app.domain.voices.voices import start_podcast
         from app.domain import provider_models
 
         profile_id = str(payload.get("provider_profile_id") or "").strip()

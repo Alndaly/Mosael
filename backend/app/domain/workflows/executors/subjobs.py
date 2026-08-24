@@ -20,7 +20,7 @@ from app.domain.workflows.executors.common import wait_for_job
 
 @register("transcribe_asset")
 def transcribe_asset(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    from app.audio.service import start_transcription
+    from app.domain.voices.service import start_transcription
 
     asset_id = str(config.get("asset_id", ""))
     child = start_transcription(db, asset_id, created_by=current_actor(db))
@@ -92,7 +92,7 @@ def ai_generate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict
 
 @register("synthesize_speech")
 def synthesize_speech(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    from app.audio.voices import start_synthesis
+    from app.domain.voices.voices import start_synthesis
 
     child = start_synthesis(
         db,

@@ -13,7 +13,7 @@ Windows 打包版上,用户点「下载」拿到两条报错,它们是同一件�
 启动日志当成"创建失败的原因"端给用户。
 
 第二条:worker 是被**另一个解释器当脚本跑**的,所以它必须是盘上一个真文件;而冻结之后
-`app/audio/tts_worker.py` 只存在于归档里,`Path(__file__).with_name()` 指向一个不存在的路径。
+`app/ai/runtime/tts_worker.py` 只存在于归档里,`Path(__file__).with_name()` 指向一个不存在的路径。
 
 「哪个解释器是真 Python」这件事其实**早就答对过一次** —— `base_python()` 就是为这个写的,
 连注释都写着"打包版 sys.executable 指向它自己"。它只是住在 TTS 专属模块里,转写那边没找到,
@@ -63,7 +63,7 @@ def test_the_shell_can_hand_us_a_real_one(frozen, monkeypatch, tmp_path) -> None
 
 def test_candidate_interpreters_exclude_the_frozen_exe(frozen, monkeypatch) -> None:
     """探测「这个解释器装了 f5_tts 吗」会**执行**它 —— 拿冻结的 exe 探,等于再起一个后端。"""
-    from app.audio import asr_models, tts_models
+    from app.ai.runtime import asr_models, tts_models
 
     for candidates in (tts_models.candidate_pythons("f5-tts"), asr_models.candidate_pythons("whisperx")):
         assert all(str(frozen) != str(path) for path in candidates), (

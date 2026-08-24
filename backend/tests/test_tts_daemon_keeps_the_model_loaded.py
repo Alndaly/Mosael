@@ -26,7 +26,7 @@ import time
 
 import pytest
 
-from app.audio import tts_daemon
+from app.ai.runtime import tts_daemon
 
 
 def _fake_worker(tmp_path, body: str) -> str:

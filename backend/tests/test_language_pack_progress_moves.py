@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import time
 
-from app.audio import f5_models
+from app.ai.runtime import f5_models
 
 
 def test_progress_follows_bytes_on_disk_not_worker_events(monkeypatch, tmp_path) -> None:

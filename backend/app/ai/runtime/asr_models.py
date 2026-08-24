@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from app.audio import remote_size
+from app.ai.runtime import remote_size
 from app.core import interpreter, pip_install, run_log
 from app.core.child_process import ChildProcess, popen_text, run_logged
 from app.core.rate import DownloadRate
@@ -52,7 +52,7 @@ class SubModel:
     name the library materialises under its cache root."""
 
     cache_dir: str
-    #: 体积**问源要**时用的那个仓库 id(见 audio/remote_size)。`cache_dir` 是库在本地
+    #: 体积**问源要**时用的那个仓库 id(见 ai/runtime/remote_size)。`cache_dir` 是库在本地
     #: 摊开成的目录名,不一定等于仓库 id —— HuggingFace 那边是 `models--A--B` 这种转写。
     repo: str
     #: 源:"modelscope" 或 "hf"。
@@ -78,7 +78,7 @@ class ModelEntry:
 
 
 #: 每个引擎的运行依赖。装到托管 venv 里 —— 重的那些(torch 2GB+)落在用户数据目录而不是安装包里。
-#: 和 TTS 那边同一个做法(见 audio/tts_models.ensure_engine_runtime),理由也同一条:让用户
+#: 和 TTS 那边同一个做法(见 ai/runtime/tts_models.ensure_engine_runtime),理由也同一条:让用户
 #: **不必**去设置里指定 Python 解释器。
 ENGINE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
     "funasr": ("funasr", "torch", "torchaudio", "modelscope"),
@@ -163,7 +163,7 @@ _FUNASR_BUNDLE = ModelEntry(
     detail="asrDetail_funasr",
     sub_models=(
         # SenseVoice:按官方说明「超过 40 万小时数据训练,支持超过 50 种语言,识别效果上优于 Whisper」,
-        # 标点与逆文本规整都在模型内部。体积现在**问 ModelScope 要**(见 audio/remote_size);
+        # 标点与逆文本规整都在模型内部。体积现在**问 ModelScope 要**(见 ai/runtime/remote_size);
         # 这里的数字只是问不到时的兜底,而它注定会随上游改文件而失准。
         SubModel("SenseVoiceSmall", "iic/SenseVoiceSmall", "modelscope", 937_000_000),
         # VAD 断句与说话人分离是**独立阶段**,与识别模型无关:它们按音频切段/聚类,换识别模型照样用。
@@ -203,7 +203,7 @@ def measured_total(entry: ModelEntry, *, blocking: bool = False) -> tuple[int, b
     """(这个条目要下的总字节, 这个数是不是估算)。
 
     此前用的是目录里写死的估算,而它同时当着卡片体积、进度分母、和"装好了没有"的判据 ——
-    上游改一次文件三样一起失准。按源上的**实际文件**算(见 audio/remote_size);
+    上游改一次文件三样一起失准。按源上的**实际文件**算(见 ai/runtime/remote_size);
     任何一份问不到,整个总量就退回估算并说出来 —— 报一个残缺的总数比报估算更糟:
     它看起来精确,而进度条会提前走满。
     """
@@ -353,7 +353,7 @@ def resolve_engine_python(engine: str) -> str | None:
 
 #: 探测过的结果。**列状态只读这里,永远不等** —— 探测要起子进程 import funasr(它会把
 #: torch 一起拉起来),而列模型是一次纯读的请求。用户那一页停在「正在连接后端…」就是这个。
-#: 克隆那边同一套(见 audio/tts_models),判据也是同一句:这个接口要回答的问题,不需要起
+#: 克隆那边同一套(见 ai/runtime/tts_models),判据也是同一句:这个接口要回答的问题,不需要起
 #: 子进程就能回答。
 _PROBED: dict[str, bool] = {}
 _PROBING: set[str] = set()
@@ -486,7 +486,7 @@ def any_downloading() -> bool:
 def candidate_pythons(engine: str) -> list[Path]:
     """可能装了 funasr/whisperx 的解释器,按优先级。**这是唯一一份名单。**
 
-    托管 venv 排在最前:那是应用自己建、自己装的那个(见 audio/asr_models.ensure_engine_runtime),
+    托管 venv 排在最前:那是应用自己建、自己装的那个(见 ai/runtime/asr_models.ensure_engine_runtime),
     最可能是对的。用户显式指定的次之,后端自己的解释器兜底。
 
     收在一处是因为它被问过两遍:转写走这里,模型页那个「跑不跑得起来」也走这里。此前两边各拼
@@ -526,7 +526,7 @@ def ensure_engine_runtime(engine: str, *, progress_key: str | None = None) -> No
     """确保有一个解释器能 `import <engine>`;没有就建一个托管 venv 并装进去。
 
     这一步的存在,就是为了让用户**不必**去设置里指定 Python 解释器 —— 和 TTS 那边同一个做法
-    (见 audio/tts_models.ensure_engine_runtime)。此前 ASR 没有这条路:模型下好了、页面写着
+    (见 ai/runtime/tts_models.ensure_engine_runtime)。此前 ASR 没有这条路:模型下好了、页面写着
     「已安装」,而转写照样报「未找到可用的转写环境」,唯一的出路是自己去装 funasr 再设环境变量。
 
     已经跑得起来就直接返回 —— **不碰用户自带的环境**。

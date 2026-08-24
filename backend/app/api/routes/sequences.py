@@ -459,7 +459,7 @@ def dub_subtitles(sequence_id: str, body: SubtitleDubRequest, db: DbSession, use
     """
     sequence = require_sequence_access(db, user, sequence_id, perm="edit")
     ensure_workspace_perm(db, user, sequence.workspace_id, "ai")
-    from app.audio.subtitle_dub import DubError, start_subtitle_dub
+    from app.domain.voices.subtitle_dub import DubError, start_subtitle_dub
 
     synthesis = body.model_dump(exclude={"clip_ids", "match_duration", "line"})
     # 克隆引擎才认 voice_id,远端引擎才认 workspace_id —— 两边都传的话

@@ -20,7 +20,7 @@ traceback 的最后一行就是异常本身,前面那些是给读代码的人看
 
 from __future__ import annotations
 
-from app.audio import voices
+from app.domain.voices import voices
 
 RAW = '''Traceback (most recent call last):
   File "/x/tts_worker.py", line 152, in run_fish
@@ -71,7 +71,7 @@ def test_the_failure_path_itself_does_not_crash() -> None:
     import ast
     import pathlib
 
-    for path in (pathlib.Path("app/audio/voices.py"), pathlib.Path("app/audio/tts_models.py")):
+    for path in (pathlib.Path("app/domain/voices/voices.py"), pathlib.Path("app/ai/runtime/tts_models.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         if any(isinstance(n, ast.Name) and n.id == "logger" for n in ast.walk(tree)):
             assert any(

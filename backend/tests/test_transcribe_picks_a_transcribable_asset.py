@@ -56,7 +56,7 @@ def test_clips_carry_the_asset_kind(client=None) -> None:
 
 def test_the_backend_still_refuses_an_image() -> None:
     """后端这道闸留着 —— 界面挑错了它也得拦住,而且话要说得像人话。"""
-    from app.audio import service
+    from app.domain.voices import service
 
     client = fresh_client()
     sequence_id = _timeline(client)

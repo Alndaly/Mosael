@@ -26,7 +26,7 @@ from app.core.child_process import ChildProcess, popen_text, run_logged
 from app.core.rate import DownloadRate
 from app.core.config import settings
 from app.core.text import blame_line, strip_ansi
-from app.audio import remote_size
+from app.ai.runtime import remote_size
 
 logger = logging.getLogger(__name__)
 
@@ -379,7 +379,7 @@ def _ffmpeg_runtime_dir(engine_python: str) -> str:
 def weights_for(engine_id: str, text: str, model_id: str = "") -> dict[str, str]:
     """这次合成该用**哪一份权重**。
 
-    只有 F5 有多份(按语言分,见 audio/f5_models);别的引擎一份权重走天下,返回空字典。
+    只有 F5 有多份(按语言分,见 ai/runtime/f5_models);别的引擎一份权重走天下,返回空字典。
     判断放在这个文件里,是因为"哪个引擎有多份权重"本身就是关于引擎的知识 —— 它属于目录,
     不属于调用方(棘轮 test_engine_capabilities_live_in_one_table 盯的正是这个)。
 
@@ -389,8 +389,8 @@ def weights_for(engine_id: str, text: str, model_id: str = "") -> dict[str, str]
     """
     if engine_id != "f5-tts":
         return {}
-    from app.audio import f5_models
-    from app.audio.tts_language import detect_script
+    from app.ai.runtime import f5_models
+    from app.ai.runtime.tts_language import detect_script
 
     explicit = f5_models.get(model_id) if model_id else None
     chosen = explicit if explicit is not None and f5_models.installed(explicit) else f5_models.for_language(detect_script(text))

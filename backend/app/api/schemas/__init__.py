@@ -1113,7 +1113,7 @@ class SubtitleDubRequest(BaseModel):
     #: 克隆引擎要一个音色行;远端引擎不需要,它自带发音人。
     voice_id: str | None = None
     clone_engine: str = Field(default="", max_length=40)
-    #: 明说要用哪一份克隆权重(见 audio/f5_models)。空 = 按文字自动挑。
+    #: 明说要用哪一份克隆权重(见 ai/runtime/f5_models)。空 = 按文字自动挑。
     #: 法语/德语/西语/意语/芬兰语都写拉丁字母,自动挑**永远挑不中**,只能由人来说。
     clone_model: str = Field(default="", max_length=40)
     provider_profile_id: str | None = None

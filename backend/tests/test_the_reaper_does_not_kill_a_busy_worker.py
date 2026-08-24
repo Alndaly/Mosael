@@ -14,7 +14,7 @@ import sys
 import textwrap
 import time
 
-from app.audio import tts_daemon
+from app.ai.runtime import tts_daemon
 
 
 def _slow_worker(tmp_path) -> str:

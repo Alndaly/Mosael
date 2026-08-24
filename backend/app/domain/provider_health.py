@@ -21,7 +21,7 @@ from dataclasses import dataclass
 import httpx
 
 from app.domain.provider_credentials import ResolvedProvider
-from app.domain.ai_retry import RetryingClient
+from app.core.http_retry import RetryingClient
 from app.domain.providers import VENDOR_PRESETS
 
 #: 探活要快。这不是业务请求 —— 慢到几秒的端点,用户想知道的也正是"它慢"。

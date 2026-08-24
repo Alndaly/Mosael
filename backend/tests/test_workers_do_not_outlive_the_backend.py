@@ -22,7 +22,7 @@ import textwrap
 import time
 from pathlib import Path
 
-WORKER = Path(__file__).resolve().parents[1] / "app" / "audio" / "tts_worker.py"
+WORKER = Path(__file__).resolve().parents[1] / "app" / "ai" / "runtime" / "tts_worker.py"
 
 
 def test_the_worker_exits_when_its_parent_dies(tmp_path) -> None:

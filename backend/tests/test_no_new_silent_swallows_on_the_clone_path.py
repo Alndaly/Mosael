@@ -24,13 +24,13 @@ import pathlib
 ALLOWED = {
     # _dir_size 逐个文件 stat:一个读不动的文件跳过就好,每次记一行会淹掉真正的日志;
     # 外层那个已经记 debug 了(残缺的总量会被当判据用)。
-    "app/audio/tts_models.py": 3,
+    "app/ai/runtime/tts_models.py": 3,
     # 迁移前逐个引擎探测:探不动就试下一个,run_logged 已经记过命令与失败。
     "app/domain/tts_config.py": 1,
     # 合成失败的兜底:它自己会 logger.warning,这里数的是它里层的 rollback 分支。
-    "app/audio/voices.py": 1,
+    "app/domain/voices/voices.py": 1,
     # kill 一个已经死了的进程。
-    "app/audio/tts_daemon.py": 1,
+    "app/ai/runtime/tts_daemon.py": 1,
 }
 
 

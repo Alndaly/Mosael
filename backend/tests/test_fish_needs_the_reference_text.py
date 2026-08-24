@@ -22,7 +22,8 @@ import wave
 
 import pytest
 
-from app.audio import tts_models, voices
+from app.ai.runtime import tts_models
+from app.domain.voices import voices
 from tests.util import fresh_client
 
 

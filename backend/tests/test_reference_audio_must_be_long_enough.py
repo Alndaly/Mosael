@@ -21,7 +21,7 @@ import wave
 
 import pytest
 
-from app.audio import voices
+from app.domain.voices import voices
 from tests.util import fresh_client
 
 

@@ -40,7 +40,8 @@ def test_asr_tts_catalogs_store_keys_not_prose() -> None:
     这一条把扫描范围从发布平台扩到它们仨。范围就是待迁清单 —— 与其在别处记一份"还有哪些没迁",
     不如让棘轮自己说,它不会忘也不会过期。
     """
-    from app.audio import asr_models, tts, tts_models
+    from app.ai.runtime import asr_models, tts_models
+    from app.domain.voices import engine_catalog as tts
 
     offenders: list[str] = []
     for entry in asr_models.CATALOG:
@@ -161,7 +162,7 @@ def test_download_progress_messages_take_params() -> None:
     它们和别的不同:是**模板**。值必须在产生它的地方算好、跟着 key 一起传出来 —— 直接拼进句子
     的话那句话从此只有一种语言,而这正是它们此前一直是中文的原因。
     """
-    from app.audio import tts_models
+    from app.ai.runtime import tts_models
 
     tts_models._store.set(
         "f5-tts",

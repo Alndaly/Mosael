@@ -92,7 +92,8 @@ def test_a_missing_voice_is_404() -> None:
 def test_filling_in_the_text_unblocks_fish(monkeypatch) -> None:
     """补上文本之后,fish 那道闸就该放行 —— 这条把两件事连起来:
     没有补填入口的必填项,等于一条死路。"""
-    from app.audio import tts_models, voices
+    from app.ai.runtime import tts_models
+    from app.domain.voices import voices
     from app.core.db import SessionLocal
 
     monkeypatch.setattr(tts_models, "resolve_engine_python", lambda engine_id: "/usr/bin/python3")

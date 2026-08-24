@@ -203,7 +203,7 @@ class TestDispatchWiring:
         )
 
     def test_transcribe_respects_external_mode(self, monkeypatch) -> None:
-        from app.audio.service import start_transcription
+        from app.domain.voices.service import start_transcription
         from app.db.models import Asset
 
         self._external(monkeypatch, "transcribe")
@@ -218,7 +218,7 @@ class TestDispatchWiring:
             assert claim_next_job(db, kinds=["transcribe"]).id == job.id
 
     def test_tts_respects_external_mode(self, monkeypatch) -> None:
-        from app.audio.voices import start_synthesis
+        from app.domain.voices.voices import start_synthesis
 
         self._external(monkeypatch, "tts")
         workspace_id = _workspace()

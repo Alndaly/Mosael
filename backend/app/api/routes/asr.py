@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Request
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import AsrModelOut
 from app.domain.permissions import ensure_deployment_admin
-from app.audio import asr_models
+from app.ai.runtime import asr_models
 from app.core.i18n import normalize_locale, translate_fields
 
 router = APIRouter(tags=["asr"])

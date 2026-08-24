@@ -19,7 +19,7 @@ import sys
 import textwrap
 import time
 
-from app.audio import tts_daemon
+from app.ai.runtime import tts_daemon
 
 
 def test_the_reaper_survives_a_bad_worker_entry(tmp_path) -> None:

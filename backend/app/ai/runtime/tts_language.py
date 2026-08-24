@@ -75,7 +75,7 @@ def edge_voice_language(voice: str) -> str:
 def clone_supports(script: str) -> bool:
     """本地克隆**现在**念不念得了这套书写系统。
 
-    答案不在这里 —— 它取决于这台机器上装了哪几份权重(见 audio/f5_models)。引擎什么语言都
+    答案不在这里 —— 它取决于这台机器上装了哪几份权重(见 ai/runtime/f5_models)。引擎什么语言都
     支持,支持范围由模型决定;此前这里写死"不认日韩",等于把一个可以通过下载解决的问题
     说成了引擎的固有限制。
 
@@ -83,6 +83,6 @@ def clone_supports(script: str) -> bool:
     """
     if not script:
         return True
-    from app.audio import f5_models
+    from app.ai.runtime import f5_models
 
     return script in f5_models.installed_languages()

@@ -22,7 +22,7 @@
 
 from __future__ import annotations
 
-from app.audio import tts_models
+from app.ai.runtime import tts_models
 from app.domain import tts_config
 
 

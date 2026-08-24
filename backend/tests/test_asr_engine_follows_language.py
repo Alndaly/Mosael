@@ -15,7 +15,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.audio import asr_models, service
+from app.ai.runtime import asr_models
+from app.domain.voices import service
 
 
 @pytest.fixture(autouse=True)
@@ -65,7 +66,7 @@ def test_warmup_and_transcribe_build_the_same_pipeline() -> None:
     import ast
     from pathlib import Path
 
-    source = Path("app/audio/asr_worker.py").read_text(encoding="utf-8")
+    source = Path("app/ai/runtime/asr_worker.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
     builders = {
         node.name: node
@@ -84,6 +85,6 @@ def test_warmup_and_transcribe_build_the_same_pipeline() -> None:
 
 def test_the_default_model_matches_the_backend() -> None:
     """worker 的默认模型和后端挑的必须是同一个 —— 不然"装了却用不上"会再来一次。"""
-    from app.audio import asr_worker
+    from app.ai.runtime import asr_worker
 
     assert asr_worker.DEFAULT_FUNASR_MODEL == service.FUNASR_MODEL

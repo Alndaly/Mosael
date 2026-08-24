@@ -16,7 +16,7 @@ import pytest
 from app.core.db import SessionLocal
 from app.db.models import AiRuntimeConfig
 from app.domain.ai_chat import AiChatError, ChatTarget, chat
-from app.domain import ai_retry
+from app.core import http_retry as ai_retry
 from app.domain.workflows.executors import ai
 from tests.util import fresh_client
 
@@ -154,7 +154,7 @@ def test_重试对所有_AI_出站调用生效(monkeypatch):
     import importlib
 
     from app.domain import ai_chat
-    from app.domain.ai_retry import RetryingClient
+    from app.core.http_retry import RetryingClient
 
     # **适配器不手写清单,自己走一遍目录。** 手写的话新加一家不会自动进来 —— 而"新加的那一家
     # 忘了走重试"正是这条测试要防的事,清单漏了它就等于这道闸对新代码不生效。

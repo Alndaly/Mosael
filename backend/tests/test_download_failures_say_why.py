@@ -24,7 +24,7 @@ import sys
 
 import pytest
 
-from app.audio import tts_models, tts_worker
+from app.ai.runtime import tts_models, tts_worker
 
 WORKER = tts_models.WORKER_PATH
 

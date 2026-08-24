@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.audio import asr_models
+from app.ai.runtime import asr_models
 
 
 def test_catalog_status_shape() -> None:
