@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from app.audio.tts_providers import (
+from app.audio.tts import (
     EDGE_BUILTIN_VOICES,
     EdgeTTS,
     SpeechRequest,

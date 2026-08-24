@@ -40,7 +40,7 @@ def test_asr_tts_catalogs_store_keys_not_prose() -> None:
     这一条把扫描范围从发布平台扩到它们仨。范围就是待迁清单 —— 与其在别处记一份"还有哪些没迁",
     不如让棘轮自己说,它不会忘也不会过期。
     """
-    from app.audio import asr_models, tts_models, tts_providers
+    from app.audio import asr_models, tts, tts_models
 
     offenders: list[str] = []
     for entry in asr_models.CATALOG:
@@ -51,7 +51,7 @@ def test_asr_tts_catalogs_store_keys_not_prose() -> None:
         for field in ("label", "detail"):
             if CJK.search(str(getattr(entry, field, "") or "")):
                 offenders.append(f"tts:{entry.id}.{field}")
-    for provider in tts_providers.describe_engines():
+    for provider in tts.describe_engines():
         for field in ("label", "note"):
             if CJK.search(str(provider.get(field) or "")):
                 offenders.append(f"provider:{provider['id']}.{field}")

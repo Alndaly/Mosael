@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.audio.tts_providers import PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES
+from app.audio.tts import PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES
 from app.integrations import volc_openapi
 from tests.util import fresh_client
 

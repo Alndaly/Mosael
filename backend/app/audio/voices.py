@@ -680,15 +680,15 @@ def _synthesize_remote(
     No reference clip and no local model, so none of the worker-subprocess machinery applies —
     but the outcome has to look identical to the caller: an audio asset on the job's result.
     """
-    from app.audio.tts_providers import SpeechRequest, build_remote_provider
+    from app.audio.tts import SpeechRequest, build_remote_provider
     from app.domain.providers import resolve_profile
 
     # The profile carries base_url too. Reading only the key would send a proxy user's request
     # to api.openai.com with a key that is not valid there — a 401 with no hint as to why.
     # 这次配音替谁干,job 上记着 —— 后台线程手里只有它(见 Job.created_by)。
     # 引擎 id 通常就是 vendor id,百炼是唯一的例外:qwen-tts 与 CosyVoice 是两个引擎、
-    # 一条连接、一把 Key(见 tts_providers.vendor_for_engine)。
-    from app.audio.tts_providers import REMOTE_ENGINES, vendor_for_engine
+    # 一条连接、一把 Key(见 audio.tts.vendor_for_engine)。
+    from app.audio.tts import REMOTE_ENGINES, vendor_for_engine
 
     profile = resolve_profile(db, vendor_for_engine(engine), provider_profile_id, user_id=job.created_by)
     api_key = (profile.api_key if profile else None) or ""

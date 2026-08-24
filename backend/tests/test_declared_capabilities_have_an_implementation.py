@@ -10,7 +10,7 @@
 
 各能力由谁执行:
   · image / video → ai.providers 的注册表,按 (vendor, kind) 取
-  · tts           → audio.tts_providers.REMOTE_ENGINES,按 vendor 取
+  · tts           → audio.tts.REMOTE_ENGINES,按 vendor 取
   · chat          → 统一的 OpenAI 兼容客户端,不需要每家一个适配器
   · podcast       → 专用的 WebSocket 实现,按 vendor 取
 """
@@ -38,7 +38,7 @@ def _has_implementation(vendor: str, capability: str) -> bool:
 
         return get_provider(vendor, capability) is not None
     if capability == "tts":
-        from app.audio.tts_providers import REMOTE_ENGINES
+        from app.audio.tts import REMOTE_ENGINES
 
         return vendor in REMOTE_ENGINES
     if capability == "podcast":

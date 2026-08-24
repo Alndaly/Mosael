@@ -28,7 +28,7 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
                 "key": "base_url",
                 # 这个字段只管**对话与向量嵌入**。图像 / 视频 / 语音走百炼的原生路径,各自从
                 # 这里推导自己的根(qwen_image.resolve_dashscope_base、
-                # tts_providers.resolve_dashscope_native_base 等),填什么都不影响它们。
+                # audio.tts.resolve_dashscope_native_base 等),填什么都不影响它们。
                 # 早先叫「图像生成 Endpoint」是错的:它默认值是 compatible-mode(对话端点),
                 # 而图像根本不读这一份 —— 名字说的和它管的是两回事。
                 "label": "对话 Endpoint",

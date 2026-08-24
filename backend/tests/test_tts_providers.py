@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from app.audio.tts_providers import (
+from app.audio.tts import (
     REMOTE_PARALLEL,
     OpenAITTS,
     SpeechRequest,
@@ -133,7 +133,7 @@ class TestOpenAI:
             captured.update(kwargs["json"])
             return FakeResponse()
 
-        monkeypatch.setattr("app.audio.tts_providers.httpx.post", fake_post)
+        monkeypatch.setattr("app.audio.tts.volcano.httpx.post", fake_post)
         OpenAITTS(api_key="k").synthesize(SpeechRequest(text="hi", speed=1.25), tmp_path / "o.wav")
         assert captured["speed"] == pytest.approx(1.25)
 
@@ -147,7 +147,7 @@ class TestOpenAI:
                 return None
 
         monkeypatch.setattr(
-            "app.audio.tts_providers.httpx.post",
+            "app.audio.tts.volcano.httpx.post",
             lambda url, **kw: (captured.update(kw["json"]), FakeResponse())[1],
         )
         OpenAITTS(api_key="k").synthesize(SpeechRequest(text="hi"), tmp_path / "o.wav")
