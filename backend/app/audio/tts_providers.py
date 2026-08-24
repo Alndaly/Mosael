@@ -322,8 +322,84 @@ PODCAST_SPEAKERS: tuple[tuple[str, str], ...] = (
 
 #: Engines a user can pick, in the order the UI offers them. "clone" is handled separately —
 #: it is the local reference-driven path and needs a Voice row, not an engine voice id.
+class BailianTTS:
+    """阿里云百炼(DashScope)的 qwen-tts。
+
+    走的是多模态生成端点,**同步返回一个音频地址**,再下载 —— 不是异步任务,所以这里没有轮询
+    (同一家的视频生成才需要,见 ai/providers/wan_video)。
+
+    **speed 这一档它不接**。百炼的 qwen-tts 没有语速参数,而配音要的正是"把一句话塞进原来那段
+    时长里"。这不影响功能:时间线在渲染时用 atempo 变速兜底(见 README 里「缩放到段落长度」)。
+    但引擎自己念得快慢更自然,所以需要精确控时的配音,选 openai / volcano / 本地克隆更合适 ——
+    这句话写进 note 里给用户看,而不是让他试完才发现。
+
+    音色是模型自带的固定几个(不像火山那样按账号变),所以直接列在这儿,不用另开一个拉取接口。
+    """
+
+    id = "alibaba"
+    label = "ttsProvider_bailian"
+    parallel_safe = True
+    #: qwen-tts 自带音色。中英双语,前两个是女声、后两个男声。
+    VOICES = ("Cherry", "Serena", "Ethan", "Chelsie")
+    PATH = "/api/v1/services/aigc/multimodal-generation/generation"
+
+    def __init__(self, api_key: str, model: str = "qwen-tts", base_url: str = "") -> None:
+        if not api_key:
+            raise TTSError("百炼语音合成需要 DashScope API Key,请在设置里配置")
+        self._key = api_key
+        self._model = model or "qwen-tts"
+        self._base = (base_url or "https://dashscope.aliyuncs.com").rstrip("/")
+
+    def synthesize(self, request: SpeechRequest, out_path: Path) -> None:
+        payload = {
+            "model": self._model,
+            "input": {"text": request.text, "voice": request.voice or self.VOICES[0]},
+        }
+        try:
+            response = httpx.post(
+                f"{self._base}{self.PATH}",
+                headers={"Authorization": f"Bearer {self._key}", "Content-Type": "application/json"},
+                json=payload,
+                timeout=REMOTE_TIMEOUT_SECONDS,
+            )
+            response.raise_for_status()
+            url = extract_bailian_audio_url(response.json())
+            if not url:
+                raise TTSError("百炼语音合成没有返回音频地址")
+            # 结果是一个预签名 OSS 地址。**不要带上 Authorization** —— 多余的头会让 OSS 的
+            # 签名校验走另一条分支(与 ai/providers/qwen_image 里那条注释同一个坑)。
+            audio = httpx.get(url, timeout=REMOTE_TIMEOUT_SECONDS)
+            audio.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise TTSError(f"百炼语音合成失败: {exc}") from exc
+        out_path.write_bytes(audio.content)
+
+
+def extract_bailian_audio_url(payload: dict) -> str:
+    """从 qwen-tts 的回包里取音频地址。
+
+    单独成函数是为了能被纯 payload 测试盯住:这个适配器真正容易错的就是这一步(回包是
+    `output.audio.url`,而同家的图像走的是 `output.results[].url`),而它在真跑一次之前
+    看不出来。
+    """
+    output = payload.get("output") or {}
+    audio = output.get("audio")
+    if isinstance(audio, dict) and audio.get("url"):
+        return str(audio["url"])
+    # 少数模型把音频放进 choices 的 content 数组里,与 qwen-image 的编辑模式同形。
+    for choice in output.get("choices") or []:
+        message = choice.get("message") if isinstance(choice, dict) else None
+        content = message.get("content") if isinstance(message, dict) else None
+        if isinstance(content, list):
+            for item in content:
+                if isinstance(item, dict) and isinstance(item.get("audio"), dict) and item["audio"].get("url"):
+                    return str(item["audio"]["url"])
+    return ""
+
+
 REMOTE_ENGINES = {
     OpenAITTS.id: OpenAITTS,
+    BailianTTS.id: BailianTTS,
     VolcanoTTS.id: VolcanoTTS,
     EdgeTTS.id: EdgeTTS,
 }
@@ -375,6 +451,14 @@ def describe_engines() -> list[dict[str, object]]:
             "needs_voice_id": False,
             "voices": [voice for voice, _ in PODCAST_SPEAKERS],
             "note": "ttsProviderNote_volcanoPodcast",
+        },
+        {
+            "id": BailianTTS.id,
+            "label": BailianTTS.label,
+            "needs_key": True,
+            "needs_voice_id": False,
+            "voices": list(BailianTTS.VOICES),
+            "note": "ttsProviderNote_bailian",
         },
         {
             "id": VolcanoTTS.id,

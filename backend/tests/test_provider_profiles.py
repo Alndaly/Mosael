@@ -92,9 +92,10 @@ def test_vendor_presets_listed() -> None:
     # 预设不再写死默认模型:实测 deepseek 那个 "deepseek-chat" 在真实端点上根本不存在,
     # 而这种字符串没人会去复核。模型从供应商目录实时拉。
     assert not presets["minimax"].get("default_model")
-    # 百炼同时提供对话与向量嵌入(compatible-mode 端点),此前只写了 image —— 同一把
-    # DashScope Key 想配对话还得再建一个「OpenAI 兼容端点」档案,而它明明就是这一家。
-    assert presets["alibaba"]["capability_ids"] == ["chat", "image"]
+    # 百炼是**一家四能力**,同一把 DashScope Key:对话与向量嵌入(compatible-mode)、
+    # 图像(qwen-image)、视频(万相)、语音(qwen-tts)。少写一样的代价是用户得为同一把 Key
+    # 再建一个档案 —— 早先只写 image 时就是这样。
+    assert presets["alibaba"]["capability_ids"] == ["chat", "image", "video", "tts"]
     # 火山方舟合成一家:同一把 Key 既做图像(Seedream)也做视频(Seedance)。
     # 拆成两个 vendor 是"一档案一能力"年代的产物,重构后只剩"同一把 Key 填两遍"的代价。
     assert presets["bytedance"]["capability_ids"] == ["image", "video"]

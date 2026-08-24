@@ -212,6 +212,11 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "ttsProvider_openai": {"zh": "OpenAI 语音合成(含兼容端点)", "en": "OpenAI speech (incl. compatible endpoints)"},
     "ttsProvider_edge": {"zh": "Edge 免费语音(微软)", "en": "Edge free voices (Microsoft)"},
+    "ttsProvider_bailian": {"zh": "阿里云百炼(qwen-tts)", "en": "Alibaba Bailian (qwen-tts)"},
+    "ttsProviderNote_bailian": {
+        "zh": "用百炼的 DashScope Key;音色固定四个。**不支持语速** —— 需要把配音精确塞进原时长的,选别的引擎。",
+        "en": "Uses your Bailian (DashScope) key; four fixed voices. **No speed control** — pick another engine when dubbing must fit an exact window.",
+    },
     "ttsProvider_volcano": {"zh": "火山方舟(豆包)", "en": "Volcano Ark (Doubao)"},
     "ttsProvider_volcanoPodcast": {"zh": "火山播客(双人对话)", "en": "Volcano Podcast (two speakers)"},
     "ttsProviderNote_volcanoPodcast": {

@@ -13,12 +13,15 @@ from typing import Any
 
 VENDOR_PRESETS: dict[str, dict[str, Any]] = {
     "alibaba": {
-        "label": "阿里云 DashScope (qwen)",
+        # 平台叫**百炼**,DashScope 是它的 API 名字。此前写作「阿里云 DashScope (qwen)」——
+        # 那个 (qwen) 后缀会让人以为这条连接只能配通义千问,而同一把 Key 上挂着的还有万相
+        # (图像 / 视频)和 qwen-tts(语音)。括号里留 DashScope 是因为控制台发的 Key 就叫这个名。
+        "label": "阿里云百炼 (DashScope)",
         "base_url": "https://dashscope.aliyuncs.com",
         # 百炼同时提供对话与向量嵌入(compatible-mode 端点),此前只写了 image,于是同一把
         # DashScope Key 想配对话还得再建一个「OpenAI 兼容端点」档案 —— 而它明明就是这一家。
-        "capabilities": "图像生成(qwen-image)、对话与向量嵌入(compatible-mode 端点)。",
-        "capability_ids": ["chat", "image"],
+        "capabilities": "对话与向量嵌入(compatible-mode 端点)、图像生成(qwen-image)、视频生成(万相)、语音合成(qwen-tts)。同一把 DashScope Key。",
+        "capability_ids": ["chat", "image", "video", "tts"],
         "fields": [
             {"key": "api_key", "label": "DashScope API Key", "storage": "api_key", "secret": True, "required": True},
             {
