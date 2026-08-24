@@ -283,7 +283,7 @@ function WorkspaceGate() {
   if (!workspace) {
     return (
       <PreShellScreen>
-        <Card className="w-[min(384px,calc(100vw-32px))] [[data-appearance=glass]_&]:[-webkit-backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] [[data-appearance=glass]_&]:[backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)]">
+        <Card className="w-[min(384px,calc(100vw-32px))]">
           <CardContent className="grid justify-items-center gap-4 px-7 pb-[22px] pt-[30px] text-center [&_h1]:m-0 [&_p]:m-0">
             <Film size={34} />
             <h1>Open Studio</h1>

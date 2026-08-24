@@ -343,7 +343,7 @@ export function HomeView({
             {visible.map((project) => (
               <ContextMenu key={project.id}>
                 <ContextMenuTrigger asChild>
-                  <article className="grid grid-cols-[minmax(0,1fr)] gap-2 rounded-lg border border-border bg-panel p-3 shadow-[var(--shadow-panel)] transition-[border-color] duration-100 hover:border-border-strong [[data-appearance=glass]_&]:[-webkit-backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] [[data-appearance=glass]_&]:[backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)]" onDoubleClick={() => onOpenProject(project.id)}>
+                  <article className="grid grid-cols-[minmax(0,1fr)] gap-2 rounded-lg border border-border bg-panel p-3 shadow-[var(--shadow-panel)] transition-[border-color] duration-100 hover:border-border-strong" onDoubleClick={() => onOpenProject(project.id)}>
                     <div className="min-w-0">
                       <strong className="block truncate text-ui-md font-semibold">{project.name}</strong>
                       <small className="mt-0.5 block text-xs text-muted-foreground">{displayWorkspaceName(workspace.name, t)}</small>

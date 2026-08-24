@@ -126,8 +126,9 @@ export function AppShell({
 
   return (
     <div className="grid h-screen grid-cols-[56px_minmax(0,1fr)] grid-rows-[44px_minmax(0,1fr)]">
-      <header className={cn(
-        "col-span-full flex items-center justify-between border-b border-border bg-panel px-2.5 supports-[backdrop-filter]:bg-[var(--glass-chrome)] supports-[backdrop-filter]:[-webkit-backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[[data-appearance=glass]_&]:[-webkit-backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] supports-[backdrop-filter]:[[data-appearance=glass]_&]:[backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] [.is-desktop_&]:[-webkit-app-region:drag] [.is-desktop_&_:is(button,a,input,[role=button])]:[-webkit-app-region:no-drag]",
+      <header
+        data-glass-surface className={cn(
+        "col-span-full flex items-center justify-between border-b border-border bg-panel px-2.5 supports-[backdrop-filter]:bg-[var(--glass-chrome)] supports-[backdrop-filter]:[-webkit-backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[backdrop-filter:blur(14px)_saturate(1.4)] [.is-desktop_&]:[-webkit-app-region:drag] [.is-desktop_&_:is(button,a,input,[role=button])]:[-webkit-app-region:no-drag]",
         WINDOW_CHROME_INSET,
       )}>
         {(() => {
@@ -214,7 +215,9 @@ export function AppShell({
           </Tooltip>
         </div>
       </header>
-      <aside className="col-start-1 row-start-2 flex flex-col items-center gap-0.5 border-r border-border bg-panel px-0 py-2 supports-[backdrop-filter]:bg-[var(--glass-chrome)] supports-[backdrop-filter]:[-webkit-backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[[data-appearance=glass]_&]:[-webkit-backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] supports-[backdrop-filter]:[[data-appearance=glass]_&]:[backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] [.is-desktop_&]:[-webkit-app-region:drag] [.is-desktop_&_:is(button,a)]:[-webkit-app-region:no-drag]">
+      <aside
+        data-glass-surface
+        className="col-start-1 row-start-2 flex flex-col items-center gap-0.5 border-r border-border bg-panel px-0 py-2 supports-[backdrop-filter]:bg-[var(--glass-chrome)] supports-[backdrop-filter]:[-webkit-backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[backdrop-filter:blur(14px)_saturate(1.4)] [.is-desktop_&]:[-webkit-app-region:drag] [.is-desktop_&_:is(button,a)]:[-webkit-app-region:no-drag]">
         <div className="mb-2.5 grid h-[30px] w-[30px] select-none place-items-center rounded-md bg-primary text-[15px] font-bold text-primary-foreground" aria-hidden>
           <BrandMark size={22} />
         </div>
@@ -242,7 +245,11 @@ export function AppShell({
         <div className="flex-1" />
         <RailUserMenu onOpenSettings={() => onViewChange("settings")} />
       </aside>
-      <main className="col-start-2 row-start-2 h-full min-h-0 min-w-0 overflow-hidden bg-background supports-[backdrop-filter]:[[data-appearance=glass]_&]:m-2 supports-[backdrop-filter]:[[data-appearance=glass]_&]:h-auto supports-[backdrop-filter]:[[data-appearance=glass]_&]:rounded-xl supports-[backdrop-filter]:[[data-appearance=glass]_&]:border supports-[backdrop-filter]:[[data-appearance=glass]_&]:border-border supports-[backdrop-filter]:[[data-appearance=glass]_&]:[-webkit-backdrop-filter:blur(var(--app-blur,16px))_saturate(1.3)] supports-[backdrop-filter]:[[data-appearance=glass]_&]:[backdrop-filter:blur(var(--app-blur,16px))_saturate(1.3)]">{children}</main>
+      {/* data-glass-surface:开了自定义背景时由 tokens.css 统一给模糊 —— 几何一个字都不改。
+          此前这里在 glass 下会长出 m-2/h-auto/rounded-xl/border,内容区于是从铺满变成浮起的卡。 */}
+      <main data-glass-surface className="col-start-2 row-start-2 h-full min-h-0 min-w-0 overflow-hidden bg-background">
+        {children}
+      </main>
     </div>
   );
 }

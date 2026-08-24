@@ -243,7 +243,10 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
           return (
             <section key={group.key || "unknown"} className="grid gap-2 pb-4">
               {/* 日期栏头贴顶:滚很长时也知道现在看的是哪一天。 */}
-              <h3 className="sticky top-0 z-[1] m-0 bg-background/92 py-1 text-ui-xs font-semibold text-muted-foreground backdrop-blur-sm">
+              {/* 日期分割**不铺底色**:它是一条标签,不是一块面板。原来那层 bg-background/92 是为了
+                  sticky 时盖住下面滚过的卡片,但换了自定义背景之后,它就成了浮在背景上的一条灰带
+                  (真机截图)。改为只保留 sticky 的模糊 —— 文字读得清,底下的背景照旧透出来。 */}
+              <h3 className="sticky top-0 z-[1] m-0 py-1 text-ui-xs font-semibold text-muted-foreground backdrop-blur-sm">
                 {day.kind === "today" ? t("dateToday") : day.kind === "yesterday" ? t("dateYesterday") : day.text}
                 <span className="ml-1.5 font-normal tabular-nums text-muted-foreground/70">{group.items.length}</span>
               </h3>

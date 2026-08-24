@@ -28,7 +28,7 @@ export function SettingsGroup({
   children?: React.ReactNode;
 }) {
   return (
-    <section className="grid gap-2 [[data-appearance=glass]_&]:[-webkit-backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)] [[data-appearance=glass]_&]:[backdrop-filter:blur(var(--app-blur,16px))_saturate(1.35)]">
+    <section className="grid gap-2">
       {/* 动作**对齐整个抬头的竖向中心**,不是对齐标题那一行,也不是对齐整块的底边。
           三种都试过:`items-end` 在说明一长时把按钮拖到最后一行旁边,看着像那句话的一部分;
           `items-start` 则在说明有两三行时把按钮顶在最上面,右边空出一大块。

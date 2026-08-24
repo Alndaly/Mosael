@@ -295,6 +295,28 @@
     --panel-subtle: color-mix(in srgb, #191720 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
     --panel-inset: color-mix(in srgb, #131118 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
   }
+
+  /* 磨玻璃**只改两件事:颜色和模糊。几何一律不动。**
+   *
+   * 上面那段把表面色调成半透明(背景因此透出来);模糊则由这里统一给。此前它是散在
+   * 五个组件里手写的 `[[data-appearance=glass]_&]:[backdrop-filter:…]`,各写各的,
+   * 而 AppShell 的 <main> 顺手还加了 `m-2 h-auto rounded-xl border` —— 于是一开磨玻璃,
+   * 内容区就从铺满变成一张浮起的圆角卡,底下露出一大片背景(真机截图)。
+   * 收到这里之后,组件那边一个 glass 类都不留,想改也没地方改错。
+   *
+   * **只有结构性表面自己模糊一次**(顶栏、左栏、内容区,以及走 portal 的弹层/对话框):
+   * 它们内部的面板只做半透明就够了 —— 一层套一层地模糊,越糊越脏,而且每一层都新开一个
+   * 层叠上下文。 */
+  :root[data-appearance="glass"] {
+    --glass-filter: blur(var(--app-blur, 16px)) saturate(1.35);
+  }
+  :root[data-appearance="glass"] [data-glass-surface],
+  :root[data-appearance="glass"] [data-slot="popover-content"],
+  :root[data-appearance="glass"] [data-slot="dialog-content"],
+  :root[data-appearance="glass"] [data-radix-popper-content-wrapper] > * {
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
+  }
 }
 
 * {
