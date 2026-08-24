@@ -525,6 +525,19 @@ def _prompt_with_context(content: str, context: str | None) -> str:
     return f"{context}\n\n用户消息:\n{content}"
 
 
+def agent_notice_envelope(content: str, origin_session_id: str) -> str:
+    """另一个智能体会话发来的消息,**给模型看的**那一份。
+
+    信封只进提示词,不进 `content` —— 此前它是拼进正文落库的,于是用户在对话里看到的是
+    一行「【来自另一个智能体会话的通知】发起会话 id:5b99d040243b4fdabc4ba5b3ef03430d」:
+    一个方括号标签加一串 32 位十六进制,而这两样都是写给模型的。谁发来的这件事界面有更好的
+    表达方式(来源徽章 + 会话标题,见前端 ChatBubble),模型需要的则是这句明确的话。
+
+    分开之后,「谁发来的」在库里只有一个表示:payload.from_agent_session。
+    """
+    return f"【来自另一个智能体会话的通知】发起会话 id:{origin_session_id}\n\n{content}"
+
+
 def post_user_message(
     db: Session,
     session: AgentSession,
@@ -535,7 +548,11 @@ def post_user_message(
     origin_session_id: str | None = None,
 ) -> AgentMessage:
     """Store the user message and run the agent turn on a worker thread."""
+    # 模型收到的那一份可以比落库的正文多两样东西:上下文集锦,以及"这条是别的会话发来的"信封。
+    # 两样都不进 content —— content 是**用户在对话里看到的**那份。
     prompt = _prompt_with_context(content, context)
+    if origin_session_id:
+        prompt = agent_notice_envelope(prompt, origin_session_id)
     # 另一个智能体会话发来的通知:落库带结构化来源(前端画徽章靠它),
     # 且**不参与**会话自动命名 —— 标题应当是人提的第一件事,不是别的智能体的信封。
     origin_marker = {"from_agent_session": origin_session_id} if origin_session_id else {}
@@ -829,7 +846,12 @@ def _drain_queue_locked(session_id: str) -> None:
         session.status = "running"
         db.commit()
         token = _mint_service_token(db, owner, session_id)
-        content = _prompt_with_context(message.content, (message.payload or {}).get("context"))
+        payload = message.payload or {}
+        content = _prompt_with_context(message.content, payload.get("context"))
+        # 排队那条也要补信封:它和直发走的是同一件事,只是晚一点跑。漏在这儿的话,
+        # 「对方正忙」时发来的通知,模型就不知道它来自另一个会话。
+        if payload.get("from_agent_session"):
+            content = agent_notice_envelope(content, str(payload["from_agent_session"]))
     threading.Thread(target=_run_turn_thread, args=(session_id, content, token), daemon=True, name=TURN_THREAD_NAME).start()
 
 

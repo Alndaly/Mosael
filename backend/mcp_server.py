@@ -1229,13 +1229,12 @@ def notify_agent_session(session_id: str, message: str) -> dict[str, Any]:
     text = (message or "").strip()
     if not text:
         return {"error": "message 不能为空"}
-    # 信封写明来源:收到的那边(模型和用户)一眼看出这不是人发的,而是哪个会话的智能体发的。
-    # 来源同时走结构化字段(origin_session_id):标题自动命名跳过它、前端靠它画徽章 ——
-    # 这两件事都不该建立在信封文案的字符串匹配上。
-    envelope = f"【来自另一个智能体会话的通知】发起会话 id:{me or '(未知)'}\n\n{text}"
+    # 来源只走结构化字段。信封(给模型看的那句「这条来自另一个会话」)由收信那侧在**拼提示词
+    # 时**加上,见 host.agent_notice_envelope —— 拼进 content 的话,用户在对话里看到的就是一行
+    # 方括号标签加一串 32 位 id,而那两样都是写给模型的。
     result = _post(
         f"/api/agent/sessions/{session_id}/messages",
-        {"content": envelope, "origin_session_id": me or None},
+        {"content": text, "origin_session_id": me or None},
     )
     queued = bool((result.get("payload") or {}).get("queued")) if isinstance(result, dict) else False
     return {

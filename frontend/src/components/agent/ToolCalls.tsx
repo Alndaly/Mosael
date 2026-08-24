@@ -287,6 +287,37 @@ export function agentTurnParts(
 }
 
 
+type TurnBlock =
+  | { type: "tools"; tools: ToolCall[] }
+  | { type: "thinking"; text: string; done?: boolean }
+  | { type: "text"; text: string };
+
+/**
+ * 把一轮的时间线切成**渲染块**,并且把**连着的工具调用并成一块**。
+ *
+ * 之前每个工具各自成块,于是三步连着调用时,它们之间用的是外层那个「块与块」的 gap-2.5
+ * —— 和"一段正文之后跟一张卡"同一个间距。结果是三个本该读成一串步骤的东西,被摊成三条
+ * 互不相干的行:ToolCalls 里那句"竖排成任务步骤"的设计从来没生效过,它内部的 gap-1 也
+ * 一直是死代码(每次只传一个工具进去)。
+ *
+ * 子步(subtool)和普通工具一起并:它们在视觉上本来就是同一串步骤,分开只会在中间豁一个口。
+ */
+export function turnBlocks(timeline: AgentTimelineItem[] | undefined): TurnBlock[] {
+  const blocks: TurnBlock[] = [];
+  for (const item of agentTurnParts(timeline)) {
+    if ((item.type === "tool" || item.type === "subtool") && item.tool) {
+      const last = blocks[blocks.length - 1];
+      if (last?.type === "tools") last.tools.push(item.tool);
+      else blocks.push({ type: "tools", tools: [item.tool] });
+    } else if (item.type === "thinking") {
+      blocks.push({ type: "thinking", text: item.text, done: item.done });
+    } else if (item.type === "text" && item.text) {
+      blocks.push({ type: "text", text: item.text });
+    }
+  }
+  return blocks;
+}
+
 /**
  * 思考块。
  *
@@ -339,13 +370,11 @@ export function AgentTurnContent({
     // grid 里的其它块(思考、正文)跟着一起变宽**,看起来像"整条消息比别的宽"。子项自己的
     // truncate 救不了:truncate 要父级先有确定宽度,而这里父级宽度正是由它的内容定的。
     <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-2.5">
-      {agentTurnParts(timeline).map((item, index) =>
-        item.type === "tool" && item.tool ? (
-          <ToolCalls key={`tool-${item.tool.id}-${index}`} tools={[item.tool]} />
-        ) : item.type === "subtool" && item.tool ? (
-          // 子步卡与其它卡同宽平铺,不内嵌(间距要一致);它属于哪个子代理,点头部
-          // 「N 个子代理」或右侧面板进它自己的会话视图看全貌。
-          <ToolCalls key={`subtool-${item.tool.id}-${index}`} tools={[item.tool]} />
+      {turnBlocks(timeline).map((item, index) =>
+        item.type === "tools" ? (
+          // 连成一串的工具步骤共用**一个** ToolCalls,于是它们之间是块内的 gap-1,
+          // 而不是外层这个"块与块之间"的 gap-2.5 —— 见 turnBlocks 的说明。
+          <ToolCalls key={`tools-${item.tools[0].id}-${index}`} tools={item.tools} />
         ) : item.type === "thinking" ? (
           <ThinkingBlock key={`thinking-${index}`} text={item.text} done={item.done} />
         ) : item.type === "text" && item.text ? (

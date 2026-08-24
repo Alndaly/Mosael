@@ -863,6 +863,48 @@ def _migrate_agent_session_groups() -> None:
         conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN group_id VARCHAR(64)"))
 
 
+def _migrate_agent_notice_envelope_out_of_content() -> None:
+    """把跨会话通知的**信封**从正文里剥出来,来源改记进 payload。
+
+    这句信封(「【来自另一个智能体会话的通知】发起会话 id:<32位>」)是写给模型的,此前被拼进
+    了 content —— 而 content 正是用户在对话里看到的那一份,于是界面上就多出一行方括号标签
+    加一串十六进制。现在信封只在拼提示词时加(见 ai/agent/host.agent_notice_envelope),
+    「谁发来的」在库里只留一个表示:payload.from_agent_session。
+
+    存量这么写的消息在这里一次性改正,而不是让前端去认那个前缀 —— 靠字符串匹配认信封,正是
+    这件事一开始就该避免的做法。
+    """
+    import json
+    import re
+
+    inspector = inspect(engine)
+    if "agent_messages" not in set(inspector.get_table_names()):
+        return
+    pattern = re.compile(r"^【来自另一个智能体会话的通知】发起会话 id:(\S+)\n\n", re.S)
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text("SELECT id, content, payload FROM agent_messages WHERE role='user' AND content LIKE '【来自另一个智能体会话的通知】%'")
+        ).fetchall()
+        for row in rows:
+            match = pattern.match(row.content or "")
+            if not match:
+                continue
+            origin = match.group(1)
+            payload = {}
+            if row.payload:
+                try:
+                    payload = json.loads(row.payload) or {}
+                except (TypeError, ValueError):
+                    payload = {}
+            # id 未知的那批(工具当时取不到自己的会话)只剥前缀,不编一个来源出来。
+            if origin != "(未知)":
+                payload["from_agent_session"] = origin
+            conn.execute(
+                text("UPDATE agent_messages SET content=:c, payload=:p WHERE id=:i"),
+                {"c": row.content[match.end():], "p": json.dumps(payload, ensure_ascii=False), "i": row.id},
+            )
+
+
 def _migrate_agent_session_order() -> None:
     """删掉 agent_sessions.sort_order —— 对话不再支持手动拖排序。
 
@@ -1105,6 +1147,7 @@ def init_db() -> None:
     _migrate_agent_session_groups()
     _migrate_generation_job_message_keys()
     _migrate_agent_session_order()
+    _migrate_agent_notice_envelope_out_of_content()
     _drop_generation_models()
     _adopt_deepseek_vendor()
     _merge_split_vendors()
