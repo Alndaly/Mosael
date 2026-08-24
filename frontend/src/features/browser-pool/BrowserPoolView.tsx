@@ -241,7 +241,12 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                     <small className={cn("truncate text-ui-xs text-destructive", !p.last_error && "invisible")}>
                       {p.last_error ?? " "}
                     </small>
-                    <div className="mt-auto flex min-h-[33px] items-center gap-1 pt-[5px]">
+                    {/* flex-wrap:同样三个按钮,中文「打开/重新登录/复检」很短,英文 Open / Log in again /
+                        Recheck 就顶穿一张卡的宽度 —— 不给换行许可,末尾那个会被裁成一个字母
+                        (真机英文界面)。字号收一档同时留着换行许可作兜底。
+                        **字号写在这一行上、不写在按钮上**:tokens.css 里那条无层级的
+                        `button{font:inherit}` 会压掉按钮自己的字号类,顺着它写才落得下去。 */}
+                    <div className="mt-auto flex min-h-[33px] flex-wrap items-center gap-1 pt-[5px] text-ui-xs [&_svg]:size-3">
                       {/* 登录态决定主按钮是什么:已登录 → 打开;其余(需登录/待人工/检测中) → 去登录。 */}
                       <Button
                         size="sm"
