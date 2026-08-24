@@ -60,7 +60,7 @@ import {
   capabilityNumber,
   capabilityString,
   durationOptions,
-  imageSizeOptions,
+  sizeOptions,
   maxImages,
   supportsParameter,
   videoResolutionOptions,
@@ -98,7 +98,7 @@ type GenerationConfig = {
 type GenerationEngineOption = GenerationOption & { value: string };
 
 function defaultGenerationConfig(model: GenerationModel | null): GenerationConfig {
-  const sizes = imageSizeOptions(model);
+  const sizes = sizeOptions(model);
   const durations = durationOptions(model);
   const resolutions = videoResolutionOptions(model);
   const ratios = aspectRatioOptions(model);
@@ -136,6 +136,10 @@ function generationParameters(model: GenerationModel, config: GenerationConfig) 
   if (supportsParameter(model, "duration_seconds")) {
     params.duration_seconds = Math.max(1, Math.min(capabilityNumber(model, "max_duration_seconds", 10), Number(config.durationSeconds) || 5));
   }
+  // 尺寸**按模型声明的来**。这一支此前只认 `resolution`(720p 那种档位名)—— 那是按火山 /
+  // 可灵那几家定的形状,而万相收的是 `宽*高` 的像素对。声明了 size 的模型于是一个尺寸都发不出去,
+  // 参数描述符说了话而界面没听。
+  if (supportsParameter(model, "size") && config.size) params.size = config.size;
   if (supportsParameter(model, "resolution") && config.resolution) params.resolution = config.resolution;
   if (supportsParameter(model, "aspect_ratio") && config.aspectRatio) params.aspect_ratio = config.aspectRatio;
   if (supportsParameter(model, "first_frame") && config.firstFrameUrl.trim()) params.first_frame_url = config.firstFrameUrl.trim();
@@ -290,7 +294,7 @@ function GenerateWorkspace({
   const defaultImageOption = defaultGenerationOption(modelOptions, defaults.data ?? [], "image");
   const selectedModel = (modelId ? optionByValue.get(modelId) : null) ?? sessionOption ?? defaultImageOption ?? modelOptions[0] ?? null;
   const selectedAdapterAvailable = selectedModel?.adapter_available ?? false;
-  const selectedImageSizes = imageSizeOptions(selectedModel);
+  const selectedSizes = sizeOptions(selectedModel);
   const selectedDurations = durationOptions(selectedModel);
   const selectedResolutions = videoResolutionOptions(selectedModel);
   const selectedAspectRatios = aspectRatioOptions(selectedModel);
@@ -874,25 +878,28 @@ function GenerateWorkspace({
               </Select>
             </label>
             {comfyWorkflowSection}
+            {/* 尺寸**不属于任何一支**:图像收 `1024x1024`,万相视频收 `832*480`,都是"出多大"。
+                此前它锁在 image 分支里,于是一个声明了 size 的视频模型连这一栏都不出现 ——
+                参数描述符说了话而界面没听。 */}
+            {supportsParameter(selectedModel, "size") && selectedSizes.length > 0 && (
+              <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
+                <span>{t("genSize")}</span>
+                <Select value={generationConfig.size} onValueChange={(value) => setConfigValue("size", value)}>
+                  <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {selectedSizes.map((size) => (
+                      <SelectItem key={size} value={size}>
+                        {size}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+            )}
             {selectedModel.kind === "image" ? (
               <>
-                {supportsParameter(selectedModel, "size") && selectedImageSizes.length > 0 && (
-                  <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
-                    <span>{t("genSize")}</span>
-                    <Select value={generationConfig.size} onValueChange={(value) => setConfigValue("size", value)}>
-                      <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {selectedImageSizes.map((size) => (
-                          <SelectItem key={size} value={size}>
-                            {size}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
-                )}
                 {supportsParameter(selectedModel, "num_images") && (
                   <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
                     <span>{t("genNumImages")}</span>

@@ -74,7 +74,7 @@ import {
   capabilityNumber,
   capabilityString,
   durationOptions,
-  imageSizeOptions,
+  sizeOptions,
   maxImages,
   supportsParameter,
   videoResolutionOptions,
@@ -2721,7 +2721,7 @@ function NodeInspector({
     const ratios = aspectRatioOptions(genModel);
     if (ratios.length > 0) out.push({ key: "aspect_ratio", label: t("wfGenAspectRatio"), options: ratios });
     if (genModel.kind === "image") {
-      const sizes = imageSizeOptions(genModel);
+      const sizes = sizeOptions(genModel);
       if (sizes.length > 0) out.push({ key: "size", label: t("wfGenSize"), options: sizes });
     } else {
       const resolutions = videoResolutionOptions(genModel);

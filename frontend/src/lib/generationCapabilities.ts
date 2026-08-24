@@ -48,9 +48,11 @@ export function supportsParameter(model: GenerationModel | null, key: string) {
   return keys.length === 0 || keys.includes(key);
 }
 
-export function imageSizeOptions(model: GenerationModel | null): string[] {
+/** 这个模型能出哪些尺寸。**不限图像** —— 万相视频收的也是 `宽*高` 的像素对,
+ *  而名字里带 image 会让人以为视频不该有这一栏(它此前就是这么被漏掉的)。 */
+export function sizeOptions(model: GenerationModel | null): string[] {
   if (!supportsParameter(model, "size")) return [];
-  return capabilityList(model, "sizes", FALLBACK_IMAGE_SIZES);
+  return capabilityList(model, "sizes", model?.kind === "video" ? [] : FALLBACK_IMAGE_SIZES);
 }
 
 export function videoResolutionOptions(model: GenerationModel | null): string[] {
