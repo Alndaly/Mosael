@@ -172,7 +172,7 @@ def test_重试对所有_AI_出站调用生效(monkeypatch):
     ] + [
         "app.domain.generation.prompt_optimizer",
         "app.domain.workflows.ai_edit",
-        "app.ai.analysis.service",
+        "app.domain.analysis.service",
         "app.domain.workflows.executors.ai",
     ]
     #: 不发 HTTP 的适配器 —— 豁免要**逐个写清楚理由**,而不是放宽判据。

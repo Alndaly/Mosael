@@ -157,14 +157,19 @@ def abort_turn(session_id: str) -> bool:
     return live.send({"type": "abort", "turnId": live.turn_id})
 
 
-def _proxy_env(base: dict[str, str]) -> dict[str, str]:
-    """给 sidecar 的环境补上代理设置。自开一个会话:调用方持有的那个 db 可能正处在
-    一次回合的事务里,而这里只是读一行配置,不该被卷进去。"""
-    from app.core.db import SessionLocal
-    from app.domain.network import subprocess_env
+#: 谁来补代理设置。**默认原样返回** —— 这一层是基础设施,不认识"网络配置"存在哪张表。
+#: 组合层(app/main.py 的启动装配)把领域那份装上;没装时 sidecar 照样起得来,只是不带代理。
+_proxy_source: "Callable[[dict[str, str]], dict[str, str]]" = lambda base: base
 
-    with SessionLocal() as db:
-        return subprocess_env(db, base)
+
+def use_proxy_source(fn: "Callable[[dict[str, str]], dict[str, str]]") -> None:
+    """装上"怎么给子进程算代理环境"。见 domain/network.subprocess_env_for_child。"""
+    global _proxy_source
+    _proxy_source = fn
+
+
+def _proxy_env(base: dict[str, str]) -> dict[str, str]:
+    return _proxy_source(base)
 
 
 def pi_sidecar_command() -> tuple[str, str]:

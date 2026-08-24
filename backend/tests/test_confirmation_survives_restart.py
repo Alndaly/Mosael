@@ -34,7 +34,7 @@ def test_重启把中断那轮的确认卡一并作废() -> None:
         _pending(db, workspace_id=ws["id"], session_id=sid)
         db.commit()
 
-    from app.ai.agent.host import reconcile_orphaned_agent_sessions
+    from app.domain.agent.host import reconcile_orphaned_agent_sessions
 
     with SessionLocal() as db:
         assert reconcile_orphaned_agent_sessions(db) == 1
@@ -60,7 +60,7 @@ def test_外部智能体的卡不受牵连() -> None:
         _pending(db, workspace_id=ws["id"], session_id=None)
         db.commit()
 
-    from app.ai.agent.host import reconcile_orphaned_agent_sessions
+    from app.domain.agent.host import reconcile_orphaned_agent_sessions
 
     with SessionLocal() as db:
         reconcile_orphaned_agent_sessions(db)
@@ -79,7 +79,7 @@ def test_没有卡在跑的时候什么都不动() -> None:
         _pending(db, workspace_id=ws["id"], session_id=sid)   # 会话是 idle,这张卡是本轮的
         db.commit()
 
-    from app.ai.agent.host import reconcile_orphaned_agent_sessions
+    from app.domain.agent.host import reconcile_orphaned_agent_sessions
 
     with SessionLocal() as db:
         assert reconcile_orphaned_agent_sessions(db) == 0

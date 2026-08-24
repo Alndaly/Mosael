@@ -8,7 +8,7 @@
 """
 from __future__ import annotations
 
-from app.ai.agent import host
+from app.domain.agent import host
 
 
 def test_first_token_is_stamped_once_and_thinking_counts() -> None:

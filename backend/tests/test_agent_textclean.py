@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.ai.agent.textclean import decode_byte_fallback
+from app.domain.agent.textclean import decode_byte_fallback
 
 
 def test_reassembles_the_exact_run_from_the_bug_report() -> None:

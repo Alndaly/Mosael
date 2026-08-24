@@ -116,3 +116,16 @@ def subprocess_env(db: Session, base: dict[str, str]) -> dict[str, str]:
         env.pop(key.lower(), None)
     env.update(proxy_env(row.proxy_url, row.no_proxy))
     return env
+
+
+def subprocess_env_for_child(base: dict[str, str]) -> dict[str, str]:
+    """给子进程算环境,**自开一个会话**。
+
+    调用方(ai/sidecar)持有的那个 db 可能正处在一次回合的事务里,而这里只是读一行配置,
+    不该被卷进去。装配在 app/main.py:`adapters.use_proxy_source(subprocess_env_for_child)`
+    —— 基础设施声明它要什么,领域把答案喂进去,而不是反过来让它认识这张表。
+    """
+    from app.core.db import SessionLocal
+
+    with SessionLocal() as db:
+        return subprocess_env(db, base)

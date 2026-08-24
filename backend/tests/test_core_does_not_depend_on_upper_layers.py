@@ -3,7 +3,7 @@
 此前它反向依赖着上层:
 
     app/core/db.py:964  from app.ai.runtime import asr_models
-    app/core/db.py:965  from app.domain import tts_config
+    app/core/db.py:965  from app.ai.runtime import config as tts_config
 
 而且是**写在函数体里**的 import —— 那不是技巧,是"层分错了"的自白:写在文件顶上会立刻成环
 (core.db → domain.tts_config → core.config → …),挪进函数里只是把环推迟到运行时。

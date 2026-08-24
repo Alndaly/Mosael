@@ -29,7 +29,7 @@ from app.api.schemas import (
 from app.ai.runtime import tts_daemon, tts_models
 from app.domain.voices import voices
 from app.domain.permissions import ensure_workspace_perm, ensure_deployment_admin, ensure_workspace_access
-from app.domain import tts_config
+from app.ai.runtime import config as tts_config
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["voices"])

@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from app.ai.agent.host import FALLBACK_CONTEXT_WINDOW
+from app.domain.agent.host import FALLBACK_CONTEXT_WINDOW
 from app.domain.context_meter import CHARS_PER_TOKEN, context_tokens
 
 _CONTRACT = Path(__file__).resolve().parents[2] / "contracts" / "context-meter-cases.json"

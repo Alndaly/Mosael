@@ -10,8 +10,8 @@ import time
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.ai.agent.adapters import AdapterError, TurnResult, abort_turn, compact_session, run_turn, steer_turn
-from app.ai.agent.textclean import decode_byte_fallback
+from app.ai.sidecar.adapters import AdapterError, TurnResult, abort_turn, compact_session, run_turn, steer_turn
+from app.domain.agent.textclean import decode_byte_fallback
 from app.ai.model_catalog import cached_model
 from app.domain.provider_auth import read_credential
 from app.domain import provider_models
@@ -22,7 +22,8 @@ from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.security import mint_service_session, revoke_session
 from app.db.models import AgentMessage, AgentSession, AuthSession, ToolConfirmation, User, now
-from app.domain.usage import billable, estimate_text_tokens
+from app.core.token_estimate import estimate_text_tokens
+from app.domain.usage import billable
 
 """
 Agent host (plan §16 + user decision): sessions and messages live in Open Studio;

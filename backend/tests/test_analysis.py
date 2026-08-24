@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from app.ai.analysis import service
+from app.domain.analysis import service
 from app.core.db import SessionLocal
 from app.db.models import Asset, ProviderProfile
 def _me() -> str:

@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, update
 
-from app.ai.agent import host
+from app.domain.agent import host
 from app.domain import sharing
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (

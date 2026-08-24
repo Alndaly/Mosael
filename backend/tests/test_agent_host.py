@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import time
 
-from app.ai.agent import adapters, host
-from app.ai.agent.adapters import TurnResult
+from app.ai.sidecar import adapters
+from app.domain.agent import host
+from app.ai.sidecar.adapters import TurnResult
 from app.core.db import SessionLocal
 from app.db.models import ProviderProfile
 from tests.util import add_provider, fresh_client
@@ -289,7 +290,7 @@ def test_stop_is_not_an_error_when_nothing_is_running() -> None:
 
 def test_reconcile_orphaned_agent_sessions() -> None:
     """重启把 running 会话线程杀死 → 启动时拨回 idle 并补中断说明,idle 会话不动。"""
-    from app.ai.agent.host import reconcile_orphaned_agent_sessions
+    from app.domain.agent.host import reconcile_orphaned_agent_sessions
     from app.db.models import AgentMessage, AgentSession
     from app.core.db import SessionLocal
 
@@ -379,7 +380,7 @@ def test_一轮结束时不会留下思考中() -> None:
 def test_子智能体的每一步进时间线_并嵌在父调用名下() -> None:
     """subtool 事件 → 时间线条目。没有它,run_subagent 是一段几十秒的静默 ——
     旧的 onSubagentStep 回调从来没被接线,这次直接换成完整的 start/end 事件流。"""
-    from app.ai.agent import host
+    from app.domain.agent import host
 
     session_id = "sub-trace-test"
     host._stream_reset(session_id)
@@ -423,7 +424,7 @@ def test_后台子智能体跑完_存档填回发起那张卡() -> None:
     """subagent_result 事件 → run_subagent 卡的 details.subagent。非阻塞派发的卡瞬间
     就 done 了(回执是「已派发」),存档要等子智能体真跑完才回填 —— 丢了这个事件,
     界面上那张卡永远停在「已派发、无档案」。"""
-    from app.ai.agent import host
+    from app.domain.agent import host
 
     session_id = "subagent-result-test"
     host._stream_reset(session_id)
@@ -455,8 +456,8 @@ def test_记账之后prompt快照和水位不被覆盖丢掉(monkeypatch) -> Non
     丢在中间:billable 记完账为了把成本写进 usage,把整个 payload 重新赋值成
     {usage, timeline},第一次构造时的 prompt / context / compaction 全被覆盖。
     轨迹里的 SYSTEM / CONTEXT 行因此从来没出现过。"""
-    from app.ai.agent import host
-    from app.ai.agent.adapters import TurnResult
+    from app.domain.agent import host
+    from app.ai.sidecar.adapters import TurnResult
     from tests.util import fresh_client
 
     monkeypatch.setattr(
@@ -498,7 +499,7 @@ def test_记账之后prompt快照和水位不被覆盖丢掉(monkeypatch) -> Non
 def test_落库时subtool不被丢掉() -> None:
     """流式期间嵌套卡都在,一刷新全没了 —— _timeline_for_payload 只认三种类型,
     subtool 被静默丢弃。真机上第一次派发就撞上:存档在、时间线里却零条子步。"""
-    from app.ai.agent.host import _timeline_for_payload
+    from app.domain.agent.host import _timeline_for_payload
 
     stream_state = {
         "timeline": [

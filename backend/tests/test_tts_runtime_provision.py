@@ -16,7 +16,7 @@ import pytest
 
 from app.ai.runtime import tts_models
 from app.core import interpreter
-from app.domain import tts_config
+from app.ai.runtime import config as tts_config
 
 
 def test_managed_venv_is_probed_before_this_interpreter() -> None:

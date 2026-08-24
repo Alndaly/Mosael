@@ -4,7 +4,7 @@ import wave
 from pathlib import Path
 
 from app.ai.runtime import tts_models, tts_worker
-from app.domain import tts_config
+from app.ai.runtime import config as tts_config
 
 
 def test_tts_catalog_status_shape() -> None:

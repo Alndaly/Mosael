@@ -21,7 +21,7 @@
 from __future__ import annotations
 
 from app.ai.runtime import tts_models
-from app.domain import tts_config
+from app.ai.runtime import config as tts_config
 
 
 def test_modelscope_is_offered_for_fish() -> None:

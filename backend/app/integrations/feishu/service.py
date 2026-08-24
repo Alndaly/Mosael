@@ -17,8 +17,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core import interpreter
-from app.ai.agent.adapters import AdapterError, run_turn
-from app.ai.agent.host import (
+from app.ai.sidecar.adapters import AdapterError, run_turn
+from app.domain.agent.host import (
     SYSTEM_PROMPT_TEMPLATE,
     append_message,
     get_or_create_external_session,
@@ -446,7 +446,7 @@ def notify_interrupted_chats(db: Session) -> int:
     只写进了库。桌面端看得到它,而在飞书里发消息的那个人只看到一片沉默,和"还在处理中"
     分辨不出来,于是一直等。开发时 --reload 尤其频繁,这就是"卡死"的另一半。
     """
-    from app.ai.agent.host import interrupted_external_sessions, mark_interrupt_notified
+    from app.domain.agent.host import interrupted_external_sessions, mark_interrupt_notified
 
     sent = 0
     for external_key, notice, message_id in interrupted_external_sessions(db, "feishu"):

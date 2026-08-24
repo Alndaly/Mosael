@@ -15,7 +15,7 @@ notify_agent_session 发来的消息此前把信封拼进了 `content`:
 
 from __future__ import annotations
 
-from app.ai.agent.host import agent_notice_envelope
+from app.domain.agent.host import agent_notice_envelope
 
 
 def test_信封进提示词而不进正文() -> None:

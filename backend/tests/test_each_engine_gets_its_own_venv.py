@@ -18,7 +18,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.ai.runtime import asr_models, tts_models
-from app.domain import tts_config
+from app.ai.runtime import config as tts_config
 
 
 def _fake_venv(root: Path) -> Path:

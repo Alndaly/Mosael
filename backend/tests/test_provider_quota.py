@@ -263,7 +263,7 @@ def test_刷新失败才报过期_且不会每次都重试(monkeypatch):
     """刷不动才是用户需要知道的事(refresh token 被吊销、账号在别处登出)—— 那时前端用
     警告色说"需重新授权"。同时:失败不该让最常被拉的这个接口每次都去起一次 node 撞同一堵墙。"""
     from app.api.routes import settings as settings_routes
-    from app.ai.agent.adapters import AdapterError
+    from app.ai.sidecar.adapters import AdapterError
 
     client, profile_id, _ = _expired_oauth_client("掉线的订阅")
 

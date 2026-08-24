@@ -8,7 +8,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from app.ai.agent.host import wait_for_idle_turns
+from app.domain.agent.host import wait_for_idle_turns
 from app.domain.agent.autopilot import wait_for_idle_autopilot
 from app.core.config import settings
 from app.core.db import Base, engine

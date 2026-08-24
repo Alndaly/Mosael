@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.core.token_estimate import estimate_text_tokens
+
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -76,19 +78,6 @@ PRICING_BILLING_UNITS = frozenset(
 )
 
 
-def estimate_text_tokens(text: str) -> int:
-    """Cheap local token estimate for providers that do not return token usage.
-
-    This is intentionally marked by callers with token_estimate=true: it is good enough for
-    home charts and usage auditing trends, but not a substitute for provider billing records.
-    """
-    stripped = text.strip()
-    if not stripped:
-        return 0
-    cjk_chars = len(re.findall(r"[\u3400-\u9fff\uf900-\ufaff]", stripped))
-    non_cjk = re.sub(r"[\u3400-\u9fff\uf900-\ufaff\s]", "", stripped)
-    latinish_tokens = len(non_cjk) / 4
-    return max(1, round(cjk_chars + latinish_tokens))
 
 
 def create_pricing_rule(

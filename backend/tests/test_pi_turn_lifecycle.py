@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from app.ai.agent import adapters
+from app.ai.sidecar import adapters
 
 #: Answers the turn, then reports every control frame it receives back through stderr, so a
 #: test can assert on what the backend actually wrote — the steering channel is otherwise

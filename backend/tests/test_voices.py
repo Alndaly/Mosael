@@ -94,7 +94,7 @@ def test_tts_models_listed() -> None:
 
 
 def test_tts_config_get_and_update() -> None:
-    from app.domain import tts_config
+    from app.ai.runtime import config as tts_config
 
     client = fresh_client()
     client.post("/api/workspaces", json={"name": "W"})

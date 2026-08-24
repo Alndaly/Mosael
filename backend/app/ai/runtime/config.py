@@ -4,6 +4,8 @@ Fish Speech source+weights dirs are editable from Settings. Cached; call refresh
 after a write."""
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import threading
 from dataclasses import dataclass
 import logging
@@ -37,26 +39,10 @@ HF_ENDPOINTS = {
 }
 
 #: 已经不存在的下载源 → 与它**等价**的那一个。等价才迁,否则就是替用户改了设置。
-#: (ModelScope 现在是真的了,所以它不在这里。)
-_LEGACY_SOURCES: dict[str, str] = {}
+#: (ModelScope 现在是真的了,所以它不在这里。迁移动作本身在 domain/voices/tts_settings ——
+#: 它要碰数据库,而这一层不认识数据库。)
 
 
-def migrate_legacy_sources() -> None:
-    """把库里存着的老下载源换成等价的新值。
-
-    不迁的话它会落到 `hf_endpoint` 的兜底(hf-mirror)上 —— 那是**另一个**端点:用户什么都
-    没改,下载源却悄悄换了人,而这台机器上镜像恰恰是下不动的那个。
-    """
-    from app.core.db import SessionLocal
-    from app.db.models import TtsConfig
-
-    with SessionLocal() as db:
-        rows = db.query(TtsConfig).filter(TtsConfig.source.in_(tuple(_LEGACY_SOURCES))).all()
-        for row in rows:
-            row.source = _LEGACY_SOURCES[row.source]
-        if rows:
-            db.commit()
-    refresh()
 
 # App 托管的 TTS 运行环境:两个引擎(f5-tts / fish-speech)共用这一个 venv。
 #
@@ -225,29 +211,24 @@ _lock = threading.Lock()
 _cached: TtsRuntimeConfig | None = None
 
 
-def _load() -> TtsRuntimeConfig:
-    from sqlalchemy.exc import SQLAlchemyError
+#: 从哪儿读用户存的配置。**默认只读环境变量** —— 这一层是基础设施,不认识数据库。
+#: 组合层(app/main.py 的启动装配)把"读那张表"的函数装上;没装的时候(比如单跑一个 worker
+#: 子进程)照样能工作,只是拿到的是环境变量那份默认值。
+#:
+#: 这条注入是 `ai` 不再依赖 `domain` 的最后一块:此前这个模块住在 domain 里、被运行时引用
+#: 15 次,于是"在这台机器上跑模型"这件纯基础设施的事,被一张数据库表拴住了。
+_source: "Callable[[], TtsRuntimeConfig] | None" = None
 
-    from app.core.db import SessionLocal
-    from app.db.models import TtsConfig
 
-    try:
-        with SessionLocal() as db:
-            row = db.get(TtsConfig, SINGLETON_ID)
-            if row is not None:
-                return TtsRuntimeConfig(
-                    engine=row.engine,
-                    python_path=row.python_path,
-                    source=row.source,
-                    pip_index=getattr(row, "pip_index", "") or "",
-                    fish_repo_dir=row.fish_repo_dir or "",
-                    fish_model_dir=row.fish_model_dir or "",
-                )
-    except SQLAlchemyError as exc:
-        # 新库还没迁移出这张表时是正常的(那时本来就没有已保存的配置)。但**任何别的**
-        # 数据库错误意味着用户存的引擎/下载源被无声忽略、悄悄换成默认值 —— 那是他改了设置
-        # 却不生效的形状,得留下痕迹。
-        logger.warning("读取 TTS 配置失败,这一次用默认值:%s: %s", type(exc).__name__, exc)
+def use_source(loader: "Callable[[], TtsRuntimeConfig]") -> None:
+    """装上配置来源。装完立刻失效缓存 —— 否则装之前读过的那份默认值会一直留着。"""
+    global _source
+    _source = loader
+    refresh()
+
+
+def _from_env() -> TtsRuntimeConfig:
+    """没有配置来源时的那一份:全部取自环境变量。"""
     return TtsRuntimeConfig(
         engine=settings.tts_engine,
         python_path=settings.tts_python,
@@ -256,6 +237,10 @@ def _load() -> TtsRuntimeConfig:
         fish_repo_dir="",
         fish_model_dir="",
     )
+
+
+def _load() -> TtsRuntimeConfig:
+    return (_source or _from_env)()
 
 
 def get() -> TtsRuntimeConfig:

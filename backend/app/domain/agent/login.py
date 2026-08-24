@@ -21,7 +21,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 
-from app.ai.agent.adapters import _proxy_env, pi_sidecar_command
+from app.ai.sidecar.adapters import _proxy_env, pi_sidecar_command
 from app.core.child_process import popen_text
 
 logger = logging.getLogger(__name__)

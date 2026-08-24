@@ -104,7 +104,7 @@ def _agent_facing_text() -> str:
     import pathlib
 
     import mcp_server
-    from app.ai.agent.host import SYSTEM_PROMPT_TEMPLATE
+    from app.domain.agent.host import SYSTEM_PROMPT_TEMPLATE
 
     del pathlib
     return SYSTEM_PROMPT_TEMPLATE + (mcp_server.edit_workflow.__doc__ or "")

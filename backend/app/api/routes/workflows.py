@@ -236,7 +236,7 @@ def workflow_agent_session(workflow_id: str, db: DbSession, user: CurrentUser) -
     ensure_workspace_perm(db, user, workflow.workspace_id, "edit")
     from sqlalchemy import select
 
-    from app.ai.agent import host
+    from app.domain.agent import host
     from app.db.models import AgentSession
 
     key = f"workflow:{workflow_id}"
@@ -276,7 +276,7 @@ def create_workflow_agent_session(workflow_id: str, db: DbSession, user: Current
     """给工作流再开一个会话(external_key 带唯一后缀,与默认会话同前缀便于归组)。"""
     import uuid
 
-    from app.ai.agent import host
+    from app.domain.agent import host
 
     workflow = _get(db, workflow_id)
     ensure_workspace_perm(db, user, workflow.workspace_id, "edit")

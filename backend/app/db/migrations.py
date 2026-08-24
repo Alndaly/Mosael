@@ -22,7 +22,8 @@ from app.ai.runtime import asr_models
 from app.core.config import LOGIN_SESSION_TTL, settings
 from app.core.db import Base, PARTITION_PREFIX, engine, now
 from app.core.tokens import TOKEN_SCHEME, token_digest
-from app.domain import tts_config
+from app.ai.runtime import config as tts_config
+from app.domain.voices import tts_settings
 
 logger = logging.getLogger(__name__)
 
@@ -1187,7 +1188,7 @@ def _migrate_shared_venvs() -> None:
 def _migrate_legacy_tts_sources() -> None:
     """「ModelScope」这个下载源和「HuggingFace」指向同一个端点,已删除;已存的值迁到 hf。"""
 
-    tts_config.migrate_legacy_sources()
+    tts_settings.migrate_legacy_sources()
 
 
 def _migrate_plugin_instances() -> None:

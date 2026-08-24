@@ -26,7 +26,7 @@ import pytest
 
 from app.ai.runtime import tts_models
 from app.domain.voices import voices
-from app.domain import tts_config
+from app.ai.runtime import config as tts_config
 from app.core.db import SessionLocal
 from app.db.models import Job
 from tests.util import fresh_client

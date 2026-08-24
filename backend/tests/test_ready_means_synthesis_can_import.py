@@ -33,7 +33,7 @@ def test_the_probe_imports_what_synthesis_imports(monkeypatch) -> None:
     这里把"检出和权重都在"喂进去,而不是指望跑测试的机器上正好装着 —— 一条要看机器脸色的
     测试,红了绿了都说明不了问题。
     """
-    from app.domain import tts_config
+    from app.ai.runtime import config as tts_config
 
     monkeypatch.setattr(
         tts_config, "get",

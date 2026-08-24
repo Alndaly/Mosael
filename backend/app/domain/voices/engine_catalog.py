@@ -50,7 +50,7 @@ def describe_engines() -> list[dict[str, object]]:
     「还没有可用的引擎」要早得多。
     """
     from app.ai.runtime import tts_models
-    from app.domain import tts_config
+    from app.ai.runtime import config as tts_config
 
     # **不等探测**:这个接口只是"引擎选择器要什么",而探测要起子进程 import torch。
     # 没测过时按"还没就绪"渲染,后台探完下一次拉列表就对了(见 tts_models.runtime_status)。

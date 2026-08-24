@@ -85,7 +85,7 @@ def test_resolving_without_my_own_default_gives_nothing() -> None:
 
 def test_a_chat_without_a_chosen_model_says_so() -> None:
     """报错要说清下一步做什么,而不是"未配置供应商"。"""
-    from app.ai.agent.host import AdapterError, resolve_chat_provider
+    from app.domain.agent.host import AdapterError, resolve_chat_provider
 
     fresh_client()
     _provider()

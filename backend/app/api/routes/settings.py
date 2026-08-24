@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.domain.permissions import ensure_deployment_admin
-from app.ai.agent.login import (
+from app.domain.agent.login import (
     LoginError,
     answer as answer_login,
     cancel as cancel_login,
@@ -60,8 +60,8 @@ from app.domain import provider_credentials
 from app.domain.provider_credentials import ResolvedProvider
 from app.domain.provider_defaults import DEFAULTABLE_CAPABILITIES, set_default
 from app.domain.network import apply_to_process, effective_no_proxy, get_config as get_network
-from app.ai.agent.adapters import AdapterError, refresh_oauth_credential
-from app.ai.agent.host import mint_tool_token
+from app.ai.sidecar.adapters import AdapterError, refresh_oauth_credential
+from app.domain.agent.host import mint_tool_token
 from app.domain import provider_models
 from app.core.http_retry import set_max_retries
 from app.domain.provider_quota import QuotaUnavailable, fetch_quota, is_expired, supports_quota
@@ -620,7 +620,7 @@ def start_oauth_login(profile_id: str, db: DbSession, user: CurrentUser) -> OAut
     每个人都该能挂自己的。连接怎么配仍然是管理员的事,那是另一回事。
     """
     profile = _oauth_profile(db, profile_id, user)
-    from app.ai.agent.host import mint_tool_token
+    from app.domain.agent.host import mint_tool_token
 
     try:
         session = start_login(

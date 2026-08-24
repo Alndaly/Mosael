@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from app.ai.agent import login as login_mod
+from app.domain.agent import login as login_mod
 from tests.util import fresh_client
 
 """订阅计划的授权登录(设备码 / 浏览器授权)全链路。

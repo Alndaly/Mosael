@@ -197,7 +197,7 @@ def get(model_id: str) -> F5Model | None:
 
 
 def root() -> Path:
-    from app.domain import tts_config
+    from app.ai.runtime import config as tts_config
 
     return tts_config.MANAGED_F5_MODEL
 

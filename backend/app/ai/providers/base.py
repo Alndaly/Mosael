@@ -12,7 +12,7 @@ from typing import Any
 
 import httpx
 
-from app.domain.usage import estimate_text_tokens
+from app.core.token_estimate import estimate_text_tokens
 
 """
 Generation provider contract (plan §18.2). A provider turns a validated

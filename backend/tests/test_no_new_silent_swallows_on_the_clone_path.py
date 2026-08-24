@@ -26,7 +26,7 @@ ALLOWED = {
     # 外层那个已经记 debug 了(残缺的总量会被当判据用)。
     "app/ai/runtime/tts_models.py": 3,
     # 迁移前逐个引擎探测:探不动就试下一个,run_logged 已经记过命令与失败。
-    "app/domain/tts_config.py": 1,
+    "app/ai/runtime/config.py": 1,
     # 合成失败的兜底:它自己会 logger.warning,这里数的是它里层的 rollback 分支。
     "app/domain/voices/voices.py": 1,
     # kill 一个已经死了的进程。

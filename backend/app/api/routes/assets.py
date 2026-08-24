@@ -247,7 +247,7 @@ def delete_asset(asset_id: str, db: DbSession, user: CurrentUser) -> Response:
 
 @router.post("/assets/{asset_id}/analyze", response_model=AnalyzeAssetResponse)
 def analyze_asset_route(asset_id: str, body: AnalyzeAssetRequest, db: DbSession, user: CurrentUser) -> AnalyzeAssetResponse:
-    from app.ai.analysis.service import AnalysisError, analyze_asset
+    from app.domain.analysis.service import AnalysisError, analyze_asset
 
     asset = require_asset(db, user, asset_id)
     ensure_workspace_perm(db, user, asset.workspace_id, "ai")

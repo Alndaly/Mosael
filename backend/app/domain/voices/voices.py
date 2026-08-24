@@ -92,7 +92,7 @@ def resolve_clone_engine(requested: str = "") -> str:
     设置页那个是**默认**,不是唯一 —— 配音面板每次生成都可能想换一个(F5 快、Fish 支持情感
     标签),而此前想换只能跑去设置页改全局。请求带了就用请求的,没带才回落到默认。
     """
-    from app.domain import tts_config
+    from app.ai.runtime import config as tts_config
 
     engine = (requested or "").strip() or tts_config.get().engine
     if engine not in {item.id for item in tts_models.CATALOG}:
@@ -573,7 +573,7 @@ def _run_synthesis_body(
             ref = reference_path(voice)
             if not ref.is_file():
                 raise VoiceError("音色参考音频缺失")
-            from app.domain import tts_config
+            from app.ai.runtime import config as tts_config
 
             # 用**建任务时**定下的那个引擎:中途有人去设置页改了默认,这一单不该跟着漂。
             engine = clone_engine or tts_config.get().engine

@@ -569,7 +569,7 @@ def ensure_engine_runtime(engine: str, *, progress_key: str | None = None) -> No
     #
     # 这个设置存在 tts_config 里(历史上克隆先有了它),但它管的是 pip 而不是克隆 ——
     # 两个引擎装依赖用的是同一个索引。在函数里 import:core/audio 不该在模块层依赖 domain。
-    from app.domain import tts_config
+    from app.ai.runtime import config as tts_config
 
     try:
         pip_install.install(

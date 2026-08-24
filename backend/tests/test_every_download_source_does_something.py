@@ -23,7 +23,8 @@
 from __future__ import annotations
 
 from app.ai.runtime import tts_models
-from app.domain import tts_config
+from app.ai.runtime import config as tts_config
+from app.domain.voices import tts_settings
 
 
 def test_every_endpoint_is_distinct() -> None:
@@ -47,4 +48,4 @@ def test_no_source_is_silently_rewritten_anymore() -> None:
     「等价才迁」—— 一次不等价的迁移就是替用户改了设置,而这台机器上那正好是把一条
     9 MB/s 的路换成 46 KB/s 的路。
     """
-    assert tts_config._LEGACY_SOURCES == {}
+    assert tts_settings._LEGACY_SOURCES == {}

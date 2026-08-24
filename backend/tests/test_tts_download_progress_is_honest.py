@@ -29,7 +29,7 @@ def test_the_runtime_phase_does_not_borrow_the_weights_size(monkeypatch) -> None
     """1.5 GB 是**权重**的大小,而这一阶段跑的是 pip。"""
     monkeypatch.setattr(tts_models, "resolve_engine_python", lambda engine_id: None)
     monkeypatch.setattr(tts_models.subprocess, "run", lambda *a, **k: _Failed())
-    from app.domain import tts_config
+    from app.ai.runtime import config as tts_config
 
     monkeypatch.setattr(tts_config, "managed_venv_python", lambda engine_id: pathlib.Path("/nope/python"))
     tts_models._store.clear("f5-tts")

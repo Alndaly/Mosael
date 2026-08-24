@@ -56,7 +56,7 @@ def test_my_own_default_beats_the_first_available_model() -> None:
 
 def test_the_agent_uses_the_model_i_picked() -> None:
     """这条是端到端的那一句:界面显示什么,发给模型的就该是什么。"""
-    from app.ai.agent.host import resolve_chat_provider
+    from app.domain.agent.host import resolve_chat_provider
 
     _client, _first_id, mine_id, me = _two_connections()
     with SessionLocal() as db:
@@ -72,7 +72,7 @@ def test_the_agent_uses_the_model_i_picked() -> None:
 
 def test_a_session_that_names_its_model_always_wins() -> None:
     """会话上明确选过的,任何默认都不该盖过它。"""
-    from app.ai.agent.host import resolve_chat_provider
+    from app.domain.agent.host import resolve_chat_provider
 
     _client, first_id, mine_id, me = _two_connections()
     with SessionLocal() as db:

@@ -56,7 +56,7 @@ logger = logging.getLogger(__name__)
 from app.api.deps.auth import get_current_user
 from app.domain.permissions import NotVisible, PermissionDenied
 from app.domain.assets import reconcile_broken_media_info
-from app.ai.agent.host import reconcile_orphaned_agent_sessions
+from app.domain.agent.host import reconcile_orphaned_agent_sessions
 from app.domain.browser import reconcile_browser_state
 from app.domain.jobs import reconcile_orphaned_jobs, register_external_kind
 from app.domain.assets.proxies import reconcile_missing_proxies
@@ -68,6 +68,18 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     configure_logging()  # 先配好日志,后续启动步骤才追溯得到
     logger.info("Open Studio backend starting (host=%s port=%s)", settings.backend_host, settings.backend_port)
     init_db()
+    # 把"配置从数据库读"装进运行时。**这是组合层的活** —— ai/runtime 是基础设施,不认识
+    # 数据库;它默认只读环境变量,真正那份由这里喂进去(见 ai/runtime/config.use_source)。
+    # 装配必须在 init_db 之后:那张表得先存在。
+    from app.ai.runtime import config as tts_runtime_config
+    from app.domain.voices import tts_settings
+
+    tts_runtime_config.use_source(tts_settings.load)
+    # 同一条道理:sidecar 是基础设施,不认识"网络配置存在哪张表"。
+    from app.ai.sidecar import adapters as sidecar_adapters
+    from app.domain.network import subprocess_env_for_child
+
+    sidecar_adapters.use_proxy_source(subprocess_env_for_child)
     _prepare_network()
     # Mint the publish worker's shared secret before any request can arrive. See
     # app/core/worker_key.py for why that channel needs one.

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import time
 
-from app.ai.agent.adapters import TurnResult
+from app.ai.sidecar.adapters import TurnResult
 from app.core.db import SessionLocal
 from app.db.models import AgentSession
 from app.integrations.feishu import service
@@ -118,7 +118,7 @@ def test_handle_incoming_adapter_error_still_replies(monkeypatch) -> None:
     ).json()
 
     sent: list[str] = []
-    from app.ai.agent.adapters import AdapterError
+    from app.ai.sidecar.adapters import AdapterError
 
     def boom(*args, **kwargs):
         raise AdapterError("cli exploded")
@@ -239,7 +239,7 @@ def test_图片下载失败也要回话(monkeypatch) -> None:
 def test_被重启打断的飞书会话会收到中断说明(monkeypatch) -> None:
     """会话状态早就被拨回 idle 了,但那条说明只写进了库 —— 桌面端看得到,而在飞书里
     发消息的人只看到沉默。这是"卡死"的另一半:开发时 --reload 尤其频繁。"""
-    from app.ai.agent.host import reconcile_orphaned_agent_sessions
+    from app.domain.agent.host import reconcile_orphaned_agent_sessions
 
     client = fresh_client()
     sent: list = []
@@ -264,7 +264,7 @@ def test_中断说明只发一次_不随每次重启重发(monkeypatch) -> None:
     根因:挑要通知的会话时看的是「最后一条消息带中断标记」,而聊天里之后没人说话,
     它就一直是最后一条 —— 发过与否没有任何记号。发成功要标记,下次启动跳过。
     """
-    from app.ai.agent.host import reconcile_orphaned_agent_sessions
+    from app.domain.agent.host import reconcile_orphaned_agent_sessions
 
     client = fresh_client()
     sent: list = []
@@ -298,7 +298,7 @@ def test_中断说明只发一次_不随每次重启重发(monkeypatch) -> None:
 
 def test_发送失败不标记_下次启动重试(monkeypatch) -> None:
     """失败多半是网络/令牌暂时不行,和「已送达」是两回事 —— 标了就永远沉默。"""
-    from app.ai.agent.host import reconcile_orphaned_agent_sessions
+    from app.domain.agent.host import reconcile_orphaned_agent_sessions
 
     client = fresh_client()
     sent: list = []

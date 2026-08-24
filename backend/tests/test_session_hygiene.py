@@ -53,7 +53,7 @@ def test_logout_without_any_token_does_not_explode() -> None:
 def test_a_chat_turn_does_not_leave_a_permanent_token_behind() -> None:
     """The host mints a service token per turn so the MCP server can call back. Nothing removed
     it, and with no expiry column that is one permanent full-privilege credential per message."""
-    import app.ai.agent.host as host
+    import app.domain.agent.host as host
 
     client = fresh_client()
     client.post("/api/workspaces", json={"name": "W"})

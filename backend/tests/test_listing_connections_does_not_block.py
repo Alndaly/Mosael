@@ -137,7 +137,7 @@ def test_an_expired_token_being_refreshed_does_not_cry_wolf(monkeypatch) -> None
 
 def test_a_token_that_really_cannot_be_refreshed_does_say_so(monkeypatch) -> None:
     """反过来:真的刷不动就必须说。不然「需重新授权」这个状态等于没有了。"""
-    from app.ai.agent.adapters import AdapterError
+    from app.ai.sidecar.adapters import AdapterError
 
     def refuse(**kwargs):
         raise AdapterError("OAuth refresh failed for anthropic: fetch failed")
