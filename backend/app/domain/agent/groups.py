@@ -44,33 +44,3 @@ def delete_group(db: Session, group: AgentSessionGroup) -> None:
     db.delete(group)
     db.commit()
 
-
-def apply_order(db: Session, *, workspace_id: str, group_id: str | None, ordered_ids: list[str]) -> int:
-    """一次拖放的结果:这一摞现在是这些人、这个顺序。
-
-    **不动 updated_at**:拖动是整理,不是活动。让它跟着涨的话,被拖过的对话会显得"刚聊过",
-    而"最近更新"正是没排过的那些人赖以排序的东西 —— 整理一次就把别人的顺序搅了。
-
-    三列一起用 Core update 写,`updated_at` **必须显式出现在 SET 里**。走 ORM 属性赋值是不行的:
-    把它赋成原来的值,变更检测认为"没改",这一列就不进 SET,onupdate 照常把它顶成现在 ——
-    第一版正是这么写的,被 test_拖放落库_顺序生效而updated_at不被顶掉 当场抓到。
-    """
-    wanted = ordered_ids[:200]
-    rows = {
-        row.id: row
-        for row in db.scalars(select(AgentSession).where(AgentSession.id.in_(wanted)))
-        if row.workspace_id == workspace_id
-    }
-    moved = 0
-    for index, session_id in enumerate(wanted, start=1):
-        row = rows.get(session_id)
-        if row is None:
-            continue
-        db.execute(
-            update(AgentSession)
-            .where(AgentSession.id == row.id)
-            .values(group_id=group_id, sort_order=index, updated_at=row.updated_at)
-        )
-        moved += 1
-    db.commit()
-    return moved

@@ -53,7 +53,7 @@ function CodeCard({ children }: React.ComponentProps<"pre"> & { node?: unknown }
     >
       <div className="flex h-7 items-center gap-1 border-b border-border px-2.5 text-ui-2xs text-muted-foreground">
         <span className="font-mono lowercase">{language}</span>
-        <span className="ml-auto flex items-center gap-0.5">
+        <span className="ml-auto flex items-center gap-1.5">
           <button
             type="button"
             className="inline-grid size-5 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground hover:bg-secondary hover:text-foreground"
@@ -62,7 +62,7 @@ function CodeCard({ children }: React.ComponentProps<"pre"> & { node?: unknown }
             aria-pressed={wrap}
             onClick={() => setWrap((value) => !value)}
           >
-            <WrapText size={13} />
+            <WrapText size={14} />
           </button>
           <CodeBlockCopyButton className="size-5 rounded-sm p-0 hover:bg-secondary [&_svg]:size-3.5" code={code} />
         </span>

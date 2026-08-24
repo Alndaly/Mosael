@@ -864,17 +864,25 @@ def _migrate_agent_session_groups() -> None:
 
 
 def _migrate_agent_session_order() -> None:
-    """agent_sessions 新增 sort_order —— 手动拖出来的位次。
+    """删掉 agent_sessions.sort_order —— 对话不再支持手动拖排序。
 
-    默认 0 = 没排过。列表按 (sort_order, updated_at desc) 取,所以老库全是 0 时顺序不变。
+    这一列曾经存"手动拖出来的位次",列表按 (sort_order, updated_at desc) 取。拖排序这个能力
+    去掉之后它就没有读者了,顺序回落到纯粹的「最近更新在前」;留着一个没人读的列,下次有人看到
+    它只会去猜它还有没有用。
+
+    SQLite 从 3.35 起支持 DROP COLUMN;删不掉就跳过 —— 一个没人读的列不影响任何行为(同
+    provider_profiles 那几处的取舍)。
     """
     inspector = inspect(engine)
     if "agent_sessions" not in set(inspector.get_table_names()):
         return
-    if "sort_order" in {c["name"] for c in inspector.get_columns("agent_sessions")}:
+    if "sort_order" not in {c["name"] for c in inspector.get_columns("agent_sessions")}:
         return
-    with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0"))
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE agent_sessions DROP COLUMN sort_order"))
+    except Exception:  # noqa: BLE001 —— 老 SQLite 不支持,留着无害
+        pass
 
 
 def _migrate_agent_session_plan() -> None:

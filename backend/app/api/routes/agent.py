@@ -16,7 +16,6 @@ from app.api.schemas import (
     AgentSessionGroupCreate,
     AgentSessionGroupOut,
     AgentSessionGroupUpdate,
-    AgentSessionReorder,
     AgentMemoryOut,
     AgentMemoryUpdate,
     AgentPlanUpdate,
@@ -70,7 +69,7 @@ def list_agent_sessions(workspace_id: str, db: DbSession, user: CurrentUser) -> 
             sharing.visible_filter("agent_session", user, workspace_id),
         )
         # 手动位次优先,其次最近活跃。全是 0(没人拖过)时就是纯粹的"最近活跃在前"。
-        .order_by(AgentSession.sort_order, AgentSession.updated_at.desc())
+        .order_by(AgentSession.updated_at.desc())
         .limit(50)
     )
     return sharing.annotate(db, "agent_session", list(db.scalars(stmt)), user, workspace_id)
@@ -180,6 +179,10 @@ def stop_agent_turn(session_id: str, db: DbSession, user: CurrentUser) -> dict:
 @router.patch("/agent/sessions/{session_id}", response_model=AgentSessionOut)
 def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSession, user: CurrentUser) -> AgentSession:
     session = _require_session(db, user, session_id)
+    # 收纳不是活动:这一次只改了 group_id 的话,不该让对话显得「刚聊过」—— 列表就是按最近更新
+    # 排的(手动排序已经去掉,它是唯一的排序依据),收一次纳就把顺序搅了。
+    organising_only = body.model_fields_set <= {"group_id"} and body.group_id is not None
+    kept_updated_at = session.updated_at
     if body.title is not None:
         session.title = body.title
     if body.provider_profile_id is not None:
@@ -212,6 +215,11 @@ def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSessio
         if session.mode_set_at is None:
             session.mode_set_at = now()
     db.commit()
+    if organising_only:
+        # **不能只是把 updated_at 赋回原值**:赋成原来的值,SQLAlchemy 的变更检测认为「没改」,
+        # 这一列就不进 SET,而 onupdate=now 照常把它顶成现在。必须走显式 UPDATE 把它写回去。
+        db.execute(update(AgentSession).where(AgentSession.id == session.id).values(updated_at=kept_updated_at))
+        db.commit()
     db.refresh(session)
     return session
 
@@ -323,20 +331,6 @@ def set_agent_plan(session_id: str, body: AgentPlanUpdate, db: DbSession, user: 
 #
 # 设置页与智能体共用这组接口:用户在设置里看到的清单,就是每轮注入模型的那一份。
 # 两份清单会立刻漂移,而"模型到底记住了什么"是用户唯一想确认的事。
-
-
-@router.post("/agent/sessions/reorder")
-def reorder_sessions(body: AgentSessionReorder, db: DbSession, user: CurrentUser) -> dict:
-    """把一次拖放落库:这一摞现在是这些人、这个顺序。"""
-    ensure_workspace_perm(db, user, body.workspace_id, "ai")
-    group_id = body.group_id or None
-    if group_id:
-        group = db.get(AgentSessionGroup, group_id)
-        if group is None or group.workspace_id != body.workspace_id:
-            raise HTTPException(status_code=404, detail="分组不存在")
-    return {"ordered": agent_groups.apply_order(
-        db, workspace_id=body.workspace_id, group_id=group_id, ordered_ids=body.ordered_ids
-    )}
 
 
 @router.get("/agent/session-groups", response_model=list[AgentSessionGroupOut])

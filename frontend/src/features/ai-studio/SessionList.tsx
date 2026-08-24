@@ -1,8 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { DndContext, DragOverlay, PointerSensor, pointerWithin, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
-import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { DndContext, DragOverlay, PointerSensor, pointerWithin, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
 import { ChevronRight, FolderInput, FolderPlus, ListChecks, MessageSquarePlus, Pencil, Plus, Search, SearchX, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -14,7 +12,6 @@ import {
   listSessionGroups,
   moveSessionToGroup,
   renameSessionGroup,
-  reorderSessions,
   type AgentSessionGroup,
 } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -161,13 +158,6 @@ export function SessionList({
     onSuccess: refresh,
   });
 
-  const reorder = useMutation({
-    mutationFn: ({ groupId, orderedIds }: { groupId: string | null; orderedIds: string[] }) =>
-      reorderSessions(workspaceId, groupId, orderedIds),
-    // 乐观更新已经把界面摆好了(见 onDragEnd),这里只在落库后对一次账。
-    onSettled: refresh,
-  });
-
   const groupList = groups.data ?? [];
   // 按标题筛。搜索时**不改变分组结构**,只是把不匹配的行拿掉、空掉的分组整段收起 ——
   // 拍平成一列会让人分不清找到的这条本来收在哪儿。
@@ -212,30 +202,17 @@ export function SessionList({
     const over = event.over;
     if (!over) return;
     const overId = String(over.id);
-    const from = containerOf(activeId);
-    // 落在分组标题上 = 收进那个分组的末尾(空分组、折叠着的分组都只能这样接)。
+    // 拖拽只做一件事:换分组。落在分组标题上进那个分组,落在别的对话上进它所在的分组。
+    // 组内先后由「最近更新」决定,不接受手排 —— 见下面 containers 的说明。
     const to = overId.startsWith("group:") ? overId.slice("group:".length) : containerOf(overId);
-    const target = [...(containers[to] ?? [])].filter((id) => id !== activeId);
-    const index = overId.startsWith("group:") ? target.length : Math.max(0, target.indexOf(overId));
-    target.splice(index, 0, activeId);
-    if (from === to && target.join() === (containers[to] ?? []).join()) return;
+    if (containerOf(activeId) === to) return;
 
-    // 先把界面摆好再落库:等一个来回的话,松手那一刻会看到它弹回原位。
     const groupId = to === UNGROUPED ? null : to;
-    qc.setQueryData<AgentSession[]>(["agent-sessions", workspaceId], (old) => {
-      if (!old) return old;
-      const byId = new Map(old.map((session) => [session.id, session]));
-      const next: AgentSession[] = [];
-      const order = { ...containers, [to]: target, [from]: containers[from].filter((id) => id !== activeId) };
-      for (const key of [...groupList.map((group) => group.id), UNGROUPED]) {
-        for (const id of order[key] ?? []) {
-          const session = byId.get(id);
-          if (session) next.push({ ...session, group_id: key === UNGROUPED ? null : key });
-        }
-      }
-      return next;
-    });
-    reorder.mutate({ groupId, orderedIds: target });
+    // 先把界面摆好再落库:等一个来回的话,松手那一刻会看到它弹回原位。
+    qc.setQueryData<AgentSession[]>(["agent-sessions", workspaceId], (old) =>
+      old?.map((session) => (session.id === activeId ? { ...session, group_id: groupId } : session)),
+    );
+    moveSession.mutate({ id: activeId, groupId });
   };
 
   const renderSession = (session: AgentSession) => (
@@ -412,9 +389,7 @@ export function SessionList({
                 </ContextMenuContent>
               </ContextMenu>
               {!isCollapsed && (
-                <SortableContext items={containers[group.id] ?? []} strategy={verticalListSortingStrategy}>
-                  <div className="grid gap-1 pl-2">{members.map(renderSession)}</div>
-                </SortableContext>
+                <div className="grid gap-1 pl-2">{members.map(renderSession)}</div>
               )}
             </GroupSection>
           );
@@ -430,9 +405,7 @@ export function SessionList({
             </MarkerContent>
           </Marker>
         )}
-        <SortableContext items={containers[UNGROUPED] ?? []} strategy={verticalListSortingStrategy}>
-          {byGroup.loose.map(renderSession)}
-        </SortableContext>
+        {byGroup.loose.map(renderSession)}
       </div>
       {/* 拖起来时跟手的那一片 —— 没有它,拖动中的行只是原地变淡,看不出自己在拖什么。 */}
       <DragOverlay dropAnimation={null}>
@@ -536,17 +509,13 @@ function SessionRow({
 }) {
   const t = useI18n();
   // 选择模式下不许拖:那时的点击是"勾选",两种手势叠在一起谁都做不好。
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
-    id: session.id,
-    disabled: selectMode,
-  });
+  const { attributes, listeners, setNodeRef } = useDraggable({ id: session.id, disabled: selectMode });
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <button
           ref={setNodeRef}
           type="button"
-          style={{ transform: CSS.Transform.toString(transform), transition }}
           className={cn(
             "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)] items-center gap-px rounded-md border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted",
             selectMode && "grid-cols-[auto_minmax(0,1fr)] gap-1.5",

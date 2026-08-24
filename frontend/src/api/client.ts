@@ -818,20 +818,6 @@ export function moveSessionToGroup(sessionId: string, groupId: string | null): P
   });
 }
 
-/** 一次拖放的结果:**这一摞现在是这些人、这个顺序**(移进分组和组内排序是同一件事的两半)。
- *  `groupId` 为 null 即未分组那一摞。后端据此写 sort_order,并**不动 updated_at** —— 拖动是
- *  整理,不是活动。 */
-export function reorderSessions(
-  workspaceId: string,
-  groupId: string | null,
-  orderedIds: string[],
-): Promise<{ ordered: number }> {
-  return api("/api/agent/sessions/reorder", {
-    method: "POST",
-    body: JSON.stringify({ workspace_id: workspaceId, group_id: groupId ?? "", ordered_ids: orderedIds }),
-  });
-}
-
 export function deleteAgentSession(sessionId: string): Promise<unknown> {
   return api(`/api/agent/sessions/${sessionId}`, { method: "DELETE" });
 }

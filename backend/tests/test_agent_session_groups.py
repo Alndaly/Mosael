@@ -74,41 +74,50 @@ def test_改名是一次操作_不必挨个改成员() -> None:
         assert client.get(f"/api/agent/sessions/{sid}").json()["group_id"] == group["id"]
 
 
-def test_拖放落库_顺序生效而updated_at不被顶掉() -> None:
-    """拖动是整理,不是活动。
+def test_换分组不把对话顶成刚聊过() -> None:
+    """拖进分组是整理,不是活动。
 
-    让 updated_at 跟着涨的话,被拖过的对话会显得"刚聊过" —— 而"最近更新"正是没排过的那些人
-    赖以排序的东西(默认顺序就是它),整理一次就把别人的顺序搅了。
+    让 updated_at 跟着涨的话,被拖过的对话会显得「刚聊过」—— 而列表就是按最近更新排的,
+    整理一次就把顺序搅了。(手动拖排序这个能力已经去掉:组内先后一律由最近更新决定,
+    所以这条更要紧了 —— 现在没有任何东西能把被搅乱的顺序再摆回去。)
     """
     from app.core.db import SessionLocal
     from app.db.models import AgentSession
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    ids = [_session(client, ws["id"]) for _ in range(3)]
-    for index, sid in enumerate(ids):
-        client.patch(f"/api/agent/sessions/{sid}", json={"title": f"第{index}个"})
+    group = client.post("/api/agent/session-groups", json={"workspace_id": ws["id"], "name": "客户 A"}).json()
+    sid = _session(client, ws["id"])
+    client.patch(f"/api/agent/sessions/{sid}", json={"title": "聊过了"})
 
     with SessionLocal() as db:
-        before = {s.id: s.updated_at for s in db.query(AgentSession).filter(AgentSession.id.in_(ids))}
+        before = db.get(AgentSession, sid).updated_at
 
-    # 倒过来排
-    reversed_ids = list(reversed(ids))
-    assert client.post(
-        "/api/agent/sessions/reorder",
-        json={"workspace_id": ws["id"], "group_id": "", "ordered_ids": reversed_ids},
-    ).json() == {"ordered": 3}
-
-    listed = [s["id"] for s in client.get(f"/api/agent/sessions?workspace_id={ws['id']}").json()]
-    assert listed == reversed_ids, "拖出来的顺序没生效"
+    client.patch(f"/api/agent/sessions/{sid}", json={"group_id": group["id"]})
 
     with SessionLocal() as db:
-        after = {s.id: s.updated_at for s in db.query(AgentSession).filter(AgentSession.id.in_(ids))}
-    assert after == before, "拖一下就把 updated_at 顶成了现在 —— 对话会显得刚聊过"
+        after = db.get(AgentSession, sid).updated_at
+    assert after == before, "收进分组就把 updated_at 顶成了现在 —— 对话会显得刚聊过"
 
 
-def test_没排过的时候就是最近更新在前() -> None:
-    """默认顺序不变:sort_order 全是 0,退化成纯粹的 updated_at desc。"""
+def test_不再有手动排序这个入口() -> None:
+    """对话不支持手动拖排序 —— 端点和列都删了,顺序只由最近更新决定。
+
+    钉住它没有以「留着不用」的形式回来:一个还在的端点迟早会被某个地方调上。
+    """
+    client = fresh_client()
+    # 直接查路由表,不去打那个地址 —— `reorder` 会被 /agent/sessions/{session_id} 当成一个
+    # session_id 接住,POST 于是回 405 而不是 404,拿状态码判断会把「还在」和「没了」搞混。
+    paths = client.get("/openapi.json").json()["paths"]
+    assert "/api/agent/sessions/reorder" not in paths, "reorder 端点还在路由表里"
+
+    from app.db.models import AgentSession
+
+    assert not hasattr(AgentSession, "sort_order"), "AgentSession 上还留着 sort_order"
+
+
+def test_顺序就是最近更新在前() -> None:
+    """唯一的排序规则:updated_at desc。"""
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     first = _session(client, ws["id"])
