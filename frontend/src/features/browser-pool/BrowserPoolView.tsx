@@ -242,11 +242,11 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                       {p.last_error ?? " "}
                     </small>
                     {/* flex-wrap:同样三个按钮,中文「打开/重新登录/复检」很短,英文 Open / Log in again /
-                        Recheck 就顶穿一张卡的宽度 —— 不给换行许可,末尾那个会被裁成一个字母
-                        (真机英文界面)。字号收一档同时留着换行许可作兜底。
-                        **字号写在这一行上、不写在按钮上**:tokens.css 里那条无层级的
-                        `button{font:inherit}` 会压掉按钮自己的字号类,顺着它写才落得下去。 */}
-                    <div className="mt-auto flex min-h-[33px] flex-wrap items-center gap-1 pt-[5px] text-ui-xs [&_svg]:size-3">
+                        Recheck 就顶穿一张卡的宽度。收字号治不好:三个带文字的按钮加一个开关,
+                        在一张 ~276px 的卡里**任何语言都放不下**,中文只是勉强擦过去而已。
+                        所以次要动作一律图标化 —— 它们本就是 ghost,标签退到 title/aria 上,
+                        宽度从此与语言无关。 */}
+                    <div className="mt-auto flex min-h-[33px] items-center gap-1 pt-[5px]">
                       {/* 登录态决定主按钮是什么:已登录 → 打开;其余(需登录/待人工/检测中) → 去登录。 */}
                       <Button
                         size="sm"
@@ -267,18 +267,26 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                       </Button>
                       {/* 已登录时「重新登录」退居次要动作:换号/掉线自查还需要它,但它不该是默认那一下。 */}
                       {loggedIn && (
-                        <Button size="sm" variant="ghost" onClick={() => login(p)}>
-                          <LogIn size={13} /> {t("poolRelogin")}
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          title={t("poolRelogin")}
+                          aria-label={t("poolRelogin")}
+                          onClick={() => login(p)}
+                        >
+                          <LogIn />
                         </Button>
                       )}
                       {bound && (
                         <Button
-                          size="sm"
+                          size="icon-sm"
                           variant="ghost"
                           loading={recheck.isPending}
+                          title={t("publishRecheck")}
+                          aria-label={t("publishRecheck")}
                           onClick={() => recheck.mutate(p.bound_account_id!)}
                         >
-                          <RefreshCcw size={13} /> {t("publishRecheck")}
+                          <RefreshCcw />
                         </Button>
                       )}
                       <span className="flex-1" />

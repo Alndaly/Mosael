@@ -26,6 +26,9 @@ const buttonVariants = cva(
         sm: "h-8 rounded-full px-3 text-xs",
         lg: "h-10 rounded-full px-8",
         icon: "h-9 w-9 rounded-full",
+        // 与 sm 同高的方形图标按钮。卡片、工具栏这类窄容器里,次要动作放不下文字标签,
+        // 而 icon(36px)在一排 sm(32px)按钮中间会高出一截。
+        "icon-sm": "size-8 rounded-full",
       },
     },
     defaultVariants: {
