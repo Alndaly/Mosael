@@ -7,6 +7,10 @@
 # 应用内「检查更新」比对的就是 Releases 的 tag。
 #
 # 手动触发(workflow_dispatch)= 试打包:只传 workflow artifact,不碰 Releases。
+#
+# 顺序:test(后端 pytest + 前端 vitest)→ draft → build(mac / win 并行)→ publish。
+# 测试不过就不建草稿、不出包 —— 打了 tag 不等于代码是好的,这道闸就是用来把这两件事重新
+# 绑在一起的。
 name: Release
 
 on:
@@ -22,9 +26,51 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # 测试闸。放在最前面,失败就什么都不发 —— 此前这条工作流**只跑 sidecar 自己的测试和打包
+  # 冒烟**,两套主测试(后端 pytest / 前端 vitest)一次都不跑,于是「打了 tag」和「代码是好的」
+  # 之间没有任何关系:v0.20.0 就是带着一条红着的棘轮发出去的(那次只是仓库规范检查,下次未必)。
+  #
+  # 只在 ubuntu 上跑一份:这两套测试都不依赖平台。**跨平台**才需要验的那部分(打包产物的
+  # 初始化顺序)已经由 build 里的 agent-sidecar 冒烟在每个平台各跑一遍。
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      # 没有 ffmpeg 的话,9 个测试文件会整体 skip —— 导出与渲染主流程都在里面。
+      # 那样这道闸看着是绿的,实际没验到最该验的那部分。
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
+      - name: Install dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          cd backend && uv sync --frozen --python 3.13
+
+      - name: Backend tests
+        run: cd backend && uv run pytest -q
+
+      # frontend 的 build 脚本本身带 `tsc --noEmit`(见 package.json),所以类型检查
+      # 由 build 阶段覆盖,这里只跑单测。
+      - name: Frontend tests
+        run: cd frontend && pnpm vitest run
+
   # 先建好草稿 Release(自动生成变更说明),两个平台的构建往同一个草稿传产物,
   # 全部成功后才转正——避免用户在「检查更新」里看到缺产物的半成品版本。
   draft:
+    needs: [test]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
@@ -38,9 +84,11 @@ jobs:
               --draft --generate-notes --title "Open Studio $GITHUB_REF_NAME"
 
   build:
-    needs: [draft]
-    # workflow_dispatch 时 draft 被跳过,也要能继续跑
-    if: ${{ !cancelled() && (needs.draft.result == 'success' || needs.draft.result == 'skipped') }}
+    needs: [test, draft]
+    # workflow_dispatch 时 draft 被跳过,也要能继续跑。
+    # **test 必须显式要求 success**:`!cancelled()` 会让 build 在依赖失败时照样起来 ——
+    # 只写 needs 而不写这一条,测试红了照样出包。
+    if: ${{ !cancelled() && needs.test.result == 'success' && (needs.draft.result == 'success' || needs.draft.result == 'skipped') }}
     strategy:
       fail-fast: false
       matrix:
