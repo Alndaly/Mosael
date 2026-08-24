@@ -14,6 +14,7 @@ import {
   LogOut,
   MonitorCog,
   Moon,
+  Pencil,
   Plug,
   Rocket,
   Scissors,
@@ -21,19 +22,22 @@ import {
   Settings,
   ShieldCheck,
   Sun,
+  Trash2,
   Workflow,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { api, createWorkspace, userAvatarUrl, type Workspace } from "@/api/client";
+import { api, createWorkspace, deleteWorkspace, renameWorkspace, userAvatarUrl, type Workspace } from "@/api/client";
 import { useAuth } from "@/app/auth";
 import { displayWorkspaceName, useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { NotificationCenter } from "@/components/layout/NotificationCenter";
 import { TaskCenter } from "@/components/layout/TaskCenter";
 import { BrandMark } from "@/components/layout/BrandMark";
-import { RenameDialog } from "@/components/app/modals";
+import { workspaceMenuState } from "@/components/layout/workspaceMenu";
+import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { MessageKey } from "@/app/messages";
 import { NAV_ITEMS, navLabelKey, type StudioView } from "@/components/layout/navLabels";
@@ -342,6 +346,36 @@ function WorkspaceSwitcher({
   const qc = useQueryClient();
   const [open, setOpen] = React.useState(false);
   const [creating, setCreating] = React.useState(false);
+  // 右键菜单要操作的**不一定是当前工作区** —— 所以这两个 state 存的是那一行的对象,
+  // 不是一个布尔开关。
+  const [renaming, setRenaming] = React.useState<Workspace | null>(null);
+  const [removing, setRemoving] = React.useState<Workspace | null>(null);
+
+  const renameMut = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => renameWorkspace(id, name),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["workspaces"] });
+      toast.success(t("saved"));
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const removeMut = useMutation({
+    mutationFn: (id: string) => deleteWorkspace(id),
+    onSuccess: (_data, id) => {
+      // 删掉的正好是当前这个的话,先把选择挪到别处再让列表失效 —— 反过来的话,
+      // 中间那一瞬列表里没有当前工作区,WorkspaceGate 会先弹一次。
+      if (id === workspaceId) {
+        const next = workspaces.find((ws) => ws.id !== id);
+        if (next) onSelectWorkspace?.(next.id);
+      }
+      qc.setQueryData<Workspace[]>(["workspaces"], (old) => old?.filter((ws) => ws.id !== id));
+      void qc.invalidateQueries({ queryKey: ["workspaces"] });
+      toast.success(t("workspaceDeleted"));
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   const createMut = useMutation({
     mutationFn: createWorkspace,
     onSuccess: (created) => {
@@ -370,23 +404,43 @@ function WorkspaceSwitcher({
         </PopoverTrigger>
         <PopoverContent className="grid w-60 gap-0.5 p-1.5" align="start" sideOffset={8}>
           <div className="px-2 pb-1.5 pt-1 text-ui-xs font-semibold tracking-[0.02em] text-muted-foreground">{t("workspaceSwitch")}</div>
-          {workspaces.map((ws) => (
-            <button
-              key={ws.id}
-              type="button"
-              className={cn(
-              "flex cursor-pointer items-center justify-between gap-2 rounded-md border-0 bg-transparent px-2 py-[7px] text-left text-ui-sm text-foreground transition-colors duration-100 hover:bg-secondary [&_svg]:shrink-0 [&_svg]:text-primary",
-              ws.id === workspaceId && "font-semibold text-primary",
-            )}
-              onClick={() => {
-                setOpen(false);
-                if (ws.id !== workspaceId) onSelectWorkspace(ws.id);
-              }}
-            >
-              <span className="truncate">{displayWorkspaceName(ws.name, t)}</span>
-              {ws.id === workspaceId && <Check size={13} />}
-            </button>
-          ))}
+          {workspaces.map((ws) => {
+            // 门槛与设置页那两个按钮同源,见 workspaceMenu.ts。角色列表接口就带,
+            // 不必为一个右键菜单再发请求。
+            const gate = workspaceMenuState(ws.role, workspaces.length);
+            return (
+              <ContextMenu key={ws.id}>
+                <ContextMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex cursor-pointer items-center justify-between gap-2 rounded-md border-0 bg-transparent px-2 py-[7px] text-left text-ui-sm text-foreground transition-colors duration-100 hover:bg-secondary [&_svg]:shrink-0 [&_svg]:text-primary",
+                      ws.id === workspaceId && "font-semibold text-primary",
+                    )}
+                    onClick={() => {
+                      setOpen(false);
+                      if (ws.id !== workspaceId) onSelectWorkspace(ws.id);
+                    }}
+                  >
+                    <span className="truncate">{displayWorkspaceName(ws.name, t)}</span>
+                    {ws.id === workspaceId && <Check size={13} />}
+                  </button>
+                </ContextMenuTrigger>
+                <ContextMenuContent>
+                  <ContextMenuItem disabled={gate.renameDisabled} onSelect={() => { setOpen(false); setRenaming(ws); }}>
+                    <Pencil /> {t("rename")}
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    disabled={gate.deleteDisabled}
+                    className="text-destructive focus:text-destructive"
+                    onSelect={() => { setOpen(false); setRemoving(ws); }}
+                  >
+                    <Trash2 /> {t("delete")}
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
+            );
+          })}
           <div className="mx-0.5 my-1 h-px bg-border" />
           <button
             type="button"
@@ -409,6 +463,30 @@ function WorkspaceSwitcher({
         onSubmit={(name) => {
           setCreating(false);
           createMut.mutate(name);
+        }}
+      />
+      <RenameDialog
+        open={renaming !== null}
+        title={t("renameWorkspace")}
+        initialValue={renaming?.name ?? ""}
+        onCancel={() => setRenaming(null)}
+        onSubmit={(name) => {
+          const target = renaming;
+          setRenaming(null);
+          if (target && name.trim() && name.trim() !== target.name) {
+            renameMut.mutate({ id: target.id, name: name.trim() });
+          }
+        }}
+      />
+      <ConfirmDialog
+        open={removing !== null}
+        title={t("deleteWorkspace")}
+        body={t("deleteWorkspaceConfirm").replace("{name}", removing?.name ?? "")}
+        onCancel={() => setRemoving(null)}
+        onConfirm={() => {
+          const target = removing;
+          setRemoving(null);
+          if (target) removeMut.mutate(target.id);
         }}
       />
     </>
