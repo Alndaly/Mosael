@@ -222,17 +222,30 @@ def list_tts_voices(engine: str, db: DbSession, user: CurrentUser) -> list[dict]
     account and each voice carries its family. Without them, the built-in list still works;
     it is smaller and can go stale, which is a far better failure than an empty dropdown.
     """
-    from app.audio.tts_providers import EDGE_BUILTIN_VOICES, PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES, EdgeTTS, OpenAITTS
+    from app.audio.tts_providers import EDGE_BUILTIN_VOICES, VOLCANO_BUILTIN_VOICES, describe_engines
     from app.domain.providers import resolve_profile, profile_extra
 
-    if engine == OpenAITTS.id:
-        return [{"value": voice, "label": voice} for voice in OpenAITTS.VOICES]
-    if engine == EdgeTTS.id:
-        return [{"value": voice, "label": label} for voice, label in EDGE_BUILTIN_VOICES]
-    if engine == "volcano-podcast":
-        return [{"value": voice, "label": label} for voice, label in PODCAST_SPEAKERS]
+    # **固定音色的引擎不在这里再写一遍。** 这个函数原本是逐引擎的 if 分支,末尾一句
+    # `if engine != "volcano": return []` —— 于是加一个引擎要改两处(引擎目录 + 这里),
+    # 漏掉第二处的表现是"引擎选得出来,但音色下拉是空的"。百炼刚接进来时就是这样。
+    # 音色清单只有一个产地:describe_engines()。这里只负责**火山那条实时的**。
+    if engine == "alibaba":
+        # 百炼的音色**跟着模型走**(qwen3-tts-flash 有 qwen-tts 没有的几个),而模型是这条连接
+        # 在 tts 能力下配的那一个。这里解析的必须和合成时同一条路径(audio/voices 里那句
+        # `model_id_for(db, profile, "tts")`),否则下拉列的是 A 的音色、发的是 B 的请求。
+        from app.audio.tts_providers import BailianTTS
+        from app.domain import provider_models
+
+        profile = resolve_profile(db, "alibaba", user_id=user.id)
+        model = provider_models.model_id_for(db, profile, "tts", user_id=user.id) if profile else ""
+        return [{"value": v, "label": v} for v in BailianTTS.voices_for(model)]
+
     if engine != "volcano":
-        return []
+        fixed = next((item for item in describe_engines() if item["id"] == engine), None)
+        voices = list(fixed.get("voices") or []) if fixed else []
+        # edge 的音色带中文标签,别把它降级成裸 id。
+        labels = dict(EDGE_BUILTIN_VOICES)
+        return [{"value": voice, "label": labels.get(voice, voice)} for voice in voices]
 
     # ak/sk 是密字段,跟着**我自己**那把钥匙走(见 domain/provider_credentials) ——
     # 列音色用的是我的账号,不是"这个部署里随便谁的"。

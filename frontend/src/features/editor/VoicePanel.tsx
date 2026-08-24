@@ -162,6 +162,11 @@ export function VoicePanel({
     enabled: engine !== "clone",
   });
   const voiceChoices = engineVoices.data ?? [];
+  // 语速跟着**引擎能力**走。本地克隆早就是这样(按模型判,见下面的 cloneModel.supports_speed),
+  // 远程引擎却一直无条件摆着那个旋钮 —— 百炼的 qwen-tts 没有语速参数,拨得动却不生效,
+  // 而配音要的正是"塞进原时长",用户会以为自己已经调过了。
+  // 缺省按**支持**处理:老引擎没有这个字段时行为不变。
+  const showSpeed = activeEngine?.supports_speed !== false;
   // The podcast engine is a different shape of request, not another voice: one call produces
   // a whole dialogue, so it needs two speakers and a mode rather than one voice.
   const isPodcast = engine === "volcano-podcast";
@@ -470,12 +475,15 @@ export function VoicePanel({
             {/* 单人远程引擎:音色 + 语速 同行,标签说明谁是谁 */}
             {engine !== "clone" && !isPodcast && voiceChoices.length > 0 && (
               <FieldRow className="flex-nowrap">
+                {/* 语速藏起来时音色独占一行 —— flex-1 自然铺满,不必另给宽度。 */}
                 <VoiceField label={t("voiceEngineVoice")} className="min-w-0 flex-1">
                   <VoicePicker value={engineVoice || voiceChoices[0].value} onChange={setEngineVoice} choices={voiceChoices} ariaLabel={t("voiceEngineVoice")} />
                 </VoiceField>
-                <VoiceField label={t("voiceSpeed")} className={FIELD_SPEED}>
-                  <SpeedPicker value={speed} onChange={setSpeed} ariaLabel={t("voiceSpeed")} />
-                </VoiceField>
+                {showSpeed && (
+                  <VoiceField label={t("voiceSpeed")} className={FIELD_SPEED}>
+                    <SpeedPicker value={speed} onChange={setSpeed} ariaLabel={t("voiceSpeed")} />
+                  </VoiceField>
+                )}
               </FieldRow>
             )}
             {/* 播客:两个发音人一行(A/B 一目了然),对话方式 + 语速一行 */}
@@ -508,8 +516,11 @@ export function VoicePanel({
                 </FieldRow>
               </>
             )}
-            {/* 目录拉不到、需要手填音色 id 的引擎:输入框 + 语速 */}
-            {engine !== "clone" && !isPodcast && voiceChoices.length === 0 && (
+            {/* 目录拉不到、需要手填音色 id 的引擎:输入框 + 语速。
+                两样都没有就**整行不渲染** —— 此前这里会剩下一个 76px 宽、孤零零的语速下拉
+                (真机:百炼刚接进来、音色接口还返回空的时候就是这个样子)。 */}
+            {engine !== "clone" && !isPodcast && voiceChoices.length === 0 &&
+              (activeEngine?.needs_voice_id || showSpeed) && (
               <FieldRow className="flex-nowrap">
                 {activeEngine?.needs_voice_id && (
                   <VoiceField label={t("voiceEngineVoiceId")} className="min-w-0 flex-1">
@@ -522,9 +533,15 @@ export function VoicePanel({
                     />
                   </VoiceField>
                 )}
-                <VoiceField label={t("voiceSpeed")} className={FIELD_SPEED}>
-                  <SpeedPicker value={speed} onChange={setSpeed} ariaLabel={t("voiceSpeed")} />
-                </VoiceField>
+                {showSpeed && (
+                  <VoiceField
+                    label={t("voiceSpeed")}
+                    // 只剩它自己的时候铺满整行,不再是一个孤零零的窄下拉。
+                    className={activeEngine?.needs_voice_id ? FIELD_SPEED : "min-w-0 flex-1"}
+                  >
+                    <SpeedPicker value={speed} onChange={setSpeed} ariaLabel={t("voiceSpeed")} />
+                  </VoiceField>
+                )}
               </FieldRow>
             )}
           </div>

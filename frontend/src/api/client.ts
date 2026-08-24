@@ -201,6 +201,9 @@ export interface TtsEngineChoice {
       voice is typed in rather than picked. */
   needs_voice_id: boolean;
   voices: string[];
+  /** 接不接语速。接不了就别摆那个旋钮 —— 拨得动却不生效比没有更糟(配音要的正是"塞进原时长",
+      用户会以为自己已经调过了)。缺省按支持处理,老引擎行为不变。 */
+  supports_speed: boolean;
   note: string;
   /** 这台机器上现在跑得了吗。本地克隆按解释器探测给,远程引擎恒真 —— 界面据此在**挑引擎**
       的时候就说清楚,而不是等填完文本、点了生成才拒绝。 */

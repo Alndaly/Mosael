@@ -334,26 +334,55 @@ class BailianTTS:
     这句话写进 note 里给用户看,而不是让他试完才发现。
 
     音色是模型自带的固定几个(不像火山那样按账号变),所以直接列在这儿,不用另开一个拉取接口。
+
+    真机验证(2026-08-24):四个音色各合成一句,均返回 24kHz 单声道 16bit PCM 的 WAV。
     """
 
     id = "alibaba"
     label = "ttsProvider_bailian"
     parallel_safe = True
-    #: qwen-tts 自带音色。中英双语,前两个是女声、后两个男声。
+    #: 音色**按模型族**给,不是全引擎一份 —— 真机验证过 qwen3-tts-flash 有 qwen-tts 没有的
+    #: 音色(Ryan/Katerina/Elias)。键按前缀匹配:带日期的快照沿用同族音色
+    #: (实测 qwen3-tts-flash-2025-11-27 + Ryan、qwen-tts-2025-05-22 + Chelsie 都通)。
+    #:
+    #: **这几张表是"已知可用",不是"全部"。** 百炼的 TTS 模型是开放集合(还有 instruct /
+    #: vd / vc 变体和一串日期快照),而它没有列音色的接口 —— 穷举只会得到一张很快过期的表。
+    #: 所以列不出来的模型退回让用户填音色 id(needs_voice_id),而不是给他一个空下拉。
+    VOICES_BY_MODEL = {
+        # 四个都真机验证过(2026-08-24,各合成一句均返回可播放 WAV)。
+        "qwen-tts": ("Cherry", "Serena", "Ethan", "Chelsie"),
+        "qwen3-tts-flash": ("Cherry", "Serena", "Ethan", "Chelsie", "Ryan", "Katerina", "Elias"),
+    }
+    #: 取不到模型时的兜底:两族的交集,哪个模型都认。
     VOICES = ("Cherry", "Serena", "Ethan", "Chelsie")
+
+    @classmethod
+    def voices_for(cls, model: str) -> tuple[str, ...]:
+        """这个模型能用哪些音色。认不出来就回空 —— 由调用方退回"自己填 id"。"""
+        name = (model or "").strip()
+        if not name:
+            return cls.VOICES
+        # 最长前缀优先:qwen3-tts-flash 要先于 qwen-tts 命中,否则带 3 的那族会落到旧表上。
+        for prefix in sorted(cls.VOICES_BY_MODEL, key=len, reverse=True):
+            if name.startswith(prefix):
+                return cls.VOICES_BY_MODEL[prefix]
+        return ()
     PATH = "/api/v1/services/aigc/multimodal-generation/generation"
 
-    def __init__(self, api_key: str, model: str = "qwen-tts", base_url: str = "") -> None:
+    # 签名要收 `voice`:build_remote_provider 的兜底分支是
+    # `cls(api_key=…, voice=…, model=…, base_url=…)`,少一个参数就是 TypeError。
+    def __init__(self, api_key: str, voice: str = "", model: str = "", base_url: str = "") -> None:
         if not api_key:
             raise TTSError("百炼语音合成需要 DashScope API Key,请在设置里配置")
         self._key = api_key
         self._model = model or "qwen-tts"
-        self._base = (base_url or "https://dashscope.aliyuncs.com").rstrip("/")
+        self._base = resolve_dashscope_native_base(base_url)
+        self._default_voice = voice
 
     def synthesize(self, request: SpeechRequest, out_path: Path) -> None:
         payload = {
             "model": self._model,
-            "input": {"text": request.text, "voice": request.voice or self.VOICES[0]},
+            "input": {"text": request.text, "voice": request.voice or self._default_voice or self.VOICES[0]},
         }
         try:
             response = httpx.post(
@@ -373,6 +402,29 @@ class BailianTTS:
         except httpx.HTTPError as exc:
             raise TTSError(f"百炼语音合成失败: {exc}") from exc
         out_path.write_bytes(audio.content)
+
+
+#: 百炼原生 API 的根。语音走的是它,不是对话那个 compatible-mode。
+DASHSCOPE_NATIVE_BASE = "https://dashscope.aliyuncs.com"
+
+
+def resolve_dashscope_native_base(base_url: str) -> str:
+    """把档案里的 base_url 归一到**原生** API 根。
+
+    同一个百炼档案的 base_url 往往填的是对话用的
+    `https://dashscope.aliyuncs.com/compatible-mode/v1` —— 那是 OpenAI 兼容端点。语音走的是
+    原生路径 `/api/v1/services/aigc/...`,直接往后拼会得到
+    `…/compatible-mode/v1/api/v1/services/…`,一个必然 404 的地址。
+
+    同一个坑图像那边已经踩过并解决(见 ai/providers/qwen_image.resolve_qwen_edit_base),
+    这里用同一条判据:认得出 compatible-mode 就剥掉它,自定义代理原样放行。
+    """
+    base = (base_url or "").strip().rstrip("/")
+    if not base:
+        return DASHSCOPE_NATIVE_BASE
+    if base.endswith("/compatible-mode/v1"):
+        return base.removesuffix("/compatible-mode/v1")
+    return base
 
 
 def extract_bailian_audio_url(payload: dict) -> str:
@@ -423,6 +475,9 @@ def describe_engines() -> list[dict[str, object]]:
             "id": "clone",
             "label": "ttsProvider_clone",
             "needs_key": False,
+            # 本地克隆按**模型**定(F5 的 infer 吃 speed,fish 的请求里根本没这项),
+            # 所以这里不表态,由 tts_models 那份 supports_speed 说了算。
+            "supports_speed": True,
             "needs_voice_id": False,
             "voices": [],
             "ready": clone_ready,
@@ -432,6 +487,7 @@ def describe_engines() -> list[dict[str, object]]:
             "id": EdgeTTS.id,
             "label": EdgeTTS.label,
             "needs_key": False,
+            "supports_speed": True,
             "needs_voice_id": False,
             "voices": [voice for voice, _ in EDGE_BUILTIN_VOICES],
             "note": "ttsProviderNote_edge",
@@ -440,6 +496,7 @@ def describe_engines() -> list[dict[str, object]]:
             "id": OpenAITTS.id,
             "label": OpenAITTS.label,
             "needs_key": True,
+            "supports_speed": True,
             "needs_voice_id": False,
             "voices": list(OpenAITTS.VOICES),
             "note": "ttsProviderNote_openai",
@@ -448,6 +505,7 @@ def describe_engines() -> list[dict[str, object]]:
             "id": "volcano-podcast",
             "label": "ttsProvider_volcanoPodcast",
             "needs_key": True,
+            "supports_speed": True,
             "needs_voice_id": False,
             "voices": [voice for voice, _ in PODCAST_SPEAKERS],
             "note": "ttsProviderNote_volcanoPodcast",
@@ -456,7 +514,11 @@ def describe_engines() -> list[dict[str, object]]:
             "id": BailianTTS.id,
             "label": BailianTTS.label,
             "needs_key": True,
-            "needs_voice_id": False,
+            # qwen-tts 没有语速参数。摆一个拨不动的旋钮比不摆更糟 —— 界面据此把它藏掉。
+            "supports_speed": False,
+            # 模型是开放集合(日期快照、instruct / vd / vc 变体),而百炼没有列音色的接口。
+            # 认得出的模型走下拉(见 /api/tts/voices),认不出的退回填 id —— 而不是空下拉。
+            "needs_voice_id": True,
             "voices": list(BailianTTS.VOICES),
             "note": "ttsProviderNote_bailian",
         },
@@ -464,6 +526,7 @@ def describe_engines() -> list[dict[str, object]]:
             "id": VolcanoTTS.id,
             "label": VolcanoTTS.label,
             "needs_key": True,
+            "supports_speed": True,
             # The catalogue is account-dependent, so the real list comes from /api/tts/voices —
             # live when AK/SK are set, the built-in list otherwise. Either way it is a list, so
             # the panel offers a dropdown rather than asking the user to type an opaque id.

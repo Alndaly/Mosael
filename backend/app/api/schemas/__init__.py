@@ -1174,6 +1174,9 @@ class TtsEngineChoiceOut(BaseModel):
     needs_key: bool
     needs_voice_id: bool
     voices: list[str] = []
+    #: 这个引擎接不接语速。接不了就别在界面上摆那个旋钮 —— 拨得动却不生效,
+    #: 比没有更糟(配音要的正是"塞进原时长",用户会以为自己调过了)。
+    supports_speed: bool = True
     note: str = ""
     #: 这台机器上现在就能跑吗。远程引擎恒真(能不能跑取决于档案,那是另一件事);
     #: 本地克隆按解释器探测结果给,好让界面在**挑引擎**时就说清楚。
