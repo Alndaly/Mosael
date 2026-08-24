@@ -344,3 +344,55 @@ def test_另一个智能体发来的通知_不夺标题_且带结构化来源(mo
     assert _wait_idle(sid2) == "idle"
     with SessionLocal() as db:
         assert db.get(AgentSession, sid2).title == "帮我剪个片"
+
+
+def test_排队的跨会话通知_重放时也带上信封(monkeypatch) -> None:
+    """对方正忙时通知先排队,稍后重放 —— 那时信封不能丢。
+
+    信封(「这条来自另一个会话」)只进提示词、不进 content,所以它是在**发起 turn 的那一刻**
+    拼上去的。直发那条路顺手就拼了;排队这条晚一点才跑,漏在那里的话,「对方正忙」时发来的
+    通知,模型就不知道它来自另一个会话 —— 会当成用户在说话,而这恰恰是最需要区分的场合
+    (它可能正准备回复"用户",实际却是在回复另一个智能体)。
+
+    这里直接盯模型收到的那份文本,而不是盯 content —— content 本来就该是干净的。
+    """
+    prompts: list[str] = []
+
+    def _capture(*args, **kwargs):
+        # run_turn(session_id, prompt, token) —— 第二个位置参数就是模型收到的那份
+        prompts.append(args[1] if len(args) > 1 else kwargs.get("prompt", ""))
+        time.sleep(0.3)
+        return TurnResult(text="ok")
+
+    monkeypatch.setattr(host, "run_turn", _capture)
+
+    client = fresh_client()
+    sid = _session(client)
+    # 第一条把会话占住
+    client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "先干这个"})
+    _wait_until(lambda: _status(sid) == "running")
+    # 正忙时收到另一个会话的通知 → 应该排队
+    client.post(
+        f"/api/agent/sessions/{sid}/messages",
+        json={"content": "请汇报进展", "origin_session_id": "peer-9"},
+    )
+    with SessionLocal() as db:
+        queued = [
+            m for m in db.query(AgentMessage).filter(AgentMessage.session_id == sid).all()
+            if (m.payload or {}).get("queued")
+        ]
+        assert len(queued) == 1, "通知没有排队"
+        assert (queued[0].payload or {}).get("from_agent_session") == "peer-9", "排队时把来源丢了"
+        assert "【" not in queued[0].content, "信封又被拼进正文了"
+
+    _wait_until(lambda: _status(sid) == "idle", seconds=10)
+
+    assert len(prompts) == 2, f"排队那条没有作为自己的一轮跑起来:{prompts}"
+    assert "peer-9" in prompts[1], "重放时信封丢了 —— 模型不知道这条来自另一个会话"
+    assert "请汇报进展" in prompts[1]
+    assert "【" not in prompts[0], "第一条不是通知,不该有信封"
+
+
+def _status(session_id: str) -> str:
+    with SessionLocal() as db:
+        return db.get(AgentSession, session_id).status
