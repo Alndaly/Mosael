@@ -38,7 +38,11 @@ export function InspectorCard({
     </>
   );
   return (
-    <section className={cn("grid gap-2 rounded-lg border border-border bg-panel-subtle p-2.5", className)}>
+        // **不描边、圆角比外框小**。此前是 `rounded-lg border border-border` —— 边框色和外面
+    // 那层面板一模一样(都是 --border),而卡片本身还有一层填色:填色已经把它从面板背景里
+    // 分出来了,再描一道同色的边就是第三重冗余。圆角同理:内卡 10px 比面板的 8px 还大,
+    // 嵌套的角应当向内递减,反过来会显得内卡在往外顶。
+    <section className={cn("grid gap-2 rounded-sm bg-panel-subtle p-2.5", className)}>
       {/* 排版**只挂在 h3 上**,可折叠时按钮放进去继承它。
           不能把 text-ui-xs font-bold 写在裸 <button> 上:design/tokens.css 里那条
           `button { font: inherit }` 不在任何 layer 内,而 Tailwind 的工具类在 @layer utilities ——

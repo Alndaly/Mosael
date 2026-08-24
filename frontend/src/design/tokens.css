@@ -334,6 +334,22 @@ textarea {
   font: inherit;
 }
 
+/* 键盘焦点的**基线** —— 全站只此一处。
+ *
+ * 此前只有 ui/ 里那几个组件自己声明了 `focus-visible:ring`,而手写的 <button> 有 186 处、
+ * 带焦点样式的只有 33 处。剩下的全都退回**浏览器/系统默认环** —— 在把系统强调色设成橙色的
+ * macOS 上,那是一圈橙色方框,和这套配色毫无关系(真机反馈:右侧栏「任务计划」外面那圈橙色)。
+ *
+ * 放 @layer base:它压得住 UA 样式,又让组件自己的 `focus-visible:outline-none + ring`
+ * (工具类在 @layer utilities,排在 base 之后)照旧覆盖 —— 不会两层环叠着画。
+ * outline 会自动跟随元素的圆角,不必再补 border-radius。 */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 1px;
+  }
+}
+
 ::selection {
   background: var(--accent);
   color: var(--accent-foreground);
