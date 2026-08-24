@@ -90,5 +90,14 @@ interface Window {
     /** null = 这个环境不提供(开发模式)。`needsApproval` 见 electron/system/loginItem。 */
     getOpenAtLogin?: () => Promise<{ enabled: boolean; needsApproval: boolean } | null>;
     setOpenAtLogin?: (enabled: boolean) => Promise<{ enabled: boolean; needsApproval: boolean } | null>;
+    /** 用户自定义 CSS(userData/custom.css)。桌面端独有:浏览器读不到本地文件。 */
+    customCss?: {
+      read: () => Promise<string>;
+      path: () => Promise<string>;
+      open: () => Promise<string>;
+      reveal: () => Promise<string>;
+      /** 存盘后推送新内容;返回取消订阅的函数。 */
+      onChange: (callback: (css: string) => void) => () => void;
+    };
   };
 }

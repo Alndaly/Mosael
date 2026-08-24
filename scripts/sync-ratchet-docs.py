@@ -29,7 +29,9 @@ END = "<!-- END RATCHETS -->"
 
 # 扫描范围。写死成两处,免得哪天有人把测试放进 node_modules 之类的地方还被收进来。
 PY_ROOTS = [ROOT / "backend" / "tests"]
-TS_ROOTS = [ROOT / "frontend" / "src"]
+# electron/ 也要扫:主进程侧同样有棘轮(比如「监听盯的是目录不是文件」),而它们跟着
+# frontend 的 vitest 一起跑(见 frontend/vite.config.ts 的 include)。
+TS_ROOTS = [ROOT / "frontend" / "src", ROOT / "electron"]
 
 
 def _tidy(line: str) -> str:
@@ -60,7 +62,9 @@ def collect_python() -> list[tuple[str, str]]:
     return found
 
 
-TS_DOC = re.compile(r"^/\*\*\s*\n\s*\*\s*(?P<first>.+?)\s*$", re.M)
+# 摘要取**第一段多行块注释**的第一行。不能死磕「文件必须以 /** 开头」:jsdom 环境的测试
+# 惯例是先写一行 `/** @vitest-environment jsdom */` 指令,真正的说明在它下面那一段。
+TS_DOC = re.compile(r"/\*\*\s*\n\s*\*\s*(?P<first>.+?)\s*$", re.M)
 
 
 def collect_typescript() -> list[tuple[str, str]]:
@@ -70,7 +74,7 @@ def collect_typescript() -> list[tuple[str, str]]:
             source = path.read_text(encoding="utf-8")
             if "export const RATCHET = true" not in source:
                 continue
-            match = TS_DOC.match(source)
+            match = TS_DOC.search(source)
             if not match:
                 raise SystemExit(f"{path.relative_to(ROOT)}: 标了 RATCHET 却没有开头的 /** */ 说明")
             found.append((str(path.relative_to(ROOT)), _tidy(match.group("first"))))

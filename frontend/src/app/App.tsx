@@ -1,12 +1,37 @@
 import React from "react";
-import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ChevronLeft, ChevronRight, Film, FolderPlus, Loader2, RotateCw, X } from "lucide-react";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Film,
+  FolderPlus,
+  Loader2,
+  RotateCw,
+  X,
+} from "lucide-react";
 
-import { api, importLocalAsset, type ProjectWithStats, type Workspace } from "@/api/client";
+import {
+  api,
+  importLocalAsset,
+  type ProjectWithStats,
+  type Workspace,
+} from "@/api/client";
 import { createMutationCache } from "@/app/mutationErrors";
 import { AuthProvider, useAuth } from "@/app/auth";
 import { AppearanceProvider } from "@/app/appearance";
-import { PreferencesProvider, useI18n, usePreferences } from "@/app/preferences";
+import { CustomCssProvider } from "@/app/customCss";
+import {
+  PreferencesProvider,
+  useI18n,
+  usePreferences,
+} from "@/app/preferences";
 import { Toaster, toast } from "sonner";
 import { LoginView } from "@/features/auth/LoginView";
 import { AppShell, type StudioView } from "@/components/layout/AppShell";
@@ -57,7 +82,10 @@ export function App() {
     const desktop = window.openStudioDesktop;
     if (!desktop) return;
     const isWin = desktop.platform !== "darwin";
-    document.documentElement.classList.add("is-desktop", isWin ? "is-win" : "is-mac");
+    document.documentElement.classList.add(
+      "is-desktop",
+      isWin ? "is-win" : "is-mac",
+    );
     // Win/Linux:标题栏三键叠层颜色随主题(mac 无叠层)。跟 <html> 的 .dark 类走。
     if (!isWin || !desktop.setTitleOverlay) return;
     const push = () =>
@@ -68,7 +96,10 @@ export function App() {
       );
     push();
     const observer = new MutationObserver(push);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
     return () => observer.disconnect();
   }, []);
 
@@ -84,17 +115,20 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       <PreferencesProvider>
         <AppearanceProvider>
-          <TooltipProvider delayDuration={300}>
-            <AuthProvider>
-              <ImagePreviewProvider>
-                <AuthGate />
-                <AppToaster />
-                <PublishViewBar />
-                <BrowserPreview />
-                <LivePanels />
-              </ImagePreviewProvider>
-            </AuthProvider>
-          </TooltipProvider>
+          {/* 自定义 CSS 包在外观里面:它压过应用自带的一切样式,自然也压过外观那几个令牌。 */}
+          <CustomCssProvider>
+            <TooltipProvider delayDuration={300}>
+              <AuthProvider>
+                <ImagePreviewProvider>
+                  <AuthGate />
+                  <AppToaster />
+                  <PublishViewBar />
+                  <BrowserPreview />
+                  <LivePanels />
+                </ImagePreviewProvider>
+              </AuthProvider>
+            </TooltipProvider>
+          </CustomCssProvider>
         </AppearanceProvider>
       </PreferencesProvider>
     </QueryClientProvider>
@@ -117,7 +151,10 @@ function PublishViewBar() {
   });
   const [address, setAddress] = React.useState("");
   const [editing, setEditing] = React.useState(false);
-  React.useEffect(() => window.openStudioPublish?.onViewState((next) => setState(next)), []);
+  React.useEffect(
+    () => window.openStudioPublish?.onViewState((next) => setState(next)),
+    [],
+  );
   // 地址随导航更新,但用户正在输入时不覆盖(否则打字被主进程回报打断)。
   React.useEffect(() => {
     if (!editing) setAddress(state.url ?? "");
@@ -128,7 +165,9 @@ function PublishViewBar() {
     event.preventDefault();
     const value = address.trim();
     if (value) void window.openStudioPublish?.navigate(value);
-    (event.currentTarget.querySelector("input") as HTMLInputElement | null)?.blur();
+    (
+      event.currentTarget.querySelector("input") as HTMLInputElement | null
+    )?.blur();
   };
 
   return (
@@ -137,7 +176,8 @@ function PublishViewBar() {
       className={cn(
         "fixed inset-x-0 top-0 z-[200] flex items-center gap-2 border-b border-border-strong bg-panel px-2.5 [-webkit-app-region:drag] supports-[backdrop-filter]:bg-[var(--glass-chrome)] supports-[backdrop-filter]:[-webkit-backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[backdrop-filter:blur(14px)_saturate(1.4)]",
         WINDOW_CHROME_INSET,
-      )}>
+      )}
+    >
       <div className="[-webkit-app-region:no-drag] inline-flex items-center gap-0.5">
         <button
           type="button"
@@ -169,8 +209,16 @@ function PublishViewBar() {
           {state.loading ? <X size={15} /> : <RotateCw size={14} />}
         </button>
       </div>
-      <form className="[-webkit-app-region:no-drag] flex h-[30px] min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-border bg-panel-inset px-2.5 focus-within:border-ring [&_input]:min-w-0 [&_input]:flex-1 [&_input]:border-0 [&_input]:bg-transparent [&_input]:text-ui-sm [&_input]:text-foreground [&_input]:outline-none [&_input:focus-visible]:ring-0" onSubmit={submit}>
-        {state.loading && <Loader2 size={13} className="flex-none animate-openstudio-spin text-muted-foreground" />}
+      <form
+        className="[-webkit-app-region:no-drag] flex h-[30px] min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-border bg-panel-inset px-2.5 focus-within:border-ring [&_input]:min-w-0 [&_input]:flex-1 [&_input]:border-0 [&_input]:bg-transparent [&_input]:text-ui-sm [&_input]:text-foreground [&_input]:outline-none [&_input:focus-visible]:ring-0"
+        onSubmit={submit}
+      >
+        {state.loading && (
+          <Loader2
+            size={13}
+            className="flex-none animate-openstudio-spin text-muted-foreground"
+          />
+        )}
         <Input
           value={address}
           spellCheck={false}
@@ -200,7 +248,17 @@ function PublishViewBar() {
 /** Sonner 跟随应用主题;样式对齐全平面(细边框、无投影由 CSS 覆盖)。 */
 function AppToaster() {
   const { theme } = usePreferences();
-  return <Toaster theme={theme} position="bottom-right" gap={8} toastOptions={{ className: "rounded-lg! border! border-border-strong! bg-popover! text-ui-sm! text-foreground! shadow-none!" }} />;
+  return (
+    <Toaster
+      theme={theme}
+      position="bottom-right"
+      gap={8}
+      toastOptions={{
+        className:
+          "rounded-lg! border! border-border-strong! bg-popover! text-ui-sm! text-foreground! shadow-none!",
+      }}
+    />
+  );
 }
 
 /**
@@ -215,7 +273,9 @@ function PreShellScreen({ children }: { children: React.ReactNode }) {
         className="fixed inset-x-0 top-0 z-[5] hidden h-11 [.is-desktop_&]:block [-webkit-app-region:drag]"
         aria-hidden
       />
-      <div className="[&_:is(button,a,input,[role=button])]:[-webkit-app-region:no-drag]">{children}</div>
+      <div className="[&_:is(button,a,input,[role=button])]:[-webkit-app-region:no-drag]">
+        {children}
+      </div>
     </div>
   );
 }
@@ -223,7 +283,8 @@ function PreShellScreen({ children }: { children: React.ReactNode }) {
 function AuthGate() {
   const t = useI18n();
   const { status } = useAuth();
-  if (status === "loading") return <PreShellScreen>{t("connecting")}</PreShellScreen>;
+  if (status === "loading")
+    return <PreShellScreen>{t("connecting")}</PreShellScreen>;
   if (status === "anonymous") return <LoginView />;
   return <WorkspaceGate />;
 }
@@ -249,22 +310,34 @@ function persistWorkspaceId(id: string) {
 function WorkspaceGate() {
   const t = useI18n();
   const qc = useQueryClient();
-  const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: () => api<Workspace[]>("/api/workspaces") });
+  const workspaces = useQuery({
+    queryKey: ["workspaces"],
+    queryFn: () => api<Workspace[]>("/api/workspaces"),
+  });
   // The active workspace is persisted so a refresh — or a newer workspace appearing at
   // list[0] (newest first) — can't switch the user out of the workspace their jobs/projects live in.
-  const [activeId, setActiveId] = React.useState<string | null>(readStoredWorkspaceId);
+  const [activeId, setActiveId] = React.useState<string | null>(
+    readStoredWorkspaceId,
+  );
   const createWorkspace = useMutation({
-    mutationFn: () => api<Workspace>("/api/workspaces", { method: "POST", body: JSON.stringify({ name: t("workspaceDefault") }) }),
+    mutationFn: () =>
+      api<Workspace>("/api/workspaces", {
+        method: "POST",
+        body: JSON.stringify({ name: t("workspaceDefault") }),
+      }),
     onSuccess: (created) => {
       // 先塞缓存再选中,避免下方兜底效应在列表刷新前把选择弹回 list[0]。
-      qc.setQueryData<Workspace[]>(["workspaces"], (old) => (old ? [created, ...old] : [created]));
+      qc.setQueryData<Workspace[]>(["workspaces"], (old) =>
+        old ? [created, ...old] : [created],
+      );
       persistWorkspaceId(created.id);
       setActiveId(created.id);
       qc.invalidateQueries({ queryKey: ["workspaces"] });
     },
   });
   const list = workspaces.data;
-  const workspace = list?.find((item) => item.id === activeId) ?? list?.[0] ?? null;
+  const workspace =
+    list?.find((item) => item.id === activeId) ?? list?.[0] ?? null;
 
   // Stamp the resolved workspace so the very first load (empty storage) pins list[0].
   React.useEffect(() => {
@@ -279,7 +352,8 @@ function WorkspaceGate() {
     setActiveId(id);
   }, []);
 
-  if (workspaces.isLoading) return <PreShellScreen>{t("connecting")}</PreShellScreen>;
+  if (workspaces.isLoading)
+    return <PreShellScreen>{t("connecting")}</PreShellScreen>;
   if (!workspace) {
     return (
       <PreShellScreen>
@@ -288,7 +362,10 @@ function WorkspaceGate() {
             <Film size={34} />
             <h1>Open Studio</h1>
             <p>{t("welcomeText")}</p>
-            <Button loading={createWorkspace.isPending} onClick={() => createWorkspace.mutate()}>
+            <Button
+              loading={createWorkspace.isPending}
+              onClick={() => createWorkspace.mutate()}
+            >
               <FolderPlus size={16} /> {t("createWorkspace")}
             </Button>
           </CardContent>
@@ -296,7 +373,13 @@ function WorkspaceGate() {
       </PreShellScreen>
     );
   }
-  return <Studio workspace={workspace} workspaces={list ?? []} onSelectWorkspace={selectWorkspace} />;
+  return (
+    <Studio
+      workspace={workspace}
+      workspaces={list ?? []}
+      onSelectWorkspace={selectWorkspace}
+    />
+  );
 }
 
 // 路由认哪些页面,和侧栏/面包屑认哪些页面,是同一件事 —— 手抄第三遍就会漏第三次。
@@ -314,7 +397,8 @@ function readHash(): { view: StudioView; projectId: string | null } {
 function writeHash(view: StudioView, projectId: string | null) {
   const query = projectId ? `?p=${projectId}` : "";
   const next = `#/${view}${query}`;
-  if (window.location.hash !== next) window.history.replaceState(null, "", next);
+  if (window.location.hash !== next)
+    window.history.replaceState(null, "", next);
 }
 
 function Studio({
@@ -330,7 +414,9 @@ function Studio({
   const qc = useQueryClient();
   const initial = React.useMemo(readHash, []);
   const [view, setView] = React.useState<StudioView>(initial.view);
-  const [projectId, setProjectId] = React.useState<string | null>(initial.projectId);
+  const [projectId, setProjectId] = React.useState<string | null>(
+    initial.projectId,
+  );
 
   // Switching workspaces: the open project belongs to the previous workspace, so
   // drop it and return home. The ref skips the initial mount (hash restore).
@@ -358,13 +444,17 @@ function Studio({
   }, []);
   const projects = useQuery({
     queryKey: ["projects", workspace.id],
-    queryFn: () => api<ProjectWithStats[]>(`/api/projects?workspace_id=${workspace.id}`),
+    queryFn: () =>
+      api<ProjectWithStats[]>(`/api/projects?workspace_id=${workspace.id}`),
     staleTime: 0,
     refetchInterval: view === "home" ? 5_000 : false,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
   });
-  const project = projects.data?.find((item) => item.id === projectId) ?? projects.data?.[0] ?? null;
+  const project =
+    projects.data?.find((item) => item.id === projectId) ??
+    projects.data?.[0] ??
+    null;
 
   const openProject = (id: string) => {
     setProjectId(id);
@@ -378,14 +468,17 @@ function Studio({
   // 挂在 App 这一层,是因为它要跨页面生效——不能等某个页面挂载了才开始听。
   React.useEffect(() => {
     return listenDesktopDeepLinks((paths) => {
-      void Promise.allSettled(paths.map((p) => importLocalAsset(workspace.id, p))).then((settled) => {
+      void Promise.allSettled(
+        paths.map((p) => importLocalAsset(workspace.id, p)),
+      ).then((settled) => {
         const ok = settled.filter((r) => r.status === "fulfilled").length;
         if (ok) {
           void qc.invalidateQueries({ queryKey: ["assets", workspace.id] });
           toast.success(t("importedAssets").replace("{n}", String(ok)));
         }
         const failed = settled.length - ok;
-        if (failed) toast.error(t("importFailed").replace("{n}", String(failed)));
+        if (failed)
+          toast.error(t("importFailed").replace("{n}", String(failed)));
       });
     });
   }, [workspace.id, qc, t]);
@@ -429,7 +522,9 @@ function Studio({
       {view === "settings" && <SettingsView workspace={workspace} />}
       {view === "admin" && <AdminView />}
       {view === "workflows" && <WorkflowsView workspace={workspace} />}
-      {view === "scheduler" && <SchedulerView workspace={workspace} project={project} />}
+      {view === "scheduler" && (
+        <SchedulerView workspace={workspace} project={project} />
+      )}
       {view === "plugins" && <PluginsView />}
       <CommandPalette
         workspace={workspace}

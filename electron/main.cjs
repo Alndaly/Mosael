@@ -591,6 +591,13 @@ app.whenReady().then(async () => {
     ipcMain.handle("system:getOpenAtLogin", () => (isDev ? null : system.getOpenAtLogin()));
     ipcMain.handle("system:setOpenAtLogin", (_e, enabled) => (isDev ? null : system.setOpenAtLogin(Boolean(enabled))));
 
+    // 自定义 CSS:渲染层要三样东西 —— 内容(启动时读一次,之后靠推送)、路径(设置页显示)、
+    // 以及打开/定位这个文件的两个动作。写入始终由用户在自己的编辑器里完成,应用不代写。
+    ipcMain.handle("customCss:read", () => system.readCustomCss());
+    ipcMain.handle("customCss:path", () => system.customCssPath());
+    ipcMain.handle("customCss:open", () => system.openCustomCss());
+    ipcMain.handle("customCss:reveal", () => system.revealCustomCss());
+
     // 开机自启拉起时静默驻留托盘,不弹窗口。
     if (system.isHiddenLaunch()) BrowserWindow.getAllWindows()[0]?.hide();
   }

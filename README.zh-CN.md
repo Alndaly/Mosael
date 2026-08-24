@@ -141,7 +141,7 @@ App 会自动拉起内置后端(`127.0.0.1:8800`)、加载前端、启动发布�
 | [docs/PERMISSION_MODEL.md](docs/PERMISSION_MODEL.md) | 三种主体,以及授权怎么判 |
 | [docs/PLUGIN_MANIFEST.md](docs/PLUGIN_MANIFEST.md) | 插件清单格式与权限 |
 | [docs/PLUGIN_ARCHITECTURE.md](docs/PLUGIN_ARCHITECTURE.md) | 插件怎么打包、实例化、拿到能力 |
-| [docs/CONVENTIONS.md](docs/CONVENTIONS.md) | 编码约定,以及仓库自己守着的 31 道**棘轮** |
+| [docs/CONVENTIONS.md](docs/CONVENTIONS.md) | 编码约定,以及仓库自己守着的 33 道**棘轮** |
 | [docs/MAINTENANCE_HOTSPOTS.md](docs/MAINTENANCE_HOTSPOTS.md) | 已知风险区,以及**改完至少要跑什么** |
 | [docs/adr/](docs/adr/) | 架构决策,连同当时的推理 |
 
@@ -285,6 +285,7 @@ git tag v0.20.0 && git push origin v0.20.0
 | `<userData>/logs/publisher.log` | 发布执行器全链路(认领 / goto / 登录 / 巡检 / 回报) |
 | `<userData>/logs/backend.log` | 打包版后端 stdout/stderr |
 | `<userData>/Partitions/` | 各发布账号的持久登录会话 |
+| `<userData>/custom.css` | 你自己写的 CSS,覆盖应用样式(设置 → 外观) |
 
 `~/.open-studio` 在 `Path.home()` 下,Windows 上即 `C:\Users\<用户名>\.open-studio`。
 `<userData>` 是 Electron 的用户数据目录:macOS 为 `~/Library/Application Support/Open Studio`,

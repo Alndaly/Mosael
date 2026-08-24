@@ -46,6 +46,19 @@ contextBridge.exposeInMainWorld("openStudioDesktop", {
   },
   // 全屏状态订阅:主进程在进入/退出全屏(及首帧)推送布尔值。订阅时立即补发缓存的当前值,
   // 避免渲染层挂载晚于首帧推送时"有时"漏掉全屏态。
+  // 自定义 CSS(userData/custom.css)。read 取当前内容,onChange 订阅存盘后的推送 ——
+  // 「改一下就生效」靠的是后者,而不是让渲染层去轮询文件。
+  customCss: {
+    read: () => ipcRenderer.invoke("customCss:read"),
+    path: () => ipcRenderer.invoke("customCss:path"),
+    open: () => ipcRenderer.invoke("customCss:open"),
+    reveal: () => ipcRenderer.invoke("customCss:reveal"),
+    onChange: (callback) => {
+      const listener = (_event, css) => callback(css);
+      ipcRenderer.on("openstudio:custom-css", listener);
+      return () => ipcRenderer.removeListener("openstudio:custom-css", listener);
+    },
+  },
   onFullscreen: (callback) => {
     callback(lastFullscreen);
     const listener = (_event, value) => callback(value);

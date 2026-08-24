@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { API_BASE, api, userAvatarUrl, type Workspace } from "@/api/client";
 import { BACKGROUND_PRESETS, type BackgroundKind, compressImageFile, useAppearance } from "@/app/appearance";
+import { useCustomCss } from "@/app/customCss";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import type { components } from "@/api/generated/schema";
@@ -165,6 +166,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
             <>
               <AppearanceSection />
               <BackgroundSection />
+              <CustomCssSection />
             </>
           )}
           {section === "provider-chat" && (
@@ -606,6 +608,50 @@ function AppearanceSection() {
             {t("languageEn")}
           </button>
         </div>
+      </SettingsRow>
+    </SettingsGroup>
+  );
+}
+
+/** 用户自定义 CSS:一个磁盘上的文件,存盘即生效。文件住在客户端自己的存储里
+    (`<userData>/custom.css`),不在后端的数据目录 —— 后端可能压根不在这台机器上。
+    应用只读不写:内容始终由用户在自己的编辑器里改。 */
+function CustomCssSection() {
+  const t = useI18n();
+  const custom = useCustomCss();
+
+  if (!custom.supported) {
+    return (
+      <SettingsGroup title={t("customCssTitle")} description={t("customCssDesktopOnly")} />
+    );
+  }
+
+  const lines = custom.css.trim() ? custom.css.trimEnd().split("\n").length : 0;
+
+  return (
+    <SettingsGroup title={t("customCssTitle")} description={t("customCssDesc")}>
+      <SettingsRow label={t("customCssFile")} description={t("customCssFileDesc")}>
+        <div className="flex items-center gap-1.5">
+          <Button size="sm" variant="outline" onClick={() => void custom.open()}>
+            {t("customCssOpen")}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => void custom.reveal()}>
+            {t("customCssReveal")}
+          </Button>
+        </div>
+      </SettingsRow>
+      <SettingsBlock>
+        {/* 路径常驻显示:自定义 CSS 的第一个问题永远是「那个文件到底在哪」,而这个目录
+            在 mac 和 Windows 上长得完全不一样,让用户照着文档拼路径不如直接把它印出来。 */}
+        <code className="block overflow-x-auto whitespace-nowrap rounded-sm bg-panel-inset px-2 py-1.5 text-ui-2xs text-muted-foreground">
+          {custom.path || "—"}
+        </code>
+        <p className="text-ui-2xs text-muted-foreground">
+          {lines > 0 ? t("customCssActive").replace("{lines}", String(lines)) : t("customCssEmpty")}
+        </p>
+      </SettingsBlock>
+      <SettingsRow label={t("customCssEnabled")} description={t("customCssEnabledDesc")}>
+        <Switch checked={custom.enabled} onCheckedChange={custom.setEnabled} aria-label={t("customCssEnabled")} />
       </SettingsRow>
     </SettingsGroup>
   );
