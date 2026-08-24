@@ -50,10 +50,10 @@ export function HighlightedCode({
               {line.map((token, position) => (
                 <span
                   key={position}
-                  // 亮色走 token 自己的 color,暗色走 --shiki-dark —— 和 Streamdown 给
-                  // Markdown 代码块用的是同一套变量约定(见 codeHighlighter 里那段说明)。
+                  // 亮色走 --sdm-c,暗色走 --shiki-dark —— 和 Streamdown 给 Markdown
+                  // 代码块用的是同一套变量约定(见 codeHighlighter 里那段说明)。
                   className="text-[var(--sdm-c,inherit)] dark:text-[var(--shiki-dark,var(--sdm-c,inherit))]"
-                  style={{ "--sdm-c": token.color, ...(token.htmlStyle as React.CSSProperties) } as React.CSSProperties}
+                  style={tokenStyle(token)}
                 >
                   {token.content}
                 </span>
@@ -68,3 +68,22 @@ export function HighlightedCode({
 
 type Token = { content: string; color?: string; htmlStyle?: Record<string, string> };
 type TokenLine = Token[];
+
+/**
+ * 把 shiki 的 token 配色搬成两个 CSS 变量,**并且把 `color` 从内联样式里摘掉**。
+ *
+ * 摘掉这一步是关键。双主题模式下 shiki 的 `htmlStyle` 长这样:
+ *
+ *     { color: "#24292e", "--shiki-dark": "#E1E4E8" }
+ *
+ * 整个摊进 `style` 的话,那个内联 `color` 会**压过上面两个 Tailwind 类** —— 内联样式赢过
+ * 任何基于 class 的规则。于是 `--shiki-dark` 明明设上了却没人读,深色模式下拿到的是浅色
+ * 主题的字色:实测 34 个 token 全部低于 4.5 对比度,最差 1.17(#24292e 印在 #141218 上,
+ * 基本看不见)。浅色模式下碰巧看着是对的 —— 内联色正好就是浅色,所以这个 bug 一直没暴露。
+ *
+ * 亮色值优先取 `token.color`;双主题模式下它是空的,那就从 htmlStyle 里取。
+ */
+function tokenStyle(token: Token): React.CSSProperties {
+  const { color, ...rest } = token.htmlStyle ?? {};
+  return { "--sdm-c": token.color ?? color, ...rest } as React.CSSProperties;
+}

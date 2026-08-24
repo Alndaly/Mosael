@@ -34,6 +34,19 @@ function codeLanguage(node: React.ReactNode): string {
  * 头部里放语言、换行开关、复制。换行开关是必要的:一行长 URL 或长正则不换行就只能横着拖,
  * 而拖的时候左边的行号会跟着滚走 —— 所以不换行时行号 sticky 在左侧。
  */
+/**
+ * 代码块头部那两颗图标按钮的样子。**两个按钮共用一份** —— 一个是本文件里手写的换行开关,
+ * 另一个是 Streamdown 的 `CodeBlockCopyButton`,它们在界面上是同一种东西。
+ *
+ * `inline-grid place-items-center` 不是装饰:复制按钮渲染出来是 `display: block`,
+ * 而 `p-0` 又把它自带的内边距抹掉了 —— 于是那个 14px 图标贴着 20px 方框的左边缘,右边空
+ * 6px(真机实测的偏差就是 -6)。换行开关一直是对的,因为它自己写了 grid 居中;两边各写各的,
+ * 才让这个差别一直没人发现。
+ */
+const HEADER_ICON_BUTTON =
+  "inline-grid size-5 cursor-pointer place-items-center rounded-sm border-0 bg-transparent p-0 " +
+  "text-muted-foreground hover:bg-secondary hover:text-foreground [&_svg]:size-3.5";
+
 function CodeCard({ children }: React.ComponentProps<"pre"> & { node?: unknown }) {
   const t = useI18n();
   const [wrap, setWrap] = React.useState(false);
@@ -56,7 +69,7 @@ function CodeCard({ children }: React.ComponentProps<"pre"> & { node?: unknown }
         <span className="ml-auto flex items-center gap-1.5">
           <button
             type="button"
-            className="inline-grid size-5 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground hover:bg-secondary hover:text-foreground"
+            className={HEADER_ICON_BUTTON}
             title={wrap ? t("codeNoWrap") : t("codeWrap")}
             aria-label={wrap ? t("codeNoWrap") : t("codeWrap")}
             aria-pressed={wrap}
@@ -64,7 +77,7 @@ function CodeCard({ children }: React.ComponentProps<"pre"> & { node?: unknown }
           >
             <WrapText size={14} />
           </button>
-          <CodeBlockCopyButton className="size-5 rounded-sm p-0 hover:bg-secondary [&_svg]:size-3.5" code={code} />
+          <CodeBlockCopyButton className={HEADER_ICON_BUTTON} code={code} />
         </span>
       </div>
       <CodeBlock
