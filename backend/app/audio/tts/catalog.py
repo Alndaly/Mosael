@@ -1,30 +1,25 @@
-"""引擎注册表与引擎目录 —— 界面问"有哪些引擎、各自能干什么"时读的就是这里。"""
+"""引擎目录:界面挑引擎时看到的那一份。
+
+不在 `ai/providers/speech/` 里,因为它要读**本地模型的就绪状态**(clone 引擎装没装、
+百炼当前配的是哪个模型)—— 那是 `audio` 与 `domain` 的事。搬过去会让 `ai` 反过来依赖
+`audio`,和既有的 `audio → ai` 撞成环(见 tests/test_import_layering)。
+
+界线因此是清楚的:**"怎么跟这家说话"在 ai,"这个部署现在能用什么"在这里。**
+"""
 
 from __future__ import annotations
 
-from app.audio.tts.bailian import BailianTTS, CosyVoiceTTS
-from app.audio.tts.edge import EDGE_BUILTIN_VOICES, EdgeTTS
-from app.audio.tts.openai import OpenAITTS
-from app.audio.tts.volcano import PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES, VolcanoTTS
-from app.audio.tts.base import TTSError
-
-
-_ENGINE_VENDOR = {CosyVoiceTTS.id: BailianTTS.id}
-
-
-def vendor_for_engine(engine: str) -> str:
-    """这个引擎的凭据挂在哪个 vendor 下。"""
-    return _ENGINE_VENDOR.get(engine, engine)
-
-
-REMOTE_ENGINES = {
-    OpenAITTS.id: OpenAITTS,
-    BailianTTS.id: BailianTTS,
-    CosyVoiceTTS.id: CosyVoiceTTS,
-    VolcanoTTS.id: VolcanoTTS,
-    EdgeTTS.id: EdgeTTS,
-}
-
+from app.ai.providers.speech import (
+    EDGE_BUILTIN_VOICES,
+    PODCAST_SPEAKERS,
+    VOLCANO_BUILTIN_VOICES,
+    BailianTTS,
+    CosyVoiceTTS,
+    EdgeTTS,
+    OpenAITTS,
+    VolcanoTTS,
+    vendor_for_engine,
+)
 
 def active_model_for(engine_cls: type) -> str:
     """这个部署给某个百炼引擎配的模型;取不到就回它的默认模型。
@@ -138,13 +133,3 @@ def describe_engines() -> list[dict[str, object]]:
     ]
 
 
-def build_remote_provider(engine: str, api_key: str, voice: str = "", model: str = "", base_url: str = ""):
-    """Construct a remote engine, or raise a message the user can act on."""
-    cls = REMOTE_ENGINES.get(engine)
-    if cls is None:
-        raise TTSError(f"未知的语音引擎:{engine}")
-    if cls is EdgeTTS:
-        return cls(voice=voice)  # 免费服务,无密钥可传
-    if cls is OpenAITTS:
-        return cls(api_key=api_key, model=model or "gpt-4o-mini-tts", base_url=base_url)
-    return cls(api_key=api_key, voice=voice, model=model, base_url=base_url)

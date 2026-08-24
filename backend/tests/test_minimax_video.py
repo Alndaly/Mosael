@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from app.ai.providers.base import GenerationRequest, ProviderContext, ProviderError
-from app.ai.providers.minimax_video import build_submit_payload, extract_video_url, resolve_model
+from app.ai.providers.video.minimax import build_submit_payload, extract_video_url, resolve_model
 
 
 def _ctx(**kw) -> ProviderContext:

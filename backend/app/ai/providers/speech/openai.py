@@ -6,7 +6,9 @@ from pathlib import Path
 
 import httpx
 
-from app.audio.tts.base import REMOTE_TIMEOUT_SECONDS, SpeechRequest, TTSError
+from app.domain.ai_retry import RetryingClient
+
+from app.ai.providers.speech.base import REMOTE_TIMEOUT_SECONDS, SpeechRequest, TTSError
 
 
 class OpenAITTS:
@@ -39,13 +41,13 @@ class OpenAITTS:
         if abs(request.speed - 1.0) > 0.01:
             payload["speed"] = max(0.25, min(4.0, request.speed))
         try:
-            response = httpx.post(
-                f"{self._base}/audio/speech",
-                headers={"Authorization": f"Bearer {self._key}"},
-                json=payload,
-                timeout=REMOTE_TIMEOUT_SECONDS,
-            )
-            response.raise_for_status()
+            with RetryingClient(timeout=REMOTE_TIMEOUT_SECONDS) as client:
+                response = client.post(
+                    f"{self._base}/audio/speech",
+                    headers={"Authorization": f"Bearer {self._key}"},
+                    json=payload,
+                )
+                response.raise_for_status()
         except httpx.HTTPError as exc:
             raise TTSError(f"OpenAI 语音合成失败: {exc}") from exc
         out_path.write_bytes(response.content)

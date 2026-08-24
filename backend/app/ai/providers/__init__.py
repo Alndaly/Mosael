@@ -11,14 +11,14 @@ from app.ai.providers.base import (
     ProviderError,
 )
 from app.ai.providers.comfyui import ComfyUIProvider
-from app.ai.providers.kling import KlingProvider
-from app.ai.providers.openai_image import OpenAIImageProvider
-from app.ai.providers.qwen_image import QwenImageProvider
-from app.ai.providers.wan_video import WanVideoProvider
-from app.ai.providers.seedance import SeedanceProvider
-from app.ai.providers.seedream import SeedreamProvider
-from app.ai.providers.minimax_video import MiniMaxVideoProvider
-from app.ai.providers.veo import VeoProvider
+from app.ai.providers.video.kling import KlingProvider
+from app.ai.providers.image.openai import OpenAIImageProvider
+from app.ai.providers.image.qwen import QwenImageProvider
+from app.ai.providers.video.wan import WanVideoProvider
+from app.ai.providers.video.seedance import SeedanceProvider
+from app.ai.providers.image.seedream import SeedreamProvider
+from app.ai.providers.video.minimax import MiniMaxVideoProvider
+from app.ai.providers.video.veo import VeoProvider
 
 _PROVIDERS: dict[tuple[str, str], GenerationProvider] = {}
 

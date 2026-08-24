@@ -133,7 +133,9 @@ class TestOpenAI:
             captured.update(kwargs["json"])
             return FakeResponse()
 
-        monkeypatch.setattr("app.audio.tts.volcano.httpx.post", fake_post)
+        # 拦的是 client 的 post,不是模块级的 httpx.post —— 适配器现在走 RetryingClient
+        # (它是 httpx.Client 的子类,重试挂在 send 上)。
+        monkeypatch.setattr("httpx.Client.post", lambda self, url, **kw: fake_post(url, **kw))
         OpenAITTS(api_key="k").synthesize(SpeechRequest(text="hi", speed=1.25), tmp_path / "o.wav")
         assert captured["speed"] == pytest.approx(1.25)
 
@@ -147,8 +149,8 @@ class TestOpenAI:
                 return None
 
         monkeypatch.setattr(
-            "app.audio.tts.volcano.httpx.post",
-            lambda url, **kw: (captured.update(kw["json"]), FakeResponse())[1],
+            "httpx.Client.post",
+            lambda self, url, **kw: (captured.update(kw["json"]), FakeResponse())[1],
         )
         OpenAITTS(api_key="k").synthesize(SpeechRequest(text="hi"), tmp_path / "o.wav")
         assert "speed" not in captured

@@ -156,22 +156,38 @@ def test_重试对所有_AI_出站调用生效(monkeypatch):
     from app.domain import ai_chat
     from app.domain.ai_retry import RetryingClient
 
+    # **适配器不手写清单,自己走一遍目录。** 手写的话新加一家不会自动进来 —— 而"新加的那一家
+    # 忘了走重试"正是这条测试要防的事,清单漏了它就等于这道闸对新代码不生效。
+    # (2026-08-25 按能力重组目录时,手写清单里的路径也确实全部失效过一次。)
+    import pkgutil
+
+    import app.ai.providers as providers_pkg
+
     modules = [
-        "app.ai.providers.kling",
-        "app.ai.providers.seedream",
-        "app.ai.providers.veo",
-        "app.ai.providers.seedance",
-        "app.ai.providers.qwen_image",
-        "app.ai.providers.openai_image",
-        "app.ai.providers.comfyui",
-        "app.ai.providers.comfyui_client",
+        name
+        for _, name, is_pkg in pkgutil.walk_packages(providers_pkg.__path__, f"{providers_pkg.__name__}.")
+        # 包的 __init__ 是门面,只转发名字、不发请求;base 是契约,同理。
+        # 用 walk_packages 给的 is_pkg 判断,而不是按名字猜 —— 猜的话新开一个包又要来改这里。
+        if not is_pkg and not name.endswith(".base")
+    ] + [
         "app.domain.generation.prompt_optimizer",
         "app.domain.workflows.ai_edit",
         "app.ai.analysis.service",
         "app.domain.workflows.executors.ai",
     ]
+    #: 不发 HTTP 的适配器 —— 豁免要**逐个写清楚理由**,而不是放宽判据。
+    #: 放宽的话下一个真绕过重试的也会一起溜过去。
+    NO_HTTP = {
+        # Edge 走 edge_tts 库(它自己开 WebSocket),这个模块里没有一次 HTTP 调用可以被包起来。
+        "app.ai.providers.speech.edge",
+    }
+
     missing = []
     for name in modules:
+        if name in NO_HTTP:
+            module = importlib.import_module(name)
+            assert not hasattr(module, "httpx"), f"{name} 开始发 HTTP 了,豁免不再成立"
+            continue
         module = importlib.import_module(name)
         uses_client = getattr(module, "RetryingClient", None) is RetryingClient
         uses_helpers = getattr(module, "ai_retry", None) is not None

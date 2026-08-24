@@ -13,7 +13,7 @@ from __future__ import annotations
 import pytest
 
 from app.ai.providers.base import GenerationRequest, ProviderContext, ProviderError
-from app.ai.providers.wan_video import build_submit_payload, extract_video_url
+from app.ai.providers.video.wan import build_submit_payload, extract_video_url
 from app.audio.tts import BailianTTS, extract_bailian_audio_url
 
 
@@ -447,7 +447,7 @@ def test_内置目录里的模型不该被标成已不存在() -> None:
 def test_档位名要映射成像素对() -> None:
     """生成面板的**视频**分支发的是 `resolution`(720p 这种档位名)——那是按火山/可灵定的形状。
     万相收的是像素对,把 "720p" 原样当尺寸发过去会被百炼拒掉。"""
-    from app.ai.providers.wan_video import resolve_size
+    from app.ai.providers.video.wan import resolve_size
 
     assert resolve_size({"resolution": "720p"}) == "1280*720"
     assert resolve_size({"resolution": "480p"}) == "832*480"
@@ -472,8 +472,9 @@ def test_首帧走仓库既有约定_而不是只看上传文件(tmp_path) -> No
 def test_共享约定住在base里_不住在某一家() -> None:
     """first_frame_value 此前定义在 kling.py:wan_video 得反过来 import 那一家,seedance 抄了
     一遍。一个三家共用的约定住在某个供应商的文件里,读的人只会以为它是那家特有的。"""
-    from app.ai.providers import base, kling, wan_video
+    from app.ai.providers import base
+    from app.ai.providers.video import kling, wan
 
     assert hasattr(base, "first_frame_value")
     assert kling.first_frame_value is base.first_frame_value
-    assert wan_video.first_frame_value is base.first_frame_value
+    assert wan.first_frame_value is base.first_frame_value

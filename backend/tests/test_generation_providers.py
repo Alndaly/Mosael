@@ -13,9 +13,9 @@ from app.ai.providers.base import (
     provider_http_error,
     sanitize_provider_error,
 )
-from app.ai.providers.kling import build_submit_payload as kling_payload, extract_video_url as extract_kling_video_url
-from app.ai.providers.openai_image import build_edit_fields as openai_edit_fields, build_submit_payload as openai_payload, extract_image_bytes
-from app.ai.providers.qwen_image import (
+from app.ai.providers.video.kling import build_submit_payload as kling_payload, extract_video_url as extract_kling_video_url
+from app.ai.providers.image.openai import build_edit_fields as openai_edit_fields, build_submit_payload as openai_payload, extract_image_bytes
+from app.ai.providers.image.qwen import (
     DASHSCOPE_BASE,
     build_edit_payload as qwen_edit_payload,
     build_submit_payload as qwen_payload,
@@ -24,14 +24,14 @@ from app.ai.providers.qwen_image import (
     resolve_dashscope_base,
     resolve_qwen_edit_base,
 )
-from app.ai.providers.seedance import (
+from app.ai.providers.video.seedance import (
     ARK_BASE,
     LAS_BASE,
     build_submit_payload as seedance_payload,
     extract_video_url,
     resolve_seedance_base,
 )
-from app.ai.providers.veo import _with_first_frame_inline, build_submit_payload as veo_payload, extract_video_uri
+from app.ai.providers.video.veo import _with_first_frame_inline, build_submit_payload as veo_payload, extract_video_uri
 
 
 def make_request(kind: str, **params) -> GenerationRequest:
@@ -169,7 +169,7 @@ def test_qwen_download_result_url_does_not_reuse_dashscope_headers(tmp_path, mon
 
     # 下载走的是带重试的传输层(RetryingClient),桩要打在它上面 —— 打 httpx.Client 拦不住,
     # 因为子类在导入期就绑定了真类,结果会真的去连那个域名。
-    monkeypatch.setattr("app.ai.providers.qwen_image.RetryingClient", FakeClient)
+    monkeypatch.setattr("app.ai.providers.image.qwen.RetryingClient", FakeClient)
     target = tmp_path / "generated.png"
     signed_url = "https://dashscope-oss.example.com/out.png?Signature=abc"
 
@@ -374,7 +374,7 @@ def test_provider_http_error_includes_safe_response_body() -> None:
 
 
 def test_seedream_registry_and_payload_shape(tmp_path) -> None:
-    from app.ai.providers.seedream import build_image_payload, extract_image_url
+    from app.ai.providers.image.seedream import build_image_payload, extract_image_url
 
     assert get_provider("bytedance", "image") is not None
 

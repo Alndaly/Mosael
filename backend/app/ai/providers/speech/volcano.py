@@ -9,7 +9,9 @@ from pathlib import Path
 
 import httpx
 
-from app.audio.tts.base import REMOTE_TIMEOUT_SECONDS, SpeechRequest, TTSError
+from app.domain.ai_retry import RetryingClient
+
+from app.ai.providers.speech.base import REMOTE_TIMEOUT_SECONDS, SpeechRequest, TTSError
 
 
 class VolcanoTTS:
@@ -72,7 +74,7 @@ class VolcanoTTS:
         }
         chunks: list[bytes] = []
         try:
-            with httpx.Client(timeout=REMOTE_TIMEOUT_SECONDS) as client:
+            with RetryingClient(timeout=REMOTE_TIMEOUT_SECONDS) as client:
                 with client.stream(
                     "POST", f"{self._base}/api/v3/tts/unidirectional", headers=headers, json=payload
                 ) as response:

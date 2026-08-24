@@ -125,7 +125,7 @@ def optimize_prompt(body: PromptOptimizeRequest, db: DbSession, user: CurrentUse
 def list_comfyui_workflows(db: DbSession, user: CurrentUser, profile_id: str | None = None) -> list[dict]:
     """列出某 ComfyUI 档案实例里保存的工作流,供生成表单下拉。ComfyUI 细节封在 comfyui_client,
     这里只解析档案地址、转发列表。连不上 ComfyUI → 502,前端据此提示。"""
-    from app.ai.providers.comfyui_client import ComfyUIClient
+    from app.ai.providers.comfyui.client import ComfyUIClient
     from app.domain.providers import resolve_profile
 
     from app.domain import provider_models
@@ -155,7 +155,7 @@ def get_comfyui_workflow_params(
     workflow: str, db: DbSession, user: CurrentUser, profile_id: str | None = None
 ) -> list[dict]:
     """提取某工作流的可调参数(类型/范围/当前值/语义角色),供动态表单渲染。"""
-    from app.ai.providers.comfyui_client import ComfyUIClient
+    from app.ai.providers.comfyui.client import ComfyUIClient
     from app.domain.providers import resolve_profile
 
     profile = resolve_profile(db, "comfyui", profile_id, user_id=user.id)

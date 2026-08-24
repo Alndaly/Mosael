@@ -18,7 +18,7 @@ from app.ai.providers.base import (
     metering_from_request,
     provider_http_error,
 )
-from app.ai.providers.qwen_image import (
+from app.ai.providers.image.qwen import (
     DASHSCOPE_BASE,
     download_result_asset,
     resolve_dashscope_base,

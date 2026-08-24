@@ -14,7 +14,9 @@ import json
 import httpx
 import pytest
 
-from app.ai.providers import comfyui, comfyui_client, get_provider
+from app.ai.providers import get_provider
+from app.ai.providers.comfyui import client as comfyui_client
+from app.ai.providers.comfyui import provider as comfyui
 from app.ai.providers.base import GenerationRequest, ProviderContext, ProviderError
 from app.ai.providers.comfyui import (
     DEFAULT_TEMPLATE,

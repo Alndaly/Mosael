@@ -5,7 +5,7 @@ control_after_generate 隐藏项跳过、连接解析、Reroute 透传、muted �
 
 from __future__ import annotations
 
-from app.ai.providers.comfyui_client import (
+from app.ai.providers.comfyui.client import (
     extract_workflow_params,
     graph_to_api_prompt,
     inject_generation_params,

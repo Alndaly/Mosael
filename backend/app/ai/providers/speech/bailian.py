@@ -6,7 +6,9 @@ from pathlib import Path
 
 import httpx
 
-from app.audio.tts.base import REMOTE_TIMEOUT_SECONDS, SpeechRequest, TTSError
+from app.domain.ai_retry import RetryingClient
+
+from app.ai.providers.speech.base import REMOTE_TIMEOUT_SECONDS, SpeechRequest, TTSError
 
 
 class BailianTTS:
@@ -124,20 +126,21 @@ class BailianTTS:
     def synthesize(self, request: SpeechRequest, out_path: Path) -> None:
         payload, path = self._request_for(request)
         try:
-            response = httpx.post(
-                f"{self._base}{path}",
-                headers={"Authorization": f"Bearer {self._key}", "Content-Type": "application/json"},
-                json=payload,
-                timeout=REMOTE_TIMEOUT_SECONDS,
-            )
-            response.raise_for_status()
+            with RetryingClient(timeout=REMOTE_TIMEOUT_SECONDS) as client:
+                response = client.post(
+                    f"{self._base}{path}",
+                    headers={"Authorization": f"Bearer {self._key}", "Content-Type": "application/json"},
+                    json=payload,
+                )
+                response.raise_for_status()
             url = extract_bailian_audio_url(response.json())
             if not url:
                 raise TTSError("百炼语音合成没有返回音频地址")
-            # 结果是一个预签名 OSS 地址。**不要带上 Authorization** —— 多余的头会让 OSS 的
-            # 签名校验走另一条分支(与 ai/providers/qwen_image 里那条注释同一个坑)。
-            audio = httpx.get(url, timeout=REMOTE_TIMEOUT_SECONDS)
-            audio.raise_for_status()
+            # 结果是一个预签名 OSS 地址。**另起一个干净的 client** —— 带上 Authorization 会让
+            # OSS 的签名校验走另一条分支(与 image/qwen.py 里那条注释同一个坑)。
+            with RetryingClient(timeout=REMOTE_TIMEOUT_SECONDS) as fetcher:
+                audio = fetcher.get(url)
+                audio.raise_for_status()
         except httpx.HTTPError as exc:
             raise TTSError(f"百炼语音合成失败: {exc}") from exc
         out_path.write_bytes(audio.content)
