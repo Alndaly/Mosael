@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import time
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +8,7 @@ import httpx
 from app.domain.ai_retry import RetryingClient
 
 from app.ai.providers.base import (
+    poll_until_ready,
     GenerationProvider,
     GenerationRequest,
     GenerationResult,
@@ -30,8 +30,6 @@ take generation parameters as JSON fields, not prompt suffixes.
 ARK_BASE = "https://ark.cn-beijing.volces.com/api/v3"
 LAS_BASE = "https://operator.las.cn-beijing.volces.com/api/v1"
 TASKS_PATH = "/contents/generations/tasks"
-POLL_INTERVAL_SECONDS = 3.0
-POLL_TIMEOUT_SECONDS = 600
 DEFAULT_MODEL_ID = "doubao-seedance-2-0-260128"
 
 
@@ -115,19 +113,7 @@ class SeedanceProvider(GenerationProvider):
                 if not task_id:
                     raise ProviderError("Provider did not return a task id")
 
-                deadline = time.time() + POLL_TIMEOUT_SECONDS
-                url: str | None = None
-                poll_payload: dict[str, Any] = {}
-                while time.time() < deadline:
-                    poll = client.get(f"{TASKS_PATH}/{task_id}")
-                    poll.raise_for_status()
-                    poll_payload = poll.json()
-                    url = extract_video_url(poll_payload)
-                    if url:
-                        break
-                    time.sleep(POLL_INTERVAL_SECONDS)
-                if not url:
-                    raise ProviderError("Generation timed out")
+                url, poll_payload = poll_until_ready(client, f"{TASKS_PATH}/{task_id}", extract_video_url)
 
                 output_dir.mkdir(parents=True, exist_ok=True)
                 target = output_dir / "generated.mp4"

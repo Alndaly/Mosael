@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import time
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +8,7 @@ import httpx
 from app.domain.ai_retry import RetryingClient
 
 from app.ai.providers.base import (
+    poll_until_ready,
     GenerationProvider,
     GenerationRequest,
     GenerationResult,
@@ -37,8 +37,6 @@ adaptive,图生视频则恒为 adaptive(画面比例由首帧决定)。传错会
 BASE_URL = "https://api.minimaxi.com"
 SUBMIT_PATH = "/v2/video_generation"
 QUERY_PATH = "/v2/query/video_generation"
-POLL_INTERVAL_SECONDS = 3.0
-POLL_TIMEOUT_SECONDS = 900
 DEFAULT_MODEL_ID = "MiniMax-H3"
 
 #: 终态。轮询看到这些就停,不再等超时。
@@ -112,19 +110,10 @@ class MiniMaxVideoProvider(GenerationProvider):
                 if not task_id:
                     raise ProviderError(f"MiniMax 没有返回任务 id:{str(submitted)[:200]}")
 
-                deadline = time.time() + POLL_TIMEOUT_SECONDS
-                url: str | None = None
-                poll_payload: dict[str, Any] = {}
-                while time.time() < deadline:
-                    poll = client.get(f"{QUERY_PATH}/{task_id}")
-                    poll.raise_for_status()
-                    poll_payload = poll.json()
-                    url = extract_video_url(poll_payload)
-                    if url:
-                        break
-                    time.sleep(POLL_INTERVAL_SECONDS)
-                if not url:
-                    raise ProviderError("MiniMax 视频生成超时")
+                url, poll_payload = poll_until_ready(
+                    client, f"{QUERY_PATH}/{task_id}", extract_video_url,
+                    timed_out_message="MiniMax 视频生成超时",
+                )
 
                 output_dir.mkdir(parents=True, exist_ok=True)
                 target = output_dir / "generated.mp4"

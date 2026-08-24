@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import time
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +8,7 @@ import httpx
 from app.domain.ai_retry import RetryingClient
 
 from app.ai.providers.base import (
+    poll_until_ready,
     GenerationProvider,
     GenerationRequest,
     GenerationResult,
@@ -20,8 +20,6 @@ from app.ai.providers.base import (
 )
 from app.ai.providers.qwen_image import (
     DASHSCOPE_BASE,
-    POLL_INTERVAL_SECONDS,
-    POLL_TIMEOUT_SECONDS,
     download_result_asset,
     resolve_dashscope_base,
 )
@@ -29,8 +27,9 @@ from app.ai.providers.qwen_image import (
 """阿里云百炼(DashScope)的通义万相视频生成。
 
 和同目录的 qwen_image 是**同一套异步任务协议**:提交拿 task_id → 轮询 `/api/v1/tasks/{id}`
-→ 从终态里取一个预签名 OSS 地址下载。所以轮询间隔、超时、下载(不带 Authorization,否则 OSS
-签名校验会变)这几样直接复用它的,不另写一份 —— 同一家的两条能力在这些地方不该有两种行为。
+→ 从终态里取一个预签名 OSS 地址下载。所以下载(不带 Authorization,否则 OSS 签名校验会变)
+直接复用它的,不另写一份 —— 同一家的两条能力在这些地方不该有两种行为。轮询的节奏则跟着
+base.poll_until_ready 走,六家共用一份。
 
 只有两处是视频独有的:提交路径,以及结果字段是 `output.video_url` 而不是 `output.results[].url`。
 """
@@ -132,19 +131,7 @@ class WanVideoProvider(GenerationProvider):
                 if not task_id:
                     raise ProviderError("Provider did not return a task id")
 
-                deadline = time.time() + POLL_TIMEOUT_SECONDS
-                url: str | None = None
-                poll_payload: dict[str, Any] = {}
-                while time.time() < deadline:
-                    poll = client.get(f"/api/v1/tasks/{task_id}")
-                    poll.raise_for_status()
-                    poll_payload = poll.json()
-                    url = extract_video_url(poll_payload)
-                    if url:
-                        break
-                    time.sleep(POLL_INTERVAL_SECONDS)
-                if not url:
-                    raise ProviderError("Generation timed out")
+                url, poll_payload = poll_until_ready(client, f"/api/v1/tasks/{task_id}", extract_video_url)
 
                 target = output_dir / "generated.mp4"
                 download_result_asset(url, target)

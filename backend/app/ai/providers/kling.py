@@ -13,6 +13,7 @@ import httpx
 from app.domain.ai_retry import RetryingClient
 
 from app.ai.providers.base import (
+    poll_until_ready,
     GenerationProvider,
     GenerationRequest,
     GenerationResult,
@@ -33,8 +34,6 @@ provider profile without branching in the runner.
 
 KLING_BASE = "https://api.klingai.com"
 DEFAULT_MODEL_ID = "kling-v3"
-POLL_INTERVAL_SECONDS = 5.0
-POLL_TIMEOUT_SECONDS = 600
 
 
 def resolve_model(request: GenerationRequest, context: ProviderContext) -> str:
@@ -120,19 +119,7 @@ class KlingProvider(GenerationProvider):
                 if not task_id:
                     raise ProviderError("Provider did not return a task id")
 
-                deadline = time.time() + POLL_TIMEOUT_SECONDS
-                url: str | None = None
-                poll_payload: dict[str, Any] = {}
-                while time.time() < deadline:
-                    poll = client.get(f"{endpoint}/{task_id}")
-                    poll.raise_for_status()
-                    poll_payload = poll.json()
-                    url = extract_video_url(poll_payload)
-                    if url:
-                        break
-                    time.sleep(POLL_INTERVAL_SECONDS)
-                if not url:
-                    raise ProviderError("Generation timed out")
+                url, poll_payload = poll_until_ready(client, f"{endpoint}/{task_id}", extract_video_url)
 
                 output_dir.mkdir(parents=True, exist_ok=True)
                 target = output_dir / "generated.mp4"

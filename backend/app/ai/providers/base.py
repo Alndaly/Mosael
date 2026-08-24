@@ -3,9 +3,11 @@ from __future__ import annotations
 import base64
 import mimetypes
 import re
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -169,6 +171,48 @@ def image_file_to_data_url(path: Path) -> str:
     """Return a data URL for providers that accept image URLs or base64-like image fields."""
     mime_type, data = image_file_to_base64(path)
     return f"data:{mime_type};base64,{data}"
+
+
+#: 异步任务的默认节奏。各家可以覆盖,但没有理由的话就用这一份 —— 此前七个文件各定义了一次
+#: 自己的 POLL_INTERVAL,而它们的值本来就一样。
+POLL_INTERVAL_SECONDS = 2.0
+POLL_TIMEOUT_SECONDS = 300.0
+
+
+def poll_until_ready(
+    client: Any,
+    poll_path: str,
+    extract: "Callable[[dict[str, Any]], str | None]",
+    *,
+    interval: float = POLL_INTERVAL_SECONDS,
+    timeout: float = POLL_TIMEOUT_SECONDS,
+    timed_out_message: str = "Generation timed out",
+) -> tuple[str, dict[str, Any]]:
+    """轮询一个异步任务到终态,返回 (产物地址, 终态回包)。
+
+    几乎所有外部生成 API 都是同一个形状:提交拿 id → 轮询到终态 → 下载。此前**六家各写了一遍
+    这个循环**,各自定义间隔、各自抛超时 —— 代价不是行数,是每家都可能漏掉一件事,而没有任何
+    机制能发现谁漏了。
+
+    `extract` 负责读懂那一家的终态:拿到地址就回地址,还没结束回 None,失败**自己抛**
+    (它才知道那家把失败原因放在哪个字段)。
+
+    计时用 `time.monotonic()` 而不是 `time.time()`:墙钟会跳(NTP 校时、夏令时),跳一下
+    要么把还在跑的任务判成超时,要么让它多等一个小时。六家原本都用的是墙钟。
+    """
+    deadline = time.monotonic() + timeout
+    payload: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        response = client.get(poll_path)
+        response.raise_for_status()
+        payload = response.json()
+        url = extract(payload)
+        if url:
+            return url, payload
+        time.sleep(interval)
+    # 超时文案让调用方给:有几家写的是自己的措辞(「MiniMax 视频生成超时」),那句话会一路
+    # 显示到用户眼前,收成一份通用句子等于把"是哪一家超时了"这个信息删掉。
+    raise ProviderError(timed_out_message)
 
 
 def first_frame_value(request: GenerationRequest) -> str | None:

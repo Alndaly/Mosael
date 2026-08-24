@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import mimetypes
-import time
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +10,7 @@ import httpx
 from app.domain.ai_retry import RetryingClient
 
 from app.ai.providers.base import (
+    poll_until_ready,
     GenerationProvider,
     GenerationRequest,
     GenerationResult,
@@ -28,8 +28,6 @@ predictLongRunning → poll operation → download video URI.
 
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 DEFAULT_MODEL_ID = "veo-3.1-generate-preview"
-POLL_INTERVAL_SECONDS = 10.0
-POLL_TIMEOUT_SECONDS = 600
 
 
 def resolve_model(request: GenerationRequest, context: ProviderContext) -> str:
@@ -102,19 +100,9 @@ class VeoProvider(GenerationProvider):
                 if not operation_name:
                     raise ProviderError("Provider did not return an operation name")
 
-                deadline = time.time() + POLL_TIMEOUT_SECONDS
-                uri: str | None = None
-                poll_payload: dict[str, Any] = {}
-                while time.time() < deadline:
-                    poll = client.get(f"/{operation_name.lstrip('/')}")
-                    poll.raise_for_status()
-                    poll_payload = poll.json()
-                    uri = extract_video_uri(poll_payload)
-                    if uri:
-                        break
-                    time.sleep(POLL_INTERVAL_SECONDS)
-                if not uri:
-                    raise ProviderError("Generation timed out")
+                uri, poll_payload = poll_until_ready(
+                    client, f"/{operation_name.lstrip('/')}", extract_video_uri
+                )
 
                 output_dir.mkdir(parents=True, exist_ok=True)
                 target = output_dir / "generated.mp4"

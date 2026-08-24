@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import time
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +8,7 @@ import httpx
 from app.domain.ai_retry import RetryingClient
 
 from app.ai.providers.base import (
+    poll_until_ready,
     GenerationProvider,
     GenerationRequest,
     GenerationResult,
@@ -27,8 +27,6 @@ submit → poll /api/v1/tasks/{id} → download result URL.
 DASHSCOPE_BASE = "https://dashscope.aliyuncs.com"
 SUBMIT_PATH = "/api/v1/services/aigc/text2image/image-synthesis"
 EDIT_PATH = "/api/v1/services/aigc/multimodal-generation/generation"
-POLL_INTERVAL_SECONDS = 2.0
-POLL_TIMEOUT_SECONDS = 300
 
 
 def build_submit_payload(request: GenerationRequest) -> dict[str, Any]:
@@ -162,18 +160,7 @@ class QwenImageProvider(GenerationProvider):
                 if not task_id:
                     raise ProviderError("Provider did not return a task id")
 
-                deadline = time.time() + POLL_TIMEOUT_SECONDS
-                url: str | None = None
-                while time.time() < deadline:
-                    poll = client.get(f"/api/v1/tasks/{task_id}")
-                    poll.raise_for_status()
-                    poll_payload = poll.json()
-                    url = extract_result_url(poll_payload)
-                    if url:
-                        break
-                    time.sleep(POLL_INTERVAL_SECONDS)
-                if not url:
-                    raise ProviderError("Generation timed out")
+                url, poll_payload = poll_until_ready(client, f"/api/v1/tasks/{task_id}", extract_result_url)
 
                 target = output_dir / "generated.png"
                 download_result_asset(url, target)
