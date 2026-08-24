@@ -7,7 +7,7 @@ import math
 import threading
 import time
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.ai.agent.adapters import AdapterError, TurnResult, abort_turn, compact_session, run_turn, steer_turn
@@ -21,7 +21,7 @@ from app.domain.providers import pi_provider_id
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.security import mint_service_session, revoke_session
-from app.db.models import AgentMessage, AgentSession, AuthSession, User, now
+from app.db.models import AgentMessage, AgentSession, AuthSession, ToolConfirmation, User, now
 from app.domain.usage import billable, estimate_text_tokens
 
 """
@@ -839,7 +839,13 @@ def reconcile_orphaned_agent_sessions(db: Session) -> int:
     turn 跑在进程内的 daemon 线程 + sidecar 子进程上,后端一重启(开发 --reload
     尤其频繁)线程即死,_run_turn_thread 的 finally 永远执行不到 —— 会话从此
     永远「思考中」,前端只是如实转述。启动时统一拨回,并补一条可见的中断说明,
-    否则那轮用户消息看起来石沉大海。"""
+    否则那轮用户消息看起来石沉大海。
+
+    **那一轮留下的确认卡也要一起作废。** 不作废的话,对话上面写着「已中断,请重新发送」,
+    下面那张卡还亮着三个按钮等你点 —— 而 approve_confirmation 是**当场执行工具**的
+    (不是唤醒某个还在等的线程),点下去真的会把浏览器打开、把节点加上,而结果没有任何一轮
+    对话去接收。所以这不是"点了没反应"那种小事,是一个已经没有上下文的动作仍然可以被执行。
+    """
     stale = db.scalars(select(AgentSession).where(AgentSession.status == "running")).all()
     for session in stale:
         session.status = "idle"
@@ -852,6 +858,16 @@ def reconcile_orphaned_agent_sessions(db: Session) -> int:
             )
         )
     if stale:
+        # 只作废**这些会话**的卡。session_id 为空的那批来自 MCP / 飞书等外部智能体,
+        # 它们是另一条生命周期(进程可能还活着、还在等人点),不该被这里顺手清掉。
+        db.execute(
+            update(ToolConfirmation)
+            .where(
+                ToolConfirmation.session_id.in_([session.id for session in stale]),
+                ToolConfirmation.status == "pending",
+            )
+            .values(status="cancelled", error="backend restarted mid-turn", resolved_at=now())
+        )
         db.commit()
     return len(stale)
 
