@@ -359,8 +359,25 @@ class BailianTTS:
         # 四个都真机验证过(2026-08-24,各合成一句均返回可播放 WAV)。
         "qwen-tts": ("Cherry", "Serena", "Ethan", "Chelsie"),
         "qwen3-tts-flash": ("Cherry", "Serena", "Ethan", "Chelsie", "Ryan", "Katerina", "Elias"),
-        # CosyVoice v2 的音色 id 带 `_v2` 后缀,和 v1 不通用。真机验证过 longxiaochun_v2。
-        "cosyvoice-v2": ("longxiaochun_v2", "longwan_v2", "longcheng_v2", "longhua_v2", "longshu_v2"),
+        # CosyVoice 的音色 id 是 `<名字>_v<主版本>`,**跨版本不通用**(v2 的 id 发给 v3 会得到
+        # `Engine return error code: 418`)。下面两张表逐个真机验证过(2026-08-24),
+        # 没有一个是照文档抄的:v3-flash 比 v2 多出 8 个,少了 longyue 之外的几个也确实探不通。
+        "cosyvoice-v2": (
+            "longxiaochun_v2", "longwan_v2", "longcheng_v2", "longhua_v2", "longshu_v2",
+            "longjielidou_v2", "longxiaoxia_v2", "longshuo_v2", "loongtomoka_v2", "loongdavid_v2",
+            "longshao_v2", "longyan_v2", "longyuan_v2", "longyue_v2",
+        ),
+        "cosyvoice-v3-flash": (
+            "longxiaochun_v3", "longwan_v3", "longcheng_v3", "longhua_v3", "longshu_v3",
+            "longdaiyu_v3", "longhuhu_v3", "longjielidou_v3", "longanxuan_v3", "longxiaoxia_v3",
+            "longyingtao_v3", "longshuo_v3", "longanli_v3", "loongtomoka_v3", "longsanshu_v3",
+            "loongdavid_v3", "longwanjun_v3", "longyan_v3", "longyuan_v3", "longyingxiao_v3",
+            "longyue_v3", "longyichen_v3",
+        ),
+        # 探过但**接不进来**的,记在这儿省得下次再试一遍:
+        #   cosyvoice-v1      → "current user api does not support http call"(它是 WebSocket-only)
+        #   cosyvoice-v3-plus / v3.5-plus / v3.5-flash → 即使用 _v3 音色也回 418,多半是账号未开通
+        # 这几个落到"认不出"分支,由用户自己填音色 id —— 而不是给一张猜出来的表。
     }
 
     #: 支持语速的模型族。CosyVoice 收 `rate`(实测真变速);qwen-tts 家族没有这个参数。

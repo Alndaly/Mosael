@@ -170,9 +170,11 @@ def test_认不出的模型回空_由界面退回填id() -> None:
     给一个**猜出来的**下拉比让用户自己填更糟:选项看着像是对的,发出去才知道不存在。
     """
     assert BailianTTS.voices_for("qwen3-tts-vd-2026-01-26") == ()
-    # cosyvoice-v3 系列真机返回 `Engine return error code: 418` —— 音色 id 与 v2 不同,
-    # 而具体是什么没探出来。列不出来就不猜。
-    assert BailianTTS.voices_for("cosyvoice-v3-flash") == ()
+    # v3-plus / v3.5-* 即使用 _v3 音色也回 418(多半账号未开通);v1 明确说"不支持 http call"。
+    from app.audio.tts_providers import CosyVoiceTTS
+
+    for model in ("cosyvoice-v1", "cosyvoice-v3-plus", "cosyvoice-v3.5-flash"):
+        assert CosyVoiceTTS.voices_for(model) == (), model
 
 
 def test_引擎目录声明了要能填音色id() -> None:
@@ -237,11 +239,29 @@ def test_支持语速这件事按模型判_不是整个引擎() -> None:
     assert BailianTTS.supports_speed_for("") is False, "取不到模型时按不支持处理(保守的那一侧)"
 
 
-def test_cosyvoice的音色带v2后缀_与v1不通用() -> None:
-    """五个都真机验证过(2026-08-24)。v1 的 id 没有 `_v2` 后缀,混用会被拒。"""
-    voices = BailianTTS.voices_for("cosyvoice-v2")
-    assert "longxiaochun_v2" in voices
-    assert all(v.endswith("_v2") for v in voices), f"混进了非 v2 的音色 id:{voices}"
+def test_cosyvoice音色按主版本分表_跨版本不通用() -> None:
+    """id 是 `<名字>_v<主版本>`,把 v2 的 id 发给 v3 会得到 `Engine return error code: 418`。
+
+    两张表逐个真机验证过(2026-08-24),不是照文档抄的 —— v3-flash 比 v2 多出 8 个。
+    """
+    from app.audio.tts_providers import CosyVoiceTTS
+
+    v2 = CosyVoiceTTS.voices_for("cosyvoice-v2")
+    v3 = CosyVoiceTTS.voices_for("cosyvoice-v3-flash")
+    assert len(v2) == 14 and len(v3) == 22
+    assert all(v.endswith("_v2") for v in v2), f"v2 表里混进了别的版本:{v2}"
+    assert all(v.endswith("_v3") for v in v3), f"v3 表里混进了别的版本:{v3}"
+    assert not set(v2) & set(v3), "两版的 id 不该有交集"
+    # 日期快照沿用同族。
+    assert CosyVoiceTTS.voices_for("cosyvoice-v3-flash-2025-09-01") == v3
+
+
+def test_v3plus不会误配到v3flash的表() -> None:
+    """前缀匹配最怕这种:`cosyvoice-v3-plus` 和 `cosyvoice-v3-flash` 前 13 个字符一样。
+    误配的话用户会拿到一张看着合法、发出去全是 418 的音色表。"""
+    from app.audio.tts_providers import CosyVoiceTTS
+
+    assert CosyVoiceTTS.voices_for("cosyvoice-v3-plus") == ()
 
 
 def test_播客音色不能显示成原始id() -> None:
