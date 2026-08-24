@@ -222,7 +222,7 @@ def list_tts_voices(engine: str, db: DbSession, user: CurrentUser) -> list[dict]
     account and each voice carries its family. Without them, the built-in list still works;
     it is smaller and can go stale, which is a far better failure than an empty dropdown.
     """
-    from app.audio.tts_providers import EDGE_BUILTIN_VOICES, VOLCANO_BUILTIN_VOICES, describe_engines
+    from app.audio.tts_providers import EDGE_BUILTIN_VOICES, PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES, describe_engines
     from app.domain.providers import resolve_profile, profile_extra
 
     # **固定音色的引擎不在这里再写一遍。** 这个函数原本是逐引擎的 if 分支,末尾一句
@@ -240,11 +240,16 @@ def list_tts_voices(engine: str, db: DbSession, user: CurrentUser) -> list[dict]
         model = provider_models.model_id_for(db, profile, "tts", user_id=user.id) if profile else ""
         return [{"value": v, "label": v} for v in BailianTTS.voices_for(model)]
 
+
+
     if engine != "volcano":
         fixed = next((item for item in describe_engines() if item["id"] == engine), None)
         voices = list(fixed.get("voices") or []) if fixed else []
-        # edge 的音色带中文标签,别把它降级成裸 id。
-        labels = dict(EDGE_BUILTIN_VOICES)
+        # **标签要从所有带标签的清单里找**,不只是 edge。engine 目录里的 `voices` 是纯 id
+        # (schema 是 list[str]),而 edge / 播客 / 火山内置那三张表都是 (id, 名字) 成对的 ——
+        # 只查 edge 的话,播客那四个会显示成 `zh_male_dayixiansheng_v2_saturn_bigtts`
+        # 这种一眼认不出谁是谁的原始 id(真机截图)。
+        labels = {**dict(EDGE_BUILTIN_VOICES), **dict(PODCAST_SPEAKERS), **dict(VOLCANO_BUILTIN_VOICES)}
         return [{"value": voice, "label": labels.get(voice, voice)} for voice in voices]
 
     # ak/sk 是密字段,跟着**我自己**那把钥匙走(见 domain/provider_credentials) ——

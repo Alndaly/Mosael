@@ -341,6 +341,8 @@ class BailianTTS:
     id = "alibaba"
     label = "ttsProvider_bailian"
     parallel_safe = True
+    #: CosyVoice 走**另一个端点**,请求体也不同 —— 见 _request_for。
+    COSYVOICE_PATH = "/api/v1/services/audio/tts/SpeechSynthesizer"
     #: 音色**按模型族**给,不是全引擎一份 —— 真机验证过 qwen3-tts-flash 有 qwen-tts 没有的
     #: 音色(Ryan/Katerina/Elias)。键按前缀匹配:带日期的快照沿用同族音色
     #: (实测 qwen3-tts-flash-2025-11-27 + Ryan、qwen-tts-2025-05-22 + Chelsie 都通)。
@@ -352,7 +354,16 @@ class BailianTTS:
         # 四个都真机验证过(2026-08-24,各合成一句均返回可播放 WAV)。
         "qwen-tts": ("Cherry", "Serena", "Ethan", "Chelsie"),
         "qwen3-tts-flash": ("Cherry", "Serena", "Ethan", "Chelsie", "Ryan", "Katerina", "Elias"),
+        # CosyVoice v2 的音色 id 带 `_v2` 后缀,和 v1 不通用。真机验证过 longxiaochun_v2。
+        "cosyvoice-v2": ("longxiaochun_v2", "longwan_v2", "longcheng_v2", "longhua_v2", "longshu_v2"),
     }
+
+    #: 支持语速的模型族。CosyVoice 收 `rate`(实测真变速);qwen-tts 家族没有这个参数。
+    SPEED_PREFIXES = ("cosyvoice",)
+
+    @classmethod
+    def supports_speed_for(cls, model: str) -> bool:
+        return (model or "").strip().lower().startswith(cls.SPEED_PREFIXES)
     #: 取不到模型时的兜底:两族的交集,哪个模型都认。
     VOICES = ("Cherry", "Serena", "Ethan", "Chelsie")
 
@@ -379,14 +390,33 @@ class BailianTTS:
         self._base = resolve_dashscope_native_base(base_url)
         self._default_voice = voice
 
+    def _request_for(self, request: SpeechRequest) -> tuple[dict, str]:
+        """百炼的语音有**两套 API**,按模型分派。
+
+        · qwen-tts 家族 → 多模态生成端点,音色在 `input.voice`,**没有语速参数**;
+        · CosyVoice   → `/api/v1/services/audio/tts/SpeechSynthesizer`,音色在
+          `parameters.voice`,而且**支持语速**(实测 rate=1.5 把 2.25 秒的句子变成 1.50 秒,
+          正好 1.5 倍 —— 是真变速,不是被忽略)。
+
+        两套的回包形状一样(`output.audio.url`),所以只有请求这一半要分。
+        """
+        voice = request.voice or self._default_voice
+        if is_cosyvoice(self._model):
+            parameters: dict = {"voice": voice or "longxiaochun_v2", "format": "wav", "sample_rate": 22050}
+            if abs(request.speed - 1.0) > 0.01:
+                # 配音要的正是"塞进原时长" —— 引擎自己变速比事后拉伸波形自然。
+                parameters["rate"] = max(0.5, min(2.0, request.speed))
+            return {"model": self._model, "input": {"text": request.text}, "parameters": parameters}, self.COSYVOICE_PATH
+        return (
+            {"model": self._model, "input": {"text": request.text, "voice": voice or self.VOICES[0]}},
+            self.PATH,
+        )
+
     def synthesize(self, request: SpeechRequest, out_path: Path) -> None:
-        payload = {
-            "model": self._model,
-            "input": {"text": request.text, "voice": request.voice or self._default_voice or self.VOICES[0]},
-        }
+        payload, path = self._request_for(request)
         try:
             response = httpx.post(
-                f"{self._base}{self.PATH}",
+                f"{self._base}{path}",
                 headers={"Authorization": f"Bearer {self._key}", "Content-Type": "application/json"},
                 json=payload,
                 timeout=REMOTE_TIMEOUT_SECONDS,
@@ -427,6 +457,10 @@ def resolve_dashscope_native_base(base_url: str) -> str:
     return base
 
 
+def is_cosyvoice(model: str) -> bool:
+    return (model or "").strip().lower().startswith("cosyvoice")
+
+
 def extract_bailian_audio_url(payload: dict) -> str:
     """从 qwen-tts 的回包里取音频地址。
 
@@ -455,6 +489,24 @@ REMOTE_ENGINES = {
     VolcanoTTS.id: VolcanoTTS,
     EdgeTTS.id: EdgeTTS,
 }
+
+
+def _active_tts_model() -> str:
+    """这个部署给百炼配的 tts 模型。取不到就回空(按不支持语速处理,较保守的那一侧)。
+
+    引擎目录本来是"纯静态的一张表",这里破了一次例 —— 因为百炼的能力**随模型变**,
+    而界面要在**挑引擎的那一刻**就说清楚有没有语速,不能等用户填完文本才发现旋钮是假的。
+    """
+    try:
+        from app.core.db import SessionLocal
+        from app.domain import provider_models
+        from app.domain.providers import resolve_profile
+
+        with SessionLocal() as db:
+            profile = resolve_profile(db, "alibaba")
+            return provider_models.model_id_for(db, profile, "tts") if profile else ""
+    except Exception:  # noqa: BLE001 —— 引擎目录不该因为取不到模型就整个拉不出来
+        return ""
 
 
 def describe_engines() -> list[dict[str, object]]:
@@ -514,8 +566,9 @@ def describe_engines() -> list[dict[str, object]]:
             "id": BailianTTS.id,
             "label": BailianTTS.label,
             "needs_key": True,
-            # qwen-tts 没有语速参数。摆一个拨不动的旋钮比不摆更糟 —— 界面据此把它藏掉。
-            "supports_speed": False,
+            # **按当前配的模型算**,不是整个引擎一刀切:CosyVoice 收 rate(实测真变速),
+            # qwen-tts 家族没有这个参数。摆一个拨不动的旋钮比不摆更糟。
+            "supports_speed": BailianTTS.supports_speed_for(_active_tts_model()),
             # 模型是开放集合(日期快照、instruct / vd / vc 变体),而百炼没有列音色的接口。
             # 认得出的模型走下拉(见 /api/tts/voices),认不出的退回填 id —— 而不是空下拉。
             "needs_voice_id": True,

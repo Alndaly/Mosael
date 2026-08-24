@@ -26,10 +26,15 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
             {"key": "api_key", "label": "DashScope API Key", "storage": "api_key", "secret": True, "required": True},
             {
                 "key": "base_url",
-                "label": "图像生成 Endpoint",
+                # 这个字段只管**对话与向量嵌入**。图像 / 视频 / 语音走百炼的原生路径,各自从
+                # 这里推导自己的根(qwen_image.resolve_dashscope_base、
+                # tts_providers.resolve_dashscope_native_base 等),填什么都不影响它们。
+                # 早先叫「图像生成 Endpoint」是错的:它默认值是 compatible-mode(对话端点),
+                # 而图像根本不读这一份 —— 名字说的和它管的是两回事。
+                "label": "对话 Endpoint",
                 "storage": "base_url",
-                "default": "https://dashscope.aliyuncs.com",
-                "hint": "通常保持默认;自建代理或区域端点可在这里覆盖。",
+                "default": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                "hint": "对话与向量嵌入用。图像 / 视频 / 语音走百炼原生地址,不看这里,通常保持默认即可。",
             },
             {"key": "default_model", "label": "首个模型(可选)", "storage": "default_model", "hint": "留空即可 —— 保存后在模型列表里从供应商目录直接挑,那份是实时拉的。"},
         ],

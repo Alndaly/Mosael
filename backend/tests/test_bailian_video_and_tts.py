@@ -170,7 +170,9 @@ def test_认不出的模型回空_由界面退回填id() -> None:
     给一个**猜出来的**下拉比让用户自己填更糟:选项看着像是对的,发出去才知道不存在。
     """
     assert BailianTTS.voices_for("qwen3-tts-vd-2026-01-26") == ()
-    assert BailianTTS.voices_for("cosyvoice-v2") == ()
+    # cosyvoice-v3 系列真机返回 `Engine return error code: 418` —— 音色 id 与 v2 不同,
+    # 而具体是什么没探出来。列不出来就不猜。
+    assert BailianTTS.voices_for("cosyvoice-v3-flash") == ()
 
 
 def test_引擎目录声明了要能填音色id() -> None:
@@ -179,3 +181,75 @@ def test_引擎目录声明了要能填音色id() -> None:
     entry = next(e for e in describe_engines() if e["id"] == "alibaba")
     assert entry["needs_voice_id"] is True, "认不出的模型会得到一个空下拉,而不是输入框"
     assert entry["supports_speed"] is False
+
+
+# ---------------- CosyVoice:同一个引擎里的第二套 API ----------------
+
+
+def test_cosyvoice走另一个端点和另一种请求体() -> None:
+    """百炼的语音有两套 API,按模型分派 —— 混用会得到 `url error` 或 `task can not be null`。
+
+    · qwen-tts → 多模态生成端点,音色在 input.voice
+    · CosyVoice → /api/v1/services/audio/tts/SpeechSynthesizer,音色在 parameters.voice
+    """
+    from app.audio.tts_providers import SpeechRequest
+
+    qwen_payload, qwen_path = BailianTTS(api_key="k", model="qwen-tts")._request_for(
+        SpeechRequest(text="嗨", voice="Cherry")
+    )
+    assert qwen_path.endswith("/multimodal-generation/generation")
+    assert qwen_payload["input"]["voice"] == "Cherry"
+    assert "parameters" not in qwen_payload, "qwen-tts 没有 parameters,多塞会被拒"
+
+    cosy_payload, cosy_path = BailianTTS(api_key="k", model="cosyvoice-v2")._request_for(
+        SpeechRequest(text="嗨", voice="longwan_v2")
+    )
+    assert cosy_path.endswith("/audio/tts/SpeechSynthesizer")
+    assert cosy_payload["parameters"]["voice"] == "longwan_v2", "CosyVoice 的音色在 parameters 里"
+    assert "voice" not in cosy_payload["input"]
+
+
+def test_语速只发给收得住的那一族() -> None:
+    """真机实测:CosyVoice 的 rate=1.5 把 2.25 秒的句子变成 1.50 秒,正好 1.5 倍(真变速)。
+    qwen-tts 没有这个参数,发过去只会被拒或忽略。"""
+    from app.audio.tts_providers import SpeechRequest
+
+    cosy, _ = BailianTTS(api_key="k", model="cosyvoice-v2")._request_for(SpeechRequest(text="嗨", speed=1.5))
+    assert cosy["parameters"]["rate"] == 1.5
+
+    qwen, _ = BailianTTS(api_key="k", model="qwen-tts")._request_for(SpeechRequest(text="嗨", speed=1.5))
+    assert "parameters" not in qwen, "把语速发给了收不住它的那一族"
+
+
+def test_语速是1时不发这个参数() -> None:
+    """1.0 是"引擎自然语速"。显式发 1.0 和不发在语义上一样,但少一个字段就少一处能出错的地方。"""
+    from app.audio.tts_providers import SpeechRequest
+
+    cosy, _ = BailianTTS(api_key="k", model="cosyvoice-v2")._request_for(SpeechRequest(text="嗨", speed=1.0))
+    assert "rate" not in cosy["parameters"]
+
+
+def test_支持语速这件事按模型判_不是整个引擎() -> None:
+    assert BailianTTS.supports_speed_for("cosyvoice-v2") is True
+    assert BailianTTS.supports_speed_for("cosyvoice-v3-flash") is True
+    assert BailianTTS.supports_speed_for("qwen-tts") is False
+    assert BailianTTS.supports_speed_for("qwen3-tts-flash") is False
+    assert BailianTTS.supports_speed_for("") is False, "取不到模型时按不支持处理(保守的那一侧)"
+
+
+def test_cosyvoice的音色带v2后缀_与v1不通用() -> None:
+    """五个都真机验证过(2026-08-24)。v1 的 id 没有 `_v2` 后缀,混用会被拒。"""
+    voices = BailianTTS.voices_for("cosyvoice-v2")
+    assert "longxiaochun_v2" in voices
+    assert all(v.endswith("_v2") for v in voices), f"混进了非 v2 的音色 id:{voices}"
+
+
+def test_播客音色不能显示成原始id() -> None:
+    """真机截图抓到的回归:固定音色改从 describe_engines() 出之后,标签丢了 ——
+    engine 目录里的 voices 是纯 id,而 (id, 名字) 成对的表在别处。只查 edge 的话,
+    播客那四个会显示成 `zh_male_dayixiansheng_v2_saturn_bigtts`。"""
+    from app.audio.tts_providers import EDGE_BUILTIN_VOICES, PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES
+
+    labels = {**dict(EDGE_BUILTIN_VOICES), **dict(PODCAST_SPEAKERS), **dict(VOLCANO_BUILTIN_VOICES)}
+    for voice, expected in PODCAST_SPEAKERS:
+        assert labels.get(voice) == expected != voice, f"{voice} 会显示成原始 id"
