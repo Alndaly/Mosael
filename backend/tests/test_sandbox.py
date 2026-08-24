@@ -20,6 +20,10 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
+from pathlib import Path
+
 import pytest
 
 from app.domain import sandbox
@@ -59,16 +63,30 @@ def test_it_cannot_read_the_application_database() -> None:
     assert str(got).startswith("blocked:"), f"读到了应用数据库:{got}"
 
 
-def test_it_cannot_read_the_home_directory() -> None:
+def test_它读不到宿主机家目录里的文件() -> None:
+    """断言的是**宿主机的东西看不见**,不是"某个系统调用被拒绝"。
+
+    这两者不一样,而写成后者会得出错误结论。两种后端挡住它的方式根本不同:
+    seatbelt 是内核拒绝(OSError),docker 是那个文件压根不在容器里(FileNotFoundError)。
+    早先这条写成「列 `~` 必须失败」,于是在 docker 上红了 —— 而它列到的 `['var','etc','opt']`
+    是**容器自己的根**,一个宿主机文件都没有。测症状会把"换了种挡法"误报成"漏了"。
+
+    埋一个哨兵再去读它,两种后端给出同一个可观察结果,而它测的正是真正要防的那件事。
+    """
     _skip_without_backend()
-    code = (
-        "import os\n"
-        "try:\n"
-        "    output = os.listdir(os.path.expanduser('~'))[:3]\n"
-        "except OSError as exc:\n"
-        "    output = f'blocked:{type(exc).__name__}'\n"
-    )
-    assert str(_run(code)).startswith("blocked:")
+    with tempfile.NamedTemporaryFile(dir=Path.home(), prefix=".openstudio-sentinel-", suffix=".txt") as sentinel:
+        sentinel.write(b"host-only-secret")
+        sentinel.flush()
+        code = (
+            "import os\n"
+            f"p = {str(sentinel.name)!r}\n"
+            "try:\n"
+            "    output = open(p).read()\n"
+            "except OSError as exc:\n"
+            "    output = f'blocked:{type(exc).__name__}'\n"
+        )
+        got = str(_run(code))
+    assert got.startswith("blocked:"), f"读到了宿主机家目录里的文件:{got}"
 
 
 def test_it_cannot_write_outside_its_own_scratch_space() -> None:
@@ -91,11 +109,16 @@ def test_it_cannot_read_the_backends_environment() -> None:
     再严的文件策略也拦不住它。
     """
     _skip_without_backend()
-    code = "import os\noutput = sorted(os.environ)"
-    names = _run(code)
-    # __CF_USER_TEXT_ENCODING 是 macOS 自己往子进程里塞的(区域设置),不是后端的东西。
-    allowed = {"PATH", "LANG", "PYTHONDONTWRITEBYTECODE", "PWD", "HOME", "HOSTNAME", "__CF_USER_TEXT_ENCODING"}
-    assert set(names) <= allowed, f"后端的环境漏进了沙箱:{sorted(set(names) - allowed)}"
+    # 白名单式断言("只允许出现这几个名字")测的是**沙箱里有什么**,而那取决于后端:docker 的
+    # python 镜像自带 PYTHON_VERSION / PYTHON_SHA256,于是白名单在 Linux 上必然红,而那两个
+    # 变量根本不是后端的东西。改成从后端这一侧埋一个独一无二的名字,直接问"它传进去了没有" ——
+    # 这才是要防的那件事(后端的环境里有各家模型的密钥)。
+    os.environ["OPEN_STUDIO_SANDBOX_SENTINEL"] = "must-not-leak"
+    try:
+        got = _run("import os\noutput = os.environ.get('OPEN_STUDIO_SANDBOX_SENTINEL', 'absent')")
+    finally:
+        os.environ.pop("OPEN_STUDIO_SANDBOX_SENTINEL", None)
+    assert got == "absent", f"后端的环境漏进了沙箱:{got}"
 
 
 def test_it_has_no_network() -> None:
@@ -115,13 +138,19 @@ def test_it_has_no_network() -> None:
 def test_a_child_process_is_confined_too() -> None:
     """起子进程本身不是逃逸 —— 只要子进程也在同一层隔离里。这一条锁住的正是"也在"。"""
     _skip_without_backend()
-    code = (
-        "import subprocess, sys, os\n"
-        "r = subprocess.run([sys.executable, '-c', "
-        "\"import os;print(os.listdir(os.path.expanduser('~'))[:1])\"], capture_output=True)\n"
-        "output = 'blocked' if r.returncode else 'escaped:' + r.stdout.decode()[:40]\n"
-    )
-    assert str(_run(code)) == "blocked", "子进程逃出了隔离"
+    with tempfile.NamedTemporaryFile(dir=Path.home(), prefix=".openstudio-sentinel-", suffix=".txt") as sentinel:
+        sentinel.write(b"host-only-secret")
+        sentinel.flush()
+        # 子进程去读同一个哨兵:读到了才叫逃逸。判据同上 —— 不看它怎么失败,只看它有没有拿到。
+        code = (
+            "import subprocess, sys\n"
+            f"p = {str(sentinel.name)!r}\n"
+            "r = subprocess.run([sys.executable, '-c', "
+            "'import sys;print(open(sys.argv[1]).read())', p], capture_output=True)\n"
+            "output = 'escaped:' + r.stdout.decode()[:40] if b'host-only-secret' in r.stdout else 'blocked'\n"
+        )
+        got = str(_run(code))
+    assert got == "blocked", f"子进程逃出了隔离:{got}"
 
 
 # ---------------- 资源上限 ----------------

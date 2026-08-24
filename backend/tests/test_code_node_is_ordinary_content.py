@@ -49,15 +49,26 @@ def test_it_actually_runs_and_stays_isolated() -> None:
     from app.domain.workflows.executors.basic import run_python
 
     assert run_python("output = 6 * 7", {})["output"] == 42
-    blocked = run_python(
-        "import os\n"
-        "try:\n"
-        "    output = os.listdir(os.path.expanduser('~'))[:1]\n"
-        "except OSError as exc:\n"
-        "    output = 'blocked'\n",
-        {},
-    )
-    assert blocked["output"] == "blocked"
+
+    # 判据是「宿主机的东西看不见」,不是「某个系统调用被拒绝」—— 两种后端挡住它的方式不同
+    # (seatbelt 内核拒绝 / docker 里那个文件根本不存在),测症状会把换了种挡法误报成漏了。
+    # 详见 tests/test_sandbox.py 里同名那几条的说明。
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.NamedTemporaryFile(dir=Path.home(), prefix=".openstudio-sentinel-", suffix=".txt") as sentinel:
+        sentinel.write(b"host-only-secret")
+        sentinel.flush()
+        blocked = run_python(
+            "import os\n"
+            f"p = {str(sentinel.name)!r}\n"
+            "try:\n"
+            "    output = 'leaked' if 'host-only-secret' in open(p).read() else 'blocked'\n"
+            "except OSError:\n"
+            "    output = 'blocked'\n",
+            {},
+        )
+    assert blocked["output"] == "blocked", f"沙箱读到了宿主机的文件:{blocked['output']}"
 
 
 def test_without_isolation_execution_is_refused_but_saving_is_not(monkeypatch) -> None:
