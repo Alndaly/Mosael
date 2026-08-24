@@ -26,14 +26,56 @@ from app.domain.providers import capability_ids_for_vendor, normalize_capability
 RUNTIME_FIELDS = ("context_window", "max_output_tokens", "reasoning", "vision", "reasoning_effort", "developer_role")
 
 
+#: 从模型名推能力的线索,按 vendor 给。**只写有把握的**:推错比不推更糟。
+#: 顺序有意义 —— 先匹配到的赢(`wan2.7-i2v` 要判成视频,不能被 `image` 那条抢走)。
+_CAPABILITY_HINTS: dict[str, tuple[tuple[tuple[str, ...], str], ...]] = {
+    "alibaba": (
+        (("-i2v", "-t2v", "i2v-", "t2v-"), "video"),
+        (("cosyvoice", "-tts", "tts-"), "tts"),
+        (("-image", "image-", "wanx"), "image"),
+    ),
+}
+
+
+def infer_capabilities(vendor: str, model_id: str) -> list[str]:
+    """从模型名推它提供哪种能力;推不出来回空。
+
+    存在的理由:`effective_capabilities` 原本在行上没写能力时回落**整个 vendor 的能力集**。
+    那在一家只有一两种能力时无害,而百炼有四种(对话/图像/视频/语音)—— 于是从目录里加一个
+    qwen-tts 模型会被声明成"也能做视频",它随即出现在视频生成的下拉里,选了必然失败。
+    界面替供应商撒谎,而用户只会以为是自己配错了。
+
+    先查内置目录(那是**验证过的事实**:哪个模型属于哪种生成能力),再按名字线索,都不中就回空。
+    """
+    name = (model_id or "").strip().lower()
+    if not name:
+        return []
+    from app.domain.generation import builtin_models_for
+
+    for kind in ("image", "video"):
+        if any(name == known.lower() for known in builtin_models_for(vendor, kind)):
+            return [kind]
+    for needles, capability in _CAPABILITY_HINTS.get(vendor, ()):
+        if any(needle in name for needle in needles):
+            return [capability]
+    return []
+
+
 def effective_capabilities(model: ProviderModel) -> list[str]:
-    """模型实际生效的能力。行上没写就回落 vendor 预设 —— 回填来的老数据、以及用户还没细分过
-    的连接都走这条路,不至于因为"没填"就变成"什么都不能做"。"""
+    """模型实际生效的能力。
+
+    顺序:行上写了的 → 从模型名推出来的 → vendor 预设。最后那条是兜底,不至于因为"没填"
+    就变成"什么都不能做";但它给的是**整个 vendor 的能力集**,所以能推出来的时候不要用它
+    (见 infer_capabilities 里那段说明)。
+    """
     own = normalize_capability_ids(model.capability_ids or [])
     if own:
         return own
     profile = model.profile
-    return capability_ids_for_vendor(profile.vendor) if profile is not None else []
+    if profile is None:
+        return []
+    inferred = infer_capabilities(profile.vendor, model.model_id)
+    return inferred or capability_ids_for_vendor(profile.vendor)
 
 
 def list_models(db: Session, profile_id: str, *, enabled_only: bool = False) -> list[ProviderModel]:

@@ -374,3 +374,51 @@ def test_万相在生成目录里_视频模型不在兼容目录中() -> None:
     # 尺寸档位用的是百炼收的像素对,不是 480p 这种档位名。
     for m in videos:
         assert all("*" in s for s in m["capabilities"]["sizes"])
+
+
+# ---------------- 模型要能被看见、能力要标对 ----------------
+
+
+def test_原生端点的模型必须能在设置里看到() -> None:
+    """真机症状:生成页的模型下拉里,百炼那一家整个是空的。
+
+    链条是这样的 —— 生成页列的是「档案 × 已配置模型」,而要配模型得先在设置里看得见;
+    设置那份列表原本只合并「已配置的行 + 实时目录」,而实时目录读的是 OpenAI 兼容的
+    /models,**视频走原生端点、根本不在那份清单里**(真机:那个接口对百炼只返回两个 wan
+    图像模型)。于是用户看不到、加不进来,而他并不知道为什么。
+    """
+    from app.domain.generation import builtin_models_for
+
+    videos = builtin_models_for("alibaba", "video")
+    assert len(videos) >= 5, "内置目录里没有万相视频模型"
+    assert all(m.startswith("wan") for m in videos)
+
+
+def test_能力按模型推_不套用vendor全集() -> None:
+    """百炼有四种能力,回落 vendor 全集会让每个模型都声称四样都行。
+
+    后果是具体的:从目录里加一个 qwen-tts,它会被声明成"也能做视频",随即出现在视频生成的
+    下拉里 —— 选了必然失败,而用户只会以为是自己配错了。
+    """
+    from app.domain.provider_models import infer_capabilities
+
+    assert infer_capabilities("alibaba", "wan2.7-i2v") == ["video"]
+    assert infer_capabilities("alibaba", "wan2.2-t2v-plus") == ["video"]
+    assert infer_capabilities("alibaba", "qwen-tts") == ["tts"]
+    assert infer_capabilities("alibaba", "cosyvoice-v2") == ["tts"]
+    assert infer_capabilities("alibaba", "qwen-image") == ["image"]
+    # 图像那条不能把视频抢走:wan2.7-i2v 里没有 image,但顺序错了迟早会出这类事。
+    assert infer_capabilities("alibaba", "wan2.7-image") == ["image"]
+
+
+def test_推不出来的回空_由调用方回落() -> None:
+    """对话模型的名字没有可靠线索,硬推只会推错。推不出来就回空,让 vendor 兜底 ——
+    行为和以前一样,不是收紧。"""
+    from app.domain.provider_models import infer_capabilities
+
+    assert infer_capabilities("alibaba", "qwen-max") == []
+    assert infer_capabilities("alibaba", "") == []
+    # 没有线索表、也不在内置目录里的,回空。
+    assert infer_capabilities("openai", "gpt-4o") == []
+    # 但**内置目录是验证过的事实**,对任何 vendor 都该生效 —— 不只百炼。
+    assert infer_capabilities("openai", "gpt-image-2") == ["image"]

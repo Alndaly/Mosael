@@ -1056,10 +1056,17 @@ def _model_out(model, catalog: dict[str, dict]) -> ProviderModelOut:
 
 @router.get("/settings/providers/{profile_id}/models", response_model=list[ProviderModelOut])
 def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> list[ProviderModelOut]:
-    """这条连接下的模型:**已配置的行 + 目录里还没配的**。
+    """这条连接下的模型:**已配置的行 + 实时目录 + 内置目录**。
 
-    两者合并而不是二选一 —— 目录说端点有什么(会变),模型行说用户做过什么(不该被目录冲掉)。
-    已配置的排在前面:那是用户实际在用的;目录里的其余项跟在后面,可一键加入。
+    三者合并而不是二选一 —— 实时目录说端点现在有什么(会变),模型行说用户做过什么(不该被
+    目录冲掉),内置目录补上**实时目录看不见的那些**。
+
+    第三份不是可有可无的:实时目录读的是 OpenAI 兼容的 `/models`,而有些能力走供应商的原生
+    端点、根本不在那份清单里 —— 百炼的万相视频就是这样(真机实测:那个接口对百炼只返回两个
+    wan **图像**模型,一个视频模型都没有)。少了这一份,用户在设置里看不到、加不进来,于是
+    生成页的下拉里那一家整个是空的,而他并不知道为什么。
+
+    已配置的排在前面:那是用户实际在用的;其余可一键加入。
     """
     # 只读:任何登录用户都看得到这条连接下有哪些模型 —— 他要据此选自己的默认。
     profile = _require_profile(db, profile_id, user)
@@ -1079,9 +1086,39 @@ def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> l
                 context_window=entry.get("context_window"),
                 context_window_source="catalog" if entry.get("context_window") else "fallback",
                 max_output_tokens=entry.get("max_output_tokens"),
-                effective_capability_ids=capability_ids_for_vendor(profile.vendor),
+                # 和落库后 effective_capabilities 走同一条判据 —— 否则列表里显示的能力
+                # 和加进去之后的能力对不上,而用户是照着列表做的决定。
+                effective_capability_ids=(
+                    provider_models.infer_capabilities(profile.vendor, model_id)
+                    or capability_ids_for_vendor(profile.vendor)
+                ),
             )
         )
+        known.add(model_id)
+
+    # 内置目录:走原生端点、不在 /models 里的那些。能力**按 kind 给准**,而不是套用 vendor
+    # 的全集 —— 一个万相视频模型不该被声明成"对话 + 图像 + 视频 + 语音"。
+    from app.domain.generation import builtin_models_for
+
+    for kind in ("image", "video"):
+        for model_id in builtin_models_for(profile.vendor, kind):
+            if model_id in known:
+                continue
+            known.add(model_id)
+            rows.append(
+                ProviderModelOut(
+                    id=model_id,
+                    configured=False,
+                    # 对界面来说它和目录项是一回事:没配过、可一键加入。区别只在"这份清单
+                    # 是静态的",而那是实现细节,不是用户要分辨的东西。
+                    in_catalog=True,
+                    enabled=False,
+                    context_window=None,
+                    context_window_source="fallback",
+                    max_output_tokens=None,
+                    effective_capability_ids=[kind],
+                )
+            )
     return rows
 
 
