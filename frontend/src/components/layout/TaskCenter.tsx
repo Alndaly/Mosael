@@ -166,7 +166,9 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
         <TooltipContent>{t("taskCenter")}</TooltipContent>
       </Tooltip>
 
-      <PopoverContent className="w-[340px] overflow-hidden" aria-label={t("taskCenter")}>
+      {/* p-0:PopoverContent 基类自带 p-4,而里面的头部和列表各自已经有内边距 ——
+          留着就是里外两层留白,行会被推得离弹层边缘很远。 */}
+      <PopoverContent className="w-[340px] overflow-hidden p-0" aria-label={t("taskCenter")}>
         <div className="flex items-center justify-between border-b border-border px-2.5 py-2 [&_strong]:text-ui-sm">
           <strong>{t("taskCenter")}</strong>
           {finished.length > 0 && (

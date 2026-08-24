@@ -372,6 +372,44 @@ textarea {
   }
 }
 
+/* 滚动条:**平时不占视觉,要用时才出现。**
+ *
+ * 浏览器只在内容溢出时才画滚动条,但"溢出"和"此刻需要看见它"是两回事 —— 一排横向的
+ * 标签、一列刚好多出两行的列表,都会常驻一条灰杠,而那条杠比它旁边的内容还抢眼
+ * (真机:剪辑页的 MEDIA/TRANSCRIPT 标签下方那条)。
+ *
+ * 所以:默认收起,鼠标移到那块区域上、或那块区域里有焦点时才显形。这套写法此前手写在
+ * 会话列表和生成页里(各一长串 class),现在提成全局默认 —— 新加的滚动区不必再抄一遍,
+ * 也不会因为忘了抄而各长各的样。
+ *
+ * 需要给滚动条**预留位置**、避免出现时内容跳动的地方,自己加 `scrollbar-gutter: stable`。 */
+@layer base {
+  * {
+    scrollbar-width: none;
+  }
+  *:hover,
+  *:focus-within {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--muted-foreground) 35%, transparent) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+  *:hover::-webkit-scrollbar,
+  *:focus-within::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--muted-foreground) 35%, transparent);
+  }
+}
+
 ::selection {
   background: var(--accent);
   color: var(--accent-foreground);
