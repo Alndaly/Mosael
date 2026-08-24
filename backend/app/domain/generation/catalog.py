@@ -60,6 +60,21 @@ SEEDREAM_3_IMAGE_CAPABILITIES = {
     "max_num_images": 1,
 }
 
+#: 万相(通义)视频。**尺寸用 `宽*高` 而不是 480p 这种档位名** —— 百炼收的就是像素对
+#: (真机:`size=1*1` 会被拒成 `size is not supported`,而 `832*480` 通过)。
+#: 这几个档是实测确认过被接受的,不是照文档抄的。
+WAN_VIDEO_CAPABILITIES = {
+    "modes": ["text-to-video", "image-to-video"],
+    "endpoint": "dashscope",
+    "parameter_keys": ["duration_seconds", "size", "first_frame"],
+    "duration_seconds": [5],
+    "default_duration_seconds": 5,
+    "sizes": ["832*480", "480*832", "1280*720", "720*1280"],
+    "default_size": "832*480",
+    "max_duration_seconds": 5,
+    "supports_audio": False,
+}
+
 SEEDANCE_2_VIDEO_CAPABILITIES = {
     "modes": ["text-to-video", "image-to-video"],
     "endpoint": "ark",
@@ -193,6 +208,44 @@ BUILTIN_MODELS = [
         "kind": "image",
         "model": "doubao-seedream-3-0-t2i-250415",
         "capabilities": SEEDREAM_3_IMAGE_CAPABILITIES,
+    },
+    {
+        # 下面这几个模型 id 都真机验证过存在(2026-08-24)。**它们不在兼容模式的 /models
+        # 目录里** —— 那个接口只列 OpenAI 兼容的模型,而视频走百炼原生端点,所以必须在这里
+        # 写出来,否则用户在界面上一个也选不到(真机:目录只返回 wan2.7-image 两个图像模型)。
+        "id": "alibaba:wan2.2-t2v-plus:video",
+        "provider": "alibaba",
+        "kind": "video",
+        "model": "wan2.2-t2v-plus",
+        "capabilities": WAN_VIDEO_CAPABILITIES,
+    },
+    {
+        "id": "alibaba:wan2.5-t2v-preview:video",
+        "provider": "alibaba",
+        "kind": "video",
+        "model": "wan2.5-t2v-preview",
+        "capabilities": WAN_VIDEO_CAPABILITIES,
+    },
+    {
+        "id": "alibaba:wan2.5-i2v-preview:video",
+        "provider": "alibaba",
+        "kind": "video",
+        "model": "wan2.5-i2v-preview",
+        "capabilities": WAN_VIDEO_CAPABILITIES,
+    },
+    {
+        "id": "alibaba:wan2.6-i2v-flash:video",
+        "provider": "alibaba",
+        "kind": "video",
+        "model": "wan2.6-i2v-flash",
+        "capabilities": WAN_VIDEO_CAPABILITIES,
+    },
+    {
+        "id": "alibaba:wan2.7-i2v:video",
+        "provider": "alibaba",
+        "kind": "video",
+        "model": "wan2.7-i2v",
+        "capabilities": WAN_VIDEO_CAPABILITIES,
     },
     {
         "id": "bytedance:doubao-seedance-2-0-260128:video",

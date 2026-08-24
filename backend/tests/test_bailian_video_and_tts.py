@@ -321,3 +321,56 @@ def test_cosyvoice引擎默认就是能用的模型() -> None:
 
     assert CosyVoiceTTS(api_key="k")._model == "cosyvoice-v2"
     assert CosyVoiceTTS.voices_for(CosyVoiceTTS.DEFAULT_MODEL), "默认模型没有音色"
+
+
+# ---------------- 万相视频:真机跑过之后补的 ----------------
+
+
+def test_已经是星号的尺寸不会被改坏() -> None:
+    """目录里给的档位本来就是 `832*480`(百炼收的就是像素对),而界面别处写的是 `1280x720`。
+    两种都要接得住,且已经是星号的不能被二次替换弄坏。"""
+    assert build_submit_payload(_req(parameters={"size": "832*480"}))["parameters"]["size"] == "832*480"
+    assert build_submit_payload(_req(parameters={"size": "1280x720"}))["parameters"]["size"] == "1280*720"
+
+
+def test_真机失败回包能读出原因() -> None:
+    """百炼把失败原因放在 output.message。丢掉它的话,用户只看到一个 FAILED ——
+    而这条真机回包里写着 `size is not supported`,那正是他需要知道的。"""
+    real = {
+        "request_id": "a9592167",
+        "output": {
+            "task_id": "e2f18bea", "task_status": "FAILED",
+            "code": "InvalidParameter", "message": "size is not supported",
+        },
+    }
+    with pytest.raises(ProviderError) as err:
+        extract_video_url(real)
+    assert "size is not supported" in str(err.value)
+
+
+def test_真机成功回包能取出地址() -> None:
+    """这是 wan2.2-t2v-plus 真实成功时的形状(2026-08-24):video_url 直接挂在 output 上,
+    而同一家的图像走的是 output.results[].url —— 别串了。"""
+    real = {
+        "output": {
+            "task_id": "7b26e27a", "task_status": "SUCCEEDED",
+            "orig_prompt": "海边日落", "actual_prompt": "海边日落,金色光线",
+            "video_url": "https://dashscope-7c2c.oss-cn-shanghai.aliyuncs.com/1d/f2/x.mp4",
+        },
+        "usage": {"video_duration": 5, "video_ratio": "832*480", "video_count": 1},
+    }
+    assert extract_video_url(real).endswith("x.mp4")
+
+
+def test_万相在生成目录里_视频模型不在兼容目录中() -> None:
+    """必须写进内置目录:兼容模式的 /models 只列 OpenAI 兼容的模型,视频走百炼原生端点 ——
+    真机实测那个接口对百炼只返回两个 wan 图像模型,一个视频模型都没有。不写的话用户在界面上
+    一个也选不到。"""
+    from app.domain.generation.catalog import BUILTIN_MODELS
+
+    videos = [m for m in BUILTIN_MODELS if m["provider"] == "alibaba" and m["kind"] == "video"]
+    assert len(videos) >= 5, "万相视频模型没进目录"
+    assert all(m["model"].startswith("wan") for m in videos)
+    # 尺寸档位用的是百炼收的像素对,不是 480p 这种档位名。
+    for m in videos:
+        assert all("*" in s for s in m["capabilities"]["sizes"])
