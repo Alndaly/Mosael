@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ChevronRight, FolderInput, FolderPlus, ListChecks, MessageSquarePlus, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ChevronRight, FolderInput, FolderPlus, ListChecks, MessageSquarePlus, Pencil, Plus, Search, SearchX, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -77,6 +77,7 @@ export function SessionList({
   const [deletingGroup, setDeletingGroup] = React.useState<AgentSessionGroup | null>(null);
   const [creatingGroup, setCreatingGroup] = React.useState(false);
   const [batchDeleting, setBatchDeleting] = React.useState(false);
+  const [query, setQuery] = React.useState("");
   // 折叠状态只活在这次会话里:它是"我现在不想看这一摞",不是设置。
   const [collapsed, setCollapsed] = React.useState<Set<string>>(new Set());
 
@@ -168,11 +169,18 @@ export function SessionList({
   });
 
   const groupList = groups.data ?? [];
+  // 按标题筛。搜索时**不改变分组结构**,只是把不匹配的行拿掉、空掉的分组整段收起 ——
+  // 拍平成一列会让人分不清找到的这条本来收在哪儿。
+  const keyword = query.trim().toLowerCase();
+  const visible = React.useMemo(
+    () => (keyword ? sessions.filter((session) => session.title.toLowerCase().includes(keyword)) : sessions),
+    [sessions, keyword],
+  );
   // 分组内 / 未分组两摞。会话本身的顺序(后端按 updated_at 倒序)在每一摞里保持不变。
   const byGroup = React.useMemo(() => {
     const map = new Map<string, AgentSession[]>();
     const loose: AgentSession[] = [];
-    for (const session of sessions) {
+    for (const session of visible) {
       const groupId = session.group_id;
       if (groupId && groupList.some((group) => group.id === groupId)) {
         map.set(groupId, [...(map.get(groupId) ?? []), session]);
@@ -181,7 +189,7 @@ export function SessionList({
       }
     }
     return { map, loose };
-  }, [sessions, groupList]);
+  }, [visible, groupList]);
 
   // 未分组那一摞的容器键。用一个不可能撞上 id 的常量,免得和真实分组 id 混在一起。
   const UNGROUPED = "__ungrouped__";
@@ -250,7 +258,7 @@ export function SessionList({
 
   return (
     <>
-      <div className="flex min-h-10 items-center justify-between gap-1 border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
+      <div className="flex min-h-10 shrink-0 items-center justify-between gap-1 border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
         {selectMode ? (
           // 选择模式下头部换成这一批的动作 —— 和素材/工作流/发布三页同一套语汇。
           <>
@@ -260,9 +268,9 @@ export function SessionList({
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7"
-                title={allSelected(sessions) ? t("mediaDeselectAll") : t("mediaSelectAll")}
-                aria-label={allSelected(sessions) ? t("mediaDeselectAll") : t("mediaSelectAll")}
-                onClick={() => selectAll(sessions)}
+                title={allSelected(visible) ? t("mediaDeselectAll") : t("mediaSelectAll")}
+                aria-label={allSelected(visible) ? t("mediaDeselectAll") : t("mediaSelectAll")}
+                onClick={() => selectAll(visible)}
               >
                 <ListChecks size={14} />
               </Button>
@@ -329,17 +337,40 @@ export function SessionList({
         onDragEnd={onDragEnd}
         onDragCancel={() => setDraggingId(null)}
       >
+      {/* 搜索只在真有东西可搜时出现 —— 空列表上摆一个搜索框是纯占位。
+          ⌘K 那个全局搜索**不覆盖对话**(只有导航/项目/素材/工作流/发布),所以这里是
+          找回一次旧对话的唯一入口。 */}
+      {sessions.length > 0 && !selectMode && (
+        <div className="relative shrink-0 border-b border-border px-2 py-1.5">
+          <Search size={12} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={t("chatSearchSessions")}
+            aria-label={t("chatSearchSessions")}
+            className="h-7 w-full rounded-md border border-transparent bg-field pl-6 pr-2 text-ui-xs text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring [&::-webkit-search-cancel-button]:appearance-none"
+          />
+        </div>
+      )}
       <div
         className={cn(
-          "grid grid-cols-[minmax(0,1fr)] content-start gap-1 overflow-y-auto overflow-x-hidden p-1.5 [scrollbar-gutter:stable] [scrollbar-width:none] hover:[scrollbar-color:color-mix(in_srgb,var(--muted-foreground)_35%,transparent)_transparent] hover:[scrollbar-width:thin] focus-within:[scrollbar-color:color-mix(in_srgb,var(--muted-foreground)_35%,transparent)_transparent] focus-within:[scrollbar-width:thin] [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0 hover:[&::-webkit-scrollbar]:h-1.5 hover:[&::-webkit-scrollbar]:w-1.5 focus-within:[&::-webkit-scrollbar]:h-1.5 focus-within:[&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[color-mix(in_srgb,var(--muted-foreground)_35%,transparent)]",
-          loaded && sessions.length === 0 && groupList.length === 0 && "content-center justify-items-center",
+          "grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] content-start gap-1 overflow-y-auto overflow-x-hidden p-1.5 [scrollbar-gutter:stable] [scrollbar-width:none] hover:[scrollbar-color:color-mix(in_srgb,var(--muted-foreground)_35%,transparent)_transparent] hover:[scrollbar-width:thin] focus-within:[scrollbar-color:color-mix(in_srgb,var(--muted-foreground)_35%,transparent)_transparent] focus-within:[scrollbar-width:thin] [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0 hover:[&::-webkit-scrollbar]:h-1.5 hover:[&::-webkit-scrollbar]:w-1.5 focus-within:[&::-webkit-scrollbar]:h-1.5 focus-within:[&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[color-mix(in_srgb,var(--muted-foreground)_35%,transparent)]",
+          loaded && ((sessions.length === 0 && groupList.length === 0) || (Boolean(keyword) && visible.length === 0)) &&
+            "content-center justify-items-center",
         )}
       >
         {loaded && sessions.length === 0 && groupList.length === 0 && (
           <EmptyState size="compact" icon={<MessageSquarePlus size={15} />} title={t("chatNoSessions")} />
         )}
+        {keyword && visible.length === 0 && (
+          <EmptyState size="compact" icon={<SearchX size={15} />} title={t("chatSearchNoMatch")} />
+        )}
         {groupList.map((group) => {
           const members = byGroup.map.get(group.id) ?? [];
+          // 搜索时把没命中的分组整段收起 —— 一排「某某 0」既占地方,又让人以为搜错了。
+          // 不搜索时空分组要留着:刚建出来的那个得看得见,否则没地方往里拖。
+          if (keyword && members.length === 0) return null;
           const isCollapsed = collapsed.has(group.id);
           return (
             <GroupSection key={group.id} groupId={group.id}>
@@ -519,7 +550,11 @@ function SessionRow({
           className={cn(
             "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)] items-center gap-px rounded-md border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted",
             selectMode && "grid-cols-[auto_minmax(0,1fr)] gap-1.5",
-            active && "bg-accent shadow-[inset_2px_0_0_var(--primary)] hover:bg-accent",
+            // 选中态:一条**圆角短竖条**贴在左边 + 一层很淡的底色。此前是
+            // `shadow-[inset_2px_0_0]` —— 直角、贯穿整行高、颜色还是实心 primary,
+            // 在一堆圆角行里显得很硬。圆角竖条是本仓库已有的做法(剪辑页字幕条同款)。
+            active &&
+              "relative bg-[color-mix(in_srgb,var(--primary)_9%,transparent)] before:absolute before:inset-y-1.5 before:left-0.5 before:w-0.5 before:rounded-full before:bg-primary before:content-[''] hover:bg-[color-mix(in_srgb,var(--primary)_12%,transparent)]",
             // 拖起来的那一条留个淡影占位,别让列表塌下去。
             dragging && "opacity-40",
           )}
@@ -530,7 +565,7 @@ function SessionRow({
           {/* 列表行用**前导勾选框**,不是卡片那种右上角浮标(components/app/SelectionCheck):
               那个是为卡片定的位置与尺寸,压在一行 28px 高的标题上会把字盖掉。 */}
           {selectMode && <Checkbox checked={checked} className="pointer-events-none" tabIndex={-1} />}
-          <strong className="truncate text-xs font-semibold">{session.title}</strong>
+          <span className="truncate text-xs">{session.title}</span>
         </button>
       </ContextMenuTrigger>
       <ContextMenuContent>

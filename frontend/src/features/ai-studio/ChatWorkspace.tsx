@@ -444,7 +444,10 @@ export function ChatWorkspace({
           onPointerDown={startPanelDrag("right")}
         />
       )}
-      <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[820px]:hidden">
+      {/* flex 列而不是定行数的 grid:搜索框是**条件渲染**的(空列表/选择模式下不出现),
+          而 `grid-rows-[auto_minmax(0,1fr)]` 一旦子元素从两个变三个,能滚的那一行就落到
+          搜索框头上,列表反而掉进隐式行撑破容器。 */}
+      <aside className="flex min-h-0 flex-col overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] max-[820px]:hidden">
         <SessionList
           workspaceId={workspace.id}
           sessions={sessions.data ?? []}
