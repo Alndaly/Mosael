@@ -341,6 +341,11 @@ class BailianTTS:
     id = "alibaba"
     label = "ttsProvider_bailian"
     parallel_safe = True
+    #: 这一支只认 qwen-tts 家族。CosyVoice 是同一把 Key 下的**另一套 API**,单独一个引擎
+    #: (见 CosyVoiceTTS)—— 端点、请求体、音色、支不支持语速全都不一样,合成一条会让面板
+    #: 上的音色和语速跟着"当前恰好配了哪个模型"无声地变。
+    MODEL_PREFIXES = ("qwen-tts", "qwen3-tts")
+    DEFAULT_MODEL = "qwen-tts"
     #: CosyVoice 走**另一个端点**,请求体也不同 —— 见 _request_for。
     COSYVOICE_PATH = "/api/v1/services/audio/tts/SpeechSynthesizer"
     #: 音色**按模型族**给,不是全引擎一份 —— 真机验证过 qwen3-tts-flash 有 qwen-tts 没有的
@@ -483,30 +488,66 @@ def extract_bailian_audio_url(payload: dict) -> str:
     return ""
 
 
+class CosyVoiceTTS(BailianTTS):
+    """百炼的 CosyVoice。**和 qwen-tts 同一把 Key,但是另一套 API。**
+
+    单独成一个引擎而不是塞进 BailianTTS 里选模型 —— 理由和火山把 TTS 与播客分开一样:
+    面板上要显示的东西不同(CosyVoice 有语速、音色 id 完全不同),而"显示什么"不该取决于
+    用户当前恰好在这条连接下配了哪个模型。
+
+    与火山那两条的差别是**钥匙**:火山的 TTS 和播客来自两个控制台、发两把不同的 Key,所以
+    它们是两个 vendor;百炼这两套共用一把 DashScope Key,拆 vendor 会让用户把同一把钥匙填
+    两遍(bytedance 当年就是这么拆的,后来合了)。所以只拆**引擎**,凭据仍指向 alibaba ——
+    见 vendor_for_engine。
+    """
+
+    id = "alibaba-cosyvoice"
+    label = "ttsProvider_cosyvoice"
+    MODEL_PREFIXES = ("cosyvoice",)
+    DEFAULT_MODEL = "cosyvoice-v2"
+
+    def __init__(self, api_key: str, voice: str = "", model: str = "", base_url: str = "") -> None:
+        super().__init__(api_key=api_key, voice=voice, model=model or self.DEFAULT_MODEL, base_url=base_url)
+
+
+#: 引擎 id → 取凭据时用的 vendor。**默认是它自己**(约定见 OpenAITTS.id 上面那段);
+#: 只有百炼这一处例外:两个引擎共用一条连接、一把 Key。
+_ENGINE_VENDOR = {CosyVoiceTTS.id: BailianTTS.id}
+
+
+def vendor_for_engine(engine: str) -> str:
+    """这个引擎的凭据挂在哪个 vendor 下。"""
+    return _ENGINE_VENDOR.get(engine, engine)
+
+
 REMOTE_ENGINES = {
     OpenAITTS.id: OpenAITTS,
     BailianTTS.id: BailianTTS,
+    CosyVoiceTTS.id: CosyVoiceTTS,
     VolcanoTTS.id: VolcanoTTS,
     EdgeTTS.id: EdgeTTS,
 }
 
 
-def _active_tts_model() -> str:
-    """这个部署给百炼配的 tts 模型。取不到就回空(按不支持语速处理,较保守的那一侧)。
+def active_model_for(engine_cls: type) -> str:
+    """这个部署给某个百炼引擎配的模型;取不到就回它的默认模型。
 
-    引擎目录本来是"纯静态的一张表",这里破了一次例 —— 因为百炼的能力**随模型变**,
-    而界面要在**挑引擎的那一刻**就说清楚有没有语速,不能等用户填完文本才发现旋钮是假的。
+    引擎目录本来是"纯静态的一张表",这里破了一次例 —— 因为百炼的音色**随模型变**,
+    而界面要在**挑引擎的那一刻**就把音色列对,不能等用户填完文本才发现选的音色不存在。
     """
+    prefixes = getattr(engine_cls, "MODEL_PREFIXES", ())
+    default = getattr(engine_cls, "DEFAULT_MODEL", "")
     try:
         from app.core.db import SessionLocal
         from app.domain import provider_models
         from app.domain.providers import resolve_profile
 
         with SessionLocal() as db:
-            profile = resolve_profile(db, "alibaba")
-            return provider_models.model_id_for(db, profile, "tts") if profile else ""
+            profile = resolve_profile(db, vendor_for_engine(getattr(engine_cls, "id", "")))
+            found = provider_models.model_id_for_family(db, profile, "tts", prefixes) if profile else ""
+            return found or default
     except Exception:  # noqa: BLE001 —— 引擎目录不该因为取不到模型就整个拉不出来
-        return ""
+        return default
 
 
 def describe_engines() -> list[dict[str, object]]:
@@ -566,14 +607,24 @@ def describe_engines() -> list[dict[str, object]]:
             "id": BailianTTS.id,
             "label": BailianTTS.label,
             "needs_key": True,
-            # **按当前配的模型算**,不是整个引擎一刀切:CosyVoice 收 rate(实测真变速),
-            # qwen-tts 家族没有这个参数。摆一个拨不动的旋钮比不摆更糟。
-            "supports_speed": BailianTTS.supports_speed_for(_active_tts_model()),
+            # qwen-tts 家族没有语速参数。摆一个拨不动的旋钮比不摆更糟。
+            "supports_speed": False,
             # 模型是开放集合(日期快照、instruct / vd / vc 变体),而百炼没有列音色的接口。
             # 认得出的模型走下拉(见 /api/tts/voices),认不出的退回填 id —— 而不是空下拉。
             "needs_voice_id": True,
-            "voices": list(BailianTTS.VOICES),
+            "voices": list(BailianTTS.voices_for(active_model_for(BailianTTS))),
             "note": "ttsProviderNote_bailian",
+        },
+        {
+            # 同一把 DashScope Key 的第二套 API。分开列的理由见 CosyVoiceTTS 的说明。
+            "id": CosyVoiceTTS.id,
+            "label": CosyVoiceTTS.label,
+            "needs_key": True,
+            # 实测 rate=1.5 把 2.25 秒的句子变成 1.50 秒,是真变速。
+            "supports_speed": True,
+            "needs_voice_id": True,
+            "voices": list(CosyVoiceTTS.voices_for(active_model_for(CosyVoiceTTS))),
+            "note": "ttsProviderNote_cosyvoice",
         },
         {
             "id": VolcanoTTS.id,

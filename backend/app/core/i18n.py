@@ -213,6 +213,11 @@ MESSAGES: dict[str, dict[str, str]] = {
     "ttsProvider_openai": {"zh": "OpenAI 语音合成(含兼容端点)", "en": "OpenAI speech (incl. compatible endpoints)"},
     "ttsProvider_edge": {"zh": "Edge 免费语音(微软)", "en": "Edge free voices (Microsoft)"},
     "ttsProvider_bailian": {"zh": "阿里云百炼(qwen-tts)", "en": "Alibaba Bailian (qwen-tts)"},
+    "ttsProvider_cosyvoice": {"zh": "阿里云百炼(CosyVoice)", "en": "Alibaba Bailian (CosyVoice)"},
+    "ttsProviderNote_cosyvoice": {
+        "zh": "同一把百炼 DashScope Key 的另一套语音 API。支持语速,音色 id 与 qwen-tts 完全不同。",
+        "en": "The other speech API behind the same Bailian (DashScope) key. Supports speed; its voice ids differ entirely from qwen-tts.",
+    },
     "ttsProviderNote_bailian": {
         "zh": "用百炼的 DashScope Key,音色固定四个。它不支持语速 —— 需要把配音精确塞进原时长的,请选别的引擎。",
         "en": "Uses your Bailian (DashScope) key; four fixed voices. No speed control — pick another engine when dubbing must fit an exact window.",

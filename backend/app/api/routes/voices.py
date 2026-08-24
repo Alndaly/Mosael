@@ -229,16 +229,16 @@ def list_tts_voices(engine: str, db: DbSession, user: CurrentUser) -> list[dict]
     # `if engine != "volcano": return []` —— 于是加一个引擎要改两处(引擎目录 + 这里),
     # 漏掉第二处的表现是"引擎选得出来,但音色下拉是空的"。百炼刚接进来时就是这样。
     # 音色清单只有一个产地:describe_engines()。这里只负责**火山那条实时的**。
-    if engine == "alibaba":
-        # 百炼的音色**跟着模型走**(qwen3-tts-flash 有 qwen-tts 没有的几个),而模型是这条连接
-        # 在 tts 能力下配的那一个。这里解析的必须和合成时同一条路径(audio/voices 里那句
-        # `model_id_for(db, profile, "tts")`),否则下拉列的是 A 的音色、发的是 B 的请求。
-        from app.audio.tts_providers import BailianTTS
-        from app.domain import provider_models
+    from app.audio.tts_providers import REMOTE_ENGINES, BailianTTS
 
-        profile = resolve_profile(db, "alibaba", user_id=user.id)
-        model = provider_models.model_id_for(db, profile, "tts", user_id=user.id) if profile else ""
-        return [{"value": v, "label": v} for v in BailianTTS.voices_for(model)]
+    if engine in (BailianTTS.id, "alibaba-cosyvoice"):
+        # 百炼的音色**跟着模型走**(qwen3-tts-flash 有 qwen-tts 没有的几个,CosyVoice 的
+        # id 更是完全另一套)。这里解析模型必须和合成时**同一条路径**,否则下拉列的是 A 的
+        # 音色、发出去的是 B 的请求 —— 用户选了个看着合法的音色,拿回一句"音色不存在"。
+        from app.audio.tts_providers import active_model_for
+
+        engine_cls = REMOTE_ENGINES[engine]
+        return [{"value": v, "label": v} for v in engine_cls.voices_for(active_model_for(engine_cls))]
 
 
 

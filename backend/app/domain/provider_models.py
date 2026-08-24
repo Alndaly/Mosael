@@ -161,6 +161,31 @@ def model_id_for(
     return ""
 
 
+def model_id_for_family(
+    db: Session, profile: ProviderProfile | None, capability: str, prefixes: tuple[str, ...],
+    user_id: str | None = None,
+) -> str:
+    """同 model_id_for,但**只认某一族**的模型。
+
+    一条连接下可以挂好几个同能力的模型,而有些引擎只吃其中一族:百炼的语音就是两套 API
+    (qwen-tts 家族 / CosyVoice),共用一把 Key、共用一条连接,却各自只认自己那一族。
+    不筛的话,配了 qwen-tts 的人切到 CosyVoice 引擎会把 qwen 的模型名发去 CosyVoice 的端点,
+    得到一句看不懂的 `url error`。
+    """
+    if profile is None:
+        return ""
+    def matches(model_id: str) -> bool:
+        return model_id.strip().lower().startswith(prefixes)
+
+    chosen = resolve_default(db, capability, user_id)
+    if chosen is not None and chosen.provider_profile_id == profile.id and matches(chosen.model_id):
+        return chosen.model_id
+    for model in list_models(db, profile.id, enabled_only=True):
+        if capability in effective_capabilities(model) and matches(model.model_id):
+            return model.model_id
+    return ""
+
+
 def profile_capabilities(db: Session, profile: ProviderProfile) -> list[str]:
     """这条连接对外提供的能力 = 它下面所有启用模型能力的并集。
 

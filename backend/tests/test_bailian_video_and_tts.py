@@ -253,3 +253,51 @@ def test_播客音色不能显示成原始id() -> None:
     labels = {**dict(EDGE_BUILTIN_VOICES), **dict(PODCAST_SPEAKERS), **dict(VOLCANO_BUILTIN_VOICES)}
     for voice, expected in PODCAST_SPEAKERS:
         assert labels.get(voice) == expected != voice, f"{voice} 会显示成原始 id"
+
+
+# ---------------- 两个引擎、一条连接、一把钥匙 ----------------
+
+
+def test_两个引擎共用同一条连接的凭据() -> None:
+    """和火山那两条的差别在**钥匙**:火山 TTS 与播客来自两个控制台、两把 Key,所以是两个
+    vendor;百炼这两套共用一把 DashScope Key,拆 vendor 会让用户把同一把钥匙填两遍
+    (bytedance 当年就是这么拆的,后来合了)。所以只拆引擎,凭据仍指向 alibaba。"""
+    from app.audio.tts_providers import CosyVoiceTTS, vendor_for_engine
+
+    assert vendor_for_engine(CosyVoiceTTS.id) == "alibaba"
+    assert vendor_for_engine("alibaba") == "alibaba"
+    # 别的引擎照旧:引擎 id 就是 vendor id。
+    assert vendor_for_engine("volcano") == "volcano"
+    assert vendor_for_engine("openai") == "openai"
+
+
+def test_模型按族筛_免得把qwen的模型发去cosyvoice() -> None:
+    """一条连接下可以同时挂 qwen-tts 和 cosyvoice-v2。不筛的话切到 CosyVoice 引擎会把
+    qwen 的模型名发去 CosyVoice 的端点,得到一句看不懂的 `url error`。"""
+    from app.audio.tts_providers import BailianTTS as B, CosyVoiceTTS as C
+
+    assert B.MODEL_PREFIXES == ("qwen-tts", "qwen3-tts")
+    assert C.MODEL_PREFIXES == ("cosyvoice",)
+    # 两族不重叠 —— 重叠的话筛选就形同虚设。
+    for prefix in C.MODEL_PREFIXES:
+        assert not prefix.startswith(B.MODEL_PREFIXES)
+
+
+def test_两个引擎各自的音色和语速() -> None:
+    """面板上显示什么,不该取决于用户在这条连接下当前恰好配了哪个模型 —— 这正是分开列的理由。"""
+    from app.audio.tts_providers import CosyVoiceTTS, describe_engines
+
+    entries = {e["id"]: e for e in describe_engines()}
+    assert entries["alibaba"]["supports_speed"] is False
+    assert entries[CosyVoiceTTS.id]["supports_speed"] is True
+    # 音色两边完全不同,混用会被拒。
+    assert not set(entries["alibaba"]["voices"]) & set(entries[CosyVoiceTTS.id]["voices"])
+
+
+def test_cosyvoice引擎默认就是能用的模型() -> None:
+    """这条连接还没配任何 cosyvoice 模型时,引擎也该能跑 —— 回落到 DEFAULT_MODEL,
+    而不是把空模型名发出去。"""
+    from app.audio.tts_providers import CosyVoiceTTS
+
+    assert CosyVoiceTTS(api_key="k")._model == "cosyvoice-v2"
+    assert CosyVoiceTTS.voices_for(CosyVoiceTTS.DEFAULT_MODEL), "默认模型没有音色"

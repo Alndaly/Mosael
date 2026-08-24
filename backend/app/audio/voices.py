@@ -686,9 +686,23 @@ def _synthesize_remote(
     # The profile carries base_url too. Reading only the key would send a proxy user's request
     # to api.openai.com with a key that is not valid there — a 401 with no hint as to why.
     # 这次配音替谁干,job 上记着 —— 后台线程手里只有它(见 Job.created_by)。
-    profile = resolve_profile(db, engine, provider_profile_id, user_id=job.created_by)
+    # 引擎 id 通常就是 vendor id,百炼是唯一的例外:qwen-tts 与 CosyVoice 是两个引擎、
+    # 一条连接、一把 Key(见 tts_providers.vendor_for_engine)。
+    from app.audio.tts_providers import REMOTE_ENGINES, vendor_for_engine
+
+    profile = resolve_profile(db, vendor_for_engine(engine), provider_profile_id, user_id=job.created_by)
     api_key = (profile.api_key if profile else None) or ""
-    model = model_override or voice_resource or provider_models.model_id_for(db, profile, "tts")
+    # **模型要按引擎那一族筛**。同一条连接下可以同时挂着 qwen-tts 和 cosyvoice-v2,
+    # 不筛的话切到 CosyVoice 引擎会把 qwen 的模型名发去 CosyVoice 的端点(得到 `url error`)。
+    engine_cls = REMOTE_ENGINES.get(engine)
+    prefixes = getattr(engine_cls, "MODEL_PREFIXES", ())
+    resolved = (
+        provider_models.model_id_for_family(db, profile, "tts", prefixes)
+        or getattr(engine_cls, "DEFAULT_MODEL", "")
+        if prefixes
+        else provider_models.model_id_for(db, profile, "tts")
+    )
+    model = model_override or voice_resource or resolved
     provider = build_remote_provider(
         engine,
         api_key=api_key,
