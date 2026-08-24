@@ -723,6 +723,9 @@ export const messages = {
     wfIssueStaleVar: "引用了已删除的节点:{ref}",
     wfIssueDisconnected: "未连接到流程,不会被执行",
     wfIssueNoProviders: "未配置模型服务",
+    // 条件节点引出的两条边,画布上就标这两个字。
+    wfEdgeTrue: "真",
+    wfEdgeFalse: "假",
     wfIssueProviderMissing: "绑定的模型服务已失效",
     wfIssueGenUnconfigured: "所选生成服务商未配密钥",
     wfIssueTypeMismatch: "类型不匹配:需要{expected},接的是{actual}",
@@ -2572,6 +2575,8 @@ export const messages = {
     wfIssueStaleVar: "References a deleted node: {ref}",
     wfIssueDisconnected: "Not connected to the flow — it won't run",
     wfIssueNoProviders: "No model provider configured",
+    wfEdgeTrue: "true",
+    wfEdgeFalse: "false",
     wfIssueProviderMissing: "Bound model provider no longer exists",
     wfIssueGenUnconfigured: "Chosen generation provider has no key",
     wfIssueTypeMismatch: "Type mismatch: expects {expected}, got {actual}",

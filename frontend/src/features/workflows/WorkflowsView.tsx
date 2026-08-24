@@ -857,7 +857,7 @@ function toFlowNodes(graph: WorkflowGraph, registry: Map<string, WorkflowNodeTyp
   }));
 }
 
-function toFlowEdges(graph: WorkflowGraph): Edge[] {
+function toFlowEdges(graph: WorkflowGraph, t: ReturnType<typeof useI18n>): Edge[] {
   const nodeType = new Map((graph.nodes ?? []).map((node) => [node.id, node.type]));
   return (graph.edges ?? []).map((edge) => {
     // 数据边:接输出接点 out:x → 输入接点 in:y。蓝色流动虚线,不带箭头(终点是接点)。
@@ -887,7 +887,12 @@ function toFlowEdges(graph: WorkflowGraph): Edge[] {
       source: edge.source,
       target: edge.target,
       sourceHandle: edge.source_handle ?? undefined,
-      label: edge.source_handle === "true" ? "真" : edge.source_handle === "false" ? "假" : undefined,
+      label:
+        edge.source_handle === "true"
+          ? t("wfEdgeTrue")
+          : edge.source_handle === "false"
+            ? t("wfEdgeFalse")
+            : undefined,
       className: edge.source_handle ? `wf-edge-${edge.source_handle}` : undefined,
     };
   });
@@ -994,7 +999,7 @@ function WorkflowEditor({
   const canUndo = useStore(graphStore.temporal, (s) => s.pastStates.length > 0);
   const canRedo = useStore(graphStore.temporal, (s) => s.futureStates.length > 0);
   const [nodes, setNodes] = React.useState<Node[]>(() => toFlowNodes(workflow.graph as unknown as WorkflowGraph, registry));
-  const [edges, setEdges] = React.useState<Edge[]>(() => toFlowEdges(workflow.graph as unknown as WorkflowGraph));
+  const [edges, setEdges] = React.useState<Edge[]>(() => toFlowEdges(workflow.graph as unknown as WorkflowGraph, t));
   const [dirty, setDirty] = React.useState(false);
   const [showHistory, setShowHistory] = React.useState(false);
 
@@ -1002,7 +1007,7 @@ function WorkflowEditor({
   const syncFromGraph = React.useCallback(() => {
     const next = graphStore.getState().graph;
     setNodes(toFlowNodes(next, registry));
-    setEdges(toFlowEdges(next));
+    setEdges(toFlowEdges(next, t));
     setDirty(true);
   }, [graphStore, registry]);
   const undo = React.useCallback(() => {
@@ -1130,7 +1135,7 @@ function WorkflowEditor({
       const next = structuredClone(workflow.graph as unknown as WorkflowGraph);
       setGraph(next);
       rebuildNodes(next);
-      setEdges(toFlowEdges(next));
+      setEdges(toFlowEdges(next, t));
     }
   }, [workflow.updated_at, workflow.graph, dirty, rebuildNodes]);
 
@@ -1138,7 +1143,7 @@ function WorkflowEditor({
     (next: WorkflowGraph) => {
       setGraph(next);
       rebuildNodes(next);
-      setEdges(toFlowEdges(next));
+      setEdges(toFlowEdges(next, t));
       setDirty(true);
     },
     [rebuildNodes],
@@ -1236,7 +1241,7 @@ function WorkflowEditor({
     const pastedIds = new Set(newNodes.map((node) => node.id));
     // 只让粘贴出来的新节点选中(旧选区取消),方便立刻整体拖走。
     setNodes(toFlowNodes(next, registry).map((node) => ({ ...node, selected: pastedIds.has(node.id) })));
-    setEdges(toFlowEdges(next));
+    setEdges(toFlowEdges(next, t));
     setDirty(true);
     setSelectedNodeId(newNodes[0].id);
     return true;
@@ -1343,7 +1348,7 @@ function WorkflowEditor({
             ),
           };
           setNodes(toFlowNodes(next, registry));
-          setEdges(toFlowEdges(next));
+          setEdges(toFlowEdges(next, t));
           return next;
         });
         setDirty(true);
@@ -1360,7 +1365,7 @@ function WorkflowEditor({
             { id, source: connection.source!, target: connection.target!, source_handle: srcHandle ?? null },
           ],
         };
-        setEdges(toFlowEdges(next));
+        setEdges(toFlowEdges(next, t));
         return next;
       });
       setDirty(true);
@@ -2225,7 +2230,7 @@ function LoopBodyEditor({
   }, []);
   const [body, setBody] = React.useState<WorkflowGraph>(() => structuredClone(initialBody));
   const [nodes, setNodes] = React.useState<Node[]>(() => toFlowNodes(initialBody, registry));
-  const [edges, setEdges] = React.useState<Edge[]>(() => toFlowEdges(initialBody));
+  const [edges, setEdges] = React.useState<Edge[]>(() => toFlowEdges(initialBody, t));
   // 循环体编辑器读同一个偏好:主画布是圆角折线、点进循环体却变回贝塞尔,会让人以为进错了地方。
   const [edgeShape] = usePersistentTab<EdgeShape>("wf-edge-shape", "default", EDGE_SHAPES);
   const shapedEdges = React.useMemo(
@@ -2238,7 +2243,7 @@ function LoopBodyEditor({
     (next: WorkflowGraph) => {
       setBody(next);
       setNodes(toFlowNodes(next, registry));
-      setEdges(toFlowEdges(next));
+      setEdges(toFlowEdges(next, t));
       onChange(next);
     },
     [registry, onChange],
