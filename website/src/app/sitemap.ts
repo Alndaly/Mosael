@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-import { HTML_LANG, LOCALES, type Locale } from "@/i18n/config";
+import { DEFAULT_LOCALE, HTML_LANG, LOCALES, type Locale } from "@/i18n/config";
 import { docHref, listDocs } from "@/lib/docs";
 import { SITE } from "@/lib/site";
 
@@ -8,7 +8,8 @@ import { SITE } from "@/lib/site";
  * 站点地图。
  *
  * 每条都带 `alternates.languages` —— 中英两版是同一篇内容的两种语言,不声明的话搜索引擎
- * 会把它们当重复内容,择一收录、另一个丢掉。
+ * 会把它们当重复内容,择一收录、另一个丢掉。里面还有一条 `x-default`,指默认语言那版:
+ * 读者的语言两条都不匹配时(比如日语),没有它搜索引擎只能自己猜发哪版。
  *
  * 只列**有正文的页**:`/` 是一条 307 跳转,`/<语言>/docs` 也是跳到第一篇,把跳转写进
  * sitemap 只会浪费抓取配额。
@@ -23,8 +24,10 @@ const STATIC: Entry[] = [
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const url = (path: string) => `${SITE.url}${path}`;
-  const languages = (make: (locale: Locale) => string) =>
-    Object.fromEntries(LOCALES.map((locale) => [HTML_LANG[locale], url(make(locale))]));
+  const languages = (make: (locale: Locale) => string) => ({
+    ...Object.fromEntries(LOCALES.map((locale) => [HTML_LANG[locale], url(make(locale))])),
+    "x-default": url(make(DEFAULT_LOCALE)),
+  });
 
   const pages: MetadataRoute.Sitemap = [];
 
