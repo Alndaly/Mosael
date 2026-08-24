@@ -207,7 +207,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto px-2 pb-2 [&>*]:shrink-0">
       {/* 顶部工具条 + 标签筛选 sticky 吸顶:滚动素材网格时保持可见。顶部内边距放在本 sticky 头上
           (滚动容器不留 pt),吸顶时才能严丝合缝贴顶、不露出上一行卡片;-mx 铺满宽度,bg 盖住滚上来的卡片。 */}
-      {/* 负外边距**必须与外壳的内边距同数**:它靠 -mx 把自己拉到容器边缘,好让 sticky 时的
+      {/* 负外边距和外壳的内边距**是同一个数**:它靠 -mx 把自己拉到容器边缘,好让 sticky 时的
           底色铺满整宽。外壳从 px-3.5 收到 px-2 之后这层耦合就断了 —— 工具条比容器宽出 12px,
           整页于是能左右滚(真机)。两个数写在一起,下次改 padding 时才看得见要一起改。 */}
       <div className="sticky top-0 z-20 -mx-2 flex flex-col gap-2 bg-background px-2 pt-2 pb-2">

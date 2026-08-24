@@ -11,6 +11,9 @@ tests/test_agent_workflow_parity.py、test_data_ownership_ratchet.py 是同一�
 
 from __future__ import annotations
 
+# 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
+RATCHET = True
+
 import re
 from pathlib import Path
 

@@ -170,6 +170,7 @@ Full guides live at **[openstudio.team](https://openstudio.team)** (source in
 | [docs/PERMISSION_MODEL.md](docs/PERMISSION_MODEL.md) | The three principals and how authorization is decided |
 | [docs/PLUGIN_MANIFEST.md](docs/PLUGIN_MANIFEST.md) | Plugin manifest format and permissions |
 | [docs/PLUGIN_ARCHITECTURE.md](docs/PLUGIN_ARCHITECTURE.md) | How plugins are packaged, instantiated, and granted capabilities |
+| [docs/CONVENTIONS.md](docs/CONVENTIONS.md) | Coding conventions, and the 31 **ratchet tests** the repo enforces on itself |
 | [docs/MAINTENANCE_HOTSPOTS.md](docs/MAINTENANCE_HOTSPOTS.md) | Known risk areas, and **what to run after touching them** |
 | [docs/adr/](docs/adr/) | Architecture decisions, with the reasoning that produced them |
 

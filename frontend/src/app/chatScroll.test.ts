@@ -12,6 +12,9 @@
  * 这条查的是**同时写了 overflow-y-auto 的容器**:它已经声明了"内容会超出",横向却没表态。
  * 例外写进 EXEMPT 并说明理由 —— 只减不增,和 buttonPending.test.ts 同一套棘轮。
  */
+
+// 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
+export const RATCHET = true;
 import fs from "node:fs";
 import path from "node:path";
 

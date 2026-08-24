@@ -20,6 +20,9 @@ Windows 上是 GBK。sidecar 是 Node,按 UTF-8 写 JSON;父进程按 GBK 读,�
 
 from __future__ import annotations
 
+# 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
+RATCHET = True
+
 import ast
 import pathlib
 import sys

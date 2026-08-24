@@ -15,6 +15,9 @@ DENY,不是 ASK。一句说明同时描述三项而只对一项为真,比没有�
 
 from __future__ import annotations
 
+# 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
+RATCHET = True
+
 import pytest
 
 from app.domain.agent import rules

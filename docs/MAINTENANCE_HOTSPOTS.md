@@ -52,7 +52,7 @@ Interface 从「全局 class 名 + cascade」变成了「设计刻度」——�
 
 ## 4. 超大 feature 文件
 
-`WorkflowsView.tsx`(3.2k 行,还在长)、`EditorView.tsx`(1.3k)、`timeline/Timeline.tsx`(1.2k)。
+`WorkflowsView.tsx`(3341 行,还在长)、`EditorView.tsx`(1305)、`timeline/Timeline.tsx`(1.2k)。
 
 按函数量过一遍之后,这三个要分开看 —— **大而内聚**的不必拆:`Timeline` 虽然 1.2k,但只有
 6 个 state、3 个 effect、**0 个查询**,主体是交互数学与绘制,拆开反而更难读。真正该拆的是
@@ -61,7 +61,7 @@ Interface 从「全局 class 名 + cascade」变成了「设计刻度」——�
 (1.3k / **42 处 useQuery/useMutation**)。切分方向:画布 / 节点检查器 / 节点表单;
 面板编排 / 变换与合成 / mutations。低优先,顺手做,不专项大拆。
 
-> 这条一直在变糟(2.7k → 3.2k)。下次往 `WorkflowsView.tsx` 加东西时,先把要加的那部分单独成文件。
+> 这条一直在变糟(2.7k → 3.2k → 3341)。下次往 `WorkflowsView.tsx` 加东西时,先把要加的那部分单独成文件。
 
 ## 5. 预览与导出 — ✅ 已按契约收口(2026-07-28)
 

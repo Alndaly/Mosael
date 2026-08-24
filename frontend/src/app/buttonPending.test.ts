@@ -14,6 +14,9 @@
  * 例外只能出现在 EXEMPT 里,而且要写清楚"它的即时反馈是什么" —— 只减不增,和
  * tests/test_data_ownership_ratchet.py 是同一套棘轮。
  */
+
+// 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
+export const RATCHET = true;
 import fs from "node:fs";
 import path from "node:path";
 

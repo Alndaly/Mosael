@@ -16,6 +16,9 @@ test_agent_workflow_parity 钉的是「工作流有的能力智能体也有」�
 
 from __future__ import annotations
 
+# 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
+RATCHET = True
+
 import asyncio
 from typing import Any
 

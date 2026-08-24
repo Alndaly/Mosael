@@ -141,6 +141,7 @@ App 会自动拉起内置后端(`127.0.0.1:8800`)、加载前端、启动发布�
 | [docs/PERMISSION_MODEL.md](docs/PERMISSION_MODEL.md) | 三种主体,以及授权怎么判 |
 | [docs/PLUGIN_MANIFEST.md](docs/PLUGIN_MANIFEST.md) | 插件清单格式与权限 |
 | [docs/PLUGIN_ARCHITECTURE.md](docs/PLUGIN_ARCHITECTURE.md) | 插件怎么打包、实例化、拿到能力 |
+| [docs/CONVENTIONS.md](docs/CONVENTIONS.md) | 编码约定,以及仓库自己守着的 31 道**棘轮** |
 | [docs/MAINTENANCE_HOTSPOTS.md](docs/MAINTENANCE_HOTSPOTS.md) | 已知风险区,以及**改完至少要跑什么** |
 | [docs/adr/](docs/adr/) | 架构决策,连同当时的推理 |
 

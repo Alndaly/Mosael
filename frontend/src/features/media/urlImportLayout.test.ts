@@ -7,6 +7,9 @@
  * 这个仓库修过同一个形状(见工具浏览器弹窗的注释),所以这里盯的是**每一层都锁住**:
  * 容器 `min-w-0`、可变的那一栏 `min-w-0 flex-1`、固定的那一栏 `shrink-0`、长文本 `truncate`。
  */
+
+// 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
+export const RATCHET = true;
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 

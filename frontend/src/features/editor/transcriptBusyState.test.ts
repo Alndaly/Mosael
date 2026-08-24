@@ -8,6 +8,9 @@
  * 这条棘轮守的是「别再退回本地 state」,以及「跑完要自己取结果」——后者缺了就变成另一种
  * "跑完了界面不知道",用户仍然只能刷新。
  */
+
+// 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
+export const RATCHET = true;
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 

@@ -11,6 +11,9 @@
  * 少数确实是特例的尺寸(徽标 9px、大标题 22px…)不在这四档里,列在 ALLOWED 里放行 ——
  * **要放行就写进来**,这样"例外"是一份看得见的清单,而不是散在各文件里的既成事实。
  */
+
+// 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
+export const RATCHET = true;
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 

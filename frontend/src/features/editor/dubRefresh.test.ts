@@ -11,6 +11,9 @@
  * 两次都是同一个形状:**后台任务改了数据,而前端不知道该刷什么**。所以这里断言的是
  * 「配音这条路要刷的缓存键集合」,而不是某一次调用。
  */
+
+// 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
+export const RATCHET = true;
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 

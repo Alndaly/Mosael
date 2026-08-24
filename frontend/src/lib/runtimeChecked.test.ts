@@ -10,6 +10,9 @@
  *
  * 这条棘轮拦的就是「下一处只读一半」:凡是读 runtime_ready 的文件,必须也读 runtime_checked。
  */
+
+// 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
+export const RATCHET = true;
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 

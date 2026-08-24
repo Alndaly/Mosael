@@ -8,6 +8,9 @@
  *
  * 所以断言的是「调用点带上了 engine」,不是「组件里有个下拉」:有下拉但没传参,正是要拦的那种。
  */
+
+// 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
+export const RATCHET = true;
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 

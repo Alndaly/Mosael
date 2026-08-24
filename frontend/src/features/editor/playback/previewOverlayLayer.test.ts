@@ -7,6 +7,9 @@
  * 真正的修法有两半,这条棘轮守的是第一半(层级),第二半在 Monitor 里:画面出不来时那些操作层
  * 干脆不渲染 —— 你没法去拖一个看不见的东西。
  */
+
+// 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
+export const RATCHET = true;
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 

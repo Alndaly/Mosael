@@ -8,6 +8,9 @@
  * 现在这条规则住在 `lib/windowChrome.ts`,且把 `:not(.is-fullscreen)` 写进选择器本身,不再需要
  * 配对的第二条类。这个测试拦的就是「下一处顶栏又手写一遍」。
  */
+
+// 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
+export const RATCHET = true;
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
