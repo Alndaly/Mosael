@@ -422,3 +422,23 @@ def test_推不出来的回空_由调用方回落() -> None:
     assert infer_capabilities("openai", "gpt-4o") == []
     # 但**内置目录是验证过的事实**,对任何 vendor 都该生效 —— 不只百炼。
     assert infer_capabilities("openai", "gpt-image-2") == ["image"]
+
+
+def test_内置目录里的模型不该被标成已不存在() -> None:
+    """真机截图:刚加的 wan2.7-i2v 挂着「目录中已不存在」。
+
+    那个提示的本意是**预警** —— 曾经能用的模型从供应商目录里消失了(下架、改名),再点下去
+    会失败。但判据原本只有"在不在实时目录里",而万相**从来就不在**那份清单里(它走原生端点)。
+    于是每一个从内置目录加进来的模型都挂着这个警告,而它明明刚验证过能用。
+
+    一个永远为真的警告等于没有警告 —— 更糟的是它会让用户去删一个好模型。
+    """
+    from app.api.routes.settings import _is_known_model
+
+    # 实时目录里没有,内置目录里有 → 认得
+    assert _is_known_model("alibaba", "wan2.7-i2v", {}) is True
+    assert _is_known_model("alibaba", "wan2.2-t2v-plus", {}) is True
+    # 实时目录里有 → 认得(老路径不变)
+    assert _is_known_model("alibaba", "qwen-max", {"qwen-max": {}}) is True
+    # 两处都没有 → 这才是真正的"已不存在",警告要留着
+    assert _is_known_model("alibaba", "wan-something-removed", {}) is False

@@ -1026,7 +1026,27 @@ def _catalog_entries(profile: ResolvedProvider) -> dict[str, dict]:
     }
 
 
-def _model_out(model, catalog: dict[str, dict]) -> ProviderModelOut:
+def _is_known_model(vendor: str, model_id: str, catalog: dict[str, dict]) -> bool:
+    """这个模型是不是"我们认得的"。
+
+    「目录中已不存在」这个提示的本意是**预警**:曾经能用的模型从供应商目录里消失了(下架、
+    改名),再点下去就会失败。判据原本只有一条 —— 在不在实时目录里。
+
+    可实时目录读的是 OpenAI 兼容的 `/models`,而有些能力走供应商的原生端点、**从来就不在
+    那份清单里**:百炼的万相视频就是这样。于是每一个从内置目录加进来的模型都挂着"已不存在",
+    而它明明刚验证过能用(真机截图)。一个永远为真的警告等于没有警告 —— 更糟的是它会让用户
+    去删一个好模型。
+
+    所以内置目录也算数:它是**验证过的事实**,不是"端点当下报了什么"。
+    """
+    if model_id in catalog:
+        return True
+    from app.domain.generation import builtin_models_for
+
+    return any(model_id in builtin_models_for(vendor, kind) for kind in ("image", "video"))
+
+
+def _model_out(model, catalog: dict[str, dict], vendor: str = "") -> ProviderModelOut:
     entry = catalog.get(model.model_id) or {}
     catalog_window = entry.get("context_window")
     if model.context_window:
@@ -1042,7 +1062,7 @@ def _model_out(model, catalog: dict[str, dict]) -> ProviderModelOut:
         effective_capability_ids=provider_models.effective_capabilities(model),
         enabled=model.enabled,
         configured=True,
-        in_catalog=model.model_id in catalog,
+        in_catalog=_is_known_model(vendor or (model.profile.vendor if model.profile else ""), model.model_id, catalog),
         source=model.source,
         context_window=window,
         context_window_source=source,
@@ -1072,7 +1092,7 @@ def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> l
     profile = _require_profile(db, profile_id, user)
     catalog = _catalog_entries(_resolved_or_bare(db, profile, user))
     configured = provider_models.list_models(db, profile_id)
-    rows = [_model_out(model, catalog) for model in configured]
+    rows = [_model_out(model, catalog, profile.vendor) for model in configured]
     known = {row.id for row in rows}
     for model_id, entry in catalog.items():
         if model_id in known:
@@ -1143,7 +1163,7 @@ def add_provider_model(
         **fields,
     )
     db.commit()
-    return _model_out(model, catalog)
+    return _model_out(model, catalog, profile.vendor)
 
 
 @router.patch("/settings/providers/{profile_id}/models/{model_id:path}", response_model=ProviderModelOut)
@@ -1171,7 +1191,7 @@ def update_provider_model(
     if "capability_ids" in patch:
         model.capability_ids = normalize_capability_ids(body.capability_ids) or []
     db.commit()
-    return _model_out(model, _catalog_entries(_resolved_or_bare(db, profile, user)))
+    return _model_out(model, _catalog_entries(_resolved_or_bare(db, profile, user)), profile.vendor)
 
 
 @router.delete("/settings/providers/{profile_id}/models/{model_id:path}", status_code=204)
