@@ -1,12 +1,12 @@
 # Open Studio 官网(website)
 
-Next.js 16 + Tailwind 4 + shadcn/ui。中英双语,文档也在这里 —— 它取代了原来的 Astro
-Starlight 文档站,迁移记录见 [`docs/WEBSITE_REBUILD.md`](../docs/WEBSITE_REBUILD.md)。
+Next.js 16 + Tailwind 4 + shadcn/ui。中英双语,文档正文也在这里 —— 它取代了原来的 Astro
+Starlight 文档站。
 
 ```bash
 pnpm install
 pnpm dev            # http://localhost:3000
-pnpm build          # 构建期把 35 个页面全部静态生成
+pnpm build          # 构建期把 36 个页面全部静态生成(文档正文中英各 13 篇)
 ```
 
 ## 目录
@@ -47,7 +47,9 @@ props 传。
 - **`pnpm lint` 跑不了**。typescript-eslint 还不支持 TypeScript 7(`does not support TS 7.0`),
   而「依赖取最新版」是这个站的前提。类型检查没有丢:`next build` 会调 `tsc`
   (`experimental.useTypeScriptCli`)。等 typescript-eslint 跟上就能恢复。
-- **`/` 没有页面**,由 `next.config.ts` 的 redirects 送到 `/zh`。全站路由都在 `[locale]` 段下,
-  因为 `<html lang>` 必须跟着语言变,而真正的根布局拿不到动态参数。
+- **`/` 没有页面**,由 `next.config.ts` 的 redirects 送到默认语言(`/en`,见
+  `src/i18n/config.ts` 的 `DEFAULT_LOCALE`)。全站路由都在 `[locale]` 段下,因为
+  `<html lang>` 必须跟着语言变,而真正的根布局拿不到动态参数。这里不做 Accept-Language
+  协商:那需要 middleware,会让每个请求都过一次边缘函数,还让站点没法纯静态导出。
 - **配图会过期,而过期的配图比没有更糟**。重录用 `scripts/record-doc-media.py`,它同时写
   `website/public/media/`;别退回手工截图。

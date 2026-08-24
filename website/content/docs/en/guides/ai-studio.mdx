@@ -69,6 +69,23 @@ The trajectory also carries the half the conversation never shows:
 - Per-turn token detail (input / output / cache reads) on the turn header. With no usage records it is
   blank rather than 0 — "not recorded" and "spent nothing" are different facts.
 
+### Subagents: handing off an investigation
+
+The agent can hand a self-contained piece of work to a **subagent** — read-only tools, its own
+context. Only the conclusion comes back. What that saves is context, not compute: a search that
+would have spent forty turns rummaging through files spends them somewhere else, and your main
+conversation receives the answer instead of the rummaging.
+
+- **Dispatch does not block.** The agent gets a receipt immediately and keeps working; whether and
+  when to wait is its own decision. Dispatch several in one message and they run concurrently.
+- **Nothing is lost.** Reports it never waited for are delivered at wrap-up.
+- **Each subagent is a session you can open**, with the same interface as the main conversation —
+  from the right-hand panel or the header. You can watch it work, step by step, while it runs.
+
+Agents in different sessions can also **@-notify each other**. An idle recipient starts immediately;
+a busy one queues the message and picks it up when it is free. Messages that arrive this way carry a
+"from another agent" badge, so a conversation never looks like it talked to itself.
+
 ## Generate: text-to-image / text-to-video
 
 In **Generate** mode the left column is the **generation model** catalog, the middle is the results feed, and the composer takes your prompt:

@@ -1,6 +1,6 @@
 # Open Studio MCP Server
 
-Minimal external-agent surface (plan §17). Tools return stable product
+Minimal external-agent surface. Tools return stable product
 summaries — never raw internal schemas.
 
 ## Tools
@@ -104,7 +104,7 @@ The browser tools reuse the confirmation gate. `browser_pool_open` is the securi
 `browser_pool_open` 直接改成 `external` —— 它接的是用户在别人站点上的**真实身份**,不是"可撤销
 的编辑"。档位不只是徽标:三档一上,它直接决定要不要放行,定错了放开的就是错的东西。
 
-## Confirmation flow (plan §16.2/§17.2)
+## Confirmation flow
 
 Mutating tools never execute directly. They create a pending confirmation;
 a card appears showing the requesting agent, permission level, and operation

@@ -1,0 +1,79 @@
+---
+title: Browser pool
+description: One place for every persistent login, reused by publishing, workflows and the agent — with per-use authorization.
+order: 8
+---
+
+Automating anything on the open web runs into the same wall: **the site wants you logged in**.
+Publishing needs an account. A workflow that scrapes a dashboard needs a session. Downloading a
+video at full quality often needs one too. Solving that per feature means the same login copied into
+three places, expiring at three different times.
+
+The **browser pool** is the single place those logins live. Each one is a **profile**: a persistent
+browser session with its own cookies and storage, kept on disk under Electron's `Partitions/`
+directory.
+
+## Two kinds of profile
+
+- **Publishing accounts** are bound to a platform (TikTok, YouTube, Douyin, Bilibili, Xiaohongshu,
+  WeChat Channels). The publishing matrix picks from these, and the platform binding is what lets
+  Open Studio know which upload flow to drive.
+- **General profiles** are for any other site. A workflow's RPA nodes and the agent's browser tools
+  use them.
+
+Both are created the same way: **New profile**, then sign in inside the embedded browser window
+exactly as you would in Chrome. Open Studio never sees or stores your password — what it keeps is
+the session the site handed back.
+
+## Signing in, and staying signed in
+
+Cards show a status badge — **signed in**, **login needed**, or **checking**. The **recheck** button
+loads the site and looks for evidence you are still authenticated; the result and its timestamp go on
+the card. When a session dies, the card says so rather than letting the next publish fail.
+
+Rechecking is deliberately evidence-based: it looks for something only a signed-in visitor sees.
+Treating "the page loaded" as proof is how an account pool ends up insisting you are signed in while
+every upload fails.
+
+Each profile can also carry its own **proxy**, set from the card's context menu. Sessions and exit
+addresses stay paired, which is what most platforms expect.
+
+## Who may use a profile
+
+This is the part worth reading carefully.
+
+- **Publishing** uses the account bound to the platform you are publishing to. That is the whole
+  point of binding, and no extra approval is asked for.
+- **Workflows** name a profile explicitly on the node (`profile_id`, required when the node's
+  session mode is `pool`), so the flow you built states which identity it uses.
+- **The agent** must ask before it may open a profile at all. Borrowing a login is classed as an
+  **external** action, so it raises a confirmation card naming the profile — the agent cannot reach
+  an identity you did not hand it.
+
+Two details of that last rule are worth knowing, because they decide how much a single approval
+buys:
+
+- A confirmation card offers **"always allow for this session"**. That is per tool and per session,
+  and it is your click, not a mode the agent can set for itself.
+- Approval is on **opening** the profile. Once a page is open, the agent's interactions inside it —
+  typing, clicking, evaluating — are classed read-only and do not each raise their own card. So an
+  approved `browser_pool_open` is best read as "you may act as this identity on this site", not
+  "you may take exactly one action".
+
+Treat approval accordingly: it is a decision about which identity the agent may wear, so the
+question worth asking at the card is whether you want it acting as that account at all.
+
+Profiles you disable with the card's toggle are invisible to publishing and to the agent, without
+being deleted or signed out.
+
+## Sharing in a team deployment
+
+A profile you own can be **shared** into the workspace from the context menu. Other members can then
+publish through it and select it in workflows — without the credentials ever passing through
+anybody's hands, because what is shared is the session, not the password.
+
+## Where the data lives
+
+Sessions live under Electron's user data directory (`Partitions/`), not in the SQLite database.
+They are per-machine by nature: a browser session is bound to the browser that created it, so
+switching to a team backend does not carry logins along with it.
