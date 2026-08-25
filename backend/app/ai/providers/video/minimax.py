@@ -8,6 +8,10 @@ import httpx
 from app.core.http_retry import RetryingClient
 
 from app.ai.providers.base import (
+    FIRST_FRAME,
+    LAST_FRAME,
+    REFERENCE_IMAGE,
+    source_value,
     poll_until_ready,
     GenerationProvider,
     GenerationRequest,
@@ -50,15 +54,14 @@ def resolve_model(request: GenerationRequest, context: ProviderContext | None = 
 def build_submit_payload(request: GenerationRequest, context: ProviderContext) -> dict[str, Any]:
     """把内部的生成请求翻成 MiniMax 的多模态 content 数组。"""
     content: list[dict[str, Any]] = [{"type": "text", "text": request.prompt}]
-    first_frame = request.source_files[0] if request.source_files else None
-    if first_frame is not None:
-        content.append(
-            {
-                "type": "image_url",
-                "role": "first_frame",
-                "image_url": {"url": image_file_to_data_url(first_frame)},
-            }
-        )
+    # content 数组按 role 区分每张图的用途 —— 这是接口自己的形状(文件顶上那段注释说的就是
+    # 它),此前我们只喂得进首帧。
+    for role in (FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE):
+        value = source_value(request, role)
+        if not value:
+            continue
+        content.append({"type": "image_url", "role": role, "image_url": {"url": str(value)}})
+    first_frame = source_value(request, FIRST_FRAME)
     payload: dict[str, Any] = {"model": resolve_model(request, context), "content": content}
 
     duration = request.parameters.get("duration_seconds")
@@ -70,7 +73,7 @@ def build_submit_payload(request: GenerationRequest, context: ProviderContext) -
     if resolution:
         payload["resolution"] = str(resolution)
     # 图生视频恒为 adaptive(比例由首帧决定);文生视频必须给具体比例。
-    payload["ratio"] = "adaptive" if first_frame is not None else str(request.parameters.get("aspect_ratio") or "16:9")
+    payload["ratio"] = "adaptive" if first_frame else str(request.parameters.get("aspect_ratio") or "16:9")
     return payload
 
 

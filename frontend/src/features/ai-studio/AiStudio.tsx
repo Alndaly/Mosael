@@ -60,7 +60,16 @@ import {
   supportsParameter,
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
+import { FrameSlotField } from "@/features/ai-studio/FrameSlotField";
 import { SessionList } from "@/features/ai-studio/SessionList";
+import {
+  EMPTY_SLOT,
+  emptyFrames,
+  frameUrlParameters,
+  sourceAssetsFrom,
+  type FrameSlot,
+  type SourceRole,
+} from "@/features/ai-studio/sourceFrames";
 import { cn } from "@/lib/utils";
 
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
@@ -77,11 +86,8 @@ type GenerationConfig = {
   durationSeconds: string;
   resolution: string;
   aspectRatio: string;
-  firstFrameUrl: string;
-  firstFrameAssetId: string;
-  firstFrameAssetName: string;
-  referenceImageAssetId: string;
-  referenceImageAssetName: string;
+  /** 带角色的输入素材:首帧 / 尾帧 / 参考图。它们是同一种东西,差的只是用途。 */
+  frames: Record<SourceRole, FrameSlot>;
   usePreviousImage: boolean;
   workflow: string; // ComfyUI:选中的工作流路径("" = 用档案默认/内置文生图)
 };
@@ -105,11 +111,7 @@ function defaultGenerationConfig(model: GenerationModel | null): GenerationConfi
     durationSeconds: String(capabilityNumber(model, "default_duration_seconds", durations[0] ?? 5)),
     resolution: capabilityString(model, "default_resolution", resolutions[0] ?? ""),
     aspectRatio: capabilityString(model, "default_aspect_ratio", ratios[0] ?? ""),
-    firstFrameUrl: "",
-    firstFrameAssetId: "",
-    firstFrameAssetName: "",
-    referenceImageAssetId: "",
-    referenceImageAssetName: "",
+    frames: emptyFrames(),
     // **默认不带参考图**。此前默认 true,于是每次生成都会悄悄把上一张结果当参考图喂进去 ——
     // 用户输入一句全新的提示词,出来的图却还带着上一张的人和构图,而参考图那一栏他从没碰过。
     // 想接着上一张改的时候,右栏有「用上一张结果」一键设上。
@@ -137,7 +139,9 @@ function generationParameters(model: GenerationModel, config: GenerationConfig) 
   if (supportsParameter(model, "size") && config.size) params.size = config.size;
   if (supportsParameter(model, "resolution") && config.resolution) params.resolution = config.resolution;
   if (supportsParameter(model, "aspect_ratio") && config.aspectRatio) params.aspect_ratio = config.aspectRatio;
-  if (supportsParameter(model, "first_frame") && config.firstFrameUrl.trim()) params.first_frame_url = config.firstFrameUrl.trim();
+  // 外链形式的输入素材:first_frame_url / last_frame_url / reference_image_url。
+  // 三种角色一条路 —— 此前只有首帧那一条,而且是手写的。
+  Object.assign(params, frameUrlParameters(config.frames, (role) => supportsParameter(model, role)));
   return params;
 }
 
@@ -292,8 +296,11 @@ function GenerateWorkspace({
   const selectedResolutions = videoResolutionOptions(selectedModel);
   const selectedAspectRatios = aspectRatioOptions(selectedModel);
   const supportsNegativePrompt = supportsParameter(selectedModel, "negative_prompt");
-  const supportsReferenceImage = selectedModel?.kind === "image" && supportsParameter(selectedModel, "reference_image");
+  const supportsReferenceImage = supportsParameter(selectedModel, "reference_image");
   const supportsFirstFrame = selectedModel?.kind === "video" && supportsParameter(selectedModel, "first_frame");
+  // 尾帧:首尾帧一起给 = 让模型从一张图动到另一张图。只有描述符声明了的模型才出这个控件 ——
+  // 控件跟着描述符走,不按 kind 写死(见 docs/CONVENTIONS 那条棘轮)。
+  const supportsLastFrame = selectedModel?.kind === "video" && supportsParameter(selectedModel, "last_frame");
   // ComfyUI:拉取该实例保存的工作流,生成时可直接选一个(自动转换 + 注入提示词)。
   const isComfyui = selectedModel?.provider === "comfyui";
   const comfyWorkflows = useQuery({
@@ -429,34 +436,24 @@ function GenerateWorkspace({
   const selectedCapabilityMissing = selectedModel ? !providerById.has(selectedModel.provider_profile_id) : false;
   const setConfigValue = (key: keyof GenerationConfig, value: string) =>
     setGenerationConfig((current) => ({ ...current, [key]: value }));
-  const setFirstFrameUrl = (value: string) =>
-    setGenerationConfig((current) => ({
-      ...current,
-      firstFrameUrl: value,
-      firstFrameAssetId: value.trim() ? "" : current.firstFrameAssetId,
-      firstFrameAssetName: value.trim() ? "" : current.firstFrameAssetName,
-    }));
-  const clearFirstFrameAsset = () =>
-    setGenerationConfig((current) => ({ ...current, firstFrameAssetId: "", firstFrameAssetName: "" }));
+  const setFrame = (role: SourceRole, slot: FrameSlot) =>
+    setGenerationConfig((current) => ({ ...current, frames: { ...current.frames, [role]: slot } }));
   const setReferenceImageAsset = (asset: Asset) =>
     setGenerationConfig((current) => ({
       ...current,
-      referenceImageAssetId: asset.id,
-      referenceImageAssetName: asset.name,
+      frames: { ...current.frames, reference_image: { url: "", assetId: asset.id, assetName: asset.name } },
       usePreviousImage: false,
     }));
   const clearReferenceImage = () =>
     setGenerationConfig((current) => ({
       ...current,
-      referenceImageAssetId: "",
-      referenceImageAssetName: "",
+      frames: { ...current.frames, reference_image: { ...EMPTY_SLOT } },
       usePreviousImage: false,
     }));
   const usePreviousImageAsReference = () =>
     setGenerationConfig((current) => ({
       ...current,
-      referenceImageAssetId: "",
-      referenceImageAssetName: "",
+      frames: { ...current.frames, reference_image: { ...EMPTY_SLOT } },
       usePreviousImage: true,
     }));
   const selectEngine = (value: string) => {
@@ -485,19 +482,6 @@ function GenerateWorkspace({
       void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
     },
   });
-  const uploadFirstFrame = useMutation({
-    mutationFn: (file: File) => importAsset({ workspaceId: workspace.id, file, name: file.name }),
-    onSuccess: (asset: Asset) => {
-      setGenerationConfig((current) => ({
-        ...current,
-        firstFrameUrl: "",
-        firstFrameAssetId: asset.id,
-        firstFrameAssetName: asset.name,
-      }));
-      void qc.invalidateQueries({ queryKey: ["assets", workspace.id] });
-      void qc.invalidateQueries({ queryKey: ["assets"] });
-    },
-  });
   const uploadReferenceImage = useMutation({
     mutationFn: (file: File) => importAsset({ workspaceId: workspace.id, file, name: file.name }),
     onSuccess: (asset: Asset) => {
@@ -524,11 +508,11 @@ function GenerateWorkspace({
   );
   const effectiveReferenceImageAssetId =
     selectedModel?.kind === "image"
-      ? generationConfig.referenceImageAssetId ||
+      ? generationConfig.frames.reference_image.assetId ||
         (generationConfig.usePreviousImage ? latestImageResult?.result_asset_id ?? "" : "")
       : "";
   const effectiveReferenceImageName =
-    generationConfig.referenceImageAssetName ||
+    generationConfig.frames.reference_image.assetName ||
     (effectiveReferenceImageAssetId && latestImageResult?.result_asset_id === effectiveReferenceImageAssetId
       ? t("genPreviousImage")
       : "");
@@ -572,12 +556,14 @@ function GenerateWorkspace({
               ? { workflow_params: workflowParams }
               : {}),
           },
-          source_asset_ids:
-            selectedModel!.kind === "video" && supportsFirstFrame && generationConfig.firstFrameAssetId
-              ? [generationConfig.firstFrameAssetId]
-              : selectedModel!.kind === "image" && supportsReferenceImage && effectiveReferenceImageAssetId
-                ? [effectiveReferenceImageAssetId]
-                : [],
+          // 每份素材带着**它的用途**。此前这里是一个裸 id 数组,谁是首帧靠后端「取第 0 个」
+          // 那条约定 —— 尾帧因此没地方放,而多加一个位置约定不会报错,只会生成出别的东西。
+          source_assets: sourceAssetsFrom(
+            // 「用上一张结果」是把上一次的产物**当场**当参考图,它不落在配置里(配置只记
+            // 用户挑了什么),所以在这里合进去。
+            { ...generationConfig.frames, reference_image: { ...generationConfig.frames.reference_image, assetId: effectiveReferenceImageAssetId } },
+            (role) => supportsParameter(selectedModel, role),
+          ),
         }),
       });
       return targetSessionId;
@@ -900,7 +886,7 @@ function GenerateWorkspace({
                         <Upload size={13} />
                         {uploadReferenceImage.isPending ? t("genFirstFrameUploading") : t("genReferenceImageUpload")}
                       </Button>
-                      {latestImageResult?.result_asset_id && !generationConfig.usePreviousImage && !generationConfig.referenceImageAssetId && (
+                      {latestImageResult?.result_asset_id && !generationConfig.usePreviousImage && !generationConfig.frames.reference_image.assetId && (
                         <Button type="button" variant="ghost" size="sm" onClick={usePreviousImageAsReference}>
                           {t("genUsePreviousImage")}
                         </Button>
@@ -999,64 +985,21 @@ function GenerateWorkspace({
                   </label>
                 )}
                 {supportsFirstFrame && (
-                  <div className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
-                    <span>{t("genFirstFrame")}</span>
-                    <input
-                      ref={firstFrameInputRef}
-                      className="sr-only"
-                      type="file"
-                      accept="image/*"
-                      onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        event.target.value = "";
-                        if (file) uploadFirstFrame.mutate(file);
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="w-full justify-center"
-                      onClick={() => firstFrameInputRef.current?.click()}
-                      loading={uploadFirstFrame.isPending}
-                    >
-                      <Upload size={13} />
-                      {uploadFirstFrame.isPending ? t("genFirstFrameUploading") : t("genFirstFrameUpload")}
-                    </Button>
-                    {generationConfig.firstFrameAssetId && (
-                      <div className="grid min-h-11 grid-cols-[44px_minmax(0,1fr)_28px] items-center gap-2 rounded-lg border border-border bg-[color-mix(in_srgb,var(--panel)_88%,var(--muted)_12%)] p-[5px]">
-                        <button
-                          type="button"
-                          className="block size-auto h-[34px] w-11 cursor-zoom-in overflow-hidden rounded-lg border border-border bg-muted p-0"
-                          onClick={() =>
-                            openImagePreview({
-                              src: assetFileUrl(generationConfig.firstFrameAssetId),
-                              title: generationConfig.firstFrameAssetName || t("genFirstFrame"),
-                            })
-                          }
-                        >
-                          <img className="block h-full w-full object-cover" src={assetThumbnailUrl(generationConfig.firstFrameAssetId)} alt="" />
-                        </button>
-                        <span className="truncate text-xs font-semibold text-foreground" title={generationConfig.firstFrameAssetName}>
-                          {generationConfig.firstFrameAssetName}
-                        </span>
-                        <Button type="button" variant="ghost" size="icon" onClick={clearFirstFrameAsset} aria-label={t("delete")}>
-                          <X size={13} />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
+                  <FrameSlotField
+                    role="first_frame"
+                    slot={generationConfig.frames.first_frame}
+                    onChange={(slot) => setFrame("first_frame", slot)}
+                    workspaceId={workspace.id}
+                  />
                 )}
-                {supportsFirstFrame && (
-                  <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
-                    <span>{t("genFirstFrameUrl")}</span>
-                    <Input
-                      className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-ui-sm font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
-                      placeholder="https://..."
-                      value={generationConfig.firstFrameUrl}
-                      onChange={(event) => setFirstFrameUrl(event.target.value)}
-                    />
-                  </label>
+                {supportsLastFrame && (
+                  <FrameSlotField
+                    role="last_frame"
+                    slot={generationConfig.frames.last_frame}
+                    onChange={(slot) => setFrame("last_frame", slot)}
+                    workspaceId={workspace.id}
+                    hint={t("genLastFrameHint")}
+                  />
                 )}
               </>
             )}

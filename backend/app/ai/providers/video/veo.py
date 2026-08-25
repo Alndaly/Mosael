@@ -10,6 +10,7 @@ import httpx
 from app.core.http_retry import RetryingClient
 
 from app.ai.providers.base import (
+    FIRST_FRAME,
     poll_until_ready,
     GenerationProvider,
     GenerationRequest,
@@ -117,8 +118,9 @@ class VeoProvider(GenerationProvider):
 def _with_first_frame_inline(request: GenerationRequest, api_key: str) -> GenerationRequest:
     if request.parameters.get("first_frame_base64") or request.parameters.get("image_base64"):
         return request
-    if request.source_files:
-        mime_type, data = image_file_to_base64(request.source_files[0])
+    first_frame = request.source_for(FIRST_FRAME)
+    if first_frame is not None:
+        mime_type, data = image_file_to_base64(first_frame)
         parameters = dict(request.parameters)
         parameters["first_frame_base64"] = data
         parameters["first_frame_mime_type"] = mime_type
@@ -128,7 +130,7 @@ def _with_first_frame_inline(request: GenerationRequest, api_key: str) -> Genera
             prompt=request.prompt,
             negative_prompt=request.negative_prompt,
             parameters=parameters,
-            source_files=request.source_files,
+            sources=request.sources,
         )
 
     first_frame_url = request.parameters.get("first_frame_url") or request.parameters.get("image_url")
@@ -150,7 +152,7 @@ def _with_first_frame_inline(request: GenerationRequest, api_key: str) -> Genera
                 prompt=request.prompt,
                 negative_prompt=request.negative_prompt,
                 parameters=parameters,
-                source_files=request.source_files,
+                sources=request.sources,
             )
     except httpx.HTTPError as exc:
         raise ProviderError(provider_http_error("Failed to fetch Veo first frame", exc, api_key)) from exc

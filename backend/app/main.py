@@ -81,6 +81,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     from app.domain.network import subprocess_env_for_child
 
     sidecar_adapters.use_proxy_source(subprocess_env_for_child)
+    # 后台任务干完之后把回执送回发起它的那次对话。方向是反的:任务域不认识智能体,
+    # 是智能体在这里把自己登记进去(见 domain/agent/receipts)。
+    from app.domain.agent import receipts as agent_receipts
+
+    agent_receipts.install()
     _prepare_network()
     # Mint the publish worker's shared secret before any request can arrive. See
     # app/core/worker_key.py for why that channel needs one.

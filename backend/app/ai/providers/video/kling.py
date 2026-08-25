@@ -19,7 +19,9 @@ from app.ai.providers.base import (
     GenerationResult,
     ProviderContext,
     ProviderError,
+    LAST_FRAME,
     first_frame_value,
+    source_value,
     metering_from_request,
     provider_http_error,
 )
@@ -62,6 +64,11 @@ def build_submit_payload(request: GenerationRequest, context: ProviderContext | 
     first_frame = first_frame_value(request)
     if first_frame:
         payload["image"] = str(first_frame)
+    # 尾帧走 image_tail(可灵把首尾帧拆成两个字段,而不是一个带 role 的数组)。
+    # 只给尾帧不给首帧是不成立的 —— 那条接口是 image2video,首帧是它的必填项。
+    last_frame = source_value(request, LAST_FRAME)
+    if first_frame and last_frame:
+        payload["image_tail"] = str(last_frame)
     return payload
 
 

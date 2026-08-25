@@ -260,7 +260,7 @@ def test_generate_image_confirmation_carries_ai_cost_permission(monkeypatch) -> 
             "workspace_id": ws["id"],
             "tool": "generate_image",
             "payload": {"prompt": "a lighthouse at dawn", "provider": "alibaba", "model": "qwen-image",
-                        "parameters": {"size": "320x180"}},
+                        "parameters": {"size": "1024x1024"}},
         },
     ).json()
     assert data["permission"] == "ai-cost"

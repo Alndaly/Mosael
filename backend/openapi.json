@@ -15953,12 +15953,12 @@
             "type": "object",
             "title": "Parameters"
           },
-          "source_asset_ids": {
+          "source_assets": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/SourceAssetRef"
             },
             "type": "array",
-            "title": "Source Asset Ids"
+            "title": "Source Assets"
           }
         },
         "type": "object",
@@ -20648,6 +20648,28 @@
           "workspace_id"
         ],
         "title": "ShareRequest"
+      },
+      "SourceAssetRef": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Asset Id"
+          },
+          "role": {
+            "type": "string",
+            "pattern": "^(first_frame|last_frame|reference_image|reference_video)$",
+            "title": "Role",
+            "default": "first_frame"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id"
+        ],
+        "title": "SourceAssetRef",
+        "description": "一份输入素材,**带着它的用途**。\n\n此前这里是一个裸的 id 列表,谁是首帧靠「第 0 个」这条约定 —— 尾帧、参考图、参考视频\n因此都没地方放。role 的取值见 ai/providers/base.SOURCE_ROLES;哪个模型认哪几种,\n由 domain/generation/catalog 的描述符声明。"
       },
       "SplitClipPointsRequest": {
         "properties": {

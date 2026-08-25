@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.permissions import ensure_workspace_perm
 from app.db.models import PublishAccount, Sequence, ToolConfirmation, User, now
+from app.domain.jobs import reset_receipt, set_receipt
 from app.domain.sequences import operations as seq_ops
 from app.domain.workflows import external_nodes_in_graph
 
@@ -420,6 +421,25 @@ def _summarize(tool: str, payload: dict[str, Any], external: set[str] | None = N
 
 
 def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
+    """跑这张卡批准的那件事。
+
+    整段包在 set_receipt 里:**这里面建的任何后台任务,干完了都把回执送回发起它的那次对话**。
+    智能体此前提交完就断了线索,只知道「提交成功」,不知道跑完没有 —— 要么反复轮询,要么
+    干脆当作没这回事。发布/导出/生成各有各的入口函数,逐个加参数就得每加一种任务改一处,
+    而漏掉的那一处不会报错,只是那种任务的回执永远送不到。
+    """
+    if confirmation.session_id:
+        from app.domain.agent.receipts import receipt_to_session
+
+        token = set_receipt(receipt_to_session(confirmation.session_id))
+        try:
+            return _execute_approved(db, confirmation)
+        finally:
+            reset_receipt(token)
+    return _execute_approved(db, confirmation)
+
+
+def _execute_approved(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
     payload = confirmation.payload
     # 这一步替谁干:批准它的那个人。智能体自己不是主体 —— 它花的是批准者的额度、用的是
     # 批准者的钥匙(见 domain/provider_credentials 与 Job.created_by)。
@@ -495,6 +515,7 @@ def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
         return {"job_id": job.id}
     if confirmation.tool in ("generate_image", "generate_video"):
         from app.domain.generation import create_generation_job
+        from app.domain.generation.operations import parse_source_assets
         from app.domain.generation.runner import start_generation_thread
         from app.domain import provider_models
         kind = "image" if confirmation.tool == "generate_image" else "video"
@@ -518,7 +539,7 @@ def _execute(db: Session, confirmation: ToolConfirmation) -> dict[str, Any]:
             prompt=str(payload["prompt"]),
             negative_prompt=str(payload.get("negative_prompt", "")),
             parameters=dict(payload.get("parameters") or {}),
-            source_asset_ids=[str(item) for item in payload.get("source_asset_ids") or []],
+            source_assets=parse_source_assets(payload.get("source_assets"), kind=kind),
         )
         start_generation_thread(generation.id)
         return {"job_id": job.id, "generation_id": generation.id}

@@ -114,7 +114,7 @@ def test_generation_sessions_scope_jobs_and_can_be_managed(tmp_path: Path, monke
             "model": "qwen-image",
             "kind": "image",
             "prompt": "海边女孩",
-            "parameters": {"size": "320x180"},
+            "parameters": {"size": "1024x1024"},
         },
     )
 

@@ -6,7 +6,18 @@ import tempfile
 import time
 from pathlib import Path
 
-from app.ai.providers import GenerationRequest, GenerationResult, ProviderContext, ProviderError, get_provider
+from app.ai.providers import (
+    FIRST_FRAME,
+    LAST_FRAME,
+    REFERENCE_IMAGE,
+    REFERENCE_VIDEO,
+    GenerationRequest,
+    GenerationResult,
+    ProviderContext,
+    ProviderError,
+    SourceAsset,
+    get_provider,
+)
 from app.ai.providers.base import sanitize_provider_error
 from app.core.db import SessionLocal
 from app.db.models import Asset, GeneratedAsset, GenerationJob, Job
@@ -90,7 +101,7 @@ def _run_generation(generation_id: str) -> None:
                 prompt=str(generation.request.get("prompt", "")),
                 negative_prompt=str(generation.request.get("negative_prompt", "")),
                 parameters=dict(generation.request.get("parameters") or {}),
-                source_files=_source_files_for_generation(db, generation),
+                sources=_sources_for_generation(db, generation),
             )
             provider.validate_request(request)
             if getattr(provider, "supports_callbacks", False):
@@ -176,22 +187,43 @@ def _fail(db, job: Job, message: str) -> None:
     logger.warning("generation job %s failed: %s", job.id, message)
 
 
-def _source_files_for_generation(db, generation: GenerationJob) -> tuple[Path, ...]:
-    source_asset_ids = generation.request.get("source_asset_ids") or []
-    paths: list[Path] = []
-    for asset_id in source_asset_ids:
-        asset = db.get(Asset, str(asset_id))
+#: 每种角色收什么素材。参考视频收视频,其余收图片 —— 这一条是**校验**,不是描述:
+#: 把一段视频当首帧递上去,各家的报错五花八门(有的干脆生成出一片黑),不如在这里拦住。
+ROLE_ASSET_KIND = {
+    FIRST_FRAME: "image",
+    LAST_FRAME: "image",
+    REFERENCE_IMAGE: "image",
+    REFERENCE_VIDEO: "video",
+}
+
+#: 报错里那个词。写死「首帧」的话,尾帧缺文件时用户看到的是「首帧素材文件不存在」。
+ROLE_LABEL = {
+    FIRST_FRAME: "首帧",
+    LAST_FRAME: "尾帧",
+    REFERENCE_IMAGE: "参考图",
+    REFERENCE_VIDEO: "参考视频",
+}
+
+
+def _sources_for_generation(db, generation: GenerationJob) -> tuple[SourceAsset, ...]:
+    """把请求里记的素材引用解析成本地文件,**保住各自的角色**。"""
+    sources: list[SourceAsset] = []
+    for entry in generation.request.get("source_assets") or []:
+        role = str(entry.get("role") or FIRST_FRAME)
+        label = ROLE_LABEL.get(role, role)
+        asset = db.get(Asset, str(entry.get("asset_id") or ""))
         if asset is None or asset.workspace_id != generation.workspace_id:
-            raise ProviderError("首帧素材不存在或不属于当前工作区")
-        if asset.kind != "image":
-            raise ProviderError("首帧素材必须是图片")
+            raise ProviderError(f"{label}素材不存在或不属于当前工作区")
+        expected = ROLE_ASSET_KIND.get(role, "image")
+        if asset.kind != expected:
+            raise ProviderError(f"{label}素材必须是{'视频' if expected == 'video' else '图片'}")
         if not asset.file_key:
-            raise ProviderError("首帧素材缺少本地文件")
+            raise ProviderError(f"{label}素材缺少本地文件")
         path = resolve_key(asset.file_key)
         if not path.is_file():
-            raise ProviderError("首帧素材文件不存在")
-        paths.append(path)
-    return tuple(paths)
+            raise ProviderError(f"{label}素材文件不存在")
+        sources.append(SourceAsset(role=role, path=path))
+    return tuple(sources)
 
 
 def _record_generation_usage(
@@ -209,7 +241,7 @@ def _record_generation_usage(
         units["requests"] = 1
     if request.kind == "image":
         units.setdefault("images", int(request.parameters.get("num_images", 1)))
-        units.setdefault("source_images", len(request.source_files))
+        units.setdefault("source_images", len(request.sources))
         if request.parameters.get("size"):
             units.setdefault("size", str(request.parameters["size"]).replace("*", "x"))
     if request.kind == "video":
@@ -217,7 +249,7 @@ def _record_generation_usage(
         units.setdefault("video_seconds", float(request.parameters.get("duration_seconds", 5)))
         units.setdefault("resolution", str(request.parameters.get("resolution", "720p")))
         units.setdefault("aspect_ratio", str(request.parameters.get("aspect_ratio", "")))
-        units.setdefault("source_images", len(request.source_files))
+        units.setdefault("source_images", len(request.sources))
     with billable(
         db,
         capability=generation.kind,

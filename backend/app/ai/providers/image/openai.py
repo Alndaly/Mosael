@@ -10,6 +10,7 @@ import httpx
 from app.core.http_retry import RetryingClient
 
 from app.ai.providers.base import (
+    REFERENCE_IMAGE,
     GenerationProvider,
     GenerationRequest,
     GenerationResult,
@@ -82,11 +83,12 @@ class OpenAIImageProvider(GenerationProvider):
         headers = {"Authorization": f"Bearer {context.api_key}"}
         try:
             with RetryingClient(base_url=base_url, timeout=120, headers=headers) as client:
-                if request.source_files:
+                references = request.sources_for(REFERENCE_IMAGE)
+                if references:
                     files = []
                     handles = []
                     try:
-                        for path in request.source_files[:16]:
+                        for path in references[:16]:
                             handle = path.open("rb")
                             handles.append(handle)
                             mime_type = mimetypes.guess_type(path.name)[0] or "image/png"

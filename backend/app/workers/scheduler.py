@@ -111,6 +111,7 @@ def dispatch_job_for_task(db: Session, task: ScheduledTask, run: ScheduledTaskRu
             start_workflow_job(db, workflow, created_by=task.owner_user_id, params=dict(payload.get("params") or {}), job=job)
         elif task.kind == "ai_generation":
             from app.domain.generation import create_generation_job
+            from app.domain.generation.operations import parse_source_assets
             from app.domain.generation.runner import start_generation_thread
             from app.domain import provider_models
 
@@ -135,7 +136,7 @@ def dispatch_job_for_task(db: Session, task: ScheduledTask, run: ScheduledTaskRu
                 prompt=str(payload.get("prompt", "")),
                 negative_prompt=str(payload.get("negative_prompt", "")),
                 parameters=dict(payload.get("parameters") or {}),
-                source_asset_ids=[str(item) for item in payload.get("source_asset_ids") or []],
+                source_assets=parse_source_assets(payload.get("source_assets"), kind=kind),
             )
             job.status = "running"
             say(job, f"Dispatched generation {generation.id}")

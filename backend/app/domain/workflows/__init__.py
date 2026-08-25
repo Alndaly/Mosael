@@ -130,9 +130,14 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "type": "object",
                 "description": "生成参数,取值随模型而定:aspect_ratio / duration_seconds / resolution / size / seed…",
             },
-            "source_asset_ids": {"advanced": True, 
+            "source_assets": {
+                "advanced": True,
                 "type": "template",
-                "description": "参考图 / 首帧素材 id;多个用换行或逗号分隔",
+                "description": (
+                    "输入素材,每行一条 `素材id` 或 `素材id:角色`。"
+                    "角色:first_frame 首帧 / last_frame 尾帧 / reference_image 参考图 / "
+                    "reference_video 参考视频;不写角色时图生视频按首帧、图生图按参考图。"
+                ),
             },
         },
         "outputs": ["asset_id", "generation_id"],

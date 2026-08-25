@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from app.ai.providers import get_provider
+from app.ai.providers.base import FIRST_FRAME, REFERENCE_IMAGE, SourceAsset
 import httpx
 
 from app.ai.providers.base import (
@@ -100,7 +101,7 @@ def test_qwen_edit_payload_uses_uploaded_reference_image(tmp_path) -> None:
         prompt="把女孩变成男孩",
         negative_prompt="low quality",
         parameters={"num_images": 1, "size": "1024x1024", "seed": 9},
-        source_files=(source,),
+        sources=tuple(SourceAsset(role=REFERENCE_IMAGE, path=p) for p in (source,)),
     )
     payload = qwen_edit_payload(request)
     content = payload["input"]["messages"][0]["content"]
@@ -212,7 +213,7 @@ def test_seedance_payload_accepts_uploaded_first_frame(tmp_path) -> None:
         model="doubao-seedance-2-0-260128",
         prompt="waves",
         parameters={"duration_seconds": 5, "resolution": "720p", "aspect_ratio": "16:9"},
-        source_files=(first_frame,),
+        sources=tuple(SourceAsset(role=FIRST_FRAME, path=p) for p in (first_frame,)),
     )
     payload = seedance_payload(request)
     assert payload["content"][1]["image_url"]["url"] == "data:image/png;base64,aW1hZ2UtYnl0ZXM="
@@ -307,7 +308,7 @@ def test_veo_payload_accepts_uploaded_first_frame(tmp_path) -> None:
         kind="video",
         model="veo",
         prompt="p",
-        source_files=(first_frame,),
+        sources=tuple(SourceAsset(role=FIRST_FRAME, path=p) for p in (first_frame,)),
     )
     payload = veo_payload(_with_first_frame_inline(request, "sk-test"))
     assert payload["instances"][0]["image"]["inlineData"] == {
@@ -351,7 +352,7 @@ def test_kling_payload_accepts_uploaded_first_frame(tmp_path) -> None:
         model="kling",
         prompt="p",
         parameters={"duration_seconds": 5, "resolution": "720p", "aspect_ratio": "9:16"},
-        source_files=(first_frame,),
+        sources=tuple(SourceAsset(role=FIRST_FRAME, path=p) for p in (first_frame,)),
     )
     payload = kling_payload(request, ProviderContext(None, "kuaishou", "ak", default_model="kling-v3"))
     assert payload["image"] == "data:image/png;base64,aW1hZ2UtYnl0ZXM="
@@ -387,7 +388,7 @@ def test_seedream_registry_and_payload_shape(tmp_path) -> None:
             model="doubao-seedream-4-0-250828",
             prompt="蓝调海边",
             parameters={"size": "2048*2048"},
-            source_files=(ref,),
+            sources=tuple(SourceAsset(role=REFERENCE_IMAGE, path=p) for p in (ref,)),
         )
     )
     assert payload["model"] == "doubao-seedream-4-0-250828"

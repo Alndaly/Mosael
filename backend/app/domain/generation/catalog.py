@@ -76,9 +76,9 @@ WAN_VIDEO_CAPABILITIES = {
 }
 
 SEEDANCE_2_VIDEO_CAPABILITIES = {
-    "modes": ["text-to-video", "image-to-video"],
+    "modes": ["text-to-video", "image-to-video", "keyframes-to-video"],
     "endpoint": "ark",
-    "parameter_keys": ["duration_seconds", "resolution", "first_frame"],
+    "parameter_keys": ["duration_seconds", "resolution", "first_frame", "last_frame", "reference_image"],
     "duration_seconds": [5, 10],
     "default_duration_seconds": 5,
     "resolutions": ["480p", "720p", "1080p"],
@@ -126,8 +126,15 @@ COMFYUI_VIDEO_CAPABILITIES = {
 #: MiniMax 海螺 H3(2026-07)。原生 2K、4–15 秒、可给首帧;文生视频必须给具体比例,
 #: 图生视频恒为 adaptive(见 ai/providers/minimax_video.py)。
 MINIMAX_VIDEO_CAPABILITIES = {
-    "modes": ["text-to-video", "image-to-video"],
-    "parameter_keys": ["duration_seconds", "resolution", "aspect_ratio", "first_frame"],
+    "modes": ["text-to-video", "image-to-video", "keyframes-to-video"],
+    "parameter_keys": [
+        "duration_seconds",
+        "resolution",
+        "aspect_ratio",
+        "first_frame",
+        "last_frame",
+        "reference_image",
+    ],
     "duration_seconds": [4, 6, 10, 15],
     "default_duration_seconds": 6,
     "resolutions": ["2K"],
@@ -312,8 +319,8 @@ BUILTIN_MODELS = [
         "kind": "video",
         "model": "kling",
         "capabilities": {
-            "modes": ["text-to-video", "image-to-video"],
-            "parameter_keys": ["duration_seconds", "aspect_ratio", "first_frame", "negative_prompt"],
+            "modes": ["text-to-video", "image-to-video", "keyframes-to-video"],
+            "parameter_keys": ["duration_seconds", "aspect_ratio", "first_frame", "last_frame", "negative_prompt"],
             "duration_seconds": [5, 10],
             "default_duration_seconds": 5,
             "aspect_ratios": ["16:9", "9:16", "1:1"],
@@ -362,13 +369,23 @@ def capabilities_for(vendor: str, model: str, kind: str) -> dict[str, Any]:
     精确匹配 (provider, model, kind) 优先;同 vendor 同 kind 的第一条次之(同系模型参数通常
     一致);都没有就用按 kind 的保守兜底。
     """
+    return known_capabilities_for(vendor, model, kind) or dict(_FALLBACK_BY_KIND.get(kind, {}))
+
+
+def known_capabilities_for(vendor: str, model: str, kind: str) -> dict[str, Any] | None:
+    """同上,但**查不到就是 None**,不给兜底。
+
+    兜底那份是给界面用的 —— 总得渲染出点什么。校验不能用它:落到兜底的意思是「我们不认识
+    这个模型」(用户自建的、ComfyUI 的工作流),拿那份窄名单去拦,会挡住本来能用的参数。
+    两种需求共用一个返回值时,分不出「它只支持这些」和「我们不知道它支持什么」。
+    """
     for item in BUILTIN_MODELS:
         if item["provider"] == vendor and item["model"] == model and item["kind"] == kind:
             return dict(item["capabilities"])
     for item in BUILTIN_MODELS:
         if item["provider"] == vendor and item["kind"] == kind:
             return dict(item["capabilities"])
-    return dict(_FALLBACK_BY_KIND.get(kind, {}))
+    return None
 
 
 def builtin_models_for(vendor: str, kind: str) -> list[str]:

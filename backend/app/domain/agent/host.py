@@ -539,6 +539,44 @@ def agent_notice_envelope(content: str, origin_session_id: str) -> str:
     return f"【来自另一个智能体会话的通知】发起会话 id:{origin_session_id}\n\n{content}"
 
 
+def job_receipt_envelope(content: str, job_id: str) -> str:
+    """后台任务干完了发回来的回执。
+
+    智能体提交一次生成之后就失去了这条线索:它只知道"提交成功",不知道跑完没有 ——
+    于是要么反复 get_job 轮询(用户看着它一遍遍查),要么干脆当作没这回事。这句信封告诉模型
+    这条消息是任务自己发回来的,可以直接接着往下做。
+    """
+    return f"【后台任务回执】job id:{job_id}\n\n{content}"
+
+
+#: 一条消息**从哪儿来**。key 是落在 payload 里的标记名,值是给模型看的那句信封。
+#:
+#: 摊成一张表是因为信封此前在两个地方各拼了一遍(直发一处、排队一处):加第二种来源时,
+#: 漏改的那一处不会报错 —— 模型只是收到一条没头没尾的消息,不知道是谁说的。
+ORIGIN_ENVELOPES = {
+    "from_agent_session": agent_notice_envelope,
+    "from_job": job_receipt_envelope,
+}
+
+
+def origin_marker_for(origin_session_id: str | None, origin_job_id: str | None = None) -> dict[str, str]:
+    """把来源收成落库用的那一个标记。**同一条消息只有一个来源** —— 先来先得。"""
+    if origin_session_id:
+        return {"from_agent_session": origin_session_id}
+    if origin_job_id:
+        return {"from_job": origin_job_id}
+    return {}
+
+
+def with_origin_envelope(content: str, marker: dict[str, object]) -> str:
+    """按 payload 里的来源标记加信封;没有标记就原样返回。"""
+    for key, envelope in ORIGIN_ENVELOPES.items():
+        value = marker.get(key)
+        if value:
+            return envelope(content, str(value))
+    return content
+
+
 def post_user_message(
     db: Session,
     session: AgentSession,
@@ -547,16 +585,16 @@ def post_user_message(
     *,
     context: str | None = None,
     origin_session_id: str | None = None,
+    origin_job_id: str | None = None,
 ) -> AgentMessage:
     """Store the user message and run the agent turn on a worker thread."""
     # 模型收到的那一份可以比落库的正文多两样东西:上下文集锦,以及"这条是别的会话发来的"信封。
     # 两样都不进 content —— content 是**用户在对话里看到的**那份。
     prompt = _prompt_with_context(content, context)
-    if origin_session_id:
-        prompt = agent_notice_envelope(prompt, origin_session_id)
+    prompt = with_origin_envelope(prompt, origin_marker_for(origin_session_id, origin_job_id))
     # 另一个智能体会话发来的通知:落库带结构化来源(前端画徽章靠它),
     # 且**不参与**会话自动命名 —— 标题应当是人提的第一件事,不是别的智能体的信封。
-    origin_marker = {"from_agent_session": origin_session_id} if origin_session_id else {}
+    origin_marker = origin_marker_for(origin_session_id, origin_job_id)
     if session.status == "running":
         # Queued, not steered. These are two different things and only one of them should be
         # the default: queuing waits for the whole reason-act loop to finish and then runs as
@@ -850,9 +888,8 @@ def _drain_queue_locked(session_id: str) -> None:
         payload = message.payload or {}
         content = _prompt_with_context(message.content, payload.get("context"))
         # 排队那条也要补信封:它和直发走的是同一件事,只是晚一点跑。漏在这儿的话,
-        # 「对方正忙」时发来的通知,模型就不知道它来自另一个会话。
-        if payload.get("from_agent_session"):
-            content = agent_notice_envelope(content, str(payload["from_agent_session"]))
+        # 「对方正忙」时收到的消息,模型就不知道它是谁发的。
+        content = with_origin_envelope(content, payload)
     threading.Thread(target=_run_turn_thread, args=(session_id, content, token), daemon=True, name=TURN_THREAD_NAME).start()
 
 

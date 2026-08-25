@@ -896,6 +896,68 @@ def _migrate_session_groups_serve_both() -> None:
                 conn.execute(text("ALTER TABLE generation_sessions ADD COLUMN group_id VARCHAR(64)"))
 
 
+def _migrate_source_assets_get_a_role() -> None:
+    """生成请求里的 `source_asset_ids` → `source_assets`,每一项带上角色。
+
+    此前是一个裸 id 列表,谁是首帧靠「第 0 个」这条约定,于是尾帧/参考视频没地方放。
+    老数据的角色按 kind 还原成它当初**实际被当成什么用**:视频那边取的是首帧
+    (providers/base.first_frame_value 读 source_files[0]),图片那边当的是参考图
+    (seedream / qwen-edit / openai-edit 都是这么用的)。这不是猜,是把当时的行为写明。
+    """
+    inspector = inspect(engine)
+    if "generation_jobs" not in set(inspector.get_table_names()):
+        return
+    with engine.begin() as conn:
+        rows = conn.execute(text("SELECT id, kind, request FROM generation_jobs")).fetchall()
+        for row in rows:
+            try:
+                request = json.loads(row[2]) if isinstance(row[2], str) else (row[2] or {})
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(request, dict) or "source_asset_ids" not in request:
+                continue
+            ids = request.pop("source_asset_ids") or []
+            role = "first_frame" if row[1] == "video" else "reference_image"
+            request["source_assets"] = [{"asset_id": str(one), "role": role} for one in ids if str(one).strip()]
+            conn.execute(
+                text("UPDATE generation_jobs SET request = :request WHERE id = :id"),
+                {"request": json.dumps(request, ensure_ascii=False), "id": row[0]},
+            )
+
+
+def _migrate_workflow_source_assets() -> None:
+    """工作流 generate 节点的 `source_asset_ids` 配置项 → `source_assets`。
+
+    和上面同一件事的另一半:节点配置里存的也是裸 id(模板字段,可能是换行分隔的字符串)。
+    只改键名 —— 值的形态解析器两种都认(见 domain/generation/operations.parse_source_assets),
+    角色按节点自己的 kind 兜底,和迁移前的行为一致。
+    """
+    inspector = inspect(engine)
+    if "workflows" not in set(inspector.get_table_names()):
+        return
+    with engine.begin() as conn:
+        rows = conn.execute(text("SELECT id, graph FROM workflows")).fetchall()
+        for row in rows:
+            try:
+                graph = json.loads(row[1]) if isinstance(row[1], str) else (row[1] or {})
+            except (TypeError, ValueError):
+                continue
+            nodes = graph.get("nodes") if isinstance(graph, dict) else None
+            if not isinstance(nodes, list):
+                continue
+            touched = False
+            for node in nodes:
+                config = node.get("config") if isinstance(node, dict) else None
+                if isinstance(config, dict) and "source_asset_ids" in config:
+                    config["source_assets"] = config.pop("source_asset_ids")
+                    touched = True
+            if touched:
+                conn.execute(
+                    text("UPDATE workflows SET graph = :graph WHERE id = :id"),
+                    {"graph": json.dumps(graph, ensure_ascii=False), "id": row[0]},
+                )
+
+
 def _migrate_agent_notice_envelope_out_of_content() -> None:
     """把跨会话通知的**信封**从正文里剥出来,来源改记进 payload。
 
@@ -1179,6 +1241,8 @@ def init_db() -> None:
     _migrate_agent_session_plan()
     _migrate_agent_session_groups()
     _migrate_session_groups_serve_both()
+    _migrate_source_assets_get_a_role()
+    _migrate_workflow_source_assets()
     _migrate_generation_job_message_keys()
     _migrate_agent_session_order()
     _migrate_agent_notice_envelope_out_of_content()

@@ -5565,8 +5565,8 @@ export interface components {
             parameters?: {
                 [key: string]: unknown;
             };
-            /** Source Asset Ids */
-            source_asset_ids?: string[];
+            /** Source Assets */
+            source_assets?: components["schemas"]["SourceAssetRef"][];
         };
         /** GenerationCreateResponse */
         GenerationCreateResponse: {
@@ -7542,6 +7542,23 @@ export interface components {
         ShareRequest: {
             /** Workspace Id */
             workspace_id: string;
+        };
+        /**
+         * SourceAssetRef
+         * @description 一份输入素材,**带着它的用途**。
+         *
+         *     此前这里是一个裸的 id 列表,谁是首帧靠「第 0 个」这条约定 —— 尾帧、参考图、参考视频
+         *     因此都没地方放。role 的取值见 ai/providers/base.SOURCE_ROLES;哪个模型认哪几种,
+         *     由 domain/generation/catalog 的描述符声明。
+         */
+        SourceAssetRef: {
+            /** Asset Id */
+            asset_id: string;
+            /**
+             * Role
+             * @default first_frame
+             */
+            role: string;
         };
         /** SplitClipPointsRequest */
         SplitClipPointsRequest: {

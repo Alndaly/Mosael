@@ -258,7 +258,7 @@ class TestDispatchWiring:
                 prompt="p",
                 negative_prompt="",
                 parameters={},
-                source_asset_ids=[],
+                source_assets=[],
             )
             db.commit()
             generation_id, job_id = generation.id, job.id

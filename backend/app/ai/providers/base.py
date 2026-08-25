@@ -29,6 +29,29 @@ class ProviderError(RuntimeError):
     """Raised for provider failures; message must already be safe to surface."""
 
 
+#: 一份输入素材**拿来干什么**。
+#:
+#: 各家的接口本来就带这个概念 —— Seedance / MiniMax 的 content 数组按 `role` 区分,
+#: 可灵分 `image` 与 `image_tail`。我们这一层此前把它抹平成一个扁平的 Path 元组,谁是首帧
+#: 靠「第 0 个」这条约定。于是尾帧、参考图、参考视频都没地方放:再加一个位置约定,每个适配器
+#: 都得记住第几个是什么,而记错了不会报错,只会生成出别的东西。
+FIRST_FRAME = "first_frame"
+LAST_FRAME = "last_frame"
+REFERENCE_IMAGE = "reference_image"
+REFERENCE_VIDEO = "reference_video"
+
+#: 全部角色。描述符(domain/generation/catalog)声明某个模型认哪几种,界面和智能体都读它。
+SOURCE_ROLES = (FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, REFERENCE_VIDEO)
+
+
+@dataclass(frozen=True)
+class SourceAsset:
+    """一份输入素材,带着它的用途。"""
+
+    role: str
+    path: Path
+
+
 @dataclass(frozen=True)
 class GenerationRequest:
     kind: str  # "image" | "video"
@@ -36,7 +59,18 @@ class GenerationRequest:
     prompt: str
     negative_prompt: str = ""
     parameters: dict[str, Any] = field(default_factory=dict)
-    source_files: tuple[Path, ...] = ()
+    sources: tuple[SourceAsset, ...] = ()
+
+    def source_for(self, role: str) -> Path | None:
+        """取这个角色的素材;没有就是 None。同一角色给了多份时取第一份。"""
+        for item in self.sources:
+            if item.role == role:
+                return item.path
+        return None
+
+    def sources_for(self, role: str) -> tuple[Path, ...]:
+        """取这个角色的**全部**素材 —— 参考图可以给多张。"""
+        return tuple(item.path for item in self.sources if item.role == role)
 
 
 @dataclass(frozen=True)
@@ -115,7 +149,7 @@ def metering_from_request(request: GenerationRequest) -> dict[str, Any]:
         units.update(
             {
                 "images": int(request.parameters.get("num_images", 1)),
-                "source_images": len(request.source_files),
+                "source_images": len(request.sources),
             }
         )
         if size:
@@ -127,7 +161,7 @@ def metering_from_request(request: GenerationRequest) -> dict[str, Any]:
                 "video_seconds": float(request.parameters.get("duration_seconds", 5)),
                 "resolution": str(request.parameters.get("resolution", "720p")),
                 "aspect_ratio": str(request.parameters.get("aspect_ratio", "")),
-                "source_images": len(request.source_files),
+                "source_images": len(request.sources),
             }
         )
     return units
@@ -215,16 +249,31 @@ def poll_until_ready(
     raise ProviderError(timed_out_message)
 
 
-def first_frame_value(request: GenerationRequest) -> str | None:
-    """图生视频的首帧:**先看参数里的 url,再回落上传的文件**。
+#: 每个角色对应的「直接给个 url」参数名。界面既可以选素材库里的图,也可以粘一个外链;
+#: 两条路进来的东西是同一样,所以在这里合流,而不是让每个适配器各写一遍回落。
+ROLE_URL_PARAMETERS = {
+    FIRST_FRAME: ("first_frame_url", "image_url"),
+    LAST_FRAME: ("last_frame_url",),
+    REFERENCE_IMAGE: ("reference_image_url",),
+    REFERENCE_VIDEO: ("reference_video_url",),
+}
 
-    住在这里而不是某一家的模块里 —— 三家(可灵 / 火山 seedance / 万相)取法完全一样,而它此前
-    定义在 kling.py:wan_video 得反过来 import 那一家,seedance 干脆整段抄了一遍。一个共享
-    约定住在某个供应商的文件里,读的人只会以为它是那家特有的东西。
+
+def source_value(request: GenerationRequest, role: str) -> str | None:
+    """取某个角色的素材,拿成可以直接塞进请求体的字符串:**先看参数里的 url,再回落上传的文件**。
+
+    住在这里而不是某一家的模块里 —— 各家取法完全一样,而它此前(只有首帧那一版)定义在
+    kling.py:万相得反过来 import 那一家,seedance 干脆整段抄了一遍。一个共享约定住在某个
+    供应商的文件里,读的人只会以为它是那家特有的东西。
     """
-    first_frame = request.parameters.get("first_frame_url") or request.parameters.get("image_url")
-    if first_frame:
-        return str(first_frame)
-    if request.source_files:
-        return image_file_to_data_url(request.source_files[0])
-    return None
+    for name in ROLE_URL_PARAMETERS.get(role, ()):
+        value = request.parameters.get(name)
+        if value:
+            return str(value)
+    path = request.source_for(role)
+    return image_file_to_data_url(path) if path is not None else None
+
+
+def first_frame_value(request: GenerationRequest) -> str | None:
+    """图生视频的首帧。`source_value(request, FIRST_FRAME)` 的简写 —— 用得最多的那一个。"""
+    return source_value(request, FIRST_FRAME)

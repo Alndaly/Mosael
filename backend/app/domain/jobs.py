@@ -41,6 +41,25 @@ def current_parent_job_id() -> str | None:
     """当前正在执行的父任务 id(工作流节点里 = 本工作流 job);无则 None。"""
     return _current_parent_job.get()
 
+
+#: 「接下来建的任务,干完了把回执寄给谁」。和 _current_parent_job 同一个做法。
+#:
+#: 用上下文变量而不是给每个 start_* 加一个参数:确认卡执行的是发布/导出/生成三种不同的活儿,
+#: 各自有各自的入口函数。逐个加参数意味着**每加一种能被智能体触发的任务,都要再改一处**,
+#: 而漏掉的那一处不会报错 —— 只是那种任务的回执永远送不到。
+_current_receipt: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar(
+    "open_studio_current_receipt", default=None
+)
+
+
+def set_receipt(receipt: dict[str, Any] | None) -> contextvars.Token:
+    """标记「后续 create_job 建的任务,终态时按这份回执通知」。返回的 token 用于 reset_receipt。"""
+    return _current_receipt.set(receipt)
+
+
+def reset_receipt(token: contextvars.Token) -> None:
+    _current_receipt.reset(token)
+
 # Children (ffmpeg, ASR/TTS workers) belonging to a running job, so cancelling can actually
 # stop the work. Without this, cancel only flipped a database row: ffmpeg ran to completion,
 # burning CPU the user had asked to stop, and then the worker overwrote the cancellation with
@@ -133,6 +152,12 @@ def finish_job(db: Session, job: Job, **fields: Any) -> bool:
     the job is already settled; the caller uses the return value to skip the rest of its
     success path too (registering an export as an asset, emitting job.succeeded).
     """
+    # **先看手里这一份**,再去库里对。只 refresh 的话,本次事务里还没提交的终态会被库里的
+    # 旧值冲掉 —— 于是同一个 job 连着 finish 两次,两次都返回 True,最终状态由后一次说了算,
+    # 而回执也会发两封(一封说成功、一封说失败)。refresh 要挡的是**别的会话**写进来的取消,
+    # 它挡不了自己刚写的那一笔。
+    if job.status in TERMINAL_STATUSES:
+        return False
     db.refresh(job)
     if job.status in TERMINAL_STATUSES:
         return False
@@ -147,7 +172,37 @@ def finish_job(db: Session, job: Job, **fields: Any) -> bool:
                        fields.get("error") or fields.get("message") or "")
     elif status == "succeeded":
         logger.info("job %s [%s] succeeded in %s", job.id, job.kind, took)
+    if status in TERMINAL_STATUSES:
+        _deliver_receipt(db, job)
     return True
+
+
+#: 「这活儿干完了,回执寄给谁」。key 是收信方的种类,值是那一类怎么送。
+#:
+#: **任务这一层不认识收信方** —— 智能体自己在装配时登记(app/main.py),就像 tts_runtime_config
+#: 那样。反过来写(在这里 import domain.agent)会让任务域依赖智能体域,而任务是更底下那一层:
+#: 发布、导出、转写都建任务,它们没有一个该因为「智能体也许想知道」而认识智能体。
+_RECEIPT_DELIVERERS: dict[str, Callable[[Session, Job, dict[str, Any]], None]] = {}
+
+
+def register_receipt_deliverer(kind: str, deliver: Callable[[Session, Job, dict[str, Any]], None]) -> None:
+    """登记一种回执的送法。同名后登记的覆盖先登记的。"""
+    _RECEIPT_DELIVERERS[kind] = deliver
+
+
+def _deliver_receipt(db: Session, job: Job) -> None:
+    receipt = (job.payload or {}).get("receipt")
+    if not isinstance(receipt, dict):
+        return
+    deliver = _RECEIPT_DELIVERERS.get(str(receipt.get("kind") or ""))
+    if deliver is None:
+        return
+    try:
+        deliver(db, job, receipt)
+    except Exception:
+        # 回执送不到**不能**把任务弄失败 —— 活儿已经干完了,产物已经在库里。
+        # 吞掉但记下来:没有日志的话,「智能体不知道任务结束了」会查成一个玄学问题。
+        logger.warning("job %s [%s] 回执没送到 (%s)", job.id, job.kind, receipt.get("kind"), exc_info=True)
 
 
 def _elapsed(job: Job) -> str:
@@ -244,6 +299,9 @@ def create_job(
     """
     # 显式传入优先;否则取当前工作流上下文(工作流节点里派生的子任务自动归到父 job 下)。
     parent = parent_job_id if parent_job_id is not None else _current_parent_job.get()
+    receipt = _current_receipt.get()
+    if receipt is not None and "receipt" not in payload:
+        payload = {**payload, "receipt": receipt}
     job = Job(
         workspace_id=workspace_id, kind=kind, payload=payload,
         parent_job_id=parent, created_by=created_by,

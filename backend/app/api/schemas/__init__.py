@@ -1281,6 +1281,18 @@ class GenerationModelOut(OrmModel):
     adapter_available: bool
 
 
+class SourceAssetRef(BaseModel):
+    """一份输入素材,**带着它的用途**。
+
+    此前这里是一个裸的 id 列表,谁是首帧靠「第 0 个」这条约定 —— 尾帧、参考图、参考视频
+    因此都没地方放。role 的取值见 ai/providers/base.SOURCE_ROLES;哪个模型认哪几种,
+    由 domain/generation/catalog 的描述符声明。
+    """
+
+    asset_id: str = Field(min_length=1, max_length=64)
+    role: str = Field(default="first_frame", pattern="^(first_frame|last_frame|reference_image|reference_video)$")
+
+
 class GenerationCreate(BaseModel):
     workspace_id: str
     session_id: str | None = None
@@ -1292,7 +1304,7 @@ class GenerationCreate(BaseModel):
     prompt: str = Field(min_length=1)
     negative_prompt: str = Field(default="", max_length=4000)
     parameters: dict = Field(default_factory=dict)
-    source_asset_ids: list[str] = Field(default_factory=list)
+    source_assets: list[SourceAssetRef] = Field(default_factory=list)
 
 
 class GenerationJobOut(OrmModel):

@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 from app.ai.providers.base import (
+    FIRST_FRAME,
+    LAST_FRAME,
+    REFERENCE_IMAGE,
+    REFERENCE_VIDEO,
+    SOURCE_ROLES,
     GenerationCallbacks,
     GenerationProvider,
     GenerationRequest,
     GenerationResult,
     ProviderContext,
     ProviderError,
+    SourceAsset,
 )
 from app.ai.providers.comfyui import ComfyUIProvider
 from app.ai.providers.video.kling import KlingProvider
@@ -45,6 +51,12 @@ def get_provider(name: str, kind: str) -> GenerationProvider | None:
 
 
 __all__ = [
+    "FIRST_FRAME",
+    "LAST_FRAME",
+    "REFERENCE_IMAGE",
+    "REFERENCE_VIDEO",
+    "SOURCE_ROLES",
+    "SourceAsset",
     "GenerationCallbacks",
     "GenerationProvider",
     "GenerationRequest",

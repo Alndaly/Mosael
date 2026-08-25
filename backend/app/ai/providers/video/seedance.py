@@ -14,7 +14,11 @@ from app.ai.providers.base import (
     GenerationResult,
     ProviderContext,
     ProviderError,
+    FIRST_FRAME,
+    LAST_FRAME,
+    REFERENCE_IMAGE,
     first_frame_value,
+    source_value,
     metering_from_request,
     provider_http_error,
 )
@@ -59,11 +63,18 @@ def build_submit_payload(request: GenerationRequest, context: ProviderContext | 
     ratio = str(request.parameters.get("aspect_ratio", "16:9"))
     content: list[dict[str, Any]] = [{"type": "text", "text": request.prompt.strip()}]
     # 三家共用的约定,住在 base 里 —— 这里此前是整段抄写的。
+    #
+    # content 数组按 `role` 区分每张图是干什么的,这正是接口自己的形状 —— 我们这一层此前
+    # 只喂得进首帧。seedance-1 不认 role,所以那一档只发首帧(多发也没有字段承载)。
+    roles = (FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE) if _is_seedance2(model) else (FIRST_FRAME,)
     first_frame = first_frame_value(request)
-    if first_frame:
-        image: dict[str, Any] = {"type": "image_url", "image_url": {"url": str(first_frame)}}
+    for role in roles:
+        value = source_value(request, role)
+        if not value:
+            continue
+        image: dict[str, Any] = {"type": "image_url", "image_url": {"url": str(value)}}
         if _is_seedance2(model):
-            image["role"] = "first_frame"
+            image["role"] = role
         content.append(image)
     payload: dict[str, Any] = {
         "model": model,

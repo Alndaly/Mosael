@@ -45,23 +45,10 @@ def export_sequence(db: Session, workflow: Workflow, config: dict[str, Any]) -> 
     return {"asset_id": asset_id}
 
 
-def _asset_id_list(value: Any) -> list[str]:
-    """参考图/首帧素材 id 归一成列表。
-
-    既接受列表,也接受换行或逗号分隔的字符串 —— 后者是模板字段的形态,而模板正是把上游节点
-    的输出(如 {{gen-1.asset_id}})接进来的唯一方式。只认列表的话,这个字段在编辑器里就没法用。
-    """
-    if isinstance(value, str):
-        parts = value.replace(",", "\n").replace("，", "\n").split("\n")
-        return [item.strip() for item in parts if item.strip()]
-    if isinstance(value, (list, tuple)):
-        return [str(item).strip() for item in value if str(item).strip()]
-    return []
-
-
 @register("ai_generate")
 def ai_generate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     from app.domain.generation import create_generation_job
+    from app.domain.generation.operations import parse_source_assets
     from app.domain.generation.runner import start_generation_thread
 
     provider = str(config.get("provider", "")).strip()
@@ -81,7 +68,7 @@ def ai_generate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict
         prompt=str(config.get("prompt", "")),
         negative_prompt=str(config.get("negative_prompt", "")),
         parameters=dict(config.get("parameters") or {}),
-        source_asset_ids=_asset_id_list(config.get("source_asset_ids")),
+        source_assets=parse_source_assets(config.get("source_assets"), kind=kind),
     )
     db.commit()
     start_generation_thread(generation.id)

@@ -8,6 +8,7 @@ import httpx
 from app.core.http_retry import RetryingClient
 
 from app.ai.providers.base import (
+    REFERENCE_IMAGE,
     GenerationProvider,
     GenerationRequest,
     GenerationResult,
@@ -54,8 +55,10 @@ def build_image_payload(request: GenerationRequest, context: ProviderContext | N
     if _is_seedream4(model):
         # 4.x 参考图:显式 URL 优先,其次上传文件转 data URL。
         reference = request.parameters.get("image_url")
-        if not reference and request.source_files:
-            reference = image_file_to_data_url(request.source_files[0])
+        if not reference:
+            path = request.source_for(REFERENCE_IMAGE)
+            if path is not None:
+                reference = image_file_to_data_url(path)
         if reference:
             payload["image"] = [str(reference)]
     elif request.parameters.get("seed") is not None:

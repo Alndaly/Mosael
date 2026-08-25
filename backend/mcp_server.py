@@ -447,12 +447,19 @@ def generate_image(
     provider: str = "",
     workspace_id: str = "",
     source_asset_ids: list[str] | None = None,
+    parameters: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Confirmation required: generate or edit an image asset.
 
     Use without source_asset_ids for text-to-image. Use source_asset_ids with
     existing image asset ids when the user asks to edit/transform/continue from
     a specific image, for example "把这张图里的女孩变成男孩" or "按上一张图继续改"。
+
+    parameters carries the model's own settings — size, num_images, seed,
+    negative_prompt and so on. Which keys a model accepts, and the allowed
+    values, come from list_generation_models; call it first whenever the user
+    asks for a specific size or count. Passing a key the model does not accept
+    is rejected, so do not guess.
     Requires the user's approval because it may spend AI
     budget; once approved the finished image appears in the media pool. Leave provider/model empty only when the user wants the
     configured image-generation default. When the user names an engine (e.g.
@@ -472,8 +479,10 @@ def generate_image(
                 "prompt": prompt,
                 "provider": provider,
                 "model": model,
-                "parameters": {},
-                "source_asset_ids": source_asset_ids or [],
+                "parameters": parameters or {},
+                "source_assets": [
+                    {"asset_id": str(one), "role": "reference_image"} for one in (source_asset_ids or [])
+                ],
             },
         },
     )
@@ -493,6 +502,7 @@ def list_generation_models(kind: str = "") -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for one in kinds:
         for item in _get("/api/generation/options", {"kind": one}):
+            capabilities = item.get("capabilities") or {}
             out.append(
                 {
                     "provider": item["provider"],
@@ -500,23 +510,86 @@ def list_generation_models(kind: str = "") -> list[dict[str, Any]]:
                     "kind": item["kind"],
                     "profile": item["profile_name"],
                     "available": item["adapter_available"],
+                    # 这个模型认哪些 parameters,以及各自的取值 —— 界面按同一份描述符渲染控件。
+                    # 此前这里被整个剥掉:于是智能体连"这个模型支不支持首帧""时长能选几档"
+                    # 都问不出来,只能盲发一个没有参数的请求。
+                    "parameters": _parameter_help(capabilities),
+                    "modes": capabilities.get("modes") or [],
                 }
             )
     return out
 
 
+#: 描述符里,某个参数键对应的**取值清单**放在哪一栏。参数名和取值清单不同名是历史形状
+#: (`size` 的清单叫 `sizes`),在这里对上一次,别让每个消费者各猜一遍。
+_PARAMETER_CHOICES = {
+    "size": "sizes",
+    "resolution": "resolutions",
+    "aspect_ratio": "aspect_ratios",
+    "duration_seconds": "duration_seconds",
+}
+
+#: 素材类参数:值不是从清单里挑,而是给一个素材 id(或外链 url)。
+_SOURCE_PARAMETERS = {
+    "first_frame": "首帧图片的 asset_id;也可用 first_frame_url 传外链",
+    "last_frame": "尾帧图片的 asset_id;首尾帧一起给才是「首尾帧生视频」",
+    "reference_image": "参考图的 asset_id",
+    "reference_video": "参考视频的 asset_id",
+}
+
+
+def _parameter_help(capabilities: dict[str, Any]) -> dict[str, Any]:
+    """把一个模型的描述符翻成「这些参数能给,各自能给什么」。
+
+    **不在这里维护第二份名单** —— 键从描述符自己的 parameter_keys 来。新增一个参数只要
+    改目录(domain/generation/catalog),界面和智能体同时拿到;在这里再列一遍的话,漏掉的
+    那一个不会报错,只会让智能体以为它不存在。
+    """
+    help_: dict[str, Any] = {}
+    for key in capabilities.get("parameter_keys") or []:
+        if key in _SOURCE_PARAMETERS:
+            help_[key] = _SOURCE_PARAMETERS[key]
+            continue
+        choices = capabilities.get(_PARAMETER_CHOICES.get(key, ""))
+        default = capabilities.get(f"default_{key}")
+        if choices:
+            help_[key] = {"choices": choices, "default": default} if default is not None else {"choices": choices}
+        else:
+            help_[key] = "自由取值"
+    return help_
+
+
 @mcp.tool()
-def generate_video(prompt: str, model: str = "", provider: str = "", workspace_id: str = "") -> dict[str, Any]:
+def generate_video(
+    prompt: str,
+    model: str = "",
+    provider: str = "",
+    workspace_id: str = "",
+    parameters: dict[str, Any] | None = None,
+    source_assets: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
     """Confirmation required: generate a NEW video asset from a text prompt.
 
     Use when the user asks to create new footage/animation/B-roll as a media
     asset. This does not place the video onto a timeline; after approval the
     generated asset lands in the media pool and can later be inserted with
     edit_timeline. Leave provider/model empty only when the configured
-    video-generation default should be used; list_generation_models shows the
-    valid provider/model pairs. Do NOT use for exporting an existing sequence
-    (render_sequence), running a workflow (run_workflow), or editing
-    workflow nodes (edit_workflow).
+    video-generation default should be used.
+
+    parameters carries the model's own settings — duration_seconds, resolution,
+    size, aspect_ratio, seed, generate_audio and so on. Which keys a model
+    accepts, and the allowed values, come from list_generation_models; call it
+    first whenever the user asks for a specific length, aspect or quality.
+    Passing a key the model does not accept is rejected, so do not guess.
+
+    source_assets attaches input footage/images, each with the role it plays:
+    [{"asset_id": "...", "role": "first_frame"}]. Roles are first_frame,
+    last_frame, reference_image, reference_video. Giving first_frame and
+    last_frame together is "keyframes to video" — the model animates from one
+    image to the other. Only models whose parameters list the role support it.
+
+    Do NOT use for exporting an existing sequence (render_sequence), running a
+    workflow (run_workflow), or editing workflow nodes (edit_workflow).
     """
     confirmation = _post(
         "/api/confirmations",
@@ -524,7 +597,13 @@ def generate_video(prompt: str, model: str = "", provider: str = "", workspace_i
             "workspace_id": workspace_id or _default_workspace_id(),
             "tool": "generate_video",
             "requested_by": _REQUESTED_BY.get(),
-            "payload": {"prompt": prompt, "provider": provider, "model": model, "parameters": {}},
+            "payload": {
+                "prompt": prompt,
+                "provider": provider,
+                "model": model,
+                "parameters": parameters or {},
+                "source_assets": source_assets or [],
+            },
         },
     )
     return _confirmation_reply(confirmation)

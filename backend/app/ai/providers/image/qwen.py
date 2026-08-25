@@ -8,6 +8,7 @@ import httpx
 from app.core.http_retry import RetryingClient
 
 from app.ai.providers.base import (
+    REFERENCE_IMAGE,
     poll_until_ready,
     GenerationProvider,
     GenerationRequest,
@@ -48,7 +49,9 @@ def build_submit_payload(request: GenerationRequest) -> dict[str, Any]:
 
 def build_edit_payload(request: GenerationRequest, context: ProviderContext | None = None) -> dict[str, Any]:
     model = resolve_edit_model(request, context)
-    content: list[dict[str, str]] = [{"image": image_file_to_data_url(path)} for path in request.source_files[:3]]
+    content: list[dict[str, str]] = [
+        {"image": image_file_to_data_url(path)} for path in request.sources_for(REFERENCE_IMAGE)[:3]
+    ]
     content.append({"text": request.prompt})
     parameters: dict[str, Any] = {
         "n": int(request.parameters.get("num_images", 1)),
@@ -140,7 +143,7 @@ class QwenImageProvider(GenerationProvider):
             raise ProviderError("DashScope API key is not configured (settings → 生成服务)")
         base_url = resolve_dashscope_base(context)
         try:
-            if request.source_files:
+            if request.sources_for(REFERENCE_IMAGE):
                 headers = {"Authorization": f"Bearer {context.api_key}", "Content-Type": "application/json"}
                 with RetryingClient(base_url=resolve_qwen_edit_base(context), timeout=120, headers=headers) as client:
                     submit = client.post(EDIT_PATH, json=build_edit_payload(request, context))

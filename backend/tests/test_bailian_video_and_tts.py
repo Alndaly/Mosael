@@ -13,6 +13,7 @@ from __future__ import annotations
 import pytest
 
 from app.ai.providers.base import GenerationRequest, ProviderContext, ProviderError
+from app.ai.providers.base import FIRST_FRAME, SourceAsset
 from app.ai.providers.video.wan import build_submit_payload, extract_video_url
 from app.ai.providers.speech import BailianTTS, extract_bailian_audio_url
 
@@ -51,7 +52,7 @@ def test_图生视频走同一个端点_只多一个首帧(tmp_path) -> None:
     """和火山 / MiniMax 不同:那两家图生视频有独立路径或独立 content 数组,这家只是 input 多一项。"""
     png = tmp_path / "first.png"
     png.write_bytes(bytes.fromhex("89504e470d0a1a0a"))
-    payload = build_submit_payload(_req(source_files=[png]))
+    payload = build_submit_payload(_req(sources=tuple(SourceAsset(role=FIRST_FRAME, path=p) for p in [png])))
     assert payload["input"]["prompt"] == "海边黄昏"
     assert payload["input"]["img_url"].startswith("data:image/"), "首帧没转成 data URL"
 
@@ -466,7 +467,7 @@ def test_首帧走仓库既有约定_而不是只看上传文件(tmp_path) -> No
 
     png = tmp_path / "f.png"
     png.write_bytes(bytes.fromhex("89504e470d0a1a0a"))
-    payload = build_submit_payload(_req(source_files=[png]))
+    payload = build_submit_payload(_req(sources=tuple(SourceAsset(role=FIRST_FRAME, path=p) for p in [png])))
     assert payload["input"]["img_url"].startswith("data:image/"), "上传的文件也要能当首帧"
 
 
