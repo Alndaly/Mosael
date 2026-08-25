@@ -11,7 +11,7 @@ import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { decodeByteFallback } from "@/lib/byteFallback";
 import { formatElapsedSeconds } from "@/lib/time";
 import { cn } from "@/lib/utils";
-import { ToolResultCard, toolResultData } from "./toolResultShapes";
+import { ToolResultCard, detectShape, toolResultData } from "./toolResultShapes";
 
 /** 工具调用卡的数据形态:后端从 sidecar 事件累积(host.py),流里实时更新、消息 payload 里持久化。 */
 export type ToolCall = {
@@ -37,6 +37,43 @@ export type AgentTimelineItem =
   | { type: "thinking"; text: string; done?: boolean };
 
 /** 取一段短摘要塞进折叠态标题(参考 Claude/Codex:折叠时也能看出这步在干嘛)。 */
+/**
+ * 只有机器需要的字段。它们在摘要里毫无意义,在展开的明细里也只是噪音。
+ *
+ * 折叠行此前显示的是 `browser_open fd8620bd80ec4c88a03d73b8b17b7f6b` —— 那是 workspace_id,
+ * 因为老的取法是「对象里第一个字符串值」,而参数里第一个往往就是它。一串 32 位十六进制
+ * 占满整行,而真正说明这一步在干什么的 url 被挤掉了。
+ */
+const NOISE_KEYS = new Set([
+  "workspace_id",
+  "project_id",
+  "session_id",
+  "confirmation_id",
+  "requested_by",
+  "instance_id",
+]);
+
+/**
+ * 摘要**按字段名挑**,不按出现顺序。
+ *
+ * 排在前面的是「一眼看出这一步在干什么」的那些:提示词、地址、要找的东西。挑不到就退回
+ * 第一个不是噪音的字符串 —— 那至少比 workspace_id 强。
+ */
+const SUMMARY_KEYS = [
+  "prompt",
+  "text",
+  "query",
+  "keyword",
+  "url",
+  "path",
+  "name",
+  "title",
+  "message",
+  "content",
+  "tool_name",
+  "model",
+];
+
 function summarize(args: unknown): string | null {
   if (args == null) return null;
   if (typeof args === "string") return args;
@@ -45,12 +82,24 @@ function summarize(args: unknown): string | null {
     const first = args.find((item) => typeof item === "string");
     return typeof first === "string" ? first : null;
   }
-  if (typeof args === "object") {
-    for (const value of Object.values(args as Record<string, unknown>)) {
-      if (typeof value === "string" && value.trim()) return value;
-    }
+  if (typeof args !== "object") return null;
+  const record = args as Record<string, unknown>;
+  for (const key of SUMMARY_KEYS) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  for (const [key, value] of Object.entries(record)) {
+    if (NOISE_KEYS.has(key)) continue;
+    if (typeof value === "string" && value.trim()) return value.trim();
   }
   return null;
+}
+
+/** 展开的明细里也把噪音字段拿掉 —— 它们占的行数常常比真正的参数还多。 */
+function withoutNoise(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const kept = Object.entries(value as Record<string, unknown>).filter(([key]) => !NOISE_KEYS.has(key));
+  return kept.length > 0 ? Object.fromEntries(kept) : value;
 }
 
 /**
@@ -138,15 +187,29 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
   // 失败默认展开(让人一眼看到出错原因),其余默认折叠。
   const [open, setOpen] = React.useState(tool.status === "error");
   const preview = summarize(tool.args);
-  const argText = format(tool.args);
+  // 明细里也去噪:workspace_id 那几个占的行常常比真正的参数还多,而它们对读的人没有任何意义。
+  const cleanArgs = React.useMemo(() => withoutNoise(tool.args), [tool.args]);
+  const argText = format(cleanArgs);
+  // 去噪之后只剩一个字段、而它的值就是摘要里那句 —— 再摆一遍 JSON 是纯重复。
+  const argsAreJustPreview =
+    preview != null &&
+    cleanArgs != null &&
+    typeof cleanArgs === "object" &&
+    !Array.isArray(cleanArgs) &&
+    Object.keys(cleanArgs as Record<string, unknown>).length === 1 &&
+    Object.values(cleanArgs as Record<string, unknown>)[0] === preview;
   // Structure first: the runtimes hand us the result pre-stringified, so without unwrapping
   // there is nothing to render but the string.
   const data = React.useMemo(() => toolResultData(tool.result), [tool.result]);
   const card = tool.status === "error" ? null : <ToolResultCard value={data} />;
-  const resultText = format(data ?? tool.result);
-  // card 是 JSX 元素,恒为真 —— 不能拿它当"有没有内容"的判据(那会让空结果的箭头变成死键)。
-  // 有富卡就必有 data,也就必有 resultText,所以这两个足够。
-  const hasBody = Boolean(argText || resultText);
+  // 富卡认得出这份数据的形状时,**下面那块裸 JSON 就是同一份东西再摆一遍**。
+  // 判据用 detectShape 而不是 card:card 是 JSX 元素,恒为真。
+  const richShape = tool.status !== "error" && detectShape(data) !== null;
+  const resultText = richShape ? null : format(data ?? tool.result);
+  // 富卡也算"有内容" —— 少了它这一项,一个「参数就是摘要 + 结果是富卡」的调用会算成没内容,
+  // 整行不可展开,而那张富卡就永远看不到了。原注释警告过的正是这个陷阱(card 恒为真不能当判据),
+  // 现在有了 richShape 这个真正的布尔值。
+  const hasBody = Boolean((argText && !argsAreJustPreview) || resultText || richShape);
   const elapsed =
     typeof tool.usage?.duration_seconds === "number" ? formatElapsedSeconds(tool.usage.duration_seconds) : null;
   // Media the tool touched (an analyzed image, a generated clip, synthesized audio…) — shown as
@@ -156,8 +219,10 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
     [tool.args, data, tool.status],
   );
 
+  // **成功时不写「已完成」** —— 那个 ✓ 已经说过一遍了,再写一次只是在占地方。
+  // 运行中和失败时保留:那两个词带的信息,图标传达不了全部(尤其失败,它要把视线拉过去)。
   const statusWord =
-    tool.status === "running" ? t("toolRunning") : tool.status === "error" ? t("toolFailed") : t("toolDone");
+    tool.status === "running" ? t("toolRunning") : tool.status === "error" ? t("toolFailed") : null;
 
   return (
     // 一次工具调用是对话里的**一条行内标记**,不是一张与正文并列的卡片 —— 所以用 Marker:
@@ -195,15 +260,22 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
               <Check className="size-3" />
             )}
           </MarkerIcon>
-          <MarkerContent className="flex min-w-0 flex-1 items-center gap-1.5">
+          <MarkerContent className="flex min-w-0 flex-1 items-baseline gap-1.5">
             <span className="flex-none font-mono text-foreground">{tool.name}</span>
             {preview && !open && <span className="min-w-0 flex-1 truncate font-mono">{preview}</span>}
+            {/* 摘要占中间那一段(它可缩),状态与耗时**永远靠右** —— 但靠的是摘要那一栏的右缘,
+                不是整行的最右。没有摘要时补一个占位,否则这一行的耗时会贴在名字后面,
+                和上下几行对不齐。
+                字号挂在 span 上:根是 button,那条全局 `button{font:inherit}` 会吃掉根上的字号。 */}
+            {!(preview && !open) && <span className="min-w-0 flex-1" aria-hidden />}
+            <span className="flex-none pl-1.5 text-ui-xs">
+              {statusWord}
+              {statusWord && elapsed && " · "}
+              {elapsed && <span className="tabular-nums">{elapsed}</span>}
+            </span>
           </MarkerContent>
-          {/* 字号挂在 span 上:根是 button,那条全局 `button{font:inherit}` 会吃掉根上的字号。 */}
-          <span className="flex-none text-ui-xs">{statusWord}</span>
-          {elapsed && (
-            <span className="flex-none text-ui-xs tabular-nums">{t("usageDuration").replace("{t}", elapsed)}</span>
-          )}
+          {/* 右侧只留展开箭头。状态词和耗时此前排在这儿,和左边的名字之间隔着一整片空白 ——
+              一行里两组字各自贴边,中间那段空是最先被看见的东西,而它什么都不是。 */}
           {hasBody && (
             <ChevronRight
               className={cn("size-3 flex-none transition-transform duration-[120ms]", open && "rotate-90")}
@@ -223,7 +295,7 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
           )}
         >
           {card && <div className="max-h-[360px] min-w-0 overflow-y-auto overflow-x-hidden">{card}</div>}
-          {argText && (
+          {argText && !argsAreJustPreview && (
             <div className="flex flex-col gap-[3px]">
               <span className="text-ui-2xs uppercase tracking-[0.04em] text-muted-foreground">{t("toolInput")}</span>
               <HighlightedCode
