@@ -1,0 +1,82 @@
+{
+  "id": "dev.openstudio.baidu-pan",
+  "name": "百度网盘",
+  "version": "0.1.0",
+  "runtime": {
+    "kind": "process",
+    "entry": "tools/main.py"
+  },
+  "permissions": ["network:baidu-pan"],
+  "skills": [
+    {
+      "id": "baidu_pan",
+      "description": "从百度网盘找素材并拉进素材库。先用 pan_list 或 pan_search 找到文件的 fs_id,再用 pan_import 把它导进来。导入是异步下载,拿到 asset_id 之后就能像别的素材一样用(插时间线、当生成的首帧)。"
+    }
+  ],
+  "instance": {
+    "multiple": true,
+    "name_template": "百度网盘",
+    "credentials": [
+      {
+        "key": "BAIDU_PAN_ACCESS_TOKEN",
+        "label": "Access Token",
+        "required": true,
+        "help": "百度网盘开放平台的 access_token。在 pan.baidu.com/union 注册应用后走一次 OAuth 拿到。有效期 30 天,过期后回来换一个新的。"
+      }
+    ],
+    "config": [
+      {
+        "key": "BAIDU_PAN_ROOT",
+        "label": "起始目录",
+        "type": "text",
+        "required": false,
+        "help": "留空就是网盘根目录 /。填 /我的资源 这样的路径可以让 pan_list 默认从那里开始。"
+      }
+    ]
+  },
+  "tools": {
+    "expose": "all",
+    "declare": [
+      {
+        "name": "pan_list",
+        "description": "列出百度网盘某个目录下的文件和子目录。返回每一项的 fs_id、文件名、大小、是不是目录。fs_id 是后面 pan_import 要用的。",
+        "read_only": true,
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "path": { "type": "string", "description": "网盘路径,如 /我的资源/素材。留空用起始目录。" },
+            "limit": { "type": "integer", "description": "最多返回多少条,默认 100,上限 1000。" }
+          }
+        }
+      },
+      {
+        "name": "pan_search",
+        "description": "按文件名在百度网盘里搜索。找不准路径时用这个,比一层层 pan_list 快。返回同样带 fs_id。",
+        "read_only": true,
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "keyword": { "type": "string", "description": "文件名关键词" },
+            "path": { "type": "string", "description": "限定在这个目录下搜,留空搜全盘" }
+          },
+          "required": ["keyword"]
+        }
+      },
+      {
+        "name": "pan_import",
+        "description": "把百度网盘里的一个文件拉进素材库。传 pan_list / pan_search 给出的 fs_id。返回 asset_id,之后就和别的素材一样用。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "fs_id": { "type": "string", "description": "文件的 fs_id" }
+          },
+          "required": ["fs_id"]
+        },
+        "node": {
+          "label": "从百度网盘导入",
+          "outputs": ["asset_id", "asset_name"]
+        }
+      }
+    ]
+  }
+}
