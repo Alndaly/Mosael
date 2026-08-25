@@ -249,6 +249,7 @@ def _set_permission_mode(db: DbSession, user: CurrentUser, session: AgentSession
 @router.delete("/agent/sessions/{session_id}", status_code=204)
 def delete_agent_session(session_id: str, db: DbSession, user: CurrentUser) -> Response:
     session = _require_session(db, user, session_id, perm="ai")
+    sharing.forget(db, "agent_session", session.id)
     db.delete(session)
     db.commit()
     return Response(status_code=204)

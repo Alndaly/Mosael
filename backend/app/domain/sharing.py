@@ -119,6 +119,22 @@ def unshare(db: Session, kind: str, resource_id: str, workspace_id: str) -> None
             db.delete(row)
 
 
+def forget(db: Session, kind: str, resource_id: str) -> None:
+    """这份东西没了 —— 把它在**所有**工作区里的共享记录一起清掉。
+
+    和 `unshare` 不同:那个是「从这个工作区里收回」,是用户的一次决定;这个是删除时的收尾。
+
+    必须显式做,`resource_shares.resource_id` 是**多态**引用(同一列指向五张不同的表),
+    没法建外键、也就没有级联。漏掉的后果不是报错:记录留在库里指向一个不存在的 id,
+    越攒越多;而真正咬人的是**同名 kind 的下一次统计**会把它们算进去 —— 真库里 19 条
+    generation_session 共享记录,16 条指向早就删掉的会话。
+    """
+    for row in db.scalars(
+        select(ResourceShare).where(ResourceShare.kind == kind, ResourceShare.resource_id == resource_id)
+    ):
+        db.delete(row)
+
+
 def is_shared_with(db: Session, kind: str, resource_id: str, workspace_id: str) -> bool:
     return (
         db.scalar(

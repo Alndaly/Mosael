@@ -61,6 +61,7 @@ def update_task(task_id: str, body: ScheduledTaskUpdate, db: DbSession, user: Cu
 def delete_task(task_id: str, db: DbSession, user: CurrentUser) -> Response:
     task = _get_task(db, task_id)
     ensure_workspace_perm(db, user, task.workspace_id, "schedule")
+    sharing.forget(db, "scheduled_task", task.id)
     db.delete(task)
     db.commit()
     return Response(status_code=204)

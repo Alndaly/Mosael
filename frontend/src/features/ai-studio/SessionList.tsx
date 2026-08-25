@@ -368,7 +368,7 @@ export function SessionList({
                 <ListChecks size={14} />
               </Button>
               <Button
-                variant="outline"
+                variant="ghost"
                 size="icon"
                 className="h-7 w-7"
                 title={t(spec.newSession)}

@@ -122,6 +122,7 @@ def delete_profile(db: Session, workspace_id: str, profile_id: str) -> None:
         raise BrowserDomainError("该档案有正在进行的会话,先结束再删")
     if db.scalar(select(PublishAccount).where(PublishAccount.profile_id == profile_id)):
         raise BrowserDomainError("该档案绑定了发布账号,请先在发布页解绑或删除账号")
+    sharing.forget(db, "browser_profile", prof.id)
     db.delete(prof)
     db.commit()
 

@@ -108,6 +108,7 @@ def delete_generation_session(session_id: str, db: DbSession, user: CurrentUser)
     if job_ids:
         db.execute(delete(Job).where(Job.id.in_(job_ids)))
     db.execute(delete(GenerationSession).where(GenerationSession.id == session.id))
+    sharing.forget(db, "generation_session", session.id)
     db.commit()
     return Response(status_code=204)
 

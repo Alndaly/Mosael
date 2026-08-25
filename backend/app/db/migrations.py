@@ -958,6 +958,42 @@ def _migrate_workflow_source_assets() -> None:
                 )
 
 
+def _cleanup_orphan_resource_shares() -> None:
+    """清掉指向已删资源的共享记录。
+
+    `resource_shares.resource_id` 是多态引用(同一列指向五张表),建不了外键、也就没有级联,
+    而删除路径此前没人清 —— 记录留在库里指向一个不存在的 id,越攒越多。真库里撞见的时候,
+    19 条 generation_session 记录里有 16 条是这样的。
+
+    删除路径现在都会清了(由 tests/test_sharing_forgets_on_delete.py 钉住),这一条只处理
+    存量。**每次启动都跑**:它按 kind 逐张表反查,没有孤儿时是几条空查询。
+    """
+    tables = {
+        "publish_account": "publish_accounts",
+        "browser_profile": "browser_profiles",
+        "agent_session": "agent_sessions",
+        "generation_session": "generation_sessions",
+        "scheduled_task": "scheduled_tasks",
+    }
+    inspector = inspect(engine)
+    present = set(inspector.get_table_names())
+    if "resource_shares" not in present:
+        return
+    with engine.begin() as conn:
+        for kind, table in tables.items():
+            if table not in present:
+                continue
+            removed = conn.execute(
+                text(
+                    f"DELETE FROM resource_shares WHERE kind = :kind "  # noqa: S608 — 表名来自上面那张常量表
+                    f"AND resource_id NOT IN (SELECT id FROM {table})"
+                ),
+                {"kind": kind},
+            ).rowcount
+            if removed:
+                logger.info("清掉 %d 条指向已删 %s 的共享记录", removed, kind)
+
+
 def _migrate_agent_notice_envelope_out_of_content() -> None:
     """把跨会话通知的**信封**从正文里剥出来,来源改记进 payload。
 
@@ -1243,6 +1279,7 @@ def init_db() -> None:
     _migrate_session_groups_serve_both()
     _migrate_source_assets_get_a_role()
     _migrate_workflow_source_assets()
+    _cleanup_orphan_resource_shares()
     _migrate_generation_job_message_keys()
     _migrate_agent_session_order()
     _migrate_agent_notice_envelope_out_of_content()

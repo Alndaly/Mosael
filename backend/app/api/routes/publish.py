@@ -129,6 +129,7 @@ def delete_account(account_id: str, db: DbSession, user: CurrentUser) -> Respons
     if account is None:
         raise HTTPException(status_code=404, detail="Account not found")
     ensure_workspace_perm(db, user, account.workspace_id, "publish")
+    sharing.forget(db, "publish_account", account.id)
     db.delete(account)
     db.commit()
     return Response(status_code=204)
