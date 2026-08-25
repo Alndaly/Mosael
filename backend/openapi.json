@@ -10802,6 +10802,130 @@
         }
       }
     },
+    "/api/plugins/market": {
+      "get": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Browse Market",
+        "description": "市场里有什么。**要管理员** —— 看到的下一步就是装,而装是往这台机器上放代码。",
+        "operationId": "browse_market_api_plugins_market_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PluginMarketEntry"
+                  },
+                  "type": "array",
+                  "title": "Response Browse Market Api Plugins Market Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/install/preview": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Preview Install",
+        "description": "下下来读一遍清单就扔 —— **让用户在装之前看见它要什么权限**。\n\n权限清单写在清单里,而清单在包里面,不下下来看不到。少了这一步,「安装」就是一个\n什么都不说的按钮,而它做的事是往这台机器上放一份会被执行的代码。",
+        "operationId": "preview_install_api_plugins_install_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PluginInstallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PluginInstallPreview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/install": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Install From Url",
+        "description": "下下来装上,然后照常扫描一遍(建默认实例、对齐字段)。",
+        "operationId": "install_from_url_api_plugins_install_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PluginInstallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PluginPackageOut"
+                  },
+                  "type": "array",
+                  "title": "Response Install From Url Api Plugins Install Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins/dir": {
       "get": {
         "tags": [
@@ -17273,6 +17397,79 @@
         "title": "PluginFieldOut",
         "description": "一个配置项或凭据项。凭据只是 secret=True 的配置 —— 差别在控件和回显,不在语义。"
       },
+      "PluginInstallPreview": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": ""
+          },
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "default": ""
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Permissions"
+          },
+          "tools": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tools"
+          },
+          "installed": {
+            "type": "boolean",
+            "title": "Installed",
+            "default": false
+          },
+          "installed_version": {
+            "type": "string",
+            "title": "Installed Version",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "PluginInstallPreview",
+        "description": "装之前先看清楚:它是谁、要什么权限。"
+      },
+      "PluginInstallRequest": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Url"
+          },
+          "overwrite": {
+            "type": "boolean",
+            "title": "Overwrite",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "PluginInstallRequest"
+      },
       "PluginInstanceCreate": {
         "properties": {
           "name": {
@@ -17442,6 +17639,67 @@
         },
         "type": "object",
         "title": "PluginInvokeRequest"
+      },
+      "PluginMarketEntry": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": ""
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "default": ""
+          },
+          "author": {
+            "type": "string",
+            "title": "Author",
+            "default": ""
+          },
+          "homepage": {
+            "type": "string",
+            "title": "Homepage",
+            "default": ""
+          },
+          "download": {
+            "type": "string",
+            "title": "Download",
+            "default": ""
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Permissions"
+          },
+          "installed": {
+            "type": "boolean",
+            "title": "Installed",
+            "default": false
+          },
+          "installed_version": {
+            "type": "string",
+            "title": "Installed Version",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "PluginMarketEntry",
+        "description": "市场里的一条。索引给什么就是什么 —— 不做补全,免得看起来比实际更可信。"
       },
       "PluginPackageOut": {
         "properties": {

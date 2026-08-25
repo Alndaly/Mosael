@@ -62,6 +62,9 @@ import {
 } from "@/lib/generationCapabilities";
 import { FrameSlotField } from "@/features/ai-studio/FrameSlotField";
 import { SessionList } from "@/features/ai-studio/SessionList";
+import { AI_PANEL_BOUNDS } from "@/features/ai-studio/ChatWorkspace";
+import { useMediaMatch } from "@/lib/useMediaMatch";
+import { SIDEBAR_HANDLE_CLASS, handleOffset, useSidePanels } from "@/lib/useResizableSidebar";
 import {
   EMPTY_SLOT,
   emptyFrames,
@@ -215,6 +218,17 @@ function GenerateWorkspace({
   const { locale } = usePreferences();
   const qc = useQueryClient();
   const { openImagePreview } = useImagePreview();
+  const panels = useSidePanels("generation", AI_PANEL_BOUNDS);
+  const narrowLayout = useMediaMatch("(max-width: 1180px)");
+  const singleColumn = useMediaMatch("(max-width: 820px)");
+  const showRightPanel = !narrowLayout;
+  // 内联 gridTemplateColumns 会覆盖 class 里的 max-[...] 回退,所以断点在 JS 里一起判 ——
+  // 单列时不给内联,交还给 class(对话页踩过同一处)。
+  const columns = singleColumn
+    ? undefined
+    : showRightPanel
+      ? `${panels.left}px minmax(0,1fr) ${panels.right}px`
+      : `${panels.left}px minmax(0,1fr)`;
   const sessionKey = generationSessionSelectionKey(workspace.id);
   const [sessionId, setSessionId] = React.useState<string | null>(() => window.localStorage.getItem(sessionKey));
   const [prompt, setPrompt] = React.useState("");
@@ -636,7 +650,26 @@ function GenerateWorkspace({
   };
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)_300px] grid-rows-[minmax(0,1fr)] gap-2 max-[1180px]:grid-cols-[220px_minmax(0,1fr)] max-[820px]:grid-cols-[minmax(0,1fr)]">
+    <div
+      className="relative grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)_300px] grid-rows-[minmax(0,1fr)] gap-2 max-[1180px]:grid-cols-[220px_minmax(0,1fr)] max-[820px]:grid-cols-[minmax(0,1fr)]"
+      style={columns ? { gridTemplateColumns: columns } : undefined}
+    >
+      {/* 和对话页同一套(lib/useResizableSidebar):同一个形状不该有两份实现,
+          而这边此前一条拖柄都没有 —— 右栏那些参数挤在 300px 里,长模型名一个都看不全。 */}
+      {!singleColumn && (
+        <div
+          className={SIDEBAR_HANDLE_CLASS}
+          style={{ left: handleOffset(panels.left) }}
+          onPointerDown={panels.startDrag("left")}
+        />
+      )}
+      {showRightPanel && (
+        <div
+          className={SIDEBAR_HANDLE_CLASS}
+          style={{ right: handleOffset(panels.right) }}
+          onPointerDown={panels.startDrag("right")}
+        />
+      )}
       {/* 和对话栏同一个组件:分组、拖进分组、搜索、批量删,两边一份实现。
           布局也照它 —— flex 列而不是定行数的 grid:搜索框是条件渲染的,行数会变。 */}
       <aside className="flex min-h-0 flex-col overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] max-[820px]:hidden">

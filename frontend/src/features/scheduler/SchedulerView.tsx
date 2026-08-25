@@ -18,6 +18,7 @@ import {
 } from "@/api/client";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { relativeTime } from "@/lib/time";
+import { useResizableSidebar } from "@/lib/useResizableSidebar";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,7 @@ import { cn } from "@/lib/utils";
  * 右侧选中任务的详情(概览行 + 运行记录)。
  */
 export function SchedulerView({ workspace, project }: { workspace: Workspace; project: Project | null }) {
+  const sidebar = useResizableSidebar("scheduler");
   const t = useI18n();
   const qc = useQueryClient();
   const [creating, setCreating] = React.useState(false);
@@ -111,7 +113,8 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
 
   return (
     <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
-      <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]">
+      <div className="relative grid min-h-0 flex-1  gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]"
+        style={{ gridTemplateColumns: `${sidebar.width}px minmax(0, 1fr)` }}>
         <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
           <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
             <h2>{t("tasks")}</h2>
@@ -168,6 +171,8 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
             ))}
           </div>
         </aside>
+        {/* 边缘拖动 —— 和剪辑页同一套(lib/useResizableSidebar)。 */}
+        <div {...sidebar.handleProps} />
         <div className="grid min-w-0 overflow-y-auto">
           {selected ? (
             <TaskDetail key={selected.id} task={selected} workspaceId={workspace.id} />

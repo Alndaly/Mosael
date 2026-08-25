@@ -3671,6 +3671,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plugins/market": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Browse Market
+         * @description 市场里有什么。**要管理员** —— 看到的下一步就是装,而装是往这台机器上放代码。
+         */
+        get: operations["browse_market_api_plugins_market_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/install/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Install
+         * @description 下下来读一遍清单就扔 —— **让用户在装之前看见它要什么权限**。
+         *
+         *     权限清单写在清单里,而清单在包里面,不下下来看不到。少了这一步,「安装」就是一个
+         *     什么都不说的按钮,而它做的事是往这台机器上放一份会被执行的代码。
+         */
+        post: operations["preview_install_api_plugins_install_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Install From Url
+         * @description 下下来装上,然后照常扫描一遍(建默认实例、对齐字段)。
+         */
+        post: operations["install_from_url_api_plugins_install_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plugins/dir": {
         parameters: {
             query?: never;
@@ -6149,6 +6212,53 @@ export interface components {
              */
             default: string;
         };
+        /**
+         * PluginInstallPreview
+         * @description 装之前先看清楚:它是谁、要什么权限。
+         */
+        PluginInstallPreview: {
+            /** Id */
+            id: string;
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /**
+             * Version
+             * @default
+             */
+            version: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Permissions */
+            permissions?: string[];
+            /** Tools */
+            tools?: string[];
+            /**
+             * Installed
+             * @default false
+             */
+            installed: boolean;
+            /**
+             * Installed Version
+             * @default
+             */
+            installed_version: string;
+        };
+        /** PluginInstallRequest */
+        PluginInstallRequest: {
+            /** Url */
+            url: string;
+            /**
+             * Overwrite
+             * @default false
+             */
+            overwrite: boolean;
+        };
         /** PluginInstanceCreate */
         PluginInstanceCreate: {
             /**
@@ -6226,6 +6336,56 @@ export interface components {
             input?: {
                 [key: string]: unknown;
             };
+        };
+        /**
+         * PluginMarketEntry
+         * @description 市场里的一条。索引给什么就是什么 —— 不做补全,免得看起来比实际更可信。
+         */
+        PluginMarketEntry: {
+            /** Id */
+            id: string;
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Version
+             * @default
+             */
+            version: string;
+            /**
+             * Author
+             * @default
+             */
+            author: string;
+            /**
+             * Homepage
+             * @default
+             */
+            homepage: string;
+            /**
+             * Download
+             * @default
+             */
+            download: string;
+            /** Permissions */
+            permissions?: string[];
+            /**
+             * Installed
+             * @default false
+             */
+            installed: boolean;
+            /**
+             * Installed Version
+             * @default
+             */
+            installed_version: string;
         };
         /** PluginPackageOut */
         PluginPackageOut: {
@@ -16379,6 +16539,101 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginPackageOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    browse_market_api_plugins_market_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginMarketEntry"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_install_api_plugins_install_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PluginInstallRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginInstallPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    install_from_url_api_plugins_install_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PluginInstallRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

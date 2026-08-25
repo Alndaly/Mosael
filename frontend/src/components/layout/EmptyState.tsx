@@ -33,7 +33,10 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "empty-state m-auto grid justify-items-center text-center",
+        // `max-w` 是**上限不是宽度**,但它挡不住比它更窄的容器 —— 260px 的空态放进 258px 的
+        // 侧栏就溢出 10px,而那 10px 会让整页能左右滑。`w-full` 让它先服从容器,
+        // `break-words` 让里面的长 URL(报错文案里全是)断得开而不是硬撑。
+        "empty-state m-auto grid w-full justify-items-center break-words text-center [overflow-wrap:anywhere]",
         compact
           ? "max-w-[260px] gap-1 px-3 py-4 [&_h2]:m-0 [&_h2]:text-ui-sm [&_h2]:font-[620] [&_p]:m-0 [&_p]:text-ui-xs [&_p]:leading-[1.5] [&_p]:text-muted-foreground"
           : "max-w-[420px] gap-2 px-5 py-8 [&_h2]:mt-0.5 [&_h2]:text-sm [&_h2]:font-[650] [&_p]:mb-1.5 [&_p]:mt-0 [&_p]:text-ui-md [&_p]:leading-[1.55] [&_p]:text-muted-foreground",

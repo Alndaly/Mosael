@@ -15,11 +15,14 @@ from app.api.schemas import (
     PluginCredentialOut,
     PluginCredentialUpdate,
     PluginEnableRequest,
+    PluginInstallPreview,
+    PluginInstallRequest,
     PluginInstanceCreate,
     PluginInstanceOut,
     PluginInstanceUpdate,
     PluginInvocationOut,
     PluginInvokeRequest,
+    PluginMarketEntry,
     PluginPackageOut,
     PluginPermissionGrantOut,
     PluginPermissionGrantUpdate,
@@ -32,6 +35,7 @@ from app.domain.plugins import PluginDomainError
 from app.domain.plugins import instances as inst
 from app.domain.plugins import install as installer
 from app.domain.plugins import packages as pkg
+from app.domain.plugins import registry as market
 from app.domain.plugins import tools as tools_domain
 from app.domain.plugins.manifest import manifest_of
 
@@ -48,6 +52,75 @@ def _fail(exc: PluginDomainError, status: int = 422) -> HTTPException:
 def scan_packages(db: DbSession, user: CurrentUser) -> list[dict]:
     ensure_deployment_admin(db, user)
     try:
+        installer.sync(db, settings.plugins_dir, owner_user_id=user.id)
+    except PluginDomainError as exc:
+        raise _fail(exc) from exc
+    return _packages(db, user)
+
+
+#: 内置的市场索引。部署管理员可以在设置里换成自己那一份(DeploymentConfig.plugin_registry_url)。
+DEFAULT_REGISTRY_URL = "https://openstudio.team/plugins/registry.json"
+
+
+def _registry_url(db: DbSession) -> str:
+    from app.db.models import DeploymentConfig
+
+    config = db.get(DeploymentConfig, "default")
+    return (config.plugin_registry_url if config else "").strip() or DEFAULT_REGISTRY_URL
+
+
+@router.get("/plugins/market", response_model=list[PluginMarketEntry])
+def browse_market(db: DbSession, user: CurrentUser) -> list[PluginMarketEntry]:
+    """市场里有什么。**要管理员** —— 看到的下一步就是装,而装是往这台机器上放代码。"""
+    ensure_deployment_admin(db, user)
+    try:
+        entries = market.fetch_index(_registry_url(db))
+    except PluginDomainError as exc:
+        raise _fail(exc) from exc
+    installed = {row.id: row.version for row in db.scalars(select(PluginPackage))}
+    return [
+        PluginMarketEntry(
+            **{key: entry.get(key, "") for key in ("id", "name", "description", "version", "author", "homepage", "download")},
+            permissions=[p for p in (entry.get("permissions") or []) if isinstance(p, str)],
+            installed=entry["id"] in installed,
+            installed_version=installed.get(entry["id"], ""),
+        )
+        for entry in entries
+    ]
+
+
+@router.post("/plugins/install/preview", response_model=PluginInstallPreview)
+def preview_install(body: PluginInstallRequest, db: DbSession, user: CurrentUser) -> PluginInstallPreview:
+    """下下来读一遍清单就扔 —— **让用户在装之前看见它要什么权限**。
+
+    权限清单写在清单里,而清单在包里面,不下下来看不到。少了这一步,「安装」就是一个
+    什么都不说的按钮,而它做的事是往这台机器上放一份会被执行的代码。
+    """
+    ensure_deployment_admin(db, user)
+    try:
+        raw = market.preview_from_url(body.url.strip())
+    except PluginDomainError as exc:
+        raise _fail(exc) from exc
+    existing = db.get(PluginPackage, str(raw.get("id") or ""))
+    declared = (raw.get("tools") or {}).get("declare") if isinstance(raw.get("tools"), dict) else []
+    return PluginInstallPreview(
+        id=str(raw.get("id") or ""),
+        name=str(raw.get("name") or ""),
+        version=str(raw.get("version") or ""),
+        description=str((raw.get("skills") or [{}])[0].get("description") or "") if raw.get("skills") else "",
+        permissions=[p for p in (raw.get("permissions") or []) if isinstance(p, str)],
+        tools=[str(t.get("name")) for t in (declared or []) if isinstance(t, dict) and t.get("name")],
+        installed=existing is not None,
+        installed_version=existing.version if existing else "",
+    )
+
+
+@router.post("/plugins/install", response_model=list[PluginPackageOut])
+def install_from_url(body: PluginInstallRequest, db: DbSession, user: CurrentUser) -> list[dict]:
+    """下下来装上,然后照常扫描一遍(建默认实例、对齐字段)。"""
+    ensure_deployment_admin(db, user)
+    try:
+        market.install_from_url(body.url.strip(), settings.plugins_dir, overwrite=body.overwrite)
         installer.sync(db, settings.plugins_dir, owner_user_id=user.id)
     except PluginDomainError as exc:
         raise _fail(exc) from exc

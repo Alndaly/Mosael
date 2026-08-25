@@ -60,6 +60,11 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { clipEnd } from "@/domain/timeline/geometry";
 import { projectTranscript, type SegmentLike } from "@/domain/timeline/transcriptProjection";
 import { type LeftTab, useEditorPanels } from "@/features/editor/useEditorPanels";
+import { HANDLE_COLUMN, HANDLE_ROW, handleOffset } from "@/lib/useResizableSidebar";
+
+//: 剪辑页的 grid **自己**带 p-2(别的页面是外层 flex 带,grid 自己是 0)。
+//: 手柄绝对定位在这个 grid 里,所以偏移要算上它。
+const EDITOR_GRID = { padding: 8 };
 import { useEditorStore } from "@/stores/editorStore";
 import { ConfirmDialog } from "@/components/app/modals";
 import { FontFaces } from "@/features/editor/FontFaces";
@@ -813,20 +818,20 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           monitor's left edge, resized the panel instead. Stop them at the panels row: grid
           padding + timeline height + row gap. */}
       <div
-        className="absolute bottom-3 top-3 z-10 w-[7px] cursor-col-resize touch-none before:absolute before:inset-0 before:m-auto before:h-9 before:w-0.5 before:rounded-sm before:bg-border before:transition-colors before:duration-100 before:content-[''] hover:before:bg-[color-mix(in_srgb,var(--primary)_70%,transparent)] active:before:bg-[color-mix(in_srgb,var(--primary)_70%,transparent)]"
-        style={{ left: panels.leftWidth + 12 + 4 - 3, bottom: panelsRowBottom }}
+        className={`absolute bottom-3 top-3 z-10 ${HANDLE_COLUMN}`}
+        style={{ left: handleOffset(panels.leftWidth, EDITOR_GRID), bottom: panelsRowBottom }}
         onPointerDown={panels.startDrag("left")}
       />
       {inspectorInGrid && (
         <div
-          className="absolute bottom-3 top-3 z-10 w-[7px] cursor-col-resize touch-none before:absolute before:inset-0 before:m-auto before:h-9 before:w-0.5 before:rounded-sm before:bg-border before:transition-colors before:duration-100 before:content-[''] hover:before:bg-[color-mix(in_srgb,var(--primary)_70%,transparent)] active:before:bg-[color-mix(in_srgb,var(--primary)_70%,transparent)]"
-          style={{ right: panels.sizes.right + 12 + 4 - 3, bottom: panelsRowBottom }}
+          className={`absolute bottom-3 top-3 z-10 ${HANDLE_COLUMN}`}
+          style={{ right: handleOffset(panels.sizes.right, EDITOR_GRID), bottom: panelsRowBottom }}
           onPointerDown={panels.startDrag("right")}
         />
       )}
       <div
-        className="absolute left-3 right-3 z-10 h-[7px] cursor-row-resize touch-none before:absolute before:inset-0 before:m-auto before:h-0.5 before:w-9 before:rounded-sm before:bg-border before:transition-colors before:duration-100 before:content-[''] hover:before:bg-[color-mix(in_srgb,var(--primary)_70%,transparent)] active:before:bg-[color-mix(in_srgb,var(--primary)_70%,transparent)]"
-        style={{ bottom: panels.sizes.timeline + 12 + 4 - 3 }}
+        className={`absolute left-3 right-3 z-10 ${HANDLE_ROW}`}
+        style={{ bottom: handleOffset(panels.sizes.timeline, EDITOR_GRID) }}
         onPointerDown={panels.startDrag("timeline")}
       />
       {panels.tab === "media" ? (

@@ -29,11 +29,13 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { PluginMarket } from "@/features/plugins/PluginMarket";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
-import { usePersistentSelection } from "@/lib/usePersistentTab";
+import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab";
+import { useResizableSidebar } from "@/lib/useResizableSidebar";
 import { cn } from "@/lib/utils";
 
 /**
@@ -46,6 +48,7 @@ import { cn } from "@/lib/utils";
  * 设计与取舍见 docs/PLUGIN_ARCHITECTURE.md。
  */
 export function PluginsView() {
+  const sidebar = useResizableSidebar("plugins");
   const t = useI18n();
   const qc = useQueryClient();
 
@@ -65,29 +68,47 @@ export function PluginsView() {
   // 选中的那一个**活过导航** —— 切走再回来还停在他刚才看的那条(见 lib/usePersistentTab)。
   // 它被删掉时自动回落到列表第一条,那正是下面这行本来就在做的事。
   const [selectedId, setSelectedId] = usePersistentSelection("plugins", list.map((item) => item.id));
+  const [tab, setTab] = usePersistentTab<"installed" | "market">("plugins-tab", "installed", ["installed", "market"]);
+  // 一个插件都没有时直接停在市场 —— 「已安装」那一栏这时没有任何可看的东西。
+  const empty = packages.isSuccess && list.length === 0;
+  React.useEffect(() => {
+    if (empty) setTab("market");
+    // 只在"从有到无"这一刻拨一次:用户之后自己切回「已安装」不该被拨回来。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empty]);
   const selected = list.find((item) => item.id === selectedId) ?? list[0] ?? null;
 
-  if (packages.isSuccess && list.length === 0) {
-    return (
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
-        <EmptyState
-          icon={<Plug size={22} />}
-          title={t("noPlugins")}
-          body={t("noPluginsGuide").replace("{dir}", pluginsDir.data?.path ?? "")}
-          action={<ScanButton pending={scan.isPending} onScan={() => scan.mutate()} size="default" />}
-        />
-      </div>
-    );
-  }
 
   return (
     <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
-      <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]">
+      <div className="relative grid min-h-0 flex-1  gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]"
+        style={{ gridTemplateColumns: `${sidebar.width}px minmax(0, 1fr)` }}>
         <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
-          <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
-            <h2>{t("installed")}</h2>
-            <ScanButton pending={scan.isPending} onScan={() => scan.mutate()} />
+          {/* 「装什么」和「装了什么」是同一件事的两面,所以是同一栏的两个页签,不是两个页面。
+              空插件目录时默认停在市场 —— 一个只会说「你没有插件」的空态帮不上任何忙。 */}
+          <div className="flex min-h-10 items-center justify-between border-b border-border px-3">
+            <span className="flex items-center gap-0.5 text-ui-xs font-semibold uppercase tracking-[0.06em]">
+              {(["installed", "market"] as const).map((one) => (
+                <button
+                  key={one}
+                  type="button"
+                  className={cn(
+                    "cursor-pointer rounded-md border-0 bg-transparent px-1.5 py-1 transition-colors duration-100",
+                    tab === one ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                  )}
+                  onClick={() => setTab(one)}
+                >
+                  {one === "installed" ? t("installed") : t("pluginMarket")}
+                </button>
+              ))}
+            </span>
+            {tab === "installed" && <ScanButton pending={scan.isPending} onScan={() => scan.mutate()} />}
           </div>
+          {tab === "market" ? (
+            <div className="min-h-0 overflow-y-auto">
+              <PluginMarket onInstalled={() => invalidatePlugins(qc)} />
+            </div>
+          ) : (
           <div className="grid content-start gap-1 overflow-y-auto p-1.5 max-[880px]:order-1 max-[880px]:flex max-[880px]:min-w-0 max-[880px]:flex-1 max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:overflow-x-auto max-[880px]:p-0">
             {packages.isLoading &&
               list.length === 0 &&
@@ -121,8 +142,16 @@ export function PluginsView() {
                 </button>
               );
             })}
+            {packages.isSuccess && list.length === 0 && (
+              <p className="m-0 px-2 py-3 text-ui-xs leading-[1.6] text-muted-foreground">
+                {t("noPluginsGuide").replace("{dir}", pluginsDir.data?.path ?? "")}
+              </p>
+            )}
           </div>
+          )}
         </aside>
+        {/* 边缘拖动 —— 和剪辑页同一套(lib/useResizableSidebar)。 */}
+        <div {...sidebar.handleProps} />
         <div className="grid min-w-0 overflow-y-auto">
           {selected ? (
             <PackageDetail key={selected.id} pkg={selected} />

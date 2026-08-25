@@ -32,6 +32,7 @@ import { readToolPayload } from "@/features/ai-studio/toolPayload";
 import { TraceStatsBar, TraceView } from "@/features/ai-studio/trace/TraceView";
 import { buildTurns } from "@/features/ai-studio/trace/traceModel";
 import { useMediaMatch } from "@/lib/useMediaMatch";
+import { SIDEBAR_HANDLE_CLASS, handleOffset, useSidePanels } from "@/lib/useResizableSidebar";
 import { InspectorSubagentList, SubagentBreadcrumb, SubagentButton, SubagentSessionView, type SubagentRun } from "@/components/agent/SubagentPanel";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
@@ -42,26 +43,10 @@ type AgentManifest = components["schemas"]["AgentManifestOut"];
 type AgentTool = components["schemas"]["ToolSpec"];
 
 //: 分栏宽度的边界。上限挡的是"把中间对话挤没了",下限挡的是"栏窄到内容全在换行"。
-const AI_PANEL_BOUNDS = {
+export const AI_PANEL_BOUNDS = {
   left: { min: 180, max: 340, fallback: 240 },
   right: { min: 240, max: 460, fallback: 300 },
 } as const;
-
-const AI_PANELS_KEY = "openstudio.ai.panels.v1";
-
-function clampAiPanel(which: "left" | "right", value: unknown): number {
-  const bounds = AI_PANEL_BOUNDS[which];
-  return Math.min(bounds.max, Math.max(bounds.min, Number(value) || bounds.fallback));
-}
-
-function readAiPanels(): { left: number; right: number } {
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(AI_PANELS_KEY) ?? "{}");
-    return { left: clampAiPanel("left", parsed.left), right: clampAiPanel("right", parsed.right) };
-  } catch {
-    return { left: AI_PANEL_BOUNDS.left.fallback, right: AI_PANEL_BOUNDS.right.fallback };
-  }
-}
 
 export function ChatWorkspace({
   workspace,
@@ -367,10 +352,7 @@ export function ChatWorkspace({
   });
   // —— 可拉伸分栏(照剪辑页的模式:pointer 拖拽 + localStorage 持久化 + 边界钳制)——
   // clamp 在**读取**时也做:localStorage 里可能躺着旧版本写的越界值。
-  const [panels, setPanels] = React.useState(readAiPanels);
-  React.useEffect(() => {
-    window.localStorage.setItem(AI_PANELS_KEY, JSON.stringify(panels));
-  }, [panels]);
+  const panels = useSidePanels("ai", AI_PANEL_BOUNDS);
 
   const usageByMessage = React.useMemo(() => {
     const byMessage = new Map<string, AgentUsageEvent[]>();
@@ -394,28 +376,6 @@ export function ChatWorkspace({
       ? `${panels.left}px minmax(0,1fr) ${panels.right}px`
       : `${panels.left}px minmax(0,1fr)`;
 
-  const startPanelDrag = (which: "left" | "right") => (event: React.PointerEvent) => {
-    event.preventDefault();
-    const startX = event.clientX;
-    const origin = { ...panels };
-    const onMove = (moveEvent: PointerEvent) => {
-      const dx = moveEvent.clientX - startX;
-      if (which === "left") setPanels((c) => ({ ...c, left: clampAiPanel("left", origin.left + dx) }));
-      else setPanels((c) => ({ ...c, right: clampAiPanel("right", origin.right - dx) }));
-    };
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-    // 整个拖拽期间按住 resize 光标并禁选:移出 7px 的把手条时,光标会跳回默认、
-    // 并开始选中底下的文字(剪辑页踩过)。
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-  };
 
   return (
     // 轨迹视图下右侧那栏让位:排查时要的是一行行看得清的步骤和一屏放得下的详情,
@@ -432,16 +392,16 @@ export function ChatWorkspace({
       {/* 拖柄骑在 8px 的列间隙正中,7px 宽、中间一根会亮的细线 —— 和剪辑页同款。 */}
       {!single && (
         <div
-          className="absolute bottom-0 top-0 z-10 w-[7px] cursor-col-resize touch-none before:absolute before:inset-0 before:m-auto before:h-9 before:w-0.5 before:rounded-sm before:bg-border before:transition-colors before:duration-100 before:content-[''] hover:before:bg-[color-mix(in_srgb,var(--primary)_70%,transparent)] active:before:bg-[color-mix(in_srgb,var(--primary)_70%,transparent)]"
-          style={{ left: panels.left + 4 - 3 }}
-          onPointerDown={startPanelDrag("left")}
+          className={SIDEBAR_HANDLE_CLASS}
+          style={{ left: handleOffset(panels.left) }}
+          onPointerDown={panels.startDrag("left")}
         />
       )}
       {showRight && (
         <div
-          className="absolute bottom-0 top-0 z-10 w-[7px] cursor-col-resize touch-none before:absolute before:inset-0 before:m-auto before:h-9 before:w-0.5 before:rounded-sm before:bg-border before:transition-colors before:duration-100 before:content-[''] hover:before:bg-[color-mix(in_srgb,var(--primary)_70%,transparent)] active:before:bg-[color-mix(in_srgb,var(--primary)_70%,transparent)]"
-          style={{ right: panels.right + 4 - 3 }}
-          onPointerDown={startPanelDrag("right")}
+          className={SIDEBAR_HANDLE_CLASS}
+          style={{ right: handleOffset(panels.right) }}
+          onPointerDown={panels.startDrag("right")}
         />
       )}
       {/* flex 列而不是定行数的 grid:搜索框是**条件渲染**的(空列表/选择模式下不出现),

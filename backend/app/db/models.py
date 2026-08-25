@@ -947,6 +947,11 @@ class DeploymentConfig(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default="default")
     #: 陌生人能不能自己建账号。关掉之后要邀请码(见 routes/auth.register)。
     open_registration: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
+    #: 插件市场的索引地址。空 = 用内置默认(见 domain/plugins/registry)。
+    #:
+    #: 是部署级设置而不是每人一份:装插件是把代码放进**这台机器**,而这台机器上装了什么
+    #: 对所有用户是同一件事。公司内网可以指向自己那一份。
+    plugin_registry_url: Mapped[str] = mapped_column(String(500), nullable=False, default="", server_default="")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 

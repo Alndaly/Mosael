@@ -958,6 +958,20 @@ def _migrate_workflow_source_assets() -> None:
                 )
 
 
+def _migrate_plugin_registry_url() -> None:
+    """deployment_config 新增 plugin_registry_url(插件市场索引地址)。
+
+    create_all 只建新表,不给**已有**表补列。空串 = 用内置默认。
+    """
+    inspector = inspect(engine)
+    if "deployment_config" not in set(inspector.get_table_names()):
+        return
+    if "plugin_registry_url" in {c["name"] for c in inspector.get_columns("deployment_config")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE deployment_config ADD COLUMN plugin_registry_url VARCHAR(500) NOT NULL DEFAULT ''"))
+
+
 def _cleanup_orphan_resource_shares() -> None:
     """清掉指向已删资源的共享记录。
 
@@ -1279,6 +1293,7 @@ def init_db() -> None:
     _migrate_session_groups_serve_both()
     _migrate_source_assets_get_a_role()
     _migrate_workflow_source_assets()
+    _migrate_plugin_registry_url()
     _cleanup_orphan_resource_shares()
     _migrate_generation_job_message_keys()
     _migrate_agent_session_order()

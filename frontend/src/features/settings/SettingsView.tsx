@@ -34,6 +34,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ServerPicker } from "@/components/layout/ServerPicker";
 import { cn } from "@/lib/utils";
+import { useResizableSidebar } from "@/lib/useResizableSidebar";
 
 
 type SectionId =
@@ -74,6 +75,7 @@ const SECTION_IDS: SectionId[] = [
 const SECTION_STORAGE_KEY = "openstudio:settings-section";
 
 export function SettingsView({ workspace }: { workspace: Workspace }) {
+  const sidebar = useResizableSidebar("settings");
   const t = useI18n();
   const [focusProviderCapability, setFocusProviderCapability] = React.useState<string | null>(null);
   const [section, setSectionState] = React.useState<SectionId>(() => {
@@ -140,7 +142,8 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
-      <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] items-stretch gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]">
+      <div className="relative grid min-h-0 flex-1 items-stretch gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]"
+        style={{ gridTemplateColumns: `${sidebar.width}px minmax(0, 1fr)` }}>
         <nav className="grid content-start gap-0.5 rounded-lg border border-border bg-panel p-1.5 max-[880px]:inline-flex max-[880px]:w-fit max-[880px]:max-w-full max-[880px]:gap-0 max-[880px]:overflow-x-auto max-[880px]:overflow-y-hidden max-[880px]:rounded max-[880px]:p-0 max-[880px]:[&>*+*]:border-l max-[880px]:[&>*+*]:border-border" aria-label={t("settingsTitle")}>
           {nav.map((item) => (
             <button
@@ -159,6 +162,8 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
             </button>
           ))}
         </nav>
+        {/* 边缘拖动 —— 和别处同一套(lib/useResizableSidebar)。 */}
+        <div {...sidebar.handleProps} />
         <div className="grid min-w-0 content-start gap-5 overflow-y-auto px-0.5 pb-2.5 pt-1">
           {section === "account" && <AccountSection />}
           {section === "team" && <TeamSection workspace={workspace} />}

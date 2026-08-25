@@ -1490,6 +1490,42 @@ class PluginPackageOut(BaseModel):
     instances: list[PluginInstanceOut] = Field(default_factory=list)
 
 
+class PluginMarketEntry(BaseModel):
+    """市场里的一条。索引给什么就是什么 —— 不做补全,免得看起来比实际更可信。"""
+
+    id: str
+    name: str = ""
+    description: str = ""
+    version: str = ""
+    author: str = ""
+    homepage: str = ""
+    download: str = ""
+    permissions: list[str] = Field(default_factory=list)
+    #: 这台机器上装没装过同 id 的包。装过的话界面给的是「更新」而不是「安装」。
+    installed: bool = False
+    installed_version: str = ""
+
+
+class PluginInstallRequest(BaseModel):
+    url: str = Field(min_length=1, max_length=1000)
+    #: 覆盖已装的同 id 包。要单独同意 —— 那个目录里可能已经有用户填过的东西,
+    #: 而且新版本可能声明了完全不同的权限。
+    overwrite: bool = False
+
+
+class PluginInstallPreview(BaseModel):
+    """装之前先看清楚:它是谁、要什么权限。"""
+
+    id: str
+    name: str = ""
+    version: str = ""
+    description: str = ""
+    permissions: list[str] = Field(default_factory=list)
+    tools: list[str] = Field(default_factory=list)
+    installed: bool = False
+    installed_version: str = ""
+
+
 class PluginInstanceCreate(BaseModel):
     name: str = ""
     config: dict = Field(default_factory=dict)
