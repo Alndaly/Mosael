@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Brain, Check, ChevronDown, ChevronRight, CircleAlert, FileWarning, Loader2 } from "lucide-react";
+import { Brain, Check, ChevronRight, CircleAlert, FileWarning, Loader2 } from "lucide-react";
 
 import { api, assetFileUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -410,18 +410,37 @@ function ThinkingBlock({ text, done }: { text: string; done?: boolean }) {
   }, [done]);
 
   return (
-    <div className="grid gap-1 rounded-md border border-dashed border-border bg-panel-subtle px-2.5 py-1.5">
-      <button
-        type="button"
-        className="flex cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-left text-ui-xs text-muted-foreground hover:text-foreground"
-        onClick={() => setOpen((v) => !v)}
+    // **和工具调用同一套形状**(Marker):折叠态就是安静的一行,展开的正文挂在一条左竖线下。
+    //
+    // 此前它是一个虚线框 + 背景 + 内边距的块 —— 而折叠着的「已思考」什么都没说,却比旁边
+    // 真正有内容的工具行重得多。同一段对话里两种同级的东西用两套形状,读的人会以为它们
+    // 是两类不同的事,而它们都只是"这一步做了什么"。
+    <div className="w-full min-w-0">
+      <Marker
+        asChild
+        className="rounded-md px-1.5 py-1 transition-colors duration-100 enabled:cursor-pointer enabled:hover:bg-muted"
       >
-        {done ? <Brain size={11} className="shrink-0" /> : <Loader2 size={11} className="shrink-0 animate-spin" />}
-        <span className="min-w-0 flex-1 truncate">{done ? t("agentThought") : t("agentThinking")}</span>
-        <ChevronDown size={11} className={cn("shrink-0 transition-transform", open && "rotate-180")} />
-      </button>
+        <button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open} disabled={!text}>
+          {/* 图标显式带 size-3:Marker 会把没有 size- 类的 svg 统一撑到 16px,
+              而这一行的节奏是按 12px 图标定的(同 ToolCallCard)。 */}
+          <MarkerIcon className="inline-flex items-center justify-center">
+            {done ? <Brain className="size-3" /> : <Loader2 className="size-3 animate-openstudio-spin" />}
+          </MarkerIcon>
+          <MarkerContent className="flex min-w-0 flex-1 items-baseline gap-1.5">
+            <span className="flex-none">{done ? t("agentThought") : t("agentThinking")}</span>
+          </MarkerContent>
+          {text && (
+            <ChevronRight
+              className={cn("size-3 flex-none transition-transform duration-[120ms]", open && "rotate-90")}
+              aria-hidden
+            />
+          )}
+        </button>
+      </Marker>
       {open && text && (
-        <p className="m-0 whitespace-pre-wrap text-ui-sm leading-[1.6] text-muted-foreground">{text}</p>
+        <div className="ml-[13px] mt-1 border-l border-border pl-3">
+          <p className="m-0 whitespace-pre-wrap text-ui-sm leading-[1.6] text-muted-foreground">{text}</p>
+        </div>
       )}
     </div>
   );

@@ -32,7 +32,9 @@ describe("思考块", () => {
     );
     expect(screen.getByText("agentThinking")).toBeTruthy();
     expect(screen.getByText("先看看素材库")).toBeTruthy();
-    expect(container.querySelector(".animate-spin")).toBeTruthy();
+    // 转圈用 animate-openstudio-spin —— 全仓库都是它,思考块此前是唯一用 animate-spin 的
+    // 特例(那两个动画曲线不一样,并排时看得出快慢不同)。
+    expect(container.querySelector(".animate-openstudio-spin")).toBeTruthy();
   });
 
   it("结束后默认收起,标题仍在", () => {
