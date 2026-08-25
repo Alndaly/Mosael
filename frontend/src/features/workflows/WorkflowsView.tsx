@@ -63,6 +63,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { useCanvasPosture } from "@/features/workflows/useCanvasPosture";
 import { VarTextarea } from "@/features/workflows/VarTextarea";
 import { CodeEditor, type CodeEditorHandle } from "@/components/app/code-editor";
 import { WorkflowAgentChat, type WorkflowAgentMode } from "@/features/workflows/WorkflowAgentChat";
@@ -1064,14 +1065,9 @@ function WorkflowEditor({
   // Drill-in: double-click a loop OR subgraph node to edit its nested body sub-graph in an overlay canvas.
   const [editingLoopId, setEditingLoopId] = React.useState<string | null>(null);
   const rfRef = React.useRef<ReactFlowInstance | null>(null);
-  // 首次 fitView 前隐藏画布(挂载首帧节点在默认视口的错误位置,直接可见会闪一下)
-  const [viewReady, setViewReady] = React.useState(false);
-  // 贴靠面板按节点的**屏幕**位置摆放,视口一动就要重算(平移/缩放时面板跟着节点走)。
-  const [viewportTick, setViewportTick] = React.useState(0);
-  //  平移画布时,贴靠面板会跟着节点走 —— 一旦它滑到指针底下,浏览器会对这次手势发
-  //  pointercancel,而 React Flow 的平移(d3-zoom)把 pointercancel 当作手势结束,于是画布
-  //  "自己停住了"。面板在平移期间不吃指针事件就不会发生这件事;它照样跟着节点动,只是不拦。
-  const [panning, setPanning] = React.useState(false);
+  // 画布姿态(是否已 fitView、视口动过几次、正不正在平移)。三条各自的来历见 useCanvasPosture
+  // —— 它们是 React Flow 的机制,不是工作流的概念,所以不和图 / 弹窗 / 搜索那些 state 混在一起。
+  const canvas = useCanvasPosture();
 
   /**
    * 把视口居中到某坐标上。用坐标而非 getNode:新加节点此刻还没同步进 React Flow 内部 store,
@@ -1521,7 +1517,7 @@ function WorkflowEditor({
   });
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
   // 拖动时收起(跟着抖没有意义,还挡住落点),松手后 dragging 转 false 自然复现。
-  // viewportTick / graph 变化都要重算:前者是平移缩放,后者是节点位置被改。
+  // canvas.tick / graph 变化都要重算:前者是平移缩放,后者是节点位置被改。
   const anchor = React.useMemo(
     () =>
       dragging
@@ -1530,9 +1526,9 @@ function WorkflowEditor({
             width: window.innerWidth,
             height: window.innerHeight,
           }),
-    // nodes 而不是 graph:位置要和画布上真正画出来的那个节点一致。viewportTick 管平移缩放。
+    // nodes 而不是 graph:位置要和画布上真正画出来的那个节点一致。canvas.tick 管平移缩放。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedNodeId, dragging, viewportTick, nodes],
+    [selectedNodeId, dragging, canvas.tick, nodes],
   );
   // 框选中的节点(≥2 才给「折叠为子图」入口),从 React Flow 的 selected 态直接派生。
   const selectedFlowIds = nodes.filter((node) => node.selected).map((node) => node.id);
@@ -1914,7 +1910,7 @@ function WorkflowEditor({
       )}>
         <div className="min-h-0 overflow-hidden rounded-lg border border-border bg-panel">
           <ReactFlow
-            className={cn("[--xy-attribution-background-color:color-mix(in_srgb,var(--panel)_70%,transparent)]", !viewReady && "opacity-0")}
+            className={cn("[--xy-attribution-background-color:color-mix(in_srgb,var(--panel)_70%,transparent)]", !canvas.ready && "opacity-0")}
             nodes={displayNodes}
             edges={displayEdges}
             nodeTypes={NODE_COMPONENT_TYPES}
@@ -1925,14 +1921,14 @@ function WorkflowEditor({
               // fit 完成前画布不可见:首帧按默认视口渲染会让所有节点在错位处闪一下。
               requestAnimationFrame(() => {
                 instance.fitView({ padding: 0.25, maxZoom: 1 });
-                setViewReady(true);
+                canvas.handlers.onInit();
               });
             }}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
-            onMoveStart={() => setPanning(true)}
-            onMove={() => setViewportTick((n) => n + 1)}
-            onMoveEnd={() => setPanning(false)}
+            onMoveStart={canvas.handlers.onMoveStart}
+            onMove={canvas.handlers.onMove}
+            onMoveEnd={canvas.handlers.onMoveEnd}
             onNodeDragStart={() => setDragging(true)}
             onNodeDragStop={() => setDragging(false)}
             onConnect={onConnect}
@@ -2040,7 +2036,7 @@ function WorkflowEditor({
         {selectedNode && !editingLoopId && anchor && (
           <NodeInspector
             anchor={anchor}
-            inert={panning}
+            inert={canvas.panning}
             node={selectedNode}
             meta={registry.get(selectedNode.type) ?? null}
             graph={graph}
