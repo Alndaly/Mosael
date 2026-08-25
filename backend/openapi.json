@@ -3386,7 +3386,7 @@
           "voices"
         ],
         "summary": "List F5 Models",
-        "description": "本地克隆能用哪几份权重,各自认得什么语言、装没装。\n\n这是「引擎 / 模型」分开之后新长出来的一层:引擎什么语言都支持,支持范围由权重决定\n(见 audio/f5_models)。",
+        "description": "本地克隆能用哪几份权重,各自认得什么语言、装没装。\n\n这是「引擎 / 模型」分开之后新长出来的一层:引擎什么语言都支持,支持范围由权重决定\n(见 ai/runtime/f5_models)。",
         "operationId": "list_f5_models_api_tts_f5_models_get",
         "responses": {
           "200": {
@@ -9414,7 +9414,7 @@
           "settings"
         ],
         "summary": "List Provider Models",
-        "description": "这条连接下的模型:**已配置的行 + 目录里还没配的**。\n\n两者合并而不是二选一 —— 目录说端点有什么(会变),模型行说用户做过什么(不该被目录冲掉)。\n已配置的排在前面:那是用户实际在用的;目录里的其余项跟在后面,可一键加入。",
+        "description": "这条连接下的模型:**已配置的行 + 实时目录 + 内置目录**。\n\n三者合并而不是二选一 —— 实时目录说端点现在有什么(会变),模型行说用户做过什么(不该被\n目录冲掉),内置目录补上**实时目录看不见的那些**。\n\n第三份不是可有可无的:实时目录读的是 OpenAI 兼容的 `/models`,而有些能力走供应商的原生\n端点、根本不在那份清单里 —— 百炼的万相视频就是这样(真机实测:那个接口对百炼只返回两个\nwan **图像**模型,一个视频模型都没有)。少了这一份,用户在设置里看不到、加不进来,于是\n生成页的下拉里那一家整个是空的,而他并不知道为什么。\n\n已配置的排在前面:那是用户实际在用的;其余可一键加入。",
         "operationId": "list_provider_models_api_settings_providers__profile_id__models_get",
         "parameters": [
           {
@@ -12258,221 +12258,6 @@
         }
       }
     },
-    "/api/agent/sessions/reorder": {
-      "post": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "Reorder Sessions",
-        "description": "把一次拖放落库:这一摞现在是这些人、这个顺序。",
-        "operationId": "reorder_sessions_api_agent_sessions_reorder_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AgentSessionReorder"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Reorder Sessions Api Agent Sessions Reorder Post"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/agent/session-groups": {
-      "get": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "List Session Groups",
-        "operationId": "list_session_groups_api_agent_session_groups_get",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Workspace Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/AgentSessionGroupOut"
-                  },
-                  "title": "Response List Session Groups Api Agent Session Groups Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "Create Session Group",
-        "operationId": "create_session_group_api_agent_session_groups_post",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AgentSessionGroupCreate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AgentSessionGroupOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/agent/session-groups/{group_id}": {
-      "patch": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "Update Session Group",
-        "operationId": "update_session_group_api_agent_session_groups__group_id__patch",
-        "parameters": [
-          {
-            "name": "group_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Group Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AgentSessionGroupUpdate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AgentSessionGroupOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "Delete Session Group",
-        "description": "删掉分组,**里面的对话留着**(退回未分组,见 domain/agent/groups)。",
-        "operationId": "delete_session_group_api_agent_session_groups__group_id__delete",
-        "parameters": [
-          {
-            "name": "group_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Group Id"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/agent/memories": {
       "get": {
         "tags": [
@@ -12705,6 +12490,187 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/session-groups": {
+      "get": {
+        "tags": [
+          "session-groups"
+        ],
+        "summary": "List Session Groups",
+        "operationId": "list_session_groups_api_session_groups_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "agent",
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SessionGroupOut"
+                  },
+                  "title": "Response List Session Groups Api Session Groups Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "session-groups"
+        ],
+        "summary": "Create Session Group",
+        "operationId": "create_session_group_api_session_groups_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionGroupCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionGroupOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/session-groups/{group_id}": {
+      "patch": {
+        "tags": [
+          "session-groups"
+        ],
+        "summary": "Update Session Group",
+        "operationId": "update_session_group_api_session_groups__group_id__patch",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Group Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionGroupUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionGroupOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "session-groups"
+        ],
+        "summary": "Delete Session Group",
+        "description": "删掉分组,**里面的会话留着**(退回未分组,见 domain/session_groups)。",
+        "operationId": "delete_session_group_api_session_groups__group_id__delete",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Group Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -13796,107 +13762,6 @@
         ],
         "title": "AgentSessionCreate"
       },
-      "AgentSessionGroupCreate": {
-        "properties": {
-          "workspace_id": {
-            "type": "string",
-            "title": "Workspace Id"
-          },
-          "name": {
-            "type": "string",
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "Name"
-          }
-        },
-        "type": "object",
-        "required": [
-          "workspace_id",
-          "name"
-        ],
-        "title": "AgentSessionGroupCreate"
-      },
-      "AgentSessionGroupOut": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "workspace_id": {
-            "type": "string",
-            "title": "Workspace Id"
-          },
-          "owner_user_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Owner User Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "sort_order": {
-            "type": "integer",
-            "title": "Sort Order",
-            "default": 0
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Updated At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "workspace_id",
-          "name",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "AgentSessionGroupOut"
-      },
-      "AgentSessionGroupUpdate": {
-        "properties": {
-          "name": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 80,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          },
-          "sort_order": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sort Order"
-          }
-        },
-        "type": "object",
-        "title": "AgentSessionGroupUpdate"
-      },
       "AgentSessionOut": {
         "properties": {
           "id": {
@@ -14071,40 +13936,6 @@
           "updated_at"
         ],
         "title": "AgentSessionOut"
-      },
-      "AgentSessionReorder": {
-        "properties": {
-          "workspace_id": {
-            "type": "string",
-            "title": "Workspace Id"
-          },
-          "group_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 64
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Group Id"
-          },
-          "ordered_ids": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Ordered Ids"
-          }
-        },
-        "type": "object",
-        "required": [
-          "workspace_id",
-          "ordered_ids"
-        ],
-        "title": "AgentSessionReorder",
-        "description": "一次拖放的结果:**这一摞现在是这些人、这个顺序**。\n\n移进分组和组内排序是同一件事的两半,所以是一个接口 —— 拖一下产生的事实就是这一句话。\ngroup_id 空 = 未分组那一摞。"
       },
       "AgentSessionUpdate": {
         "properties": {
@@ -16428,6 +16259,17 @@
             "type": "string",
             "title": "Title"
           },
+          "group_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Id"
+          },
           "provider_profile_id": {
             "anyOf": [
               {
@@ -16496,6 +16338,17 @@
               }
             ],
             "title": "Title"
+          },
+          "group_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Id"
           },
           "provider_profile_id": {
             "anyOf": [
@@ -20475,6 +20328,118 @@
         ],
         "title": "SequenceOut"
       },
+      "SessionGroupCreate": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "kind": {
+            "type": "string",
+            "pattern": "^(agent|generation)$",
+            "title": "Kind",
+            "default": "agent"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "name"
+        ],
+        "title": "SessionGroupCreate"
+      },
+      "SessionGroupOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "owner_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner User Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "sort_order": {
+            "type": "integer",
+            "title": "Sort Order",
+            "default": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "kind",
+          "name",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SessionGroupOut"
+      },
+      "SessionGroupUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          }
+        },
+        "type": "object",
+        "title": "SessionGroupUpdate"
+      },
       "SetClipEffectsRequest": {
         "properties": {
           "effects": {
@@ -21464,6 +21429,11 @@
             "type": "array",
             "title": "Voices",
             "default": []
+          },
+          "supports_speed": {
+            "type": "boolean",
+            "title": "Supports Speed",
+            "default": true
           },
           "note": {
             "type": "string",

@@ -849,7 +849,7 @@ def _migrate_agent_session_groups() -> None:
     agent_session_groups 那张新表时,成员列已经在了。
 
     列上**不加外键**:老库用 ALTER TABLE 加列,SQLite 没法事后补约束,新老两种库会长得不一样。
-    删分组时由路由显式把成员置空(见 routes/agent.delete_session_group),两种库行为一致。
+    删分组时由领域层显式把成员置空(见 domain/session_groups.delete_group),两种库行为一致。
     """
     inspector = inspect(engine)
     if "agent_sessions" not in set(inspector.get_table_names()):
@@ -859,6 +859,41 @@ def _migrate_agent_session_groups() -> None:
         return
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE agent_sessions ADD COLUMN group_id VARCHAR(64)"))
+
+
+def _migrate_session_groups_serve_both() -> None:
+    """分组从「对话专属」变成「会话通用」:表改名 + 加 kind,生成会话补 group_id。
+
+    **必须排在 create_all 之前**:否则 create_all 会照新模型建一张空的 session_groups,
+    旧的 agent_session_groups 原地留着没人认领 —— 用户建过的分组当场消失。
+
+    kind 的回填是 "agent":这张表此前只装对话分组,没有第二种可能。生成分组是从此刻起
+    才建得出来的东西。
+    """
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    with engine.begin() as conn:
+        if "agent_session_groups" in tables:
+            # 两张表同时在:说明有谁先跑了 create_all(开发时的 --reload 就会),建出一张空的
+            # session_groups,而真正的分组还在旧表里。空表没有任何东西可丢,扔掉它再改名。
+            # **不能用「新表不存在才改名」当守卫** —— 那样这些分组会安安静静地留在一张
+            # 再没人查的表里,界面上表现为「我建的分组不见了」,而迁移本身一声不吭地成功了。
+            if "session_groups" in tables:
+                if conn.execute(text("SELECT count(*) FROM session_groups")).scalar_one():
+                    raise RuntimeError(
+                        "session_groups 和 agent_session_groups 同时有数据 —— 拒绝猜哪份是真的,请人工合并"
+                    )
+                conn.execute(text("DROP TABLE session_groups"))
+            conn.execute(text("ALTER TABLE agent_session_groups RENAME TO session_groups"))
+            tables = {"session_groups"} | (tables - {"agent_session_groups"})
+        if "session_groups" in tables:
+            columns = {c["name"] for c in inspect(engine).get_columns("session_groups")}
+            if "kind" not in columns:
+                conn.execute(text("ALTER TABLE session_groups ADD COLUMN kind VARCHAR(24) NOT NULL DEFAULT 'agent'"))
+        if "generation_sessions" in tables:
+            columns = {c["name"] for c in inspect(engine).get_columns("generation_sessions")}
+            if "group_id" not in columns:
+                conn.execute(text("ALTER TABLE generation_sessions ADD COLUMN group_id VARCHAR(64)"))
 
 
 def _migrate_agent_notice_envelope_out_of_content() -> None:
@@ -1143,6 +1178,7 @@ def init_db() -> None:
     _migrate_agent_thinking_level()
     _migrate_agent_session_plan()
     _migrate_agent_session_groups()
+    _migrate_session_groups_serve_both()
     _migrate_generation_job_message_keys()
     _migrate_agent_session_order()
     _migrate_agent_notice_envelope_out_of_content()

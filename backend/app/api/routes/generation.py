@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Response
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
@@ -17,7 +17,7 @@ from app.api.schemas import (
 )
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import GenerationJob, GenerationSession, Job, ProviderUsageEvent
-from app.domain import sharing
+from app.domain import session_groups, sharing
 from app.domain.generation import create_generation_job, generation_options
 from app.domain.generation.operations import GenerationDomainError
 from app.domain.generation.prompt_optimizer import PromptOptimizeError, optimize_image_prompt
@@ -69,8 +69,18 @@ def update_generation_session(
 ) -> GenerationSession:
     session = _require_generation_session(db, user, session_id, perm="ai")
     fields = body.model_fields_set
+    # 收纳不是活动:这一次只改了 group_id 的话,不该让这条会话显得「刚生成过」—— 列表按
+    # updated_at 倒序排,收一次纳就把顺序搅了。和对话那边同一条规则(routes/agent.py)。
+    organising_only = fields <= {"group_id"} and body.group_id is not None
+    kept_updated_at = session.updated_at
     if "title" in fields and body.title is not None:
         session.title = body.title
+    if "group_id" in fields:
+        if body.group_id and not session_groups.resolve_member_group(
+            db, body.group_id, workspace_id=session.workspace_id, kind="generation"
+        ):
+            raise HTTPException(status_code=404, detail="分组不存在")
+        session.group_id = body.group_id or None
     if "provider_profile_id" in fields:
         session.provider_profile_id = body.provider_profile_id
     if "model" in fields:
@@ -78,6 +88,13 @@ def update_generation_session(
     if "kind" in fields:
         session.kind = body.kind
     db.commit()
+    if organising_only:
+        # **不能只是把 updated_at 赋回原值**:赋成原来的值,SQLAlchemy 的变更检测认为「没改」,
+        # 这一列就不进 SET,而 onupdate=now 照常把它顶成现在。必须走显式 UPDATE 写回去。
+        db.execute(
+            update(GenerationSession).where(GenerationSession.id == session.id).values(updated_at=kept_updated_at)
+        )
+        db.commit()
     db.refresh(session)
     return session
 

@@ -1000,6 +1000,9 @@ class GenerationSession(Base):
         String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     title: Mapped[str] = mapped_column(String(200), nullable=False, default="新生成")
+    #: 收在哪个分组里(SessionGroup.kind == "generation")。和对话同一条规矩:不设外键,
+    #: 分组被删时由 domain/session_groups 显式清空 —— 收纳方式不该反过来决定会话的生死。
+    group_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     provider_profile_id: Mapped[str | None] = mapped_column(
         String(64), ForeignKey("provider_profiles.id", ondelete="SET NULL"), nullable=True
     )
@@ -1038,20 +1041,26 @@ class GenerationJob(Base):
     session: Mapped[GenerationSession | None] = relationship(back_populates="generations")
 
 
-class AgentSessionGroup(Base):
-    """对话分组:给会话列表分个类,便于管理。
+#: 分组挂在哪一种会话上。两边**各自一套**:对话里建的「客户 A」不会跑到生成栏里去空着站着。
+SESSION_GROUP_KINDS = ("agent", "generation")
 
-    **是一张表而不是会话上的一个名字字符串**:分组要能空着存在(先建「客户 A」,再往里挪对话),
+
+class SessionGroup(Base):
+    """会话分组:给会话列表分个类,便于管理。对话和生成共用这张表,由 `kind` 分开。
+
+    **是一张表而不是会话上的一个名字字符串**:分组要能空着存在(先建「客户 A」,再往里挪会话),
     改名要是一次操作而不是把 N 行的字符串挨个改一遍 —— 名字当键的话,这两件事都做不到。
 
-    删掉分组**不删里面的对话**(路由里先把成员的 group_id 清空):分组是收纳方式,不是所有权。
+    删掉分组**不删里面的会话**(先把成员的 group_id 清空):分组是收纳方式,不是所有权。
     """
 
-    __tablename__ = "agent_session_groups"
-    __table_args__ = (Index("idx_agent_session_groups_ws", "workspace_id"),)
+    __tablename__ = "session_groups"
+    __table_args__ = (Index("idx_session_groups_ws_kind", "workspace_id", "kind"),)
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    #: "agent" | "generation" —— 见 SESSION_GROUP_KINDS。
+    kind: Mapped[str] = mapped_column(String(24), nullable=False, default="agent")
     #: 谁建的。和会话同一条规矩:不设外键,账号没了归属仍是审计信息。
     owner_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(80), nullable=False)

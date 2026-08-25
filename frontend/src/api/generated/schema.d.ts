@@ -1264,7 +1264,7 @@ export interface paths {
          * @description 本地克隆能用哪几份权重,各自认得什么语言、装没装。
          *
          *     这是「引擎 / 模型」分开之后新长出来的一层:引擎什么语言都支持,支持范围由权重决定
-         *     (见 audio/f5_models)。
+         *     (见 ai/runtime/f5_models)。
          */
         get: operations["list_f5_models_api_tts_f5_models_get"];
         put?: never;
@@ -3239,10 +3239,17 @@ export interface paths {
         };
         /**
          * List Provider Models
-         * @description 这条连接下的模型:**已配置的行 + 目录里还没配的**。
+         * @description 这条连接下的模型:**已配置的行 + 实时目录 + 内置目录**。
          *
-         *     两者合并而不是二选一 —— 目录说端点有什么(会变),模型行说用户做过什么(不该被目录冲掉)。
-         *     已配置的排在前面:那是用户实际在用的;目录里的其余项跟在后面,可一键加入。
+         *     三者合并而不是二选一 —— 实时目录说端点现在有什么(会变),模型行说用户做过什么(不该被
+         *     目录冲掉),内置目录补上**实时目录看不见的那些**。
+         *
+         *     第三份不是可有可无的:实时目录读的是 OpenAI 兼容的 `/models`,而有些能力走供应商的原生
+         *     端点、根本不在那份清单里 —— 百炼的万相视频就是这样(真机实测:那个接口对百炼只返回两个
+         *     wan **图像**模型,一个视频模型都没有)。少了这一份,用户在设置里看不到、加不进来,于是
+         *     生成页的下拉里那一家整个是空的,而他并不知道为什么。
+         *
+         *     已配置的排在前面:那是用户实际在用的;其余可一键加入。
          */
         get: operations["list_provider_models_api_settings_providers__profile_id__models_get"];
         put?: never;
@@ -4142,65 +4149,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/agent/sessions/reorder": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Reorder Sessions
-         * @description 把一次拖放落库:这一摞现在是这些人、这个顺序。
-         */
-        post: operations["reorder_sessions_api_agent_sessions_reorder_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/agent/session-groups": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Session Groups */
-        get: operations["list_session_groups_api_agent_session_groups_get"];
-        put?: never;
-        /** Create Session Group */
-        post: operations["create_session_group_api_agent_session_groups_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/agent/session-groups/{group_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete Session Group
-         * @description 删掉分组,**里面的对话留着**(退回未分组,见 domain/agent/groups)。
-         */
-        delete: operations["delete_session_group_api_agent_session_groups__group_id__delete"];
-        options?: never;
-        head?: never;
-        /** Update Session Group */
-        patch: operations["update_session_group_api_agent_session_groups__group_id__patch"];
-        trace?: never;
-    };
     "/api/agent/memories": {
         parameters: {
             query?: never;
@@ -4269,6 +4217,45 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/session-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Session Groups */
+        get: operations["list_session_groups_api_session_groups_get"];
+        put?: never;
+        /** Create Session Group */
+        post: operations["create_session_group_api_session_groups_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/session-groups/{group_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Session Group
+         * @description 删掉分组,**里面的会话留着**(退回未分组,见 domain/session_groups)。
+         */
+        delete: operations["delete_session_group_api_session_groups__group_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Session Group */
+        patch: operations["update_session_group_api_session_groups__group_id__patch"];
         trace?: never;
     };
     "/api/agent/tools": {
@@ -4700,46 +4687,6 @@ export interface components {
             /** Model */
             model?: string | null;
         };
-        /** AgentSessionGroupCreate */
-        AgentSessionGroupCreate: {
-            /** Workspace Id */
-            workspace_id: string;
-            /** Name */
-            name: string;
-        };
-        /** AgentSessionGroupOut */
-        AgentSessionGroupOut: {
-            /** Id */
-            id: string;
-            /** Workspace Id */
-            workspace_id: string;
-            /** Owner User Id */
-            owner_user_id?: string | null;
-            /** Name */
-            name: string;
-            /**
-             * Sort Order
-             * @default 0
-             */
-            sort_order: number;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-        };
-        /** AgentSessionGroupUpdate */
-        AgentSessionGroupUpdate: {
-            /** Name */
-            name?: string | null;
-            /** Sort Order */
-            sort_order?: number | null;
-        };
         /** AgentSessionOut */
         AgentSessionOut: {
             /** Id */
@@ -4811,21 +4758,6 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
-        };
-        /**
-         * AgentSessionReorder
-         * @description 一次拖放的结果:**这一摞现在是这些人、这个顺序**。
-         *
-         *     移进分组和组内排序是同一件事的两半,所以是一个接口 —— 拖一下产生的事实就是这一句话。
-         *     group_id 空 = 未分组那一摞。
-         */
-        AgentSessionReorder: {
-            /** Workspace Id */
-            workspace_id: string;
-            /** Group Id */
-            group_id?: string | null;
-            /** Ordered Ids */
-            ordered_ids: string[];
         };
         /** AgentSessionUpdate */
         AgentSessionUpdate: {
@@ -5750,6 +5682,8 @@ export interface components {
             shared: boolean;
             /** Title */
             title: string;
+            /** Group Id */
+            group_id?: string | null;
             /** Provider Profile Id */
             provider_profile_id?: string | null;
             /** Model */
@@ -5771,6 +5705,8 @@ export interface components {
         GenerationSessionUpdate: {
             /** Title */
             title?: string | null;
+            /** Group Id */
+            group_id?: string | null;
             /** Provider Profile Id */
             provider_profile_id?: string | null;
             /** Model */
@@ -7481,6 +7417,53 @@ export interface components {
             /** Tracks */
             tracks?: components["schemas"]["TrackOut"][];
         };
+        /** SessionGroupCreate */
+        SessionGroupCreate: {
+            /** Workspace Id */
+            workspace_id: string;
+            /**
+             * Kind
+             * @default agent
+             */
+            kind: string;
+            /** Name */
+            name: string;
+        };
+        /** SessionGroupOut */
+        SessionGroupOut: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Kind */
+            kind: string;
+            /** Owner User Id */
+            owner_user_id?: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Sort Order
+             * @default 0
+             */
+            sort_order: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** SessionGroupUpdate */
+        SessionGroupUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Sort Order */
+            sort_order?: number | null;
+        };
         /** SetClipEffectsRequest */
         SetClipEffectsRequest: {
             /** Effects */
@@ -7961,6 +7944,11 @@ export interface components {
              * @default []
              */
             voices: string[];
+            /**
+             * Supports Speed
+             * @default true
+             */
+            supports_speed: boolean;
             /**
              * Note
              * @default
@@ -17420,169 +17408,6 @@ export interface operations {
             };
         };
     };
-    reorder_sessions_api_agent_sessions_reorder_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AgentSessionReorder"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_session_groups_api_agent_session_groups_get: {
-        parameters: {
-            query: {
-                workspace_id: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentSessionGroupOut"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_session_group_api_agent_session_groups_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AgentSessionGroupCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentSessionGroupOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_session_group_api_agent_session_groups__group_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                group_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_session_group_api_agent_session_groups__group_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                group_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AgentSessionGroupUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentSessionGroupOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_memories_api_agent_memories_get: {
         parameters: {
             query: {
@@ -17757,6 +17582,135 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentManifestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_session_groups_api_session_groups_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+                kind?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionGroupOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_session_group_api_session_groups_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionGroupCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionGroupOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_session_group_api_session_groups__group_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                group_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_session_group_api_session_groups__group_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                group_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionGroupUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionGroupOut"];
                 };
             };
             /** @description Validation Error */

@@ -7,14 +7,14 @@ import { toast } from "sonner";
 import {
   api,
   createSessionGroup,
-  deleteAgentSession,
   deleteSessionGroup,
   listSessionGroups,
-  moveSessionToGroup,
   renameSessionGroup,
-  type AgentSessionGroup,
+  type SessionGroup,
+  type SessionGroupKind,
 } from "@/api/client";
 import type { components } from "@/api/generated/schema";
+import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -35,7 +35,77 @@ import { SessionShareMenuItem } from "@/features/ai-studio/SessionShareMenuItem"
 import { useMultiSelect } from "@/lib/useMultiSelect";
 import { cn } from "@/lib/utils";
 
-type AgentSession = components["schemas"]["AgentSessionOut"];
+/** 这个列表认得的会话:两种会话都有这三样,别的它不碰。 */
+export interface ListedSession {
+  id: string;
+  title: string;
+  group_id?: string | null;
+  //  分享菜单要看这两个(SessionShareMenuItem):是不是我的、有没有分享出去。
+  is_mine: boolean;
+  shared: boolean;
+}
+
+/**
+ * 两种会话的差异**全在这里**,组件里没有一处 if (kind === ...)。
+ *
+ * 差的只是「打哪个地址」「缓存键叫什么」「分享时算哪一类」—— 列表怎么组织、怎么拖、
+ * 怎么批量删,两边一模一样。把差异摊成一张表而不是分支,是因为下次再来第三种会话时,
+ * 该改的地方只有这张表;写成分支的话,得把整个组件重读一遍找齐所有分叉。
+ */
+interface SessionKindSpec {
+  sessionsQueryKey: string;
+  path: (id: string) => string;
+  shareKind: "agent_session" | "generation_session";
+  title: MessageKey;
+  newSession: MessageKey;
+  empty: MessageKey;
+  searchPlaceholder: MessageKey;
+  searchNoMatch: MessageKey;
+  renameTitle: MessageKey;
+  deleteBody: MessageKey;
+  deleteGroupBody: MessageKey;
+  /** 批量删。措辞里带数量和「会一并删掉什么」—— 两种会话删掉的东西不一样。 */
+  deleteManyBody: MessageKey;
+}
+
+const SESSION_KINDS: Record<SessionGroupKind, SessionKindSpec> = {
+  agent: {
+    sessionsQueryKey: "agent-sessions",
+    path: (id: string) => `/api/agent/sessions/${id}`,
+    shareKind: "agent_session" as const,
+    title: "chatSessionsTitle",
+    newSession: "chatNewSession",
+    empty: "chatNoSessions",
+    searchPlaceholder: "chatSearchSessions",
+    searchNoMatch: "chatSearchNoMatch",
+    renameTitle: "renameSession",
+    deleteBody: "deleteSessionBody",
+    deleteGroupBody: "chatDeleteGroupBody",
+    deleteManyBody: "chatDeleteSessionsBody",
+  },
+  generation: {
+    sessionsQueryKey: "generation-sessions",
+    path: (id: string) => `/api/generation/sessions/${id}`,
+    shareKind: "generation_session" as const,
+    title: "generationSessionsTitle",
+    newSession: "generationNewSession",
+    empty: "generationNoSessions",
+    searchPlaceholder: "generationSearchSessions",
+    searchNoMatch: "generationSearchNoMatch",
+    renameTitle: "renameGenerationSession",
+    deleteBody: "deleteGenerationSessionBody",
+    deleteGroupBody: "generationDeleteGroupBody",
+    deleteManyBody: "generationDeleteSessionsBody",
+  },
+};
+
+/** 收进分组;`null` = 移出分组(接口用空串表达"改成没有")。 */
+function moveSessionToGroup(kind: SessionGroupKind, sessionId: string, groupId: string | null): Promise<unknown> {
+  return api(SESSION_KINDS[kind].path(sessionId), {
+    method: "PATCH",
+    body: JSON.stringify({ group_id: groupId ?? "" }),
+  });
+}
 
 /**
  * 左侧的对话列表:分组收纳 + 批量删除。
@@ -47,6 +117,7 @@ type AgentSession = components["schemas"]["AgentSessionOut"];
  * 失败的报出来 —— 后端没有批量接口,而逐条删至少让"删了 8 个失败 2 个"说得出口。
  */
 export function SessionList({
+  kind,
   workspaceId,
   sessions,
   loaded,
@@ -56,8 +127,10 @@ export function SessionList({
   creating,
   onDeleted,
 }: {
+  /** 对话还是生成 —— 两边各自一套分组,差异全在 SESSION_KINDS 那张表里。 */
+  kind: SessionGroupKind;
   workspaceId: string;
-  sessions: AgentSession[];
+  sessions: ListedSession[];
   loaded: boolean;
   activeSessionId: string | null;
   onSelect: (id: string) => void;
@@ -68,10 +141,11 @@ export function SessionList({
 }) {
   const t = useI18n();
   const qc = useQueryClient();
-  const [renamingSession, setRenamingSession] = React.useState<AgentSession | null>(null);
-  const [deletingSession, setDeletingSession] = React.useState<AgentSession | null>(null);
-  const [renamingGroup, setRenamingGroup] = React.useState<AgentSessionGroup | null>(null);
-  const [deletingGroup, setDeletingGroup] = React.useState<AgentSessionGroup | null>(null);
+  const spec = SESSION_KINDS[kind];
+  const [renamingSession, setRenamingSession] = React.useState<ListedSession | null>(null);
+  const [deletingSession, setDeletingSession] = React.useState<ListedSession | null>(null);
+  const [renamingGroup, setRenamingGroup] = React.useState<SessionGroup | null>(null);
+  const [deletingGroup, setDeletingGroup] = React.useState<SessionGroup | null>(null);
   const [creatingGroup, setCreatingGroup] = React.useState(false);
   const [batchDeleting, setBatchDeleting] = React.useState(false);
   const [query, setQuery] = React.useState("");
@@ -79,12 +153,12 @@ export function SessionList({
   const [collapsed, setCollapsed] = React.useState<Set<string>>(new Set());
 
   const groups = useQuery({
-    queryKey: ["agent-session-groups", workspaceId],
-    queryFn: () => listSessionGroups(workspaceId),
+    queryKey: ["session-groups", kind, workspaceId],
+    queryFn: () => listSessionGroups(workspaceId, kind),
   });
   const refresh = () => {
-    void qc.invalidateQueries({ queryKey: ["agent-sessions", workspaceId] });
-    void qc.invalidateQueries({ queryKey: ["agent-session-groups", workspaceId] });
+    void qc.invalidateQueries({ queryKey: [spec.sessionsQueryKey, workspaceId] });
+    void qc.invalidateQueries({ queryKey: ["session-groups", kind, workspaceId] });
   };
 
   const { selectMode, setSelectMode, selectedIds, toggle, selectAll, allSelected, exit } = useMultiSelect(
@@ -94,14 +168,14 @@ export function SessionList({
 
   const renameSession = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) =>
-      api(`/api/agent/sessions/${id}`, { method: "PATCH", body: JSON.stringify({ title: name }) }),
+      api(spec.path(id), { method: "PATCH", body: JSON.stringify({ title: name }) }),
     onSuccess: () => {
       setRenamingSession(null);
       refresh();
     },
   });
   const removeSession = useMutation({
-    mutationFn: (id: string) => deleteAgentSession(id),
+    mutationFn: (id: string) => api(spec.path(id), { method: "DELETE" }),
     onSuccess: (_data, id) => {
       setDeletingSession(null);
       onDeleted([id]);
@@ -116,7 +190,7 @@ export function SessionList({
       const failures: string[] = [];
       for (const id of ids) {
         try {
-          await deleteAgentSession(id);
+          await api(spec.path(id), { method: "DELETE" });
           removed.push(id);
         } catch (error) {
           failures.push(String((error as Error).message));
@@ -133,7 +207,7 @@ export function SessionList({
     },
   });
   const addGroup = useMutation({
-    mutationFn: (name: string) => createSessionGroup(workspaceId, name),
+    mutationFn: (name: string) => createSessionGroup(workspaceId, kind, name),
     onSuccess: () => {
       setCreatingGroup(false);
       refresh();
@@ -154,7 +228,7 @@ export function SessionList({
     },
   });
   const moveSession = useMutation({
-    mutationFn: ({ id, groupId }: { id: string; groupId: string | null }) => moveSessionToGroup(id, groupId),
+    mutationFn: ({ id, groupId }: { id: string; groupId: string | null }) => moveSessionToGroup(kind, id, groupId),
     onSuccess: refresh,
   });
 
@@ -168,8 +242,8 @@ export function SessionList({
   );
   // 分组内 / 未分组两摞。会话本身的顺序(后端按 updated_at 倒序)在每一摞里保持不变。
   const byGroup = React.useMemo(() => {
-    const map = new Map<string, AgentSession[]>();
-    const loose: AgentSession[] = [];
+    const map = new Map<string, ListedSession[]>();
+    const loose: ListedSession[] = [];
     for (const session of visible) {
       const groupId = session.group_id;
       if (groupId && groupList.some((group) => group.id === groupId)) {
@@ -209,15 +283,16 @@ export function SessionList({
 
     const groupId = to === UNGROUPED ? null : to;
     // 先把界面摆好再落库:等一个来回的话,松手那一刻会看到它弹回原位。
-    qc.setQueryData<AgentSession[]>(["agent-sessions", workspaceId], (old) =>
+    qc.setQueryData<ListedSession[]>([spec.sessionsQueryKey, workspaceId], (old) =>
       old?.map((session) => (session.id === activeId ? { ...session, group_id: groupId } : session)),
     );
     moveSession.mutate({ id: activeId, groupId });
   };
 
-  const renderSession = (session: AgentSession) => (
+  const renderSession = (session: ListedSession) => (
     <SessionRow
       key={session.id}
+      kind={kind}
       session={session}
       groups={groupList}
       active={!selectMode && activeSessionId === session.id}
@@ -269,7 +344,7 @@ export function SessionList({
           </>
         ) : (
           <>
-            <h2>{t("chatSessionsTitle")}</h2>
+            <h2>{t(spec.title)}</h2>
             <span className="flex items-center gap-0.5">
               <Button
                 variant="ghost"
@@ -296,8 +371,8 @@ export function SessionList({
                 variant="outline"
                 size="icon"
                 className="h-7 w-7"
-                title={t("chatNewSession")}
-                aria-label={t("chatNewSession")}
+                title={t(spec.newSession)}
+                aria-label={t(spec.newSession)}
                 onClick={onCreate}
                 loading={creating}
               >
@@ -324,8 +399,8 @@ export function SessionList({
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder={t("chatSearchSessions")}
-            aria-label={t("chatSearchSessions")}
+            placeholder={t(spec.searchPlaceholder)}
+            aria-label={t(spec.searchPlaceholder)}
             className="h-7 w-full rounded-md border border-transparent bg-field pl-6 pr-2 text-ui-xs text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring [&::-webkit-search-cancel-button]:appearance-none"
           />
         </div>
@@ -338,10 +413,10 @@ export function SessionList({
         )}
       >
         {loaded && sessions.length === 0 && groupList.length === 0 && (
-          <EmptyState size="compact" icon={<MessageSquarePlus size={15} />} title={t("chatNoSessions")} />
+          <EmptyState size="compact" icon={<MessageSquarePlus size={15} />} title={t(spec.empty)} />
         )}
         {keyword && visible.length === 0 && (
-          <EmptyState size="compact" icon={<SearchX size={15} />} title={t("chatSearchNoMatch")} />
+          <EmptyState size="compact" icon={<SearchX size={15} />} title={t(spec.searchNoMatch)} />
         )}
         {groupList.map((group) => {
           const members = byGroup.map.get(group.id) ?? [];
@@ -434,13 +509,13 @@ export function SessionList({
       <ConfirmDialog
         open={deletingGroup !== null}
         title={t("deleteConfirmTitle")}
-        body={t("chatDeleteGroupBody")}
+        body={t(spec.deleteGroupBody)}
         onCancel={() => setDeletingGroup(null)}
         onConfirm={() => deletingGroup && removeGroup.mutate(deletingGroup.id)}
       />
       <RenameDialog
         open={renamingSession !== null}
-        title={t("renameSession")}
+        title={t(spec.renameTitle)}
         initialValue={renamingSession?.title ?? ""}
         onCancel={() => setRenamingSession(null)}
         onSubmit={(name) => renamingSession && renameSession.mutate({ id: renamingSession.id, name })}
@@ -448,14 +523,14 @@ export function SessionList({
       <ConfirmDialog
         open={deletingSession !== null}
         title={t("deleteConfirmTitle")}
-        body={t("deleteSessionBody")}
+        body={t(spec.deleteBody)}
         onCancel={() => setDeletingSession(null)}
         onConfirm={() => deletingSession && removeSession.mutate(deletingSession.id)}
       />
       <ConfirmDialog
         open={batchDeleting}
         title={t("deleteConfirmTitle")}
-        body={t("chatDeleteSessionsBody").replace("{n}", String(selectedIds.size))}
+        body={t(spec.deleteManyBody).replace("{n}", String(selectedIds.size))}
         onCancel={() => setBatchDeleting(false)}
         onConfirm={() => batchRemove.mutate()}
       />
@@ -493,9 +568,11 @@ function SessionRow({
   onDelete,
   onMove,
   onNewGroup,
+  kind,
 }: {
-  session: AgentSession;
-  groups: AgentSessionGroup[];
+  session: ListedSession;
+  groups: SessionGroup[];
+  kind: SessionGroupKind;
   active: boolean;
   selectMode: boolean;
   checked: boolean;
@@ -566,7 +643,12 @@ function SessionRow({
             </ContextMenuItem>
           </ContextMenuSubContent>
         </ContextMenuSub>
-        <SessionShareMenuItem session={session} kind="agent_session" workspaceId={workspaceId} queryKey="agent-sessions" />
+        <SessionShareMenuItem
+          session={session}
+          kind={SESSION_KINDS[kind].shareKind}
+          workspaceId={workspaceId}
+          queryKey={SESSION_KINDS[kind].sessionsQueryKey}
+        />
         <ContextMenuSeparator />
         <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onDelete}>
           <Trash2 /> {t("delete")}

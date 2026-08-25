@@ -6,12 +6,9 @@ import {
   Copy,
   ImagePlus,
   Loader2,
-  MessageSquarePlus,
-  Pencil,
   Plus,
   Send,
   Sparkles,
-  Trash2,
   Upload,
   Video,
   Wand2,
@@ -45,8 +42,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ConfigNotice } from "@/components/layout/ConfigNotice";
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useImagePreview } from "@/components/app/image-preview";
@@ -65,7 +60,7 @@ import {
   supportsParameter,
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
-import { SessionShareMenuItem } from "@/features/ai-studio/SessionShareMenuItem";
+import { SessionList } from "@/features/ai-studio/SessionList";
 import { cn } from "@/lib/utils";
 
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
@@ -221,8 +216,6 @@ function GenerateWorkspace({
   const [prompt, setPrompt] = React.useState("");
   const [modelId, setModelId] = React.useState<string | null>(null);
   const [generationConfig, setGenerationConfig] = React.useState<GenerationConfig>(() => defaultGenerationConfig(null));
-  const [renamingSession, setRenamingSession] = React.useState<GenerationSession | null>(null);
-  const [deletingSession, setDeletingSession] = React.useState<GenerationSession | null>(null);
   const firstFrameInputRef = React.useRef<HTMLInputElement | null>(null);
   const referenceImageInputRef = React.useRef<HTMLInputElement | null>(null);
 
@@ -619,14 +612,6 @@ function GenerateWorkspace({
       toast.error(t("optimizePromptFailed"), { description: error instanceof Error ? error.message : String(error) });
     },
   });
-  const renameSession = useMutation({
-    mutationFn: ({ id, title }: { id: string; title: string }) =>
-      api<GenerationSession>(`/api/generation/sessions/${id}`, { method: "PATCH", body: JSON.stringify({ title }) }),
-    onSuccess: () => {
-      setRenamingSession(null);
-      void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
-    },
-  });
   const updateSessionEngine = useMutation({
     mutationFn: ({
       id,
@@ -645,19 +630,6 @@ function GenerateWorkspace({
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
-    },
-  });
-  const deleteSession = useMutation({
-    mutationFn: (id: string) => api(`/api/generation/sessions/${id}`, { method: "DELETE" }),
-    onSuccess: (_data, id) => {
-      setDeletingSession(null);
-      if (sessionId === id) {
-        setSessionId(null);
-        window.localStorage.removeItem(sessionKey);
-      }
-      void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
-      void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id] });
-      void qc.invalidateQueries({ queryKey: ["jobs", workspace.id, "ai_generation"] });
     },
   });
 
@@ -679,65 +651,32 @@ function GenerateWorkspace({
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)_300px] grid-rows-[minmax(0,1fr)] gap-2 max-[1180px]:grid-cols-[220px_minmax(0,1fr)] max-[820px]:grid-cols-[minmax(0,1fr)]">
-      <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[820px]:hidden">
-        <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
-          <h2>{t("generationSessionsTitle")}</h2>
-          <Button variant="outline" size="icon" className="h-7 w-7" title={t("generationNewSession")} aria-label={t("generationNewSession")} onClick={() => createSession.mutate()} loading={createSession.isPending}>
-            <Plus size={14} />
-          </Button>
-        </div>
-        <div
-          className={cn(
-            "grid content-start gap-1 overflow-auto p-1.5",
-            sessions.isSuccess && (sessions.data ?? []).length === 0 && "content-center justify-items-center",
-          )}
-        >
-          {sessions.isSuccess && (sessions.data ?? []).length === 0 && (
-            <EmptyState size="compact" icon={<MessageSquarePlus size={15} />} title={t("generationNoSessions")} />
-          )}
-          {(sessions.data ?? []).map((item) => (
-            <ContextMenu key={item.id}>
-              <ContextMenuTrigger asChild>
-                <button
-                  type="button"
-                  className={cn(
-                    "grid w-full cursor-pointer gap-px rounded-md border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted",
-                    activeSession?.id === item.id && "bg-accent shadow-[inset_2px_0_0_var(--primary)] hover:bg-accent",
-                  )}
-                  onClick={() => {
-                    setSessionId(item.id);
-                    window.localStorage.setItem(sessionKey, item.id);
-                  }}
-                >
-                  <strong className="truncate text-xs font-semibold">{item.title}</strong>
-                </button>
-              </ContextMenuTrigger>
-              <ContextMenuContent>
-                <ContextMenuItem onSelect={() => setRenamingSession(item)}>
-                  <Pencil /> {t("rename")}
-                </ContextMenuItem>
-                <SessionShareMenuItem session={item} kind="generation_session" workspaceId={workspace.id} queryKey="generation-sessions" />
-                <ContextMenuSeparator />
-                <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeletingSession(item)}>
-                  <Trash2 /> {t("delete")}
-                </ContextMenuItem>
-              </ContextMenuContent>
-            </ContextMenu>
-          ))}
-        </div>
-        <RenameDialog
-          open={renamingSession !== null}
-          title={t("renameGenerationSession")}
-          initialValue={renamingSession?.title ?? ""}
-          onCancel={() => setRenamingSession(null)}
-          onSubmit={(title) => renamingSession && renameSession.mutate({ id: renamingSession.id, title })}
-        />
-        <ConfirmDialog
-          open={deletingSession !== null}
-          title={t("deleteConfirmTitle")}
-          body={t("deleteGenerationSessionBody")}
-          onCancel={() => setDeletingSession(null)}
-          onConfirm={() => deletingSession && deleteSession.mutate(deletingSession.id)}
+      {/* 和对话栏同一个组件:分组、拖进分组、搜索、批量删,两边一份实现。
+          布局也照它 —— flex 列而不是定行数的 grid:搜索框是条件渲染的,行数会变。 */}
+      <aside className="flex min-h-0 flex-col overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] max-[820px]:hidden">
+        <SessionList
+          kind="generation"
+          workspaceId={workspace.id}
+          sessions={sessions.data ?? []}
+          loaded={sessions.isSuccess}
+          activeSessionId={activeSession?.id ?? null}
+          onSelect={(id) => {
+            setSessionId(id);
+            window.localStorage.setItem(sessionKey, id);
+          }}
+          onCreate={() => createSession.mutate()}
+          creating={createSession.isPending}
+          onDeleted={(ids) => {
+            // 删掉的里面有正开着的那个,就把视图放下 —— 否则右边还停在一个已经不存在的会话上。
+            if (sessionId && ids.includes(sessionId)) {
+              setSessionId(null);
+              window.localStorage.removeItem(sessionKey);
+            }
+            // 会话没了,它那些生成记录也不该继续挂在任务列表里。SessionList 只管会话这一层,
+            // 连带要刷的东西由调用方说 —— 它不认识生成任务。
+            void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id] });
+            void qc.invalidateQueries({ queryKey: ["jobs", workspace.id, "ai_generation"] });
+          }}
         />
       </aside>
 

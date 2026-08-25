@@ -1349,6 +1349,8 @@ class GenerationSessionCreate(BaseModel):
 
 class GenerationSessionUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
+    #: 收进哪个分组;空串或 null 表示退回未分组。
+    group_id: str | None = None
     provider_profile_id: str | None = None
     model: str | None = Field(default=None, max_length=120)
     kind: str | None = Field(default=None, pattern="^(image|video)$")
@@ -1362,6 +1364,7 @@ class GenerationSessionOut(OrmModel):
     is_mine: bool = True
     shared: bool = False
     title: str
+    group_id: str | None = None
     provider_profile_id: str | None = None
     model: str | None = None
     kind: str | None = None
@@ -1752,19 +1755,22 @@ class AgentSessionCreate(BaseModel):
     model: str | None = Field(default=None, max_length=120)
 
 
-class AgentSessionGroupCreate(BaseModel):
+class SessionGroupCreate(BaseModel):
     workspace_id: str
+    #: 挂在哪一种会话上。两边各自一套,见 db/models.SESSION_GROUP_KINDS。
+    kind: str = Field(default="agent", pattern="^(agent|generation)$")
     name: str = Field(min_length=1, max_length=80)
 
 
-class AgentSessionGroupUpdate(BaseModel):
+class SessionGroupUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=80)
     sort_order: int | None = None
 
 
-class AgentSessionGroupOut(OrmModel):
+class SessionGroupOut(OrmModel):
     id: str
     workspace_id: str
+    kind: str
     owner_user_id: str | None = None
     name: str
     sort_order: int = 0

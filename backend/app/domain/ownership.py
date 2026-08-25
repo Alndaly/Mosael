@@ -74,7 +74,8 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "TtsConfig": ("app/domain/tts_config.py",),
     # 智能体/集成
     "AgentSession": ("app/ai/agent/", "app/domain/agent/"),
-    "AgentSessionGroup": ("app/domain/agent/",),
+    # 分组对话和生成共用一张表(kind 分开),所以归属在中立的 domain/session_groups。
+    "SessionGroup": ("app/domain/session_groups.py",),
     "AgentMessage": ("app/ai/agent/", "app/domain/agent/"),
     "AgentMemory": ("app/domain/agent/",),
     "ToolConfirmation": ("app/domain/agent/",),

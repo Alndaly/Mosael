@@ -1,4 +1,6 @@
-"""会话分组:收纳方式,不是所有权。
+"""对话分组:收纳方式,不是所有权。
+
+(分组表两边共用,生成那一侧另见 test_generation_session_groups.py。)
 
 钉住三件容易做错的事:
   · 删分组**不删对话** —— 它们退回未分组。删一个文件夹不该连着删掉里面的东西;
@@ -18,23 +20,23 @@ def _session(client, workspace_id: str) -> str:
 def test_删分组不删对话_成员退回未分组() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    group = client.post("/api/agent/session-groups", json={"workspace_id": ws["id"], "name": "客户 A"}).json()
+    group = client.post("/api/session-groups", json={"workspace_id": ws["id"], "kind": "agent", "name": "客户 A"}).json()
     sid = _session(client, ws["id"])
     client.patch(f"/api/agent/sessions/{sid}", json={"group_id": group["id"]})
     assert client.get(f"/api/agent/sessions/{sid}").json()["group_id"] == group["id"]
 
-    assert client.delete(f"/api/agent/session-groups/{group['id']}").status_code == 204
+    assert client.delete(f"/api/session-groups/{group['id']}").status_code == 204
 
     session = client.get(f"/api/agent/sessions/{sid}").json()
     assert session["id"] == sid, "对话被分组带走了"
     assert session["group_id"] is None, "对话还挂在一个已经不存在的分组上"
-    assert client.get(f"/api/agent/session-groups?workspace_id={ws['id']}").json() == []
+    assert client.get(f"/api/session-groups?workspace_id={ws['id']}").json() == []
 
 
 def test_空串把对话移出分组() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    group = client.post("/api/agent/session-groups", json={"workspace_id": ws["id"], "name": "归档"}).json()
+    group = client.post("/api/session-groups", json={"workspace_id": ws["id"], "kind": "agent", "name": "归档"}).json()
     sid = _session(client, ws["id"])
     client.patch(f"/api/agent/sessions/{sid}", json={"group_id": group["id"]})
 
@@ -51,7 +53,7 @@ def test_不能收进别的工作区的分组() -> None:
     client = fresh_client()
     mine = client.post("/api/workspaces", json={"name": "我的"}).json()
     other = client.post("/api/workspaces", json={"name": "另一个"}).json()
-    foreign = client.post("/api/agent/session-groups", json={"workspace_id": other["id"], "name": "别人的"}).json()
+    foreign = client.post("/api/session-groups", json={"workspace_id": other["id"], "kind": "agent", "name": "别人的"}).json()
     sid = _session(client, mine["id"])
 
     assert client.patch(f"/api/agent/sessions/{sid}", json={"group_id": foreign["id"]}).status_code == 404
@@ -61,14 +63,14 @@ def test_不能收进别的工作区的分组() -> None:
 def test_改名是一次操作_不必挨个改成员() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    group = client.post("/api/agent/session-groups", json={"workspace_id": ws["id"], "name": "旧名"}).json()
+    group = client.post("/api/session-groups", json={"workspace_id": ws["id"], "kind": "agent", "name": "旧名"}).json()
     sids = [_session(client, ws["id"]) for _ in range(3)]
     for sid in sids:
         client.patch(f"/api/agent/sessions/{sid}", json={"group_id": group["id"]})
 
-    client.patch(f"/api/agent/session-groups/{group['id']}", json={"name": "新名"})
+    client.patch(f"/api/session-groups/{group['id']}", json={"name": "新名"})
 
-    groups = client.get(f"/api/agent/session-groups?workspace_id={ws['id']}").json()
+    groups = client.get(f"/api/session-groups?workspace_id={ws['id']}").json()
     assert [g["name"] for g in groups] == ["新名"]
     for sid in sids:
         assert client.get(f"/api/agent/sessions/{sid}").json()["group_id"] == group["id"]
@@ -86,7 +88,7 @@ def test_换分组不把对话顶成刚聊过() -> None:
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    group = client.post("/api/agent/session-groups", json={"workspace_id": ws["id"], "name": "客户 A"}).json()
+    group = client.post("/api/session-groups", json={"workspace_id": ws["id"], "kind": "agent", "name": "客户 A"}).json()
     sid = _session(client, ws["id"])
     client.patch(f"/api/agent/sessions/{sid}", json={"title": "聊过了"})
 

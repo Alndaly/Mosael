@@ -449,6 +449,7 @@ export function ChatWorkspace({
           搜索框头上,列表反而掉进隐式行撑破容器。 */}
       <aside className="flex min-h-0 flex-col overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] max-[820px]:hidden">
         <SessionList
+          kind="agent"
           workspaceId={workspace.id}
           sessions={sessions.data ?? []}
           loaded={sessions.isSuccess}

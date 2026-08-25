@@ -786,39 +786,38 @@ export interface WorkflowGraph {
 }
 
 
-/* ---------- 对话分组 ---------- */
+/* ---------- 会话分组 ---------- */
 
-export type AgentSessionGroup = components["schemas"]["AgentSessionGroupOut"];
+export type SessionGroup = components["schemas"]["SessionGroupOut"];
 
-export function listSessionGroups(workspaceId: string): Promise<AgentSessionGroup[]> {
-  return api<AgentSessionGroup[]>(`/api/agent/session-groups?workspace_id=${workspaceId}`);
+/** 分组挂在哪一种会话上。对话和生成共用一张表、一组接口,但**各自一套分组**。 */
+export type SessionGroupKind = "agent" | "generation";
+
+export function listSessionGroups(workspaceId: string, kind: SessionGroupKind): Promise<SessionGroup[]> {
+  return api<SessionGroup[]>(`/api/session-groups?workspace_id=${workspaceId}&kind=${kind}`);
 }
 
-export function createSessionGroup(workspaceId: string, name: string): Promise<AgentSessionGroup> {
-  return api<AgentSessionGroup>("/api/agent/session-groups", {
+export function createSessionGroup(
+  workspaceId: string,
+  kind: SessionGroupKind,
+  name: string,
+): Promise<SessionGroup> {
+  return api<SessionGroup>("/api/session-groups", {
     method: "POST",
-    body: JSON.stringify({ workspace_id: workspaceId, name }),
+    body: JSON.stringify({ workspace_id: workspaceId, kind, name }),
   });
 }
 
-export function renameSessionGroup(groupId: string, name: string): Promise<AgentSessionGroup> {
-  return api<AgentSessionGroup>(`/api/agent/session-groups/${groupId}`, {
+export function renameSessionGroup(groupId: string, name: string): Promise<SessionGroup> {
+  return api<SessionGroup>(`/api/session-groups/${groupId}`, {
     method: "PATCH",
     body: JSON.stringify({ name }),
   });
 }
 
-/** 删分组不删对话 —— 成员退回未分组(后端显式清空,见 routes/agent)。 */
+/** 删分组不删会话 —— 成员退回未分组(后端显式清空,见 domain/session_groups)。 */
 export function deleteSessionGroup(groupId: string): Promise<unknown> {
-  return api(`/api/agent/session-groups/${groupId}`, { method: "DELETE" });
-}
-
-/** 收进分组;`null` = 移出分组(接口用空串表达"改成没有",见 AgentSessionUpdate)。 */
-export function moveSessionToGroup(sessionId: string, groupId: string | null): Promise<unknown> {
-  return api(`/api/agent/sessions/${sessionId}`, {
-    method: "PATCH",
-    body: JSON.stringify({ group_id: groupId ?? "" }),
-  });
+  return api(`/api/session-groups/${groupId}`, { method: "DELETE" });
 }
 
 export function deleteAgentSession(sessionId: string): Promise<unknown> {

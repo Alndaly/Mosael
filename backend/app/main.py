@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi import Depends
 
 from app.api.routes.agent import router as agent_router
+from app.api.routes.session_groups import router as session_groups_router
 from app.api.routes.agent_credentials import router as agent_credentials_router
 from app.api.routes.agent_tools import router as agent_tools_router
 from app.api.routes.agent_browser import router as agent_browser_router
@@ -255,6 +256,7 @@ def create_app() -> FastAPI:
     app.include_router(feishu_router, prefix="/api", dependencies=protected)
     app.include_router(plugins_router, prefix="/api", dependencies=protected)
     app.include_router(agent_router, prefix="/api", dependencies=protected)
+    app.include_router(session_groups_router, prefix="/api", dependencies=protected)
     app.include_router(agent_tools_router, prefix="/api", dependencies=protected)
     app.include_router(agent_credentials_router, prefix="/api", dependencies=protected)
     app.include_router(agent_browser_router, prefix="/api", dependencies=protected)
