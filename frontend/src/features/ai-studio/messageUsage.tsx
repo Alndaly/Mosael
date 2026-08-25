@@ -2,7 +2,8 @@ import React from "react";
 import { Check, Copy } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
-import { formatElapsedSeconds } from "@/lib/time";
+import { usePreferences } from "@/app/preferences";
+import { formatElapsedSeconds, relativeTime, useNow } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
 /**
@@ -118,6 +119,66 @@ function formatUsageCost(events: ReturnType<typeof summarizeMessageUsage>, t: Re
   return events.unknownCostEvents > 0 ? t("usageCostUnknown") : null;
 }
 
+/**
+ * 消息脚注的公共骨架:一行小字,复制永远在最左,后面跟这条消息自己的元信息。
+ *
+ * 助手那侧是耗时/tokens/计费,用户那侧是发出的时间 —— 两边**长得一样**,因为它们是同一件事:
+ * 这条消息的元信息。分成两个组件各写一份的话,间距、字号、悬停行为会各走各的。
+ */
+export function MessageFooter({
+  content,
+  children,
+  className,
+}: {
+  /** 「一键复制」复制什么。 */
+  content: string;
+  children?: React.ReactNode;
+  className?: string;
+}) {
+  const t = useI18n();
+  const [copied, setCopied] = React.useState(false);
+  const copy = () => {
+    void navigator.clipboard.writeText(content).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return (
+    // 字号设在**行容器**上,不设在按钮上。tokens.css 里那条无层级的 `button{font:inherit}`
+    // 会压掉按钮自己的字号类(class 还在,尺寸静默回落到继承值)—— 而它继承的正是这里。
+    // 所以顺着它写:容器定 11px,按钮跟着 11px,和旁边的耗时/时间一样齐。
+    <div className={cn("mt-1.5 flex min-h-[18px] items-center gap-1.5 text-ui-xs", className)}>
+      <button
+        type="button"
+        className="inline-flex cursor-pointer items-center gap-1 rounded-sm border-0 bg-transparent px-1.5 py-0.5 text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-foreground"
+        title={t("copyMessage")}
+        onClick={copy}
+      >
+        {copied ? <Check size={11} /> : <Copy size={11} />}
+        {copied ? t("copied") : t("copyMessage")}
+      </button>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * 「x 分钟前」。
+ *
+ * 自带节拍时钟:光算一次的话,这行字会停在渲染那一刻 —— 一条 30 秒前发的消息可以在屏幕上
+ * 一直写着「刚刚」,直到有别的东西碰巧触发重渲。
+ */
+export function MessageTime({ iso }: { iso: string | null | undefined }) {
+  const { locale } = usePreferences();
+  useNow(30_000);
+  if (!iso) return null;
+  return (
+    <time className="text-ui-xs text-muted-foreground" dateTime={iso} title={new Date(iso).toLocaleString(locale)}>
+      {relativeTime(iso, locale)}
+    </time>
+  );
+}
+
 /** 助手回复页脚:复制 + 耗时 + tokens + 计费。durationOverride 用消息 payload 里的耗时兜底。 */
 export function MessageUsageFooter({
   content,
@@ -131,7 +192,6 @@ export function MessageUsageFooter({
   className?: string;
 }) {
   const t = useI18n();
-  const [copied, setCopied] = React.useState(false);
   const usage = summarizeMessageUsage(usageEvents);
   const duration = durationOverride ?? usage.durationSeconds;
   const tokenLabel = usage.totalTokens > 0 ? t("usageTokens").replace("{n}", formatTokenCount(usage.totalTokens)) : null;
@@ -141,27 +201,8 @@ export function MessageUsageFooter({
       : undefined;
   const costLabel = formatUsageCost(usage, t);
 
-  const copy = () => {
-    void navigator.clipboard.writeText(content).then(() => {
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    });
-  };
-
   return (
-        // 字号设在**行容器**上,不设在按钮上。tokens.css 里那条无层级的 `button{font:inherit}`
-    // 会压掉按钮自己的字号类(class 还在,尺寸静默回落到继承值)—— 而它继承的正是这里。
-    // 所以顺着它写:容器定 11px,按钮跟着 11px,和旁边的耗时/Token 一样齐。
-    <div className={cn("mt-1.5 flex min-h-[18px] items-center gap-1.5 text-ui-xs", className)}>
-      <button
-        type="button"
-        className="inline-flex cursor-pointer items-center gap-1 rounded-sm border-0 bg-transparent px-1.5 py-0.5 text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-foreground"
-        title={t("copyMessage")}
-        onClick={copy}
-      >
-        {copied ? <Check size={11} /> : <Copy size={11} />}
-        {copied ? t("copied") : t("copyMessage")}
-      </button>
+    <MessageFooter content={content} className={className}>
       {typeof duration === "number" && (
         <span className="timecode text-ui-xs text-muted-foreground">
           {t("usageDuration").replace("{t}", formatElapsedSeconds(duration))}
@@ -173,6 +214,6 @@ export function MessageUsageFooter({
         </span>
       )}
       {costLabel && <span className="text-ui-xs text-muted-foreground">{costLabel}</span>}
-    </div>
+    </MessageFooter>
   );
 }

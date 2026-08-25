@@ -47,9 +47,9 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useImagePreview } from "@/components/app/image-preview";
 import { ChatWorkspace } from "@/features/ai-studio/ChatWorkspace";
 import { generationSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
-import { elapsedSecondsBetween, formatElapsedSeconds, relativeTime, useNow } from "@/lib/time";
+import { elapsedSecondsBetween, formatElapsedSeconds, useNow } from "@/lib/time";
 import { usePersistentTab } from "@/lib/usePersistentTab";
-import { formatCostMicros } from "@/features/ai-studio/messageUsage";
+import { MessageFooter, MessageTime, formatCostMicros } from "@/features/ai-studio/messageUsage";
 import {
   aspectRatioOptions,
   capabilityNumber,
@@ -1077,7 +1077,6 @@ function GenerationTurn({
   gallery?: Array<{ src: string; title?: string }>;
 }) {
   const t = useI18n();
-  const { locale } = usePreferences();
   const { openImagePreview } = useImagePreview();
   // job 行可能已被任务中心「清空已完成」删掉(记录长存、job_id 置空):
   // 有产物即成功、无产物即失败;仅当 job_id 还在而列表未拉到时才视作排队中。
@@ -1088,7 +1087,7 @@ function GenerationTurn({
   // 节拍时钟:运行中每秒刷计时;空闲 30s 一拍让「x 分钟前」不冻住。
   // (轮询回包无变化时 react-query 不触发重渲,光靠轮询计时会停走。)
   const now = useNow(isRunning ? 1000 : 30_000);
-  const timestampLabel = timestamp ? relativeTime(timestamp, locale) : "";
+  const prompt = String(generation.request.prompt ?? "");
   const durationSeconds = isRunning
     ? elapsedSecondsBetween(timestamp, now)
     : isFinished
@@ -1106,16 +1105,19 @@ function GenerationTurn({
         ? t("usageCostUnknown")
         : "";
   return (
-    <article className="grid w-full max-w-[780px] shrink-0 gap-2.5 self-center">
+    <article className="group/gen grid w-full max-w-[780px] shrink-0 gap-2.5 self-center">
       <div className="grid justify-items-end gap-1">
         <div className="w-fit max-w-[min(560px,82%)] justify-self-end whitespace-pre-wrap break-words rounded-lg rounded-br bg-secondary px-3 py-[9px] text-ui-md leading-[1.65] text-foreground">
-          {String(generation.request.prompt ?? "")}
+          {prompt}
         </div>
-        {timestamp ? (
-          <time className="text-ui-xs leading-tight text-muted-foreground" dateTime={timestamp}>
-            {timestampLabel}
-          </time>
-        ) : null}
+        {/* 和对话页的用户气泡同一个脚注:复制 + 时间。此前这里只有一个裸 <time>,
+            没法把提示词捞出来 —— 而提示词正是最常要复制去改一版再生成的东西。 */}
+        <MessageFooter
+          content={prompt}
+          className="justify-end opacity-0 transition-opacity duration-[120ms] group-hover/gen:opacity-100"
+        >
+          <MessageTime iso={timestamp} />
+        </MessageFooter>
       </div>
       <div className="grid min-h-7 justify-items-start gap-[7px] pb-2 pt-0.5">
         {generation.result_asset_id && generation.kind === "video" ? (

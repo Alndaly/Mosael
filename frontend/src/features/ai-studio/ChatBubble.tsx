@@ -8,8 +8,9 @@ import { useI18n } from "@/app/preferences";
 
 import { CompactionNotice, type CompactionInfo } from "@/components/agent/ContextMeter";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/components/agent/ToolCalls";
-import { MessageUsageFooter, type AgentUsageEvent } from "@/features/ai-studio/messageUsage";
+import { MessageFooter, MessageTime, MessageUsageFooter, type AgentUsageEvent } from "@/features/ai-studio/messageUsage";
 import { UserMessageContent } from "@/features/ai-studio/userMessage";
+import { cn } from "@/lib/utils";
 
 export type AgentMessage = components["schemas"]["AgentMessageOut"];
 
@@ -74,15 +75,18 @@ export function ChatBubble({ message, usageEvents }: { message: AgentMessage; us
   // 就把"谁说的"讲清楚了,不必靠正文里一行方括号标签(那行现在只进提示词,见后端
   // host.agent_notice_envelope)。
   const fromAgent = message.role === "user" ? payload?.from_agent_session : undefined;
+  // 外层只负责**摆位置**和挂 group,可见的那块(药丸/内嵌卡)在里面 —— 脚注要落在药丸
+  // **下方**而不是它的内边距里,所以这两层必须分开。
   return (
     <div
-      className={
+      className={cn(
+        "group/bubble",
         message.role === "assistant"
-          ? "group/bubble relative mx-auto w-full max-w-[780px] shrink-0 text-ui-md leading-[1.65] [word-break:break-word]"
+          ? "relative mx-auto w-full max-w-[780px] shrink-0 text-ui-md leading-[1.65] [word-break:break-word]"
           : fromAgent
-            ? "mx-auto grid w-full max-w-[780px] shrink-0 gap-1.5 rounded-lg border border-border border-l-[3px] border-l-muted-foreground/40 bg-panel-subtle px-3 py-2.5 text-ui-md leading-[1.65] [word-break:break-word]"
-            : "ml-auto mr-[max(calc((100%-780px)/2),0px)] w-fit max-w-[min(560px,82%)] shrink-0 whitespace-pre-wrap rounded-lg rounded-br-[6px] bg-secondary px-3 py-[9px] text-ui-md leading-[1.65] text-foreground [word-break:break-word]"
-      }
+            ? "mx-auto w-full max-w-[780px] shrink-0"
+            : "ml-auto mr-[max(calc((100%-780px)/2),0px)] flex w-fit max-w-[min(560px,82%)] shrink-0 flex-col items-stretch",
+      )}
     >
       {/* 自动压缩发生在这一轮开始前,标记就排在这条回复之前 —— 位置本身在说"从这里往前被整理过"。 */}
       {message.role === "assistant" && payload?.compaction && (
@@ -97,21 +101,35 @@ export function ChatBubble({ message, usageEvents }: { message: AgentMessage; us
           <AgentTurnContent timeline={payload?.timeline} />
         )
       ) : (
-        <>
+        <div
+          className={
+            fromAgent
+              ? "grid gap-1.5 rounded-lg border border-border border-l-[3px] border-l-muted-foreground/40 bg-panel-subtle px-3 py-2.5 text-ui-md leading-[1.65] [word-break:break-word]"
+              : "whitespace-pre-wrap rounded-lg rounded-br-[6px] bg-secondary px-3 py-[9px] text-ui-md leading-[1.65] text-foreground [word-break:break-word]"
+          }
+        >
           {fromAgent && <AgentOrigin sessionId={fromAgent} />}
           <div className={fromAgent ? "whitespace-pre-wrap" : undefined}>
             <UserMessageContent content={message.content} />
           </div>
-        </>
+        </div>
       )}
-      {/* 脚注只给助手回答:用户消息没有复制/耗时,免得药丸下方留一条空的悬停占位。 */}
-      {message.role === "assistant" && (
+      {/* 两侧都有脚注,长得一样(见 MessageFooter):助手那边是耗时/tokens/计费,
+          用户这边是发出的时间。都只在悬停时显形 —— 常态下这一行是空的,不该占视线。 */}
+      {message.role === "assistant" ? (
         <MessageUsageFooter
           content={message.content}
           usageEvents={usageEvents}
           durationOverride={payload?.usage?.duration_seconds}
           className="opacity-0 transition-opacity duration-[120ms] group-hover/bubble:opacity-100"
         />
+      ) : (
+        <MessageFooter
+          content={message.content}
+          className="justify-end opacity-0 transition-opacity duration-[120ms] group-hover/bubble:opacity-100"
+        >
+          <MessageTime iso={message.created_at} />
+        </MessageFooter>
       )}
     </div>
   );
