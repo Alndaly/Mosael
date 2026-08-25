@@ -59,6 +59,7 @@ import { ModalShell } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { clipEnd } from "@/domain/timeline/geometry";
 import { projectTranscript, type SegmentLike } from "@/domain/timeline/transcriptProjection";
+import { type LeftTab, useEditorPanels } from "@/features/editor/useEditorPanels";
 import { useEditorStore } from "@/stores/editorStore";
 import { ConfirmDialog } from "@/components/app/modals";
 import { FontFaces } from "@/features/editor/FontFaces";
@@ -69,8 +70,6 @@ import { SubtitlePanel } from "./SubtitlePanel";
 import { TranscriptPanel } from "./TranscriptPanel";
 import { VoicePanel } from "./VoicePanel";
 import { Timeline, trackAcceptsAsset, type TrimPayload } from "./timeline/Timeline";
-import { usePersistentTab } from "@/lib/usePersistentTab";
-import { useMediaMatch } from "@/lib/useMediaMatch";
 import { cn } from "@/lib/utils";
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useSensor, useSensors, type DragStartEvent } from "@dnd-kit/core";
 
@@ -108,57 +107,6 @@ export function EditorView({
   return <Editor workspace={workspace} project={project} />;
 }
 
-const PANEL_SIZES_KEY = "openstudio.editor.panels.v2";
-
-const LEFT_TABS = ["media", "transcript", "subtitle", "voice"] as const;
-type LeftTab = (typeof LEFT_TABS)[number];
-
-/** 素材是缩略图列表,窄即可;逐字稿是整篇文档,需要宽栏。宽度按页签分别记忆。 */
-const LEFT_WIDTH_BOUNDS: Record<LeftTab, { min: number; max: number; fallback: number }> = {
-  media: { min: 180, max: 480, fallback: 252 },
-  transcript: { min: 300, max: 620, fallback: 420 },
-  subtitle: { min: 240, max: 520, fallback: 320 },
-  voice: { min: 240, max: 520, fallback: 320 },
-};
-
-interface PanelSizes {
-  left: Record<LeftTab, number>;
-  right: number;
-  timeline: number;
-}
-
-function clampLeft(tab: LeftTab, value: unknown): number {
-  const bounds = LEFT_WIDTH_BOUNDS[tab];
-  return Math.min(bounds.max, Math.max(bounds.min, Number(value) || bounds.fallback));
-}
-
-/** 紧凑断点(Global rhythm):≤1000px 时编辑器收成两列,检查器改为浮动抽屉。 */
-function useCompact(): boolean {
-  return useMediaMatch("(max-width: 1000px)");
-}
-
-function readPanelSizes(): PanelSizes {
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(PANEL_SIZES_KEY) ?? "{}");
-    return {
-      left: {
-        media: clampLeft("media", parsed.left?.media),
-        transcript: clampLeft("transcript", parsed.left?.transcript),
-        subtitle: clampLeft("subtitle", parsed.left?.subtitle),
-        voice: clampLeft("voice", parsed.left?.voice),
-      },
-      right: Math.min(480, Math.max(200, Number(parsed.right) || 264)),
-      timeline: Math.min(560, Math.max(160, Number(parsed.timeline) || 252)),
-    };
-  } catch {
-    return {
-      left: { media: 252, transcript: 420, subtitle: 320, voice: 320 },
-      right: 264,
-      timeline: 252,
-    };
-  }
-}
-
 function Editor({ workspace, project }: { workspace: Workspace; project: Project }) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -166,46 +114,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   // 在哪个 tab 是**这个人怎么用这个工具**的一部分,不是这一刻的临时值 —— 切走再回来不该重置
   // (面板宽度早就是这么存的,见 PANEL_SIZES_KEY)。用项目里已有的那个钩子,它自带白名单:
   // 哪天某个 tab 被删掉,存着旧值的用户不会卡在一个不存在的页面上。
-  const [leftTab, setLeftTab] = usePersistentTab<LeftTab>("editor-left", "media", LEFT_TABS);
-  const [panels, setPanels] = React.useState(readPanelSizes);
-  const compact = useCompact();
-  const leftWidth = Math.min(panels.left[leftTab], compact ? 300 : Number.POSITIVE_INFINITY);
+  const panels = useEditorPanels();
 
-  React.useEffect(() => {
-    window.localStorage.setItem(PANEL_SIZES_KEY, JSON.stringify(panels));
-  }, [panels]);
-
-  const startPanelDrag = (which: "left" | "right" | "timeline") => (event: React.PointerEvent) => {
-    event.preventDefault();
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const origin = { ...panels, left: { ...panels.left } };
-    const tab = leftTab;
-    const onMove = (moveEvent: PointerEvent) => {
-      if (which === "left") {
-        setPanels((current) => ({
-          ...current,
-          left: { ...current.left, [tab]: clampLeft(tab, origin.left[tab] + (moveEvent.clientX - startX)) },
-        }));
-      } else if (which === "right") {
-        setPanels((current) => ({ ...current, right: Math.min(480, Math.max(200, origin.right - (moveEvent.clientX - startX))) }));
-      } else {
-        setPanels((current) => ({ ...current, timeline: Math.min(560, Math.max(160, origin.timeline - (moveEvent.clientY - startY))) }));
-      }
-    };
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-    // Hold the resize cursor and suppress selection for the whole drag — otherwise moving off
-    // the 7px strip reverts the cursor and starts selecting whatever is underneath.
-    document.body.style.cursor = which === "timeline" ? "row-resize" : "col-resize";
-    document.body.style.userSelect = "none";
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-  };
 
   const assets = useQuery({
     queryKey: ["assets", workspace.id, project.id],
@@ -861,8 +771,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const showInspector = selectedClip !== null;
   // Where the panels row ends, measured from the grid's bottom edge: padding (10) + the
   // timeline's height + the row gap (6). Keeps the column resizers out of the timeline.
-  const panelsRowBottom = panels.timeline + 16;
-  const inspectorInGrid = showInspector && !compact;
+  const panelsRowBottom = panels.sizes.timeline + 16;
+  const inspectorInGrid = showInspector && !panels.compact;
 
   return (
     <DndContext
@@ -876,9 +786,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       className="relative grid h-full grid-cols-[252px_minmax(0,1fr)_264px] grid-rows-[minmax(0,1fr)_252px] gap-2 p-2"
       style={{
         gridTemplateColumns: inspectorInGrid
-          ? `${leftWidth}px minmax(0, 1fr) ${panels.right}px`
-          : `${leftWidth}px minmax(0, 1fr)`,
-        gridTemplateRows: `minmax(0, 1fr) ${panels.timeline}px`,
+          ? `${panels.leftWidth}px minmax(0, 1fr) ${panels.sizes.right}px`
+          : `${panels.leftWidth}px minmax(0, 1fr)`,
+        gridTemplateRows: `minmax(0, 1fr) ${panels.sizes.timeline}px`,
       }}
     >
       {/* Uploaded fonts must be registered before the monitor or the style panel can paint
@@ -904,37 +814,37 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           padding + timeline height + row gap. */}
       <div
         className="absolute bottom-3 top-3 z-10 w-[7px] cursor-col-resize touch-none before:absolute before:inset-0 before:m-auto before:h-9 before:w-0.5 before:rounded-sm before:bg-border before:transition-colors before:duration-100 before:content-[''] hover:before:bg-[color-mix(in_srgb,var(--primary)_70%,transparent)] active:before:bg-[color-mix(in_srgb,var(--primary)_70%,transparent)]"
-        style={{ left: leftWidth + 12 + 4 - 3, bottom: panelsRowBottom }}
-        onPointerDown={startPanelDrag("left")}
+        style={{ left: panels.leftWidth + 12 + 4 - 3, bottom: panelsRowBottom }}
+        onPointerDown={panels.startDrag("left")}
       />
       {inspectorInGrid && (
         <div
           className="absolute bottom-3 top-3 z-10 w-[7px] cursor-col-resize touch-none before:absolute before:inset-0 before:m-auto before:h-9 before:w-0.5 before:rounded-sm before:bg-border before:transition-colors before:duration-100 before:content-[''] hover:before:bg-[color-mix(in_srgb,var(--primary)_70%,transparent)] active:before:bg-[color-mix(in_srgb,var(--primary)_70%,transparent)]"
-          style={{ right: panels.right + 12 + 4 - 3, bottom: panelsRowBottom }}
-          onPointerDown={startPanelDrag("right")}
+          style={{ right: panels.sizes.right + 12 + 4 - 3, bottom: panelsRowBottom }}
+          onPointerDown={panels.startDrag("right")}
         />
       )}
       <div
         className="absolute left-3 right-3 z-10 h-[7px] cursor-row-resize touch-none before:absolute before:inset-0 before:m-auto before:h-0.5 before:w-9 before:rounded-sm before:bg-border before:transition-colors before:duration-100 before:content-[''] hover:before:bg-[color-mix(in_srgb,var(--primary)_70%,transparent)] active:before:bg-[color-mix(in_srgb,var(--primary)_70%,transparent)]"
-        style={{ bottom: panels.timeline + 12 + 4 - 3 }}
-        onPointerDown={startPanelDrag("timeline")}
+        style={{ bottom: panels.sizes.timeline + 12 + 4 - 3 }}
+        onPointerDown={panels.startDrag("timeline")}
       />
-      {leftTab === "media" ? (
+      {panels.tab === "media" ? (
         <MediaPool
           assets={assets.data ?? []}
           uploading={uploadAsset.isPending}
           onImportFile={(file) => uploadAsset.mutate(file)}
           onAddToTimeline={addAssetToTimeline}
-          tabs={<LeftTabs tab={leftTab} onChange={setLeftTab} />}
+          tabs={<LeftTabs tab={panels.tab} onChange={panels.setTab} />}
         />
-      ) : leftTab === "voice" ? (
-        <VoicePanel workspace={workspace} project={project} tabs={<LeftTabs tab={leftTab} onChange={setLeftTab} />} />
+      ) : panels.tab === "voice" ? (
+        <VoicePanel workspace={workspace} project={project} tabs={<LeftTabs tab={panels.tab} onChange={panels.setTab} />} />
       ) : (
         <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
           <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
-            <LeftTabs tab={leftTab} onChange={setLeftTab} />
+            <LeftTabs tab={panels.tab} onChange={panels.setTab} />
           </div>
-          {leftTab === "transcript" ? (
+          {panels.tab === "transcript" ? (
             <TranscriptPanel
               sequence={sequence}
               onCutSegment={(clipId, srcStart, srcEnd) => cutRangeMutation.mutate({ clipId, srcStart, srcEnd })}
@@ -996,10 +906,10 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
               onUploadFont={(file) => uploadFontMutation.mutate(file)}
               onDeleteFont={(fontId) => deleteFontMutation.mutate(fontId)}
               uploadingFont={uploadFontMutation.isPending}
-              onClose={compact ? () => useEditorStore.getState().selectClip(null) : undefined}
+              onClose={panels.compact ? () => useEditorStore.getState().selectClip(null) : undefined}
             />
           );
-          return compact ? <div className="fixed bottom-0 right-0 top-11 z-[60] grid w-[min(320px,calc(100vw-96px))] border-l border-border-strong bg-panel [&>section]:h-full [&>section]:rounded-none [&>section]:border-0">{inspector}</div> : inspector;
+          return panels.compact ? <div className="fixed bottom-0 right-0 top-11 z-[60] grid w-[min(320px,calc(100vw-96px))] border-l border-border-strong bg-panel [&>section]:h-full [&>section]:rounded-none [&>section]:border-0">{inspector}</div> : inspector;
         })()}
       <section className="col-span-full min-h-0 overflow-hidden rounded-md border border-border shadow-[var(--shadow-panel)] bg-[var(--timeline-bg)]">
         <Timeline

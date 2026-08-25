@@ -9,5 +9,22 @@ if (typeof document !== "undefined") {
   const { cleanup } = await import("@testing-library/react");
   const { afterEach } = await import("vitest");
   afterEach(() => cleanup());
+
+  // jsdom 没有 matchMedia,而项目里的响应式分支全走 useMediaMatch —— 少了它,任何渲染到
+  // 带断点组件的用例都会在 useSyncExternalStore 里炸,报的还是 React 内部栈,看不出是环境缺口。
+  // 默认不匹配(宽屏);要测窄屏的用例自己覆盖 window.matchMedia。
+  if (!window.matchMedia) {
+    window.matchMedia = (query: string) =>
+      ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addEventListener() {},
+        removeEventListener() {},
+        addListener() {},
+        removeListener() {},
+        dispatchEvent: () => false,
+      }) as MediaQueryList;
+  }
 }
 export {};

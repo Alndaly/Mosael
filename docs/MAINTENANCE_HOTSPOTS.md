@@ -61,7 +61,7 @@ Interface 从「全局 class 名 + cascade」变成了「设计刻度」——�
 | `Timeline` | 1197 | **0** | 6 | 大而内聚,不拆 |
 | `NodeInspector` | 904 | 9 | **1** | 纯渲染,904 行是**宽度**不是混乱,不拆 |
 | `WorkflowEditor` | 1123 | 6 | 14 | 见下 |
-| `Editor` | 1305 | **39** | 7 | 真正混了太多 mutation,该拆 |
+| `Editor` | ~~1143~~ 925 | **37** | ~~7~~ 3 | 面板摆放已抽走;剩下的是序列变更 |
 
 `WorkflowEditor` 曾被判定为"最该拆的那个"。重新量之后:它的 state 分四组,而**「图数据」那组
 (nodes/edges/dirty/runJobId)被引用 106 次**,其余三组加起来 36 次 —— 也就是说它其实也是
@@ -72,8 +72,16 @@ Interface 从「全局 class 名 + cascade」变成了「设计刻度」——�
 让文件变短(只少了 5 行),是那三个 state 和工作流没有一点关系,混在一起时读的人要先分辨
 `viewportTick` 是业务概念还是渲染细节。
 
-**还该拆的只剩 `EditorView.tsx` 的 `Editor`**:39 处 useQuery/useMutation 挤在一个组件里,
-切分方向是面板编排 / 变换与合成 / mutations。低优先,顺手做。
+**已做**:`useEditorPanels` —— 哪个页签、各栏多宽、窗口够不够宽。和 `useCanvasPosture` 同一
+类东西:讲的是**这个人怎么用这个工具**,不是这一刻在剪什么。抽的时候顺手合了两组抄重的边界
+数字,并把「读盘兜底」和「拖动夹范围」分开(合成一个 `Number(v) || fallback` 时,把栏位拖到
+宽度恰好为 0 会弹回默认宽而不是收到最小值 —— 拖得越狠反而越宽)。`useEditorPanels.test.ts`
+钉住了这个区分。
+
+**`Editor` 还剩 37 处 useQuery/useMutation**,其中约 30 条是同一件事:对当前序列做一次编辑
+(插入/移动/裁剪/删除/分割/调速/变换…),共用 `applySequence` / `settleWith` /
+`resyncAfterFailedDrag` 三个回调。这是一个内聚的组 —— 该整组抽成 `useSequenceMutations`,
+而不是按"面板编排 / 变换与合成"那样横着切。低优先,顺手做。
 
 > 教训:「这个文件太大了」不是一条可执行的判据。**查询数与 state 分组**才是 —— 前者说明它
 > 承担了多少件事,后者说明那些事彼此相不相干。
