@@ -80,7 +80,11 @@ export default async function PluginsPage({ params }: { params: Params }) {
                 className="flex flex-col border-2 border-ink bg-card transition-shadow hover:shadow-block"
               >
                 <div className="flex items-center gap-3 border-b-2 border-ink px-6 py-4">
-                  <h3 className="m-0 font-display text-lg font-bold tracking-tight">{plugin.name}</h3>
+                  <h3 className="m-0 font-display text-lg font-bold tracking-tight">
+                    <Link className="hover:text-flame" href={localePath(locale, `/plugins/${plugin.slug}`)}>
+                      {plugin.name}
+                    </Link>
+                  </h3>
                   <span className="ml-auto shrink-0 border-2 border-ink px-2 py-0.5 font-mono text-[0.65rem] font-bold tracking-wider uppercase">
                     {plugin.kind === "mcp" ? t.kindMcp : t.kindScript}
                   </span>
@@ -102,15 +106,15 @@ export default async function PluginsPage({ params }: { params: Params }) {
                         </span>
                       ))
                     )}
-                    <a
+                    {/* 主行动是「看详情」而不是「看源码」:大多数人想知道的是它能干什么、
+                        要什么权限,而不是它怎么实现的。源码链接留在详情页里。 */}
+                    <Link
                       className="ml-auto inline-flex items-center gap-1 font-sans font-bold text-flame hover:underline"
-                      href={`${SITE.repo}/tree/main/${plugin.source}`}
-                      target="_blank"
-                      rel="noreferrer"
+                      href={localePath(locale, `/plugins/${plugin.slug}`)}
                     >
-                      {t.viewSource}
+                      {t.detailLink}
                       <ArrowUpRight className="size-3.5" />
-                    </a>
+                    </Link>
                   </div>
                 </div>
               </Reveal>

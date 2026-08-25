@@ -22,6 +22,10 @@ export type PluginEntry = {
   summary: string;
   /** 仓库里的源码目录,相对仓库根。 */
   source: string;
+  /** URL 里用的那一段 —— 就是插件的目录名(`baidu-pan`),不是那串带点的 id。 */
+  slug: string;
+  /** 它带来哪些工具。MCP 插件的清单在服务那边,这里是空的。 */
+  tools: { name: string; description: string }[];
 };
 
 type Manifest = {
@@ -33,6 +37,7 @@ type Manifest = {
   runtime?: { kind?: string };
   permissions?: string[];
   skills?: { description?: string }[];
+  tools?: { declare?: { name?: string; description?: string }[] };
 };
 
 const EXAMPLES = path.join(process.cwd(), "..", "plugins", "examples");
@@ -56,9 +61,28 @@ export function listPlugins(): PluginEntry[] {
         permissions: manifest.permissions ?? [],
         summary: manifest.skills?.[0]?.description ?? "",
         source: `plugins/examples/${path.basename(path.dirname(file))}`,
+        slug: path.basename(path.dirname(file)),
+        tools: (manifest.tools?.declare ?? [])
+          .filter((tool) => tool.name)
+          .map((tool) => ({ name: tool.name ?? "", description: tool.description ?? "" })),
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export function findPlugin(slug: string): PluginEntry | null {
+  return listPlugins().find((plugin) => plugin.slug === slug) ?? null;
+}
+
+/**
+ * 插件自己的 README,原样读出来。
+ *
+ * **不是每个插件都有** —— text-toolkit 那种一句话说得清的就没写。没有时返回 null,
+ * 详情页照样成立(清单里的信息已经够看了),而不是渲染一块空白。
+ */
+export function readPluginDoc(slug: string): string | null {
+  const file = path.join(EXAMPLES, slug, "README.md");
+  return fs.existsSync(file) ? fs.readFileSync(file, "utf8") : null;
 }
 
 /**
