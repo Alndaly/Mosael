@@ -83,6 +83,24 @@ jobs:
             gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
               --draft --generate-notes --title "Open Studio $GITHUB_REF_NAME"
 
+      # 插件包和平台无关,所以在这里打一次,而不是 mac/win 各打一遍。
+      # 市场索引里的下载地址指的就是这些附件(website/public/plugins/registry.json)——
+      # 不传的话,插件页点「安装」拿到的是 404,而索引看起来一切正常。
+      - name: Package plugins
+        run: |
+          mkdir -p dist/plugins
+          for dir in plugins/examples/*/; do
+            id=$(python3 -c "import json,sys;print(json.load(open('$dir/open-studio.plugin.json'))['id'])")
+            (cd "$dir" && zip -qr "$GITHUB_WORKSPACE/dist/plugins/$id.zip" .)
+            echo "packed $id"
+          done
+          ls -la dist/plugins
+
+      - name: Upload plugins to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber dist/plugins/*.zip
+
   build:
     needs: [test, draft]
     # workflow_dispatch 时 draft 被跳过,也要能继续跑。

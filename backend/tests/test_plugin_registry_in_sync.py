@@ -48,6 +48,21 @@ def test_权限清单一致() -> None:
         assert registry[raw["id"]]["permissions"] == (raw.get("permissions") or []), f"{raw['id']} 的权限清单漂了"
 
 
+def test_下载地址和_CI_产出的文件名对得上() -> None:
+    """索引说去哪儿下,CI 决定传上去的叫什么。**两边对不上就是 404**,而索引看起来一切正常。
+
+    这条上一版就是错的:索引里挂着 `plugins-v1.0.0/<id>.zip`,而那个 tag 从来没存在过 ——
+    用户点「安装」拿到一个 404,而市场页上那条目长得和能用的一模一样。
+    """
+    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    assert "dist/plugins/$id.zip" in workflow, "CI 不再按 <id>.zip 打包了"
+    assert "gh release upload" in workflow and "dist/plugins/*.zip" in workflow, "CI 没有上传插件包"
+    for entry in _registry().values():
+        assert entry["download"].endswith(f"/{entry['id']}.zip"), f"{entry['id']} 的下载地址和 CI 的文件名对不上"
+        # 不钉版本号:索引由网站部署、附件由发版流程产出,两者各走各的。
+        assert "/releases/latest/download/" in entry["download"], f"{entry['id']} 的下载地址钉死了版本"
+
+
 def test_这道棘轮扫得到东西() -> None:
     """假阴性比红更危险:哪天目录改了名,上面三条会一起真空通过。"""
     assert len(list(EXAMPLES.glob(f"*/{MANIFEST_NAME}"))) >= 3

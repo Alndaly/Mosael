@@ -21,8 +21,14 @@ EXAMPLES = ROOT / "plugins" / "examples"
 OUT = ROOT / "website" / "public" / "plugins" / "registry.json"
 MANIFEST_NAME = "open-studio.plugin.json"
 
-#: 插件包的下载地址。CI 在打 tag 时把每个插件目录打成 <id>-<version>.zip 传到 Release。
-DOWNLOAD_TEMPLATE = "https://github.com/Alndaly/OpenStudio/releases/download/plugins-v{version}/{id}.zip"
+#: 插件包的下载地址。CI 在打 tag 时把每个插件目录打成 <id>.zip 传到那次 Release
+#: (见 .github/workflows/release.yml 的 Package plugins)。
+#:
+#: **用 `releases/latest/download` 而不是钉某个版本号**:索引由网站部署、附件由发版流程
+#: 产出,两者各走各的。写死版本号的话,发了新版而网站还没重新部署,索引就指向一个还不存在
+#: 的附件 —— 而那正是这条上一版踩的坑(索引里挂着 plugins-v1.0.0,那个 tag 从来没有过)。
+#: latest 由 GitHub 转发到最新一次 Release,永远指得到东西。
+DOWNLOAD_TEMPLATE = "https://github.com/Alndaly/OpenStudio/releases/latest/download/{id}.zip"
 
 
 def entry(manifest_path: Path) -> dict:
@@ -36,7 +42,7 @@ def entry(manifest_path: Path) -> dict:
         "description": (skills[0].get("description") if skills else "") or "",
         "author": "Open Studio",
         "homepage": f"https://github.com/Alndaly/OpenStudio/tree/main/plugins/examples/{manifest_path.parent.name}",
-        "download": DOWNLOAD_TEMPLATE.format(id=raw["id"], version=raw.get("version", "")),
+        "download": DOWNLOAD_TEMPLATE.format(id=raw["id"]),
         # 权限**从清单来**:界面在装之前把它摊开给用户看,写错等于骗人。
         "permissions": [p for p in (raw.get("permissions") or []) if isinstance(p, str)],
     }
