@@ -81,6 +81,37 @@ except Exception as exc:
 规矩:进程 60 秒超时,stdout 上限 1MB,`output` 必须是个对象。进程崩了、超时了、吐了非 JSON ——
 失败的是那一次调用记录,不是应用。
 
+### 要交出一个**文件**
+
+上面那条路只搬 JSON,上限 1MB —— 一个 2GB 的 mp4 塞不进去。要把文件交给素材库,在 `output`
+里放 `artifact`,有两种交法:
+
+```python
+# 一、你自己下好了。**必须写在给你的目录里**
+out = os.environ["OPEN_STUDIO_PLUGIN_OUTPUT_DIR"]
+path = os.path.join(out, "video.mp4")
+download_to(path)
+return {"artifact": {"path": "video.mp4"}}       # 相对这个目录,或者绝对路径
+
+# 二、你只换到了下载凭据,让宿主去下
+return {"artifact": {
+    "url": "https://.../dlink?sign=...",
+    "headers": {"User-Agent": "pan.baidu.com"},   # 有些接口不带特定头就 403
+    "filename": "video.mp4",
+}}
+```
+
+**第二种通常更好。** 让插件负责换取凭据、宿主负责搬字节 —— 进度、取消、重试、失败隔离全都
+是现成的,你一行都不用写。反过来自己下的话,这些每个插件都要再实现一遍。
+
+宿主收下之后,`output` 里的 `artifact` 会被**换成** `asset_id` / `asset_name`,调用方拿到的
+就是一个素材 id,和其它产素材的工具一样。暂存目录用完即删,所以那个路径不会传给下游 ——
+它在返回的那一刻就已经失效了。
+
+限制:单份 8GB;`url` 只能是 http/https;`path` 必须落在 `OPEN_STUDIO_PLUGIN_OUTPUT_DIR`
+里面(插件本来就以你的身份运行、读得到你读得到的一切,这条挡的不是提权,是「随手交出一个
+别处的文件」—— 素材库里的东西是能被发布出去的)。
+
 ## 形态二:接一个 MCP 服务
 
 ```jsonc

@@ -105,7 +105,9 @@ def _fit_arguments(fn: Any, arguments: dict[str, Any]) -> tuple[dict[str, Any], 
     return fitted, dropped
 
 
-def _invoke_plugin_tool(db: Any, name: str, arguments: dict[str, Any], user_id: str) -> dict[str, Any]:
+def _invoke_plugin_tool(
+    db: Any, name: str, arguments: dict[str, Any], user_id: str, workspace_id: str = ""
+) -> dict[str, Any]:
     """把展开后的名字反查回 (plugin_id, tool_name) 并执行。
 
     走的是 invoke_plugin_tool 这条**唯一**的插件执行路径 —— 权限校验、凭据注入、调用留痕
@@ -121,7 +123,9 @@ def _invoke_plugin_tool(db: Any, name: str, arguments: dict[str, Any], user_id: 
         # 工具表。说清楚是哪一类问题,而不是一句"找不到"。
         raise HTTPException(status_code=404, detail=f"插件工具 {name} 不可用(连接未启用、未授权、缺凭据,或该工具未开启)")
     try:
-        invocation = invoke(db, match["instance_id"], match["name"], arguments)
+        # 带上工作区:插件交出的**文件**产出要收进它的素材库,输出里换成 asset_id。
+        # 这个 workspace_id 上面已经过了 ensure_workspace_member,不是模型给的。
+        invocation = invoke(db, match["instance_id"], match["name"], arguments, workspace_id=workspace_id or None)
     except PluginDomainError as exc:
         return {"error": str(exc)[:500]}
     if invocation.status != "succeeded":
@@ -146,7 +150,7 @@ def invoke_agent_tool(
     if workspace_id:
         ensure_workspace_member(db, user, workspace_id)
     if name.startswith(PLUGIN_TOOL_PREFIX):
-        return _invoke_plugin_tool(db, name, body.arguments, user.id)
+        return _invoke_plugin_tool(db, name, body.arguments, user.id, workspace_id)
     registry = _registry()
     fn = getattr(registry, name, None)
     if fn is None or not callable(fn) or name.startswith("_"):

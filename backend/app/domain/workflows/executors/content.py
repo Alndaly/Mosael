@@ -15,12 +15,16 @@ from app.domain.workflows.executors import register, register_prefix
 from app.domain.workflows.executors.common import id_list
 
 
-def _run_plugin_tool(db: Session, instance_id: str, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
+def _run_plugin_tool(
+    db: Session, instance_id: str, tool_name: str, payload: dict[str, Any], *, workspace_id: str
+) -> dict[str, Any]:
     from app.domain.plugins import PluginDomainError
     from app.domain.plugins.tools import invoke
 
     try:
-        invocation = invoke(db, instance_id, tool_name, payload)
+        # 带上工作区:插件交出的**文件**产出要收进这个工作区的素材库,输出里换成 asset_id。
+        # 不带的话,一个从网盘拉文件的节点在工作流里跑不通 —— 它没地方放拿到的东西。
+        invocation = invoke(db, instance_id, tool_name, payload, workspace_id=workspace_id)
     except PluginDomainError as exc:  # 停用 / 撤权 / 删掉 —— 是这次运行的失败,不是服务端故障
         raise WorkflowDomainError(str(exc)) from exc
     if invocation.status != "succeeded":
@@ -57,7 +61,11 @@ def plugin_tool(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict
     它存的是 plugin_id(包),在实例模型下要先落到一个具体连接上。"""
     tool_name = str(config.get("tool_name", ""))
     instance_id = _resolve_instance(db, str(config.get("plugin_id", "")), tool_name, str(config.get("instance_id", "")))
-    return {"output": _run_plugin_tool(db, instance_id, tool_name, dict(config.get("input") or {}))}
+    return {
+        "output": _run_plugin_tool(
+            db, instance_id, tool_name, dict(config.get("input") or {}), workspace_id=workflow.workspace_id
+        )
+    }
 
 
 @register_prefix(PLUGIN_NODE_PREFIX)
@@ -87,7 +95,7 @@ def plugin_node(node_type: str):
         payload = {
             key: value for key, value in config.items() if key != "instance_id" and value not in (None, "")
         }
-        output = _run_plugin_tool(db, instance_id, tool_name, payload)
+        output = _run_plugin_tool(db, instance_id, tool_name, payload, workspace_id=workflow.workspace_id)
 
         tool = find(db, instance_id, tool_name)
         outputs = node_meta(tool)["outputs"] if tool else ["output"]

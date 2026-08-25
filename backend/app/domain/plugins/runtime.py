@@ -8,6 +8,9 @@ Contract with the plugin's entry script:
     stdin : {"tool": str, "input": {...}}
     stdout: {"ok": true, "output": {...}} | {"ok": false, "error": str}
 
+- 要交出一个**文件**(而不是一段 JSON)时,output 里放 `artifact`,写在
+  OPEN_STUDIO_PLUGIN_OUTPUT_DIR 指的目录里,或者给一个后端去下的 url。见 artifacts。
+
 - The child gets a minimal environment: PATH/HOME/LANG plus **the credentials
   this plugin itself declared** in its manifest (see credentials.py). It never
   receives the app's own provider keys, database, or API token — plugins cannot
@@ -28,6 +31,7 @@ from typing import Any
 from app.core.interpreter import base_python
 from app.core.child_process import run_logged
 from app.core.text import blame_line
+from app.domain.plugins.artifacts import SCRATCH_ENV as ARTIFACT_SCRATCH_ENV
 
 PLUGIN_TIMEOUT_SECONDS = 60
 MAX_OUTPUT_BYTES = 1_000_000
@@ -67,12 +71,17 @@ def execute_tool(
     tool_name: str,
     input_payload: dict[str, Any],
     credentials: dict[str, str] | None = None,
+    scratch_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Run the plugin entry once. Returns the tool output dict; raises
     PluginRuntimeError with an actionable message on any failure.
 
     `credentials` are this plugin's own declared keys, injected as environment
-    variables — never the app's."""
+    variables — never the app's.
+
+    `scratch_dir` 是这次调用的产出目录:插件要交出一个文件时写在那儿,路径经
+    OPEN_STUDIO_PLUGIN_OUTPUT_DIR 告诉它(见 artifacts 的说明)。协议本身只搬 JSON,
+    所以搬字节这件事得另开一条路。"""
     entry_path = resolve_entry(manifest)
     request = json.dumps({"tool": tool_name, "input": input_payload}, ensure_ascii=False)
     env = {
@@ -80,6 +89,7 @@ def execute_tool(
         "HOME": os.environ.get("HOME", ""),
         "LANG": os.environ.get("LANG", "en_US.UTF-8"),
         "OPEN_STUDIO_PLUGIN": "1",
+        **({ARTIFACT_SCRATCH_ENV: str(scratch_dir)} if scratch_dir is not None else {}),
         **(credentials or {}),
     }
     started = time.monotonic()

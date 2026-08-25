@@ -6,13 +6,15 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import PluginInstance, PluginInvocation, PluginPackage
-from app.domain.plugins import instances as inst
+from app.domain.plugins import artifacts, instances as inst
+from app.domain.plugins.artifacts import ArtifactError, cleanup_scratch_dir, make_scratch_dir
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import Manifest
 from app.domain.plugins.mcp_bridge import McpBridgeError, call_tool as mcp_call, discover_tools
@@ -123,8 +125,21 @@ def find(db: Session, instance_id: str, tool_name: str) -> dict[str, Any] | None
     return next((tool for tool in all_tools(db, instance) if tool["name"] == tool_name), None)
 
 
-def invoke(db: Session, instance_id: str, tool_name: str, payload: dict[str, Any]) -> PluginInvocation:
-    """跑一次工具。**插件唯一的执行路径。**"""
+def invoke(
+    db: Session,
+    instance_id: str,
+    tool_name: str,
+    payload: dict[str, Any],
+    *,
+    workspace_id: str | None = None,
+    project_id: str | None = None,
+) -> PluginInvocation:
+    """跑一次工具。**插件唯一的执行路径。**
+
+    给了 workspace_id 的话,插件交出的文件产出会在这里收进素材库(见 artifacts):
+    输出里的 `artifact` 换成 `asset_id`,调用方拿到的就是一个素材 id,和其它产素材的
+    工具一样。没给 workspace_id 就不收 —— 一份素材总得属于某个工作区。
+    """
     instance = db.get(PluginInstance, instance_id)
     if instance is None:
         raise PluginDomainError("Plugin instance not found")
@@ -142,26 +157,59 @@ def invoke(db: Session, instance_id: str, tool_name: str, payload: dict[str, Any
     db.commit()
 
     manifest = inst.manifest_for(db, instance)
+    scratch: Path | None = None
     # 进程隔离:插件崩了、超时了、吐了非 JSON —— 失败的是这次调用记录,不是应用。
     try:
         check_required_input(tool, payload)
         if manifest.is_mcp:
             output = mcp_call(_runtime_manifest(manifest), tool_name, payload, inst.secrets_for(db, instance))
         else:
+            scratch = make_scratch_dir()
             output = execute_tool(
                 {"_path": manifest.path, "entry": manifest.runtime.entry},
                 tool_name,
                 payload,
                 inst.process_env(db, instance),
+                scratch_dir=scratch,
             )
+        output = _collect_artifact(
+            db, output, scratch, workspace_id=workspace_id, project_id=project_id, fallback_name=tool_name
+        )
         invocation.status, invocation.output = "succeeded", output
-    except (PluginRuntimeError, McpBridgeError) as exc:
+    except (PluginRuntimeError, McpBridgeError, ArtifactError) as exc:
         invocation.status, invocation.error = "failed", str(exc)
     except Exception as exc:  # noqa: BLE001 — runtime must never bubble
         invocation.status, invocation.error = "failed", f"插件运行时异常: {exc}"
+    finally:
+        cleanup_scratch_dir(scratch)
     db.commit()
     db.refresh(invocation)
     return invocation
 
 
 __all__ = ["all_tools", "exposed", "find", "invoke", "refresh_tools"]
+
+
+def _collect_artifact(
+    db: Session,
+    output: dict[str, Any],
+    scratch: Path | None,
+    *,
+    workspace_id: str | None,
+    project_id: str | None,
+    fallback_name: str,
+) -> dict[str, Any]:
+    """把输出里的文件产出收进素材库,`artifact` 换成 `asset_id`。
+
+    换掉而不是两个都留:留着的话,下游会拿到一个指向已经删掉的暂存目录的路径 —— 那条路径
+    在返回的那一刻就已经失效了(finally 里刚清完),而它看起来完全像个能用的路径。
+    """
+    spec = output.get("artifact")
+    if not isinstance(spec, dict):
+        return output
+    if workspace_id is None or scratch is None:
+        raise ArtifactError("这个工具产出了文件,但这次调用没有归属工作区,收不下")
+    asset = artifacts.register(
+        db, spec, scratch, workspace_id=workspace_id, project_id=project_id, fallback_name=fallback_name
+    )
+    return {**{k: v for k, v in output.items() if k != "artifact"}, "asset_id": asset.id, "asset_name": asset.name}
