@@ -18,12 +18,9 @@ from datetime import UTC, datetime
 
 from sqlalchemy import inspect, text
 
-from app.ai.runtime import asr_models
 from app.core.config import LOGIN_SESSION_TTL, settings
 from app.core.db import Base, PARTITION_PREFIX, engine, now
 from app.core.tokens import TOKEN_SCHEME, token_digest
-from app.ai.runtime import config as tts_config
-from app.domain.voices import tts_settings
 
 logger = logging.getLogger(__name__)
 
@@ -1181,12 +1178,20 @@ def _migrate_shared_venvs() -> None:
     """一个引擎一个运行环境。分开之前那个共用 venv 搬到它实际服务的引擎名下 —— 不留兼容路径,
     因为"一个环境被两个引擎装东西"正是「装一边弄坏另一边」的机制本身。"""
 
+    # **在函数里 import,不在模块顶层。** 这两个迁移动作住在被迁移的那一侧(venv 归运行时管),
+    # 而 db 是比它们更底的一层 —— 顶层 import 会让"加载一个迁移模块"连带拉起半个应用
+    # (实测:app.ai / app.ai.runtime / app.domain / app.domain.voices 全被带起来)。
+    # 迁移只在 init_db 那一刻跑一次,它对上层的需要是**运行时的**,不该固化成加载时的绑定。
+    from app.ai.runtime import asr_models, config as tts_config
+
     tts_config.migrate_shared_venv()
     asr_models.migrate_shared_venv()
 
 
 def _migrate_legacy_tts_sources() -> None:
     """「ModelScope」这个下载源和「HuggingFace」指向同一个端点,已删除;已存的值迁到 hf。"""
+
+    from app.domain.voices import tts_settings
 
     tts_settings.migrate_legacy_sources()
 

@@ -127,6 +127,47 @@ def test_lower_layers_never_import_the_api_layer() -> None:
     assert not violations, "底层模块反向依赖了 api 层:\n  " + "\n  ".join(sorted(violations))
 
 
+#: 分层的**顺序**,从下到上。下标越小越底层,底层不许认识上层。
+#:
+#: 这比"不许依赖 api"那条严:那条只钉住了最上面一层,而真正会悄悄长出来的是中间的反向边 ——
+#: `db/migrations.py` 曾在顶层 import `ai.runtime` 与 `domain.voices`(迁移动作住在被迁移的
+#: 那一侧),于是**加载一个迁移模块会连带拉起半个应用**。它没被上面那条拦住,因为 db 当时
+#: 根本不在名单里。
+LAYER_ORDER = ("app.core", "app.db", "app.media", "app.ai", "app.domain", "app.integrations", "app.api")
+
+
+def _layer_of(module: str) -> int:
+    """这个模块属于第几层。不在分层里的(app.main、app.workers)回 -1,不参与判定。"""
+    for index, prefix in enumerate(LAYER_ORDER):
+        if module == prefix or module.startswith(prefix + "."):
+            return index
+    return -1
+
+
+def test_下层不认识上层() -> None:
+    """**只看顶层 import。**
+
+    函数内的延迟导入在这里是允许的 —— 那是"运行时才需要"的正当表达(迁移只在 init_db 那一刻
+    跑一次,它对上层的需要确实是运行时的)。而顶层 import 是**加载时的绑定**:它把两层焊死,
+    代价是 import 一个底层模块就要把上层整棵拉起来,而那恰恰是让循环依赖有机可乘的形状。
+    """
+    graph = _graph(include_lazy=False)
+    violations = []
+    for src, dsts in graph.items():
+        src_layer = _layer_of(src)
+        if src_layer < 0:
+            continue
+        for dst in dsts:
+            dst_layer = _layer_of(dst)
+            if dst_layer > src_layer:
+                violations.append(f"{src} → {dst}    ({LAYER_ORDER[src_layer]} 认识了 {LAYER_ORDER[dst_layer]})")
+
+    assert not violations, (
+        "下层在**顶层** import 了上层。真的需要的话请挪进函数体 —— 那表示「运行时才需要」,"
+        "而不是「加载时就绑死」:\n  " + "\n  ".join(sorted(violations))
+    )
+
+
 def test_top_level_imports_are_acyclic() -> None:
     """只看顶层导入(不含函数内延迟导入),依赖图必须无环。
 
