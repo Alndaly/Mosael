@@ -20,19 +20,25 @@
 
 ## 配置
 
-1. 去 [百度网盘开放平台](https://pan.baidu.com/union) 注册一个应用
-2. 走一次 OAuth 拿到 `access_token`
-3. 在 Open Studio 的插件页接入这个包,把 token 填进「Access Token」
+1. 去 [百度网盘开放平台](https://pan.baidu.com/union) 注册一个应用,拿到 AppKey / SecretKey
+2. 走一次 OAuth 拿到 `refresh_token`(有效期 10 年)
+3. 在 Open Studio 的插件页接入这个包,把这三样填进去
+
+「Access Token」那一栏**留空即可** —— 插件会用 refresh_token 自己换。
 
 可选:填「起始目录」,`pan_list` 不带路径时就从那儿开始。
 
-### 关于 token 过期
+### token 自己续
 
-百度的 `access_token` **有效期 30 天**。插件是无状态的(环境变量进、JSON 出,没法回写),
-所以这里不做自动刷新 —— 与其攒一个会在第 31 天安静失效的机制,不如让它在过期时明确报出来,
-用户回设置页换一个。这是有意的取舍。
+百度的 `access_token` 三十天到期。插件撞上「过期」那个 errno 就换一个新的、原样重试一次,
+并把换来的 token 交回宿主记住(靠 [`state` 通道](../../../docs/PLUGIN_MANIFEST.md))。
+你填一次 refresh_token 就不用再管。
 
-过期时你会看到:「access_token 无效或已过期(百度的有效期是 30 天),回设置里换一个新的」。
+**access_token 和 refresh_token 都会被记住** —— 百度换 token 时会连 refresh_token 一起
+轮换,只存前者的话,三十天后拿着一个已经作废的去换,得到的是一个查不出原因的失败。
+
+续了一次还是过期,说明问题不在有效期上(AppKey 不对、应用被停用),这时才会报到界面上,
+并且**只重试一次** —— 再试就是拿同一个错误刷接口。
 
 ## 它为什么不自己下载文件
 

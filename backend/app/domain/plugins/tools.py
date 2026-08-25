@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import PluginInstance, PluginInvocation, PluginPackage
-from app.domain.plugins import artifacts, instances as inst
+from app.domain.plugins import artifacts, instances as inst, state as plugin_state
 from app.domain.plugins.artifacts import ArtifactError, cleanup_scratch_dir, make_scratch_dir
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import Manifest
@@ -162,21 +162,27 @@ def invoke(
     try:
         check_required_input(tool, payload)
         if manifest.is_mcp:
+            # MCP 那一侧没有 state 槽 —— 它是别人的协议,我们不往里加字段。要记东西的插件
+            # 走进程形态(见 domain/plugins/state 的说明)。
             output = mcp_call(_runtime_manifest(manifest), tool_name, payload, inst.secrets_for(db, instance))
         else:
             scratch = make_scratch_dir()
-            output = execute_tool(
+            result = execute_tool(
                 {"_path": manifest.path, "entry": manifest.runtime.entry},
                 tool_name,
                 payload,
                 inst.process_env(db, instance),
                 scratch_dir=scratch,
             )
+            output = result.output
+            # 先落状态再收产出:刷新出来的令牌得先存住。反过来的话,收产出那一步出任何岔子
+            # (下载失败、磁盘满),这次刷新就白做了 —— 而旧令牌已经被百度那边作废了。
+            plugin_state.persist(db, instance, result.state)
         output = _collect_artifact(
             db, output, scratch, workspace_id=workspace_id, project_id=project_id, fallback_name=tool_name
         )
         invocation.status, invocation.output = "succeeded", output
-    except (PluginRuntimeError, McpBridgeError, ArtifactError) as exc:
+    except (PluginRuntimeError, McpBridgeError, ArtifactError, PluginDomainError) as exc:
         invocation.status, invocation.error = "failed", str(exc)
     except Exception as exc:  # noqa: BLE001 — runtime must never bubble
         invocation.status, invocation.error = "failed", f"插件运行时异常: {exc}"

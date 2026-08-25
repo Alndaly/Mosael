@@ -1,12 +1,14 @@
 {
   "id": "dev.openstudio.baidu-pan",
   "name": "百度网盘",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "runtime": {
     "kind": "process",
     "entry": "tools/main.py"
   },
-  "permissions": ["network:baidu-pan"],
+  "permissions": [
+    "network:baidu-pan"
+  ],
   "skills": [
     {
       "id": "baidu_pan",
@@ -18,10 +20,28 @@
     "name_template": "百度网盘",
     "credentials": [
       {
+        "key": "BAIDU_PAN_APP_KEY",
+        "label": "AppKey",
+        "required": true,
+        "help": "在 pan.baidu.com/union 注册应用后拿到的 AppKey。"
+      },
+      {
+        "key": "BAIDU_PAN_SECRET_KEY",
+        "label": "SecretKey",
+        "required": true,
+        "help": "同一个应用的 SecretKey。"
+      },
+      {
+        "key": "BAIDU_PAN_REFRESH_TOKEN",
+        "label": "Refresh Token",
+        "required": true,
+        "help": "走一次 OAuth 拿到的 refresh_token(有效期 10 年)。填一次就行 —— access_token 由插件自动续,续出来的新值会存回这里。"
+      },
+      {
         "key": "BAIDU_PAN_ACCESS_TOKEN",
         "label": "Access Token",
-        "required": true,
-        "help": "百度网盘开放平台的 access_token。在 pan.baidu.com/union 注册应用后走一次 OAuth 拿到。有效期 30 天,过期后回来换一个新的。"
+        "required": false,
+        "help": "留空即可 —— 插件用 refresh_token 自动换,并把换来的存在这里。手动填一个也认。"
       }
     ],
     "config": [
@@ -44,8 +64,14 @@
         "input_schema": {
           "type": "object",
           "properties": {
-            "path": { "type": "string", "description": "网盘路径,如 /我的资源/素材。留空用起始目录。" },
-            "limit": { "type": "integer", "description": "最多返回多少条,默认 100,上限 1000。" }
+            "path": {
+              "type": "string",
+              "description": "网盘路径,如 /我的资源/素材。留空用起始目录。"
+            },
+            "limit": {
+              "type": "integer",
+              "description": "最多返回多少条,默认 100,上限 1000。"
+            }
           }
         }
       },
@@ -56,10 +82,18 @@
         "input_schema": {
           "type": "object",
           "properties": {
-            "keyword": { "type": "string", "description": "文件名关键词" },
-            "path": { "type": "string", "description": "限定在这个目录下搜,留空搜全盘" }
+            "keyword": {
+              "type": "string",
+              "description": "文件名关键词"
+            },
+            "path": {
+              "type": "string",
+              "description": "限定在这个目录下搜,留空搜全盘"
+            }
           },
-          "required": ["keyword"]
+          "required": [
+            "keyword"
+          ]
         }
       },
       {
@@ -68,13 +102,21 @@
         "input_schema": {
           "type": "object",
           "properties": {
-            "fs_id": { "type": "string", "description": "文件的 fs_id" }
+            "fs_id": {
+              "type": "string",
+              "description": "文件的 fs_id"
+            }
           },
-          "required": ["fs_id"]
+          "required": [
+            "fs_id"
+          ]
         },
         "node": {
           "label": "从百度网盘导入",
-          "outputs": ["asset_id", "asset_name"]
+          "outputs": [
+            "asset_id",
+            "asset_name"
+          ]
         }
       }
     ]

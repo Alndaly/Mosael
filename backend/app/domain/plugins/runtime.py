@@ -6,10 +6,13 @@ Contract with the plugin's entry script:
   write ONE JSON request to stdin and read ONE JSON response from stdout:
 
     stdin : {"tool": str, "input": {...}}
-    stdout: {"ok": true, "output": {...}} | {"ok": false, "error": str}
+    stdout: {"ok": true, "output": {...}, "state": {...}} | {"ok": false, "error": str}
 
 - 要交出一个**文件**(而不是一段 JSON)时,output 里放 `artifact`,写在
   OPEN_STUDIO_PLUGIN_OUTPUT_DIR 指的目录里,或者给一个后端去下的 url。见 artifacts。
+- 要**记住**一点东西到下次调用(刷新出来的 access_token、同步游标)时,放 `state` ——
+  它和 output 平级,**不进 output** 是有意的:output 会交给调用方和模型,而刷新出来的
+  令牌不该出现在那里。见 state。
 
 - The child gets a minimal environment: PATH/HOME/LANG plus **the credentials
   this plugin itself declared** in its manifest (see credentials.py). It never
@@ -26,6 +29,7 @@ import json
 import os
 import subprocess
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from app.core.interpreter import base_python
@@ -39,6 +43,19 @@ MAX_OUTPUT_BYTES = 1_000_000
 
 class PluginRuntimeError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class ToolResult:
+    """一次调用的两样产出。
+
+    分成两样而不是一个字典,是因为它们的去向不同:`output` 回给调用方(以及模型),
+    `state` 只落库、谁都看不到。混在一起的话,一个刚刷新出来的 access_token 会顺着
+    工具结果流进对话记录里。
+    """
+
+    output: dict[str, Any]
+    state: dict[str, Any] = field(default_factory=dict)
 
 
 def resolve_entry(manifest: dict[str, Any]) -> Path:
@@ -72,7 +89,7 @@ def execute_tool(
     input_payload: dict[str, Any],
     credentials: dict[str, str] | None = None,
     scratch_dir: Path | None = None,
-) -> dict[str, Any]:
+) -> ToolResult:
     """Run the plugin entry once. Returns the tool output dict; raises
     PluginRuntimeError with an actionable message on any failure.
 
@@ -129,7 +146,10 @@ def execute_tool(
     if not isinstance(output, dict):
         raise PluginRuntimeError("插件成功响应必须包含 output 对象")
     output["_duration_ms"] = duration_ms
-    return output
+    state = response.get("state")
+    if state is not None and not isinstance(state, dict):
+        raise PluginRuntimeError("插件返回的 state 必须是对象")
+    return ToolResult(output=output, state=dict(state or {}))
 
 
-__all__ = ["PluginRuntimeError", "execute_tool", "check_required_input", "resolve_entry", "PLUGIN_TIMEOUT_SECONDS"]
+__all__ = ["PluginRuntimeError", "ToolResult", "execute_tool", "check_required_input", "resolve_entry", "PLUGIN_TIMEOUT_SECONDS"]

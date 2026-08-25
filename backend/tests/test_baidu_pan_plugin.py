@@ -49,7 +49,14 @@ def run(tool: str, payload: dict, responses: list, env: dict | None = None) -> t
         capture_output=True,
         text=True,
         timeout=30,
-        env={"PATH": "/usr/bin:/bin", "BAIDU_PAN_ACCESS_TOKEN": "T", **(env or {})},
+        env={
+            "PATH": "/usr/bin:/bin",
+            "BAIDU_PAN_ACCESS_TOKEN": "T",
+            "BAIDU_PAN_APP_KEY": "K",
+            "BAIDU_PAN_SECRET_KEY": "S",
+            "BAIDU_PAN_REFRESH_TOKEN": "R",
+            **(env or {}),
+        },
     )
     assert result.returncode == 0, result.stderr
     calls = json.loads(result.stderr.split("CALLS=", 1)[1]) if "CALLS=" in result.stderr else []
@@ -155,16 +162,21 @@ class Test导入:
 class Test错误翻成人话:
     @pytest.mark.parametrize(
         "errno,expect",
-        [(-6, "过期"), (111, "过期"), (-9, "不存在"), (31034, "限流"), (99999, "errno=99999")],
+        [(-9, "不存在"), (31034, "限流"), (99999, "errno=99999")],
     )
     def test_百度用_errno_表达失败_HTTP_永远是_200(self, errno: int, expect: str) -> None:
         """光报一个数字等于让用户去搜,而这几个的处置方式完全不同:换 token / 换文件 / 等一会儿。"""
         out, _ = run("pan_list", {}, [{"errno": errno}])
         assert out["ok"] is False and expect in out["error"]
 
-    def test_没配_token_直接说(self) -> None:
-        out, _ = run("pan_list", {}, [], env={"BAIDU_PAN_ACCESS_TOKEN": ""})
-        assert out["ok"] is False and "access_token" in out["error"]
+    def test_什么都没配时直接说(self) -> None:
+        out, _ = run(
+            "pan_list",
+            {},
+            [],
+            env={"BAIDU_PAN_ACCESS_TOKEN": "", "BAIDU_PAN_APP_KEY": "", "BAIDU_PAN_SECRET_KEY": "", "BAIDU_PAN_REFRESH_TOKEN": ""},
+        )
+        assert out["ok"] is False and "AppKey" in out["error"]
 
     def test_不认识的工具名(self) -> None:
         out, _ = run("nope", {}, [])
@@ -267,3 +279,85 @@ class Test和_artifact_通道合得上:
         assert collected["asset_id"]
         assert "artifact" not in collected
         assert collected["fs_id"] == "111", "插件的其它输出被顺手丢了"
+
+
+class Test自动续期:
+    """access_token 三十天到期。用户只填一次 refresh_token,之后由插件自己续。
+
+    这条路以前不存在 —— 插件是无状态的,续出来的新令牌没地方放,于是只能让用户三十天
+    回来粘一次。现在响应里多了个 `state` 槽(见 domain/plugins/state)。
+    """
+
+    def test_撞上过期就续一次并重试(self) -> None:
+        out, calls = run(
+            "pan_list",
+            {},
+            [{"errno": 111}, {"access_token": "NEW", "refresh_token": "R"}, LIST_OK],
+        )
+        assert out["ok"], out.get("error")
+        assert len(calls) == 3, "没有续期重试"
+        assert "oauth/2.0/token" in calls[1]["url"]
+        assert "access_token=NEW" in calls[2]["url"], "重试还在用那个已经过期的令牌"
+
+    def test_续出来的令牌交回去记住(self) -> None:
+        """不交回去的话,下一次调用又是「过期 → 续 → 重试」,每次都白跑一趟。"""
+        out, _ = run("pan_list", {}, [{"errno": 111}, {"access_token": "NEW", "refresh_token": "R"}, LIST_OK])
+        assert out["state"]["BAIDU_PAN_ACCESS_TOKEN"] == "NEW"
+
+    def test_轮换出来的_refresh_token_也要记(self) -> None:
+        """百度换 token 时会连 refresh_token 一起轮换。只存 access_token 的话,三十天后
+        拿着一个已经作废的 refresh_token 去换,得到的是一个查不出原因的失败。"""
+        out, _ = run("pan_list", {}, [{"errno": 111}, {"access_token": "NEW", "refresh_token": "R2"}, LIST_OK])
+        assert out["state"]["BAIDU_PAN_REFRESH_TOKEN"] == "R2"
+
+    def test_没轮换就不写那一项(self) -> None:
+        """原样写回去不算错,但每次调用都重写一遍数据库是白费的。"""
+        out, _ = run("pan_list", {}, [{"errno": 111}, {"access_token": "NEW", "refresh_token": "R"}, LIST_OK])
+        assert "BAIDU_PAN_REFRESH_TOKEN" not in out["state"]
+
+    def test_没续期时不带_state(self) -> None:
+        """一切正常的调用不该顺手重写一遍凭据。"""
+        out, _ = run("pan_list", {}, [LIST_OK])
+        assert "state" not in out
+
+    def test_一个令牌都没有时直接去换(self) -> None:
+        """第一次用:用户只填了 refresh_token,access_token 那栏留空。"""
+        out, calls = run(
+            "pan_list",
+            {},
+            [{"access_token": "FIRST", "refresh_token": "R"}, LIST_OK],
+            env={"BAIDU_PAN_ACCESS_TOKEN": ""},
+        )
+        assert out["ok"], out.get("error")
+        assert "oauth/2.0/token" in calls[0]["url"]
+        assert "access_token=FIRST" in calls[1]["url"]
+
+    def test_只重试一次(self) -> None:
+        """续完还是过期,说明问题不在有效期上(AppKey 不对、应用被停用)。
+        再试就是拿同一个错误刷接口。"""
+        out, calls = run(
+            "pan_list",
+            {},
+            [{"errno": 111}, {"access_token": "NEW", "refresh_token": "R"}, {"errno": 111}],
+        )
+        assert out["ok"] is False and "回设置里检查" in out["error"]
+        assert len(calls) == 3, "重试了不止一次"
+
+    def test_refresh_token_作废时说得明白(self) -> None:
+        out, _ = run(
+            "pan_list",
+            {},
+            [{"errno": 111}, {"error": "invalid_grant", "error_description": "refresh token 已过期"}],
+        )
+        assert out["ok"] is False and "重新走一次授权" in out["error"]
+
+    def test_导入那条路也会续期(self) -> None:
+        """续期在 _call 里,不是在某个工具里 —— 三个工具都该受益。"""
+        out, calls = run(
+            "pan_import",
+            {"fs_id": "111"},
+            [{"errno": 111}, {"access_token": "NEW", "refresh_token": "R"}, META_OK],
+        )
+        assert out["ok"], out.get("error")
+        # 交给宿主的下载地址要用**续过的**那个,不是过期的那个
+        assert "access_token=NEW" in out["output"]["artifact"]["url"]

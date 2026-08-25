@@ -23,10 +23,10 @@ def make_plugin(tmp_path: Path, entry_body: str, entry: str = "main.py") -> dict
 def test_example_plugin_word_count_end_to_end() -> None:
     manifest = json.loads((EXAMPLE / "open-studio.plugin.json").read_text(encoding="utf-8"))
     manifest["_path"] = str(EXAMPLE)
-    output = execute_tool(manifest, "word_count", {"text": "大家好 欢迎来到米布"})
+    output = execute_tool(manifest, "word_count", {"text": "大家好 欢迎来到米布"}).output
     assert output["chars"] == 9
     assert output["estimated_seconds"] == 2.0
-    tags = execute_tool(manifest, "extract_hashtags", {"text": "上新啦 #好物# #newvideo 冲"})
+    tags = execute_tool(manifest, "extract_hashtags", {"text": "上新啦 #好物# #newvideo 冲"}).output
     assert tags["hashtags"] == ["好物", "newvideo"]
 
 

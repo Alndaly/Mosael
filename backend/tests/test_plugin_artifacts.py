@@ -43,7 +43,7 @@ class Test暂存目录:
         )
         scratch = tmp_path / "out"
         scratch.mkdir()
-        output = execute_tool(manifest, "x", {}, scratch_dir=scratch)
+        output = execute_tool(manifest, "x", {}, scratch_dir=scratch).output
         assert output["dir"] == str(scratch)
 
     def test_没给暂存目录时不注入这个变量(self, tmp_path) -> None:
@@ -56,7 +56,7 @@ class Test暂存目录:
             print(json.dumps({"ok": True, "output": {"has": "OPEN_STUDIO_PLUGIN_OUTPUT_DIR" in os.environ}}))
             """,
         )
-        assert execute_tool(manifest, "x", {})["has"] is False
+        assert execute_tool(manifest, "x", {}).output["has"] is False
 
 
 class Test交出本地文件:
