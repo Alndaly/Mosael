@@ -866,7 +866,7 @@ function GenerateWorkspace({
                       </div>
                       {group.models.map((model) => (
                         <SelectItem key={model.value} value={model.value} className="min-h-[30px] px-2 py-[5px]">
-                          <span className="flex w-full min-w-0 items-center gap-[7px] leading-none [&_svg]:block [&_svg]:shrink-0 [&_svg]:text-muted-foreground">
+                          <span className="flex w-full min-w-0 items-center gap-[7px] leading-[1.45] [&_svg]:block [&_svg]:shrink-0 [&_svg]:text-muted-foreground">
                             {model.kind === "image" ? <ImagePlus size={12} /> : <Video size={12} />}
                             <span className="truncate">{model.label}</span>
                           </span>
