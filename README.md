@@ -146,7 +146,12 @@ and the reasoning and vision switches all belong to the **model**. Subscription-
 report remaining quota and reset windows.
 
 Plugins run as subprocess scripts or connect to MCP servers, declaring their permissions in a
-manifest. The backend speaks your language too — job messages, engine catalogs, and progress
+manifest. Install one from the built-in market or any zip URL — the package is fetched and its
+manifest read *before* anything lands, so the permissions it declares and the tools it brings are
+laid out for you first. A plugin can also hand back a **file** (too big for the JSON channel, so
+it either writes to a scratch dir or hands over a download URL and lets the host fetch it) and
+**remember** something across calls (a refreshed OAuth token, say — the host persists it into the
+keys the manifest declared and injects them back next run). The backend speaks your language too — job messages, engine catalogs, and progress
 strings are returned per the request's `Accept-Language`. What's stored is a key plus
 arguments, translated on the way out: a job record outlives the request that made it, so
 translating at write time would freeze the language at that moment.

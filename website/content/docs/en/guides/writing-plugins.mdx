@@ -137,7 +137,7 @@ other asset-producing tool. The [Baidu Netdisk plugin](/plugins/baidu-pan) uses 
 
 ## Remembering something
 
-Plugins are **stateless**: environment in, JSON out. Fine for pure computation, a dead end for
+A plugin **process** is stateless: environment in, JSON out, then it is gone — you have no way to write anything back yourself. Fine for pure computation, a dead end for
 credentials that expire — swapping a refresh token for a fresh access token is easy; having
 somewhere to put the new one is not.
 
@@ -147,9 +147,13 @@ Put `state` in the response, **beside** `output`:
 json.dump({
     "ok": True,
     "output": {"files": [...]},              # goes back to the caller
-    "state": {"MY_ACCESS_TOKEN": "the new one"},   # the host remembers it and injects it next time
+    "state": {"MY_ACCESS_TOKEN": "the new one"},   # the host remembers it for you
 }, sys.stdout, ensure_ascii=False)
 ```
+
+**Next call it is simply in the environment** — still `os.environ["MY_ACCESS_TOKEN"]`; you never
+need to know the value came from your own last run. Where it is kept follows the manifest: keys
+declared under `credentials` go to the encrypted store, keys under `config` to plain settings.
 
 **Beside, not inside, on purpose**: `output` reaches the caller and the model, and a freshly
 minted token has no business being there.

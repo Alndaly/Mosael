@@ -27,15 +27,15 @@
 | `scheduler/` | 触发器(manual/interval/daily/weekly/webhook)→ 触发工作流。注意:桌面端关掉进程后端就停了,所以定时任务依赖应用常驻(见「系统能力层」) |
 | `agent/` | 智能体会话:CLI 适配器 + 流式 + 记忆 |
 | `audio/`(在 `app/` 下,与 `domain/` 平级) | 语音:ASR 引擎目录与 worker、TTS 引擎与守护进程、音色克隆、字幕配音(`subtitle_dub.py`)。**语言能力挂在权重上而不是引擎上**(`f5_models.py` 是那张表,`tts_language.py` 是合成前的那道判断) |
-| `generation/` | 文生图/视频:供应商契约 + 适配器 |
+| `generation/` | 文生图/视频。**参数描述符(`catalog.py`)是唯一事实源** —— 界面按它渲染控件、智能体按它知道能给什么、提交按它校验(四条路都汇到 `create_generation_job`,漏拦的后果不是报错:供应商可能默默忽略,于是要的 10 秒跑出默认的 5 秒)。输入素材**带角色**(首帧/尾帧/参考图/参考视频),不靠位置 —— 各家接口本来就有 role,而扁平列表表达不了 |
 | `translate.py` | 文本翻译:Google 免费端点 + 走工作区模型的 LLM 两条路,字幕面板与工作流节点共用 |
 | `assets/from_url.py`(配 `media/ytdlp.py`) | 从链接导入素材:先探清单再下选中的几条,音频/视频与画质上限在下载前定;需要登录的站点**借浏览器池档案的 cookie**(经既有动作队列问 Electron 要),入库仍走 `register_file_asset` |
-| `plugins/` | 插件:子进程执行 + 权限门 + MCP 暴露 |
+| `plugins/` | 插件:子进程执行 + 权限门 + MCP 暴露;市场索引与安装(`registry.py`)、文件产出(`artifacts.py`)、跨调用状态(`state.py`) |
 | `core/pip_install.py` | **通往 pip 的唯一一道门**(声音克隆 / 转写共用)。带上设置页那个镜像、`--prefer-binary`(挡的是"为了新版本号去本机编译 Rust")、够用的超时重试;失败时挑出 pip 自己的结论行而不是取输出尾巴,并把完整输出落盘 |
 | `core/run_log.py` | 子进程的完整输出落盘(`~/.open-studio/logs/`)。装依赖、下权重两条路共用 —— 界面只放一句话,而排查要全文,此前全文哪儿都没有 |
 | `core/text.blame_line` | 从子进程输出里挑出**说明失败原因**的那一行。**不取最后一行**:那常常是收尾提示、分隔线,或者一根 tqdm 进度条(这个坑踩过三次,判据因此收在一处) |
 | `audio/remote_size.py` | 问下载源要**实际的**文件大小(HuggingFace `?blobs=true` / ModelScope `/repo/files?Recursive=True`),按这次真正要取的文件算而不是整仓。问不到就退回目录里的估算**并说出它是估算** |
-| `jobs.py` | **任务总线**:所有后台工作(导出/转写/生成/工作流/发布)统一为 `jobs` + `task_events` |
+| `jobs.py` | **任务总线**:所有后台工作(导出/转写/生成/工作流/发布)统一为 `jobs` + `task_events`;终态时按 payload 里的 `receipt` 回执给发起方(监听状态变化,不认某个函数 —— 各处写法不一) |
 | `notifications.py` | 站内通知:按用户投递,团队模式扇出给工作区成员 |
 
 ### 任务总线是枢纽

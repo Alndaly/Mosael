@@ -13,6 +13,13 @@ The agent uses Open Studio's MCP tools to **see your project and propose changes
 ![AI Studio chat mode: agent environment panel on the right (context / session / capabilities)](/media/screens/ai-chat.png)
 
 - **Confirmation cards**: any action that would mutate project / external state pops a confirmation card and only lands after you approve.
+- **Choice cards**: at a genuine fork — two or three routes all make sense and which one is right
+  depends on what you want (which platform to publish to, which style) — it lays the options out
+  for you to pick, single or multi select, with an "other" box and a skip. Skipping means it
+  continues on its own judgement rather than asking again.
+  A confirmation card can be set to "always allow in this session"; **a choice card cannot** —
+  it is asking precisely because it does not know, and auto-answering would mean it made the
+  answer up.
 - **Skills**: preset skills (opencode-style) are available at the bottom-left of the composer.
 - **Attachments**: upload images / videos for the agent to analyze (multimodal).
 - The left column lists **conversations**; each is independent and can be renamed / deleted.
@@ -98,6 +105,29 @@ In **Generate** mode the left column is the **generation model** catalog, the mi
 
 - Pick a model → write a prompt → send; the job queues and finished results land in the media library.
 - Whether a model can run depends on **its vendor's key** being configured; with no usable model, a banner at the top links to settings.
+
+### The controls follow the model
+
+Not every model takes the same parameters: Wan wants a pixel pair like `832*480`, Seedance wants a
+tier like `720p`; some let you pick a duration, some have exactly one. So the right panel shows
+**only what this model actually supports** — switch models and the controls switch with it.
+
+### First frame, last frame, reference
+
+Image-to-video is more than "here's a picture":
+
+| | What it means |
+| --- | --- |
+| **First frame** | Start moving from this image |
+| **Last frame** | Give it together with the first and the model animates **from** one **to** the other |
+| **Reference** | Not a starting frame — a style or subject reference |
+
+Again, only models that support these get the controls. Each takes either an image from the media
+library or a pasted link.
+
+Asking the agent works the same way: "use these two images as first and last frame for a 5-second
+clip" and it will check what the model supports before sending — passing a parameter the model
+does not accept is rejected outright rather than quietly producing something else.
 
 ## Feishu (Lark) binding
 

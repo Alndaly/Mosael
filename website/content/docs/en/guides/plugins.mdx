@@ -14,10 +14,31 @@ app's provider keys, its database, or its API token.
 
 Want to write one? See [Writing a plugin](/docs/guides/writing-plugins).
 
-## Install & toggle
+## Installing one
 
-- On the **Plugins** page, click **Scan** to discover local plugins; each can be enabled / disabled.
-- A plugin's `manifest` declares its tools and required **permissions**; permissions are granted one by one, and ungranted tools stay unavailable.
+The Plugins page has two tabs: **Installed** and **Market**.
+
+**From the market**: find the one you want and hit Install. It does not go straight in — the
+package is fetched, its manifest read, and **the permissions it declares and the tools it brings
+are laid out for you** before anything lands. Installing a plugin puts code that will be executed
+on your machine; that list is worth a look.
+
+**From a link**: any zip URL works, through the same confirmation. A company intranet can host its
+own market index (plain JSON — format in [Writing a plugin](/docs/guides/writing-plugins)) and
+point the app at it in settings.
+
+**By hand**: copy the plugin directory into the plugins folder (the Plugins page tells you where —
+don't go looking for `~/.open-studio/plugins`, that path does not exist on Windows) and hit
+**Scan**. This is the fastest loop while writing one.
+
+Once installed: a package with no settings comes with a connection ready to go, one with settings
+needs you to add a connection; the **permissions** the manifest declares are granted one at a
+time, and an ungranted connection stays unavailable.
+
+**Uninstalling** removes the plugin directory from disk along with its permissions, credentials
+and call log. Clearing only the records is not enough — the next scan would install it right back,
+and what the user sees is "I deleted it and it came back". Deleting the directory by hand also
+clears the record on the next scan.
 
 ## Tools & call log
 

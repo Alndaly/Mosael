@@ -133,7 +133,7 @@ return {"artifact": {
 
 ## 要记住一点东西
 
-插件是**无状态**的：环境变量进、JSON 出。对纯计算没问题，对要续期的凭据是个死结 ——
+插件**进程**是无状态的：环境变量进、JSON 出，跑完就没了，你自己没有任何写回的手段。对纯计算没问题，对要续期的凭据是个死结 ——
 拿 refresh_token 换一个新的 access_token 很容易，难的是换完之后没地方放。
 
 在响应里放 `state`（和 `output` 平级）：
@@ -142,9 +142,13 @@ return {"artifact": {
 json.dump({
     "ok": True,
     "output": {"files": [...]},              # 回给调用方
-    "state": {"MY_ACCESS_TOKEN": "新换的"},   # 宿主替你记住，下次注入回环境变量
+    "state": {"MY_ACCESS_TOKEN": "新换的"},   # 宿主替你记住
 }, sys.stdout, ensure_ascii=False)
 ```
+
+**下一次调用它就在环境变量里了** —— 还是 `os.environ["MY_ACCESS_TOKEN"]`，你不需要知道
+这个值是上次自己存的。存在哪儿由清单决定：声明成 `credentials` 的进加密库，声明成 `config`
+的进明文配置。
 
 **和 output 平级不是随手放的**：`output` 会交给调用方和模型，而刚续出来的令牌不该出现
 在那里。
