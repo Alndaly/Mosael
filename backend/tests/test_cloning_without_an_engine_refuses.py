@@ -110,8 +110,7 @@ def test_the_worker_no_longer_invents_audio(tmp_path) -> None:
 
 
 def voices_worker_synthesize(out) -> None:
-    from app.ai.runtime import tts_worker
-
+    from app.ai.runtime.workers import tts as tts_worker
     tts_worker.synthesize({"engine": "f5-tts", "text": "你好,测试一段语音合成。"}, str(out))
 
 

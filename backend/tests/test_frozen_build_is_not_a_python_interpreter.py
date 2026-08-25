@@ -13,7 +13,7 @@ Windows 打包版上,用户点「下载」拿到两条报错,它们是同一件�
 启动日志当成"创建失败的原因"端给用户。
 
 第二条:worker 是被**另一个解释器当脚本跑**的,所以它必须是盘上一个真文件;而冻结之后
-`app/ai/runtime/tts_worker.py` 只存在于归档里,`Path(__file__).with_name()` 指向一个不存在的路径。
+`app/ai/runtime/workers/tts.py` 只存在于归档里,`Path(__file__).with_name()` 指向一个不存在的路径。
 
 「哪个解释器是真 Python」这件事其实**早就答对过一次** —— `base_python()` 就是为这个写的,
 连注释都写着"打包版 sys.executable 指向它自己"。它只是住在 TTS 专属模块里,转写那边没找到,
@@ -101,8 +101,19 @@ def test_only_one_place_decides_what_python_means() -> None:
 
 
 def _scripts_run_by_another_interpreter() -> set[str]:
-    """`Path(__file__).with_name("x.py")` —— 这种是要当**脚本**跑的,必须是盘上的真文件。"""
-    wanted: set[str] = set()
+    """哪些 .py 会被**另一个解释器当文件打开**。两条判据,缺一不可:
+
+    1. `app/ai/runtime/workers/` 下的一切 —— 那个目录的存在意义就是这个(见它的说明);
+    2. 任何 `Path(__file__).with_name("x.py")` —— 老写法,别处可能还有。
+
+    只留第 2 条会**假绿**:worker 挪进 workers/ 之后不再用 with_name 定位(改成
+    workers.tts_script()),于是这个函数一个都扫不到、`--add-data` 漏了也不会红。
+    真机上那是"点了下载转半天,然后 can't open file"。假绿比红更危险 —— 它让人以为查过了。
+    """
+    wanted = {
+        str(path) for path in sorted(pathlib.Path("app/ai/runtime/workers").glob("*.py"))
+        if path.name != "__init__.py"
+    }
     for path in sorted(pathlib.Path("app").rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):

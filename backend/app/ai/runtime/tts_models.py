@@ -19,6 +19,8 @@ import time
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
+
+from app.ai.runtime import workers
 from typing import Any
 
 from app.core import interpreter, pip_install, run_log
@@ -30,7 +32,7 @@ from app.ai.runtime import remote_size
 
 logger = logging.getLogger(__name__)
 
-WORKER_PATH = Path(__file__).with_name("tts_worker.py")
+WORKER_PATH = workers.tts_script()
 _POLL_SECONDS = 1.5
 _INSTALLED_FRACTION = 0.6
 

@@ -16,8 +16,8 @@ from pathlib import Path
 import pytest
 
 # worker 跑在**另一个解释器**里(那边才有 funasr),但这些函数是纯字符串处理,可以直接测。
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app" / "ai" / "runtime"))
-import asr_worker  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app" / "ai" / "runtime" / "workers"))
+import asr as asr_worker  # noqa: E402
 
 
 @pytest.mark.parametrize(

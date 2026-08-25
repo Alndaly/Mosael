@@ -54,7 +54,7 @@ def test_no_engine_id_is_hardcoded_outside_the_catalog() -> None:
 
     别处出现一个 `== "fish-speech"`,就是又长出了一处"关于这个引擎的知识"。
     """
-    allowed = {"app/ai/runtime/tts_models.py", "app/ai/runtime/tts_worker.py"}
+    allowed = {"app/ai/runtime/tts_models.py", "app/ai/runtime/workers/tts.py"}
     engine_ids = {"fish-speech", "f5-tts"}
     offenders: list[str] = []
     for path in sorted(pathlib.Path("app").rglob("*.py")):

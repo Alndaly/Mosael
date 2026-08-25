@@ -26,8 +26,7 @@ def test_the_repo_id_is_the_modelscope_one() -> None:
 
 
 def test_the_worker_fetches_the_checkpoint_from_modelscope(monkeypatch, tmp_path) -> None:
-    from app.ai.runtime import tts_worker
-
+    from app.ai.runtime.workers import tts as tts_worker
     grabbed: list[tuple[str, str]] = []
     monkeypatch.setattr(
         tts_worker, "_modelscope_file",
@@ -44,8 +43,7 @@ def test_the_worker_fetches_the_checkpoint_from_modelscope(monkeypatch, tmp_path
 
 def test_it_does_not_touch_modelscope_on_the_hf_path(monkeypatch, tmp_path) -> None:
     """选 HF 时就老老实实走 HF —— F5TTS 自己会拉,不该在这里抢着下一份。"""
-    from app.ai.runtime import tts_worker
-
+    from app.ai.runtime.workers import tts as tts_worker
     called = []
     monkeypatch.setattr(tts_worker, "_modelscope_file", lambda *a, **k: called.append(a))
     monkeypatch.setenv("OPEN_STUDIO_MODEL_SOURCE", "hf")

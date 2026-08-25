@@ -18,8 +18,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app" / "ai" / "runtime"))
-import tts_worker  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app" / "ai" / "runtime" / "workers"))
+import tts as tts_worker  # noqa: E402
 
 
 def test_it_says_downloading_when_the_vocoder_is_missing(tmp_path, monkeypatch) -> None:

@@ -25,12 +25,14 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
+from app.ai.runtime import workers
+
 logger = logging.getLogger(__name__)
 
 #: 协议行的前缀。子进程的其它输出一律当日志。
 EVENT_PREFIX = "@@OPEN-STUDIO-TTS "
 
-WORKER_PATH = Path(__file__).with_name("tts_worker.py")
+WORKER_PATH = workers.tts_script()
 
 #: 一次合成最长等多久(权重首次加载可能就要 8 分钟)。
 DEFAULT_TIMEOUT_SECONDS = 1800

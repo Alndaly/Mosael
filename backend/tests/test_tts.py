@@ -3,7 +3,8 @@ from __future__ import annotations
 import wave
 from pathlib import Path
 
-from app.ai.runtime import tts_models, tts_worker
+from app.ai.runtime.workers import tts as tts_worker
+from app.ai.runtime import tts_models
 from app.ai.runtime import config as tts_config
 
 

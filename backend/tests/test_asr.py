@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.ai.runtime.asr_worker import funasr_sentences_to_segments, whisperx_segments
+from app.ai.runtime.workers.asr import funasr_sentences_to_segments, whisperx_segments
 from app.domain.voices.service import to_segment_ins
 from tests.util import fresh_client
 

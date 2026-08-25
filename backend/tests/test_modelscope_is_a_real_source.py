@@ -79,8 +79,7 @@ def test_the_worker_pulls_from_modelscope_when_told_to(monkeypatch, tmp_path) ->
 
     这个选项最早的毛病正是后者:配置里写着 ModelScope,拉的却是 HuggingFace。
     """
-    from app.ai.runtime import tts_worker
-
+    from app.ai.runtime.workers import tts as tts_worker
     called: dict[str, object] = {}
 
     def fake_ms_download(model_id: str, local_dir: str):
@@ -104,8 +103,7 @@ def test_the_worker_pulls_from_modelscope_when_told_to(monkeypatch, tmp_path) ->
 
 
 def test_the_worker_pulls_from_huggingface_otherwise(monkeypatch, tmp_path) -> None:
-    from app.ai.runtime import tts_worker
-
+    from app.ai.runtime.workers import tts as tts_worker
     called: dict[str, object] = {}
     monkeypatch.setattr(tts_worker, "_modelscope_snapshot", lambda *a, **k: called.setdefault("backend", "modelscope"))
     monkeypatch.setattr(tts_worker, "_hf_snapshot", lambda **k: called.setdefault("backend", "huggingface"))

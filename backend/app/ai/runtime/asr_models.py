@@ -27,6 +27,8 @@ from functools import lru_cache
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from app.ai.runtime import workers
 from typing import Any
 
 from app.ai.runtime import remote_size
@@ -38,7 +40,7 @@ from app.core.text import blame_line
 
 logger = logging.getLogger(__name__)
 
-WORKER_PATH = Path(__file__).with_name("asr_worker.py")
+WORKER_PATH = workers.asr_script()
 WARMUP_TIMEOUT_SECONDS = 3600
 _POLL_SECONDS = 1.5
 # A model counts as installed once its on-disk size reaches this fraction of the
