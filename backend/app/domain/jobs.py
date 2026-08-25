@@ -7,7 +7,7 @@ from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, event, inspect, select
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
@@ -172,8 +172,6 @@ def finish_job(db: Session, job: Job, **fields: Any) -> bool:
                        fields.get("error") or fields.get("message") or "")
     elif status == "succeeded":
         logger.info("job %s [%s] succeeded in %s", job.id, job.kind, took)
-    if status in TERMINAL_STATUSES:
-        _deliver_receipt(db, job)
     return True
 
 
@@ -190,19 +188,64 @@ def register_receipt_deliverer(kind: str, deliver: Callable[[Session, Job, dict[
     _RECEIPT_DELIVERERS[kind] = deliver
 
 
-def _deliver_receipt(db: Session, job: Job) -> None:
-    receipt = (job.payload or {}).get("receipt")
-    if not isinstance(receipt, dict):
+#: 这次事务里刚落终态、等着送回执的 job id。挂在 session.info 上而不是模块级 ——
+#: 后台线程各有各的 session,模块级变量会让两个线程的回执串到一起。
+_PENDING_RECEIPTS = "open_studio_pending_receipts"
+
+
+@event.listens_for(Session, "after_flush")
+def _note_settled_jobs(session: Session, _flush_context: Any) -> None:
+    """记下这次 flush 里**刚进终态**的任务。
+
+    **挂在状态变化上,不挂在某个函数上。** 回执最初挂在 finish_job 里,而全仓库只有
+    render.py 走它 —— 生成、发布、配音、代理、从链接导入全是直接 `job.status = ...`。
+    于是回执挂在了一条几乎没人走的路上:智能体提交完生成、任务失败了,它一无所知。
+
+    只认「**从非终态进终态**」这一次跳变:一个已经 failed 的行再被写一次别的字段,
+    不该再发一封。
+    """
+    for obj in session.dirty:
+        if not isinstance(obj, Job):
+            continue
+        history = inspect(obj).attrs.status.history
+        if not history.has_changes():
+            continue
+        was = history.deleted[0] if history.deleted else None
+        if obj.status in TERMINAL_STATUSES and was not in TERMINAL_STATUSES:
+            session.info.setdefault(_PENDING_RECEIPTS, []).append(obj.id)
+
+
+@event.listens_for(Session, "after_commit")
+def _deliver_settled_receipts(session: Session) -> None:
+    """提交之后才送。
+
+    送信会写库(往对话里放一条消息)、还会叫醒一个智能体回合 —— 在 flush 里做的话,
+    它看到的是一份还没提交的任务状态,而万一外层回滚,消息已经发出去了。
+    """
+    job_ids = session.info.pop(_PENDING_RECEIPTS, None)
+    if not job_ids:
         return
-    deliver = _RECEIPT_DELIVERERS.get(str(receipt.get("kind") or ""))
-    if deliver is None:
-        return
-    try:
-        deliver(db, job, receipt)
-    except Exception:
-        # 回执送不到**不能**把任务弄失败 —— 活儿已经干完了,产物已经在库里。
-        # 吞掉但记下来:没有日志的话,「智能体不知道任务结束了」会查成一个玄学问题。
-        logger.warning("job %s [%s] 回执没送到 (%s)", job.id, job.kind, receipt.get("kind"), exc_info=True)
+    # 用**新的** session:调用方那个刚提交完,在它上面接着写会把这次送信卷进调用方的
+    # 下一个事务里 —— 而调用方随时可能回滚。
+    from app.core.db import SessionLocal
+
+    with SessionLocal() as fresh:
+        for job_id in job_ids:
+            job = fresh.get(Job, job_id)
+            if job is None:
+                continue
+            receipt = (job.payload or {}).get("receipt")
+            if not isinstance(receipt, dict):
+                continue
+            deliver = _RECEIPT_DELIVERERS.get(str(receipt.get("kind") or ""))
+            if deliver is None:
+                continue
+            try:
+                deliver(fresh, job, receipt)
+            except Exception:
+                # 回执送不到**不能**把任务弄失败 —— 活儿已经干完了,产物已经在库里。
+                # 吞掉但记下来:没有日志的话,「智能体不知道任务结束了」会查成一个玄学问题。
+                logger.warning("job %s [%s] 回执没送到 (%s)", job.id, job.kind, receipt.get("kind"), exc_info=True)
 
 
 def _elapsed(job: Job) -> str:

@@ -1,10 +1,18 @@
 ---
 title: Plugins
-description: Pure-function tools in a local trusted sandbox, exposed to the agent and workflows.
+description: A local script or an existing MCP server — wire it in and it becomes a tool for the agent and workflows.
 order: 6
 ---
 
-Plugins are **pure-function tools** running in the same local trusted sandbox as the code node, automatically exposed to the agent and workflows.
+A plugin brings capability from outside Open Studio in — a local script, or an existing MCP
+server. Once wired in, **its tools work in both the agent and workflows**, with no second
+adaptation for either side.
+
+A process plugin runs as its own child process with a **minimal environment**: `PATH` / `HOME` /
+`LANG` plus the credentials it declared. Not a sandbox — it runs as you — but it cannot reach the
+app's provider keys, its database, or its API token.
+
+Want to write one? See [Writing a plugin](/docs/guides/writing-plugins).
 
 ## Install & toggle
 

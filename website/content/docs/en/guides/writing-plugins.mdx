@@ -1,0 +1,198 @@
+---
+title: Writing a plugin
+description: A directory, a manifest, a script — and how to get it into the market.
+order: 7
+---
+
+A plugin is how capability from outside Open Studio gets in. Writing one does not mean reading
+framework source: a directory, a manifest, a script — that is all of it.
+
+This page is about **writing** one; [Plugins](/docs/guides/plugins) is about using them, and the
+[manifest reference](https://github.com/Alndaly/OpenStudio/blob/main/docs/PLUGIN_MANIFEST.md)
+is the full field list.
+
+## First decide: script or MCP
+
+One question: **does the thing already have an MCP server?**
+
+If it does, don't write a script. Adding a layer that translates stdin JSON into one HTTP call
+and the result back into stdout re-implements something that exists — and every new endpoint
+means changing code. Wiring up MCP takes a manifest and zero lines of code;
+[mcp-everything](/plugins/mcp-everything) is exactly that.
+
+If it doesn't — or what you want is local computation (reading files, computing something,
+calling a private HTTP API) — write a script. That's what the rest of this page covers.
+
+## Five minutes: a plugin that runs
+
+One directory, two files:
+
+```
+my-plugin/
+  open-studio.plugin.json
+  main.py
+```
+
+The manifest:
+
+```json
+{
+  "id": "dev.yourname.my-plugin",
+  "name": "My plugin",
+  "version": "0.1.0",
+  "runtime": { "kind": "process", "entry": "main.py" },
+  "tools": {
+    "expose": "all",
+    "declare": [
+      { "name": "shout", "description": "Uppercase a piece of text.", "read_only": true }
+    ]
+  }
+}
+```
+
+The script — **one JSON in on stdin, one JSON out on stdout**:
+
+```python
+import json, sys
+
+def shout(payload):
+    return {"text": str(payload.get("text", "")).upper()}
+
+TOOLS = {"shout": shout}
+
+request = json.loads(sys.stdin.read())      # {"tool": "shout", "input": {...}}
+try:
+    output = TOOLS[request["tool"]](request.get("input") or {})
+    json.dump({"ok": True, "output": output}, sys.stdout, ensure_ascii=False)
+except Exception as exc:
+    json.dump({"ok": False, "error": str(exc)}, sys.stdout, ensure_ascii=False)
+```
+
+Drop the directory into the plugins folder — the Plugins page tells you where it is;
+**don't go looking for `~/.open-studio/plugins`**, that path does not exist on Windows —
+then hit **Scan**. It shows up in the list.
+
+Use a reverse-domain `id`. It is the **unique key on this machine**: the installed directory is
+named after it, and a collision is treated as the same plugin.
+
+## The rules
+
+- **60 second** process timeout, **1MB** stdout cap, `output` must be an object.
+- Crashed, timed out, printed non-JSON — what fails is **that one invocation record**, not the app.
+- Every call is logged (input, output, duration) and visible on the Plugins page.
+
+## Taking settings and credentials
+
+Declare them in the manifest, the user fills them on the Plugins page, and they arrive as
+**environment variables**. `credentials` are stored encrypted, `config` in the clear:
+
+```json
+"instance": {
+  "credentials": [
+    { "key": "MY_API_KEY", "label": "API key", "required": true, "help": "Generated in the xxx console." }
+  ],
+  "config": [
+    { "key": "MY_REGION", "label": "Region", "type": "enum", "required": false,
+      "options": [{ "value": "cn", "label": "China" }, { "value": "us", "label": "US" }] }
+  ]
+}
+```
+
+```python
+key = os.environ["MY_API_KEY"]
+```
+
+**Nothing else reaches you.** The child process gets `PATH` / `HOME` / `LANG` plus the keys you
+declared — not the app's provider keys, not the database, not its API token. That isn't a
+restriction on you; it is what makes people willing to install: the list they see on the Plugins
+page is everything you can touch.
+
+## Handing over a file
+
+The path above moves JSON, capped at 1MB — a 2GB mp4 does not fit. To hand a file to the media
+library, put `artifact` in `output`. Two ways:
+
+```python
+# 1. You downloaded it yourself. It must live in the directory you were given
+out = os.environ["OPEN_STUDIO_PLUGIN_OUTPUT_DIR"]
+path = os.path.join(out, "video.mp4")
+download_to(path)
+return {"artifact": {"path": "video.mp4"}}
+
+# 2. You only obtained download credentials — let the host fetch it
+return {"artifact": {
+    "url": "https://.../dlink?sign=...",
+    "headers": {"User-Agent": "..."},    # some endpoints 403 without a specific header
+    "filename": "video.mp4",
+}}
+```
+
+**The second is usually better.** The plugin obtains credentials, the host moves the bytes —
+progress, cancel, retry, failure isolation are all already there and you write none of it. And
+your side only gets one 60-second call: downloading something large yourself will time out, and
+even if it didn't, the user sees no progress and cancel does nothing.
+
+Once accepted, `artifact` is **replaced** by `asset_id`, so callers get a media id just like any
+other asset-producing tool. The [Baidu Netdisk plugin](/plugins/baidu-pan) uses the second form.
+
+## Remembering something
+
+Plugins are **stateless**: environment in, JSON out. Fine for pure computation, a dead end for
+credentials that expire — swapping a refresh token for a fresh access token is easy; having
+somewhere to put the new one is not.
+
+Put `state` in the response, **beside** `output`:
+
+```python
+json.dump({
+    "ok": True,
+    "output": {"files": [...]},              # goes back to the caller
+    "state": {"MY_ACCESS_TOKEN": "the new one"},   # the host remembers it and injects it next time
+}, sys.stdout, ensure_ascii=False)
+```
+
+**Beside, not inside, on purpose**: `output` reaches the caller and the model, and a freshly
+minted token has no business being there.
+
+Only keys **declared** in the manifest can be written. Writing an undeclared key fails outright
+rather than being ignored — ignoring it means you think it was saved, you get the old value next
+time, and the error surfaces somewhere else half an hour later.
+
+## Making it a workflow node
+
+Tools work in the agent by default. To make one a workflow node too, add `node` to it:
+
+```json
+{ "name": "pull", "description": "Pull one file",
+  "node": { "label": "Import from netdisk", "outputs": ["asset_id", "asset_name"] } }
+```
+
+Downstream nodes reference the `outputs` keys as `{{nodeId.asset_id}}`.
+
+## Writing the readme
+
+Put a `README.md` in the plugin directory. It is **rendered as-is on the plugin's detail page**
+(see [Baidu Netdisk](/plugins/baidu-pan)), so write it for people, not as an internal note.
+
+Two traps: relative links can follow the repository layout (they get rewritten to point back at
+the repo), but **don't point at files that don't exist**; and while `<https://…>` is fine on
+GitHub, `[link](https://…)` is safer here.
+
+## Shipping it
+
+The market index is plain JSON that anyone can host — including on a company intranet:
+
+```json
+{"plugins": [{
+  "id": "dev.yourname.my-plugin", "name": "My plugin", "version": "0.1.0",
+  "description": "…", "author": "You", "homepage": "https://…",
+  "download": "https://…/my-plugin.zip",
+  "permissions": []
+}]}
+```
+
+`download` points at a zip containing your directory — one wrapping folder is fine too, since
+archives from GitHub always have one. Point the app at your index address and it can install.
+
+**Get `permissions` right.** People decide whether to install based on that list, and installing
+a plugin puts code that will be executed on their machine.

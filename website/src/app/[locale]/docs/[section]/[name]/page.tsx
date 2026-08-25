@@ -56,7 +56,7 @@ export default async function DocPage({ params }: { params: Params }) {
   const t = getMessages(locale).docs;
   const { content } = await compileMDX({
     source: doc.body,
-    components: mdxComponents,
+    components: mdxComponents(locale),
     options: {
       mdxOptions: {
         // gfm:表格和删除线,文档里两样都在用。

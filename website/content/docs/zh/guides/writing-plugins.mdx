@@ -1,0 +1,191 @@
+---
+title: 写一个插件
+description: 从一个目录、一份清单、一个脚本开始，到装进市场。
+order: 7
+---
+
+插件是把 Open Studio 之外的能力接进来的那道口子。写一个不需要读框架源码 —— 一个目录、
+一份清单、一个脚本，就是全部。
+
+这篇讲**怎么写**；[插件](/docs/guides/plugins)讲怎么用；
+[manifest 字段说明](https://github.com/Alndaly/OpenStudio/blob/main/docs/PLUGIN_MANIFEST.md)
+是完整的字段表。
+
+## 先决定一件事：脚本还是 MCP
+
+判据只有一条：**对方有没有现成的 MCP 服务**。
+
+有就别写脚本。再写一层把 stdin 的 JSON 翻成一次 HTTP 调用、再把结果翻回 stdout，是在重新
+实现一个已经存在的东西，而且每加一个端点都要改代码。接 MCP 只要一份清单，零行代码 ——
+[mcp-everything](/plugins/mcp-everything) 就是这么一个例子。
+
+没有，或者你要做的是本地计算（读文件、算东西、调一个私有 HTTP 接口），那就写脚本。
+下面讲的是这一种。
+
+## 五分钟：一个能跑的插件
+
+建一个目录，两个文件：
+
+```
+my-plugin/
+  open-studio.plugin.json
+  main.py
+```
+
+清单：
+
+```json
+{
+  "id": "dev.yourname.my-plugin",
+  "name": "我的插件",
+  "version": "0.1.0",
+  "runtime": { "kind": "process", "entry": "main.py" },
+  "tools": {
+    "expose": "all",
+    "declare": [
+      { "name": "shout", "description": "把一段文字变成全大写。", "read_only": true }
+    ]
+  }
+}
+```
+
+脚本 —— **stdin 一个 JSON 进，stdout 一个 JSON 出**：
+
+```python
+import json, sys
+
+def shout(payload):
+    return {"text": str(payload.get("text", "")).upper()}
+
+TOOLS = {"shout": shout}
+
+request = json.loads(sys.stdin.read())      # {"tool": "shout", "input": {...}}
+try:
+    output = TOOLS[request["tool"]](request.get("input") or {})
+    json.dump({"ok": True, "output": output}, sys.stdout, ensure_ascii=False)
+except Exception as exc:
+    json.dump({"ok": False, "error": str(exc)}, sys.stdout, ensure_ascii=False)
+```
+
+把这个目录放进插件目录（应用的插件页会告诉你它在哪 —— **别照着 `~/.open-studio/plugins`
+去找**，Windows 上那个路径不存在），点「扫描」。它就出现在列表里了。
+
+`id` 用反写域名式的写法。它是**这台机器上的唯一键**：装进来的目录按它命名，重名会被当成
+同一个插件。
+
+## 规矩
+
+- 进程 **60 秒**超时，stdout 上限 **1MB**，`output` 必须是个对象。
+- 崩了、超时了、吐了非 JSON —— 失败的是**那一次调用记录**，不是应用。
+- 每次调用都留痕（输入、输出、耗时），在插件页看得到。
+
+## 要参数、要凭据
+
+在清单里声明，用户在插件页填，运行时以**环境变量**注入。声明成 `credentials` 的加密存，
+声明成 `config` 的明文存：
+
+```json
+"instance": {
+  "credentials": [
+    { "key": "MY_API_KEY", "label": "API Key", "required": true, "help": "在 xxx 后台生成。" }
+  ],
+  "config": [
+    { "key": "MY_REGION", "label": "区域", "type": "enum", "required": false,
+      "options": [{ "value": "cn", "label": "国内" }, { "value": "us", "label": "美国" }] }
+  ]
+}
+```
+
+```python
+key = os.environ["MY_API_KEY"]
+```
+
+**拿不到别的东西。** 子进程的环境里只有 `PATH` / `HOME` / `LANG` 加上你自己声明的那几个键 ——
+拿不到应用的供应商密钥、拿不到数据库、拿不到 API 令牌。这不是限制你，是让用户敢装：
+他在插件页看到的那张清单，就是你能碰到的全部。
+
+## 要交出一个文件
+
+上面那条路只搬 JSON，1MB 封顶 —— 一个 2GB 的 mp4 塞不进去。要把文件交给素材库，在
+`output` 里放 `artifact`，有两种交法：
+
+```python
+# 一、你自己下好了。必须写在给你的目录里
+out = os.environ["OPEN_STUDIO_PLUGIN_OUTPUT_DIR"]
+path = os.path.join(out, "video.mp4")
+download_to(path)
+return {"artifact": {"path": "video.mp4"}}
+
+# 二、你只换到了下载凭据，让宿主去下
+return {"artifact": {
+    "url": "https://.../dlink?sign=...",
+    "headers": {"User-Agent": "..."},    # 有些接口不带特定头就 403
+    "filename": "video.mp4",
+}}
+```
+
+**第二种通常更好。** 让插件负责换取凭据、宿主负责搬字节 —— 进度、取消、重试、失败隔离
+全是现成的，你一行都不用写。而且你这一侧只有一次 60 秒的调用：自己下一个大文件必然超时，
+就算不超时，用户也看不到进度、按取消也停不下来。
+
+宿主收下之后，`artifact` 会被**换成** `asset_id`，调用方拿到的就是一个素材 id，和别的
+产素材的工具一样。[百度网盘插件](/plugins/baidu-pan)走的就是第二种。
+
+## 要记住一点东西
+
+插件是**无状态**的：环境变量进、JSON 出。对纯计算没问题，对要续期的凭据是个死结 ——
+拿 refresh_token 换一个新的 access_token 很容易，难的是换完之后没地方放。
+
+在响应里放 `state`（和 `output` 平级）：
+
+```python
+json.dump({
+    "ok": True,
+    "output": {"files": [...]},              # 回给调用方
+    "state": {"MY_ACCESS_TOKEN": "新换的"},   # 宿主替你记住，下次注入回环境变量
+}, sys.stdout, ensure_ascii=False)
+```
+
+**和 output 平级不是随手放的**：`output` 会交给调用方和模型，而刚续出来的令牌不该出现
+在那里。
+
+只能写清单里**声明过的**键。写了没声明的键直接失败，不是忽略 —— 忽略的话你以为存下了，
+下次拿到旧值，而错误表现在几十分钟后的另一个地方。
+
+## 让它进工作流
+
+工具默认就能在智能体里用。要让它同时成为一个工作流节点，在那条工具上加 `node`：
+
+```json
+{ "name": "pull", "description": "拉一个文件",
+  "node": { "label": "从网盘导入", "outputs": ["asset_id", "asset_name"] } }
+```
+
+`outputs` 里的键，下游节点用 `{{节点id.asset_id}}` 就能接上。
+
+## 写说明
+
+在插件目录里放一个 `README.md`。它会**原样渲染在插件详情页上**（比如
+[百度网盘](/plugins/baidu-pan)），所以按给人看的写，别当成内部备忘。
+
+两个坑：相对链接按仓库目录写就好（渲染时会改指回仓库），但**别指向不存在的文件**；
+`<https://…>` 这种写法在 GitHub 上没问题，写成 `[链接](https://…)` 更保险。
+
+## 发出去
+
+插件市场的索引是一份普通 JSON，谁都能架 —— 包括公司内网：
+
+```json
+{"plugins": [{
+  "id": "dev.yourname.my-plugin", "name": "我的插件", "version": "0.1.0",
+  "description": "……", "author": "你", "homepage": "https://…",
+  "download": "https://…/my-plugin.zip",
+  "permissions": []
+}]}
+```
+
+`download` 指向一个 zip，里面是你那个目录（外面套一层也认 —— 从 GitHub 下下来的包总是
+套一层的）。用户在应用里换成你这个索引地址，就能装了。
+
+**`permissions` 那一栏别写错。** 用户是照着它决定装不装的，而装插件是在他机器上放一份
+会被执行的代码。

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { CircleAlert, Info, Lightbulb, OctagonAlert } from "lucide-react";
 
 import { QrCards } from "@/components/qr-cards";
+import { localePath, type Locale } from "@/i18n/config";
 import { Shot } from "@/components/shot";
 import { cn } from "@/lib/utils";
 
@@ -102,7 +103,8 @@ function MdxParagraph({ children, ...props }: React.ComponentProps<"p">) {
  *
  * 站内链接换成 next/link(客户端跳转、预取),站外链接补 `target`/`rel`。
  */
-export const mdxComponents = {
+export function mdxComponents(locale: Locale) {
+  return {
   Aside,
   Steps,
   Shot,
@@ -111,19 +113,27 @@ export const mdxComponents = {
   p: MdxParagraph,
   h2: anchored("h2"),
   h3: anchored("h3"),
+  /**
+   * 站内链接**自动补语言前缀**。
+   *
+   * 正文里写 `/docs/guides/plugins` 是自然的写法 —— 让每篇文档手写 `/zh/…` 的话,
+   * 同一篇文章的中英版本就得各写各的链接,而漏改的那一条不会报错,只是 404。
+   * 锚点(`#x`)不动:它指的是本页。
+   */
   a: ({ href = "", children, ...props }: React.ComponentProps<"a">) => {
-    const external = /^https?:/.test(href);
-    if (external) {
+    if (/^https?:/.test(href)) {
       return (
         <a href={href} target="_blank" rel="noreferrer" {...props}>
           {children}
         </a>
       );
     }
+    const internal = href.startsWith("/") ? localePath(locale, href) : href;
     return (
-      <Link href={href} {...props}>
+      <Link href={internal} {...props}>
         {children}
       </Link>
     );
   },
-};
+  };
+}

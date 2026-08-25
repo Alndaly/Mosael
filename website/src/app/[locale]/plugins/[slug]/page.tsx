@@ -72,7 +72,7 @@ export default async function PluginDetailPage({
   const doc = raw
     ? await compileMDX({
         source: rewriteRelativeLinks(unwrapAutolinks(raw), plugin.source),
-        components: mdxComponents,
+        components: mdxComponents(locale),
         options: { mdxOptions: { remarkPlugins: [remarkGfm], rehypePlugins: [rehypeSlug] } },
       })
     : null;

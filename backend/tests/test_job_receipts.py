@@ -39,6 +39,77 @@ def _workspace(client) -> str:
     return client.post("/api/workspaces", json={"name": "W"}).json()["id"]
 
 
+class Test不管谁怎么写状态都送得出:
+    """**这是这套机制最初写错的地方。**
+
+    回执一开始挂在 `finish_job` 里,而全仓库只有 render.py 走它 —— 生成、发布、配音、
+    代理、从链接导入全是直接 `job.status = "failed"`。于是它挂在了一条几乎没人走的路上:
+    智能体提交完一次视频生成、任务因为「ComfyUI 需要工作流模板」失败了,而它一无所知,
+    对话就停在那儿。
+
+    改成监听**状态变化**之后,写法无关。这几条钉住的就是"写法无关"。
+    """
+
+    def test_直接赋值也送(self, spy) -> None:
+        """生成、配音、代理、从链接导入都是这么写的。"""
+        client = fresh_client()
+        ws = _workspace(client)
+        with SessionLocal() as db:
+            job = _job(db, ws, receipt={"kind": "spy"})
+            db.commit()
+            job.status = "failed"
+            job.error = "ComfyUI 视频生成需要工作流模板"
+            db.commit()
+        assert len(spy) == 1, "直接赋 status 的路径没送出回执"
+
+    def test_走_finish_job_也送(self, spy) -> None:
+        client = fresh_client()
+        ws = _workspace(client)
+        with SessionLocal() as db:
+            job = _job(db, ws, receipt={"kind": "spy"})
+            db.commit()
+            jobs_domain.finish_job(db, job, status="succeeded")
+            db.commit()
+        assert len(spy) == 1
+
+    def test_只在进终态那一次送(self, spy) -> None:
+        """一个已经 failed 的行再被写一次别的字段,不该再发一封。"""
+        client = fresh_client()
+        ws = _workspace(client)
+        with SessionLocal() as db:
+            job = _job(db, ws, receipt={"kind": "spy"})
+            db.commit()
+            job.status = "failed"
+            db.commit()
+            job.message = "换个说法"
+            db.commit()
+        assert len(spy) == 1
+
+    def test_中间状态不送(self, spy) -> None:
+        """queued → running 不是终态,送了等于每个任务开跑都打扰一次智能体。"""
+        client = fresh_client()
+        ws = _workspace(client)
+        with SessionLocal() as db:
+            job = _job(db, ws, receipt={"kind": "spy"})
+            db.commit()
+            job.status = "running"
+            db.commit()
+        assert spy == []
+
+    def test_没提交就不送(self, spy) -> None:
+        """送信会写库、还会叫醒一个智能体回合。外层要是回滚了,消息却已经发出去了。"""
+        client = fresh_client()
+        ws = _workspace(client)
+        with SessionLocal() as db:
+            job = _job(db, ws, receipt={"kind": "spy"})
+            db.commit()
+            job.status = "failed"
+            db.flush()
+            assert spy == [], "还没提交就送出去了"
+            db.rollback()
+        assert spy == []
+
+
 class Test回执在终态送出:
     def test_成功时送(self, spy) -> None:
         client = fresh_client()
