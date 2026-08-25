@@ -9,6 +9,7 @@ import { SearchDialog } from "@/components/search-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { localePath, type Locale } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
+import { docHref, firstDoc } from "@/lib/docs";
 import { SITE } from "@/lib/site";
 
 /**
@@ -22,7 +23,10 @@ import { SITE } from "@/lib/site";
 export function SiteHeader({ locale }: { locale: Locale }) {
   const t = getMessages(locale);
   const links = [
-    { href: localePath(locale, "/docs"), label: t.nav.docs },
+    // **直接指向第一篇,不走 /docs**。`/docs` 是服务端 redirect(它自己不承载内容),
+    // 而 redirect 会把一次客户端跳转变成一次整页加载 + 302 —— 那条路上 docs/loading 的
+    // 骨架根本不参与,用户看到的是站头站脚之间空一片。/docs 本身留着(有人存了书签)。
+    { href: docHref(locale, firstDoc(locale)), label: t.nav.docs },
     { href: localePath(locale, "/plugins"), label: t.nav.plugins },
     { href: localePath(locale, "/workflows"), label: t.nav.workflows },
   ];
