@@ -25,6 +25,7 @@ import { InspectorCard, InspectorRow } from "@/components/agent/InspectorCard";
 import { PlanCard, planHistory, type PlanStep } from "@/components/agent/PlanCard";
 import { JumpToLatest, useStickToBottom } from "@/components/agent/stickToBottom";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
+import { InlineQuestions } from "@/components/agent/InlineQuestions";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem, type ToolCall } from "@/components/agent/ToolCalls";
 import { formatElapsedSeconds } from "@/lib/time";
 import { AgentStatusIcon, ToolName, toAgentStatus } from "@/components/agent/StatusIcon";
@@ -534,6 +535,7 @@ export function ChatWorkspace({
                 </div>
               )}
               {sessionId && <InlineConfirmations workspaceId={workspace.id} allowKey={sessionId} />}
+              {sessionId && <InlineQuestions sessionId={sessionId} />}
             </div>
             <JumpToLatest stick={stick} label={t("chatJumpToLatest")} newLabel={t("chatNewBelow")} />
             </div>

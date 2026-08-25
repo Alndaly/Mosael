@@ -78,6 +78,7 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "SessionGroup": ("app/domain/session_groups.py",),
     "AgentMessage": ("app/ai/agent/", "app/domain/agent/"),
     "AgentMemory": ("app/domain/agent/",),
+    "AgentQuestion": ("app/domain/agent/",),
     "ToolConfirmation": ("app/domain/agent/",),
     "FeishuBot": ("app/integrations/feishu/",),
     "FeishuBinding": ("app/integrations/feishu/",),

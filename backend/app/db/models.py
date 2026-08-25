@@ -1211,6 +1211,36 @@ class FeishuBindCode(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
+class AgentQuestion(Base):
+    """智能体问用户一个有选项的问题,等他挑。
+
+    **不是确认卡。** 确认卡问的是「这件事能不能做」,而这里问的是「你要哪一个」——
+    形状像,但有一条决定性的差别:确认卡有 `auto_allow_tools` 和 bypass 模式,可以被
+    自动批准;而询问的**全部意义就是智能体不知道答案**,自动回答等于让它自己编一个。
+    共用一张表的话,那两个开关迟早会把问题一起自动答掉。
+
+    只在对话里出现(session_id 必填):一个问题脱离了它的上下文没有意义 —— 右上角的
+    全局中心里蹦出一句「你要哪一个」,而看的人根本不知道在说什么。
+    """
+
+    __tablename__ = "agent_questions"
+    __table_args__ = (Index("idx_agent_questions_session", "session_id", "status"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    #: 哪次对话问的。不设外键:会话删了这条记录的归属仍有审计意义。
+    session_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    #: [{header, question, multi_select, options: [{label, description}]}]
+    questions: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
+    #: {question: [选中的 label]}。多选也是列表 —— 单选是"长度为 1 的列表",
+    #: 两种形状分开存的话,消费端要写两遍解析。
+    answers: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    #: pending | answered | dismissed
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    answered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class ToolConfirmation(Base):
     __tablename__ = "tool_confirmations"
     __table_args__ = (

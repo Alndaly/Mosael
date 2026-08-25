@@ -7,11 +7,12 @@ summaries — never raw internal schemas.
 
 <!-- BEGIN generated: tools -->
 
-共 **58** 个工具,其中 **15** 个走确认卡。
+共 **60** 个工具,其中 **15** 个走确认卡。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
 | `analyze_asset` | 直接执行 | Runs directly: analyze an EXISTING image/video media asset with a multimodal model. |
+| `ask_user` | 直接执行 | Blocks until the user picks: ask them to choose between options you cannot decide for them. |
 | `browser_click` | 直接执行 | Click an element by CSS selector or visible text in the open session (one of selector/text). |
 | `browser_close` | 直接执行 | Close a browser session (frees the view; a throwaway session's cookies/storage are wiped). |
 | `browser_evaluate` | 直接执行 | Advanced: evaluate a JS expression in the open session's page and return its value. |
@@ -34,6 +35,7 @@ summaries — never raw internal schemas.
 | `generate_image` | 确认卡 | Confirmation required: generate or edit an image asset. |
 | `generate_podcast` | 确认卡 | Confirmation required: generate a NEW two-speaker podcast/dialogue audio asset. |
 | `generate_video` | 确认卡 | Confirmation required: generate a NEW video asset from a text prompt. |
+| `get_answer` | 直接执行 | Read what the user picked for an ask_user question (or whether they skipped). |
 | `get_confirmation` | 直接执行 | Read-only: poll one confirmation card by confirmation_id. |
 | `get_current_time` | 直接执行 | Read-only: what time is it right now, on the machine running this studio. |
 | `get_job` | 直接执行 | Read-only: poll one background job (transcription, render, generation) by id. |

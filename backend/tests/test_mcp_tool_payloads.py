@@ -36,6 +36,18 @@ ARGS: dict[str, dict[str, Any]] = {
     "list_workflows": {},
     "list_workflow_node_types": {},
     "list_memories": {},
+    # 问一个形状合法的问题:载荷要能被 /api/agent/questions 接住。没有会话上下文时它会
+    # 早退(返回 error),那条路不打后端 —— 所以这里主要盯的是**有**会话时那一份形状。
+    "ask_user": {
+        "questions": [
+            {
+                "header": "去向",
+                "question": "这段成片发到哪儿?",
+                "options": [{"label": "B站", "description": "投稿到已登录的账号"}, {"label": "先不发"}],
+            }
+        ]
+    },
+    "get_answer": {"question_id": "does-not-exist"},
     "list_generation_models": {},
     "list_plugin_tools": {},
     "list_publish_accounts": {},

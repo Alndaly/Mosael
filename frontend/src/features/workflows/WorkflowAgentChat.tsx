@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
+import { InlineQuestions } from "@/components/agent/InlineQuestions";
 import { ModelPicker } from "@/features/ai-studio/ModelPicker";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/components/agent/ToolCalls";
 import { JumpToLatest, useStickToBottom } from "@/components/agent/stickToBottom";
@@ -570,6 +571,7 @@ export function WorkflowAgentChat({
           </div>
         )}
         {activeSession && <InlineConfirmations workspaceId={workspaceId} allowKey={activeSession.id} />}
+              {activeSession && <InlineQuestions sessionId={activeSession.id} />}
       </div>
       <JumpToLatest stick={stick} label={t("chatJumpToLatest")} newLabel={t("chatNewBelow")} />
       </div>

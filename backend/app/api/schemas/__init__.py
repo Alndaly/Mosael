@@ -1490,6 +1490,42 @@ class PluginPackageOut(BaseModel):
     instances: list[PluginInstanceOut] = Field(default_factory=list)
 
 
+class AgentQuestionOption(BaseModel):
+    label: str
+    description: str = ""
+
+
+class AgentQuestionItem(BaseModel):
+    header: str = ""
+    question: str
+    multi_select: bool = False
+    options: list[AgentQuestionOption] = Field(default_factory=list)
+
+
+class AgentQuestionCreate(BaseModel):
+    workspace_id: str
+    session_id: str
+    #: 形状由 domain/agent/questions.normalize 校 —— 校验和展示用同一份规则,
+    #: 在这里再写一遍 pydantic 约束会变成第二个答案。
+    questions: list[dict] = Field(default_factory=list)
+
+
+class AgentQuestionAnswer(BaseModel):
+    #: {问题正文: [选中的 label]}。单选也是列表(长度 1)—— 两种形状分开的话消费端要解析两遍。
+    answers: dict[str, list[str]] = Field(default_factory=dict)
+
+
+class AgentQuestionOut(OrmModel):
+    id: str
+    workspace_id: str
+    session_id: str
+    questions: list[AgentQuestionItem] = Field(default_factory=list)
+    answers: dict[str, list[str]] = Field(default_factory=dict)
+    status: str
+    created_at: datetime
+    answered_at: datetime | None = None
+
+
 class PluginMarketEntry(BaseModel):
     """市场里的一条。索引给什么就是什么 —— 不做补全,免得看起来比实际更可信。"""
 

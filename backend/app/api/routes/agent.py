@@ -14,6 +14,9 @@ from app.api.schemas import (
     AgentManifestOut,
     AgentMemoryCreate,
     AgentMemoryOut,
+    AgentQuestionAnswer,
+    AgentQuestionCreate,
+    AgentQuestionOut,
     AgentMemoryUpdate,
     AgentPlanUpdate,
     AgentMessageCreate,
@@ -28,10 +31,11 @@ from app.api.schemas import (
 )
 from app.core.config import app_version
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, ensure_workspace_role
-from app.db.models import AgentMessage, AgentSession, ProviderUsageEvent, now
+from app.db.models import AgentMessage, AgentQuestion, AgentSession, ProviderUsageEvent, now
 from app.domain.agent import list_agent_skills
 from app.domain import session_groups
 from app.domain.agent import memory as agent_memory
+from app.domain.agent import questions as agent_questions
 from app.domain.agent import plan as agent_plan
 
 router = APIRouter(tags=["agent"])
@@ -329,6 +333,59 @@ def set_agent_plan(session_id: str, body: AgentPlanUpdate, db: DbSession, user: 
 #
 # 设置页与智能体共用这组接口:用户在设置里看到的清单,就是每轮注入模型的那一份。
 # 两份清单会立刻漂移,而"模型到底记住了什么"是用户唯一想确认的事。
+
+
+@router.post("/agent/questions", response_model=AgentQuestionOut, status_code=201)
+def ask_question(body: AgentQuestionCreate, db: DbSession, user: CurrentUser) -> AgentQuestion:
+    """智能体问用户一个有选项的问题。"""
+    ensure_workspace_perm(db, user, body.workspace_id, "ai")
+    try:
+        return agent_questions.ask(
+            db, workspace_id=body.workspace_id, session_id=body.session_id, questions=body.questions
+        )
+    except agent_questions.QuestionError as exc:
+        # 422 而不是 500:这是模型给错了形状,消息里说清怎么改 —— 它下一步就是改了重发。
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/agent/questions/{question_id}", response_model=AgentQuestionOut)
+def read_question(question_id: str, db: DbSession, user: CurrentUser) -> AgentQuestion:
+    return _require_question(db, user, question_id)
+
+
+@router.get("/agent/questions", response_model=list[AgentQuestionOut])
+def list_pending_questions(session_id: str, db: DbSession, user: CurrentUser) -> list[AgentQuestion]:
+    """某次对话里还没答的问题。**按会话取,不按工作区** —— 一个问题脱离上下文没有意义。"""
+    session = _require_session(db, user, session_id)
+    return agent_questions.pending_for(db, session.id)
+
+
+@router.post("/agent/questions/{question_id}/answer", response_model=AgentQuestionOut)
+def answer_question(
+    question_id: str, body: AgentQuestionAnswer, db: DbSession, user: CurrentUser
+) -> AgentQuestion:
+    row = _require_question(db, user, question_id)
+    ensure_workspace_perm(db, user, row.workspace_id, "ai")
+    try:
+        return agent_questions.answer(db, row, body.answers)
+    except agent_questions.QuestionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/agent/questions/{question_id}/dismiss", response_model=AgentQuestionOut)
+def dismiss_question(question_id: str, db: DbSession, user: CurrentUser) -> AgentQuestion:
+    """不想答。模型会收到「用户跳过了」并继续往下走,而不是卡在那儿等。"""
+    row = _require_question(db, user, question_id)
+    ensure_workspace_perm(db, user, row.workspace_id, "ai")
+    return agent_questions.dismiss(db, row)
+
+
+def _require_question(db: DbSession, user: CurrentUser, question_id: str) -> AgentQuestion:
+    row = db.get(AgentQuestion, question_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="问题不存在")
+    ensure_workspace_access(db, user, row.workspace_id)
+    return row
 
 
 @router.get("/agent/memories", response_model=list[AgentMemoryOut])

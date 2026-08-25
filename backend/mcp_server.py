@@ -182,10 +182,12 @@ CONFIRMATION_TOOLS = frozenset(
 READ_ONLY_TOOLS = frozenset(
     {
         "analyze_asset",
+        "ask_user",
         "browser_pool_list",
         "browser_read",
         "browser_wait",
         "fetch_url",
+        "get_answer",
         "get_confirmation",
         "get_current_time",
         "get_job",
@@ -1291,6 +1293,56 @@ def list_agent_sessions(workspace_id: str = "") -> list[dict[str, Any]]:
         }
         for item in sessions
     ]
+
+
+@mcp.tool()
+def ask_user(questions: list[dict[str, Any]], workspace_id: str = "") -> dict[str, Any]:
+    """Blocks until the user picks: ask them to choose between options you cannot decide for them.
+
+    Use at a genuine fork — two or three routes all make sense and which one is right depends on
+    what the user wants. Picking one yourself and building on it means a whole stretch of work
+    gets thrown away when the guess was wrong; one click is far cheaper.
+
+    Do NOT use for something you can find out yourself (list the assets, read the file, check the
+    settings), for a choice with an obvious default, or to ask permission — writes already go
+    through their own confirmation card.
+
+    Each question: {"header": short chip label, "question": the full question,
+    "multi_select": true if several answers can apply, "options": [{"label", "description"}]}.
+    At least 2 options, at most 6; at most 4 questions in one go. Give every option a
+    `description` saying what happens if it is chosen — a bare label makes people guess.
+
+    The user can also skip. Then you get {"skipped": true} and should continue with your best
+    judgement rather than asking again.
+    """
+    session_id = _SESSION_ID.get()
+    if not session_id:
+        # 飞书 / 外部 MCP 客户端没有会话 —— 问题没地方显示,骗它说"等着"只会白等到超时。
+        return {"error": "这次调用没有对话上下文,问不了 —— 请直接在回复里把选项写出来。"}
+    created = _post(
+        "/api/agent/questions",
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "session_id": session_id,
+            "questions": questions,
+        },
+    )
+    return {
+        "question_id": created["id"],
+        "status": created["status"],
+        "message": "等待用户在 Open Studio 中选择。用 get_answer 轮询结果。",
+    }
+
+
+@mcp.tool()
+def get_answer(question_id: str) -> dict[str, Any]:
+    """Read what the user picked for an ask_user question (or whether they skipped)."""
+    row = _get(f"/api/agent/questions/{question_id}")
+    if row.get("status") == "pending":
+        return {"status": "pending"}
+    if row.get("status") == "dismissed":
+        return {"status": "dismissed", "skipped": True}
+    return {"status": "answered", "answers": row.get("answers") or {}}
 
 
 @mcp.tool()
