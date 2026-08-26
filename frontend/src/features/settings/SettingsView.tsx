@@ -27,7 +27,7 @@ import { ProviderDefaultsSection } from "@/features/settings/ProviderDefaultsSec
 import { ProviderPricingSection } from "@/features/settings/ProviderPricingSection";
 import { ProviderProfilesSection } from "@/features/settings/ProviderProfilesSection";
 import { BuiltinTtsSection } from "@/features/settings/BuiltinTtsSection";
-import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
+import { SettingsBlock, SettingsField, SettingsForm, SettingsGroup, SettingsRow } from "@/features/settings/ui";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -386,28 +386,22 @@ function AccountSection() {
         </div>
       </SettingsBlock>
       <SettingsBlock>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="grid min-w-0 gap-1.5 [&>span]:text-ui-sm [&>span]:font-semibold [&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground">
-            <span>{t("settingsUsername")}</span>
-            <small>{t("settingsUsernameDesc")}</small>
+        <SettingsForm className="grid-cols-2">
+          <SettingsField label={t("settingsUsername")} description={t("settingsUsernameDesc")}>
             <Input
               value={profile.username}
               autoComplete="username"
               onChange={(event) => setProfile((current) => ({ ...current, username: event.target.value }))}
             />
-          </label>
-          <label className="grid min-w-0 gap-1.5 [&>span]:text-ui-sm [&>span]:font-semibold [&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground">
-            <span>{t("displayName")}</span>
-            <small>{t("displayNameDesc")}</small>
+          </SettingsField>
+          <SettingsField label={t("displayName")} description={t("displayNameDesc")}>
             <Input
               value={profile.display_name}
               autoComplete="name"
               onChange={(event) => setProfile((current) => ({ ...current, display_name: event.target.value }))}
             />
-          </label>
-          <label className="col-span-full grid min-w-0 gap-1.5 [&>span]:text-ui-sm [&>span]:font-semibold [&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground">
-            <span>{t("signature")}</span>
-            <small>{t("signatureDesc")}</small>
+          </SettingsField>
+          <SettingsField label={t("signature")} description={t("signatureDesc")} className="col-span-full">
             <Textarea
               className="resize-y"
               rows={3}
@@ -416,8 +410,8 @@ function AccountSection() {
               placeholder={t("signaturePlaceholder")}
               onChange={(event) => setProfile((current) => ({ ...current, signature: event.target.value }))}
             />
-          </label>
-        </div>
+          </SettingsField>
+        </SettingsForm>
       </SettingsBlock>
       <SettingsBlock>
         <div className="grid gap-3">

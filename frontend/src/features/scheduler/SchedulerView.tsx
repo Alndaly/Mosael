@@ -18,7 +18,7 @@ import {
 } from "@/api/client";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { relativeTime } from "@/lib/time";
-import { useResizableSidebar } from "@/lib/useResizableSidebar";
+import { COMPACT_SIDEBAR_BOUNDS, useResizableSidebar } from "@/lib/useResizableSidebar";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
@@ -37,9 +37,9 @@ import { cn } from "@/lib/utils";
  * 右侧选中任务的详情(概览行 + 运行记录)。
  */
 export function SchedulerView({ workspace, project }: { workspace: Workspace; project: Project | null }) {
-  // 第三个参数是右栏内容自己的 px-0.5(2px,给卡片聚焦光圈留位置)——
-  // 手柄要按**看得见的边**居中,不按 grid 列边界。见 handleOffset。
-  const sidebar = useResizableSidebar("scheduler", undefined, 2);
+  // 右栏现在是一块有边框的面板,它的边**就是**列边界 —— 不再需要 nextInset 补偿
+  // (那是给"无边框滚动容器 + 内层 px-0.5"那种形状用的,见 handleOffset)。
+  const sidebar = useResizableSidebar("scheduler", COMPACT_SIDEBAR_BOUNDS);
   const t = useI18n();
   const qc = useQueryClient();
   const [creating, setCreating] = React.useState(false);
@@ -175,7 +175,9 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
         </aside>
         {/* 边缘拖动 —— 和剪辑页同一套(lib/useResizableSidebar)。 */}
         <div {...sidebar.handleProps} />
-        <div className="grid min-w-0 overflow-y-auto">
+        {/* 右栏是**一块占满高度的面板**,内部滚动 —— 此前它跟着内容走,内容少时就是半截,
+            左边是个完整的带边框面板、右边飘着一段,两边看着不像同一层东西。 */}
+        <div className="grid min-h-0 min-w-0 content-start overflow-y-auto rounded-md border border-border bg-panel px-3 py-2.5 shadow-[var(--shadow-panel)]">
           {selected ? (
             <TaskDetail key={selected.id} task={selected} workspaceId={workspace.id} />
           ) : (
@@ -438,52 +440,76 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
   };
 
   return (
-    <div className="grid w-full content-start gap-3 px-0.5 pb-4 pt-0.5">
-      <SettingsGroup
-        title={task.name}
-        description={`${t(`taskKind_${task.kind}` as never)} · ${t(`trigger_${task.trigger_type}` as never)}`}
-        actions={
-          <div className="flex items-center gap-1.5">
+    <div className="grid w-full content-start gap-4">
+      {/* **页头,不是卡片。** 任务名是这一页的身份 —— 它此前和运行记录一样是个 SettingsGroup,
+          两块等重,而真正天天看的是下面那份记录。 */}
+      <header className="grid gap-2 border-b border-border pb-3">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+          <h2 className="m-0 truncate text-ui-lg font-semibold text-foreground">{task.name}</h2>
+          <div className="flex shrink-0 items-center gap-1.5">
             <Button size="sm" variant="outline" disabled={!task.enabled} loading={runTask.isPending} onClick={() => runTask.mutate()}>
               <Play size={13} /> {t("runNow")}
             </Button>
-            <label className="inline-flex cursor-pointer select-none items-center gap-1.5 text-xs text-muted-foreground">
+            <label className="inline-flex cursor-pointer select-none items-center gap-1.5 text-ui-xs text-muted-foreground">
               <span>{task.enabled ? t("pluginOn") : t("pluginOff")}</span>
               <Switch checked={task.enabled} onCheckedChange={(checked) => toggleTask.mutate(checked)} />
             </label>
           </div>
-        }
-      >
-        {task.kind === "workflow" && <BoundWorkflowRow task={task} workspaceId={workspaceId} />}
-        {task.trigger_type === "webhook" && <WebhookUrlRow task={task} />}
-        <SettingsRow label={t("taskSchedule")} description={t("taskScheduleDesc")}>
-          <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">{scheduleLabel}</code>
-        </SettingsRow>
-        <SettingsRow label={t("taskNextRun")} description={t("taskNextRunDesc")}>
-          <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">
-            {localTime(task.next_run_at) ?? t("manualNoSchedule")}
-          </code>
-        </SettingsRow>
-        <SettingsRow label={t("taskLastRun")}>
-          <code className="timecode max-w-[320px] truncate text-xs text-muted-foreground">{localTime(task.last_run_at) ?? "—"}</code>
-        </SettingsRow>
-        <SettingsRow label={t("deleteTask")} description={t("deleteTaskDesc")}>
-          <Button size="sm" variant="outline" className="hover:border-[color-mix(in_oklab,var(--destructive)_45%,var(--border))] hover:text-destructive" onClick={() => setDeleting(true)}>
-            <Trash2 size={13} /> {t("delete")}
-          </Button>
-        </SettingsRow>
-      </SettingsGroup>
+        </div>
+        {/* 计划 / 下次 / 上次是**三个短事实**,不是三件要操作的事 —— 它们此前各占一整行,
+            每行还配一句说明,读三个时间戳要扫过六行字。摆成一排。 */}
+        <dl className="m-0 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-ui-xs [&_dd]:m-0 [&_dd]:text-foreground [&_dt]:text-muted-foreground">
+          <span className="flex items-baseline gap-1.5">
+            <dt>{t("taskSchedule")}</dt>
+            <dd className="timecode">{scheduleLabel}</dd>
+          </span>
+          <span className="flex items-baseline gap-1.5">
+            <dt>{t("taskNextRun")}</dt>
+            <dd className="timecode">{localTime(task.next_run_at) ?? t("manualNoSchedule")}</dd>
+          </span>
+          <span className="flex items-baseline gap-1.5">
+            <dt>{t("taskLastRun")}</dt>
+            <dd className="timecode">{localTime(task.last_run_at) ?? "—"}</dd>
+          </span>
+        </dl>
+      </header>
 
-      <SettingsGroup title={t("taskRuns")} description={t("taskRunsDesc")}>
-        <SettingsBlock>
-          <div className="block">
-            {(runs.data ?? []).map((run) => (
-              <RunRow key={run.id} run={run} job={jobs.data?.find((job) => job.id === run.job_id) ?? null} />
-            ))}
-            {runs.data?.length === 0 && <p className="m-0 text-xs text-muted-foreground">{t("noRunsYet")}</p>}
-          </div>
-        </SettingsBlock>
-      </SettingsGroup>
+      {/* 绑定与 webhook 是**要动手的**,留在卡片里;上面那些是只读事实。 */}
+      {(task.kind === "workflow" || task.trigger_type === "webhook") && (
+        <div className="overflow-hidden rounded-lg border border-border bg-panel">
+          {task.kind === "workflow" && <BoundWorkflowRow task={task} workspaceId={workspaceId} />}
+          {task.trigger_type === "webhook" && <WebhookUrlRow task={task} />}
+        </div>
+      )}
+
+      {/* **运行记录是主体**,所以它占最大一块,而且不再被上面那堆只读行挤到屏幕外。 */}
+      <section className="grid gap-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <h3 className="m-0 text-ui-md font-semibold text-foreground">{t("taskRuns")}</h3>
+          <span className="text-ui-xs text-muted-foreground">{t("taskRunsDesc")}</span>
+        </div>
+        <div className="overflow-hidden rounded-lg border border-border bg-panel">
+          {(runs.data ?? []).map((run) => (
+            <RunRow key={run.id} run={run} job={jobs.data?.find((job) => job.id === run.job_id) ?? null} />
+          ))}
+          {runs.data?.length === 0 && (
+            <p className="m-0 px-3 py-4 text-center text-ui-xs text-muted-foreground">{t("noRunsYet")}</p>
+          )}
+        </div>
+      </section>
+
+      {/* 删除排在最后、样子最轻 —— 危险操作不该和日常操作抢同一个视觉分量。 */}
+      <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
+        <p className="m-0 text-ui-xs leading-[1.55] text-muted-foreground">{t("deleteTaskDesc")}</p>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="shrink-0 text-muted-foreground hover:text-destructive"
+          onClick={() => setDeleting(true)}
+        >
+          <Trash2 size={13} /> {t("delete")}
+        </Button>
+      </div>
 
       <ConfirmDialog
         open={deleting}

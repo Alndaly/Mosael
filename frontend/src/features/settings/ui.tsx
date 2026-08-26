@@ -79,3 +79,40 @@ export function SettingsRow({
 export function SettingsBlock({ children }: { children: React.ReactNode }) {
   return <div className="grid gap-2 px-3.5 py-2.5">{children}</div>;
 }
+
+
+/**
+ * 一个表单字段:标签 + 说明 + 控件。
+ *
+ * 抽出来是因为那串 `[&>span]:… [&_small]:…` 在每个 label 上抄了一遍 —— 抄到第三遍时,
+ * 三处的字号已经开始各说各的。
+ */
+export function SettingsField({
+  label,
+  description,
+  className,
+  children,
+}: {
+  label: string;
+  description?: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className={cn("grid min-w-0 gap-1.5", className)}>
+      <span className="text-ui-sm font-semibold text-foreground">{label}</span>
+      {description && <small className="text-ui-xs leading-[1.45] text-muted-foreground">{description}</small>}
+      {children}
+    </label>
+  );
+}
+
+/**
+ * 表单的可读宽度上限。
+ *
+ * 一个用户名输入框铺满 900px 是没道理的 —— 眼睛要从标签一路扫到光标。设置页此前所有表单
+ * 都跟着容器走,窗口越宽越难填。
+ */
+export function SettingsForm({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <div className={cn("grid max-w-[42rem] gap-3", className)}>{children}</div>;
+}

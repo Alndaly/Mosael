@@ -20,6 +20,13 @@ export interface SidebarBounds {
 export const DEFAULT_SIDEBAR_BOUNDS: SidebarBounds = { min: 200, max: 520, fallback: 288 };
 
 /**
+ * 内容不多的侧栏 —— 一行插件名、一行任务名,288px 里有九成是空的。
+ *
+ * 用它的页面把宽度让给右边真正有东西的那半;要看长名字的人自己拖宽,而那个宽度是记住的。
+ */
+export const COMPACT_SIDEBAR_BOUNDS: SidebarBounds = { min: 168, max: 420, fallback: 216 };
+
+/**
  * 拖柄长什么样 —— **全应用只有这一份**。
  *
  * 骑在 8px 列间隙正中,7px 宽的热区里一根 36px 的短竖条,常显、悬停变主色。
@@ -112,7 +119,10 @@ export function useResizableSidebar(
   /** 右邻内容自己的内缩,见 handleOffset。只有调用方知道下一块长什么样。 */
   nextInset = 0,
 ): ResizableSidebar {
-  const storageKey = `openstudio.sidebar.${key}`;
+  // v2:紧凑档换过一次默认宽度。存着旧值的用户会一直看到旧的宽度,而那正是这次要改的东西 ——
+  // 换键名让它重新从新默认值起步。这是**一次性迁移**,不是兼容层:旧键没人再读,它会随
+  // localStorage 自然消失。
+  const storageKey = `openstudio.sidebar.v2.${key}`;
   const [width, setWidth] = React.useState(() => {
     try {
       return clampSaved(bounds, window.localStorage.getItem(storageKey));

@@ -35,7 +35,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
 import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab";
-import { useResizableSidebar } from "@/lib/useResizableSidebar";
+import { COMPACT_SIDEBAR_BOUNDS, useResizableSidebar } from "@/lib/useResizableSidebar";
 import { cn } from "@/lib/utils";
 
 /**
@@ -48,9 +48,9 @@ import { cn } from "@/lib/utils";
  * 设计与取舍见 docs/PLUGIN_ARCHITECTURE.md。
  */
 export function PluginsView() {
-  // 第三个参数是右栏内容自己的 px-0.5(2px,给卡片聚焦光圈留位置)——
-  // 手柄要按**看得见的边**居中,不按 grid 列边界。见 handleOffset。
-  const sidebar = useResizableSidebar("plugins", undefined, 2);
+  // 右栏现在是一块有边框的面板,它的边**就是**列边界 —— 不再需要 nextInset 补偿
+  // (那是给"无边框滚动容器 + 内层 px-0.5"那种形状用的,见 handleOffset)。
+  const sidebar = useResizableSidebar("plugins", COMPACT_SIDEBAR_BOUNDS);
   const t = useI18n();
   const qc = useQueryClient();
 
@@ -158,7 +158,9 @@ export function PluginsView() {
         </aside>
         {/* 边缘拖动 —— 和剪辑页同一套(lib/useResizableSidebar)。 */}
         <div {...sidebar.handleProps} />
-        <div className="grid min-w-0 overflow-y-auto">
+        {/* 右栏是**一块占满高度的面板**,内部滚动 —— 此前它跟着内容走,内容少时就是半截,
+            左边是个完整的带边框面板、右边飘着一段,两边看着不像同一层东西。 */}
+        <div className="grid min-h-0 min-w-0 content-start overflow-y-auto rounded-md border border-border bg-panel px-3 py-2.5 shadow-[var(--shadow-panel)]">
           {selected ? (
             <PackageDetail key={selected.id} pkg={selected} />
           ) : (
@@ -233,8 +235,11 @@ function PackageDetail({ pkg }: { pkg: PluginPackage }) {
 
   const canAdd = pkg.multiple || (pkg.instances ?? []).length === 0;
 
+  const instances = pkg.instances ?? [];
+  const live = instances.filter((one) => one.enabled).length;
+
   return (
-    <div className="grid w-full content-start gap-3 px-0.5 pb-4 pt-0.5">
+    <div className="grid w-full content-start gap-4">
       {/* 卸载会删掉磁盘上的插件目录 —— 不可撤销,所以走确认。 */}
       <ConfirmDialog
         open={confirmUninstall}
@@ -244,48 +249,69 @@ function PackageDetail({ pkg }: { pkg: PluginPackage }) {
         onConfirm={() => uninstall.mutate()}
       />
 
-      <SettingsGroup
-        title={pkg.name}
-        description={`${pkg.id} · v${pkg.version} · ${pkg.kind === "mcp" ? t("pluginKindMcp") : t("pluginKindProcess")}`}
-        actions={
+      {/* **页头,不是卡片。** 包是这一页的身份 —— 它此前和连接一样是个 SettingsGroup,
+          于是「TikHub」在屏幕上出现两次、长得一模一样,读的人分不清哪个是包哪个是连接。
+          身份该在版面顶端只出现一次,后面全是它的内容。 */}
+      <header className="grid gap-2 border-b border-border pb-3">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+          <h2 className="m-0 truncate text-ui-lg font-semibold text-foreground">{pkg.name}</h2>
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="text-destructive hover:text-destructive"
+            className="shrink-0 text-muted-foreground hover:text-destructive"
             loading={uninstall.isPending}
             onClick={() => setConfirmUninstall(true)}
           >
             <Trash2 size={13} /> {t("pluginUninstall")}
           </Button>
-        }
-      >
-        {canAdd ? (
-          <SettingsRow
-            label={t("pluginNewConnection")}
-            description={(pkg.config_fields ?? []).length ? t("pluginNewConnectionDesc") : t("pluginNewConnectionSimple")}
-          >
-            <div className="flex flex-wrap items-center justify-end gap-1.5">
-              {(pkg.config_fields ?? []).map((field) => (
-                <FieldInput
-                  key={field.key}
-                  field={field}
-                  value={draft[field.key] ?? field.default}
-                  onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))}
-                />
-              ))}
-              <Button size="sm" loading={createInstance.isPending} onClick={() => createInstance.mutate()}>
-                <Plus size={13} /> {t("pluginAddConnection")}
-              </Button>
-            </div>
-          </SettingsRow>
-        ) : (
-          <SettingsRow label={t("pluginSingleConnection")} description={t("pluginSingleConnectionDesc")} />
-        )}
-      </SettingsGroup>
+        </div>
+        {/* 元信息一行说完 —— 它们是查故障时才看的东西,不值一整块版面。 */}
+        <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-ui-xs text-muted-foreground">
+          <span className="timecode">{pkg.id}</span>
+          <span aria-hidden>·</span>
+          <span>v{pkg.version}</span>
+          <span aria-hidden>·</span>
+          <span>{pkg.kind === "mcp" ? t("pluginKindMcp") : t("pluginKindProcess")}</span>
+          {live > 0 && (
+            <>
+              <span aria-hidden>·</span>
+              <span className="text-success">{t("pluginConnectionCount").replace("{n}", String(live))}</span>
+            </>
+          )}
+        </p>
+      </header>
 
-      {(pkg.instances ?? []).map((instance) => (
+      {/* 连接是这一页的**主体**。有几个就是几个,新建那一条排在最后 —— 排在最前的话,
+          每次进来第一眼看到的是"再建一个",而绝大多数时候用户是来改已有的那个。 */}
+      {instances.map((instance) => (
         <ConnectionCard key={instance.id} pkg={pkg} instance={instance} />
       ))}
+
+      {instances.length === 0 && (
+        <EmptyState size="compact" icon={<Plug size={15} />} title={t("pluginNoConnections")} body={t("pluginNoConnectionsBody")} />
+      )}
+
+      {canAdd && (
+        <div className="grid gap-2 rounded-lg border border-dashed border-border px-3 py-2.5">
+          <span className="text-ui-sm font-semibold text-foreground">{t("pluginNewConnection")}</span>
+          <p className="m-0 text-ui-xs leading-[1.55] text-muted-foreground">
+            {(pkg.config_fields ?? []).length ? t("pluginNewConnectionDesc") : t("pluginNewConnectionSimple")}
+          </p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {(pkg.config_fields ?? []).map((field) => (
+              <FieldInput
+                key={field.key}
+                field={field}
+                value={draft[field.key] ?? field.default}
+                onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))}
+              />
+            ))}
+            <Button size="sm" loading={createInstance.isPending} onClick={() => createInstance.mutate()}>
+              <Plus size={13} /> {t("pluginAddConnection")}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
