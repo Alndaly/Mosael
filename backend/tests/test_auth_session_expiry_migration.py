@@ -23,7 +23,16 @@ from tests.util import fresh_client
 
 
 def _old_shaped_table() -> None:
-    """把 auth_sessions 退回迁移前的形状(只有 token / user_id / created_at)。"""
+    """把 auth_sessions 退回迁移前的形状(只有 token / user_id / created_at)。
+
+    **DDL 之后必须清掉连接池**:SQLite 的每条连接各自缓存表结构,而 `engine.begin()` 每次
+    从池里拿一条。这里 DROP+CREATE 用的是一条,迁移里 `inspect(engine)` 用的可能是另一条 ——
+    那一条还记着 DROP 之前的样子,于是迁移以为 `kind` 不存在、再 ADD 一次,SQLite 回
+    `duplicate column name`。
+
+    macOS 上撞不到(池里往往就一条连接被反复复用),Linux 的 CI 上必现 —— 这是本地绿、
+    CI 红的全部原因。
+    """
     with engine.begin() as conn:
         conn.execute(text("DROP TABLE IF EXISTS auth_sessions"))
         conn.execute(
@@ -34,6 +43,7 @@ def _old_shaped_table() -> None:
                 "created_at DATETIME NOT NULL)"
             )
         )
+    engine.dispose()
 
 
 def _insert_legacy(token: str, *, age_days: int) -> None:
