@@ -122,3 +122,98 @@ def test_两侧用的是同一份操作清单() -> None:
     from app.domain.sequences.operations import EDIT_OP_KINDS as domain_kinds
 
     assert agent_kinds is domain_kinds
+
+
+class Test接素材到时间线:
+    """**编排里占九成的动作。**
+
+    此前只有一个万能节点,要用户手写 `{"kind": "insert_clip", "timeline_start": 12.5, …}` ——
+    而那个 timeline_start 还得自己算。"接到末尾"本来就该由机器算。
+    """
+
+    def _asset(self, ws: str, kind: str = "video", duration: float = 5.0) -> str:
+        from app.db.models import Asset
+
+        with SessionLocal() as db:
+            asset = Asset(workspace_id=ws, kind=kind, name="a.mp4", source="imported",
+                          file_key="x", media_info={"duration": duration})
+            db.add(asset)
+            db.commit()
+            return asset.id
+
+    def test_接到末尾_起点由机器算(self) -> None:
+        ws, sequence_id, _ = _setup()
+        asset = self._asset(ws)
+        first = _run("timeline_append", ws, {"sequence_id": sequence_id, "asset_id": asset})
+        assert first["timeline_start"] == 0.0
+        second = _run("timeline_append", ws, {"sequence_id": sequence_id, "asset_id": asset})
+        assert second["timeline_start"] == first["timeline_end"], "第二段没接在第一段后面"
+
+    def test_不填轨道就自动挑一条同类的(self) -> None:
+        """绝大多数时间线只有一条视频轨 —— 逼用户先跑一个「看一眼时间线」把 id 取出来是纯仪式。"""
+        ws, sequence_id, _ = _setup()
+        out = _run("timeline_append", ws, {"sequence_id": sequence_id, "asset_id": self._asset(ws)})
+        assert out["clip_id"]
+
+    def test_音频进音频轨(self) -> None:
+        ws, sequence_id, _ = _setup()
+        _run("timeline_add_track", ws, {"sequence_id": sequence_id, "kind": "audio"})
+        out = _run("timeline_append", ws, {"sequence_id": sequence_id, "asset_id": self._asset(ws, "audio", 3.0)})
+        assert out["clip_id"]
+
+    def test_可以只截一段(self) -> None:
+        ws, sequence_id, _ = _setup()
+        out = _run("timeline_append", ws, {
+            "sequence_id": sequence_id, "asset_id": self._asset(ws, duration=10.0), "start": 2, "end": 6,
+        })
+        assert out["timeline_end"] - out["timeline_start"] == 4.0
+
+    def test_截取范围反了要拦下(self) -> None:
+        ws, sequence_id, _ = _setup()
+        with pytest.raises(WorkflowDomainError, match="大于"):
+            _run("timeline_append", ws, {
+                "sequence_id": sequence_id, "asset_id": self._asset(ws), "start": 5, "end": 2,
+            })
+
+    def test_跨工作区的素材不给接(self) -> None:
+        from app.db.models import Workspace
+
+        ws, sequence_id, _ = _setup()
+        with SessionLocal() as db:
+            other = Workspace(name="别人的")
+            db.add(other)
+            db.commit()
+            other_asset = self._asset(other.id)
+        with pytest.raises(WorkflowDomainError, match="工作区"):
+            _run("timeline_append", ws, {"sequence_id": sequence_id, "asset_id": other_asset})
+
+
+class Test加轨道与清空:
+    def test_加一条轨道并给出_id(self) -> None:
+        ws, sequence_id, _ = _setup()
+        out = _run("timeline_add_track", ws, {"sequence_id": sequence_id, "kind": "subtitle"})
+        assert out["track_id"], "没给出新轨道的 id,下游没法指定它"
+
+    def test_清空只删片段_轨道留着(self) -> None:
+        """留着轨道是有意的:重跑一条工作流时,下游的「接素材」还指望那几条轨道在。"""
+        from app.db.models import Asset, Track
+
+        ws, sequence_id, _ = _setup()
+        with SessionLocal() as db:
+            asset = Asset(workspace_id=ws, kind="video", name="a", source="imported",
+                          file_key="x", media_info={"duration": 5.0})
+            db.add(asset); db.commit(); asset_id = asset.id
+        _run("timeline_append", ws, {"sequence_id": sequence_id, "asset_id": asset_id})
+        with SessionLocal() as db:
+            tracks_before = db.query(Track).filter(Track.sequence_id == sequence_id).count()
+        out = _run("timeline_clear", ws, {"sequence_id": sequence_id})
+        assert out["removed"] == 1
+        with SessionLocal() as db:
+            assert db.query(Track).filter(Track.sequence_id == sequence_id).count() == tracks_before
+
+
+def test_看一眼时间线直接给出轨道_id() -> None:
+    """下游想指定轨道时,不用自己去 tracks 数组里翻。"""
+    ws, sequence_id, _ = _setup()
+    out = _run("inspect_sequence", ws, {"sequence_id": sequence_id})
+    assert "video_track_id" in out and "audio_track_id" in out

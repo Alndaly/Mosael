@@ -121,21 +121,60 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "看一眼时间线",
         "description": "读出这条时间线的轨道、片段和总时长。编排之前先知道现在长什么样。",
         "config": {"sequence_id": {"type": "template", "required": True}},
-        "outputs": ["sequence_id", "revision", "tracks", "duration"],
+        "outputs": ["sequence_id", "revision", "tracks", "duration", "video_track_id", "audio_track_id"],
+    },
+    "timeline_append": {
+        "category": "素材",
+        "label": "把素材接到时间线",
+        "description": (
+            "把一份素材接到某条轨道的**末尾**。这是编排里占九成的动作 —— 一段段往后排。"
+            "轨道留空就用第一条同类轨道(视频素材进视频轨,音频进音频轨)。"
+        ),
+        "config": {
+            "sequence_id": {"type": "template", "required": True, "description": "要编排的时间线"},
+            "asset_id": {"type": "template", "required": True, "description": "要接进去的素材"},
+            "track_id": {"type": "template", "description": "接到哪条轨道。留空自动挑一条同类的"},
+            "start": {"type": "number", "description": "从第几秒开始截。留空从头"},
+            "end": {"type": "number", "description": "截到第几秒。留空到尾"},
+        },
+        "outputs": ["clip_id", "timeline_start", "timeline_end", "sequence_id"],
+    },
+    "timeline_add_track": {
+        "category": "素材",
+        "label": "加一条轨道",
+        "description": "给时间线加一条视频 / 音频 / 字幕轨。",
+        "config": {
+            "sequence_id": {"type": "template", "required": True},
+            "kind": {
+                "type": "string",
+                "required": True,
+                "description": "轨道类型",
+                "options": ["video", "audio", "subtitle"],
+            },
+        },
+        "outputs": ["track_id", "sequence_id"],
+    },
+    "timeline_clear": {
+        "category": "素材",
+        "label": "清空时间线",
+        "description": "删掉这条时间线上的所有片段,轨道留着。重跑一条工作流之前常常要先清一次。",
+        "config": {"sequence_id": {"type": "template", "required": True}},
+        "outputs": ["removed", "sequence_id"],
     },
     "edit_timeline": {
         "category": "素材",
-        "label": "编排时间线",
+        "label": "时间线高级操作",
         "description": (
-            "把一组操作应用到时间线上:插入/移动/裁剪/删除片段、切一段、增删轨道、改效果与变换。"
-            "操作是一个数组,每项形如 {\"kind\": \"insert_clip\", ...}。"
+            "一次提交一组操作,用于上面几个节点覆盖不了的情况(移动、裁剪、切一段、改效果与变换)。"
+            "operations 是一个 JSON 数组,每项形如 {\"kind\": \"move_clip\", \"clip_id\": …}。"
+            "常规的「接素材 / 加轨道 / 清空」用对应的专用节点,不必写这个。"
         ),
         "config": {
             "sequence_id": {"type": "template", "required": True},
             "operations": {
                 "type": "template",
                 "required": True,
-                "description": "操作数组(JSON)。可用的 kind: " + "、".join(EDIT_OP_KINDS),
+                "description": "操作数组(JSON)。可用的 kind:" + "、".join(EDIT_OP_KINDS),
             },
         },
         "outputs": ["applied", "sequence_id", "revision"],
@@ -753,6 +792,9 @@ INTERNAL_NODE_TYPES = frozenset(
         # sequence_operations,用户撤得回来。
         "inspect_sequence",
         "edit_timeline",
+        "timeline_append",
+        "timeline_add_track",
+        "timeline_clear",
         "ai_generate",
         "condition",
         "template",

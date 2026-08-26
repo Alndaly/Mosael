@@ -43,6 +43,11 @@ const OUTPUT_TYPES: Record<string, Record<string, DataType>> = {
   transcribe_asset: { text: "text" },
   export_sequence: { asset_id: "asset" },
   ai_generate: { asset_id: "asset", generation_id: "text" },
+  inspect_sequence: { sequence_id: "sequence", duration: "number" },
+  timeline_append: { sequence_id: "sequence", timeline_start: "number", timeline_end: "number" },
+  timeline_add_track: { sequence_id: "sequence" },
+  timeline_clear: { sequence_id: "sequence", removed: "number" },
+  edit_timeline: { sequence_id: "sequence", applied: "number" },
   publish: { result: "json" },
   condition: { result: "text" },
   http_request: { status: "number", text: "text", json: "json" },
@@ -54,6 +59,11 @@ const INPUT_TYPES: Record<string, Record<string, DataType>> = {
   transcribe_asset: { asset_id: "asset" },
   export_sequence: { sequence_id: "sequence" },
   publish: { asset_id: "asset" },
+  inspect_sequence: { sequence_id: "sequence" },
+  edit_timeline: { sequence_id: "sequence" },
+  timeline_append: { sequence_id: "sequence", asset_id: "asset" },
+  timeline_add_track: { sequence_id: "sequence" },
+  timeline_clear: { sequence_id: "sequence" },
 };
 
 export function outputType(nodeType: string, output: string): DataType {

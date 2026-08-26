@@ -26,6 +26,11 @@ NODE_TO_TOOL: dict[str, str] = {
     # (domain/sequences/operations.EDIT_OP_KINDS)—— 不是抄的,是同一个常量。
     "edit_timeline": "edit_timeline",
     "inspect_sequence": "inspect_sequence",
+    # 这三个是**同一件事的常用形状**:画布上让人填表比手写一条 insert_clip 好用得多,
+    # 而智能体不需要这层 —— 它本来就是在写那条操作。都由 edit_timeline 承担。
+    "timeline_append": "edit_timeline",
+    "timeline_add_track": "edit_timeline",
+    "timeline_clear": "edit_timeline",
     "llm": "",  # 见 NOT_A_TOOL
     "plugin_tool": "",  # 插件工具已展开成一等公民(plugin__<连接>__<工具>),不是固定的一个名字
     "transcribe_asset": "transcribe_asset",
