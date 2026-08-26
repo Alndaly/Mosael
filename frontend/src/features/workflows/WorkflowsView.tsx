@@ -1137,8 +1137,8 @@ function WorkflowEditor({
   }, [workflow.updated_at, workflow.graph, dirty, rebuildNodes]);
 
   const applyGraph = React.useCallback(
-    (next: WorkflowGraph) => {
-      setGraph(next);
+    (next: WorkflowGraph, options?: { coalesce?: boolean }) => {
+      setGraph(next, options);
       rebuildNodes(next);
       setEdges(toFlowEdges(next, t));
       setDirty(true);
@@ -2073,10 +2073,19 @@ function WorkflowEditor({
             registry={registry}
             workspaceId={workspaceId}
             onChange={(patch) => {
-              applyGraph({
-                ...graph,
-                nodes: graph.nodes.map((node) => (node.id === selectedNode.id ? { ...node, ...patch } : node)),
-              });
+              // **打字是连发,不是离散编辑。** 每敲一个字符记一条历史的话,Cmd+Z 一次只退回
+              // 一个字母 —— 用户以为撤销坏了,其实是它太尽责。用拖拽那同一套合并机制:
+              // 一串输入在历史里塌成一条,存的是这串开始前的图(见 stores/workflowGraphStore)。
+              //
+              // 只有改文字才合并;改开关、换下拉那些仍然一步一条 —— 它们本来就是离散的。
+              const typing = "config" in patch || "name" in patch;
+              applyGraph(
+                {
+                  ...graph,
+                  nodes: graph.nodes.map((node) => (node.id === selectedNode.id ? { ...node, ...patch } : node)),
+                },
+                { coalesce: typing },
+              );
             }}
             onApplyGraph={applyGraph}
             onDelete={() => {
@@ -2997,8 +3006,15 @@ function NodeInspector({
               **一个框都不给** —— 它是这张卡片的标题,不是一个待填的表单项。悬停给个底色说明
               "这儿能点",聚焦时给一条下划线说明"正在改",都不用整圈边框:那圈线会让标题看着
               和下面那些参数输入框同级,而它是标题。 */}
-          <Input
-            className="-ml-1 h-6 min-w-0 rounded-md border-0 bg-transparent px-1 py-px text-ui-md font-semibold text-foreground shadow-none outline-none hover:bg-secondary focus-visible:bg-transparent focus-visible:outline-none focus-visible:ring-0 focus-visible:[box-shadow:inset_0_-1px_0_0_var(--primary)]"
+          {/* **裸 input,不是 Input 组件。** 它是这张卡片的可编辑标题,不是表单控件 ——
+              套基础款要一路对抗 border-input / rounded-md / h-9。
+
+              颜色走 CSS 变量 + 一条局部规则(见下面的 <style>):全局有一条
+              `* { border-color: var(--border) }`,和单个 border-* 类同优先级、靠顺序决胜,
+              而它排在后面 —— 试过 border-transparent 和任意变体,Tailwind 要么被它盖掉、
+              要么根本没为那些写法生成 CSS。一条带类名的真规则最省事,也最好读。 */}
+          <input
+            className="wf-node-title -ml-1 h-6 min-w-0 border-0 border-b bg-transparent px-1 py-px text-ui-md font-semibold text-foreground outline-none transition-colors duration-100 placeholder:font-normal placeholder:text-muted-foreground"
             value={node.name ?? ""}
             placeholder={meta?.label ?? node.type}
             aria-label={t("wfNodeName")}
