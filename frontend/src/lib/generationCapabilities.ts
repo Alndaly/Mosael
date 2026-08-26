@@ -65,9 +65,29 @@ export function aspectRatioOptions(model: GenerationModel | null): string[] {
   return capabilityList(model, "aspect_ratios", FALLBACK_ASPECT_RATIOS);
 }
 
+/**
+ * 时长的**可选档位**。空数组有两种含义,要分开:
+ *
+ * - 模型不支持时长 → 空(上面那行);
+ * - 支持,但它是个**区间**而不是几个档 → 也是空,由 min/max 说了算(见 durationRange)。
+ *
+ * 所以这里不能走 capabilityNumberList 的兜底 —— 那个兜底把空数组当成"没声明"、回落到
+ * `[5]`,于是区间型的模型永远显示成一个只有 5 的下拉。Seedance 2 收 4–15 秒,而界面
+ * 只给一个选项,正是这么来的。
+ */
 export function durationOptions(model: GenerationModel | null): number[] {
   if (!supportsParameter(model, "duration_seconds")) return [];
-  return capabilityNumberList(model, "duration_seconds", [5]);
+  const value = model?.capabilities?.duration_seconds;
+  if (!Array.isArray(value)) return [5];
+  return value.map((item) => Number(item)).filter((item) => Number.isFinite(item) && item > 0);
+}
+
+/** 时长是区间时的上下界;不是区间(或没声明上界)时返回 null。 */
+export function durationRange(model: GenerationModel | null): { min: number; max: number } | null {
+  if (durationOptions(model).length > 0) return null;
+  const max = capabilityNumber(model, "max_duration_seconds", 0);
+  if (max <= 0) return null;
+  return { min: capabilityNumber(model, "min_duration_seconds", 1) || 1, max };
 }
 
 export function maxImages(model: GenerationModel | null): number {

@@ -75,6 +75,7 @@ import { ROW_HANDLE_CLASS, SIDEBAR_HANDLE_CLASS, handleOffset, useResizableRow, 
 import {
   aspectRatioOptions,
   capabilityNumber,
+  durationRange,
   capabilityString,
   durationOptions,
   sizeOptions,
@@ -1633,6 +1634,39 @@ function WorkflowEditor({
   }, [edges, runByNode, edgeShape]);
 
   /**
+   * 画布快捷键。
+   *
+   * ⌘/Ctrl+N 打开「添加节点」;⌘/Ctrl+S 存盘;⌘/Ctrl+Enter 运行。
+   *
+   * **在输入框里一律不劫持** —— 在节点检查器里打字时按 ⌘N,想要的是浏览器的新建窗口
+   * (或什么都不发生),而不是画布上冒出一个节点。这和撤销那条同一个判据。
+   */
+  React.useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+      const key = event.key.toLowerCase();
+      if (key === "n") {
+        // 点那个按钮,而不是给 SearchableSelect 加一个受控 prop —— 它的开合是内部状态,
+        // 为一个快捷键把它改成受控,调用它的另外几处都要跟着改。
+        const trigger = document.querySelector<HTMLButtonElement>("[data-wf-add-node]");
+        if (!trigger) return;
+        event.preventDefault();
+        trigger.click();
+      } else if (key === "s") {
+        event.preventDefault();
+        if (!save.isPending) save.mutate();
+      } else if (event.key === "Enter") {
+        event.preventDefault();
+        if (!run.isPending) run.mutate();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  /**
    * Cmd/Ctrl+] 把选中节点提到最前、[ 压到最后。与悬浮窗、剪辑页片段同键同义。
    *
    * **夹在 ±900 而不是无穷**:React Flow 的 elevateNodesOnSelect 是给选中节点的 z **加** 1000
@@ -1728,6 +1762,7 @@ function WorkflowEditor({
             trigger={
               <button
                 type="button"
+                data-wf-add-node=""
                 className="flex h-8 w-auto items-center gap-1 rounded-full border border-input bg-card px-3 text-xs text-foreground hover:bg-muted"
                 aria-label={t("wfAddNode")}
               >
@@ -2762,10 +2797,16 @@ function NodeInspector({
     else next[key] = /^-?\d+(\.\d+)?$/.test(value) ? Number(value) : value;
     setConfig("parameters", next);
   };
-  /** 该模型声明支持、且是「从若干可选值里挑一个」的那些参数。 */
-  const genParamKeys: Array<{ key: string; label: string; options: string[] }> = React.useMemo(() => {
+  /**
+   * 该模型声明支持的参数。两种形状:
+   *
+   * - **枚举** —— 从若干可选值里挑一个(分辨率、宽高比);
+   * - **区间** —— min..max 内的任意整数(时长)。Seedance 2 收 4–15 秒,写成枚举就只剩
+   *   两个档,而用户看不出少了什么。
+   */
+  const genParamKeys: Array<{ key: string; label: string; options: string[]; range?: { min: number; max: number } }> = React.useMemo(() => {
     if (!genModel) return [];
-    const out: Array<{ key: string; label: string; options: string[] }> = [];
+    const out: Array<{ key: string; label: string; options: string[]; range?: { min: number; max: number } }> = [];
     const ratios = aspectRatioOptions(genModel);
     if (ratios.length > 0) out.push({ key: "aspect_ratio", label: t("wfGenAspectRatio"), options: ratios });
     if (genModel.kind === "image") {
@@ -2775,8 +2816,13 @@ function NodeInspector({
       const resolutions = videoResolutionOptions(genModel);
       if (resolutions.length > 0) out.push({ key: "resolution", label: t("wfGenResolution"), options: resolutions });
       const durations = durationOptions(genModel);
-      if (durations.length > 0)
+      if (durations.length > 0) {
         out.push({ key: "duration_seconds", label: t("wfGenDuration"), options: durations.map(String) });
+      } else {
+        // 枚举为空 = 这是个区间。上下界从描述符来 —— 写死的话,界面允许的值供应商会当场拒。
+        const range = durationRange(genModel);
+        if (range) out.push({ key: "duration_seconds", label: t("wfGenDuration"), options: [], range });
+      }
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3183,21 +3229,34 @@ function NodeInspector({
             {/* 生成参数按所选模型的 capabilities 渲染 —— 目录声明支持什么就出现什么。 */}
             {genModel && genParamKeys.length > 0 && (
               <>
-                {genParamKeys.map(({ key, label, options }) => (
+                {genParamKeys.map(({ key, label, options, range }) => (
                   <div className={FIELD_BOX} key={key}>
                     <span>{label}</span>
-                    <Select value={String(genParams[key] ?? "")} onValueChange={(next) => setGenParam(key, next)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder={t("wfPickOption")} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {options.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {/* 区间给数字框(上下界来自描述符),枚举给下拉。写死成下拉的话,
+                        4–15 秒的模型只剩两个档,而用户看不出少了什么。 */}
+                    {range ? (
+                      <Input
+                        type="number"
+                        min={range.min}
+                        max={range.max}
+                        value={String(genParams[key] ?? "")}
+                        placeholder={`${range.min}–${range.max}`}
+                        onChange={(event) => setGenParam(key, event.target.value)}
+                      />
+                    ) : (
+                      <Select value={String(genParams[key] ?? "")} onValueChange={(next) => setGenParam(key, next)}>
+                        <SelectTrigger>
+                          <SelectValue placeholder={t("wfPickOption")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {options.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
                 ))}
                 {supportsParameter(genModel, "seed") && (

@@ -53,6 +53,7 @@ import { MessageFooter, MessageTime, formatCostMicros } from "@/features/ai-stud
 import {
   aspectRatioOptions,
   capabilityNumber,
+  durationRange,
   capabilityString,
   durationOptions,
   sizeOptions,
@@ -978,10 +979,11 @@ function GenerateWorkspace({
                       <Input
                         className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-ui-sm font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
                         type="number"
-                        // 下界也从描述符来 —— 写死 1 的话,界面允许的值供应商会当场拒掉
+                        // 上下界都从描述符来 —— 写死的话,界面允许的值供应商会当场拒掉
                         // (Seedance 2 实测 3 秒被拒、4 秒可以)。
-                        min={capabilityNumber(selectedModel, "min_duration_seconds", 1)}
-                        max={capabilityNumber(selectedModel, "max_duration_seconds", 10)}
+                        min={durationRange(selectedModel)?.min ?? 1}
+                        max={durationRange(selectedModel)?.max ?? capabilityNumber(selectedModel, "max_duration_seconds", 10)}
+                        placeholder={(() => { const r = durationRange(selectedModel); return r ? `${r.min}–${r.max}` : ""; })()}
                         value={generationConfig.durationSeconds}
                         onChange={(event) => setConfigValue("durationSeconds", event.target.value)}
                       />
