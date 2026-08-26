@@ -34,7 +34,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ServerPicker } from "@/components/layout/ServerPicker";
 import { cn } from "@/lib/utils";
-import { useResizableSidebar } from "@/lib/useResizableSidebar";
+import { COMPACT_SIDEBAR_BOUNDS, useResizableSidebar } from "@/lib/useResizableSidebar";
 
 
 type SectionId =
@@ -75,7 +75,8 @@ const SECTION_IDS: SectionId[] = [
 const SECTION_STORAGE_KEY = "openstudio:settings-section";
 
 export function SettingsView({ workspace }: { workspace: Workspace }) {
-  const sidebar = useResizableSidebar("settings");
+  // 导航项是短标签,不是长内容 —— 用紧凑档,宽度让给右边真正在配的东西。
+  const sidebar = useResizableSidebar("settings", COMPACT_SIDEBAR_BOUNDS);
   const t = useI18n();
   const [focusProviderCapability, setFocusProviderCapability] = React.useState<string | null>(null);
   const [section, setSectionState] = React.useState<SectionId>(() => {
@@ -144,7 +145,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
     <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
       <div className="relative grid min-h-0 flex-1 items-stretch gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]"
         style={{ gridTemplateColumns: `${sidebar.width}px minmax(0, 1fr)` }}>
-        <nav className="grid content-start gap-0.5 rounded-lg border border-border bg-panel p-1.5 max-[880px]:inline-flex max-[880px]:w-fit max-[880px]:max-w-full max-[880px]:gap-0 max-[880px]:overflow-x-auto max-[880px]:overflow-y-hidden max-[880px]:rounded max-[880px]:p-0 max-[880px]:[&>*+*]:border-l max-[880px]:[&>*+*]:border-border" aria-label={t("settingsTitle")}>
+        <nav className="grid min-h-0 content-start gap-0.5 overflow-y-auto rounded-md border border-border bg-panel p-1.5 shadow-[var(--shadow-panel)] max-[880px]:inline-flex max-[880px]:w-fit max-[880px]:max-w-full max-[880px]:gap-0 max-[880px]:overflow-x-auto max-[880px]:overflow-y-hidden max-[880px]:rounded max-[880px]:p-0 max-[880px]:[&>*+*]:border-l max-[880px]:[&>*+*]:border-border" aria-label={t("settingsTitle")}>
           {nav.map((item) => (
             <button
               key={item.id}
@@ -164,7 +165,9 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
         </nav>
         {/* 边缘拖动 —— 和别处同一套(lib/useResizableSidebar)。 */}
         <div {...sidebar.handleProps} />
-        <div className="grid min-w-0 content-start gap-5 overflow-y-auto px-0.5 pb-2.5 pt-1">
+        {/* 右栏是**一块占满高度的面板**,内部滚动 —— 和插件页、定时任务页同一套。此前它跟着
+            内容走,内容少时就是半截,而左边是个完整的带边框面板。 */}
+        <div className="grid min-h-0 min-w-0 content-start gap-5 overflow-y-auto rounded-md border border-border bg-panel px-3.5 py-3 shadow-[var(--shadow-panel)]">
           {section === "account" && <AccountSection />}
           {section === "team" && <TeamSection workspace={workspace} />}
           {section === "appearance" && (

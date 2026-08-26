@@ -233,7 +233,7 @@ export function HomeView({
       />
 
       {statTiles.length > 0 && (
-        <section className="mb-3 grid grid-cols-[repeat(auto-fit,minmax(128px,1fr))] gap-2.5">
+        <section className="mb-2 grid grid-cols-[repeat(auto-fit,minmax(128px,1fr))] gap-2">
           {statTiles.map((tile) => (
             <button
               type="button"
@@ -256,7 +256,7 @@ export function HomeView({
       )}
 
       {stats && (
-        <section className="mb-3 grid grid-cols-[2fr_1fr] gap-2.5 max-[880px]:grid-cols-1">
+        <section className="mb-2 grid grid-cols-[2fr_1fr] gap-2 max-[880px]:grid-cols-1">
           <div className="grid content-start gap-1.5 rounded-lg border border-border bg-panel px-3.5 pb-2 pt-2.5">
             <h2 className="m-0 text-xs font-[650] text-muted-foreground">{t("homeChartActivity")}</h2>
             <ActivityChart daily={stats.daily} />
@@ -301,7 +301,7 @@ export function HomeView({
         </section>
       )}
 
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-1.5">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-1.5">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           <Input
             ref={searchRef}
@@ -339,7 +339,7 @@ export function HomeView({
         />
       ) : (
         <>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-2.5">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-2">
             {visible.map((project) => (
               <ContextMenu key={project.id}>
                 <ContextMenuTrigger asChild>
