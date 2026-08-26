@@ -110,6 +110,7 @@ def chat(
     # 与其把十来个参数提到签名上,不如让需要的那一处显式传进来。
     if extra:
         payload.update({k: v for k, v in extra.items() if k not in ("model", "messages")})
+    payload["messages"] = _satisfy_json_mode(payload.get("messages") or [], payload.get("response_format"))
     url = f"{target.base_url.rstrip('/')}/chat/completions"
     headers = _auth_headers(target.api_key)
 
@@ -136,6 +137,28 @@ def chat(
         call.describe(provider=target.vendor, model=target.model, provider_profile_id=target.profile_id or None)
         call.meter_openai_tokens(body.get("usage"))
     return content
+
+
+#: OpenAI 兼容接口的硬性要求:用 `response_format: json_object` 时,**提示词里必须出现
+#: "json" 这个词**,否则直接 400。deepseek、月之暗面等跟着 OpenAI 的实现都照做。
+_JSON_MODE_HINT = "Respond with a single valid JSON object."
+
+
+def _satisfy_json_mode(messages: list[dict[str, Any]], response_format: Any) -> list[dict[str, Any]]:
+    """JSON 模式下,保证提示词里出现 "json"。
+
+    这条约束是接口方定的,不是模型的偏好 —— 不满足时拿到的是一个 400,而不是一个凑合的
+    回答。此前四个调用点各自拼提示词,谁都没管它:工作流的 LLM 节点把 response_format
+    开放给了用户,而用户的提示词里当然不会无缘无故提到 json,于是选了 JSON 模式就 400。
+
+    **只在缺的时候补一句**,而且补在 system 那一侧:改用户写的那段话会改变他的意图,
+    而这一句说的正是 JSON 模式本来就要求的事,不增加任何新约束。
+    """
+    if not isinstance(response_format, dict) or response_format.get("type") not in ("json_object", "json_schema"):
+        return messages
+    if any("json" in str(one.get("content") or "").lower() for one in messages):
+        return messages
+    return [{"role": "system", "content": _JSON_MODE_HINT}, *messages]
 
 
 def _auth_headers(api_key: str) -> dict[str, str]:

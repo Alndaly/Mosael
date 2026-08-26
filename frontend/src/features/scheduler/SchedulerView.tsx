@@ -488,12 +488,14 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
           <h3 className="m-0 text-ui-md font-semibold text-foreground">{t("taskRuns")}</h3>
           <span className="text-ui-xs text-muted-foreground">{t("taskRunsDesc")}</span>
         </div>
-        <div className="overflow-hidden rounded-lg border border-border bg-panel">
+        {/* 行自己不带边框(靠 [&+&]:border-t 分隔),所以左右内边距要由容器给 ——
+            少了它,每一行都贴着边框,而图标离边只有 1px。 */}
+        <div className="overflow-hidden rounded-lg border border-border bg-panel px-3">
           {(runs.data ?? []).map((run) => (
             <RunRow key={run.id} run={run} job={jobs.data?.find((job) => job.id === run.job_id) ?? null} />
           ))}
           {runs.data?.length === 0 && (
-            <p className="m-0 px-3 py-4 text-center text-ui-xs text-muted-foreground">{t("noRunsYet")}</p>
+            <p className="m-0 py-4 text-center text-ui-xs text-muted-foreground">{t("noRunsYet")}</p>
           )}
         </div>
       </section>
