@@ -11,6 +11,11 @@ import { describe, expect, it, vi } from "vitest";
 import type { WorkflowGraph } from "@/api/client";
 import { COALESCE_MS, createWorkflowGraphStore } from "./workflowGraphStore";
 
+/** 取出那个节点的提示词。测试里只有一个节点,但类型上它是可选的。 */
+function prompt(graph: WorkflowGraph): string {
+  return String((graph.nodes[0]?.config as { prompt?: string } | undefined)?.prompt ?? "");
+}
+
 function graphWith(text: string): WorkflowGraph {
   return {
     nodes: [{ id: "n1", type: "llm", name: "写提示词", config: { prompt: text }, position: { x: 0, y: 0 } }],
@@ -24,10 +29,10 @@ describe("打字合并成一条历史", () => {
     for (const text of ["你", "你好", "你好世", "你好世界", "你好世界!"]) {
       store.getState().setGraph(graphWith(text), { coalesce: true });
     }
-    expect(store.getState().graph.nodes[0].config.prompt).toBe("你好世界!");
+    expect(prompt(store.getState().graph)).toBe("你好世界!");
 
     store.temporal.getState().undo();
-    expect(store.getState().graph.nodes[0].config.prompt).toBe("");
+    expect(prompt(store.getState().graph)).toBe("");
   });
 
   it("停顿之后是新的一串 —— 两次编辑各自可撤销", () => {
@@ -40,9 +45,9 @@ describe("打字合并成一条历史", () => {
       store.getState().setGraph(graphWith("第一段第二段"), { coalesce: true });
 
       store.temporal.getState().undo();
-      expect(store.getState().graph.nodes[0].config.prompt).toBe("第一段");
+      expect(prompt(store.getState().graph)).toBe("第一段");
       store.temporal.getState().undo();
-      expect(store.getState().graph.nodes[0].config.prompt).toBe("");
+      expect(prompt(store.getState().graph)).toBe("");
     } finally {
       vi.useRealTimers();
     }
@@ -55,8 +60,8 @@ describe("打字合并成一条历史", () => {
     store.getState().setGraph(graphWith("改法二"));
 
     store.temporal.getState().undo();
-    expect(store.getState().graph.nodes[0].config.prompt).toBe("改法一");
+    expect(prompt(store.getState().graph)).toBe("改法一");
     store.temporal.getState().undo();
-    expect(store.getState().graph.nodes[0].config.prompt).toBe("原文");
+    expect(prompt(store.getState().graph)).toBe("原文");
   });
 });

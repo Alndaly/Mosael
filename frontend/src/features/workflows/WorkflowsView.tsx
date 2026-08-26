@@ -1684,8 +1684,10 @@ function WorkflowEditor({
   );
 
   return (
-    <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-1.5">
-      <div className="flex flex-wrap items-center justify-between gap-2.5 px-0.5 pb-2 pt-0.5">
+    // 间距和别的页面一样是 8px:外框已经有 p-2,这里给 gap-2 就够,工具条自己不再另加
+    // 上下内边距 —— 此前是 pb-2 pt-0.5(下 8 上 2),上下差四倍,顶栏看着往上贴。
+    <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2.5 px-0.5">
         <button
           type="button"
           className="-ml-1 grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
