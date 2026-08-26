@@ -41,7 +41,13 @@ export const HANDLE_ROW = `h-[7px] cursor-row-resize touch-none before:h-0.5 bef
 /** 贴满整条边的竖拖柄 —— 侧栏用这个(剪辑页的三条各自内缩,自己拼 HANDLE_COLUMN)。 */
 export const SIDEBAR_HANDLE_CLASS = `absolute bottom-0 top-0 z-10 ${HANDLE_COLUMN}`;
 
-/** 热区多宽。`w-[7px]` / `h-[7px]` 说的就是它 —— 定位要减去半个热区才能居中。 */
+/**
+ * 热区多宽。`w-[7px]` / `h-[7px]` 说的就是它 —— 定位要减去半个热区才能居中。
+ *
+ * 比 8px 的缝只窄 1px:居中之后两边各剩 0.5px,取整之后常常变成一边 0、一边 1,看起来就是
+ * 「贴在右边那块面板上」。热区不能再窄(太细抓不住),所以让它**盖住整条缝**、两边都不留 ——
+ * 视觉上那根 2px 的短竖条仍然在正中,而"贴边"的错觉来自热区边缘,不是竖条。
+ */
 export const HANDLE_SIZE = 7;
 
 /**
@@ -57,7 +63,9 @@ export const HANDLE_SIZE = 7;
  * 于是手柄整体偏 5px、压在右边那块面板上,看着就是"贴在一边"。**数字来自布局,不该手抄。**
  */
 export function handleOffset(panelSize: number, { padding = 0, gap = 8 } = {}): number {
-  return padding + panelSize + (gap - HANDLE_SIZE) / 2;
+  // **向下取整**:8px 的缝里放 7px 的热区,两边各 0.5px —— 半个像素在不同缩放下会被舍到
+  // 不同边,于是同一条缝有时贴左、有时贴右。取整之后固定贴左那 0.5px,上下几条永远一致。
+  return padding + panelSize + Math.floor((gap - HANDLE_SIZE) / 2);
 }
 
 /** 拖动:已经是个数,只夹范围。 */

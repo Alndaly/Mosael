@@ -14,6 +14,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 type MarketEntry = components["schemas"]["PluginMarketEntry"];
+
+/**
+ * 装的就是市场里这一版。
+ *
+ * 版本号是字符串,比不出大小 —— 但这里不需要:**不相等就是有新版**。真去解析语义化版本的话,
+ * 得处理 `1.0` / `v1.0.0` / `1.0.0-beta` 这些写法,而插件作者写什么全凭自觉;判错一次的
+ * 后果是把新版说成旧版,比"多提示一次更新"糟得多。
+ */
+function upToDate(entry: { installed?: boolean; installed_version?: string; version?: string }): boolean {
+  return Boolean(entry.installed && entry.installed_version && entry.installed_version === entry.version);
+}
 type InstallPreview = components["schemas"]["PluginInstallPreview"];
 
 /**
@@ -111,19 +122,21 @@ export function PluginMarket({ onInstalled }: { onInstalled: () => void }) {
               <small className="text-ui-xs text-muted-foreground">
                 v{entry.version}
                 {entry.author && ` · ${entry.author}`}
-                {entry.installed && ` · ${t("pluginInstalled").replace("{v}", entry.installed_version)}`}
+                {entry.installed && !upToDate(entry) && ` · ${t("pluginInstalled").replace("{v}", entry.installed_version)}`}
               </small>
             </span>
+            {/* 三态,不是两态:**装过 ≠ 有新版**。此前只看「装没装」,于是同一个版本也写着
+                「更新」—— 点下去装一遍一模一样的东西,而用户以为自己落后了。 */}
             <Button
               className="shrink-0"
               variant="outline"
               size="sm"
-              disabled={!entry.download}
+              disabled={!entry.download || upToDate(entry)}
               loading={preview.isPending && preview.variables === entry.download}
               onClick={() => preview.mutate(entry.download)}
             >
-              <Download size={13} />
-              {entry.installed ? t("pluginUpdate") : t("pluginInstall")}
+              {!upToDate(entry) && <Download size={13} />}
+              {upToDate(entry) ? t("pluginUpToDate") : entry.installed ? t("pluginUpdate") : t("pluginInstall")}
             </Button>
           </div>
           {entry.description && (

@@ -81,12 +81,16 @@ export function PluginsView() {
 
   return (
     <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
-      <div className="relative grid min-h-0 flex-1  gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]"
+      <div className="relative grid min-h-0 flex-1 gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]"
         style={{ gridTemplateColumns: `${sidebar.width}px minmax(0, 1fr)` }}>
         <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
           {/* 「装什么」和「装了什么」是同一件事的两面,所以是同一栏的两个页签,不是两个页面。
               空插件目录时默认停在市场 —— 一个只会说「你没有插件」的空态帮不上任何忙。 */}
           <div className="flex min-h-10 items-center justify-between border-b border-border px-3">
+            {/* 页签的 px-1.5 是 hover 背景的形状,不该去掉;但它让首个页签的**文字**比右侧
+                那个圆钮的边框多缩进 6px —— 一行两头的视觉边距不一样。这里**不抵**:
+                量过之后左 13 / 右 13 —— 页签的 px-1.5 正好补上"文字比边框虚"的那一点,
+                两头看起来是齐的。抵掉反而变成左 7 / 右 13。 */}
             <span className="flex items-center gap-0.5 text-ui-xs font-semibold uppercase tracking-[0.06em]">
               {(["installed", "market"] as const).map((one) => (
                 <button
