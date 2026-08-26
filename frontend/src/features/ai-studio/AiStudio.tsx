@@ -134,7 +134,10 @@ function generationParameters(model: GenerationModel, config: GenerationConfig) 
   }
   const params: Record<string, string | number> = {};
   if (supportsParameter(model, "duration_seconds")) {
-    params.duration_seconds = Math.max(1, Math.min(capabilityNumber(model, "max_duration_seconds", 10), Number(config.durationSeconds) || 5));
+    params.duration_seconds = Math.max(
+      capabilityNumber(model, "min_duration_seconds", 1),
+      Math.min(capabilityNumber(model, "max_duration_seconds", 10), Number(config.durationSeconds) || 5),
+    );
   }
   // 尺寸**按模型声明的来**。这一支此前只认 `resolution`(720p 那种档位名)—— 那是按火山 /
   // 可灵那几家定的形状,而万相收的是 `宽*高` 的像素对。声明了 size 的模型于是一个尺寸都发不出去,
@@ -975,7 +978,9 @@ function GenerateWorkspace({
                       <Input
                         className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-ui-sm font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
                         type="number"
-                        min={1}
+                        // 下界也从描述符来 —— 写死 1 的话,界面允许的值供应商会当场拒掉
+                        // (Seedance 2 实测 3 秒被拒、4 秒可以)。
+                        min={capabilityNumber(selectedModel, "min_duration_seconds", 1)}
                         max={capabilityNumber(selectedModel, "max_duration_seconds", 10)}
                         value={generationConfig.durationSeconds}
                         onChange={(event) => setConfigValue("durationSeconds", event.target.value)}

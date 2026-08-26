@@ -75,15 +75,19 @@ WAN_VIDEO_CAPABILITIES = {
     "supports_audio": False,
 }
 
+#: Seedance 2 的时长是**区间,不是两个档位**。此前写的是 `[5, 10]`,于是界面只给这两个
+#: 选项 —— 而真机实测 4 到 15 秒的任意整数都收(3 秒和 16 秒各自被拒成
+#: `the specified duration is not supported`)。枚举留空,界面自动落到 min/max 数字框。
 SEEDANCE_2_VIDEO_CAPABILITIES = {
     "modes": ["text-to-video", "image-to-video", "keyframes-to-video"],
     "endpoint": "ark",
     "parameter_keys": ["duration_seconds", "resolution", "first_frame", "last_frame", "reference_image"],
-    "duration_seconds": [5, 10],
+    "duration_seconds": [],
     "default_duration_seconds": 5,
     "resolutions": ["480p", "720p", "1080p"],
     "default_resolution": "720p",
-    "max_duration_seconds": 10,
+    "min_duration_seconds": 4,
+    "max_duration_seconds": 15,
     "supports_audio": True,
 }
 

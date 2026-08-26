@@ -209,12 +209,24 @@ def validate_against_capabilities(
         value = parameters.get(name)
         if choices and value and str(value) not in [str(one) for one in choices]:
             raise GenerationDomainError(f"{provider}/{model} 的 {name} 只能是:{'、'.join(str(c) for c in choices)}")
+    # 时长有两种形状:**枚举**(只收这几个档)或**区间**(min..max 内的任意整数)。
+    # 只校验枚举的话,区间型的模型这里全放行,越界的值要等供应商拒了才知道 —— 而那时
+    # 任务已经建好、扣了一次配额,报的还是一句英文的 InvalidParameter。
     durations = capabilities.get("duration_seconds")
     duration = parameters.get("duration_seconds")
-    if durations and duration is not None and int(duration) not in [int(one) for one in durations]:
-        raise GenerationDomainError(
-            f"{provider}/{model} 的时长只能是:{'、'.join(str(one) for one in durations)} 秒"
-        )
+    if duration is not None:
+        if durations:
+            if int(duration) not in [int(one) for one in durations]:
+                raise GenerationDomainError(
+                    f"{provider}/{model} 的时长只能是:{'、'.join(str(one) for one in durations)} 秒"
+                )
+        else:
+            low = capabilities.get("min_duration_seconds")
+            high = capabilities.get("max_duration_seconds")
+            if (low is not None and int(duration) < int(low)) or (high is not None and int(duration) > int(high)):
+                raise GenerationDomainError(
+                    f"{provider}/{model} 的时长要在 {low or 1}–{high} 秒之间"
+                )
     for entry in source_assets:
         role = entry.get("role") or ""
         if role not in allowed:
