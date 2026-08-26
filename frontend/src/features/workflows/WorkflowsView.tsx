@@ -70,6 +70,7 @@ import { WorkflowAgentChat, type WorkflowAgentMode } from "@/features/workflows/
 import { WorkflowRunHistory } from "@/features/workflows/WorkflowRunHistory";
 import { createWorkflowGraphStore } from "@/stores/workflowGraphStore";
 import { saveJsonToDisk } from "@/lib/download";
+import { ROW_HANDLE_CLASS, SIDEBAR_HANDLE_CLASS, handleOffset, useResizableRow, useResizableSidebar } from "@/lib/useResizableSidebar";
 import {
   aspectRatioOptions,
   capabilityNumber,
@@ -1593,6 +1594,11 @@ function WorkflowEditor({
     />
   );
   const rightPanels = (dockedAgent ? 1 : 0) + (dockedHistory ? 1 : 0);
+  // 右栏可拖 —— 和别处同一套(lib/useResizableSidebar)。此前是 minmax(360,420) 的固定范围:
+  // AI 助手里的长回复和执行历史的步骤名在 360px 里都读得很挤,而画布这边常常有大片空白。
+  const rightPanel = useResizableSidebar("workflow-right", { min: 320, max: 640, fallback: 400 });
+  // 助手与执行历史上下分。上界给得宽 —— 只想看助手时把它拉满是合理的用法。
+  const agentRow = useResizableRow("workflow-agent", { min: 160, max: 900, fallback: 420 });
 
   const displayEdges = React.useMemo(() => {
     // type 显式写到每条边上,而不是只靠 defaultEdgeOptions —— 后者的语义是"新建边的默认值",
@@ -1906,8 +1912,17 @@ function WorkflowEditor({
 
       <div className={cn(
         "relative grid min-h-0 grid-cols-[minmax(0,1fr)] gap-2 [&_.react-flow\_\_background]:bg-background [&_.react-flow\_\_controls]:overflow-hidden [&_.react-flow\_\_controls]:rounded-md [&_.react-flow\_\_controls]:border [&_.react-flow\_\_controls]:border-border [&_.react-flow\_\_controls]:shadow-none [&_.react-flow\_\_controls-button]:border-b [&_.react-flow\_\_controls-button]:border-border [&_.react-flow\_\_controls-button]:bg-panel [&_.react-flow\_\_controls-button]:text-foreground [&_.react-flow\_\_controls-button:hover]:bg-secondary [&_.react-flow\_\_edge-path]:stroke-border-strong [&_.react-flow\_\_edge-path]:[stroke-width:1.5] [&_.react-flow\_\_edge-path]:[stroke-linecap:round] [&_.react-flow\_\_edge-path]:[transition:stroke_120ms,stroke-width_120ms] [&_.react-flow\_\_edge.selected_.react-flow\_\_edge-path]:stroke-primary [&_.react-flow\_\_edge.selected_.react-flow\_\_edge-path]:[stroke-width:2.2] [&_.react-flow\_\_edge:hover_.react-flow\_\_edge-path]:[stroke-width:2.2] [&_.react-flow\_\_edge-textbg]:fill-panel [&_.react-flow\_\_edge-text]:fill-muted-foreground [&_.react-flow\_\_edge-text]:text-[9.5px] [&_.react-flow\_\_attribution]:bg-transparent [&_.react-flow\_\_attribution]:text-muted-foreground [&_.wf-edge-true_.react-flow\_\_edge-path]:stroke-[#16a34a] [&_.wf-edge-false_.react-flow\_\_edge-path]:stroke-[#e11d48] [&_.wf-edge-data_.react-flow\_\_edge-path]:animate-wf-dash [&_.wf-edge-data_.react-flow\_\_edge-path]:stroke-primary [&_.wf-edge-data_.react-flow\_\_edge-path]:[stroke-width:2] [&_.wf-edge-data_.react-flow\_\_edge-path]:[stroke-dasharray:6_5] [&_.wf-edge-data.selected_.react-flow\_\_edge-path]:[stroke-width:2.6] [&_.wf-edge-data.wf-edge-mismatch_.react-flow\_\_edge-path]:stroke-[#d97706] [&_.react-flow\_\_minimap]:overflow-hidden [&_.react-flow\_\_minimap]:rounded-md [&_.react-flow\_\_minimap]:border [&_.react-flow\_\_minimap]:border-border [&_.react-flow\_\_minimap]:bg-background [&_.react-flow\_\_minimap-mask]:fill-[color-mix(in_srgb,var(--foreground)_6%,transparent)] [&_.react-flow\_\_minimap-node]:fill-border-strong",
-        rightPanels > 0 && "grid-cols-[minmax(0,1fr)_minmax(360px,420px)]",
-      )}>
+      )}
+        style={rightPanels > 0 ? { gridTemplateColumns: `minmax(0,1fr) ${rightPanel.width}px` } : undefined}
+      >
+        {/* 画布和右栏之间的拖柄。右栏是从右往左量的,所以给 right 而不是 left。 */}
+        {rightPanels > 0 && (
+          <div
+            className={SIDEBAR_HANDLE_CLASS}
+            style={{ right: handleOffset(rightPanel.width) }}
+            onPointerDown={rightPanel.startDragFromRight}
+          />
+        )}
         <div className="min-h-0 overflow-hidden rounded-lg border border-border bg-panel">
           <ReactFlow
             className={cn("[--xy-attribution-background-color:color-mix(in_srgb,var(--panel)_70%,transparent)]", !canvas.ready && "opacity-0")}
@@ -1997,11 +2012,26 @@ function WorkflowEditor({
         {(dockedAgent || dockedHistory) && (
           <div
             className={cn(
-              "grid min-h-0 min-w-0 gap-2",
+              "relative grid min-h-0 min-w-0 gap-2",
               dockedAgent && dockedHistory ? "grid-rows-[minmax(0,1fr)_minmax(0,1fr)]" : "grid-rows-[minmax(0,1fr)]",
             )}
+            // 两个都开时上面那块用记住的高度,下面那块吃掉剩下的 —— 运行时想看某一步的输出
+            // 就把历史那块拉大,而平分是个谁都不满意的折中。
+            style={
+              dockedAgent && dockedHistory
+                ? { gridTemplateRows: `${agentRow.height}px minmax(0,1fr)` }
+                : undefined
+            }
           >
             {dockedAgent && agentPanel}
+            {/* 上下之间的横拖柄。和左右那条同一套外观(HANDLE_ROW),只是转了九十度。 */}
+            {dockedAgent && dockedHistory && (
+              <div
+                className={ROW_HANDLE_CLASS}
+                style={{ top: handleOffset(agentRow.height) }}
+                onPointerDown={agentRow.startDrag}
+              />
+            )}
             {dockedHistory && historyPanel}
           </div>
         )}
@@ -2963,10 +2993,12 @@ function NodeInspector({
         </span>
         <div className="grid min-w-0 flex-1 gap-0 [&_small]:pl-0 [&_small]:text-ui-2xs [&_small]:text-muted-foreground">
           {/* 节点名直接在头部内联编辑(Dify 式),不再单列一个"节点名称"字段。
-              h-6 收掉 Input 基础款的 h-9:38px 头部里塞 36px 输入框会把整行撑満,
-              名字看着像一只大号表单框而不是可改的标题。 */}
+              h-6 收掉 Input 基础款的 h-9:38px 头部里塞 36px 输入框会把整行撑満。
+              **一个框都不给** —— 它是这张卡片的标题,不是一个待填的表单项。悬停给个底色说明
+              "这儿能点",聚焦时给一条下划线说明"正在改",都不用整圈边框:那圈线会让标题看着
+              和下面那些参数输入框同级,而它是标题。 */}
           <Input
-            className="-ml-1 h-6 min-w-0 rounded-md border border-transparent bg-transparent px-1 py-px text-ui-md font-semibold text-foreground shadow-none hover:border-border focus-visible:border-primary focus-visible:bg-background focus-visible:outline-none focus-visible:ring-0"
+            className="-ml-1 h-6 min-w-0 rounded-md border-0 bg-transparent px-1 py-px text-ui-md font-semibold text-foreground shadow-none outline-none hover:bg-secondary focus-visible:bg-transparent focus-visible:outline-none focus-visible:ring-0 focus-visible:[box-shadow:inset_0_-1px_0_0_var(--primary)]"
             value={node.name ?? ""}
             placeholder={meta?.label ?? node.type}
             aria-label={t("wfNodeName")}

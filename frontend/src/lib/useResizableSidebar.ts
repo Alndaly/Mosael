@@ -80,8 +80,10 @@ function clampSaved(bounds: SidebarBounds, value: unknown): number {
 
 export interface ResizableSidebar {
   width: number;
-  /** 按在那条窄条上开始拖。 */
+  /** 按在那条窄条上开始拖(栏在**左**边:往右拖变宽)。 */
   startDrag: (event: React.PointerEvent) => void;
+  /** 栏在**右**边:往左拖才变宽。方向反了的话,拖右边那条会觉得"反了"。 */
+  startDragFromRight: (event: React.PointerEvent) => void;
   /** 那条可拖的窄条,直接摆进布局里。 */
   handleProps: {
     onPointerDown: (event: React.PointerEvent) => void;
@@ -109,11 +111,12 @@ export function useResizableSidebar(key: string, bounds: SidebarBounds = DEFAULT
     window.localStorage.setItem(storageKey, String(width));
   }, [storageKey, width]);
 
-  const startDrag = (event: React.PointerEvent) => {
+  const drag = (sign: 1 | -1) => (event: React.PointerEvent) => {
     event.preventDefault();
     const startX = event.clientX;
     const origin = width;
-    const onMove = (moveEvent: PointerEvent) => setWidth(clamp(bounds, origin + (moveEvent.clientX - startX)));
+    const onMove = (moveEvent: PointerEvent) =>
+      setWidth(clamp(bounds, origin + sign * (moveEvent.clientX - startX)));
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
@@ -127,9 +130,12 @@ export function useResizableSidebar(key: string, bounds: SidebarBounds = DEFAULT
     window.addEventListener("pointerup", onUp);
   };
 
+  const startDrag = drag(1);
+
   return {
     width,
     startDrag,
+    startDragFromRight: drag(-1),
     handleProps: {
       onPointerDown: startDrag,
       role: "separator",
@@ -199,3 +205,55 @@ export function useSidePanels(
 
   return { left: panels.left, right: panels.right, startDrag };
 }
+
+export interface ResizableRow {
+  /** 上面那块占多少(px)。 */
+  height: number;
+  startDrag: (event: React.PointerEvent) => void;
+}
+
+/**
+ * 上下两块之间可拖。
+ *
+ * 和 useResizableSidebar 同一件事换个轴 —— 工作流右栏里「AI 助手」和「执行历史」上下平分,
+ * 而运行时想看某一步的输出就得把历史那块拉大。
+ *
+ * 单独一个函数而不是给上面那个加参数:两者的 handleProps(横条 vs 竖条)、落盘键、
+ * 甚至 clamp 的语义(宽 vs 高)都不同,合在一起的参数表会比两份实现加起来还难读。
+ */
+export function useResizableRow(key: string, bounds: SidebarBounds): ResizableRow {
+  const storageKey = `openstudio.row.${key}`;
+  const [height, setHeight] = React.useState(() => {
+    try {
+      return clampSaved(bounds, window.localStorage.getItem(storageKey));
+    } catch {
+      return bounds.fallback;
+    }
+  });
+
+  React.useEffect(() => {
+    window.localStorage.setItem(storageKey, String(height));
+  }, [storageKey, height]);
+
+  const startDrag = (event: React.PointerEvent) => {
+    event.preventDefault();
+    const startY = event.clientY;
+    const origin = height;
+    const onMove = (moveEvent: PointerEvent) => setHeight(clamp(bounds, origin + (moveEvent.clientY - startY)));
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
+  return { height, startDrag };
+}
+
+/** 贴满整条边的横拖柄 —— 上下两块之间用这个。 */
+export const ROW_HANDLE_CLASS = `absolute left-0 right-0 z-10 ${HANDLE_ROW}`;
