@@ -70,7 +70,11 @@ export const CodeEditor = React.forwardRef<
       // 1) h-fit —— 外框收缩到编辑器实际高度,别被父级 grid/flex 的 align-stretch 拉高,否则
       //    editor 只有 minHeight、下方多出的空白是死区,点了不定位(表现为"除第一行外点击无效")。
       // 2) .cm-content/.cm-scroller 撑到 minHeight —— 内容仅一行时可点区也铺满到最小高度。
-      className="h-fit overflow-hidden rounded-md border border-input focus-within:border-primary [&_.cm-editor]:rounded-md [&_.cm-editor]:font-mono [&_.cm-editor]:text-xs [&_.cm-editor.cm-focused]:outline-none [&_.cm-gutters]:border-0 [&_.cm-scroller]:font-mono [&_.cm-content]:min-h-[var(--cm-min-h)] [&_.cm-scroller]:min-h-[var(--cm-min-h)]"
+      // 3) 折叠箭头居中 —— CodeMirror 默认把 `›` 当**普通文字**放在槽里(display:inline,
+      //    vertical-align:baseline),于是它按文字基线坐,而不是按行框居中,看着整体偏下。
+      //    改成 flex 居中,箭头就落在行的正中。不给 leading-none —— 那会让裁切的文字被
+      //    削掉顶和底(见 app/clippedText.test.ts 那道护栏),而 flex 居中本身已经够了。
+      className="h-fit overflow-hidden rounded-md border border-input focus-within:border-primary [&_.cm-editor]:rounded-md [&_.cm-editor]:font-mono [&_.cm-editor]:text-xs [&_.cm-editor.cm-focused]:outline-none [&_.cm-gutters]:border-0 [&_.cm-scroller]:font-mono [&_.cm-content]:min-h-[var(--cm-min-h)] [&_.cm-scroller]:min-h-[var(--cm-min-h)] [&_.cm-foldGutter_.cm-gutterElement]:flex [&_.cm-foldGutter_.cm-gutterElement]:items-center [&_.cm-foldGutter_.cm-gutterElement]:justify-center"
       style={{ "--cm-min-h": `${minHeight}px` } as React.CSSProperties}
     >
       <CodeMirror
