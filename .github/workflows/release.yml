@@ -54,6 +54,18 @@ jobs:
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
 
+      # runner 上 docker 是装着的,但**刚开机时 daemon 还没起来** —— 探测有 5 秒超时,
+      # 撞上就判定"这台机器隔离不住",于是 11 个测权限判定的用例全红,而它们和 docker
+      # 本身没关系(run_code 只是载体)。等一下比放宽超时诚实:超时放宽了,真的没有隔离
+      # 环境时又要多等那么久才说话。
+      - name: Wait for Docker
+        run: |
+          for i in $(seq 1 30); do
+            docker info >/dev/null 2>&1 && echo "docker ready after ${i}s" && exit 0
+            sleep 1
+          done
+          echo "::warning::docker daemon 没起来 —— 依赖隔离环境的用例会失败"
+
       - name: Install dependencies
         run: |
           pnpm install --frozen-lockfile
