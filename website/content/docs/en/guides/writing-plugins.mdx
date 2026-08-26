@@ -135,6 +135,41 @@ even if it didn't, the user sees no progress and cancel does nothing.
 Once accepted, `artifact` is **replaced** by `asset_id`, so callers get a media id just like any
 other asset-producing tool. The [Baidu Netdisk plugin](/plugins/baidu-pan) uses the second form.
 
+## Taking a file
+
+The other direction: your tool needs to work on an **existing** asset — upload it to a netdisk,
+send it off for transcoding. Mark that field `"format": "asset"` in the `input_schema`:
+
+```json
+{ "name": "upload",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "asset_id": { "type": "string", "format": "asset" },
+      "path": { "type": "string" }
+    },
+    "required": ["asset_id", "path"]
+  } }
+```
+
+The caller passes an asset id; **what you receive is a local absolute path**:
+
+```python
+local = payload["asset_id"]        # already a path, not an id
+upload_to_somewhere(local)
+```
+
+You don't know the media library exists, and you don't need to.
+
+You get a **copy**, not the library's own file — breaking or deleting it cannot touch the user's
+asset. It is removed when the call ends, so don't write anything there you want to keep (hand
+that back with `artifact` instead).
+
+Why you don't fetch it yourself: your environment has no database, no API token, no media
+directory — that is the isolation boundary, not an oversight.
+
+See `pan_upload` in the [Baidu Netdisk plugin](/plugins/baidu-pan).
+
 ## Remembering something
 
 A plugin **process** is stateless: environment in, JSON out, then it is gone — you have no way to write anything back yourself. Fine for pure computation, a dead end for
