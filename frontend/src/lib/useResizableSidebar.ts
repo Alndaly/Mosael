@@ -64,10 +64,17 @@ export const HANDLE_SIZE = 8;
  * 是当年 `p-3` 的内边距 —— 后来容器改成了 `p-2`,三个调用点里的 12 一个都没跟着改,
  * 于是手柄整体偏 5px、压在右边那块面板上,看着就是"贴在一边"。**数字来自布局,不该手抄。**
  */
-export function handleOffset(panelSize: number, { padding = 0, gap = 8 } = {}): number {
-  // 热区宽度 == 缝宽,所以偏移就是"面板右缘",没有余数要分配。gap ≠ 热区宽时才需要居中,
-  // 那种情况留给调用方显式传 gap。
-  return padding + panelSize + (gap - HANDLE_SIZE) / 2;
+export function handleOffset(
+  panelSize: number,
+  { padding = 0, gap = 8, nextInset = 0 } = {},
+): number {
+  // 热区宽度 == 缝宽,所以偏移基准就是"面板右缘",没有余数要分配。
+  //
+  // `nextInset` 是**下一块内容自己的内缩**。用它做补偿是因为手柄要按**看得见的边**居中,
+  // 而不是按 grid 的列边界:插件页和定时任务页的右栏是一个无边框的滚动容器,里面那层
+  // 有 `px-0.5` 给卡片的聚焦光圈留位置 —— 于是用户看到的缝是 8+2=10px,而手柄贴着左边
+  // 那一侧,右边空出 2px。列边界上它是"精确居中"的,眼睛看到的却不是。
+  return padding + panelSize + (gap + nextInset - HANDLE_SIZE) / 2;
 }
 
 /** 拖动:已经是个数,只夹范围。 */
@@ -99,7 +106,12 @@ export interface ResizableSidebar {
 /**
  * @param key 落盘用的键,每个页面一个 —— 设置页和插件页各自记各自的宽度。
  */
-export function useResizableSidebar(key: string, bounds: SidebarBounds = DEFAULT_SIDEBAR_BOUNDS): ResizableSidebar {
+export function useResizableSidebar(
+  key: string,
+  bounds: SidebarBounds = DEFAULT_SIDEBAR_BOUNDS,
+  /** 右邻内容自己的内缩,见 handleOffset。只有调用方知道下一块长什么样。 */
+  nextInset = 0,
+): ResizableSidebar {
   const storageKey = `openstudio.sidebar.${key}`;
   const [width, setWidth] = React.useState(() => {
     try {
@@ -143,7 +155,7 @@ export function useResizableSidebar(key: string, bounds: SidebarBounds = DEFAULT
       role: "separator",
       "aria-orientation": "vertical",
       className: SIDEBAR_HANDLE_CLASS,
-      style: { left: handleOffset(width) },
+      style: { left: handleOffset(width, { nextInset }) },
     },
   };
 }

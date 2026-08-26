@@ -48,7 +48,9 @@ import { cn } from "@/lib/utils";
  * 设计与取舍见 docs/PLUGIN_ARCHITECTURE.md。
  */
 export function PluginsView() {
-  const sidebar = useResizableSidebar("plugins");
+  // 第三个参数是右栏内容自己的 px-0.5(2px,给卡片聚焦光圈留位置)——
+  // 手柄要按**看得见的边**居中,不按 grid 列边界。见 handleOffset。
+  const sidebar = useResizableSidebar("plugins", undefined, 2);
   const t = useI18n();
   const qc = useQueryClient();
 

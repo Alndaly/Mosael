@@ -37,7 +37,9 @@ import { cn } from "@/lib/utils";
  * 右侧选中任务的详情(概览行 + 运行记录)。
  */
 export function SchedulerView({ workspace, project }: { workspace: Workspace; project: Project | null }) {
-  const sidebar = useResizableSidebar("scheduler");
+  // 第三个参数是右栏内容自己的 px-0.5(2px,给卡片聚焦光圈留位置)——
+  // 手柄要按**看得见的边**居中,不按 grid 列边界。见 handleOffset。
+  const sidebar = useResizableSidebar("scheduler", undefined, 2);
   const t = useI18n();
   const qc = useQueryClient();
   const [creating, setCreating] = React.useState(false);
