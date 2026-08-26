@@ -3011,7 +3011,8 @@ function NodeInspector({
       style={anchor ? { left: anchor.left, top: anchor.top, maxHeight: anchor.maxHeight } : undefined}
       aria-label={node.name || meta?.label || node.type}
     >
-      <div className="flex min-h-[38px] items-center justify-between gap-2 border-b border-border px-2.5">
+      <div // 头部只有一行(类型进了图标的 tooltip),38px 是给两行留的高度。
+        className="flex min-h-9 items-center justify-between gap-2 border-b border-border px-2.5 py-1.5">
         {/* 节点说明挂在图标上,不占正文一行 —— 那句话每个节点都有,而只在第一次看时有用,
             之后每次打开都要从它上面跨过去才能到真正要改的参数。 */}
         <Tooltip>
@@ -3023,7 +3024,12 @@ function NodeInspector({
               {NODE_ICONS[node.type] ?? <Type size={13} />}
             </span>
           </TooltipTrigger>
-          {meta?.description && <TooltipContent className="max-w-[260px]">{meta.description}</TooltipContent>}
+          {/* 类型和说明都在这里。类型此前是头部的第二行 —— 而**图标已经在表达类型**
+              (每种节点各有颜色和图形),再写一遍只是让头部高了一倍。 */}
+          <TooltipContent className="grid max-w-[260px] gap-1">
+            <span className="font-semibold">{meta?.label ?? node.type}</span>
+            {meta?.description && <span className="text-ui-xs opacity-80">{meta.description}</span>}
+          </TooltipContent>
         </Tooltip>
         <div className="grid min-w-0 flex-1 gap-0 [&_small]:pl-0 [&_small]:text-ui-2xs [&_small]:text-muted-foreground">
           {/* 节点名在头部内联编辑(Dify 式),不再单列一个"节点名称"字段。
@@ -3040,8 +3046,6 @@ function NodeInspector({
             aria-label={t("wfNodeName")}
             onChange={(event) => onChange({ name: event.target.value })}
           />
-          {/* 名称输入的 placeholder 已是类型名;仅在改过名(与类型不同)时才补一行类型。 */}
-          {node.name && node.name !== (meta?.label ?? node.type) && <small>{meta?.label ?? node.type}</small>}
         </div>
         {onDelete && (
           <button type="button" className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive" aria-label={t("delete")} onClick={onDelete}>
