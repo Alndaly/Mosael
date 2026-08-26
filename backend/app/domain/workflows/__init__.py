@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+from app.domain.sequences.operations import EDIT_OP_KINDS
+
 import json
 import re
 from typing import Any
@@ -113,6 +115,30 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "description": "渲染导出一条时间线,产出新素材。",
         "config": {"sequence_id": {"type": "template", "required": True}},
         "outputs": ["asset_id"],
+    },
+    "inspect_sequence": {
+        "category": "素材",
+        "label": "看一眼时间线",
+        "description": "读出这条时间线的轨道、片段和总时长。编排之前先知道现在长什么样。",
+        "config": {"sequence_id": {"type": "template", "required": True}},
+        "outputs": ["sequence_id", "revision", "tracks", "duration"],
+    },
+    "edit_timeline": {
+        "category": "素材",
+        "label": "编排时间线",
+        "description": (
+            "把一组操作应用到时间线上:插入/移动/裁剪/删除片段、切一段、增删轨道、改效果与变换。"
+            "操作是一个数组,每项形如 {\"kind\": \"insert_clip\", ...}。"
+        ),
+        "config": {
+            "sequence_id": {"type": "template", "required": True},
+            "operations": {
+                "type": "template",
+                "required": True,
+                "description": "操作数组(JSON)。可用的 kind: " + "、".join(EDIT_OP_KINDS),
+            },
+        },
+        "outputs": ["applied", "sequence_id", "revision"],
     },
     "ai_generate": {
         "category": "AI",
@@ -723,6 +749,10 @@ INTERNAL_NODE_TYPES = frozenset(
         "llm",
         "transcribe_asset",
         "export_sequence",
+        # 编排/检视时间线改的是**本地序列**,后果留在这个应用里;而且每一步都记进
+        # sequence_operations,用户撤得回来。
+        "inspect_sequence",
+        "edit_timeline",
         "ai_generate",
         "condition",
         "template",

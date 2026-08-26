@@ -50,17 +50,9 @@ TOOL_DEFS: dict[str, dict[str, str]] = {
     "run_code": {"permission": "external", "cost": "none"},
 }
 
-EDIT_OP_KINDS = (
-    "insert_clip",
-    "move_clip",
-    "trim_clip",
-    "delete_clip",
-    "cut_clip_range",
-    "add_track",
-    "remove_track",
-    "set_clip_effects",
-    "set_clip_transform",
-)
+#: 时间线操作的种类由**序列域**说了算(见 domain/sequences/operations)——
+#: 那是"能对时间线做什么"的清单,不是智能体这一个入口的清单。
+EDIT_OP_KINDS = seq_ops.EDIT_OP_KINDS
 
 
 def request_confirmation(
@@ -641,29 +633,6 @@ def _execute_approved(db: Session, confirmation: ToolConfirmation) -> dict[str, 
 
 def _execute_edit_timeline(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
     sequence_id = str(payload["sequence_id"])
-    applied = 0
-    for operation in payload["operations"]:
-        kind = operation["kind"]
-        args = {key: value for key, value in operation.items() if key != "kind"}
-        if kind == "insert_clip":
-            seq_ops.insert_clip(db, sequence_id, seq_ops.InsertClip(**args))
-        elif kind == "move_clip":
-            seq_ops.move_clip(db, sequence_id, seq_ops.MoveClip(**args))
-        elif kind == "trim_clip":
-            seq_ops.trim_clip(db, sequence_id, seq_ops.TrimClip(**args))
-        elif kind == "delete_clip":
-            seq_ops.delete_clip(db, sequence_id, seq_ops.DeleteClip(**args))
-        elif kind == "cut_clip_range":
-            seq_ops.cut_clip_range(db, sequence_id, seq_ops.CutClipRange(**args))
-        elif kind == "add_track":
-            # The op's own name occupies "kind", so the track kind travels as track_kind.
-            seq_ops.add_track(db, sequence_id, seq_ops.AddTrack(kind=str(args.get("track_kind", "video"))))
-        elif kind == "remove_track":
-            seq_ops.remove_track(db, sequence_id, seq_ops.RemoveTrack(**args))
-        elif kind == "set_clip_effects":
-            seq_ops.set_clip_effects(db, sequence_id, seq_ops.SetClipEffects(**args))
-        elif kind == "set_clip_transform":
-            seq_ops.set_clip_transform(db, sequence_id, seq_ops.SetClipTransform(**args))
-        applied += 1
+    applied = seq_ops.apply_edit_operations(db, sequence_id, payload["operations"])
     sequence = db.get(Sequence, sequence_id)
     return {"applied_operations": applied, "sequence_revision": sequence.revision if sequence else None}

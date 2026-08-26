@@ -1634,3 +1634,54 @@ def _record_operation(
             summary=summary,
         )
     )
+
+
+#: 一组时间线操作的种类。**这是"能对时间线做什么"的清单**,不是某一个界面的清单 ——
+#: 智能体的 edit_timeline、工作流的时间线节点、将来任何别的入口,认的都是这一份。
+EDIT_OP_KINDS = (
+    "insert_clip",
+    "move_clip",
+    "trim_clip",
+    "delete_clip",
+    "cut_clip_range",
+    "add_track",
+    "remove_track",
+    "set_clip_effects",
+    "set_clip_transform",
+)
+
+
+def apply_edit_operations(db: Session, sequence_id: str, operations: list[dict[str, Any]]) -> int:
+    """把一组 `{kind, ...args}` 应用到一条序列上,返回应用了几条。
+
+    **住在这里而不是某个入口里。** 这段派发此前长在 domain/agent/confirmations 里 ——
+    它和智能体没有关系,那只是第一个用到它的地方。工作流要用同一套时,要么 import 智能体域
+    (方向反了),要么抄一份(于是两处会漂)。
+    """
+    applied = 0
+    for operation in operations:
+        kind = operation["kind"]
+        args = {key: value for key, value in operation.items() if key != "kind"}
+        if kind == "insert_clip":
+            insert_clip(db, sequence_id, InsertClip(**args))
+        elif kind == "move_clip":
+            move_clip(db, sequence_id, MoveClip(**args))
+        elif kind == "trim_clip":
+            trim_clip(db, sequence_id, TrimClip(**args))
+        elif kind == "delete_clip":
+            delete_clip(db, sequence_id, DeleteClip(**args))
+        elif kind == "cut_clip_range":
+            cut_clip_range(db, sequence_id, CutClipRange(**args))
+        elif kind == "add_track":
+            # 操作自己的名字占了 "kind",所以轨道类型走 track_kind。
+            add_track(db, sequence_id, AddTrack(kind=str(args.get("track_kind", "video"))))
+        elif kind == "remove_track":
+            remove_track(db, sequence_id, RemoveTrack(**args))
+        elif kind == "set_clip_effects":
+            set_clip_effects(db, sequence_id, SetClipEffects(**args))
+        elif kind == "set_clip_transform":
+            set_clip_transform(db, sequence_id, SetClipTransform(**args))
+        else:
+            raise SequenceDomainError(f"不认识的时间线操作: {kind}")
+        applied += 1
+    return applied

@@ -396,7 +396,8 @@ def edit_timeline(sequence_id: str, operations: list[dict[str, Any]], workspace_
     (clip_id, timeline_start), trim_clip (clip_id, timeline_start, src_in,
     src_out), delete_clip (clip_id), cut_clip_range (clip_id, src_start,
     src_end), add_track (track_kind), remove_track (track_id),
-    set_clip_effects (clip_id, effects).
+    set_clip_effects (clip_id, effects), set_clip_transform (clip_id, transform:
+    scale / position / rotation / opacity — reframe, pan, zoom or fade one clip).
     Every applied edit is undoable by the user.
     """
     if _looks_like_workflow_graph_ops(operations):

@@ -22,6 +22,10 @@ from app.domain.workflows import NODE_TYPES
 #: 节点类型 → 对应的智能体工具名。
 NODE_TO_TOOL: dict[str, str] = {
     "delay": "sleep",
+    # 时间线:两侧同名同义。节点收的操作数组和 edit_timeline 工具收的是**同一份清单**
+    # (domain/sequences/operations.EDIT_OP_KINDS)—— 不是抄的,是同一个常量。
+    "edit_timeline": "edit_timeline",
+    "inspect_sequence": "inspect_sequence",
     "llm": "",  # 见 NOT_A_TOOL
     "plugin_tool": "",  # 插件工具已展开成一等公民(plugin__<连接>__<工具>),不是固定的一个名字
     "transcribe_asset": "transcribe_asset",

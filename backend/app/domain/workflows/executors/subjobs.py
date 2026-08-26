@@ -6,12 +6,14 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Transcript, Workflow
+from app.db.models import Sequence, Transcript, Workflow
+from app.domain.sequences.errors import SequenceDomainError
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import register
 from app.domain.jobs import current_actor
@@ -116,3 +118,72 @@ def publish(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str
     final = wait_for_job(task.job_id or "")
     return {"result": final.result or {}}
 
+
+
+@register("edit_timeline")
+def edit_timeline(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    """把一组操作应用到时间线上。
+
+    智能体早就能做这件事(edit_timeline 工具),而工作流只能「导出序列」—— 于是「生成素材
+    → 编排 → 导出」这条最常见的链路,中间那步在画布上做不了,必须切去对话里或者手动摆。
+
+    操作的种类和智能体那边**是同一份**(domain/sequences/operations.EDIT_OP_KINDS)——
+    不是抄一遍,是同一个清单。
+    """
+    from app.domain.sequences.operations import apply_edit_operations
+
+    sequence_id = str(config.get("sequence_id", "")).strip()
+    if not sequence_id:
+        raise WorkflowDomainError("时间线节点缺少 sequence_id")
+    operations = config.get("operations")
+    if isinstance(operations, str):
+        # 上游节点常常给一段 JSON 文本(比如 code 节点算出来的),接住它省得再加一个解析节点。
+        try:
+            operations = json.loads(operations)
+        except json.JSONDecodeError as exc:
+            raise WorkflowDomainError(f"operations 不是合法 JSON:{exc}") from exc
+    if not isinstance(operations, list) or not operations:
+        raise WorkflowDomainError("operations 要是一个非空数组")
+    try:
+        applied = apply_edit_operations(db, sequence_id, operations)
+    except SequenceDomainError as exc:
+        raise WorkflowDomainError(str(exc)) from exc
+    db.commit()
+    sequence = db.get(Sequence, sequence_id)
+    return {"applied": applied, "sequence_id": sequence_id, "revision": sequence.revision if sequence else 0}
+
+
+@register("inspect_sequence")
+def inspect_sequence(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    """看一眼时间线现在长什么样 —— 编排之前得先知道有哪些轨道、片段排到了第几秒。
+
+    智能体有对应的工具;工作流此前只能盲改。
+    """
+    sequence_id = str(config.get("sequence_id", "")).strip()
+    if not sequence_id:
+        raise WorkflowDomainError("检视节点缺少 sequence_id")
+    sequence = db.get(Sequence, sequence_id)
+    if sequence is None or sequence.workspace_id != workflow.workspace_id:
+        raise WorkflowDomainError("序列不在这个工作区里")
+    tracks = [
+        {
+            "id": track.id,
+            "kind": track.kind,
+            "clips": [
+                {
+                    "id": clip.id,
+                    "asset_id": clip.asset_id,
+                    "timeline_start": clip.timeline_start,
+                    "src_in": clip.src_in,
+                    "src_out": clip.src_out,
+                }
+                for clip in (track.clips or [])
+            ],
+        }
+        for track in (sequence.tracks or [])
+    ]
+    duration = max(
+        (clip["timeline_start"] + (clip["src_out"] - clip["src_in"]) for track in tracks for clip in track["clips"]),
+        default=0.0,
+    )
+    return {"sequence_id": sequence.id, "revision": sequence.revision, "tracks": tracks, "duration": duration}
