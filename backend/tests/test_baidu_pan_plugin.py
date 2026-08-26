@@ -32,7 +32,12 @@ class _Resp:
     def __exit__(self, *a): return False
 _RESPONSES = json.loads({responses!r})
 def _fake(request, timeout=None):
-    _CALLS.append({{"url": request.full_url, "headers": dict(request.headers)}})
+    raw = request.data or b""
+    try:
+        body = raw.decode("utf-8", "replace")[:400]
+    except Exception:
+        body = ""
+    _CALLS.append({{"url": request.full_url, "headers": dict(request.headers), "body": body}})
     return _Resp(_RESPONSES.pop(0))
 urllib.request.urlopen = _fake
 import atexit
@@ -201,7 +206,7 @@ class Test清单和实现对得上:
         manifest = parse(raw, str(PLUGIN))
         assert manifest.runtime.kind == "process"
         assert manifest.runtime.entry == "tools/main.py"
-        assert {t["name"] for t in manifest.declared_tools} == {"pan_list", "pan_search", "pan_import"}
+        assert {t["name"] for t in manifest.declared_tools} == {"pan_list", "pan_search", "pan_import", "pan_upload"}
 
     def test_只读的那两个标了只读(self) -> None:
         """标错的话,列目录这种纯查询也会被当成会改东西的工具,子智能体就用不了它。"""
@@ -210,6 +215,7 @@ class Test清单和实现对得上:
         assert by_name["pan_list"]["read_only"] is True
         assert by_name["pan_search"]["read_only"] is True
         assert by_name["pan_import"].get("read_only") is not True, "导入会往素材库里加东西,不是只读"
+        assert by_name["pan_upload"].get("read_only") is not True, "上传会往网盘里写东西,不是只读"
 
 
 class Test和_artifact_通道合得上:
@@ -361,3 +367,75 @@ class Test自动续期:
         assert out["ok"], out.get("error")
         # 交给宿主的下载地址要用**续过的**那个,不是过期的那个
         assert "access_token=NEW" in out["output"]["artifact"]["url"]
+
+
+UPLOAD_PRE = {"errno": 0, "uploadid": "U1"}
+UPLOAD_CHUNK = {"md5": "x"}
+UPLOAD_CREATE = {"errno": 0, "fs_id": 777, "path": "/我的资源/成片.mp4"}
+
+
+class Test上传:
+    """素材库 → 网盘。百度的上传协议本身就是三步,不是我们绕远。"""
+
+    def _run(self, tmp_path, payload: dict, responses: list, size: int = 100):
+        local = tmp_path / "成片.mp4"
+        local.write_bytes(b"x" * size)
+        return run("pan_upload", {**payload, "asset_id": str(local)}, responses)
+
+    def test_三步都走(self, tmp_path) -> None:
+        """少一步都不行:只传不 create 的话,文件在网盘上根本不存在,而 superfile2 全返回成功。"""
+        out, calls = self._run(tmp_path, {"path": "/我的资源/成片.mp4"},
+                               [UPLOAD_PRE, UPLOAD_CHUNK, UPLOAD_CREATE])
+        assert out["ok"], out.get("error")
+        assert "method=precreate" in calls[0]["url"]
+        assert "superfile2" in calls[1]["url"]
+        assert "method=create" in calls[2]["url"]
+        assert out["output"]["fs_id"] == "777"
+
+    def test_秒传时一个字节都不传(self, tmp_path) -> None:
+        """百度认得这些分片就直接给 return_type=2 —— 再传一遍是纯浪费。"""
+        out, calls = self._run(
+            tmp_path, {"path": "/x.mp4"},
+            [{"errno": 0, "return_type": 2, "info": {"fs_id": 999, "path": "/x.mp4"}}],
+        )
+        assert out["ok"] and out["output"]["rapid"] is True
+        assert len(calls) == 1, "秒传还传了分片"
+
+    def test_大文件按_4MB_分片(self, tmp_path) -> None:
+        """分片大小是百度规定的,不是可调参数 —— 换个数字 precreate 报的 md5 清单就对不上。"""
+        out, calls = self._run(
+            tmp_path, {"path": "/big.mp4"},
+            [UPLOAD_PRE, UPLOAD_CHUNK, UPLOAD_CHUNK, UPLOAD_CHUNK, UPLOAD_CREATE],
+            size=9 * 1024 * 1024,  # 9MB → 3 片
+        )
+        assert out["ok"], out.get("error")
+        chunks = [c for c in calls if "superfile2" in c["url"]]
+        assert len(chunks) == 3
+        assert [int(c["url"].split("partseq=")[1].split("&")[0]) for c in chunks] == [0, 1, 2]
+
+    def test_默认不覆盖(self, tmp_path) -> None:
+        """传错一次就把人家网盘上的东西冲掉,这个代价比多一个副本大得多。"""
+        _, calls = self._run(tmp_path, {"path": "/x.mp4"}, [UPLOAD_PRE, UPLOAD_CHUNK, UPLOAD_CREATE])
+        assert "rtype=1" in calls[0]["body"], "默认成了覆盖"
+
+    def test_明确要求才覆盖(self, tmp_path) -> None:
+        _, calls = self._run(tmp_path, {"path": "/x.mp4", "overwrite": True},
+                             [UPLOAD_PRE, UPLOAD_CHUNK, UPLOAD_CREATE])
+        assert "rtype=3" in calls[0]["body"]
+
+    def test_路径要含文件名(self, tmp_path) -> None:
+        out, _ = self._run(tmp_path, {"path": "/我的资源/"}, [])
+        assert out["ok"] is False and "文件名" in out["error"]
+
+    def test_空文件挡住(self, tmp_path) -> None:
+        out, _ = self._run(tmp_path, {"path": "/x.mp4"}, [], size=0)
+        assert out["ok"] is False and "空的" in out["error"]
+
+    def test_插件拿到的是路径而不是_id(self) -> None:
+        """`asset_id` 在清单里标了 format:asset,宿主交过来的已经是本地路径
+        (见 tests/test_plugin_inputs)。插件这一侧不知道素材库存在。"""
+        manifest = json.loads((PLUGIN / "open-studio.plugin.json").read_text(encoding="utf-8"))
+        upload = next(t for t in manifest["tools"]["declare"] if t["name"] == "pan_upload")
+        assert upload["input_schema"]["properties"]["asset_id"]["format"] == "asset"
+        source = ENTRY.read_text(encoding="utf-8")
+        assert "os.path.isfile(local)" in source, "没把它当路径用"

@@ -1,7 +1,18 @@
-"""百度网盘 —— 把网盘里的素材拉进素材库。
+"""百度网盘 —— 在网盘和素材库之间搬文件。
 
-**只做「拉进来」,不做上传。** 上传涉及分片、断点、秒传(要算文件 md5 和 slice-md5),
-是完全另一摊工作量;而日常真正在做的事是「把网盘里的素材拉进来剪」。
+拉:`pan_list` / `pan_search` 找到 fs_id,`pan_import` 导进来。
+传:`pan_upload` 把素材库里的东西存到网盘。
+
+## 上传为什么是三步
+
+百度的上传协议本身就是三步,不是我们绕远:
+
+1. `precreate` —— 报上文件大小和**每个分片的 md5**,百度回一个 uploadid;
+   秒传就发生在这一步:它认得这些 md5 的话直接回 `return_type=2`,一个字节都不用传。
+2. `superfile2` —— 逐片传。分片固定 4MB(百度的规定,不是我们挑的)。
+3. `create` —— 报上 uploadid 和分片清单,文件才算落地。
+
+少一步都不行:只传不 create 的话,文件在网盘上根本不存在,而 superfile2 全都返回成功。
 
 ## 为什么 pan_import 不自己下载
 
@@ -24,6 +35,7 @@ state 那节)。
 三十天后拿着一个已经作废的 refresh_token 去换,得到的是一个查不出原因的失败。
 """
 
+import hashlib
 import json
 import os
 import sys
@@ -186,7 +198,123 @@ def pan_import(payload: dict) -> dict:
     }
 
 
-TOOLS = {"pan_list": pan_list, "pan_search": pan_search, "pan_import": pan_import}
+#: 百度规定的分片大小。不是可调参数 —— 换个数字 precreate 报的 md5 清单就对不上。
+CHUNK_BYTES = 4 * 1024 * 1024
+UPLOAD_HOST = "https://d.pcs.baidu.com"
+
+
+def _chunk_md5s(path: str) -> tuple[list, int]:
+    """逐片算 md5。**流式读**,不整个载进内存 —— 上传的常常是几个 G 的成片。"""
+    md5s = []
+    total = 0
+    with open(path, "rb") as handle:
+        while True:
+            chunk = handle.read(CHUNK_BYTES)
+            if not chunk:
+                break
+            total += len(chunk)
+            md5s.append(hashlib.md5(chunk).hexdigest())
+    if not md5s:
+        raise PanError("这个文件是空的")
+    return md5s, total
+
+
+def _post_form(url: str, fields: dict) -> dict:
+    body = urllib.parse.urlencode(fields).encode()
+    request = urllib.request.Request(url, data=body, headers={"User-Agent": DOWNLOAD_UA})
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except Exception as exc:
+        raise PanError(f"百度网盘接口没有响应:{exc}") from exc
+
+
+def _upload_chunk(remote_path: str, uploadid: str, index: int, data: bytes) -> None:
+    """传一片。multipart 手搓 —— 标准库没有现成的,而为这一件事引一个依赖不值当。"""
+    boundary = "----OpenStudioBoundary"
+    head = (
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="file"; filename="chunk"\r\n'
+        f"Content-Type: application/octet-stream\r\n\r\n"
+    ).encode()
+    body = head + data + f"\r\n--{boundary}--\r\n".encode()
+    query = urllib.parse.urlencode(
+        {
+            "method": "upload",
+            "access_token": _token(),
+            "type": "tmpfile",
+            "path": remote_path,
+            "uploadid": uploadid,
+            "partseq": index,
+        }
+    )
+    request = urllib.request.Request(
+        f"{UPLOAD_HOST}/rest/2.0/pcs/superfile2?{query}",
+        data=body,
+        headers={"User-Agent": DOWNLOAD_UA, "Content-Type": f"multipart/form-data; boundary={boundary}"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS * 6) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except Exception as exc:
+        raise PanError(f"上传第 {index + 1} 片失败:{exc}") from exc
+    if payload.get("error_code"):
+        raise PanError(f"上传第 {index + 1} 片被拒:{payload.get('error_msg') or payload['error_code']}")
+
+
+def pan_upload(payload: dict) -> dict:
+    """素材库 → 网盘。
+
+    `asset_id` 那个字段在清单里标了 `format: asset`,所以宿主交给我们的已经是一个**本地
+    路径**(见 docs/PLUGIN_MANIFEST 的素材输入那节)—— 插件这一侧不知道素材库存在。
+    """
+    local = str(payload.get("asset_id") or "").strip()
+    remote = str(payload.get("path") or "").strip()
+    if not local:
+        raise PanError("没有拿到要上传的文件")
+    if not remote or remote.endswith("/"):
+        raise PanError("path 要是网盘上的完整路径,含文件名")
+    if not os.path.isfile(local):
+        raise PanError("要上传的文件不存在")
+
+    md5s, size = _chunk_md5s(local)
+    # rtype:1 = 同名另存为副本(默认),3 = 覆盖。默认不覆盖 —— 传错一次就把人家网盘上的
+    # 东西冲掉,这个代价比多一个副本大得多。
+    rtype = 3 if payload.get("overwrite") else 1
+
+    pre = _post_form(
+        f"{API_ROOT}/file?method=precreate&access_token={urllib.parse.quote(_token())}",
+        {"path": remote, "size": size, "isdir": 0, "autoinit": 1, "rtype": rtype,
+         "block_list": json.dumps(md5s)},
+    )
+    if pre.get("errno") not in (0, None):
+        raise PanError(ERRNO_MESSAGES.get(pre.get("errno"), f"precreate 失败 errno={pre.get('errno')}"))
+
+    # 秒传:百度认得这些分片,一个字节都不用传。
+    if pre.get("return_type") == 2:
+        info = pre.get("info") or {}
+        return {"fs_id": str(info.get("fs_id") or ""), "path": info.get("path") or remote,
+                "size": size, "rapid": True}
+
+    uploadid = str(pre.get("uploadid") or "")
+    if not uploadid:
+        raise PanError("百度没有返回 uploadid")
+    with open(local, "rb") as handle:
+        for index in range(len(md5s)):
+            _upload_chunk(remote, uploadid, index, handle.read(CHUNK_BYTES))
+
+    created = _post_form(
+        f"{API_ROOT}/file?method=create&access_token={urllib.parse.quote(_token())}",
+        {"path": remote, "size": size, "isdir": 0, "rtype": rtype,
+         "uploadid": uploadid, "block_list": json.dumps(md5s)},
+    )
+    if created.get("errno") not in (0, None):
+        raise PanError(ERRNO_MESSAGES.get(created.get("errno"), f"create 失败 errno={created.get('errno')}"))
+    return {"fs_id": str(created.get("fs_id") or ""), "path": created.get("path") or remote,
+            "size": size, "rapid": False}
+
+
+TOOLS = {"pan_list": pan_list, "pan_search": pan_search, "pan_import": pan_import, "pan_upload": pan_upload}
 
 
 def main() -> None:

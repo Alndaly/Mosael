@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import PluginInstance, PluginInvocation, PluginPackage
-from app.domain.plugins import artifacts, instances as inst, state as plugin_state
+from app.domain.plugins import artifacts, inputs as plugin_inputs, instances as inst, state as plugin_state
 from app.domain.plugins.artifacts import ArtifactError, cleanup_scratch_dir, make_scratch_dir
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import Manifest
@@ -167,10 +167,14 @@ def invoke(
             output = mcp_call(_runtime_manifest(manifest), tool_name, payload, inst.secrets_for(db, instance))
         else:
             scratch = make_scratch_dir()
+            # 声明为素材的输入换成插件看得见的本地路径(见 plugins/inputs)。
+            # 在这里而不是让插件自己取:它的环境里没有数据库、没有令牌、没有媒体目录,
+            # 那是隔离边界的一部分。
+            resolved = plugin_inputs.materialize(db, tool, payload, scratch, workspace_id=workspace_id)
             result = execute_tool(
                 {"_path": manifest.path, "entry": manifest.runtime.entry},
                 tool_name,
-                payload,
+                resolved,
                 inst.process_env(db, instance),
                 scratch_dir=scratch,
             )
@@ -215,7 +219,7 @@ def _collect_artifact(
         return output
     if workspace_id is None or scratch is None:
         raise ArtifactError("这个工具产出了文件,但这次调用没有归属工作区,收不下")
-    asset = artifacts.register(
+    ref, name = artifacts.register(
         db, spec, scratch, workspace_id=workspace_id, project_id=project_id, fallback_name=fallback_name
     )
-    return {**{k: v for k, v in output.items() if k != "artifact"}, "asset_id": asset.id, "asset_name": asset.name}
+    return {**{k: v for k, v in output.items() if k != "artifact"}, "asset_id": ref, "asset_name": name}

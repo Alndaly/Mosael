@@ -83,9 +83,6 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     sidecar_adapters.use_proxy_source(subprocess_env_for_child)
     # 后台任务干完之后把回执送回发起它的那次对话。方向是反的:任务域不认识智能体,
     # 是智能体在这里把自己登记进去(见 domain/agent/receipts)。
-    from app.domain.agent import receipts as agent_receipts
-
-    agent_receipts.install()
     _prepare_network()
     # Mint the publish worker's shared secret before any request can arrive. See
     # app/core/worker_key.py for why that channel needs one.
@@ -179,6 +176,28 @@ def _install_permission_handlers(app: FastAPI) -> None:
     @app.exception_handler(PermissionDenied)
     async def _denied(_request: Request, exc: PermissionDenied) -> JSONResponse:
         return JSONResponse(status_code=403, content={"detail": str(exc)})
+
+
+def _wire_seams() -> None:
+    """把各条接缝的实现登记进去。**这是组装根**,也是唯一知道"谁实现谁"的地方。
+
+    在导入期做而不是在 lifespan 里:「谁实现这道缝」是一件静态的组装事实,不是运行时状态。
+    放在 lifespan 里的话,任何不跑 lifespan 的入口(TestClient、脚本、worker)拿到的就是
+    一个半装配的系统 —— 而症状是运行到某一行才抛"没有装配",离原因很远。
+
+    这些 install 只写注册表,不碰 IO,导入期做是安全的。
+    """
+    # 任务干完之后把回执送回发起它的那次对话。方向是反的:任务域不认识智能体,
+    # 是智能体在这里把自己登记进去(见 domain/agent/receipts)。
+    from app.domain.agent import receipts as agent_receipts
+    # 插件与素材库之间那道缝同理 —— 两边各自都不认识对方(见 plugins/media_bridge)。
+    from app.domain.assets import plugin_bridge as asset_plugin_bridge
+
+    agent_receipts.install()
+    asset_plugin_bridge.install()
+
+
+_wire_seams()
 
 
 def create_app() -> FastAPI:

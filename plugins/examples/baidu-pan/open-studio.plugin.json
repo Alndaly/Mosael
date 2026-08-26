@@ -1,7 +1,7 @@
 {
   "id": "dev.openstudio.baidu-pan",
   "name": "百度网盘",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "runtime": {
     "kind": "process",
     "entry": "tools/main.py"
@@ -12,7 +12,7 @@
   "skills": [
     {
       "id": "baidu_pan",
-      "description": "从百度网盘找素材并拉进素材库。先用 pan_list 或 pan_search 找到文件的 fs_id,再用 pan_import 把它导进来。导入是异步下载,拿到 asset_id 之后就能像别的素材一样用(插时间线、当生成的首帧)。"
+      "description": "在百度网盘和素材库之间搬文件。拉:用 pan_list 或 pan_search 找到 fs_id,再用 pan_import 导进来。传:用 pan_upload 把素材库里的东西存到网盘(传 asset_id 和目标路径)。"
     }
   ],
   "instance": {
@@ -116,6 +116,39 @@
           "outputs": [
             "asset_id",
             "asset_name"
+          ]
+        }
+      },
+      {
+        "name": "pan_upload",
+        "description": "把素材库里的一个文件传到百度网盘。传 asset_id 和网盘上的目标路径(如 /我的资源/成片.mp4)。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "asset_id": {
+              "type": "string",
+              "format": "asset",
+              "description": "要上传的素材 id"
+            },
+            "path": {
+              "type": "string",
+              "description": "网盘上的目标路径,含文件名"
+            },
+            "overwrite": {
+              "type": "boolean",
+              "description": "同名文件已存在时是否覆盖,默认另存为副本"
+            }
+          },
+          "required": [
+            "asset_id",
+            "path"
+          ]
+        },
+        "node": {
+          "label": "上传到百度网盘",
+          "outputs": [
+            "fs_id",
+            "path"
           ]
         }
       }

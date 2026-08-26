@@ -14,8 +14,9 @@
 插件自己一行都不用写。反过来让插件自己下的话,每个插件都要再实现一遍这些,而它们会各实现
 各的。
 
-入库统一走 `register_file_asset` —— 上传、本机注册、渲染产出、AI 生成、从链接导入用的都是
-它。这里只是又一个「字节从哪来」,后面的探测、缩略图、波形、建记录完全一样。
+**落到哪儿不在这里决定。** 这一层只管把字节弄到手(下下来 / 从暂存目录取),然后交给
+装配层登记的那个落点(见 media_bridge)。插件系统不认识素材库 —— 和 jobs 不认识智能体
+是同一个道理。
 """
 
 from __future__ import annotations
@@ -30,7 +31,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core.http_retry import RetryingClient
-from app.db.models import Asset
+from app.domain.plugins import media_bridge
 
 logger = logging.getLogger(__name__)
 
@@ -110,23 +111,16 @@ def register(
     workspace_id: str,
     project_id: str | None,
     fallback_name: str,
-) -> Asset:
-    """把一份产出收进素材库。两种交法在这里合流,入库那一步只有一条。"""
-    from app.domain.assets import register_file_asset
-
+) -> tuple[str, str]:
+    """把一份产出交出去。两种交法在这里合流,交接那一步只有一条。返回 (引用, 名字)。"""
     if spec.get("url"):
         path = _download(spec, scratch)
     else:
         path = _resolve_local(spec, scratch)
     name = str(spec.get("filename") or "").strip() or path.name or fallback_name
-    return register_file_asset(
-        db,
-        workspace_id=workspace_id,
-        project_id=project_id,
-        source_path=path,
-        name=name,
-        source="plugin",
-    )
+    # 落到哪儿由**装配层**决定(见 plugins/media_bridge)。这里不 import 素材库 ——
+    # 插件系统不该因为"产出也许要进素材库"而认识素材库。
+    return media_bridge.sink()(db, path, workspace_id=workspace_id, project_id=project_id, name=name)
 
 
 __all__ = [

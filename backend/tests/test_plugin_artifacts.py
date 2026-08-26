@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pytest
 
+from app.db.models import Asset
 from app.domain.plugins import artifacts
 from app.domain.plugins.artifacts import ArtifactError, SCRATCH_ENV
 from app.domain.plugins.runtime import execute_tool
@@ -70,12 +71,13 @@ class Test交出本地文件:
         from app.core.db import SessionLocal
 
         with SessionLocal() as db:
-            asset = artifacts.register(
+            # 返回的是**引用**,不是 ORM 对象 —— 这一层不认识素材库(见 plugins/media_bridge)。
+            ref, name = artifacts.register(
                 db, {"path": "a.txt"}, scratch, workspace_id=ws, project_id=None, fallback_name="t"
             )
             db.commit()
-            assert asset.name == "a.txt"
-            assert asset.source == "plugin"
+            assert name == "a.txt"
+            assert db.get(Asset, ref).source == "plugin"
 
     def test_不能交出暂存目录以外的文件(self, tmp_path) -> None:
         """插件本来就以用户身份运行、读得到用户读得到的一切,所以这不挡提权。
