@@ -72,6 +72,40 @@ class Test通义图像:
             assert 512 <= height <= 2048, f"{size} 的高超出 [512, 2048]"
 
 
+class TestSeedream4:
+    """核查日期 2026-08-27。接口原话:`image size must be at least 921600 pixels`。
+
+    真机逐个跑过:1280x720 / 960x960 / 1024x1024 / 2048x2048 / 2560x1440 / 4096x4096 全部通过。
+    **约束是总像素数,不是固定档** —— 原注释推断"故不提供 1024 档"是错的(1024x1024 是
+    1048576 像素,高于下限)。
+    """
+
+    def test_每个档都过得了像素下限(self) -> None:
+        cap = C.SEEDREAM_4_IMAGE_CAPABILITIES
+        low = cap["min_size_pixels"]
+        for size in cap["sizes"]:
+            width, height = (int(part) for part in size.split("x"))
+            assert width * height >= low, f"{size} 只有 {width * height} 像素,低于下限 {low}"
+
+    def test_常用横屏档在表里(self) -> None:
+        """1280x720 此前不在表里,而它正好是下限、也是最常用的横屏尺寸。"""
+        assert "1280x720" in C.SEEDREAM_4_IMAGE_CAPABILITIES["sizes"]
+
+
+class TestComfyUI:
+    """核查日期 2026-08-27,本地 ComfyUI 0.34.0。端到端跑通:工作流转换(14 节点)→ 参数注入
+    → 提交 → 35 秒生成成功。
+
+    **它的能力取决于用户装的工作流**,所以描述符里那几个尺寸档只是缺省值 —— 真正可调的
+    参数由 extract_workflow_params 从工作流里扫出来(那次扫到 20 个,并正确识别出
+    prompt / negative / seed 三个角色)。
+    """
+
+    def test_声明了需要工作流模板(self) -> None:
+        """漏了这条的话,界面会把 ComfyUI 当成一个开箱即用的模型 —— 而它没有工作流跑不了。"""
+        assert C.COMFYUI_VIDEO_CAPABILITIES.get("requires_workflow_template") is True
+
+
 def test_这道棘轮扫得到东西() -> None:
     """假阴性比红更危险:哪天描述符改了名,上面几条会一起真空通过。"""
     assert C.WAN_VIDEO_CAPABILITIES["sizes"]
