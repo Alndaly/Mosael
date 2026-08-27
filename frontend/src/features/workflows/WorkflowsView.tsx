@@ -3482,6 +3482,9 @@ function NodeInspector({
           const options = spec?.options
             ? spec.options.map((option) => ({ value: option, label: option }))
             : dynamicOptions(key, spec as { plugin_instances?: boolean } | undefined);
+          // 标签**优先用声明里带来的那个**(后端 domain/workflows.config_label,插件节点也有);
+          // FIELD_LABEL_KEYS 是本地那张老表,留作回落,最后才退到裸键名。
+          const declaredLabel = String((spec as { label?: unknown } | undefined)?.label ?? "").trim();
           const labelKey = FIELD_LABEL_KEYS[key];
           // ComfyUI 式:非 object 字段都可切到"连接"(暴露输入接点,再从画布拖数据边或下拉选源)。
           const canConnect = !isObject;
@@ -3491,7 +3494,7 @@ function NodeInspector({
           return (
             <div className={FIELD_BOX} key={key}>
               <span>
-                {labelKey ? t(labelKey) : key}
+                {declaredLabel || (labelKey ? t(labelKey) : key)}
                 {spec?.required ? <em className="font-bold not-italic text-destructive">*</em> : null}
                 {canConnect && (
                   <button

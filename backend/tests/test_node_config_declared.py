@@ -163,3 +163,40 @@ def test_节点类型接口把类型发出去() -> None:
     assert _with_data_type("asset_id", {"type": "template"})["data_type"] == "asset"
     # 推不出来的字段不该凭空多一个空 data_type —— 那会让前端以为它被声明过。
     assert "data_type" not in _with_data_type("prompt", {"type": "template"})
+
+
+def test_每个配置字段都有中文标签() -> None:
+    """界面上直接露出英文键名是不该发生的事。
+
+    这份知识此前是前端手抄的一张表(WorkflowsView 的 FIELD_LABEL_KEYS),81 个键只覆盖了 28 个
+    —— 剩下 55 个在中文界面上就显示 `session`、`selector`、`timeout_ms`、`temperature`。
+    而且**插件节点永远不可能被那张表覆盖**,它们是运行时才知道的。
+
+    这是同一个形状第三次出现(智能体的角色表、字段类型表、标签表):一份该住在声明里的知识
+    被抄到消费方那边,加东西时漏掉不报错,只是界面上默默露出一个英文单词。
+    """
+    from app.domain.workflows import NODE_TYPES, config_label
+
+    missing = [
+        f"{name}.{key}"
+        for name, spec in NODE_TYPES.items()
+        for key, meta in (spec.get("config") or {}).items()
+        if not config_label(key, meta)
+    ]
+    assert missing == [], f"这些字段会在界面上露出英文键名:{missing}"
+
+
+def test_节点自己的_label_压过共用表() -> None:
+    """`selector` 在六种浏览器节点里是同一个意思,所以按键名给;某个节点要特别说法时
+    得能覆盖,否则共用表就从"省事"变成了"挡路"。"""
+    from app.domain.workflows import config_label
+
+    assert config_label("selector", {}) == "元素选择器"
+    assert config_label("selector", {"label": "要点的元素"}) == "要点的元素"
+
+
+def test_标签真的发到接口上() -> None:
+    """在后端算好但没发出去,等于没算。"""
+    from app.api.routes.workflows import _with_data_type
+
+    assert _with_data_type("selector", {"type": "string"})["label"] == "元素选择器"

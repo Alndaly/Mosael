@@ -27,6 +27,7 @@ from app.domain.workflows import (
     NODE_CATEGORIES,
     NODE_TYPES,
     config_data_type,
+    config_label,
     WorkflowDomainError,
     create_workflow,
     list_workflows,
@@ -45,8 +46,16 @@ def _with_data_type(key: str, spec: Any) -> Any:
     """把推导出的语义类型贴到字段声明上;推不出来就原样返回。"""
     if not isinstance(spec, dict):
         return spec
+    enriched = dict(spec)
     data_type = config_data_type(key, spec)
-    return {**spec, "data_type": data_type} if data_type else spec
+    if data_type:
+        enriched["data_type"] = data_type
+    # 界面上叫什么,也随声明一起发 —— 前端此前自己抄了一张表,81 个键只覆盖了 28 个,
+    # 剩下的在中文界面上直接露出英文键名。
+    label = config_label(key, spec)
+    if label:
+        enriched["label"] = label
+    return enriched
 
 
 @router.get("/workflows/node-types", response_model=list[WorkflowNodeTypeOut])

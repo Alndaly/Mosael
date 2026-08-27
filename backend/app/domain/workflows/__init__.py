@@ -45,6 +45,52 @@ class WorkflowDomainError(RuntimeError):
 #: 浏览器要登录态,插件要先装。列表顺序即面板顺序,前端不再排第二次。
 NODE_CATEGORIES: tuple[str, ...] = ("流程", "AI", "素材", "数据", "发布", "浏览器", "插件")
 
+#: 配置字段在界面上**叫什么**。
+#:
+#: 这份知识此前是前端手抄的一张表(WorkflowsView 的 FIELD_LABEL_KEYS),81 个键里只覆盖了 28 个
+#: —— 剩下 55 个在中文界面上直接显示英文键名:`session`、`selector`、`timeout_ms`、
+#: `temperature`…… 而且**插件节点永远不可能被那张表覆盖**,它们是运行时才知道的。
+#:
+#: 今天这是第三次撞见同一个形状了(智能体的角色表、字段类型表、现在是标签表):一份该住在
+#: 声明里的知识,被抄到了消费方那边,于是加东西时漏掉不报错,只是界面上默默露出一个英文单词。
+#:
+#: 按**键名**给,不按节点给 —— `selector` 在六种浏览器节点里是同一个意思,写六遍只会让它们
+#: 迟早不一致。某个节点要特别说法,在它自己的 spec 里写 `label` 覆盖。
+_FIELD_LABELS = {
+    "account_id": "发布账号", "all": "全部", "asset_id": "素材", "asset_ids": "素材",
+    "attribute": "取哪个属性", "body": "子图", "code": "代码", "condition": "条件",
+    "description": "说明", "dy": "纵向距离", "end": "结束位置", "engine": "引擎",
+    "exact": "精确匹配", "expression": "表达式", "file_path": "文件路径",
+    "find": "查找", "frequency_penalty": "重复惩罚", "gone": "等它消失",
+    "headers": "请求头", "input": "入参", "inputs": "入参映射",
+    "instance_id": "连接", "items": "要遍历的列表", "json_schema": "JSON Schema",
+    "json_schema_name": "Schema 名称", "json_schema_strict": "严格模式",
+    "kind": "类型", "left": "左值", "limit": "条数上限",
+    "max_iterations": "最多循环几次", "max_tokens": "最长输出", "method": "请求方法",
+    "mode": "模式", "model": "模型", "name": "名称", "name_contains": "名称包含",
+    "negative_prompt": "负向提示词", "op": "运算", "operations": "操作",
+    "output": "对外输出", "parameters": "生成参数", "params": "启动参数",
+    "path": "路径", "plugin_id": "插件", "presence_penalty": "话题惩罚",
+    "preset": "预设", "profile_id": "连接", "project_id": "项目", "prompt": "提示词",
+    "provider": "服务商", "replace": "替换为", "response_format": "返回格式",
+    "right": "右值", "seconds": "秒数", "seed": "随机种子", "selector": "元素选择器",
+    "sequence_id": "时间线", "session": "浏览器会话", "session_mode": "会话方式",
+    "session_name": "会话名称", "source": "来源", "source_assets": "输入素材",
+    "start": "起始位置", "stop": "停止词", "system": "系统提示词", "tags": "标签",
+    "target_lang": "目标语言", "temperature": "发散程度", "template": "模板",
+    "text": "文本", "timeout_ms": "超时(毫秒)", "title": "标题",
+    "tool_name": "工具", "top_p": "采样范围", "track_id": "轨道",
+    "url": "网址", "url_contains": "网址包含", "value": "值", "values": "具名输出",
+    "voice_id": "音色", "workflow_id": "工作流",
+}
+
+
+def config_label(key: str, spec: dict[str, Any]) -> str:
+    """这个配置字段在界面上叫什么。没有登记就返回空串(界面退回显示键名)。"""
+    explicit = str(spec.get("label") or "").strip()
+    return explicit or _FIELD_LABELS.get(key, "")
+
+
 #: 一个配置字段**装的是什么东西** —— 素材?时间线?还是随便什么值。
 #:
 #: 界面靠它决定给不给素材选择器、画不画缩略图、连线时类型对不对得上。此前这张表是**前端
