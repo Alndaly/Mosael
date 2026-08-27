@@ -1440,7 +1440,8 @@ function WorkflowEditor({
     return true;
   }, [graph, registry]);
 
-  // Cmd/Ctrl+C 复制选中节点,Cmd/Ctrl+V 粘贴;输入框 / 代码编辑器里不劫持(交给系统复制粘贴)。
+  // Cmd/Ctrl+C 复制选中节点,Cmd/Ctrl+V 粘贴,Cmd/Ctrl+G 把选中的折叠成子图;
+  // 输入框 / 代码编辑器里不劫持(交给系统复制粘贴)。
   React.useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey)) return;
@@ -1451,11 +1452,22 @@ function WorkflowEditor({
         if (copySelection()) event.preventDefault();
       } else if (key === "v") {
         if (pasteClipboard()) event.preventDefault();
+      } else if (key === "g") {
+        // G = group,和别处"编组"是同一个键位。**要拦下浏览器的"查找下一个"** ——
+        // 不 preventDefault 的话 Safari/Chrome 会在折叠的同时弹出查找栏。
+        // 少于两个节点时不接管:那时这个操作本来就不成立,让系统的 ⌘G 照常工作。
+        // 就地从 nodes 取选中项:selectedFlowIds 声明在这条 effect 后面,而它本来就是
+        // nodes 的派生量 —— 为了顺序去搬一个几百行外的声明,只会让下一个人更难读。
+        const picked = nodes.filter((node) => node.selected).map((node) => node.id);
+        if (picked.length >= 2) {
+          event.preventDefault();
+          handleCollapse(picked);
+        }
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [copySelection, pasteClipboard]);
+  }, [copySelection, pasteClipboard, nodes, handleCollapse]);
 
   const onNodesChange = React.useCallback(
     (changes: NodeChange[]) => {
@@ -2405,8 +2417,10 @@ function WorkflowEditor({
                 <button
                   type="button"
                   onClick={() => handleCollapse(selectedFlowIds)}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-input bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-muted"
-                  title={t("wfCollapseHint")}
+                  // **select-none**:它出现的时机正是框选拖拽刚结束的那一刻,而那一下拖拽会把
+                  // 按钮上的字一起选中 —— 于是文字顶着一层系统选区的紫色,看着像坏了。
+                  className="inline-flex select-none items-center gap-1.5 rounded-full border border-input bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-muted"
+                  title={`${t("wfCollapseHint")} ⌘G`}
                 >
                   <Boxes size={13} /> {t("wfCollapseToSubgraph").replace("{n}", String(selectedFlowIds.length))}
                 </button>
@@ -2724,7 +2738,9 @@ function LoopBodyEditor({
    * 地方,而这只是少传了一个参数。
    */
   const subRf = React.useRef<ReactFlowInstance | null>(null);
-  const [subTick, setSubTick] = React.useState(0);
+  //: 和主图同一套画布姿态。**平移/缩放时把检查器设成 inert** —— 否则滚轮滚到面板上就被它吃掉,
+  //: 画布停住不动:用户以为滚坏了,其实是指针从画布挪到了浮层上。
+  const subCanvas = useCanvasPosture();
   const [subPanelHeight, setSubPanelHeight] = React.useState<number | undefined>(undefined);
   const subPanelRef = React.useCallback((element: HTMLElement | null) => {
     if (!element) return;
@@ -2743,7 +2759,7 @@ function LoopBodyEditor({
         subPanelHeight,
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedId, subTick, nodes, subPanelHeight],
+    [selectedId, subCanvas.tick, nodes, subPanelHeight],
   );
 
   //: 最后一次**我们自己发出去**的 body。用来分辨"这次 prop 变化是我引起的"还是"外面改的"。
@@ -2990,12 +3006,17 @@ function LoopBodyEditor({
           deleteKeyCode={["Backspace", "Delete"]}
           onInit={(instance) => {
             subRf.current = instance as unknown as ReactFlowInstance;
+            subCanvas.handlers.onInit();
             requestAnimationFrame(() => {
               instance.fitView({ padding: 0.3, maxZoom: 1 });
               setBodyViewReady(true);
             });
           }}
-          onMove={() => setSubTick((value) => value + 1)}
+          onMoveStart={subCanvas.handlers.onMoveStart}
+          onMove={subCanvas.handlers.onMove}
+          onMoveEnd={subCanvas.handlers.onMoveEnd}
+          // 和主图一致:署名照常显示 —— 隐藏它是 Pro 授权才允许的事,不能因为"看着干净"就关掉。
+          proOptions={{ hideAttribution: false }}
         >
           <Background gap={20} size={1.2} />
           <Controls
@@ -3008,6 +3029,7 @@ function LoopBodyEditor({
         {selectedNode && subAnchor && (
           <NodeInspector
             anchor={subAnchor}
+            inert={subCanvas.panning}
             panelRef={subPanelRef}
             node={selectedNode}
             meta={registry.get(selectedNode.type) ?? null}
