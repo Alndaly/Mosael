@@ -241,7 +241,10 @@ function NodeResultPreview({ assetIds }: { assetIds: string[] }) {
     // **只有视频/音频挂 nodrag**。整块都挂的话,缩略图占了节点大半个身体,从图上按下就拖不动
     // 节点了 —— 用户感觉像"焦点卡住",换个地方按又好了。图片不需要:拖动不会触发 click,
     // 原地点一下照样打开大图。
-    <div className="grid grid-flow-col justify-stretch gap-1 overflow-hidden rounded-md border border-border">
+    // **通栏。** 卡片有 px-3 的内边距,预览夹在里面就成了"贴在卡片上的一张小图",两侧各留
+    // 一道白 —— 而它是这个节点最该被看见的东西。用负边距顶到卡片边缘,上下各一条分隔线
+    // 代替四周的框:框会让它继续像个独立元件,横线则把它读成卡片自己的一段。
+    <div className="-mx-3 grid grid-flow-col justify-stretch gap-px overflow-hidden border-y border-border bg-border">
       {ready.map((asset) => (
         <AssetInlinePreview
           key={asset.id}
@@ -252,9 +255,9 @@ function NodeResultPreview({ assetIds }: { assetIds: string[] }) {
           plain
           className={
             asset.kind === "image"
-              ? "block h-[62px] w-full object-cover"
+              ? "block h-[74px] w-full object-cover"
               : asset.kind === "video"
-                ? "h-[62px] w-full bg-black object-cover"
+                ? "h-[74px] w-full bg-black object-cover"
                 : "w-full"
           }
         />
@@ -276,6 +279,10 @@ function WfNode({ data, selected }: NodeProps) {
     retry: false,
   });
   const kindIcon = ASSET_KIND_ICONS[configAsset.data?.kind ?? ""];
+  //: 上面有没有一块**通栏**的内容(预览图)。有的话页脚要贴着它 —— 卡片统一的 gap 落在
+  //: 两者之间就成了一条空带,而页脚是"接着上面那段"的东西,不是另起一段。
+  //: 两条边框也要合成一条:预览的下边线和页脚的上边线挨在一起会变成 2px。
+  const hasBleed = Boolean(d.configAssetId || (d.runAssets ?? []).length > 0);
   const subtitle = d.configAssetId
     ? ""
     : d.configSummary || (d.label !== d.typeLabel ? d.typeLabel : "");
@@ -291,7 +298,10 @@ function WfNode({ data, selected }: NodeProps) {
         // **要有上界。** 标题里塞进一个 43 字符的文件名时,卡片会被撑到 375px(普通节点是 172),
         // 而 truncate 没有上界根本不会生效。撑宽不只是难看:贴节点浮现的检查器先试右侧,
         // 放不下才翻左侧 —— 一个过宽的节点会把面板推到左边,正好压在邻居身上。
-        "group/node relative flex min-w-[172px] max-w-[264px] flex-col gap-1.5 rounded-lg border border-border bg-panel px-3 py-[9px] transition-[border-color] duration-100 hover:border-border-strong",
+        // 竖直节奏:**段落之间(gap-2)比段落内部(header 自己的 gap)大**,否则标题、预览、
+        // 接点读成一整片。上下内边距收到 8px —— 预览通栏之后,原来那 9px 会让图和标题之间
+        // 出现一道比左右都宽的空当。
+        "group/node relative flex min-w-[172px] max-w-[264px] flex-col gap-2 rounded-lg border border-border bg-panel px-3 py-2 transition-[border-color] duration-100 hover:border-border-strong",
         // **两侧都有接点时才撑宽。** 单侧接点(比如只有输出的 LLM)撑到 210px 的话,那一列被
         // 推到最右边,左半张卡片是空的 —— 看着像排版坏了,其实是宽度给多了。
         showIo && inputs.length > 0 && outputs.length > 0 && "min-w-[210px]",
@@ -385,7 +395,12 @@ function WfNode({ data, selected }: NodeProps) {
       {showIo && (
         // 接口区做成卡片"页脚条":压进左右 padding、贴住底边、subtle 底色 —
         // 端口行读作独立的接线区,而不是悬在卡片下半的零散小字(空的一侧也不再是大片留白)。
-        <div className="-mx-3 -mb-[9px] mt-0.5 flex justify-between gap-4 rounded-b-[9px] border-t border-border bg-panel-subtle px-3 py-[6px]">
+        <div
+          className={cn(
+            "-mx-3 -mb-2 flex justify-between gap-4 rounded-b-[9px] bg-panel-subtle px-3 py-[6px]",
+            hasBleed ? "-mt-2" : "border-t border-border",
+          )}
+        >
           <div className="flex min-w-0 flex-col gap-[3px]">
             {inputs.map((key) => (
               <div className="relative flex min-h-4 items-center" key={key}>
