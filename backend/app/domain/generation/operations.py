@@ -248,7 +248,18 @@ _ROLE_LABELS = {
     "reference_image": "参考图",
     "reference_video": "参考视频",
     "reference_audio": "参考音频",
+    "source_video": "待编辑的视频",
+    "first_clip": "待续写的片段",
 }
+
+
+#: 为什么互斥 —— 说清楚每一组各自是干什么的,比一句「不兼容」有用:用户下一步要做的是
+#: 挑一条路,而不是猜哪个参数写错了。
+_WHY_EXCLUSIVE = (
+    "首尾帧决定成片的第一格和最后一格;"
+    "参考素材一帧都不出现在成片里,只影响风格与主体;"
+    "待续写的片段则是成片的开头、后面接着往下拍。"
+)
 
 
 def _label(role: str) -> str:
@@ -283,8 +294,12 @@ def _check_source_counts(
         names = ["、".join(_label(r) for r in sorted(group & used)) for group in touched]
         raise GenerationDomainError(
             f"{provider}/{model} 的{' 和 '.join(names)}不能一起用:"
-            "首尾帧决定的是成片的第一格和最后一格,参考素材只影响风格与主体,两者是两条路。"
+            f"{_WHY_EXCLUSIVE}它们是不同的路子,一次只能走一条。"
         )
+
+    for role in capabilities.get("requires_source") or []:
+        if role not in used:
+            raise GenerationDomainError(f"{provider}/{model} 必须给一份{_label(role)}")
 
     for role, companions in (capabilities.get("requires_companion") or {}).items():
         if role in used and not (set(companions) & used):

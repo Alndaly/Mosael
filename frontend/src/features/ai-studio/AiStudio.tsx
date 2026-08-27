@@ -329,6 +329,12 @@ function GenerateWorkspace({
   const videoReferenceRoles = (["reference_image", "reference_video", "reference_audio"] as const).filter(
     (role) => selectedModel?.kind === "video" && supportsParameter(selectedModel, role),
   );
+  // 拿一段现成的视频当输入,这是第三条路:编辑(输出就是这一段改过的样子)和续写(输出以它
+  // 开头再往下长)。它们既不是首尾帧也不是参考素材,所以单独列在最上面 —— 选了这类模型,
+  // 用户第一件要做的事就是把那段片子挂上去。
+  const videoInputRoles = (["source_video", "first_clip"] as const).filter(
+    (role) => selectedModel?.kind === "video" && supportsParameter(selectedModel, role),
+  );
   // 互斥由描述符说了算(各家接口的硬约束,不是我们的规矩):一组用上了,另一组就灰掉,
   // 而不是让用户挂满了才在提交时吃一个说着数组下标的英文 400。
   const lockedRoles = React.useMemo(() => {
@@ -1079,6 +1085,19 @@ function GenerateWorkspace({
                     disabledReason={t("genSourceGroupsExclusive")}
                   />
                 )}
+                {videoInputRoles.map((role) => (
+                  <FrameSlotField
+                    key={role}
+                    role={role}
+                    slots={generationConfig.frames[role]}
+                    limit={sourceLimit(selectedModel, role)}
+                    onChange={(slots) => setFrames(role, slots)}
+                    workspaceId={workspace.id}
+                    hint={role === "source_video" ? t("genSourceVideoHint") : t("genFirstClipHint")}
+                    disabled={lockedRoles.has(role)}
+                    disabledReason={t("genSourceGroupsExclusive")}
+                  />
+                ))}
                 {videoReferenceRoles.map((role, index) => (
                   <FrameSlotField
                     key={role}

@@ -29,6 +29,8 @@ export const SOURCE_ROLES = [
   "reference_image",
   "reference_video",
   "reference_audio",
+  "source_video",
+  "first_clip",
 ] as const;
 export type SourceRole = (typeof SOURCE_ROLES)[number];
 
@@ -90,6 +92,20 @@ export const ROLE_COPY: Record<SourceRole, RoleCopy> = {
     urlLabel: "genReferenceAudioUrl",
     accept: "audio/*",
   },
+  source_video: {
+    label: "genSourceVideo",
+    upload: "genSourceVideoUpload",
+    uploading: "genSourceVideoUploading",
+    urlLabel: "genSourceVideoUrl",
+    accept: "video/*",
+  },
+  first_clip: {
+    label: "genFirstClip",
+    upload: "genFirstClipUpload",
+    uploading: "genFirstClipUploading",
+    urlLabel: "genFirstClipUrl",
+    accept: "video/*",
+  },
 };
 
 /** 这个槽位是空的吗 —— 素材和外链都没有。 */
@@ -139,6 +155,8 @@ export function emptyFrames(): FrameSlots {
     reference_image: [{ ...EMPTY_SLOT }],
     reference_video: [{ ...EMPTY_SLOT }],
     reference_audio: [{ ...EMPTY_SLOT }],
+    source_video: [{ ...EMPTY_SLOT }],
+    first_clip: [{ ...EMPTY_SLOT }],
   };
 }
 

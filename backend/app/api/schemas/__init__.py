@@ -1290,7 +1290,7 @@ class SourceAssetRef(BaseModel):
     """
 
     asset_id: str = Field(min_length=1, max_length=64)
-    role: str = Field(default="first_frame", pattern="^(first_frame|last_frame|reference_image|reference_video|reference_audio)$")
+    role: str = Field(default="first_frame", pattern="^(first_frame|last_frame|reference_image|reference_video|reference_audio|source_video|first_clip)$")
 
 
 class GenerationCreate(BaseModel):

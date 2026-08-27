@@ -211,7 +211,9 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "description": (
                     "输入素材,每行一条 `素材id` 或 `素材id:角色`。"
                     "角色:first_frame 首帧 / last_frame 尾帧 / reference_image 参考图 / "
-                    "reference_video 参考视频 / reference_audio 参考音频;不写角色时图生视频按首帧、图生图按参考图。"
+                    "reference_video 参考视频 / reference_audio 参考音频 / "
+                    "source_video 待编辑的视频 / first_clip 待续写的片段;"
+                    "不写角色时图生视频按首帧、图生图按参考图。"
                 ),
             },
         },

@@ -235,6 +235,43 @@ class Test万相27:
         assert not wan.uses_media_array("wan2.5-i2v-preview")
 
 
+class Test视频编辑与续写:
+    """核查日期 2026-08-27,拿用户自己的密钥跑到终态,两条都 SUCCEEDED。
+
+    * **视频编辑** `wan2.7-videoedit`:给一段片子加一句「把画面改成水彩画风格」,
+      出的是同一段片子改过之后的样子。文档原话:输入视频「有且仅有 1 个」,2～10 秒。
+    * **视频续写** `wan2.7-i2v` + media `first_clip`:成片以那一段开头,后面接着往下拍。
+      接口对时长有话说 —— `first_clip duration (2.07s after trim) must be less than the
+      requested duration (2s)`,也就是**总时长必须比片段长**。
+    """
+
+    def test_视频编辑有自己的描述符_不是拿参考视频凑的(self) -> None:
+        """混成 reference_video 的话,用户选了「编辑」拿到的会是一段重拍的片子 ——
+        画面出得来,只是根本不是他要的那一段,而界面上看不出哪里不对。"""
+        assert C.WAN_VIDEO_EDIT_CAPABILITIES["modes"] == ["video-edit"]
+        assert C.WAN_VIDEO_EDIT_CAPABILITIES["source_limits"]["source_video"] == 1
+        assert "reference_video" not in C.WAN_VIDEO_EDIT_CAPABILITIES["source_limits"]
+
+    def test_没视频就无从编辑(self) -> None:
+        assert C.WAN_VIDEO_EDIT_CAPABILITIES["requires_source"] == ["source_video"]
+
+    def test_编辑的时长上限是_10_秒_不是_15(self) -> None:
+        """和 2.7 生成那一族不一样(那边到 15)。抄串了就是线上失败。"""
+        assert C.WAN_VIDEO_EDIT_CAPABILITIES["max_duration_seconds"] == 10
+
+    def test_续写自成一组_不和首尾帧混用(self) -> None:
+        groups = [set(group) for group in C.WAN_27_VIDEO_CAPABILITIES["exclusive_source_groups"]]
+        assert {"first_clip"} in groups
+
+    def test_被编辑的那段视频在万相那边叫_video(self) -> None:
+        """内部不能也叫 video —— 那个词在这里什么都指(参考视频是视频,续写的片段也是)。"""
+        from app.ai.providers.video import wan
+
+        assert wan._MEDIA_TYPES["source_video"] == "video"
+        assert wan._MEDIA_TYPES["first_clip"] == "first_clip"
+        assert wan.uses_media_array("wan2.7-videoedit")
+
+
 def test_这道棘轮扫得到东西() -> None:
     """假阴性比红更危险:哪天描述符改了名,上面几条会一起真空通过。"""
     assert C.WAN_VIDEO_CAPABILITIES["sizes"]
@@ -242,3 +279,4 @@ def test_这道棘轮扫得到东西() -> None:
     assert C.MINIMAX_VIDEO_CAPABILITIES["duration_seconds"]
     assert C.SEEDANCE_2_VIDEO_CAPABILITIES["source_limits"]
     assert C.WAN_27_VIDEO_CAPABILITIES["resolutions"]
+    assert C.WAN_VIDEO_EDIT_CAPABILITIES["source_limits"]

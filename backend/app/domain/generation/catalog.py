@@ -149,6 +149,7 @@ WAN_27_VIDEO_CAPABILITIES = {
     "parameter_keys": [
         "duration_seconds", "resolution", "aspect_ratio",
         "first_frame", "last_frame", "reference_image", "reference_video",
+        "first_clip",
     ],
     "duration_seconds": [],
     "default_duration_seconds": 5,
@@ -158,10 +159,38 @@ WAN_27_VIDEO_CAPABILITIES = {
     "default_aspect_ratio": "16:9",
     # 文档原话:参考图像 + 参考视频合计不超过 5 个,首帧图像最多 1 张。这一组和火山那边的
     # 9/3/3 不是一个数,别照抄 —— 每家自己一套。
-    "source_limits": {"first_frame": 1, "last_frame": 1, "reference_image": 5, "reference_video": 5},
-    "exclusive_source_groups": [KEYFRAME_GROUP, REFERENCE_GROUP],
+    "source_limits": {"first_frame": 1, "last_frame": 1, "reference_image": 5, "reference_video": 5, "first_clip": 1},
+    # 续写是第三条路:给一段现成的片子,让模型接着往下拍。它既不是首尾帧(那是画面的起止),
+    # 也不是参考视频(那只提供风格和主体、自己不出现在成片里),所以自成一组。
+    "exclusive_source_groups": [KEYFRAME_GROUP, REFERENCE_GROUP, ["first_clip"]],
     "min_duration_seconds": 2,
     "max_duration_seconds": 15,
+    "supports_audio": True,
+}
+
+#: 万相视频编辑 wan2.7-videoedit。真机跑到 succeeded(2026-08-27):给一段视频加一句指令
+#: (「把画面改成水彩画风格」),出的是同一段片子改过之后的样子。
+#:
+#: 和「参考生视频」是两回事:参考视频只提供风格和主体,成片是新拍的;这里输出的就是**这一段**。
+#: 所以角色叫 source_video 而不是 reference_video,两者混用的话用户选了编辑却拿到一段重拍的片子。
+#:
+#: 文档原话:输入视频「有且仅有 1 个」,mp4/mov,2～10 秒,不超过 100MB;时长 [2, 10] 整数。
+#: 可以再挂参考图做「指令 + 参考图编辑」(局部替换)—— 这一组和 source_video **不互斥**。
+WAN_VIDEO_EDIT_CAPABILITIES = {
+    "modes": ["video-edit"],
+    "endpoint": "dashscope",
+    "payload_shape": "media",
+    "parameter_keys": ["duration_seconds", "resolution", "aspect_ratio", "source_video", "reference_image"],
+    "duration_seconds": [],
+    "default_duration_seconds": 5,
+    "resolutions": ["720P", "1080P"],
+    "default_resolution": "1080P",
+    "aspect_ratios": ["16:9", "9:16", "1:1", "4:3", "3:4"],
+    "default_aspect_ratio": "16:9",
+    "source_limits": {"source_video": 1, "reference_image": 5},
+    "requires_source": ["source_video"],
+    "min_duration_seconds": 2,
+    "max_duration_seconds": 10,
     "supports_audio": True,
 }
 
@@ -405,6 +434,14 @@ BUILTIN_MODELS = [
         "kind": "video",
         "model": "wan2.7-r2v",
         "capabilities": WAN_27_VIDEO_CAPABILITIES,
+    },
+    {
+        # 视频编辑:给一段片子加一句指令,出的是同一段片子改过之后的样子。
+        "id": "alibaba:wan2.7-videoedit:video",
+        "provider": "alibaba",
+        "kind": "video",
+        "model": "wan2.7-videoedit",
+        "capabilities": WAN_VIDEO_EDIT_CAPABILITIES,
     },
     {
         "id": "bytedance:doubao-seedance-2-0-260128:video",

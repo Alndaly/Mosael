@@ -20,6 +20,8 @@ from app.ai.providers.base import (
     LAST_FRAME,
     REFERENCE_IMAGE,
     REFERENCE_VIDEO,
+    SOURCE_VIDEO,
+    FIRST_CLIP,
     metering_from_request,
     provider_http_error,
 )
@@ -76,12 +78,27 @@ def resolve_size(parameters: dict[str, Any]) -> str:
 #: 提交照样 200,任务终态才回 `Field required: input.media`。
 _MEDIA_ARRAY_PREFIXES = ("wan2.7", "wan2.8", "wan3")
 
-#: media 数组里的 type 就是我们内部的角色名,一一对上,不用翻译表。
-_MEDIA_ROLES = (FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, REFERENCE_VIDEO)
+#: 视频编辑走的也是同一条路径、同一个 media 数组,只是模型名不带代号后缀 —— 显式列出来,
+#: 免得哪天前缀规则改了把它漏掉(漏掉的下场是提交 200、终态 `Field required: input.media`)。
+_MEDIA_ARRAY_MODELS = ("wan2.7-videoedit",)
+
+#: media 数组里的 type。大部分角色名和我们内部的一样,只有**被编辑的那段视频**例外:
+#: 万相把它叫 `video`,而我们叫 `source_video` —— 内部不能也叫 video,那个词在这里
+#: 什么都指(参考视频是视频,续写的片段也是视频),读的人分不出哪个是哪个。
+_MEDIA_TYPES = {
+    FIRST_FRAME: "first_frame",
+    LAST_FRAME: "last_frame",
+    REFERENCE_IMAGE: "reference_image",
+    REFERENCE_VIDEO: "reference_video",
+    FIRST_CLIP: "first_clip",
+    SOURCE_VIDEO: "video",
+}
+_MEDIA_ROLES = tuple(_MEDIA_TYPES)
 
 
 def uses_media_array(model: str) -> bool:
-    return str(model or "").strip().lower().startswith(_MEDIA_ARRAY_PREFIXES)
+    name = str(model or "").strip().lower()
+    return name.startswith(_MEDIA_ARRAY_PREFIXES) or name in _MEDIA_ARRAY_MODELS
 
 
 def build_submit_payload(request: GenerationRequest) -> dict[str, Any]:
@@ -117,7 +134,7 @@ def build_submit_payload(request: GenerationRequest) -> dict[str, Any]:
         payload["input"]["negative_prompt"] = request.negative_prompt
     if uses_media_array(request.model):
         media = [
-            {"type": role, "url": str(value)}
+            {"type": _MEDIA_TYPES[role], "url": str(value)}
             for role in _MEDIA_ROLES
             for value in source_values(request, role)
         ]

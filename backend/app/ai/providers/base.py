@@ -41,8 +41,27 @@ REFERENCE_IMAGE = "reference_image"
 REFERENCE_VIDEO = "reference_video"
 REFERENCE_AUDIO = "reference_audio"
 
+#: **拿一段现成的视频当输入**,这是第三条路,和前两条都不一样。
+#:
+#: `source_video` 是**被改的那一段**:输出是它改过之后的样子,长度和内容都对得上(万相的
+#: 视频编辑就是这个 —— 「把画面改成水彩风格」)。
+#: `first_clip` 是**被接着往下拍的那一段**:输出以它开头,再往后长出新的内容(视频续写)。
+#:
+#: 两者都不是 `reference_video`:参考视频只提供风格和主体,它自己一帧都不出现在成片里。
+#: 把三者混成一个角色的话,用户选「续写」拿到的会是一段重新生成的视频,而看不出哪里不对。
+SOURCE_VIDEO = "source_video"
+FIRST_CLIP = "first_clip"
+
 #: 全部角色。描述符(domain/generation/catalog)声明某个模型认哪几种,界面和智能体都读它。
-SOURCE_ROLES = (FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, REFERENCE_VIDEO, REFERENCE_AUDIO)
+SOURCE_ROLES = (
+    FIRST_FRAME,
+    LAST_FRAME,
+    REFERENCE_IMAGE,
+    REFERENCE_VIDEO,
+    REFERENCE_AUDIO,
+    SOURCE_VIDEO,
+    FIRST_CLIP,
+)
 
 #: **首尾帧**和**参考素材**是两回事,不是同一个东西的两种叫法。
 #:
@@ -55,6 +74,7 @@ SOURCE_ROLES = (FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, REFERENCE_VIDEO, REFER
 #: 五个角色平铺成一串,界面上可以同时勾首帧和参考图 —— 提交必然 400,而用户看不出为什么。
 KEYFRAME_ROLES = (FIRST_FRAME, LAST_FRAME)
 REFERENCE_ROLES = (REFERENCE_IMAGE, REFERENCE_VIDEO, REFERENCE_AUDIO)
+VIDEO_INPUT_ROLES = (SOURCE_VIDEO, FIRST_CLIP)
 
 
 @dataclass(frozen=True)
@@ -270,6 +290,8 @@ ROLE_URL_PARAMETERS = {
     REFERENCE_IMAGE: ("reference_image_url",),
     REFERENCE_VIDEO: ("reference_video_url",),
     REFERENCE_AUDIO: ("reference_audio_url",),
+    SOURCE_VIDEO: ("source_video_url", "video_url"),
+    FIRST_CLIP: ("first_clip_url",),
 }
 
 
