@@ -2040,17 +2040,19 @@ function WorkflowEditor({
             canvasDrop.handlers.onDrop(event);
           }}
         >
+          {/* inset-0 一点不留:留边就会在四角露出没被盖住的缝。虚线框收到中间那块提示上,
+              而不是描在整块区域的边上 —— 后者会和画布自己的圆角错开。 */}
           {(canvasDrop.active || dropUpload.isPending) && (
-            <div className="pointer-events-none absolute inset-3 z-20 grid place-items-center rounded-lg border-2 border-dashed border-primary bg-[color-mix(in_oklab,var(--primary)_8%,transparent)]">
-              <span className="flex items-center gap-2 text-ui-md font-semibold text-primary">
+            <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-lg bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]">
+              <span className="grid justify-items-center gap-2 rounded-lg border-2 border-dashed border-primary px-6 py-4 text-ui-md font-semibold text-primary">
                 {dropUpload.isPending ? (
                   <>
-                    <Loader2 size={16} className="animate-openstudio-spin" />
+                    <Loader2 size={20} className="animate-openstudio-spin" />
                     {t("mediaDropUploading")}
                   </>
                 ) : (
                   <>
-                    <FileUp size={16} />
+                    <FileUp size={20} />
                     {t("wfDropHint")}
                   </>
                 )}

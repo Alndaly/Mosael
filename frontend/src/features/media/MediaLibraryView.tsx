@@ -222,29 +222,28 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   };
 
   return (
-    <div
-      className="relative flex h-full min-h-0 flex-col items-stretch overflow-auto px-2 pb-2 [&>*]:shrink-0"
-      {...drop.handlers}
-    >
-      {/* 拖着文件悬在页面上时才出现。盖住整页 —— 落点不该只是某个小方框,
-          用户拖进来时看的是"这一页",不是某个角落。 */}
+    // 两层:外层不滚,只做定位上下文;里层是滚动区。遮罩挂在**外层**上 ——
+    // 挂在滚动容器里的话,absolute 会跟着内容一起滚走,滚到一半松手时提示已经在屏幕外了。
+    <div className="relative h-full min-h-0" {...drop.handlers}>
+      {/* inset-0 一点不留:留边就会在四角露出没被盖住的缝。落点是整块区域,不是某个方框。 */}
       {(drop.active || dropUpload.isPending) && (
-        <div className="pointer-events-none absolute inset-2 z-40 grid place-items-center rounded-lg border-2 border-dashed border-primary bg-[color-mix(in_oklab,var(--primary)_8%,var(--background))]">
-          <span className="flex items-center gap-2 text-ui-md font-semibold text-primary">
+        <div className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]">
+          <span className="grid justify-items-center gap-2 rounded-lg border-2 border-dashed border-primary px-6 py-4 text-ui-md font-semibold text-primary">
             {dropUpload.isPending ? (
               <>
-                <Loader2 size={16} className="animate-openstudio-spin" />
+                <Loader2 size={20} className="animate-openstudio-spin" />
                 {t("mediaDropUploading")}
               </>
             ) : (
               <>
-                <Upload size={16} />
+                <Upload size={20} />
                 {t("mediaDropHint")}
               </>
             )}
           </span>
         </div>
       )}
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto px-2 pb-2 [&>*]:shrink-0">
       {/* 顶部工具条 + 标签筛选 sticky 吸顶:滚动素材网格时保持可见。顶部内边距放在本 sticky 头上
           (滚动容器不留 pt),吸顶时才能严丝合缝贴顶、不露出上一行卡片;-mx 铺满宽度,bg 盖住滚上来的卡片。 */}
       {/* 负外边距和外壳的内边距**是同一个数**:它靠 -mx 把自己拉到容器边缘,好让 sticky 时的
@@ -474,6 +473,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
       {comparing && comparable.length >= 2 && (
         <AssetCompareView assets={comparable} onClose={() => setComparing(false)} />
       )}
+      </div>
     </div>
   );
 }
