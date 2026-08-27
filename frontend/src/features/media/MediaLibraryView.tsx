@@ -1,10 +1,12 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, Link2, ListChecks, Pencil, Tag, Tags, Trash2, X } from "lucide-react";
+import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, Link2, ListChecks, Loader2, Pencil, Tag, Tags, Trash2, Upload, X } from "lucide-react";
 
 import { api, assetThumbnailUrl, deleteAsset, importAsset, renameAsset, setAssetTags, type Asset, type Workspace } from "@/api/client";
 import { UrlImportDialog } from "@/features/media/UrlImportDialog";
 import { saveAssetToDisk } from "@/lib/download";
+import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
+import { toast } from "sonner";
 import { useI18n } from "@/app/preferences";
 import { AssetCompareView } from "@/features/media/AssetCompareView";
 import { Badge } from "@/components/ui/badge";
@@ -100,6 +102,22 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     mutationFn: (file: File) => importAsset({ workspaceId: workspace.id, file }),
     onSuccess: refresh,
   });
+  // 从访达直接拖进来。**逐个传而不是并发** —— 一次拖十个视频,并发会把带宽和后端的
+  // 转码队列同时打满,而用户看到的是十个都卡着不动。
+  const dropUpload = useMutation({
+    mutationFn: async (files: File[]) => {
+      for (const file of files) {
+        await importAsset({ workspaceId: workspace.id, file });
+      }
+      return files.length;
+    },
+    onSuccess: (count) => {
+      refresh();
+      toast.success(t("mediaDropped").replace("{n}", String(count)));
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const drop = useFileDrop((files) => dropUpload.mutate(files), isMediaFile);
   const rename = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) => renameAsset(id, name),
     onSuccess: () => {
@@ -204,7 +222,29 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto px-2 pb-2 [&>*]:shrink-0">
+    <div
+      className="relative flex h-full min-h-0 flex-col items-stretch overflow-auto px-2 pb-2 [&>*]:shrink-0"
+      {...drop.handlers}
+    >
+      {/* 拖着文件悬在页面上时才出现。盖住整页 —— 落点不该只是某个小方框,
+          用户拖进来时看的是"这一页",不是某个角落。 */}
+      {(drop.active || dropUpload.isPending) && (
+        <div className="pointer-events-none absolute inset-2 z-40 grid place-items-center rounded-lg border-2 border-dashed border-primary bg-[color-mix(in_oklab,var(--primary)_8%,var(--background))]">
+          <span className="flex items-center gap-2 text-ui-md font-semibold text-primary">
+            {dropUpload.isPending ? (
+              <>
+                <Loader2 size={16} className="animate-openstudio-spin" />
+                {t("mediaDropUploading")}
+              </>
+            ) : (
+              <>
+                <Upload size={16} />
+                {t("mediaDropHint")}
+              </>
+            )}
+          </span>
+        </div>
+      )}
       {/* 顶部工具条 + 标签筛选 sticky 吸顶:滚动素材网格时保持可见。顶部内边距放在本 sticky 头上
           (滚动容器不留 pt),吸顶时才能严丝合缝贴顶、不露出上一行卡片;-mx 铺满宽度,bg 盖住滚上来的卡片。 */}
       {/* 负外边距和外壳的内边距**是同一个数**:它靠 -mx 把自己拉到容器边缘,好让 sticky 时的

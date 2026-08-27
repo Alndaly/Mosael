@@ -319,3 +319,27 @@ def timeline_clear(db: Session, workflow: Workflow, config: dict[str, Any]) -> d
         delete_clip(db, sequence.id, DeleteClip(clip_id=clip_id))
     db.commit()
     return {"removed": len(clip_ids), "sequence_id": sequence.id}
+
+
+@register("asset")
+def asset_node(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    """指向一份素材,把它的 id 交给下游。
+
+    **它不做任何事**,存在的意义是让「这条流程从这份素材开始」在画布上有一个说法 ——
+    否则下游节点的 asset_id 只能手填一个 32 位十六进制,而那个 id 从哪来、指的是哪个文件,
+    图上完全看不出来。
+
+    拖一个文件到画布上就会得到它(文件先进素材库,再落成这个节点)。
+    """
+    asset_id = str(config.get("asset_id", "")).strip()
+    if not asset_id:
+        raise WorkflowDomainError("素材节点没有选素材")
+    asset = db.get(Asset, asset_id)
+    if asset is None or asset.workspace_id != workflow.workspace_id:
+        raise WorkflowDomainError("素材不在这个工作区里")
+    return {
+        "asset_id": asset.id,
+        "name": asset.name,
+        "kind": asset.kind,
+        "duration": float((asset.media_info or {}).get("duration") or 0.0),
+    }

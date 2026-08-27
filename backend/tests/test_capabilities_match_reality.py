@@ -106,6 +106,32 @@ class TestComfyUI:
         assert C.COMFYUI_VIDEO_CAPABILITIES.get("requires_workflow_template") is True
 
 
+class TestOpenAI图像:
+    """核查日期 2026-08-27(gpt-image-2,经 147ai)。接口原话:
+    `Width and height must both be divisible by 16.` 与
+    `Requested resolution is below the current minimum pixel budget.`
+
+    实测:1024x1024 / 1536x1024 / 1024x1536 / 1280x720 / 1920x1088 / 896x896 通过;
+    768x768、1024x576、832x480、512x512 被拒。**约束是整除 16 + 像素下限,不是固定档。**
+    """
+
+    def test_每个档的宽高都能被_16_整除(self) -> None:
+        cap = C.OPENAI_IMAGE_CAPABILITIES
+        for size in cap["sizes"]:
+            width, height = (int(part) for part in size.split("x"))
+            assert width % cap["size_multiple_of"] == 0, f"{size} 的宽不是 16 的倍数"
+            assert height % cap["size_multiple_of"] == 0, f"{size} 的高不是 16 的倍数"
+
+    def test_每个档都在像素下限之上(self) -> None:
+        """下限二分在 (589824, 802816] 之间。低于它的档选了必然失败。"""
+        for size in C.OPENAI_IMAGE_CAPABILITIES["sizes"]:
+            width, height = (int(part) for part in size.split("x"))
+            assert width * height > 589824, f"{size} 只有 {width * height} 像素,实测这一档会被拒"
+
+    def test_常用横屏档在表里(self) -> None:
+        assert "1280x720" in C.OPENAI_IMAGE_CAPABILITIES["sizes"]
+
+
 def test_这道棘轮扫得到东西() -> None:
     """假阴性比红更危险:哪天描述符改了名,上面几条会一起真空通过。"""
     assert C.WAN_VIDEO_CAPABILITIES["sizes"]

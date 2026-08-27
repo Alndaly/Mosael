@@ -26,6 +26,9 @@ NODE_TO_TOOL: dict[str, str] = {
     # (domain/sequences/operations.EDIT_OP_KINDS)—— 不是抄的,是同一个常量。
     "edit_timeline": "edit_timeline",
     "inspect_sequence": "inspect_sequence",
+    # 「素材」节点只是把一个 id 交给下游 —— 智能体本来就直接拿着 id 说话,
+    # 不需要这层。list_assets 是它找素材的那条路。
+    "asset": "list_assets",
     # 这三个是**同一件事的常用形状**:画布上让人填表比手写一条 insert_clip 好用得多,
     # 而智能体不需要这层 —— 它本来就是在写那条操作。都由 edit_timeline 承担。
     "timeline_append": "edit_timeline",

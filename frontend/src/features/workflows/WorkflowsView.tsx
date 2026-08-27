@@ -35,6 +35,7 @@ import {
   listAssets,
   listJobEvents,
   listProviderModels,
+  importAsset,
   listPublishAccounts,
   listVoices,
   listWorkflows,
@@ -72,6 +73,7 @@ import { WorkflowRunHistory } from "@/features/workflows/WorkflowRunHistory";
 import { createWorkflowGraphStore } from "@/stores/workflowGraphStore";
 import { saveJsonToDisk } from "@/lib/download";
 import { ROW_HANDLE_CLASS, SIDEBAR_HANDLE_CLASS, handleOffset, useResizableRow, useResizableSidebar } from "@/lib/useResizableSidebar";
+import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
 import {
   aspectRatioOptions,
   capabilityNumber,
@@ -1442,6 +1444,59 @@ function WorkflowEditor({
     requestAnimationFrame(() => requestAnimationFrame(() => focusPosition(position.x, position.y, 0)));
   };
 
+  /**
+   * 把拖进来的文件上传成素材,并在**鼠标落点**放一个「素材」节点。
+   *
+   * 落在鼠标那儿而不是排在最右:拖放这个动作本身就指明了位置 —— 把它扔到别处去,
+   * 用户得先找一下自己刚拖的东西去哪了。
+   *
+   * 逐个传而不是并发:一次拖十个视频,并发会把带宽和后端转码队列同时打满,
+   * 而用户看到的是十个都卡着不动。
+   */
+  const dropUpload = useMutation({
+    mutationFn: async ({ files, at }: { files: File[]; at: { x: number; y: number } }) => {
+      const created: Array<{ id: string; name: string }> = [];
+      for (const file of files) {
+        const asset = await importAsset({ workspaceId, file });
+        created.push({ id: asset.id, name: asset.name });
+      }
+      return { created, at };
+    },
+    onSuccess: ({ created, at }) => {
+      let next = graph;
+      created.forEach((asset, index) => {
+        const base = "asset";
+        let seq = 1;
+        while (next.nodes.some((node) => node.id === `${base}-${seq}`)) seq += 1;
+        const id = `${base}-${seq}`;
+        next = {
+          ...next,
+          nodes: [
+            ...next.nodes,
+            {
+              id,
+              type: "asset",
+              name: asset.name,
+              // 多个文件斜着摞开,不然它们会精确重叠成一个。
+              position: { x: at.x + index * 24, y: at.y + index * 24 },
+              config: { asset_id: asset.id },
+            },
+          ],
+        };
+      });
+      applyGraph(next);
+      toast.success(t("wfDropped").replace("{n}", String(created.length)));
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  // React Flow 的坐标换算要在 drop 那一刻做(那时才有鼠标位置),而 useFileDrop 的回调
+  // 拿不到事件 —— 用一个 ref 把落点从事件里带出来。
+  const pendingDropAt = React.useRef<{ x: number; y: number } | null>(null);
+  const canvasDrop = useFileDrop((files) => {
+    dropUpload.mutate({ files, at: pendingDropAt.current ?? { x: 120, y: 140 } });
+  }, isMediaFile);
+
   const save = useMutation({
     mutationFn: () => updateWorkflow(workflow.id, { graph }),
     onSuccess: (saved) => {
@@ -1971,7 +2026,37 @@ function WorkflowEditor({
             onPointerDown={rightPanel.startDragFromRight}
           />
         )}
-        <div className="min-h-0 overflow-hidden rounded-lg border border-border bg-panel">
+        {/* 从访达直接把视频/图片拖进画布:先进素材库,再在**落点**放一个「素材」节点。
+            省掉「先去素材页上传 → 回来找那个 id」那一圈。 */}
+        <div
+          className="relative min-h-0 overflow-hidden rounded-lg border border-border bg-panel"
+          {...canvasDrop.handlers}
+          onDrop={(event) => {
+            // 落点要在这一刻算 —— 只有事件里才有鼠标位置。存进 ref 给上面那个回调用。
+            const instance = rfRef.current;
+            pendingDropAt.current = instance
+              ? instance.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+              : null;
+            canvasDrop.handlers.onDrop(event);
+          }}
+        >
+          {(canvasDrop.active || dropUpload.isPending) && (
+            <div className="pointer-events-none absolute inset-3 z-20 grid place-items-center rounded-lg border-2 border-dashed border-primary bg-[color-mix(in_oklab,var(--primary)_8%,transparent)]">
+              <span className="flex items-center gap-2 text-ui-md font-semibold text-primary">
+                {dropUpload.isPending ? (
+                  <>
+                    <Loader2 size={16} className="animate-openstudio-spin" />
+                    {t("mediaDropUploading")}
+                  </>
+                ) : (
+                  <>
+                    <FileUp size={16} />
+                    {t("wfDropHint")}
+                  </>
+                )}
+              </span>
+            </div>
+          )}
           <ReactFlow
             className={cn("[--xy-attribution-background-color:color-mix(in_srgb,var(--panel)_70%,transparent)]", !canvas.ready && "opacity-0")}
             nodes={displayNodes}

@@ -116,6 +116,16 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "config": {"sequence_id": {"type": "template", "required": True}},
         "outputs": ["asset_id"],
     },
+    "asset": {
+        "category": "素材",
+        "label": "素材",
+        "description": (
+            "指向素材库里的一份素材,把它的 id 交给下游。拖一个文件到画布上就会得到这个节点 —— "
+            "它是「这条流程从这份素材开始」的说法。"
+        ),
+        "config": {"asset_id": {"type": "template", "required": True, "description": "素材"}},
+        "outputs": ["asset_id", "name", "kind", "duration"],
+    },
     "inspect_sequence": {
         "category": "素材",
         "label": "看一眼时间线",
@@ -790,6 +800,7 @@ INTERNAL_NODE_TYPES = frozenset(
         "export_sequence",
         # 编排/检视时间线改的是**本地序列**,后果留在这个应用里;而且每一步都记进
         # sequence_operations,用户撤得回来。
+        "asset",
         "inspect_sequence",
         "edit_timeline",
         "timeline_append",

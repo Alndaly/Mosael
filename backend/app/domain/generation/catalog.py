@@ -4,12 +4,21 @@ from typing import Any
 
 
 
+#: OpenAI 兼容的图像接口(gpt-image-2 等)。真机核过(2026-08-27,经 147ai):
+#: **约束是「宽高都能被 16 整除」+ 一个像素数下限**,不是三个固定档 —— 接口原话
+#: `Width and height must both be divisible by 16.` 与
+#: `Requested resolution is below the current minimum pixel budget.`
+#:
+#: 二分出的下限落在 589824(768x768,被拒)和 802816(896x896,通过)之间。
+#: 1280x720(921600)和 1920x1088 都实测通过,而它们此前一个都不在表里 ——
+#: **1280x720 是最常用的横屏尺寸**。
 OPENAI_IMAGE_CAPABILITIES = {
     "modes": ["text-to-image", "image-to-image"],
     "max_prompt_chars": 8000,
     "parameter_keys": ["size", "num_images", "reference_image"],
-    "sizes": ["1024x1024", "1536x1024", "1024x1536"],
+    "sizes": ["1024x1024", "1536x1024", "1024x1536", "1280x720", "720x1280", "1920x1088"],
     "default_size": "1024x1024",
+    "size_multiple_of": 16,
     "max_num_images": 4,
 }
 
