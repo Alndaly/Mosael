@@ -15,6 +15,7 @@ from app.ai.providers.base import (
     ProviderContext,
     ProviderError,
     image_file_to_data_url,
+    source_values,
     metering_from_request,
     provider_http_error,
 )
@@ -54,13 +55,14 @@ def build_image_payload(request: GenerationRequest, context: ProviderContext | N
         payload["size"] = size.replace("*", "x")
     if _is_seedream4(model):
         # 4.x 参考图:显式 URL 优先,其次上传文件转 data URL。
-        reference = request.parameters.get("image_url")
-        if not reference:
-            path = request.source_for(REFERENCE_IMAGE)
-            if path is not None:
-                reference = image_file_to_data_url(path)
-        if reference:
-            payload["image"] = [str(reference)]
+        #
+        # **每一张都发。** `image` 本来就是个数组,而这里此前取的是单数的 source_for ——
+        # 挂了十张也只发第一张,不报错,只是效果不对。真机核过的上限是 14 张
+        # (接口原话 `number of reference images cannot exceed 14`),写在描述符的
+        # source_limits 里,超了由 domain/generation 那道统一校验在提交前拦下。
+        references = source_values(request, REFERENCE_IMAGE)
+        if references:
+            payload["image"] = [str(one) for one in references]
     elif request.parameters.get("seed") is not None:
         payload["seed"] = int(request.parameters["seed"])
     return payload

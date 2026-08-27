@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from collections import Counter
 
 from typing import Any
@@ -8,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.providers import FIRST_FRAME, REFERENCE_IMAGE, SOURCE_ROLES, get_provider
-from app.domain.generation.catalog import known_capabilities_for
+from app.domain.generation.catalog import SOURCE_ROLE_LABELS, known_capabilities_for
 from app.db.models import GenerationJob, GenerationSession, ProviderProfile, now
 from app.domain.jobs import create_job
 
@@ -132,6 +134,10 @@ def _vendor_can_generate(db: Session, vendor: str, kind: str) -> bool:
 DEFAULT_ROLE_BY_KIND = {"video": FIRST_FRAME, "image": REFERENCE_IMAGE}
 
 
+#: 模板串的样子。只有它里面的冒号可以不是角色分隔符 —— 别处的冒号一律当成在写角色。
+_TEMPLATE = re.compile(r"\{\{.*\}\}")
+
+
 def parse_source_assets(value: Any, *, kind: str) -> list[dict[str, str]]:
     """把各种形态的「输入素材」归一成 [{asset_id, role}]。
 
@@ -159,8 +165,25 @@ def parse_source_assets(value: Any, *, kind: str) -> list[dict[str, str]]:
             text = str(item).strip()
             if not text:
                 continue
-            asset_id, _, role = text.partition(":")
-            asset_id, role = asset_id.strip(), (role.strip() or default_role)
+            # **从右边找冒号,而且只认后半段真是个角色名的那一种。**
+            #
+            # 从左边切(partition)的话,`{{node.a:b}}` 这种模板串会被腰斩成
+            # asset_id=`{{node.a` + role=`b}}`,然后报一句「未知的素材角色」——
+            # 而用户看着自己那行写得好好的,完全不知道哪里错了。前端序列化时用的就是
+            # 右起规则(features/workflows/sourceAssetLines),两边得是同一条。
+            # 从**右边**切,因为模板串自己也可能带冒号(`{{node.a:b}}`)。从左边切的话那种
+            # 写法会被腰斩成 `{{node.a` + 角色 `b}}`,报一句「未知的素材角色」,而用户看着
+            # 自己那行写得好好的。前端序列化用的就是右起规则,两边得是同一条。
+            head, sep, tail = text.rpartition(":")
+            if not sep:
+                asset_id, role = text, default_role
+            elif _TEMPLATE.search(text) and tail.strip() not in SOURCE_ROLES:
+                # 模板串里那个冒号是它自己的一部分 —— 整条都是值。**只对模板串放行**:
+                # 不是模板的话,写了冒号就是在写角色,拼错了要当场说,不能默默走默认
+                # (那样任务照样成功,只是那张图当成了别的用途,界面上什么都没说)。
+                asset_id, role = text, default_role
+            else:
+                asset_id, role = head.strip(), (tail.strip() or default_role)
         if not asset_id:
             continue
         if role not in SOURCE_ROLES:
@@ -265,30 +288,13 @@ def _check_conditional_duration(
             )
 
 
-#: 角色的中文名。报错要说人话:用户在界面上看到的是「参考图」,不是 reference_image。
-_ROLE_LABELS = {
-    "first_frame": "首帧",
-    "last_frame": "尾帧",
-    "reference_image": "参考图",
-    "reference_video": "参考视频",
-    "reference_audio": "参考音频",
-    "source_video": "待编辑的视频",
-    "first_clip": "待续写的片段",
-    "driving_audio": "驱动音频",
-}
-
-
-#: 为什么互斥 —— 说清楚每一组各自是干什么的,比一句「不兼容」有用:用户下一步要做的是
-#: 挑一条路,而不是猜哪个参数写错了。
-_WHY_EXCLUSIVE = (
-    "首尾帧决定成片的第一格和最后一格;"
-    "参考素材一帧都不出现在成片里,只影响风格与主体;"
-    "待续写的片段则是成片的开头、后面接着往下拍。"
-)
+#: 角色的中文名住在描述符那一层(catalog.SOURCE_ROLE_LABELS),这里只是读它 —— 报错要说人话:
+#: 用户在界面上看到的是「参考图」,不是 reference_image。此前这张表在这里另存了一份,
+#: 而三份表里漏掉哪一份都不会报错。
 
 
 def _label(role: str) -> str:
-    return _ROLE_LABELS.get(role, role)
+    return SOURCE_ROLE_LABELS.get(role, role)
 
 
 def _check_source_counts(

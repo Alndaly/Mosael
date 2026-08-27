@@ -9,7 +9,6 @@ import {
   Plus,
   Send,
   Sparkles,
-  Upload,
   Video,
   Wand2,
   X,
@@ -20,7 +19,6 @@ import {
   api,
   assetFileUrl,
   assetThumbnailUrl,
-  importAsset,
   listComfyuiWorkflows,
   listComfyuiWorkflowParams,
   optimizeImagePrompt,
@@ -251,7 +249,6 @@ function GenerateWorkspace({
   const [modelId, setModelId] = React.useState<string | null>(null);
   const [generationConfig, setGenerationConfig] = React.useState<GenerationConfig>(() => defaultGenerationConfig(null));
   const firstFrameInputRef = React.useRef<HTMLInputElement | null>(null);
-  const referenceImageInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const sessions = useQuery({
     queryKey: ["generation-sessions", workspace.id],
@@ -492,12 +489,6 @@ function GenerateWorkspace({
     setGenerationConfig((current) => ({ ...current, [key]: value }));
   const setFrames = (role: SourceRole, slots: FrameSlot[]) =>
     setGenerationConfig((current) => ({ ...current, frames: { ...current.frames, [role]: slots } }));
-  const setReferenceImageAsset = (asset: Asset) =>
-    setGenerationConfig((current) => ({
-      ...current,
-      frames: { ...current.frames, reference_image: [{ url: "", assetId: asset.id, assetName: asset.name }] },
-      usePreviousImage: false,
-    }));
   const clearReferenceImage = () =>
     setGenerationConfig((current) => ({
       ...current,
@@ -536,14 +527,6 @@ function GenerateWorkspace({
       void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
     },
   });
-  const uploadReferenceImage = useMutation({
-    mutationFn: (file: File) => importAsset({ workspaceId: workspace.id, file, name: file.name }),
-    onSuccess: (asset: Asset) => {
-      setReferenceImageAsset(asset);
-      void qc.invalidateQueries({ queryKey: ["assets", workspace.id] });
-      void qc.invalidateQueries({ queryKey: ["assets"] });
-    },
-  });
   const ordered = React.useMemo(() => sessionJobs.data ?? [], [sessionJobs.data]);
   // 会话画廊:点开任意一张图,可左右翻看本会话的全部图片产出。
   const sessionGallery = React.useMemo(
@@ -565,11 +548,6 @@ function GenerateWorkspace({
       ? generationConfig.frames.reference_image[0]?.assetId ||
         (generationConfig.usePreviousImage ? latestImageResult?.result_asset_id ?? "" : "")
       : "";
-  const effectiveReferenceImageName =
-    generationConfig.frames.reference_image[0]?.assetName ||
-    (effectiveReferenceImageAssetId && latestImageResult?.result_asset_id === effectiveReferenceImageAssetId
-      ? t("genPreviousImage")
-      : "");
 
   const createGeneration = useMutation({
     mutationFn: async () => {
@@ -942,61 +920,37 @@ function GenerateWorkspace({
                   </label>
                 )}
                 {supportsReferenceImage && (
-                  <div className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
-                    <span>{t("genReferenceImage")}</span>
-                    <input
-                      ref={referenceImageInputRef}
-                      className="sr-only"
-                      type="file"
-                      accept="image/*"
-                      onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        event.target.value = "";
-                        if (file) uploadReferenceImage.mutate(file);
-                      }}
+                  // 图像的参考图和视频那边**是同一件事**,所以用同一个控件:一行缩略图、一次能选
+                  // 多张、上限读描述符(seedream 4 十四张、qwen 三张、gpt-image 十六张)。
+                  // 此前这里自成一套 —— 单张、老样式,于是同一个"参考图"在两个 tab 里长得不一样,
+                  // 能挂的份数也不一样,而那个差别纯粹是没人来改。
+                  <div className="grid gap-1.5">
+                    <FrameSlotField
+                      role="reference_image"
+                      slots={generationConfig.frames.reference_image}
+                      limit={sourceLimit(selectedModel, "reference_image")}
+                      onChange={(slots) =>
+                        setGenerationConfig((current) => ({
+                          ...current,
+                          frames: { ...current.frames, reference_image: slots },
+                          // 手挑了图就不再"用上一张结果" —— 两个都开着的话,发出去的是哪张
+                          // 全看代码顺序,而界面上两处都亮着。
+                          usePreviousImage: slots.some((one) => one.assetId || one.url.trim())
+                            ? false
+                            : current.usePreviousImage,
+                        }))
+                      }
+                      workspaceId={workspace.id}
                     />
-                    <div className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
+                    {latestImageResult?.result_asset_id && !generationConfig.frames.reference_image[0]?.assetId && (
                       <Button
                         type="button"
-                        variant="outline"
+                        variant={generationConfig.usePreviousImage ? "outline" : "ghost"}
                         size="sm"
-                        className="w-full justify-center"
-                        onClick={() => referenceImageInputRef.current?.click()}
-                        loading={uploadReferenceImage.isPending}
+                        onClick={generationConfig.usePreviousImage ? clearReferenceImage : usePreviousImageAsReference}
                       >
-                        <Upload size={13} />
-                        {uploadReferenceImage.isPending ? t("genFirstFrameUploading") : t("genReferenceImageUpload")}
+                        {t("genUsePreviousImage")}
                       </Button>
-                      {latestImageResult?.result_asset_id && !generationConfig.usePreviousImage && !generationConfig.frames.reference_image[0]?.assetId && (
-                        <Button type="button" variant="ghost" size="sm" onClick={usePreviousImageAsReference}>
-                          {t("genUsePreviousImage")}
-                        </Button>
-                      )}
-                    </div>
-                    {effectiveReferenceImageAssetId && (
-                      <div className="grid min-h-11 grid-cols-[44px_minmax(0,1fr)_28px] items-center gap-2 rounded-lg border border-border bg-[color-mix(in_srgb,var(--panel)_88%,var(--muted)_12%)] p-[5px]">
-                        <button
-                          type="button"
-                          className="block size-auto h-[34px] w-11 cursor-zoom-in overflow-hidden rounded-lg border border-border bg-muted p-0"
-                          onClick={() =>
-                            openImagePreview({
-                              src: assetFileUrl(effectiveReferenceImageAssetId),
-                              title: effectiveReferenceImageName || t("genReferenceImage"),
-                            })
-                          }
-                        >
-                          <img className="block h-full w-full object-cover" src={assetThumbnailUrl(effectiveReferenceImageAssetId)} alt="" />
-                        </button>
-                        <span
-                          className="truncate text-xs font-semibold text-foreground"
-                          title={effectiveReferenceImageName || t("genReferenceImage")}
-                        >
-                          {effectiveReferenceImageName || t("genReferenceImage")}
-                        </span>
-                        <Button type="button" variant="ghost" size="icon" onClick={clearReferenceImage} aria-label={t("delete")}>
-                          <X size={13} />
-                        </Button>
-                      </div>
                     )}
                   </div>
                 )}

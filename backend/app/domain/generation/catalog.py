@@ -13,6 +13,36 @@ from typing import Any
 #: 一组。这不是我们加的规矩,是火山原话 `first/last frame content cannot be mixed with
 #: reference media content`;可灵那边的说法是「不支持仅尾帧图生视频」,所以尾帧还额外
 #: 依赖首帧(见各家描述符里的 `requires_source`)。
+#: 每种素材角色**叫什么、是干什么的**。一份,三个消费者:提交前的校验拿它写报错、
+#: 智能体拿它知道每个参数该给什么、界面拿它做标题。
+#:
+#: 此前这张表存在三份(operations 的中文名、mcp_server 的说明、前端的 ROLE_COPY),而
+#: 新增角色时漏掉哪一份都不会报错 —— 只是智能体不知道有这个东西,于是永远不会用它。
+#: 事实上到这次为止,mcp_server 那份就漏了参考音频、待编辑的视频、待续写的片段、驱动音频四种。
+SOURCE_ROLE_LABELS = {
+    "first_frame": "首帧",
+    "last_frame": "尾帧",
+    "reference_image": "参考图",
+    "reference_video": "参考视频",
+    "reference_audio": "参考音频",
+    "source_video": "待编辑的视频",
+    "first_clip": "待续写的片段",
+    "driving_audio": "驱动音频",
+}
+
+#: 给智能体的一句话:这个角色到底是什么意思。**光有名字不够** —— 「参考视频」和「待编辑的
+#: 视频」都是视频,分不清的话它会拿编辑模型去做参考生成,而画面出得来、只是不是那一段。
+SOURCE_ROLE_HELP = {
+    "first_frame": "成片的第一格画面;asset_id 或 first_frame_url 外链",
+    "last_frame": "成片的最后一格;要和首帧一起给,单独给尾帧不成立",
+    "reference_image": "照着它的风格和主体来拍;它自己一帧都不出现在成片里",
+    "reference_video": "照着它的风格和主体来拍;成片是新的,不是它",
+    "reference_audio": "参考音色/风格,不驱动画面",
+    "source_video": "**被编辑的那一段**;成片就是它改过之后的样子",
+    "first_clip": "**被接着往下拍的那一段**;成片以它开头,总时长要比它长",
+    "driving_audio": "画面跟着它走 —— 口型同步、动作卡点",
+}
+
 KEYFRAME_GROUP = ["first_frame", "last_frame"]
 REFERENCE_GROUP = ["reference_image", "reference_video", "reference_audio"]
 
@@ -34,6 +64,10 @@ OPENAI_IMAGE_CAPABILITIES = {
     "modes": ["text-to-image", "image-to-image"],
     "max_prompt_chars": 8000,
     "parameter_keys": ["size", "num_images", "reference_image"],
+    # **这一条没探出来**:走的是 147ai 这类转售网关,它对张数一律放行,官方端点又没有密钥可打。
+    # 16 来自 OpenAI 文档(`/images/edits` 的 `image[]` 上限),适配器此前也是硬编码的 16 —— 
+    # 只是把那个数字从代码里挪进描述符,别把它当成和上面几家同等确信的东西。
+    "source_limits": {"reference_image": 16},
     "sizes": ["1024x1024", "1536x1024", "1024x1536", "1280x720", "720x1280", "1920x1088"],
     "default_size": "1024x1024",
     "size_multiple_of": 16,
@@ -49,28 +83,42 @@ QWEN_TEXT_IMAGE_CAPABILITIES = {
     "max_num_images": 4,
 }
 
+#: 真机核过(2026-08-27)。接口原话把两种模式一起说清楚了:
+#: `Model 'qwen-image-2.0-2in1' supports 0~3 image content items.
+#:  (0 images = T2I mode, 1~3 images = I2I mode)`
+#: 所以它和 qwen-image-edit 不一样:**不给图也能跑**,那就是文生图。
 QWEN_PRO_IMAGE_CAPABILITIES = {
     "modes": ["text-to-image", "image-to-image"],
     "max_prompt_chars": 8000,
     "parameter_keys": ["size", "num_images", "seed", "negative_prompt", "reference_image"],
+    "source_limits": {"reference_image": 3},
     "sizes": ["1024x1024", "1536x1024", "1024x1536", "1280x720", "720x1280"],
     "default_size": "1024x1024",
     "max_num_images": 4,
 }
 
+#: 真机核过(2026-08-27)。接口原话:
+#: `For image editing, the message must contain 1~3 image content items.`
+#: **下限是 1** —— 零张也被拒(它是编辑模型,没有图就无从编辑),所以进 requires_source。
 QWEN_EDIT_IMAGE_CAPABILITIES = {
     "modes": ["image-to-image"],
     "max_prompt_chars": 8000,
     "parameter_keys": ["reference_image"],
+    "source_limits": {"reference_image": 3},
+    "requires_source": [["reference_image"]],
     "default_size": "",
     "max_num_images": 1,
 }
 
+#: 参考图上限 2026-08-27 真机核过,接口原话:
+#: `number of reference images cannot exceed 14`。适配器此前只发第一张(走的是单数的
+#: source_for),所以挂几张都一样 —— 不报错,只是效果不对。
 SEEDREAM_4_IMAGE_CAPABILITIES = {
     "modes": ["text-to-image", "image-to-image"],
     "endpoint": "ark",
     "max_prompt_chars": 8000,
     "parameter_keys": ["size", "reference_image"],
+    "source_limits": {"reference_image": 14},
     # 4.x 的约束是**总像素数**,不是固定档:接口原话
     # `image size must be at least 921600 pixels`(= 1280x720)。真机核过(2026-08-27):
     # 1280x720 / 960x960 / 1024x1024 / 4096x4096 全部通过。
@@ -116,6 +164,7 @@ WAN_VIDEO_CAPABILITIES = {
     "modes": ["text-to-video", "image-to-video"],
     "endpoint": "dashscope",
     "parameter_keys": ["duration_seconds", "size", "first_frame"],
+    "source_limits": {"first_frame": 1},
     "duration_seconds": [5],
     "default_duration_seconds": 5,
     "sizes": [
@@ -612,6 +661,9 @@ BUILTIN_MODELS = [
         "capabilities": {
             "modes": ["text-to-video", "image-to-video"],
             "parameter_keys": ["duration_seconds", "resolution", "aspect_ratio", "first_frame"],
+            # 没有 Google 密钥,这一份仍是照文档写的 —— Veo 3.x 文档上还有参考图和续写,
+            # 都没接,等有密钥再核。
+            "source_limits": {"first_frame": 1},
             "duration_seconds": [4, 6, 8],
             "default_duration_seconds": 8,
             "resolutions": ["720p", "1080p"],

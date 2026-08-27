@@ -291,7 +291,7 @@ def poll_until_ready(
 #: 每个角色对应的「直接给个 url」参数名。界面既可以选素材库里的图,也可以粘一个外链;
 #: 两条路进来的东西是同一样,所以在这里合流,而不是让每个适配器各写一遍回落。
 ROLE_URL_PARAMETERS = {
-    FIRST_FRAME: ("first_frame_url", "image_url"),
+    FIRST_FRAME: ("first_frame_url",),
     LAST_FRAME: ("last_frame_url",),
     REFERENCE_IMAGE: ("reference_image_url",),
     REFERENCE_VIDEO: ("reference_video_url",),
@@ -313,8 +313,29 @@ def source_value(request: GenerationRequest, role: str) -> str | None:
         value = request.parameters.get(name)
         if value:
             return str(value)
+    untyped = _untyped_image_url(request, role)
+    if untyped:
+        return untyped
     path = request.source_for(role)
     return image_file_to_data_url(path) if path is not None else None
+
+
+#: `image_url` 是个**不说角色的别名**:它只说"这张图是输入",而它到底是什么角色,取决于在生成
+#: 什么 —— 视频的输入图是首帧(画面从它动起来),图像的输入图是参考图(图像没有"首帧"这回事)。
+#:
+#: 写成一条按 kind 分的规则,而不是让每个适配器各自解释一遍:此前火山图像那边自己读
+#: `image_url` 当参考图,而 base 这里把它列在首帧名下 —— 同一个参数名,两处含义,谁都没写错,
+#: 但读代码的人没法从任何一处看出全貌。
+_UNTYPED_IMAGE_URL = "image_url"
+_UNTYPED_IMAGE_ROLE_BY_KIND = {"video": FIRST_FRAME, "image": REFERENCE_IMAGE}
+
+
+def _untyped_image_url(request: GenerationRequest, role: str) -> str | None:
+    """`image_url` 在这次请求里算不算这个角色。"""
+    if _UNTYPED_IMAGE_ROLE_BY_KIND.get(request.kind) != role:
+        return None
+    value = request.parameters.get(_UNTYPED_IMAGE_URL)
+    return str(value) if value else None
 
 
 def source_values(request: GenerationRequest, role: str) -> tuple[str, ...]:
@@ -327,6 +348,9 @@ def source_values(request: GenerationRequest, role: str) -> tuple[str, ...]:
     首尾帧这种天然只有一份的角色照样可以用它,拿回来的元组长度就是 1。
     """
     urls = [str(value) for name in ROLE_URL_PARAMETERS.get(role, ()) for value in _as_list(request.parameters.get(name))]
+    untyped = _untyped_image_url(request, role)
+    if untyped and untyped not in urls:
+        urls.append(untyped)
     if urls:
         return tuple(urls)
     return tuple(image_file_to_data_url(path) for path in request.sources_for(role))

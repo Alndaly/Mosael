@@ -88,7 +88,10 @@ class OpenAIImageProvider(GenerationProvider):
                     files = []
                     handles = []
                     try:
-                        for path in references[:16]:
+                        # 张数由描述符管(见 domain/generation/catalog 的 source_limits),
+                        # 提交前那道统一校验已经拦过。这里再截一刀的话,超出的那几张会被
+                        # 悄悄丢掉 —— 任务照样成功,只是用的图和用户挂的不一样。
+                        for path in references:
                             handle = path.open("rb")
                             handles.append(handle)
                             mime_type = mimetypes.guess_type(path.name)[0] or "image/png"

@@ -12,6 +12,7 @@ Env:  OPEN_STUDIO_API   (default http://127.0.0.1:8800)
 
 from __future__ import annotations
 
+from app.domain.generation.catalog import SOURCE_ROLE_HELP, SOURCE_ROLE_LABELS
 import contextvars
 import os
 from typing import Any
@@ -518,6 +519,7 @@ def list_generation_models(kind: str = "") -> list[dict[str, Any]]:
                     # 都问不出来,只能盲发一个没有参数的请求。
                     "parameters": _parameter_help(capabilities),
                     "modes": capabilities.get("modes") or [],
+                    "source_rules": _source_rules(capabilities),
                 }
             )
     return out
@@ -532,13 +534,38 @@ _PARAMETER_CHOICES = {
     "duration_seconds": "duration_seconds",
 }
 
-#: 素材类参数:值不是从清单里挑,而是给一个素材 id(或外链 url)。
-_SOURCE_PARAMETERS = {
-    "first_frame": "首帧图片的 asset_id;也可用 first_frame_url 传外链",
-    "last_frame": "尾帧图片的 asset_id;首尾帧一起给才是「首尾帧生视频」",
-    "reference_image": "参考图的 asset_id",
-    "reference_video": "参考视频的 asset_id",
-}
+#: 素材类参数的说明**住在描述符那一层**(catalog.SOURCE_ROLE_HELP),这里只是读它。
+#:
+#: 此前这里另存了一份四条的名单,而角色加到八种了 —— 参考音频、待编辑的视频、待续写的片段、
+#: 驱动音频四种智能体根本不知道存在,于是永远不会用。上面那句「不在这里维护第二份名单」
+#: 说的就是这件事,而这张表自己就是那第二份。
+
+
+def _source_rules(capabilities: dict[str, Any]) -> list[str]:
+    """**素材之间的规矩**,一条一句人话。
+
+    上限、互斥、必填、搭伴 —— 这四类此前一条都没告诉过智能体。它拿到的只有"支持哪些角色",
+    于是完全可能同时给首帧和参考图(接口硬约束,必然 400),或者拿视频编辑模型不给视频。
+    每一条都会被提交前的校验拦下,但那意味着一次可见的失败,而这些规矩本来就是可以先说的。
+    """
+    rules: list[str] = []
+    label = lambda role: SOURCE_ROLE_LABELS.get(role, role)
+
+    groups = [g for g in (capabilities.get("exclusive_source_groups") or []) if g]
+    if len(groups) > 1:
+        rules.append(
+            "这几组只能用一组:" + " | ".join("、".join(label(r) for r in group) for group in groups)
+        )
+    for options in capabilities.get("requires_source") or []:
+        rules.append("必须给" + "或".join(label(one) for one in options))
+    for role, companions in (capabilities.get("requires_companion") or {}).items():
+        rules.append(f"{label(role)}要搭配" + "或".join(label(one) for one in companions))
+    floor = capabilities.get("min_reference_images")
+    if floor:
+        rules.append(f"给参考图就至少给 {floor} 张(第一张是正面图)")
+    for role, cap in (capabilities.get("conditional_max_duration_seconds") or {}).items():
+        rules.append(f"挂了{label(role)}时时长最多 {cap} 秒")
+    return rules
 
 
 def _parameter_help(capabilities: dict[str, Any]) -> dict[str, Any]:
@@ -549,9 +576,14 @@ def _parameter_help(capabilities: dict[str, Any]) -> dict[str, Any]:
     那一个不会报错,只会让智能体以为它不存在。
     """
     help_: dict[str, Any] = {}
+    limits = capabilities.get("source_limits") or {}
     for key in capabilities.get("parameter_keys") or []:
-        if key in _SOURCE_PARAMETERS:
-            help_[key] = _SOURCE_PARAMETERS[key]
+        if key in SOURCE_ROLE_HELP:
+            cap = limits.get(key)
+            # 张数写进说明里。不写的话智能体只能猜 —— 挂十张参考图、被提交前的校验拦下、
+            # 再重试一次,而那一次失败对用户是可见的。
+            suffix = f";最多 {cap} 份" if cap and int(cap) > 1 else ""
+            help_[key] = f"{SOURCE_ROLE_LABELS.get(key, key)}({key})的 asset_id —— {SOURCE_ROLE_HELP[key]}{suffix}"
             continue
         choices = capabilities.get(_PARAMETER_CHOICES.get(key, ""))
         default = capabilities.get(f"default_{key}")

@@ -16,6 +16,7 @@ from app.ai.providers.base import (
     ProviderContext,
     ProviderError,
     image_file_to_data_url,
+    source_values,
     metering_from_request,
     provider_http_error,
 )
@@ -49,8 +50,11 @@ def build_submit_payload(request: GenerationRequest) -> dict[str, Any]:
 
 def build_edit_payload(request: GenerationRequest, context: ProviderContext | None = None) -> dict[str, Any]:
     model = resolve_edit_model(request, context)
+    # 张数由描述符管(qwen-image-edit 1~3、qwen-image-2.0-pro 0~3,都是接口自己报的),
+    # 提交前那道统一校验已经拦过。这里再截一刀的话,超出的那几张会被**悄悄丢掉** ——
+    # 用户挂了五张、任务成功、结果只用了三张,而界面上什么都没说。
     content: list[dict[str, str]] = [
-        {"image": image_file_to_data_url(path)} for path in request.sources_for(REFERENCE_IMAGE)[:3]
+        {"image": str(one)} for one in source_values(request, REFERENCE_IMAGE)
     ]
     content.append({"text": request.prompt})
     parameters: dict[str, Any] = {

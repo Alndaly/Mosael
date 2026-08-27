@@ -103,3 +103,93 @@ class Test智能体拿得到描述符:
         help_ = mcp_server._parameter_help(fake)
         assert set(help_) == every_key
         assert all(value for value in help_.values()), "有参数键翻不出任何说明"
+
+
+class Test角色只有一张表:
+    """新增一种素材角色时,**漏掉哪一处都不会报错**。
+
+    这条测试是为一件真事写的:角色从四种长到八种,而 mcp_server 里那份手抄的名单停在四种 ——
+    参考音频、待编辑的视频、待续写的片段、驱动音频,智能体根本不知道它们存在,于是永远不会用。
+    没有任何测试会红,界面也一切正常。
+    """
+
+    def test_每种角色都有名字和说明(self) -> None:
+        from app.ai.providers.base import SOURCE_ROLES
+        from app.domain.generation.catalog import SOURCE_ROLE_HELP, SOURCE_ROLE_LABELS
+
+        assert set(SOURCE_ROLES) == set(SOURCE_ROLE_LABELS), "角色和中文名对不上"
+        assert set(SOURCE_ROLES) == set(SOURCE_ROLE_HELP), "角色和给智能体的说明对不上"
+
+    def test_报错和智能体读的是同一张表(self) -> None:
+        """两份的话,同一个角色在报错里叫「参考图」、在智能体那儿叫别的,谁也对不上号。"""
+        from app.domain.generation import operations
+        from app.domain.generation.catalog import SOURCE_ROLE_LABELS
+
+        assert operations._label("reference_video") == SOURCE_ROLE_LABELS["reference_video"]
+
+
+class Test智能体拿得到素材的规矩:
+    """光知道"支持哪些角色"不够 —— 智能体会同时给首帧和参考图(接口硬约束,必然 400),
+    或者拿视频编辑模型不给视频。每一条都会被提交前的校验拦下,但那是一次可见的失败,
+    而这些规矩本来就可以先说。"""
+
+    def _rules(self, provider: str, model: str, kind: str) -> list[str]:
+        import mcp_server
+
+        return mcp_server._source_rules(capabilities_for(provider, model, kind))
+
+    def test_互斥说出来(self) -> None:
+        rules = self._rules("bytedance", "doubao-seedance-2-0-260128", "video")
+        assert any("只能用一组" in one for one in rules)
+
+    def test_必填说出来(self) -> None:
+        assert any("必须给" in one for one in self._rules("alibaba", "wan2.7-videoedit", "video"))
+
+    def test_搭伴说出来(self) -> None:
+        rules = self._rules("bytedance", "doubao-seedance-2-0-260128", "video")
+        assert any("参考音频要搭配" in one for one in rules)
+
+    def test_张数进了参数说明(self) -> None:
+        import mcp_server
+
+        help_ = mcp_server._parameter_help(capabilities_for("bytedance", "doubao-seedance-2-0-260128", "video"))
+        assert "最多 9 份" in help_["reference_image"]
+
+    def test_没规矩的模型不要硬编出一条(self) -> None:
+        """纯文生视频没有任何素材,规矩列表就该是空的 —— 凭空多一句只会让智能体去猜它的意思。"""
+        assert self._rules("alibaba", "wan2.7-t2v", "video") == []
+
+
+class Test模板串里的冒号:
+    """`素材id:角色` 这个写法和模板串撞车了 —— 模板自己也可能带冒号。
+
+    从左边切的话,`{{node.a:b}}` 会被腰斩成 `{{node.a` + 角色 `b}}`,报一句「未知的素材角色」,
+    而用户看着自己那行写得好好的。前端序列化用的是右起规则,后端得是同一条。
+    """
+
+    def _parse(self, text: str):
+        from app.domain.generation.operations import parse_source_assets
+
+        return parse_source_assets(text, kind="video")
+
+    def test_正常的角色照旧(self) -> None:
+        assert self._parse("a1:last_frame") == [{"asset_id": "a1", "role": "last_frame"}]
+
+    def test_模板串整条留住(self) -> None:
+        assert self._parse("{{node.a:b}}")[0]["asset_id"] == "{{node.a:b}}"
+
+    def test_模板串加角色两边都对(self) -> None:
+        assert self._parse("{{gen-1.asset_id}}:reference_image") == [
+            {"asset_id": "{{gen-1.asset_id}}", "role": "reference_image"}
+        ]
+
+    def test_角色拼错了要报错_不能默默走默认(self) -> None:
+        """默默走默认的话:任务照样成功,只是那张图当成了别的用途,而界面上什么都没说。"""
+        from app.domain.generation.operations import GenerationDomainError
+
+        with pytest.raises(GenerationDomainError, match="bogus"):
+            self._parse("a1:bogus")
+
+    def test_不像角色名的后半段不算角色(self) -> None:
+        """`C1` 有大写,不是角色名的样子 —— 那个冒号是模板串自己的。"""
+        assert self._parse("{{a.b:C1}}")[0]["asset_id"] == "{{a.b:C1}}"
