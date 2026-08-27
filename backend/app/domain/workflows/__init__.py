@@ -45,6 +45,28 @@ class WorkflowDomainError(RuntimeError):
 #: 浏览器要登录态,插件要先装。列表顺序即面板顺序,前端不再排第二次。
 NODE_CATEGORIES: tuple[str, ...] = ("流程", "AI", "素材", "数据", "发布", "浏览器", "插件")
 
+#: 一个 object 字段该用**哪种编辑器**。
+#:
+#: 绝大多数 object 配置其实是「名字 → 值」的映射:入参映射、请求头、具名输出、启动参数……
+#: 值往往还是上游节点的引用(`{{llm-1.text}}`)。让用户对着一个 `{}` 手写 JSON,要背键名、
+#: 要记引号逗号,而**写错了直到运行才知道**。这类字段给一行一对的编辑器,值那格能从上游输出里挑。
+#:
+#: 只有真正是自由结构的才留原始 JSON —— 目前就 `json_schema` 一个(它是一份 schema,
+#: 天然嵌套,拍平成键值对是错的)。所以默认给 map,例外自己声明 `"editor": "json"` ——
+#: 这样新加的 object 字段自动就有友好编辑器,而不是等谁记得来补。
+_RAW_JSON_FIELDS = {"json_schema"}
+
+
+def config_editor(key: str, spec: dict[str, Any]) -> str:
+    """这个字段用哪种编辑器:map(一行一对)/ json(原始 JSON)/ 空(非 object,按类型走)。"""
+    if str(spec.get("type") or "") != "object":
+        return ""
+    explicit = str(spec.get("editor") or "").strip()
+    if explicit:
+        return explicit
+    return "json" if key in _RAW_JSON_FIELDS else "map"
+
+
 #: 配置字段在界面上**叫什么**。
 #:
 #: 这份知识此前是前端手抄的一张表(WorkflowsView 的 FIELD_LABEL_KEYS),81 个键里只覆盖了 28 个

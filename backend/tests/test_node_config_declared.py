@@ -200,3 +200,32 @@ def test_标签真的发到接口上() -> None:
     from app.api.routes.workflows import _with_data_type
 
     assert _with_data_type("selector", {"type": "string"})["label"] == "元素选择器"
+
+
+def test_名字到值的映射不该让用户手写_JSON() -> None:
+    """入参映射、请求头、具名输出、启动参数……绝大多数 object 字段其实是「名字 → 值」,
+    而值往往是上游节点的引用(`{{llm-1.text}}`)。
+
+    让用户对着一个 `{}` 手写 JSON,键名要背、引号逗号要记,而**写错了直到运行才知道**:
+    少个引号是解析失败(还算好),引用名写错则一路静默传个空值下去。
+    """
+    from app.domain.workflows import NODE_TYPES, config_editor
+
+    for name, spec in NODE_TYPES.items():
+        for key, meta in (spec.get("config") or {}).items():
+            if meta.get("type") != "object":
+                continue
+            editor = config_editor(key, meta)
+            assert editor in {"map", "json"}, f"{name}.{key} 没说清用哪种编辑器"
+
+
+def test_只有真正自由结构的才留原始_JSON() -> None:
+    """json_schema 是一份 schema,天然嵌套,拍平成键值对是错的。**默认给 map**,
+    例外自己声明 —— 这样新加的 object 字段自动就有友好编辑器,而不是等谁记得来补。"""
+    from app.domain.workflows import config_editor
+
+    assert config_editor("json_schema", {"type": "object"}) == "json"
+    assert config_editor("inputs", {"type": "object"}) == "map"
+    assert config_editor("whatever", {"type": "object", "editor": "json"}) == "json"
+    # 非 object 不归它管。
+    assert config_editor("prompt", {"type": "template"}) == ""

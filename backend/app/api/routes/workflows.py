@@ -27,6 +27,7 @@ from app.domain.workflows import (
     NODE_CATEGORIES,
     NODE_TYPES,
     config_data_type,
+    config_editor,
     config_label,
     WorkflowDomainError,
     create_workflow,
@@ -55,6 +56,10 @@ def _with_data_type(key: str, spec: Any) -> Any:
     label = config_label(key, spec)
     if label:
         enriched["label"] = label
+    # object 字段用哪种编辑器:一行一对的映射,还是原始 JSON。
+    editor = config_editor(key, spec)
+    if editor:
+        enriched["editor"] = editor
     return enriched
 
 

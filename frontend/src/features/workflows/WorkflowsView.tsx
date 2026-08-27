@@ -75,6 +75,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useCanvasPosture } from "@/features/workflows/useCanvasPosture";
 import { VarTextarea } from "@/features/workflows/VarTextarea";
+import { MapField } from "@/features/workflows/MapField";
 import { CodeEditor, type CodeEditorHandle } from "@/components/app/code-editor";
 import { WorkflowAgentChat, type WorkflowAgentMode } from "@/features/workflows/WorkflowAgentChat";
 import { WorkflowRunHistory } from "@/features/workflows/WorkflowRunHistory";
@@ -242,10 +243,9 @@ function NodeResultPreview({ assetIds }: { assetIds: string[] }) {
     // **只有视频/音频挂 nodrag**。整块都挂的话,缩略图占了节点大半个身体,从图上按下就拖不动
     // 节点了 —— 用户感觉像"焦点卡住",换个地方按又好了。图片不需要:拖动不会触发 click,
     // 原地点一下照样打开大图。
-    // **通栏。** 卡片有 px-3 的内边距,预览夹在里面就成了"贴在卡片上的一张小图",两侧各留
-    // 一道白 —— 而它是这个节点最该被看见的东西。用负边距顶到卡片边缘,上下各一条分隔线
-    // 代替四周的框:框会让它继续像个独立元件,横线则把它读成卡片自己的一段。
-    <div className="-mx-3 grid grid-flow-col justify-stretch gap-px overflow-hidden border-y border-border bg-border">
+    // 预览层:**自己就是通栏的**,因为卡片不带内边距(见卡片那段说明)。多份并排时用 1px 的
+    // 底色缝隙隔开,不画框 —— 框会让它读成贴上去的独立元件,而它是卡片自己的一段。
+    <div className="grid grid-flow-col justify-stretch gap-px border-t border-border bg-border">
       {ready.map((asset) => (
         <AssetInlinePreview
           key={asset.id}
@@ -280,10 +280,6 @@ function WfNode({ data, selected }: NodeProps) {
     retry: false,
   });
   const kindIcon = ASSET_KIND_ICONS[configAsset.data?.kind ?? ""];
-  //: 上面有没有一块**通栏**的内容(预览图)。有的话页脚要贴着它 —— 卡片统一的 gap 落在
-  //: 两者之间就成了一条空带,而页脚是"接着上面那段"的东西,不是另起一段。
-  //: 两条边框也要合成一条:预览的下边线和页脚的上边线挨在一起会变成 2px。
-  const hasBleed = Boolean(d.configAssetId || (d.runAssets ?? []).length > 0);
   const subtitle = d.configAssetId
     ? ""
     : d.configSummary || (d.label !== d.typeLabel ? d.typeLabel : "");
@@ -299,10 +295,13 @@ function WfNode({ data, selected }: NodeProps) {
         // **要有上界。** 标题里塞进一个 43 字符的文件名时,卡片会被撑到 375px(普通节点是 172),
         // 而 truncate 没有上界根本不会生效。撑宽不只是难看:贴节点浮现的检查器先试右侧,
         // 放不下才翻左侧 —— 一个过宽的节点会把面板推到左边,正好压在邻居身上。
-        // 竖直节奏:**段落之间(gap-2)比段落内部(header 自己的 gap)大**,否则标题、预览、
-        // 接点读成一整片。上下内边距收到 8px —— 预览通栏之后,原来那 9px 会让图和标题之间
-        // 出现一道比左右都宽的空当。
-        "group/node relative flex min-w-[172px] max-w-[264px] flex-col gap-2 rounded-lg border border-border bg-panel px-3 py-2 transition-[border-color] duration-100 hover:border-border-strong",
+        // **卡片自己不带内边距,分三层:标题层 / 预览层 / 参数层,各自带自己的。**
+        //
+        // 此前是"卡片统一 px-3 py-2,预览再用 -mx-3 顶回去、页脚再用 -mb-2 贴上去" ——
+        // 负 margin 是把 padding 加错了层之后的补丁:每加一个新区块都要重新算一遍该抵消多少,
+        // 而算错了只会看出来一点点歪。分层之后预览天然就是通栏的,不需要抵消任何东西。
+        // overflow-hidden 让预览自己被卡片的圆角裁掉。
+        "group/node relative flex min-w-[172px] max-w-[264px] flex-col overflow-hidden rounded-lg border border-border bg-panel transition-[border-color] duration-100 hover:border-border-strong",
         // **两侧都有接点时才撑宽。** 单侧接点(比如只有输出的 LLM)撑到 210px 的话,那一列被
         // 推到最右边,左半张卡片是空的 —— 看着像排版坏了,其实是宽度给多了。
         showIo && inputs.length > 0 && outputs.length > 0 && "min-w-[210px]",
@@ -344,7 +343,7 @@ function WfNode({ data, selected }: NodeProps) {
           {(d.run.ms / 1000).toFixed(2)}s
         </span>
       )}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 px-3 py-2">
         <span className="grid h-7 w-7 flex-none place-items-center rounded-md bg-[color-mix(in_srgb,var(--wf-node-color,var(--primary))_12%,transparent)] text-[color:var(--wf-node-color,var(--primary))]" style={{ "--wf-node-color": WF_NODE_COLORS[d.nodeType] } as React.CSSProperties}>{kindIcon ?? NODE_ICONS[d.nodeType] ?? <Type size={13} />}</span>
         <span className="grid min-w-0 gap-px [&_small]:truncate [&_small]:text-ui-2xs [&_small]:text-muted-foreground [&_strong]:truncate [&_strong]:text-ui-sm">
           <strong>{d.label}</strong>
@@ -366,7 +365,7 @@ function WfNode({ data, selected }: NodeProps) {
           想知道这一步到底给了什么,得在后面再接一个"通知"节点把它打出来。
           两行封顶:节点是张名片,不是日志窗口;全文在检查器里。 */}
       {d.runSummary && (
-        <p className="m-0 line-clamp-2 whitespace-pre-wrap break-words rounded-md bg-[color-mix(in_srgb,var(--muted)_45%,transparent)] px-1.5 py-1 text-ui-2xs leading-[1.45] text-muted-foreground">
+        <p className="m-0 line-clamp-2 whitespace-pre-wrap break-words border-t border-border bg-[color-mix(in_srgb,var(--muted)_45%,transparent)] px-3 py-1.5 text-ui-2xs leading-[1.45] text-muted-foreground">
           {d.runSummary}
         </p>
       )}
@@ -396,12 +395,7 @@ function WfNode({ data, selected }: NodeProps) {
       {showIo && (
         // 接口区做成卡片"页脚条":压进左右 padding、贴住底边、subtle 底色 —
         // 端口行读作独立的接线区,而不是悬在卡片下半的零散小字(空的一侧也不再是大片留白)。
-        <div
-          className={cn(
-            "-mx-3 -mb-2 flex justify-between gap-4 rounded-b-[9px] bg-panel-subtle px-3 py-[6px]",
-            hasBleed ? "-mt-2" : "border-t border-border",
-          )}
-        >
+        <div className="flex justify-between gap-4 border-t border-border bg-panel-subtle px-3 py-[6px]">
           <div className="flex min-w-0 flex-col gap-[3px]">
             {inputs.map((key) => (
               <div className="relative flex min-h-4 items-center" key={key}>
@@ -3435,7 +3429,17 @@ function NodeInspector({
                   />
                 )
               ) : isObject ? (
-                <JsonField value={value} onChange={(parsed) => setConfig(key, parsed)} />
+                // 「名字 → 值」的映射给一行一对的编辑器,值那格能从上游输出里挑;
+                // 真正自由结构的(json_schema)才留原始 JSON。哪种由声明说了算,见后端 config_editor。
+                String((spec as { editor?: unknown } | undefined)?.editor ?? "") === "json" ? (
+                  <JsonField value={value} onChange={(parsed) => setConfig(key, parsed)} />
+                ) : (
+                  <MapField
+                    value={value}
+                    variables={variables}
+                    onChange={(next) => setConfig(key, next)}
+                  />
+                )
               ) : spec?.type === "code" ? (
                 <CodeField value={String(value ?? "")} onChange={(next) => setConfig(key, next)} variables={variables} />
               ) : spec?.type === "template" ? (

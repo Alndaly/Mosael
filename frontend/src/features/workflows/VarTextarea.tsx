@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 
 /**
- * 支持 Dify 式「/ 唤起变量弹窗」的 textarea:
+ * 支持「@ 唤起变量弹窗」的 textarea:
  * 输入 `/` 在光标处弹出上游变量列表,继续输入过滤,↑↓ 选择、Enter/Tab 插入、Esc 关闭。
  *
  * 光标像素定位用镜像 div 技巧(textarea 拿不到光标坐标):把 textarea 的排版样式
@@ -38,15 +38,23 @@ function caretCoordinates(textarea: HTMLTextAreaElement, index: number): { top: 
   return { top, left };
 }
 
-/** 光标前最近的、以空白/行首开头的 `/token`;没有则 null。 */
-function slashQueryAt(value: string, caret: number): { start: number; query: string } | null {
+//: 唤起变量菜单的那个字符。
+//:
+//: **是 `@` 不是 `/`。** 斜杠在这些框里是会被正常打出来的内容 —— 路径(`a/b`)、日期
+//: (`2026/08/28`)、比例(`16/9`)都带它,于是打着打着就弹出一个菜单挡住视线。而 `@` 在
+//: "点名某个东西"这件事上是通行的手势(提到某人、引用某项),这里引用的正是上游那个节点。
+const TRIGGER = "@";
+
+/** 光标前最近的、以空白/行首开头的 `@token`;没有则 null。 */
+function triggerQueryAt(value: string, caret: number): { start: number; query: string } | null {
   const before = value.slice(0, caret);
-  const slash = before.lastIndexOf("/");
-  if (slash < 0) return null;
-  if (slash > 0 && !/[\s({\[,:，:、]/.test(before[slash - 1])) return null;
-  const query = before.slice(slash + 1);
+  const at = before.lastIndexOf(TRIGGER);
+  if (at < 0) return null;
+  // 前面必须是行首或分隔符 —— 否则 `a@b`(邮箱、句中的 @)也会弹菜单。
+  if (at > 0 && !/[\s({\[,:，:、]/.test(before[at - 1])) return null;
+  const query = before.slice(at + 1);
   if (/[\s]/.test(query)) return null;
-  return { start: slash, query };
+  return { start: at, query };
 }
 
 export function VarTextarea({
@@ -81,7 +89,7 @@ export function VarTextarea({
 
   const sync = (el: HTMLTextAreaElement) => {
     if (variables.length === 0) return setMenu(null);
-    const found = slashQueryAt(el.value, el.selectionStart ?? 0);
+    const found = triggerQueryAt(el.value, el.selectionStart ?? 0);
     if (!found) return setMenu(null);
     const pos = caretCoordinates(el, found.start);
     const lineHeight = Number.parseFloat(window.getComputedStyle(el).lineHeight) || 18;
