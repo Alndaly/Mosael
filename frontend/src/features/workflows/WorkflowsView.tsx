@@ -1248,7 +1248,19 @@ function WorkflowEditor({
   // graph and interrupt React Flow's drag. The save fires once, right after the drag settles.
   const [dragging, setDragging] = React.useState(false);
   // Drill-in: double-click a loop OR subgraph node to edit its nested body sub-graph in an overlay canvas.
-  const [editingLoopId, setEditingLoopId] = React.useState<string | null>(null);
+  /**
+   * 钻进了哪个子图。**记在本地,不是纯 state** —— 刷新一下就被弹回上一层是不对的:
+   * 用户正在子图里编辑,按了刷新(或者应用自己重载),回来发现自己站在主流程上,
+   * 而刚才改到一半的地方还得再点进去找。
+   *
+   * 和"选中哪个工作流"用的是同一个 hook:它会拿 ids 校验,那个节点被删掉之后自动回到主流程,
+   * 不会卡在一个不存在的子图里。key 按工作流分,免得 A 工作流记下的节点 id 跑去 B 里生效。
+   */
+  const drillableIds = React.useMemo(
+    () => graph.nodes.filter((node) => node.type === "subgraph" || node.type.startsWith("loop_")).map((node) => node.id),
+    [graph.nodes],
+  );
+  const [editingLoopId, setEditingLoopId] = usePersistentSelection(`workflow-drill:${workflow.id}`, drillableIds);
   const rfRef = React.useRef<ReactFlowInstance | null>(null);
   // 画布姿态(是否已 fitView、视口动过几次、正不正在平移)。三条各自的来历见 useCanvasPosture
   // —— 它们是 React Flow 的机制,不是工作流的概念,所以不和图 / 弹窗 / 搜索那些 state 混在一起。
@@ -2704,6 +2716,35 @@ function LoopBodyEditor({
     [edges, edgeShape],
   );
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  /**
+   * 子图里的检查器**和主图长一样**。
+   *
+   * 这里此前不传 anchor,于是走了"贴右边占满整条高度"的兜底样式 —— 同一个东西在主图是贴着
+   * 节点浮现的小面板,进了子图变成一条右侧长栏,还把工具条右边那组盖住。用户会以为自己进错了
+   * 地方,而这只是少传了一个参数。
+   */
+  const subRf = React.useRef<ReactFlowInstance | null>(null);
+  const [subTick, setSubTick] = React.useState(0);
+  const [subPanelHeight, setSubPanelHeight] = React.useState<number | undefined>(undefined);
+  const subPanelRef = React.useCallback((element: HTMLElement | null) => {
+    if (!element) return;
+    const observer = new ResizeObserver(() => setSubPanelHeight(element.getBoundingClientRect().height));
+    observer.observe(element);
+    setSubPanelHeight(element.getBoundingClientRect().height);
+    return () => observer.disconnect();
+  }, []);
+  React.useEffect(() => setSubPanelHeight(undefined), [selectedId]);
+  const subAnchor = React.useMemo(
+    () =>
+      anchorToNode(
+        subRf.current,
+        nodes.find((node) => node.id === selectedId) ?? null,
+        { width: window.innerWidth, height: window.innerHeight },
+        subPanelHeight,
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedId, subTick, nodes, subPanelHeight],
+  );
 
   //: 最后一次**我们自己发出去**的 body。用来分辨"这次 prop 变化是我引起的"还是"外面改的"。
   const emitted = React.useRef<string>("");
@@ -2947,12 +2988,14 @@ function LoopBodyEditor({
           connectionLineType={edgeShape as ConnectionLineType}
           defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
           deleteKeyCode={["Backspace", "Delete"]}
-          onInit={(instance) =>
+          onInit={(instance) => {
+            subRf.current = instance as unknown as ReactFlowInstance;
             requestAnimationFrame(() => {
               instance.fitView({ padding: 0.3, maxZoom: 1 });
               setBodyViewReady(true);
-            })
-          }
+            });
+          }}
+          onMove={() => setSubTick((value) => value + 1)}
         >
           <Background gap={20} size={1.2} />
           <Controls
@@ -2962,8 +3005,10 @@ function LoopBodyEditor({
           />
         </ReactFlow>
         {body.nodes.length === 0 && <div className="pointer-events-none absolute left-1/2 top-4 max-w-[70%] -translate-x-1/2 rounded-lg border border-dashed border-border bg-muted px-3 py-2 text-center text-xs text-muted-foreground">{t(loopNode.type === "subgraph" ? "wfSubgraphEmptyHint" : "wfLoopEmptyHint")}</div>}
-        {selectedNode && (
+        {selectedNode && subAnchor && (
           <NodeInspector
+            anchor={subAnchor}
+            panelRef={subPanelRef}
             node={selectedNode}
             meta={registry.get(selectedNode.type) ?? null}
             graph={body}
