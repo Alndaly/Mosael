@@ -2035,11 +2035,13 @@ function WorkflowEditor({
               <button
                 type="button"
                 data-wf-add-node=""
-                className="flex h-8 w-auto items-center gap-1 rounded-full border border-input bg-card px-3 text-xs text-foreground hover:bg-muted"
+                // 组里全是圆形图标钮,只有它带文字就会显得突出一截 —— 而它并不比「运行」更重要。
+                // 名字进 title/aria-label,悬停仍然说得出自己是谁。
+                className="grid h-8 w-8 place-items-center rounded-full border-0 bg-transparent text-foreground transition-colors hover:bg-secondary"
                 aria-label={t("wfAddNode")}
+                title={t("wfAddNode")}
               >
-                <Plus size={12} />
-                <span>{t("wfAddNode")}</span>
+                <Plus size={15} />
               </button>
             }
           />
@@ -2052,14 +2054,18 @@ function WorkflowEditor({
         </div>
         <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
           <Button
-            variant={agentOpen ? "secondary" : "outline"}
-            size="sm"
+            variant="ghost"
+            size="icon"
+            className={cn("h-8 w-8", agentOpen && "bg-secondary text-foreground")}
+            aria-label={t("wfAgentTitle")}
+            title={t("wfAgentTitle")}
+            aria-pressed={agentOpen}
             onClick={() => {
               setAgentOpen((value) => !value);
               if (!agentOpen) setAgentMode("docked");
             }}
           >
-            <Bot size={13} /> {t("wfAgentTitle")}
+            <Bot size={14} />
           </Button>
           <Popover
             open={nodeSearchOpen}
@@ -2135,7 +2141,7 @@ function WorkflowEditor({
                   // 组已经有自己的边框和底了,按钮**不再各带一层** —— 那是胶囊套胶囊。
                   // 状态靠颜色说,不靠再画一圈线。
                   "inline-flex h-8 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border-0 bg-transparent text-xs font-[650] text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground",
-                  checklistCount > 0 ? "px-2.5" : "w-8 justify-center",
+                  checklistCount > 0 ? "gap-1 px-2" : "w-8 justify-center",
                   analysis.errorCount
                     ? "bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] text-destructive hover:bg-[color-mix(in_srgb,var(--destructive)_18%,transparent)] hover:text-destructive"
                     : analysis.warnCount
@@ -2150,12 +2156,9 @@ function WorkflowEditor({
                     图标 + 文字 + 数字三样一起上,是同一个状态编码了三遍。 */}
                 {checklistCount > 0 ? <AlertTriangle size={13} /> : <CircleCheck size={14} />}
                 {checklistCount > 0 && (
-                  <>
-                    <span>{t("wfChecklist")}</span>
-                    <em className="inline-grid h-[15px] min-w-[15px] place-items-center rounded-full bg-[color-mix(in_srgb,currentColor_18%,transparent)] px-1 text-ui-2xs font-bold not-italic leading-none text-current">
-                      {checklistCount}
-                    </em>
-                  </>
+                  <em className="inline-grid h-[15px] min-w-[15px] place-items-center rounded-full bg-[color-mix(in_srgb,currentColor_18%,transparent)] px-1 text-ui-2xs font-bold not-italic leading-none text-current">
+                    {checklistCount}
+                  </em>
                 )}
               </button>
             </PopoverTrigger>
@@ -2197,12 +2200,14 @@ function WorkflowEditor({
           {/* 不再挂「未保存/保存中」文案:自动保存本就静默,状态条只会闪来闪去制造焦虑;
               脏状态期间运行按钮自会禁用并带「保存中」提示,足够了。 */}
           <Button
-            size="sm"
+            size="icon"
+            className="h-8 w-8"
             disabled={dirty || !analysis.runnable} loading={run.isPending}
-            title={dirty ? t("wfSaving") : !analysis.runnable ? t("wfRunBlocked") : undefined}
+            aria-label={t("wfRun")}
+            title={dirty ? t("wfSaving") : !analysis.runnable ? t("wfRunBlocked") : t("wfRun")}
             onClick={() => run.mutate()}
           >
-            <Play size={13} /> {t("wfRun")}
+            <Play size={14} />
           </Button>
         </div>
         <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
@@ -2279,13 +2284,16 @@ function WorkflowEditor({
       <div className={cn(
         "relative grid min-h-0 grid-cols-[minmax(0,1fr)] gap-2 [&_.react-flow\_\_background]:bg-background [&_.react-flow\_\_controls]:overflow-hidden [&_.react-flow\_\_controls]:rounded-md [&_.react-flow\_\_controls]:border [&_.react-flow\_\_controls]:border-border [&_.react-flow\_\_controls]:shadow-none [&_.react-flow\_\_controls-button]:border-b [&_.react-flow\_\_controls-button]:border-border [&_.react-flow\_\_controls-button]:bg-panel [&_.react-flow\_\_controls-button]:text-foreground [&_.react-flow\_\_controls-button:hover]:bg-secondary [&_.react-flow\_\_edge-path]:stroke-border-strong [&_.react-flow\_\_edge-path]:[stroke-width:1.5] [&_.react-flow\_\_edge-path]:[stroke-linecap:round] [&_.react-flow\_\_edge-path]:[transition:stroke_120ms,stroke-width_120ms] [&_.react-flow\_\_edge.selected_.react-flow\_\_edge-path]:stroke-primary [&_.react-flow\_\_edge.selected_.react-flow\_\_edge-path]:[stroke-width:2.2] [&_.react-flow\_\_edge:hover_.react-flow\_\_edge-path]:[stroke-width:2.2] [&_.react-flow\_\_edge-textbg]:fill-panel [&_.react-flow\_\_edge-text]:fill-muted-foreground [&_.react-flow\_\_edge-text]:text-[9.5px] [&_.react-flow\_\_attribution]:bg-transparent [&_.react-flow\_\_attribution]:text-muted-foreground [&_.wf-edge-true_.react-flow\_\_edge-path]:stroke-[#16a34a] [&_.wf-edge-false_.react-flow\_\_edge-path]:stroke-[#e11d48] [&_.wf-edge-data_.react-flow\_\_edge-path]:animate-wf-dash [&_.wf-edge-data_.react-flow\_\_edge-path]:stroke-primary [&_.wf-edge-data_.react-flow\_\_edge-path]:[stroke-width:2] [&_.wf-edge-data_.react-flow\_\_edge-path]:[stroke-dasharray:6_5] [&_.wf-edge-data.selected_.react-flow\_\_edge-path]:[stroke-width:2.6] [&_.wf-edge-data.wf-edge-mismatch_.react-flow\_\_edge-path]:stroke-[#d97706] [&_.react-flow\_\_minimap]:overflow-hidden [&_.react-flow\_\_minimap]:rounded-md [&_.react-flow\_\_minimap]:border [&_.react-flow\_\_minimap]:border-border [&_.react-flow\_\_minimap]:bg-background [&_.react-flow\_\_minimap-mask]:fill-[color-mix(in_srgb,var(--foreground)_6%,transparent)] [&_.react-flow\_\_minimap-node]:fill-border-strong",
       )}
-        style={rightPanels > 0 ? { gridTemplateColumns: `minmax(0,1fr) ${rightPanel.width}px` } : undefined}
+        // 画布**始终占满**:助手和执行历史改成浮在上面,不再从画布身上切走一列。
+        // 工具条已经浮起来了,右边再留一条实心栏,画布就被两面夹住 —— 而这一页的主角是画布。
       >
         {/* 画布和右栏之间的拖柄。右栏是从右往左量的,所以给 right 而不是 left。 */}
+        {/* 拖柄:面板浮起来之后它不再是"两栏之间的界",而是浮窗自己的左边缘 —— 所以贴着
+            浮窗左侧,并跟着浮窗一起压在画布上(z-10),否则会被画布吃掉指针事件。 */}
         {rightPanels > 0 && (
           <div
-            className={SIDEBAR_HANDLE_CLASS}
-            style={{ right: handleOffset(rightPanel.width) }}
+            className={cn(SIDEBAR_HANDLE_CLASS, "z-10")}
+            style={{ right: rightPanel.width + 8, top: 54, bottom: 8 }}
             onPointerDown={rightPanel.startDragFromRight}
           />
         )}
@@ -2414,16 +2422,19 @@ function WorkflowEditor({
         {(dockedAgent || dockedHistory) && (
           <div
             className={cn(
-              "relative grid min-h-0 min-w-0 gap-2",
+              // 浮窗:贴右侧,从工具条底下起、到画布底边止。z-10 —— 压过画布,让过工具条(z-20)
+              // 和节点检查器(z-30):检查器是"你正在改的那个东西",它该在最上面。
+              "absolute bottom-2 right-2 top-[54px] z-10 grid min-h-0 min-w-0 gap-2",
               dockedAgent && dockedHistory ? "grid-rows-[minmax(0,1fr)_minmax(0,1fr)]" : "grid-rows-[minmax(0,1fr)]",
             )}
             // 两个都开时上面那块用记住的高度,下面那块吃掉剩下的 —— 运行时想看某一步的输出
             // 就把历史那块拉大,而平分是个谁都不满意的折中。
-            style={
-              dockedAgent && dockedHistory
+            style={{
+              width: rightPanel.width,
+              ...(dockedAgent && dockedHistory
                 ? { gridTemplateRows: `${agentRow.height}px minmax(0,1fr)` }
-                : undefined
-            }
+                : {}),
+            }}
           >
             {dockedAgent && agentPanel}
             {/* 上下之间的横拖柄。和左右那条同一套外观(HANDLE_ROW),只是转了九十度。 */}
