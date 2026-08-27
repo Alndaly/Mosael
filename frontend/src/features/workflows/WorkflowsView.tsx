@@ -288,7 +288,10 @@ function WfNode({ data, selected }: NodeProps) {
   return (
     <div
       className={cn(
-        "group/node relative flex min-w-[172px] flex-col gap-1.5 rounded-lg border border-border bg-panel px-3 py-[9px] transition-[border-color] duration-100 hover:border-border-strong",
+        // **要有上界。** 标题里塞进一个 43 字符的文件名时,卡片会被撑到 375px(普通节点是 172),
+        // 而 truncate 没有上界根本不会生效。撑宽不只是难看:贴节点浮现的检查器先试右侧,
+        // 放不下才翻左侧 —— 一个过宽的节点会把面板推到左边,正好压在邻居身上。
+        "group/node relative flex min-w-[172px] max-w-[264px] flex-col gap-1.5 rounded-lg border border-border bg-panel px-3 py-[9px] transition-[border-color] duration-100 hover:border-border-strong",
         // **两侧都有接点时才撑宽。** 单侧接点(比如只有输出的 LLM)撑到 210px 的话,那一列被
         // 推到最右边,左半张卡片是空的 —— 看着像排版坏了,其实是宽度给多了。
         showIo && inputs.length > 0 && outputs.length > 0 && "min-w-[210px]",
@@ -480,7 +483,14 @@ const NODE_COMPONENT_TYPES = { wf: WfNode };
 
 
 /** 贴靠面板的几何:宽度固定,高度自适应但封顶;与节点之间留 10px 间隙,离窗口边至少 12px。 */
-const ANCHOR = { width: 320, gap: 10, margin: 12, maxHeight: 560 } as const;
+//: 贴靠面板的几何。**宽度是唯一来源** —— 样式里也读它,不再各写一份。
+//:
+//: 这里此前写 320,而面板的 CSS 是 `w-[380px]`(旁边还留着一句「380 而不是 320」的注释,
+//: 说明宽度改过、常量没跟着改)。60px 的错位把四条边一起弄坏了:
+//:   · 右侧:按 320 判断"放得下",实际 380 → 溢出 60px 被窗口切掉;
+//:   · 左侧:左翻位置算成"节点左缘 − 320",实际宽 380 → 往右多伸 60px,**压住自己的节点**;
+//:   · 上下:竖直钳制拿 maxHeight(那是**上限**,不是实际高)当高度用,面板矮的时候被硬推上去。
+const ANCHOR = { width: 380, gap: 10, margin: 12, maxHeight: 560 } as const;
 
 export type AnchorBox = { left: number; top: number; maxHeight: number };
 
@@ -505,6 +515,8 @@ export function anchorToNode(
   /** 可视区尺寸。作为入参而不是直接读 window:这样这段摆放逻辑是纯函数,可以直接单测
    *  (仓库里没装 jsdom,其余测试也都是纯逻辑)。 */
   viewport: { width: number; height: number },
+  /** 面板量到的真实高度。不给就按上限估(见下方 panelH)。 */
+  actualHeight?: number,
 ): AnchorBox | null {
   if (!instance || !node) return null;
   // v12:measured 是渲染后的真实尺寸;没测到时用节点默认宽度兜底,别让面板贴到错的地方。
@@ -518,29 +530,45 @@ export function anchorToNode(
 
   const { width: viewW, height: viewH } = viewport;
   const maxHeight = Math.min(ANCHOR.maxHeight, viewH - ANCHOR.margin * 2);
+  //: 实际高度只有渲染后才知道;调用方量到了就传进来,量不到就按上限估 —— **宁可高估**,
+  //: 高估只是把面板往上挪一点,低估会让它探出窗口下沿。
+  const panelH = Math.min(actualHeight ?? maxHeight, maxHeight);
 
-  // 侧放只有**真的能放在节点旁边**才算数。早先的写法在左右都放不下时用「节点左缘」兜底,
-  // 结果面板压在节点身上,而随后的判定只看窗口边界、不看是否避开了节点 —— 于是「落到下方」
-  // 这条分支永远不会触发。单测正是在这里发现的。
-  const rightLeft = bottomRight.x + ANCHOR.gap;
-  const leftLeft = topLeft.x - ANCHOR.gap - ANCHOR.width;
-  let left: number;
-  let top = topLeft.y;
-  if (rightLeft + ANCHOR.width <= viewW - ANCHOR.margin) {
-    left = rightLeft; // 首选:节点右侧
-  } else if (leftLeft >= ANCHOR.margin) {
-    left = leftLeft; // 次选:翻到左侧
-  } else {
-    // 左右都放不下(节点很宽或窗口很窄):落到节点下方,下方也放不下就放上方。
-    left = topLeft.x;
-    const below = bottomRight.y + ANCHOR.gap;
-    top = below + maxHeight <= viewH - ANCHOR.margin ? below : topLeft.y - ANCHOR.gap - maxHeight;
+  const minLeft = ANCHOR.margin;
+  const maxLeft = Math.max(minLeft, viewW - ANCHOR.width - ANCHOR.margin);
+  const minTop = ANCHOR.margin;
+  const maxTop = Math.max(minTop, viewH - panelH - ANCHOR.margin);
+  const clampLeft = (value: number) => Math.min(Math.max(minLeft, value), maxLeft);
+  const clampTop = (value: number) => Math.min(Math.max(minTop, value), maxTop);
+
+  /** 这个位置会不会压在**自己那个节点**上。压别的节点没办法(画布上到处是节点),
+   *  压自己不行 —— 用户正是为了看这个节点才点开它的。 */
+  const coversOwnNode = (left: number, top: number) =>
+    left < bottomRight.x && left + ANCHOR.width > topLeft.x &&
+    top < bottomRight.y && top + panelH > topLeft.y;
+
+  //: 四个候选位置,**按偏好排序**:右、左、下、上。每个都先夹进窗口再判断是否压住自己 ——
+  //: 此前是「选完位置最后统一夹一次」,而那一夹会把好不容易避开的位移again抵消掉:
+  //: 落到下方的面板被顶回节点头上,正是这么来的。
+  const candidates: Array<{ left: number; top: number }> = [
+    { left: bottomRight.x + ANCHOR.gap, top: topLeft.y },
+    { left: topLeft.x - ANCHOR.gap - ANCHOR.width, top: topLeft.y },
+    { left: topLeft.x, top: bottomRight.y + ANCHOR.gap },
+    { left: topLeft.x, top: topLeft.y - ANCHOR.gap - panelH },
+  ];
+  for (const candidate of candidates) {
+    const left = clampLeft(candidate.left);
+    const top = clampTop(candidate.top);
+    if (!coversOwnNode(left, top)) return { left, top, maxHeight };
   }
-  return {
-    left: Math.min(Math.max(ANCHOR.margin, left), Math.max(ANCHOR.margin, viewW - ANCHOR.width - ANCHOR.margin)),
-    top: Math.min(Math.max(ANCHOR.margin, top), Math.max(ANCHOR.margin, viewH - maxHeight - ANCHOR.margin)),
-    maxHeight,
-  };
+  //: 四个方向都躲不开(节点大到几乎占满窗口)。此时贴着窗口边放,让节点尽量露出来 ——
+  //: 挡住一部分总比挡在正中间强。
+  const room = { left: topLeft.x - minLeft, right: viewW - bottomRight.x, top: topLeft.y - minTop, bottom: viewH - bottomRight.y };
+  const widest = Math.max(room.left, room.right, room.top, room.bottom);
+  if (widest === room.right) return { left: maxLeft, top: clampTop(topLeft.y), maxHeight };
+  if (widest === room.left) return { left: minLeft, top: clampTop(topLeft.y), maxHeight };
+  if (widest === room.bottom) return { left: clampLeft(topLeft.x), top: maxTop, maxHeight };
+  return { left: clampLeft(topLeft.x), top: minTop, maxHeight };
 }
 
 /** 配置字段 key → 人类可读标签键(Dify 式:面板不暴露裸 config key)。 */
@@ -3329,12 +3357,13 @@ function NodeInspector({
         "z-30 grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border-strong bg-panel shadow-[var(--shadow-panel)]",
         // 380 而不是 320:两列并排的参数(Temperature / Top P 这种)在 320 里各自只剩
         // 130px,长一点的标签就换行。左右各留 12px 让它在小窗口里也不贴边。
-        anchor
-          ? "fixed w-[380px] max-w-[calc(100vw-24px)]"
-          : "absolute bottom-2 right-2 top-2 w-[min(380px,calc(100%-32px))]",
+        // 宽度从 ANCHOR 来(见那里的说明):写死在这里就会和摆放计算各说各话,而那正是
+        // 四条边一起越界的成因。两列并排的参数(Temperature / Top P)在 320 里会换行,
+        // 所以是 380 —— 要改就改 ANCHOR.width 那一处。
+        anchor ? "fixed max-w-[calc(100vw-24px)]" : "absolute bottom-2 right-2 top-2 w-[min(380px,calc(100%-32px))]",
         inert && "pointer-events-none",
       )}
-      style={anchor ? { left: anchor.left, top: anchor.top, maxHeight: anchor.maxHeight } : undefined}
+      style={anchor ? { left: anchor.left, top: anchor.top, maxHeight: anchor.maxHeight, width: ANCHOR.width } : undefined}
       aria-label={node.name || meta?.label || node.type}
     >
       <div // 头部只有一行(类型进了图标的 tooltip),38px 是给两行留的高度。

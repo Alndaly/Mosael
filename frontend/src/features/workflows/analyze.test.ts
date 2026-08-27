@@ -11,7 +11,7 @@ import type { WorkflowGraph } from "@/api/client";
 
 const registry: RegistryLike = {
   get(type) {
-    const table: Record<string, { config?: Record<string, { type?: string; required?: boolean }> }> = {
+    const table: Record<string, { config?: Record<string, { type?: string; required?: boolean; data_type?: string }> }> = {
       start: { config: { params: { type: "object" } } },
       llm: {
         config: {

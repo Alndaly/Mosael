@@ -98,6 +98,8 @@ export interface AnalyzeContext {
 interface ConfigSpecLike {
   type?: string;
   required?: boolean;
+  /** 这个字段装的是什么(素材/时间线/…)。**后端推好一起发过来**,见 domain/workflows。 */
+  data_type?: string;
 }
 
 interface NodeMetaLike {
