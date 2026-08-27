@@ -53,6 +53,13 @@ import {
 import type { components } from "@/api/generated/schema";
 import { useI18n, usePreferences } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
+import {
+  extraLines,
+  parseSourceAssets,
+  serializeSourceAssets,
+  valueForRole,
+  withRole,
+} from "@/features/workflows/sourceAssetLines";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -83,6 +90,7 @@ import {
   sizeOptions,
   maxImages,
   supportsParameter,
+  sourceLimit,
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
 import { cn } from "@/lib/utils";
@@ -370,6 +378,44 @@ function WfNode({ data, selected }: NodeProps) {
  * 2026-08 的重做里全部收进来了(当时是十五处)。控件尺寸随之统一:输入框 h-8、
  * 内边距 px-2.5,不再有 p-1.5 和 h-9 两种说法。
  */
+/** 素材角色在检查器里的排列顺序与名字。和后端 ai/providers/base.SOURCE_ROLES 同一套。 */
+const SOURCE_ROLE_ORDER = [
+  "first_frame",
+  "last_frame",
+  "reference_image",
+  "reference_video",
+  "reference_audio",
+  "source_video",
+  "first_clip",
+  "driving_audio",
+] as const;
+
+const SOURCE_ROLE_LABELS: Record<(typeof SOURCE_ROLE_ORDER)[number], MessageKey> = {
+  first_frame: "genFirstFrame",
+  last_frame: "genLastFrame",
+  reference_image: "genReferenceImage",
+  reference_video: "genReferenceVideo",
+  reference_audio: "genReferenceAudio",
+  source_video: "genSourceVideo",
+  first_clip: "genFirstClip",
+  driving_audio: "genDrivingAudio",
+};
+
+/** 生成节点里的一个参数控件:枚举给下拉、区间给数字框、布尔给开关。 */
+interface GenField {
+  key: string;
+  label: string;
+  options: string[];
+  range?: { min: number; max: number };
+  toggle?: boolean;
+}
+
+/** 开关类参数 —— 描述符声明了才出现。有声比无声贵,不替用户默认打开。 */
+const TOGGLE_PARAMS: Array<[string, MessageKey]> = [
+  ["generate_audio", "wfGenAudio"],
+  ["multi_shot", "wfGenMultiShot"],
+];
+
 const FIELD_BOX =
   "grid gap-1.5 [&>span]:flex [&>span]:items-center [&>span]:gap-1 [&>span]:text-ui-sm [&>span]:font-medium [&>span]:text-foreground " +
   "[&_small]:text-ui-xs [&_small]:leading-[1.5] [&_small]:text-muted-foreground " +
@@ -486,7 +532,10 @@ const FIELD_LABEL_KEYS: Record<string, MessageKey> = {
  *  用哪个生成模型。三者各自铺成必填框时,面板里会出现两个都叫「模型」的字段(一个选择器、
  *  一个输入框),外加一个能和模型矛盾的「类型」(选了图像模型却把类型填成 video)。
  *  parameters 同理:按模型能力生成的下拉已经在管它,再铺一个原始 JSON 框就是同一份东西两处编辑。 */
-const GENERATE_SPECIAL_CONFIG_KEYS = new Set(["provider", "model", "kind", "parameters"]);
+//: 生成节点里由专区自己渲染的配置项,不走通用字段列表。source_assets 在这里,是因为它在配置里
+//: 是一段 `id:role` 的文本,而界面上该是**按角色一行一格** —— 让用户手写那段文本,角色名要背、
+//: 冒号要记,写错了还不报错(后端拿不到角色就按默认走,于是"我明明挂了尾帧"的片子里没有尾帧)。
+const GENERATE_SPECIAL_CONFIG_KEYS = new Set(["provider", "model", "kind", "parameters", "source_assets"]);
 
 const LLM_SPECIAL_CONFIG_KEYS = new Set([
   "preset",
@@ -2891,14 +2940,20 @@ function NodeInspector({
    * - **区间** —— min..max 内的任意整数(时长)。Seedance 2 收 4–15 秒,写成枚举就只剩
    *   两个档,而用户看不出少了什么。
    */
-  const genParamKeys: Array<{ key: string; label: string; options: string[]; range?: { min: number; max: number } }> = React.useMemo(() => {
+  const genParamKeys: GenField[] = React.useMemo(() => {
     if (!genModel) return [];
-    const out: Array<{ key: string; label: string; options: string[]; range?: { min: number; max: number } }> = [];
+    const out: GenField[] = [];
     const ratios = aspectRatioOptions(genModel);
     if (ratios.length > 0) out.push({ key: "aspect_ratio", label: t("wfGenAspectRatio"), options: ratios });
     if (genModel.kind === "image") {
       const sizes = sizeOptions(genModel);
       if (sizes.length > 0) out.push({ key: "size", label: t("wfGenSize"), options: sizes });
+      // 一次出几张。此前工作流里没有这一栏 —— 而它是图像那边最常调的一个,
+      // 生成面板有、节点没有,同一个模型两处能力不一样。
+      const images = maxImages(genModel);
+      if (supportsParameter(genModel, "num_images") && images > 1) {
+        out.push({ key: "num_images", label: t("wfGenNumImages"), options: [], range: { min: 1, max: images } });
+      }
     } else {
       const resolutions = videoResolutionOptions(genModel);
       if (resolutions.length > 0) out.push({ key: "resolution", label: t("wfGenResolution"), options: resolutions });
@@ -2911,9 +2966,28 @@ function NodeInspector({
         if (range) out.push({ key: "duration_seconds", label: t("wfGenDuration"), options: [], range });
       }
     }
+    // 开关类。**只在模型声明了的时候出现** —— 声明即接口,这里不按 kind 猜。
+    for (const [key, labelKey] of TOGGLE_PARAMS) {
+      if (supportsParameter(genModel, key)) out.push({ key, label: t(labelKey), options: [], toggle: true });
+    }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [genModel]);
+
+  /** 配置里那段 `id:role` 文本,解析成一条条素材。 */
+  const genSourceLines = React.useMemo(
+    () => parseSourceAssets(String(config.source_assets ?? "")),
+    [config.source_assets],
+  );
+  /** 这个模型认哪几种素材角色 —— 描述符说了算,不按 kind 猜。 */
+  const genSourceRoles = React.useMemo(
+    () => (genModel ? SOURCE_ROLE_ORDER.filter((role) => supportsParameter(genModel, role)) : []),
+    [genModel],
+  );
+  const genExtraSourceLines = React.useMemo(
+    () => extraLines(genSourceLines, genSourceRoles as readonly string[]),
+    [genSourceLines, genSourceRoles],
+  );
 
   /** 哪些动态下拉允许手填值。
    *
@@ -3316,12 +3390,25 @@ function NodeInspector({
             {/* 生成参数按所选模型的 capabilities 渲染 —— 目录声明支持什么就出现什么。 */}
             {genModel && genParamKeys.length > 0 && (
               <>
-                {genParamKeys.map(({ key, label, options, range }) => (
+                {genParamKeys.map(({ key, label, options, range, toggle }) => (
                   <div className={FIELD_BOX} key={key}>
                     <span>{label}</span>
                     {/* 区间给数字框(上下界来自描述符),枚举给下拉。写死成下拉的话,
                         4–15 秒的模型只剩两个档,而用户看不出少了什么。 */}
-                    {range ? (
+                    {toggle ? (
+                      <Select
+                        value={genParams[key] === undefined ? "" : String(Boolean(genParams[key]))}
+                        onValueChange={(next) => setGenParam(key, next)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={t("wfGenToggleDefault")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="true">{t("wfGenToggleOn")}</SelectItem>
+                          <SelectItem value="false">{t("wfGenToggleOff")}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : range ? (
                       <Input
                         type="number"
                         min={range.min}
@@ -3358,6 +3445,61 @@ function NodeInspector({
                   </div>
                 )}
               </>
+            )}
+            {/* 输入素材:**这个模型认哪几种角色就出哪几格**。每一格既能从素材库里选一份,
+                也能填上游节点的输出(`{{ai-generate-1.asset_id}}`)—— 工作流里后者才是常态,
+                所以用可手填的下拉,而不是纯选择器。 */}
+            {genSourceRoles.map((role) => (
+              <div className={FIELD_BOX} key={role}>
+                <span>
+                  {t(SOURCE_ROLE_LABELS[role])}
+                  {sourceLimit(genModel, role) > 1 && (
+                    <small className="ml-auto font-normal opacity-60">
+                      {t("wfGenSourceMultiHint")}
+                    </small>
+                  )}
+                </span>
+                <Combobox
+                  value={valueForRole(genSourceLines, role)}
+                  options={(assets.data ?? []).map((asset) => ({
+                    value: asset.id,
+                    label: asset.name || asset.original_filename,
+                  }))}
+                  placeholder={t("wfGenSourcePlaceholder")}
+                  emptyText={t("cmdkEmpty")}
+                  // 手填是**常态**而不是逃生口:工作流里这一格多半填的是上游输出
+                  // (`{{ai-generate-1.asset_id}}`),那种东西下拉里根本没有。
+                  allowCustomValue
+                  className="w-full"
+                  onValueChange={(next: string) =>
+                    setConfig("source_assets", serializeSourceAssets(withRole(genSourceLines, role, next)))
+                  }
+                />
+              </div>
+            ))}
+            {genExtraSourceLines.length > 0 && (
+              // 换了模型之后不再被支持的角色。**不能悄悄丢掉** —— 用户换个模型看看效果,
+              // 回来发现之前挂的东西没了,比多显示一行难受得多。
+              <div className={FIELD_BOX}>
+                <span>{t("wfGenSourceExtra")}</span>
+                <VarTextarea
+                  rows={Math.min(genExtraSourceLines.length + 1, 4)}
+                  value={serializeSourceAssets(genExtraSourceLines)}
+                  variables={variables}
+                  onChange={(next: string) =>
+                    setConfig(
+                      "source_assets",
+                      serializeSourceAssets([
+                        ...genSourceLines.filter(
+                          (line) => line.role && (genSourceRoles as readonly string[]).includes(line.role),
+                        ),
+                        ...parseSourceAssets(next),
+                      ]),
+                    )
+                  }
+                />
+                <small>{t("wfGenSourceExtraHint")}</small>
+              </div>
             )}
           </div>
         )}
