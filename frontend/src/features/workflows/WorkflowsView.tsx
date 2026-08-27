@@ -1998,15 +1998,18 @@ function WorkflowEditor({
         {/* 左边这组是**身份**(回哪儿去、这是谁),右边那组是**操作**。浮起来之后两组各自要有
             自己的底,否则它们会散在画布上,和节点抢注意力 —— 悬浮不等于没有边界。 */}
         <div className="flex items-center gap-1 rounded-full border border-border bg-panel/95 p-1 pr-2.5 shadow-[var(--shadow-panel)] backdrop-blur">
-        <button
-          type="button"
-          className="grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-transparent text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+        {/* 返回键**给它一个底**。透明底的图标钮在胶囊里没有自己的轮廓,左边和胶囊边缘之间那点
+            空白就显得忽大忽小 —— 有了底,它的占位是确定的,和右边的竖线、名字也就对齐了。 */}
+        <Button
+          variant="secondary"
+          size="icon"
+          className="h-8 w-8 shrink-0"
           onClick={onBack}
           title={t("navWorkflows")}
           aria-label={t("navWorkflows")}
         >
           <ChevronLeft size={16} />
-        </button>
+        </Button>
         {/* 返回和名字之间一根竖线:一个是"离开这里",一个是"这里是什么" —— 两件事,
             挨着放需要一道界。 */}
         <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-border" />
@@ -2462,6 +2465,10 @@ function WorkflowEditor({
                 registry={registry}
                 nodeTypes={nodeTypes}
                 workspaceId={workspaceId}
+                canUndo={canUndo}
+                canRedo={canRedo}
+                undo={undo}
+                redo={redo}
                 onChange={(body) =>
                   applyGraph({
                     ...graph,
@@ -2657,6 +2664,10 @@ function LoopBodyEditor({
   workspaceId,
   onChange,
   onClose,
+  canUndo,
+  canRedo,
+  undo,
+  redo,
 }: {
   loopNode: WorkflowGraph["nodes"][number];
   registry: Map<string, WorkflowNodeType>;
@@ -2664,6 +2675,11 @@ function LoopBodyEditor({
   workspaceId: string;
   onChange: (body: WorkflowGraph) => void;
   onClose: () => void;
+  /** 撤销/重做走主图那一套 —— 子图的每次编辑本来就是主图的一次变更。 */
+  canUndo: boolean;
+  canRedo: boolean;
+  undo: () => void;
+  redo: () => void;
 }) {
   const t = useI18n();
   const { options: subOptions } = useNodePicker(nodeTypes, t);
@@ -2682,22 +2698,46 @@ function LoopBodyEditor({
   const [nodes, setNodes] = React.useState<Node[]>(() => toFlowNodes(initialBody, registry));
   const [edges, setEdges] = React.useState<Edge[]>(() => toFlowEdges(initialBody, t, registry));
   // 循环体编辑器读同一个偏好:主画布是圆角折线、点进循环体却变回贝塞尔,会让人以为进错了地方。
-  const [edgeShape] = usePersistentTab<EdgeShape>("wf-edge-shape", "default", EDGE_SHAPES);
+  const [edgeShape, setEdgeShape] = usePersistentTab<EdgeShape>("wf-edge-shape", "default", EDGE_SHAPES);
   const shapedEdges = React.useMemo(
     () => edges.map((edge) => (edge.type === edgeShape ? edge : { ...edge, type: edgeShape })),
     [edges, edgeShape],
   );
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
 
+  //: 最后一次**我们自己发出去**的 body。用来分辨"这次 prop 变化是我引起的"还是"外面改的"。
+  const emitted = React.useRef<string>("");
+
   const commit = React.useCallback(
     (next: WorkflowGraph) => {
       setBody(next);
       setNodes(toFlowNodes(next, registry));
       setEdges(toFlowEdges(next, t, registry));
+      emitted.current = JSON.stringify(next);
       onChange(next);
     },
     [registry, onChange],
   );
+
+  /**
+   * **外面改了 body 就跟上。**
+   *
+   * 子图的每次编辑本来就走主图的 applyGraph(body 存在父节点的 config 里),所以撤销栈里
+   * 一直记着它 —— 缺的不是历史,是这一层不听外面的话:body 只在挂载时取一次,撤销把主图
+   * 改回去了,覆盖层还显示着改之前的样子。用户按下 Cmd+Z,画面纹丝不动,再按一次就退过头了。
+   *
+   * 只在**不是自己发出去的那一版**时才跟 —— 否则每次自己的编辑都会被 prop 回流覆盖一遍,
+   * 打字打到一半光标就跳。
+   */
+  React.useEffect(() => {
+    const incoming = JSON.stringify(initialBody);
+    if (incoming === emitted.current) return;
+    emitted.current = incoming;
+    setBody(structuredClone(initialBody));
+    setNodes(toFlowNodes(initialBody, registry));
+    setEdges(toFlowEdges(initialBody, t, registry));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialBody, registry]);
 
   const onNodesChange = React.useCallback(
     (changes: NodeChange[]) => {
@@ -2800,31 +2840,91 @@ function LoopBodyEditor({
   const selectedNode = selectedId ? (body.nodes.find((node) => node.id === selectedId) ?? null) : null;
 
   return (
-    <div className="absolute inset-0 z-30 grid grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-panel">
-      <div className="flex items-center gap-2.5 border-b border-border bg-card px-2 py-1.5">
-        <button type="button" className="inline-flex items-center gap-[5px] rounded-md border border-input bg-card px-2 py-1 text-xs text-foreground hover:bg-muted" onClick={onClose}>
-          <ArrowLeft size={14} /> {t("wfLoopBack")}
-        </button>
-        <span className="inline-flex items-center gap-[5px] text-ui-sm font-semibold text-foreground">
-          {loopNode.type === "subgraph" ? <Boxes size={13} /> : <Repeat size={13} />} {loopNode.name} ·{" "}
-          {t(loopNode.type === "subgraph" ? "wfSubgraphBody" : "wfLoopBody")}
-        </span>
-        <SearchableSelect
-          value=""
-          onValueChange={addNode}
-          searchPlaceholder={t("wfAddNode")}
-          options={subOptions.filter((option) => option.value !== "start")}
-          trigger={
-            <button
-              type="button"
-              className="ml-auto flex h-8 w-auto items-center gap-1 rounded-full border border-input bg-card px-3 text-xs text-foreground hover:bg-muted"
-              aria-label={t("wfAddNode")}
-            >
-              <Plus size={12} />
-              <span>{t("wfAddNode")}</span>
-            </button>
-          }
-        />
+    // 工具条和主编辑器一样浮在画布上 —— 子图也是画布,没有理由这里就顶一条实心横带。
+    <div className="absolute inset-0 z-30 grid overflow-hidden rounded-lg border border-border bg-panel">
+      <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex flex-wrap items-start justify-between gap-2 [&>*]:pointer-events-auto">
+        <div className="flex items-center gap-1 rounded-full border border-border bg-panel/95 p-1 pr-2.5 shadow-[var(--shadow-panel)] backdrop-blur">
+          <Button
+            variant="secondary"
+            size="icon"
+            className="h-8 w-8 shrink-0"
+            onClick={onClose}
+            aria-label={t("wfLoopBack")}
+            title={t("wfLoopBack")}
+          >
+            <ArrowLeft size={16} />
+          </Button>
+          <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-border" />
+          <span className="inline-flex items-center gap-[5px] text-ui-sm font-semibold text-foreground">
+            {loopNode.type === "subgraph" ? <Boxes size={13} /> : <Repeat size={13} />} {loopNode.name} ·{" "}
+            {t(loopNode.type === "subgraph" ? "wfSubgraphBody" : "wfLoopBody")}
+          </span>
+        </div>
+        {/* 这里**只放子图自己用得上的**:加节点、走线方式。
+            运行 / 就绪检查 / 导出 / 历史 / 删除都是主图或整份文档的事,放进来只会让人以为
+            自己能在子图里跑一次;撤销也没有 —— 子图编辑器没有历史栈,画一个按钮却不能用,
+            比没有更糟。 */}
+        <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
+          <SearchableSelect
+            value=""
+            onValueChange={addNode}
+            searchPlaceholder={t("wfAddNode")}
+            options={subOptions.filter((option) => option.value !== "start")}
+            trigger={
+              <button
+                type="button"
+                className="grid h-8 w-8 place-items-center rounded-full border-0 bg-transparent text-foreground transition-colors hover:bg-secondary"
+                aria-label={t("wfAddNode")}
+                title={t("wfAddNode")}
+              >
+                <Plus size={15} />
+              </button>
+            }
+          />
+          {/* 撤销/重做走的是**主图那一套历史** —— 子图的每次编辑本来就是主图的一次变更
+              (body 存在父节点的 config 里),所以这里不该另开一个栈:两个栈会各记各的,
+              退出子图之后再按撤销,退回去的是哪一步就说不清了。 */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            title={`${t("undo")} ⌘Z`}
+            aria-label={t("undo")}
+            disabled={!canUndo}
+            onClick={undo}
+          >
+            <Undo2 size={14} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            title={`${t("redo")} ⇧⌘Z`}
+            aria-label={t("redo")}
+            disabled={!canRedo}
+            onClick={redo}
+          >
+            <Redo2 size={14} />
+          </Button>
+          <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-border" />
+          {EDGE_SHAPES.map((shape) => {
+            const Icon = EDGE_SHAPE_ICON[shape];
+            return (
+              <Button
+                key={shape}
+                variant={edgeShape === shape ? "secondary" : "ghost"}
+                size="icon"
+                className={cn("h-8 w-8", edgeShape === shape && "bg-secondary text-foreground")}
+                aria-label={t(EDGE_SHAPE_LABEL[shape])}
+                title={t(EDGE_SHAPE_LABEL[shape])}
+                aria-pressed={edgeShape === shape}
+                onClick={() => setEdgeShape(shape)}
+              >
+                <Icon size={13} />
+              </Button>
+            );
+          })}
+        </div>
       </div>
       <div className="relative min-h-0">
         <ReactFlow
