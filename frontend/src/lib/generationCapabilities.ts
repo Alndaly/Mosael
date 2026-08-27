@@ -39,6 +39,36 @@ export function capabilityNumber(model: GenerationModel | null, key: string, fal
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
+/**
+ * 这个角色最多能挂几份。目录里没写就是 1 —— **保守的那一边**:多挂一份的下场是提交时被拒,
+ * 少挂一份只是少一张参考图。
+ *
+ * 数字来自各家接口自己的报错(见后端 domain/generation/catalog 的 source_limits),
+ * 不是我们定的:火山和海螺给九张参考图,万相给参考图 + 参考视频合计五份。
+ */
+export function sourceLimit(model: GenerationModel | null, role: string): number {
+  const limits = model?.capabilities?.source_limits;
+  if (!limits || typeof limits !== "object") return 1;
+  const value = Number((limits as Record<string, unknown>)[role]);
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 1;
+}
+
+/**
+ * 互斥的角色分组。同一次生成只能用其中一组。
+ *
+ * 首尾帧决定成片的第一格和最后一格;参考素材一帧都不出现在成片里,只影响风格与主体 ——
+ * 火山把这条画成硬约束(`first/last frame content cannot be mixed with reference media
+ * content`)。界面照着它把另一组灰掉,免得用户挂满了才在提交时吃一个英文 400。
+ */
+export function exclusiveSourceGroups(model: GenerationModel | null): string[][] {
+  const groups = model?.capabilities?.exclusive_source_groups;
+  if (!Array.isArray(groups)) return [];
+  return groups
+    .filter((group): group is unknown[] => Array.isArray(group))
+    .map((group) => group.map((role) => String(role)).filter(Boolean))
+    .filter((group) => group.length > 0);
+}
+
 export function parameterKeys(model: GenerationModel | null): string[] {
   return capabilityList(model, "parameter_keys", []);
 }

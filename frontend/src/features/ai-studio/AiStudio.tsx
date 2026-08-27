@@ -59,6 +59,8 @@ import {
   sizeOptions,
   maxImages,
   supportsParameter,
+  sourceLimit,
+  exclusiveSourceGroups,
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
 import { FrameSlotField } from "@/features/ai-studio/FrameSlotField";
@@ -69,10 +71,13 @@ import { SIDEBAR_HANDLE_CLASS, handleOffset, useSidePanels } from "@/lib/useResi
 import {
   EMPTY_SLOT,
   emptyFrames,
+  filledCount,
+  SOURCE_ROLES,
   frameUrlParameters,
   sourceAssetsFrom,
   type FrameSlot,
   type SourceRole,
+  type FrameSlots,
 } from "@/features/ai-studio/sourceFrames";
 import { cn } from "@/lib/utils";
 
@@ -91,7 +96,7 @@ type GenerationConfig = {
   resolution: string;
   aspectRatio: string;
   /** 带角色的输入素材:首帧 / 尾帧 / 参考图。它们是同一种东西,差的只是用途。 */
-  frames: Record<SourceRole, FrameSlot>;
+  frames: FrameSlots;
   usePreviousImage: boolean;
   workflow: string; // ComfyUI:选中的工作流路径("" = 用档案默认/内置文生图)
 };
@@ -319,6 +324,24 @@ function GenerateWorkspace({
   // 尾帧:首尾帧一起给 = 让模型从一张图动到另一张图。只有描述符声明了的模型才出这个控件 ——
   // 控件跟着描述符走,不按 kind 写死(见 docs/CONVENTIONS 那条棘轮)。
   const supportsLastFrame = selectedModel?.kind === "video" && supportsParameter(selectedModel, "last_frame");
+  // 视频的参考素材:参考图/参考视频/参考音频。它们和首尾帧**不是一回事** —— 首尾帧决定
+  // 成片的第一格和最后一格,参考素材一帧都不出现在成片里,只影响风格与主体。
+  const videoReferenceRoles = (["reference_image", "reference_video", "reference_audio"] as const).filter(
+    (role) => selectedModel?.kind === "video" && supportsParameter(selectedModel, role),
+  );
+  // 互斥由描述符说了算(各家接口的硬约束,不是我们的规矩):一组用上了,另一组就灰掉,
+  // 而不是让用户挂满了才在提交时吃一个说着数组下标的英文 400。
+  const lockedRoles = React.useMemo(() => {
+    const groups = exclusiveSourceGroups(selectedModel);
+    const used = new Set(
+      SOURCE_ROLES.filter((role) => filledCount(generationConfig.frames, role) > 0),
+    );
+    const active = groups.filter((group) => group.some((role) => used.has(role as SourceRole)));
+    if (active.length === 0) return new Set<string>();
+    return new Set(
+      groups.filter((group) => !active.includes(group)).flatMap((group) => group),
+    );
+  }, [selectedModel, generationConfig.frames]);
   // ComfyUI:拉取该实例保存的工作流,生成时可直接选一个(自动转换 + 注入提示词)。
   const isComfyui = selectedModel?.provider === "comfyui";
   const comfyWorkflows = useQuery({
@@ -454,24 +477,24 @@ function GenerateWorkspace({
   const selectedCapabilityMissing = selectedModel ? !providerById.has(selectedModel.provider_profile_id) : false;
   const setConfigValue = (key: keyof GenerationConfig, value: string) =>
     setGenerationConfig((current) => ({ ...current, [key]: value }));
-  const setFrame = (role: SourceRole, slot: FrameSlot) =>
-    setGenerationConfig((current) => ({ ...current, frames: { ...current.frames, [role]: slot } }));
+  const setFrames = (role: SourceRole, slots: FrameSlot[]) =>
+    setGenerationConfig((current) => ({ ...current, frames: { ...current.frames, [role]: slots } }));
   const setReferenceImageAsset = (asset: Asset) =>
     setGenerationConfig((current) => ({
       ...current,
-      frames: { ...current.frames, reference_image: { url: "", assetId: asset.id, assetName: asset.name } },
+      frames: { ...current.frames, reference_image: [{ url: "", assetId: asset.id, assetName: asset.name }] },
       usePreviousImage: false,
     }));
   const clearReferenceImage = () =>
     setGenerationConfig((current) => ({
       ...current,
-      frames: { ...current.frames, reference_image: { ...EMPTY_SLOT } },
+      frames: { ...current.frames, reference_image: [{ ...EMPTY_SLOT }] },
       usePreviousImage: false,
     }));
   const usePreviousImageAsReference = () =>
     setGenerationConfig((current) => ({
       ...current,
-      frames: { ...current.frames, reference_image: { ...EMPTY_SLOT } },
+      frames: { ...current.frames, reference_image: [{ ...EMPTY_SLOT }] },
       usePreviousImage: true,
     }));
   const selectEngine = (value: string) => {
@@ -526,11 +549,11 @@ function GenerateWorkspace({
   );
   const effectiveReferenceImageAssetId =
     selectedModel?.kind === "image"
-      ? generationConfig.frames.reference_image.assetId ||
+      ? generationConfig.frames.reference_image[0]?.assetId ||
         (generationConfig.usePreviousImage ? latestImageResult?.result_asset_id ?? "" : "")
       : "";
   const effectiveReferenceImageName =
-    generationConfig.frames.reference_image.assetName ||
+    generationConfig.frames.reference_image[0]?.assetName ||
     (effectiveReferenceImageAssetId && latestImageResult?.result_asset_id === effectiveReferenceImageAssetId
       ? t("genPreviousImage")
       : "");
@@ -579,7 +602,15 @@ function GenerateWorkspace({
           source_assets: sourceAssetsFrom(
             // 「用上一张结果」是把上一次的产物**当场**当参考图,它不落在配置里(配置只记
             // 用户挑了什么),所以在这里合进去。
-            { ...generationConfig.frames, reference_image: { ...generationConfig.frames.reference_image, assetId: effectiveReferenceImageAssetId } },
+            {
+              ...generationConfig.frames,
+              reference_image: effectiveReferenceImageAssetId
+                ? [
+                    { ...(generationConfig.frames.reference_image[0] ?? EMPTY_SLOT), assetId: effectiveReferenceImageAssetId },
+                    ...generationConfig.frames.reference_image.slice(1),
+                  ]
+                : generationConfig.frames.reference_image,
+            },
             (role) => supportsParameter(selectedModel, role),
           ),
         }),
@@ -923,7 +954,7 @@ function GenerateWorkspace({
                         <Upload size={13} />
                         {uploadReferenceImage.isPending ? t("genFirstFrameUploading") : t("genReferenceImageUpload")}
                       </Button>
-                      {latestImageResult?.result_asset_id && !generationConfig.usePreviousImage && !generationConfig.frames.reference_image.assetId && (
+                      {latestImageResult?.result_asset_id && !generationConfig.usePreviousImage && !generationConfig.frames.reference_image[0]?.assetId && (
                         <Button type="button" variant="ghost" size="sm" onClick={usePreviousImageAsReference}>
                           {t("genUsePreviousImage")}
                         </Button>
@@ -1027,20 +1058,41 @@ function GenerateWorkspace({
                 {supportsFirstFrame && (
                   <FrameSlotField
                     role="first_frame"
-                    slot={generationConfig.frames.first_frame}
-                    onChange={(slot) => setFrame("first_frame", slot)}
+                    slots={generationConfig.frames.first_frame}
+                    limit={sourceLimit(selectedModel, "first_frame")}
+                    onChange={(slots) => setFrames("first_frame", slots)}
                     workspaceId={workspace.id}
+                    hint={t("genKeyframeHint")}
+                    disabled={lockedRoles.has("first_frame")}
+                    disabledReason={t("genSourceGroupsExclusive")}
                   />
                 )}
                 {supportsLastFrame && (
                   <FrameSlotField
                     role="last_frame"
-                    slot={generationConfig.frames.last_frame}
-                    onChange={(slot) => setFrame("last_frame", slot)}
+                    slots={generationConfig.frames.last_frame}
+                    limit={sourceLimit(selectedModel, "last_frame")}
+                    onChange={(slots) => setFrames("last_frame", slots)}
                     workspaceId={workspace.id}
                     hint={t("genLastFrameHint")}
+                    disabled={lockedRoles.has("last_frame")}
+                    disabledReason={t("genSourceGroupsExclusive")}
                   />
                 )}
+                {videoReferenceRoles.map((role, index) => (
+                  <FrameSlotField
+                    key={role}
+                    role={role}
+                    slots={generationConfig.frames[role]}
+                    limit={sourceLimit(selectedModel, role)}
+                    onChange={(slots) => setFrames(role, slots)}
+                    workspaceId={workspace.id}
+                    // 这一句只说一遍:三个参考控件挨在一起,每个都重复一次就成了噪音。
+                    hint={index === 0 ? t("genReferenceHint") : undefined}
+                    disabled={lockedRoles.has(role)}
+                    disabledReason={t("genSourceGroupsExclusive")}
+                  />
+                ))}
               </>
             )}
           </>
