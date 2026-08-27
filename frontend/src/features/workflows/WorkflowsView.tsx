@@ -22,7 +22,7 @@ import {
   type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { AlertTriangle, AlignLeft, AppWindow, ArrowLeft, AudioLines, Bell, BookOpen, Bot, Boxes, Braces, CaseSensitive, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleCheck, Code2, Download, FileOutput, FileUp, Filter, Flag, FolderInput, FolderPlus, GitBranch, Globe, History, Hourglass, Keyboard, Languages, Link2, ListChecks, Loader2, Mic, MousePointer2, MousePointerClick, PanelTopClose, PenLine, Pencil, Play, Plus, Redo2, RefreshCw, Repeat, Rocket, ScanText, Search, SkipForward, Sparkles, Spline, Tags, Timer, Trash2, Type, Undo2, Wand2, Waypoints, Workflow as WorkflowIcon, Wrench, X, XCircle, type LucideIcon } from "lucide-react";
+import { AlertTriangle, AlignLeft, Film, Image as ImageIcon, AppWindow, ArrowLeft, AudioLines, Bell, BookOpen, Bot, Boxes, Braces, CaseSensitive, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleCheck, Code2, Download, FileOutput, FileUp, Filter, Flag, FolderInput, FolderPlus, GitBranch, Globe, History, Hourglass, Keyboard, Languages, Link2, ListChecks, Loader2, Mic, MousePointer2, MousePointerClick, PanelTopClose, PenLine, Pencil, Play, Plus, Redo2, RefreshCw, Repeat, Rocket, ScanText, Search, SkipForward, Sparkles, Spline, Tags, Timer, Trash2, Type, Undo2, Wand2, Waypoints, Workflow as WorkflowIcon, Wrench, X, XCircle, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -104,6 +104,7 @@ import { blurFloatingPanels, hasFocusedFloatingPanel } from "@/features/workflow
 import {
   analyzeWorkflow,
   extractRefs,
+  fieldDataType,
   inputType,
   outputType,
   typesCompatible,
@@ -148,6 +149,13 @@ const WF_NODE_COLORS: Record<string, string> = {
 };
 
 /** 节点类型 → 图标(与节点面板/画布一致)。 */
+/** 素材节点按**素材本身**取图标 —— 图片、视频、音频各是各的样子。 */
+const ASSET_KIND_ICONS: Record<string, React.ReactNode> = {
+  image: <ImageIcon size={13} />,
+  video: <Film size={13} />,
+  audio: <AudioLines size={13} />,
+};
+
 const NODE_ICONS: Record<string, React.ReactNode> = {
   start: <Flag size={13} />,
   llm: <Sparkles size={13} />,
@@ -203,6 +211,12 @@ interface WfNodeData extends Record<string, unknown> {
   runAssets?: string[];
   /** 非素材产出的一行摘要 —— 节点上直接看见"这步给了什么"。 */
   runSummary?: string;
+  /** **配置里指向的素材**(不是跑出来的)。素材节点没跑之前也该看得见自己指着哪张图。 */
+  configAssetId?: string;
+  /** 一行配置摘要:这个节点被配成做什么。没有它,一屏节点长得只有标题不一样。 */
+  configSummary?: string;
+  /** 每个输入接点收什么类型 —— 卡片按它给接点上色。 */
+  inputTypes?: Record<string, string>;
 }
 
 /** 画布节点:语义色图标 + 名称 + 类型标签,全平面卡片。
@@ -252,6 +266,19 @@ function NodeResultPreview({ assetIds }: { assetIds: string[] }) {
 function WfNode({ data, selected }: NodeProps) {
   const t = useI18n();
   const d = data as WfNodeData;
+  // 素材节点的图标要跟着**这份素材本身**走:一张图和一段视频不该长同一个样子。
+  // 取不到就退回类型图标 —— 素材可能已被删除,那是正常路径。
+  const configAsset = useQuery({
+    queryKey: ["asset", d.configAssetId],
+    queryFn: () => api<Asset>(`/api/assets/${d.configAssetId}`),
+    enabled: Boolean(d.configAssetId),
+    staleTime: 60_000,
+    retry: false,
+  });
+  const kindIcon = ASSET_KIND_ICONS[configAsset.data?.kind ?? ""];
+  const subtitle = d.configAssetId
+    ? ""
+    : d.configSummary || (d.label !== d.typeLabel ? d.typeLabel : "");
   const isCondition = d.nodeType === "condition";
   const badge = d.badge ?? null;
   const inputs = d.inputs ?? [];
@@ -262,7 +289,9 @@ function WfNode({ data, selected }: NodeProps) {
     <div
       className={cn(
         "group/node relative flex min-w-[172px] flex-col gap-1.5 rounded-lg border border-border bg-panel px-3 py-[9px] transition-[border-color] duration-100 hover:border-border-strong",
-        showIo && "min-w-[210px]",
+        // **两侧都有接点时才撑宽。** 单侧接点(比如只有输出的 LLM)撑到 210px 的话,那一列被
+        // 推到最右边,左半张卡片是空的 —— 看着像排版坏了,其实是宽度给多了。
+        showIo && inputs.length > 0 && outputs.length > 0 && "min-w-[210px]",
         badge && !selected && (badge.severity === "error"
           ? "border-[color-mix(in_srgb,var(--destructive)_60%,var(--border))]"
           : "border-[color-mix(in_srgb,#d97706_55%,var(--border))]"),
@@ -302,13 +331,22 @@ function WfNode({ data, selected }: NodeProps) {
         </span>
       )}
       <div className="flex items-center gap-2">
-        <span className="grid h-7 w-7 flex-none place-items-center rounded-md bg-[color-mix(in_srgb,var(--wf-node-color,var(--primary))_12%,transparent)] text-[color:var(--wf-node-color,var(--primary))]" style={{ "--wf-node-color": WF_NODE_COLORS[d.nodeType] } as React.CSSProperties}>{NODE_ICONS[d.nodeType] ?? <Type size={13} />}</span>
-        <span className="grid min-w-0 gap-px [&_small]:text-ui-2xs [&_small]:text-muted-foreground [&_strong]:truncate [&_strong]:text-ui-sm">
+        <span className="grid h-7 w-7 flex-none place-items-center rounded-md bg-[color-mix(in_srgb,var(--wf-node-color,var(--primary))_12%,transparent)] text-[color:var(--wf-node-color,var(--primary))]" style={{ "--wf-node-color": WF_NODE_COLORS[d.nodeType] } as React.CSSProperties}>{kindIcon ?? NODE_ICONS[d.nodeType] ?? <Type size={13} />}</span>
+        <span className="grid min-w-0 gap-px [&_small]:truncate [&_small]:text-ui-2xs [&_small]:text-muted-foreground [&_strong]:truncate [&_strong]:text-ui-sm">
           <strong>{d.label}</strong>
-          {/* 未改名时 label 就是类型名,别再重复显示一行类型。 */}
-          {d.label !== d.typeLabel && <small>{d.typeLabel}</small>}
+          {/* **副标题只有一行**,而且优先说"这个节点被配成做什么"(模型名、被调的工作流),
+              其次才是类型名 —— 类型名在同一屏里重复度最高,信息量最低。
+              配置摘要此前是卡片里一条满宽的灰底,读起来像个禁用的输入框;它本来就是标题的
+              附注,归到副标题位就不用再画一个框。
+              指着某份素材时两者都不显示:图标已经说了是图还是视频,底下还有缩略图。 */}
+          {subtitle && <small title={subtitle}>{subtitle}</small>}
         </span>
       </div>
+      {/* 配置指向的素材:**没跑之前也该看得见自己指着哪张图**。跑过之后让位给产出预览 ——
+          两张图并排会让人分不清哪张是输入哪张是输出。 */}
+      {d.configAssetId && (d.runAssets ?? []).length === 0 && (
+        <NodeResultPreview assetIds={[d.configAssetId]} />
+      )}
       <NodeResultPreview assetIds={d.runAssets ?? []} />
       {/* 非素材的产出:模型回的那段话、抽出来的那个值。**跑完了却看不见**是此前最别扭的地方 ——
           想知道这一步到底给了什么,得在后面再接一个"通知"节点把它打出来。
@@ -353,7 +391,7 @@ function WfNode({ data, selected }: NodeProps) {
                   type="target"
                   position={Position.Left}
                   className="h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-primary! bg-panel! data-[dtype=any]:border-border-strong! data-[dtype=asset]:border-[#c026d3]! data-[dtype=json]:border-[#0891b2]! data-[dtype=number]:border-[#d97706]! data-[dtype=sequence]:border-[#e11d48]! data-[dtype=text]:border-[#64748b]! left-[-12px]!"
-                  data-dtype={inputType(d.nodeType, key)}
+                  data-dtype={(d.inputTypes ?? {})[key] ?? "any"}
                 />
                 {/* 有本地化标签走正文字体;裸标识符(如 items)与输出侧同用 mono,同卡不混排。 */}
                 <span className={cn("whitespace-nowrap text-ui-2xs text-muted-foreground", !FIELD_LABEL_KEYS[key] && "font-mono")}>
@@ -916,6 +954,37 @@ function WorkflowCard({ workflow }: { workflow: Workflow }) {
   );
 }
 
+/** 配置里那份素材的 id。
+ *
+ *  按**字段类型**找(注册表里标了 asset 的那些),而不是认死"素材节点" —— 别的节点也可能
+ *  收素材,认类型的话它们自动都有图,认名字就得一个个补。
+ *
+ *  值是模板({{上游.asset_id}})时返回空:那时候还不知道会是哪一份,画不出图来。 */
+function configAsset(node: WorkflowGraph["nodes"][number], registry: Map<string, WorkflowNodeType>): string {
+  for (const [key, value] of Object.entries(node.config ?? {})) {
+    if (inputType(registry, node.type, key) !== "asset") continue;
+    const text = String(value ?? "").trim();
+    if (text && !text.includes("{{")) return text;
+  }
+  return "";
+}
+
+/** 一行配置摘要:这个节点被配成做什么。
+ *
+ *  一屏节点如果只有标题不一样,想知道"这个 LLM 用的哪个模型"就得一个个点开。挑的是**最能
+ *  区分同类节点**的那个字段,而不是把配置全铺上去 —— 卡片是名片,不是配置表。 */
+const SUMMARY_KEYS = ["model", "workflow_id", "voice_id", "seconds", "url", "tool_name"] as const;
+
+function configSummary(node: WorkflowGraph["nodes"][number]): string {
+  const config = node.config ?? {};
+  for (const key of SUMMARY_KEYS) {
+    const text = String(config[key] ?? "").trim();
+    // 模板不摘要:`{{a.b}}` 摆在卡片上既占地方又什么都没说明。
+    if (text && !text.includes("{{")) return text;
+  }
+  return "";
+}
+
 function toFlowNodes(graph: WorkflowGraph, registry: Map<string, WorkflowNodeType>): Node[] {
   return (graph.nodes ?? []).map((node) => ({
     id: node.id,
@@ -928,12 +997,19 @@ function toFlowNodes(graph: WorkflowGraph, registry: Map<string, WorkflowNodeTyp
       inputs: node.inputs ?? [],
       // 过滤通配输出(如 start 的 *params),它们不是可连接的具体接点。
       outputs: (registry.get(node.type)?.outputs ?? []).filter((output) => !output.startsWith("*")),
+      configAssetId: configAsset(node, registry),
+      // 接点类型在这里算好带走:节点卡片是 react-flow 的渲染组件,拿不到 registry,
+      // 而"这个槽收什么"是注册表的知识,不该在卡片里另找一条路问。
+      inputTypes: Object.fromEntries(
+        (node.inputs ?? []).map((key) => [key, inputType(registry, node.type, key)]),
+      ),
+      configSummary: configSummary(node),
     } satisfies WfNodeData,
     deletable: true,
   }));
 }
 
-function toFlowEdges(graph: WorkflowGraph, t: ReturnType<typeof useI18n>): Edge[] {
+function toFlowEdges(graph: WorkflowGraph, t: ReturnType<typeof useI18n>, registry: Map<string, WorkflowNodeType>): Edge[] {
   const nodeType = new Map((graph.nodes ?? []).map((node) => [node.id, node.type]));
   return (graph.edges ?? []).map((edge) => {
     // 数据边:接输出接点 out:x → 输入接点 in:y。蓝色流动虚线,不带箭头(终点是接点)。
@@ -944,7 +1020,7 @@ function toFlowEdges(graph: WorkflowGraph, t: ReturnType<typeof useI18n>): Edge[
         edge.target_input &&
         !typesCompatible(
           outputType(nodeType.get(edge.source) ?? "", edge.source_output),
-          inputType(nodeType.get(edge.target) ?? "", edge.target_input),
+          inputType(registry, nodeType.get(edge.target) ?? "", edge.target_input),
         );
       return {
         id: edge.id,
@@ -1075,7 +1151,7 @@ function WorkflowEditor({
   const canUndo = useStore(graphStore.temporal, (s) => s.pastStates.length > 0);
   const canRedo = useStore(graphStore.temporal, (s) => s.futureStates.length > 0);
   const [nodes, setNodes] = React.useState<Node[]>(() => toFlowNodes(workflow.graph as unknown as WorkflowGraph, registry));
-  const [edges, setEdges] = React.useState<Edge[]>(() => toFlowEdges(workflow.graph as unknown as WorkflowGraph, t));
+  const [edges, setEdges] = React.useState<Edge[]>(() => toFlowEdges(workflow.graph as unknown as WorkflowGraph, t, registry));
   const [dirty, setDirty] = React.useState(false);
   const [showHistory, setShowHistory] = React.useState(false);
 
@@ -1083,7 +1159,7 @@ function WorkflowEditor({
   const syncFromGraph = React.useCallback(() => {
     const next = graphStore.getState().graph;
     setNodes(toFlowNodes(next, registry));
-    setEdges(toFlowEdges(next, t));
+    setEdges(toFlowEdges(next, t, registry));
     setDirty(true);
   }, [graphStore, registry]);
   const undo = React.useCallback(() => {
@@ -1118,6 +1194,15 @@ function WorkflowEditor({
   const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(null);
   const [renaming, setRenaming] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
+  // 导出走后端信封(格式和版本的权威在后端),落成 .openstudio-workflow.json —— 和列表页
+  // 右键那条是同一个函数,不另写一份:两份迟早会在文件名或格式上分叉。
+  const exportFile = useMutation({
+    mutationFn: async () => {
+      const envelope = await exportWorkflowFile(workflow.id);
+      saveJsonToDisk(`${workflow.name}.openstudio-workflow.json`, envelope);
+    },
+    onError: (error: Error) => toast.error(t("wfExportFailed"), { description: error.message }),
+  });
   // 默认关闭:进工作流页是来看画布的,助手默认占掉右侧近一半、把节点挤到看不见。
   // 需要时点顶栏「AI 助手」;开关状态记住,下次进来照旧。
   const [agentOpen, setAgentOpen] = React.useState(() => localStorage.getItem(AGENT_PANEL_KEY) === "1");
@@ -1206,7 +1291,7 @@ function WorkflowEditor({
       const next = structuredClone(workflow.graph as unknown as WorkflowGraph);
       setGraph(next);
       rebuildNodes(next);
-      setEdges(toFlowEdges(next, t));
+      setEdges(toFlowEdges(next, t, registry));
     }
   }, [workflow.updated_at, workflow.graph, dirty, rebuildNodes]);
 
@@ -1214,7 +1299,7 @@ function WorkflowEditor({
     (next: WorkflowGraph, options?: { coalesce?: boolean }) => {
       setGraph(next, options);
       rebuildNodes(next);
-      setEdges(toFlowEdges(next, t));
+      setEdges(toFlowEdges(next, t, registry));
       setDirty(true);
     },
     [rebuildNodes],
@@ -1312,7 +1397,7 @@ function WorkflowEditor({
     const pastedIds = new Set(newNodes.map((node) => node.id));
     // 只让粘贴出来的新节点选中(旧选区取消),方便立刻整体拖走。
     setNodes(toFlowNodes(next, registry).map((node) => ({ ...node, selected: pastedIds.has(node.id) })));
-    setEdges(toFlowEdges(next, t));
+    setEdges(toFlowEdges(next, t, registry));
     setDirty(true);
     setSelectedNodeId(newNodes[0].id);
     return true;
@@ -1419,7 +1504,7 @@ function WorkflowEditor({
             ),
           };
           setNodes(toFlowNodes(next, registry));
-          setEdges(toFlowEdges(next, t));
+          setEdges(toFlowEdges(next, t, registry));
           return next;
         });
         setDirty(true);
@@ -1436,7 +1521,7 @@ function WorkflowEditor({
             { id, source: connection.source!, target: connection.target!, source_handle: srcHandle ?? null },
           ],
         };
-        setEdges(toFlowEdges(next, t));
+        setEdges(toFlowEdges(next, t, registry));
         return next;
       });
       setDirty(true);
@@ -2058,6 +2143,20 @@ function WorkflowEditor({
             })}
           </div>
           <div className="mx-1 h-[18px] w-px bg-border" />
+          {/* 导出。**放在这一组**(历史/删除)而不是运行旁边:这几个都是对"这份工作流"整体
+              做的事,而运行、就绪检查、加节点是对**画布内容**做的事。此前导出只藏在列表页的
+              右键菜单里 —— 而人想导出的时机,恰恰是刚在详情页里把它调好的那一刻。 */}
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={t("wfExport")}
+            title={t("wfExport")}
+            className="h-8 w-8"
+            loading={exportFile.isPending}
+            onClick={() => exportFile.mutate()}
+          >
+            <Download size={14} />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -2104,7 +2203,11 @@ function WorkflowEditor({
           {/* inset-0 一点不留:留边就会在四角露出没被盖住的缝。虚线框收到中间那块提示上,
               而不是描在整块区域的边上 —— 后者会和画布自己的圆角错开。 */}
           {(canvasDrop.active || dropUpload.isPending) && (
-            <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-lg bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]">
+            // **要盖过画布上的一切**,包括节点检查器那张浮层(z-30)和子流程面板(同样 z-30)。
+            // z-20 的时候,选中某个节点再拖文件进来,检查器就压在提示上面 —— 用户看到的是
+            // 半块被切掉的虚线框,不知道松手到底会发生什么。拖拽反馈是**全局态**,不该和
+            // 画布里某个局部面板比高矮。
+            <div className="pointer-events-none absolute inset-0 z-40 grid place-items-center rounded-lg bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]">
               <span className="grid justify-items-center gap-2 rounded-lg border-2 border-dashed border-primary px-6 py-4 text-ui-md font-semibold text-primary">
                 {dropUpload.isPending ? (
                   <>
@@ -2462,7 +2565,7 @@ function LoopBodyEditor({
   }, []);
   const [body, setBody] = React.useState<WorkflowGraph>(() => structuredClone(initialBody));
   const [nodes, setNodes] = React.useState<Node[]>(() => toFlowNodes(initialBody, registry));
-  const [edges, setEdges] = React.useState<Edge[]>(() => toFlowEdges(initialBody, t));
+  const [edges, setEdges] = React.useState<Edge[]>(() => toFlowEdges(initialBody, t, registry));
   // 循环体编辑器读同一个偏好:主画布是圆角折线、点进循环体却变回贝塞尔,会让人以为进错了地方。
   const [edgeShape] = usePersistentTab<EdgeShape>("wf-edge-shape", "default", EDGE_SHAPES);
   const shapedEdges = React.useMemo(
@@ -2475,7 +2578,7 @@ function LoopBodyEditor({
     (next: WorkflowGraph) => {
       setBody(next);
       setNodes(toFlowNodes(next, registry));
-      setEdges(toFlowEdges(next, t));
+      setEdges(toFlowEdges(next, t, registry));
       onChange(next);
     },
     [registry, onChange],
@@ -2784,7 +2887,7 @@ function NodeInspector({
     enabled: node.type === "synthesize_speech",
   });
   // 强类型 asset 字段(如 素材转写.asset_id)手动模式下,给工作区素材下拉,免手填 UUID。
-  const hasAssetField = specs.some(([key]) => inputType(node.type, key) === "asset");
+  const hasAssetField = specs.some(([, spec]) => fieldDataType(spec) === "asset");
   const assets = useQuery({
     queryKey: ["workflow-assets", workspaceId],
     queryFn: () => listAssets(workspaceId),
@@ -3058,7 +3161,7 @@ function NodeInspector({
       return (callableWorkflows.data ?? []).map((wf) => ({ value: wf.id, label: wf.name }));
     }
     // asset 型字段:工作区素材下拉(label 用素材名,回退原始文件名)。
-    if (inputType(node.type, key) === "asset") {
+    if (fieldDataType(spec as ConfigSpec | undefined) === "asset") {
       return (assets.data ?? []).map((asset) => ({
         value: asset.id,
         label: asset.name || asset.original_filename,

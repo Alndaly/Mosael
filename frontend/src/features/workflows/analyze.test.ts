@@ -22,7 +22,9 @@ const registry: RegistryLike = {
       ai_generate: {
         config: { provider: { type: "string", required: true }, prompt: { type: "template", required: true } },
       },
-      transcribe_asset: { config: { asset_id: { type: "template", required: true } } },
+      // `data_type` 由后端按字段名推出来(见 domain/workflows.config_data_type),随节点声明
+      // 一起发过来 —— 前端不再自己维护一张"哪个字段是素材"的表。
+      transcribe_asset: { config: { asset_id: { type: "template", required: true, data_type: "asset" } } },
       template: { config: { template: { type: "template", required: true } } },
       subgraph: { config: { inputs: { type: "object" }, body: { type: "graph" }, output: { type: "template" } } },
     };

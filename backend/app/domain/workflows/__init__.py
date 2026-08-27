@@ -45,6 +45,36 @@ class WorkflowDomainError(RuntimeError):
 #: 浏览器要登录态,插件要先装。列表顺序即面板顺序,前端不再排第二次。
 NODE_CATEGORIES: tuple[str, ...] = ("流程", "AI", "素材", "数据", "发布", "浏览器", "插件")
 
+#: 一个配置字段**装的是什么东西** —— 素材?时间线?还是随便什么值。
+#:
+#: 界面靠它决定给不给素材选择器、画不画缩略图、连线时类型对不对得上。此前这张表是**前端
+#: 自己抄的一份**(features/workflows/analyze.ts 的 INPUT_TYPES),于是:
+#:
+#:   · 「素材」节点本身就漏了 —— 它整个存在的意义就是指向一份素材,却拿不到素材选择器,
+#:     用户只能手打一串十六进制;
+#:   · 插件节点**永远**不可能被那张表覆盖,它们是运行时才知道的;
+#:   · 新加一种节点,忘了改前端那张表不会报错,只是安静地少了选择器和校验。
+#:
+#: 所以改成**按字段名推**,而不是逐个登记:沿用 asset_id / sequence_id 这套既有命名的新节点
+#: 自动就有这些能力,不需要谁记得去补一张表。要覆盖的话在 spec 里显式写 data_type。
+_DATA_TYPE_BY_NAME = (
+    ("asset_ids", "asset"),
+    ("asset_id", "asset"),
+    ("sequence_id", "sequence"),
+)
+
+
+def config_data_type(key: str, spec: dict[str, Any]) -> str:
+    """这个配置字段装的是什么。推不出来就返回空串(界面按"随便什么值"处理)。"""
+    explicit = str(spec.get("data_type") or "").strip()
+    if explicit:
+        return explicit
+    for name, data_type in _DATA_TYPE_BY_NAME:
+        if key == name or key.endswith(f"_{name}"):
+            return data_type
+    return ""
+
+
 NODE_TYPES: dict[str, dict[str, Any]] = {
     "start": {
         "category": "流程",

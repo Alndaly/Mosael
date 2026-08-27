@@ -122,3 +122,44 @@ def test_角色写错了当场拦住() -> None:
 
     with pytest.raises(GenerationDomainError, match="未知的素材角色"):
         parse_source_assets("a:头一帧", kind="video")
+
+
+def test_素材和时间线字段自己会声明类型() -> None:
+    """界面靠字段类型决定给不给素材选择器、画不画缩略图、连线类型对不对得上。
+
+    这份知识此前是**前端自己抄的一张表**(features/workflows/analyze.ts 的 INPUT_TYPES),
+    于是三件事一起坏:
+
+      · 「素材」节点本身就漏了 —— 它整个存在的意义就是指向一份素材,却拿不到素材选择器,
+        用户只能手打一串十六进制;
+      · asset_tag / asset_update / browser_upload 也漏了;
+      · **插件节点永远不可能被那张表覆盖** —— 它们是运行时才知道的。
+
+    加一种节点忘了补表不会报错,只是安静地少了选择器和校验。所以改成按字段名推,这条钉住它。
+    """
+    from app.domain.workflows import NODE_TYPES, config_data_type
+
+    for name, spec in NODE_TYPES.items():
+        for key, meta in (spec.get("config") or {}).items():
+            if key.endswith("asset_id") or key.endswith("asset_ids"):
+                assert config_data_type(key, meta) == "asset", f"{name}.{key} 没被认成素材"
+            if key.endswith("sequence_id"):
+                assert config_data_type(key, meta) == "sequence", f"{name}.{key} 没被认成时间线"
+
+
+def test_显式声明压过命名约定() -> None:
+    """约定覆盖不到的字段(名字不叫 asset_id 但装的就是素材)要能显式指定,
+    否则这条约定就从"省事"变成了"挡路"。"""
+    from app.domain.workflows import config_data_type
+
+    assert config_data_type("whatever", {"data_type": "asset"}) == "asset"
+    assert config_data_type("whatever", {}) == ""
+
+
+def test_节点类型接口把类型发出去() -> None:
+    """推出来了但没发给前端,等于没推。"""
+    from app.api.routes.workflows import _with_data_type
+
+    assert _with_data_type("asset_id", {"type": "template"})["data_type"] == "asset"
+    # 推不出来的字段不该凭空多一个空 data_type —— 那会让前端以为它被声明过。
+    assert "data_type" not in _with_data_type("prompt", {"type": "template"})

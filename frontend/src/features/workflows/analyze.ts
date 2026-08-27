@@ -54,24 +54,30 @@ const OUTPUT_TYPES: Record<string, Record<string, DataType>> = {
   template: { text: "text" },
 };
 
-// 输入字段的期望类型。只标"强类型"槽(asset/sequence/number);其余按 any(宽松,不提示)。
-const INPUT_TYPES: Record<string, Record<string, DataType>> = {
-  transcribe_asset: { asset_id: "asset" },
-  export_sequence: { sequence_id: "sequence" },
-  publish: { asset_id: "asset" },
-  inspect_sequence: { sequence_id: "sequence" },
-  edit_timeline: { sequence_id: "sequence" },
-  timeline_append: { sequence_id: "sequence", asset_id: "asset" },
-  timeline_add_track: { sequence_id: "sequence" },
-  timeline_clear: { sequence_id: "sequence" },
-};
+/**
+ * 一个输入字段**装的是什么** —— 素材?时间线?还是随便什么值。
+ *
+ * **权威在后端**:节点声明里每个配置字段带着 `data_type`(见 domain/workflows.config_data_type,
+ * 按 asset_id / sequence_id 这套命名自动推)。这里只负责读。
+ *
+ * 此前这是前端自己抄的一张表,后果是三件事一起坏:「素材」节点本身就漏了(它整个存在的意义
+ * 就是指向一份素材,却拿不到素材选择器,用户只能手打一串十六进制)、asset_tag / asset_update /
+ * browser_upload 也漏了、而**插件节点永远不可能被那张表覆盖** —— 它们是运行时才知道的。
+ * 加一种节点忘了补表不会报错,只是安静地少了选择器和类型校验。
+ */
+export function fieldDataType(spec: ConfigSpecLike | null | undefined): DataType {
+  const declared = String((spec as { data_type?: unknown } | null | undefined)?.data_type ?? "").trim();
+  return (declared || "any") as DataType;
+}
+
+/** 从注册表里取某个字段的类型。有 registry 在手时用它,省得调用方自己翻两层。 */
+export function inputType(registry: RegistryLike, nodeType: string, key: string): DataType {
+  const config = registry.get(nodeType)?.config as Record<string, ConfigSpecLike> | undefined;
+  return fieldDataType(config?.[key]);
+}
 
 export function outputType(nodeType: string, output: string): DataType {
   return OUTPUT_TYPES[nodeType]?.[output] ?? "any";
-}
-
-export function inputType(nodeType: string, key: string): DataType {
-  return INPUT_TYPES[nodeType]?.[key] ?? "any";
 }
 
 /** 软兼容:any 通配;text 槽接受一切(都能字符串化);同类型兼容;否则不兼容。 */
@@ -244,7 +250,7 @@ export function analyzeWorkflow(
     const target = nodeById.get(edge.target);
     if (!source || !target) continue;
     const actual = outputType(source.type, edge.source_output);
-    const expected = inputType(target.type, edge.target_input);
+    const expected = inputType(registry, target.type, edge.target_input);
     if (!typesCompatible(actual, expected)) {
       issues.push({
         nodeId: target.id,

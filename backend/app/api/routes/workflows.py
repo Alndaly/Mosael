@@ -26,6 +26,7 @@ from app.db.models import Job, Workflow
 from app.domain.workflows import (
     NODE_CATEGORIES,
     NODE_TYPES,
+    config_data_type,
     WorkflowDomainError,
     create_workflow,
     list_workflows,
@@ -38,6 +39,14 @@ if TYPE_CHECKING:
     from app.db.models import AgentSession
 
 router = APIRouter(tags=["workflows"])
+
+
+def _with_data_type(key: str, spec: Any) -> Any:
+    """把推导出的语义类型贴到字段声明上;推不出来就原样返回。"""
+    if not isinstance(spec, dict):
+        return spec
+    data_type = config_data_type(key, spec)
+    return {**spec, "data_type": data_type} if data_type else spec
 
 
 @router.get("/workflows/node-types", response_model=list[WorkflowNodeTypeOut])
@@ -58,7 +67,10 @@ def node_types(db: DbSession, user: CurrentUser) -> list[dict]:
             "label": meta["label"],
             "description": meta["description"],
             "category": meta.get("category", ""),
-            "config": meta["config"],
+            # 每个配置字段带上**它装的是什么**(素材/时间线/…)。界面据此决定给不给素材选择器、
+            # 画不画缩略图、连线时类型对不对得上 —— 此前这份知识是前端自己抄的一张表,
+            # 「素材」节点本身就漏了,而插件节点它永远也覆盖不到。
+            "config": {key: _with_data_type(key, spec) for key, spec in meta["config"].items()},
             "outputs": list(meta["outputs"]),
             "plugin_name": meta.get("plugin_name", ""),
         }
