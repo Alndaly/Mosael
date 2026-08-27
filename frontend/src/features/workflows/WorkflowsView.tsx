@@ -10,6 +10,7 @@ import {
   MiniMap,
   Panel,
   Position,
+  NodeToolbar,
   ReactFlow,
   applyEdgeChanges,
   applyNodeChanges,
@@ -498,93 +499,7 @@ const NODE_COMPONENT_TYPES = { wf: WfNode };
 
 
 /** 贴靠面板的几何:宽度固定,高度自适应但封顶;与节点之间留 10px 间隙,离窗口边至少 12px。 */
-//: 贴靠面板的几何。**宽度是唯一来源** —— 样式里也读它,不再各写一份。
-//:
-//: 这里此前写 320,而面板的 CSS 是 `w-[380px]`(旁边还留着一句「380 而不是 320」的注释,
-//: 说明宽度改过、常量没跟着改)。60px 的错位把四条边一起弄坏了:
-//:   · 右侧:按 320 判断"放得下",实际 380 → 溢出 60px 被窗口切掉;
-//:   · 左侧:左翻位置算成"节点左缘 − 320",实际宽 380 → 往右多伸 60px,**压住自己的节点**;
-//:   · 上下:竖直钳制拿 maxHeight(那是**上限**,不是实际高)当高度用,面板矮的时候被硬推上去。
-const ANCHOR = { width: 380, gap: 10, margin: 12, maxHeight: 560 } as const;
 
-export type AnchorBox = { left: number; top: number; maxHeight: number };
-
-/**
- * 把面板贴到**节点旁边**浮现的定位计算。
- *
- * 为什么不固定在右侧:画布上的节点可能在任何位置,而固定面板逼着视线在「节点」和「屏幕另一头的
- * 表单」之间来回跳;工作流页右侧已经挤了 AI 助手、执行历史等好几层。贴着节点浮现则是「改哪儿看哪儿」。
- *
- * 摆放优先右侧,右边放不下翻左侧,左右都放不下就落到节点下方(再不行放上方),最后统一夹进窗口。
- * 位置随视口变化重算(平移/缩放时面板跟着节点走),所以调用方要在 onMove 时让依赖变化。
- */
-export function anchorToNode(
-  instance: ReactFlowInstance | null,
-  /** 要贴靠的节点,**取自我们自己的 nodes 状态**,不是 instance.getNode()。
-   *
-   *  读 instance 会拿到过期位置:React Flow 的内部 store 是在**提交后的副作用**里从 nodes
-   *  prop 同步的,而这个位置是在 render 期间算的。撤销一次节点拖动时,graph 和 nodes 在同一批
-   *  更新里变新,内部 store 还停在旧位置 —— 于是表单留在了节点撤销前的地方,而且之后依赖不再
-   *  变化,它就一直留在那儿(除非用户顺手平移一下画布)。这正是「撤销后表单不跟随」的成因。 */
-  node: Pick<Node, "position" | "measured" | "width" | "height"> | null,
-  /** 可视区尺寸。作为入参而不是直接读 window:这样这段摆放逻辑是纯函数,可以直接单测
-   *  (仓库里没装 jsdom,其余测试也都是纯逻辑)。 */
-  viewport: { width: number; height: number },
-  /** 面板量到的真实高度。不给就按上限估(见下方 panelH)。 */
-  actualHeight?: number,
-): AnchorBox | null {
-  if (!instance || !node) return null;
-  // v12:measured 是渲染后的真实尺寸;没测到时用节点默认宽度兜底,别让面板贴到错的地方。
-  const width = node.measured?.width ?? node.width ?? 200;
-  const height = node.measured?.height ?? node.height ?? 60;
-  const topLeft = instance.flowToScreenPosition({ x: node.position.x, y: node.position.y });
-  const bottomRight = instance.flowToScreenPosition({
-    x: node.position.x + width,
-    y: node.position.y + height,
-  });
-
-  const { width: viewW, height: viewH } = viewport;
-  const maxHeight = Math.min(ANCHOR.maxHeight, viewH - ANCHOR.margin * 2);
-  //: 实际高度只有渲染后才知道;调用方量到了就传进来,量不到就按上限估 —— **宁可高估**,
-  //: 高估只是把面板往上挪一点,低估会让它探出窗口下沿。
-  const panelH = Math.min(actualHeight ?? maxHeight, maxHeight);
-
-  const minLeft = ANCHOR.margin;
-  const maxLeft = Math.max(minLeft, viewW - ANCHOR.width - ANCHOR.margin);
-  const minTop = ANCHOR.margin;
-  const maxTop = Math.max(minTop, viewH - panelH - ANCHOR.margin);
-  const clampLeft = (value: number) => Math.min(Math.max(minLeft, value), maxLeft);
-  const clampTop = (value: number) => Math.min(Math.max(minTop, value), maxTop);
-
-  /** 这个位置会不会压在**自己那个节点**上。压别的节点没办法(画布上到处是节点),
-   *  压自己不行 —— 用户正是为了看这个节点才点开它的。 */
-  const coversOwnNode = (left: number, top: number) =>
-    left < bottomRight.x && left + ANCHOR.width > topLeft.x &&
-    top < bottomRight.y && top + panelH > topLeft.y;
-
-  //: 四个候选位置,**按偏好排序**:右、左、下、上。每个都先夹进窗口再判断是否压住自己 ——
-  //: 此前是「选完位置最后统一夹一次」,而那一夹会把好不容易避开的位移again抵消掉:
-  //: 落到下方的面板被顶回节点头上,正是这么来的。
-  const candidates: Array<{ left: number; top: number }> = [
-    { left: bottomRight.x + ANCHOR.gap, top: topLeft.y },
-    { left: topLeft.x - ANCHOR.gap - ANCHOR.width, top: topLeft.y },
-    { left: topLeft.x, top: bottomRight.y + ANCHOR.gap },
-    { left: topLeft.x, top: topLeft.y - ANCHOR.gap - panelH },
-  ];
-  for (const candidate of candidates) {
-    const left = clampLeft(candidate.left);
-    const top = clampTop(candidate.top);
-    if (!coversOwnNode(left, top)) return { left, top, maxHeight };
-  }
-  //: 四个方向都躲不开(节点大到几乎占满窗口)。此时贴着窗口边放,让节点尽量露出来 ——
-  //: 挡住一部分总比挡在正中间强。
-  const room = { left: topLeft.x - minLeft, right: viewW - bottomRight.x, top: topLeft.y - minTop, bottom: viewH - bottomRight.y };
-  const widest = Math.max(room.left, room.right, room.top, room.bottom);
-  if (widest === room.right) return { left: maxLeft, top: clampTop(topLeft.y), maxHeight };
-  if (widest === room.left) return { left: minLeft, top: clampTop(topLeft.y), maxHeight };
-  if (widest === room.bottom) return { left: clampLeft(topLeft.x), top: maxTop, maxHeight };
-  return { left: clampLeft(topLeft.x), top: minTop, maxHeight };
-}
 
 /** 配置字段 key → 人类可读标签键(Dify 式:面板不暴露裸 config key)。 */
 const FIELD_LABEL_KEYS: Record<string, MessageKey> = {
@@ -1285,7 +1200,7 @@ function WorkflowEditor({
    * 把视口居中到某坐标上。用坐标而非 getNode:新加节点此刻还没同步进 React Flow 内部 store,
    * getNode 会取空;而 setCenter 只改视口变换,不依赖节点已登记。
    *
-   * 不再为「躲开右侧检查器」额外右移:配置面板已改为贴着节点浮现(见 anchorToNode),
+   * 不再为「躲开右侧检查器」额外右移:配置面板贴着节点浮现(NodeToolbar,和节点同层),
    * 右侧不再有常驻遮挡,再偏移反而把节点推离视觉中心。
    */
   const focusPosition = React.useCallback((x: number, y: number, duration = 350) => {
@@ -1793,35 +1708,8 @@ function WorkflowEditor({
     onError: (error: Error) => toast.error(t("wfRunFailed"), { description: error.message }),
   });
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
-  // 换了节点就忘掉上一个面板的高度 —— 拿上一个的高度给下一个算位置,第一帧会跳一下。
-  React.useEffect(() => setPanelHeight(undefined), [selectedNodeId]);
   // 拖动时收起(跟着抖没有意义,还挡住落点),松手后 dragging 转 false 自然复现。
   // canvas.tick / graph 变化都要重算:前者是平移缩放,后者是节点位置被改。
-  // 面板量到的真实高度。**不量的话竖直方向就是错的**:摆放只能拿"高度上限"(560)当实际高度,
-  // 于是一个 200 高的面板会被当成 560 来避让 —— 节点靠下时,它被推到远高于必要的位置,
-  // 和自己的节点隔着一大片空白,看着像飘走了。第一帧还没量到,按上限估;量到之后重算一次。
-  const [panelHeight, setPanelHeight] = React.useState<number | undefined>(undefined);
-  const panelRef = React.useCallback((element: HTMLElement | null) => {
-    if (!element) return;
-    const observer = new ResizeObserver(() => setPanelHeight(element.getBoundingClientRect().height));
-    observer.observe(element);
-    setPanelHeight(element.getBoundingClientRect().height);
-    return () => observer.disconnect();
-  }, []);
-  const anchor = React.useMemo(
-    () =>
-      dragging
-        ? null
-        : anchorToNode(
-            rfRef.current,
-            nodes.find((node) => node.id === selectedNodeId) ?? null,
-            { width: window.innerWidth, height: window.innerHeight },
-            panelHeight,
-          ),
-    // nodes 而不是 graph:位置要和画布上真正画出来的那个节点一致。canvas.tick 管平移缩放。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedNodeId, dragging, canvas.tick, nodes, panelHeight],
-  );
   // 框选中的节点(≥2 才给「折叠为子图」入口),从 React Flow 的 selected 态直接派生。
   const selectedFlowIds = nodes.filter((node) => node.selected).map((node) => node.id);
 
@@ -2459,6 +2347,44 @@ function WorkflowEditor({
               nodeColor="var(--border-strong)"
               nodeStrokeColor="transparent"
             />}
+        {selectedNode && !editingLoopId && (
+          <NodeInspector
+            inert={canvas.panning}
+            step={runByNode[selectedNode.id] ?? null}
+            node={selectedNode}
+            meta={registry.get(selectedNode.type) ?? null}
+            graph={graph}
+            registry={registry}
+            workspaceId={workspaceId}
+            onChange={(patch) => {
+              // **打字是连发,不是离散编辑。** 每敲一个字符记一条历史的话,Cmd+Z 一次只退回
+              // 一个字母 —— 用户以为撤销坏了,其实是它太尽责。用拖拽那同一套合并机制:
+              // 一串输入在历史里塌成一条,存的是这串开始前的图(见 stores/workflowGraphStore)。
+              //
+              // 只有改文字才合并;改开关、换下拉那些仍然一步一条 —— 它们本来就是离散的。
+              const typing = "config" in patch || "name" in patch;
+              applyGraph(
+                {
+                  ...graph,
+                  nodes: graph.nodes.map((node) => (node.id === selectedNode.id ? { ...node, ...patch } : node)),
+                },
+                { coalesce: typing },
+              );
+            }}
+            onApplyGraph={applyGraph}
+            onDelete={() => {
+              applyGraph({
+                ...graph,
+                nodes: graph.nodes.filter((node) => node.id !== selectedNode.id),
+                edges: graph.edges.filter(
+                  (edge) => edge.source !== selectedNode.id && edge.target !== selectedNode.id,
+                ),
+              });
+              setSelectedNodeId(null);
+            }}
+            onClose={() => setSelectedNodeId(null)}
+          />
+        )}
           </ReactFlow>
         </div>
         {/* 右栏:助手与执行历史共用。两个都开就上下平分 —— 运行时经常要一边看画布状态、
@@ -2524,46 +2450,6 @@ function WorkflowEditor({
           })()}
         {/* 钻进循环体时不渲染外层检查器:它和覆盖层同为 z-index:30 且在 DOM 里更靠后,会盖住
             子画布头部(返回/面包屑/添加节点)。子画布有自己的检查器;外层节点回主流程再编辑。 */}
-        {selectedNode && !editingLoopId && anchor && (
-          <NodeInspector
-            anchor={anchor}
-            inert={canvas.panning}
-            step={runByNode[selectedNode.id] ?? null}
-            panelRef={panelRef}
-            node={selectedNode}
-            meta={registry.get(selectedNode.type) ?? null}
-            graph={graph}
-            registry={registry}
-            workspaceId={workspaceId}
-            onChange={(patch) => {
-              // **打字是连发,不是离散编辑。** 每敲一个字符记一条历史的话,Cmd+Z 一次只退回
-              // 一个字母 —— 用户以为撤销坏了,其实是它太尽责。用拖拽那同一套合并机制:
-              // 一串输入在历史里塌成一条,存的是这串开始前的图(见 stores/workflowGraphStore)。
-              //
-              // 只有改文字才合并;改开关、换下拉那些仍然一步一条 —— 它们本来就是离散的。
-              const typing = "config" in patch || "name" in patch;
-              applyGraph(
-                {
-                  ...graph,
-                  nodes: graph.nodes.map((node) => (node.id === selectedNode.id ? { ...node, ...patch } : node)),
-                },
-                { coalesce: typing },
-              );
-            }}
-            onApplyGraph={applyGraph}
-            onDelete={() => {
-              applyGraph({
-                ...graph,
-                nodes: graph.nodes.filter((node) => node.id !== selectedNode.id),
-                edges: graph.edges.filter(
-                  (edge) => edge.source !== selectedNode.id && edge.target !== selectedNode.id,
-                ),
-              });
-              setSelectedNodeId(null);
-            }}
-            onClose={() => setSelectedNodeId(null)}
-          />
-        )}
       </div>
 
       <RenameDialog
@@ -2756,26 +2642,6 @@ function LoopBodyEditor({
   //: 和主图同一套画布姿态。**平移/缩放时把检查器设成 inert** —— 否则滚轮滚到面板上就被它吃掉,
   //: 画布停住不动:用户以为滚坏了,其实是指针从画布挪到了浮层上。
   const subCanvas = useCanvasPosture();
-  const [subPanelHeight, setSubPanelHeight] = React.useState<number | undefined>(undefined);
-  const subPanelRef = React.useCallback((element: HTMLElement | null) => {
-    if (!element) return;
-    const observer = new ResizeObserver(() => setSubPanelHeight(element.getBoundingClientRect().height));
-    observer.observe(element);
-    setSubPanelHeight(element.getBoundingClientRect().height);
-    return () => observer.disconnect();
-  }, []);
-  React.useEffect(() => setSubPanelHeight(undefined), [selectedId]);
-  const subAnchor = React.useMemo(
-    () =>
-      anchorToNode(
-        subRf.current,
-        nodes.find((node) => node.id === selectedId) ?? null,
-        { width: window.innerWidth, height: window.innerHeight },
-        subPanelHeight,
-      ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedId, subCanvas.tick, nodes, subPanelHeight],
-  );
 
   //: 最后一次**我们自己发出去**的 body。用来分辨"这次 prop 变化是我引起的"还是"外面改的"。
   const emitted = React.useRef<string>("");
@@ -3039,13 +2905,9 @@ function LoopBodyEditor({
             position="bottom-left"
             className="overflow-hidden rounded-md border border-border [--xy-controls-box-shadow:none] [--xy-controls-button-background-color:var(--panel)] [--xy-controls-button-background-color-hover:var(--secondary)] [--xy-controls-button-border-color:var(--border)] [--xy-controls-button-color:var(--muted-foreground)] [--xy-controls-button-color-hover:var(--foreground)]"
           />
-        </ReactFlow>
-        {body.nodes.length === 0 && <div className="pointer-events-none absolute left-1/2 top-4 max-w-[70%] -translate-x-1/2 rounded-lg border border-dashed border-border bg-muted px-3 py-2 text-center text-xs text-muted-foreground">{t(loopNode.type === "subgraph" ? "wfSubgraphEmptyHint" : "wfLoopEmptyHint")}</div>}
-        {selectedNode && subAnchor && (
+        {selectedNode && (
           <NodeInspector
-            anchor={subAnchor}
             inert={subCanvas.panning}
-            panelRef={subPanelRef}
             node={selectedNode}
             meta={registry.get(selectedNode.type) ?? null}
             graph={body}
@@ -3066,16 +2928,16 @@ function LoopBodyEditor({
             onClose={() => setSelectedId(null)}
           />
         )}
+        </ReactFlow>
+        {body.nodes.length === 0 && <div className="pointer-events-none absolute left-1/2 top-4 max-w-[70%] -translate-x-1/2 rounded-lg border border-dashed border-border bg-muted px-3 py-2 text-center text-xs text-muted-foreground">{t(loopNode.type === "subgraph" ? "wfSubgraphEmptyHint" : "wfLoopEmptyHint")}</div>}
       </div>
     </div>
   );
 }
 
 function NodeInspector({
-  anchor,
   inert = false,
   step = null,
-  panelRef,
   node,
   meta,
   graph,
@@ -3086,14 +2948,10 @@ function NodeInspector({
   onDelete,
   onClose,
 }: {
-  /** 贴靠几何:给出就浮现在节点旁(见 anchorToNode);不给就沿用贴右边占满高度的老样式。 */
-  anchor?: AnchorBox | null;
   /** 画布正在平移:此时面板不吃指针事件(见 WorkflowsView 里 panning 的说明)。 */
   inert?: boolean;
   /** 这个节点在**最近一次运行**里的那一步。没跑过就是 null。 */
   step?: Step | null;
-  /** 量面板真实高度用 —— 摆放要靠它,不然只能按上限估(见 anchorToNode)。 */
-  panelRef?: (element: HTMLElement | null) => void;
   node: WorkflowGraph["nodes"][number];
   meta: WorkflowNodeType | null;
   graph: WorkflowGraph;
@@ -3626,20 +3484,27 @@ function NodeInspector({
           );
   };
 
+  /**
+   * **住在画布里,大小不跟着缩放变。**
+   *
+   * 此前它是 position:fixed 的屏幕层浮层,而节点在画布坐标系里 —— 两个坐标系,于是每次平移
+   * 缩放都要把节点位置换算成屏幕位置、再夹进窗口。那套换算前后修了三轮:四条边一起越界
+   * (摆放按 320 算而面板其实是 380)、拿"高度上限"当实际高度用、子图漏传参数整个走成另一种
+   * 样式。三条都是同一个错配的不同发作点。
+   *
+   * NodeToolbar 正是这件事的原语:渲染在 react-flow 的 viewport portal 里(**和节点同层**),
+   * 位置用 viewport.zoom 算所以跟着节点走,但元素本身不缩放 —— 缩到 40% 时面板还是这么大、
+   * 还能填表单。换算、四边钳制、量高度那一整套因此全部删掉。
+   */
   return (
+    <NodeToolbar nodeId={node.id} isVisible position={Position.Right} align="start" offset={14}>
     <aside
-      ref={panelRef}
       className={cn(
-        "z-30 grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border-strong bg-panel shadow-[var(--shadow-panel)]",
-        // 380 而不是 320:两列并排的参数(Temperature / Top P 这种)在 320 里各自只剩
-        // 130px,长一点的标签就换行。左右各留 12px 让它在小窗口里也不贴边。
-        // 宽度从 ANCHOR 来(见那里的说明):写死在这里就会和摆放计算各说各话,而那正是
-        // 四条边一起越界的成因。两列并排的参数(Temperature / Top P)在 320 里会换行,
-        // 所以是 380 —— 要改就改 ANCHOR.width 那一处。
-        anchor ? "fixed max-w-[calc(100vw-24px)]" : "absolute bottom-2 right-2 top-2 w-[min(380px,calc(100%-32px))]",
+        // 380 而不是 320:两列并排的参数(Temperature / Top P 这种)在 320 里各自只剩 130px,
+        // 长一点的标签就换行。
+        "grid max-h-[560px] min-h-0 w-[380px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border-strong bg-panel shadow-[var(--shadow-panel)]",
         inert && "pointer-events-none",
       )}
-      style={anchor ? { left: anchor.left, top: anchor.top, maxHeight: anchor.maxHeight, width: ANCHOR.width } : undefined}
       aria-label={node.name || meta?.label || node.type}
     >
       <div // 头部只有一行(类型进了图标的 tooltip),38px 是给两行留的高度。
@@ -4125,5 +3990,6 @@ function NodeInspector({
         {step && <RunOutputs nodeType={node.type} step={step} />}
       </div>
     </aside>
+    </NodeToolbar>
   );
 }
