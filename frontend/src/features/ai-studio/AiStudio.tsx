@@ -836,7 +836,7 @@ function GenerateWorkspace({
         </form>
       </section>
 
-      <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] flex min-w-0 flex-col gap-[9px] overflow-y-auto px-3 pb-3.5 max-[1180px]:col-span-full max-[1180px]:grid max-[1180px]:max-h-[220px] max-[1180px]:grid-cols-2 max-[1180px]:content-start max-[820px]:grid-cols-1">
+      <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] flex min-w-0 flex-col gap-3.5 overflow-y-auto px-3 pb-3.5 max-[1180px]:col-span-full max-[1180px]:grid max-[1180px]:max-h-[220px] max-[1180px]:grid-cols-2 max-[1180px]:content-start max-[820px]:grid-cols-1">
         <div className="-mx-3 flex min-h-[38px] items-center justify-between border-b border-border px-3 py-2.5 max-[1180px]:col-span-full [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
           <h2 className="text-xs tracking-[0.02em] text-muted-foreground">{t("generationEngineSettings")}</h2>
         </div>

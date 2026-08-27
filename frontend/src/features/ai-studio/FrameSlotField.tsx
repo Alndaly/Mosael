@@ -30,8 +30,18 @@ import { EMPTY_SLOT, ROLE_COPY, isEmptySlot, type FrameSlot, type SourceRole } f
  * 的时候完全看不出这层关系;拍错顺序也是常事,所以给一个原地对调,而不是让用户删掉重传。
  */
 
-/** 一格素材的尺寸:够看清是什么,又不至于把面板撑开。 */
-const TILE = "grid aspect-video w-full place-items-center overflow-hidden rounded-lg border border-border bg-muted/40";
+/** 一格素材。
+ *
+ * **固定高度而不是固定比例。** 用 aspect-video 的话,一行只挂一份时那一格会被拉成整个面板宽
+ * (280×157),一个空的加号占掉半屏;而挂满三份时又缩成邮票。固定高度让"一份"和"三份"看起来
+ * 是同一种东西,只是宽窄不同。
+ */
+const TILE = "grid h-[68px] w-full place-items-center overflow-hidden rounded-lg border border-border bg-muted/40";
+
+/** 一行**铺满**:少于三份就按份数均分,而不是留着两个空位。 */
+function columnsFor(count: number): string {
+  return `repeat(${Math.min(Math.max(count, 1), 3)}, minmax(0, 1fr))`;
+}
 
 function useUpload(workspaceId: string, onDone: (assets: Asset[]) => void) {
   const qc = useQueryClient();
@@ -128,11 +138,14 @@ function Tile({
       <button
         type="button"
         disabled={disabled}
-        className={`${TILE} cursor-pointer gap-1 border-dashed text-ui-xs font-semibold text-muted-foreground hover:border-primary/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60`}
+        className={`${TILE} cursor-pointer border-dashed text-ui-xs font-semibold text-muted-foreground hover:border-primary/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60`}
         onClick={() => inputRef.current?.click()}
       >
-        <Plus size={14} />
-        {label && <span className="px-1 text-center leading-tight">{label}</span>}
+        {/* 加号和名字**排一行**。竖着摞的时候,两者之间那道空白比它俩加起来还高。 */}
+        <span className="flex items-center gap-1 px-1.5">
+          <Plus size={14} />
+          {label && <span className="truncate">{label}</span>}
+        </span>
       </button>
     </>
   );
@@ -181,7 +194,10 @@ export function FrameSlotField({
       {disabled && disabledReason && (
         <span className="font-normal leading-[1.5] text-muted-foreground/80">{disabledReason}</span>
       )}
-      <div className="grid grid-cols-3 gap-1.5">
+      <div
+        className="grid gap-1.5"
+        style={{ gridTemplateColumns: columnsFor(filled.length + (canAdd ? 1 : 0)) }}
+      >
         {filled.map((slot, index) => (
           <Tile
             key={slot.assetId || index}
@@ -282,7 +298,7 @@ export function KeyframePairField({
           />
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-1.5">
+        <div className="grid gap-1.5">
           <Tile
             slot={firstSlot}
             role="first_frame"
