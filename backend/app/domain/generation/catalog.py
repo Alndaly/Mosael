@@ -237,6 +237,56 @@ WAN_27_R2V_CAPABILITIES = {
     "supports_audio": True,
 }
 
+#: 可灵 2.x 那一代(旧接口 `/v1/videos/image2video`)。参数是平铺的,只有首尾帧。
+KLING_LEGACY_VIDEO_CAPABILITIES = {
+    "modes": ["text-to-video", "image-to-video", "keyframes-to-video"],
+    "parameter_keys": ["duration_seconds", "aspect_ratio", "first_frame", "last_frame", "negative_prompt"],
+    "duration_seconds": [5, 10],
+    "default_duration_seconds": 5,
+    "aspect_ratios": ["16:9", "9:16", "1:1"],
+    "default_aspect_ratio": "16:9",
+    "source_limits": {"first_frame": 1, "last_frame": 1},
+    "requires_companion": {"last_frame": ["first_frame"]},
+    "max_duration_seconds": 10,
+}
+
+#: 可灵 3.0(新接口 `/image-to-video/kling-3.0`,请求体是 contents 数组)。
+#:
+#: **多图参考在这一代才有,而且不是「挂几张图」。** 可灵要你先用 2～4 张图建一个**主体**
+#: (进主体库、有名字、能复用),生成时引用它的 id,提示词里用 `@名字` 点名;一次最多引 3 个。
+#: 这一步由适配器代劳(见 ai/providers/video/kling_elements):界面上照旧是挂参考图,
+#: 底下自动查/建主体。所以这里的 `reference_image` 上限是 4 —— 那是**一个主体**的取图上限,
+#: 不是别家那种"这次生成用几张图"。
+#:
+#: 数字来自官方能力地图与 3.0 图生视频的 API 参考(2026-08-27):时长 3～15 的整数,
+#: 清晰度 720p/1080p/**4k**,首帧尾帧各 1 张且不支持仅尾帧。
+#:
+#: **没有可灵密钥可核。** 这一份是照文档写的,不是真机探的 —— 和上面几家不一样,别把它
+#: 当成同等确信的东西:等有密钥了要按 test_capabilities_match_reality 的法子重核一遍。
+KLING_V3_VIDEO_CAPABILITIES = {
+    "modes": ["text-to-video", "image-to-video", "keyframes-to-video", "reference-to-video"],
+    "payload_shape": "contents",
+    "parameter_keys": [
+        "duration_seconds", "resolution", "aspect_ratio", "negative_prompt",
+        "first_frame", "last_frame", "reference_image",
+        "generate_audio", "multi_shot",
+    ],
+    "duration_seconds": [],
+    "default_duration_seconds": 5,
+    "resolutions": ["720p", "1080p", "4k"],
+    "default_resolution": "720p",
+    "aspect_ratios": ["16:9", "9:16", "1:1"],
+    "default_aspect_ratio": "16:9",
+    "source_limits": {"first_frame": 1, "last_frame": 1, "reference_image": 4},
+    # 建主体要 1 张正面图 + 1～3 张其他角度,少于两张建不起来。
+    "min_reference_images": 2,
+    "requires_companion": {"last_frame": ["first_frame"]},
+    "min_duration_seconds": 3,
+    "max_duration_seconds": 15,
+    "supports_audio": True,
+}
+
+
 #: 万相视频编辑 wan2.7-videoedit。真机跑到 succeeded(2026-08-27):给一段视频加一句指令
 #: (「把画面改成水彩画风格」),出的是同一段片子改过之后的样子。
 #:
@@ -572,19 +622,33 @@ BUILTIN_MODELS = [
         },
     },
     {
+        # 旧接口那一代(2.x):参数平铺,只有首尾帧,没有主体。
         "id": "kuaishou:kling:video",
         "provider": "kuaishou",
         "kind": "video",
         "model": "kling",
-        "capabilities": {
-            "modes": ["text-to-video", "image-to-video", "keyframes-to-video"],
-            "parameter_keys": ["duration_seconds", "aspect_ratio", "first_frame", "last_frame", "negative_prompt"],
-            "duration_seconds": [5, 10],
-            "default_duration_seconds": 5,
-            "aspect_ratios": ["16:9", "9:16", "1:1"],
-            "default_aspect_ratio": "16:9",
-            "max_duration_seconds": 10,
-        },
+        "capabilities": KLING_LEGACY_VIDEO_CAPABILITIES,
+    },
+    {
+        "id": "kuaishou:kling-v3:video",
+        "provider": "kuaishou",
+        "kind": "video",
+        "model": "kling-v3",
+        "capabilities": KLING_V3_VIDEO_CAPABILITIES,
+    },
+    {
+        "id": "kuaishou:kling-v3-omni:video",
+        "provider": "kuaishou",
+        "kind": "video",
+        "model": "kling-v3-omni",
+        "capabilities": KLING_V3_VIDEO_CAPABILITIES,
+    },
+    {
+        "id": "kuaishou:kling-3.0-turbo:video",
+        "provider": "kuaishou",
+        "kind": "video",
+        "model": "kling-3.0-turbo",
+        "capabilities": KLING_V3_VIDEO_CAPABILITIES,
     },
 ]
 

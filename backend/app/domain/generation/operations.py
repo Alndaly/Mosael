@@ -312,6 +312,17 @@ def _check_source_counts(
                 f"{provider}/{model} 最多收 {cap} 份{_label(role)},这次给了 {count} 份"
             )
 
+    # 参考图还有个**下限**,而且只有可灵有:它的多图参考是先拿几张图建一个主体,
+    # 而建主体要 1 张正面图 + 至少 1 张其他角度。只给一张的话,那一步会在提交之后才失败,
+    # 报的还是可灵那边关于 refer_images 的话 —— 用户根本不知道自己少挂了一张。
+    floor = capabilities.get("min_reference_images")
+    given = counts.get("reference_image", 0)
+    if floor and given and given < int(floor):
+        raise GenerationDomainError(
+            f"{provider}/{model} 的多图参考至少要 {floor} 张参考图"
+            f"(第一张是正面图,其余是其他角度),这次只给了 {given} 张"
+        )
+
     used = {role for role, count in counts.items() if count}
     groups = [set(group) for group in capabilities.get("exclusive_source_groups") or []]
     touched = [group for group in groups if group & used]

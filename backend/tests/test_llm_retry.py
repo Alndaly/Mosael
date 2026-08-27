@@ -182,8 +182,21 @@ def test_重试对所有_AI_出站调用生效(monkeypatch):
         "app.ai.providers.speech.edge",
     }
 
+    #: **不自己建连接**的模块 —— 请求是拿调用方给的 client 发的,而那个 client 就是
+    #: RetryingClient。豁免的理由和 NO_HTTP 不一样(那些是压根不发 HTTP),所以分开列:
+    #: 判据也不同 —— 这些模块只要不 import httpx,就不可能绕开调用方给的那个 client。
+    BORROWS_CLIENT = {
+        # 可灵的主体库:建主体是生成流程里的一步,用的是 kling.py 已经开好的那个连接
+        # (同一个 base_url、同一份 JWT 鉴权)。自己再开一个等于把鉴权逻辑抄第二遍。
+        "app.ai.providers.video.kling_elements",
+    }
+
     missing = []
     for name in modules:
+        if name in BORROWS_CLIENT:
+            module = importlib.import_module(name)
+            assert not hasattr(module, "httpx"), f"{name} 自己发 HTTP 了,豁免不再成立"
+            continue
         if name in NO_HTTP:
             module = importlib.import_module(name)
             assert not hasattr(module, "httpx"), f"{name} 开始发 HTTP 了,豁免不再成立"
