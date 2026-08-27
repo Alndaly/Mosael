@@ -22,6 +22,7 @@ from app.ai.providers.base import (
     REFERENCE_VIDEO,
     SOURCE_VIDEO,
     FIRST_CLIP,
+    DRIVING_AUDIO,
     metering_from_request,
     provider_http_error,
 )
@@ -92,6 +93,7 @@ _MEDIA_TYPES = {
     REFERENCE_VIDEO: "reference_video",
     FIRST_CLIP: "first_clip",
     SOURCE_VIDEO: "video",
+    DRIVING_AUDIO: "driving_audio",
 }
 _MEDIA_ROLES = tuple(_MEDIA_TYPES)
 

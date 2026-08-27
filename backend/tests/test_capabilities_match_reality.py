@@ -19,6 +19,13 @@ from __future__ import annotations
 
 RATCHET = True
 
+#: 素材角色名 —— 用来把描述符的 parameter_keys 里"哪些是素材"挑出来。
+_SOURCE_ROLE_NAMES = {
+    "first_frame", "last_frame",
+    "reference_image", "reference_video", "reference_audio",
+    "source_video", "first_clip", "driving_audio",
+}
+
 from app.domain.generation import catalog as C
 
 
@@ -171,7 +178,7 @@ class Test参考素材的份数上限:
 
     def test_万相是另一套数字_别照抄(self) -> None:
         """文档原话:参考图像 + 参考视频不超过 5 个。每家自己一套,抄串了就是线上失败。"""
-        assert C.WAN_27_VIDEO_CAPABILITIES["source_limits"]["reference_image"] == 5
+        assert C.WAN_27_R2V_CAPABILITIES["source_limits"]["reference_image"] == 5
 
     def test_首尾帧和参考素材是互斥的两组(self) -> None:
         """接口原话:`first/last frame content cannot be mixed with reference media content`。
@@ -181,7 +188,6 @@ class Test参考素材的份数上限:
         for descriptor in (
             C.SEEDANCE_2_VIDEO_CAPABILITIES,
             C.MINIMAX_VIDEO_CAPABILITIES,
-            C.WAN_27_VIDEO_CAPABILITIES,
         ):
             groups = [set(group) for group in descriptor["exclusive_source_groups"]]
             assert {"first_frame", "last_frame"} in groups
@@ -220,11 +226,12 @@ class Test万相27:
     """
 
     def test_时长是_2_到_15_的区间(self) -> None:
-        assert C.WAN_27_VIDEO_CAPABILITIES["min_duration_seconds"] == 2
-        assert C.WAN_27_VIDEO_CAPABILITIES["max_duration_seconds"] == 15
+        for descriptor in (C.WAN_27_T2V_CAPABILITIES, C.WAN_27_I2V_CAPABILITIES, C.WAN_27_R2V_CAPABILITIES):
+            assert descriptor["min_duration_seconds"] == 2
+            assert descriptor["max_duration_seconds"] == 15
 
     def test_只有两档清晰度(self) -> None:
-        assert set(C.WAN_27_VIDEO_CAPABILITIES["resolutions"]) == {"720P", "1080P"}
+        assert set(C.WAN_27_I2V_CAPABILITIES["resolutions"]) == {"720P", "1080P"}
 
     def test_素材走_media_数组(self) -> None:
         """漏了这一条的后果是提交 200、终态 `Field required: input.media` ——
@@ -253,14 +260,14 @@ class Test视频编辑与续写:
         assert "reference_video" not in C.WAN_VIDEO_EDIT_CAPABILITIES["source_limits"]
 
     def test_没视频就无从编辑(self) -> None:
-        assert C.WAN_VIDEO_EDIT_CAPABILITIES["requires_source"] == ["source_video"]
+        assert C.WAN_VIDEO_EDIT_CAPABILITIES["requires_source"] == [["source_video"]]
 
     def test_编辑的时长上限是_10_秒_不是_15(self) -> None:
         """和 2.7 生成那一族不一样(那边到 15)。抄串了就是线上失败。"""
         assert C.WAN_VIDEO_EDIT_CAPABILITIES["max_duration_seconds"] == 10
 
     def test_续写自成一组_不和首尾帧混用(self) -> None:
-        groups = [set(group) for group in C.WAN_27_VIDEO_CAPABILITIES["exclusive_source_groups"]]
+        groups = [set(group) for group in C.WAN_27_I2V_CAPABILITIES["exclusive_source_groups"]]
         assert {"first_clip"} in groups
 
     def test_被编辑的那段视频在万相那边叫_video(self) -> None:
@@ -272,11 +279,53 @@ class Test视频编辑与续写:
         assert wan.uses_media_array("wan2.7-videoedit")
 
 
+class Test万相27三个型号各认各的:
+    """核查日期 2026-08-27,类型白名单是接口自己报的,每条都跑到终态:
+
+      i2v  `Input should be 'first_frame', 'last_frame', 'driving_audio' or 'first_clip'`
+      r2v  `Input should be 'reference_image', 'reference_video' or 'first_frame'`
+      r2v  `Only first frame provided is not allowed` / `Field required: input.media`
+      t2v  给什么都收,而且照样 SUCCEEDED —— 它根本不看 media
+    """
+
+    def test_文生视频一个素材角色都不声明(self) -> None:
+        """这条最要命。多声明一个的后果不是报错 —— t2v 收下那张图、跑成功、片子里没有它的
+        任何痕迹。用户看到的是"生成好了",而那张参考图从来没被用过。"""
+        roles = [k for k in C.WAN_27_T2V_CAPABILITIES["parameter_keys"] if k in _SOURCE_ROLE_NAMES]
+        assert roles == [], f"t2v 不看 media,却声明了:{roles}"
+
+    def test_图生视频和参考生视频认的东西不一样(self) -> None:
+        """共用一份描述符的话,两边都会长出对方的控件,而选错的那次要等任务失败才知道。"""
+        i2v = {k for k in C.WAN_27_I2V_CAPABILITIES["parameter_keys"] if k in _SOURCE_ROLE_NAMES}
+        r2v = {k for k in C.WAN_27_R2V_CAPABILITIES["parameter_keys"] if k in _SOURCE_ROLE_NAMES}
+        assert i2v == {"first_frame", "last_frame", "first_clip", "driving_audio"}
+        assert r2v == {"reference_image", "reference_video", "first_frame"}
+
+    def test_参考生视频不能只给首帧(self) -> None:
+        """接口原话 `Only first frame provided is not allowed` —— 这边的首帧只是辅助,
+        和 i2v 那边"画面从它动起来"的首帧不是一回事。"""
+        assert C.WAN_27_R2V_CAPABILITIES["requires_source"] == [["reference_image", "reference_video"]]
+
+    def test_图生视频必须给起点(self) -> None:
+        assert C.WAN_27_I2V_CAPABILITIES["requires_source"] == [["first_frame", "first_clip"]]
+
+    def test_驱动音频只跟首帧走(self) -> None:
+        """文档把合法组合列成白名单,续写 + 驱动音频不在里面。靠这条把它挡住。"""
+        assert C.WAN_27_I2V_CAPABILITIES["requires_companion"]["driving_audio"] == ["first_frame"]
+
+    def test_带参考视频时时长压到_10_秒(self) -> None:
+        """文档原话:包含参考视频 2–10s,不包含 2–15s。写死 15 的话,挂了参考视频再选 12 秒
+        要等任务失败才知道;写死 10 的话,不挂参考视频那条路白白少了 5 秒。"""
+        assert C.WAN_27_R2V_CAPABILITIES["conditional_max_duration_seconds"] == {"reference_video": 10}
+
+
 def test_这道棘轮扫得到东西() -> None:
     """假阴性比红更危险:哪天描述符改了名,上面几条会一起真空通过。"""
     assert C.WAN_VIDEO_CAPABILITIES["sizes"]
     assert C.QWEN_TEXT_IMAGE_CAPABILITIES["sizes"]
     assert C.MINIMAX_VIDEO_CAPABILITIES["duration_seconds"]
     assert C.SEEDANCE_2_VIDEO_CAPABILITIES["source_limits"]
-    assert C.WAN_27_VIDEO_CAPABILITIES["resolutions"]
+    assert C.WAN_27_I2V_CAPABILITIES["resolutions"]
     assert C.WAN_VIDEO_EDIT_CAPABILITIES["source_limits"]
+    assert C.WAN_27_I2V_CAPABILITIES["source_limits"]
+    assert C.WAN_27_R2V_CAPABILITIES["source_limits"]

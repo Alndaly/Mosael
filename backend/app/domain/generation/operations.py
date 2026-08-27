@@ -239,6 +239,30 @@ def validate_against_capabilities(
             )
         counts[role] += 1
     _check_source_counts(provider, model, capabilities, counts)
+    _check_conditional_duration(provider, model, capabilities, counts, parameters)
+
+
+def _check_conditional_duration(
+    provider: str,
+    model: str,
+    capabilities: dict[str, Any],
+    counts: Counter[str],
+    parameters: dict[str, Any],
+) -> None:
+    """有些上限**跟着素材变**:万相参考生视频不带参考视频能到 15 秒,带上就只剩 10 秒。
+
+    不拦的话,用户挂了参考视频再选 12 秒 —— 提交过得去,要等任务失败才知道,而那时候
+    报的是一句英文。写死 10 也不行:不带参考视频的那条路本来就能跑到 15 秒。
+    """
+    duration = parameters.get("duration_seconds")
+    if duration is None:
+        return
+    for role, cap in (capabilities.get("conditional_max_duration_seconds") or {}).items():
+        if counts.get(role) and int(duration) > int(cap):
+            raise GenerationDomainError(
+                f"{provider}/{model} 挂了{_label(role)}时,时长最多 {cap} 秒(不挂能到 "
+                f"{capabilities.get('max_duration_seconds')} 秒)"
+            )
 
 
 #: 角色的中文名。报错要说人话:用户在界面上看到的是「参考图」,不是 reference_image。
@@ -250,6 +274,7 @@ _ROLE_LABELS = {
     "reference_audio": "参考音频",
     "source_video": "待编辑的视频",
     "first_clip": "待续写的片段",
+    "driving_audio": "驱动音频",
 }
 
 
@@ -297,9 +322,13 @@ def _check_source_counts(
             f"{_WHY_EXCLUSIVE}它们是不同的路子,一次只能走一条。"
         )
 
-    for role in capabilities.get("requires_source") or []:
-        if role not in used:
-            raise GenerationDomainError(f"{provider}/{model} 必须给一份{_label(role)}")
+    # 每一条是「这几种里至少给一份」。写成嵌套而不是平铺的一串,是因为两种要求都真实存在:
+    # 视频编辑必须给那一段视频(只有一个选项),参考生视频则是参考图或参考视频给一个就行。
+    for options in capabilities.get("requires_source") or []:
+        if not (set(options) & used):
+            raise GenerationDomainError(
+                f"{provider}/{model} 必须给一份{'或'.join(_label(one) for one in options)}"
+            )
 
     for role, companions in (capabilities.get("requires_companion") or {}).items():
         if role in used and not (set(companions) & used):

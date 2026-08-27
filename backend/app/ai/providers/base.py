@@ -52,6 +52,10 @@ REFERENCE_AUDIO = "reference_audio"
 SOURCE_VIDEO = "source_video"
 FIRST_CLIP = "first_clip"
 
+#: **拿一段音频驱动画面** —— 口型同步、动作卡点。它不是参考音频(那只是"照这个风格来"),
+#: 成片的节奏和口型是跟着它走的,所以两者不能混:选错了拿到的是一段对不上嘴的视频。
+DRIVING_AUDIO = "driving_audio"
+
 #: 全部角色。描述符(domain/generation/catalog)声明某个模型认哪几种,界面和智能体都读它。
 SOURCE_ROLES = (
     FIRST_FRAME,
@@ -61,6 +65,7 @@ SOURCE_ROLES = (
     REFERENCE_AUDIO,
     SOURCE_VIDEO,
     FIRST_CLIP,
+    DRIVING_AUDIO,
 )
 
 #: **首尾帧**和**参考素材**是两回事,不是同一个东西的两种叫法。
@@ -75,6 +80,7 @@ SOURCE_ROLES = (
 KEYFRAME_ROLES = (FIRST_FRAME, LAST_FRAME)
 REFERENCE_ROLES = (REFERENCE_IMAGE, REFERENCE_VIDEO, REFERENCE_AUDIO)
 VIDEO_INPUT_ROLES = (SOURCE_VIDEO, FIRST_CLIP)
+DRIVING_ROLES = (DRIVING_AUDIO,)
 
 
 @dataclass(frozen=True)
@@ -292,6 +298,7 @@ ROLE_URL_PARAMETERS = {
     REFERENCE_AUDIO: ("reference_audio_url",),
     SOURCE_VIDEO: ("source_video_url", "video_url"),
     FIRST_CLIP: ("first_clip_url",),
+    DRIVING_AUDIO: ("driving_audio_url",),
 }
 
 

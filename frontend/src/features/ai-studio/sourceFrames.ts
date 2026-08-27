@@ -31,6 +31,7 @@ export const SOURCE_ROLES = [
   "reference_audio",
   "source_video",
   "first_clip",
+  "driving_audio",
 ] as const;
 export type SourceRole = (typeof SOURCE_ROLES)[number];
 
@@ -99,6 +100,13 @@ export const ROLE_COPY: Record<SourceRole, RoleCopy> = {
     urlLabel: "genSourceVideoUrl",
     accept: "video/*",
   },
+  driving_audio: {
+    label: "genDrivingAudio",
+    upload: "genDrivingAudioUpload",
+    uploading: "genDrivingAudioUploading",
+    urlLabel: "genDrivingAudioUrl",
+    accept: "audio/*",
+  },
   first_clip: {
     label: "genFirstClip",
     upload: "genFirstClipUpload",
@@ -157,6 +165,7 @@ export function emptyFrames(): FrameSlots {
     reference_audio: [{ ...EMPTY_SLOT }],
     source_video: [{ ...EMPTY_SLOT }],
     first_clip: [{ ...EMPTY_SLOT }],
+    driving_audio: [{ ...EMPTY_SLOT }],
   };
 }
 

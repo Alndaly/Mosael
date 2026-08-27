@@ -142,14 +142,82 @@ WAN_VIDEO_CAPABILITIES = {
 #: * 清晰度只有 **720P / 1080P**(`Input should be '1080P' or '720P'`),不再按 W*H 给尺寸。
 #:
 #: 已实跑通过:t2v 2s/15s/1080P、i2v 首帧、i2v 首帧+尾帧、r2v 参考图,全部 SUCCEEDED。
-WAN_27_VIDEO_CAPABILITIES = {
-    "modes": ["text-to-video", "image-to-video", "keyframes-to-video", "reference-to-video"],
+#: 万相 2.7 的三个型号**各认各的素材**,不是一份描述符能盖住的。类型白名单是接口自己报的
+#: (2026-08-27 真机,每条都跑到终态):
+#:
+#:   i2v  `Input should be 'first_frame', 'last_frame', 'driving_audio' or 'first_clip'`
+#:   r2v  `Input should be 'reference_image', 'reference_video' or 'first_frame'`
+#:   t2v  **给什么都收,而且照样 SUCCEEDED** —— 它根本不看 media。
+#:
+#: 最后那条最要命:此前三个型号共用一份描述符,于是文生视频那一栏也长出了首帧和参考图。
+#: 用户挂上一张图、任务成功、片子里没有那张图的任何痕迹 —— 不报错,只是那张图从来没被用过。
+#: 所以 t2v 一个素材角色都不声明。
+WAN_27_T2V_CAPABILITIES = {
+    "modes": ["text-to-video"],
+    "endpoint": "dashscope",
+    "payload_shape": "media",
+    "parameter_keys": ["duration_seconds", "resolution", "aspect_ratio"],
+    "duration_seconds": [],
+    "default_duration_seconds": 5,
+    "resolutions": ["720P", "1080P"],
+    "default_resolution": "1080P",
+    "aspect_ratios": ["16:9", "9:16", "1:1", "4:3", "3:4"],
+    "default_aspect_ratio": "16:9",
+    "min_duration_seconds": 2,
+    "max_duration_seconds": 15,
+    "supports_audio": True,
+}
+
+#: 图生视频。文档说它一个模型干三件事:首帧生视频、首尾帧生视频、**视频续写**。
+#:
+#: 素材组合是**白名单**,不是随便配 —— 文档原话「仅支持以下特定的素材组合,非法组合将报错」:
+#:   first_frame / first_frame+driving_audio / first_frame+last_frame /
+#:   first_frame+last_frame+driving_audio / first_clip / first_clip+last_frame
+#:
+#: 这份白名单用现有的两条规则就能原样表达,不用再造一个机制:
+#:   * 首帧和续写片段互斥(一个是从这张图动起来,一个是接着这段片子往下拍);
+#:   * 尾帧得搭首帧或续写片段(光给尾帧没有起点);
+#:   * driving_audio 只跟首帧走(所以续写 + 音频这个非法组合自动落空)。
+WAN_27_I2V_CAPABILITIES = {
+    "modes": ["image-to-video", "keyframes-to-video", "video-extend"],
     "endpoint": "dashscope",
     "payload_shape": "media",
     "parameter_keys": [
         "duration_seconds", "resolution", "aspect_ratio",
-        "first_frame", "last_frame", "reference_image", "reference_video",
-        "first_clip",
+        "first_frame", "last_frame", "first_clip", "driving_audio",
+    ],
+    "duration_seconds": [],
+    "default_duration_seconds": 5,
+    "resolutions": ["720P", "1080P"],
+    "default_resolution": "1080P",
+    "aspect_ratios": ["16:9", "9:16", "1:1", "4:3", "3:4"],
+    "default_aspect_ratio": "16:9",
+    # 文档原话:每种 type 在 media 数组中最多出现一次。
+    "source_limits": {"first_frame": 1, "last_frame": 1, "first_clip": 1, "driving_audio": 1},
+    "requires_source": [["first_frame", "first_clip"]],
+    "exclusive_source_groups": [["first_frame"], ["first_clip"]],
+    "requires_companion": {
+        "last_frame": ["first_frame", "first_clip"],
+        "driving_audio": ["first_frame"],
+    },
+    "min_duration_seconds": 2,
+    "max_duration_seconds": 15,
+    "supports_audio": True,
+}
+
+#: 参考生视频。接口两句话把规矩说全了:
+#:   `Field required: input.media`      —— 必须给参考素材,不能空着跑
+#:   `Only first frame provided is not allowed` —— 光给首帧不算,首帧只是**辅助**
+#:
+#: 所以这里的首帧和 i2v 那边的首帧不是一回事:那边它是主角(画面从它动起来),这边它得
+#: 搭着参考素材才有意义。
+WAN_27_R2V_CAPABILITIES = {
+    "modes": ["reference-to-video"],
+    "endpoint": "dashscope",
+    "payload_shape": "media",
+    "parameter_keys": [
+        "duration_seconds", "resolution", "aspect_ratio",
+        "reference_image", "reference_video", "first_frame",
     ],
     "duration_seconds": [],
     "default_duration_seconds": 5,
@@ -159,10 +227,11 @@ WAN_27_VIDEO_CAPABILITIES = {
     "default_aspect_ratio": "16:9",
     # 文档原话:参考图像 + 参考视频合计不超过 5 个,首帧图像最多 1 张。这一组和火山那边的
     # 9/3/3 不是一个数,别照抄 —— 每家自己一套。
-    "source_limits": {"first_frame": 1, "last_frame": 1, "reference_image": 5, "reference_video": 5, "first_clip": 1},
-    # 续写是第三条路:给一段现成的片子,让模型接着往下拍。它既不是首尾帧(那是画面的起止),
-    # 也不是参考视频(那只提供风格和主体、自己不出现在成片里),所以自成一组。
-    "exclusive_source_groups": [KEYFRAME_GROUP, REFERENCE_GROUP, ["first_clip"]],
+    "source_limits": {"reference_image": 5, "reference_video": 5, "first_frame": 1},
+    "requires_source": [["reference_image", "reference_video"]],
+    # 带参考视频时时长压到 10 秒(文档原话:包含参考视频 2–10s,不包含 2–15s)。写死 15 的话,
+    # 用户挂了参考视频再选 12 秒,要等任务失败才知道。
+    "conditional_max_duration_seconds": {"reference_video": 10},
     "min_duration_seconds": 2,
     "max_duration_seconds": 15,
     "supports_audio": True,
@@ -188,7 +257,7 @@ WAN_VIDEO_EDIT_CAPABILITIES = {
     "aspect_ratios": ["16:9", "9:16", "1:1", "4:3", "3:4"],
     "default_aspect_ratio": "16:9",
     "source_limits": {"source_video": 1, "reference_image": 5},
-    "requires_source": ["source_video"],
+    "requires_source": [["source_video"]],
     "min_duration_seconds": 2,
     "max_duration_seconds": 10,
     "supports_audio": True,
@@ -418,14 +487,14 @@ BUILTIN_MODELS = [
         "provider": "alibaba",
         "kind": "video",
         "model": "wan2.7-t2v",
-        "capabilities": WAN_27_VIDEO_CAPABILITIES,
+        "capabilities": WAN_27_T2V_CAPABILITIES,
     },
     {
         "id": "alibaba:wan2.7-i2v:video",
         "provider": "alibaba",
         "kind": "video",
         "model": "wan2.7-i2v",
-        "capabilities": WAN_27_VIDEO_CAPABILITIES,
+        "capabilities": WAN_27_I2V_CAPABILITIES,
     },
     {
         # 参考生视频:照着参考图/参考视频里的人和风格拍,而不是从某一帧开始动。
@@ -433,7 +502,7 @@ BUILTIN_MODELS = [
         "provider": "alibaba",
         "kind": "video",
         "model": "wan2.7-r2v",
-        "capabilities": WAN_27_VIDEO_CAPABILITIES,
+        "capabilities": WAN_27_R2V_CAPABILITIES,
     },
     {
         # 视频编辑:给一段片子加一句指令,出的是同一段片子改过之后的样子。
