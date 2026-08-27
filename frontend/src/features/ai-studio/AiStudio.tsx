@@ -63,7 +63,7 @@ import {
   exclusiveSourceGroups,
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
-import { FrameSlotField } from "@/features/ai-studio/FrameSlotField";
+import { FrameSlotField, KeyframePairField } from "@/features/ai-studio/FrameSlotField";
 import { SessionList } from "@/features/ai-studio/SessionList";
 import { AI_PANEL_BOUNDS } from "@/features/ai-studio/ChatWorkspace";
 import { useMediaMatch } from "@/lib/useMediaMatch";
@@ -1069,26 +1069,19 @@ function GenerateWorkspace({
                   </label>
                 )}
                 {supportsFirstFrame && (
-                  <FrameSlotField
-                    role="first_frame"
-                    slots={generationConfig.frames.first_frame}
-                    limit={sourceLimit(selectedModel, "first_frame")}
-                    onChange={(slots) => setFrames("first_frame", slots)}
+                  <KeyframePairField
+                    first={generationConfig.frames.first_frame}
+                    last={generationConfig.frames.last_frame}
+                    showLast={supportsLastFrame}
+                    onChange={({ first, last }) =>
+                      setGenerationConfig((current) => ({
+                        ...current,
+                        frames: { ...current.frames, first_frame: first, last_frame: last },
+                      }))
+                    }
                     workspaceId={workspace.id}
-                    hint={t("genKeyframeHint")}
+                    hint={supportsLastFrame ? t("genLastFrameHint") : t("genKeyframeHint")}
                     disabled={lockedRoles.has("first_frame")}
-                    disabledReason={t("genSourceGroupsExclusive")}
-                  />
-                )}
-                {supportsLastFrame && (
-                  <FrameSlotField
-                    role="last_frame"
-                    slots={generationConfig.frames.last_frame}
-                    limit={sourceLimit(selectedModel, "last_frame")}
-                    onChange={(slots) => setFrames("last_frame", slots)}
-                    workspaceId={workspace.id}
-                    hint={t("genLastFrameHint")}
-                    disabled={lockedRoles.has("last_frame")}
                     disabledReason={t("genSourceGroupsExclusive")}
                   />
                 )}

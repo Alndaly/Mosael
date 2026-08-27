@@ -1,30 +1,144 @@
 import React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Upload, X } from "lucide-react";
+import { ArrowLeftRight, Music, Plus, X } from "lucide-react";
 
 import { assetFileUrl, assetThumbnailUrl, importAsset, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { EMPTY_SLOT, ROLE_COPY, isEmptySlot, withSlot, type FrameSlot, type SourceRole } from "@/features/ai-studio/sourceFrames";
+import { EMPTY_SLOT, ROLE_COPY, isEmptySlot, type FrameSlot, type SourceRole } from "@/features/ai-studio/sourceFrames";
 
 /**
- * 一个「带角色的输入素材」槽位:上传/选一张图,或者粘一条外链。
+ * 「带角色的输入素材」在面板里的样子:**一格一格的缩略图**,不是一行一行的表单。
  *
- * 首帧、尾帧、参考图长得一模一样,差的只是称呼 —— 此前它们在生成面板里各占一套(三个配置
- * 字段、一个 ref、一条上传变更、一个清除函数、六十行 JSX)。加尾帧就是把这一整套再抄一遍。
+ * 此前每个角色占五行(标题、说明、上传按钮、URL 标签、URL 输入框),再加一个「再加一份」。
+ * 火山那种支持首帧 + 尾帧 + 参考图 + 参考视频 + 参考音频的模型,光素材区就三十多行 ——
+ * 面板滚三屏才到底,而用户真正要看的是"我挂了哪几张图",那恰恰是唯一看不见的东西。
  *
- * 素材和外链**互斥**:填了一个就清掉另一个。两个同时留着的话,后端按素材走,而界面上那条
- * url 还明晃晃写着,用户会以为它生效了。
+ * 现在一个角色一行缩略图:挂了什么一眼看得见,加号在末尾,加到上限就消失。
  *
- * ## 一个角色可以挂多份
+ * ## 三处刻意的取舍
  *
- * 参考图能给九张、参考视频三段(上限由描述符的 source_limits 给)。所以这里收的是**一串**
- * 槽位:`limit === 1` 时长得和以前一模一样,没有计数也没有加号;大于 1 时每一份自己一行,
- * 底下一个「再加一份」,加到上限就消失 —— 上限是接口的硬约束,让用户挂到第十张再被拒,
- * 拒的话还是一句说着数组下标的英文。
+ * **一次能选多个文件。** 参考图能挂九张,让用户点九次上传是没有道理的。选多了就按剩余
+ * 名额截断,而不是报错 —— 用户的意图很清楚,是"这些都要"。
+ *
+ * **没有 URL 输入框。** 那一栏几乎没人用(素材本来就在素材库里),却让每个角色多占两行。
+ * 外链这条路本身留着(智能体和工作流照样能发 `<role>_url`,见 ai/providers/base),
+ * 只是不再占据面板。
+ *
+ * **首尾帧左右并排,中间一个交换箭头。** 它俩天然是一对(从这一格动到那一格),而竖着排
+ * 的时候完全看不出这层关系;拍错顺序也是常事,所以给一个原地对调,而不是让用户删掉重传。
  */
+
+/** 一格素材的尺寸:够看清是什么,又不至于把面板撑开。 */
+const TILE = "grid aspect-video w-full place-items-center overflow-hidden rounded-lg border border-border bg-muted/40";
+
+function useUpload(workspaceId: string, onDone: (assets: Asset[]) => void) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (files: File[]) =>
+      Promise.all(files.map((file) => importAsset({ workspaceId, file, name: file.name }))),
+    onSuccess: (assets: Asset[]) => {
+      onDone(assets);
+      void qc.invalidateQueries({ queryKey: ["assets", workspaceId] });
+      void qc.invalidateQueries({ queryKey: ["assets"] });
+    },
+  });
+}
+
+function slotOf(asset: Asset): FrameSlot {
+  return { url: "", assetId: asset.id, assetName: asset.name };
+}
+
+/** 一格:空的是个加号,填了的是缩略图 + 一个移除角标。 */
+function Tile({
+  slot,
+  role,
+  disabled,
+  onPick,
+  onClear,
+  multiple,
+  label,
+}: {
+  slot: FrameSlot | null;
+  role: SourceRole;
+  disabled: boolean;
+  onPick: (files: File[]) => void;
+  onClear?: () => void;
+  multiple: boolean;
+  label?: string;
+}) {
+  const t = useI18n();
+  const { openImagePreview } = useImagePreview();
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const copy = ROLE_COPY[role];
+  const isAudio = copy.accept.startsWith("audio");
+
+  if (slot && !isEmptySlot(slot)) {
+    return (
+      <div className="relative">
+        <button
+          type="button"
+          className={`${TILE} cursor-zoom-in p-0`}
+          onClick={() =>
+            isAudio
+              ? undefined
+              : openImagePreview({ src: assetFileUrl(slot.assetId), title: slot.assetName || t(copy.label) })
+          }
+        >
+          {isAudio ? (
+            <span className="flex items-center gap-1.5 px-2 text-ui-xs font-semibold text-muted-foreground">
+              <Music size={13} />
+              <span className="truncate">{slot.assetName}</span>
+            </span>
+          ) : (
+            <img className="block h-full w-full object-cover" src={assetThumbnailUrl(slot.assetId)} alt="" />
+          )}
+        </button>
+        {onClear && !disabled && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="absolute right-1 top-1 h-5 w-5 rounded-full bg-background/85 hover:bg-background"
+            onClick={onClear}
+            aria-label={t("delete")}
+          >
+            <X size={11} />
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <input
+        ref={inputRef}
+        className="sr-only"
+        type="file"
+        multiple={multiple}
+        accept={copy.accept}
+        onChange={(event) => {
+          const files = Array.from(event.target.files ?? []);
+          event.target.value = "";
+          if (files.length) onPick(files);
+        }}
+      />
+      <button
+        type="button"
+        disabled={disabled}
+        className={`${TILE} cursor-pointer gap-1 border-dashed text-ui-xs font-semibold text-muted-foreground hover:border-primary/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60`}
+        onClick={() => inputRef.current?.click()}
+      >
+        <Plus size={14} />
+        {label && <span className="px-1 text-center leading-tight">{label}</span>}
+      </button>
+    </>
+  );
+}
+
+/** 一个角色的全部素材:一行缩略图 + 末尾一个加号。 */
 export function FrameSlotField({
   role,
   slots,
@@ -37,30 +151,29 @@ export function FrameSlotField({
 }: {
   role: SourceRole;
   slots: FrameSlot[];
-  /** 这个角色最多挂几份。来自描述符的 source_limits,不是我们定的。 */
   limit?: number;
   onChange: (next: FrameSlot[]) => void;
   workspaceId: string;
-  /** 这个角色要额外说的一句话(比如首尾帧一起给是什么意思)。 */
   hint?: string;
-  /** 另一组正在用 —— 灰掉,并说清楚为什么。 */
   disabled?: boolean;
   disabledReason?: string;
 }) {
   const t = useI18n();
   const copy = ROLE_COPY[role];
-  const filled = slots.filter((slot) => !isEmptySlot(slot)).length;
-  const canAdd = !disabled && slots.length < limit;
+  const filled = slots.filter((one) => !isEmptySlot(one));
+  // 选多了就按剩余名额截断 —— 用户的意图很清楚(这些都要),为超出的那两张弹个错没有意义。
+  const upload = useUpload(workspaceId, (assets) =>
+    onChange([...filled, ...assets.map(slotOf)].slice(0, limit)),
+  );
+  const canAdd = !disabled && filled.length < limit;
 
   return (
-    <div
-      className={`grid gap-1.5 text-ui-xs font-semibold text-muted-foreground ${disabled ? "opacity-45" : ""}`}
-    >
+    <div className={`grid gap-1.5 text-ui-xs font-semibold text-muted-foreground ${disabled ? "opacity-45" : ""}`}>
       <div className="flex items-center justify-between gap-2">
         <span>{t(copy.label)}</span>
         {limit > 1 && (
           <span className="font-normal tabular-nums text-muted-foreground/70">
-            {filled}/{limit}
+            {filled.length}/{limit}
           </span>
         )}
       </div>
@@ -68,123 +181,118 @@ export function FrameSlotField({
       {disabled && disabledReason && (
         <span className="font-normal leading-[1.5] text-muted-foreground/80">{disabledReason}</span>
       )}
-      {slots.map((slot, index) => (
-        <OneSlot
-          key={index}
-          role={role}
-          slot={slot}
-          disabled={disabled}
-          workspaceId={workspaceId}
-          onChange={(next) => onChange(withSlot(slots, index, next))}
-        />
-      ))}
-      {canAdd && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="w-full justify-center"
-          onClick={() => onChange([...slots, { ...EMPTY_SLOT }])}
-        >
-          <Plus size={13} />
-          {t("genReferenceAdd")}
-        </Button>
-      )}
+      <div className="grid grid-cols-3 gap-1.5">
+        {filled.map((slot, index) => (
+          <Tile
+            key={slot.assetId || index}
+            slot={slot}
+            role={role}
+            disabled={disabled}
+            multiple={limit > 1}
+            onPick={() => undefined}
+            onClear={() => onChange(filled.filter((_, i) => i !== index))}
+          />
+        ))}
+        {canAdd && (
+          <Tile
+            slot={null}
+            role={role}
+            disabled={upload.isPending}
+            multiple={limit > 1}
+            onPick={(files) => upload.mutate(files)}
+            label={upload.isPending ? t(copy.uploading) : undefined}
+          />
+        )}
+      </div>
     </div>
   );
 }
 
-/** 一份素材。上传/选一张,或者粘一条外链。 */
-function OneSlot({
-  role,
-  slot,
+/**
+ * 首帧和尾帧并排,中间一个交换箭头。
+ *
+ * 它俩是一对:成片从左边那一格动到右边那一格。竖着排的时候这层关系完全看不出来,而"拍反了"
+ * 又是最常见的手误 —— 所以给一个原地对调,而不是删掉两张重传。
+ */
+export function KeyframePairField({
+  first,
+  last,
   onChange,
   workspaceId,
-  disabled,
+  hint,
+  disabled = false,
+  disabledReason,
+  showLast,
 }: {
-  role: SourceRole;
-  slot: FrameSlot;
-  onChange: (next: FrameSlot) => void;
+  first: FrameSlot[];
+  last: FrameSlot[];
+  onChange: (next: { first: FrameSlot[]; last: FrameSlot[] }) => void;
   workspaceId: string;
-  disabled: boolean;
+  hint?: string;
+  disabled?: boolean;
+  disabledReason?: string;
+  /** 有些模型只认首帧 —— 那就只画左边一格,不画箭头。 */
+  showLast: boolean;
 }) {
   const t = useI18n();
-  const qc = useQueryClient();
-  const { openImagePreview } = useImagePreview();
-  const inputRef = React.useRef<HTMLInputElement>(null);
-  const copy = ROLE_COPY[role];
-
-  const upload = useMutation({
-    mutationFn: (file: File) => importAsset({ workspaceId, file, name: file.name }),
-    onSuccess: (asset: Asset) => {
-      onChange({ url: "", assetId: asset.id, assetName: asset.name });
-      void qc.invalidateQueries({ queryKey: ["assets", workspaceId] });
-      void qc.invalidateQueries({ queryKey: ["assets"] });
-    },
-  });
+  const firstSlot = first[0] ?? EMPTY_SLOT;
+  const lastSlot = last[0] ?? EMPTY_SLOT;
+  const uploadFirst = useUpload(workspaceId, (assets) => onChange({ first: [slotOf(assets[0])], last }));
+  const uploadLast = useUpload(workspaceId, (assets) => onChange({ first, last: [slotOf(assets[0])] }));
+  const canSwap = !disabled && !isEmptySlot(firstSlot) && !isEmptySlot(lastSlot);
 
   return (
-    <div className="grid gap-1.5">
-      <input
-        ref={inputRef}
-        className="sr-only"
-        type="file"
-        accept={copy.accept}
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          event.target.value = "";
-          if (file) upload.mutate(file);
-        }}
-      />
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="w-full justify-center"
-        onClick={() => inputRef.current?.click()}
-        loading={upload.isPending}
-        disabled={disabled}
-      >
-        <Upload size={13} />
-        {upload.isPending ? t(copy.uploading) : t(copy.upload)}
-      </Button>
-      {slot.assetId && (
-        <div className="grid min-h-11 grid-cols-[44px_minmax(0,1fr)_28px] items-center gap-2 rounded-lg border border-border bg-[color-mix(in_srgb,var(--panel)_88%,var(--muted)_12%)] p-[5px]">
-          <button
-            type="button"
-            className="block size-auto h-[34px] w-11 cursor-zoom-in overflow-hidden rounded-lg border border-border bg-muted p-0"
-            onClick={() => openImagePreview({ src: assetFileUrl(slot.assetId), title: slot.assetName || t(copy.label) })}
-          >
-            <img className="block h-full w-full object-cover" src={assetThumbnailUrl(slot.assetId)} alt="" />
-          </button>
-          <span className="truncate text-xs font-semibold text-foreground" title={slot.assetName}>
-            {slot.assetName}
-          </span>
+    <div className={`grid gap-1.5 text-ui-xs font-semibold text-muted-foreground ${disabled ? "opacity-45" : ""}`}>
+      <span>{showLast ? t("genKeyframes") : t("genFirstFrame")}</span>
+      {hint && <span className="font-normal leading-[1.5] text-muted-foreground/80">{hint}</span>}
+      {disabled && disabledReason && (
+        <span className="font-normal leading-[1.5] text-muted-foreground/80">{disabledReason}</span>
+      )}
+      {showLast ? (
+        <div className="grid grid-cols-[minmax(0,1fr)_28px_minmax(0,1fr)] items-center gap-1">
+          <Tile
+            slot={firstSlot}
+            role="first_frame"
+            disabled={disabled || uploadFirst.isPending}
+            multiple={false}
+            onPick={(files) => uploadFirst.mutate(files.slice(0, 1))}
+            onClear={() => onChange({ first: [{ ...EMPTY_SLOT }], last })}
+            label={t("genFirstFrame")}
+          />
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            onClick={() => onChange({ ...EMPTY_SLOT })}
-            aria-label={t("delete")}
+            className="mx-auto h-6 w-6"
+            disabled={!canSwap}
+            onClick={() => onChange({ first: last, last: first })}
+            aria-label={t("genSwapKeyframes")}
+            title={t("genSwapKeyframes")}
           >
-            <X size={13} />
+            <ArrowLeftRight size={13} />
           </Button>
+          <Tile
+            slot={lastSlot}
+            role="last_frame"
+            disabled={disabled || uploadLast.isPending}
+            multiple={false}
+            onPick={(files) => uploadLast.mutate(files.slice(0, 1))}
+            onClear={() => onChange({ first, last: [{ ...EMPTY_SLOT }] })}
+            label={t("genLastFrame")}
+          />
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-1.5">
+          <Tile
+            slot={firstSlot}
+            role="first_frame"
+            disabled={disabled || uploadFirst.isPending}
+            multiple={false}
+            onPick={(files) => uploadFirst.mutate(files.slice(0, 1))}
+            onClear={() => onChange({ first: [{ ...EMPTY_SLOT }], last })}
+          />
         </div>
       )}
-      <label className="grid gap-1.5">
-        <span>{t(copy.urlLabel)}</span>
-        <Input
-          className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-ui-sm font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
-          placeholder="https://..."
-          disabled={disabled}
-          value={slot.url}
-          onChange={(event) =>
-            // 填了外链就清掉选中的素材 —— 两个都留着的话,后端按素材走,而界面上那条 url
-            // 还写着,用户会以为它生效了。
-            onChange(event.target.value.trim() ? { url: event.target.value, assetId: "", assetName: "" } : { ...EMPTY_SLOT })
-          }
-        />
-      </label>
     </div>
   );
 }
