@@ -22,7 +22,7 @@ import {
   type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { AlertTriangle, AlignLeft, Film, Image as ImageIcon, AppWindow, ArrowLeft, AudioLines, Bell, BookOpen, Bot, Boxes, Braces, CaseSensitive, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleCheck, Code2, Download, FileOutput, FileUp, Filter, Flag, FolderInput, FolderPlus, GitBranch, Globe, History, Hourglass, Keyboard, Languages, Link2, ListChecks, Loader2, Mic, MousePointer2, MousePointerClick, PanelTopClose, PenLine, Pencil, Play, Plus, Redo2, RefreshCw, Repeat, Rocket, ScanText, Search, SkipForward, Sparkles, Spline, Tags, Timer, Trash2, Type, Undo2, Wand2, Waypoints, Workflow as WorkflowIcon, Wrench, X, XCircle, type LucideIcon } from "lucide-react";
+import { AlertTriangle, AlignLeft, Film, Image as ImageIcon, Map as MapIcon, AppWindow, ArrowLeft, AudioLines, Bell, BookOpen, Bot, Boxes, Braces, CaseSensitive, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleCheck, Code2, Download, FileOutput, FileUp, Filter, Flag, FolderInput, FolderPlus, GitBranch, Globe, History, Hourglass, Keyboard, Languages, Link2, ListChecks, Loader2, Mic, MousePointer2, MousePointerClick, PanelTopClose, PenLine, Pencil, Play, Plus, Redo2, RefreshCw, Repeat, Rocket, ScanText, Search, SkipForward, Sparkles, Spline, Tags, Timer, Trash2, Type, Undo2, Wand2, Waypoints, Workflow as WorkflowIcon, Wrench, X, XCircle, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -1025,12 +1025,6 @@ function toFlowNodes(graph: WorkflowGraph, registry: Map<string, WorkflowNodeTyp
       inputs: node.inputs ?? [],
       // 过滤通配输出(如 start 的 *params),它们不是可连接的具体接点。
       outputs: (registry.get(node.type)?.outputs ?? []).filter((output) => !output.startsWith("*")),
-      configAssetId: configAsset(node, registry),
-      // 接点类型在这里算好带走:节点卡片是 react-flow 的渲染组件,拿不到 registry,
-      // 而"这个槽收什么"是注册表的知识,不该在卡片里另找一条路问。
-      inputTypes: Object.fromEntries(
-        (node.inputs ?? []).map((key) => [key, inputType(registry, node.type, key)]),
-      ),
       configSummary: configSummary(node),
     } satisfies WfNodeData,
     deletable: true,
@@ -1242,6 +1236,9 @@ function WorkflowEditor({
   /** 执行历史与助手同一套停靠/悬浮机制,但各记各的模式与几何。 */
   const [historyMode, setHistoryMode] = usePersistentTab<WorkflowAgentMode>("wf-history-mode", "docked", AGENT_MODES);
   const [edgeShape, setEdgeShape] = usePersistentTab<EdgeShape>("wf-edge-shape", "default", EDGE_SHAPES);
+  //: 右下角的全览。默认开着 —— 大图时它最有用,而"图大不大"只有用户自己知道。
+  const [minimapMode, setShowMinimap] = usePersistentTab<"on" | "off">("wf-minimap", "on", ["on", "off"] as const);
+  const showMinimap = minimapMode === "on";
   /** 节点的手动层级。只在会话内有效,不写进图 —— 叠放是看图时的临时诉求(把被压住的那个
    *  拎出来看一眼),固化进数据会让每次调整都变成一次图变更、触发自动保存。 */
   const [nodeZ, setNodeZ] = React.useState<Record<string, number>>({});
@@ -1948,8 +1945,11 @@ function WorkflowEditor({
   }, [nodes]);
 
   const displayNodes = React.useMemo(
-    () =>
-      nodes.map((node) => {
+    () => {
+      //: 画布节点(react-flow 的)身上没有 config,配置在图里。按 id 取回来。
+      const graphNode = (id: string) =>
+        graph.nodes.find((one) => one.id === id) ?? { id, type: "", config: {} };
+      return nodes.map((node) => {
         const nodeIssues = analysis.byNode.get(node.id);
         const severity = analysis.severityByNode.get(node.id);
         const badge =
@@ -1966,37 +1966,65 @@ function WorkflowEditor({
             run: step ? { status: step.status, ms: step.ms, error: step.error } : null,
             runAssets: step?.outputs ? assetOutputs(node.data.nodeType as string, step.outputs) : [],
             runSummary: outputSummary(node.data.nodeType as string, step?.outputs),
+            // **这两项算在这里,不在 toFlowNodes。** 那个函数跑在 useState 的初始化里,
+            // 那一刻节点类型还没拉回来、registry 是空的 —— 算出来的永远是空值,而且不会重算。
+            // (素材节点的缩略图和图标就是这么丢的:改成读注册表之后,读的是一张还没到货的表。)
+            configAssetId: configAsset(graphNode(node.id), registry),
+            inputTypes: Object.fromEntries(
+              ((node.data as WfNodeData).inputs ?? []).map((key) => [
+                key,
+                inputType(registry, node.data.nodeType as string, key),
+              ]),
+            ),
           },
         };
-      }),
-    [nodes, analysis, t, runByNode, nodeZ],
+      });
+    },
+    // registry / graph 也要在里面:缩略图和接点类型都读它们,漏了就一直是加载前的空值。
+    [nodes, analysis, t, runByNode, nodeZ, registry, graph],
   );
 
   return (
     // 间距和别的页面一样是 8px:外框已经有 p-2,这里给 gap-2 就够,工具条自己不再另加
     // 上下内边距 —— 此前是 pb-2 pt-0.5(下 8 上 2),上下差四倍,顶栏看着往上贴。
-    <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-2">
-      <div className="flex flex-wrap items-center justify-between gap-2.5 px-0.5">
+    // **工具条浮在画布上,不再占一整行。** 画布因此从上到下是完整的一块 —— 此前顶上那条
+    // 实心横带把可视区切掉一截,而工作流恰恰是越大越好看的东西。
+    //
+    // 没有照搬参考产品的左侧竖直悬浮栏:我们左边**已经有一条全局导航栏**,再加一条竖栏就是
+    // 两条并排的竖条,用户得先分辨"哪条是应用的、哪条是这一页的"。所以横向成组、浮在顶部,
+    // 保持"这一页的操作"和"整个应用的导航"在方向上就分得开。
+    <div className="relative grid min-h-0">
+      <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex flex-wrap items-start justify-between gap-2 [&>*]:pointer-events-auto">
+        {/* 左边这组是**身份**(回哪儿去、这是谁),右边那组是**操作**。浮起来之后两组各自要有
+            自己的底,否则它们会散在画布上,和节点抢注意力 —— 悬浮不等于没有边界。 */}
+        <div className="flex items-center gap-1 rounded-full border border-border bg-panel/95 p-1 pr-2.5 shadow-[var(--shadow-panel)] backdrop-blur">
         <button
           type="button"
-          className="-ml-1 grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          className="grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-transparent text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           onClick={onBack}
           title={t("navWorkflows")}
           aria-label={t("navWorkflows")}
         >
           <ChevronLeft size={16} />
         </button>
-        <button type="button" className="mr-auto inline-flex cursor-pointer items-center gap-[9px] rounded-md border-0 bg-transparent py-[3px] pl-[3px] pr-1.5 text-left text-foreground hover:bg-secondary" onClick={() => setRenaming(true)} title={t("rename")}>
-          <span className="grid h-7 w-7 place-items-center rounded-md bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary">
-            <WorkflowIcon size={14} />
-          </span>
+        {/* 返回和名字之间一根竖线:一个是"离开这里",一个是"这里是什么" —— 两件事,
+            挨着放需要一道界。 */}
+        <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-border" />
+        {/* 工作流图标去掉了:左边导航栏里那一格已经亮着"工作流",顶上再画一次是同一句话说两遍,
+            而这一格真正要回答的是"**哪一个**工作流"。 */}
+        <button type="button" className="inline-flex cursor-pointer items-center rounded-full border-0 bg-transparent px-1.5 py-[3px] text-left text-foreground hover:bg-secondary" onClick={() => setRenaming(true)} title={t("rename")}>
           <span className="grid leading-[1.3] [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:text-ui-md">
             <strong>{workflow.name}</strong>
             {/* 保存状态只放工具栏的 wf-save-status:标题里再挂一行「未保存」会随每次
                 拖动→自动保存增删一行,撑动整条工具栏导致画布跳一下(闪烁)。 */}
           </span>
         </button>
-        <div className="flex flex-wrap items-center gap-1.5">
+        </div>
+        {/* 右边按**作用对象**分组,每组自己一颗胶囊 —— 此前十来个按钮挤在一条里,只靠两道
+            细竖线隔开,找一个键要从头扫到尾。分组是:编辑图 / 理解图 / 跑这张图 / 看的方式 /
+            这份文档。竖线换成真正断开,因为断开比线更快被看见。 */}
+        <div className="flex flex-wrap items-start justify-end gap-2">
+        <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
           {/* 工具条统一刻度:胶囊(rounded-full)、h-8、text-xs;图标钮 h-8 w-8。 */}
           <SearchableSelect
             value=""
@@ -2021,7 +2049,8 @@ function WorkflowEditor({
           <Button variant="ghost" size="icon" className="h-8 w-8" title={`${t("redo")} ⇧⌘Z`} aria-label={t("redo")} disabled={!canRedo} onClick={redo}>
             <Redo2 size={14} />
           </Button>
-          <div className="mx-1 h-[18px] w-px bg-border" />
+        </div>
+        <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
           <Button
             variant={agentOpen ? "secondary" : "outline"}
             size="sm"
@@ -2103,19 +2132,31 @@ function WorkflowEditor({
               <button
                 type="button"
                 className={cn(
-                  "inline-flex h-8 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-panel px-3 text-xs font-[650] text-muted-foreground transition-[background,border-color,color] duration-[120ms] hover:border-border-strong hover:text-foreground",
+                  // 组已经有自己的边框和底了,按钮**不再各带一层** —— 那是胶囊套胶囊。
+                  // 状态靠颜色说,不靠再画一圈线。
+                  "inline-flex h-8 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border-0 bg-transparent text-xs font-[650] text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground",
+                  checklistCount > 0 ? "px-2.5" : "w-8 justify-center",
                   analysis.errorCount
-                    ? "border-[color-mix(in_srgb,var(--destructive)_45%,var(--border))] bg-[color-mix(in_srgb,var(--destructive)_10%,var(--panel))] text-destructive hover:text-destructive"
+                    ? "bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] text-destructive hover:bg-[color-mix(in_srgb,var(--destructive)_18%,transparent)] hover:text-destructive"
                     : analysis.warnCount
-                      ? "border-[color-mix(in_srgb,#d97706_40%,var(--border))] bg-[color-mix(in_srgb,#f59e0b_10%,var(--panel))] text-[#f59e0b] hover:text-[#f59e0b]"
-                      : "border-[color-mix(in_srgb,#22c55e_30%,var(--border))] bg-[color-mix(in_srgb,#22c55e_8%,var(--panel))] text-[#22c55e] hover:text-[#22c55e]",
+                      ? "bg-[color-mix(in_srgb,#f59e0b_12%,transparent)] text-[#f59e0b] hover:bg-[color-mix(in_srgb,#f59e0b_18%,transparent)] hover:text-[#f59e0b]"
+                      : "bg-[color-mix(in_srgb,#22c55e_10%,transparent)] text-[#22c55e] hover:bg-[color-mix(in_srgb,#22c55e_16%,transparent)] hover:text-[#22c55e]",
                 )}
                 aria-label={`${t("wfChecklist")}: ${checklistLabel}`}
                 title={checklistLabel}
               >
-                {analysis.errorCount || analysis.warnCount ? <AlertTriangle size={13} /> : <CircleCheck size={13} />}
-                <span>{checklistCount > 0 ? t("wfChecklist") : t("wfChecklistReadyShort")}</span>
-                {checklistCount > 0 && <em className="inline-grid h-[15px] min-w-[15px] place-items-center rounded-full border border-[color-mix(in_srgb,currentColor_35%,transparent)] bg-[color-mix(in_srgb,currentColor_14%,transparent)] px-1 text-ui-2xs font-bold not-italic leading-none text-current">{checklistCount}</em>}
+                {/* **没问题时缩成一个图标。** "一切就绪"是无聊的默认态,不该占一整个词的宽度;
+                    有问题时才值得展开 —— 那时数字才是要看的东西。
+                    图标 + 文字 + 数字三样一起上,是同一个状态编码了三遍。 */}
+                {checklistCount > 0 ? <AlertTriangle size={13} /> : <CircleCheck size={14} />}
+                {checklistCount > 0 && (
+                  <>
+                    <span>{t("wfChecklist")}</span>
+                    <em className="inline-grid h-[15px] min-w-[15px] place-items-center rounded-full bg-[color-mix(in_srgb,currentColor_18%,transparent)] px-1 text-ui-2xs font-bold not-italic leading-none text-current">
+                      {checklistCount}
+                    </em>
+                  </>
+                )}
               </button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-80 p-1.5">
@@ -2163,10 +2204,14 @@ function WorkflowEditor({
           >
             <Play size={13} /> {t("wfRun")}
           </Button>
-          <div className="mx-1 h-[18px] w-px bg-border" />
+        </div>
+        <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
           {/* 走线方式:四种够用,直接摆成一排图标钮而不是下拉 —— 它是"试一下看哪种顺眼"的
               设置,藏进下拉就得点两次才能比较一次。 */}
-          <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5">
+          {/* **不再套一个方框。** 分段控件自带 rounded-md 边框,而外层组是 rounded-full ——
+              方框套胶囊,两种圆角打架,而且组里别的按钮都是圆的。选中态用填色表达就够了,
+              不需要再画一圈线把它们框起来。 */}
+          <div className="flex items-center gap-1">
             {EDGE_SHAPES.map((shape) => {
               const Icon = EDGE_SHAPE_ICON[shape];
               return (
@@ -2174,7 +2219,7 @@ function WorkflowEditor({
                   key={shape}
                   variant={edgeShape === shape ? "secondary" : "ghost"}
                   size="icon"
-                  className="h-7 w-7 rounded-[5px]"
+                  className={cn("h-8 w-8", edgeShape === shape && "bg-secondary text-foreground")}
                   aria-label={t(EDGE_SHAPE_LABEL[shape])}
                   title={t(EDGE_SHAPE_LABEL[shape])}
                   aria-pressed={edgeShape === shape}
@@ -2185,7 +2230,21 @@ function WorkflowEditor({
               );
             })}
           </div>
-          <div className="mx-1 h-[18px] w-px bg-border" />
+          {/* 全览可关。它占着右下角一块不小的地方,图小的时候纯属挡视线;而图大的时候
+              又是最有用的东西 —— 所以给开关,不替用户决定。记在本地,下次进来还是这个样子。 */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn("h-8 w-8", showMinimap && "bg-secondary text-foreground")}
+            aria-label={t("wfMinimap")}
+            title={t("wfMinimap")}
+            aria-pressed={showMinimap}
+            onClick={() => setShowMinimap(showMinimap ? "off" : "on")}
+          >
+            <MapIcon size={14} />
+          </Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
           {/* 导出。**放在这一组**(历史/删除)而不是运行旁边:这几个都是对"这份工作流"整体
               做的事,而运行、就绪检查、加节点是对**画布内容**做的事。此前导出只藏在列表页的
               右键菜单里 —— 而人想导出的时机,恰恰是刚在详情页里把它调好的那一刻。 */}
@@ -2213,6 +2272,7 @@ function WorkflowEditor({
           <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t("delete")} onClick={() => setDeleting(true)}>
             <Trash2 size={14} />
           </Button>
+        </div>
         </div>
       </div>
 
@@ -2337,7 +2397,7 @@ function WorkflowEditor({
               position="bottom-left"
               className="overflow-hidden rounded-md border border-border [--xy-controls-box-shadow:none] [--xy-controls-button-background-color:var(--panel)] [--xy-controls-button-background-color-hover:var(--secondary)] [--xy-controls-button-border-color:var(--border)] [--xy-controls-button-color:var(--muted-foreground)] [--xy-controls-button-color-hover:var(--foreground)]"
             />
-            <MiniMap
+            {showMinimap && <MiniMap
               pannable
               zoomable
               position="bottom-right"
@@ -2346,7 +2406,7 @@ function WorkflowEditor({
               maskColor="color-mix(in srgb, var(--background) 55%, transparent)"
               nodeColor="var(--border-strong)"
               nodeStrokeColor="transparent"
-            />
+            />}
           </ReactFlow>
         </div>
         {/* 右栏:助手与执行历史共用。两个都开就上下平分 —— 运行时经常要一边看画布状态、
