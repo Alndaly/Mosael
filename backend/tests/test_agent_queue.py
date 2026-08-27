@@ -385,7 +385,11 @@ def test_排队的跨会话通知_重放时也带上信封(monkeypatch) -> None:
         assert (queued[0].payload or {}).get("from_agent_session") == "peer-9", "排队时把来源丢了"
         assert "【" not in queued[0].content, "信封又被拼进正文了"
 
-    _wait_until(lambda: _status(sid) == "idle", seconds=10)
+    # **等的就是断言的那件事。** 这里此前等的是「会话空闲了」—— 而 idle 在两轮之间是**真的**:
+    # 第一轮在 finally 里置 idle,drain 随后才抢占并起第二轮。满负载跑整个套件时那道缝会变宽,
+    # 于是等待在缝里返回、prompts 还只有一条,测试红一次、单独重跑又绿。
+    # _wait_until 的文档写的就是这条:「断言什么就等什么」。
+    _wait_until(lambda: len(prompts) == 2, seconds=15)
 
     assert len(prompts) == 2, f"排队那条没有作为自己的一轮跑起来:{prompts}"
     assert "peer-9" in prompts[1], "重放时信封丢了 —— 模型不知道这条来自另一个会话"
