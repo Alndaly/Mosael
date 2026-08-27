@@ -75,6 +75,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useCanvasPosture } from "@/features/workflows/useCanvasPosture";
 import { VarTextarea } from "@/features/workflows/VarTextarea";
+import { RefEditor } from "@/features/workflows/RefEditor";
 import { MapField } from "@/features/workflows/MapField";
 import { CodeEditor, type CodeEditorHandle } from "@/components/app/code-editor";
 import { WorkflowAgentChat, type WorkflowAgentMode } from "@/features/workflows/WorkflowAgentChat";
@@ -245,7 +246,7 @@ function NodeResultPreview({ assetIds }: { assetIds: string[] }) {
     // 原地点一下照样打开大图。
     // 预览层:**自己就是通栏的**,因为卡片不带内边距(见卡片那段说明)。多份并排时用 1px 的
     // 底色缝隙隔开,不画框 —— 框会让它读成贴上去的独立元件,而它是卡片自己的一段。
-    <div className="grid grid-flow-col justify-stretch gap-px border-t border-border bg-border">
+    <div className="grid grid-flow-col justify-stretch gap-px overflow-hidden border-t border-border bg-border [&:last-child]:rounded-b-[7px]">
       {ready.map((asset) => (
         <AssetInlinePreview
           key={asset.id}
@@ -300,8 +301,12 @@ function WfNode({ data, selected }: NodeProps) {
         // 此前是"卡片统一 px-3 py-2,预览再用 -mx-3 顶回去、页脚再用 -mb-2 贴上去" ——
         // 负 margin 是把 padding 加错了层之后的补丁:每加一个新区块都要重新算一遍该抵消多少,
         // 而算错了只会看出来一点点歪。分层之后预览天然就是通栏的,不需要抵消任何东西。
-        // overflow-hidden 让预览自己被卡片的圆角裁掉。
-        "group/node relative flex min-w-[172px] max-w-[264px] flex-col overflow-hidden rounded-lg border border-border bg-panel transition-[border-color] duration-100 hover:border-border-strong",
+        // **不能用 overflow-hidden。** 有些东西是**故意挂在卡片外面**的:右上角的告警角标
+        // (-top-[7px] -right-[7px])、左右两侧的连接点(left-[-12px])。裁掉之后角标只剩半个、
+        // 连接点变成贴边的半圆 —— 而它们正是要突出到边界之外才看得见。
+        // 预览夹在标题层和接点层之间,本来就不碰圆角;真正需要圆角的是最底下那一层,
+        // 由它自己 rounded-b 处理(见参数层)。
+        "group/node relative flex min-w-[172px] max-w-[264px] flex-col rounded-lg border border-border bg-panel transition-[border-color] duration-100 hover:border-border-strong",
         // **两侧都有接点时才撑宽。** 单侧接点(比如只有输出的 LLM)撑到 210px 的话,那一列被
         // 推到最右边,左半张卡片是空的 —— 看着像排版坏了,其实是宽度给多了。
         showIo && inputs.length > 0 && outputs.length > 0 && "min-w-[210px]",
@@ -395,7 +400,7 @@ function WfNode({ data, selected }: NodeProps) {
       {showIo && (
         // 接口区做成卡片"页脚条":压进左右 padding、贴住底边、subtle 底色 —
         // 端口行读作独立的接线区,而不是悬在卡片下半的零散小字(空的一侧也不再是大片留白)。
-        <div className="flex justify-between gap-4 border-t border-border bg-panel-subtle px-3 py-[6px]">
+        <div className="flex justify-between gap-4 rounded-b-[7px] border-t border-border bg-panel-subtle px-3 py-[6px]">
           <div className="flex min-w-0 flex-col gap-[3px]">
             {inputs.map((key) => (
               <div className="relative flex min-h-4 items-center" key={key}>
@@ -3443,15 +3448,14 @@ function NodeInspector({
               ) : spec?.type === "code" ? (
                 <CodeField value={String(value ?? "")} onChange={(next) => setConfig(key, next)} variables={variables} />
               ) : spec?.type === "template" ? (
-                // 只有模板字段需要多行:它要放 {{变量}}、要支持 `/` 唤起变量菜单。
-                <VarTextarea
-                  textareaRef={(el) => {
-                    fieldRefs.current[key] = el;
-                  }}
+                // 模板字段:多行,而且里面的 `{{上游.输出}}` 显示成**可整体删除的标签** ——
+                // 纯文本时退格会把它咬成 `{{llm-1.tex`,而半截引用在运行前看不出错。
+                <RefEditor
                   rows={2}
                   value={String(value ?? "")}
                   onChange={(next) => setConfig(key, next)}
                   variables={variables}
+                  placeholder={spec?.description ? undefined : t("wfRefEditorHint")}
                 />
               ) : (
                 // string / number 是单行值,以前也铺成可拖拽的多行文本域 —— 于是同一个面板里
