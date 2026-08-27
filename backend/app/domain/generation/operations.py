@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections import Counter
+
 from typing import Any
 
 from sqlalchemy import select
@@ -227,10 +229,66 @@ def validate_against_capabilities(
                 raise GenerationDomainError(
                     f"{provider}/{model} 的时长要在 {low or 1}–{high} 秒之间"
                 )
+    counts: Counter[str] = Counter()
     for entry in source_assets:
         role = entry.get("role") or ""
         if role not in allowed:
             raise GenerationDomainError(
                 f"{provider}/{model} 不支持「{role}」这种素材;它支持的是:"
                 f"{'、'.join(one for one in keys if one in SOURCE_ROLES) or '无'}"
+            )
+        counts[role] += 1
+    _check_source_counts(provider, model, capabilities, counts)
+
+
+#: 角色的中文名。报错要说人话:用户在界面上看到的是「参考图」,不是 reference_image。
+_ROLE_LABELS = {
+    "first_frame": "首帧",
+    "last_frame": "尾帧",
+    "reference_image": "参考图",
+    "reference_video": "参考视频",
+    "reference_audio": "参考音频",
+}
+
+
+def _label(role: str) -> str:
+    return _ROLE_LABELS.get(role, role)
+
+
+def _check_source_counts(
+    provider: str,
+    model: str,
+    capabilities: dict[str, Any],
+    counts: Counter[str],
+) -> None:
+    """按描述符查三件事:**每种给了几份、两组有没有混着用、有没有该搭伴的落了单**。
+
+    拦在提交之前,是因为供应商那边的回话帮不上忙:火山说的是
+    `expected at most 9 reference images but got 10 instead` —— 英文、说的是数组下标,
+    而用户看到的是自己挂了十张图。更要紧的是**混用那一条**:首帧配参考图必然 400,
+    而界面此前完全允许这么挂,用户只会觉得「这模型怎么老是失败」。
+    """
+    limits = capabilities.get("source_limits") or {}
+    for role, count in counts.items():
+        cap = limits.get(role)
+        if cap is not None and count > int(cap):
+            raise GenerationDomainError(
+                f"{provider}/{model} 最多收 {cap} 份{_label(role)},这次给了 {count} 份"
+            )
+
+    used = {role for role, count in counts.items() if count}
+    groups = [set(group) for group in capabilities.get("exclusive_source_groups") or []]
+    touched = [group for group in groups if group & used]
+    if len(touched) > 1:
+        names = ["、".join(_label(r) for r in sorted(group & used)) for group in touched]
+        raise GenerationDomainError(
+            f"{provider}/{model} 的{' 和 '.join(names)}不能一起用:"
+            "首尾帧决定的是成片的第一格和最后一格,参考素材只影响风格与主体,两者是两条路。"
+        )
+
+    for role, companions in (capabilities.get("requires_companion") or {}).items():
+        if role in used and not (set(companions) & used):
+            raise GenerationDomainError(
+                f"{provider}/{model} 的{_label(role)}不能单独使用,"
+                f"要搭配{'或'.join(_label(one) for one in companions)}一起给"
             )

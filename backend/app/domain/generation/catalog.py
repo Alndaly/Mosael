@@ -2,6 +2,24 @@ from __future__ import annotations
 
 from typing import Any
 
+#: 一份素材**能给几份**,按角色分开算。描述符里写 `source_limits`,校验在
+#: domain/generation/operations.validate_against_capabilities 里统一做。
+#:
+#: 这些数字全部来自接口自己的报错(见 tests/test_capabilities_match_reality.py 里的原话),
+#: 不是从文档抄的「建议值」—— 此前一个都没写,于是界面上想挂几张挂几张,超了就是一个
+#: 提交期 400,而错误信息是英文的、说的是 `content` 数组下标。
+#:
+#: **首尾帧组和参考素材组互斥**,写在 `exclusive_source_groups` 里:同一次生成只能用其中
+#: 一组。这不是我们加的规矩,是火山原话 `first/last frame content cannot be mixed with
+#: reference media content`;可灵那边的说法是「不支持仅尾帧图生视频」,所以尾帧还额外
+#: 依赖首帧(见各家描述符里的 `requires_source`)。
+KEYFRAME_GROUP = ["first_frame", "last_frame"]
+REFERENCE_GROUP = ["reference_image", "reference_video", "reference_audio"]
+
+#: 火山 Seedance 2 与 MiniMax H3 给的数字**一模一样**(9 / 3 / 3),两家的报错措辞不同但
+#: 结论相同,所以这里合成一份共用常量,而不是抄两遍。
+REFERENCE_SCENE_LIMITS = {"reference_image": 9, "reference_video": 3, "reference_audio": 3}
+
 
 
 #: OpenAI 兼容的图像接口(gpt-image-2 等)。真机核过(2026-08-27,经 147ai):
@@ -115,13 +133,62 @@ WAN_VIDEO_CAPABILITIES = {
     "supports_audio": False,
 }
 
+#: 万相 2.7 是**另一份契约**,不是 2.5 的参数微调 —— 2026-08-27 拿用户自己的密钥跑到终态核过:
+#:
+#: * 素材走 `input.media` 数组(每项 `{"type": ..., "url": ...}`),不再是 `input.img_url`。
+#:   拿 2.5 的形状打 2.7,提交返回 200,任务终态才回 `Field required: input.media` ——
+#:   也就是说**我们目录里挂着的 wan2.7-i2v 此前一次都没成功过**,而界面上看不出来。
+#: * 时长是 **2–15 的整数区间**(`Duration should be between 2 and 15`),不是固定 5 秒。
+#: * 清晰度只有 **720P / 1080P**(`Input should be '1080P' or '720P'`),不再按 W*H 给尺寸。
+#:
+#: 已实跑通过:t2v 2s/15s/1080P、i2v 首帧、i2v 首帧+尾帧、r2v 参考图,全部 SUCCEEDED。
+WAN_27_VIDEO_CAPABILITIES = {
+    "modes": ["text-to-video", "image-to-video", "keyframes-to-video", "reference-to-video"],
+    "endpoint": "dashscope",
+    "payload_shape": "media",
+    "parameter_keys": [
+        "duration_seconds", "resolution", "aspect_ratio",
+        "first_frame", "last_frame", "reference_image", "reference_video",
+    ],
+    "duration_seconds": [],
+    "default_duration_seconds": 5,
+    "resolutions": ["720P", "1080P"],
+    "default_resolution": "1080P",
+    "aspect_ratios": ["16:9", "9:16", "1:1", "4:3", "3:4"],
+    "default_aspect_ratio": "16:9",
+    # 文档原话:参考图像 + 参考视频合计不超过 5 个,首帧图像最多 1 张。这一组和火山那边的
+    # 9/3/3 不是一个数,别照抄 —— 每家自己一套。
+    "source_limits": {"first_frame": 1, "last_frame": 1, "reference_image": 5, "reference_video": 5},
+    "exclusive_source_groups": [KEYFRAME_GROUP, REFERENCE_GROUP],
+    "min_duration_seconds": 2,
+    "max_duration_seconds": 15,
+    "supports_audio": True,
+}
+
+
 #: Seedance 2 的时长是**区间,不是两个档位**。此前写的是 `[5, 10]`,于是界面只给这两个
 #: 选项 —— 而真机实测 4 到 15 秒的任意整数都收(3 秒和 16 秒各自被拒成
 #: `the specified duration is not supported`)。枚举留空,界面自动落到 min/max 数字框。
+#: 参考素材那一组是 2026-08-27 对着方舟真机探出来的,每个数字都有接口原话垫底:
+#:   `expected at most 9 reference images but got 10 instead`
+#:   `expected at most 3 video contents but got 4 instead`
+#:   `expected at most 3 audio contents but got 4 instead`
+#:   `expected at most one first frame image content but got 2 instead`
+#:   `first/last frame content cannot be mixed with reference media content`
+#:   `reference_audio cannot be the only reference input`
+#: 输入类型的白名单也是它自己给的:`text`, `image_url`, `audio_url`, `video_url`, `draft_task`。
 SEEDANCE_2_VIDEO_CAPABILITIES = {
-    "modes": ["text-to-video", "image-to-video", "keyframes-to-video"],
+    "modes": ["text-to-video", "image-to-video", "keyframes-to-video", "reference-to-video"],
     "endpoint": "ark",
-    "parameter_keys": ["duration_seconds", "resolution", "first_frame", "last_frame", "reference_image"],
+    "parameter_keys": [
+        "duration_seconds", "resolution",
+        "first_frame", "last_frame",
+        "reference_image", "reference_video", "reference_audio",
+    ],
+    "source_limits": {"first_frame": 1, "last_frame": 1, **REFERENCE_SCENE_LIMITS},
+    "exclusive_source_groups": [KEYFRAME_GROUP, REFERENCE_GROUP],
+    # 参考音频不能单独上场,得搭着参考图或参考视频给 —— 接口自己这么说的。
+    "requires_companion": {"reference_audio": ["reference_image", "reference_video"]},
     "duration_seconds": [],
     "default_duration_seconds": 5,
     "resolutions": ["480p", "720p", "1080p"],
@@ -131,15 +198,29 @@ SEEDANCE_2_VIDEO_CAPABILITIES = {
     "supports_audio": True,
 }
 
+#: Seedance 1 真机核过(2026-08-27),三处和此前写的不一样:
+#:
+#: 1. **它在方舟上,不在 LAS。** 拿方舟密钥打 LAS 直接 401 —— 那是另一套凭据,而我们只让
+#:    用户配一份火山密钥。同一把密钥打方舟的 `doubao-seedance-1-0-pro-250528`,2 秒到 12 秒
+#:    的任务全部跑到 succeeded。
+#: 2. **时长是 2–12 的整数区间,不是 [5, 10] 两个档。** 边界是接口自己划的:
+#:    `duration ... must be greater than or equal to 2` / `must be less than or equal to 12`。
+#: 3. **它按分辨率出片,不是按宽高比。** `2k` 被拒(`resolution ... is not valid for model
+#:    doubao-seedance-1-0-pro in t2v`),480p/720p/1080p 都过。
+#:
+#: 尾帧不支持:给了尾帧回的是 `last frame image content cannot be mixed with first frame or
+#: reference image content` —— 也就是这一代只认首帧。
 SEEDANCE_1_VIDEO_CAPABILITIES = {
     "modes": ["text-to-video", "image-to-video"],
-    "endpoint": "las",
-    "parameter_keys": ["duration_seconds", "aspect_ratio", "first_frame"],
-    "duration_seconds": [5, 10],
+    "endpoint": "ark",
+    "parameter_keys": ["duration_seconds", "resolution", "first_frame"],
+    "duration_seconds": [],
     "default_duration_seconds": 5,
-    "aspect_ratios": ["16:9", "9:16", "1:1"],
-    "default_aspect_ratio": "16:9",
-    "max_duration_seconds": 10,
+    "resolutions": ["480p", "720p", "1080p"],
+    "default_resolution": "720p",
+    "source_limits": {"first_frame": 1},
+    "min_duration_seconds": 2,
+    "max_duration_seconds": 12,
     "supports_audio": False,
 }
 
@@ -170,7 +251,7 @@ COMFYUI_VIDEO_CAPABILITIES = {
 #: MiniMax 海螺 H3(2026-07)。原生 2K、4–15 秒、可给首帧;文生视频必须给具体比例,
 #: 图生视频恒为 adaptive(见 ai/providers/minimax_video.py)。
 MINIMAX_VIDEO_CAPABILITIES = {
-    "modes": ["text-to-video", "image-to-video", "keyframes-to-video"],
+    "modes": ["text-to-video", "image-to-video", "keyframes-to-video", "reference-to-video"],
     "parameter_keys": [
         "duration_seconds",
         "resolution",
@@ -178,10 +259,22 @@ MINIMAX_VIDEO_CAPABILITIES = {
         "first_frame",
         "last_frame",
         "reference_image",
+        "reference_video",
+        "reference_audio",
     ],
-    "duration_seconds": [4, 6, 10, 15],
+    # 同日同法核过。MiniMax 的报错是中文的,数字和火山完全一致:
+    #   `reference 场景参考图最多 9 张` / `参考视频最多 3 个` / `参考音频最多 3 段`
+    # 它的输入类型白名单也一样:`allowed: text|image_url|video_url|audio_url`。
+    "source_limits": {"first_frame": 1, "last_frame": 1, **REFERENCE_SCENE_LIMITS},
+    "exclusive_source_groups": [KEYFRAME_GROUP, REFERENCE_GROUP],
+    # 真机核过(2026-08-27,MiniMax-H3 的 /v2/video_generation)。两份清单都是接口自己报的:
+    #   `supported durations: 4s, 5s, 6s, 7s, 8s, 9s, 10s, 11s, 12s, 13s, 14s, 15s`
+    #   `supported resolutions: 768P, 2K`
+    # 此前时长只写了四个(4/6/10/15),十二个里漏了八个;分辨率只写了 2K,漏了 768P ——
+    # 而 768P 是**跑得快、便宜**的那一档,做草稿时正该用它。
+    "duration_seconds": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     "default_duration_seconds": 6,
-    "resolutions": ["2K"],
+    "resolutions": ["768P", "2K"],
     "default_resolution": "2K",
     "aspect_ratios": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
     "default_aspect_ratio": "16:9",
@@ -292,11 +385,26 @@ BUILTIN_MODELS = [
         "capabilities": WAN_VIDEO_CAPABILITIES,
     },
     {
+        "id": "alibaba:wan2.7-t2v:video",
+        "provider": "alibaba",
+        "kind": "video",
+        "model": "wan2.7-t2v",
+        "capabilities": WAN_27_VIDEO_CAPABILITIES,
+    },
+    {
         "id": "alibaba:wan2.7-i2v:video",
         "provider": "alibaba",
         "kind": "video",
         "model": "wan2.7-i2v",
-        "capabilities": WAN_VIDEO_CAPABILITIES,
+        "capabilities": WAN_27_VIDEO_CAPABILITIES,
+    },
+    {
+        # 参考生视频:照着参考图/参考视频里的人和风格拍,而不是从某一帧开始动。
+        "id": "alibaba:wan2.7-r2v:video",
+        "provider": "alibaba",
+        "kind": "video",
+        "model": "wan2.7-r2v",
+        "capabilities": WAN_27_VIDEO_CAPABILITIES,
     },
     {
         "id": "bytedance:doubao-seedance-2-0-260128:video",

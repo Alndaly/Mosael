@@ -373,9 +373,15 @@ def test_万相在生成目录里_视频模型不在兼容目录中() -> None:
     videos = [m for m in BUILTIN_MODELS if m["provider"] == "alibaba" and m["kind"] == "video"]
     assert len(videos) >= 5, "万相视频模型没进目录"
     assert all(m["model"].startswith("wan") for m in videos)
-    # 尺寸档位用的是百炼收的像素对,不是 480p 这种档位名。
+    # 两代模型两份契约:2.6 及更早按百炼收的**像素对**给尺寸(不是 480p 这种档位名),
+    # 2.7 起改成按**清晰度档**出片,连 size 字段都不再收(真机核过,见能力棘轮里的 Test万相27)。
     for m in videos:
-        assert all("*" in s for s in m["capabilities"]["sizes"])
+        capabilities = m["capabilities"]
+        if capabilities.get("payload_shape") == "media":
+            assert set(capabilities["resolutions"]) == {"720P", "1080P"}
+            assert "sizes" not in capabilities
+        else:
+            assert all("*" in s for s in capabilities["sizes"])
 
 
 # ---------------- 模型要能被看见、能力要标对 ----------------

@@ -17,8 +17,10 @@ from app.ai.providers.base import (
     FIRST_FRAME,
     LAST_FRAME,
     REFERENCE_IMAGE,
+    REFERENCE_VIDEO,
+    REFERENCE_AUDIO,
     first_frame_value,
-    source_value,
+    source_values,
     metering_from_request,
     provider_http_error,
 )
@@ -26,19 +28,18 @@ from app.ai.providers.base import (
 """
 ByteDance Seedance adapter.
 
-Seedance 2.x runs on Volcano ARK's /api/v3 content-generation tasks endpoint.
-Seedance 1.x is still served by the older LAS operator endpoint. Both contracts
-take generation parameters as JSON fields, not prompt suffixes.
+Seedance 1.x 和 2.x **都**跑在火山方舟的 /api/v3 上,同一把密钥、同一条路径,
+参数是平铺的 JSON 字段而不是提示词后缀。
+
+此前这里还有一条通往 LAS(operator.las.cn-beijing)的分支,给 seedance-1 用。2026-08-27
+真机核过:拿方舟密钥打 LAS 一律 401 —— 那是另一套凭据,而设置里只让用户配一份火山密钥,
+所以那条分支**从来没有真正跑通过**;同一把密钥打方舟的 doubao-seedance-1-0-pro-250528
+则是正常出片的。分支连同 LAS_BASE 一起删掉,不留回落。
 """
 
 ARK_BASE = "https://ark.cn-beijing.volces.com/api/v3"
-LAS_BASE = "https://operator.las.cn-beijing.volces.com/api/v1"
 TASKS_PATH = "/contents/generations/tasks"
 DEFAULT_MODEL_ID = "doubao-seedance-2-0-260128"
-
-
-def _is_seedance1(model: str) -> bool:
-    return "seedance-1" in model
 
 
 def _is_seedance2(model: str) -> bool:
@@ -50,10 +51,19 @@ def resolve_seedance_model(request: GenerationRequest, context: ProviderContext 
 
 
 def resolve_seedance_base(model: str, context: ProviderContext) -> str:
-    configured = (context.base_url or ARK_BASE).rstrip("/")
-    if _is_seedance1(model) and configured == ARK_BASE:
-        return LAS_BASE
-    return configured
+    return (context.base_url or ARK_BASE).rstrip("/")
+
+
+#: 每个角色在 content 数组里长什么样。接口的类型白名单是它自己报的:
+#: `supported values are: text, image_url, audio_url, video_url and draft_task`。
+_CONTENT_KINDS = {
+    FIRST_FRAME: "image_url",
+    LAST_FRAME: "image_url",
+    REFERENCE_IMAGE: "image_url",
+    REFERENCE_VIDEO: "video_url",
+    REFERENCE_AUDIO: "audio_url",
+}
+_CONTENT_ROLES = (FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, REFERENCE_VIDEO, REFERENCE_AUDIO)
 
 
 def build_submit_payload(request: GenerationRequest, context: ProviderContext | None = None) -> dict[str, Any]:
@@ -62,20 +72,22 @@ def build_submit_payload(request: GenerationRequest, context: ProviderContext | 
     resolution = str(request.parameters.get("resolution", "720p"))
     ratio = str(request.parameters.get("aspect_ratio", "16:9"))
     content: list[dict[str, Any]] = [{"type": "text", "text": request.prompt.strip()}]
-    # 三家共用的约定,住在 base 里 —— 这里此前是整段抄写的。
+    # content 数组按 `role` 区分每一份素材是干什么的,这正是接口自己的形状。
     #
-    # content 数组按 `role` 区分每张图是干什么的,这正是接口自己的形状 —— 我们这一层此前
-    # 只喂得进首帧。seedance-1 不认 role,所以那一档只发首帧(多发也没有字段承载)。
-    roles = (FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE) if _is_seedance2(model) else (FIRST_FRAME,)
+    # **每个角色都可能有多份**:参考图能给九张、参考视频三段、参考音频三段(上限见
+    # domain/generation/catalog 的 source_limits,数字是接口自己报的)。此前这里走的是单数的
+    # source_value,九张参考图只发得出第一张 —— 不报错,只是效果不对。
+    #
+    # seedance-1 不认 role,那一档只发首帧(多发也没有字段承载它们)。
+    roles = _CONTENT_ROLES if _is_seedance2(model) else (FIRST_FRAME,)
     first_frame = first_frame_value(request)
     for role in roles:
-        value = source_value(request, role)
-        if not value:
-            continue
-        image: dict[str, Any] = {"type": "image_url", "image_url": {"url": str(value)}}
-        if _is_seedance2(model):
-            image["role"] = role
-        content.append(image)
+        kind = _CONTENT_KINDS[role]
+        for value in source_values(request, role):
+            item: dict[str, Any] = {"type": kind, kind: {"url": str(value)}}
+            if _is_seedance2(model):
+                item["role"] = role
+            content.append(item)
     payload: dict[str, Any] = {
         "model": model,
         "content": content,

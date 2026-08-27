@@ -39,9 +39,22 @@ FIRST_FRAME = "first_frame"
 LAST_FRAME = "last_frame"
 REFERENCE_IMAGE = "reference_image"
 REFERENCE_VIDEO = "reference_video"
+REFERENCE_AUDIO = "reference_audio"
 
 #: 全部角色。描述符(domain/generation/catalog)声明某个模型认哪几种,界面和智能体都读它。
-SOURCE_ROLES = (FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, REFERENCE_VIDEO)
+SOURCE_ROLES = (FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, REFERENCE_VIDEO, REFERENCE_AUDIO)
+
+#: **首尾帧**和**参考素材**是两回事,不是同一个东西的两种叫法。
+#:
+#: 首尾帧说的是「画面从这一格开始、到那一格结束」——它落在成片的第一帧和最后一帧上。
+#: 参考素材说的是「照着这个人/这种风格/这段动作来」——它一帧都不出现在成片里,只influence。
+#:
+#: 两家接口都把这条界线画成**硬约束**,而不是建议。火山原话:
+#:   `first/last frame content cannot be mixed with reference media content`
+#: 所以描述符里它们分属两个互斥组:给了首帧就不能再给参考图,反过来也一样。此前我们把
+#: 五个角色平铺成一串,界面上可以同时勾首帧和参考图 —— 提交必然 400,而用户看不出为什么。
+KEYFRAME_ROLES = (FIRST_FRAME, LAST_FRAME)
+REFERENCE_ROLES = (REFERENCE_IMAGE, REFERENCE_VIDEO, REFERENCE_AUDIO)
 
 
 @dataclass(frozen=True)
@@ -256,6 +269,7 @@ ROLE_URL_PARAMETERS = {
     LAST_FRAME: ("last_frame_url",),
     REFERENCE_IMAGE: ("reference_image_url",),
     REFERENCE_VIDEO: ("reference_video_url",),
+    REFERENCE_AUDIO: ("reference_audio_url",),
 }
 
 
@@ -272,6 +286,28 @@ def source_value(request: GenerationRequest, role: str) -> str | None:
             return str(value)
     path = request.source_for(role)
     return image_file_to_data_url(path) if path is not None else None
+
+
+def source_values(request: GenerationRequest, role: str) -> tuple[str, ...]:
+    """取某个角色的**全部**素材。
+
+    参考图可以给九张、参考视频三段(见 domain/generation/catalog 里各家的 `source_limits`),
+    而 `source_value` 只会返回第一份。适配器此前一律走单数那个,于是用户挑了九张参考图,
+    真正发出去的只有第一张 —— 不报错,只是效果不对,而且没人看得出来少了八张。
+
+    首尾帧这种天然只有一份的角色照样可以用它,拿回来的元组长度就是 1。
+    """
+    urls = [str(value) for name in ROLE_URL_PARAMETERS.get(role, ()) for value in _as_list(request.parameters.get(name))]
+    if urls:
+        return tuple(urls)
+    return tuple(image_file_to_data_url(path) for path in request.sources_for(role))
+
+
+def _as_list(value: Any) -> list[Any]:
+    """参数里的 `<role>_url` 既可能是一个外链,也可能是一串。"""
+    if value is None or value == "":
+        return []
+    return [one for one in value if one] if isinstance(value, (list, tuple)) else [value]
 
 
 def first_frame_value(request: GenerationRequest) -> str | None:

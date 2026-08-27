@@ -132,7 +132,113 @@ class TestOpenAI图像:
         assert "1280x720" in C.OPENAI_IMAGE_CAPABILITIES["sizes"]
 
 
+class Test海螺视频:
+    """核查日期 2026-08-27,MiniMax-H3 的 /v2/video_generation。接口原话:
+    `supported durations: 4s, 5s, 6s, 7s, 8s, 9s, 10s, 11s, 12s, 13s, 14s, 15s`
+    `supported resolutions: 768P, 2K`
+    """
+
+    def test_十二个时长档一个都不能少(self) -> None:
+        """此前只写了 4/6/10/15 四个 —— 剩下八个用户在界面上根本选不到。"""
+        assert set(C.MINIMAX_VIDEO_CAPABILITIES["duration_seconds"]) == set(range(4, 16))
+
+    def test_便宜的那一档在表里(self) -> None:
+        """768P 是跑得快、便宜的那一档,做草稿正该用它;此前表里只有 2K。"""
+        assert set(C.MINIMAX_VIDEO_CAPABILITIES["resolutions"]) == {"768P", "2K"}
+
+
+class Test参考素材的份数上限:
+    """核查日期 2026-08-27。火山方舟与 MiniMax 各自报出的数字**完全一致**。
+
+    火山原话:
+      `expected at most 9 reference images but got 10 instead`
+      `expected at most 3 video contents but got 4 instead`
+      `expected at most 3 audio contents but got 4 instead`
+      `expected at most one first frame image content but got 2 instead`
+    MiniMax 原话(中文):
+      `reference 场景参考图最多 9 张` / `参考视频最多 3 个` / `参考音频最多 3 段`
+    """
+
+    AUTHORITATIVE = {
+        "first_frame": 1, "last_frame": 1,
+        "reference_image": 9, "reference_video": 3, "reference_audio": 3,
+    }
+
+    def test_火山和海螺都按接口给的数字来(self) -> None:
+        """多写一份的后果不是报错,是用户挂满十张、提交时吃一个英文 400。"""
+        for descriptor in (C.SEEDANCE_2_VIDEO_CAPABILITIES, C.MINIMAX_VIDEO_CAPABILITIES):
+            assert descriptor["source_limits"] == self.AUTHORITATIVE
+
+    def test_万相是另一套数字_别照抄(self) -> None:
+        """文档原话:参考图像 + 参考视频不超过 5 个。每家自己一套,抄串了就是线上失败。"""
+        assert C.WAN_27_VIDEO_CAPABILITIES["source_limits"]["reference_image"] == 5
+
+    def test_首尾帧和参考素材是互斥的两组(self) -> None:
+        """接口原话:`first/last frame content cannot be mixed with reference media content`。
+
+        这一条最容易被当成"建议"删掉 —— 它不是。同时给首帧和参考图,提交必然 400。
+        """
+        for descriptor in (
+            C.SEEDANCE_2_VIDEO_CAPABILITIES,
+            C.MINIMAX_VIDEO_CAPABILITIES,
+            C.WAN_27_VIDEO_CAPABILITIES,
+        ):
+            groups = [set(group) for group in descriptor["exclusive_source_groups"]]
+            assert {"first_frame", "last_frame"} in groups
+            assert {"reference_image", "reference_video", "reference_audio"} in groups
+
+    def test_参考音频不能单独上场(self) -> None:
+        """接口原话:`reference_audio cannot be the only reference input`。"""
+        companions = C.SEEDANCE_2_VIDEO_CAPABILITIES["requires_companion"]["reference_audio"]
+        assert set(companions) == {"reference_image", "reference_video"}
+
+
+class TestSeedance1:
+    """核查日期 2026-08-27,方舟 doubao-seedance-1-0-pro-250528。接口原话:
+    `duration ... must be greater than or equal to 2` / `must be less than or equal to 12`
+    2/3/5/10/12 秒的任务都跑到了 succeeded;`2k` 被拒。
+    """
+
+    def test_时长是_2_到_12_的区间_不是两个档(self) -> None:
+        assert C.SEEDANCE_1_VIDEO_CAPABILITIES["duration_seconds"] == []
+        assert C.SEEDANCE_1_VIDEO_CAPABILITIES["min_duration_seconds"] == 2
+        assert C.SEEDANCE_1_VIDEO_CAPABILITIES["max_duration_seconds"] == 12
+
+    def test_它在方舟上_不在_LAS(self) -> None:
+        """拿方舟密钥打 LAS 一律 401 —— 那条路从来没通过,而设置里只让配一份火山密钥。"""
+        assert C.SEEDANCE_1_VIDEO_CAPABILITIES["endpoint"] == "ark"
+
+    def test_不认_2k(self) -> None:
+        assert "2k" not in [one.lower() for one in C.SEEDANCE_1_VIDEO_CAPABILITIES["resolutions"]]
+
+
+class Test万相27:
+    """核查日期 2026-08-27,拿用户自己的密钥跑到终态。接口原话:
+    `Field required: input.media`(拿 2.5 的 img_url 形状打 2.7 的下场)
+    `Duration should be between 2 and 15`
+    `Input should be '1080P' or '720P'`
+    """
+
+    def test_时长是_2_到_15_的区间(self) -> None:
+        assert C.WAN_27_VIDEO_CAPABILITIES["min_duration_seconds"] == 2
+        assert C.WAN_27_VIDEO_CAPABILITIES["max_duration_seconds"] == 15
+
+    def test_只有两档清晰度(self) -> None:
+        assert set(C.WAN_27_VIDEO_CAPABILITIES["resolutions"]) == {"720P", "1080P"}
+
+    def test_素材走_media_数组(self) -> None:
+        """漏了这一条的后果是提交 200、终态 `Field required: input.media` ——
+        目录里挂着的 wan2.7-i2v 此前就是这样,一次都没成功过。"""
+        from app.ai.providers.video import wan
+
+        assert wan.uses_media_array("wan2.7-i2v")
+        assert not wan.uses_media_array("wan2.5-i2v-preview")
+
+
 def test_这道棘轮扫得到东西() -> None:
     """假阴性比红更危险:哪天描述符改了名,上面几条会一起真空通过。"""
     assert C.WAN_VIDEO_CAPABILITIES["sizes"]
     assert C.QWEN_TEXT_IMAGE_CAPABILITIES["sizes"]
+    assert C.MINIMAX_VIDEO_CAPABILITIES["duration_seconds"]
+    assert C.SEEDANCE_2_VIDEO_CAPABILITIES["source_limits"]
+    assert C.WAN_27_VIDEO_CAPABILITIES["resolutions"]

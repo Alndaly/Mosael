@@ -15,6 +15,11 @@ from app.ai.providers.base import (
     ProviderContext,
     ProviderError,
     first_frame_value,
+    source_values,
+    FIRST_FRAME,
+    LAST_FRAME,
+    REFERENCE_IMAGE,
+    REFERENCE_VIDEO,
     metering_from_request,
     provider_http_error,
 )
@@ -64,6 +69,21 @@ def resolve_size(parameters: dict[str, Any]) -> str:
     return _RESOLUTION_SIZES.get(label, "")
 
 
+#: 万相 2.7 起,输入素材走 `input.media` 数组;2.6 及更早只认一个 `input.img_url` 首帧。
+#:
+#: 这不是我们的历史包袱,是**两代模型两份契约**,所以写成一句可以回答的问题,而不是散在
+#: 各处的 if。判断放在这里的代价是新一代上线要改一行;放在调用方的代价是漏掉一处不会报错 ——
+#: 提交照样 200,任务终态才回 `Field required: input.media`。
+_MEDIA_ARRAY_PREFIXES = ("wan2.7", "wan2.8", "wan3")
+
+#: media 数组里的 type 就是我们内部的角色名,一一对上,不用翻译表。
+_MEDIA_ROLES = (FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, REFERENCE_VIDEO)
+
+
+def uses_media_array(model: str) -> bool:
+    return str(model or "").strip().lower().startswith(_MEDIA_ARRAY_PREFIXES)
+
+
 def build_submit_payload(request: GenerationRequest) -> dict[str, Any]:
     """把内部请求翻成万相的提交体。
 
@@ -72,9 +92,20 @@ def build_submit_payload(request: GenerationRequest) -> dict[str, Any]:
     路径分支,只在 input 上加字段。
     """
     parameters: dict[str, Any] = {}
-    size = resolve_size(request.parameters)
-    if size:
-        parameters["size"] = size
+    if uses_media_array(request.model):
+        # 2.7 按**清晰度档**出片,不收 `宽*高`:传 size 会被终态拒成
+        # `Invalid input format, expected format like '480*832'` 或
+        # `Input should be '1080P' or '720P'`。比例单独走 aspect_ratio。
+        resolution = str(request.parameters.get("resolution") or "").strip()
+        if resolution:
+            parameters["resolution"] = resolution.upper()
+        ratio = str(request.parameters.get("aspect_ratio") or "").strip()
+        if ratio:
+            parameters["aspect_ratio"] = ratio
+    else:
+        size = resolve_size(request.parameters)
+        if size:
+            parameters["size"] = size
     duration = request.parameters.get("duration_seconds") or request.parameters.get("duration")
     if duration is not None:
         parameters["duration"] = int(duration)
@@ -84,12 +115,21 @@ def build_submit_payload(request: GenerationRequest) -> dict[str, Any]:
     payload: dict[str, Any] = {"model": request.model, "input": {"prompt": request.prompt}}
     if request.negative_prompt:
         payload["input"]["negative_prompt"] = request.negative_prompt
-    # 首帧图:**先看参数里的 url,再回落本地文件** —— 这是仓库里既有的约定
-    # (seedance / kling 都是这么取的),而生成面板的视频分支发的正是 `first_frame_url`。
-    # 只读 source_files 的话,界面上填的首帧会被静默忽略,图生视频退化成文生视频。
-    first_frame = first_frame_value(request)
-    if first_frame:
-        payload["input"]["img_url"] = first_frame
+    if uses_media_array(request.model):
+        media = [
+            {"type": role, "url": str(value)}
+            for role in _MEDIA_ROLES
+            for value in source_values(request, role)
+        ]
+        if media:
+            payload["input"]["media"] = media
+    else:
+        # 首帧图:**先看参数里的 url,再回落本地文件** —— 这是仓库里既有的约定
+        # (seedance / kling 都是这么取的),而生成面板的视频分支发的正是 `first_frame_url`。
+        # 只读 source_files 的话,界面上填的首帧会被静默忽略,图生视频退化成文生视频。
+        first_frame = first_frame_value(request)
+        if first_frame:
+            payload["input"]["img_url"] = first_frame
     if parameters:
         payload["parameters"] = parameters
     return payload

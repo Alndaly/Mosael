@@ -39,8 +39,10 @@ class Test按描述符校验:
         _check("alibaba", "qwen-image", "image", {"size": "1024x1024", "num_images": 2})
 
     def test_时长按清单拦(self) -> None:
+        """海螺认 4–15 的每一个整数(接口自己报的清单),20 秒不在里面。"""
+        _check("minimax", "MiniMax-H3", "video", {"duration_seconds": 7})
         with pytest.raises(GenerationDomainError, match="时长只能是"):
-            _check("minimax", "MiniMax-H3", "video", {"duration_seconds": 7})
+            _check("minimax", "MiniMax-H3", "video", {"duration_seconds": 20})
 
     def test_模型不支持的素材角色也拦(self) -> None:
         """万相没有尾帧(它的首尾帧是另一个模型)。默默丢掉的话,用户会拿到一段只用了首帧的视频。"""
@@ -75,11 +77,11 @@ class Test智能体拿得到描述符:
             )
 
     def test_有清单的参数要把清单带出去(self) -> None:
-        """只说「支持 duration_seconds」不够 —— 智能体得知道能填 5 还是 10,否则还是在猜。"""
+        """只说「支持 duration_seconds」不够 —— 智能体得知道能填哪几个,否则还是在猜。"""
         import mcp_server
 
         help_ = mcp_server._parameter_help(capabilities_for("minimax", "MiniMax-H3", "video"))
-        assert help_["duration_seconds"]["choices"] == [4, 6, 10, 15]
+        assert help_["duration_seconds"]["choices"] == list(range(4, 16))
         assert help_["duration_seconds"]["default"] == 6
 
     def test_素材类参数说清楚要给什么(self) -> None:

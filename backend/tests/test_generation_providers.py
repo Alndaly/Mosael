@@ -27,7 +27,6 @@ from app.ai.providers.image.qwen import (
 )
 from app.ai.providers.video.seedance import (
     ARK_BASE,
-    LAS_BASE,
     build_submit_payload as seedance_payload,
     extract_video_url,
     resolve_seedance_base,
@@ -233,10 +232,33 @@ def test_seedance_text_to_video_keeps_ratio_as_a_json_parameter() -> None:
     assert payload["ratio"] == "16:9"
 
 
-def test_seedance_one_x_routes_to_las_when_profile_uses_default_ark_base() -> None:
+def test_seedance_两代都走方舟_没有第二个端点() -> None:
+    """2026-08-27 真机核过:拿方舟密钥打 LAS 一律 401,那是另一套凭据,而设置里只让用户
+    配一份火山密钥 —— 那条分支从来没跑通过。同一把密钥打方舟的 seedance-1 正常出片。"""
     context = ProviderContext(None, "bytedance", "sk-test", base_url=ARK_BASE)
-    assert resolve_seedance_base("doubao-seedance-1-5-pro-251215", context) == LAS_BASE
+    assert resolve_seedance_base("doubao-seedance-1-0-pro-250528", context) == ARK_BASE
     assert resolve_seedance_base("doubao-seedance-2-0-260128", context) == ARK_BASE
+
+
+def test_seedance_参考素材每一份都发得出去() -> None:
+    """挂九张参考图就该发九张。此前走单数的 source_value,只发得出第一张 ——
+    不报错,只是效果不对,而且界面上看不出少了八张。"""
+    request = GenerationRequest(
+        kind="video",
+        model="doubao-seedance-2-0-260128",
+        prompt="waves",
+        parameters={
+            "reference_image_url": ["https://x/a.png", "https://x/b.png", "https://x/c.png"],
+            "reference_video_url": "https://x/v.mp4",
+            "reference_audio_url": "https://x/a.mp3",
+        },
+    )
+    content = seedance_payload(request)["content"]
+    images = [one for one in content if one.get("role") == "reference_image"]
+    assert [one["image_url"]["url"] for one in images] == ["https://x/a.png", "https://x/b.png", "https://x/c.png"]
+    # 类型要跟着角色走 —— 接口会校验这一对配不配(`role=... invalid for type=...`)。
+    assert [one["type"] for one in content if one.get("role") == "reference_video"] == ["video_url"]
+    assert [one["type"] for one in content if one.get("role") == "reference_audio"] == ["audio_url"]
 
 
 def test_seedance_poll_parsing() -> None:

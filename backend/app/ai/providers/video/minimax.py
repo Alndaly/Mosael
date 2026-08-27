@@ -11,7 +11,10 @@ from app.ai.providers.base import (
     FIRST_FRAME,
     LAST_FRAME,
     REFERENCE_IMAGE,
+    REFERENCE_VIDEO,
+    REFERENCE_AUDIO,
     source_value,
+    source_values,
     poll_until_ready,
     GenerationProvider,
     GenerationRequest,
@@ -51,16 +54,30 @@ def resolve_model(request: GenerationRequest, context: ProviderContext | None = 
     return (request.model or (context.default_model if context else "") or DEFAULT_MODEL_ID).strip()
 
 
+#: 每个角色在 content 数组里的类型。白名单是接口自己报的:
+#: `allowed: text|image_url|video_url|audio_url`,而且它会校验类型和 role 配不配对
+#: (`role="first_frame" invalid for type="video_url"`)。
+_CONTENT_KINDS = {
+    FIRST_FRAME: "image_url",
+    LAST_FRAME: "image_url",
+    REFERENCE_IMAGE: "image_url",
+    REFERENCE_VIDEO: "video_url",
+    REFERENCE_AUDIO: "audio_url",
+}
+_CONTENT_ROLES = (FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, REFERENCE_VIDEO, REFERENCE_AUDIO)
+
+
 def build_submit_payload(request: GenerationRequest, context: ProviderContext) -> dict[str, Any]:
     """把内部的生成请求翻成 MiniMax 的多模态 content 数组。"""
     content: list[dict[str, Any]] = [{"type": "text", "text": request.prompt}]
-    # content 数组按 role 区分每张图的用途 —— 这是接口自己的形状(文件顶上那段注释说的就是
-    # 它),此前我们只喂得进首帧。
-    for role in (FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE):
-        value = source_value(request, role)
-        if not value:
-            continue
-        content.append({"type": "image_url", "role": role, "image_url": {"url": str(value)}})
+    # content 数组按 role 区分每一份素材的用途 —— 这是接口自己的形状(文件顶上那段注释说的
+    # 就是它)。**每个角色都可能有多份**:参考图九张、参考视频三段、参考音频三段,上限见
+    # domain/generation/catalog 的 source_limits。此前这里走单数的 source_value,挂了九张
+    # 参考图也只发得出第一张。
+    for role in _CONTENT_ROLES:
+        kind = _CONTENT_KINDS[role]
+        for value in source_values(request, role):
+            content.append({"type": kind, "role": role, kind: {"url": str(value)}})
     first_frame = source_value(request, FIRST_FRAME)
     payload: dict[str, Any] = {"model": resolve_model(request, context), "content": content}
 
