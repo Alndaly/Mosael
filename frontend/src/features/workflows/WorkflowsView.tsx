@@ -111,8 +111,9 @@ import {
   type NodeIssue,
 } from "@/features/workflows/analyze";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
+import { RunOutputs, outputSummary } from "@/features/workflows/RunOutputs";
 import { collapseToSubgraph } from "@/features/workflows/collapse";
-import { assetOutputs, stepsByNode } from "@/features/workflows/runSteps";
+import { assetOutputs, stepsByNode, type Step } from "@/features/workflows/runSteps";
 import { isDataConnection, isDuplicateControlEdge } from "@/features/workflows/connections";
 
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
@@ -200,6 +201,8 @@ interface WfNodeData extends Record<string, unknown> {
   run?: { status: "running" | "done" | "skipped" | "failed"; ms?: number; error?: string } | null;
   /** 这一步产出的素材(节点注册表里声明为 asset 的输出)。节点上直接出缩略图。 */
   runAssets?: string[];
+  /** 非素材产出的一行摘要 —— 节点上直接看见"这步给了什么"。 */
+  runSummary?: string;
 }
 
 /** 画布节点:语义色图标 + 名称 + 类型标签,全平面卡片。
@@ -307,6 +310,14 @@ function WfNode({ data, selected }: NodeProps) {
         </span>
       </div>
       <NodeResultPreview assetIds={d.runAssets ?? []} />
+      {/* 非素材的产出:模型回的那段话、抽出来的那个值。**跑完了却看不见**是此前最别扭的地方 ——
+          想知道这一步到底给了什么,得在后面再接一个"通知"节点把它打出来。
+          两行封顶:节点是张名片,不是日志窗口;全文在检查器里。 */}
+      {d.runSummary && (
+        <p className="m-0 line-clamp-2 whitespace-pre-wrap break-words rounded-md bg-[color-mix(in_srgb,var(--muted)_45%,transparent)] px-1.5 py-1 text-ui-2xs leading-[1.45] text-muted-foreground">
+          {d.runSummary}
+        </p>
+      )}
       {badge && (
         <span
           className={cn(
@@ -1826,6 +1837,7 @@ function WorkflowEditor({
             badge,
             run: step ? { status: step.status, ms: step.ms, error: step.error } : null,
             runAssets: step?.outputs ? assetOutputs(node.data.nodeType as string, step.outputs) : [],
+            runSummary: outputSummary(node.data.nodeType as string, step?.outputs),
           },
         };
       }),
@@ -2251,6 +2263,7 @@ function WorkflowEditor({
           <NodeInspector
             anchor={anchor}
             inert={canvas.panning}
+            step={runByNode[selectedNode.id] ?? null}
             node={selectedNode}
             meta={registry.get(selectedNode.type) ?? null}
             graph={graph}
@@ -2661,6 +2674,7 @@ function LoopBodyEditor({
 function NodeInspector({
   anchor,
   inert = false,
+  step = null,
   node,
   meta,
   graph,
@@ -2675,6 +2689,8 @@ function NodeInspector({
   anchor?: AnchorBox | null;
   /** 画布正在平移:此时面板不吃指针事件(见 WorkflowsView 里 panning 的说明)。 */
   inert?: boolean;
+  /** 这个节点在**最近一次运行**里的那一步。没跑过就是 null。 */
+  step?: Step | null;
   node: WorkflowGraph["nodes"][number];
   meta: WorkflowNodeType | null;
   graph: WorkflowGraph;
@@ -3697,6 +3713,8 @@ function NodeInspector({
             </div>
           </div>
         )}
+        {/* 「输出变量」列的是**名字**,这里是**这次的值** —— 调工作流时真正要问的是后者。 */}
+        {step && <RunOutputs nodeType={node.type} step={step} />}
       </div>
     </aside>
   );
