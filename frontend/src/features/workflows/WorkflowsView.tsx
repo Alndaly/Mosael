@@ -1757,19 +1757,34 @@ function WorkflowEditor({
     onError: (error: Error) => toast.error(t("wfRunFailed"), { description: error.message }),
   });
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
+  // 换了节点就忘掉上一个面板的高度 —— 拿上一个的高度给下一个算位置,第一帧会跳一下。
+  React.useEffect(() => setPanelHeight(undefined), [selectedNodeId]);
   // 拖动时收起(跟着抖没有意义,还挡住落点),松手后 dragging 转 false 自然复现。
   // canvas.tick / graph 变化都要重算:前者是平移缩放,后者是节点位置被改。
+  // 面板量到的真实高度。**不量的话竖直方向就是错的**:摆放只能拿"高度上限"(560)当实际高度,
+  // 于是一个 200 高的面板会被当成 560 来避让 —— 节点靠下时,它被推到远高于必要的位置,
+  // 和自己的节点隔着一大片空白,看着像飘走了。第一帧还没量到,按上限估;量到之后重算一次。
+  const [panelHeight, setPanelHeight] = React.useState<number | undefined>(undefined);
+  const panelRef = React.useCallback((element: HTMLElement | null) => {
+    if (!element) return;
+    const observer = new ResizeObserver(() => setPanelHeight(element.getBoundingClientRect().height));
+    observer.observe(element);
+    setPanelHeight(element.getBoundingClientRect().height);
+    return () => observer.disconnect();
+  }, []);
   const anchor = React.useMemo(
     () =>
       dragging
         ? null
-        : anchorToNode(rfRef.current, nodes.find((node) => node.id === selectedNodeId) ?? null, {
-            width: window.innerWidth,
-            height: window.innerHeight,
-          }),
+        : anchorToNode(
+            rfRef.current,
+            nodes.find((node) => node.id === selectedNodeId) ?? null,
+            { width: window.innerWidth, height: window.innerHeight },
+            panelHeight,
+          ),
     // nodes 而不是 graph:位置要和画布上真正画出来的那个节点一致。canvas.tick 管平移缩放。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedNodeId, dragging, canvas.tick, nodes],
+    [selectedNodeId, dragging, canvas.tick, nodes, panelHeight],
   );
   // 框选中的节点(≥2 才给「折叠为子图」入口),从 React Flow 的 selected 态直接派生。
   const selectedFlowIds = nodes.filter((node) => node.selected).map((node) => node.id);
@@ -2395,6 +2410,7 @@ function WorkflowEditor({
             anchor={anchor}
             inert={canvas.panning}
             step={runByNode[selectedNode.id] ?? null}
+            panelRef={panelRef}
             node={selectedNode}
             meta={registry.get(selectedNode.type) ?? null}
             graph={graph}
@@ -2806,6 +2822,7 @@ function NodeInspector({
   anchor,
   inert = false,
   step = null,
+  panelRef,
   node,
   meta,
   graph,
@@ -2822,6 +2839,8 @@ function NodeInspector({
   inert?: boolean;
   /** 这个节点在**最近一次运行**里的那一步。没跑过就是 null。 */
   step?: Step | null;
+  /** 量面板真实高度用 —— 摆放要靠它,不然只能按上限估(见 anchorToNode)。 */
+  panelRef?: (element: HTMLElement | null) => void;
   node: WorkflowGraph["nodes"][number];
   meta: WorkflowNodeType | null;
   graph: WorkflowGraph;
@@ -3353,6 +3372,7 @@ function NodeInspector({
 
   return (
     <aside
+      ref={panelRef}
       className={cn(
         "z-30 grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border-strong bg-panel shadow-[var(--shadow-panel)]",
         // 380 而不是 320:两列并排的参数(Temperature / Top P 这种)在 320 里各自只剩
