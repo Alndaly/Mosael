@@ -625,6 +625,13 @@ def post_user_message(
         db.add(message)
         db.commit()
         db.refresh(message)
+        # **落库之后再 drain 一次。** 排队这个决定是「读 status」和「写消息」两步,中间那一轮
+        # 完全可能跑完并 drain 过了 —— 那次 drain 看到的队列还是空的,而这条消息随后才落库,
+        # 于是它躺在一个 idle 的会话里,再也没有下一轮来捞它。用户看到的是「发过去没反应」。
+        #
+        # 这一下补在写之后,所以看得见自己刚写的东西。上一轮还在跑的话它抢不到会话、直接让位,
+        # 那条消息由那一轮结束时的 drain 接走 —— 两边都不会漏,也不会重。
+        _drain_queue(session.id)
         return message
     # context 也要存:发出去的是 `_prompt_with_context(content, context)`,而 content 只是它的一半。
     # 排队那条路一直存着,直发这条没存 —— 于是同一件事有两种记录,轨迹上看到的提问不是模型
@@ -872,10 +879,26 @@ def _drain_queue(session_id: str) -> None:
 def _drain_queue_locked(session_id: str) -> None:
     with SessionLocal() as db:
         session = db.get(AgentSession, session_id)
-        if session is None or session.status == "running":
+        if session is None:
             return
+        # **先抢占,再看队列。** 「读到 idle」和「置成 running」如果不是一步,两个 drain 会同时
+        # 通过检查、同时取走同一条消息、同时起一轮 —— 用户看到那条消息被回答了两遍。
+        # 条件更新让数据库来裁决:rowcount 是 0 就是别人抢到了,直接让位。
+        claimed = db.execute(
+            update(AgentSession)
+            .where(AgentSession.id == session_id, AgentSession.status != "running")
+            .values(status="running")
+        ).rowcount
+        db.commit()
+        if not claimed:
+            return
+        db.refresh(session)
         pending = _queued_messages(db, session)
         if not pending:
+            # 抢到了却没活干:必须把 status 放回去,否则这个会话永远停在 running,
+            # 之后每一条消息都会被当成"正忙"排进一个再也不会被 drain 的队列。
+            session.status = "idle"
+            db.commit()
             return
         message = pending[0]
         owner_id = (message.payload or {}).get("queued_by")
@@ -886,9 +909,9 @@ def _drain_queue_locked(session_id: str) -> None:
             # is not retried on every subsequent turn — a message that silently reappears
             # forever is worse than one that visibly did not run.
             logger.warning("queued message %s has no sender; not running it", message.id)
+            session.status = "idle"
             db.commit()
             return
-        session.status = "running"
         db.commit()
         token = _mint_service_token(db, owner, session_id)
         payload = message.payload or {}
