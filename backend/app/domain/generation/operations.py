@@ -200,6 +200,23 @@ _ALWAYS_ALLOWED = {"negative_prompt", "seed"}
 _ROLE_URL_KEYS = {f"{role}_url" for role in SOURCE_ROLES} | {"image_url"}
 
 
+def allowed_parameter_keys(capabilities: dict[str, Any]) -> set[str]:
+    """这个模型**认哪些参数键**。
+
+    抽出来是因为有两个人要问同一个问题:校验器(拦下不认的)和棘轮
+    (tests/test_adapters_read_only_declared_parameters,检查适配器读的键够不够得着)。
+    各算一遍的话两边会分头演进 —— 而那正是这条规则要防的事:棘轮以为某个键不被允许、
+    校验器其实放行,于是它报一个不存在的问题;反过来则是漏报。
+    """
+    allowed = set(capabilities.get("parameter_keys") or ()) | _ALWAYS_ALLOWED | _ROLE_URL_KEYS
+    # 「能不能出声」已经作为 `supports_audio` 声明过了(真机核过的那一份),所以开关本身
+    # **从它推出来**,不在 parameter_keys 里再抄一遍 —— 抄一遍就会出现两处说法不一致的可能:
+    # 声明说支持、参数名单里没有,于是这个开关谁都发不出去(seedance 2.0 与 1.5 正是这样)。
+    if capabilities.get("supports_audio"):
+        allowed.add("generate_audio")
+    return allowed
+
+
 def validate_against_capabilities(
     provider: str,
     model: str,
@@ -223,7 +240,7 @@ def validate_against_capabilities(
     keys = capabilities.get("parameter_keys")
     if not keys:
         return
-    allowed = set(keys) | _ALWAYS_ALLOWED | _ROLE_URL_KEYS
+    allowed = allowed_parameter_keys(capabilities)
     unknown = sorted(set(parameters) - allowed)
     if unknown:
         raise GenerationDomainError(

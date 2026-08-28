@@ -425,7 +425,11 @@ SEEDANCE_1_VIDEO_CAPABILITIES = {
 COMFYUI_IMAGE_CAPABILITIES = {
     "modes": ["text-to-image"],
     "max_prompt_chars": 8000,
-    "parameter_keys": ["size", "seed", "steps", "negative_prompt"],
+    # workflow / workflow_params:**选一个 ComfyUI 里保存的工作流**,以及它那张动态参数表单。
+    # 适配器一直读这两个键(providers/comfyui/provider),界面也一直在发,只是描述符没声明 ——
+    # 于是校验器把它们当成"这个模型不支持的参数"当场拦下:选了工作流就提交不了,而选工作流
+    # 正是接 ComfyUI 的理由。没有测试覆盖"带工作流提交",所以一直是绿的。
+    "parameter_keys": ["size", "seed", "steps", "negative_prompt", "workflow", "workflow_params"],
     # 本地生成没有服务端尺寸白名单;这里是常用档,模板可自带任意尺寸。
     "sizes": ["1024x1024", "832x1216", "1216x832", "1280x720", "720x1280"],
     "default_size": "1024x1024",
@@ -437,7 +441,9 @@ COMFYUI_VIDEO_CAPABILITIES = {
     "max_prompt_chars": 8000,
     # 尺寸/步数/采样器等由所选工作流的动态参数表单调,主控件只留时长/负向(之前 size 有 key 却没
     # sizes、给了 resolutions 又没挂,尺寸下拉是空的——一并去掉)。
-    "parameter_keys": ["duration_seconds", "seed", "negative_prompt"],
+    # 同上 —— 视频这边界面只发 workflow_params(workflow 那一半漏在 image 分支里,见下),
+    # 两个都得声明,否则选了工作流照样提交不了。
+    "parameter_keys": ["duration_seconds", "seed", "negative_prompt", "workflow", "workflow_params"],
     "duration_seconds": [3, 5, 10],
     "default_duration_seconds": 5,
     "max_duration_seconds": 10,
