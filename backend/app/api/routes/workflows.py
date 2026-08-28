@@ -56,6 +56,11 @@ def _with_data_type(key: str, spec: Any) -> Any:
     label = config_label(key, spec)
     if label:
         enriched["label"] = label
+    # 这个字段的值跟着谁走 —— 父字段一换,这里存的旧值就失效了(换了供应商配置,模型还是
+    # 上一家的那个)。声明在后端,是因为**插件节点也有这种关系**,前端一张写死的表覆盖不到。
+    depends_on = str(spec.get("depends_on") or "").strip()
+    if depends_on:
+        enriched["depends_on"] = depends_on
     # object 字段用哪种编辑器:一行一对的映射,还是原始 JSON。
     editor = config_editor(key, spec)
     if editor:

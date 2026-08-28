@@ -128,7 +128,7 @@ _FIELD_LABELS = {
     "negative_prompt": "负向提示词", "op": "运算", "operations": "操作",
     "output": "对外输出", "parameters": "生成参数", "params": "启动参数",
     "path": "路径", "plugin_id": "插件", "presence_penalty": "话题惩罚",
-    "preset": "预设", "profile_id": "连接", "project_id": "项目", "prompt": "提示词",
+    "preset": "预设", "profile_id": "供应商配置", "project_id": "项目", "prompt": "提示词",
     "provider": "服务商", "replace": "替换为", "response_format": "返回格式",
     "right": "右值", "seconds": "秒数", "seed": "随机种子", "selector": "元素选择器",
     "sequence_id": "时间线", "session": "浏览器会话", "session_mode": "会话方式",
@@ -199,7 +199,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "options": ["precise", "balanced", "creative"],
             },
             "profile_id": {"type": "string", "description": "供应商配置 id,留空自动选择"},
-            "model": {"type": "string", "description": "模型名,留空用配置默认"},
+            "model": {"type": "string", "description": "模型名,留空用配置默认", "depends_on": "profile_id"},
             "temperature": {"advanced": True, "type": "number", "description": "采样温度 0-2;留空跟随生成风格"},
             "top_p": {"advanced": True, "type": "number", "description": "核采样 0-1;留空不传"},
             "max_tokens": {"advanced": True, "type": "number", "description": "最大输出 token;留空不传"},
@@ -228,9 +228,9 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "description": "调用已启用插件的纯函数工具。",
         "config": {
             "plugin_id": {"type": "string", "required": True},
-            "tool_name": {"type": "string", "required": True},
+            "tool_name": {"type": "string", "required": True, "depends_on": "plugin_id"},
             # 同一个插件可以接多个连接;留空且只有一个可用连接时自动用它。
-            "instance_id": {"type": "string", "description": "用哪个连接;留空自动选(仅一个时)", "plugin_instances": True},
+            "instance_id": {"type": "string", "description": "用哪个连接;留空自动选(仅一个时)", "plugin_instances": True, "depends_on": "plugin_id"},
             "input": {"type": "object", "description": "工具入参,值支持 {{变量}}"},
         },
         "outputs": ["output"],
@@ -328,7 +328,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "description": "文生图/文生视频(也支持图生图、图生视频),产出素材进素材库。",
         "config": {
             "provider": {"type": "string", "required": True},
-            "model": {"type": "string", "required": True},
+            "model": {"type": "string", "required": True, "depends_on": "provider"},
             "kind": {"type": "string", "required": True, "description": "生成类型", "options": ["image", "video"]},
             "prompt": {"type": "template", "required": True},
             # 下面三项执行器一直支持,却没在这里声明 —— 于是编辑器渲染不出输入框、AI 助手也不知道

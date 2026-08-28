@@ -74,6 +74,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useCanvasPosture } from "@/features/workflows/useCanvasPosture";
+import { withDependentsCleared } from "@/features/workflows/dependents";
 import { RefEditor } from "@/features/workflows/RefEditor";
 import { MapField } from "@/features/workflows/MapField";
 import { CodeEditor, type CodeEditorHandle } from "@/components/app/code-editor";
@@ -2483,6 +2484,8 @@ interface ConfigSpec {
   default?: string;
   /** 留空也能跑的专业旋钮 —— 收进折叠的「高级选项」,不在第一眼糊到用户脸上。 */
   advanced?: boolean;
+  /** 这个字段的值跟着谁走(后端 NODE_TYPES 声明)。父字段一换,这里的旧值就失效了。 */
+  depends_on?: string;
 }
 
 /** 选中节点的所有上游变量(祖先节点输出 + start 参数),供插入器使用。 */
@@ -3114,7 +3117,9 @@ function NodeInspector({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const setConfig = (key: string, value: unknown) => onChange({ config: { ...config, [key]: value } });
+  // 换了父字段就清掉依赖它的子字段 —— 规则抽在 dependents.ts(有测试),这里只负责接线。
+  const setConfig = (key: string, value: unknown) =>
+    onChange({ config: withDependentsCleared(config, key, value, (meta?.config ?? {}) as Record<string, ConfigSpec>) });
   const responseFormat = String(config.response_format || "text");
   const setTextConfig = (key: string) => (event: React.ChangeEvent<HTMLInputElement>) => setConfig(key, event.target.value);
 
