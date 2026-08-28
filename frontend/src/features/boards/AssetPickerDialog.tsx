@@ -15,11 +15,14 @@ import { Skeleton } from "@/components/ui/skeleton";
  */
 export function AssetPickerDialog({
   open,
+  kind,
   workspaceId,
   onOpenChange,
   onPick,
 }: {
   open: boolean;
+  /** 列哪一类。**选得到的就该是贴上去能看的** —— 给视频节点列图片等于让人选一个放不了的东西。 */
+  kind: "image" | "video";
   workspaceId: string;
   onOpenChange: (open: boolean) => void;
   onPick: (assetId: string) => void;
@@ -34,13 +37,13 @@ export function AssetPickerDialog({
   });
 
   const images = React.useMemo(() => {
-    const all = (assets.data ?? []).filter((asset: Asset) => asset.kind === "image");
+    const all = (assets.data ?? []).filter((asset: Asset) => asset.kind === kind);
     const needle = keyword.trim().toLowerCase();
     if (!needle) return all;
     return all.filter((asset: Asset) =>
       `${asset.name ?? ""} ${asset.original_filename ?? ""}`.toLowerCase().includes(needle),
     );
-  }, [assets.data, keyword]);
+  }, [assets.data, kind, keyword]);
 
   return (
     <ModalShell open={open} onOpenChange={onOpenChange} title={t("boardsPickImage")} className="w-[560px]">
@@ -70,12 +73,22 @@ export function AssetPickerDialog({
                 title={asset.name || asset.original_filename || ""}
                 className="group aspect-square cursor-pointer overflow-hidden rounded-md border border-border transition-colors hover:border-primary"
               >
-                <img
-                  src={`${API_BASE}/api/assets/${asset.id}/file`}
-                  alt={asset.name || ""}
-                  loading="lazy"
-                  className="h-full w-full object-cover"
-                />
+                {kind === "video" ? (
+                  // 只取首帧当缩略图 —— 选择器里不需要能播,能认出是哪一段就够了。
+                  <video
+                    src={`${API_BASE}/api/assets/${asset.id}/file`}
+                    preload="metadata"
+                    muted
+                    className="h-full w-full bg-black object-cover"
+                  />
+                ) : (
+                  <img
+                    src={`${API_BASE}/api/assets/${asset.id}/file`}
+                    alt={asset.name || ""}
+                    loading="lazy"
+                    className="h-full w-full object-cover"
+                  />
+                )}
               </button>
             ))}
           </div>

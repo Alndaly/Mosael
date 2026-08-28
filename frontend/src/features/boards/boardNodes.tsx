@@ -168,11 +168,44 @@ export function FrameNode({ data, selected }: NodeProps) {
   );
 }
 
-export const BOARD_NODE_TYPES = { note: NoteNode, image: ImageNode, frame: FrameNode };
+/** 视频:就地播。**不自动播、不循环** —— 画板上可能同时摆着五段片子,一起动是噪音。 */
+export function VideoNode({ data, selected }: NodeProps) {
+  const { item } = data as unknown as BoardNodeData;
+  const [broken, setBroken] = React.useState(false);
+
+  return (
+    <div
+      className={cn(
+        "group relative h-full w-full overflow-hidden rounded-lg border border-border bg-panel shadow-sm",
+        selected && "ring-2 ring-primary",
+      )}
+    >
+      <NodeResizer minWidth={120} minHeight={80} isVisible={selected} lineClassName="!border-primary" handleClassName="!h-2 !w-2 !rounded-sm !border-primary !bg-panel" />
+      <Ports />
+      {broken ? (
+        <div className="grid h-full w-full place-items-center px-3 text-center text-ui-2xs text-muted-foreground">
+          这份素材已经不在了
+        </div>
+      ) : (
+        <video
+          src={`${API_BASE}/api/assets/${item.asset_id}/file`}
+          controls
+          preload="metadata"
+          // nodrag/nowheel:不挂的话拖进度条会变成拖动整个节点,滚轮会缩放画布。
+          className="nodrag nowheel h-full w-full bg-black object-contain"
+          onError={() => setBroken(true)}
+        />
+      )}
+    </div>
+  );
+}
+
+export const BOARD_NODE_TYPES = { note: NoteNode, image: ImageNode, video: VideoNode, frame: FrameNode };
 
 /** 每种项新建时的默认大小。便签比图片矮 —— 它装的是一句话,不是一张图。 */
 export const DEFAULT_SIZE: Record<BoardItem["kind"], { width: number; height: number }> = {
   note: { width: 220, height: 140 },
   image: { width: 260, height: 180 },
+  video: { width: 320, height: 200 },
   frame: { width: 420, height: 300 },
 };

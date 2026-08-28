@@ -5,6 +5,8 @@ import {
   Controls,
   MiniMap,
   ReactFlow,
+  NodeToolbar,
+  Position,
   ReactFlowProvider,
   addEdge,
   useEdgesState,
@@ -14,7 +16,7 @@ import {
   type Node,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { Image as ImageIcon, Square, StickyNote, Trash2 } from "lucide-react";
+import { Copy, Film, Image as ImageIcon, Replace, Square, StickyNote, Trash2 } from "lucide-react";
 
 import type { BoardCanvas as Canvas, BoardItem } from "@/api/client";
 import { Button } from "@/components/ui/button";
@@ -67,10 +69,11 @@ interface Props {
   boardId: string;
   canvas: Canvas;
   onChange: (canvas: Canvas) => void;
-  onPickImage: (place: (assetId: string) => void) => void;
+  /** 让上层开素材选择器。kind 决定它列图片还是视频 —— 选得到的就该是贴上去能看的。 */
+  onPickAsset: (kind: "image" | "video", place: (assetId: string) => void) => void;
 }
 
-function Inner({ boardId, canvas, onChange, onPickImage }: Props) {
+function Inner({ boardId, canvas, onChange, onPickAsset }: Props) {
   const rf = React.useRef<ReactFlowInstance | null>(null);
   const viewport = usePersistentViewport(`board:${boardId}`);
   const [ready, setReady] = React.useState(false);
@@ -162,9 +165,24 @@ function Inner({ boardId, canvas, onChange, onPickImage }: Props) {
         selectionOnDrag
         panOnDrag={[1, 2]}
       >
-        <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
-        <Controls showInteractive={false} />
-        <MiniMap pannable zoomable className="!bg-panel" />
+        <Background variant={BackgroundVariant.Dots} gap={20} size={1.2} />
+        {/* 缩放钮/预览图**不吃应用主题**(xyflow 默认一律白底)—— 深色下就是右下角一块白。
+            把 --xy-* 映射到设计令牌,和工作流页用的是同一套(见 WorkflowsView 里那段说明)。 */}
+        <Controls
+          showInteractive={false}
+          position="bottom-left"
+          className="overflow-hidden rounded-md border border-border [--xy-controls-box-shadow:none] [--xy-controls-button-background-color:var(--panel)] [--xy-controls-button-background-color-hover:var(--secondary)] [--xy-controls-button-border-color:var(--border)] [--xy-controls-button-color:var(--muted-foreground)] [--xy-controls-button-color-hover:var(--foreground)]"
+        />
+        <MiniMap
+          pannable
+          zoomable
+          position="bottom-right"
+          className="overflow-hidden rounded-md border border-border"
+          bgColor="var(--panel)"
+          maskColor="color-mix(in srgb, var(--background) 55%, transparent)"
+          nodeColor="var(--border-strong)"
+          nodeStrokeColor="transparent"
+        />
       </ReactFlow>
 
       {/* 工具条:加什么。**浮在左上而不是顶部通栏** —— 画板要尽量大,一条通栏会一直吃掉一行。 */}
@@ -176,9 +194,17 @@ function Inner({ boardId, canvas, onChange, onPickImage }: Props) {
           variant="ghost"
           size="sm"
           className="h-7 gap-1.5 px-2"
-          onClick={() => onPickImage((assetId) => add("image", { asset_id: assetId }))}
+          onClick={() => onPickAsset("image", (assetId) => add("image", { asset_id: assetId }))}
         >
           <ImageIcon size={13} /> 图片
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1.5 px-2"
+          onClick={() => onPickAsset("video", (assetId) => add("video", { asset_id: assetId }))}
+        >
+          <Film size={13} /> 视频
         </Button>
         <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2" onClick={() => add("frame")}>
           <Square size={13} /> 分组
@@ -186,49 +212,114 @@ function Inner({ boardId, canvas, onChange, onPickImage }: Props) {
       </div>
 
       {/* 选中一张便签时才出色板 —— 没选中时它没有作用对象。 */}
-      <NotePalette nodes={nodes} setNodes={setNodes} />
+      <ItemToolbar nodes={nodes} setNodes={setNodes} onPickAsset={onPickAsset} />
     </div>
   );
 }
 
-function NotePalette({
+/**
+ * 选中一项时浮在它上面的操作条。
+ *
+ * **按类型给动作,不给一套通用的**:便签要换颜色,图片/视频要换素材,分组框两者都不要。
+ * 摆一排一半是灰的按钮,等于让用户每次都先分辨哪些能点。
+ *
+ * 位置跟着选中项走 —— 用 NodeToolbar,它渲染在 React Flow 的视口层里,平移缩放时自己跟着动
+ * (工作流那边的检查器用的是同一个原语)。
+ */
+function ItemToolbar({
   nodes,
   setNodes,
+  onPickAsset,
 }: {
   nodes: Node[];
   setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
+  onPickAsset: Props["onPickAsset"];
 }) {
-  const selected = nodes.filter((node) => node.selected && node.type === "note");
+  const selected = nodes.filter((node) => node.selected);
+  // 多选时只给共通的动作 —— 逐个类型的动作在混选下没有一致的含义。
+  const single = selected.length === 1 ? selected[0] : null;
   if (selected.length === 0) return null;
+
+  const item = single ? (single.data as unknown as { item: BoardItem }).item : null;
+
+  const patch = (id: string, next: Partial<BoardItem>) =>
+    setNodes((current) =>
+      current.map((node) =>
+        node.id === id
+          ? { ...node, data: { ...node.data, item: { ...(node.data as { item: BoardItem }).item, ...next } } }
+          : node,
+      ),
+    );
+
+  const duplicate = () =>
+    setNodes((current) => [
+      ...current.map((node) => ({ ...node, selected: false })),
+      ...current
+        .filter((node) => node.selected)
+        .map((node) => {
+          const source = (node.data as unknown as { item: BoardItem }).item;
+          const copy: BoardItem = { ...source, id: `${source.kind}-${Math.random().toString(36).slice(2, 9)}` };
+          return {
+            ...node,
+            id: copy.id,
+            // 错开一点放,不然复制出来的正好盖在原件上,看着像什么都没发生。
+            position: { x: node.position.x + 24, y: node.position.y + 24 },
+            selected: true,
+            data: { ...node.data, item: copy },
+          };
+        }),
+    ]);
+
   return (
-    <div className="nodrag absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full border border-border-strong bg-panel p-1 shadow-[var(--shadow-panel)]">
-      {NOTE_COLORS.map((color) => (
+    <NodeToolbar nodeId={selected.map((node) => node.id)} isVisible position={Position.Top} offset={10}>
+      <div className="nodrag nopan flex items-center gap-0.5 rounded-full border border-border-strong bg-panel p-1 shadow-[var(--shadow-panel)]">
+        {item?.kind === "note" &&
+          NOTE_COLORS.map((color) => (
+            <button
+              key={color}
+              type="button"
+              aria-label={color}
+              className={cn(
+                "h-5 w-5 cursor-pointer rounded-full border transition-transform hover:scale-110",
+                noteColorClass(color),
+                item.color === color && "ring-2 ring-primary ring-offset-1 ring-offset-[var(--panel)]",
+              )}
+              onClick={() => patch(item.id, { color })}
+            />
+          ))}
+
+        {(item?.kind === "image" || item?.kind === "video") && (
+          <button
+            type="button"
+            className="flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs text-muted-foreground hover:bg-secondary hover:text-foreground"
+            onClick={() => onPickAsset(item.kind as "image" | "video", (assetId) => patch(item.id, { asset_id: assetId }))}
+          >
+            <Replace size={12} /> 换一份
+          </button>
+        )}
+
+        {item && <span aria-hidden className="mx-0.5 h-4 w-px bg-border" />}
+
         <button
-          key={color}
           type="button"
-          aria-label={color}
-          className={cn("h-5 w-5 cursor-pointer rounded-full border", noteColorClass(color))}
-          onClick={() =>
-            setNodes((current) =>
-              current.map((node) =>
-                node.selected && node.type === "note"
-                  ? { ...node, data: { ...node.data, item: { ...(node.data as { item: BoardItem }).item, color } } }
-                  : node,
-              ),
-            )
-          }
-        />
-      ))}
-      <span className="mx-1 h-4 w-px bg-border" />
-      <button
-        type="button"
-        aria-label="删除"
-        className="grid h-5 w-5 cursor-pointer place-items-center rounded-full text-muted-foreground hover:text-destructive"
-        onClick={() => setNodes((current) => current.filter((node) => !node.selected))}
-      >
-        <Trash2 size={12} />
-      </button>
-    </div>
+          aria-label="复制"
+          title="复制"
+          className="grid h-6 w-6 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
+          onClick={duplicate}
+        >
+          <Copy size={12} />
+        </button>
+        <button
+          type="button"
+          aria-label="删除"
+          title="删除"
+          className="grid h-6 w-6 cursor-pointer place-items-center rounded-full text-muted-foreground hover:text-destructive"
+          onClick={() => setNodes((current) => current.filter((node) => !node.selected))}
+        >
+          <Trash2 size={12} />
+        </button>
+      </div>
+    </NodeToolbar>
   );
 }
 

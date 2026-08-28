@@ -184,7 +184,7 @@ function BoardDetail({
   const t = useI18n();
   const [name, setName] = React.useState(board.name);
   const [canvas, setCanvas] = React.useState<Canvas | null>(null);
-  const [picking, setPicking] = React.useState<((assetId: string) => void) | null>(null);
+  const [picking, setPicking] = React.useState<{ kind: "image" | "video"; place: (assetId: string) => void } | null>(null);
 
   const save = React.useCallback(
     (next: Canvas) => {
@@ -230,15 +230,16 @@ function BoardDetail({
         boardId={board.id}
         canvas={board.canvas ?? { items: [], edges: [] }}
         onChange={setCanvas}
-        onPickImage={(place) => setPicking(() => place)}
+        onPickAsset={(kind, place) => setPicking({ kind, place })}
       />
 
       <AssetPickerDialog
         open={picking !== null}
+        kind={picking?.kind ?? "image"}
         workspaceId={workspaceId}
         onOpenChange={(next) => !next && setPicking(null)}
         onPick={(assetId) => {
-          picking?.(assetId);
+          picking?.place(assetId);
           setPicking(null);
         }}
       />

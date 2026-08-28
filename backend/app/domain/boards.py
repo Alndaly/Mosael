@@ -32,10 +32,15 @@ class BoardDomainError(ValueError):
 
 #: 画板上能放什么。
 #:
-#: `note` 便签(文字)、`image` 图片(指向素材库的一份)、`frame` 分组框(把一堆东西圈起来命名)。
-#: 三种是**摊开想法**这件事的最小完备集:写下来、贴上参考、把相关的归到一起。
-#: 加第四种前先问它是不是这三种的组合 —— 画板的价值在于摆放,不在于控件多。
-ITEM_KINDS = ("note", "image", "frame")
+#: `note` 便签(文字)、`image` 图片、`video` 视频、`frame` 分组框(把一堆东西圈起来命名)。
+#:
+#: 图片和视频**分开两种而不是合成一个 media**:它们在画板上的样子和操作都不同 ——
+#: 图片是一张静止的参考,视频要能就地播;而"从这张图生成视频"是图片才有的动作,
+#: 反过来"抽一帧"是视频才有的。合成一种的话每处都要先分辨一次它到底是哪个。
+ITEM_KINDS = ("note", "image", "video", "frame")
+
+#: 必须指向素材库一份的那几种。空着的话存得下、打开却是个空白框。
+_NEEDS_ASSET = ("image", "video")
 
 #: 一个 item 至少要有的东西。坐标必须是数,否则画布渲染不出来。
 _REQUIRED = ("id", "kind", "x", "y")
@@ -123,9 +128,9 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
             if not isinstance(asset_id, str) or not asset_id.strip():
                 raise BoardDomainError(f"画板项 {item_id} 的 asset_id 不合法")
             item["asset_id"] = asset_id.strip()
-        # 图片项没有素材就是一个空白框 —— 存得下、打开却什么都没有,不如当场说。
-        if kind == "image" and "asset_id" not in item:
-            raise BoardDomainError(f"图片项 {item_id} 必须指向一份素材")
+        # 没有素材就是一个空白框 —— 存得下、打开却什么都没有,不如当场说。
+        if kind in _NEEDS_ASSET and "asset_id" not in item:
+            raise BoardDomainError(f"{item_id} 必须指向一份素材")
 
         items.append(item)
 

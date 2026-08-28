@@ -827,7 +827,7 @@ export function deleteAgentSession(sessionId: string): Promise<unknown> {
 /** 创意画板上的一项:便签 / 图片 / 分组框。形状由后端 domain/boards 校验。 */
 export interface BoardItem {
   id: string;
-  kind: "note" | "image" | "frame";
+  kind: "note" | "image" | "video" | "frame";
   x: number;
   y: number;
   width?: number;

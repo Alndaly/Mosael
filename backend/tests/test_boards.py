@@ -120,6 +120,7 @@ def test_空画布和缺字段都读得回来() -> None:
         ({"items": [{"id": "a", "kind": "note", "x": 0, "y": 0, "color": "橙"}]}, "不在色板里"),
         ({"items": [{"id": "a", "kind": "note", "x": 0, "y": 0, "width": 0}]}, "宽度为 0"),
         ({"items": [{"id": "a", "kind": "image", "x": 0, "y": 0}]}, "图片项没有素材"),
+        ({"items": [{"id": "a", "kind": "video", "x": 0, "y": 0}]}, "视频项没有素材"),
         ({"items": [], "edges": [{"source": "a", "target": "b"}]}, "连线连到不存在的项"),
     ],
 )
@@ -148,3 +149,12 @@ def test_太大的画布拒绝() -> None:
     items = [{"id": f"n{i}", "kind": "note", "x": 0, "y": 0} for i in range(MAX_ITEMS + 1)]
     with pytest.raises(BoardDomainError, match="最多"):
         normalize_canvas({"items": items})
+
+
+def test_视频项和图片项一样要指向素材() -> None:
+    """两种分开是因为**画板上的样子和能做的事不同**,但"必须有素材"这条是共通的。"""
+    from app.domain.boards import ITEM_KINDS
+
+    assert "video" in ITEM_KINDS
+    got = normalize_canvas({"items": [{"id": "v", "kind": "video", "x": 0, "y": 0, "asset_id": "abc"}]})
+    assert got["items"][0]["asset_id"] == "abc"
