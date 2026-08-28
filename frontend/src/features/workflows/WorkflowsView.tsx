@@ -3176,22 +3176,6 @@ function NodeInspector({
     });
   };
 
-  const insertVariable = (key: string, ref: string) => {
-    const el = fieldRefs.current[key];
-    const current = String(config[key] ?? "");
-    if (!el) {
-      setConfig(key, current + ref);
-      return;
-    }
-    const start = el.selectionStart ?? current.length;
-    const end = el.selectionEnd ?? current.length;
-    setConfig(key, current.slice(0, start) + ref + current.slice(end));
-    requestAnimationFrame(() => {
-      el.focus();
-      el.selectionStart = el.selectionEnd = start + ref.length;
-    });
-  };
-
   // ── AI 生成节点:所选模型 + 它声明支持的参数 ────────────────────────────────
   /** 是否展开「手动指定 provider/model/类型」。目录里有的模型不需要看见这三项。 */
   const [genCustom, setGenCustom] = React.useState(false);
@@ -3471,22 +3455,6 @@ function NodeInspector({
                   onChange={(event) => setConfig(key, event.target.value)}
                 />
               )}
-              {!connected && spec?.type === "template" && variables.length > 0 && (
-                <div className="flex flex-wrap gap-[3px]">
-                  {variables.map((ref) => (
-                    <button
-                      key={ref}
-                      type="button"
-                      className="cursor-pointer rounded-md border border-border bg-[color-mix(in_srgb,var(--primary)_6%,transparent)] px-1.5 py-px font-mono text-ui-2xs text-primary transition-[border-color,background] duration-100 hover:border-primary hover:bg-[color-mix(in_srgb,var(--primary)_12%,transparent)]"
-                      title={t("wfInsertVar")}
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => insertVariable(key, ref)}
-                    >
-                      {ref.replace(/[{}]/g, "")}
-                    </button>
-                  ))}
-                </div>
-              )}
               {spec?.description && <small>{spec.description}</small>}
             </div>
           );
@@ -3511,6 +3479,15 @@ function NodeInspector({
         // 380 而不是 320:两列并排的参数(Temperature / Top P 这种)在 320 里各自只剩 130px,
         // 长一点的标签就换行。
         "grid max-h-[560px] min-h-0 w-[380px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border-strong bg-panel shadow-[var(--shadow-panel)]",
+        // **搬进画布之后必须挂这三个。** 面板现在长在 React Flow 里面,而画布自己要监听
+        // pointerdown 来平移、滚轮来缩放 —— 不声明的话这些事件在到达输入框之前就被画布截走:
+        // 点输入框不聚焦、打字没反应、下拉点不开。此前面板是 fixed 在画布外面的,画布看不到
+        // 这些事件,所以从来不需要声明,搬进来才暴露。
+        //   nodrag  —— 在面板里按下不要拖动节点/框选
+        //   nopan   —— 不要平移画布
+        //   nowheel —— 面板内滚动是滚它自己,不是缩放画布
+        // 另外 viewport-portal 整个 user-select:none,面板里要能选中文字得显式改回来。
+        "nodrag nopan nowheel select-text",
         inert && "pointer-events-none",
       )}
       aria-label={node.name || meta?.label || node.type}
