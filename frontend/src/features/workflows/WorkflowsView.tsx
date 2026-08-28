@@ -74,7 +74,6 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useCanvasPosture } from "@/features/workflows/useCanvasPosture";
-import { VarTextarea } from "@/features/workflows/VarTextarea";
 import { RefEditor } from "@/features/workflows/RefEditor";
 import { MapField } from "@/features/workflows/MapField";
 import { CodeEditor, type CodeEditorHandle } from "@/components/app/code-editor";
@@ -3756,7 +3755,7 @@ function NodeInspector({
               // 回来发现之前挂的东西没了,比多显示一行难受得多。
               <div className={FIELD_BOX}>
                 <span>{t("wfGenSourceExtra")}</span>
-                <VarTextarea
+                <RefEditor
                   rows={Math.min(genExtraSourceLines.length + 1, 4)}
                   value={serializeSourceAssets(genExtraSourceLines)}
                   variables={variables}
@@ -3890,7 +3889,7 @@ function NodeInspector({
             </div>
             <div className={FIELD_BOX}>
               <span>{t("wfLlmStop")}</span>
-              <VarTextarea
+              <RefEditor
                 rows={2}
                 value={String(config.stop ?? "")}
                 onChange={(next) => setConfig("stop", next)}

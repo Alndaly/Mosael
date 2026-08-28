@@ -143,16 +143,22 @@ export function RefEditor({
             onStart: (props) => {
               commandRef.current = props.command;
               clientRectRef.current = props.clientRect ?? null;
-              setMenu({ items: props.items, active: 0 });
+              // **没有候选就不要弹。** 空菜单渲染出来是一条什么都没有的小灰条,贴在光标下面 ——
+              // 用户看到的是"敲了 @ 冒出个奇怪的东西",而真相是这个节点没有上游可引用。
+              setMenu(props.items.length ? { items: props.items, active: 0 } : null);
             },
             onUpdate: (props) => {
               commandRef.current = props.command;
               clientRectRef.current = props.clientRect ?? null;
-              setMenu((prev) => ({
-                items: props.items,
-                // 候选变了就回到第一条;没变则保留用户按下去的位置。
-                active: prev && prev.items.join() === props.items.join() ? prev.active : 0,
-              }));
+              setMenu((prev) =>
+                props.items.length
+                  ? {
+                      items: props.items,
+                      // 候选变了就回到第一条;没变则保留用户按下去的位置。
+                      active: prev && prev.items.join() === props.items.join() ? prev.active : 0,
+                    }
+                  : null,
+              );
             },
             // **按键交给插件**:它知道 composition,中文选词时的回车不会被当成"选中候选"。
             onKeyDown: (props) => {
