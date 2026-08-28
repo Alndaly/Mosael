@@ -41,7 +41,7 @@ CORE_SKILLS = [
         "description": "Create image and video generation jobs across configured providers, and optimize an image prompt for a target platform's conventions.",
         "source": "core",
         "tools": [
-            {"name": "list_generation_models", "method": "GET", "path": "/api/generation/models"},
+            {"name": "list_generation_models", "method": "GET", "path": "/api/generation/options"},
             {"name": "create_generation_job", "method": "POST", "path": "/api/generation/jobs"},
             {"name": "optimize_image_prompt", "method": "POST", "path": "/api/generation/optimize-prompt"},
         ],
@@ -66,7 +66,7 @@ CORE_SKILLS = [
         "tools": [
             {"name": "scan_plugins", "method": "POST", "path": "/api/plugins/scan"},
             {"name": "list_plugin_tools", "method": "GET", "path": "/api/plugins/tools"},
-            {"name": "invoke_plugin_tool", "method": "POST", "path": "/api/plugins/{plugin_id}/tools/{tool_name}/invoke"},
+            {"name": "invoke_plugin_tool", "method": "POST", "path": "/api/plugins/instances/{instance_id}/tools/{tool_name}/invoke"},
         ],
         "permissions": ["plugins:read", "plugins:write"],
     },
