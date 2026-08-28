@@ -65,15 +65,6 @@ _UNDECLARED = {
     # 这两个是各自厂商的真旋钮,只是还没接进描述符。
     ("openai.py", "output_format"),
     ("qwen.py", "prompt_extend"),
-    # Seedance 读 aspect_ratio(默认 "16:9")但没有一个 seedance 描述符声明它 —— 于是这一家
-    # **只出得了 16:9**,竖屏做不了,而适配器本身是支持的。
-    #
-    # 没有直接补声明,是因为**取值清单没探过**:seedance 那批 08-27 核过的是时长/分辨率/素材
-    # 角色,`aspect_ratios` 一直是「未声明」。只写个 key 不给清单的话校验器就不约束取值,
-    # 用户发 "3:4" 照样提交,失败要等供应商回话 —— 那正是这个仓库反复吃过的亏
-    # (见 test_capabilities_match_reality 开头那两段)。补法是:拿真机把它接受哪几种比例
-    # 探到终态,连 `aspect_ratios` 一起写进去。
-    ("seedance.py", "aspect_ratio"),
 }
 
 

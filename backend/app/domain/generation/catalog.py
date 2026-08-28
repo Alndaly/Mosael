@@ -374,11 +374,18 @@ WAN_VIDEO_EDIT_CAPABILITIES = {
 #:   `first/last frame content cannot be mixed with reference media content`
 #:   `reference_audio cannot be the only reference input`
 #: 输入类型的白名单也是它自己给的:`text`, `image_url`, `audio_url`, `video_url`, `draft_task`。
+#: 方舟视频的宽高比。**官方文档原话**(docs.volcengine.com/docs/82379/1520757,2026-08-28 查):
+#:   可选值:16:9、4:3、1:1、3:4、9:16、21:9、adaptive(根据任务类型和输入内容自动适配宽高比)
+#: 默认值分模型:Seedance 2.5 / 2.0 系列 / 1.5 pro 默认 `adaptive`;1.0 pro 与 1.0 pro fast
+#: **文生视频默认 16:9、图生视频默认 adaptive**。
+#: 首帧/首尾帧生视频时模型自动保持与首帧图片一致 —— 所以那条路上根本不用传它。
+ARK_VIDEO_RATIOS = ["adaptive", "16:9", "4:3", "1:1", "3:4", "9:16", "21:9"]
+
 SEEDANCE_2_VIDEO_CAPABILITIES = {
     "modes": ["text-to-video", "image-to-video", "keyframes-to-video", "reference-to-video"],
     "endpoint": "ark",
     "parameter_keys": [
-        "duration_seconds", "resolution",
+        "duration_seconds", "resolution", "aspect_ratio",
         "first_frame", "last_frame",
         "reference_image", "reference_video", "reference_audio",
     ],
@@ -388,11 +395,23 @@ SEEDANCE_2_VIDEO_CAPABILITIES = {
     "requires_companion": {"reference_audio": ["reference_image", "reference_video"]},
     "duration_seconds": [],
     "default_duration_seconds": 5,
-    "resolutions": ["480p", "720p", "1080p"],
+    # 文档:Seedance 2.0 默认 720p,可选 480p/720p/1080p/**4k**。fast 与 mini 只到 720p,
+    # 它们各自有自己的描述符(见下)—— 此前三个共用这一份,于是 fast/mini 上也列出 1080p,
+    # 选了必然失败。08-27 那次真机核的是 2.0 base,fast/mini 是**继承**来的,没被验证过。
+    "resolutions": ["480p", "720p", "1080p", "4k"],
     "default_resolution": "720p",
+    "aspect_ratios": ARK_VIDEO_RATIOS,
+    "default_aspect_ratio": "adaptive",
     "min_duration_seconds": 4,
     "max_duration_seconds": 15,
     "supports_audio": True,
+}
+
+#: 2.0 fast / mini:除了**分辨率只到 720p**,其余和 2.0 base 一样(文档原话:
+#: 「Seedance 2.0 fast:默认值 720p;可选值 480p、720p」,mini 同)。
+SEEDANCE_2_SMALL_VIDEO_CAPABILITIES = {
+    **SEEDANCE_2_VIDEO_CAPABILITIES,
+    "resolutions": ["480p", "720p"],
 }
 
 #: Seedance 1 真机核过(2026-08-27),三处和此前写的不一样:
@@ -410,15 +429,36 @@ SEEDANCE_2_VIDEO_CAPABILITIES = {
 SEEDANCE_1_VIDEO_CAPABILITIES = {
     "modes": ["text-to-video", "image-to-video"],
     "endpoint": "ark",
-    "parameter_keys": ["duration_seconds", "resolution", "first_frame"],
+    # seed / camera_fixed 是文档明确写「Seedance 1.5 pro / 1.0 pro / 1.0 pro fast」支持的两项,
+    # **2.0 系列不在支持名单里** —— 所以它们只挂在 1.x 这一族。
+    "parameter_keys": ["duration_seconds", "resolution", "aspect_ratio", "seed", "camera_fixed", "first_frame"],
     "duration_seconds": [],
     "default_duration_seconds": 5,
     "resolutions": ["480p", "720p", "1080p"],
-    "default_resolution": "720p",
+    # 文档:1.0 pro 与 1.0 pro fast 默认 **1080p**(不是 720p)。
+    "default_resolution": "1080p",
+    "aspect_ratios": ARK_VIDEO_RATIOS,
+    # 文档:1.0 pro / fast 是「文生视频默认 16:9,图生视频默认 adaptive」。这里给文生那一档的
+    # 默认值 —— 有首帧时我们根本不传 ratio,交给模型按图片适配(见 providers/video/seedance)。
+    "default_aspect_ratio": "16:9",
     "source_limits": {"first_frame": 1},
     "min_duration_seconds": 2,
     "max_duration_seconds": 12,
     "supports_audio": False,
+}
+
+#: Seedance 1.5 pro **不是 1.0 的一个别名**,规格自己一套(文档 2026-08-28 查):
+#:   · 时长 [4, 12] —— 下限是 4 不是 2。此前它共用 1.0 那份,写着下限 2,而 08-27 的真机
+#:     核的是 **1.0 pro**(接口原话 `must be greater than or equal to 2`),1.5 从没被验证过。
+#:     于是界面允许选 2 秒、3 秒,提交到方舟才失败。
+#:   · 默认分辨率 720p(1.0 那两个是 1080p)。
+#:   · 有声视频:文档把 1.5 pro 列进 generate_audio 的支持名单。
+SEEDANCE_15_VIDEO_CAPABILITIES = {
+    **SEEDANCE_1_VIDEO_CAPABILITIES,
+    "min_duration_seconds": 4,
+    "default_resolution": "720p",
+    "default_aspect_ratio": "adaptive",
+    "supports_audio": True,
 }
 
 
@@ -629,21 +669,21 @@ BUILTIN_MODELS = [
         "provider": "bytedance",
         "kind": "video",
         "model": "doubao-seedance-2-0-fast-260128",
-        "capabilities": SEEDANCE_2_VIDEO_CAPABILITIES,
+        "capabilities": SEEDANCE_2_SMALL_VIDEO_CAPABILITIES,
     },
     {
         "id": "bytedance:doubao-seedance-2-0-mini-260615:video",
         "provider": "bytedance",
         "kind": "video",
         "model": "doubao-seedance-2-0-mini-260615",
-        "capabilities": SEEDANCE_2_VIDEO_CAPABILITIES,
+        "capabilities": SEEDANCE_2_SMALL_VIDEO_CAPABILITIES,
     },
     {
         "id": "bytedance:doubao-seedance-1-5-pro-251215:video",
         "provider": "bytedance",
         "kind": "video",
         "model": "doubao-seedance-1-5-pro-251215",
-        "capabilities": {**SEEDANCE_1_VIDEO_CAPABILITIES, "supports_audio": True},
+        "capabilities": SEEDANCE_15_VIDEO_CAPABILITIES,
     },
     {
         "id": "bytedance:doubao-seedance-1-0-pro-250528:video",

@@ -70,7 +70,11 @@ def build_submit_payload(request: GenerationRequest, context: ProviderContext | 
     model = resolve_seedance_model(request, context)
     duration = int(float(request.parameters.get("duration_seconds", 5)))
     resolution = str(request.parameters.get("resolution", "720p"))
-    ratio = str(request.parameters.get("aspect_ratio", "16:9"))
+    # **不写死 16:9。** 官方文档:2.5 / 2.0 系列 / 1.5 pro 的 ratio 默认就是 `adaptive`
+    # (按任务类型和输入内容自动适配),写死 16:9 等于替模型做了它本来会自己做的选择 ——
+    # 而且做反了:文生视频想要竖屏的人拿到的是横的。用户没指定时**不传这个字段**,
+    # 让模型用它自己的默认;指定了就照发。
+    ratio = str(request.parameters.get("aspect_ratio") or "").strip()
     content: list[dict[str, Any]] = [{"type": "text", "text": request.prompt.strip()}]
     # content 数组按 `role` 区分每一份素材是干什么的,这正是接口自己的形状。
     #
@@ -95,7 +99,9 @@ def build_submit_payload(request: GenerationRequest, context: ProviderContext | 
         "duration": duration,
         "resolution": resolution,
     }
-    if not first_frame:
+    # 有首帧时不传:文档说首帧/首尾帧生视频「模型自动保持输出视频宽高比和 first_frame 一致」,
+    # 传了反而会触发裁剪(居中裁)。
+    if ratio and not first_frame:
         payload["ratio"] = ratio
     if request.parameters.get("generate_audio"):
         payload["generate_audio"] = True

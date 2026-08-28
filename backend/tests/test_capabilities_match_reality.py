@@ -65,6 +65,47 @@ class TestSeedance2:
         assert (cap["min_duration_seconds"], cap["max_duration_seconds"]) == (4, 15)
 
 
+class TestSeedance官方文档:
+    """**来源是官方文档,不是真机** —— 和这个文件里其余几组不一样,标出来是因为两者的分量不同。
+
+    docs.volcengine.com/docs/82379/1520757「创建视频生成任务」,2026-08-28 查。
+    08-27 那次真机核的是每一族的**一个成员**(2.0 base 和 1.0 pro),而 fast / mini / 1.5 pro
+    当时共用同族的描述符 —— 它们的规格从没被验证过,继承来的值和文档对不上四处:
+
+      · 2.0 fast / mini 官方只到 720p,而它们继承了 base 的 1080p —— 选了必然失败;
+      · 2.0 base 官方还支持 4k,我们少了一档;
+      · 1.5 pro 时长下限官方是 4,继承来的是 1.0 pro 的 2 —— 选 2、3 秒会失败;
+      · 1.0 pro / fast 默认分辨率官方是 1080p,我们写的 720p。
+
+    有密钥能跑到终态之后,该把这几条升级成真机结论并挪进上面那些类。
+    """
+
+    def test_ratio取值来自文档原文(self) -> None:
+        # 文档原话:「可选值:16:9、4:3、1:1、3:4、9:16、21:9、adaptive」
+        assert set(C.ARK_VIDEO_RATIOS) == {"16:9", "4:3", "1:1", "3:4", "9:16", "21:9", "adaptive"}
+
+    def test_默认宽高比分模型(self) -> None:
+        """文档:2.0 系列 / 1.5 pro 默认 adaptive;1.0 pro 与 fast 文生视频默认 16:9。"""
+        assert C.SEEDANCE_2_VIDEO_CAPABILITIES["default_aspect_ratio"] == "adaptive"
+        assert C.SEEDANCE_15_VIDEO_CAPABILITIES["default_aspect_ratio"] == "adaptive"
+        assert C.SEEDANCE_1_VIDEO_CAPABILITIES["default_aspect_ratio"] == "16:9"
+
+    def test_fast与mini的分辨率只到720p(self) -> None:
+        assert C.SEEDANCE_2_SMALL_VIDEO_CAPABILITIES["resolutions"] == ["480p", "720p"]
+        assert "4k" in C.SEEDANCE_2_VIDEO_CAPABILITIES["resolutions"]
+
+    def test_15pro的时长下限是4不是2(self) -> None:
+        assert C.SEEDANCE_15_VIDEO_CAPABILITIES["min_duration_seconds"] == 4
+        assert C.SEEDANCE_1_VIDEO_CAPABILITIES["min_duration_seconds"] == 2
+
+    def test_seed与固定摄像头只挂在1x那一族(self) -> None:
+        """文档的支持名单:seed 与 camera_fixed 都是「1.5 pro / 1.0 pro / 1.0 pro fast」,
+        2.0 系列不在其中。挂错族的话,2.0 上会多出两个发过去没人认的字段。"""
+        for key in ("seed", "camera_fixed"):
+            assert key in C.SEEDANCE_1_VIDEO_CAPABILITIES["parameter_keys"]
+            assert key not in C.SEEDANCE_2_VIDEO_CAPABILITIES["parameter_keys"]
+
+
 class Test通义图像:
     """核查日期 2026-08-27,qwen-image。接口原话:`Size 1*1 is out of range [512*512, 2048*2048]`。
 
