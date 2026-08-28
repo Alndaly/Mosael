@@ -101,6 +101,14 @@ export function MapField({
 
   return (
     <div className="grid gap-1.5">
+      {/* 有行的时候给一排列头 —— 两列都是输入框,不说明哪列是什么就得靠猜。 */}
+      {rows.length > 0 && (
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_24px] gap-1 text-ui-2xs text-muted-foreground">
+          <span>{t("wfMapKey")}</span>
+          <span>{t("wfMapValue")}</span>
+          <span />
+        </div>
+      )}
       {rows.map((row, index) => (
         <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_24px] items-center gap-1" key={index}>
           <Input
@@ -133,14 +141,17 @@ export function MapField({
           </Button>
         </div>
       ))}
+      {/* **左对齐的小按钮,不是居中的大块。** 一行都没有时,居中的"加一项"孤零零悬在那儿,
+          既不像表单也不像空状态 —— 它只是个次要操作,主路径是下面那排上游 chip:
+          多数时候用户就是想把上一个节点的输出接进来,点一下就好,不用先加行再挑值。 */}
       <Button
         type="button"
         variant="ghost"
         size="sm"
-        className="justify-center"
+        className="h-7 w-fit justify-start px-1.5 text-ui-xs"
         onClick={() => push([...rows, { key: "", value: "" }])}
       >
-        <Plus size={13} />
+        <Plus size={12} />
         {t("wfMapAdd")}
       </Button>
       {/**
@@ -154,7 +165,9 @@ export function MapField({
         * 不合适再改。已经用过的不再列出来 —— 列着只会让人以为可以加第二遍。
         */}
       {unused.length > 0 && (
-        <div className="flex flex-wrap gap-1">
+        <div className="grid gap-1 rounded-md border border-dashed border-border p-1.5">
+          <span className="text-ui-2xs text-muted-foreground">{t("wfMapFromUpstream")}</span>
+          <div className="flex flex-wrap gap-1">
           {unused.map((ref) => (
             <button
               key={ref}
@@ -166,6 +179,7 @@ export function MapField({
               {ref.replace(/^\{\{|\}\}$/g, "")}
             </button>
           ))}
+          </div>
         </div>
       )}
     </div>
