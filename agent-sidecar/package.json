@@ -19,13 +19,13 @@
     "test": "node test/subagent-report.test.mjs && node test/subagent-manager.test.mjs && node test/usage.test.mjs && node test/compaction.test.mjs && node test/context-meter.parity.test.mjs && node test/credentials.test.mjs && node test/proxy.test.mjs && node test/thinking.test.mjs && node test/thinking-wire.test.mjs && node test/bundle.smoke.mjs"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "^0.83.0",
-    "@earendil-works/pi-ai": "^0.83.0",
-    "undici": "^8.9.0"
+    "@earendil-works/pi-agent-core": "^0.84.3",
+    "@earendil-works/pi-ai": "^0.84.3",
+    "undici": "^8.10.0"
   },
   "devDependencies": {
-    "@types/node": "^26.1.2",
-    "esbuild": "^0.28.1",
+    "@types/node": "^26.4.0",
+    "esbuild": "^0.28.2",
     "typescript": "^7.0.2"
   }
 }

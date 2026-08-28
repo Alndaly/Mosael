@@ -7,8 +7,8 @@ import { app } from "electron";
  * 和 residency 是一对:关窗不退让 App 在开机之后一直活着,开机自启让它在开机之后**先**活起来。
  * 少了任何一半,「每天 9 点自动发布」都还是要用户记得手动开一次 App。
  *
- * 自启时带 --hidden:直接静默驻留托盘,而不是每次开机弹一个窗口出来。mac 有原生的
- * openAsHidden 表达同一件事,Windows/Linux 只能靠命令行参数,所以两边都给。
+ * 自启时带 --hidden:直接静默驻留托盘,而不是每次开机弹一个窗口出来。Windows/Linux 靠这个
+ * 命令行参数;mac 从登录项拉起时系统不传参数,改问 `wasOpenedAtLogin`(见 isHiddenLaunch)。
  */
 
 const HIDDEN_FLAG = "--hidden";
@@ -16,8 +16,16 @@ const HIDDEN_FLAG = "--hidden";
 export function isHiddenLaunch(): boolean {
   if (process.argv.includes(HIDDEN_FLAG)) return true;
   // mac:从「登录项」拉起时系统不会传我们的参数,得问它。
+  //
+  // 问的是 `wasOpenedAtLogin`(系统在登录时自动拉起了我),不是已经删掉的 `wasOpenedAsHidden`。
+  // Electron 44 把后者连同 `openAsHidden` 一起移除了 —— 它们只在 macOS 12 及以下有效,
+  // 而 12 已不在支持范围内。留着的话读回来是 undefined,`=== true` 恒为 false:
+  // 开机静默启动从此永远检测不到,而且一声不吭。
+  //
+  // 换成 wasOpenedAtLogin 不是找个字段顶上,而是**判据本来就该是这个**:我们注册登录项的
+  // 目的就是静默驻留托盘,所以「被登录拉起」和「该静默」在这个应用里是同一件事。
   try {
-    return app.getLoginItemSettings().wasOpenedAsHidden === true;
+    return app.getLoginItemSettings().wasOpenedAtLogin === true;
   } catch {
     return false;
   }
@@ -73,9 +81,10 @@ export function getOpenAtLogin(): LoginItemState {
 }
 
 export function setOpenAtLogin(enabled: boolean): LoginItemState {
+  // 不再传 openAsHidden:Electron 44 移除了它(只在 macOS 12 及以下有效)。静默这件事现在
+  // 两边都靠 --hidden 参数 + 上面 isHiddenLaunch 里的 wasOpenedAtLogin 兜住。
   app.setLoginItemSettings({
     openAtLogin: enabled,
-    openAsHidden: enabled,
     args: enabled ? [HIDDEN_FLAG] : [],
   });
   return readState();

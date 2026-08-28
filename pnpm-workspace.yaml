@@ -15,9 +15,10 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - '@earendil-works/pi-agent-core@0.83.0'
   - '@earendil-works/pi-ai@0.83.0'
-  - '@vitejs/plugin-react@6.0.5'
-  - lucide-react@1.28.0
+  - '@vitejs/plugin-react@6.0.5 || 6.1.1'
+  - lucide-react@1.28.0 || 1.35.0
   - vite@8.2.0
+  - '@testing-library/react@16.3.3'
 
 onlyBuiltDependencies:
   - electron
