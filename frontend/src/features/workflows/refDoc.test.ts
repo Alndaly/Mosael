@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { docToString, parsePieces, piecesToDoc, piecesToString } from "@/features/workflows/refDoc";
+import { docToString, filterRefs, parsePieces, piecesToDoc, piecesToString } from "@/features/workflows/refDoc";
 
 describe("字符串 → 片段", () => {
   it("认得出引用和它两边的文字", () => {
@@ -75,5 +75,29 @@ describe("文档 → 字符串", () => {
   it("空段落给空串,不是 undefined", () => {
     expect(docToString({ type: "doc", content: [{ type: "paragraph" }] })).toBe("");
     expect(docToString(null)).toBe("");
+  });
+});
+
+describe("按输入筛选候选", () => {
+
+
+
+
+  it("查询为空时给出全部候选", () => {
+    // 刚敲下 @ 就该看见所有候选,而不是一片空白。
+    expect(filterRefs(["{{a.b}}", "{{c.d}}"], "")).toEqual(["{{a.b}}", "{{c.d}}"]);
+  });
+
+  it("匹配的是去掉花括号后的名字", () => {
+    // 用户敲的是 `@llm`,不是 `@{{llm`。
+    expect(filterRefs(["{{llm-1.text}}", "{{http-1.json}}"], "llm")).toEqual(["{{llm-1.text}}"]);
+  });
+
+  it("大小写不敏感", () => {
+    expect(filterRefs(["{{LLM-1.Text}}"], "llm")).toEqual(["{{LLM-1.Text}}"]);
+  });
+
+  it("匹配输出名那一半也算", () => {
+    expect(filterRefs(["{{llm-1.text}}", "{{llm-1.json}}"], "json")).toEqual(["{{llm-1.json}}"]);
   });
 });

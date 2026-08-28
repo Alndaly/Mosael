@@ -13,7 +13,8 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 
 import { cn } from "@/lib/utils";
-import { docToString, parsePieces, piecesToDoc } from "@/features/workflows/refDoc";
+import { TRIGGER, docToString, filterRefs, parsePieces, piecesToDoc } from "@/features/workflows/refDoc";
+import { RefSuggestion } from "@/features/workflows/RefSuggestion";
 
 /**
  * 一段可以夹着**上游引用**的文本。
@@ -66,6 +67,12 @@ function RefChip(props: { node: { attrs: { ref?: string } } }) {
   );
 }
 
+/** 插件给的是**视口坐标**,菜单也用 fixed,所以原样用,不做换算。 */
+function caretRect(rect: DOMRect | null | undefined): { left: number; top: number } {
+  if (!rect) return { left: 0, top: 0 };
+  return { left: rect.left, top: rect.bottom + 4 };
+}
+
 export function RefEditor({
   value,
   onChange,
@@ -86,6 +93,22 @@ export function RefEditor({
   //: prop 回流重建文档,光标跳到开头。
   const emitted = React.useRef(value);
 
+  //: 变量表给插件的 items 回调用 —— 插件在创建时拿到配置,之后 variables 变了它得看得见。
+  const variablesRef = React.useRef(variables);
+  variablesRef.current = variables;
+
+  /** 菜单只剩「长什么样」这一半:什么时候出现、匹配到哪个字符、按键怎么走,都归插件。 */
+  const [menu, setMenu] = React.useState<{
+    items: string[];
+    active: number;
+    rect: { left: number; top: number };
+  } | null>(null);
+  //: 插件的 onKeyDown 拿不到最新的 state(它在 render() 里闭包住了),用 ref 读当前高亮项。
+  const menuRef = React.useRef(menu);
+  menuRef.current = menu;
+  //: 插件给的"确认这一条"回调。点击和回车都走它 —— 插入位置由插件算,我们不自己数字符。
+  const commandRef = React.useRef<((item: string) => void) | null>(null);
+
   const editor = useEditor({
     extensions: [
       // 这些字段是**一段文本**,不是文档:标题、列表、引用块之类一概关掉,免得用户不小心
@@ -105,6 +128,62 @@ export function RefEditor({
       }),
       RefNode,
       Placeholder.configure({ placeholder: placeholder ?? "" }),
+      RefSuggestion.configure({
+        suggestion: {
+          char: TRIGGER,
+          // 只在行首或分隔符后唤起 —— 否则邮箱 a@b、句中的 @ 也会弹菜单。
+          // 前面必须是空白或分隔符 —— 否则邮箱 a@b、句中的 @ 也会弹菜单。
+          allowedPrefixes: [" ", "(", "[", "{", ",", ":", "，", "、"],
+          items: ({ query }) => filterRefs(variablesRef.current, query),
+          command: ({ editor: instance, range, props }) => {
+            instance
+              .chain()
+              .focus()
+              .deleteRange(range)
+              .insertContent({ type: "ref", attrs: { ref: String(props).replace(/^\{\{|\}\}$/g, "") } })
+              .run();
+          },
+          render: () => ({
+            onStart: (props) => {
+              commandRef.current = props.command;
+              setMenu({ items: props.items, active: 0, rect: caretRect(props.clientRect?.()) });
+            },
+            onUpdate: (props) => {
+              commandRef.current = props.command;
+              setMenu((prev) => ({
+                items: props.items,
+                // 候选变了就回到第一条;没变则保留用户已经按下去的位置。
+                active: prev && prev.items.join() === props.items.join() ? prev.active : 0,
+                rect: caretRect(props.clientRect?.()),
+              }));
+            },
+            // **按键交给插件**:它知道 composition,中文选词时的回车不会被当成"选中候选"。
+            onKeyDown: (props) => {
+              const key = props.event.key;
+              if (key === "Escape") {
+                setMenu(null);
+                return true;
+              }
+              if (key === "ArrowDown" || key === "ArrowUp") {
+                setMenu((prev) =>
+                  prev
+                    ? { ...prev, active: (prev.active + (key === "ArrowDown" ? 1 : -1) + prev.items.length) % prev.items.length }
+                    : prev,
+                );
+                return true;
+              }
+              if (key === "Enter" || key === "Tab") {
+                const current = menuRef.current;
+                if (!current || current.items.length === 0) return false;
+                commandRef.current?.(current.items[current.active]);
+                return true;
+              }
+              return false;
+            },
+            onExit: () => setMenu(null),
+          }),
+        },
+      }),
     ],
     content: piecesToDoc(parsePieces(value)),
     editorProps: {
@@ -142,7 +221,33 @@ export function RefEditor({
 
   return (
     <div className="grid gap-1">
-      <EditorContent editor={editor} />
+      <div className="relative">
+        <EditorContent editor={editor} />
+        {menu && (
+          <div
+            // **fixed 而不是 absolute**:插件给的是视口坐标(clientRect),用 absolute 就得再减一次
+            // 容器偏移 —— 那正是搬进画布时删掉的那类换算,不要再引进来一份。
+            className="fixed z-50 max-h-48 min-w-[180px] overflow-auto rounded-md border border-border bg-panel p-1 shadow-[var(--shadow-panel)]"
+            style={{ left: menu.rect.left, top: menu.rect.top }}
+          >
+            {menu.items.map((ref, index) => (
+              <button
+                key={ref}
+                type="button"
+                className={cn(
+                  "block w-full cursor-pointer rounded-[5px] border-0 bg-transparent px-2 py-1 text-left font-mono text-ui-xs text-foreground",
+                  index === menu.active ? "bg-secondary" : "hover:bg-secondary",
+                )}
+                // mousedown 会先让编辑器失焦,失焦又会收起菜单 —— 拦掉,让 click 有机会跑到。
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => commandRef.current?.(ref)}
+              >
+                {ref.replace(/^\{\{|\}\}$/g, "")}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       {variables.length > 0 && (
         // 上游有什么直接摆出来,点一下插到光标处 —— 不用记 `{{}}` 怎么写,也不用回画布上看
         // 输出变量叫什么。

@@ -63,3 +63,23 @@ export function docToString(doc: unknown): string {
     )
     .join("\n");
 }
+
+
+//: 唤起变量菜单的字符。
+//:
+//: **是 `@` 不是 `/`。** 斜杠在这些框里是会被正常打出来的内容 —— 路径 `a/b`、日期
+//: `2026/08/28`、比例 `16/9` 都带它,打着打着就弹出菜单挡住视线。`@` 在"点名某个东西"上是
+//: 通行手势,而这里点的正是上游那个节点。
+export const TRIGGER = "@";
+
+/**
+ * 按输入筛上游引用。
+ *
+ * 匹配的是**去掉花括号之后**的名字(`llm-1.text`),因为用户敲的是 `@llm` 而不是 `@{{llm`。
+ * 大小写不敏感;查询为空时全给 —— 刚敲下 `@` 就该看见所有候选,而不是一片空白。
+ */
+export function filterRefs(variables: string[], query: string): string[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return variables;
+  return variables.filter((ref) => ref.replace(/[{}]/g, "").toLowerCase().includes(needle));
+}
