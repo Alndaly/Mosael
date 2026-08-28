@@ -239,7 +239,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "category": "AI",
         "label": "素材转写",
         "description": "对音视频素材跑 ASR,输出全文。",
-        "config": {"asset_id": {"type": "template", "required": True}},
+        "config": {"asset_id": {"type": "template", "required": True, "description": "要转写的素材 —— 只收视频或音频,图片会被拒"}},
         "outputs": ["text"],
     },
     "export_sequence": {
@@ -347,8 +347,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "description": "用已登录的平台账号发布到抖音 / 小红书 / 视频号 / B站(由桌面端内嵌浏览器执行)。",
         "config": {
             "account_id": {"type": "string", "required": True, "description": "发布账号 id(浏览器池可查)"},
-            "asset_id": {"type": "template", "required": True},
-            "title": {"type": "template"},
+            "asset_id": {"type": "template", "required": True, "description": "要发布的素材 —— 必须已经下载到本地"},
+            "title": {"type": "template", "description": "标题。各平台的长度上限不同,超了会被平台拒掉"},
             "description": {"type": "template"},
         },
         "outputs": ["result"],
