@@ -46,7 +46,7 @@ export function AssetPickerDialog({
   }, [assets.data, kind, keyword]);
 
   return (
-    <ModalShell open={open} onOpenChange={onOpenChange} title={t("boardsPickImage")} className="w-[560px]">
+    <ModalShell open={open} onOpenChange={onOpenChange} title={t(kind === "video" ? "boardsPickVideo" : "boardsPickImage")} className="w-[560px]">
       <div className="grid gap-2">
         <Input
           autoFocus
@@ -62,7 +62,7 @@ export function AssetPickerDialog({
             ))}
           </div>
         ) : images.length === 0 ? (
-          <p className="py-8 text-center text-ui-xs text-muted-foreground">{t("boardsNoImages")}</p>
+          <p className="py-8 text-center text-ui-xs text-muted-foreground">{t(kind === "video" ? "boardsNoVideos" : "boardsNoImages")}</p>
         ) : (
           <div className="grid max-h-[380px] grid-cols-4 gap-2 overflow-y-auto">
             {images.map((asset: Asset) => (

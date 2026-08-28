@@ -16,10 +16,9 @@ import {
   type Node,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { Copy, Film, Image as ImageIcon, Replace, Square, StickyNote, Trash2 } from "lucide-react";
+import { Copy, Replace, Trash2 } from "lucide-react";
 
 import type { BoardCanvas as Canvas, BoardItem } from "@/api/client";
-import { Button } from "@/components/ui/button";
 import { usePersistentViewport } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass } from "@/features/boards/boardNodes";
@@ -71,9 +70,12 @@ interface Props {
   onChange: (canvas: Canvas) => void;
   /** 让上层开素材选择器。kind 决定它列图片还是视频 —— 选得到的就该是贴上去能看的。 */
   onPickAsset: (kind: "image" | "video", place: (assetId: string) => void) => void;
+  /** 把「加一项」交给上层 —— 顶栏那两组胶囊要摆在一起(和工作流详情页一致),
+   *  而 add 依赖画布内部的 rf 实例和 setNodes,只能由画布提供。 */
+  onReady?: (api: { add: (kind: BoardItem["kind"], extra?: Partial<BoardItem>) => void }) => void;
 }
 
-function Inner({ boardId, canvas, onChange, onPickAsset }: Props) {
+function Inner({ boardId, canvas, onChange, onPickAsset, onReady }: Props) {
   const rf = React.useRef<ReactFlowInstance | null>(null);
   const viewport = usePersistentViewport(`board:${boardId}`);
   const [ready, setReady] = React.useState(false);
@@ -122,6 +124,10 @@ function Inner({ boardId, canvas, onChange, onPickAsset }: Props) {
     },
     [setNodes, setText],
   );
+
+  React.useEffect(() => {
+    onReady?.({ add });
+  }, [add, onReady]);
 
   return (
     <div className="relative h-full w-full">
@@ -185,33 +191,8 @@ function Inner({ boardId, canvas, onChange, onPickAsset }: Props) {
         />
       </ReactFlow>
 
-      {/* 工具条:加什么。**浮在左上而不是顶部通栏** —— 画板要尽量大,一条通栏会一直吃掉一行。 */}
-      <div className="nodrag absolute left-3 top-3 z-10 flex items-center gap-1 rounded-lg border border-border-strong bg-panel p-1 shadow-[var(--shadow-panel)]">
-        <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2" onClick={() => add("note")}>
-          <StickyNote size={13} /> 便签
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 gap-1.5 px-2"
-          onClick={() => onPickAsset("image", (assetId) => add("image", { asset_id: assetId }))}
-        >
-          <ImageIcon size={13} /> 图片
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 gap-1.5 px-2"
-          onClick={() => onPickAsset("video", (assetId) => add("video", { asset_id: assetId }))}
-        >
-          <Film size={13} /> 视频
-        </Button>
-        <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2" onClick={() => add("frame")}>
-          <Square size={13} /> 分组
-        </Button>
-      </div>
 
-      {/* 选中一张便签时才出色板 —— 没选中时它没有作用对象。 */}
+      {/* 选中之后才出操作条 —— 没选中时它没有作用对象。 */}
       <ItemToolbar nodes={nodes} setNodes={setNodes} onPickAsset={onPickAsset} />
     </div>
   );

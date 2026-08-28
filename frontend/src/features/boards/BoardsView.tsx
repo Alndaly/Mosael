@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, LayoutGrid, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, Film, Image as ImageIcon, LayoutGrid, Plus, Square, StickyNote, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -185,6 +185,8 @@ function BoardDetail({
   const [name, setName] = React.useState(board.name);
   const [canvas, setCanvas] = React.useState<Canvas | null>(null);
   const [picking, setPicking] = React.useState<{ kind: "image" | "video"; place: (assetId: string) => void } | null>(null);
+  //: 画布交出来的「加一项」。顶栏那组按钮要和身份胶囊并排,而 add 依赖画布内部状态。
+  const [api, setApi] = React.useState<{ add: (kind: "note" | "image" | "video" | "frame", extra?: Record<string, unknown>) => void } | null>(null);
 
   const save = React.useCallback(
     (next: Canvas) => {
@@ -205,25 +207,71 @@ function BoardDetail({
       .catch((error: Error) => toast.error(error.message));
   };
 
+  // 版式跟着工作流详情页:**画布铺满,两组胶囊浮在上面** —— 左边是身份(回哪儿去、这是谁),
+  // 右边是操作。悬浮不等于没有边界:两组各有自己的底,否则它们会散在画布上和内容抢注意力。
   return (
-    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-      <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onBack} aria-label={t("back")}>
-          <ChevronLeft size={15} />
-        </Button>
-        <Input
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          onBlur={rename}
-          onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
-          className="h-7 w-56 border-0 bg-transparent px-1 text-ui-sm font-semibold shadow-none focus-visible:bg-field"
-          aria-label={t("boardsName")}
-        />
-        {/* 自动保存本来就该是无声的,但**攒着还没发**的那一刻要让人看见 —— 否则切走时
-            用户不知道自己是不是走早了。 */}
-        <span className="ml-auto text-ui-2xs text-muted-foreground">
-          {pending ? t("boardsSaving") : t("boardsSaved")}
-        </span>
+    <div className="relative grid h-full min-h-0">
+      <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex flex-wrap items-start justify-between gap-2 [&>*]:pointer-events-auto">
+        <div className="flex items-center gap-1 rounded-full border border-border bg-panel/95 p-1 pr-2.5 shadow-[var(--shadow-panel)] backdrop-blur">
+          {/* 返回键给它一个底:透明底的图标钮在胶囊里没有自己的轮廓,和右边的竖线对不齐。 */}
+          <Button
+            variant="secondary"
+            size="icon"
+            className="h-8 w-8 shrink-0"
+            onClick={onBack}
+            title={t("navBoards")}
+            aria-label={t("navBoards")}
+          >
+            <ChevronLeft size={16} />
+          </Button>
+          {/* 一个是「离开这里」,一个是「这里是什么」—— 两件事,挨着放需要一道界。 */}
+          <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-border" />
+          <Input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            onBlur={rename}
+            onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
+            className="h-7 w-44 border-0 bg-transparent px-1.5 text-ui-md font-semibold shadow-none focus-visible:bg-field"
+            aria-label={t("boardsName")}
+          />
+        </div>
+
+        <div className="flex flex-wrap items-start justify-end gap-2">
+          {/* 加什么。刻度和工作流工具条一致:胶囊、h-8、图标钮 h-8 w-8。 */}
+          <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
+            <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsAddNote")} aria-label={t("boardsAddNote")} onClick={() => api?.add("note")}>
+              <StickyNote size={15} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              title={t("boardsAddImage")}
+              aria-label={t("boardsAddImage")}
+              onClick={() => setPicking({ kind: "image", place: (assetId) => api?.add("image", { asset_id: assetId }) })}
+            >
+              <ImageIcon size={15} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              title={t("boardsAddVideo")}
+              aria-label={t("boardsAddVideo")}
+              onClick={() => setPicking({ kind: "video", place: (assetId) => api?.add("video", { asset_id: assetId }) })}
+            >
+              <Film size={15} />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsAddFrame")} aria-label={t("boardsAddFrame")} onClick={() => api?.add("frame")}>
+              <Square size={15} />
+            </Button>
+          </div>
+          {/* 自动保存本来就该无声,但**攒着还没发**的那一刻要让人看见 —— 否则切走时
+              用户不知道自己是不是走早了。 */}
+          <div className="flex items-center rounded-full border border-border bg-panel/95 px-3 py-1.5 text-ui-2xs text-muted-foreground shadow-[var(--shadow-panel)] backdrop-blur">
+            {pending ? t("boardsSaving") : t("boardsSaved")}
+          </div>
+        </div>
       </div>
 
       <BoardCanvas
@@ -231,6 +279,7 @@ function BoardDetail({
         canvas={board.canvas ?? { items: [], edges: [] }}
         onChange={setCanvas}
         onPickAsset={(kind, place) => setPicking({ kind, place })}
+        onReady={setApi}
       />
 
       <AssetPickerDialog
