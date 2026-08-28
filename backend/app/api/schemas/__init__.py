@@ -1674,6 +1674,29 @@ class WorkflowOut(OrmModel):
     updated_at: datetime
 
 
+class BoardOut(OrmModel):
+    id: str
+    workspace_id: str
+    name: str
+    canvas: dict
+    created_at: datetime
+    updated_at: datetime
+
+
+class BoardCreate(BaseModel):
+    workspace_id: str
+    name: str = ""
+    canvas: dict | None = None
+
+
+class BoardUpdate(BaseModel):
+    workspace_id: str
+    #: 两者都可以单独传 —— 自动保存只发 canvas,重命名只发 name。None = 这次不改它,
+    #: 而不是"清空它"。
+    name: str | None = None
+    canvas: dict | None = None
+
+
 class WorkflowRunRequest(BaseModel):
     params: dict = Field(default_factory=dict)
 

@@ -558,6 +558,29 @@ class Workflow(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 
+class Board(Base):
+    """创意画板:一张无限画布,用来攒想法。
+
+    **和 Workflow 是同一个形状**(工作区作用域 + 一坨 JSON),不另发明一套存储:那边证明过
+    这个形状能撑住一张大图,而画板的编辑模式(整张一起自动保存)和它一模一样。差别只在内容
+    语义 —— 工作流的 graph 是**要执行的**,画板的 canvas 只是**要看的**。
+
+    为什么不是「一个 item 一行」:一行一 item 能做细粒度更新,代价是一整套读写机制,而收益
+    要到多人同时编同一张板才兑现。那一天到了再拆,拆的时候有真实的并发场景说清该按什么粒度。
+    """
+
+    __tablename__ = "boards"
+    __table_args__ = (Index("idx_boards_workspace_updated", "workspace_id", "updated_at"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(180), nullable=False)
+    #: {"items": [...], "edges": [...]} —— 形状由 domain/boards 校验,这里只管存。
+    canvas: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
 class PublishAccount(Base):
     """发布目标账号(计划 §6.9 publish_accounts):platform 决定适配器,
     config 是该平台的连接配置(目录路径 / webhook URL / 未来的 OAuth)。"""
