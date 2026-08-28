@@ -45,41 +45,6 @@ class WorkflowDomainError(RuntimeError):
 #: 浏览器要登录态,插件要先装。列表顺序即面板顺序,前端不再排第二次。
 NODE_CATEGORIES: tuple[str, ...] = ("流程", "AI", "素材", "数据", "发布", "浏览器", "插件")
 
-#: 一个配置字段属于**检查器里的哪一段**。
-#:
-#: 节点被选中时,顶上会按它**实际拥有的段**给出几个按钮(点一下聚焦到该节点并展开那一段)。
-#: 所以分组不能是前端一张硬编码表:**插件节点是运行时才知道的**,任何写死的表都覆盖不到它们
-#: —— 今天已经因为同一个形状修过三次(智能体角色表、字段类型表、界面标签表)。
-#:
-#: 按**字段名**归组,认不出来的落到 basic。归错一段的代价很小(按钮上的字不同),
-#: 而漏掉一整类节点的代价很大,所以宁可让新字段先落 basic,也不要求谁记得来登记。
-_FIELD_GROUPS = {
-    "prompt": {"prompt", "system", "negative_prompt", "template", "text", "find", "replace", "description", "title"},
-    "model": {
-        "model", "provider", "profile_id", "preset", "temperature", "top_p", "max_tokens",
-        "frequency_penalty", "presence_penalty", "seed", "stop", "response_format",
-        "json_schema", "json_schema_name", "json_schema_strict", "engine", "voice_id",
-        "target_lang", "parameters", "kind",
-    },
-    "media": {"asset_id", "asset_ids", "source_assets", "sequence_id", "track_id", "project_id", "operations", "tags"},
-    "flow": {
-        "condition", "left", "right", "op", "items", "body", "inputs", "values", "output",
-        "max_iterations", "workflow_id", "params", "expression", "seconds", "path", "source",
-    },
-    "browser": {
-        "session", "session_mode", "session_name", "selector", "url", "attribute", "timeout_ms",
-        "gone", "exact", "dx", "dy", "file_path", "method", "headers", "mode",
-    },
-    "plugin": {"plugin_id", "tool_name", "instance_id", "input"},
-}
-_GROUP_BY_FIELD = {key: group for group, keys in _FIELD_GROUPS.items() for key in keys}
-
-
-def config_group(key: str, spec: dict[str, Any]) -> str:
-    """这个字段属于哪一段。显式声明优先;认不出来的落 basic。"""
-    return str(spec.get("group") or "").strip() or _GROUP_BY_FIELD.get(key, "basic")
-
-
 #: 一个 object 字段该用**哪种编辑器**。
 #:
 #: 绝大多数 object 配置其实是「名字 → 值」的映射:入参映射、请求头、具名输出、启动参数……

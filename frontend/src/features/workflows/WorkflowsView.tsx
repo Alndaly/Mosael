@@ -531,21 +531,6 @@ const FIELD_LABEL_KEYS: Record<string, MessageKey> = {
   source_asset_ids: "wffSourceAssets",
 };
 
-/** 检查器分段的中文名。段 id 由**后端**声明(domain/workflows.config_group),这里只管怎么叫它。
- *
- *  查不到的 id **直接把 id 当标签显示**,而不是丢掉这一段 —— 插件在运行时可以声明自己的段,
- *  本地这张表不可能预先知道。代价是一个英文按钮,而不是一整段功能凭空消失。 */
-const GROUP_LABEL_KEYS: Record<string, MessageKey> = {
-  basic: "wfgBasic",
-  prompt: "wfgPrompt",
-  model: "wfgModel",
-  media: "wfgMedia",
-  flow: "wfgFlow",
-  browser: "wfgBrowser",
-  plugin: "wfgPlugin",
-  // 复用正文里那块的既有措辞 —— 条上和正文指的是同一处,不该有两个名字。
-  outputs: "wfOutputs",
-};
 
 /** 「AI 生成素材」自己渲染这几项,不走通用字段列表。
  *
@@ -2396,6 +2381,11 @@ function WorkflowEditor({
               });
               setSelectedNodeId(null);
             }}
+            onDrillIn={
+              selectedNode.type === "subgraph" || selectedNode.type.startsWith("loop_")
+                ? () => setEditingLoopId(selectedNode.id)
+                : undefined
+            }
             onClose={() => setSelectedNodeId(null)}
           />
         )}
@@ -2493,9 +2483,6 @@ interface ConfigSpec {
   default?: string;
   /** 留空也能跑的专业旋钮 —— 收进折叠的「高级选项」,不在第一眼糊到用户脸上。 */
   advanced?: boolean;
-  /** 这个字段属于检查器里的哪一段(后端 domain/workflows.config_group 声明,插件节点也有)。
-      节点顶上的分段条据此生成 —— 认不出来的段直接把 id 当标签显示,**不会整段消失**。 */
-  group?: string;
 }
 
 /** 选中节点的所有上游变量(祖先节点输出 + start 参数),供插入器使用。 */
@@ -2963,6 +2950,7 @@ function NodeInspector({
   onChange,
   onApplyGraph,
   onDelete,
+  onDrillIn,
   onClose,
 }: {
   /** 画布正在平移:此时面板不吃指针事件(见 WorkflowsView 里 panning 的说明)。 */
@@ -2977,6 +2965,8 @@ function NodeInspector({
   onChange: (patch: Partial<WorkflowGraph["nodes"][number]>) => void;
   onApplyGraph: (next: WorkflowGraph) => void;
   onDelete?: () => void;
+  /** 只有子图 / 循环节点给 —— 双击进子画布的那件事,在悬浮键上也给一个入口。 */
+  onDrillIn?: () => void;
   onClose?: () => void;
 }) {
   const t = useI18n();
@@ -3338,76 +3328,24 @@ function NodeInspector({
   const basicSpecs = visibleSpecs.filter(([, spec]) => !spec?.advanced);
   const advancedSpecs = visibleSpecs.filter(([, spec]) => Boolean(spec?.advanced));
 
-  // ── 分段 ────────────────────────────────────────────────────────────────
-  // 段 id 来自**后端的字段声明**(domain/workflows.config_group),前端只负责把同一段的字段
-  // 收在一起、给它一个标题和一个跳转按钮。不按节点类型硬编码:插件节点是运行时才知道的,
-  // 任何写死的表都覆盖不到它们 —— 同一个形状在这个项目里已经修过三次了。
-  const groupOf = (spec: ConfigSpec | undefined) => (spec?.group ?? "").trim() || "basic";
-  const groupedBasics: Array<[string, Array<[string, ConfigSpec]>]> = [];
-  for (const entry of basicSpecs) {
-    const id = groupOf(entry[1]);
-    const bucket = groupedBasics.find(([g]) => g === id);
-    if (bucket) bucket[1].push(entry);
-    else groupedBasics.push([id, [entry]]);
-  }
-  // llm / ai_generate 的专区不走通用列表,但它管的那些键**同样带着段声明** —— 取其中最常见的
-  // 那一段当作专区所属,专区就和普通字段一样出现在分段条上,不需要为它单开一条规则。
-  const dominantGroup = (keys: Set<string>): string | null => {
-    const tally = new Map<string, number>();
-    for (const [key, spec] of specs) {
-      if (!keys.has(key)) continue;
-      const id = groupOf(spec);
-      tally.set(id, (tally.get(id) ?? 0) + 1);
-    }
-    let best: string | null = null;
-    for (const [id, n] of tally) if (!best || n > (tally.get(best) ?? 0)) best = id;
-    return best;
-  };
-  const llmZoneGroup = node.type === "llm" ? dominantGroup(LLM_SPECIAL_CONFIG_KEYS) : null;
-  const genZoneGroup = node.type === "ai_generate" ? dominantGroup(GENERATE_SPECIAL_CONFIG_KEYS) : null;
+  // ── 功能区 ──────────────────────────────────────────────────────────────
+  // 节点上方那条悬浮键分两组(中间一道竖线):左边是**这个节点有哪几块内容**,点了换下面
+  // 面板的内容;右边是**能对这个节点做什么**。
+  //
+  // 分的是**节点的内容块**,不是表单字段 —— 按字段分会把一份表单切碎(「提示词」「模型」
+  // 各自一段),而表单本来就该整份读。参数区里的字段一个不拆。
+  //
+  // 「预览」不在这儿:产出预览已经通栏长在节点卡片上,面板里再来一份就是同一张图上下叠两遍。
+  const areas: string[] = [];
+  if (specs.length > 0) areas.push("config");
+  if (meta && meta.outputs.length > 0) areas.push("outputs");
+  if (step) areas.push("run");
+  const [pickedArea, setPickedArea] = React.useState<string | null>(null);
+  // 派生而不是同步:换节点时 areas 变了,上一个节点选中的那块可能根本不存在 —— 直接回落到
+  // 第一块,不需要一个 effect 追着清空(那种 effect 总慢一帧,会先露出一个空面板)。
+  const area = pickedArea && areas.includes(pickedArea) ? pickedArea : areas[0];
+  const AREA_LABELS: Record<string, MessageKey> = { config: "wfaConfig", outputs: "wfOutputs", run: "wfRunOutputs" };
 
-  const sectionIds: string[] = [];
-  const genHasMedia = genZoneGroup !== null && genSourceRoles.length > 0;
-  for (const id of [llmZoneGroup, genZoneGroup, ...(genHasMedia ? ["media"] : [])]) {
-    if (id && !sectionIds.includes(id)) sectionIds.push(id);
-  }
-  for (const [id] of groupedBasics) if (!sectionIds.includes(id)) sectionIds.push(id);
-  if (meta && meta.outputs.length > 0) sectionIds.push("outputs");
-  // **不再排一次序。** 上面的构造顺序就是面板里的出现顺序:专区在前(llm/ai_generate 的 JSX 就在
-  // 通用字段之前)、通用字段按后端的声明顺序、「对外输出」垫底。另排一张次序表的话,条上的顺序
-  // 会和正文对不上 —— 点着往下走反而往回跳,而这个错处只有真去点才看得出来。
-  const sections = sectionIds;
-
-  // 跳转用手算 scrollTop,不用 scrollIntoView:面板长在 React Flow 的变换层里,
-  // scrollIntoView 会连带滚动祖先,把画布本身也拖走。
-  const bodyRef = React.useRef<HTMLDivElement | null>(null);
-  const anchors = React.useRef<Record<string, HTMLElement | null>>({});
-  // 每轮渲染重新收集:ref 回调每轮都是新函数,所以每轮都会重新挂一遍,这里清空即可。
-  anchors.current = {};
-  // **一个段只认它的第一处。** llm/ai_generate 的专区和通用字段可能落在同一个段(比如都算「模型」),
-  // 正文里前者在上面 —— 后写覆盖的话按钮会跳到下半截,跳过用户真正要看的那块。
-  const anchorFor = (id: string) => (el: HTMLElement | null) => {
-    if (el && !anchors.current[id]) anchors.current[id] = el;
-  };
-  const goToSection = (id: string) => {
-    const body = bodyRef.current;
-    const target = anchors.current[id];
-    if (!body || !target) return;
-    // 沿 offsetParent 链往上累加,而不是两个 offsetTop 相减 —— 后者的基准是各自的定位祖先,
-    // 滚动容器本身没定位,相减出来是个毫无意义的小数,表现为"点了只挪一点点"。
-    // 也不用 getBoundingClientRect:面板长在 React Flow 的缩放层里,视口坐标带着 zoom 倍率,
-    // 而 scrollTop 是布局像素,zoom≠1 时会差一个倍率。offsetTop 是布局值,不吃变换。
-    let top = 0;
-    let cursor: HTMLElement | null = target;
-    while (cursor && cursor !== body) {
-      top += cursor.offsetTop;
-      cursor = cursor.offsetParent as HTMLElement | null;
-    }
-    if (!cursor) return; // 没走到容器:说明中间被别的定位祖先截断,宁可不动也不要乱跳
-    // 直接赋值,不用 scrollTo({behavior:"smooth"}) —— 面板长在 React Flow 的变换层里,
-    // 那套平滑滚动在这儿不生效(实测调用后 scrollTop 纹丝不动,而直接赋值正常)。
-    body.scrollTop = top;
-  };
 
   /** 一个配置字段的渲染。抽出来是因为要渲染两遍:基础项直接铺开,高级项收进折叠区。 */
   const renderField = ([key, spec]: [string, ConfigSpec]) => {
@@ -3563,25 +3501,55 @@ function NodeInspector({
    */
   return (
     <>
-    {/* 分段条:节点**实际拥有哪几段就出哪几个按钮**,点一下把面板滚到那一段。
-        只有一段时不出 —— 一个按钮什么也没得选,纯噪音。和面板一样长在画布坐标系里,
-        所以同样要挂 nodrag/nopan(不然按下去是在拖节点)。 */}
-    {sections.length > 1 && (
-      <NodeToolbar nodeId={node.id} isVisible position={Position.Top} align="center" offset={12}>
-        <div className="nodrag nopan flex items-center gap-0.5 rounded-full border border-border-strong bg-panel px-1 py-1 shadow-[var(--shadow-panel)]">
-          {sections.map((id) => (
-            <button
-              key={id}
-              type="button"
-              className="cursor-pointer rounded-full px-3 py-1.5 text-ui-xs font-medium text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground"
-              onClick={() => goToSection(id)}
-            >
-              {GROUP_LABEL_KEYS[id] ? t(GROUP_LABEL_KEYS[id]) : id}
-            </button>
-          ))}
-        </div>
-      </NodeToolbar>
-    )}
+    {/* 节点悬浮键,分两组、中间一道竖线(tapnow 那条也是这么断的):
+          左边 = **这个节点有哪几块内容**(点了换下面面板的内容),右边 = **能对它做什么**。
+        两组都按"有才出":没跑过就没有「本次产出」,不是子图就没有「进入子图」。
+        和面板一样长在画布坐标系里,所以同样要挂 nodrag/nopan —— 不然按下去是在拖节点。 */}
+    <NodeToolbar nodeId={node.id} isVisible position={Position.Top} align="center" offset={12}>
+      <div className="nodrag nopan flex items-center gap-0.5 rounded-full border border-border-strong bg-panel px-1 py-1 shadow-[var(--shadow-panel)]">
+        {areas.map((id) => (
+          <button
+            key={id}
+            type="button"
+            className={cn(
+              "cursor-pointer rounded-full px-3 py-1.5 text-ui-xs font-medium transition-[background,color] duration-100",
+              area === id
+                ? "bg-secondary text-foreground"
+                : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+            )}
+            onClick={() => setPickedArea(id)}
+          >
+            {t(AREA_LABELS[id])}
+          </button>
+        ))}
+        {/* 竖线只在两边都有东西时才画 —— 否则它分隔的是"一组和空气"。 */}
+        {areas.length > 0 && (onDrillIn || onDelete) && (
+          <span aria-hidden className="mx-1 h-4 w-px bg-border" />
+        )}
+        {onDrillIn && (
+          <button
+            type="button"
+            className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground"
+            aria-label={t("wfaEnterSubgraph")}
+            title={t("wfaEnterSubgraph")}
+            onClick={onDrillIn}
+          >
+            <Boxes size={14} />
+          </button>
+        )}
+        {onDelete && (
+          <button
+            type="button"
+            className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground transition-[background,color] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
+            aria-label={t("delete")}
+            title={t("delete")}
+            onClick={onDelete}
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
+      </div>
+    </NodeToolbar>
     {/* 面板在节点**正下方**、分段条在正上方 —— 上下夹着节点,而不是挤在右边。
         居中对齐:节点是这两块的锚,偏在一侧看起来像是飘着的另一个东西。 */}
     <NodeToolbar nodeId={node.id} isVisible position={Position.Bottom} align="center" offset={12}>
@@ -3639,22 +3607,14 @@ function NodeInspector({
             onChange={(event) => onChange({ name: event.target.value })}
           />
         </div>
-        {onDelete && (
-          <button type="button" className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive" aria-label={t("delete")} onClick={onDelete}>
-            <Trash2 size={13} />
-          </button>
-        )}
+        {/* 删除在上方悬浮键的操作组里 —— 一个动作只该有一个入口。 */}
         {onClose && (
           <button type="button" className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-secondary hover:text-foreground" aria-label={t("close")} title={`${t("close")} (Esc)`} onClick={onClose}>
             <X size={14} />
           </button>
         )}
       </div>
-      <div
-        ref={bodyRef}
-        // relative:让它成为分段锚点的 offsetParent —— 不定位的话 offsetTop 链会直接跳过它,
-        // 跳转算不出相对位置(见 goToSection)。
-        className="relative grid min-h-0 grid-cols-[minmax(0,1fr)] content-start gap-2 overflow-x-hidden overflow-y-auto p-2.5">
+      <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] content-start gap-2 overflow-x-hidden overflow-y-auto p-2.5">
         {bindingNotice && (
           <ConfigNotice
             message={bindingNotice.message}
@@ -3701,8 +3661,8 @@ function NodeInspector({
             ))}
           </div>
         )}
-        {node.type === "ai_generate" && (
-          <div ref={anchorFor(genZoneGroup ?? "model")} className="grid min-w-0 gap-2">
+        {area === "config" && node.type === "ai_generate" && (
+          <div className="grid min-w-0 gap-2">
             <div className={FIELD_BOX}>
               <span>
                 {t("wfGenModel")}
@@ -3838,8 +3798,8 @@ function NodeInspector({
             {/* 输入素材:**这个模型认哪几种角色就出哪几格**。每一格既能从素材库里选一份,
                 也能填上游节点的输出(`{{ai-generate-1.asset_id}}`)—— 工作流里后者才是常态,
                 所以用可手填的下拉,而不是纯选择器。 */}
-            {genSourceRoles.map((role, index) => (
-              <div className={FIELD_BOX} key={role} ref={index === 0 ? anchorFor("media") : undefined}>
+            {genSourceRoles.map((role) => (
+              <div className={FIELD_BOX} key={role}>
                 <span>
                   {t(SOURCE_ROLE_LABELS[role])}
                   {sourceLimit(genModel, role) > 1 && (
@@ -3892,10 +3852,9 @@ function NodeInspector({
             )}
           </div>
         )}
-        {node.type === "llm" && (
+        {area === "config" && node.type === "llm" && (
           <div // **不套框。** 检查器本身已经是一张卡片,里面再画一圈边框就是框中框,而那圈线不表示
             // 任何东西 —— 它只是让内容离两边更远、可读宽度更窄。
-            ref={anchorFor(llmZoneGroup ?? "model")}
             className="grid gap-3">
             <div className={FIELD_BOX}>
               <span>{t("wfLlmPreset")}</span>
@@ -4050,18 +4009,10 @@ function NodeInspector({
             )}
           </div>
         )}
-        {groupedBasics.map(([id, entries]) => (
-          <div key={id} ref={anchorFor(id)} className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
-            {/* 只有一段时不出标题 —— 那条标题什么也没区分开,纯占地方。 */}
-            {sections.filter((sid) => sid !== "outputs").length > 1 && (
-              <span className="text-ui-2xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-                {GROUP_LABEL_KEYS[id] ? t(GROUP_LABEL_KEYS[id]) : id}
-              </span>
-            )}
-            {entries.map(renderField)}
-          </div>
-        ))}
-        {advancedSpecs.length > 0 && (
+        {/* **参数区里的表单不再切碎** —— 整份一起读,基础项铺开、高级项收进折叠区。
+            分块是分到「参数 / 输出变量 / 本次产出」这一层为止的。 */}
+        {area === "config" && basicSpecs.map(renderField)}
+        {area === "config" && advancedSpecs.length > 0 && (
           <details className="group min-w-0 rounded-md border border-border bg-[color-mix(in_srgb,var(--muted)_40%,transparent)]">
             <summary className="flex cursor-pointer list-none items-center gap-1 px-2 py-1.5 text-ui-xs font-semibold text-muted-foreground marker:content-none hover:text-foreground">
               <ChevronRight size={12} className="transition-transform group-open:rotate-90" />
@@ -4073,10 +4024,8 @@ function NodeInspector({
             </div>
           </details>
         )}
-        {meta && (
-          <div
-            ref={anchorFor("outputs")}
-            className="grid gap-[5px] border-t border-border pt-2.5 [&>span]:text-ui-xs [&>span]:font-semibold [&>span]:uppercase [&>span]:tracking-[0.05em] [&>span]:text-muted-foreground">
+        {area === "outputs" && meta && (
+          <div className="grid gap-[5px] pt-0.5 [&>span]:text-ui-xs [&>span]:font-semibold [&>span]:uppercase [&>span]:tracking-[0.05em] [&>span]:text-muted-foreground">
             <span>{t("wfOutputs")}</span>
             <div className="flex flex-wrap gap-1">
               {meta.outputs.map((output) => {
@@ -4100,7 +4049,7 @@ function NodeInspector({
           </div>
         )}
         {/* 「输出变量」列的是**名字**,这里是**这次的值** —— 调工作流时真正要问的是后者。 */}
-        {step && <RunOutputs nodeType={node.type} step={step} />}
+        {area === "run" && step && <RunOutputs nodeType={node.type} step={step} />}
       </div>
     </aside>
     </NodeToolbar>

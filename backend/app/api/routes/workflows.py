@@ -28,7 +28,6 @@ from app.domain.workflows import (
     NODE_TYPES,
     config_data_type,
     config_editor,
-    config_group,
     config_label,
     WorkflowDomainError,
     create_workflow,
@@ -61,10 +60,6 @@ def _with_data_type(key: str, spec: Any) -> Any:
     editor = config_editor(key, spec)
     if editor:
         enriched["editor"] = editor
-    # 属于检查器里的哪一段 —— 节点顶上的分段按钮据此生成。
-    group = config_group(key, spec)
-    if group:
-        enriched["group"] = group
     return enriched
 
 
