@@ -120,6 +120,39 @@ def test_tts_config_get_and_update() -> None:
     assert client.put("/api/settings/tts", json={"engine": "nope", "source": "hf"}).status_code == 422
 
 
+def test_存进去了却读不回来的话_保存接口要报错而不是回一个旧值() -> None:
+    """「存了、没生效、还回 200」是这个接口最坏的形状 —— 用户看到的是它自己变了回去。
+
+    这里把读取路径**真的**弄坏:把配置来源退回环境变量那份(这正是它装在 lifespan 里、
+    而入口不跑 lifespan 时的样子,见 test_ai_is_infrastructure)。写入路径完全正常,
+    库里那一行是对的 —— 于是这条断言问的就是那一句:接口肯不肯承认它没生效。
+    """
+    from app.ai.runtime import config as tts_config
+    from app.core.db import SessionLocal
+    from app.db.models import TtsConfig
+
+    client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})
+
+    wired = tts_config._source
+    tts_config.use_source(tts_config._from_env)  # 装配没接上的样子
+    try:
+        res = client.put("/api/settings/tts", json={"engine": "fish-speech", "source": "modelscope"})
+    finally:
+        tts_config.use_source(wired)
+
+    assert res.status_code == 500, res.text
+    detail = res.json()["detail"]
+    # 报的是**哪个字段、想存什么、读回什么** —— 一句笼统的「保存失败」定位不到读取那一侧。
+    assert "engine" in detail and "fish-speech" in detail and "f5-tts" in detail, detail
+
+    # 而库里那一行是写进去了的:坏的是读取侧,回滚只会把一次正确的写入也扔掉。
+    with SessionLocal() as db:
+        assert db.get(TtsConfig, "default").engine == "fish-speech"
+    # 接上之后同一份配置就该生效 —— 不需要用户再存一次。
+    assert client.get("/api/settings/tts").json()["engine"] == "fish-speech"
+
+
 def test_engine_list_marks_which_engines_need_a_typed_voice_id() -> None:
     """The panel renders a dropdown or a text field off these two flags, so they are contract."""
     client = fresh_client()
