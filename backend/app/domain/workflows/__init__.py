@@ -37,7 +37,7 @@ def _source_assets_help() -> str:
     """
     roles = "、".join(f"{role} {label}" for role, label in SOURCE_ROLE_LABELS.items())
     return (
-        "输入素材,每行一条 `素材id` 或 `素材id:角色`。"
+        "每行一条 `素材id` 或 `素材id:角色`。"
         f"角色:{roles};"
         "不写角色时图生视频按首帧、图生图按参考图。"
     )
@@ -56,7 +56,7 @@ def _generation_parameters_help() -> str:
         if key not in SOURCE_ROLE_LABELS
     )
     return (
-        "生成参数,取值随模型而定 —— 逐模型的可用清单看 /api/generation/options 里那个模型的 "
+        "取值随模型而定 —— 逐模型的可用清单看 /api/generation/options 里那个模型的 "
         f"capabilities.parameter_keys。目录里出现过的有:{' / '.join(dict.fromkeys(keys))}"
     )
 
@@ -192,28 +192,28 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "description": "调用配置的 AI 供应商生成文本。",
         "config": {
             "prompt": {"type": "template", "required": True, "description": "这一轮要模型做的事"},
-            "system": {"type": "template", "description": "系统提示词"},
+            "system": {"type": "template"},
             "preset": {
                 "type": "string",
                 "description": "生成风格(替代裸 temperature)",
                 "options": ["precise", "balanced", "creative"],
             },
-            "profile_id": {"type": "string", "description": "供应商配置 id,留空自动选择"},
-            "model": {"type": "string", "description": "模型名,留空用配置默认", "depends_on": "profile_id"},
+            "profile_id": {"type": "string", "description": "留空自动选择"},
+            "model": {"type": "string", "description": "留空用配置默认", "depends_on": "profile_id"},
             "temperature": {"advanced": True, "type": "number", "description": "采样温度 0-2;留空跟随生成风格"},
             "top_p": {"advanced": True, "type": "number", "description": "核采样 0-1;留空不传"},
             "max_tokens": {"advanced": True, "type": "number", "description": "最大输出 token;留空不传"},
             "frequency_penalty": {"advanced": True, "type": "number", "description": "频率惩罚 -2 到 2;留空不传"},
             "presence_penalty": {"advanced": True, "type": "number", "description": "存在惩罚 -2 到 2;留空不传"},
-            "seed": {"advanced": True, "type": "number", "description": "随机种子;留空不传"},
-            "stop": {"advanced": True, "type": "template", "description": "停止词,多个用换行分隔"},
+            "seed": {"advanced": True, "type": "number", "description": "留空不传"},
+            "stop": {"advanced": True, "type": "template", "description": "多个用换行分隔"},
             "response_format": {"advanced": True, 
                 "type": "string",
                 "description": "输出格式",
                 "options": ["text", "json_object", "json_schema"],
             },
             "json_schema_name": {"advanced": True, "type": "template", "description": "JSON Schema 名称,默认 workflow_output"},
-            "json_schema": {"advanced": True, "type": "object", "description": "JSON Schema;仅 response_format=json_schema 时使用"},
+            "json_schema": {"advanced": True, "type": "object", "description": "仅 response_format=json_schema 时使用"},
             "json_schema_strict": {"advanced": True, 
                 "type": "string",
                 "description": "JSON Schema 严格模式",
@@ -256,7 +256,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "指向素材库里的一份素材,把它的 id 交给下游。拖一个文件到画布上就会得到这个节点 —— "
             "它是「这条流程从这份素材开始」的说法。"
         ),
-        "config": {"asset_id": {"type": "template", "required": True, "description": "素材"}},
+        "config": {"asset_id": {"type": "template", "required": True}},
         "outputs": ["asset_id", "name", "kind", "duration"],
     },
     "inspect_sequence": {
@@ -317,7 +317,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "operations": {
                 "type": "template",
                 "required": True,
-                "description": "操作数组(JSON)。可用的 kind:" + "、".join(EDIT_OP_KINDS),
+                "description": "JSON 数组。可用的 kind:" + "、".join(EDIT_OP_KINDS),
             },
         },
         "outputs": ["applied", "sequence_id", "revision"],
@@ -333,7 +333,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "prompt": {"type": "template", "required": True},
             # 下面三项执行器一直支持,却没在这里声明 —— 于是编辑器渲染不出输入框、AI 助手也不知道
             # 它们存在,工作流里生成不出竖屏视频这类最常见的诉求。声明即接口。
-            "negative_prompt": {"advanced": True, "type": "template", "description": "负向提示词(部分模型支持)"},
+            "negative_prompt": {"advanced": True, "type": "template", "description": "部分模型支持"},
             "parameters": {"type": "object", "description": _generation_parameters_help()},
             # **不标 advanced。** 它是图生视频/参考生视频的唯一入口 —— 藏进高级等于把一整类
             # 用法藏起来,而判据的第二条正是"它是不是这个节点在做的事"。
@@ -346,9 +346,9 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "发布",
         "description": "用已登录的平台账号发布到抖音 / 小红书 / 视频号 / B站(由桌面端内嵌浏览器执行)。",
         "config": {
-            "account_id": {"type": "string", "required": True, "description": "发布账号 id(浏览器池可查)"},
+            "account_id": {"type": "string", "required": True, "description": "浏览器池可查"},
             "asset_id": {"type": "template", "required": True, "description": "要发布的素材 —— 必须已经下载到本地"},
-            "title": {"type": "template", "description": "标题。各平台的长度上限不同,超了会被平台拒掉"},
+            "title": {"type": "template", "description": "各平台的长度上限不同,超了会被平台拒掉"},
             "description": {"type": "template"},
         },
         "outputs": ["result"],
@@ -358,14 +358,14 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "条件分支",
         "description": "按条件把流程导向「真」或「假」分支(连线时从对应端点拉出)。",
         "config": {
-            "left": {"type": "template", "required": True, "description": "左值,如 {{llm-1.text}}"},
+            "left": {"type": "template", "required": True, "description": "如 {{llm-1.text}}"},
             "op": {
                 "type": "string",
                 "required": True,
                 "description": "比较方式",
                 "options": ["equals", "not_equals", "contains", "not_contains", "empty", "not_empty", "gt", "lt"],
             },
-            "right": {"type": "template", "description": "右值(empty/not_empty 不需要)"},
+            "right": {"type": "template", "description": "empty/not_empty 不需要"},
         },
         "outputs": ["result"],
         "branches": ["true", "false"],
@@ -377,7 +377,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "config": {
             "method": {"type": "string", "description": "默认 GET", "options": ["GET", "POST", "PUT", "DELETE"]},
             "url": {"type": "template", "required": True},
-            "headers": {"type": "object", "description": "请求头"},
+            "headers": {"type": "object"},
             "body": {"type": "template", "description": "请求体(POST/PUT),JSON 或纯文本"},
         },
         "outputs": ["status", "text", "json"],
@@ -388,7 +388,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "description": "运行一段 Python:inputs 为入参 dict,把结果赋给 output 变量。与插件同级的本地信任沙箱。",
         "config": {
             "code": {"type": "code", "required": True, "description": "如:output = len(inputs['text'])"},
-            "input": {"type": "object", "description": "入参"},
+            "input": {"type": "object"},
         },
         "outputs": ["output"],
     },
@@ -438,7 +438,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "语音合成",
         "description": "用指定音色把文本合成为配音,产出音频素材进素材库。",
         "config": {
-            "voice_id": {"type": "string", "required": True, "description": "音色 id(配音库可查)"},
+            "voice_id": {"type": "string", "required": True, "description": "配音库可查"},
             "text": {"type": "template", "required": True},
         },
         "outputs": ["asset_id"],
@@ -462,7 +462,6 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "target_lang": {
                 "type": "string",
                 "required": True,
-                "description": "目标语言",
                 "options": ["en", "zh-CN", "zh-TW", "ja", "ko", "fr", "de", "es", "ru"],
             },
             "engine": {"type": "string", "description": "翻译引擎(默认 Google 免费)", "options": ["google", "ai"]},
@@ -478,7 +477,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "items": {
                 "type": "template",
                 "required": True,
-                "description": "要遍历的列表(如 {{split_1.results}});也接受多行文本,按行拆分",
+                "description": "如 {{split_1.results}};也接受多行文本,按行拆分",
             },
             "body": {"type": "graph", "description": "循环体子流程(在节点内编辑;子流程节点用 {{loop.item}}/{{loop.index}})"},
             "output": {
@@ -509,8 +508,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "description": "按条件批量选出工作区里的素材(类型/名称/标签),输出素材列表 —— 常接「循环·遍历」的 items 逐个处理。",
         "config": {
             "kind": {"type": "string", "description": "素材类型", "options": ["all", "video", "image", "audio"]},
-            "name_contains": {"type": "template", "description": "名称包含此关键词(留空不筛)"},
-            "tags": {"type": "template", "description": "标签(逗号分隔,命中任一即选;留空不筛)"},
+            "name_contains": {"type": "template", "description": "留空不筛"},
+            "tags": {"type": "template", "description": "逗号分隔,命中任一即选;留空不筛"},
             "limit": {"advanced": True, "type": "number", "description": "最多返回条数(默认 50,上限 500)"},
         },
         "outputs": ["assets", "ids", "count"],
@@ -523,9 +522,9 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "asset_ids": {
                 "type": "template",
                 "required": True,
-                "description": "素材 id(逗号分隔,或直接接「素材筛选」的 ids)",
+                "description": "逗号分隔,或直接接「素材筛选」的 ids",
             },
-            "tags": {"type": "template", "required": True, "description": "标签(逗号分隔)"},
+            "tags": {"type": "template", "required": True, "description": "逗号分隔"},
             "mode": {
                 "type": "string",
                 "description": "add=追加,remove=移除,replace=整组替换",
@@ -539,7 +538,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "素材整理",
         "description": "重命名素材、或把素材归入某个项目。",
         "config": {
-            "asset_ids": {"type": "template", "required": True, "description": "素材 id(逗号分隔)"},
+            "asset_ids": {"type": "template", "required": True, "description": "逗号分隔"},
             "name": {"type": "template", "description": "新名称;多个素材时会自动加序号。留空则不改名"},
             "project_id": {"type": "template", "description": "归入的项目 id;留空则不改动归属"},
         },
@@ -561,7 +560,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "description": "把另一个已保存的工作流当子流程调用:映射入参 → 跑完取其「输出」节点声明的结果作为本节点输出(引用 {{call_1.output.xxx}})。子流程走完整引擎,自动收纳到本流程下、随本流程取消;防递归、防过深。",
         "config": {
             "workflow_id": {"type": "string", "required": True, "description": "要调用的工作流(选一个已保存的)"},
-            "inputs": {"type": "object", "description": "入参映射 {参数名: 值/引用},喂给子流程开始节点的参数,如 {\"topic\": \"{{start.theme}}\"}"},
+            "inputs": {"type": "object", "description": "{参数名: 值/引用},喂给子流程开始节点的参数,如 {\"topic\": \"{{start.theme}}\"}"},
         },
         "outputs": ["output"],
     },
@@ -570,7 +569,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "输出",
         "description": "声明本工作流的输出(参考 dify End):{名: 引用}。被「调用工作流」时,调用方拿到的就是这里声明的具名输出;留空/无本节点则输出整份上下文。",
         "config": {
-            "values": {"type": "object", "description": "具名输出 {名: 引用},如 {\"result\": \"{{llm_1.text}}\", \"url\": \"{{browser_1.value}}\"}"},
+            "values": {"type": "object", "description": "{名: 引用},如 {\"result\": \"{{llm_1.text}}\", \"url\": \"{{browser_1.value}}\"}"},
         },
         "outputs": ["output"],
     },
@@ -580,7 +579,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "description": "把一组节点封装成一个可复用子图(参考 ComfyUI「折叠为子图」):内嵌、可任意嵌套,在节点内进子画布编辑。与主引擎同一套内核(并行/条件分支一致)。用 inputs 把外层值喂进去(子图内 {{input.名}} 引用),output 指定子图输出(引用内部节点,如 {{node_1.text}});留空则输出整份子上下文。",
         "config": {
             "inputs": {"type": "object", "description": "喂进子图的输入 {名: 值/引用},子图内用 {{input.名}} 取,如 {\"topic\": \"{{start.theme}}\"}"},
-            "body": {"type": "graph", "description": "子图(在节点内进子画布编辑;无入边的根即入口,可放多个)"},
+            "body": {"type": "graph", "description": "在节点内进子画布编辑;无入边的根即入口,可放多个"},
             "output": {"type": "template", "description": "子图输出,引用内部节点输出(如 {{node_1.text}});留空则输出整份子上下文"},
         },
         "outputs": ["output"],
@@ -667,7 +666,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "gone": {"advanced": True, "type": "string", "options": ["否", "是"], "description": "是=等元素消失"},
             "url_contains": {"advanced": True, "type": "template", "description": "等 URL 包含此片段(与选择器/文本三选一)"},
             "text": {"advanced": True, "type": "template", "description": "等页面出现此文本"},
-            "timeout_ms": {"advanced": True, "type": "number", "description": "超时毫秒,默认 15000"},
+            "timeout_ms": {"advanced": True, "type": "number", "description": "默认 15000"},
         },
         "outputs": ["session"],
     },
