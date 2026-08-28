@@ -135,15 +135,20 @@ function defaultGenerationConfig(model: GenerationModel | null): GenerationConfi
 }
 
 function generationParameters(model: GenerationModel, config: GenerationConfig) {
+  // **图像和视频都要的那几项先放这儿。** 此前它们写在 image 分支里,于是视频那条路上
+  // 控件照常渲染、值却在这一行被丢掉 —— 用户选了 ComfyUI 工作流没反应、填了种子不生效,
+  // 而界面什么都没说。控件的显示条件本来就不分 kind(见 supportsParameter 那几处)。
+  const shared: Record<string, string | number> = {};
+  if (model.provider === "comfyui" && config.workflow) shared.workflow = config.workflow;
+  if (supportsParameter(model, "seed") && config.seed.trim()) shared.seed = Number(config.seed);
+
   if (model.kind === "image") {
-    const params: Record<string, string | number> = {};
+    const params: Record<string, string | number> = { ...shared };
     if (supportsParameter(model, "size") && config.size) params.size = config.size;
     if (supportsParameter(model, "num_images")) params.num_images = Math.max(1, Math.min(maxImages(model), Number(config.numImages) || 1));
-    if (supportsParameter(model, "seed") && config.seed.trim()) params.seed = Number(config.seed);
-    if (model.provider === "comfyui" && config.workflow) params.workflow = config.workflow;
     return params;
   }
-  const params: Record<string, string | number> = {};
+  const params: Record<string, string | number> = { ...shared };
   if (supportsParameter(model, "duration_seconds")) {
     params.duration_seconds = Math.max(
       capabilityNumber(model, "min_duration_seconds", 1),
