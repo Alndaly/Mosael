@@ -704,14 +704,6 @@ BUILTIN_MODELS = [
     },
 ]
 
-REMOVED_BUILTIN_MODEL_IDS = {
-    "bytedance:seedance:video",
-    # seedream 图像改挂独立厂商 bytedance-image(独立档案,互不牵连)
-    "bytedance:doubao-seedream-4-0-250828:image",
-    "bytedance:doubao-seedream-3-0-t2i-250415:image",
-}
-
-
 #: 某个 vendor 在某种生成能力下的**兜底**描述符。目录里没登记的模型(私有部署、别名、
 #: 用户手填的)照样要能出现在选择器里并给出一组可用参数 —— 缺描述符不该等于"不能用"。
 _FALLBACK_BY_KIND: dict[str, dict[str, Any]] = {
