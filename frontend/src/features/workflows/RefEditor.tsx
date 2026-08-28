@@ -67,9 +67,15 @@ function RefChip(props: { node: { attrs: { ref?: string } } }) {
   );
 }
 
-/** 插件给的是**视口坐标**,菜单也用 fixed,所以原样用,不做换算。 */
-function caretRect(rect: DOMRect | null | undefined): { left: number; top: number } {
-  if (!rect) return { left: 0, top: 0 };
+/**
+ * 插件给的是**视口坐标**,菜单也用 fixed,所以原样用,不做换算。
+ *
+ * 拿不到位置时返回 null,**上层据此不渲染菜单** —— 早先这里回落成 {0,0},结果菜单会跑到
+ * 浏览器窗口左上角去,离插入点十万八千里:用户以为"没反应",其实它在屏幕另一头。
+ * 定位不出来就别画,比画在错的地方好。
+ */
+function caretRect(rect: DOMRect | null | undefined): { left: number; top: number } | null {
+  if (!rect) return null;
   return { left: rect.left, top: rect.bottom + 4 };
 }
 
@@ -146,16 +152,22 @@ export function RefEditor({
           render: () => ({
             onStart: (props) => {
               commandRef.current = props.command;
-              setMenu({ items: props.items, active: 0, rect: caretRect(props.clientRect?.()) });
+              const rect = caretRect(props.clientRect?.());
+              setMenu(rect ? { items: props.items, active: 0, rect } : null);
             },
             onUpdate: (props) => {
               commandRef.current = props.command;
-              setMenu((prev) => ({
-                items: props.items,
-                // 候选变了就回到第一条;没变则保留用户已经按下去的位置。
-                active: prev && prev.items.join() === props.items.join() ? prev.active : 0,
-                rect: caretRect(props.clientRect?.()),
-              }));
+              const rect = caretRect(props.clientRect?.());
+              setMenu((prev) =>
+                rect
+                  ? {
+                      items: props.items,
+                      // 候选变了就回到第一条;没变则保留用户按下去的位置。
+                      active: prev && prev.items.join() === props.items.join() ? prev.active : 0,
+                      rect,
+                    }
+                  : null,
+              );
             },
             // **按键交给插件**:它知道 composition,中文选词时的回车不会被当成"选中候选"。
             onKeyDown: (props) => {
