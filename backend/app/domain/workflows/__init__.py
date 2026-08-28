@@ -191,7 +191,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "LLM 生成",
         "description": "调用配置的 AI 供应商生成文本。",
         "config": {
-            "prompt": {"type": "template", "required": True, "description": "用户提示词,支持 {{变量}}"},
+            "prompt": {"type": "template", "required": True, "description": "这一轮要模型做的事"},
             "system": {"type": "template", "description": "系统提示词"},
             "preset": {
                 "type": "string",
@@ -231,7 +231,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "tool_name": {"type": "string", "required": True, "depends_on": "plugin_id"},
             # 同一个插件可以接多个连接;留空且只有一个可用连接时自动用它。
             "instance_id": {"type": "string", "description": "用哪个连接;留空自动选(仅一个时)", "plugin_instances": True, "depends_on": "plugin_id"},
-            "input": {"type": "object", "description": "工具入参,值支持 {{变量}}"},
+            "input": {"type": "object", "description": "工具入参"},
         },
         "outputs": ["output"],
     },
@@ -375,7 +375,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "config": {
             "method": {"type": "string", "description": "默认 GET", "options": ["GET", "POST", "PUT", "DELETE"]},
             "url": {"type": "template", "required": True},
-            "headers": {"type": "object", "description": "请求头,值支持 {{变量}}"},
+            "headers": {"type": "object", "description": "请求头"},
             "body": {"type": "template", "description": "请求体(POST/PUT),JSON 或纯文本"},
         },
         "outputs": ["status", "text", "json"],
@@ -386,7 +386,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "description": "运行一段 Python:inputs 为入参 dict,把结果赋给 output 变量。与插件同级的本地信任沙箱。",
         "config": {
             "code": {"type": "code", "required": True, "description": "如:output = len(inputs['text'])"},
-            "input": {"type": "object", "description": "入参,值支持 {{变量}}"},
+            "input": {"type": "object", "description": "入参"},
         },
         "outputs": ["output"],
     },
@@ -476,7 +476,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "items": {
                 "type": "template",
                 "required": True,
-                "description": "要遍历的列表,支持 {{变量}}(如 {{split_1.results}});也接受多行文本(按行拆分)",
+                "description": "要遍历的列表(如 {{split_1.results}});也接受多行文本,按行拆分",
             },
             "body": {"type": "graph", "description": "循环体子流程(在节点内编辑;子流程节点用 {{loop.item}}/{{loop.index}})"},
             "output": {

@@ -649,6 +649,7 @@ export const messages = {
     wfRunOutputs: "本次产出",
     // 节点悬浮键:左边功能区、右边操作
     wfaConfig: "参数",
+    wfRefNoUpstream: "这个节点还没有上游 —— 先从别的节点连一条边过来,它的输出才能在这里引用。",
     wfaEnterSubgraph: "进入子图",
     wfRunNoOutputs: "这一步没有产出",
     wfSaveFailed: "保存失败",
@@ -791,7 +792,7 @@ export const messages = {
     wfLlmPresencePenalty: "存在惩罚",
     wfLlmBlankDefault: "留空不传",
     wfLlmStop: "停止词",
-    wfLlmStopHint: "一行一个停止词,支持 {{变量}}。",
+    wfLlmStopHint: "一行一个停止词。",
     wfLlmJsonSchemaName: "Schema 名称",
     wfLlmJsonStrict: "严格模式",
     wfLlmJsonStrictOn: "开启",
@@ -2614,6 +2615,7 @@ export const messages = {
     wfRunOutputs: "This run",
     // Node toolbar: content areas on the left, actions on the right
     wfaConfig: "Parameters",
+    wfRefNoUpstream: "Nothing upstream yet — connect a node into this one first, then its outputs can be referenced here.",
     wfaEnterSubgraph: "Open subgraph",
     wfRunNoOutputs: "This step produced nothing",
     wfSaveFailed: "Save failed",
@@ -2748,7 +2750,7 @@ export const messages = {
     wfLlmPresencePenalty: "Presence penalty",
     wfLlmBlankDefault: "Leave blank",
     wfLlmStop: "Stop",
-    wfLlmStopHint: "One stop sequence per line; {{variables}} are supported.",
+    wfLlmStopHint: "One stop sequence per line.",
     wfLlmJsonSchemaName: "Schema name",
     wfLlmJsonStrict: "Strict mode",
     wfLlmJsonStrictOn: "On",

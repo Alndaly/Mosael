@@ -14,7 +14,11 @@ import {
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 
+import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
+
+/** 菜单的三种形态:列候选、只给一句解释(hint)、不显示(null)。 */
+type MenuState = { items: string[]; active: number; hint?: string } | null;
 import { TRIGGER, docToString, filterRefs, parsePieces, piecesToDoc } from "@/features/workflows/refDoc";
 import { RefSuggestion } from "@/features/workflows/RefSuggestion";
 
@@ -90,11 +94,19 @@ export function RefEditor({
   const emitted = React.useRef(value);
 
   //: 变量表给插件的 items 回调用 —— 插件在创建时拿到配置,之后 variables 变了它得看得见。
+  const t = useI18n();
   const variablesRef = React.useRef(variables);
   variablesRef.current = variables;
+  // 文案走 i18n,但 suggestion 的回调是在 useEffect 里一次性装好的(拿不到后续渲染的 t),
+  // 所以和 variables 一样用 ref 兜住当前值。
+  const emptyHintRef = React.useRef("");
+  emptyHintRef.current = t("wfRefNoUpstream");
 
   /** 菜单只剩「长什么样」这一半:什么时候出现、匹配到哪个字符、按键怎么走,都归插件。 */
-  const [menu, setMenu] = React.useState<{ items: string[]; active: number } | null>(null);
+  // hint:**这一格没有可引用的变量**,菜单里只放一句解释,不放候选。
+  // 此前这种情况下什么都不弹 —— 敲了 @ 毫无反应,用户只能自己猜为什么(实测:一位用户
+  // 花了一会儿才想到「哦 是我没有连线」)。一个什么都不做又不解释的键,比一条小灰条更糟。
+  const [menu, setMenu] = React.useState<MenuState>(null);
   //: 插件给的**是个函数**,每次调用返回当前的光标矩形。存函数而不是存算好的坐标 ——
   //: 存坐标就成了一张快照:画布一平移,光标动了而菜单不知道,于是它钉在原地。
   const clientRectRef = React.useRef<(() => DOMRect | null) | null>(null);
@@ -104,6 +116,24 @@ export function RefEditor({
   menuRef.current = menu;
   //: 插件给的"确认这一条"回调。点击和回车都走它 —— 插入位置由插件算,我们不自己数字符。
   const commandRef = React.useRef<((item: string) => void) | null>(null);
+
+  /**
+   * 敲下 `@` 之后菜单该长什么样。三种情况,分开对待:
+   *
+   *  · 有候选 → 列出来;
+   *  · **一条上游都没有** → 只给一句解释。此前这里返回 null,于是这个键静默无效 ——
+   *    用户敲了没反应,只能自己猜为什么(实测有人想了一会儿才反应过来「哦 是我没有连线」);
+   *  · 有上游、只是这次输入没匹配上 → 不打扰,继续敲两下自己就出来了。
+   */
+  const nextMenu = (prev: MenuState, items: string[]): MenuState => {
+    if (items.length) {
+      // 候选变了就回到第一条;没变则保留用户按下去的位置。
+      const active = prev && !prev.hint && prev.items.join() === items.join() ? prev.active : 0;
+      return { items, active };
+    }
+    if (variablesRef.current.length === 0) return { items: [], active: 0, hint: emptyHintRef.current };
+    return null;
+  };
 
   const editor = useEditor({
     extensions: [
@@ -140,25 +170,18 @@ export function RefEditor({
               .run();
           },
           render: () => ({
+            // **onStart 和 onUpdate 用同一条规则。** tiptap 在同一次输入里 onStart 之后紧接着
+            // 就调 onUpdate —— 两边写两份的话,onStart 刚摆上的东西会被 onUpdate 立刻清掉,
+            // 表现是"提示闪一下就没了"(实测:根本看不见,像完全没实现)。
             onStart: (props) => {
               commandRef.current = props.command;
               clientRectRef.current = props.clientRect ?? null;
-              // **没有候选就不要弹。** 空菜单渲染出来是一条什么都没有的小灰条,贴在光标下面 ——
-              // 用户看到的是"敲了 @ 冒出个奇怪的东西",而真相是这个节点没有上游可引用。
-              setMenu(props.items.length ? { items: props.items, active: 0 } : null);
+              setMenu((prev) => nextMenu(prev, props.items));
             },
             onUpdate: (props) => {
               commandRef.current = props.command;
               clientRectRef.current = props.clientRect ?? null;
-              setMenu((prev) =>
-                props.items.length
-                  ? {
-                      items: props.items,
-                      // 候选变了就回到第一条;没变则保留用户按下去的位置。
-                      active: prev && prev.items.join() === props.items.join() ? prev.active : 0,
-                    }
-                  : null,
-              );
+              setMenu((prev) => nextMenu(prev, props.items));
             },
             // **按键交给插件**:它知道 composition,中文选词时的回车不会被当成"选中候选"。
             onKeyDown: (props) => {
@@ -274,6 +297,9 @@ export function RefEditor({
             ref={menuEl}
             className="fixed left-0 top-0 z-50 max-h-48 min-w-[180px] overflow-auto rounded-md border border-border bg-panel p-1 shadow-[var(--shadow-panel)]"
           >
+            {menu.hint ? (
+              <div className="px-2 py-1 text-ui-2xs leading-relaxed text-muted-foreground">{menu.hint}</div>
+            ) : null}
             {menu.items.map((ref, index) => (
               <button
                 key={ref}
