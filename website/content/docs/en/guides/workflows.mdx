@@ -27,7 +27,11 @@ Workflows orchestrate a chain of actions (retrieval, generation, transcription, 
   | External | HTTP request, plugin tool |
   | Browser | open / navigate / click / input / extract / scroll / upload / wait / evaluate / close |
 - **Edges** define execution order; drag from a node's right port to a downstream node's left port. The **condition** node has "true / false" outlets. The toolbar switches **edge shape** between curved (bezier) and stepped (right-angle); your choice is remembered.
-- Click a node to open its **inspector** (icon + inline rename + type in the header).
+- Click a node to open its **inspector** — it sits **directly below** the node, and a floating bar sits
+  **directly above** it: content sections on the left (**Parameters** / **Advanced** / **Outputs**, plus
+  **This run** once it has run — each shown **only when the node has it**), node actions on the right
+  (open subgraph, delete). "Advanced" holds the knobs that **work fine left blank**, so the first screen
+  isn't a wall of sampling parameters.
 
 ### When something is buried
 
@@ -41,7 +45,8 @@ After a node runs it writes results into the context; output variables look like
 
 Each field can switch between **two input modes** (the small pill at the right of the label row):
 
-- **Manual**: type a value / pick an option; template fields support `/` to insert variables, or click a variable chip to insert at the cursor.
+- **Manual**: type a value / pick an option; in template fields press **`@`** to pull up upstream variables (keep typing to filter), or click a variable chip to insert at the cursor.
+  When the node has nothing upstream yet, `@` says so instead of doing nothing.
 - **Connected**: the field becomes a port; pick one from the **upstream outputs** dropdown — equivalent to binding `{{upstream.output}}`. Switching back to manual keeps the previous value.
 
 ## Readiness check / run gating

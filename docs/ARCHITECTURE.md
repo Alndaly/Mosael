@@ -51,6 +51,27 @@ TaskEvent 行只在总线创建。
 见 [ADR-0002](adr/0002-claim-report-worker-protocol.md))。`OPEN_STUDIO_EXTERNAL_JOB_KINDS=render`
 即可把渲染交给独立 worker 机器,领域代码不改。
 
+### 工作流节点的字段声明
+
+一个节点的表单**完全由 `NODE_TYPES` 的 `config` 声明生成** —— 编辑器不认识任何具体节点,
+智能体和 MCP 读的也是同一份。所以「加一个字段」就是加一行声明,而**漏一个声明位不会报错**,
+只会让界面安静地少一块能力。这份契约同时约束插件(见 [PLUGIN_MANIFEST](PLUGIN_MANIFEST.md)
+的 `input_schema`,键名不同、语义一一对应)。
+
+| 键 | 作用 | 判据 |
+| --- | --- | --- |
+| `type` | 控件形态:`template` / `string` / `number` / `object` / `graph` / `code` | **自由文本一律 `template`** —— 引擎对每个字符串值都做 `{{}}` 替换(`interpolate` 递归整个 config,不看类型),写 `string` 不是"不支持变量"而是声明落后于实现,后果是那一格没有 `@` 引用菜单。剩下的 `string` 只有两类:带 `options` 的枚举、选择器背书的 id |
+| `required` | 必填 | 少了它跑不起来 |
+| `advanced` | 收进面板的「高级」一档 | **留空也能跑**的才算。不是"我觉得它高深" |
+| `options` | 静态枚举 → 下拉 | 渲染分支里 `options` **优先于** `type`,所以给选择器字段改 `type` 是无效的 |
+| `depends_on` | 这个字段跟着谁走 | 父字段一换,这里存的旧值就失效(换了供应商配置,模型还挂着上一家的)。声明在后端而不是前端一张表 —— **插件节点是运行时才知道的** |
+| `description` | 字段下面那行小字 | **只说标签说不出的东西**(约束、默认、格式、留空的含义)。说不出新东西就不写 —— 标签「系统提示词」下面再写一遍「系统提示词」,读的人要多花一次注意力才发现什么也没得到。反过来,执行器有硬约束而表单只字未提,那是要**补**说明 |
+| `plugin_instances` | 值来自插件实例列表 | 插件工具节点专用 |
+
+每一条都有对应的棘轮钉着(见 [CONVENTIONS](CONVENTIONS.md) 的清单),因为它们的共同点是
+**违反了不会报错**:界面照常渲染,只是少了 `@`、少了一档、留下一个对不上的组合,
+或者多一行白占地方的小字。
+
 ### 数据模型要点
 
 SQLite(WAL)+ SQLAlchemy 2.0。所有实体挂 `workspace_id`,路由层 `ensure_workspace_access` 强制隔离(方法感知:写门禁读 ASGI 中间件绑定的 HTTP 方法)。
