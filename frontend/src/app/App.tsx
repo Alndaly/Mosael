@@ -57,6 +57,7 @@ import { PublishView } from "@/features/publish/PublishView";
 import { BrowserPoolView } from "@/features/browser-pool/BrowserPoolView";
 import { PluginsView } from "@/features/plugins/PluginsView";
 import { SchedulerView } from "@/features/scheduler/SchedulerView";
+import { BoardsView } from "@/features/boards/BoardsView";
 import { WorkflowsView } from "@/features/workflows/WorkflowsView";
 import { AdminView } from "@/features/admin/AdminView";
 import { SettingsView } from "@/features/settings/SettingsView";
@@ -522,6 +523,7 @@ function Studio({
       {view === "settings" && <SettingsView workspace={workspace} />}
       {view === "admin" && <AdminView />}
       {view === "workflows" && <WorkflowsView workspace={workspace} />}
+      {view === "boards" && <BoardsView workspace={workspace} />}
       {view === "scheduler" && (
         <SchedulerView workspace={workspace} project={project} />
       )}

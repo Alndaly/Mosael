@@ -18,6 +18,7 @@ export type StudioView =
   | "publish"
   | "settings"
   | "workflows"
+  | "boards"
   | "scheduler"
   | "plugins"
   | "browser-pool"
@@ -33,6 +34,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { view: "publish", labelKey: "navPublish", group: "primary" },
   { view: "settings", labelKey: "navSettings", group: "primary" },
   { view: "workflows", labelKey: "navWorkflows", group: "secondary" },
+  { view: "boards", labelKey: "navBoards", group: "secondary" },
   { view: "browser-pool", labelKey: "navBrowserPool", group: "secondary" },
   { view: "scheduler", labelKey: "schedulerTitle", group: "secondary" },
   { view: "plugins", labelKey: "pluginsTitle", group: "secondary" },

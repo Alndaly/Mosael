@@ -1,5 +1,6 @@
 import React from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BookOpen,
   Bot,
@@ -23,8 +24,7 @@ import {
   ShieldCheck,
   Sun,
   Trash2,
-  Workflow,
-} from "lucide-react";
+  Workflow, LayoutGrid } from "lucide-react";
 import { toast } from "sonner";
 
 import { api, createWorkspace, deleteWorkspace, renameWorkspace, userAvatarUrl, type Workspace } from "@/api/client";
@@ -56,6 +56,7 @@ const ICONS: Record<StudioView, React.ReactNode> = {
   publish: <Rocket size={17} />,
   settings: <Settings size={17} />,
   workflows: <Workflow size={17} />,
+  boards: <LayoutGrid size={17} />,
   "browser-pool": <Boxes size={17} />,
   scheduler: <CalendarClock size={17} />,
   plugins: <Plug size={17} />,

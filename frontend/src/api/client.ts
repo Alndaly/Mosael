@@ -824,6 +824,60 @@ export function deleteAgentSession(sessionId: string): Promise<unknown> {
   return api(`/api/agent/sessions/${sessionId}`, { method: "DELETE" });
 }
 
+/** 创意画板上的一项:便签 / 图片 / 分组框。形状由后端 domain/boards 校验。 */
+export interface BoardItem {
+  id: string;
+  kind: "note" | "image" | "frame";
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  text?: string;
+  color?: string;
+  asset_id?: string;
+}
+
+export interface BoardEdge {
+  id: string;
+  source: string;
+  target: string;
+  label?: string;
+}
+
+export interface BoardCanvas {
+  items: BoardItem[];
+  edges: BoardEdge[];
+}
+
+export interface Board {
+  id: string;
+  workspace_id: string;
+  name: string;
+  canvas: BoardCanvas;
+  created_at: string;
+  updated_at: string;
+}
+
+export function listBoards(workspaceId: string): Promise<Board[]> {
+  return api<Board[]>(`/api/boards?workspace_id=${workspaceId}`);
+}
+
+export function createBoard(body: { workspace_id: string; name?: string }): Promise<Board> {
+  return api<Board>("/api/boards", { method: "POST", body: JSON.stringify(body) });
+}
+
+/** 改名和存画布是同一个入口 —— 各发各的那一半,另一半不传就不动它。 */
+export function updateBoard(
+  boardId: string,
+  body: { workspace_id: string; name?: string; canvas?: BoardCanvas },
+): Promise<Board> {
+  return api<Board>(`/api/boards/${boardId}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
+export function deleteBoard(boardId: string, workspaceId: string): Promise<unknown> {
+  return api(`/api/boards/${boardId}?workspace_id=${workspaceId}`, { method: "DELETE" });
+}
+
 export function listWorkflows(workspaceId: string): Promise<Workflow[]> {
   return api<Workflow[]>(`/api/workflows?workspace_id=${workspaceId}`);
 }
