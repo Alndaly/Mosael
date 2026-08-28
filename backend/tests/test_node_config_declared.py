@@ -229,3 +229,58 @@ def test_只有真正自由结构的才留原始_JSON() -> None:
     assert config_editor("whatever", {"type": "object", "editor": "json"}) == "json"
     # 非 object 不归它管。
     assert config_editor("prompt", {"type": "template"}) == ""
+
+
+def test_每个配置字段都归得进一段() -> None:
+    """检查器要按段折叠,而段是**声明出来的**,不是前端按节点类型硬编码的。
+
+    同一个形状的第四次:一份该住在声明里的知识被抄到消费方。前三次是智能体的角色表、
+    字段类型表、界面标签表。这次如果抄一张「哪个节点有哪几段」的表到前端,
+    **插件节点永远不会在里面** —— 它们是运行时才出现的。
+
+    这条只钉住"每个字段都有归属"。归错一段的代价是按钮上的字不同,归不进去的代价是
+    整段功能在界面上不存在,后者才是要挡的。
+    """
+    from app.domain.workflows import NODE_TYPES, config_group
+
+    missing = [
+        f"{name}.{key}"
+        for name, spec in NODE_TYPES.items()
+        for key, meta in (spec.get("config") or {}).items()
+        if not config_group(key, meta)
+    ]
+    assert missing == [], f"这些字段没有段归属:{missing}"
+
+
+def test_分段不能退化成全都是basic() -> None:
+    """全落 basic 的话,分段条上永远只有一个按钮 —— 功能还在,但什么也没分开。
+
+    不写死具体比例(那会变成每加一个字段就要改测试),只钉住"绝大多数字段有真实归属"。
+    """
+    from app.domain.workflows import NODE_TYPES, config_group
+
+    groups = [
+        config_group(key, meta)
+        for spec in NODE_TYPES.values()
+        for key, meta in (spec.get("config") or {}).items()
+    ]
+    assert len(set(groups)) >= 4, f"段太少,分不开:{sorted(set(groups))}"
+    assert groups.count("basic") * 2 < len(groups), "过半字段落进了 basic,等于没分段"
+
+
+def test_节点自己的_group_压过命名约定() -> None:
+    """按字段名归组是"省事",不能变成"挡路":某个节点要把 url 归到别处得能覆盖。"""
+    from app.domain.workflows import config_group
+
+    assert config_group("url", {}) == "browser"
+    assert config_group("url", {"group": "media"}) == "media"
+    # 约定认不出来的落 basic,而不是空 —— 空会让前端以为这个字段没有段。
+    assert config_group("某个插件自定义字段", {}) == "basic"
+
+
+def test_分段真的发到接口上() -> None:
+    """在后端算好但没发出去,等于没算。"""
+    from app.api.routes.workflows import _with_data_type
+
+    assert _with_data_type("temperature", {"type": "number"})["group"] == "model"
+    assert _with_data_type("selector", {"type": "string"})["group"] == "browser"
