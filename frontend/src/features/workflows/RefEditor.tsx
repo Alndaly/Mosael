@@ -1,4 +1,5 @@
 import React from "react";
+import { createPortal } from "react-dom";
 // 只从**已声明的包**里取:@tiptap/react 再导出了 core,StarterKit 里已含 Document/Paragraph/
 // Text/History。不额外添依赖 —— 单个扩展包全都能从这两个里拿到。
 import {
@@ -235,7 +236,18 @@ export function RefEditor({
     <div className="grid gap-1">
       <div className="relative">
         <EditorContent editor={editor} />
-        {menu && (
+        {/**
+          * **菜单要 portal 到 body。**
+          *
+          * 插件给的 clientRect 是**屏幕坐标**,而这个编辑器住在 React Flow 的 viewport 里 ——
+          * 那个容器带着 `transform: translate() scale()`。CSS 有一条:祖先一旦有 transform,
+          * 它就成了后代 `position: fixed` 的包含块 —— 于是 fixed 不再相对窗口,而是相对那个
+          * 被平移缩放过的容器。把屏幕坐标喂进去,菜单就跑到画布的另一头(实测:右下角),
+          * 而且还跟着缩放变了形。
+          *
+          * 挂到 body 上,fixed 才真的相对窗口;顺带也不会被面板的 overflow-hidden 裁掉。
+          */}
+        {menu && createPortal((
           <div
             // **fixed 而不是 absolute**:插件给的是视口坐标(clientRect),用 absolute 就得再减一次
             // 容器偏移 —— 那正是搬进画布时删掉的那类换算,不要再引进来一份。
@@ -258,7 +270,7 @@ export function RefEditor({
               </button>
             ))}
           </div>
-        )}
+        ), document.body)}
       </div>
       {variables.length > 0 && (
         // 上游有什么直接摆出来,点一下插到光标处 —— 不用记 `{{}}` 怎么写,也不用回画布上看
