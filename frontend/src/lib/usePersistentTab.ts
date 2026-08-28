@@ -68,3 +68,63 @@ export function usePersistentSelection(
   const valid = selected !== null && (ids.length === 0 || ids.includes(selected));
   return [valid ? selected : null, set];
 }
+
+
+/** 画布视口:平移量 + 缩放。和 React Flow 的 `Viewport` 同形,这里不引它的类型(纯 lib 层)。 */
+export interface StoredViewport {
+  x: number;
+  y: number;
+  zoom: number;
+}
+
+/** 存进去的东西不一定还是合法的 —— 手改过 storage、旧版本写的、NaN。用不了就当没存过。 */
+function parseViewport(raw: string | null): StoredViewport | null {
+  if (!raw) return null;
+  try {
+    const value = JSON.parse(raw) as Partial<StoredViewport>;
+    const { x, y, zoom } = value;
+    const finite = [x, y, zoom].every((n) => typeof n === "number" && Number.isFinite(n));
+    // zoom 为 0 或负数会让画布彻底不可用,而这种值只可能来自坏数据。
+    if (!finite || !(zoom! > 0)) return null;
+    return { x: x!, y: y!, zoom: zoom! };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 记住某张画布**上次停在哪儿**。
+ *
+ * 少了它,每次刷新或重新进入工作流详情都会 fitView —— 把所有节点框回视野里。图一大就意味着
+ * 用户每次回来都要重新找到自己刚才在看的那一块,而他离开时的位置本来就是最有价值的信息。
+ *
+ * **只在挂载时读一次**(useState 惰性初值):读成响应式的话,自己保存又会触发自己重定位,
+ * 画布会在用户拖动时和自己打架。
+ */
+export function usePersistentViewport(key: string): {
+  /** 上次的位置;没有(第一次进来)就是 null —— 调用方这时才该 fitView。 */
+  saved: StoredViewport | null;
+  remember: (viewport: StoredViewport) => void;
+} {
+  const storageKey = `openstudio:viewport:${key}`;
+  const [saved] = React.useState<StoredViewport | null>(() => {
+    try {
+      return parseViewport(localStorage.getItem(storageKey));
+    } catch {
+      return null;
+    }
+  });
+
+  const remember = React.useCallback(
+    (viewport: StoredViewport) => {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(viewport));
+      } catch {
+        // 隐私模式 / 无 storage:这次会话内照常用,只是下次回来还是 fitView。
+      }
+    },
+    [storageKey],
+  );
+
+  return { saved, remember };
+}

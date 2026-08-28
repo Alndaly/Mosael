@@ -2,7 +2,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab";
+import { usePersistentSelection, usePersistentTab, usePersistentViewport } from "@/lib/usePersistentTab";
 
 /**
  * 「切走再回来,选择还在」。
@@ -71,5 +71,56 @@ describe("会活过导航的选中", () => {
     hook.unmount();
 
     expect(renderHook(() => usePersistentSelection("w", ["a"])).result.current[0]).toBeNull();
+  });
+});
+
+/**
+ * 「上次停在哪儿,回来还在哪儿」。
+ *
+ * 用户报的是:每次刷新或重新进入工作流详情,画布都 fitView 把所有节点框回视野 —— 图一大,
+ * 他每次回来都要重新找到刚才在看的那一块,而**离开时的位置本来就是最有价值的信息**。
+ */
+describe("usePersistentViewport", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("第一次进来没有存过 —— 调用方据此决定要不要 fitView", () => {
+    expect(renderHook(() => usePersistentViewport("wf-1")).result.current.saved).toBeNull();
+  });
+
+  it("记住之后再挂载就回到那个位置", () => {
+    const first = renderHook(() => usePersistentViewport("wf-1"));
+    act(() => first.result.current.remember({ x: -120, y: 40, zoom: 0.75 }));
+    expect(renderHook(() => usePersistentViewport("wf-1")).result.current.saved).toEqual({
+      x: -120,
+      y: 40,
+      zoom: 0.75,
+    });
+  });
+
+  it("每张图各记各的 —— 换一张不该继承上一张停在哪儿", () => {
+    const a = renderHook(() => usePersistentViewport("wf-a"));
+    act(() => a.result.current.remember({ x: 1, y: 2, zoom: 1.5 }));
+    expect(renderHook(() => usePersistentViewport("wf-b")).result.current.saved).toBeNull();
+  });
+
+  it("挂载后不再跟着 storage 变", () => {
+    // 读成响应式的话,自己保存又会触发自己重定位 —— 用户拖动时画布会和自己打架。
+    const { result } = renderHook(() => usePersistentViewport("wf-1"));
+    act(() => result.current.remember({ x: 9, y: 9, zoom: 2 }));
+    expect(result.current.saved).toBeNull();
+  });
+
+  describe("坏数据一律当没存过", () => {
+    it.each([
+      ["不是 JSON", "{{{"],
+      ["缺字段", '{"x":1,"y":2}'],
+      ["不是数字", '{"x":null,"y":2,"zoom":1}'],
+      // zoom 为 0 / 负数会让画布彻底不可用,而这种值只可能来自坏数据。
+      ["zoom 为 0", '{"x":1,"y":2,"zoom":0}'],
+      ["zoom 为负", '{"x":1,"y":2,"zoom":-1}'],
+    ])("%s", (_name, raw) => {
+      localStorage.setItem("openstudio:viewport:wf-1", raw);
+      expect(renderHook(() => usePersistentViewport("wf-1")).result.current.saved).toBeNull();
+    });
   });
 });

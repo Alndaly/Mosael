@@ -100,7 +100,7 @@ import { cn } from "@/lib/utils";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { relativeTime } from "@/lib/time";
 import { useMultiSelect } from "@/lib/useMultiSelect";
-import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab";
+import { usePersistentSelection, usePersistentTab, usePersistentViewport } from "@/lib/usePersistentTab";
 
 const AGENT_MODES = ["docked", "floating"] as const;
 import { blurFloatingPanels, hasFocusedFloatingPanel } from "@/features/workflows/useFloatingPanel";
@@ -1195,6 +1195,8 @@ function WorkflowEditor({
   // 画布姿态(是否已 fitView、视口动过几次、正不正在平移)。三条各自的来历见 useCanvasPosture
   // —— 它们是 React Flow 的机制,不是工作流的概念,所以不和图 / 弹窗 / 搜索那些 state 混在一起。
   const canvas = useCanvasPosture();
+  // 每张工作流各记各的位置 —— 换一张图不该继承上一张停在哪儿。
+  const viewport = usePersistentViewport(`workflow:${workflow.id}`);
 
   /**
    * 把视口居中到某坐标上。用坐标而非 getNode:新加节点此刻还没同步进 React Flow 内部 store,
@@ -2271,11 +2273,16 @@ function WorkflowEditor({
             nodeTypes={NODE_COMPONENT_TYPES}
             onInit={(instance) => {
               rfRef.current = instance as unknown as ReactFlowInstance;
-              // 只在挂载时 fit 一次(切换工作流会因 key 重挂而重跑)。用命令式而非声明式
+              // 只在挂载时定位一次(切换工作流会因 key 重挂而重跑)。用命令式而非声明式
               // fitView 属性:后者会在每次新增未测量节点时重新 fit,把手动聚焦覆盖掉。
-              // fit 完成前画布不可见:首帧按默认视口渲染会让所有节点在错位处闪一下。
+              // 定位完成前画布不可见:首帧按默认视口渲染会让所有节点在错位处闪一下。
+              //
+              // **上次停在哪儿就回哪儿**,只有第一次进来才 fitView。此前每次刷新/重进都 fit,
+              // 把所有节点框回视野 —— 图一大,用户每次回来都得重新找到刚才在看的那一块,
+              // 而他离开时的位置本来就是最有价值的信息。
               requestAnimationFrame(() => {
-                instance.fitView({ padding: 0.25, maxZoom: 1 });
+                if (viewport.saved) instance.setViewport(viewport.saved);
+                else instance.fitView({ padding: 0.25, maxZoom: 1 });
                 canvas.handlers.onInit();
               });
             }}
@@ -2283,7 +2290,10 @@ function WorkflowEditor({
             onEdgesChange={onEdgesChange}
             onMoveStart={canvas.handlers.onMoveStart}
             onMove={canvas.handlers.onMove}
-            onMoveEnd={canvas.handlers.onMoveEnd}
+            onMoveEnd={(event, next) => {
+              canvas.handlers.onMoveEnd();
+              viewport.remember(next);
+            }}
             onNodeDragStart={() => setDragging(true)}
             onNodeDragStop={() => setDragging(false)}
             onConnect={onConnect}
@@ -2433,6 +2443,7 @@ function WorkflowEditor({
             if (!loopNode) return null;
             return (
               <LoopBodyEditor
+                workflowId={workflow.id}
                 loopNode={loopNode}
                 registry={registry}
                 nodeTypes={nodeTypes}
@@ -2592,6 +2603,7 @@ function CodeField({
  *  A self-contained mini-canvas: add/connect/move/delete/config body nodes; changes flow up via
  *  onChange. Header/hints switch on the node type (loop scope {{loop.*}} vs subgraph {{input.*}}). */
 function LoopBodyEditor({
+  workflowId,
   loopNode,
   registry,
   nodeTypes,
@@ -2603,6 +2615,8 @@ function LoopBodyEditor({
   undo,
   redo,
 }: {
+  /** 只用来给「子图停在哪儿」当存储键 —— 节点 id 在不同工作流里会重名。 */
+  workflowId: string;
   loopNode: WorkflowGraph["nodes"][number];
   registry: Map<string, WorkflowNodeType>;
   nodeTypes: WorkflowNodeType[];
@@ -2649,6 +2663,8 @@ function LoopBodyEditor({
   //: 和主图同一套画布姿态。**平移/缩放时把检查器设成 inert** —— 否则滚轮滚到面板上就被它吃掉,
   //: 画布停住不动:用户以为滚坏了,其实是指针从画布挪到了浮层上。
   const subCanvas = useCanvasPosture();
+  // 子图按「哪张工作流的哪个节点」各记各的。
+  const subViewport = usePersistentViewport(`workflow:${workflowId}:${loopNode.id}`);
 
   //: 最后一次**我们自己发出去**的 body。用来分辨"这次 prop 变化是我引起的"还是"外面改的"。
   const emitted = React.useRef<string>("");
@@ -2896,13 +2912,17 @@ function LoopBodyEditor({
             subRf.current = instance as unknown as ReactFlowInstance;
             subCanvas.handlers.onInit();
             requestAnimationFrame(() => {
-              instance.fitView({ padding: 0.3, maxZoom: 1 });
+              if (subViewport.saved) instance.setViewport(subViewport.saved);
+              else instance.fitView({ padding: 0.3, maxZoom: 1 });
               setBodyViewReady(true);
             });
           }}
           onMoveStart={subCanvas.handlers.onMoveStart}
           onMove={subCanvas.handlers.onMove}
-          onMoveEnd={subCanvas.handlers.onMoveEnd}
+          onMoveEnd={(event, next) => {
+            subCanvas.handlers.onMoveEnd();
+            subViewport.remember(next);
+          }}
           // 和主图一致:署名照常显示 —— 隐藏它是 Pro 授权才允许的事,不能因为"看着干净"就关掉。
           proOptions={{ hideAttribution: false }}
         >
