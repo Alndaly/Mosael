@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+from app.domain.generation.catalog import BUILTIN_MODELS, SOURCE_ROLE_LABELS
 from app.domain.sequences.operations import EDIT_OP_KINDS
 
 import json
@@ -24,6 +25,40 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Workflow
+
+
+def _source_assets_help() -> str:
+    """「AI 生成素材」节点里那句关于角色的说明,**从描述符生成**。
+
+    它此前是手写的一串,而 catalog 里的 SOURCE_ROLE_LABELS 才是这份知识的产地 ——
+    那张表的注释已经预言了这件事:「此前这张表存在三份…新增角色时漏掉哪一份都不会报错,
+    只是智能体不知道有这个东西,于是永远不会用它」。工作流节点这段就是仍然活着的第四份:
+    今天八种角色恰好写全了,而加第九种时不会有任何东西提醒你回来补这句话。
+    """
+    roles = "、".join(f"{role} {label}" for role, label in SOURCE_ROLE_LABELS.items())
+    return (
+        "输入素材,每行一条 `素材id` 或 `素材id:角色`。"
+        f"角色:{roles};"
+        "不写角色时图生视频按首帧、图生图按参考图。"
+    )
+
+
+def _generation_parameters_help() -> str:
+    """同上:可用的生成参数按目录里**实际出现过的**键列出,不手抄。
+
+    末尾指一句「查这个模型的 capabilities」——因为哪些键可用是**逐模型**的,
+    这里能给的只是全集。
+    """
+    keys = sorted(
+        key
+        for model in BUILTIN_MODELS
+        for key in model["capabilities"].get("parameter_keys", ())
+        if key not in SOURCE_ROLE_LABELS
+    )
+    return (
+        "生成参数,取值随模型而定 —— 逐模型的可用清单看 /api/generation/options 里那个模型的 "
+        f"capabilities.parameter_keys。目录里出现过的有:{' / '.join(dict.fromkeys(keys))}"
+    )
 
 
 class WorkflowDomainError(RuntimeError):
@@ -299,21 +334,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             # 下面三项执行器一直支持,却没在这里声明 —— 于是编辑器渲染不出输入框、AI 助手也不知道
             # 它们存在,工作流里生成不出竖屏视频这类最常见的诉求。声明即接口。
             "negative_prompt": {"advanced": True, "type": "template", "description": "负向提示词(部分模型支持)"},
-            "parameters": {
-                "type": "object",
-                "description": "生成参数,取值随模型而定:aspect_ratio / duration_seconds / resolution / size / seed…",
-            },
-            "source_assets": {
-                "advanced": True,
-                "type": "template",
-                "description": (
-                    "输入素材,每行一条 `素材id` 或 `素材id:角色`。"
-                    "角色:first_frame 首帧 / last_frame 尾帧 / reference_image 参考图 / "
-                    "reference_video 参考视频 / reference_audio 参考音频 / "
-                    "source_video 待编辑的视频 / first_clip 待续写的片段 / driving_audio 驱动音频;"
-                    "不写角色时图生视频按首帧、图生图按参考图。"
-                ),
-            },
+            "parameters": {"type": "object", "description": _generation_parameters_help()},
+            "source_assets": {"advanced": True, "type": "template", "description": _source_assets_help()},
         },
         "outputs": ["asset_id", "generation_id"],
     },

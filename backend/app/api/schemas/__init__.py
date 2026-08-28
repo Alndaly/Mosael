@@ -5,6 +5,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
+from app.ai.providers.base import FIRST_FRAME, SOURCE_ROLES
+
 
 class OrmModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -1290,7 +1292,10 @@ class SourceAssetRef(BaseModel):
     """
 
     asset_id: str = Field(min_length=1, max_length=64)
-    role: str = Field(default="first_frame", pattern="^(first_frame|last_frame|reference_image|reference_video|reference_audio|source_video|first_clip|driving_audio)$")
+    # 取值**从 SOURCE_ROLES 生成**,不手抄。注释里早写着"取值见 base.SOURCE_ROLES"了,
+    # 而下面那条正则是抄的第二份 —— 加第九种角色时描述符说支持、这里却会以校验错误拒掉它,
+    # 而报的是一句正则不匹配,和"角色"两个字没有关系。
+    role: str = Field(default=FIRST_FRAME, pattern=f"^({'|'.join(SOURCE_ROLES)})$")
 
 
 class GenerationCreate(BaseModel):
