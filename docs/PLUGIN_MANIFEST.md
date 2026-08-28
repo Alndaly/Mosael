@@ -247,6 +247,24 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 自动生成:字符串给模板输入框(能引用 `{{上游.输出}}`)、`enum` 给下拉、`required` 进必填校验。
 不写一个字也是一个像样的节点。
 
+**留空也能跑的旋钮标成高级**,它们会收进面板的「高级」一档,不占第一屏 —— 内置节点用的是
+同一套语义。JSON Schema 没有这个概念,所以认 `x-advanced`(`advanced` 也认):
+
+```jsonc
+"input_schema": {
+  "type": "object",
+  "properties": {
+    "query":   { "type": "string",  "description": "搜什么" },
+    "page":    { "type": "integer", "description": "第几页", "x-advanced": true },
+    "timeout": { "type": "integer", "description": "超时秒数", "x-advanced": true }
+  },
+  "required": ["query"]
+}
+```
+
+判据和内置节点一致:**留空也能跑的才算高级**。必填项、以及决定"这个节点在做什么"的那几个
+字段留在第一屏 —— 把它们收起来,用户打开面板会以为没配好。
+
 想更讲究就写 `node`(参照 ComfyUI 的自定义节点 —— 节点长什么样由插件说了算):
 
 ```jsonc
@@ -330,6 +348,7 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 | `tools.recommended` | 首次启用默认勾上的工具名 |
 | `tools.declare` | 本地脚本的工具声明(MCP 不写,清单从服务拉) |
 | `tools.overrides` | 按工具名覆盖 `label` / `description` / `read_only` / `node` |
+| `input_schema` 属性的 `x-advanced` | 标成高级,收进面板的「高级」一档。判据:**留空也能跑**的才算 |
 
 ## 范例
 

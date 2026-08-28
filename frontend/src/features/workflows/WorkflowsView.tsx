@@ -3343,13 +3343,16 @@ function NodeInspector({
   // 「预览」不在这儿:产出预览已经通栏长在节点卡片上,面板里再来一份就是同一张图上下叠两遍。
   const areas: string[] = [];
   if (specs.length > 0) areas.push("config");
+  // 「高级」自成一档,而不是正文底下一个折叠块:折叠块把「有没有更多可调的」藏在一次点击后面,
+  // 而条上摆着就一眼看得见。**有才出** —— 没有高级项的节点条上不会多这一档。
+  if (specs.some(([, spec]) => spec?.advanced)) areas.push("advanced");
   if (meta && meta.outputs.length > 0) areas.push("outputs");
   if (step) areas.push("run");
   const [pickedArea, setPickedArea] = React.useState<string | null>(null);
   // 派生而不是同步:换节点时 areas 变了,上一个节点选中的那块可能根本不存在 —— 直接回落到
   // 第一块,不需要一个 effect 追着清空(那种 effect 总慢一帧,会先露出一个空面板)。
   const area = pickedArea && areas.includes(pickedArea) ? pickedArea : areas[0];
-  const AREA_LABELS: Record<string, MessageKey> = { config: "wfaConfig", outputs: "wfOutputs", run: "wfRunOutputs" };
+  const AREA_LABELS: Record<string, MessageKey> = { config: "wfaConfig", advanced: "wfAdvanced", outputs: "wfOutputs", run: "wfRunOutputs" };
 
 
   /** 一个配置字段的渲染。抽出来是因为要渲染两遍:基础项直接铺开,高级项收进折叠区。 */
@@ -3884,6 +3887,14 @@ function NodeInspector({
                     : t("wfPresetBalancedHint")}
               </small>
             </div>
+          </div>
+        )}
+        {/* **专区此前完全绕过了 advanced 声明。** llm 的十一个旋钮在 NODE_TYPES 里一直标着
+            advanced,而专区把它们和 preset 一股脑铺开 —— 于是那个声明在最需要它的节点上
+            等于不存在,面板一打开就是满屏采样参数。这里按声明切开:preset 是"这个节点在做
+            什么"的那一档,其余进高级。 */}
+        {area === "advanced" && node.type === "llm" && (
+          <div className="grid gap-3">
             <div className={FIELD_BOX}>
               <span>{t("wfLlmResponseFormat")}</span>
               <Select value={responseFormat} onValueChange={(next) => setConfig("response_format", next)}>
@@ -4014,21 +4025,11 @@ function NodeInspector({
             )}
           </div>
         )}
-        {/* **参数区里的表单不再切碎** —— 整份一起读,基础项铺开、高级项收进折叠区。
-            分块是分到「参数 / 输出变量 / 本次产出」这一层为止的。 */}
+        {/* 每一档里的表单**整份一起读**,不再切碎;分档只分到「参数 / 高级 / 输出变量 /
+            本次产出」这一层。高级从正文底下的折叠块升成条上的一档 —— 折叠块把「还有没有
+            更多可调的」藏在一次点击后面,而条上摆着一眼就看得见。 */}
         {area === "config" && basicSpecs.map(renderField)}
-        {area === "config" && advancedSpecs.length > 0 && (
-          <details className="group min-w-0 rounded-md border border-border bg-[color-mix(in_srgb,var(--muted)_40%,transparent)]">
-            <summary className="flex cursor-pointer list-none items-center gap-1 px-2 py-1.5 text-ui-xs font-semibold text-muted-foreground marker:content-none hover:text-foreground">
-              <ChevronRight size={12} className="transition-transform group-open:rotate-90" />
-              {t("wfAdvanced")}
-              <span className="font-normal opacity-60">{advancedSpecs.length}</span>
-            </summary>
-            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 border-t border-border p-2">
-              {advancedSpecs.map(renderField)}
-            </div>
-          </details>
-        )}
+        {area === "advanced" && advancedSpecs.map(renderField)}
         {area === "outputs" && meta && (
           <div className="grid gap-[5px] pt-0.5 [&>span]:text-ui-xs [&>span]:font-semibold [&>span]:uppercase [&>span]:tracking-[0.05em] [&>span]:text-muted-foreground">
             <span>{t("wfOutputs")}</span>

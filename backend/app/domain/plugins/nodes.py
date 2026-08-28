@@ -99,6 +99,11 @@ def _config_from_schema(schema: Any) -> dict[str, dict[str, Any]]:
         enum = spec.get("enum")
         if isinstance(enum, list) and enum:
             entry["options"] = [str(value) for value in enum]
+        # 「留空也能跑的专业旋钮」收进高级区,和内置节点同一套语义(NODE_TYPES 的 advanced)。
+        # JSON Schema 没有这个概念,所以认 `x-advanced` 这个扩展键;直接写 `advanced` 也认 ——
+        # 插件作者八成会先试后者,为一个拼写把人挡在门外不值得。
+        if spec.get("x-advanced") is True or spec.get("advanced") is True:
+            entry["advanced"] = True
         config[key] = entry
     return config
 
@@ -130,6 +135,8 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
                 "type": "string",
                 "description": "用哪个连接(同一个插件可以接多个)",
                 "plugin_instances": True,
+                # 只接了一个实例时留空即可 —— 正是「留空也能跑」,不该占第一屏。
+                "advanced": True,
             },
             **config,
         },
