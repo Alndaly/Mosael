@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextvars
 import logging
 import threading
+import time
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any
@@ -293,6 +294,28 @@ def external_kinds() -> tuple[str, ...]:
     return tuple(sorted(k for k, mode in _EXECUTION_MODES.items() if mode == "external"))
 
 
+#: 每个在进程内跑的 job 线程都叫这个名字 —— 派发点只有 dispatch_job 一处,所以名字必然覆盖全部。
+#: 见 `wait_for_idle_jobs` 及它在 tests/util.fresh_client 里的用处。
+JOB_THREAD_NAME = "job-run"
+
+
+def wait_for_idle_jobs(timeout: float = 5.0) -> bool:
+    """Block until no in-process job thread is running. Returns False if `timeout` ran out.
+
+    和 agent 的 `wait_for_idle_turns` 同一个道理,只是这里挡的是 job:请求返回时线程才刚起步,
+    真正的活(转写、配音、导出、生成)全在返回之后。生产里无所谓——进程比 job 活得久;测试里
+    下一步就要 drop_all,掉队的线程会撞进正在重建的库,炸成 `no such table: jobs`,而且这个异常
+    会记在**当时恰好在跑的那条用例**头上,与真凶无关。典型的"单独跑绿、全量跑红、CI 更容易红"。
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        alive = [t for t in threading.enumerate() if t.name == JOB_THREAD_NAME and t.is_alive()]
+        if not alive:
+            return True
+        alive[0].join(timeout=max(0.0, deadline - time.monotonic()))
+    return not any(t.name == JOB_THREAD_NAME and t.is_alive() for t in threading.enumerate())
+
+
 def dispatch_job(db: Session, job: Job, thread_target: Callable[[], None]) -> bool:
     """按 kind 的执行模式派发一个刚创建的 job。
 
@@ -308,7 +331,7 @@ def dispatch_job(db: Session, job: Job, thread_target: Callable[[], None]) -> bo
         logger.info("job %s [%s] queued for external worker", job.id, job.kind)
         return False
     db.commit()
-    threading.Thread(target=thread_target, daemon=True).start()
+    threading.Thread(target=thread_target, name=JOB_THREAD_NAME, daemon=True).start()
     logger.info("job %s [%s] dispatched in-process", job.id, job.kind)
     return True
 

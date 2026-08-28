@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from app.domain.agent.host import wait_for_idle_turns
 from app.domain.agent.autopilot import wait_for_idle_autopilot
+from app.domain.jobs import wait_for_idle_jobs
 from app.core.config import settings
 from app.core.db import Base, engine
 from app.db.migrations import init_db
@@ -55,6 +56,8 @@ def fresh_client(username: str = "tester") -> TestClient:
     wait_for_idle_turns()
     # 自动放行的执行线程同理:它在请求返回之后才批准并执行,底下就要 drop_all 了。
     wait_for_idle_autopilot()
+    # in-process 的 job 线程是第三类:转写/配音/导出/生成都是请求先返回、活在后面干。
+    wait_for_idle_jobs()
     Base.metadata.drop_all(bind=engine)
     init_db()
     issue_worker_key()

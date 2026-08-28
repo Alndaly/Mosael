@@ -54,7 +54,9 @@ def test_transcribe_endpoint_creates_job(monkeypatch) -> None:
 
     # 线程由任务总线派发(dispatch_job),不再是 service 自己 spawn:
     # 把总线的线程换成同步执行,再记录 worker 收到的 asset_id。
-    def fake_thread(target=None, daemon=None):
+    def fake_thread(target=None, **_kwargs):
+        # 吞掉 name/daemon 等其余参数:这里只关心「谁被跑了」,
+        # 总线以后给线程加什么属性都不该把这条用例带下水。
         class T:
             def start(self_inner) -> None:
                 target()
