@@ -70,3 +70,24 @@ def test_注入点确实存在_而不是靠自觉() -> None:
 
     # 没装的时候也要能工作 —— 单跑一个 worker 子进程时没人会去装配。
     assert config._from_env().engine, "没装配置来源时拿不到可用的默认值"
+
+
+def test_接缝在导入期就接上了_不是等到_lifespan() -> None:
+    """光有注入点不够 —— **还得真的被接上,而且是在导入期接上**。
+
+    这两条曾经装在 `lifespan` 里。于是任何不跑 lifespan 的入口(TestClient、脚本)拿到的是
+    一个半装配的系统:`config.get()` 悄悄回落到环境变量那份默认值,用户存进库的引擎/下载源/
+    fish 目录被顶掉。症状离原因很远 —— 设置页 PUT 成功、回读还是旧的 f5-tts,一句错都不报,
+    而单跑 tests/test_voices.py::test_tts_config_get_and_update 就红、跟着整套跑却绿。
+
+    「谁实现这道缝」是静态的组装事实,该在 `app.main` 被 import 的那一刻就成立。
+    """
+    import app.main  # noqa: F401  —— 组装根,import 它就等于装配完成
+
+    from app.ai.runtime import config
+    from app.ai.sidecar import adapters
+    from app.domain.network import subprocess_env_for_child
+    from app.domain.voices import tts_settings
+
+    assert config._source is tts_settings.load, "TTS 配置来源没接上:读到的会是环境变量默认值,不是用户存的那份"
+    assert adapters._proxy_source is subprocess_env_for_child, "sidecar 代理来源没接上:子进程会不带代理起来"

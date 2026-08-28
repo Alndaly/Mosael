@@ -69,20 +69,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     configure_logging()  # 先配好日志,后续启动步骤才追溯得到
     logger.info("Open Studio backend starting (host=%s port=%s)", settings.backend_host, settings.backend_port)
     init_db()
-    # 把"配置从数据库读"装进运行时。**这是组合层的活** —— ai/runtime 是基础设施,不认识
-    # 数据库;它默认只读环境变量,真正那份由这里喂进去(见 ai/runtime/config.use_source)。
-    # 装配必须在 init_db 之后:那张表得先存在。
-    from app.ai.runtime import config as tts_runtime_config
-    from app.domain.voices import tts_settings
-
-    tts_runtime_config.use_source(tts_settings.load)
-    # 同一条道理:sidecar 是基础设施,不认识"网络配置存在哪张表"。
-    from app.ai.sidecar import adapters as sidecar_adapters
-    from app.domain.network import subprocess_env_for_child
-
-    sidecar_adapters.use_proxy_source(subprocess_env_for_child)
-    # 后台任务干完之后把回执送回发起它的那次对话。方向是反的:任务域不认识智能体,
-    # 是智能体在这里把自己登记进去(见 domain/agent/receipts)。
+    # 「配置从数据库读」「代理怎么算」这两道缝装在 _wire_seams(导入期),不在这里 —— 见那里的注释。
     _prepare_network()
     # Mint the publish worker's shared secret before any request can arrive. See
     # app/core/worker_key.py for why that channel needs one.
@@ -192,9 +179,23 @@ def _wire_seams() -> None:
     from app.domain.agent import receipts as agent_receipts
     # 插件与素材库之间那道缝同理 —— 两边各自都不认识对方(见 plugins/media_bridge)。
     from app.domain.assets import plugin_bridge as asset_plugin_bridge
+    # 「TTS 配置从哪儿读」:ai/runtime 是基础设施,不认识数据库,默认只读环境变量,
+    # 真正那份由这里喂进去(见 ai/runtime/config.use_source)。
+    #
+    # 这一条曾经装在 lifespan 里,于是它正是上面那段话说的那个坑:不跑 lifespan 的入口
+    # (TestClient、脚本)拿到的是**环境变量那份默认值**,而用户存进库的引擎/下载源/fish
+    # 目录被无声顶掉 —— 表现是设置页 PUT 成功、回读还是旧的 f5-tts,一句错都不报。
+    # 装的只是一个 callable(load 到真正 get() 时才碰库),所以不需要等 init_db。
+    from app.ai.runtime import config as tts_runtime_config
+    from app.domain.voices import tts_settings
+    # 同一条道理:sidecar 是基础设施,不认识"网络配置存在哪张表"。
+    from app.ai.sidecar import adapters as sidecar_adapters
+    from app.domain.network import subprocess_env_for_child
 
     agent_receipts.install()
     asset_plugin_bridge.install()
+    tts_runtime_config.use_source(tts_settings.load)
+    sidecar_adapters.use_proxy_source(subprocess_env_for_child)
 
 
 _wire_seams()
