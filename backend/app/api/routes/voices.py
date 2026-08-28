@@ -317,6 +317,37 @@ def _tts_config_out() -> dict:
     }
 
 
+def _refuse_to_report_a_save_that_did_not_take(wanted: dict[str, str]) -> None:
+    """刚写进去的那几个值,回读一遍必须还是它们 —— 不是的话报错,**不要回一个 200**。
+
+    这道校验存在的理由是一次真实的故障:配置来源(`config.use_source`)装在了 lifespan 里,
+    于是读取路径悄悄回落到环境变量那份默认值。行确实写进了库,可接口回的是旧的 f5-tts,
+    一句错都不报 —— 用户看到的是"我明明改了、点了保存、它自己变回去了"。
+
+    这不是那一个 bug 的补丁,是**那一类**的:写入路径只有这一条,而读取路径上任何一处让
+    用户存的那份失真(装配没接上、`tts_settings.load` 吞掉数据库错误退回默认值、以后某个
+    新的兜底),症状都是同一个形状 —— 存了、没生效、没人说。把"写完 = 读回来是同一份"钉在
+    这里,那一整类就都会当场出声。
+
+    **不回滚**:库里那一行是对的,坏的是读取那一侧。回滚等于把一次正确的写入也扔掉,
+    换来的只是"一致地没生效"。留着它,修好读取侧(或重启)之后它就生效了。
+    """
+    saved = tts_config.get()
+    drifted = {
+        name: (value, getattr(saved, name, None))
+        for name, value in wanted.items()
+        if getattr(saved, name, None) != value
+    }
+    if not drifted:
+        return
+    detail = "、".join(f"{name} 存的是 {want!r},回读却是 {got!r}" for name, (want, got) in drifted.items())
+    logger.error("TTS 设置写进去了,回读却不是同一份:%s", detail)
+    raise HTTPException(
+        status_code=500,
+        detail=f"TTS 设置没有生效({detail})。改动已写入数据库,但这个进程读到的仍是旧值 —— 请检查后端日志。",
+    )
+
+
 @router.get("/settings/tts", response_model=TtsConfigOut)
 def get_tts_config(db: DbSession, user: CurrentUser) -> dict:
     return _tts_config_out()
@@ -333,14 +364,21 @@ def set_tts_config(body: TtsConfigUpdate, db: DbSession, user: CurrentUser) -> d
     if row is None:
         row = TtsConfig(id="default")
         db.add(row)
-    row.engine = body.engine
-    row.python_path = body.python_path.strip()
-    row.source = body.source
-    row.pip_index = body.pip_index.strip()
-    row.fish_repo_dir = body.fish_repo_dir.strip()
-    row.fish_model_dir = body.fish_model_dir.strip()
+    # **写和回读用的是同一份名单。** 分成两处的话,新加的字段会是"写进去了、没人验"的那个 ——
+    # 而"没人验"正是下面那道校验要拦的东西。
+    wanted = {
+        "engine": body.engine,
+        "python_path": body.python_path.strip(),
+        "source": body.source,
+        "pip_index": body.pip_index.strip(),
+        "fish_repo_dir": body.fish_repo_dir.strip(),
+        "fish_model_dir": body.fish_model_dir.strip(),
+    }
+    for name, value in wanted.items():
+        setattr(row, name, value)
     db.commit()
     tts_config.refresh()
+    _refuse_to_report_a_save_that_did_not_take(wanted)
     # 解释器路径/下载源/fish 目录刚改过 —— 探测缓存里的答案是按旧配置算的,
     # 而上一次的失败消息说的也是改之前那套(源已经换掉了,卡片还在说旧的那个)。
     tts_models.clear_runtime_probes()
