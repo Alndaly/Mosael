@@ -1,5 +1,6 @@
 import React from "react";
 import { createPortal } from "react-dom";
+import { autoUpdate, computePosition, flip, offset, shift } from "@floating-ui/dom";
 // 只从**已声明的包**里取:@tiptap/react 再导出了 core,StarterKit 里已含 Document/Paragraph/
 // Text/History。不额外添依赖 —— 单个扩展包全都能从这两个里拿到。
 import {
@@ -68,18 +69,6 @@ function RefChip(props: { node: { attrs: { ref?: string } } }) {
   );
 }
 
-/**
- * 插件给的是**视口坐标**,菜单也用 fixed,所以原样用,不做换算。
- *
- * 拿不到位置时返回 null,**上层据此不渲染菜单** —— 早先这里回落成 {0,0},结果菜单会跑到
- * 浏览器窗口左上角去,离插入点十万八千里:用户以为"没反应",其实它在屏幕另一头。
- * 定位不出来就别画,比画在错的地方好。
- */
-function caretRect(rect: DOMRect | null | undefined): { left: number; top: number } | null {
-  if (!rect) return null;
-  return { left: rect.left, top: rect.bottom + 4 };
-}
-
 export function RefEditor({
   value,
   onChange,
@@ -105,11 +94,11 @@ export function RefEditor({
   variablesRef.current = variables;
 
   /** 菜单只剩「长什么样」这一半:什么时候出现、匹配到哪个字符、按键怎么走,都归插件。 */
-  const [menu, setMenu] = React.useState<{
-    items: string[];
-    active: number;
-    rect: { left: number; top: number };
-  } | null>(null);
+  const [menu, setMenu] = React.useState<{ items: string[]; active: number } | null>(null);
+  //: 插件给的**是个函数**,每次调用返回当前的光标矩形。存函数而不是存算好的坐标 ——
+  //: 存坐标就成了一张快照:画布一平移,光标动了而菜单不知道,于是它钉在原地。
+  const clientRectRef = React.useRef<(() => DOMRect | null) | null>(null);
+  const menuEl = React.useRef<HTMLDivElement | null>(null);
   //: 插件的 onKeyDown 拿不到最新的 state(它在 render() 里闭包住了),用 ref 读当前高亮项。
   const menuRef = React.useRef(menu);
   menuRef.current = menu;
@@ -153,22 +142,17 @@ export function RefEditor({
           render: () => ({
             onStart: (props) => {
               commandRef.current = props.command;
-              const rect = caretRect(props.clientRect?.());
-              setMenu(rect ? { items: props.items, active: 0, rect } : null);
+              clientRectRef.current = props.clientRect ?? null;
+              setMenu({ items: props.items, active: 0 });
             },
             onUpdate: (props) => {
               commandRef.current = props.command;
-              const rect = caretRect(props.clientRect?.());
-              setMenu((prev) =>
-                rect
-                  ? {
-                      items: props.items,
-                      // 候选变了就回到第一条;没变则保留用户按下去的位置。
-                      active: prev && prev.items.join() === props.items.join() ? prev.active : 0,
-                      rect,
-                    }
-                  : null,
-              );
+              clientRectRef.current = props.clientRect ?? null;
+              setMenu((prev) => ({
+                items: props.items,
+                // 候选变了就回到第一条;没变则保留用户按下去的位置。
+                active: prev && prev.items.join() === props.items.join() ? prev.active : 0,
+              }));
             },
             // **按键交给插件**:它知道 composition,中文选词时的回车不会被当成"选中候选"。
             onKeyDown: (props) => {
@@ -216,6 +200,38 @@ export function RefEditor({
     },
   });
 
+  /**
+   * 菜单跟着光标走 —— **交给 floating-ui,不自己算**。
+   *
+   * 自己算的话要处理:画布平移缩放(光标在动而菜单不知道)、贴到窗口边缘要翻面、
+   * 容器滚动、以及祖先 transform 把 fixed 的基准换掉。这些正是刚从这个代码库里删掉的
+   * 那类坐标换算,不该再写第二遍。
+   *
+   * autoUpdate 用 animationFrame:React Flow 的平移是改 CSS transform,既不是滚动也不是
+   * resize,只有逐帧比对才追得上。
+   */
+  React.useEffect(() => {
+    const floating = menuEl.current;
+    const getRect = clientRectRef.current;
+    if (!menu || !floating || !getRect) return;
+    const reference = { getBoundingClientRect: () => getRect() ?? new DOMRect() };
+    return autoUpdate(
+      reference,
+      floating,
+      () => {
+        void computePosition(reference, floating, {
+          placement: "bottom-start",
+          // 贴着光标下方 6px;放不下就翻到上方;左右不够就往里挪,别被窗口切掉。
+          middleware: [offset(6), flip(), shift({ padding: 8 })],
+        }).then(({ x, y }) => {
+          floating.style.left = `${x}px`;
+          floating.style.top = `${y}px`;
+        });
+      },
+      { animationFrame: true },
+    );
+  }, [menu]);
+
   React.useEffect(() => {
     if (!editor || value === emitted.current) return;
     emitted.current = value;
@@ -249,10 +265,8 @@ export function RefEditor({
           */}
         {menu && createPortal((
           <div
-            // **fixed 而不是 absolute**:插件给的是视口坐标(clientRect),用 absolute 就得再减一次
-            // 容器偏移 —— 那正是搬进画布时删掉的那类换算,不要再引进来一份。
-            className="fixed z-50 max-h-48 min-w-[180px] overflow-auto rounded-md border border-border bg-panel p-1 shadow-[var(--shadow-panel)]"
-            style={{ left: menu.rect.left, top: menu.rect.top }}
+            ref={menuEl}
+            className="fixed left-0 top-0 z-50 max-h-48 min-w-[180px] overflow-auto rounded-md border border-border bg-panel p-1 shadow-[var(--shadow-panel)]"
           >
             {menu.items.map((ref, index) => (
               <button
