@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, Film, FolderOpen, Image as ImageIcon, LayoutGrid, Plus, Square, StickyNote, Trash2 } from "lucide-react";
+import { ChevronLeft, Film, FolderOpen, Image as ImageIcon, LayoutGrid, Map as MapIcon, Maximize2, Plus, Square, StickyNote, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -9,6 +9,7 @@ import {
   deleteBoard,
   generateOnBoard,
   getBoard,
+  importAsset,
   listBoards,
   updateBoard,
   type GenerationModel,
@@ -23,7 +24,8 @@ import { ConfirmDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import { relativeTime } from "@/lib/time";
-import { usePersistentSelection } from "@/lib/usePersistentTab";
+import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab";
+import { cn } from "@/lib/utils";
 import { BoardCanvas } from "@/features/boards/BoardCanvas";
 import { useAutosave } from "@/features/boards/useAutosave";
 import { AssetPickerDialog } from "@/features/boards/AssetPickerDialog";
@@ -188,12 +190,17 @@ function BoardDetail({
   const t = useI18n();
   const [name, setName] = React.useState(board.name);
   const [renaming, setRenaming] = React.useState(false);
+  const [confirmingDelete, setConfirmingDelete] = React.useState(false);
+  //: 全览默认开着 —— 大图时它最有用,而"图大不大"只有用户自己知道。记在本地。
+  const [minimapMode, setMinimap] = usePersistentTab<"on" | "off">("board-minimap", "on", ["on", "off"] as const);
+  const showMinimap = minimapMode === "on";
   const [canvas, setCanvas] = React.useState<Canvas | null>(null);
   const [picking, setPicking] = React.useState<{ kind: "image" | "video"; place: (assetId: string) => void } | null>(null);
   //: 画布交出来的「加一项」。顶栏那组按钮要和身份胶囊并排,而 add 依赖画布内部状态。
   const [api, setApi] = React.useState<{
     add: (kind: "note" | "image" | "video" | "frame", extra?: Record<string, unknown>) => void;
     fill: (itemId: string, assetId: string) => void;
+    fitView: () => void;
   } | null>(null);
 
   // 提示词面板要让人选模型 —— 两种能力各取一次再合并,和 AI 工作台看到的是同一份。
@@ -207,6 +214,22 @@ function BoardDetail({
       return [...image, ...video];
     },
     staleTime: 60_000,
+  });
+
+  /** 系统里拖进来的文件:先传进素材库,再由画布摆到落点上。**只收图片和视频** ——
+   *  画板上的项渲染的就是这两种,音频拖进来会变成一个放不了的空框。 */
+  const upload = useMutation({
+    mutationFn: async (files: File[]) => {
+      const created: { id: string; name: string; kind: "image" | "video" }[] = [];
+      for (const file of files) {
+        const asset = await importAsset({ workspaceId, file });
+        if (asset.kind === "image" || asset.kind === "video") {
+          created.push({ id: asset.id, name: asset.name, kind: asset.kind });
+        }
+      }
+      return created;
+    },
+    onError: (error: Error) => toast.error(error.message),
   });
 
   /** 在这一格里生成。产出由后端回执填回画布,这里只负责发起 + 轮询到结果为止。 */
@@ -334,35 +357,69 @@ function BoardDetail({
           )}
         </div>
 
-      </div>
 
-      {/* 加什么:**竖排,贴左侧** —— 画布要尽量大,而这几个是"一直都在"的入口(tapnow 同款)。
-          横在顶上的话它和身份胶囊挤成一行,画布还要为它让出一整行。 */}
-      <div className="pointer-events-auto absolute left-4 top-1/2 z-20 flex -translate-y-1/2 flex-col items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
-        <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsAddNote")} aria-label={t("boardsAddNote")} onClick={() => api?.add("note")}>
-          <StickyNote size={15} />
-        </Button>
-        <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsAddImage")} aria-label={t("boardsAddImage")} onClick={() => api?.add("image")}>
-          <ImageIcon size={15} />
-        </Button>
-        <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsAddVideo")} aria-label={t("boardsAddVideo")} onClick={() => api?.add("video")}>
-          <Film size={15} />
-        </Button>
-        <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsAddFrame")} aria-label={t("boardsAddFrame")} onClick={() => api?.add("frame")}>
-          <Square size={15} />
-        </Button>
-        <span aria-hidden className="my-0.5 h-px w-4 bg-border" />
-        {/* 从素材库贴一份现成的 —— 和"放一个空槽去生成"是两件事,所以分在竖线下面。 */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          title={t("boardsPickImage")}
-          aria-label={t("boardsPickImage")}
-          onClick={() => setPicking({ kind: "image", place: (assetId) => api?.add("image", { asset_id: assetId }) })}
-        >
-          <FolderOpen size={15} />
-        </Button>
+        {/* 右上角**分组胶囊**,刻度和工作流详情页一致:胶囊 rounded-full、图标钮 h-8 w-8、
+            bg-panel/95 + backdrop-blur。分三组是按"这是哪一类动作"分的 ——
+            往画布上加东西 / 看画布 / 处置这张板。混成一条的话,删除会挨着「加便签」。 */}
+        <div className="flex flex-wrap items-start justify-end gap-2">
+          <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
+            <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsAddNote")} aria-label={t("boardsAddNote")} onClick={() => api?.add("note")}>
+              <StickyNote size={15} />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsAddImage")} aria-label={t("boardsAddImage")} onClick={() => api?.add("image")}>
+              <ImageIcon size={15} />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsAddVideo")} aria-label={t("boardsAddVideo")} onClick={() => api?.add("video")}>
+              <Film size={15} />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsAddFrame")} aria-label={t("boardsAddFrame")} onClick={() => api?.add("frame")}>
+              <Square size={15} />
+            </Button>
+            {/* 贴一份现成的和「放一个空槽去生成」是两件事 —— 中间给一道界。 */}
+            <span aria-hidden className="mx-0.5 h-4 w-px bg-border" />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              title={t("boardsPickImage")}
+              aria-label={t("boardsPickImage")}
+              onClick={() => setPicking({ kind: "image", place: (assetId) => api?.add("image", { asset_id: assetId }) })}
+            >
+              <FolderOpen size={15} />
+            </Button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
+            {/* 全览可关 —— 它占着右下角一块不小的地方,图小的时候纯属挡视线。记在本地。 */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn("h-8 w-8", showMinimap && "bg-secondary text-foreground")}
+              title={t("wfMinimap")}
+              aria-label={t("wfMinimap")}
+              aria-pressed={showMinimap}
+              onClick={() => setMinimap(showMinimap ? "off" : "on")}
+            >
+              <MapIcon size={14} />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsFitView")} aria-label={t("boardsFitView")} onClick={() => api?.fitView()}>
+              <Maximize2 size={14} />
+            </Button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 hover:text-destructive"
+              title={t("delete")}
+              aria-label={t("delete")}
+              onClick={() => setConfirmingDelete(true)}
+            >
+              <Trash2 size={14} />
+            </Button>
+          </div>
+        </div>
       </div>
 
       <BoardCanvas
@@ -372,7 +429,24 @@ function BoardDetail({
         onPickAsset={(kind, place) => setPicking({ kind, place })}
         onGenerate={generate}
         models={models.data ?? []}
+        showMinimap={showMinimap}
+        onDropFiles={(files) => upload.mutateAsync(files)}
+        uploading={upload.isPending}
         onReady={setApi}
+      />
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        title={t("boardsDeleteTitle")}
+        body={board.name}
+        onCancel={() => setConfirmingDelete(false)}
+        onConfirm={() => {
+          setConfirmingDelete(false);
+          void deleteBoard(board.id, workspaceId).then(() => {
+            onSaved();
+            onBack();
+          });
+        }}
       />
 
       <AssetPickerDialog

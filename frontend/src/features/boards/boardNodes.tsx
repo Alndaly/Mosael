@@ -2,7 +2,8 @@ import React from "react";
 import { Handle, NodeResizer, Position, type NodeProps } from "@xyflow/react";
 import { Film as FilmIcon, Image as ImageIcon, Loader2 } from "lucide-react";
 
-import { API_BASE, type BoardItem } from "@/api/client";
+import type { BoardItem } from "@/api/client";
+import { AssetInlinePreview } from "@/components/app/asset-preview";
 import { cn } from "@/lib/utils";
 
 /**
@@ -40,20 +41,32 @@ export type BoardNodeData = {
 
 /** 两侧各一个接点。**始终渲染但默认透明** —— 只在悬停/选中时显形:
  *  想法之间的关系是次要信息,一上来八个圆点会让画布看着像电路图。 */
-function Ports() {
+/**
+ * 左右两个接点。**画成圆形的 `+`**,选中或悬停时显形。
+ *
+ * 小圆点只说得出"这里能连线";而用户在画板上真正想做的是**从这一边接着往下长**(tapnow 同款)。
+ * 一个 `+` 把这件事说清楚了,而它同时仍是 React Flow 的 Handle —— 拖它就是连线。
+ *
+ * 默认透明是因为想法之间的关系是次要信息:一上来每个节点四周都挂着圆圈,画布看着像电路图。
+ */
+function Ports({ visible }: { visible?: boolean }) {
+  const shape =
+    "!h-4 !w-4 !rounded-full !border !border-border-strong !bg-panel !text-muted-foreground transition-opacity after:absolute after:inset-0 after:grid after:place-items-center after:text-ui-2xs after:leading-none after:content-['+']";
+  const shown = visible ? "opacity-100" : "opacity-0 group-hover:opacity-100";
   return (
     <>
-      <Handle
-        type="target"
-        position={Position.Left}
-        className="!h-2 !w-2 !border-border-strong !bg-panel opacity-0 transition-opacity group-hover:opacity-100"
-      />
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="!h-2 !w-2 !border-border-strong !bg-panel opacity-0 transition-opacity group-hover:opacity-100"
-      />
+      <Handle type="target" position={Position.Left} className={cn(shape, shown, "!-left-2")} />
+      <Handle type="source" position={Position.Right} className={cn(shape, shown, "!-right-2")} />
     </>
+  );
+}
+
+/** 节点上方那行类型标签 —— 一眼看出这格是图片还是视频,不用等它加载出来。 */
+function TypeLabel({ icon, text }: { icon: React.ReactNode; text: string }) {
+  return (
+    <span className="pointer-events-none absolute -top-5 left-0 inline-flex items-center gap-1 text-ui-2xs text-muted-foreground">
+      {icon} {text}
+    </span>
   );
 }
 
@@ -77,7 +90,8 @@ export function NoteNode({ data, selected }: NodeProps) {
       onDoubleClick={() => setEditing(true)}
     >
       <NodeResizer minWidth={120} minHeight={80} isVisible={selected} lineClassName="!border-primary" handleClassName="!h-2 !w-2 !rounded-sm !border-primary !bg-panel" />
-      <Ports />
+      <TypeLabel icon={<FilmIcon size={11} />} text="视频" />
+      <Ports visible={selected} />
       {editing ? (
         <textarea
           ref={ref}
@@ -128,31 +142,33 @@ function EmptySlot({ icon }: { icon: React.ReactNode }) {
 /** 图片:指向素材库的一份。加载不出来时说清楚 —— 素材可能已经被删了。 */
 export function ImageNode({ data, selected }: NodeProps) {
   const { item } = data as unknown as BoardNodeData;
-  const [broken, setBroken] = React.useState(false);
 
   return (
     <div
       className={cn(
-        "group relative h-full w-full overflow-hidden rounded-lg border border-border bg-panel shadow-sm",
+        // **不在这一层 overflow-hidden。** 类型标签在框上方、接点在框左右两侧,都在框外 ——
+        // 裁在这里会把它们切掉(工作流节点上刚犯过同一个错:「感叹号被截断了」)。
+        // 圆角裁剪交给里面那层媒体。
+        "group relative h-full w-full rounded-lg border border-border bg-panel shadow-sm",
         selected && "ring-2 ring-primary",
       )}
     >
       <NodeResizer minWidth={80} minHeight={60} isVisible={selected} lineClassName="!border-primary" handleClassName="!h-2 !w-2 !rounded-sm !border-primary !bg-panel" />
-      <Ports />
+      <TypeLabel icon={<ImageIcon size={11} />} text="图片" />
+      <Ports visible={selected} />
       {!item.asset_id ? (
         item.job_id ? <Generating text={item.text} /> : <EmptySlot icon={<ImageIcon size={20} />} />
-      ) : broken ? (
-        <div className="grid h-full w-full place-items-center px-3 text-center text-ui-2xs text-muted-foreground">
-          这份素材已经不在了
-        </div>
       ) : (
-        <img
-          src={`${API_BASE}/api/assets/${item.asset_id}/file`}
-          alt={item.text || ""}
-          // 拖不动整块的话用户会以为图片卡住了 —— 图片自己不接收拖拽。
-          draggable={false}
-          className="h-full w-full object-cover"
-          onError={() => setBroken(true)}
+        // 用仓库现成的预览件:它已经处理好**画布里必须关懒加载**这件事 ——
+        // React Flow 的视口是 transform 过的,浏览器据此判断"还没进视野"而迟迟不发请求,
+        // 图片就一直是 0×0,节点上看着像没产出。
+        <AssetInlinePreview
+          assetId={item.asset_id}
+          name={item.text || ""}
+          kind="image"
+          plain
+          lazy={false}
+          className="h-full w-full overflow-hidden rounded-lg object-cover"
         />
       )}
     </div>
@@ -203,32 +219,31 @@ export function FrameNode({ data, selected }: NodeProps) {
 /** 视频:就地播。**不自动播、不循环** —— 画板上可能同时摆着五段片子,一起动是噪音。 */
 export function VideoNode({ data, selected }: NodeProps) {
   const { item } = data as unknown as BoardNodeData;
-  const [broken, setBroken] = React.useState(false);
 
   return (
     <div
       className={cn(
-        "group relative h-full w-full overflow-hidden rounded-lg border border-border bg-panel shadow-sm",
+        // 同上:标签和接点都在框外,不能裁在这一层。
+        "group relative h-full w-full rounded-lg border border-border bg-panel shadow-sm",
         selected && "ring-2 ring-primary",
       )}
     >
       <NodeResizer minWidth={120} minHeight={80} isVisible={selected} lineClassName="!border-primary" handleClassName="!h-2 !w-2 !rounded-sm !border-primary !bg-panel" />
-      <Ports />
+      <Ports visible={selected} />
       {!item.asset_id ? (
         item.job_id ? <Generating text={item.text} /> : <EmptySlot icon={<FilmIcon size={20} />} />
-      ) : broken ? (
-        <div className="grid h-full w-full place-items-center px-3 text-center text-ui-2xs text-muted-foreground">
-          这份素材已经不在了
-        </div>
       ) : (
-        <video
-          src={`${API_BASE}/api/assets/${item.asset_id}/file`}
-          controls
-          preload="metadata"
-          // nodrag/nowheel:不挂的话拖进度条会变成拖动整个节点,滚轮会缩放画布。
-          className="nodrag nowheel h-full w-full bg-black object-contain"
-          onError={() => setBroken(true)}
-        />
+        // nodrag/nowheel 挂在外层:不挂的话拖进度条会变成拖动整个节点,滚轮会缩放画布。
+        <div className="nodrag nowheel h-full w-full overflow-hidden rounded-lg">
+          <AssetInlinePreview
+            assetId={item.asset_id}
+            name={item.text || ""}
+            kind="video"
+            plain
+            lazy={false}
+            className="h-full w-full"
+          />
+        </div>
       )}
     </div>
   );

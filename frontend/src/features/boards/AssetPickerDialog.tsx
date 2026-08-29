@@ -1,7 +1,7 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { API_BASE, listAssets, type Asset } from "@/api/client";
+import { assetThumbnailUrl, listAssets, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Input } from "@/components/ui/input";
 import { ModalShell } from "@/components/app/modals";
@@ -13,6 +13,15 @@ import { Skeleton } from "@/components/ui/skeleton";
  * **只列图片。** 画板上的 image 项渲染的是 `<img>`,把视频/音频列出来等于让人选一个贴上去
  * 之后是空白框的东西 —— 选择器里能选到的,就应该是贴上去能看的。
  */
+/** 行尾那句说明:尺寸、时长 —— 挑素材时真正要看的东西。取不到就不写,不编。 */
+function describe(asset: Asset): string {
+  const info = (asset.media_info ?? {}) as { width?: number; height?: number; duration?: number };
+  const parts: string[] = [];
+  if (info.width && info.height) parts.push(`${info.width}×${info.height}`);
+  if (info.duration) parts.push(`${Math.round(info.duration)}s`);
+  return parts.join(" · ");
+}
+
 export function AssetPickerDialog({
   open,
   kind,
@@ -64,31 +73,31 @@ export function AssetPickerDialog({
         ) : images.length === 0 ? (
           <p className="py-8 text-center text-ui-xs text-muted-foreground">{t(kind === "video" ? "boardsNoVideos" : "boardsNoImages")}</p>
         ) : (
-          <div className="grid max-h-[380px] grid-cols-4 gap-2 overflow-y-auto">
+          // **一行一个,不是缩略图墙。** 光看图分不出「同一个人的三版」哪个是哪个 ——
+          // 名字、尺寸、时长才是真正用来挑的信息。缩略图退到行首当认脸用。
+          //
+          // 顺带修掉一个布局错:此前是 grid-cols-4 + aspect-square,而 grid 默认 align-items:
+          // stretch —— 一行里最高的那个把整行撑开,其余的图就顶破了自己的格子。
+          <div className="grid max-h-[380px] content-start gap-1 overflow-y-auto">
             {images.map((asset: Asset) => (
               <button
                 key={asset.id}
                 type="button"
                 onClick={() => onPick(asset.id)}
-                title={asset.name || asset.original_filename || ""}
-                className="group aspect-square cursor-pointer overflow-hidden rounded-md border border-border transition-colors hover:border-primary"
+                className="flex cursor-pointer items-center gap-2.5 rounded-md border border-transparent p-1.5 text-left transition-colors hover:border-border hover:bg-secondary"
               >
-                {kind === "video" ? (
-                  // 只取首帧当缩略图 —— 选择器里不需要能播,能认出是哪一段就够了。
-                  <video
-                    src={`${API_BASE}/api/assets/${asset.id}/file`}
-                    preload="metadata"
-                    muted
-                    className="h-full w-full bg-black object-cover"
-                  />
-                ) : (
-                  <img
-                    src={`${API_BASE}/api/assets/${asset.id}/file`}
-                    alt={asset.name || ""}
-                    loading="lazy"
-                    className="h-full w-full object-cover"
-                  />
-                )}
+                <img
+                  src={assetThumbnailUrl(asset.id)}
+                  alt=""
+                  loading="lazy"
+                  className="h-10 w-14 shrink-0 rounded bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] object-cover"
+                />
+                <span className="grid min-w-0 flex-1 gap-0.5">
+                  <span className="truncate text-ui-xs text-foreground">
+                    {asset.name || asset.original_filename}
+                  </span>
+                  <span className="truncate text-ui-2xs text-muted-foreground">{describe(asset)}</span>
+                </span>
               </button>
             ))}
           </div>

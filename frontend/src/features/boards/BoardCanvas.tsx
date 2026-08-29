@@ -16,10 +16,11 @@ import {
   type Node,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { Copy, Replace, Sparkles, Trash2 } from "lucide-react";
+import { Copy, FileUp, Loader2, Replace, Sparkles, Trash2 } from "lucide-react";
 
 import type { BoardCanvas as Canvas, BoardItem, GenerationModel } from "@/api/client";
 import { NodeComposer } from "@/features/boards/NodeComposer";
+import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
 import { usePersistentViewport } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass } from "@/features/boards/boardNodes";
@@ -85,15 +86,21 @@ interface Props {
   }) => Promise<unknown>;
   /** 可用的生成模型 —— 提示词面板要让人选。 */
   models?: GenerationModel[];
+  /** 全览开着没有。占右下角一块不小的地方,图小的时候纯属挡视线。 */
+  showMinimap?: boolean;
+  /** 系统里拖进来的文件:上层负责传进素材库,回来的每一份就地摆到落点上。 */
+  onDropFiles?: (files: File[]) => Promise<{ id: string; name: string; kind: "image" | "video" }[]>;
+  uploading?: boolean;
   /** 把「加一项」交给上层 —— 顶栏那两组胶囊要摆在一起(和工作流详情页一致),
    *  而 add 依赖画布内部的 rf 实例和 setNodes,只能由画布提供。 */
   onReady?: (api: {
     add: (kind: BoardItem["kind"], extra?: Partial<BoardItem>) => void;
     fill: (itemId: string, assetId: string) => void;
+    fitView: () => void;
   }) => void;
 }
 
-function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, onReady }: Props) {
+function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, showMinimap = true, onDropFiles, uploading, onReady }: Props) {
   const rf = React.useRef<ReactFlowInstance | null>(null);
   const viewport = usePersistentViewport(`board:${boardId}`);
   const [ready, setReady] = React.useState(false);
@@ -171,14 +178,60 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, onR
     [setNodes],
   );
 
+  /**
+   * 从系统里拖文件进来 —— 传进素材库,再就地摆到落点上。
+   *
+   * 用仓库现成的 useFileDrop:整块区域拖放的三个坑(子元素边界上的 dragleave 抖动、
+   * 浏览器默认打开文件、拖文字也亮提示)它已经处理过了,自己写要再踩一遍。
+   *
+   * **落点要在 drop 那一刻算**(那时才有鼠标位置),而 useFileDrop 的回调拿不到事件 ——
+   * 和工作流那边一样,用一个 ref 把坐标从事件里带出来。
+   */
+  const dropAt = React.useRef<{ x: number; y: number } | null>(null);
+  const drop = useFileDrop((files) => {
+    const at = dropAt.current ?? { x: 0, y: 0 };
+    void onDropFiles?.(files).then((assets) => {
+      if (!assets?.length) return;
+      setNodes((current) => [
+        ...current.map((node) => ({ ...node, selected: false })),
+        ...assets.flatMap((asset, index) =>
+          toNodes(
+            [
+              {
+                id: `${asset.kind}-${Math.random().toString(36).slice(2, 9)}`,
+                kind: asset.kind,
+                // 多个文件斜着摞开,不然它们会精确重叠成一个。
+                x: Math.round(at.x + index * 24),
+                y: Math.round(at.y + index * 24),
+                ...DEFAULT_SIZE[asset.kind],
+                asset_id: asset.id,
+                text: asset.name,
+              },
+            ],
+            setText,
+          ),
+        ),
+      ]);
+    });
+  }, isMediaFile);
+
   React.useEffect(() => {
-    onReady?.({ add, fill });
+    onReady?.({ add, fill, fitView: () => rf.current?.fitView({ padding: 0.3, duration: 250 }) });
   }, [add, fill, onReady]);
 
   return (
     // 画布放在**带边框的圆角卡片**里(和工作流详情页同一个形态)—— 通栏铺到窗口边的话,
     // 它和外面的应用外壳之间没有界,画布看起来是"漏出来的"而不是一块内容区。
-    <div className="relative h-full w-full overflow-hidden rounded-lg border border-border bg-background">
+    <div
+      className="relative h-full w-full overflow-hidden rounded-lg border border-border bg-background"
+      {...drop.handlers}
+      // 坐标换算要在 drop 那一刻做 —— 这里把鼠标位置存下来给上面的回调用。
+      onDragOver={(event) => {
+        drop.handlers.onDragOver(event);
+        const instance = rf.current;
+        if (instance) dropAt.current = instance.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      }}
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -213,11 +266,16 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, onR
         }}
         className={cn(!ready && "opacity-0")}
         proOptions={{ hideAttribution: false }}
+        /* 触控板约定(Figma / Miro 那套):双指滑动 = 平移,捏合 = 缩放。**和工作流画布同一套** ——
+           React Flow 默认 zoomOnScroll:true,而 macOS 触控板双指滑动发出的正是 wheel 事件,
+           于是「想拖画布」变成了「缩放」。捏合发的是 ctrlKey 的 wheel,归 zoomOnPinch 管,
+           所以关掉 zoomOnScroll 不影响捏合;鼠标用户按住 ctrl/⌘ 滚轮同样落进这条,仍可缩放。 */
+        panOnScroll
+        zoomOnScroll={false}
+        zoomOnPinch
         minZoom={0.1}
         maxZoom={2.5}
         deleteKeyCode={["Backspace", "Delete"]}
-        selectionOnDrag
-        panOnDrag={[1, 2]}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.2} />
         {/* 缩放钮/预览图**不吃应用主题**(xyflow 默认一律白底)—— 深色下就是右下角一块白。
@@ -227,7 +285,7 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, onR
           position="bottom-left"
           className="overflow-hidden rounded-md border border-border [--xy-controls-box-shadow:none] [--xy-controls-button-background-color:var(--panel)] [--xy-controls-button-background-color-hover:var(--secondary)] [--xy-controls-button-border-color:var(--border)] [--xy-controls-button-color:var(--muted-foreground)] [--xy-controls-button-color-hover:var(--foreground)]"
         />
-        <MiniMap
+        {showMinimap && <MiniMap
           pannable
           zoomable
           position="bottom-right"
@@ -236,9 +294,20 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, onR
           maskColor="color-mix(in srgb, var(--background) 55%, transparent)"
           nodeColor="var(--border-strong)"
           nodeStrokeColor="transparent"
-        />
+        />}
       </ReactFlow>
 
+
+      {/* 拖着文件悬在上面时的提示。**盖住整块**,虚线收在中间那段字上而不是描边 ——
+          描边会和画布自己的圆角错开(工作流那边写过同一段理由)。 */}
+      {(drop.active || uploading) && (
+        <div className="pointer-events-none absolute inset-0 z-40 grid place-items-center rounded-lg bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]">
+          <span className="grid justify-items-center gap-2 rounded-lg border-2 border-dashed border-primary px-6 py-4 text-ui-md font-semibold text-primary">
+            {uploading ? <Loader2 size={20} className="animate-spin" /> : <FileUp size={20} />}
+            {uploading ? "正在上传…" : "松手就放到画板上"}
+          </span>
+        </div>
+      )}
 
       {/* 选中之后才出操作条 —— 没选中时它没有作用对象。 */}
       <ItemToolbar nodes={nodes} setNodes={setNodes} onPickAsset={onPickAsset} onGenerate={onGenerate} />
