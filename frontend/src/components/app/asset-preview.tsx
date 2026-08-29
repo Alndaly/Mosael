@@ -21,6 +21,7 @@ export function AssetInlinePreview({
   className,
   lazy = true,
   plain = false,
+  previewOnClick = true,
   onNaturalSize,
 }: {
   assetId: string;
@@ -30,6 +31,9 @@ export function AssetInlinePreview({
   className?: string;
   /** 去掉自带的边框与黑底。画布节点里由外层容器统一收边,元素各带一圈边框会显得碎。 */
   plain?: boolean;
+  /** 点一下开大图预览。**画布上要关掉** —— 那里点一下的意思是「选中这个节点」,
+   *  被预览抢走的话,节点的操作条和表单就都弹不出来了。 */
+  previewOnClick?: boolean;
   /** 懒加载。**画布节点里必须关掉**:React Flow 的视口是 transform 变换过的,浏览器据此
    *  判断"还没进视野"而迟迟不发请求,图片就一直是 0×0,节点上看着像没产出。 */
   lazy?: boolean;
@@ -49,7 +53,7 @@ export function AssetInlinePreview({
           "block max-w-full cursor-zoom-in overflow-hidden p-0",
           plain ? "w-full border-0 bg-transparent" : "w-fit rounded-lg border border-border bg-black",
         )}
-        onClick={() => openImagePreview({ src, title: name })}
+        onClick={previewOnClick ? () => openImagePreview({ src, title: name }) : undefined}
       >
         <img
           src={src}

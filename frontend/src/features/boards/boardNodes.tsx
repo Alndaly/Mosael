@@ -3,7 +3,9 @@ import { Handle, NodeResizer, Position, useStore, type NodeProps } from "@xyflow
 import { Film as FilmIcon, Image as ImageIcon, Loader2, Music, Plus, Square as SquareIcon, StickyNote, type LucideIcon } from "lucide-react";
 
 import type { BoardItem } from "@/api/client";
+import { assetFileUrl } from "@/api/client";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
+import { useImagePreview } from "@/components/app/image-preview";
 import { BoardAudio, BoardVideo } from "@/features/boards/BoardPlayer";
 import { cn } from "@/lib/utils";
 
@@ -141,7 +143,8 @@ export function NoteNode({ data, selected }: NodeProps) {
         // 裁在这里等于把它们裁掉(图片/视频那两处已经栽过一次)。裁剪交给里面那层。
         "group relative h-full w-full rounded-lg border p-2.5 text-ui-sm leading-relaxed shadow-sm transition-shadow",
         noteColorClass(item.color),
-        selected && "ring-2 ring-primary",
+        //: 选中**不加彩色描边** —— 四角的缩放点已经说明选中了(图片/视频那两处早就这么做,
+        //: 这里当时漏改)。便签本身是有颜色的,再套一圈主色就成了两种颜色打架。
       )}
       onDoubleClick={() => setEditing(true)}
     >
@@ -197,9 +200,14 @@ function EmptySlot({ icon }: { icon: React.ReactNode }) {
 /** 图片:指向素材库的一份。加载不出来时说清楚 —— 素材可能已经被删了。 */
 export function ImageNode({ data, selected }: NodeProps) {
   const { item, onAspect } = data as unknown as BoardNodeData;
+  const { openImagePreview } = useImagePreview();
 
   return (
     <div
+      //: 双击才看大图。单击留给「选中」—— 便签的双击是进编辑,图片这边正好空着。
+      onDoubleClick={() =>
+        item.asset_id && openImagePreview({ src: assetFileUrl(item.asset_id), title: item.text || "" })
+      }
       className={cn(
         // **不在这一层 overflow-hidden。** 类型标签在框上方、接点在框左右两侧,都在框外 ——
         // 裁在这里会把它们切掉(工作流节点上刚犯过同一个错:「感叹号被截断了」)。
@@ -218,11 +226,14 @@ export function ImageNode({ data, selected }: NodeProps) {
         // 用仓库现成的预览件:它已经处理好**画布里必须关懒加载**这件事 ——
         // React Flow 的视口是 transform 过的,浏览器据此判断"还没进视野"而迟迟不发请求,
         // 图片就一直是 0×0,节点上看着像没产出。
+        //: **不让它接管点击** —— 画布上点一下的意思是「选中这个节点」。被预览抢走之后,
+        //: 操作条和表单都弹不出来。想看大图:双击(见外层)。
         <AssetInlinePreview
           assetId={item.asset_id}
           name={item.text || ""}
           kind="image"
           plain
+          previewOnClick={false}
           lazy={false}
           className="h-full w-full overflow-hidden rounded-lg object-cover"
           onNaturalSize={(width, height) => onAspect(item.id, width / height)}

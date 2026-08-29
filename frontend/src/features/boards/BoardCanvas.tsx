@@ -382,26 +382,31 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     } | null
   >(null);
 
+  /**
+   * 从某一项长出下一项,并连上。
+   *
+   * 「从这张便签生成图片」「从这张图生成视频」走的都是它:**放一个空节点、连上线,而不是
+   * 直接开跑**。空节点一选中,它的表单就打开了,提示词也已经由上游那张便签填好 —— 用户
+   * 还能改模型、改比例、再挂张参考图。点一下就把任务发出去的话,这些他一个都来不及说。
+   */
   const spawnLinked = React.useCallback(
-    (kind: (typeof SPAWNABLE_KINDS)[number]) => {
-      if (!linkMenu) return;
+    (kind: (typeof SPAWNABLE_KINDS)[number], from: string, at: { x: number; y: number }, fromIsSource = true) => {
       const size = DEFAULT_SIZE[kind];
       const item = add(kind, {
-        x: Math.round(linkMenu.x - (linkMenu.fromIsSource ? 0 : size.width)),
-        y: Math.round(linkMenu.y - size.height / 2),
+        x: Math.round(at.x - (fromIsSource ? 0 : size.width)),
+        y: Math.round(at.y - size.height / 2),
       });
       //: 线的方向照着用户拉的那一头:从 source 拉出来的,新节点是终点;反之是起点。
       setEdges((current) =>
         addEdge(
-          linkMenu.fromIsSource
-            ? { source: linkMenu.from, target: item.id, sourceHandle: null, targetHandle: null }
-            : { source: item.id, target: linkMenu.from, sourceHandle: null, targetHandle: null },
+          fromIsSource
+            ? { source: from, target: item.id, sourceHandle: null, targetHandle: null }
+            : { source: item.id, target: from, sourceHandle: null, targetHandle: null },
           current,
         ),
       );
-      setLinkMenu(null);
     },
-    [add, linkMenu, setEdges],
+    [add, setEdges],
   );
 
   /** 把某一项就地换成已完成的产出。轮询拿到结果后由上层调。 */
@@ -614,7 +619,10 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
                 <button
                   key={kind}
                   type="button"
-                  onClick={() => spawnLinked(kind)}
+                  onClick={() => {
+                    spawnLinked(kind, linkMenu.from, { x: linkMenu.x, y: linkMenu.y }, linkMenu.fromIsSource);
+                    setLinkMenu(null);
+                  }}
                   className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-secondary"
                 >
                   <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-secondary text-muted-foreground">
@@ -632,7 +640,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       )}
 
       {/* 选中之后才出操作条 —— 没选中时它没有作用对象。 */}
-      <ItemToolbar nodes={nodes} setNodes={setNodes} onPickAsset={onPickAsset} onGenerate={onGenerate} />
+      <ItemToolbar nodes={nodes} setNodes={setNodes} onPickAsset={onPickAsset} onSpawn={onGenerate ? spawnLinked : undefined} />
 
       {/* 选中一个**还没有产出**的图片/视频槽时,底下挂提示词面板 —— 节点本身就是生成单元。 */}
       {composerItem && onGenerate && (
@@ -675,12 +683,18 @@ function ItemToolbar({
   nodes,
   setNodes,
   onPickAsset,
-  onGenerate,
+  onSpawn,
 }: {
   nodes: Node[];
   setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
   onPickAsset: Props["onPickAsset"];
-  onGenerate: Props["onGenerate"];
+  /** 从这一项长出下一项并连上。没给 = 这张画板不支持生成(上层没接生成能力)。 */
+  onSpawn?: (
+    kind: (typeof SPAWNABLE_KINDS)[number],
+    from: string,
+    at: { x: number; y: number },
+    fromIsSource?: boolean,
+  ) => void;
 }) {
   const selected = nodes.filter((node) => node.selected);
   // 多选时只给共通的动作 —— 逐个类型的动作在混选下没有一致的含义。
@@ -768,48 +782,35 @@ function ItemToolbar({
           </button>
         )}
 
-        {/* 生成:**从这一项长出下一项**。便签的文字就是提示词,图片当首帧生视频 ——
-            这正是画板比便签墙多出来的那一步。已经在生成的那一项不再给(它还没有产出)。 */}
-        {onGenerate && item && item.kind !== "frame" && item.asset_id !== undefined === (item.kind !== "note") && (
+        {/* 从这一项长出下一项:**放一个空节点并连上,不是直接开跑**。
+            空节点一选中它的表单就开着,提示词已经由上游这一项填好(便签给文字、图片给首帧),
+            用户还能改模型、改比例、再挂张参考图 —— 点一下就把任务发出去的话,这些他一个都
+            来不及说。已经在生成的那一项不给(它还没有产出)。 */}
+        {onSpawn && single && item && item.kind !== "frame" && !item.job_id && (
           <>
-            {item.kind === "note" && (
-              <button
-                type="button"
-                className="flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs text-muted-foreground hover:bg-secondary hover:text-foreground"
-                title="用这段文字生成图片"
-                onClick={() =>
-                  void onGenerate({
-                    kind: "image",
-                    prompt: item.text ?? "",
-                    x: (single?.position.x ?? 0) + (single?.width ?? 220) + 40,
-                    y: single?.position.y ?? 0,
-                  })
-                }
-              >
-                <Sparkles size={12} /> 生成图片
-              </button>
-            )}
-            {item.kind === "image" && item.asset_id && (
-              <button
-                type="button"
-                className="flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs text-muted-foreground hover:bg-secondary hover:text-foreground"
-                title="用这张图当首帧生成视频"
-                onClick={() =>
-                  void onGenerate({
-                    kind: "video",
-                    prompt: item.text ?? "",
-                    x: (single?.position.x ?? 0) + (single?.width ?? 260) + 40,
-                    y: single?.position.y ?? 0,
-                    sourceAssets: item.asset_id ? [{ asset_id: item.asset_id, role: "first_frame" }] : [],
-                  })
-                }
-              >
-                <Sparkles size={12} /> 生成视频
-              </button>
-            )}
+            {(["image", "video"] as const)
+              //: 便签往下接图片,有产出的图片/视频往下接视频 —— 空槽自己都还没有东西可给。
+              .filter((kind) =>
+                item.kind === "note" ? kind === "image" : Boolean(item.asset_id) && kind === "video",
+              )
+              .map((kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  className="flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  title={item.kind === "note" ? "用这段文字生成图片" : "用这张图当首帧生成视频"}
+                  onClick={() =>
+                    onSpawn(kind, item.id, {
+                      x: single.position.x + (single.width ?? 260) + 60,
+                      y: single.position.y + (single.height ?? 180) / 2,
+                    })
+                  }
+                >
+                  <Sparkles size={12} /> 生成{KIND_META[kind].label}
+                </button>
+              ))}
           </>
         )}
-
         </div>
 
         <button

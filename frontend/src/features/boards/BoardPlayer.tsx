@@ -161,7 +161,10 @@ export function BoardVideo({
       )}
 
       {/* 控件条:**只有它**吃掉指针事件,画布的拖动和缩放在别处照常。 */}
-      <div className="nodrag nopan nowheel absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-black/80 to-transparent px-2 pb-1.5 pt-4 text-white opacity-0 transition-all group-hover/player:translate-y-0 group-hover/player:opacity-100">
+      {/* **不挂 nowheel/nopan。** 挂上去的话,滚轮划到这条带子上画布就停住 —— 而它有 40px
+          高、横跨整个节点,还因为 translate-y-full 悬在节点**下方**:没悬浮时也一直挡着。
+          藏起来时连指针事件一起收掉,别只靠 opacity(透明不等于不吃事件)。 */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-black/80 to-transparent px-2 pb-1.5 pt-4 text-white opacity-0 transition-all group-hover/player:pointer-events-auto group-hover/player:translate-y-0 group-hover/player:opacity-100">
         <Scrubber media={ref} at={at} total={total} className="mb-0.5" trackClassName="bg-white/30" />
         <div className="flex items-center gap-1.5">
           <button type="button" aria-label={playing ? "暂停" : "播放"} onClick={toggle} className="cursor-pointer opacity-90 hover:opacity-100">
