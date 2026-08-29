@@ -310,3 +310,20 @@ def test_客户端不会覆盖它还不知道的产出() -> None:
 
     assert item["asset_id"] == "asset-9", "客户端那份把已经到达的产出覆盖掉了"
     assert "job_id" not in item
+
+
+def test_音频项和图片视频同一套三状态() -> None:
+    """配音、旁白、BGM 都是想法的一部分 —— 画板上摊开的东西不该只有能看的。"""
+    from app.domain.boards import ITEM_KINDS
+
+    assert "audio" in ITEM_KINDS
+    empty, done = normalize_canvas(
+        {
+            "items": [
+                {"id": "a", "kind": "audio", "x": 0, "y": 0},
+                {"id": "b", "kind": "audio", "x": 0, "y": 0, "asset_id": "snd"},
+            ]
+        }
+    )["items"]
+    assert "asset_id" not in empty
+    assert done["asset_id"] == "snd"

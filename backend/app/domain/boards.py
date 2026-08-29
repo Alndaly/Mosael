@@ -36,15 +36,15 @@ class BoardDomainError(ValueError):
 
 #: 画板上能放什么。
 #:
-#: `note` 便签(文字)、`image` 图片、`video` 视频、`frame` 分组框(把一堆东西圈起来命名)。
+#: `note` 便签(文字)、`image` 图片、`video` 视频、`audio` 音频、`frame` 分组框(圈起来命名)。
 #:
 #: 图片和视频**分开两种而不是合成一个 media**:它们在画板上的样子和操作都不同 ——
 #: 图片是一张静止的参考,视频要能就地播;而"从这张图生成视频"是图片才有的动作,
 #: 反过来"抽一帧"是视频才有的。合成一种的话每处都要先分辨一次它到底是哪个。
-ITEM_KINDS = ("note", "image", "video", "frame")
+ITEM_KINDS = ("note", "image", "video", "audio", "frame")
 
 #: 必须指向素材库一份的那几种。空着的话存得下、打开却是个空白框。
-_NEEDS_ASSET = ("image", "video")
+_NEEDS_ASSET = ("image", "video", "audio")
 
 #: 一个 item 至少要有的东西。坐标必须是数,否则画布渲染不出来。
 _REQUIRED = ("id", "kind", "x", "y")
