@@ -611,3 +611,82 @@ def test_不是图片的素材不会被塞进对话() -> None:
         # 跨工作区的也不给。
         other = client.post("/api/workspaces", json={"name": "别人的"}).json()["id"]
         assert _pictures(db, other, [audio_id]) == []
+
+
+def test_上游便签给的材料和要求分开发() -> None:
+    """揉成一段的话,模型分不清哪句是素材、哪句是指令 —— 常见的结果是把材料原样抄一遍。"""
+    from unittest.mock import patch as mock_patch
+
+    from app.core.db import SessionLocal
+    from app.db.models import ProviderProfile
+    from app.domain import provider_models
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id = client.post(
+        "/api/boards",
+        json={"workspace_id": ws, "name": "B", "canvas": {"items": [{"id": "n1", "kind": "note", "x": 0, "y": 0}], "edges": []}},
+    ).json()["id"]
+    profile_id = client.post(
+        "/api/settings/providers",
+        json={"vendor": "openai", "name": "演示", "api_key": "sk-test", "base_url": "http://127.0.0.1:1"},
+    ).json()["id"]
+    client.put(f"/api/settings/providers/{profile_id}/credential", json={"api_key": "sk-test"})
+    with SessionLocal() as db:
+        provider_models.upsert(db, db.get(ProviderProfile, profile_id), "gpt-4.1-mini", source="manual")
+        db.commit()
+
+    seen: dict = {}
+    with mock_patch("app.domain.ai_chat.chat", side_effect=lambda t, m, **k: seen.setdefault("m", m) and "" or "好"):
+        answer = client.post(
+            f"/api/boards/{board_id}/write",
+            json={
+                "workspace_id": ws,
+                "item_id": "n1",
+                "prompt": "缩成一句",
+                "context": ["第一段素材", "第二段素材"],
+            },
+        )
+    assert answer.status_code == 200, answer.text
+    messages = seen["m"]
+    material = next((one for one in messages if "第一段素材" in str(one["content"])), None)
+    assert material is not None, "上游材料没发过去"
+    assert "缩成一句" not in str(material["content"]), "材料和要求揉在了一段里"
+    assert "第二段素材" in str(material["content"])
+    assert messages[-1]["content"] == "缩成一句"
+
+
+def test_语音合成的产出也能落回画板() -> None:
+    """合成任务给的是 asset_id(单数),生成任务给的是 asset_ids(复数)。
+
+    **这不是新旧兼容,是两种任务本来就不同。** 只认一种的话,另一种落终态时占位会被当成
+    失败摘掉 —— 用户看到的是音频「生成完就没了」。
+    """
+    from types import SimpleNamespace
+
+    from app.core.db import SessionLocal
+    from app.domain.boards import deliver_generated, receipt_to_item
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id = client.post(
+        "/api/boards",
+        json={
+            "workspace_id": ws,
+            "name": "B",
+            "canvas": {"items": [{"id": "a1", "kind": "audio", "x": 0, "y": 0, "job_id": "job-tts"}], "edges": []},
+        },
+    ).json()["id"]
+
+    db = SessionLocal()
+    deliver_generated(
+        db,
+        SimpleNamespace(id="job-tts", status="succeeded", result={"asset_id": "snd-1", "engine": "volcano"}),
+        receipt_to_item(board_id, "a1"),
+    )
+    items = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]["items"]
+    db.close()
+
+    assert len(items) == 1, f"占位被摘掉了:{items}"
+    assert items[0]["asset_id"] == "snd-1"
+    assert "job_id" not in items[0]

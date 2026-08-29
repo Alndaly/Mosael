@@ -26,6 +26,7 @@ import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
 import { usePersistentViewport } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { canRedo, canUndo, emptyHistory, record, redo, undo } from "@/features/boards/canvasHistory";
+import { AudioComposer } from "@/features/boards/AudioComposer";
 import { NoteComposer } from "@/features/boards/NoteComposer";
 import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, KIND_META, SPAWNABLE_KINDS, type MediaKind } from "@/features/boards/boardNodes";
 
@@ -109,6 +110,8 @@ interface Props {
     sourceAssets?: { asset_id: string; role: string }[];
   }) => Promise<unknown>;
   /** 让 AI 往某张便签里写字。**同步** —— 写字几秒就回,不走生成任务那条路。 */
+  /** 把一段文字念成音频。**异步** —— 走和出图出片同一套占位/回执。 */
+  onSpeak?: (input: { itemId: string; text: string; voiceId: string }) => Promise<unknown>;
   onWrite?: (input: {
     itemId: string;
     prompt: string;
@@ -116,6 +119,8 @@ interface Props {
     model: string;
     /** 让模型看着写的图片(上游连过来的 + 正文里 @ 到的)。 */
     assets: string[];
+    /** 上游便签给的材料。 */
+    context: string[];
   }) => Promise<unknown>;
   /** 可用的生成模型 —— 提示词面板要让人选。 */
   models?: GenerationModel[];
@@ -129,7 +134,7 @@ interface Props {
   onReady?: (api: BoardCanvasApi) => void;
 }
 
-function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, models, showMinimap = true, onDropFiles, uploading, onReady }: Props) {
+function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, onSpeak, models, showMinimap = true, onDropFiles, uploading, onReady }: Props) {
   const rf = React.useRef<ReactFlowInstance | null>(null);
   const viewport = usePersistentViewport(`board:${boardId}`);
   const [ready, setReady] = React.useState(false);
@@ -186,7 +191,9 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     const picked = nodes.filter((node) => node.selected);
     if (picked.length !== 1) return null;
     const item = (picked[0].data as unknown as { item: BoardItem }).item;
-    if (item.kind === "image" || item.kind === "video") return item.asset_id ? null : item;
+    if (item.kind === "image" || item.kind === "video" || item.kind === "audio") {
+      return item.asset_id ? null : item;
+    }
     //: **便签不论空不空都挂。** 空的是「从头写」,有字的是「照我说的改」—— 后者才是这块
     //: 面板最常被用到的样子(写完之后想「短一半」「换个语气」)。双击进编辑照旧,两者不冲突:
     //: 面板挂在节点下方,不盖着字。
@@ -686,17 +693,33 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           workspaceId={workspaceId}
           //: 上游连过来的图 —— 一张图连到便签,意思就是「照着这张写」。
           upstreamImages={feeding.assets.filter((one) => one.kind === "image").map((one) => one.assetId)}
-          onWrite={({ prompt, providerProfileId, model, assets }) => {
+          //: 上游便签的字当**材料**,不是提示词 —— 「接着这段往下写」里,那段是素材,
+          //: 用户在框里打的才是指令。
+          upstreamTexts={feeding.texts.map((one) => one.text)}
+          onWrite={({ prompt, providerProfileId, model, assets, context }) => {
             setWriting(composerItem.id);
-            void onWrite({ itemId: composerItem.id, prompt, providerProfileId, model, assets }).finally(() =>
+            void onWrite({ itemId: composerItem.id, prompt, providerProfileId, model, assets, context }).finally(() =>
               setWriting(null),
             );
           }}
         />
       )}
 
+      {/* 音频:念一段文字。**不是「生成」那条路** —— 出图出片选生成模型,念字选的是音色。 */}
+      {composerItem?.kind === "audio" && onSpeak && (
+        <AudioComposer
+          key={composerItem.id}
+          item={composerItem}
+          busy={Boolean(composerItem.job_id)}
+          workspaceId={workspaceId}
+          //: 上游便签的字**就是要念的内容** —— 让用户再抄一遍,那条线就白连了。
+          upstreamText={feeding.texts.map((one) => one.text).join("\n\n")}
+          onSpeak={({ text, voiceId }) => void onSpeak({ itemId: composerItem.id, text, voiceId })}
+        />
+      )}
+
       {/* 选中一个**还没有产出**的图片/视频槽时,底下挂提示词面板 —— 节点本身就是生成单元。 */}
-      {composerItem && composerItem.kind !== "note" && onGenerate && (
+      {composerItem && composerItem.kind !== "note" && composerItem.kind !== "audio" && onGenerate && (
         <NodeComposer
           key={composerItem.id}
           item={composerItem}
@@ -859,23 +882,26 @@ function ItemToolbar({
             来不及说。已经在生成的那一项不给(它还没有产出)。 */}
         {onSpawn && single && item && item.kind !== "frame" && !item.job_id && (
           <>
-            {(["image", "video", "note"] as const)
+            {(["image", "video", "note", "audio"] as const)
               //: 便签往下接图片,有产出的图片/视频往下接视频 —— 空槽自己都还没有东西可给。
               //: 文案谁都能往下接:给图配一段说明、给便签接着往下写。
-              .filter((kind) =>
-                kind === "note"
-                  ? item.kind !== "note" || Boolean((item.text ?? "").trim())
-                  : item.kind === "note"
-                    ? kind === "image"
-                    : Boolean(item.asset_id) && kind === "video",
-              )
+              //: 便签往下接图片和音频(有字才接得动),有产出的图片/视频往下接视频;
+              //: 文案谁都能往下接。空槽自己都还没有东西可给。
+              .filter((kind) => {
+                if (kind === "note") return item.kind !== "note" || Boolean((item.text ?? "").trim());
+                if (kind === "audio") return item.kind === "note" && Boolean((item.text ?? "").trim());
+                if (item.kind === "note") return kind === "image";
+                return Boolean(item.asset_id) && kind === "video";
+              })
               .map((kind) => (
                 <button
                   key={kind}
                   type="button"
                   className="flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs text-muted-foreground hover:bg-secondary hover:text-foreground"
                   title={
-                    kind === "note"
+                    kind === "audio"
+                      ? "把这段文字念成音频"
+                      : kind === "note"
                       ? "让 AI 接着这一项写点文字"
                       : item.kind === "note"
                         ? "用这段文字生成图片"

@@ -1731,6 +1731,24 @@ class BoardWrite(BaseModel):
     #: 让模型**看着**写:上游连过来的图片、正文里 @ 到的图片。多模态模型才吃得下,
     #: 不认的会当作没有(而不是报错)——一张图带不动整次请求。
     source_assets: list[str] = Field(default_factory=list)
+    #: 上游便签给的材料。**和「要求」分开** —— 揉成一段的话,模型分不清哪句是素材、哪句是指令。
+    context: list[str] = Field(default_factory=list)
+
+
+class BoardSpeak(BaseModel):
+    """把一段文字念成音频,产出落回画板上那一格。
+
+    和写文案**不是一条路**:写字几秒就回所以同步;念出来要起合成任务(可能还在另一台机器上跑),
+    所以走和出图出片同一套 —— 先摆占位、起任务、回执把产出填回来。
+    """
+
+    workspace_id: str
+    item_id: str
+    text: str
+    #: 用哪个音色。留空时由 start_synthesis 按这个人的默认走。
+    voice_id: str = ""
+    x: float = 0
+    y: float = 0
 
 
 class WorkflowRunRequest(BaseModel):

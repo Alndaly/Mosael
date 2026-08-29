@@ -8380,6 +8380,59 @@
         }
       }
     },
+    "/api/boards/{board_id}/speak": {
+      "post": {
+        "tags": [
+          "boards"
+        ],
+        "summary": "Speak",
+        "description": "把一段文字念成音频,产出落回画板上那一格。\n\n**和出图出片同一套**:先摆占位、起任务、回执把 asset_id 填回来 —— 合成可能几十秒,还可能\n在另一台机器上跑。回执用 set_receipt 打在上下文里,之后 start_synthesis 建的任务自动带上\n(不用把 board 的概念塞进 voices 领域)。",
+        "operationId": "speak_api_boards__board_id__speak_post",
+        "parameters": [
+          {
+            "name": "board_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Board Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoardSpeak"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/publish/platforms": {
       "get": {
         "tags": [
@@ -15467,6 +15520,45 @@
         ],
         "title": "BoardOut"
       },
+      "BoardSpeak": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "item_id": {
+            "type": "string",
+            "title": "Item Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "voice_id": {
+            "type": "string",
+            "title": "Voice Id",
+            "default": ""
+          },
+          "x": {
+            "type": "number",
+            "title": "X",
+            "default": 0
+          },
+          "y": {
+            "type": "number",
+            "title": "Y",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "item_id",
+          "text"
+        ],
+        "title": "BoardSpeak",
+        "description": "把一段文字念成音频,产出落回画板上那一格。\n\n和写文案**不是一条路**:写字几秒就回所以同步;念出来要起合成任务(可能还在另一台机器上跑),\n所以走和出图出片同一套 —— 先摆占位、起任务、回执把产出填回来。"
+      },
       "BoardUpdate": {
         "properties": {
           "workspace_id": {
@@ -15526,6 +15618,20 @@
             "type": "string",
             "title": "Model",
             "default": ""
+          },
+          "source_assets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Assets"
+          },
+          "context": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Context"
           }
         },
         "type": "object",

@@ -362,11 +362,13 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
 
     canvas = board.canvas or {"items": [], "edges": []}
     items = list(canvas.get("items") or [])
-    asset_ids = (
-        [str(one) for one in ((job.result or {}).get("asset_ids") or []) if one]
-        if job.status == "succeeded"
-        else []
-    )
+    #: **两种形状都要读。** 生成任务一次可能出多张,给的是 asset_ids;语音合成一次只出一段,
+    #: 给的是 asset_id —— 这不是新旧兼容,是两种任务本来就不同。只认一种的话,另一种落终态
+    #: 时占位会被当成失败摘掉:用户看到音频「生成完就没了」。
+    result = (job.result or {}) if job.status == "succeeded" else {}
+    asset_ids = [str(one) for one in (result.get("asset_ids") or []) if one]
+    if not asset_ids and result.get("asset_id"):
+        asset_ids = [str(result["asset_id"])]
 
     kept: list[dict[str, Any]] = []
     for item in items:

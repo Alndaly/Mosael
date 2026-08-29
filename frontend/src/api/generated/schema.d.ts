@@ -2853,6 +2853,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/boards/{board_id}/speak": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Speak
+         * @description 把一段文字念成音频,产出落回画板上那一格。
+         *
+         *     **和出图出片同一套**:先摆占位、起任务、回执把 asset_id 填回来 —— 合成可能几十秒,还可能
+         *     在另一台机器上跑。回执用 set_receipt 打在上下文里,之后 start_synthesis 建的任务自动带上
+         *     (不用把 board 的概念塞进 voices 领域)。
+         */
+        post: operations["speak_api_boards__board_id__speak_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/publish/platforms": {
         parameters: {
             query?: never;
@@ -5361,6 +5385,36 @@ export interface components {
              */
             updated_at: string;
         };
+        /**
+         * BoardSpeak
+         * @description 把一段文字念成音频,产出落回画板上那一格。
+         *
+         *     和写文案**不是一条路**:写字几秒就回所以同步;念出来要起合成任务(可能还在另一台机器上跑),
+         *     所以走和出图出片同一套 —— 先摆占位、起任务、回执把产出填回来。
+         */
+        BoardSpeak: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Item Id */
+            item_id: string;
+            /** Text */
+            text: string;
+            /**
+             * Voice Id
+             * @default
+             */
+            voice_id: string;
+            /**
+             * X
+             * @default 0
+             */
+            x: number;
+            /**
+             * Y
+             * @default 0
+             */
+            y: number;
+        };
         /** BoardUpdate */
         BoardUpdate: {
             /** Workspace Id */
@@ -5396,6 +5450,10 @@ export interface components {
              * @default
              */
             model: string;
+            /** Source Assets */
+            source_assets?: string[];
+            /** Context */
+            context?: string[];
         };
         /** Body_import_asset_api_assets_import_post */
         Body_import_asset_api_assets_import_post: {
@@ -15127,6 +15185,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["BoardWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    speak_api_boards__board_id__speak_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                board_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoardSpeak"];
             };
         };
         responses: {

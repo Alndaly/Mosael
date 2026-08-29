@@ -23,6 +23,7 @@ export function NoteComposer({
   busy,
   workspaceId,
   upstreamImages,
+  upstreamTexts,
   onWrite,
 }: {
   item: BoardItem;
@@ -31,7 +32,15 @@ export function NoteComposer({
   workspaceId: string;
   /** 上游连过来的图片。**让模型看着写** —— 一张图连到便签,意思就是「照着这张写」。 */
   upstreamImages?: string[];
-  onWrite: (input: { prompt: string; providerProfileId: string; model: string; assets: string[] }) => void;
+  /** 上游便签给的文字。作为**材料**发过去,和「要求」分开。 */
+  upstreamTexts?: string[];
+  onWrite: (input: {
+    prompt: string;
+    providerProfileId: string;
+    model: string;
+    assets: string[];
+    context: string[];
+  }) => void;
 }) {
   const [prompt, setPrompt] = React.useState("");
   const [mentioned, setMentioned] = React.useState<string[]>([]);
@@ -69,7 +78,13 @@ export function NoteComposer({
     setSending(true);
     //: 上游连过来的 + 正文里 @ 到的,一起发。同一张不发两遍。
     const assets = [...new Set([...(upstreamImages ?? []), ...mentioned])];
-    onWrite({ prompt: text, providerProfileId: current.provider_profile_id, model: current.model, assets });
+    onWrite({
+      prompt: text,
+      providerProfileId: current.provider_profile_id,
+      model: current.model,
+      assets,
+      context: upstreamTexts ?? [],
+    });
   };
 
   return (

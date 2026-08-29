@@ -912,9 +912,19 @@ export function writeOnBoard(
     model?: string;
     /** 让模型**看着**写的图片。多模态模型才吃得下,不认的会当作没有。 */
     source_assets?: string[];
+    /** 上游便签给的材料。和「要求」分开发 —— 揉成一段模型分不清哪句是素材、哪句是指令。 */
+    context?: string[];
   },
 ): Promise<Board> {
   return api<Board>(`/api/boards/${boardId}/write`, { method: "POST", body: JSON.stringify(body) });
+}
+
+/** 把一段文字念成音频,产出落回画板上那一格。**异步** —— 走和出图出片同一套占位/回执。 */
+export function speakOnBoard(
+  boardId: string,
+  body: { workspace_id: string; item_id: string; text: string; voice_id?: string; x?: number; y?: number },
+): Promise<Board> {
+  return api<Board>(`/api/boards/${boardId}/speak`, { method: "POST", body: JSON.stringify(body) });
 }
 
 /** 某能力下所有可用模型(跨连接)。文案生成列的是 chat。 */

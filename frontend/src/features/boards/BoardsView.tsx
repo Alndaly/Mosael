@@ -8,6 +8,7 @@ import {
   createBoard,
   deleteBoard,
   generateOnBoard,
+  speakOnBoard,
   writeOnBoard,
   getBoard,
   importAsset,
@@ -292,6 +293,7 @@ function BoardDetail({
       providerProfileId: string;
       model: string;
       assets: string[];
+      context: string[];
     }) => {
       try {
         const next = await writeOnBoard(board.id, {
@@ -301,6 +303,7 @@ function BoardDetail({
           provider_profile_id: input.providerProfileId,
           model: input.model,
           source_assets: input.assets,
+          context: input.context,
         });
         //: **走画布的把手,不是回写这里的 canvas 状态** —— 画布的节点只在挂载时从 canvas
         //: 建一次,改这里的 state 它看不见,用户会以为「写完了但没出来」。
@@ -312,6 +315,29 @@ function BoardDetail({
       }
     },
     [board.id, workspaceId, onSaved, api],
+  );
+
+  /** 把一段文字念成音频。**异步** —— 和出图出片同一套:摆占位、起任务、轮询等回执填回来。 */
+  const speak = React.useCallback(
+    async (input: { itemId: string; text: string; voiceId: string }) => {
+      let placed;
+      try {
+        placed = await speakOnBoard(board.id, {
+          workspace_id: workspaceId,
+          item_id: input.itemId,
+          text: input.text,
+          voice_id: input.voiceId,
+        });
+      } catch (error) {
+        toast.error("念不出来", { description: (error as Error).message });
+        return;
+      }
+      //: 和生成那条一样:马上把这一格标成在跑,不然画布上看不出发生了什么。
+      const pending = ((placed.canvas?.items ?? []) as BoardItem[]).find((one) => one.id === input.itemId);
+      if (pending?.job_id) api?.patch(input.itemId, { job_id: pending.job_id, text: pending.text });
+      setRunning((current) => [...current, input.itemId]);
+    },
+    [board.id, workspaceId, api],
   );
 
   //: 还在跑的那几格。**轮询而不是等** —— 生成要几十秒,而用户这期间还在画布上干别的。
@@ -547,6 +573,7 @@ function BoardDetail({
         onPickAsset={(kind, place) => setPicking({ kind, place })}
         onGenerate={generate}
         onWrite={write}
+        onSpeak={speak}
         models={models.data ?? []}
         showMinimap={showMinimap}
         onDropFiles={(files) => upload.mutateAsync(files)}

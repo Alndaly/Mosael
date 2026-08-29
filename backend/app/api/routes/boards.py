@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import BoardCreate, BoardGenerate, BoardOut, BoardUpdate, BoardWrite
+from app.api.schemas import BoardCreate, BoardGenerate, BoardOut, BoardSpeak, BoardUpdate, BoardWrite
 from app.db.models import Board
 from app.domain.boards import (
     BoardDomainError,
@@ -177,6 +177,7 @@ def write(board_id: str, body: BoardWrite, db: DbSession, user: CurrentUser) -> 
     #: 上游连过来的图 + 正文里 @ 到的图。**只收图片** —— 视频和音频这条路吃不下
     #: (要抽帧、要转写,那是 analyze_asset 的事),悄悄发过去只会换回一句看不懂的报错。
     pictures = _pictures(db, body.workspace_id, body.source_assets)
+    materials = [one.strip() for one in body.context if one and one.strip()]
 
     try:
         profile = require_profile(db, body.provider_profile_id or None, user_id=user.id, error=AiChatError)
@@ -211,6 +212,18 @@ def write(board_id: str, body: BoardWrite, db: DbSession, user: CurrentUser) -> 
                         ),
                     },
                     *(
+                        #: 上游便签给的材料,自成一轮。**和「要求」分开** —— 揉成一段的话,
+                        #: 模型分不清哪句是素材、哪句是指令,常见的结果是把材料原样抄一遍。
+                        [
+                            {
+                                "role": "user",
+                                "content": "上游给的材料:\n\n" + "\n\n---\n\n".join(materials),
+                            }
+                        ]
+                        if materials
+                        else []
+                    ),
+                    *(
                         #: 现有内容单独一轮,和要求分开 —— 揉成一段的话,模型会把「改短一点」
                         #: 当成正文的一部分写进去。
                         [{"role": "user", "content": f"这张便签现在的内容:\n{existing}"}]
@@ -232,6 +245,48 @@ def write(board_id: str, body: BoardWrite, db: DbSession, user: CurrentUser) -> 
         return write_text(db, workspace_id=body.workspace_id, board_id=board_id, item_id=body.item_id, text=text)
     except BoardDomainError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/boards/{board_id}/speak", response_model=BoardOut)
+def speak(board_id: str, body: BoardSpeak, db: DbSession, user: CurrentUser) -> Board:
+    """把一段文字念成音频,产出落回画板上那一格。
+
+    **和出图出片同一套**:先摆占位、起任务、回执把 asset_id 填回来 —— 合成可能几十秒,还可能
+    在另一台机器上跑。回执用 set_receipt 打在上下文里,之后 start_synthesis 建的任务自动带上
+    (不用把 board 的概念塞进 voices 领域)。
+    """
+    from app.domain.jobs import reset_receipt, set_receipt
+    from app.domain.voices.voices import VoiceError, start_synthesis
+
+    ensure_workspace_perm(db, user, body.workspace_id, "edit")
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="没有可念的文字")
+
+    token = set_receipt(receipt_to_item(board_id, body.item_id))
+    try:
+        job = start_synthesis(
+            db,
+            text=text,
+            project_id=None,
+            created_by=user.id,
+            voice_id=body.voice_id or None,
+            workspace_id=body.workspace_id,
+        )
+    except VoiceError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    finally:
+        reset_receipt(token)
+
+    try:
+        return place_pending(
+            db,
+            workspace_id=body.workspace_id,
+            board_id=board_id,
+            item={"id": body.item_id, "kind": "audio", "x": body.x, "y": body.y, "job_id": job.id, "text": text[:120]},
+        )
+    except BoardDomainError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _pictures(db: DbSession, workspace_id: str, asset_ids: list[str]) -> list[dict]:
