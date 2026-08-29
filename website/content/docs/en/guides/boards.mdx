@@ -1,0 +1,75 @@
+---
+title: Creative boards
+description: An infinite canvas — notes, images, video and audio wired together, where a connection means "use this as input".
+order: 4
+---
+
+A board is where ideas get spread out. Talking to the agent is telling it what you want; a board
+is laying it out where you can see it. You place notes, images, videos, audio and group frames —
+and **connecting two of them means the downstream one takes the upstream as input**.
+
+## What a connection gives you
+
+Connections are not decoration. The downstream node reshapes its form around what it receives:
+
+| Upstream → downstream | What arrives |
+| --- | --- |
+| Note → image / video | The text fills in the prompt |
+| Note → audio | The text is what gets read aloud |
+| Note → note | The upstream text is sent as **material**, kept separate from your instruction |
+| Image → image | Attached as a reference image |
+| Image → video | One image becomes the first frame; several become references |
+| Image / video → note | The model **looks at it** — images directly, video as sampled frames |
+| Audio → note | Its transcript, if one exists, becomes material |
+
+What flows in **never overwrites what you typed**: it only fills a box that is still empty, or one
+that still holds the previous auto-filled text.
+
+## What each node can do
+
+Select a node: the action bar sits above it, its form below.
+
+- **Image / video** — while still empty, a prompt panel hangs underneath. Model, aspect ratio,
+  resolution and duration are **driven by the model descriptor**, so switching models reshapes
+  that row by itself. Once there is a result, the action bar offers Preview, Swap and Trim.
+- **Note** — empty means "write it"; with text it means "change it the way I say", which is what
+  this panel is used for most (you wrote something, now you want it half as long). Double-click
+  still edits by hand.
+- **Audio** — pick a voice and the text to read. Audio here is not a "generation" capability; it
+  is TTS, so you choose a voice rather than a model.
+- **Group frame** — fence things off and name them. Select a few nodes and press
+  <kbd>⌘</kbd><kbd>G</kbd> to group them directly.
+
+### Referencing assets with `@`
+
+Press `@` in a prompt to reference something from the asset library; the menu follows the caret.
+What you pick becomes an **inline chip in the sentence** — "put the person from @creator.png on
+the street" reads as one sentence. On submit it splits in two: the name stays in the prompt (with
+several images the model needs to know which one you meant) and the asset itself is sent as input.
+
+### Trimming
+
+Video gets a **filmstrip**, audio gets its **waveform**; drag either end to set the range. The
+problem with typing numbers is not the typing — it is that you do not know what second 3.2 looks
+like. When you do want frame accuracy, the number fields on the right are still faster.
+
+**The original is untouched.** A trim produces a new asset in a new node — every step on a board
+should be one you can walk back from.
+
+## The AI assistant
+
+The robot icon in the top-right opens it. It is **not a second AI**: sessions, messages and
+confirmation cards are the same ones the global assistant uses; each message just carries one
+extra line saying which board you are looking at.
+
+It can read the canvas (`get_board`) and change it (`edit_board`): add notes, rewrite text,
+connect, delete, move things. **Every change goes through a confirmation card** — nothing lands
+until you approve it. It submits granular operations rather than a whole canvas, because a model
+handed the whole thing gets it wrong on any non-trivial board: items go missing, or the positions
+you arranged by hand get flattened.
+
+## Undo
+
+<kbd>⌘</kbd><kbd>Z</kbd> undoes, <kbd>⌘</kbd><kbd>⇧</kbd><kbd>Z</kbd> redoes, and the toolbar has
+buttons too. A continuous drag collapses into one step — dragging a node emits dozens of position
+updates, and one-per-update would mean dozens of presses to get back.

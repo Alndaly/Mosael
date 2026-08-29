@@ -51,6 +51,34 @@ TaskEvent 行只在总线创建。
 见 [ADR-0002](adr/0002-claim-report-worker-protocol.md))。`OPEN_STUDIO_EXTERNAL_JOB_KINDS=render`
 即可把渲染交给独立 worker 机器,领域代码不改。
 
+### 创意画板:生成能力的第五个入口
+
+画板(`domain/boards`)是一张无限画布,上面摆的是便签、图片、视频、音频、分组框。它**不自己
+实现生成** —— 出图出片汇进 `create_generation_job` 那条漏斗(前四个入口:AI 工作台、定时任务、
+工作流节点、智能体),于是描述符校验、能力探测、计量记账、任务中心全都白拿。
+
+四种产出走三条路,因为它们本来就不是一回事:
+
+| 动作 | 走哪条 | 同步还是任务 |
+| --- | --- | --- |
+| 出图 / 出片 | `create_generation_job` | 任务 + 回执 |
+| 写 / 改文案 | `ai_chat.chat`(和工作流 LLM 节点、智能体同一条) | 同步,几秒就回 |
+| 文案转音频 | `start_synthesis`(TTS 不是「生成」能力,选的是音色) | 任务 + 回执 |
+| 剪一段 | 一次 ffmpeg,`register_file_asset` 登记成新素材 | 任务 + 回执 |
+
+**产出落回画布靠回执**:建任务前用 `set_receipt()` 或 `job.payload["receipt"]` 标记「这次的
+产出属于哪张板的哪一项」,任务落终态时由 `domain/boards.deliver_generated` 填回去。回执的登记
+在组合层(`app/main._wire_seams`)的**导入期**,不在 lifespan 里 —— 不跑 lifespan 的入口
+(TestClient、脚本)照样要能把产出填回画布。
+
+`deliver_generated` **要认两种产出形状**:生成任务一次可能出多张(`asset_ids`),语音合成和剪辑
+一次出一段(`asset_id`)。这不是新旧兼容,是两种任务本来就不同;只认一种的话,另一种落终态时
+占位会被当成失败摘掉 —— 用户看到的是「生成完就没了」。
+
+智能体改画板走 `edit_board`(细粒度算子 + 确认卡),和 `edit_workflow` 同一套:它表达意图,
+服务端落到当前画布 —— 让模型吐回整份 canvas 的话,稍复杂一点的板必然出错(漏项,或把用户
+一手拖好的位置推平),而这两种错都不报错。
+
 ### 工作流节点的字段声明
 
 一个节点的表单**完全由 `NODE_TYPES` 的 `config` 声明生成** —— 编辑器不认识任何具体节点,
