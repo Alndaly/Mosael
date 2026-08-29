@@ -9,6 +9,7 @@ import { useImagePreview } from "@/components/app/image-preview";
 import { PromptEditor } from "@/features/boards/PromptEditor";
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import { useI18n } from "@/app/preferences";
+import type { MessageKey } from "@/app/messages";
 import { ROLE_COPY, type SourceRole } from "@/features/ai-studio/sourceFrames";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -103,8 +104,9 @@ export function sourceModes(model: GenerationModel | null): { key: string; roles
 }
 
 /** 这一组在界面上叫什么。**从组成员推**,不另立一张表 —— 表会和描述符各走各的。 */
-export function modeLabel(roles: string[]): string {
-  return roles.some((role) => role.endsWith("_frame")) ? "首尾帧" : "全能参考";
+/** 这一组角色叫什么。**回的是 i18n 的 key** —— 这个名字要出现在参数行的下拉里。 */
+export function modeLabel(roles: string[]): MessageKey {
+  return roles.some((role) => role.endsWith("_frame")) ? "boardModeKeyframes" : "boardModeReference";
 }
 
 /**
@@ -422,7 +424,7 @@ export function NodeComposer({
                     <span key={one.assetId} className="group/thumb relative shrink-0">
                       <button
                         type="button"
-                        title={`${roleLabel(t, slot.role)} —— 点开看大图`}
+                        title={`${roleLabel(t, slot.role)} —— ${t("boardOpenLarge")}`}
                         onClick={() =>
                           openImagePreview({ src: assetFileUrl(one.assetId), title: roleLabel(t, slot.role) })
                         }
@@ -507,7 +509,7 @@ export function NodeComposer({
                       touched.current = true;
                       setMode(next);
                     }}
-                    options={modes.map((one) => ({ value: one.key, label: modeLabel(one.roles) }))}
+                    options={modes.map((one) => ({ value: one.key, label: t(modeLabel(one.roles)) }))}
                   />
                 )}
                 {supportsParameter(current, "aspect_ratio") && (

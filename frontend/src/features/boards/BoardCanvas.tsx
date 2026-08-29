@@ -928,7 +928,7 @@ function ItemToolbar({
           <button
             type="button"
             aria-pressed={Boolean(item.move_children)}
-            title={item.move_children ? "拖动时带着框内的项一起走" : "拖动时只移动这个框"}
+            title={t(item.move_children ? "boardMoveChildrenOn" : "boardMoveChildrenOff")}
             className={cn(
               "flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs transition-colors",
               item.move_children
@@ -937,7 +937,7 @@ function ItemToolbar({
             )}
             onClick={() => patch(item.id, { move_children: !item.move_children })}
           >
-            <Group size={12} /> 联动拖动
+            <Group size={12} /> {t("boardMoveChildren")}
           </button>
         )}
 
@@ -974,7 +974,7 @@ function ItemToolbar({
             className="flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs text-muted-foreground hover:bg-secondary hover:text-foreground"
             onClick={() => onPickAsset(item.kind as MediaKind, (assetId) => patch(item.id, { asset_id: assetId }))}
           >
-            <Replace size={12} /> 换一份
+            <Replace size={12} /> {t("boardReplaceAsset")}
           </button>
         )}
 
@@ -1016,7 +1016,12 @@ function ItemToolbar({
                     })
                   }
                 >
-                  <Sparkles size={12} /> {t("boardGenerateKind").replace("{kind}", t(KIND_META[kind].label))}
+                  <Sparkles size={12} />{" "}
+                  {/* 文案那一格说的是「生成文案」而不是「生成便签」—— 便签是这张卡片的名字,
+                      而用户要的是里面那段字。套同一个模板会说出「Generate Note」这种话。 */}
+                  {kind === "note"
+                    ? t("boardWriteCopy")
+                    : t("boardGenerateKind").replace("{kind}", t(KIND_META[kind].label))}
                 </button>
               ))}
           </>

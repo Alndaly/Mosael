@@ -82,8 +82,9 @@ describe("生成方式照描述符的互斥分组出", () => {
   });
 
   it("组名从成员推出来,不另立一张表", () => {
-    expect(modeLabel(["first_frame", "last_frame"])).toBe("首尾帧");
-    expect(modeLabel(["reference_image"])).toBe("全能参考");
+    //: 回的是 i18n 的 key —— 这个名字要出现在参数行的下拉里,写死中文的话英文界面就是半中半英。
+    expect(modeLabel(["first_frame", "last_frame"])).toBe("boardModeKeyframes");
+    expect(modeLabel(["reference_image"])).toBe("boardModeReference");
   });
 });
 
