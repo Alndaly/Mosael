@@ -327,3 +327,46 @@ def test_音频项和图片视频同一套三状态() -> None:
     )["items"]
     assert "asset_id" not in empty
     assert done["asset_id"] == "snd"
+
+
+def test_在已有的空槽上生成不会撞上自己() -> None:
+    """在画布上**已经存在**的那一格里点生成 —— 占位要就地更新,不是再追加一份。
+
+    画板上的生成有两个入口:工具条上「放一个空槽去生成」是新建一项,而在已有的空槽里
+    写完提示词点生成,那一项早就在画布上了。追加的话会撞上同 id 的自己(normalize_canvas
+    拒重复 id),用户看到的是一句「画板项 id 重复」,而他只是点了生成。
+    """
+    from app.core.db import SessionLocal
+    from app.domain.boards import place_pending
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id = client.post(
+        "/api/boards",
+        json={
+            "workspace_id": ws,
+            "name": "B",
+            "canvas": {
+                "items": [{"id": "img-1", "kind": "image", "x": 120, "y": 80, "width": 300, "height": 200}],
+                "edges": [],
+            },
+        },
+    ).json()["id"]
+
+    db = SessionLocal()
+    updated = place_pending(
+        db,
+        workspace_id=ws,
+        board_id=board_id,
+        # 路由拿不到用户把节点拖到了哪儿,发过来的是默认坐标 —— 不能拿它覆盖。
+        item={"id": "img-1", "kind": "image", "x": 0, "y": 0, "job_id": "job-1", "text": "一个女孩"},
+    )
+
+    items = updated.canvas["items"]
+    assert len(items) == 1, f"占位被追加成了第二份:{items}"
+    assert items[0]["job_id"] == "job-1"
+    assert items[0]["text"] == "一个女孩"
+    assert (items[0]["x"], items[0]["y"]) == (120, 80), "节点自己跳回了左上角"
+    assert (items[0]["width"], items[0]["height"]) == (300, 200), "用户拉过的大小被抹掉了"
+
+    db.close()

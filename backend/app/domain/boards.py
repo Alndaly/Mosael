@@ -279,15 +279,36 @@ def receipt_to_item(board_id: str, item_id: str) -> dict[str, Any]:
 
 
 def place_pending(db: Session, *, workspace_id: str, board_id: str, item: dict[str, Any]) -> Board:
-    """先把「正在生成」那一项放上画布,再去起任务。
+    """把某一项的「正在生成」状态放到画布上,再去起任务。
 
     **顺序是这样的原因**:生成要几十秒,而用户点完就在看画布。先放一个占位,他立刻看得见
     "这儿在生成";等回执把 asset_id 填回来,占位就地变成图片/视频。反过来(先起任务、
     等成功再放)的话,这几十秒里画布上什么都没有,用户会以为自己没点中。
+
+    **按 id 就地更新,不存在才追加。** 画板上的生成有两个入口:工具条上「放一个空槽去
+    生成」是新建一项,而在已有的空槽里写完提示词点生成,那一项**早就在画布上**了 ——
+    无脑追加会撞上同 id 的自己,用户只是点了生成,却收到一句「画板项 id 重复」。
+
+    就地更新时**保留它已有的位置和大小**:调用方只知道「它开始生成了」,不知道用户把它
+    拖到哪儿、拉多大 —— 拿请求里的默认坐标覆盖,会让节点自己跳回左上角。
     """
     board = get_board(db, workspace_id, board_id)
     canvas = dict(board.canvas or {"items": [], "edges": []})
-    board.canvas = normalize_canvas({**canvas, "items": [*(canvas.get("items") or []), item]})
+    items = [dict(one) for one in (canvas.get("items") or [])]
+
+    index = next((i for i, one in enumerate(items) if one.get("id") == item.get("id")), None)
+    if index is None:
+        items.append(item)
+    else:
+        #: 位置和大小归画布(用户拖出来的),状态归这里(任务起来了)。
+        keep = {k: v for k, v in item.items() if k not in ("x", "y", "width", "height")}
+        merged = {**items[index], **keep}
+        #: 三状态里「生成中」和「有产出」是互斥的 —— 重新生成时旧产出让位给占位,
+        #: 否则一个项同时带着 job_id 和 asset_id,画布不知道该画哪个。
+        merged.pop("asset_id", None)
+        items[index] = merged
+
+    board.canvas = normalize_canvas({**canvas, "items": items})
     db.commit()
     db.refresh(board)
     return board

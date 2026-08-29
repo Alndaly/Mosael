@@ -119,18 +119,23 @@ def generate(board_id: str, body: BoardGenerate, db: DbSession, user: CurrentUse
     job.payload = {**(job.payload or {}), "receipt": receipt_to_item(board.id, body.item_id)}
     db.commit()
 
-    board = place_pending(
-        db,
-        workspace_id=body.workspace_id,
-        board_id=board.id,
-        item={
-            "id": body.item_id,
-            "kind": body.kind,
-            "x": body.x,
-            "y": body.y,
-            "job_id": job.id,
-            "text": body.prompt[:120],
-        },
-    )
+    try:
+        board = place_pending(
+            db,
+            workspace_id=body.workspace_id,
+            board_id=board.id,
+            item={
+                "id": body.item_id,
+                "kind": body.kind,
+                "x": body.x,
+                "y": body.y,
+                "job_id": job.id,
+                "text": body.prompt[:120],
+            },
+        )
+    except BoardDomainError as exc:
+        # 画布放不下这一项是**请求的问题**,不是服务器崩了 —— 漏出去的话调用方收到 500
+        # 和一整页 traceback,而真正的原因(比如坐标不合法)一个字都看不到。
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     start_generation_thread(generation.id)
     return board
