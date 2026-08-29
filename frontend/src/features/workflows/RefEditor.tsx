@@ -1,6 +1,4 @@
 import React from "react";
-import { createPortal } from "react-dom";
-import { autoUpdate, computePosition, flip, offset, shift } from "@floating-ui/dom";
 // 只从**已声明的包**里取:@tiptap/react 再导出了 core,StarterKit 里已含 Document/Paragraph/
 // Text/History。不额外添依赖 —— 单个扩展包全都能从这两个里拿到。
 import {
@@ -15,12 +13,11 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 
 import { useI18n } from "@/app/preferences";
+import { useSuggestionMenu } from "@/components/app/suggestionMenu";
 import { cn } from "@/lib/utils";
 
-/** 菜单的三种形态:列候选、只给一句解释(hint)、不显示(null)。 */
-type MenuState = { items: string[]; active: number; hint?: string } | null;
 import { TRIGGER, docToString, filterRefs, parsePieces, piecesToDoc } from "@/features/workflows/refDoc";
-import { RefSuggestion } from "@/features/workflows/RefSuggestion";
+import { RefSuggestion } from "@/components/app/refSuggestion";
 
 /**
  * 一段可以夹着**上游引用**的文本。
@@ -102,38 +99,14 @@ export function RefEditor({
   const emptyHintRef = React.useRef("");
   emptyHintRef.current = t("wfRefNoUpstream");
 
-  /** 菜单只剩「长什么样」这一半:什么时候出现、匹配到哪个字符、按键怎么走,都归插件。 */
+  /** 菜单只剩「长什么样」这一半:什么时候出现、匹配到哪个字符、按键怎么走,都归插件。
+   *  摆在哪、怎么跟着光标走,归共用的 useSuggestionMenu —— 画板那边的 @ 用的是同一份。 */
   // hint:**这一格没有可引用的变量**,菜单里只放一句解释,不放候选。
   // 此前这种情况下什么都不弹 —— 敲了 @ 毫无反应,用户只能自己猜为什么(实测:一位用户
   // 花了一会儿才想到「哦 是我没有连线」)。一个什么都不做又不解释的键,比一条小灰条更糟。
-  const [menu, setMenu] = React.useState<MenuState>(null);
-  //: 插件给的**是个函数**,每次调用返回当前的光标矩形。存函数而不是存算好的坐标 ——
-  //: 存坐标就成了一张快照:画布一平移,光标动了而菜单不知道,于是它钉在原地。
-  const clientRectRef = React.useRef<(() => DOMRect | null) | null>(null);
-  const menuEl = React.useRef<HTMLDivElement | null>(null);
-  //: 插件的 onKeyDown 拿不到最新的 state(它在 render() 里闭包住了),用 ref 读当前高亮项。
-  const menuRef = React.useRef(menu);
-  menuRef.current = menu;
-  //: 插件给的"确认这一条"回调。点击和回车都走它 —— 插入位置由插件算,我们不自己数字符。
-  const commandRef = React.useRef<((item: string) => void) | null>(null);
-
-  /**
-   * 敲下 `@` 之后菜单该长什么样。三种情况,分开对待:
-   *
-   *  · 有候选 → 列出来;
-   *  · **一条上游都没有** → 只给一句解释。此前这里返回 null,于是这个键静默无效 ——
-   *    用户敲了没反应,只能自己猜为什么(实测有人想了一会儿才反应过来「哦 是我没有连线」);
-   *  · 有上游、只是这次输入没匹配上 → 不打扰,继续敲两下自己就出来了。
-   */
-  const nextMenu = (prev: MenuState, items: string[]): MenuState => {
-    if (items.length) {
-      // 候选变了就回到第一条;没变则保留用户按下去的位置。
-      const active = prev && !prev.hint && prev.items.join() === items.join() ? prev.active : 0;
-      return { items, active };
-    }
-    if (variablesRef.current.length === 0) return { items: [], active: 0, hint: emptyHintRef.current };
-    return null;
-  };
+  const menu = useSuggestionMenu<string>({
+    emptyHint: () => (variablesRef.current.length === 0 ? emptyHintRef.current : ""),
+  });
 
   const editor = useEditor({
     extensions: [
@@ -169,45 +142,7 @@ export function RefEditor({
               .insertContent({ type: "ref", attrs: { ref: String(props).replace(/^\{\{|\}\}$/g, "") } })
               .run();
           },
-          render: () => ({
-            // **onStart 和 onUpdate 用同一条规则。** tiptap 在同一次输入里 onStart 之后紧接着
-            // 就调 onUpdate —— 两边写两份的话,onStart 刚摆上的东西会被 onUpdate 立刻清掉,
-            // 表现是"提示闪一下就没了"(实测:根本看不见,像完全没实现)。
-            onStart: (props) => {
-              commandRef.current = props.command;
-              clientRectRef.current = props.clientRect ?? null;
-              setMenu((prev) => nextMenu(prev, props.items));
-            },
-            onUpdate: (props) => {
-              commandRef.current = props.command;
-              clientRectRef.current = props.clientRect ?? null;
-              setMenu((prev) => nextMenu(prev, props.items));
-            },
-            // **按键交给插件**:它知道 composition,中文选词时的回车不会被当成"选中候选"。
-            onKeyDown: (props) => {
-              const key = props.event.key;
-              if (key === "Escape") {
-                setMenu(null);
-                return true;
-              }
-              if (key === "ArrowDown" || key === "ArrowUp") {
-                setMenu((prev) =>
-                  prev
-                    ? { ...prev, active: (prev.active + (key === "ArrowDown" ? 1 : -1) + prev.items.length) % prev.items.length }
-                    : prev,
-                );
-                return true;
-              }
-              if (key === "Enter" || key === "Tab") {
-                const current = menuRef.current;
-                if (!current || current.items.length === 0) return false;
-                commandRef.current?.(current.items[current.active]);
-                return true;
-              }
-              return false;
-            },
-            onExit: () => setMenu(null),
-          }),
+          render: menu.render,
         },
       }),
     ],
@@ -229,38 +164,6 @@ export function RefEditor({
     },
   });
 
-  /**
-   * 菜单跟着光标走 —— **交给 floating-ui,不自己算**。
-   *
-   * 自己算的话要处理:画布平移缩放(光标在动而菜单不知道)、贴到窗口边缘要翻面、
-   * 容器滚动、以及祖先 transform 把 fixed 的基准换掉。这些正是刚从这个代码库里删掉的
-   * 那类坐标换算,不该再写第二遍。
-   *
-   * autoUpdate 用 animationFrame:React Flow 的平移是改 CSS transform,既不是滚动也不是
-   * resize,只有逐帧比对才追得上。
-   */
-  React.useEffect(() => {
-    const floating = menuEl.current;
-    const getRect = clientRectRef.current;
-    if (!menu || !floating || !getRect) return;
-    const reference = { getBoundingClientRect: () => getRect() ?? new DOMRect() };
-    return autoUpdate(
-      reference,
-      floating,
-      () => {
-        void computePosition(reference, floating, {
-          placement: "bottom-start",
-          // 贴着光标下方 6px;放不下就翻到上方;左右不够就往里挪,别被窗口切掉。
-          middleware: [offset(6), flip(), shift({ padding: 8 })],
-        }).then(({ x, y }) => {
-          floating.style.left = `${x}px`;
-          floating.style.top = `${y}px`;
-        });
-      },
-      { animationFrame: true },
-    );
-  }, [menu]);
-
   React.useEffect(() => {
     if (!editor || value === emitted.current) return;
     emitted.current = value;
@@ -281,42 +184,23 @@ export function RefEditor({
     <div className="grid gap-1">
       <div className="relative">
         <EditorContent editor={editor} />
-        {/**
-          * **菜单要 portal 到 body。**
-          *
-          * 插件给的 clientRect 是**屏幕坐标**,而这个编辑器住在 React Flow 的 viewport 里 ——
-          * 那个容器带着 `transform: translate() scale()`。CSS 有一条:祖先一旦有 transform,
-          * 它就成了后代 `position: fixed` 的包含块 —— 于是 fixed 不再相对窗口,而是相对那个
-          * 被平移缩放过的容器。把屏幕坐标喂进去,菜单就跑到画布的另一头(实测:右下角),
-          * 而且还跟着缩放变了形。
-          *
-          * 挂到 body 上,fixed 才真的相对窗口;顺带也不会被面板的 overflow-hidden 裁掉。
-          */}
-        {menu && createPortal((
-          <div
-            ref={menuEl}
-            className="fixed left-0 top-0 z-50 max-h-48 min-w-[180px] overflow-auto rounded-md border border-border bg-panel p-1 shadow-[var(--shadow-panel)]"
-          >
-            {menu.hint ? (
-              <div className="px-2 py-1 text-ui-2xs leading-relaxed text-muted-foreground">{menu.hint}</div>
-            ) : null}
-            {menu.items.map((ref, index) => (
-              <button
-                key={ref}
-                type="button"
-                className={cn(
-                  "block w-full cursor-pointer rounded-[5px] border-0 bg-transparent px-2 py-1 text-left font-mono text-ui-xs text-foreground",
-                  index === menu.active ? "bg-secondary" : "hover:bg-secondary",
-                )}
-                // mousedown 会先让编辑器失焦,失焦又会收起菜单 —— 拦掉,让 click 有机会跑到。
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => commandRef.current?.(ref)}
-              >
-                {ref.replace(/^\{\{|\}\}$/g, "")}
-              </button>
-            ))}
-          </div>
-        ), document.body)}
+        <menu.Portal>
+          {(ref, index) => (
+            <button
+              key={ref}
+              type="button"
+              className={cn(
+                "block w-full cursor-pointer rounded-[5px] border-0 bg-transparent px-2 py-1 text-left font-mono text-ui-xs text-foreground",
+                index === (menu.menu?.active ?? 0) ? "bg-secondary" : "hover:bg-secondary",
+              )}
+              // mousedown 会先让编辑器失焦,失焦又会收起菜单 —— 拦掉,让 click 有机会跑到。
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => menu.choose(ref)}
+            >
+              {ref.replace(/^\{\{|\}\}$/g, "")}
+            </button>
+          )}
+        </menu.Portal>
       </div>
       {variables.length > 0 && (
         // 上游有什么直接摆出来,点一下插到光标处 —— 不用记 `{{}}` 怎么写,也不用回画布上看

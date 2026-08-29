@@ -5,8 +5,8 @@ import { ArrowLeftRight, ArrowUp, Loader2, Plus, Sparkles, Volume2, VolumeX, X }
 import { useQuery } from "@tanstack/react-query";
 
 import { assetFileUrl, assetThumbnailUrl, listAssets, type Asset, type BoardItem, type GenerationModel } from "@/api/client";
-import { useAssetMentions } from "@/components/app/useAssetMentions";
 import { useImagePreview } from "@/components/app/image-preview";
+import { PromptEditor } from "@/features/boards/PromptEditor";
 import { useI18n } from "@/app/preferences";
 import { ROLE_COPY, type SourceRole } from "@/features/ai-studio/sourceFrames";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -274,42 +274,40 @@ export function NodeComposer({
   }, [textKey]);
 
   /**
-   * `@` 引用素材。挑中的**挂到输入素材的槽位上**,不写进提示词 —— 提示词里留着
-   * 「@猫.png」的话,模型会把这几个字当成描述的一部分念出来。
+   * `@` 引用素材的候选。**挑中的挂到槽位上,不写进提示词** —— 正文里留着「@猫.png」的话,
+   * 模型会把这几个字当成描述念出来。
    *
-   * 候选只列这个模型**收得下**的类别:它一个视频槽都没有的时候,把视频列出来等于让用户
-   * 选一个挂不上去的东西。
+   * 只列这个模型**收得下**的类别:它一个视频槽都没有的时候,把视频列出来等于让用户选一个
+   * 挂不上去的东西。
    */
-  const mention = useAssetMentions();
-  const box = React.useRef<HTMLTextAreaElement | null>(null);
+  //: **面板一开就预取**,不等到敲下 @ 才拉。插件是在每次按键时问一次候选的:等到那一刻
+  //: 才发请求的话,第一次敲 @ 手上是空的 —— 菜单不出,用户得再多敲一个字它才冒出来。
   const library = useQuery({
     queryKey: ["assets", workspaceId],
     queryFn: () => listAssets(workspaceId),
-    enabled: mention.query !== null,
+    enabled: slots.length > 0,
   });
   const accepted = React.useMemo(() => new Set(slots.map((slot) => roleAccepts(slot.role))), [slots]);
-  const matches = React.useMemo(() => {
-    if (mention.query === null) return [];
-    const needle = mention.query.trim().toLowerCase();
-    return (library.data ?? [])
-      .filter((asset: Asset) => accepted.has(asset.kind as "image" | "video" | "audio"))
-      .filter(
-        (asset: Asset) =>
-          !needle || `${asset.name ?? ""} ${asset.original_filename ?? ""}`.toLowerCase().includes(needle),
-      )
-      .slice(0, 8);
-  }, [library.data, mention.query, accepted]);
+  const candidates = React.useCallback(
+    (query: string) => {
+      const needle = query.trim().toLowerCase();
+      return (library.data ?? [])
+        .filter((asset: Asset) => accepted.has(asset.kind as "image" | "video" | "audio"))
+        .filter(
+          (asset: Asset) =>
+            !needle || `${asset.name ?? ""} ${asset.original_filename ?? ""}`.toLowerCase().includes(needle),
+        )
+        .slice(0, 8);
+    },
+    [library.data, accepted],
+  );
 
-  const pickMention = React.useCallback(
+  const attachMentioned = React.useCallback(
     (asset: Asset) => {
       const slot = slots.find((one) => roleAccepts(one.role) === asset.kind);
       if (slot) setSources((all) => [...all, { role: slot.role, assetId: asset.id }]);
-      const next = mention.take(prompt);
-      setPrompt(next.text);
-      //: 光标放回那个 @ 原来的位置 —— 不放的话它会跳到末尾,用户接着打字就打错地方了。
-      requestAnimationFrame(() => box.current?.setSelectionRange(next.caret, next.caret));
     },
-    [mention, prompt, slots],
+    [slots],
   );
 
   //: 上游变了就重挑一次默认方式:一张图 = 首帧,多张 = 参考(TapNow 的那套直觉)。
@@ -429,58 +427,18 @@ export function NodeComposer({
           </div>
         )}
 
-        {/* 输入框 + `@` 引用素材。@ 挑中的东西**挂到输入素材上,不留在文字里** ——
-            留着的话模型会把「@猫.png」当成描述的一部分念出来。 */}
-        <div>
-          <textarea
-            ref={box}
-            value={prompt}
-            onChange={(event) => {
-              setPrompt(event.target.value);
-              mention.onChange(event.target.value, event.target.selectionStart ?? event.target.value.length);
-            }}
-            onClick={(event) =>
-              mention.onChange(event.currentTarget.value, event.currentTarget.selectionStart ?? 0)
-            }
-            onBlur={() => window.setTimeout(mention.close, 120)}
-            // ⌘/Ctrl+Enter 提交:光按 Enter 会和换行打架,而提示词经常要分行写。
-            onKeyDown={(event) => {
-              //: 菜单开着时,方向键和回车归菜单 —— 否则回车会换行、上下键会把光标挪走,
-              //: 而用户以为自己在选素材。
-              if (mention.query !== null && matches.length > 0) {
-                if (event.key === "ArrowDown") {
-                  event.preventDefault();
-                  mention.setIndex((mention.index + 1) % matches.length);
-                  return;
-                }
-                if (event.key === "ArrowUp") {
-                  event.preventDefault();
-                  mention.setIndex((mention.index - 1 + matches.length) % matches.length);
-                  return;
-                }
-                if (event.key === "Enter" || event.key === "Tab") {
-                  event.preventDefault();
-                  pickMention(matches[mention.index]);
-                  return;
-                }
-                if (event.key === "Escape") {
-                  event.preventDefault();
-                  mention.close();
-                  return;
-                }
-              }
-              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-                event.preventDefault();
-                send();
-              }
-            }}
-            rows={3}
-            //: 这个模型一个输入素材槽都没有时,别在提示里许诺 @ —— 挑中了也无处可挂,
-            //: 那就成了一句点了没反应的说明。
-            placeholder={slots.length > 0 ? "描述你想要生成的内容,按 @ 引用素材" : "描述你想要生成的内容"}
-            className="w-full resize-none border-0 bg-transparent px-1.5 py-1 text-ui-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
-          />
-        </div>
+        {/* 提示词。`@` 在**表单内部**引用素材,菜单跟着光标走 —— 和工作流的上游引用同一套
+            机件(TipTap + 共用的 useSuggestionMenu)。自己判 @ 的那一版栽在输入法上:
+            中文选词时按回车会被菜单当成「选中候选」吃掉,候选词上不了屏。 */}
+        <PromptEditor
+          value={prompt}
+          onChange={setPrompt}
+          placeholder={slots.length > 0 ? "描述你想要生成的内容,按 @ 引用素材" : "描述你想要生成的内容"}
+          candidates={candidates}
+          onPick={attachMentioned}
+          onSubmit={send}
+          emptyHint={() => (slots.length === 0 ? "这个模型不收参考素材,@ 在这里没有可挂的地方。" : "")}
+        />
         {/* 参数行:**按这个模型声明的来**,不写死。
             后端描述符已经说清楚了每个模型认哪几项(aspect_ratio / resolution /
             duration_seconds / size / num_images / generate_audio),这里照着出控件 ——
@@ -585,35 +543,6 @@ export function NodeComposer({
             </>
           )}
         </div>
-        {mention.query !== null && matches.length > 0 && (
-          <div //: 挂在**整个面板**下面,不是输入框下面 —— 挂输入框下面会盖住面板自己的模型行,
-          //: 还有一半探到面板外边,读起来像另一块浮起来的东西。
-          className="absolute inset-x-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-xl border border-border-strong bg-panel p-1 shadow-[var(--shadow-panel)]">
-            {matches.map((asset, at) => (
-              <button
-                key={asset.id}
-                type="button"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => pickMention(asset)}
-                onMouseEnter={() => mention.setIndex(at)}
-                className={cn(
-                  "flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors",
-                  at === mention.index ? "bg-secondary" : "hover:bg-secondary",
-                )}
-              >
-                <img
-                  src={assetThumbnailUrl(asset.id)}
-                  alt=""
-                  className="h-7 w-10 shrink-0 rounded bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] object-cover"
-                />
-                <span className="min-w-0 flex-1 truncate text-ui-2xs text-foreground">
-                  {asset.name || asset.original_filename}
-                </span>
-                <span className="shrink-0 text-ui-2xs text-muted-foreground">{asset.kind}</span>
-              </button>
-            ))}
-          </div>
-        )}
       </div>
     </NodeToolbar>
   );
