@@ -2,7 +2,6 @@ import React from "react";
 import {
   Background,
   BackgroundVariant,
-  Controls,
   MiniMap,
   ReactFlow,
   NodeToolbar,
@@ -23,6 +22,7 @@ import { NodeComposer } from "@/features/boards/NodeComposer";
 import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
 import { usePersistentViewport } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
+import { canRedo, canUndo, emptyHistory, record, redo, undo } from "@/features/boards/canvasHistory";
 import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, KIND_META, SPAWNABLE_KINDS, type MediaKind } from "@/features/boards/boardNodes";
 
 /**
@@ -38,6 +38,18 @@ import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKi
 
 /** 只放**数据**。回调在渲染时注入(见 displayNodes)—— 存进节点里的话,它们会闭包住
  *  还没声明的 setNodes,而这个顺序绕不开:节点的初值本身就要用到它们。 */
+/** 画布交出去的把手。**只此一处** —— 上层曾经自己抄了一份同样形状的类型,加一个动作
+ *  (撤销)时抄的那份不会报错,只会让按钮点了没反应。 */
+export interface BoardCanvasApi {
+  add: (kind: BoardItem["kind"], extra?: Partial<BoardItem>) => void;
+  fill: (itemId: string, assetId: string) => void;
+  fitView: () => void;
+  undo: () => void;
+  redo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
+}
+
 function toNodes(items: BoardItem[]): Node[] {
   return items.map((item) => ({
     id: item.id,
@@ -70,6 +82,8 @@ export function toCanvas(nodes: Node[], edges: Edge[]): Canvas {
 
 interface Props {
   boardId: string;
+  /** 提示词面板里 `@` 引用素材时去哪个工作区找。 */
+  workspaceId: string;
   canvas: Canvas;
   onChange: (canvas: Canvas) => void;
   /** 让上层开素材选择器。kind 决定它列图片还是视频 —— 选得到的就该是贴上去能看的。 */
@@ -96,14 +110,10 @@ interface Props {
   uploading?: boolean;
   /** 把「加一项」交给上层 —— 顶栏那两组胶囊要摆在一起(和工作流详情页一致),
    *  而 add 依赖画布内部的 rf 实例和 setNodes,只能由画布提供。 */
-  onReady?: (api: {
-    add: (kind: BoardItem["kind"], extra?: Partial<BoardItem>) => void;
-    fill: (itemId: string, assetId: string) => void;
-    fitView: () => void;
-  }) => void;
+  onReady?: (api: BoardCanvasApi) => void;
 }
 
-function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, showMinimap = true, onDropFiles, uploading, onReady }: Props) {
+function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, models, showMinimap = true, onDropFiles, uploading, onReady }: Props) {
   const rf = React.useRef<ReactFlowInstance | null>(null);
   const viewport = usePersistentViewport(`board:${boardId}`);
   const [ready, setReady] = React.useState(false);
@@ -169,16 +179,25 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, sho
    * 已经出了产出的项收上来,交给面板照当前生成方式挂进槽位(一张图当首帧、多张当参考)。
    * 还没出产出的上游跳过 —— 它自己都还没有东西可给。
    */
-  const upstream = React.useMemo(() => {
-    if (!composerItem) return [];
+  const feeding = React.useMemo(() => {
+    if (!composerItem) return { assets: [], texts: [] as { itemId: string; text: string }[] };
     const byId = new Map(
       nodes.map((node) => [node.id, (node.data as unknown as { item: BoardItem }).item]),
     );
-    return edges
+    const sources = edges
       .filter((edge) => edge.target === composerItem.id)
       .map((edge) => byId.get(edge.source))
-      .filter((item): item is BoardItem => Boolean(item?.asset_id))
-      .map((item) => ({ assetId: item.asset_id as string, kind: item.kind }));
+      .filter((item): item is BoardItem => Boolean(item));
+    return {
+      assets: sources
+        .filter((item) => item.asset_id)
+        .map((item) => ({ assetId: item.asset_id as string, kind: item.kind })),
+      //: **便签给的是提示词,不是素材。** 一张写着描述的便签连到图片上,用户的意思是
+      //: 「照这段话画」—— 而不是把便签当参考图(它根本没有图)。
+      texts: sources
+        .filter((item) => item.kind === "note" && (item.text ?? "").trim())
+        .map((item) => ({ itemId: item.id, text: (item.text ?? "").trim() })),
+    };
   }, [composerItem, edges, nodes]);
 
   /**
@@ -245,6 +264,74 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, sho
   React.useEffect(() => {
     onChange(JSON.parse(serialized) as Canvas);
   }, [serialized, onChange]);
+
+  /**
+   * 撤销/重做。存的是**整份画布的快照** —— 画板的事实来源是 React Flow 的 nodes/edges,
+   * 撤销就是把某一份装回去(工作流那边挂在 zundo 上,因为它的事实来源是 store 里的 graph)。
+   */
+  const [history, setHistory] = React.useState(() => emptyHistory(serialized));
+  //: 正在装回去的那一份 —— 它引发的这一轮变化**不能再进历史**,否则撤一步会立刻被记成
+  //: 一次新编辑,重做就永远回不去了(表现是「撤销键按一下就灰了」)。
+  const restoring = React.useRef<string | null>(null);
+
+  const restore = React.useCallback(
+    (snapshot: string) => {
+      const canvas = JSON.parse(snapshot) as Canvas;
+      restoring.current = snapshot;
+      setNodes(toNodes(canvas.items));
+      setEdges(canvas.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target })));
+    },
+    [setNodes, setEdges],
+  );
+
+  React.useEffect(() => {
+    if (restoring.current === serialized) {
+      restoring.current = null;
+      return;
+    }
+    //: **攒一下再记。** 拖一个节点会发几十次位置更新,一次一步的话用户得按几十下撤销
+    //: 才回得到上一个状态。
+    const timer = setTimeout(() => setHistory((current) => record(current, serialized)), 400);
+    return () => clearTimeout(timer);
+  }, [serialized]);
+
+  const stepBack = React.useCallback(() => {
+    setHistory((current) => {
+      const next = undo(current);
+      if (!next) return current;
+      restore(next.present);
+      return next;
+    });
+  }, [restore]);
+
+  const stepForward = React.useCallback(() => {
+    setHistory((current) => {
+      const next = redo(current);
+      if (!next) return current;
+      restore(next.present);
+      return next;
+    });
+  }, [restore]);
+
+  //: ⌘/Ctrl+Z 撤销,⌘⇧Z / Ctrl+Y 重做。输入框里不劫持 —— 在便签里打字时按撤销,
+  //: 用户想撤的是自己刚打的字,不是整张画布。
+  React.useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey)) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+      const key = event.key.toLowerCase();
+      if (key === "z" && !event.shiftKey) {
+        event.preventDefault();
+        stepBack();
+      } else if ((key === "z" && event.shiftKey) || key === "y") {
+        event.preventDefault();
+        stepForward();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [stepBack, stepForward]);
 
   const add = React.useCallback(
     (kind: BoardItem["kind"], extra: Partial<BoardItem> = {}) => {
@@ -369,8 +456,16 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, sho
   }, isMediaFile);
 
   React.useEffect(() => {
-    onReady?.({ add, fill, fitView: () => rf.current?.fitView({ padding: 0.3, duration: 250 }) });
-  }, [add, fill, onReady]);
+    onReady?.({
+      add,
+      fill,
+      fitView: () => rf.current?.fitView({ padding: 0.3, duration: 250 }),
+      undo: stepBack,
+      redo: stepForward,
+      canUndo: canUndo(history),
+      canRedo: canRedo(history),
+    });
+  }, [add, fill, onReady, stepBack, stepForward, history]);
 
   return (
     // 画布放在**带边框的圆角卡片**里(和工作流详情页同一个形态)—— 通栏铺到窗口边的话,
@@ -469,11 +564,6 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, sho
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.2} />
         {/* 缩放钮/预览图**不吃应用主题**(xyflow 默认一律白底)—— 深色下就是右下角一块白。
             把 --xy-* 映射到设计令牌,和工作流页用的是同一套(见 WorkflowsView 里那段说明)。 */}
-        <Controls
-          showInteractive={false}
-          position="bottom-left"
-          className="overflow-hidden rounded-md border border-border [--xy-controls-box-shadow:none] [--xy-controls-button-background-color:var(--panel)] [--xy-controls-button-background-color-hover:var(--secondary)] [--xy-controls-button-border-color:var(--border)] [--xy-controls-button-color:var(--muted-foreground)] [--xy-controls-button-color-hover:var(--foreground)]"
-        />
         {showMinimap && <MiniMap
           pannable
           zoomable
@@ -552,7 +642,9 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, sho
           models={models ?? []}
           busy={Boolean(composerItem.job_id)}
           onPickAsset={onPickAsset}
-          upstream={upstream}
+          workspaceId={workspaceId}
+          upstream={feeding.assets}
+          upstreamTexts={feeding.texts}
           onSubmit={({ prompt, provider, model, parameters, sourceAssets }) =>
             void onGenerate({
               kind: composerItem.kind as "image" | "video",

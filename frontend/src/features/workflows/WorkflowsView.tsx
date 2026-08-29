@@ -3,7 +3,6 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import { useStore } from "zustand";
 import {
   Background,
-  Controls,
   Handle,
   ConnectionLineType,
   MarkerType,
@@ -23,7 +22,7 @@ import {
   type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { AlertTriangle, AlignLeft, Film, Image as ImageIcon, Map as MapIcon, AppWindow, ArrowLeft, AudioLines, Bell, BookOpen, Bot, Boxes, Braces, CaseSensitive, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleCheck, Code2, Download, FileOutput, FileUp, Filter, Flag, FolderInput, FolderPlus, GitBranch, Globe, History, Hourglass, Keyboard, Languages, Link2, ListChecks, Loader2, Mic, MousePointer2, MousePointerClick, PanelTopClose, PenLine, Pencil, Play, Plus, Redo2, RefreshCw, Repeat, Rocket, ScanText, Search, SkipForward, Sparkles, Spline, Tags, Timer, Trash2, Type, Undo2, Wand2, Waypoints, Workflow as WorkflowIcon, Wrench, X, XCircle, type LucideIcon } from "lucide-react";
+import { AlertTriangle, AlignLeft, Film, Maximize2, Image as ImageIcon, Map as MapIcon, AppWindow, ArrowLeft, AudioLines, Bell, BookOpen, Bot, Boxes, Braces, CaseSensitive, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleCheck, Code2, Download, FileOutput, FileUp, Filter, Flag, FolderInput, FolderPlus, GitBranch, Globe, History, Hourglass, Keyboard, Languages, Link2, ListChecks, Loader2, Mic, MousePointer2, MousePointerClick, PanelTopClose, PenLine, Pencil, Play, Plus, Redo2, RefreshCw, Repeat, Rocket, ScanText, Search, SkipForward, Sparkles, Spline, Tags, Timer, Trash2, Type, Undo2, Wand2, Waypoints, Workflow as WorkflowIcon, Wrench, X, XCircle, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -78,7 +77,7 @@ import { withDependentsCleared } from "@/features/workflows/dependents";
 import { RefEditor } from "@/features/workflows/RefEditor";
 import { MapField } from "@/features/workflows/MapField";
 import { CodeEditor, type CodeEditorHandle } from "@/components/app/code-editor";
-import { WorkflowAgentChat, type WorkflowAgentMode } from "@/features/workflows/WorkflowAgentChat";
+import { CanvasAgentChat, type CanvasAgentMode } from "@/components/agent/CanvasAgentChat";
 import { WorkflowRunHistory } from "@/features/workflows/WorkflowRunHistory";
 import { createWorkflowGraphStore } from "@/stores/workflowGraphStore";
 import { saveJsonToDisk } from "@/lib/download";
@@ -1162,9 +1161,9 @@ function WorkflowEditor({
     localStorage.setItem(AGENT_PANEL_KEY, agentOpen ? "1" : "0");
   }, [agentOpen]);
   // 停靠还是浮窗,是布局偏好 —— 每次回来都弹回"停靠"等于每次都要重摆一遍。
-  const [agentMode, setAgentMode] = usePersistentTab<WorkflowAgentMode>("wf-agent-mode", "docked", AGENT_MODES);
+  const [agentMode, setAgentMode] = usePersistentTab<CanvasAgentMode>("wf-agent-mode", "docked", AGENT_MODES);
   /** 执行历史与助手同一套停靠/悬浮机制,但各记各的模式与几何。 */
-  const [historyMode, setHistoryMode] = usePersistentTab<WorkflowAgentMode>("wf-history-mode", "docked", AGENT_MODES);
+  const [historyMode, setHistoryMode] = usePersistentTab<CanvasAgentMode>("wf-history-mode", "docked", AGENT_MODES);
   const [edgeShape, setEdgeShape] = usePersistentTab<EdgeShape>("wf-edge-shape", "default", EDGE_SHAPES);
   //: 右下角的全览。默认开着 —— 大图时它最有用,而"图大不大"只有用户自己知道。
   const [minimapMode, setShowMinimap] = usePersistentTab<"on" | "off">("wf-minimap", "on", ["on", "off"] as const);
@@ -1754,9 +1753,11 @@ function WorkflowEditor({
   /** 右栏里停靠着几个面板(助手 / 执行历史)。0 就不开这一列。 */
   const dockedHistory = showHistory && historyMode === "docked";
   const agentPanel = (
-    <WorkflowAgentChat
-      workflowId={workflow.id}
-      workflowName={workflow.name}
+    <CanvasAgentChat
+      contextLine={t("wfAgentContext").replace("{id}", workflow.id).replace("{name}", workflow.name)}
+      emptyHint={t("wfAgentEmpty")}
+      placeholder={t("wfAgentPlaceholder")}
+      rectKey="openstudio.wf.agent.rect.v2"
       workspaceId={workflow.workspace_id}
       mode={agentMode}
       onModeChange={setAgentMode}
@@ -2180,6 +2181,18 @@ function WorkflowEditor({
           >
             <MapIcon size={14} />
           </Button>
+          {/* 全览:把整张图框回视野里。此前它藏在左下角 React Flow 自带的那组控件里,
+              而那组控件被撤掉了 —— 缩放有触控板和滚轮,「我找不到我的图了」却只有它能解。 */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            aria-label={t("boardsFitView")}
+            title={t("boardsFitView")}
+            onClick={() => rfRef.current?.fitView({ padding: 0.3, duration: 250 })}
+          >
+            <Maximize2 size={14} />
+          </Button>
         </div>
         <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
           {/* 导出。**放在这一组**(历史/删除)而不是运行旁边:这几个都是对"这份工作流"整体
@@ -2342,11 +2355,6 @@ function WorkflowEditor({
             <Background gap={20} size={1.2} />
             {/* 缩放钮/预览图不吃应用主题(xyflow 默认一律白底),把 --xy-* 变量
                 映射到设计令牌,昼夜两版都跟着色板走;投影按全局规范去掉。 */}
-            <Controls
-              showInteractive={false}
-              position="bottom-left"
-              className="overflow-hidden rounded-md border border-border [--xy-controls-box-shadow:none] [--xy-controls-button-background-color:var(--panel)] [--xy-controls-button-background-color-hover:var(--secondary)] [--xy-controls-button-border-color:var(--border)] [--xy-controls-button-color:var(--muted-foreground)] [--xy-controls-button-color-hover:var(--foreground)]"
-            />
             {showMinimap && <MiniMap
               pannable
               zoomable
@@ -2927,11 +2935,6 @@ function LoopBodyEditor({
           proOptions={{ hideAttribution: false }}
         >
           <Background gap={20} size={1.2} />
-          <Controls
-            showInteractive={false}
-            position="bottom-left"
-            className="overflow-hidden rounded-md border border-border [--xy-controls-box-shadow:none] [--xy-controls-button-background-color:var(--panel)] [--xy-controls-button-background-color-hover:var(--secondary)] [--xy-controls-button-border-color:var(--border)] [--xy-controls-button-color:var(--muted-foreground)] [--xy-controls-button-color-hover:var(--foreground)]"
-          />
         {selectedNode && (
           <NodeInspector
             inert={subCanvas.panning}

@@ -7,7 +7,7 @@ summaries — never raw internal schemas.
 
 <!-- BEGIN generated: tools -->
 
-共 **60** 个工具,其中 **15** 个走确认卡。
+共 **63** 个工具,其中 **16** 个走确认卡。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -27,6 +27,7 @@ summaries — never raw internal schemas.
 | `browser_wait` | 直接执行 | Wait for an element (selector) / URL substring (url_contains) / page text in the open session. |
 | `create_project` | 直接执行 | Runs directly: create a project in the workspace; returns its id. |
 | `create_workflow` | 确认卡 | Confirmation required: create a NEW visual workflow. |
+| `edit_board` | 确认卡 | Confirmation required: edit an EXISTING CREATIVE BOARD with granular canvas ops. |
 | `edit_timeline` | 确认卡 | Confirmation required: propose edits to a VIDEO TIMELINE sequence. |
 | `edit_workflow` | 确认卡 | Confirmation required: edit an EXISTING VISUAL WORKFLOW with granular graph ops. |
 | `fetch_url` | 直接执行 | Read-only: fetch one public web page as readable text. |
@@ -36,6 +37,7 @@ summaries — never raw internal schemas.
 | `generate_podcast` | 确认卡 | Confirmation required: generate a NEW two-speaker podcast/dialogue audio asset. |
 | `generate_video` | 确认卡 | Confirmation required: generate a NEW video asset from a text prompt. |
 | `get_answer` | 直接执行 | Read what the user picked for an ask_user question (or whether they skipped). |
+| `get_board` | 直接执行 | Read-only: inspect one CREATIVE BOARD canvas in full. |
 | `get_confirmation` | 直接执行 | Read-only: poll one confirmation card by confirmation_id. |
 | `get_current_time` | 直接执行 | Read-only: what time is it right now, on the machine running this studio. |
 | `get_job` | 直接执行 | Read-only: poll one background job (transcription, render, generation) by id. |
@@ -47,6 +49,7 @@ summaries — never raw internal schemas.
 | `invoke_plugin_tool` | 直接执行 | Runs directly: invoke one plugin tool returned by list_plugin_tools. |
 | `list_agent_sessions` | 直接执行 | Runs directly: list the agent sessions in this workspace (id, title, status). |
 | `list_assets` | 直接执行 | Read-only: list media assets in a workspace (id, name, kind, source, duration). |
+| `list_boards` | 直接执行 | Read-only: list CREATIVE BOARDS (infinite canvases) in a workspace. |
 | `list_generation_models` | 直接执行 | List the AI generation engines available to generate_image / generate_video. |
 | `list_jobs` | 直接执行 | Read-only: list recent background jobs (renders, transcriptions, generations, imports). |
 | `list_memories` | 直接执行 | Read-only: list what you already remember in this workspace. |

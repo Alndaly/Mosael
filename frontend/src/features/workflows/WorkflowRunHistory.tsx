@@ -7,7 +7,7 @@ import { useI18n } from "@/app/preferences";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
 import { assetOutputs, parseIso, toSteps, type Step } from "@/features/workflows/runSteps";
 import { PANEL_HEADER_CLASS, useFloatingPanel } from "@/features/workflows/useFloatingPanel";
-import type { WorkflowAgentMode } from "@/features/workflows/WorkflowAgentChat";
+import type { CanvasAgentMode } from "@/components/agent/CanvasAgentChat";
 import { cn } from "@/lib/utils";
 
 const RUNNING = new Set(["queued", "running"]);
@@ -85,8 +85,8 @@ export function WorkflowRunHistory({
    *  历史里的节点可能已被删改,查不到就退回纯文本 —— 不猜。 */
   nodeTypeById?: Record<string, string>;
   /** 与 AI 助手同一套:停靠在右栏,或浮成可拖动、可八向缩放的小窗。 */
-  mode: WorkflowAgentMode;
-  onModeChange: (mode: WorkflowAgentMode) => void;
+  mode: CanvasAgentMode;
+  onModeChange: (mode: CanvasAgentMode) => void;
   onClose: () => void;
 }) {
   const isFloating = mode === "floating";

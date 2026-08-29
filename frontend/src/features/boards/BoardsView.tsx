@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, Film, FolderOpen, Image as ImageIcon, LayoutGrid, Map as MapIcon, Maximize2, Music, Plus, Square, StickyNote, Trash2 } from "lucide-react";
+import { Bot, ChevronLeft, Film, Redo2, Undo2, FolderOpen, Image as ImageIcon, LayoutGrid, Map as MapIcon, Maximize2, Music, Plus, Square, StickyNote, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -28,7 +28,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { relativeTime } from "@/lib/time";
 import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
-import { BoardCanvas } from "@/features/boards/BoardCanvas";
+import { CanvasAgentChat, type CanvasAgentMode } from "@/components/agent/CanvasAgentChat";
+import { SIDEBAR_HANDLE_CLASS, useResizableSidebar } from "@/lib/useResizableSidebar";
+import { BoardCanvas, type BoardCanvasApi } from "@/features/boards/BoardCanvas";
 import { useAutosave } from "@/features/boards/useAutosave";
 import { AssetPickerDialog } from "@/features/boards/AssetPickerDialog";
 
@@ -193,19 +195,22 @@ function BoardDetail({
   const [name, setName] = React.useState(board.name);
   const [renaming, setRenaming] = React.useState(false);
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
+
+  //: 画布上的助手。**和工作流那扇是同一个面板** —— 会话池、消息、确认卡都走同一套 agent
+  //: session,两边的差别只有附给智能体的那行上下文。各记各的停靠状态和宽度:在画板上
+  //: 摊开助手,不该把工作流那边也改了。
+  const [agentOpen, setAgentOpen] = usePersistentTab<"on" | "off">("board-agent", "off", ["on", "off"]);
+  const [agentMode, setAgentMode] = usePersistentTab<CanvasAgentMode>("board-agent-mode", "docked", ["docked", "floating"]);
+  const agentPanel = useResizableSidebar("board-right", { min: 320, max: 640, fallback: 400 });
+  const dockedAgent = agentOpen === "on" && agentMode === "docked";
   //: 全览默认开着 —— 大图时它最有用,而"图大不大"只有用户自己知道。记在本地。
   const [minimapMode, setMinimap] = usePersistentTab<"on" | "off">("board-minimap", "on", ["on", "off"] as const);
   const showMinimap = minimapMode === "on";
   const [canvas, setCanvas] = React.useState<Canvas | null>(null);
   const [picking, setPicking] = React.useState<{ kind: MediaKind; place: (assetId: string) => void } | null>(null);
-  //: 画布交出来的「加一项」。顶栏那组按钮要和身份胶囊并排,而 add 依赖画布内部状态。
-  const [api, setApi] = React.useState<{
-    //: **就用 BoardItem["kind"]**,别在这儿再抄一份种类表 —— 抄漏一种不会报错,
-    //: 只会让那种节点建不出来(音频此前就是这么漏掉的)。
-    add: (kind: BoardItem["kind"], extra?: Record<string, unknown>) => void;
-    fill: (itemId: string, assetId: string) => void;
-    fitView: () => void;
-  } | null>(null);
+  //: 画布交出来的把手。顶栏那组按钮要和身份胶囊并排,而它们依赖画布内部状态。
+  //: **类型从画布导出**,别在这儿再抄一份 —— 抄的那份少一个动作不会报错,只会让按钮点了没反应。
+  const [api, setApi] = React.useState<BoardCanvasApi | null>(null);
 
   // 提示词面板要让人选模型 —— 两种能力各取一次再合并,和 AI 工作台看到的是同一份。
   const models = useQuery({
@@ -412,6 +417,41 @@ function BoardDetail({
             <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsFitView")} aria-label={t("boardsFitView")} onClick={() => api?.fitView()}>
               <Maximize2 size={14} />
             </Button>
+            {/* 撤销/重做。画布上最容易「手一滑」—— 拖错一个节点、误删一项,没有退路的话
+                用户只能凭记忆手动摆回去。快捷键是 ⌘Z / ⌘⇧Z,按钮是给不知道有快捷键的人。 */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              title={`${t("undo")}  ⌘Z`}
+              aria-label={t("undo")}
+              disabled={!api?.canUndo}
+              onClick={() => api?.undo()}
+            >
+              <Undo2 size={14} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              title={`${t("redo")}  ⌘⇧Z`}
+              aria-label={t("redo")}
+              disabled={!api?.canRedo}
+              onClick={() => api?.redo()}
+            >
+              <Redo2 size={14} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn("h-8 w-8", agentOpen === "on" && "bg-secondary text-foreground")}
+              title={t("wfAgentTitle")}
+              aria-label={t("wfAgentTitle")}
+              aria-pressed={agentOpen === "on"}
+              onClick={() => setAgentOpen(agentOpen === "on" ? "off" : "on")}
+            >
+              <Bot size={14} />
+            </Button>
           </div>
 
           <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
@@ -429,8 +469,41 @@ function BoardDetail({
         </div>
       </div>
 
+      {agentOpen === "on" && (
+        // 停靠时贴右侧,从工具条底下起、到画布底边止(和工作流详情页同一套刻度);
+        // 切到浮动模式后它自己脱离文档流,这一层就只是个容器。
+        <div
+          className={cn(
+            "z-10 grid min-h-0 min-w-0",
+            //: 起点算出来的,不是抄工作流那个 54:这一页的工具条挂在 top-4(容器内 16px)、
+            //: 高 42px,底边落在 58px —— 再留 8px 才是这里的 66。抄数字的话删除键会叠在面板上。
+            dockedAgent && "absolute bottom-2 right-2 top-[66px]",
+          )}
+          style={dockedAgent ? { width: agentPanel.width } : undefined}
+        >
+          <CanvasAgentChat
+            contextLine={t("boardAgentContext").replace("{id}", board.id).replace("{name}", board.name)}
+            emptyHint={t("boardAgentEmpty")}
+            placeholder={t("boardAgentPlaceholder")}
+            rectKey="openstudio.board.agent.rect.v1"
+            workspaceId={workspaceId}
+            mode={agentMode}
+            onModeChange={setAgentMode}
+            onClose={() => setAgentOpen("off")}
+          />
+        </div>
+      )}
+      {dockedAgent && (
+        <div
+          className={SIDEBAR_HANDLE_CLASS}
+          style={{ right: agentPanel.width + 4 }}
+          onPointerDown={agentPanel.startDrag}
+        />
+      )}
+
       <BoardCanvas
         boardId={board.id}
+        workspaceId={workspaceId}
         canvas={board.canvas ?? { items: [], edges: [] }}
         onChange={setCanvas}
         onPickAsset={(kind, place) => setPicking({ kind, place })}

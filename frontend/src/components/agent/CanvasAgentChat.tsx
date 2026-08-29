@@ -43,30 +43,36 @@ import { cn } from "@/lib/utils";
 
 type AgentMessage = components["schemas"]["AgentMessageOut"];
 type AgentSession = components["schemas"]["AgentSessionOut"];
-export type WorkflowAgentMode = "docked" | "floating";
-
-/** 悬浮窗几何记忆的键。v2:默认尺寸加大 + 八向缩放手柄(升键让老用户的小窗让位一次)。 */
-const RECT_KEY = "openstudio.wf.agent.rect.v2";
+export type CanvasAgentMode = "docked" | "floating";
 
 
 /**
- * 工作流常驻智能体面板:它不是第二套 AI,而是全局 AI 助手的工作流入口。
- * 会话池/消息/队列/确认卡都走同一套 agent session;入口只给每条消息附加
- * 当前 workflow_id/name 的隐藏上下文。
+ * 画布上的常驻智能体面板 —— 工作流和创意画板**共用这一个**。
+ *
+ * 它不是第二套 AI:会话池、消息、队列、确认卡走的都是同一套 agent session。两个入口的差别
+ * 只有三样东西 —— 给每条消息附加的隐藏上下文、空态那句话、输入框的例子。所以这里收参数,
+ * 而不是各存一份六百行的副本:副本改一处只会改好其中一个,而两边看起来一模一样。
  */
-export function WorkflowAgentChat({
-  workflowId,
-  workflowName,
+export function CanvasAgentChat({
+  /** 附在每条消息上的隐藏上下文:告诉智能体它在看哪张画布、该用哪几个工具。 */
+  contextLine,
+  /** 空态那句话 —— 说清这个面板能干什么。 */
+  emptyHint,
+  placeholder,
+  /** 悬浮窗几何记忆的键。**两个入口各记各的**:工作流那扇窗的大小位置,和画板那扇没关系。 */
+  rectKey,
   workspaceId,
   mode,
   onModeChange,
   onClose,
 }: {
-  workflowId: string;
-  workflowName: string;
+  contextLine: string;
+  emptyHint: string;
+  placeholder: string;
+  rectKey: string;
   workspaceId: string;
-  mode: WorkflowAgentMode;
-  onModeChange: (mode: WorkflowAgentMode) => void;
+  mode: CanvasAgentMode;
+  onModeChange: (mode: CanvasAgentMode) => void;
   onClose: () => void;
 }) {
   const t = useI18n();
@@ -83,7 +89,7 @@ export function WorkflowAgentChat({
 
   // 悬浮窗的拖动/缩放/位置记忆走共用 hook —— 执行历史面板用的是同一套。
   const { style: floatStyle, startDrag, handles, focusProps } = useFloatingPanel({
-    storageKey: RECT_KEY,
+    storageKey: rectKey,
     floating: isFloating,
   });
 
@@ -352,10 +358,7 @@ export function WorkflowAgentChat({
       let visibleContent = text || files.map((file) => `[${t("wfAgentAttached")} ${file.name}]`).join("\n");
       for (const asset of mediaAssets) visibleContent += attachmentToken(asset);
       visibleContent = visibleContent.trim();
-      const context = [
-        t("wfAgentContext").replace("{id}", workflowId).replace("{name}", workflowName),
-        fileBlock,
-      ].filter(Boolean).join("\n\n");
+      const context = [contextLine, fileBlock].filter(Boolean).join("\n\n");
       let targetId = sessionId;
       if (!targetId) {
         const created = await api<AgentSession>("/api/agent/sessions", {
@@ -501,7 +504,7 @@ export function WorkflowAgentChat({
         {(messages.data ?? []).length === 0 && !running && (
           <div className="grid justify-items-center gap-1.5 p-2.5 text-center text-xs text-muted-foreground [&_svg]:text-primary [&_svg]:opacity-70">
             <Bot size={16} />
-            <span>{t("wfAgentEmpty")}</span>
+            <span>{emptyHint}</span>
           </div>
         )}
         {(messages.data ?? []).map((message) => {
@@ -621,7 +624,7 @@ export function WorkflowAgentChat({
           rows={1}
           className="max-h-[220px] min-h-9 w-full min-w-0 resize-none border-0 bg-transparent px-0.5 pb-1.5 pt-0.5 text-ui-md leading-[1.55] shadow-none outline-none placeholder:text-muted-foreground placeholder:opacity-100 focus-visible:ring-0"
           value={draft}
-          placeholder={t("wfAgentPlaceholder")}
+          placeholder={placeholder}
           onChange={(event) => setDraft(event.target.value)}
           onPaste={attach.onPaste}
           onKeyDown={(event) => {

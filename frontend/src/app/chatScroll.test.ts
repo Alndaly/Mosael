@@ -24,7 +24,7 @@ const SRC = path.resolve(__dirname, "..");
 
 /** 只查真正承载对话正文的文件 —— 别的滚动容器(设置页表单、列表)不适用这条。 */
 const FILES = [
-  "features/workflows/WorkflowAgentChat.tsx",
+  "components/agent/CanvasAgentChat.tsx",
   "features/ai-studio/ChatWorkspace.tsx",
   "components/agent/ToolCalls.tsx",
 ];

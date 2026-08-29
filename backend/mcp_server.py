@@ -158,6 +158,7 @@ CONFIRMATION_TOOLS = frozenset(
         "generate_audio",
         "generate_podcast",
         "create_workflow",
+        "edit_board",
         "edit_workflow",
         "update_workflow",
         "run_workflow",
@@ -190,6 +191,7 @@ READ_ONLY_TOOLS = frozenset(
         "fetch_url",
         "get_answer",
         "get_confirmation",
+        "get_board",
         "get_current_time",
         "get_job",
         "get_transcript",
@@ -197,6 +199,7 @@ READ_ONLY_TOOLS = frozenset(
         "inspect_sequence",
         "list_agent_sessions",
         "list_assets",
+        "list_boards",
         "list_generation_models",
         "list_jobs",
         "list_memories",
@@ -1155,6 +1158,71 @@ def update_workflow(workflow_id: str, graph: dict[str, Any] | None = None, name:
             "tool": "update_workflow",
             "requested_by": _REQUESTED_BY.get(),
             "payload": payload,
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@mcp.tool()
+def list_boards(workspace_id: str = "") -> list[dict[str, Any]]:
+    """Read-only: list CREATIVE BOARDS (infinite canvases) in a workspace.
+
+    A board is a free-form canvas of notes, images, videos, audio and group
+    frames that the user brainstorms on — NOT a visual workflow and NOT a video
+    timeline. Use this to find a board_id before get_board/edit_board.
+    """
+    boards = _get("/api/boards", {"workspace_id": workspace_id or _default_workspace_id()})
+    return [
+        {"id": b["id"], "name": b["name"], "items": len((b.get("canvas") or {}).get("items", []))}
+        for b in boards
+    ]
+
+
+@mcp.tool()
+def get_board(board_id: str, workspace_id: str = "") -> dict[str, Any]:
+    """Read-only: inspect one CREATIVE BOARD canvas in full.
+
+    Returns every item (id, kind, x, y, width, height, text, color, asset_id) and
+    every edge. Call this before edit_board so you know the exact item_id values
+    and where things already sit — the user has arranged them by hand.
+    """
+    return _get(f"/api/boards/{board_id}", {"workspace_id": workspace_id or _default_workspace_id()})
+
+
+@mcp.tool()
+def edit_board(board_id: str, operations: list[dict[str, Any]], workspace_id: str = "") -> dict[str, Any]:
+    """Confirmation required: edit an EXISTING CREATIVE BOARD with granular canvas ops.
+
+    Use for anything on the board canvas: adding notes/image/video/audio slots,
+    rewriting a note, recolouring, moving or resizing, connecting items, deleting.
+    The server applies your ops onto the CURRENT canvas, so you never rewrite the
+    whole board — rewriting it wipes the positions the user arranged by hand.
+    Call get_board first for exact item_id values. Do NOT use for visual workflows
+    (edit_workflow) or video timelines (edit_timeline).
+
+    An image/video/audio item with no asset_id is an EMPTY SLOT: the user writes a
+    prompt on it and generates. Adding empty slots is how you set up work for them.
+
+    operations is a list of:
+      {"kind":"add_item","type":"note","item_id":"n1","x":80,"y":120,"text":"开场白","color":"yellow"}
+          (item_id/x/y/width/height optional — the server auto-ids and lays out to the right)
+          type is one of note / image / video / audio / frame
+      {"kind":"set_text","item_id":"n1","text":"新内容"}
+      {"kind":"set_color","item_id":"n1","color":"green"}      (notes: yellow/blue/green/pink/purple/gray)
+      {"kind":"move_item","item_id":"n1","x":400,"y":200}
+      {"kind":"resize_item","item_id":"n1","width":320,"height":200}
+      {"kind":"connect","source":"n1","target":"i1"}
+          (a line from A to B; the downstream node picks up A's output as its reference)
+      {"kind":"remove_item","item_id":"n1"}                     (its edges go too)
+      {"kind":"remove_edge","edge_id":"e-n1-i1"}
+    """
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "edit_board",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"board_id": board_id, "operations": operations},
         },
     )
     return _confirmation_reply(confirmation)

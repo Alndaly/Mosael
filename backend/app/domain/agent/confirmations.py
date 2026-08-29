@@ -35,6 +35,8 @@ TOOL_DEFS: dict[str, dict[str, str]] = {
     "create_workflow": {"permission": "edit", "cost": "none"},
     "update_workflow": {"permission": "edit", "cost": "none"},
     "edit_workflow": {"permission": "edit", "cost": "none"},
+    # 创意画板:改的是用户攒想法的那张画布,和改工作流同一档 —— 最坏也撤得回。
+    "edit_board": {"permission": "edit", "cost": "none"},
     "run_workflow": {"permission": "ai-cost", "cost": "ai"},
     # 智能体开一个隔离浏览器并导航——入口确认(用户看到目标网址再放行);后续同会话动作内联。
     "browser_open": {"permission": "edit", "cost": "none"},
@@ -336,6 +338,28 @@ def _validate_payload(db: Session, tool: str, workspace_id: str, payload: dict[s
                 raise ConfirmationError("；".join(errors))
 
 
+    if tool == "edit_board":
+        from app.db.models import Board
+        from app.domain.board_ops import BOARD_OP_KINDS, apply_board_ops
+        from app.domain.boards import BoardDomainError, normalize_canvas
+
+        board = db.get(Board, str(payload.get("board_id", "")))
+        if board is None or board.workspace_id != workspace_id:
+            raise ConfirmationError("这个工作区里没有这张画板")
+        operations = payload.get("operations")
+        if not isinstance(operations, list) or not operations:
+            raise ConfirmationError("edit_board 需要一个非空的 operations 列表")
+        for operation in operations:
+            kind = operation.get("kind") if isinstance(operation, dict) else None
+            if kind not in BOARD_OP_KINDS:
+                raise ConfirmationError(f"不支持的画板算子:{kind}")
+        # 先干跑一遍:写坏的算子要在**批准之前**就失败,而不是让用户点了同意才看到报错。
+        try:
+            normalize_canvas(apply_board_ops(board.canvas or {}, operations))
+        except BoardDomainError as exc:
+            raise ConfirmationError(str(exc)) from exc
+
+
 def _external_warning(external: set[str] | None) -> str:
     """把「这张图会伸到应用外面去」写成人话,挂在摘要末尾。
 
@@ -364,6 +388,9 @@ def _summarize(tool: str, payload: dict[str, Any], external: set[str] | None = N
         nodes = len((payload.get("graph") or {}).get("nodes", []) or [])
         head = f"修改工作流({nodes} 个节点)" if nodes else "修改工作流"
         return head + _external_warning(external)
+    if tool == "edit_board":
+        kinds = [op.get("kind", "?") for op in payload.get("operations", []) if isinstance(op, dict)]
+        return f"{len(kinds)} 个画板编辑: {', '.join(kinds[:6])}{'…' if len(kinds) > 6 else ''}"
     if tool == "edit_workflow":
         ops = [op for op in payload.get("operations", []) if isinstance(op, dict)]
         kinds = [op.get("kind", "?") for op in ops]
@@ -620,6 +647,17 @@ def _execute_approved(db: Session, confirmation: ToolConfirmation) -> dict[str, 
         new_graph = apply_graph_ops(workflow.graph or {}, payload["operations"])
         update_workflow(db, workflow, {"graph": new_graph})
         return {"workflow_id": workflow.id, "nodes": len(new_graph.get("nodes", []))}
+    if confirmation.tool == "edit_board":
+        from app.db.models import Board
+        from app.domain.board_ops import apply_board_ops
+        from app.domain.boards import update_board
+
+        board = db.get(Board, str(payload["board_id"]))
+        assert board is not None  # 开卡时校验过
+        # 落到**批准这一刻**的画布上,而不是开卡时的那份快照 —— 这中间用户很可能还在拖东西。
+        canvas = apply_board_ops(board.canvas or {}, payload["operations"])
+        update_board(db, workspace_id=board.workspace_id, board_id=board.id, name=None, canvas=canvas)
+        return {"board_id": board.id, "items": len(canvas.get("items", []))}
     if confirmation.tool == "run_workflow":
         from app.db.models import Workflow
         from app.domain.workflows.engine import start_workflow_job

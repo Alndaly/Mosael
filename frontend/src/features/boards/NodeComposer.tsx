@@ -2,7 +2,10 @@ import React from "react";
 import { NodeToolbar, Position } from "@xyflow/react";
 import { ArrowLeftRight, ArrowUp, Loader2, Plus, Sparkles, Volume2, VolumeX } from "lucide-react";
 
-import { assetThumbnailUrl, type BoardItem, type GenerationModel } from "@/api/client";
+import { useQuery } from "@tanstack/react-query";
+
+import { assetThumbnailUrl, listAssets, type Asset, type BoardItem, type GenerationModel } from "@/api/client";
+import { useAssetMentions } from "@/components/app/useAssetMentions";
 import { useI18n } from "@/app/preferences";
 import { ROLE_COPY, type SourceRole } from "@/features/ai-studio/sourceFrames";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -175,6 +178,8 @@ export function NodeComposer({
   onSubmit,
   onPickAsset,
   upstream,
+  upstreamTexts,
+  workspaceId,
 }: {
   item: BoardItem;
   /** 这种能力下可选的模型。空数组 = 还没配 —— 那时该说清楚,而不是给一个点了没反应的按钮。 */
@@ -192,6 +197,11 @@ export function NodeComposer({
   /** **连到这个节点上的上游产出**,按连线顺序。它们会自动挂进当前生成方式的槽位 ——
    *  连了线还要再挂一遍素材的话,那条线就只是根装饰。 */
   upstream?: { assetId: string; kind: string }[];
+  /** 上游**便签**给的文字。一张写着描述的便签连过来,意思是「照这段话画」—— 它不是参考图
+   *  (便签根本没有图),而是提示词本身。 */
+  upstreamTexts?: { itemId: string; text: string }[];
+  /** `@` 引用素材时去哪个工作区找。 */
+  workspaceId: string;
 }) {
   const t = useI18n();
   const [prompt, setPrompt] = React.useState(item.text ?? "");
@@ -220,6 +230,7 @@ export function NodeComposer({
   //: 「生成方式」= 描述符里那几个互斥分组。摆出来的槽只属于当前这一组 —— 两组同时摆着,
   //: 用户挂满了才会在提交时被拒。
   const feed = React.useMemo(() => upstream ?? [], [upstream]);
+  const texts = React.useMemo(() => upstreamTexts ?? [], [upstreamTexts]);
   const modes = React.useMemo(() => sourceModes(current), [current]);
   const [mode, setMode] = React.useState("");
   const activeMode = modes.find((one) => one.key === mode) ?? modes[0] ?? null;
@@ -242,6 +253,62 @@ export function NodeComposer({
     lastFeed.current = feedKey;
     setSources(autoAssign(sourceSlots(current, activeMode?.roles), feed));
   }, [feedKey, current, activeMode, feed]);
+
+  /**
+   * 上游便签的文字**填进提示词**。
+   *
+   * 连一张写着描述的便签到图片上,意思就是「照这段话画」—— 让用户再把那段字抄一遍,那条线
+   * 就白连了。但**不覆盖他自己写的**:只有输入框还空着、或者里面正好是上一次自动填进去的
+   * 那段时才替换;他改过或删掉之后就不再回填(那本身就是一次表态)。
+   */
+  const textKey = texts.map((one) => `${one.itemId}:${one.text}`).join("|");
+  const filled = React.useRef("");
+  React.useEffect(() => {
+    const joined = texts.map((one) => one.text).join("\n\n");
+    if (!joined || joined === filled.current) return;
+    setPrompt((current) => (current.trim() === "" || current === filled.current ? joined : current));
+    filled.current = joined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [textKey]);
+
+  /**
+   * `@` 引用素材。挑中的**挂到输入素材的槽位上**,不写进提示词 —— 提示词里留着
+   * 「@猫.png」的话,模型会把这几个字当成描述的一部分念出来。
+   *
+   * 候选只列这个模型**收得下**的类别:它一个视频槽都没有的时候,把视频列出来等于让用户
+   * 选一个挂不上去的东西。
+   */
+  const mention = useAssetMentions();
+  const box = React.useRef<HTMLTextAreaElement | null>(null);
+  const library = useQuery({
+    queryKey: ["assets", workspaceId],
+    queryFn: () => listAssets(workspaceId),
+    enabled: mention.query !== null,
+  });
+  const accepted = React.useMemo(() => new Set(slots.map((slot) => roleAccepts(slot.role))), [slots]);
+  const matches = React.useMemo(() => {
+    if (mention.query === null) return [];
+    const needle = mention.query.trim().toLowerCase();
+    return (library.data ?? [])
+      .filter((asset: Asset) => accepted.has(asset.kind as "image" | "video" | "audio"))
+      .filter(
+        (asset: Asset) =>
+          !needle || `${asset.name ?? ""} ${asset.original_filename ?? ""}`.toLowerCase().includes(needle),
+      )
+      .slice(0, 8);
+  }, [library.data, mention.query, accepted]);
+
+  const pickMention = React.useCallback(
+    (asset: Asset) => {
+      const slot = slots.find((one) => roleAccepts(one.role) === asset.kind);
+      if (slot) setSources((all) => [...all, { role: slot.role, assetId: asset.id }]);
+      const next = mention.take(prompt);
+      setPrompt(next.text);
+      //: 光标放回那个 @ 原来的位置 —— 不放的话它会跳到末尾,用户接着打字就打错地方了。
+      requestAnimationFrame(() => box.current?.setSelectionRange(next.caret, next.caret));
+    },
+    [mention, prompt, slots],
+  );
 
   //: 上游变了就重挑一次默认方式:一张图 = 首帧,多张 = 参考(TapNow 的那套直觉)。
   //: 用户自己点过之后,这条不再插手 —— touched 记着这件事。
@@ -345,20 +412,83 @@ export function NodeComposer({
           </div>
         )}
 
-        <textarea
-          value={prompt}
-          onChange={(event) => setPrompt(event.target.value)}
-          // ⌘/Ctrl+Enter 提交:光按 Enter 会和换行打架,而提示词经常要分行写。
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-              event.preventDefault();
-              send();
+        {/* 输入框 + `@` 引用素材。@ 挑中的东西**挂到输入素材上,不留在文字里** ——
+            留着的话模型会把「@猫.png」当成描述的一部分念出来。 */}
+        <div className="relative">
+          <textarea
+            ref={box}
+            value={prompt}
+            onChange={(event) => {
+              setPrompt(event.target.value);
+              mention.onChange(event.target.value, event.target.selectionStart ?? event.target.value.length);
+            }}
+            onClick={(event) =>
+              mention.onChange(event.currentTarget.value, event.currentTarget.selectionStart ?? 0)
             }
-          }}
-          rows={3}
-          placeholder="描述你想要生成的内容"
-          className="w-full resize-none border-0 bg-transparent px-1.5 py-1 text-ui-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
-        />
+            onBlur={() => window.setTimeout(mention.close, 120)}
+            // ⌘/Ctrl+Enter 提交:光按 Enter 会和换行打架,而提示词经常要分行写。
+            onKeyDown={(event) => {
+              //: 菜单开着时,方向键和回车归菜单 —— 否则回车会换行、上下键会把光标挪走,
+              //: 而用户以为自己在选素材。
+              if (mention.query !== null && matches.length > 0) {
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  mention.setIndex((mention.index + 1) % matches.length);
+                  return;
+                }
+                if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  mention.setIndex((mention.index - 1 + matches.length) % matches.length);
+                  return;
+                }
+                if (event.key === "Enter" || event.key === "Tab") {
+                  event.preventDefault();
+                  pickMention(matches[mention.index]);
+                  return;
+                }
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  mention.close();
+                  return;
+                }
+              }
+              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                event.preventDefault();
+                send();
+              }
+            }}
+            rows={3}
+            placeholder="描述你想要生成的内容,按 @ 引用素材"
+            className="w-full resize-none border-0 bg-transparent px-1.5 py-1 text-ui-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
+          />
+          {mention.query !== null && matches.length > 0 && (
+            <div className="absolute inset-x-1 top-full z-50 max-h-56 overflow-y-auto rounded-lg border border-border-strong bg-panel p-1 shadow-[var(--shadow-panel)]">
+              {matches.map((asset, at) => (
+                <button
+                  key={asset.id}
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => pickMention(asset)}
+                  onMouseEnter={() => mention.setIndex(at)}
+                  className={cn(
+                    "flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors",
+                    at === mention.index ? "bg-secondary" : "hover:bg-secondary",
+                  )}
+                >
+                  <img
+                    src={assetThumbnailUrl(asset.id)}
+                    alt=""
+                    className="h-7 w-10 shrink-0 rounded bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] object-cover"
+                  />
+                  <span className="min-w-0 flex-1 truncate text-ui-2xs text-foreground">
+                    {asset.name || asset.original_filename}
+                  </span>
+                  <span className="shrink-0 text-ui-2xs text-muted-foreground">{asset.kind}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         {/* 参数行:**按这个模型声明的来**,不写死。
             后端描述符已经说清楚了每个模型认哪几项(aspect_ratio / resolution /
             duration_seconds / size / num_images / generate_audio),这里照着出控件 ——

@@ -824,6 +824,10 @@ export const messages = {
     wfLlmJsonStrictOff: "关闭",
     wfLlmJsonSchema: "JSON Schema",
     wfAgentEmpty: "描述你想要的流程,我来搭建或修改节点;改动会先出确认卡。",
+    boardAgentEmpty: "说说你想在这张画板上做什么 —— 摊开思路、加几张空槽、把它们连起来;改动会先出确认卡。",
+    boardAgentPlaceholder: "例如:按分镜拆成六张便签,每张后面接一个图片空槽",
+    boardAgentContext:
+      "你正在协助编辑 Open Studio 创意画板「{name}」(board_id={id})。先用 get_board 看当前画布,再用 edit_board 提交细粒度算子(add_item/set_text/set_color/move_item/resize_item/connect/remove_item/remove_edge,一次可批量,由服务端落到当前画布,你不用重写整张板 —— 上面的位置是用户一手拖出来的)。图片/视频/音频项不带 asset_id 就是一个空槽,用户在上面写提示词然后生成;给他摆好空槽并连上参考往往比替他决定生成什么更有用。画板不是工作流,不要用 edit_workflow 改它。改动都会生成确认卡等我批准。",
     wfAgentPlaceholder: "例如:加一个条件分支,检索结果为空就走 HTTP 通知",
     wfAgentAttach: "添加文件",
     wfAgentAttached: "附件",
@@ -2809,6 +2813,10 @@ export const messages = {
     wfPickOption: "Pick one",
     wfInsertVar: "Insert at cursor",
     wfAgentEmpty: "Describe the flow you want — I'll build or edit nodes; changes go through confirmation cards.",
+    boardAgentEmpty: "Tell me what you want on this board — lay out an idea, add empty slots, wire them up; changes go through confirmation cards.",
+    boardAgentPlaceholder: "e.g. break this into six shot notes, each followed by an image slot",
+    boardAgentContext:
+      "You are assisting with Open Studio creative board \"{name}\" (board_id={id}). Call get_board first, then edit_board with granular ops (add_item/set_text/set_color/move_item/resize_item/connect/remove_item/remove_edge, batchable; the server applies them to the current canvas so you never rewrite the whole board — the user arranged those positions by hand). An image/video/audio item with no asset_id is an EMPTY SLOT the user writes a prompt on and generates; setting up slots and wiring references is often more useful than deciding the content for them. A board is not a workflow — do not use edit_workflow on it. Changes create a confirmation card for my approval.",
     wfAgentPlaceholder: "e.g. add a condition branch; if search is empty, notify via HTTP",
     wfAgentAttach: "Attach file",
     wfAgentAttached: "attachment",

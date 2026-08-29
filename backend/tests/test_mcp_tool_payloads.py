@@ -34,6 +34,7 @@ ARGS: dict[str, dict[str, Any]] = {
     "get_current_time": {},
     "list_assets": {},
     "list_workflows": {},
+    "list_boards": {},
     "list_workflow_node_types": {},
     "list_memories": {},
     # 问一个形状合法的问题:载荷要能被 /api/agent/questions 接住。没有会话上下文时它会
@@ -61,6 +62,7 @@ ARGS: dict[str, dict[str, Any]] = {
     "sleep": {"seconds": 0},
     "get_job": {"job_id": "no-such-job"},
     "get_workflow": {"workflow_id": "no-such-workflow"},
+    "get_board": {"board_id": "no-such-board"},
     "get_confirmation": {"confirmation_id": "no-such-confirmation"},
     "inspect_sequence": {"sequence_id": "no-such-sequence"},
     "analyze_asset": {"asset_id": "no-such-asset", "question": "这是什么"},
