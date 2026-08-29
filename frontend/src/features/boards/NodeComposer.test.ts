@@ -137,3 +137,39 @@ describe("上游产出自动挂进槽位", () => {
     expect(roleAccepts("reference_audio")).toBe("audio");
   });
 });
+
+/**
+ * 提交时发出去的输入素材 = 槽位上挂的 + 正文里 @ 到的。两条规矩错了都不报错:
+ * 重复发一份会被厂商算进份数、挂到上限就整次被拒;而硬塞一个没有槽可落的素材,
+ * 会被描述符校验当场拒掉,连带整次生成都发不出去。
+ */
+import { mergeSourceAssets } from "./NodeComposer";
+
+const lib = [
+  { id: "a", kind: "image" },
+  { id: "b", kind: "image" },
+  { id: "v", kind: "video" },
+];
+
+describe("槽位和正文引用合到一起", () => {
+  const slots = [{ role: "reference_image", limit: 9 }];
+
+  it("正文里 @ 到的落到第一个收得下它的槽", () => {
+    expect(mergeSourceAssets([], ["a"], lib, slots)).toEqual([{ asset_id: "a", role: "reference_image" }]);
+  });
+
+  it("同一份不发两遍 —— 槽位上挂过的,正文里再 @ 一次也只算一份", () => {
+    expect(mergeSourceAssets([{ role: "first_frame", assetId: "a" }], ["a", "b"], lib, slots)).toEqual([
+      { asset_id: "a", role: "first_frame" },
+      { asset_id: "b", role: "reference_image" },
+    ]);
+  });
+
+  it("没有槽收得下就不发 —— 这个模型不认参考视频", () => {
+    expect(mergeSourceAssets([], ["v", "a"], lib, slots)).toEqual([{ asset_id: "a", role: "reference_image" }]);
+  });
+
+  it("库里查不到的 id 也不发 —— 认不出类别就找不到该落哪儿", () => {
+    expect(mergeSourceAssets([], ["幽灵"], lib, slots)).toEqual([]);
+  });
+});

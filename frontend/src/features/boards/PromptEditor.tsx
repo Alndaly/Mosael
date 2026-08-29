@@ -1,5 +1,12 @@
 import React from "react";
-import { EditorContent, useEditor } from "@tiptap/react";
+import {
+  EditorContent,
+  Node,
+  NodeViewWrapper,
+  ReactNodeViewRenderer,
+  mergeAttributes,
+  useEditor,
+} from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 
@@ -21,26 +28,72 @@ import { cn } from "@/lib/utils";
  * 菜单的「摆在哪、怎么跟着光标走」也和工作流共用一份(useSuggestionMenu):抄两份的话,
  * 翻面、贴边、跟随都要各修一遍。
  *
- * ## 选中的素材**不写进正文**
+ * ## 选中的素材是正文里的一个 chip
  *
- * 它挂到上面那排槽位上去。槽位行是「这次生成挂了什么」的唯一去处 —— 正文里再插一个
- * chip,同一份素材就有了两个说法,而用户删掉其中一个时另一个还在。
+ * 它就长在句子里 ——「把 @创作者.png 里的人放到街上」读起来是一句话,而这正是用户写下 @
+ * 时想说的。**chip 是原子节点**:整体选中、整体删除,退格不会把「创作者.png」咬掉半截
+ * 变成一段没人认得的字。
+ *
+ * 提交时它一分为二:名字留在提示词里(有好几张图时,模型得知道你说的是哪张),素材本身
+ * 进 source_assets。上面那排槽位是另一件事 —— 那里挂的是首帧/参考这种**有角色**的位置。
  */
+/** 正文里的素材 chip。`atom: true` 是关键 —— 没有它光标能走进标签内部,退格就咬半截。 */
+const AssetChip = Node.create({
+  name: "assetRef",
+  group: "inline",
+  inline: true,
+  atom: true,
+  selectable: true,
+  addAttributes: () => ({ assetId: { default: "" }, name: { default: "" } }),
+  parseHTML: () => [{ tag: "span[data-asset-ref]" }],
+  renderHTML: ({ HTMLAttributes }: { HTMLAttributes: Record<string, unknown> }) => [
+    "span",
+    mergeAttributes(HTMLAttributes, { "data-asset-ref": "" }),
+  ],
+  //: 序列化成**名字**而不是 id:editor.getText() 拿到的就是提示词该有的样子,
+  //: 而 id 是给 source_assets 用的(从文档里另收,见 collect)。
+  renderText: ({ node }: { node: { attrs: Record<string, unknown> } }) => String(node.attrs.name ?? ""),
+  addNodeView: () =>
+    ReactNodeViewRenderer(({ node }: { node: { attrs: Record<string, unknown> } }) => (
+      <NodeViewWrapper as="span" className="inline-flex max-w-[180px] items-center gap-1 rounded-md bg-secondary px-1 py-0.5 align-baseline text-ui-2xs text-foreground">
+        <img
+          src={assetThumbnailUrl(String(node.attrs.assetId))}
+          alt=""
+          className="h-3.5 w-3.5 shrink-0 rounded-[3px] object-cover"
+        />
+        <span className="truncate">{String(node.attrs.name ?? "")}</span>
+      </NodeViewWrapper>
+    )),
+});
+
+/** 文档里所有 chip 引用到的素材 id,按出现顺序、去重。 */
+export function collect(doc: { content?: unknown[] } | null): string[] {
+  const found: string[] = [];
+  const walk = (node: Record<string, unknown>) => {
+    if (node.type === "assetRef") {
+      const id = String((node.attrs as Record<string, unknown> | undefined)?.assetId ?? "");
+      if (id && !found.includes(id)) found.push(id);
+    }
+    for (const child of (node.content as Record<string, unknown>[] | undefined) ?? []) walk(child);
+  };
+  if (doc) walk(doc as Record<string, unknown>);
+  return found;
+}
+
 export function PromptEditor({
   value,
   onChange,
   placeholder,
   candidates,
-  onPick,
   onSubmit,
   emptyHint,
 }: {
   value: string;
-  onChange: (next: string) => void;
+  /** 正文变化。`assets` 是正文里 chip 引用到的素材 —— 提交时它们进 source_assets。 */
+  onChange: (next: string, assets: string[]) => void;
   placeholder: string;
   /** `@` 能挑的素材。由调用方按「这个模型收得下什么」筛过。 */
   candidates: (query: string) => Asset[];
-  onPick: (asset: Asset) => void;
   /** ⌘/Ctrl+Enter。 */
   onSubmit: () => void;
   /** 一个候选都没有时说的那句话;返回空串就什么都不弹。 */
@@ -52,8 +105,6 @@ export function PromptEditor({
   //: 插件的回调在创建时一次性装好,拿不到后续渲染的闭包 —— 用 ref 兜住当前值。
   const candidatesRef = React.useRef(candidates);
   candidatesRef.current = candidates;
-  const pickRef = React.useRef(onPick);
-  pickRef.current = onPick;
   const submitRef = React.useRef(onSubmit);
   submitRef.current = onSubmit;
 
@@ -65,6 +116,7 @@ export function PromptEditor({
   const editor = useEditor({
     extensions: [
       // 这是**一段提示词**,不是文档:标题、列表、加粗之类一概关掉。
+      AssetChip,
       StarterKit.configure({
         heading: false,
         bulletList: false,
@@ -86,9 +138,18 @@ export function PromptEditor({
           allowedPrefixes: [" ", "(", "[", "{", ",", ":", "，", "、"],
           items: ({ query }) => candidatesRef.current(query),
           command: ({ editor: instance, range, props }) => {
-            //: 把那段 `@词` 从正文里删掉 —— 留着的话模型会把「@猫.png」当成描述念出来。
-            instance.chain().focus().deleteRange(range).run();
-            pickRef.current(props as unknown as Asset);
+            const asset = props as unknown as Asset;
+            //: 把那段 `@词` 换成一个 chip,并在后面补一个空格 —— 不补的话光标紧贴着原子节点,
+            //: 接着打字会被当成还在挑素材。
+            instance
+              .chain()
+              .focus()
+              .deleteRange(range)
+              .insertContent([
+                { type: "assetRef", attrs: { assetId: asset.id, name: asset.name || asset.original_filename || "" } },
+                { type: "text", text: " " },
+              ])
+              .run();
           },
           render: menu.render,
         },
@@ -114,7 +175,7 @@ export function PromptEditor({
     onUpdate: ({ editor: instance }) => {
       const next = instance.getText();
       emitted.current = next;
-      onChange(next);
+      onChange(next, collect(instance.getJSON() as { content?: unknown[] }));
     },
   });
 

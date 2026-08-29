@@ -106,6 +106,35 @@ export function modeLabel(roles: string[]): string {
   return roles.some((role) => role.endsWith("_frame")) ? "首尾帧" : "全能参考";
 }
 
+/**
+ * 提交时要发出去的输入素材:**槽位挂的 + 正文里 @ 到的**。
+ *
+ * 两条规矩,错了都不报错:
+ *
+ *  · **同一份不发两遍。** 有些厂商会把重复的那一份也算进参考图的份数,挂到上限就直接拒了 ——
+ *    而用户看到的只是一句英文报错,他并不知道自己"挂了两次"。
+ *  · **落不下的就不发。** 正文里的 @ 没有角色,得找一个收得下它的槽;一个都没有(比如
+ *    这个模型不认参考视频)就跳过,硬塞会被描述符校验当场拒掉,连带整次生成都发不出去。
+ */
+export function mergeSourceAssets(
+  attached: { role: string; assetId: string }[],
+  mentioned: string[],
+  library: { id: string; kind: string }[],
+  slots: { role: string; limit: number }[],
+): { asset_id: string; role: string }[] {
+  const out = attached.map((one) => ({ asset_id: one.assetId, role: one.role }));
+  const seen = new Set(out.map((one) => one.asset_id));
+  for (const assetId of mentioned) {
+    if (seen.has(assetId)) continue;
+    const kind = library.find((asset) => asset.id === assetId)?.kind;
+    const slot = slots.find((one) => roleAccepts(one.role) === kind);
+    if (!slot) continue;
+    seen.add(assetId);
+    out.push({ asset_id: assetId, role: slot.role });
+  }
+  return out;
+}
+
 /** 这个模型认哪几种输入素材、各能挂几份。
  *
  * **认不认看 supportsParameter(描述符的 parameter_keys),能挂几份才看 sourceLimit。**
@@ -302,13 +331,9 @@ export function NodeComposer({
     [library.data, accepted],
   );
 
-  const attachMentioned = React.useCallback(
-    (asset: Asset) => {
-      const slot = slots.find((one) => roleAccepts(one.role) === asset.kind);
-      if (slot) setSources((all) => [...all, { role: slot.role, assetId: asset.id }]);
-    },
-    [slots],
-  );
+  //: 正文里 chip 引用到的素材。它们和上面那排槽位是**两件事**:槽位挂的是首帧/参考这种
+  //: 有角色的位置,而 chip 是「我在这句话里指的是这张图」。提交时两边都进 source_assets。
+  const [mentioned, setMentioned] = React.useState<string[]>([]);
 
   //: 上游变了就重挑一次默认方式:一张图 = 首帧,多张 = 参考(TapNow 的那套直觉)。
   //: 用户自己点过之后,这条不再插手 —— touched 记着这件事。
@@ -336,7 +361,10 @@ export function NodeComposer({
       provider: current.provider,
       model: current.model,
       parameters,
-      sourceAssets: sources.map((one) => ({ asset_id: one.assetId, role: one.role })),
+      //: 槽位挂的 + 正文里 @ 到的,都要发出去。**同一份素材不发两遍** —— 有些厂商会把
+      //: 重复的那一份也算进参考图的份数,挂到上限就直接拒了。正文里的 @ 没有角色,
+      //: 落到第一个收得下它的槽上(通常就是参考图)。
+      sourceAssets: mergeSourceAssets(sources, mentioned, library.data ?? [], slots),
     });
   };
 
@@ -432,10 +460,12 @@ export function NodeComposer({
             中文选词时按回车会被菜单当成「选中候选」吃掉,候选词上不了屏。 */}
         <PromptEditor
           value={prompt}
-          onChange={setPrompt}
+          onChange={(next, assets) => {
+            setPrompt(next);
+            setMentioned(assets);
+          }}
           placeholder={slots.length > 0 ? "描述你想要生成的内容,按 @ 引用素材" : "描述你想要生成的内容"}
           candidates={candidates}
-          onPick={attachMentioned}
           onSubmit={send}
           emptyHint={() => (slots.length === 0 ? "这个模型不收参考素材,@ 在这里没有可挂的地方。" : "")}
         />
