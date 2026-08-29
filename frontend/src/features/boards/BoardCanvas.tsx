@@ -46,10 +46,10 @@ import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKi
  *  (撤销)时抄的那份不会报错,只会让按钮点了没反应。 */
 export interface BoardCanvasApi {
   add: (kind: BoardItem["kind"], extra?: Partial<BoardItem>) => void;
-  fill: (itemId: string, assetId: string) => void;
-  /** 把某一项的文字换掉(AI 写完之后)。**得走这条** —— 画布的节点只在挂载时从 canvas
-   *  建一次,回写上层的 canvas 状态是看不见的。 */
-  setText: (itemId: string, text: string) => void;
+  /** 就地改某一项(填产出、写文字、标记开始生成)。**得走这条** —— 画布的节点只在挂载时
+   *  从 canvas 建一次,回写上层的 canvas 状态它看不见,用户会以为「点了没反应」。
+   *  值给 undefined 表示删掉那个字段。 */
+  patch: (itemId: string, next: Partial<BoardItem>) => void;
   fitView: () => void;
   undo: () => void;
   redo: () => void;
@@ -428,14 +428,23 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
   );
 
   /** 把某一项就地换成已完成的产出。轮询拿到结果后由上层调。 */
-  const fill = React.useCallback(
-    (itemId: string, assetId: string) => {
+  /**
+   * 就地改某一项。**画布上的一切改动都走它** —— 填产出、写文字、标记开始生成,此前是三段
+   * 各写一遍的 setNodes,而它们只在「改哪个字段」上不同。
+   *
+   * 值给 undefined 表示**删掉这个字段**:产出到了要把 job_id 摘掉,留着的话一个项同时带着
+   * job_id 和 asset_id,画布不知道该画转圈还是画图。
+   */
+  const patch = React.useCallback(
+    (itemId: string, next: Partial<BoardItem>) => {
       setNodes((current) =>
         current.map((node) => {
           if (node.id !== itemId) return node;
-          const item = (node.data as unknown as { item: BoardItem }).item;
-          const { job_id: _dropped, ...rest } = item;
-          return { ...node, data: { ...node.data, item: { ...rest, asset_id: assetId } } };
+          const item = { ...(node.data as unknown as { item: BoardItem }).item, ...next };
+          for (const [key, value] of Object.entries(next)) {
+            if (value === undefined) delete (item as Record<string, unknown>)[key];
+          }
+          return { ...node, data: { ...node.data, item } };
         }),
       );
     },
@@ -481,15 +490,14 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
   React.useEffect(() => {
     onReady?.({
       add,
-      fill,
-      setText,
+      patch,
       fitView: () => rf.current?.fitView({ padding: 0.3, duration: 250 }),
       undo: stepBack,
       redo: stepForward,
       canUndo: canUndo(history),
       canRedo: canRedo(history),
     });
-  }, [add, fill, setText, onReady, stepBack, stepForward, history]);
+  }, [add, patch, onReady, stepBack, stepForward, history]);
 
   return (
     // 画布放在**带边框的圆角卡片**里(和工作流详情页同一个形态)—— 通栏铺到窗口边的话,
@@ -768,7 +776,9 @@ function ItemToolbar({
     ]);
 
   return (
-    <NodeToolbar nodeId={selected.map((node) => node.id)} isVisible position={Position.Top} offset={10}>
+    //: 间距从**类型标签**上方算起,不是节点上边框:标签挂在节点外的 -top-5(20px)处,
+    //: 按节点算的话操作条会压在标签上。
+    <NodeToolbar nodeId={selected.map((node) => node.id)} isVisible position={Position.Top} offset={30}>
       <div className="nodrag nopan flex items-center gap-0.5 rounded-full border border-border-strong bg-panel p-1 shadow-[var(--shadow-panel)]">
         {/* 按类型来的那几个动作装在这一格里,**分隔线是这一格自己的右边框**。
             于是它不可能在没有动作时出现 —— 此前那道线自己抄了一遍「上面有没有东西」的

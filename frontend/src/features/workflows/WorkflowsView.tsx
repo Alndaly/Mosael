@@ -1945,7 +1945,7 @@ function WorkflowEditor({
         <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-border" />
         {/* 工作流图标去掉了:左边导航栏里那一格已经亮着"工作流",顶上再画一次是同一句话说两遍,
             而这一格真正要回答的是"**哪一个**工作流"。 */}
-        <button type="button" className="inline-flex cursor-pointer items-center rounded-full border-0 bg-transparent px-1.5 py-[3px] text-left text-foreground hover:bg-secondary" onClick={() => setRenaming(true)} title={t("rename")}>
+        <button type="button" className="inline-flex cursor-pointer items-center rounded-full border-0 bg-transparent px-1.5 py-[3px] text-left text-ui-md font-semibold text-foreground hover:bg-secondary" onClick={() => setRenaming(true)} title={t("rename")}>
           <span className="grid leading-[1.3] [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:text-ui-md">
             <strong>{workflow.name}</strong>
             {/* 保存状态只放工具栏的 wf-save-status:标题里再挂一行「未保存」会随每次

@@ -345,9 +345,15 @@ export function NodeComposer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [feedIds, modes.length]);
 
+  //: 点下去**立刻**转圈,不等服务端回来。往返有几百毫秒,这期间按钮毫无变化 —— 用户
+  //: 会以为没点上,再点一次(于是发两遍)。
+  const [sending, setSending] = React.useState(false);
+  const working = sending || busy;
+
   const send = () => {
     const text = prompt.trim();
-    if (!text || !current || busy) return;
+    if (!text || !current || working) return;
+    setSending(true);
     //: 只发这个模型**认的**那几项 —— 多发一项会被校验器当场拦下(它照描述符判)。
     const parameters: Record<string, unknown> = {};
     if (supportsParameter(current, "aspect_ratio") && ratio) parameters.aspect_ratio = ratio;
@@ -567,7 +573,7 @@ export function NodeComposer({
                       : "cursor-pointer bg-primary text-primary-foreground hover:opacity-90",
                   )}
                 >
-                  {busy ? <Loader2 size={13} className="animate-spin" /> : <ArrowUp size={13} />}
+                  {working ? <Loader2 size={13} className="animate-spin" /> : <ArrowUp size={13} />}
                 </button>
               </span>
             </>

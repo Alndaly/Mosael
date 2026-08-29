@@ -5,6 +5,7 @@ import { Film as FilmIcon, Image as ImageIcon, Loader2, Music, Plus, Square as S
 import type { BoardItem } from "@/api/client";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
 import { BoardAudio, BoardVideo } from "@/features/boards/BoardPlayer";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 /**
@@ -175,9 +176,16 @@ export function NoteNode({ data, selected }: NodeProps) {
  */
 function Generating({ text }: { text?: string }) {
   return (
-    <div className="grid h-full w-full place-items-center gap-1.5 px-3 text-center">
-      <Loader2 size={16} className="animate-spin text-primary" />
-      {text ? <span className="line-clamp-3 text-ui-2xs leading-relaxed text-muted-foreground">{text}</span> : null}
+    <div className="relative grid h-full w-full place-items-center overflow-hidden rounded-lg">
+      {/* **骨架屏,不是一个干转的圈。** 出图要几十秒,一个圈在那儿转看不出「快好了还是卡住了」;
+          一块和产出同形状的灰底至少说明「这一格将来是张图」,画布上一眼扫过去也分得清哪几格在跑。 */}
+      <Skeleton className="absolute inset-0 h-full w-full rounded-lg" />
+      <div className="relative grid justify-items-center gap-1.5 px-3 text-center">
+        <Loader2 size={16} className="animate-spin text-primary" />
+        {/* **要看得见提示词**。同时跑三四个生成时,四个一模一样的框分不出谁是谁 ——
+            而用户想撤掉的往往正是其中某一个。 */}
+        {text ? <span className="line-clamp-3 text-ui-2xs leading-relaxed text-muted-foreground">{text}</span> : null}
+      </div>
     </div>
   );
 }

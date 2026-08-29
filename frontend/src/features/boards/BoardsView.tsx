@@ -256,8 +256,9 @@ function BoardDetail({
       sourceAssets?: { asset_id: string; role: string }[];
     }) => {
       const itemId = input.itemId ?? `${input.kind}-${Math.random().toString(36).slice(2, 9)}`;
+      let placed;
       try {
-        await generateOnBoard(board.id, {
+        placed = await generateOnBoard(board.id, {
           workspace_id: workspaceId,
           item_id: itemId,
           kind: input.kind,
@@ -273,9 +274,14 @@ function BoardDetail({
         toast.error(t("boardsGenerateFailed"), { description: (error as Error).message });
         return;
       }
+      //: **马上把那一格标成「在生成」**。服务端已经摆好占位了,但画布的节点只在挂载时从
+      //: canvas 建一次 —— 不主动告诉它的话,节点还是个空槽、面板也不收:用户看到的就是
+      //: 「点了没反应」,然后再点一次。
+      const pending = ((placed.canvas?.items ?? []) as BoardItem[]).find((one) => one.id === itemId);
+      if (pending?.job_id) api?.patch(itemId, { job_id: pending.job_id, text: pending.text });
       setRunning((current) => [...current, itemId]);
     },
-    [board.id, workspaceId, t],
+    [board.id, workspaceId, t, api],
   );
 
   /** 让 AI 往某张便签里写字。同步返回,写完直接把新画布落回本地状态。 */
@@ -292,7 +298,7 @@ function BoardDetail({
         //: **走画布的把手,不是回写这里的 canvas 状态** —— 画布的节点只在挂载时从 canvas
         //: 建一次,改这里的 state 它看不见,用户会以为「写完了但没出来」。
         const written = ((next.canvas?.items ?? []) as BoardItem[]).find((one) => one.id === input.itemId);
-        if (written?.text) api?.setText(input.itemId, written.text);
+        if (written?.text) api?.patch(input.itemId, { text: written.text });
         onSaved();
       } catch (error) {
         toast.error("写不出来", { description: (error as Error).message });
@@ -314,7 +320,8 @@ function BoardDetail({
         // 找不到 = 任务失败,后端把占位摘了 —— 这一格也就不用再等。
         if (!item) settled.push(id);
         else if (item.asset_id) {
-          api?.fill(id, item.asset_id);
+          //: 产出到了:填上 asset_id,并把 job_id 摘掉 —— 两个都在的话画布不知道该画转圈还是画图。
+          api?.patch(id, { asset_id: item.asset_id, job_id: undefined });
           settled.push(id);
         }
       }
