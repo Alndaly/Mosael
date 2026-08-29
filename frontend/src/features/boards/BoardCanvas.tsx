@@ -23,7 +23,7 @@ import { NodeComposer } from "@/features/boards/NodeComposer";
 import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
 import { usePersistentViewport } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
-import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass } from "@/features/boards/boardNodes";
+import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, type MediaKind } from "@/features/boards/boardNodes";
 
 /**
  * 创意画板的画布。
@@ -73,7 +73,7 @@ interface Props {
   canvas: Canvas;
   onChange: (canvas: Canvas) => void;
   /** 让上层开素材选择器。kind 决定它列图片还是视频 —— 选得到的就该是贴上去能看的。 */
-  onPickAsset: (kind: "image" | "video", place: (assetId: string) => void) => void;
+  onPickAsset: (kind: MediaKind, place: (assetId: string) => void) => void;
   /** 从某一项生成。上层拿得到 workspaceId 和接口,画布只提供"放哪儿"和"填回来"。 */
   onGenerate?: (input: {
     kind: "image" | "video";
@@ -466,11 +466,11 @@ function ItemToolbar({
             />
           ))}
 
-        {(item?.kind === "image" || item?.kind === "video") && (
+        {item && isMediaKind(item.kind) && (
           <button
             type="button"
             className="flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs text-muted-foreground hover:bg-secondary hover:text-foreground"
-            onClick={() => onPickAsset(item.kind as "image" | "video", (assetId) => patch(item.id, { asset_id: assetId }))}
+            onClick={() => onPickAsset(item.kind as MediaKind, (assetId) => patch(item.id, { asset_id: assetId }))}
           >
             <Replace size={12} /> 换一份
           </button>
@@ -518,7 +518,11 @@ function ItemToolbar({
           </>
         )}
 
-        {item && <span aria-hidden className="mx-0.5 h-4 w-px bg-border" />}
+        {/* 分隔线只在**前面真有东西**时才画 —— 无条件画的话,音频这种没有专属动作的
+            节点头上会挂一道悬空的竖线(截图里那条)。 */}
+        {(item?.kind === "note" || (item && isMediaKind(item.kind)) || Boolean(onGenerate && item && item.kind !== "frame")) && (
+          <span aria-hidden className="mx-0.5 h-4 w-px bg-border" />
+        )}
 
         <button
           type="button"

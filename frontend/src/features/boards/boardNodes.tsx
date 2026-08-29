@@ -1,9 +1,10 @@
 import React from "react";
-import { Handle, NodeResizer, Position, type NodeProps } from "@xyflow/react";
+import { Handle, NodeResizer, Position, useStore, type NodeProps } from "@xyflow/react";
 import { Film as FilmIcon, Image as ImageIcon, Loader2, Music, Plus, StickyNote } from "lucide-react";
 
 import type { BoardItem } from "@/api/client";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
+import { BoardAudio, BoardVideo } from "@/features/boards/BoardPlayer";
 import { cn } from "@/lib/utils";
 
 /**
@@ -52,27 +53,39 @@ export type BoardNodeData = {
  * 默认透明是因为想法之间的关系是次要信息:一上来每个节点四周都挂着圆圈,画布看着像电路图。
  */
 function Ports({ visible }: { visible?: boolean }) {
-  //: **连接柄本身要骑在节点边上**,因为 React Flow 拿 handle 元素的中心当连线的锚点 ——
-  //: 把它整个往外挪,线头就跟着挪,节点和线之间会裂开一段空白。
+  //: **handle 元素自己要小、要贴着边**,因为连线的锚点是从它的矩形算出来的 —— 把它做大
+  //: 或者整个挪出去,线头就跟着跑,节点和线之间裂开一段空白(试过一版横跨边线的大盒子,
+  //: 不成立:线头跟着可见的圆圈走了)。
   //:
-  //: 所以这里分两层:外层是一个横跨边线的**透明**大盒子(中心正落在边上,锚点就在边上),
-  //: 可见的圆圈画在盒子的外侧一端。线贴着边,按钮离得开,而且圆圈还在 handle 里面,
-  //: 从它上面往外拖照样能拉线。
-  const box =
-    "!flex !h-9 !w-14 !items-center !rounded-none !border-0 !bg-transparent !p-0 !pointer-events-none transition-opacity";
+  //: 所以反过来做:handle 保持一个贴边的小方块(锚点稳稳落在边上),可见的圆圈是它的**子
+  //: 元素**,绝对定位溢出到节点外面。圆圈在 handle 里,从它上面往外拖照样能拉线。
+  //:
+  //: 圆圈**反着视口缩放**,于是它在屏幕上永远这么大 —— 跟着画布缩的话,拉远时它小成一个
+  //: 点(点不中),拉近时又胀成一个盘子。同一份 transform 里连位移一起抵消,离节点的那段
+  //: 距离也就不会跟着变(transform 从右往左作用,先位移再缩放)。
+  const zoom = useStore((state) => state.transform[2]) || 1;
+  const anchor = "!h-2 !w-2 !rounded-none !border-0 !bg-transparent !p-0 transition-opacity";
   const dot =
-    "!pointer-events-auto grid h-6 w-6 place-items-center rounded-full border border-border-strong bg-panel text-muted-foreground transition-colors hover:border-primary hover:text-primary";
+    "grid h-6 w-6 place-items-center rounded-full border border-border-strong bg-panel text-muted-foreground transition-colors hover:border-primary hover:text-primary";
   const shown = visible ? "opacity-100" : "opacity-0 group-hover:opacity-100";
+  const scaled = (offset: number, origin: string) => ({
+    transform: `scale(${1 / zoom}) translateX(${offset}px)`,
+    transformOrigin: origin,
+  });
   return (
     <>
-      <Handle type="target" position={Position.Left} className={cn(box, shown, "!justify-start")}>
-        <span className={dot}>
-          <Plus size={13} />
+      <Handle type="target" position={Position.Left} className={cn(anchor, shown)}>
+        <span className="absolute right-full top-1/2 -translate-y-1/2">
+          <span className={dot} style={scaled(-10, "right center")}>
+            <Plus size={13} />
+          </span>
         </span>
       </Handle>
-      <Handle type="source" position={Position.Right} className={cn(box, shown, "!justify-end")}>
-        <span className={dot}>
-          <Plus size={13} />
+      <Handle type="source" position={Position.Right} className={cn(anchor, shown)}>
+        <span className="absolute left-full top-1/2 -translate-y-1/2">
+          <span className={dot} style={scaled(10, "left center")}>
+            <Plus size={13} />
+          </span>
         </span>
       </Handle>
     </>
@@ -254,20 +267,14 @@ export function VideoNode({ data, selected }: NodeProps) {
       {!item.asset_id ? (
         item.job_id ? <Generating text={item.text} /> : <EmptySlot icon={<FilmIcon size={20} />} />
       ) : (
-        // **不在这一层挂 nodrag/nowheel。** 挂在这儿等于整块都不让画布用:鼠标悬在视频上时
-        // 拖不动画布、滚轮也不缩放了。播放条那点需求由 AssetInlinePreview 给 <video> 自己
-        // 加的 nodrag 满足 —— 粒度到元素为止。
-        <div className="h-full w-full overflow-hidden rounded-lg">
-          <AssetInlinePreview
-            assetId={item.asset_id}
-            name={item.text || ""}
-            kind="video"
-            plain
-            lazy={false}
-            className="h-full w-full"
-            onNaturalSize={(width, height) => onAspect(item.id, width / height)}
-          />
-        </div>
+        // 自建播放器,不用原生 controls:那条控件不吃主题,而且它占掉的高度由浏览器说了算,
+        // 会把按画面比例算好的框挤变形。nodrag 只挂在它的控件条上 —— 挂在整块上的话,
+        // 鼠标一悬到视频上画布就拖不动了(踩过)。
+        <BoardVideo
+          assetId={item.asset_id}
+          className="rounded-lg"
+          onNaturalSize={(width, height) => onAspect(item.id, width / height)}
+        />
       )}
     </div>
   );
@@ -286,13 +293,7 @@ function AudioNode({ data, selected }: NodeProps) {
         {!item.asset_id ? (
           item.job_id ? <Generating text={item.text} /> : <EmptySlot icon={<Music size={20} />} />
         ) : (
-          <AssetInlinePreview
-            assetId={item.asset_id}
-            name={item.text ?? ""}
-            kind="audio"
-            lazy={false}
-            className="nodrag w-full"
-          />
+          <BoardAudio assetId={item.asset_id} />
         )}
       </div>
     </div>
@@ -308,6 +309,15 @@ export const BOARD_NODE_TYPES: Record<BoardItem["kind"], React.ComponentType<Nod
   audio: AudioNode,
   frame: FrameNode,
 };
+
+/** 指向素材库一份的那几种。**只此一处** —— 操作条给不给「换一份」、选择器能选什么,
+ *  都问它;分散判的话,加一种就会有一处忘记改(音频此前正是这么漏掉「换一份」的)。 */
+export const MEDIA_KINDS = ["image", "video", "audio"] as const;
+export type MediaKind = (typeof MEDIA_KINDS)[number];
+
+export function isMediaKind(kind: string): kind is MediaKind {
+  return (MEDIA_KINDS as readonly string[]).includes(kind);
+}
 
 /** 每种项新建时的默认大小。便签比图片矮 —— 它装的是一句话,不是一张图。 */
 export const DEFAULT_SIZE: Record<BoardItem["kind"], { width: number; height: number }> = {

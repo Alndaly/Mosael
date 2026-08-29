@@ -405,22 +405,31 @@ export function NodeComposer({
                 {supportsParameter(current, "duration_seconds") && durations.length > 0 && (
                   <Pick value={String(duration)} onChange={(next) => setDuration(Number(next))} options={durations.map((one) => ({ value: String(one), label: `${one}s` }))} />
                 )}
-                {/* 出声与否:描述符里 supports_audio 那条已核过的声明,不是又一个旋钮。 */}
-                {Boolean(current?.capabilities?.supports_audio) && (
-                  <button
-                    type="button"
-                    aria-pressed={audio}
-                    title={audio ? "生成声音" : "不生成声音"}
-                    onClick={() => setAudio((on) => !on)}
-                    className={cn(
-                      "grid h-6 w-6 shrink-0 place-items-center rounded-full transition-colors",
-                      audio ? "text-foreground" : "text-muted-foreground/50 hover:text-foreground",
-                    )}
-                  >
-                    {audio ? <Volume2 size={12} /> : <VolumeX size={12} />}
-                  </button>
-                )}
               </span>
+
+              {/* **出声与否是一项独立的配置**,不是那串参数里的一格 —— 它决定成片有没有
+                  声音,和「多大、多长」不是一类事。所以拆出来自成一段,并且写成 有声/静音
+                  两个字:一个喇叭图标读起来像预览的静音键,而它其实是在配置**要不要生成**。 */}
+              {Boolean(current?.capabilities?.supports_audio) && (
+                <>
+                  <span aria-hidden className="h-3.5 w-px shrink-0 bg-border" />
+                  <span className="flex shrink-0 items-center gap-0.5 rounded-full px-1 transition-colors hover:bg-secondary">
+                    {audio ? (
+                      <Volume2 size={12} className="shrink-0 text-muted-foreground" />
+                    ) : (
+                      <VolumeX size={12} className="shrink-0 text-muted-foreground" />
+                    )}
+                    <Pick
+                      value={audio ? "on" : "off"}
+                      onChange={(next) => setAudio(next === "on")}
+                      options={[
+                        { value: "on", label: "有声" },
+                        { value: "off", label: "静音" },
+                      ]}
+                    />
+                  </span>
+                </>
+              )}
 
               <span className="ml-auto flex shrink-0 items-center gap-1">
                 {maxImages(current) > 1 && (

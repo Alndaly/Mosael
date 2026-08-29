@@ -18,6 +18,7 @@ import {
   type BoardItem,
   type Workspace,
 } from "@/api/client";
+import type { MediaKind } from "@/features/boards/boardNodes";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -196,7 +197,7 @@ function BoardDetail({
   const [minimapMode, setMinimap] = usePersistentTab<"on" | "off">("board-minimap", "on", ["on", "off"] as const);
   const showMinimap = minimapMode === "on";
   const [canvas, setCanvas] = React.useState<Canvas | null>(null);
-  const [picking, setPicking] = React.useState<{ kind: "image" | "video"; place: (assetId: string) => void } | null>(null);
+  const [picking, setPicking] = React.useState<{ kind: MediaKind; place: (assetId: string) => void } | null>(null);
   //: 画布交出来的「加一项」。顶栏那组按钮要和身份胶囊并排,而 add 依赖画布内部状态。
   const [api, setApi] = React.useState<{
     //: **就用 BoardItem["kind"]**,别在这儿再抄一份种类表 —— 抄漏一种不会报错,

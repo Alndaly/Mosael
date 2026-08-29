@@ -1,10 +1,12 @@
 import React from "react";
+import { Music } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import { assetThumbnailUrl, listAssets, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Input } from "@/components/ui/input";
 import { ModalShell } from "@/components/app/modals";
+import type { MediaKind } from "@/features/boards/boardNodes";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
@@ -31,7 +33,7 @@ export function AssetPickerDialog({
 }: {
   open: boolean;
   /** 列哪一类。**选得到的就该是贴上去能看的** —— 给视频节点列图片等于让人选一个放不了的东西。 */
-  kind: "image" | "video";
+  kind: MediaKind;
   workspaceId: string;
   onOpenChange: (open: boolean) => void;
   onPick: (assetId: string) => void;
@@ -55,7 +57,7 @@ export function AssetPickerDialog({
   }, [assets.data, kind, keyword]);
 
   return (
-    <ModalShell open={open} onOpenChange={onOpenChange} title={t(kind === "video" ? "boardsPickVideo" : "boardsPickImage")} className="w-[560px]">
+    <ModalShell open={open} onOpenChange={onOpenChange} title={t(kind === "video" ? "boardsPickVideo" : kind === "audio" ? "boardsPickAudio" : "boardsPickImage")} className="w-[560px]">
       <div className="grid gap-2">
         <Input
           autoFocus
@@ -71,7 +73,7 @@ export function AssetPickerDialog({
             ))}
           </div>
         ) : images.length === 0 ? (
-          <p className="py-8 text-center text-ui-xs text-muted-foreground">{t(kind === "video" ? "boardsNoVideos" : "boardsNoImages")}</p>
+          <p className="py-8 text-center text-ui-xs text-muted-foreground">{t(kind === "video" ? "boardsNoVideos" : kind === "audio" ? "boardsNoAudios" : "boardsNoImages")}</p>
         ) : (
           // **一行一个,不是缩略图墙。** 光看图分不出「同一个人的三版」哪个是哪个 ——
           // 名字、尺寸、时长才是真正用来挑的信息。缩略图退到行首当认脸用。
@@ -86,12 +88,19 @@ export function AssetPickerDialog({
                 onClick={() => onPick(asset.id)}
                 className="flex cursor-pointer items-center gap-2.5 rounded-md border border-transparent p-1.5 text-left transition-colors hover:border-border hover:bg-secondary"
               >
-                <img
-                  src={assetThumbnailUrl(asset.id)}
-                  alt=""
-                  loading="lazy"
-                  className="h-10 w-14 shrink-0 rounded bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] object-cover"
-                />
+                {/* 音频没有缩略图 —— 拿它的 URL 去当图片只会得到一个碎图标。 */}
+                {kind === "audio" ? (
+                  <span className="grid h-10 w-14 shrink-0 place-items-center rounded bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] text-muted-foreground">
+                    <Music size={16} />
+                  </span>
+                ) : (
+                  <img
+                    src={assetThumbnailUrl(asset.id)}
+                    alt=""
+                    loading="lazy"
+                    className="h-10 w-14 shrink-0 rounded bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] object-cover"
+                  />
+                )}
                 <span className="grid min-w-0 flex-1 gap-0.5">
                   <span className="truncate text-ui-xs text-foreground">
                     {asset.name || asset.original_filename}
