@@ -1751,6 +1751,22 @@ class BoardSpeak(BaseModel):
     y: float = 0
 
 
+class BoardTrim(BaseModel):
+    """把一段视频/音频截出起止,产出落回画板上那一格。"""
+
+    workspace_id: str
+    #: 产出落到哪一格。
+    item_id: str
+    #: 截哪一份素材。
+    asset_id: str
+    start: float = 0
+    end: float
+    #: 去掉声音 —— 做无声底片时常用。
+    mute: bool = False
+    x: float = 0
+    y: float = 0
+
+
 class WorkflowRunRequest(BaseModel):
     params: dict = Field(default_factory=dict)
 

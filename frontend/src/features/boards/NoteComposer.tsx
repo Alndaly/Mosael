@@ -22,7 +22,7 @@ export function NoteComposer({
   item,
   busy,
   workspaceId,
-  upstreamImages,
+  upstreamAssets,
   upstreamTexts,
   onWrite,
 }: {
@@ -30,8 +30,8 @@ export function NoteComposer({
   busy: boolean;
   /** `@` 引用素材时去哪个工作区找。 */
   workspaceId: string;
-  /** 上游连过来的图片。**让模型看着写** —— 一张图连到便签,意思就是「照着这张写」。 */
-  upstreamImages?: string[];
+  /** 上游连过来的素材。**让模型看着写** —— 图片和视频给画面,音频给转写(见后端 _look_at)。 */
+  upstreamAssets?: string[];
   /** 上游便签给的文字。作为**材料**发过去,和「要求」分开。 */
   upstreamTexts?: string[];
   onWrite: (input: {
@@ -46,14 +46,14 @@ export function NoteComposer({
   const [mentioned, setMentioned] = React.useState<string[]>([]);
   const [picked, setPicked] = React.useState("");
 
-  //: `@` 的候选:工作区里的图片。写字这条路只吃得下图 —— 视频要抽帧、音频要转写,
-  //: 那是分析素材的事,列出来等于让用户选一个发过去会报错的东西。
+  //: `@` 的候选:图片、视频、音频都能引。后端会按类别摊开(图片和视频给画面,音频给转写)——
+  //: 只列图片的话,用户明明连得上视频,却 @ 不到它。
   const library = useQuery({ queryKey: ["assets", workspaceId], queryFn: () => listAssets(workspaceId) });
   const candidates = React.useCallback(
     (query: string) => {
       const needle = query.trim().toLowerCase();
       return (library.data ?? [])
-        .filter((asset: Asset) => asset.kind === "image")
+        .filter((asset: Asset) => ["image", "video", "audio"].includes(asset.kind))
         .filter(
           (asset: Asset) =>
             !needle || `${asset.name ?? ""} ${asset.original_filename ?? ""}`.toLowerCase().includes(needle),
@@ -77,7 +77,7 @@ export function NoteComposer({
     if (!text || !current || working) return;
     setSending(true);
     //: 上游连过来的 + 正文里 @ 到的,一起发。同一张不发两遍。
-    const assets = [...new Set([...(upstreamImages ?? []), ...mentioned])];
+    const assets = [...new Set([...(upstreamAssets ?? []), ...mentioned])];
     onWrite({
       prompt: text,
       providerProfileId: current.provider_profile_id,
@@ -105,7 +105,7 @@ export function NoteComposer({
           }
           candidates={candidates}
           onSubmit={send}
-          emptyHint={() => "这个工作区里还没有图片可以引用。"}
+          emptyHint={() => "这个工作区里还没有素材可以引用。"}
         />
         <div className="flex items-center gap-1 border-t border-border pt-1.5">
           {options.length === 0 ? (

@@ -9,6 +9,7 @@ import {
   deleteBoard,
   generateOnBoard,
   speakOnBoard,
+  trimOnBoard,
   writeOnBoard,
   getBoard,
   importAsset,
@@ -340,6 +341,43 @@ function BoardDetail({
     [board.id, workspaceId, api],
   );
 
+  /** 截出一段。**产出是一份新素材**,落到一个新节点上 —— 原素材不动。 */
+  const trim = React.useCallback(
+    async (input: {
+      itemId: string;
+      assetId: string;
+      start: number;
+      end: number;
+      mute: boolean;
+      x: number;
+      y: number;
+    }) => {
+      let placed;
+      try {
+        placed = await trimOnBoard(board.id, {
+          workspace_id: workspaceId,
+          item_id: input.itemId,
+          asset_id: input.assetId,
+          start: input.start,
+          end: input.end,
+          mute: input.mute,
+          x: input.x,
+          y: input.y,
+        });
+      } catch (error) {
+        toast.error("剪不出来", { description: (error as Error).message });
+        return;
+      }
+      //: **走画布的把手把新那一格加进去。** 回写这里的 canvas 状态是没用的 —— 画布的节点
+      //: 只在挂载时从 canvas 建一次(和写文案那条同一个坑)。
+      const made = ((placed.canvas?.items ?? []) as BoardItem[]).find((one) => one.id === input.itemId);
+      if (made) api?.add(made.kind, made);
+      onSaved();
+      setRunning((current) => [...current, input.itemId]);
+    },
+    [board.id, workspaceId, onSaved, api],
+  );
+
   //: 还在跑的那几格。**轮询而不是等** —— 生成要几十秒,而用户这期间还在画布上干别的。
   const [running, setRunning] = React.useState<string[]>([]);
   React.useEffect(() => {
@@ -574,6 +612,7 @@ function BoardDetail({
         onGenerate={generate}
         onWrite={write}
         onSpeak={speak}
+        onTrim={trim}
         models={models.data ?? []}
         showMinimap={showMinimap}
         onDropFiles={(files) => upload.mutateAsync(files)}

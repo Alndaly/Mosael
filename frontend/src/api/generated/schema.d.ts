@@ -2877,6 +2877,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/boards/{board_id}/trim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trim
+         * @description 截出一段,产出落回画板上那一格。
+         *
+         *     **原素材不动** —— 画板上的每一步都该是可回头的,就地改会让上一版消失。产出是一份新素材。
+         */
+        post: operations["trim_api_boards__board_id__trim_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/publish/platforms": {
         parameters: {
             query?: never;
@@ -5404,6 +5426,40 @@ export interface components {
              * @default
              */
             voice_id: string;
+            /**
+             * X
+             * @default 0
+             */
+            x: number;
+            /**
+             * Y
+             * @default 0
+             */
+            y: number;
+        };
+        /**
+         * BoardTrim
+         * @description 把一段视频/音频截出起止,产出落回画板上那一格。
+         */
+        BoardTrim: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Item Id */
+            item_id: string;
+            /** Asset Id */
+            asset_id: string;
+            /**
+             * Start
+             * @default 0
+             */
+            start: number;
+            /** End */
+            end: number;
+            /**
+             * Mute
+             * @default false
+             */
+            mute: boolean;
             /**
              * X
              * @default 0
@@ -15220,6 +15276,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["BoardSpeak"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trim_api_boards__board_id__trim_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                board_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoardTrim"];
             };
         };
         responses: {

@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import BoardCreate, BoardGenerate, BoardOut, BoardSpeak, BoardUpdate, BoardWrite
+from app.api.schemas import BoardCreate, BoardGenerate, BoardOut, BoardSpeak, BoardTrim, BoardUpdate, BoardWrite
 from app.db.models import Board
 from app.domain.boards import (
     BoardDomainError,
@@ -176,8 +176,9 @@ def write(board_id: str, body: BoardWrite, db: DbSession, user: CurrentUser) -> 
 
     #: 上游连过来的图 + 正文里 @ 到的图。**只收图片** —— 视频和音频这条路吃不下
     #: (要抽帧、要转写,那是 analyze_asset 的事),悄悄发过去只会换回一句看不懂的报错。
-    pictures = _pictures(db, body.workspace_id, body.source_assets)
-    materials = [one.strip() for one in body.context if one and one.strip()]
+    #: 上游连过来的 + 正文里 @ 到的。图片和视频给画面,音频给转写 —— 见 _look_at。
+    pictures, from_assets = _look_at(db, body.workspace_id, body.source_assets)
+    materials = [one.strip() for one in body.context if one and one.strip()] + from_assets
 
     try:
         profile = require_profile(db, body.provider_profile_id or None, user_id=user.id, error=AiChatError)
@@ -289,24 +290,90 @@ def speak(board_id: str, body: BoardSpeak, db: DbSession, user: CurrentUser) -> 
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-def _pictures(db: DbSession, workspace_id: str, asset_ids: list[str]) -> list[dict]:
-    """把素材 id 变成对话消息里的图片段。
+@router.post("/boards/{board_id}/trim", response_model=BoardOut)
+def trim(board_id: str, body: BoardTrim, db: DbSession, user: CurrentUser) -> Board:
+    """截出一段,产出落回画板上那一格。
 
-    **拼 data URI 那一步用 analysis.service.image_part** —— 分析素材那条路早就在做同一件事,
-    自己再拼一遍 base64 的话,格式改了只会改好其中一处。
+    **原素材不动** —— 画板上的每一步都该是可回头的,就地改会让上一版消失。产出是一份新素材。
     """
     from app.db.models import Asset
-    from app.domain.analysis.service import image_part
+    from app.domain.boards_trim import TrimError, start_trim
+    from app.domain.jobs import reset_receipt, set_receipt
+
+    ensure_workspace_perm(db, user, body.workspace_id, "edit")
+    asset = db.get(Asset, body.asset_id)
+    if asset is None or asset.workspace_id != body.workspace_id:
+        raise HTTPException(status_code=404, detail="这个工作区里没有这份素材")
+
+    token = set_receipt(receipt_to_item(board_id, body.item_id))
+    try:
+        job = start_trim(
+            db, asset=asset, start=body.start, end=body.end, mute=body.mute, created_by=user.id
+        )
+    except TrimError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        reset_receipt(token)
+
+    try:
+        return place_pending(
+            db,
+            workspace_id=body.workspace_id,
+            board_id=board_id,
+            item={
+                "id": body.item_id,
+                "kind": asset.kind,
+                "x": body.x,
+                "y": body.y,
+                "job_id": job.id,
+                "text": f"截取 {body.start:.1f}-{body.end:.1f}s",
+            },
+        )
+    except BoardDomainError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _look_at(db: DbSession, workspace_id: str, asset_ids: list[str]) -> tuple[list[dict], list[str]]:
+    """把上游素材摊成模型看得懂的东西:**画面**和**能读的文字**。
+
+    三种素材三条路,而它们本来就不一样:
+
+     · 图片 —— 直接就是一帧画面。
+     · 视频 —— 抽帧。**在这一次调用里抽**,不是先跑一遍 analyze_asset 再把结论喂进来:
+       那样要多花一次模型调用和几秒钟,而模型本来就能直接看这几帧。抽帧用
+       analysis.service 那份(自适应帧数、单次 ffmpeg),不自己再写一遍。
+     · 音频 —— 没有画面可看,能给的是**转写**。没转写过就跳过 —— 在这里顺手起一个 ASR
+       任务的话,一次「写句文案」会变成一次要等的后台作业,而用户并没有要求那件事。
+
+    返回 (画面段, 文字材料)。
+    """
+    from app.db.models import Asset
+    from app.domain.analysis.service import AnalysisError, extract_video_frames, image_part
     from app.media.paths import resolve_key
 
     parts: list[dict] = []
-    for asset_id in asset_ids[:8]:  # 一次带太多图既贵又容易超上下文
+    materials: list[str] = []
+    for asset_id in asset_ids[:8]:  # 一次带太多既贵又容易超上下文
         asset = db.get(Asset, str(asset_id))
-        if asset is None or asset.workspace_id != workspace_id or asset.kind != "image" or not asset.file_key:
+        if asset is None or asset.workspace_id != workspace_id or not asset.file_key:
             continue
         path = resolve_key(asset.file_key)
         if not path.is_file():
             continue
-        mime = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
-        parts.append(image_part(path.read_bytes(), mime))
-    return parts
+
+        if asset.kind == "image":
+            mime = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
+            parts.append(image_part(path.read_bytes(), mime))
+        elif asset.kind == "video":
+            try:
+                parts.extend(image_part(frame) for frame in extract_video_frames(path))
+            except AnalysisError:
+                # 抽不出帧不该让整次「写文案」失败 —— 少一段素材,总比一句都写不出来好。
+                continue
+        elif asset.kind == "audio":
+            from app.domain.analysis.service import _asset_transcript_text
+
+            spoken = _asset_transcript_text(db, asset.id)
+            if spoken:
+                materials.append(f"【{asset.name} 的语音转写】\n{spoken}")
+    return parts, materials

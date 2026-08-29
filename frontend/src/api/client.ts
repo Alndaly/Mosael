@@ -927,6 +927,23 @@ export function speakOnBoard(
   return api<Board>(`/api/boards/${boardId}/speak`, { method: "POST", body: JSON.stringify(body) });
 }
 
+/** 截出一段,产出落回画板上那一格。**原素材不动** —— 产出是一份新素材。 */
+export function trimOnBoard(
+  boardId: string,
+  body: {
+    workspace_id: string;
+    item_id: string;
+    asset_id: string;
+    start: number;
+    end: number;
+    mute?: boolean;
+    x?: number;
+    y?: number;
+  },
+): Promise<Board> {
+  return api<Board>(`/api/boards/${boardId}/trim`, { method: "POST", body: JSON.stringify(body) });
+}
+
 /** 某能力下所有可用模型(跨连接)。文案生成列的是 chat。 */
 export interface CapabilityModel {
   provider_profile_id: string;

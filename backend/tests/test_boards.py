@@ -594,9 +594,55 @@ def test_连过来的图片会让模型看着写() -> None:
     assert last[1]["type"] == "image_url" and last[1]["image_url"]["url"].startswith("data:image/png;base64,")
 
 
-def test_不是图片的素材不会被塞进对话() -> None:
-    """视频/音频这条路吃不下 —— 塞进去换回的是一句看不懂的报错。"""
-    from app.api.routes.boards import _pictures
+def test_视频给画面_音频给转写_都不做多余的模型调用() -> None:
+    """三种素材三条路,而它们本来就不一样:
+
+     · 图片直接是一帧画面;
+     · 视频**在这一次调用里抽帧** —— 先跑一遍 analyze_asset 再把结论喂进来的话,要多花
+       一次模型调用和几秒钟,而模型本来就能直接看这几帧;
+     · 音频没有画面,能给的是转写;没转写过就跳过,不在这里顺手起一个 ASR 任务
+       (一次「写句文案」会变成一次要等的后台作业)。
+    """
+    from unittest.mock import patch as mock_patch
+
+    from app.api.routes.boards import _look_at
+    from app.core.db import SessionLocal
+
+    client = fresh_client()
+    ws = _workspace(client)
+    video_id = client.post(
+        "/api/assets/import", data={"workspace_id": ws}, files={"file": ("片子.mp4", b"fake mp4", "video/mp4")}
+    ).json()["id"]
+    audio_id = client.post(
+        "/api/assets/import", data={"workspace_id": ws}, files={"file": ("声音.mp3", b"fake mp3", "audio/mpeg")}
+    ).json()["id"]
+
+    with SessionLocal() as db:
+        with mock_patch(
+            "app.domain.analysis.service.extract_video_frames", return_value=[b"frame-1", b"frame-2"]
+        ):
+            parts, materials = _look_at(db, ws, [video_id])
+        assert [one["type"] for one in parts] == ["image_url", "image_url"], "视频没抽成画面"
+        assert materials == []
+
+        # 没转写过的音频:跳过,不报错、也不顺手起任务。
+        with mock_patch("app.domain.analysis.service._asset_transcript_text", return_value=None):
+            assert _look_at(db, ws, [audio_id]) == ([], [])
+        with mock_patch("app.domain.analysis.service._asset_transcript_text", return_value="他说了这些"):
+            parts, materials = _look_at(db, ws, [audio_id])
+        assert parts == []
+        assert materials and "他说了这些" in materials[0]
+
+        # 抽帧失败不该让整次「写文案」失败 —— 少一段素材,总比一句都写不出来好。
+        from app.domain.analysis.service import AnalysisError
+
+        with mock_patch("app.domain.analysis.service.extract_video_frames", side_effect=AnalysisError("没画面")):
+            assert _look_at(db, ws, [video_id]) == ([], [])
+
+
+def test_够不着的素材一律跳过() -> None:
+    """不存在的、别的工作区的 —— 一律当作没有,而不是报错让整次写作失败。"""
+    from app.api.routes.boards import _look_at
     from app.core.db import SessionLocal
 
     client = fresh_client()
@@ -606,11 +652,10 @@ def test_不是图片的素材不会被塞进对话() -> None:
     ).json()["id"]
 
     with SessionLocal() as db:
-        assert _pictures(db, ws, [audio_id]) == []
-        assert _pictures(db, ws, ["根本不存在"]) == []
+        assert _look_at(db, ws, ["根本不存在"]) == ([], [])
         # 跨工作区的也不给。
         other = client.post("/api/workspaces", json={"name": "别人的"}).json()["id"]
-        assert _pictures(db, other, [audio_id]) == []
+        assert _look_at(db, other, [audio_id]) == ([], [])
 
 
 def test_上游便签给的材料和要求分开发() -> None:
@@ -690,3 +735,64 @@ def test_语音合成的产出也能落回画板() -> None:
     assert len(items) == 1, f"占位被摘掉了:{items}"
     assert items[0]["asset_id"] == "snd-1"
     assert "job_id" not in items[0]
+
+
+def test_截取范围写错时当场拒绝_而不是让_ffmpeg_去发现() -> None:
+    """让 ffmpeg 去发现「结束早于开始」的话,用户拿到的是一句英文报错 —— 而且是几秒之后
+    从任务中心里才看到的。"""
+    import pytest as _pytest
+
+    from app.core.db import SessionLocal
+    from app.db.models import Asset
+    from app.domain.boards_trim import TrimError, start_trim
+
+    client = fresh_client()
+    ws = _workspace(client)
+    video_id = client.post(
+        "/api/assets/import", data={"workspace_id": ws}, files={"file": ("片子.mp4", b"fake", "video/mp4")}
+    ).json()["id"]
+    png = (
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00"
+        b"\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc```\x00\x00\x00\x04\x00\x01\xf6\x178U\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+    picture = client.post(
+        "/api/assets/import", data={"workspace_id": ws}, files={"file": ("一张图.png", png, "image/png")}
+    ).json()["id"]
+
+    with SessionLocal() as db:
+        video = db.get(Asset, video_id)
+        for start, end in ((5.0, 1.0), (2.0, 2.0), (-1.0, 3.0)):
+            with _pytest.raises(TrimError):
+                start_trim(db, asset=video, start=start, end=end, created_by=None)
+        # 不是视听素材的也拒 —— 一张图没有时间轴,截不出「第 3 秒」。
+        with _pytest.raises(TrimError):
+            start_trim(db, asset=db.get(Asset, picture), start=0, end=1, created_by=None)
+
+
+def test_截取产出走的是画板同一套回执() -> None:
+    """截取任务给的是 asset_id(和语音合成同一个形状)—— 画板的回执两种都读得懂。"""
+    from types import SimpleNamespace
+
+    from app.core.db import SessionLocal
+    from app.domain.boards import deliver_generated, receipt_to_item
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id = client.post(
+        "/api/boards",
+        json={
+            "workspace_id": ws,
+            "name": "B",
+            "canvas": {"items": [{"id": "v1", "kind": "video", "x": 0, "y": 0, "job_id": "job-trim"}], "edges": []},
+        },
+    ).json()["id"]
+
+    db = SessionLocal()
+    deliver_generated(
+        db,
+        SimpleNamespace(id="job-trim", status="succeeded", result={"asset_id": "cut-1"}),
+        receipt_to_item(board_id, "v1"),
+    )
+    items = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]["items"]
+    db.close()
+    assert items[0]["asset_id"] == "cut-1" and "job_id" not in items[0]

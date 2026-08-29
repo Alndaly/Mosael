@@ -15,7 +15,7 @@ import {
   type Node,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { Copy, FileUp, Group, Loader2, Maximize2, Replace, Sparkles, Trash2 } from "lucide-react";
+import { Copy, FileUp, Group, Loader2, Maximize2, Replace, Scissors, Sparkles, Trash2 } from "lucide-react";
 
 import { assetFileUrl } from "@/api/client";
 import { useImagePreview } from "@/components/app/image-preview";
@@ -27,6 +27,7 @@ import { usePersistentViewport } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { canRedo, canUndo, emptyHistory, record, redo, undo } from "@/features/boards/canvasHistory";
 import { AudioComposer } from "@/features/boards/AudioComposer";
+import { TrimComposer } from "@/features/boards/TrimComposer";
 import { NoteComposer } from "@/features/boards/NoteComposer";
 import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, KIND_META, SPAWNABLE_KINDS, type MediaKind } from "@/features/boards/boardNodes";
 
@@ -112,6 +113,16 @@ interface Props {
   /** 让 AI 往某张便签里写字。**同步** —— 写字几秒就回,不走生成任务那条路。 */
   /** 把一段文字念成音频。**异步** —— 走和出图出片同一套占位/回执。 */
   onSpeak?: (input: { itemId: string; text: string; voiceId: string }) => Promise<unknown>;
+  /** 截出一段。产出是一份**新素材**,落到一个新节点上 —— 原素材不动。 */
+  onTrim?: (input: {
+    itemId: string;
+    assetId: string;
+    start: number;
+    end: number;
+    mute: boolean;
+    x: number;
+    y: number;
+  }) => Promise<unknown>;
   onWrite?: (input: {
     itemId: string;
     prompt: string;
@@ -134,7 +145,7 @@ interface Props {
   onReady?: (api: BoardCanvasApi) => void;
 }
 
-function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, onSpeak, models, showMinimap = true, onDropFiles, uploading, onReady }: Props) {
+function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, onSpeak, onTrim, models, showMinimap = true, onDropFiles, uploading, onReady }: Props) {
   const rf = React.useRef<ReactFlowInstance | null>(null);
   const viewport = usePersistentViewport(`board:${boardId}`);
   const [ready, setReady] = React.useState(false);
@@ -396,6 +407,10 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
    * **拉了线就说明用户已经想好了「从这儿接下去」**,这时再让他去右上角找按钮加节点、
    * 拖回来、连上,是把一个动作拆成了三个。菜单里选一种,节点就落在松手的地方并且线已经连好。
    */
+  //: 正在给哪一项定剪辑范围。**不是选中就弹** —— 「剪一段」是对已有产出的动作,
+  //: 而选中一段片子最常见的意图是看它、拖它,不是剪它。
+  const [trimming, setTrimming] = React.useState<string | null>(null);
+
   //: 哪一张便签正在写。写字是同步的几秒,期间按钮转圈 —— 不给反馈的话用户会再点一次。
   const [writing, setWriting] = React.useState<string | null>(null);
 
@@ -681,7 +696,13 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       )}
 
       {/* 选中之后才出操作条 —— 没选中时它没有作用对象。 */}
-      <ItemToolbar nodes={nodes} setNodes={setNodes} onPickAsset={onPickAsset} onSpawn={onGenerate ? spawnLinked : undefined} />
+      <ItemToolbar
+        nodes={nodes}
+        setNodes={setNodes}
+        onPickAsset={onPickAsset}
+        onSpawn={onGenerate ? spawnLinked : undefined}
+        onTrimRequest={onTrim ? setTrimming : undefined}
+      />
 
       {/* 空便签:挂写文案的面板。**和图片/视频不是同一张表** —— 写字没有比例、时长、参考图
           这些东西,硬塞进同一个组件里会长出一堆「文本的时候不显示」的分支。 */}
@@ -691,8 +712,9 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           item={composerItem}
           busy={writing === composerItem.id}
           workspaceId={workspaceId}
-          //: 上游连过来的图 —— 一张图连到便签,意思就是「照着这张写」。
-          upstreamImages={feeding.assets.filter((one) => one.kind === "image").map((one) => one.assetId)}
+          //: 上游连过来的素材,**不只是图**:视频抽帧给它看,音频有转写就当材料 ——
+          //: 一段片子连到便签,意思就是「照着这段写」。
+          upstreamAssets={feeding.assets.map((one) => one.assetId)}
           //: 上游便签的字当**材料**,不是提示词 —— 「接着这段往下写」里,那段是素材,
           //: 用户在框里打的才是指令。
           upstreamTexts={feeding.texts.map((one) => one.text)}
@@ -704,6 +726,32 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           }}
         />
       )}
+
+      {/* 剪一段:定起止,产出落到**新节点**上。 */}
+      {trimming && onTrim && (() => {
+        const node = nodes.find((one) => one.id === trimming);
+        const item = node && (node.data as unknown as { item: BoardItem }).item;
+        if (!node || !item?.asset_id) return null;
+        return (
+          <TrimComposer
+            key={item.id}
+            item={item}
+            busy={false}
+            onTrim={({ start, end, mute }) => {
+              void onTrim({
+                //: 产出落到**新的一格**,摆在原件下面 —— 覆盖原件的话,上一版就没了。
+                itemId: `${item.kind}-${Date.now().toString(36)}`,
+                assetId: item.asset_id as string,
+                start,
+                end,
+                mute,
+                x: node.position.x,
+                y: node.position.y + (node.height ?? 200) + 60,
+              }).finally(() => setTrimming(null));
+            }}
+          />
+        );
+      })()}
 
       {/* 音频:念一段文字。**不是「生成」那条路** —— 出图出片选生成模型,念字选的是音色。 */}
       {composerItem?.kind === "audio" && onSpeak && (
@@ -760,6 +808,7 @@ function ItemToolbar({
   setNodes,
   onPickAsset,
   onSpawn,
+  onTrimRequest,
 }: {
   nodes: Node[];
   setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
@@ -771,6 +820,8 @@ function ItemToolbar({
     at: { x: number; y: number },
     fromIsSource?: boolean,
   ) => void;
+  /** 请求给这一项定剪辑范围。没给 = 这张画板不支持剪辑。 */
+  onTrimRequest?: (itemId: string) => void;
 }) {
   const { openImagePreview } = useImagePreview();
   const selected = nodes.filter((node) => node.selected);
@@ -863,6 +914,18 @@ function ItemToolbar({
             }
           >
             <Maximize2 size={12} /> 预览
+          </button>
+        )}
+
+        {/* 剪一段:视听素材才有时间轴,一张图截不出「第 3 秒」。 */}
+        {onTrimRequest && item?.asset_id && (item.kind === "video" || item.kind === "audio") && (
+          <button
+            type="button"
+            className="flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs text-muted-foreground hover:bg-secondary hover:text-foreground"
+            title="截出一段 —— 原件不动,产出是新的一格"
+            onClick={() => onTrimRequest(item.id)}
+          >
+            <Scissors size={12} /> 剪一段
           </button>
         )}
 

@@ -8433,6 +8433,59 @@
         }
       }
     },
+    "/api/boards/{board_id}/trim": {
+      "post": {
+        "tags": [
+          "boards"
+        ],
+        "summary": "Trim",
+        "description": "截出一段,产出落回画板上那一格。\n\n**原素材不动** —— 画板上的每一步都该是可回头的,就地改会让上一版消失。产出是一份新素材。",
+        "operationId": "trim_api_boards__board_id__trim_post",
+        "parameters": [
+          {
+            "name": "board_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Board Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoardTrim"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/publish/platforms": {
       "get": {
         "tags": [
@@ -15558,6 +15611,55 @@
         ],
         "title": "BoardSpeak",
         "description": "把一段文字念成音频,产出落回画板上那一格。\n\n和写文案**不是一条路**:写字几秒就回所以同步;念出来要起合成任务(可能还在另一台机器上跑),\n所以走和出图出片同一套 —— 先摆占位、起任务、回执把产出填回来。"
+      },
+      "BoardTrim": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "item_id": {
+            "type": "string",
+            "title": "Item Id"
+          },
+          "asset_id": {
+            "type": "string",
+            "title": "Asset Id"
+          },
+          "start": {
+            "type": "number",
+            "title": "Start",
+            "default": 0
+          },
+          "end": {
+            "type": "number",
+            "title": "End"
+          },
+          "mute": {
+            "type": "boolean",
+            "title": "Mute",
+            "default": false
+          },
+          "x": {
+            "type": "number",
+            "title": "X",
+            "default": 0
+          },
+          "y": {
+            "type": "number",
+            "title": "Y",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "item_id",
+          "asset_id",
+          "end"
+        ],
+        "title": "BoardTrim",
+        "description": "把一段视频/音频截出起止,产出落回画板上那一格。"
       },
       "BoardUpdate": {
         "properties": {
