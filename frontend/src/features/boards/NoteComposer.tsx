@@ -6,6 +6,12 @@ import { useQuery } from "@tanstack/react-query";
 import { listAssets, listCapabilityModels, type Asset, type BoardItem } from "@/api/client";
 import { PromptEditor } from "@/features/boards/PromptEditor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useSubmitting } from "@/features/boards/useSubmitting";
+import { Film, Music, X } from "lucide-react";
+
+import { assetFileUrl, assetThumbnailUrl } from "@/api/client";
+import { useImagePreview } from "@/components/app/image-preview";
+import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
 
 /**
@@ -42,6 +48,8 @@ export function NoteComposer({
     context: string[];
   }) => void;
 }) {
+  const t = useI18n();
+  const { openImagePreview } = useImagePreview();
   const [prompt, setPrompt] = React.useState("");
   const [mentioned, setMentioned] = React.useState<string[]>([]);
   const [picked, setPicked] = React.useState("");
@@ -68,28 +76,76 @@ export function NoteComposer({
   //: 值里带上连接 id:同一个模型名可能挂在两条连接下(自己的和团队的),只存模型名会挑错那条。
   const current = options.find((one) => `${one.provider_profile_id}:${one.model}` === picked) ?? options[0] ?? null;
 
-  //: 点下去**立刻**转圈,不等服务端回来 —— 往返几百毫秒里按钮毫无变化,用户会再点一次。
-  const [sending, setSending] = React.useState(false);
-  const working = sending || busy;
+  //: 这次会发给模型的那几份素材 —— 上游连过来的 + 正文里 @ 到的。**从素材库里查回实体**
+  //: 才画得出缩略图(手上只有 id)。
+  const referenced = React.useMemo(() => {
+    const ids = [...new Set([...(upstreamAssets ?? []), ...mentioned])];
+    return ids
+      .map((id) => (library.data ?? []).find((asset: Asset) => asset.id === id))
+      .filter((asset): asset is Asset => Boolean(asset));
+  }, [upstreamAssets, mentioned, library.data]);
+
+  //: 点下去立刻转、落地就停(**失败也要停** —— 否则那个圈会一直转下去)。见 useSubmitting。
+  const { submitting, run } = useSubmitting();
+  const working = submitting || busy;
 
   const send = () => {
     const text = prompt.trim();
     if (!text || !current || working) return;
-    setSending(true);
     //: 上游连过来的 + 正文里 @ 到的,一起发。同一张不发两遍。
     const assets = [...new Set([...(upstreamAssets ?? []), ...mentioned])];
-    onWrite({
-      prompt: text,
-      providerProfileId: current.provider_profile_id,
-      model: current.model,
-      assets,
-      context: upstreamTexts ?? [],
-    });
+    run(() =>
+      onWrite({
+        prompt: text,
+        providerProfileId: current.provider_profile_id,
+        model: current.model,
+        assets,
+        context: upstreamTexts ?? [],
+      }),
+    );
   };
 
   return (
     <NodeToolbar nodeId={item.id} isVisible position={Position.Bottom} offset={12}>
       <div className="nodrag nopan nowheel w-[420px] rounded-xl border border-border-strong bg-panel p-2 shadow-[var(--shadow-panel)]">
+        {/* 连过来的素材摆在最上面。**看得见才知道它在起作用** —— 一条线连过来之后表单上
+            什么都不变的话,用户不知道模型到底看没看见那张图。点一下开大图,叉叉解开引用。 */}
+        {referenced.length > 0 && (
+          <div className="mb-1.5 flex flex-wrap items-center gap-1 border-b border-border px-1 pb-1.5">
+            {referenced.map((asset) => (
+              <span key={asset.id} className="group/thumb relative shrink-0">
+                <button
+                  type="button"
+                  title={asset.name || asset.original_filename || ""}
+                  onClick={() => openImagePreview({ src: assetFileUrl(asset.id), title: asset.name || "" })}
+                  className="block h-8 w-8 cursor-zoom-in overflow-hidden rounded-md border border-border transition-colors hover:border-border-strong"
+                >
+                  {asset.kind === "image" ? (
+                    <img src={assetThumbnailUrl(asset.id)} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="grid h-full w-full place-items-center text-muted-foreground">
+                      {asset.kind === "video" ? <Film size={13} /> : <Music size={13} />}
+                    </span>
+                  )}
+                </button>
+                {/* 只有正文里 @ 进来的能在这儿摘掉 —— 上游那张是**连线连过来的**,
+                    要取消就该去断那条线,在这里给个叉会让两种取消方式打架。 */}
+                {mentioned.includes(asset.id) && (
+                  <button
+                    type="button"
+                    aria-label={t("boardRemove")}
+                    title={t("boardRemove")}
+                    onClick={() => setMentioned((all) => all.filter((one) => one !== asset.id))}
+                    className="absolute -right-1 -top-1 grid h-4 w-4 cursor-pointer place-items-center rounded-full border border-border bg-panel text-muted-foreground opacity-0 shadow-sm transition-opacity hover:border-destructive hover:text-destructive group-hover/thumb:opacity-100"
+                  >
+                    <X size={9} />
+                  </button>
+                )}
+              </span>
+            ))}
+          </div>
+        )}
+
         <PromptEditor
           value={prompt}
           onChange={(next, assets) => {
@@ -100,17 +156,17 @@ export function NoteComposer({
           //: 用同一句提示语的话,用户会以为它要把整篇重写一遍。
           placeholder={
             (item.text ?? "").trim()
-              ? "想怎么改?例如:短一半、换成更口语的说法、再来三版"
-              : "想让它写什么?按 @ 引用素材"
+              ? t("boardRewritePlaceholder")
+              : t("boardWritePlaceholder")
           }
           candidates={candidates}
           onSubmit={send}
-          emptyHint={() => "这个工作区里还没有素材可以引用。"}
+          emptyHint={() => t("boardNoAssetsToMention")}
         />
         <div className="flex items-center gap-1 border-t border-border pt-1.5">
           {options.length === 0 ? (
             // 没有可用模型时说清楚 —— 给一个点了没反应的按钮比什么都不给更糟。
-            <span className="px-1 text-ui-2xs text-muted-foreground">还没有可用的对话模型,先去设置里配一个</span>
+            <span className="px-1 text-ui-2xs text-muted-foreground">{t("boardNoChatModel")}</span>
           ) : (
             <span className="flex min-w-0 shrink items-center gap-0.5 rounded-full px-1 transition-colors hover:bg-secondary">
               <Sparkles size={12} className="shrink-0 text-muted-foreground" />
@@ -130,8 +186,8 @@ export function NoteComposer({
           )}
           <button
             type="button"
-            aria-label={(item.text ?? "").trim() ? "改写" : "写"}
-            title={`${(item.text ?? "").trim() ? "改写" : "写"}  ⌘↵`}
+            aria-label={t((item.text ?? "").trim() ? "boardRewrite" : "boardWrite")}
+            title={`${t((item.text ?? "").trim() ? "boardRewrite" : "boardWrite")}  ⌘↵`}
             disabled={!prompt.trim() || !current || working}
             onClick={send}
             className={cn(

@@ -234,3 +234,29 @@ def test_次数夹在合法区间():
         assert ai_retry.current_max_retries() == 10
     finally:
         ai_retry.set_max_retries(original)
+
+
+def test_地址空着时给人话而不是_httpx_那句协议错误() -> None:
+    """不拦的话拼出来的是 "/chat/completions",httpx 抛「missing an 'http://' protocol」——
+    用户看到这句,完全想不到要去设置里补一个服务地址。"""
+    import pytest as _pytest
+
+    from app.core.db import SessionLocal
+    from app.db.models import ProviderProfile
+    from app.domain import provider_models
+    from app.domain.ai_chat import AiChatError, target_for
+    from app.domain.provider_credentials import ResolvedProvider
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    profile_id = client.post(
+        "/api/settings/providers", json={"vendor": "openai", "name": "没填地址的连接", "api_key": "k"}
+    ).json()["id"]
+    with SessionLocal() as db:
+        provider_models.upsert(db, db.get(ProviderProfile, profile_id), "some-chat-model", source="manual")
+        db.commit()
+        blank = ResolvedProvider(
+            id=profile_id, name="没填地址的连接", vendor="openai", base_url="", auth_type="api_key", enabled=True, api_key="k"
+        )
+        with _pytest.raises(AiChatError, match="服务地址"):
+            target_for(db, blank, model="some-chat-model")

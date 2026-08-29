@@ -18,6 +18,7 @@ import {
 import { Copy, FileUp, Group, Loader2, Maximize2, Replace, Scissors, Sparkles, Trash2 } from "lucide-react";
 
 import { assetFileUrl } from "@/api/client";
+import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
 
 import type { BoardCanvas as Canvas, BoardItem, GenerationModel } from "@/api/client";
@@ -146,6 +147,7 @@ interface Props {
 }
 
 function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, onSpeak, onTrim, models, showMinimap = true, onDropFiles, uploading, onReady }: Props) {
+  const t = useI18n();
   const rf = React.useRef<ReactFlowInstance | null>(null);
   const viewport = usePersistentViewport(`board:${boardId}`);
   const [ready, setReady] = React.useState(false);
@@ -353,6 +355,32 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     });
   }, [restore]);
 
+  /**
+   * 把选中的这几项圈成一组:算出它们的外接矩形,四周留一点余量,摆一个分组框。
+   *
+   * **框放在最底下** —— React Flow 按数组顺序画,放在后面会盖住被圈的那些项。
+   */
+  const groupSelection = React.useCallback(() => {
+    setNodes((current) => {
+      const picked = current.filter((node) => node.selected);
+      if (picked.length < 2) return current;
+      const pad = 32;
+      const left = Math.min(...picked.map((one) => one.position.x)) - pad;
+      const top = Math.min(...picked.map((one) => one.position.y)) - pad - 12;
+      const right = Math.max(...picked.map((one) => one.position.x + (one.width ?? 220))) + pad;
+      const bottom = Math.max(...picked.map((one) => one.position.y + (one.height ?? 140))) + pad;
+      const item: BoardItem = {
+        id: `frame-${Date.now().toString(36)}`,
+        kind: "frame",
+        x: Math.round(left),
+        y: Math.round(top),
+        width: Math.round(right - left),
+        height: Math.round(bottom - top),
+      };
+      return [...toNodes([item]), ...current.map((node) => ({ ...node, selected: false }))];
+    });
+  }, [setNodes]);
+
   //: ⌘/Ctrl+Z 撤销,⌘⇧Z / Ctrl+Y 重做。输入框里不劫持 —— 在便签里打字时按撤销,
   //: 用户想撤的是自己刚打的字,不是整张画布。
   React.useEffect(() => {
@@ -361,6 +389,12 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       const target = event.target as HTMLElement | null;
       if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
       const key = event.key.toLowerCase();
+      //: ⌘G 分组 —— 框选之后最常接的一步,而它此前只能靠手动加框再往里拖。
+      if (key === "g") {
+        event.preventDefault();
+        groupSelection();
+        return;
+      }
       if (key === "z" && !event.shiftKey) {
         event.preventDefault();
         stepBack();
@@ -371,7 +405,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [stepBack, stepForward]);
+  }, [stepBack, stepForward, groupSelection]);
 
   const add = React.useCallback(
     (kind: BoardItem["kind"], extra: Partial<BoardItem> = {}) => {
@@ -644,7 +678,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         <div className="pointer-events-none absolute inset-0 z-40 grid place-items-center rounded-lg bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]">
           <span className="grid justify-items-center gap-2 rounded-lg border-2 border-dashed border-primary px-6 py-4 text-ui-md font-semibold text-primary">
             {uploading ? <Loader2 size={20} className="animate-spin" /> : <FileUp size={20} />}
-            {uploading ? "正在上传…" : "松手就放到画板上"}
+            {t(uploading ? "boardUploading" : "boardDropHere")}
           </span>
         </div>
       )}
@@ -668,7 +702,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
             className="fixed z-50 w-56 overflow-hidden rounded-xl border border-border-strong bg-panel p-1 shadow-[var(--shadow-panel)]"
             style={{ left: linkMenu.screenX + 8, top: linkMenu.screenY + 8 }}
           >
-            <p className="px-2 py-1.5 text-ui-2xs text-muted-foreground">引用该节点生成</p>
+            <p className="px-2 py-1.5 text-ui-2xs text-muted-foreground">{t("boardSpawnTitle")}</p>
             {SPAWNABLE_KINDS.map((kind) => {
               const { icon: Icon, label, hint } = KIND_META[kind];
               return (
@@ -702,6 +736,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         onPickAsset={onPickAsset}
         onSpawn={onGenerate ? spawnLinked : undefined}
         onTrimRequest={onTrim ? setTrimming : undefined}
+        onGroup={groupSelection}
       />
 
       {/* 空便签:挂写文案的面板。**和图片/视频不是同一张表** —— 写字没有比例、时长、参考图
@@ -809,6 +844,7 @@ function ItemToolbar({
   onPickAsset,
   onSpawn,
   onTrimRequest,
+  onGroup,
 }: {
   nodes: Node[];
   setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
@@ -822,7 +858,10 @@ function ItemToolbar({
   ) => void;
   /** 请求给这一项定剪辑范围。没给 = 这张画板不支持剪辑。 */
   onTrimRequest?: (itemId: string) => void;
+  /** 把当前选中的这几项圈成一组。 */
+  onGroup?: () => void;
 }) {
+  const t = useI18n();
   const { openImagePreview } = useImagePreview();
   const selected = nodes.filter((node) => node.selected);
   // 多选时只给共通的动作 —— 逐个类型的动作在混选下没有一致的含义。
@@ -860,9 +899,9 @@ function ItemToolbar({
     ]);
 
   return (
-    //: 间距从**类型标签**上方算起,不是节点上边框:标签挂在节点外的 -top-5(20px)处,
-    //: 按节点算的话操作条会压在标签上。
-    <NodeToolbar nodeId={selected.map((node) => node.id)} isVisible position={Position.Top} offset={30}>
+    //: 间距从**类型标签**上方算起,不是节点上边框:标签挂在节点外的 -top-5(20px)处。
+    //: 20 + 12 —— 那个 12 和下方面板离节点下边的距离是同一个数,两边看着才一样宽。
+    <NodeToolbar nodeId={selected.map((node) => node.id)} isVisible position={Position.Top} offset={32}>
       <div className="nodrag nopan flex items-center gap-0.5 rounded-full border border-border-strong bg-panel p-1 shadow-[var(--shadow-panel)]">
         {/* 按类型来的那几个动作装在这一格里,**分隔线是这一格自己的右边框**。
             于是它不可能在没有动作时出现 —— 此前那道线自己抄了一遍「上面有没有东西」的
@@ -908,12 +947,12 @@ function ItemToolbar({
           <button
             type="button"
             className="flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs text-muted-foreground hover:bg-secondary hover:text-foreground"
-            title="看大图"
+            title={t("boardPreviewTitle")}
             onClick={() =>
               openImagePreview({ src: assetFileUrl(item.asset_id as string), title: item.text || "" })
             }
           >
-            <Maximize2 size={12} /> 预览
+            <Maximize2 size={12} /> {t("boardPreview")}
           </button>
         )}
 
@@ -922,10 +961,10 @@ function ItemToolbar({
           <button
             type="button"
             className="flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs text-muted-foreground hover:bg-secondary hover:text-foreground"
-            title="截出一段 —— 原件不动,产出是新的一格"
+            title={t("boardTrimTitle")}
             onClick={() => onTrimRequest(item.id)}
           >
-            <Scissors size={12} /> 剪一段
+            <Scissors size={12} /> {t("boardTrim")}
           </button>
         )}
 
@@ -963,12 +1002,12 @@ function ItemToolbar({
                   className="flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs text-muted-foreground hover:bg-secondary hover:text-foreground"
                   title={
                     kind === "audio"
-                      ? "把这段文字念成音频"
+                      ? t("boardSpawnAudio")
                       : kind === "note"
-                      ? "让 AI 接着这一项写点文字"
-                      : item.kind === "note"
-                        ? "用这段文字生成图片"
-                        : "用这张图当首帧生成视频"
+                        ? t("boardSpawnNote")
+                        : item.kind === "note"
+                          ? t("boardSpawnImageFromNote")
+                          : t("boardSpawnVideoFromImage")
                   }
                   onClick={() =>
                     onSpawn(kind, item.id, {
@@ -977,7 +1016,7 @@ function ItemToolbar({
                     })
                   }
                 >
-                  <Sparkles size={12} /> {kind === "note" ? "生成文案" : `生成${KIND_META[kind].label}`}
+                  <Sparkles size={12} /> {t("boardGenerateKind").replace("{kind}", t(KIND_META[kind].label))}
                 </button>
               ))}
           </>
@@ -986,8 +1025,8 @@ function ItemToolbar({
 
         <button
           type="button"
-          aria-label="复制"
-          title="复制"
+          aria-label={t("copy")}
+          title={t("copy")}
           className="grid h-6 w-6 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
           onClick={duplicate}
         >
@@ -995,8 +1034,8 @@ function ItemToolbar({
         </button>
         <button
           type="button"
-          aria-label="删除"
-          title="删除"
+          aria-label={t("delete")}
+          title={t("delete")}
           className="grid h-6 w-6 cursor-pointer place-items-center rounded-full text-muted-foreground hover:text-destructive"
           onClick={() => setNodes((current) => current.filter((node) => !node.selected))}
         >

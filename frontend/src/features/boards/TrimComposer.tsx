@@ -4,6 +4,8 @@ import { Loader2, Scissors, Volume2, VolumeX } from "lucide-react";
 
 import { type BoardItem } from "@/api/client";
 import { Input } from "@/components/ui/input";
+import { useSubmitting } from "@/features/boards/useSubmitting";
+import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
 
 /**
@@ -27,11 +29,13 @@ export function TrimComposer({
   busy: boolean;
   onTrim: (input: { start: number; end: number; mute: boolean }) => void;
 }) {
+  const t = useI18n();
   const [start, setStart] = React.useState("0");
   const [end, setEnd] = React.useState(duration ? String(Math.round(duration * 10) / 10) : "");
   const [mute, setMute] = React.useState(false);
-  const [sending, setSending] = React.useState(false);
-  const working = sending || busy;
+  //: 点下去立刻转、落地就停(**失败也要停** —— 否则那个圈会一直转下去)。见 useSubmitting。
+  const { submitting, run } = useSubmitting();
+  const working = submitting || busy;
 
   const from = Number(start);
   const to = Number(end);
@@ -40,8 +44,7 @@ export function TrimComposer({
 
   const send = () => {
     if (!ok || working) return;
-    setSending(true);
-    onTrim({ start: from, end: to, mute });
+    run(() => onTrim({ start: from, end: to, mute }));
   };
 
   return (
@@ -49,32 +52,32 @@ export function TrimComposer({
       <div className="nodrag nopan nowheel flex w-[420px] items-center gap-2 rounded-xl border border-border-strong bg-panel p-2 shadow-[var(--shadow-panel)]">
         <Scissors size={13} className="shrink-0 text-muted-foreground" />
         <label className="flex items-center gap-1 text-ui-2xs text-muted-foreground">
-          从
+          {t("boardTrimFrom")}
           <Input
             value={start}
             onChange={(event) => setStart(event.target.value)}
             inputMode="decimal"
             className="h-7 w-16 px-1.5 text-center text-ui-xs"
-            aria-label="开始秒数"
+            aria-label={t("boardTrimStartLabel")}
           />
         </label>
         <label className="flex items-center gap-1 text-ui-2xs text-muted-foreground">
-          到
+          {t("boardTrimTo")}
           <Input
             value={end}
             onChange={(event) => setEnd(event.target.value)}
             inputMode="decimal"
-            placeholder={duration ? String(Math.round(duration * 10) / 10) : "秒"}
+            placeholder={duration ? String(Math.round(duration * 10) / 10) : t("boardTrimSeconds")}
             className="h-7 w-16 px-1.5 text-center text-ui-xs"
-            aria-label="结束秒数"
+            aria-label={t("boardTrimEndLabel")}
           />
         </label>
-        <span className="text-ui-2xs text-muted-foreground">秒</span>
+        <span className="text-ui-2xs text-muted-foreground">{t("boardTrimSeconds")}</span>
 
         <button
           type="button"
           aria-pressed={mute}
-          title={mute ? "去掉声音" : "保留声音"}
+          title={t(mute ? "boardDropSound" : "boardKeepSound")}
           onClick={() => setMute((on) => !on)}
           className={cn(
             "grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-full transition-colors",
@@ -95,7 +98,7 @@ export function TrimComposer({
               : "cursor-pointer bg-primary text-primary-foreground hover:opacity-90",
           )}
         >
-          {working ? <Loader2 size={12} className="animate-spin" /> : <Scissors size={12} />} 剪出来
+          {working ? <Loader2 size={12} className="animate-spin" /> : <Scissors size={12} />} {t("boardTrimSubmit")}
         </button>
       </div>
     </NodeToolbar>

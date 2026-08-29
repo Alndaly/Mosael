@@ -5,6 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 
 import { listVoices, type BoardItem, type Voice } from "@/api/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useSubmitting } from "@/features/boards/useSubmitting";
+import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
 
 /**
@@ -31,6 +33,7 @@ export function AudioComposer({
   upstreamText?: string;
   onSpeak: (input: { text: string; voiceId: string }) => void;
 }) {
+  const t = useI18n();
   const [text, setText] = React.useState(upstreamText ?? "");
   const [picked, setPicked] = React.useState("");
 
@@ -47,15 +50,14 @@ export function AudioComposer({
   const options = voices.data ?? [];
   const current = options.find((one: Voice) => one.id === picked) ?? options[0] ?? null;
 
-  //: 点下去**立刻**转圈,不等服务端回来。
-  const [sending, setSending] = React.useState(false);
-  const working = sending || busy;
+  //: 点下去立刻转、落地就停(**失败也要停** —— 否则那个圈会一直转下去)。见 useSubmitting。
+  const { submitting, run } = useSubmitting();
+  const working = submitting || busy;
 
   const send = () => {
     const body = text.trim();
     if (!body || working) return;
-    setSending(true);
-    onSpeak({ text: body, voiceId: current?.id ?? "" });
+    run(() => onSpeak({ text: body, voiceId: current?.id ?? "" }));
   };
 
   return (
@@ -71,13 +73,13 @@ export function AudioComposer({
             }
           }}
           rows={3}
-          placeholder="要念的文字 —— 上游连一张便签过来就自动填好了"
+          placeholder={t("boardSpeakPlaceholder")}
           className="w-full resize-none border-0 bg-transparent px-1.5 py-1 text-ui-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
         />
         <div className="flex items-center gap-1 border-t border-border pt-1.5">
           {options.length === 0 ? (
             // 没有音色时说清楚 —— 给一个点了没反应的按钮比什么都不给更糟。
-            <span className="px-1 text-ui-2xs text-muted-foreground">还没有可用的音色,先去「声音」里加一个</span>
+            <span className="px-1 text-ui-2xs text-muted-foreground">{t("boardNoVoices")}</span>
           ) : (
             <span className="flex min-w-0 shrink items-center gap-0.5 rounded-full px-1 transition-colors hover:bg-secondary">
               <AudioLines size={12} className="shrink-0 text-muted-foreground" />
@@ -97,8 +99,8 @@ export function AudioComposer({
           )}
           <button
             type="button"
-            aria-label="念出来"
-            title="念出来  ⌘↵"
+            aria-label={t("boardSpeak")}
+            title={`${t("boardSpeak")}  ⌘↵`}
             disabled={!text.trim() || options.length === 0 || working}
             onClick={send}
             className={cn(

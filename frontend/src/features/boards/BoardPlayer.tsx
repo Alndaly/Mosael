@@ -2,6 +2,7 @@ import React from "react";
 import { Maximize2, Music, Pause, Play, Volume2, VolumeX } from "lucide-react";
 
 import { assetFileUrl } from "@/api/client";
+import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
 
 /**
@@ -124,6 +125,7 @@ export function BoardVideo({
   /** 画面的自然尺寸 —— 节点拿它把自己的宽高比校正成片子的比例。 */
   onNaturalSize?: (width: number, height: number) => void;
 }) {
+  const t = useI18n();
   const ref = React.useRef<HTMLVideoElement | null>(null);
   const { playing, muted, at, total, setTotal, toggle, toggleMute, bind } = usePlayback(ref);
 
@@ -149,7 +151,7 @@ export function BoardVideo({
       {!playing && (
         <button
           type="button"
-          aria-label="播放"
+          aria-label={t("boardPlay")}
           onClick={toggle}
           //: **不带 nodrag** —— 它铺满整个节点,带上就等于整块拖不动;点一下不是拖动,onClick 照发。
           className="absolute inset-0 grid cursor-pointer place-items-center bg-black/10 transition-colors hover:bg-black/20"
@@ -167,16 +169,16 @@ export function BoardVideo({
       <div className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-black/80 to-transparent px-2 pb-1.5 pt-4 text-white opacity-0 transition-all group-hover/player:pointer-events-auto group-hover/player:translate-y-0 group-hover/player:opacity-100">
         <Scrubber media={ref} at={at} total={total} className="mb-0.5" trackClassName="bg-white/30" />
         <div className="flex items-center gap-1.5">
-          <button type="button" aria-label={playing ? "暂停" : "播放"} onClick={toggle} className="cursor-pointer opacity-90 hover:opacity-100">
+          <button type="button" aria-label={t(playing ? "boardPause" : "boardPlay")} onClick={toggle} className="cursor-pointer opacity-90 hover:opacity-100">
             {playing ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" />}
           </button>
           <span className="text-ui-2xs tabular-nums opacity-90">
             {clock(at)} / {clock(total)}
           </span>
-          <button type="button" aria-label={muted ? "取消静音" : "静音"} onClick={toggleMute} className="ml-auto cursor-pointer opacity-90 hover:opacity-100">
+          <button type="button" aria-label={t(muted ? "boardUnmute" : "boardMute")} onClick={toggleMute} className="ml-auto cursor-pointer opacity-90 hover:opacity-100">
             {muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
           </button>
-          <button type="button" aria-label="全屏" onClick={() => void ref.current?.requestFullscreen?.()} className="cursor-pointer opacity-90 hover:opacity-100">
+          <button type="button" aria-label={t("boardFullscreen")} onClick={() => void ref.current?.requestFullscreen?.()} className="cursor-pointer opacity-90 hover:opacity-100">
             <Maximize2 size={13} />
           </button>
         </div>
@@ -192,6 +194,7 @@ export function BoardVideo({
  * 上什么都没有。
  */
 export function BoardAudio({ assetId, className }: { assetId: string; className?: string }) {
+  const t = useI18n();
   const ref = React.useRef<HTMLAudioElement | null>(null);
   const { playing, muted, at, total, setTotal, toggle, toggleMute, bind } = usePlayback(ref);
 
@@ -207,7 +210,7 @@ export function BoardAudio({ assetId, className }: { assetId: string; className?
       />
       <button
         type="button"
-        aria-label={playing ? "暂停" : "播放"}
+        aria-label={t(playing ? "boardPause" : "boardPlay")}
         onClick={toggle}
         className="grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90"
       >
@@ -218,7 +221,7 @@ export function BoardAudio({ assetId, className }: { assetId: string; className?
       <span className="shrink-0 text-ui-2xs tabular-nums">
         {clock(at)} / {clock(total)}
       </span>
-      <button type="button" aria-label={muted ? "取消静音" : "静音"} onClick={toggleMute} className="shrink-0 cursor-pointer hover:text-foreground">
+      <button type="button" aria-label={t(muted ? "boardUnmute" : "boardMute")} onClick={toggleMute} className="shrink-0 cursor-pointer hover:text-foreground">
         {muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
       </button>
     </div>

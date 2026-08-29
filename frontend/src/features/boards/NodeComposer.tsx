@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { assetFileUrl, assetThumbnailUrl, listAssets, type Asset, type BoardItem, type GenerationModel } from "@/api/client";
 import { useImagePreview } from "@/components/app/image-preview";
 import { PromptEditor } from "@/features/boards/PromptEditor";
+import { useSubmitting } from "@/features/boards/useSubmitting";
 import { useI18n } from "@/app/preferences";
 import { ROLE_COPY, type SourceRole } from "@/features/ai-studio/sourceFrames";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -345,15 +346,13 @@ export function NodeComposer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [feedIds, modes.length]);
 
-  //: 点下去**立刻**转圈,不等服务端回来。往返有几百毫秒,这期间按钮毫无变化 —— 用户
-  //: 会以为没点上,再点一次(于是发两遍)。
-  const [sending, setSending] = React.useState(false);
-  const working = sending || busy;
+  //: 点下去立刻转、落地就停(**失败也要停** —— 否则那个圈会一直转下去)。见 useSubmitting。
+  const { submitting, run } = useSubmitting();
+  const working = submitting || busy;
 
   const send = () => {
     const text = prompt.trim();
     if (!text || !current || working) return;
-    setSending(true);
     //: 只发这个模型**认的**那几项 —— 多发一项会被校验器当场拦下(它照描述符判)。
     const parameters: Record<string, unknown> = {};
     if (supportsParameter(current, "aspect_ratio") && ratio) parameters.aspect_ratio = ratio;
@@ -362,16 +361,18 @@ export function NodeComposer({
     if (supportsParameter(current, "duration_seconds")) parameters.duration_seconds = duration;
     if (current.capabilities?.supports_audio && audio) parameters.generate_audio = true;
     if (maxImages(current) > 1 && count > 1) parameters.num_images = count;
-    onSubmit({
-      prompt: text,
-      provider: current.provider,
-      model: current.model,
-      parameters,
-      //: 槽位挂的 + 正文里 @ 到的,都要发出去。**同一份素材不发两遍** —— 有些厂商会把
-      //: 重复的那一份也算进参考图的份数,挂到上限就直接拒了。正文里的 @ 没有角色,
-      //: 落到第一个收得下它的槽上(通常就是参考图)。
-      sourceAssets: mergeSourceAssets(sources, mentioned, library.data ?? [], slots),
-    });
+    run(() =>
+      onSubmit({
+        prompt: text,
+        provider: current.provider,
+        model: current.model,
+        parameters,
+        //: 槽位挂的 + 正文里 @ 到的,都要发出去。**同一份素材不发两遍** —— 有些厂商会把
+        //: 重复的那一份也算进参考图的份数,挂到上限就直接拒了。正文里的 @ 没有角色,
+        //: 落到第一个收得下它的槽上(通常就是参考图)。
+        sourceAssets: mergeSourceAssets(sources, mentioned, library.data ?? [], slots),
+      }),
+    );
   };
 
   return (
@@ -397,8 +398,8 @@ export function NodeComposer({
                     // 首帧和尾帧之间那个交换 —— 摆反了是最常见的手误,而重挂两次很烦。
                     <button
                       type="button"
-                      aria-label="交换首尾帧"
-                      title="交换首尾帧"
+                      aria-label={t("boardSwapFrames")}
+                      title={t("boardSwapFrames")}
                       className="grid h-6 w-6 cursor-pointer place-items-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
                       onClick={() =>
                         setSources((current) =>
@@ -431,8 +432,8 @@ export function NodeComposer({
                       </button>
                       <button
                         type="button"
-                        aria-label={`移除${roleLabel(t, slot.role)}`}
-                        title="移除"
+                        aria-label={`${t("boardRemove")}${roleLabel(t, slot.role)}`}
+                        title={t("boardRemove")}
                         onClick={() => setSources((all) => all.filter((x) => x.assetId !== one.assetId))}
                         //: 悬浮才出。常驻的话,这一排小图上会挂满一圈叉,比图本身还显眼。
                         className="absolute -right-1 -top-1 grid h-4 w-4 cursor-pointer place-items-center rounded-full border border-border bg-panel text-muted-foreground opacity-0 shadow-sm transition-opacity hover:border-destructive hover:text-destructive group-hover/thumb:opacity-100"
@@ -470,10 +471,10 @@ export function NodeComposer({
             setPrompt(next);
             setMentioned(assets);
           }}
-          placeholder={slots.length > 0 ? "描述你想要生成的内容,按 @ 引用素材" : "描述你想要生成的内容"}
+          placeholder={t(slots.length > 0 ? "boardPromptPlaceholderMention" : "boardPromptPlaceholder")}
           candidates={candidates}
           onSubmit={send}
-          emptyHint={() => (slots.length === 0 ? "这个模型不收参考素材,@ 在这里没有可挂的地方。" : "")}
+          emptyHint={() => (slots.length === 0 ? t("boardNoSourceSlots") : "")}
         />
         {/* 参数行:**按这个模型声明的来**,不写死。
             后端描述符已经说清楚了每个模型认哪几项(aspect_ratio / resolution /
@@ -487,7 +488,7 @@ export function NodeComposer({
         <div className="flex items-center gap-1 border-t border-border pt-1.5">
           {options.length === 0 ? (
             // 没有可用模型时说清楚 —— 给一个点了没反应的按钮比什么都不给更糟。
-            <span className="px-1 text-ui-2xs text-muted-foreground">还没有可用的生成模型,先去设置里配一个</span>
+            <span className="px-1 text-ui-2xs text-muted-foreground">{t("boardNoGenerationModel")}</span>
           ) : (
             <>
               <span className="flex min-w-0 shrink items-center gap-0.5 rounded-full px-1 transition-colors hover:bg-secondary">
@@ -539,8 +540,8 @@ export function NodeComposer({
                       value={audio ? "on" : "off"}
                       onChange={(next) => setAudio(next === "on")}
                       options={[
-                        { value: "on", label: "有声" },
-                        { value: "off", label: "静音" },
+                        { value: "on", label: t("boardWithSound") },
+                        { value: "off", label: t("boardMuted") },
                       ]}
                     />
                   </span>
@@ -562,8 +563,8 @@ export function NodeComposer({
                 )}
                 <button
                   type="button"
-                  aria-label="生成"
-                  title="生成  ⌘↵"
+                  aria-label={t("boardGenerate")}
+                  title={`${t("boardGenerate")}  ⌘↵`}
                   disabled={!prompt.trim() || !current || busy}
                   onClick={send}
                   className={cn(

@@ -1,11 +1,13 @@
 import React from "react";
 import { Handle, NodeResizer, Position, useStore, type NodeProps } from "@xyflow/react";
-import { Film as FilmIcon, Image as ImageIcon, Loader2, Music, Plus, Square as SquareIcon, StickyNote, type LucideIcon } from "lucide-react";
+import { Film as FilmIcon, Group, Image as ImageIcon, Loader2, Music, Plus, Square as SquareIcon, StickyNote, type LucideIcon } from "lucide-react";
 
 import type { BoardItem } from "@/api/client";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
 import { BoardAudio, BoardVideo } from "@/features/boards/BoardPlayer";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useI18n } from "@/app/preferences";
+import type { MessageKey } from "@/app/messages";
 import { cn } from "@/lib/utils";
 
 /**
@@ -104,12 +106,14 @@ function Ports({ visible }: { visible?: boolean }) {
  * 节点左上角的标签、从连线末端长出新节点的那个菜单、工具条 —— 都读它。此前图标和名字散在
  * 各个节点组件里各写一份,于是便签被贴成了「视频」、视频自己反倒没有标签,而两处都不报错。
  */
-export const KIND_META: Record<BoardItem["kind"], { icon: LucideIcon; label: string; hint: string }> = {
-  note: { icon: StickyNote, label: "便签", hint: "写一段想法、脚本或提示词" },
-  image: { icon: ImageIcon, label: "图片", hint: "生成或贴一张图" },
-  video: { icon: FilmIcon, label: "视频", hint: "生成或贴一段视频" },
-  audio: { icon: Music, label: "音频", hint: "配音、旁白、背景音乐" },
-  frame: { icon: SquareIcon, label: "分组", hint: "把一堆东西圈起来命名" },
+//: 名字和说明**存的是 i18n 的 key,不是中文**。写死的话切到英文界面这一整排还是中文,
+//: 而它们出现在工具条、节点标签、添加菜单三处 —— 漏一处不会报错,只会是半中半英。
+export const KIND_META: Record<BoardItem["kind"], { icon: LucideIcon; label: MessageKey; hint: MessageKey }> = {
+  note: { icon: StickyNote, label: "boardKindNote", hint: "boardKindNoteHint" },
+  image: { icon: ImageIcon, label: "boardKindImage", hint: "boardKindImageHint" },
+  video: { icon: FilmIcon, label: "boardKindVideo", hint: "boardKindVideoHint" },
+  audio: { icon: Music, label: "boardKindAudio", hint: "boardKindAudioHint" },
+  frame: { icon: SquareIcon, label: "boardKindFrame", hint: "boardKindFrameHint" },
 };
 
 /** 能从一条线的末端长出来的种类。分组框不在其中 —— 它是个容器,不是一份产出。 */
@@ -117,10 +121,11 @@ export const SPAWNABLE_KINDS = ["image", "video", "audio", "note"] as const;
 
 /** 节点上方那行类型标签 —— 一眼看出这格是图片还是视频,不用等它加载出来。 */
 function TypeLabel({ kind }: { kind: BoardItem["kind"] }) {
+  const t = useI18n();
   const { icon: Icon, label } = KIND_META[kind];
   return (
     <span className="pointer-events-none absolute -top-5 left-0 inline-flex items-center gap-1 text-ui-2xs text-muted-foreground">
-      <Icon size={11} /> {label}
+      <Icon size={11} /> {t(label)}
     </span>
   );
 }
@@ -128,6 +133,7 @@ function TypeLabel({ kind }: { kind: BoardItem["kind"] }) {
 /** 便签:双击进入编辑。**单击不进** —— 单击是选中/拖动,想法摆位比改字更频繁。 */
 export function NoteNode({ data, selected }: NodeProps) {
   const { item, onText } = data as unknown as BoardNodeData;
+  const t = useI18n();
   const [editing, setEditing] = React.useState(false);
   const ref = React.useRef<HTMLTextAreaElement | null>(null);
 
@@ -161,7 +167,7 @@ export function NoteNode({ data, selected }: NodeProps) {
         />
       ) : (
         <div className="h-full w-full overflow-hidden whitespace-pre-wrap break-words text-foreground">
-          {item.text || <span className="text-muted-foreground">双击写点什么</span>}
+          {item.text || <span className="text-muted-foreground">{t("boardNotePlaceholder")}</span>}
         </div>
       )}
     </div>
@@ -252,6 +258,7 @@ export function ImageNode({ data, selected }: NodeProps) {
  */
 export function FrameNode({ data, selected }: NodeProps) {
   const { item, onText } = data as unknown as BoardNodeData;
+  const t = useI18n();
   const [editing, setEditing] = React.useState(false);
 
   return (
@@ -262,22 +269,25 @@ export function FrameNode({ data, selected }: NodeProps) {
       )}
     >
       <NodeResizer minWidth={160} minHeight={120} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
-      {/* 只有标题条吃指针事件 —— 拖它来移动整个框,框内区域让给里面的项。 */}
-      <div className="pointer-events-auto absolute -top-0.5 left-2 flex max-w-[90%] -translate-y-1/2 items-center rounded-md border border-border bg-panel px-2 py-0.5">
+      {/* 只有标题吃指针事件 —— 拖它来移动整个框,框内区域让给里面的项。
+          **和别的节点同一套**:框外正上方、同样的字号和图标(见 TypeLabel)。此前它是一枚
+          带边框和底色的胶囊,摆在一排节点里像是另一个体系的东西。 */}
+      <div className="pointer-events-auto absolute -top-5 left-0 flex max-w-[90%] items-center gap-1 text-ui-2xs text-muted-foreground">
+        <Group size={11} className="shrink-0" />
         {editing ? (
           <input
             autoFocus
-            className="nodrag w-40 border-0 bg-transparent p-0 text-ui-2xs font-medium text-foreground outline-none"
+            className="nodrag w-40 border-0 bg-transparent p-0 text-ui-2xs text-foreground outline-none"
             value={item.text ?? ""}
             onChange={(event) => onText(item.id, event.target.value)}
             onBlur={() => setEditing(false)}
           />
         ) : (
           <span
-            className="cursor-text truncate text-ui-2xs font-medium text-muted-foreground"
+            className="cursor-text truncate text-ui-2xs"
             onDoubleClick={() => setEditing(true)}
           >
-            {item.text || "分组"}
+            {item.text || t("boardKindFrame")}
           </span>
         )}
       </div>

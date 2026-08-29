@@ -312,10 +312,10 @@ function BoardDetail({
         if (written?.text) api?.patch(input.itemId, { text: written.text });
         onSaved();
       } catch (error) {
-        toast.error("写不出来", { description: (error as Error).message });
+        toast.error(t("boardWriteFailed"), { description: (error as Error).message });
       }
     },
-    [board.id, workspaceId, onSaved, api],
+    [board.id, workspaceId, onSaved, api, t],
   );
 
   /** 把一段文字念成音频。**异步** —— 和出图出片同一套:摆占位、起任务、轮询等回执填回来。 */
@@ -330,7 +330,7 @@ function BoardDetail({
           voice_id: input.voiceId,
         });
       } catch (error) {
-        toast.error("念不出来", { description: (error as Error).message });
+        toast.error(t("boardSpeakFailed"), { description: (error as Error).message });
         return;
       }
       //: 和生成那条一样:马上把这一格标成在跑,不然画布上看不出发生了什么。
@@ -338,7 +338,7 @@ function BoardDetail({
       if (pending?.job_id) api?.patch(input.itemId, { job_id: pending.job_id, text: pending.text });
       setRunning((current) => [...current, input.itemId]);
     },
-    [board.id, workspaceId, api],
+    [board.id, workspaceId, api, t],
   );
 
   /** 截出一段。**产出是一份新素材**,落到一个新节点上 —— 原素材不动。 */
@@ -365,7 +365,7 @@ function BoardDetail({
           y: input.y,
         });
       } catch (error) {
-        toast.error("剪不出来", { description: (error as Error).message });
+        toast.error(t("boardTrimFailed"), { description: (error as Error).message });
         return;
       }
       //: **走画布的把手把新那一格加进去。** 回写这里的 canvas 状态是没用的 —— 画布的节点
@@ -375,7 +375,7 @@ function BoardDetail({
       onSaved();
       setRunning((current) => [...current, input.itemId]);
     },
-    [board.id, workspaceId, onSaved, api],
+    [board.id, workspaceId, onSaved, api, t],
   );
 
   //: 还在跑的那几格。**轮询而不是等** —— 生成要几十秒,而用户这期间还在画布上干别的。
