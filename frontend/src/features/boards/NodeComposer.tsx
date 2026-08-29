@@ -342,7 +342,7 @@ export function NodeComposer({
 
   return (
     <NodeToolbar nodeId={item.id} isVisible position={Position.Bottom} offset={12}>
-      <div className="nodrag nopan nowheel w-[420px] rounded-xl border border-border-strong bg-panel p-2 shadow-[var(--shadow-panel)]">
+      <div className="nodrag nopan nowheel relative w-[420px] rounded-xl border border-border-strong bg-panel p-2 shadow-[var(--shadow-panel)]">
         {/* 输入素材:图片是一排参考图(可多张),视频是首帧 ⇄ 尾帧。**格子按模型声明出** ——
             见 slots 那段。挂满上限就不再给 + ,免得点了才被校验器拦下。 */}
         {slots.length > 0 && (
@@ -414,7 +414,7 @@ export function NodeComposer({
 
         {/* 输入框 + `@` 引用素材。@ 挑中的东西**挂到输入素材上,不留在文字里** ——
             留着的话模型会把「@猫.png」当成描述的一部分念出来。 */}
-        <div className="relative">
+        <div>
           <textarea
             ref={box}
             value={prompt}
@@ -458,36 +458,11 @@ export function NodeComposer({
               }
             }}
             rows={3}
-            placeholder="描述你想要生成的内容,按 @ 引用素材"
+            //: 这个模型一个输入素材槽都没有时,别在提示里许诺 @ —— 挑中了也无处可挂,
+            //: 那就成了一句点了没反应的说明。
+            placeholder={slots.length > 0 ? "描述你想要生成的内容,按 @ 引用素材" : "描述你想要生成的内容"}
             className="w-full resize-none border-0 bg-transparent px-1.5 py-1 text-ui-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
           />
-          {mention.query !== null && matches.length > 0 && (
-            <div className="absolute inset-x-1 top-full z-50 max-h-56 overflow-y-auto rounded-lg border border-border-strong bg-panel p-1 shadow-[var(--shadow-panel)]">
-              {matches.map((asset, at) => (
-                <button
-                  key={asset.id}
-                  type="button"
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => pickMention(asset)}
-                  onMouseEnter={() => mention.setIndex(at)}
-                  className={cn(
-                    "flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors",
-                    at === mention.index ? "bg-secondary" : "hover:bg-secondary",
-                  )}
-                >
-                  <img
-                    src={assetThumbnailUrl(asset.id)}
-                    alt=""
-                    className="h-7 w-10 shrink-0 rounded bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] object-cover"
-                  />
-                  <span className="min-w-0 flex-1 truncate text-ui-2xs text-foreground">
-                    {asset.name || asset.original_filename}
-                  </span>
-                  <span className="shrink-0 text-ui-2xs text-muted-foreground">{asset.kind}</span>
-                </button>
-              ))}
-            </div>
-          )}
         </div>
         {/* 参数行:**按这个模型声明的来**,不写死。
             后端描述符已经说清楚了每个模型认哪几项(aspect_ratio / resolution /
@@ -593,6 +568,35 @@ export function NodeComposer({
             </>
           )}
         </div>
+        {mention.query !== null && matches.length > 0 && (
+          <div //: 挂在**整个面板**下面,不是输入框下面 —— 挂输入框下面会盖住面板自己的模型行,
+          //: 还有一半探到面板外边,读起来像另一块浮起来的东西。
+          className="absolute inset-x-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-xl border border-border-strong bg-panel p-1 shadow-[var(--shadow-panel)]">
+            {matches.map((asset, at) => (
+              <button
+                key={asset.id}
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => pickMention(asset)}
+                onMouseEnter={() => mention.setIndex(at)}
+                className={cn(
+                  "flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors",
+                  at === mention.index ? "bg-secondary" : "hover:bg-secondary",
+                )}
+              >
+                <img
+                  src={assetThumbnailUrl(asset.id)}
+                  alt=""
+                  className="h-7 w-10 shrink-0 rounded bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] object-cover"
+                />
+                <span className="min-w-0 flex-1 truncate text-ui-2xs text-foreground">
+                  {asset.name || asset.original_filename}
+                </span>
+                <span className="shrink-0 text-ui-2xs text-muted-foreground">{asset.kind}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </NodeToolbar>
   );
