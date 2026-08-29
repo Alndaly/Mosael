@@ -162,6 +162,25 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, sho
     return (item.kind === "image" || item.kind === "video") && !item.asset_id ? item : null;
   }, [nodes]);
 
+  /**
+   * 连到这个节点上的上游产出,按连线的先后。
+   *
+   * **这就是那条线的意思。** 连了线还要再挂一遍素材的话,线就只是根装饰;所以这里把上游
+   * 已经出了产出的项收上来,交给面板照当前生成方式挂进槽位(一张图当首帧、多张当参考)。
+   * 还没出产出的上游跳过 —— 它自己都还没有东西可给。
+   */
+  const upstream = React.useMemo(() => {
+    if (!composerItem) return [];
+    const byId = new Map(
+      nodes.map((node) => [node.id, (node.data as unknown as { item: BoardItem }).item]),
+    );
+    return edges
+      .filter((edge) => edge.target === composerItem.id)
+      .map((edge) => byId.get(edge.source))
+      .filter((item): item is BoardItem => Boolean(item?.asset_id))
+      .map((item) => ({ assetId: item.asset_id as string, kind: item.kind }));
+  }, [composerItem, edges, nodes]);
+
   //: 渲染用的节点 = 数据 + 这一轮的回调。**每轮重新贴** —— 回调闭包着最新的 setNodes,
   //: 而把它们存进节点数据会让节点的初值反过来依赖 setNodes,那个循环绕不开。
   const displayNodes = React.useMemo(
@@ -356,6 +375,7 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, sho
           models={models ?? []}
           busy={Boolean(composerItem.job_id)}
           onPickAsset={onPickAsset}
+          upstream={upstream}
           onSubmit={({ prompt, provider, model, parameters, sourceAssets }) =>
             void onGenerate({
               kind: composerItem.kind as "image" | "video",

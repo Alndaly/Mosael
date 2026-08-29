@@ -46,6 +46,12 @@ export function capabilityNumber(model: GenerationModel | null, key: string, fal
  * 数字来自各家接口自己的报错(见后端 domain/generation/catalog 的 source_limits),
  * 不是我们定的:火山和海螺给九张参考图,万相给参考图 + 参考视频合计五份。
  */
+/**
+ * 这个角色**能挂几份**。
+ *
+ * **不是支持判定。** 没声明的角色它返回兜底的 1 —— 想问「这个模型认不认某个角色」,
+ * 用 supportsParameter(它查描述符的 parameter_keys)。两者混用会让图片模型也长出首尾帧槽。
+ */
 export function sourceLimit(model: GenerationModel | null, role: string): number {
   const limits = model?.capabilities?.source_limits;
   if (!limits || typeof limits !== "object") return 1;

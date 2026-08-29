@@ -1,16 +1,20 @@
 import React from "react";
 import { NodeToolbar, Position } from "@xyflow/react";
-import { ArrowUp, Loader2, Sparkles, Volume2, VolumeX } from "lucide-react";
+import { ArrowLeftRight, ArrowUp, Loader2, Plus, Sparkles, Volume2, VolumeX } from "lucide-react";
 
-import type { BoardItem, GenerationModel } from "@/api/client";
+import { assetThumbnailUrl, type BoardItem, type GenerationModel } from "@/api/client";
+import { useI18n } from "@/app/preferences";
+import { ROLE_COPY, type SourceRole } from "@/features/ai-studio/sourceFrames";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   aspectRatioOptions,
   capabilityNumber,
+  exclusiveSourceGroups,
   capabilityString,
   durationOptions,
   maxImages,
   sizeOptions,
+  sourceLimit,
   supportsParameter,
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
@@ -47,7 +51,9 @@ function Pick({
   if (options.length === 0) return null;
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="h-6 w-auto gap-0.5 border-0 bg-transparent px-1 text-ui-2xs text-muted-foreground shadow-none focus:ring-0 [&>svg]:h-3 [&>svg]:w-3">
+      {/* 不出下拉箭头:一行里五六个箭头是纯噪音,而这一行读起来该像「16:9 · 480p · 5s」。
+          点开仍然是完整的下拉。 */}
+      <SelectTrigger className="h-6 w-auto gap-0 border-0 bg-transparent px-1 text-ui-2xs text-muted-foreground shadow-none focus:ring-0 data-[state=open]:text-foreground [&>svg]:hidden">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -61,18 +67,133 @@ function Pick({
   );
 }
 
+/** 角色的中文名 —— 和 AI 工作台共用那一份(features/ai-studio/sourceFrames.ROLE_COPY),
+ *  不在这里再抄一张表。 */
+/** ROLE_COPY 里存的是 i18n 的 key,**不是**给人看的字 —— 不过一遍 t() 就会把
+ *  「genFirstFrame」原样挂到提示上。 */
+/** 一个角色收哪一类素材。**只此一处** —— 选择器开哪一类、上游哪种产出能自动挂进来,
+ *  都问它;分散写两遍的话,加一个角色就会有一边忘记改。 */
+export function roleAccepts(role: string): "image" | "video" | "audio" {
+  if (role === "reference_video") return "video";
+  if (role === "reference_audio") return "audio";
+  return "image";
+}
+
+/**
+ * 这个模型有哪几种「生成方式」。
+ *
+ * **不是手写的二选一** —— 首尾帧和参考素材互斥是厂商的硬约束,后端已经在描述符的
+ * `exclusive_source_groups` 里声明过了(火山原话:first/last frame content cannot be
+ * mixed with reference media content)。界面只是把那份声明画成一个开关:多写一份
+ * 「哪些方式」的表,换个模型就会对不上。
+ *
+ * 只留这个模型真认的角色;剩不下角色的组直接不出现。不足两组就没得选,返回空 =「不显示开关」。
+ */
+export function sourceModes(model: GenerationModel | null): { key: string; roles: string[] }[] {
+  const groups = exclusiveSourceGroups(model)
+    .map((roles) => roles.filter((role) => supportsParameter(model, role)))
+    .filter((roles) => roles.length > 0)
+    .map((roles) => ({ key: roles[0], roles }));
+  return groups.length >= 2 ? groups : [];
+}
+
+/** 这一组在界面上叫什么。**从组成员推**,不另立一张表 —— 表会和描述符各走各的。 */
+export function modeLabel(roles: string[]): string {
+  return roles.some((role) => role.endsWith("_frame")) ? "首尾帧" : "全能参考";
+}
+
+/** 这个模型认哪几种输入素材、各能挂几份。
+ *
+ * **认不认看 supportsParameter(描述符的 parameter_keys),能挂几份才看 sourceLimit。**
+ * sourceLimit 对没声明的角色兜底返回 1,拿它当支持判定用的话,图片模型也会长出首尾帧槽。
+ */
+export function sourceSlots(
+  model: GenerationModel | null,
+  /** 当前生成方式的角色。给了就只出这一组 —— 互斥的另一组同时摆出来,挂满了才在提交时被拒。 */
+  activeRoles?: string[],
+): { role: string; limit: number }[] {
+  if (!model) return [];
+  return (["first_frame", "last_frame", "reference_image", "reference_video", "reference_audio"] as const)
+    .filter((role) => supportsParameter(model, role))
+    .filter((role) => !activeRoles || activeRoles.includes(role))
+    .map((role) => ({ role, limit: sourceLimit(model, role) }));
+}
+
+/**
+ * 把上游节点的产出自动挂到槽位上,按槽位顺序、各自的份数上限来。
+ *
+ * 连了线却还要再挂一遍素材,那条线就只是根装饰。类别对不上的跳过(视频挂不进首帧),
+ * 装不下的也跳过 —— 宁可少挂一张,也不要把用户没连的东西塞进去。
+ */
+export function autoAssign(
+  slots: { role: string; limit: number }[],
+  upstream: { assetId: string; kind: string }[],
+): { role: string; assetId: string }[] {
+  const taken = new Set<string>();
+  const out: { role: string; assetId: string }[] = [];
+  for (const slot of slots) {
+    for (const one of upstream) {
+      if (out.filter((x) => x.role === slot.role).length >= slot.limit) break;
+      if (taken.has(one.assetId) || one.kind !== roleAccepts(slot.role)) continue;
+      taken.add(one.assetId);
+      out.push({ role: slot.role, assetId: one.assetId });
+    }
+  }
+  return out;
+}
+
+/**
+ * 上游连了这些东西时,默认该用哪种生成方式。
+ *
+ * 照 TapNow 的直觉:**连一张图 = 拿它当首帧**(最常见的图生视频),连两张以上就说明用户
+ * 想要的是「像这些」而不是「从这张开始」,于是切到参考。装不下的组不选。
+ */
+export function defaultMode(
+  modes: { key: string; roles: string[] }[],
+  model: GenerationModel | null,
+  upstream: { assetId: string; kind: string }[],
+): string {
+  if (modes.length === 0) return "";
+  const fits = (mode: { roles: string[] }) =>
+    autoAssign(sourceSlots(model, mode.roles), upstream).length;
+  const keyframe = modes.find((mode) => mode.roles.some((role) => role.endsWith("_frame")));
+  if (upstream.length === 1 && keyframe && fits(keyframe) === 1) return keyframe.key;
+  //: 挂得下最多张的那组胜出;都挂不下就维持第一组。
+  const best = modes.reduce((a, b) => (fits(b) > fits(a) ? b : a));
+  return fits(best) > 0 ? best.key : modes[0].key;
+}
+
+function roleLabel(t: ReturnType<typeof useI18n>, role: string): string {
+  const key = ROLE_COPY[role as SourceRole]?.label;
+  return key ? t(key as Parameters<typeof t>[0]) : role;
+}
+
 export function NodeComposer({
   item,
   models,
   busy,
   onSubmit,
+  onPickAsset,
+  upstream,
 }: {
   item: BoardItem;
   /** 这种能力下可选的模型。空数组 = 还没配 —— 那时该说清楚,而不是给一个点了没反应的按钮。 */
   models: GenerationModel[];
   busy: boolean;
-  onSubmit: (input: { prompt: string; provider: string; model: string; parameters: Record<string, unknown> }) => void;
+  onSubmit: (input: {
+    prompt: string;
+    provider: string;
+    model: string;
+    parameters: Record<string, unknown>;
+    sourceAssets: { asset_id: string; role: string }[];
+  }) => void;
+  /** 挂输入素材时开选择器 —— 和画布上「换一份」用的是同一个。 */
+  onPickAsset: (kind: "image" | "video", place: (assetId: string) => void) => void;
+  /** **连到这个节点上的上游产出**,按连线顺序。它们会自动挂进当前生成方式的槽位 ——
+   *  连了线还要再挂一遍素材的话,那条线就只是根装饰。 */
+  upstream?: { assetId: string; kind: string }[];
 }) {
+  const t = useI18n();
   const [prompt, setPrompt] = React.useState(item.text ?? "");
   const [picked, setPicked] = React.useState("");
 
@@ -92,6 +213,45 @@ export function NodeComposer({
   const [duration, setDuration] = React.useState(() => capabilityNumber(current, "default_duration_seconds", durations[0] ?? 5));
   const [audio, setAudio] = React.useState(false);
   const [count, setCount] = React.useState(1);
+  //: 挂上去的输入素材,按角色分。**角色和上限都由描述符说了算** —— 参考图九张还是三张、
+  //: 认不认尾帧,每个模型不一样;写死一套的话换个模型就要么少给要么超限。
+  const [sources, setSources] = React.useState<{ role: string; assetId: string }[]>([]);
+
+  //: 「生成方式」= 描述符里那几个互斥分组。摆出来的槽只属于当前这一组 —— 两组同时摆着,
+  //: 用户挂满了才会在提交时被拒。
+  const feed = React.useMemo(() => upstream ?? [], [upstream]);
+  const modes = React.useMemo(() => sourceModes(current), [current]);
+  const [mode, setMode] = React.useState("");
+  const activeMode = modes.find((one) => one.key === mode) ?? modes[0] ?? null;
+
+  //: 这个模型认哪几种输入素材,各能挂几份。首尾帧和参考图**分属互斥的两组**(厂商硬约束),
+  //: 描述符里已经声明过 —— 这里只按它出格子,不自己判。
+  const slots = React.useMemo(
+    () => sourceSlots(current, activeMode?.roles),
+    [current, activeMode],
+  );
+
+  //: 换模型、换方式、或者上游连线变了 —— 都重新照上游挂一遍。
+  //:
+  //: 这三件事任一变化,原来挂着的东西就可能已经不属于现在这组槽位了(尾帧换到参考组里
+  //: 没有对应的槽),留着它只会在提交时被后端拒。手动增删在下一次变化前一直有效。
+  const feedKey = `${modelValue}|${activeMode?.key ?? ""}|${feed.map((one) => one.assetId).join(",")}`;
+  const lastFeed = React.useRef("");
+  React.useEffect(() => {
+    if (lastFeed.current === feedKey) return;
+    lastFeed.current = feedKey;
+    setSources(autoAssign(sourceSlots(current, activeMode?.roles), feed));
+  }, [feedKey, current, activeMode, feed]);
+
+  //: 上游变了就重挑一次默认方式:一张图 = 首帧,多张 = 参考(TapNow 的那套直觉)。
+  //: 用户自己点过之后,这条不再插手 —— touched 记着这件事。
+  const touched = React.useRef(false);
+  const feedIds = feed.map((one) => one.assetId).join(",");
+  React.useEffect(() => {
+    if (touched.current || modes.length === 0) return;
+    setMode(defaultMode(modes, current, feed));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feedIds, modes.length]);
 
   const send = () => {
     const text = prompt.trim();
@@ -104,12 +264,87 @@ export function NodeComposer({
     if (supportsParameter(current, "duration_seconds")) parameters.duration_seconds = duration;
     if (current.capabilities?.supports_audio && audio) parameters.generate_audio = true;
     if (maxImages(current) > 1 && count > 1) parameters.num_images = count;
-    onSubmit({ prompt: text, provider: current.provider, model: current.model, parameters });
+    onSubmit({
+      prompt: text,
+      provider: current.provider,
+      model: current.model,
+      parameters,
+      sourceAssets: sources.map((one) => ({ asset_id: one.assetId, role: one.role })),
+    });
   };
 
   return (
     <NodeToolbar nodeId={item.id} isVisible position={Position.Bottom} offset={12}>
       <div className="nodrag nopan nowheel w-[420px] rounded-xl border border-border-strong bg-panel p-2 shadow-[var(--shadow-panel)]">
+        {/* 输入素材:图片是一排参考图(可多张),视频是首帧 ⇄ 尾帧。**格子按模型声明出** ——
+            见 slots 那段。挂满上限就不再给 + ,免得点了才被校验器拦下。 */}
+        {slots.length > 0 && (
+          // 槽位行和提示词之间给一道界:上面挂的是**素材**,下面写的是**话**,两件事。
+          <div className="mb-1.5 flex flex-wrap items-center gap-1 border-b border-border px-1 pb-1.5">
+            {slots.map((slot, index) => {
+              // 首尾帧和参考素材**分属互斥的两组**(厂商硬约束,描述符里声明着)——
+              // 组与组之间给一道竖线,否则一排虚线框读起来像五个平级的槽。
+              const previous = slots[index - 1]?.role;
+              const groupChanged =
+                previous !== undefined &&
+                previous.endsWith("_frame") !== slot.role.endsWith("_frame");
+              const mine = sources.filter((one) => one.role === slot.role);
+              return (
+                <React.Fragment key={slot.role}>
+                  {groupChanged && <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border" />}
+                  {index > 0 && slot.role === "last_frame" && (
+                    // 首帧和尾帧之间那个交换 —— 摆反了是最常见的手误,而重挂两次很烦。
+                    <button
+                      type="button"
+                      aria-label="交换首尾帧"
+                      title="交换首尾帧"
+                      className="grid h-6 w-6 cursor-pointer place-items-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
+                      onClick={() =>
+                        setSources((current) =>
+                          current.map((one) =>
+                            one.role === "first_frame"
+                              ? { ...one, role: "last_frame" }
+                              : one.role === "last_frame"
+                                ? { ...one, role: "first_frame" }
+                                : one,
+                          ),
+                        )
+                      }
+                    >
+                      <ArrowLeftRight size={12} />
+                    </button>
+                  )}
+                  {mine.map((one) => (
+                    <button
+                      key={one.assetId}
+                      type="button"
+                      title={`${roleLabel(t, slot.role)} —— 点一下移除`}
+                      onClick={() => setSources((all) => all.filter((x) => x.assetId !== one.assetId))}
+                      className="h-8 w-8 shrink-0 overflow-hidden rounded-md border border-border transition-colors hover:border-destructive"
+                    >
+                      <img src={assetThumbnailUrl(one.assetId)} alt="" className="h-full w-full object-cover" />
+                    </button>
+                  ))}
+                  {mine.length < slot.limit && (
+                    <button
+                      type="button"
+                      title={roleLabel(t, slot.role)}
+                      onClick={() =>
+                        onPickAsset(roleAccepts(slot.role) === "video" ? "video" : "image", (assetId) =>
+                          setSources((all) => [...all, { role: slot.role, assetId }]),
+                        )
+                      }
+                      className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-md border border-dashed border-border-strong text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+                    >
+                      <Plus size={13} />
+                    </button>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        )}
+
         <textarea
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
@@ -129,69 +364,95 @@ export function NodeComposer({
             duration_seconds / size / num_images / generate_audio),这里照着出控件 ——
             换一个模型,这一行自己就变了。写死的话每接一个新模型都要回来改一次,
             而漏改不会报错,只会让那一项永远调不了。 */}
-        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 border-t border-border pt-1.5">
-          <Sparkles size={12} className="shrink-0 text-muted-foreground" />
+        {/* 底部一行分三段:**它是谁**(模型)、**怎么生成**(参数)、**发出去**(次数 + 提交)。
+            参数收进**一个胶囊**里而不是并排六个下拉 —— 它们是同一个决定的几个侧面
+            (「首尾帧 · 16:9 · 480p · 5s」读起来是一句话),各自带框会让这一行像一张表单。
+            胶囊整体有 hover 态,里面每一格点开才是下拉。 */}
+        <div className="flex items-center gap-1 border-t border-border pt-1.5">
           {options.length === 0 ? (
             // 没有可用模型时说清楚 —— 给一个点了没反应的按钮比什么都不给更糟。
-            <span className="text-ui-2xs text-muted-foreground">还没有可用的生成模型,先去设置里配一个</span>
+            <span className="px-1 text-ui-2xs text-muted-foreground">还没有可用的生成模型,先去设置里配一个</span>
           ) : (
             <>
-              <Pick value={modelValue} onChange={setPicked} options={options.map((one) => ({ value: `${one.provider}/${one.model}`, label: one.model }))} />
+              <span className="flex min-w-0 shrink items-center gap-0.5 rounded-full px-1 transition-colors hover:bg-secondary">
+                <Sparkles size={12} className="shrink-0 text-muted-foreground" />
+                <Pick value={modelValue} onChange={setPicked} options={options.map((one) => ({ value: `${one.provider}/${one.model}`, label: one.model }))} />
+              </span>
 
-              {supportsParameter(current, "aspect_ratio") && (
-                <Pick value={ratio} onChange={setRatio} options={aspectRatioOptions(current).map((one) => ({ value: one, label: one }))} />
-              )}
-              {supportsParameter(current, "resolution") && (
-                <Pick value={resolution} onChange={setResolution} options={videoResolutionOptions(current).map((one) => ({ value: one, label: one }))} />
-              )}
-              {supportsParameter(current, "size") && (
-                <Pick value={size} onChange={setSize} options={sizeOptions(current).map((one) => ({ value: one, label: one }))} />
-              )}
-              {supportsParameter(current, "duration_seconds") && durations.length > 0 && (
-                <Pick value={String(duration)} onChange={(next) => setDuration(Number(next))} options={durations.map((one) => ({ value: String(one), label: `${one}s` }))} />
-              )}
-              {/* 出声与否:描述符里是 supports_audio 那条已核过的声明,不是又一个旋钮。 */}
-              {Boolean(current?.capabilities?.supports_audio) && (
+              <span aria-hidden className="h-3.5 w-px shrink-0 bg-border" />
+
+              <span className="flex min-w-0 shrink items-center gap-0 rounded-full px-1 transition-colors hover:bg-secondary">
+                {/* 生成方式排第一格:它决定上面那排槽位是首尾帧还是参考,后面几项都在它之下。 */}
+                {modes.length > 0 && (
+                  <Pick
+                    value={activeMode?.key ?? ""}
+                    onChange={(next) => {
+                      touched.current = true;
+                      setMode(next);
+                    }}
+                    options={modes.map((one) => ({ value: one.key, label: modeLabel(one.roles) }))}
+                  />
+                )}
+                {supportsParameter(current, "aspect_ratio") && (
+                  <Pick value={ratio} onChange={setRatio} options={aspectRatioOptions(current).map((one) => ({ value: one, label: one }))} />
+                )}
+                {supportsParameter(current, "resolution") && (
+                  <Pick value={resolution} onChange={setResolution} options={videoResolutionOptions(current).map((one) => ({ value: one, label: one }))} />
+                )}
+                {supportsParameter(current, "size") && (
+                  <Pick value={size} onChange={setSize} options={sizeOptions(current).map((one) => ({ value: one, label: one }))} />
+                )}
+                {supportsParameter(current, "duration_seconds") && durations.length > 0 && (
+                  <Pick value={String(duration)} onChange={(next) => setDuration(Number(next))} options={durations.map((one) => ({ value: String(one), label: `${one}s` }))} />
+                )}
+                {/* 出声与否:描述符里 supports_audio 那条已核过的声明,不是又一个旋钮。 */}
+                {Boolean(current?.capabilities?.supports_audio) && (
+                  <button
+                    type="button"
+                    aria-pressed={audio}
+                    title={audio ? "生成声音" : "不生成声音"}
+                    onClick={() => setAudio((on) => !on)}
+                    className={cn(
+                      "grid h-6 w-6 shrink-0 place-items-center rounded-full transition-colors",
+                      audio ? "text-foreground" : "text-muted-foreground/50 hover:text-foreground",
+                    )}
+                  >
+                    {audio ? <Volume2 size={12} /> : <VolumeX size={12} />}
+                  </button>
+                )}
+              </span>
+
+              <span className="ml-auto flex shrink-0 items-center gap-1">
+                {maxImages(current) > 1 && (
+                  <span className="flex items-center rounded-full px-1 transition-colors hover:bg-secondary">
+                    <Pick
+                      value={String(count)}
+                      onChange={(next) => setCount(Number(next))}
+                      options={Array.from({ length: maxImages(current) }, (_, index) => ({
+                        value: String(index + 1),
+                        label: `${index + 1}×`,
+                      }))}
+                    />
+                  </span>
+                )}
                 <button
                   type="button"
-                  aria-pressed={audio}
-                  title={audio ? "生成声音" : "不生成声音"}
-                  onClick={() => setAudio((on) => !on)}
+                  aria-label="生成"
+                  title="生成  ⌘↵"
+                  disabled={!prompt.trim() || !current || busy}
+                  onClick={send}
                   className={cn(
-                    "grid h-6 w-6 shrink-0 place-items-center rounded-md transition-colors",
-                    audio ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary",
+                    "grid h-7 w-7 shrink-0 place-items-center rounded-full transition-colors",
+                    !prompt.trim() || !current || busy
+                      ? "cursor-not-allowed bg-secondary text-muted-foreground"
+                      : "cursor-pointer bg-primary text-primary-foreground hover:opacity-90",
                   )}
                 >
-                  {audio ? <Volume2 size={12} /> : <VolumeX size={12} />}
+                  {busy ? <Loader2 size={13} className="animate-spin" /> : <ArrowUp size={13} />}
                 </button>
-              )}
-              {maxImages(current) > 1 && (
-                <Pick
-                  value={String(count)}
-                  onChange={(next) => setCount(Number(next))}
-                  options={Array.from({ length: maxImages(current) }, (_, index) => ({
-                    value: String(index + 1),
-                    label: `${index + 1}×`,
-                  }))}
-                />
-              )}
+              </span>
             </>
           )}
-          <button
-            type="button"
-            aria-label="生成"
-            title="生成  ⌘↵"
-            disabled={!prompt.trim() || !current || busy}
-            onClick={send}
-            className={cn(
-              "ml-auto grid h-7 w-7 shrink-0 place-items-center rounded-full transition-colors",
-              !prompt.trim() || !current || busy
-                ? "cursor-not-allowed bg-secondary text-muted-foreground"
-                : "cursor-pointer bg-primary text-primary-foreground hover:opacity-90",
-            )}
-          >
-            {busy ? <Loader2 size={13} className="animate-spin" /> : <ArrowUp size={13} />}
-          </button>
         </div>
       </div>
     </NodeToolbar>
