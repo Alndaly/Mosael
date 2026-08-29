@@ -33,6 +33,11 @@ export function setApiLocale(locale: string): void {
   apiLocale = locale;
 }
 
+/** 请求**没送到**服务端(后端没起来、网线断了、机器刚唤醒)。和 4xx/5xx 不是一回事。 */
+export class ApiOfflineError extends Error {
+  readonly offline = true;
+}
+
 export function setAuthToken(token: string | null): void {
   authToken = token;
   if (typeof window !== "undefined") {
@@ -416,7 +421,16 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     init?.body instanceof FormData
       ? { ...auth, ...(init?.headers as Record<string, string> | undefined) }
       : { "Content-Type": "application/json", ...auth, ...(init?.headers as Record<string, string> | undefined) };
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  } catch (cause) {
+    //: **「连不上」和「服务端说不行」是两件事。** 混成一个错误的话,调用方只能一视同仁 ——
+    //: 而它们的正确反应正好相反:前者该等一会儿再试(后端可能正在重启),后者才是真的没权限。
+    //: 启动那条路上曾经就是混着的:后端一时没起来,前端把令牌删了、把人退出登录,
+    //: 而那个令牌完全有效、后端两秒后就回来了。
+    throw new ApiOfflineError(`${API_BASE} 连不上`, { cause });
+  }
   if (res.status === 401 && !path.startsWith("/api/auth/")) {
     onUnauthorized?.();
     throw new Error("Not authenticated");

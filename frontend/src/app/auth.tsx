@@ -2,6 +2,7 @@ import React from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
+  ApiOfflineError,
   api,
   getAuthToken,
   setAuthToken,
@@ -14,7 +15,9 @@ import {
 } from "@/api/client";
 
 type AuthState = {
-  status: "loading" | "anonymous" | "authenticated";
+  //: offline = **令牌还在,只是这会儿够不着后端**。它和 anonymous 必须分开:摆一屏登录页
+  //: 等于告诉用户「你的会话结束了」,而其实没有 —— 后端起来之后重试一下就回去了。
+  status: "loading" | "anonymous" | "authenticated" | "offline";
   user: User | null;
   hasUsers: boolean;
   /** 这个部署收不收自助注册。不收时注册要邀请码,登录页才摆那个框。 */
@@ -27,6 +30,8 @@ type AuthState = {
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   updateAvatar: (file: File) => Promise<User>;
   logout: () => Promise<void>;
+  /** 连不上之后再试一次(重跑启动那条路,不另写一份)。 */
+  retry: () => void;
 };
 
 const AuthContext = React.createContext<AuthState | null>(null);
@@ -66,6 +71,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => setUnauthorizedHandler(null);
   }, [becomeAnonymous]);
 
+  //: 重试用的:改一下它,下面那个 effect 就再跑一遍 boot。**不是复制一份 boot 的逻辑** ——
+  //: 复制出来的那份迟早和真正的启动路径分岔。
+  const [attempt, setAttempt] = React.useState(0);
+  const retry = React.useCallback(() => {
+    setStatus("loading");
+    setAttempt((n) => n + 1);
+  }, []);
+
   React.useEffect(() => {
     const boot = async () => {
       if (!getAuthToken()) {
@@ -76,12 +89,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const me = await api<User>("/api/auth/me");
         setUser(me);
         setStatus("authenticated");
-      } catch {
+      } catch (error) {
+        //: **连不上不等于登出。** 这个 catch 以前是光秃秃的:后端一时没起来(本机进程,重启、
+        //: 休眠唤醒、启动时抢跑都是常态),它就把令牌删了 —— 而令牌完全有效,删掉之后后端
+        //: 回来也救不回,用户只能手动重新登录。
+        if (error instanceof ApiOfflineError) {
+          setStatus("offline");
+          return;
+        }
         await becomeAnonymous();
       }
     };
     void boot();
-  }, [becomeAnonymous]);
+  }, [becomeAnonymous, attempt]);
 
   const applyAuth = (auth: AuthOut) => {
     setAuthToken(auth.token);
@@ -107,6 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value: AuthState = {
     status,
+    retry,
     user,
     hasUsers,
     openRegistration,
