@@ -16,9 +16,10 @@ import {
   type Node,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { Copy, Replace, Trash2 } from "lucide-react";
+import { Copy, Replace, Sparkles, Trash2 } from "lucide-react";
 
-import type { BoardCanvas as Canvas, BoardItem } from "@/api/client";
+import type { BoardCanvas as Canvas, BoardItem, GenerationModel } from "@/api/client";
+import { NodeComposer } from "@/features/boards/NodeComposer";
 import { usePersistentViewport } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass } from "@/features/boards/boardNodes";
@@ -70,12 +71,29 @@ interface Props {
   onChange: (canvas: Canvas) => void;
   /** 让上层开素材选择器。kind 决定它列图片还是视频 —— 选得到的就该是贴上去能看的。 */
   onPickAsset: (kind: "image" | "video", place: (assetId: string) => void) => void;
+  /** 从某一项生成。上层拿得到 workspaceId 和接口,画布只提供"放哪儿"和"填回来"。 */
+  onGenerate?: (input: {
+    kind: "image" | "video";
+    prompt: string;
+    /** 填进**这一格**(节点即生成单元)。不给就是另开一格放在源节点右边。 */
+    itemId?: string;
+    x?: number;
+    y?: number;
+    provider?: string;
+    model?: string;
+    sourceAssetId?: string;
+  }) => Promise<unknown>;
+  /** 可用的生成模型 —— 提示词面板要让人选。 */
+  models?: GenerationModel[];
   /** 把「加一项」交给上层 —— 顶栏那两组胶囊要摆在一起(和工作流详情页一致),
    *  而 add 依赖画布内部的 rf 实例和 setNodes,只能由画布提供。 */
-  onReady?: (api: { add: (kind: BoardItem["kind"], extra?: Partial<BoardItem>) => void }) => void;
+  onReady?: (api: {
+    add: (kind: BoardItem["kind"], extra?: Partial<BoardItem>) => void;
+    fill: (itemId: string, assetId: string) => void;
+  }) => void;
 }
 
-function Inner({ boardId, canvas, onChange, onPickAsset, onReady }: Props) {
+function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, onReady }: Props) {
   const rf = React.useRef<ReactFlowInstance | null>(null);
   const viewport = usePersistentViewport(`board:${boardId}`);
   const [ready, setReady] = React.useState(false);
@@ -99,6 +117,14 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onReady }: Props) {
 
   // 每次画布变了就汇一份给上层去存。**用 JSON 比对而不是引用比对** —— React Flow 每次
   // 拖动都换新对象,引用比对等于每帧都报"变了"。
+  //: 选中的那个空槽/生成中的槽 —— 只有一个被选中时才挂面板,多选没有单一的作用对象。
+  const composerItem = React.useMemo(() => {
+    const picked = nodes.filter((node) => node.selected);
+    if (picked.length !== 1) return null;
+    const item = (picked[0].data as unknown as { item: BoardItem }).item;
+    return (item.kind === "image" || item.kind === "video") && !item.asset_id ? item : null;
+  }, [nodes]);
+
   const serialized = React.useMemo(() => JSON.stringify(toCanvas(nodes, edges)), [nodes, edges]);
   React.useEffect(() => {
     onChange(JSON.parse(serialized) as Canvas);
@@ -120,17 +146,39 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onReady }: Props) {
         ...(kind === "note" ? { color: "yellow" } : {}),
         ...extra,
       };
-      setNodes((current) => [...current, ...toNodes([item], setText)]);
+      // **加完就选中它**:放一个空槽的下一步一定是写提示词,而面板只在选中时才挂。
+      // 不选中的话用户要再点一次才知道这儿能写字。
+      setNodes((current) => [
+        ...current.map((node) => ({ ...node, selected: false })),
+        ...toNodes([item], setText).map((node) => ({ ...node, selected: true })),
+      ]);
     },
     [setNodes, setText],
   );
 
+  /** 把某一项就地换成已完成的产出。轮询拿到结果后由上层调。 */
+  const fill = React.useCallback(
+    (itemId: string, assetId: string) => {
+      setNodes((current) =>
+        current.map((node) => {
+          if (node.id !== itemId) return node;
+          const item = (node.data as unknown as { item: BoardItem }).item;
+          const { job_id: _dropped, ...rest } = item;
+          return { ...node, data: { ...node.data, item: { ...rest, asset_id: assetId } } };
+        }),
+      );
+    },
+    [setNodes],
+  );
+
   React.useEffect(() => {
-    onReady?.({ add });
-  }, [add, onReady]);
+    onReady?.({ add, fill });
+  }, [add, fill, onReady]);
 
   return (
-    <div className="relative h-full w-full">
+    // 画布放在**带边框的圆角卡片**里(和工作流详情页同一个形态)—— 通栏铺到窗口边的话,
+    // 它和外面的应用外壳之间没有界,画布看起来是"漏出来的"而不是一块内容区。
+    <div className="relative h-full w-full overflow-hidden rounded-lg border border-border bg-background">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -193,7 +241,26 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onReady }: Props) {
 
 
       {/* 选中之后才出操作条 —— 没选中时它没有作用对象。 */}
-      <ItemToolbar nodes={nodes} setNodes={setNodes} onPickAsset={onPickAsset} />
+      <ItemToolbar nodes={nodes} setNodes={setNodes} onPickAsset={onPickAsset} onGenerate={onGenerate} />
+
+      {/* 选中一个**还没有产出**的图片/视频槽时,底下挂提示词面板 —— 节点本身就是生成单元。 */}
+      {composerItem && onGenerate && (
+        <NodeComposer
+          key={composerItem.id}
+          item={composerItem}
+          models={models ?? []}
+          busy={Boolean(composerItem.job_id)}
+          onSubmit={({ prompt, provider, model }) =>
+            void onGenerate({
+              kind: composerItem.kind as "image" | "video",
+              prompt,
+              provider,
+              model,
+              itemId: composerItem.id,
+            })
+          }
+        />
+      )}
     </div>
   );
 }
@@ -211,10 +278,12 @@ function ItemToolbar({
   nodes,
   setNodes,
   onPickAsset,
+  onGenerate,
 }: {
   nodes: Node[];
   setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
   onPickAsset: Props["onPickAsset"];
+  onGenerate: Props["onGenerate"];
 }) {
   const selected = nodes.filter((node) => node.selected);
   // 多选时只给共通的动作 —— 逐个类型的动作在混选下没有一致的含义。
@@ -277,6 +346,48 @@ function ItemToolbar({
           >
             <Replace size={12} /> 换一份
           </button>
+        )}
+
+        {/* 生成:**从这一项长出下一项**。便签的文字就是提示词,图片当首帧生视频 ——
+            这正是画板比便签墙多出来的那一步。已经在生成的那一项不再给(它还没有产出)。 */}
+        {onGenerate && item && item.kind !== "frame" && item.asset_id !== undefined === (item.kind !== "note") && (
+          <>
+            {item.kind === "note" && (
+              <button
+                type="button"
+                className="flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs text-muted-foreground hover:bg-secondary hover:text-foreground"
+                title="用这段文字生成图片"
+                onClick={() =>
+                  void onGenerate({
+                    kind: "image",
+                    prompt: item.text ?? "",
+                    x: (single?.position.x ?? 0) + (single?.width ?? 220) + 40,
+                    y: single?.position.y ?? 0,
+                  })
+                }
+              >
+                <Sparkles size={12} /> 生成图片
+              </button>
+            )}
+            {item.kind === "image" && item.asset_id && (
+              <button
+                type="button"
+                className="flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs text-muted-foreground hover:bg-secondary hover:text-foreground"
+                title="用这张图当首帧生成视频"
+                onClick={() =>
+                  void onGenerate({
+                    kind: "video",
+                    prompt: item.text ?? "",
+                    x: (single?.position.x ?? 0) + (single?.width ?? 260) + 40,
+                    y: single?.position.y ?? 0,
+                    sourceAssetId: item.asset_id,
+                  })
+                }
+              >
+                <Sparkles size={12} /> 生成视频
+              </button>
+            )}
+          </>
         )}
 
         {item && <span aria-hidden className="mx-0.5 h-4 w-px bg-border" />}

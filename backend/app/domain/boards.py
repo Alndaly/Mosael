@@ -142,8 +142,11 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
                 raise BoardDomainError(f"画板项 {item_id} 的 job_id 不合法")
             item["job_id"] = job_id.strip()
 
-        if kind in _NEEDS_ASSET and "asset_id" not in item and "job_id" not in item:
-            raise BoardDomainError(f"{item_id} 必须指向一份素材")
+        # **空槽是合法的。** 一个图片/视频项有三种状态,缺一不可:
+        #   · 空槽(都没有)   —— 刚放下,底下挂着提示词面板等你写;
+        #   · 生成中(有 job_id) —— 提交了,等回执把 asset_id 填回来;
+        #   · 有产出(有 asset_id)。
+        # 前两种此前都被当成错误拒掉了 —— 而"节点本身就是生成单元"这件事,正要从空槽开始。
 
         items.append(item)
 
@@ -218,10 +221,39 @@ def update_board(
             raise BoardDomainError("画板名不能为空")
         board.name = cleaned
     if canvas is not None:
-        board.canvas = normalize_canvas(canvas)
+        board.canvas = _keep_arrived_results(board.canvas, normalize_canvas(canvas))
     db.commit()
     db.refresh(board)
     return board
+
+
+def _keep_arrived_results(stored: Any, incoming: dict[str, Any]) -> dict[str, Any]:
+    """**客户端不该覆盖它还不知道的产出。**
+
+    这是一个必然的竞态,不是偶发:画板自动保存,而生成是异步的 ——
+      t1 客户端存了一份带占位(有 job_id、没 asset_id)的画布;
+      t2 任务跑完,回执把 asset_id 填进那一项;
+      t3 用户又拖了一下,客户端把**它手上那份**存回来 —— 那份里还是占位。
+    产出就这么没了,而且不报错:那一项看着还在转圈,可任务早就结束了。
+
+    所以服务端在这一处做主:一项如果库里已经有 asset_id,而传来的那份还是占位,
+    保留库里那个。客户端下一次拉到的就是填好的。
+    """
+    have = {
+        str(item.get("id")): item
+        for item in ((stored or {}).get("items") or [])
+        if item.get("asset_id")
+    }
+    if not have:
+        return incoming
+    items = []
+    for item in incoming["items"]:
+        settled = have.get(str(item.get("id")))
+        if settled and not item.get("asset_id"):
+            items.append({**{k: v for k, v in item.items() if k != "job_id"}, "asset_id": settled["asset_id"]})
+        else:
+            items.append(item)
+    return {**incoming, "items": items}
 
 
 def delete_board(db: Session, workspace_id: str, board_id: str) -> None:

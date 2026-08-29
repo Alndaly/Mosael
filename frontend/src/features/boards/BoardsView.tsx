@@ -1,13 +1,17 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, Film, Image as ImageIcon, LayoutGrid, Plus, Square, StickyNote, Trash2 } from "lucide-react";
+import { ChevronLeft, Film, FolderOpen, Image as ImageIcon, LayoutGrid, Plus, Square, StickyNote, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  api as api2,
   createBoard,
   deleteBoard,
+  generateOnBoard,
+  getBoard,
   listBoards,
   updateBoard,
+  type GenerationModel,
   type Board,
   type BoardCanvas as Canvas,
   type Workspace,
@@ -183,10 +187,85 @@ function BoardDetail({
 }) {
   const t = useI18n();
   const [name, setName] = React.useState(board.name);
+  const [renaming, setRenaming] = React.useState(false);
   const [canvas, setCanvas] = React.useState<Canvas | null>(null);
   const [picking, setPicking] = React.useState<{ kind: "image" | "video"; place: (assetId: string) => void } | null>(null);
   //: 画布交出来的「加一项」。顶栏那组按钮要和身份胶囊并排,而 add 依赖画布内部状态。
-  const [api, setApi] = React.useState<{ add: (kind: "note" | "image" | "video" | "frame", extra?: Record<string, unknown>) => void } | null>(null);
+  const [api, setApi] = React.useState<{
+    add: (kind: "note" | "image" | "video" | "frame", extra?: Record<string, unknown>) => void;
+    fill: (itemId: string, assetId: string) => void;
+  } | null>(null);
+
+  // 提示词面板要让人选模型 —— 两种能力各取一次再合并,和 AI 工作台看到的是同一份。
+  const models = useQuery({
+    queryKey: ["generation-options", "board"],
+    queryFn: async () => {
+      const [image, video] = await Promise.all([
+        api2<GenerationModel[]>("/api/generation/options?kind=image"),
+        api2<GenerationModel[]>("/api/generation/options?kind=video"),
+      ]);
+      return [...image, ...video];
+    },
+    staleTime: 60_000,
+  });
+
+  /** 在这一格里生成。产出由后端回执填回画布,这里只负责发起 + 轮询到结果为止。 */
+  const generate = React.useCallback(
+    async (input: {
+      kind: "image" | "video";
+      prompt: string;
+      itemId?: string;
+      x?: number;
+      y?: number;
+      provider?: string;
+      model?: string;
+      sourceAssetId?: string;
+    }) => {
+      const itemId = input.itemId ?? `${input.kind}-${Math.random().toString(36).slice(2, 9)}`;
+      try {
+        await generateOnBoard(board.id, {
+          workspace_id: workspaceId,
+          item_id: itemId,
+          kind: input.kind,
+          prompt: input.prompt,
+          x: input.x ?? 0,
+          y: input.y ?? 0,
+          provider: input.provider,
+          model: input.model,
+          source_assets: input.sourceAssetId
+            ? [{ asset_id: input.sourceAssetId, role: "first_frame" }]
+            : undefined,
+        });
+      } catch (error) {
+        toast.error(t("boardsGenerateFailed"), { description: (error as Error).message });
+        return;
+      }
+      setRunning((current) => [...current, itemId]);
+    },
+    [board.id, workspaceId, t],
+  );
+
+  //: 还在跑的那几格。**轮询而不是等** —— 生成要几十秒,而用户这期间还在画布上干别的。
+  const [running, setRunning] = React.useState<string[]>([]);
+  React.useEffect(() => {
+    if (running.length === 0) return;
+    const timer = setInterval(async () => {
+      const fresh = await getBoard(board.id, workspaceId).catch(() => null);
+      if (!fresh) return;
+      const settled: string[] = [];
+      for (const id of running) {
+        const item = fresh.canvas.items.find((one) => one.id === id);
+        // 找不到 = 任务失败,后端把占位摘了 —— 这一格也就不用再等。
+        if (!item) settled.push(id);
+        else if (item.asset_id) {
+          api?.fill(id, item.asset_id);
+          settled.push(id);
+        }
+      }
+      if (settled.length) setRunning((current) => current.filter((id) => !settled.includes(id)));
+    }, 2500);
+    return () => clearInterval(timer);
+  }, [running, board.id, workspaceId, api]);
 
   const save = React.useCallback(
     (next: Canvas) => {
@@ -212,8 +291,8 @@ function BoardDetail({
   // 版式跟着工作流详情页:**画布铺满,两组胶囊浮在上面** —— 左边是身份(回哪儿去、这是谁),
   // 右边是操作。悬浮不等于没有边界:两组各有自己的底,否则它们会散在画布上和内容抢注意力。
   return (
-    <div className="relative grid h-full min-h-0">
-      <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex flex-wrap items-start justify-between gap-2 [&>*]:pointer-events-auto">
+    <div className="relative grid h-full min-h-0 p-2">
+      <div className="pointer-events-none absolute inset-x-4 top-4 z-20 flex flex-wrap items-start justify-between gap-2 [&>*]:pointer-events-auto">
         <div className="flex items-center gap-1 rounded-full border border-border bg-panel/95 p-1 pr-2.5 shadow-[var(--shadow-panel)] backdrop-blur">
           {/* 返回键给它一个底:透明底的图标钮在胶囊里没有自己的轮廓,和右边的竖线对不齐。 */}
           <Button
@@ -228,47 +307,62 @@ function BoardDetail({
           </Button>
           {/* 一个是「离开这里」,一个是「这里是什么」—— 两件事,挨着放需要一道界。 */}
           <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-border" />
-          <Input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            onBlur={rename}
-            onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
-            className="h-7 w-44 border-0 bg-transparent px-1.5 text-ui-md font-semibold shadow-none focus-visible:bg-field"
-            aria-label={t("boardsName")}
-          />
+          {/* **贴着内容,不给固定宽度。** 定宽的输入框在只有三个字的名字下面是一个大空格子,
+              看着像没加载完 —— 工作流那边是一个点开才变输入框的按钮,这里同理。 */}
+          {renaming ? (
+            <Input
+              autoFocus
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              onBlur={() => {
+                rename();
+                setRenaming(false);
+              }}
+              onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
+              className="h-7 w-40 border-0 bg-field px-1.5 text-ui-md font-semibold shadow-none"
+              aria-label={t("boardsName")}
+            />
+          ) : (
+            <button
+              type="button"
+              className="inline-flex cursor-pointer items-center rounded-full border-0 bg-transparent px-1.5 py-[3px] text-ui-md font-semibold text-foreground hover:bg-secondary"
+              onClick={() => setRenaming(true)}
+              title={t("rename")}
+            >
+              {board.name}
+            </button>
+          )}
         </div>
 
-        <div className="flex flex-wrap items-start justify-end gap-2">
-          {/* 加什么。刻度和工作流工具条一致:胶囊、h-8、图标钮 h-8 w-8。 */}
-          <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
-            <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsAddNote")} aria-label={t("boardsAddNote")} onClick={() => api?.add("note")}>
-              <StickyNote size={15} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              title={t("boardsAddImage")}
-              aria-label={t("boardsAddImage")}
-              onClick={() => setPicking({ kind: "image", place: (assetId) => api?.add("image", { asset_id: assetId }) })}
-            >
-              <ImageIcon size={15} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              title={t("boardsAddVideo")}
-              aria-label={t("boardsAddVideo")}
-              onClick={() => setPicking({ kind: "video", place: (assetId) => api?.add("video", { asset_id: assetId }) })}
-            >
-              <Film size={15} />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsAddFrame")} aria-label={t("boardsAddFrame")} onClick={() => api?.add("frame")}>
-              <Square size={15} />
-            </Button>
-          </div>
-        </div>
+      </div>
+
+      {/* 加什么:**竖排,贴左侧** —— 画布要尽量大,而这几个是"一直都在"的入口(tapnow 同款)。
+          横在顶上的话它和身份胶囊挤成一行,画布还要为它让出一整行。 */}
+      <div className="pointer-events-auto absolute left-4 top-1/2 z-20 flex -translate-y-1/2 flex-col items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
+        <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsAddNote")} aria-label={t("boardsAddNote")} onClick={() => api?.add("note")}>
+          <StickyNote size={15} />
+        </Button>
+        <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsAddImage")} aria-label={t("boardsAddImage")} onClick={() => api?.add("image")}>
+          <ImageIcon size={15} />
+        </Button>
+        <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsAddVideo")} aria-label={t("boardsAddVideo")} onClick={() => api?.add("video")}>
+          <Film size={15} />
+        </Button>
+        <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsAddFrame")} aria-label={t("boardsAddFrame")} onClick={() => api?.add("frame")}>
+          <Square size={15} />
+        </Button>
+        <span aria-hidden className="my-0.5 h-px w-4 bg-border" />
+        {/* 从素材库贴一份现成的 —— 和"放一个空槽去生成"是两件事,所以分在竖线下面。 */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          title={t("boardsPickImage")}
+          aria-label={t("boardsPickImage")}
+          onClick={() => setPicking({ kind: "image", place: (assetId) => api?.add("image", { asset_id: assetId }) })}
+        >
+          <FolderOpen size={15} />
+        </Button>
       </div>
 
       <BoardCanvas
@@ -276,6 +370,8 @@ function BoardDetail({
         canvas={board.canvas ?? { items: [], edges: [] }}
         onChange={setCanvas}
         onPickAsset={(kind, place) => setPicking({ kind, place })}
+        onGenerate={generate}
+        models={models.data ?? []}
         onReady={setApi}
       />
 

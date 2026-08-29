@@ -119,8 +119,6 @@ def test_空画布和缺字段都读得回来() -> None:
         ({"items": [{"id": "", "kind": "note", "x": 0, "y": 0}]}, "id 是空的"),
         ({"items": [{"id": "a", "kind": "note", "x": 0, "y": 0, "color": "橙"}]}, "不在色板里"),
         ({"items": [{"id": "a", "kind": "note", "x": 0, "y": 0, "width": 0}]}, "宽度为 0"),
-        ({"items": [{"id": "a", "kind": "image", "x": 0, "y": 0}]}, "图片项没有素材"),
-        ({"items": [{"id": "a", "kind": "video", "x": 0, "y": 0}]}, "视频项没有素材"),
         ({"items": [], "edges": [{"source": "a", "target": "b"}]}, "连线连到不存在的项"),
     ],
 )
@@ -151,13 +149,27 @@ def test_太大的画布拒绝() -> None:
         normalize_canvas({"items": items})
 
 
-def test_视频项和图片项一样要指向素材() -> None:
-    """两种分开是因为**画板上的样子和能做的事不同**,但"必须有素材"这条是共通的。"""
+def test_图片视频项的三种状态都存得下() -> None:
+    """空槽 / 生成中 / 有产出 —— 缺一不可。
+
+    「节点本身就是生成单元」这件事**从空槽开始**:放下一个空的图片槽,底下挂提示词面板,
+    写完提交才有任务。此前空槽和生成中都被当成错误拒掉了。
+    """
     from app.domain.boards import ITEM_KINDS
 
     assert "video" in ITEM_KINDS
-    got = normalize_canvas({"items": [{"id": "v", "kind": "video", "x": 0, "y": 0, "asset_id": "abc"}]})
-    assert got["items"][0]["asset_id"] == "abc"
+    empty, running, done = normalize_canvas(
+        {
+            "items": [
+                {"id": "a", "kind": "image", "x": 0, "y": 0},
+                {"id": "b", "kind": "image", "x": 0, "y": 0, "job_id": "j1"},
+                {"id": "c", "kind": "video", "x": 0, "y": 0, "asset_id": "abc"},
+            ]
+        }
+    )["items"]
+    assert "asset_id" not in empty and "job_id" not in empty
+    assert running["job_id"] == "j1"
+    assert done["asset_id"] == "abc"
 
 
 # ── 在画板上生成 ────────────────────────────────────────────────────────────
@@ -265,3 +277,36 @@ def test_回执登记在导入期() -> None:
     from app.domain.jobs import _RECEIPT_DELIVERERS
 
     assert _RECEIPT_DELIVERERS.get(RECEIPT_KIND) is deliver_generated
+
+
+def test_客户端不会覆盖它还不知道的产出() -> None:
+    """必然的竞态,不是偶发:画板自动保存,而生成是异步的。
+
+      t1 客户端存了带占位的画布 → t2 任务跑完,回执填进 asset_id
+      → t3 用户又拖了一下,客户端把**它手上那份**(还是占位)存回来。
+
+    不管的话产出就这么没了,而且不报错 —— 那一项看着还在转圈,可任务早就结束了。
+    """
+    from types import SimpleNamespace
+
+    from app.core.db import SessionLocal
+    from app.db.models import Board
+    from app.domain.boards import deliver_generated, receipt_to_item
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id, item_id = _pending_board(client, ws)
+    stale = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]
+
+    db = SessionLocal()
+    deliver_generated(
+        db, SimpleNamespace(id="job-x", status="succeeded", result={"asset_id": "asset-9"}), receipt_to_item(board_id, item_id)
+    )
+    db.close()
+
+    # 客户端把 t1 那份原样存回来 —— 它手上还是占位。
+    got = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "canvas": stale}).json()
+    item = got["canvas"]["items"][0]
+
+    assert item["asset_id"] == "asset-9", "客户端那份把已经到达的产出覆盖掉了"
+    assert "job_id" not in item

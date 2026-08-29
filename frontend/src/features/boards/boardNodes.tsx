@@ -1,5 +1,6 @@
 import React from "react";
 import { Handle, NodeResizer, Position, type NodeProps } from "@xyflow/react";
+import { Film as FilmIcon, Image as ImageIcon, Loader2 } from "lucide-react";
 
 import { API_BASE, type BoardItem } from "@/api/client";
 import { cn } from "@/lib/utils";
@@ -95,6 +96,35 @@ export function NoteNode({ data, selected }: NodeProps) {
   );
 }
 
+/**
+ * 还在生成的样子:转圈 + 那句提示词。
+ *
+ * **要看得见提示词**。画布上同时跑三四个生成时,四个一模一样的转圈框分不出谁是谁 ——
+ * 而用户想撤掉的往往正是其中某一个。
+ */
+function Generating({ text }: { text?: string }) {
+  return (
+    <div className="grid h-full w-full place-items-center gap-1.5 px-3 text-center">
+      <Loader2 size={16} className="animate-spin text-primary" />
+      {text ? <span className="line-clamp-3 text-ui-2xs leading-relaxed text-muted-foreground">{text}</span> : null}
+    </div>
+  );
+}
+
+/**
+ * 空槽:还没写提示词、也没有任务。
+ *
+ * **不能画成转圈** —— 转圈的意思是"正在跑,等着就行",而这里等不来任何东西:它在等用户写字。
+ * 两种状态长一样的话,用户会盯着一个永远不动的圈。
+ */
+function EmptySlot({ icon }: { icon: React.ReactNode }) {
+  return (
+    <div className="grid h-full w-full place-items-center rounded-lg border border-dashed border-border-strong text-muted-foreground">
+      {icon}
+    </div>
+  );
+}
+
 /** 图片:指向素材库的一份。加载不出来时说清楚 —— 素材可能已经被删了。 */
 export function ImageNode({ data, selected }: NodeProps) {
   const { item } = data as unknown as BoardNodeData;
@@ -109,7 +139,9 @@ export function ImageNode({ data, selected }: NodeProps) {
     >
       <NodeResizer minWidth={80} minHeight={60} isVisible={selected} lineClassName="!border-primary" handleClassName="!h-2 !w-2 !rounded-sm !border-primary !bg-panel" />
       <Ports />
-      {broken ? (
+      {!item.asset_id ? (
+        item.job_id ? <Generating text={item.text} /> : <EmptySlot icon={<ImageIcon size={20} />} />
+      ) : broken ? (
         <div className="grid h-full w-full place-items-center px-3 text-center text-ui-2xs text-muted-foreground">
           这份素材已经不在了
         </div>
@@ -182,7 +214,9 @@ export function VideoNode({ data, selected }: NodeProps) {
     >
       <NodeResizer minWidth={120} minHeight={80} isVisible={selected} lineClassName="!border-primary" handleClassName="!h-2 !w-2 !rounded-sm !border-primary !bg-panel" />
       <Ports />
-      {broken ? (
+      {!item.asset_id ? (
+        item.job_id ? <Generating text={item.text} /> : <EmptySlot icon={<FilmIcon size={20} />} />
+      ) : broken ? (
         <div className="grid h-full w-full place-items-center px-3 text-center text-ui-2xs text-muted-foreground">
           这份素材已经不在了
         </div>

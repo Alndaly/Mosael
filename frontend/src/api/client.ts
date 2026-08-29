@@ -835,6 +835,8 @@ export interface BoardItem {
   text?: string;
   color?: string;
   asset_id?: string;
+  /** 还在生成:有任务、还没有素材。任务落终态时由后端回执把 asset_id 填回来。 */
+  job_id?: string;
 }
 
 export interface BoardEdge {
@@ -862,6 +864,10 @@ export function listBoards(workspaceId: string): Promise<Board[]> {
   return api<Board[]>(`/api/boards?workspace_id=${workspaceId}`);
 }
 
+export function getBoard(boardId: string, workspaceId: string): Promise<Board> {
+  return api<Board>(`/api/boards/${boardId}?workspace_id=${workspaceId}`);
+}
+
 export function createBoard(body: { workspace_id: string; name?: string }): Promise<Board> {
   return api<Board>("/api/boards", { method: "POST", body: JSON.stringify(body) });
 }
@@ -872,6 +878,24 @@ export function updateBoard(
   body: { workspace_id: string; name?: string; canvas?: BoardCanvas },
 ): Promise<Board> {
   return api<Board>(`/api/boards/${boardId}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
+/** 在画板上就地生成。产出由后端回执填回画布 —— 这里只负责把任务发起来。 */
+export function generateOnBoard(
+  boardId: string,
+  body: {
+    workspace_id: string;
+    item_id: string;
+    kind: "image" | "video";
+    prompt: string;
+    x: number;
+    y: number;
+    provider?: string;
+    model?: string;
+    source_assets?: { asset_id: string; role: string }[];
+  },
+): Promise<Board> {
+  return api<Board>(`/api/boards/${boardId}/generate`, { method: "POST", body: JSON.stringify(body) });
 }
 
 export function deleteBoard(boardId: string, workspaceId: string): Promise<unknown> {
