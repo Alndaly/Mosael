@@ -8,6 +8,7 @@ import {
   createBoard,
   deleteBoard,
   generateOnBoard,
+  grabAssetFrame,
   speakOnBoard,
   trimOnBoard,
   writeOnBoard,
@@ -341,6 +342,21 @@ function BoardDetail({
     [board.id, workspaceId, api, t],
   );
 
+  /** 取某一帧,存成一份新素材、落到一个新节点上。**是图片节点** —— 取出来的是一张图。 */
+  const grabFrame = React.useCallback(
+    async (input: { assetId: string; at: number; x: number; y: number }) => {
+      try {
+        const made = await grabAssetFrame(input.assetId, input.at);
+        //: 直接就有 asset_id —— 取帧是同步的一次 ffmpeg,没有「生成中」这个状态。
+        api?.add("image", { asset_id: made.id, x: input.x, y: input.y });
+        onSaved();
+      } catch (error) {
+        toast.error(t("boardGrabFrameFailed"), { description: (error as Error).message });
+      }
+    },
+    [api, onSaved, t],
+  );
+
   /** 截出一段。**产出是一份新素材**,落到一个新节点上 —— 原素材不动。 */
   const trim = React.useCallback(
     async (input: {
@@ -613,6 +629,7 @@ function BoardDetail({
         onWrite={write}
         onSpeak={speak}
         onTrim={trim}
+        onGrabFrame={grabFrame}
         models={models.data ?? []}
         showMinimap={showMinimap}
         onDropFiles={(files) => upload.mutateAsync(files)}

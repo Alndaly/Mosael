@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import or_, select
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, AssetUpdate, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse
+from app.api.schemas import AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, AssetUpdate, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse
 from app.domain.voices.service import AsrError, start_transcription
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, require_asset
 from app.db.models import Asset, Clip, Job, Transcript, Project
@@ -338,6 +338,39 @@ def get_asset_thumbnail(asset_id: str, db: DbSession, user: CurrentUser) -> File
     if not thumb.is_file():
         raise HTTPException(status_code=404, detail="Thumbnail not available")
     return FileResponse(thumb, media_type="image/jpeg")
+
+
+@router.post("/assets/{asset_id}/frame", response_model=AssetOut)
+def grab_asset_frame(asset_id: str, body: AssetFrameRequest, db: DbSession, user: CurrentUser) -> Asset:
+    """取这段视频的某一帧,存成一份新素材。
+
+    **原素材不动**,产出是新的一份 —— 取帧是「我要这个画面」,不是「把这段片子变成一张图」。
+    """
+    import tempfile
+
+    from app.media.still import StillError, grab_frame
+
+    asset = _require_file_backed_asset(db, asset_id)
+    ensure_workspace_perm(db, user, asset.workspace_id, "edit")
+    if asset.kind != "video":
+        raise HTTPException(status_code=400, detail="只能从视频里取帧")
+
+    source = resolve_key(asset.file_key)
+    with tempfile.TemporaryDirectory(prefix="open-studio-still-") as tmp:
+        target = Path(tmp) / "frame.jpg"
+        try:
+            grab_frame(source, body.at, target)
+        except StillError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return register_file_asset(
+            db,
+            workspace_id=asset.workspace_id,
+            project_id=body.project_id or asset.project_id,
+            source_path=target,
+            #: 名字带上时间 —— 从同一段片子取三帧,光看「xxx 的帧」分不出哪张是哪张。
+            name=f"{asset.name} · {body.at:.1f}s",
+            source="generated",
+        )
 
 
 @router.get("/assets/{asset_id}/filmstrip")

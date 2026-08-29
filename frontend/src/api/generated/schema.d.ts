@@ -1048,6 +1048,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assets/{asset_id}/frame": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Grab Asset Frame
+         * @description 取这段视频的某一帧,存成一份新素材。
+         *
+         *     **原素材不动**,产出是新的一份 —— 取帧是「我要这个画面」,不是「把这段片子变成一张图」。
+         */
+        post: operations["grab_asset_frame_api_assets__asset_id__frame_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assets/{asset_id}/filmstrip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Asset Filmstrip
+         * @description 剪辑面板用的帧条(一张横向长图)。**按需生成、落盘缓存** —— 和缩略图同一条路。
+         */
+        get: operations["get_asset_filmstrip_api_assets__asset_id__filmstrip_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/assets/{asset_id}/waveform": {
         parameters: {
             query?: never;
@@ -2167,6 +2209,29 @@ export interface paths {
         put?: never;
         /** Export Sequence */
         post: operations["export_sequence_api_sequences__sequence_id__export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sequences/{sequence_id}/frame": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Grab Sequence Frame Route
+         * @description 取播放头这一帧,存成一份新素材。
+         *
+         *     **走渲染那条路,不是抓预览的画布** —— 预览里花字和字幕是 DOM 叠上去的,画布抓不到它们:
+         *     抓出来的画面看着对,只是少了一层字,而用户不会发现。
+         */
+        post: operations["grab_sequence_frame_route_api_sequences__sequence_id__frame_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5269,6 +5334,19 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /**
+         * AssetFrameRequest
+         * @description 从一段视频里取某一时刻的一帧,存成一份新素材。
+         */
+        AssetFrameRequest: {
+            /**
+             * At
+             * @default 0
+             */
+            at: number;
+            /** Project Id */
+            project_id?: string | null;
+        };
         /** AssetOut */
         AssetOut: {
             /** Id */
@@ -8004,6 +8082,17 @@ export interface components {
              * @default 30
              */
             fps: number;
+        };
+        /**
+         * SequenceFrameRequest
+         * @description 把时间线在某一时刻的合成画面存成一份新素材。
+         */
+        SequenceFrameRequest: {
+            /**
+             * At
+             * @default 0
+             */
+            at: number;
         };
         /** SequenceOut */
         SequenceOut: {
@@ -11458,6 +11547,72 @@ export interface operations {
             };
         };
     };
+    grab_asset_frame_api_assets__asset_id__frame_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetFrameRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_asset_filmstrip_api_assets__asset_id__filmstrip_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_asset_waveform_api_assets__asset_id__waveform_get: {
         parameters: {
             query?: never;
@@ -13695,6 +13850,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    grab_sequence_frame_route_api_sequences__sequence_id__frame_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SequenceFrameRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetOut"];
                 };
             };
             /** @description Validation Error */

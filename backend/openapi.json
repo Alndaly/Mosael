@@ -2831,6 +2831,100 @@
         }
       }
     },
+    "/api/assets/{asset_id}/frame": {
+      "post": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Grab Asset Frame",
+        "description": "取这段视频的某一帧,存成一份新素材。\n\n**原素材不动**,产出是新的一份 —— 取帧是「我要这个画面」,不是「把这段片子变成一张图」。",
+        "operationId": "grab_asset_frame_api_assets__asset_id__frame_post",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssetFrameRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/assets/{asset_id}/filmstrip": {
+      "get": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Get Asset Filmstrip",
+        "description": "剪辑面板用的帧条(一张横向长图)。**按需生成、落盘缓存** —— 和缩略图同一条路。",
+        "operationId": "get_asset_filmstrip_api_assets__asset_id__filmstrip_get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/assets/{asset_id}/waveform": {
       "get": {
         "tags": [
@@ -6092,6 +6186,59 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{sequence_id}/frame": {
+      "post": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Grab Sequence Frame Route",
+        "description": "取播放头这一帧,存成一份新素材。\n\n**走渲染那条路,不是抓预览的画布** —— 预览里花字和字幕是 DOM 叠上去的,画布抓不到它们:\n抓出来的画面看着对,只是少了一层字,而用户不会发现。",
+        "operationId": "grab_sequence_frame_route_api_sequences__sequence_id__frame_post",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceFrameRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetOut"
                 }
               }
             }
@@ -15253,6 +15400,29 @@
         ],
         "title": "AssetCreate"
       },
+      "AssetFrameRequest": {
+        "properties": {
+          "at": {
+            "type": "number",
+            "title": "At",
+            "default": 0
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          }
+        },
+        "type": "object",
+        "title": "AssetFrameRequest",
+        "description": "从一段视频里取某一时刻的一帧,存成一份新素材。"
+      },
       "AssetOut": {
         "properties": {
           "id": {
@@ -21649,6 +21819,18 @@
           "name"
         ],
         "title": "SequenceCreate"
+      },
+      "SequenceFrameRequest": {
+        "properties": {
+          "at": {
+            "type": "number",
+            "title": "At",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "SequenceFrameRequest",
+        "description": "把时间线在某一时刻的合成画面存成一份新素材。"
       },
       "SequenceOut": {
         "properties": {

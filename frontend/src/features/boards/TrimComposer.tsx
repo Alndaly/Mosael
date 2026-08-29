@@ -1,6 +1,6 @@
 import React from "react";
 import { NodeToolbar, Position } from "@xyflow/react";
-import { Loader2, Scissors, Volume2, VolumeX } from "lucide-react";
+import { Camera, Loader2, Scissors, Volume2, VolumeX } from "lucide-react";
 
 import { useQuery } from "@tanstack/react-query";
 
@@ -26,6 +26,7 @@ export function TrimComposer({
   workspaceId,
   busy,
   onTrim,
+  onGrabFrame,
 }: {
   item: BoardItem;
   /** 剪哪一份素材 —— 帧条/波形都按它取。 */
@@ -33,6 +34,8 @@ export function TrimComposer({
   workspaceId: string;
   busy: boolean;
   onTrim: (input: { start: number; end: number; mute: boolean }) => void;
+  /** 取起点那一帧,存成一份新素材。视频才有 —— 音频没有画面。 */
+  onGrabFrame?: (at: number) => void;
 }) {
   const t = useI18n();
   //: 时长从素材库里查 —— 画布上的项只记着 asset_id,而"拖到哪儿是第几秒"全靠它。
@@ -123,12 +126,26 @@ export function TrimComposer({
           {mute ? <VolumeX size={13} /> : <Volume2 size={13} />}
         </button>
 
+        {/* 取一帧:**用起点那个把手的位置** —— 轨已经在那儿了,再给一个「取帧位置」等于
+            让用户在同一条轨上记两个数。 */}
+        {onGrabFrame && item.kind === "video" && (
+          <button
+            type="button"
+            title={t("boardGrabFrameTitle")}
+            disabled={working}
+            onClick={() => run(() => onGrabFrame(from))}
+            className="ml-auto flex h-7 shrink-0 cursor-pointer items-center gap-1 rounded-full px-2.5 text-ui-2xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed"
+          >
+            <Camera size={12} /> {t("boardGrabFrame")}
+          </button>
+        )}
+
         <button
           type="button"
           disabled={!ok || working}
           onClick={send}
           className={cn(
-            "ml-auto flex h-7 shrink-0 items-center gap-1 rounded-full px-3 text-ui-2xs transition-colors",
+            "flex h-7 shrink-0 items-center gap-1 rounded-full px-3 text-ui-2xs transition-colors",
             !ok || working
               ? "cursor-not-allowed bg-secondary text-muted-foreground"
               : "cursor-pointer bg-primary text-primary-foreground hover:opacity-90",

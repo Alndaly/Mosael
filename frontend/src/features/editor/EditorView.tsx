@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CircleAlert, CircleCheck, Download, FolderPlus, Loader2, Plus, Redo2, Scissors, Sparkles, Type, Undo2 } from "lucide-react";
+import { Camera, CircleAlert, CircleCheck, Download, FolderPlus, Loader2, Plus, Redo2, Scissors, Sparkles, Type, Undo2 } from "lucide-react";
 
 import { toast } from "sonner";
 
@@ -31,6 +31,7 @@ import {
   moveTrack,
   removeTrack,
   setTrackState,
+  grabSequenceFrame,
   splitClip,
   splitClipAtPoints,
   setClipEffects,
@@ -593,6 +594,21 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     [sequence, splitMutation],
   );
 
+  /**
+   * 把播放头这一帧存成一份素材。
+   *
+   * **走后端渲染,不抓预览的画布** —— 预览里花字和字幕是 DOM 叠上去的,画布抓不到它们:
+   * 抓出来的画面看着对,只是少了一层字,而用户不会发现自己导出的是没有字幕的那一版。
+   */
+  const grabFrameMutation = useMutation({
+    mutationFn: () => grabSequenceFrame(sequence!.id, useEditorStore.getState().playhead),
+    onSuccess: (asset) => {
+      void qc.invalidateQueries({ queryKey: ["assets", workspace.id, project.id] });
+      toast.success(t("editorGrabFrameDone"), { description: asset.name });
+    },
+    onError: (error) => toast.error(t("editorGrabFrameFailed"), { description: (error as Error).message }),
+  });
+
   const duplicateClip = React.useCallback(
     (clipId?: string) => {
       if (!sequence) return;
@@ -881,7 +897,31 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           )}
         </section>
       )}
-      <section className="min-h-0 overflow-hidden rounded-md border border-border shadow-[var(--shadow-panel)] bg-[var(--monitor-bg)]">
+      <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-md border border-border shadow-[var(--shadow-panel)] bg-[var(--monitor-bg)]">
+        {/* 监视器上方的操作条:**只放和「此刻这一画面」有关的动作**。
+            播放/快进那些在下面的走带条上,和这里不是一类事:那些是「走到哪一帧」,
+            这里是「拿这一帧做什么」。 */}
+        <div className="flex items-center gap-1 border-b border-border/60 px-2 py-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 px-2 text-ui-2xs"
+            title={t("editorSplitHere")}
+            onClick={() => splitAtPlayhead()}
+          >
+            <Scissors size={12} /> {t("editorSplitHere")}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 px-2 text-ui-2xs"
+            title={t("editorGrabFrameTitle")}
+            loading={grabFrameMutation.isPending}
+            onClick={() => grabFrameMutation.mutate()}
+          >
+            <Camera size={12} /> {t("editorGrabFrame")}
+          </Button>
+        </div>
         <Monitor
           sequence={sequence}
           subtitleStyleOverride={styleDraft}

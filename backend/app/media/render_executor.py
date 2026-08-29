@@ -693,7 +693,13 @@ def build_ffmpeg_command(
     *,
     force_software: bool = False,
     text_pngs: dict | None = None,
+    still_at: float | None = None,
 ) -> list[str]:
+    """…still_at 给了就**只出那一时刻的一帧**(一张图,不是一段片子)。
+
+    **滤镜图一个字都不改** —— 保真度全在那里:变换、调色、花字、字幕、叠层。另写一条"取当前帧"
+    的路的话,它迟早和成片长得不一样,而这种不一样是最难发现的:画面看着对,只是少了一层字。
+    """
     width, height, fps = plan.output.width, plan.output.height, plan.output.fps
     # Probe every source we will ask about up front, concurrently, instead of once per clip as
     # the command is assembled — the probes are independent and each one is just waiting on an
@@ -885,6 +891,34 @@ def build_ffmpeg_command(
             filters.append(f"{''.join(mix_inputs)}amix=inputs={len(mix_inputs)}:normalize=0[amix]")
             audio_label = "[amix]"
 
+    if still_at is not None:
+        #: 只取一帧:画面那一路照旧,音频整条不要(一张图没有声音),输出换成单帧图片。
+        #: -ss 放在 filter_complex **之后** —— 输出侧 seek,滤镜图照常从头算,
+        #: 那些跟时间走的东西(关键帧、淡入淡出、字幕的出入点)才会落在正确的位置上。
+        args += [
+            "-filter_complex",
+            ";".join(filters),
+            "-map",
+            video_label,
+            "-ss",
+            f"{max(still_at, 0.0):.3f}",
+            "-frames:v",
+            "1",
+            "-q:v",
+            "2",
+            str(output_path),
+            #: **音频那条也得有人接。** 滤镜图和成片的是同一份(保真度全在那里),而它的
+            #: concat 会同时吐出画面和声音 —— 只接画面的话 ffmpeg 直接拒跑:
+            #: 「Filter 'concat' has output 1 (abase) unconnected」。丢进 null 就行,
+            #: 一张图本来就不要声音。
+            "-map",
+            audio_label,
+            "-f",
+            "null",
+            "-",
+        ]
+        return args
+
     args += [
         "-filter_complex",
         ";".join(filters),
@@ -947,6 +981,28 @@ def _rasterize_text(plan: RenderPlan, workdir: Path) -> dict | None:
     except Exception:
         logger.exception("text rasterization failed; falling back to ASS burn")
         return None
+
+
+def render_still(plan: RenderPlan, resolve: Callable[[str], Path], output_path: Path, at: float) -> Path:
+    """把时间线在 `at` 处的**合成画面**渲成一张图。
+
+    **走和成片同一条命令**(build_ffmpeg_command,只是换了输出那一段)。另写一条的话它迟早和
+    成片长得不一样,而这种不一样最难发现:画面看着对,只是少了一层花字 —— 而那正是预览里
+    用 DOM 叠出来的、canvas 抓不到的东西。
+
+    这里**也要先把文字渲成 PNG**:少这一步,取出来的帧就是没有字幕的那一版。
+    """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    text_pngs = _rasterize_text(plan, output_path.parent)
+    command = build_ffmpeg_command(plan, resolve, output_path, text_pngs=text_pngs, still_at=at)
+    try:
+        run_logged(command, check=True, capture_output=True, timeout=180, what="取当前帧")
+    except subprocess.SubprocessError as exc:
+        raise RenderExecutionError("取当前帧失败") from exc
+    if not output_path.is_file() or output_path.stat().st_size == 0:
+        #: 时间点落在片尾之后:ffmpeg 成功退出但什么都不写。空文件比报错更难查。
+        raise RenderExecutionError("这个时间点上没有画面 —— 是不是超过片长了?")
+    return output_path
 
 
 def output_stem(plan: RenderPlan) -> str:

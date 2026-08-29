@@ -9,6 +9,8 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
+    AssetOut,
+    SequenceFrameRequest,
     AddTrackRequest,
     CutClipRangeRequest,
     CutClipRangesRequest,
@@ -498,6 +500,28 @@ def export_sequence(sequence_id: str, db: DbSession, user: CurrentUser, body: Ex
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except RenderPlanError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/sequences/{sequence_id}/frame", response_model=AssetOut)
+def grab_sequence_frame_route(
+    sequence_id: str, body: SequenceFrameRequest, db: DbSession, user: CurrentUser
+) -> Asset:
+    """取播放头这一帧,存成一份新素材。
+
+    **走渲染那条路,不是抓预览的画布** —— 预览里花字和字幕是 DOM 叠上去的,画布抓不到它们:
+    抓出来的画面看着对,只是少了一层字,而用户不会发现。
+    """
+    from app.domain.render import grab_sequence_frame
+    from app.media.render_executor import RenderExecutionError
+
+    sequence = require_sequence_access(db, user, sequence_id)
+    ensure_workspace_perm(db, user, sequence.workspace_id, "export")
+    try:
+        return grab_sequence_frame(db, sequence_id, body.at, created_by=user.id)
+    except RenderPlanError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RenderExecutionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _apply(operation) -> None:

@@ -3,7 +3,9 @@ from __future__ import annotations
 import logging
 import os
 import re
+import tempfile
 import time
+from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -241,6 +243,34 @@ def _resolve_subtitle_font(db: Session, sequence: Sequence) -> dict:
     if resolved:
         style["font_family"], style["font_dir"] = resolved
     return style
+
+
+def grab_sequence_frame(db: Session, sequence_id: str, at: float, *, created_by: str | None) -> Asset:
+    """把时间线在 `at` 处的合成画面存成一份新素材。
+
+    **同步返回** —— 一帧就是一次 ffmpeg,几百毫秒到两三秒;为它铺一套任务/进度,用户看到的
+    只是一个多余的转圈。而**导出成片是任务**,因为那要几十秒到几分钟。
+
+    产出走 register_file_asset(和渲染成片、AI 生成、配音同一条入库路),所以缩略图、探测、
+    代理这些一样也不会少。
+    """
+    from app.media.render_executor import render_still
+
+    plan = build_plan_for_sequence(db, sequence_id)
+    sequence = db.get(Sequence, sequence_id)
+    assert sequence is not None
+    with tempfile.TemporaryDirectory(prefix="open-studio-still-") as tmp:
+        target = Path(tmp) / "frame.jpg"
+        render_still(plan, resolve_key, target, at)
+        return register_file_asset(
+            db,
+            workspace_id=sequence.workspace_id,
+            project_id=sequence.project_id,
+            source_path=target,
+            #: 名字带上时间 —— 从同一条时间线取三帧,光看「xxx 的帧」分不出哪张是哪张。
+            name=f"{sequence.name} · {at:.1f}s",
+            source="generated",
+        )
 
 
 def start_export(db: Session, sequence_id: str, export_params: dict | None = None, *, created_by: str | None) -> Job:

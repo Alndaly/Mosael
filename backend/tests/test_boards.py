@@ -838,3 +838,54 @@ def test_帧条按需生成并缓存在素材旁边() -> None:
         assert client.get(f"/api/assets/{video_id}/filmstrip").status_code == 200
     assert made["count"] == 1, f"帧条被重复生成了 {made['count']} 次"
     assert filmstrip_path(directory).is_file()
+
+
+def test_取帧要精确到那一秒_而不是最近的关键帧() -> None:
+    """`-ss` 放在 `-i` **之后**才是逐帧解到那个时间点。放在前面会跳到最近的关键帧 ——
+    用户在帧条上停在 3.2 秒,拿回来的是 2.8 秒那一帧,而画面看着差不多,他不会发现取错了。
+    """
+    from unittest.mock import patch as mock_patch
+
+    from app.media.still import grab_frame
+
+    seen: dict = {}
+
+    def fake_run(args, **kwargs):
+        seen["args"] = args
+        pathlib_target = args[-1]
+        import pathlib as _p
+        _p.Path(pathlib_target).write_bytes(b"\xff\xd8\xff\xd9")
+        return None
+
+    import pathlib, tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        source = pathlib.Path(tmp) / "in.mp4"
+        source.write_bytes(b"x")
+        with mock_patch("app.media.still.run_logged", side_effect=fake_run):
+            grab_frame(source, 3.2, pathlib.Path(tmp) / "out.jpg")
+
+    args = seen["args"]
+    assert args.index("-ss") > args.index("-i"), f"-ss 跑到 -i 前面了,会对齐到关键帧:{args}"
+    assert args[args.index("-ss") + 1] == "3.200"
+    assert "-frames:v" in args and args[args.index("-frames:v") + 1] == "1"
+
+
+def test_取帧落在片尾之后要说人话() -> None:
+    """ffmpeg 这时会成功退出但什么都不写 —— 一个空文件比报错更难查。"""
+    import pathlib
+    import tempfile
+    from unittest.mock import patch as mock_patch
+
+    import pytest as _pytest
+
+    from app.media.still import StillError, grab_frame
+
+    with tempfile.TemporaryDirectory() as tmp:
+        source = pathlib.Path(tmp) / "in.mp4"
+        source.write_bytes(b"x")
+        with mock_patch("app.media.still.run_logged", return_value=None):
+            with _pytest.raises(StillError, match="没有画面"):
+                grab_frame(source, 999, pathlib.Path(tmp) / "out.jpg")
+        with _pytest.raises(StillError, match="负数"):
+            grab_frame(source, -1, pathlib.Path(tmp) / "out.jpg")

@@ -114,6 +114,8 @@ interface Props {
   /** 让 AI 往某张便签里写字。**同步** —— 写字几秒就回,不走生成任务那条路。 */
   /** 把一段文字念成音频。**异步** —— 走和出图出片同一套占位/回执。 */
   onSpeak?: (input: { itemId: string; text: string; voiceId: string }) => Promise<unknown>;
+  /** 取某一帧,存成一份新素材、落到一个新节点上 —— 原素材不动。 */
+  onGrabFrame?: (input: { assetId: string; at: number; x: number; y: number }) => Promise<unknown>;
   /** 截出一段。产出是一份**新素材**,落到一个新节点上 —— 原素材不动。 */
   onTrim?: (input: {
     itemId: string;
@@ -146,7 +148,7 @@ interface Props {
   onReady?: (api: BoardCanvasApi) => void;
 }
 
-function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, onSpeak, onTrim, models, showMinimap = true, onDropFiles, uploading, onReady }: Props) {
+function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, onSpeak, onTrim, onGrabFrame, models, showMinimap = true, onDropFiles, uploading, onReady }: Props) {
   const t = useI18n();
   const rf = React.useRef<ReactFlowInstance | null>(null);
   const viewport = usePersistentViewport(`board:${boardId}`);
@@ -793,6 +795,13 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
             assetId={item.asset_id as string}
             workspaceId={workspaceId}
             busy={false}
+            //: 取一帧和剪一段都产出**新的一格** —— 摆在原件下面,原件不动。
+            onGrabFrame={onGrabFrame ? (at) => void onGrabFrame({
+              assetId: item.asset_id as string,
+              at,
+              x: node.position.x,
+              y: node.position.y + (node.height ?? 200) + 60,
+            }) : undefined}
             onTrim={({ start, end, mute }) => {
               void onTrim({
                 //: 产出落到**新的一格**,摆在原件下面 —— 覆盖原件的话,上一版就没了。

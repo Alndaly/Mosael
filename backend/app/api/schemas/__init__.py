@@ -1767,6 +1767,20 @@ class BoardTrim(BaseModel):
     y: float = 0
 
 
+class AssetFrameRequest(BaseModel):
+    """从一段视频里取某一时刻的一帧,存成一份新素材。"""
+
+    at: float = 0
+    #: 落到哪个项目下。留空跟随原素材。
+    project_id: str | None = None
+
+
+class SequenceFrameRequest(BaseModel):
+    """把时间线在某一时刻的合成画面存成一份新素材。"""
+
+    at: float = 0
+
+
 class WorkflowRunRequest(BaseModel):
     params: dict = Field(default_factory=dict)
 

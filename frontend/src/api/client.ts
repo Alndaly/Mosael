@@ -479,6 +479,19 @@ export function assetThumbnailUrl(assetId: string): string {
   return `${API_BASE}/api/assets/${assetId}/thumbnail${suffix}`;
 }
 
+/** 取这段视频某一时刻的一帧,存成一份新素材。**原素材不动。** */
+export function grabAssetFrame(assetId: string, at: number, projectId?: string | null): Promise<Asset> {
+  return api<Asset>(`/api/assets/${assetId}/frame`, {
+    method: "POST",
+    body: JSON.stringify({ at, project_id: projectId ?? null }),
+  });
+}
+
+/** 取时间线播放头这一帧。**走渲染那条路** —— 预览里花字和字幕是 DOM 叠的,画布抓不到。 */
+export function grabSequenceFrame(sequenceId: string, at: number): Promise<Asset> {
+  return api<Asset>(`/api/sequences/${sequenceId}/frame`, { method: "POST", body: JSON.stringify({ at }) });
+}
+
 /** 剪辑面板用的帧条:整条片子均匀取几帧拼成的一张横向长图。按需生成、落盘缓存。 */
 export function assetFilmstripUrl(assetId: string): string {
   const suffix = authToken ? `?token=${authToken}` : "";
