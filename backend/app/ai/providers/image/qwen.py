@@ -106,23 +106,27 @@ def resolve_qwen_edit_base(context: ProviderContext) -> str:
     return DASHSCOPE_BASE
 
 
-def extract_result_url(task_payload: dict[str, Any]) -> str | None:
+def extract_result_urls(task_payload: dict[str, Any]) -> list[str] | None:
+    """终态里的**每一张**产物地址;还没结束回 None,失败自己抛。
+
+    请求里的 `n` 是几,`results` 里就有几条。此前这里 return 第一条就走 —— 用户选了 4 张、
+    按 4 张计了费,拿回来一张,而且没有任何地方会报错。
+    """
     output = task_payload.get("output") or {}
-    choices = output.get("choices") or []
-    for choice in choices:
+    urls: list[str] = []
+    for choice in output.get("choices") or []:
         message = choice.get("message") if isinstance(choice, dict) else None
         content = message.get("content") if isinstance(message, dict) else None
         if isinstance(content, list):
-            for item in content:
-                if isinstance(item, dict) and item.get("image"):
-                    return str(item["image"])
+            urls.extend(str(item["image"]) for item in content if isinstance(item, dict) and item.get("image"))
+    if urls:
+        return urls
     status = output.get("task_status")
     if status == "SUCCEEDED":
-        results = output.get("results") or []
-        for result in results:
-            if isinstance(result, dict) and result.get("url"):
-                return str(result["url"])
-        raise ProviderError("Provider returned success without a result URL")
+        urls = [str(one["url"]) for one in (output.get("results") or []) if isinstance(one, dict) and one.get("url")]
+        if not urls:
+            raise ProviderError("Provider returned success without a result URL")
+        return urls
     if status in ("FAILED", "CANCELED"):
         raise ProviderError(f"Generation failed with status {status}")
     return None
@@ -136,6 +140,14 @@ def download_result_asset(url: str, target: Path) -> None:
         response = client.get(url)
         response.raise_for_status()
         target.write_bytes(response.content)
+
+
+def _download_all(urls: list[str], output_dir: Path) -> list[Path]:
+    """挨个下回来。**文件名带序号** —— 同名的话第二张会把第一张覆盖掉,而两次下载都"成功"。"""
+    targets = [output_dir / f"generated-{index + 1}.png" for index in range(len(urls))]
+    for url, target in zip(urls, targets):
+        download_result_asset(url, target)
+    return targets
 
 
 class QwenImageProvider(GenerationProvider):
@@ -152,12 +164,11 @@ class QwenImageProvider(GenerationProvider):
                 with RetryingClient(base_url=resolve_qwen_edit_base(context), timeout=120, headers=headers) as client:
                     submit = client.post(EDIT_PATH, json=build_edit_payload(request, context))
                     submit.raise_for_status()
-                    url = extract_result_url(submit.json())
-                    if not url:
+                    urls = extract_result_urls(submit.json())
+                    if not urls:
                         raise ProviderError("Provider returned success without a result URL")
-                    target = output_dir / "generated.png"
-                    download_result_asset(url, target)
-                    return GenerationResult(output_path=target, usage=metering_from_request(request), raw_usage=submit.json())
+                    targets = _download_all(urls, output_dir)
+                    return GenerationResult(output_paths=targets, usage=metering_from_request(request), raw_usage=submit.json())
 
             headers = {"Authorization": f"Bearer {context.api_key}", "X-DashScope-Async": "enable"}
             with RetryingClient(base_url=base_url, timeout=30, headers=headers) as client:
@@ -167,10 +178,9 @@ class QwenImageProvider(GenerationProvider):
                 if not task_id:
                     raise ProviderError("Provider did not return a task id")
 
-                url, poll_payload = poll_until_ready(client, f"/api/v1/tasks/{task_id}", extract_result_url)
+                urls, poll_payload = poll_until_ready(client, f"/api/v1/tasks/{task_id}", extract_result_urls)
 
-                target = output_dir / "generated.png"
-                download_result_asset(url, target)
-                return GenerationResult(output_path=target, usage=metering_from_request(request), raw_usage=poll_payload)
+                targets = _download_all(urls, output_dir)
+                return GenerationResult(output_paths=targets, usage=metering_from_request(request), raw_usage=poll_payload)
         except httpx.HTTPError as exc:
             raise ProviderError(provider_http_error("DashScope request failed", exc, context.api_key)) from exc

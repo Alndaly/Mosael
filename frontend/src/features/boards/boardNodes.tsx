@@ -64,6 +64,11 @@ function Ports({ visible }: { visible?: boolean }) {
   //: 点(点不中),拉近时又胀成一个盘子。同一份 transform 里连位移一起抵消,离节点的那段
   //: 距离也就不会跟着变(transform 从右往左作用,先位移再缩放)。
   const zoom = useStore((state) => state.transform[2]) || 1;
+  //: **锚点是 handle 在那一侧的外边缘,不是中心** —— 源码里 Position.Right 返回 x+width、
+  //: Position.Left 返回 x。而默认样式把 handle 居中骑在边线上(translate ±50%),于是线头
+  //: 天生就落在边外 width/2 处;handle 越大离得越远(横跨边线的大盒子那版差了 28px)。
+  //: 把横向的位移抵掉,让方块整个缩进边内:左侧的左边缘、右侧的右边缘,就都正好压在边上。
+  const flush = { transform: "translateY(-50%)" };
   const anchor = "!h-2 !w-2 !rounded-none !border-0 !bg-transparent !p-0 transition-opacity";
   const dot =
     "grid h-6 w-6 place-items-center rounded-full border border-border-strong bg-panel text-muted-foreground transition-colors hover:border-primary hover:text-primary";
@@ -74,14 +79,14 @@ function Ports({ visible }: { visible?: boolean }) {
   });
   return (
     <>
-      <Handle type="target" position={Position.Left} className={cn(anchor, shown)}>
+      <Handle type="target" position={Position.Left} style={flush} className={cn(anchor, shown)}>
         <span className="absolute right-full top-1/2 -translate-y-1/2">
           <span className={dot} style={scaled(-10, "right center")}>
             <Plus size={13} />
           </span>
         </span>
       </Handle>
-      <Handle type="source" position={Position.Right} className={cn(anchor, shown)}>
+      <Handle type="source" position={Position.Right} style={flush} className={cn(anchor, shown)}>
         <span className="absolute left-full top-1/2 -translate-y-1/2">
           <span className={dot} style={scaled(10, "left center")}>
             <Plus size={13} />
@@ -114,7 +119,9 @@ export function NoteNode({ data, selected }: NodeProps) {
   return (
     <div
       className={cn(
-        "group relative h-full w-full overflow-hidden rounded-lg border p-2.5 text-ui-sm leading-relaxed shadow-sm transition-shadow",
+        // **不在这一层 overflow-hidden。** 类型标签在框上方、接点在框左右两侧,都在框外 ——
+        // 裁在这里等于把它们裁掉(图片/视频那两处已经栽过一次)。裁剪交给里面那层。
+        "group relative h-full w-full rounded-lg border p-2.5 text-ui-sm leading-relaxed shadow-sm transition-shadow",
         noteColorClass(item.color),
         selected && "ring-2 ring-primary",
       )}
@@ -133,7 +140,7 @@ export function NoteNode({ data, selected }: NodeProps) {
           onBlur={() => setEditing(false)}
         />
       ) : (
-        <div className="h-full w-full whitespace-pre-wrap break-words text-foreground">
+        <div className="h-full w-full overflow-hidden whitespace-pre-wrap break-words text-foreground">
           {item.text || <span className="text-muted-foreground">双击写点什么</span>}
         </div>
       )}

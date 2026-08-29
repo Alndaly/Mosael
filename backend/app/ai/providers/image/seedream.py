@@ -102,6 +102,6 @@ class SeedreamProvider(GenerationProvider):
                     download = downloader.get(url)
                     download.raise_for_status()
                     target.write_bytes(download.content)
-                return GenerationResult(output_path=target, usage=metering_from_request(request), raw_usage=payload)
+                return GenerationResult(output_paths=[target], usage=metering_from_request(request), raw_usage=payload)
         except httpx.HTTPError as exc:
             raise ProviderError(provider_http_error("ARK image request failed", exc, context.api_key)) from exc

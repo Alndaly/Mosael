@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 from collections.abc import Callable
-from typing import Any
+from typing import Any, TypeVar
 
 import httpx
 
@@ -114,7 +114,14 @@ class GenerationRequest:
 
 @dataclass(frozen=True)
 class GenerationResult:
-    output_path: Path
+    """一次生成的产出。
+
+    **是一串,不是一个。** 图像接口的 `n`(num_images)一次会返回多张,而这里长期只有一个
+    `output_path`,于是 provider 取 data[0]、其余的当场丢掉 —— 用户选了 4 张、按 4 张计了费,
+    拿回来一张。视频那几家一次只出一段,给一个单元素的列表,不为此再开一条单数的路。
+    """
+
+    output_paths: list[Path]
     usage: dict[str, Any] = field(default_factory=dict)
     raw_usage: dict[str, Any] = field(default_factory=dict)
 
@@ -252,23 +259,28 @@ POLL_INTERVAL_SECONDS = 2.0
 POLL_TIMEOUT_SECONDS = 300.0
 
 
+#: 轮询到手的产物形状由那一家决定:一个地址,或者一串(图像接口的 n 一次给多张)。
+_Ready = TypeVar("_Ready")
+
+
 def poll_until_ready(
     client: Any,
     poll_path: str,
-    extract: "Callable[[dict[str, Any]], str | None]",
+    extract: "Callable[[dict[str, Any]], _Ready | None]",
     *,
     interval: float = POLL_INTERVAL_SECONDS,
     timeout: float = POLL_TIMEOUT_SECONDS,
     timed_out_message: str = "Generation timed out",
-) -> tuple[str, dict[str, Any]]:
+) -> tuple[_Ready, dict[str, Any]]:
     """轮询一个异步任务到终态,返回 (产物地址, 终态回包)。
 
     几乎所有外部生成 API 都是同一个形状:提交拿 id → 轮询到终态 → 下载。此前**六家各写了一遍
     这个循环**,各自定义间隔、各自抛超时 —— 代价不是行数,是每家都可能漏掉一件事,而没有任何
     机制能发现谁漏了。
 
-    `extract` 负责读懂那一家的终态:拿到地址就回地址,还没结束回 None,失败**自己抛**
-    (它才知道那家把失败原因放在哪个字段)。
+    `extract` 负责读懂那一家的终态:拿到产物就回产物,还没结束回 None,失败**自己抛**
+    (它才知道那家把失败原因放在哪个字段)。回的是一个地址还是**一串**地址由那一家决定 ——
+    图像接口的 `n` 一次会给回多张,收成单数的话多出来的那几张就在这儿被丢掉了。
 
     计时用 `time.monotonic()` 而不是 `time.time()`:墙钟会跳(NTP 校时、夏令时),跳一下
     要么把还在跑的任务判成超时,要么让它多等一个小时。六家原本都用的是墙钟。
@@ -279,9 +291,9 @@ def poll_until_ready(
         response = client.get(poll_path)
         response.raise_for_status()
         payload = response.json()
-        url = extract(payload)
-        if url:
-            return url, payload
+        ready = extract(payload)
+        if ready:
+            return ready, payload
         time.sleep(interval)
     # 超时文案让调用方给:有几家写的是自己的措辞(「MiniMax 视频生成超时」),那句话会一路
     # 显示到用户眼前,收成一份通用句子等于把"是哪一家超时了"这个信息删掉。

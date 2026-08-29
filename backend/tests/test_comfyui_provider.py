@@ -131,7 +131,7 @@ def test_full_flow_discovers_checkpoint_submits_and_downloads(monkeypatch, tmp_p
     assert graph["3"]["inputs"]["seed"] == 7
     assert graph["5"]["inputs"] == {"batch_size": 1, "width": 832, "height": 1216}
     assert graph["6"]["inputs"]["text"] == "海边的柴犬"
-    assert result.output_path.read_bytes() == b"png-bytes"
+    assert result.output_paths[0].read_bytes() == b"png-bytes"
     assert result.raw_usage["prompt_id"] == "abc123def"
 
 
@@ -262,8 +262,8 @@ def test_video_prefers_the_video_container_output(monkeypatch, tmp_path) -> None
     _mock_comfy(monkeypatch, handler)
     template = json.dumps({"1": {"class_type": "X", "inputs": {"text": "{{prompt}}", "frames": "{{duration_seconds}}"}}})
     result = ComfyUIProvider("video").generate(vreq(duration_seconds=5), ctx({"workflow_template": template}), tmp_path)
-    assert result.output_path.suffix == ".mp4"
-    assert result.output_path.read_bytes() == b"mp4-bytes"
+    assert result.output_paths[0].suffix == ".mp4"
+    assert result.output_paths[0].read_bytes() == b"mp4-bytes"
 
 
 class _Callbacks:

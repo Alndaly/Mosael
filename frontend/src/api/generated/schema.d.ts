@@ -2765,6 +2765,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/boards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List All */
+        get: operations["list_all_api_boards_get"];
+        put?: never;
+        /** Create */
+        post: operations["create_api_boards_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/boards/{board_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read */
+        get: operations["read_api_boards__board_id__get"];
+        put?: never;
+        post?: never;
+        /** Remove */
+        delete: operations["remove_api_boards__board_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update */
+        patch: operations["update_api_boards__board_id__patch"];
+        trace?: never;
+    };
+    "/api/boards/{board_id}/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate
+         * @description 在画板上生成一份素材,产出就地落回画布。
+         *
+         *     **不自己实现生成** —— 汇进 create_generation_job 那条漏斗(AI 工作台、定时任务、
+         *     工作流节点、智能体走的是同一条),于是描述符校验、能力探测、计量记账、任务中心全都白拿。
+         *     这里只多做一件画板自己的事:先摆一个「正在生成」的占位,并把回执指向它。
+         */
+        post: operations["generate_api_boards__board_id__generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/publish/platforms": {
         parameters: {
             query?: never;
@@ -5196,6 +5257,94 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** BoardCreate */
+        BoardCreate: {
+            /** Workspace Id */
+            workspace_id: string;
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /** Canvas */
+            canvas?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** BoardGenerate */
+        BoardGenerate: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Item Id */
+            item_id: string;
+            /**
+             * Kind
+             * @default image
+             */
+            kind: string;
+            /** Prompt */
+            prompt: string;
+            /**
+             * X
+             * @default 0
+             */
+            x: number;
+            /**
+             * Y
+             * @default 0
+             */
+            y: number;
+            /**
+             * Provider
+             * @default
+             */
+            provider: string;
+            /**
+             * Model
+             * @default
+             */
+            model: string;
+            /** Parameters */
+            parameters?: {
+                [key: string]: unknown;
+            };
+            /** Source Assets */
+            source_assets?: components["schemas"]["SourceAssetRef"][];
+        };
+        /** BoardOut */
+        BoardOut: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Name */
+            name: string;
+            /** Canvas */
+            canvas: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** BoardUpdate */
+        BoardUpdate: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Name */
+            name?: string | null;
+            /** Canvas */
+            canvas?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** Body_import_asset_api_assets_import_post */
         Body_import_asset_api_assets_import_post: {
             /** Workspace Id */
@@ -5807,6 +5956,11 @@ export interface components {
             };
             /** Result Asset Id */
             result_asset_id: string | null;
+            /**
+             * Result Asset Ids
+             * @default []
+             */
+            result_asset_ids: string[];
             /**
              * Created At
              * Format: date-time
@@ -14694,6 +14848,208 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentSessionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_all_api_boards_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_api_boards_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoardCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_api_boards__board_id__get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path: {
+                board_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_api_boards__board_id__delete: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path: {
+                board_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_api_boards__board_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                board_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoardUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_api_boards__board_id__generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                board_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoardGenerate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardOut"];
                 };
             };
             /** @description Validation Error */

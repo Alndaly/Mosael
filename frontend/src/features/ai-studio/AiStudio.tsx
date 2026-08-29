@@ -534,14 +534,23 @@ function GenerateWorkspace({
   });
   const ordered = React.useMemo(() => sessionJobs.data ?? [], [sessionJobs.data]);
   // 会话画廊:点开任意一张图,可左右翻看本会话的全部图片产出。
+  //: **每条生成摊平成它的全部产出** —— 一次出四张时,画廊里就该有四张;只收封面的话,
+  //: 用户左右翻着翻着会发现刚看到的那三张翻不到。
   const sessionGallery = React.useMemo(
     () =>
       ordered
-        .filter((generation) => generation.kind === "image" && generation.result_asset_id)
-        .map((generation) => ({
-          src: assetFileUrl(generation.result_asset_id!),
-          title: String(generation.request.prompt ?? generation.model),
-        })),
+        .filter((generation) => generation.kind === "image")
+        .flatMap((generation) => {
+          const ids = generation.result_asset_ids?.length
+            ? generation.result_asset_ids
+            : generation.result_asset_id
+              ? [generation.result_asset_id]
+              : [];
+          return ids.map((assetId) => ({
+            src: assetFileUrl(assetId),
+            title: String(generation.request.prompt ?? generation.model),
+          }));
+        }),
     [ordered],
   );
   const latestImageResult = React.useMemo(
@@ -1094,6 +1103,13 @@ function GenerationTurn({
   // job 行可能已被任务中心「清空已完成」删掉(记录长存、job_id 置空):
   // 有产物即成功、无产物即失败;仅当 job_id 还在而列表未拉到时才视作排队中。
   const status = job?.status ?? (generation.result_asset_id ? "succeeded" : generation.job_id ? "queued" : "failed");
+  //: 这一条生成的**全部**产出。后端给 result_asset_ids(封面排第一);一次只出一份时它就是
+  //: 那一份 —— 不为「一份」和「多份」各写一套渲染。
+  const outputs = generation.result_asset_ids?.length
+    ? generation.result_asset_ids
+    : generation.result_asset_id
+      ? [generation.result_asset_id]
+      : [];
   const timestamp = generation.created_at ?? job?.created_at ?? null;
   const isRunning = status === "running";
   const isFinished = status === "succeeded" || status === "failed";
@@ -1141,25 +1157,39 @@ function GenerationTurn({
             controls
             preload="metadata"
           />
-        ) : generation.result_asset_id ? (
-          <button
-            type="button"
-            className="inline-block max-w-[min(560px,100%)] cursor-zoom-in border-0 bg-transparent p-0 focus-visible:rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-ring"
-            onClick={() =>
-              openImagePreview({
-                src: assetFileUrl(generation.result_asset_id!),
-                title: String(generation.request.prompt ?? generation.model),
-                gallery,
-              })
-            }
-          >
-            <img
-              className="block w-auto max-w-[min(560px,100%)] rounded-lg border border-border"
-              src={assetThumbnailUrl(generation.result_asset_id)}
-              alt=""
-              loading="lazy"
-            />
-          </button>
+        ) : outputs.length > 0 ? (
+          //: **照 result_asset_ids 出图,不是只出封面。** 图像接口的 n 选了几就出几张,
+          //: 只画第一张的话,用户按 4 张付了钱、界面上只多出 1 张(另外 3 张在素材库里
+          //: 躺着,而他不知道)。一张时就是原来的样子,多张时并排铺开。
+          <div className={cn("flex max-w-[min(560px,100%)] flex-wrap gap-1.5")}>
+            {outputs.map((assetId) => (
+              <button
+                key={assetId}
+                type="button"
+                className={cn(
+                  "cursor-zoom-in border-0 bg-transparent p-0 focus-visible:rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-ring",
+                  outputs.length > 1 ? "min-w-0 flex-[1_1_45%]" : "inline-block max-w-full",
+                )}
+                onClick={() =>
+                  openImagePreview({
+                    src: assetFileUrl(assetId),
+                    title: String(generation.request.prompt ?? generation.model),
+                    gallery,
+                  })
+                }
+              >
+                <img
+                  className={cn(
+                    "block rounded-lg border border-border",
+                    outputs.length > 1 ? "h-auto w-full" : "w-auto max-w-full",
+                  )}
+                  src={assetThumbnailUrl(assetId)}
+                  alt=""
+                  loading="lazy"
+                />
+              </button>
+            ))}
+          </div>
         ) : status === "failed" ? (
           <GenerationFailureCard error={job?.error ?? ""} />
         ) : (

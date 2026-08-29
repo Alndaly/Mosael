@@ -76,7 +76,15 @@ def ai_generate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict
     start_generation_thread(generation.id)
     wait_for_job(child.id)
     db.refresh(generation)
-    return {"asset_id": generation.result_asset_id or "", "generation_id": generation.id}
+    db.refresh(child)
+    #: asset_id 是**封面**(下游多数节点只接一份),asset_ids 是全部 —— 生成一次可能出多张
+    #: (图像接口的 n),只往下游传第一张的话,其余的在工作流里就没人看得见了。
+    asset_ids = [str(one) for one in ((child.result or {}).get("asset_ids") or []) if one]
+    return {
+        "asset_id": generation.result_asset_id or "",
+        "asset_ids": asset_ids,
+        "generation_id": generation.id,
+    }
 
 
 @register("synthesize_speech")

@@ -21,7 +21,7 @@ from app.ai.providers.image.qwen import (
     build_edit_payload as qwen_edit_payload,
     build_submit_payload as qwen_payload,
     download_result_asset,
-    extract_result_url,
+    extract_result_urls,
     resolve_dashscope_base,
     resolve_qwen_edit_base,
 )
@@ -132,16 +132,35 @@ def test_qwen_image_uses_native_dashscope_endpoint_even_when_chat_base_url_is_co
 
 
 def test_qwen_poll_parsing() -> None:
-    assert extract_result_url({"output": {"task_status": "RUNNING"}}) is None
-    assert extract_result_url({"output": {"task_status": "SUCCEEDED", "results": [{"url": "https://x/y.png"}]}}) == "https://x/y.png"
-    assert (
-        extract_result_url(
-            {"output": {"choices": [{"message": {"content": [{"image": "https://x/edit.png"}], "role": "assistant"}}]}}
-        )
-        == "https://x/edit.png"
-    )
+    assert extract_result_urls({"output": {"task_status": "RUNNING"}}) is None
+    assert extract_result_urls({"output": {"task_status": "SUCCEEDED", "results": [{"url": "https://x/y.png"}]}}) == [
+        "https://x/y.png"
+    ]
+    assert extract_result_urls(
+        {"output": {"choices": [{"message": {"content": [{"image": "https://x/edit.png"}], "role": "assistant"}}]}}
+    ) == ["https://x/edit.png"]
     with pytest.raises(ProviderError):
-        extract_result_url({"output": {"task_status": "FAILED"}})
+        extract_result_urls({"output": {"task_status": "FAILED"}})
+
+
+def test_qwen_多张产出一张都不能少() -> None:
+    """`n` 选了几就回几条,**每一条都要取**。
+
+    此前这里 return 第一条就走 —— 用户选了 4 张、按 4 张计了费,拿回来一张,而且没有任何
+    地方会报错:界面上就是安安静静地只多出一张图。
+    """
+    assert extract_result_urls(
+        {"output": {"task_status": "SUCCEEDED", "results": [{"url": "https://x/1.png"}, {"url": "https://x/2.png"}]}}
+    ) == ["https://x/1.png", "https://x/2.png"]
+    assert extract_result_urls(
+        {
+            "output": {
+                "choices": [
+                    {"message": {"content": [{"image": "https://x/a.png"}, {"image": "https://x/b.png"}]}},
+                ]
+            }
+        }
+    ) == ["https://x/a.png", "https://x/b.png"]
 
 
 def test_qwen_download_result_url_does_not_reuse_dashscope_headers(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -278,7 +297,9 @@ def test_openai_image_payload_and_parsing() -> None:
     )
     payload = openai_payload(request)
     assert payload == {"model": "gpt-image-2", "prompt": "p", "n": 2, "size": "1024x576", "quality": "high"}
-    assert extract_image_bytes({"data": [{"b64_json": "aGk="}]}) == b"hi"
+    assert extract_image_bytes({"data": [{"b64_json": "aGk="}]}) == [b"hi"]
+    # n 是几就有几条 —— 只读 data[0] 的话,多出来的那几张连同它们的钱一起消失。
+    assert extract_image_bytes({"data": [{"b64_json": "aGk="}, {"b64_json": "eW8="}]}) == [b"hi", b"yo"]
     with pytest.raises(ProviderError):
         extract_image_bytes({"data": []})
 

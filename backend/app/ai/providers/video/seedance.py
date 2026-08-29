@@ -151,6 +151,6 @@ class SeedanceProvider(GenerationProvider):
                     with target.open("wb") as out:
                         for chunk in download.iter_bytes():
                             out.write(chunk)
-                return GenerationResult(output_path=target, usage=metering_from_request(request), raw_usage=poll_payload)
+                return GenerationResult(output_paths=[target], usage=metering_from_request(request), raw_usage=poll_payload)
         except httpx.HTTPError as exc:
             raise ProviderError(provider_http_error("ARK request failed", exc, context.api_key)) from exc

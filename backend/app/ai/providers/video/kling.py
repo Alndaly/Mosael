@@ -240,7 +240,7 @@ class KlingProvider(GenerationProvider):
                 download = client.get(url)
                 download.raise_for_status()
                 target.write_bytes(download.content)
-                return GenerationResult(output_path=target, usage=metering_from_request(request), raw_usage=poll_payload)
+                return GenerationResult(output_paths=[target], usage=metering_from_request(request), raw_usage=poll_payload)
         except httpx.HTTPError as exc:
             raise ProviderError(provider_http_error("Kling request failed", exc, context.api_key)) from exc
 

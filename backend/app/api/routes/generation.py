@@ -16,7 +16,7 @@ from app.api.schemas import (
     PromptOptimizeResponse,
 )
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
-from app.db.models import GenerationJob, GenerationSession, Job, ProviderUsageEvent
+from app.db.models import GeneratedAsset, GenerationJob, GenerationSession, Job, ProviderUsageEvent
 from app.domain import session_groups, sharing
 from app.domain.generation import create_generation_job, generation_options
 from app.domain.generation.operations import GenerationDomainError
@@ -228,7 +228,25 @@ def list_generation_jobs(
     stmt = stmt.order_by(GenerationJob.created_at.asc(), GenerationJob.id.asc())
     generations = list(db.scalars(stmt))
     _attach_generation_costs(db, generations)
+    _attach_generation_assets(db, generations)
     return generations
+
+
+def _attach_generation_assets(db: DbSession, generations: list[GenerationJob]) -> None:
+    """把每条生成的**全部**产出贴到瞬态属性上,供 GenerationJobOut 读。
+
+    result_asset_id 那一栏只放得下封面,而一次生成可能出多份(图像接口的 n)。真正的账在
+    generated_assets 里 —— 每一份产出一行。封面排第一,其余按它们登记的顺序跟在后面。
+    """
+    job_ids = [g.job_id for g in generations if g.job_id]
+    by_job: dict[str, list[str]] = {}
+    if job_ids:
+        for row in db.scalars(select(GeneratedAsset).where(GeneratedAsset.job_id.in_(job_ids))):
+            by_job.setdefault(str(row.job_id), []).append(row.asset_id)
+    for gen in generations:
+        cover = gen.result_asset_id
+        rest = [one for one in by_job.get(gen.job_id or "", []) if one != cover]
+        gen.result_asset_ids = ([cover] if cover else []) + rest  # type: ignore[attr-defined]
 
 
 def _attach_generation_costs(db: DbSession, generations: list[GenerationJob]) -> None:

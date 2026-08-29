@@ -108,39 +108,52 @@ def _run_generation(generation_id: str) -> None:
                 result = provider.generate(request, context, workdir, callbacks=_job_callbacks(db, job))
             else:
                 result = provider.generate(request, context, workdir)
-            asset = register_file_asset(
-                db,
-                workspace_id=job.workspace_id,
-                project_id=generation.request.get("project_id"),
-                source_path=result.output_path,
-                name=_asset_name(request.prompt, generation.model),
-                source="generated",
-            )
-            db.add(
-                GeneratedAsset(
-                    asset_id=asset.id,
-                    provider=generation.provider,
-                    model=generation.model,
-                    prompt=request.prompt,
-                    parameters=request.parameters,
-                    job_id=job.id,
+            #: **每一份产出都登记。** 图像接口的 n 一次会返回多张,此前这里只收一份 ——
+            #: 用户选了 4 张、按 4 张计了费,库里只多出一张,其余的连同它们的钱一起消失。
+            assets = [
+                register_file_asset(
+                    db,
+                    workspace_id=job.workspace_id,
+                    project_id=generation.request.get("project_id"),
+                    source_path=path,
+                    name=_asset_name(request.prompt, generation.model),
+                    source="generated",
                 )
-            )
-            generation.result_asset_id = asset.id
+                for path in result.output_paths
+            ]
+            if not assets:
+                raise ProviderError("Provider returned no output")
+            for asset in assets:
+                db.add(
+                    GeneratedAsset(
+                        asset_id=asset.id,
+                        provider=generation.provider,
+                        model=generation.model,
+                        prompt=request.prompt,
+                        parameters=request.parameters,
+                        job_id=job.id,
+                    )
+                )
+            #: 这一栏是**封面**:一次生成对多份产出,而它只放得下一个。想要全部的走
+            #: GeneratedAsset(每一份都有一行),或者读回执里的 asset_ids。
+            generation.result_asset_id = assets[0].id
+            asset_ids = [one.id for one in assets]
             job.status = "succeeded"
             job.progress = 1.0
             say(job, "jobMsg_generationDone")
-            job.result = {"asset_id": asset.id}
+            #: 回执里放**一串**。收成单数的话,消费方拿到的永远只是第一张 —— 而这正是
+            #: 多出来那几张此前消失的地方。
+            job.result = {"asset_ids": asset_ids}
             _record_generation_usage(db, generation, job, request, context, result, started, "succeeded")
-            emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
+            emit_job_event(db, job.id, "job.succeeded", {"asset_ids": asset_ids})
             db.commit()
             logger.info(
-                "generation job %s succeeded in %.1fs (%s/%s) → asset %s",
+                "generation job %s succeeded in %.1fs (%s/%s) → assets %s",
                 job.id,
                 time.monotonic() - started,
                 generation.provider,
                 generation.model,
-                asset.id,
+                ", ".join(asset_ids),
             )
         except ProviderError as exc:
             if request is not None:

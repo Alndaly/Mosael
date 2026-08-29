@@ -36,10 +36,15 @@ def _summarize(job: Job) -> str:
     what = f"「{subject}」" if subject else "刚才那个任务"
     if job.status == "succeeded":
         result = job.result or {}
-        asset_id = str(result.get("asset_id") or "")
+        # 这句摘要要覆盖**所有**任务种类,而它们的产出形状本来就不同:渲染、配音一次出一份
+        # (asset_id),生成可能出多份(asset_ids —— 图像接口的 n)。两个都读,不是兼容旧字段,
+        # 是这两种形状同时真实存在。
+        ids = [str(one) for one in (result.get("asset_ids") or []) if one]
+        if not ids and result.get("asset_id"):
+            ids = [str(result["asset_id"])]
         # 素材 id 是模型下一步真正要用的东西(插进时间线、当下一次生成的首帧)。
         # 只说「完成了」的话,它还得再查一次任务才拿得到。
-        tail = f",素材 id:{asset_id}" if asset_id else ""
+        tail = f",素材 id:{'、'.join(ids)}" if ids else ""
         return f"{what}已完成{tail}。"
     reason = str(job.error or job.message or "").strip()
     return f"{what}失败了{f':{reason}' if reason else ''}。"

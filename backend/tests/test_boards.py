@@ -206,7 +206,7 @@ def test_任务成功后占位就地变成素材() -> None:
     from app.core.db import SessionLocal
 
     db = SessionLocal()
-    job = SimpleNamespace(id="job-x", status="succeeded", result={"asset_id": "asset-42"})
+    job = SimpleNamespace(id="job-x", status="succeeded", result={"asset_ids": ["asset-42"]})
     deliver_generated(db, job, receipt_to_item(board_id, item_id))
     item = (db.get(Board, board_id).canvas["items"])[0]
     db.close()
@@ -300,7 +300,7 @@ def test_客户端不会覆盖它还不知道的产出() -> None:
 
     db = SessionLocal()
     deliver_generated(
-        db, SimpleNamespace(id="job-x", status="succeeded", result={"asset_id": "asset-9"}), receipt_to_item(board_id, item_id)
+        db, SimpleNamespace(id="job-x", status="succeeded", result={"asset_ids": ["asset-9"]}), receipt_to_item(board_id, item_id)
     )
     db.close()
 
@@ -370,3 +370,44 @@ def test_在已有的空槽上生成不会撞上自己() -> None:
     assert (items[0]["width"], items[0]["height"]) == (300, 200), "用户拉过的大小被抹掉了"
 
     db.close()
+
+
+def test_一次出多张时每一张都落回画布() -> None:
+    """选了 4 张就该看见 4 张。
+
+    图像接口的 `n` 选几就回几张,而回执此前只填第一张 —— 用户按 4 张付了钱,画布上只多出
+    一张。另外三张确实在素材库里,只是他不知道,也没有任何地方会报错。
+    """
+    from types import SimpleNamespace
+
+    from app.core.db import SessionLocal
+    from app.domain.boards import deliver_generated, receipt_to_item
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id = client.post(
+        "/api/boards",
+        json={
+            "workspace_id": ws,
+            "name": "B",
+            "canvas": {
+                "items": [{"id": "img-1", "kind": "image", "x": 100, "y": 50, "width": 200, "job_id": "job-x"}],
+                "edges": [],
+            },
+        },
+    ).json()["id"]
+
+    db = SessionLocal()
+    deliver_generated(
+        db,
+        SimpleNamespace(id="job-x", status="succeeded", result={"asset_ids": ["a", "b", "c"]}),
+        receipt_to_item(board_id, "img-1"),
+    )
+    items = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]["items"]
+    db.close()
+
+    assert [one["asset_id"] for one in items] == ["a", "b", "c"], f"只落回了一部分:{items}"
+    assert all("job_id" not in one for one in items), "还留着转圈的占位"
+    # 挨着原处往右排,别叠在一起 —— 叠住的话看起来就还是只出了一张。
+    assert [one["x"] for one in items] == [100, 324, 548]
+    assert {one["y"] for one in items} == {50}

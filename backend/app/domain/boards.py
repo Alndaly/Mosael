@@ -320,6 +320,10 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
     **成功和失败都要处理。** 只处理成功的话,失败时画布上会永远留着一个转圈的占位 ——
     用户不知道它是还在跑还是已经死了,而这两件事的下一步完全不同。失败就把占位摘掉,
     任务中心那条失败记录才是讲原因的地方。
+
+    **一次可能出多张。** 图像接口的 n 选了几就回几张:第一张落进占位,其余的挨着它往右
+    摆开。只填第一张的话,用户按 4 张付了钱,画布上只多出一张 —— 而另外三张确实在素材库里,
+    只是他不知道。
     """
     board = db.get(Board, str(receipt.get("board_id") or ""))
     item_id = str(receipt.get("item_id") or "")
@@ -328,23 +332,40 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
 
     canvas = board.canvas or {"items": [], "edges": []}
     items = list(canvas.get("items") or [])
-    asset_id = str((job.result or {}).get("asset_id") or "") if job.status == "succeeded" else ""
+    asset_ids = (
+        [str(one) for one in ((job.result or {}).get("asset_ids") or []) if one]
+        if job.status == "succeeded"
+        else []
+    )
 
     kept: list[dict[str, Any]] = []
     for item in items:
         if item.get("id") != item_id:
             kept.append(item)
             continue
-        if not asset_id:
+        if not asset_ids:
             continue  # 失败/被取消:摘掉占位,别留一个永远转圈的框
-        kept.append({**{k: v for k, v in item.items() if k != "job_id"}, "asset_id": asset_id})
+        settled = {k: v for k, v in item.items() if k != "job_id"}
+        kept.append({**settled, "asset_id": asset_ids[0]})
+        #: 多出来的那几张挨着它往右排。宽度按这一项自己的宽 —— 用户可能已经把它拉大了,
+        #: 用一个写死的间距会让它们叠在一起。
+        step = float(settled.get("width") or 260) + 24
+        for offset, extra in enumerate(asset_ids[1:], start=1):
+            kept.append(
+                {
+                    **settled,
+                    "id": f"{item_id}-{offset + 1}",
+                    "x": float(settled.get("x") or 0) + step * offset,
+                    "asset_id": extra,
+                }
+            )
 
     # 连线可能指着刚被摘掉的那一项 —— normalize 会拒绝悬空的线,所以先把它们去掉。
     alive = {item["id"] for item in kept}
     edges = [edge for edge in (canvas.get("edges") or []) if edge.get("source") in alive and edge.get("target") in alive]
     board.canvas = normalize_canvas({"items": kept, "edges": edges})
     db.commit()
-    logger.info("board %s item %s -> %s", board.id, item_id, asset_id or "(dropped)")
+    logger.info("board %s item %s -> %s", board.id, item_id, ", ".join(asset_ids) or "(dropped)")
 
 
 def install() -> None:

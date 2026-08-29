@@ -1324,6 +1324,10 @@ class GenerationJobOut(OrmModel):
     kind: str
     request: dict
     result_asset_id: str | None
+    #: **全部产出。** 一次生成可能出多份(图像接口的 n),而 result_asset_id 只放得下封面 ——
+    #: 界面照这一串出图,不然用户选了 4 张、只看得见 1 张(另外 3 张确实在素材库里,他不知道)。
+    #: 封面排在第一。由路由从 generated_assets 贴上来。
+    result_asset_ids: list[str] = []
     created_at: datetime
     updated_at: datetime
     # 计费:取自本次生成记录的用量事件(source_type=generation_job)。cost_micros 为已知估算费用;

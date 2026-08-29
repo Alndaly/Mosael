@@ -171,7 +171,7 @@ class ComfyUIProvider(GenerationProvider):
                 f"连接 ComfyUI 失败({base}):{exc}。请确认 ComfyUI 正在运行,地址在设置 → AI 绘图 → ComfyUI 里可改。"
             ) from exc
         usage = metering_from_request(request)
-        return GenerationResult(output_path=target, usage=usage, raw_usage={"prompt_id": prompt_id})
+        return GenerationResult(output_paths=[target], usage=usage, raw_usage={"prompt_id": prompt_id})
 
     # ------------------------------------------------------------------
     def _pick_output(self, files: list[dict[str, Any]]) -> dict[str, Any]:

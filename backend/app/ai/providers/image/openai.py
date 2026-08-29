@@ -60,14 +60,20 @@ def build_edit_fields(request: GenerationRequest) -> dict[str, str]:
     return fields
 
 
-def extract_image_bytes(payload: dict[str, Any]) -> bytes:
+def extract_image_bytes(payload: dict[str, Any]) -> list[bytes]:
+    """取回**每一张**内联图。
+
+    请求里的 `n` 是几,`data` 里就有几条。此前这里只读 data[0] —— 用户选了 4 张、按 4 张
+    计了费,拿回来一张,而且没有任何地方会报错。
+    """
     data = payload.get("data") or []
-    if not data or not isinstance(data[0], dict):
+    entries = [one for one in data if isinstance(one, dict)]
+    if not entries:
         raise ProviderError("Provider returned no image data")
-    first = data[0]
-    if first.get("b64_json"):
-        return base64.b64decode(str(first["b64_json"]))
-    raise ProviderError("Provider returned a URL result where inline image data was expected")
+    images = [base64.b64decode(str(one["b64_json"])) for one in entries if one.get("b64_json")]
+    if not images:
+        raise ProviderError("Provider returned a URL result where inline image data was expected")
+    return images
 
 
 class OpenAIImageProvider(GenerationProvider):
@@ -104,20 +110,29 @@ class OpenAIImageProvider(GenerationProvider):
                     response = client.post("/images/generations", json=build_submit_payload(request))
                 response.raise_for_status()
                 content = response.json()
-                data = content.get("data") or []
-                image_bytes: bytes
-                if data and isinstance(data[0], dict) and data[0].get("url"):
-                    download = client.get(str(data[0]["url"]))
-                    download.raise_for_status()
-                    image_bytes = download.content
+                data = [one for one in (content.get("data") or []) if isinstance(one, dict)]
+                #: 两种回法:外链和内联 base64。**都要全取** —— n 是几就有几条,
+                #: 只取第一条的话后面那几张连同它们的钱一起消失。
+                if data and any(one.get("url") for one in data):
+                    images: list[bytes] = []
+                    for one in data:
+                        if not one.get("url"):
+                            continue
+                        download = client.get(str(one["url"]))
+                        download.raise_for_status()
+                        images.append(download.content)
+                    if not images:
+                        raise ProviderError("Provider returned no image data")
                 else:
-                    image_bytes = extract_image_bytes(content)
+                    images = extract_image_bytes(content)
                 output_dir.mkdir(parents=True, exist_ok=True)
                 suffix = str(request.parameters.get("output_format") or "png").lower().lstrip(".")
                 if suffix not in {"png", "jpg", "jpeg", "webp"}:
                     suffix = "png"
-                target = output_dir / f"generated.{suffix}"
-                target.write_bytes(image_bytes)
-                return GenerationResult(output_path=target, usage=metering_from_request(request), raw_usage=content)
+                #: 文件名带序号 —— 同名的话第二张会把第一张覆盖掉,而两次写入都"成功"。
+                targets = [output_dir / f"generated-{index + 1}.{suffix}" for index in range(len(images))]
+                for target, blob in zip(targets, images):
+                    target.write_bytes(blob)
+                return GenerationResult(output_paths=targets, usage=metering_from_request(request), raw_usage=content)
         except httpx.HTTPError as exc:
             raise ProviderError(provider_http_error("OpenAI image request failed", exc, context.api_key)) from exc
