@@ -109,7 +109,14 @@ interface Props {
     sourceAssets?: { asset_id: string; role: string }[];
   }) => Promise<unknown>;
   /** 让 AI 往某张便签里写字。**同步** —— 写字几秒就回,不走生成任务那条路。 */
-  onWrite?: (input: { itemId: string; prompt: string; providerProfileId: string; model: string }) => Promise<unknown>;
+  onWrite?: (input: {
+    itemId: string;
+    prompt: string;
+    providerProfileId: string;
+    model: string;
+    /** 让模型看着写的图片(上游连过来的 + 正文里 @ 到的)。 */
+    assets: string[];
+  }) => Promise<unknown>;
   /** 可用的生成模型 —— 提示词面板要让人选。 */
   models?: GenerationModel[];
   /** 全览开着没有。占右下角一块不小的地方,图小的时候纯属挡视线。 */
@@ -676,9 +683,12 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           key={composerItem.id}
           item={composerItem}
           busy={writing === composerItem.id}
-          onWrite={({ prompt, providerProfileId, model }) => {
+          workspaceId={workspaceId}
+          //: 上游连过来的图 —— 一张图连到便签,意思就是「照着这张写」。
+          upstreamImages={feeding.assets.filter((one) => one.kind === "image").map((one) => one.assetId)}
+          onWrite={({ prompt, providerProfileId, model, assets }) => {
             setWriting(composerItem.id);
-            void onWrite({ itemId: composerItem.id, prompt, providerProfileId, model }).finally(() =>
+            void onWrite({ itemId: composerItem.id, prompt, providerProfileId, model, assets }).finally(() =>
               setWriting(null),
             );
           }}

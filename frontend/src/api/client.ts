@@ -904,7 +904,15 @@ export function generateOnBoard(
 /** 让 AI 往画板上的一张便签里写字。**同步返回** —— 写字几秒就回,不走生成任务那条路。 */
 export function writeOnBoard(
   boardId: string,
-  body: { workspace_id: string; item_id: string; prompt: string; provider_profile_id?: string; model?: string },
+  body: {
+    workspace_id: string;
+    item_id: string;
+    prompt: string;
+    provider_profile_id?: string;
+    model?: string;
+    /** 让模型**看着**写的图片。多模态模型才吃得下,不认的会当作没有。 */
+    source_assets?: string[];
+  },
 ): Promise<Board> {
   return api<Board>(`/api/boards/${boardId}/write`, { method: "POST", body: JSON.stringify(body) });
 }

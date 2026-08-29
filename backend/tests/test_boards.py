@@ -542,3 +542,72 @@ def test_便签上已有内容时是改写而不是重写() -> None:
     assert any("原来的那句话" in one["content"] and "改短一半" not in one["content"] for one in messages[1:]), messages
     assert messages[-1]["content"] == "改短一半"
     assert answer.json()["canvas"]["items"][0]["text"] == "改过之后的那句话"
+
+
+def test_连过来的图片会让模型看着写() -> None:
+    """图片连到便签,意思是「照着这张图写」—— 不把图带上的话,模型只能凭提示词瞎编。
+
+    **只收图片**:视频和音频这条路吃不下(要抽帧、要转写,那是 analyze_asset 的事),
+    悄悄发过去只会换回一句看不懂的报错。
+    """
+    from unittest.mock import patch as mock_patch
+
+    from app.core.db import SessionLocal
+    from app.db.models import ProviderProfile
+    from app.domain import provider_models
+
+    client = fresh_client()
+    ws = _workspace(client)
+    png = (
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00"
+        b"\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc```\x00\x00\x00\x04\x00\x01\xf6\x178U\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+    image_id = client.post(
+        "/api/assets/import", data={"workspace_id": ws}, files={"file": ("一张图.png", png, "image/png")}
+    ).json()["id"]
+
+    board_id = client.post(
+        "/api/boards",
+        json={"workspace_id": ws, "name": "B", "canvas": {"items": [{"id": "n1", "kind": "note", "x": 0, "y": 0}], "edges": []}},
+    ).json()["id"]
+    profile_id = client.post(
+        "/api/settings/providers",
+        json={"vendor": "openai", "name": "演示", "api_key": "sk-test", "base_url": "http://127.0.0.1:1"},
+    ).json()["id"]
+    client.put(f"/api/settings/providers/{profile_id}/credential", json={"api_key": "sk-test"})
+    with SessionLocal() as db:
+        provider_models.upsert(db, db.get(ProviderProfile, profile_id), "gpt-4.1-mini", source="manual")
+        db.commit()
+
+    seen: dict = {}
+
+    with mock_patch("app.domain.ai_chat.chat", side_effect=lambda t, m, **k: seen.setdefault("m", m) and "" or "写好了"):
+        answer = client.post(
+            f"/api/boards/{board_id}/write",
+            json={"workspace_id": ws, "item_id": "n1", "prompt": "照这张图写一句", "source_assets": [image_id]},
+        )
+
+    assert answer.status_code == 200, answer.text
+    last = seen["m"][-1]["content"]
+    assert isinstance(last, list), f"图没带上,发过去的还是纯文本:{last!r}"
+    assert last[0] == {"type": "text", "text": "照这张图写一句"}
+    assert last[1]["type"] == "image_url" and last[1]["image_url"]["url"].startswith("data:image/png;base64,")
+
+
+def test_不是图片的素材不会被塞进对话() -> None:
+    """视频/音频这条路吃不下 —— 塞进去换回的是一句看不懂的报错。"""
+    from app.api.routes.boards import _pictures
+    from app.core.db import SessionLocal
+
+    client = fresh_client()
+    ws = _workspace(client)
+    audio_id = client.post(
+        "/api/assets/import", data={"workspace_id": ws}, files={"file": ("声音.mp3", b"not really audio", "audio/mpeg")}
+    ).json()["id"]
+
+    with SessionLocal() as db:
+        assert _pictures(db, ws, [audio_id]) == []
+        assert _pictures(db, ws, ["根本不存在"]) == []
+        # 跨工作区的也不给。
+        other = client.post("/api/workspaces", json={"name": "别人的"}).json()["id"]
+        assert _pictures(db, other, [audio_id]) == []

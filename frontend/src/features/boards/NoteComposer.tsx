@@ -3,7 +3,8 @@ import { NodeToolbar, Position } from "@xyflow/react";
 import { ArrowUp, Loader2, Sparkles } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
-import { listCapabilityModels, type BoardItem } from "@/api/client";
+import { listAssets, listCapabilityModels, type Asset, type BoardItem } from "@/api/client";
+import { PromptEditor } from "@/features/boards/PromptEditor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
@@ -20,48 +21,76 @@ import { cn } from "@/lib/utils";
 export function NoteComposer({
   item,
   busy,
+  workspaceId,
+  upstreamImages,
   onWrite,
 }: {
   item: BoardItem;
   busy: boolean;
-  onWrite: (input: { prompt: string; providerProfileId: string; model: string }) => void;
+  /** `@` 引用素材时去哪个工作区找。 */
+  workspaceId: string;
+  /** 上游连过来的图片。**让模型看着写** —— 一张图连到便签,意思就是「照着这张写」。 */
+  upstreamImages?: string[];
+  onWrite: (input: { prompt: string; providerProfileId: string; model: string; assets: string[] }) => void;
 }) {
   const [prompt, setPrompt] = React.useState("");
+  const [mentioned, setMentioned] = React.useState<string[]>([]);
   const [picked, setPicked] = React.useState("");
+
+  //: `@` 的候选:工作区里的图片。写字这条路只吃得下图 —— 视频要抽帧、音频要转写,
+  //: 那是分析素材的事,列出来等于让用户选一个发过去会报错的东西。
+  const library = useQuery({ queryKey: ["assets", workspaceId], queryFn: () => listAssets(workspaceId) });
+  const candidates = React.useCallback(
+    (query: string) => {
+      const needle = query.trim().toLowerCase();
+      return (library.data ?? [])
+        .filter((asset: Asset) => asset.kind === "image")
+        .filter(
+          (asset: Asset) =>
+            !needle || `${asset.name ?? ""} ${asset.original_filename ?? ""}`.toLowerCase().includes(needle),
+        )
+        .slice(0, 8);
+    },
+    [library.data],
+  );
 
   const models = useQuery({ queryKey: ["capability-models", "chat"], queryFn: () => listCapabilityModels("chat") });
   const options = models.data ?? [];
   //: 值里带上连接 id:同一个模型名可能挂在两条连接下(自己的和团队的),只存模型名会挑错那条。
   const current = options.find((one) => `${one.provider_profile_id}:${one.model}` === picked) ?? options[0] ?? null;
 
+  //: 点下去**立刻**转圈,不等服务端回来 —— 往返几百毫秒里按钮毫无变化,用户会再点一次。
+  const [sending, setSending] = React.useState(false);
+  const working = sending || busy;
+
   const send = () => {
     const text = prompt.trim();
-    if (!text || !current || busy) return;
-    onWrite({ prompt: text, providerProfileId: current.provider_profile_id, model: current.model });
+    if (!text || !current || working) return;
+    setSending(true);
+    //: 上游连过来的 + 正文里 @ 到的,一起发。同一张不发两遍。
+    const assets = [...new Set([...(upstreamImages ?? []), ...mentioned])];
+    onWrite({ prompt: text, providerProfileId: current.provider_profile_id, model: current.model, assets });
   };
 
   return (
     <NodeToolbar nodeId={item.id} isVisible position={Position.Bottom} offset={12}>
       <div className="nodrag nopan nowheel w-[420px] rounded-xl border border-border-strong bg-panel p-2 shadow-[var(--shadow-panel)]">
-        <textarea
+        <PromptEditor
           value={prompt}
-          onChange={(event) => setPrompt(event.target.value)}
-          // ⌘/Ctrl+Enter 提交:光按 Enter 会和换行打架,而要求经常要分行写。
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-              event.preventDefault();
-              send();
-            }
+          onChange={(next, assets) => {
+            setPrompt(next);
+            setMentioned(assets);
           }}
-          rows={3}
           //: 有字和没字问的**不是同一件事**:一个是「写什么」,一个是「怎么改」。
           //: 用同一句提示语的话,用户会以为它要把整篇重写一遍。
           placeholder={
             (item.text ?? "").trim()
               ? "想怎么改?例如:短一半、换成更口语的说法、再来三版"
-              : "想让它写什么?例如:给这条片子写三版短视频开头"
+              : "想让它写什么?按 @ 引用素材"
           }
-          className="w-full resize-none border-0 bg-transparent px-1.5 py-1 text-ui-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
+          candidates={candidates}
+          onSubmit={send}
+          emptyHint={() => "这个工作区里还没有图片可以引用。"}
         />
         <div className="flex items-center gap-1 border-t border-border pt-1.5">
           {options.length === 0 ? (
@@ -88,16 +117,16 @@ export function NoteComposer({
             type="button"
             aria-label={(item.text ?? "").trim() ? "改写" : "写"}
             title={`${(item.text ?? "").trim() ? "改写" : "写"}  ⌘↵`}
-            disabled={!prompt.trim() || !current || busy}
+            disabled={!prompt.trim() || !current || working}
             onClick={send}
             className={cn(
               "ml-auto grid h-7 w-7 shrink-0 place-items-center rounded-full transition-colors",
-              !prompt.trim() || !current || busy
+              !prompt.trim() || !current || working
                 ? "cursor-not-allowed bg-secondary text-muted-foreground"
                 : "cursor-pointer bg-primary text-primary-foreground hover:opacity-90",
             )}
           >
-            {busy ? <Loader2 size={13} className="animate-spin" /> : <ArrowUp size={13} />}
+            {working ? <Loader2 size={13} className="animate-spin" /> : <ArrowUp size={13} />}
           </button>
         </div>
       </div>

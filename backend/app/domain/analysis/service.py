@@ -136,6 +136,12 @@ def extract_video_frames(path: Path, count: int | None = None) -> list[bytes]:
         return [frame.read_bytes() for frame in frames]
 
 
+def image_part(data: bytes, mime: str = "image/jpeg") -> dict[str, Any]:
+    """一张图在对话消息里的样子(data URI)。**导出给别处用** —— 画板上「图片连到便签让
+    模型看着写」用的是同一份,自己再拼一遍 base64 的话,格式改了只会改好其中一处。"""
+    return _image_part(data, mime)
+
+
 def _image_part(data: bytes, mime: str = "image/jpeg") -> dict[str, Any]:
     encoded = base64.b64encode(data).decode()
     return {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{encoded}"}}

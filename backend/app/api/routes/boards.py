@@ -174,6 +174,10 @@ def write(board_id: str, body: BoardWrite, db: DbSession, user: CurrentUser) -> 
         "",
     ).strip()
 
+    #: 上游连过来的图 + 正文里 @ 到的图。**只收图片** —— 视频和音频这条路吃不下
+    #: (要抽帧、要转写,那是 analyze_asset 的事),悄悄发过去只会换回一句看不懂的报错。
+    pictures = _pictures(db, body.workspace_id, body.source_assets)
+
     try:
         profile = require_profile(db, body.provider_profile_id or None, user_id=user.id, error=AiChatError)
         target = target_for(db, profile, model=body.model)
@@ -213,7 +217,9 @@ def write(board_id: str, body: BoardWrite, db: DbSession, user: CurrentUser) -> 
                         if existing
                         else []
                     ),
-                    {"role": "user", "content": prompt},
+                    #: 有图就让模型**看着写**。图片和要求放在同一轮里 —— 分开发的话模型
+                    #: 不知道这句话说的是哪张图。
+                    {"role": "user", "content": [{"type": "text", "text": prompt}, *pictures] if pictures else prompt},
                 ],
                 temperature=0.7,
                 call=call,
@@ -226,3 +232,26 @@ def write(board_id: str, body: BoardWrite, db: DbSession, user: CurrentUser) -> 
         return write_text(db, workspace_id=body.workspace_id, board_id=board_id, item_id=body.item_id, text=text)
     except BoardDomainError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+def _pictures(db: DbSession, workspace_id: str, asset_ids: list[str]) -> list[dict]:
+    """把素材 id 变成对话消息里的图片段。
+
+    **拼 data URI 那一步用 analysis.service.image_part** —— 分析素材那条路早就在做同一件事,
+    自己再拼一遍 base64 的话,格式改了只会改好其中一处。
+    """
+    from app.db.models import Asset
+    from app.domain.analysis.service import image_part
+    from app.media.paths import resolve_key
+
+    parts: list[dict] = []
+    for asset_id in asset_ids[:8]:  # 一次带太多图既贵又容易超上下文
+        asset = db.get(Asset, str(asset_id))
+        if asset is None or asset.workspace_id != workspace_id or asset.kind != "image" or not asset.file_key:
+            continue
+        path = resolve_key(asset.file_key)
+        if not path.is_file():
+            continue
+        mime = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
+        parts.append(image_part(path.read_bytes(), mime))
+    return parts

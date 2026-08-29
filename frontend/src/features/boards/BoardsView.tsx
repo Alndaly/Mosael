@@ -286,7 +286,13 @@ function BoardDetail({
 
   /** 让 AI 往某张便签里写字。同步返回,写完直接把新画布落回本地状态。 */
   const write = React.useCallback(
-    async (input: { itemId: string; prompt: string; providerProfileId: string; model: string }) => {
+    async (input: {
+      itemId: string;
+      prompt: string;
+      providerProfileId: string;
+      model: string;
+      assets: string[];
+    }) => {
       try {
         const next = await writeOnBoard(board.id, {
           workspace_id: workspaceId,
@@ -294,6 +300,7 @@ function BoardDetail({
           prompt: input.prompt,
           provider_profile_id: input.providerProfileId,
           model: input.model,
+          source_assets: input.assets,
         });
         //: **走画布的把手,不是回写这里的 canvas 状态** —— 画布的节点只在挂载时从 canvas
         //: 建一次,改这里的 state 它看不见,用户会以为「写完了但没出来」。

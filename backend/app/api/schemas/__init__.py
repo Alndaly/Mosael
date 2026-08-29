@@ -1728,6 +1728,9 @@ class BoardWrite(BaseModel):
     #: 留空就用这个人在 chat 能力上的默认模型。
     provider_profile_id: str = ""
     model: str = ""
+    #: 让模型**看着**写:上游连过来的图片、正文里 @ 到的图片。多模态模型才吃得下,
+    #: 不认的会当作没有(而不是报错)——一张图带不动整次请求。
+    source_assets: list[str] = Field(default_factory=list)
 
 
 class WorkflowRunRequest(BaseModel):
