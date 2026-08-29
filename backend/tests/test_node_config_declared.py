@@ -191,15 +191,25 @@ def test_节点自己的_label_压过共用表() -> None:
     得能覆盖,否则共用表就从"省事"变成了"挡路"。"""
     from app.domain.workflows import config_label
 
-    assert config_label("selector", {}) == "元素选择器"
+    #: 表里存的是 key(出口才翻,见 core/i18n)——这里断言的是「用了共用表那一条」,
+    #: 而不是那条长什么样。
+    assert config_label("selector", {}) == "wfField_selector"
     assert config_label("selector", {"label": "要点的元素"}) == "要点的元素"
 
 
 def test_标签真的发到接口上() -> None:
-    """在后端算好但没发出去,等于没算。"""
-    from app.api.routes.workflows import _with_data_type
+    """在后端算好但没发出去,等于没算。
 
-    assert _with_data_type("selector", {"type": "string"})["label"] == "元素选择器"
+    **打接口,不打内部函数** —— 中间还隔着一层翻译,而用户要的是那句人话:内部返回 key、
+    出口忘了翻的话,界面上就是一串 wfField_selector,而只看内部函数的测试照样是绿的。
+    """
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    for header, expected in (("zh-CN", "元素选择器"), ("en-US", "Selector")):
+        types = client.get("/api/workflows/node-types", headers={"Accept-Language": header}).json()
+        click = next(one for one in types if one["type"] == "browser_click")
+        assert click["config"]["selector"]["label"] == expected, f"{header} 下标签没翻出来"
 
 
 def test_名字到值的映射不该让用户手写_JSON() -> None:

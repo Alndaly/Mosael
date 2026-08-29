@@ -371,7 +371,12 @@ def _external_warning(external: set[str] | None) -> str:
         return ""
     from app.domain.workflows import NODE_TYPES
 
-    labels = sorted(str((NODE_TYPES.get(name) or {}).get("label") or name) for name in external)
+    #: 目录里存的是 key(见 core/i18n),这句话是给**用户**看的 —— 直接拼进去的话卡上会写
+    #: 「含 wfNode_code 节点」。这里就是出口,所以在这里翻。
+    from app.core.i18n import get_current_locale, t
+
+    locale = get_current_locale()
+    labels = sorted(t(str((NODE_TYPES.get(name) or {}).get("label") or name), locale) for name in external)
     return f"  ⚠️ 含{'、'.join(labels)}节点(后果在本应用之外,撤不回)"
 
 

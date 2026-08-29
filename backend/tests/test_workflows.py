@@ -1029,6 +1029,7 @@ def test_每个节点类型都有分组和一句人话描述() -> None:
 def test_节点清单按分组顺序返回_前端不再排第二次() -> None:
     from tests.util import fresh_client
 
+    from app.core.i18n import DEFAULT_LOCALE, t
     from app.domain.workflows import NODE_CATEGORIES
 
     client = fresh_client()
@@ -1037,7 +1038,10 @@ def test_节点清单按分组顺序返回_前端不再排第二次() -> None:
     for item in items:
         if item["category"] not in seen:
             seen.append(item["category"])
-    assert seen == [c for c in NODE_CATEGORIES if c in seen]
+    #: 响应里的分组名是**翻过的**(它要显示在面板栏头上),而顺序按 key 排 —— 拿翻过的名字
+    #: 去比,才是在比用户真正看到的那一排。
+    expected = [t(c, DEFAULT_LOCALE) for c in NODE_CATEGORIES]
+    assert seen == [c for c in expected if c in seen]
 
 
 def test_llm_节点会把用量记进账(monkeypatch) -> None:

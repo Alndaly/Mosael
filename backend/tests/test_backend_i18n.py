@@ -256,3 +256,50 @@ def test_nobody_writes_prose_into_job_message() -> None:
                 continue
             offenders.append(f"{path.relative_to(root)}:{lineno}")
     assert offenders == [], "这些地方直接给 job.message 写了中文,应改用 domain.jobs.say()"
+
+
+def test_工作流节点目录里存的是_key_不是文案() -> None:
+    """和发布平台目录同一条规矩:**这里出现中文就说明有人又直接写了文案** —— 那条从此不会被
+    翻译,英文界面上那一格还是中文,而且没有任何东西会提示他。
+
+    覆盖三处:节点的名字和说明、每个配置字段的说明、以及字段名那张表(它出现在检查器的
+    每一行标题上)。分组名同理 —— 它是面板每一栏的标题。
+    """
+    from app.domain.workflows import NODE_CATEGORIES, NODE_TYPES, _FIELD_LABELS
+
+    offenders: list[str] = []
+    for category in NODE_CATEGORIES:
+        if CJK.search(category):
+            offenders.append(f"NODE_CATEGORIES.{category}")
+    for key, label in _FIELD_LABELS.items():
+        if CJK.search(label):
+            offenders.append(f"_FIELD_LABELS.{key}")
+    for node, meta in NODE_TYPES.items():
+        for field in ("label", "description", "category"):
+            if CJK.search(str(meta.get(field) or "")):
+                offenders.append(f"{node}.{field}")
+        for name, spec in (meta.get("config") or {}).items():
+            for field in ("label", "description"):
+                if CJK.search(str(spec.get(field) or "")):
+                    offenders.append(f"{node}.{name}.{field}")
+    assert offenders == []
+
+
+def test_工作流节点目录写的_key_都翻得出来() -> None:
+    """拼错了 t() 会原样返回它 —— 界面上就是一串 wfNode_xxx。"""
+    from app.domain.workflows import NODE_CATEGORIES, NODE_TYPES, _FIELD_LABELS
+
+    unknown: list[str] = []
+    for key in [*NODE_CATEGORIES, *_FIELD_LABELS.values()]:
+        if key not in MESSAGES:
+            unknown.append(key)
+    for node, meta in NODE_TYPES.items():
+        for field in ("label", "description"):
+            value = str(meta.get(field) or "")
+            if value and value not in MESSAGES:
+                unknown.append(f"{node}.{field}={value}")
+        for name, spec in (meta.get("config") or {}).items():
+            value = str(spec.get("description") or "")
+            if value and value not in MESSAGES:
+                unknown.append(f"{node}.{name}={value}")
+    assert unknown == []

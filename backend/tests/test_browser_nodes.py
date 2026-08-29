@@ -32,7 +32,7 @@ def test_browser_nodes_registered_and_categorized() -> None:
     for t in BROWSER_NODES:
         assert t in NODE_TYPES, f"{t} 未登记 NODE_TYPES"
         assert t in registered_types(), f"{t} 无执行器"
-        assert NODE_TYPES[t].get("category") == "浏览器"
+        assert NODE_TYPES[t].get("category") == "wfCat_browser"
 
 
 def test_browser_open_navigates_and_returns_session(monkeypatch) -> None:

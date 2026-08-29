@@ -33,11 +33,19 @@ def test_两张产地表本身对得上() -> None:
 
 
 def test_工作流节点的说明覆盖全部角色() -> None:
-    from app.domain.workflows import NODE_TYPES
+    """**两种语言都要覆盖。** 这句话是现算的,而它有中英两份模板 —— 只有中文那句跟着角色表
+    走的话,加第九种角色时英文界面和读英文的智能体永远不知道有这个东西。
 
-    text = NODE_TYPES["ai_generate"]["config"]["source_assets"]["description"]
-    missing = [role for role in SOURCE_ROLES if role not in text]
-    assert not missing, f"这些角色在工作流节点里没被说明,编辑器和智能体都不知道它存在:{missing}"
+    打接口而不是读目录:目录里现在存的是 key + 参数,句子在出口才组装。
+    """
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    for header in ("zh-CN", "en-US"):
+        types = client.get("/api/workflows/node-types", headers={"Accept-Language": header}).json()
+        text = next(one for one in types if one["type"] == "ai_generate")["config"]["source_assets"]["description"]
+        missing = [role for role in SOURCE_ROLES if role not in text]
+        assert not missing, f"{header} 下这些角色没被说明:{missing}"
 
 
 def test_接口_schema_收全部角色() -> None:
@@ -74,10 +82,10 @@ def test_节点说明是算出来的_不是写死的() -> None:
     # **比对的是接线,不是函数。** 只调一次生成函数、看它算得对不对是没用的:
     # 节点里塞一段写死的字面量,那个函数照样算得好好的,而节点用的根本不是它。
     # (第一版就是这么写的,两种写死的破坏它一个都没抓到。)
-    assert config["source_assets"]["description"] == _source_assets_help(), (
+    assert config["source_assets"]["description_params"] == _source_assets_help(), (
         "节点的素材说明不是生成的那一份 —— 加一种角色时它不会跟着变"
     )
-    assert config["parameters"]["description"] == _generation_parameters_help(), (
+    assert config["parameters"]["description_params"] == _generation_parameters_help(), (
         "节点的参数说明不是生成的那一份 —— 描述符里加一个参数时它不会跟着变"
     )
 
