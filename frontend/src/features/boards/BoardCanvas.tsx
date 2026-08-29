@@ -445,6 +445,24 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
   //: 而选中一段片子最常见的意图是看它、拖它,不是剪它。
   const [trimming, setTrimming] = React.useState<string | null>(null);
 
+  //: **关得掉。** 它是从操作条点开的一块面板,而面板一旦只有「成功剪完」这一条出路,
+  //: 用户改主意时就被困住了。三条都给上:换选别的(或点空白处取消选中)、Esc、再点一次
+  //: 那个按钮。此前一条都没有。
+  React.useEffect(() => {
+    if (!trimming) return;
+    const still = nodes.some((node) => node.id === trimming && node.selected);
+    if (!still) setTrimming(null);
+  }, [trimming, nodes]);
+
+  React.useEffect(() => {
+    if (!trimming) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setTrimming(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [trimming]);
+
   //: 哪一张便签正在写。写字是同步的几秒,期间按钮转圈 —— 不给反馈的话用户会再点一次。
   const [writing, setWriting] = React.useState<string | null>(null);
 
@@ -735,7 +753,8 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         setNodes={setNodes}
         onPickAsset={onPickAsset}
         onSpawn={onGenerate ? spawnLinked : undefined}
-        onTrimRequest={onTrim ? setTrimming : undefined}
+        onTrimRequest={onTrim ? (id) => setTrimming((current) => (current === id ? null : id)) : undefined}
+        trimmingId={trimming}
         onGroup={groupSelection}
       />
 
@@ -846,6 +865,7 @@ function ItemToolbar({
   onPickAsset,
   onSpawn,
   onTrimRequest,
+  trimmingId,
   onGroup,
 }: {
   nodes: Node[];
@@ -858,8 +878,10 @@ function ItemToolbar({
     at: { x: number; y: number },
     fromIsSource?: boolean,
   ) => void;
-  /** 请求给这一项定剪辑范围。没给 = 这张画板不支持剪辑。 */
+  /** 请求给这一项定剪辑范围(再点一次收起)。没给 = 这张画板不支持剪辑。 */
   onTrimRequest?: (itemId: string) => void;
+  /** 当前开着剪辑面板的那一项 —— 按钮据此变成按下态,再点一次就收起。 */
+  trimmingId?: string | null;
   /** 把当前选中的这几项圈成一组。 */
   onGroup?: () => void;
 }) {
@@ -945,13 +967,18 @@ function ItemToolbar({
 
         {/* 预览:**看大图是一个明确的动作,不是点在图上的副作用**。画布上点一下的意思是
             选中这个节点 —— 让图片自己接管点击的话,操作条和表单都弹不出来。 */}
-        {item?.kind === "image" && item.asset_id && (
+        {(item?.kind === "image" || item?.kind === "video") && item.asset_id && (
           <button
             type="button"
             className="flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs text-muted-foreground hover:bg-secondary hover:text-foreground"
             title={t("boardPreviewTitle")}
             onClick={() =>
-              openImagePreview({ src: assetFileUrl(item.asset_id as string), title: item.text || "" })
+              openImagePreview({
+                src: assetFileUrl(item.asset_id as string),
+                title: item.text || "",
+                //: 视频走同一个灯箱,只是那一项渲染成播放器 —— 见 image-preview。
+                video: item.kind === "video",
+              })
             }
           >
             <Maximize2 size={12} /> {t("boardPreview")}
@@ -962,9 +989,13 @@ function ItemToolbar({
         {onTrimRequest && item?.asset_id && (item.kind === "video" || item.kind === "audio") && (
           <button
             type="button"
-            className="flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs text-muted-foreground hover:bg-secondary hover:text-foreground"
+            className={cn(
+              "flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs transition-colors hover:bg-secondary hover:text-foreground",
+              trimmingId === item.id ? "bg-secondary text-foreground" : "text-muted-foreground",
+            )}
             title={t("boardTrimTitle")}
             onClick={() => onTrimRequest(item.id)}
+            aria-pressed={trimmingId === item.id}
           >
             <Scissors size={12} /> {t("boardTrim")}
           </button>

@@ -4,11 +4,16 @@ import { PhotoSlider } from "react-photo-view";
 import "react-photo-view/dist/react-photo-view.css";
 
 import { useI18n } from "@/app/preferences";
+import { BoardVideo } from "@/features/boards/BoardPlayer";
 import { cn } from "@/lib/utils";
 
 type ImagePreviewImage = {
   src: string;
   title?: string;
+  /** 这一项是视频 —— **同一个灯箱,换一种渲染**。另开一个视频弹层的话,关闭、遮罩、
+   *  Esc、层级这几件事就要各写一遍,而它们已经在这儿处理过了(包括那条「关掉之后
+   *  还接管一会儿点击」的坑)。 */
+  video?: boolean;
 };
 
 type ImagePreviewState = ImagePreviewImage & {
@@ -28,9 +33,15 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
   const [images, setImages] = React.useState<ImagePreviewImage[]>([]);
   const [index, setIndex] = React.useState(0);
   const [visible, setVisible] = React.useState(false);
+  //: 打开那一刻的视口大小 —— 视频那一项按它出盒子(见下面 width/height 那段)。
+  const [viewport, setViewport] = React.useState({ width: 1280, height: 720 });
 
   const openImagePreview = React.useCallback((next: ImagePreviewState) => {
-    const list = next.gallery?.length ? next.gallery : [{ src: next.src, title: next.title }];
+    setViewport({ width: window.innerWidth, height: window.innerHeight });
+    //: 单张时**把这一项整个带过去**,别逐字段重建 —— 漏掉哪个字段不会报错,只会让那个
+    //: 功能悄悄失效(video 标记就是这么丢的:灯箱开了,里面什么都没有)。
+    const { gallery, ...single } = next;
+    const list = gallery?.length ? gallery : [single];
     const at = list.findIndex((item) => item.src === next.src);
     setImages(list);
     setIndex(at >= 0 ? at : 0);
@@ -47,8 +58,32 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
       <PhotoSlider
         images={images.map((item) => ({
           key: item.src,
-          src: item.src,
+          //: **视频那一项不给 src。** 库里 render 的优先级比 src 低(它的注释原话),给了
+          //: src 就走 <img> 那条路 —— 一个视频地址当图片加载,结果是整块空白。
+          src: item.video ? undefined : item.src,
           overlay: item.title ?? t("imagePreviewTitle"),
+          //: 自定义渲染要**显式给尺寸**:那一层按图片的自然宽高摆位,视频这边它测不到,
+          //: 不给就是 0×0(一片空白),给死一个 1920×1080 又会顶出视口。给**视口大小** ——
+          //: 于是它摆出来的盒子正好铺满屏幕,播放器再按 object-contain 收进去。
+          //:
+          //: 不能用 position: fixed 自己铺满:这块内容住在一个带 transform 的容器里,而祖先
+          //: 一旦有 transform,它就成了后代 fixed 的包含块 —— 视频会跑到屏幕角上去(实测)。
+          width: item.video ? viewport.width : undefined,
+          height: item.video ? viewport.height : undefined,
+          //: 视频交给**自己写的**播放器,不是原生 controls —— 浏览器自带那条控件各家各的
+          //: 样子、不吃主题,而画板节点上早就换掉了它,大图里又冒出来就是两套东西。
+          //: 缩放/拖拽那套对视频没意义:它要的是能播、能拖进度。
+          //: **不套 attrs。** 那套属性是给图片的缩放/拖拽用的(transform + 按自然宽高摆位),
+          //: 对视频既没意义又会把它顶出视口。这里自己铺满视口,播放器按 object-contain 收进去;
+          //: 关闭仍然走灯箱自己的 ✕ 和 Esc。
+          render: item.video
+            ? ({ attrs }) => (
+                <div {...attrs}>
+                  {/* 播放器铺满这个盒子;画面按 object-contain 收进去,不会被拉变形。 */}
+                  <BoardVideo assetSrc={item.src} autoPlay className="!bg-transparent" />
+                </div>
+              )
+            : undefined,
         }))}
         index={index}
         onIndexChange={setIndex}

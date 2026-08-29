@@ -117,10 +117,16 @@ function Scrubber({
 
 export function BoardVideo({
   assetId,
+  assetSrc,
+  autoPlay,
   className,
   onNaturalSize,
 }: {
-  assetId: string;
+  /** 画布节点用它:按 id 取带令牌的地址。 */
+  assetId?: string;
+  /** 大图预览用它:手上已经是一个地址了。**两者给一个就行。** */
+  assetSrc?: string;
+  autoPlay?: boolean;
   className?: string;
   /** 画面的自然尺寸 —— 节点拿它把自己的宽高比校正成片子的比例。 */
   onNaturalSize?: (width: number, height: number) => void;
@@ -133,8 +139,9 @@ export function BoardVideo({
     <div className={cn("group/player relative h-full w-full overflow-hidden bg-black", className)}>
       <video
         ref={ref}
-        src={assetFileUrl(assetId)}
+        src={assetSrc ?? assetFileUrl(assetId ?? "")}
         preload="metadata"
+        autoPlay={autoPlay}
         playsInline
         //: **这里不挂 nodrag** —— 视频铺满整个节点,挂上去就等于整块都拖不动。
         className="h-full w-full object-contain"
