@@ -1,11 +1,12 @@
 import React from "react";
 import { NodeToolbar, Position } from "@xyflow/react";
-import { ArrowLeftRight, ArrowUp, Loader2, Plus, Sparkles, Volume2, VolumeX } from "lucide-react";
+import { ArrowLeftRight, ArrowUp, Loader2, Plus, Sparkles, Volume2, VolumeX, X } from "lucide-react";
 
 import { useQuery } from "@tanstack/react-query";
 
-import { assetThumbnailUrl, listAssets, type Asset, type BoardItem, type GenerationModel } from "@/api/client";
+import { assetFileUrl, assetThumbnailUrl, listAssets, type Asset, type BoardItem, type GenerationModel } from "@/api/client";
 import { useAssetMentions } from "@/components/app/useAssetMentions";
+import { useImagePreview } from "@/components/app/image-preview";
 import { useI18n } from "@/app/preferences";
 import { ROLE_COPY, type SourceRole } from "@/features/ai-studio/sourceFrames";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -204,6 +205,7 @@ export function NodeComposer({
   workspaceId: string;
 }) {
   const t = useI18n();
+  const { openImagePreview } = useImagePreview();
   const [prompt, setPrompt] = React.useState(item.text ?? "");
   const [picked, setPicked] = React.useState("");
 
@@ -382,15 +384,30 @@ export function NodeComposer({
                     </button>
                   )}
                   {mine.map((one) => (
-                    <button
-                      key={one.assetId}
-                      type="button"
-                      title={`${roleLabel(t, slot.role)} —— 点一下移除`}
-                      onClick={() => setSources((all) => all.filter((x) => x.assetId !== one.assetId))}
-                      className="h-8 w-8 shrink-0 overflow-hidden rounded-md border border-border transition-colors hover:border-destructive"
-                    >
-                      <img src={assetThumbnailUrl(one.assetId)} alt="" className="h-full w-full object-cover" />
-                    </button>
+                    // 点图看大图,叉叉才是移除。**两件事分开** —— 挂上去之后最想做的是
+                    // 「确认一下挂对了没有」,而此前点一下就把它摘掉了:想看清楚,反而弄丢了。
+                    <span key={one.assetId} className="group/thumb relative shrink-0">
+                      <button
+                        type="button"
+                        title={`${roleLabel(t, slot.role)} —— 点开看大图`}
+                        onClick={() =>
+                          openImagePreview({ src: assetFileUrl(one.assetId), title: roleLabel(t, slot.role) })
+                        }
+                        className="block h-8 w-8 cursor-zoom-in overflow-hidden rounded-md border border-border transition-colors hover:border-border-strong"
+                      >
+                        <img src={assetThumbnailUrl(one.assetId)} alt="" className="h-full w-full object-cover" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`移除${roleLabel(t, slot.role)}`}
+                        title="移除"
+                        onClick={() => setSources((all) => all.filter((x) => x.assetId !== one.assetId))}
+                        //: 悬浮才出。常驻的话,这一排小图上会挂满一圈叉,比图本身还显眼。
+                        className="absolute -right-1 -top-1 grid h-4 w-4 cursor-pointer place-items-center rounded-full border border-border bg-panel text-muted-foreground opacity-0 shadow-sm transition-opacity hover:border-destructive hover:text-destructive group-hover/thumb:opacity-100"
+                      >
+                        <X size={9} />
+                      </button>
+                    </span>
                   ))}
                   {mine.length < slot.limit && (
                     <button
