@@ -1,6 +1,6 @@
 import React from "react";
 import { Handle, NodeResizer, Position, type NodeProps } from "@xyflow/react";
-import { Film as FilmIcon, Image as ImageIcon, Loader2 } from "lucide-react";
+import { Film as FilmIcon, Image as ImageIcon, Loader2, Music, Plus, StickyNote } from "lucide-react";
 
 import type { BoardItem } from "@/api/client";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
@@ -37,6 +37,8 @@ export function noteColorClass(color: string | undefined): string {
 export type BoardNodeData = {
   item: BoardItem;
   onText: (id: string, text: string) => void;
+  /** 媒体加载出来之后报一次自然宽高比 —— 节点据此把高度校正过来,画面才铺得满。 */
+  onAspect: (id: string, ratio: number) => void;
 };
 
 /** 两侧各一个接点。**始终渲染但默认透明** —— 只在悬停/选中时显形:
@@ -50,13 +52,29 @@ export type BoardNodeData = {
  * 默认透明是因为想法之间的关系是次要信息:一上来每个节点四周都挂着圆圈,画布看着像电路图。
  */
 function Ports({ visible }: { visible?: boolean }) {
-  const shape =
-    "!h-4 !w-4 !rounded-full !border !border-border-strong !bg-panel !text-muted-foreground transition-opacity after:absolute after:inset-0 after:grid after:place-items-center after:text-ui-2xs after:leading-none after:content-['+']";
+  //: **连接柄本身要骑在节点边上**,因为 React Flow 拿 handle 元素的中心当连线的锚点 ——
+  //: 把它整个往外挪,线头就跟着挪,节点和线之间会裂开一段空白。
+  //:
+  //: 所以这里分两层:外层是一个横跨边线的**透明**大盒子(中心正落在边上,锚点就在边上),
+  //: 可见的圆圈画在盒子的外侧一端。线贴着边,按钮离得开,而且圆圈还在 handle 里面,
+  //: 从它上面往外拖照样能拉线。
+  const box =
+    "!flex !h-9 !w-14 !items-center !rounded-none !border-0 !bg-transparent !p-0 !pointer-events-none transition-opacity";
+  const dot =
+    "!pointer-events-auto grid h-6 w-6 place-items-center rounded-full border border-border-strong bg-panel text-muted-foreground transition-colors hover:border-primary hover:text-primary";
   const shown = visible ? "opacity-100" : "opacity-0 group-hover:opacity-100";
   return (
     <>
-      <Handle type="target" position={Position.Left} className={cn(shape, shown, "!-left-2")} />
-      <Handle type="source" position={Position.Right} className={cn(shape, shown, "!-right-2")} />
+      <Handle type="target" position={Position.Left} className={cn(box, shown, "!justify-start")}>
+        <span className={dot}>
+          <Plus size={13} />
+        </span>
+      </Handle>
+      <Handle type="source" position={Position.Right} className={cn(box, shown, "!justify-end")}>
+        <span className={dot}>
+          <Plus size={13} />
+        </span>
+      </Handle>
     </>
   );
 }
@@ -89,8 +107,8 @@ export function NoteNode({ data, selected }: NodeProps) {
       )}
       onDoubleClick={() => setEditing(true)}
     >
-      <NodeResizer minWidth={120} minHeight={80} isVisible={selected} lineClassName="!border-primary" handleClassName="!h-2 !w-2 !rounded-sm !border-primary !bg-panel" />
-      <TypeLabel icon={<FilmIcon size={11} />} text="视频" />
+      <NodeResizer minWidth={120} minHeight={80} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
+      <TypeLabel icon={<StickyNote size={11} />} text="便签" />
       <Ports visible={selected} />
       {editing ? (
         <textarea
@@ -132,16 +150,15 @@ function Generating({ text }: { text?: string }) {
  * 两种状态长一样的话,用户会盯着一个永远不动的圈。
  */
 function EmptySlot({ icon }: { icon: React.ReactNode }) {
-  return (
-    <div className="grid h-full w-full place-items-center rounded-lg border border-dashed border-border-strong text-muted-foreground">
-      {icon}
-    </div>
-  );
+  //: 虚线由**节点自己**画(见下面各节点的 emptyRing),这里只放图标 —— 两层虚线套在一起
+  //: 会露出两圈错开的边。
+  return <div className="grid h-full w-full place-items-center text-muted-foreground/70">{icon}</div>;
 }
+
 
 /** 图片:指向素材库的一份。加载不出来时说清楚 —— 素材可能已经被删了。 */
 export function ImageNode({ data, selected }: NodeProps) {
-  const { item } = data as unknown as BoardNodeData;
+  const { item, onAspect } = data as unknown as BoardNodeData;
 
   return (
     <div
@@ -149,11 +166,12 @@ export function ImageNode({ data, selected }: NodeProps) {
         // **不在这一层 overflow-hidden。** 类型标签在框上方、接点在框左右两侧,都在框外 ——
         // 裁在这里会把它们切掉(工作流节点上刚犯过同一个错:「感叹号被截断了」)。
         // 圆角裁剪交给里面那层媒体。
+        //: 边框一律安静的实线。选中**不加彩色描边** —— 四角的缩放点已经说明「选中了」,
+        //: 再套一圈主色反而盖过节点里的画面。
         "group relative h-full w-full rounded-lg border border-border bg-panel shadow-sm",
-        selected && "ring-2 ring-primary",
       )}
     >
-      <NodeResizer minWidth={80} minHeight={60} isVisible={selected} lineClassName="!border-primary" handleClassName="!h-2 !w-2 !rounded-sm !border-primary !bg-panel" />
+      <NodeResizer minWidth={80} minHeight={60} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
       <TypeLabel icon={<ImageIcon size={11} />} text="图片" />
       <Ports visible={selected} />
       {!item.asset_id ? (
@@ -169,6 +187,7 @@ export function ImageNode({ data, selected }: NodeProps) {
           plain
           lazy={false}
           className="h-full w-full overflow-hidden rounded-lg object-cover"
+          onNaturalSize={(width, height) => onAspect(item.id, width / height)}
         />
       )}
     </div>
@@ -192,7 +211,7 @@ export function FrameNode({ data, selected }: NodeProps) {
         selected && "border-primary",
       )}
     >
-      <NodeResizer minWidth={160} minHeight={120} isVisible={selected} lineClassName="!border-primary" handleClassName="!h-2 !w-2 !rounded-sm !border-primary !bg-panel" />
+      <NodeResizer minWidth={160} minHeight={120} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
       {/* 只有标题条吃指针事件 —— 拖它来移动整个框,框内区域让给里面的项。 */}
       <div className="pointer-events-auto absolute -top-0.5 left-2 flex max-w-[90%] -translate-y-1/2 items-center rounded-md border border-border bg-panel px-2 py-0.5">
         {editing ? (
@@ -218,23 +237,27 @@ export function FrameNode({ data, selected }: NodeProps) {
 
 /** 视频:就地播。**不自动播、不循环** —— 画板上可能同时摆着五段片子,一起动是噪音。 */
 export function VideoNode({ data, selected }: NodeProps) {
-  const { item } = data as unknown as BoardNodeData;
+  const { item, onAspect } = data as unknown as BoardNodeData;
 
   return (
     <div
       className={cn(
         // 同上:标签和接点都在框外,不能裁在这一层。
+        //: 边框一律安静的实线。选中**不加彩色描边** —— 四角的缩放点已经说明「选中了」,
+        //: 再套一圈主色反而盖过节点里的画面。
         "group relative h-full w-full rounded-lg border border-border bg-panel shadow-sm",
-        selected && "ring-2 ring-primary",
       )}
     >
-      <NodeResizer minWidth={120} minHeight={80} isVisible={selected} lineClassName="!border-primary" handleClassName="!h-2 !w-2 !rounded-sm !border-primary !bg-panel" />
+      <NodeResizer minWidth={120} minHeight={80} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
+      <TypeLabel icon={<FilmIcon size={11} />} text="视频" />
       <Ports visible={selected} />
       {!item.asset_id ? (
         item.job_id ? <Generating text={item.text} /> : <EmptySlot icon={<FilmIcon size={20} />} />
       ) : (
-        // nodrag/nowheel 挂在外层:不挂的话拖进度条会变成拖动整个节点,滚轮会缩放画布。
-        <div className="nodrag nowheel h-full w-full overflow-hidden rounded-lg">
+        // **不在这一层挂 nodrag/nowheel。** 挂在这儿等于整块都不让画布用:鼠标悬在视频上时
+        // 拖不动画布、滚轮也不缩放了。播放条那点需求由 AssetInlinePreview 给 <video> 自己
+        // 加的 nodrag 满足 —— 粒度到元素为止。
+        <div className="h-full w-full overflow-hidden rounded-lg">
           <AssetInlinePreview
             assetId={item.asset_id}
             name={item.text || ""}
@@ -242,6 +265,7 @@ export function VideoNode({ data, selected }: NodeProps) {
             plain
             lazy={false}
             className="h-full w-full"
+            onNaturalSize={(width, height) => onAspect(item.id, width / height)}
           />
         </div>
       )}
@@ -249,12 +273,47 @@ export function VideoNode({ data, selected }: NodeProps) {
   );
 }
 
-export const BOARD_NODE_TYPES = { note: NoteNode, image: ImageNode, video: VideoNode, frame: FrameNode };
+/** 音频项。配音、旁白、BGM —— 摊在画板上的想法不该只有能看的。
+ *  和图片/视频同一套三状态:空槽 / 生成中 / 有产出。 */
+function AudioNode({ data, selected }: NodeProps) {
+  const { item } = data as unknown as BoardNodeData;
+  return (
+    <div className="group relative h-full w-full rounded-lg border border-border bg-panel shadow-sm">
+      <NodeResizer minWidth={200} minHeight={64} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
+      <TypeLabel icon={<Music size={11} />} text="音频" />
+      <Ports visible={selected} />
+      <div className="grid h-full w-full place-items-center overflow-hidden rounded-lg px-2">
+        {!item.asset_id ? (
+          item.job_id ? <Generating text={item.text} /> : <EmptySlot icon={<Music size={20} />} />
+        ) : (
+          <AssetInlinePreview
+            assetId={item.asset_id}
+            name={item.text ?? ""}
+            kind="audio"
+            lazy={false}
+            className="nodrag w-full"
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+//: **写成 Record<kind, …> 而不是随手一个对象** —— 后端加一种 item kind 时,这里漏登记
+//: 不会报错,只会让那种节点在画布上凭空消失。标上类型,漏一种就编译不过。
+export const BOARD_NODE_TYPES: Record<BoardItem["kind"], React.ComponentType<NodeProps>> = {
+  note: NoteNode,
+  image: ImageNode,
+  video: VideoNode,
+  audio: AudioNode,
+  frame: FrameNode,
+};
 
 /** 每种项新建时的默认大小。便签比图片矮 —— 它装的是一句话,不是一张图。 */
 export const DEFAULT_SIZE: Record<BoardItem["kind"], { width: number; height: number }> = {
   note: { width: 220, height: 140 },
   image: { width: 260, height: 180 },
   video: { width: 320, height: 200 },
+  audio: { width: 280, height: 72 },
   frame: { width: 420, height: 300 },
 };

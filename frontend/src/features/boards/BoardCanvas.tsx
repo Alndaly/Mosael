@@ -36,14 +36,16 @@ import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass } from "@/f
  * 双向同步会打架:拖动时 React Flow 每帧改一次位置,回写又会重建节点,拖到一半会跳。
  */
 
-function toNodes(items: BoardItem[], onText: (id: string, text: string) => void): Node[] {
+/** 只放**数据**。回调在渲染时注入(见 displayNodes)—— 存进节点里的话,它们会闭包住
+ *  还没声明的 setNodes,而这个顺序绕不开:节点的初值本身就要用到它们。 */
+function toNodes(items: BoardItem[]): Node[] {
   return items.map((item) => ({
     id: item.id,
     type: item.kind,
     position: { x: item.x, y: item.y },
     width: item.width ?? DEFAULT_SIZE[item.kind].width,
     height: item.height ?? DEFAULT_SIZE[item.kind].height,
-    data: { item, onText },
+    data: { item },
     // 分组框永远在最底 —— 它是背景,盖住上面的项就没法点了。
     zIndex: item.kind === "frame" ? 0 : 1,
   }));
@@ -82,7 +84,8 @@ interface Props {
     y?: number;
     provider?: string;
     model?: string;
-    sourceAssetId?: string;
+    parameters?: Record<string, unknown>;
+    sourceAssets?: { asset_id: string; role: string }[];
   }) => Promise<unknown>;
   /** 可用的生成模型 —— 提示词面板要让人选。 */
   models?: GenerationModel[];
@@ -105,11 +108,16 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, sho
   const viewport = usePersistentViewport(`board:${boardId}`);
   const [ready, setReady] = React.useState(false);
 
+  const [nodes, setNodes, onNodesChange] = useNodesState(toNodes(canvas.items));
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(
+    canvas.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target })),
+  );
+
   // 文字改动直接落进节点 data —— 走 setNodes 而不是回写上层,理由同上:
   // 上层一变就重建节点,正在打字的 textarea 会失焦。
-  const setText = React.useCallback((id: string, text: string) => {
-    setNodes((current) =>
-      current.map((node) =>
+  const setText = React.useCallback((id: string, text: string): void => {
+    setNodes((current: Node[]) =>
+      current.map((node: Node) =>
         node.id === id
           ? { ...node, data: { ...node.data, item: { ...(node.data as { item: BoardItem }).item, text } } }
           : node,
@@ -117,10 +125,32 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, sho
     );
   }, []);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(toNodes(canvas.items, setText));
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(
-    canvas.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target })),
-  );
+  /**
+   * 媒体加载出来之后,把节点高度校正成它的**自然宽高比**。
+   *
+   * 不校正的话:一段 16:9 的视频摆在 320×200(1.6:1)的框里,上下各留一条黑边 —— 而画板上
+   * 一眼扫过去看的就是画面本身,黑边等于把每个节点都缩小了一圈。图片同理。
+   *
+   * **只在还没被用户拉过时才校正**:他手动调过尺寸就是他的决定,不该被媒体加载覆盖回去。
+   * 判据是宽高恰好等于默认值 —— 拉过的话至少有一边不是。
+   */
+  // 参数显式标类型:它在 useNodesState 之前定义(初值要用它),不标的话 TS 会绕回自己身上推。
+  const setAspect = React.useCallback((id: string, ratio: number): void => {
+    if (!Number.isFinite(ratio) || ratio <= 0) return;
+    setNodes((current: Node[]) =>
+      current.map((node: Node) => {
+        if (node.id !== id) return node;
+        const item = (node.data as unknown as { item: BoardItem }).item;
+        const preset = DEFAULT_SIZE[item.kind];
+        const width = node.width ?? preset.width;
+        const height = node.height ?? preset.height;
+        if (width !== preset.width || height !== preset.height) return node;
+        const next = Math.round(width / ratio);
+        return next === height ? node : { ...node, height: next };
+      }),
+    );
+  }, [setNodes]);
+
 
   // 每次画布变了就汇一份给上层去存。**用 JSON 比对而不是引用比对** —— React Flow 每次
   // 拖动都换新对象,引用比对等于每帧都报"变了"。
@@ -131,6 +161,13 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, sho
     const item = (picked[0].data as unknown as { item: BoardItem }).item;
     return (item.kind === "image" || item.kind === "video") && !item.asset_id ? item : null;
   }, [nodes]);
+
+  //: 渲染用的节点 = 数据 + 这一轮的回调。**每轮重新贴** —— 回调闭包着最新的 setNodes,
+  //: 而把它们存进节点数据会让节点的初值反过来依赖 setNodes,那个循环绕不开。
+  const displayNodes = React.useMemo(
+    () => nodes.map((node) => ({ ...node, data: { ...node.data, onText: setText, onAspect: setAspect } })),
+    [nodes, setText, setAspect],
+  );
 
   const serialized = React.useMemo(() => JSON.stringify(toCanvas(nodes, edges)), [nodes, edges]);
   React.useEffect(() => {
@@ -157,10 +194,10 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, sho
       // 不选中的话用户要再点一次才知道这儿能写字。
       setNodes((current) => [
         ...current.map((node) => ({ ...node, selected: false })),
-        ...toNodes([item], setText).map((node) => ({ ...node, selected: true })),
+        ...toNodes([item]).map((node) => ({ ...node, selected: true })),
       ]);
     },
-    [setNodes, setText],
+    [setNodes, setText, setAspect],
   );
 
   /** 把某一项就地换成已完成的产出。轮询拿到结果后由上层调。 */
@@ -208,7 +245,6 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, sho
                 text: asset.name,
               },
             ],
-            setText,
           ),
         ),
       ]);
@@ -233,7 +269,7 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, sho
       }}
     >
       <ReactFlow
-        nodes={nodes}
+        nodes={displayNodes}
         edges={edges}
         nodeTypes={BOARD_NODE_TYPES}
         onNodesChange={onNodesChange}
@@ -262,7 +298,7 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, sho
             ...DEFAULT_SIZE.note,
             color: "yellow",
           };
-          setNodes((current) => [...current, ...toNodes([item], setText)]);
+          setNodes((current) => [...current, ...toNodes([item])]);
         }}
         className={cn(!ready && "opacity-0")}
         proOptions={{ hideAttribution: false }}
@@ -319,12 +355,15 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, sho
           item={composerItem}
           models={models ?? []}
           busy={Boolean(composerItem.job_id)}
-          onSubmit={({ prompt, provider, model }) =>
+          onPickAsset={onPickAsset}
+          onSubmit={({ prompt, provider, model, parameters, sourceAssets }) =>
             void onGenerate({
               kind: composerItem.kind as "image" | "video",
               prompt,
               provider,
               model,
+              parameters,
+              sourceAssets,
               itemId: composerItem.id,
             })
           }
@@ -449,7 +488,7 @@ function ItemToolbar({
                     prompt: item.text ?? "",
                     x: (single?.position.x ?? 0) + (single?.width ?? 260) + 40,
                     y: single?.position.y ?? 0,
-                    sourceAssetId: item.asset_id,
+                    sourceAssets: item.asset_id ? [{ asset_id: item.asset_id, role: "first_frame" }] : [],
                   })
                 }
               >

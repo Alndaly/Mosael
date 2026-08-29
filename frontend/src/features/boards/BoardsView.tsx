@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, Film, FolderOpen, Image as ImageIcon, LayoutGrid, Map as MapIcon, Maximize2, Plus, Square, StickyNote, Trash2 } from "lucide-react";
+import { ChevronLeft, Film, FolderOpen, Image as ImageIcon, LayoutGrid, Map as MapIcon, Maximize2, Music, Plus, Square, StickyNote, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -15,6 +15,7 @@ import {
   type GenerationModel,
   type Board,
   type BoardCanvas as Canvas,
+  type BoardItem,
   type Workspace,
 } from "@/api/client";
 import { useI18n, usePreferences } from "@/app/preferences";
@@ -198,7 +199,9 @@ function BoardDetail({
   const [picking, setPicking] = React.useState<{ kind: "image" | "video"; place: (assetId: string) => void } | null>(null);
   //: 画布交出来的「加一项」。顶栏那组按钮要和身份胶囊并排,而 add 依赖画布内部状态。
   const [api, setApi] = React.useState<{
-    add: (kind: "note" | "image" | "video" | "frame", extra?: Record<string, unknown>) => void;
+    //: **就用 BoardItem["kind"]**,别在这儿再抄一份种类表 —— 抄漏一种不会报错,
+    //: 只会让那种节点建不出来(音频此前就是这么漏掉的)。
+    add: (kind: BoardItem["kind"], extra?: Record<string, unknown>) => void;
     fill: (itemId: string, assetId: string) => void;
     fitView: () => void;
   } | null>(null);
@@ -242,7 +245,8 @@ function BoardDetail({
       y?: number;
       provider?: string;
       model?: string;
-      sourceAssetId?: string;
+      parameters?: Record<string, unknown>;
+      sourceAssets?: { asset_id: string; role: string }[];
     }) => {
       const itemId = input.itemId ?? `${input.kind}-${Math.random().toString(36).slice(2, 9)}`;
       try {
@@ -255,9 +259,8 @@ function BoardDetail({
           y: input.y ?? 0,
           provider: input.provider,
           model: input.model,
-          source_assets: input.sourceAssetId
-            ? [{ asset_id: input.sourceAssetId, role: "first_frame" }]
-            : undefined,
+          parameters: input.parameters,
+          source_assets: input.sourceAssets,
         });
       } catch (error) {
         toast.error(t("boardsGenerateFailed"), { description: (error as Error).message });
@@ -371,6 +374,9 @@ function BoardDetail({
             </Button>
             <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsAddVideo")} aria-label={t("boardsAddVideo")} onClick={() => api?.add("video")}>
               <Film size={15} />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsAddAudio")} aria-label={t("boardsAddAudio")} onClick={() => api?.add("audio")}>
+              <Music size={15} />
             </Button>
             <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsAddFrame")} aria-label={t("boardsAddFrame")} onClick={() => api?.add("frame")}>
               <Square size={15} />

@@ -21,6 +21,7 @@ export function AssetInlinePreview({
   className,
   lazy = true,
   plain = false,
+  onNaturalSize,
 }: {
   assetId: string;
   name: string;
@@ -32,6 +33,9 @@ export function AssetInlinePreview({
   /** 懒加载。**画布节点里必须关掉**:React Flow 的视口是 transform 变换过的,浏览器据此
    *  判断"还没进视野"而迟迟不发请求,图片就一直是 0×0,节点上看着像没产出。 */
   lazy?: boolean;
+  /** 媒体的**自然尺寸**加载出来时报一次。画布节点用它把自己的宽高比校正成画面的比例 ——
+   *  不校正的话 16:9 的片子摆在 1.6:1 的框里,上下各留一条黑边。可选:别的消费方不关心。 */
+  onNaturalSize?: (width: number, height: number) => void;
 }) {
   const { openImagePreview } = useImagePreview();
   const src = assetFileUrl(assetId);
@@ -52,6 +56,10 @@ export function AssetInlinePreview({
           alt={name}
           loading={lazy ? "lazy" : "eager"}
           className={className ?? "block max-h-[180px] w-auto max-w-full object-contain"}
+          onLoad={(event) => {
+            const img = event.currentTarget;
+            if (img.naturalWidth && img.naturalHeight) onNaturalSize?.(img.naturalWidth, img.naturalHeight);
+          }}
         />
       </button>
     );
@@ -68,6 +76,10 @@ export function AssetInlinePreview({
           "nodrag",
           className ?? (plain ? "max-w-full bg-black" : "max-h-[200px] max-w-full rounded-lg border border-border bg-black"),
         )}
+        onLoadedMetadata={(event) => {
+          const video = event.currentTarget;
+          if (video.videoWidth && video.videoHeight) onNaturalSize?.(video.videoWidth, video.videoHeight);
+        }}
       />
     );
   }

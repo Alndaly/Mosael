@@ -827,7 +827,7 @@ export function deleteAgentSession(sessionId: string): Promise<unknown> {
 /** 创意画板上的一项:便签 / 图片 / 分组框。形状由后端 domain/boards 校验。 */
 export interface BoardItem {
   id: string;
-  kind: "note" | "image" | "video" | "frame";
+  kind: "note" | "image" | "video" | "audio" | "frame";
   x: number;
   y: number;
   width?: number;
@@ -892,6 +892,7 @@ export function generateOnBoard(
     y: number;
     provider?: string;
     model?: string;
+    parameters?: Record<string, unknown>;
     source_assets?: { asset_id: string; role: string }[];
   },
 ): Promise<Board> {
