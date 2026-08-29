@@ -16,14 +16,14 @@ import {
   type Node,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { Copy, FileUp, Loader2, Replace, Sparkles, Trash2 } from "lucide-react";
+import { Copy, FileUp, Group, Loader2, Replace, Sparkles, Trash2 } from "lucide-react";
 
 import type { BoardCanvas as Canvas, BoardItem, GenerationModel } from "@/api/client";
 import { NodeComposer } from "@/features/boards/NodeComposer";
 import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
 import { usePersistentViewport } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
-import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, type MediaKind } from "@/features/boards/boardNodes";
+import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, KIND_META, SPAWNABLE_KINDS, type MediaKind } from "@/features/boards/boardNodes";
 
 /**
  * 创意画板的画布。
@@ -181,6 +181,59 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, sho
       .map((item) => ({ assetId: item.asset_id as string, kind: item.kind }));
   }, [composerItem, edges, nodes]);
 
+  /**
+   * 拖动分组框时被它带着走的那几项。
+   *
+   * **在按下的那一刻定下来,拖的过程中不再变。** 边拖边判「谁在框里」的话,框扫过谁就会
+   * 顺手把谁卷走 —— 用户只是想把这一组挪到右边,结果沿途的东西全被推到了一起。
+   */
+  const carried = React.useRef<{ id: string; from: { x: number; y: number } }[]>([]);
+  const dragFrom = React.useRef<{ x: number; y: number } | null>(null);
+
+  const beginFrameDrag = React.useCallback(
+    (node: Node) => {
+      const item = (node.data as unknown as { item: BoardItem }).item;
+      carried.current = [];
+      dragFrom.current = null;
+      if (item.kind !== "frame" || !item.move_children) return;
+      const left = node.position.x;
+      const top = node.position.y;
+      const right = left + (node.width ?? DEFAULT_SIZE.frame.width);
+      const bottom = top + (node.height ?? DEFAULT_SIZE.frame.height);
+      dragFrom.current = { ...node.position };
+      carried.current = nodes
+        .filter((one) => one.id !== node.id && one.type !== "frame")
+        //: 按**中心**判在不在框里,不是按有没有碰到 —— 压着边线的那一项,用碰撞判会
+        //: 跟着走,而它看起来明明在框外。
+        .filter((one) => {
+          const cx = one.position.x + (one.width ?? 0) / 2;
+          const cy = one.position.y + (one.height ?? 0) / 2;
+          return cx >= left && cx <= right && cy >= top && cy <= bottom;
+        })
+        .map((one) => ({ id: one.id, from: { ...one.position } }));
+    },
+    [nodes],
+  );
+
+  const dragFrame = React.useCallback(
+    (node: Node) => {
+      const from = dragFrom.current;
+      if (!from || carried.current.length === 0) return;
+      //: 位移始终从**按下时**的位置算起,不是上一帧 —— 逐帧累加的话,某一帧被丢掉
+      //: (拖得快时会)就永久错开一段。
+      const dx = node.position.x - from.x;
+      const dy = node.position.y - from.y;
+      const moves = new Map(carried.current.map((one) => [one.id, one.from]));
+      setNodes((current) =>
+        current.map((one) => {
+          const origin = moves.get(one.id);
+          return origin ? { ...one, position: { x: origin.x + dx, y: origin.y + dy } } : one;
+        }),
+      );
+    },
+    [setNodes],
+  );
+
   //: 渲染用的节点 = 数据 + 这一轮的回调。**每轮重新贴** —— 回调闭包着最新的 setNodes,
   //: 而把它们存进节点数据会让节点的初值反过来依赖 setNodes,那个循环绕不开。
   const displayNodes = React.useMemo(
@@ -215,8 +268,42 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, sho
         ...current.map((node) => ({ ...node, selected: false })),
         ...toNodes([item]).map((node) => ({ ...node, selected: true })),
       ]);
+      //: 把建好的那一项交回去 —— 从连线末端长出节点时,调用方还要拿它的 id 接上那条线。
+      return item;
     },
     [setNodes, setText, setAspect],
+  );
+
+  /**
+   * 从节点拉出一条线、松手在空白处时弹的那个菜单。
+   *
+   * **拉了线就说明用户已经想好了「从这儿接下去」**,这时再让他去右上角找按钮加节点、
+   * 拖回来、连上,是把一个动作拆成了三个。菜单里选一种,节点就落在松手的地方并且线已经连好。
+   */
+  const [linkMenu, setLinkMenu] = React.useState<
+    { screenX: number; screenY: number; x: number; y: number; from: string; fromIsSource: boolean } | null
+  >(null);
+
+  const spawnLinked = React.useCallback(
+    (kind: (typeof SPAWNABLE_KINDS)[number]) => {
+      if (!linkMenu) return;
+      const size = DEFAULT_SIZE[kind];
+      const item = add(kind, {
+        x: Math.round(linkMenu.x - (linkMenu.fromIsSource ? 0 : size.width)),
+        y: Math.round(linkMenu.y - size.height / 2),
+      });
+      //: 线的方向照着用户拉的那一头:从 source 拉出来的,新节点是终点;反之是起点。
+      setEdges((current) =>
+        addEdge(
+          linkMenu.fromIsSource
+            ? { source: linkMenu.from, target: item.id, sourceHandle: null, targetHandle: null }
+            : { source: item.id, target: linkMenu.from, sourceHandle: null, targetHandle: null },
+          current,
+        ),
+      );
+      setLinkMenu(null);
+    },
+    [add, linkMenu, setEdges],
   );
 
   /** 把某一项就地换成已完成的产出。轮询拿到结果后由上层调。 */
@@ -294,6 +381,30 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, sho
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={(connection: Connection) => setEdges((current) => addEdge(connection, current))}
+        //: 线拉到空白处松手 —— 用户已经想好了「从这儿接下去」,弹一张单子让他直接选。
+        //: 连到别的节点上时 isValid 为真,那是正常连线,不该弹。
+        onConnectEnd={(event, connection) => {
+          const instance = rf.current;
+          const from = connection.fromNode?.id;
+          if (connection.isValid || !instance || !from) return;
+          const point = "changedTouches" in event ? event.changedTouches[0] : (event as MouseEvent);
+          if (!point) return;
+          const flow = instance.screenToFlowPosition({ x: point.clientX, y: point.clientY });
+          setLinkMenu({
+            screenX: point.clientX,
+            screenY: point.clientY,
+            x: flow.x,
+            y: flow.y,
+            from,
+            fromIsSource: connection.fromHandle?.type !== "target",
+          });
+        }}
+        onNodeDragStart={(_event, node) => beginFrameDrag(node)}
+        onNodeDrag={(_event, node) => dragFrame(node)}
+        onNodeDragStop={() => {
+          carried.current = [];
+          dragFrom.current = null;
+        }}
         onInit={(instance) => {
           rf.current = instance as unknown as ReactFlowInstance;
           requestAnimationFrame(() => {
@@ -362,6 +473,40 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, sho
             {uploading ? "正在上传…" : "松手就放到画板上"}
           </span>
         </div>
+      )}
+
+      {/* 从线尾长出下一个节点。位置跟着松手的地方,**不是屏幕中央** —— 用户刚把线拉到那儿,
+          单子出现在别处等于要他把视线再挪一趟。 */}
+      {linkMenu && (
+        <>
+          {/* 点别处就收起来。铺满整块,但在菜单**下面**。 */}
+          <div className="fixed inset-0 z-40" onPointerDown={() => setLinkMenu(null)} />
+          <div
+            className="fixed z-50 w-56 overflow-hidden rounded-xl border border-border-strong bg-panel p-1 shadow-[var(--shadow-panel)]"
+            style={{ left: linkMenu.screenX + 8, top: linkMenu.screenY + 8 }}
+          >
+            <p className="px-2 py-1.5 text-ui-2xs text-muted-foreground">引用该节点生成</p>
+            {SPAWNABLE_KINDS.map((kind) => {
+              const { icon: Icon, label, hint } = KIND_META[kind];
+              return (
+                <button
+                  key={kind}
+                  type="button"
+                  onClick={() => spawnLinked(kind)}
+                  className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-secondary"
+                >
+                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-secondary text-muted-foreground">
+                    <Icon size={14} />
+                  </span>
+                  <span className="grid min-w-0 gap-0.5">
+                    <span className="truncate text-ui-xs text-foreground">{label}</span>
+                    <span className="truncate text-ui-2xs text-muted-foreground">{hint}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {/* 选中之后才出操作条 —— 没选中时它没有作用对象。 */}
@@ -451,6 +596,10 @@ function ItemToolbar({
   return (
     <NodeToolbar nodeId={selected.map((node) => node.id)} isVisible position={Position.Top} offset={10}>
       <div className="nodrag nopan flex items-center gap-0.5 rounded-full border border-border-strong bg-panel p-1 shadow-[var(--shadow-panel)]">
+        {/* 按类型来的那几个动作装在这一格里,**分隔线是这一格自己的右边框**。
+            于是它不可能在没有动作时出现 —— 此前那道线自己抄了一遍「上面有没有东西」的
+            条件,加了音频节点之后就和实际渲染分了岔:音频头上挂着一道悬空的竖线。 */}
+        <div className="flex items-center gap-0.5 empty:hidden [&:not(:empty)]:mr-1 [&:not(:empty)]:border-r [&:not(:empty)]:border-border [&:not(:empty)]:pr-1.5">
         {item?.kind === "note" &&
           NOTE_COLORS.map((color) => (
             <button
@@ -465,6 +614,25 @@ function ItemToolbar({
               onClick={() => patch(item.id, { color })}
             />
           ))}
+
+        {/* 分组框:**这一组是不是一个整体**。开着的时候拖框会把框里的东西一起带走 ——
+            没有它的话,想把一组想法整体挪个位置就得一个个拖。 */}
+        {item?.kind === "frame" && (
+          <button
+            type="button"
+            aria-pressed={Boolean(item.move_children)}
+            title={item.move_children ? "拖动时带着框内的项一起走" : "拖动时只移动这个框"}
+            className={cn(
+              "flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs transition-colors",
+              item.move_children
+                ? "bg-primary/12 text-primary"
+                : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+            )}
+            onClick={() => patch(item.id, { move_children: !item.move_children })}
+          >
+            <Group size={12} /> 联动拖动
+          </button>
+        )}
 
         {item && isMediaKind(item.kind) && (
           <button
@@ -518,11 +686,7 @@ function ItemToolbar({
           </>
         )}
 
-        {/* 分隔线只在**前面真有东西**时才画 —— 无条件画的话,音频这种没有专属动作的
-            节点头上会挂一道悬空的竖线(截图里那条)。 */}
-        {(item?.kind === "note" || (item && isMediaKind(item.kind)) || Boolean(onGenerate && item && item.kind !== "frame")) && (
-          <span aria-hidden className="mx-0.5 h-4 w-px bg-border" />
-        )}
+        </div>
 
         <button
           type="button"

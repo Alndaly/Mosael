@@ -411,3 +411,21 @@ def test_一次出多张时每一张都落回画布() -> None:
     # 挨着原处往右排,别叠在一起 —— 叠住的话看起来就还是只出了一张。
     assert [one["x"] for one in items] == [100, 324, 548]
     assert {one["y"] for one in items} == {50}
+
+
+def test_分组框记得住联动拖动这件事() -> None:
+    """「这一组是一个整体」是这个框的**性质**,不是一次操作的临时状态 —— 重进画板还该是那样。"""
+    canvas = normalize_canvas(
+        {"items": [{"id": "f", "kind": "frame", "x": 0, "y": 0, "move_children": True}], "edges": []}
+    )
+    assert canvas["items"][0]["move_children"] is True
+
+    # 别的类型给了就是写错了 —— 悄悄丢掉的话,前端读回来会以为自己没存上。
+    with pytest.raises(BoardDomainError):
+        normalize_canvas(
+            {"items": [{"id": "n", "kind": "note", "x": 0, "y": 0, "move_children": True}], "edges": []}
+        )
+    with pytest.raises(BoardDomainError):
+        normalize_canvas(
+            {"items": [{"id": "f", "kind": "frame", "x": 0, "y": 0, "move_children": "yes"}], "edges": []}
+        )

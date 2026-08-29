@@ -1,6 +1,6 @@
 import React from "react";
 import { Handle, NodeResizer, Position, useStore, type NodeProps } from "@xyflow/react";
-import { Film as FilmIcon, Image as ImageIcon, Loader2, Music, Plus, StickyNote } from "lucide-react";
+import { Film as FilmIcon, Image as ImageIcon, Loader2, Music, Plus, Square as SquareIcon, StickyNote, type LucideIcon } from "lucide-react";
 
 import type { BoardItem } from "@/api/client";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
@@ -97,11 +97,29 @@ function Ports({ visible }: { visible?: boolean }) {
   );
 }
 
+/**
+ * 每种节点叫什么、长什么图标、是干嘛的。**只此一处。**
+ *
+ * 节点左上角的标签、从连线末端长出新节点的那个菜单、工具条 —— 都读它。此前图标和名字散在
+ * 各个节点组件里各写一份,于是便签被贴成了「视频」、视频自己反倒没有标签,而两处都不报错。
+ */
+export const KIND_META: Record<BoardItem["kind"], { icon: LucideIcon; label: string; hint: string }> = {
+  note: { icon: StickyNote, label: "便签", hint: "写一段想法、脚本或提示词" },
+  image: { icon: ImageIcon, label: "图片", hint: "生成或贴一张图" },
+  video: { icon: FilmIcon, label: "视频", hint: "生成或贴一段视频" },
+  audio: { icon: Music, label: "音频", hint: "配音、旁白、背景音乐" },
+  frame: { icon: SquareIcon, label: "分组", hint: "把一堆东西圈起来命名" },
+};
+
+/** 能从一条线的末端长出来的种类。分组框不在其中 —— 它是个容器,不是一份产出。 */
+export const SPAWNABLE_KINDS = ["image", "video", "audio", "note"] as const;
+
 /** 节点上方那行类型标签 —— 一眼看出这格是图片还是视频,不用等它加载出来。 */
-function TypeLabel({ icon, text }: { icon: React.ReactNode; text: string }) {
+function TypeLabel({ kind }: { kind: BoardItem["kind"] }) {
+  const { icon: Icon, label } = KIND_META[kind];
   return (
     <span className="pointer-events-none absolute -top-5 left-0 inline-flex items-center gap-1 text-ui-2xs text-muted-foreground">
-      {icon} {text}
+      <Icon size={11} /> {label}
     </span>
   );
 }
@@ -128,7 +146,7 @@ export function NoteNode({ data, selected }: NodeProps) {
       onDoubleClick={() => setEditing(true)}
     >
       <NodeResizer minWidth={120} minHeight={80} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
-      <TypeLabel icon={<StickyNote size={11} />} text="便签" />
+      <TypeLabel kind="note" />
       <Ports visible={selected} />
       {editing ? (
         <textarea
@@ -192,7 +210,7 @@ export function ImageNode({ data, selected }: NodeProps) {
       )}
     >
       <NodeResizer minWidth={80} minHeight={60} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
-      <TypeLabel icon={<ImageIcon size={11} />} text="图片" />
+      <TypeLabel kind="image" />
       <Ports visible={selected} />
       {!item.asset_id ? (
         item.job_id ? <Generating text={item.text} /> : <EmptySlot icon={<ImageIcon size={20} />} />
@@ -269,7 +287,7 @@ export function VideoNode({ data, selected }: NodeProps) {
       )}
     >
       <NodeResizer minWidth={120} minHeight={80} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
-      <TypeLabel icon={<FilmIcon size={11} />} text="视频" />
+      <TypeLabel kind="video" />
       <Ports visible={selected} />
       {!item.asset_id ? (
         item.job_id ? <Generating text={item.text} /> : <EmptySlot icon={<FilmIcon size={20} />} />
@@ -294,7 +312,7 @@ function AudioNode({ data, selected }: NodeProps) {
   return (
     <div className="group relative h-full w-full rounded-lg border border-border bg-panel shadow-sm">
       <NodeResizer minWidth={200} minHeight={64} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
-      <TypeLabel icon={<Music size={11} />} text="音频" />
+      <TypeLabel kind="audio" />
       <Ports visible={selected} />
       <div className="grid h-full w-full place-items-center overflow-hidden rounded-lg px-2">
         {!item.asset_id ? (

@@ -837,6 +837,8 @@ export interface BoardItem {
   asset_id?: string;
   /** 还在生成:有任务、还没有素材。任务落终态时由后端回执把 asset_id 填回来。 */
   job_id?: string;
+  /** 分组框专属:开着的时候,拖动这个框会把框里的东西一起带走。 */
+  move_children?: boolean;
 }
 
 export interface BoardEdge {

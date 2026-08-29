@@ -133,6 +133,18 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
                 raise BoardDomainError(f"画板项 {item_id} 的 asset_id 不合法")
             item["asset_id"] = asset_id.strip()
 
+        # 分组框「联动拖动」:开着的时候,拖动这个框会把框里的东西一起带走。
+        #
+        # **存下来而不是每次现开** —— 它是这个框的性质(「这一组是一个整体」),而不是一次
+        # 操作的临时状态;重进画板时该还是那样。只有分组框有意义,别的类型给了就是写错了。
+        move_children = entry.get("move_children")
+        if move_children is not None:
+            if not isinstance(move_children, bool):
+                raise BoardDomainError(f"画板项 {item_id} 的 move_children 必须是布尔值")
+            if kind != "frame":
+                raise BoardDomainError(f"只有分组框有 move_children,{kind} 没有")
+            item["move_children"] = move_children
+
         # 正在生成的那一项:还没有素材,但有一个任务在跑。任务落终态时由回执把 asset_id
         # 填回来(见 deliver_generated)。**这是"还没有"和"不该有"的区别** —— 前者要占着位置
         # 让用户看见"这儿在生成",后者才是错误。
