@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import BoardCreate, BoardOut, BoardUpdate
+from app.api.schemas import BoardCreate, BoardGenerate, BoardOut, BoardUpdate
 from app.db.models import Board
 from app.domain.boards import (
     BoardDomainError,
@@ -13,6 +13,8 @@ from app.domain.boards import (
     delete_board,
     get_board,
     list_boards,
+    place_pending,
+    receipt_to_item,
     update_board,
 )
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
@@ -65,3 +67,70 @@ def remove(board_id: str, workspace_id: str, db: DbSession, user: CurrentUser) -
     except BoardDomainError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"ok": True}
+
+
+@router.post("/boards/{board_id}/generate", response_model=BoardOut)
+def generate(board_id: str, body: BoardGenerate, db: DbSession, user: CurrentUser) -> Board:
+    """在画板上生成一份素材,产出就地落回画布。
+
+    **不自己实现生成** —— 汇进 create_generation_job 那条漏斗(AI 工作台、定时任务、
+    工作流节点、智能体走的是同一条),于是描述符校验、能力探测、计量记账、任务中心全都白拿。
+    这里只多做一件画板自己的事:先摆一个「正在生成」的占位,并把回执指向它。
+    """
+    from app.domain import provider_models
+    from app.domain.generation import create_generation_job
+    from app.domain.generation.operations import GenerationDomainError
+    from app.domain.generation.runner import start_generation_thread
+
+    ensure_workspace_perm(db, user, body.workspace_id, "edit")
+    try:
+        board = get_board(db, body.workspace_id, board_id)
+    except BoardDomainError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    provider, model = body.provider.strip(), body.model.strip()
+    if not provider or not model:
+        # 没点名就用这个人在这种能力上的默认 —— 和定时任务那条路同一个解析。
+        default = provider_models.resolve_default(db, body.kind, user.id)
+        if default is not None and default.profile is not None:
+            provider, model = default.profile.vendor, default.model_id
+    if not provider or not model:
+        raise HTTPException(status_code=400, detail="还没有可用的生成模型,先去设置里配一个")
+
+    try:
+        generation, job = create_generation_job(
+            db,
+            workspace_id=body.workspace_id,
+            session_id=None,
+            project_id=None,
+            created_by=user.id,
+            provider=provider,
+            model=model,
+            kind=body.kind,
+            prompt=body.prompt,
+            negative_prompt="",
+            parameters=dict(body.parameters or {}),
+            source_assets=list(body.source_assets or []),
+        )
+    except GenerationDomainError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # 回执指向这一项:任务落终态时由 domain/boards.deliver_generated 把 asset_id 填回来。
+    job.payload = {**(job.payload or {}), "receipt": receipt_to_item(board.id, body.item_id)}
+    db.commit()
+
+    board = place_pending(
+        db,
+        workspace_id=body.workspace_id,
+        board_id=board.id,
+        item={
+            "id": body.item_id,
+            "kind": body.kind,
+            "x": body.x,
+            "y": body.y,
+            "job_id": job.id,
+            "text": body.prompt[:120],
+        },
+    )
+    start_generation_thread(generation.id)
+    return board

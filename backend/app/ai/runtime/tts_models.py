@@ -505,6 +505,14 @@ def _resolve_engine_python(engine_id: str) -> str | None:
 _PROBED: dict[str, str | None] = {}
 _PROBING: set[str] = set()
 _PROBE_LOCK = threading.Lock()
+#: 探测的**代次**。`clear_runtime_probes()` 让它 +1,于是所有在飞的探测都成了上一代。
+#:
+#: 少了它有两个后果,都真实发生过:
+#:   · `_PROBING` 不清 —— 上一代那条还挂着"正在探测",新一代的探测**永远起不来**,
+#:     状态卡在「还没测过」;
+#:   · 就算清了,上一代那条跑完还是会把**过期答案写回缓存**,覆盖掉新探出来的那个。
+#: 所以判据不是"清空",是"只有当代的才算数"。
+_PROBE_GENERATION = 0
 
 
 def probe_in_background(engine_id: str) -> None:
@@ -513,6 +521,7 @@ def probe_in_background(engine_id: str) -> None:
         if engine_id in _PROBED or engine_id in _PROBING:
             return
         _PROBING.add(engine_id)
+        generation = _PROBE_GENERATION
 
     def run() -> None:
         python = None
@@ -520,8 +529,10 @@ def probe_in_background(engine_id: str) -> None:
             python = _resolve_engine_python(engine_id)
         finally:
             with _PROBE_LOCK:
-                _PROBING.discard(engine_id)
-                _PROBED[engine_id] = python
+                # 上一代的结果一律丢掉 —— 它探的是改配置之前那套环境。
+                if generation == _PROBE_GENERATION:
+                    _PROBING.discard(engine_id)
+                    _PROBED[engine_id] = python
 
     threading.Thread(target=run, daemon=True).start()
 
@@ -567,9 +578,13 @@ def clear_runtime_probes() -> None:
     """装完引擎、改完解释器路径之后叫一声,否则答案会停在"装之前"。"""
     # getattr:测试会把探测换成一个普通函数(没有 cache_clear)。作废缓存是清理动作,
     # 不该因为"被替换过"就炸。
+    global _PROBE_GENERATION
     getattr(_resolve_engine_python, "cache_clear", lambda: None)()
     with _PROBE_LOCK:
         _PROBED.clear()
+        # 在飞的那些连同它们的结果一起作废,位置也让出来 —— 否则新的探测起不来。
+        _PROBING.clear()
+        _PROBE_GENERATION += 1
 
 
 def probe_interpreter(engine_id: str) -> dict[str, Any]:

@@ -18,12 +18,16 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Board
+
+
+logger = logging.getLogger(__name__)
 
 
 class BoardDomainError(ValueError):
@@ -128,8 +132,17 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
             if not isinstance(asset_id, str) or not asset_id.strip():
                 raise BoardDomainError(f"画板项 {item_id} 的 asset_id 不合法")
             item["asset_id"] = asset_id.strip()
-        # 没有素材就是一个空白框 —— 存得下、打开却什么都没有,不如当场说。
-        if kind in _NEEDS_ASSET and "asset_id" not in item:
+
+        # 正在生成的那一项:还没有素材,但有一个任务在跑。任务落终态时由回执把 asset_id
+        # 填回来(见 deliver_generated)。**这是"还没有"和"不该有"的区别** —— 前者要占着位置
+        # 让用户看见"这儿在生成",后者才是错误。
+        job_id = entry.get("job_id")
+        if job_id is not None:
+            if not isinstance(job_id, str) or not job_id.strip():
+                raise BoardDomainError(f"画板项 {item_id} 的 job_id 不合法")
+            item["job_id"] = job_id.strip()
+
+        if kind in _NEEDS_ASSET and "asset_id" not in item and "job_id" not in item:
             raise BoardDomainError(f"{item_id} 必须指向一份素材")
 
         items.append(item)
@@ -215,3 +228,79 @@ def delete_board(db: Session, workspace_id: str, board_id: str) -> None:
     board = get_board(db, workspace_id, board_id)
     db.delete(board)
     db.commit()
+
+
+# ── 在画板上生成 ────────────────────────────────────────────────────────────
+#
+# 画板是生成能力的**第五个入口**(前四个:AI 工作台、定时任务、工作流节点、智能体)。
+# 它不自己实现一遍生成 —— 照样汇进 create_generation_job 那条漏斗,于是描述符校验、
+# 能力探测、计量记账、任务中心全都白拿。这一层只回答画板自己的那个问题:
+# **产出该落回哪儿**。
+
+#: 回执的种类名。任务落终态时,jobs 那边按这个名字找到下面的 deliver_generated。
+RECEIPT_KIND = "board_item"
+
+
+def receipt_to_item(board_id: str, item_id: str) -> dict[str, Any]:
+    """建任务时写进 payload 的那一小块:这次的产出属于哪张板的哪一项。"""
+    return {"kind": RECEIPT_KIND, "board_id": board_id, "item_id": item_id}
+
+
+def place_pending(db: Session, *, workspace_id: str, board_id: str, item: dict[str, Any]) -> Board:
+    """先把「正在生成」那一项放上画布,再去起任务。
+
+    **顺序是这样的原因**:生成要几十秒,而用户点完就在看画布。先放一个占位,他立刻看得见
+    "这儿在生成";等回执把 asset_id 填回来,占位就地变成图片/视频。反过来(先起任务、
+    等成功再放)的话,这几十秒里画布上什么都没有,用户会以为自己没点中。
+    """
+    board = get_board(db, workspace_id, board_id)
+    canvas = dict(board.canvas or {"items": [], "edges": []})
+    board.canvas = normalize_canvas({**canvas, "items": [*(canvas.get("items") or []), item]})
+    db.commit()
+    db.refresh(board)
+    return board
+
+
+def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
+    """任务落终态 → 把产出填进画板上那一项。
+
+    **成功和失败都要处理。** 只处理成功的话,失败时画布上会永远留着一个转圈的占位 ——
+    用户不知道它是还在跑还是已经死了,而这两件事的下一步完全不同。失败就把占位摘掉,
+    任务中心那条失败记录才是讲原因的地方。
+    """
+    board = db.get(Board, str(receipt.get("board_id") or ""))
+    item_id = str(receipt.get("item_id") or "")
+    if board is None or not item_id:
+        return
+
+    canvas = board.canvas or {"items": [], "edges": []}
+    items = list(canvas.get("items") or [])
+    asset_id = str((job.result or {}).get("asset_id") or "") if job.status == "succeeded" else ""
+
+    kept: list[dict[str, Any]] = []
+    for item in items:
+        if item.get("id") != item_id:
+            kept.append(item)
+            continue
+        if not asset_id:
+            continue  # 失败/被取消:摘掉占位,别留一个永远转圈的框
+        kept.append({**{k: v for k, v in item.items() if k != "job_id"}, "asset_id": asset_id})
+
+    # 连线可能指着刚被摘掉的那一项 —— normalize 会拒绝悬空的线,所以先把它们去掉。
+    alive = {item["id"] for item in kept}
+    edges = [edge for edge in (canvas.get("edges") or []) if edge.get("source") in alive and edge.get("target") in alive]
+    board.canvas = normalize_canvas({"items": kept, "edges": edges})
+    db.commit()
+    logger.info("board %s item %s -> %s", board.id, item_id, asset_id or "(dropped)")
+
+
+def install() -> None:
+    """把画板的回执登记进任务总线。
+
+    **方向是反的**:任务不认识画板,是画板认识任务 —— 和智能体那条回执同一个做法
+    (见 domain/agent/receipts 开头那段)。登记在组合层(app/main._wire_seams)的**导入期**,
+    不在 lifespan 里:不跑 lifespan 的入口(TestClient、脚本)照样要能把产出填回画布。
+    """
+    from app.domain.jobs import register_receipt_deliverer
+
+    register_receipt_deliverer(RECEIPT_KIND, deliver_generated)

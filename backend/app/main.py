@@ -180,6 +180,8 @@ def _wire_seams() -> None:
     from app.domain.agent import receipts as agent_receipts
     # 插件与素材库之间那道缝同理 —— 两边各自都不认识对方(见 plugins/media_bridge)。
     from app.domain.assets import plugin_bridge as asset_plugin_bridge
+    # 画板上生成的产出要落回画布 —— 同样是「任务不认识画板,画板认识任务」。
+    from app.domain import boards as board_receipts
     # 「TTS 配置从哪儿读」:ai/runtime 是基础设施,不认识数据库,默认只读环境变量,
     # 真正那份由这里喂进去(见 ai/runtime/config.use_source)。
     #
@@ -195,6 +197,7 @@ def _wire_seams() -> None:
 
     agent_receipts.install()
     asset_plugin_bridge.install()
+    board_receipts.install()
     tts_runtime_config.use_source(tts_settings.load)
     sidecar_adapters.use_proxy_source(subprocess_env_for_child)
 

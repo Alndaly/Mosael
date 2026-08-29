@@ -1697,6 +1697,20 @@ class BoardUpdate(BaseModel):
     canvas: dict | None = None
 
 
+class BoardGenerate(BaseModel):
+    workspace_id: str
+    #: 前端先编好 id —— 占位项和回执要指同一个东西,由前端定名字省掉一次往返。
+    item_id: str
+    kind: str = "image"
+    prompt: str
+    x: float = 0
+    y: float = 0
+    provider: str = ""
+    model: str = ""
+    parameters: dict = Field(default_factory=dict)
+    source_assets: list[SourceAssetRef] = Field(default_factory=list)
+
+
 class WorkflowRunRequest(BaseModel):
     params: dict = Field(default_factory=dict)
 

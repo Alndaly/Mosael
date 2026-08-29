@@ -158,3 +158,110 @@ def test_视频项和图片项一样要指向素材() -> None:
     assert "video" in ITEM_KINDS
     got = normalize_canvas({"items": [{"id": "v", "kind": "video", "x": 0, "y": 0, "asset_id": "abc"}]})
     assert got["items"][0]["asset_id"] == "abc"
+
+
+# ── 在画板上生成 ────────────────────────────────────────────────────────────
+
+
+def _pending_board(client, ws: str) -> tuple[str, str]:
+    """一张板 + 一项「正在生成」的占位。返回 (board_id, item_id)。"""
+    board_id = client.post("/api/boards", json={"workspace_id": ws}).json()["id"]
+    canvas = {
+        "items": [{"id": "gen-1", "kind": "image", "x": 0, "y": 0, "job_id": "job-x", "text": "一只猫"}],
+        "edges": [],
+    }
+    client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "canvas": canvas})
+    return board_id, "gen-1"
+
+
+def test_正在生成的项可以没有素材() -> None:
+    """「还没有」和「不该有」是两件事。前者要占着位置让用户看见"这儿在生成"。"""
+    got = normalize_canvas({"items": [{"id": "g", "kind": "image", "x": 0, "y": 0, "job_id": "j1"}]})
+    assert got["items"][0]["job_id"] == "j1"
+    assert "asset_id" not in got["items"][0]
+
+
+def test_任务成功后占位就地变成素材() -> None:
+    from types import SimpleNamespace
+
+    from app.db.models import Board
+    from app.domain.boards import deliver_generated, receipt_to_item
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id, item_id = _pending_board(client, ws)
+
+    from app.core.db import SessionLocal
+
+    db = SessionLocal()
+    job = SimpleNamespace(id="job-x", status="succeeded", result={"asset_id": "asset-42"})
+    deliver_generated(db, job, receipt_to_item(board_id, item_id))
+    item = (db.get(Board, board_id).canvas["items"])[0]
+    db.close()
+
+    assert item["asset_id"] == "asset-42"
+    assert "job_id" not in item, "填完素材还留着 job_id,界面会一直显示在生成"
+
+
+def test_任务失败时把占位摘掉() -> None:
+    """只处理成功的话,失败时画布上会永远留着一个转圈的框 —— 用户分不清它是还在跑还是已经死了,
+    而这两件事的下一步完全不同。"""
+    from types import SimpleNamespace
+
+    from app.db.models import Board
+    from app.domain.boards import deliver_generated, receipt_to_item
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id, item_id = _pending_board(client, ws)
+
+    from app.core.db import SessionLocal
+
+    db = SessionLocal()
+    job = SimpleNamespace(id="job-x", status="failed", result=None)
+    deliver_generated(db, job, receipt_to_item(board_id, item_id))
+    items = db.get(Board, board_id).canvas["items"]
+    db.close()
+
+    assert items == [], "失败了却把占位留在画布上"
+
+
+def test_摘掉占位时连着它的线也要去掉() -> None:
+    """normalize 会拒绝悬空的线 —— 不一起去掉的话,回填这一步自己会炸,而炸在后台线程里。"""
+    from types import SimpleNamespace
+
+    from app.core.db import SessionLocal
+    from app.db.models import Board
+    from app.domain.boards import deliver_generated, receipt_to_item
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id = client.post("/api/boards", json={"workspace_id": ws}).json()["id"]
+    canvas = {
+        "items": [
+            {"id": "note-1", "kind": "note", "x": 0, "y": 0, "text": "一只猫"},
+            {"id": "gen-1", "kind": "image", "x": 300, "y": 0, "job_id": "job-x"},
+        ],
+        "edges": [{"id": "e1", "source": "note-1", "target": "gen-1"}],
+    }
+    client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "canvas": canvas})
+
+    db = SessionLocal()
+    deliver_generated(db, SimpleNamespace(id="job-x", status="failed", result=None), receipt_to_item(board_id, "gen-1"))
+    board = db.get(Board, board_id)
+    items, edges = board.canvas["items"], board.canvas["edges"]
+    db.close()
+
+    assert [item["id"] for item in items] == ["note-1"]
+    assert edges == []
+
+
+def test_回执登记在导入期() -> None:
+    """登记在 lifespan 里的话,不跑 lifespan 的入口(TestClient、脚本)产出永远回不到画布。
+    这个仓库为同一个形状修过一次(TTS 配置来源),不该再来一遍。"""
+    import app.main  # noqa: F401 —— 组装根,import 它就等于装配完成
+
+    from app.domain.boards import RECEIPT_KIND, deliver_generated
+    from app.domain.jobs import _RECEIPT_DELIVERERS
+
+    assert _RECEIPT_DELIVERERS.get(RECEIPT_KIND) is deliver_generated

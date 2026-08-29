@@ -360,6 +360,9 @@ def resolve_engine_python(engine: str) -> str | None:
 _PROBED: dict[str, bool] = {}
 _PROBING: set[str] = set()
 _PROBE_LOCK = threading.Lock()
+#: 探测代次。和克隆那边同一套(见 ai/runtime/tts_models 里那段说明):清缓存时 +1,
+#: 在飞的探测就成了上一代 —— 它既不该继续占着"正在探测"的位置,结果也不该写回来。
+_PROBE_GENERATION = 0
 
 
 def probe_in_background(engine: str) -> None:
@@ -367,6 +370,7 @@ def probe_in_background(engine: str) -> None:
         if engine in _PROBED or engine in _PROBING:
             return
         _PROBING.add(engine)
+        generation = _PROBE_GENERATION
 
     def run() -> None:
         ok = False
@@ -374,8 +378,9 @@ def probe_in_background(engine: str) -> None:
             ok = runtime_ready(engine)
         finally:
             with _PROBE_LOCK:
-                _PROBING.discard(engine)
-                _PROBED[engine] = ok
+                if generation == _PROBE_GENERATION:
+                    _PROBING.discard(engine)
+                    _PROBED[engine] = ok
 
     threading.Thread(target=run, daemon=True).start()
 
@@ -401,10 +406,13 @@ def clear_runtime_probes() -> None:
     """装好环境之后把探测缓存清掉 —— 只有一处要清,因为只有一份缓存。"""
     # getattr:测试会把探测换成普通函数(没有 cache_clear)。清缓存是清理动作,不是判据,
     # 不该因为"被替换过"就炸。
+    global _PROBE_GENERATION
     getattr(_resolve_python, "cache_clear", lambda: None)()
     getattr(runtime_ready, "cache_clear", lambda: None)()
     with _PROBE_LOCK:
         _PROBED.clear()
+        _PROBING.clear()
+        _PROBE_GENERATION += 1
 
 
 @lru_cache(maxsize=4)

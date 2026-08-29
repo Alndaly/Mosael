@@ -197,7 +197,9 @@ function BoardDetail({
     },
     [board.id, workspaceId, onSaved, t],
   );
-  const { pending } = useAutosave(canvas, save);
+  // **不显示"已保存"。** 自动保存做对了就该是无声的:一个常驻的「已保存」既不能让人放心
+  // (它任何时候都这么写),又占着顶栏一格。失败仍然会 toast —— 那才是需要打断的时刻。
+  useAutosave(canvas, save);
 
   const rename = () => {
     const cleaned = name.trim();
@@ -265,11 +267,6 @@ function BoardDetail({
             <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsAddFrame")} aria-label={t("boardsAddFrame")} onClick={() => api?.add("frame")}>
               <Square size={15} />
             </Button>
-          </div>
-          {/* 自动保存本来就该无声,但**攒着还没发**的那一刻要让人看见 —— 否则切走时
-              用户不知道自己是不是走早了。 */}
-          <div className="flex items-center rounded-full border border-border bg-panel/95 px-3 py-1.5 text-ui-2xs text-muted-foreground shadow-[var(--shadow-panel)] backdrop-blur">
-            {pending ? t("boardsSaving") : t("boardsSaved")}
           </div>
         </div>
       </div>
