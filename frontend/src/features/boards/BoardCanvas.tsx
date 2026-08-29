@@ -281,7 +281,18 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, sho
    * 拖回来、连上,是把一个动作拆成了三个。菜单里选一种,节点就落在松手的地方并且线已经连好。
    */
   const [linkMenu, setLinkMenu] = React.useState<
-    { screenX: number; screenY: number; x: number; y: number; from: string; fromIsSource: boolean } | null
+    {
+      screenX: number;
+      screenY: number;
+      /** 那条线的起点(屏幕坐标)—— 松手后 React Flow 会把它正在拖的线撤掉,
+       *  而菜单还开着:没有这段线,看起来就像刚拉的那条线没了。 */
+      fromX: number;
+      fromY: number;
+      x: number;
+      y: number;
+      from: string;
+      fromIsSource: boolean;
+    } | null
   >(null);
 
   const spawnLinked = React.useCallback(
@@ -390,9 +401,21 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, sho
           const point = "changedTouches" in event ? event.changedTouches[0] : (event as MouseEvent);
           if (!point) return;
           const flow = instance.screenToFlowPosition({ x: point.clientX, y: point.clientY });
+          //: 起点取那个 handle 自己的位置 —— 菜单开着的这段时间要把线接上,
+          //: 否则用户看到的是「我拉的线松手就没了」。
+          const handle = document
+            .querySelector(`.react-flow__node[data-id="${CSS.escape(from)}"]`)
+            ?.querySelector(
+              connection.fromHandle?.type === "target"
+                ? ".react-flow__handle-left"
+                : ".react-flow__handle-right",
+            )
+            ?.getBoundingClientRect();
           setLinkMenu({
             screenX: point.clientX,
             screenY: point.clientY,
+            fromX: handle ? handle.x + handle.width / 2 : point.clientX,
+            fromY: handle ? handle.y + handle.height / 2 : point.clientY,
             x: flow.x,
             y: flow.y,
             from,
@@ -481,6 +504,15 @@ function Inner({ boardId, canvas, onChange, onPickAsset, onGenerate, models, sho
         <>
           {/* 点别处就收起来。铺满整块,但在菜单**下面**。 */}
           <div className="fixed inset-0 z-40" onPointerDown={() => setLinkMenu(null)} />
+          {/* 把那条线接着画到菜单上。**画的是一根线,不是一条边** —— 这时还没有第二个节点,
+              真的边无从连起;而没有它,松手的一瞬间线就断在半空,像是操作没生效。 */}
+          <svg className="pointer-events-none fixed inset-0 z-40 h-full w-full" aria-hidden>
+            <path
+              d={`M${linkMenu.fromX},${linkMenu.fromY} C${(linkMenu.fromX + linkMenu.screenX) / 2},${linkMenu.fromY} ${(linkMenu.fromX + linkMenu.screenX) / 2},${linkMenu.screenY} ${linkMenu.screenX},${linkMenu.screenY}`}
+              className="fill-none stroke-border-strong"
+              strokeWidth={1.5}
+            />
+          </svg>
           <div
             className="fixed z-50 w-56 overflow-hidden rounded-xl border border-border-strong bg-panel p-1 shadow-[var(--shadow-panel)]"
             style={{ left: linkMenu.screenX + 8, top: linkMenu.screenY + 8 }}
