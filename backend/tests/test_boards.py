@@ -796,3 +796,45 @@ def test_截取产出走的是画板同一套回执() -> None:
     items = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]["items"]
     db.close()
     assert items[0]["asset_id"] == "cut-1" and "job_id" not in items[0]
+
+
+def test_帧条按需生成并缓存在素材旁边() -> None:
+    """剪辑面板一打开就要看到整条片子的样子。**一张横向长图,不是十二个请求** —— 分成
+    十二个的话它们会一格一格跳出来,每格还各过一次鉴权和落盘。
+
+    生成是尽力而为:抽不出来就没有帧条,面板退回到只填秒数,而不是整个打不开。
+    """
+    from unittest.mock import patch as mock_patch
+
+    from app.media.filmstrip import filmstrip_path
+    from app.media.paths import resolve_key
+
+    client = fresh_client()
+    ws = _workspace(client)
+    video_id = client.post(
+        "/api/assets/import", data={"workspace_id": ws}, files={"file": ("片子.mp4", b"fake", "video/mp4")}
+    ).json()["id"]
+
+    # 抽不出来(假 mp4):404,而不是 500。
+    assert client.get(f"/api/assets/{video_id}/filmstrip").status_code == 404
+
+    from app.core.db import SessionLocal
+    from app.db.models import Asset
+
+    with SessionLocal() as db:
+        directory = resolve_key(db.get(Asset, video_id).file_key).parent
+
+    made: dict = {}
+
+    def fake_generate(source, kind, asset_directory):
+        made["count"] = made.get("count", 0) + 1
+        target = filmstrip_path(asset_directory)
+        target.write_bytes(b"\xff\xd8\xff\xd9")  # 一个最小的 jpeg 头尾
+        return target
+
+    with mock_patch("app.media.filmstrip.generate_filmstrip", side_effect=fake_generate):
+        assert client.get(f"/api/assets/{video_id}/filmstrip").status_code == 200
+        # 第二次直接读盘 —— 同一段素材会被反复打开剪辑面板,每次重跑 ffmpeg 太贵。
+        assert client.get(f"/api/assets/{video_id}/filmstrip").status_code == 200
+    assert made["count"] == 1, f"帧条被重复生成了 {made['count']} 次"
+    assert filmstrip_path(directory).is_file()

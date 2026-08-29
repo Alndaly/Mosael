@@ -771,6 +771,8 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           <TrimComposer
             key={item.id}
             item={item}
+            assetId={item.asset_id as string}
+            workspaceId={workspaceId}
             busy={false}
             onTrim={({ start, end, mute }) => {
               void onTrim({

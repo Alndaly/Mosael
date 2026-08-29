@@ -465,6 +465,12 @@ export function assetThumbnailUrl(assetId: string): string {
   return `${API_BASE}/api/assets/${assetId}/thumbnail${suffix}`;
 }
 
+/** 剪辑面板用的帧条:整条片子均匀取几帧拼成的一张横向长图。按需生成、落盘缓存。 */
+export function assetFilmstripUrl(assetId: string): string {
+  const suffix = authToken ? `?token=${authToken}` : "";
+  return `${API_BASE}/api/assets/${assetId}/filmstrip${suffix}`;
+}
+
 /** The 720p preview proxy the WebCodecs compositor decodes (media_info.proxy_status === "ready"). */
 export function assetProxyUrl(assetId: string): string {
   const suffix = authToken ? `?token=${authToken}` : "";

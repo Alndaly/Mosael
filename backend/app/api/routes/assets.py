@@ -340,6 +340,22 @@ def get_asset_thumbnail(asset_id: str, db: DbSession, user: CurrentUser) -> File
     return FileResponse(thumb, media_type="image/jpeg")
 
 
+@router.get("/assets/{asset_id}/filmstrip")
+def get_asset_filmstrip(asset_id: str, db: DbSession, user: CurrentUser) -> FileResponse:
+    """剪辑面板用的帧条(一张横向长图)。**按需生成、落盘缓存** —— 和缩略图同一条路。"""
+    from app.media.filmstrip import filmstrip_path, generate_filmstrip
+
+    asset = _require_file_backed_asset(db, asset_id)
+    ensure_workspace_access(db, user, asset.workspace_id)
+    source = resolve_key(asset.file_key)
+    strip = filmstrip_path(source.parent)
+    if not strip.is_file():
+        generate_filmstrip(source, asset.kind, source.parent)
+    if not strip.is_file():
+        raise HTTPException(status_code=404, detail="Filmstrip not available")
+    return FileResponse(strip, media_type="image/jpeg")
+
+
 @router.get("/assets/{asset_id}/waveform")
 def get_asset_waveform(asset_id: str, db: DbSession, user: CurrentUser) -> FileResponse:
     asset = _require_file_backed_asset(db, asset_id)
