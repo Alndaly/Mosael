@@ -901,6 +901,26 @@ export function generateOnBoard(
   return api<Board>(`/api/boards/${boardId}/generate`, { method: "POST", body: JSON.stringify(body) });
 }
 
+/** 让 AI 往画板上的一张便签里写字。**同步返回** —— 写字几秒就回,不走生成任务那条路。 */
+export function writeOnBoard(
+  boardId: string,
+  body: { workspace_id: string; item_id: string; prompt: string; provider_profile_id?: string; model?: string },
+): Promise<Board> {
+  return api<Board>(`/api/boards/${boardId}/write`, { method: "POST", body: JSON.stringify(body) });
+}
+
+/** 某能力下所有可用模型(跨连接)。文案生成列的是 chat。 */
+export interface CapabilityModel {
+  provider_profile_id: string;
+  provider_name: string;
+  model: string;
+  display_name: string;
+}
+
+export function listCapabilityModels(capability: string): Promise<CapabilityModel[]> {
+  return api<CapabilityModel[]>(`/api/settings/capability-models/${capability}`);
+}
+
 export function deleteBoard(boardId: string, workspaceId: string): Promise<unknown> {
   return api(`/api/boards/${boardId}?workspace_id=${workspaceId}`, { method: "DELETE" });
 }

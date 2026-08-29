@@ -429,3 +429,116 @@ def test_分组框记得住联动拖动这件事() -> None:
         normalize_canvas(
             {"items": [{"id": "f", "kind": "frame", "x": 0, "y": 0, "move_children": "yes"}], "edges": []}
         )
+
+
+def test_写文案就地落进那张便签_不新建() -> None:
+    """AI 写完的字要放进用户摆好的那张便签里 —— 位置、颜色、大小都归他。"""
+    from app.core.db import SessionLocal
+    from app.domain.boards import write_text
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id = client.post(
+        "/api/boards",
+        json={
+            "workspace_id": ws,
+            "name": "B",
+            "canvas": {
+                "items": [{"id": "n1", "kind": "note", "x": 40, "y": 80, "width": 220, "color": "green"}],
+                "edges": [],
+            },
+        },
+    ).json()["id"]
+
+    db = SessionLocal()
+    board = write_text(db, workspace_id=ws, board_id=board_id, item_id="n1", text="城市夜景下的一只白猫")
+    items = board.canvas["items"]
+    assert len(items) == 1, "写字居然新建了一项"
+    assert items[0]["text"] == "城市夜景下的一只白猫"
+    assert (items[0]["x"], items[0]["y"], items[0]["color"]) == (40, 80, "green"), "把用户摆好的东西改了"
+
+    with pytest.raises(BoardDomainError):
+        write_text(db, workspace_id=ws, board_id=board_id, item_id="没这项", text="x")
+    db.close()
+
+
+def test_写文案没配模型时给准信而不是五百() -> None:
+    """一个连接都没有时,用户该看到「先去设置里配一个」,不是一页 traceback。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id = client.post(
+        "/api/boards",
+        json={"workspace_id": ws, "name": "B", "canvas": {"items": [{"id": "n1", "kind": "note", "x": 0, "y": 0}], "edges": []}},
+    ).json()["id"]
+
+    answer = client.post(
+        f"/api/boards/{board_id}/write",
+        json={"workspace_id": ws, "item_id": "n1", "prompt": "写一句广告词"},
+    )
+    assert answer.status_code == 422, answer.text
+    assert "供应商" in answer.json()["detail"]
+
+    # 空要求也别发出去 —— 供应商那边回的是一句看不懂的英文 400。
+    empty = client.post(
+        f"/api/boards/{board_id}/write",
+        json={"workspace_id": ws, "item_id": "n1", "prompt": "   "},
+    )
+    assert empty.status_code == 400
+
+
+def test_便签上已有内容时是改写而不是重写() -> None:
+    """有字就该把现有内容单独交代给模型,并说明用户给的是**改法**。
+
+    揉成一段发过去的话,模型会把「改短一点」当成正文的一部分写进便签;什么都不说的话,
+    它会把整篇重写一遍 —— 而用户只想动其中一句。两种都不报错,只是结果不对。
+    """
+    from unittest.mock import patch as mock_patch
+
+    from app.core.db import SessionLocal
+    from app.db.models import ProviderProfile
+    from app.domain import provider_models
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id = client.post(
+        "/api/boards",
+        json={
+            "workspace_id": ws,
+            "name": "B",
+            "canvas": {
+                "items": [{"id": "n1", "kind": "note", "x": 0, "y": 0, "text": "原来的那句话"}],
+                "edges": [],
+            },
+        },
+    ).json()["id"]
+
+    #: 真建一条连接 —— 计量事件带着 provider_profile_id 的外键,拿个假对象顶上会在落账时炸。
+    profile_id = client.post(
+        "/api/settings/providers",
+        json={"vendor": "openai", "name": "演示", "api_key": "sk-test", "base_url": "http://127.0.0.1:1"},
+    ).json()["id"]
+    #: 密钥是按人存的,建连接时那个字段不落钥匙 —— 得再存一次(见 provider_credentials)。
+    client.put(f"/api/settings/providers/{profile_id}/credential", json={"api_key": "sk-test"})
+    with SessionLocal() as db:
+        provider_models.upsert(db, db.get(ProviderProfile, profile_id), "gpt-4.1-mini", source="manual")
+        db.commit()
+
+    seen: dict = {}
+
+    def fake_chat(target, messages, **kwargs):
+        seen["messages"] = messages
+        return "改过之后的那句话"
+
+    with mock_patch("app.domain.ai_chat.chat", side_effect=fake_chat):
+        answer = client.post(
+            f"/api/boards/{board_id}/write",
+            json={"workspace_id": ws, "item_id": "n1", "prompt": "改短一半"},
+        )
+
+    assert answer.status_code == 200, answer.text
+    messages = seen["messages"]
+    assert "改法" in messages[0]["content"], "没告诉模型这是改写"
+    # 现有内容自成一轮 —— 和要求分开。
+    assert any("原来的那句话" in one["content"] and "改短一半" not in one["content"] for one in messages[1:]), messages
+    assert messages[-1]["content"] == "改短一半"
+    assert answer.json()["canvas"]["items"][0]["text"] == "改过之后的那句话"

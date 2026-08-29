@@ -2826,6 +2826,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/boards/{board_id}/write": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Write
+         * @description 让 AI 往画板上的一张便签里写字。
+         *
+         *     **不走生成任务那条路。** 出图出片要几十秒,所以那边先摆占位、起任务、回执填回来;写字几秒
+         *     就回,同步返回反而更直接 —— 为它铺一套任务/回执,用户看到的只是一个多余的转圈。
+         *
+         *     **也不自己实现一遍「调 LLM」**:供应商解析走 require_profile、调用走 ai_chat.chat、计量走
+         *     billable —— 和工作流的 LLM 节点、智能体是同三样东西。另写一份的话,重试次数、超时、
+         *     记账口径迟早各走各的,而分岔了没有任何地方会报错。
+         */
+        post: operations["write_api_boards__board_id__write_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/publish/platforms": {
         parameters: {
             query?: never;
@@ -5344,6 +5371,31 @@ export interface components {
             canvas?: {
                 [key: string]: unknown;
             } | null;
+        };
+        /**
+         * BoardWrite
+         * @description 让 AI 往画板上的一张便签里写字。
+         *
+         *     和 BoardGenerate **不是一条路**:出图出片要几十秒,所以那边先摆占位、起任务、回执填回来;
+         *     写字几秒就回,同步返回反而更直接 —— 为它铺一套任务/回执,用户看到的只是一个多余的转圈。
+         */
+        BoardWrite: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Item Id */
+            item_id: string;
+            /** Prompt */
+            prompt: string;
+            /**
+             * Provider Profile Id
+             * @default
+             */
+            provider_profile_id: string;
+            /**
+             * Model
+             * @default
+             */
+            model: string;
         };
         /** Body_import_asset_api_assets_import_post */
         Body_import_asset_api_assets_import_post: {
@@ -15040,6 +15092,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["BoardGenerate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    write_api_boards__board_id__write_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                board_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoardWrite"];
             };
         };
         responses: {

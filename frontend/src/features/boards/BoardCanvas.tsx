@@ -15,7 +15,10 @@ import {
   type Node,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { Copy, FileUp, Group, Loader2, Replace, Sparkles, Trash2 } from "lucide-react";
+import { Copy, FileUp, Group, Loader2, Maximize2, Replace, Sparkles, Trash2 } from "lucide-react";
+
+import { assetFileUrl } from "@/api/client";
+import { useImagePreview } from "@/components/app/image-preview";
 
 import type { BoardCanvas as Canvas, BoardItem, GenerationModel } from "@/api/client";
 import { NodeComposer } from "@/features/boards/NodeComposer";
@@ -23,6 +26,7 @@ import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
 import { usePersistentViewport } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { canRedo, canUndo, emptyHistory, record, redo, undo } from "@/features/boards/canvasHistory";
+import { NoteComposer } from "@/features/boards/NoteComposer";
 import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, KIND_META, SPAWNABLE_KINDS, type MediaKind } from "@/features/boards/boardNodes";
 
 /**
@@ -43,6 +47,9 @@ import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKi
 export interface BoardCanvasApi {
   add: (kind: BoardItem["kind"], extra?: Partial<BoardItem>) => void;
   fill: (itemId: string, assetId: string) => void;
+  /** 把某一项的文字换掉(AI 写完之后)。**得走这条** —— 画布的节点只在挂载时从 canvas
+   *  建一次,回写上层的 canvas 状态是看不见的。 */
+  setText: (itemId: string, text: string) => void;
   fitView: () => void;
   undo: () => void;
   redo: () => void;
@@ -101,6 +108,8 @@ interface Props {
     parameters?: Record<string, unknown>;
     sourceAssets?: { asset_id: string; role: string }[];
   }) => Promise<unknown>;
+  /** 让 AI 往某张便签里写字。**同步** —— 写字几秒就回,不走生成任务那条路。 */
+  onWrite?: (input: { itemId: string; prompt: string; providerProfileId: string; model: string }) => Promise<unknown>;
   /** 可用的生成模型 —— 提示词面板要让人选。 */
   models?: GenerationModel[];
   /** 全览开着没有。占右下角一块不小的地方,图小的时候纯属挡视线。 */
@@ -113,7 +122,7 @@ interface Props {
   onReady?: (api: BoardCanvasApi) => void;
 }
 
-function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, models, showMinimap = true, onDropFiles, uploading, onReady }: Props) {
+function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, models, showMinimap = true, onDropFiles, uploading, onReady }: Props) {
   const rf = React.useRef<ReactFlowInstance | null>(null);
   const viewport = usePersistentViewport(`board:${boardId}`);
   const [ready, setReady] = React.useState(false);
@@ -165,11 +174,17 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
   // 每次画布变了就汇一份给上层去存。**用 JSON 比对而不是引用比对** —— React Flow 每次
   // 拖动都换新对象,引用比对等于每帧都报"变了"。
   //: 选中的那个空槽/生成中的槽 —— 只有一个被选中时才挂面板,多选没有单一的作用对象。
+  /** 选中的**还空着**的那一项 —— 空槽就是「等着被填」,面板挂在它下面。 */
   const composerItem = React.useMemo(() => {
     const picked = nodes.filter((node) => node.selected);
     if (picked.length !== 1) return null;
     const item = (picked[0].data as unknown as { item: BoardItem }).item;
-    return (item.kind === "image" || item.kind === "video") && !item.asset_id ? item : null;
+    if (item.kind === "image" || item.kind === "video") return item.asset_id ? null : item;
+    //: **便签不论空不空都挂。** 空的是「从头写」,有字的是「照我说的改」—— 后者才是这块
+    //: 面板最常被用到的样子(写完之后想「短一半」「换个语气」)。双击进编辑照旧,两者不冲突:
+    //: 面板挂在节点下方,不盖着字。
+    if (item.kind === "note") return item;
+    return null;
   }, [nodes]);
 
   /**
@@ -367,6 +382,9 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
    * **拉了线就说明用户已经想好了「从这儿接下去」**,这时再让他去右上角找按钮加节点、
    * 拖回来、连上,是把一个动作拆成了三个。菜单里选一种,节点就落在松手的地方并且线已经连好。
    */
+  //: 哪一张便签正在写。写字是同步的几秒,期间按钮转圈 —— 不给反馈的话用户会再点一次。
+  const [writing, setWriting] = React.useState<string | null>(null);
+
   const [linkMenu, setLinkMenu] = React.useState<
     {
       screenX: number;
@@ -464,13 +482,14 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     onReady?.({
       add,
       fill,
+      setText,
       fitView: () => rf.current?.fitView({ padding: 0.3, duration: 250 }),
       undo: stepBack,
       redo: stepForward,
       canUndo: canUndo(history),
       canRedo: canRedo(history),
     });
-  }, [add, fill, onReady, stepBack, stepForward, history]);
+  }, [add, fill, setText, onReady, stepBack, stepForward, history]);
 
   return (
     // 画布放在**带边框的圆角卡片**里(和工作流详情页同一个形态)—— 通栏铺到窗口边的话,
@@ -642,8 +661,24 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       {/* 选中之后才出操作条 —— 没选中时它没有作用对象。 */}
       <ItemToolbar nodes={nodes} setNodes={setNodes} onPickAsset={onPickAsset} onSpawn={onGenerate ? spawnLinked : undefined} />
 
+      {/* 空便签:挂写文案的面板。**和图片/视频不是同一张表** —— 写字没有比例、时长、参考图
+          这些东西,硬塞进同一个组件里会长出一堆「文本的时候不显示」的分支。 */}
+      {composerItem?.kind === "note" && onWrite && (
+        <NoteComposer
+          key={composerItem.id}
+          item={composerItem}
+          busy={writing === composerItem.id}
+          onWrite={({ prompt, providerProfileId, model }) => {
+            setWriting(composerItem.id);
+            void onWrite({ itemId: composerItem.id, prompt, providerProfileId, model }).finally(() =>
+              setWriting(null),
+            );
+          }}
+        />
+      )}
+
       {/* 选中一个**还没有产出**的图片/视频槽时,底下挂提示词面板 —— 节点本身就是生成单元。 */}
-      {composerItem && onGenerate && (
+      {composerItem && composerItem.kind !== "note" && onGenerate && (
         <NodeComposer
           key={composerItem.id}
           item={composerItem}
@@ -696,6 +731,7 @@ function ItemToolbar({
     fromIsSource?: boolean,
   ) => void;
 }) {
+  const { openImagePreview } = useImagePreview();
   const selected = nodes.filter((node) => node.selected);
   // 多选时只给共通的动作 —— 逐个类型的动作在混选下没有一致的含义。
   const single = selected.length === 1 ? selected[0] : null;
@@ -772,6 +808,21 @@ function ItemToolbar({
           </button>
         )}
 
+        {/* 预览:**看大图是一个明确的动作,不是点在图上的副作用**。画布上点一下的意思是
+            选中这个节点 —— 让图片自己接管点击的话,操作条和表单都弹不出来。 */}
+        {item?.kind === "image" && item.asset_id && (
+          <button
+            type="button"
+            className="flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs text-muted-foreground hover:bg-secondary hover:text-foreground"
+            title="看大图"
+            onClick={() =>
+              openImagePreview({ src: assetFileUrl(item.asset_id as string), title: item.text || "" })
+            }
+          >
+            <Maximize2 size={12} /> 预览
+          </button>
+        )}
+
         {item && isMediaKind(item.kind) && (
           <button
             type="button"
@@ -788,17 +839,28 @@ function ItemToolbar({
             来不及说。已经在生成的那一项不给(它还没有产出)。 */}
         {onSpawn && single && item && item.kind !== "frame" && !item.job_id && (
           <>
-            {(["image", "video"] as const)
+            {(["image", "video", "note"] as const)
               //: 便签往下接图片,有产出的图片/视频往下接视频 —— 空槽自己都还没有东西可给。
+              //: 文案谁都能往下接:给图配一段说明、给便签接着往下写。
               .filter((kind) =>
-                item.kind === "note" ? kind === "image" : Boolean(item.asset_id) && kind === "video",
+                kind === "note"
+                  ? item.kind !== "note" || Boolean((item.text ?? "").trim())
+                  : item.kind === "note"
+                    ? kind === "image"
+                    : Boolean(item.asset_id) && kind === "video",
               )
               .map((kind) => (
                 <button
                   key={kind}
                   type="button"
                   className="flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  title={item.kind === "note" ? "用这段文字生成图片" : "用这张图当首帧生成视频"}
+                  title={
+                    kind === "note"
+                      ? "让 AI 接着这一项写点文字"
+                      : item.kind === "note"
+                        ? "用这段文字生成图片"
+                        : "用这张图当首帧生成视频"
+                  }
                   onClick={() =>
                     onSpawn(kind, item.id, {
                       x: single.position.x + (single.width ?? 260) + 60,
@@ -806,7 +868,7 @@ function ItemToolbar({
                     })
                   }
                 >
-                  <Sparkles size={12} /> 生成{KIND_META[kind].label}
+                  <Sparkles size={12} /> {kind === "note" ? "生成文案" : `生成${KIND_META[kind].label}`}
                 </button>
               ))}
           </>

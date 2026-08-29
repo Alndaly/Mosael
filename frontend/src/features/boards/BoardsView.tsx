@@ -8,6 +8,7 @@ import {
   createBoard,
   deleteBoard,
   generateOnBoard,
+  writeOnBoard,
   getBoard,
   importAsset,
   listBoards,
@@ -277,6 +278,29 @@ function BoardDetail({
     [board.id, workspaceId, t],
   );
 
+  /** 让 AI 往某张便签里写字。同步返回,写完直接把新画布落回本地状态。 */
+  const write = React.useCallback(
+    async (input: { itemId: string; prompt: string; providerProfileId: string; model: string }) => {
+      try {
+        const next = await writeOnBoard(board.id, {
+          workspace_id: workspaceId,
+          item_id: input.itemId,
+          prompt: input.prompt,
+          provider_profile_id: input.providerProfileId,
+          model: input.model,
+        });
+        //: **走画布的把手,不是回写这里的 canvas 状态** —— 画布的节点只在挂载时从 canvas
+        //: 建一次,改这里的 state 它看不见,用户会以为「写完了但没出来」。
+        const written = ((next.canvas?.items ?? []) as BoardItem[]).find((one) => one.id === input.itemId);
+        if (written?.text) api?.setText(input.itemId, written.text);
+        onSaved();
+      } catch (error) {
+        toast.error("写不出来", { description: (error as Error).message });
+      }
+    },
+    [board.id, workspaceId, onSaved, api],
+  );
+
   //: 还在跑的那几格。**轮询而不是等** —— 生成要几十秒,而用户这期间还在画布上干别的。
   const [running, setRunning] = React.useState<string[]>([]);
   React.useEffect(() => {
@@ -508,6 +532,7 @@ function BoardDetail({
         onChange={setCanvas}
         onPickAsset={(kind, place) => setPicking({ kind, place })}
         onGenerate={generate}
+        onWrite={write}
         models={models.data ?? []}
         showMinimap={showMinimap}
         onDropFiles={(files) => upload.mutateAsync(files)}

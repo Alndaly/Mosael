@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import BoardCreate, BoardGenerate, BoardOut, BoardUpdate
+from app.api.schemas import BoardCreate, BoardGenerate, BoardOut, BoardUpdate, BoardWrite
 from app.db.models import Board
 from app.domain.boards import (
     BoardDomainError,
@@ -16,6 +16,7 @@ from app.domain.boards import (
     place_pending,
     receipt_to_item,
     update_board,
+    write_text,
 )
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 
@@ -139,3 +140,89 @@ def generate(board_id: str, body: BoardGenerate, db: DbSession, user: CurrentUse
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     start_generation_thread(generation.id)
     return board
+
+
+@router.post("/boards/{board_id}/write", response_model=BoardOut)
+def write(board_id: str, body: BoardWrite, db: DbSession, user: CurrentUser) -> Board:
+    """让 AI 往画板上的一张便签里写字。
+
+    **不走生成任务那条路。** 出图出片要几十秒,所以那边先摆占位、起任务、回执填回来;写字几秒
+    就回,同步返回反而更直接 —— 为它铺一套任务/回执,用户看到的只是一个多余的转圈。
+
+    **也不自己实现一遍「调 LLM」**:供应商解析走 require_profile、调用走 ai_chat.chat、计量走
+    billable —— 和工作流的 LLM 节点、智能体是同三样东西。另写一份的话,重试次数、超时、
+    记账口径迟早各走各的,而分岔了没有任何地方会报错。
+    """
+    from app.domain.ai_chat import AiChatError, chat, target_for
+    from app.domain.providers import require_profile
+    from app.domain.usage import billable
+
+    ensure_workspace_perm(db, user, body.workspace_id, "ai")
+    prompt = body.prompt.strip()
+    if not prompt:
+        raise HTTPException(status_code=400, detail="先写点要求,再让它写")
+
+    #: 这张便签上已经有的字。**从画布上读,不让前端拼进提示词** —— 服务端本来就拿着这份画布,
+    #: 而拼在前端意味着「现在写的是什么」和「要求是什么」揉成了一段,模型分不清哪句是要改的
+    #: 对象、哪句是改法。有字就是**改写**,没字才是从头写。
+    try:
+        board = get_board(db, body.workspace_id, board_id)
+    except BoardDomainError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    existing = next(
+        (str(one.get("text") or "") for one in (board.canvas or {}).get("items", []) if one.get("id") == body.item_id),
+        "",
+    ).strip()
+
+    try:
+        profile = require_profile(db, body.provider_profile_id or None, user_id=user.id, error=AiChatError)
+        target = target_for(db, profile, model=body.model)
+        with billable(
+            db,
+            capability="chat",
+            operation="board_write",
+            workspace_id=body.workspace_id,
+            provider=target.vendor,
+            model=target.model,
+            provider_profile_id=profile.id,
+            source_type="board",
+            source_id=board_id,
+        ) as call:
+            text = chat(
+                target,
+                [
+                    #: 说清楚产物要直接摆在画板上 —— 不交代的话模型爱写「好的,这是您要的文案:」,
+                    #: 而那句话会原样贴进便签里。
+                    {
+                        "role": "system",
+                        "content": (
+                            "你在帮用户往一张创意画板的便签上写字。直接给正文,不要开场白、不要解释、"
+                            "不要用 Markdown 代码块包起来。"
+                            + (
+                                "这张便签上已经有内容,用户给的是**改法**:照他说的改,没提到的地方保持原样,"
+                                "整篇重写一遍不是他要的。"
+                                if existing
+                                else ""
+                            )
+                        ),
+                    },
+                    *(
+                        #: 现有内容单独一轮,和要求分开 —— 揉成一段的话,模型会把「改短一点」
+                        #: 当成正文的一部分写进去。
+                        [{"role": "user", "content": f"这张便签现在的内容:\n{existing}"}]
+                        if existing
+                        else []
+                    ),
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.7,
+                call=call,
+                label="画板写文案",
+            ).strip()
+    except AiChatError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    try:
+        return write_text(db, workspace_id=body.workspace_id, board_id=board_id, item_id=body.item_id, text=text)
+    except BoardDomainError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

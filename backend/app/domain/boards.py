@@ -326,6 +326,24 @@ def place_pending(db: Session, *, workspace_id: str, board_id: str, item: dict[s
     return board
 
 
+def write_text(db: Session, *, workspace_id: str, board_id: str, item_id: str, text: str) -> Board:
+    """把一段写好的文字放进某一项。
+
+    **就地改,不新建** —— 调用方要写的那张便签是用户在画布上摆好的,位置、颜色、大小都归他。
+    """
+    board = get_board(db, workspace_id, board_id)
+    canvas = dict(board.canvas or {"items": [], "edges": []})
+    items = [dict(one) for one in (canvas.get("items") or [])]
+    index = next((i for i, one in enumerate(items) if one.get("id") == item_id), None)
+    if index is None:
+        raise BoardDomainError(f"画板项不存在:{item_id or '(空)'}")
+    items[index] = {**items[index], "text": text}
+    board.canvas = normalize_canvas({**canvas, "items": items})
+    db.commit()
+    db.refresh(board)
+    return board
+
+
 def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
     """任务落终态 → 把产出填进画板上那一项。
 

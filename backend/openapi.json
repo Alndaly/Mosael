@@ -8327,6 +8327,59 @@
         }
       }
     },
+    "/api/boards/{board_id}/write": {
+      "post": {
+        "tags": [
+          "boards"
+        ],
+        "summary": "Write",
+        "description": "让 AI 往画板上的一张便签里写字。\n\n**不走生成任务那条路。** 出图出片要几十秒,所以那边先摆占位、起任务、回执填回来;写字几秒\n就回,同步返回反而更直接 —— 为它铺一套任务/回执,用户看到的只是一个多余的转圈。\n\n**也不自己实现一遍「调 LLM」**:供应商解析走 require_profile、调用走 ai_chat.chat、计量走\nbillable —— 和工作流的 LLM 节点、智能体是同三样东西。另写一份的话,重试次数、超时、\n记账口径迟早各走各的,而分岔了没有任何地方会报错。",
+        "operationId": "write_api_boards__board_id__write_post",
+        "parameters": [
+          {
+            "name": "board_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Board Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoardWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/publish/platforms": {
       "get": {
         "tags": [
@@ -15449,6 +15502,40 @@
           "workspace_id"
         ],
         "title": "BoardUpdate"
+      },
+      "BoardWrite": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "item_id": {
+            "type": "string",
+            "title": "Item Id"
+          },
+          "prompt": {
+            "type": "string",
+            "title": "Prompt"
+          },
+          "provider_profile_id": {
+            "type": "string",
+            "title": "Provider Profile Id",
+            "default": ""
+          },
+          "model": {
+            "type": "string",
+            "title": "Model",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "item_id",
+          "prompt"
+        ],
+        "title": "BoardWrite",
+        "description": "让 AI 往画板上的一张便签里写字。\n\n和 BoardGenerate **不是一条路**:出图出片要几十秒,所以那边先摆占位、起任务、回执填回来;\n写字几秒就回,同步返回反而更直接 —— 为它铺一套任务/回执,用户看到的只是一个多余的转圈。"
       },
       "Body_import_asset_api_assets_import_post": {
         "properties": {

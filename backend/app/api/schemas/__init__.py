@@ -1715,6 +1715,21 @@ class BoardGenerate(BaseModel):
     source_assets: list[SourceAssetRef] = Field(default_factory=list)
 
 
+class BoardWrite(BaseModel):
+    """让 AI 往画板上的一张便签里写字。
+
+    和 BoardGenerate **不是一条路**:出图出片要几十秒,所以那边先摆占位、起任务、回执填回来;
+    写字几秒就回,同步返回反而更直接 —— 为它铺一套任务/回执,用户看到的只是一个多余的转圈。
+    """
+
+    workspace_id: str
+    item_id: str
+    prompt: str
+    #: 留空就用这个人在 chat 能力上的默认模型。
+    provider_profile_id: str = ""
+    model: str = ""
+
+
 class WorkflowRunRequest(BaseModel):
     params: dict = Field(default_factory=dict)
 
