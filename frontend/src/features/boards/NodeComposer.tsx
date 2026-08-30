@@ -536,6 +536,9 @@ export function NodeComposer({
           }}
           placeholder={t(slots.length > 0 ? "boardPromptPlaceholderMention" : "boardPromptPlaceholder")}
           candidates={candidates}
+          //: 连进这个节点的那几份排最前,并单独给一个「已连接」筛选钮 —— 刚接进来的那张,
+          //: 正是这句话十有八九要指的东西。
+          linked={feed.map((one) => one.assetId)}
           onSubmit={send}
           emptyHint={() => (slots.length === 0 ? t("boardNoSourceSlots") : "")}
         />

@@ -2,6 +2,8 @@ import React from "react";
 import { createPortal } from "react-dom";
 import { autoUpdate, computePosition, flip, offset, shift } from "@floating-ui/dom";
 
+import { cn } from "@/lib/utils";
+
 /**
  * 跟着光标走的候选菜单 —— TipTap suggestion 插件的**那一半界面**。
  *
@@ -27,6 +29,8 @@ export interface SuggestionMenuState<T> {
 
 export interface SuggestionMenu<T> {
   menu: SuggestionMenuState<T> | null;
+  /** 插件这一轮给出的**全部**候选(没过 view)。渲染表头(比如"共 N 个"、有哪些类型)用它。 */
+  all: T[];
   /** 交给 `RefSuggestion.configure({ suggestion: { render } })`。 */
   render: () => {
     onStart: (props: { command: (item: T) => void; clientRect?: (() => DOMRect | null) | null; items: T[] }) => void;
@@ -37,7 +41,14 @@ export interface SuggestionMenu<T> {
   /** 确认某一条(点击走这里;回车由 onKeyDown 处理)。 */
   choose: (item: T) => void;
   /** 把菜单画出来 —— 每一条长什么样由调用方给。 */
-  Portal: (props: { children: (item: T, index: number) => React.ReactNode; className?: string }) => React.ReactNode;
+  Portal: (props: {
+    children: (item: T, index: number) => React.ReactNode;
+    className?: string;
+    /** 钉在列表上方、**不跟着滚**的一条:筛选按钮这类"作用于下面整份列表"的东西。 */
+    header?: React.ReactNode;
+    /** 列表下方的一行,比如「还有 N 个」。 */
+    footer?: React.ReactNode;
+  }) => React.ReactNode;
 }
 
 export function useSuggestionMenu<T>({
@@ -45,10 +56,25 @@ export function useSuggestionMenu<T>({
   emptyHint,
   /** 两条候选算不算「同一批」—— 同一批时保留用户按下去的高亮位置,不弹回第一条。 */
   sameItems = (a: T[], b: T[]) => a.length === b.length && a.every((one, at) => one === b[at]),
+  /**
+   * 把插件给的候选**再过一道**:筛选、排序、截断。
+   *
+   * **筛选必须发生在这里,不能放进 `items()`。** 插件只在 query / 光标位置变了才重新调
+   * `items()`(见 @tiptap/suggestion 的 update:`queryChanged || textChanged || rangeChanged`)——
+   * 而按一下筛选钮这三样一个都没变。放进 items() 的筛选按下去列表纹丝不动,而且不报错。
+   *
+   * 过完之后 `menu.items` 就是**看得见的那一份**,键盘高亮和回车选中都对着它 —— 不然
+   * 上下键走的是原始列表,选中的和高亮的不是同一条。
+   */
+  view,
 }: {
   emptyHint?: () => string;
   sameItems?: (a: T[], b: T[]) => boolean;
+  view?: (items: T[]) => T[];
 } = {}): SuggestionMenu<T> {
+  //: 插件这一轮给出的原始候选。**和可见列表分开存** —— 筛选一变,要能就着原始的重新过一遍,
+  //: 而插件那时候不会再调 items()。
+  const [raw, setRaw] = React.useState<T[]>([]);
   const [menu, setMenu] = React.useState<SuggestionMenuState<T> | null>(null);
   //: 插件给的**是个函数**,每次调用返回当前的光标矩形。存函数而不是存算好的坐标 ——
   //: 存坐标就成了一张快照:画布一平移,光标动了而菜单不知道,于是它钉在原地。
@@ -63,7 +89,11 @@ export function useSuggestionMenu<T>({
   const sameRef = React.useRef(sameItems);
   sameRef.current = sameItems;
 
-  const next = React.useCallback((prev: SuggestionMenuState<T> | null, items: T[]): SuggestionMenuState<T> | null => {
+  const viewRef = React.useRef(view);
+  viewRef.current = view;
+
+  const next = React.useCallback((prev: SuggestionMenuState<T> | null, source: T[]): SuggestionMenuState<T> | null => {
+    const items = viewRef.current ? viewRef.current(source) : source;
     if (items.length) {
       const active = prev && !prev.hint && sameRef.current(prev.items, items) ? prev.active : 0;
       return { items, active };
@@ -81,11 +111,13 @@ export function useSuggestionMenu<T>({
       onStart: (props: { command: (item: T) => void; clientRect?: (() => DOMRect | null) | null; items: T[] }) => {
         commandRef.current = props.command;
         clientRectRef.current = props.clientRect ?? null;
+        setRaw(props.items);
         setMenu((prev) => next(prev, props.items));
       },
       onUpdate: (props: { command: (item: T) => void; clientRect?: (() => DOMRect | null) | null; items: T[] }) => {
         commandRef.current = props.command;
         clientRectRef.current = props.clientRect ?? null;
+        setRaw(props.items);
         setMenu((prev) => next(prev, props.items));
       },
       // **按键交给插件**:它知道 composition,中文选词时的回车不会被当成「选中候选」。
@@ -114,10 +146,24 @@ export function useSuggestionMenu<T>({
         }
         return false;
       },
-      onExit: () => setMenu(null),
+      onExit: () => {
+        setRaw([]);
+        setMenu(null);
+      },
     }),
     [next],
   );
+
+  //: 筛选变了(view 换了身份)就着**原始候选**重新过一遍。插件这时候不会再调 items(),
+  //: 不自己重算的话,按下去的筛选钮什么都不会发生。
+  const firstView = React.useRef(true);
+  React.useEffect(() => {
+    if (firstView.current) {
+      firstView.current = false;
+      return;
+    }
+    setMenu((prev) => (prev ? next(prev, raw) : prev));
+  }, [view, raw, next]);
 
   React.useEffect(() => {
     const floating = menuEl.current;
@@ -144,20 +190,38 @@ export function useSuggestionMenu<T>({
   const choose = React.useCallback((item: T) => commandRef.current?.(item), []);
 
   const Portal = React.useCallback(
-    ({ children, className }: { children: (item: T, index: number) => React.ReactNode; className?: string }) => {
+    ({
+      children,
+      className,
+      header,
+      footer,
+    }: {
+      children: (item: T, index: number) => React.ReactNode;
+      className?: string;
+      header?: React.ReactNode;
+      footer?: React.ReactNode;
+    }) => {
       if (!menu) return null;
+      //: 有表头/表尾时,滚动只发生在**中间那一段** —— 整块一起滚的话,筛选钮会跟着列表滚走,
+      //: 而它作用于整份列表。没有表头时保持原样(一整块可滚),不给已有的调用方添麻烦。
+      const banded = Boolean(header || footer);
       return createPortal(
         <div
           ref={menuEl}
-          className={
+          className={cn(
             className ??
-            "fixed left-0 top-0 z-50 max-h-48 min-w-[180px] overflow-auto rounded-md border border-border bg-panel p-1 shadow-[var(--shadow-panel)]"
-          }
+              "fixed left-0 top-0 z-50 max-h-48 min-w-[180px] rounded-md border border-border bg-panel p-1 shadow-[var(--shadow-panel)]",
+            banded ? "flex flex-col overflow-hidden" : "overflow-auto",
+          )}
         >
-          {menu.hint ? (
-            <div className="px-2 py-1 text-ui-2xs leading-relaxed text-muted-foreground">{menu.hint}</div>
-          ) : null}
-          {menu.items.map((item, index) => children(item, index))}
+          {header}
+          <div className={banded ? "min-h-0 flex-1 overflow-auto" : undefined}>
+            {menu.hint ? (
+              <div className="px-2 py-1 text-ui-2xs leading-relaxed text-muted-foreground">{menu.hint}</div>
+            ) : null}
+            {menu.items.map((item, index) => children(item, index))}
+          </div>
+          {footer}
         </div>,
         document.body,
       );
@@ -165,5 +229,5 @@ export function useSuggestionMenu<T>({
     [menu],
   );
 
-  return { menu, render, choose, Portal };
+  return { menu, all: raw, render, choose, Portal };
 }

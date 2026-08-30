@@ -11,6 +11,9 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 
 import { assetThumbnailUrl, type Asset } from "@/api/client";
+import { useI18n } from "@/app/preferences";
+import type { MessageKey } from "@/app/messages";
+import type { MediaKind } from "@/features/boards/boardNodes";
 import { RefSuggestion } from "@/components/app/refSuggestion";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
 import { cn } from "@/lib/utils";
@@ -37,6 +40,22 @@ import { cn } from "@/lib/utils";
  * 提交时它一分为二:名字留在提示词里(有好几张图时,模型得知道你说的是哪张),素材本身
  * 进 source_assets。上面那排槽位是另一件事 —— 那里挂的是首帧/参考这种**有角色**的位置。
  */
+/** 这一行要不要先画一个分组标题:上一条和它不在同一组时画。 */
+export function groupHeadAt(items: { id: string }[], index: number, linked: Set<string>): boolean {
+  if (index === 0) return true;
+  return linked.has(items[index].id) !== linked.has(items[index - 1].id);
+}
+
+/** 类型在界面上叫什么。和画布节点上的标签同一份 —— 那边叫「视频」这边就不能叫「video」。 */
+const KIND_LABEL: Record<string, MessageKey> = {
+  image: "boardKindImage",
+  video: "boardKindVideo",
+  audio: "boardKindAudio",
+};
+
+/** 菜单里最多摆几条。再多就该靠打字缩范围,而不是滚一整屏。 */
+const LIMIT = 12;
+
 /** 正文里的素材 chip。`atom: true` 是关键 —— 没有它光标能走进标签内部,退格就咬半截。 */
 const AssetChip = Node.create({
   name: "assetRef",
@@ -87,6 +106,7 @@ export function PromptEditor({
   candidates,
   onSubmit,
   emptyHint,
+  linked,
 }: {
   value: string;
   /** 正文变化。`assets` 是正文里 chip 引用到的素材 —— 提交时它们进 source_assets。 */
@@ -98,6 +118,8 @@ export function PromptEditor({
   onSubmit: () => void;
   /** 一个候选都没有时说的那句话;返回空串就什么都不弹。 */
   emptyHint: () => string;
+  /** 连进这个节点的那几份素材。它们排在最前面 —— 「刚接进来的那张」是最可能要指的。 */
+  linked?: string[];
 }) {
   //: 最后一次自己发出去的值。外面改了(上游便签填进来、撤销)才回灌,否则每敲一个字都会被
   //: prop 回流重建文档,光标跳到开头。
@@ -107,11 +129,59 @@ export function PromptEditor({
   candidatesRef.current = candidates;
   const submitRef = React.useRef(onSubmit);
   submitRef.current = onSubmit;
+  const t = useI18n();
+
+  //: 筛选**只作用于看得见的这一份**。放进 candidates() 的话按下去毫无反应:插件只在
+  //: query / 光标位置变了才重新取候选,而按一下筛选钮这两样都没变(见 useSuggestionMenu 的 view)。
+  const [filter, setFilter] = React.useState<"all" | "linked" | MediaKind>("all");
+  const linkedIds = React.useMemo(() => new Set(linked ?? []), [linked]);
+
+  //: 先按筛选留下,再把连进来的提到前面,最后截断。**排序在截断之前** —— 反过来的话,
+  //: 连进来的那张要是排在第 20 位,截完就没了,而它恰恰是最该出现的一条。
+  const view = React.useCallback(
+    (items: Asset[]) => {
+      const kept = items.filter((one) =>
+        filter === "all" ? true : filter === "linked" ? linkedIds.has(one.id) : one.kind === filter,
+      );
+      const linkedFirst = [
+        ...kept.filter((one) => linkedIds.has(one.id)),
+        ...kept.filter((one) => !linkedIds.has(one.id)),
+      ];
+      return linkedFirst.slice(0, LIMIT);
+    },
+    [filter, linkedIds],
+  );
 
   const menu = useSuggestionMenu<Asset>({
     emptyHint,
     sameItems: (a, b) => a.length === b.length && a.every((one, at) => one.id === b[at].id),
+    view,
   });
+
+  //: 表头读的是**没过筛选的那一份**(menu.all)—— 读过筛选的会让筛选钮自己把自己藏起来:
+  //: 点「视频」之后列表里只剩视频,「图片」那个钮就消失了,再也点不回去。
+  const kinds = React.useMemo(() => {
+    const set = new Set(menu.all.map((one) => one.kind));
+    return (["image", "video", "audio"] as const).filter((kind) => set.has(kind));
+  }, [menu.all]);
+  const onlyKind = kinds.length === 1 ? kinds[0] : null;
+  const hasLinked = menu.all.some((one) => linkedIds.has(one.id));
+  const chips = React.useMemo(
+    () => [
+      { key: "all" as const, label: t("boardPickAll") },
+      ...(hasLinked ? [{ key: "linked" as const, label: t("boardPickLinked") }] : []),
+      //: 只有一类时不给类型钮 —— 它和「全部」是同一份东西。
+      ...(onlyKind ? [] : kinds.map((kind) => ({ key: kind, label: t(KIND_LABEL[kind]) }))),
+    ],
+    [hasLinked, kinds, onlyKind, t],
+  );
+  //: 被截掉了多少条。按**筛完之后**的总数算 —— 拿原始总数减,会在筛过之后报一个虚高的数字。
+  const hidden = React.useMemo(() => {
+    const kept = menu.all.filter((one) =>
+      filter === "all" ? true : filter === "linked" ? linkedIds.has(one.id) : one.kind === filter,
+    );
+    return Math.max(0, kept.length - LIMIT);
+  }, [menu.all, filter, linkedIds]);
 
   const editor = useEditor({
     extensions: [
@@ -195,29 +265,84 @@ export function PromptEditor({
   return (
     <>
       <EditorContent editor={editor} />
-      <menu.Portal className="fixed left-0 top-0 z-50 max-h-56 w-64 overflow-auto rounded-lg border border-border-strong bg-panel p-1 shadow-[var(--shadow-panel)]">
-        {(asset, index) => (
-          <button
-            key={asset.id}
-            type="button"
-            className={cn(
-              "flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors",
-              index === (menu.menu?.active ?? 0) ? "bg-secondary" : "hover:bg-secondary",
+      <menu.Portal
+        className="fixed left-0 top-0 z-50 max-h-64 w-72 rounded-lg border border-border-strong bg-panel p-1 shadow-[var(--shadow-panel)]"
+        header={
+          <div className="grid gap-1 border-b border-border px-1 pb-1.5 pt-0.5">
+            {/* 快捷分类。**只摆真的有东西的那几档** —— 一个按下去必然空的筛选钮,
+                比没有这个钮更让人困惑。 */}
+            <div className="flex flex-wrap items-center gap-1">
+              {chips.map((chip) => (
+                <button
+                  key={chip.key}
+                  type="button"
+                  className={cn(
+                    "cursor-pointer rounded-full border-0 px-1.5 py-0.5 text-ui-2xs transition-colors",
+                    filter === chip.key
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-secondary text-muted-foreground hover:text-foreground",
+                  )}
+                  //: 和列表项同一个道理:mousedown 会让编辑器失焦,失焦就收菜单。
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => setFilter(chip.key)}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+            {/* **说清楚为什么只有这一类。** 一个只收图片的模型下,视频不出现在列表里是对的,
+                但界面此前一个字都没说 —— 用户只会觉得"我的视频呢"。 */}
+            {onlyKind && (
+              <span className="text-ui-2xs text-muted-foreground">
+                {t("boardPickOnlyKind").replace("{kind}", t(KIND_LABEL[onlyKind]))}
+              </span>
             )}
-            // mousedown 会先让编辑器失焦,失焦又会收起菜单 —— 拦掉,让 click 有机会跑到。
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => menu.choose(asset)}
-          >
-            <img
-              src={assetThumbnailUrl(asset.id)}
-              alt=""
-              className="h-7 w-10 shrink-0 rounded bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] object-cover"
-            />
-            <span className="min-w-0 flex-1 truncate text-ui-2xs text-foreground">
-              {asset.name || asset.original_filename}
-            </span>
-            <span className="shrink-0 text-ui-2xs text-muted-foreground">{asset.kind}</span>
-          </button>
+          </div>
+        }
+        footer={
+          hidden > 0 ? (
+            <div className="border-t border-border px-2 pb-0.5 pt-1 text-ui-2xs text-muted-foreground">
+              {t("boardPickMore").replace("{n}", String(hidden))}
+            </div>
+          ) : null
+        }
+      >
+        {(asset, index) => (
+          <React.Fragment key={asset.id}>
+            {/* 分组标题**由列表自己长出来**,不另存一份结构:上一条和这一条不在同一组时画一行。
+                「刚连进来的那张」是最可能要指的,所以它单独成组、排在最前。 */}
+            {groupHeadAt(menu.menu?.items ?? [], index, linkedIds) && (
+              <div className="px-1.5 pb-0.5 pt-1 text-ui-2xs font-semibold text-muted-foreground">
+                {t(linkedIds.has(asset.id) ? "boardPickLinkedGroup" : "boardPickLibrary")}
+              </div>
+            )}
+            <button
+              type="button"
+              className={cn(
+                "flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors",
+                index === (menu.menu?.active ?? 0) ? "bg-secondary" : "hover:bg-secondary",
+              )}
+              // mousedown 会先让编辑器失焦,失焦又会收起菜单 —— 拦掉,让 click 有机会跑到。
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => menu.choose(asset)}
+            >
+              <img
+                src={assetThumbnailUrl(asset.id)}
+                alt=""
+                className="h-7 w-10 shrink-0 rounded bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] object-cover"
+              />
+              <span className="min-w-0 flex-1 truncate text-ui-2xs text-foreground">
+                {asset.name || asset.original_filename}
+              </span>
+              {/* **只有一类可选时不标类型。** 每行都写一遍「image」是纯噪音 —— 它没有回答
+                  任何问题,而列表里本来就只有这一类。 */}
+              {!onlyKind && (
+                <span className="shrink-0 text-ui-2xs text-muted-foreground">
+                  {t(KIND_LABEL[asset.kind as MediaKind] ?? "boardKindImage")}
+                </span>
+              )}
+            </button>
+          </React.Fragment>
         )}
       </menu.Portal>
     </>
