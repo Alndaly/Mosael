@@ -260,3 +260,37 @@ def test_地址空着时给人话而不是_httpx_那句协议错误() -> None:
         )
         with _pytest.raises(AiChatError, match="服务地址"):
             target_for(db, blank, model="some-chat-model")
+
+
+def test_订阅连接不报_去填服务地址_而是说清只有智能体能用() -> None:
+    """OAuth 订阅连接(Kimi Code 这类)没有服务地址可填 —— 端点在 pi 的 Provider 定义里,
+    后端只递身份。指人去设置里填地址是把他引向走不通的修复路径:填了也没有 api_key。"""
+    import pytest as _pytest
+
+    from app.core.db import SessionLocal
+    from app.db.models import ProviderProfile
+    from app.domain import provider_models
+    from app.domain.ai_chat import AiChatError, target_for
+    from app.domain.provider_credentials import ResolvedProvider
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    profile_id = client.post(
+        "/api/settings/providers", json={"vendor": "openai", "name": "订阅连接", "api_key": "k"}
+    ).json()["id"]
+    with SessionLocal() as db:
+        provider_models.upsert(db, db.get(ProviderProfile, profile_id), "some-chat-model", source="manual")
+        db.commit()
+        oauth_profile = ResolvedProvider(
+            id=profile_id, name="订阅连接", vendor="kimi-coding", base_url="",
+            auth_type="oauth", enabled=True, oauth_credential={"access_token": "x"},
+        )
+        with _pytest.raises(AiChatError, match="订阅授权"):
+            target_for(db, oauth_profile, model="some-chat-model")
+
+
+def test_订阅连接的报错按请求方语言翻译() -> None:
+    from app.core.i18n import t
+
+    assert "订阅授权" in t("aiChat_agentOnly", "zh", name="X")
+    assert "subscription" in t("aiChat_agentOnly", "en", name="X")

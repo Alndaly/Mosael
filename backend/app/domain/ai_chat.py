@@ -38,6 +38,7 @@ from typing import Any
 import httpx
 from sqlalchemy.orm import Session
 
+from app.core.i18n import get_current_locale, t
 from app.domain.provider_credentials import ResolvedProvider
 from app.core import http_retry as ai_retry
 from app.domain import provider_models
@@ -73,12 +74,17 @@ def target_for(db: Session, profile: ResolvedProvider, *, model: str = "") -> Ch
     """
     resolved = model or provider_models.model_id_for(db, profile, "chat")
     if not resolved:
-        raise AiChatError(f"连接「{profile.name}」下没有可用的对话模型")
+        raise AiChatError(t("aiChat_noChatModel", get_current_locale(), name=profile.name))
     #: **地址空着就在这儿说清楚。** 不拦的话拼出来的是 "/chat/completions",httpx 抛的是
     #: 「Request URL is missing an 'http://' or 'https://' protocol」—— 用户看到这句,
     #: 完全想不到要去设置里补一个服务地址。而且这是所有调用方共用的一层,拦在这里全都受益。
     if not (profile.base_url or "").strip():
-        raise AiChatError(f"连接「{profile.name}」还没填服务地址,去设置里补上再用")
+        # 订阅授权(Kimi Code 这类 OAuth 连接)**没有服务地址可填** —— 端点、模型目录都在 pi 的
+        # Provider 定义里,后端只递身份(host.resolve_chat_provider)。指人去设置里填地址是把他
+        # 引向一条走不通的修复路径:填了 base_url 也没有 api_key,依然调不通。
+        if profile.auth_type == "oauth":
+            raise AiChatError(t("aiChat_agentOnly", get_current_locale(), name=profile.name))
+        raise AiChatError(t("aiChat_noBaseUrl", get_current_locale(), name=profile.name))
     return ChatTarget(
         base_url=profile.base_url,
         api_key=profile.api_key or "",

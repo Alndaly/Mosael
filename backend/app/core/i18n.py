@@ -100,6 +100,19 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Weights are downloaded, but no interpreter has the engine installed — click Download again to add the runtime",
     },
     "modelMsg_runtimeNoWeights": {"zh": "运行环境已就绪,还差模型权重", "en": "The runtime is ready; the model weights are still missing"},
+    # ---- AI 对话调用的报错(target_for 在每一通后端直连 LLM 的入口拦下) ----
+    "aiChat_noChatModel": {
+        "zh": "连接「{name}」下没有可用的对话模型",
+        "en": "Connection \"{name}\" has no usable chat model.",
+    },
+    "aiChat_noBaseUrl": {
+        "zh": "连接「{name}」还没填服务地址,去设置里补上再用",
+        "en": "Connection \"{name}\" has no service address yet — add it in Settings first.",
+    },
+    "aiChat_agentOnly": {
+        "zh": "连接「{name}」是订阅授权(如 Kimi Code),只能给智能体对话用;画板、工作流等功能请改用 API Key 的连接",
+        "en": "Connection \"{name}\" uses a subscription sign-in (e.g. Kimi Code) that only the agent can talk through. Boards, workflows and other features need an API-key connection.",
+    },
     # ---- 任务消息(任务中心 / 飞书 / 工作流都读它)----
     "jobMsg_asrQueued": {"zh": "转写排队中", "en": "Transcription queued"},
     "jobMsg_asrDownloading": {"zh": "首次转写:下载模型中 {percent}%", "en": "First transcription: downloading the model, {percent}%"},
