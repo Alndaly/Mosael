@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, ChevronLeft, Film, Redo2, Undo2, FolderOpen, Image as ImageIcon, LayoutGrid, Map as MapIcon, Maximize2, Music, Plus, Square, StickyNote, Trash2 } from "lucide-react";
+import { Bot, Film, Redo2, Undo2, FolderOpen, Image as ImageIcon, LayoutGrid, Map as MapIcon, Maximize2, Music, Plus, Square, StickyNote, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -25,8 +25,8 @@ import {
 import type { MediaKind } from "@/features/boards/boardNodes";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ConfirmDialog } from "@/components/app/modals";
+import { CanvasTitle } from "@/components/app/canvasTitle";
+import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import { relativeTime } from "@/lib/time";
@@ -196,7 +196,6 @@ function BoardDetail({
   onSaved: () => void;
 }) {
   const t = useI18n();
-  const [name, setName] = React.useState(board.name);
   const [renaming, setRenaming] = React.useState(false);
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
 
@@ -430,10 +429,13 @@ function BoardDetail({
   // (它任何时候都这么写),又占着顶栏一格。失败仍然会 toast —— 那才是需要打断的时刻。
   useAutosave(canvas, save);
 
-  const rename = () => {
-    const cleaned = name.trim();
-    if (!cleaned || cleaned === board.name) return setName(board.name);
-    updateBoard(board.id, { workspace_id: workspaceId, name: cleaned })
+  //: 改名走**全站那一个** RenameDialog(设置、首页、会话列表、工作流都走它)。此前这里是
+  //: 就地把标题换成一个输入框 —— 少一处确认、少一条校验(空名靠 onBlur 悄悄回滚),
+  //: 而"改个名字"在这个应用里已经有答案了,画板没有理由是第九种。
+  const rename = (next: string) => {
+    setRenaming(false);
+    if (next === board.name) return;
+    updateBoard(board.id, { workspace_id: workspaceId, name: next })
       .then(onSaved)
       .catch((error: Error) => toast.error(error.message));
   };
@@ -443,46 +445,17 @@ function BoardDetail({
   return (
     <div className="relative grid h-full min-h-0 p-2">
       <div className="pointer-events-none absolute inset-x-4 top-4 z-20 flex flex-wrap items-start justify-between gap-2 [&>*]:pointer-events-auto">
-        <div className="flex items-center gap-1 rounded-full border border-border bg-panel/95 p-1 pr-2.5 shadow-[var(--shadow-panel)] backdrop-blur">
-          {/* 返回键给它一个底:透明底的图标钮在胶囊里没有自己的轮廓,和右边的竖线对不齐。 */}
-          <Button
-            variant="secondary"
-            size="icon"
-            className="h-8 w-8 shrink-0"
-            onClick={onBack}
-            title={t("navBoards")}
-            aria-label={t("navBoards")}
-          >
-            <ChevronLeft size={16} />
-          </Button>
-          {/* 一个是「离开这里」,一个是「这里是什么」—— 两件事,挨着放需要一道界。 */}
-          <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-border" />
-          {/* **贴着内容,不给固定宽度。** 定宽的输入框在只有三个字的名字下面是一个大空格子,
-              看着像没加载完 —— 工作流那边是一个点开才变输入框的按钮,这里同理。 */}
-          {renaming ? (
-            <Input
-              autoFocus
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              onBlur={() => {
-                rename();
-                setRenaming(false);
-              }}
-              onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
-              className="h-7 w-40 border-0 bg-field px-1.5 text-ui-md font-semibold shadow-none"
-              aria-label={t("boardsName")}
-            />
-          ) : (
-            <button
-              type="button"
-              className="inline-flex cursor-pointer items-center rounded-full border-0 bg-transparent px-1.5 py-[3px] text-ui-md font-semibold text-foreground hover:bg-secondary"
-              onClick={() => setRenaming(true)}
-              title={t("rename")}
-            >
-              {board.name}
-            </button>
-          )}
-        </div>
+        {/* 和工作流详情页、子图共用同一颗胶囊(components/app/canvasTitle)—— 它们是同一类
+            东西:「你现在在哪儿」。此前这里是自己写的一份,标题的 font-semibold 挂在 <button>
+            上,被 tokens.css 那条无层级的 `button { font: inherit }` 压掉了,于是画板的标题
+            比工作流的明显更细 —— 而两处的 class 写得一模一样。 */}
+        <CanvasTitle
+          onBack={onBack}
+          backLabel={t("navBoards")}
+          name={board.name}
+          onRename={() => setRenaming(true)}
+          renameLabel={t("rename")}
+        />
 
 
         {/* 右上角**分组胶囊**,刻度和工作流详情页一致:胶囊 rounded-full、图标钮 h-8 w-8、
@@ -635,6 +608,14 @@ function BoardDetail({
         onDropFiles={(files) => upload.mutateAsync(files)}
         uploading={upload.isPending}
         onReady={setApi}
+      />
+
+      <RenameDialog
+        open={renaming}
+        title={t("rename")}
+        initialValue={board.name}
+        onCancel={() => setRenaming(false)}
+        onSubmit={rename}
       />
 
       <ConfirmDialog

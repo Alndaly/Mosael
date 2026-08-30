@@ -22,7 +22,7 @@ import {
   type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { AlertTriangle, AlignLeft, Film, Maximize2, Image as ImageIcon, Map as MapIcon, AppWindow, ArrowLeft, AudioLines, Bell, BookOpen, Bot, Boxes, Braces, CaseSensitive, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleCheck, Code2, Download, FileOutput, FileUp, Filter, Flag, FolderInput, FolderPlus, GitBranch, Globe, History, Hourglass, Keyboard, Languages, Link2, ListChecks, Loader2, Mic, MousePointer2, MousePointerClick, PanelTopClose, PenLine, Pencil, Play, Plus, Redo2, RefreshCw, Repeat, Rocket, ScanText, Search, SkipForward, Sparkles, Spline, Tags, Timer, Trash2, Type, Undo2, Wand2, Waypoints, Workflow as WorkflowIcon, Wrench, X, XCircle, type LucideIcon } from "lucide-react";
+import { AlertTriangle, AlignLeft, Film, Maximize2, Image as ImageIcon, Map as MapIcon, AppWindow, ArrowLeft, AudioLines, Bell, BookOpen, Bot, Boxes, Braces, CaseSensitive, Check, CheckCircle2, ChevronRight, CircleCheck, Code2, Download, FileOutput, FileUp, Filter, Flag, FolderInput, FolderPlus, GitBranch, Globe, History, Hourglass, Keyboard, Languages, Link2, ListChecks, Loader2, Mic, MousePointer2, MousePointerClick, PanelTopClose, PenLine, Pencil, Play, Plus, Redo2, RefreshCw, Repeat, Rocket, ScanText, Search, SkipForward, Sparkles, Spline, Tags, Timer, Trash2, Type, Undo2, Wand2, Waypoints, Workflow as WorkflowIcon, Wrench, X, XCircle, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -64,6 +64,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Combobox } from "@/components/app/combobox";
+import { CanvasTitle } from "@/components/app/canvasTitle";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -1931,34 +1932,17 @@ function WorkflowEditor({
       <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex flex-wrap items-start justify-between gap-2 [&>*]:pointer-events-auto">
         {/* 左边这组是**身份**(回哪儿去、这是谁),右边那组是**操作**。浮起来之后两组各自要有
             自己的底,否则它们会散在画布上,和节点抢注意力 —— 悬浮不等于没有边界。 */}
-        <div className="flex items-center gap-1 rounded-full border border-border bg-panel/95 p-1 pr-2.5 shadow-[var(--shadow-panel)] backdrop-blur">
-        {/* 返回键**给它一个底**。透明底的图标钮在胶囊里没有自己的轮廓,左边和胶囊边缘之间那点
-            空白就显得忽大忽小 —— 有了底,它的占位是确定的,和右边的竖线、名字也就对齐了。 */}
-        <Button
-          variant="secondary"
-          size="icon"
-          className="h-8 w-8 shrink-0"
-          onClick={onBack}
-          title={t("navWorkflows")}
-          aria-label={t("navWorkflows")}
-        >
-          <ChevronLeft size={16} />
-        </Button>
-        {/* 返回和名字之间一根竖线:一个是"离开这里",一个是"这里是什么" —— 两件事,
-            挨着放需要一道界。 */}
-        <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-border" />
         {/* 工作流图标去掉了:左边导航栏里那一格已经亮着"工作流",顶上再画一次是同一句话说两遍,
-            而这一格真正要回答的是"**哪一个**工作流"。 */}
-        <button type="button" className="inline-flex cursor-pointer items-center rounded-full border-0 bg-transparent px-1.5 py-[3px] text-left text-ui-md font-semibold text-foreground hover:bg-secondary" onClick={() => setRenaming(true)} title={t("rename")}>
-          {/* strong 的浏览器默认字重是 bolder(700),会**压过**外面的 font-semibold(600)——
-              于是这块标题比创意画板左上角那块明显更粗,而两者是同一类东西。显式钉回 600。 */}
-          <span className="grid leading-[1.3] [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:text-ui-md [&_strong]:font-semibold">
-            <strong>{workflow.name}</strong>
-            {/* 保存状态只放工具栏的 wf-save-status:标题里再挂一行「未保存」会随每次
-                拖动→自动保存增删一行,撑动整条工具栏导致画布跳一下(闪烁)。 */}
-          </span>
-        </button>
-        </div>
+            而这一格真正要回答的是"**哪一个**工作流"。
+            保存状态只放工具栏的 wf-save-status:标题里再挂一行「未保存」会随每次
+            拖动→自动保存增删一行,撑动整条工具栏导致画布跳一下(闪烁)。 */}
+        <CanvasTitle
+          onBack={onBack}
+          backLabel={t("navWorkflows")}
+          name={workflow.name}
+          onRename={() => setRenaming(true)}
+          renameLabel={t("rename")}
+        />
         {/* 右边按**作用对象**分组,每组自己一颗胶囊 —— 此前十来个按钮挤在一条里,只靠两道
             细竖线隔开,找一个键要从头扫到尾。分组是:编辑图 / 理解图 / 跑这张图 / 看的方式 /
             这份文档。竖线换成真正断开,因为断开比线更快被看见。 */}
@@ -2822,25 +2806,16 @@ function LoopBodyEditor({
     //: 而 bg-panel 是「一块面板」;两种画布用两种底色,切过去时会觉得走进了另一个应用。
     <div className="absolute inset-0 z-30 grid overflow-hidden rounded-lg border border-border bg-background">
       <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex flex-wrap items-start justify-between gap-2 [&>*]:pointer-events-auto">
-        <div className="flex items-center gap-1 rounded-full border border-border bg-panel/95 p-1 pr-2.5 shadow-[var(--shadow-panel)] backdrop-blur">
-          <Button
-            variant="secondary"
-            size="icon"
-            className="h-8 w-8 shrink-0"
-            onClick={onClose}
-            aria-label={t("wfLoopBack")}
-            title={t("wfLoopBack")}
-          >
-            <ArrowLeft size={16} />
-          </Button>
-          <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-border" />
-          {/* 字号字重和创意画板左上角那块一致(text-ui-md / semibold)—— 它们是同一类东西:
-              「你现在在哪儿」。 */}
-          <span className="inline-flex items-center gap-[5px] text-ui-md font-semibold text-foreground">
-            {loopNode.type === "subgraph" ? <Boxes size={13} /> : <Repeat size={13} />} {loopNode.name} ·{" "}
-            {t(loopNode.type === "subgraph" ? "wfSubgraphBody" : "wfLoopBody")}
-          </span>
-        </div>
+        {/* 和主画布、创意画板同一颗胶囊 —— 它们是同一类东西:「你现在在哪儿」。
+            返回键在这里是「离开这一层」而不是「回上一层清单」,所以用 ←。
+            名字在它自己的节点上改,这里不给 onRename。 */}
+        <CanvasTitle
+          onBack={onClose}
+          backLabel={t("wfLoopBack")}
+          backIcon={<ArrowLeft size={16} />}
+          icon={loopNode.type === "subgraph" ? <Boxes size={13} /> : <Repeat size={13} />}
+          name={`${loopNode.name} · ${t(loopNode.type === "subgraph" ? "wfSubgraphBody" : "wfLoopBody")}`}
+        />
         {/* 这里**只放子图自己用得上的**:加节点、走线方式。
             运行 / 就绪检查 / 导出 / 历史 / 删除都是主图或整份文档的事,放进来只会让人以为
             自己能在子图里跑一次;撤销也没有 —— 子图编辑器没有历史栈,画一个按钮却不能用,
