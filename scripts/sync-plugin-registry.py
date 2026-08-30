@@ -41,7 +41,10 @@ def entry(manifest_path: Path) -> dict:
         # 描述取第一条技能的说明 —— 那句话本来就是写给"这东西是干嘛的"的。
         "description": (skills[0].get("description") if skills else "") or "",
         "author": "Open Studio",
-        "homepage": f"https://github.com/Alndaly/OpenStudio/tree/main/plugins/examples/{manifest_path.parent.name}",
+        # 主页**先用插件自己写的**:那是它的文档站,是用户装之前真正想看的东西。
+        # 没写才退到仓库里它的目录 —— 至少还能读到源码和 README。
+        "homepage": str(raw.get("homepage") or "").strip()
+        or f"https://github.com/Alndaly/OpenStudio/tree/main/plugins/examples/{manifest_path.parent.name}",
         "download": DOWNLOAD_TEMPLATE.format(id=raw["id"]),
         # 权限**从清单来**:界面在装之前把它摊开给用户看,写错等于骗人。
         "permissions": [p for p in (raw.get("permissions") or []) if isinstance(p, str)],

@@ -12,7 +12,7 @@
         "en": "Move files between Baidu Netdisk and the asset library. To pull: find an fs_id with pan_list or pan_search, then bring it in with pan_import. To push: use pan_upload to save something from the asset library to the netdisk (pass an asset_id and a target path)."
       },
       "author": "Open Studio",
-      "homepage": "https://github.com/Alndaly/OpenStudio/tree/main/plugins/examples/baidu-pan",
+      "homepage": "https://pan.baidu.com/union/doc/",
       "download": "https://github.com/Alndaly/OpenStudio/releases/latest/download/dev.openstudio.baidu-pan.zip",
       "permissions": [
         "network:baidu-pan"
@@ -30,7 +30,7 @@
         "en": "An example of wiring an existing MCP server up as an Open Studio plugin. The tool list comes from the server itself, not from this file."
       },
       "author": "Open Studio",
-      "homepage": "https://github.com/Alndaly/OpenStudio/tree/main/plugins/examples/mcp-everything",
+      "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/everything",
       "download": "https://github.com/Alndaly/OpenStudio/releases/latest/download/dev.openstudio.mcp-everything.zip",
       "permissions": [
         "process:spawn"
@@ -58,7 +58,7 @@
         "en": "Read public data from Douyin / TikTok / Xiaohongshu / Bilibili / Kuaishou and other platforms: post details, creator profiles and their posts, keyword search, trending charts. For topic research, studying comparable accounts, and finding footage ideas."
       },
       "author": "Open Studio",
-      "homepage": "https://github.com/Alndaly/OpenStudio/tree/main/plugins/examples/tikhub",
+      "homepage": "https://docs.tikhub.io/",
       "download": "https://github.com/Alndaly/OpenStudio/releases/latest/download/dev.openstudio.tikhub.zip",
       "permissions": [
         "network:tikhub"

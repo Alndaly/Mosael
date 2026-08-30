@@ -1494,6 +1494,8 @@ class PluginPackageOut(BaseModel):
     kind: str = "process"  # process | mcp
     multiple: bool = False
     permissions: list[str] = Field(default_factory=list)
+    #: 插件自己的文档/主页。空 = 作者没写,界面就不画那个链接。
+    homepage: str = ""
     config_fields: list[PluginFieldOut] = Field(default_factory=list)
     credential_fields: list[PluginFieldOut] = Field(default_factory=list)
     instances: list[PluginInstanceOut] = Field(default_factory=list)
@@ -1567,6 +1569,7 @@ class PluginInstallPreview(BaseModel):
     description: str = ""
     permissions: list[str] = Field(default_factory=list)
     tools: list[str] = Field(default_factory=list)
+    homepage: str = ""
     installed: bool = False
     installed_version: str = ""
 

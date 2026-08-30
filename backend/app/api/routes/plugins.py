@@ -37,7 +37,7 @@ from app.domain.plugins import install as installer
 from app.domain.plugins import packages as pkg
 from app.domain.plugins import registry as market
 from app.domain.plugins import tools as tools_domain
-from app.domain.plugins.manifest import manifest_of, text_of
+from app.domain.plugins.manifest import manifest_of, text_of, web_url
 
 router = APIRouter(tags=["plugins"])
 
@@ -113,6 +113,9 @@ def preview_install(body: PluginInstallRequest, db: DbSession, user: CurrentUser
         description=text_of((raw.get("skills") or [{}])[0].get("description")) if raw.get("skills") else "",
         permissions=[p for p in (raw.get("permissions") or []) if isinstance(p, str)],
         tools=[str(t.get("name")) for t in (declared or []) if isinstance(t, dict) and t.get("name")],
+        #: 只取这一个字段,不跑整份 parse —— 这份清单还没装上,它可能是畸形的,而
+        #: 「预览」正是用来看清楚它的那一步,不该被它自己打成 500。
+        homepage=web_url(raw.get("homepage")),
         installed=existing is not None,
         installed_version=existing.version if existing else "",
     )
@@ -181,6 +184,7 @@ def _packages(db: DbSession, user: CurrentUser) -> list[dict]:
                 "kind": manifest.runtime.kind,
                 "multiple": manifest.multiple,
                 "permissions": manifest.permissions,
+                "homepage": manifest.homepage,
                 "config_fields": [_field(f) for f in manifest.config],
                 "credential_fields": [_field(f) for f in manifest.credentials],
                 "instances": [

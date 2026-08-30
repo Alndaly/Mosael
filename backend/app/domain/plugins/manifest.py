@@ -114,6 +114,9 @@ class Manifest:
     overrides: dict[str, ToolOverride] = field(default_factory=dict)
     #: 进程类插件在 manifest 里声明的工具(MCP 插件此项为空,清单从服务拉)。
     declared_tools: list[dict[str, Any]] = field(default_factory=list)
+    #: 插件**自己的**文档/主页。界面上给一个「文档」链接 —— 一个插件带来几十个工具、一串权限
+    #: 和一套要去某个后台申请的凭据,而这些怎么用只有作者说得清;我们能做的是把人送到那儿。
+    homepage: str = ""
 
     @property
     def is_mcp(self) -> bool:
@@ -221,6 +224,16 @@ def _tools_policy(raw: dict[str, Any]) -> tuple[str, list[str], dict[str, ToolOv
     return ("all" if expose == "all" else "selected"), recommended, overrides, declared
 
 
+def web_url(raw: Any) -> str:
+    """清单里给的一条链接,**只认 http(s)**。
+
+    不认的一律当没写:界面上那个「文档」按钮点下去就是打开它,而 `javascript:` / `file:`
+    是一条从第三方清单直通用户浏览器的路。这里不是在防御格式,是在防御来源。
+    """
+    url = str(raw or "").strip()
+    return url if url.lower().startswith(("http://", "https://")) else ""
+
+
 def parse(raw: dict[str, Any], path: str) -> Manifest:
     for key in ("id", "version"):
         if not isinstance(raw.get(key), str) or not raw[key].strip():
@@ -247,6 +260,7 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
         recommended=recommended,
         overrides=overrides,
         declared_tools=declared,
+        homepage=web_url(raw.get("homepage")),
     )
 
 

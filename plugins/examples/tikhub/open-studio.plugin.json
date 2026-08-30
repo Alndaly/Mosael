@@ -3,6 +3,7 @@
   "manifest_version": 1,
   "name": "TikHub",
   "version": "1.0.1",
+  "homepage": "https://docs.tikhub.io/",
   "runtime": {
     "kind": "mcp",
     "transport": "http",

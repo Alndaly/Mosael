@@ -106,3 +106,18 @@ def test_这道棘轮扫得到东西() -> None:
     """假阴性比红更危险:哪天目录改了名,上面几条会一起真空通过。"""
     assert len(_manifests()) >= 3
     assert sum(len(_human_texts(raw)) for _, raw in _manifests()) >= 20
+
+
+def test_文档链接只认_http() -> None:
+    """那个链接是直接交给用户浏览器打开的 —— `javascript:` 是一条从第三方清单直通浏览器的路。
+
+    这里不是在防御格式,是在防御来源:清单是别人写的。
+    """
+    from app.domain.plugins.manifest import parse
+
+    base = {"id": "x", "name": "X", "version": "1"}
+    for good in ("https://docs.example.com/", "http://example.com/a"):
+        assert parse({**base, "homepage": good}, "").homepage == good
+
+    for bad in ("javascript:alert(1)", "file:///etc/passwd", "ftp://x/y", "docs.example.com", ""):
+        assert parse({**base, "homepage": bad}, "").homepage == "", bad

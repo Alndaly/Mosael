@@ -6784,6 +6784,11 @@ export interface components {
             /** Tools */
             tools?: string[];
             /**
+             * Homepage
+             * @default
+             */
+            homepage: string;
+            /**
              * Installed
              * @default false
              */
@@ -6952,6 +6957,11 @@ export interface components {
             multiple: boolean;
             /** Permissions */
             permissions?: string[];
+            /**
+             * Homepage
+             * @default
+             */
+            homepage: string;
             /** Config Fields */
             config_fields?: components["schemas"]["PluginFieldOut"][];
             /** Credential Fields */
