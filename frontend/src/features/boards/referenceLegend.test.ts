@@ -9,7 +9,8 @@ import { describe, expect, it } from "vitest";
 
 import { referenceLegend } from "./NodeComposer";
 
-const label = (role: string) => (role === "first_frame" ? "首帧" : "参考图");
+const label = (role: string) =>
+  ({ first_frame: "首帧", reference_video: "参考视频", driving_audio: "驱动音频" })[role] ?? "参考图";
 
 const library = [
   { id: "a", name: "创作者.png" },
@@ -53,6 +54,19 @@ describe("参考素材对应关系", () => {
 
   it("没有素材就不出这一段 —— 一句空说明会白占提示词", () => {
     expect(referenceLegend([], library, label)).toBe("");
+  });
+
+  it("**视频和音频也写进来** —— @ 到的不一定是图片,而它们同样是「没有名字」地交给模型的", () => {
+    const out = referenceLegend(
+      [
+        { asset_id: "a", role: "reference_image" },
+        { asset_id: "v", role: "reference_video" },
+        { asset_id: "s", role: "driving_audio" },
+      ],
+      [...library, { id: "v", name: "运镜.mp4" }, { id: "s", name: "旁白.wav" }],
+      label,
+    );
+    expect(out).toBe("参考图 1 = 创作者.png\n参考视频 1 = 运镜.mp4\n驱动音频 1 = 旁白.wav");
   });
 
   it("重名也分得开:说明里带着序号", () => {

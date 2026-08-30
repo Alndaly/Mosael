@@ -10,7 +10,7 @@ import { PromptEditor } from "@/features/boards/PromptEditor";
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
-import { ROLE_COPY, type SourceRole } from "@/features/ai-studio/sourceFrames";
+import { ROLE_COPY, SOURCE_ROLES, type SourceRole } from "@/features/ai-studio/sourceFrames";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   aspectRatioOptions,
@@ -80,8 +80,16 @@ function Pick({
 /** 一个角色收哪一类素材。**只此一处** —— 选择器开哪一类、上游哪种产出能自动挂进来,
  *  都问它;分散写两遍的话,加一个角色就会有一边忘记改。 */
 export function roleAccepts(role: string): "image" | "video" | "audio" {
-  if (role === "reference_video") return "video";
-  if (role === "reference_audio") return "audio";
+  //: **从 ROLE_COPY 的 accept 推**,不自己再列一张表。那里每个角色都写了文件选择器收什么
+  //: (`image/*` / `video/*` / `audio/*`)—— 那就是「这个角色收哪类素材」本身。
+  //:
+  //: 此前这里是「参考视频→视频、参考音频→音频、**其余一律图片**」。八个角色里那条兜底判错了
+  //: 三个:source_video(源视频)、first_clip(首段)是视频,driving_audio(驱动音频)是音频。
+  //: 判错的后果是正文里 @ 一段视频,它会被当成图片去找槽位 —— 要么落到参考图上(厂商当场拒),
+  //: 要么一个槽都找不到,那份素材**根本没发出去**,而提示词里还写着它的名字。
+  const accept = ROLE_COPY[role as SourceRole]?.accept ?? "image/*";
+  if (accept.startsWith("video/")) return "video";
+  if (accept.startsWith("audio/")) return "audio";
   return "image";
 }
 
@@ -164,12 +172,20 @@ export function mergeSourceAssets(
 ): { asset_id: string; role: string }[] {
   const out = attached.map((one) => ({ asset_id: one.assetId, role: one.role }));
   const seen = new Set(out.map((one) => one.asset_id));
+  //: 每个角色已经占了几份。**槽位里挂着的先算进去** —— 首帧只收一份而槽位里已经有一张时,
+  //: 正文里再 @ 一张图,它不该也变成首帧。
+  const used = new Map<string, number>();
+  for (const one of out) used.set(one.role, (used.get(one.role) ?? 0) + 1);
   for (const assetId of mentioned) {
     if (seen.has(assetId)) continue;
     const kind = library.find((asset) => asset.id === assetId)?.kind;
-    const slot = slots.find((one) => roleAccepts(one.role) === kind);
+    //: **找一个收得下、而且还装得下的槽。** 只看类型不看份数的话,@ 三张图会一起挂到同一个
+    //: 只收一份的角色上 —— 后端照描述符校验,把**整次生成**拒掉,而用户看到的只是一句
+    //: 「首帧最多 1 份」:他并不觉得自己在设首帧,他只是在句子里提了三张图。
+    const slot = slots.find((one) => roleAccepts(one.role) === kind && (used.get(one.role) ?? 0) < one.limit);
     if (!slot) continue;
     seen.add(assetId);
+    used.set(slot.role, (used.get(slot.role) ?? 0) + 1);
     out.push({ asset_id: assetId, role: slot.role });
   }
   return out;
@@ -186,8 +202,10 @@ export function sourceSlots(
   activeRoles?: string[],
 ): { role: string; limit: number }[] {
   if (!model) return [];
-  return (["first_frame", "last_frame", "reference_image", "reference_video", "reference_audio"] as const)
-    .filter((role) => supportsParameter(model, role))
+  //: **八个角色全在这儿**,由描述符筛。此前只列了前五个 —— 于是声明了源视频/首段/驱动音频的
+  //: 模型(比如万相的视频重绘)在画板上一个对应的格子都没有,那几种能力等于用不了。
+  //: 顺序就是出格子的顺序:先首尾帧,再参考,最后那三种整段素材。
+  return SOURCE_ROLES.filter((role) => supportsParameter(model, role))
     .filter((role) => !activeRoles || activeRoles.includes(role))
     .map((role) => ({ role, limit: sourceLimit(model, role) }));
 }
