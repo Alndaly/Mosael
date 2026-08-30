@@ -1,6 +1,6 @@
 import React from "react";
 import { Handle, NodeResizer, Position, useStore, type NodeProps } from "@xyflow/react";
-import { Film as FilmIcon, Group, Image as ImageIcon, Loader2, Music, Plus, Square as SquareIcon, StickyNote, type LucideIcon } from "lucide-react";
+import { AlertTriangle, Film as FilmIcon, Group, Image as ImageIcon, Loader2, Music, Plus, Square as SquareIcon, StickyNote, type LucideIcon } from "lucide-react";
 
 import type { BoardItem } from "@/api/client";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
@@ -108,7 +108,11 @@ function Ports({ visible }: { visible?: boolean }) {
  */
 //: 名字和说明**存的是 i18n 的 key,不是中文**。写死的话切到英文界面这一整排还是中文,
 //: 而它们出现在工具条、节点标签、添加菜单三处 —— 漏一处不会报错,只会是半中半英。
-export const KIND_META: Record<BoardItem["kind"], { icon: LucideIcon; label: MessageKey; hint: MessageKey }> = {
+//:
+//: **别直接读这里的 label / hint 往界面上放** —— 走下面的 kindText():直接读的话拿到的是
+//: 「boardKindImage」这串 key 本身,而它长得像个正常字符串,一路挂到菜单上都不会有人拦。
+//: 连线菜单就这么漏过一次:四个选项连标题带说明,整整八行显示的全是 key。
+const KIND_META: Record<BoardItem["kind"], { icon: LucideIcon; label: MessageKey; hint: MessageKey }> = {
   note: { icon: StickyNote, label: "boardKindNote", hint: "boardKindNoteHint" },
   image: { icon: ImageIcon, label: "boardKindImage", hint: "boardKindImageHint" },
   video: { icon: FilmIcon, label: "boardKindVideo", hint: "boardKindVideoHint" },
@@ -116,13 +120,29 @@ export const KIND_META: Record<BoardItem["kind"], { icon: LucideIcon; label: Mes
   frame: { icon: SquareIcon, label: "boardKindFrame", hint: "boardKindFrameHint" },
 };
 
+/** 这一类的图标。图标不需要翻译,所以它可以直接拿。 */
+export function kindIcon(kind: BoardItem["kind"]): LucideIcon {
+  return KIND_META[kind].icon;
+}
+
+/**
+ * 这一类**给人看的**名字和说明。
+ *
+ * 传 `t` 而不是自己 `useI18n()`:调用点之一在 `.map()` 里,而 hook 不能在循环里调。
+ */
+export function kindText(t: (key: MessageKey) => string, kind: BoardItem["kind"]): { label: string; hint: string } {
+  const meta = KIND_META[kind];
+  return { label: t(meta.label), hint: t(meta.hint) };
+}
+
 /** 能从一条线的末端长出来的种类。分组框不在其中 —— 它是个容器,不是一份产出。 */
 export const SPAWNABLE_KINDS = ["image", "video", "audio", "note"] as const;
 
 /** 节点上方那行类型标签 —— 一眼看出这格是图片还是视频,不用等它加载出来。 */
 function TypeLabel({ kind }: { kind: BoardItem["kind"] }) {
   const t = useI18n();
-  const { icon: Icon, label } = KIND_META[kind];
+  const Icon = kindIcon(kind);
+  const { label } = kindText(t, kind);
   //: **反着视口缩放** —— 标签跟着画布缩的话,它在屏幕上的高度一直在变,而上方那块操作条
   //: 的间距是按屏幕像素算的(NodeToolbar 的 offset)。两者对不上的结果:拉远时标签越缩越小,
   //: 操作条和节点之间的空当越拉越大,而下方的面板纹丝不动。
@@ -132,7 +152,7 @@ function TypeLabel({ kind }: { kind: BoardItem["kind"] }) {
       className="pointer-events-none absolute bottom-full left-0 inline-flex origin-bottom-left items-center gap-1 pb-1 text-ui-2xs text-muted-foreground"
       style={{ transform: `scale(${1 / zoom})` }}
     >
-      <Icon size={11} /> {t(label)}
+      <Icon size={11} /> {label}
     </span>
   );
 }
@@ -209,6 +229,38 @@ function Generating({ text }: { text?: string }) {
  * **不能画成转圈** —— 转圈的意思是"正在跑,等着就行",而这里等不来任何东西:它在等用户写字。
  * 两种状态长一样的话,用户会盯着一个永远不动的圈。
  */
+/**
+ * 跑挂了:任务结束了,没有产出。
+ *
+ * **不是转圈,也不是空槽。** 这两种此前都被拿来表示过失败,而两种都在骗人 —— 一个说"还在跑"
+ * (于是用户一直等),一个说"你还没开始"(于是他以为自己点漏了)。原因写在框里:去任务中心
+ * 翻一遍才知道为什么,对一个画布上的框来说太远了。
+ */
+function Failed({ reason }: { reason: string }) {
+  const t = useI18n();
+  return (
+    <div className="grid h-full w-full place-items-center overflow-hidden rounded-lg bg-[color-mix(in_srgb,var(--destructive)_7%,transparent)] px-3">
+      <div className="grid justify-items-center gap-1 text-center">
+        <AlertTriangle size={15} className="text-destructive" />
+        <span className="text-ui-2xs font-semibold text-destructive">{t("boardsGenerateFailed")}</span>
+        <span className="line-clamp-3 text-ui-2xs leading-relaxed text-muted-foreground">{reason}</span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 一格**还没有产出**时画什么。
+ *
+ * 三个媒体节点共用这一处。此前三处各写一份 `job_id ? 转圈 : 空槽`,而状态从三种变成四种时,
+ * 得记得三处都改 —— 漏掉一处不会报错,只会是那一类节点永远转圈。
+ */
+function PendingSlot({ item, icon }: { item: BoardItem; icon: React.ReactNode }) {
+  if (item.job_id) return <Generating text={item.text} />;
+  if (item.error) return <Failed reason={item.error} />;
+  return <EmptySlot icon={icon} />;
+}
+
 function EmptySlot({ icon }: { icon: React.ReactNode }) {
   //: 虚线由**节点自己**画(见下面各节点的 emptyRing),这里只放图标 —— 两层虚线套在一起
   //: 会露出两圈错开的边。
@@ -235,7 +287,7 @@ export function ImageNode({ data, selected }: NodeProps) {
       <TypeLabel kind="image" />
       <Ports visible={selected} />
       {!item.asset_id ? (
-        item.job_id ? <Generating text={item.text} /> : <EmptySlot icon={<ImageIcon size={20} />} />
+        <PendingSlot item={item} icon={<ImageIcon size={20} />} />
       ) : (
         // 用仓库现成的预览件:它已经处理好**画布里必须关懒加载**这件事 ——
         // React Flow 的视口是 transform 过的,浏览器据此判断"还没进视野"而迟迟不发请求,
@@ -319,7 +371,7 @@ export function VideoNode({ data, selected }: NodeProps) {
       <TypeLabel kind="video" />
       <Ports visible={selected} />
       {!item.asset_id ? (
-        item.job_id ? <Generating text={item.text} /> : <EmptySlot icon={<FilmIcon size={20} />} />
+        <PendingSlot item={item} icon={<FilmIcon size={20} />} />
       ) : (
         // 自建播放器,不用原生 controls:那条控件不吃主题,而且它占掉的高度由浏览器说了算,
         // 会把按画面比例算好的框挤变形。nodrag 只挂在它的控件条上 —— 挂在整块上的话,
@@ -345,7 +397,7 @@ function AudioNode({ data, selected }: NodeProps) {
       <Ports visible={selected} />
       <div className="grid h-full w-full place-items-center overflow-hidden rounded-lg px-2">
         {!item.asset_id ? (
-          item.job_id ? <Generating text={item.text} /> : <EmptySlot icon={<Music size={20} />} />
+          <PendingSlot item={item} icon={<Music size={20} />} />
         ) : (
           <BoardAudio assetId={item.asset_id} />
         )}

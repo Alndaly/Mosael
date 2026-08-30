@@ -215,9 +215,12 @@ def test_任务成功后占位就地变成素材() -> None:
     assert "job_id" not in item, "填完素材还留着 job_id,界面会一直显示在生成"
 
 
-def test_任务失败时把占位摘掉() -> None:
-    """只处理成功的话,失败时画布上会永远留着一个转圈的框 —— 用户分不清它是还在跑还是已经死了,
-    而这两件事的下一步完全不同。"""
+def test_任务失败时留着这一项并写上原因() -> None:
+    """失败是这一项的一种**状态**,不是删掉它的理由。
+
+    三种写法里只有一种是对的:留着 job_id(画布永远转圈,用户以为还在跑)、整项删掉
+    (框凭空消失,连同刚写的提示词 —— 而他要做的下一件事十有八九是"改个字再来一次")、
+    或者摘掉 job_id、留下这一项和原因。这里钉的是第三种。"""
     from types import SimpleNamespace
 
     from app.db.models import Board
@@ -230,16 +233,39 @@ def test_任务失败时把占位摘掉() -> None:
     from app.core.db import SessionLocal
 
     db = SessionLocal()
-    job = SimpleNamespace(id="job-x", status="failed", result=None)
+    job = SimpleNamespace(id="job-x", status="failed", result=None, error="供应商说这个提示词不行")
     deliver_generated(db, job, receipt_to_item(board_id, item_id))
     items = db.get(Board, board_id).canvas["items"]
     db.close()
 
-    assert items == [], "失败了却把占位留在画布上"
+    assert [one["id"] for one in items] == [item_id], "失败了却把这一项从画布上删了"
+    failed = items[0]
+    assert "job_id" not in failed, "任务已经结束了,job_id 还留着 —— 画布会一直转圈"
+    assert failed["error"] == "供应商说这个提示词不行"
 
 
-def test_摘掉占位时连着它的线也要去掉() -> None:
-    """normalize 会拒绝悬空的线 —— 不一起去掉的话,回填这一步自己会炸,而炸在后台线程里。"""
+def test_任务失败但没留下原因时不写空() -> None:
+    """空的 error 会被 normalize 丢掉,于是那一项看起来又像个没开始的空槽。"""
+    from types import SimpleNamespace
+
+    from app.core.db import SessionLocal
+    from app.db.models import Board
+    from app.domain.boards import deliver_generated, receipt_to_item
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id, item_id = _pending_board(client, ws)
+
+    db = SessionLocal()
+    deliver_generated(db, SimpleNamespace(id="job-x", status="failed", result=None, error=""), receipt_to_item(board_id, item_id))
+    items = db.get(Board, board_id).canvas["items"]
+    db.close()
+
+    assert items[0]["error"] == "failed"
+
+
+def test_跑挂了也留着连进来的那条线() -> None:
+    """上游那张参考图还连着,重来一次才不用重新连 —— 而这正是失败之后最常做的事。"""
     from types import SimpleNamespace
 
     from app.core.db import SessionLocal
@@ -259,13 +285,13 @@ def test_摘掉占位时连着它的线也要去掉() -> None:
     client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "canvas": canvas})
 
     db = SessionLocal()
-    deliver_generated(db, SimpleNamespace(id="job-x", status="failed", result=None), receipt_to_item(board_id, "gen-1"))
+    deliver_generated(db, SimpleNamespace(id="job-x", status="failed", result=None, error="炸了"), receipt_to_item(board_id, "gen-1"))
     board = db.get(Board, board_id)
     items, edges = board.canvas["items"], board.canvas["edges"]
     db.close()
 
-    assert [item["id"] for item in items] == ["note-1"]
-    assert edges == []
+    assert [item["id"] for item in items] == ["note-1", "gen-1"]
+    assert [edge["id"] for edge in edges] == ["e1"]
 
 
 def test_回执登记在导入期() -> None:

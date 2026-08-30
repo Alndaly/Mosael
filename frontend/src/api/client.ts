@@ -870,6 +870,9 @@ export interface BoardItem {
   asset_id?: string;
   /** 还在生成:有任务、还没有素材。任务落终态时由后端回执把 asset_id 填回来。 */
   job_id?: string;
+  /** 跑挂了的原因。**和 job_id 互斥** —— 有它就说明那个任务已经结束、而且没有产出。
+   *  提示词还留在这一项上,改一改就能再来一次。 */
+  error?: string;
   /** 分组框专属:开着的时候,拖动这个框会把框里的东西一起带走。 */
   move_children?: boolean;
 }

@@ -154,9 +154,20 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
                 raise BoardDomainError(f"画板项 {item_id} 的 job_id 不合法")
             item["job_id"] = job_id.strip()
 
-        # **空槽是合法的。** 一个图片/视频项有三种状态,缺一不可:
+        # 跑挂了的那一项:任务落了终态,但没有产出。**它不是"还在跑",也不是"空的"** ——
+        # 这两种状态此前都被拿来表示过失败,而两种都在骗人:留着 job_id 的话画布永远转圈,
+        # 摘成空槽的话用户看到的是"点了之后那个框自己没了"。
+        error = entry.get("error")
+        if error is not None:
+            if not isinstance(error, str):
+                raise BoardDomainError(f"画板项 {item_id} 的 error 必须是字符串")
+            if error.strip():
+                item["error"] = error.strip()[:300]
+
+        # **空槽是合法的。** 一个图片/视频项有四种状态,缺一不可:
         #   · 空槽(都没有)   —— 刚放下,底下挂着提示词面板等你写;
         #   · 生成中(有 job_id) —— 提交了,等回执把 asset_id 填回来;
+        #   · 跑挂了(有 error)  —— 提示词还在,可以改一改再来一次;
         #   · 有产出(有 asset_id)。
         # 前两种此前都被当成错误拒掉了 —— 而"节点本身就是生成单元"这件事,正要从空槽开始。
 
@@ -315,9 +326,11 @@ def place_pending(db: Session, *, workspace_id: str, board_id: str, item: dict[s
         #: 位置和大小归画布(用户拖出来的),状态归这里(任务起来了)。
         keep = {k: v for k, v in item.items() if k not in ("x", "y", "width", "height")}
         merged = {**items[index], **keep}
-        #: 三状态里「生成中」和「有产出」是互斥的 —— 重新生成时旧产出让位给占位,
-        #: 否则一个项同时带着 job_id 和 asset_id,画布不知道该画哪个。
+        #: 四个状态两两互斥 —— 重新生成时旧产出、上一次的失败都让位给这次的占位。
+        #: 不清的话,一个项会同时带着 job_id 和 asset_id(画布不知道该画哪个),或者一边转圈
+        #: 一边挂着上次的报错(用户以为这次也挂了)。
         merged.pop("asset_id", None)
+        merged.pop("error", None)
         items[index] = merged
 
     board.canvas = normalize_canvas({**canvas, "items": items})
@@ -376,8 +389,22 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
             kept.append(item)
             continue
         if not asset_ids:
-            continue  # 失败/被取消:摘掉占位,别留一个永远转圈的框
-        settled = {k: v for k, v in item.items() if k != "job_id"}
+            # 失败/被取消:**摘掉 job_id,留下这一项和它的提示词**,并把原因写在上面。
+            #
+            # 此前是整项删掉。那让画布上的框凭空消失,连同用户刚写的提示词 —— 而他要做的
+            # 下一件事十有八九是"改一个字再来一次"。留着才能重来;原因写在上面,他也不必
+            # 去任务中心翻一遍才知道为什么。
+            kept.append(
+                {
+                    **{k: v for k, v in item.items() if k != "job_id"},
+                    #: 「生成失败」这句话由界面说(它才知道读的人看哪种语言);这里存的是**原因**。
+                    #: 任务没留下原因时退到它的终态词(failed / cancelled)—— 短,而且是真的,
+                    #: 不像一个假的消息键那样会原样显示在节点上。
+                    "error": str(getattr(job, "error", "") or "")[:300] or str(job.status),
+                }
+            )
+            continue
+        settled = {k: v for k, v in item.items() if k not in ("job_id", "error")}
         kept.append({**settled, "asset_id": asset_ids[0]})
         #: 多出来的那几张挨着它往右排。宽度按这一项自己的宽 —— 用户可能已经把它拉大了,
         #: 用一个写死的间距会让它们叠在一起。

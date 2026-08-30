@@ -279,8 +279,9 @@ function BoardDetail({
       //: **马上把那一格标成「在生成」**。服务端已经摆好占位了,但画布的节点只在挂载时从
       //: canvas 建一次 —— 不主动告诉它的话,节点还是个空槽、面板也不收:用户看到的就是
       //: 「点了没反应」,然后再点一次。
+      //: 上一次的报错要一起清掉 —— 重来一次的时候还挂着上次为什么挂,用户会以为这次也挂了。
       const pending = ((placed.canvas?.items ?? []) as BoardItem[]).find((one) => one.id === itemId);
-      if (pending?.job_id) api?.patch(itemId, { job_id: pending.job_id, text: pending.text });
+      if (pending?.job_id) api?.patch(itemId, { job_id: pending.job_id, text: pending.text, error: undefined });
       setRunning((current) => [...current, itemId]);
     },
     [board.id, workspaceId, t, api],
@@ -335,7 +336,7 @@ function BoardDetail({
       }
       //: 和生成那条一样:马上把这一格标成在跑,不然画布上看不出发生了什么。
       const pending = ((placed.canvas?.items ?? []) as BoardItem[]).find((one) => one.id === input.itemId);
-      if (pending?.job_id) api?.patch(input.itemId, { job_id: pending.job_id, text: pending.text });
+      if (pending?.job_id) api?.patch(input.itemId, { job_id: pending.job_id, text: pending.text, error: undefined });
       setRunning((current) => [...current, input.itemId]);
     },
     [board.id, workspaceId, api, t],
@@ -403,11 +404,18 @@ function BoardDetail({
       const settled: string[] = [];
       for (const id of running) {
         const item = fresh.canvas.items.find((one) => one.id === id);
-        // 找不到 = 任务失败,后端把占位摘了 —— 这一格也就不用再等。
-        if (!item) settled.push(id);
-        else if (item.asset_id) {
+        //: 整项没了(比如别处把它删了):没什么可等的了。
+        if (!item) {
+          settled.push(id);
+        } else if (item.asset_id) {
           //: 产出到了:填上 asset_id,并把 job_id 摘掉 —— 两个都在的话画布不知道该画转圈还是画图。
           api?.patch(id, { asset_id: item.asset_id, job_id: undefined });
+          settled.push(id);
+        } else if (item.error) {
+          //: **跑挂了也要落到画布上。** 此前这里只把 id 从「还在等」的名单里划掉,却没告诉
+          //: 画布 —— 而画布的节点只在挂载时从 canvas 建一次,那一格于是永远带着 job_id:
+          //: 框里一直转圈,底下那个提交按钮(busy 看的就是 job_id)也一直按不动。
+          api?.patch(id, { error: item.error, job_id: undefined });
           settled.push(id);
         }
       }
