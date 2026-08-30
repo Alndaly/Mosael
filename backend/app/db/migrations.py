@@ -15,6 +15,7 @@ import json
 import logging
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import inspect, text
 
@@ -1323,6 +1324,7 @@ def init_db() -> None:
     _migrate_prepared_publish_tasks()
     _migrate_track_role()
     _migrate_legacy_tts_sources()
+    _migrate_browser_boolean_options()
     _migrate_shared_venvs()
 
 
@@ -1338,6 +1340,56 @@ def _migrate_shared_venvs() -> None:
 
     tts_config.migrate_shared_venv()
     asr_models.migrate_shared_venv()
+
+
+def _migrate_browser_boolean_options() -> None:
+    """三个浏览器节点的是非选项从「否 / 是」迁成「false / true」。
+
+    选项**值**会原样存进图里,也会原样显示在下拉框上 —— 目录里其余选项一律是中性标识符
+    (`true` `GET` `image` `precise`),只有这三处写的是中文,于是英文界面上那三个下拉框
+    永远是「否 / 是」,而且没有任何出口能把它翻掉:那是值,不是文案。
+
+    值本身改掉之后,库里已有的图还留着旧值 —— 在这里迁,而不是让读取端认两套。
+    **对里写死**是有意的:迁移是历史的快照,不该跟着后面还会变的目录走。
+    """
+    inspector = inspect(engine)
+    if "workflows" not in set(inspector.get_table_names()):
+        return
+    pairs = {("browser_click", "exact"), ("browser_extract", "all"), ("browser_wait", "gone")}
+
+    def fix(graph: Any) -> bool:
+        """→ 改动过没有。子图(循环体 / 子流程)也要走进去。"""
+        touched = False
+        if not isinstance(graph, dict):
+            return False
+        for node in graph.get("nodes") or []:
+            if not isinstance(node, dict):
+                continue
+            config = node.get("config")
+            if not isinstance(config, dict):
+                continue
+            for field in [key for key in config if (node.get("type"), key) in pairs]:
+                if config[field] in ("是", "否"):
+                    config[field] = "true" if config[field] == "是" else "false"
+                    touched = True
+            for value in config.values():
+                if isinstance(value, dict) and value.get("nodes") is not None:
+                    touched = fix(value) or touched
+
+        return touched
+
+    with engine.begin() as conn:
+        rows = conn.execute(text("SELECT id, graph FROM workflows")).fetchall()
+        for row in rows:
+            try:
+                graph = json.loads(row[1]) if isinstance(row[1], str) else row[1]
+            except (TypeError, ValueError):
+                continue
+            if fix(graph):
+                conn.execute(
+                    text("UPDATE workflows SET graph = :graph WHERE id = :id"),
+                    {"graph": json.dumps(graph, ensure_ascii=False), "id": row[0]},
+                )
 
 
 def _migrate_legacy_tts_sources() -> None:

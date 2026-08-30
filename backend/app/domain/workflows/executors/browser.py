@@ -25,6 +25,8 @@ def _session_id(config: dict[str, Any]) -> str:
 
 
 def _truthy(value: Any) -> bool:
+    #: 认好几种拼法,因为这个值不一定来自下拉框 —— 它也可以从上游连线过来(模型吐的 "是"、
+    #: HTTP 回来的 "on")。下拉框给的是 true/false,这里宽容的是**别处**送来的写法。
     return str(value).strip().lower() in ("1", "true", "yes", "y", "on", "是")
 
 
