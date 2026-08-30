@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import base64
 import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
-from app.domain.analysis import service
 from app.core.db import SessionLocal
 from app.db.models import Asset, ProviderProfile
+from app.domain.analysis import service
+from tests.media_fixtures import TINY_HEIC
+from tests.util import add_provider, fresh_client, make_video_asset
+
+
 def _me() -> str:
     """钥匙归人之后,取供应商必须说清"为谁" —— 测试里就是第一个账号。"""
     from app.core.db import SessionLocal
@@ -16,10 +21,6 @@ def _me() -> str:
 
     with SessionLocal() as db:
         return db.query(User).order_by(User.created_at).first().id
-
-
-from tests.util import add_provider, make_video_asset
-from tests.util import fresh_client
 
 HAS_FFMPEG = shutil.which("ffmpeg") is not None
 
@@ -125,6 +126,31 @@ def test_analyze_endpoint_end_to_end(monkeypatch, tmp_path: Path) -> None:
     assert payload["answer"] == "画面是一张纯红色图片。"
     assert payload["provider"] == "moonshot"
     assert captured["parts"] == 2  # text + one image
+
+
+@pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")
+def test_analyze_heic_sends_real_jpeg_bytes_and_mime(monkeypatch) -> None:
+    """不能只修界面:同一份 HEIC 交给视觉模型时也要走那份兼容预览。"""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    add_profile(client, "moonshot", "Kimi")
+    asset = client.post(
+        "/api/assets/import",
+        data={"workspace_id": ws["id"]},
+        files={"file": ("photo.heic", TINY_HEIC, "image/heic")},
+    ).json()
+    captured: dict[str, str] = {}
+
+    def fake_call(db, profile, messages, call=None):
+        captured["url"] = messages[0]["content"][1]["image_url"]["url"]
+        return "红色图片"
+
+    monkeypatch.setattr(service, "call_vision_model", fake_call)
+    response = client.post(f"/api/assets/{asset['id']}/analyze", json={"question": "什么颜色？"})
+    assert response.status_code == 200, response.text
+    prefix, encoded = captured["url"].split(",", 1)
+    assert prefix == "data:image/jpeg;base64"
+    assert base64.b64decode(encoded).startswith(b"\xff\xd8")
 
 
 def test_analyze_rejects_audio_assets() -> None:

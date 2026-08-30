@@ -14,7 +14,7 @@ import { ModalShell } from "@/components/app/modals";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { ChatBubble } from "@/features/ai-studio/ChatBubble";
 import { SessionList } from "@/features/ai-studio/SessionList";
-import { UserMessageContent, attachmentToken } from "@/features/ai-studio/userMessage";
+import { UserMessageContent, attachmentToken, chatMediaGallery } from "@/features/ai-studio/userMessage";
 import { MessageUsageFooter, type AgentUsageEvent } from "@/features/ai-studio/messageUsage";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ModelPicker } from "@/features/ai-studio/ModelPicker";
@@ -308,6 +308,7 @@ export function ChatWorkspace({
   };
 
   const visibleMessages = (messages.data ?? []).filter((message) => !queuedIds.has(message.id));
+  const mediaGallery = React.useMemo(() => chatMediaGallery(visibleMessages), [visibleMessages]);
   //: 「N 个子代理」的数据源:历史消息的 timeline 摊平,再接上正在流的这一轮 ——
   //: 子代理跑到一半时就该在列表里(转着圈),不是等它跑完才出现。
   //: 正在查看的子代理(DSH 形态:进它自己的会话视图,面包屑返回)。换会话就退出 ——
@@ -496,7 +497,12 @@ export function ChatWorkspace({
             <div className="relative grid min-h-0 min-w-0">
             <div className="flex min-w-0 flex-col gap-3.5 overflow-y-auto overflow-x-hidden px-4 pb-2.5 pt-7" ref={stick.ref}>
               {visibleMessages.map((message) => (
-                <ChatBubble key={message.id} message={message} usageEvents={usageByMessage.get(message.id) ?? []} />
+                <ChatBubble
+                  key={message.id}
+                  message={message}
+                  usageEvents={usageByMessage.get(message.id) ?? []}
+                  mediaGallery={mediaGallery}
+                />
               ))}
               {running && streamText && (
                 <div className="relative mx-auto w-full max-w-[780px] shrink-0 text-ui-md leading-[1.65] [word-break:break-word]">
@@ -986,5 +992,4 @@ function collectRecentToolCalls(messages: AgentMessage[], streamTimeline: AgentT
   pushTimeline(streamTimeline, "stream");
   return tools.reverse();
 }
-
 

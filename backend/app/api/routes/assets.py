@@ -14,10 +14,11 @@ from app.domain.permissions import ensure_workspace_access, ensure_workspace_per
 from app.db.models import Asset, Clip, Job, Transcript, Project
 from app.core.config import settings
 from app.domain.assets import import_uploaded_asset, register_file_asset
+from app.domain.assets.proxies import start_proxy_job
 from app.domain.transcripts import attach_transcript, get_transcript_for_asset
 from app.domain.transcripts.operations import SegmentIn, TokenIn, TranscriptDomainError
+from app.media.image_preview import browser_compatible_image
 from app.media.paths import resolve_key
-from app.domain.assets.proxies import start_proxy_job
 from app.media.proxy import proxy_path
 from app.media.thumbnails import generate_thumbnail, thumbnail_path
 from app.media.waveform import waveform_path
@@ -325,6 +326,27 @@ def get_asset_file(asset_id: str, db: DbSession, user: CurrentUser) -> FileRespo
         raise HTTPException(status_code=404, detail="Asset file missing")
     media_type = mimetypes.guess_type(asset.original_filename or path.name)[0] or "application/octet-stream"
     return FileResponse(path, media_type=media_type, filename=asset.original_filename or path.name)
+
+
+@router.get("/assets/{asset_id}/preview")
+def get_asset_preview(asset_id: str, db: DbSession, user: CurrentUser) -> FileResponse:
+    """A full-size browser-compatible representation of an image.
+
+    The original file remains the download source. Unsupported browser containers such as HEIC
+    are decoded into a cached JPEG, including for assets imported before this endpoint existed.
+    """
+    asset = _require_file_backed_asset(db, asset_id)
+    ensure_workspace_access(db, user, asset.workspace_id)
+    if asset.kind != "image":
+        raise HTTPException(status_code=422, detail="Preview is only available for image assets")
+    source = resolve_key(asset.file_key)
+    if not source.is_file():
+        raise HTTPException(status_code=404, detail="Asset file missing")
+    compatible = browser_compatible_image(source, source.parent)
+    if compatible is None:
+        raise HTTPException(status_code=422, detail="Image preview could not be generated")
+    preview, media_type = compatible
+    return FileResponse(preview, media_type=media_type)
 
 
 @router.get("/assets/{asset_id}/thumbnail")

@@ -1,9 +1,9 @@
 import React from "react";
-import { Paperclip } from "lucide-react";
+import { Maximize2, Paperclip } from "lucide-react";
 
-import { assetFileUrl } from "@/api/client";
+import { assetFileUrl, assetPreviewUrl } from "@/api/client";
 import { cn } from "@/lib/utils";
-import { useImagePreview } from "@/components/app/image-preview";
+import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
 
 /**
  * 一个素材的行内预览:图出图、视频出播放器、音频出音轨,其余退回文件胶囊。
@@ -23,6 +23,7 @@ export function AssetInlinePreview({
   plain = false,
   previewOnClick = true,
   onNaturalSize,
+  gallery,
 }: {
   assetId: string;
   name: string;
@@ -40,9 +41,18 @@ export function AssetInlinePreview({
   /** 媒体的**自然尺寸**加载出来时报一次。画布节点用它把自己的宽高比校正成画面的比例 ——
    *  不校正的话 16:9 的片子摆在 1.6:1 的框里,上下各留一条黑边。可选:别的消费方不关心。 */
   onNaturalSize?: (width: number, height: number) => void;
+  /** 同一聊天/生成批次里的媒体。react-photo-view 用它提供左右翻页与计数。 */
+  gallery?: ImagePreviewItem[];
 }) {
   const { openImagePreview } = useImagePreview();
-  const src = assetFileUrl(assetId);
+  const src = kind === "image" ? assetPreviewUrl(assetId) : assetFileUrl(assetId);
+  const openPreview = () =>
+    openImagePreview({
+      src,
+      title: name,
+      ...(kind === "video" ? { video: true } : {}),
+      ...(gallery?.length ? { gallery } : {}),
+    });
 
   if (kind === "image") {
     const picture = (
@@ -69,7 +79,7 @@ export function AssetInlinePreview({
           "block max-w-full cursor-zoom-in overflow-hidden p-0",
           plain ? "w-full border-0 bg-transparent" : "w-fit rounded-lg border border-border bg-black",
         )}
-        onClick={() => openImagePreview({ src, title: name })}
+        onClick={openPreview}
       >
         {picture}
       </button>
@@ -77,21 +87,33 @@ export function AssetInlinePreview({
   }
   if (kind === "video") {
     return (
-      // nodrag:播放条要能点、能拖进度,不能让画布把 pointerdown 抢去拖节点。
-      // 图片不加 —— 那会让占了半个节点的缩略图变成"拖不动的死区"。
-      <video
-        src={src}
-        controls
-        preload="metadata"
-        className={cn(
-          "nodrag",
-          className ?? (plain ? "max-w-full bg-black" : "max-h-[200px] max-w-full rounded-lg border border-border bg-black"),
+      <div className="relative w-fit max-w-full">
+        {/* nodrag:播放条要能点、能拖进度,不能让画布把 pointerdown 抢去拖节点。 */}
+        <video
+          src={src}
+          controls
+          preload="metadata"
+          className={cn(
+            "nodrag",
+            className ?? (plain ? "max-w-full bg-black" : "max-h-[200px] max-w-full rounded-lg border border-border bg-black"),
+          )}
+          onLoadedMetadata={(event) => {
+            const video = event.currentTarget;
+            if (video.videoWidth && video.videoHeight) onNaturalSize?.(video.videoWidth, video.videoHeight);
+          }}
+        />
+        {previewOnClick && (
+          <button
+            type="button"
+            title={name}
+            aria-label={name}
+            className="nodrag absolute right-1.5 top-1.5 inline-flex size-7 cursor-zoom-in items-center justify-center rounded-full border border-white/20 bg-black/55 p-0 text-white backdrop-blur-sm hover:bg-black/75"
+            onClick={openPreview}
+          >
+            <Maximize2 size={13} />
+          </button>
         )}
-        onLoadedMetadata={(event) => {
-          const video = event.currentTarget;
-          if (video.videoWidth && video.videoHeight) onNaturalSize?.(video.videoWidth, video.videoHeight);
-        }}
-      />
+      </div>
     );
   }
   if (kind === "audio") {

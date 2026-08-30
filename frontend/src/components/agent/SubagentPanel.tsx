@@ -3,6 +3,7 @@ import { Bot, ChevronDown, ChevronRight, CircleAlert, Loader2, X } from "lucide-
 
 import type { AgentTimelineItem, ToolCall } from "@/components/agent/ToolCalls";
 import { ChatBubble, type AgentMessage as ChatMessage } from "@/features/ai-studio/ChatBubble";
+import { chatMediaGallery } from "@/features/ai-studio/userMessage";
 import { TraceView } from "@/features/ai-studio/trace/TraceView";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -305,6 +306,7 @@ export function SubagentSessionView({ run }: { run: SubagentRun }) {
   const t = useI18n();
   const [view, setView] = React.useState<"chat" | "trace">("chat");
   const { timeline, messages } = React.useMemo(() => synthesize(run), [run]);
+  const mediaGallery = React.useMemo(() => chatMediaGallery(messages as ChatMessage[]), [messages]);
 
   if (!run.archive) {
     return (
@@ -346,7 +348,7 @@ export function SubagentSessionView({ run }: { run: SubagentRun }) {
            和悬停脚注的助手消息,失败走同一张错误卡(所以 tabs 行不再单独挂红字)。 */
         <div className="flex min-w-0 flex-col gap-3.5 overflow-y-auto overflow-x-hidden px-4 pb-4 pt-7">
           {(messages as ChatMessage[]).map((message) => (
-            <ChatBubble key={message.id} message={message} usageEvents={[]} />
+            <ChatBubble key={message.id} message={message} usageEvents={[]} mediaGallery={mediaGallery} />
           ))}
         </div>
       )}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.media_fixtures import TINY_HEIC
 from tests.util import make_video_asset
 from tests.util import fresh_client
 
@@ -22,6 +23,31 @@ def test_get_single_asset_missing_is_404() -> None:
     client = fresh_client()
     missing = client.get("/api/assets/does-not-exist")
     assert missing.status_code == 404
+
+
+def test_heic_has_a_browser_compatible_full_size_preview() -> None:
+    """原件可以保留 HEIC,但 `<img>` 与视觉模型拿到的必须是浏览器通用格式。"""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    imported = client.post(
+        "/api/assets/import",
+        data={"workspace_id": ws["id"]},
+        files={"file": ("photo.heic", TINY_HEIC, "image/heic")},
+    )
+    assert imported.status_code == 200, imported.text
+    asset = imported.json()
+    assert asset["kind"] == "image"
+
+    preview = client.get(f"/api/assets/{asset['id']}/preview")
+    assert preview.status_code == 200, preview.text
+    assert preview.headers["content-type"].startswith("image/jpeg")
+    assert preview.content.startswith(b"\xff\xd8")
+
+    # 下载仍拿原件:兼容预览是派生物,不是有损替换用户文件。
+    original = client.get(f"/api/assets/{asset['id']}/file")
+    assert original.status_code == 200
+    assert original.headers["content-type"].startswith("image/heic")
+    assert original.content == TINY_HEIC
 
 
 def test_update_asset_moves_it_between_projects() -> None:

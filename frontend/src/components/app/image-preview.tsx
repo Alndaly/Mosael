@@ -7,7 +7,7 @@ import { useI18n } from "@/app/preferences";
 import { BoardVideo } from "@/features/boards/BoardPlayer";
 import { cn } from "@/lib/utils";
 
-type ImagePreviewImage = {
+export type ImagePreviewItem = {
   src: string;
   title?: string;
   /** 这一项是视频 —— **同一个灯箱,换一种渲染**。另开一个视频弹层的话,关闭、遮罩、
@@ -16,10 +16,10 @@ type ImagePreviewImage = {
   video?: boolean;
 };
 
-type ImagePreviewState = ImagePreviewImage & {
+type ImagePreviewState = ImagePreviewItem & {
   /** 画廊:同场景的全部图片(如生成会话里所有产出)。点开的 src 决定初始位置,
    *  PhotoSlider 自带左右翻页/计数。省略 = 单张预览,老调用方不变。 */
-  gallery?: ImagePreviewImage[];
+  gallery?: ImagePreviewItem[];
 };
 
 type ImagePreviewContextValue = {
@@ -30,7 +30,7 @@ const ImagePreviewContext = React.createContext<ImagePreviewContextValue | null>
 
 export function ImagePreviewProvider({ children }: { children: React.ReactNode }) {
   const t = useI18n();
-  const [images, setImages] = React.useState<ImagePreviewImage[]>([]);
+  const [images, setImages] = React.useState<ImagePreviewItem[]>([]);
   const [index, setIndex] = React.useState(0);
   const [visible, setVisible] = React.useState(false);
   //: 打开那一刻的视口大小 —— 视频那一项按它出盒子(见下面 width/height 那段)。

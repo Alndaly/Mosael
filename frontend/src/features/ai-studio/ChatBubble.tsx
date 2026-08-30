@@ -10,6 +10,7 @@ import { CompactionNotice, type CompactionInfo } from "@/components/agent/Contex
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/components/agent/ToolCalls";
 import { MessageFooter, MessageTime, MessageUsageFooter, type AgentUsageEvent } from "@/features/ai-studio/messageUsage";
 import { UserMessageContent } from "@/features/ai-studio/userMessage";
+import type { ImagePreviewItem } from "@/components/app/image-preview";
 import { cn } from "@/lib/utils";
 
 export type AgentMessage = components["schemas"]["AgentMessageOut"];
@@ -51,7 +52,15 @@ function AgentOrigin({ sessionId }: { sessionId: string }) {
   );
 }
 
-export function ChatBubble({ message, usageEvents }: { message: AgentMessage; usageEvents: AgentUsageEvent[] }) {
+export function ChatBubble({
+  message,
+  usageEvents,
+  mediaGallery,
+}: {
+  message: AgentMessage;
+  usageEvents: AgentUsageEvent[];
+  mediaGallery?: ImagePreviewItem[];
+}) {
   const t = useI18n();
   const payload = message.payload as
     | {
@@ -110,7 +119,7 @@ export function ChatBubble({ message, usageEvents }: { message: AgentMessage; us
         >
           {fromAgent && <AgentOrigin sessionId={fromAgent} />}
           <div className={fromAgent ? "whitespace-pre-wrap" : undefined}>
-            <UserMessageContent content={message.content} />
+            <UserMessageContent content={message.content} mediaGallery={mediaGallery} />
           </div>
         </div>
       )}

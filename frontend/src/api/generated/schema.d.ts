@@ -1031,6 +1031,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assets/{asset_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Asset Preview
+         * @description A full-size browser-compatible representation of an image.
+         *
+         *     The original file remains the download source. Unsupported browser containers such as HEIC
+         *     are decoded into a cached JPEG, including for assets imported before this endpoint existed.
+         */
+        get: operations["get_asset_preview_api_assets__asset_id__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/assets/{asset_id}/thumbnail": {
         parameters: {
             query?: never;
@@ -11496,6 +11519,37 @@ export interface operations {
         };
     };
     get_asset_file_api_assets__asset_id__file_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_asset_preview_api_assets__asset_id__preview_get: {
         parameters: {
             query?: never;
             header?: never;

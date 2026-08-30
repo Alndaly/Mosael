@@ -22,6 +22,7 @@ from app.ai.providers.base import sanitize_provider_error
 from app.db.models import Asset, ProviderProfile
 from app.domain import provider_credentials
 from app.domain.provider_credentials import ResolvedProvider
+from app.media.image_preview import browser_compatible_image
 from app.media.paths import resolve_key
 from app.core.child_process import run_logged
 import logging
@@ -148,7 +149,12 @@ def _image_part(data: bytes, mime: str = "image/jpeg") -> dict[str, Any]:
 
 
 def build_messages(
-    asset: Asset, question: str, images: list[bytes], transcript: str | None = None
+    asset: Asset,
+    question: str,
+    images: list[bytes],
+    transcript: str | None = None,
+    *,
+    image_mime: str = "image/jpeg",
 ) -> list[dict[str, Any]]:
     meta = asset.media_info or {}
     context = f"素材名称: {asset.name}；类型: {asset.kind}"
@@ -160,7 +166,7 @@ def build_messages(
     if transcript:
         context += f"\n\n【语音转写(自动识别,可能有误差,仅供参考)】\n{transcript}"
     content: list[dict[str, Any]] = [{"type": "text", "text": f"{context}\n\n{question}"}]
-    content.extend(_image_part(image) for image in images)
+    content.extend(_image_part(image, image_mime) for image in images)
     return [{"role": "user", "content": content}]
 
 
@@ -293,12 +299,21 @@ def analyze_asset(
 
     # 图片:始终抽一帧走视觉模型(原生视频那套对图片没意义)。
     if asset.kind == "image":
+        compatible = browser_compatible_image(path, path.parent)
+        if compatible is None:
+            raise AnalysisError("图片无法转换成视觉模型支持的格式")
+        image_path, image_mime = compatible
         profile = pick_analysis_profile(db, profile_id, user_id)
         with billable(
             db, capability="chat", operation="analyze_asset", workspace_id=asset.workspace_id,
             source_type="asset", source_id=asset.id,
         ) as call:
-            answer = call_vision_model(db, profile, build_messages(asset, prompt, [path.read_bytes()]), call)
+            answer = call_vision_model(
+                db,
+                profile,
+                build_messages(asset, prompt, [image_path.read_bytes()], image_mime=image_mime),
+                call,
+            )
         return {"answer": answer, "provider": profile.vendor, "model": provider_models.model_id_for(db, profile, "chat"), "mode": "image", "frames": 1}
 
     transcript_text = _asset_transcript_text(db, asset.id)  # 转写两条路都喂

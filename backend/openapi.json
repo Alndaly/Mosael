@@ -2791,6 +2791,47 @@
         }
       }
     },
+    "/api/assets/{asset_id}/preview": {
+      "get": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Get Asset Preview",
+        "description": "A full-size browser-compatible representation of an image.\n\nThe original file remains the download source. Unsupported browser containers such as HEIC\nare decoded into a cached JPEG, including for assets imported before this endpoint existed.",
+        "operationId": "get_asset_preview_api_assets__asset_id__preview_get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/assets/{asset_id}/thumbnail": {
       "get": {
         "tags": [

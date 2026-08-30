@@ -1,5 +1,7 @@
 import React from "react";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
+import { assetFileUrl, assetPreviewUrl } from "@/api/client";
+import type { ImagePreviewItem } from "@/components/app/image-preview";
 
 /**
  * 用户消息里「素材附件」的统一编码与渲染——AI Studio 对话页与工作流助手共用一套,避免两处漂移。
@@ -28,7 +30,27 @@ export function parseUserContent(content: string): {
   return { text, attachments };
 }
 
-export function UserMessageContent({ content }: { content: string }) {
+/** 同一聊天里的图片/视频按出现顺序组成一个 react-photo-view 列表。 */
+export function chatMediaGallery(messages: readonly { role?: string; content: string }[]): ImagePreviewItem[] {
+  const seen = new Set<string>();
+  const gallery: ImagePreviewItem[] = [];
+  for (const message of messages) {
+    if (message.role !== "user") continue;
+    for (const attachment of parseUserContent(message.content).attachments) {
+      if (attachment.kind !== "image" && attachment.kind !== "video") continue;
+      if (seen.has(attachment.assetId)) continue;
+      seen.add(attachment.assetId);
+      gallery.push({
+        src: attachment.kind === "image" ? assetPreviewUrl(attachment.assetId) : assetFileUrl(attachment.assetId),
+        title: attachment.name,
+        ...(attachment.kind === "video" ? { video: true } : {}),
+      });
+    }
+  }
+  return gallery;
+}
+
+export function UserMessageContent({ content, mediaGallery }: { content: string; mediaGallery?: ImagePreviewItem[] }) {
   const { text, attachments } = React.useMemo(() => parseUserContent(content), [content]);
   if (attachments.length === 0) return <div>{content}</div>;
   return (
@@ -36,7 +58,13 @@ export function UserMessageContent({ content }: { content: string }) {
       {text && <div className="whitespace-pre-wrap">{text}</div>}
       <div className="flex flex-wrap gap-1.5">
         {attachments.map((att) => (
-          <AssetInlinePreview key={att.assetId} assetId={att.assetId} name={att.name} kind={att.kind} />
+          <AssetInlinePreview
+            key={att.assetId}
+            assetId={att.assetId}
+            name={att.name}
+            kind={att.kind}
+            gallery={mediaGallery}
+          />
         ))}
       </div>
     </div>
