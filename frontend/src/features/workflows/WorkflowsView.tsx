@@ -246,7 +246,9 @@ function NodeResultPreview({ assetIds }: { assetIds: string[] }) {
     // 原地点一下照样打开大图。
     // 预览层:**自己就是通栏的**,因为卡片不带内边距(见卡片那段说明)。多份并排时用 1px 的
     // 底色缝隙隔开,不画框 —— 框会让它读成贴上去的独立元件,而它是卡片自己的一段。
-    <div className="grid grid-flow-col justify-stretch gap-px overflow-hidden border-t border-border bg-border [&:last-child]:rounded-b-[7px]">
+    // 圆角**从卡片的令牌推**(卡片圆角 − 1px 边框),不写死一个数:这里原本是 7px,那是卡片还用
+    // rounded-md(8px)时算的;卡片后来升到 rounded-lg(10px)而这个数没跟,于是底部两角各缺 2px。
+    <div className="grid grid-flow-col justify-stretch gap-px overflow-hidden border-t border-border bg-border [&:last-child]:rounded-b-[calc(var(--radius-lg)-1px)]">
       {ready.map((asset) => (
         <AssetInlinePreview
           key={asset.id}
@@ -404,7 +406,8 @@ function WfNode({ data, selected }: NodeProps) {
       {showIo && (
         // 接口区做成卡片"页脚条":压进左右 padding、贴住底边、subtle 底色 —
         // 端口行读作独立的接线区,而不是悬在卡片下半的零散小字(空的一侧也不再是大片留白)。
-        <div className="flex justify-between gap-4 rounded-b-[7px] border-t border-border bg-panel-subtle px-3 py-[6px]">
+        // 圆角同上:卡片圆角 − 1px 边框。差 1px 就会在底部两角露出一线卡片底色。
+        <div className="flex justify-between gap-4 rounded-b-[calc(var(--radius-lg)-1px)] border-t border-border bg-panel-subtle px-3 py-[6px]">
           <div className="flex min-w-0 flex-col gap-[3px]">
             {inputs.map((key) => (
               <div className="relative flex min-h-4 items-center" key={key}>
