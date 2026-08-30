@@ -172,7 +172,8 @@ def invoke(
             # 那是隔离边界的一部分。
             resolved = plugin_inputs.materialize(db, tool, payload, scratch, workspace_id=workspace_id)
             result = execute_tool(
-                {"_path": manifest.path, "entry": manifest.runtime.entry},
+                Path(manifest.path),
+                manifest.runtime.entry,
                 tool_name,
                 resolved,
                 inst.process_env(db, instance),

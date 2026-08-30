@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from app.domain.plugins.manifest import parse
 from app.domain.plugins.runtime import PluginRuntimeError, check_required_input, execute_tool
 from tests.util import fresh_client
 
@@ -13,48 +14,50 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 EXAMPLE = REPO_ROOT / "plugins" / "examples" / "text-toolkit"
 
 
-def make_plugin(tmp_path: Path, entry_body: str, entry: str = "main.py") -> dict:
+def make_plugin(tmp_path: Path, entry_body: str, entry: str = "main.py") -> tuple[Path, str]:
+    """→ (插件目录, 入口),正是 execute_tool 要的两样东西。"""
     plugin_dir = tmp_path / "p"
     plugin_dir.mkdir()
     (plugin_dir / entry).write_text(textwrap.dedent(entry_body), encoding="utf-8")
-    return {"_path": str(plugin_dir), "entry": entry}
+    return plugin_dir, entry
+
+
+def _example() -> tuple[Path, str]:
+    """入口从清单里现取 —— 让这条端到端测试连"清单怎么说入口"也一起走一遍。"""
+    raw = json.loads((EXAMPLE / "open-studio.plugin.json").read_text(encoding="utf-8"))
+    return EXAMPLE, parse(raw, str(EXAMPLE)).runtime.entry
 
 
 def test_example_plugin_word_count_end_to_end() -> None:
-    manifest = json.loads((EXAMPLE / "open-studio.plugin.json").read_text(encoding="utf-8"))
-    manifest["_path"] = str(EXAMPLE)
-    output = execute_tool(manifest, "word_count", {"text": "大家好 欢迎来到米布"}).output
+    output = execute_tool(*_example(), "word_count", {"text": "大家好 欢迎来到米布"}).output
     assert output["chars"] == 9
     assert output["estimated_seconds"] == 2.0
-    tags = execute_tool(manifest, "extract_hashtags", {"text": "上新啦 #好物# #newvideo 冲"}).output
+    tags = execute_tool(*_example(), "extract_hashtags", {"text": "上新啦 #好物# #newvideo 冲"}).output
     assert tags["hashtags"] == ["好物", "newvideo"]
 
 
 def test_plugin_error_response_raises() -> None:
-    manifest = json.loads((EXAMPLE / "open-studio.plugin.json").read_text(encoding="utf-8"))
-    manifest["_path"] = str(EXAMPLE)
     with pytest.raises(PluginRuntimeError, match="unknown tool"):
-        execute_tool(manifest, "nope", {})
+        execute_tool(*_example(), "nope", {})
 
 
 def test_crashing_plugin_reports_exit_code(tmp_path) -> None:
-    manifest = make_plugin(tmp_path, "import sys; sys.exit(3)")
+    plugin = make_plugin(tmp_path, "import sys; sys.exit(3)")
     with pytest.raises(PluginRuntimeError, match="退出码 3"):
-        execute_tool(manifest, "x", {})
+        execute_tool(*plugin, "x", {})
 
 
 def test_garbage_output_rejected(tmp_path) -> None:
-    manifest = make_plugin(tmp_path, "print('not json')")
+    plugin = make_plugin(tmp_path, "print('not json')")
     with pytest.raises(PluginRuntimeError, match="不是合法 JSON"):
-        execute_tool(manifest, "x", {})
+        execute_tool(*plugin, "x", {})
 
 
 def test_entry_escape_rejected(tmp_path) -> None:
     (tmp_path / "outside.py").write_text("print('{}')", encoding="utf-8")
-    manifest = make_plugin(tmp_path, "pass")
-    manifest["entry"] = "../outside.py"
+    plugin_dir, _ = make_plugin(tmp_path, "pass")
     with pytest.raises(PluginRuntimeError, match="插件目录内"):
-        execute_tool(manifest, "x", {})
+        execute_tool(plugin_dir, "../outside.py", "x", {})
 
 
 def test_missing_required_input() -> None:

@@ -58,11 +58,15 @@ class ToolResult:
     state: dict[str, Any] = field(default_factory=dict)
 
 
-def resolve_entry(manifest: dict[str, Any]) -> Path:
-    plugin_dir = Path(str(manifest.get("_path") or ""))
-    entry = str(manifest.get("entry") or "").strip()
+def resolve_entry(plugin_dir: Path, entry: str) -> Path:
+    """入口脚本的绝对路径。
+
+    **要目录和入口,不要"一份清单"** —— 这里曾经收一个字典、自己读顶层 `entry`,于是同一个
+    字段有了两个读法(清单模块认 `runtime.entry`,这里认顶层 `entry`),中间靠调用方现搭一个
+    `{"_path", "entry"}` 的假清单粘着。粘住的两边一旦分开走,插件就装得上、跑不动。
+    """
     if not entry:
-        raise PluginRuntimeError("插件未声明 entry 脚本,无法执行(manifest.entry)")
+        raise PluginRuntimeError("插件未声明 entry 脚本,无法执行(runtime.entry)")
     if not plugin_dir.is_dir():
         raise PluginRuntimeError("插件目录不存在,请重新扫描")
     entry_path = (plugin_dir / entry).resolve()
@@ -84,7 +88,8 @@ def check_required_input(tool: dict[str, Any], input_payload: dict[str, Any]) ->
 
 
 def execute_tool(
-    manifest: dict[str, Any],
+    plugin_dir: Path,
+    entry: str,
     tool_name: str,
     input_payload: dict[str, Any],
     credentials: dict[str, str] | None = None,
@@ -99,7 +104,7 @@ def execute_tool(
     `scratch_dir` 是这次调用的产出目录:插件要交出一个文件时写在那儿,路径经
     OPEN_STUDIO_PLUGIN_OUTPUT_DIR 告诉它(见 artifacts 的说明)。协议本身只搬 JSON,
     所以搬字节这件事得另开一条路。"""
-    entry_path = resolve_entry(manifest)
+    entry_path = resolve_entry(plugin_dir, entry)
     request = json.dumps({"tool": tool_name, "input": input_payload}, ensure_ascii=False)
     env = {
         "PATH": os.environ.get("PATH", ""),

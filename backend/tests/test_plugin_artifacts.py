@@ -24,17 +24,17 @@ from app.domain.plugins.runtime import execute_tool
 from tests.util import fresh_client
 
 
-def make_plugin(tmp_path: Path, entry_body: str) -> dict:
+def make_plugin(tmp_path: Path, entry_body: str) -> tuple[Path, str]:
     plugin_dir = tmp_path / "p"
     plugin_dir.mkdir()
     (plugin_dir / "main.py").write_text(textwrap.dedent(entry_body), encoding="utf-8")
-    return {"_path": str(plugin_dir), "entry": "main.py"}
+    return plugin_dir, "main.py"
 
 
 class Test暂存目录:
     def test_插件收得到那个目录(self, tmp_path) -> None:
         """协议只搬 JSON,所以搬字节这件事得另开一条路 —— 而插件得知道往哪儿写。"""
-        manifest = make_plugin(
+        plugin = make_plugin(
             tmp_path,
             """
             import json, os, sys
@@ -44,12 +44,12 @@ class Test暂存目录:
         )
         scratch = tmp_path / "out"
         scratch.mkdir()
-        output = execute_tool(manifest, "x", {}, scratch_dir=scratch).output
+        output = execute_tool(*plugin, "x", {}, scratch_dir=scratch).output
         assert output["dir"] == str(scratch)
 
     def test_没给暂存目录时不注入这个变量(self, tmp_path) -> None:
         """不是所有工具都产文件。凭空多一个指向不存在目录的环境变量,只会让插件写进去然后丢掉。"""
-        manifest = make_plugin(
+        plugin = make_plugin(
             tmp_path,
             """
             import json, os, sys
@@ -57,7 +57,7 @@ class Test暂存目录:
             print(json.dumps({"ok": True, "output": {"has": "OPEN_STUDIO_PLUGIN_OUTPUT_DIR" in os.environ}}))
             """,
         )
-        assert execute_tool(manifest, "x", {}).output["has"] is False
+        assert execute_tool(*plugin, "x", {}).output["has"] is False
 
 
 class Test交出本地文件:
