@@ -17,9 +17,11 @@
   这一条有棘轮守着(`lib/typeScale.test.ts`),特例列在它的 `ALLOWED` 里。
 - 圆角走 8px 刻度,分段控件是胶囊形,表单填充用 `--field`。不用投影。
 - 每个新界面都要同时管好浅色和深色。
-- **表单控件的字号必须写在容器上,让控件继承。** `design/tokens.css` 里有一条无层级的
-  `button, input, select, textarea { font: inherit }`,它压过 `@layer utilities` —— 直接写在
-  按钮上的 `text-ui-xs` 会静默失效(class 还在,尺寸回落到继承值)。
+- **控件的字号字重直接写在控件上就行。** `design/tokens.css` 里那条
+  `button, input, select, textarea { font: inherit }` 曾经是无层级的,压过 `@layer utilities`,
+  于是写在按钮上的 `text-ui-xs` 会静默失效(class 还在,尺寸回落到继承值);2026-08 那一轮
+  把它挪进了 `@layer base`,并把 `ui/` 下的组件按本项目的 ui-* 刻度重定了一遍。
+  没写字体类的控件仍然继承。棘轮:`design/unlayeredGlobals.test.ts`。
 
 ### 布局
 
@@ -125,7 +127,7 @@ python3 scripts/sync-ratchet-docs.py
 | 结构性约束:**装智能体正文的滚动容器,横向也要锁死。** | `frontend/src/app/chatScroll.test.ts` |
 | **会裁切的盒子不能用 `leading-none`。** | `frontend/src/app/clippedText.test.ts` |
 | 自定义 CSS 能不能压过应用样式,全看**注入的那个 `<style>` 排在哪**。 | `frontend/src/app/customCss.dom.test.tsx` |
-| 全局那条 `* { border-color: … }` 是**默认值**,不是强制值。 | `frontend/src/design/borderDefault.test.ts` |
+| tokens.css 里给全局兜底的那几条规则,**必须写在 @layer 里面**。 | `frontend/src/design/unlayeredGlobals.test.ts` |
 | 配音完成后要刷**哪些**缓存。 | `frontend/src/features/editor/dubRefresh.test.ts` |
 | 画不出来时的那块提示,必须在监视器的**最上层**。 | `frontend/src/features/editor/playback/previewOverlayLayer.test.ts` |
 | 字幕翻译的引擎选择必须真的传到后端。 | `frontend/src/features/editor/subtitleTranslateEngine.test.ts` |

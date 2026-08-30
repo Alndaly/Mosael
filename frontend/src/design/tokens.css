@@ -350,18 +350,23 @@ body {
 
 /* 表单控件继承应用字体,而不是浏览器的系统字体。
  *
- * **这条是无层级(unlayered)的,于是它压过 @layer utilities —— 也就是说 button / input /
- * select / textarea 上的字号工具类(text-xs、text-ui-xs…)一律不生效**,元素会静默回落到
- * 继承来的大小,而 class 还老老实实挂在 DOM 上。全站的按钮与输入框都是在这个前提下调出来的
- * (Button 基类里那个 text-sm、Input 的 text-base 从来没生效过),所以**不要**顺手把它挪进
- * @layer base:那会一次性把一批没人审视过的 shadcn 默认字号铺满全站。
- * 要改就单独做一轮:挪层级 + 把 ui/ 下的组件重新按本项目的 ui-* 刻度定一遍。
- * 在那之前,需要精确字号的地方把类挂在**内部的 span** 上(见 components/ui/marker.tsx)。 */
-button,
-input,
-select,
-textarea {
-  font: inherit;
+ * **在 @layer base 里,不是无层级的。** 这一条曾经是无层级的,于是它压过 @layer utilities ——
+ * button / input / select / textarea 上的字号字重工具类一律不生效,元素静默回落到继承来的
+ * 大小,而 class 还老老实实挂在 DOM 上。实测过:同样 `text-ui-md font-semibold` 两个类,
+ * 放 <span> 上是 600/13.5px,放 <button> 上是 400/13px。全站 60 组控件 class 里有 40 组
+ * 声明了字体类,而它们**无一例外**都渲染成 13px/400 —— 也就是那 40 处写的话没有一句算数。
+ *
+ * 挪进 base 之后,工具类正常生效,而没写字体类的控件仍然继承(base 压得住 UA 样式)。
+ * ui/ 下的组件已经按本项目的 ui-* 刻度重定过一遍,不再留 shadcn 的 text-sm / text-base。
+ *
+ * 所以:**控件上的字号字重直接写工具类就行**,不必再挂到内部的 span 上。 */
+@layer base {
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
 }
 
 /* 键盘焦点的**基线** —— 全站只此一处。
