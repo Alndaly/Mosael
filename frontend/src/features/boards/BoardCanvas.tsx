@@ -30,7 +30,7 @@ import { canRedo, canUndo, emptyHistory, record, redo, undo } from "@/features/b
 import { AudioComposer } from "@/features/boards/AudioComposer";
 import { TrimComposer } from "@/features/boards/TrimComposer";
 import { NoteComposer } from "@/features/boards/NoteComposer";
-import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, KIND_META, SPAWNABLE_KINDS, type MediaKind } from "@/features/boards/boardNodes";
+import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, kindIcon, kindText, SPAWNABLE_KINDS, type MediaKind } from "@/features/boards/boardNodes";
 
 /**
  * 创意画板的画布。
@@ -724,7 +724,8 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           >
             <p className="px-2 py-1.5 text-ui-2xs text-muted-foreground">{t("boardSpawnTitle")}</p>
             {SPAWNABLE_KINDS.map((kind) => {
-              const { icon: Icon, label, hint } = KIND_META[kind];
+              const Icon = kindIcon(kind);
+              const { label, hint } = kindText(t, kind);
               return (
                 <button
                   key={kind}
@@ -1063,7 +1064,7 @@ function ItemToolbar({
                       而用户要的是里面那段字。套同一个模板会说出「Generate Note」这种话。 */}
                   {kind === "note"
                     ? t("boardWriteCopy")
-                    : t("boardGenerateKind").replace("{kind}", t(KIND_META[kind].label))}
+                    : t("boardGenerateKind").replace("{kind}", kindText(t, kind).label)}
                 </button>
               ))}
           </>
