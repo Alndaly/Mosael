@@ -900,8 +900,12 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-md border border-border shadow-[var(--shadow-panel)] bg-[var(--monitor-bg)]">
         {/* 监视器上方的操作条:**只放和「此刻这一画面」有关的动作**。
             播放/快进那些在下面的走带条上,和这里不是一类事:那些是「走到哪一帧」,
-            这里是「拿这一帧做什么」。 */}
-        <div className="flex items-center gap-1 border-b border-border/60 px-2 py-1">
+            这里是「拿这一帧做什么」。
+
+            **颜色不跟应用主题走。** 监视器这块底是恒定深色的(画面要在中性底上看),所以
+            这里和下面的走带条用同一套写死的浅灰/白 —— 跟主题走的话,浅色模式下就是深字
+            压在深底上,一个字都看不清。分割线同理:用一道极淡的白,而不是主题的 border。 */}
+        <div className="flex items-center gap-1 border-b border-white/10 px-2 py-1 [&_button]:text-[#c6cbd2] [&_button:hover]:bg-white/10 [&_button:hover]:text-white">
           <Button
             variant="ghost"
             size="sm"

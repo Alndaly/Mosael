@@ -719,6 +719,7 @@ function SubtitleStyleControls({
         // 此前 8 行、每行一个吃满宽度的大控件(3 个选项的「位置」也占满一行,「上传字体」
         // 独占一行还带一格空缩进);收成 5 行紧凑排布,相关的项并到同一行。
         <div className="grid gap-1.5 px-2.5 pb-2.5 pt-0.5">
+          <StyleGroup label={t("subGroupText")} first />
           <StyleRow label={t("subFont")}>
             <Select
               value={s.font_id ? `${UPLOAD_PREFIX}${s.font_id}` : s.font_family}
@@ -809,12 +810,24 @@ function SubtitleStyleControls({
             />
             <StyleValue>{Math.round(s.font_size)}</StyleValue>
           </StyleRow>
-          {/* 前景色、背景色(带透明度)一行:它们是同一件事 —— 字长什么样 —— 的两半,
-              各占一行只会让两个 28px 的色块各自漂在一整行空白里。 */}
           <StyleRow label={t("subColor")}>
             <ColorSwatch value={s.color} onChange={(v) => patch({ color: v })} />
-            <span className="shrink-0 whitespace-nowrap pl-2 text-xs text-muted-foreground">{t("subBg")}</span>
+            <span className="ml-auto shrink-0 whitespace-nowrap text-xs text-muted-foreground">{t("subBold")}</span>
+            <Switch checked={s.bold} onCheckedChange={(v) => patch({ bold: v })} />
+          </StyleRow>
+
+          {/* 衬底自成一组。**此前它和前景色挤在「颜色」那一行**,而那一行末尾还挂着一个
+              没有名字的滑杆 —— 光看界面猜不出它调的是什么(是背景的不透明度)。
+              一个控件如果需要用户猜它管什么,那它就还没做完。 */}
+          <StyleGroup label={t("subGroupBackplate")} />
+          <StyleRow label={t("subBg")}>
             <ColorSwatch value={s.bg_color} onChange={(v) => patch({ bg_color: v })} />
+            {/* 不透明度归零就是「没有衬底」—— 说出来,免得用户以为自己把颜色调错了。 */}
+            <span className="ml-auto shrink-0 whitespace-nowrap text-xs text-muted-foreground">
+              {s.bg_opacity <= 0.001 ? t("subBgNone") : ""}
+            </span>
+          </StyleRow>
+          <StyleRow label={t("subBgOpacity")}>
             <Slider
               min={0}
               max={1}
@@ -823,8 +836,12 @@ function SubtitleStyleControls({
               onValueChange={([v]) => preview({ bg_opacity: v })}
               onValueCommit={([v]) => patch({ bg_opacity: v })}
             />
+            <StyleValue>{Math.round(s.bg_opacity * 100)}%</StyleValue>
           </StyleRow>
-          {/* 位置只有三个值,给一整行下拉是浪费 —— 和加粗并排,两个都是"摆哪儿/什么形态"。 */}
+
+          {/* 位置和边距是**同一件事的两半**(摆在哪儿、离边多远),此前边距孤零零挂在最后一行,
+              而位置那行却和「加粗」并排 —— 加粗是字的形态,和摆位不是一类事。 */}
+          <StyleGroup label={t("subGroupPlacement")} />
           <StyleRow label={t("subPosition")}>
             <Select value={s.position} onValueChange={(v) => patch({ position: v as SubtitleStyle["position"] })}>
               <SelectTrigger className="h-7 w-auto min-w-24 text-xs">
@@ -836,8 +853,6 @@ function SubtitleStyleControls({
                 <SelectItem value="top">{t("subPosTop")}</SelectItem>
               </SelectContent>
             </Select>
-            <span className="ml-auto shrink-0 whitespace-nowrap text-xs text-muted-foreground">{t("subBold")}</span>
-            <Switch checked={s.bold} onCheckedChange={(v) => patch({ bold: v })} />
           </StyleRow>
           <StyleRow label={t("subOffset")}>
             <Slider
@@ -856,12 +871,23 @@ function SubtitleStyleControls({
   );
 }
 
+/** 一组的小标题。**分组不是装饰** —— 此前七个控件平铺,而它们其实分属三件事(字长什么样、
+    衬底、摆在哪儿);混在一起时,用户读到「颜色」和「边距」之间没有任何提示说这是两码事。 */
+function StyleGroup({ label, first }: { label: string; first?: boolean }) {
+  return (
+    <span className={cn("text-ui-2xs font-medium text-muted-foreground/70", first ? "pb-0.5" : "pt-1.5")}>
+      {label}
+    </span>
+  );
+}
+
 /** 样式面板的一行:左边 42px 标签列,右边内容横排。此前这段布局类(连同色块、数值的样式)
     在每一行上原样抄了七遍 —— 一坨 400 字符的 className,改一处漏六处。 */
 function StyleRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="grid grid-cols-[42px_minmax(0,1fr)] items-center gap-2 text-xs text-foreground">
-      <span className="text-muted-foreground">{label}</span>
+    //: 标签列 56px:42px 装不下三个字的标签(「不透明度」会折成两行,把整行撑高)。
+    <label className="grid grid-cols-[56px_minmax(0,1fr)] items-center gap-2 text-xs text-foreground">
+      <span className="truncate text-muted-foreground">{label}</span>
       <span className="flex min-w-0 items-center gap-1.5">{children}</span>
     </label>
   );
