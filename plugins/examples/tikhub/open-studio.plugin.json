@@ -1,7 +1,8 @@
 {
   "id": "dev.openstudio.tikhub",
+  "manifest_version": 1,
   "name": "TikHub",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "runtime": {
     "kind": "mcp",
     "transport": "http",
@@ -19,14 +20,23 @@
     "config": [
       {
         "key": "TIKHUB_PLATFORM",
-        "label": "平台",
+        "label": {
+          "zh": "平台",
+          "en": "Platform"
+        },
         "type": "enum",
         "required": true,
-        "help": "一个连接对一个平台端点。要同时用两个平台就建两个连接。",
+        "help": {
+          "zh": "一个连接对一个平台端点。要同时用两个平台就建两个连接。",
+          "en": "One connection targets one platform endpoint. To use two platforms at once, create two connections."
+        },
         "options": [
           {
             "value": "douyin",
-            "label": "抖音"
+            "label": {
+              "zh": "抖音",
+              "en": "Douyin"
+            }
           },
           {
             "value": "tiktok",
@@ -34,23 +44,38 @@
           },
           {
             "value": "xiaohongshu",
-            "label": "小红书"
+            "label": {
+              "zh": "小红书",
+              "en": "Xiaohongshu"
+            }
           },
           {
             "value": "bilibili",
-            "label": "哔哩哔哩"
+            "label": {
+              "zh": "哔哩哔哩",
+              "en": "Bilibili"
+            }
           },
           {
             "value": "kuaishou",
-            "label": "快手"
+            "label": {
+              "zh": "快手",
+              "en": "Kuaishou"
+            }
           },
           {
             "value": "weibo",
-            "label": "微博"
+            "label": {
+              "zh": "微博",
+              "en": "Weibo"
+            }
           },
           {
             "value": "zhihu",
-            "label": "知乎"
+            "label": {
+              "zh": "知乎",
+              "en": "Zhihu"
+            }
           },
           {
             "value": "instagram",
@@ -78,15 +103,24 @@
           },
           {
             "value": "wechat",
-            "label": "微信"
+            "label": {
+              "zh": "微信",
+              "en": "WeChat"
+            }
           },
           {
             "value": "others",
-            "label": "其它平台"
+            "label": {
+              "zh": "其它平台",
+              "en": "Other platforms"
+            }
           },
           {
             "value": "tikhub",
-            "label": "TikHub 账户工具"
+            "label": {
+              "zh": "TikHub 账户工具",
+              "en": "TikHub account tools"
+            }
           }
         ]
       }
@@ -95,7 +129,10 @@
       {
         "key": "TIKHUB_API_KEY",
         "label": "API Key",
-        "help": "在 https://user.tikhub.io 生成。只注入这个连接,拿不到应用的其它凭据。",
+        "help": {
+          "zh": "在 https://user.tikhub.io 生成。只注入这个连接,拿不到应用的其它凭据。",
+          "en": "Generate one at https://user.tikhub.io. It is injected into this connection only and cannot reach the app's other credentials."
+        },
         "secret": true
       }
     ]
@@ -103,7 +140,10 @@
   "skills": [
     {
       "id": "tikhub",
-      "description": "读抖音 / TikTok / 小红书 / B站 / 快手等平台的公开数据:作品详情、作者主页与作品列表、关键词搜索、热榜。用于选题调研、对标账号分析、找素材灵感。"
+      "description": {
+        "zh": "读抖音 / TikTok / 小红书 / B站 / 快手等平台的公开数据:作品详情、作者主页与作品列表、关键词搜索、热榜。用于选题调研、对标账号分析、找素材灵感。",
+        "en": "Read public data from Douyin / TikTok / Xiaohongshu / Bilibili / Kuaishou and other platforms: post details, creator profiles and their posts, keyword search, trending charts. For topic research, studying comparable accounts, and finding footage ideas."
+      }
     }
   ],
   "tools": {

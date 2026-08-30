@@ -2,9 +2,15 @@
   "plugins": [
     {
       "id": "dev.openstudio.baidu-pan",
-      "name": "百度网盘",
-      "version": "0.3.0",
-      "description": "在百度网盘和素材库之间搬文件。拉:用 pan_list 或 pan_search 找到 fs_id,再用 pan_import 导进来。传:用 pan_upload 把素材库里的东西存到网盘(传 asset_id 和目标路径)。",
+      "name": {
+        "zh": "百度网盘",
+        "en": "Baidu Netdisk"
+      },
+      "version": "0.3.1",
+      "description": {
+        "zh": "在百度网盘和素材库之间搬文件。拉:用 pan_list 或 pan_search 找到 fs_id,再用 pan_import 导进来。传:用 pan_upload 把素材库里的东西存到网盘(传 asset_id 和目标路径)。",
+        "en": "Move files between Baidu Netdisk and the asset library. To pull: find an fs_id with pan_list or pan_search, then bring it in with pan_import. To push: use pan_upload to save something from the asset library to the netdisk (pass an asset_id and a target path)."
+      },
       "author": "Open Studio",
       "homepage": "https://github.com/Alndaly/OpenStudio/tree/main/plugins/examples/baidu-pan",
       "download": "https://github.com/Alndaly/OpenStudio/releases/latest/download/dev.openstudio.baidu-pan.zip",
@@ -14,9 +20,15 @@
     },
     {
       "id": "dev.openstudio.mcp-everything",
-      "name": "MCP 接入范例",
-      "version": "0.1.0",
-      "description": "把一个现成的 MCP server 接成 Open Studio 插件的范例。工具清单由 server 自己提供,不写在这个文件里。",
+      "name": {
+        "zh": "MCP 接入范例",
+        "en": "MCP Example"
+      },
+      "version": "0.1.1",
+      "description": {
+        "zh": "把一个现成的 MCP server 接成 Open Studio 插件的范例。工具清单由 server 自己提供,不写在这个文件里。",
+        "en": "An example of wiring an existing MCP server up as an Open Studio plugin. The tool list comes from the server itself, not from this file."
+      },
       "author": "Open Studio",
       "homepage": "https://github.com/Alndaly/OpenStudio/tree/main/plugins/examples/mcp-everything",
       "download": "https://github.com/Alndaly/OpenStudio/releases/latest/download/dev.openstudio.mcp-everything.zip",
@@ -27,8 +39,11 @@
     {
       "id": "dev.openstudio.text-toolkit",
       "name": "Text Toolkit",
-      "version": "0.1.0",
-      "description": "文本小工具:统计字数、提取话题标签、生成标题候选。纯本地计算,无需任何权限。",
+      "version": "0.1.1",
+      "description": {
+        "zh": "文本小工具:统计字数、提取话题标签、生成标题候选。纯本地计算,无需任何权限。",
+        "en": "Small text utilities: count words, pull out hashtags, draft title candidates. All local, no permissions needed."
+      },
       "author": "Open Studio",
       "homepage": "https://github.com/Alndaly/OpenStudio/tree/main/plugins/examples/text-toolkit",
       "download": "https://github.com/Alndaly/OpenStudio/releases/latest/download/dev.openstudio.text-toolkit.zip",
@@ -37,8 +52,11 @@
     {
       "id": "dev.openstudio.tikhub",
       "name": "TikHub",
-      "version": "1.0.0",
-      "description": "读抖音 / TikTok / 小红书 / B站 / 快手等平台的公开数据:作品详情、作者主页与作品列表、关键词搜索、热榜。用于选题调研、对标账号分析、找素材灵感。",
+      "version": "1.0.1",
+      "description": {
+        "zh": "读抖音 / TikTok / 小红书 / B站 / 快手等平台的公开数据:作品详情、作者主页与作品列表、关键词搜索、热榜。用于选题调研、对标账号分析、找素材灵感。",
+        "en": "Read public data from Douyin / TikTok / Xiaohongshu / Bilibili / Kuaishou and other platforms: post details, creator profiles and their posts, keyword search, trending charts. For topic research, studying comparable accounts, and finding footage ideas."
+      },
       "author": "Open Studio",
       "homepage": "https://github.com/Alndaly/OpenStudio/tree/main/plugins/examples/tikhub",
       "download": "https://github.com/Alndaly/OpenStudio/releases/latest/download/dev.openstudio.tikhub.zip",

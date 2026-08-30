@@ -23,7 +23,7 @@ export default async function PluginsPage({ params }: { params: Params }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   const t = getMessages(locale).plugins;
-  const plugins = listPlugins();
+  const plugins = listPlugins(locale);
 
   return (
     <>

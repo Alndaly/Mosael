@@ -334,11 +334,42 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 
 ---
 
+## 多语言
+
+界面会说好几种语言,而清单里的文案是你写的 —— 所以**一段给人看的文字既可以是一个字符串,
+也可以是一个按语言分的对象**:
+
+```json
+"label": "起始目录"
+"label": { "zh": "起始目录", "en": "Start directory" }
+```
+
+只写字符串就是「哪种语言下都这么显示」,已有的清单一个字都不用改。
+
+**翻译贴着它翻译的那个东西写**,不要在清单顶上另开一张 `{"config.X.label": "…"}` 的对照表:
+那种表的键要和别处对得上,而对不上时不会报错,只会让那一条永远显示原文。
+
+哪些字段吃这一套(其余字段是标识、路径、类型,不翻):
+
+- `name`
+- `skills[].description`(以及 `skills[].name`)
+- `instance.name_template`
+- `instance.config[]` / `instance.credentials[]` 的 `label`、`help`,以及 `options[].label`
+- `tools.declare[]` 的 `description`、`label`、`node.label`,和 `input_schema` 里各属性的 `description`
+- `tools.overrides[]` 的 `label`、`description`
+
+某种语言没写就退回**原文**,不是空白 —— 只写了中文的插件在英文界面上显示中文,总好过显示一片空白。
+
+我们自己发的那几个插件由一道棘轮钉着:凡是中文文案都得配上 `en`
+(`backend/tests/test_plugin_manifest_i18n.py`)。你的插件不受这条约束,但样板就摆在那儿。
+
+---
+
 ## 清单字段速查
 
 | 字段 | 说明 |
 | --- | --- |
-| `id` / `name` / `version` | 必填。`id` 是稳定标识,改了等于换了个插件 |
+| `id` / `name` / `version` | 必填。`id` 是稳定标识,改了等于换了个插件;`name` 可写成按语言分的对象 |
 | `manifest_version` | 当前是 `1`。老清单扫描时自动迁移并补上 |
 | `runtime.kind` | `"process"` 或 `"mcp"` |
 | `runtime.entry` | 本地脚本入口,相对插件目录,必须在目录内 |
@@ -357,11 +388,14 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 
 ## 范例
 
-`plugins/examples/` 下三个,覆盖三种形态:
+`plugins/examples/` 下四个,覆盖各种形态:
 
 - **text-toolkit** — 纯函数,零依赖零凭据,`expose: "all"`
+- **baidu-pan** — 本地脚本 + 凭据自动续期 + 收发文件 + 工作流节点
 - **tikhub** — 零代码接 MCP + 多连接 + 枚举配置 + 凭据
 - **mcp-everything** — 最小的 MCP 接入声明
+
+四个都写了中英两份文案,可以直接照着抄多语言的写法。
 
 ## 接口
 

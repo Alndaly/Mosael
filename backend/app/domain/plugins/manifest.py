@@ -16,6 +16,9 @@ import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+#: i18n 是纯叶子(只依赖标准库),运行时 import 它不会把这个模块拖出叶子位置。
+from app.core.i18n import DEFAULT_LOCALE, get_current_locale
+
 if TYPE_CHECKING:  # 仅为类型;运行时不 import models,保持这个模块是叶子
     from app.db.models import PluginPackage
 
@@ -23,6 +26,32 @@ if TYPE_CHECKING:  # 仅为类型;运行时不 import models,保持这个模块�
 KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 FIELD_TYPES = ("string", "enum", "number", "boolean")
+
+
+def text_of(value: Any, locale: str | None = None) -> str:
+    """清单里一段**给人看的文字**。既可以是普通字符串,也可以是按语言分的对象:
+
+        "label": "起始目录"
+        "label": { "zh": "起始目录", "en": "Start directory" }
+
+    **翻译贴着它翻译的那个东西写**,不放在清单顶上的一张 `{"config.X.label": …}` 表里 ——
+    那种表的键要和别处对得上,而对不上时不会报错,只会让那一条永远显示原文。这个项目在
+    「手抄一张表」上栽过好几次。
+
+    退路是**给原文**,不是给空:插件只写了中文时,英文界面上看到中文,总好过看到一片空白。
+    """
+    if isinstance(value, dict):
+        want = locale or get_current_locale()
+        for key in (want, DEFAULT_LOCALE):
+            picked = value.get(key)
+            if isinstance(picked, str) and picked.strip():
+                return picked
+        #: 连缺省语言都没有:退到作者写的第一条,而不是空串。
+        for picked in value.values():
+            if isinstance(picked, str) and picked.strip():
+                return picked
+        return ""
+    return str(value or "")
 
 
 @dataclass(frozen=True)
@@ -101,6 +130,16 @@ class ManifestError(ValueError):
     pass
 
 
+def _humanized(entry: dict[str, Any], *keys: str) -> dict[str, Any]:
+    """把一个原样透传的字典里那几个给人看的键就地定下语言 —— 其余原封不动。
+
+    技能、工具声明这些是整个字典往下传的(它们的形状由插件作者定,我们不该逐字段抄一遍),
+    所以只挑名字确定的那几个键翻,别的一个字不动。
+    """
+    picked = {k: text_of(entry[k]) for k in keys if k in entry}
+    return {**entry, **picked} if picked else entry
+
+
 def _fields(raw: Any, *, secret: bool) -> list[Field]:
     if not isinstance(raw, list):
         return []
@@ -117,16 +156,16 @@ def _fields(raw: Any, *, secret: bool) -> list[Field]:
         if isinstance(raw_options, list):
             for option in raw_options:
                 if isinstance(option, dict) and option.get("value") is not None:
-                    options.append({"value": str(option["value"]), "label": str(option.get("label") or option["value"])})
+                    options.append({"value": str(option["value"]), "label": text_of(option.get("label")) or str(option["value"])})
                 elif isinstance(option, str):
                     options.append({"value": option, "label": option})
         declared_type = str(entry.get("type") or ("string" if not options else "enum"))
         out.append(
             Field(
                 key=key,
-                label=str(entry.get("label") or key),
+                label=text_of(entry.get("label")) or key,
                 type=declared_type if declared_type in FIELD_TYPES else "string",
-                help=str(entry.get("help") or ""),
+                help=text_of(entry.get("help")),
                 required=entry.get("required") is not False,
                 # 凭据默认按密文对待,漏标不该导致明文回显;配置默认明文。
                 secret=bool(entry.get("secret", secret)),
@@ -137,7 +176,8 @@ def _fields(raw: Any, *, secret: bool) -> list[Field]:
     return out
 
 
-def _runtime(raw: dict[str, Any]) -> Runtime:
+def runtime_of(raw: dict[str, Any]) -> Runtime:
+    """原始清单 → 怎么跑。**执行器也走这里** —— 它只要跑法,不该顺带要求 id、version 齐全。"""
     block = raw.get("runtime") if isinstance(raw.get("runtime"), dict) else {}
     kind = str(block.get("kind") or "process").strip().lower()
     return Runtime(
@@ -167,34 +207,42 @@ def _tools_policy(raw: dict[str, Any]) -> tuple[str, list[str], dict[str, ToolOv
         if not isinstance(spec, dict):
             continue
         overrides[str(name)] = ToolOverride(
-            label=str(spec.get("label") or ""),
-            description=str(spec.get("description") or ""),
+            label=text_of(spec.get("label")),
+            description=text_of(spec.get("description")),
             read_only=spec.get("read_only") is True,
             node=spec.get("node") if isinstance(spec.get("node"), dict) else None,
         )
-    declared = [t for t in (tools.get("declare") or []) if isinstance(t, dict) and isinstance(t.get("name"), str)]
+    declared = [
+        _humanized(t, "label", "description")
+        for t in (tools.get("declare") or [])
+        if isinstance(t, dict) and isinstance(t.get("name"), str)
+    ]
     recommended = [str(n) for n in (tools.get("recommended") or [])]
     return ("all" if expose == "all" else "selected"), recommended, overrides, declared
 
 
 def parse(raw: dict[str, Any], path: str) -> Manifest:
-    for key in ("id", "name", "version"):
+    for key in ("id", "version"):
         if not isinstance(raw.get(key), str) or not raw[key].strip():
             raise ManifestError(f"插件清单 {path} 缺少必填字段: {key}")
+    #: 名字是给人看的,可以按语言写;但空的仍然是缺字段。
+    name = text_of(raw.get("name")).strip()
+    if not name:
+        raise ManifestError(f"插件清单 {path} 缺少必填字段: name")
     instance = raw.get("instance") if isinstance(raw.get("instance"), dict) else {}
     expose, recommended, overrides, declared = _tools_policy(raw)
     return Manifest(
         id=raw["id"].strip(),
-        name=raw["name"].strip(),
+        name=name,
         version=raw["version"].strip(),
         path=path,
-        runtime=_runtime(raw),
+        runtime=runtime_of(raw),
         permissions=[p for p in (raw.get("permissions") or []) if isinstance(p, str) and p.strip()],
-        skills=[s for s in (raw.get("skills") or []) if isinstance(s, dict)],
+        skills=[_humanized(s, "name", "description") for s in (raw.get("skills") or []) if isinstance(s, dict)],
         config=_fields(instance.get("config"), secret=False),
         credentials=_fields(instance.get("credentials"), secret=True),
         multiple=instance.get("multiple") is True,
-        name_template=str(instance.get("name_template") or ""),
+        name_template=text_of(instance.get("name_template")),
         expose=expose,
         recommended=recommended,
         overrides=overrides,

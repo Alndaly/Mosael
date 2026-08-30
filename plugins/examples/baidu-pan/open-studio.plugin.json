@@ -1,7 +1,11 @@
 {
   "id": "dev.openstudio.baidu-pan",
-  "name": "百度网盘",
-  "version": "0.3.0",
+  "manifest_version": 1,
+  "name": {
+    "zh": "百度网盘",
+    "en": "Baidu Netdisk"
+  },
+  "version": "0.3.1",
   "runtime": {
     "kind": "process",
     "entry": "tools/main.py"
@@ -12,45 +16,69 @@
   "skills": [
     {
       "id": "baidu_pan",
-      "description": "在百度网盘和素材库之间搬文件。拉:用 pan_list 或 pan_search 找到 fs_id,再用 pan_import 导进来。传:用 pan_upload 把素材库里的东西存到网盘(传 asset_id 和目标路径)。"
+      "description": {
+        "zh": "在百度网盘和素材库之间搬文件。拉:用 pan_list 或 pan_search 找到 fs_id,再用 pan_import 导进来。传:用 pan_upload 把素材库里的东西存到网盘(传 asset_id 和目标路径)。",
+        "en": "Move files between Baidu Netdisk and the asset library. To pull: find an fs_id with pan_list or pan_search, then bring it in with pan_import. To push: use pan_upload to save something from the asset library to the netdisk (pass an asset_id and a target path)."
+      }
     }
   ],
   "instance": {
     "multiple": true,
-    "name_template": "百度网盘",
+    "name_template": {
+      "zh": "百度网盘",
+      "en": "Baidu Netdisk"
+    },
     "credentials": [
       {
         "key": "BAIDU_PAN_APP_KEY",
         "label": "AppKey",
         "required": true,
-        "help": "在 pan.baidu.com/union 注册应用后拿到的 AppKey。"
+        "help": {
+          "zh": "在 pan.baidu.com/union 注册应用后拿到的 AppKey。",
+          "en": "The AppKey you get after registering an app at pan.baidu.com/union."
+        }
       },
       {
         "key": "BAIDU_PAN_SECRET_KEY",
         "label": "SecretKey",
         "required": true,
-        "help": "同一个应用的 SecretKey。"
+        "help": {
+          "zh": "同一个应用的 SecretKey。",
+          "en": "The SecretKey of that same app."
+        }
       },
       {
         "key": "BAIDU_PAN_REFRESH_TOKEN",
         "label": "Refresh Token",
         "required": true,
-        "help": "走一次 OAuth 拿到的 refresh_token(有效期 10 年)。填一次就行 —— access_token 由插件自动续,续出来的新值会存回这里。"
+        "help": {
+          "zh": "走一次 OAuth 拿到的 refresh_token(有效期 10 年)。填一次就行 —— access_token 由插件自动续,续出来的新值会存回这里。",
+          "en": "The refresh_token from one pass through OAuth (valid for 10 years). Fill it in once — the plugin renews access_token on its own and writes the new value back here."
+        }
       },
       {
         "key": "BAIDU_PAN_ACCESS_TOKEN",
         "label": "Access Token",
         "required": false,
-        "help": "留空即可 —— 插件用 refresh_token 自动换,并把换来的存在这里。手动填一个也认。"
+        "help": {
+          "zh": "留空即可 —— 插件用 refresh_token 自动换,并把换来的存在这里。手动填一个也认。",
+          "en": "Leave it empty — the plugin exchanges the refresh_token for one and stores the result here. A value you fill in by hand is accepted too."
+        }
       }
     ],
     "config": [
       {
         "key": "BAIDU_PAN_ROOT",
-        "label": "起始目录",
-        "type": "text",
+        "label": {
+          "zh": "起始目录",
+          "en": "Start directory"
+        },
+        "type": "string",
         "required": false,
-        "help": "留空就是网盘根目录 /。填 /我的资源 这样的路径可以让 pan_list 默认从那里开始。"
+        "help": {
+          "zh": "留空就是网盘根目录 /。填 /我的资源 这样的路径可以让 pan_list 默认从那里开始。",
+          "en": "Empty means the netdisk root, /. A path like /My files makes pan_list start there by default."
+        }
       }
     ]
   },
@@ -59,36 +87,54 @@
     "declare": [
       {
         "name": "pan_list",
-        "description": "列出百度网盘某个目录下的文件和子目录。返回每一项的 fs_id、文件名、大小、是不是目录。fs_id 是后面 pan_import 要用的。",
+        "description": {
+          "zh": "列出百度网盘某个目录下的文件和子目录。返回每一项的 fs_id、文件名、大小、是不是目录。fs_id 是后面 pan_import 要用的。",
+          "en": "List the files and sub-directories under a Baidu Netdisk directory. Each entry carries its fs_id, name, size and whether it is a directory. The fs_id is what pan_import takes."
+        },
         "read_only": true,
         "input_schema": {
           "type": "object",
           "properties": {
             "path": {
               "type": "string",
-              "description": "网盘路径,如 /我的资源/素材。留空用起始目录。"
+              "description": {
+                "zh": "网盘路径,如 /我的资源/素材。留空用起始目录。",
+                "en": "A netdisk path, e.g. /My files/footage. Empty uses the start directory."
+              }
             },
             "limit": {
               "type": "integer",
-              "description": "最多返回多少条,默认 100,上限 1000。"
+              "description": {
+                "zh": "最多返回多少条,默认 100,上限 1000。",
+                "en": "How many entries at most; 100 by default, 1000 at the top."
+              }
             }
           }
         }
       },
       {
         "name": "pan_search",
-        "description": "按文件名在百度网盘里搜索。找不准路径时用这个,比一层层 pan_list 快。返回同样带 fs_id。",
+        "description": {
+          "zh": "按文件名在百度网盘里搜索。找不准路径时用这个,比一层层 pan_list 快。返回同样带 fs_id。",
+          "en": "Search Baidu Netdisk by file name. Use this when you don't know the exact path — it beats walking down with pan_list. Results carry fs_id the same way."
+        },
         "read_only": true,
         "input_schema": {
           "type": "object",
           "properties": {
             "keyword": {
               "type": "string",
-              "description": "文件名关键词"
+              "description": {
+                "zh": "文件名关键词",
+                "en": "File-name keyword"
+              }
             },
             "path": {
               "type": "string",
-              "description": "限定在这个目录下搜,留空搜全盘"
+              "description": {
+                "zh": "限定在这个目录下搜,留空搜全盘",
+                "en": "Search only under this directory; empty searches the whole netdisk"
+              }
             }
           },
           "required": [
@@ -98,13 +144,19 @@
       },
       {
         "name": "pan_import",
-        "description": "把百度网盘里的一个文件拉进素材库。传 pan_list / pan_search 给出的 fs_id。返回 asset_id,之后就和别的素材一样用。",
+        "description": {
+          "zh": "把百度网盘里的一个文件拉进素材库。传 pan_list / pan_search 给出的 fs_id。返回 asset_id,之后就和别的素材一样用。",
+          "en": "Pull one file from Baidu Netdisk into the asset library. Pass an fs_id from pan_list or pan_search. Returns an asset_id you can use like any other asset."
+        },
         "input_schema": {
           "type": "object",
           "properties": {
             "fs_id": {
               "type": "string",
-              "description": "文件的 fs_id"
+              "description": {
+                "zh": "文件的 fs_id",
+                "en": "The file's fs_id"
+              }
             }
           },
           "required": [
@@ -112,7 +164,10 @@
           ]
         },
         "node": {
-          "label": "从百度网盘导入",
+          "label": {
+            "zh": "从百度网盘导入",
+            "en": "Import from Baidu Netdisk"
+          },
           "outputs": [
             "asset_id",
             "asset_name"
@@ -121,22 +176,34 @@
       },
       {
         "name": "pan_upload",
-        "description": "把素材库里的一个文件传到百度网盘。传 asset_id 和网盘上的目标路径(如 /我的资源/成片.mp4)。",
+        "description": {
+          "zh": "把素材库里的一个文件传到百度网盘。传 asset_id 和网盘上的目标路径(如 /我的资源/成片.mp4)。",
+          "en": "Send one file from the asset library to Baidu Netdisk. Pass an asset_id and the target path on the netdisk (e.g. /My files/final.mp4)."
+        },
         "input_schema": {
           "type": "object",
           "properties": {
             "asset_id": {
               "type": "string",
               "format": "asset",
-              "description": "要上传的素材 id"
+              "description": {
+                "zh": "要上传的素材 id",
+                "en": "id of the asset to upload"
+              }
             },
             "path": {
               "type": "string",
-              "description": "网盘上的目标路径,含文件名"
+              "description": {
+                "zh": "网盘上的目标路径,含文件名",
+                "en": "Target path on the netdisk, including the file name"
+              }
             },
             "overwrite": {
               "type": "boolean",
-              "description": "同名文件已存在时是否覆盖,默认另存为副本"
+              "description": {
+                "zh": "同名文件已存在时是否覆盖,默认另存为副本",
+                "en": "Whether to overwrite when a file of the same name exists; saves a copy by default"
+              }
             }
           },
           "required": [
@@ -145,7 +212,10 @@
           ]
         },
         "node": {
-          "label": "上传到百度网盘",
+          "label": {
+            "zh": "上传到百度网盘",
+            "en": "Upload to Baidu Netdisk"
+          },
           "outputs": [
             "fs_id",
             "path"

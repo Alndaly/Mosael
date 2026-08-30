@@ -37,7 +37,7 @@ from app.domain.plugins import install as installer
 from app.domain.plugins import packages as pkg
 from app.domain.plugins import registry as market
 from app.domain.plugins import tools as tools_domain
-from app.domain.plugins.manifest import manifest_of
+from app.domain.plugins.manifest import manifest_of, text_of
 
 router = APIRouter(tags=["plugins"])
 
@@ -80,7 +80,10 @@ def browse_market(db: DbSession, user: CurrentUser) -> list[PluginMarketEntry]:
     installed = {row.id: row.version for row in db.scalars(select(PluginPackage))}
     return [
         PluginMarketEntry(
-            **{key: entry.get(key, "") for key in ("id", "name", "description", "version", "author", "homepage", "download")},
+            **{key: str(entry.get(key, "")) for key in ("id", "version", "author", "homepage", "download")},
+            #: 索引里的名字和简介照搬清单,而清单里它们可以是按语言分的对象 —— 在这儿定语言。
+            name=text_of(entry.get("name")),
+            description=text_of(entry.get("description")),
             permissions=[p for p in (entry.get("permissions") or []) if isinstance(p, str)],
             installed=entry["id"] in installed,
             installed_version=installed.get(entry["id"], ""),
@@ -105,9 +108,9 @@ def preview_install(body: PluginInstallRequest, db: DbSession, user: CurrentUser
     declared = (raw.get("tools") or {}).get("declare") if isinstance(raw.get("tools"), dict) else []
     return PluginInstallPreview(
         id=str(raw.get("id") or ""),
-        name=str(raw.get("name") or ""),
+        name=text_of(raw.get("name")),
         version=str(raw.get("version") or ""),
-        description=str((raw.get("skills") or [{}])[0].get("description") or "") if raw.get("skills") else "",
+        description=text_of((raw.get("skills") or [{}])[0].get("description")) if raw.get("skills") else "",
         permissions=[p for p in (raw.get("permissions") or []) if isinstance(p, str)],
         tools=[str(t.get("name")) for t in (declared or []) if isinstance(t, dict) and t.get("name")],
         installed=existing is not None,
@@ -171,7 +174,9 @@ def _packages(db: DbSession, user: CurrentUser) -> list[dict]:
         out.append(
             {
                 "id": package.id,
-                "name": package.name,
+                #: 名字从清单现取,不取库里那一列 —— 那一列是装的时候定的,装的人是什么语言
+                #: 就一直是什么语言;清单里若写了多语言,这里才跟得上看的人。
+                "name": manifest.name,
                 "version": package.version,
                 "kind": manifest.runtime.kind,
                 "multiple": manifest.multiple,

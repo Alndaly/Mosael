@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { DEFAULT_LOCALE, type Locale } from "@/i18n/config";
+
 /**
  * 官方插件索引。
  *
@@ -28,21 +30,32 @@ export type PluginEntry = {
   tools: { name: string; description: string }[];
 };
 
+/**
+ * 清单里一段给人看的文字。可以是普通字符串,也可以是按语言分的对象 ——
+ * 与后端 `manifest.text_of` 同一套约定,见 docs/PLUGIN_MANIFEST.md。
+ */
+type Text = string | Record<string, string>;
+
+function textOf(value: Text | undefined, locale: Locale): string {
+  if (typeof value === "string") return value;
+  if (!value) return "";
+  // 退路是**给原文**,不是给空:插件只写了一种语言时,看到另一种语言总好过看到空白。
+  return value[locale] || value[DEFAULT_LOCALE] || Object.values(value).find(Boolean) || "";
+}
+
 type Manifest = {
   id?: string;
-  name?: string;
+  name?: Text;
   version?: string;
-  kind?: string;
-  entry?: string;
   runtime?: { kind?: string };
   permissions?: string[];
-  skills?: { description?: string }[];
-  tools?: { declare?: { name?: string; description?: string }[] };
+  skills?: { description?: Text }[];
+  tools?: { declare?: { name?: string; description?: Text }[] };
 };
 
 const EXAMPLES = path.join(process.cwd(), "..", "plugins", "examples");
 
-export function listPlugins(): PluginEntry[] {
+export function listPlugins(locale: Locale = DEFAULT_LOCALE): PluginEntry[] {
   if (!fs.existsSync(EXAMPLES)) return [];
   return fs
     .readdirSync(EXAMPLES)
@@ -50,28 +63,26 @@ export function listPlugins(): PluginEntry[] {
     .filter((file) => fs.existsSync(file))
     .map((file): PluginEntry => {
       const manifest = JSON.parse(fs.readFileSync(file, "utf8")) as Manifest;
-      // kind 在 manifest 里有两种写法(顶层 `kind` 与 `runtime.kind`),都认;
-      // 两处都没有就是带 entry 的本地脚本。
-      const kind = manifest.kind ?? manifest.runtime?.kind;
+      const kind = manifest.runtime?.kind;
       return {
         id: manifest.id ?? "",
-        name: manifest.name ?? "",
+        name: textOf(manifest.name, locale),
         version: manifest.version ?? "",
         kind: kind === "mcp" ? "mcp" : "script",
         permissions: manifest.permissions ?? [],
-        summary: manifest.skills?.[0]?.description ?? "",
+        summary: textOf(manifest.skills?.[0]?.description, locale),
         source: `plugins/examples/${path.basename(path.dirname(file))}`,
         slug: path.basename(path.dirname(file)),
         tools: (manifest.tools?.declare ?? [])
           .filter((tool) => tool.name)
-          .map((tool) => ({ name: tool.name ?? "", description: tool.description ?? "" })),
+          .map((tool) => ({ name: tool.name ?? "", description: textOf(tool.description, locale) })),
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export function findPlugin(slug: string): PluginEntry | null {
-  return listPlugins().find((plugin) => plugin.slug === slug) ?? null;
+export function findPlugin(slug: string, locale: Locale = DEFAULT_LOCALE): PluginEntry | null {
+  return listPlugins(locale).find((plugin) => plugin.slug === slug) ?? null;
 }
 
 /**

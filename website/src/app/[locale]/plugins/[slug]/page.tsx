@@ -23,7 +23,7 @@ export async function generateMetadata({
   params: Promise<{ locale: string; slug: string }>;
 }): Promise<Metadata> {
   const { locale, slug } = await params;
-  const plugin = findPlugin(slug);
+  const plugin = findPlugin(slug, isLocale(locale) ? locale : undefined);
   if (!plugin) return {};
   return {
     title: `${plugin.name} · ${getMessages(isLocale(locale) ? locale : "en").plugins.title}`,
@@ -64,7 +64,7 @@ export default async function PluginDetailPage({
 }) {
   const { locale, slug } = await params;
   if (!isLocale(locale)) notFound();
-  const plugin = findPlugin(slug);
+  const plugin = findPlugin(slug, locale);
   if (!plugin) notFound();
   const t = getMessages(locale).plugins;
 

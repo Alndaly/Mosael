@@ -81,6 +81,7 @@ PluginPackage  一个磁盘目录 + 一份 manifest。没有「启用」状态�
 - **`runtime`** 收口「怎么跑」,`instance` 收口「接一次要什么」,`tools` 收口「暴露什么」。三个字段三件事,读的人不用先看 `kind`。
 - **`${platform}` / `${api_key}`** 从配置和凭据里按声明的 key 展开(小写、与声明同名)。进程类插件把两者都注入子进程环境(大写化),但 manifest 里不写环境变量名 —— 那是运行时细节。
 - **`tools.overrides`** 是唯一的覆盖入口,`tools.recommended` 是首次启用时的默认勾选。白名单不再由「写没写 tools」隐式决定。
+- **给人看的文字可以按语言写**:`"label": { "zh": "平台", "en": "Platform" }`,普通字符串就是「哪种语言都这么显示」。翻译贴着它翻译的那个东西写,不另开一张对照表 —— 对照表的键对不上时不会报错,只会让那一条永远显示原文。全部字段见 [PLUGIN_MANIFEST.md](PLUGIN_MANIFEST.md#多语言)。
 
 ## 能力默认不暴露
 
