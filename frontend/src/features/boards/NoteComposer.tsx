@@ -71,7 +71,10 @@ export function NoteComposer({
     [library.data],
   );
 
-  const models = useQuery({ queryKey: ["capability-models", "chat"], queryFn: () => listCapabilityModels("chat") });
+  const models = useQuery({
+    queryKey: ["capability-models", "chat", "direct"],
+    queryFn: () => listCapabilityModels("chat", "direct"),
+  });
   const options = models.data ?? [];
   //: 值里带上连接 id:同一个模型名可能挂在两条连接下(自己的和团队的),只存模型名会挑错那条。
   const current = options.find((one) => `${one.provider_profile_id}:${one.model}` === picked) ?? options[0] ?? null;

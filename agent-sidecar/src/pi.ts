@@ -10,6 +10,7 @@ import {
   type Api,
   type Credential,
   type CredentialStore,
+  type ImageContent,
   type Model,
   type Models,
   type Provider,
@@ -378,6 +379,7 @@ export async function runCompaction(input: {
 export interface PiTurnInput {
   systemPrompt: string;
   prompt: string;
+  images?: ImageContent[];
   provider: {
     baseUrl: string;
     apiKey: string;
@@ -458,6 +460,7 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
       )
     : buildModels(input.provider.baseUrl, input.provider.apiKey, input.model, input.provider);
   const prior = Array.isArray(input.sessionState) ? (input.sessionState as AgentMessage[]) : [];
+  const images = model?.input?.includes("image") ? (input.images ?? []) : [];
   // **必须是 streamSimple**,不是 stream。pi 的 Agent 把思考档位放在 options.reasoning 里,
   // 而拼请求体的地方读的是 options.reasoningEffort —— 这两者之间的翻译(含按模型 clamp)
   // 只发生在 streamSimple 里。走 stream 的话 reasoningEffort 永远是 undefined,于是供应商
@@ -481,7 +484,10 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
   const tools = [...input.tools, ...buildSubagentTools(input.tools, model as Model<Api>, streamFn, handlers, subagents)];
   const agent = new Agent({
     initialState: {
-      systemPrompt: input.systemPrompt,
+      systemPrompt:
+        images.length > 0
+          ? `${input.systemPrompt}\n\n当前消息的图片附件已直接作为视觉输入提供给你。直接观察图片回答，不要再为这些图片调用 analyze_asset。`
+          : input.systemPrompt,
       model,
       tools,
       messages: priorMessages,
@@ -517,7 +523,8 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
   });
   let aborted = false;
   try {
-    await agent.prompt(input.prompt);
+    if (images.length > 0) await agent.prompt(input.prompt, images);
+    else await agent.prompt(input.prompt);
     // 收尾清算:模型答完了,但后台可能还有子智能体在跑、或报告还没进过它的上下文。
     // 等全部跑完,把没送达的报告作为一条通知消息续一轮 —— 模型消化完(可能因此又派新的,
     // 所以是循环)才算真正结束。丢报告是不可接受的:sidecar 是回合级进程,这轮不送,永远没了。

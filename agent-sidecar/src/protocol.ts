@@ -13,6 +13,8 @@ export interface RunTurnRequest {
   type: "run_turn";
   turnId: string;
   prompt: string;
+  /** Current-turn images; pi.ts applies them only when the selected model declares image input. */
+  images?: Array<{ data: string; mimeType: string }>;
   systemPrompt: string;
   /** Prior turns, already trimmed by the backend (may be empty). */
   history?: Array<{ role: "user" | "assistant"; content: string }>;

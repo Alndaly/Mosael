@@ -37,6 +37,7 @@ async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promi
       {
         systemPrompt: msg.systemPrompt,
         prompt,
+        images: (msg.images ?? []).map((image) => ({ type: "image" as const, ...image })),
         provider: msg.provider,
         model: msg.model,
         tools,

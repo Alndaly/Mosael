@@ -28,6 +28,8 @@ ECHO_SIDECAR = '''
 import json, os, sys
 log = open(os.environ["FRAME_LOG"], "a")
 line = sys.stdin.readline()
+log.write(line)
+log.flush()
 turn = json.loads(line)["turnId"]
 print(json.dumps({"type": "text_delta", "turnId": turn, "delta": "hi"}), flush=True)
 for raw in sys.stdin:
@@ -134,7 +136,7 @@ class TestControlFrames:
     """
 
     @staticmethod
-    def _run_with(session_id: str, act, capture: dict) -> None:
+    def _run_with(session_id: str, act, capture: dict, images: list[dict[str, str]] | None = None) -> None:
         import threading
 
         def drive():
@@ -150,7 +152,7 @@ class TestControlFrames:
         capture["result"] = adapters._run_pi(
             "hi", "system", "http://x", "token", "ws",
             {"base_url": "http://x", "api_key": "k", "vendor": "v"},
-            "model", None, None, None, session_id=session_id,
+            "model", None, None, None, session_id=session_id, images=images,
         )
         thread.join(5)
 
@@ -182,3 +184,11 @@ class TestControlFrames:
 
         queue = next(f for f in frames if f["type"] == "queue")
         assert queue["prompts"] == []
+
+    def test_image_bytes_cross_the_python_to_sidecar_protocol(self, echo_sidecar) -> None:
+        capture: dict = {}
+        images = [{"data": "aW1hZ2U=", "mimeType": "image/png"}]
+        self._run_with("s-image", lambda: None, capture, images=images)
+
+        run = next(f for f in _frames(echo_sidecar) if f["type"] == "run_turn")
+        assert run["images"] == images

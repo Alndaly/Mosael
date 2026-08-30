@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.core.db import SessionLocal
 from app.domain.providers import resolve_profile
-from tests.util import fresh_client
+from tests.util import add_provider, fresh_client
 
 
 def test_profile_crud_with_masked_keys() -> None:
@@ -84,6 +84,30 @@ def test_能力挂在模型行上而不是连接上() -> None:
     # 连接对外的能力 = 它下面模型能力的并集
     profile = next(p for p in client.get("/api/settings/providers").json() if p["id"] == created["id"])
     assert set(profile["capability_ids"]) == {"chat", "image"}
+
+
+def test_后端直连能力列表不暴露只能由智能体使用的订阅模型() -> None:
+    """画板/工作流走后端 HTTP Adapter；OAuth 订阅走 pi Adapter，没有可填写的 base_url。
+
+    两者都叫 chat 不等于能走同一条执行通道。把订阅模型列进 direct 选择器，用户选中后
+    必然得到“服务地址为空”或“只能给智能体用”，选择器本身就在承诺一个执行不了的选项。
+    """
+    client = fresh_client()
+    with SessionLocal() as db:
+        add_provider(
+            db,
+            name="Kimi Code",
+            vendor="kimi-coding",
+            base_url="",
+            auth_type="oauth",
+            oauth_credential={"access_token": "test"},
+            model="kimi-k3",
+            capability_ids=["chat"],
+        )
+        db.commit()
+
+    assert [row["model"] for row in client.get("/api/settings/capability-models/chat").json()] == ["kimi-k3"]
+    assert client.get("/api/settings/capability-models/chat?surface=direct").json() == []
 
 def test_vendor_presets_listed() -> None:
     client = fresh_client()

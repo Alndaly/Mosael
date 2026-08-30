@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -96,7 +96,16 @@ def get_model(db: Session, profile_id: str, model_id: str) -> ProviderModel | No
     ).first()
 
 
-def models_for_capability(db: Session, capability: str, user_id: str | None = None) -> list[ProviderModel]:
+ExecutionSurface = Literal["all", "agent", "direct"]
+
+
+def models_for_capability(
+    db: Session,
+    capability: str,
+    user_id: str | None = None,
+    *,
+    surface: ExecutionSurface = "all",
+) -> list[ProviderModel]:
     """**他自己的**连接下,启用且声明了该能力的模型。
 
     选择器据此列项 —— 此前列的是"档案",于是同一个端点的对话模型和生图模型没法分别出现。
@@ -110,6 +119,16 @@ def models_for_capability(db: Session, capability: str, user_id: str | None = No
     if user_id is not None:
         stmt = stmt.where(ProviderProfile.owner_user_id == user_id)
     rows = db.scalars(stmt).all()
+    if surface == "direct":
+        # OAuth 订阅由 pi Adapter 持有端点和凭据；后端直连 Adapter 没有 base_url/api_key 可用。
+        # 能力同为 chat 只说明模型会对话，不代表两条执行通道可以互换。
+        rows = [
+            model
+            for model in rows
+            if model.profile is not None
+            and model.profile.auth_type != "oauth"
+            and bool((model.profile.base_url or "").strip())
+        ]
     return [model for model in rows if capability in effective_capabilities(model)]
 
 

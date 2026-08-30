@@ -48,6 +48,35 @@ def test_profile_picking_prefers_vision_vendors() -> None:
         assert service.pick_analysis_profile(db, None, me).vendor == "moonshot"  # order: moonshot first
 
 
+def test_standalone_analysis_skips_agent_only_oauth_connections() -> None:
+    client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})
+    with SessionLocal() as db:
+        add_provider(
+            db,
+            name="Kimi 订阅",
+            vendor="moonshot",
+            auth_type="oauth",
+            base_url="",
+            oauth_credential={"access_token": "x"},
+            model="kimi-k3",
+            capability_ids=["chat"],
+        )
+        add_provider(
+            db,
+            name="MiniMax API",
+            vendor="minimax",
+            base_url="https://api.minimax.test/v1",
+            api_key="sk-test",
+            model="minimax-vl",
+            capability_ids=["chat"],
+        )
+        db.commit()
+
+    with SessionLocal() as db:
+        assert service.pick_analysis_profile(db, None, _me()).name == "MiniMax API"
+
+
 def test_build_messages_shape() -> None:
     class FakeAsset:
         name = "海边素材"

@@ -80,7 +80,12 @@ def pick_analysis_profile(db: Session, profile_id: str | None, user_id: str | No
         if profile is None or not profile.enabled:
             raise AnalysisError("指定的供应商配置不存在或已停用")
         return _with_key(db, profile, user_id)
-    profiles = db.scalars(select(ProviderProfile).where(ProviderProfile.enabled.is_(True))).all()
+    profiles = db.scalars(
+        select(ProviderProfile).where(
+            ProviderProfile.enabled.is_(True),
+            ProviderProfile.auth_type != "oauth",
+        )
+    ).all()
     by_vendor = {profile.vendor: profile for profile in reversed(profiles)}
     for vendor in ANALYSIS_VENDOR_ORDER:
         if vendor in by_vendor:
@@ -103,7 +108,12 @@ def pick_native_video_profile(db: Session, profile_id: str | None, user_id: str 
         if profile is not None and profile.enabled and profile.vendor in NATIVE_VIDEO_VENDORS:
             return provider_credentials.resolve(db, profile, user_id)
         return None
-    profiles = db.scalars(select(ProviderProfile).where(ProviderProfile.enabled.is_(True))).all()
+    profiles = db.scalars(
+        select(ProviderProfile).where(
+            ProviderProfile.enabled.is_(True),
+            ProviderProfile.auth_type != "oauth",
+        )
+    ).all()
     by_vendor = {profile.vendor: profile for profile in reversed(profiles)}
     for vendor in NATIVE_VIDEO_VENDORS:
         if vendor in by_vendor:

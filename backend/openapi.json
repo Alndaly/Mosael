@@ -9787,6 +9787,21 @@
               "type": "string",
               "title": "Capability"
             }
+          },
+          {
+            "name": "surface",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "all",
+                "agent",
+                "direct"
+              ],
+              "type": "string",
+              "default": "all",
+              "title": "Surface"
+            }
           }
         ],
         "responses": {

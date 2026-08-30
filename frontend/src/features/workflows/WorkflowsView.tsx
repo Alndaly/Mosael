@@ -123,6 +123,11 @@ import { isDataConnection, isDuplicateControlEdge } from "@/features/workflows/c
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 
+/** LLM nodes use the backend's direct HTTP Adapter; OAuth subscriptions belong to the pi agent Adapter. */
+function supportsDirectChat(profile: ProviderProfile): boolean {
+  return profile.enabled && profile.auth_type !== "oauth" && Boolean(profile.base_url?.trim());
+}
+
 /** 节点类型语义色(与轨道颜色同属内容色,不算点缀):
     开始=绿 / LLM=紫 / 检索=蓝 / 插件=琥珀 / 转写=青 / 导出=玫红 / 生成=品红;
     其余类型走 --wf-node-color 的 primary 兜底。 */
@@ -1728,16 +1733,15 @@ function WorkflowEditor({
   const hasGen = graph.nodes.some((node) => node.type === "ai_generate");
   const providers = useQuery({
     queryKey: ["provider-profiles"],
-    queryFn: () =>
-      api<Array<{ id: string; name: string; vendor: string; capability_ids: string[]; enabled: boolean }>>(
-        "/api/settings/providers",
-      ),
+    queryFn: () => api<ProviderProfile[]>("/api/settings/providers"),
     enabled: hasLlm || hasGen,
   });
   const analysis = React.useMemo(
     () =>
       analyzeWorkflow(graph, registry, {
-        providerIds: new Set((providers.data ?? []).map((p) => p.id)),
+        providerIds: new Set(
+          (providers.data ?? []).filter(supportsDirectChat).map((p) => p.id),
+        ),
         providersLoaded: (!hasLlm && !hasGen) || providers.isSuccess,
         configuredGenProviders: new Set(
           (providers.data ?? [])
@@ -3288,7 +3292,9 @@ function NodeInspector({
     spec?: { plugin_instances?: boolean },
   ): Array<{ value: string; label: string }> | null => {
     if (node.type === "llm" && key === "profile_id") {
-      return (providers.data ?? []).map((p) => ({ value: p.id, label: `${p.name} (${p.vendor})` }));
+      return (providers.data ?? [])
+        .filter(supportsDirectChat)
+        .map((p) => ({ value: p.id, label: `${p.name} (${p.vendor})` }));
     }
     if (node.type === "llm" && key === "model") {
       // 端点上真实存在的模型。allowsCustomValue 同时放行手填 —— 新模型上线往往早于目录更新,

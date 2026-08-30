@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import time
+from base64 import b64decode
 
 from app.ai.sidecar import adapters
 from app.domain.agent import host
 from app.ai.sidecar.adapters import TurnResult
 from app.core.db import SessionLocal
+from app.core.config import settings
 from app.db.models import ProviderProfile
 from tests.util import add_provider, fresh_client
 
@@ -121,6 +123,51 @@ def test_session_turn_lifecycle_with_fake_adapter(monkeypatch) -> None:
     assert calls["prompt"] == "帮我看看时间线"
     assert ws["id"] in calls["system"]
     assert calls["token"]  # service token minted for MCP access
+
+
+def test_image_attachment_pixels_reach_the_selected_agent_model(monkeypatch) -> None:
+    """附件不能只变成 ``asset_id`` 文本；支持视觉的当前模型需要收到真实图片内容。
+
+    sidecar 会按所选模型的 input 能力决定使用图片还是保留工具回落，这一层负责把工作区内
+    合法的图片素材解析成跨进程载荷。
+    """
+    calls: dict = {}
+
+    def fake_run_turn(adapter, *, prompt, images=None, **_):
+        calls["prompt"] = prompt
+        calls["images"] = images
+        return TurnResult(text="看到了")
+
+    monkeypatch.setattr(host, "run_turn", fake_run_turn)
+    client = fresh_client()
+    _configured(client)
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+    image_path = settings.media_dir / "test-agent-vision.png"
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    image_path.write_bytes(
+        b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")
+    )
+    asset = client.post(
+        "/api/assets",
+        json={
+            "workspace_id": workspace["id"],
+            "kind": "image",
+            "name": "一像素.png",
+            "file_key": "media/test-agent-vision.png",
+        },
+    ).json()
+    session = client.post("/api/agent/sessions", json={"workspace_id": workspace["id"]}).json()
+
+    response = client.post(
+        f"/api/agent/sessions/{session['id']}/messages",
+        json={"content": f"这是什么？\n[附件 asset_id={asset['id']} 名称=一像素.png 类型=image]"},
+    )
+    assert response.status_code == 200
+    assert wait_idle(client, session["id"]) == "idle"
+    assert len(calls["images"]) == 1
+    assert set(calls["images"][0]) == {"data", "mimeType"}
+    assert calls["images"][0]["mimeType"] == "image/png"
+    assert b64decode(calls["images"][0]["data"]) == image_path.read_bytes()
 
 
 def test_message_context_is_sent_to_agent_but_not_stored_in_transcript(monkeypatch) -> None:

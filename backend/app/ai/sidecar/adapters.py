@@ -61,6 +61,7 @@ def run_turn(
     on_tool: "Callable[[dict], None] | None" = None,
     on_thinking: "Callable[[dict], None] | None" = None,
     thinking_level: str = "off",
+    images: list[dict[str, str]] | None = None,
 ) -> TurnResult:
     if adapter == "pi":
         return _run_pi(
@@ -78,6 +79,7 @@ def run_turn(
             session_id=session_key,
             force_compact=force_compact,
             thinking_level=thinking_level,
+            images=images,
         )
     raise AdapterError(f"Unknown agent adapter: {adapter}")
 
@@ -195,6 +197,7 @@ def _run_pi(
     session_id: str = "",
     force_compact: bool = False,
     thinking_level: str = "off",
+    images: list[dict[str, str]] | None = None,
 ) -> TurnResult:
     """Spawn the pi sidecar (Node, embeds pi-agent-core) for one turn and stream
     its JSONL events. The sidecar's tools call back into Open Studio's REST with the
@@ -239,6 +242,9 @@ def _run_pi(
         # 思考档位。off 时 pi 根本不向供应商要思考 —— "模型是推理模型"只决定怎么解析,
         # 与"这一轮要不要思考"是两件事。
         "thinkingLevel": thinking_level,
+        # 图片字节只随本轮送入。sidecar 会再按实际所选模型的 input 能力决定是否使用；
+        # 文本模型不接收它们，正文里的 asset_id 仍可让智能体回落 analyze_asset。
+        "images": images or [],
     }
     # 打包版把 Electron 二进制当 node 用(OPEN_STUDIO_AGENT_BIN_NODE),需 ELECTRON_RUN_AS_NODE=1;
     # 真 node(dev)会忽略该变量,所以仅在显式指定 node 时加,最稳妥。

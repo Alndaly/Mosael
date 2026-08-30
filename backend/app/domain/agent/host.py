@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import logging
 import math
+import re
 import threading
 import time
 
@@ -21,7 +23,7 @@ from app.domain.providers import pi_provider_id
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.security import mint_service_session, revoke_session
-from app.db.models import AgentMessage, AgentSession, AuthSession, ToolConfirmation, User, now
+from app.db.models import AgentMessage, AgentSession, Asset, AuthSession, ToolConfirmation, User, now
 from app.core.token_estimate import estimate_text_tokens
 from app.domain.usage import billable
 
@@ -101,6 +103,43 @@ _streams: dict[str, dict] = {}
 #: `duplicate column` during migration, or another test's message appearing in this test's list.
 #: See `wait_for_idle_turns` and its use in tests/util.fresh_client.
 TURN_THREAD_NAME = "agent-turn"
+
+# 与前端 userMessage.ATTACHMENT_TOKEN 同一协议。名称可以含空格，因此只取稳定的 id/kind 字段。
+_ATTACHED_ASSET = re.compile(r"\[附件 asset_id=(\S+) 名称=.*? 类型=([a-z]+)\]")
+MAX_AGENT_IMAGES = 4
+MAX_AGENT_IMAGE_BYTES = 5 * 1024 * 1024
+
+
+def _attached_images(db: Session, workspace_id: str, prompt: str) -> list[dict[str, str]]:
+    """Resolve image attachment tokens into a bounded, workspace-safe sidecar payload."""
+    from app.media.image_preview import browser_compatible_image
+    from app.media.paths import resolve_key
+
+    out: list[dict[str, str]] = []
+    used = 0
+    seen: set[str] = set()
+    for asset_id, kind in _ATTACHED_ASSET.findall(prompt):
+        if len(out) >= MAX_AGENT_IMAGES:
+            break
+        if kind != "image" or asset_id in seen:
+            continue
+        seen.add(asset_id)
+        asset = db.get(Asset, asset_id)
+        if asset is None or asset.workspace_id != workspace_id or asset.kind != "image" or not asset.file_key:
+            continue
+        source = resolve_key(asset.file_key)
+        if not source.is_file():
+            continue
+        compatible = browser_compatible_image(source, source.parent)
+        if compatible is None:
+            continue
+        image_path, mime_type = compatible
+        size = image_path.stat().st_size
+        if size <= 0 or used + size > MAX_AGENT_IMAGE_BYTES:
+            continue
+        used += size
+        out.append({"data": base64.b64encode(image_path.read_bytes()).decode(), "mimeType": mime_type})
+    return out
 
 
 def wait_for_idle_turns(timeout: float = 5.0) -> bool:
@@ -720,6 +759,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                 workspace_id=session.workspace_id,
                 adapter_state=session.adapter_state,
                 session_key=session.id,
+                images=_attached_images(db, session.workspace_id, prompt),
             )
             # 本地模型的 byte-fallback token(<0xF0>… 字面串)在落库前重组回 UTF-8。
             final_text = decode_byte_fallback(result.text)

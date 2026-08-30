@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 import time
 import logging
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import select
@@ -831,7 +832,12 @@ def list_provider_defaults(db: DbSession, user: CurrentUser) -> list[ProviderDef
 
 
 @router.get("/settings/capability-models/{capability}", response_model=list[CapabilityModelOut])
-def list_capability_models(capability: str, db: DbSession, user: CurrentUser) -> list[CapabilityModelOut]:
+def list_capability_models(
+    capability: str,
+    db: DbSession,
+    user: CurrentUser,
+    surface: Literal["all", "agent", "direct"] = "all",
+) -> list[CapabilityModelOut]:
     """某能力下所有可用模型,跨连接。**任何登录用户都读得到** —— 挡住它等于让人闭着眼睛
     选自己的默认模型(见 tests/test_who_owns_each_setting.py)。
 
@@ -851,7 +857,7 @@ def list_capability_models(capability: str, db: DbSession, user: CurrentUser) ->
             reasoning=model.reasoning,
             reasoning_effort=model.reasoning_effort,
         )
-        for model in provider_models.models_for_capability(db, capability, user.id)
+        for model in provider_models.models_for_capability(db, capability, user.id, surface=surface)
     ]
 
 
