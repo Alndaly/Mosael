@@ -288,6 +288,7 @@ def test_vision_call_refuses_a_profile_with_no_chat_model() -> None:
     """
     from app.domain.provider_credentials import ResolvedProvider
 
+    fresh_client()  # 建表 —— 没有它,单独跑这条测试时 model_id_for 会撞「没有这张表」
     profile = ResolvedProvider(
         id="no-such-profile", name="空连接", vendor="moonshot",
         base_url="https://api.moonshot.cn/v1", auth_type="api_key", enabled=True,
