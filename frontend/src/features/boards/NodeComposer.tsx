@@ -119,6 +119,43 @@ export function modeLabel(roles: string[]): MessageKey {
  *  · **落不下的就不发。** 正文里的 @ 没有角色,得找一个收得下它的槽;一个都没有(比如
  *    这个模型不认参考视频)就跳过,硬塞会被描述符校验当场拒掉,连带整次生成都发不出去。
  */
+/**
+ * 提示词末尾那段「谁是第几张」。
+ *
+ * **模型收到的是一串没有名字的图。** 用户在正文里写「把 创作者.png 里的人放到 街景.jpg」——
+ * 那两个名字对他有意义,对模型只是两个词:它拿到的是 `image: [url, url]`,一个文件名都没有。
+ * 一两张时还能靠顺序猜,而这个界面本来就是让人 @ 很多张的。
+ *
+ * 所以把对应关系明写出来。三个判断:
+ *
+ * 1. **附在末尾,不改用户写的字。** 在正文里把名字替换成「图1」会动他的句子,而且他再打开
+ *    这一格时看到的就不是自己写的东西了;后端存的节点文字是 `prompt[:120]`,附在末尾也就
+ *    不会挤掉那一截。
+ * 2. **按角色分组编号。** 适配器是按角色过滤成一串的(比如 seedream 的
+ *    `payload["image"] = 参考图那几个`),所以「第几张」只在同一个角色里才有意义 ——
+ *    跨角色连着数会把首帧算成参考图的第一张。
+ * 3. **重名要能分开。** 同名的两份素材在这段说明里也是两个词,不编号的话它等于没说。
+ */
+export function referenceLegend(
+  sources: { asset_id: string; role: string }[],
+  library: { id: string; name?: string | null; original_filename?: string | null }[],
+  label: (role: string) => string,
+): string {
+  const byRole = new Map<string, string[]>();
+  for (const one of sources) {
+    const asset = library.find((item) => item.id === one.asset_id);
+    const name = String(asset?.name || asset?.original_filename || "").trim();
+    //: 认不出名字的不写进来 —— 「参考图 2 = 」比不写更糟。
+    if (!name) continue;
+    byRole.set(one.role, [...(byRole.get(one.role) ?? []), name]);
+  }
+  const lines: string[] = [];
+  for (const [role, names] of byRole) {
+    lines.push(names.map((name, at) => `${label(role)} ${at + 1} = ${name}`).join("; "));
+  }
+  return lines.join("\n");
+}
+
 export function mergeSourceAssets(
   attached: { role: string; assetId: string }[],
   mentioned: string[],
@@ -363,16 +400,22 @@ export function NodeComposer({
     if (supportsParameter(current, "duration_seconds")) parameters.duration_seconds = duration;
     if (current.capabilities?.supports_audio && audio) parameters.generate_audio = true;
     if (maxImages(current) > 1 && count > 1) parameters.num_images = count;
+    //: 槽位挂的 + 正文里 @ 到的,都要发出去。**同一份素材不发两遍** —— 有些厂商会把
+    //: 重复的那一份也算进参考图的份数,挂到上限就直接拒了。正文里的 @ 没有角色,
+    //: 落到第一个收得下它的槽上(通常就是参考图)。
+    const sourceAssets = mergeSourceAssets(sources, mentioned, library.data ?? [], slots);
+    //: 正文里写的是名字,而模型收到的是一串没有名字的图 —— 末尾补一段对应关系(见 referenceLegend)。
+    //: 角色名走 ROLE_COPY —— 和 AI 工作台、工作流面板同一份,不在这儿再抄一张表。
+    const legend = referenceLegend(sourceAssets, library.data ?? [], (role) =>
+      t(ROLE_COPY[role as SourceRole]?.label ?? "genReferenceImage"),
+    );
     run(() =>
       onSubmit({
-        prompt: text,
+        prompt: legend ? `${text}\n\n${t("boardPromptLegend")}${legend}` : text,
         provider: current.provider,
         model: current.model,
         parameters,
-        //: 槽位挂的 + 正文里 @ 到的,都要发出去。**同一份素材不发两遍** —— 有些厂商会把
-        //: 重复的那一份也算进参考图的份数,挂到上限就直接拒了。正文里的 @ 没有角色,
-        //: 落到第一个收得下它的槽上(通常就是参考图)。
-        sourceAssets: mergeSourceAssets(sources, mentioned, library.data ?? [], slots),
+        sourceAssets,
       }),
     );
   };
