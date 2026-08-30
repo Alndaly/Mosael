@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, ShieldAlert, Store } from "lucide-react";
+import { BookOpen, Check, Download, Link2, Search, ShieldAlert, Store } from "lucide-react";
 import { toast } from "sonner";
 
 import { api } from "@/api/client";
@@ -10,10 +10,12 @@ import { ModalShell } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 type MarketEntry = components["schemas"]["PluginMarketEntry"];
+type InstallPreview = components["schemas"]["PluginInstallPreview"];
 
 /**
  * 装的就是市场里这一版。
@@ -25,7 +27,28 @@ type MarketEntry = components["schemas"]["PluginMarketEntry"];
 function upToDate(entry: { installed?: boolean; installed_version?: string; version?: string }): boolean {
   return Boolean(entry.installed && entry.installed_version && entry.installed_version === entry.version);
 }
-type InstallPreview = components["schemas"]["PluginInstallPreview"];
+
+/** 一条市场条目此刻**要人做什么**。三态,不是两态:装过 ≠ 有新版。 */
+type Stance = "install" | "update" | "current";
+
+function stanceOf(entry: MarketEntry): Stance {
+  if (upToDate(entry)) return "current";
+  return entry.installed ? "update" : "install";
+}
+
+/**
+ * 搜的是**这个插件是干嘛的**,不只是它叫什么。
+ *
+ * 只搜名字的话,「网盘」搜不到 TikHub,而「找一个能搬文件的插件」正是打开市场的理由 ——
+ * 用户不知道它叫什么,他知道自己要做什么。所以说明和 id 也进搜索范围。
+ */
+function matches(entry: MarketEntry, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return [entry.name, entry.description, entry.id, entry.author].some((field) =>
+    String(field ?? "").toLowerCase().includes(q),
+  );
+}
 
 /**
  * 插件市场。
@@ -33,11 +56,28 @@ type InstallPreview = components["schemas"]["PluginInstallPreview"];
  * 装插件 = 在这台机器上放一份**会被执行**的代码。所以这里没有一键安装 —— 点「安装」先
  * 把包下下来读一遍清单,把它声明的权限和会带来的工具摊开给人看,确认了才真的落地。
  * 那份清单在包里面,不下下来看不到,所以这一步省不掉。
+ *
+ * 版式的两个判断:
+ *
+ * 1. **搜索占主位。** 市场只有四个条目时随便怎么排都行,而它是要长起来的;等长起来再补搜索,
+ *    中间那段时间用户只能一行行翻。
+ * 2. **「从链接安装」收进一个按钮。** 它是逃生口:装一个来路不明的 zip,是这里风险最高的
+ *    一件事,却曾经占着弹窗最顶上一整行 —— 位置在说"这是主路",而主路是下面那份清单。
  */
-export function PluginMarket({ onInstalled }: { onInstalled: () => void }) {
+export function PluginMarketDialog({
+  open,
+  onOpenChange,
+  onInstalled,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onInstalled: () => void;
+}) {
   const t = useI18n();
   const qc = useQueryClient();
+  const [query, setQuery] = React.useState("");
   const [url, setUrl] = React.useState("");
+  const [urlOpen, setUrlOpen] = React.useState(false);
   const [pending, setPending] = React.useState<{ url: string; preview: InstallPreview } | null>(null);
 
   const market = useQuery({
@@ -49,7 +89,10 @@ export function PluginMarket({ onInstalled }: { onInstalled: () => void }) {
   const preview = useMutation({
     mutationFn: (target: string) =>
       api<InstallPreview>("/api/plugins/install/preview", { method: "POST", body: JSON.stringify({ url: target }) }),
-    onSuccess: (data, target) => setPending({ url: target, preview: data }),
+    onSuccess: (data, target) => {
+      setUrlOpen(false);
+      setPending({ url: target, preview: data });
+    },
     onError: (error: Error) => toast.error(error.message),
   });
 
@@ -67,85 +110,113 @@ export function PluginMarket({ onInstalled }: { onInstalled: () => void }) {
   });
 
   const entries = market.data ?? [];
+  const shown = entries.filter((entry) => matches(entry, query));
   const perms = pending?.preview.permissions ?? [];
   const toolNames = pending?.preview.tools ?? [];
-  return (
-    // 两行:上面是「从链接安装」(高度固定),下面吃掉剩下的空间 —— 空态要在**那块空间**的
-    // 正中,而不是紧贴着输入框。此前整块是 content-start,空态被钉在顶部。
-    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-2 p-2">
-      <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
-        <span>{t("pluginInstallFromUrl")}</span>
-        <span className="flex min-w-0 items-center gap-1.5">
-          <Input
-            className="h-8 min-w-0 flex-1 rounded-lg border-border bg-field px-2.5 text-ui-sm font-medium text-foreground"
-            placeholder={t("pluginInstallUrlPlaceholder")}
-            value={url}
-            onChange={(event) => setUrl(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && url.trim()) preview.mutate(url.trim());
-            }}
-          />
-          <Button
-            className="shrink-0"
-            variant="outline"
-            size="sm"
-            disabled={!url.trim()}
-            //: **只认自己那一条 URL。** 光看 isPending 的话,市场里任何一张卡片在预览,
-            //: 这个按钮都会跟着转 —— 用户按的是那边,转的是这边。
-            loading={preview.isPending && preview.variables === url.trim()}
-            onClick={() => preview.mutate(url.trim())}
-          >
-            <Download size={13} />
-            {t("pluginInstall")}
-          </Button>
-        </span>
-      </label>
 
+  return (
+    <ModalShell
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t("pluginMarket")}
+      className="w-[680px] max-w-[92vw]"
+      // 找东西的那一条**钉在头里**:滚到第十个插件时,搜索框还在原地。
+      header={
+        <div className="flex min-w-0 items-center gap-1.5">
+        <span className="relative min-w-0 flex-1">
+          <Search
+            size={13}
+            aria-hidden
+            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            className="h-8 w-full min-w-0 rounded-lg border-border bg-field pl-[30px] pr-2.5 text-foreground [&]:text-ui-sm"
+            placeholder={t("pluginMarketSearch")}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            aria-label={t("pluginMarketSearch")}
+          />
+        </span>
+        {/* 逃生口收进一颗按钮:点开才给输入框。**它不该和搜索抢那一行** —— 一个是"看看有什么",
+            一个是"我已经知道要装哪个 zip",后者一年用一次。 */}
+        <Popover open={urlOpen} onOpenChange={setUrlOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="shrink-0" aria-expanded={urlOpen}>
+              <Link2 size={13} />
+              {t("pluginInstallFromUrl")}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-[320px]">
+            <div className="grid gap-1.5">
+              <span className="text-ui-xs font-semibold text-foreground">{t("pluginInstallFromUrl")}</span>
+              <p className="m-0 text-ui-xs leading-[1.5] text-muted-foreground">{t("pluginInstallFromUrlHint")}</p>
+              <span className="flex min-w-0 items-center gap-1.5">
+                <Input
+                  autoFocus
+                  className="h-8 min-w-0 flex-1 rounded-lg border-border bg-field px-2.5 text-foreground [&]:text-ui-sm"
+                  placeholder={t("pluginInstallUrlPlaceholder")}
+                  value={url}
+                  onChange={(event) => setUrl(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && url.trim()) preview.mutate(url.trim());
+                  }}
+                />
+                <Button
+                  className="shrink-0"
+                  size="sm"
+                  disabled={!url.trim()}
+                  //: **只认自己那一条 URL。** 光看 isPending 的话,市场里任何一张卡片在预览,
+                  //: 这个按钮都会跟着转 —— 用户按的是那边,转的是这边。
+                  loading={preview.isPending && preview.variables === url.trim()}
+                  onClick={() => preview.mutate(url.trim())}
+                >
+                  {t("pluginInstall")}
+                </Button>
+              </span>
+            </div>
+          </PopoverContent>
+          </Popover>
+        </div>
+      }
+    >
       {/* 有东西就从顶部排,没东西就把空态放正中 —— content-start 一直挂着的话,
-          「打不开市场」会紧贴在输入框下面,看着像是输入框的一部分。 */}
+          「没有匹配的插件」会紧贴在搜索框下面,看着像是搜索框的一部分。 */}
       <div
         className={cn(
-          "grid min-h-0 gap-2 overflow-y-auto",
-          entries.length > 0 || market.isLoading ? "content-start" : "content-center justify-items-center",
+          "grid min-h-full gap-2",
+          shown.length > 0 || market.isLoading ? "content-start" : "content-center justify-items-center",
         )}
       >
-      {market.isLoading && [0, 1, 2].map((i) => <Skeleton key={i} className="h-16 rounded-lg" />)}
-      {market.isError && (
-        <EmptyState size="compact" icon={<Store size={15} />} title={t("pluginMarketFailed")} body={String((market.error as Error).message)} />
-      )}
-      {market.isSuccess && entries.length === 0 && (
-        <EmptyState size="compact" icon={<Store size={15} />} title={t("pluginMarketEmpty")} />
-      )}
-      {entries.map((entry) => (
-        <article key={entry.id} className="grid gap-1.5 rounded-lg border border-border bg-panel-subtle p-2.5">
-          <div className="flex min-w-0 items-start justify-between gap-2">
-            <span className="min-w-0">
-              <strong className="block truncate text-ui-sm font-semibold text-foreground">{entry.name || entry.id}</strong>
-              <small className="text-ui-xs text-muted-foreground">
-                v{entry.version}
-                {entry.author && ` · ${entry.author}`}
-                {entry.installed && !upToDate(entry) && ` · ${t("pluginInstalled").replace("{v}", entry.installed_version)}`}
-              </small>
-            </span>
-            {/* 三态,不是两态:**装过 ≠ 有新版**。此前只看「装没装」,于是同一个版本也写着
-                「更新」—— 点下去装一遍一模一样的东西,而用户以为自己落后了。 */}
-            <Button
-              className="shrink-0"
-              variant="outline"
-              size="sm"
-              disabled={!entry.download || upToDate(entry)}
-              loading={preview.isPending && preview.variables === entry.download}
-              onClick={() => preview.mutate(entry.download)}
-            >
-              {!upToDate(entry) && <Download size={13} />}
-              {upToDate(entry) ? t("pluginUpToDate") : entry.installed ? t("pluginUpdate") : t("pluginInstall")}
-            </Button>
-          </div>
-          {entry.description && (
-            <p className="m-0 text-ui-xs leading-[1.55] text-muted-foreground">{entry.description}</p>
-          )}
-        </article>
-      ))}
+        {market.isLoading && [0, 1, 2].map((i) => <Skeleton key={i} className="h-[72px] rounded-lg" />)}
+        {market.isError && (
+          <EmptyState
+            size="compact"
+            icon={<Store size={15} />}
+            title={t("pluginMarketFailed")}
+            body={String((market.error as Error).message)}
+          />
+        )}
+        {market.isSuccess && entries.length === 0 && (
+          <EmptyState size="compact" icon={<Store size={15} />} title={t("pluginMarketEmpty")} />
+        )}
+        {/* 搜不到和市场是空的**是两件事**:一个是"换个词",一个是"这儿本来就没东西"。
+            合成一句的话,搜错字的人会以为市场坏了。 */}
+        {market.isSuccess && entries.length > 0 && shown.length === 0 && (
+          <EmptyState
+            size="compact"
+            icon={<Search size={15} />}
+            title={t("pluginMarketNoMatch")}
+            body={t("pluginMarketNoMatchBody")}
+          />
+        )}
+        {shown.map((entry) => (
+          <MarketRow
+            key={entry.id}
+            entry={entry}
+            busy={preview.isPending && preview.variables === entry.download}
+            onPick={() => preview.mutate(entry.download)}
+          />
+        ))}
       </div>
 
       {pending && (
@@ -155,9 +226,20 @@ export function PluginMarket({ onInstalled }: { onInstalled: () => void }) {
           title={t("pluginInstallConfirmTitle")}
         >
           <div className="grid gap-2 text-ui-sm">
-            <div>
+            <div className="flex flex-wrap items-baseline gap-x-1.5">
               <strong className="text-ui-md font-semibold">{pending.preview.name || pending.preview.id}</strong>
-              <small className="ml-1.5 text-ui-xs text-muted-foreground">v{pending.preview.version}</small>
+              <small className="text-ui-xs text-muted-foreground">v{pending.preview.version}</small>
+              {pending.preview.homepage && (
+                <a
+                  href={pending.preview.homepage}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="inline-flex items-center gap-0.5 text-ui-xs text-primary hover:underline"
+                >
+                  <BookOpen size={11} />
+                  {t("pluginDocs")}
+                </a>
+              )}
             </div>
             {pending.preview.description && (
               <p className="m-0 text-ui-xs leading-[1.55] text-muted-foreground">{pending.preview.description}</p>
@@ -205,6 +287,87 @@ export function PluginMarket({ onInstalled }: { onInstalled: () => void }) {
           </div>
         </ModalShell>
       )}
-    </div>
+    </ModalShell>
+  );
+}
+
+/**
+ * 市场里的一条。
+ *
+ * **权限摆在条目上,而不是只在确认弹窗里。** 权限是决定装不装的那条信息,而确认弹窗是
+ * 点了「安装」之后才出现的 —— 也就是说,人得先做决定,才能看到做决定要用的东西。
+ * 摆在这里,四个条目可以横着比。
+ */
+function MarketRow({ entry, busy, onPick }: { entry: MarketEntry; busy: boolean; onPick: () => void }) {
+  const t = useI18n();
+  const stance = stanceOf(entry);
+  const perms = entry.permissions ?? [];
+
+  return (
+    <article className="grid gap-1.5 rounded-lg border border-border bg-panel-subtle p-2.5">
+      <div className="flex min-w-0 items-start justify-between gap-2">
+        <span className="min-w-0">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <strong className="min-w-0 truncate text-ui-sm font-semibold text-foreground">{entry.name || entry.id}</strong>
+            {/* 状态用**标记**说,不藏在副标题那行小字里 —— 那一行还挂着版本号和作者,
+                「已装 v0.3.0」混在里面读不出来"这条我已经有了"。 */}
+            {stance === "update" && (
+              <span className="shrink-0 rounded-full bg-[color-mix(in_srgb,#d97706_16%,transparent)] px-1.5 py-px text-ui-2xs font-semibold text-[#b45309]">
+                {t("pluginMarketHasUpdate")}
+              </span>
+            )}
+            {stance === "current" && (
+              <span className="inline-flex shrink-0 items-center gap-0.5 text-ui-2xs font-semibold text-muted-foreground">
+                <Check size={11} />
+                {t("pluginUpToDate")}
+              </span>
+            )}
+          </span>
+          <small className="flex flex-wrap items-center gap-x-1.5 text-ui-xs text-muted-foreground">
+            <span>
+              v{entry.version}
+              {entry.author && ` · ${entry.author}`}
+              {stance === "update" && ` · ${t("pluginInstalled").replace("{v}", entry.installed_version)}`}
+            </span>
+            {/* **装之前就该能读文档。** 权限和工具这里已经摊开了,但"它到底怎么用、凭据去哪儿
+                申请"只有作者说得清 —— 而那正是决定装不装的最后一问。 */}
+            {entry.homepage && (
+              <a
+                href={entry.homepage}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="inline-flex items-center gap-0.5 text-primary hover:underline"
+              >
+                <BookOpen size={11} />
+                {t("pluginDocs")}
+              </a>
+            )}
+          </small>
+        </span>
+        {/* 已是最新时**不画按钮**:一个永远按不下去的按钮还占着最显眼的位置,而它什么都不做。
+            状态由左边那个标记说,这里留空。 */}
+        {stance !== "current" && (
+          <Button className="shrink-0" size="sm" disabled={!entry.download} loading={busy} onClick={onPick}>
+            <Download size={13} />
+            {stance === "update" ? t("pluginUpdate") : t("pluginInstall")}
+          </Button>
+        )}
+      </div>
+      {entry.description && <p className="m-0 text-ui-xs leading-[1.55] text-muted-foreground">{entry.description}</p>}
+      {/* 无权限也要说出来 —— 「没有声明任何权限」是这四个字里最有说服力的一条,空着的话
+          它和"我忘了写"长得一模一样。 */}
+      <span className="flex min-w-0 flex-wrap items-center gap-1 text-ui-2xs text-muted-foreground">
+        <ShieldAlert size={11} className="shrink-0" aria-hidden />
+        {perms.length === 0 ? (
+          <span>{t("pluginMarketNoPerms")}</span>
+        ) : (
+          perms.map((one) => (
+            <span key={one} className="timecode rounded bg-muted px-1 py-px text-foreground">
+              {one}
+            </span>
+          ))
+        )}
+      </span>
+    </article>
   );
 }

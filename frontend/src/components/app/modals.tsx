@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 
@@ -53,28 +54,51 @@ function useUnlockBodyOnClose(open: boolean): void {
 export const DIALOG_FIELD =
   "grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none";
 
+/**
+ * 全站弹窗的外壳:**三段** —— 钉住的头、能滚的身体、钉住的尾。
+ *
+ * 此前是「一整块 p-5,内容自己想办法」,于是每个内容长一点的弹窗都要在**自己内部**再套一层
+ * `overflow-y-auto`。那一层带来两个后果:标题跟着内容滚走(长列表滚到一半就不知道这是什么
+ * 弹窗了),以及**贴着滚动容器边缘的控件,焦点框会被裁掉** —— outline 画在 border box 外面,
+ * 而那正好在容器的裁剪线之外(插件市场的搜索框和「从链接安装」按钮就是这么半截的)。
+ *
+ * 三段之后,滚动只发生在中间那一段,头尾各自有内边距,谁都不贴着裁剪线。
+ *
+ * `sticky` 段里的 `bg-popover` 不能省:滚上来的内容会从它背后穿过去。
+ */
 export function ModalShell({
   open,
   onOpenChange,
   title,
+  header,
+  footer,
   children,
   className,
+  bodyClassName,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
+  /** 钉在标题下面、**不跟着滚**的一条:搜索框、筛选器这类"作用于下面整份列表"的东西。 */
+  header?: React.ReactNode;
+  /** 钉在底部的动作区。表单的「取消 / 确定」放这里,长表单滚动时它仍然在。 */
+  footer?: React.ReactNode;
   children: React.ReactNode;
   /** Override the default width (w-[360px]) for wider dialogs, e.g. the recorder. */
   className?: string;
+  /** 覆盖滚动区的内边距 —— 内容自己就是通栏的(比如一张图)时用。 */
+  bodyClassName?: string;
 }) {
   useUnlockBodyOnClose(open);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={className}>
-        <DialogHeader>
+      <DialogContent className={cn("flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0", className)}>
+        <DialogHeader className={cn("shrink-0 px-5 pb-3.5 pt-5", header && "gap-2.5")}>
           <DialogTitle>{title}</DialogTitle>
+          {header}
         </DialogHeader>
-        {children}
+        <div className={cn("min-h-0 flex-1 overflow-y-auto px-5 pb-5", bodyClassName)}>{children}</div>
+        {footer && <div className="shrink-0 border-t border-border bg-popover px-5 py-3.5">{footer}</div>}
       </DialogContent>
     </Dialog>
   );

@@ -1,6 +1,7 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  BookOpen,
   CheckCircle2,
   Copy,
   ChevronDown,
@@ -31,7 +32,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ModalShell } from "@/components/app/modals";
-import { PluginMarket } from "@/features/plugins/PluginMarket";
+import { PluginMarketDialog } from "@/features/plugins/PluginMarket";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -92,8 +93,10 @@ export function PluginsView() {
         style={{ gridTemplateColumns: `${sidebar.width}px minmax(0, 1fr)` }}>
         <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
           <div className="flex min-h-10 items-center justify-between border-b border-border px-3">
+            {/* 「插件」而不是「已安装」:这一栏和右边的详情是**同一件东西的两半**,而标题是在
+                回答"这一栏里是什么",不是在给它们贴状态 —— 没装的插件根本不会出现在这儿。 */}
             <span className="text-ui-xs font-semibold uppercase tracking-[0.06em] text-foreground">
-              {t("installed")}
+              {t("pluginsTitle")}
             </span>
             <span className="flex items-center gap-1">
               <Button
@@ -152,16 +155,9 @@ export function PluginsView() {
 
       {/* 市场:**一张弹窗,宽度归它自己** —— 挤在侧栏里时,一个用来浏览的列表被塞进了
           一个用来选中的列表的位置,每张卡片的说明都要折成五行。 */}
-      <ModalShell
-        open={marketOpen}
-        onOpenChange={setMarketOpen}
-        title={t("pluginMarket")}
-        className="w-[720px] max-w-[92vw]"
-      >
-        <div className="max-h-[70vh] min-h-0 overflow-y-auto">
-          <PluginMarket onInstalled={() => invalidatePlugins(qc)} />
-        </div>
-      </ModalShell>
+      {/* 搜索条钉在头里、列表在滚动体里 —— 滚动由 ModalShell 那一层管,这里**不再自己套一层
+          overflow**:套两层的后果是标题跟着列表滚走,而且贴着裁剪线的搜索框焦点框会缺半圈。 */}
+      <PluginMarketDialog open={marketOpen} onOpenChange={setMarketOpen} onInstalled={() => invalidatePlugins(qc)} />
         {/* 右栏是**一块占满高度的面板**,内部滚动 —— 此前它跟着内容走,内容少时就是半截,
             左边是个完整的带边框面板、右边飘着一段,两边看着不像同一层东西。 */}
         <div className="grid min-h-0 min-w-0 content-start overflow-y-auto rounded-md border border-border bg-panel px-3 py-2.5 shadow-[var(--shadow-panel)]">
@@ -259,15 +255,27 @@ function PackageDetail({ pkg }: { pkg: PluginPackage }) {
       <header className="grid gap-2 border-b border-border pb-3">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
           <h2 className="m-0 truncate text-ui-lg font-semibold text-foreground">{pkg.name}</h2>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="shrink-0 text-muted-foreground hover:text-destructive"
-            loading={uninstall.isPending}
-            onClick={() => setConfirmUninstall(true)}
-          >
-            <Trash2 size={13} /> {t("pluginUninstall")}
-          </Button>
+          <span className="flex shrink-0 items-center gap-1">
+            {/* **文档由插件自己给。** 一个插件带来四十个工具、一串权限和一套要去哪儿申请的
+                凭据 —— 这些怎么用只有作者说得清,我们能做的是把人送到那儿。清单里没写就不画,
+                画一个点不开的按钮比没有更糟。 */}
+            {pkg.homepage && (
+              <Button variant="ghost" size="sm" className="text-muted-foreground" asChild>
+                <a href={pkg.homepage} target="_blank" rel="noreferrer noopener">
+                  <BookOpen size={13} /> {t("pluginDocs")}
+                </a>
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="shrink-0 text-muted-foreground hover:text-destructive"
+              loading={uninstall.isPending}
+              onClick={() => setConfirmUninstall(true)}
+            >
+              <Trash2 size={13} /> {t("pluginUninstall")}
+            </Button>
+          </span>
         </div>
         {/* 元信息一行说完 —— 它们是查故障时才看的东西,不值一整块版面。 */}
         <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-ui-xs text-muted-foreground">

@@ -57,8 +57,14 @@ export function AssetPickerDialog({
   }, [assets.data, kind, keyword]);
 
   return (
-    <ModalShell open={open} onOpenChange={onOpenChange} title={t(kind === "video" ? "boardsPickVideo" : kind === "audio" ? "boardsPickAudio" : "boardsPickImage")} className="w-[560px]">
-      <div className="grid gap-2">
+    <ModalShell
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t(kind === "video" ? "boardsPickVideo" : kind === "audio" ? "boardsPickAudio" : "boardsPickImage")}
+      className="w-[560px]"
+      //: 搜索框**钉在头里**:它作用于下面整份清单,翻到第三十个素材时它该还在原地。
+      //: (放在滚动体里还有个副作用:它贴着滚动容器的上边缘,焦点框会被裁掉半圈。)
+      header={
         <Input
           autoFocus
           value={keyword}
@@ -66,6 +72,9 @@ export function AssetPickerDialog({
           placeholder={t("boardsSearchImages")}
           className="h-8"
         />
+      }
+    >
+      <div className="grid gap-2">
         {assets.isLoading ? (
           <div className="grid grid-cols-4 gap-2">
             {[0, 1, 2, 3].map((n) => (
@@ -80,7 +89,8 @@ export function AssetPickerDialog({
           //
           // 顺带修掉一个布局错:此前是 grid-cols-4 + aspect-square,而 grid 默认 align-items:
           // stretch —— 一行里最高的那个把整行撑开,其余的图就顶破了自己的格子。
-          <div className="grid max-h-[380px] content-start gap-1 overflow-y-auto">
+          // 滚动归 ModalShell 那一层管 —— 这里再套一层的话,弹窗里会有两个滚动条。
+          <div className="grid content-start gap-1">
             {images.map((asset: Asset) => (
               <button
                 key={asset.id}
