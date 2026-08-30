@@ -80,6 +80,7 @@ def generate(board_id: str, body: BoardGenerate, db: DbSession, user: CurrentUse
     """
     from app.domain import provider_models
     from app.domain.generation import create_generation_job
+    from app.domain.generation.operations import parse_source_assets
     from app.domain.generation.operations import GenerationDomainError
     from app.domain.generation.runner import start_generation_thread
 
@@ -111,7 +112,13 @@ def generate(board_id: str, body: BoardGenerate, db: DbSession, user: CurrentUse
             prompt=body.prompt,
             negative_prompt="",
             parameters=dict(body.parameters or {}),
-            source_assets=list(body.source_assets or []),
+            #: **归一成字典再交出去** —— `create_generation_job` 收的是 `[{asset_id, role}]`,
+            #: 而这里的 body.source_assets 是一串 pydantic 对象。直接传的话校验器上
+            #: `entry.get("role")` 当场 AttributeError,整个请求 500:也就是说画板上只要挂了
+            #: 素材(槽位或正文里 @ 的),生成就没成过。别处四个调用方都走这个函数。
+            source_assets=parse_source_assets(
+                [one.model_dump() for one in (body.source_assets or [])], kind=body.kind
+            ),
         )
     except GenerationDomainError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

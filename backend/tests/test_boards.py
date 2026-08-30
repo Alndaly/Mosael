@@ -915,3 +915,54 @@ def test_取帧落在片尾之后要说人话() -> None:
                 grab_frame(source, 999, pathlib.Path(tmp) / "out.jpg")
         with _pytest.raises(StillError, match="负数"):
             grab_frame(source, -1, pathlib.Path(tmp) / "out.jpg")
+
+
+def test_画板把素材归一成字典再交给领域层() -> None:
+    """`create_generation_job` 收的是 `[{asset_id, role}]`,而这条路曾经把一串 pydantic 对象
+    直接交出去 —— 校验器上 `entry.get("role")` 当场 AttributeError,整个请求 500。
+
+    也就是说**画板上只要挂了素材(槽位里的,或正文里 @ 的),生成就没成过**,而这正是画板生成
+    的主要用法。别处四个调用方都走 parse_source_assets,只有这里绕开了。
+
+    **测的是交出去的那一手**,不是整条链路:把模型、凭据、能力表全配起来才能跑到校验器那一行,
+    而那一堆设置和这个 bug 没有半点关系 —— 真正的契约就是"交出去的必须是字典"。
+    """
+    from unittest.mock import patch as mock_patch
+
+    png = (
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4"
+        b"\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n\x2d\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+    client = fresh_client()
+    ws = _workspace(client)
+    image_id = client.post(
+        "/api/assets/import", data={"workspace_id": ws}, files={"file": ("参考.png", png, "image/png")}
+    ).json()["id"]
+    board_id = client.post("/api/boards", json={"workspace_id": ws}).json()["id"]
+
+    seen: dict = {}
+
+    def spy(db, **kwargs):
+        seen["source_assets"] = kwargs.get("source_assets")
+        raise RuntimeError("到这儿就够了")
+
+    with mock_patch("app.domain.generation.create_generation_job", side_effect=spy):
+        with pytest.raises(RuntimeError):
+            client.post(
+                f"/api/boards/{board_id}/generate",
+                json={
+                    "workspace_id": ws,
+                    "item_id": "gen-1",
+                    "kind": "image",
+                    "x": 0,
+                    "y": 0,
+                    "prompt": "把这张图改成夜景",
+                    "provider": "openai",
+                    "model": "gpt-image-1",
+                    "source_assets": [{"asset_id": image_id, "role": "reference_image"}],
+                },
+            )
+
+    assert seen["source_assets"] == [{"asset_id": image_id, "role": "reference_image"}], (
+        f"交出去的不是字典,领域层拿 .get() 会当场炸:{seen['source_assets']!r}"
+    )
