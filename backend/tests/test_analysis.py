@@ -278,3 +278,21 @@ def test_native_video_size_guard(monkeypatch) -> None:
         asset = db.get(Asset, asset_json["id"])
         with pytest.raises(service.AnalysisError):
             service.analyze_asset(db, asset, "?", mode="native", user_id=_me())
+
+
+def test_vision_call_refuses_a_profile_with_no_chat_model() -> None:
+    """连接下没有对话模型时必须当场报错,而不是把请求换成 gpt-4o-mini 发出去。
+
+    那个回落曾经真实存在:用户选的是 Kimi,分析却跑在别家端点的 gpt-4o-mini 上 ——
+    静默换模型换厂商,正是 provider_credentials 要消灭的「花错钱」。
+    """
+    from app.domain.provider_credentials import ResolvedProvider
+
+    profile = ResolvedProvider(
+        id="no-such-profile", name="空连接", vendor="moonshot",
+        base_url="https://api.moonshot.cn/v1", auth_type="api_key", enabled=True,
+        api_key="sk-test",
+    )
+    with SessionLocal() as db:
+        with pytest.raises(service.AnalysisError, match="没有可用的对话模型"):
+            service.call_vision_model(db, profile, [{"role": "user", "content": "hi"}])

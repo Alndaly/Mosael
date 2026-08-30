@@ -189,10 +189,12 @@ def call_vision_model(
 ) -> str:
     # 参数是解析过的连接(连接 + 这个人的钥匙),不再是 ORM 对象 —— 此前靠 object_session 把
     # 会话从对象上摸出来,而 ResolvedProvider 没有挂在任何会话上,db 只能显式传。
-    model = provider_models.model_id_for(db, profile, "chat") or "gpt-4o-mini"
+    # 模型名不做兜底:取不到就让 target_for 当场报「这条连接下没有可用的对话模型」。
+    # 此前回落成 "gpt-4o-mini" —— 用户选的是 Kimi,实际却在别家端点上花 OpenAI 模型的钱,
+    # 静默换模型换厂商是这里最坏的失败方式(pick_analysis_profile 的钥匙原则同理)。
     try:
         return chat(
-            target_for(db, profile, model=model),
+            target_for(db, profile),
             messages,
             temperature=0.2,
             timeout=REQUEST_TIMEOUT_SECONDS,
