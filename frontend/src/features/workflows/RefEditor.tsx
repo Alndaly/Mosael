@@ -130,9 +130,12 @@ export function RefEditor({
       RefSuggestion.configure({
         suggestion: {
           char: TRIGGER,
-          // 只在行首或分隔符后唤起 —— 否则邮箱 a@b、句中的 @ 也会弹菜单。
-          // 前面必须是空白或分隔符 —— 否则邮箱 a@b、句中的 @ 也会弹菜单。
-          allowedPrefixes: [" ", "(", "[", "{", ",", ":", "，", "、"],
+          //: **`@` 前面是什么都认。** 插件默认(以及此前这里写的那张分隔符白名单)要求 `@`
+          //: 跟在空格或分隔符后面 —— 于是「给@」打不出菜单,「给 @」才行。中文正文里本来就
+          //: 不打空格,这条规则等于让这个功能在中文下时灵时不灵,而不灵的时候没有任何提示。
+          //: 放开之后 `a@b` 这样的邮箱也会试着唤起,但它匹配不到任何东西,菜单自己就不显示 ——
+          //: 「偶尔多算一次、什么都不弹」比「中文里一半时候用不了」轻得多。
+          allowedPrefixes: null,
           items: ({ query }) => filterRefs(variablesRef.current, query),
           command: ({ editor: instance, range, props }) => {
             instance
