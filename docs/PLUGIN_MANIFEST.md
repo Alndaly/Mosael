@@ -35,7 +35,7 @@
 ```jsonc
 {
   "id": "dev.example.text",          // 稳定唯一 id;改了等于换了个插件
-  "name": "文本工具",
+  "name": { "zh": "文本工具", "en": "Text Toolkit" },   // 给人看的文字可按语言写,见「多语言」
   "version": "1.0.0",
   "manifest_version": 1,
 
