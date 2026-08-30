@@ -319,9 +319,17 @@
   }
 }
 
-* {
-  box-sizing: border-box;
-  border-color: var(--border);
+/* 这两条是**默认值**,不是强制值 —— 必须放进 @layer base。
+ *
+ * 不分层的话它们会压过 Tailwind 的所有工具类(v4 里工具类都在 @layer utilities,而不分层的
+ * CSS 胜过任何分层 CSS,和特异性无关)。后果是**全项目的 border-* 颜色类全是死的**:
+ * border-primary、border-destructive、border-[任意色] 一律算成 var(--border) —— 输入框的
+ * 错误态画的是普通边框、选中态画的是普通边框,而没有任何地方会报错。 */
+@layer base {
+  * {
+    box-sizing: border-box;
+    border-color: var(--border);
+  }
 }
 
 html,

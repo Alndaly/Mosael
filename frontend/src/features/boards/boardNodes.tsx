@@ -123,8 +123,15 @@ export const SPAWNABLE_KINDS = ["image", "video", "audio", "note"] as const;
 function TypeLabel({ kind }: { kind: BoardItem["kind"] }) {
   const t = useI18n();
   const { icon: Icon, label } = KIND_META[kind];
+  //: **反着视口缩放** —— 标签跟着画布缩的话,它在屏幕上的高度一直在变,而上方那块操作条
+  //: 的间距是按屏幕像素算的(NodeToolbar 的 offset)。两者对不上的结果:拉远时标签越缩越小,
+  //: 操作条和节点之间的空当越拉越大,而下方的面板纹丝不动。
+  const zoom = useStore((state) => state.transform[2]) || 1;
   return (
-    <span className="pointer-events-none absolute -top-5 left-0 inline-flex items-center gap-1 text-ui-2xs text-muted-foreground">
+    <span
+      className="pointer-events-none absolute bottom-full left-0 inline-flex origin-bottom-left items-center gap-1 pb-1 text-ui-2xs text-muted-foreground"
+      style={{ transform: `scale(${1 / zoom})` }}
+    >
       <Icon size={11} /> {t(label)}
     </span>
   );

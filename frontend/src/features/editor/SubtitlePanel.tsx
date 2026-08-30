@@ -811,7 +811,9 @@ function SubtitleStyleControls({
             <StyleValue>{Math.round(s.font_size)}</StyleValue>
           </StyleRow>
           <StyleRow label={t("subColor")}>
-            <ColorSwatch value={s.color} onChange={(v) => patch({ color: v })} />
+            {/* 色块铺满这一行剩下的宽度 —— 一个 36px 的小方块漂在一整行空白里,读起来
+                像是这行没做完。加粗留在右端:它是另一个开关,不是这块颜色的一部分。 */}
+            <ColorSwatch value={s.color} onChange={(v) => patch({ color: v })} grow />
             <span className="ml-auto shrink-0 whitespace-nowrap text-xs text-muted-foreground">{t("subBold")}</span>
             <Switch checked={s.bold} onCheckedChange={(v) => patch({ bold: v })} />
           </StyleRow>
@@ -821,7 +823,7 @@ function SubtitleStyleControls({
               一个控件如果需要用户猜它管什么,那它就还没做完。 */}
           <StyleGroup label={t("subGroupBackplate")} />
           <StyleRow label={t("subBg")}>
-            <ColorSwatch value={s.bg_color} onChange={(v) => patch({ bg_color: v })} />
+            <ColorSwatch value={s.bg_color} onChange={(v) => patch({ bg_color: v })} grow />
             {/* 不透明度归零就是「没有衬底」—— 说出来,免得用户以为自己把颜色调错了。 */}
             <span className="ml-auto shrink-0 whitespace-nowrap text-xs text-muted-foreground">
               {s.bg_opacity <= 0.001 ? t("subBgNone") : ""}
@@ -844,7 +846,7 @@ function SubtitleStyleControls({
           <StyleGroup label={t("subGroupPlacement")} />
           <StyleRow label={t("subPosition")}>
             <Select value={s.position} onValueChange={(v) => patch({ position: v as SubtitleStyle["position"] })}>
-              <SelectTrigger className="h-7 w-auto min-w-24 text-xs">
+              <SelectTrigger className="h-7 w-full text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -898,11 +900,14 @@ function StyleValue({ children }: { children: React.ReactNode }) {
   return <em className="min-w-[30px] shrink-0 text-right text-xs not-italic tabular-nums text-muted-foreground">{children}</em>;
 }
 
-function ColorSwatch({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function ColorSwatch({ value, onChange, grow }: { value: string; onChange: (v: string) => void; grow?: boolean }) {
   return (
     <input
       type="color"
-      className="h-7 w-9 shrink-0 cursor-pointer rounded-lg border border-input bg-transparent p-0.5 [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0"
+      className={cn(
+        "h-7 cursor-pointer rounded-lg border border-input bg-transparent p-0.5 [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0",
+        grow ? "min-w-0 flex-1" : "w-9 shrink-0",
+      )}
       value={value}
       onChange={(e) => onChange(e.target.value)}
     />

@@ -904,8 +904,13 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
 
             **颜色不跟应用主题走。** 监视器这块底是恒定深色的(画面要在中性底上看),所以
             这里和下面的走带条用同一套写死的浅灰/白 —— 跟主题走的话,浅色模式下就是深字
-            压在深底上,一个字都看不清。分割线同理:用一道极淡的白,而不是主题的 border。 */}
-        <div className="flex items-center gap-1 border-b border-white/10 px-2 py-1 [&_button]:text-[#c6cbd2] [&_button:hover]:bg-white/10 [&_button:hover]:text-white">
+            压在深底上,一个字都看不清。
+
+            分割线写成 `border-b-[color:…]` 而不是 `border-white/10`:这个项目用的是自定义
+            色板,**没有 `white` 这个色阶**,那条类根本不会生成 —— 于是边框退回 preflight 的
+            主题色(浅色模式下是一条不透明的浅灰),看着又粗又亮。加 `color:` 前缀是因为
+            `border-b-[…]` 的方括号里放长度会被当成边框宽度。 */}
+        <div className="flex items-center gap-1 border-b border-b-[color:rgb(255_255_255/0.08)] px-2 py-1 [&_button]:text-[#c6cbd2] [&_button:hover]:bg-[rgb(255_255_255/0.08)] [&_button:hover]:text-white">
           <Button
             variant="ghost"
             size="sm"

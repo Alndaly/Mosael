@@ -90,7 +90,9 @@ export function PluginMarket({ onInstalled }: { onInstalled: () => void }) {
             variant="outline"
             size="sm"
             disabled={!url.trim()}
-            loading={preview.isPending}
+            //: **只认自己那一条 URL。** 光看 isPending 的话,市场里任何一张卡片在预览,
+            //: 这个按钮都会跟着转 —— 用户按的是那边,转的是这边。
+            loading={preview.isPending && preview.variables === url.trim()}
             onClick={() => preview.mutate(url.trim())}
           >
             <Download size={13} />

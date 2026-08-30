@@ -390,8 +390,12 @@ function WfNode({ data, selected }: NodeProps) {
         <>
           <Handle id="true" type="source" position={Position.Right} className={cn("h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-border-strong! bg-panel! transition-[border-color,transform] duration-100 after:absolute after:-inset-[7px] after:rounded-full after:content-[''] hover:border-primary! group-hover/node:border-primary! [&.react-flow\_\_handle-left:hover]:[transform:translate(-50%,-50%)_scale(1.35)]! [&.react-flow\_\_handle-right:hover]:[transform:translate(50%,-50%)_scale(1.35)]!", "border-[#16a34a]!", selected && "border-primary!")} style={{ top: "32%" }} />
           <Handle id="false" type="source" position={Position.Right} className={cn("h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-border-strong! bg-panel! transition-[border-color,transform] duration-100 after:absolute after:-inset-[7px] after:rounded-full after:content-[''] hover:border-primary! group-hover/node:border-primary! [&.react-flow\_\_handle-left:hover]:[transform:translate(-50%,-50%)_scale(1.35)]! [&.react-flow\_\_handle-right:hover]:[transform:translate(50%,-50%)_scale(1.35)]!", "border-[#e11d48]!", selected && "border-primary!")} style={{ top: "68%" }} />
-          <span className="pointer-events-none absolute -right-5 top-[calc(32%-7px)] text-[9px] font-semibold text-[#16a34a]">真</span>
-          <span className="pointer-events-none absolute -right-5 top-[calc(68%-7px)] text-[9px] font-semibold text-[#e11d48]">假</span>
+          {/* 真/假走 i18n:英文界面下这两个字此前还是中文 —— 它们贴在连线端点上,是整张图里
+              最该看懂的两个词。 */}
+          {/* **锚左边缘,不是右边缘。** `-right-5` 钉的是文字的右边,于是文字一变长就往左长 ——
+              中文「真/假」两个字时看着还行,换成 True/False 就压在连接点上了。 */}
+          <span className="pointer-events-none absolute left-full top-[calc(32%-7px)] ml-2 whitespace-nowrap text-ui-2xs font-semibold text-[#16a34a]">{t("wfBranchTrue")}</span>
+          <span className="pointer-events-none absolute left-full top-[calc(68%-7px)] ml-2 whitespace-nowrap text-ui-2xs font-semibold text-[#e11d48]">{t("wfBranchFalse")}</span>
         </>
       ) : (
         <Handle type="source" position={Position.Right} className={cn("h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-border-strong! bg-panel! transition-[border-color,transform] duration-100 after:absolute after:-inset-[7px] after:rounded-full after:content-[''] hover:border-primary! group-hover/node:border-primary! [&.react-flow\_\_handle-left:hover]:[transform:translate(-50%,-50%)_scale(1.35)]! [&.react-flow\_\_handle-right:hover]:[transform:translate(50%,-50%)_scale(1.35)]!", selected && "border-primary!")} style={{ top: 22 }} />
@@ -1946,7 +1950,9 @@ function WorkflowEditor({
         {/* 工作流图标去掉了:左边导航栏里那一格已经亮着"工作流",顶上再画一次是同一句话说两遍,
             而这一格真正要回答的是"**哪一个**工作流"。 */}
         <button type="button" className="inline-flex cursor-pointer items-center rounded-full border-0 bg-transparent px-1.5 py-[3px] text-left text-ui-md font-semibold text-foreground hover:bg-secondary" onClick={() => setRenaming(true)} title={t("rename")}>
-          <span className="grid leading-[1.3] [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:text-ui-md">
+          {/* strong 的浏览器默认字重是 bolder(700),会**压过**外面的 font-semibold(600)——
+              于是这块标题比创意画板左上角那块明显更粗,而两者是同一类东西。显式钉回 600。 */}
+          <span className="grid leading-[1.3] [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:text-ui-md [&_strong]:font-semibold">
             <strong>{workflow.name}</strong>
             {/* 保存状态只放工具栏的 wf-save-status:标题里再挂一行「未保存」会随每次
                 拖动→自动保存增删一行,撑动整条工具栏导致画布跳一下(闪烁)。 */}
@@ -2245,7 +2251,9 @@ function WorkflowEditor({
         {/* 从访达直接把视频/图片拖进画布:先进素材库,再在**落点**放一个「素材」节点。
             省掉「先去素材页上传 → 回来找那个 id」那一圈。 */}
         <div
-          className="relative min-h-0 overflow-hidden rounded-lg border border-border bg-panel"
+          //: 底色和创意画板那张画布同一个(bg-background)—— 两者都是「摊开东西的地方」,
+          //: 而 bg-panel 是「一块面板」。用两种底色的话,在两页之间切换会觉得走进了另一个应用。
+          className="relative min-h-0 overflow-hidden rounded-lg border border-border bg-background"
           {...canvasDrop.handlers}
           onDrop={(event) => {
             // 落点要在这一刻算 —— 只有事件里才有鼠标位置。存进 ref 给上面那个回调用。
@@ -2810,7 +2818,9 @@ function LoopBodyEditor({
 
   return (
     // 工具条和主编辑器一样浮在画布上 —— 子图也是画布,没有理由这里就顶一条实心横带。
-    <div className="absolute inset-0 z-30 grid overflow-hidden rounded-lg border border-border bg-panel">
+    //: 底色用 bg-background,和创意画板那张画布同一个 —— 画布是「摊开东西的地方」,
+    //: 而 bg-panel 是「一块面板」;两种画布用两种底色,切过去时会觉得走进了另一个应用。
+    <div className="absolute inset-0 z-30 grid overflow-hidden rounded-lg border border-border bg-background">
       <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex flex-wrap items-start justify-between gap-2 [&>*]:pointer-events-auto">
         <div className="flex items-center gap-1 rounded-full border border-border bg-panel/95 p-1 pr-2.5 shadow-[var(--shadow-panel)] backdrop-blur">
           <Button
@@ -2824,7 +2834,9 @@ function LoopBodyEditor({
             <ArrowLeft size={16} />
           </Button>
           <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-border" />
-          <span className="inline-flex items-center gap-[5px] text-ui-sm font-semibold text-foreground">
+          {/* 字号字重和创意画板左上角那块一致(text-ui-md / semibold)—— 它们是同一类东西:
+              「你现在在哪儿」。 */}
+          <span className="inline-flex items-center gap-[5px] text-ui-md font-semibold text-foreground">
             {loopNode.type === "subgraph" ? <Boxes size={13} /> : <Repeat size={13} />} {loopNode.name} ·{" "}
             {t(loopNode.type === "subgraph" ? "wfSubgraphBody" : "wfLoopBody")}
           </span>
@@ -3985,7 +3997,7 @@ function NodeInspector({
                   max={2}
                   step="0.1"
                   value={String(config.frequency_penalty ?? "")}
-                  placeholder="-2 到 2"
+                  placeholder={t("wfRangeMinus2To2")}
                   onChange={setTextConfig("frequency_penalty")}
                 />
               </div>
@@ -3997,7 +4009,7 @@ function NodeInspector({
                   max={2}
                   step="0.1"
                   value={String(config.presence_penalty ?? "")}
-                  placeholder="-2 到 2"
+                  placeholder={t("wfRangeMinus2To2")}
                   onChange={setTextConfig("presence_penalty")}
                 />
               </div>

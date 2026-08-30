@@ -12,6 +12,7 @@ import {
   Plus,
   RefreshCcw,
   Terminal,
+  Store,
   Trash2,
 } from "lucide-react";
 
@@ -29,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { ModalShell } from "@/components/app/modals";
 import { PluginMarket } from "@/features/plugins/PluginMarket";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -70,12 +72,15 @@ export function PluginsView() {
   // 选中的那一个**活过导航** —— 切走再回来还停在他刚才看的那条(见 lib/usePersistentTab)。
   // 它被删掉时自动回落到列表第一条,那正是下面这行本来就在做的事。
   const [selectedId, setSelectedId] = usePersistentSelection("plugins", list.map((item) => item.id));
-  const [tab, setTab] = usePersistentTab<"installed" | "market">("plugins-tab", "installed", ["installed", "market"]);
-  // 一个插件都没有时直接停在市场 —— 「已安装」那一栏这时没有任何可看的东西。
+  //: 市场是**去找新东西**,和「管理已经装了的」不是一件事。挤成同一栏的两个页签时,它得
+  //: 挤在那条几百像素宽的侧栏里 —— 一个用来浏览的列表被塞进了一个用来选中的列表的位置。
+  //: 现在它是头部的一个按钮 + 一张弹窗,宽度归它自己。
+  const [marketOpen, setMarketOpen] = React.useState(false);
+  //: 一个插件都没有时**自己把市场打开** —— 「已安装」那一栏这时只会说「你没有插件」,
+  //: 而那句话帮不上任何忙。只在「从有到无」这一刻弹一次:用户关掉之后不该再弹回来。
   const empty = packages.isSuccess && list.length === 0;
   React.useEffect(() => {
-    if (empty) setTab("market");
-    // 只在"从有到无"这一刻拨一次:用户之后自己切回「已安装」不该被拨回来。
+    if (empty) setMarketOpen(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empty]);
   const selected = list.find((item) => item.id === selectedId) ?? list[0] ?? null;
@@ -86,35 +91,22 @@ export function PluginsView() {
       <div className="relative grid min-h-0 flex-1 gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]"
         style={{ gridTemplateColumns: `${sidebar.width}px minmax(0, 1fr)` }}>
         <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
-          {/* 「装什么」和「装了什么」是同一件事的两面,所以是同一栏的两个页签,不是两个页面。
-              空插件目录时默认停在市场 —— 一个只会说「你没有插件」的空态帮不上任何忙。 */}
           <div className="flex min-h-10 items-center justify-between border-b border-border px-3">
-            {/* 页签的 px-1.5 是 hover 背景的形状,不该去掉;但它让首个页签的**文字**比右侧
-                那个圆钮的边框多缩进 6px —— 一行两头的视觉边距不一样。这里**不抵**:
-                量过之后左 13 / 右 13 —— 页签的 px-1.5 正好补上"文字比边框虚"的那一点,
-                两头看起来是齐的。抵掉反而变成左 7 / 右 13。 */}
-            <span className="flex items-center gap-0.5 text-ui-xs font-semibold uppercase tracking-[0.06em]">
-              {(["installed", "market"] as const).map((one) => (
-                <button
-                  key={one}
-                  type="button"
-                  className={cn(
-                    "cursor-pointer rounded-md border-0 bg-transparent px-1.5 py-1 transition-colors duration-100",
-                    tab === one ? "text-foreground" : "text-muted-foreground hover:text-foreground",
-                  )}
-                  onClick={() => setTab(one)}
-                >
-                  {one === "installed" ? t("installed") : t("pluginMarket")}
-                </button>
-              ))}
+            <span className="text-ui-xs font-semibold uppercase tracking-[0.06em] text-foreground">
+              {t("installed")}
             </span>
-            {tab === "installed" && <ScanButton pending={scan.isPending} onScan={() => scan.mutate()} />}
+            <span className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1 px-2 text-ui-2xs"
+                onClick={() => setMarketOpen(true)}
+              >
+                <Store size={12} /> {t("pluginMarket")}
+              </Button>
+              <ScanButton pending={scan.isPending} onScan={() => scan.mutate()} />
+            </span>
           </div>
-          {tab === "market" ? (
-            <div className="min-h-0 overflow-y-auto">
-              <PluginMarket onInstalled={() => invalidatePlugins(qc)} />
-            </div>
-          ) : (
           <div className="grid content-start gap-1 overflow-y-auto p-1.5 max-[880px]:order-1 max-[880px]:flex max-[880px]:min-w-0 max-[880px]:flex-1 max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:overflow-x-auto max-[880px]:p-0">
             {packages.isLoading &&
               list.length === 0 &&
@@ -154,10 +146,22 @@ export function PluginsView() {
               </p>
             )}
           </div>
-          )}
         </aside>
         {/* 边缘拖动 —— 和剪辑页同一套(lib/useResizableSidebar)。 */}
         <div {...sidebar.handleProps} />
+
+      {/* 市场:**一张弹窗,宽度归它自己** —— 挤在侧栏里时,一个用来浏览的列表被塞进了
+          一个用来选中的列表的位置,每张卡片的说明都要折成五行。 */}
+      <ModalShell
+        open={marketOpen}
+        onOpenChange={setMarketOpen}
+        title={t("pluginMarket")}
+        className="w-[720px] max-w-[92vw]"
+      >
+        <div className="max-h-[70vh] min-h-0 overflow-y-auto">
+          <PluginMarket onInstalled={() => invalidatePlugins(qc)} />
+        </div>
+      </ModalShell>
         {/* 右栏是**一块占满高度的面板**,内部滚动 —— 此前它跟着内容走,内容少时就是半截,
             左边是个完整的带边框面板、右边飘着一段,两边看着不像同一层东西。 */}
         <div className="grid min-h-0 min-w-0 content-start overflow-y-auto rounded-md border border-border bg-panel px-3 py-2.5 shadow-[var(--shadow-panel)]">
@@ -297,7 +301,9 @@ function PackageDetail({ pkg }: { pkg: PluginPackage }) {
           <p className="m-0 text-ui-xs leading-[1.55] text-muted-foreground">
             {(pkg.config_fields ?? []).length ? t("pluginNewConnectionDesc") : t("pluginNewConnectionSimple")}
           </p>
-          <div className="flex flex-wrap items-center gap-1.5">
+          {/* 字段**铺满这一行**,按钮跟在末尾。此前是 flex-wrap + 各自按内容宽度:只有一个
+              字段时,那一格就是一小块漂在一整行空白里,读起来像这块没做完。 */}
+          <div className="flex flex-wrap items-center gap-1.5 [&>*:not(:last-child)]:min-w-0 [&>*:not(:last-child)]:flex-1">
             {(pkg.config_fields ?? []).map((field) => (
               <FieldInput
                 key={field.key}
@@ -306,7 +312,7 @@ function PackageDetail({ pkg }: { pkg: PluginPackage }) {
                 onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))}
               />
             ))}
-            <Button size="sm" loading={createInstance.isPending} onClick={() => createInstance.mutate()}>
+            <Button className="shrink-0" size="sm" loading={createInstance.isPending} onClick={() => createInstance.mutate()}>
               <Plus size={13} /> {t("pluginAddConnection")}
             </Button>
           </div>
