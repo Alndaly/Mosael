@@ -17,6 +17,33 @@ app.commandLine.appendSwitch("disable-blink-features", "AutomationControlled");
 const BACKEND_PORT = Number(process.env.OPEN_STUDIO_BACKEND_PORT || 8800);
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
 const isDev = !app.isPackaged;
+// 打包产物冒烟由 CI 显式开启。结果写文件而不是只看退出码：壳、冻结后端、renderer
+// 任一层提前退出都可能同样得到 code 0，结构化结果才说得清实际走到了哪一步。
+const smokeResultPath = process.env.OPEN_STUDIO_SMOKE_TEST_RESULT || "";
+const isSmokeTest = Boolean(smokeResultPath);
+
+// 冒烟必须能和开发版/已安装版并行跑。Electron 的单实例锁跟 userData 目录绑定；如果继续
+// 使用真实用户目录，本机开着 Open Studio 时打包产物会在 requestSingleInstanceLock()
+// 这里提前退出，CI/本地测试都没有真正穿过后端启动与数据库升级这条 Seam。
+// 结果文件本来就在 mkdtemp 目录中，顺手把 userData 也隔离到同一个可回收目录。
+if (isSmokeTest) {
+  app.setPath("userData", path.join(path.dirname(smokeResultPath), "electron-user-data"));
+}
+
+function reportSmoke(result) {
+  if (!smokeResultPath) return;
+  try {
+    const fs = require("node:fs");
+    fs.mkdirSync(path.dirname(smokeResultPath), { recursive: true });
+    fs.writeFileSync(
+      smokeResultPath,
+      JSON.stringify({ packaged: app.isPackaged, version: app.getVersion(), ...result }, null, 2),
+      "utf8",
+    );
+  } catch (error) {
+    console.error("[smoke] 写结果失败:", error);
+  }
+}
 
 let backend = null;
 let quitting = false;
@@ -322,6 +349,7 @@ function buildAppMenu() {
 function createWindow() {
   const isMac = process.platform === "darwin";
   const win = new BrowserWindow({
+    show: !isSmokeTest,
     width: 1440,
     height: 900,
     minWidth: 980,
@@ -373,6 +401,16 @@ function createWindow() {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
     return { action: "deny" };
   });
+  if (isSmokeTest) {
+    win.webContents.once("did-finish-load", () => {
+      reportSmoke({ backendHealthy: true, rendererLoaded: true });
+      app.quit();
+    });
+    win.webContents.once("did-fail-load", (_event, code, description) => {
+      reportSmoke({ backendHealthy: true, rendererLoaded: false, error: `${code}: ${description}` });
+      app.exit(1);
+    });
+  }
   if (isDev) {
     win.loadURL(process.env.OPEN_STUDIO_FRONTEND_URL || "http://127.0.0.1:5173");
   } else {
@@ -461,6 +499,11 @@ function createWindow() {
 app.whenReady().then(async () => {
   const ready = await ensureBackend();
   if (!ready) {
+    reportSmoke({ backendHealthy: false, rendererLoaded: false, error: "backend did not become healthy" });
+    if (isSmokeTest) {
+      app.exit(1);
+      return;
+    }
     dialog.showErrorBox(
       "Open Studio backend failed to start",
       `The local backend did not become healthy on port ${BACKEND_PORT}. ` +
@@ -522,7 +565,7 @@ app.whenReady().then(async () => {
       return { error: error.message };
     }
   });
-  if (app.isPackaged) {
+  if (app.isPackaged && !isSmokeTest) {
     setTimeout(async () => {
       try {
         const info = await checkForUpdates();

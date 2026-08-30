@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
@@ -9,14 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
 from app.core.secrets_at_rest import EncryptedJSON, EncryptedText
-
-
-def new_id() -> str:
-    return uuid.uuid4().hex
-
-
-def now() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
+from app.db.model_base import new_id, now
 
 
 class Workspace(Base):
@@ -581,133 +573,10 @@ class Board(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 
-class PublishAccount(Base):
-    """发布目标账号(计划 §6.9 publish_accounts):platform 决定适配器,
-    config 是该平台的连接配置(目录路径 / webhook URL / 未来的 OAuth)。"""
-
-    __tablename__ = "publish_accounts"
-
-    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
-    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
-    #: 这是谁的。**不设外键**:账号被删时这份东西的归属仍然是审计信息,不该级联消失
-    #: (归属与共享见 domain/sharing)。
-    owner_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
-    # 组合(非合并):发布账号复用浏览器池档案的持久身份(分区/代理),自己只留发布语义
-    # (platform/config/binding_status…)。迁移时按同 partition 建档并回填(见 core/db 迁移)。
-    profile_id: Mapped[str | None] = mapped_column(
-        ForeignKey("browser_profiles.id", ondelete="SET NULL"), nullable=True
-    )
-    platform: Mapped[str] = mapped_column(String(40), nullable=False)
-    name: Mapped[str] = mapped_column(String(160), nullable=False)
-    config: Mapped[dict[str, Any]] = mapped_column(EncryptedJSON, nullable=False, default=dict)
-    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    # 该账号内嵌视图走的代理(矩阵防关联):http(s)://[user:pass@]host:port 或 socks5://host:port。
-    # 空 = 直连。执行器把它喂给该账号 session 分区的 setProxy。
-    proxy: Mapped[str | None] = mapped_column(String(300), nullable=True)
-    # 浏览器平台的登录态(老版 BINDING_STATUSES):unknown/checking/bound/login_required/...
-    binding_status: Mapped[str] = mapped_column(String(40), nullable=False, default="unknown")
-    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    # 登录检测时执行器回写的平台侧昵称(矩阵运营:一眼分清哪个号)。
-    profile_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+from app.db.model_slices.publish import PublishAccount, PublishTask  # noqa: E402,F401
 
 
-class PublishTask(Base):
-    """一次发布(计划 §6.9 publish_tasks):成片素材 + 文案元数据 + 目标账号,
-    执行状态挂在任务总线 job 上。"""
-
-    __tablename__ = "publish_tasks"
-
-    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
-    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
-    account_id: Mapped[str] = mapped_column(ForeignKey("publish_accounts.id", ondelete="CASCADE"), nullable=False)
-    asset_id: Mapped[str] = mapped_column(ForeignKey("assets.id", ondelete="CASCADE"), nullable=False)
-    title: Mapped[str] = mapped_column(String(300), nullable=False, default="")
-    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    tags: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
-    # 视频号等平台的短标题;浏览器平台任务的富状态(老版 TASK_STATUSES 词汇)。
-    short_title: Mapped[str] = mapped_column(String(80), nullable=False, default="")
-    #: 平台自己的发布选项(可见性、允许评论…)。取值范围由 domain/publish.PLATFORM_OPTIONS 定义并校验;
-    #: 建任务时就收敛成完整字典(补默认值),执行器直接消费,不必再猜"没写这个键是什么意思"。
-    options: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    status: Mapped[str] = mapped_column(String(40), nullable=False, default="pending")
-    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    screenshot_path: Mapped[str | None] = mapped_column(Text, nullable=True)
-    job_id: Mapped[str | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
-
-
-class BrowserProfile(Base):
-    """浏览器池档案:一个可复用的持久登录身份 = 持久分区(cookie/登录)+ 代理 + 元数据。
-
-    不再只服务自媒体发布:任何需要登录态的站点都能存一个可复用档案(通用池)。
-    - 发布账号 = 挂了平台的档案(PublishAccount.profile_id 指过来);
-    - 通用档案 = 不挂平台,工作流 / 智能体可复用其登录态。
-    分区:通用档案 persist:pool-<id>;从发布账号迁移来的沿用 persist:openstudio-<accountId>(保住登录)。
-    租约:一个档案同一时刻只允许一个活动会话(见 domain/browser.open_session)。"""
-
-    __tablename__ = "browser_profiles"
-
-    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
-    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
-    #: 这是谁的。**不设外键**:账号被删时这份东西的归属仍然是审计信息,不该级联消失
-    #: (归属与共享见 domain/sharing)。
-    owner_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
-    name: Mapped[str] = mapped_column(String(160), nullable=False, default="")
-    partition: Mapped[str] = mapped_column(String(120), nullable=False, default="")
-    proxy: Mapped[str | None] = mapped_column(String(300), nullable=True)
-    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
-
-
-class BrowserSession(Base):
-    """一个隔离的自动化浏览器会话(RPA 节点 / 智能体 / 手动)。
-
-    分区(partition)决定 cookie/storage 归属:
-    - 临时会话:ephemeral-<id>(无 persist: 前缀 → 内存态,关闭即清)
-    - 具名持久会话:persist:rpa-<name>(保留登录,供重复自动化)
-    - 池档案会话:profile_id 指向 BrowserProfile,partition 沿用该档案分区(可为发布登录的
-      persist:openstudio-<accountId>)——「接入浏览器池」正是有意打通这条,受租约 + 显式授权约束。"""
-
-    __tablename__ = "browser_sessions"
-
-    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
-    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
-    kind: Mapped[str] = mapped_column(String(16), nullable=False, default="ephemeral")  # ephemeral | named | profile
-    name: Mapped[str] = mapped_column(String(80), nullable=False, default="")  # 具名会话名
-    partition: Mapped[str] = mapped_column(String(120), nullable=False, default="")
-    profile_id: Mapped[str | None] = mapped_column(
-        ForeignKey("browser_profiles.id", ondelete="SET NULL"), nullable=True
-    )  # 池档案会话:指向 BrowserProfile;临时/具名会话为 NULL
-    owner_kind: Mapped[str] = mapped_column(String(16), nullable=False, default="manual")  # agent | workflow | manual
-    owner_id: Mapped[str | None] = mapped_column(String(64), nullable=True)  # agent_session_id / workflow job id
-    status: Mapped[str] = mapped_column(String(16), nullable=False, default="open")  # open | closed
-    last_url: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
-
-
-class BrowserAction(Base):
-    """浏览器会话上的一个待执行动作(navigate/click/input/extract/…)。调用方入队后阻塞轮询到
-    终态(见 domain/browser.run_action);Electron 浏览器 worker 认领→执行→回报。"""
-
-    __tablename__ = "browser_actions"
-    __table_args__ = (Index("idx_browser_actions_status_created", "status", "created_at"),)
-
-    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
-    session_id: Mapped[str] = mapped_column(ForeignKey("browser_sessions.id", ondelete="CASCADE"), nullable=False)
-    workspace_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
-    action: Mapped[str] = mapped_column(String(32), nullable=False)
-    args: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    status: Mapped[str] = mapped_column(String(16), nullable=False, default="queued")  # queued | running | done | failed
-    result: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+from app.db.model_slices.browser import BrowserAction, BrowserProfile, BrowserSession  # noqa: E402,F401
 
 
 class ProviderProfile(Base):
@@ -1406,7 +1275,5 @@ class PluginInvocation(Base):
     output: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
-
-
 
 

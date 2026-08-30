@@ -6,11 +6,20 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from app.ai.providers.base import FIRST_FRAME, SOURCE_ROLES
-
-
-class OrmModel(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+from app.api.schemas.base import OrmModel
+from app.api.schemas.browser import BrowserProfileCreate, BrowserProfileOut, BrowserProfileUpdate
+from app.api.schemas.publish import (
+    PublishAccountCreate,
+    PublishAccountOut,
+    PublishAccountUpdate,
+    PublishCopyRequest,
+    PublishCopyResponse,
+    PublishCreate,
+    PublishOptionChoice,
+    PublishOptionSpec,
+    PublishPlatformOut,
+    PublishTaskOut,
+)
 
 class AuthCredentials(BaseModel):
     username: str = Field(min_length=2, max_length=80)
@@ -1808,141 +1817,6 @@ class WorkflowAiEditRequest(BaseModel):
 class WorkflowAiEditResponse(BaseModel):
     graph: dict
     summary: str = ""
-
-
-class BrowserProfileOut(BaseModel):
-    id: str
-    workspace_id: str
-    name: str
-    partition: str
-    proxy: str | None = None
-    enabled: bool
-    last_used_at: datetime | None = None
-    created_at: datetime
-    # 若被发布账号绑定,回其平台/账号 id + 登录态(浏览器池页据此标注「发布账号」并显示登录状态、
-    # 复用登录/复检动作);通用档案这些为 None。
-    platform: str | None = None
-    bound_account_id: str | None = None
-    binding_status: str | None = None
-    last_checked_at: datetime | None = None
-    last_error: str | None = None
-    # 归属:是不是我的、有没有被放进当前工作区(见 domain/sharing)。只有主人能改共享状态。
-    is_mine: bool = True
-    shared: bool = False
-
-
-class BrowserProfileCreate(BaseModel):
-    workspace_id: str
-    name: str = Field(min_length=1, max_length=160)
-    proxy: str | None = None
-
-
-class BrowserProfileUpdate(BaseModel):
-    name: str | None = Field(default=None, max_length=160)
-    proxy: str | None = None
-    enabled: bool | None = None
-
-
-class PublishOptionChoice(BaseModel):
-    value: str
-    label: str
-
-
-class PublishOptionSpec(BaseModel):
-    """一个平台专属发布选项的声明。**前端照它渲染控件,后端照它校验** —— 只有这一份。"""
-
-    key: str
-    label: str
-    type: Literal["enum", "bool"]
-    default: Any
-    choices: list[PublishOptionChoice] = Field(default_factory=list)
-    description: str = ""
-
-
-class PublishPlatformOut(BaseModel):
-    platform: str
-    label: str
-    description: str
-    config: dict
-    title_max: int = 300
-    short_title: bool = False
-    #: 该平台自己的发布选项声明(可见性…)。前端照它渲染控件,别处不硬编码。
-    options: list[PublishOptionSpec] = Field(default_factory=list)
-
-
-class PublishAccountCreate(BaseModel):
-    workspace_id: str
-    platform: str = Field(min_length=1, max_length=40)
-    name: str = Field(min_length=1, max_length=160)
-    config: dict = Field(default_factory=dict)
-    proxy: str | None = Field(default=None, max_length=300)
-
-
-class PublishAccountUpdate(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=160)
-    config: dict | None = None
-    enabled: bool | None = None
-    # 空串 = 清除代理走直连;None = 不改。
-    proxy: str | None = Field(default=None, max_length=300)
-
-
-class PublishAccountOut(OrmModel):
-    id: str
-    workspace_id: str
-    platform: str
-    name: str
-    config: dict
-    enabled: bool
-    proxy: str | None = None
-    binding_status: str = "unknown"
-    last_error: str | None = None
-    last_checked_at: datetime | None = None
-    profile_name: str | None = None
-    created_at: datetime
-
-
-class PublishCreate(BaseModel):
-    workspace_id: str
-    account_id: str
-    asset_id: str
-    title: str = Field(default="", max_length=300)
-    description: str = Field(default="", max_length=5000)
-    tags: list[str] = Field(default_factory=list, max_length=24)
-    short_title: str = Field(default="", max_length=80)
-    #: 平台自己的发布选项(可见性等)。取值范围由 domain/publish.PLATFORM_OPTIONS 校验 —— 不认识的键
-    #: 会 422,而不是被静默丢掉(那会让用户以为自己设了公开、发出来却是私享)。
-    options: dict[str, Any] = Field(default_factory=dict)
-
-
-class PublishTaskOut(BaseModel):
-    id: str
-    workspace_id: str
-    account_id: str
-    account_name: str
-    platform: str
-    asset_id: str
-    asset_name: str
-    title: str
-    description: str
-    tags: list[str]
-    status: str
-    error: str | None
-    result: dict
-    job_id: str | None
-    created_at: datetime
-
-
-class PublishCopyRequest(BaseModel):
-    workspace_id: str
-    asset_id: str | None = None
-    brief: str = Field(default="", max_length=2000)
-    profile_id: str | None = None
-
-
-class PublishCopyResponse(BaseModel):
-    title: str
-    description: str
-    tags: list[str]
 
 
 class AgentSessionCreate(BaseModel):

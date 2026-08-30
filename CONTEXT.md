@@ -96,7 +96,7 @@ _Avoid_: 把「预览和导出不一样」一概当 bug——调色的不一样�
 ### 数据
 
 **数据归属**:
-每张表归一个领域模块所有,行创建只发生在拥有方(`app/domain/ownership.py`);跨领域需要新行时调用拥有方的领域函数。
+每张表归一个领域模块所有,行创建只发生在拥有方(`app/domain/ownership.py`);跨领域需要新行时调用拥有方的领域函数。ORM / schema / 前端 client 可以按领域切片以获得 locality，但切片是实现细节；`app.db.models` / `app.api.schemas` / `@/api/client` 是统一装配入口。
 
 **归属棘轮**:
 `tests/test_data_ownership_ratchet.py`:存量越界冻结在 allowlist 只减不增;新增越界与修复后未删条目都会失败。
@@ -173,7 +173,15 @@ _Avoid_: 把能力挂在连接上(同一端点常常既有对话模型也有生�
 
 **能力默认(ProviderDefault)**:
 每种能力(chat / image / video / tts / podcast / embedding)指向**一行模型**,不是一个档案。
-指向失效时回落"该能力下第一个可用模型",而不是报未配置。
+只认这个人显式设的那一行;没有或指向失效就返回未配置,不替他静默挑别的模型。
+
+**执行面(execution surface)**:
+能力回答“模型会什么”,执行面回答“这次调用经哪个 Adapter”。`agent` 走 pi Adapter,API Key 与 OAuth
+订阅都能用;`direct` 走后端 OpenAI-compatible Adapter,只列有 `base_url` 的 API Key 连接。画板写作、
+工作流 LLM、独立素材分析属于 `direct`;AI Studio 智能体属于 `agent`。选择器必须同时按能力和执行面过滤,
+不能因为两边都叫 `chat` 就把 OAuth 模型交给后端直连。支持视觉的智能体模型直接接收当前消息图片;
+文本模型以及视频/音频仍通过 `analyze_asset` 工具处理。
+_Avoid_: 用 capability 代替执行通道;把“只能由 pi 使用”的订阅模型列进画板/工作流
 
 **vendor 预设**:
 `app/domain/providers.py` 声明某个 vendor 支持哪些能力、设置页要收集哪些 `fields`、支持哪些鉴权方式。
@@ -198,7 +206,7 @@ _Avoid_: 在某一条调用路径里手写重试循环
 - 每张表有且只有一个**数据归属**领域;**归属棘轮**守护它
 - **用量台账**从任务总线、智能体、生成执行器接收事实,不反向决定业务是否成功
 - 一个**连接**有 0..n 个**模型**;**能力默认**指向一行**模型**;**vendor 预设**只在模型没声明能力时兜底
-- 能力的实际 HTTP/SDK 差异由该能力自己的 Adapter 接缝负责,不由**连接**或**模型**表达
+- 能力的实际 HTTP/SDK 差异由 Adapter 接缝与**执行面**负责,不由**连接**或**模型**表达
 - **上下文预算**由所选**模型**的窗口决定;超过阈值触发**上下文整理**;**思考档位**是会话属性,与模型无关
 
 ## Example dialogue

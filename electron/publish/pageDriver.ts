@@ -1,3 +1,9 @@
+/**
+ * Platform-neutral browser capability module.
+ *
+ * It knows navigation, DOM inspection, trusted input, files, cookies, diagnostics and capture.
+ * Platform URLs, selectors, wording and publishing state machines belong to Adapter modules.
+ */
 import type { NativeImage, WebContents } from "electron";
 import { writeFile } from "node:fs/promises";
 

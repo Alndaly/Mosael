@@ -1,58 +1,9 @@
 import type { components } from "@/api/generated/schema";
-import { humanError } from "@/api/errorMessage";
+import { API_BASE, api, getAuthToken } from "@/api/transport";
 
-// 服务器可切换(团队模式铺垫):默认本机后端,localStorage 记住自定义地址。
-// 切换后整页 reload,让所有模块用新地址重新初始化;换服务器后原 token 失效
-// 会命中 401 → 自动回到登录页。
-const SERVER_KEY = "openstudio.server.url";
-export const DEFAULT_API_BASE = "http://127.0.0.1:8800";
-export const API_BASE = (
-  typeof window === "undefined" ? DEFAULT_API_BASE : window.localStorage.getItem(SERVER_KEY) || DEFAULT_API_BASE
-).replace(/\/+$/, "");
-
-export function setServerUrl(url: string | null): void {
-  if (url && url.replace(/\/+$/, "") !== DEFAULT_API_BASE) {
-    window.localStorage.setItem(SERVER_KEY, url.replace(/\/+$/, ""));
-  } else {
-    window.localStorage.removeItem(SERVER_KEY);
-  }
-}
-
-export function isCustomServer(): boolean {
-  return API_BASE !== DEFAULT_API_BASE;
-}
-
-const TOKEN_KEY = "openstudio.auth.token";
-let authToken: string | null = typeof window === "undefined" ? null : window.localStorage.getItem(TOKEN_KEY);
-let onUnauthorized: (() => void) | null = null;
-
-/** 当前界面语言。由 preferences 推进来(与 setAuthToken 同一个路子)——**client 不反向依赖界面层**。 */
-let apiLocale = "zh";
-
-export function setApiLocale(locale: string): void {
-  apiLocale = locale;
-}
-
-/** 请求**没送到**服务端(后端没起来、网线断了、机器刚唤醒)。和 4xx/5xx 不是一回事。 */
-export class ApiOfflineError extends Error {
-  readonly offline = true;
-}
-
-export function setAuthToken(token: string | null): void {
-  authToken = token;
-  if (typeof window !== "undefined") {
-    if (token) window.localStorage.setItem(TOKEN_KEY, token);
-    else window.localStorage.removeItem(TOKEN_KEY);
-  }
-}
-
-export function getAuthToken(): string | null {
-  return authToken;
-}
-
-export function setUnauthorizedHandler(handler: (() => void) | null): void {
-  onUnauthorized = handler;
-}
+export * from "@/api/transport";
+export * from "@/api/domains/browser";
+export * from "@/api/domains/publish";
 
 export type User = components["schemas"]["UserOut"] & {
   display_name: string;
@@ -69,7 +20,8 @@ export function uploadAvatar(file: File): Promise<User> {
 /** 头像 URL:<img> 带不了请求头,与素材文件同款 ?token= 鉴权;avatar_key 作 ?v= 破缓存。 */
 export function userAvatarUrl(userId: string, avatarKey: string | null | undefined): string {
   if (!avatarKey) return "";
-  const suffix = authToken ? `&token=${authToken}` : "";
+  const token = getAuthToken();
+  const suffix = token ? `&token=${token}` : "";
   return `${API_BASE}/api/auth/users/${userId}/avatar?v=${encodeURIComponent(avatarKey)}${suffix}`;
 }
 
@@ -360,7 +312,8 @@ export function dubSubtitles(
 }
 
 export function voiceSampleUrl(id: string): string {
-  const suffix = authToken ? `?token=${authToken}` : "";
+  const token = getAuthToken();
+  const suffix = token ? `?token=${token}` : "";
   return `${API_BASE}/api/voices/${id}/sample${suffix}`;
 }
 export function listTtsModels(): Promise<TtsEngine[]> {
@@ -396,56 +349,11 @@ export type PluginInstance = components["schemas"]["PluginInstanceOut"];
 export type PluginField = components["schemas"]["PluginFieldOut"];
 export type PluginToolState = components["schemas"]["PluginToolStateOut"];
 export type Workflow = components["schemas"]["WorkflowOut"];
-export type PublishPlatform = components["schemas"]["PublishPlatformOut"];
-export type PublishAccount = components["schemas"]["PublishAccountOut"];
-export type PublishTask = components["schemas"]["PublishTaskOut"];
-export type PublishCopy = components["schemas"]["PublishCopyResponse"];
 export type WorkflowNodeType = components["schemas"]["WorkflowNodeTypeOut"];
 export type PluginTool = components["schemas"]["PluginToolOut"];
 export type PluginInvocation = components["schemas"]["PluginInvocationOut"];
 export type PluginPermissionGrant = components["schemas"]["PluginPermissionGrantOut"];
 export type PluginCredential = components["schemas"]["PluginCredentialOut"];
-
-export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  // 客户端自报版本。后端知道的是**它自己**那个进程的版本 —— 分布式部署里每个人跑的壳可以
-  // 各不相同,而"某人还停在旧版"正是管理员要看的:它解释了为什么只有他撞得到那个早修好的 bug。
-  const auth: Record<string, string> = {
-    "X-Open-Studio-Client": __APP_VERSION__,
-    // 界面语言随每个请求带上:后端也有自己要翻的文案(平台说明、发布选项、引擎目录…),而它是
-    // 多租户、可远程部署的 —— 没有"服务端语言"这回事,只有"这个请求是谁发的、他看哪种语言"。
-    // 放在这一处而不是各调用点各带一次:漏一处就是那一屏突然变回另一种语言。
-    "Accept-Language": apiLocale,
-    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-  };
-  const headers =
-    init?.body instanceof FormData
-      ? { ...auth, ...(init?.headers as Record<string, string> | undefined) }
-      : { "Content-Type": "application/json", ...auth, ...(init?.headers as Record<string, string> | undefined) };
-  let res: Response;
-  try {
-    res = await fetch(`${API_BASE}${path}`, { ...init, headers });
-  } catch (cause) {
-    //: **「连不上」和「服务端说不行」是两件事。** 混成一个错误的话,调用方只能一视同仁 ——
-    //: 而它们的正确反应正好相反:前者该等一会儿再试(后端可能正在重启),后者才是真的没权限。
-    //: 启动那条路上曾经就是混着的:后端一时没起来,前端把令牌删了、把人退出登录,
-    //: 而那个令牌完全有效、后端两秒后就回来了。
-    throw new ApiOfflineError(`${API_BASE} 连不上`, { cause });
-  }
-  if (res.status === 401 && !path.startsWith("/api/auth/")) {
-    onUnauthorized?.();
-    throw new Error("Not authenticated");
-  }
-  if (!res.ok) {
-    const body = await res.text();
-    // 开发者可在控制台追溯失败的后端调用;抛出的错误照常驱动界面 toast 给用户。
-    const method = (init?.method ?? "GET").toUpperCase();
-    // 控制台留全貌给开发者;抛给界面的只留后端写的那句人话(见 api/errorMessage)。
-    console.warn(`[api] ${method} ${path} → ${res.status} ${res.statusText}${body ? `: ${body}` : ""}`);
-    throw new Error(humanError(res.status, res.statusText, body));
-  }
-  if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
-}
 
 /** 桌面端把文件拖到应用图标上 / 「用 Open Studio 打开」:后端按本机绝对路径入库。
  *  只有桌面端自带的后端提供这个接口(团队服务器上 404)。 */
@@ -470,12 +378,21 @@ export async function importLocalAsset(workspaceId: string, path: string, projec
 
 export function assetFileUrl(assetId: string): string {
   // Media elements cannot send headers, so these URLs carry the token.
-  const suffix = authToken ? `?token=${authToken}` : "";
+  const token = getAuthToken();
+  const suffix = token ? `?token=${token}` : "";
   return `${API_BASE}/api/assets/${assetId}/file${suffix}`;
 }
 
+/** 图片显示用的全尺寸浏览器兼容版本。HEIC 等格式由后端按需派生 JPEG,原件仍走 assetFileUrl。 */
+export function assetPreviewUrl(assetId: string): string {
+  const token = getAuthToken();
+  const suffix = token ? `?token=${token}` : "";
+  return `${API_BASE}/api/assets/${assetId}/preview${suffix}`;
+}
+
 export function assetThumbnailUrl(assetId: string): string {
-  const suffix = authToken ? `?token=${authToken}` : "";
+  const token = getAuthToken();
+  const suffix = token ? `?token=${token}` : "";
   return `${API_BASE}/api/assets/${assetId}/thumbnail${suffix}`;
 }
 
@@ -494,13 +411,15 @@ export function grabSequenceFrame(sequenceId: string, at: number): Promise<Asset
 
 /** 剪辑面板用的帧条:整条片子均匀取几帧拼成的一张横向长图。按需生成、落盘缓存。 */
 export function assetFilmstripUrl(assetId: string): string {
-  const suffix = authToken ? `?token=${authToken}` : "";
+  const token = getAuthToken();
+  const suffix = token ? `?token=${token}` : "";
   return `${API_BASE}/api/assets/${assetId}/filmstrip${suffix}`;
 }
 
 /** The 720p preview proxy the WebCodecs compositor decodes (media_info.proxy_status === "ready"). */
 export function assetProxyUrl(assetId: string): string {
-  const suffix = authToken ? `?token=${authToken}` : "";
+  const token = getAuthToken();
+  const suffix = token ? `?token=${token}` : "";
   return `${API_BASE}/api/assets/${assetId}/proxy${suffix}`;
 }
 
@@ -988,8 +907,11 @@ export interface CapabilityModel {
   display_name: string;
 }
 
-export function listCapabilityModels(capability: string): Promise<CapabilityModel[]> {
-  return api<CapabilityModel[]>(`/api/settings/capability-models/${capability}`);
+export function listCapabilityModels(
+  capability: string,
+  surface: "all" | "agent" | "direct" = "all",
+): Promise<CapabilityModel[]> {
+  return api<CapabilityModel[]>(`/api/settings/capability-models/${capability}?surface=${surface}`);
 }
 
 export function deleteBoard(boardId: string, workspaceId: string): Promise<unknown> {
@@ -1070,55 +992,6 @@ export function clearReadNotifications(workspaceId: string): Promise<{ removed: 
   return api(`/api/notifications/read?workspace_id=${workspaceId}`, { method: "DELETE" });
 }
 
-export function listPublishPlatforms(): Promise<PublishPlatform[]> {
-  return api<PublishPlatform[]>("/api/publish/platforms");
-}
-
-export function listPublishAccounts(workspaceId: string): Promise<PublishAccount[]> {
-  return api<PublishAccount[]>(`/api/publish/accounts?workspace_id=${workspaceId}`);
-}
-
-export function createPublishAccount(body: {
-  workspace_id: string;
-  platform: string;
-  name: string;
-  config: Record<string, unknown>;
-  proxy?: string | null;
-}): Promise<PublishAccount> {
-  return api<PublishAccount>("/api/publish/accounts", { method: "POST", body: JSON.stringify(body) });
-}
-
-export function deletePublishAccount(accountId: string): Promise<unknown> {
-  return api(`/api/publish/accounts/${accountId}`, { method: "DELETE" });
-}
-
-export function patchPublishAccount(
-  accountId: string,
-  body: { name?: string; enabled?: boolean; proxy?: string | null },
-): Promise<PublishAccount> {
-  return api<PublishAccount>(`/api/publish/accounts/${accountId}`, { method: "PATCH", body: JSON.stringify(body) });
-}
-
-export function recheckPublishAccount(accountId: string): Promise<PublishAccount> {
-  return api<PublishAccount>(`/api/publish/accounts/${accountId}/recheck`, { method: "POST" });
-}
-
-// ---- 浏览器池:持久登录档案(发布账号 = 挂平台的档案;通用档案任意站点复用) ----
-
-export type BrowserProfile = components["schemas"]["BrowserProfileOut"];
-
-export function listBrowserProfiles(workspaceId: string): Promise<BrowserProfile[]> {
-  return api<BrowserProfile[]>(`/api/browser/profiles?workspace_id=${workspaceId}`);
-}
-
-export function createBrowserProfile(body: {
-  workspace_id: string;
-  name: string;
-  proxy?: string | null;
-}): Promise<BrowserProfile> {
-  return api<BrowserProfile>("/api/browser/profiles", { method: "POST", body: JSON.stringify(body) });
-}
-
 /** 把「我的东西」放进一个工作区,或者收回来。发布账号与它的浏览器档案会一起动(后端保证)。 */
 export function setResourceShared(
   kind: "publish_account" | "browser_profile" | "agent_session" | "generation_session" | "scheduled_task",
@@ -1130,47 +1003,6 @@ export function setResourceShared(
     method: shared ? "POST" : "DELETE",
     body: JSON.stringify({ workspace_id: workspaceId }),
   });
-}
-
-export function updateBrowserProfile(
-  profileId: string,
-  body: { name?: string; proxy?: string | null; enabled?: boolean },
-): Promise<BrowserProfile> {
-  return api<BrowserProfile>(`/api/browser/profiles/${profileId}`, { method: "PATCH", body: JSON.stringify(body) });
-}
-
-export function deleteBrowserProfile(profileId: string): Promise<unknown> {
-  return api(`/api/browser/profiles/${profileId}`, { method: "DELETE" });
-}
-
-export function listPublishTasks(workspaceId: string): Promise<PublishTask[]> {
-  return api<PublishTask[]>(`/api/publish/tasks?workspace_id=${workspaceId}`);
-}
-
-export function createPublishTask(body: {
-  workspace_id: string;
-  account_id: string;
-  asset_id: string;
-  title: string;
-  description: string;
-  tags: string[];
-  short_title?: string;
-  /** 平台自己的发布选项(可见性等)。键与取值由 /api/publish/platforms 的 options 声明,后端校验。 */
-  options?: Record<string, unknown>;
-}): Promise<PublishTask> {
-  return api<PublishTask>("/api/publish/tasks", { method: "POST", body: JSON.stringify(body) });
-}
-
-export function deletePublishTask(taskId: string): Promise<unknown> {
-  return api(`/api/publish/tasks/${taskId}`, { method: "DELETE" });
-}
-
-export function generatePublishCopy(body: {
-  workspace_id: string;
-  asset_id?: string | null;
-  brief?: string;
-}): Promise<PublishCopy> {
-  return api<PublishCopy>("/api/publish/copy", { method: "POST", body: JSON.stringify(body) });
 }
 
 export type WorkspaceSummary = components["schemas"]["WorkspaceSummaryOut"];
@@ -1324,6 +1156,7 @@ export function deleteFont(fontId: string): Promise<void> {
 
 export function fontFileUrl(fontId: string): string {
   // An @font-face url() sends no headers, so the token rides along like the other media URLs.
-  const suffix = authToken ? `?token=${authToken}` : "";
+  const token = getAuthToken();
+  const suffix = token ? `?token=${token}` : "";
   return `${API_BASE}/api/fonts/${fontId}/file${suffix}`;
 }
