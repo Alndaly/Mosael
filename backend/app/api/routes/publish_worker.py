@@ -12,8 +12,10 @@ from app.domain.publish import worker as publish_worker
 
 """桌面发布器 worker 通道(老版契约 1:1)。
 
-免登录鉴权:执行器是本机无 token 的 Electron 进程,后端只监听
-127.0.0.1 —— 与老版相同的信任边界。
+鉴权:执行器是本机无用户会话的 Electron 进程,凭启动时下发的共享密钥
+(X-Open-Studio-Worker-Key)通过 require_worker_key 校验 —— 只监听
+127.0.0.1 挡不住浏览器跨域 POST,密钥才是边界。见 app/core/worker_key.py;
+依赖在 main.py 挂路由时统一注入。
 """
 
 router = APIRouter(tags=["publish-worker"])
