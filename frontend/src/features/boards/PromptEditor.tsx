@@ -106,7 +106,8 @@ const KIND_LABEL: Record<string, MessageKey> = {
 /** 菜单里最多摆几条。再多就该靠打字缩范围,而不是滚一整屏。 */
 const LIMIT = 12;
 
-/** 正文里的素材 chip。`atom: true` 是关键 —— 没有它光标能走进标签内部,退格就咬半截。 */
+/** 正文里的素材引用。语义上仍是原子 chip，但视觉上是一段下划线文字：胶囊的 padding 会把
+ * 当前行撑高，连续放两三个时尤其像一排表单控件，而不是一句话。 */
 const AssetChip = Node.create({
   name: "assetRef",
   group: "inline",
@@ -128,14 +129,16 @@ const AssetChip = Node.create({
         as="span"
         data-asset-ref=""
         data-asset-id={String(node.attrs.assetId)}
-        className="inline-flex max-w-[180px] items-center gap-1 rounded-md bg-secondary px-1 py-0.5 align-baseline text-ui-2xs text-foreground"
+        className="inline-flex max-w-[180px] items-center gap-1 align-baseline leading-[inherit] text-foreground"
       >
         <img
           src={assetThumbnailUrl(String(node.attrs.assetId))}
           alt=""
-          className="h-3.5 w-3.5 shrink-0 rounded-[3px] object-cover"
+          className="h-[1em] w-[1em] shrink-0 rounded-[2px] object-cover"
         />
-        <span className="truncate">{String(node.attrs.name ?? "")}</span>
+        <span className="truncate underline decoration-muted-foreground/60 underline-offset-2">
+          {String(node.attrs.name ?? "")}
+        </span>
       </NodeViewWrapper>
     )),
 });

@@ -250,6 +250,8 @@ failed 错误色、cancelled 虚线弱化；即使节点已有旧产物，重跑
 `BoardItem.run`，不能只让提交按钮转圈。
 正文中的 `@` 引用还要把 TipTap JSON 存进 `form.prompt_document`；`prompt` 只是模型所需纯文本，
 `mentioned_asset_ids` 只说明引用了谁，两者都无法单独恢复 chip 在句子中的位置。
+引用在文档结构中仍是不可拆的 `assetRef` 原子节点，但视觉使用“等正文行高的小缩略图 + 下划线素材名”，
+不使用带背景和 padding 的胶囊；否则一行里的引用会改变行高和垂直居中。
 节点内的排队、运行和失败文案必须同时给内容 grid `min-w-0`、给文本 `overflow-wrap:anywhere`；供应商
 错误常带连续 URL/请求 ID，只做 `line-clamp` 会裁高度，却不会阻止长 token 把内容盒撑出节点宽度。
 
