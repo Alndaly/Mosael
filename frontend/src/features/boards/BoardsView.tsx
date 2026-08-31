@@ -37,6 +37,7 @@ import { SIDEBAR_HANDLE_CLASS, useResizableSidebar } from "@/lib/useResizableSid
 import { BoardCanvas, type BoardCanvasApi } from "@/features/boards/BoardCanvas";
 import { useAutosave } from "@/features/boards/useAutosave";
 import { AssetPickerDialog } from "@/features/boards/AssetPickerDialog";
+import { itemError, itemIsRunning, itemJobId } from "@/features/boards/boardItemState";
 
 /**
  * 创意画板:除了和智能体对话之外,另一条把想法摊开的路。
@@ -256,6 +257,7 @@ function BoardDetail({
       model?: string;
       parameters?: Record<string, unknown>;
       sourceAssets?: { asset_id: string; role: string }[];
+      form?: BoardItem["form"];
     }) => {
       const itemId = input.itemId ?? `${input.kind}-${Math.random().toString(36).slice(2, 9)}`;
       let placed;
@@ -271,6 +273,7 @@ function BoardDetail({
           model: input.model,
           parameters: input.parameters,
           source_assets: input.sourceAssets,
+          form: input.form,
         });
       } catch (error) {
         toast.error(t("boardsGenerateFailed"), { description: (error as Error).message });
@@ -281,8 +284,9 @@ function BoardDetail({
       //: 「点了没反应」,然后再点一次。
       //: 上一次的报错要一起清掉 —— 重来一次的时候还挂着上次为什么挂,用户会以为这次也挂了。
       const pending = ((placed.canvas?.items ?? []) as BoardItem[]).find((one) => one.id === itemId);
-      if (pending?.job_id) api?.patch(itemId, { job_id: pending.job_id, text: pending.text, error: undefined });
-      setRunning((current) => [...current, itemId]);
+      const jobId = pending ? itemJobId(pending) : undefined;
+      if (jobId) api?.patch(itemId, { form: pending?.form ?? input.form, run: { status: "running", job_id: jobId }, job_id: undefined, error: undefined });
+      setRunning((current) => (current.includes(itemId) ? current : [...current, itemId]));
     },
     [board.id, workspaceId, t, api],
   );
@@ -336,8 +340,9 @@ function BoardDetail({
       }
       //: 和生成那条一样:马上把这一格标成在跑,不然画布上看不出发生了什么。
       const pending = ((placed.canvas?.items ?? []) as BoardItem[]).find((one) => one.id === input.itemId);
-      if (pending?.job_id) api?.patch(input.itemId, { job_id: pending.job_id, text: pending.text, error: undefined });
-      setRunning((current) => [...current, input.itemId]);
+      const jobId = pending ? itemJobId(pending) : undefined;
+      if (jobId) api?.patch(input.itemId, { run: { status: "running", job_id: jobId }, job_id: undefined, error: undefined });
+      setRunning((current) => (current.includes(input.itemId) ? current : [...current, input.itemId]));
     },
     [board.id, workspaceId, api, t],
   );
@@ -396,6 +401,12 @@ function BoardDetail({
 
   //: 还在跑的那几格。**轮询而不是等** —— 生成要几十秒,而用户这期间还在画布上干别的。
   const [running, setRunning] = React.useState<string[]>([]);
+  // 重进画板、切走再回来、应用重启都不能丢掉轮询。运行状态住在节点里，因此直接从节点
+  // 恢复待观察列表，而不是依赖这个组件一次挂载期内的临时 state。
+  React.useEffect(() => {
+    const ids = (canvas?.items ?? board.canvas.items).filter(itemIsRunning).map((item) => item.id);
+    if (ids.length) setRunning((current) => Array.from(new Set([...current, ...ids])));
+  }, [board.id, board.canvas.items, canvas]);
   React.useEffect(() => {
     if (running.length === 0) return;
     const timer = setInterval(async () => {
@@ -409,13 +420,13 @@ function BoardDetail({
           settled.push(id);
         } else if (item.asset_id) {
           //: 产出到了:填上 asset_id,并把 job_id 摘掉 —— 两个都在的话画布不知道该画转圈还是画图。
-          api?.patch(id, { asset_id: item.asset_id, job_id: undefined });
+          api?.patch(id, { asset_id: item.asset_id, run: item.run ?? { status: "succeeded" }, job_id: undefined, error: undefined });
           settled.push(id);
-        } else if (item.error) {
+        } else if (itemError(item)) {
           //: **跑挂了也要落到画布上。** 此前这里只把 id 从「还在等」的名单里划掉,却没告诉
           //: 画布 —— 而画布的节点只在挂载时从 canvas 建一次,那一格于是永远带着 job_id:
           //: 框里一直转圈,底下那个提交按钮(busy 看的就是 job_id)也一直按不动。
-          api?.patch(id, { error: item.error, job_id: undefined });
+          api?.patch(id, { run: item.run ?? { status: "failed", error: itemError(item) }, job_id: undefined, error: undefined });
           settled.push(id);
         }
       }

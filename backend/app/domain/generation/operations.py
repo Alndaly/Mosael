@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.ai.providers import FIRST_FRAME, REFERENCE_IMAGE, SOURCE_ROLES, get_provider
 from app.domain.generation.catalog import SOURCE_ROLE_LABELS, known_capabilities_for
-from app.db.models import GenerationJob, GenerationSession, ProviderProfile, now
+from app.db.models import Asset, GenerationJob, GenerationSession, ProviderProfile, now
 from app.domain.jobs import create_job
 
 
@@ -49,6 +49,7 @@ def create_generation_job(
         raise GenerationDomainError(f"Generation adapter is not available for {provider}/{kind}")
 
     validate_against_capabilities(provider, model, kind, parameters, source_assets)
+    _validate_source_assets(db, workspace_id, source_assets)
 
     session = _resolve_session(db, workspace_id=workspace_id, session_id=session_id, prompt=prompt)
     request = {
@@ -89,6 +90,23 @@ def create_generation_job(
     db.refresh(generation)
     db.refresh(job)
     return generation, job
+
+
+def _validate_source_assets(db: Session, workspace_id: str, source_assets: list[dict[str, str]]) -> None:
+    """在创建任务前确认引用仍有效。
+
+    以前到 worker 真正下载/读取素材时才发现引用已删除或来自别的工作区。此时界面已经进入
+    loading，用户只得到一句没有素材名称的异步失败。同步拦截既不制造一个注定失败的任务，
+    也能明确告诉他该重新连接哪一个槽位。runner 仍会复查，以覆盖提交后被删除的竞态。
+    """
+    for entry in source_assets:
+        asset_id = str(entry.get("asset_id") or "").strip()
+        role = str(entry.get("role") or FIRST_FRAME)
+        asset = db.get(Asset, asset_id)
+        if asset is None or asset.workspace_id != workspace_id:
+            label = SOURCE_ROLE_LABELS.get(role, role)
+            short = f"（{asset_id[:12]}…）" if asset_id else ""
+            raise GenerationDomainError(f"{label}素材{short}已删除或不在当前工作区，请重新连接或选择")
 
 
 def _resolve_provider_profile(db: Session, provider_profile_id: str | None) -> ProviderProfile | None:

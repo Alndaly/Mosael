@@ -174,8 +174,8 @@ def test_图片视频项的三种状态都存得下() -> None:
             ]
         }
     )["items"]
-    assert "asset_id" not in empty and "job_id" not in empty
-    assert running["job_id"] == "j1"
+    assert "asset_id" not in empty and "run" not in empty
+    assert running["run"] == {"status": "running", "job_id": "j1"}
     assert done["asset_id"] == "abc"
 
 
@@ -196,7 +196,7 @@ def _pending_board(client, ws: str) -> tuple[str, str]:
 def test_正在生成的项可以没有素材() -> None:
     """「还没有」和「不该有」是两件事。前者要占着位置让用户看见"这儿在生成"。"""
     got = normalize_canvas({"items": [{"id": "g", "kind": "image", "x": 0, "y": 0, "job_id": "j1"}]})
-    assert got["items"][0]["job_id"] == "j1"
+    assert got["items"][0]["run"] == {"status": "running", "job_id": "j1"}
     assert "asset_id" not in got["items"][0]
 
 
@@ -248,7 +248,7 @@ def test_任务失败时留着这一项并写上原因() -> None:
     assert [one["id"] for one in items] == [item_id], "失败了却把这一项从画布上删了"
     failed = items[0]
     assert "job_id" not in failed, "任务已经结束了,job_id 还留着 —— 画布会一直转圈"
-    assert failed["error"] == "供应商说这个提示词不行"
+    assert failed["run"] == {"status": "failed", "error": "供应商说这个提示词不行"}
 
 
 def test_任务失败但没留下原因时不写空() -> None:
@@ -268,7 +268,7 @@ def test_任务失败但没留下原因时不写空() -> None:
     items = db.get(Board, board_id).canvas["items"]
     db.close()
 
-    assert items[0]["error"] == "failed"
+    assert items[0]["run"] == {"status": "failed", "error": "failed"}
 
 
 def test_跑挂了也留着连进来的那条线() -> None:
@@ -345,6 +345,58 @@ def test_客户端不会覆盖它还不知道的产出() -> None:
     assert "job_id" not in item
 
 
+def test_客户端不会把已经失败的节点重新写成_loading() -> None:
+    """失败回执与自动保存竞态时，服务端终态必须赢。"""
+    from types import SimpleNamespace
+
+    from app.core.db import SessionLocal
+    from app.domain.boards import deliver_generated, receipt_to_item
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id, item_id = _pending_board(client, ws)
+    stale = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]
+
+    with SessionLocal() as db:
+        deliver_generated(
+            db,
+            SimpleNamespace(id="job-x", status="failed", result=None, error="引用素材已删除"),
+            receipt_to_item(board_id, item_id),
+        )
+
+    got = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "canvas": stale}).json()
+    item = got["canvas"]["items"][0]
+    assert item["run"] == {"status": "failed", "error": "引用素材已删除"}
+    assert "job_id" not in item
+
+
+def test_媒体节点的原始表单和运行态各自存放() -> None:
+    canvas = normalize_canvas(
+        {
+            "items": [
+                {
+                    "id": "v1",
+                    "kind": "video",
+                    "x": 0,
+                    "y": 0,
+                    "form": {
+                        "prompt": "女孩跳舞",
+                        "provider": "bytedance",
+                        "model": "seedance",
+                        "parameters": {"duration_seconds": 9},
+                    },
+                    "run": {"status": "running", "job_id": "j1"},
+                }
+            ]
+        }
+    )
+    item = canvas["items"][0]
+    assert item["form"]["prompt"] == "女孩跳舞"
+    assert item["form"]["parameters"]["duration_seconds"] == 9
+    assert item["run"] == {"status": "running", "job_id": "j1"}
+    assert "text" not in item, "运行时提示词不应覆盖用户表单"
+
+
 def test_音频项和图片视频同一套三状态() -> None:
     """配音、旁白、BGM 都是想法的一部分 —— 画板上摊开的东西不该只有能看的。"""
     from app.domain.boards import ITEM_KINDS
@@ -397,8 +449,8 @@ def test_在已有的空槽上生成不会撞上自己() -> None:
 
     items = updated.canvas["items"]
     assert len(items) == 1, f"占位被追加成了第二份:{items}"
-    assert items[0]["job_id"] == "job-1"
-    assert items[0]["text"] == "一个女孩"
+    assert items[0]["run"] == {"status": "running", "job_id": "job-1"}
+    assert items[0]["form"]["prompt"] == "一个女孩"
     assert (items[0]["x"], items[0]["y"]) == (120, 80), "节点自己跳回了左上角"
     assert (items[0]["width"], items[0]["height"]) == (300, 200), "用户拉过的大小被抹掉了"
 

@@ -137,8 +137,17 @@ def generate(board_id: str, body: BoardGenerate, db: DbSession, user: CurrentUse
                 "kind": body.kind,
                 "x": body.x,
                 "y": body.y,
-                "job_id": job.id,
-                "text": body.prompt[:120],
+                "form": {
+                    **dict(body.form or {}),
+                    # 即使旧客户端没传 form，也只存请求中原始 prompt；新版会传真正的用户
+                    # 表单，运行时追加的图例不会再覆盖它。
+                    "prompt": str((body.form or {}).get("prompt") or body.prompt),
+                    "provider": provider,
+                    "model": model,
+                    "parameters": dict(body.parameters or {}),
+                    "source_assets": [one.model_dump() for one in (body.source_assets or [])],
+                },
+                "run": {"status": "running", "job_id": job.id},
             },
         )
     except BoardDomainError as exc:
@@ -291,7 +300,14 @@ def speak(board_id: str, body: BoardSpeak, db: DbSession, user: CurrentUser) -> 
             db,
             workspace_id=body.workspace_id,
             board_id=board_id,
-            item={"id": body.item_id, "kind": "audio", "x": body.x, "y": body.y, "job_id": job.id, "text": text[:120]},
+            item={
+                "id": body.item_id,
+                "kind": "audio",
+                "x": body.x,
+                "y": body.y,
+                "form": {"prompt": text, "voice_id": body.voice_id},
+                "run": {"status": "running", "job_id": job.id},
+            },
         )
     except BoardDomainError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -332,8 +348,8 @@ def trim(board_id: str, body: BoardTrim, db: DbSession, user: CurrentUser) -> Bo
                 "kind": asset.kind,
                 "x": body.x,
                 "y": body.y,
-                "job_id": job.id,
-                "text": f"截取 {body.start:.1f}-{body.end:.1f}s",
+                "form": {"parameters": {"start": body.start, "end": body.end, "mute": body.mute}},
+                "run": {"status": "running", "job_id": job.id},
             },
         )
     except BoardDomainError as exc:

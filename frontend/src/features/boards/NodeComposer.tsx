@@ -18,6 +18,7 @@ import {
   exclusiveSourceGroups,
   capabilityString,
   durationOptions,
+  durationRange,
   maxImages,
   sizeOptions,
   sourceLimit,
@@ -268,6 +269,7 @@ export function NodeComposer({
   upstream,
   upstreamTexts,
   workspaceId,
+  onFormChange,
 }: {
   item: BoardItem;
   /** 这种能力下可选的模型。空数组 = 还没配 —— 那时该说清楚,而不是给一个点了没反应的按钮。 */
@@ -279,7 +281,10 @@ export function NodeComposer({
     model: string;
     parameters: Record<string, unknown>;
     sourceAssets: { asset_id: string; role: string }[];
+    form: NonNullable<BoardItem["form"]>;
   }) => void;
+  /** 每一次编辑都写回节点，而不是留在面板组件的临时 state 里。 */
+  onFormChange: (form: NonNullable<BoardItem["form"]>) => void;
   /** 挂输入素材时开选择器 —— 和画布上「换一份」用的是同一个。 */
   onPickAsset: (kind: "image" | "video", place: (assetId: string) => void) => void;
   /** **连到这个节点上的上游产出**,按连线顺序。它们会自动挂进当前生成方式的槽位 ——
@@ -293,8 +298,11 @@ export function NodeComposer({
 }) {
   const t = useI18n();
   const { openImagePreview } = useImagePreview();
-  const [prompt, setPrompt] = React.useState(item.text ?? "");
-  const [picked, setPicked] = React.useState("");
+  const saved = item.form ?? {};
+  const [prompt, setPrompt] = React.useState(saved.prompt ?? item.text ?? "");
+  const [picked, setPicked] = React.useState(
+    saved.provider && saved.model ? `${saved.provider}/${saved.model}` : "",
+  );
 
   const options = React.useMemo(
     () => models.filter((model) => model.kind === item.kind),
@@ -306,22 +314,26 @@ export function NodeComposer({
   //: 每一项的默认值都**从描述符取**(default_* 那几条),而不是前端挑一个 —— 后端那份才是
   //: 对着真机核过的。换模型时跟着换,所以用 key 重挂而不是 useState 记着上一个模型的值。
   const durations = durationOptions(current);
-  const [ratio, setRatio] = React.useState(() => capabilityString(current, "default_aspect_ratio", aspectRatioOptions(current)[0] ?? ""));
-  const [resolution, setResolution] = React.useState(() => capabilityString(current, "default_resolution", videoResolutionOptions(current)[0] ?? ""));
-  const [size, setSize] = React.useState(() => capabilityString(current, "default_size", sizeOptions(current)[0] ?? ""));
-  const [duration, setDuration] = React.useState(() => capabilityNumber(current, "default_duration_seconds", durations[0] ?? 5));
-  const [audio, setAudio] = React.useState(false);
-  const [count, setCount] = React.useState(1);
+  const range = durationRange(current);
+  const savedParameters = saved.parameters ?? {};
+  const [ratio, setRatio] = React.useState(() => String(savedParameters.aspect_ratio ?? capabilityString(current, "default_aspect_ratio", aspectRatioOptions(current)[0] ?? "")));
+  const [resolution, setResolution] = React.useState(() => String(savedParameters.resolution ?? capabilityString(current, "default_resolution", videoResolutionOptions(current)[0] ?? "")));
+  const [size, setSize] = React.useState(() => String(savedParameters.size ?? capabilityString(current, "default_size", sizeOptions(current)[0] ?? "")));
+  const [duration, setDuration] = React.useState(() => Number(savedParameters.duration_seconds ?? capabilityNumber(current, "default_duration_seconds", durations[0] ?? 5)));
+  const [audio, setAudio] = React.useState(Boolean(savedParameters.generate_audio));
+  const [count, setCount] = React.useState(Number(savedParameters.num_images ?? 1));
   //: 挂上去的输入素材,按角色分。**角色和上限都由描述符说了算** —— 参考图九张还是三张、
   //: 认不认尾帧,每个模型不一样;写死一套的话换个模型就要么少给要么超限。
-  const [sources, setSources] = React.useState<{ role: string; assetId: string }[]>([]);
+  const [sources, setSources] = React.useState<{ role: string; assetId: string }[]>(() =>
+    (saved.source_assets ?? []).map((one) => ({ role: one.role, assetId: one.asset_id })),
+  );
 
   //: 「生成方式」= 描述符里那几个互斥分组。摆出来的槽只属于当前这一组 —— 两组同时摆着,
   //: 用户挂满了才会在提交时被拒。
   const feed = React.useMemo(() => upstream ?? [], [upstream]);
   const texts = React.useMemo(() => upstreamTexts ?? [], [upstreamTexts]);
   const modes = React.useMemo(() => sourceModes(current), [current]);
-  const [mode, setMode] = React.useState("");
+  const [mode, setMode] = React.useState(saved.mode ?? "");
   const activeMode = modes.find((one) => one.key === mode) ?? modes[0] ?? null;
 
   //: 这个模型认哪几种输入素材,各能挂几份。首尾帧和参考图**分属互斥的两组**(厂商硬约束),
@@ -336,7 +348,7 @@ export function NodeComposer({
   //: 这三件事任一变化,原来挂着的东西就可能已经不属于现在这组槽位了(尾帧换到参考组里
   //: 没有对应的槽),留着它只会在提交时被后端拒。手动增删在下一次变化前一直有效。
   const feedKey = `${modelValue}|${activeMode?.key ?? ""}|${feed.map((one) => one.assetId).join(",")}`;
-  const lastFeed = React.useRef("");
+  const lastFeed = React.useRef(saved.source_assets?.length ? feedKey : "");
   React.useEffect(() => {
     if (lastFeed.current === feedKey) return;
     lastFeed.current = feedKey;
@@ -391,7 +403,7 @@ export function NodeComposer({
 
   //: 正文里 chip 引用到的素材。它们和上面那排槽位是**两件事**:槽位挂的是首帧/参考这种
   //: 有角色的位置,而 chip 是「我在这句话里指的是这张图」。提交时两边都进 source_assets。
-  const [mentioned, setMentioned] = React.useState<string[]>([]);
+  const [mentioned, setMentioned] = React.useState<string[]>(saved.mentioned_asset_ids ?? []);
 
   //: 上游变了就重挑一次默认方式:一张图 = 首帧,多张 = 参考(TapNow 的那套直觉)。
   //: 用户自己点过之后,这条不再插手 —— touched 记着这件事。
@@ -407,17 +419,42 @@ export function NodeComposer({
   const { submitting, run } = useSubmitting();
   const working = submitting || busy;
 
-  const send = () => {
-    const text = prompt.trim();
-    if (!text || !current || working) return;
-    //: 只发这个模型**认的**那几项 —— 多发一项会被校验器当场拦下(它照描述符判)。
+  const formParameters = React.useMemo(() => {
     const parameters: Record<string, unknown> = {};
     if (supportsParameter(current, "aspect_ratio") && ratio) parameters.aspect_ratio = ratio;
     if (supportsParameter(current, "resolution") && resolution) parameters.resolution = resolution;
     if (supportsParameter(current, "size") && size) parameters.size = size;
     if (supportsParameter(current, "duration_seconds")) parameters.duration_seconds = duration;
-    if (current.capabilities?.supports_audio && audio) parameters.generate_audio = true;
+    if (current?.capabilities?.supports_audio && audio) parameters.generate_audio = true;
     if (maxImages(current) > 1 && count > 1) parameters.num_images = count;
+    return parameters;
+  }, [current, ratio, resolution, size, duration, audio, count]);
+
+  const editableForm = React.useMemo<NonNullable<BoardItem["form"]>>(
+    () => ({
+      prompt,
+      provider: current?.provider ?? saved.provider,
+      model: current?.model ?? saved.model,
+      mode: activeMode?.key ?? mode,
+      parameters: formParameters,
+      source_assets: sources.map((one) => ({ asset_id: one.assetId, role: one.role })),
+      mentioned_asset_ids: mentioned,
+    }),
+    [prompt, current, saved.provider, saved.model, activeMode, mode, formParameters, sources, mentioned],
+  );
+  const serializedForm = React.useMemo(() => JSON.stringify(editableForm), [editableForm]);
+  const lastSavedForm = React.useRef(JSON.stringify(item.form ?? {}));
+  React.useEffect(() => {
+    if (serializedForm === lastSavedForm.current) return;
+    lastSavedForm.current = serializedForm;
+    onFormChange(JSON.parse(serializedForm) as NonNullable<BoardItem["form"]>);
+  }, [serializedForm, onFormChange]);
+
+  const send = () => {
+    const text = prompt.trim();
+    if (!text || !current || working) return;
+    //: 只发这个模型**认的**那几项 —— 多发一项会被校验器当场拦下(它照描述符判)。
+    const parameters = formParameters;
     //: 槽位挂的 + 正文里 @ 到的,都要发出去。**同一份素材不发两遍** —— 有些厂商会把
     //: 重复的那一份也算进参考图的份数,挂到上限就直接拒了。正文里的 @ 没有角色,
     //: 落到第一个收得下它的槽上(通常就是参考图)。
@@ -434,6 +471,7 @@ export function NodeComposer({
         model: current.model,
         parameters,
         sourceAssets,
+        form: editableForm,
       }),
     );
   };
@@ -587,6 +625,20 @@ export function NodeComposer({
                 )}
                 {supportsParameter(current, "duration_seconds") && durations.length > 0 && (
                   <Pick value={String(duration)} onChange={(next) => setDuration(Number(next))} options={durations.map((one) => ({ value: String(one), label: `${one}s` }))} />
+                )}
+                {supportsParameter(current, "duration_seconds") && range && (
+                  <label className="flex h-6 items-center gap-0.5 px-1 text-ui-2xs text-muted-foreground" title={`${range.min}–${range.max}s`}>
+                    <input
+                      type="number"
+                      min={range.min}
+                      max={range.max}
+                      step={1}
+                      value={duration}
+                      onChange={(event) => setDuration(Math.max(range.min, Math.min(range.max, Number(event.target.value) || range.min)))}
+                      className="w-7 border-0 bg-transparent p-0 text-right text-ui-2xs text-muted-foreground outline-none"
+                    />
+                    s
+                  </label>
                 )}
               </span>
 

@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { cn } from "@/lib/utils";
+import { itemError, itemIsRunning } from "@/features/boards/boardItemState";
 
 /**
  * 画板上的三种项。
@@ -256,8 +257,9 @@ function Failed({ reason }: { reason: string }) {
  * 得记得三处都改 —— 漏掉一处不会报错,只会是那一类节点永远转圈。
  */
 function PendingSlot({ item, icon }: { item: BoardItem; icon: React.ReactNode }) {
-  if (item.job_id) return <Generating text={item.text} />;
-  if (item.error) return <Failed reason={item.error} />;
+  if (itemIsRunning(item)) return <Generating text={item.form?.prompt ?? item.text} />;
+  const error = itemError(item);
+  if (error) return <Failed reason={error} />;
   return <EmptySlot icon={icon} />;
 }
 

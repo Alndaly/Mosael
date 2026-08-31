@@ -1725,6 +1725,17 @@ class BoardGenerate(BaseModel):
     model: str = ""
     parameters: dict = Field(default_factory=dict)
     source_assets: list[SourceAssetRef] = Field(default_factory=list)
+    #: 用户可再次编辑的原始表单。prompt 是用户写的那份，不含调用供应商时临时追加的图例。
+    form: dict = Field(default_factory=dict)
+
+
+class VideoToGifRequest(BaseModel):
+    """Options for creating a new GIF asset from a video asset."""
+
+    fps: int = Field(default=12, ge=1, le=30)
+    width: int = Field(default=720, ge=64, le=1920)
+    start: float = Field(default=0, ge=0)
+    duration: float | None = Field(default=None, gt=0)
 
 
 class BoardWrite(BaseModel):

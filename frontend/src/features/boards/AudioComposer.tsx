@@ -25,6 +25,7 @@ export function AudioComposer({
   workspaceId,
   upstreamText,
   onSpeak,
+  onFormChange,
 }: {
   item: BoardItem;
   busy: boolean;
@@ -32,10 +33,11 @@ export function AudioComposer({
   /** 上游便签给的文字 —— 念的就是它。 */
   upstreamText?: string;
   onSpeak: (input: { text: string; voiceId: string }) => void;
+  onFormChange: (form: NonNullable<BoardItem["form"]>) => void;
 }) {
   const t = useI18n();
-  const [text, setText] = React.useState(upstreamText ?? "");
-  const [picked, setPicked] = React.useState("");
+  const [text, setText] = React.useState(item.form?.prompt ?? upstreamText ?? "");
+  const [picked, setPicked] = React.useState(item.form?.voice_id ?? "");
 
   //: 上游的字变了就跟着换 —— 但不覆盖用户自己改过的(和便签那条同一个道理)。
   const filled = React.useRef(upstreamText ?? "");
@@ -49,6 +51,14 @@ export function AudioComposer({
   const voices = useQuery({ queryKey: ["voices", workspaceId], queryFn: () => listVoices(workspaceId) });
   const options = voices.data ?? [];
   const current = options.find((one: Voice) => one.id === picked) ?? options[0] ?? null;
+
+  const serializedForm = JSON.stringify({ prompt: text, voice_id: current?.id ?? item.form?.voice_id });
+  const lastSavedForm = React.useRef(JSON.stringify(item.form ?? {}));
+  React.useEffect(() => {
+    if (serializedForm === lastSavedForm.current) return;
+    lastSavedForm.current = serializedForm;
+    onFormChange(JSON.parse(serializedForm) as NonNullable<BoardItem["form"]>);
+  }, [serializedForm, onFormChange]);
 
   //: 点下去立刻转、落地就停(**失败也要停** —— 否则那个圈会一直转下去)。见 useSubmitting。
   const { submitting, run } = useSubmitting();

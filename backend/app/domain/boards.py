@@ -55,12 +55,79 @@ NOTE_COLORS = ("yellow", "blue", "green", "pink", "purple", "gray")
 
 MAX_ITEMS = 2000
 MAX_TEXT_CHARS = 20_000
+RUN_STATUSES = ("idle", "queued", "running", "succeeded", "failed", "cancelled")
 
 
 def _number(value: Any, field: str, item_id: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise BoardDomainError(f"画板项 {item_id} 的 {field} 必须是数字,收到 {value!r}")
     return float(value)
+
+
+def _normalize_form(value: Any, item_id: str) -> dict[str, Any] | None:
+    """校验并保留**属于节点自己的表单**。
+
+    表单是用户可继续编辑的事实；生成器为了调用供应商临时补上的文件名图例、签名参数等都
+    不属于它。这里有意允许不同节点放不同字段，但把 JSON 的基本形状钉住，避免下一次打开
+    节点时拿到一个无法渲染的值。
+    """
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise BoardDomainError(f"画板项 {item_id} 的 form 必须是对象")
+    form = dict(value)
+    prompt = form.get("prompt")
+    if prompt is not None:
+        if not isinstance(prompt, str):
+            raise BoardDomainError(f"画板项 {item_id} 的 form.prompt 必须是字符串")
+        if len(prompt) > MAX_TEXT_CHARS:
+            raise BoardDomainError(f"画板项 {item_id} 的提示词超过 {MAX_TEXT_CHARS} 字")
+    for field in ("provider", "provider_profile_id", "model", "mode", "voice_id"):
+        if form.get(field) is not None and not isinstance(form[field], str):
+            raise BoardDomainError(f"画板项 {item_id} 的 form.{field} 必须是字符串")
+    if form.get("parameters") is not None and not isinstance(form["parameters"], dict):
+        raise BoardDomainError(f"画板项 {item_id} 的 form.parameters 必须是对象")
+    sources = form.get("source_assets")
+    if sources is not None:
+        if not isinstance(sources, list) or any(not isinstance(one, dict) for one in sources):
+            raise BoardDomainError(f"画板项 {item_id} 的 form.source_assets 必须是对象数组")
+        form["source_assets"] = [
+            {"asset_id": str(one.get("asset_id") or "").strip(), "role": str(one.get("role") or "").strip()}
+            for one in sources
+            if str(one.get("asset_id") or "").strip() and str(one.get("role") or "").strip()
+        ]
+    mentioned = form.get("mentioned_asset_ids")
+    if mentioned is not None:
+        if not isinstance(mentioned, list):
+            raise BoardDomainError(f"画板项 {item_id} 的 form.mentioned_asset_ids 必须是数组")
+        form["mentioned_asset_ids"] = [str(one).strip() for one in mentioned if str(one).strip()]
+    return form
+
+
+def _normalize_run(value: Any, item_id: str) -> dict[str, Any] | None:
+    """校验节点自己的运行态。终态不允许再携带 job_id，避免 UI 永久转圈。"""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise BoardDomainError(f"画板项 {item_id} 的 run 必须是对象")
+    status = str(value.get("status") or "idle").strip()
+    if status not in RUN_STATUSES:
+        raise BoardDomainError(f"画板项 {item_id} 的 run.status 不合法:{status}")
+    run: dict[str, Any] = {"status": status}
+    job_id = value.get("job_id")
+    if job_id is not None:
+        if status not in ("queued", "running"):
+            raise BoardDomainError(f"画板项 {item_id} 已结束却仍带有 job_id")
+        if not isinstance(job_id, str) or not job_id.strip():
+            raise BoardDomainError(f"画板项 {item_id} 的 run.job_id 不合法")
+        run["job_id"] = job_id.strip()
+    error = value.get("error")
+    if error is not None:
+        if not isinstance(error, str):
+            raise BoardDomainError(f"画板项 {item_id} 的 run.error 必须是字符串")
+        if error.strip():
+            run["error"] = error.strip()[:300]
+    return run
 
 
 def normalize_canvas(raw: Any) -> dict[str, Any]:
@@ -121,6 +188,14 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
                 raise BoardDomainError(f"画板项 {item_id} 的文字超过 {MAX_TEXT_CHARS} 字")
             item["text"] = text
 
+        form = _normalize_form(entry.get("form"), item_id)
+        # 旧画布把媒体提示词塞在 text 里。读到时迁到 form.prompt；从此 text 只负责节点
+        # 展示内容/素材名，运行时拼出来的提示词也不会再污染下一次编辑。
+        if form is None and kind in _NEEDS_ASSET and isinstance(text, str) and text:
+            form = {"prompt": text}
+        if form is not None:
+            item["form"] = form
+
         color = entry.get("color")
         if color is not None:
             if color not in NOTE_COLORS:
@@ -148,21 +223,15 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
         # 正在生成的那一项:还没有素材,但有一个任务在跑。任务落终态时由回执把 asset_id
         # 填回来(见 deliver_generated)。**这是"还没有"和"不该有"的区别** —— 前者要占着位置
         # 让用户看见"这儿在生成",后者才是错误。
-        job_id = entry.get("job_id")
-        if job_id is not None:
-            if not isinstance(job_id, str) or not job_id.strip():
-                raise BoardDomainError(f"画板项 {item_id} 的 job_id 不合法")
-            item["job_id"] = job_id.strip()
-
-        # 跑挂了的那一项:任务落了终态,但没有产出。**它不是"还在跑",也不是"空的"** ——
-        # 这两种状态此前都被拿来表示过失败,而两种都在骗人:留着 job_id 的话画布永远转圈,
-        # 摘成空槽的话用户看到的是"点了之后那个框自己没了"。
-        error = entry.get("error")
-        if error is not None:
-            if not isinstance(error, str):
-                raise BoardDomainError(f"画板项 {item_id} 的 error 必须是字符串")
-            if error.strip():
-                item["error"] = error.strip()[:300]
+        run = _normalize_run(entry.get("run"), item_id)
+        # 兼容旧结构，但归一化输出只有一份状态事实。这样旧数据库一经读写就自然升级，前端
+        # 不必永远同时判断 job_id/error 和 run。
+        if run is None and entry.get("job_id") is not None:
+            run = _normalize_run({"status": "running", "job_id": entry.get("job_id")}, item_id)
+        if run is None and entry.get("error") is not None:
+            run = _normalize_run({"status": "failed", "error": entry.get("error")}, item_id)
+        if run is not None:
+            item["run"] = run
 
         # **空槽是合法的。** 一个图片/视频项有四种状态,缺一不可:
         #   · 空槽(都没有)   —— 刚放下,底下挂着提示词面板等你写;
@@ -265,15 +334,20 @@ def _keep_arrived_results(stored: Any, incoming: dict[str, Any]) -> dict[str, An
     have = {
         str(item.get("id")): item
         for item in ((stored or {}).get("items") or [])
-        if item.get("asset_id")
+        if item.get("asset_id") or (item.get("run") or {}).get("status") in ("failed", "cancelled")
     }
     if not have:
         return incoming
     items = []
     for item in incoming["items"]:
         settled = have.get(str(item.get("id")))
-        if settled and not item.get("asset_id"):
-            items.append({**{k: v for k, v in item.items() if k != "job_id"}, "asset_id": settled["asset_id"]})
+        incoming_running = (item.get("run") or {}).get("status") in ("queued", "running")
+        if settled and not item.get("asset_id") and settled.get("asset_id"):
+            items.append({**item, "asset_id": settled["asset_id"], "run": settled.get("run", {"status": "succeeded"})})
+        elif settled and incoming_running and (settled.get("run") or {}).get("status") in ("failed", "cancelled"):
+            # 任务失败后的下一次自动保存，客户端手里往往还是提交前的 running 快照。终态必须
+            # 赢，否则它会把 job_id 写活，节点就永远 loading。
+            items.append({**item, "run": settled["run"]})
         else:
             items.append(item)
     return {**incoming, "items": items}
@@ -323,7 +397,7 @@ def place_pending(db: Session, *, workspace_id: str, board_id: str, item: dict[s
     if index is None:
         items.append(item)
     else:
-        #: 位置和大小归画布(用户拖出来的),状态归这里(任务起来了)。
+        #: 位置和大小、表单归画布(用户编辑出来的),状态归这里(任务起来了)。
         keep = {k: v for k, v in item.items() if k not in ("x", "y", "width", "height")}
         merged = {**items[index], **keep}
         #: 四个状态两两互斥 —— 重新生成时旧产出、上一次的失败都让位给这次的占位。
@@ -396,15 +470,17 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
             # 去任务中心翻一遍才知道为什么。
             kept.append(
                 {
-                    **{k: v for k, v in item.items() if k != "job_id"},
-                    #: 「生成失败」这句话由界面说(它才知道读的人看哪种语言);这里存的是**原因**。
-                    #: 任务没留下原因时退到它的终态词(failed / cancelled)—— 短,而且是真的,
-                    #: 不像一个假的消息键那样会原样显示在节点上。
-                    "error": str(getattr(job, "error", "") or "")[:300] or str(job.status),
+                    **{k: v for k, v in item.items() if k not in ("job_id", "error")},
+                    "run": {
+                        "status": "cancelled" if str(job.status) == "cancelled" else "failed",
+                        #: 「生成失败」这句话由界面说；这里只存真正原因。
+                        "error": str(getattr(job, "error", "") or "")[:300] or str(job.status),
+                    },
                 }
             )
             continue
         settled = {k: v for k, v in item.items() if k not in ("job_id", "error")}
+        settled["run"] = {"status": "succeeded"}
         kept.append({**settled, "asset_id": asset_ids[0]})
         #: 多出来的那几张挨着它往右排。宽度按这一项自己的宽 —— 用户可能已经把它拉大了,
         #: 用一个写死的间距会让它们叠在一起。

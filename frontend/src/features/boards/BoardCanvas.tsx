@@ -31,6 +31,7 @@ import { AudioComposer } from "@/features/boards/AudioComposer";
 import { TrimComposer } from "@/features/boards/TrimComposer";
 import { NoteComposer } from "@/features/boards/NoteComposer";
 import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, kindIcon, kindText, SPAWNABLE_KINDS, type MediaKind } from "@/features/boards/boardNodes";
+import { itemIsRunning } from "@/features/boards/boardItemState";
 
 /**
  * 创意画板的画布。
@@ -110,6 +111,7 @@ interface Props {
     model?: string;
     parameters?: Record<string, unknown>;
     sourceAssets?: { asset_id: string; role: string }[];
+    form?: BoardItem["form"];
   }) => Promise<unknown>;
   /** 让 AI 往某张便签里写字。**同步** —— 写字几秒就回,不走生成任务那条路。 */
   /** 把一段文字念成音频。**异步** —— 走和出图出片同一套占位/回执。 */
@@ -602,6 +604,9 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={(connection: Connection) => setEdges((current) => addEdge(connection, current))}
+        // 可见的 + 在边界外，而真实锚点贴在边界上。扩大屏幕命中半径后，拖到 + 上即可
+        // 自动吸附，不必再精确瞄准那个透明的 8px handle。
+        connectionRadius={32}
         //: 线拉到空白处松手 —— 用户已经想好了「从这儿接下去」,弹一张单子让他直接选。
         //: 连到别的节点上时 isValid 为真,那是正常连线,不该弹。
         onConnectEnd={(event, connection) => {
@@ -775,6 +780,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           //: 上游便签的字当**材料**,不是提示词 —— 「接着这段往下写」里,那段是素材,
           //: 用户在框里打的才是指令。
           upstreamTexts={feeding.texts.map((one) => one.text)}
+          onFormChange={(form) => patch(composerItem.id, { form })}
           onWrite={({ prompt, providerProfileId, model, assets, context }) => {
             setWriting(composerItem.id);
             void onWrite({ itemId: composerItem.id, prompt, providerProfileId, model, assets, context }).finally(() =>
@@ -824,10 +830,11 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         <AudioComposer
           key={composerItem.id}
           item={composerItem}
-          busy={Boolean(composerItem.job_id)}
+          busy={itemIsRunning(composerItem)}
           workspaceId={workspaceId}
           //: 上游便签的字**就是要念的内容** —— 让用户再抄一遍,那条线就白连了。
           upstreamText={feeding.texts.map((one) => one.text).join("\n\n")}
+          onFormChange={(form) => patch(composerItem.id, { form })}
           onSpeak={({ text, voiceId }) => void onSpeak({ itemId: composerItem.id, text, voiceId })}
         />
       )}
@@ -838,12 +845,13 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           key={composerItem.id}
           item={composerItem}
           models={models ?? []}
-          busy={Boolean(composerItem.job_id)}
+          busy={itemIsRunning(composerItem)}
           onPickAsset={onPickAsset}
           workspaceId={workspaceId}
           upstream={feeding.assets}
           upstreamTexts={feeding.texts}
-          onSubmit={({ prompt, provider, model, parameters, sourceAssets }) =>
+          onFormChange={(form) => patch(composerItem.id, { form })}
+          onSubmit={({ prompt, provider, model, parameters, sourceAssets, form }) =>
             void onGenerate({
               kind: composerItem.kind as "image" | "video",
               prompt,
@@ -851,6 +859,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
               model,
               parameters,
               sourceAssets,
+              form,
               itemId: composerItem.id,
             })
           }
@@ -1025,7 +1034,7 @@ function ItemToolbar({
             空节点一选中它的表单就开着,提示词已经由上游这一项填好(便签给文字、图片给首帧),
             用户还能改模型、改比例、再挂张参考图 —— 点一下就把任务发出去的话,这些他一个都
             来不及说。已经在生成的那一项不给(它还没有产出)。 */}
-        {onSpawn && single && item && item.kind !== "frame" && !item.job_id && (
+        {onSpawn && single && item && item.kind !== "frame" && !itemIsRunning(item) && (
           <>
             {(["image", "video", "note", "audio"] as const)
               //: 便签往下接图片,有产出的图片/视频往下接视频 —— 空槽自己都还没有东西可给。

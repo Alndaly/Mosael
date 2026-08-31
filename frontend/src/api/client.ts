@@ -787,10 +787,30 @@ export interface BoardItem {
   text?: string;
   color?: string;
   asset_id?: string;
+  /** 节点自己的可编辑表单。供应商调用时临时拼接的提示词不得写回这里。 */
+  form?: {
+    prompt?: string;
+    provider?: string;
+    provider_profile_id?: string;
+    model?: string;
+    mode?: string;
+    voice_id?: string;
+    parameters?: Record<string, unknown>;
+    source_assets?: { asset_id: string; role: string }[];
+    mentioned_asset_ids?: string[];
+  };
+  /** 节点自己的运行态。表单和运行态分开，失败/重试不会改掉用户输入。 */
+  run?: {
+    status: "idle" | "queued" | "running" | "succeeded" | "failed" | "cancelled";
+    job_id?: string;
+    error?: string;
+  };
   /** 还在生成:有任务、还没有素材。任务落终态时由后端回执把 asset_id 填回来。 */
+  /** @deprecated 仅用于读取升级前的画布。 */
   job_id?: string;
   /** 跑挂了的原因。**和 job_id 互斥** —— 有它就说明那个任务已经结束、而且没有产出。
    *  提示词还留在这一项上,改一改就能再来一次。 */
+  /** @deprecated 仅用于读取升级前的画布。 */
   error?: string;
   /** 分组框专属:开着的时候,拖动这个框会把框里的东西一起带走。 */
   move_children?: boolean;
@@ -851,6 +871,7 @@ export function generateOnBoard(
     model?: string;
     parameters?: Record<string, unknown>;
     source_assets?: { asset_id: string; role: string }[];
+    form?: BoardItem["form"];
   },
 ): Promise<Board> {
   return api<Board>(`/api/boards/${boardId}/generate`, { method: "POST", body: JSON.stringify(body) });
@@ -1070,6 +1091,17 @@ export function deleteAsset(assetId: string): Promise<unknown> {
 export function transcribeAsset(assetId: string, language = ""): Promise<Job> {
   const query = language ? `?language=${encodeURIComponent(language)}` : "";
   return api<Job>(`/api/assets/${assetId}/transcribe${query}`, { method: "POST" });
+}
+
+/** 生成一份新的 GIF 素材；原视频不变。 */
+export function convertVideoToGif(
+  assetId: string,
+  options: { fps?: number; width?: number; start?: number; duration?: number | null } = {},
+): Promise<Job> {
+  return api<Job>(`/api/assets/${assetId}/convert-gif`, {
+    method: "POST",
+    body: JSON.stringify(options),
+  });
 }
 
 export function fetchJob(jobId: string): Promise<Job> {

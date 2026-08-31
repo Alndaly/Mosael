@@ -31,6 +31,7 @@ export function NoteComposer({
   upstreamAssets,
   upstreamTexts,
   onWrite,
+  onFormChange,
 }: {
   item: BoardItem;
   busy: boolean;
@@ -47,12 +48,17 @@ export function NoteComposer({
     assets: string[];
     context: string[];
   }) => void;
+  onFormChange: (form: NonNullable<BoardItem["form"]>) => void;
 }) {
   const t = useI18n();
   const { openImagePreview } = useImagePreview();
-  const [prompt, setPrompt] = React.useState("");
-  const [mentioned, setMentioned] = React.useState<string[]>([]);
-  const [picked, setPicked] = React.useState("");
+  const [prompt, setPrompt] = React.useState(item.form?.prompt ?? "");
+  const [mentioned, setMentioned] = React.useState<string[]>(item.form?.mentioned_asset_ids ?? []);
+  const [picked, setPicked] = React.useState(
+    item.form?.provider_profile_id && item.form?.model
+      ? `${item.form.provider_profile_id}:${item.form.model}`
+      : "",
+  );
 
   //: `@` 的候选:图片、视频、音频都能引。后端会按类别摊开(图片和视频给画面,音频给转写)——
   //: 只列图片的话,用户明明连得上视频,却 @ 不到它。
@@ -78,6 +84,19 @@ export function NoteComposer({
   const options = models.data ?? [];
   //: 值里带上连接 id:同一个模型名可能挂在两条连接下(自己的和团队的),只存模型名会挑错那条。
   const current = options.find((one) => `${one.provider_profile_id}:${one.model}` === picked) ?? options[0] ?? null;
+
+  const serializedForm = JSON.stringify({
+    prompt,
+    provider_profile_id: current?.provider_profile_id ?? item.form?.provider_profile_id,
+    model: current?.model ?? item.form?.model,
+    mentioned_asset_ids: mentioned,
+  });
+  const lastSavedForm = React.useRef(JSON.stringify(item.form ?? {}));
+  React.useEffect(() => {
+    if (serializedForm === lastSavedForm.current) return;
+    lastSavedForm.current = serializedForm;
+    onFormChange(JSON.parse(serializedForm) as NonNullable<BoardItem["form"]>);
+  }, [serializedForm, onFormChange]);
 
   //: 这次会发给模型的那几份素材 —— 上游连过来的 + 正文里 @ 到的。**从素材库里查回实体**
   //: 才画得出缩略图(手上只有 id)。
