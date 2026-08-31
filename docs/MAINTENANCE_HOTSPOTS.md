@@ -244,8 +244,10 @@ HEIC 在素材分析入口能成功，在画布「看图」入口却以错误 MI
 
 状态视觉必须读统一的 `itemRunStatus`：idle 中性、queued 等待、running 动态主色、succeeded 成功色、
 failed 错误色、cancelled 虚线弱化；即使节点已有旧产物，重跑失败也要在节点外壳上看得出来。表单的
-“重置”指产物版本变化后从 `BoardItem.form` 重新水合组件局部状态，不是清空持久表单。失败/取消不能
-重置，拖动和逐字保存更不能参与 reset key，否则会丢失光标和重试输入。
+“重置”有两层：产物版本变化后从 `BoardItem.form` 重新水合组件局部状态；成功后由领域层清空已消费的
+一次性输入（prompt、手动引用素材），同时保留模型等稳定选择。失败/取消不能清空，拖动和逐字保存更
+不能参与 reset key，否则会丢失光标和重试输入。同步便签写作也必须把 running/succeeded/failed 写进
+`BoardItem.run`，不能只让提交按钮转圈。
 
 视频转 GIF 是另一条相同的数据归属规则：源视频只读，新 GIF 记录 `derived_from_asset_id` 与转换参数；
 素材页右键和工作流节点必须汇到同一个领域函数，不能各自拼 ffmpeg 命令。

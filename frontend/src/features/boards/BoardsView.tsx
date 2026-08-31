@@ -38,6 +38,7 @@ import { BoardCanvas, type BoardCanvasApi } from "@/features/boards/BoardCanvas"
 import { useAutosave } from "@/features/boards/useAutosave";
 import { AssetPickerDialog } from "@/features/boards/AssetPickerDialog";
 import { itemError, itemIsRunning, itemJobId } from "@/features/boards/boardItemState";
+import { runNoteWrite, type NoteWriteInput } from "@/features/boards/noteWriteLifecycle";
 
 /**
  * 创意画板:除了和智能体对话之外,另一条把想法摊开的路。
@@ -293,28 +294,22 @@ function BoardDetail({
 
   /** 让 AI 往某张便签里写字。同步返回,写完直接把新画布落回本地状态。 */
   const write = React.useCallback(
-    async (input: {
-      itemId: string;
-      prompt: string;
-      providerProfileId: string;
-      model: string;
-      assets: string[];
-      context: string[];
-    }) => {
+    async (input: NoteWriteInput) => {
       try {
-        const next = await writeOnBoard(board.id, {
-          workspace_id: workspaceId,
-          item_id: input.itemId,
-          prompt: input.prompt,
-          provider_profile_id: input.providerProfileId,
-          model: input.model,
-          source_assets: input.assets,
-          context: input.context,
+        await runNoteWrite({
+          input,
+          patch: (itemId, next) => api?.patch(itemId, next),
+          request: () =>
+            writeOnBoard(board.id, {
+              workspace_id: workspaceId,
+              item_id: input.itemId,
+              prompt: input.prompt,
+              provider_profile_id: input.providerProfileId,
+              model: input.model,
+              source_assets: input.assets,
+              context: input.context,
+            }),
         });
-        //: **走画布的把手,不是回写这里的 canvas 状态** —— 画布的节点只在挂载时从 canvas
-        //: 建一次,改这里的 state 它看不见,用户会以为「写完了但没出来」。
-        const written = ((next.canvas?.items ?? []) as BoardItem[]).find((one) => one.id === input.itemId);
-        if (written?.text) api?.patch(input.itemId, { text: written.text });
         onSaved();
       } catch (error) {
         toast.error(t("boardWriteFailed"), { description: (error as Error).message });

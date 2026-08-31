@@ -334,7 +334,7 @@ def _keep_arrived_results(stored: Any, incoming: dict[str, Any]) -> dict[str, An
     have = {
         str(item.get("id")): item
         for item in ((stored or {}).get("items") or [])
-        if item.get("asset_id") or (item.get("run") or {}).get("status") in ("failed", "cancelled")
+        if item.get("asset_id") or (item.get("run") or {}).get("status") in ("succeeded", "failed", "cancelled")
     }
     if not have:
         return incoming
@@ -344,10 +344,20 @@ def _keep_arrived_results(stored: Any, incoming: dict[str, Any]) -> dict[str, An
         incoming_running = (item.get("run") or {}).get("status") in ("queued", "running")
         if settled and not item.get("asset_id") and settled.get("asset_id"):
             items.append({**item, "asset_id": settled["asset_id"], "run": settled.get("run", {"status": "succeeded"})})
-        elif settled and incoming_running and (settled.get("run") or {}).get("status") in ("failed", "cancelled"):
-            # 任务失败后的下一次自动保存，客户端手里往往还是提交前的 running 快照。终态必须
-            # 赢，否则它会把 job_id 写活，节点就永远 loading。
-            items.append({**item, "run": settled["run"]})
+        elif settled and incoming_running and (settled.get("run") or {}).get("status") in (
+            "succeeded",
+            "failed",
+            "cancelled",
+        ):
+            # 任务结束后的下一次自动保存，客户端手里往往还是提交前的 running 快照。终态必须
+            # 赢，否则它会把节点重新写活，界面就永远 loading。
+            kept = {**item, "run": settled["run"]}
+            # 同步便签写作没有 asset_id 可以充当「结果已到」的证据。服务端已经落下正文和
+            # 清空后的表单时，晚到的 running 自动保存不能把三者一起覆盖回旧快照。
+            if (settled.get("run") or {}).get("status") == "succeeded" and settled.get("kind") == "note":
+                kept["text"] = settled.get("text", "")
+                kept["form"] = settled.get("form", {})
+            items.append(kept)
         else:
             items.append(item)
     return {**incoming, "items": items}
@@ -413,7 +423,46 @@ def place_pending(db: Session, *, workspace_id: str, board_id: str, item: dict[s
     return board
 
 
-def write_text(db: Session, *, workspace_id: str, board_id: str, item_id: str, text: str) -> Board:
+def set_text_write_run(
+    db: Session,
+    *,
+    workspace_id: str,
+    board_id: str,
+    item_id: str,
+    status: str,
+    error: str = "",
+) -> Board:
+    """同步便签写作的运行态也落在节点内；失败时不碰表单，用户可以原样重试。"""
+    if status not in ("running", "failed"):
+        raise BoardDomainError(f"便签写作状态不合法:{status}")
+    board = get_board(db, workspace_id, board_id)
+    canvas = dict(board.canvas or {"items": [], "edges": []})
+    items = [dict(one) for one in (canvas.get("items") or [])]
+    index = next((i for i, one in enumerate(items) if one.get("id") == item_id), None)
+    if index is None:
+        raise BoardDomainError(f"画板项不存在:{item_id or '(空)'}")
+    run = {"status": status}
+    if error.strip():
+        run["error"] = error.strip()[:300]
+    items[index] = {**items[index], "run": run}
+    items[index].pop("job_id", None)
+    items[index].pop("error", None)
+    board.canvas = normalize_canvas({**canvas, "items": items})
+    db.commit()
+    db.refresh(board)
+    return board
+
+
+def write_text(
+    db: Session,
+    *,
+    workspace_id: str,
+    board_id: str,
+    item_id: str,
+    text: str,
+    reset_form: bool = False,
+    completed_form: dict[str, Any] | None = None,
+) -> Board:
     """把一段写好的文字放进某一项。
 
     **就地改,不新建** —— 调用方要写的那张便签是用户在画布上摆好的,位置、颜色、大小都归他。
@@ -424,7 +473,16 @@ def write_text(db: Session, *, workspace_id: str, board_id: str, item_id: str, t
     index = next((i for i, one in enumerate(items) if one.get("id") == item_id), None)
     if index is None:
         raise BoardDomainError(f"画板项不存在:{item_id or '(空)'}")
-    items[index] = {**items[index], "text": text}
+    updated = {**items[index], "text": text}
+    if reset_form:
+        form = dict(completed_form if completed_form is not None else updated.get("form") or {})
+        form["prompt"] = ""
+        form["mentioned_asset_ids"] = []
+        updated["form"] = form
+        updated["run"] = {"status": "succeeded"}
+        updated.pop("job_id", None)
+        updated.pop("error", None)
+    items[index] = updated
     board.canvas = normalize_canvas({**canvas, "items": items})
     db.commit()
     db.refresh(board)

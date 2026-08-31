@@ -15,6 +15,7 @@ from app.domain.boards import (
     list_boards,
     place_pending,
     receipt_to_item,
+    set_text_write_run,
     update_board,
     write_text,
 )
@@ -190,6 +191,19 @@ def write(board_id: str, body: BoardWrite, db: DbSession, user: CurrentUser) -> 
         "",
     ).strip()
 
+    # 同步并不等于没有生命周期。先把 running 落进节点，失败/成功再在同一节点收口；前端也会
+    # 立即做同样的本地 patch，所以用户不必等网络往返才看到节点描边变化。
+    try:
+        set_text_write_run(
+            db,
+            workspace_id=body.workspace_id,
+            board_id=board_id,
+            item_id=body.item_id,
+            status="running",
+        )
+    except BoardDomainError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
     #: 上游连过来的图 + 正文里 @ 到的图。**只收图片** —— 视频和音频这条路吃不下
     #: (要抽帧、要转写,那是 analyze_asset 的事),悄悄发过去只会换回一句看不懂的报错。
     #: 上游连过来的 + 正文里 @ 到的。图片和视频给画面,音频给转写 —— 见 _look_at。
@@ -256,10 +270,31 @@ def write(board_id: str, body: BoardWrite, db: DbSession, user: CurrentUser) -> 
                 label="画板写文案",
             ).strip()
     except AiChatError as exc:
+        set_text_write_run(
+            db,
+            workspace_id=body.workspace_id,
+            board_id=board_id,
+            item_id=body.item_id,
+            status="failed",
+            error=str(exc),
+        )
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     try:
-        return write_text(db, workspace_id=body.workspace_id, board_id=board_id, item_id=body.item_id, text=text)
+        return write_text(
+            db,
+            workspace_id=body.workspace_id,
+            board_id=board_id,
+            item_id=body.item_id,
+            text=text,
+            reset_form=True,
+            completed_form={
+                "prompt": "",
+                "provider_profile_id": body.provider_profile_id,
+                "model": body.model,
+                "mentioned_asset_ids": [],
+            },
+        )
     except BoardDomainError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

@@ -370,6 +370,51 @@ def test_客户端不会把已经失败的节点重新写成_loading() -> None:
     assert "job_id" not in item
 
 
+def test_旧自动保存不会覆盖便签写作的成功正文和空表单() -> None:
+    """同步写作没有 asset_id，仍要像异步产出一样抵抗晚到的 running 快照。"""
+    from app.core.db import SessionLocal
+    from app.domain.boards import write_text
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id = client.post(
+        "/api/boards",
+        json={
+            "workspace_id": ws,
+            "canvas": {
+                "items": [
+                    {
+                        "id": "n1",
+                        "kind": "note",
+                        "x": 0,
+                        "y": 0,
+                        "form": {"prompt": "描述图片", "model": "k3", "mentioned_asset_ids": ["asset-1"]},
+                        "run": {"status": "running"},
+                    }
+                ],
+                "edges": [],
+            },
+        },
+    ).json()["id"]
+    stale = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]
+
+    with SessionLocal() as db:
+        write_text(
+            db,
+            workspace_id=ws,
+            board_id=board_id,
+            item_id="n1",
+            text="生成后的正文",
+            reset_form=True,
+        )
+
+    got = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "canvas": stale}).json()
+    item = got["canvas"]["items"][0]
+    assert item["text"] == "生成后的正文"
+    assert item["form"] == {"prompt": "", "model": "k3", "mentioned_asset_ids": []}
+    assert item["run"] == {"status": "succeeded"}
+
+
 def test_媒体节点的原始表单和运行态各自存放() -> None:
     canvas = normalize_canvas(
         {
@@ -516,8 +561,8 @@ def test_分组框记得住联动拖动这件事() -> None:
         )
 
 
-def test_写文案就地落进那张便签_不新建() -> None:
-    """AI 写完的字要放进用户摆好的那张便签里 —— 位置、颜色、大小都归他。"""
+def test_写文案就地落进那张便签_成功后重置一次性表单() -> None:
+    """AI 写完保留节点与稳定模型选择，但提示词和手动引用已经消费完，下一轮应从空表单开始。"""
     from app.core.db import SessionLocal
     from app.domain.boards import write_text
 
@@ -529,18 +574,48 @@ def test_写文案就地落进那张便签_不新建() -> None:
             "workspace_id": ws,
             "name": "B",
             "canvas": {
-                "items": [{"id": "n1", "kind": "note", "x": 40, "y": 80, "width": 220, "color": "green"}],
+                "items": [
+                    {
+                        "id": "n1",
+                        "kind": "note",
+                        "x": 40,
+                        "y": 80,
+                        "width": 220,
+                        "color": "green",
+                        "form": {
+                            "prompt": "描述图片",
+                            "provider_profile_id": "profile-1",
+                            "model": "k3",
+                            "mentioned_asset_ids": ["asset-1"],
+                        },
+                        "run": {"status": "running"},
+                    }
+                ],
                 "edges": [],
             },
         },
     ).json()["id"]
 
     db = SessionLocal()
-    board = write_text(db, workspace_id=ws, board_id=board_id, item_id="n1", text="城市夜景下的一只白猫")
+    board = write_text(
+        db,
+        workspace_id=ws,
+        board_id=board_id,
+        item_id="n1",
+        text="城市夜景下的一只白猫",
+        reset_form=True,
+    )
     items = board.canvas["items"]
     assert len(items) == 1, "写字居然新建了一项"
     assert items[0]["text"] == "城市夜景下的一只白猫"
     assert (items[0]["x"], items[0]["y"], items[0]["color"]) == (40, 80, "green"), "把用户摆好的东西改了"
+    assert items[0]["form"] == {
+        "prompt": "",
+        "provider_profile_id": "profile-1",
+        "model": "k3",
+        "mentioned_asset_ids": [],
+    }
+    assert items[0]["run"] == {"status": "succeeded"}
 
     with pytest.raises(BoardDomainError):
         write_text(db, workspace_id=ws, board_id=board_id, item_id="没这项", text="x")
@@ -562,6 +637,9 @@ def test_写文案没配模型时给准信而不是五百() -> None:
     )
     assert answer.status_code == 422, answer.text
     assert "供应商" in answer.json()["detail"]
+    item = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]["items"][0]
+    assert item["run"]["status"] == "failed", "同步写作失败也必须结束节点 loading"
+    assert item["run"]["error"], "节点要保留可读错误，不能只在 toast 里闪一下"
 
     # 空要求也别发出去 —— 供应商那边回的是一句看不懂的英文 400。
     empty = client.post(

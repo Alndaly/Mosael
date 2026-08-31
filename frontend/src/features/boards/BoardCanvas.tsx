@@ -783,7 +783,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           onFormChange={(form) => patch(composerItem.id, { form })}
           onWrite={({ prompt, providerProfileId, model, assets, context }) => {
             setWriting(composerItem.id);
-            void onWrite({ itemId: composerItem.id, prompt, providerProfileId, model, assets, context }).finally(() =>
+            return onWrite({ itemId: composerItem.id, prompt, providerProfileId, model, assets, context }).finally(() =>
               setWriting(null),
             );
           }}

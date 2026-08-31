@@ -47,7 +47,7 @@ export function NoteComposer({
     model: string;
     assets: string[];
     context: string[];
-  }) => void;
+  }) => Promise<unknown>;
   onFormChange: (form: NonNullable<BoardItem["form"]>) => void;
 }) {
   const t = useI18n();
