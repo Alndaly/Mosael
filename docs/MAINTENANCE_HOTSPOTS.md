@@ -250,6 +250,19 @@ failed 错误色、cancelled 虚线弱化；即使节点已有旧产物，重跑
 视频转 GIF 是另一条相同的数据归属规则：源视频只读，新 GIF 记录 `derived_from_asset_id` 与转换参数；
 素材页右键和工作流节点必须汇到同一个领域函数，不能各自拼 ffmpeg 命令。
 
+## 16. 弹窗宽度必须按“不可信长文本”设计
+
+供应商错误常同时包含 URL、JSON、request id 与无空格错误码。普通中文句子能换行，不代表这些内容也
+能换；只给段落 `break-words`，而 flex/grid 子项仍是默认 `min-width:auto`，弹窗一样会被 min-content
+撑宽。
+
+- `DialogContent` 的实际宽度必须限制在 `100vw - 2rem`，`ModalShell` 与滚动 body 都要 `min-w-0`，
+  body 只允许纵向滚动。
+- 展示服务端错误的正文使用 `whitespace-pre-wrap [overflow-wrap:anywhere]`：保留有意义的换行，同时
+  允许长 URL/JSON 在任意位置折行。
+- 事件时间线、子任务列表等嵌套 grid 的内容列必须是 `minmax(0,1fr)`，对应子项也要 `min-w-0`；只在
+  最内层补断词规则无法修复父级固有宽度。
+
 ## Verification rule
 
 每个 slice 至少跑:

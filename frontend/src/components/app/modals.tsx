@@ -92,12 +92,12 @@ export function ModalShell({
   useUnlockBodyOnClose(open);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn("flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0", className)}>
+      <DialogContent className={cn("flex min-w-0 max-h-[85vh] flex-col gap-0 overflow-hidden p-0", className)}>
         <DialogHeader className={cn("shrink-0 px-5 pb-3.5 pt-5", header && "gap-2.5")}>
           <DialogTitle>{title}</DialogTitle>
           {header}
         </DialogHeader>
-        <div className={cn("min-h-0 flex-1 overflow-y-auto px-5 pb-5", bodyClassName)}>{children}</div>
+        <div className={cn("min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-5 pb-5", bodyClassName)}>{children}</div>
         {footer && <div className="shrink-0 border-t border-border bg-popover px-5 py-3.5">{footer}</div>}
       </DialogContent>
     </Dialog>

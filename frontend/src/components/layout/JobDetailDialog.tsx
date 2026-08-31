@@ -59,8 +59,8 @@ export function JobDetailDialog({
   return (
     <ModalShell open={!!job} onOpenChange={(next) => !next && onClose()} title={t("jobDetailTitle")}>
       {current && (
-        <div className="grid gap-2">
-          <div className="flex items-center gap-2">
+        <div className="grid min-w-0 gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <span
               className={cn(
                 "inline-flex items-center gap-1 rounded-full bg-secondary px-[9px] py-px text-ui-xs text-muted-foreground",
@@ -79,22 +79,26 @@ export function JobDetailDialog({
               )}
               {t(`runStatus_${active ? "running" : current.status}` as never)}
             </span>
-            <span className="text-ui-xs text-muted-foreground">{t(`jobKind${kindKey(current.kind)}` as never)}</span>
+            <span className="min-w-0 truncate text-ui-xs text-muted-foreground">{t(`jobKind${kindKey(current.kind)}` as never)}</span>
           </div>
 
           {active && <Progress className="my-0.5" value={Math.round(current.progress * 100)} />}
-          <div className="flex items-baseline justify-between gap-2">
-            <p className="m-0 text-xs text-foreground">{current.message}</p>
+          <div className="flex min-w-0 items-baseline justify-between gap-2">
+            <p className="m-0 min-w-0 text-xs text-foreground [overflow-wrap:anywhere]">{current.message}</p>
             {active && (
               <span className="timecode shrink-0 text-ui-xs tabular-nums text-muted-foreground">
                 {Math.round(current.progress * 100)}%
               </span>
             )}
           </div>
-          {current.error && <p className="m-0 text-ui-xs text-destructive">{current.error}</p>}
+          {current.error && (
+            <p className="m-0 min-w-0 whitespace-pre-wrap text-ui-xs text-destructive [overflow-wrap:anywhere]">
+              {current.error}
+            </p>
+          )}
 
           {(children.data ?? []).length > 0 && (
-            <div className="grid gap-1 border-t border-border pt-2">
+            <div className="grid min-w-0 gap-1 border-t border-border pt-2">
               <span className="text-ui-xs font-semibold text-muted-foreground">{t("jobDetailChildren")}</span>
               <ul className="m-0 grid list-none gap-0 p-0">
                 {(children.data ?? []).map((child) => {
@@ -132,24 +136,24 @@ export function JobDetailDialog({
             </div>
           )}
 
-          <div className="grid gap-1 border-t border-border pt-2">
+          <div className="grid min-w-0 gap-1 border-t border-border pt-2">
             <span className="text-ui-xs font-semibold text-muted-foreground">{t("jobDetailEvents")}</span>
             {(events.data ?? []).length === 0 && <EmptyState size="compact" icon={<Activity size={15} />} title={t("jobDetailNoEvents")} />}
-            <ol className="m-0 grid max-h-60 list-none gap-0 overflow-y-auto p-0">
+            <ol className="m-0 grid min-w-0 max-h-60 list-none gap-0 overflow-x-hidden overflow-y-auto p-0">
               {(events.data ?? []).map((event) => (
-                <li className="grid grid-cols-[12px_minmax(0,1fr)_auto] items-baseline gap-2 py-[5px] [&+&]:border-t [&+&]:border-border" key={event.id}>
+                <li className="grid min-w-0 grid-cols-[12px_minmax(0,1fr)_auto] items-baseline gap-2 py-[5px] [&+&]:border-t [&+&]:border-border" key={event.id}>
                   <i className="mt-[5px] h-1.5 w-1.5 rounded-full bg-border-strong" />
                   <div className="grid min-w-0 gap-px">
-                    <span className="text-ui-xs text-foreground">{event.type}</span>
+                    <span className="text-ui-xs text-foreground [overflow-wrap:anywhere]">{event.type}</span>
                     {eventText(event.payload) && <small className="truncate text-ui-xs text-muted-foreground">{eventText(event.payload)}</small>}
                   </div>
-                  <time className="timecode text-ui-2xs text-muted-foreground">{relativeTime(event.created_at, locale)}</time>
+                  <time className="timecode shrink-0 text-ui-2xs text-muted-foreground">{relativeTime(event.created_at, locale)}</time>
                 </li>
               ))}
             </ol>
           </div>
 
-          <div className="mt-0.5 flex justify-end gap-1.5">
+          <div className="mt-0.5 flex flex-wrap justify-end gap-1.5">
             {onGoto && (
               <Button size="sm" variant="outline" onClick={onGoto}>
                 <ExternalLink size={13} /> {gotoLabel ?? t("jobDetailGoto")}
