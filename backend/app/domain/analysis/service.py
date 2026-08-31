@@ -239,7 +239,11 @@ def _call_gemini_video(
 ) -> str:
     """Gemini 原生:视频字节走 inline_data,generateContent 端点(非 OpenAI 兼容)。"""
     base_url = (profile.base_url or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
-    model = provider_models.model_id_for(db, profile, "chat") or "gemini-2.0-flash"
+    model = provider_models.model_id_for(db, profile, "chat")
+    if not model:
+        # 与 OpenAI-compatible 分支的 target_for 保持同一条不变量：连接下没有显式可用的
+        # chat 模型就当场失败，不能因为这个 Adapter 绕开 target_for 而暗换成某个固定 Gemini。
+        raise AnalysisError(f"供应商「{profile.name}」没有可用的对话模型")
     body = {
         "contents": [
             {

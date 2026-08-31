@@ -208,7 +208,8 @@ f5-tts / fish-speech 都要 torch + torchaudio + transformers,**2.5–3.5 GB**�
 Implementation;已登录 OAuth 连接分派到 sidecar `gateway` Implementation。两者对调用方暴露同一个
 `ai_chat.chat` Interface。`analyze_asset` 刻意不继承当前智能体模型:它是可从 HTTP、MCP 和文本模型
 共同调用的独立素材能力,因此按素材分析配置选一个 `direct` 模型。这里不再有 `gpt-4o-mini` 或其他
-硬编码模型回退;模型不可用就明确失败。
+硬编码模型回退;Gemini 原生视频的 `generateContent` Adapter 也必须从模型行解析显式 `chat` 模型,
+模型不可用就明确失败。
 
 Gateway 的边界与安全不变量见
 [ADR-0009](adr/0009-oauth-automation-through-a-tool-free-sidecar-gateway.md)。

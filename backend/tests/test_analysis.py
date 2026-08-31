@@ -205,8 +205,18 @@ class _FakeResp:
         return self._payload
 
 
-def _add_native_profile(db, vendor: str, base_url: str = "", model: str = "m") -> None:
-    add_provider(db, name=vendor, vendor=vendor, base_url=base_url, api_key=f"sk-{vendor}", model=model)
+def _add_native_profile(
+    db, vendor: str, base_url: str = "", model: str = "m", capability_ids: list[str] | None = None
+) -> None:
+    add_provider(
+        db,
+        name=vendor,
+        vendor=vendor,
+        base_url=base_url,
+        api_key=f"sk-{vendor}",
+        model=model,
+        capability_ids=capability_ids,
+    )
     db.commit()
 
 
@@ -222,7 +232,9 @@ def test_pick_native_video_profile_priority() -> None:
 
         me = db.query(User).order_by(User.created_at).first().id
         assert service.pick_native_video_profile(db, None, me).vendor == "alibaba"  # google>alibaba>moonshot
-        _add_native_profile(db, "google", base_url="https://gl/v1beta", model="gemini-2.0-flash")
+        _add_native_profile(
+            db, "google", base_url="https://gl/v1beta", model="gemini-2.0-flash", capability_ids=["chat"]
+        )
     with SessionLocal() as db:
         assert service.pick_native_video_profile(db, None, _me()).vendor == "google"
 
@@ -264,14 +276,43 @@ def test_analyze_video_native_gemini_inline_data(monkeypatch) -> None:
 
     monkeypatch.setattr(service.ai_retry, "post", fake_post)
     with SessionLocal() as db:
-        _add_native_profile(db, "google", base_url="https://generativelanguage.googleapis.com/v1beta", model="gemini-2.0-flash")
+        _add_native_profile(
+            db,
+            "google",
+            base_url="https://generativelanguage.googleapis.com/v1beta",
+            model="gemini-2.0-flash",
+            capability_ids=["chat"],
+        )
         asset = db.get(Asset, asset_json["id"])
         result = service.analyze_asset(db, asset, "描述", mode="native", user_id=_me())
     assert result["mode"] == "native" and result["provider"] == "google"
-    assert ":generateContent" in captured["url"]
+    assert captured["url"].endswith("/models/gemini-2.0-flash:generateContent")
     assert captured["params"]["key"] == "sk-google"
     parts = captured["json"]["contents"][0]["parts"]
     assert parts[1]["inline_data"]["mime_type"] == "video/mp4"
+
+
+def test_analyze_native_gemini_refuses_missing_chat_model(monkeypatch) -> None:
+    """Gemini 原生视频也必须使用连接中显式配置的模型，不能暗换成固定默认值。"""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    asset_json = make_video_asset(client, ws["id"])
+
+    def unexpected_post(*_args, **_kwargs):
+        pytest.fail("没有配置模型时不应发起 Gemini 请求")
+
+    monkeypatch.setattr(service.ai_retry, "post", unexpected_post)
+    with SessionLocal() as db:
+        add_provider(
+            db,
+            name="Google",
+            vendor="google",
+            base_url="https://generativelanguage.googleapis.com/v1beta",
+            api_key="sk-google",
+        )
+        asset = db.get(Asset, asset_json["id"])
+        with pytest.raises(service.AnalysisError, match="没有可用的对话模型"):
+            service.analyze_asset(db, asset, "描述", mode="native", user_id=_me())
 
 
 def test_analyze_native_without_provider_errors() -> None:
