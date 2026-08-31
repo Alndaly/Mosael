@@ -248,6 +248,8 @@ failed 错误色、cancelled 虚线弱化；即使节点已有旧产物，重跑
 一次性输入（prompt、手动引用素材），同时保留模型等稳定选择。失败/取消不能清空，拖动和逐字保存更
 不能参与 reset key，否则会丢失光标和重试输入。同步便签写作也必须把 running/succeeded/failed 写进
 `BoardItem.run`，不能只让提交按钮转圈。
+正文中的 `@` 引用还要把 TipTap JSON 存进 `form.prompt_document`；`prompt` 只是模型所需纯文本，
+`mentioned_asset_ids` 只说明引用了谁，两者都无法单独恢复 chip 在句子中的位置。
 
 视频转 GIF 是另一条相同的数据归属规则：源视频只读，新 GIF 记录 `derived_from_asset_id` 与转换参数；
 素材页右键和工作流节点必须汇到同一个领域函数，不能各自拼 ffmpeg 命令。

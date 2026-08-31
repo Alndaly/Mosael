@@ -4,7 +4,12 @@ import { ArrowUp, Loader2, Sparkles } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import { listAssets, listCapabilityModels, type Asset, type BoardItem } from "@/api/client";
-import { PromptEditor } from "@/features/boards/PromptEditor";
+import {
+  collect,
+  PromptEditor,
+  restorePromptDocument,
+  type PromptDocument,
+} from "@/features/boards/PromptEditor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import { Film, Music, X } from "lucide-react";
@@ -54,6 +59,9 @@ export function NoteComposer({
   const { openImagePreview } = useImagePreview();
   const [prompt, setPrompt] = React.useState(item.form?.prompt ?? "");
   const [mentioned, setMentioned] = React.useState<string[]>(item.form?.mentioned_asset_ids ?? []);
+  const [promptDocument, setPromptDocument] = React.useState<PromptDocument | undefined>(
+    item.form?.prompt_document as PromptDocument | undefined,
+  );
   const [picked, setPicked] = React.useState(
     item.form?.provider_profile_id && item.form?.model
       ? `${item.form.provider_profile_id}:${item.form.model}`
@@ -85,8 +93,17 @@ export function NoteComposer({
   //: 值里带上连接 id:同一个模型名可能挂在两条连接下(自己的和团队的),只存模型名会挑错那条。
   const current = options.find((one) => `${one.provider_profile_id}:${one.model}` === picked) ?? options[0] ?? null;
 
+  // 升级旧节点：旧版只保存纯文本和引用 id。素材库回来后按素材名恢复 chip，并在下一次
+  // onFormChange 时把结构化文档补进节点；之后重开不再依赖猜测。
+  React.useEffect(() => {
+    if (promptDocument || mentioned.length === 0 || !library.data?.length) return;
+    const restored = restorePromptDocument(prompt, mentioned, library.data);
+    if (collect(restored as { content?: unknown[] }).length > 0) setPromptDocument(restored);
+  }, [promptDocument, prompt, mentioned, library.data]);
+
   const serializedForm = JSON.stringify({
     prompt,
+    prompt_document: promptDocument,
     provider_profile_id: current?.provider_profile_id ?? item.form?.provider_profile_id,
     model: current?.model ?? item.form?.model,
     mentioned_asset_ids: mentioned,
@@ -170,9 +187,11 @@ export function NoteComposer({
 
         <PromptEditor
           value={prompt}
-          onChange={(next, assets) => {
+          document={promptDocument}
+          onChange={(next, assets, document) => {
             setPrompt(next);
             setMentioned(assets);
+            setPromptDocument(document);
           }}
           //: 有字和没字问的**不是同一件事**:一个是「写什么」,一个是「怎么改」。
           //: 用同一句提示语的话,用户会以为它要把整篇重写一遍。

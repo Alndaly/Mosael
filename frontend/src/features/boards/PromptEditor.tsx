@@ -1,6 +1,7 @@
 import React from "react";
 import {
   EditorContent,
+  type JSONContent,
   Node,
   NodeViewWrapper,
   ReactNodeViewRenderer,
@@ -17,6 +18,55 @@ import type { MediaKind } from "@/features/boards/boardNodes";
 import { RefSuggestion } from "@/components/app/refSuggestion";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
 import { cn } from "@/lib/utils";
+
+export type PromptDocument = JSONContent;
+
+function textDocument(value: string): PromptDocument {
+  return value
+    ? { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: value }] }] }
+    : { type: "doc", content: [{ type: "paragraph" }] };
+}
+
+/**
+ * 升级只有 prompt + mentioned_asset_ids 的旧节点。
+ *
+ * chip 的 renderText 本来就写入素材名，所以可以用 id 找回名字，再在原位置恢复原子节点。
+ * 找不到素材或名字时保持原文字，不凭空把引用塞到句首。
+ */
+export function restorePromptDocument(
+  value: string,
+  mentionedAssetIds: string[],
+  assets: Pick<Asset, "id" | "name" | "original_filename">[],
+): PromptDocument {
+  const references = mentionedAssetIds
+    .map((id) => {
+      const asset = assets.find((one) => one.id === id);
+      const name = asset?.name || asset?.original_filename || "";
+      return name ? { id, name } : null;
+    })
+    .filter((one): one is { id: string; name: string } => Boolean(one));
+  if (!value || references.length === 0) return textDocument(value);
+
+  const content: JSONContent[] = [];
+  let cursor = 0;
+  while (cursor < value.length) {
+    const next = references
+      .map((reference) => ({ reference, at: value.indexOf(reference.name, cursor) }))
+      .filter((match) => match.at >= 0)
+      .sort((a, b) => a.at - b.at || b.reference.name.length - a.reference.name.length)[0];
+    if (!next) {
+      content.push({ type: "text", text: value.slice(cursor) });
+      break;
+    }
+    if (next.at > cursor) content.push({ type: "text", text: value.slice(cursor, next.at) });
+    content.push({
+      type: "assetRef",
+      attrs: { assetId: next.reference.id, name: next.reference.name },
+    });
+    cursor = next.at + next.reference.name.length;
+  }
+  return { type: "doc", content: [{ type: "paragraph", ...(content.length ? { content } : {}) }] };
+}
 
 /**
  * 画板提示词输入框:一段纯文本,`@` 在**表单内部**引用素材。
@@ -74,7 +124,12 @@ const AssetChip = Node.create({
   renderText: ({ node }: { node: { attrs: Record<string, unknown> } }) => String(node.attrs.name ?? ""),
   addNodeView: () =>
     ReactNodeViewRenderer(({ node }: { node: { attrs: Record<string, unknown> } }) => (
-      <NodeViewWrapper as="span" className="inline-flex max-w-[180px] items-center gap-1 rounded-md bg-secondary px-1 py-0.5 align-baseline text-ui-2xs text-foreground">
+      <NodeViewWrapper
+        as="span"
+        data-asset-ref=""
+        data-asset-id={String(node.attrs.assetId)}
+        className="inline-flex max-w-[180px] items-center gap-1 rounded-md bg-secondary px-1 py-0.5 align-baseline text-ui-2xs text-foreground"
+      >
         <img
           src={assetThumbnailUrl(String(node.attrs.assetId))}
           alt=""
@@ -101,6 +156,7 @@ export function collect(doc: { content?: unknown[] } | null): string[] {
 
 export function PromptEditor({
   value,
+  document,
   onChange,
   placeholder,
   candidates,
@@ -109,8 +165,10 @@ export function PromptEditor({
   linked,
 }: {
   value: string;
+  /** 节点表单里保存的 TipTap JSON；没有时按旧版纯文本打开。 */
+  document?: PromptDocument;
   /** 正文变化。`assets` 是正文里 chip 引用到的素材 —— 提交时它们进 source_assets。 */
-  onChange: (next: string, assets: string[]) => void;
+  onChange: (next: string, assets: string[], document: PromptDocument) => void;
   placeholder: string;
   /** `@` 能挑的素材。由调用方按「这个模型收得下什么」筛过。 */
   candidates: (query: string) => Asset[];
@@ -123,7 +181,8 @@ export function PromptEditor({
 }) {
   //: 最后一次自己发出去的值。外面改了(上游便签填进来、撤销)才回灌,否则每敲一个字都会被
   //: prop 回流重建文档,光标跳到开头。
-  const emitted = React.useRef(value);
+  const initialDocument = document ?? textDocument(value);
+  const emitted = React.useRef({ value, document: JSON.stringify(initialDocument) });
   //: 插件的回调在创建时一次性装好,拿不到后续渲染的闭包 —— 用 ref 兜住当前值。
   const candidatesRef = React.useRef(candidates);
   candidatesRef.current = candidates;
@@ -229,7 +288,7 @@ export function PromptEditor({
         },
       }),
     ],
-    content: value ? { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: value }] }] } : undefined,
+    content: initialDocument,
     editorProps: {
       attributes: {
         // nodrag / nowheel:这东西活在画布上,不挂的话在里面选文字会变成拖画布。
@@ -248,19 +307,20 @@ export function PromptEditor({
     },
     onUpdate: ({ editor: instance }) => {
       const next = instance.getText();
-      emitted.current = next;
-      onChange(next, collect(instance.getJSON() as { content?: unknown[] }));
+      const nextDocument = instance.getJSON() as PromptDocument;
+      emitted.current = { value: next, document: JSON.stringify(nextDocument) };
+      onChange(next, collect(nextDocument as { content?: unknown[] }), nextDocument);
     },
   });
 
   React.useEffect(() => {
-    if (!editor || value === emitted.current) return;
-    emitted.current = value;
-    editor.commands.setContent(
-      value ? { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: value }] }] } : { type: "doc", content: [{ type: "paragraph" }] },
-      { emitUpdate: false },
-    );
-  }, [value, editor]);
+    if (!editor) return;
+    const nextDocument = document ?? textDocument(value);
+    const serialized = JSON.stringify(nextDocument);
+    if (value === emitted.current.value && serialized === emitted.current.document) return;
+    emitted.current = { value, document: serialized };
+    editor.commands.setContent(nextDocument, { emitUpdate: false });
+  }, [value, document, editor]);
 
   return (
     <>

@@ -6,7 +6,12 @@ import { useQuery } from "@tanstack/react-query";
 
 import { assetFileUrl, assetThumbnailUrl, listAssets, type Asset, type BoardItem, type GenerationModel } from "@/api/client";
 import { useImagePreview } from "@/components/app/image-preview";
-import { PromptEditor } from "@/features/boards/PromptEditor";
+import {
+  collect,
+  PromptEditor,
+  restorePromptDocument,
+  type PromptDocument,
+} from "@/features/boards/PromptEditor";
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
@@ -300,6 +305,9 @@ export function NodeComposer({
   const { openImagePreview } = useImagePreview();
   const saved = item.form ?? {};
   const [prompt, setPrompt] = React.useState(saved.prompt ?? item.text ?? "");
+  const [promptDocument, setPromptDocument] = React.useState<PromptDocument | undefined>(
+    saved.prompt_document as PromptDocument | undefined,
+  );
   const [picked, setPicked] = React.useState(
     saved.provider && saved.model ? `${saved.provider}/${saved.model}` : "",
   );
@@ -404,6 +412,11 @@ export function NodeComposer({
   //: 正文里 chip 引用到的素材。它们和上面那排槽位是**两件事**:槽位挂的是首帧/参考这种
   //: 有角色的位置,而 chip 是「我在这句话里指的是这张图」。提交时两边都进 source_assets。
   const [mentioned, setMentioned] = React.useState<string[]>(saved.mentioned_asset_ids ?? []);
+  React.useEffect(() => {
+    if (promptDocument || mentioned.length === 0 || !library.data?.length) return;
+    const restored = restorePromptDocument(prompt, mentioned, library.data);
+    if (collect(restored as { content?: unknown[] }).length > 0) setPromptDocument(restored);
+  }, [promptDocument, prompt, mentioned, library.data]);
 
   //: 上游变了就重挑一次默认方式:一张图 = 首帧,多张 = 参考(TapNow 的那套直觉)。
   //: 用户自己点过之后,这条不再插手 —— touched 记着这件事。
@@ -433,6 +446,7 @@ export function NodeComposer({
   const editableForm = React.useMemo<NonNullable<BoardItem["form"]>>(
     () => ({
       prompt,
+      prompt_document: promptDocument,
       provider: current?.provider ?? saved.provider,
       model: current?.model ?? saved.model,
       mode: activeMode?.key ?? mode,
@@ -440,7 +454,7 @@ export function NodeComposer({
       source_assets: sources.map((one) => ({ asset_id: one.assetId, role: one.role })),
       mentioned_asset_ids: mentioned,
     }),
-    [prompt, current, saved.provider, saved.model, activeMode, mode, formParameters, sources, mentioned],
+    [prompt, promptDocument, current, saved.provider, saved.model, activeMode, mode, formParameters, sources, mentioned],
   );
   const serializedForm = React.useMemo(() => JSON.stringify(editableForm), [editableForm]);
   const lastSavedForm = React.useRef(JSON.stringify(item.form ?? {}));
@@ -568,9 +582,11 @@ export function NodeComposer({
             中文选词时按回车会被菜单当成「选中候选」吃掉,候选词上不了屏。 */}
         <PromptEditor
           value={prompt}
-          onChange={(next, assets) => {
+          document={promptDocument}
+          onChange={(next, assets, document) => {
             setPrompt(next);
             setMentioned(assets);
+            setPromptDocument(document);
           }}
           placeholder={t(slots.length > 0 ? "boardPromptPlaceholderMention" : "boardPromptPlaceholder")}
           candidates={candidates}

@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { collect } from "./PromptEditor";
+import { collect, restorePromptDocument } from "./PromptEditor";
 
 const doc = (...content: unknown[]) => ({ type: "doc", content });
 const para = (...content: unknown[]) => ({ type: "paragraph", content });
@@ -28,4 +28,23 @@ describe("收正文里的素材引用", () => {
     expect(collect(doc(para(text("光是一句话"))))).toEqual([]);
     expect(collect(null)).toEqual([]);
   });
-})
+});
+
+describe("旧节点的 @ 引用升级", () => {
+  it("用已保存的素材 id 和名字把纯文本恢复成原子 chip", () => {
+    const restored = restorePromptDocument(
+      "把 森林.jpg 里的女孩换一套衣服",
+      ["asset-1"],
+      [{ id: "asset-1", name: "森林.jpg", original_filename: "森林.jpg" }],
+    );
+    expect(restored).toEqual(
+      doc(
+        para(
+          text("把 "),
+          { type: "assetRef", attrs: { assetId: "asset-1", name: "森林.jpg" } },
+          text(" 里的女孩换一套衣服"),
+        ),
+      ),
+    );
+  });
+});

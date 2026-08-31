@@ -426,6 +426,21 @@ def test_媒体节点的原始表单和运行态各自存放() -> None:
                     "y": 0,
                     "form": {
                         "prompt": "女孩跳舞",
+                        "prompt_document": {
+                            "type": "doc",
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "content": [
+                                        {
+                                            "type": "assetRef",
+                                            "attrs": {"assetId": "image-1", "name": "女孩.jpg"},
+                                        },
+                                        {"type": "text", "text": " 跳舞"},
+                                    ],
+                                }
+                            ],
+                        },
                         "provider": "bytedance",
                         "model": "seedance",
                         "parameters": {"duration_seconds": 9},
@@ -437,9 +452,28 @@ def test_媒体节点的原始表单和运行态各自存放() -> None:
     )
     item = canvas["items"][0]
     assert item["form"]["prompt"] == "女孩跳舞"
+    assert item["form"]["prompt_document"]["content"][0]["content"][0]["type"] == "assetRef"
     assert item["form"]["parameters"]["duration_seconds"] == 9
     assert item["run"] == {"status": "running", "job_id": "j1"}
     assert "text" not in item, "运行时提示词不应覆盖用户表单"
+
+
+def test_提示词文档必须是_tiptap_doc() -> None:
+    """任意对象存进 form 会在下次打开时交给 TipTap；形状不对必须在保存时拒绝。"""
+    with pytest.raises(BoardDomainError, match="prompt_document"):
+        normalize_canvas(
+            {
+                "items": [
+                    {
+                        "id": "n1",
+                        "kind": "note",
+                        "x": 0,
+                        "y": 0,
+                        "form": {"prompt": "女孩跳舞", "prompt_document": {"type": "paragraph"}},
+                    }
+                ]
+            }
+        )
 
 
 def test_音频项和图片视频同一套三状态() -> None:

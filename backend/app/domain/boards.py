@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -101,6 +102,12 @@ def _normalize_form(value: Any, item_id: str) -> dict[str, Any] | None:
         if not isinstance(mentioned, list):
             raise BoardDomainError(f"画板项 {item_id} 的 form.mentioned_asset_ids 必须是数组")
         form["mentioned_asset_ids"] = [str(one).strip() for one in mentioned if str(one).strip()]
+    prompt_document = form.get("prompt_document")
+    if prompt_document is not None:
+        if not isinstance(prompt_document, dict) or prompt_document.get("type") != "doc":
+            raise BoardDomainError(f"画板项 {item_id} 的 form.prompt_document 必须是 TipTap doc 对象")
+        if len(json.dumps(prompt_document, ensure_ascii=False)) > MAX_TEXT_CHARS * 8:
+            raise BoardDomainError(f"画板项 {item_id} 的 form.prompt_document 过大")
     return form
 
 
@@ -478,6 +485,7 @@ def write_text(
         form = dict(completed_form if completed_form is not None else updated.get("form") or {})
         form["prompt"] = ""
         form["mentioned_asset_ids"] = []
+        form.pop("prompt_document", None)
         updated["form"] = form
         updated["run"] = {"status": "succeeded"}
         updated.pop("job_id", None)

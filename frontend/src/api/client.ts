@@ -798,6 +798,8 @@ export interface BoardItem {
     parameters?: Record<string, unknown>;
     source_assets?: { asset_id: string; role: string }[];
     mentioned_asset_ids?: string[];
+    /** TipTap JSON，保留正文中 @ 素材 chip 的位置；prompt 仍是发给模型的纯文本。 */
+    prompt_document?: { type?: string; content?: unknown[]; [key: string]: unknown };
   };
   /** 节点自己的运行态。表单和运行态分开，失败/重试不会改掉用户输入。 */
   run?: {
