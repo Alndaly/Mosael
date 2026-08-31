@@ -68,7 +68,11 @@ const STATUSES: NonNullable<BoardItem["run"]>["status"][] = [
 
 afterEach(cleanup);
 
-function renderNode(kind: BoardItem["kind"], status: NonNullable<BoardItem["run"]>["status"]) {
+function renderNode(
+  kind: BoardItem["kind"],
+  status: NonNullable<BoardItem["run"]>["status"],
+  extra: Partial<BoardItem> = {},
+) {
   const Node = BOARD_NODE_TYPES[kind];
   const item: BoardItem = {
     id: `${kind}-${status}`,
@@ -77,11 +81,12 @@ function renderNode(kind: BoardItem["kind"], status: NonNullable<BoardItem["run"
     y: 0,
     text: "测试节点",
     asset_id: status === "succeeded" && ["image", "video", "audio"].includes(kind) ? "asset-1" : undefined,
-    run: {
-      status,
-      job_id: status === "queued" || status === "running" ? "job-1" : undefined,
-      error: status === "failed" ? "上游拒绝了请求" : undefined,
-    },
+    ...extra,
+    run: extra.run ?? {
+        status,
+        job_id: status === "queued" || status === "running" ? "job-1" : undefined,
+        error: status === "failed" ? "上游拒绝了请求" : undefined,
+      },
   };
   const props = {
     id: item.id,
@@ -111,5 +116,18 @@ describe("无限画布节点运行状态", () => {
     const { getAllByText, queryByText } = renderNode("video", "cancelled");
     expect(getAllByText("已取消")).toHaveLength(2);
     expect(queryByText("生成中")).toBeNull();
+  });
+
+  it.each(["queued", "running", "failed"] as const)("%s 的长 URL 文案限制在节点宽度内", (status) => {
+    const copy =
+      "ARK-request-failed:https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks/abcdefghijklmnopqrstuvwxyz0123456789";
+    const extra: Partial<BoardItem> =
+      status === "failed"
+        ? { run: { status, error: copy } }
+        : { form: { prompt: copy }, run: { status, job_id: "job-1" } };
+    const { getByText } = renderNode("video", status, extra);
+    const text = getByText(copy);
+    expect(text.className).toContain("[overflow-wrap:anywhere]");
+    expect(text.parentElement?.className).toContain("min-w-0");
   });
 });

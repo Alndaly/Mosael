@@ -277,11 +277,15 @@ function Generating({ text }: { text?: string }) {
       {/* **骨架屏,不是一个干转的圈。** 出图要几十秒,一个圈在那儿转看不出「快好了还是卡住了」;
           一块和产出同形状的灰底至少说明「这一格将来是张图」,画布上一眼扫过去也分得清哪几格在跑。 */}
       <Skeleton className="absolute inset-0 h-full w-full rounded-lg" />
-      <div className="relative grid justify-items-center gap-1.5 px-3 text-center">
+      <div className="relative grid w-full min-w-0 max-w-full justify-items-center gap-1.5 px-3 text-center">
         <Loader2 size={16} className="animate-spin text-primary" />
         {/* **要看得见提示词**。同时跑三四个生成时,四个一模一样的框分不出谁是谁 ——
             而用户想撤掉的往往正是其中某一个。 */}
-        {text ? <span className="line-clamp-3 text-ui-2xs leading-relaxed text-muted-foreground">{text}</span> : null}
+        {text ? (
+          <span className="line-clamp-3 min-w-0 max-w-full [overflow-wrap:anywhere] text-ui-2xs leading-relaxed text-muted-foreground">
+            {text}
+          </span>
+        ) : null}
       </div>
     </div>
   );
@@ -291,10 +295,14 @@ function Queued({ text }: { text?: string }) {
   const t = useI18n();
   return (
     <div className="grid h-full w-full place-items-center overflow-hidden rounded-lg bg-[color-mix(in_srgb,var(--primary)_6%,transparent)] px-3">
-      <div className="grid justify-items-center gap-1.5 text-center">
+      <div className="grid w-full min-w-0 max-w-full justify-items-center gap-1.5 text-center">
         <Clock3 size={16} className="text-primary" />
         <span className="text-ui-2xs font-medium text-primary">{t("boardNodeQueued")}</span>
-        {text ? <span className="line-clamp-3 text-ui-2xs leading-relaxed text-muted-foreground">{text}</span> : null}
+        {text ? (
+          <span className="line-clamp-3 min-w-0 max-w-full [overflow-wrap:anywhere] text-ui-2xs leading-relaxed text-muted-foreground">
+            {text}
+          </span>
+        ) : null}
       </div>
     </div>
   );
@@ -317,10 +325,12 @@ function Failed({ reason }: { reason: string }) {
   const t = useI18n();
   return (
     <div className="grid h-full w-full place-items-center overflow-hidden rounded-lg bg-[color-mix(in_srgb,var(--destructive)_7%,transparent)] px-3">
-      <div className="grid justify-items-center gap-1 text-center">
+      <div className="grid w-full min-w-0 max-w-full justify-items-center gap-1 text-center">
         <AlertTriangle size={15} className="text-destructive" />
         <span className="text-ui-2xs font-semibold text-destructive">{t("boardsGenerateFailed")}</span>
-        <span className="line-clamp-3 text-ui-2xs leading-relaxed text-muted-foreground">{reason}</span>
+        <span className="line-clamp-3 min-w-0 max-w-full [overflow-wrap:anywhere] text-ui-2xs leading-relaxed text-muted-foreground">
+          {reason}
+        </span>
       </div>
     </div>
   );
