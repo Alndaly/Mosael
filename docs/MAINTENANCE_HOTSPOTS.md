@@ -21,17 +21,19 @@
 - `pageDriver.ts` 是通用 WebContents Driver,但已经长出小红书等平台命名 helper,说明平台知识开始反向泄漏。
 - `publishWorker.ts` 同时处理 claim/report、并发、前台占用、截图、失败分类和单任务执行脚本。
 
-**Started**
+**Completed**
 
 - 已把平台页面选择器契约抽到 `electron/publish/selectors.ts`。这是第一条低风险 seam:
   平台页面 DOM 变化现在可以独立 review,不用在 1000 行 Adapter 实现里找常量。
+- 已按平台拆到 `electron/publish/adapters/*.ts`,`electron/publish/adapters.ts` 只保留统一装配入口
+  `createAdapter`。调用方不感知文件布局,新增平台也不再扩大既有平台 Implementation。
+- 已把小红书等平台 helper 移回对应 Adapter。`PageDriver` 只保留导航、DOM 探测、可信输入、文件、
+  cookie、诊断与截图这些通用浏览器能力。
 
-**Next slices**
+**Remaining slice**
 
-1. 把 `BilibiliAdapter` + B 站专属 DOM script 移到 `electron/publish/adapters/bilibili.ts`,
-   `createAdapter` 保持行为不变。
-2. 把 `PageDriver` 里的平台命名 helper 移回对应平台 Adapter,让 Driver 只保留导航、CSS/text 探测、输入事件、CDP 文件上传、截图、取消。
-3. 抽出 `runPublishTask(...)` Module: `publishWorker.ts` 只留轮询/并发;单条任务的状态回报、截图、blocked 映射集中到一个测试 surface。
+1. 抽出 `runPublishTask(...)` Module:`publishWorker.ts` 目前仍同时拥有轮询/并发和单任务的状态回报、
+   截图、blocked 映射。抽出后让 worker 只编排,并给单任务执行形成一个稳定测试 surface。
 
 ## 2. 前端全局样式 — ✅ 已解决(2026-07-22)
 
@@ -97,7 +99,7 @@ base 归属由 [`contracts/scene-cases.json`](../contracts/scene-cases.json) 双
 
 ## 6. `_migrate_*` 会持续堆积
 
-运行时没有迁移框架,已装机的表结构变更全靠 `app/core/db.py` 里的 `_migrate_*` 链,而它只增不减。
+运行时没有迁移框架,已装机的表结构变更全靠 `app/db/migrations.py` 里的 `_migrate_*` 链,而它只增不减。
 退休判据写在 [ARCHITECTURE.md](ARCHITECTURE.md):引入时间早于**最早仍支持的 Release** 即可删。
 每次停止支持某个旧版本时顺手清一轮,否则 `init_db()` 会慢慢长成考古现场。
 
@@ -193,6 +195,23 @@ REST)。但**改一处不改另一处**的后果是隐性的——前端说「�
 
 改这两个值时**两侧一起改**,并在 PR 里说明。将来若要收口,方向是让后端从 sidecar 拿一次配置,
 而不是再抄第三份。
+
+## 13. 视觉输入归一化 Seam 仍分叉
+
+`analysis.service.analyze_asset` 会先用 `browser_compatible_image` 把 HEIC 等格式转成模型可消费的
+PNG/JPEG；无限画布 `boards._look_at` 却直接读原文件，并把所有非 PNG 后缀标成 `image/jpeg`。因此同一张
+HEIC 在素材分析入口能成功，在画布「看图」入口仍可能以错误 MIME 和原始字节送给模型。
+
+不要在画布里再补一段 HEIC 特判。应抽一个「素材 → 模型视觉输入」Module，让它的 Interface 统一负责：
+
+- 浏览器/模型兼容格式转换与真实 MIME；
+- 图片数量和编码大小限制；
+- 视频采样帧及其 MIME；
+- 失败时可给用户解释的输入级错误。
+
+这个 Seam 有足够的 Depth：删掉它会迫使素材分析、无限画布和未来工作流视觉节点各自重写同一组规则；
+保留它则能让格式支持和限制修改具有 Locality，并让三个 Adapter 复用同一批 fixture。回归测试至少覆盖
+HEIC、PNG、JPEG、错误扩展名、超过上限、视频帧，以及同一素材经素材分析/画布得到等价视觉输入。
 
 ## Verification rule
 

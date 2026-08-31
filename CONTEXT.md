@@ -104,6 +104,8 @@ _Avoid_: 把「预览和导出不一样」一概当 bug——调色的不一样�
 **表结构演进**:
 运行时**不跑迁移框架**。`init_db()` = `create_all`(新装机建全表)+ 一串 `_migrate_*`(已装机补差)。
 改表 = 改 `models.py` **且** 加一个 `_migrate_*`,少一步就是「新装机好、老用户崩」。
+`test/bundle.smoke.mjs` 会拿 `test/upgrade_db_fixture.py` 生成的旧库启动真正的打包 Electron,同时验证
+冻结后端升级、health、renderer 加载与升级后数据,不是只检查产物存在。
 _Avoid_: 说「加个 Alembic 迁移」——那套已随漂移移除
 
 **迁移退休判据**:
@@ -179,9 +181,12 @@ _Avoid_: 把能力挂在连接上(同一端点常常既有对话模型也有生�
 能力回答“模型会什么”,执行面回答“这次调用经哪个 Adapter”。`agent` 走 pi Agent Adapter,API Key 与 OAuth
 订阅都能用;`direct` 走后端 OpenAI-compatible Adapter,只认有 `base_url` 的 API Key 连接;`gateway` 走
 sidecar 的**无工具、无记忆单次补全** Adapter,只给已登录 OAuth 连接。画板写作、工作流 LLM 选择
-`automation` 集合(=`direct` + `gateway`),运行时按连接鉴权方式分派;独立素材分析仍属于 `direct`,AI Studio
-智能体属于 `agent`。Gateway 沿用短期服务令牌与凭据租约做刷新,不监听端口、不向浏览器返回 OAuth Token。
-支持视觉的智能体/Gateway 模型直接接收当前消息图片;文本模型以及视频/音频仍通过 `analyze_asset` 工具处理。
+`automation` 集合(=`direct` + `gateway`),运行时按连接鉴权方式分派;无限画布与工作流 LLM 共用这条
+无状态 Interface,但工作流节点目前只组装文本消息。独立素材分析仍属于 `direct`,AI Studio 智能体属于
+`agent`。`analyze_asset` 不继承当前智能体的模型:它按素材分析配置独立选模,供 HTTP、MCP 与文本模型
+共同调用;不存在 `gpt-4o-mini` 或其他硬编码模型回退。Gateway 沿用短期服务令牌与凭据租约做刷新,
+不监听端口、不向浏览器返回 OAuth Token。支持视觉的智能体可直接接收当前消息图片;Gateway 协议也支持
+图片 data URI。视频/音频和已有素材按调用方走采样帧、转写或 `analyze_asset`。
 _Avoid_: 用 capability 代替执行通道;把 OAuth Token 或任意供应商地址暴露成通用反向代理
 
 **vendor 预设**:

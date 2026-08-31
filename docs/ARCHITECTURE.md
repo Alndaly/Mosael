@@ -25,7 +25,7 @@
 | `publish/` | 发布:平台注册表(**只有需要登录态的真平台**)、任务队列、worker 协议;账号即挂平台的浏览器档案(`profile_id`) |
 | `browser/` | 浏览器池 / 持久登录:`BrowserProfile`(可复用登录身份 = 持久分区 + 代理 + 元数据)统一发布账号与通用档案;会话受**租约**(一档案一时刻一会话)。RPA 节点 / 智能体 / 手动会话都经「入队动作 + 执行器回报」桥驱动 Electron 里的浏览器 |
 | `scheduler/` | 触发器(manual/interval/daily/weekly/webhook)→ 触发工作流。注意:桌面端关掉进程后端就停了,所以定时任务依赖应用常驻(见「系统能力层」) |
-| `agent/` | 智能体会话:CLI 适配器 + 流式 + 记忆 |
+| `agent/` | 智能体会话:pi Agent Adapter + sidecar 流式协议 + 会话/记忆 + 工具循环 + 子智能体 |
 | `audio/`(在 `app/` 下,与 `domain/` 平级) | 语音:ASR 引擎目录与 worker、TTS 引擎与守护进程、音色克隆、字幕配音(`subtitle_dub.py`)。**语言能力挂在权重上而不是引擎上**(`f5_models.py` 是那张表,`tts_language.py` 是合成前的那道判断) |
 | `generation/` | 文生图/视频。**参数描述符(`catalog.py`)是唯一事实源** —— 界面按它渲染控件、智能体按它知道能给什么、提交按它校验(四条路都汇到 `create_generation_job`,漏拦的后果不是报错:供应商可能默默忽略,于是要的 10 秒跑出默认的 5 秒)。输入素材**带角色**,不靠位置 —— 各家接口本来就有 role,而扁平列表表达不了。角色分**三条互不相通的路**:首尾帧(决定成片的第一格和最后一格)、参考素材(参考图/视频/音频,一帧都不出现在成片里,只影响风格与主体)、视频输入(`source_video` 是被编辑的那一段、`first_clip` 是被续写的那一段、`driving_audio` 驱动口型与卡点)。素材之间的规矩全由描述符声明:份数上限 `source_limits`、互斥组 `exclusive_source_groups`、必填 `requires_source`、搭伴 `requires_companion`、参考图下限 `min_reference_images`、跟着素材变的时长上限 `conditional_max_duration_seconds`。数字来自各家接口自己的报错,不是文档里的建议值;角色的名字和给智能体的说明也在这里(`SOURCE_ROLE_LABELS` / `SOURCE_ROLE_HELP`),**只此一份** —— 此前 mcp_server 另抄了一份,结果角色长到八种时它停在四种,智能体永远不会用剩下那四种 |
 | `translate.py` | 文本翻译:Google 免费端点 + 走工作区模型的 LLM 两条路,字幕面板与工作流节点共用 |
@@ -62,7 +62,7 @@ TaskEvent 行只在总线创建。
 | 动作 | 走哪条 | 同步还是任务 |
 | --- | --- | --- |
 | 出图 / 出片 | `create_generation_job` | 任务 + 回执 |
-| 写 / 改文案 | `ai_chat.chat`(和工作流 LLM 节点、智能体同一条) | 同步,几秒就回 |
+| 写 / 改文案 | `ai_chat.chat`(与工作流 LLM 共用单次补全 Interface;智能体走 pi Agent Adapter) | 同步,几秒就回 |
 | 文案转音频 | `start_synthesis`(TTS 不是「生成」能力,选的是音色) | 任务 + 回执 |
 | 剪一段 | 一次 ffmpeg,`register_file_asset` 登记成新素材 | 任务 + 回执 |
 
@@ -108,11 +108,15 @@ TaskEvent 行只在总线创建。
 SQLite(WAL)+ SQLAlchemy 2.0。所有实体挂 `workspace_id`,路由层 `ensure_workspace_access` 强制隔离(方法感知:写门禁读 ASGI 中间件绑定的 HTTP 方法)。
 
 **表结构怎么演进**(重要,曾被误记为 Alembic):运行时**不跑迁移框架**。`init_db()` 做两件事——
-`Base.metadata.create_all` 建出新装机需要的全部表,再依次跑 `app/core/db.py` 里的一串 `_migrate_*`
+`Base.metadata.create_all` 建出新装机需要的全部表,再依次跑 `app/db/migrations.py` 里的一串 `_migrate_*`
 函数,给**已装机**补上 `create_all` 不会施加的变更(加列、改外键、回填)。
 
 改表结构因此是两步:①改 `models.py`(新装机由此得到正确结构);②加一个 `_migrate_*`(已装机由此
 跟上)。只做①的话,新装机正常、老用户升级后崩在缺列上。
+
+发版 CI 还会运行 `test/bundle.smoke.mjs`:它先用 `test/upgrade_db_fixture.py` 造一份最小旧库,再真正
+启动打包后的 Electron。通过条件不是「安装包能解压」,而是冻结后端完成升级并健康、打包 renderer
+完成加载,最后旧库新增字段与数据仍正确。这条冒烟覆盖的是源码单测碰不到的打包路径和启动顺序。
 
 `_migrate_*` 有明确的退休判据:**它保护的最早版本一旦不再需要支持,就可以删**。判据是引入时间
 对比最早仍支持的 GitHub Release —— 早于它的只服务从未公开的 dev 库,可以删掉;晚于它的仍在为
@@ -122,6 +126,9 @@ SQLite(WAL)+ SQLAlchemy 2.0。所有实体挂 `workspace_id`,路由层 `ensure_w
 团队成员是**邀请制**:管理员按用户名发邀请(`workspace_invitations`),对方在站内通知里接受/拒绝,四级角色 + 逐权限覆盖。
 每张表归一个领域所有(`app/domain/ownership.py`),行创建只发生在拥有方,棘轮测试强制
 (见 [ADR-0003](adr/0003-data-ownership-over-splitting-models.md))。
+文件布局可以按领域切片:`app/db/model_slices/*`、`app/api/schemas/*`、`frontend/src/api/domains/*`
+提高 Locality,但切片不是公共 Interface。调用方仍分别只从 `app.db.models`、`app.api.schemas`、
+`@/api/client` 这三个统一装配入口导入,因此继续拆文件不会把布局变化扩散到全仓。
 
 **主机权限 vs 内容权限**:工作流的 `code` 节点在后端主机上执行任意 Python(进程隔离 + 超时 +
 输出上限,但**不是沙箱**)。单机安装下作者就是机器主人,无所谓;团队/远程后端下,`edit` 是所有
@@ -183,6 +190,28 @@ f5-tts / fish-speech 都要 torch + torchaudio + transformers,**2.5–3.5 GB**�
   什么(不该被目录冲掉)。目录里查不到的模型(私有部署、别名)可以手填,与目录来的平权,只额外
   标一个「目录中已不存在」。
 - **数据归属**是 `app/domain/provider_models.py`,建行只经它的 `upsert`(棘轮盯着)。
+
+### 能力和执行面是两条轴
+
+能力回答「这个模型会什么」,执行面(execution surface)回答「这次调用经哪个 Adapter」。把两者合在
+一个 `vision_model` 或供应商开关里,会让调用方在 OAuth/API Key、工具权限和会话状态之间暗中换语义。
+当前装配关系如下:
+
+| 调用方 | 执行面 | Adapter / Interface | 状态与工具 | 视觉输入现状 |
+| --- | --- | --- | --- | --- |
+| AI Studio 智能体 | `agent` | pi Agent Adapter | 有会话、记忆、工具循环和子智能体 | 当前消息图片在所选模型声明视觉能力时直接送入;已有素材可经工具分析 |
+| 无限画布写作/看图 | `automation` | `ai_chat.chat` → `direct` 或 `gateway` | 无状态、无工具的单次补全 | 图片与视频采样帧可随消息发送;浏览器不兼容图片的统一归一化仍是待收口 Seam |
+| 工作流 LLM 节点 | `automation` | `ai_chat.chat` → `direct` 或 `gateway` | 无状态、无工具的单次补全 | 节点目前只组装文本消息 |
+| 素材分析 API / `analyze_asset` 工具 | `direct` | `analysis.service` → 后端视觉 Adapter | 独立单次分析,不继承智能体会话与模型 | 图片先归一化;视频走原生输入或采样帧;音频复用转写 |
+
+`automation` 是选择集合而不是第四种传输协议:有 `base_url` 的 API Key 连接分派到后端 `direct`
+Implementation;已登录 OAuth 连接分派到 sidecar `gateway` Implementation。两者对调用方暴露同一个
+`ai_chat.chat` Interface。`analyze_asset` 刻意不继承当前智能体模型:它是可从 HTTP、MCP 和文本模型
+共同调用的独立素材能力,因此按素材分析配置选一个 `direct` 模型。这里不再有 `gpt-4o-mini` 或其他
+硬编码模型回退;模型不可用就明确失败。
+
+Gateway 的边界与安全不变量见
+[ADR-0009](adr/0009-oauth-automation-through-a-tool-free-sidecar-gateway.md)。
 
 **订阅计划(OAuth)的令牌自动刷新**。access token 普遍只有几小时,刷新是协议里就有的一步,但刷新
 协议在 pi 的 Provider 定义里——自己在 Python 里实现等于把六家协议再抄一遍。所以后端只负责**决定
