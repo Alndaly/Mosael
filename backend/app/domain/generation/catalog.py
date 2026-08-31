@@ -525,7 +525,102 @@ MINIMAX_VIDEO_CAPABILITIES = {
     "supports_audio": True,
 }
 
+#: Evolink 是一层统一媒体网关,不是又一套模型家族。下面只描述它公开目录中已经明确写出的
+#: 共同协议和代表性引擎；模型 id 仍原样下发,所以用户也能在设置里手动加入目录后来新增的型号。
+#: 网关公开参数允许 3–15 秒和最高 4K,但「具体型号是否有某一档」会变化。内置描述符只展示
+#: 官方 quick reference 明确承诺的 1080p 常用档,手动模型则走 provider 自己的宽范围校验。
+EVOLINK_VIDEO_T2V_CAPABILITIES = {
+    "modes": ["text-to-video"],
+    "max_prompt_chars": 5000,
+    "parameter_keys": ["duration_seconds", "resolution", "aspect_ratio"],
+    "duration_seconds": [],
+    "default_duration_seconds": 5,
+    "min_duration_seconds": 3,
+    "max_duration_seconds": 15,
+    "resolutions": ["480p", "720p", "1080p"],
+    "default_resolution": "1080p",
+    "aspect_ratios": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"],
+    "default_aspect_ratio": "16:9",
+}
+
+EVOLINK_VIDEO_I2V_CAPABILITIES = {
+    **EVOLINK_VIDEO_T2V_CAPABILITIES,
+    "modes": ["text-to-video", "image-to-video"],
+    "parameter_keys": [
+        "duration_seconds", "resolution", "aspect_ratio", "first_frame",
+    ],
+    "source_limits": {"first_frame": 1},
+}
+
+EVOLINK_SEEDANCE_15_CAPABILITIES = {
+    **EVOLINK_VIDEO_I2V_CAPABILITIES,
+    "modes": ["text-to-video", "image-to-video", "keyframes-to-video"],
+    "parameter_keys": [
+        "duration_seconds", "resolution", "aspect_ratio", "first_frame", "last_frame",
+    ],
+    "source_limits": {"first_frame": 1, "last_frame": 1},
+    "requires_source": {"last_frame": ["first_frame"]},
+    "min_duration_seconds": 4,
+    "max_duration_seconds": 12,
+    "supports_audio": True,
+}
+
+EVOLINK_IMAGE_SIZES = [
+    "1024x1024", "1024x1536", "1536x1024",
+    "1:1", "16:9", "9:16", "2:3", "3:2", "4:3", "3:4", "4:5", "5:4", "21:9",
+]
+EVOLINK_IMAGE_CAPABILITIES = {
+    "modes": ["text-to-image"],
+    "max_prompt_chars": 2000,
+    "parameter_keys": ["size", "num_images"],
+    "sizes": EVOLINK_IMAGE_SIZES,
+    "default_size": "1024x1024",
+    "max_num_images": 4,
+}
+EVOLINK_IMAGE_EDIT_CAPABILITIES = {
+    **EVOLINK_IMAGE_CAPABILITIES,
+    "modes": ["text-to-image", "image-to-image"],
+    "parameter_keys": ["size", "num_images", "reference_image"],
+    "source_limits": {"reference_image": 14},
+}
+
+EVOLINK_BUILTIN_MODELS = [
+    # Seedance 经 Evolink 是一条独立于火山方舟的路由；不在本地做「真人」关键词拦截，
+    # 实际审核仍由 Evolink 当前选中的上游型号决定。
+    ("seedance-1.5-pro", "video", EVOLINK_SEEDANCE_15_CAPABILITIES),
+    # Evolink README 的 Seedance 2.0 示例使用这个 id；静态 MCP 目录仍保留旧 placeholder，
+    # 两边更新节奏不同，所以只把当前示例 id 纳入，不把 placeholder 冒充成可用模型。
+    ("seedance-2.0-text-to-video", "video", EVOLINK_VIDEO_T2V_CAPABILITIES),
+    ("sora-2-preview", "video", EVOLINK_VIDEO_I2V_CAPABILITIES),
+    ("kling-o3-text-to-video", "video", EVOLINK_VIDEO_T2V_CAPABILITIES),
+    ("kling-o3-image-to-video", "video", EVOLINK_VIDEO_I2V_CAPABILITIES),
+    ("veo-3.1-generate-preview", "video", EVOLINK_VIDEO_T2V_CAPABILITIES),
+    ("MiniMax-Hailuo-2.3", "video", EVOLINK_VIDEO_T2V_CAPABILITIES),
+    ("wan2.6-text-to-video", "video", EVOLINK_VIDEO_T2V_CAPABILITIES),
+    ("wan2.6-image-to-video", "video", EVOLINK_VIDEO_I2V_CAPABILITIES),
+    ("grok-imagine-text-to-video", "video", EVOLINK_VIDEO_T2V_CAPABILITIES),
+    ("grok-imagine-image-to-video", "video", EVOLINK_VIDEO_I2V_CAPABILITIES),
+    ("veo3.1-pro", "video", {**EVOLINK_VIDEO_T2V_CAPABILITIES, "supports_audio": True}),
+    ("gpt-image-1.5", "image", EVOLINK_IMAGE_EDIT_CAPABILITIES),
+    ("gemini-3.1-flash-image-preview", "image", EVOLINK_IMAGE_EDIT_CAPABILITIES),
+    ("z-image-turbo", "image", EVOLINK_IMAGE_CAPABILITIES),
+    ("doubao-seedream-4.5", "image", EVOLINK_IMAGE_CAPABILITIES),
+    ("qwen-image-edit", "image", EVOLINK_IMAGE_EDIT_CAPABILITIES),
+    ("wan2.5-text-to-image", "image", EVOLINK_IMAGE_CAPABILITIES),
+    ("wan2.5-image-to-image", "image", EVOLINK_IMAGE_EDIT_CAPABILITIES),
+]
+
 BUILTIN_MODELS = [
+    *[
+        {
+            "id": f"evolink:{model}:{kind}",
+            "provider": "evolink",
+            "kind": kind,
+            "model": model,
+            "capabilities": capabilities,
+        }
+        for model, kind, capabilities in EVOLINK_BUILTIN_MODELS
+    ],
     {
         "id": "minimax:MiniMax-H3:video",
         "provider": "minimax",

@@ -240,6 +240,29 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
                },
         ],
     },
+    "evolink": {
+        "label": "Evolink AI",
+        "base_url": "https://api.evolink.ai/v1",
+        "health_path": "/models",
+        "capabilities": "统一图像/视频生成网关：Seedance、Kling、Veo、Hailuo、WAN、Sora、GPT Image、Gemini、Seedream 等共用一把 Key。",
+        "capability_ids": ["image", "video"],
+        "fields": [
+            {"key": "api_key", "label": "Evolink API Key", "storage": "api_key", "secret": True, "required": True},
+            {
+                "key": "base_url",
+                "label": "Evolink Endpoint",
+                "storage": "base_url",
+                "default": "https://api.evolink.ai/v1",
+                "hint": "通常保持默认；素材会自动上传到 Evolink Files API，生成结果会立即下载回本地素材库。",
+            },
+            {
+                "key": "default_model",
+                "label": "首个模型(可选)",
+                "storage": "default_model",
+                "hint": "留空即可，保存后可从内置目录选择不同引擎的图像或视频模型。",
+            },
+        ],
+    },
     # ── 订阅计划(OAuth)────────────────────────────────────────────────────────
     # 这一组刻意只声明「是哪家 + 能力」:端点、模型目录、授权流程都取自 pi 的同名 Provider。
     # fields 为空是对的 —— 用户要做的是点「登录」,不是找一把 Key 粘进来。

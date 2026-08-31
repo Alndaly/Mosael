@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from app.ai.providers import get_provider
-from app.ai.providers.base import FIRST_FRAME, REFERENCE_IMAGE, SourceAsset
+from app.ai.providers.base import FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, SourceAsset
 import httpx
 
 from app.ai.providers.base import (
@@ -32,6 +32,13 @@ from app.ai.providers.video.seedance import (
     resolve_seedance_base,
 )
 from app.ai.providers.video.veo import _with_first_frame_inline, build_submit_payload as veo_payload, extract_video_uri
+from app.ai.providers.evolink import (
+    _upload as evolink_upload,
+    build_image_payload as evolink_image_payload,
+    build_video_payload as evolink_video_payload,
+    collect_image_urls as evolink_collect_image_urls,
+    extract_result_urls as extract_evolink_result_urls,
+)
 
 
 def make_request(kind: str, **params) -> GenerationRequest:
@@ -45,6 +52,8 @@ def test_registry_resolves_providers() -> None:
     assert get_provider("kuaishou", "video") is not None
     assert get_provider("openai", "image") is not None
     assert get_provider("openai-compatible", "image") is not None
+    assert get_provider("evolink", "image") is not None
+    assert get_provider("evolink", "video") is not None
     assert get_provider("mock", "image") is None
     assert get_provider("mock", "video") is None
     assert get_provider("nope", "image") is None
@@ -61,6 +70,140 @@ def test_guardrails_reject_out_of_bounds() -> None:
         video.validate_request(make_request("video", resolution="8k"))
     with pytest.raises(ProviderError, match="Prompt"):
         video.validate_request(GenerationRequest(kind="video", model="m", prompt="  "))
+
+
+def test_evolink_uses_gateway_parameter_names_and_wider_video_limits() -> None:
+    request = GenerationRequest(
+        kind="video",
+        model="seedance-1.5-pro",
+        prompt="a runner in a park",
+        parameters={
+            "duration_seconds": 12,
+            "resolution": "1080p",
+            "aspect_ratio": "9:16",
+            "generate_audio": True,
+            "first_frame_url": "https://files.example/first.jpg",
+            "last_frame_url": "https://files.example/last.jpg",
+        },
+    )
+    assert evolink_video_payload(request) == {
+        "model": "seedance-1.5-pro",
+        "prompt": "a runner in a park",
+        "duration": 12,
+        "quality": "1080p",
+        "aspect_ratio": "9:16",
+        "generate_audio": True,
+        "image_urls": ["https://files.example/first.jpg", "https://files.example/last.jpg"],
+    }
+    provider = get_provider("evolink", "video")
+    provider.validate_request(make_request("video", duration_seconds=15, resolution="4k"))
+    with pytest.raises(ProviderError, match="3 and 15"):
+        provider.validate_request(make_request("video", duration_seconds=16))
+
+
+def test_evolink_image_payload_preserves_all_reference_urls() -> None:
+    request = GenerationRequest(
+        kind="image",
+        model="gpt-image-1.5",
+        prompt="edit the coat",
+        parameters={
+            "size": "1024*1536",
+            "num_images": 2,
+            "reference_image_url": ["https://files.example/a.png", "https://files.example/b.png"],
+        },
+    )
+    assert evolink_image_payload(request) == {
+        "model": "gpt-image-1.5",
+        "prompt": "edit the coat",
+        "size": "1024x1536",
+        "n": 2,
+        "image_urls": ["https://files.example/a.png", "https://files.example/b.png"],
+    }
+
+
+def test_evolink_uploads_local_inputs_in_semantic_role_order(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    first = tmp_path / "first.png"
+    last = tmp_path / "last.png"
+    reference = tmp_path / "reference.png"
+    for path in (first, last, reference):
+        path.write_bytes(path.stem.encode())
+    request = GenerationRequest(
+        kind="video",
+        model="seedance-1.5-pro",
+        prompt="move",
+        sources=(
+            SourceAsset(role=REFERENCE_IMAGE, path=reference),
+            SourceAsset(role=LAST_FRAME, path=last),
+            SourceAsset(role=FIRST_FRAME, path=first),
+        ),
+    )
+    monkeypatch.setattr(
+        "app.ai.providers.evolink._upload",
+        lambda path, _context: f"https://files.example/{path.name}",
+    )
+    urls = evolink_collect_image_urls(request, ProviderContext("p", "evolink", "key"))
+    assert urls == [
+        "https://files.example/first.png",
+        "https://files.example/last.png",
+        "https://files.example/reference.png",
+    ]
+
+
+def test_evolink_upload_reuses_browser_image_normalization(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    source = tmp_path / "source.heic"
+    preview = tmp_path / "browser-preview.jpg"
+    source.write_bytes(b"heic")
+    preview.write_bytes(b"jpeg")
+    captured: dict[str, object] = {}
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {"success": True, "data": {"file_url": "https://files.example/preview.jpg"}}
+
+    class FakeClient:
+        def __init__(self, **kwargs) -> None:
+            captured["client"] = kwargs
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+        def post(self, path: str, **kwargs):
+            captured["path"] = path
+            captured["files"] = kwargs["files"]
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        "app.ai.providers.evolink.browser_compatible_image",
+        lambda path, directory: (preview, "image/jpeg"),
+    )
+    monkeypatch.setattr("app.ai.providers.evolink.RetryingClient", FakeClient)
+
+    url = evolink_upload(source, ProviderContext("p", "evolink", "secret"))
+
+    assert url == "https://files.example/preview.jpg"
+    assert captured["path"] == "/api/v1/files/upload/stream"
+    assert captured["files"] == {"file": ("browser-preview.jpg", b"jpeg", "image/jpeg")}
+
+
+def test_evolink_task_terminal_states() -> None:
+    assert extract_evolink_result_urls({"status": "processing", "progress": 40}) is None
+    assert extract_evolink_result_urls(
+        {
+            "status": "completed",
+            "results": ["https://cdn.example/a.mp4"],
+            "result_data": [{"video_url": "https://cdn.example/b.mp4"}],
+        }
+    ) == ["https://cdn.example/a.mp4", "https://cdn.example/b.mp4"]
+    with pytest.raises(ProviderError, match="policy rejected"):
+        extract_evolink_result_urls(
+            {"status": "failed", "error": {"code": "content_policy", "message": "policy rejected"}}
+        )
 
 
 def test_generation_metering_estimates_prompt_tokens() -> None:

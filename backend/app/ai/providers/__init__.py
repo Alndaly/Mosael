@@ -25,6 +25,7 @@ from app.ai.providers.video.seedance import SeedanceProvider
 from app.ai.providers.image.seedream import SeedreamProvider
 from app.ai.providers.video.minimax import MiniMaxVideoProvider
 from app.ai.providers.video.veo import VeoProvider
+from app.ai.providers.evolink import EvolinkProvider
 
 _PROVIDERS: dict[tuple[str, str], GenerationProvider] = {}
 
@@ -44,6 +45,8 @@ _register(OpenAIImageProvider("openai"))
 _register(OpenAIImageProvider("openai-compatible"))
 _register(ComfyUIProvider("image"))
 _register(ComfyUIProvider("video"))
+_register(EvolinkProvider("image"))
+_register(EvolinkProvider("video"))
 
 
 def get_provider(name: str, kind: str) -> GenerationProvider | None:
