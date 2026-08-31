@@ -8,10 +8,17 @@
 
 from __future__ import annotations
 
+import base64
+import shutil
+
 import pytest
 
 from app.domain.boards import BoardDomainError, normalize_canvas
+from tests.media_fixtures import TINY_HEIC
 from tests.util import fresh_client
+
+
+HAS_FFMPEG = shutil.which("ffmpeg") is not None
 
 
 def _workspace(client) -> str:
@@ -618,6 +625,52 @@ def test_连过来的图片会让模型看着写() -> None:
     assert isinstance(last, list), f"图没带上,发过去的还是纯文本:{last!r}"
     assert last[0] == {"type": "text", "text": "照这张图写一句"}
     assert last[1]["type"] == "image_url" and last[1]["image_url"]["url"].startswith("data:image/png;base64,")
+
+
+@pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")
+def test_连过来的_heic_会复用视觉分析的兼容图片() -> None:
+    """画布与素材分析必须共享同一条归一化 Seam，不能把 HEIC 原字节伪装成 JPEG。"""
+    from app.api.routes.boards import _look_at
+    from app.core.db import SessionLocal
+
+    client = fresh_client()
+    ws = _workspace(client)
+    image_id = client.post(
+        "/api/assets/import",
+        data={"workspace_id": ws},
+        files={"file": ("photo.heic", TINY_HEIC, "image/heic")},
+    ).json()["id"]
+
+    with SessionLocal() as db:
+        parts, materials = _look_at(db, ws, [image_id])
+
+    assert materials == []
+    assert len(parts) == 1
+    prefix, encoded = parts[0]["image_url"]["url"].split(",", 1)
+    assert prefix == "data:image/jpeg;base64"
+    assert base64.b64decode(encoded).startswith(b"\xff\xd8")
+
+
+def test_连过来的_webp_会保留真实_mime() -> None:
+    """浏览器原生格式不需要转码，但 MIME 也不能被非 PNG = JPEG 的旧规则改错。"""
+    from app.api.routes.boards import _look_at
+    from app.core.db import SessionLocal
+
+    client = fresh_client()
+    ws = _workspace(client)
+    webp = b"RIFF\x04\x00\x00\x00WEBP"
+    image_id = client.post(
+        "/api/assets/import",
+        data={"workspace_id": ws},
+        files={"file": ("photo.webp", webp, "image/webp")},
+    ).json()["id"]
+
+    with SessionLocal() as db:
+        parts, _materials = _look_at(db, ws, [image_id])
+
+    prefix, encoded = parts[0]["image_url"]["url"].split(",", 1)
+    assert prefix == "data:image/webp;base64"
+    assert base64.b64decode(encoded) == webp
 
 
 def test_视频给画面_音频给转写_都不做多余的模型调用() -> None:

@@ -200,7 +200,7 @@ f5-tts / fish-speech 都要 torch + torchaudio + transformers,**2.5–3.5 GB**�
 | 调用方 | 执行面 | Adapter / Interface | 状态与工具 | 视觉输入现状 |
 | --- | --- | --- | --- | --- |
 | AI Studio 智能体 | `agent` | pi Agent Adapter | 有会话、记忆、工具循环和子智能体 | 当前消息图片在所选模型声明视觉能力时直接送入;已有素材可经工具分析 |
-| 无限画布写作/看图 | `automation` | `ai_chat.chat` → `direct` 或 `gateway` | 无状态、无工具的单次补全 | 图片与视频采样帧可随消息发送;浏览器不兼容图片的统一归一化仍是待收口 Seam |
+| 无限画布写作/看图 | `automation` | `ai_chat.chat` → `direct` 或 `gateway` | 无状态、无工具的单次补全 | 图片经 `browser_compatible_image` 统一格式/MIME 后发送;视频发送采样帧 |
 | 工作流 LLM 节点 | `automation` | `ai_chat.chat` → `direct` 或 `gateway` | 无状态、无工具的单次补全 | 节点目前只组装文本消息 |
 | 素材分析 API / `analyze_asset` 工具 | `direct` | `analysis.service` → 后端视觉 Adapter | 独立单次分析,不继承智能体会话与模型 | 图片先归一化;视频走原生输入或采样帧;音频复用转写 |
 

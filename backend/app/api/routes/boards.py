@@ -356,6 +356,7 @@ def _look_at(db: DbSession, workspace_id: str, asset_ids: list[str]) -> tuple[li
     """
     from app.db.models import Asset
     from app.domain.analysis.service import AnalysisError, extract_video_frames, image_part
+    from app.media.image_preview import browser_compatible_image
     from app.media.paths import resolve_key
 
     parts: list[dict] = []
@@ -369,8 +370,15 @@ def _look_at(db: DbSession, workspace_id: str, asset_ids: list[str]) -> tuple[li
             continue
 
         if asset.kind == "image":
-            mime = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
-            parts.append(image_part(path.read_bytes(), mime))
+            # 与素材分析、聊天附件共用同一条格式 Seam：HEIC 等容器先转成派生 JPEG，
+            # WebP/AVIF 等浏览器原生格式则保留原字节和真实 MIME。不能只改 data URI 标签，
+            # 否则会把 HEIC 原字节伪装成 JPEG 交给模型。
+            compatible = browser_compatible_image(path, path.parent)
+            if compatible is None:
+                # 一份坏图不该让整次写作失败；与视频抽帧失败保持相同的尽力而为语义。
+                continue
+            image_path, image_mime = compatible
+            parts.append(image_part(image_path.read_bytes(), image_mime))
         elif asset.kind == "video":
             try:
                 parts.extend(image_part(frame) for frame in extract_video_frames(path))

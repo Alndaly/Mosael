@@ -196,22 +196,23 @@ REST)。但**改一处不改另一处**的后果是隐性的——前端说「�
 改这两个值时**两侧一起改**,并在 PR 里说明。将来若要收口,方向是让后端从 sidecar 拿一次配置,
 而不是再抄第三份。
 
-## 13. 视觉输入归一化 Seam 仍分叉
+## 13. 视觉输入格式归一化 — ✅ 已收口(2026-08-31)
 
-`analysis.service.analyze_asset` 会先用 `browser_compatible_image` 把 HEIC 等格式转成模型可消费的
-PNG/JPEG；无限画布 `boards._look_at` 却直接读原文件，并把所有非 PNG 后缀标成 `image/jpeg`。因此同一张
-HEIC 在素材分析入口能成功，在画布「看图」入口仍可能以错误 MIME 和原始字节送给模型。
+`analysis.service.analyze_asset` 原本会先用 `browser_compatible_image` 把 HEIC 等格式转成模型可消费的
+JPEG；无限画布 `boards._look_at` 却直接读原文件，并把所有非 PNG 后缀标成 `image/jpeg`。因此同一张
+HEIC 在素材分析入口能成功，在画布「看图」入口却以错误 MIME 和原始字节送给模型；WebP 也会被错误
+标成 JPEG。
 
-不要在画布里再补一段 HEIC 特判。应抽一个「素材 → 模型视觉输入」Module，让它的 Interface 统一负责：
+画布现已复用 `app.media.image_preview.browser_compatible_image`：
 
-- 浏览器/模型兼容格式转换与真实 MIME；
-- 图片数量和编码大小限制；
-- 视频采样帧及其 MIME；
-- 失败时可给用户解释的输入级错误。
+- HEIC/HEIF 等容器生成并缓存派生 JPEG，原件不动；
+- JPEG/PNG/WebP/GIF/AVIF 保留原始字节并携带真实 MIME；
+- 转换失败时只跳过这一份素材，与视频抽帧失败保持相同的尽力而为语义。
 
-这个 Seam 有足够的 Depth：删掉它会迫使素材分析、无限画布和未来工作流视觉节点各自重写同一组规则；
-保留它则能让格式支持和限制修改具有 Locality，并让三个 Adapter 复用同一批 fixture。回归测试至少覆盖
-HEIC、PNG、JPEG、错误扩展名、超过上限、视频帧，以及同一素材经素材分析/画布得到等价视觉输入。
+这个 Seam 有足够的 Depth：素材预览、缩略图、智能体附件、素材分析和无限画布都只学习一个 Interface，
+格式支持的修改具有 Locality。画布回归测试钉住 HEIC 的真实 JPEG 字节和 MIME，以及 WebP 原字节与
+真实 MIME；素材分析已有独立 HEIC 回归。图片数量、编码大小和视频输入仍由各传输 Adapter 按自身协议
+限制，不强行塞进格式归一化 Module。
 
 ## Verification rule
 
