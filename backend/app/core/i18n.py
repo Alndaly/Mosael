@@ -188,6 +188,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_code": {"zh": "代码", "en": "Code"},
     "wfField_condition": {"zh": "条件", "en": "Condition"},
     "wfField_description": {"zh": "说明", "en": "Description"},
+    "wfField_duration": {"zh": "时长", "en": "Duration"},
     "wfField_dy": {"zh": "纵向距离", "en": "Vertical distance"},
     "wfField_end": {"zh": "结束位置", "en": "End"},
     "wfField_engine": {"zh": "引擎", "en": "Engine"},
@@ -195,6 +196,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_expression": {"zh": "表达式", "en": "Expression"},
     "wfField_file_path": {"zh": "文件路径", "en": "File path"},
     "wfField_find": {"zh": "查找", "en": "Find"},
+    "wfField_fps": {"zh": "帧率", "en": "Frame rate"},
     "wfField_frequency_penalty": {"zh": "重复惩罚", "en": "Frequency penalty"},
     "wfField_gone": {"zh": "等它消失", "en": "Wait until gone"},
     "wfField_headers": {"zh": "请求头", "en": "Headers"},
@@ -260,6 +262,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_values": {"zh": "具名输出", "en": "Named outputs"},
     "wfField_voice_id": {"zh": "音色", "en": "Voice"},
     "wfField_workflow_id": {"zh": "工作流", "en": "Workflow"},
+    "wfField_width": {"zh": "宽度", "en": "Width"},
     #: 节点面板的分组名。
     "wfCat_flow": {"zh": "流程", "en": "Flow"},
     "wfCat_ai": {"zh": "AI", "en": "AI"},

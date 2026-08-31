@@ -7,7 +7,7 @@ summaries — never raw internal schemas.
 
 <!-- BEGIN generated: tools -->
 
-共 **63** 个工具,其中 **16** 个走确认卡。
+共 **64** 个工具,其中 **17** 个走确认卡。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -25,6 +25,7 @@ summaries — never raw internal schemas.
 | `browser_type` | 直接执行 | Type text into an input/textarea in the open session. NEVER type passwords, payment, or credentials. |
 | `browser_upload` | 直接执行 | Put an asset's file into a page's <input type=file> — the key step when uploading a video. |
 | `browser_wait` | 直接执行 | Wait for an element (selector) / URL substring (url_contains) / page text in the open session. |
+| `convert_video_to_gif` | 确认卡 | Confirmation required: convert an EXISTING video asset into a NEW GIF asset. |
 | `create_project` | 直接执行 | Runs directly: create a project in the workspace; returns its id. |
 | `create_workflow` | 确认卡 | Confirmation required: create a NEW visual workflow. |
 | `edit_board` | 确认卡 | Confirmation required: edit an EXISTING CREATIVE BOARD with granular canvas ops. |

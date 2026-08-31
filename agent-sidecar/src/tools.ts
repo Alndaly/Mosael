@@ -96,6 +96,7 @@ const TOOL_LABELS: Record<string, string> = {
   inspect_sequence: "查看时间线",
   edit_timeline: "修改时间线",
   render_sequence: "导出时间线",
+  convert_video_to_gif: "视频转 GIF",
   generate_image: "生成图片",
   generate_video: "生成视频",
   create_workflow: "新建工作流",

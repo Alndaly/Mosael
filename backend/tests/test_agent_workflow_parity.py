@@ -38,6 +38,7 @@ NODE_TO_TOOL: dict[str, str] = {
     "plugin_tool": "",  # 插件工具已展开成一等公民(plugin__<连接>__<工具>),不是固定的一个名字
     "transcribe_asset": "transcribe_asset",
     "export_sequence": "render_sequence",
+    "video_to_gif": "convert_video_to_gif",
     "ai_generate": "generate_image",  # 与 generate_video 同一节点的两种 kind
     "publish": "publish_asset",
     "http_request": "http_request",

@@ -1022,6 +1022,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assets/{asset_id}/convert-gif": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Convert Asset To Gif
+         * @description Create a **new** GIF asset. The source video remains untouched.
+         */
+        post: operations["convert_asset_to_gif_api_assets__asset_id__convert_gif_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/assets/{asset_id}/file": {
         parameters: {
             query?: never;
@@ -5492,6 +5512,10 @@ export interface components {
             };
             /** Source Assets */
             source_assets?: components["schemas"]["SourceAssetRef"][];
+            /** Form */
+            form?: {
+                [key: string]: unknown;
+            };
         };
         /** BoardOut */
         BoardOut: {
@@ -9030,6 +9054,29 @@ export interface components {
             /** Auth */
             auth?: string[];
         };
+        /**
+         * VideoToGifRequest
+         * @description Options for creating a new GIF asset from a video asset.
+         */
+        VideoToGifRequest: {
+            /**
+             * Fps
+             * @default 12
+             */
+            fps: number;
+            /**
+             * Width
+             * @default 720
+             */
+            width: number;
+            /**
+             * Start
+             * @default 0
+             */
+            start: number;
+            /** Duration */
+            duration?: number | null;
+        };
         /** VoiceFromSpeakerRequest */
         VoiceFromSpeakerRequest: {
             /** Asset Id */
@@ -11505,6 +11552,41 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    convert_asset_to_gif_api_assets__asset_id__convert_gif_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VideoToGifRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

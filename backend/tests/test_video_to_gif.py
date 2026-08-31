@@ -75,3 +75,29 @@ def test_工作流节点已注册并归为内部变更() -> None:
     assert get_executor("video_to_gif") is not None
     assert NODE_TYPES["video_to_gif"]["outputs"] == ["asset_id", "source_asset_id"]
 
+
+def test_智能体转换工具先确认再创建同一类任务() -> None:
+    client = fresh_client()
+    ws = _workspace(client)
+    video = client.post(
+        "/api/assets/import",
+        data={"workspace_id": ws},
+        files={"file": ("source.mp4", b"video", "video/mp4")},
+    ).json()
+    card = client.post(
+        "/api/confirmations",
+        json={
+            "workspace_id": ws,
+            "tool": "convert_video_to_gif",
+            "payload": {"asset_id": video["id"], "fps": 9, "width": 600, "start": 1, "duration": 2},
+        },
+    )
+    assert card.status_code == 200, card.text
+    pending = card.json()
+    assert pending["permission"] == "render-cost"
+    assert "原视频不变" in pending["summary"]
+    with patch("app.domain.assets.video_gif.threading.Thread") as thread:
+        approved = client.post(f"/api/confirmations/{pending['id']}/approve").json()
+    assert approved["status"] == "executed", approved.get("error")
+    assert approved["result"]["source_asset_id"] == video["id"]
+    assert thread.called

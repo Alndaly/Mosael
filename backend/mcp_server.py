@@ -153,6 +153,7 @@ CONFIRMATION_TOOLS = frozenset(
     {
         "edit_timeline",
         "render_sequence",
+        "convert_video_to_gif",
         "generate_image",
         "generate_video",
         "generate_audio",
@@ -442,6 +443,40 @@ def render_sequence(sequence_id: str, workspace_id: str = "") -> dict[str, Any]:
             "tool": "render_sequence",
             "requested_by": _REQUESTED_BY.get(),
             "payload": {"sequence_id": sequence_id},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@mcp.tool()
+def convert_video_to_gif(
+    asset_id: str,
+    fps: int = 12,
+    width: int = 720,
+    start: float = 0,
+    duration: float | None = None,
+    workspace_id: str = "",
+) -> dict[str, Any]:
+    """Confirmation required: convert an EXISTING video asset into a NEW GIF asset.
+
+    The source video is never changed or overwritten. fps must be 1-30, width
+    64-1920 pixels, start cannot be negative, and duration is optional; leave it
+    empty to convert from start to the end. This starts a background job and the
+    final GIF lands in the media library with lineage back to the source video.
+    """
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "convert_video_to_gif",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {
+                "asset_id": asset_id,
+                "fps": fps,
+                "width": width,
+                "start": start,
+                "duration": duration,
+            },
         },
     )
     return _confirmation_reply(confirmation)

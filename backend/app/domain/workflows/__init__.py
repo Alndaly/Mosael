@@ -132,6 +132,7 @@ _FIELD_LABELS = {
     "code": "wfField_code",
     "condition": "wfField_condition",
     "description": "wfField_description",
+    "duration": "wfField_duration",
     "dy": "wfField_dy",
     "end": "wfField_end",
     "engine": "wfField_engine",
@@ -139,6 +140,7 @@ _FIELD_LABELS = {
     "expression": "wfField_expression",
     "file_path": "wfField_file_path",
     "find": "wfField_find",
+    "fps": "wfField_fps",
     "frequency_penalty": "wfField_frequency_penalty",
     "gone": "wfField_gone",
     "headers": "wfField_headers",
@@ -204,6 +206,7 @@ _FIELD_LABELS = {
     "values": "wfField_values",
     "voice_id": "wfField_voice_id",
     "workflow_id": "wfField_workflow_id",
+    "width": "wfField_width",
 }
 
 

@@ -27,6 +27,7 @@ class ConfirmationError(ValueError):
 TOOL_DEFS: dict[str, dict[str, str]] = {
     "edit_timeline": {"permission": "edit", "cost": "none"},
     "render_sequence": {"permission": "render-cost", "cost": "render"},
+    "convert_video_to_gif": {"permission": "render-cost", "cost": "render"},
     "generate_image": {"permission": "ai-cost", "cost": "ai"},
     "generate_video": {"permission": "ai-cost", "cost": "ai"},
     "generate_audio": {"permission": "ai-cost", "cost": "ai"},
@@ -276,6 +277,24 @@ def _validate_payload(db: Session, tool: str, workspace_id: str, payload: dict[s
         sequence = db.get(Sequence, str(payload.get("sequence_id", "")))
         if sequence is None or sequence.workspace_id != workspace_id:
             raise ConfirmationError("Sequence not found in this workspace")
+    if tool == "convert_video_to_gif":
+        from app.db.models import Asset
+
+        asset = db.get(Asset, str(payload.get("asset_id") or ""))
+        if asset is None or asset.workspace_id != workspace_id:
+            raise ConfirmationError("这个工作区里没有这份视频素材")
+        if asset.kind != "video":
+            raise ConfirmationError("只有视频素材可以转换为 GIF")
+        try:
+            fps = int(payload.get("fps") or 12)
+            width = int(payload.get("width") or 720)
+            start = float(payload.get("start") or 0)
+            duration = payload.get("duration")
+            duration = float(duration) if duration not in (None, "") else None
+        except (TypeError, ValueError) as exc:
+            raise ConfirmationError("GIF 参数格式不正确") from exc
+        if fps < 1 or fps > 30 or width < 64 or width > 1920 or start < 0 or (duration is not None and duration <= 0):
+            raise ConfirmationError("GIF 参数超出允许范围")
     if tool == "edit_timeline":
         operations = payload.get("operations")
         if not isinstance(operations, list) or not operations:
@@ -386,6 +405,10 @@ def _summarize(tool: str, payload: dict[str, Any], external: set[str] | None = N
         return f"{len(kinds)} 个时间线操作: {', '.join(kinds[:6])}{'…' if len(kinds) > 6 else ''}"
     if tool == "render_sequence":
         return "导出时间线为 mp4"
+    if tool == "convert_video_to_gif":
+        duration = payload.get("duration")
+        clip = f"，截取 {duration} 秒" if duration not in (None, "") else ""
+        return f"把视频转成新的 GIF（{payload.get('fps', 12)} fps，宽 {payload.get('width', 720)} px{clip}），原视频不变"
     if tool == "create_workflow":
         nodes = len((payload.get("graph") or {}).get("nodes", []) or [])
         return f"创建工作流「{payload.get('name', '')}」({nodes or 1} 个节点)" + _external_warning(external)
@@ -537,6 +560,24 @@ def _execute_approved(db: Session, confirmation: ToolConfirmation) -> dict[str, 
 
         job = start_export(db, str(payload["sequence_id"]))
         return {"job_id": job.id}
+    if confirmation.tool == "convert_video_to_gif":
+        from app.db.models import Asset
+        from app.domain.assets.video_gif import start_video_to_gif
+
+        asset = db.get(Asset, str(payload["asset_id"]))
+        if asset is None or asset.workspace_id != confirmation.workspace_id:
+            raise ValueError("素材不存在")
+        duration = payload.get("duration")
+        job = start_video_to_gif(
+            db,
+            asset=asset,
+            created_by=actor,
+            fps=int(payload.get("fps") or 12),
+            width=int(payload.get("width") or 720),
+            start=float(payload.get("start") or 0),
+            duration=float(duration) if duration not in (None, "") else None,
+        )
+        return {"job_id": job.id, "source_asset_id": asset.id}
     if confirmation.tool in ("generate_image", "generate_video"):
         from app.domain.generation import create_generation_job
         from app.domain.generation.operations import parse_source_assets

@@ -2752,6 +2752,59 @@
         }
       }
     },
+    "/api/assets/{asset_id}/convert-gif": {
+      "post": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Convert Asset To Gif",
+        "description": "Create a **new** GIF asset. The source video remains untouched.",
+        "operationId": "convert_asset_to_gif_api_assets__asset_id__convert_gif_post",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VideoToGifRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/assets/{asset_id}/file": {
       "get": {
         "tags": [
@@ -15751,6 +15804,11 @@
             },
             "type": "array",
             "title": "Source Assets"
+          },
+          "form": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Form"
           }
         },
         "type": "object",
@@ -23643,6 +23701,45 @@
           "label"
         ],
         "title": "VendorPresetOut"
+      },
+      "VideoToGifRequest": {
+        "properties": {
+          "fps": {
+            "type": "integer",
+            "maximum": 30.0,
+            "minimum": 1.0,
+            "title": "Fps",
+            "default": 12
+          },
+          "width": {
+            "type": "integer",
+            "maximum": 1920.0,
+            "minimum": 64.0,
+            "title": "Width",
+            "default": 720
+          },
+          "start": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Start",
+            "default": 0
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration"
+          }
+        },
+        "type": "object",
+        "title": "VideoToGifRequest",
+        "description": "Options for creating a new GIF asset from a video asset."
       },
       "VoiceFromSpeakerRequest": {
         "properties": {
