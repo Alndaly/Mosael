@@ -407,6 +407,19 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         },
         "outputs": ["asset_id", "generation_id"],
     },
+    "video_to_gif": {
+        "category": "wfCat_asset",
+        "label": "wfNode_video_to_gif",
+        "description": "wfNode_video_to_gif_desc",
+        "config": {
+            "asset_id": {"type": "template", "required": True, "description": "wfNode_video_to_gif_asset_id"},
+            "fps": {"advanced": True, "type": "number", "description": "wfNode_video_to_gif_fps"},
+            "width": {"advanced": True, "type": "number", "description": "wfNode_video_to_gif_width"},
+            "start": {"advanced": True, "type": "number", "description": "wfNode_video_to_gif_start"},
+            "duration": {"advanced": True, "type": "number", "description": "wfNode_video_to_gif_duration"},
+        },
+        "outputs": ["asset_id", "source_asset_id"],
+    },
     "publish": {
         "category": "wfCat_publish",
         "label": "wfNode_publish",
@@ -996,6 +1009,7 @@ INTERNAL_NODE_TYPES = frozenset(
         "timeline_add_track",
         "timeline_clear",
         "ai_generate",
+        "video_to_gif",
         "condition",
         "template",
         "json_extract",

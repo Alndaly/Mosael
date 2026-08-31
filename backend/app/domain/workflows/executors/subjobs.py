@@ -87,6 +87,32 @@ def ai_generate(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict
     }
 
 
+@register("video_to_gif")
+def video_to_gif(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    from app.domain.assets.video_gif import VideoGifError, start_video_to_gif
+
+    asset = db.get(Asset, str(config.get("asset_id") or ""))
+    if asset is None or asset.workspace_id != workflow.workspace_id:
+        raise WorkflowDomainError("要转换的视频素材不在当前工作区")
+    try:
+        child = start_video_to_gif(
+            db,
+            asset=asset,
+            created_by=current_actor(db),
+            fps=int(config.get("fps") or 12),
+            width=int(config.get("width") or 720),
+            start=float(config.get("start") or 0),
+            duration=float(config["duration"]) if config.get("duration") not in (None, "") else None,
+        )
+    except VideoGifError as exc:
+        raise WorkflowDomainError(str(exc)) from exc
+    final = wait_for_job(child.id)
+    return {
+        "asset_id": str((final.result or {}).get("asset_id") or ""),
+        "source_asset_id": asset.id,
+    }
+
+
 @register("synthesize_speech")
 def synthesize_speech(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     from app.domain.voices.voices import start_synthesis

@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, AudioLines, Captions, CheckCircle2, CircleAlert, Clapperboard, Download, GitBranch, Link as LinkIcon, ListChecks, Loader2, Mic, Send, Sparkles, Timer, Trash2, X } from "lucide-react";
+import { Activity, AudioLines, Captions, CheckCircle2, CircleAlert, Clapperboard, Download, Film, GitBranch, Link as LinkIcon, ListChecks, Loader2, Mic, Send, Sparkles, Timer, Trash2, X } from "lucide-react";
 
 import { toast } from "sonner";
 
@@ -233,6 +233,7 @@ const KIND_META: Record<string, { icon: React.ReactNode; labelKey: string }> = {
   // 这些种类真实存在(proxy 还是失败大户),没有条目就全落到「任务」—— 一列
   // 十二条「任务 · 失败」,分不清是谁的什么活,这正是任务中心巡检里最响的一声。
   proxy: { icon: <Clapperboard size={13} />, labelKey: "jobKindProxy" },
+  video_to_gif: { icon: <Film size={13} />, labelKey: "jobKindVideoGif" },
   url_import: { icon: <LinkIcon size={13} />, labelKey: "jobKindUrlImport" },
   subtitle_dub: { icon: <Captions size={13} />, labelKey: "jobKindSubtitleDub" },
   tts: { icon: <AudioLines size={13} />, labelKey: "jobKindTts" },

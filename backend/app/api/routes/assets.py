@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import or_, select
 
 from app.api.deps import CurrentUser, DbSession, PresentedToken
-from app.api.schemas import AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, AssetUpdate, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse
+from app.api.schemas import AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, AssetUpdate, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, VideoToGifRequest
 from app.domain.voices.service import AsrError, start_transcription
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, require_asset
 from app.db.models import Asset, Clip, Job, Transcript, Project
@@ -356,6 +356,26 @@ def transcribe_asset(asset_id: str, db: DbSession, user: CurrentUser, language: 
     try:
         return start_transcription(db, asset_id, created_by=user.id, language=language)
     except AsrError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/assets/{asset_id}/convert-gif", response_model=JobOut)
+def convert_asset_to_gif(asset_id: str, body: VideoToGifRequest, db: DbSession, user: CurrentUser) -> Job:
+    """Create a **new** GIF asset. The source video remains untouched."""
+    from app.domain.assets.video_gif import VideoGifError, start_video_to_gif
+
+    asset = require_asset(db, user, asset_id, perm="edit")
+    try:
+        return start_video_to_gif(
+            db,
+            asset=asset,
+            created_by=user.id,
+            fps=body.fps,
+            width=body.width,
+            start=body.start,
+            duration=body.duration,
+        )
+    except VideoGifError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 

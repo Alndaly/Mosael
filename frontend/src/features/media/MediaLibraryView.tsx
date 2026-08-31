@@ -2,7 +2,7 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, Link2, ListChecks, Loader2, Pencil, Tag, Tags, Trash2, Upload, X } from "lucide-react";
 
-import { api, assetThumbnailUrl, deleteAsset, importAsset, renameAsset, setAssetTags, type Asset, type Workspace } from "@/api/client";
+import { api, assetThumbnailUrl, convertVideoToGif, deleteAsset, importAsset, renameAsset, setAssetTags, type Asset, type Workspace } from "@/api/client";
 import { UrlImportDialog } from "@/features/media/UrlImportDialog";
 import { saveAssetToDisk } from "@/lib/download";
 import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
@@ -101,6 +101,11 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     // 工作区级导入:不挂 project_id,该工作区下所有项目都能用。
     mutationFn: (file: File) => importAsset({ workspaceId: workspace.id, file }),
     onSuccess: refresh,
+  });
+  const convertGif = useMutation({
+    mutationFn: (assetId: string) => convertVideoToGif(assetId),
+    onSuccess: () => toast.success(t("assetConvertGifQueued")),
+    onError: (error: Error) => toast.error(error.message),
   });
   // 从访达直接拖进来。**逐个传而不是并发** —— 一次拖十个视频,并发会把带宽和后端的
   // 转码队列同时打满,而用户看到的是十个都卡着不动。
@@ -417,6 +422,11 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                 <ContextMenuItem onSelect={() => setEditingTags(asset)}>
                   <Tag /> {t("editTags")}
                 </ContextMenuItem>
+                {asset.kind === "video" && (
+                  <ContextMenuItem disabled={convertGif.isPending} onSelect={() => convertGif.mutate(asset.id)}>
+                    {convertGif.isPending ? <Loader2 className="animate-spin" /> : <ImagePlus />} {t("assetConvertGif")}
+                  </ContextMenuItem>
+                )}
                 <ContextMenuSeparator />
                 <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting(asset)}>
                   <Trash2 /> {t("delete")}
