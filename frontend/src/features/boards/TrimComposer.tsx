@@ -10,6 +10,7 @@ import { TrimTrack } from "@/features/boards/TrimTrack";
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
+import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
 
 /**
  * 「剪一段」面板:定起止、要不要声音。
@@ -70,7 +71,7 @@ export function TrimComposer({
   };
 
   return (
-    <NodeToolbar nodeId={item.id} isVisible position={Position.Bottom} offset={12}>
+    <NodeToolbar nodeId={item.id} isVisible position={Position.Bottom} offset={BOARD_NODE_PANEL_OFFSET}>
       <div className="nodrag nopan nowheel grid w-[420px] gap-2 rounded-xl border border-border-strong bg-panel p-2 shadow-[var(--shadow-panel)]">
         {/* 看着片子本身去剪。**填数字的问题不在麻烦,在于你不知道第 3.2 秒是什么** ——
             要么反复播放去数,要么剪出来再看一眼、不对再来一次。 */}

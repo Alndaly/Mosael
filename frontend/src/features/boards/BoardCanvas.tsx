@@ -32,6 +32,7 @@ import { TrimComposer } from "@/features/boards/TrimComposer";
 import { NoteComposer } from "@/features/boards/NoteComposer";
 import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, kindIcon, kindText, SPAWNABLE_KINDS, type MediaKind } from "@/features/boards/boardNodes";
 import { itemFormResetKey, itemIsRunning } from "@/features/boards/boardItemState";
+import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
 
 /**
  * 创意画板的画布。
@@ -942,9 +943,9 @@ function ItemToolbar({
     ]);
 
   return (
-    //: 间距从**类型标签**上方算起,不是节点上边框:标签挂在节点外的 -top-5(20px)处。
-    //: 20 + 12 —— 那个 12 和下方面板离节点下边的距离是同一个数,两边看着才一样宽。
-    <NodeToolbar nodeId={selected.map((node) => node.id)} isVisible position={Position.Top} offset={32}>
+    //: 上下浮层都从**节点边框**量同一段距离。类型标签挂在节点外,但不能因此让上方浮层
+    //: 另用一套数字 —— 否则一眼看过去就是上疏下密。
+    <NodeToolbar nodeId={selected.map((node) => node.id)} isVisible position={Position.Top} offset={BOARD_NODE_PANEL_OFFSET}>
       <div className="nodrag nopan flex items-center gap-1 rounded-full border border-border-strong bg-panel p-1.5 shadow-[var(--shadow-panel)]">
         {/* 按类型来的那几个动作装在这一格里,**分隔线是这一格自己的右边框**。
             于是它不可能在没有动作时出现 —— 此前那道线自己抄了一遍「上面有没有东西」的

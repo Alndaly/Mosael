@@ -31,6 +31,7 @@ import {
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
 import { cn } from "@/lib/utils";
+import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
 
 /**
  * 挂在节点**下方**的提示词面板 —— 「节点本身就是生成单元」这件事的那一半。
@@ -503,7 +504,7 @@ export function NodeComposer({
   };
 
   return (
-    <NodeToolbar nodeId={item.id} isVisible position={Position.Bottom} offset={12}>
+    <NodeToolbar nodeId={item.id} isVisible position={Position.Bottom} offset={BOARD_NODE_PANEL_OFFSET}>
       <div className="nodrag nopan nowheel relative w-[480px] max-w-[calc(100vw-2rem)] rounded-xl border border-border-strong bg-panel p-2.5 shadow-[var(--shadow-panel)]">
         {/* 输入素材:图片是一排参考图(可多张),视频是首帧 ⇄ 尾帧。**格子按模型声明出** ——
             见 slots 那段。挂满上限就不再给 + ,免得点了才被校验器拦下。 */}
