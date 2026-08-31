@@ -713,7 +713,11 @@ def analyze_asset(asset_id: str, question: str = "", mode: str = "auto") -> dict
     documents, web pages, workflow graphs, or to generate new media — use
     fetch_url/get_workflow/generate_*.
 
-    mode: how to feed video (images always go directly):
+    When called from an AI Studio turn, the backend derives the provider/model from the
+    authenticated agent session. Do not try to choose or describe another provider in the
+    question. OAuth vision models use the tool-free Gateway; no base URL is required.
+
+    mode: how to feed video (the session's analysis mode is authoritative for AI Studio turns):
       - "auto" (default): native video understanding when a capable profile is
         configured (Gemini / Qwen-VL / Kimi), otherwise sampled frames + transcript.
       - "native": force native video understanding (errors if no capable profile).

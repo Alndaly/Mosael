@@ -54,3 +54,18 @@ test("gateway sends a tool-free completion with sampling options and image pixel
   assert.ok(captured.messages.at(-1).content.some((part) => part.type === "image_url"));
   assert.equal(captured.tools, undefined);
 });
+
+test("gateway rejects image or sampled-video input when the selected model is text-only", async () => {
+  await assert.rejects(
+    runGatewayCompletion({
+      systemPrompt: "只给正文",
+      prompt: "分析视频帧",
+      images: [{ type: "image", data: "ZnJhbWU=", mimeType: "image/jpeg" }],
+      provider: { baseUrl: "https://example.test/v1", apiKey: "k", vendor: "openai", vision: false },
+      model: "text-only-model",
+      apiBase: "http://127.0.0.1:1",
+      token: "ephemeral",
+    }),
+    /不支持图片输入/,
+  );
+});

@@ -7,7 +7,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import or_, select
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, PresentedToken
 from app.api.schemas import AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, AssetUpdate, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse
 from app.domain.voices.service import AsrError, start_transcription
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, require_asset
@@ -247,13 +247,57 @@ def delete_asset(asset_id: str, db: DbSession, user: CurrentUser) -> Response:
 
 
 @router.post("/assets/{asset_id}/analyze", response_model=AnalyzeAssetResponse)
-def analyze_asset_route(asset_id: str, body: AnalyzeAssetRequest, db: DbSession, user: CurrentUser) -> AnalyzeAssetResponse:
+def analyze_asset_route(
+    asset_id: str,
+    body: AnalyzeAssetRequest,
+    db: DbSession,
+    user: CurrentUser,
+    token: PresentedToken,
+) -> AnalyzeAssetResponse:
     from app.domain.analysis.service import AnalysisError, analyze_asset
 
     asset = require_asset(db, user, asset_id)
     ensure_workspace_perm(db, user, asset.workspace_id, "ai")
+    resolved_profile = None
+    model = ""
+    surface = "direct"
+    mode = body.mode
+    # 智能体工具回连携带的短期令牌绑定 agent_session_id。当前模型从这份服务端事实解析，
+    # 不能让模型在工具参数里自报 profile/model —— 那既可伪造，也可能摸到别人的连接。
+    from app.core.security import find_session
+    from app.db.models import AgentSession
+
+    auth = find_session(db, token)
+    if auth is not None and auth.agent_session_id:
+        session = db.get(AgentSession, auth.agent_session_id)
+        if session is None or session.workspace_id != asset.workspace_id:
+            raise HTTPException(status_code=422, detail="素材不属于当前智能体会话的工作区")
+        from app.ai.sidecar.adapters import AdapterError
+        from app.domain.agent.host import resolve_chat_provider
+
+        try:
+            _provider, model, resolved_profile = resolve_chat_provider(
+                db,
+                session.provider_profile_id,
+                session.model or "",
+                user_id=user.id,
+            )
+        except AdapterError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        surface = "automation"
+        mode = session.analysis_video_mode or "auto"
     try:
-        result = analyze_asset(db, asset, body.question, user_id=user.id, profile_id=body.profile_id, mode=body.mode)
+        result = analyze_asset(
+            db,
+            asset,
+            body.question,
+            user_id=user.id,
+            profile_id=None if resolved_profile is not None else body.profile_id,
+            mode=mode,
+            resolved_profile=resolved_profile,
+            model=model,
+            surface=surface,
+        )
     except AnalysisError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     # 分析本身只读,但记了一笔用量;记账跟调用方事务走(见 domain/usage.billable),得落盘。

@@ -21,11 +21,13 @@ pi Provider。要求用户补 `base_url` 是错误修复路径；把 OAuth Token
 | AI Studio 智能体 | `agent` | 完整 pi Agent：会话、记忆、工具循环、子智能体 |
 | 无限画布写作/看图 | `automation` | 无状态单次补全；按连接分派 `direct` / `gateway` |
 | 工作流 LLM 节点 | `automation` | 无状态单次补全；当前只组装文本消息 |
-| 素材分析 API / `analyze_asset` | `direct` | 独立选模，不继承当前智能体模型，也不使用 OAuth Gateway |
+| 素材分析 API / `analyze_asset` | 普通请求=`direct`;AI Studio 工具=`automation` | 普通请求独立选模；工具回连从令牌绑定的会话继承模型，OAuth 图片/视频帧走 Gateway |
 
 Gateway 接受 system/user/assistant 文本和 `image_url` data URI。图片至多 8 张，编码后每张至多 8 MiB；
-非 system 角色会连同角色标签折叠成一次提示词。它不接受 `video_url`，不复用调用方的 HTTP client，
-也不保留跨请求上下文。sidecar 依据模型目录确认视觉能力后才把图片交给 Provider。
+非 system 角色会连同角色标签折叠成一次提示词。它不接受 `video_url`，所以 OAuth 视频的 `auto` / `frames`
+模式发送时间采样帧和已有语音转写，显式 `native` 明确失败，不静默改变用户模式。Gateway 不复用调用方
+的 HTTP client，也不保留跨请求上下文。sidecar 依据模型目录确认视觉能力后才把图片交给 Provider；若
+当前模型不支持图片，必须报错而不是丢弃帧后只分析文字。
 
 `target_for(..., surface="automation")` 为一次 Gateway 调用铸造并提交短期服务令牌，`chat(...)` 在
 `finally` 中立即撤销。因此这两个 Interface 必须紧邻使用，不能把带 Gateway 令牌的 `ChatTarget` 缓存、
@@ -37,7 +39,8 @@ Gateway 接受 system/user/assistant 文本和 `image_url` data URI。图片至�
 失效时明确要求重新登录，不得静默切换模型或借用他人凭据。
 
 **非目标**：Gateway 不是可对外发布的 OpenAI-compatible API，也不是 OAuth 反向代理；它不替代完整
-Agent，不为独立素材分析兜底，也不允许浏览器或插件直接拿服务令牌。若未来确有跨进程部署需求，应另写
+Agent，不为普通 HTTP 素材分析兜底，也不允许浏览器或插件直接拿服务令牌。AI Studio 工具使用 Gateway
+是因为其服务令牌已经绑定具体 `agent_session_id`，不是新增一个公开入口。若未来确有跨进程部署需求，应另写
 ADR 定义调用方身份、租户隔离、目标白名单、配额与审计，不能直接给当前 stdin Seam 加监听端口。
 
 **Considered options**：启动本地 OpenAI-compatible HTTP 代理——拒绝，新增可探测端口与第二套鉴权却没有

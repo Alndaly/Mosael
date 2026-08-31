@@ -480,7 +480,11 @@ export async function runGatewayCompletion(
       )
     : buildModels(input.provider.baseUrl, input.provider.apiKey, input.model, input.provider);
   if (!model) throw new Error(`模型 ${input.model} 不存在`);
-  const images = model.input?.includes("image") ? (input.images ?? []) : [];
+  const requestedImages = input.images ?? [];
+  if (requestedImages.length > 0 && !model.input?.includes("image")) {
+    throw new Error(`模型 ${input.model} 不支持图片输入，无法分析图片或视频帧`);
+  }
+  const images = requestedImages;
   const context: Context = {
     systemPrompt: input.systemPrompt || undefined,
     tools: [],

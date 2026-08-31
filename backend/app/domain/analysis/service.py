@@ -6,7 +6,7 @@ import mimetypes
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 
@@ -195,7 +195,13 @@ def _asset_transcript_text(db: Session, asset_id: str) -> str | None:
 
 
 def call_vision_model(
-    db: Session, profile: ResolvedProvider, messages: list[dict[str, Any]], call: BillableCall | None = None
+    db: Session,
+    profile: ResolvedProvider,
+    messages: list[dict[str, Any]],
+    call: BillableCall | None = None,
+    *,
+    model: str = "",
+    surface: Literal["direct", "automation"] = "direct",
 ) -> str:
     # 参数是解析过的连接(连接 + 这个人的钥匙),不再是 ORM 对象 —— 此前靠 object_session 把
     # 会话从对象上摸出来,而 ResolvedProvider 没有挂在任何会话上,db 只能显式传。
@@ -204,7 +210,7 @@ def call_vision_model(
     # 静默换模型换厂商是这里最坏的失败方式(pick_analysis_profile 的钥匙原则同理)。
     try:
         return chat(
-            target_for(db, profile),
+            target_for(db, profile, model=model, surface=surface),
             messages,
             temperature=0.2,
             timeout=REQUEST_TIMEOUT_SECONDS,
@@ -235,11 +241,18 @@ def _read_native_video(path: Path) -> tuple[bytes, str]:
 
 
 def _call_gemini_video(
-    db: Session, profile: ResolvedProvider, prompt: str, video: bytes, mime: str, call: BillableCall | None = None
+    db: Session,
+    profile: ResolvedProvider,
+    prompt: str,
+    video: bytes,
+    mime: str,
+    call: BillableCall | None = None,
+    *,
+    model: str = "",
 ) -> str:
     """Gemini 原生:视频字节走 inline_data,generateContent 端点(非 OpenAI 兼容)。"""
     base_url = (profile.base_url or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
-    model = provider_models.model_id_for(db, profile, "chat")
+    model = (model or provider_models.model_id_for(db, profile, "chat")).strip()
     if not model:
         # 与 OpenAI-compatible 分支的 target_for 保持同一条不变量：连接下没有显式可用的
         # chat 模型就当场失败，不能因为这个 Adapter 绕开 target_for 而暗换成某个固定 Gemini。
@@ -287,19 +300,38 @@ def _analyze_video_native(
     question: str,
     transcript: str | None,
     call: BillableCall | None = None,
+    *,
+    model: str = "",
+    surface: Literal["direct", "automation"] = "direct",
 ) -> str:
     """原生视频理解:Gemini 走 inline_data;Qwen-VL / Kimi 等 OpenAI 兼容端走 content 里的 video_url。"""
     video, mime = _read_native_video(path)
     prompt = _prompt_text(asset, question, transcript)
     if profile.vendor in GEMINI_VIDEO_VENDORS:
-        return _call_gemini_video(db, profile, prompt, video, mime, call)
+        return _call_gemini_video(db, profile, prompt, video, mime, call, model=model)
     data_uri = f"data:{mime};base64,{base64.b64encode(video).decode()}"
     content = [{"type": "text", "text": prompt}, {"type": "video_url", "video_url": {"url": data_uri}}]
-    return call_vision_model(db, profile, [{"role": "user", "content": content}], call)
+    return call_vision_model(
+        db,
+        profile,
+        [{"role": "user", "content": content}],
+        call,
+        model=model,
+        surface=surface,
+    )
 
 
 def analyze_asset(
-    db: Session, asset: Asset, question: str, *, user_id: str | None, profile_id: str | None = None, mode: str = "auto"
+    db: Session,
+    asset: Asset,
+    question: str,
+    *,
+    user_id: str | None,
+    profile_id: str | None = None,
+    mode: str = "auto",
+    resolved_profile: ResolvedProvider | None = None,
+    model: str = "",
+    surface: Literal["direct", "automation"] = "direct",
 ) -> dict[str, Any]:
     if asset.kind not in ("image", "video"):
         raise AnalysisError("只支持分析图片或视频素材")
@@ -319,21 +351,30 @@ def analyze_asset(
         if compatible is None:
             raise AnalysisError("图片无法转换成视觉模型支持的格式")
         image_path, image_mime = compatible
-        profile = pick_analysis_profile(db, profile_id, user_id)
+        profile = resolved_profile or pick_analysis_profile(db, profile_id, user_id)
         with billable(
             db, capability="chat", operation="analyze_asset", workspace_id=asset.workspace_id,
             source_type="asset", source_id=asset.id,
         ) as call:
-            answer = call_vision_model(
-                db,
-                profile,
-                build_messages(asset, prompt, [image_path.read_bytes()], image_mime=image_mime),
-                call,
-            )
-        return {"answer": answer, "provider": profile.vendor, "model": provider_models.model_id_for(db, profile, "chat"), "mode": "image", "frames": 1}
+            messages = build_messages(asset, prompt, [image_path.read_bytes()], image_mime=image_mime)
+            if resolved_profile is not None:
+                answer = call_vision_model(db, profile, messages, call, model=model, surface=surface)
+            else:
+                # 保留普通 HTTP/MCP 旧入口的调用形状，让测试替身和第三方调用者不必学习新参数。
+                answer = call_vision_model(db, profile, messages, call)
+        actual_model = model or provider_models.model_id_for(db, profile, "chat")
+        return {"answer": answer, "provider": profile.vendor, "model": actual_model, "mode": "image", "frames": 1}
 
     transcript_text = _asset_transcript_text(db, asset.id)  # 转写两条路都喂
-    native_profile = None if mode == "frames" else pick_native_video_profile(db, profile_id, user_id)
+    oauth_gateway = resolved_profile is not None and surface == "automation" and resolved_profile.auth_type == "oauth"
+    if mode == "native" and oauth_gateway:
+        raise AnalysisError("当前 OAuth 模型的自动化 Gateway 不支持原生视频，请改用抽帧模式")
+    if mode == "frames" or oauth_gateway:
+        native_profile = None
+    elif resolved_profile is not None:
+        native_profile = resolved_profile if resolved_profile.vendor in NATIVE_VIDEO_VENDORS else None
+    else:
+        native_profile = pick_native_video_profile(db, profile_id, user_id)
 
     # 原生视频理解:显式 native 必须有原生档案;auto 有就走、没有回落抽帧。
     if mode == "native" and native_profile is None:
@@ -344,27 +385,43 @@ def analyze_asset(
             db, capability="chat", operation="analyze_asset", workspace_id=asset.workspace_id,
             source_type="asset", source_id=asset.id,
         ) as call:
-            answer = _analyze_video_native(db, native_profile, asset, path, prompt, transcript_text, call)
+            answer = _analyze_video_native(
+                db,
+                native_profile,
+                asset,
+                path,
+                prompt,
+                transcript_text,
+                call,
+                model=model,
+                surface=surface,
+            )
+        actual_model = model or provider_models.model_id_for(db, native_profile, "chat")
         return {
             "answer": answer,
             "provider": native_profile.vendor,
-            "model": provider_models.model_id_for(db, native_profile, "chat"),
+            "model": actual_model,
             "mode": "native",
             "used_transcript": bool(transcript_text),
         }
 
     # 抽帧 + 转写(frames,或 auto 无原生档案时的回落)。
-    profile = pick_analysis_profile(db, profile_id, user_id)
+    profile = resolved_profile or pick_analysis_profile(db, profile_id, user_id)
     images = extract_video_frames(path)  # 帧数按时长自适应
     with billable(
         db, capability="chat", operation="analyze_asset", workspace_id=asset.workspace_id,
         source_type="asset", source_id=asset.id,
     ) as call:
-        answer = call_vision_model(db, profile, build_messages(asset, prompt, images, transcript=transcript_text), call)
+        messages = build_messages(asset, prompt, images, transcript=transcript_text)
+        if resolved_profile is not None:
+            answer = call_vision_model(db, profile, messages, call, model=model, surface=surface)
+        else:
+            answer = call_vision_model(db, profile, messages, call)
+    actual_model = model or provider_models.model_id_for(db, profile, "chat")
     return {
         "answer": answer,
         "provider": profile.vendor,
-        "model": provider_models.model_id_for(db, profile, "chat"),
+        "model": actual_model,
         "mode": "frames",
         "frames": len(images),
         "used_transcript": bool(transcript_text),

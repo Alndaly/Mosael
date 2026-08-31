@@ -202,14 +202,16 @@ f5-tts / fish-speech 都要 torch + torchaudio + transformers,**2.5–3.5 GB**�
 | AI Studio 智能体 | `agent` | pi Agent Adapter | 有会话、记忆、工具循环和子智能体 | 当前消息图片在所选模型声明视觉能力时直接送入;已有素材可经工具分析 |
 | 无限画布写作/看图 | `automation` | `ai_chat.chat` → `direct` 或 `gateway` | 无状态、无工具的单次补全 | 图片经 `browser_compatible_image` 统一格式/MIME 后发送;视频发送采样帧 |
 | 工作流 LLM 节点 | `automation` | `ai_chat.chat` → `direct` 或 `gateway` | 无状态、无工具的单次补全 | 节点目前只组装文本消息 |
-| 素材分析 API / `analyze_asset` 工具 | `direct` | `analysis.service` → 后端视觉 Adapter | 独立单次分析,不继承智能体会话与模型 | 图片先归一化;视频走原生输入或采样帧;音频复用转写 |
+| 素材分析 API / `analyze_asset` 工具 | 普通 HTTP=`direct`;AI Studio 工具=`automation` | `analysis.service` → `ai_chat.chat` | 无状态单次分析;工具调用继承令牌绑定的智能体会话模型 | 图片先归一化;视频走原生输入或采样帧 + 转写;OAuth Gateway 使用采样帧 |
 
 `automation` 是选择集合而不是第四种传输协议:有 `base_url` 的 API Key 连接分派到后端 `direct`
 Implementation;已登录 OAuth 连接分派到 sidecar `gateway` Implementation。两者对调用方暴露同一个
-`ai_chat.chat` Interface。`analyze_asset` 刻意不继承当前智能体模型:它是可从 HTTP、MCP 和文本模型
-共同调用的独立素材能力,因此按素材分析配置选一个 `direct` 模型。这里不再有 `gpt-4o-mini` 或其他
-硬编码模型回退;Gemini 原生视频的 `generateContent` Adapter 也必须从模型行解析显式 `chat` 模型,
-模型不可用就明确失败。
+`ai_chat.chat` Interface。`analyze_asset` 的模型来源取决于调用身份：普通 HTTP/MCP 请求保持独立选模，
+AI Studio 工具回连的短期令牌绑定 `agent_session_id`，服务端据此解析当前连接、模型与视频模式，工具参数
+不能自报或覆盖这些事实。OAuth 图片与视频采样帧复用 `gateway`；Gateway 不支持原生 video block，
+`auto` 因而走采样帧，显式 `native` 则明确提示改用抽帧。这里不再有 `gpt-4o-mini` 或其他硬编码模型
+回退；Gemini 原生视频的 `generateContent` Adapter 也必须从模型行解析显式 `chat` 模型，模型不可用就
+明确失败。
 
 Gateway 的边界与安全不变量见
 [ADR-0009](adr/0009-oauth-automation-through-a-tool-free-sidecar-gateway.md)。
