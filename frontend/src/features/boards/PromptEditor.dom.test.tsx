@@ -51,7 +51,7 @@ describe("提示词素材引用水合", () => {
     expect(second.container.textContent).toContain("森林.jpg");
   });
 
-  it("正文引用是与行高一致的下划线文本，不再用带内边距的胶囊", async () => {
+  it("正文引用使用紧凑胶囊，不显示下划线", async () => {
     const view = mount();
     const reference = await waitFor(() => {
       const found = view.container.querySelector<HTMLElement>('[data-asset-id="asset-1"]');
@@ -59,10 +59,9 @@ describe("提示词素材引用水合", () => {
       return found as HTMLElement;
     });
 
-    expect(reference.className).toContain("leading-[inherit]");
-    expect(reference.className).not.toContain("bg-secondary");
-    expect(reference.className).not.toContain("px-1");
-    expect(reference.className).not.toContain("py-0.5");
-    expect(reference.querySelector("span")?.className).toContain("underline");
+    expect(reference.className).toContain("bg-secondary");
+    expect(reference.className).toContain("px-1");
+    expect(reference.className).toContain("py-0.5");
+    expect(reference.querySelector("span")?.className).not.toContain("underline");
   });
 });
