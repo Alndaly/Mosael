@@ -214,6 +214,23 @@ HEIC 在素材分析入口能成功，在画布「看图」入口却以错误 MI
 真实 MIME；素材分析已有独立 HEIC 回归。图片数量、编码大小和视频输入仍由各传输 Adapter 按自身协议
 限制，不强行塞进格式归一化 Module。
 
+## 14. `analyze_asset` 有两种调用身份，不能共用一套选模假设
+
+普通 HTTP/MCP 请求与 AI Studio 工具回连虽然进入同一个路由，却不是同一种身份语义：
+
+- 普通请求没有 `agent_session_id`，按素材分析配置选择 `direct` 模型；
+- 智能体工具使用短期 service token，`AuthSession.agent_session_id` 是当前连接、模型、工作区与
+  `analysis_video_mode` 的事实源；不能相信工具参数自报 profile/model/mode；
+- 当前连接是 API Key 时走后端 `direct` Adapter；是订阅/OAuth 时走无工具、无记忆的 `gateway`，
+  不需要也不允许用虚构的 `base_url` 修复；
+- Gateway 只接受图片 block，不接受原生视频。`auto` / `frames` 发送均匀采样帧(传输层最多保留 8 张)
+  与已有转写；显式 `native` 必须失败并建议抽帧，不能暗中换模式；
+- sidecar 必须依据当前模型元数据接受视觉输入。模型不支持图片时明确失败，不能丢掉帧后只分析文字。
+
+这里最危险的回归不是请求失败，而是**静默换模型**：工具身份丢失后回落到独立选模器，用户选 Kimi
+却可能在另一连接上付费。回归测试至少要覆盖 session-bound OAuth 模型、视频帧确实进入 Gateway、
+会话 mode 覆盖工具参数，以及 OAuth `native` 的明确错误。
+
 ## Verification rule
 
 每个 slice 至少跑:

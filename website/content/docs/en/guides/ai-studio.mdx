@@ -21,7 +21,9 @@ The agent uses Open Studio's MCP tools to **see your project and propose changes
   it is asking precisely because it does not know, and auto-answering would mean it made the
   answer up.
 - **Skills**: preset skills (opencode-style) are available at the bottom-left of the composer.
-- **Attachments**: upload images / videos for the agent to analyze (multimodal).
+- **Attachments**: images on the current message go straight to the selected model. Images and
+  videos imported into the media library are analyzed by `analyze_asset` with the **current
+  session model**, not a separate hidden vision model.
 - The left column lists **conversations**; each is independent and can be renamed / deleted.
 
 Under the hood it hosts an external coding-agent CLI (opencode-style), not a home-grown chat loop. Requires [model providers](/en/docs/guides/providers) to be configured.
@@ -35,7 +37,15 @@ settings** — the set-once-and-forget things:
 - **Thinking**: off / low / medium / high. When on, the model's reasoning streams into a collapsible
   block you can expand, and it auto-collapses when done. "Off" only means we don't *ask* for it:
   models that reason regardless (k3, DeepSeek reasoner) still have their thinking shown.
-- **Video analysis mode**: whole clip vs sampled frames.
+- **Video analysis mode**:
+  - **Auto**: an API-key model uses native whole-video input when its Adapter supports it;
+    otherwise Open Studio samples frames and includes any existing speech transcript.
+    Subscription/OAuth models use sampled frames through the tool-free Gateway and need no
+    service address.
+  - **Native video**: forces whole-video input. The OAuth Gateway has no video block, so this
+    fails with a clear suggestion to use Frames instead of silently changing model or mode.
+  - **Frames + transcript**: always samples the timeline and sends existing transcript text to
+    the current vision model alongside those frames.
 - **Context**: a meter with "N% left", plus **Compact context now**.
 
 ### What happens when the context fills up

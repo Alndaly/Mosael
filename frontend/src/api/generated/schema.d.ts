@@ -965,7 +965,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Analyze Asset Route */
+        /**
+         * Analyze Asset Route
+         * @description Analyze an existing image or video.
+         *
+         *     Ordinary authenticated HTTP requests use the independently selected analysis profile.
+         *     Agent-tool service tokens are bound to an AgentSession, so the server derives the current
+         *     provider, model, workspace and video mode from that session. OAuth image/video-frame input
+         *     uses the tool-free Gateway and never requires a caller-supplied service address.
+         */
         post: operations["analyze_asset_route_api_assets__asset_id__analyze_post"];
         delete?: never;
         options?: never;

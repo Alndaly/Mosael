@@ -84,6 +84,13 @@ session, 1440p with one.
 A chat workbench whose tools reach the whole app — the timeline, media, workflows, publishing,
 the browser pool — over MCP, with a confirmation card for anything that has consequences.
 
+Images and videos already in the media library are analyzed with the **model selected for the
+current conversation**, not a hidden global vision model. Images are normalized before visual
+input; video uses the session's Auto / Native / Frames setting and includes any existing speech
+transcript. Subscription/OAuth models need no Base URL: their tool-free Gateway analyzes sampled
+frames, while native whole-video input remains available only to API-backed adapters that support
+it. Asking an OAuth model for Native mode fails clearly instead of switching models or modes.
+
 The main agent can hand a self-contained investigation to a **subagent**: read-only tools, its
 intermediate steps stay in its own context, and only the conclusion comes back. What that saves
 is context, not compute. Dispatch is **non-blocking by default** — the agent gets a receipt

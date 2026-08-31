@@ -254,6 +254,13 @@ def analyze_asset_route(
     user: CurrentUser,
     token: PresentedToken,
 ) -> AnalyzeAssetResponse:
+    """Analyze an existing image or video.
+
+    Ordinary authenticated HTTP requests use the independently selected analysis profile.
+    Agent-tool service tokens are bound to an AgentSession, so the server derives the current
+    provider, model, workspace and video mode from that session. OAuth image/video-frame input
+    uses the tool-free Gateway and never requires a caller-supplied service address.
+    """
     from app.domain.analysis.service import AnalysisError, analyze_asset
 
     asset = require_asset(db, user, asset_id)

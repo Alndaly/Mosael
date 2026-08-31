@@ -27,11 +27,13 @@ from app.media.paths import resolve_key
 from app.core.child_process import run_logged
 import logging
 
-"""
-Asset analysis via OpenAI-compatible multimodal chat completions.
-Images go in directly; videos are sampled into evenly-spaced frames —
-this works uniformly across Kimi (moonshot), MiniMax, and any other
-OpenAI-compatible vision endpoint the user configures.
+"""Existing-asset visual analysis.
+
+Standalone HTTP callers select an independently configured direct profile. Agent-tool callers
+arrive with a service token bound to an AgentSession and pass its resolved current model here;
+API-key targets use the direct Adapter and OAuth targets use the tool-free Gateway. Images are
+normalized first. Video can use a native API-backed Adapter or evenly sampled frames plus any
+existing transcript; the Gateway has no native video block and therefore uses frames.
 """
 
 ANALYSIS_VENDOR_ORDER = ("moonshot", "minimax", "openai", "openai-compatible")
@@ -51,7 +53,8 @@ TRANSCRIPT_MAX_CHARS = 6000
 #   moonshot→ Kimi 视觉(OpenAI 兼容,content 里 video_url)
 NATIVE_VIDEO_VENDORS = ("google", "alibaba", "moonshot")
 GEMINI_VIDEO_VENDORS = ("google",)
-# 视频分析方式:auto=有原生能力就走原生、否则抽帧;native=强制原生;frames=强制抽帧+转写。
+# 视频分析方式:auto=API Adapter 有原生能力就走原生,OAuth Gateway/其余走抽帧;
+# native=强制原生(OAuth 明确拒绝);frames=强制抽帧+转写。
 VIDEO_ANALYSIS_MODES = ("auto", "frames", "native")
 # 原生视频直传体积上限:base64 会膨胀约 33%,过大既慢又易被网关拒。超限建议抽帧。
 MAX_NATIVE_VIDEO_MB = 48

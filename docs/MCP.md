@@ -11,7 +11,7 @@ summaries — never raw internal schemas.
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
-| `analyze_asset` | 直接执行 | Runs directly: analyze an EXISTING image/video media asset with a multimodal model. |
+| `analyze_asset` | 直接执行 | Analyze an EXISTING image/video media asset with a multimodal model. |
 | `ask_user` | 直接执行 | Blocks until the user picks: ask them to choose between options you cannot decide for them. |
 | `browser_click` | 直接执行 | Click an element by CSS selector or visible text in the open session (one of selector/text). |
 | `browser_close` | 直接执行 | Close a browser session (frees the view; a throwaway session's cookies/storage are wiped). |
@@ -80,6 +80,13 @@ summaries — never raw internal schemas.
 上面这张表**由 `scripts/sync-tool-docs.py` 从注册表生成**,不要手改 —— 手写清单会腐烂,
 而且没有任何信号:这份文档一度只列了 54 个里的 15 个,缺的恰恰是后来加的那批(浏览器、记忆、
 通知)。`tests/test_tool_docs_in_sync.py` 钉住它与代码一致。
+
+表里的「直接执行」只表示**不需要确认卡**，不是 AI 的 `direct` execution surface。以
+`analyze_asset` 为例：普通、未绑定智能体会话的请求独立选择后端 `direct` 分析模型；AI Studio
+工具回连则从 service token 的 `agent_session_id` 继承当前会话模型，API Key 仍走 `direct`，
+订阅/OAuth 走无工具 `gateway`。图片先归一化；视频 `auto` 在 API Adapter 支持时可原生直读，
+否则发送采样帧 + 已有转写。OAuth Gateway 没有原生 video block，因此 `auto` 走抽帧、`native`
+明确失败；它不需要 `base_url`，也不会静默换成 `gpt-4o-mini` 或另一条连接。
 
 工作流画布能做的事智能体都能做 —— 由 `tests/test_agent_workflow_parity.py` 钉住:节点类型
 没有对应工具、又没写明为什么不需要,测试就红。

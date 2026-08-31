@@ -37,7 +37,10 @@ Click **Add provider** in the relevant section:
 1. Pick a **vendor** (built-ins include Alibaba DashScope, Volcengine ARK (video / Seedream image), Kimi, MiniMax, OpenAI, Google, Kuaishou Kling, OpenAI-compatible endpoints; the catalog grows over time).
 2. Give it a **name** (e.g. "My Kimi").
 3. Paste the **API key** (subscription plans have no key field — you authorize after saving instead). A "Get API key ↗" link jumps straight to that vendor's key console.
-4. **Base URL**: leave empty for the vendor default (the placeholder shows it); OpenAI-compatible endpoints need it filled in.
+4. **Base URL**: API-key providers can leave it empty for the vendor default (shown as the
+   placeholder); self-hosted OpenAI-compatible endpoints need it filled in. Subscription/OAuth
+   providers neither expose nor need this field — their Provider Adapter owns the endpoint, so
+   do not invent a service address for them.
 5. **Model** is optional; if filled it becomes this provider's first model. You can add more at any time.
 
 Providers can be **enabled / disabled** at any time without deleting.
@@ -65,6 +68,12 @@ Claude Pro/Max, Kimi Code, ChatGPT Plus/Pro, GitHub Copilot, xAI and OpenRouter 
 3. Once authorized, the models that account can actually use are pulled in automatically (Copilot's vary by plan tier; OpenRouter has hundreds).
 
 **Tokens refresh themselves.** Expiry is simply how subscription tokens work — the app refreshes them when they're used and whenever you open Settings. Only a *failed* refresh (signed out elsewhere, authorization revoked) surfaces, in warning colour, as "re-authorization needed"; click **Re-authorize** then. **Revoke** disconnects the account.
+
+When AI Studio analyzes an existing image or video with a subscription model, it keeps using the
+**current session model**. The backend verifies the session from the agent's short-lived token and
+sends images or sampled video frames through a tool-free, stateless Gateway. This is not a public
+reverse proxy and it needs no `base_url`. Native whole-video input is not available through this
+Gateway; choose Auto or Frames + transcript instead.
 
 ### Checking your quota
 

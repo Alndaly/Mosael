@@ -12,9 +12,9 @@ type AgentSession = components["schemas"]["AgentSessionOut"];
 const MODES = ["auto", "native", "frames"] as const;
 
 /**
- * 视频分析方式(会话级):auto=自动(有 Gemini/Qwen-VL/Kimi 就原生直读整段视频,否则抽帧+转写)、
- * native=强制原生、frames=强制抽帧+转写。写回会话后由系统提示强约束 analyze_asset 的 mode。
- * 仅在有会话时显示。
+ * 视频分析方式(会话级):auto=当前 API Key 模型有原生 Adapter 就直读整段,否则抽帧+转写；
+ * OAuth Gateway 的 auto 固定走抽帧。native=强制原生(OAuth 会明确拒绝),frames=强制抽帧+转写。
+ * 写回会话后由服务端按令牌绑定的 session 强制执行；系统提示只负责让模型提前知道。仅在有会话时显示。
  */
 export function AnalysisModePicker({ session }: { session: AgentSession | null }) {
   const t = useI18n();

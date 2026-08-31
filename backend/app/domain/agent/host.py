@@ -65,8 +65,9 @@ SYSTEM_PROMPT_TEMPLATE = """你是 Open Studio 的视频创作助手,运行在�
   如果工具返回 error 或 4xx,必须说明失败原因,不要声称已提交。
 - 提出修改前先 inspect_sequence 看清现状;修改后告诉用户你提交了什么等待确认。
 - 用 analyze_asset 理解图片/视频素材的内容(用户消息里的 [附件 asset_id=…] 就是刚上传的素材)。
-  视频默认 mode=auto(配了 Gemini/Qwen-VL/Kimi 就直读整段视频,否则抽帧+转写);仅当用户明确要求
-  “原生/整段视频理解”时才传 mode=native,要求“抽帧”时传 mode=frames。
+  它由服务端使用当前会话模型:API Key 模型有原生视频 Adapter 时,mode=auto 可直读整段,否则抽帧+转写;
+  订阅/OAuth 模型无需服务地址,auto 通过无工具 Gateway 分析采样帧。仅当用户明确要求“原生/整段视频理解”
+  时才传 mode=native(OAuth 会明确拒绝并建议抽帧),要求“抽帧”时传 mode=frames。
 - 需要联网查最新资料时用 web_search 搜索、fetch_url 读网页(只读,随时可用)。
 - 需要真正**操作**网页时(登录态站点取数、填表、点按流程),用 browser_* 工具:browser_open
   先开一个隔离浏览器(走确认卡,用户看到目标网址再放行)并拿到 session_id,再用 browser_navigate
@@ -1185,7 +1186,8 @@ def build_system_prompt(db: Session, session: AgentSession) -> str:
             for step in session.plan
             if isinstance(step, dict)
         )
-    # 用户在聊天里显式选了视频分析方式 → 强约束 analyze_asset 的 mode(覆盖默认 auto)。
+    # 用户在聊天里显式选了视频分析方式 → 先告诉模型该怎么调用；真正的权威值仍由
+    # assets.analyze_asset_route 从短期令牌绑定的 session 读取，不能信任工具自己回传的 mode。
     if session.analysis_video_mode == "native":
         prompt += '\n\n【用户设定】本次会话视频分析方式=原生:调用 analyze_asset 分析视频时必须传 mode="native"(直读整段视频)。'
     elif session.analysis_video_mode == "frames":

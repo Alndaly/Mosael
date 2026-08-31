@@ -706,7 +706,7 @@ def generate_podcast(
 
 @mcp.tool()
 def analyze_asset(asset_id: str, question: str = "", mode: str = "auto") -> dict[str, Any]:
-    """Runs directly: analyze an EXISTING image/video media asset with a multimodal model.
+    """Analyze an EXISTING image/video media asset with a multimodal model.
 
     Use after list_assets when you need to understand visual/audio content,
     scenes, on-screen text, mood, or best moments for cutting. Do NOT use for
@@ -718,9 +718,10 @@ def analyze_asset(asset_id: str, question: str = "", mode: str = "auto") -> dict
     question. OAuth vision models use the tool-free Gateway; no base URL is required.
 
     mode: how to feed video (the session's analysis mode is authoritative for AI Studio turns):
-      - "auto" (default): native video understanding when a capable profile is
-        configured (Gemini / Qwen-VL / Kimi), otherwise sampled frames + transcript.
-      - "native": force native video understanding (errors if no capable profile).
+      - "auto" (default): native video for a capable API-backed Adapter, otherwise sampled
+        frames + transcript. OAuth session models always use frames through the Gateway.
+      - "native": force native video understanding (errors for OAuth Gateway or when no
+        capable API-backed Adapter exists).
       - "frames": force sampled frames + transcript.
     Pass "native" only when the user explicitly asks for native/whole-video analysis.
     """
