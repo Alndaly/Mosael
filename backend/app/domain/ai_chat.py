@@ -32,8 +32,8 @@ from __future__ import annotations
 import json
 import logging
 import re
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import dataclass, field
+from typing import Any, Literal
 
 import httpx
 from sqlalchemy.orm import Session
@@ -59,14 +59,24 @@ class ChatTarget:
     """一次对话调用需要知道的全部信息,**不含任何 ORM 对象** —— 可以安全地跨线程传递。"""
 
     base_url: str
-    api_key: str
+    api_key: str = field(repr=False)
     model: str
     profile_id: str = ""
     vendor: str = ""
     name: str = ""
+    execution_surface: Literal["direct", "gateway"] = "direct"
+    gateway_provider: dict[str, Any] | None = field(default=None, repr=False)
+    gateway_api_base: str = ""
+    gateway_token: str = field(default="", repr=False)
 
 
-def target_for(db: Session, profile: ResolvedProvider, *, model: str = "") -> ChatTarget:
+def target_for(
+    db: Session,
+    profile: ResolvedProvider,
+    *,
+    model: str = "",
+    surface: Literal["direct", "automation"] = "direct",
+) -> ChatTarget:
     """在**持有 Session 的线程上**把一条连接解析成可跨线程的调用目标。
 
     model 留空时按这条连接的 chat 能力解析;解析不出来当场报错,而不是发一个空 model 让供应商
@@ -75,6 +85,26 @@ def target_for(db: Session, profile: ResolvedProvider, *, model: str = "") -> Ch
     resolved = model or provider_models.model_id_for(db, profile, "chat")
     if not resolved:
         raise AiChatError(t("aiChat_noChatModel", get_current_locale(), name=profile.name))
+    if profile.auth_type == "oauth" and surface == "automation":
+        if not profile.oauth_credential or not profile.owner_user_id:
+            raise AiChatError(t("aiChat_oauthRequired", get_current_locale(), name=profile.name))
+        from app.core.config import settings
+        from app.core.security import mint_service_session
+        from app.domain.provider_runtime import sidecar_provider
+
+        return ChatTarget(
+            base_url="",
+            api_key="",
+            model=resolved,
+            profile_id=profile.id,
+            vendor=profile.vendor or "",
+            name=profile.name,
+            execution_surface="gateway",
+            gateway_provider=sidecar_provider(db, profile, resolved),
+            gateway_api_base=f"http://{settings.backend_host}:{settings.backend_port}",
+            # 短期服务令牌只给 sidecar 回写**这个人自己的** OAuth 刷新结果；不发给浏览器。
+            gateway_token=mint_service_session(db, profile.owner_user_id),
+        )
     #: **地址空着就在这儿说清楚。** 不拦的话拼出来的是 "/chat/completions",httpx 抛的是
     #: 「Request URL is missing an 'http://' or 'https://' protocol」—— 用户看到这句,
     #: 完全想不到要去设置里补一个服务地址。而且这是所有调用方共用的一层,拦在这里全都受益。
@@ -93,7 +123,6 @@ def target_for(db: Session, profile: ResolvedProvider, *, model: str = "") -> Ch
         vendor=profile.vendor or "",
         name=profile.name,
     )
-
 
 def chat(
     target: ChatTarget,
@@ -122,6 +151,16 @@ def chat(
     if extra:
         payload.update({k: v for k, v in extra.items() if k not in ("model", "messages")})
     payload["messages"] = _satisfy_json_mode(payload.get("messages") or [], payload.get("response_format"))
+    if target.execution_surface == "gateway":
+        return _chat_gateway(
+            target,
+            payload,
+            timeout=timeout,
+            max_retries=max_retries,
+            client=client,
+            call=call,
+            label=label,
+        )
     url = f"{target.base_url.rstrip('/')}/chat/completions"
     headers = _auth_headers(target.api_key)
 
@@ -148,6 +187,113 @@ def chat(
         call.describe(provider=target.vendor, model=target.model, provider_profile_id=target.profile_id or None)
         call.meter_openai_tokens(body.get("usage"))
     return content
+
+
+_GATEWAY_IMAGE = re.compile(r"^data:(image/[A-Za-z0-9.+-]+);base64,(.+)$", re.DOTALL)
+_GATEWAY_MAX_IMAGES = 8
+_GATEWAY_MAX_ENCODED_BYTES = 8 * 1024 * 1024
+
+
+def _gateway_prompt(messages: list[dict[str, Any]]) -> tuple[str, str, list[dict[str, str]]]:
+    """Normalize OpenAI-shaped messages into the sidecar's stateless completion Interface."""
+    systems: list[str] = []
+    turns: list[tuple[str, str]] = []
+    images: list[dict[str, str]] = []
+    encoded = 0
+    for message in messages:
+        role = str(message.get("role") or "user")
+        content = message.get("content")
+        texts: list[str] = []
+        if isinstance(content, str):
+            texts.append(content)
+        elif isinstance(content, list):
+            for part in content:
+                if not isinstance(part, dict):
+                    continue
+                if part.get("type") == "text":
+                    texts.append(str(part.get("text") or ""))
+                elif part.get("type") == "image_url" and len(images) < _GATEWAY_MAX_IMAGES:
+                    image_url = part.get("image_url")
+                    url = image_url.get("url") if isinstance(image_url, dict) else image_url
+                    match = _GATEWAY_IMAGE.match(str(url or ""))
+                    if match and encoded + len(match.group(2)) <= _GATEWAY_MAX_ENCODED_BYTES:
+                        encoded += len(match.group(2))
+                        images.append({"mimeType": match.group(1), "data": match.group(2)})
+        text = "\n".join(one for one in texts if one).strip()
+        if role == "system":
+            if text:
+                systems.append(text)
+        elif text:
+            turns.append((role, text))
+    if len(turns) == 1 and turns[0][0] == "user":
+        prompt = turns[0][1]
+    else:
+        labels = {"user": "用户", "assistant": "助手"}
+        prompt = "\n\n".join(f"【{labels.get(role, role)}】\n{text}" for role, text in turns)
+    return "\n\n".join(systems), prompt, images
+
+
+def _chat_gateway(
+    target: ChatTarget,
+    payload: dict[str, Any],
+    *,
+    timeout: float,
+    max_retries: int | None,
+    client: httpx.Client | None,
+    call: BillableCall | None,
+    label: str,
+) -> str:
+    if client is not None:
+        raise AiChatError(f"{label}失败:OAuth Gateway 不支持复用调用方 HTTP 连接")
+    from app.ai.sidecar.adapters import AdapterError, gateway_complete
+
+    system_prompt, prompt, images = _gateway_prompt(payload.get("messages") or [])
+    sampling = {
+        key: value
+        for key, value in payload.items()
+        if key not in {"model", "messages", "temperature", "max_tokens", "max_completion_tokens"}
+    }
+    options: dict[str, Any] = {
+        "temperature": payload.get("temperature"),
+        "maxRetries": max_retries if max_retries is not None else ai_retry.current_max_retries(),
+        "timeoutMs": max(1, int(timeout * 1000)),
+    }
+    max_tokens = payload.get("max_tokens") or payload.get("max_completion_tokens")
+    if max_tokens is not None:
+        options["maxTokens"] = int(max_tokens)
+    if sampling:
+        options["samplingParams"] = sampling
+    try:
+        result = gateway_complete(
+            system_prompt=system_prompt,
+            prompt=prompt,
+            images=images,
+            provider=target.gateway_provider or {},
+            model=target.model,
+            api_base=target.gateway_api_base,
+            token=target.gateway_token,
+            options=options,
+            timeout=timeout,
+        )
+    except AdapterError as exc:
+        raise AiChatError(_sanitize(f"{label}失败:{exc}", target.gateway_token)) from exc
+    finally:
+        if target.gateway_token:
+            from app.core.db import SessionLocal
+            from app.core.security import revoke_session
+
+            with SessionLocal() as db:
+                revoke_session(db, target.gateway_token)
+                db.commit()
+    if call is not None:
+        usage = result.usage or {}
+        call.describe(provider=target.vendor, model=target.model, provider_profile_id=target.profile_id or None)
+        call.meter(
+            input_tokens=int(usage.get("input") or usage.get("input_tokens") or 0),
+            output_tokens=int(usage.get("output") or usage.get("output_tokens") or 0),
+            raw=usage,
+        )
+    return result.text
 
 
 #: OpenAI 兼容接口的硬性要求:用 `response_format: json_object` 时,**提示词里必须出现
@@ -201,5 +347,3 @@ def _provider_detail(response: httpx.Response, model: str) -> str:
         elif isinstance(err, str) and err:
             detail = err
     return f"{response.status_code} {detail[:300]}（模型 {model}）"
-
-

@@ -537,6 +537,42 @@ def test_llm_node_sends_advanced_openai_payload_and_parses_json(monkeypatch) -> 
     }
 
 
+def test_llm_node_uses_the_tool_free_gateway_for_oauth(monkeypatch) -> None:
+    from app.ai.sidecar import adapters
+    from app.domain.workflows.executors import ai as ai_nodes
+
+    client = fresh_client()
+    workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    captured: dict = {}
+
+    def fake_gateway(**kwargs):
+        captured.update(kwargs)
+        return adapters.GatewayResult(text="订阅模型回答", usage={"input": 7, "output": 3})
+
+    monkeypatch.setattr(adapters, "gateway_complete", fake_gateway)
+    with SessionLocal() as db:
+        profile = add_provider(
+            db,
+            name="Kimi Code",
+            vendor="kimi-coding",
+            base_url="",
+            auth_type="oauth",
+            oauth_credential={"access_token": "x"},
+            model="k3",
+            capability_ids=["chat"],
+        )
+        workflow = Workflow(workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []})
+        db.add(workflow)
+        db.flush()
+        with acting_as(db):
+            result = ai_nodes.llm(db, workflow, {"profile_id": profile.id, "prompt": "写一句"})
+
+    assert result == {"text": "订阅模型回答"}
+    assert captured["provider"]["pi_provider"] == "kimi-coding"
+    assert captured["model"] == "k3"
+    assert captured["prompt"] == "写一句"
+
+
 def test_llm_node_rejects_invalid_json_response(monkeypatch) -> None:
     from app.domain.workflows.executors import ai as ai_nodes
 

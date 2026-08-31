@@ -11,6 +11,7 @@ import {
   type Credential,
   type CredentialStore,
   type ImageContent,
+  type Context,
   type Model,
   type Models,
   type Provider,
@@ -442,6 +443,69 @@ export interface PiTurnHandlers {
     parentCallId: string,
     archive: { task: string; steps: number; error: string | null; trace: unknown[] },
   ) => void;
+}
+
+export interface GatewayCompletionInput {
+  systemPrompt: string;
+  prompt: string;
+  images?: ImageContent[];
+  provider: PiTurnInput["provider"];
+  model: string;
+  apiBase: string;
+  token: string;
+  options?: {
+    temperature?: number;
+    maxTokens?: number;
+    maxRetries?: number;
+    timeoutMs?: number;
+    samplingParams?: Record<string, unknown>;
+  };
+}
+
+/** One provider completion with OAuth refresh support, but no Agent, tools, state or subagents. */
+export async function runGatewayCompletion(
+  input: GatewayCompletionInput,
+): Promise<{ text: string; usage: Record<string, unknown> }> {
+  const piProvider = input.provider.piProvider ?? "";
+  const { models, model } = piProvider
+    ? await buildSubscriptionModels(
+        piProvider,
+        input.model,
+        new BackendCredentialStore(
+          input.apiBase,
+          input.token,
+          input.provider.profileId ?? "",
+          input.provider.credential ?? undefined,
+        ),
+      )
+    : buildModels(input.provider.baseUrl, input.provider.apiKey, input.model, input.provider);
+  if (!model) throw new Error(`模型 ${input.model} 不存在`);
+  const images = model.input?.includes("image") ? (input.images ?? []) : [];
+  const context: Context = {
+    systemPrompt: input.systemPrompt || undefined,
+    tools: [],
+    messages: [
+      {
+        role: "user",
+        content: images.length > 0 ? [{ type: "text", text: input.prompt }, ...images] : input.prompt,
+        timestamp: Date.now(),
+      },
+    ],
+  };
+  const answer = await models.completeSimple(model, context, {
+    temperature: input.options?.temperature,
+    maxTokens: input.options?.maxTokens,
+    maxRetries: input.options?.maxRetries,
+    timeoutMs: input.options?.timeoutMs,
+    samplingParams: input.options?.samplingParams,
+    toolChoice: "none",
+  });
+  if (answer.stopReason === "error") throw new Error(answer.errorMessage || "模型补全失败");
+  const text = answer.content
+    .filter((part): part is Extract<(typeof answer.content)[number], { type: "text" }> => part.type === "text")
+    .map((part) => part.text)
+    .join("");
+  return { text, usage: answer.usage as unknown as Record<string, unknown> };
 }
 
 /** Run one turn through pi's Agent; stream text + tool events, return text + new state. */

@@ -12,9 +12,16 @@ import * as readline from "node:readline";
 import type { Agent } from "@earendil-works/pi-agent-core";
 
 import { answerAuthPrompt, runAuthLogin } from "./auth.js";
-import { log, send, type CompactRequest, type RefreshCredentialRequest, type Request } from "./protocol.js";
+import {
+  log,
+  send,
+  type CompactRequest,
+  type GatewayCompletionRequest,
+  type RefreshCredentialRequest,
+  type Request,
+} from "./protocol.js";
 import { installProxyFromEnv } from "./proxy.js";
-import { refreshCredential, runCompaction, runPiTurn } from "./pi.js";
+import { refreshCredential, runCompaction, runGatewayCompletion, runPiTurn } from "./pi.js";
 import { buildAllTools } from "./tools.js";
 
 /**
@@ -93,6 +100,20 @@ async function handleRefreshCredential(msg: RefreshCredentialRequest): Promise<v
   send({ type: "credential_refreshed", turnId: msg.turnId, refreshed: result.refreshed });
 }
 
+async function handleGatewayCompletion(msg: GatewayCompletionRequest): Promise<void> {
+  const result = await runGatewayCompletion({
+    systemPrompt: msg.systemPrompt,
+    prompt: msg.prompt,
+    images: (msg.images ?? []).map((image) => ({ type: "image" as const, ...image })),
+    provider: msg.provider,
+    model: msg.model,
+    apiBase: msg.apiBase,
+    token: msg.token,
+    options: msg.options,
+  });
+  send({ type: "gateway_done", turnId: msg.turnId, text: result.text, usage: result.usage });
+}
+
 /** 只压缩不对话。没有 provider/model 就原样回,不假装压过 —— 界面会显示"没有可压缩的内容"。 */
 async function handleCompact(msg: CompactRequest): Promise<void> {
   if (!(msg.provider?.baseUrl || msg.provider?.piProvider) || !msg.model) {
@@ -139,6 +160,10 @@ async function main(): Promise<void> {
         void handleRunTurn(msg)
           .catch((err) => send({ type: "error", turnId: msg.turnId, message: String(err) }))
           .finally(() => active.delete(msg.turnId));
+      } else if (msg.type === "gateway_complete") {
+        void handleGatewayCompletion(msg).catch((err) =>
+          send({ type: "error", turnId: msg.turnId, message: String(err) }),
+        );
       } else if (msg.type === "steer") {
         const agent = active.get(msg.turnId);
         if (!agent) {

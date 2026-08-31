@@ -9796,7 +9796,9 @@
               "enum": [
                 "all",
                 "agent",
-                "direct"
+                "direct",
+                "gateway",
+                "automation"
               ],
               "type": "string",
               "default": "all",

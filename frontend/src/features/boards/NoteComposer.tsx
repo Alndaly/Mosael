@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
  * 硬塞进同一个组件的话,里面会长出一堆「文本的时候不显示」的分支,而那正是表单开始骗人的
  * 起点。
  *
- * 模型列的是 **chat 能力**下的全部模型(跨连接),和设置里挑默认模型看到的是同一份。
+ * 模型列的是 **chat 能力 + automation 执行面**下的模型:API Key 走 direct,OAuth 走无工具 gateway。
  */
 export function NoteComposer({
   item,
@@ -72,8 +72,8 @@ export function NoteComposer({
   );
 
   const models = useQuery({
-    queryKey: ["capability-models", "chat", "direct"],
-    queryFn: () => listCapabilityModels("chat", "direct"),
+    queryKey: ["capability-models", "chat", "automation"],
+    queryFn: () => listCapabilityModels("chat", "automation"),
   });
   const options = models.data ?? [];
   //: 值里带上连接 id:同一个模型名可能挂在两条连接下(自己的和团队的),只存模型名会挑错那条。

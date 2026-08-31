@@ -176,12 +176,13 @@ _Avoid_: 把能力挂在连接上(同一端点常常既有对话模型也有生�
 只认这个人显式设的那一行;没有或指向失效就返回未配置,不替他静默挑别的模型。
 
 **执行面(execution surface)**:
-能力回答“模型会什么”,执行面回答“这次调用经哪个 Adapter”。`agent` 走 pi Adapter,API Key 与 OAuth
-订阅都能用;`direct` 走后端 OpenAI-compatible Adapter,只列有 `base_url` 的 API Key 连接。画板写作、
-工作流 LLM、独立素材分析属于 `direct`;AI Studio 智能体属于 `agent`。选择器必须同时按能力和执行面过滤,
-不能因为两边都叫 `chat` 就把 OAuth 模型交给后端直连。支持视觉的智能体模型直接接收当前消息图片;
-文本模型以及视频/音频仍通过 `analyze_asset` 工具处理。
-_Avoid_: 用 capability 代替执行通道;把“只能由 pi 使用”的订阅模型列进画板/工作流
+能力回答“模型会什么”,执行面回答“这次调用经哪个 Adapter”。`agent` 走 pi Agent Adapter,API Key 与 OAuth
+订阅都能用;`direct` 走后端 OpenAI-compatible Adapter,只认有 `base_url` 的 API Key 连接;`gateway` 走
+sidecar 的**无工具、无记忆单次补全** Adapter,只给已登录 OAuth 连接。画板写作、工作流 LLM 选择
+`automation` 集合(=`direct` + `gateway`),运行时按连接鉴权方式分派;独立素材分析仍属于 `direct`,AI Studio
+智能体属于 `agent`。Gateway 沿用短期服务令牌与凭据租约做刷新,不监听端口、不向浏览器返回 OAuth Token。
+支持视觉的智能体/Gateway 模型直接接收当前消息图片;文本模型以及视频/音频仍通过 `analyze_asset` 工具处理。
+_Avoid_: 用 capability 代替执行通道;把 OAuth Token 或任意供应商地址暴露成通用反向代理
 
 **vendor 预设**:
 `app/domain/providers.py` 声明某个 vendor 支持哪些能力、设置页要收集哪些 `fields`、支持哪些鉴权方式。

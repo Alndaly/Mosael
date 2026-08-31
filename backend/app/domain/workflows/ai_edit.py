@@ -1,6 +1,6 @@
 """智能体图编辑:自然语言指令 → 修改后的工作流 graph。
 
-直连供应商 LLM(与聊天智能体无关,确定性强):提示词带上节点类型注册表
+经自动化执行面调用 LLM(无智能体工具,确定性强):提示词带上节点类型注册表
 与当前 graph,要求只输出 JSON;返回前必须过 validate_graph,失败会把
 错误喂回去重试一次。
 """
@@ -48,7 +48,7 @@ def ai_edit_graph(
 ) -> tuple[dict[str, Any], str]:
     profile = require_profile(db, profile_id, user_id=user_id, error=WorkflowDomainError)
     try:
-        target = target_for(db, profile)
+        target = target_for(db, profile, surface="automation")
     except AiChatError as exc:
         raise WorkflowDomainError(str(exc)) from exc
     registry = json.dumps(
@@ -111,4 +111,3 @@ def _chat(target: ChatTarget, system: str, user: str, call: BillableCall | None 
         )
     except AiChatError as exc:
         raise WorkflowDomainError(str(exc)) from exc
-

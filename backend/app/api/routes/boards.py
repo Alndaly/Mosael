@@ -189,7 +189,7 @@ def write(board_id: str, body: BoardWrite, db: DbSession, user: CurrentUser) -> 
 
     try:
         profile = require_profile(db, body.provider_profile_id or None, user_id=user.id, error=AiChatError)
-        target = target_for(db, profile, model=body.model)
+        target = target_for(db, profile, model=body.model, surface="automation")
         with billable(
             db,
             capability="chat",

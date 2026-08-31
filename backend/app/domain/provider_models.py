@@ -96,7 +96,7 @@ def get_model(db: Session, profile_id: str, model_id: str) -> ProviderModel | No
     ).first()
 
 
-ExecutionSurface = Literal["all", "agent", "direct"]
+ExecutionSurface = Literal["all", "agent", "direct", "gateway", "automation"]
 
 
 def models_for_capability(
@@ -119,16 +119,31 @@ def models_for_capability(
     if user_id is not None:
         stmt = stmt.where(ProviderProfile.owner_user_id == user_id)
     rows = db.scalars(stmt).all()
-    if surface == "direct":
+    if surface in {"direct", "gateway", "automation"}:
         # OAuth 订阅由 pi Adapter 持有端点和凭据；后端直连 Adapter 没有 base_url/api_key 可用。
         # 能力同为 chat 只说明模型会对话，不代表两条执行通道可以互换。
-        rows = [
-            model
-            for model in rows
-            if model.profile is not None
-            and model.profile.auth_type != "oauth"
-            and bool((model.profile.base_url or "").strip())
-        ]
+        from app.domain import provider_credentials
+
+        def direct(model: ProviderModel) -> bool:
+            return (
+                model.profile is not None
+                and model.profile.auth_type != "oauth"
+                and bool((model.profile.base_url or "").strip())
+            )
+
+        def gateway(model: ProviderModel) -> bool:
+            return (
+                user_id is not None
+                and model.profile is not None
+                and model.profile.auth_type == "oauth"
+                and provider_credentials.resolve(db, model.profile, user_id) is not None
+            )
+        if surface == "direct":
+            rows = [model for model in rows if direct(model)]
+        elif surface == "gateway":
+            rows = [model for model in rows if gateway(model)]
+        else:
+            rows = [model for model in rows if direct(model) or gateway(model)]
     return [model for model in rows if capability in effective_capabilities(model)]
 
 

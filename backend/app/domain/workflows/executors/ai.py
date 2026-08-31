@@ -1,4 +1,4 @@
-"""AI 文本类节点:直连供应商 API(不产生子 job)。"""
+"""AI 文本类节点:经自动化执行面做单次补全(不产生子 job、不开放智能体工具)。"""
 
 from __future__ import annotations
 
@@ -149,7 +149,7 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
         raise WorkflowDomainError("LLM 节点的提示词为空:请填写提示词,或把「引用」的上游接好、确认其有输出。")
     messages.append({"role": "user", "content": prompt})
     try:
-        target = target_for(db, profile, model=str(config.get("model") or ""))
+        target = target_for(db, profile, model=str(config.get("model") or ""), surface="automation")
         payload = _request_payload(config, target.model, messages)
         with billable(
             db,

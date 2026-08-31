@@ -909,7 +909,7 @@ export interface CapabilityModel {
 
 export function listCapabilityModels(
   capability: string,
-  surface: "all" | "agent" | "direct" = "all",
+  surface: "all" | "agent" | "direct" | "gateway" | "automation" = "all",
 ): Promise<CapabilityModel[]> {
   return api<CapabilityModel[]>(`/api/settings/capability-models/${capability}?surface=${surface}`);
 }

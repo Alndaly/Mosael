@@ -52,6 +52,31 @@ export interface RunTurnRequest {
 }
 
 /**
+ * Tool-free, stateless completion for boards/workflows.
+ *
+ * It reuses pi's provider and OAuth credential machinery, but deliberately does not construct
+ * an Agent: callers get one deterministic completion and cannot acquire the agent tool surface.
+ */
+export interface GatewayCompletionRequest {
+  type: "gateway_complete";
+  turnId: string;
+  systemPrompt: string;
+  prompt: string;
+  images?: Array<{ data: string; mimeType: string }>;
+  provider: NonNullable<RunTurnRequest["provider"]>;
+  model: string;
+  apiBase: string;
+  token: string;
+  options?: {
+    temperature?: number;
+    maxTokens?: number;
+    maxRetries?: number;
+    timeoutMs?: number;
+    samplingParams?: Record<string, unknown>;
+  };
+}
+
+/**
  * Inject a message into a turn that is already running.
  *
  * "steer" lands after the current assistant message completes, which is what makes it a
@@ -142,6 +167,7 @@ export interface AuthCancelRequest {
 
 export type Request =
   | RunTurnRequest
+  | GatewayCompletionRequest
   | SteerRequest
   | QueueRequest
   | AbortRequest
@@ -194,6 +220,7 @@ export type Event =
   | { type: "queued"; turnId: string; mode: "steer" | "follow_up"; pending: boolean }
   | { type: "aborted"; turnId: string }
   | { type: "credential_refreshed"; turnId: string; refreshed: boolean }
+  | { type: "gateway_done"; turnId: string; text: string; usage?: Record<string, unknown> }
   | {
       type: "compacted";
       turnId: string;

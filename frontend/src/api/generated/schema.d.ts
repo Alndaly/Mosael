@@ -16406,7 +16406,7 @@ export interface operations {
     list_capability_models_api_settings_capability_models__capability__get: {
         parameters: {
             query?: {
-                surface?: "all" | "agent" | "direct";
+                surface?: "all" | "agent" | "direct" | "gateway" | "automation";
             };
             header?: never;
             path: {

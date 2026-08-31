@@ -836,7 +836,7 @@ def list_capability_models(
     capability: str,
     db: DbSession,
     user: CurrentUser,
-    surface: Literal["all", "agent", "direct"] = "all",
+    surface: Literal["all", "agent", "direct", "gateway", "automation"] = "all",
 ) -> list[CapabilityModelOut]:
     """某能力下所有可用模型,跨连接。**任何登录用户都读得到** —— 挡住它等于让人闭着眼睛
     选自己的默认模型(见 tests/test_who_owns_each_setting.py)。

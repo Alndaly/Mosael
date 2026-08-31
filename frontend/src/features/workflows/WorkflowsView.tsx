@@ -123,9 +123,10 @@ import { isDataConnection, isDuplicateControlEdge } from "@/features/workflows/c
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 
-/** LLM nodes use the backend's direct HTTP Adapter; OAuth subscriptions belong to the pi agent Adapter. */
-function supportsDirectChat(profile: ProviderProfile): boolean {
-  return profile.enabled && profile.auth_type !== "oauth" && Boolean(profile.base_url?.trim());
+/** Automation chooses direct API-key or the tool-free OAuth Gateway Adapter at runtime. */
+function supportsAutomationChat(profile: ProviderProfile): boolean {
+  if (!profile.enabled) return false;
+  return profile.auth_type === "oauth" ? profile.oauth_linked : Boolean(profile.base_url?.trim());
 }
 
 /** 节点类型语义色(与轨道颜色同属内容色,不算点缀):
@@ -1740,7 +1741,7 @@ function WorkflowEditor({
     () =>
       analyzeWorkflow(graph, registry, {
         providerIds: new Set(
-          (providers.data ?? []).filter(supportsDirectChat).map((p) => p.id),
+          (providers.data ?? []).filter(supportsAutomationChat).map((p) => p.id),
         ),
         providersLoaded: (!hasLlm && !hasGen) || providers.isSuccess,
         configuredGenProviders: new Set(
@@ -3293,7 +3294,7 @@ function NodeInspector({
   ): Array<{ value: string; label: string }> | null => {
     if (node.type === "llm" && key === "profile_id") {
       return (providers.data ?? [])
-        .filter(supportsDirectChat)
+        .filter(supportsAutomationChat)
         .map((p) => ({ value: p.id, label: `${p.name} (${p.vendor})` }));
     }
     if (node.type === "llm" && key === "model") {

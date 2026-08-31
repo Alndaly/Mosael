@@ -101,13 +101,45 @@ def test_后端直连能力列表不暴露只能由智能体使用的订阅模�
             base_url="",
             auth_type="oauth",
             oauth_credential={"access_token": "test"},
-            model="kimi-k3",
+            model="k3",
             capability_ids=["chat"],
         )
         db.commit()
 
-    assert [row["model"] for row in client.get("/api/settings/capability-models/chat").json()] == ["kimi-k3"]
+    assert [row["model"] for row in client.get("/api/settings/capability-models/chat").json()] == ["k3"]
     assert client.get("/api/settings/capability-models/chat?surface=direct").json() == []
+
+
+def test_自动化执行面同时提供直连与已登录的订阅模型() -> None:
+    """画板/工作流的选择器不该关心底下走 direct 还是 gateway；它只列实际能自动执行的模型。"""
+    client = fresh_client()
+    with SessionLocal() as db:
+        add_provider(
+            db,
+            name="Kimi Code",
+            vendor="kimi-coding",
+            base_url="",
+            auth_type="oauth",
+            oauth_credential={"access_token": "test"},
+            model="k3",
+            capability_ids=["chat"],
+        )
+        add_provider(
+            db,
+            name="本地模型",
+            vendor="openai-compatible",
+            base_url="http://127.0.0.1:11434/v1",
+            api_key="",
+            model="local-chat",
+            capability_ids=["chat"],
+        )
+        db.commit()
+
+    models = {
+        row["model"] for row in client.get("/api/settings/capability-models/chat?surface=automation").json()
+    }
+    assert models == {"k3", "local-chat"}
+
 
 def test_vendor_presets_listed() -> None:
     client = fresh_client()

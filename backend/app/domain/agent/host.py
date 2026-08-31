@@ -14,12 +14,11 @@ from sqlalchemy.orm import Session
 
 from app.ai.sidecar.adapters import AdapterError, TurnResult, abort_turn, compact_session, run_turn, steer_turn
 from app.domain.agent.textclean import decode_byte_fallback
-from app.ai.model_catalog import cached_model
 from app.domain.provider_auth import read_credential
 from app.domain import provider_models
+from app.domain.provider_runtime import sidecar_provider
 from app.domain.agent import memory as agent_memory
 from app.domain.context_meter import CHARS_PER_TOKEN, context_breakdown, context_tokens
-from app.domain.providers import pi_provider_id
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.security import mint_service_session, revoke_session
@@ -198,27 +197,7 @@ def resolve_chat_provider(
             f"供应商「{profile.name}」没有可用的模型:请在设置里为它填写默认模型,"
             "或在对话框的模型选择器里选一个。"
         )
-    provider_dict = {
-        "base_url": profile.base_url,
-        "api_key": profile.api_key,
-        "vendor": profile.vendor,
-        "profile_id": profile.id,
-    }
-    if profile.auth_type == "oauth":
-        # 订阅计划:端点、模型目录、上下文窗口都在 pi 的 Provider 定义里,这边只递身份。
-        provider_dict["pi_provider"] = pi_provider_id(profile.vendor)
-        provider_dict["credential"] = profile.oauth_credential
-    else:
-        # 上下文窗口来自供应商目录(带 TTL 缓存);端点没列出这个模型就留 None,由 sidecar 用保守回退。
-        # **只读缓存,不在这里等网络**:这是每一轮对话的必经之路,而目录请求打不通要等满 8 秒。
-        # 为了一个"取不到就留空、下游本来就有保守回退、还被用户自己填的值压在上面"的可选元数据,
-        # 让每句话都先卡八秒不值当 —— 缺了就让 cached_model 在后台取,下一轮自然就有了。
-        catalog = cached_model(profile.base_url or "", profile.api_key or "", agent_model)
-        provider_dict["context_window"] = catalog.context_window if catalog else None
-        provider_dict["max_output_tokens"] = catalog.max_output_tokens if catalog else None
-    # 模型行上的显式设置压在最后:目录取不到(自定义模型名、私有部署)或给得不准时,
-    # 用户填的那份说了算。订阅计划同样适用 —— pi 的目录也不是每个模型都准。
-    provider_dict.update(provider_models.runtime_limits(provider_models.get_model(db, profile.id, agent_model)))
+    provider_dict = sidecar_provider(db, profile, agent_model)
     return provider_dict, agent_model, profile
 
 

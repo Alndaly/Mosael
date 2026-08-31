@@ -44,6 +44,86 @@ class TurnResult:
     #: 用户不会知道早期消息已经不在上下文里了。
     compaction: dict | None = None
 
+
+@dataclass(frozen=True)
+class GatewayResult:
+    text: str
+    usage: dict | None = None
+
+
+def gateway_complete(
+    *,
+    system_prompt: str,
+    prompt: str,
+    images: list[dict[str, str]] | None,
+    provider: dict,
+    model: str,
+    api_base: str,
+    token: str,
+    options: dict | None = None,
+    timeout: float = 180,
+) -> GatewayResult:
+    """Run one stateless, tool-free completion through pi's provider/OAuth machinery."""
+    node, sidecar = pi_sidecar_command()
+    if not Path(sidecar).exists():
+        raise AdapterError(f"pi sidecar 未构建:{sidecar}(在 agent-sidecar 目录执行 pnpm build)")
+    frame = {
+        "type": "gateway_complete",
+        "turnId": "gateway",
+        "systemPrompt": system_prompt,
+        "prompt": prompt,
+        "images": images or [],
+        "provider": {
+            "baseUrl": provider.get("base_url", ""),
+            "apiKey": provider.get("api_key", ""),
+            "vendor": provider.get("vendor", ""),
+            "contextWindow": provider.get("context_window"),
+            "maxOutputTokens": provider.get("max_output_tokens"),
+            "reasoning": provider.get("reasoning"),
+            "vision": provider.get("vision"),
+            "reasoningEffort": provider.get("reasoning_effort"),
+            "developerRole": provider.get("developer_role"),
+            "piProvider": provider.get("pi_provider", ""),
+            "credential": provider.get("credential"),
+            "profileId": provider.get("profile_id", ""),
+        },
+        "model": model,
+        "apiBase": api_base,
+        "token": token,
+        "options": options or {},
+    }
+    env = {**os.environ}
+    if os.environ.get("OPEN_STUDIO_AGENT_BIN_NODE"):
+        env["ELECTRON_RUN_AS_NODE"] = "1"
+    env = _proxy_env(env)
+    process = popen_text(
+        [node, sidecar], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env
+    )
+    assert process.stdin is not None and process.stdout is not None
+    process.stdin.write(json.dumps(frame) + "\n")
+    process.stdin.flush()
+    process.stdin.close()
+    child = ChildProcess(process, timeout)
+    for line in child.lines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("type") == "gateway_done":
+            child.finish()
+            usage = event.get("usage")
+            return GatewayResult(
+                text=str(event.get("text", "")).strip(),
+                usage=usage if isinstance(usage, dict) else None,
+            )
+        if event.get("type") == "error":
+            child.finish()
+            raise AdapterError(_tail(str(event.get("message", "Gateway 调用失败"))))
+    stderr = _tail(child.finish())
+    if child.timed_out:
+        raise AdapterError(f"Gateway 调用超过 {timeout:g} 秒未返回")
+    raise AdapterError(stderr or "Gateway 没有返回结果")
+
 def run_turn(
     adapter: str,
     *,

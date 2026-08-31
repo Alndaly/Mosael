@@ -110,8 +110,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Connection \"{name}\" has no service address yet — add it in Settings first.",
     },
     "aiChat_agentOnly": {
-        "zh": "连接「{name}」是订阅授权(如 Kimi Code),只能给智能体对话用;画板、工作流等功能请改用 API Key 的连接",
-        "en": "Connection \"{name}\" uses a subscription sign-in (e.g. Kimi Code) that only the agent can talk through. Boards, workflows and other features need an API-key connection.",
+        "zh": "连接「{name}」是订阅授权(如 Kimi Code),当前操作只支持直连 API;请改用支持订阅网关的画板、工作流或智能体入口",
+        "en": "Connection \"{name}\" uses a subscription sign-in (e.g. Kimi Code), while this operation only supports a direct API. Use a board, workflow or agent entry point that supports the subscription gateway.",
+    },
+    "aiChat_oauthRequired": {
+        "zh": "连接「{name}」还没有完成订阅授权,请先到设置里登录",
+        "en": "Connection \"{name}\" has not completed its subscription sign-in. Sign in from Settings first.",
     },
     # ---- 任务消息(任务中心 / 飞书 / 工作流都读它)----
     "jobMsg_asrQueued": {"zh": "转写排队中", "en": "Transcription queued"},
