@@ -31,7 +31,7 @@ import { AudioComposer } from "@/features/boards/AudioComposer";
 import { TrimComposer } from "@/features/boards/TrimComposer";
 import { NoteComposer } from "@/features/boards/NoteComposer";
 import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, kindIcon, kindText, SPAWNABLE_KINDS, type MediaKind } from "@/features/boards/boardNodes";
-import { itemIsRunning } from "@/features/boards/boardItemState";
+import { itemFormResetKey, itemIsRunning } from "@/features/boards/boardItemState";
 
 /**
  * 创意画板的画布。
@@ -770,7 +770,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           这些东西,硬塞进同一个组件里会长出一堆「文本的时候不显示」的分支。 */}
       {composerItem?.kind === "note" && onWrite && (
         <NoteComposer
-          key={composerItem.id}
+          key={itemFormResetKey(composerItem)}
           item={composerItem}
           busy={writing === composerItem.id}
           workspaceId={workspaceId}
@@ -828,7 +828,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       {/* 音频:念一段文字。**不是「生成」那条路** —— 出图出片选生成模型,念字选的是音色。 */}
       {composerItem?.kind === "audio" && onSpeak && (
         <AudioComposer
-          key={composerItem.id}
+          key={itemFormResetKey(composerItem)}
           item={composerItem}
           busy={itemIsRunning(composerItem)}
           workspaceId={workspaceId}
@@ -842,7 +842,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       {/* 选中一个**还没有产出**的图片/视频槽时,底下挂提示词面板 —— 节点本身就是生成单元。 */}
       {composerItem && composerItem.kind !== "note" && composerItem.kind !== "audio" && onGenerate && (
         <NodeComposer
-          key={composerItem.id}
+          key={itemFormResetKey(composerItem)}
           item={composerItem}
           models={models ?? []}
           busy={itemIsRunning(composerItem)}
@@ -1024,7 +1024,13 @@ function ItemToolbar({
           <button
             type="button"
             className="flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs text-muted-foreground hover:bg-secondary hover:text-foreground"
-            onClick={() => onPickAsset(item.kind as MediaKind, (assetId) => patch(item.id, { asset_id: assetId }))}
+            onClick={() =>
+              onPickAsset(item.kind as MediaKind, (assetId) =>
+                // 手动换素材不是上一轮 AI 任务的“成功产物”。把运行态归回 idle，同时 asset_id
+                // 变化会让对应 Composer 从节点表单重新水合，清掉上一轮局部 touched/submitting。
+                patch(item.id, { asset_id: assetId, run: { status: "idle" }, job_id: undefined, error: undefined }),
+              )
+            }
           >
             <Replace size={12} /> {t("boardReplaceAsset")}
           </button>

@@ -48,6 +48,12 @@ Closing an inspector, selecting another node or reopening the board therefore ca
 different placeholder or lose the form. Failed jobs settle into a visible failed state instead of
 spinning forever. Models that declare a continuous duration range get a numeric input for that range.
 
+Every node also exposes its run state directly: queued uses a light primary outline, running adds an
+animated glow, completed turns green, failed turns red, and cancelled uses a subdued dashed outline.
+The signal is not confined to a spinner in an empty media slot, so a failed rerun remains visible even
+when the node still has an older result. A new result or manual asset replacement rehydrates the form
+from that node's saved data; failure and cancellation keep the inputs intact for retry.
+
 ### Referencing assets with `@`
 
 Press `@` in a prompt to reference something from the asset library; the menu follows the caret.

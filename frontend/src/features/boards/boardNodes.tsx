@@ -1,6 +1,6 @@
 import React from "react";
 import { Handle, NodeResizer, Position, useStore, type NodeProps } from "@xyflow/react";
-import { AlertTriangle, Film as FilmIcon, Group, Image as ImageIcon, Loader2, Music, Plus, Square as SquareIcon, StickyNote, type LucideIcon } from "lucide-react";
+import { AlertTriangle, Ban, CheckCircle2, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Loader2, Music, Plus, Square as SquareIcon, StickyNote, type LucideIcon } from "lucide-react";
 
 import type { BoardItem } from "@/api/client";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { cn } from "@/lib/utils";
-import { itemError, itemIsRunning } from "@/features/boards/boardItemState";
+import { itemError, itemRunStatus, type BoardItemRunStatus } from "@/features/boards/boardItemState";
 
 /**
  * 画板上的三种项。
@@ -158,6 +158,65 @@ function TypeLabel({ kind }: { kind: BoardItem["kind"] }) {
   );
 }
 
+/**
+ * 节点状态是节点外壳的一部分，不只是空槽里的一枚转圈。
+ *
+ * 这样即使节点已经有旧产物（重跑失败时仍展示旧图），用户也能从描边和标签看出这一次运行
+ * 的状态。选择态继续只用四角缩放点表达，两套视觉信号不会互相覆盖。
+ */
+const RUN_STATE_CLASS: Record<BoardItemRunStatus, string> = {
+  idle: "ring-0",
+  queued: "border-primary/45 ring-1 ring-primary/15",
+  running:
+    "border-primary/70 ring-2 ring-primary/25 shadow-[0_0_20px_color-mix(in_srgb,var(--primary)_16%,transparent)]",
+  succeeded: "border-success/60 ring-1 ring-success/20",
+  failed: "border-destructive/75 ring-2 ring-destructive/25",
+  cancelled: "border-dashed border-muted-foreground/60 opacity-80 ring-1 ring-muted-foreground/15",
+};
+
+function nodeRunProps(item: BoardItem) {
+  const status = itemRunStatus(item);
+  return {
+    "data-board-run-status": status,
+    className: RUN_STATE_CLASS[status],
+  } as const;
+}
+
+const RUN_STATE_META: Partial<
+  Record<BoardItemRunStatus, { icon: LucideIcon; label: MessageKey; className: string; spin?: boolean }>
+> = {
+  queued: { icon: Clock3, label: "boardNodeQueued", className: "text-primary" },
+  running: { icon: Loader2, label: "boardNodeRunning", className: "text-primary", spin: true },
+  succeeded: { icon: CheckCircle2, label: "boardNodeSucceeded", className: "text-success" },
+  failed: { icon: AlertTriangle, label: "boardNodeFailed", className: "text-destructive" },
+  cancelled: { icon: Ban, label: "boardNodeCancelled", className: "text-muted-foreground" },
+};
+
+/** 状态标签跟类型标签一样反缩放，拉远画布后仍能读，且不遮挡节点内容。 */
+function RunStatusLabel({ item }: { item: BoardItem }) {
+  const t = useI18n();
+  const status = itemRunStatus(item);
+  const meta = RUN_STATE_META[status];
+  const zoom = useStore((state) => state.transform[2]) || 1;
+  if (!meta) return null;
+  const Icon = meta.icon;
+  const label = t(meta.label);
+  return (
+    <span
+      aria-label={label}
+      title={label}
+      className={cn(
+        "pointer-events-none absolute bottom-full right-0 inline-flex origin-bottom-right items-center gap-1 pb-1 text-ui-2xs font-medium",
+        meta.className,
+      )}
+      style={{ transform: `scale(${1 / zoom})` }}
+    >
+      <Icon size={11} className={meta.spin ? "animate-spin" : undefined} />
+      {label}
+    </span>
+  );
+}
+
 /** 便签:双击进入编辑。**单击不进** —— 单击是选中/拖动,想法摆位比改字更频繁。 */
 export function NoteNode({ data, selected }: NodeProps) {
   const { item, onText } = data as unknown as BoardNodeData;
@@ -169,13 +228,16 @@ export function NoteNode({ data, selected }: NodeProps) {
     if (editing) ref.current?.focus();
   }, [editing]);
 
+  const state = nodeRunProps(item);
   return (
     <div
+      data-board-run-status={state["data-board-run-status"]}
       className={cn(
         // **不在这一层 overflow-hidden。** 类型标签在框上方、接点在框左右两侧,都在框外 ——
         // 裁在这里等于把它们裁掉(图片/视频那两处已经栽过一次)。裁剪交给里面那层。
         "group relative h-full w-full rounded-lg border p-2.5 text-ui-sm leading-relaxed shadow-sm transition-shadow",
         noteColorClass(item.color),
+        state.className,
         //: 选中**不加彩色描边** —— 四角的缩放点已经说明选中了(图片/视频那两处早就这么做,
         //: 这里当时漏改)。便签本身是有颜色的,再套一圈主色就成了两种颜色打架。
       )}
@@ -183,6 +245,7 @@ export function NoteNode({ data, selected }: NodeProps) {
     >
       <NodeResizer minWidth={120} minHeight={80} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
       <TypeLabel kind="note" />
+      <RunStatusLabel item={item} />
       <Ports visible={selected} />
       {editing ? (
         <textarea
@@ -224,6 +287,19 @@ function Generating({ text }: { text?: string }) {
   );
 }
 
+function Queued({ text }: { text?: string }) {
+  const t = useI18n();
+  return (
+    <div className="grid h-full w-full place-items-center overflow-hidden rounded-lg bg-[color-mix(in_srgb,var(--primary)_6%,transparent)] px-3">
+      <div className="grid justify-items-center gap-1.5 text-center">
+        <Clock3 size={16} className="text-primary" />
+        <span className="text-ui-2xs font-medium text-primary">{t("boardNodeQueued")}</span>
+        {text ? <span className="line-clamp-3 text-ui-2xs leading-relaxed text-muted-foreground">{text}</span> : null}
+      </div>
+    </div>
+  );
+}
+
 /**
  * 空槽:还没写提示词、也没有任务。
  *
@@ -250,6 +326,18 @@ function Failed({ reason }: { reason: string }) {
   );
 }
 
+function Cancelled() {
+  const t = useI18n();
+  return (
+    <div className="grid h-full w-full place-items-center overflow-hidden rounded-lg bg-secondary/35 px-3">
+      <div className="grid justify-items-center gap-1 text-center text-muted-foreground">
+        <Ban size={15} />
+        <span className="text-ui-2xs font-semibold">{t("boardNodeCancelled")}</span>
+      </div>
+    </div>
+  );
+}
+
 /**
  * 一格**还没有产出**时画什么。
  *
@@ -257,9 +345,12 @@ function Failed({ reason }: { reason: string }) {
  * 得记得三处都改 —— 漏掉一处不会报错,只会是那一类节点永远转圈。
  */
 function PendingSlot({ item, icon }: { item: BoardItem; icon: React.ReactNode }) {
-  if (itemIsRunning(item)) return <Generating text={item.form?.prompt ?? item.text} />;
+  const status = itemRunStatus(item);
+  if (status === "queued") return <Queued text={item.form?.prompt ?? item.text} />;
+  if (status === "running") return <Generating text={item.form?.prompt ?? item.text} />;
   const error = itemError(item);
-  if (error) return <Failed reason={error} />;
+  if (status === "failed") return <Failed reason={error || "—"} />;
+  if (status === "cancelled") return <Cancelled />;
   return <EmptySlot icon={icon} />;
 }
 
@@ -273,9 +364,11 @@ function EmptySlot({ icon }: { icon: React.ReactNode }) {
 /** 图片:指向素材库的一份。加载不出来时说清楚 —— 素材可能已经被删了。 */
 export function ImageNode({ data, selected }: NodeProps) {
   const { item, onAspect } = data as unknown as BoardNodeData;
+  const state = nodeRunProps(item);
 
   return (
     <div
+      data-board-run-status={state["data-board-run-status"]}
       className={cn(
         // **不在这一层 overflow-hidden。** 类型标签在框上方、接点在框左右两侧,都在框外 ——
         // 裁在这里会把它们切掉(工作流节点上刚犯过同一个错:「感叹号被截断了」)。
@@ -283,10 +376,12 @@ export function ImageNode({ data, selected }: NodeProps) {
         //: 边框一律安静的实线。选中**不加彩色描边** —— 四角的缩放点已经说明「选中了」,
         //: 再套一圈主色反而盖过节点里的画面。
         "group relative h-full w-full rounded-lg border border-border bg-panel shadow-sm",
+        state.className,
       )}
     >
       <NodeResizer minWidth={80} minHeight={60} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
       <TypeLabel kind="image" />
+      <RunStatusLabel item={item} />
       <Ports visible={selected} />
       {!item.asset_id ? (
         <PendingSlot item={item} icon={<ImageIcon size={20} />} />
@@ -321,12 +416,15 @@ export function FrameNode({ data, selected }: NodeProps) {
   const { item, onText } = data as unknown as BoardNodeData;
   const t = useI18n();
   const [editing, setEditing] = React.useState(false);
+  const state = nodeRunProps(item);
 
   return (
     <div
+      data-board-run-status={state["data-board-run-status"]}
       className={cn(
         "group pointer-events-none relative h-full w-full rounded-xl border-2 border-dashed border-border-strong bg-[color-mix(in_srgb,var(--foreground)_3%,transparent)]",
         selected && "border-primary",
+        state.className,
       )}
     >
       <NodeResizer minWidth={160} minHeight={120} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
@@ -352,6 +450,7 @@ export function FrameNode({ data, selected }: NodeProps) {
           </span>
         )}
       </div>
+      <RunStatusLabel item={item} />
     </div>
   );
 }
@@ -359,18 +458,22 @@ export function FrameNode({ data, selected }: NodeProps) {
 /** 视频:就地播。**不自动播、不循环** —— 画板上可能同时摆着五段片子,一起动是噪音。 */
 export function VideoNode({ data, selected }: NodeProps) {
   const { item, onAspect } = data as unknown as BoardNodeData;
+  const state = nodeRunProps(item);
 
   return (
     <div
+      data-board-run-status={state["data-board-run-status"]}
       className={cn(
         // 同上:标签和接点都在框外,不能裁在这一层。
         //: 边框一律安静的实线。选中**不加彩色描边** —— 四角的缩放点已经说明「选中了」,
         //: 再套一圈主色反而盖过节点里的画面。
         "group relative h-full w-full rounded-lg border border-border bg-panel shadow-sm",
+        state.className,
       )}
     >
       <NodeResizer minWidth={120} minHeight={80} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
       <TypeLabel kind="video" />
+      <RunStatusLabel item={item} />
       <Ports visible={selected} />
       {!item.asset_id ? (
         <PendingSlot item={item} icon={<FilmIcon size={20} />} />
@@ -392,10 +495,15 @@ export function VideoNode({ data, selected }: NodeProps) {
  *  和图片/视频同一套三状态:空槽 / 生成中 / 有产出。 */
 function AudioNode({ data, selected }: NodeProps) {
   const { item } = data as unknown as BoardNodeData;
+  const state = nodeRunProps(item);
   return (
-    <div className="group relative h-full w-full rounded-lg border border-border bg-panel shadow-sm">
+    <div
+      data-board-run-status={state["data-board-run-status"]}
+      className={cn("group relative h-full w-full rounded-lg border border-border bg-panel shadow-sm", state.className)}
+    >
       <NodeResizer minWidth={200} minHeight={64} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
       <TypeLabel kind="audio" />
+      <RunStatusLabel item={item} />
       <Ports visible={selected} />
       <div className="grid h-full w-full place-items-center overflow-hidden rounded-lg px-2">
         {!item.asset_id ? (
