@@ -22,7 +22,7 @@ Workflows orchestrate a chain of actions (retrieval, generation, transcription, 
   | Flow | start, output, condition, delay, notify |
   | Text & models | LLM, text template, text transform, translate, JSON extract, code |
   | Loops & reuse | for-each, while, subgraph, call workflow |
-  | Media & cuts | AI-generate asset, synthesize speech, transcribe asset, export timeline, publish |
+  | Media & cuts | AI-generate asset, synthesize speech, transcribe asset, video to GIF, export timeline, publish |
   | Asset library | asset query, asset tag, asset update, create project |
   | External | HTTP request, plugin tool |
   | Browser | open / navigate / click / input / extract / scroll / upload / wait / evaluate / close |
@@ -56,6 +56,9 @@ The toolbar's **readiness check** aggregates all blockers: missing required fiel
 - Problem nodes get a **warning badge** on the canvas (red = blocking, amber = advisory) with a tooltip listing the issues.
 - With errors present the **Run** button is disabled; each issue is clickable and jumps to the node.
 - After deleting an upstream node, fields referencing it are marked **stale** and can be re-pointed or cleared.
+
+The **Video to GIF** node takes a video asset id plus frame rate, width, start time and duration. It
+outputs a **new GIF asset id** and never overwrites the source video.
 
 ## LLM generation style
 

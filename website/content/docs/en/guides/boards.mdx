@@ -8,6 +8,9 @@ A board is where ideas get spread out. Talking to the agent is telling it what y
 is laying it out where you can see it. You place notes, images, videos, audio and group frames —
 and **connecting two of them means the downstream one takes the upstream as input**.
 
+Drop an edge anywhere on the visible **+** target at either side of a node; it snaps there without
+requiring pixel-perfect placement on the node boundary.
+
 ## What a connection gives you
 
 Connections are not decoration. The downstream node reshapes its form around what it receives:
@@ -39,6 +42,11 @@ Select a node: the action bar sits above it, its form below.
   is TTS, so you choose a voice rather than a model.
 - **Group frame** — fence things off and name them. Select a few nodes and press
   <kbd>⌘</kbd><kbd>G</kbd> to group them directly.
+
+Prompt, model, duration, source references and run status live **inside the node's own data**.
+Closing an inspector, selecting another node or reopening the board therefore cannot reconstruct a
+different placeholder or lose the form. Failed jobs settle into a visible failed state instead of
+spinning forever. Models that declare a continuous duration range get a numeric input for that range.
 
 ### Referencing assets with `@`
 

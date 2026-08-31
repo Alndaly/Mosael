@@ -79,6 +79,9 @@ session, 1440p with one.
 
 ![URL import: probe listing, multi-select, quality and audio/video choice](docs/media/url-import.png)
 
+Right-click a video and choose **Convert to GIF** to create a derived GIF asset. The video is never
+overwritten; the same conversion is available as a workflow node for repeatable pipelines.
+
 ### Agent
 
 A chat workbench whose tools reach the whole app — the timeline, media, workflows, publishing,
@@ -151,6 +154,11 @@ Providers and models are two levels: a **provider** is one endpoint plus one cre
 number of models hang beneath it. Capabilities (chat / image / video / audio), context length,
 and the reasoning and vision switches all belong to the **model**. Subscription-based providers
 report remaining quota and reset windows.
+
+Evolink is available as one image/video gateway provider: configure one Evolink API key, then add
+Seedance, Kling, Veo, Hailuo, WAN, Sora, GPT Image, Gemini or Seedream model rows under that
+connection. Local reference images are uploaded through Evolink's Files API; completed results are
+downloaded immediately into the local media library because gateway URLs expire.
 
 Plugins run as subprocess scripts or connect to MCP servers, declaring their permissions in a
 manifest. Install one from the built-in market or any zip URL — the package is fetched and its

@@ -30,6 +30,7 @@
 | `generation/` | 文生图/视频。**参数描述符(`catalog.py`)是唯一事实源** —— 界面按它渲染控件、智能体按它知道能给什么、提交按它校验(四条路都汇到 `create_generation_job`,漏拦的后果不是报错:供应商可能默默忽略,于是要的 10 秒跑出默认的 5 秒)。输入素材**带角色**,不靠位置 —— 各家接口本来就有 role,而扁平列表表达不了。角色分**三条互不相通的路**:首尾帧(决定成片的第一格和最后一格)、参考素材(参考图/视频/音频,一帧都不出现在成片里,只影响风格与主体)、视频输入(`source_video` 是被编辑的那一段、`first_clip` 是被续写的那一段、`driving_audio` 驱动口型与卡点)。素材之间的规矩全由描述符声明:份数上限 `source_limits`、互斥组 `exclusive_source_groups`、必填 `requires_source`、搭伴 `requires_companion`、参考图下限 `min_reference_images`、跟着素材变的时长上限 `conditional_max_duration_seconds`。数字来自各家接口自己的报错,不是文档里的建议值;角色的名字和给智能体的说明也在这里(`SOURCE_ROLE_LABELS` / `SOURCE_ROLE_HELP`),**只此一份** —— 此前 mcp_server 另抄了一份,结果角色长到八种时它停在四种,智能体永远不会用剩下那四种 |
 | `translate.py` | 文本翻译:Google 免费端点 + 走工作区模型的 LLM 两条路,字幕面板与工作流节点共用 |
 | `assets/from_url.py`(配 `media/ytdlp.py`) | 从链接导入素材:先探清单再下选中的几条,音频/视频与画质上限在下载前定;需要登录的站点**借浏览器池档案的 cookie**(经既有动作队列问 Electron 要),入库仍走 `register_file_asset` |
+| `assets/video_gif.py`(配 `media/video_gif.py`) | 视频转 GIF:领域层排任务并登记派生素材,媒体层只负责 ffmpeg 转码。来源关系只写到新 GIF 的 `media_info`,原视频字节与记录都不改;素材页右键与工作流节点共用这一条路径 |
 | `plugins/` | 插件:子进程执行 + 权限门 + MCP 暴露;市场索引与安装(`registry.py`)、文件双向搬运(`artifacts.py` 交出 / `inputs.py` 收下)、跨调用状态(`state.py`)。**不认识素材库** —— `media_bridge.py` 只定义来源与落点的契约,由 `domain/assets/plugin_bridge` 在组装根登记(同 jobs 不认识智能体) |
 | `core/pip_install.py` | **通往 pip 的唯一一道门**(声音克隆 / 转写共用)。带上设置页那个镜像、`--prefer-binary`(挡的是"为了新版本号去本机编译 Rust")、够用的超时重试;失败时挑出 pip 自己的结论行而不是取输出尾巴,并把完整输出落盘 |
 | `core/run_log.py` | 子进程的完整输出落盘(`~/.open-studio/logs/`)。装依赖、下权重两条路共用 —— 界面只放一句话,而排查要全文,此前全文哪儿都没有 |
@@ -74,6 +75,11 @@ TaskEvent 行只在总线创建。
 `deliver_generated` **要认两种产出形状**:生成任务一次可能出多张(`asset_ids`),语音合成和剪辑
 一次出一段(`asset_id`)。这不是新旧兼容,是两种任务本来就不同;只认一种的话,另一种落终态时
 占位会被当成失败摘掉 —— 用户看到的是「生成完就没了」。
+
+节点的 `form` 与 `run` 是画布 JSON 的一部分,不是 React 选中态的副产品。`form` 保存提示词、模型、
+参数与引用素材；`run` 保存 job id 和 idle/queued/running/succeeded/failed/cancelled 终态。保存时若旧快照
+晚到,服务端保留已经落下的终态,避免失败任务被 stale autosave 改回 loading。边的命中半径覆盖左右可见
+`+` 号,拖到交互目标即可吸附。
 
 智能体改画板走 `edit_board`(细粒度算子 + 确认卡),和 `edit_workflow` 同一套:它表达意图,
 服务端落到当前画布 —— 让模型吐回整份 canvas 的话,稍复杂一点的板必然出错(漏项,或把用户
@@ -190,6 +196,11 @@ f5-tts / fish-speech 都要 torch + torchaudio + transformers,**2.5–3.5 GB**�
   什么(不该被目录冲掉)。目录里查不到的模型(私有部署、别名)可以手填,与目录来的平权,只额外
   标一个「目录中已不存在」。
 - **数据归属**是 `app/domain/provider_models.py`,建行只经它的 `upsert`(棘轮盯着)。
+
+Evolink 是「平台 Adapter」的例子：一个 `(evolink, image|video)` 协议实现服务多个上游引擎，
+`model` 只负责选择 Seedance/Kling/Veo/Hailuo/WAN/Sora/GPT Image/Gemini/Seedream。它先把本地输入
+上传到 Files API，再走统一异步任务协议并立即下载限时结果；不会按引擎复制 HTTP Adapter。原生
+火山 Seedance 与 Evolink Seedance 是两条独立连接，能力描述符仍按 `(vendor, model, kind)` 分开。
 
 ### 能力和执行面是两条轴
 

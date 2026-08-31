@@ -54,6 +54,9 @@ _Avoid_: 队列服务、调度中心
 **节点注册表(NODE_TYPES)**:
 节点的元数据接缝:驱动校验、画布 UI、智能体提示。
 
+`video_to_gif` 是派生素材节点：输入视频 id，输出新的 GIF id；实现委托 `domain/assets/video_gif.py`，
+绝不原地覆盖来源视频。
+
 **执行器注册表(executors/)**:
 节点的行为接缝:每种节点类型一个执行器适配器,签名 `handler(db, workflow, config) -> dict`。与 NODE_TYPES 一一对应(锁步测试钉死)。
 
@@ -195,6 +198,12 @@ _Avoid_: 用 capability 代替执行通道;把 OAuth Token 或任意供应商地
 `app/domain/providers.py` 声明某个 vendor 支持哪些能力、设置页要收集哪些 `fields`、支持哪些鉴权方式。
 前端只渲染后端声明的 `fields`,不硬编码通用凭据模型。它是**兜底**:模型行没写能力时按它回落。
 _Avoid_: 仅凭 vendor 文案推断能力
+
+**Evolink 平台 Adapter**:
+`ai/providers/evolink.py` 按一份平台协议承载图像与视频生成,上游引擎由模型 id 区分,不是每个引擎再写
+一份 Adapter。本地引用图先传 Files API,任务走 `/v1/images|videos/generations` + `/v1/tasks/{id}`,
+限时结果立即落回本地素材库。它与各家原生 Adapter 并列,不复用 OAuth Gateway,也不在本地承诺绕过
+上游内容审核。
 
 **订阅额度**:
 `domain/provider_quota.py`,六家(anthropic / codex / openrouter / kimi / xai / copilot)各一个解析器。

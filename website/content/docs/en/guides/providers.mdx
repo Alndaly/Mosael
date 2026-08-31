@@ -34,7 +34,7 @@ hold **any number of models**. Click the chevron on a provider row to see its mo
 
 Click **Add provider** in the relevant section:
 
-1. Pick a **vendor** (built-ins include Alibaba DashScope, Volcengine ARK (video / Seedream image), Kimi, MiniMax, OpenAI, Google, Kuaishou Kling, OpenAI-compatible endpoints; the catalog grows over time).
+1. Pick a **vendor** (built-ins include Alibaba DashScope, Volcengine ARK (video / Seedream image), Evolink, Kimi, MiniMax, OpenAI, Google, Kuaishou Kling, OpenAI-compatible endpoints; the catalog grows over time).
 2. Give it a **name** (e.g. "My Kimi").
 3. Paste the **API key** (subscription plans have no key field — you authorize after saving instead). A "Get API key ↗" link jumps straight to that vendor's key console.
 4. **Base URL**: API-key providers can leave it empty for the vendor default (shown as the
@@ -44,6 +44,18 @@ Click **Add provider** in the relevant section:
 5. **Model** is optional; if filled it becomes this provider's first model. You can add more at any time.
 
 Providers can be **enabled / disabled** at any time without deleting.
+
+### Evolink: several generation engines under one connection
+
+Evolink is a unified image/video gateway. One Evolink API key can host Seedance, Kling, Veo,
+Hailuo, WAN, Sora, GPT Image, Gemini and Seedream model rows under the same connection. Open Studio
+uploads local reference images through the Evolink Files API, submits the asynchronous task by model
+id, then immediately downloads expiring results into the local media library.
+
+This route is independent from the native Volcengine Seedance adapter, so you can choose it for
+different regional, account or content-policy behaviour. Open Studio adds no local "real person"
+keyword block, but it cannot promise policy bypass: acceptance still belongs to Evolink's current
+upstream model.
 
 ## Managing its models
 

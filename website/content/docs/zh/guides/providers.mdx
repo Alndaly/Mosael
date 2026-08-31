@@ -34,7 +34,7 @@ Open Studio 的 AI 能力(智能体对话、文生图 / 视频、配音、转写
 
 进对应分区点「**添加供应商**」：
 
-1. 选**服务商**(内置阿里云百炼 DashScope、火山方舟 ARK(视频 / Seedream 图像)、Kimi、MiniMax、OpenAI、Google、快手 Kling、OpenAI 兼容端点等，目录随版本扩充)。
+1. 选**服务商**(内置阿里云百炼 DashScope、火山方舟 ARK(视频 / Seedream 图像)、Evolink、Kimi、MiniMax、OpenAI、Google、快手 Kling、OpenAI 兼容端点等，目录随版本扩充)。
 2. 填**名称**(便于区分，如「我的 Kimi」)。
 3. 贴 **API Key**(订阅计划没有这一项，改为保存后授权登录)。字段旁有「**获取 API Key ↗**」直达该服务商的密钥控制台。
 4. **Base URL**：API Key 连接留空即用该服务商默认(占位符会显示默认值);自建 OpenAI 兼容端点需自己填。
@@ -42,6 +42,15 @@ Open Studio 的 AI 能力(智能体对话、文生图 / 视频、配音、转写
 5. **模型**可选，填了就作为这条供应商的第一个模型；之后随时可以再加。
 
 添加后可随时**启用 / 停用**，不必删。
+
+### Evolink：一个连接挂多个生成引擎
+
+Evolink 是统一图像/视频网关：只需一份 Evolink API Key，同一连接下可分别加入 Seedance、Kling、
+Veo、海螺、WAN、Sora、GPT Image、Gemini、Seedream 等模型。Open Studio 会把本地参考图先上传到
+Evolink Files API，按模型 id 提交异步任务，再把限时产物地址立即下载回本地素材库。
+
+这条路由与火山方舟的 Seedance Adapter 相互独立，可按内容策略、地区与账号可用性选择。Open Studio
+不会在本地额外拦「真人」提示词，但也不承诺绕过审核：最终是否通过仍由 Evolink 当前路由的上游模型决定。
 
 ## 管理它下面的模型
 
