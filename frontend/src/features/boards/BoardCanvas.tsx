@@ -945,11 +945,11 @@ function ItemToolbar({
     //: 间距从**类型标签**上方算起,不是节点上边框:标签挂在节点外的 -top-5(20px)处。
     //: 20 + 12 —— 那个 12 和下方面板离节点下边的距离是同一个数,两边看着才一样宽。
     <NodeToolbar nodeId={selected.map((node) => node.id)} isVisible position={Position.Top} offset={32}>
-      <div className="nodrag nopan flex items-center gap-0.5 rounded-full border border-border-strong bg-panel p-1 shadow-[var(--shadow-panel)]">
+      <div className="nodrag nopan flex items-center gap-1 rounded-full border border-border-strong bg-panel p-1.5 shadow-[var(--shadow-panel)]">
         {/* 按类型来的那几个动作装在这一格里,**分隔线是这一格自己的右边框**。
             于是它不可能在没有动作时出现 —— 此前那道线自己抄了一遍「上面有没有东西」的
             条件,加了音频节点之后就和实际渲染分了岔:音频头上挂着一道悬空的竖线。 */}
-        <div className="flex items-center gap-0.5 empty:hidden [&:not(:empty)]:mr-1 [&:not(:empty)]:border-r [&:not(:empty)]:border-border [&:not(:empty)]:pr-1.5">
+        <div className="flex items-center gap-1 empty:hidden [&:not(:empty)]:mr-1 [&:not(:empty)]:border-r [&:not(:empty)]:border-border [&:not(:empty)]:pr-2">
         {item?.kind === "note" &&
           NOTE_COLORS.map((color) => (
             <button
@@ -957,7 +957,7 @@ function ItemToolbar({
               type="button"
               aria-label={color}
               className={cn(
-                "h-5 w-5 cursor-pointer rounded-full border transition-transform hover:scale-110",
+                "h-6 w-6 cursor-pointer rounded-full border transition-transform hover:scale-110",
                 noteColorClass(color),
                 item.color === color && "ring-2 ring-primary ring-offset-1 ring-offset-[var(--panel)]",
               )}
@@ -973,14 +973,14 @@ function ItemToolbar({
             aria-pressed={Boolean(item.move_children)}
             title={t(item.move_children ? "boardMoveChildrenOn" : "boardMoveChildrenOff")}
             className={cn(
-              "flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs transition-colors",
+              "flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1.5 text-ui-xs transition-colors",
               item.move_children
                 ? "bg-primary/12 text-primary"
                 : "text-muted-foreground hover:bg-secondary hover:text-foreground",
             )}
             onClick={() => patch(item.id, { move_children: !item.move_children })}
           >
-            <Group size={12} /> {t("boardMoveChildren")}
+            <Group size={13} /> {t("boardMoveChildren")}
           </button>
         )}
 
@@ -989,7 +989,7 @@ function ItemToolbar({
         {(item?.kind === "image" || item?.kind === "video") && item.asset_id && (
           <button
             type="button"
-            className="flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs text-muted-foreground hover:bg-secondary hover:text-foreground"
+            className="flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1.5 text-ui-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
             title={t("boardPreviewTitle")}
             onClick={() =>
               openImagePreview({
@@ -1000,7 +1000,7 @@ function ItemToolbar({
               })
             }
           >
-            <Maximize2 size={12} /> {t("boardPreview")}
+            <Maximize2 size={13} /> {t("boardPreview")}
           </button>
         )}
 
@@ -1009,21 +1009,21 @@ function ItemToolbar({
           <button
             type="button"
             className={cn(
-              "flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs transition-colors hover:bg-secondary hover:text-foreground",
+              "flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1.5 text-ui-xs transition-colors hover:bg-secondary hover:text-foreground",
               trimmingId === item.id ? "bg-secondary text-foreground" : "text-muted-foreground",
             )}
             title={t("boardTrimTitle")}
             onClick={() => onTrimRequest(item.id)}
             aria-pressed={trimmingId === item.id}
           >
-            <Scissors size={12} /> {t("boardTrim")}
+            <Scissors size={13} /> {t("boardTrim")}
           </button>
         )}
 
         {item && isMediaKind(item.kind) && (
           <button
             type="button"
-            className="flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs text-muted-foreground hover:bg-secondary hover:text-foreground"
+            className="flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1.5 text-ui-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
             onClick={() =>
               onPickAsset(item.kind as MediaKind, (assetId) =>
                 // 手动换素材不是上一轮 AI 任务的“成功产物”。把运行态归回 idle，同时 asset_id
@@ -1032,7 +1032,7 @@ function ItemToolbar({
               )
             }
           >
-            <Replace size={12} /> {t("boardReplaceAsset")}
+            <Replace size={13} /> {t("boardReplaceAsset")}
           </button>
         )}
 
@@ -1057,7 +1057,7 @@ function ItemToolbar({
                 <button
                   key={kind}
                   type="button"
-                  className="flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-ui-2xs text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  className="flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1.5 text-ui-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
                   title={
                     kind === "audio"
                       ? t("boardSpawnAudio")
@@ -1074,7 +1074,7 @@ function ItemToolbar({
                     })
                   }
                 >
-                  <Sparkles size={12} />{" "}
+                  <Sparkles size={13} />{" "}
                   {/* 文案那一格说的是「生成文案」而不是「生成便签」—— 便签是这张卡片的名字,
                       而用户要的是里面那段字。套同一个模板会说出「Generate Note」这种话。 */}
                   {kind === "note"
@@ -1090,19 +1090,19 @@ function ItemToolbar({
           type="button"
           aria-label={t("copy")}
           title={t("copy")}
-          className="grid h-6 w-6 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
+          className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
           onClick={duplicate}
         >
-          <Copy size={12} />
+          <Copy size={13} />
         </button>
         <button
           type="button"
           aria-label={t("delete")}
           title={t("delete")}
-          className="grid h-6 w-6 cursor-pointer place-items-center rounded-full text-muted-foreground hover:text-destructive"
+          className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:text-destructive"
           onClick={() => setNodes((current) => current.filter((node) => !node.selected))}
         >
-          <Trash2 size={12} />
+          <Trash2 size={13} />
         </button>
       </div>
     </NodeToolbar>

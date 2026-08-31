@@ -28,4 +28,22 @@ describe("画板表单的提交状态", () => {
     // 自己维护的那份正是「失败后停不下来」的来源 —— 它只在开头置 true。
     expect(source, `${file}:又出现了本地的 sending 状态`).not.toMatch(/setSending\s*\(/);
   });
+
+  it("视频时长不使用带系统 spinner 的原生 number 输入", () => {
+    const source = fs.readFileSync(path.join(HERE, "NodeComposer.tsx"), "utf8");
+    expect(source).not.toContain('type="number"');
+  });
+
+  it("生成面板留足宽度并让底部参数换行而不是逐项省略", () => {
+    const source = fs.readFileSync(path.join(HERE, "NodeComposer.tsx"), "utf8");
+    expect(source).toContain('w-[480px]');
+    expect(source).toContain('flex flex-wrap items-center');
+    expect(source).toContain('shrink-0 [&>span]:overflow-visible [&>span]:text-clip');
+  });
+
+  it("节点上方操作条使用较大的点击区", () => {
+    const source = fs.readFileSync(path.join(HERE, "BoardCanvas.tsx"), "utf8");
+    expect(source).toContain('rounded-full border border-border-strong bg-panel p-1.5');
+    expect(source).toContain('h-7 w-7 cursor-pointer');
+  });
 });

@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { sourceSlots } from "./NodeComposer";
+import { durationRangeOptions, sourceSlots } from "./NodeComposer";
 import type { GenerationModel } from "@/api/client";
 
 const model = (parameterKeys: string[], sourceLimits: Record<string, number> = {}) =>
@@ -37,6 +37,18 @@ describe("输入素材槽照描述符出", () => {
 
   it("没模型就没槽", () => {
     expect(sourceSlots(null)).toEqual([]);
+  });
+});
+
+describe("区间时长在紧凑参数行中的呈现", () => {
+  it("展开区间内每个合法整数，不退回浏览器原生数字框", () => {
+    expect(durationRangeOptions({ min: 4, max: 8 })).toEqual([
+      { value: "4", label: "4s" },
+      { value: "5", label: "5s" },
+      { value: "6", label: "6s" },
+      { value: "7", label: "7s" },
+      { value: "8", label: "8s" },
+    ]);
   });
 });
 

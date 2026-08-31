@@ -65,7 +65,7 @@ function Pick({
     <Select value={value} onValueChange={onChange}>
       {/* 不出下拉箭头:一行里五六个箭头是纯噪音,而这一行读起来该像「16:9 · 480p · 5s」。
           点开仍然是完整的下拉。 */}
-      <SelectTrigger className="h-6 w-auto gap-0 border-0 bg-transparent px-1 text-ui-2xs text-muted-foreground shadow-none focus:ring-0 data-[state=open]:text-foreground [&>svg]:hidden">
+      <SelectTrigger className="h-6 w-auto shrink-0 [&>span]:overflow-visible [&>span]:text-clip gap-0 border-0 bg-transparent px-1 text-ui-2xs text-muted-foreground shadow-none focus:ring-0 data-[state=open]:text-foreground [&>svg]:hidden">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -77,6 +77,18 @@ function Pick({
       </SelectContent>
     </Select>
   );
+}
+
+/** 区间时长仍用紧凑 Pick，但把 min..max 的每个合法整数都列出来。
+ * 不能只把两个端点当枚举，那会把 Seedance 4–15 秒中间的 10 个合法值藏掉。 */
+export function durationRangeOptions(range: { min: number; max: number }): { value: string; label: string }[] {
+  const min = Math.ceil(range.min);
+  const max = Math.floor(range.max);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max < min) return [];
+  return Array.from({ length: max - min + 1 }, (_, index) => {
+    const seconds = min + index;
+    return { value: String(seconds), label: `${seconds}s` };
+  });
 }
 
 /** 角色的中文名 —— 和 AI 工作台共用那一份(features/ai-studio/sourceFrames.ROLE_COPY),
@@ -492,7 +504,7 @@ export function NodeComposer({
 
   return (
     <NodeToolbar nodeId={item.id} isVisible position={Position.Bottom} offset={12}>
-      <div className="nodrag nopan nowheel relative w-[420px] rounded-xl border border-border-strong bg-panel p-2 shadow-[var(--shadow-panel)]">
+      <div className="nodrag nopan nowheel relative w-[480px] max-w-[calc(100vw-2rem)] rounded-xl border border-border-strong bg-panel p-2.5 shadow-[var(--shadow-panel)]">
         {/* 输入素材:图片是一排参考图(可多张),视频是首帧 ⇄ 尾帧。**格子按模型声明出** ——
             见 slots 那段。挂满上限就不再给 + ,免得点了才被校验器拦下。 */}
         {slots.length > 0 && (
@@ -605,20 +617,20 @@ export function NodeComposer({
             参数收进**一个胶囊**里而不是并排六个下拉 —— 它们是同一个决定的几个侧面
             (「首尾帧 · 16:9 · 480p · 5s」读起来是一句话),各自带框会让这一行像一张表单。
             胶囊整体有 hover 态,里面每一格点开才是下拉。 */}
-        <div className="flex items-center gap-1 border-t border-border pt-1.5">
+        <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 border-t border-border pt-2">
           {options.length === 0 ? (
             // 没有可用模型时说清楚 —— 给一个点了没反应的按钮比什么都不给更糟。
             <span className="px-1 text-ui-2xs text-muted-foreground">{t("boardNoGenerationModel")}</span>
           ) : (
             <>
-              <span className="flex min-w-0 shrink items-center gap-0.5 rounded-full px-1 transition-colors hover:bg-secondary">
+              <span className="flex shrink-0 items-center gap-0.5 rounded-full px-1 transition-colors hover:bg-secondary">
                 <Sparkles size={12} className="shrink-0 text-muted-foreground" />
                 <Pick value={modelValue} onChange={setPicked} options={options.map((one) => ({ value: `${one.provider}/${one.model}`, label: one.model }))} />
               </span>
 
               <span aria-hidden className="h-3.5 w-px shrink-0 bg-border" />
 
-              <span className="flex min-w-0 shrink items-center gap-0 rounded-full px-1 transition-colors hover:bg-secondary">
+              <span className="flex shrink-0 items-center gap-0 rounded-full px-1 transition-colors hover:bg-secondary">
                 {/* 生成方式排第一格:它决定上面那排槽位是首尾帧还是参考,后面几项都在它之下。 */}
                 {modes.length > 0 && (
                   <Pick
@@ -639,22 +651,16 @@ export function NodeComposer({
                 {supportsParameter(current, "size") && (
                   <Pick value={size} onChange={setSize} options={sizeOptions(current).map((one) => ({ value: one, label: one }))} />
                 )}
-                {supportsParameter(current, "duration_seconds") && durations.length > 0 && (
-                  <Pick value={String(duration)} onChange={(next) => setDuration(Number(next))} options={durations.map((one) => ({ value: String(one), label: `${one}s` }))} />
-                )}
-                {supportsParameter(current, "duration_seconds") && range && (
-                  <label className="flex h-6 items-center gap-0.5 px-1 text-ui-2xs text-muted-foreground" title={`${range.min}–${range.max}s`}>
-                    <input
-                      type="number"
-                      min={range.min}
-                      max={range.max}
-                      step={1}
-                      value={duration}
-                      onChange={(event) => setDuration(Math.max(range.min, Math.min(range.max, Number(event.target.value) || range.min)))}
-                      className="w-7 border-0 bg-transparent p-0 text-right text-ui-2xs text-muted-foreground outline-none"
-                    />
-                    s
-                  </label>
+                {supportsParameter(current, "duration_seconds") && (durations.length > 0 || range) && (
+                  <Pick
+                    value={String(duration)}
+                    onChange={(next) => setDuration(Number(next))}
+                    options={
+                      durations.length > 0
+                        ? durations.map((one) => ({ value: String(one), label: `${one}s` }))
+                        : durationRangeOptions(range as { min: number; max: number })
+                    }
+                  />
                 )}
               </span>
 
