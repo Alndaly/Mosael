@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Film, Redo2, Undo2, FolderOpen, Image as ImageIcon, LayoutGrid, Map as MapIcon, Maximize2, Music, Plus, Square, StickyNote, Trash2 } from "lucide-react";
+import { Bot, LayoutGrid, Map as MapIcon, Maximize2, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -25,6 +25,7 @@ import {
 import type { MediaKind } from "@/features/boards/boardNodes";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { CanvasTitle } from "@/components/app/canvasTitle";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -430,6 +431,30 @@ function BoardDetail({
     return () => clearInterval(timer);
   }, [running, board.id, workspaceId, api]);
 
+  /**
+   * ⌘/Ctrl+N 打开「添加」弹层 —— 和工作流详情页同键同义(那边是 ⌘N 添加节点)。
+   *
+   * 做法是点那个按钮而不是把 SearchableSelect 改成受控:它的开合是内部状态,
+   * 为一个快捷键改受控,调用它的另外几处都要跟着改(同 WorkflowsView 的取舍)。
+   *
+   * **在输入框里一律不劫持** —— 在便签/提示词里打字时按 ⌘N,想要的是浏览器的新建窗口
+   * (或什么都不发生),而不是画布上冒出一个节点。
+   */
+  React.useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
+      if (event.key.toLowerCase() !== "n") return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+      const trigger = document.querySelector<HTMLButtonElement>("[data-board-add-item]");
+      if (!trigger) return;
+      event.preventDefault();
+      trigger.click();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
   const save = React.useCallback(
     (next: Canvas) => {
       updateBoard(board.id, { workspace_id: workspaceId, canvas: next })
@@ -477,33 +502,39 @@ function BoardDetail({
             往画布上加东西 / 看画布 / 处置这张板。混成一条的话,删除会挨着「加便签」。 */}
         <div className="flex flex-wrap items-start justify-end gap-2">
           <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
-            <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsAddNote")} aria-label={t("boardsAddNote")} onClick={() => api?.add("note")}>
-              <StickyNote size={15} />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsAddImage")} aria-label={t("boardsAddImage")} onClick={() => api?.add("image")}>
-              <ImageIcon size={15} />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsAddVideo")} aria-label={t("boardsAddVideo")} onClick={() => api?.add("video")}>
-              <Film size={15} />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsAddAudio")} aria-label={t("boardsAddAudio")} onClick={() => api?.add("audio")}>
-              <Music size={15} />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsAddFrame")} aria-label={t("boardsAddFrame")} onClick={() => api?.add("frame")}>
-              <Square size={15} />
-            </Button>
-            {/* 贴一份现成的和「放一个空槽去生成」是两件事 —— 中间给一道界。 */}
-            <span aria-hidden className="mx-0.5 h-4 w-px bg-border" />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              title={t("boardsPickImage")}
-              aria-label={t("boardsPickImage")}
-              onClick={() => setPicking({ kind: "image", place: (assetId) => api?.add("image", { asset_id: assetId }) })}
-            >
-              <FolderOpen size={15} />
-            </Button>
+            {/* 「往画布上加东西」收成一个 + —— 和工作流详情页的「添加节点」同一颗控件
+                (SearchableSelect):六个图标排一排要逐个认,弹层里名字写出来就不用猜。
+                「贴一份现成的」和「放一个空槽去生成」是两件事,弹层里分成两组。 */}
+            <SearchableSelect
+              value=""
+              onValueChange={(kind) => {
+                if (kind === "pick-image") {
+                  setPicking({ kind: "image", place: (assetId) => api?.add("image", { asset_id: assetId }) });
+                } else {
+                  api?.add(kind as "note" | "image" | "video" | "audio" | "frame");
+                }
+              }}
+              searchPlaceholder={t("boardsAddItem")}
+              options={[
+                { value: "note", label: t("boardsAddNote"), group: t("boardsGroupCreate") },
+                { value: "image", label: t("boardsAddImage"), group: t("boardsGroupCreate") },
+                { value: "video", label: t("boardsAddVideo"), group: t("boardsGroupCreate") },
+                { value: "audio", label: t("boardsAddAudio"), group: t("boardsGroupCreate") },
+                { value: "frame", label: t("boardsAddFrame"), group: t("boardsGroupCreate") },
+                { value: "pick-image", label: t("boardsPickImage"), group: t("boardsGroupAssets") },
+              ]}
+              trigger={
+                <button
+                  type="button"
+                  data-board-add-item=""
+                  className="grid h-8 w-8 place-items-center rounded-full border-0 bg-transparent text-foreground transition-colors hover:bg-secondary"
+                  aria-label={t("boardsAddItem")}
+                  title={`${t("boardsAddItem")} ⌘N`}
+                >
+                  <Plus size={15} />
+                </button>
+              }
+            />
           </div>
 
           <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
