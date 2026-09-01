@@ -16,14 +16,14 @@ from app.ai.providers.base import (
     source_values,
 )
 from app.ai.providers.media_transfer import DownloadedBytes
-from app.ai.providers.video.kling import build_submit_payload as kling_payload, extract_video_url as extract_kling_video_url
-from app.ai.providers.image.openai import (
+from app.ai.providers.kuaishou.kling import build_submit_payload as kling_payload, extract_video_url as extract_kling_video_url
+from app.ai.providers.openai.image import (
     OpenAIImageProvider,
     build_edit_fields as openai_edit_fields,
     build_submit_payload as openai_payload,
     extract_image_bytes,
 )
-from app.ai.providers.image.qwen import (
+from app.ai.providers.alibaba.image import (
     DASHSCOPE_BASE,
     EDIT_PATH,
     QwenImageProvider,
@@ -34,13 +34,13 @@ from app.ai.providers.image.qwen import (
     resolve_dashscope_base,
     resolve_qwen_edit_base,
 )
-from app.ai.providers.video.seedance import (
+from app.ai.providers.bytedance.video import (
     ARK_BASE,
     build_submit_payload as seedance_payload,
     extract_video_url,
     resolve_seedance_base,
 )
-from app.ai.providers.video.veo import _with_first_frame_inline, build_submit_payload as veo_payload, extract_video_uri
+from app.ai.providers.google import _with_first_frame_inline, build_submit_payload as veo_payload, extract_video_uri
 from app.ai.providers.evolink import (
     _upload as evolink_upload,
     build_image_payload as evolink_image_payload,
@@ -503,7 +503,7 @@ def test_qwen_download_result_url_does_not_reuse_dashscope_headers(tmp_path, mon
         captured.update(url=url, kwargs=kwargs)
         target.write_bytes(b"png-bytes")
 
-    monkeypatch.setattr("app.ai.providers.image.qwen.download_to_path", fake_download)
+    monkeypatch.setattr("app.ai.providers.alibaba.image.download_to_path", fake_download)
     target = tmp_path / "generated.png"
     signed_url = "https://dashscope-oss.example.com/out.png?Signature=abc"
 
@@ -549,9 +549,9 @@ def test_qwen_url_only_reference_uses_edit_endpoint(tmp_path, monkeypatch: pytes
         def get(self, _url: str) -> FakeResponse:
             return FakeResponse()
 
-    monkeypatch.setattr("app.ai.providers.image.qwen.RetryingClient", FakeClient)
+    monkeypatch.setattr("app.ai.providers.alibaba.image.RetryingClient", FakeClient)
     monkeypatch.setattr(
-        "app.ai.providers.image.qwen.download_to_path",
+        "app.ai.providers.alibaba.image.download_to_path",
         lambda _url, target, **_kwargs: target.write_bytes(b"result"),
     )
     request = GenerationRequest(
@@ -734,8 +734,8 @@ def test_openai_url_only_reference_uses_edit_endpoint_without_forwarding_api_key
             captured["post"] = (path, kwargs)
             return FakeResponse()
 
-    monkeypatch.setattr("app.ai.providers.image.openai.fetch_bytes", fake_fetch)
-    monkeypatch.setattr("app.ai.providers.image.openai.RetryingClient", FakeClient)
+    monkeypatch.setattr("app.ai.providers.openai.image.fetch_bytes", fake_fetch)
+    monkeypatch.setattr("app.ai.providers.openai.image.RetryingClient", FakeClient)
     request = GenerationRequest(
         kind="image",
         model="gpt-image-2",
@@ -799,7 +799,7 @@ def test_veo_fetching_external_first_frame_never_leaks_google_api_key(monkeypatc
         captured.update(url=url, kwargs=kwargs)
         return DownloadedBytes(b"image", "image/png")
 
-    monkeypatch.setattr("app.ai.providers.video.veo.fetch_bytes", fake_fetch)
+    monkeypatch.setattr("app.ai.providers.google.fetch_bytes", fake_fetch)
     request = GenerationRequest(
         kind="video",
         model="veo",
@@ -872,7 +872,7 @@ def test_provider_http_error_includes_safe_response_body() -> None:
 
 
 def test_seedream_registry_and_payload_shape(tmp_path) -> None:
-    from app.ai.providers.image.seedream import build_image_payload, extract_image_url
+    from app.ai.providers.bytedance.image import build_image_payload, extract_image_url
 
     assert get_provider("bytedance", "image") is not None
 

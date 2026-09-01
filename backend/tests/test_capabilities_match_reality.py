@@ -297,7 +297,7 @@ class Test万相27:
     def test_素材走_media_数组(self) -> None:
         """漏了这一条的后果是提交 200、终态 `Field required: input.media` ——
         目录里挂着的 wan2.7-i2v 此前就是这样,一次都没成功过。"""
-        from app.ai.providers.video import wan
+        from app.ai.providers.alibaba import video as wan
 
         assert wan.uses_media_array("wan2.7-i2v")
         assert not wan.uses_media_array("wan2.5-i2v-preview")
@@ -333,7 +333,7 @@ class Test视频编辑与续写:
 
     def test_被编辑的那段视频在万相那边叫_video(self) -> None:
         """内部不能也叫 video —— 那个词在这里什么都指(参考视频是视频,续写的片段也是)。"""
-        from app.ai.providers.video import wan
+        from app.ai.providers.alibaba import video as wan
 
         assert wan._MEDIA_TYPES["source_video"] == "video"
         assert wan._MEDIA_TYPES["first_clip"] == "first_clip"

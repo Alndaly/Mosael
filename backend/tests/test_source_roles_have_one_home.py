@@ -122,7 +122,7 @@ def test_没有第二处把角色名铺开写() -> None:
     app_dir = _p.Path(__file__).resolve().parents[1] / "app"
     #: 产地本身,以及供应商各自的**线上字段名映射**(万相把 source_video 叫 video,
     #: 那是两套命名之间的翻译,不是抄我们的表)。
-    allowed = ("providers/base.py", "generation/catalog.py", "video/wan.py")
+    allowed = ("providers/base.py", "generation/catalog.py", "alibaba/video.py")
 
     offenders = []
     for path in sorted(app_dir.rglob("*.py")):

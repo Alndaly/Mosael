@@ -15,7 +15,7 @@ from __future__ import annotations
 import pytest
 
 from app.ai.providers.base import GenerationRequest, ProviderError
-from app.ai.providers.video import kling, kling_elements
+from app.ai.providers.kuaishou import elements as kling_elements, kling
 
 
 class Test建主体的请求体:

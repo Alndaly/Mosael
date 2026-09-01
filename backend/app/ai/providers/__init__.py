@@ -1,4 +1,13 @@
-"""Generation provider registry (plan §18.1): pluggable, never hardcoded in routes/UI."""
+"""供应商适配器注册表:pluggable, never hardcoded in routes/UI.
+
+**这一层按供应商组织,不按能力。** 顶层每个名字都是一家供应商(alibaba/ bytedance/
+openai/ kuaishou/ google.py minimax.py volcano.py edge.py comfyui/ evolink.py);
+一家跨几种能力时,能力是它内部的模块名(alibaba/image.py、alibaba/video.py、
+alibaba/speech.py)—— 百炼的 qwen 图像与万相视频共用一把 Key、同样的 HTTP 形状,
+没理由分处两棵树。一套协议服务多种能力的网关(comfyui/、evolink.py)按同一规矩
+各成一个单元。仅有的三个例外是公共的:base.py(图/视频契约)、speech/(语音契约+
+注册表门面)、media_transfer.py(下载缝)。
+"""
 
 from __future__ import annotations
 
@@ -19,14 +28,14 @@ from app.ai.providers.base import (
     roles_supplied_via_url,
 )
 from app.ai.providers.comfyui import ComfyUIProvider
-from app.ai.providers.video.kling import KlingProvider
-from app.ai.providers.image.openai import OpenAIImageProvider
-from app.ai.providers.image.qwen import QwenImageProvider
-from app.ai.providers.video.wan import WanVideoProvider
-from app.ai.providers.video.seedance import SeedanceProvider
-from app.ai.providers.image.seedream import SeedreamProvider
-from app.ai.providers.video.minimax import MiniMaxVideoProvider
-from app.ai.providers.video.veo import VeoProvider
+from app.ai.providers.kuaishou.kling import KlingProvider
+from app.ai.providers.openai.image import OpenAIImageProvider
+from app.ai.providers.alibaba.image import QwenImageProvider
+from app.ai.providers.alibaba.video import WanVideoProvider
+from app.ai.providers.bytedance.video import SeedanceProvider
+from app.ai.providers.bytedance.image import SeedreamProvider
+from app.ai.providers.minimax import MiniMaxVideoProvider
+from app.ai.providers.google import VeoProvider
 from app.ai.providers.evolink import EvolinkProvider
 
 _PROVIDERS: dict[tuple[str, str], GenerationProvider] = {}

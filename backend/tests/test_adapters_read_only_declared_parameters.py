@@ -43,14 +43,16 @@ from app.domain.generation.operations import allowed_parameter_keys
 _READS = re.compile(r'(?:request\.)?parameters(?:\.get\(|\[)\s*["\']([a-z_0-9]+)["\']')
 
 #: 语音适配器不走生成校验那条路(它们的入口是配音/克隆,没有 parameter_keys 这个概念)。
-_NOT_GENERATION = {"speech"}
+#: 按供应商组织后,语音实现是各家里叫 speech.py 的模块,外加两个单文件的语音供应商。
+_NOT_GENERATION_DIRS = {"speech"}
+_NOT_GENERATION_FILES = {"speech.py", "volcano.py", "edge.py"}
 
 #: Veo 把本地文件/不可信 URL 归一化为 inlineData 后写入的内部传输字段。调用方只能给
 #: first_frame，不能绕过素材下载边界直接给 base64/MIME。
 _INTERNAL_PARAMETERS = {
-    ("veo.py", "first_frame_base64"),
-    ("veo.py", "first_frame_mime_type"),
-    ("veo.py", "image_base64"),
+    ("google.py", "first_frame_base64"),
+    ("google.py", "first_frame_mime_type"),
+    ("google.py", "image_base64"),
 }
 
 
@@ -100,7 +102,7 @@ def test_适配器读的参数键都被声明过() -> None:
 
     gaps: set[tuple[str, str]] = set()
     for path in sorted(root.rglob("*.py")):
-        if "__pycache__" in path.parts or path.parent.name in _NOT_GENERATION:
+        if "__pycache__" in path.parts or path.parent.name in _NOT_GENERATION_DIRS or path.name in _NOT_GENERATION_FILES:
             continue
         module = "app.ai." + ".".join(path.relative_to(root.parents[1]).with_suffix("").parts[1:])
         vendors = by_module.get(module)

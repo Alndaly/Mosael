@@ -10,8 +10,8 @@ provider 只读 data[0]、GenerationResult 只有一个 output_path、runner 只
 
 from __future__ import annotations
 
-from app.ai.providers.image.openai import extract_image_bytes
-from app.ai.providers.image.qwen import extract_result_urls
+from app.ai.providers.openai.image import extract_image_bytes
+from app.ai.providers.alibaba.image import extract_result_urls
 from tests.util import fresh_client
 
 
