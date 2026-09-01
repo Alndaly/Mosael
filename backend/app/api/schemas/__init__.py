@@ -9,6 +9,7 @@ from app.ai.providers.contracts.generation import FIRST_FRAME, SOURCE_ROLES
 from app.api.schemas.base import OrmModel
 from app.api.schemas.browser import BrowserProfileCreate, BrowserProfileOut, BrowserProfileUpdate
 from app.api.schemas.jobs import JobOut, TaskEventOut
+from app.api.schemas.notifications import NotificationListOut, NotificationOut, NotifyRequest
 from app.api.schemas.publish import (
     PublishAccountCreate,
     PublishAccountOut,
@@ -521,29 +522,6 @@ class ClipTextEntry(BaseModel):
 class SetClipTextsRequest(BaseModel):
     # Bounded so one request cannot rewrite an unbounded number of clips in a single revision.
     texts: list[ClipTextEntry] = Field(min_length=1, max_length=2000)
-
-
-class NotificationOut(OrmModel):
-    id: str
-    workspace_id: str
-    type: str
-    title: str
-    body: str
-    link: str | None
-    payload: dict
-    read_at: datetime | None
-    created_at: datetime
-
-
-class NotifyRequest(BaseModel):
-    workspace_id: str
-    title: str = Field(min_length=1, max_length=200)
-    body: str = Field(default="", max_length=2000)
-
-
-class NotificationListOut(BaseModel):
-    items: list[NotificationOut]
-    unread: int
 
 
 class ProviderModelOut(BaseModel):

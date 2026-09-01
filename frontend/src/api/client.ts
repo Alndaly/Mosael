@@ -5,6 +5,7 @@ import { API_BASE, api, getAuthToken } from "@/api/transport";
 export * from "@/api/transport";
 export * from "@/api/domains/browser";
 export * from "@/api/domains/jobs";
+export * from "@/api/domains/notifications";
 export * from "@/api/domains/publish";
 
 export type User = components["schemas"]["UserOut"] & {
@@ -971,34 +972,6 @@ export function fetchWorkflowNodeTypes(): Promise<WorkflowNodeType[]> {
 /** Execution history — this workflow's run jobs, newest first. */
 export function listWorkflowRuns(workflowId: string): Promise<Job[]> {
   return api<Job[]>(`/api/workflows/${workflowId}/runs`);
-}
-
-export interface AppNotification {
-  id: string;
-  workspace_id: string;
-  type: string;
-  title: string;
-  body: string;
-  link: string | null;
-  payload: Record<string, unknown>;
-  read_at: string | null;
-  created_at: string;
-}
-
-export function listNotifications(workspaceId: string): Promise<{ items: AppNotification[]; unread: number }> {
-  return api(`/api/notifications?workspace_id=${workspaceId}`);
-}
-
-export function readNotification(id: string): Promise<AppNotification> {
-  return api(`/api/notifications/${id}/read`, { method: "POST" });
-}
-
-export function readAllNotifications(workspaceId: string): Promise<{ read: number }> {
-  return api(`/api/notifications/read-all?workspace_id=${workspaceId}`, { method: "POST" });
-}
-
-export function clearReadNotifications(workspaceId: string): Promise<{ removed: number }> {
-  return api(`/api/notifications/read?workspace_id=${workspaceId}`, { method: "DELETE" });
 }
 
 /** 把「我的东西」放进一个工作区,或者收回来。发布账号与它的浏览器档案会一起动(后端保证)。 */

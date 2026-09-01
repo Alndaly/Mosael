@@ -55,3 +55,19 @@ def test_jobs_schema_slice_is_reexported() -> None:
 
     assert schemas.JobOut is JobOut
     assert schemas.TaskEventOut is TaskEventOut
+
+
+def test_notifications_orm_slice_is_reexported_and_registered() -> None:
+    from app.db import models
+    from app.db.model_slices.notifications import Notification
+
+    assert models.Notification is Notification
+    assert Notification.__table__ is models.Base.metadata.tables["notifications"]
+
+
+def test_notifications_schema_slice_is_reexported() -> None:
+    from app.api import schemas
+    from app.api.schemas.notifications import NotificationListOut, NotificationOut
+
+    assert schemas.NotificationOut is NotificationOut
+    assert schemas.NotificationListOut is NotificationListOut

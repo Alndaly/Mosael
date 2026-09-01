@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import * as client from "@/api/client";
 import * as browser from "@/api/domains/browser";
 import * as jobs from "@/api/domains/jobs";
+import * as notifications from "@/api/domains/notifications";
 import * as publish from "@/api/domains/publish";
 import * as transport from "@/api/transport";
 
@@ -25,5 +26,10 @@ describe("unified API client assembly", () => {
   it("re-exports the task-bus domain client", () => {
     expect(client.getJob).toBe(jobs.getJob);
     expect(client.listJobEvents).toBe(jobs.listJobEvents);
+  });
+
+  it("re-exports the notification domain client", () => {
+    expect(client.listNotifications).toBe(notifications.listNotifications);
+    expect(client.readNotification).toBe(notifications.readNotification);
   });
 });
