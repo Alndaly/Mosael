@@ -68,7 +68,7 @@ const zh = {
       {
         label: "智能体",
         title: "它动手，但先问你",
-        body: "对话里的智能体通过工具直接操作工程 —— 找素材、切片、配音、导出。每一次会改动工程的动作都先出一张确认卡，点头才执行。它不替你做决定，只是把「想到」和「做到」之间那段路铺平。",
+        body: "对话里的智能体通过工具直接操作工程 —— 找素材、切片、配音、导出。剪辑、工作流和画板共用同一会话池，助手可停靠也可悬浮。每一次会改动工程的动作都先出一张确认卡，点头才执行。",
         shotAlt: "智能体对话面板：工具调用步骤与待确认的改动卡",
       },
       {
@@ -256,7 +256,7 @@ const en: Messages = {
       {
         label: "Agent",
         title: "It acts, but it asks first",
-        body: "The agent in the chat panel drives your project through tools — finding footage, cutting, voicing, exporting. Anything that would change the project surfaces a confirmation card first, and runs only once you agree. It doesn't decide for you; it shortens the walk between having an idea and having it done.",
+        body: "The agent drives your project through tools — finding footage, cutting, voicing, exporting. Editing, workflows and boards share one session pool, with a panel that docks or floats. Anything that changes the project surfaces a confirmation card first.",
         shotAlt: "The agent chat panel: tool-call steps and a pending change awaiting confirmation",
       },
       {

@@ -376,6 +376,12 @@ Gateway 的边界与安全不变量见
 - **拖拽一律 dnd-kit**(原生 HTML5 DnD 在 Electron 下真实鼠标不触发);dnd 相关 hooks 必须在任何 early-return 之前。
 - **文案全部走 i18n**(`app/messages.ts`,zh-CN / en-US 双份,键必须成对)。
 - **深链事件通道**:跨页面跳转用 `openstudio:open-*` CustomEvent(`open-cmdk` / `open-asset` / `open-kb-doc` / `open-publish-task` …),派发统一走 `lib/deepLink.ts` 的 80/300/800ms 三连发(目标视图挂载慢时单发会丢)。
+- **详情恢复先恢复身份、再取数据**:`usePersistentSelection` 同步读取 localStorage 中的稳定 id，
+  `CanvasDetailLoading` 在 React Query 返回前保留详情语义。工作流、画板、调度、插件和素材不能先以
+  `null` 渲染列表页再异步切回详情，否则刷新会闪一次错误页面。
+- **工作区智能体只有一套壳**:`components/agent/CanvasAgentChat.tsx` 被剪辑、工作流和画板复用。
+  会话池、流、确认卡、附件和会话切换不能在各业务页复制；停靠态是布局列，悬浮态才是 overlay。
+  左上角标题由 `AgentSessionSwitcher` 直接渲染当前会话并提供搜索，不能再包一层有边框的 selector。
 
 ### 桌面适配
 

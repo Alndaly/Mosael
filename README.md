@@ -42,6 +42,8 @@ owned by the current user; its secret/OAuth state is stored separately, and mode
 
 A timeline NLE with transcript-based editing: cut by deleting words, and the clips follow.
 Subtitles, dubbing, and speech recognition sit on the same panel rather than in separate tools.
+Transcript sentences keep timestamp, speaker and the first line aligned; long text wraps in full
+instead of being clipped, while row actions appear only when they are useful.
 
 Each subtitle line carries its own dubbing entry point, and you can dub a whole batch at once.
 Output lands on a dedicated dub track — the original audio is untouched, so deleting the track
@@ -86,6 +88,11 @@ overwritten; the same conversion is available as a workflow node for repeatable 
 
 A chat workbench whose tools reach the whole app — the timeline, media, workflows, publishing,
 the browser pool — over MCP, with a confirmation card for anything that has consequences.
+
+The same assistant is available inside the editor, workflow canvas and creative boards. It docks as
+a real workspace column by default (or can float), so opening it does not cover the timeline. The
+top-left heading is the current conversation title: click it to search or switch conversations;
+long names ellipsize without adding a second framed selector.
 
 Images and videos already in the media library are analyzed with the **model selected for the
 current conversation**, not a hidden global vision model. Images are normalized before visual
@@ -193,6 +200,7 @@ Full guides live at **[openstudio.team](https://openstudio.team)** (source in
 | Document | What it covers |
 | --- | --- |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture: three-stage bootstrap, domain core, data model, key patterns |
+| [CHANGELOG.md](CHANGELOG.md) | User-visible highlights for each release |
 | [docs/PUBLISHING.md](docs/PUBLISHING.md) | Publishing and the account matrix: embedded browser, worker protocol, **hard constraints and troubleshooting** |
 | [docs/MCP.md](docs/MCP.md) | The agent's MCP tools and confirmation cards |
 | [docs/AGENT_PERMISSION_MODES.md](docs/AGENT_PERMISSION_MODES.md) | What the agent may do without asking, and how the modes differ |
@@ -267,7 +275,7 @@ cd frontend && pnpm exec tsc -b --noEmit
 cd frontend && pnpm gen:api
 ```
 
-1,698 backend cases and 536 frontend cases at the time of writing. `tsc` must run from the
+2,440 backend cases and 815 frontend cases at the time of writing. `tsc` must run from the
 `frontend` directory. `gen:api` regenerates the TypeScript types after the backend's OpenAPI
 schema changes.
 
@@ -319,18 +327,21 @@ Running only `build:publisher` and repackaging leaves the frontend at the previo
 mistake worth naming, because the symptom is a CSS change that "didn't take" and half an hour
 of looking in the wrong place.
 
-**Releasing is a tag:**
+**Releasing is a version bump plus a tag:**
 
 ```bash
-git tag v0.20.0 && git push origin v0.20.0
+npm pkg set version=0.26.7
+git commit -am "chore(release): v0.26.7"
+git tag -a v0.26.7 -m "Open Studio v0.26.7"
+git push origin main v0.26.7
 ```
 
 `.github/workflows/release.yml` builds the macOS `.dmg` (arm64) and the Windows NSIS installer
 and attaches both to a GitHub Release with generated notes; it is only promoted once both
-platforms succeed. The version comes from the tag, so there's no need to edit `package.json`
-first, and build output goes to Releases and **never into the repository**. Triggering the same
-workflow by hand from the Actions tab is a dry run — workflow artifacts only, Releases
-untouched.
+platforms succeed. The tag is the release source of truth, while the workflow verifies that
+`package.json` matches it and rewrites the same value during packaging as a safety net. Build output
+goes to Releases and **never into the repository**. Triggering the same workflow by hand from the
+Actions tab is a dry run — workflow artifacts only, Releases untouched.
 
 ### App updates
 

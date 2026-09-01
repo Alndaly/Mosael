@@ -29,7 +29,16 @@ The **Edit** page is a multi-track timeline editor: media / transcript / subtitl
 Run ASR on an audio/video asset to get a **word-level transcript**:
 
 - Deleting sentences / words cuts the corresponding segments from the source; silences and filler words ("uh", "you know") can be detected and batch-removed in one click.
+- Each sentence keeps its timestamp, speaker and first text line aligned. Long text wraps in full;
+  it is never ellipsized, and row actions do not reserve empty space while hidden.
 - Transcription runs in an external interpreter; models download on first use (see [Download & install](/en/docs/start/download)).
+
+## AI assistant
+
+The robot button opens the same agent session pool used by AI Studio, workflows and boards. In the
+editor it docks as a real right-hand column by default, so the timeline and monitor resize instead
+of being covered; switch it to floating mode when you want an overlay. The top-left title is the
+current conversation — click it to search or switch sessions.
 
 ## Color grading
 

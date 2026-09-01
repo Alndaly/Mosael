@@ -26,6 +26,10 @@ The agent uses Open Studio's MCP tools to **see your project and propose changes
   session model**, not a separate hidden vision model.
 - The left column lists **conversations**; each is independent and can be renamed / deleted.
 
+The editor, workflow canvas and boards reuse this same session pool in a compact assistant panel.
+Its top-left heading is the current conversation title; click it to search or switch sessions.
+Long titles ellipsize, and the control stays visually flat rather than adding a framed selector.
+
 Under the hood it hosts an external coding-agent CLI (opencode-style), not a home-grown chat loop. Requires [model providers](/en/docs/guides/providers) to be configured.
 
 ### The composer keeps only what you look at every turn

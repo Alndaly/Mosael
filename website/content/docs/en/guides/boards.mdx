@@ -76,6 +76,9 @@ The robot icon in the top-right opens it. It is **not a second AI**: sessions, m
 confirmation cards are the same ones the global assistant uses; each message just carries one
 extra line saying which board you are looking at.
 
+The top-left title is the current conversation. Click it to search or switch sessions; the title
+ellipsizes when space is tight instead of introducing another framed picker.
+
 It can read the canvas (`get_board`) and change it (`edit_board`): add notes, rewrite text,
 connect, delete, move things. **Every change goes through a confirmation card** — nothing lands
 until you approve it. It submits granular operations rather than a whole canvas, because a model

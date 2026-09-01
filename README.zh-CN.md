@@ -38,6 +38,8 @@ App 会自动拉起内置后端(`127.0.0.1:8800`)、加载前端、启动发布�
 
 时间线 NLE,支持对着逐字稿剪:删掉文字,片段跟着走。字幕、配音、语音识别在同一个面板里,
 而不是散在几个工具中。
+逐字稿的时间、说话人和正文首行保持同高；长正文完整换行、不截断，行操作只在需要时出现，
+不会为一组隐藏按钮常驻一截空白。
 
 字幕面板里每条字幕自带配音入口,也可以整批配。产物落到一条专门的配音轨 —— 原声不动,所以
 整条删掉就回到原样,再配一次是替换这条轨而不是摞出一叠。「缩放到段落长度」用的是片段自己的
@@ -73,6 +75,10 @@ App 会自动拉起内置后端(`127.0.0.1:8800`)、加载前端、启动发布�
 
 一个对话工作台,工具经 MCP 伸到整个应用 —— 时间线、素材、工作流、发布、浏览器池 —— 凡是有
 后果的动作都走确认卡。
+
+剪辑、工作流和创意画板里复用同一套助手。默认作为真正的工作区右栏停靠（也可切成悬浮），打开时
+不会盖住时间线。左上角直接显示当前会话名称；点击即可搜索、切换会话，长标题省略，不再额外套一层
+带边框的选择器。
 
 素材库里的图片、视频由**当前对话所选模型**分析,不会暗中换成一套全局视觉模型。图片先归一化再送
 视觉输入;视频遵循会话里的「自动 / 原生 / 抽帧」设置,并带上已有语音转写。订阅/OAuth 模型无需填写
@@ -152,6 +158,7 @@ Evolink Files API，视频与音频参考也走同一上传入口但保留首尾
 | 文档 | 内容 |
 | --- | --- |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 系统架构:三段自举、领域内核、数据模型、关键模式 |
+| [CHANGELOG.md](CHANGELOG.md) | 各版本的用户可见变更摘要 |
 | [docs/PUBLISHING.md](docs/PUBLISHING.md) | 发布与账号矩阵:内嵌浏览器、worker 协议、**硬约束与排错** |
 | [docs/MCP.md](docs/MCP.md) | 智能体的 MCP 工具与确认卡 |
 | [docs/AGENT_PERMISSION_MODES.md](docs/AGENT_PERMISSION_MODES.md) | 智能体不问就能做什么,几种模式差在哪 |
@@ -222,7 +229,7 @@ cd frontend && pnpm exec tsc -b --noEmit
 cd frontend && pnpm gen:api
 ```
 
-写这份文档时是后端 1698 例、前端 536 例。`tsc` 必须在 `frontend` 目录下跑。后端 OpenAPI
+写这份文档时是后端 2440 例、前端 815 例。`tsc` 必须在 `frontend` 目录下跑。后端 OpenAPI
 变了之后用 `gen:api` 重新生成 TS 类型。
 
 ### 排错
@@ -270,16 +277,20 @@ pnpm dist:mac                # 同流程,产出 .dmg
 再打包,前端会停在上一版 —— 这个坑值得点名,因为症状是 CSS 改了却「没生效」,然后往错的方向
 查半小时。
 
-**发版就是打个 tag:**
+**发版要同步版本号再打 tag:**
 
 ```bash
-git tag v0.20.0 && git push origin v0.20.0
+npm pkg set version=0.26.7
+git commit -am "chore(release): v0.26.7"
+git tag -a v0.26.7 -m "Open Studio v0.26.7"
+git push origin main v0.26.7
 ```
 
 `.github/workflows/release.yml` 会构建 macOS `.dmg`(arm64)与 Windows NSIS 安装包,挂到
-自动生成变更说明的 GitHub Release 上,两个平台都成功才转正。版本号直接取自 tag,不需要先改
-`package.json`;构建产物只进 Releases,**永远不进仓库**。在 Actions 页手动触发同一工作流是
-试打包 —— 只出 workflow artifact,不碰 Releases。
+自动生成变更说明的 GitHub Release 上,两个平台都成功才转正。tag 是发布版本的事实源，工作流会
+校验 `package.json` 与它一致，并在打包阶段再幂等写入同一版本兜底。构建产物只进 Releases,
+**永远不进仓库**。在 Actions 页手动触发同一工作流是试打包 —— 只出 workflow artifact,
+不碰 Releases。
 
 ### 应用更新
 

@@ -3,8 +3,9 @@
 #
 # 发版方式(唯一入口):
 #   git tag v0.2.0 && git push origin v0.2.0
-# 应用版本号在 CI 里直接取自 tag(不要求先改 package.json),
-# 应用内「检查更新」比对的就是 Releases 的 tag。
+# 应用版本号以 tag 为准,但仓库里的 package.json 必须同步:本地打包和故障排查也要显示
+# 正确版本。CI 会校验两者一致,构建阶段再从 tag 幂等写入一次作为兜底。
+# 应用内「检查更新」比对的是 Releases 的 tag。
 #
 # 手动触发(workflow_dispatch)= 试打包:只传 workflow artifact,不碰 Releases。
 #
@@ -70,6 +71,16 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           cd backend && uv sync --frozen --python 3.13
+
+      - name: Validate release version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          package_version=$(node -p "require('./package.json').version")
+          tag_version="${GITHUB_REF_NAME#v}"
+          test "$package_version" = "$tag_version" || {
+            echo "::error::package.json is $package_version but release tag is $tag_version"
+            exit 1
+          }
 
       - name: Backend tests
         run: cd backend && uv run pytest -q
