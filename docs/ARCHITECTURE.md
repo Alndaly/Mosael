@@ -183,9 +183,14 @@ f5-tts / fish-speech 都要 torch + torchaudio + transformers,**2.5–3.5 GB**�
 
 | | 是什么 | 表 |
 | --- | --- | --- |
-| **连接** | 一个端点 + 一份凭据 + 一种鉴权方式(api_key / oauth) | `provider_profiles` |
+| **连接** | 某个用户配置的端点 + 鉴权方式(api_key / oauth) | `provider_profiles` |
 | **模型** | 连接下的一行。能力与运行时参数的唯一挂载点 | `provider_models` |
 | **能力默认** | 某个能力(chat/image/video/tts/podcast/embedding)用哪一行模型 | `provider_defaults` |
+
+连接和秘密都归创建它的用户，但生命周期分开：`ProviderProfile` 保存端点与非密选项，
+`ProviderCredential` 保存 API Key、OAuth 令牌、密字段和动态模型目录。业务读取只拿
+`ResolvedConnection`；`resolve_connection()` 与 `require_connection()` 都按 `owner_user_id` 选择，
+不会从另一个用户的第一条连接回退。
 
 早期只有「档案」一层,还带一个 `default_model` 字段。于是同一个端点上的对话模型和生图模型没法
 分别出现在两个能力分区里,用户被迫**拿模型名当档案名**建一堆档案——同一把 key 重复五遍,改一处
@@ -212,8 +217,11 @@ Provider 代码用三层 Module 表达能力与连接协议两条轴：
 | `app/ai/providers/registry.py` | 内置 Adapter 的唯一装配入口 | 精确注册 `(vendor, kind)` / 语音引擎 id，重复键启动失败 |
 | `app.ai.providers` | 领域调用方的稳定公共 Interface | 领域 Module 不直接选择具体 Adapter |
 
-Adapter 目录按**技术连接家族**而不是公司归属分类；一家连接横跨多种能力时，在自己的目录内再按
-`image.py` / `video.py` / `speech.py` 拆分。详见
+Adapter 目录先按**平台/企业归属**建立命名空间，再按**产品协议族**划分真正的实现边界；协议族内部
+横跨多种能力时，再按 `image.py` / `video.py` / `speech.py` 拆分。ByteDance 下的
+`ark/{image,video}` 与 `volcano/{speech,podcast}` 表达同一企业的两套控制台和协议，持久化 vendor id
+仍各自兼容。阿里云的图像、视频和语音共享百炼 DashScope 连接协议，因此统一位于
+`alibaba/dashscope/{image,video,speech}`。详见
 [ADR-0010](adr/0010-provider-contracts-adapters-registry.md)。
 
 Evolink 是「平台 Adapter」的例子：一个 `(evolink, image|video)` 协议实现服务多个上游引擎，

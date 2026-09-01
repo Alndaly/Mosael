@@ -25,10 +25,13 @@ At the top of each section is the **default model**: the default provider and mo
 
 ![Demo: provider configuration entries for AI Chat and AI Image](/media/gifs/providers.gif)
 
-## A provider is one endpoint plus one credential
+## One connection is one endpoint plus one credential
 
-A provider is **not** a model. It records where to connect and which credential to use, and it can
-hold **any number of models**. Click the chevron on a provider row to see its model list.
+A vendor is **not** a model or a connection. A connection records where the current user connects
+and which credential they use, and it can hold **any number of models**. Endpoint/non-secret options
+and API-key/OAuth state are stored separately so they can evolve independently, but both belong only
+to their creator; Open Studio never lists, selects, or falls back to another user's connection.
+Click the chevron on a provider row to see that connection's model list.
 
 ## Add a provider
 
@@ -44,6 +47,13 @@ Click **Add provider** in the relevant section:
 5. **Model** is optional; if filled it becomes this provider's first model. You can add more at any time.
 
 Providers can be **enabled / disabled** at any time without deleting.
+
+### ByteDance: one company, two product protocols
+
+Volcengine Ark's Seedream / Seedance generation APIs and Volcengine Speech's TTS / podcast APIs both
+belong to ByteDance, but their consoles, credentials, endpoints and request protocols are not
+interchangeable. Open Studio groups them under one company namespace while retaining separate
+Adapters and stable connection types; directory ownership does not merge the two credential sets.
 
 ### Evolink: several generation engines under one connection
 

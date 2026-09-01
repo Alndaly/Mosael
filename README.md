@@ -31,8 +31,8 @@ publishing executor. No services to start by hand.
 > it rather than starting a second one.
 
 Nothing is required beyond that to look around. To actually generate or transcribe you'll want
-at least one provider configured — Settings → Providers, where a provider is *one endpoint plus
-one credential* and models hang underneath it.
+at least one provider connection configured — Settings → Providers. A connection is an endpoint
+owned by the current user; its secret/OAuth state is stored separately, and models hang underneath it.
 
 ---
 
@@ -150,8 +150,8 @@ doesn't pretend they do.
 
 ### Providers, plugins, and the rest
 
-Providers and models are two levels: a **provider** is one endpoint plus one credential, and any
-number of models hang beneath it. Capabilities (chat / image / video / audio), context length,
+Connections and models are two levels: a **provider connection** is a user-owned endpoint with its
+own secret/OAuth state, and any number of models hang beneath it. Capabilities (chat / image / video / audio), context length,
 and the reasoning and vision switches all belong to the **model**. Subscription-based providers
 report remaining quota and reset windows.
 
@@ -162,6 +162,10 @@ their semantic roles (first/last frame, reference, edit source, or extension cli
 Completed results are downloaded immediately into the local media library because gateway URLs expire.
 Generation controls come from the exact model descriptor; manually added unknown models remain usable
 without inheriting another model's guessed duration, resolution, or input rules.
+
+Native ByteDance integrations are grouped by product protocol: Ark hosts Seedream/Seedance generation,
+while Volcano speech hosts TTS and podcast WebSocket adapters. They share corporate ownership, not
+credentials; their existing connection IDs remain compatible.
 
 Plugins run as subprocess scripts or connect to MCP servers, declaring their permissions in a
 manifest. Install one from the built-in market or any zip URL — the package is fetched and its

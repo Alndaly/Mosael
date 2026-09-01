@@ -201,14 +201,16 @@ _Avoid_: 仅凭 vendor 文案推断能力
 
 **Provider Adapter 结构**:
 `app/ai/providers/contracts/` 按能力定义生成与语音 Interface；`adapters/` 按连接协议组织具体
-Implementation，同一连接横跨图片、视频、语音时在供应商目录内按能力拆文件；`registry.py` 是内置
-Adapter 的唯一装配入口，重复 `(vendor, kind)` 或语音引擎 id 在启动时失败；`app.ai.providers` 是领域
-Module 使用的稳定公共 Interface。这里的供应商目录表达认证、端点和协议家族，不表达企业归属——
-火山和字节原生接口若凭据/协议不同就是两个 Adapter。
+Implementation。目录先表达企业/平台归属，再按真正独立的产品协议族分层，最后才按能力拆文件；
+`registry.py` 是内置 Adapter 的唯一装配入口，重复 `(vendor, kind)` 或语音引擎 id 在启动时失败；
+`app.ai.providers` 是领域 Module 使用的稳定公共 Interface。企业归属与协议边界是两层信息：例如
+`bytedance/ark/{image,video}` 与 `bytedance/volcano/{speech,podcast}` 同属字节跳动，但凭据、控制台、
+端点和协议不可互换，所以仍是两套 Adapter，持久化 vendor id 也不因目录重排而改变。
+阿里云三类能力共享百炼 DashScope 产品协议，归在 `alibaba/dashscope/{image,video,speech}`。
 _Avoid_: `providers/image/<vendor>.py` 式纯能力目录；一个供应商一个巨型文件；领域 Module 直接选择具体 Adapter
 
 **Evolink 平台 Adapter**:
-`ai/providers/adapters/evolink.py` 按一份平台协议承载图像与视频生成,上游引擎由模型 id 区分,不是每个引擎再写
+`ai/providers/adapters/evolink/generation.py` 按一份平台协议承载图像与视频生成,上游引擎由模型 id 区分,不是每个引擎再写
 一份 Adapter。Seedance 2.5 连**模式**也在模型 id 里(`-text-to-video` / `-image-to-video` /
 `-reference-to-video` / `-video-edit` / `-video-extend` 是五个 id),描述符按 id 各给一份而不是加模式
 开关。网关按图片的**张数与位置**认帧(1 张 = 首帧,2 张 = 首+尾),单独的尾帧会被当成首帧;编辑/续写

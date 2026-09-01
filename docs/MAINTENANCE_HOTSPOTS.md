@@ -11,11 +11,17 @@
 现在分成三个有 Depth 的 Module：
 
 - `providers/contracts/`：按能力定义 Interface；
-- `providers/adapters/`：按连接协议组织 Implementation，供应商内部再按能力拆文件；
+- `providers/adapters/`：平台/企业命名空间 → 产品协议族 → 能力文件；Adapter 边界由凭据与协议决定；
 - `providers/registry.py`：唯一装配入口，拒绝重复注册。
 
 领域调用方只依赖 `app.ai.providers` 公共 Interface。`test_provider_architecture.py` 固定依赖方向，防止
 契约反向依赖 Adapter、领域直接选择 Adapter 或根目录再次混入供应商文件。
+
+ByteDance 已作为命名校准：方舟生成在 `bytedance/ark/`，火山语音与播客在
+`bytedance/volcano/`。`bytedance` / `volcano` / `volcano-podcast` 仍是兼容的连接 id，不因目录重排迁移。
+阿里云图像、视频和语音共享百炼 DashScope 协议族，统一在 `alibaba/dashscope/`，不再把企业名
+直接当成含混的协议目录。
+Evolink、ComfyUI 使用同一生成协议跨图像/视频，保留单一 `generation.py`，避免浅层复制。
 
 ## 1. 发布执行器:平台 Adapter seam
 

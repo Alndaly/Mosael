@@ -2560,7 +2560,7 @@
           "assets"
         ],
         "summary": "Analyze Asset Route",
-        "description": "Analyze an existing image or video.\n\nOrdinary authenticated HTTP requests use the independently selected analysis profile.\nAgent-tool service tokens are bound to an AgentSession, so the server derives the current\nprovider, model, workspace and video mode from that session. OAuth image/video-frame input\nuses the tool-free Gateway and never requires a caller-supplied service address.",
+        "description": "Analyze an existing image or video.\n\nOrdinary authenticated HTTP requests use the independently selected analysis profile.\nAgent-tool service tokens are bound to an AgentSession, so the server derives the current\nconnection, model, workspace and video mode from that session. OAuth image/video-frame input\nuses the tool-free Gateway and never requires a caller-supplied service address.",
         "operationId": "analyze_asset_route_api_assets__asset_id__analyze_post",
         "parameters": [
           {
@@ -2705,7 +2705,7 @@
           "assets"
         ],
         "summary": "Transcribe Asset",
-        "description": "`language` 空 = 自动:WhisperX 自己检测,中文素材走 FunASR 的中文预设。\n\n说了具体语言就按它选引擎 —— FunASR 装的那套是中文权重,拿它转英文只会出一堆错字\n(见 service.resolve_asr_runtime)。",
+        "description": "`language` 空 = 由已选 ASR 引擎自动检测。\n\n语言只传给识别模型，不暗中切换引擎；FunASR 使用多语种 SenseVoice 权重。运行时选择见\n`transcription.resolve_transcription_runtime`。",
         "operationId": "transcribe_asset_api_assets__asset_id__transcribe_post",
         "parameters": [
           {
@@ -8575,7 +8575,7 @@
           "boards"
         ],
         "summary": "Write",
-        "description": "让 AI 往画板上的一张便签里写字。\n\n**不走生成任务那条路。** 出图出片要几十秒,所以那边先摆占位、起任务、回执填回来;写字几秒\n就回,同步返回反而更直接 —— 为它铺一套任务/回执,用户看到的只是一个多余的转圈。\n\n**也不自己实现一遍「调 LLM」**:供应商解析走 require_profile、调用走 ai_chat.chat、计量走\nbillable —— 和工作流的 LLM 节点、智能体是同三样东西。另写一份的话,重试次数、超时、\n记账口径迟早各走各的,而分岔了没有任何地方会报错。",
+        "description": "让 AI 往画板上的一张便签里写字。\n\n**不走生成任务那条路。** 出图出片要几十秒,所以那边先摆占位、起任务、回执填回来;写字几秒\n就回,同步返回反而更直接 —— 为它铺一套任务/回执,用户看到的只是一个多余的转圈。\n\n**也不自己实现一遍「调 LLM」**:供应商解析走 require_connection、调用走 ai_chat.chat、计量走\nbillable —— 和工作流的 LLM 节点、智能体是同三样东西。另写一份的话,重试次数、超时、\n记账口径迟早各走各的,而分岔了没有任何地方会报错。",
         "operationId": "write_api_boards__board_id__write_post",
         "parameters": [
           {
@@ -9178,7 +9178,7 @@
           "settings"
         ],
         "summary": "Put My Credential",
-        "description": "填**我自己**在这条连接上的钥匙。\n\n不要求部署管理员:连接怎么配是部署的事,而钥匙是谁的钱、谁的额度、谁的订阅账号。",
+        "description": "填**我自己**在这条连接上的钥匙。\n\n不要求部署管理员:连接与钥匙都归当前用户，只是端点配置和秘密/OAuth 状态分别保存、分别更新。",
         "operationId": "put_my_credential_api_settings_providers__profile_id__credential_put",
         "parameters": [
           {
@@ -22375,7 +22375,7 @@
           "asset_id"
         ],
         "title": "SourceAssetRef",
-        "description": "一份输入素材,**带着它的用途**。\n\n此前这里是一个裸的 id 列表,谁是首帧靠「第 0 个」这条约定 —— 尾帧、参考图、参考视频\n因此都没地方放。role 的取值见 ai/providers/base.SOURCE_ROLES;哪个模型认哪几种,\n由 domain/generation/catalog 的描述符声明。"
+        "description": "一份输入素材,**带着它的用途**。\n\n此前这里是一个裸的 id 列表,谁是首帧靠「第 0 个」这条约定 —— 尾帧、参考图、参考视频\n因此都没地方放。role 的取值见 ai/providers/contracts/generation.SOURCE_ROLES;哪个模型认哪几种,\n由 domain/generation/catalog 的描述符声明。"
       },
       "SplitClipPointsRequest": {
         "properties": {

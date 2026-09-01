@@ -971,7 +971,7 @@ export interface paths {
          *
          *     Ordinary authenticated HTTP requests use the independently selected analysis profile.
          *     Agent-tool service tokens are bound to an AgentSession, so the server derives the current
-         *     provider, model, workspace and video mode from that session. OAuth image/video-frame input
+         *     connection, model, workspace and video mode from that session. OAuth image/video-frame input
          *     uses the tool-free Gateway and never requires a caller-supplied service address.
          */
         post: operations["analyze_asset_route_api_assets__asset_id__analyze_post"];
@@ -1010,10 +1010,10 @@ export interface paths {
         put?: never;
         /**
          * Transcribe Asset
-         * @description `language` 空 = 自动:WhisperX 自己检测,中文素材走 FunASR 的中文预设。
+         * @description `language` 空 = 由已选 ASR 引擎自动检测。
          *
-         *     说了具体语言就按它选引擎 —— FunASR 装的那套是中文权重,拿它转英文只会出一堆错字
-         *     (见 service.resolve_asr_runtime)。
+         *     语言只传给识别模型，不暗中切换引擎；FunASR 使用多语种 SenseVoice 权重。运行时选择见
+         *     `transcription.resolve_transcription_runtime`。
          */
         post: operations["transcribe_asset_api_assets__asset_id__transcribe_post"];
         delete?: never;
@@ -2958,7 +2958,7 @@ export interface paths {
          *     **不走生成任务那条路。** 出图出片要几十秒,所以那边先摆占位、起任务、回执填回来;写字几秒
          *     就回,同步返回反而更直接 —— 为它铺一套任务/回执,用户看到的只是一个多余的转圈。
          *
-         *     **也不自己实现一遍「调 LLM」**:供应商解析走 require_profile、调用走 ai_chat.chat、计量走
+         *     **也不自己实现一遍「调 LLM」**:供应商解析走 require_connection、调用走 ai_chat.chat、计量走
          *     billable —— 和工作流的 LLM 节点、智能体是同三样东西。另写一份的话,重试次数、超时、
          *     记账口径迟早各走各的,而分岔了没有任何地方会报错。
          */
@@ -3169,7 +3169,7 @@ export interface paths {
          * Put My Credential
          * @description 填**我自己**在这条连接上的钥匙。
          *
-         *     不要求部署管理员:连接怎么配是部署的事,而钥匙是谁的钱、谁的额度、谁的订阅账号。
+         *     不要求部署管理员:连接与钥匙都归当前用户，只是端点配置和秘密/OAuth 状态分别保存、分别更新。
          */
         put: operations["put_my_credential_api_settings_providers__profile_id__credential_put"];
         post?: never;
@@ -8329,7 +8329,7 @@ export interface components {
          * @description 一份输入素材,**带着它的用途**。
          *
          *     此前这里是一个裸的 id 列表,谁是首帧靠「第 0 个」这条约定 —— 尾帧、参考图、参考视频
-         *     因此都没地方放。role 的取值见 ai/providers/base.SOURCE_ROLES;哪个模型认哪几种,
+         *     因此都没地方放。role 的取值见 ai/providers/contracts/generation.SOURCE_ROLES;哪个模型认哪几种,
          *     由 domain/generation/catalog 的描述符声明。
          */
         SourceAssetRef: {
