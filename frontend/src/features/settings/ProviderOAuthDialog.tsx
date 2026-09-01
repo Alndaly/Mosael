@@ -233,7 +233,16 @@ export function ProviderOAuthDialog({
   const prompt = state.data?.prompt ?? null;
 
   return (
-    <ModalShell open={open} onOpenChange={(next) => !next && close()} title={`${t("providerOauthTitle")} · ${profileName}`}>
+    <ModalShell
+      open={open}
+      onOpenChange={(next) => !next && close()}
+      title={`${t("providerOauthTitle")} · ${profileName}`}
+      footer={
+        <Button type="button" variant={status === "done" ? "default" : "ghost"} size="sm" onClick={close}>
+          {status === "done" ? t("close") : t("cancel")}
+        </Button>
+      }
+    >
       <div className="grid gap-2.5">
         <p className="m-0 text-ui-xs leading-[1.5] text-muted-foreground">{t("providerOauthHint")}</p>
 
@@ -269,13 +278,6 @@ export function ProviderOAuthDialog({
           </p>
         )}
 
-        <div className="mt-1 flex justify-end">
-          {/* 未完成时是「取消」—— 放弃这次授权。用描边胶囊会读成主操作(它带 primary 色边),
-              而此刻真正的主操作是上面的选项行。完成后才变成实心的「关闭」。 */}
-          <Button type="button" variant={status === "done" ? "default" : "ghost"} size="sm" onClick={close}>
-            {status === "done" ? t("close") : t("cancel")}
-          </Button>
-        </div>
       </div>
     </ModalShell>
   );

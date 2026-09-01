@@ -44,7 +44,21 @@ export function TagsDialog({
   };
 
   return (
-    <ModalShell open={open} onOpenChange={(next) => !next && onCancel()} title={title}>
+    <ModalShell
+      open={open}
+      onOpenChange={(next) => !next && onCancel()}
+      title={title}
+      footer={
+        <>
+          <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+            {t("cancel")}
+          </Button>
+          <Button type="button" size="sm" onClick={() => onSubmit(commitDraft())}>
+            {t("confirm")}
+          </Button>
+        </>
+      }
+    >
       {body && <p className="mb-3 text-ui-md text-muted-foreground">{body}</p>}
       <div className="grid gap-3">
         {tags.length > 0 && (
@@ -79,14 +93,6 @@ export function TagsDialog({
             }
           }}
         />
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
-            {t("cancel")}
-          </Button>
-          <Button type="button" size="sm" onClick={() => onSubmit(commitDraft())}>
-            {t("confirm")}
-          </Button>
-        </div>
       </div>
     </ModalShell>
   );

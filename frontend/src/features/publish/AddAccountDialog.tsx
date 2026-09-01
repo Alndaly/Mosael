@@ -58,7 +58,19 @@ export function AddAccountDialog({
   });
 
   return (
-    <ModalShell open={open} onOpenChange={(next) => !next && onClose()} title={t("publishAccountAdd")}>
+    <ModalShell
+      open={open}
+      onOpenChange={(next) => !next && onClose()}
+      title={t("publishAccountAdd")}
+      footer={
+        <>
+          <Button variant="outline" size="sm" onClick={onClose}>{t("close")}</Button>
+          <Button size="sm" loading={create.isPending} onClick={() => create.mutate()}>
+            <Plus size={13} /> {t("publishAccountAdd")}
+          </Button>
+        </>
+      }
+    >
       <div className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
         <label className={DIALOG_FIELD}>
           <span>{t("publishPlatform")}</span>
@@ -109,14 +121,6 @@ export function AddAccountDialog({
           />
           <small>{t("publishProxyHint")}</small>
         </label>
-        <div className="mt-1 flex justify-end gap-1.5">
-          <Button variant="outline" size="sm" onClick={onClose}>
-            {t("close")}
-          </Button>
-          <Button size="sm" loading={create.isPending} onClick={() => create.mutate()}>
-            <Plus size={13} /> {t("publishAccountAdd")}
-          </Button>
-        </div>
       </div>
     </ModalShell>
   );

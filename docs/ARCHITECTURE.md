@@ -173,6 +173,11 @@ f5-tts / fish-speech 都要 torch + torchaudio + transformers,**2.5–3.5 GB**�
 探测顺序是 用户覆盖 → 托管 venv → 本进程解释器(`tts_models.candidate_pythons`),所以点过下载
 之后自动可用。设置页的「TTS 解释器」因此是**高级覆盖项**,留空是常态。
 
+音色库的新建入口只负责“上传参考音频”这条不依赖项目的路径，并通过共享 `ModalShell` 打开独立
+表单；不能把创建字段内联进音色列表，否则空状态和列表高度会在点击后突变，也无法复用 sticky
+header/footer、焦点环安全区与统一的提交状态。“从转写说话人创建”仍归剪辑页配音面板，因为它依赖
+当前素材的 Transcript 上下文。两条入口最终都写入同一份工作区音色实体。
+
 **两个下载源是分开的**:「模型下载源」管 HF 权重(`HF_ENDPOINT`),「依赖下载源」管 pip 索引
 (`--index-url`)。装引擎要拉 2.5–3.5GB,国内直连 PyPI 常常慢到不可用,而它与权重镜像并不是
 同一件事。自定义 index 只接受 http(s),避免任意字符串进子进程 argv。
@@ -347,6 +352,11 @@ Gateway 的边界与安全不变量见
 - **样式全部内联为 TSX Tailwind 类**,`styles.css` 只剩 portal 覆盖(~40 行);禁手写全局 class、禁共享类字符串文件。刻度:昼「暖纸面」`#f6f4f0`+`#6a5cd8` / 夜「暖檀黑」`#141218`+`#8a7bf0`(独立调校非翻转),`--radius: 8px` 派生 sm=6/md=8/lg=10/xl=14,分段控件一律药丸形,表单填充用 `--field` 实底。
 - **全平面无阴影**:分层靠发丝边框 + 底色层级(`--shadow-*` 解析为 none);焦点环/inset 不算。
 - **控件一律用 Radix/shadcn**(`components/ui/`),禁原生 `select`/`alert`/`confirm`/手写弹层;**动态长列表下拉一律可搜索 Combobox**(`components/app/combobox.tsx`)。
+- **业务弹窗统一三段式**(`components/app/modals.tsx` 的 `ModalShell`):顶栏与动作栏 sticky 并复用
+  中段的半透明 `popover` 表面 + backdrop blur,中间 body
+  独占滚动并保留 `py-5` 焦点环安全区。底层 `DialogContent` 只留给命令面板、媒体预览这类非表单
+  专用布局；命令面板仍须使用相同的半透明表面与 blur，不能回退到完全不透明；不能在业务页重复
+  组合一套 `overflow-y-auto` 弹窗。
 - **Tailwind v4 两个陷阱**(已踩实):`space-y` 落在前一子元素的 margin-bottom、对 inline 元素(如 Label)蒸发 → 纵向堆叠一律 grid/flex+gap;`translate-*` 类编译为独立 `translate` 属性、与行内 transform **叠加**而非覆盖 → 定位由行内样式负责的元素类里不得再写定位类。
 - **表单一律 shadcn Form**(react-hook-form + zod),字段级错误就地红字,表单级错误用 destructive Alert。
 - **拖拽一律 dnd-kit**(原生 HTML5 DnD 在 Electron 下真实鼠标不触发);dnd 相关 hooks 必须在任何 early-return 之前。

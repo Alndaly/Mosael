@@ -355,8 +355,32 @@ function PublishDetailDialog({ task, onClose, onDelete }: { task: PublishTask | 
       }}
       title={task ? task.title || task.asset_name : t("publishListTitle")}
       className="w-[min(620px,calc(100vw-32px))]"
+      footer={
+        task ? (
+          <>
+            {window.openStudioPublish && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  onClose();
+                  window.openStudioPublish
+                    ?.openPage(task.account_id, task.platform)
+                    .catch((error: Error) => toast.error(error.message));
+                }}
+              >
+                <ExternalLink size={13} /> {t("publishOpenPage")}
+              </Button>
+            )}
+            <Button size="sm" variant="outline" className="hover:border-[color-mix(in_oklab,var(--destructive)_45%,var(--border))] hover:text-destructive" onClick={onDelete}>
+              <Trash2 size={13} /> {t("delete")}
+            </Button>
+            <Button size="sm" onClick={onClose}>{t("close")}</Button>
+          </>
+        ) : undefined
+      }
     >
-      {task && <PublishDetail task={task} onDelete={onDelete} onLeave={onClose} />}
+      {task && <PublishDetail task={task} />}
     </ModalShell>
   );
 }
@@ -377,13 +401,8 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
 
 function PublishDetail({
   task,
-  onDelete,
-  onLeave,
 }: {
   task: PublishTask;
-  onDelete: () => void;
-  /** 跳去内嵌浏览器之后调用 —— 弹窗留在原地的话,从平台页返回 Open Studio 还要再点一次关闭。 */
-  onLeave: () => void;
 }) {
   const t = useI18n();
   // 不再需要问「这个平台是不是浏览器平台」:发布任务只可能是平台账号发布。
@@ -392,7 +411,7 @@ function PublishDetail({
     // 外框和标题由弹窗提供 —— 这里再套一张卡就是盒中盒,标题也会重复一遍。
     <div className="grid w-full content-start gap-2.5">
       <section>
-        <header className="flex items-start justify-between gap-3 pb-2.5">
+        <header className="pb-2.5">
           {/* 状态只说一次:此前这一行写着「失败」,右边还浮着一个同义的红色图标。 */}
           <p className="m-0 flex min-w-0 items-center gap-1.5 text-ui-sm text-muted-foreground">
             <StatusIcon status={task.status} />
@@ -401,27 +420,6 @@ function PublishDetail({
               <span className={statusTone(task.status).tone}>{t(`batchStatus_${task.status}` as never)}</span>
             </span>
           </p>
-          <div className="flex shrink-0 items-center gap-1.5">
-            {window.openStudioPublish && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  // 先关弹窗再跳:跳过去之后这个弹窗就在内嵌视图**背后**,用户从平台页
-                  // 返回时会撞见一个自己没打开过的东西,还得多点一次。
-                  onLeave();
-                  window.openStudioPublish
-                    ?.openPage(task.account_id, task.platform)
-                    .catch((error: Error) => toast.error(error.message));
-                }}
-              >
-                <ExternalLink size={13} /> {t("publishOpenPage")}
-              </Button>
-            )}
-            <Button size="sm" variant="outline" className="hover:border-[color-mix(in_oklab,var(--destructive)_45%,var(--border))] hover:text-destructive" onClick={onDelete}>
-              <Trash2 size={13} /> {t("delete")}
-            </Button>
-          </div>
         </header>
         <dl className="m-0 grid gap-2.5">
           <InfoRow label={t("publishAsset")}>
@@ -545,7 +543,22 @@ function CreatePublishDialog({
   });
 
   return (
-    <ModalShell open={open} onOpenChange={(next) => !next && onClose()} title={t("publishCreate")}>
+    <ModalShell
+      open={open}
+      onOpenChange={(next) => !next && onClose()}
+      title={t("publishCreate")}
+      footer={
+        <>
+          <Button className="mr-auto" variant="outline" size="sm" disabled={!assetId} loading={aiCopy.isPending} onClick={() => aiCopy.mutate()}>
+            <Sparkles size={13} /> {t("publishAiCopy")}
+          </Button>
+          <Button variant="outline" size="sm" onClick={onClose}>{t("cancel")}</Button>
+          <Button size="sm" disabled={!assetId || !accountId} loading={create.isPending} onClick={() => create.mutate()}>
+            <Rocket size={13} /> {t("publishStart")}
+          </Button>
+        </>
+      }
+    >
       <div className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
         <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
           <span>{t("publishAsset")}</span>
@@ -656,18 +669,6 @@ function CreatePublishDialog({
             </label>
           ),
         )}
-        <div className="mt-1 flex items-center justify-end gap-1.5">
-          <Button variant="outline" size="sm" disabled={!assetId} loading={aiCopy.isPending} onClick={() => aiCopy.mutate()}>
-            <Sparkles size={13} /> {t("publishAiCopy")}
-          </Button>
-          <span className="flex-1" />
-          <Button variant="outline" size="sm" onClick={onClose}>
-            {t("cancel")}
-          </Button>
-          <Button size="sm" disabled={!assetId || !accountId} loading={create.isPending} onClick={() => create.mutate()}>
-            <Rocket size={13} /> {t("publishStart")}
-          </Button>
-        </div>
       </div>
     </ModalShell>
   );

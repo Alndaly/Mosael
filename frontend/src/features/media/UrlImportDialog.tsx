@@ -108,6 +108,13 @@ export function UrlImportDialog({
       onOpenChange={onOpenChange}
       title={t("urlImportTitle")}
       className="w-[min(560px,92vw)] max-w-none"
+      footer={
+        listing ? (
+          <Button size="sm" disabled={selected.size === 0} loading={start.isPending} onClick={() => start.mutate()}>
+            <Link2 size={13} /> {t("urlImportStart").replace("{n}", String(selected.size))}
+          </Button>
+        ) : undefined
+      }
     >
       <div className="grid min-w-0 gap-2.5">
         <form
@@ -129,8 +136,7 @@ export function UrlImportDialog({
           />
           <Button
             type="submit"
-            size="sm"
-            variant="outline"
+            variant="default"
             className="shrink-0"
             loading={probe.isPending}
             disabled={!url.trim()}
@@ -298,9 +304,6 @@ export function UrlImportDialog({
               </Select>
             </label>
 
-            <Button size="sm" disabled={selected.size === 0} loading={start.isPending} onClick={() => start.mutate()}>
-              <Link2 size={13} /> {t("urlImportStart").replace("{n}", String(selected.size))}
-            </Button>
           </>
         )}
       </div>

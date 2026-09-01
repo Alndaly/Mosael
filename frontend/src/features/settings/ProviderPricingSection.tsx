@@ -132,6 +132,7 @@ function formFromRule(rule: PricingRule): PricingForm {
 
 export function ProviderPricingSection({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
+  const pricingFormId = React.useId();
   const qc = useQueryClient();
   const [editing, setEditing] = React.useState<PricingRule | null>(null);
   const allCapabilities = useAllCapabilities();
@@ -290,7 +291,12 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
         </div>
       }
     >
-      <ModalShell open={prefillOpen} onOpenChange={setPrefillOpen} title={t("pricingPrefill")}>
+      <ModalShell
+        open={prefillOpen}
+        onOpenChange={setPrefillOpen}
+        title={t("pricingPrefill")}
+        footer={<Button type="button" variant="outline" size="sm" onClick={() => setPrefillOpen(false)}>{t("close")}</Button>}
+      >
         <div className="grid gap-2.5">
           <p className="m-0 text-ui-xs leading-[1.5] text-muted-foreground">{t("pricingPrefillHint")}</p>
           <div className="grid gap-1.5">
@@ -316,19 +322,23 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
                 .replace("{seen}", String(prefillResult.models_seen))}
             </p>
           )}
-          <div className="mt-1 flex justify-end">
-            <Button type="button" variant="outline" size="sm" onClick={() => setPrefillOpen(false)}>
-              {t("close")}
-            </Button>
-          </div>
         </div>
       </ModalShell>
       <ModalShell
         open={adding || editing !== null}
         onOpenChange={(next) => !next && closeModal()}
         title={editing ? t("pricingRuleEdit") : t("pricingRuleAdd")}
+        footer={
+          <>
+            <Button type="button" variant="outline" size="sm" onClick={closeModal}>{t("cancel")}</Button>
+            <Button type="submit" form={pricingFormId} size="sm" disabled={!canSubmit || create.isPending || update.isPending}>
+              {editing ? t("save") : t("pricingRuleAdd")}
+            </Button>
+          </>
+        }
       >
         <form
+          id={pricingFormId}
           className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none"
           onSubmit={(event) => {
             event.preventDefault();
@@ -431,14 +441,6 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
               onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
             />
           </label>
-          <div className="mt-1 flex justify-end gap-1.5">
-            <Button type="button" variant="outline" size="sm" onClick={closeModal}>
-              {t("cancel")}
-            </Button>
-            <Button type="submit" size="sm" disabled={!canSubmit || create.isPending || update.isPending}>
-              {editing ? t("save") : t("pricingRuleAdd")}
-            </Button>
-          </div>
         </form>
       </ModalShell>
 

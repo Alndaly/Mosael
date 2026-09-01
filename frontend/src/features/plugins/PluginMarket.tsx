@@ -224,6 +224,14 @@ export function PluginMarketDialog({
           open
           onOpenChange={(next) => !next && setPending(null)}
           title={t("pluginInstallConfirmTitle")}
+          footer={
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setPending(null)}>{t("cancel")}</Button>
+              <Button size="sm" loading={install.isPending} onClick={() => install.mutate({ url: pending.url, overwrite: !!pending.preview.installed })}>
+                {pending.preview.installed ? t("pluginUpdate") : t("pluginInstall")}
+              </Button>
+            </>
+          }
         >
           <div className="grid gap-2 text-ui-sm">
             <div className="flex flex-wrap items-baseline gap-x-1.5">
@@ -272,18 +280,6 @@ export function PluginMarketDialog({
               </p>
             )}
             <p className="m-0 text-ui-xs leading-[1.55] text-muted-foreground">{t("pluginInstallWarning")}</p>
-            <div className="mt-1 flex items-center justify-end gap-1.5">
-              <Button variant="ghost" size="sm" onClick={() => setPending(null)}>
-                {t("cancel")}
-              </Button>
-              <Button
-                size="sm"
-                loading={install.isPending}
-                onClick={() => install.mutate({ url: pending.url, overwrite: !!pending.preview.installed })}
-              >
-                {pending.preview.installed ? t("pluginUpdate") : t("pluginInstall")}
-              </Button>
-            </div>
           </div>
         </ModalShell>
       )}

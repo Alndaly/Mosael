@@ -252,7 +252,19 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
         </div>
       </ModalShell>
 
-      <ModalShell open={manualOpen} onOpenChange={(next) => !next && setManualOpen(false)} title={t("feishuManualToggle")}>
+      <ModalShell
+        open={manualOpen}
+        onOpenChange={(next) => !next && setManualOpen(false)}
+        title={t("feishuManualToggle")}
+        footer={
+          <>
+            <Button variant="ghost" size="sm" onClick={() => setManualOpen(false)}>{t("cancel")}</Button>
+            <Button size="sm" disabled={!appId.trim() || !appSecret.trim()} loading={addBot.isPending} onClick={() => addBot.mutate()}>
+              {t("feishuAdd")}
+            </Button>
+          </>
+        }
+      >
         <div className="grid gap-3">
           <p className="text-ui-md text-muted-foreground">{t("feishuManualBody")}</p>
           <Input placeholder={t("feishuAppId")} value={appId} onChange={(event) => setAppId(event.target.value)} autoFocus />
@@ -263,18 +275,6 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
             onChange={(event) => setAppSecret(event.target.value)}
           />
           {addBot.isError && <p className="m-0 text-xs text-destructive">{String((addBot.error as Error).message)}</p>}
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setManualOpen(false)}>
-              {t("cancel")}
-            </Button>
-            <Button
-              size="sm"
-              disabled={!appId.trim() || !appSecret.trim()} loading={addBot.isPending}
-              onClick={() => addBot.mutate()}
-            >
-              {t("feishuAdd")}
-            </Button>
-          </div>
         </div>
       </ModalShell>
 

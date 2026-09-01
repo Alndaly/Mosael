@@ -298,7 +298,19 @@ function CreateTaskDialog({
   });
 
   return (
-    <ModalShell open={open} onOpenChange={(next) => !next && onClose()} title={t("createTask")}>
+    <ModalShell
+      open={open}
+      onOpenChange={(next) => !next && onClose()}
+      title={t("createTask")}
+      footer={
+        <>
+          <Button variant="outline" size="sm" onClick={onClose}>{t("cancel")}</Button>
+          <Button size="sm" disabled={!workflowId} loading={create.isPending} onClick={() => create.mutate()}>
+            <CalendarClock size={13} /> {t("createTask")}
+          </Button>
+        </>
+      }
+    >
       <div className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
         <div className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
           <span>{t("taskNameLabel")}</span>
@@ -359,14 +371,6 @@ function CreateTaskDialog({
             </div>
           </div>
         )}
-        <div className="mt-1 flex justify-end gap-1.5">
-          <Button variant="outline" size="sm" onClick={onClose}>
-            {t("cancel")}
-          </Button>
-          <Button size="sm" disabled={!workflowId} loading={create.isPending} onClick={() => create.mutate()}>
-            <CalendarClock size={13} /> {t("createTask")}
-          </Button>
-        </div>
       </div>
     </ModalShell>
   );

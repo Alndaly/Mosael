@@ -187,7 +187,22 @@ export function Recorder({
   const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
   return (
-    <ModalShell open={open} onOpenChange={onOpenChange} title={t("recordTitle")} className="w-[520px]">
+    <ModalShell
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t("recordTitle")}
+      className="w-[520px]"
+      footer={
+        <div className="flex w-full min-w-0 items-center justify-between gap-4">
+          <span className="min-w-0 text-ui-xs leading-[1.4] text-muted-foreground">{t(`record_${source}_hint` as never) as string}</span>
+          {!recording ? (
+            <Button className="shrink-0" size="sm" onClick={start}><Circle size={11} className="fill-destructive text-destructive" /> {t("recordStart")}</Button>
+          ) : (
+            <Button className="shrink-0" size="sm" variant="destructive" onClick={stop}><Square size={11} /> {t("recordStop")}</Button>
+          )}
+        </div>
+      }
+    >
       <div className="grid w-full gap-2.5">
         <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border w-fit justify-self-start" role="group" aria-label={t("recordTitle")}>
           {(["screen", "camera", "mic"] as Source[]).map((s) => (
@@ -288,18 +303,6 @@ export function Recorder({
           </div>
         )}
 
-        <div className="flex items-center gap-2.5">
-          {!recording ? (
-            <Button size="sm" onClick={start}>
-              <Circle size={11} className="fill-destructive text-destructive" /> {t("recordStart")}
-            </Button>
-          ) : (
-            <Button size="sm" variant="destructive" onClick={stop}>
-              <Square size={11} /> {t("recordStop")}
-            </Button>
-          )}
-          <span className="text-ui-xs text-muted-foreground">{t(`record_${source}_hint` as never) as string}</span>
-        </div>
       </div>
     </ModalShell>
   );

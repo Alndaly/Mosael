@@ -93,6 +93,7 @@ export function ProviderProfilesSection({
   description?: string;
 }) {
   const t = useI18n();
+  const profileFormId = React.useId();
   const qc = useQueryClient();
   const [adding, setAdding] = React.useState(false);
   const [editing, setEditing] = React.useState<ProviderProfile | null>(null);
@@ -313,9 +314,17 @@ export function ProviderProfilesSection({
         open={adding || editing !== null}
         onOpenChange={(next) => !next && closeModal()}
         title={editing ? t("providerEdit") : t("providerAdd")}
+        footer={
+          <>
+            <Button type="button" variant="outline" size="sm" onClick={closeModal}>{t("cancel")}</Button>
+            <Button type="submit" form={profileFormId} size="sm" disabled={editing ? update.isPending : create.isPending}>
+              {editing ? t("save") : <><Plus size={13} /> {t("providerAdd")}</>}
+            </Button>
+          </>
+        }
       >
         <Form {...form}>
-          <form className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none" onSubmit={submit} noValidate>
+          <form id={profileFormId} className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none" onSubmit={submit} noValidate>
             <FormField
               control={form.control}
               name="vendor"
@@ -417,20 +426,6 @@ export function ProviderProfilesSection({
                 供应商⇄模型重构里就没了(能力挂在模型行上:同一个端点既可能有对话模型也可能有生图
                 模型,挂在连接上就只能二选一)。更新路由一直显式忽略它,于是这一栏勾了、存了、
                 什么都没发生。能力现在在每个模型/工作流自己的设置弹窗里改。 */}
-            <div className="mt-1 flex justify-end gap-1.5">
-              <Button type="button" variant="outline" size="sm" onClick={closeModal}>
-                {t("cancel")}
-              </Button>
-              <Button type="submit" size="sm" disabled={editing ? update.isPending : create.isPending}>
-                {editing ? (
-                  t("save")
-                ) : (
-                  <>
-                    <Plus size={13} /> {t("providerAdd")}
-                  </>
-                )}
-              </Button>
-            </div>
           </form>
         </Form>
       </ModalShell>

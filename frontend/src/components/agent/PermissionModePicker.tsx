@@ -5,15 +5,8 @@ import { ShieldAlert, ShieldCheck, ShieldQuestion } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
+import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
@@ -109,28 +102,21 @@ export function PermissionModePicker({ session }: { session: AgentSession | null
       </Select>
 
       {/* 二次确认:这一档放开的是撤不回来的动作,不该一次点击就滑过去。 */}
-      <Dialog open={pendingBypass} onOpenChange={setPendingBypass}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <ShieldAlert size={16} className="text-destructive" /> {t("permModeBypassConfirmTitle")}
-            </DialogTitle>
-            <DialogDescription>{t("permModeBypassConfirmBody")}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPendingBypass(false)}>
-              {t("cancel")}
-            </Button>
-            <Button
-              variant="destructive"
-              loading={setMode.isPending}
-              onClick={() => setMode.mutate("bypass", { onSuccess: () => setPendingBypass(false) })}
-            >
+      <ModalShell
+        open={pendingBypass}
+        onOpenChange={setPendingBypass}
+        title={<span className="flex items-center gap-2"><ShieldAlert size={16} className="text-destructive" /> {t("permModeBypassConfirmTitle")}</span>}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setPendingBypass(false)}>{t("cancel")}</Button>
+            <Button variant="destructive" loading={setMode.isPending} onClick={() => setMode.mutate("bypass", { onSuccess: () => setPendingBypass(false) })}>
               {t("permModeBypassConfirmCta")}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </>
+        }
+      >
+        <p className="m-0 text-sm text-muted-foreground">{t("permModeBypassConfirmBody")}</p>
+      </ModalShell>
     </>
   );
 }

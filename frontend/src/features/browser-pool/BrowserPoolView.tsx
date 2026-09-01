@@ -379,7 +379,17 @@ function LoginUrlDialog({
     }
   };
   return (
-    <ModalShell open onOpenChange={(next) => !next && onCancel()} title={t("poolLoginTitle").replace("{name}", profile.name)}>
+    <ModalShell
+      open
+      onOpenChange={(next) => !next && onCancel()}
+      title={t("poolLoginTitle").replace("{name}", profile.name)}
+      footer={
+        <>
+          <Button variant="outline" size="sm" onClick={onCancel}>{t("cancel")}</Button>
+          <Button size="sm" disabled={pending || !url.trim()} onClick={open}>{t("poolLogin")}</Button>
+        </>
+      }
+    >
       <div className="grid gap-2.5">
         <Input
           value={url}
@@ -389,14 +399,6 @@ function LoginUrlDialog({
           onKeyDown={(e) => e.key === "Enter" && open()}
         />
         <small className="text-ui-xs text-muted-foreground">{t("poolLoginHint")}</small>
-        <div className="mt-1 flex justify-end gap-2">
-          <Button variant="outline" size="sm" onClick={onCancel}>
-            {t("cancel")}
-          </Button>
-          <Button size="sm" disabled={pending || !url.trim()} onClick={open}>
-            {t("poolLogin")}
-          </Button>
-        </div>
       </div>
     </ModalShell>
   );
@@ -415,7 +417,17 @@ function CreateProfileDialog({
   const [name, setName] = React.useState("");
   const [proxy, setProxy] = React.useState("");
   return (
-    <ModalShell open onOpenChange={(next) => !next && onCancel()} title={t("poolCreate")}>
+    <ModalShell
+      open
+      onOpenChange={(next) => !next && onCancel()}
+      title={t("poolCreate")}
+      footer={
+        <>
+          <Button variant="outline" size="sm" onClick={onCancel}>{t("cancel")}</Button>
+          <Button size="sm" disabled={pending || !name.trim()} onClick={() => onCreate({ name: name.trim(), proxy: proxy.trim() || null })}>{t("poolCreate")}</Button>
+        </>
+      }
+    >
       <div className="grid gap-2.5">
         <label className={DIALOG_FIELD}>
           <span>{t("poolNameLabel")}</span>
@@ -425,14 +437,6 @@ function CreateProfileDialog({
           <span>{t("publishProxySet")}</span>
           <Input value={proxy} onChange={(e) => setProxy(e.target.value)} placeholder="socks5://host:port" />
         </label>
-        <div className="mt-1 flex justify-end gap-2">
-          <Button variant="outline" size="sm" onClick={onCancel}>
-            {t("cancel")}
-          </Button>
-          <Button size="sm" disabled={pending || !name.trim()} onClick={() => onCreate({ name: name.trim(), proxy: proxy.trim() || null })}>
-            {t("poolCreate")}
-          </Button>
-        </div>
       </div>
     </ModalShell>
   );
@@ -452,18 +456,20 @@ function ProxyDialog({
   const t = useI18n();
   const [proxy, setProxy] = React.useState(initial);
   return (
-    <ModalShell open onOpenChange={(next) => !next && onCancel()} title={t("publishProxySet")}>
+    <ModalShell
+      open
+      onOpenChange={(next) => !next && onCancel()}
+      title={t("publishProxySet")}
+      footer={
+        <>
+          <Button variant="outline" size="sm" onClick={onCancel}>{t("cancel")}</Button>
+          <Button size="sm" disabled={pending} onClick={() => onSave(proxy.trim() || null)}>{t("save")}</Button>
+        </>
+      }
+    >
       <div className="grid gap-2.5">
         <Input value={proxy} onChange={(e) => setProxy(e.target.value)} placeholder="socks5://host:port" autoFocus />
         <small className="text-ui-xs text-muted-foreground">{t("poolProxyHint")}</small>
-        <div className="mt-1 flex justify-end gap-2">
-          <Button variant="outline" size="sm" onClick={onCancel}>
-            {t("cancel")}
-          </Button>
-          <Button size="sm" disabled={pending} onClick={() => onSave(proxy.trim() || null)}>
-            {t("save")}
-          </Button>
-        </div>
       </div>
     </ModalShell>
   );

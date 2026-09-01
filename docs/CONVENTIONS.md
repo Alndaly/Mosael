@@ -33,6 +33,12 @@
 - 单列 grid 想让内容可收缩,轨道要写成 `grid-cols-[minmax(0,1fr)]`。默认的隐式列是
   `auto` 也就是 max-content,长内容会把宽度顶开,而给子元素加 `min-w-0` **约束不到轨道**。
 - 负外边距(`-mx-N`)抵消外壳内边距时,两者是一对。改外壳内边距而不动它,页面就会横向溢出。
+- 业务弹窗统一用 `components/app/modals.tsx` 的 `ModalShell`:外壳 `overflow-hidden`,标题与动作区
+  分别 sticky 在顶/底,只有中间 body 纵向滚动。头尾使用与中段同源的半透明 `popover` 表面加
+  backdrop blur,不能另铺一块完全不透明的异色底。body 必须保留上下内边距,不能让第一个/最后一个
+  控件贴住 overflow 裁剪线 —— `focus-visible` 的 ring 画在控件边框外,贴边时会被切掉。命令面板与
+  纯媒体预览有自己的交互模型,可直接使用底层 `DialogContent`,但表面仍须采用 `popover/90` +
+  backdrop blur,不能退回完全不透明的遮挡块；普通表单不能绕过公共壳。
 
 ### 数据与交互
 

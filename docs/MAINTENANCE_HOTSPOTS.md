@@ -294,6 +294,15 @@ failed 错误色、cancelled 虚线弱化；即使节点已有旧产物，重跑
 
 - `DialogContent` 的实际宽度必须限制在 `100vw - 2rem`，`ModalShell` 与滚动 body 都要 `min-w-0`，
   body 只允许纵向滚动。
+- 业务弹窗采用与 Revornix 一致的三段结构：外壳 `overflow-hidden`，header/footer 分别
+  `sticky top-0` / `sticky bottom-0` 且有与中段同源的半透明 `popover` 背景、backdrop blur 与
+  分隔线，只有 body 滚动。body 的 `py-5`
+  是焦点环安全区，不是可删的装饰间距；删成只有 `pb-*` 后，第一个输入框的蓝色顶边会再次被
+  overflow 裁掉。实现统一落在 `components/app/modals.tsx`，业务弹窗不要各自拼结构。
+- `CommandDialog` 虽然不使用业务三段式，外层也必须保持 `bg-popover/90 + backdrop-blur-xl`，内部
+  `Command` 使用透明背景；否则内部的默认 `bg-popover` 会把外层透明度完全盖掉。录制器这类 footer
+  左侧有说明、右侧有主按钮的弹窗，须在单个 `w-full` 包装层上显式设置 `items-center justify-between`，
+  不能只依赖通用 footer 的右对齐。
 - 展示服务端错误的正文使用 `whitespace-pre-wrap [overflow-wrap:anywhere]`：保留有意义的换行，同时
   允许长 URL/JSON 在任意位置折行。
 - 事件时间线、子任务列表等嵌套 grid 的内容列必须是 `minmax(0,1fr)`，对应子项也要 `min-w-0`；只在

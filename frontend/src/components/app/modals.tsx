@@ -15,7 +15,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -62,7 +62,8 @@ export const DIALOG_FIELD =
  * 弹窗了),以及**贴着滚动容器边缘的控件,焦点框会被裁掉** —— outline 画在 border box 外面,
  * 而那正好在容器的裁剪线之外(插件市场的搜索框和「从链接安装」按钮就是这么半截的)。
  *
- * 三段之后,滚动只发生在中间那一段,头尾各自有内边距,谁都不贴着裁剪线。
+ * 三段之后,滚动只发生在中间那一段,头尾各自有内边距,谁都不贴着裁剪线。中段必须同时有
+ * 上下 padding:输入框的 focus ring 会画到 border box 外,若第一项紧贴 overflow 顶边,蓝色顶边仍会被裁掉。
  *
  * `sticky` 段里的 `bg-popover` 不能省:滚上来的内容会从它背后穿过去。
  */
@@ -78,7 +79,7 @@ export function ModalShell({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  title: string;
+  title: React.ReactNode;
   /** 钉在标题下面、**不跟着滚**的一条:搜索框、筛选器这类"作用于下面整份列表"的东西。 */
   header?: React.ReactNode;
   /** 钉在底部的动作区。表单的「取消 / 确定」放这里,长表单滚动时它仍然在。 */
@@ -92,13 +93,39 @@ export function ModalShell({
   useUnlockBodyOnClose(open);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn("flex min-w-0 max-h-[85vh] flex-col gap-0 overflow-hidden p-0", className)}>
-        <DialogHeader className={cn("shrink-0 px-5 pb-3.5 pt-5", header && "gap-2.5")}>
+      <DialogContent
+        className={cn(
+          "flex min-w-0 max-h-[90vh] flex-col gap-0 overflow-hidden bg-transparent p-0 backdrop-blur-xl",
+          className,
+        )}
+      >
+        <DialogHeader
+          data-slot="modal-header"
+          className={cn(
+            "sticky top-0 z-10 shrink-0 border-b border-border/60 bg-popover/90 px-5 pb-3.5 pt-5 backdrop-blur-xl",
+            header && "gap-2.5",
+          )}
+        >
           <DialogTitle>{title}</DialogTitle>
           {header}
         </DialogHeader>
-        <div className={cn("min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-5 pb-5", bodyClassName)}>{children}</div>
-        {footer && <div className="shrink-0 border-t border-border bg-popover px-5 py-3.5">{footer}</div>}
+        <div
+          data-slot="modal-body"
+          className={cn(
+            "min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain bg-popover/90 px-5 py-5 backdrop-blur-xl [scrollbar-gutter:stable]",
+            bodyClassName,
+          )}
+        >
+          {children}
+        </div>
+        {footer && (
+          <DialogFooter
+            data-slot="modal-footer"
+            className="sticky bottom-0 z-10 shrink-0 gap-2 space-x-0 border-t border-border/60 bg-popover/90 px-5 py-3.5 backdrop-blur-xl sm:items-center sm:gap-2 sm:space-x-0"
+          >
+            {footer}
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -118,6 +145,7 @@ export function RenameDialog({
   onSubmit: (value: string) => void;
 }) {
   const t = useI18n();
+  const formId = React.useId();
   const form = useForm<{ value: string }>({
     resolver: zodResolver(z.object({ value: z.string().trim().min(1, t("fieldRequired")) })),
     defaultValues: { value: initialValue },
@@ -128,9 +156,23 @@ export function RenameDialog({
   const submit = form.handleSubmit((values) => onSubmit(values.value.trim()));
 
   return (
-    <ModalShell open={open} onOpenChange={(next) => !next && onCancel()} title={title}>
+    <ModalShell
+      open={open}
+      onOpenChange={(next) => !next && onCancel()}
+      title={title}
+      footer={
+        <>
+          <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+            {t("cancel")}
+          </Button>
+          <Button type="submit" form={formId} size="sm">
+            {t("confirm")}
+          </Button>
+        </>
+      }
+    >
       <Form {...form}>
-        <form className="grid gap-3" onSubmit={submit} noValidate>
+        <form id={formId} className="grid gap-3" onSubmit={submit} noValidate>
           <FormField
             control={form.control}
             name="value"
@@ -143,14 +185,6 @@ export function RenameDialog({
               </FormItem>
             )}
           />
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
-              {t("cancel")}
-            </Button>
-            <Button type="submit" size="sm">
-              {t("confirm")}
-            </Button>
-          </div>
         </form>
       </Form>
     </ModalShell>

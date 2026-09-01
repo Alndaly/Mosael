@@ -1210,7 +1210,20 @@ function ExportControl({
         {busy ? <Loader2 size={13} className="animate-openstudio-spin" /> : <Download size={13} />}
         {busy ? t("exporting") : t("exportVideo")}
       </Button>
-      <ModalShell open={configOpen} onOpenChange={setConfigOpen} title={t("exportConfigTitle")} className="w-[380px]">
+      <ModalShell
+        open={configOpen}
+        onOpenChange={setConfigOpen}
+        title={t("exportConfigTitle")}
+        className="w-[380px]"
+        footer={
+          <>
+            <span className="mr-auto text-ui-xs text-muted-foreground">{t("exportConfigHint")}</span>
+            <Button size="sm" onClick={() => { setConfigOpen(false); startExport.mutate(params); }}>
+              <Download size={13} /> {t("exportStart")}
+            </Button>
+          </>
+        }
+      >
         <div className="grid w-full gap-3.5">
           <div className="grid gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">{t("exportResolution")}</span>
@@ -1249,18 +1262,6 @@ function ExportControl({
                 <SelectItem value="compact">{t("exportQualityCompact")}</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div className="flex items-center gap-2.5">
-            <Button
-              size="sm"
-              onClick={() => {
-                setConfigOpen(false);
-                startExport.mutate(params);
-              }}
-            >
-              <Download size={13} /> {t("exportStart")}
-            </Button>
-            <span className="text-ui-xs text-muted-foreground">{t("exportConfigHint")}</span>
           </div>
         </div>
       </ModalShell>

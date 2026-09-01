@@ -14,7 +14,7 @@ import {
   type Workspace,
 } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { ConfirmDialog } from "@/components/app/modals";
+import { ConfirmDialog, DIALOG_FIELD, ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
@@ -68,11 +68,9 @@ export function VoiceLibrarySection({ workspace }: { workspace: Workspace }) {
       // **动作归到这一节的标题旁**。放在列表下面时它排在最后一条音色之后,看着像"列表的最后
       // 一项",而不是这一节的入口 —— 而这一节本来就有 actions 插槽,别处的分组都这么用。
       actions={
-        !creating && (
-          <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
-            <Plus size={13} /> {t("voiceNewTitle")}
-          </Button>
-        )
+        <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
+          <Plus size={13} /> {t("voiceNewTitle")}
+        </Button>
       }
     >
       <SettingsBlock>
@@ -99,11 +97,14 @@ export function VoiceLibrarySection({ workspace }: { workspace: Workspace }) {
             ))}
           </div>
         )}
-        {creating && (
-          <NewVoiceForm workspace={workspace} onCreated={invalidate} onClose={() => setCreating(false)} />
-        )}
         </div>
       </SettingsBlock>
+      <NewVoiceDialog
+        open={creating}
+        workspace={workspace}
+        onCreated={invalidate}
+        onClose={() => setCreating(false)}
+      />
       <ConfirmDialog
         open={deleting !== null}
         title={t("voiceDeleteTitle")}
@@ -251,11 +252,13 @@ function VoiceRow({
 
 /** 新建音色:传一段参考音频。**参考文本可以留空** —— 建完点那一行的编辑、再点「识别」,
     让本机转写引擎听一遍填上,比让用户当场打一遍自己说过的话强。 */
-function NewVoiceForm({
+function NewVoiceDialog({
+  open,
   workspace,
   onCreated,
   onClose,
 }: {
+  open: boolean;
   workspace: Workspace;
   onCreated: () => void;
   onClose: () => void;
@@ -265,6 +268,7 @@ function NewVoiceForm({
   const [refText, setRefText] = React.useState("");
   const [file, setFile] = React.useState<File | null>(null);
   const fileRef = React.useRef<HTMLInputElement | null>(null);
+  const formId = React.useId();
 
   const upload = useMutation({
     mutationFn: () => uploadVoice({ workspaceId: workspace.id, name, referenceText: refText, file: file as File }),
@@ -276,59 +280,90 @@ function NewVoiceForm({
     onError: (error: Error) => toast.error(error.message),
   });
 
+  React.useEffect(() => {
+    if (!open) return;
+    setName("");
+    setRefText("");
+    setFile(null);
+    if (fileRef.current) fileRef.current.value = "";
+    upload.reset();
+  }, [open]);
+
   return (
-    <div className="grid gap-1.5 rounded-lg border border-dashed border-border-strong p-2.5">
-      <Input placeholder={t("voiceName")} value={name} onChange={(event) => setName(event.target.value)} autoFocus />
-      <Textarea
-        rows={2}
-        placeholder={t("voiceReferenceTextOptional")}
-        value={refText}
-        onChange={(event) => setRefText(event.target.value)}
-      />
-      <input
-        ref={fileRef}
-        type="file"
-        accept="audio/*,video/*"
-        className="hidden"
-        onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-      />
-      {/* 选好的音频要**看得见、去得掉** —— 只把按钮文字换成文件名的话,既看不出选没选,
-          也没有反悔的路(剪辑页那处踩过这个)。 */}
-      {file && (
-        <div className="flex min-w-0 items-center gap-1.5 rounded-md border border-border bg-secondary px-2 py-1">
-          <AudioLines size={12} className="shrink-0 text-muted-foreground" />
-          <span className="min-w-0 flex-1 truncate text-ui-xs" title={file.name}>{file.name}</span>
-          <span className="shrink-0 text-ui-2xs tabular-nums text-muted-foreground">{formatBytes(file.size)}</span>
-          <button
-            type="button"
-            className="shrink-0 cursor-pointer rounded-sm border-0 bg-transparent p-0.5 leading-none text-muted-foreground hover:text-destructive"
-            aria-label={t("voiceClearFile")}
-            onClick={() => setFile(null)}
-          >
-            <X size={12} />
-          </button>
-        </div>
-      )}
-      <div className="flex items-center justify-between gap-2">
-        <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
-          <Upload size={12} /> {file ? t("voiceReplaceFile") : t("voicePickFile")}
-        </Button>
-        <div className="flex items-center gap-1.5">
-          <Button size="sm" variant="ghost" onClick={onClose}>
+    <ModalShell
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && !upload.isPending) onClose();
+      }}
+      title={t("voiceNewTitle")}
+      className="sm:max-w-md"
+      footer={
+        <>
+          <Button size="sm" variant="ghost" disabled={upload.isPending} onClick={onClose}>
             {t("cancel")}
           </Button>
           <Button
             size="sm"
-            // 缺什么就说缺什么 —— 一个点不动而不给理由的按钮,和坏了没区别。
+            type="submit"
+            form={formId}
             title={!file ? t("voiceNeedRefAudioHere") : !name.trim() ? t("voiceNeedName") : undefined}
             disabled={!name.trim() || !file}
             loading={upload.isPending}
-            onClick={() => upload.mutate()}
           >
             {t("voiceCreate")}
           </Button>
+        </>
+      }
+    >
+      <form
+        id={formId}
+        className="grid gap-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (name.trim() && file) upload.mutate();
+        }}
+      >
+        <label className={DIALOG_FIELD}>
+          <span>{t("voiceName")}</span>
+          <Input value={name} onChange={(event) => setName(event.target.value)} autoFocus />
+        </label>
+        <label className={DIALOG_FIELD}>
+          <span>{t("voiceReferenceTextOptional")}</span>
+          <Textarea rows={3} value={refText} onChange={(event) => setRefText(event.target.value)} />
+        </label>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="audio/*,video/*"
+          className="hidden"
+          onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+        />
+        <div className="grid gap-2">
+          <Button type="button" size="sm" variant="outline" className="justify-self-start" onClick={() => fileRef.current?.click()}>
+            <Upload size={12} /> {file ? t("voiceReplaceFile") : t("voicePickFile")}
+          </Button>
+          {/* 选好的音频要**看得见、去得掉** —— 只把按钮文字换成文件名的话,既看不出选没选,
+              也没有反悔的路(剪辑页那处踩过这个)。 */}
+          {file && (
+            <div className="flex min-w-0 items-center gap-1.5 rounded-md border border-border bg-secondary px-2 py-1.5">
+              <AudioLines size={12} className="shrink-0 text-muted-foreground" />
+              <span className="min-w-0 flex-1 truncate text-ui-xs" title={file.name}>{file.name}</span>
+              <span className="shrink-0 text-ui-2xs tabular-nums text-muted-foreground">{formatBytes(file.size)}</span>
+              <button
+                type="button"
+                className="shrink-0 cursor-pointer rounded-sm border-0 bg-transparent p-0.5 leading-none text-muted-foreground hover:text-destructive"
+                aria-label={t("voiceClearFile")}
+                onClick={() => {
+                  setFile(null);
+                  if (fileRef.current) fileRef.current.value = "";
+                }}
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
         </div>
-      </div>
-    </div>
+      </form>
+    </ModalShell>
   );
 }

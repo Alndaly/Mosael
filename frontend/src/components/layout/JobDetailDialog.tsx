@@ -57,7 +57,19 @@ export function JobDetailDialog({
   });
 
   return (
-    <ModalShell open={!!job} onOpenChange={(next) => !next && onClose()} title={t("jobDetailTitle")}>
+    <ModalShell
+      open={!!job}
+      onOpenChange={(next) => !next && onClose()}
+      title={t("jobDetailTitle")}
+      footer={
+        current ? (
+          <>
+            {onGoto && <Button size="sm" variant="outline" onClick={onGoto}><ExternalLink size={13} /> {gotoLabel ?? t("jobDetailGoto")}</Button>}
+            <Button size="sm" onClick={onClose}>{t("close")}</Button>
+          </>
+        ) : undefined
+      }
+    >
       {current && (
         <div className="grid min-w-0 gap-2">
           <div className="flex min-w-0 items-center gap-2">
@@ -153,16 +165,6 @@ export function JobDetailDialog({
             </ol>
           </div>
 
-          <div className="mt-0.5 flex flex-wrap justify-end gap-1.5">
-            {onGoto && (
-              <Button size="sm" variant="outline" onClick={onGoto}>
-                <ExternalLink size={13} /> {gotoLabel ?? t("jobDetailGoto")}
-              </Button>
-            )}
-            <Button size="sm" onClick={onClose}>
-              {t("close")}
-            </Button>
-          </div>
         </div>
       )}
     </ModalShell>

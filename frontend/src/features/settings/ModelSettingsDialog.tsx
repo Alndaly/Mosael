@@ -110,6 +110,7 @@ export function ModelSettingsDialog({
   onOpenChange: (next: boolean) => void;
 }) {
   const t = useI18n();
+  const formId = React.useId();
   const qc = useQueryClient();
   const [draft, setDraft] = React.useState<ModelSettings | null>(null);
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
@@ -156,8 +157,19 @@ export function ModelSettingsDialog({
   const isChat = effective.includes("chat");
 
   return (
-    <ModalShell open={open} onOpenChange={onOpenChange} title={vendor === "comfyui" ? t("workflowSettingsTitle") : t("modelSettingsTitle")}>
+    <ModalShell
+      open={open}
+      onOpenChange={onOpenChange}
+      title={vendor === "comfyui" ? t("workflowSettingsTitle") : t("modelSettingsTitle")}
+      footer={
+        <>
+          <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
+          <Button type="submit" form={formId} size="sm" disabled={!current} loading={save.isPending}>{t("save")}</Button>
+        </>
+      }
+    >
       <form
+        id={formId}
         className="grid gap-3"
         onSubmit={(event) => {
           event.preventDefault();
@@ -310,14 +322,6 @@ export function ModelSettingsDialog({
           </div>
         )}
 
-        <div className="flex justify-end gap-1.5">
-          <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
-            {t("cancel")}
-          </Button>
-          <Button type="submit" size="sm" disabled={!current} loading={save.isPending}>
-            {t("save")}
-          </Button>
-        </div>
       </form>
     </ModalShell>
   );
