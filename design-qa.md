@@ -35,6 +35,52 @@ final result: passed
 
 ---
 
+## Startup loading design QA
+
+### Comparison target
+
+- Source visual truth: `/var/folders/yw/0kg9jbhj3xx00gq05_14d1lw0000gn/T/TemporaryItems/NSIRD_screencaptureui_OKxCRA/Screenshot 2026-09-02 at 00.14.42.png`.
+- Browser-rendered implementation: `/tmp/openstudio-design-qa/startup-loading-implementation-1728x1117.png`.
+- Combined source/implementation comparison: `/tmp/openstudio-design-qa/startup-loading-comparison.png`.
+- State: initial authentication boot with an intentionally reachable-but-non-responsive backend, so the loading state remains visible without changing production timing.
+
+### Viewport and normalization
+
+- Source pixels: `3456 × 2234`, representing a `1728 × 1117` CSS-pixel Electron capture at 2× density.
+- Implementation pixels and CSS viewport: `1728 × 1117`, device pixel ratio `1` under the explicit in-app-browser viewport override.
+- Density normalization: the source was downsampled to `1728 × 1117`; source and implementation were then stacked at equal pixel dimensions.
+- The source uses the user's saved dark theme while the isolated browser origin defaults to light. Layout, hierarchy, and copy are compared directly; theme colors are assessed through the same semantic tokens used by the rest of the application rather than by pretending the two palettes are pixel-equivalent.
+
+### Findings
+
+No actionable P0/P1/P2 findings remain in the requested startup state.
+
+- Fonts and typography: the single tiny caption is replaced by a clear two-level hierarchy using existing responsive UI type tokens. The primary state remains concise, with an explanatory secondary line that does not claim a fabricated percentage.
+- Spacing and layout rhythm: the status cluster remains centered but now has a 72 px visual anchor, a compact 20 px gap, and enough internal width to read as intentional rather than stranded text.
+- Colors and visual tokens: the mark, ring, foreground, muted foreground, border, and surface use existing semantic tokens. The light implementation capture verifies contrast; dark rendering follows the same already-established token pairs visible in the source application.
+- Image quality and asset fidelity: no raster image or approximation was introduced. The existing vector `BrandMark` and the application's standard Lucide loading icon are reused.
+- Copy and content: the state now distinguishes backend connection from the later workspace restoration phase. Both Chinese and English messages are present.
+- Accessibility and motion: the cluster exposes `role=status`, `aria-live=polite`, and `aria-busy=true`. The standard OpenStudio spinner is covered by the repository-wide `prefers-reduced-motion` override, while the textual status remains understandable without motion.
+
+### Full-view and focused-region evidence
+
+The equal-size side-by-side comparison shows that the revised cluster keeps the source's calm full-screen composition while making the active state materially more legible. A separate focused crop was unnecessary: the only content on the screen is the centered status cluster, and it is readable in the full-resolution implementation capture.
+
+### Comparison history
+
+1. Baseline: a very small, low-contrast sentence alone in the center left most of the wait state visually empty and provided no animated evidence that the app was still working.
+2. Revised capture: a branded center mark, restrained indeterminate spinner, primary status, and secondary explanation provide activity and hierarchy without adding a false progress meter. The browser console contained no warnings or errors.
+
+### Verification
+
+- `pnpm --dir frontend test -- StartupLoading.dom.test.tsx` — 127 files and 812 tests passed.
+- `pnpm --dir frontend build` — TypeScript and Vite production build passed.
+- Browser state and copy were verified through the status DOM; the implementation screenshot was captured at the normalized source viewport; console warnings/errors: none.
+
+final result: passed
+
+---
+
 ## Transcript row design QA
 
 ### Comparison target

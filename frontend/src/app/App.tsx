@@ -46,6 +46,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { BrowserPreview } from "@/components/layout/BrowserPreview";
 import { LivePanels } from "@/components/layout/LivePanels";
+import { StartupLoading } from "@/components/layout/StartupLoading";
 import { Input } from "@/components/ui/input";
 import { WINDOW_CHROME_INSET } from "@/lib/windowChrome";
 import { cn } from "@/lib/utils";
@@ -288,7 +289,11 @@ function AuthGate() {
   const t = useI18n();
   const { status } = useAuth();
   if (status === "loading")
-    return <PreShellScreen>{t("connecting")}</PreShellScreen>;
+    return (
+      <PreShellScreen>
+        <StartupLoading label={t("connecting")} detail={t("connectingHint")} />
+      </PreShellScreen>
+    );
   //: **连不上 ≠ 没登录。** 摆一屏登录页等于告诉用户「你的会话结束了」,而其实令牌还在、
   //: 只是后端这会儿没答应(本机进程,重启和休眠唤醒都是常态)。给他真正有用的两件事:
   //: 再试一次,或者换一个后端地址。
@@ -379,7 +384,14 @@ function WorkspaceGate() {
   }, []);
 
   if (workspaces.isLoading)
-    return <PreShellScreen>{t("connecting")}</PreShellScreen>;
+    return (
+      <PreShellScreen>
+        <StartupLoading
+          label={t("workspaceLoading")}
+          detail={t("workspaceLoadingHint")}
+        />
+      </PreShellScreen>
+    );
   if (!workspace) {
     return (
       <PreShellScreen>
