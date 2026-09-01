@@ -17,7 +17,7 @@ from app.ai.providers.alibaba.speech import (
     is_cosyvoice,
     resolve_dashscope_native_base,
 )
-from app.ai.providers.speech.base import (
+from app.ai.providers.contracts.speech import (
     REMOTE_PARALLEL,
     REMOTE_TIMEOUT_SECONDS,
     SpeechRequest,

@@ -18,7 +18,7 @@ from app.domain.usage import BillableCall, billable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ai.providers.base import sanitize_provider_error
+from app.ai.providers.contracts.generation import sanitize_provider_error
 from app.db.models import Asset, ProviderProfile
 from app.domain import provider_credentials
 from app.domain.provider_credentials import ResolvedProvider

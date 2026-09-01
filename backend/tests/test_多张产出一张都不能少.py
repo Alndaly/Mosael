@@ -19,7 +19,7 @@ def test_契约本身是一串不是一个() -> None:
     """GenerationResult 只认列表 —— 留一条单数的路,就还会有人从那条路上把其余的丢掉。"""
     import inspect
 
-    from app.ai.providers.base import GenerationResult
+    from app.ai.providers.contracts.generation import GenerationResult
 
     fields = inspect.get_annotations(GenerationResult)
     assert "output_paths" in fields, "产出退回了单数"

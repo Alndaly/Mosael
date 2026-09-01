@@ -18,7 +18,7 @@ from app.ai.providers import (
     SourceAsset,
     get_provider,
 )
-from app.ai.providers.base import sanitize_provider_error
+from app.ai.providers.contracts.generation import sanitize_provider_error
 from app.core.db import SessionLocal
 from app.db.models import Asset, GeneratedAsset, GenerationJob, Job
 from app.domain import provider_models

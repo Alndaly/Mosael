@@ -22,7 +22,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from app.ai.providers.base import (
+from app.ai.providers.contracts.generation import (
     FIRST_CLIP,
     FIRST_FRAME,
     LAST_FRAME,

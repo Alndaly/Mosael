@@ -11,7 +11,7 @@ import httpx
 
 from app.core.http_retry import RetryingClient
 
-from app.ai.providers.speech.base import REMOTE_TIMEOUT_SECONDS, SpeechRequest, TTSError
+from app.ai.providers.contracts.speech import REMOTE_TIMEOUT_SECONDS, SpeechRequest, TTSError
 
 
 class VolcanoTTS:

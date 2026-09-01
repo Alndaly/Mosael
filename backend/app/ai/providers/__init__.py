@@ -11,7 +11,7 @@ alibaba/speech.py)—— 百炼的 qwen 图像与万相视频共用一把 Key、
 
 from __future__ import annotations
 
-from app.ai.providers.base import (
+from app.ai.providers.contracts.generation import (
     FIRST_FRAME,
     LAST_FRAME,
     REFERENCE_IMAGE,

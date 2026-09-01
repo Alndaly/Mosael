@@ -4,7 +4,7 @@ import hashlib
 import time
 from typing import Any
 
-from app.ai.providers.base import ProviderError
+from app.ai.providers.contracts.generation import ProviderError
 
 """可灵的「主体库」—— 它的多图参考走这条路,不是把几张图挂在生成请求上。
 

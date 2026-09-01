@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from app.ai.providers.speech.base import SpeechRequest, TTSError
+from app.ai.providers.contracts.speech import SpeechRequest, TTSError
 
 
 class EdgeTTS:

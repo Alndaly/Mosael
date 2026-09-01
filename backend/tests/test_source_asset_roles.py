@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from app.ai.providers.base import (
+from app.ai.providers.contracts.generation import (
     FIRST_FRAME,
     LAST_FRAME,
     REFERENCE_IMAGE,
@@ -122,7 +122,7 @@ class TestKling:
 class TestMiniMax:
     def test_三种角色都进_content(self, images) -> None:
         from app.ai.providers.minimax import build_submit_payload
-        from app.ai.providers.base import ProviderContext
+        from app.ai.providers.contracts.generation import ProviderContext
 
         context = ProviderContext(profile_id=None, vendor="minimax", api_key="k")
         payload = build_submit_payload(
@@ -133,7 +133,7 @@ class TestMiniMax:
 
     def test_有首帧时比例恒为_adaptive(self, images) -> None:
         from app.ai.providers.minimax import build_submit_payload
-        from app.ai.providers.base import ProviderContext
+        from app.ai.providers.contracts.generation import ProviderContext
 
         context = ProviderContext(profile_id=None, vendor="minimax", api_key="k")
         payload = build_submit_payload(

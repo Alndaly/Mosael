@@ -17,7 +17,7 @@ import pytest
 from app.ai.providers import get_provider
 from app.ai.providers.comfyui import client as comfyui_client
 from app.ai.providers.comfyui import provider as comfyui
-from app.ai.providers.base import GenerationRequest, ProviderContext, ProviderError
+from app.ai.providers.contracts.generation import GenerationRequest, ProviderContext, ProviderError
 from app.ai.providers.comfyui import (
     DEFAULT_TEMPLATE,
     ComfyUIProvider,
@@ -281,7 +281,7 @@ class _Callbacks:
 
 
 def test_progress_is_reported_while_waiting(monkeypatch, tmp_path) -> None:
-    from app.ai.providers.base import GenerationCallbacks
+    from app.ai.providers.contracts.generation import GenerationCallbacks
 
     def handler(request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -310,7 +310,7 @@ def test_progress_is_reported_while_waiting(monkeypatch, tmp_path) -> None:
 
 def test_cancel_interrupts_and_dequeues(monkeypatch, tmp_path) -> None:
     """A user cancel must stop the remote work, not merely abandon the poll loop."""
-    from app.ai.providers.base import GenerationCallbacks
+    from app.ai.providers.contracts.generation import GenerationCallbacks
 
     stopped: list[tuple[str, bytes]] = []
 

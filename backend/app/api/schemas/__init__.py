@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
-from app.ai.providers.base import FIRST_FRAME, SOURCE_ROLES
+from app.ai.providers.contracts.generation import FIRST_FRAME, SOURCE_ROLES
 from app.api.schemas.base import OrmModel
 from app.api.schemas.browser import BrowserProfileCreate, BrowserProfileOut, BrowserProfileUpdate
 from app.api.schemas.publish import (

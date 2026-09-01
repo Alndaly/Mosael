@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.ai.providers.base import GenerationRequest, ProviderError
+from app.ai.providers.contracts.generation import GenerationRequest, ProviderError
 from app.ai.providers.kuaishou import elements as kling_elements, kling
 
 

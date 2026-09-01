@@ -14,7 +14,7 @@ from __future__ import annotations
 import pytest
 
 from app.ai.providers import get_provider
-from app.ai.providers.base import GenerationRequest
+from app.ai.providers.contracts.generation import GenerationRequest
 from app.domain.generation.catalog import BUILTIN_MODELS, capabilities_for, known_capabilities_for
 from app.domain.generation.operations import (
     GenerationDomainError,
@@ -265,7 +265,7 @@ class Test角色只有一张表:
     """
 
     def test_每种角色都有名字和说明(self) -> None:
-        from app.ai.providers.base import SOURCE_ROLES
+        from app.ai.providers.contracts.generation import SOURCE_ROLES
         from app.domain.generation.catalog import SOURCE_ROLE_HELP, SOURCE_ROLE_LABELS
 
         assert set(SOURCE_ROLES) == set(SOURCE_ROLE_LABELS), "角色和中文名对不上"
@@ -359,7 +359,7 @@ class Test描述符里素材规矩的形状:
 
     def test_requires_source_是列表的列表(self) -> None:
         """每一条是「这几种里至少给一份」 —— 写成字典,校验时迭代出的就是键字符串。"""
-        from app.ai.providers.base import SOURCE_ROLES
+        from app.ai.providers.contracts.generation import SOURCE_ROLES
 
         for item in BUILTIN_MODELS:
             requires = item["capabilities"].get("requires_source") or []
@@ -372,7 +372,7 @@ class Test描述符里素材规矩的形状:
                     assert role in SOURCE_ROLES, f"{item['id']} 的 requires_source 有未知角色 {role}"
 
     def test_requires_companion_是角色到列表的字典(self) -> None:
-        from app.ai.providers.base import SOURCE_ROLES
+        from app.ai.providers.contracts.generation import SOURCE_ROLES
 
         for item in BUILTIN_MODELS:
             companions = item["capabilities"].get("requires_companion") or {}
@@ -386,7 +386,7 @@ class Test描述符里素材规矩的形状:
                     assert other in SOURCE_ROLES, f"{item['id']} 的 requires_companion 有未知角色 {other}"
 
     def test_上限与互斥组的形状(self) -> None:
-        from app.ai.providers.base import SOURCE_ROLES
+        from app.ai.providers.contracts.generation import SOURCE_ROLES
 
         for item in BUILTIN_MODELS:
             limits = item["capabilities"].get("source_limits") or {}

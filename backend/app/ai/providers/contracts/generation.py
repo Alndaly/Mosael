@@ -16,10 +16,10 @@ import httpx
 
 from app.core.token_estimate import estimate_text_tokens
 
-"""
-Generation provider contract (plan §18.2). A provider turns a validated
-request into a downloaded media file; asset/artifact registration and job
-bookkeeping happen in the domain runner, never here.
+"""图像与视频生成 Adapter 的能力契约。
+
+Provider 把已经通过领域校验的请求转换为本地媒体文件；素材登记、任务状态和计量仍由
+domain runner 持有。调用方只依赖本 Module 的 Interface，不依赖具体供应商 Implementation。
 """
 
 MAX_NUM_IMAGES = 4

@@ -3,10 +3,10 @@ from __future__ import annotations
 import pytest
 
 from app.ai.providers import get_provider
-from app.ai.providers.base import FIRST_FRAME, FIRST_CLIP, LAST_FRAME, REFERENCE_AUDIO, REFERENCE_IMAGE, REFERENCE_VIDEO, SOURCE_VIDEO, SourceAsset
+from app.ai.providers.contracts.generation import FIRST_FRAME, FIRST_CLIP, LAST_FRAME, REFERENCE_AUDIO, REFERENCE_IMAGE, REFERENCE_VIDEO, SOURCE_VIDEO, SourceAsset
 import httpx
 
-from app.ai.providers.base import (
+from app.ai.providers.contracts.generation import (
     GenerationRequest,
     ProviderContext,
     ProviderError,

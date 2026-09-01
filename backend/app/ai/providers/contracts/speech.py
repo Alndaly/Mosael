@@ -1,8 +1,7 @@
-"""语音引擎的共用契约。
+"""语音合成 Adapter 的能力契约。
 
-和 `ai/providers/base.py` 是同一件事的两侧:那边是图像/视频的适配器契约,这边是语音的。
-两边此前的差别只在**摆放**——那边一家一个文件,这边六家挤在一个 670 行的模块里,而这个
-不对称没有任何理由支撑它(见 docs 里的生成体系剖面 F4)。
+它和 ``contracts/generation.py`` 共同组成能力 Interface；供应商协议和引擎注册不属于
+这个 Module，避免契约反向依赖任意一个具体 Adapter。
 """
 
 from __future__ import annotations
@@ -88,5 +87,4 @@ def synthesize_many(
         for index in range(len(requests)):
             one(index)
     return results
-
 

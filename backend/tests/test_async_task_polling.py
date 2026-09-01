@@ -13,7 +13,7 @@ import time
 
 import pytest
 
-from app.ai.providers.base import ProviderError, poll_until_ready
+from app.ai.providers.contracts.generation import ProviderError, poll_until_ready
 
 
 class _FakeResponse:

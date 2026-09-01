@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.ai.providers.base import GenerationRequest, ProviderContext, ProviderError
-from app.ai.providers.base import FIRST_FRAME, SourceAsset
+from app.ai.providers.contracts.generation import GenerationRequest, ProviderContext, ProviderError
+from app.ai.providers.contracts.generation import FIRST_FRAME, SourceAsset
 from app.ai.providers.alibaba.video import build_submit_payload, extract_video_url
 from app.ai.providers.speech import BailianTTS, extract_bailian_audio_url
 
@@ -489,13 +489,13 @@ def test_首帧走仓库既有约定_而不是只看上传文件(tmp_path) -> No
     assert payload["input"]["img_url"].startswith("data:image/"), "上传的文件也要能当首帧"
 
 
-def test_共享约定住在base里_不住在某一家() -> None:
+def test_共享约定住在能力契约里_不住在某一家() -> None:
     """first_frame_value 此前定义在 kling.py:wan_video 得反过来 import 那一家,seedance 抄了
     一遍。一个三家共用的约定住在某个供应商的文件里,读的人只会以为它是那家特有的。"""
-    from app.ai.providers import base
+    from app.ai.providers.contracts import generation
     from app.ai.providers.alibaba import video as wan
     from app.ai.providers.kuaishou import kling
 
-    assert hasattr(base, "first_frame_value")
-    assert kling.first_frame_value is base.first_frame_value
-    assert wan.first_frame_value is base.first_frame_value
+    assert hasattr(generation, "first_frame_value")
+    assert kling.first_frame_value is generation.first_frame_value
+    assert wan.first_frame_value is generation.first_frame_value

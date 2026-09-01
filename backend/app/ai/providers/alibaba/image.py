@@ -7,7 +7,7 @@ import httpx
 
 from app.core.http_retry import RetryingClient
 
-from app.ai.providers.base import (
+from app.ai.providers.contracts.generation import (
     REFERENCE_IMAGE,
     poll_until_ready,
     GenerationProvider,
