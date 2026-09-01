@@ -3,6 +3,7 @@ import type { Job } from "@/api/domains/jobs";
 import { API_BASE, api, getAuthToken } from "@/api/transport";
 
 export * from "@/api/transport";
+export * from "@/api/domains/boards";
 export * from "@/api/domains/browser";
 export * from "@/api/domains/jobs";
 export * from "@/api/domains/notifications";
@@ -737,152 +738,6 @@ export function deleteAgentSession(sessionId: string): Promise<unknown> {
   return api(`/api/agent/sessions/${sessionId}`, { method: "DELETE" });
 }
 
-/** 创意画板上的一项:便签 / 图片 / 分组框。形状由后端 domain/boards 校验。 */
-export interface BoardItem {
-  id: string;
-  kind: "note" | "image" | "video" | "audio" | "frame";
-  x: number;
-  y: number;
-  width?: number;
-  height?: number;
-  text?: string;
-  color?: string;
-  asset_id?: string;
-  /** 节点自己的可编辑表单。供应商调用时临时拼接的提示词不得写回这里。 */
-  form?: {
-    prompt?: string;
-    provider?: string;
-    provider_profile_id?: string;
-    model?: string;
-    mode?: string;
-    voice_id?: string;
-    parameters?: Record<string, unknown>;
-    source_assets?: { asset_id: string; role: string }[];
-    mentioned_asset_ids?: string[];
-    /** TipTap JSON，保留正文中 @ 素材 chip 的位置；prompt 仍是发给模型的纯文本。 */
-    prompt_document?: { type?: string; content?: unknown[]; [key: string]: unknown };
-  };
-  /** 节点自己的运行态。表单和运行态分开，失败/重试不会改掉用户输入。 */
-  run?: {
-    status: "idle" | "queued" | "running" | "succeeded" | "failed" | "cancelled";
-    job_id?: string;
-    error?: string;
-  };
-  /** 还在生成:有任务、还没有素材。任务落终态时由后端回执把 asset_id 填回来。 */
-  /** @deprecated 仅用于读取升级前的画布。 */
-  job_id?: string;
-  /** 跑挂了的原因。**和 job_id 互斥** —— 有它就说明那个任务已经结束、而且没有产出。
-   *  提示词还留在这一项上,改一改就能再来一次。 */
-  /** @deprecated 仅用于读取升级前的画布。 */
-  error?: string;
-  /** 分组框专属:开着的时候,拖动这个框会把框里的东西一起带走。 */
-  move_children?: boolean;
-}
-
-export interface BoardEdge {
-  id: string;
-  source: string;
-  target: string;
-  label?: string;
-}
-
-export interface BoardCanvas {
-  items: BoardItem[];
-  edges: BoardEdge[];
-}
-
-export interface Board {
-  id: string;
-  workspace_id: string;
-  name: string;
-  canvas: BoardCanvas;
-  created_at: string;
-  updated_at: string;
-}
-
-export function listBoards(workspaceId: string): Promise<Board[]> {
-  return api<Board[]>(`/api/boards?workspace_id=${workspaceId}`);
-}
-
-export function getBoard(boardId: string, workspaceId: string): Promise<Board> {
-  return api<Board>(`/api/boards/${boardId}?workspace_id=${workspaceId}`);
-}
-
-export function createBoard(body: { workspace_id: string; name?: string }): Promise<Board> {
-  return api<Board>("/api/boards", { method: "POST", body: JSON.stringify(body) });
-}
-
-/** 改名和存画布是同一个入口 —— 各发各的那一半,另一半不传就不动它。 */
-export function updateBoard(
-  boardId: string,
-  body: { workspace_id: string; name?: string; canvas?: BoardCanvas },
-): Promise<Board> {
-  return api<Board>(`/api/boards/${boardId}`, { method: "PATCH", body: JSON.stringify(body) });
-}
-
-/** 在画板上就地生成。产出由后端回执填回画布 —— 这里只负责把任务发起来。 */
-export function generateOnBoard(
-  boardId: string,
-  body: {
-    workspace_id: string;
-    item_id: string;
-    kind: "image" | "video";
-    prompt: string;
-    x: number;
-    y: number;
-    provider?: string;
-    model?: string;
-    parameters?: Record<string, unknown>;
-    source_assets?: { asset_id: string; role: string }[];
-    form?: BoardItem["form"];
-  },
-): Promise<Board> {
-  return api<Board>(`/api/boards/${boardId}/generate`, { method: "POST", body: JSON.stringify(body) });
-}
-
-/** 让 AI 往画板上的一张便签里写字。**同步返回** —— 写字几秒就回,不走生成任务那条路。 */
-export function writeOnBoard(
-  boardId: string,
-  body: {
-    workspace_id: string;
-    item_id: string;
-    prompt: string;
-    provider_profile_id?: string;
-    model?: string;
-    /** 让模型**看着**写的图片。多模态模型才吃得下,不认的会当作没有。 */
-    source_assets?: string[];
-    /** 上游便签给的材料。和「要求」分开发 —— 揉成一段模型分不清哪句是素材、哪句是指令。 */
-    context?: string[];
-  },
-): Promise<Board> {
-  return api<Board>(`/api/boards/${boardId}/write`, { method: "POST", body: JSON.stringify(body) });
-}
-
-/** 把一段文字念成音频,产出落回画板上那一格。**异步** —— 走和出图出片同一套占位/回执。 */
-export function speakOnBoard(
-  boardId: string,
-  body: { workspace_id: string; item_id: string; text: string; voice_id?: string; x?: number; y?: number },
-): Promise<Board> {
-  return api<Board>(`/api/boards/${boardId}/speak`, { method: "POST", body: JSON.stringify(body) });
-}
-
-/** 截出一段,产出落回画板上那一格。**原素材不动** —— 产出是一份新素材。 */
-export function trimOnBoard(
-  boardId: string,
-  body: {
-    workspace_id: string;
-    item_id: string;
-    asset_id: string;
-    start: number;
-    end: number;
-    mute?: boolean;
-    x?: number;
-    y?: number;
-  },
-): Promise<Board> {
-  return api<Board>(`/api/boards/${boardId}/trim`, { method: "POST", body: JSON.stringify(body) });
-}
-
 /** 某能力下所有可用模型(跨连接)。文案生成列的是 chat。 */
 export interface CapabilityModel {
   provider_profile_id: string;
@@ -896,10 +751,6 @@ export function listCapabilityModels(
   surface: "all" | "agent" | "direct" | "gateway" | "automation" = "all",
 ): Promise<CapabilityModel[]> {
   return api<CapabilityModel[]>(`/api/settings/capability-models/${capability}?surface=${surface}`);
-}
-
-export function deleteBoard(boardId: string, workspaceId: string): Promise<unknown> {
-  return api(`/api/boards/${boardId}?workspace_id=${workspaceId}`, { method: "DELETE" });
 }
 
 /** 把「我的东西」放进一个工作区,或者收回来。发布账号与它的浏览器档案会一起动(后端保证)。 */

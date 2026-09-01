@@ -5,10 +5,11 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.ai.providers.contracts.generation import FIRST_FRAME, SOURCE_ROLES
 from app.api.schemas.base import OrmModel
+from app.api.schemas.boards import BoardCreate, BoardGenerate, BoardOut, BoardSpeak, BoardTrim, BoardUpdate, BoardWrite
 from app.api.schemas.browser import BrowserProfileCreate, BrowserProfileOut, BrowserProfileUpdate
 from app.api.schemas.jobs import JobOut, TaskEventOut
+from app.api.schemas.generation import SourceAssetRef
 from app.api.schemas.notifications import NotificationListOut, NotificationOut, NotifyRequest
 from app.api.schemas.scheduler import (
     RunScheduledTaskResponse,
@@ -1242,21 +1243,6 @@ class GenerationModelOut(OrmModel):
     adapter_available: bool
 
 
-class SourceAssetRef(BaseModel):
-    """一份输入素材,**带着它的用途**。
-
-    此前这里是一个裸的 id 列表,谁是首帧靠「第 0 个」这条约定 —— 尾帧、参考图、参考视频
-    因此都没地方放。role 的取值见 ai/providers/contracts/generation.SOURCE_ROLES;哪个模型认哪几种,
-    由 domain/generation/catalog 的描述符声明。
-    """
-
-    asset_id: str = Field(min_length=1, max_length=64)
-    # 取值**从 SOURCE_ROLES 生成**,不手抄。注释里早写着"取值见 base.SOURCE_ROLES"了,
-    # 而下面那条正则是抄的第二份 —— 加第九种角色时描述符说支持、这里却会以校验错误拒掉它,
-    # 而报的是一句正则不匹配,和"角色"两个字没有关系。
-    role: str = Field(default=FIRST_FRAME, pattern=f"^({'|'.join(SOURCE_ROLES)})$")
-
-
 class GenerationCreate(BaseModel):
     workspace_id: str
     session_id: str | None = None
@@ -1550,45 +1536,6 @@ class PluginInvocationOut(OrmModel):
     created_at: datetime
 
 
-class BoardOut(OrmModel):
-    id: str
-    workspace_id: str
-    name: str
-    canvas: dict
-    created_at: datetime
-    updated_at: datetime
-
-
-class BoardCreate(BaseModel):
-    workspace_id: str
-    name: str = ""
-    canvas: dict | None = None
-
-
-class BoardUpdate(BaseModel):
-    workspace_id: str
-    #: 两者都可以单独传 —— 自动保存只发 canvas,重命名只发 name。None = 这次不改它,
-    #: 而不是"清空它"。
-    name: str | None = None
-    canvas: dict | None = None
-
-
-class BoardGenerate(BaseModel):
-    workspace_id: str
-    #: 前端先编好 id —— 占位项和回执要指同一个东西,由前端定名字省掉一次往返。
-    item_id: str
-    kind: str = "image"
-    prompt: str
-    x: float = 0
-    y: float = 0
-    provider: str = ""
-    model: str = ""
-    parameters: dict = Field(default_factory=dict)
-    source_assets: list[SourceAssetRef] = Field(default_factory=list)
-    #: 用户可再次编辑的原始表单。prompt 是用户写的那份，不含调用供应商时临时追加的图例。
-    form: dict = Field(default_factory=dict)
-
-
 class VideoToGifRequest(BaseModel):
     """Options for creating a new GIF asset from a video asset."""
 
@@ -1596,58 +1543,6 @@ class VideoToGifRequest(BaseModel):
     width: int = Field(default=720, ge=64, le=1920)
     start: float = Field(default=0, ge=0)
     duration: float | None = Field(default=None, gt=0)
-
-
-class BoardWrite(BaseModel):
-    """让 AI 往画板上的一张便签里写字。
-
-    和 BoardGenerate **不是一条路**:出图出片要几十秒,所以那边先摆占位、起任务、回执填回来;
-    写字几秒就回,同步返回反而更直接 —— 为它铺一套任务/回执,用户看到的只是一个多余的转圈。
-    """
-
-    workspace_id: str
-    item_id: str
-    prompt: str
-    #: 留空就用这个人在 chat 能力上的默认模型。
-    provider_profile_id: str = ""
-    model: str = ""
-    #: 让模型**看着**写:上游连过来的图片、正文里 @ 到的图片。多模态模型才吃得下,
-    #: 不认的会当作没有(而不是报错)——一张图带不动整次请求。
-    source_assets: list[str] = Field(default_factory=list)
-    #: 上游便签给的材料。**和「要求」分开** —— 揉成一段的话,模型分不清哪句是素材、哪句是指令。
-    context: list[str] = Field(default_factory=list)
-
-
-class BoardSpeak(BaseModel):
-    """把一段文字念成音频,产出落回画板上那一格。
-
-    和写文案**不是一条路**:写字几秒就回所以同步;念出来要起合成任务(可能还在另一台机器上跑),
-    所以走和出图出片同一套 —— 先摆占位、起任务、回执把产出填回来。
-    """
-
-    workspace_id: str
-    item_id: str
-    text: str
-    #: 用哪个音色。留空时由 start_synthesis 按这个人的默认走。
-    voice_id: str = ""
-    x: float = 0
-    y: float = 0
-
-
-class BoardTrim(BaseModel):
-    """把一段视频/音频截出起止,产出落回画板上那一格。"""
-
-    workspace_id: str
-    #: 产出落到哪一格。
-    item_id: str
-    #: 截哪一份素材。
-    asset_id: str
-    start: float = 0
-    end: float
-    #: 去掉声音 —— 做无声底片时常用。
-    mute: bool = False
-    x: float = 0
-    y: float = 0
 
 
 class AssetFrameRequest(BaseModel):

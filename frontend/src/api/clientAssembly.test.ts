@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import * as client from "@/api/client";
+import * as boards from "@/api/domains/boards";
 import * as browser from "@/api/domains/browser";
 import * as jobs from "@/api/domains/jobs";
 import * as notifications from "@/api/domains/notifications";
@@ -13,6 +14,11 @@ describe("unified API client assembly", () => {
   it("re-exports the transport seam", () => {
     expect(client.api).toBe(transport.api);
     expect(client.setAuthToken).toBe(transport.setAuthToken);
+  });
+
+  it("re-exports the infinite-canvas domain client", () => {
+    expect(client.listBoards).toBe(boards.listBoards);
+    expect(client.generateOnBoard).toBe(boards.generateOnBoard);
   });
 
   it("re-exports the publishing domain client", () => {

@@ -105,3 +105,21 @@ def test_workflows_schema_slice_is_reexported() -> None:
 
     assert schemas.WorkflowOut is WorkflowOut
     assert schemas.WorkflowNodeTypeOut is WorkflowNodeTypeOut
+
+
+def test_boards_orm_slice_is_reexported_and_registered() -> None:
+    from app.db import models
+    from app.db.model_slices.boards import Board
+
+    assert models.Board is Board
+    assert Board.__table__ is models.Base.metadata.tables["boards"]
+
+
+def test_boards_schema_slice_is_reexported() -> None:
+    from app.api import schemas
+    from app.api.schemas.boards import BoardGenerate, BoardOut
+    from app.api.schemas.generation import SourceAssetRef
+
+    assert schemas.BoardOut is BoardOut
+    assert schemas.BoardGenerate is BoardGenerate
+    assert schemas.SourceAssetRef is SourceAssetRef
