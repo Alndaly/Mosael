@@ -2,8 +2,6 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bot,
-  Check,
-  ChevronDown,
   CornerDownRight,
   Loader2,
   Move,
@@ -26,9 +24,9 @@ import { MessageUsageFooter, type AgentUsageEvent } from "@/features/ai-studio/m
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { InlineQuestions } from "@/components/agent/InlineQuestions";
+import { AgentSessionSwitcher } from "@/components/agent/AgentSessionSwitcher";
 import { ModelPicker } from "@/features/ai-studio/ModelPicker";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/components/agent/ToolCalls";
 import { JumpToLatest, useStickToBottom } from "@/components/agent/stickToBottom";
@@ -104,7 +102,6 @@ export function CanvasAgentChat({
   const [selectedId, setSelectedId] = React.useState<string | null>(
     () => window.localStorage.getItem(sessionKey) || null,
   );
-  const [sessionMenuOpen, setSessionMenuOpen] = React.useState(false);
   const sessionList = sessions.data ?? [];
   const activeSession = sessionList.find((item) => item.id === selectedId) ?? sessionList[0] ?? null;
   //: 贴底跟随(见 components/agent/stickToBottom)。此前这里是无条件 scrollTop = scrollHeight
@@ -397,10 +394,10 @@ export function CanvasAgentChat({
   return (
     <aside
       className={cn(
-        "grid grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-lg border border-border-strong bg-panel",
+        "grid grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden bg-panel",
         isFloating
-          ? "fixed min-h-[380px] min-w-[320px] max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)]"
-          : "relative z-[1] h-full w-full min-h-0 min-w-0 rounded-lg border-border shadow-none",
+          ? "fixed min-h-[380px] min-w-[320px] max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)] rounded-lg border border-border-strong"
+          : "relative z-[1] h-full w-full min-h-0 min-w-0 border-0 shadow-none",
       )}
       style={floatStyle}
       {...focusProps}
@@ -409,63 +406,19 @@ export function CanvasAgentChat({
     >
       {handles}
       <div className={cn(PANEL_HEADER_CLASS, isFloating && "cursor-move")} onPointerDown={startDrag}>
-        <h2 className="inline-flex items-center gap-1.5">
-          <Bot size={14} /> {t("wfAgentTitle")}
+        <h2
+          className="min-w-0"
+          data-no-drag
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <AgentSessionSwitcher
+            sessions={sessionList}
+            activeSession={activeSession}
+            deleting={deleteSession.isPending}
+            onSelect={switchSession}
+            onDelete={setDeletingSession}
+          />
         </h2>
-        {sessionList.length > 0 && sessionId && (
-          <span data-no-drag onPointerDown={(event) => event.stopPropagation()}>
-            <Popover open={sessionMenuOpen} onOpenChange={setSessionMenuOpen}>
-              <PopoverTrigger asChild>
-                <button type="button" className="inline-flex h-6 min-w-0 max-w-[150px] cursor-pointer items-center justify-between gap-1.5 rounded-lg border border-border bg-panel px-2 text-xs text-foreground hover:border-border-strong [&>span]:truncate [&_svg]:shrink-0 [&_svg]:text-muted-foreground" aria-label={t("wfAgentSessions")}>
-                  <span>{activeSession?.title ?? t("wfAgentSessions")}</span>
-                  <ChevronDown size={12} />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent
-                align="start"
-                className="z-[120] max-h-[min(320px,var(--radix-popover-content-available-height))] w-[min(360px,calc(100vw-32px))] overflow-y-auto p-1.5 shadow-[var(--shadow-raised)]"
-                aria-label={t("wfAgentSessions")}
-                onPointerDown={(event) => event.stopPropagation()}
-              >
-                {sessionList.map((item) => (
-                  <div
-                    key={item.id}
-                    className={cn(
-                    "grid grid-cols-[minmax(0,1fr)_28px] items-center gap-1 rounded-lg hover:bg-secondary",
-                    item.id === sessionId && "bg-secondary",
-                  )}
-                  >
-                    <button
-                      type="button"
-                      className="flex min-w-0 cursor-pointer items-center justify-between gap-2.5 border-0 bg-transparent py-2 pl-2.5 pr-2 text-left text-ui-md text-inherit [&_span]:min-w-0 [&_span]:truncate [&_svg]:shrink-0 [&_svg]:text-primary"
-                      onClick={() => {
-                        setSessionMenuOpen(false);
-                        switchSession(item.id);
-                      }}
-                    >
-                      <span>{item.title}</span>
-                      {item.id === sessionId && <Check size={13} />}
-                    </button>
-                    <button
-                      type="button"
-                      className="inline-flex h-[26px] w-[26px] cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] hover:text-destructive disabled:cursor-default disabled:opacity-45"
-                      aria-label={t("delete")}
-                      title={t("delete")}
-                      disabled={deleteSession.isPending}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setSessionMenuOpen(false);
-                        setDeletingSession(item);
-                      }}
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                ))}
-              </PopoverContent>
-            </Popover>
-          </span>
-        )}
         <button
           type="button"
           className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"

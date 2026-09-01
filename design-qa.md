@@ -35,6 +35,43 @@ final result: passed
 
 ---
 
+## Shared agent session header design QA
+
+### Comparison target
+
+- Source visual truth: `/var/folders/yw/0kg9jbhj3xx00gq05_14d1lw0000gn/T/TemporaryItems/NSIRD_screencaptureui_VevbUZ/Screenshot 2026-09-02 at 00.25.43.png`
+- Browser-rendered implementation: `http://localhost:5173/#/workflows`, authenticated against an isolated temporary backend with three seeded agent sessions.
+- Scope: the shared `CanvasAgentChat` used by workflows, creative boards, and the editor.
+
+### Findings
+
+No actionable P0/P1/P2 findings remain in the requested agent header.
+
+- Information hierarchy: the active session title is now the top-left heading content. The generic robot icon and `AI 助手` label no longer compete with the actual conversation identity.
+- Long titles: the title owns the remaining header width and uses a single-line ellipsis; the new-session, dock/float, and close controls remain fixed-width.
+- Session switching: clicking the flat title opens the shared session list. Search focuses automatically, filters case-insensitively, exposes an explicit no-match state, and clears when the popover closes.
+- Framing: the docked panel renders with `border-0 shadow-none` and no rounded outer card. Floating mode deliberately keeps a border and radius because it needs a visible spatial boundary over the canvas.
+- Popover styling: the trigger is borderless and background-free; the temporary session surface uses the existing popover token, restrained shadow, and backdrop blur rather than an input-like frame around the permanent title.
+- Accessibility: the session trigger, search field, session choices, delete actions, active check mark, and empty state have stable accessible names. Keyboard focus enters the search field when the list opens.
+
+### Browser interaction evidence
+
+- The authenticated workflow view restored directly to its detail state and opened the shared agent panel.
+- A long seeded title rendered as the active header title without displacing the three header actions.
+- Opening `会话` exposed all three seeded sessions and the `搜索对话…` search box.
+- Entering `工作流` reduced the list to `工作流节点整理方案`; selecting it updated the header immediately and closed the popover.
+- The live docked `<aside>` computed to `border-0 shadow-none` with a `400 × 598` layout region at the tested `1280 × 720` viewport.
+
+### Verification
+
+- `pnpm --dir frontend exec vitest run src/components/agent/AgentSessionSwitcher.dom.test.tsx` — 3 tests passed.
+- `pnpm --dir frontend build` — TypeScript and Vite production build passed.
+- In-app browser DOM verification covered the long-title, open, search, filtered, switch, and docked-frame states.
+
+final result: passed
+
+---
+
 ## Startup loading design QA
 
 ### Comparison target
