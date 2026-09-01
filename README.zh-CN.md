@@ -8,7 +8,7 @@ Open Studio 是一款运行在本机的 AI 视频工作室，把**多轨剪辑�
 从导入素材、对着逐字稿剪辑，到生成画面、导出成片和发布，数据默认留在自己的机器上。
 应用由 Electron、FastAPI、SQLite 与 React 组成；需要联网的 AI 能力由你配置自己的供应商账号。
 
-![Open Studio 剪辑页：多轨时间线、监看器与逐字稿](docs/media/editor.png)
+![Open Studio 剪辑页：多轨时间线、监看器与逐字稿](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260902003526649.png)
 
 ## 下载与运行
 
@@ -33,7 +33,7 @@ Open Studio 是一款运行在本机的 AI 视频工作室，把**多轨剪辑�
 - 字幕、翻译和配音集中在同一面板；配音落到独立轨道，不覆盖原声。
 - 曲线、LUT、示波器、滤镜和字幕使用同一套预览/导出契约。
 
-![逐条字幕配音，产物落到独立配音轨](docs/media/subtitle-dub.png)
+![逐条字幕配音，产物落到独立配音轨](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260902003526649.png)
 
 ### AI 智能体
 
@@ -47,7 +47,7 @@ Open Studio 是一款运行在本机的 AI 视频工作室，把**多轨剪辑�
 - 轨迹视图按输入、模型与工具展示执行过程、耗时、参数和结果。
 - 上下文接近上限时可自动或手动整理，整理记录会保留在对话中。
 
-![智能体轨迹：泳道、执行步骤与耗时](docs/media/agent-trace.png)
+![智能体工作台与会话交互](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260831143139609.png)
 
 ### AI 生成与供应商
 
@@ -67,14 +67,16 @@ Open Studio 是一款运行在本机的 AI 视频工作室，把**多轨剪辑�
 - 视频转 GIF 时保留原件，并生成新的派生素材；批处理可使用同名工作流节点。
 - 创意画板支持便签、媒体、连线、裁切、`@` 素材引用和 AI 辅助编辑；节点状态与生成生命周期持久化。
 
-![URL 导入：先探测，再选择内容与画质](docs/media/url-import.png)
+![URL 导入：先探测，再选择内容与画质](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260831142758052.png)
+
+![创意画板](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260901162232470.png)
 
 ### 工作流与调度
 
 可视化 DAG 把检索、生成、转写、拼装、导出和发布串成可复用流程，支持手动、定时和 Webhook 触发。
 节点组可以折叠为任意嵌套的子图，跨边界引用会自动重连；循环体与顶层使用同一并行执行引擎。
 
-![框选节点并折叠为子图](docs/media/collapse-subgraph.gif)
+![框选节点并折叠为子图](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260831143122120.png)
 
 ### 浏览器池与发布
 

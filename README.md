@@ -9,7 +9,7 @@ From importing footage and cutting against a transcript to generating shots, exp
 and publishing it, data stays on your own machine by default. The app combines Electron, FastAPI,
 SQLite, and React; cloud AI features use provider accounts that you configure yourself.
 
-![The Open Studio editor with a multi-track timeline, monitor, and transcript](docs/media/editor.png)
+![The Open Studio editor with a multi-track timeline, monitor, and transcript](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260902003526649.png)
 
 ## Download and run
 
@@ -39,7 +39,7 @@ generation, voiceover, or transcription, add a connection and model under **Sett
   without overwriting the original sound.
 - Curves, LUTs, scopes, filters, and subtitles follow the same preview/export contract.
 
-![Per-cue voiceover output on a dedicated dub track](docs/media/subtitle-dub.png)
+![Per-cue voiceover output on a dedicated dub track](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260902003526649.png)
 
 ### AI agent
 
@@ -58,7 +58,7 @@ card and runs only after you approve it.
 - Context can be compacted automatically near the limit or manually, with the compaction kept in the
   conversation record.
 
-![Agent trajectory with lanes, execution steps, and timing](docs/media/agent-trace.png)
+![The agent workspace and conversation experience](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260831143139609.png)
 
 ### AI generation and providers
 
@@ -87,7 +87,9 @@ guess from a similar model name.
 - Creative boards support notes, media, links, trimming, `@` asset references, and AI-assisted edits;
   node state and generation lifecycle are persisted.
 
-![URL import: probe first, then choose content and quality](docs/media/url-import.png)
+![URL import: probe first, then choose content and quality](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260831142758052.png)
+
+![Creative board](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260901162232470.png)
 
 ### Workflows and scheduling
 
@@ -96,7 +98,7 @@ reusable flows triggered manually, on a schedule, or by webhook. Node groups col
 nested subgraphs with boundary references reconnected automatically; loops use the same parallel
 execution engine as the top level.
 
-![Marquee a group of nodes and collapse it into a subgraph](docs/media/collapse-subgraph.gif)
+![Marquee a group of nodes and collapse it into a subgraph](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260831143122120.png)
 
 ### Browser Pool and publishing
 
