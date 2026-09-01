@@ -15,13 +15,13 @@ from app.domain import provider_models
 from app.core import http_retry as ai_retry  # Gemini 的 generateContent 不是 /chat/completions,仍走裸重试
 from app.domain.ai_chat import AiChatError, chat, target_for
 from app.domain.usage import BillableCall, billable
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ai.providers.contracts.generation import sanitize_provider_error
+from app.ai.providers.contracts.generation import sanitize_adapter_error
 from app.db.models import Asset, ProviderProfile
 from app.domain import provider_credentials
-from app.domain.provider_credentials import ResolvedProvider
+from app.domain.provider_credentials import ResolvedConnection
+from app.domain.providers import find_enabled_connection, list_enabled_connections
 from app.media.image_preview import browser_compatible_image
 from app.media.paths import resolve_key
 from app.core.child_process import run_logged
@@ -72,56 +72,50 @@ class AnalysisError(RuntimeError):
     pass
 
 
-def pick_analysis_profile(db: Session, profile_id: str | None, user_id: str | None) -> ResolvedProvider:
+def select_analysis_connection(db: Session, profile_id: str | None, user_id: str | None) -> ResolvedConnection:
     """挑一条能做多模态的连接,并绑上**这个人**的钥匙。
 
     钥匙解析不出来就报出来,而不是换一条能用的 —— 「我以为用的是自己的额度,其实花的是别人的钱」
     是这里最坏的失败方式(见 domain/provider_credentials)。
     """
     if profile_id:
-        profile = db.get(ProviderProfile, profile_id)
-        if profile is None or not profile.enabled:
+        profile = find_enabled_connection(db, "", profile_id, owner_user_id=user_id)
+        if profile is None:
             raise AnalysisError("指定的供应商配置不存在或已停用")
-        return _with_key(db, profile, user_id)
-    profiles = db.scalars(
-        select(ProviderProfile).where(
-            ProviderProfile.enabled.is_(True),
-            ProviderProfile.auth_type != "oauth",
-        )
-    ).all()
+        return _resolve_connection_credentials(db, profile, user_id)
+    profiles = list_enabled_connections(db, owner_user_id=user_id, auth_type="api_key")
     by_vendor = {profile.vendor: profile for profile in reversed(profiles)}
     for vendor in ANALYSIS_VENDOR_ORDER:
         if vendor in by_vendor:
-            return _with_key(db, by_vendor[vendor], user_id)
+            return _resolve_connection_credentials(db, by_vendor[vendor], user_id)
     raise AnalysisError("没有可用的多模态供应商，请在设置中添加（如 Kimi 或 MiniMax）")
 
 
-def _with_key(db: Session, profile: ProviderProfile, user_id: str | None) -> ResolvedProvider:
-    resolved = provider_credentials.resolve(db, profile, user_id)
+def _resolve_connection_credentials(db: Session, profile: ProviderProfile, user_id: str | None) -> ResolvedConnection:
+    resolved = provider_credentials.resolve_connection(db, profile, user_id)
     if resolved is None:
         raise AnalysisError(f"供应商「{profile.name}」还没有配置你的密钥,请先在设置里填写")
     return resolved
 
 
-def pick_native_video_profile(db: Session, profile_id: str | None, user_id: str | None) -> ResolvedProvider | None:
+def select_native_video_connection(
+    db: Session,
+    profile_id: str | None,
+    user_id: str | None,
+) -> ResolvedConnection | None:
     """挑一个支持原生视频理解的启用档案。指定 id 时必须本身是 native vendor;否则按 NATIVE_VIDEO_VENDORS
     优先级挑。没有则返回 None(交给上层回落抽帧)。"""
     if profile_id:
-        profile = db.get(ProviderProfile, profile_id)
-        if profile is not None and profile.enabled and profile.vendor in NATIVE_VIDEO_VENDORS:
-            return provider_credentials.resolve(db, profile, user_id)
+        profile = find_enabled_connection(db, "", profile_id, owner_user_id=user_id)
+        if profile is not None and profile.vendor in NATIVE_VIDEO_VENDORS:
+            return provider_credentials.resolve_connection(db, profile, user_id)
         return None
-    profiles = db.scalars(
-        select(ProviderProfile).where(
-            ProviderProfile.enabled.is_(True),
-            ProviderProfile.auth_type != "oauth",
-        )
-    ).all()
+    profiles = list_enabled_connections(db, owner_user_id=user_id, auth_type="api_key")
     by_vendor = {profile.vendor: profile for profile in reversed(profiles)}
     for vendor in NATIVE_VIDEO_VENDORS:
         if vendor in by_vendor:
             # 原生视频是回落链的一环:钥匙没配就当这条路不存在,回落抽帧,而不是整个失败。
-            return provider_credentials.resolve(db, by_vendor[vendor], user_id)
+            return provider_credentials.resolve_connection(db, by_vendor[vendor], user_id)
     return None
 
 
@@ -199,7 +193,7 @@ def _asset_transcript_text(db: Session, asset_id: str) -> str | None:
 
 def call_vision_model(
     db: Session,
-    profile: ResolvedProvider,
+    profile: ResolvedConnection,
     messages: list[dict[str, Any]],
     call: BillableCall | None = None,
     *,
@@ -207,10 +201,10 @@ def call_vision_model(
     surface: Literal["direct", "automation"] = "direct",
 ) -> str:
     # 参数是解析过的连接(连接 + 这个人的钥匙),不再是 ORM 对象 —— 此前靠 object_session 把
-    # 会话从对象上摸出来,而 ResolvedProvider 没有挂在任何会话上,db 只能显式传。
+    # 会话从对象上摸出来,而 ResolvedConnection 没有挂在任何会话上,db 只能显式传。
     # 模型名不做兜底:取不到就让 target_for 当场报「这条连接下没有可用的对话模型」。
     # 此前回落成 "gpt-4o-mini" —— 用户选的是 Kimi,实际却在别家端点上花 OpenAI 模型的钱,
-    # 静默换模型换厂商是这里最坏的失败方式(pick_analysis_profile 的钥匙原则同理)。
+    # 静默换模型换厂商是这里最坏的失败方式(select_analysis_connection 的凭据原则同理)。
     try:
         return chat(
             target_for(db, profile, model=model, surface=surface),
@@ -245,7 +239,7 @@ def _read_native_video(path: Path) -> tuple[bytes, str]:
 
 def _call_gemini_video(
     db: Session,
-    profile: ResolvedProvider,
+    profile: ResolvedConnection,
     prompt: str,
     video: bytes,
     mime: str,
@@ -292,12 +286,12 @@ def _call_gemini_video(
             )
         return str(payload["candidates"][0]["content"]["parts"][0]["text"]).strip()
     except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
-        raise AnalysisError(sanitize_provider_error(f"Gemini 视频分析失败: {exc}", profile.api_key)) from exc
+        raise AnalysisError(sanitize_adapter_error(f"Gemini 视频分析失败: {exc}", profile.api_key)) from exc
 
 
 def _analyze_video_native(
     db: Session,
-    profile: ResolvedProvider,
+    profile: ResolvedConnection,
     asset: Asset,
     path: Path,
     question: str,
@@ -332,7 +326,7 @@ def analyze_asset(
     user_id: str | None,
     profile_id: str | None = None,
     mode: str = "auto",
-    resolved_profile: ResolvedProvider | None = None,
+    resolved_connection: ResolvedConnection | None = None,
     model: str = "",
     surface: Literal["direct", "automation"] = "direct",
 ) -> dict[str, Any]:
@@ -354,13 +348,13 @@ def analyze_asset(
         if compatible is None:
             raise AnalysisError("图片无法转换成视觉模型支持的格式")
         image_path, image_mime = compatible
-        profile = resolved_profile or pick_analysis_profile(db, profile_id, user_id)
+        profile = resolved_connection or select_analysis_connection(db, profile_id, user_id)
         with billable(
             db, capability="chat", operation="analyze_asset", workspace_id=asset.workspace_id,
             source_type="asset", source_id=asset.id,
         ) as call:
             messages = build_messages(asset, prompt, [image_path.read_bytes()], image_mime=image_mime)
-            if resolved_profile is not None:
+            if resolved_connection is not None:
                 answer = call_vision_model(db, profile, messages, call, model=model, surface=surface)
             else:
                 # 保留普通 HTTP/MCP 旧入口的调用形状，让测试替身和第三方调用者不必学习新参数。
@@ -369,15 +363,15 @@ def analyze_asset(
         return {"answer": answer, "provider": profile.vendor, "model": actual_model, "mode": "image", "frames": 1}
 
     transcript_text = _asset_transcript_text(db, asset.id)  # 转写两条路都喂
-    oauth_gateway = resolved_profile is not None and surface == "automation" and resolved_profile.auth_type == "oauth"
+    oauth_gateway = resolved_connection is not None and surface == "automation" and resolved_connection.auth_type == "oauth"
     if mode == "native" and oauth_gateway:
         raise AnalysisError("当前 OAuth 模型的自动化 Gateway 不支持原生视频，请改用抽帧模式")
     if mode == "frames" or oauth_gateway:
         native_profile = None
-    elif resolved_profile is not None:
-        native_profile = resolved_profile if resolved_profile.vendor in NATIVE_VIDEO_VENDORS else None
+    elif resolved_connection is not None:
+        native_profile = resolved_connection if resolved_connection.vendor in NATIVE_VIDEO_VENDORS else None
     else:
-        native_profile = pick_native_video_profile(db, profile_id, user_id)
+        native_profile = select_native_video_connection(db, profile_id, user_id)
 
     # 原生视频理解:显式 native 必须有原生档案;auto 有就走、没有回落抽帧。
     if mode == "native" and native_profile is None:
@@ -409,14 +403,14 @@ def analyze_asset(
         }
 
     # 抽帧 + 转写(frames,或 auto 无原生档案时的回落)。
-    profile = resolved_profile or pick_analysis_profile(db, profile_id, user_id)
+    profile = resolved_connection or select_analysis_connection(db, profile_id, user_id)
     images = extract_video_frames(path)  # 帧数按时长自适应
     with billable(
         db, capability="chat", operation="analyze_asset", workspace_id=asset.workspace_id,
         source_type="asset", source_id=asset.id,
     ) as call:
         messages = build_messages(asset, prompt, images, transcript=transcript_text)
-        if resolved_profile is not None:
+        if resolved_connection is not None:
             answer = call_vision_model(db, profile, messages, call, model=model, surface=surface)
         else:
             answer = call_vision_model(db, profile, messages, call)

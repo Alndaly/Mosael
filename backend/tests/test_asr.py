@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.ai.runtime.workers.asr import funasr_sentences_to_segments, whisperx_segments
-from app.domain.voices.service import to_segment_ins
+from app.domain.voices.transcription import parse_transcript_segments
 from tests.util import fresh_client
 
 
@@ -37,7 +37,7 @@ def test_whisperx_segments_keep_timed_words_only() -> None:
 
 
 def test_to_segment_ins_builds_tokens_and_skips_empty() -> None:
-    parsed = to_segment_ins([
+    parsed = parse_transcript_segments([
         {"start": 0, "end": 1.2, "text": "你好", "speaker": "SPEAKER_00",
          "words": [{"word": "你", "start": 0.0, "end": 0.5}, {"word": "好", "start": 0.5, "end": 0.5}]},
         {"start": 2, "end": 2, "text": "zero length"},
@@ -63,7 +63,7 @@ def test_transcribe_endpoint_creates_job(monkeypatch) -> None:
         return T()
 
     monkeypatch.setattr("app.domain.jobs.threading.Thread", fake_thread)
-    monkeypatch.setattr("app.domain.voices.service._run_transcription", lambda job_id, asset_id: started.append(asset_id))
+    monkeypatch.setattr("app.domain.voices.transcription._run_transcription", lambda job_id, asset_id: started.append(asset_id))
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     asset = client.post(

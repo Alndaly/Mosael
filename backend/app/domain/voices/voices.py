@@ -5,11 +5,8 @@ the timeline like any other clip.
 """
 from __future__ import annotations
 
-import json
 import logging
-import os
 import re
-import subprocess
 import tempfile
 from pathlib import Path
 
@@ -20,7 +17,6 @@ from app.domain import provider_models
 from app.domain.usage import billable
 from app.ai.runtime import tts_daemon, tts_models
 from app.ai.runtime.tts_language import clone_supports, detect_script, edge_voice_language
-from app.ai.runtime.tts_models import WORKER_PATH
 from app.core.db import SessionLocal
 from app.domain.jobs import TTS_SLOTS, run_job_guarded, say
 from app.db.models import Asset, Job, Voice
@@ -322,13 +318,13 @@ def recognize_reference_text(db: Session, voice: Voice) -> Voice:
 
     转不了就明说(转写引擎没装),而不是留个空文本让合成出去丢人。
     """
-    from app.domain.voices import service
+    from app.domain.voices import transcription
 
     reference = reference_path(voice)
     if not reference.is_file():
         raise VoiceError("这条音色的参考音频不在了,没法识别")
-    python, provider = service.resolve_asr_runtime()  # 没装转写引擎时它自己会说清楚
-    output = service.run_asr(reference, python, provider)
+    python_executable, engine_id = transcription.resolve_transcription_runtime()
+    output = transcription.transcribe_with_engine(reference, python_executable, engine_id)
     text = "".join(str(segment.get("text") or "") for segment in (output.get("segments") or [])).strip()
     if not text:
         raise VoiceError("没听出内容 —— 参考音频可能太轻或没有人声,换一段再试")
@@ -680,21 +676,21 @@ def _synthesize_remote(
     No reference clip and no local model, so none of the worker-subprocess machinery applies —
     but the outcome has to look identical to the caller: an audio asset on the job's result.
     """
-    from app.ai.providers import SpeechRequest, build_remote_provider
-    from app.domain.providers import resolve_profile
+    from app.ai.providers import SpeechSynthesisRequest, build_speech_adapter
+    from app.domain.providers import resolve_connection
 
     # The profile carries base_url too. Reading only the key would send a proxy user's request
     # to api.openai.com with a key that is not valid there — a 401 with no hint as to why.
     # 这次配音替谁干,job 上记着 —— 后台线程手里只有它(见 Job.created_by)。
     # 引擎 id 通常就是 vendor id,百炼是唯一的例外:qwen-tts 与 CosyVoice 是两个引擎、
-    # 一条连接、一把 Key(见 audio.tts.vendor_for_engine)。
-    from app.ai.providers import REMOTE_ENGINES, vendor_for_engine
+    # 一条连接、一把 Key(见 providers.registry.connection_vendor_for_speech_engine)。
+    from app.ai.providers import REMOTE_SPEECH_ADAPTERS, connection_vendor_for_speech_engine
 
-    profile = resolve_profile(db, vendor_for_engine(engine), provider_profile_id, user_id=job.created_by)
+    profile = resolve_connection(db, connection_vendor_for_speech_engine(engine), provider_profile_id, user_id=job.created_by)
     api_key = (profile.api_key if profile else None) or ""
     # **模型要按引擎那一族筛**。同一条连接下可以同时挂着 qwen-tts 和 cosyvoice-v2,
     # 不筛的话切到 CosyVoice 引擎会把 qwen 的模型名发去 CosyVoice 的端点(得到 `url error`)。
-    engine_cls = REMOTE_ENGINES.get(engine)
+    engine_cls = REMOTE_SPEECH_ADAPTERS.get(engine)
     prefixes = getattr(engine_cls, "MODEL_PREFIXES", ())
     resolved = (
         provider_models.model_id_for_family(db, profile, "tts", prefixes)
@@ -703,7 +699,7 @@ def _synthesize_remote(
         else provider_models.model_id_for(db, profile, "tts")
     )
     model = model_override or voice_resource or resolved
-    provider = build_remote_provider(
+    adapter = build_speech_adapter(
         engine,
         api_key=api_key,
         voice=engine_voice,
@@ -728,7 +724,7 @@ def _synthesize_remote(
             job_id=job.id,
         ) as call:
             call.meter(characters=len(text), requests=1)
-            provider.synthesize(SpeechRequest(text=text, voice=engine_voice, speed=speed), out)
+            adapter.synthesize(SpeechSynthesisRequest(text=text, voice=engine_voice, speed=speed), out)
         job.progress = 0.85
         db.commit()
         asset = register_file_asset(
@@ -736,7 +732,7 @@ def _synthesize_remote(
             workspace_id=workspace_id,
             project_id=project_id,
             source_path=out,
-            name=f"{engine_voice or provider.label} · 配音",
+            name=f"{engine_voice or engine} · 配音",
             source="tts",
         )
     job = db.get(Job, job.id)
@@ -767,9 +763,9 @@ def start_podcast(
     credential and a different shape of request — one call produces a whole dialogue, not one
     utterance in a chosen voice.
     """
-    from app.domain.voices.podcast import Action
+    from app.ai.providers import PodcastAction
 
-    actions = {"summarize": Action.SUMMARIZE, "read": Action.READ, "research": Action.RESEARCH}
+    actions = {"summarize": PodcastAction.SUMMARIZE, "read": PodcastAction.READ, "research": PodcastAction.RESEARCH}
     if mode not in actions:
         raise VoiceError(f"未知的播客模式:{mode}")
     if not workspace_id:
@@ -825,8 +821,8 @@ def _run_podcast_body(
     speed: float,
     provider_profile_id: str | None = None,
 ) -> None:
-    from app.domain.voices.podcast import synthesize_podcast
-    from app.domain.providers import profile_extra, resolve_profile
+    from app.ai.providers import synthesize_volcano_podcast
+    from app.domain.providers import resolve_connection
 
     with SessionLocal() as db:
         job = db.get(Job, job_id)
@@ -837,11 +833,11 @@ def _run_podcast_body(
         emit_job_event(db, job.id, "job.running", {})
         db.commit()
 
-        profile = resolve_profile(db, "volcano-podcast", provider_profile_id, user_id=job.created_by)
+        profile = resolve_connection(db, "volcano-podcast", provider_profile_id, user_id=job.created_by)
         # The token lives in api_key and the appid in extra — the podcast socket takes both,
         # and neither is the v3 speech API Key.
         token = (profile.api_key if profile else None) or ""
-        appid = profile_extra(db, "volcano-podcast", "appid")
+        appid = str((profile.extra if profile else {}).get("appid") or "")
 
         with tempfile.TemporaryDirectory(prefix="open-studio-podcast-") as tmp:
             out = Path(tmp) / "podcast.mp3"
@@ -858,7 +854,7 @@ def _run_podcast_body(
             ) as call:
                 # 播客按输入文本量计费,和 TTS 同一类;说话人数会影响时长,一并记下来。
                 call.meter(characters=len(text or topic or ""), speakers=len(speakers or []), requests=1)
-                result = synthesize_podcast(
+                result = synthesize_volcano_podcast(
                     appid,
                     token,
                     action=action,

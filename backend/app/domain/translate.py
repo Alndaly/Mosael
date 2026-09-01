@@ -2,7 +2,7 @@
 
 - **google**: Google's free (unofficial) translate endpoint — no API key, good enough for a
   quick subtitle pass, but it translates cue by cue with no context.
-- **ai**: an LLM through the workspace's provider profile — slower and billed, but it reads
+- **ai**: an LLM through the user's provider connection — slower and billed, but it reads
   the sentence rather than the words. Same call shape, so a caller only picks `engine`.
 
 Both live here so every caller (workflow translate node, editor subtitle panel) gets the same
@@ -61,22 +61,18 @@ def language_label(code: str) -> str:
     return _LANG_NAMES.get(code, code)
 
 
-def resolve_ai_provider(db, profile_id: str | None, user_id: str | None) -> ChatTarget:
-    from sqlalchemy import select
-
-    from app.db.models import ProviderProfile
+def resolve_ai_chat_target(db, profile_id: str | None, user_id: str | None) -> ChatTarget:
     from app.domain import provider_credentials
+    from app.domain.providers import find_enabled_connection, first_enabled_connection
 
-    profile = None
-    if profile_id:
-        profile = db.get(ProviderProfile, profile_id)
-    if profile is None:
-        profile = db.scalars(
-            select(ProviderProfile).where(ProviderProfile.enabled.is_(True)).order_by(ProviderProfile.created_at)
-        ).first()
+    profile = (
+        find_enabled_connection(db, "", profile_id, owner_user_id=user_id)
+        if profile_id
+        else first_enabled_connection(db, owner_user_id=user_id)
+    )
     if profile is None or not profile.enabled:
         raise TranslateError("translateErr_noProvider")
-    resolved = provider_credentials.resolve(db, profile, user_id)
+    resolved = provider_credentials.resolve_connection(db, profile, user_id)
     if resolved is None:
         raise TranslateError("translateErr_noCredential", name=profile.name)
     try:
@@ -89,11 +85,11 @@ def ai_translate(db, text: str, target: str, profile_id: str | None, user_id: st
     """Translate via an enabled AI provider (LLM). Reused by the workflow node + the API."""
     if not text.strip():
         return ""
-    return ai_translate_with(resolve_ai_provider(db, profile_id, user_id), text, target)
+    return ai_translate_with(resolve_ai_chat_target(db, profile_id, user_id), text, target)
 
 
 def ai_translate_with(
-    provider: ChatTarget,
+    chat_target: ChatTarget,
     text: str,
     target: str,
     client: httpx.Client | None = None,
@@ -107,7 +103,7 @@ def ai_translate_with(
     )
     try:
         return chat(
-            provider,
+            chat_target,
             [{"role": "user", "content": prompt}],
             temperature=0.2,
             timeout=_TIMEOUT * 2,
@@ -159,13 +155,13 @@ def translate_many(
     Each cue is an independent network call, so a subtitle track used to cost
     len(texts) × latency — about ten seconds for a typical track. They now overlap.
 
-    Two things are deliberately done before the pool starts: the provider is read out of the DB
+    Two things are deliberately done before the pool starts: the chat target is resolved from the DB
     (a Session is single-threaded), and one httpx.Client is created so the batch shares
     connections instead of repeating the TLS handshake per cue.
     """
     if not texts:
         return []
-    provider = resolve_ai_provider(db, profile_id, user_id) if engine == "ai" else None
+    chat_target = resolve_ai_chat_target(db, profile_id, user_id) if engine == "ai" else None
     indexed = [(i, text) for i, text in enumerate(texts) if text.strip()]
     results = [""] * len(texts)
     if not indexed:
@@ -185,11 +181,11 @@ def translate_many(
     # 经模块引用而不是 from-import:全项目只有 ai_retry.RetryingClient 一个打桩点,
     # 直接 import 进来会让它变成第二个,测试就得两处都打。
     with ai_retry.RetryingClient(timeout=_TIMEOUT * 2) as client:
-        if provider is None:  # google:免费端点,不产生供应商用量,不开记账
+        if chat_target is None:  # google:免费端点,不产生供应商用量,不开记账
             run(lambda item: (item[0], google_translate(item[1], target, client=client)))
             return results
         # 整批记**一条**账:一条字幕轨几百句,逐句记会把 Token 图淹掉,而用户想知道的是
         # "这次翻译花了多少"。
         with billable(db, capability="chat", operation="translate_batch") as call:
-            run(lambda item: (item[0], ai_translate_with(provider, item[1], target, client=client, call=call)))
+            run(lambda item: (item[0], ai_translate_with(chat_target, item[1], target, client=client, call=call)))
     return results

@@ -13,12 +13,12 @@ from app.ai.providers import (
     REFERENCE_VIDEO,
     GenerationRequest,
     GenerationResult,
-    ProviderContext,
-    ProviderError,
+    GenerationAdapterContext,
+    GenerationAdapterError,
     SourceAsset,
-    get_provider,
+    get_generation_adapter,
 )
-from app.ai.providers.contracts.generation import sanitize_provider_error
+from app.ai.providers.contracts.generation import sanitize_adapter_error
 from app.core.db import SessionLocal
 from app.db.models import Asset, GeneratedAsset, GenerationJob, Job
 from app.domain import provider_models
@@ -57,27 +57,27 @@ def _run_generation(generation_id: str) -> None:
         if job is None:
             return
 
-        provider = get_provider(generation.provider, generation.kind)
-        if provider is None:
+        adapter = get_generation_adapter(generation.provider, generation.kind)
+        if adapter is None:
             _fail(db, job, f"No adapter for provider {generation.provider}/{generation.kind}")
             return
 
-        from app.domain.providers import resolve_profile
+        from app.domain.providers import resolve_connection
 
         # 这次生成替谁干:job 上记着(见 Job.created_by)—— 用他的钥匙、花他的额度。
-        profile = resolve_profile(db, generation.provider, generation.provider_profile_id, user_id=job.created_by)
-        if provider.requires_credentials() and (profile is None or not profile.api_key):
+        profile = resolve_connection(db, generation.provider, generation.provider_profile_id, user_id=job.created_by)
+        if adapter.requires_credentials() and (profile is None or not profile.api_key):
             _fail(db, job, f"供应商 {generation.provider} 还没有配置你的密钥,请先在设置里填写")
             return
-        context = ProviderContext(
-            profile_id=profile.id if profile is not None else None,
-            vendor=profile.vendor if profile is not None else generation.provider,
+        context = GenerationAdapterContext(
+            connection_id=profile.id if profile is not None else None,
+            vendor_id=profile.vendor if profile is not None else generation.provider,
             api_key=profile.api_key if profile is not None else "",
             base_url=profile.base_url if profile is not None else "",
             # 这条连接在本次生成的能力下该用的模型。此前取 profile.default_model ——
             # 那个字段不区分能力,对话档案的默认模型被拿去当生图模型用过。
-            default_model=provider_models.model_id_for(db, profile, generation.kind),
-            extra=dict(profile.extra or {}) if profile is not None else {},
+            configured_model_id=provider_models.model_id_for(db, profile, generation.kind),
+            options=dict(profile.extra or {}) if profile is not None else {},
         )
         job.status = "running"
         say(job, "jobMsg_generationRunning")
@@ -103,11 +103,11 @@ def _run_generation(generation_id: str) -> None:
                 parameters=dict(generation.request.get("parameters") or {}),
                 sources=_sources_for_generation(db, generation),
             )
-            provider.validate_request(request)
-            if getattr(provider, "supports_callbacks", False):
-                result = provider.generate(request, context, workdir, callbacks=_job_callbacks(db, job))
+            adapter.validate_request(request)
+            if adapter.supports_progress_callbacks:
+                result = adapter.generate(request, context, workdir, callbacks=_job_callbacks(db, job))
             else:
-                result = provider.generate(request, context, workdir)
+                result = adapter.generate(request, context, workdir)
             #: **每一份产出都登记。** 图像接口的 n 一次会返回多张,此前这里只收一份 ——
             #: 用户选了 4 张、按 4 张计了费,库里只多出一张,其余的连同它们的钱一起消失。
             assets = [
@@ -122,7 +122,7 @@ def _run_generation(generation_id: str) -> None:
                 for path in result.output_paths
             ]
             if not assets:
-                raise ProviderError("Provider returned no output")
+                raise GenerationAdapterError("Provider returned no output")
             for asset in assets:
                 db.add(
                     GeneratedAsset(
@@ -155,7 +155,7 @@ def _run_generation(generation_id: str) -> None:
                 generation.model,
                 ", ".join(asset_ids),
             )
-        except ProviderError as exc:
+        except GenerationAdapterError as exc:
             if request is not None:
                 _record_generation_usage(db, generation, job, request, context, None, started, "failed")
             # 用户取消时 cancel_job 已落终态并写好「已取消」;再 _fail 会把它改写成
@@ -167,16 +167,16 @@ def _run_generation(generation_id: str) -> None:
         except Exception as exc:  # defensive: worker threads must never die silently
             if request is not None:
                 _record_generation_usage(db, generation, job, request, context, None, started, "failed")
-            _fail(db, job, sanitize_provider_error(str(exc), context.api_key))
+            _fail(db, job, sanitize_adapter_error(str(exc), context.api_key))
         finally:
             shutil.rmtree(workdir, ignore_errors=True)
 
 
 def _job_callbacks(db, job: Job):
-    """Bridge a provider's poll loop to the job row: progress writes through (capped below
+    """Bridge an Adapter's poll loop to the job row: progress writes through (capped below
     1.0 — completion belongs to asset registration), cancellation reads the row back so a
-    user cancel reaches the provider between round-trips."""
-    from app.ai.providers import GenerationCallbacks
+    user cancel reaches the Adapter between round-trips."""
+    from app.ai.providers import GenerationProgressCallbacks
 
     def on_progress(fraction: float, message: str) -> None:
         job.progress = min(0.95, max(float(job.progress or 0.0), float(fraction)))
@@ -188,7 +188,7 @@ def _job_callbacks(db, job: Job):
         db.refresh(job)
         return job.status not in ("queued", "running")
 
-    return GenerationCallbacks(on_progress=on_progress, is_cancelled=is_cancelled)
+    return GenerationProgressCallbacks(on_progress=on_progress, is_cancelled=is_cancelled)
 
 
 def _fail(db, job: Job, message: str) -> None:
@@ -226,15 +226,15 @@ def _sources_for_generation(db, generation: GenerationJob) -> tuple[SourceAsset,
         label = ROLE_LABEL.get(role, role)
         asset = db.get(Asset, str(entry.get("asset_id") or ""))
         if asset is None or asset.workspace_id != generation.workspace_id:
-            raise ProviderError(f"{label}素材不存在或不属于当前工作区")
+            raise GenerationAdapterError(f"{label}素材不存在或不属于当前工作区")
         expected = ROLE_ASSET_KIND.get(role, "image")
         if asset.kind != expected:
-            raise ProviderError(f"{label}素材必须是{'视频' if expected == 'video' else '图片'}")
+            raise GenerationAdapterError(f"{label}素材必须是{'视频' if expected == 'video' else '图片'}")
         if not asset.file_key:
-            raise ProviderError(f"{label}素材缺少本地文件")
+            raise GenerationAdapterError(f"{label}素材缺少本地文件")
         path = resolve_key(asset.file_key)
         if not path.is_file():
-            raise ProviderError(f"{label}素材文件不存在")
+            raise GenerationAdapterError(f"{label}素材文件不存在")
         sources.append(SourceAsset(role=role, path=path))
     return tuple(sources)
 
@@ -244,7 +244,7 @@ def _record_generation_usage(
     generation: GenerationJob,
     job: Job,
     request: GenerationRequest,
-    context: ProviderContext,
+    context: GenerationAdapterContext,
     result: GenerationResult | None,
     started: float,
     status: str,
@@ -268,7 +268,7 @@ def _record_generation_usage(
         capability=generation.kind,
         operation="generation_job",
         workspace_id=job.workspace_id,
-        provider_profile_id=context.profile_id,
+        provider_profile_id=context.connection_id,
         provider=generation.provider,
         model=generation.model,
         source_type="generation_job",

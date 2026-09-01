@@ -161,7 +161,7 @@ def test_engine_list_marks_which_engines_need_a_typed_voice_id() -> None:
     assert engines["clone"]["needs_key"] is False
     # openai-tts 与 openai-compatible-tts 已并成一个 "openai":前者拆分是"能力要分开"的
     # 产物(能力现在挂模型行),后者存在的唯一理由是"要填自定义 endpoint",而档案本来就有
-    # base_url 字段。旧 id 仍能被解析(REMOTE_ENGINES 里留作只读别名),但不再出现在列表里。
+    # base_url 字段。旧 id 仍能被解析(REMOTE_SPEECH_ADAPTERS 里留作只读别名),但不再出现在列表里。
     assert engines["openai"]["needs_voice_id"] is False and engines["openai"]["voices"]
     assert "openai-tts" not in engines and "openai-compatible-tts" not in engines
     # 火山's catalogue is account-specific, but /api/tts/voices always answers with a list —
@@ -173,11 +173,9 @@ def test_engine_list_marks_which_engines_need_a_typed_voice_id() -> None:
 def test_自建兼容端点的_base_url_能走到引擎() -> None:
     """A user pointing an OpenAI-compatible TTS profile at a proxy must not have the request
     sent to api.openai.com with a key that is not valid there — a 401 whose cause is invisible."""
-    import time
 
     import app.ai.providers as providers
     from app.core.db import SessionLocal
-    from app.db.models import ProviderProfile
 
     client = fresh_client()
     workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
@@ -198,8 +196,8 @@ def test_自建兼容端点的_base_url_能走到引擎() -> None:
         seen.update(engine=engine, api_key=api_key, model=model, base_url=base_url)
         raise RuntimeError("no network in tests — the constructor arguments are what this asserts")
 
-    saved = providers.build_remote_provider
-    providers.build_remote_provider = spy
+    saved = providers.build_speech_adapter
+    providers.build_speech_adapter = spy
     try:
         res = client.post(
             "/api/tts/synthesize",
@@ -216,7 +214,7 @@ def test_自建兼容端点的_base_url_能走到引擎() -> None:
         while not seen and time.time() < deadline:
             time.sleep(0.02)
     finally:
-        providers.build_remote_provider = saved
+        providers.build_speech_adapter = saved
 
     assert seen.get("base_url") == "https://proxy.test/v1", seen
     assert seen.get("api_key") == "k"
@@ -227,11 +225,9 @@ def test_the_voice_resource_survives_the_hand_off_to_the_job_thread() -> None:
     """火山 needs the voice's family in a synthesis header, and it travels from the request
     through three functions that pass their arguments positionally. Adding a parameter to one
     of them is silent until synthesis fails with an opaque 55000000 — so pin the whole path."""
-    import time
 
     import app.ai.providers as providers
     from app.core.db import SessionLocal
-    from app.db.models import ProviderProfile
 
     client = fresh_client()
     workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
@@ -245,8 +241,8 @@ def test_the_voice_resource_survives_the_hand_off_to_the_job_thread() -> None:
         seen.update(voice=voice, model=model)
         raise RuntimeError("no network in tests")
 
-    saved = providers.build_remote_provider
-    providers.build_remote_provider = spy
+    saved = providers.build_speech_adapter
+    providers.build_speech_adapter = spy
     try:
         res = client.post(
             "/api/tts/synthesize",
@@ -263,7 +259,7 @@ def test_the_voice_resource_survives_the_hand_off_to_the_job_thread() -> None:
         while not seen and time.time() < deadline:
             time.sleep(0.02)
     finally:
-        providers.build_remote_provider = saved
+        providers.build_speech_adapter = saved
 
     assert seen.get("voice") == "zh_male_custom_bigtts", seen
     assert seen.get("model") == "seed-icl-2.0", seen

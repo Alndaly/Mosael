@@ -27,8 +27,8 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
             {
                 "key": "base_url",
                 # 这个字段只管**对话与向量嵌入**。图像 / 视频 / 语音走百炼的原生路径,各自从
-                # 这里推导自己的根(qwen_image.resolve_dashscope_base、
-                # audio.tts.resolve_dashscope_native_base 等),填什么都不影响它们。
+                # 这里推导自己的根(adapters/alibaba/dashscope/image.resolve_dashscope_base、
+                # speech.resolve_dashscope_native_base 等),填什么都不影响它们。
                 # 早先叫「图像生成 Endpoint」是错的:它默认值是 compatible-mode(对话端点),
                 # 而图像根本不读这一份 —— 名字说的和它管的是两回事。
                 "label": "对话 Endpoint",
@@ -183,7 +183,7 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
         # 探活走 /system_stats:ComfyUI 没有 /models,而这个接口无鉴权、必然存在、返回小。
         "health_path": "/system_stats",
         # **免密钥**,而且这一条要机器读得懂:整条钥匙链的判据是"有没有一份带秘密的凭据",
-        # 对它一视同仁的话,这条连接永远解析不出来(见 domain/provider_credentials.resolve),
+        # 对它一视同仁的话,这条连接永远解析不出来(见 domain/provider_credentials.resolve_connection),
         # 界面上还挂着一行"未配置你的密钥"—— 而它压根没有密钥可配。
         "keyless": True,
         # 本地(或局域网 GPU 机器)的 ComfyUI 实例。工作流模板是接缝——

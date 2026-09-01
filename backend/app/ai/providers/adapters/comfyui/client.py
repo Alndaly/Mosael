@@ -14,7 +14,7 @@ ComfyUI 保存的工作流是 UI 图格式(nodes/links/widgets_values),而 /prom
 (node_id → {class_type, inputs}),两者的转换在 ComfyUI 前端的 graphToPrompt 里、没有后端端点。
 这里复现那套转换,并自动把 Open Studio 的 prompt/seed/尺寸注入到识别出的节点。
 
-耦合都收在此处:ComfyUIProvider 只调这里的函数,core(runner / GenerationProvider 协议)对
+耦合都收在此处:ComfyUIGenerationAdapter 只调这里的函数,core(runner / GenerationAdapter 协议)对
 ComfyUI 的 graph/widget/object_info 一无所知。转换是「尽力适配」——认不出的非常规工作流由
 调用方回退到手动 API 模板,不会让整个功能塌掉。
 """

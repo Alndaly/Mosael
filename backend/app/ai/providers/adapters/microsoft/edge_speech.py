@@ -5,10 +5,10 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from app.ai.providers.contracts.speech import SpeechRequest, TTSError
+from app.ai.providers.contracts.speech import SpeechSynthesisRequest, SpeechSynthesisError
 
 
-class EdgeTTS:
+class EdgeSpeechAdapter:
     """微软 Edge 的免费在线语音 — the same service the Edge browser's Read Aloud uses.
 
     The zero-config engine: no API key, no local model, no provider profile. That makes it the
@@ -18,22 +18,21 @@ class EdgeTTS:
     contractual SLA — fine for drafts and口播, not something to build billing on.
 
     Speed maps to the service's ``rate`` parameter (a signed percentage, "+0%" is natural),
-    keeping SpeechRequest.speed meaning the same thing across engines — dubbing depends on it.
+    keeping SpeechSynthesisRequest.speed meaning the same thing across engines — dubbing depends on it.
     """
 
-    id = "edge"
-    label = "ttsProvider_edge"
-    parallel_safe = True
+    engine_id = "edge"
+    label_key = "ttsProvider_edge"
+    supports_parallel_synthesis = True
 
     def __init__(self, voice: str = "") -> None:
         self._default_voice = voice
 
-    def synthesize(self, request: SpeechRequest, out_path: Path) -> None:
+    def synthesize(self, request: SpeechSynthesisRequest, out_path: Path) -> None:
         try:
             import edge_tts
         except ModuleNotFoundError as exc:  # pragma: no cover — packaged installs ship it
-            raise TTSError("edge-tts 依赖未安装,请更新后端环境") from exc
-        import asyncio
+            raise SpeechSynthesisError("edge-tts 依赖未安装,请更新后端环境") from exc
 
         voice = request.voice or self._default_voice or "zh-CN-XiaoxiaoNeural"
         speed = max(0.5, min(2.0, request.speed))
@@ -41,12 +40,12 @@ class EdgeTTS:
         communicate = edge_tts.Communicate(request.text, voice=voice, rate=rate)
         try:
             asyncio.run(communicate.save(str(out_path)))
-        except TTSError:
+        except SpeechSynthesisError:
             raise
         except Exception as exc:  # noqa: BLE001 — edge_tts raises its own exception family
-            raise TTSError(f"Edge 语音合成失败: {exc}") from exc
+            raise SpeechSynthesisError(f"Edge 语音合成失败: {exc}") from exc
         if not out_path.is_file() or out_path.stat().st_size == 0:
-            raise TTSError("Edge 语音合成返回空音频")
+            raise SpeechSynthesisError("Edge 语音合成返回空音频")
 
 
 #: Curated Edge voices. The service lists hundreds; offering them all makes the dropdown

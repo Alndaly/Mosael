@@ -203,7 +203,7 @@ class TestDispatchWiring:
         )
 
     def test_transcribe_respects_external_mode(self, monkeypatch) -> None:
-        from app.domain.voices.service import start_transcription
+        from app.domain.voices.transcription import start_transcription
         from app.db.models import Asset
 
         self._external(monkeypatch, "transcribe")
@@ -238,7 +238,6 @@ class TestDispatchWiring:
         workspace_id = _workspace()
         # 生成任务现在按"用户配了哪条连接"校验(不再查内置目录表),所以先配一条阿里云的。
         with SessionLocal() as db:
-            from app.db.models import ProviderProfile
             from app.domain import provider_models
 
             profile = add_provider(db, name="百炼", vendor="alibaba", base_url="", api_key="k")

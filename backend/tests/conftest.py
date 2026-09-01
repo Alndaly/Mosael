@@ -35,7 +35,7 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _reset_asr_runtime_probe():
-    """`asr_models.runtime_ready` / `service.resolve_asr_runtime` 都带进程级缓存,而它们探测的是
+    """`asr_models.runtime_ready` / `transcription.resolve_transcription_runtime` 都带进程级缓存,而它们探测的是
     **真实机器**(起子进程 import funasr)。不清的话,一个用例 monkeypatch 出来的结果会渗给下一个,
     表现是单独跑全绿、全量跑红。"""
     from app.ai.runtime import asr_models

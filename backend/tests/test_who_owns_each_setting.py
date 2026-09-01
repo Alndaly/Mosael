@@ -4,14 +4,14 @@
 
     PUT /api/settings/provider-defaults/image   403 这项设置属于整个部署,只有部署管理员能改
 
-「我默认用哪个模型」显然不是部署配置 —— 它和钥匙一样是个人偏好:两个人用同一条连接,完全
-可以各自默认不同的模型。同一类错误还有几处:
+「我默认用哪个模型」显然不是部署配置 —— 它和连接、钥匙一样归人：两个人各自在自己的连接上
+选择默认模型。同一类错误还有几处:
 
   - 列某能力有哪些模型、列一条连接下的模型:**只读**。挡住它,普通人连"我要选哪个"都看不到。
   - 工作区的自动放行准则:那是**工作区**的规则,却要求部署管理员 —— 工作区 admin 管不了自己
     工作区的规则,说不通。
 
-判据是同一句话:**这件事的后果落在谁身上。** 落在整台机器上(装东西、出网、连接怎么连)→ 部署;
+判据是同一句话:**这件事的后果落在谁身上。** 落在整台机器上(装东西、出网)→ 部署;
 落在这个工作区里 → 工作区;落在这个人自己头上(用谁的钥匙、默认用哪个模型)→ 人。
 """
 
@@ -35,8 +35,8 @@ def _admin_and_member() -> tuple[TestClient, TestClient, dict]:
     return admin, mate, workspace
 
 
-def _connection(admin: TestClient, vendor: str = "openai") -> str:
-    made = admin.post("/api/settings/providers", json={"name": "N", "vendor": vendor, "config": {}})
+def _connection(client: TestClient, vendor: str = "openai") -> str:
+    made = client.post("/api/settings/providers", json={"name": "N", "vendor": vendor, "config": {}})
     assert made.status_code == 200, made.text
     return made.json()["id"]
 
@@ -46,9 +46,9 @@ def _connection(admin: TestClient, vendor: str = "openai") -> str:
 
 def test_an_ordinary_member_can_set_their_own_default_model() -> None:
     """「我默认用哪个模型」是个人偏好,和钥匙一样。"""
-    admin, mate, _workspace = _admin_and_member()
-    profile_id = _connection(admin)
-    admin.post(f"/api/settings/providers/{profile_id}/models", json={"model_id": "gpt-image-2"})
+    _admin, mate, _workspace = _admin_and_member()
+    profile_id = _connection(mate)
+    mate.post(f"/api/settings/providers/{profile_id}/models", json={"model_id": "gpt-image-2"})
 
     saved = mate.put(
         "/api/settings/provider-defaults/image",
@@ -59,17 +59,18 @@ def test_an_ordinary_member_can_set_their_own_default_model() -> None:
 
 def test_my_default_is_mine_and_does_not_touch_anyone_else() -> None:
     admin, mate, _workspace = _admin_and_member()
-    profile_id = _connection(admin)
-    for model in ("gpt-image-2", "gpt-image-3"):
-        admin.post(f"/api/settings/providers/{profile_id}/models", json={"model_id": model})
+    admin_profile = _connection(admin)
+    mate_profile = _connection(mate)
+    admin.post(f"/api/settings/providers/{admin_profile}/models", json={"model_id": "gpt-image-2"})
+    mate.post(f"/api/settings/providers/{mate_profile}/models", json={"model_id": "gpt-image-3"})
 
     admin.put(
         "/api/settings/provider-defaults/image",
-        json={"provider_profile_id": profile_id, "model": "gpt-image-2"},
+        json={"provider_profile_id": admin_profile, "model": "gpt-image-2"},
     )
     mate.put(
         "/api/settings/provider-defaults/image",
-        json={"provider_profile_id": profile_id, "model": "gpt-image-3"},
+        json={"provider_profile_id": mate_profile, "model": "gpt-image-3"},
     )
 
     mine = {row["capability"]: row for row in admin.get("/api/settings/provider-defaults").json()}
@@ -100,8 +101,8 @@ def test_a_newcomer_starts_with_nothing_chosen() -> None:
 def test_setting_a_default_is_never_a_decision_for_everyone() -> None:
     """写默认永远只写自己那一条 —— 没有"替整个部署做决定"这条路了,所以也不需要更高的权限。"""
     admin, mate, _workspace = _admin_and_member()
-    profile_id = _connection(admin)
-    admin.post(f"/api/settings/providers/{profile_id}/models", json={"model_id": "gpt-image-2"})
+    profile_id = _connection(mate)
+    mate.post(f"/api/settings/providers/{profile_id}/models", json={"model_id": "gpt-image-2"})
 
     allowed = mate.put(
         "/api/settings/provider-defaults/image",

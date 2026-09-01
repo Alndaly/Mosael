@@ -30,29 +30,29 @@
 
 from __future__ import annotations
 
-# 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
-RATCHET = True
-
 import pathlib
 import re
 
 from app.domain.generation import catalog as C
 from app.domain.generation.operations import allowed_parameter_keys
 
+# 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
+RATCHET = True
+
 #: `request.parameters.get("x")` 和 `request.parameters["x"]` 两种写法。
 _READS = re.compile(r'(?:request\.)?parameters(?:\.get\(|\[)\s*["\']([a-z_0-9]+)["\']')
 
-#: 语音适配器不走生成校验那条路(它们的入口是配音/克隆,没有 parameter_keys 这个概念)。
-#: 按供应商组织后,语音实现是各家里叫 speech.py 的模块,外加两个单文件的语音供应商。
-_NOT_GENERATION_DIRS = {"speech"}
-_NOT_GENERATION_FILES = {"speech.py", "volcano.py", "edge.py"}
+#: 语音与播客 Adapter 不走生成校验那条路(入口是配音/播客,没有 parameter_keys 这个概念)。
+#: 企业/平台目录里按产品协议与能力命名，所以按明确的能力文件名排除，不再猜目录层级。
+_NOT_GENERATION_DIRS: set[str] = set()
+_NOT_GENERATION_FILES = {"speech.py", "edge_speech.py", "podcast.py", "podcast_protocol.py"}
 
 #: Veo 把本地文件/不可信 URL 归一化为 inlineData 后写入的内部传输字段。调用方只能给
 #: first_frame，不能绕过素材下载边界直接给 base64/MIME。
 _INTERNAL_PARAMETERS = {
-    ("google.py", "first_frame_base64"),
-    ("google.py", "first_frame_mime_type"),
-    ("google.py", "image_base64"),
+    ("veo.py", "first_frame_base64"),
+    ("veo.py", "first_frame_mime_type"),
+    ("veo.py", "image_base64"),
 }
 
 
@@ -71,11 +71,11 @@ def _vendor_by_module() -> dict[str, set[str]]:
     一个模块可以服务多家(image/openai 同时是 openai 和 openai-compatible),所以值是一个集合;
     判定时取并集:这个键只要被它服务的任意一家声明了,就算够得着。
     """
-    from app.ai.providers import get_provider
+    from app.ai.providers import get_generation_adapter
 
     out: dict[str, set[str]] = {}
     for model in C.BUILTIN_MODELS:
-        provider = get_provider(model["provider"], model["kind"])
+        provider = get_generation_adapter(model["provider"], model["kind"])
         if provider is not None:
             out.setdefault(type(provider).__module__, set()).add(model["provider"])
     return out

@@ -4,20 +4,26 @@
 协议 Implementation，``registry`` 是唯一装配入口。领域 Module 不应直接选择具体 Adapter。
 """
 
-from app.ai.providers.adapters.alibaba.speech import (
+from app.ai.providers.adapters.alibaba.dashscope.speech import (
     DASHSCOPE_NATIVE_BASE,
-    BailianTTS,
-    CosyVoiceTTS,
+    BailianSpeechAdapter,
+    CosyVoiceSpeechAdapter,
     extract_bailian_audio_url,
     is_cosyvoice,
     resolve_dashscope_native_base,
 )
-from app.ai.providers.adapters.edge import EDGE_BUILTIN_VOICES, EdgeTTS
-from app.ai.providers.adapters.openai.speech import OpenAITTS
-from app.ai.providers.adapters.volcano import (
+from app.ai.providers.adapters.microsoft.edge_speech import EDGE_BUILTIN_VOICES, EdgeSpeechAdapter
+from app.ai.providers.adapters.openai.speech import OpenAISpeechAdapter
+from app.ai.providers.adapters.bytedance.volcano.speech import (
     PODCAST_SPEAKERS,
     VOLCANO_BUILTIN_VOICES,
-    VolcanoTTS,
+    VolcanoSpeechAdapter,
+)
+from app.ai.providers.adapters.bytedance.volcano.podcast import (
+    PodcastAction,
+    PodcastSynthesisError,
+    PodcastSynthesisResult,
+    synthesize_volcano_podcast,
 )
 from app.ai.providers.contracts.generation import (
     DRIVING_AUDIO,
@@ -29,29 +35,29 @@ from app.ai.providers.contracts.generation import (
     REFERENCE_VIDEO,
     SOURCE_ROLES,
     SOURCE_VIDEO,
-    GenerationCallbacks,
-    GenerationProvider,
+    GenerationProgressCallbacks,
+    GenerationAdapter,
     GenerationRequest,
     GenerationResult,
-    ProviderContext,
-    ProviderError,
+    GenerationAdapterContext,
+    GenerationAdapterError,
     SourceAsset,
     allowed_source_url_parameters,
     roles_supplied_via_url,
 )
 from app.ai.providers.contracts.speech import (
-    REMOTE_PARALLEL,
-    REMOTE_TIMEOUT_SECONDS,
-    SpeechRequest,
-    TTSError,
-    TTSProvider,
+    MAX_PARALLEL_SPEECH_REQUESTS,
+    SPEECH_REQUEST_TIMEOUT_SECONDS,
+    SpeechSynthesisRequest,
+    SpeechSynthesisError,
+    SpeechAdapter,
     synthesize_many,
 )
 from app.ai.providers.registry import (
-    REMOTE_ENGINES,
-    build_remote_provider,
-    get_provider,
-    vendor_for_engine,
+    REMOTE_SPEECH_ADAPTERS,
+    build_speech_adapter,
+    get_generation_adapter,
+    connection_vendor_for_speech_engine,
 )
 
 __all__ = [
@@ -62,37 +68,41 @@ __all__ = [
     "FIRST_FRAME",
     "LAST_FRAME",
     "PODCAST_SPEAKERS",
+    "PodcastAction",
+    "PodcastSynthesisError",
+    "PodcastSynthesisResult",
     "REFERENCE_AUDIO",
     "REFERENCE_IMAGE",
     "REFERENCE_VIDEO",
-    "REMOTE_ENGINES",
-    "REMOTE_PARALLEL",
-    "REMOTE_TIMEOUT_SECONDS",
+    "REMOTE_SPEECH_ADAPTERS",
+    "MAX_PARALLEL_SPEECH_REQUESTS",
+    "SPEECH_REQUEST_TIMEOUT_SECONDS",
     "SOURCE_ROLES",
     "SOURCE_VIDEO",
     "VOLCANO_BUILTIN_VOICES",
-    "BailianTTS",
-    "CosyVoiceTTS",
-    "EdgeTTS",
-    "GenerationCallbacks",
-    "GenerationProvider",
+    "BailianSpeechAdapter",
+    "CosyVoiceSpeechAdapter",
+    "EdgeSpeechAdapter",
+    "GenerationProgressCallbacks",
+    "GenerationAdapter",
     "GenerationRequest",
     "GenerationResult",
-    "OpenAITTS",
-    "ProviderContext",
-    "ProviderError",
+    "OpenAISpeechAdapter",
+    "GenerationAdapterContext",
+    "GenerationAdapterError",
     "SourceAsset",
-    "SpeechRequest",
-    "TTSError",
-    "TTSProvider",
-    "VolcanoTTS",
+    "SpeechSynthesisRequest",
+    "SpeechSynthesisError",
+    "SpeechAdapter",
+    "VolcanoSpeechAdapter",
     "allowed_source_url_parameters",
-    "build_remote_provider",
+    "build_speech_adapter",
     "extract_bailian_audio_url",
-    "get_provider",
+    "get_generation_adapter",
     "is_cosyvoice",
     "resolve_dashscope_native_base",
     "roles_supplied_via_url",
     "synthesize_many",
-    "vendor_for_engine",
+    "synthesize_volcano_podcast",
+    "connection_vendor_for_speech_engine",
 ]

@@ -115,7 +115,7 @@ def test_automation_target_resolves_oauth_identity_without_a_base_url(monkeypatc
             capability_ids=["chat"],
         )
         db.commit()
-        resolved = provider_credentials.resolve(db, profile, profile.owner_user_id)
+        resolved = provider_credentials.resolve_connection(db, profile, profile.owner_user_id)
         assert resolved is not None
         target = target_for(db, resolved, model="k3", surface="automation")
 

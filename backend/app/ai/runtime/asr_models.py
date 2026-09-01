@@ -517,7 +517,7 @@ def candidate_pythons(engine: str) -> list[Path]:
 def _resolve_python(engine: str) -> str:
     """装了 `engine` 的那个解释器。**全项目唯一的探测实现**,也是唯一那份缓存。
 
-    此前有两份:这里一份、service.resolve_asr_runtime 一份,各带各的 lru_cache。两份实现意味着
+    此前有两份:这里一份、transcription.resolve_transcription_runtime 一份,各带各的 lru_cache。两份实现意味着
     两个答案 —— 托管 venv 加进了这一份、漏了那一份,于是模型页说「已安装」而转写说"没有环境"。
     合成一份之后,加候选、改判据都只有一个地方。
 
@@ -661,7 +661,7 @@ def _download_body(model_id: str) -> None:
     proc.stdin.write(json.dumps(entry.request))
     proc.stdin.close()
     # The child's stdout/stderr must be drained while we poll. Hub downloads write tqdm
-    # progress bars continuously (service.py notes this for the transcribe path); once one of
+    # progress bars continuously (transcription.py notes this for the transcribe path); once one of
     # those pipes fills, the child blocks writing it, poll() never returns, and the UI shows
     # "下载中" with frozen byte counts forever. There is no timeout here on purpose — a
     # multi-gigabyte download over a slow link is legitimately long — so draining is the whole

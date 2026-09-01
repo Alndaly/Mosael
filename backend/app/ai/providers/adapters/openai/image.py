@@ -12,13 +12,13 @@ from app.core.http_retry import RetryingClient
 
 from app.ai.providers.contracts.generation import (
     REFERENCE_IMAGE,
-    GenerationProvider,
+    GenerationAdapter,
     GenerationRequest,
     GenerationResult,
-    ProviderContext,
-    ProviderError,
+    GenerationAdapterContext,
+    GenerationAdapterError,
     metering_from_request,
-    provider_http_error,
+    adapter_http_error,
     source_url_values,
 )
 from app.ai.providers.media_transfer import fetch_bytes
@@ -72,22 +72,22 @@ def extract_image_bytes(payload: dict[str, Any]) -> list[bytes]:
     data = payload.get("data") or []
     entries = [one for one in data if isinstance(one, dict)]
     if not entries:
-        raise ProviderError("Provider returned no image data")
+        raise GenerationAdapterError("Provider returned no image data")
     images = [base64.b64decode(str(one["b64_json"])) for one in entries if one.get("b64_json")]
     if not images:
-        raise ProviderError("Provider returned a URL result where inline image data was expected")
+        raise GenerationAdapterError("Provider returned a URL result where inline image data was expected")
     return images
 
 
-class OpenAIImageProvider(GenerationProvider):
-    kind = "image"
+class OpenAIImageAdapter(GenerationAdapter):
+    media_kind = "image"
 
-    def __init__(self, name: str = "openai") -> None:
-        self.name = name
+    def __init__(self, vendor_id: str = "openai") -> None:
+        self.vendor_id = vendor_id
 
-    def generate(self, request: GenerationRequest, context: ProviderContext, output_dir: Path) -> GenerationResult:
+    def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         if not context.api_key:
-            raise ProviderError("OpenAI API key is not configured (settings → 生成服务)")
+            raise GenerationAdapterError("OpenAI API key is not configured (settings → 生成服务)")
         base_url = (context.base_url or OPENAI_BASE).rstrip("/")
         headers = {"Authorization": f"Bearer {context.api_key}"}
         try:
@@ -131,7 +131,7 @@ class OpenAIImageProvider(GenerationProvider):
                         # reuse the API client carrying the OpenAI bearer token.
                         images.append(fetch_bytes(str(one["url"])).data)
                 if not images:
-                    raise ProviderError("Provider returned no image data")
+                    raise GenerationAdapterError("Provider returned no image data")
                 output_dir.mkdir(parents=True, exist_ok=True)
                 suffix = str(request.parameters.get("output_format") or "png").lower().lstrip(".")
                 if suffix not in {"png", "jpg", "jpeg", "webp"}:
@@ -142,4 +142,4 @@ class OpenAIImageProvider(GenerationProvider):
                     target.write_bytes(blob)
                 return GenerationResult(output_paths=targets, usage=metering_from_request(request), raw_usage=content)
         except httpx.HTTPError as exc:
-            raise ProviderError(provider_http_error("OpenAI image request failed", exc, context.api_key)) from exc
+            raise GenerationAdapterError(adapter_http_error("OpenAI image request failed", exc, context.api_key)) from exc

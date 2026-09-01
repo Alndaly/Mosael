@@ -2,7 +2,7 @@
 
 Every message is a 4-byte header, then optional fields whose presence the header's flags
 decide, then a length-prefixed payload. All integers are big-endian. Nothing here talks to
-the network; keeping the framing separate is what makes it testable, and a marshal/unmarshal
+the network; keeping the framing separate is what makes it testable, and an encode/parse
 round-trip is the only way to catch an off-by-one in a format with no self-description.
 
 Header bytes:
@@ -21,7 +21,7 @@ PROTOCOL_VERSION = 0b0001
 DEFAULT_HEADER_SIZE = 0b0001  # one 4-byte word
 
 
-class MsgType(enum.IntEnum):
+class MessageType(enum.IntEnum):
     FullClientRequest = 0b0001
     AudioOnlyClient = 0b0010
     FullServerResponse = 0b1001
@@ -30,7 +30,7 @@ class MsgType(enum.IntEnum):
     Error = 0b1111
 
 
-class MsgTypeFlag(enum.IntEnum):
+class MessageFlags(enum.IntEnum):
     NoSeq = 0
     PositiveSeq = 0b1
     LastNoSeq = 0b10
@@ -71,7 +71,7 @@ class EventType(enum.IntEnum):
     PodcastEnd = 363
 
 
-#: Which id, if any, follows the event field. marshal and unmarshal MUST agree: the field is
+#: Which id, if any, follows the event field. to_bytes and parse_message MUST agree: the field is
 #: length-prefixed but not tagged, so a disagreement makes the reader take the id's length as
 #: the payload's and every later field shifts. That shows up as a generic "bad frame" from the
 #: server with nothing pointing at the cause.
@@ -94,13 +94,13 @@ def _event_identifier(event: int, session_id: str, connect_id: str) -> str | Non
     return connect_id if field_name == "connect_id" else session_id
 
 
-class Message:
+class PodcastProtocolMessage:
     """One framed message, in either direction."""
 
     def __init__(
         self,
-        msg_type: MsgType,
-        flag: MsgTypeFlag = MsgTypeFlag.NoSeq,
+        msg_type: MessageType,
+        flag: MessageFlags = MessageFlags.NoSeq,
         serialization: Serialization = Serialization.JSON,
         compression: Compression = Compression.Nothing,
     ) -> None:
@@ -115,7 +115,7 @@ class Message:
         self.error_code: int = 0
         self.payload: bytes = b""
 
-    def marshal(self) -> bytes:
+    def to_bytes(self) -> bytes:
         out = bytearray(
             [
                 (PROTOCOL_VERSION << 4) | DEFAULT_HEADER_SIZE,
@@ -124,7 +124,7 @@ class Message:
                 0,
             ]
         )
-        if self.flag & MsgTypeFlag.WithEvent:
+        if self.flag & MessageFlags.WithEvent:
             out += struct.pack(">i", int(self.event))
             identifier = _event_identifier(int(self.event), self.session_id, self.connect_id)
             if identifier is not None:
@@ -134,15 +134,15 @@ class Message:
         return bytes(out)
 
 
-def unmarshal(data: bytes) -> Message:
+def parse_message(data: bytes) -> PodcastProtocolMessage:
     """Parse a server frame. Raises ValueError on anything malformed rather than guessing."""
     if len(data) < 4:
         raise ValueError("frame shorter than its header")
 
     header_size = (data[0] & 0x0F) * 4
-    msg_type = MsgType((data[1] >> 4) & 0x0F)
-    flag = MsgTypeFlag(data[1] & 0x0F)
-    message = Message(
+    msg_type = MessageType((data[1] >> 4) & 0x0F)
+    flag = MessageFlags(data[1] & 0x0F)
+    message = PodcastProtocolMessage(
         msg_type,
         flag,
         Serialization((data[2] >> 4) & 0x0F),
@@ -159,9 +159,9 @@ def unmarshal(data: bytes) -> Message:
         offset += count
         return chunk
 
-    if msg_type == MsgType.Error:
+    if msg_type == MessageType.Error:
         message.error_code = struct.unpack(">I", take(4))[0]
-    if flag & MsgTypeFlag.WithEvent:
+    if flag & MessageFlags.WithEvent:
         message.event = struct.unpack(">i", take(4))[0]
         field_name = _identifier_field(message.event)
         if field_name is not None:

@@ -16,10 +16,10 @@ import pytest
 
 from app.ai.providers import (
     EDGE_BUILTIN_VOICES,
-    EdgeTTS,
-    SpeechRequest,
-    TTSError,
-    build_remote_provider,
+    EdgeSpeechAdapter,
+    SpeechSynthesisRequest,
+    SpeechSynthesisError,
+    build_speech_adapter,
 )
 from app.domain.voices.engine_catalog import describe_engines
 from tests.util import fresh_client
@@ -48,9 +48,9 @@ def test_edge_voices_come_from_the_builtin_catalogue() -> None:
 
 
 def test_provider_builds_with_no_credentials() -> None:
-    provider = build_remote_provider("edge", api_key="")
-    assert isinstance(provider, EdgeTTS)
-    assert provider.parallel_safe, "remote HTTP engine — batches must be allowed to fan out"
+    provider = build_speech_adapter("edge", api_key="")
+    assert isinstance(provider, EdgeSpeechAdapter)
+    assert provider.supports_parallel_synthesis, "remote HTTP engine — batches must be allowed to fan out"
 
 
 class _FakeCommunicate:
@@ -78,16 +78,16 @@ def fake_communicate(monkeypatch):
 
 
 def test_speed_maps_to_a_signed_rate_percentage(fake_communicate, tmp_path) -> None:
-    """SpeechRequest.speed must mean the same thing across engines — dubbing depends on it."""
+    """SpeechSynthesisRequest.speed must mean the same thing across engines — dubbing depends on it."""
     out = tmp_path / "a.mp3"
-    EdgeTTS().synthesize(SpeechRequest(text="你好", voice="zh-CN-YunxiNeural", speed=1.2), out)
+    EdgeSpeechAdapter().synthesize(SpeechSynthesisRequest(text="你好", voice="zh-CN-YunxiNeural", speed=1.2), out)
     assert fake_communicate.calls == [{"text": "你好", "voice": "zh-CN-YunxiNeural", "rate": "+20%"}]
     assert out.read_bytes() == b"fake-mp3"
 
 
 def test_missing_voice_falls_back_to_a_default(fake_communicate, tmp_path) -> None:
     """An empty voice id must synthesise, not 400 — the panel may submit before a pick."""
-    EdgeTTS().synthesize(SpeechRequest(text="hi"), tmp_path / "b.mp3")
+    EdgeSpeechAdapter().synthesize(SpeechSynthesisRequest(text="hi"), tmp_path / "b.mp3")
     assert fake_communicate.calls[0]["voice"] == "zh-CN-XiaoxiaoNeural"
     assert fake_communicate.calls[0]["rate"] == "+0%"
 
@@ -95,5 +95,5 @@ def test_missing_voice_falls_back_to_a_default(fake_communicate, tmp_path) -> No
 def test_empty_audio_is_an_error_not_a_silent_asset(fake_communicate, tmp_path) -> None:
     """A zero-byte file registered as an asset would fail much later, in the timeline."""
     fake_communicate.write_bytes = b""
-    with pytest.raises(TTSError, match="空音频"):
-        EdgeTTS().synthesize(SpeechRequest(text="你好"), tmp_path / "c.mp3")
+    with pytest.raises(SpeechSynthesisError, match="空音频"):
+        EdgeSpeechAdapter().synthesize(SpeechSynthesisRequest(text="你好"), tmp_path / "c.mp3")

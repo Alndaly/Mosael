@@ -14,7 +14,6 @@ from sqlalchemy.orm import Session
 
 from app.ai.sidecar.adapters import AdapterError, TurnResult, abort_turn, compact_session, run_turn, steer_turn
 from app.domain.agent.textclean import decode_byte_fallback
-from app.domain.provider_auth import read_credential
 from app.domain import provider_models
 from app.domain.provider_runtime import sidecar_provider
 from app.domain.agent import memory as agent_memory
@@ -22,7 +21,7 @@ from app.domain.context_meter import CHARS_PER_TOKEN, context_breakdown, context
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.security import mint_service_session, revoke_session
-from app.db.models import AgentMessage, AgentSession, Asset, AuthSession, ToolConfirmation, User, now
+from app.db.models import AgentMessage, AgentSession, Asset, ToolConfirmation, User, now
 from app.core.token_estimate import estimate_text_tokens
 from app.domain.usage import billable
 
@@ -163,18 +162,18 @@ def resolve_chat_provider(
     """pi 适配器的供应商三级解析:会话选定 → 「对话」能力默认 → 第一个启用供应商。
     AI Studio 与飞书共用 — 飞书早先裸调 run_turn 不带 provider,配好了供应商也
     永远报「未配置」,就是漏了这一步。返回 (provider_dict, model, profile)。"""
-    from app.domain.providers import first_enabled_profile, resolve_profile
+    from app.domain.providers import resolve_connection
 
     from app.domain import provider_credentials
 
     profile = None
     if provider_profile_id:
-        profile = resolve_profile(db, "", provider_profile_id, user_id=user_id)
+        profile = resolve_connection(db, "", provider_profile_id, user_id=user_id)
     if profile is None:
         # 默认解析已经是模型粒度的:拿到的是一行模型,连接就在它身上。
         default = provider_models.resolve_default(db, "chat", user_id)
         if default is not None:
-            profile = provider_credentials.resolve(db, default.profile, user_id)
+            profile = provider_credentials.resolve_connection(db, default.profile, user_id)
             model = model or default.model_id
     if profile is None:
         # **不再回退到"第一个启用的连接"。** 那个兜底的失败方式跑出来过:界面显示 DeepSeek、

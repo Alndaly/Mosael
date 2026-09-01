@@ -1,6 +1,10 @@
-from __future__ import annotations
+"""Provider 预设与用户连接选择的统一领域入口。
 
-from typing import Any
+数据库仍以 `ProviderProfile` 命名以保持迁移兼容；业务调用方通过本 Module 取得用户自己的连接，
+再由 `provider_credentials` 装配该连接的秘密与 OAuth 状态。Adapter 不直接查询这些表。
+"""
+
+from __future__ import annotations
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -8,26 +12,7 @@ from sqlalchemy.orm import Session
 from app.db.models import ProviderProfile
 from app.domain import provider_credentials
 from app.domain.provider_presets import VENDOR_PRESETS as _PRESETS
-from app.domain.provider_credentials import ResolvedProvider
-
-"""
-Provider adapter configuration.
-
-Each vendor preset declares the exact fields its adapter needs. The database
-still stores the resolved values in ProviderProfile columns/extra for now, but
-the public contract is adapter config, not a generic "credential" shape.
-
-预设还声明**鉴权方式**(`auth`):
-  - "api_key" —— 用户自己填的密钥,走本文件里描述的 base_url / fields;
-  - "oauth"   —— 订阅计划(Claude Pro/Max、Kimi Code、ChatGPT Plus/Pro……),没有可填的密钥,
-                 令牌由授权流程换取、会过期、刷新时还会轮换。
-
-订阅制这一档带 `pi_provider`:sidecar 直接用 pi 现成的 Provider 定义(端点、模型目录、
-上下文窗口、各家 OAuth 的设备码/PKCE 流程全在里面),这边**一个字段都不重描**。理由是各家
-OAuth 的差异极大(Copilot 的 endpoint 随凭据变、Codex 用自己的 responses API),照抄一份进
-Python 就等于把六家协议维护在我们这儿,上游一改就悄悄失效。这里只留 vendor id → pi provider id
-这一张映射表。
-"""
+from app.domain.provider_credentials import ResolvedConnection
 
 #: 从叶子模块引进来(见 provider_presets);这里 re-export,调用方不必改。
 VENDOR_PRESETS = _PRESETS
@@ -84,70 +69,81 @@ def normalize_capability_ids(values: list[str] | None) -> list[str] | None:
     return seen
 
 
-def effective_capability_ids(profile: "ProviderProfile") -> list[str]:
-    """档案的实际生效能力:有档案级覆盖用覆盖,否则回落 vendor 预设。"""
-    override = getattr(profile, "capability_ids", None)
-    if override is not None:
-        return normalize_capability_ids(override) or []
-    return capability_ids_for_vendor(profile.vendor)
-
-
 def supports_capability(vendor: str, capability: str) -> bool:
     return capability in capability_ids_for_vendor(vendor)
 
 
-def connection(db: Session, vendor: str, profile_id: str | None = None) -> ProviderProfile | None:
-    """这条**连接**本身(端点、模型目录、定价)。不含任何钥匙 —— 钥匙按人取,见 resolve_profile。"""
+def find_enabled_connection(
+    db: Session,
+    vendor: str,
+    profile_id: str | None = None,
+    *,
+    owner_user_id: str | None = None,
+) -> ProviderProfile | None:
+    """查找启用的连接；给出用户时绝不跨用户回退。"""
     if profile_id:
         profile = db.get(ProviderProfile, profile_id)
-        return profile if profile is not None and profile.enabled else None
-    return db.scalar(
-        select(ProviderProfile)
-        .where(ProviderProfile.vendor == vendor, ProviderProfile.enabled.is_(True))
-        .order_by(ProviderProfile.created_at)
-        .limit(1)
+        if profile is None or not profile.enabled:
+            return None
+        if vendor and profile.vendor != vendor:
+            return None
+        if owner_user_id is not None and profile.owner_user_id != owner_user_id:
+            return None
+        return profile
+    stmt = select(ProviderProfile).where(
+        ProviderProfile.vendor == vendor,
+        ProviderProfile.enabled.is_(True),
     )
+    if owner_user_id is not None:
+        stmt = stmt.where(ProviderProfile.owner_user_id == owner_user_id)
+    return db.scalars(stmt.order_by(ProviderProfile.created_at).limit(1)).first()
 
 
-def resolve_profile(
+def list_enabled_connections(
+    db: Session,
+    *,
+    owner_user_id: str | None = None,
+    auth_type: str | None = None,
+) -> list[ProviderProfile]:
+    """列出启用连接；owner 与鉴权方式在查询阶段过滤，调用方不再先看见别人的连接再补救。"""
+    stmt = select(ProviderProfile).where(ProviderProfile.enabled.is_(True))
+    if owner_user_id is not None:
+        stmt = stmt.where(ProviderProfile.owner_user_id == owner_user_id)
+    if auth_type is not None:
+        stmt = stmt.where(ProviderProfile.auth_type == auth_type)
+    return list(db.scalars(stmt.order_by(ProviderProfile.created_at)).all())
+
+
+def resolve_connection(
     db: Session, vendor: str, profile_id: str | None = None, *, user_id: str | None
-) -> ResolvedProvider | None:
-    """一条连接 + **这个人**该用的钥匙(自己的 → 部署管理员共享的 → None)。
+) -> ResolvedConnection | None:
+    """一条归属当前用户的连接 + 该用户在这条连接上的凭据。
 
     `user_id` 是必填关键字而不是可选参数:每一处取供应商的地方都得回答「为谁取」。省掉这个问题
-    的写法此前存在过 —— 结果是所有人共用同一把钥匙,而钥匙是谁的没人说得清。
+    的写法此前存在过 —— 结果是先选中别人的连接,再找不到自己的凭据,表现为明明配好了却不可用。
     """
-    return provider_credentials.resolve(db, connection(db, vendor, profile_id), user_id)
-
-
-def first_enabled_connection(db: Session) -> ProviderProfile | None:
-    """第一个启用的连接(任意 vendor),给 AI 助手对话用。"""
-    return db.scalar(
-        select(ProviderProfile).where(ProviderProfile.enabled.is_(True)).order_by(ProviderProfile.created_at).limit(1)
+    return provider_credentials.resolve_connection(
+        db,
+        find_enabled_connection(db, vendor, profile_id, owner_user_id=user_id),
+        user_id,
     )
 
 
-def first_enabled_profile(db: Session, *, user_id: str | None) -> ResolvedProvider | None:
-    return provider_credentials.resolve(db, first_enabled_connection(db), user_id)
+def first_enabled_connection(
+    db: Session,
+    *,
+    owner_user_id: str | None = None,
+) -> ProviderProfile | None:
+    """第一个启用的连接；给出用户时只在该用户的连接中选择。"""
+    stmt = select(ProviderProfile).where(ProviderProfile.enabled.is_(True))
+    if owner_user_id is not None:
+        stmt = stmt.where(ProviderProfile.owner_user_id == owner_user_id)
+    return db.scalars(stmt.order_by(ProviderProfile.created_at).limit(1)).first()
 
 
-def profile_extra(db: Session, vendor: str, key: str) -> str:
-    """One adapter-specific extra field, or "" when unset.
-
-    Callers treat "" as absent rather than raising: every extra field is either optional
-    (火山 AK/SK) or checked by the feature that needs it, which can say what is missing far
-    more usefully than a KeyError here.
-    """
-    profile = connection(db, vendor)
-    if profile is None:
-        return ""
-    value = (profile.extra or {}).get(key)
-    return str(value) if value else ""
-
-
-def require_profile(
+def require_connection(
     db: Session, profile_id: str | None = None, *, user_id: str | None, error: type[Exception] = RuntimeError
-) -> ResolvedProvider:
+) -> ResolvedConnection:
     """指定 id 时要求该 profile 存在且启用;缺省回退最早启用的一个。
 
     供应商选取是 providers 领域的事——workflows / publish / agent 各自的调用方只提供
@@ -155,13 +151,13 @@ def require_profile(
     """
     if profile_id:
         profile = db.get(ProviderProfile, str(profile_id))
-        if profile is None or not profile.enabled:
+        if profile is None or not profile.enabled or (user_id is not None and profile.owner_user_id != user_id):
             raise error("指定的供应商配置不存在或已停用")
     else:
-        profile = first_enabled_connection(db)
+        profile = first_enabled_connection(db, owner_user_id=user_id)
         if profile is None:
-            raise error("没有可用的 AI 供应商,请先在设置里添加")
-    resolved = provider_credentials.resolve(db, profile, user_id)
+            raise error("没有可用的 AI 供应商连接,请先在设置里添加并配置")
+    resolved = provider_credentials.resolve_connection(db, profile, user_id)
     if resolved is None:
         # 没有可用的钥匙时报出来,而不是找一把能用的顶上 —— 「我以为花的是自己的额度,
         # 其实花的是别人的钱」是这里最坏的失败方式。

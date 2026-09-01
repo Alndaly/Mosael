@@ -46,19 +46,17 @@ from app.api.schemas import (
     VendorPresetOut,
 )
 from app.core.config import settings as settings_config
-from app.core.db import SessionLocal
 from app.db.models import (
     AiRuntimeConfig,
     NetworkConfig,
     ProviderCredential,
-    ProviderDefault,
     ProviderModel,
     ProviderPricingRule,
     ProviderProfile,
     new_id,
 )
 from app.domain import provider_credentials
-from app.domain.provider_credentials import ResolvedProvider
+from app.domain.provider_credentials import ResolvedConnection
 from app.domain.provider_defaults import DEFAULTABLE_CAPABILITIES, set_default
 from app.domain.network import apply_to_process, effective_no_proxy, get_config as get_network
 from app.ai.sidecar.adapters import AdapterError, refresh_oauth_credential
@@ -408,7 +406,7 @@ def put_my_credential(
 ) -> ProviderCredentialOut:
     """填**我自己**在这条连接上的钥匙。
 
-    不要求部署管理员:连接怎么配是部署的事,而钥匙是谁的钱、谁的额度、谁的订阅账号。
+    不要求部署管理员:连接与钥匙都归当前用户，只是端点配置和秘密/OAuth 状态分别保存、分别更新。
     """
     profile = _require_profile(db, profile_id, user)
     credential = provider_credentials.upsert(
@@ -737,7 +735,7 @@ def logout_oauth_provider(profile_id: str, db: DbSession, user: CurrentUser) -> 
     return _profile_out(db, profile, user)
 
 
-def _catalog_rates(profile: ResolvedProvider) -> list[tuple[str, dict[str, float | None]]]:
+def _catalog_rates(profile: ResolvedConnection) -> list[tuple[str, dict[str, float | None]]]:
     """(模型 id, 每百万 token 报价) —— 两种档案取自各自的目录来源,单位已对齐。
 
     参数是**解析过的**连接(连接 + 这个人的钥匙):订阅目录在他自己那把钥匙上,API Key 档案
@@ -785,10 +783,8 @@ def prefill_provider_pricing(profile_id: str, db: DbSession, user: CurrentUser) 
     目录里为 0 的项也不写(那是「未标价 / 订阅内含」,不是「免费」)。
     """
     ensure_deployment_admin(db, user)
-    profile = db.get(ProviderProfile, profile_id)
-    if profile is None:
-        raise HTTPException(status_code=404, detail="供应商不存在")
-    resolved = provider_credentials.resolve(db, profile, user.id)
+    profile = _require_profile(db, profile_id, user)
+    resolved = provider_credentials.resolve_connection(db, profile, user.id)
     if resolved is None:
         raise HTTPException(status_code=422, detail="这条连接还没有你的密钥,先填一把再来取目录报价")
     rates = _catalog_rates(resolved)
@@ -876,9 +872,7 @@ def set_provider_default(
     model = None
     model_id = body.model.strip()
     if body.provider_profile_id and model_id:
-        profile = db.get(ProviderProfile, body.provider_profile_id)
-        if profile is None:
-            raise HTTPException(status_code=404, detail="供应商不存在")
+        profile = _require_profile(db, body.provider_profile_id, user)
         model = provider_models.get_model(db, body.provider_profile_id, model_id)
         # 能力校验放在建行之前:先建再拒会在库里留下一行没人要的模型。
         # 已有行按它自己的能力判,没有行按 vendor 预设判(新行正是这么回落的)。
@@ -908,6 +902,7 @@ def _pricing_payload_with_profile_defaults(
     db: DbSession,
     payload: dict,
     *,
+    user: CurrentUser,
     existing: ProviderPricingRule | None = None,
 ) -> dict:
     profile_id = payload.get("provider_profile_id")
@@ -915,9 +910,7 @@ def _pricing_payload_with_profile_defaults(
         profile_id = existing.provider_profile_id
     capability = payload.get("capability") or (existing.capability if existing is not None else "")
     if profile_id:
-        profile = db.get(ProviderProfile, profile_id)
-        if profile is None:
-            raise HTTPException(status_code=404, detail="供应商不存在")
+        profile = _require_profile(db, profile_id, user)
         if capability and not supports_capability(profile.vendor, capability):
             raise HTTPException(status_code=422, detail=f"该供应商不支持 {capability} 能力")
         if not payload.get("provider"):
@@ -946,7 +939,7 @@ def create_provider_pricing_rule(
     body: ProviderPricingRuleCreate, db: DbSession, user: CurrentUser
 ) -> ProviderPricingRuleOut:
     ensure_deployment_admin(db, user)
-    payload = _pricing_payload_with_profile_defaults(db, body.model_dump())
+    payload = _pricing_payload_with_profile_defaults(db, body.model_dump(), user=user)
     try:
         rule = create_pricing_rule(db, **payload)
     except ValueError as exc:
@@ -964,7 +957,12 @@ def update_provider_pricing_rule(
     rule = db.get(ProviderPricingRule, rule_id)
     if rule is None:
         raise HTTPException(status_code=404, detail="Not found")
-    patch = _pricing_payload_with_profile_defaults(db, body.model_dump(exclude_unset=True), existing=rule)
+    patch = _pricing_payload_with_profile_defaults(
+        db,
+        body.model_dump(exclude_unset=True),
+        user=user,
+        existing=rule,
+    )
     try:
         update_pricing_rule(db, rule, **patch)
     except ValueError as exc:
@@ -984,25 +982,25 @@ def delete_provider_pricing_rule(rule_id: str, db: DbSession, user: CurrentUser)
     return Response(status_code=204)
 
 
-def _resolved_or_bare(db: DbSession, profile: ProviderProfile, user: CurrentUser) -> ResolvedProvider:
+def _resolved_or_bare(db: DbSession, profile: ProviderProfile, user: CurrentUser) -> ResolvedConnection:
     """这条连接 + 我的钥匙;没有钥匙时给一个不带钥匙的 —— 目录取不到就是空列表,
     而「还没填密钥」不该让整个模型页 500。
 
     我自己那一行即使还没有密钥也要用上:订阅登录会先把模型目录存进这一行,而**目录不是钥匙**
     —— 按"有没有密钥"把它跳过去,会让刚登录完的人看到一个空的模型选择器。
     """
-    resolved = provider_credentials.resolve(db, profile, user.id)
+    resolved = provider_credentials.resolve_connection(db, profile, user.id)
     if resolved is not None:
         return resolved
     mine = provider_credentials.get(db, profile.id, user.id)
-    return ResolvedProvider(
+    return ResolvedConnection(
         id=profile.id, name=profile.name, vendor=profile.vendor, base_url=profile.base_url or "",
         auth_type=profile.auth_type, enabled=profile.enabled, extra=dict(profile.extra or {}),
         model_catalog=mine.model_catalog if mine is not None else None,
     )
 
 
-def _catalog_entries(profile: ResolvedProvider) -> dict[str, dict]:
+def _catalog_entries(profile: ResolvedConnection) -> dict[str, dict]:
     """该连接的**目录**(供应商说它有什么)。订阅计划的目录只有登录才知道(Copilot 随档位变、
     OpenRouter 有几百个),登录时由 pi 带回存下;API Key 档案现打 /models(带 TTL 缓存)。"""
     if profile.vendor == "comfyui":

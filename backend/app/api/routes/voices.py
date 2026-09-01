@@ -9,9 +9,9 @@ from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile, 
 from fastapi.responses import FileResponse
 
 from app.api.deps import CurrentUser, DbSession
-from app.domain.voices.service import AsrError
+from app.domain.voices.transcription import ASRError
 from app.core.i18n import normalize_locale, translate_fields
-from app.db.models import Voice
+from app.db.models import Job, Voice
 from app.api.schemas import (
     EngineSynthesizeRequest,
     TtsEngineChoiceOut,
@@ -115,7 +115,7 @@ def recognize_reference(voice_id: str, db: DbSession, user: CurrentUser) -> Voic
     ensure_workspace_perm(db, user, voice.workspace_id, "ai")
     try:
         return voices.recognize_reference_text(db, voice)
-    except (voices.VoiceError, AsrError) as exc:
+    except (voices.VoiceError, ASRError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -190,7 +190,7 @@ def list_tts_engines(request: Request, user: CurrentUser) -> list[dict]:
     from app.domain.voices.engine_catalog import describe_engines
 
     locale = normalize_locale(request.headers.get("accept-language"))
-    return [translate_fields(row, ("label", "note"), locale) for row in describe_engines()]
+    return [translate_fields(row, ("label", "note"), locale) for row in describe_engines(user.id)]
 
 
 @router.post("/tts/podcast", response_model=JobOut)
@@ -225,27 +225,30 @@ def list_tts_voices(engine: str, db: DbSession, user: CurrentUser) -> list[dict]
     """
     from app.ai.providers import EDGE_BUILTIN_VOICES, PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES
     from app.domain.voices.engine_catalog import describe_engines
-    from app.domain.providers import resolve_profile, profile_extra
+    from app.domain.providers import resolve_connection
 
     # **固定音色的引擎不在这里再写一遍。** 这个函数原本是逐引擎的 if 分支,末尾一句
     # `if engine != "volcano": return []` —— 于是加一个引擎要改两处(引擎目录 + 这里),
     # 漏掉第二处的表现是"引擎选得出来,但音色下拉是空的"。百炼刚接进来时就是这样。
     # 音色清单只有一个产地:describe_engines()。这里只负责**火山那条实时的**。
-    from app.ai.providers import REMOTE_ENGINES, BailianTTS
+    from app.ai.providers import REMOTE_SPEECH_ADAPTERS, BailianSpeechAdapter
 
-    if engine in (BailianTTS.id, "alibaba-cosyvoice"):
+    if engine in (BailianSpeechAdapter.engine_id, "alibaba-cosyvoice"):
         # 百炼的音色**跟着模型走**(qwen3-tts-flash 有 qwen-tts 没有的几个,CosyVoice 的
         # id 更是完全另一套)。这里解析模型必须和合成时**同一条路径**,否则下拉列的是 A 的
         # 音色、发出去的是 B 的请求 —— 用户选了个看着合法的音色,拿回一句"音色不存在"。
         from app.domain.voices.engine_catalog import active_model_for
 
-        engine_cls = REMOTE_ENGINES[engine]
-        return [{"value": v, "label": v} for v in engine_cls.voices_for(active_model_for(engine_cls))]
+        engine_cls = REMOTE_SPEECH_ADAPTERS[engine]
+        return [
+            {"value": voice, "label": voice}
+            for voice in engine_cls.voices_for(active_model_for(engine_cls, user.id))
+        ]
 
 
 
     if engine != "volcano":
-        fixed = next((item for item in describe_engines() if item["id"] == engine), None)
+        fixed = next((item for item in describe_engines(user.id) if item["id"] == engine), None)
         voices = list(fixed.get("voices") or []) if fixed else []
         # **标签要从所有带标签的清单里找**,不只是 edge。engine 目录里的 `voices` 是纯 id
         # (schema 是 list[str]),而 edge / 播客 / 火山内置那三张表都是 (id, 名字) 成对的 ——
@@ -256,7 +259,7 @@ def list_tts_voices(engine: str, db: DbSession, user: CurrentUser) -> list[dict]
 
     # ak/sk 是密字段,跟着**我自己**那把钥匙走(见 domain/provider_credentials) ——
     # 列音色用的是我的账号,不是"这个部署里随便谁的"。
-    volcano = resolve_profile(db, "volcano", user_id=user.id)
+    volcano = resolve_connection(db, "volcano", user_id=user.id)
     ak, sk = str((volcano.extra if volcano else {}).get("ak") or ""), str((volcano.extra if volcano else {}).get("sk") or "")
     if ak and sk:
         from app.integrations.volc_openapi import VolcOpenAPIError, list_all_speakers

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.ai.providers import get_provider
+from app.ai.providers import get_generation_adapter
 from app.ai.providers.contracts.generation import GenerationRequest
 from app.domain.generation.catalog import BUILTIN_MODELS, capabilities_for, known_capabilities_for
 from app.domain.generation.operations import (
@@ -34,7 +34,7 @@ def test_每个内置模型声明的边界值都能通过自己的适配器校�
     这里只校验 Adapter 的入口契约，不发送网络请求。
     """
     for item in BUILTIN_MODELS:
-        provider = get_provider(item["provider"], item["kind"])
+        provider = get_generation_adapter(item["provider"], item["kind"])
         assert provider is not None, item["id"]
         capabilities = item["capabilities"]
         parameters: dict[str, object] = {}

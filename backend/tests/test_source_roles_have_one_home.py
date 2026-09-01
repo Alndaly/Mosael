@@ -17,11 +17,11 @@
 
 from __future__ import annotations
 
-# 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
-RATCHET = True
-
 from app.ai.providers.contracts.generation import SOURCE_ROLES
 from app.domain.generation.catalog import SOURCE_ROLE_LABELS
+
+# 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
+RATCHET = True
 
 
 def test_两张产地表本身对得上() -> None:
@@ -125,7 +125,7 @@ def test_没有第二处把角色名铺开写() -> None:
     allowed = (
         "providers/contracts/generation.py",
         "generation/catalog.py",
-        "providers/adapters/alibaba/video.py",
+        "providers/adapters/alibaba/dashscope/video.py",
     )
 
     offenders = []

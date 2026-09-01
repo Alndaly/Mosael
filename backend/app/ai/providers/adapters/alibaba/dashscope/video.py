@@ -9,11 +9,11 @@ from app.core.http_retry import RetryingClient
 
 from app.ai.providers.contracts.generation import (
     poll_until_ready,
-    GenerationProvider,
+    GenerationAdapter,
     GenerationRequest,
     GenerationResult,
-    ProviderContext,
-    ProviderError,
+    GenerationAdapterContext,
+    GenerationAdapterError,
     first_frame_value,
     source_values,
     FIRST_FRAME,
@@ -24,9 +24,9 @@ from app.ai.providers.contracts.generation import (
     FIRST_CLIP,
     DRIVING_AUDIO,
     metering_from_request,
-    provider_http_error,
+    adapter_http_error,
 )
-from app.ai.providers.adapters.alibaba.image import (
+from app.ai.providers.adapters.alibaba.dashscope.image import (
     DASHSCOPE_BASE,
     download_result_asset,
     resolve_dashscope_base,
@@ -34,7 +34,7 @@ from app.ai.providers.adapters.alibaba.image import (
 
 """阿里云百炼(DashScope)的通义万相视频生成。
 
-和同目录的 qwen_image 是**同一套异步任务协议**:提交拿 task_id → 轮询 `/api/v1/tasks/{id}`
+和同目录的 ``image.py`` 是**同一套异步任务协议**:提交拿 task_id → 轮询 `/api/v1/tasks/{id}`
 → 从终态里取一个预签名 OSS 地址下载。所以下载(不带 Authorization,否则 OSS 签名校验会变)
 直接复用它的,不另写一份 —— 同一家的两条能力在这些地方不该有两种行为。轮询的节奏则跟着
 base.poll_until_ready 走,六家共用一份。
@@ -175,20 +175,20 @@ def extract_video_url(task_payload: dict[str, Any]) -> str | None:
                 return str(result["video_url"])
             if isinstance(result, dict) and result.get("url"):
                 return str(result["url"])
-        raise ProviderError("Provider returned success without a result URL")
+        raise GenerationAdapterError("Provider returned success without a result URL")
     if status in _TERMINAL_FAILURES:
         message = str(output.get("message") or task_payload.get("message") or "").strip()
-        raise ProviderError(f"Generation failed with status {status}" + (f": {message}" if message else ""))
+        raise GenerationAdapterError(f"Generation failed with status {status}" + (f": {message}" if message else ""))
     return None
 
 
-class WanVideoProvider(GenerationProvider):
-    name = "alibaba"
-    kind = "video"
+class WanVideoAdapter(GenerationAdapter):
+    vendor_id = "alibaba"
+    media_kind = "video"
 
-    def generate(self, request: GenerationRequest, context: ProviderContext, output_dir: Path) -> GenerationResult:
+    def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         if not context.api_key:
-            raise ProviderError("DashScope API key is not configured (settings → 生成服务)")
+            raise GenerationAdapterError("DashScope API key is not configured (settings → 生成服务)")
         headers = {"Authorization": f"Bearer {context.api_key}", "X-DashScope-Async": "enable"}
         try:
             with RetryingClient(base_url=resolve_dashscope_base(context), timeout=60, headers=headers) as client:
@@ -196,7 +196,7 @@ class WanVideoProvider(GenerationProvider):
                 submit.raise_for_status()
                 task_id = ((submit.json().get("output") or {}).get("task_id")) or ""
                 if not task_id:
-                    raise ProviderError("Provider did not return a task id")
+                    raise GenerationAdapterError("Provider did not return a task id")
 
                 url, poll_payload = poll_until_ready(client, f"/api/v1/tasks/{task_id}", extract_video_url)
 
@@ -204,7 +204,7 @@ class WanVideoProvider(GenerationProvider):
                 download_result_asset(url, target)
                 return GenerationResult(output_paths=[target], usage=metering_from_request(request), raw_usage=poll_payload)
         except httpx.HTTPError as exc:
-            raise ProviderError(provider_http_error("DashScope request failed", exc, context.api_key)) from exc
+            raise GenerationAdapterError(adapter_http_error("DashScope request failed", exc, context.api_key)) from exc
 
 
-__all__ = ["WanVideoProvider", "build_submit_payload", "extract_video_url", "SUBMIT_PATH", "DASHSCOPE_BASE"]
+__all__ = ["WanVideoAdapter", "build_submit_payload", "extract_video_url", "SUBMIT_PATH", "DASHSCOPE_BASE"]

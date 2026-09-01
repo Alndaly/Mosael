@@ -15,26 +15,26 @@ import threading
 
 import pytest
 
-from app.domain.voices import podcast
-from app.domain.voices.podcast_protocol import (
+from app.ai.providers.adapters.bytedance.volcano import podcast
+from app.ai.providers.adapters.bytedance.volcano.podcast_protocol import (
     EventType,
-    Message,
-    MsgType,
-    MsgTypeFlag,
-    unmarshal,
+    PodcastProtocolMessage,
+    MessageType,
+    MessageFlags,
+    parse_message,
 )
 
 
 class TestFraming:
     def test_a_session_frame_survives_a_round_trip(self) -> None:
-        message = Message(MsgType.FullClientRequest, MsgTypeFlag.WithEvent)
+        message = PodcastProtocolMessage(MessageType.FullClientRequest, MessageFlags.WithEvent)
         message.event = EventType.StartSession
         message.session_id = "abc123"
         message.payload = b'{"req_params": {}}'
 
-        parsed = unmarshal(message.marshal())
+        parsed = parse_message(message.to_bytes())
 
-        assert parsed.type == MsgType.FullClientRequest
+        assert parsed.type == MessageType.FullClientRequest
         assert parsed.event == EventType.StartSession
         assert parsed.session_id == "abc123"
         assert parsed.payload == b'{"req_params": {}}'
@@ -42,42 +42,42 @@ class TestFraming:
     def test_a_connection_frame_carries_no_session_id(self) -> None:
         """Sending one on a connection-scoped event desynchronises the server's parser: it
         reads the id's length prefix as the payload's."""
-        message = Message(MsgType.FullClientRequest, MsgTypeFlag.WithEvent)
+        message = PodcastProtocolMessage(MessageType.FullClientRequest, MessageFlags.WithEvent)
         message.event = EventType.StartConnection
         message.session_id = "should-not-be-sent"
         message.payload = b"{}"
 
-        raw = message.marshal()
+        raw = message.to_bytes()
 
         assert b"should-not-be-sent" not in raw
-        assert unmarshal(raw).payload == b"{}"
+        assert parse_message(raw).payload == b"{}"
 
     def test_binary_audio_survives_intact(self) -> None:
         """Audio is the payload of an AudioOnlyServer frame; any mangling here is silent."""
-        message = Message(MsgType.AudioOnlyServer, MsgTypeFlag.WithEvent)
+        message = PodcastProtocolMessage(MessageType.AudioOnlyServer, MessageFlags.WithEvent)
         message.event = EventType.PodcastRoundResponse
         message.session_id = "s"
         message.payload = bytes(range(256))
-        assert unmarshal(message.marshal()).payload == bytes(range(256))
+        assert parse_message(message.to_bytes()).payload == bytes(range(256))
 
     def test_a_truncated_frame_is_an_error_not_a_guess(self) -> None:
-        message = Message(MsgType.FullServerResponse, MsgTypeFlag.WithEvent)
+        message = PodcastProtocolMessage(MessageType.FullServerResponse, MessageFlags.WithEvent)
         message.event = EventType.SessionStarted
         message.session_id = "s"
         message.payload = b"12345678"
         with pytest.raises(ValueError):
-            unmarshal(message.marshal()[:-4])
+            parse_message(message.to_bytes()[:-4])
 
     def test_a_frame_shorter_than_its_header_is_rejected(self) -> None:
         with pytest.raises(ValueError):
-            unmarshal(b"\x11")
+            parse_message(b"\x11")
 
     def test_lengths_are_big_endian(self) -> None:
         """The one byte-order mistake that produces a plausible-looking frame."""
-        message = Message(MsgType.FullClientRequest, MsgTypeFlag.WithEvent)
+        message = PodcastProtocolMessage(MessageType.FullClientRequest, MessageFlags.WithEvent)
         message.event = EventType.StartConnection
         message.payload = b"x" * 258
-        raw = message.marshal()
+        raw = message.to_bytes()
         assert struct.unpack(">I", raw[-262:-258])[0] == 258
 
 
@@ -106,31 +106,31 @@ class TestArgumentChecks:
     message can say what to fix."""
 
     def test_the_v3_api_key_is_not_accepted_as_a_token(self) -> None:
-        with pytest.raises(podcast.PodcastError, match="App ID"):
-            podcast.synthesize_podcast("", "", action=podcast.Action.SUMMARIZE, input_text="x")
+        with pytest.raises(podcast.PodcastSynthesisError, match="App ID"):
+            podcast.synthesize_volcano_podcast("", "", action=podcast.PodcastAction.SUMMARIZE, input_text="x")
 
     def test_generated_dialogue_needs_exactly_two_speakers(self) -> None:
-        with pytest.raises(podcast.PodcastError, match="两个发音人"):
-            podcast.synthesize_podcast("a", "b", input_text="x", speakers=["one"])
+        with pytest.raises(podcast.PodcastSynthesisError, match="两个发音人"):
+            podcast.synthesize_volcano_podcast("a", "b", input_text="x", speakers=["one"])
 
     def test_summarize_needs_text(self) -> None:
-        with pytest.raises(podcast.PodcastError, match="改写成对话"):
-            podcast.synthesize_podcast("a", "b", input_text="  ", speakers=["one", "two"])
+        with pytest.raises(podcast.PodcastSynthesisError, match="改写成对话"):
+            podcast.synthesize_volcano_podcast("a", "b", input_text="  ", speakers=["one", "two"])
 
     def test_research_needs_a_topic(self) -> None:
-        with pytest.raises(podcast.PodcastError, match="检索"):
-            podcast.synthesize_podcast("a", "b", action=podcast.Action.RESEARCH, speakers=["1", "2"])
+        with pytest.raises(podcast.PodcastSynthesisError, match="检索"):
+            podcast.synthesize_volcano_podcast("a", "b", action=podcast.PodcastAction.RESEARCH, speakers=["1", "2"])
 
     def test_read_mode_needs_a_speaker(self) -> None:
-        with pytest.raises(podcast.PodcastError, match="发音人"):
-            podcast.synthesize_podcast("a", "b", action=podcast.Action.READ, input_text="x", speakers=[])
+        with pytest.raises(podcast.PodcastSynthesisError, match="发音人"):
+            podcast.synthesize_volcano_podcast("a", "b", action=podcast.PodcastAction.READ, input_text="x", speakers=[])
 
 
 class TestSessionPayload:
     def test_speaker_info_is_omitted_in_read_mode(self) -> None:
         """In READ mode the speaker rides with each text; speaker_info there is rejected."""
         payload = podcast._session_payload(
-            action=podcast.Action.READ,
+            action=podcast.PodcastAction.READ,
             input_text="",
             prompt_text="",
             nlp_texts=[{"text": "hi", "speaker": "a"}],
@@ -142,7 +142,7 @@ class TestSessionPayload:
 
     def test_speaker_info_is_present_for_generated_dialogue(self) -> None:
         payload = podcast._session_payload(
-            action=podcast.Action.SUMMARIZE,
+            action=podcast.PodcastAction.SUMMARIZE,
             input_text="x",
             prompt_text="",
             nlp_texts=None,
@@ -160,12 +160,12 @@ class TestSessionPayload:
 
         def fake_run(appid, token, payload, *, endpoint):
             captured.update(payload["req_params"]["audio_config"])
-            raise podcast.PodcastError("stop")
+            raise podcast.PodcastSynthesisError("stop")
 
         original = podcast.asyncio.run
         podcast.asyncio.run = lambda coro: (coro.close(), fake_run("a", "b", _LAST_PAYLOAD[0], endpoint=""))[1]
         try:
-            with pytest.raises(podcast.PodcastError):
+            with pytest.raises(podcast.PodcastSynthesisError):
                 _capture_payload(speed=speed)
         finally:
             podcast.asyncio.run = original
@@ -176,9 +176,9 @@ _LAST_PAYLOAD: list[dict] = [{}]
 
 
 def _capture_payload(*, speed: float):
-    """Build the payload the way synthesize_podcast does, without opening a socket."""
+    """Build the payload the way synthesize_volcano_podcast does, without opening a socket."""
     _LAST_PAYLOAD[0] = podcast._session_payload(
-        action=podcast.Action.SUMMARIZE,
+        action=podcast.PodcastAction.SUMMARIZE,
         input_text="x",
         prompt_text="",
         nlp_texts=None,
@@ -186,15 +186,15 @@ def _capture_payload(*, speed: float):
         speech_rate=max(-50, min(100, round((max(0.2, min(3.0, speed)) - 1.0) * 100))),
         audio_format="mp3",
     )
-    return podcast.synthesize_podcast("a", "b", input_text="x", speakers=["a", "b"], speed=speed)
+    return podcast.synthesize_volcano_podcast("a", "b", input_text="x", speakers=["a", "b"], speed=speed)
 
 
-def _server_frame(event: int, payload: bytes, msg_type=MsgType.FullServerResponse, session="s") -> bytes:
-    message = Message(msg_type, MsgTypeFlag.WithEvent)
+def _server_frame(event: int, payload: bytes, msg_type=MessageType.FullServerResponse, session="s") -> bytes:
+    message = PodcastProtocolMessage(msg_type, MessageFlags.WithEvent)
     message.event = event
     message.session_id = session
     message.payload = payload
-    return message.marshal()
+    return message.to_bytes()
 
 
 @pytest.fixture(autouse=True)
@@ -252,12 +252,12 @@ class TestAgainstAFakeServer:
                 EventType.PodcastRoundResponse,
                 json.dumps({"speaker": "a", "text": "你好"}).encode(),
             ),
-            _server_frame(EventType.PodcastRoundResponse, b"AUDIO", msg_type=MsgType.AudioOnlyServer),
+            _server_frame(EventType.PodcastRoundResponse, b"AUDIO", msg_type=MessageType.AudioOnlyServer),
             _server_frame(EventType.PodcastEnd, b"{}"),
         ]
         url, holder = self._serve(script)
         try:
-            result = podcast.synthesize_podcast(
+            result = podcast.synthesize_volcano_podcast(
                 "app", "token", input_text="原文", speakers=["a", "b"], endpoint=url
             )
         finally:
@@ -269,18 +269,18 @@ class TestAgainstAFakeServer:
     def test_a_refused_connection_says_so(self) -> None:
         url, holder = self._serve([_server_frame(EventType.ConnectionFailed, b'{"error":"bad key"}')])
         try:
-            with pytest.raises(podcast.PodcastError, match="连接被拒绝"):
-                podcast.synthesize_podcast("app", "token", input_text="x", speakers=["a", "b"], endpoint=url)
+            with pytest.raises(podcast.PodcastSynthesisError, match="连接被拒绝"):
+                podcast.synthesize_volcano_podcast("app", "token", input_text="x", speakers=["a", "b"], endpoint=url)
         finally:
             holder["loop"].call_soon_threadsafe(holder["stop"].set)
 
     def test_an_error_frame_carries_its_code(self) -> None:
-        error = Message(MsgType.Error, MsgTypeFlag.WithEvent)
+        error = PodcastProtocolMessage(MessageType.Error, MessageFlags.WithEvent)
         error.event = EventType.PodcastRoundResponse
         error.session_id = "s"
         error.payload = b'{"message":"quota"}'
-        raw = bytearray(error.marshal())
-        # Error frames put a 4-byte code before the event, which marshal() does not write.
+        raw = bytearray(error.to_bytes())
+        # Error frames put a 4-byte code before the event, which to_bytes() does not write.
         framed = bytes(raw[:4]) + struct.pack(">I", 55000000) + bytes(raw[4:])
 
         script = [
@@ -290,8 +290,8 @@ class TestAgainstAFakeServer:
         ]
         url, holder = self._serve(script)
         try:
-            with pytest.raises(podcast.PodcastError, match="55000000"):
-                podcast.synthesize_podcast("app", "token", input_text="x", speakers=["a", "b"], endpoint=url)
+            with pytest.raises(podcast.PodcastSynthesisError, match="55000000"):
+                podcast.synthesize_volcano_podcast("app", "token", input_text="x", speakers=["a", "b"], endpoint=url)
         finally:
             holder["loop"].call_soon_threadsafe(holder["stop"].set)
 
@@ -304,8 +304,8 @@ class TestAgainstAFakeServer:
         ]
         url, holder = self._serve(script)
         try:
-            with pytest.raises(podcast.PodcastError, match="空音频"):
-                podcast.synthesize_podcast("app", "token", input_text="x", speakers=["a", "b"], endpoint=url)
+            with pytest.raises(podcast.PodcastSynthesisError, match="空音频"):
+                podcast.synthesize_volcano_podcast("app", "token", input_text="x", speakers=["a", "b"], endpoint=url)
         finally:
             holder["loop"].call_soon_threadsafe(holder["stop"].set)
 

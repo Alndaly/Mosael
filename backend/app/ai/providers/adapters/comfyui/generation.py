@@ -13,12 +13,12 @@ import httpx
 from app.core.http_retry import RetryingClient
 
 from app.ai.providers.contracts.generation import (
-    GenerationCallbacks,
-    GenerationProvider,
+    GenerationProgressCallbacks,
+    GenerationAdapter,
     GenerationRequest,
     GenerationResult,
-    ProviderContext,
-    ProviderError,
+    GenerationAdapterContext,
+    GenerationAdapterError,
     metering_from_request,
 )
 from app.ai.providers.adapters.comfyui.client import ComfyUIClient, apply_workflow_params, inject_generation_params
@@ -39,7 +39,7 @@ that works without extra custom nodes, so pretending otherwise would only defer 
 Multiple templates = multiple provider profiles: the profile picker already selects among
 them per generation session, so template management needs no parallel store.
 
-Cancel/progress ride on GenerationCallbacks: each poll tick reports coarse progress
+Cancel/progress ride on GenerationProgressCallbacks: each poll tick reports coarse progress
 (queue position, elapsed) and checks for user cancel, which maps to POST /interrupt for
 the running prompt plus a queue delete for a pending one.
 """
@@ -117,12 +117,12 @@ def _size_from_request(request: GenerationRequest) -> tuple[int, int]:
     return 1024, 1024
 
 
-class ComfyUIProvider(GenerationProvider):
-    name = "comfyui"
-    supports_callbacks = True
+class ComfyUIGenerationAdapter(GenerationAdapter):
+    vendor_id = "comfyui"
+    supports_progress_callbacks = True
 
-    def __init__(self, kind: str = "image") -> None:
-        self.kind = kind
+    def __init__(self, media_kind: str = "image") -> None:
+        self.media_kind = media_kind
 
     def requires_credentials(self) -> bool:
         return False  # 本地服务,无密钥;可达性在 generate 里用可读错误报告
@@ -130,9 +130,9 @@ class ComfyUIProvider(GenerationProvider):
     def generate(
         self,
         request: GenerationRequest,
-        context: ProviderContext,
+        context: GenerationAdapterContext,
         output_dir: Path,
-        callbacks: GenerationCallbacks | None = None,
+        callbacks: GenerationProgressCallbacks | None = None,
     ) -> GenerationResult:
         base = (context.base_url or DEFAULT_BASE).rstrip("/")
         width, height = _size_from_request(request)
@@ -152,12 +152,12 @@ class ComfyUIProvider(GenerationProvider):
                 entry = self._wait(client, prompt_id, callbacks)
                 files = collect_output_files(entry)
                 if not files:
-                    raise ProviderError(
+                    raise GenerationAdapterError(
                         "ComfyUI 完成了执行但没有产出文件——工作流模板里需要 SaveImage(图)或视频合成输出节点(视频)"
                     )
                 output_dir.mkdir(parents=True, exist_ok=True)
                 chosen = self._pick_output(files)
-                suffix = Path(chosen["filename"]).suffix or (".mp4" if self.kind == "video" else ".png")
+                suffix = Path(chosen["filename"]).suffix or (".mp4" if self.media_kind == "video" else ".png")
                 target = output_dir / f"comfyui-{prompt_id[:8]}{suffix}"
                 download = client.get("/view", params={
                     "filename": chosen["filename"],
@@ -167,7 +167,7 @@ class ComfyUIProvider(GenerationProvider):
                 download.raise_for_status()
                 target.write_bytes(download.content)
         except httpx.HTTPError as exc:
-            raise ProviderError(
+            raise GenerationAdapterError(
                 f"连接 ComfyUI 失败({base}):{exc}。请确认 ComfyUI 正在运行,地址在设置 → AI 绘图 → ComfyUI 里可改。"
             ) from exc
         usage = metering_from_request(request)
@@ -175,7 +175,7 @@ class ComfyUIProvider(GenerationProvider):
 
     # ------------------------------------------------------------------
     def _pick_output(self, files: list[dict[str, Any]]) -> dict[str, Any]:
-        if self.kind == "video":
+        if self.media_kind == "video":
             # 视频图里常同时有帧图与合成视频;优先真正的视频容器
             for item in files:
                 if Path(item["filename"]).suffix.lower() in (".mp4", ".webm", ".mov", ".gif", ".webp"):
@@ -185,7 +185,7 @@ class ComfyUIProvider(GenerationProvider):
     def _resolve_graph(
         self,
         client: httpx.Client,
-        context: ProviderContext,
+        context: GenerationAdapterContext,
         request: GenerationRequest,
         values: dict[str, Any],
         base: str,
@@ -201,7 +201,7 @@ class ComfyUIProvider(GenerationProvider):
             try:
                 api_prompt = ComfyUIClient(base).workflow_to_api_prompt(workflow)
             except Exception as exc:  # noqa: BLE001 — 任何拉取/转换失败都回报可读错误
-                raise ProviderError(
+                raise GenerationAdapterError(
                     f"拉取或转换 ComfyUI 工作流「{workflow}」失败:{exc}。"
                     "可在生成时改选其它工作流、内置文生图,或在档案里粘贴自定义 API 模板。"
                 ) from exc
@@ -214,20 +214,20 @@ class ComfyUIProvider(GenerationProvider):
         template = self._resolve_template(client, context)
         return substitute_placeholders(template, values)
 
-    def _resolve_template(self, client: httpx.Client, context: ProviderContext) -> dict[str, Any]:
-        raw = str((context.extra or {}).get("workflow_template") or "").strip()
+    def _resolve_template(self, client: httpx.Client, context: GenerationAdapterContext) -> dict[str, Any]:
+        raw = str((context.options or {}).get("workflow_template") or "").strip()
         if raw:
             try:
                 graph = json.loads(raw)
             except ValueError as exc:
-                raise ProviderError("ComfyUI 工作流模板不是合法 JSON——请从 ComfyUI 用「导出 (API)」格式导出后粘贴") from exc
+                raise GenerationAdapterError("ComfyUI 工作流模板不是合法 JSON——请从 ComfyUI 用「导出 (API)」格式导出后粘贴") from exc
             if not isinstance(graph, dict) or not graph:
-                raise ProviderError("ComfyUI 工作流模板为空——需要 API 格式(节点 id → {class_type, inputs})")
+                raise GenerationAdapterError("ComfyUI 工作流模板为空——需要 API 格式(节点 id → {class_type, inputs})")
             return graph
-        if self.kind == "video":
+        if self.media_kind == "video":
             # 没有"到处都能跑"的内置视频图(AnimateDiff/SVD/WAN 都要装节点),
             # 硬造一个只会把错误推迟到执行期 —— 不如立刻说清楚缺什么。
-            raise ProviderError(
+            raise GenerationAdapterError(
                 "ComfyUI 视频生成需要工作流模板:在 ComfyUI 里搭好视频工作流(如 AnimateDiff / WAN),"
                 "「导出 (API)」后粘贴到该档案的模板字段,提示词位置写 {{prompt}}"
             )
@@ -240,7 +240,7 @@ class ComfyUIProvider(GenerationProvider):
         except (KeyError, IndexError, TypeError):
             checkpoints = []
         if not checkpoints:
-            raise ProviderError("ComfyUI 里没有任何 checkpoint 模型——请先在 ComfyUI 安装一个模型,或在档案里粘贴自定义工作流模板")
+            raise GenerationAdapterError("ComfyUI 里没有任何 checkpoint 模型——请先在 ComfyUI 安装一个模型,或在档案里粘贴自定义工作流模板")
         return substitute_placeholders(DEFAULT_TEMPLATE, {"checkpoint": checkpoints[0]})
 
     def _submit(self, client: httpx.Client, graph: dict[str, Any]) -> str:
@@ -255,20 +255,20 @@ class ComfyUIProvider(GenerationProvider):
                 for err in (node.get("errors") or [])
             ]
             top = (detail.get("error") or {}).get("message") if isinstance(detail.get("error"), dict) else ""
-            raise ProviderError("ComfyUI 拒绝了工作流:" + ("; ".join(filter(None, [top, *messages])) or response.text[:300]))
+            raise GenerationAdapterError("ComfyUI 拒绝了工作流:" + ("; ".join(filter(None, [top, *messages])) or response.text[:300]))
         response.raise_for_status()
         prompt_id = str(response.json().get("prompt_id") or "")
         if not prompt_id:
-            raise ProviderError("ComfyUI 未返回 prompt_id")
+            raise GenerationAdapterError("ComfyUI 未返回 prompt_id")
         return prompt_id
 
-    def _wait(self, client: httpx.Client, prompt_id: str, callbacks: GenerationCallbacks | None) -> dict[str, Any]:
+    def _wait(self, client: httpx.Client, prompt_id: str, callbacks: GenerationProgressCallbacks | None) -> dict[str, Any]:
         started = time.monotonic()
         deadline = started + POLL_TIMEOUT_SECONDS
         while time.monotonic() < deadline:
             if callbacks is not None and callbacks.is_cancelled():
                 self._interrupt(client, prompt_id)
-                raise ProviderError("已取消")
+                raise GenerationAdapterError("已取消")
             if callbacks is not None:
                 callbacks.on_progress(*self._progress(client, prompt_id, started))
             response = client.get(f"/history/{prompt_id}")
@@ -277,11 +277,11 @@ class ComfyUIProvider(GenerationProvider):
             if entry:
                 status = entry.get("status") or {}
                 if status.get("status_str") == "error":
-                    raise ProviderError(f"ComfyUI 执行失败:{_error_from_status(status)}")
+                    raise GenerationAdapterError(f"ComfyUI 执行失败:{_error_from_status(status)}")
                 if status.get("completed") or entry.get("outputs"):
                     return entry
             time.sleep(POLL_INTERVAL_SECONDS)
-        raise ProviderError(f"ComfyUI 生成超时({POLL_TIMEOUT_SECONDS}s)——工作流可能仍在排队,可在 ComfyUI 界面查看")
+        raise GenerationAdapterError(f"ComfyUI 生成超时({POLL_TIMEOUT_SECONDS}s)——工作流可能仍在排队,可在 ComfyUI 界面查看")
 
     def _progress(self, client: httpx.Client, prompt_id: str, started: float) -> tuple[float, str]:
         """Coarse progress from the queue: position while pending, elapsed while running.

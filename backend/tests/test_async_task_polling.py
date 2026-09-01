@@ -13,7 +13,7 @@ import time
 
 import pytest
 
-from app.ai.providers.contracts.generation import ProviderError, poll_until_ready
+from app.ai.providers.contracts.generation import GenerationAdapterError, poll_until_ready
 
 
 class _FakeResponse:
@@ -44,7 +44,7 @@ def _extract(payload: dict) -> str | None:
     if status == "done":
         return str(payload["url"])
     if status == "failed":
-        raise ProviderError(f"failed: {payload.get('reason')}")
+        raise GenerationAdapterError(f"failed: {payload.get('reason')}")
     return None
 
 
@@ -60,7 +60,7 @@ def test_轮到终态就返回_地址和整个回包都给出来() -> None:
 
 def test_失败由extract自己抛_因为只有它知道原因在哪个字段() -> None:
     client = _FakeClient([{"status": "failed", "reason": "内容审核未通过"}])
-    with pytest.raises(ProviderError) as err:
+    with pytest.raises(GenerationAdapterError) as err:
         poll_until_ready(client, "/tasks/1", _extract, interval=0)
     assert "内容审核未通过" in str(err.value)
 
@@ -68,7 +68,7 @@ def test_失败由extract自己抛_因为只有它知道原因在哪个字段() 
 def test_超时要抛_而不是静静返回空() -> None:
     """一直回"还在跑"的任务:到点必须抛。静静返回的话,调用方会拿一个空地址去下载。"""
     client = _FakeClient([{"status": "running"}] * 50)
-    with pytest.raises(ProviderError, match="timed out"):
+    with pytest.raises(GenerationAdapterError, match="timed out"):
         poll_until_ready(client, "/tasks/1", _extract, interval=0, timeout=0.05)
 
 

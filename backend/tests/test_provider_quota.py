@@ -200,7 +200,6 @@ def _expired_oauth_client(name: str):
 
     from app.api.routes import settings as settings_routes
     from app.core.db import SessionLocal
-    from app.db.models import ProviderProfile
     from tests.util import add_provider, fresh_client
 
     client = fresh_client()
@@ -340,11 +339,10 @@ def test_探活把_凭据不对_和_服务没起_分开() -> None:
     混成一个"离线"会让用户去重启一个根本没问题的服务。"""
     import httpx
 
-    from app.domain import provider_health
-    from app.domain.provider_credentials import ResolvedProvider
+    from app.domain.provider_credentials import ResolvedConnection
 
     # 探活拿到的是**解析过的连接**(连接 + 这个人的钥匙),不再是 ORM 档案。
-    profile = ResolvedProvider(
+    profile = ResolvedConnection(
         id="p", name="X", vendor="openai-compatible", base_url="http://example.invalid/v1",
         auth_type="api_key", enabled=True, api_key="k",
     )
@@ -367,7 +365,7 @@ def test_订阅计划不探活() -> None:
     """它们没有我们持有的 base_url,端点在 pi 的 Provider 定义里。返回 supported=False,
     界面据此整列不显示,而不是显示一个假的"离线"。"""
     from app.domain import provider_health
-    from app.domain.provider_credentials import ResolvedProvider
+    from app.domain.provider_credentials import ResolvedConnection
 
-    profile = ResolvedProvider(id="p", name="Kimi", vendor="kimi", base_url="", auth_type="oauth", enabled=True)
+    profile = ResolvedConnection(id="p", name="Kimi", vendor="kimi", base_url="", auth_type="oauth", enabled=True)
     assert provider_health.probe(profile).supported is False

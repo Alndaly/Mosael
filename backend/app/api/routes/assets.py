@@ -9,7 +9,7 @@ from sqlalchemy import or_, select
 
 from app.api.deps import CurrentUser, DbSession, PresentedToken
 from app.api.schemas import AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, AssetUpdate, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, VideoToGifRequest
-from app.domain.voices.service import AsrError, start_transcription
+from app.domain.voices.transcription import ASRError, start_transcription
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, require_asset
 from app.db.models import Asset, Clip, Job, Transcript, Project
 from app.core.config import settings
@@ -258,14 +258,14 @@ def analyze_asset_route(
 
     Ordinary authenticated HTTP requests use the independently selected analysis profile.
     Agent-tool service tokens are bound to an AgentSession, so the server derives the current
-    provider, model, workspace and video mode from that session. OAuth image/video-frame input
+    connection, model, workspace and video mode from that session. OAuth image/video-frame input
     uses the tool-free Gateway and never requires a caller-supplied service address.
     """
     from app.domain.analysis.service import AnalysisError, analyze_asset
 
     asset = require_asset(db, user, asset_id)
     ensure_workspace_perm(db, user, asset.workspace_id, "ai")
-    resolved_profile = None
+    resolved_connection = None
     model = ""
     surface = "direct"
     mode = body.mode
@@ -283,7 +283,7 @@ def analyze_asset_route(
         from app.domain.agent.host import resolve_chat_provider
 
         try:
-            _provider, model, resolved_profile = resolve_chat_provider(
+            _provider, model, resolved_connection = resolve_chat_provider(
                 db,
                 session.provider_profile_id,
                 session.model or "",
@@ -299,9 +299,9 @@ def analyze_asset_route(
             asset,
             body.question,
             user_id=user.id,
-            profile_id=None if resolved_profile is not None else body.profile_id,
+            profile_id=None if resolved_connection is not None else body.profile_id,
             mode=mode,
-            resolved_profile=resolved_profile,
+            resolved_connection=resolved_connection,
             model=model,
             surface=surface,
         )
@@ -346,16 +346,16 @@ def put_transcript(asset_id: str, body: TranscriptAttachRequest, db: DbSession, 
 
 @router.post("/assets/{asset_id}/transcribe", response_model=JobOut)
 def transcribe_asset(asset_id: str, db: DbSession, user: CurrentUser, language: str = ""):
-    """`language` 空 = 自动:WhisperX 自己检测,中文素材走 FunASR 的中文预设。
+    """`language` 空 = 由已选 ASR 引擎自动检测。
 
-    说了具体语言就按它选引擎 —— FunASR 装的那套是中文权重,拿它转英文只会出一堆错字
-    (见 service.resolve_asr_runtime)。
+    语言只传给识别模型，不暗中切换引擎；FunASR 使用多语种 SenseVoice 权重。运行时选择见
+    `transcription.resolve_transcription_runtime`。
     """
     asset = require_asset(db, user, asset_id)
     ensure_workspace_perm(db, user, asset.workspace_id, "ai")
     try:
         return start_transcription(db, asset_id, created_by=user.id, language=language)
-    except AsrError as exc:
+    except ASRError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 

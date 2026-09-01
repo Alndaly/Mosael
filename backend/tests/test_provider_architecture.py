@@ -55,13 +55,32 @@ def test_provider根目录只保留公共interface装配和共享下载seam() ->
     assert actual == {"__init__.py", "media_transfer.py", "registry.py"}
 
 
+def test_adapter根目录按企业或平台分组() -> None:
+    adapters = PROVIDERS / "adapters"
+    assert {path.name for path in adapters.glob("*.py")} == {"__init__.py"}
+
+
+def test_同企业的不同产品协议有各自命名空间() -> None:
+    adapters = PROVIDERS / "adapters"
+    bytedance = adapters / "bytedance"
+    alibaba = adapters / "alibaba"
+
+    assert {path.name for path in bytedance.glob("*.py")} == {"__init__.py"}
+    assert {path.name for path in bytedance.iterdir() if path.is_dir() and path.name != "__pycache__"} == {
+        "ark",
+        "volcano",
+    }
+    assert {path.name for path in alibaba.glob("*.py")} == {"__init__.py"}
+    assert {path.name for path in alibaba.iterdir() if path.is_dir() and path.name != "__pycache__"} == {"dashscope"}
+
+
 def test_registry拒绝静默覆盖重复adapter() -> None:
     class GenerationAdapter:
-        name = "same"
-        kind = "video"
+        vendor_id = "same"
+        media_kind = "video"
 
     class SpeechAdapter:
-        id = "same"
+        engine_id = "same"
 
     with pytest.raises(RuntimeError, match="重复的生成 Adapter"):
         _index_generation_adapters((GenerationAdapter(), GenerationAdapter()))  # type: ignore[arg-type]

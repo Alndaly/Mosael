@@ -6,7 +6,6 @@ from collections import Counter
 
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.providers import (
@@ -14,7 +13,7 @@ from app.ai.providers import (
     REFERENCE_IMAGE,
     SOURCE_ROLES,
     allowed_source_url_parameters,
-    get_provider,
+    get_generation_adapter,
     roles_supplied_via_url,
 )
 from app.domain.generation.catalog import SOURCE_ROLE_LABELS, known_capabilities_for
@@ -54,7 +53,7 @@ def create_generation_job(
 ) -> tuple[GenerationJob, Any]:
     provider = provider.strip()
     model = model.strip()
-    provider_profile = _resolve_provider_profile(db, provider_profile_id)
+    provider_profile = _resolve_provider_profile(db, provider_profile_id, owner_user_id=created_by)
     if provider_profile is not None:
         provider = provider_profile.vendor
     elif not _vendor_can_generate(db, provider, kind):
@@ -62,7 +61,7 @@ def create_generation_job(
         # 以前查的是 generation_models 那张目录表,而目录说"这个 vendor 有这个模型"和
         # "用户配了这条连接"是两回事,于是删掉档案之后照样能提交任务、跑到一半才失败。
         raise GenerationDomainError("Generation model is not enabled or does not exist")
-    if get_provider(provider, kind) is None:
+    if get_generation_adapter(provider, kind) is None:
         raise GenerationDomainError(f"Generation adapter is not available for {provider}/{kind}")
 
     validate_against_capabilities(provider, model, kind, parameters, source_assets)
@@ -127,11 +126,16 @@ def _validate_source_assets(db: Session, workspace_id: str, source_assets: list[
             raise GenerationDomainError(f"{label}素材{short}已删除或不在当前工作区，请重新连接或选择")
 
 
-def _resolve_provider_profile(db: Session, provider_profile_id: str | None) -> ProviderProfile | None:
+def _resolve_provider_profile(
+    db: Session,
+    provider_profile_id: str | None,
+    *,
+    owner_user_id: str | None,
+) -> ProviderProfile | None:
     if not provider_profile_id:
         return None
     profile = db.get(ProviderProfile, provider_profile_id)
-    if profile is None or not profile.enabled:
+    if profile is None or not profile.enabled or (owner_user_id is not None and profile.owner_user_id != owner_user_id):
         raise GenerationDomainError("Generation provider profile is not available")
     return profile
 
@@ -431,7 +435,7 @@ def _check_source_counts(
         names = ["、".join(_label(r) for r in sorted(group & used)) for group in touched]
         raise GenerationDomainError(
             f"{provider}/{model} 的{' 和 '.join(names)}不能一起用:"
-            f"{_WHY_EXCLUSIVE}它们是不同的路子,一次只能走一条。"
+            "它们对应不同的生成模式,一次只能选择一组。"
         )
 
     # 每一条是「这几种里至少给一份」。写成嵌套而不是平铺的一串,是因为两种要求都真实存在:

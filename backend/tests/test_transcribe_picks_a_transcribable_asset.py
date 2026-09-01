@@ -56,15 +56,15 @@ def test_clips_carry_the_asset_kind(client=None) -> None:
 
 def test_the_backend_still_refuses_an_image() -> None:
     """后端这道闸留着 —— 界面挑错了它也得拦住,而且话要说得像人话。"""
-    from app.domain.voices import service
+    from app.domain.voices import transcription
 
     client = fresh_client()
     sequence_id = _timeline(client)
     with SessionLocal() as db:
         image = db.query(Asset).filter(Asset.kind == "image").one()
         try:
-            service.start_transcription(db, image.id, created_by=None)
-        except service.AsrError as exc:
+            transcription.start_transcription(db, image.id, created_by=None)
+        except transcription.ASRError as exc:
             assert "视频或音频" in str(exc)
         else:
             raise AssertionError("图片被放行了")

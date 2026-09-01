@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
 from app.domain.usage import BillableCall, billable
-from app.domain.providers import require_profile
+from app.domain.providers import require_connection
 from app.domain.workflows import NODE_TYPES, WorkflowDomainError, validate_graph
 
 TIMEOUT_SECONDS = 120
@@ -46,7 +46,7 @@ def ai_edit_graph(
     workflow_id: str = "",
     user_id: str | None = None,
 ) -> tuple[dict[str, Any], str]:
-    profile = require_profile(db, profile_id, user_id=user_id, error=WorkflowDomainError)
+    profile = require_connection(db, profile_id, user_id=user_id, error=WorkflowDomainError)
     try:
         target = target_for(db, profile, surface="automation")
     except AiChatError as exc:

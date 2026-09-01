@@ -11,10 +11,10 @@ import httpx
 
 from app.core.http_retry import RetryingClient
 
-from app.ai.providers.contracts.speech import REMOTE_TIMEOUT_SECONDS, SpeechRequest, TTSError
+from app.ai.providers.contracts.speech import SPEECH_REQUEST_TIMEOUT_SECONDS, SpeechSynthesisRequest, SpeechSynthesisError
 
 
-class VolcanoTTS:
+class VolcanoSpeechAdapter:
     """火山引擎(豆包)大模型语音合成 — the v3 synchronous endpoint.
 
     Best Chinese voices of the engines here, at the cost of a fiddlier contract than OpenAI's:
@@ -24,17 +24,17 @@ class VolcanoTTS:
     * The response is a chunked stream of JSON lines, each carrying a base64 audio fragment;
       code 20000000 is the end-of-stream marker, not an error.
     * Speed is `speech_rate`, an int in [-50, 100] where 0 is natural — not a multiplier. The
-      linear map below is what makes SpeechRequest.speed mean the same thing across engines,
+      linear map below is what makes SpeechSynthesisRequest.speed mean the same thing across engines,
       which is what dubbing depends on.
     """
 
-    id = "volcano"
-    label = "ttsProvider_volcano"
-    parallel_safe = True
+    engine_id = "volcano"
+    label_key = "ttsProvider_volcano"
+    supports_parallel_synthesis = True
 
     def __init__(self, api_key: str, voice: str = "", model: str = "", base_url: str = "") -> None:
         if not api_key:
-            raise TTSError("火山引擎语音合成需要新版控制台的 API Key")
+            raise SpeechSynthesisError("火山引擎语音合成需要新版控制台的 API Key")
         self._key = api_key
         self._model = model
         self._base = (base_url or "https://openspeech.bytedance.com").rstrip("/")
@@ -50,10 +50,10 @@ class VolcanoTTS:
             return "seed-tts-2.0"
         return "seed-tts-1.0"
 
-    def synthesize(self, request: SpeechRequest, out_path: Path) -> None:
+    def synthesize(self, request: SpeechSynthesisRequest, out_path: Path) -> None:
         voice = request.voice or self._default_voice
         if not voice:
-            raise TTSError("火山引擎语音合成需要音色 id(如 zh_male_..._bigtts)")
+            raise SpeechSynthesisError("火山引擎语音合成需要音色 id(如 zh_male_..._bigtts)")
         speed = max(0.2, min(3.0, request.speed))
         payload = {
             "req_params": {
@@ -74,7 +74,7 @@ class VolcanoTTS:
         }
         chunks: list[bytes] = []
         try:
-            with RetryingClient(timeout=REMOTE_TIMEOUT_SECONDS) as client:
+            with RetryingClient(timeout=SPEECH_REQUEST_TIMEOUT_SECONDS) as client:
                 with client.stream(
                     "POST", f"{self._base}/api/v3/tts/unidirectional", headers=headers, json=payload
                 ) as response:
@@ -91,16 +91,16 @@ class VolcanoTTS:
                         if code == 20000000:  # documented end-of-stream, not a failure
                             break
                         if code != 0:
-                            raise TTSError(
+                            raise SpeechSynthesisError(
                                 f"火山 TTS 失败: code={code} {frame.get('message') or ''}".strip()
                             )
                         data = frame.get("data")
                         if data:
                             chunks.append(base64.b64decode(data))
         except httpx.HTTPError as exc:
-            raise TTSError(f"火山 TTS 请求失败: {exc}") from exc
+            raise SpeechSynthesisError(f"火山 TTS 请求失败: {exc}") from exc
         if not chunks:
-            raise TTSError("火山 TTS 返回空音频")
+            raise SpeechSynthesisError("火山 TTS 返回空音频")
         out_path.write_bytes(b"".join(chunks))
 
 

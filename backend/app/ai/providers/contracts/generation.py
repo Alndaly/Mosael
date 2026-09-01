@@ -1,3 +1,9 @@
+"""图像与视频生成 Adapter 的能力契约。
+
+Adapter 把已经通过领域校验的请求转换为本地媒体文件；素材登记、任务状态和计量仍由
+domain runner 持有。调用方只依赖本 Module 的 Interface，不依赖具体供应商 Implementation。
+"""
+
 from __future__ import annotations
 
 import base64
@@ -16,17 +22,11 @@ import httpx
 
 from app.core.token_estimate import estimate_text_tokens
 
-"""图像与视频生成 Adapter 的能力契约。
-
-Provider 把已经通过领域校验的请求转换为本地媒体文件；素材登记、任务状态和计量仍由
-domain runner 持有。调用方只依赖本 Module 的 Interface，不依赖具体供应商 Implementation。
-"""
-
 MAX_NUM_IMAGES = 4
 
 
-class ProviderError(RuntimeError):
-    """Raised for provider failures; message must already be safe to surface."""
+class GenerationAdapterError(RuntimeError):
+    """Raised for Adapter failures; message must already be safe to surface."""
 
 
 #: 一份输入素材**拿来干什么**。
@@ -127,23 +127,23 @@ class GenerationResult:
 
 
 @dataclass(frozen=True)
-class ProviderContext:
-    profile_id: str | None
-    vendor: str
+class GenerationAdapterContext:
+    connection_id: str | None
+    vendor_id: str
     api_key: str
     base_url: str = ""
-    default_model: str = ""
-    extra: dict[str, Any] = field(default_factory=dict)
+    configured_model_id: str = ""
+    options: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
-class GenerationCallbacks:
-    """Optional live channel from a provider's poll loop back to the job.
+class GenerationProgressCallbacks:
+    """Optional live channel from an Adapter's poll loop back to the job.
 
     on_progress reports a coarse fraction (0..1) plus a user-facing message; is_cancelled
     is checked between provider round-trips so a user cancel can stop the remote work
-    (e.g. ComfyUI /interrupt) instead of merely abandoning it. Providers that opt in set
-    supports_callbacks and accept the keyword; everyone else keeps the old signature —
+    (e.g. ComfyUI /interrupt) instead of merely abandoning it. Adapters that opt in set
+    supports_progress_callbacks and accept the keyword; everyone else keeps the old signature —
     the runner only passes callbacks where they are understood.
     """
 
@@ -151,17 +151,17 @@ class GenerationCallbacks:
     is_cancelled: Any  # Callable[[], bool]
 
 
-class GenerationProvider(ABC):
-    name: str
-    kind: str
-    #: Providers that accept generate(..., callbacks=...) set this True.
-    supports_callbacks: bool = False
+class GenerationAdapter(ABC):
+    vendor_id: str
+    media_kind: str
+    #: Adapters that accept generate(..., callbacks=...) set this True.
+    supports_progress_callbacks: bool = False
 
     def requires_credentials(self) -> bool:
         return True
 
     def validate_request(self, request: GenerationRequest) -> None:
-        """Provider-neutral shape guardrails; model limits live in the capability catalog.
+        """Adapter-neutral shape guardrails; model limits live in the capability catalog.
 
         A shared Adapter base cannot own a vendor/model allowlist: 2K/4K and 15/30-second
         models are valid product capabilities. The domain entry point validates those exact
@@ -169,20 +169,20 @@ class GenerationProvider(ABC):
         so direct/legacy callers cannot submit nonsense.
         """
         if not request.prompt.strip():
-            raise ProviderError("Prompt must not be empty")
+            raise GenerationAdapterError("Prompt must not be empty")
         if request.kind == "image":
             num_images = int(request.parameters.get("num_images", 1))
             if not 1 <= num_images <= MAX_NUM_IMAGES:
-                raise ProviderError(f"num_images must be between 1 and {MAX_NUM_IMAGES}")
+                raise GenerationAdapterError(f"num_images must be between 1 and {MAX_NUM_IMAGES}")
         if request.kind == "video":
             duration = float(request.parameters.get("duration_seconds", 5))
             if not math.isfinite(duration) or (duration != -1 and duration <= 0):
-                raise ProviderError("duration_seconds must be positive or -1 (auto)")
+                raise GenerationAdapterError("duration_seconds must be positive or -1 (auto)")
             if "resolution" in request.parameters and not str(request.parameters["resolution"]).strip():
-                raise ProviderError("resolution must not be empty")
+                raise GenerationAdapterError("resolution must not be empty")
 
     @abstractmethod
-    def generate(self, request: GenerationRequest, context: ProviderContext, output_dir: Path) -> GenerationResult:
+    def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         """Run submit→poll→download synchronously; return the media file plus provider usage."""
 
 
@@ -218,7 +218,7 @@ def metering_from_request(request: GenerationRequest) -> dict[str, Any]:
     return units
 
 
-def sanitize_provider_error(message: str, credential: str | None) -> str:
+def sanitize_adapter_error(message: str, credential: str | None) -> str:
     """Strip secrets and noise before an error can reach logs or clients (plan §18.5)."""
     text = message
     if credential:
@@ -228,7 +228,7 @@ def sanitize_provider_error(message: str, credential: str | None) -> str:
     return text[:500]
 
 
-def provider_http_error(label: str, exc: httpx.HTTPError, credential: str | None) -> str:
+def adapter_http_error(label: str, exc: httpx.HTTPError, credential: str | None) -> str:
     """Surface provider HTTP failures with the response body when available.
 
     httpx's default message links to MDN but omits the provider's JSON error, which is the
@@ -243,7 +243,7 @@ def provider_http_error(label: str, exc: httpx.HTTPError, credential: str | None
             body = ""
         if body:
             message = f"{message}; body: {body[:800]}"
-    return sanitize_provider_error(message, credential)
+    return sanitize_adapter_error(message, credential)
 
 
 def image_file_to_base64(path: Path) -> tuple[str, str]:
@@ -302,7 +302,7 @@ def poll_until_ready(
         time.sleep(interval)
     # 超时文案让调用方给:有几家写的是自己的措辞(「MiniMax 视频生成超时」),那句话会一路
     # 显示到用户眼前,收成一份通用句子等于把"是哪一家超时了"这个信息删掉。
-    raise ProviderError(timed_out_message)
+    raise GenerationAdapterError(timed_out_message)
 
 
 #: 每个角色对应的「直接给个 url」参数名。界面既可以选素材库里的图,也可以粘一个外链;

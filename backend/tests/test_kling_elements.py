@@ -14,8 +14,9 @@ from __future__ import annotations
 
 import pytest
 
-from app.ai.providers.contracts.generation import GenerationRequest, ProviderError
-from app.ai.providers.adapters.kuaishou import elements as kling_elements, kling
+from app.ai.providers.contracts.generation import GenerationRequest, GenerationAdapterError
+from app.ai.providers.adapters.kuaishou.kling import elements as kling_elements
+from app.ai.providers.adapters.kuaishou.kling import video as kling
 
 
 class Test建主体的请求体:
@@ -30,11 +31,11 @@ class Test建主体的请求体:
         ]
 
     def test_少于两张建不起来(self) -> None:
-        with pytest.raises(ProviderError, match="2～4 张"):
+        with pytest.raises(GenerationAdapterError, match="2～4 张"):
             kling_elements.build_create_payload(["only.png"])
 
     def test_多于四张也建不起来(self) -> None:
-        with pytest.raises(ProviderError, match="2～4 张"):
+        with pytest.raises(GenerationAdapterError, match="2～4 张"):
             kling_elements.build_create_payload([f"{i}.png" for i in range(5)])
 
     def test_描述是必填的_空了要有兜底(self) -> None:
@@ -84,7 +85,7 @@ class Test建主体的轮询:
         assert kling_elements.extract_element_id(done) == "42"
 
     def test_失败直接抛_不要等超时(self) -> None:
-        with pytest.raises(ProviderError):
+        with pytest.raises(GenerationAdapterError):
             kling_elements.extract_element_id({"data": {"task_status": "failed", "task_status_msg": "风控"}})
 
 
@@ -97,7 +98,7 @@ class Test引用主体:
         ]
 
     def test_一次最多引三个(self) -> None:
-        with pytest.raises(ProviderError, match="最多引用 3"):
+        with pytest.raises(GenerationAdapterError, match="最多引用 3"):
             kling_elements.build_element_contents(["1", "2", "3", "4"])
 
 
@@ -121,7 +122,7 @@ class Test两代接口:
 
     def test_普通版不能靠挂主体偷偷换成_omni(self) -> None:
         request = GenerationRequest(kind="video", model="kling-v3", prompt="x")
-        with pytest.raises(ProviderError, match="Omni"):
+        with pytest.raises(GenerationAdapterError, match="Omni"):
             kling.v3_endpoint(request, has_elements=True)
 
     def test_新接口的请求体是_contents_数组(self) -> None:
@@ -189,5 +190,5 @@ class Test新接口的结果解析:
         assert kling.extract_video_url_v3(payload) == "https://x/v.mp4"
 
     def test_失败直接抛(self) -> None:
-        with pytest.raises(ProviderError):
+        with pytest.raises(GenerationAdapterError):
             kling.extract_video_url_v3({"code": 0, "data": [{"status": "failed", "message": "风控"}]})

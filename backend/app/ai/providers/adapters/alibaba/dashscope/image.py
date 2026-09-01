@@ -10,14 +10,14 @@ from app.core.http_retry import RetryingClient
 from app.ai.providers.contracts.generation import (
     REFERENCE_IMAGE,
     poll_until_ready,
-    GenerationProvider,
+    GenerationAdapter,
     GenerationRequest,
     GenerationResult,
-    ProviderContext,
-    ProviderError,
+    GenerationAdapterContext,
+    GenerationAdapterError,
     source_values,
     metering_from_request,
-    provider_http_error,
+    adapter_http_error,
 )
 from app.ai.providers.media_transfer import download_to_path
 
@@ -50,7 +50,7 @@ def build_submit_payload(request: GenerationRequest) -> dict[str, Any]:
     return payload
 
 
-def build_edit_payload(request: GenerationRequest, context: ProviderContext | None = None) -> dict[str, Any]:
+def build_edit_payload(request: GenerationRequest, context: GenerationAdapterContext | None = None) -> dict[str, Any]:
     model = resolve_edit_model(request, context)
     # 张数由描述符管(qwen-image-edit 1~3、qwen-image-2.0-pro 0~3,都是接口自己报的),
     # 提交前那道统一校验已经拦过。这里再截一刀的话,超出的那几张会被**悄悄丢掉** ——
@@ -78,26 +78,26 @@ def build_edit_payload(request: GenerationRequest, context: ProviderContext | No
     }
 
 
-def resolve_edit_model(request: GenerationRequest, context: ProviderContext | None = None) -> str:
-    model = (request.model or (context.default_model if context else "") or "qwen-image-edit").strip()
+def resolve_edit_model(request: GenerationRequest, context: GenerationAdapterContext | None = None) -> str:
+    model = (request.model or (context.configured_model_id if context else "") or "qwen-image-edit").strip()
     if model in {"qwen-image", "qwen-image-plus", "qwen-image-max"}:
         return "qwen-image-edit"
     return model
 
 
-def resolve_dashscope_base(context: ProviderContext) -> str:
+def resolve_dashscope_base(context: GenerationAdapterContext) -> str:
     """Qwen image uses DashScope's native async task API, not Bailian compatible-mode.
 
     A single Alibaba profile may still use an OpenAI-compatible base_url for chat models.
     Treat image generation as a separate capability endpoint; it can be overridden explicitly
     via extra.dashscope_base_url, otherwise it must use DashScope native.
     """
-    configured = str(context.extra.get("dashscope_base_url") or context.extra.get("generation_base_url") or "").strip()
+    configured = str(context.options.get("dashscope_base_url") or context.options.get("generation_base_url") or "").strip()
     return (configured or DASHSCOPE_BASE).rstrip("/")
 
 
-def resolve_qwen_edit_base(context: ProviderContext) -> str:
-    configured = str(context.extra.get("qwen_edit_base_url") or context.extra.get("generation_base_url") or "").strip()
+def resolve_qwen_edit_base(context: GenerationAdapterContext) -> str:
+    configured = str(context.options.get("qwen_edit_base_url") or context.options.get("generation_base_url") or "").strip()
     if configured:
         return configured.rstrip("/")
     base_url = (context.base_url or "").rstrip("/")
@@ -127,10 +127,10 @@ def extract_result_urls(task_payload: dict[str, Any]) -> list[str] | None:
     if status == "SUCCEEDED":
         urls = [str(one["url"]) for one in (output.get("results") or []) if isinstance(one, dict) and one.get("url")]
         if not urls:
-            raise ProviderError("Provider returned success without a result URL")
+            raise GenerationAdapterError("Provider returned success without a result URL")
         return urls
     if status in ("FAILED", "CANCELED"):
-        raise ProviderError(f"Generation failed with status {status}")
+        raise GenerationAdapterError(f"Generation failed with status {status}")
     return None
 
 
@@ -148,13 +148,13 @@ def _download_all(urls: list[str], output_dir: Path) -> list[Path]:
     return targets
 
 
-class QwenImageProvider(GenerationProvider):
-    name = "alibaba"
-    kind = "image"
+class QwenImageAdapter(GenerationAdapter):
+    vendor_id = "alibaba"
+    media_kind = "image"
 
-    def generate(self, request: GenerationRequest, context: ProviderContext, output_dir: Path) -> GenerationResult:
+    def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         if not context.api_key:
-            raise ProviderError("DashScope API key is not configured (settings → 生成服务)")
+            raise GenerationAdapterError("DashScope API key is not configured (settings → 生成服务)")
         base_url = resolve_dashscope_base(context)
         try:
             # URL 与本地素材同属 reference_image。只看 sources_for 会让 URL-only 请求
@@ -166,7 +166,7 @@ class QwenImageProvider(GenerationProvider):
                     submit.raise_for_status()
                     urls = extract_result_urls(submit.json())
                     if not urls:
-                        raise ProviderError("Provider returned success without a result URL")
+                        raise GenerationAdapterError("Provider returned success without a result URL")
                     targets = _download_all(urls, output_dir)
                     return GenerationResult(output_paths=targets, usage=metering_from_request(request), raw_usage=submit.json())
 
@@ -176,11 +176,11 @@ class QwenImageProvider(GenerationProvider):
                 submit.raise_for_status()
                 task_id = ((submit.json().get("output") or {}).get("task_id")) or ""
                 if not task_id:
-                    raise ProviderError("Provider did not return a task id")
+                    raise GenerationAdapterError("Provider did not return a task id")
 
                 urls, poll_payload = poll_until_ready(client, f"/api/v1/tasks/{task_id}", extract_result_urls)
 
                 targets = _download_all(urls, output_dir)
                 return GenerationResult(output_paths=targets, usage=metering_from_request(request), raw_usage=poll_payload)
         except httpx.HTTPError as exc:
-            raise ProviderError(provider_http_error("DashScope request failed", exc, context.api_key)) from exc
+            raise GenerationAdapterError(adapter_http_error("DashScope request failed", exc, context.api_key)) from exc

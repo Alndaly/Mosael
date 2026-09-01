@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Asset, Transcript
 from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
 from app.domain.usage import BillableCall, billable
-from app.domain.providers import require_profile
+from app.domain.providers import require_connection
 from app.domain.publish import PublishDomainError
 
 TIMEOUT_SECONDS = 90
@@ -34,7 +34,7 @@ def generate_copy(
     brief: str = "",
     profile_id: str | None = None,
 ) -> dict[str, Any]:
-    profile = require_profile(db, profile_id, user_id=user_id, error=PublishDomainError)
+    profile = require_connection(db, profile_id, user_id=user_id, error=PublishDomainError)
     parts: list[str] = []
     if brief.strip():
         parts.append(f"创作者要求:{brief.strip()}")

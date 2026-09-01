@@ -12,14 +12,14 @@ from app.core.http_retry import RetryingClient
 from app.ai.providers.contracts.generation import (
     FIRST_FRAME,
     poll_until_ready,
-    GenerationProvider,
+    GenerationAdapter,
     GenerationRequest,
     GenerationResult,
-    ProviderContext,
-    ProviderError,
+    GenerationAdapterContext,
+    GenerationAdapterError,
     image_file_to_base64,
     metering_from_request,
-    provider_http_error,
+    adapter_http_error,
 )
 from app.ai.providers.media_transfer import download_to_path, fetch_bytes
 
@@ -32,10 +32,10 @@ GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 DEFAULT_MODEL_ID = "veo-3.1-generate-preview"
 
 
-def resolve_model(request: GenerationRequest, context: ProviderContext) -> str:
+def resolve_model(request: GenerationRequest, context: GenerationAdapterContext) -> str:
     if request.model != "veo":
         return request.model
-    return context.default_model or DEFAULT_MODEL_ID
+    return context.configured_model_id or DEFAULT_MODEL_ID
 
 
 def build_submit_payload(request: GenerationRequest) -> dict[str, Any]:
@@ -65,7 +65,7 @@ def extract_video_uri(operation_payload: dict[str, Any]) -> str | None:
     if operation_payload.get("error"):
         error = operation_payload["error"]
         message = error.get("message") if isinstance(error, dict) else str(error)
-        raise ProviderError(f"Generation failed: {message}")
+        raise GenerationAdapterError(f"Generation failed: {message}")
     if not operation_payload.get("done"):
         return None
 
@@ -78,16 +78,16 @@ def extract_video_uri(operation_payload: dict[str, Any]) -> str | None:
         video = sample.get("video") or {}
         if isinstance(video, dict) and video.get("uri"):
             return str(video["uri"])
-    raise ProviderError("Provider returned success without a video URI")
+    raise GenerationAdapterError("Provider returned success without a video URI")
 
 
-class VeoProvider(GenerationProvider):
-    name = "google"
-    kind = "video"
+class VeoAdapter(GenerationAdapter):
+    vendor_id = "google"
+    media_kind = "video"
 
-    def generate(self, request: GenerationRequest, context: ProviderContext, output_dir: Path) -> GenerationResult:
+    def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         if not context.api_key:
-            raise ProviderError("Google API key is not configured (settings → 生成服务)")
+            raise GenerationAdapterError("Google API key is not configured (settings → 生成服务)")
         base_url = (context.base_url or GEMINI_BASE).rstrip("/")
         model = resolve_model(request, context)
         payload = build_submit_payload(_with_first_frame_inline(request, context.api_key))
@@ -98,7 +98,7 @@ class VeoProvider(GenerationProvider):
                 submit.raise_for_status()
                 operation_name = submit.json().get("name") or ""
                 if not operation_name:
-                    raise ProviderError("Provider did not return an operation name")
+                    raise GenerationAdapterError("Provider did not return an operation name")
 
                 uri, poll_payload = poll_until_ready(
                     client, f"/{operation_name.lstrip('/')}", extract_video_uri
@@ -116,7 +116,7 @@ class VeoProvider(GenerationProvider):
                 )
                 return GenerationResult(output_paths=[target], usage=metering_from_request(request), raw_usage=poll_payload)
         except httpx.HTTPError as exc:
-            raise ProviderError(provider_http_error("Google Veo request failed", exc, context.api_key)) from exc
+            raise GenerationAdapterError(adapter_http_error("Google Veo request failed", exc, context.api_key)) from exc
 
 
 def _with_first_frame_inline(request: GenerationRequest, api_key: str) -> GenerationRequest:
@@ -156,4 +156,4 @@ def _with_first_frame_inline(request: GenerationRequest, api_key: str) -> Genera
             sources=request.sources,
         )
     except httpx.HTTPError as exc:
-        raise ProviderError(provider_http_error("Failed to fetch Veo first frame", exc, api_key)) from exc
+        raise GenerationAdapterError(adapter_http_error("Failed to fetch Veo first frame", exc, api_key)) from exc

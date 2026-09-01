@@ -16,13 +16,13 @@ from __future__ import annotations
 import pytest
 
 from app.ai.runtime import asr_models
-from app.domain.voices import service
+from app.domain.voices import transcription
 
 
 @pytest.fixture(autouse=True)
 def _both_engines_available(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(asr_models, "resolve_engine_python", lambda engine: f"/fake/{engine}")
-    monkeypatch.setattr(service.settings, "asr_provider", "auto")
+    monkeypatch.setattr(transcription.settings, "asr_provider", "auto")
 
 
 def test_there_is_exactly_one_funasr_entry() -> None:
@@ -32,14 +32,14 @@ def test_there_is_exactly_one_funasr_entry() -> None:
 
 
 def test_the_funasr_model_is_multilingual() -> None:
-    assert service.FUNASR_MODEL == "iic/SenseVoiceSmall"
+    assert transcription.FUNASR_MODEL == "iic/SenseVoiceSmall"
 
 
 @pytest.mark.parametrize("language", ["", "zh", "en", "ja", "auto"])
 def test_language_changes_neither_engine_nor_model(language: str) -> None:
     """**语言不再分流**:识别模型本来就支持 50+ 语种,把语言传给它即可,不必换模型、更不必换引擎。"""
-    assert service.resolve_asr_runtime(language)[1] == "funasr"
-    assert service.FUNASR_MODEL == "iic/SenseVoiceSmall"
+    assert transcription.resolve_transcription_runtime(language)[1] == "funasr"
+    assert transcription.FUNASR_MODEL == "iic/SenseVoiceSmall"
 
 
 def test_speaker_diarisation_survives_the_switch() -> None:
@@ -52,8 +52,8 @@ def test_speaker_diarisation_survives_the_switch() -> None:
 
 
 def test_an_explicit_setting_still_wins(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(service.settings, "asr_provider", "whisperx")
-    assert service.resolve_asr_runtime("zh")[1] == "whisperx"
+    monkeypatch.setattr(transcription.settings, "asr_provider", "whisperx")
+    assert transcription.resolve_transcription_runtime("zh")[1] == "whisperx"
 
 
 def test_warmup_and_transcribe_build_the_same_pipeline() -> None:
@@ -86,4 +86,4 @@ def test_warmup_and_transcribe_build_the_same_pipeline() -> None:
 def test_the_default_model_matches_the_backend() -> None:
     """worker 的默认模型和后端挑的必须是同一个 —— 不然"装了却用不上"会再来一次。"""
     from app.ai.runtime.workers import asr as asr_worker
-    assert asr_worker.DEFAULT_FUNASR_MODEL == service.FUNASR_MODEL
+    assert asr_worker.DEFAULT_FUNASR_MODEL == transcription.FUNASR_MODEL

@@ -1,4 +1,4 @@
-"""钥匙是人的,连接是部署的。
+"""连接和钥匙都归创建它们的人,但分别保存、分别管理生命周期。
 
 跑出来的现状(第 4 步动手前):
 
@@ -16,10 +16,10 @@
 
 拆开的依据是这两件事回答的问题不同:
 
-    ProviderProfile     怎么连到这家供应商(端点、模型目录、定价)—— 部署的配置
-    ProviderCredential  谁的钥匙 —— 某个人的身份
+    ProviderProfile     这个人怎么连到这家供应商(端点、模型目录、定价)
+    ProviderCredential  这个人在这条连接上使用的钥匙或 OAuth 身份
 
-解析顺序:**自己的 → 部署管理员共享的 → 报「请先配置」**。
+解析规则:**只选择自己的连接,再装配自己在该连接上的凭据;不跨用户回退**。
 
 密钥列从 `provider_profiles` **搬走**而不是并存 —— 搬走之后 `ProviderProfile` 上没有
 `.api_key` 可读,任何漏改的读取点会当场炸掉,而不是悄悄读到别人的钥匙。
@@ -46,7 +46,7 @@ def _deployment_admin_and_member() -> tuple[TestClient, TestClient]:
 
 
 def _connection(admin: TestClient, name: str = "OpenAI") -> str:
-    """建一条**连接**(不带钥匙)。这是部署管理员的事。"""
+    """为当前用户建一条**连接**(不带钥匙)。"""
     made = admin.post("/api/settings/providers", json={"name": name, "vendor": "openai", "config": {}})
     assert made.status_code == 200, made.text
     return made.json()["id"]
@@ -73,15 +73,15 @@ def test_an_ordinary_member_can_bring_their_own_key() -> None:
 
 def test_my_key_is_not_readable_by_anyone_else() -> None:
     admin, mate = _deployment_admin_and_member()
-    profile_id = _connection(admin)
-    mate.put(f"/api/settings/providers/{profile_id}/credential", json={"api_key": "sk-MATE-1234"})
+    profile_id = _connection(mate)
+    saved = mate.put(f"/api/settings/providers/{profile_id}/credential", json={"api_key": "sk-MATE-1234"})
+    assert saved.status_code == 200
 
     listed = admin.get("/api/settings/providers").json()
-    assert listed[0]["key_hint"] == "", "别人的钥匙提示不该出现在我的列表里"
+    assert all(row["id"] != profile_id for row in listed), "别人的连接不该出现在我的列表里"
 
     acquired = admin.post(f"/api/agent/provider-credentials/{profile_id}/acquire")
-    assert acquired.status_code == 200, acquired.text
-    assert acquired.json()["credential"] is None, "acquire 拿到了别人的凭据"
+    assert acquired.status_code == 404, acquired.text
 
 
 def test_deleting_my_key_leaves_the_connection_alone() -> None:
@@ -117,11 +117,33 @@ def test_each_person_uses_their_own_key() -> None:
     mate.put(f"/api/settings/providers/{mine}/credential", json={"api_key": "sk-MATE"})
 
     with SessionLocal() as db:
-        resolved = provider_credentials.resolve(db, db.get(ProviderProfile, mine), _user_id("mate"))
+        resolved = provider_credentials.resolve_connection(db, db.get(ProviderProfile, mine), _user_id("mate"))
         assert resolved is not None and resolved.api_key == "sk-MATE"
         # 别人那条连接就算硬拿到 id,钥匙也不是他的。
-        others = provider_credentials.resolve(db, db.get(ProviderProfile, theirs), _user_id("mate"))
+        others = provider_credentials.resolve_connection(db, db.get(ProviderProfile, theirs), _user_id("mate"))
         assert others is None or not others.api_key
+
+
+def test_default_resolution_never_selects_another_users_earlier_connection() -> None:
+    """同一 vendor 下按创建时间选默认项时,必须先按 owner 过滤。
+
+    否则管理员较早创建的连接会被所有人先选中；随后凭据装配又正确地拒绝跨用户读取，最终让
+    已经配置好自己连接的普通成员得到 None。
+    """
+    from app.domain import providers
+
+    admin, mate = _deployment_admin_and_member()
+    theirs = _connection(admin, "管理员较早创建的")
+    mine = _connection(mate, "成员自己的")
+    admin.put(f"/api/settings/providers/{theirs}/credential", json={"api_key": "sk-ADMIN"})
+    mate.put(f"/api/settings/providers/{mine}/credential", json={"api_key": "sk-MATE"})
+
+    with SessionLocal() as db:
+        resolved = providers.resolve_connection(db, "openai", user_id=_user_id("mate"))
+
+    assert resolved is not None
+    assert resolved.id == mine
+    assert resolved.api_key == "sk-MATE"
 
 
 def test_without_any_key_it_says_so_instead_of_silently_using_someone_elses() -> None:
@@ -150,7 +172,7 @@ def test_there_is_no_such_thing_as_a_shared_key() -> None:
 
     assert "shared" not in set(ProviderCredential.__table__.columns.keys())
     with SessionLocal() as db:
-        assert provider_credentials.resolve(db, db.get(ProviderProfile, profile_id), _user_id("mate")) is None
+        assert provider_credentials.resolve_connection(db, db.get(ProviderProfile, profile_id), _user_id("mate")) is None
 
 
 # ---------------- 搬走,而不是并存 ----------------
@@ -185,9 +207,9 @@ def test_the_migration_hands_existing_keys_to_the_deployment_admin() -> None:
     from app.domain import provider_credentials
 
     with SessionLocal() as db:
-        mine = provider_credentials.resolve(db, db.get(ProviderProfile, profile_id), _user_id("tester"))
+        mine = provider_credentials.resolve_connection(db, db.get(ProviderProfile, profile_id), _user_id("tester"))
         assert mine is not None and mine.api_key == "sk-LEGACY", "老钥匙没有归到管理员名下"
-        assert provider_credentials.resolve(db, db.get(ProviderProfile, profile_id), _user_id("mate")) is None
+        assert provider_credentials.resolve_connection(db, db.get(ProviderProfile, profile_id), _user_id("mate")) is None
     with engine.begin() as conn:
         assert "api_key" not in {row[1] for row in conn.execute(text("PRAGMA table_info(provider_profiles)"))}
 
@@ -227,5 +249,5 @@ def test_the_migration_adds_missing_columns_to_an_existing_credential_table() ->
     from app.domain import provider_credentials
 
     with SessionLocal() as db:
-        resolved = provider_credentials.resolve(db, db.get(ProviderProfile, profile_id), _user_id("tester"))
+        resolved = provider_credentials.resolve_connection(db, db.get(ProviderProfile, profile_id), _user_id("tester"))
         assert resolved is not None and resolved.api_key == "sk-LEGACY"

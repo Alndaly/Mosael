@@ -180,7 +180,11 @@ def test_重试对所有_AI_出站调用生效(monkeypatch):
     #: 放宽的话下一个真绕过重试的也会一起溜过去。
     NO_HTTP = {
         # Edge 走 edge_tts 库(它自己开 WebSocket),这个模块里没有一次 HTTP 调用可以被包起来。
-        "app.ai.providers.adapters.edge",
+        "app.ai.providers.adapters.microsoft.edge_speech",
+        # 火山播客走供应商要求的有状态 WebSocket 协议；HTTP 重试客户端不适用于长连接帧流。
+        "app.ai.providers.adapters.bytedance.volcano.podcast",
+        # 纯二进制编解码 Module，不执行网络 I/O。
+        "app.ai.providers.adapters.bytedance.volcano.podcast_protocol",
     }
 
     #: **不自己建连接**的模块 —— 请求是拿调用方给的 client 发的,而那个 client 就是
@@ -189,7 +193,7 @@ def test_重试对所有_AI_出站调用生效(monkeypatch):
     BORROWS_CLIENT = {
         # 可灵的主体库:建主体是生成流程里的一步,用的是 kling.py 已经开好的那个连接
         # (同一个 base_url、同一份 JWT 鉴权)。自己再开一个等于把鉴权逻辑抄第二遍。
-        "app.ai.providers.adapters.kuaishou.elements",
+        "app.ai.providers.adapters.kuaishou.kling.elements",
     }
 
     missing = []
@@ -246,7 +250,7 @@ def test_地址空着时给人话而不是_httpx_那句协议错误() -> None:
     from app.db.models import ProviderProfile
     from app.domain import provider_models
     from app.domain.ai_chat import AiChatError, target_for
-    from app.domain.provider_credentials import ResolvedProvider
+    from app.domain.provider_credentials import ResolvedConnection
     from tests.util import fresh_client
 
     client = fresh_client()
@@ -256,7 +260,7 @@ def test_地址空着时给人话而不是_httpx_那句协议错误() -> None:
     with SessionLocal() as db:
         provider_models.upsert(db, db.get(ProviderProfile, profile_id), "some-chat-model", source="manual")
         db.commit()
-        blank = ResolvedProvider(
+        blank = ResolvedConnection(
             id=profile_id, name="没填地址的连接", vendor="openai", base_url="", auth_type="api_key", enabled=True, api_key="k"
         )
         with _pytest.raises(AiChatError, match="服务地址"):
@@ -272,7 +276,7 @@ def test_订阅连接不报_去填服务地址_而是说清只有智能体能用
     from app.db.models import ProviderProfile
     from app.domain import provider_models
     from app.domain.ai_chat import AiChatError, target_for
-    from app.domain.provider_credentials import ResolvedProvider
+    from app.domain.provider_credentials import ResolvedConnection
     from tests.util import fresh_client
 
     client = fresh_client()
@@ -282,7 +286,7 @@ def test_订阅连接不报_去填服务地址_而是说清只有智能体能用
     with SessionLocal() as db:
         provider_models.upsert(db, db.get(ProviderProfile, profile_id), "some-chat-model", source="manual")
         db.commit()
-        oauth_profile = ResolvedProvider(
+        oauth_profile = ResolvedConnection(
             id=profile_id, name="订阅连接", vendor="kimi-coding", base_url="",
             auth_type="oauth", enabled=True, oauth_credential={"access_token": "x"},
         )

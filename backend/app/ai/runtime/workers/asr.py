@@ -92,7 +92,7 @@ def funasr_sentences_to_segments(sentences: list[dict[str, Any]]) -> list[dict[s
 
 
 #: FunASR 的默认识别模型。**多语种**:官方说明「支持超过 50 种语言,识别效果上优于 Whisper 模型」,
-#: 标点与逆文本规整都在模型内部。与后端的 service.FUNASR_MODEL 是同一个值。
+#: 标点与逆文本规整都在模型内部。与后端的 transcription.FUNASR_MODEL 是同一个值。
 DEFAULT_FUNASR_MODEL = "iic/SenseVoiceSmall"
 
 

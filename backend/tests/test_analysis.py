@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from app.core.db import SessionLocal
-from app.db.models import Asset, ProviderProfile
+from app.db.models import Asset
 from app.domain.analysis import service
 from tests.media_fixtures import TINY_HEIC
 from tests.util import add_provider, fresh_client, make_video_asset
@@ -37,7 +37,7 @@ def test_profile_picking_prefers_vision_vendors() -> None:
     client.post("/api/workspaces", json={"name": "W"})  # instance settings need an admin
     with SessionLocal() as db:
         with pytest.raises(service.AnalysisError):
-            service.pick_analysis_profile(db, None, None)
+            service.select_analysis_connection(db, None, None)
     add_profile(client, "minimax")
     add_profile(client, "moonshot")
     with SessionLocal() as db:
@@ -45,7 +45,7 @@ def test_profile_picking_prefers_vision_vendors() -> None:
 
         # 钥匙是建连接那个人的 —— 解析要说清「为谁」(见 domain/provider_credentials)。
         me = db.query(User).order_by(User.created_at).first().id
-        assert service.pick_analysis_profile(db, None, me).vendor == "moonshot"  # order: moonshot first
+        assert service.select_analysis_connection(db, None, me).vendor == "moonshot"  # order: moonshot first
 
 
 def test_standalone_analysis_skips_agent_only_oauth_connections() -> None:
@@ -74,7 +74,7 @@ def test_standalone_analysis_skips_agent_only_oauth_connections() -> None:
         db.commit()
 
     with SessionLocal() as db:
-        assert service.pick_analysis_profile(db, None, _me()).name == "MiniMax API"
+        assert service.select_analysis_connection(db, None, _me()).name == "MiniMax API"
 
 
 def test_build_messages_shape() -> None:
@@ -220,23 +220,23 @@ def _add_native_profile(
     db.commit()
 
 
-def test_pick_native_video_profile_priority() -> None:
+def test_select_native_video_connection_priority() -> None:
     client = fresh_client()
     client.post("/api/workspaces", json={"name": "W"})
     with SessionLocal() as db:
-        assert service.pick_native_video_profile(db, None, None) is None
+        assert service.select_native_video_connection(db, None, None) is None
         _add_native_profile(db, "moonshot")
         _add_native_profile(db, "alibaba")
     with SessionLocal() as db:
         from app.db.models import User
 
         me = db.query(User).order_by(User.created_at).first().id
-        assert service.pick_native_video_profile(db, None, me).vendor == "alibaba"  # google>alibaba>moonshot
+        assert service.select_native_video_connection(db, None, me).vendor == "alibaba"  # google>alibaba>moonshot
         _add_native_profile(
             db, "google", base_url="https://gl/v1beta", model="gemini-2.0-flash", capability_ids=["chat"]
         )
     with SessionLocal() as db:
-        assert service.pick_native_video_profile(db, None, _me()).vendor == "google"
+        assert service.select_native_video_connection(db, None, _me()).vendor == "google"
 
 
 def test_analyze_video_native_qwen_video_url(monkeypatch) -> None:
@@ -356,10 +356,10 @@ def test_vision_call_refuses_a_profile_with_no_chat_model() -> None:
     那个回落曾经真实存在:用户选的是 Kimi,分析却跑在别家端点的 gpt-4o-mini 上 ——
     静默换模型换厂商,正是 provider_credentials 要消灭的「花错钱」。
     """
-    from app.domain.provider_credentials import ResolvedProvider
+    from app.domain.provider_credentials import ResolvedConnection
 
     fresh_client()  # 建表 —— 没有它,单独跑这条测试时 model_id_for 会撞「没有这张表」
-    profile = ResolvedProvider(
+    profile = ResolvedConnection(
         id="no-such-profile", name="空连接", vendor="moonshot",
         base_url="https://api.moonshot.cn/v1", auth_type="api_key", enabled=True,
         api_key="sk-test",

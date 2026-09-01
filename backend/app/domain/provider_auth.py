@@ -117,7 +117,8 @@ def commit_credential(
     """
     key = _lease_key(profile_id, user_id)
     _check_lease(key, lease_token)
-    if db.get(ProviderProfile, profile_id) is None:
+    profile = db.get(ProviderProfile, profile_id)
+    if profile is None or profile.owner_user_id != user_id:
         release_lease(profile_id, user_id, lease_token)
         raise CredentialLeaseError("供应商不存在")
     if credential is not None:

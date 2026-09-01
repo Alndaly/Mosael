@@ -14,17 +14,19 @@
 
 from __future__ import annotations
 
+import pytest
+
 from app.core.db import SessionLocal
-from app.db.models import ProviderProfile
+from app.db.models import ProviderProfile, User
 from tests.util import fresh_client, second_client
 
 
-def _create(client, name: str) -> str:
+def _create(client, name: str, vendor: str = "openai-compatible") -> str:
     created = client.post(
         "/api/settings/providers",
         json={
             "name": name,
-            "vendor": "openai-compatible",
+            "vendor": vendor,
             "config": {"base_url": "https://x.example/v1", "default_model": "m", "api_key": "k"},
         },
     )
@@ -101,3 +103,69 @@ def test_i_can_see_my_own_endpoint() -> None:
     _create(mate, "我的")
 
     assert "https://x.example/v1" in mate.get("/api/settings/providers").text
+
+
+def test_connection_resolution_checks_vendor_as_well_as_owner() -> None:
+    """显式 id 不能让调用方口中的 vendor 失效；否则 ComfyUI 路径能拿 OpenAI 连接去调用。"""
+    from app.domain.providers import find_enabled_connection
+
+    client = fresh_client()
+    profile_id = _create(client, "OpenAI")
+    with SessionLocal() as db:
+        user_id = db.query(User).filter(User.username == "tester").one().id
+        assert find_enabled_connection(db, "comfyui", profile_id, owner_user_id=user_id) is None
+
+
+def test_analysis_default_selection_skips_other_users_earlier_connection() -> None:
+    from app.domain.analysis.service import select_analysis_connection
+
+    admin = fresh_client()
+    _create(admin, "管理员的 Kimi", "moonshot")
+    mate = second_client("mate")
+    mine = _create(mate, "我的 Kimi", "moonshot")
+
+    with SessionLocal() as db:
+        mate_id = db.query(User).filter(User.username == "mate").one().id
+        resolved = select_analysis_connection(db, None, mate_id)
+
+    assert resolved.id == mine
+
+
+def test_translation_default_selection_skips_other_users_connection() -> None:
+    from app.domain.translate import resolve_ai_chat_target
+
+    admin = fresh_client()
+    _create(admin, "管理员的 OpenAI")
+    mate = second_client("mate")
+    mine = _create(mate, "我的 OpenAI")
+
+    with SessionLocal() as db:
+        mate_id = db.query(User).filter(User.username == "mate").one().id
+        target = resolve_ai_chat_target(db, None, mate_id)
+
+    assert target.profile_id == mine
+
+
+def test_i_cannot_set_my_default_to_someone_elses_model() -> None:
+    admin = fresh_client()
+    theirs = _create(admin, "管理员的")
+    mate = second_client("mate")
+
+    denied = mate.put(
+        "/api/settings/provider-defaults/chat",
+        json={"provider_profile_id": theirs, "model": "m"},
+    )
+    assert denied.status_code == 404
+
+
+def test_generation_rejects_a_foreign_connection_before_queuing() -> None:
+    from app.domain.generation.operations import GenerationDomainError, _resolve_provider_profile
+
+    admin = fresh_client()
+    theirs = _create(admin, "管理员的")
+    second_client("mate")
+
+    with SessionLocal() as db:
+        mate_id = db.query(User).filter(User.username == "mate").one().id
+        with pytest.raises(GenerationDomainError, match="not available"):
+            _resolve_provider_profile(db, theirs, owner_user_id=mate_id)

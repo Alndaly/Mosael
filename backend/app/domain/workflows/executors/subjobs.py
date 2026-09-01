@@ -22,7 +22,7 @@ from app.domain.workflows.executors.common import wait_for_job
 
 @register("transcribe_asset")
 def transcribe_asset(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    from app.domain.voices.service import start_transcription
+    from app.domain.voices.transcription import start_transcription
 
     asset_id = str(config.get("asset_id", ""))
     child = start_transcription(db, asset_id, created_by=current_actor(db))

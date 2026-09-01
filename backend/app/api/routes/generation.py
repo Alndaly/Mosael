@@ -144,11 +144,11 @@ def list_comfyui_workflows(db: DbSession, user: CurrentUser, profile_id: str | N
     """列出某 ComfyUI 档案实例里保存的工作流,供生成表单下拉。ComfyUI 细节封在 comfyui_client,
     这里只解析档案地址、转发列表。连不上 ComfyUI → 502,前端据此提示。"""
     from app.ai.providers.adapters.comfyui.client import ComfyUIClient
-    from app.domain.providers import resolve_profile
+    from app.domain.providers import resolve_connection
 
     from app.domain import provider_models
 
-    profile = resolve_profile(db, "comfyui", profile_id, user_id=user.id)
+    profile = resolve_connection(db, "comfyui", profile_id, user_id=user.id)
     base = (profile.base_url if profile is not None else "") or "http://127.0.0.1:8188"
     try:
         workflows = ComfyUIClient(base).list_workflows()
@@ -174,9 +174,9 @@ def get_comfyui_workflow_params(
 ) -> list[dict]:
     """提取某工作流的可调参数(类型/范围/当前值/语义角色),供动态表单渲染。"""
     from app.ai.providers.adapters.comfyui.client import ComfyUIClient
-    from app.domain.providers import resolve_profile
+    from app.domain.providers import resolve_connection
 
-    profile = resolve_profile(db, "comfyui", profile_id, user_id=user.id)
+    profile = resolve_connection(db, "comfyui", profile_id, user_id=user.id)
     base = (profile.base_url if profile is not None else "") or "http://127.0.0.1:8188"
     try:
         return ComfyUIClient(base).fetch_workflow_params(workflow)

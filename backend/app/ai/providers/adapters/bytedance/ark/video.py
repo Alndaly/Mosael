@@ -9,11 +9,11 @@ from app.core.http_retry import RetryingClient
 
 from app.ai.providers.contracts.generation import (
     poll_until_ready,
-    GenerationProvider,
+    GenerationAdapter,
     GenerationRequest,
     GenerationResult,
-    ProviderContext,
-    ProviderError,
+    GenerationAdapterContext,
+    GenerationAdapterError,
     FIRST_FRAME,
     LAST_FRAME,
     REFERENCE_IMAGE,
@@ -22,7 +22,7 @@ from app.ai.providers.contracts.generation import (
     first_frame_value,
     source_values,
     metering_from_request,
-    provider_http_error,
+    adapter_http_error,
 )
 from app.ai.providers.media_transfer import download_to_path
 
@@ -47,11 +47,11 @@ def _is_seedance2(model: str) -> bool:
     return "seedance-2" in model
 
 
-def resolve_seedance_model(request: GenerationRequest, context: ProviderContext | None = None) -> str:
-    return (request.model or (context.default_model if context else "") or DEFAULT_MODEL_ID).strip()
+def resolve_seedance_model(request: GenerationRequest, context: GenerationAdapterContext | None = None) -> str:
+    return (request.model or (context.configured_model_id if context else "") or DEFAULT_MODEL_ID).strip()
 
 
-def resolve_seedance_base(model: str, context: ProviderContext) -> str:
+def resolve_seedance_base(model: str, context: GenerationAdapterContext) -> str:
     return (context.base_url or ARK_BASE).rstrip("/")
 
 
@@ -67,7 +67,7 @@ _CONTENT_KINDS = {
 _CONTENT_ROLES = (FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, REFERENCE_VIDEO, REFERENCE_AUDIO)
 
 
-def build_submit_payload(request: GenerationRequest, context: ProviderContext | None = None) -> dict[str, Any]:
+def build_submit_payload(request: GenerationRequest, context: GenerationAdapterContext | None = None) -> dict[str, Any]:
     model = resolve_seedance_model(request, context)
     duration = int(float(request.parameters.get("duration_seconds", 5)))
     resolution = str(request.parameters.get("resolution", "720p"))
@@ -124,20 +124,20 @@ def extract_video_url(task_payload: dict[str, Any]) -> str | None:
             or (task_payload.get("content") or {}).get("video_url")
         )
         if not url:
-            raise ProviderError("Provider returned success without a video URL")
+            raise GenerationAdapterError("Provider returned success without a video URL")
         return str(url)
     if status in ("failed", "cancelled", "canceled", "expired"):
-        raise ProviderError(f"Generation failed with status {status}")
+        raise GenerationAdapterError(f"Generation failed with status {status}")
     return None
 
 
-class SeedanceProvider(GenerationProvider):
-    name = "bytedance"
-    kind = "video"
+class SeedanceAdapter(GenerationAdapter):
+    vendor_id = "bytedance"
+    media_kind = "video"
 
-    def generate(self, request: GenerationRequest, context: ProviderContext, output_dir: Path) -> GenerationResult:
+    def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         if not context.api_key:
-            raise ProviderError("ARK API key is not configured (settings → 生成服务)")
+            raise GenerationAdapterError("ARK API key is not configured (settings → 生成服务)")
         model = resolve_seedance_model(request, context)
         base_url = resolve_seedance_base(model, context)
         headers = {"Authorization": f"Bearer {context.api_key}"}
@@ -147,7 +147,7 @@ class SeedanceProvider(GenerationProvider):
                 submit.raise_for_status()
                 task_id = submit.json().get("id") or ""
                 if not task_id:
-                    raise ProviderError("Provider did not return a task id")
+                    raise GenerationAdapterError("Provider did not return a task id")
 
                 url, poll_payload = poll_until_ready(client, f"{TASKS_PATH}/{task_id}", extract_video_url)
 
@@ -156,4 +156,4 @@ class SeedanceProvider(GenerationProvider):
                 download_to_path(url, target)
                 return GenerationResult(output_paths=[target], usage=metering_from_request(request), raw_usage=poll_payload)
         except httpx.HTTPError as exc:
-            raise ProviderError(provider_http_error("ARK request failed", exc, context.api_key)) from exc
+            raise GenerationAdapterError(adapter_http_error("ARK request failed", exc, context.api_key)) from exc

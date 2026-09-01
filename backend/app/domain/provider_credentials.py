@@ -1,30 +1,24 @@
+"""把用户的 Provider 连接与该连接的秘密状态装配成一次可执行连接。
+
+`ProviderProfile` 保存稳定的端点与非密配置；`ProviderCredential` 保存 API Key、OAuth 令牌和动态目录。
+两者归同一用户但生命周期不同。本 Module 只返回 `ResolvedConnection`，避免业务代码自行拼接。
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import ProviderCredential, ProviderProfile, User
+from app.db.models import ProviderCredential, ProviderProfile
+
 # 叶子模块:预设是纯数据。从 providers 引会成环(它在顶层 import 本模块)。
 from app.domain.provider_presets import VENDOR_PRESETS
 
-"""钥匙是人的,连接是部署的。
-
-`ProviderProfile` 回答「怎么连到这家供应商」—— 端点、模型目录、定价规则,那是部署的配置。
-`ProviderCredential` 回答「谁在花钱、以谁的身份调用」—— 那是某个人的身份。
-
-压在一起的后果跑出来过:能发起一轮对话的人就能 acquire 到那份明文凭据;而普通成员又没法带
-自己的钥匙,所有人共用部署管理员那一把 —— 订阅制账号被多人共用,供应商那边看到的是同一个账号。
-
-**每个人用自己的钥匙,没有回退。** 取不到就回 None,调用方报「请先配置」——"我以为用的是自己的
-额度,其实花的是别人的钱"是这里最坏的失败方式,而任何形式的回退都在制造它。
-"""
-
 
 @dataclass(frozen=True)
-class ResolvedProvider:
+class ResolvedConnection:
     """一条连接 + 这次该用谁的钥匙。
 
     读取方拿到的是这个,而不是 `ProviderProfile` —— 后者身上**已经没有** `api_key` 了。
@@ -69,7 +63,11 @@ def _has_secret(credential: ProviderCredential) -> bool:
     return bool((credential.api_key or "").strip() or credential.oauth_credential or credential.secrets)
 
 
-def resolve(db: Session, profile: ProviderProfile | None, user_id: str | None) -> ResolvedProvider | None:
+def resolve_connection(
+    db: Session,
+    profile: ProviderProfile | None,
+    user_id: str | None,
+) -> ResolvedConnection | None:
     """这条连接 + 这个人该用的钥匙。没有可用的钥匙就回 None(调用方报「请先配置」)。
 
     **免密钥的 vendor 例外**(今天只有本地 ComfyUI):它没有账号也没有 key,而"有没有一份带
@@ -78,6 +76,10 @@ def resolve(db: Session, profile: ProviderProfile | None, user_id: str | None) -
     """
     if profile is None or not profile.enabled:
         return None
+    # 连接本身也归人；不能只靠“找不到这个人的凭据”间接隔离。ComfyUI 这类免密连接没有
+    # ProviderCredential 行，少了这道判断就会让任何用户使用别人的本地端点。
+    if user_id is not None and profile.owner_user_id != user_id:
+        return None
     credential = pick(db, profile.id, user_id)
     if credential is None and not is_keyless(profile.vendor):
         return None
@@ -85,7 +87,7 @@ def resolve(db: Session, profile: ProviderProfile | None, user_id: str | None) -
         return _keyless(profile)
     extra = dict(profile.extra or {})
     extra.update(credential.secrets or {})
-    return ResolvedProvider(
+    return ResolvedConnection(
         id=profile.id,
         name=profile.name,
         vendor=profile.vendor,
@@ -110,9 +112,9 @@ def is_keyless(vendor: str) -> bool:
     return bool(VENDOR_PRESETS.get(vendor, {}).get("keyless"))
 
 
-def _keyless(profile: ProviderProfile) -> ResolvedProvider:
+def _keyless(profile: ProviderProfile) -> ResolvedConnection:
     """免密钥连接的解析结果 —— 除了没有钥匙,和正常那份一模一样。"""
-    return ResolvedProvider(
+    return ResolvedConnection(
         id=profile.id,
         name=profile.name,
         vendor=profile.vendor,

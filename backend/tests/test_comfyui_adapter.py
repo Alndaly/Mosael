@@ -14,13 +14,13 @@ import json
 import httpx
 import pytest
 
-from app.ai.providers import get_provider
+from app.ai.providers import get_generation_adapter
 from app.ai.providers.adapters.comfyui import client as comfyui_client
-from app.ai.providers.adapters.comfyui import provider as comfyui
-from app.ai.providers.contracts.generation import GenerationRequest, ProviderContext, ProviderError
+from app.ai.providers.adapters.comfyui import generation as comfyui
+from app.ai.providers.contracts.generation import GenerationRequest, GenerationAdapterContext, GenerationAdapterError
 from app.ai.providers.adapters.comfyui import (
     DEFAULT_TEMPLATE,
-    ComfyUIProvider,
+    ComfyUIGenerationAdapter,
     collect_output_files,
     substitute_placeholders,
 )
@@ -28,8 +28,14 @@ from app.domain.generation.catalog import BUILTIN_MODELS
 from tests.util import fresh_client
 
 
-def ctx(extra: dict | None = None) -> ProviderContext:
-    return ProviderContext(profile_id=None, vendor="comfyui", api_key="", base_url="", extra=extra or {})
+def ctx(options: dict | None = None) -> GenerationAdapterContext:
+    return GenerationAdapterContext(
+        connection_id=None,
+        vendor_id="comfyui",
+        api_key="",
+        base_url="",
+        options=options or {},
+    )
 
 
 def req(**params) -> GenerationRequest:
@@ -37,7 +43,7 @@ def req(**params) -> GenerationRequest:
 
 
 def test_registered_and_keyless() -> None:
-    provider = get_provider("comfyui", "image")
+    provider = get_generation_adapter("comfyui", "image")
     assert provider is not None
     assert provider.requires_credentials() is False, "a fresh install must be able to generate with zero config"
 
@@ -124,7 +130,7 @@ def test_full_flow_discovers_checkpoint_submits_and_downloads(monkeypatch, tmp_p
         return httpx.Response(404)
 
     _mock_comfy(monkeypatch, handler)
-    result = ComfyUIProvider().generate(req(size="832x1216", seed=7), ctx(), tmp_path)
+    result = ComfyUIGenerationAdapter().generate(req(size="832x1216", seed=7), ctx(), tmp_path)
 
     graph = submitted["prompt"]
     assert graph["4"]["inputs"]["ckpt_name"] == "sd_xl.safetensors", "checkpoint must come from /object_info"
@@ -154,23 +160,23 @@ def test_custom_template_bypasses_checkpoint_discovery(monkeypatch, tmp_path) ->
 
     _mock_comfy(monkeypatch, handler)
     template = json.dumps({"1": {"class_type": "SaveImage", "inputs": {"text": "{{prompt}}"}}})
-    ComfyUIProvider().generate(req(), ctx({"workflow_template": template}), tmp_path)
+    ComfyUIGenerationAdapter().generate(req(), ctx({"workflow_template": template}), tmp_path)
     assert "/object_info/CheckpointLoaderSimple" not in calls
 
 
 class TestReadableFailures:
     def test_invalid_template_json(self, monkeypatch, tmp_path) -> None:
         _mock_comfy(monkeypatch, lambda r: httpx.Response(404))
-        with pytest.raises(ProviderError, match="导出"):
-            ComfyUIProvider().generate(req(), ctx({"workflow_template": "not json"}), tmp_path)
+        with pytest.raises(GenerationAdapterError, match="导出"):
+            ComfyUIGenerationAdapter().generate(req(), ctx({"workflow_template": "not json"}), tmp_path)
 
     def test_no_checkpoints_installed(self, monkeypatch, tmp_path) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(200, json={"CheckpointLoaderSimple": {"input": {"required": {"ckpt_name": [[], {}]}}}})
 
         _mock_comfy(monkeypatch, handler)
-        with pytest.raises(ProviderError, match="checkpoint"):
-            ComfyUIProvider().generate(req(), ctx(), tmp_path)
+        with pytest.raises(GenerationAdapterError, match="checkpoint"):
+            ComfyUIGenerationAdapter().generate(req(), ctx(), tmp_path)
 
     def test_graph_rejection_surfaces_node_errors(self, monkeypatch, tmp_path) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
@@ -183,16 +189,16 @@ class TestReadableFailures:
 
         _mock_comfy(monkeypatch, handler)
         template = json.dumps({"4": {"class_type": "CheckpointLoaderSimple", "inputs": {}}})
-        with pytest.raises(ProviderError, match="ckpt_name not in list"):
-            ComfyUIProvider().generate(req(), ctx({"workflow_template": template}), tmp_path)
+        with pytest.raises(GenerationAdapterError, match="ckpt_name not in list"):
+            ComfyUIGenerationAdapter().generate(req(), ctx({"workflow_template": template}), tmp_path)
 
     def test_server_down_names_the_address(self, monkeypatch, tmp_path) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
             raise httpx.ConnectError("connection refused")
 
         _mock_comfy(monkeypatch, handler)
-        with pytest.raises(ProviderError, match="127.0.0.1:8188"):
-            ComfyUIProvider().generate(req(), ctx(), tmp_path)
+        with pytest.raises(GenerationAdapterError, match="127.0.0.1:8188"):
+            ComfyUIGenerationAdapter().generate(req(), ctx(), tmp_path)
 
     def test_execution_error_message_is_extracted(self, monkeypatch, tmp_path) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
@@ -208,8 +214,8 @@ class TestReadableFailures:
             return httpx.Response(404)
 
         _mock_comfy(monkeypatch, handler)
-        with pytest.raises(ProviderError, match="CUDA out of memory"):
-            ComfyUIProvider().generate(req(), ctx(), tmp_path)
+        with pytest.raises(GenerationAdapterError, match="CUDA out of memory"):
+            ComfyUIGenerationAdapter().generate(req(), ctx(), tmp_path)
 
 
 # ---------------------------------------------------------------- Phase 2: video + 进度/取消
@@ -220,10 +226,10 @@ def vreq(**params) -> GenerationRequest:
 
 
 def test_video_kind_is_registered_and_keyless() -> None:
-    provider = get_provider("comfyui", "video")
+    provider = get_generation_adapter("comfyui", "video")
     assert provider is not None
     assert provider.requires_credentials() is False
-    assert provider.supports_callbacks is True
+    assert provider.supports_progress_callbacks is True
 
 
 def test_video_catalog_entry_exists() -> None:
@@ -235,8 +241,8 @@ def test_video_without_template_fails_before_any_submit(monkeypatch, tmp_path) -
     submit a graph that will fail later inside ComfyUI."""
     calls: list[str] = []
     _mock_comfy(monkeypatch, lambda r: (calls.append(r.url.path), httpx.Response(404))[1])
-    with pytest.raises(ProviderError, match="模板"):
-        ComfyUIProvider("video").generate(vreq(), ctx(), tmp_path)
+    with pytest.raises(GenerationAdapterError, match="模板"):
+        ComfyUIGenerationAdapter("video").generate(vreq(), ctx(), tmp_path)
     assert "/prompt" not in calls
 
 
@@ -261,7 +267,7 @@ def test_video_prefers_the_video_container_output(monkeypatch, tmp_path) -> None
 
     _mock_comfy(monkeypatch, handler)
     template = json.dumps({"1": {"class_type": "X", "inputs": {"text": "{{prompt}}", "frames": "{{duration_seconds}}"}}})
-    result = ComfyUIProvider("video").generate(vreq(duration_seconds=5), ctx({"workflow_template": template}), tmp_path)
+    result = ComfyUIGenerationAdapter("video").generate(vreq(duration_seconds=5), ctx({"workflow_template": template}), tmp_path)
     assert result.output_paths[0].suffix == ".mp4"
     assert result.output_paths[0].read_bytes() == b"mp4-bytes"
 
@@ -281,7 +287,7 @@ class _Callbacks:
 
 
 def test_progress_is_reported_while_waiting(monkeypatch, tmp_path) -> None:
-    from app.ai.providers.contracts.generation import GenerationCallbacks
+    from app.ai.providers.contracts.generation import GenerationProgressCallbacks
 
     def handler(request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -302,15 +308,15 @@ def test_progress_is_reported_while_waiting(monkeypatch, tmp_path) -> None:
 
     _mock_comfy(monkeypatch, handler)
     recorder = _Callbacks()
-    callbacks = GenerationCallbacks(on_progress=recorder.on_progress, is_cancelled=recorder.is_cancelled)
-    ComfyUIProvider("image").generate(req(), ctx(), tmp_path, callbacks=callbacks)
+    callbacks = GenerationProgressCallbacks(on_progress=recorder.on_progress, is_cancelled=recorder.is_cancelled)
+    ComfyUIGenerationAdapter("image").generate(req(), ctx(), tmp_path, callbacks=callbacks)
     assert recorder.progress, "at least one progress tick must reach the job"
     assert "ComfyUI" in recorder.progress[0][1]
 
 
 def test_cancel_interrupts_and_dequeues(monkeypatch, tmp_path) -> None:
     """A user cancel must stop the remote work, not merely abandon the poll loop."""
-    from app.ai.providers.contracts.generation import GenerationCallbacks
+    from app.ai.providers.contracts.generation import GenerationProgressCallbacks
 
     stopped: list[tuple[str, bytes]] = []
 
@@ -329,9 +335,9 @@ def test_cancel_interrupts_and_dequeues(monkeypatch, tmp_path) -> None:
 
     _mock_comfy(monkeypatch, handler)
     recorder = _Callbacks(cancel_after=0)  # 第一次检查即已取消
-    callbacks = GenerationCallbacks(on_progress=recorder.on_progress, is_cancelled=recorder.is_cancelled)
-    with pytest.raises(ProviderError, match="已取消"):
-        ComfyUIProvider("image").generate(req(), ctx(), tmp_path, callbacks=callbacks)
+    callbacks = GenerationProgressCallbacks(on_progress=recorder.on_progress, is_cancelled=recorder.is_cancelled)
+    with pytest.raises(GenerationAdapterError, match="已取消"):
+        ComfyUIGenerationAdapter("image").generate(req(), ctx(), tmp_path, callbacks=callbacks)
     paths = [p for p, _ in stopped]
     assert "/interrupt" in paths, "the running prompt must be interrupted"
     assert any(p == "/queue" and b"pc" in body for p, body in stopped), "a pending prompt must be dequeued"
@@ -340,4 +346,4 @@ def test_cancel_interrupts_and_dequeues(monkeypatch, tmp_path) -> None:
 def test_other_providers_do_not_claim_callbacks() -> None:
     """The runner passes callbacks only where they are understood — a provider that never
     opted in must not advertise support through the shared base class."""
-    assert get_provider("openai", "image").supports_callbacks is False
+    assert get_generation_adapter("openai", "image").supports_progress_callbacks is False

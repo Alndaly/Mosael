@@ -19,7 +19,7 @@ from typing import Any, Literal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import ProviderDefault, ProviderModel, ProviderProfile
+from app.db.models import ProviderModel, ProviderProfile
 from app.domain.providers import capability_ids_for_vendor, normalize_capability_ids
 
 #: 模型行上可被用户覆盖的运行时参数。留空表示跟随目录/保守默认 —— 与 False 是两回事。
@@ -136,7 +136,7 @@ def models_for_capability(
                 user_id is not None
                 and model.profile is not None
                 and model.profile.auth_type == "oauth"
-                and provider_credentials.resolve(db, model.profile, user_id) is not None
+                and provider_credentials.resolve_connection(db, model.profile, user_id) is not None
             )
         if surface == "direct":
             rows = [model for model in rows if direct(model)]

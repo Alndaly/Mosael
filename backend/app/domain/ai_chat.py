@@ -39,7 +39,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core.i18n import get_current_locale, t
-from app.domain.provider_credentials import ResolvedProvider
+from app.domain.provider_credentials import ResolvedConnection
 from app.core import http_retry as ai_retry
 from app.domain import provider_models
 from app.domain.usage import BillableCall
@@ -72,7 +72,7 @@ class ChatTarget:
 
 def target_for(
     db: Session,
-    profile: ResolvedProvider,
+    profile: ResolvedConnection,
     *,
     model: str = "",
     surface: Literal["direct", "automation"] = "direct",

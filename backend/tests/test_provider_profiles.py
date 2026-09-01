@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.core.db import SessionLocal
-from app.domain.providers import resolve_profile
+from app.domain.providers import resolve_connection
 from tests.util import add_provider, fresh_client
 
 
@@ -51,7 +51,7 @@ def test_resolution_reads_enabled_profiles() -> None:
 
         me = db.query(User).order_by(User.created_at).first().id
         # 解析要说清「为谁」—— 建连接时填的那把钥匙是建它的人的。
-        assert resolve_profile(db, "alibaba", user_id=me).name == "主力 DashScope"
+        assert resolve_connection(db, "alibaba", user_id=me).name == "主力 DashScope"
 
 
 def test_能力挂在模型行上而不是连接上() -> None:

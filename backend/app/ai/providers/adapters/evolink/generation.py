@@ -30,14 +30,14 @@ from app.ai.providers.contracts.generation import (
     REFERENCE_IMAGE,
     REFERENCE_VIDEO,
     SOURCE_VIDEO,
-    GenerationProvider,
+    GenerationAdapter,
     GenerationRequest,
     GenerationResult,
-    ProviderContext,
-    ProviderError,
+    GenerationAdapterContext,
+    GenerationAdapterError,
     metering_from_request,
     poll_until_ready,
-    provider_http_error,
+    adapter_http_error,
     source_url_values,
 )
 from app.core.http_retry import RetryingClient
@@ -59,13 +59,13 @@ _VIDEO_AUDIO_ROLES = (REFERENCE_AUDIO,)
 _FAILED_STATUSES = {"failed", "cancelled", "canceled", "expired"}
 
 
-def resolve_base_url(context: ProviderContext) -> str:
+def resolve_base_url(context: GenerationAdapterContext) -> str:
     base = (context.base_url or BASE_URL).rstrip("/")
     return base if base.endswith("/v1") else f"{base}/v1"
 
 
-def resolve_files_base_url(context: ProviderContext) -> str:
-    return str(context.extra.get("files_base_url") or FILES_BASE_URL).rstrip("/")
+def resolve_files_base_url(context: GenerationAdapterContext) -> str:
+    return str(context.options.get("files_base_url") or FILES_BASE_URL).rstrip("/")
 
 
 def _parameter_urls(request: GenerationRequest, roles: tuple[str, ...]) -> list[str]:
@@ -128,7 +128,7 @@ def extract_result_urls(payload: dict[str, Any]) -> list[str] | None:
             detail = error.get("message") or error.get("code") or status
         else:
             detail = error or status
-        raise ProviderError(f"Evolink 生成失败: {detail}")
+        raise GenerationAdapterError(f"Evolink 生成失败: {detail}")
 
     urls = [str(url) for url in (task.get("results") or []) if url]
     for item in task.get("result_data") or []:
@@ -142,7 +142,7 @@ def extract_result_urls(payload: dict[str, Any]) -> list[str] | None:
     if urls:
         return urls
     if status == "completed":
-        raise ProviderError("Evolink 返回完成状态但没有产物地址")
+        raise GenerationAdapterError("Evolink 返回完成状态但没有产物地址")
     return None
 
 
@@ -151,13 +151,13 @@ def _task_id(payload: dict[str, Any]) -> str:
     return str(task.get("id") or task.get("task_id") or "").strip()
 
 
-def _upload(path: Path, context: ProviderContext, *, image: bool = True) -> str:
+def _upload(path: Path, context: GenerationAdapterContext, *, image: bool = True) -> str:
     mime: str | None = None
     upload_path = path
     if image:
         compatible = browser_compatible_image(path, path.parent)
         if compatible is None:
-            raise ProviderError(f"Evolink 无法读取输入图片: {path.name}")
+            raise GenerationAdapterError(f"Evolink 无法读取输入图片: {path.name}")
         upload_path, mime = compatible
     if mime is None:
         # 参考视频/音频原样上传 —— 网关收 .mp4/.mov/.wav/.mp3,图像归一化对它们既不适用也会失败。
@@ -171,17 +171,17 @@ def _upload(path: Path, context: ProviderContext, *, image: bool = True) -> str:
         response.raise_for_status()
         payload = response.json()
     if payload.get("success") is False:
-        raise ProviderError(f"Evolink 素材上传失败: {payload.get('msg') or payload.get('code') or 'unknown error'}")
+        raise GenerationAdapterError(f"Evolink 素材上传失败: {payload.get('msg') or payload.get('code') or 'unknown error'}")
     data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
     url = data.get("file_url") or data.get("download_url")
     if not url:
-        raise ProviderError("Evolink 素材上传成功但没有返回文件地址")
+        raise GenerationAdapterError("Evolink 素材上传成功但没有返回文件地址")
     return str(url)
 
 
 def _collect_role_urls(
     request: GenerationRequest,
-    context: ProviderContext,
+    context: GenerationAdapterContext,
     roles: tuple[str, ...],
     *,
     image: bool,
@@ -195,11 +195,11 @@ def _collect_role_urls(
         urls.extend(source_url_values(request.parameters, role, request.kind))
         urls.extend(_upload(path, context, image=image) for path in request.sources_for(role))
     if len(urls) > limit:
-        raise ProviderError(f"Evolink {request.kind} 最多接收 {limit} 份{label}")
+        raise GenerationAdapterError(f"Evolink {request.kind} 最多接收 {limit} 份{label}")
     return urls
 
 
-def collect_media_urls(request: GenerationRequest, context: ProviderContext) -> dict[str, list[str]]:
+def collect_media_urls(request: GenerationRequest, context: GenerationAdapterContext) -> dict[str, list[str]]:
     """把输入素材按网关的三个数组收齐:image_urls / video_urls / audio_urls。
 
     视频角色排首位的是被处理的那段(见 _VIDEO_VIDEO_ROLES),数组顺序就是语义,
@@ -236,53 +236,53 @@ def download_results(urls: list[str], output_dir: Path, kind: str) -> list[Path]
     return targets
 
 
-class EvolinkProvider(GenerationProvider):
-    name = "evolink"
+class EvolinkGenerationAdapter(GenerationAdapter):
+    vendor_id = "evolink"
 
-    def __init__(self, kind: str):
-        if kind not in {"image", "video"}:
-            raise ValueError(f"unsupported Evolink generation kind: {kind}")
-        self.kind = kind
+    def __init__(self, media_kind: str):
+        if media_kind not in {"image", "video"}:
+            raise ValueError(f"unsupported Evolink generation kind: {media_kind}")
+        self.media_kind = media_kind
 
     def validate_request(self, request: GenerationRequest) -> None:
         # Evolink 网关的协议范围:视频 3–30 秒(Seedance 2.5 已放到 4–30,2026-09-01 文档)、
         # 最高 4K。每个模型自己的更严限制由描述符在提交前拦,这里只是兜底。
         if not request.prompt.strip():
-            raise ProviderError("Prompt must not be empty")
+            raise GenerationAdapterError("Prompt must not be empty")
         if request.kind == "image":
             count = int(request.parameters.get("num_images", 1))
             if not 1 <= count <= 4:
-                raise ProviderError("num_images must be between 1 and 4")
+                raise GenerationAdapterError("num_images must be between 1 and 4")
         else:
             duration = int(request.parameters.get("duration_seconds", 5))
             if duration != -1 and not 3 <= duration <= 30:
-                raise ProviderError("duration_seconds must be -1 (auto) or between 3 and 30")
+                raise GenerationAdapterError("duration_seconds must be -1 (auto) or between 3 and 30")
             quality = str(request.parameters.get("resolution", "720p"))
             if quality not in {"480p", "720p", "1080p", "4k"}:
-                raise ProviderError("resolution must be one of 480p, 720p, 1080p, 4k")
+                raise GenerationAdapterError("resolution must be one of 480p, 720p, 1080p, 4k")
 
-    def generate(self, request: GenerationRequest, context: ProviderContext, output_dir: Path) -> GenerationResult:
+    def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         if not context.api_key:
-            raise ProviderError("Evolink 生成需要 API Key，请在设置 → AI 服务中配置")
-        if request.kind != self.kind:
-            raise ProviderError(f"Evolink {self.kind} adapter received a {request.kind} request")
+            raise GenerationAdapterError("Evolink 生成需要 API Key，请在设置 → AI 服务中配置")
+        if request.kind != self.media_kind:
+            raise GenerationAdapterError(f"Evolink {self.media_kind} adapter received a {request.kind} request")
         headers = {"Authorization": f"Bearer {context.api_key}", "Content-Type": "application/json"}
         try:
             media = collect_media_urls(request, context)
             payload = (
                 build_image_payload(request, media["image_urls"])
-                if self.kind == "image"
+                if self.media_kind == "image"
                 else build_video_payload(
                     request, media["image_urls"], media.get("video_urls"), media.get("audio_urls")
                 )
             )
-            path = "/images/generations" if self.kind == "image" else "/videos/generations"
+            path = "/images/generations" if self.media_kind == "image" else "/videos/generations"
             with RetryingClient(base_url=resolve_base_url(context), headers=headers, timeout=60) as client:
                 response = client.post(path, json=payload)
                 response.raise_for_status()
                 task_id = _task_id(response.json())
                 if not task_id:
-                    raise ProviderError(f"Evolink 没有返回任务 id: {str(response.json())[:200]}")
+                    raise GenerationAdapterError(f"Evolink 没有返回任务 id: {str(response.json())[:200]}")
                 urls, terminal = poll_until_ready(
                     client,
                     f"/tasks/{task_id}",
@@ -292,9 +292,9 @@ class EvolinkProvider(GenerationProvider):
                     timed_out_message="Evolink 生成超时",
                 )
             return GenerationResult(
-                output_paths=download_results(urls, output_dir, self.kind),
+                output_paths=download_results(urls, output_dir, self.media_kind),
                 usage=metering_from_request(request),
                 raw_usage=terminal,
             )
         except httpx.HTTPError as exc:
-            raise ProviderError(provider_http_error("Evolink 请求失败", exc, context.api_key)) from exc
+            raise GenerationAdapterError(adapter_http_error("Evolink 请求失败", exc, context.api_key)) from exc

@@ -498,7 +498,7 @@ COMFYUI_IMAGE_CAPABILITIES = {
     "modes": ["text-to-image"],
     "max_prompt_chars": 8000,
     # workflow / workflow_params:**选一个 ComfyUI 里保存的工作流**,以及它那张动态参数表单。
-    # 适配器一直读这两个键(providers/adapters/comfyui/provider),界面也一直在发,只是描述符没声明 ——
+    # 适配器一直读这两个键(providers/adapters/comfyui/generation),界面也一直在发,只是描述符没声明 ——
     # 于是校验器把它们当成"这个模型不支持的参数"当场拦下:选了工作流就提交不了,而选工作流
     # 正是接 ComfyUI 的理由。没有测试覆盖"带工作流提交",所以一直是绿的。
     "parameter_keys": ["size", "seed", "steps", "negative_prompt", "workflow", "workflow_params"],
@@ -524,7 +524,7 @@ COMFYUI_VIDEO_CAPABILITIES = {
 }
 
 #: MiniMax 海螺 H3(2026-07)。原生 2K、4–15 秒、可给首帧;文生视频必须给具体比例,
-#: 图生视频恒为 adaptive(见 ai/providers/minimax_video.py)。
+#: 图生视频恒为 adaptive(见 ``ai/providers/adapters/minimax/video.py``)。
 MINIMAX_VIDEO_CAPABILITIES = {
     "modes": ["text-to-video", "image-to-video", "keyframes-to-video", "reference-to-video"],
     "parameter_keys": [
@@ -1053,9 +1053,9 @@ def generation_options(db, kind: str) -> list[dict[str, Any]]:
     模型进不了生成页,都是这么来的。
 
     现在只有一条线:**有哪些模型 = provider_models**(设置页管的就是它),参数描述符按
-    (vendor, model, kind) 查静态表,适配器可用性问 get_provider。
+    (vendor, model, kind) 查静态表,适配器可用性问 get_generation_adapter。
     """
-    from app.ai.providers import get_provider
+    from app.ai.providers import get_generation_adapter
     from app.domain import provider_models
 
     options: list[dict[str, Any]] = []
@@ -1076,7 +1076,7 @@ def generation_options(db, kind: str) -> list[dict[str, Any]]:
                 "capabilities": capabilities_for(vendor, model.model_id, kind),
                 # 适配器不可用的照样列出来但标出来 —— 藏起来的话,用户配好了却找不到,
                 # 只会以为是自己配错了。
-                "adapter_available": get_provider(vendor, kind) is not None,
+                "adapter_available": get_generation_adapter(vendor, kind) is not None,
             }
         )
     options.sort(key=lambda item: (item["profile_name"], item["model"]))

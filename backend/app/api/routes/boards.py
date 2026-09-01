@@ -166,12 +166,12 @@ def write(board_id: str, body: BoardWrite, db: DbSession, user: CurrentUser) -> 
     **不走生成任务那条路。** 出图出片要几十秒,所以那边先摆占位、起任务、回执填回来;写字几秒
     就回,同步返回反而更直接 —— 为它铺一套任务/回执,用户看到的只是一个多余的转圈。
 
-    **也不自己实现一遍「调 LLM」**:供应商解析走 require_profile、调用走 ai_chat.chat、计量走
+    **也不自己实现一遍「调 LLM」**:供应商解析走 require_connection、调用走 ai_chat.chat、计量走
     billable —— 和工作流的 LLM 节点、智能体是同三样东西。另写一份的话,重试次数、超时、
     记账口径迟早各走各的,而分岔了没有任何地方会报错。
     """
     from app.domain.ai_chat import AiChatError, chat, target_for
-    from app.domain.providers import require_profile
+    from app.domain.providers import require_connection
     from app.domain.usage import billable
 
     ensure_workspace_perm(db, user, body.workspace_id, "ai")
@@ -211,7 +211,7 @@ def write(board_id: str, body: BoardWrite, db: DbSession, user: CurrentUser) -> 
     materials = [one.strip() for one in body.context if one and one.strip()] + from_assets
 
     try:
-        profile = require_profile(db, body.provider_profile_id or None, user_id=user.id, error=AiChatError)
+        profile = require_connection(db, body.provider_profile_id or None, user_id=user.id, error=AiChatError)
         target = target_for(db, profile, model=body.model, surface="automation")
         with billable(
             db,

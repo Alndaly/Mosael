@@ -8,14 +8,14 @@ import httpx
 
 from app.core.http_retry import RetryingClient
 
-from app.ai.providers.contracts.speech import REMOTE_TIMEOUT_SECONDS, SpeechRequest, TTSError
+from app.ai.providers.contracts.speech import SPEECH_REQUEST_TIMEOUT_SECONDS, SpeechSynthesisRequest, SpeechSynthesisError
 
 
-class BailianTTS:
+class BailianSpeechAdapter:
     """阿里云百炼(DashScope)的 qwen-tts。
 
     走的是多模态生成端点,**同步返回一个音频地址**,再下载 —— 不是异步任务,所以这里没有轮询
-    (同一家的视频生成才需要,见 ai/providers/wan_video)。
+    (同一家的视频生成才需要,见 ``adapters/alibaba/dashscope/video.py``)。
 
     **speed 这一档它不接**。百炼的 qwen-tts 没有语速参数,而配音要的正是"把一句话塞进原来那段
     时长里"。这不影响功能:时间线在渲染时用 atempo 变速兜底(见 README 里「缩放到段落长度」)。
@@ -27,11 +27,11 @@ class BailianTTS:
     真机验证(2026-08-24):四个音色各合成一句,均返回 24kHz 单声道 16bit PCM 的 WAV。
     """
 
-    id = "alibaba"
-    label = "ttsProvider_bailian"
-    parallel_safe = True
+    engine_id = "alibaba"
+    label_key = "ttsProvider_bailian"
+    supports_parallel_synthesis = True
     #: 这一支只认 qwen-tts 家族。CosyVoice 是同一把 Key 下的**另一套 API**,单独一个引擎
-    #: (见 CosyVoiceTTS)—— 端点、请求体、音色、支不支持语速全都不一样,合成一条会让面板
+    #: (见 CosyVoiceSpeechAdapter)—— 端点、请求体、音色、支不支持语速全都不一样,合成一条会让面板
     #: 上的音色和语速跟着"当前恰好配了哪个模型"无声地变。
     MODEL_PREFIXES = ("qwen-tts", "qwen3-tts")
     DEFAULT_MODEL = "qwen-tts"
@@ -91,17 +91,17 @@ class BailianTTS:
         return ()
     PATH = "/api/v1/services/aigc/multimodal-generation/generation"
 
-    # 签名要收 `voice`:build_remote_provider 的兜底分支是
+    # 签名要收 `voice`:build_speech_adapter 的兜底分支是
     # `cls(api_key=…, voice=…, model=…, base_url=…)`,少一个参数就是 TypeError。
     def __init__(self, api_key: str, voice: str = "", model: str = "", base_url: str = "") -> None:
         if not api_key:
-            raise TTSError("百炼语音合成需要 DashScope API Key,请在设置里配置")
+            raise SpeechSynthesisError("百炼语音合成需要 DashScope API Key,请在设置里配置")
         self._key = api_key
         self._model = model or "qwen-tts"
         self._base = resolve_dashscope_native_base(base_url)
         self._default_voice = voice
 
-    def _request_for(self, request: SpeechRequest) -> tuple[dict, str]:
+    def _request_for(self, request: SpeechSynthesisRequest) -> tuple[dict, str]:
         """百炼的语音有**两套 API**,按模型分派。
 
         · qwen-tts 家族 → 多模态生成端点,音色在 `input.voice`,**没有语速参数**;
@@ -123,10 +123,10 @@ class BailianTTS:
             self.PATH,
         )
 
-    def synthesize(self, request: SpeechRequest, out_path: Path) -> None:
+    def synthesize(self, request: SpeechSynthesisRequest, out_path: Path) -> None:
         payload, path = self._request_for(request)
         try:
-            with RetryingClient(timeout=REMOTE_TIMEOUT_SECONDS) as client:
+            with RetryingClient(timeout=SPEECH_REQUEST_TIMEOUT_SECONDS) as client:
                 response = client.post(
                     f"{self._base}{path}",
                     headers={"Authorization": f"Bearer {self._key}", "Content-Type": "application/json"},
@@ -135,14 +135,14 @@ class BailianTTS:
                 response.raise_for_status()
             url = extract_bailian_audio_url(response.json())
             if not url:
-                raise TTSError("百炼语音合成没有返回音频地址")
+                raise SpeechSynthesisError("百炼语音合成没有返回音频地址")
             # 结果是一个预签名 OSS 地址。**另起一个干净的 client** —— 带上 Authorization 会让
             # OSS 的签名校验走另一条分支(与 image/qwen.py 里那条注释同一个坑)。
-            with RetryingClient(timeout=REMOTE_TIMEOUT_SECONDS) as fetcher:
+            with RetryingClient(timeout=SPEECH_REQUEST_TIMEOUT_SECONDS) as fetcher:
                 audio = fetcher.get(url)
                 audio.raise_for_status()
         except httpx.HTTPError as exc:
-            raise TTSError(f"百炼语音合成失败: {exc}") from exc
+            raise SpeechSynthesisError(f"百炼语音合成失败: {exc}") from exc
         out_path.write_bytes(audio.content)
 
 
@@ -158,7 +158,7 @@ def resolve_dashscope_native_base(base_url: str) -> str:
     原生路径 `/api/v1/services/aigc/...`,直接往后拼会得到
     `…/compatible-mode/v1/api/v1/services/…`,一个必然 404 的地址。
 
-    同一个坑图像那边已经踩过并解决(见 ai/providers/qwen_image.resolve_qwen_edit_base),
+    同一个坑图像那边已经踩过并解决(见同目录 ``image.resolve_qwen_edit_base``),
     这里用同一条判据:认得出 compatible-mode 就剥掉它,自定义代理原样放行。
     """
     base = (base_url or "").strip().rstrip("/")
@@ -195,21 +195,21 @@ def extract_bailian_audio_url(payload: dict) -> str:
     return ""
 
 
-class CosyVoiceTTS(BailianTTS):
+class CosyVoiceSpeechAdapter(BailianSpeechAdapter):
     """百炼的 CosyVoice。**和 qwen-tts 同一把 Key,但是另一套 API。**
 
-    单独成一个引擎而不是塞进 BailianTTS 里选模型 —— 理由和火山把 TTS 与播客分开一样:
+    单独成一个引擎而不是塞进 BailianSpeechAdapter 里选模型 —— 理由和火山把 TTS 与播客分开一样:
     面板上要显示的东西不同(CosyVoice 有语速、音色 id 完全不同),而"显示什么"不该取决于
     用户当前恰好在这条连接下配了哪个模型。
 
     与火山那两条的差别是**钥匙**:火山的 TTS 和播客来自两个控制台、发两把不同的 Key,所以
     它们是两个 vendor;百炼这两套共用一把 DashScope Key,拆 vendor 会让用户把同一把钥匙填
     两遍(bytedance 当年就是这么拆的,后来合了)。所以只拆**引擎**,凭据仍指向 alibaba ——
-    见 vendor_for_engine。
+    见 connection_vendor_for_speech_engine。
     """
 
-    id = "alibaba-cosyvoice"
-    label = "ttsProvider_cosyvoice"
+    engine_id = "alibaba-cosyvoice"
+    label_key = "ttsProvider_cosyvoice"
     MODEL_PREFIXES = ("cosyvoice",)
     DEFAULT_MODEL = "cosyvoice-v2"
 
@@ -217,5 +217,5 @@ class CosyVoiceTTS(BailianTTS):
         super().__init__(api_key=api_key, voice=voice, model=model or self.DEFAULT_MODEL, base_url=base_url)
 
 
-#: 引擎 id → 取凭据时用的 vendor。**默认是它自己**(约定见 OpenAITTS.id 上面那段);
+#: 引擎 id → 取凭据时用的 vendor。**默认是它自己**(约定见 OpenAISpeechAdapter.engine_id 上面那段);
 #: 只有百炼这一处例外:两个引擎共用一条连接、一把 Key。

@@ -94,7 +94,6 @@ def test_blanking_a_required_visible_field_is_rejected() -> None:
 def test_an_untouched_extra_survives_an_unrelated_patch() -> None:
     """A patch that does not mention extra at all must not replace it with {}."""
     from app.core.db import SessionLocal
-    from app.db.models import ProviderProfile
 
     client = _admin_client()
     created = _create(client, "volcano", {"ak": "AKLTsecret"})
@@ -120,13 +119,16 @@ def test_the_form_spec_is_served_with_the_vendor() -> None:
     assert [f["storage"] for f in vendors["openai"]["fields"]] == ["api_key", "base_url", "default_model"]
 
 
-def test_profile_extra_reads_one_field() -> None:
+def test_resolved_connection_contains_visible_options() -> None:
     from app.core.db import SessionLocal
-    from app.domain.providers import profile_extra
+    from app.db.models import User
+    from app.domain.providers import resolve_connection
 
     client = _admin_client()
     _create(client, "volcano-podcast", {"appid": "1234567890"})
     with SessionLocal() as db:
-        assert profile_extra(db, "volcano-podcast", "appid") == "1234567890"
-        assert profile_extra(db, "volcano-podcast", "nope") == ""
-        assert profile_extra(db, "no-such-vendor", "appid") == ""
+        user_id = db.query(User.id).order_by(User.created_at).scalar()
+        resolved = resolve_connection(db, "volcano-podcast", user_id=user_id)
+        assert resolved is not None
+        assert resolved.extra["appid"] == "1234567890"
+        assert resolve_connection(db, "no-such-vendor", user_id=user_id) is None

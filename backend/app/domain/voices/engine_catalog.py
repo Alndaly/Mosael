@@ -13,16 +13,16 @@ from app.ai.providers import (
     EDGE_BUILTIN_VOICES,
     PODCAST_SPEAKERS,
     VOLCANO_BUILTIN_VOICES,
-    BailianTTS,
-    CosyVoiceTTS,
-    EdgeTTS,
-    OpenAITTS,
-    VolcanoTTS,
-    vendor_for_engine,
+    BailianSpeechAdapter,
+    CosyVoiceSpeechAdapter,
+    EdgeSpeechAdapter,
+    OpenAISpeechAdapter,
+    VolcanoSpeechAdapter,
+    connection_vendor_for_speech_engine,
 )
 
-def active_model_for(engine_cls: type) -> str:
-    """这个部署给某个百炼引擎配的模型;取不到就回它的默认模型。
+def active_model_for(engine_cls: type, user_id: str | None = None) -> str:
+    """当前用户给某个百炼引擎配的模型;取不到就回它的默认模型。
 
     引擎目录本来是"纯静态的一张表",这里破了一次例 —— 因为百炼的音色**随模型变**,
     而界面要在**挑引擎的那一刻**就把音色列对,不能等用户填完文本才发现选的音色不存在。
@@ -32,17 +32,21 @@ def active_model_for(engine_cls: type) -> str:
     try:
         from app.core.db import SessionLocal
         from app.domain import provider_models
-        from app.domain.providers import resolve_profile
+        from app.domain.providers import find_enabled_connection
 
         with SessionLocal() as db:
-            profile = resolve_profile(db, vendor_for_engine(getattr(engine_cls, "id", "")))
+            profile = find_enabled_connection(
+                db,
+                connection_vendor_for_speech_engine(getattr(engine_cls, "engine_id", "")),
+                owner_user_id=user_id,
+            )
             found = provider_models.model_id_for_family(db, profile, "tts", prefixes) if profile else ""
             return found or default
     except Exception:  # noqa: BLE001 —— 引擎目录不该因为取不到模型就整个拉不出来
         return default
 
 
-def describe_engines() -> list[dict[str, object]]:
+def describe_engines(user_id: str | None = None) -> list[dict[str, object]]:
     """What the UI needs to render an engine picker, without importing the classes.
 
     本地克隆这一条的 note 跟着**这台机器上装没装引擎**变:装了就说怎么用,没装就说去哪装。
@@ -69,8 +73,8 @@ def describe_engines() -> list[dict[str, object]]:
             "note": "ttsProviderNote_cloneReady" if clone_ready else "ttsProviderNote_cloneMissing",
         },
         {
-            "id": EdgeTTS.id,
-            "label": EdgeTTS.label,
+            "id": EdgeSpeechAdapter.engine_id,
+            "label": EdgeSpeechAdapter.label_key,
             "needs_key": False,
             "supports_speed": True,
             "needs_voice_id": False,
@@ -78,12 +82,12 @@ def describe_engines() -> list[dict[str, object]]:
             "note": "ttsProviderNote_edge",
         },
         {
-            "id": OpenAITTS.id,
-            "label": OpenAITTS.label,
+            "id": OpenAISpeechAdapter.engine_id,
+            "label": OpenAISpeechAdapter.label_key,
             "needs_key": True,
             "supports_speed": True,
             "needs_voice_id": False,
-            "voices": list(OpenAITTS.VOICES),
+            "voices": list(OpenAISpeechAdapter.VOICES),
             "note": "ttsProviderNote_openai",
         },
         {
@@ -96,31 +100,31 @@ def describe_engines() -> list[dict[str, object]]:
             "note": "ttsProviderNote_volcanoPodcast",
         },
         {
-            "id": BailianTTS.id,
-            "label": BailianTTS.label,
+            "id": BailianSpeechAdapter.engine_id,
+            "label": BailianSpeechAdapter.label_key,
             "needs_key": True,
             # qwen-tts 家族没有语速参数。摆一个拨不动的旋钮比不摆更糟。
             "supports_speed": False,
             # 模型是开放集合(日期快照、instruct / vd / vc 变体),而百炼没有列音色的接口。
             # 认得出的模型走下拉(见 /api/tts/voices),认不出的退回填 id —— 而不是空下拉。
             "needs_voice_id": True,
-            "voices": list(BailianTTS.voices_for(active_model_for(BailianTTS))),
+            "voices": list(BailianSpeechAdapter.voices_for(active_model_for(BailianSpeechAdapter, user_id))),
             "note": "ttsProviderNote_bailian",
         },
         {
-            # 同一把 DashScope Key 的第二套 API。分开列的理由见 CosyVoiceTTS 的说明。
-            "id": CosyVoiceTTS.id,
-            "label": CosyVoiceTTS.label,
+            # 同一把 DashScope Key 的第二套 API。分开列的理由见 CosyVoiceSpeechAdapter 的说明。
+            "id": CosyVoiceSpeechAdapter.engine_id,
+            "label": CosyVoiceSpeechAdapter.label_key,
             "needs_key": True,
             # 实测 rate=1.5 把 2.25 秒的句子变成 1.50 秒,是真变速。
             "supports_speed": True,
             "needs_voice_id": True,
-            "voices": list(CosyVoiceTTS.voices_for(active_model_for(CosyVoiceTTS))),
+            "voices": list(CosyVoiceSpeechAdapter.voices_for(active_model_for(CosyVoiceSpeechAdapter, user_id))),
             "note": "ttsProviderNote_cosyvoice",
         },
         {
-            "id": VolcanoTTS.id,
-            "label": VolcanoTTS.label,
+            "id": VolcanoSpeechAdapter.engine_id,
+            "label": VolcanoSpeechAdapter.label_key,
             "needs_key": True,
             "supports_speed": True,
             # The catalogue is account-dependent, so the real list comes from /api/tts/voices —
@@ -131,5 +135,3 @@ def describe_engines() -> list[dict[str, object]]:
             "note": "ttsProviderNote_volcano",
         },
     ]
-
-

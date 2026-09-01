@@ -12,26 +12,20 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-import base64
-import json
-import uuid
-
-import httpx
-
 logger = logging.getLogger(__name__)
 
-REMOTE_TIMEOUT_SECONDS = 120
-#: Concurrency for remote engines. Bounded: providers rate-limit, and a long transcript would
+SPEECH_REQUEST_TIMEOUT_SECONDS = 120
+#: Concurrency for remote engines. Bounded: vendors rate-limit, and a long transcript would
 #: otherwise open a socket per cue.
-REMOTE_PARALLEL = 6
+MAX_PARALLEL_SPEECH_REQUESTS = 6
 
 
-class TTSError(RuntimeError):
+class SpeechSynthesisError(RuntimeError):
     """Raised when synthesis cannot produce audio."""
 
 
 @dataclass(frozen=True)
-class SpeechRequest:
+class SpeechSynthesisRequest:
     """One utterance to synthesise.
 
     `speed` exists for dubbing: a translated line rarely fits the window its original occupied,
@@ -44,20 +38,20 @@ class SpeechRequest:
     speed: float = 1.0
 
 
-class TTSProvider(Protocol):
-    id: str
-    label: str
+class SpeechAdapter(Protocol):
+    engine_id: str
+    label_key: str
     #: May several synthesize() calls run at once? True for remote HTTP engines, false for a
     #: local model that holds one instance in memory.
-    parallel_safe: bool
+    supports_parallel_synthesis: bool
 
-    def synthesize(self, request: SpeechRequest, out_path: Path) -> None: ...
+    def synthesize(self, request: SpeechSynthesisRequest, out_path: Path) -> None: ...
 
 
 
 def synthesize_many(
-    provider: TTSProvider,
-    requests: list[SpeechRequest],
+    adapter: SpeechAdapter,
+    requests: list[SpeechSynthesisRequest],
     out_paths: list[Path],
 ) -> list[Exception | None]:
     """Synthesise a batch, concurrently only where the engine allows it.
@@ -72,13 +66,13 @@ def synthesize_many(
 
     def one(index: int) -> None:
         try:
-            provider.synthesize(requests[index], out_paths[index])
+            adapter.synthesize(requests[index], out_paths[index])
         except Exception as exc:  # noqa: BLE001 — recorded per cue, not raised
             logger.warning("tts cue %d failed: %s", index, exc)
             results[index] = exc
 
-    if provider.parallel_safe and len(requests) > 1:
-        workers = min(REMOTE_PARALLEL, len(requests))
+    if adapter.supports_parallel_synthesis and len(requests) > 1:
+        workers = min(MAX_PARALLEL_SPEECH_REQUESTS, len(requests))
         with ThreadPoolExecutor(max_workers=workers) as pool:
             list(pool.map(one, range(len(requests))))
     else:
@@ -87,4 +81,3 @@ def synthesize_many(
         for index in range(len(requests)):
             one(index)
     return results
-

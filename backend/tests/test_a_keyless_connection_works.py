@@ -44,7 +44,7 @@ def test_it_resolves_without_any_credential() -> None:
 
     with SessionLocal() as db:
         user_id = db.execute(__import__("sqlalchemy").text("SELECT id FROM users LIMIT 1")).scalar_one()
-        resolved = provider_credentials.resolve(db, db.get(ProviderProfile, profile_id), user_id)
+        resolved = provider_credentials.resolve_connection(db, db.get(ProviderProfile, profile_id), user_id)
 
     assert resolved is not None, "免密钥的连接被当成「没配钥匙」挡下了"
     assert resolved.base_url == "http://127.0.0.1:8188"
@@ -79,7 +79,7 @@ def test_a_normal_vendor_still_needs_one() -> None:
     client.delete(f"/api/settings/providers/{profile_id}/credential")
     with SessionLocal() as db:
         user_id = db.execute(__import__("sqlalchemy").text("SELECT id FROM users LIMIT 1")).scalar_one()
-        assert provider_credentials.resolve(db, db.get(ProviderProfile, profile_id), user_id) is None
+        assert provider_credentials.resolve_connection(db, db.get(ProviderProfile, profile_id), user_id) is None
 
 
 def test_someone_elses_keyless_connection_is_still_not_mine() -> None:
@@ -92,3 +92,8 @@ def test_someone_elses_keyless_connection_is_still_not_mine() -> None:
 
     assert mate.get("/api/settings/providers").json() == []
     assert mate.get(f"/api/settings/providers/{profile_id}/models").status_code == 404
+    with SessionLocal() as db:
+        from app.db.models import User
+
+        mate_id = db.query(User).filter(User.username == "mate").one().id
+        assert provider_credentials.resolve_connection(db, db.get(ProviderProfile, profile_id), mate_id) is None

@@ -16,14 +16,13 @@ from app.ai.providers.contracts.generation import (
     source_value,
     source_values,
     poll_until_ready,
-    GenerationProvider,
+    GenerationAdapter,
     GenerationRequest,
     GenerationResult,
-    ProviderContext,
-    ProviderError,
-    image_file_to_data_url,
+    GenerationAdapterContext,
+    GenerationAdapterError,
     metering_from_request,
-    provider_http_error,
+    adapter_http_error,
 )
 from app.ai.providers.media_transfer import download_to_path
 
@@ -51,8 +50,8 @@ DEFAULT_MODEL_ID = "MiniMax-H3"
 TERMINAL_FAILURES = ("failed", "cancelled", "canceled", "expired")
 
 
-def resolve_model(request: GenerationRequest, context: ProviderContext | None = None) -> str:
-    return (request.model or (context.default_model if context else "") or DEFAULT_MODEL_ID).strip()
+def resolve_model(request: GenerationRequest, context: GenerationAdapterContext | None = None) -> str:
+    return (request.model or (context.configured_model_id if context else "") or DEFAULT_MODEL_ID).strip()
 
 
 #: 每个角色在 content 数组里的类型。白名单是接口自己报的:
@@ -68,7 +67,7 @@ _CONTENT_KINDS = {
 _CONTENT_ROLES = (FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, REFERENCE_VIDEO, REFERENCE_AUDIO)
 
 
-def build_submit_payload(request: GenerationRequest, context: ProviderContext) -> dict[str, Any]:
+def build_submit_payload(request: GenerationRequest, context: GenerationAdapterContext) -> dict[str, Any]:
     """把内部的生成请求翻成 MiniMax 的多模态 content 数组。"""
     content: list[dict[str, Any]] = [{"type": "text", "text": request.prompt}]
     # content 数组按 role 区分每一份素材的用途 —— 这是接口自己的形状(文件顶上那段注释说的
@@ -101,20 +100,20 @@ def extract_video_url(payload: dict[str, Any]) -> str | None:
     status = str(task.get("status") or "").lower()
     if status in TERMINAL_FAILURES:
         detail = task.get("error") or payload.get("base_resp") or status
-        raise ProviderError(f"MiniMax 视频生成失败:{detail}")
+        raise GenerationAdapterError(f"MiniMax 视频生成失败:{detail}")
     content = task.get("content")
     if isinstance(content, dict) and content.get("url"):
         return str(content["url"])
     return None
 
 
-class MiniMaxVideoProvider(GenerationProvider):
-    name = "minimax"
-    kind = "video"
+class MiniMaxVideoAdapter(GenerationAdapter):
+    vendor_id = "minimax"
+    media_kind = "video"
 
-    def generate(self, request: GenerationRequest, context: ProviderContext, output_dir: Path) -> GenerationResult:
+    def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         if not context.api_key:
-            raise ProviderError("MiniMax 视频生成需要 API Key,请在设置 → AI 视频里配置")
+            raise GenerationAdapterError("MiniMax 视频生成需要 API Key,请在设置 → AI 视频里配置")
         base_url = (context.base_url or BASE_URL).rstrip("/")
         # 档案里填的常是对话用的 `.../v1`,而视频在 `/v2` 下。截掉版本段按官方路径重新拼,
         # 免得用户为了视频再建一个只有 base_url 不同的档案。
@@ -129,7 +128,7 @@ class MiniMaxVideoProvider(GenerationProvider):
                 submitted = submit.json()
                 task_id = submitted.get("task_id") or (submitted.get("task") or {}).get("id") or ""
                 if not task_id:
-                    raise ProviderError(f"MiniMax 没有返回任务 id:{str(submitted)[:200]}")
+                    raise GenerationAdapterError(f"MiniMax 没有返回任务 id:{str(submitted)[:200]}")
 
                 url, poll_payload = poll_until_ready(
                     client, f"{QUERY_PATH}/{task_id}", extract_video_url,
@@ -143,4 +142,4 @@ class MiniMaxVideoProvider(GenerationProvider):
                     output_paths=[target], usage=metering_from_request(request), raw_usage=poll_payload
                 )
         except httpx.HTTPError as exc:
-            raise ProviderError(provider_http_error("MiniMax 请求失败", exc, context.api_key)) from exc
+            raise GenerationAdapterError(adapter_http_error("MiniMax 请求失败", exc, context.api_key)) from exc

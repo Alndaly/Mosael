@@ -11,11 +11,11 @@ from sqlalchemy.orm import Session
 
 from app.ai.model_catalog import cached_model
 from app.domain import provider_models
-from app.domain.provider_credentials import ResolvedProvider
+from app.domain.provider_credentials import ResolvedConnection
 from app.domain.providers import pi_provider_id
 
 
-def sidecar_provider(db: Session, profile: ResolvedProvider, model: str) -> dict:
+def sidecar_provider(db: Session, profile: ResolvedConnection, model: str) -> dict:
     payload: dict = {
         "base_url": profile.base_url,
         "api_key": profile.api_key,

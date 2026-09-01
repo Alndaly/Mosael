@@ -11,7 +11,7 @@ from app.db.models import Workflow
 from app.core.usage_scope import workspace_scope
 from app.domain.ai_chat import AiChatError, chat, target_for
 from app.domain.usage import billable
-from app.domain.providers import require_profile
+from app.domain.providers import require_connection
 from app.domain.workflows import WorkflowDomainError
 from app.domain.jobs import current_actor
 from app.domain.workflows.executors import register
@@ -139,7 +139,7 @@ def _request_payload(config: dict[str, Any], model: str, messages: list[dict[str
 
 @register("llm")
 def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
-    profile = require_profile(db, config.get("profile_id"), user_id=current_actor(db), error=WorkflowDomainError)
+    profile = require_connection(db, config.get("profile_id"), user_id=current_actor(db), error=WorkflowDomainError)
     messages: list[dict[str, Any]] = []
     if config.get("system"):
         messages.append({"role": "system", "content": str(config["system"])})

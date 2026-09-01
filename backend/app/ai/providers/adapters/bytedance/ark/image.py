@@ -9,15 +9,14 @@ from app.core.http_retry import RetryingClient
 
 from app.ai.providers.contracts.generation import (
     REFERENCE_IMAGE,
-    GenerationProvider,
+    GenerationAdapter,
     GenerationRequest,
     GenerationResult,
-    ProviderContext,
-    ProviderError,
-    image_file_to_data_url,
+    GenerationAdapterContext,
+    GenerationAdapterError,
     source_values,
     metering_from_request,
-    provider_http_error,
+    adapter_http_error,
 )
 from app.ai.providers.media_transfer import download_to_path
 
@@ -39,11 +38,11 @@ def _is_seedream4(model: str) -> bool:
     return "seedream-4" in model
 
 
-def resolve_seedream_model(request: GenerationRequest, context: ProviderContext | None = None) -> str:
-    return (request.model or (context.default_model if context else "") or DEFAULT_MODEL_ID).strip()
+def resolve_seedream_model(request: GenerationRequest, context: GenerationAdapterContext | None = None) -> str:
+    return (request.model or (context.configured_model_id if context else "") or DEFAULT_MODEL_ID).strip()
 
 
-def build_image_payload(request: GenerationRequest, context: ProviderContext | None = None) -> dict[str, Any]:
+def build_image_payload(request: GenerationRequest, context: GenerationAdapterContext | None = None) -> dict[str, Any]:
     model = resolve_seedream_model(request, context)
     payload: dict[str, Any] = {
         "model": model,
@@ -74,18 +73,18 @@ def extract_image_url(response_payload: dict[str, Any]) -> str:
     for item in data:
         if isinstance(item, dict) and item.get("url"):
             return str(item["url"])
-    raise ProviderError("Provider returned success without an image URL")
+    raise GenerationAdapterError("Provider returned success without an image URL")
 
 
-class SeedreamProvider(GenerationProvider):
+class SeedreamAdapter(GenerationAdapter):
     # 与 Seedance(video)同属 "bytedance":适配器注册表按 (vendor, kind) 建键,
     # 同一家的图像与视频天然共存,不需要为此拆出第二个 vendor。
-    name = "bytedance"
-    kind = "image"
+    vendor_id = "bytedance"
+    media_kind = "image"
 
-    def generate(self, request: GenerationRequest, context: ProviderContext, output_dir: Path) -> GenerationResult:
+    def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         if not context.api_key:
-            raise ProviderError("ARK API key is not configured (settings → 生成服务)")
+            raise GenerationAdapterError("ARK API key is not configured (settings → 生成服务)")
         base_url = (context.base_url or ARK_BASE).rstrip("/")
         headers = {"Authorization": f"Bearer {context.api_key}"}
         try:
@@ -100,4 +99,4 @@ class SeedreamProvider(GenerationProvider):
                 download_to_path(url, target, timeout=120)
                 return GenerationResult(output_paths=[target], usage=metering_from_request(request), raw_usage=payload)
         except httpx.HTTPError as exc:
-            raise ProviderError(provider_http_error("ARK image request failed", exc, context.api_key)) from exc
+            raise GenerationAdapterError(adapter_http_error("ARK image request failed", exc, context.api_key)) from exc

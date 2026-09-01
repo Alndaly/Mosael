@@ -10,7 +10,7 @@
 
 各能力由谁执行:
   · image / video → ai.providers 的注册表,按 (vendor, kind) 取
-  · tts           → audio.tts.REMOTE_ENGINES,按 vendor 取
+  · tts           → ai.providers.REMOTE_SPEECH_ADAPTERS,按语音引擎 id 取
   · chat          → 统一的 OpenAI 兼容客户端,不需要每家一个适配器
   · podcast       → 专用的 WebSocket 实现,按 vendor 取
 """
@@ -19,12 +19,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-# 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
-RATCHET = True
-
 import pytest
 
 from app.domain.provider_presets import VENDOR_PRESETS
+
+# 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
+RATCHET = True
 
 #: chat 走通用兼容客户端,不按 vendor 分适配器 —— 它不该被要求有一个专属实现。
 _NO_PER_VENDOR_ADAPTER = {"chat"}
@@ -34,22 +34,22 @@ def _has_implementation(vendor: str, capability: str) -> bool:
     if capability in _NO_PER_VENDOR_ADAPTER:
         return True
     if capability in ("image", "video"):
-        from app.ai.providers import get_provider
+        from app.ai.providers import get_generation_adapter
 
-        return get_provider(vendor, capability) is not None
+        return get_generation_adapter(vendor, capability) is not None
     if capability == "tts":
-        from app.ai.providers import REMOTE_ENGINES
+        from app.ai.providers import REMOTE_SPEECH_ADAPTERS
 
-        return vendor in REMOTE_ENGINES
+        return vendor in REMOTE_SPEECH_ADAPTERS
     if capability == "podcast":
-        # 播客是独立的 WebSocket 实现,不在 REMOTE_ENGINES 里(它的构造参数是 appid + Access
+        # 播客是独立的 WebSocket 实现,不在 REMOTE_SPEECH_ADAPTERS 里(它的构造参数是 appid + Access
         # Token,不是 API Key)。派发处按 **vendor 名**分支,所以判据也必须按 vendor 判 ——
         # 第一版这里写的是"模块里有没有 PODCAST_SPEAKERS",那是个模块级事实,任何 vendor 都
         # 为真,于是给别人加一个 podcast 也不会红。破坏性验证当场把这一点抓了出来。
         import re
 
         source = (Path(__file__).resolve().parents[1] / "app" / "domain" / "voices" / "voices.py").read_text(encoding="utf-8")
-        return bool(re.search(rf'resolve_profile\(db, "{re.escape(vendor)}"', source))
+        return bool(re.search(rf'resolve_connection\(db, "{re.escape(vendor)}"', source))
     raise AssertionError(f"新能力 {capability!r} 还没说清谁来执行它 —— 请在这里补上判据")
 
 

@@ -11,19 +11,19 @@ from pathlib import Path
 
 import pytest
 
-from app.ai.providers.contracts.generation import GenerationRequest, ProviderContext, ProviderError
+from app.ai.providers.contracts.generation import GenerationRequest, GenerationAdapterContext, GenerationAdapterError
 from app.ai.providers.contracts.generation import FIRST_FRAME, SourceAsset
-from app.ai.providers.adapters.minimax import build_submit_payload, extract_video_url, resolve_model
+from app.ai.providers.adapters.minimax.video import build_submit_payload, extract_video_url, resolve_model
 
 
-def _ctx(**kw) -> ProviderContext:
-    return ProviderContext(
-        profile_id=None,
-        vendor="minimax",
+def _ctx(**kw) -> GenerationAdapterContext:
+    return GenerationAdapterContext(
+        connection_id=None,
+        vendor_id="minimax",
         api_key="k",
         base_url=kw.pop("base_url", ""),
-        default_model=kw.pop("default_model", ""),
-        extra=kw or {},
+        configured_model_id=kw.pop("configured_model_id", ""),
+        options=kw or {},
     )
 
 
@@ -65,11 +65,14 @@ def test_时长由统一能力校验负责_适配器不得静默改写() -> None
 
 def test_没指定模型时回落到_H3() -> None:
     assert resolve_model(GenerationRequest(kind="video", model="", prompt="p"), _ctx()) == "MiniMax-H3"
-    assert resolve_model(GenerationRequest(kind="video", model="", prompt="p"), _ctx(default_model="X")) == "X"
+    assert resolve_model(
+        GenerationRequest(kind="video", model="", prompt="p"),
+        _ctx(configured_model_id="X"),
+    ) == "X"
 
 
 def test_终态失败立刻抛而不是等超时() -> None:
-    with pytest.raises(ProviderError) as err:
+    with pytest.raises(GenerationAdapterError) as err:
         extract_video_url({"task": {"status": "failed", "error": "content policy"}})
     assert "content policy" in str(err.value)
     # 还在跑 → 返回 None 继续轮询

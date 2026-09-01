@@ -20,7 +20,7 @@ from dataclasses import dataclass
 
 import httpx
 
-from app.domain.provider_credentials import ResolvedProvider
+from app.domain.provider_credentials import ResolvedConnection
 from app.core.http_retry import RetryingClient
 from app.domain.providers import VENDOR_PRESETS
 
@@ -47,7 +47,7 @@ def health_path_for(vendor: str) -> str:
     return str(declared) if isinstance(declared, str) and declared else DEFAULT_HEALTH_PATH
 
 
-def probe(profile: ResolvedProvider) -> HealthResult:
+def probe(profile: ResolvedConnection) -> HealthResult:
     """打一次探针。**任何失败都是结果而不是异常** —— 探活本身失败就是"离线"这个答案。"""
     if profile.auth_type == "oauth":
         return HealthResult(supported=False)

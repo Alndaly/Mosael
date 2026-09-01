@@ -179,10 +179,10 @@ def test_comfyui_的目录是它的工作流而不是模型() -> None:
     """ComfyUI 是工作流引擎,没有模型目录。走同一个接缝(_catalog_entries)而不是在前端
     分叉:这样「加入 / 启停 / 设能力 / 删除」整套交互对工作流原样成立,只有文案不同。"""
     from app.api.routes import settings as settings_routes
-    from app.domain.provider_credentials import ResolvedProvider
+    from app.domain.provider_credentials import ResolvedConnection
 
     # _catalog_entries 拿的是解析过的连接(连接 + 这个人的钥匙)。
-    profile = ResolvedProvider(
+    profile = ResolvedConnection(
         id="p", name="C", vendor="comfyui", base_url="http://127.0.0.1:9", auth_type="api_key", enabled=True
     )
 
@@ -203,9 +203,9 @@ def test_comfyui_的目录是它的工作流而不是模型() -> None:
 def test_comfyui_连不上时目录为空而不是报错() -> None:
     """连不上是常态(忘了启动)。设置页不该因此 500 —— 空目录和"端点没有模型"是同一种表现。"""
     from app.api.routes import settings as settings_routes
-    from app.domain.provider_credentials import ResolvedProvider
+    from app.domain.provider_credentials import ResolvedConnection
 
-    profile = ResolvedProvider(
+    profile = ResolvedConnection(
         id="p", name="C", vendor="comfyui", base_url="http://127.0.0.1:1", auth_type="api_key", enabled=True
     )
     assert settings_routes._catalog_entries(profile) == {}

@@ -23,7 +23,7 @@ import subprocess
 
 import pytest
 
-from app.domain.voices import service
+from app.domain.voices import transcription
 from app.core.db import SessionLocal
 from app.db.models import Asset, Job
 from tests.util import fresh_client
@@ -55,8 +55,8 @@ def test_it_says_there_is_no_audio(tmp_path) -> None:
     asset_id = _asset(client, _silent_video(tmp_path), "屏幕录制")
 
     with SessionLocal() as db:
-        with pytest.raises(service.AsrError) as caught:
-            service.start_transcription(db, asset_id, created_by=None)
+        with pytest.raises(transcription.ASRError) as caught:
+            transcription.start_transcription(db, asset_id, created_by=None)
 
     message = str(caught.value)
     assert "音轨" in message, f"没说清是没有音轨:{message}"
@@ -71,8 +71,8 @@ def test_it_refuses_before_creating_a_job(tmp_path) -> None:
 
     with SessionLocal() as db:
         before = db.query(Job).count()
-        with pytest.raises(service.AsrError):
-            service.start_transcription(db, asset_id, created_by=None)
+        with pytest.raises(transcription.ASRError):
+            transcription.start_transcription(db, asset_id, created_by=None)
         assert db.query(Job).count() == before, "已经起了一个注定失败的任务"
 
 
@@ -91,5 +91,5 @@ def test_a_video_with_audio_still_goes_through(tmp_path) -> None:
     asset_id = _asset(client, out, "有声的")
 
     with SessionLocal() as db:
-        job = service.start_transcription(db, asset_id, created_by=None)
+        job = transcription.start_transcription(db, asset_id, created_by=None)
         assert job.kind == "transcribe"

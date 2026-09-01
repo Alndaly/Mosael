@@ -53,9 +53,9 @@ class CommitOut(BaseModel):
     version: int
 
 
-def _profile(db: DbSession, profile_id: str) -> ProviderProfile:
+def _require_owned_profile(db: DbSession, profile_id: str, user_id: str) -> ProviderProfile:
     profile = db.get(ProviderProfile, profile_id)
-    if profile is None:
+    if profile is None or profile.owner_user_id != user_id:
         raise HTTPException(status_code=404, detail="供应商不存在")
     return profile
 
@@ -63,7 +63,7 @@ def _profile(db: DbSession, profile_id: str) -> ProviderProfile:
 @router.post("/agent/provider-credentials/{profile_id}/acquire", response_model=LeaseOut)
 def acquire_credential_lease(profile_id: str, db: DbSession, user: CurrentUser) -> LeaseOut:
     """取得该档案凭据的独占刷新权。等不到(另一次刷新还没结束)返回 409,调用方稍后重试。"""
-    _profile(db, profile_id)
+    _require_owned_profile(db, profile_id, user.id)
     try:
         lease = acquire_lease(profile_id, user.id)
     except CredentialLeaseError as exc:
@@ -77,6 +77,7 @@ def acquire_credential_lease(profile_id: str, db: DbSession, user: CurrentUser) 
 @router.post("/agent/provider-credentials/{profile_id}/commit", response_model=CommitOut)
 def commit_credential_lease(profile_id: str, body: CommitIn, db: DbSession, user: CurrentUser) -> CommitOut:
     """持租约写回刷新结果并释放。租约已超时被顶替时返回 409 —— 此时写回会覆盖别人的新凭据。"""
+    _require_owned_profile(db, profile_id, user.id)
     try:
         row = commit_credential(db, profile_id, user.id, body.lease, body.credential)
     except CredentialLeaseError as exc:
@@ -88,5 +89,5 @@ def commit_credential_lease(profile_id: str, body: CommitIn, db: DbSession, user
 @router.post("/agent/provider-credentials/{profile_id}/release", status_code=204)
 def release_credential_lease(profile_id: str, body: CommitIn, db: DbSession, user: CurrentUser) -> None:
     """刷新失败时主动放手,不必等 TTL 到期 —— 否则下一轮对话要白等半分钟。"""
-    _profile(db, profile_id)
+    _require_owned_profile(db, profile_id, user.id)
     release_lease(profile_id, user.id, body.lease)

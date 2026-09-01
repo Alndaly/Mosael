@@ -23,7 +23,7 @@ from app.domain.usage import BillableCall, billable
 from sqlalchemy.orm import Session
 
 from app.domain import provider_models
-from app.domain.providers import require_profile
+from app.domain.providers import require_connection
 
 _LLM_TIMEOUT_SECONDS = 60.0
 
@@ -190,11 +190,11 @@ def optimize_image_prompt(
     from app.domain import provider_credentials
 
     chat_profile = (
-        provider_credentials.resolve(db, default.profile, user_id) if default is not None else None
+        provider_credentials.resolve_connection(db, default.profile, user_id) if default is not None else None
     )
     chat_model = default.model_id if default is not None else ""
     if chat_profile is None:
-        chat_profile = require_profile(db, profile_id, user_id=user_id, error=PromptOptimizeError)
+        chat_profile = require_connection(db, profile_id, user_id=user_id, error=PromptOptimizeError)
     if not chat_model:
         chat_model = provider_models.model_id_for(db, chat_profile, "chat")
     if not chat_model:

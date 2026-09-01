@@ -17,12 +17,12 @@ test_agent_workflow_parity.py 是同一套棘轮。
 
 from __future__ import annotations
 
-# 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
-RATCHET = True
-
 import ast
 import subprocess
 from pathlib import Path
+
+# 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
+RATCHET = True
 
 BACKEND = Path(__file__).resolve().parents[1]
 
@@ -74,7 +74,8 @@ def test_只有一个模块拼_chat_completions_请求() -> None:
 
 
 # 只查端点字面量,不查「谁解析了 choices」。后者听起来是同一件事的另一半,实际不成立:
-# 通义万相的图像接口回包里也有 choices,形状却完全不同(app/ai/providers/qwen_image.py)。
+# 通义万相的图像接口回包里也有 choices,形状却完全不同
+# (app/ai/providers/adapters/alibaba/dashscope/image.py)。
 # 为它挂一条豁免,就是用一条钝的约束换一条注定要不断加例外的清单 —— 而端点这条足够锋利:
 # 重新实现一遍对话补全,绕不开 /chat/completions。
 
