@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Camera, CircleAlert, CircleCheck, Download, FolderPlus, Loader2, Plus, Redo2, Scissors, Sparkles, Type, Undo2 } from "lucide-react";
+import { Bot, Camera, CircleAlert, CircleCheck, Download, FolderPlus, Loader2, Plus, Redo2, Scissors, Sparkles, Type, Undo2 } from "lucide-react";
 
 import { toast } from "sonner";
 
@@ -58,10 +58,12 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ModalShell } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { CanvasAgentChat, type CanvasAgentMode } from "@/components/agent/CanvasAgentChat";
 import { clipEnd } from "@/domain/timeline/geometry";
 import { projectTranscript, type SegmentLike } from "@/domain/timeline/transcriptProjection";
 import { type LeftTab, useEditorPanels } from "@/features/editor/useEditorPanels";
-import { HANDLE_COLUMN, HANDLE_ROW, handleOffset } from "@/lib/useResizableSidebar";
+import { usePersistentTab } from "@/lib/usePersistentTab";
+import { HANDLE_COLUMN, HANDLE_ROW, handleOffset, useResizableSidebar } from "@/lib/useResizableSidebar";
 
 //: 剪辑页的 grid **自己**带 p-2(别的页面是外层 flex 带,grid 自己是 0)。
 //: 手柄绝对定位在这个 grid 里,所以偏移要算上它。
@@ -121,6 +123,14 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   // (面板宽度早就是这么存的,见 PANEL_SIZES_KEY)。用项目里已有的那个钩子,它自带白名单:
   // 哪天某个 tab 被删掉,存着旧值的用户不会卡在一个不存在的页面上。
   const panels = useEditorPanels();
+  // 剪辑助手与工作流/画板助手共用 CanvasAgentChat。开合与停靠方式属于工作台偏好，
+  // 切项目或刷新时不应该无故消失，因此沿用页面级持久化状态。
+  const [agentOpen, setAgentOpen] = usePersistentTab<"on" | "off">("editor-agent", "off", ["on", "off"]);
+  const [agentMode, setAgentMode] = usePersistentTab<CanvasAgentMode>("editor-agent-mode", "docked", [
+    "docked",
+    "floating",
+  ]);
+  const agentSidebar = useResizableSidebar("editor-agent", { min: 320, max: 640, fallback: 400 });
 
 
   const assets = useQuery({
@@ -794,6 +804,12 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   // timeline's height + the row gap (6). Keeps the column resizers out of the timeline.
   const panelsRowBottom = panels.sizes.timeline + 16;
   const inspectorInGrid = showInspector && !panels.compact;
+  const dockedAgent = agentOpen === "on" && agentMode === "docked";
+  const agentContext = t("editorAgentContext")
+    .replace("{project}", project.name)
+    .replace("{projectId}", project.id)
+    .replace("{sequence}", sequence.name)
+    .replace("{sequenceId}", sequence.id);
 
   return (
     <DndContext
@@ -815,6 +831,37 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       {/* Uploaded fonts must be registered before the monitor or the style panel can paint
           text in them. */}
       <FontFaces fonts={fonts.data ?? []} />
+      {agentOpen === "on" && (
+        // 停靠态贴住编辑器右上工作区，不侵占时间线；浮动态由 CanvasAgentChat 自己 fixed 定位，
+        // 外层用 contents，避免凭空成为 grid 的第四个单元、把现有面板挤乱。
+        <div
+          className={cn(
+            "z-30",
+            dockedAgent ? "absolute right-2 top-2 grid min-h-0 min-w-0" : "contents",
+          )}
+          style={dockedAgent ? { width: agentSidebar.width, bottom: panelsRowBottom } : undefined}
+        >
+          <CanvasAgentChat
+            contextLine={agentContext}
+            emptyHint={t("editorAgentEmpty")}
+            placeholder={t("editorAgentPlaceholder")}
+            rectKey="openstudio.editor.agent.rect.v1"
+            workspaceId={workspace.id}
+            mode={agentMode}
+            onModeChange={setAgentMode}
+            onClose={() => setAgentOpen("off")}
+          />
+        </div>
+      )}
+      {dockedAgent && (
+        <div
+          className={`absolute top-2 z-40 ${HANDLE_COLUMN}`}
+          style={{ right: agentSidebar.width + 4, bottom: panelsRowBottom }}
+          role="separator"
+          aria-orientation="vertical"
+          onPointerDown={agentSidebar.startDragFromRight}
+        />
+      )}
       <ConfirmDialog
         open={trackPendingRemoval !== null}
         title={t("removeTrackConfirmTitle")}
@@ -930,6 +977,24 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           >
             <Camera size={12} /> {t("editorGrabFrame")}
           </Button>
+          {/* 助手针对整条时间线，不属于左边那组“当前帧动作”；推到最右并用分割线隔开，
+              入口始终可见，同时不会让它看起来像第三种截帧工具。 */}
+          <div className="ml-auto border-l border-l-[color:rgb(255_255_255/0.08)] pl-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "h-7 gap-1 px-2 text-ui-2xs",
+                agentOpen === "on" && "!bg-[rgb(255_255_255/0.12)] !text-white",
+              )}
+              title={t("wfAgentTitle")}
+              aria-label={t("wfAgentTitle")}
+              aria-pressed={agentOpen === "on"}
+              onClick={() => setAgentOpen(agentOpen === "on" ? "off" : "on")}
+            >
+              <Bot size={12} /> {t("wfAgentTitle")}
+            </Button>
+          </div>
         </div>
         <Monitor
           sequence={sequence}

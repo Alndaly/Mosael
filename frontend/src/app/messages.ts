@@ -920,6 +920,10 @@ export const messages = {
     wfLlmJsonStrictOff: "关闭",
     wfLlmJsonSchema: "JSON Schema",
     wfAgentEmpty: "描述你想要的流程,我来搭建或修改节点;改动会先出确认卡。",
+    editorAgentEmpty: "告诉我你想怎么调整这条时间线——整理节奏、移动或裁剪片段、加轨道、改画面;修改会先出确认卡。",
+    editorAgentPlaceholder: "例如:把前三个片段各缩短 0.5 秒,并依次排紧",
+    editorAgentContext:
+      "你正在协助剪辑 Open Studio 项目「{project}」中的时间线「{sequence}」(project_id={projectId}, sequence_id={sequenceId})。先用 inspect_sequence 查看当前轨道与片段;需要素材时用 list_assets 查当前工作区。修改必须用 edit_timeline 提交细粒度操作(insert_clip/move_clip/trim_clip/delete_clip/cut_clip_range/add_track/remove_track/set_clip_effects/set_clip_transform),不要用 edit_workflow。改动都会生成确认卡等我批准。",
     boardAgentEmpty: "说说你想在这张画板上做什么 —— 摊开思路、加几张空槽、把它们连起来;改动会先出确认卡。",
     boardAgentPlaceholder: "例如:按分镜拆成六张便签,每张后面接一个图片空槽",
     boardAgentContext:
@@ -3027,6 +3031,10 @@ export const messages = {
     wfPickOption: "Pick one",
     wfInsertVar: "Insert at cursor",
     wfAgentEmpty: "Describe the flow you want — I'll build or edit nodes; changes go through confirmation cards.",
+    editorAgentEmpty: "Tell me how you want this timeline adjusted — tighten pacing, move or trim clips, add tracks, or change the picture; edits go through confirmation cards.",
+    editorAgentPlaceholder: "e.g. shorten each of the first three clips by 0.5 seconds, then close the gaps",
+    editorAgentContext:
+      "You are assisting with timeline \"{sequence}\" in Open Studio project \"{project}\" (project_id={projectId}, sequence_id={sequenceId}). Call inspect_sequence first to read the current tracks and clips; use list_assets when you need workspace media. All changes must use edit_timeline with granular operations (insert_clip/move_clip/trim_clip/delete_clip/cut_clip_range/add_track/remove_track/set_clip_effects/set_clip_transform); do not use edit_workflow. Changes create a confirmation card for my approval.",
     boardAgentEmpty: "Tell me what you want on this board — lay out an idea, add empty slots, wire them up; changes go through confirmation cards.",
     boardAgentPlaceholder: "e.g. break this into six shot notes, each followed by an image slot",
     boardAgentContext:
