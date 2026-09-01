@@ -1,0 +1,61 @@
+---
+title: Chrome video companion
+description: Read, seek, and translate transcripts, then import a video or its current frame.
+order: 7
+---
+
+The Open Studio Chrome extension uses the browser's native **Side Panel** and never covers the page
+with a floating window. It currently supports YouTube and Bilibili video pages and follows the active
+tab as you switch between videos.
+
+## Install
+
+Download and unzip `open-studio-browser-extension.zip` from a GitHub Release:
+
+1. Open `chrome://extensions`.
+2. Enable **Developer mode**.
+3. Choose **Load unpacked** and select the extracted directory.
+4. Pin the Open Studio video companion to the toolbar.
+
+Developers can run `pnpm build:extension` and load `browser-extension/dist/` instead.
+
+## Transcripts and seeking
+
+Open a video and click the extension icon. The panel reads captions supplied by the site and turns
+them into a timed transcript:
+
+- Click a row to seek to that timestamp.
+- The current cue is highlighted during playback.
+- Search matches both source text and translations.
+- Moving to another video tab refreshes the panel for that page.
+
+The extension does not invent a transcript when a video has no captions. Import it into Open Studio
+and run media transcription instead.
+
+## Translation, import, and frame capture
+
+The first use of these three actions asks you to connect Open Studio from panel settings. Enter the
+local backend address (`http://127.0.0.1:8800` by default), sign in with an Open Studio account, and
+choose a workspace and optional project.
+
+- **Translate** completes the selected target language in one action; long transcripts are batched
+  automatically without changing cue order.
+- **Import video** submits the current page URL as a background media-library download.
+- **Capture current frame** crops the currently visible player into a PNG and uses the normal asset
+  upload endpoint.
+
+The password is used only to mint a session and is never stored. The extension does not request
+cookie access or export Chrome login state. Download members-only, private, or region-locked content
+from Open Studio with the matching [Browser Pool](/en/docs/guides/browser-pool) profile.
+
+## Why the permissions are needed
+
+| Permission | Purpose |
+| --- | --- |
+| Side Panel | Open Chrome's native right-hand panel |
+| Tabs / Active Tab | Follow video pages, seek, and capture the visible player |
+| Storage | Keep the Open Studio session and destination workspace |
+| YouTube / Bilibili | Read current-page player and caption data |
+| localhost / 127.0.0.1 | Call the local Open Studio API |
+
+Chrome 116+ is required. At least part of the player must be visible for frame capture.

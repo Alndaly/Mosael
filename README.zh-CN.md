@@ -88,6 +88,13 @@ Open Studio 是一款运行在本机的 AI 视频工作室，把**多轨剪辑�
 
 ![浏览器池：集中管理持久登录](docs/media/browser-pool.png)
 
+### Chrome 浏览器扩展
+
+Chrome 扩展使用浏览器原生 Side Panel，不在网页上覆盖浮动面板。浏览 YouTube 或 B 站视频时，
+点击扩展图标即可在右侧查看逐字稿、点击句子跳转时间、一键翻译，并把当前视频或播放器当前帧
+导入 Open Studio 素材库。扩展使用单独的 Open Studio 登录会话，密码不会保存，也不会读取或
+导出 Chrome Cookie。安装与限制见 [browser-extension/README.zh-CN.md](browser-extension/README.zh-CN.md)。
+
 ### 插件
 
 插件可以是本地子进程脚本，也可以连接现有 MCP 服务。安装前先读取清单并展示权限、凭据与工具；
@@ -110,6 +117,7 @@ Open Studio 是一款运行在本机的 AI 视频工作室，把**多轨剪辑�
 | [docs/PLUGIN_ARCHITECTURE.md](docs/PLUGIN_ARCHITECTURE.md) | 插件打包、实例化与能力注入 |
 | [docs/CONVENTIONS.md](docs/CONVENTIONS.md) | 编码约定与架构棘轮 |
 | [docs/MAINTENANCE_HOTSPOTS.md](docs/MAINTENANCE_HOTSPOTS.md) | 高风险区域与验证要求 |
+| [browser-extension/README.zh-CN.md](browser-extension/README.zh-CN.md) | Chrome 侧栏扩展的安装、使用与权限 |
 | [docs/adr/](docs/adr/) | 架构决策记录 |
 
 ## 本地开发
@@ -186,6 +194,7 @@ pnpm dist:mac    # 构建 macOS DMG
 | `pnpm build:publisher` | `electron/publish.bundle.cjs` |
 | `pnpm build:system` | `electron/system.bundle.cjs` |
 | `pnpm build:sidecar` | `agent-sidecar/dist/sidecar.cjs` |
+| `pnpm build:extension` | `browser-extension/dist` |
 | `pnpm fetch:tts-python` | 声音克隆使用的独立 CPython |
 | `pnpm build:backend` | `backend/dist/open-studio-backend` |
 
@@ -200,7 +209,7 @@ git push origin main "v$VERSION"
 ```
 
 `.github/workflows/release.yml` 会先运行后端与前端全量测试，再创建草稿 Release，并行构建 macOS DMG、
-Windows NSIS 安装包和插件 zip。两个桌面平台都通过打包与数据库升级冒烟后，Release 才会转为正式最新版。
+Windows NSIS 安装包、Chrome 扩展和插件 zip。两个桌面平台都通过打包与数据库升级冒烟后，Release 才会转为正式最新版。
 手动触发同一工作流只生成 workflow artifact，不发布版本。
 
 打包版会检查最新 Release 并提示更新。macOS 安装包当前未签名，因此采用“检查并提示下载”，不做静默安装。
@@ -226,6 +235,7 @@ backend/          FastAPI、SQLAlchemy、领域服务与 pytest
 frontend/         React 19、Vite、TypeScript、Tailwind v4、Radix/shadcn
 electron/         主进程、preload、发布与系统集成 bundle
 agent-sidecar/    智能体运行时
+browser-extension/ Chrome Side Panel 视频助手
 contracts/        前后端共享的可执行契约语料
 plugins/          插件示例与清单
 website/          openstudio.team 文档站

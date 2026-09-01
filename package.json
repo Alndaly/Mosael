@@ -1,6 +1,6 @@
 {
   "name": "open-studio",
-  "version": "0.26.7",
+  "version": "0.26.8",
   "private": true,
   "license": "SEE LICENSE IN LICENSE",
   "description": "Open Studio — AI video creative studio",
@@ -10,6 +10,7 @@
   "scripts": {
     "build:frontend": "pnpm --dir frontend build",
     "build:sidecar": "pnpm --dir agent-sidecar build",
+    "build:extension": "pnpm --dir browser-extension build",
     "build:backend": "cd backend && uv run --frozen pyinstaller --noconfirm --clean --onedir --name open-studio-backend --hidden-import uvicorn.logging --hidden-import uvicorn.loops.auto --hidden-import uvicorn.protocols.http.auto --hidden-import uvicorn.protocols.websockets.auto --hidden-import uvicorn.lifespan.on --add-data app/ai/runtime/workers/tts.py:app/ai/runtime/workers --add-data app/ai/runtime/workers/asr.py:app/ai/runtime/workers run_backend.py",
     "build:mac": "pnpm fetch:tts-python && pnpm build:publisher && pnpm build:system && pnpm build:frontend && pnpm build:sidecar && pnpm build:backend && electron-builder --mac dir",
     "dist:mac": "pnpm fetch:tts-python && pnpm build:publisher && pnpm build:system && pnpm build:frontend && pnpm build:sidecar && pnpm build:backend && electron-builder --mac dmg",

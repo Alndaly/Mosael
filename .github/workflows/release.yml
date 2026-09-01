@@ -90,6 +90,12 @@ jobs:
       - name: Frontend tests
         run: cd frontend && pnpm vitest run
 
+      - name: Browser extension tests and build
+        run: |
+          pnpm --dir browser-extension test
+          pnpm --dir browser-extension typecheck
+          pnpm build:extension
+
   # 先建好草稿 Release(自动生成变更说明),两个平台的构建往同一个草稿传产物,
   # 全部成功后才转正——避免用户在「检查更新」里看到缺产物的半成品版本。
   draft:
@@ -98,6 +104,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install browser extension dependencies
+        run: pnpm install --frozen-lockfile --filter open-studio-browser-extension...
       - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -123,6 +136,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber dist/plugins/*.zip
+
+      - name: Package Chrome extension
+        run: |
+          pnpm build:extension
+          mkdir -p dist/browser-extension
+          (cd browser-extension/dist && zip -qr "$GITHUB_WORKSPACE/dist/browser-extension/open-studio-browser-extension.zip" .)
+          unzip -l dist/browser-extension/open-studio-browser-extension.zip
+
+      - name: Upload Chrome extension to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber dist/browser-extension/open-studio-browser-extension.zip
 
   build:
     needs: [test, draft]

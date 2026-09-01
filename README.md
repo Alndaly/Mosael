@@ -113,6 +113,15 @@ app restarts.
 
 ![Browser Pool: persistent logins managed in one place](docs/media/browser-pool.png)
 
+### Chrome browser extension
+
+The Chrome extension uses the browser's native Side Panel instead of placing a floating overlay on
+the page. While watching YouTube or Bilibili, click the extension icon to read the transcript, seek
+by sentence, translate it, and import either the current video or the player's current frame into the
+Open Studio media library. The extension uses a separate Open Studio login session, never stores the
+password, and does not read or export Chrome cookies. See
+[browser-extension/README.md](browser-extension/README.md) for installation and limitations.
+
 ### Plugins
 
 A plugin can be a local subprocess script or a connection to an existing MCP server. Before
@@ -137,6 +146,7 @@ Complete user guides live at **[openstudio.team](https://openstudio.team)**; the
 | [docs/PLUGIN_ARCHITECTURE.md](docs/PLUGIN_ARCHITECTURE.md) | Plugin packaging, instances, and capability injection |
 | [docs/CONVENTIONS.md](docs/CONVENTIONS.md) | Coding conventions and architectural ratchets |
 | [docs/MAINTENANCE_HOTSPOTS.md](docs/MAINTENANCE_HOTSPOTS.md) | High-risk areas and required verification |
+| [browser-extension/README.md](browser-extension/README.md) | Chrome Side Panel extension setup, usage, and permissions |
 | [docs/adr/](docs/adr/) | Architecture decision records |
 
 ## Local development
@@ -215,6 +225,7 @@ pnpm dist:mac    # build a macOS DMG
 | `pnpm build:publisher` | `electron/publish.bundle.cjs` |
 | `pnpm build:system` | `electron/system.bundle.cjs` |
 | `pnpm build:sidecar` | `agent-sidecar/dist/sidecar.cjs` |
+| `pnpm build:extension` | `browser-extension/dist` |
 | `pnpm fetch:tts-python` | Standalone CPython used for voice cloning |
 | `pnpm build:backend` | `backend/dist/open-studio-backend` |
 
@@ -229,7 +240,7 @@ git push origin main "v$VERSION"
 ```
 
 `.github/workflows/release.yml` runs the full backend and frontend suites, creates a draft Release,
-and builds the macOS DMG, Windows NSIS installer, and plugin zip files in parallel. The Release is
+and builds the macOS DMG, Windows NSIS installer, Chrome extension, and plugin zip files in parallel. The Release is
 promoted to latest only after both desktop packages pass packaging and database-upgrade smoke tests.
 Manually dispatching the workflow produces artifacts only and does not publish a version.
 
@@ -257,6 +268,7 @@ backend/          FastAPI, SQLAlchemy, domain services, and pytest
 frontend/         React 19, Vite, TypeScript, Tailwind v4, and Radix/shadcn
 electron/         Main process, preload, publishing, and system-integration bundles
 agent-sidecar/    Agent runtime
+browser-extension/ Chrome Side Panel video companion
 contracts/        Executable contract corpus shared across implementations
 plugins/          Plugin examples and manifests
 website/          The openstudio.team documentation site

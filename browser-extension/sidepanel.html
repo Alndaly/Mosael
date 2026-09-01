@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Open Studio 视频助手</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand-mark" aria-hidden="true">OS</div>
+      <div class="header-copy">
+        <strong>Open Studio</strong>
+        <span id="connection-status">未连接</span>
+      </div>
+      <button id="refresh-button" class="icon-button" type="button" title="刷新当前页面" aria-label="刷新当前页面">↻</button>
+      <button id="settings-button" class="icon-button" type="button" title="连接设置" aria-label="连接设置">⚙</button>
+    </header>
+
+    <main>
+      <section id="settings-view" class="settings-view" hidden>
+        <div class="section-heading">
+          <div>
+            <h1>连接 Open Studio</h1>
+            <p>登录信息只用于换取会话，不会保存密码。</p>
+          </div>
+          <button id="close-settings-button" class="text-button" type="button">完成</button>
+        </div>
+
+        <form id="login-form" class="form-stack">
+          <label>
+            <span>后端地址</span>
+            <input id="server-input" type="url" value="http://127.0.0.1:8800" required />
+          </label>
+          <label>
+            <span>用户名</span>
+            <input id="username-input" autocomplete="username" required />
+          </label>
+          <label>
+            <span>密码</span>
+            <input id="password-input" type="password" autocomplete="current-password" required />
+          </label>
+          <button id="connect-button" class="primary-button" type="submit">连接</button>
+        </form>
+
+        <div id="connected-settings" class="form-stack" hidden>
+          <label>
+            <span>素材工作区</span>
+            <select id="workspace-select"></select>
+          </label>
+          <label>
+            <span>项目（可选）</span>
+            <select id="project-select"></select>
+          </label>
+          <button id="disconnect-button" class="danger-button" type="button">断开连接</button>
+        </div>
+        <p id="settings-message" class="form-message" role="status"></p>
+      </section>
+
+      <section id="video-view" class="video-view">
+        <div id="video-header" class="video-header" hidden>
+          <div class="video-meta">
+            <span id="platform-badge" class="badge"></span>
+            <span id="video-duration" class="duration"></span>
+          </div>
+          <h1 id="video-title"></h1>
+          <div class="action-grid">
+            <button id="import-button" class="action-button" type="button">
+              <span aria-hidden="true">↓</span>
+              <span>导入视频</span>
+            </button>
+            <button id="capture-button" class="action-button" type="button">
+              <span aria-hidden="true">▣</span>
+              <span>截取当前帧</span>
+            </button>
+          </div>
+        </div>
+
+        <div id="empty-state" class="empty-state">
+          <div class="empty-icon" aria-hidden="true">▶</div>
+          <h1>打开一个视频</h1>
+          <p>目前支持 YouTube 与 B 站视频页。切换标签页后，侧栏会自动跟随。</p>
+        </div>
+
+        <div id="transcript-section" class="transcript-section" hidden>
+          <div class="transcript-toolbar">
+            <div>
+              <strong>逐字稿</strong>
+              <span id="transcript-language"></span>
+            </div>
+            <div class="translate-controls">
+              <select id="target-language" aria-label="翻译目标语言">
+                <option value="zh-CN">中文</option>
+                <option value="en">English</option>
+                <option value="ja">日本語</option>
+                <option value="ko">한국어</option>
+                <option value="fr">Français</option>
+                <option value="de">Deutsch</option>
+                <option value="es">Español</option>
+              </select>
+              <button id="translate-button" class="text-button" type="button">翻译</button>
+            </div>
+          </div>
+          <input id="search-input" class="search-input" type="search" placeholder="搜索逐字稿…" />
+          <div id="transcript-status" class="transcript-status" role="status"></div>
+          <ol id="cue-list" class="cue-list"></ol>
+        </div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" hidden></div>
+    <script src="sidepanel.js"></script>
+  </body>
+</html>

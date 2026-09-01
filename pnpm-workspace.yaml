@@ -1,6 +1,7 @@
 packages:
   - "frontend"
   - "agent-sidecar"
+  - "browser-extension"
 
 # 依赖的 install 脚本默认不跑(pnpm 的安全默认值),需要跑的在这里逐个点名。
 # 漏了会让 `pnpm install --frozen-lockfile` 直接失败(ERR_PNPM_IGNORED_BUILDS),CI 也一样,

@@ -3,6 +3,27 @@
 这份记录只覆盖已经显出维护风险、但不适合一次性大拆的区域。目标是把浅 Module 逐步深化:
 小 Interface 后面藏更多行为,让改动有 Locality,让测试有稳定 Seam。
 
+## Chrome 扩展边界
+
+`browser-extension/` 有三个运行世界，不能为了少一层消息把它们揉在一起：
+
+- `page-bridge.ts` 在页面主世界，只读站点播放器/字幕对象；不得持有 Open Studio token。
+- `content.ts` 在隔离世界，负责页面 DOM、时间跳转和播放器可见矩形；不得渲染产品 UI。
+- `sidepanel.ts` 是 Chrome Side Panel，持有 Open Studio 会话并调用后端；不得读取站点 Cookie。
+
+站点字幕响应先收敛为 `TranscriptCue {start,end,text}`，再进入 UI。YouTube / B 站字段变化时只改各自
+Adapter 与测试，不要让站点 JSON 形状穿进侧栏。后端 CORS 的 Origin 正则必须继续限制为 32 位 a-p
+扩展 id，不能换成 `chrome-extension://.*` 或 `*`；CORS 也不能代替 Bearer 会话与工作区鉴权。
+
+改动扩展时至少运行：
+
+```bash
+pnpm --dir browser-extension test
+pnpm --dir browser-extension typecheck
+pnpm --dir browser-extension build
+cd backend && uv run pytest -q tests/test_browser_extension_cors.py
+```
+
 ## Provider 分类 — ✅ 已解决(2026-09-01)
 
 原目录同时混有供应商分类(`comfyui` / `evolink`)和能力分类(`image` / `speech` / `video`)，公共

@@ -245,6 +245,11 @@ def create_app() -> FastAPI:
             "http://localhost:8800",   # backend serving the built frontend
             "http://127.0.0.1:8800",
         ],
+        # Chrome MV3 side panels have their own opaque extension origin. Keep this deliberately
+        # narrower than ``chrome-extension://.*``: a real extension id is exactly 32 chars from
+        # a-p. CORS only permits the browser to read a response; every useful route still requires
+        # the user's bearer session and workspace authorization.
+        allow_origin_regex=r"^chrome-extension://[a-p]{32}$",
         allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],

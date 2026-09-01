@@ -3,6 +3,14 @@
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 
+## [0.26.8] - 2026-09-02
+
+### Added
+
+- Added a Chrome 116+ Side Panel extension for YouTube and Bilibili transcripts, timestamp seeking,
+  transcript translation, current-video import, and visible-player frame capture into the Open
+  Studio media library.
+
 ## [0.26.7] - 2026-09-02
 
 ### Added

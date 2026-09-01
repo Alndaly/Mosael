@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "Open Studio 视频助手",
+  "description": "在 Chrome 侧栏查看视频逐字稿、翻译，并将视频或当前帧导入 Open Studio。",
+  "version": "0.1.0",
+  "minimum_chrome_version": "116",
+  "permissions": ["activeTab", "sidePanel", "storage", "tabs"],
+  "host_permissions": [
+    "https://*.youtube.com/*",
+    "https://*.bilibili.com/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "打开 Open Studio 视频助手"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.youtube.com/*", "https://*.bilibili.com/*"],
+      "js": ["page-bridge.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://*.youtube.com/*", "https://*.bilibili.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "icons": {
+    "16": "icon.png",
+    "32": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  }
+}
