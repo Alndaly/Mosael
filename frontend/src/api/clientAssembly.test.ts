@@ -5,6 +5,7 @@ import * as browser from "@/api/domains/browser";
 import * as jobs from "@/api/domains/jobs";
 import * as notifications from "@/api/domains/notifications";
 import * as publish from "@/api/domains/publish";
+import * as scheduler from "@/api/domains/scheduler";
 import * as transport from "@/api/transport";
 
 describe("unified API client assembly", () => {
@@ -31,5 +32,10 @@ describe("unified API client assembly", () => {
   it("re-exports the notification domain client", () => {
     expect(client.listNotifications).toBe(notifications.listNotifications);
     expect(client.readNotification).toBe(notifications.readNotification);
+  });
+
+  it("re-exports the scheduler domain client", () => {
+    expect(client.listScheduledTasks).toBe(scheduler.listScheduledTasks);
+    expect(client.runScheduledTask).toBe(scheduler.runScheduledTask);
   });
 });

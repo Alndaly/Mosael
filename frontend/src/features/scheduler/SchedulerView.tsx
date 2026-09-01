@@ -5,12 +5,17 @@ import { toast } from "sonner";
 
 import {
   API_BASE,
-  api,
+  createScheduledTask,
+  deleteScheduledTask,
+  listJobs,
+  listScheduledTaskRuns,
+  listScheduledTasks,
   listWorkflows,
+  runScheduledTask,
   setResourceShared,
+  updateScheduledTask,
   type Job,
   type Project,
-  type RunScheduledTaskResponse,
   type ScheduledTask,
   type ScheduledTaskRun,
   type Workflow,
@@ -47,7 +52,7 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
 
   const tasks = useQuery({
     queryKey: ["scheduled-tasks", workspace.id],
-    queryFn: () => api<ScheduledTask[]>(`/api/scheduled-tasks?workspace_id=${workspace.id}`),
+    queryFn: () => listScheduledTasks(workspace.id),
   });
   const refreshTasks = () => void qc.invalidateQueries({ queryKey: ["scheduled-tasks", workspace.id] });
   // 定时任务默认共享(团队基建),但主人可以把它收成自己的 —— 归属决定的是谁能改、事后谁负责。
@@ -57,16 +62,16 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
     onSuccess: refreshTasks,
   });
   const menuRun = useMutation({
-    mutationFn: (id: string) => api<RunScheduledTaskResponse>(`/api/scheduled-tasks/${id}/run`, { method: "POST" }),
+    mutationFn: runScheduledTask,
     onSuccess: refreshTasks,
   });
   const menuToggle = useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
-      api<ScheduledTask>(`/api/scheduled-tasks/${id}`, { method: "PATCH", body: JSON.stringify({ enabled }) }),
+      updateScheduledTask(id, { enabled }),
     onSuccess: refreshTasks,
   });
   const menuRemove = useMutation({
-    mutationFn: (id: string) => api(`/api/scheduled-tasks/${id}`, { method: "DELETE" }),
+    mutationFn: deleteScheduledTask,
     onSuccess: () => {
       setMenuDeleting(null);
       refreshTasks();
@@ -281,17 +286,14 @@ function CreateTaskDialog({
         trigger === "scheduled" ? (schedKind === "hourly" ? "interval" : "daily") : trigger;
       const schedule =
         trigger !== "scheduled" ? {} : schedKind === "hourly" ? { seconds: 3600 } : { time: dailyTime };
-      return api<ScheduledTask>("/api/scheduled-tasks", {
-        method: "POST",
-        body: JSON.stringify({
-          workspace_id: workspace.id,
-          project_id: project?.id ?? null,
-          name: name.trim() || selectedWorkflow?.name || t("createTask"),
-          kind: "workflow",
-          trigger_type,
-          schedule,
-          payload: { workflow_id: workflowId, params: {} },
-        }),
+      return createScheduledTask({
+        workspace_id: workspace.id,
+        project_id: project?.id ?? null,
+        name: name.trim() || selectedWorkflow?.name || t("createTask"),
+        kind: "workflow",
+        trigger_type,
+        schedule,
+        payload: { workflow_id: workflowId, params: {} },
       });
     },
     onSuccess: onCreated,
@@ -383,14 +385,14 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
 
   const runs = useQuery({
     queryKey: ["task-runs", task.id],
-    queryFn: () => api<ScheduledTaskRun[]>(`/api/scheduled-tasks/${task.id}/runs`),
+    queryFn: () => listScheduledTaskRuns(task.id),
     refetchInterval: (query) =>
       (query.state.data ?? []).some((run) => run.status === "queued" || run.status === "running") ? 2000 : false,
     refetchOnWindowFocus: true,
   });
   const jobs = useQuery({
     queryKey: ["jobs", workspaceId, "all"],
-    queryFn: () => api<Job[]>(`/api/jobs?workspace_id=${workspaceId}`),
+    queryFn: () => listJobs(workspaceId),
   });
 
   const refresh = () => {
@@ -398,15 +400,11 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
     void qc.invalidateQueries({ queryKey: ["task-runs", task.id] });
   };
   const toggleTask = useMutation({
-    mutationFn: (enabled: boolean) =>
-      api<ScheduledTask>(`/api/scheduled-tasks/${task.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ enabled }),
-      }),
+    mutationFn: (enabled: boolean) => updateScheduledTask(task.id, { enabled }),
     onSuccess: refresh,
   });
   const runTask = useMutation({
-    mutationFn: () => api<RunScheduledTaskResponse>(`/api/scheduled-tasks/${task.id}/run`, { method: "POST" }),
+    mutationFn: () => runScheduledTask(task.id),
     onSuccess: () => {
       refresh();
       void qc.invalidateQueries({ queryKey: ["jobs", workspaceId, "all"] });
@@ -414,7 +412,7 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
   });
   const { locale } = usePreferences();
   const deleteTask = useMutation({
-    mutationFn: () => api(`/api/scheduled-tasks/${task.id}`, { method: "DELETE" }),
+    mutationFn: () => deleteScheduledTask(task.id),
     onSuccess: () => {
       setDeleting(false);
       void qc.invalidateQueries({ queryKey: ["scheduled-tasks", workspaceId] });

@@ -7,6 +7,7 @@ export * from "@/api/domains/browser";
 export * from "@/api/domains/jobs";
 export * from "@/api/domains/notifications";
 export * from "@/api/domains/publish";
+export * from "@/api/domains/scheduler";
 
 export type User = components["schemas"]["UserOut"] & {
   display_name: string;
@@ -328,9 +329,6 @@ export type GenerationOption = components["schemas"]["GenerationOptionOut"];
 export type GenerationModel = GenerationOption;
 export type GenerationJob = components["schemas"]["GenerationJobOut"];
 export type GenerationCreateResponse = components["schemas"]["GenerationCreateResponse"];
-export type ScheduledTask = components["schemas"]["ScheduledTaskOut"];
-export type ScheduledTaskRun = components["schemas"]["ScheduledTaskRunOut"];
-export type RunScheduledTaskResponse = components["schemas"]["RunScheduledTaskResponse"];
 export type PluginPackage = components["schemas"]["PluginPackageOut"];
 export type PluginInstance = components["schemas"]["PluginInstanceOut"];
 export type PluginField = components["schemas"]["PluginFieldOut"];

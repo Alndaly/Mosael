@@ -71,3 +71,21 @@ def test_notifications_schema_slice_is_reexported() -> None:
 
     assert schemas.NotificationOut is NotificationOut
     assert schemas.NotificationListOut is NotificationListOut
+
+
+def test_scheduler_orm_slice_is_reexported_and_registered() -> None:
+    from app.db import models
+    from app.db.model_slices.scheduler import ScheduledTask, ScheduledTaskRun
+
+    assert models.ScheduledTask is ScheduledTask
+    assert models.ScheduledTaskRun is ScheduledTaskRun
+    assert ScheduledTask.__table__ is models.Base.metadata.tables["scheduled_tasks"]
+    assert ScheduledTaskRun.__table__ is models.Base.metadata.tables["scheduled_task_runs"]
+
+
+def test_scheduler_schema_slice_is_reexported() -> None:
+    from app.api import schemas
+    from app.api.schemas.scheduler import RunScheduledTaskResponse, ScheduledTaskOut
+
+    assert schemas.ScheduledTaskOut is ScheduledTaskOut
+    assert schemas.RunScheduledTaskResponse is RunScheduledTaskResponse

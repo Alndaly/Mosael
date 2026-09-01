@@ -4,6 +4,10 @@ import { api } from "@/api/transport";
 export type Job = components["schemas"]["JobOut"];
 export type TaskEvent = components["schemas"]["TaskEventOut"];
 
+export function listJobs(workspaceId: string): Promise<Job[]> {
+  return api<Job[]>(`/api/jobs?workspace_id=${encodeURIComponent(workspaceId)}`);
+}
+
 export function getJob(jobId: string): Promise<Job> {
   return api<Job>(`/api/jobs/${jobId}`);
 }
