@@ -17,6 +17,16 @@ from app.api.schemas.scheduler import (
     ScheduledTaskRunOut,
     ScheduledTaskUpdate,
 )
+from app.api.schemas.workflows import (
+    WorkflowAiEditRequest,
+    WorkflowAiEditResponse,
+    WorkflowCreate,
+    WorkflowImportRequest,
+    WorkflowNodeTypeOut,
+    WorkflowOut,
+    WorkflowRunRequest,
+    WorkflowUpdate,
+)
 from app.api.schemas.publish import (
     PublishAccountCreate,
     PublishAccountOut,
@@ -1540,36 +1550,6 @@ class PluginInvocationOut(OrmModel):
     created_at: datetime
 
 
-class WorkflowCreate(BaseModel):
-    workspace_id: str
-    name: str = Field(min_length=1, max_length=180)
-    description: str = Field(default="", max_length=2000)
-    graph: dict | None = None
-
-
-class WorkflowUpdate(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=180)
-    description: str | None = Field(default=None, max_length=2000)
-    graph: dict | None = None
-
-
-class WorkflowImportRequest(BaseModel):
-    """导入工作流:data 是导出文件的完整 JSON(format/version/name/graph 信封)。"""
-
-    workspace_id: str
-    data: dict
-
-
-class WorkflowOut(OrmModel):
-    id: str
-    workspace_id: str
-    name: str
-    description: str
-    graph: dict
-    created_at: datetime
-    updated_at: datetime
-
-
 class BoardOut(OrmModel):
     id: str
     workspace_id: str
@@ -1682,32 +1662,6 @@ class SequenceFrameRequest(BaseModel):
     """把时间线在某一时刻的合成画面存成一份新素材。"""
 
     at: float = 0
-
-
-class WorkflowRunRequest(BaseModel):
-    params: dict = Field(default_factory=dict)
-
-
-class WorkflowNodeTypeOut(BaseModel):
-    type: str
-    label: str
-    description: str
-    category: str = ""  # 面板分组;空=通用组
-    config: dict
-    outputs: list[str]
-    #: 插件节点带来源插件名(内置节点为空)。面板据此在同名工具之间区分是谁提供的。
-    plugin_name: str = ""
-
-
-class WorkflowAiEditRequest(BaseModel):
-    instruction: str = Field(min_length=1, max_length=4000)
-    graph: dict | None = None
-    profile_id: str | None = None
-
-
-class WorkflowAiEditResponse(BaseModel):
-    graph: dict
-    summary: str = ""
 
 
 class AgentSessionCreate(BaseModel):

@@ -6,6 +6,7 @@ import * as jobs from "@/api/domains/jobs";
 import * as notifications from "@/api/domains/notifications";
 import * as publish from "@/api/domains/publish";
 import * as scheduler from "@/api/domains/scheduler";
+import * as workflows from "@/api/domains/workflows";
 import * as transport from "@/api/transport";
 
 describe("unified API client assembly", () => {
@@ -37,5 +38,10 @@ describe("unified API client assembly", () => {
   it("re-exports the scheduler domain client", () => {
     expect(client.listScheduledTasks).toBe(scheduler.listScheduledTasks);
     expect(client.runScheduledTask).toBe(scheduler.runScheduledTask);
+  });
+
+  it("re-exports the workflow domain client", () => {
+    expect(client.listWorkflows).toBe(workflows.listWorkflows);
+    expect(client.runWorkflow).toBe(workflows.runWorkflow);
   });
 });

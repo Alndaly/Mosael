@@ -8,6 +8,7 @@ export * from "@/api/domains/jobs";
 export * from "@/api/domains/notifications";
 export * from "@/api/domains/publish";
 export * from "@/api/domains/scheduler";
+export * from "@/api/domains/workflows";
 
 export type User = components["schemas"]["UserOut"] & {
   display_name: string;
@@ -333,8 +334,6 @@ export type PluginPackage = components["schemas"]["PluginPackageOut"];
 export type PluginInstance = components["schemas"]["PluginInstanceOut"];
 export type PluginField = components["schemas"]["PluginFieldOut"];
 export type PluginToolState = components["schemas"]["PluginToolStateOut"];
-export type Workflow = components["schemas"]["WorkflowOut"];
-export type WorkflowNodeType = components["schemas"]["WorkflowNodeTypeOut"];
 export type PluginTool = components["schemas"]["PluginToolOut"];
 export type PluginInvocation = components["schemas"]["PluginInvocationOut"];
 export type PluginPermissionGrant = components["schemas"]["PluginPermissionGrantOut"];
@@ -700,29 +699,6 @@ export function redoSequence(sequenceId: string): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/redo`, { method: "POST" });
 }
 
-export interface WorkflowGraph {
-  nodes: Array<{
-    id: string;
-    type: string;
-    name?: string;
-    position?: { x: number; y: number };
-    config?: Record<string, unknown>;
-    /** 以输入接点(连接态)暴露在节点左侧的 config 字段名。 */
-    inputs?: string[];
-  }>;
-  edges: Array<{
-    id: string;
-    source: string;
-    target: string;
-    source_handle?: string | null;
-    /** 缺省 / "control" = 执行边;"data" = 数据边(带 source_output → target_input)。 */
-    kind?: "control" | "data";
-    source_output?: string;
-    target_input?: string;
-  }>;
-}
-
-
 /* ---------- 会话分组 ---------- */
 
 export type SessionGroup = components["schemas"]["SessionGroupOut"];
@@ -924,52 +900,6 @@ export function listCapabilityModels(
 
 export function deleteBoard(boardId: string, workspaceId: string): Promise<unknown> {
   return api(`/api/boards/${boardId}?workspace_id=${workspaceId}`, { method: "DELETE" });
-}
-
-export function listWorkflows(workspaceId: string): Promise<Workflow[]> {
-  return api<Workflow[]>(`/api/workflows?workspace_id=${workspaceId}`);
-}
-
-export function createWorkflow(body: {
-  workspace_id: string;
-  name: string;
-  description?: string;
-  graph?: WorkflowGraph | null;
-}): Promise<Workflow> {
-  return api<Workflow>("/api/workflows", { method: "POST", body: JSON.stringify(body) });
-}
-
-export function updateWorkflow(
-  workflowId: string,
-  body: { name?: string; description?: string; graph?: WorkflowGraph },
-): Promise<Workflow> {
-  return api<Workflow>(`/api/workflows/${workflowId}`, { method: "PATCH", body: JSON.stringify(body) });
-}
-
-export function deleteWorkflow(workflowId: string): Promise<unknown> {
-  return api(`/api/workflows/${workflowId}`, { method: "DELETE" });
-}
-
-/** 导出文件信封:{format, version, name, description, graph}。 */
-export function exportWorkflowFile(workflowId: string): Promise<Record<string, unknown>> {
-  return api<Record<string, unknown>>(`/api/workflows/${workflowId}/export`);
-}
-
-export function importWorkflow(body: { workspace_id: string; data: Record<string, unknown> }): Promise<Workflow> {
-  return api<Workflow>("/api/workflows/import", { method: "POST", body: JSON.stringify(body) });
-}
-
-export function runWorkflow(workflowId: string, params: Record<string, unknown> = {}): Promise<Job> {
-  return api<Job>(`/api/workflows/${workflowId}/run`, { method: "POST", body: JSON.stringify({ params }) });
-}
-
-export function fetchWorkflowNodeTypes(): Promise<WorkflowNodeType[]> {
-  return api<WorkflowNodeType[]>("/api/workflows/node-types");
-}
-
-/** Execution history — this workflow's run jobs, newest first. */
-export function listWorkflowRuns(workflowId: string): Promise<Job[]> {
-  return api<Job[]>(`/api/workflows/${workflowId}/runs`);
 }
 
 /** 把「我的东西」放进一个工作区,或者收回来。发布账号与它的浏览器档案会一起动(后端保证)。 */

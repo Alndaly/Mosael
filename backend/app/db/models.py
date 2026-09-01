@@ -444,19 +444,7 @@ from app.db.model_slices.notifications import Notification  # noqa: E402,F401
 from app.db.model_slices.scheduler import ScheduledTask, ScheduledTaskRun  # noqa: E402,F401
 
 
-class Workflow(Base):
-    """可视化工作流(Coze/Dify 式):graph 存节点+连线的 JSON,
-    定时任务与智能体都以 workflow 为执行单元。"""
-
-    __tablename__ = "workflows"
-
-    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
-    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
-    name: Mapped[str] = mapped_column(String(180), nullable=False)
-    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    graph: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+from app.db.model_slices.workflows import Workflow  # noqa: E402,F401
 
 
 class Board(Base):

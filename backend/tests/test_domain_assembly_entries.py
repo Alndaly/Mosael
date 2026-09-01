@@ -89,3 +89,19 @@ def test_scheduler_schema_slice_is_reexported() -> None:
 
     assert schemas.ScheduledTaskOut is ScheduledTaskOut
     assert schemas.RunScheduledTaskResponse is RunScheduledTaskResponse
+
+
+def test_workflows_orm_slice_is_reexported_and_registered() -> None:
+    from app.db import models
+    from app.db.model_slices.workflows import Workflow
+
+    assert models.Workflow is Workflow
+    assert Workflow.__table__ is models.Base.metadata.tables["workflows"]
+
+
+def test_workflows_schema_slice_is_reexported() -> None:
+    from app.api import schemas
+    from app.api.schemas.workflows import WorkflowNodeTypeOut, WorkflowOut
+
+    assert schemas.WorkflowOut is WorkflowOut
+    assert schemas.WorkflowNodeTypeOut is WorkflowNodeTypeOut
