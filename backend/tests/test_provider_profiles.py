@@ -11,7 +11,11 @@ def test_profile_crud_with_masked_keys() -> None:
 
     created = client.post(
         "/api/settings/providers",
-        json={"name": "我的 Kimi", "vendor": "moonshot", "config": {"api_key": "sk-kimi-1234"}},
+        json={
+            "name": "我的 Kimi",
+            "vendor": "moonshot",
+            "config": {"api_key": "sk-kimi-1234"},
+        },
     ).json()
     # Preset fills base_url + default model; key never serializes, only a hint.
     assert created["base_url"] == "https://api.moonshot.cn/v1"
@@ -26,12 +30,18 @@ def test_profile_crud_with_masked_keys() -> None:
 
     second = client.post(
         "/api/settings/providers",
-        json={"name": "备用 Kimi", "vendor": "moonshot", "config": {"api_key": "sk-kimi-5678"}},
+        json={
+            "name": "备用 Kimi",
+            "vendor": "moonshot",
+            "config": {"api_key": "sk-kimi-5678"},
+        },
     ).json()
     listed = client.get("/api/settings/providers").json()
     assert len(listed) == 2  # multiple profiles per vendor
 
-    updated = client.patch(f"/api/settings/providers/{second['id']}", json={"enabled": False}).json()
+    updated = client.patch(
+        f"/api/settings/providers/{second['id']}", json={"enabled": False}
+    ).json()
     assert updated["enabled"] is False
 
     assert client.delete(f"/api/settings/providers/{second['id']}").status_code == 204
@@ -44,7 +54,11 @@ def test_resolution_reads_enabled_profiles() -> None:
 
     client.post(
         "/api/settings/providers",
-        json={"name": "主力 DashScope", "vendor": "alibaba", "config": {"api_key": "profile-key"}},
+        json={
+            "name": "主力 DashScope",
+            "vendor": "alibaba",
+            "config": {"api_key": "profile-key"},
+        },
     )
     with SessionLocal() as db:
         from app.db.models import User
@@ -64,25 +78,43 @@ def test_能力挂在模型行上而不是连接上() -> None:
         json={
             "name": "多能力端点",
             "vendor": "openai-compatible",
-            "config": {"base_url": "http://127.0.0.1:1/v1", "api_key": "k", "default_model": "chat-m"},
+            "config": {
+                "base_url": "http://127.0.0.1:1/v1",
+                "api_key": "k",
+                "default_model": "chat-m",
+            },
         },
     ).json()
 
-    client.post(f"/api/settings/providers/{created['id']}/models", json={"model_id": "image-m"})
-    client.patch(
-        f"/api/settings/providers/{created['id']}/models/chat-m", json={"capability_ids": ["chat"]}
+    client.post(
+        f"/api/settings/providers/{created['id']}/models", json={"model_id": "image-m"}
     )
     client.patch(
-        f"/api/settings/providers/{created['id']}/models/image-m", json={"capability_ids": ["image"]}
+        f"/api/settings/providers/{created['id']}/models/chat-m",
+        json={"capability_ids": ["chat"]},
+    )
+    client.patch(
+        f"/api/settings/providers/{created['id']}/models/image-m",
+        json={"capability_ids": ["image"]},
     )
 
-    chat = [row["model"] for row in client.get("/api/settings/capability-models/chat").json()]
-    image = [row["model"] for row in client.get("/api/settings/capability-models/image").json()]
+    chat = [
+        row["model"]
+        for row in client.get("/api/settings/capability-models/chat").json()
+    ]
+    image = [
+        row["model"]
+        for row in client.get("/api/settings/capability-models/image").json()
+    ]
     assert "chat-m" in chat and "image-m" not in chat
     assert "image-m" in image and "chat-m" not in image
 
     # 连接对外的能力 = 它下面模型能力的并集
-    profile = next(p for p in client.get("/api/settings/providers").json() if p["id"] == created["id"])
+    profile = next(
+        p
+        for p in client.get("/api/settings/providers").json()
+        if p["id"] == created["id"]
+    )
     assert set(profile["capability_ids"]) == {"chat", "image"}
 
 
@@ -106,8 +138,13 @@ def test_后端直连能力列表不暴露只能由智能体使用的订阅模�
         )
         db.commit()
 
-    assert [row["model"] for row in client.get("/api/settings/capability-models/chat").json()] == ["k3"]
-    assert client.get("/api/settings/capability-models/chat?surface=direct").json() == []
+    assert [
+        row["model"]
+        for row in client.get("/api/settings/capability-models/chat").json()
+    ] == ["k3"]
+    assert (
+        client.get("/api/settings/capability-models/chat?surface=direct").json() == []
+    )
 
 
 def test_自动化执行面同时提供直连与已登录的订阅模型() -> None:
@@ -136,14 +173,20 @@ def test_自动化执行面同时提供直连与已登录的订阅模型() -> No
         db.commit()
 
     models = {
-        row["model"] for row in client.get("/api/settings/capability-models/chat?surface=automation").json()
+        row["model"]
+        for row in client.get(
+            "/api/settings/capability-models/chat?surface=automation"
+        ).json()
     }
     assert models == {"k3", "local-chat"}
 
 
 def test_vendor_presets_listed() -> None:
     client = fresh_client()
-    presets = {item["vendor"]: item for item in client.get("/api/settings/provider-vendors").json()}
+    presets = {
+        item["vendor"]: item
+        for item in client.get("/api/settings/provider-vendors").json()
+    }
     assert "moonshot" in presets and "minimax" in presets
     # 预设不再写死默认模型:实测 deepseek 那个 "deepseek-chat" 在真实端点上根本不存在,
     # 而这种字符串没人会去复核。模型从供应商目录实时拉。
@@ -152,6 +195,10 @@ def test_vendor_presets_listed() -> None:
     # 图像(qwen-image)、视频(万相)、语音(qwen-tts)。少写一样的代价是用户得为同一把 Key
     # 再建一个档案 —— 早先只写 image 时就是这样。
     assert presets["alibaba"]["capability_ids"] == ["chat", "image", "video", "tts"]
+    alibaba_fields = {field["key"]: field for field in presets["alibaba"]["fields"]}
+    assert alibaba_fields["base_url"]["label"] == "百炼 API Endpoint"
+    assert alibaba_fields["default_model"]["label"] == "初始模型(可选)"
+    assert "不是默认模型" in alibaba_fields["default_model"]["hint"]
     # 火山方舟合成一家:同一把 Key 既做图像(Seedream)也做视频(Seedance)。
     # 拆成两个 vendor 是"一档案一能力"年代的产物,重构后只剩"同一把 Key 填两遍"的代价。
     assert presets["bytedance"]["capability_ids"] == ["image", "video"]
@@ -161,7 +208,10 @@ def test_vendor_presets_listed() -> None:
     assert "openai-tts" not in presets and "openai-compatible-tts" not in presets
     # 预设不再写死默认模型:核实过一次的名字也会随供应商下架而失效,而模型目录是实时拉的。
     assert not presets["openai"].get("default_model")
-    assert [field["key"] for field in presets["volcano-podcast"]["fields"]] == ["api_key", "appid"]
+    assert [field["key"] for field in presets["volcano-podcast"]["fields"]] == [
+        "api_key",
+        "appid",
+    ]
     assert presets["volcano-podcast"]["fields"][0]["label"] == "Access Token"
 
 
@@ -174,23 +224,36 @@ def test_provider_defaults_require_matching_capability() -> None:
     ).json()
     assert kimi["capability_ids"] == ["chat"]
 
-    assert client.put(
-        "/api/settings/provider-defaults/chat",
-        json={"provider_profile_id": kimi["id"], "model": "moonshot-v1-8k"},
-    ).status_code == 200
-    assert client.put(
-        "/api/settings/provider-defaults/image",
-        json={"provider_profile_id": kimi["id"], "model": "qwen-image"},
-    ).status_code == 422
+    assert (
+        client.put(
+            "/api/settings/provider-defaults/chat",
+            json={"provider_profile_id": kimi["id"], "model": "moonshot-v1-8k"},
+        ).status_code
+        == 200
+    )
+    assert (
+        client.put(
+            "/api/settings/provider-defaults/image",
+            json={"provider_profile_id": kimi["id"], "model": "qwen-image"},
+        ).status_code
+        == 422
+    )
 
     openai_tts = client.post(
         "/api/settings/providers",
-        json={"name": "OpenAI TTS", "vendor": "openai", "config": {"api_key": "sk-tts"}},
+        json={
+            "name": "OpenAI TTS",
+            "vendor": "openai",
+            "config": {"api_key": "sk-tts"},
+        },
     ).json()
-    assert client.put(
-        "/api/settings/provider-defaults/tts",
-        json={"provider_profile_id": openai_tts["id"], "model": "gpt-4o-mini-tts"},
-    ).status_code == 200
+    assert (
+        client.put(
+            "/api/settings/provider-defaults/tts",
+            json={"provider_profile_id": openai_tts["id"], "model": "gpt-4o-mini-tts"},
+        ).status_code
+        == 200
+    )
 
 
 def test_create_profile_copies_credentials_server_side() -> None:
@@ -200,12 +263,21 @@ def test_create_profile_copies_credentials_server_side() -> None:
     client.post("/api/workspaces", json={"name": "W"})
     video = client.post(
         "/api/settings/providers",
-        json={"name": "火山视频", "vendor": "bytedance", "config": {"api_key": "ark-secret-9876"}},
+        json={
+            "name": "火山视频",
+            "vendor": "bytedance",
+            "config": {"api_key": "ark-secret-9876"},
+        },
     ).json()
 
     image = client.post(
         "/api/settings/providers",
-        json={"name": "火山生图", "vendor": "bytedance", "config": {}, "copy_credentials_from": video["id"]},
+        json={
+            "name": "火山生图",
+            "vendor": "bytedance",
+            "config": {},
+            "copy_credentials_from": video["id"],
+        },
     ).json()
     assert image["vendor"] == "bytedance"
     assert image["key_hint"] == "…9876"  # 密钥拷到了,响应仍只有打码提示
@@ -215,7 +287,10 @@ def test_create_profile_copies_credentials_server_side() -> None:
     assert not [row for row in image_models if row["configured"]]
 
     # 独立性:改视频档案的 key 不影响生图档案
-    client.patch(f"/api/settings/providers/{video['id']}", json={"config": {"api_key": "ark-new-0000"}})
+    client.patch(
+        f"/api/settings/providers/{video['id']}",
+        json={"config": {"api_key": "ark-new-0000"}},
+    )
     listed = {p["id"]: p for p in client.get("/api/settings/providers").json()}
     assert listed[video["id"]]["key_hint"] == "…0000"
     assert listed[image["id"]]["key_hint"] == "…9876"
@@ -224,7 +299,12 @@ def test_create_profile_copies_credentials_server_side() -> None:
     assert (
         client.post(
             "/api/settings/providers",
-            json={"name": "x", "vendor": "bytedance", "config": {}, "copy_credentials_from": "nope"},
+            json={
+                "name": "x",
+                "vendor": "bytedance",
+                "config": {},
+                "copy_credentials_from": "nope",
+            },
         ).status_code
         == 404
     )

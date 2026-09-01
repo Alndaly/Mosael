@@ -341,6 +341,16 @@ speaker，且没有 Transcript 时给出明确原因。
 一起控制），不能只隐藏选择框。远程引擎使用 `/api/tts/voices` 返回的供应商目录；回归测试需要覆盖从
 本地克隆切到远程引擎后，本地音色库与创建动作全部消失。
 
+## 19. 供应商连接表单不能重新混入模型默认
+
+`provider_profiles` 已没有 `default_model`；预设里 `storage=default_model` 仅用于创建连接时调用
+`provider_models.upsert` 加入第一条模型记录。编辑弹窗必须通过 `fieldsForMode` 隐藏它，不能让用户误以为
+改的是能力默认。真正的默认在 `provider_defaults`，真正的模型增删改在 `ProviderModelList`。
+
+Endpoint 标签描述供应商连接协议，不描述用户碰巧从哪个能力分区打开弹窗。尤其百炼一条连接横跨
+chat/image/video/tts，固定写“对话 Endpoint”会在 AI 视频页制造错误语义；应使用供应商级名称，并在
+hint 说明各 Adapter 如何把兼容地址归一到原生 API 根。
+
 ## Verification rule
 
 每个 slice 至少跑:

@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -30,6 +31,7 @@ vi.mock("@/app/preferences", () => ({
 }));
 
 let providersResult: unknown = [];
+let vendorsResult: unknown = [];
 
 vi.mock("@/api/client", () => ({
   api: async (path: string) => {
@@ -37,7 +39,7 @@ vi.mock("@/api/client", () => ({
       if (providersResult instanceof Error) throw providersResult;
       return providersResult;
     }
-    if (path.startsWith("/api/settings/provider-vendors")) return [];
+    if (path.startsWith("/api/settings/provider-vendors")) return vendorsResult;
     return [];
   },
   listMembers: async () => ({ my_role: "owner", members: [] }),
@@ -77,5 +79,40 @@ describe("供应商连接列表", () => {
     const { container } = renderSection();
 
     await waitFor(() => expect(container.textContent).toContain("连接被拒绝"));
+  });
+
+  it("编辑连接时不再显示只用于创建的初始模型字段", async () => {
+    const user = userEvent.setup();
+    vendorsResult = [{
+      vendor: "alibaba",
+      label: "阿里云百炼",
+      capability_ids: ["chat", "image", "video", "tts"],
+      capabilities: "多能力供应商",
+      auth: ["api_key"],
+      fields: [
+        { key: "base_url", label: "百炼 API Endpoint", storage: "base_url", required: false, secret: false },
+        { key: "default_model", label: "初始模型(可选)", storage: "default_model", required: false, secret: false },
+      ],
+    }];
+    providersResult = [{
+      id: "p1",
+      name: "百炼",
+      vendor: "alibaba",
+      enabled: true,
+      auth_type: "api_key",
+      oauth_linked: false,
+      capability_ids: ["chat"],
+      config: { base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1", default_model: "qwen-plus" },
+      base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      needs_key: false,
+      quota_supported: false,
+    }];
+    renderSection();
+
+    await user.click(await screen.findByRole("button", { name: "more" }));
+    await user.click(await screen.findByText("providerEdit"));
+
+    expect(await screen.findByText("百炼 API Endpoint")).toBeInTheDocument();
+    expect(screen.queryByText("初始模型(可选)")).not.toBeInTheDocument();
   });
 });

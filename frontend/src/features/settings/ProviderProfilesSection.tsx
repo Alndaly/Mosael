@@ -55,6 +55,12 @@ function cleanConfig(config: Record<string, string>): Record<string, string> {
   return Object.fromEntries(Object.entries(config).map(([key, value]) => [key, (value ?? "").trim()]));
 }
 
+/** `default_model` 已不再是连接属性，只是创建时顺手加入的第一条模型记录。
+ *  编辑连接时模型归下方 ProviderModelList 管，继续显示这个字段会让人以为它仍是默认模型。 */
+function fieldsForMode(fields: VendorPreset["fields"], editing: boolean) {
+  return (fields ?? []).filter((field) => !editing || field.storage !== "default_model");
+}
+
 /** 溢出菜单里的一行。用 Popover 而不是 DropdownMenu:这个项目没有装后者,
  *  而 Popover 已经处理好了「Dialog 内外的 modal 差异」(见 components/ui/popover)。 */
 function MenuItem({
@@ -132,7 +138,7 @@ export function ProviderProfilesSection({
       })
       .superRefine((data, ctx) => {
         const preset = (vendors.data ?? []).find((item) => item.vendor === data.vendor);
-        for (const spec of preset?.fields ?? []) {
+        for (const spec of fieldsForMode(preset?.fields, Boolean(editing))) {
           if (!spec.required) continue;
           if (editing && spec.secret) continue;
           if ((data.config?.[spec.key] ?? "").trim()) continue;
@@ -180,7 +186,7 @@ export function ProviderProfilesSection({
       // Secret fields come back only as "…abcd", so prefilling one would submit the mask as
       // the new value. Blank means "keep".
       config: Object.fromEntries(
-        (vendors.data?.find((item) => item.vendor === profile.vendor)?.fields ?? []).map((spec) => [
+        fieldsForMode(vendors.data?.find((item) => item.vendor === profile.vendor)?.fields, true).map((spec) => [
           spec.key,
           spec.secret ? "" : (profile.config ?? {})[spec.key] ?? "",
         ]),
@@ -375,7 +381,7 @@ export function ProviderProfilesSection({
                 {!editing && ` ${t("providerOauthSaveFirst")}`}
               </p>
             )}
-            {(preset?.fields ?? []).map((spec) => (
+            {fieldsForMode(preset?.fields, Boolean(editing)).map((spec) => (
               <FormField
                 key={spec.key}
                 control={form.control}
