@@ -40,7 +40,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
+import { SettingsBlock, SettingsGroup, SettingsList, SettingsListItem } from "@/features/settings/ui";
 
 /** Per-permission icon for the member-permissions popover (scannability). */
 const ROLE_RANK: Record<string, number> = { viewer: 0, editor: 1, admin: 2, owner: 3 };
@@ -128,7 +128,7 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
       </SettingsBlock>
 
       <SettingsBlock>
-        <div className="grid gap-1.5">
+        <SettingsList>
           {members.data?.members.map((m) => (
             <MemberRow
               key={m.user_id}
@@ -141,7 +141,7 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
               onRemove={() => removeMut.mutate(m.user_id)}
             />
           ))}
-        </div>
+        </SettingsList>
       </SettingsBlock>
 
       {canManage && (
@@ -205,7 +205,7 @@ function MemberRow({
   const canRemove = (isSelf || canManage) && member.role !== "owner";
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-background px-2.5 py-[7px]">
+    <SettingsListItem className="flex items-center justify-between gap-3">
       <div className="flex min-w-0 items-center gap-2">
         <span className="inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-[color-mix(in_oklab,var(--primary)_16%,var(--background))] text-xs font-semibold text-primary" aria-hidden>
           {memberName.slice(0, 1).toUpperCase()}
@@ -256,7 +256,7 @@ function MemberRow({
           </>
         )}
       </div>
-    </div>
+    </SettingsListItem>
   );
 }
 

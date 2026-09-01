@@ -16,6 +16,10 @@
 - 字号走 `text-ui-*` 四档 token,不写死像素。写死的 `text-[11px]` 不跟屏幕走,而且各写各的;
   这一条有棘轮守着(`lib/typeScale.test.ts`),特例列在它的 `ALLOWED` 里。
 - 圆角走 8px 刻度,分段控件是胶囊形,表单填充用 `--field`。不用投影。
+- 设置页只保留页面主面板这一层容器。section 使用 `features/settings/ui.tsx` 的平面
+  `SettingsGroup`,相邻 section 由 `SettingsSectionStack` 插入 `Separator`;同类数据行使用
+  `SettingsList` 的分割线,不要给每个 section、每一行再套圆角边框和背景。输入控件、可选择卡片、
+  独立状态面板等确实需要交互或语义边界的元素可以保留边框。
 - 每个新界面都要同时管好浅色和深色。
 - **控件的字号字重直接写在控件上就行。** `design/tokens.css` 里那条
   `button, input, select, textarea { font: inherit }` 曾经是无层级的,压过 `@layer utilities`,

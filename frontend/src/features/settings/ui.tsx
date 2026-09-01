@@ -1,12 +1,14 @@
 import React from "react";
 
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 /**
  * Shared settings building blocks: every section is a Group (title +
  * description + optional header actions) containing Rows (label +
- * description on the left, control on the right). Keeps all five sections
- * on one consistent grid instead of ad-hoc card layouts.
+ * description on the left, control on the right). Groups are deliberately
+ * flat: the settings page already owns the surrounding panel, so another
+ * rounded card here would create a frame inside a frame.
  *
  * Row dividers come from the group body's `[&>*+*]:border-t`, so a Group's children must be
  * only Rows and Blocks. Any other element between two of them — including a display:none
@@ -28,7 +30,7 @@ export function SettingsGroup({
   children?: React.ReactNode;
 }) {
   return (
-    <section className="grid gap-2">
+    <section data-slot="settings-group" className="grid gap-2.5">
       {/* 动作**对齐整个抬头的竖向中心**,不是对齐标题那一行,也不是对齐整块的底边。
           三种都试过:`items-end` 在说明一长时把按钮拖到最后一行旁边,看着像那句话的一部分;
           `items-start` 则在说明有两三行时把按钮顶在最上面,右边空出一大块。
@@ -41,7 +43,10 @@ export function SettingsGroup({
         {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
       </header>
       {React.Children.toArray(children).some(Boolean) && (
-        <div className="grid overflow-hidden rounded-lg border border-border bg-panel shadow-[var(--shadow-panel)] [&>*+*]:border-t [&>*+*]:border-border">
+        <div
+          data-slot="settings-group-content"
+          className="grid [&>*+*]:border-t [&>*+*]:border-border/70"
+        >
           {children}
         </div>
       )}
@@ -65,7 +70,7 @@ export function SettingsRow({
   children?: React.ReactNode;
 }) {
   return (
-    <div id={id} className={cn("grid grid-cols-[minmax(0,1fr)_auto] items-center gap-5 px-3.5 py-3", className)}>
+    <div id={id} className={cn("grid grid-cols-[minmax(0,1fr)_auto] items-center gap-5 px-0.5 py-3", className)}>
       <div className="grid min-w-0 gap-0.5">
         <span className="text-ui-md font-medium">{label}</span>
         {description && <small className="text-xs leading-[1.45] text-muted-foreground">{description}</small>}
@@ -77,7 +82,53 @@ export function SettingsRow({
 
 /** Full-width slot inside a group (forms, QR panels, lists). */
 export function SettingsBlock({ children }: { children: React.ReactNode }) {
-  return <div className="grid gap-2 px-3.5 py-2.5">{children}</div>;
+  return <div className="grid gap-2 px-0.5 py-3">{children}</div>;
+}
+
+/** Flat settings collection: sibling rows are separated without becoming a stack of cards. */
+export function SettingsList({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return <div className={cn("grid divide-y divide-border/70", className)}>{children}</div>;
+}
+
+export function SettingsListItem({ className, ...props }: React.ComponentProps<"div">) {
+  return <div className={cn("px-0.5 py-2.5", className)} {...props} />;
+}
+
+function flattenSections(children: React.ReactNode): React.ReactNode[] {
+  return React.Children.toArray(children).flatMap((child) => {
+    if (React.isValidElement<{ children?: React.ReactNode }>(child) && child.type === React.Fragment) {
+      return flattenSections(child.props.children);
+    }
+    return [child];
+  });
+}
+
+/** Places real separators between settings sections instead of wrapping each section in a card. */
+export function SettingsSectionStack({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const sections = flattenSections(children).filter(Boolean);
+
+  return (
+    <div data-slot="settings-section-stack" className={cn("grid content-start", className)}>
+      {sections.map((section, index) => (
+        <React.Fragment key={React.isValidElement(section) && section.key != null ? String(section.key) : index}>
+          {index > 0 && <Separator className="my-2.5 bg-border/70" />}
+          {section}
+        </React.Fragment>
+      ))}
+    </div>
+  );
 }
 
 

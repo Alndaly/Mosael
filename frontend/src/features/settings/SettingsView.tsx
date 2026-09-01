@@ -27,7 +27,7 @@ import { ProviderDefaultsSection } from "@/features/settings/ProviderDefaultsSec
 import { ProviderPricingSection } from "@/features/settings/ProviderPricingSection";
 import { ProviderProfilesSection } from "@/features/settings/ProviderProfilesSection";
 import { BuiltinTtsSection } from "@/features/settings/BuiltinTtsSection";
-import { SettingsBlock, SettingsField, SettingsForm, SettingsGroup, SettingsRow } from "@/features/settings/ui";
+import { SettingsBlock, SettingsField, SettingsForm, SettingsGroup, SettingsRow, SettingsSectionStack } from "@/features/settings/ui";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -167,7 +167,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
         <div {...sidebar.handleProps} />
         {/* 右栏是**一块占满高度的面板**,内部滚动 —— 和插件页、定时任务页同一套。此前它跟着
             内容走,内容少时就是半截,而左边是个完整的带边框面板。 */}
-        <div className="grid min-h-0 min-w-0 content-start gap-5 overflow-y-auto rounded-md border border-border bg-panel px-3.5 py-3 shadow-[var(--shadow-panel)]">
+        <SettingsSectionStack className="min-h-0 min-w-0 overflow-y-auto rounded-md border border-border bg-panel px-3.5 py-3 shadow-[var(--shadow-panel)]">
           {section === "account" && <AccountSection />}
           {section === "team" && <TeamSection workspace={workspace} />}
           {section === "appearance" && (
@@ -237,7 +237,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
           )}
           {section === "feishu" && <FeishuSection workspace={workspace} />}
           {section === "backend" && <BackendSection workspace={workspace} />}
-        </div>
+        </SettingsSectionStack>
       </div>
     </div>
   );
@@ -889,7 +889,7 @@ function ProxySection() {
 function BackendSection({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   return (
-    <>
+    <SettingsSectionStack>
       <SettingsGroup title={t("settingsBackend")} description={t("settingsBackendDesc")}>
         <ServerSwitchRow />
         <SettingsRow label={t("settingsEndpoint")} description={t("settingsEndpointDesc")}>
@@ -905,6 +905,6 @@ function BackendSection({ workspace }: { workspace: Workspace }) {
         </SettingsRow>
       </SettingsGroup>
       <ProxySection />
-    </>
+    </SettingsSectionStack>
   );
 }

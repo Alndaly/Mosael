@@ -21,7 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ProviderModelList } from "@/features/settings/ProviderModelList";
 import { ProviderHealth } from "@/features/settings/ProviderHealth";
 import { ProviderQuota } from "@/features/settings/ProviderQuota";
-import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
+import { SettingsBlock, SettingsGroup, SettingsList, SettingsListItem } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
 import { BulkActionBar, BulkCheckbox, BulkSelectTrigger, useBulkSelection } from "@/components/app/bulkSelection";
 
@@ -469,16 +469,17 @@ export function ProviderProfilesSection({
               <Trash2 size={12} /> {t("bulkDelete")}
             </Button>
           </BulkActionBar>
-          {visibleProfiles.map((profile) => (
-            <div
-              className={cn(
-                "grid items-center gap-2 rounded-md border border-border bg-panel px-2 py-1.5",
-                bulk.active ? "grid-cols-[auto_28px_minmax(0,1fr)_auto_auto]" : "grid-cols-[28px_minmax(0,1fr)_auto_auto]",
-                !profile.enabled && "opacity-55",
-                bulk.isSelected(profile.id) && "border-primary/45 bg-[color-mix(in_srgb,var(--primary)_5%,var(--panel))] opacity-100",
-              )}
-              key={profile.id}
-            >
+          <SettingsList>
+            {visibleProfiles.map((profile) => (
+              <SettingsListItem
+                className={cn(
+                  "grid items-center gap-2",
+                  bulk.active ? "grid-cols-[auto_28px_minmax(0,1fr)_auto_auto]" : "grid-cols-[28px_minmax(0,1fr)_auto_auto]",
+                  !profile.enabled && "opacity-55",
+                  bulk.isSelected(profile.id) && "rounded-md bg-[color-mix(in_srgb,var(--primary)_7%,transparent)] opacity-100",
+                )}
+                key={profile.id}
+              >
               {bulk.active && (
                 <BulkCheckbox
                   checked={bulk.isSelected(profile.id)}
@@ -591,8 +592,9 @@ export function ProviderProfilesSection({
                   <ProviderModelList profileId={profile.id} vendor={profile.vendor} />
                 </div>
               )}
-            </div>
-          ))}
+              </SettingsListItem>
+            ))}
+          </SettingsList>
           {/* **「没有」和「没问出来」是两回事。** 空状态此前挂在 `profiles.data && …` 后面:
               请求失败(401、后端没起、网络断)时 data 是 undefined,那一行被短路掉,而外层容器
               照画 —— 于是失败长得和"空"一模一样,而"空"又长得像什么都没发生。用户看到的就是

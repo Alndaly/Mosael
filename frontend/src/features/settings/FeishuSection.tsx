@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
 import { ModalShell } from "@/components/app/modals";
-import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
+import { SettingsBlock, SettingsGroup, SettingsList, SettingsListItem } from "@/features/settings/ui";
 
 type FeishuBot = components["schemas"]["FeishuBotOut"];
 type Onboarding = components["schemas"]["FeishuOnboardingOut"];
@@ -161,9 +161,9 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
             状态那行小字(见 feishu/service.py 的 _CARD_SETUP_HINT),只在真需要时出现。 */}
 
         {hasBots && (
-          <div className="grid gap-1.5">
+          <SettingsList>
             {(bots.data ?? []).map((bot) => (
-              <div className="grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lg border border-border bg-panel px-3 py-2" key={bot.id}>
+              <SettingsListItem className="grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-2.5" key={bot.id}>
                 <span className="grid h-8 w-8 place-items-center rounded-lg bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-primary">
                   <MessageSquare size={15} />
                 </span>
@@ -208,9 +208,9 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
                     <Trash2 size={14} />
                   </Button>
                 </div>
-              </div>
+              </SettingsListItem>
             ))}
-          </div>
+          </SettingsList>
         )}
 
         {!hasBots && (
@@ -291,8 +291,9 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
             {(bindings.data ?? []).length === 0 ? (
               <small className="text-ui-sm text-muted-foreground">{t("feishuBindNobody")}</small>
             ) : (
-              (bindings.data ?? []).map((binding) => (
-                <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-2 py-1 text-ui-md" key={binding.open_id}>
+              <SettingsList>
+                {(bindings.data ?? []).map((binding) => (
+                <SettingsListItem className="flex items-center justify-between gap-2 text-ui-md" key={binding.open_id}>
                   <span className="truncate">{binding.username}</span>
                   <Button
                     variant="ghost"
@@ -304,8 +305,9 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
                   >
                     <Trash2 size={13} />
                   </Button>
-                </div>
-              ))
+                </SettingsListItem>
+                ))}
+              </SettingsList>
             )}
           </div>
         </div>

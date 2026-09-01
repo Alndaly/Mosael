@@ -13,7 +13,7 @@ import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { BulkActionBar, BulkCheckbox, BulkSelectTrigger, useBulkSelection } from "@/components/app/bulkSelection";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
+import { SettingsBlock, SettingsGroup, SettingsList, SettingsListItem } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -459,15 +459,16 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
               <Trash2 size={12} /> {t("bulkDelete")}
             </Button>
           </BulkActionBar>
-          {ruleList.map((rule) => (
-            <div
-              className={cn(
-                "grid items-center gap-2 rounded-md border border-border bg-panel px-2 py-1.5",
-                bulk.active ? "grid-cols-[auto_28px_minmax(0,1fr)_auto_auto]" : "grid-cols-[28px_minmax(0,1fr)_auto_auto]",
-                bulk.isSelected(rule.id) && "border-primary/45 bg-[color-mix(in_srgb,var(--primary)_5%,var(--panel))]",
-              )}
-              key={rule.id}
-            >
+          <SettingsList>
+            {ruleList.map((rule) => (
+              <SettingsListItem
+                className={cn(
+                  "grid items-center gap-2",
+                  bulk.active ? "grid-cols-[auto_28px_minmax(0,1fr)_auto_auto]" : "grid-cols-[28px_minmax(0,1fr)_auto_auto]",
+                  bulk.isSelected(rule.id) && "rounded-md bg-[color-mix(in_srgb,var(--primary)_7%,transparent)]",
+                )}
+                key={rule.id}
+              >
               {bulk.active && (
                 <BulkCheckbox
                   checked={bulk.isSelected(rule.id)}
@@ -496,8 +497,9 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
                   <Trash2 size={13} />
                 </Button>
               </div>
-            </div>
-          ))}
+              </SettingsListItem>
+            ))}
+          </SettingsList>
           {rules.data && ruleList.length === 0 && (
             <EmptyState size="compact" icon={<ReceiptText size={15} />} title={t("pricingRulesEmpty")} />
           )}

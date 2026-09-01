@@ -12,6 +12,7 @@ import { BulkActionBar, BulkCheckbox, BulkSelectTrigger, useBulkSelection } from
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import { ModelSettingsDialog } from "@/features/settings/ModelSettingsDialog";
+import { SettingsList, SettingsListItem } from "@/features/settings/ui";
 
 type ProviderModel = components["schemas"]["ProviderModelOut"];
 
@@ -150,15 +151,16 @@ export function ProviderModelList({
         </Button>
       </BulkActionBar>
 
-      {configured.map((row) => (
-        <div
-          className={cn(
-            "grid items-center gap-2 rounded-md border border-border bg-panel px-2.5 py-1.5",
-            bulk.active ? "grid-cols-[auto_minmax(0,1fr)_auto]" : "grid-cols-[minmax(0,1fr)_auto]",
-            bulk.isSelected(row.id) && "border-primary/45 bg-[color-mix(in_srgb,var(--primary)_5%,var(--panel))]",
-          )}
-          key={row.id}
-        >
+      <SettingsList>
+        {configured.map((row) => (
+          <SettingsListItem
+            className={cn(
+              "grid items-center gap-2",
+              bulk.active ? "grid-cols-[auto_minmax(0,1fr)_auto]" : "grid-cols-[minmax(0,1fr)_auto]",
+              bulk.isSelected(row.id) && "rounded-md bg-[color-mix(in_srgb,var(--primary)_7%,transparent)]",
+            )}
+            key={row.id}
+          >
           {bulk.active && (
             <BulkCheckbox
               checked={bulk.isSelected(row.id)}
@@ -213,8 +215,9 @@ export function ProviderModelList({
               <Trash2 size={13} />
             </Button>
           </div>
-        </div>
-      ))}
+          </SettingsListItem>
+        ))}
+      </SettingsList>
 
       {/* 一个带搜索的入口,取代原来的「展开目录清单」+「手填 id」两处。
        *
@@ -254,4 +257,3 @@ export function ProviderModelList({
     </div>
   );
 }
-

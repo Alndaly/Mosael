@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { SettingsGroup, SettingsRow } from "@/features/settings/ui";
+import { SettingsGroup, SettingsList, SettingsListItem, SettingsRow, SettingsSectionStack } from "@/features/settings/ui";
 
 type DeploymentUser = {
   id: string;
@@ -95,7 +95,7 @@ export function DeploymentSection({ showAdmins = true }: { showAdmins?: boolean 
   const admins = (users.data ?? []).filter((row) => row.is_deployment_admin).length;
 
   return (
-    <>
+    <SettingsSectionStack>
       <SettingsGroup title={t("deployRegistrationTitle")} description={t("deployRegistrationDesc")}>
         <SettingsRow label={t("deployRegistrationOpen")} description={t("deployRegistrationOpenHint")}>
           <Switch
@@ -134,11 +134,11 @@ export function DeploymentSection({ showAdmins = true }: { showAdmins?: boolean 
         </SettingsRow>
         {(invites.data ?? []).length > 0 && (
           <SettingsRow label={t("deployInviteList")} className="grid-cols-1 items-start">
-            <ul className="m-0 grid w-full list-none gap-1 p-0">
+            <SettingsList className="w-full">
               {(invites.data ?? []).map((invite) => (
-                <li
+                <SettingsListItem
                   key={invite.code}
-                  className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-panel px-2.5 py-1.5 text-ui-xs"
+                  className="flex flex-wrap items-center gap-2 text-ui-xs"
                 >
                   <code className="timecode select-all">{invite.code}</code>
                   {invite.note && <span className="text-muted-foreground">{invite.note}</span>}
@@ -159,9 +159,9 @@ export function DeploymentSection({ showAdmins = true }: { showAdmins?: boolean 
                       <Copy size={12} />
                     </button>
                   )}
-                </li>
+                </SettingsListItem>
               ))}
-            </ul>
+            </SettingsList>
           </SettingsRow>
         )}
       </SettingsGroup>
@@ -200,6 +200,6 @@ export function DeploymentSection({ showAdmins = true }: { showAdmins?: boolean 
           {t("deployLastAdminDesc")}
         </p>
       )}
-    </>
+    </SettingsSectionStack>
   );
 }
