@@ -80,7 +80,10 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
 
   // 选中的那一个**活过导航** —— 切走再回来还停在他刚才看的那条(见 lib/usePersistentTab)。
   // 它被删掉时自动回落到列表第一条,那正是下面这行本来就在做的事。
-  const [selectedId, setSelectedId] = usePersistentSelection("scheduler", (tasks.data ?? []).map((task) => task.id));
+  const [selectedId, setSelectedId] = usePersistentSelection(
+    "scheduler",
+    tasks.data?.map((task) => task.id),
+  );
   const selected =
     (tasks.data ?? []).find((task) => task.id === selectedId) ?? (tasks.data ?? [])[0] ?? null;
 

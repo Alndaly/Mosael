@@ -72,7 +72,10 @@ export function PluginsView() {
   const list = packages.data ?? [];
   // 选中的那一个**活过导航** —— 切走再回来还停在他刚才看的那条(见 lib/usePersistentTab)。
   // 它被删掉时自动回落到列表第一条,那正是下面这行本来就在做的事。
-  const [selectedId, setSelectedId] = usePersistentSelection("plugins", list.map((item) => item.id));
+  const [selectedId, setSelectedId] = usePersistentSelection(
+    "plugins",
+    packages.data?.map((item) => item.id),
+  );
   //: 市场是**去找新东西**,和「管理已经装了的」不是一件事。挤成同一栏的两个页签时,它得
   //: 挤在那条几百像素宽的侧栏里 —— 一个用来浏览的列表被塞进了一个用来选中的列表的位置。
   //: 现在它是头部的一个按钮 + 一张弹窗,宽度归它自己。

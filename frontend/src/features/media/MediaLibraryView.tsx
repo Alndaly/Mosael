@@ -203,7 +203,10 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
 
   // 标签筛选同理。用 selection 而不是 tab:合法值是**动态的**(标签会被删),存着一个已经不存在
   // 的标签时当作没筛 —— 否则素材库会空得莫名其妙。
-  const [tagFilter, setTagFilter] = usePersistentSelection("media-tag", allTags);
+  const [tagFilter, setTagFilter] = usePersistentSelection(
+    "media-tag",
+    assets.data === undefined ? undefined : allTags,
+  );
 
   const visible = React.useMemo(() => {
     const query = search.trim().toLowerCase();

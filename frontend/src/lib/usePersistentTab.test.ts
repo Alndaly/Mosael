@@ -58,10 +58,18 @@ describe("会活过导航的选中", () => {
     expect(renderHook(() => usePersistentSelection("w", ["a", "b"])).result.current[0]).toBeNull();
   });
 
-  it("**列表还没加载出来时不清空** —— 空列表是「还不知道」,不是「一个都没有」", () => {
+  it("列表还没加载出来时不清空,并显式标记正在恢复", () => {
     window.localStorage.setItem("openstudio:selected:w", "a");
-    const loading = renderHook(() => usePersistentSelection("w", []));
+    const loading = renderHook(() => usePersistentSelection("w", undefined));
     expect(loading.result.current[0]).toBe("a");
+    expect(loading.result.current[2].restoring).toBe(true);
+  });
+
+  it("列表已经加载且为空时判为无效 —— 空数组不是加载中", () => {
+    window.localStorage.setItem("openstudio:selected:w", "a");
+    const empty = renderHook(() => usePersistentSelection("w", []));
+    expect(empty.result.current[0]).toBeNull();
+    expect(empty.result.current[2].restoring).toBe(false);
   });
 
   it("清空选择也要落地 —— 否则刷新之后它又回来了", () => {

@@ -67,6 +67,7 @@ import { Combobox } from "@/components/app/combobox";
 import { CanvasTitle } from "@/components/app/canvasTitle";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { CanvasDetailLoading } from "@/components/layout/CanvasDetailLoading";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConfigNotice } from "@/components/layout/ConfigNotice";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -686,7 +687,10 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   //
   // 之前我为了去掉"回落到第一条"把这个 hook 一起换掉了,那是看错了地方:回落写在下面那句
   // `?? list[0]` 里,hook 本身返回 null 就是 null(存的是空 = 列表页),正是这里要的。
-  const [selectedId, setSelectedId] = usePersistentSelection("workflows", (workflows.data ?? []).map((w) => w.id));
+  const [selectedId, setSelectedId, selectedWorkflowState] = usePersistentSelection(
+    "workflows",
+    workflows.data?.map((workflow) => workflow.id),
+  );
   const selected = (workflows.data ?? []).find((w) => w.id === selectedId) ?? null;
   // 多选与素材页同一份状态机(见 lib/useMultiSelect)。
   const { selectMode, setSelectMode, selectedIds, toggle, selectAll, allSelected, clear, exit } =
@@ -712,6 +716,14 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
       void qc.invalidateQueries({ queryKey: ["workflows", workspace.id] });
     },
   });
+
+  const restoringSelectedWorkflow =
+    (selectedWorkflowState.restoring && workflows.isPending) ||
+    (selected !== null && nodeTypes.isPending);
+
+  if (restoringSelectedWorkflow) {
+    return <CanvasDetailLoading testId="workflows-detail-restoring" />;
+  }
 
   if (workflows.isSuccess && (workflows.data ?? []).length === 0) {
     return (

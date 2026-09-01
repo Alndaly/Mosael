@@ -29,6 +29,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { CanvasTitle } from "@/components/app/canvasTitle";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { CanvasDetailLoading } from "@/components/layout/CanvasDetailLoading";
 import { Skeleton } from "@/components/ui/skeleton";
 import { relativeTime } from "@/lib/time";
 import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab";
@@ -61,9 +62,9 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
   });
   const list = React.useMemo(() => boards.data ?? [], [boards.data]);
   // 选中的那张活过导航 —— 切走再回来还在原来那张板上(和工作流、插件同一套)。
-  const [openId, setOpenId] = usePersistentSelection(
+  const [openId, setOpenId, openSelection] = usePersistentSelection(
     `boards:${workspace.id}`,
-    list.map((board) => board.id),
+    boards.data?.map((board) => board.id),
   );
   const open = list.find((board) => board.id === openId) ?? null;
 
@@ -81,6 +82,10 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["boards", workspace.id] }),
     onError: (error: Error) => toast.error(error.message),
   });
+
+  if (openSelection.restoring && boards.isPending) {
+    return <CanvasDetailLoading testId="boards-detail-restoring" />;
+  }
 
   if (open) {
     return (

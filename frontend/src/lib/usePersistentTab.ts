@@ -36,13 +36,13 @@ export function usePersistentTab<T extends string>(key: string, initial: T, allo
  * 和 `usePersistentTab` 的区别在于合法值是**动态的**:tab 的候选写死在代码里,而选中的那一项来自
  * 服务端,而且会被删掉。所以存下来的 id 每次都要对着当前列表验一遍,验不过就当没选过。
  *
- * **列表还没加载出来时不清空**(`ids` 为空 = 还不知道有哪些,不是"一个都没有")。少了这一条,
- * 首屏那一瞬间就会把存着的选择判成非法然后抹掉 —— 表现是"偶尔记得住,偶尔记不住"。
+ * `ids === undefined` 才表示列表尚未加载；`[]` 则明确表示已经加载且一个都没有。两者不能
+ * 混为一谈：前者要保留选择等待校验，后者必须把已经不存在的选择判为无效。
  */
 export function usePersistentSelection(
   key: string,
-  ids: readonly string[],
-): [string | null, (value: string | null) => void] {
+  ids: readonly string[] | undefined,
+): [string | null, (value: string | null) => void, { restoring: boolean }] {
   const storageKey = `openstudio:selected:${key}`;
   const [selected, setSelected] = React.useState<string | null>(() => {
     try {
@@ -65,8 +65,9 @@ export function usePersistentSelection(
     [storageKey],
   );
 
-  const valid = selected !== null && (ids.length === 0 || ids.includes(selected));
-  return [valid ? selected : null, set];
+  const restoring = selected !== null && ids === undefined;
+  const valid = selected !== null && (ids === undefined || ids.includes(selected));
+  return [valid ? selected : null, set, { restoring }];
 }
 
 
