@@ -18,10 +18,13 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const SRC = path.join(__dirname, "..", "..");
+//: 播放器的家当已经搬进 components/app/media-playback(画板/灯箱/工具结果共用),
+//: 这两条规定扫的是它,不是画板剩下的薄封装。
+const PLAYER = path.join(SRC, "components/app/media-playback.tsx");
 
 describe("画布上的播放器不抢手势", () => {
   it("播放器里不出现 nowheel —— 它没有可滚动的地方,挂上就是把画布的滚轮吞掉", () => {
-    const source = fs.readFileSync(path.join(SRC, "features/boards/BoardPlayer.tsx"), "utf8");
+    const source = fs.readFileSync(PLAYER, "utf8");
     const offenders = source
       .split("\n")
       .map((line, at) => ({ line, at: at + 1 }))
@@ -30,7 +33,7 @@ describe("画布上的播放器不抢手势", () => {
   });
 
   it("藏起来的控件条要连指针事件一起收掉 —— 透明不等于不吃事件", () => {
-    const source = fs.readFileSync(path.join(SRC, "features/boards/BoardPlayer.tsx"), "utf8");
+    const source = fs.readFileSync(PLAYER, "utf8");
     const bar = source.split("\n").find((line) => line.includes("translate-y-full") && line.includes("opacity-0"));
     expect(bar, "找不到那条控件条了(改名了?)").toBeTruthy();
     expect(bar).toContain("pointer-events-none");
