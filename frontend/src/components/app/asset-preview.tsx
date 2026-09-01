@@ -4,6 +4,7 @@ import { Maximize2, Paperclip } from "lucide-react";
 import { assetFileUrl, assetPreviewUrl } from "@/api/client";
 import { cn } from "@/lib/utils";
 import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
+import { AudioPlayerBar } from "@/components/app/media-playback";
 
 /**
  * 一个素材的行内预览:图出图、视频出播放器、音频出音轨,其余退回文件胶囊。
@@ -117,9 +118,9 @@ export function AssetInlinePreview({
     );
   }
   if (kind === "audio") {
-    return (
-      <audio src={src} controls preload="metadata" className={cn("nodrag", className ?? "w-[260px] max-w-full")} />
-    );
+    //: 不用原生 controls —— 全站共享的音频条(media-playback)。不挂 nodrag:播放键点一下
+    //: 不是拖动,进度条的 nodrag 写在 Scrubber 自己内部。
+    return <AudioPlayerBar src={src} className={cn("h-10 rounded-lg border border-border bg-panel", className ?? "w-[260px] max-w-full")} />;
   }
   return (
     <span className="inline-flex max-w-full items-center gap-[5px] rounded-lg border border-border bg-panel px-2 py-1 text-ui-xs text-muted-foreground">

@@ -1,11 +1,12 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Brain, Check, ChevronRight, CircleAlert, FileWarning, Loader2 } from "lucide-react";
+import { Brain, Check, ChevronRight, CircleAlert, FileWarning, Loader2, Music } from "lucide-react";
 
 import { api, assetFileUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { AgentMarkdown } from "@/components/agent/Markdown";
 import { useImagePreview } from "@/components/app/image-preview";
+import { AudioPlayerBar } from "@/components/app/media-playback";
 import { HighlightedCode } from "@/components/agent/HighlightedCode";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { decodeByteFallback } from "@/lib/byteFallback";
@@ -160,7 +161,15 @@ function MediaPreview({ assetId }: { assetId: string }) {
       ) : asset.data.kind === "video" ? (
         <video className="max-h-[200px] w-full rounded-lg border border-border bg-black object-contain" src={src} controls preload="metadata" />
       ) : asset.data.kind === "audio" ? (
-        <audio className="w-[240px]" src={src} controls preload="metadata" />
+        //: 不用原生 controls(各家各样、不吃主题)—— 全站共享的音频条,画板节点也是它。
+        //: **卡片轮廓与图/视频对齐**(同宽同高):音频没有画面,但一条 40px 的瘦条夹在一排
+        //: 200px 高的卡片中间,读着像渲染坏了。上面摆一枚音符占住画面位,控件条压在底部。
+        <div className="flex h-[135px] w-[240px] flex-col rounded-lg border border-border bg-muted">
+          <div className="grid min-h-0 flex-1 place-items-center text-muted-foreground">
+            <Music size={22} className="opacity-50" />
+          </div>
+          <AudioPlayerBar src={src} showIcon={false} className="h-10 shrink-0 border-t border-border" />
+        </div>
       ) : (
         <div className="m-0 flex max-w-[240px] items-center gap-1.5 rounded-lg border border-border bg-muted px-2.5 py-2 text-ui-xs text-muted-foreground">
           <FileWarning size={13} /> {asset.data.name}
