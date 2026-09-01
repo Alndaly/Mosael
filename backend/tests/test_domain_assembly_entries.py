@@ -37,3 +37,21 @@ def test_browser_schema_slice_is_reexported() -> None:
 
     assert schemas.BrowserProfileOut is BrowserProfileOut
     assert schemas.BrowserProfileCreate is BrowserProfileCreate
+
+
+def test_jobs_orm_slice_is_reexported_and_registered() -> None:
+    from app.db import models
+    from app.db.model_slices.jobs import Job, TaskEvent
+
+    assert models.Job is Job
+    assert models.TaskEvent is TaskEvent
+    assert Job.__table__ is models.Base.metadata.tables["jobs"]
+    assert TaskEvent.__table__ is models.Base.metadata.tables["task_events"]
+
+
+def test_jobs_schema_slice_is_reexported() -> None:
+    from app.api import schemas
+    from app.api.schemas.jobs import JobOut, TaskEventOut
+
+    assert schemas.JobOut is JobOut
+    assert schemas.TaskEventOut is TaskEventOut

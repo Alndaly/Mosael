@@ -1,8 +1,10 @@
 import type { components } from "@/api/generated/schema";
+import type { Job } from "@/api/domains/jobs";
 import { API_BASE, api, getAuthToken } from "@/api/transport";
 
 export * from "@/api/transport";
 export * from "@/api/domains/browser";
+export * from "@/api/domains/jobs";
 export * from "@/api/domains/publish";
 
 export type User = components["schemas"]["UserOut"] & {
@@ -88,22 +90,6 @@ export type Asset = components["schemas"]["AssetOut"];
 export type Sequence = components["schemas"]["SequenceOut"];
 export type Track = components["schemas"]["TrackOut"];
 export type Clip = components["schemas"]["ClipOut"];
-export type Job = components["schemas"]["JobOut"];
-export type TaskEvent = components["schemas"]["TaskEventOut"];
-
-export function getJob(jobId: string): Promise<Job> {
-  return api<Job>(`/api/jobs/${jobId}`);
-}
-
-export function listJobEvents(jobId: string): Promise<TaskEvent[]> {
-  return api<TaskEvent[]>(`/api/jobs/${jobId}/events`);
-}
-
-/** 工作流 job 派生的子任务(发布/导出/转写/生成/配音),在任务详情里「收纳」展示。 */
-export function listJobChildren(jobId: string): Promise<Job[]> {
-  return api<Job[]>(`/api/jobs/${jobId}/children`);
-}
-
 export type AsrModel = components["schemas"]["AsrModelOut"];
 export function listAsrModels(): Promise<AsrModel[]> {
   return api<AsrModel[]>("/api/asr/models");
@@ -1104,10 +1090,6 @@ export function convertVideoToGif(
     method: "POST",
     body: JSON.stringify(options),
   });
-}
-
-export function fetchJob(jobId: string): Promise<Job> {
-  return api<Job>(`/api/jobs/${jobId}`);
 }
 
 export type ExportParams = {

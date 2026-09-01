@@ -2,7 +2,7 @@ import React from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AudioLines, Captions, Loader2, MessageSquareText, Mic, Scissors, Sparkles, Split, SplitSquareVertical, Trash2, X } from "lucide-react";
 
-import { API_BASE, api, fetchJob, getAuthToken, transcribeAsset, type Job, type Sequence } from "@/api/client";
+import { API_BASE, api, getAuthToken, getJob, transcribeAsset, type Job, type Sequence } from "@/api/client";
 import { pendingTranscribeIds } from "@/features/editor/transcribeQueue";
 import { tokenTimelineRange } from "@/domain/timeline/karaoke";
 import { speakerChipStyle, speakerLabel, speakerShort, speakersAreMeaningful } from "@/features/editor/transcriptSpeakers";
@@ -265,7 +265,7 @@ export function TranscriptPanel({
   const asrJob = useQuery({
     queryKey: ["job", asrJobId],
     enabled: Boolean(asrJobId),
-    queryFn: () => fetchJob(asrJobId!),
+    queryFn: () => getJob(asrJobId!),
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       return status === "succeeded" || status === "failed" ? false : 1500;

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import * as client from "@/api/client";
 import * as browser from "@/api/domains/browser";
+import * as jobs from "@/api/domains/jobs";
 import * as publish from "@/api/domains/publish";
 import * as transport from "@/api/transport";
 
@@ -19,5 +20,10 @@ describe("unified API client assembly", () => {
   it("re-exports the browser domain client", () => {
     expect(client.listBrowserProfiles).toBe(browser.listBrowserProfiles);
     expect(client.createBrowserProfile).toBe(browser.createBrowserProfile);
+  });
+
+  it("re-exports the task-bus domain client", () => {
+    expect(client.getJob).toBe(jobs.getJob);
+    expect(client.listJobEvents).toBe(jobs.listJobEvents);
   });
 });
