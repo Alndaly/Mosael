@@ -161,15 +161,16 @@ def test_重试对所有_AI_出站调用生效(monkeypatch):
     # (2026-08-25 按能力重组目录时,手写清单里的路径也确实全部失效过一次。)
     import pkgutil
 
-    import app.ai.providers as providers_pkg
+    import app.ai.providers.adapters as adapters_pkg
 
     modules = [
         name
-        for _, name, is_pkg in pkgutil.walk_packages(providers_pkg.__path__, f"{providers_pkg.__name__}.")
-        # 包的 __init__ 是门面,只转发名字、不发请求;base 是契约,同理。
-        # 用 walk_packages 给的 is_pkg 判断,而不是按名字猜 —— 猜的话新开一个包又要来改这里。
-        if not is_pkg and not name.endswith(".base")
+        for _, name, is_pkg in pkgutil.walk_packages(adapters_pkg.__path__, f"{adapters_pkg.__name__}.")
+        # contracts 只定义 Interface、registry 只装配,都不拥有 HTTP 传输。只扫描 Adapter
+        # Implementation,再显式补上共享媒体传输 Seam 和不在 providers 下的 AI 调用方。
+        if not is_pkg
     ] + [
+        "app.ai.providers.media_transfer",
         "app.domain.generation.prompt_optimizer",
         "app.domain.workflows.ai_edit",
         "app.domain.analysis.service",

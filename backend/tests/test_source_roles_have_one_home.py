@@ -1,6 +1,6 @@
 """结构性约束:**「有哪几种输入素材角色」只有一个产地。**
 
-产地是 `ai/providers/base.SOURCE_ROLES`(名字)和 `domain/generation/catalog.SOURCE_ROLE_LABELS`
+产地是 `ai/providers/contracts/generation.SOURCE_ROLES`(名字)和 `domain/generation/catalog.SOURCE_ROLE_LABELS`
 (中文名)。catalog 里那张表的注释已经把这件事的历史写清楚了 —— 它曾经存在三份,而
 「新增角色时漏掉哪一份都不会报错,只是智能体不知道有这个东西,于是永远不会用它」。
 
@@ -122,7 +122,11 @@ def test_没有第二处把角色名铺开写() -> None:
     app_dir = _p.Path(__file__).resolve().parents[1] / "app"
     #: 产地本身,以及供应商各自的**线上字段名映射**(万相把 source_video 叫 video,
     #: 那是两套命名之间的翻译,不是抄我们的表)。
-    allowed = ("providers/base.py", "generation/catalog.py", "alibaba/video.py")
+    allowed = (
+        "providers/contracts/generation.py",
+        "generation/catalog.py",
+        "providers/adapters/alibaba/video.py",
+    )
 
     offenders = []
     for path in sorted(app_dir.rglob("*.py")):

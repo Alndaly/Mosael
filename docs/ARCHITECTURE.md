@@ -203,6 +203,19 @@ f5-tts / fish-speech 都要 torch + torchaudio + transformers,**2.5–3.5 GB**�
   标一个「目录中已不存在」。
 - **数据归属**是 `app/domain/provider_models.py`,建行只经它的 `upsert`(棘轮盯着)。
 
+Provider 代码用三层 Module 表达能力与连接协议两条轴：
+
+| 路径 | 角色 | 依赖规则 |
+| --- | --- | --- |
+| `app/ai/providers/contracts/` | 图像/视频生成与语音能力 Interface | 不依赖 Adapter 或 Registry |
+| `app/ai/providers/adapters/` | 按供应商/平台连接协议组织的 Implementation | 依赖契约和共享下载 Seam，不反向依赖公共门面或 Registry |
+| `app/ai/providers/registry.py` | 内置 Adapter 的唯一装配入口 | 精确注册 `(vendor, kind)` / 语音引擎 id，重复键启动失败 |
+| `app.ai.providers` | 领域调用方的稳定公共 Interface | 领域 Module 不直接选择具体 Adapter |
+
+Adapter 目录按**技术连接家族**而不是公司归属分类；一家连接横跨多种能力时，在自己的目录内再按
+`image.py` / `video.py` / `speech.py` 拆分。详见
+[ADR-0010](adr/0010-provider-contracts-adapters-registry.md)。
+
 Evolink 是「平台 Adapter」的例子：一个 `(evolink, image|video)` 协议实现服务多个上游引擎，
 `model` 只负责选择 Seedance/Kling/Veo/Hailuo/WAN/Sora/GPT Image/Gemini/Seedream。它先把本地输入
 上传到 Files API（图片归一化，视频/音频原样上传），按角色与顺序组装 `image_urls` / `video_urls` /

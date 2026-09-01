@@ -320,7 +320,7 @@ KLING_LEGACY_VIDEO_CAPABILITIES = {
 #:
 #: **多图参考只属于这一代的 Omni 型号,而且不是「挂几张图」。** 可灵要你先用 2～4 张图建一个**主体**
 #: (进主体库、有名字、能复用),生成时引用它的 id,提示词里用 `@名字` 点名;一次最多引 3 个。
-#: 这一步由适配器代劳(见 ai/providers/kuaishou/elements):界面上照旧是挂参考图,
+#: 这一步由适配器代劳(见 ai/providers/adapters/kuaishou/elements):界面上照旧是挂参考图,
 #: 底下自动查/建主体。所以这里的 `reference_image` 上限是 4 —— 那是**一个主体**的取图上限,
 #: 不是别家那种"这次生成用几张图"。
 #:
@@ -468,7 +468,7 @@ SEEDANCE_1_VIDEO_CAPABILITIES = {
     "default_resolution": "1080p",
     "aspect_ratios": ARK_VIDEO_RATIOS,
     # 文档:1.0 pro / fast 是「文生视频默认 16:9,图生视频默认 adaptive」。这里给文生那一档的
-    # 默认值 —— 有首帧时我们根本不传 ratio,交给模型按图片适配(见 providers/bytedance/video)。
+    # 默认值 —— 有首帧时我们根本不传 ratio,交给模型按图片适配(见 providers/adapters/bytedance/video)。
     "default_aspect_ratio": "16:9",
     "source_limits": {"first_frame": 1},
     "min_duration_seconds": 2,
@@ -498,7 +498,7 @@ COMFYUI_IMAGE_CAPABILITIES = {
     "modes": ["text-to-image"],
     "max_prompt_chars": 8000,
     # workflow / workflow_params:**选一个 ComfyUI 里保存的工作流**,以及它那张动态参数表单。
-    # 适配器一直读这两个键(providers/comfyui/provider),界面也一直在发,只是描述符没声明 ——
+    # 适配器一直读这两个键(providers/adapters/comfyui/provider),界面也一直在发,只是描述符没声明 ——
     # 于是校验器把它们当成"这个模型不支持的参数"当场拦下:选了工作流就提交不了,而选工作流
     # 正是接 ComfyUI 的理由。没有测试覆盖"带工作流提交",所以一直是绿的。
     "parameter_keys": ["size", "seed", "steps", "negative_prompt", "workflow", "workflow_params"],

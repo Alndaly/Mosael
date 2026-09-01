@@ -1,6 +1,6 @@
 """引擎目录:界面挑引擎时看到的那一份。
 
-不在 `ai/providers/speech/` 里,因为它要读**本地模型的就绪状态**(clone 引擎装没装、
+不在 `ai/providers/contracts/speech.py` 里,因为它要读**本地模型的就绪状态**(clone 引擎装没装、
 百炼当前配的是哪个模型)—— 那是 `audio` 与 `domain` 的事。搬过去会让 `ai` 反过来依赖
 `audio`,和既有的 `audio → ai` 撞成环(见 tests/test_import_layering)。
 

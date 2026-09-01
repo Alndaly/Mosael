@@ -199,8 +199,16 @@ _Avoid_: 用 capability 代替执行通道;把 OAuth Token 或任意供应商地
 前端只渲染后端声明的 `fields`,不硬编码通用凭据模型。它是**兜底**:模型行没写能力时按它回落。
 _Avoid_: 仅凭 vendor 文案推断能力
 
+**Provider Adapter 结构**:
+`app/ai/providers/contracts/` 按能力定义生成与语音 Interface；`adapters/` 按连接协议组织具体
+Implementation，同一连接横跨图片、视频、语音时在供应商目录内按能力拆文件；`registry.py` 是内置
+Adapter 的唯一装配入口，重复 `(vendor, kind)` 或语音引擎 id 在启动时失败；`app.ai.providers` 是领域
+Module 使用的稳定公共 Interface。这里的供应商目录表达认证、端点和协议家族，不表达企业归属——
+火山和字节原生接口若凭据/协议不同就是两个 Adapter。
+_Avoid_: `providers/image/<vendor>.py` 式纯能力目录；一个供应商一个巨型文件；领域 Module 直接选择具体 Adapter
+
 **Evolink 平台 Adapter**:
-`ai/providers/evolink.py` 按一份平台协议承载图像与视频生成,上游引擎由模型 id 区分,不是每个引擎再写
+`ai/providers/adapters/evolink.py` 按一份平台协议承载图像与视频生成,上游引擎由模型 id 区分,不是每个引擎再写
 一份 Adapter。Seedance 2.5 连**模式**也在模型 id 里(`-text-to-video` / `-image-to-video` /
 `-reference-to-video` / `-video-edit` / `-video-extend` 是五个 id),描述符按 id 各给一份而不是加模式
 开关。网关按图片的**张数与位置**认帧(1 张 = 首帧,2 张 = 首+尾),单独的尾帧会被当成首帧;编辑/续写

@@ -902,7 +902,7 @@ def _migrate_source_assets_get_a_role() -> None:
 
     此前是一个裸 id 列表,谁是首帧靠「第 0 个」这条约定,于是尾帧/参考视频没地方放。
     老数据的角色按 kind 还原成它当初**实际被当成什么用**:视频那边取的是首帧
-    (providers/base.first_frame_value 读 source_files[0]),图片那边当的是参考图
+    (providers/contracts/generation.first_frame_value 读 source_files[0]),图片那边当的是参考图
     (seedream / qwen-edit / openai-edit 都是这么用的)。这不是猜,是把当时的行为写明。
     """
     inspector = inspect(engine)

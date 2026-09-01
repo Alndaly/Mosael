@@ -1,6 +1,6 @@
 """正文的 token 估算。
 
-**纯函数,住在 core** —— 没有一行数据库、不认识任何领域概念,却被 `ai/providers/base.py`
+**纯函数,住在 core** —— 没有一行数据库、不认识任何领域概念,却被 `ai/providers/contracts/generation.py`
 引用。放在 domain 会让整棵适配器树为了一个字符串统计而依赖领域层。
 
 名字不叫 `tokens`:那个已经被**认证 token** 占着(core/tokens.py 的 token_digest)。

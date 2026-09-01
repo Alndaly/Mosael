@@ -3,6 +3,20 @@
 这份记录只覆盖已经显出维护风险、但不适合一次性大拆的区域。目标是把浅 Module 逐步深化:
 小 Interface 后面藏更多行为,让改动有 Locality,让测试有稳定 Seam。
 
+## Provider 分类 — ✅ 已解决(2026-09-01)
+
+原目录同时混有供应商分类(`comfyui` / `evolink`)和能力分类(`image` / `speech` / `video`)，公共
+`__init__.py` 又同时持有契约、具体 Adapter 导入和注册，新增引擎时必须先猜它该按哪条轴归档。
+
+现在分成三个有 Depth 的 Module：
+
+- `providers/contracts/`：按能力定义 Interface；
+- `providers/adapters/`：按连接协议组织 Implementation，供应商内部再按能力拆文件；
+- `providers/registry.py`：唯一装配入口，拒绝重复注册。
+
+领域调用方只依赖 `app.ai.providers` 公共 Interface。`test_provider_architecture.py` 固定依赖方向，防止
+契约反向依赖 Adapter、领域直接选择 Adapter 或根目录再次混入供应商文件。
+
 ## 1. 发布执行器:平台 Adapter seam
 
 **Files**
