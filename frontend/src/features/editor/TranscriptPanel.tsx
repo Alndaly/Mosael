@@ -38,6 +38,12 @@ type TokenSelection = Map<string, { clipId: string; srcStart: number; srcEnd: nu
  */
 const GUTTER = "grid-cols-[58px_minmax(0,1fr)]";
 
+/**
+ * 多说话人的元数据栏只比纯时间码多留一个紧凑编号的宽度。时间码和说话人同组、
+ * 同顶线,正文列仍保持 `minmax(0, 1fr)`,内容过长时自然换行而不截断。
+ */
+const SPEAKER_GUTTER = "grid-cols-[80px_minmax(0,1fr)]";
+
 export function TranscriptPanel({
   sequence,
   onCutSegment,
@@ -588,7 +594,13 @@ export function TranscriptPanel({
             return (
               // 静音块走**同一套栅格**:空掉时间码那一栏,正文那一栏自然对齐。
               // 此前是 `ml-[46px]` —— 一个照着时间码宽度手调出来的数,时间码一改就错开。
-              <div key={gapKey} className={cn("grid items-center gap-2.5 pl-3", GUTTER)}>
+              <div
+                key={gapKey}
+                className={cn(
+                  "grid items-center gap-x-2 pl-3",
+                  showSpeakers ? SPEAKER_GUTTER : GUTTER,
+                )}
+              >
                 <span aria-hidden />
                 <button
                   type="button"
@@ -612,11 +624,8 @@ export function TranscriptPanel({
               key={key}
               ref={active ? activeSentenceRef : undefined}
               className={cn(
-                "group/sentence relative grid items-baseline gap-2.5 rounded-md py-1 pl-3 transition-[background] duration-100 hover:bg-[color-mix(in_oklab,var(--foreground)_4%,transparent)]",
-                GUTTER,
-                // 右边给悬停按钮留位:一个是 22px,两个就得是 40px —— 少留的那 18px 会让
-                // 「切一刀」压在正文最后几个字上,而那几个字是可以点的。
-                onSplitPoints ? "pr-[40px]" : "pr-[22px]",
+                "group/sentence relative grid items-start gap-x-2 rounded-md py-1 pl-3 pr-2 transition-[background] duration-100 hover:bg-[color-mix(in_oklab,var(--foreground)_4%,transparent)]",
+                showSpeakers ? SPEAKER_GUTTER : GUTTER,
                 active && "bg-[color-mix(in_oklab,var(--primary)_7%,transparent)]",
               )}
             >
@@ -626,11 +635,11 @@ export function TranscriptPanel({
               {active && (
                 <span aria-hidden className="pointer-events-none absolute bottom-[5px] left-[3px] top-[5px] w-[3px] rounded-full bg-primary" />
               )}
-              <div className="grid justify-items-end gap-[3px]">
+              <div className="flex h-6 min-w-0 items-center justify-start gap-1 whitespace-nowrap">
                 <button
                   type="button"
                   className={cn(
-                    "timecode cursor-pointer whitespace-nowrap border-0 bg-transparent p-0 text-ui-2xs leading-[1.9] tabular-nums text-muted-foreground hover:text-primary",
+                    "timecode cursor-pointer border-0 bg-transparent p-0 text-ui-2xs leading-6 tabular-nums text-muted-foreground hover:text-primary",
                     active && "font-medium text-primary",
                   )}
                   title={t("seekToSentence")}
@@ -638,11 +647,10 @@ export function TranscriptPanel({
                 >
                   {formatTimecode(sentence.timelineStart)}
                 </button>
-                {/* 说话人挪到时间码底下:它是这一句的**属性**,不是这一句的第一个词。
-                    夹在正文里时它每行都把第一句话往右顶,还会跟着文字重排。 */}
+                {/* 说话人与时间码在正文首行的同一个元数据组里,不再垂直居中到多行正文中间。 */}
                 {showSpeakers && sentence.speaker && (
                   <span
-                    className="max-w-full truncate rounded-full px-[6px] text-ui-2xs font-semibold leading-[15px] tabular-nums"
+                    className="inline-flex h-5 min-w-6 shrink-0 items-center justify-center rounded-full px-1.5 text-ui-2xs font-semibold leading-5 tabular-nums"
                     style={speakerChipStyle(sentence.speaker)}
                     title={speakerLabel(sentence.speaker)}
                   >
@@ -650,27 +658,30 @@ export function TranscriptPanel({
                   </span>
                 )}
               </div>
-              {onSplitPoints && (
+              {/* 操作浮层不参与栅格宽度:平时完全不占正文空间,悬停或键盘聚焦时才出现。 */}
+              <div className="pointer-events-none absolute right-1 top-1 z-10 flex items-center gap-0.5 rounded-md border border-border bg-popover/95 p-0.5 opacity-0 shadow-sm transition-opacity group-hover/sentence:pointer-events-auto group-hover/sentence:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
+                {onSplitPoints && (
+                  <button
+                    type="button"
+                    className="inline-flex size-5 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 text-muted-foreground hover:bg-[color-mix(in_oklab,var(--primary)_12%,transparent)] hover:text-primary"
+                    title={t("splitSentenceOutHint")}
+                    aria-label={t("splitSentenceOut")}
+                    onClick={() => splitSentenceOut(sentence.clipId, sentence.srcStart, sentence.srcEnd)}
+                  >
+                    <SplitSquareVertical size={12} />
+                  </button>
+                )}
                 <button
                   type="button"
-                  className="absolute top-[6px] cursor-pointer rounded-sm border-0 bg-transparent p-0.5 leading-none text-transparent group-hover/sentence:text-muted-foreground right-[22px] hover:bg-[color-mix(in_oklab,var(--primary)_10%,transparent)] hover:text-primary!"
-                  title={t("splitSentenceOutHint")}
-                  aria-label={t("splitSentenceOut")}
-                  onClick={() => splitSentenceOut(sentence.clipId, sentence.srcStart, sentence.srcEnd)}
+                  className="inline-flex size-5 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 text-muted-foreground hover:bg-[color-mix(in_oklab,var(--destructive)_12%,transparent)] hover:text-destructive"
+                  title={t("cutSentenceHint")}
+                  aria-label={t("cutSentence")}
+                  onClick={() => onCutSegment(sentence.clipId, sentence.srcStart, sentence.srcEnd)}
                 >
-                  <SplitSquareVertical size={11} />
+                  <X size={12} />
                 </button>
-              )}
-              <button
-                type="button"
-                className="absolute top-[6px] cursor-pointer rounded-sm border-0 bg-transparent p-0.5 leading-none text-transparent group-hover/sentence:text-muted-foreground right-0 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive!"
-                title={t("cutSentenceHint")}
-                aria-label={t("cutSentence")}
-                onClick={() => onCutSegment(sentence.clipId, sentence.srcStart, sentence.srcEnd)}
-              >
-                <X size={11} />
-              </button>
-              <p className="m-0 text-ui-md leading-[1.9] [word-break:break-word]">
+              </div>
+              <p className="m-0 min-w-0 whitespace-normal text-ui-md leading-6 [overflow-wrap:anywhere]">
                 {sentence.tokens.length > 0
                   ? sentence.tokens.map((token, index) => {
                       const tokenKey = `${sentence.clipId}:${sentence.segmentId}:${index}`;

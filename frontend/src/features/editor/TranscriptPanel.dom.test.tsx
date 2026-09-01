@@ -91,15 +91,24 @@ describe("逐字稿列表", () => {
     expect(screen.queryByTitle("说话人 00")).toBeNull();
   });
 
-  it("分得出两个人时才挂,而且挂在时间码那一栏里", async () => {
+  it("分得出两个人时才挂,而且时间码、说话人、正文在同一横向栅格里", async () => {
     serveTranscript(["SPEAKER_00", "SPEAKER_01"]);
-    renderPanel();
+    const { container } = renderPanel();
 
-    await screen.findByText("第0句");
+    const sentenceText = await screen.findByText("第0句");
     await waitFor(() => expect(screen.getByTitle("说话人 00")).toBeInTheDocument());
+    const speaker = screen.getByTitle("说话人 00");
     expect(screen.getByTitle("说话人 01")).toBeInTheDocument();
     // 栏里放得下的是编号本身,完整名字在 title 上。
-    expect(screen.getByTitle("说话人 00").textContent).toBe("00");
+    expect(speaker.textContent).toBe("00");
+
+    const row = container.querySelector(".group\\/sentence");
+    expect(row?.className).toContain("grid-cols-[80px_minmax(0,1fr)]");
+    // 时间码和说话人同在顶部元数据组里；正文是相邻的栅格列。
+    expect(speaker.parentElement?.className).toContain("h-6");
+    expect(speaker.parentElement?.className).toContain("items-center");
+    expect(speaker.parentElement?.parentElement).toBe(row);
+    expect(sentenceText.parentElement?.parentElement).toBe(row);
   });
 
   it("句子和时间码在同一套栅格里 —— 对齐是结构给的,不是手调的边距", async () => {
@@ -110,5 +119,32 @@ describe("逐字稿列表", () => {
     const row = container.querySelector(".group\\/sentence");
     expect(row?.className).toContain("grid-cols-[58px_minmax(0,1fr)]");
     expect(row?.className).not.toContain("ml-[46px]");
+  });
+
+  it("正文过长时自然换行而不是截断", async () => {
+    serveTranscript(["SPEAKER_00"]);
+    const { container } = renderPanel();
+
+    await screen.findByText("第0句");
+    const body = container.querySelector(".group\\/sentence > p");
+    expect(body?.className).toContain("whitespace-normal");
+    expect(body?.className).toContain("leading-6");
+    expect(body?.className).toContain("[overflow-wrap:anywhere]");
+    expect(body?.className).not.toContain("truncate");
+    expect(body?.className).not.toContain("whitespace-nowrap");
+  });
+
+  it("右侧行操作平时不占正文空间", async () => {
+    serveTranscript(["SPEAKER_00"]);
+    const { container } = renderPanel();
+
+    await screen.findByText("第0句");
+    const row = container.querySelector(".group\\/sentence");
+    const actionRail = screen.getByLabelText("cutSentence").parentElement;
+    expect(row?.className).not.toContain("pr-[22px]");
+    expect(row?.className).not.toContain("pr-[40px]");
+    expect(actionRail?.className).toContain("absolute");
+    expect(actionRail?.className).toContain("opacity-0");
+    expect(actionRail?.className).not.toContain("group-focus-within/sentence:opacity-100");
   });
 });
