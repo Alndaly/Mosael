@@ -325,6 +325,22 @@ failed 错误色、cancelled 虚线弱化；即使节点已有旧产物，重跑
 `test_adapters_read_only_declared_parameters.py` 与前端 `generationCapabilities.test.ts`。供应商结果下载
 必须走 `media_transfer`，不得复用携带 API 凭据的提交客户端去请求预签名对象存储地址。
 
+## 18. 音色创建入口必须共享录音与弹窗生命周期
+
+设置页“新建音色”和剪辑页“上传克隆”是同一个领域动作：两者都产生参考音频 `File` 并调用
+`uploadVoice`，所以统一使用 `features/voice/VoiceCreationDialogs.tsx`。剪辑页“从说话人”需要项目素材和
+Transcript，保留独立 `VoiceFromSpeakerDialog`，但不能退回侧栏内联表单；内联会改变列表与空状态高度，
+也让窄侧栏同时承担表单布局。
+
+麦克风只由 `useReferenceAudioRecorder` 持有。修改时至少验证：权限拒绝与录音器不可用文案不同；小于
+有效阈值的空录音不覆盖已选文件；取消/关闭/卸载会停止所有 tracks；实际 MIME 决定文件扩展名；设置页
+和剪辑页都能打开带 sticky footer 的同一上传/录制弹窗。“从说话人”弹窗还要验证素材切换后清空旧的
+speaker，且没有 Transcript 时给出明确原因。
+
+剪辑页的音色库区域必须由 `engine === "clone"` 整体守卫（标题、卡片、空状态、编辑表单、创建弹窗
+一起控制），不能只隐藏选择框。远程引擎使用 `/api/tts/voices` 返回的供应商目录；回归测试需要覆盖从
+本地克隆切到远程引擎后，本地音色库与创建动作全部消失。
+
 ## Verification rule
 
 每个 slice 至少跑:

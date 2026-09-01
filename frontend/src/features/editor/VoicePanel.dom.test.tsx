@@ -43,7 +43,7 @@ const localEngines = [
   { id: "fish-speech", label: "Fish Speech S2 Pro", status: "installed", runtime_ready: true, runtime_checked: true, supports_speed: false },
 ];
 
-function renderPanel() {
+function renderPanel(voiceData = voices) {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     const body = url.includes("/api/tts/models")
@@ -51,9 +51,14 @@ function renderPanel() {
       : url.includes("/api/settings/tts")
         ? { engine: "f5-tts", python_path: "", source: "modelscope" }
         : url.includes("/tts/engines")
-          ? [{ id: "clone", label: "本地音色克隆", needs_key: false, needs_voice_id: false, voices: [], note: "", ready: true }]
+          ? [
+              { id: "clone", label: "本地音色克隆", needs_key: false, needs_voice_id: false, voices: [], note: "clone note", ready: true },
+              { id: "edge", label: "Edge TTS", needs_key: false, needs_voice_id: false, voices: [], ready: true },
+            ]
+          : url.includes("/tts/voices")
+            ? [{ value: "edge-voice", label: "Edge Voice" }]
           : url.includes("/api/voices")
-            ? voices
+            ? voiceData
             : [];
     return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
   }) as never;
@@ -66,6 +71,56 @@ function renderPanel() {
 }
 
 describe("音色库", () => {
+  it("空音色使用禁用控件和紧凑空状态,不在生成按钮下堆提示", async () => {
+    renderPanel([]);
+
+    expect(await screen.findByPlaceholderText("voiceLibraryPickEmpty")).toBeDisabled();
+    const emptyTitle = await screen.findByText("voiceLibraryEmpty");
+    const emptyState = emptyTitle.closest(".empty-state");
+    expect(emptyState).not.toBeNull();
+    expect(emptyState!.className).toContain("max-w-none!");
+    expect(emptyState!.className).not.toMatch(/border-dashed|bg-background/);
+    expect(screen.getByText("voiceEmpty")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "voiceFromSpeaker" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "voiceUpload" })).toBeInTheDocument();
+    expect(screen.queryByText("voiceNeedVoice")).not.toBeInTheDocument();
+    expect(screen.queryByText("clone note")).not.toBeInTheDocument();
+  });
+
+  it("从说话人使用弹窗,不再挤开音色列表", async () => {
+    const user = userEvent.setup();
+    renderPanel();
+
+    await user.click(await screen.findByRole("button", { name: "voiceFromSpeaker" }));
+
+    expect(screen.getByRole("dialog", { name: "voiceFromSpeaker" })).toBeInTheDocument();
+  });
+
+  it("上传克隆使用带录音入口的弹窗", async () => {
+    const user = userEvent.setup();
+    renderPanel();
+
+    await user.click(await screen.findByRole("button", { name: "voiceUpload" }));
+
+    const dialog = screen.getByRole("dialog", { name: "voiceUpload" });
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "voiceRecord" })).toBeInTheDocument();
+    expect(dialog.querySelector('[data-slot="modal-footer"]')).not.toBeNull();
+  });
+
+  it("切换到远程语音引擎后隐藏本地音色库", async () => {
+    const user = userEvent.setup();
+    renderPanel();
+
+    expect(await screen.findByText("voiceLibrary")).toBeInTheDocument();
+    await user.click(screen.getByRole("combobox", { name: "voiceEngine" }));
+    await user.click(await screen.findByRole("option", { name: "Edge TTS" }));
+
+    await waitFor(() => expect(screen.queryByText("voiceLibrary")).not.toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "voiceFromSpeaker" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "voiceUpload" })).not.toBeInTheDocument();
+  });
+
   it("点铅笔打开编辑表单 —— 用户报的正是「点了没反应」", async () => {
     const user = userEvent.setup();
     renderPanel();

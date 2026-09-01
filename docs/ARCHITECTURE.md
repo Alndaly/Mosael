@@ -173,10 +173,16 @@ f5-tts / fish-speech 都要 torch + torchaudio + transformers,**2.5–3.5 GB**�
 探测顺序是 用户覆盖 → 托管 venv → 本进程解释器(`tts_models.candidate_pythons`),所以点过下载
 之后自动可用。设置页的「TTS 解释器」因此是**高级覆盖项**,留空是常态。
 
-音色库的新建入口只负责“上传参考音频”这条不依赖项目的路径，并通过共享 `ModalShell` 打开独立
-表单；不能把创建字段内联进音色列表，否则空状态和列表高度会在点击后突变，也无法复用 sticky
-header/footer、焦点环安全区与统一的提交状态。“从转写说话人创建”仍归剪辑页配音面板，因为它依赖
-当前素材的 Transcript 上下文。两条入口最终都写入同一份工作区音色实体。
+音色库的新建入口负责“上传或现场录制参考音频”这条不依赖项目的路径。设置页与剪辑页复用
+`features/voice/VoiceCreationDialogs.tsx` 的同一个 `UploadVoiceDialog`，麦克风生命周期进一步收口到
+`useReferenceAudioRecorder`；不能在各页面复制 `MediaRecorder`，否则权限失败、空录音、编码扩展名和
+关闭弹窗释放硬件会逐入口漂移。创建字段也不能内联进音色列表，否则空状态和列表高度会在点击后突变，
+并绕开 `ModalShell` 的 sticky header/footer、焦点环安全区与统一提交状态。
+
+“从转写说话人创建”仍归剪辑页，因为它依赖当前项目素材的 Transcript 上下文，但交互同样使用
+`VoiceFromSpeakerDialog`，不在可滚动侧栏里展开。两条入口最终都写入同一份工作区音色实体。音色库和
+创建入口只在“本地音色克隆”引擎下出现；远程 TTS 使用供应商自己的音色目录，不能把本地参考音色库
+展示在远程引擎下，避免暗示两者可以混用。
 
 **两个下载源是分开的**:「模型下载源」管 HF 权重(`HF_ENDPOINT`),「依赖下载源」管 pip 索引
 (`--index-url`)。装引擎要拉 2.5–3.5GB,国内直连 PyPI 常常慢到不可用,而它与权重镜像并不是

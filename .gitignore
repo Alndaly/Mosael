@@ -59,6 +59,11 @@ release/
 # 曾在 349f8a6 被 git add -A 误提交过一批。
 .agent-teams/
 
+# Playwright CLI 的快照、控制台日志和人工验收截图只属于本机 QA 会话；设计核对记录可引用它们，
+# 但二进制截图与带动态元素 ref 的页面快照不进入源码历史。
+.playwright-cli/
+output/playwright/
+
 # ---------------------------------------------------------------- 本机数据与密钥
 # SQLite 库(含 -shm/-wal 旁挂文件)与环境变量文件:前者是用户数据,后者含 API key。
 *.db

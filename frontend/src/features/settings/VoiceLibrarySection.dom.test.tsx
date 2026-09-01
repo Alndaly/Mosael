@@ -44,5 +44,6 @@ describe("VoiceLibrarySection", () => {
     expect(dialog).toBeInTheDocument();
     expect(dialog.querySelector('[data-slot="modal-footer"]')).not.toBeNull();
     expect(screen.getByRole("textbox", { name: "voiceName" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "voiceRecord" })).toBeInTheDocument();
   });
 });

@@ -1,12 +1,11 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AudioLines, Loader2, Mic, Pause, Pencil, Play, Sparkles, Square, Trash2, Upload, UsersRound, Wand2, X } from "lucide-react";
+import { Mic, Pause, Pencil, Play, Sparkles, Trash2, Upload, UsersRound, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
   api,
   deleteVoice,
-  listAssets,
   generatePodcast,
   getTtsConfig,
   listTtsEngines,
@@ -17,23 +16,20 @@ import {
   synthesizeWithEngine,
   recognizeReference,
   updateVoice,
-  uploadVoice,
-  voiceFromSpeaker,
   voiceSampleUrl,
   type Job,
   type Project,
-  type Transcript,
   type Workspace,
 } from "@/api/client";
 import { pollWhileUnsettled } from "@/features/settings/pollWhileUnsettled";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
-import { Combobox } from "@/components/app/combobox";
+import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useSamplePlayer } from "@/features/editor/useSamplePlayer";
-import { formatBytes } from "@/lib/bytes";
+import { UploadVoiceDialog, VoiceFromSpeakerDialog } from "@/features/voice/VoiceCreationDialogs";
 import { cn } from "@/lib/utils";
 
 /** 带小标签的紧凑表单格:配音面板的下拉全长一个样,没有标签就分不清
@@ -126,9 +122,8 @@ export function VoicePanel({
   // endpoints — see the synth mutation below.
   const [engine, setEngine] = React.useState("clone");
   const [engineVoice, setEngineVoice] = React.useState("");
-  // Remote engines take a speed multiplier (the engine paces itself — better prosody than
-  // stretching the waveform afterwards). The local clone worker has no speed input, so the
-  // control only renders for remote engines and the value only rides on their requests.
+  // Engines that advertise speed support pace themselves during synthesis — better prosody than
+  // stretching the waveform afterwards. Unsupported engines never receive this value.
   const [speed, setSpeed] = React.useState(1);
   // staleTime 不能是 Infinity:这份数据里带着"本地引擎装了没有",而用户就是会在另一个页面
   // 把它装上再回来。装完了界面还说"没装",比一开始就没说更让人不知道该干嘛。
@@ -174,72 +169,12 @@ export function VoicePanel({
   const [speakerB, setSpeakerB] = React.useState("");
   const chosenVoice = voiceChoices.find((item) => item.value === (engineVoice || voiceChoices[0]?.value));
   const [uploadOpen, setUploadOpen] = React.useState(false);
-  const [name, setName] = React.useState("");
-  const [refText, setRefText] = React.useState("");
-  const [file, setFile] = React.useState<File | null>(null);
-  const fileRef = React.useRef<HTMLInputElement>(null);
-
-  const [dragOver, setDragOver] = React.useState(false);
   // 试听是开关,不是单向动作 —— 见 useSamplePlayer。
   const sample = useSamplePlayer(voiceSampleUrl);
-  const [recording, setRecording] = React.useState(false);
-  const [recordSecs, setRecordSecs] = React.useState(0);
-  const recorderRef = React.useRef<MediaRecorder | null>(null);
-  const timerRef = React.useRef<number | null>(null);
-
-  const stopTimer = () => {
-    if (timerRef.current) window.clearInterval(timerRef.current);
-    timerRef.current = null;
-  };
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      const chunks: Blob[] = [];
-      recorder.ondataavailable = (event) => {
-        if (event.data.size) chunks.push(event.data);
-      };
-      recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
-        setFile(new File([blob], `recording-${Date.now()}.webm`, { type: blob.type }));
-        stream.getTracks().forEach((track) => track.stop());
-      };
-      recorder.start();
-      recorderRef.current = recorder;
-      setRecording(true);
-      setRecordSecs(0);
-      timerRef.current = window.setInterval(() => setRecordSecs((s) => s + 1), 1000);
-    } catch {
-      toast.error(t("voiceMicDenied"));
-    }
-  };
-  const stopRecording = () => {
-    recorderRef.current?.stop();
-    recorderRef.current = null;
-    setRecording(false);
-    stopTimer();
-  };
-  React.useEffect(() => () => stopTimer(), []);
-
-  // 「确认」点不动时,差的是哪一样。两样都缺先说音频 —— 那是这件事的主料。
-  const cloneBlocker = !file ? "voiceNeedRefAudio" : !name.trim() ? "voiceNeedName" : null;
 
   const list = voices.data ?? [];
   const activeVoice = selected ?? list[0]?.id ?? null;
 
-  const upload = useMutation({
-    mutationFn: () => uploadVoice({ workspaceId: workspace.id, name, referenceText: refText, file: file as File }),
-    onSuccess: (voice) => {
-      void qc.invalidateQueries({ queryKey: ["voices", workspace.id] });
-      setUploadOpen(false);
-      setName("");
-      setRefText("");
-      setFile(null);
-      setSelected(voice.id);
-      toast.success(t("voiceCreated"));
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
   // 音色能改的只有说明性字段:换了参考音频就是另一个音色,而用它生成过的配音还在时间线上。
   const [editing, setEditing] = React.useState<string | null>(null);
   const [editName, setEditName] = React.useState("");
@@ -343,49 +278,15 @@ export function VoicePanel({
     window.setTimeout(tick, 1500);
   };
 
-  // Clone from a transcribed speaker: pick a transcribed asset → its speaker.
+  // Clone creation forms live in dialogs; keeping them out of this scroll column prevents the
+  // whole voice library from jumping when a form opens.
   const [speakerOpen, setSpeakerOpen] = React.useState(false);
-  const [spAsset, setSpAsset] = React.useState("");
-  const [spSpeaker, setSpSpeaker] = React.useState("");
-  const [spName, setSpName] = React.useState("");
-  const assets = useQuery({
-    queryKey: ["assets", workspace.id, project.id],
-    queryFn: () => listAssets(workspace.id, project.id),
-    enabled: speakerOpen,
-  });
-  const clipAssets = (assets.data ?? []).filter((asset) => asset.kind === "video" || asset.kind === "audio");
-  const transcript = useQuery({
-    queryKey: ["transcript", spAsset],
-    queryFn: () => api<Transcript>(`/api/assets/${spAsset}/transcript`),
-    enabled: speakerOpen && Boolean(spAsset),
-    retry: false,
-  });
-  const speakers = React.useMemo(
-    () => [...new Set((transcript.data?.segments ?? []).map((seg) => seg.speaker).filter((s): s is string => !!s))],
-    [transcript.data],
-  );
-  const fromSpeaker = useMutation({
-    mutationFn: () => voiceFromSpeaker({ asset_id: spAsset, speaker: spSpeaker || null, name: spName }),
-    onSuccess: (voice) => {
-      void qc.invalidateQueries({ queryKey: ["voices", workspace.id] });
-      setSpeakerOpen(false);
-      setSpAsset("");
-      setSpSpeaker("");
-      setSpName("");
-      setSelected(voice.id);
-      toast.success(t("voiceCreated"));
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
 
   return (
     <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
       <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">{tabs}</div>
       <div className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto p-2.5">
-        <div className="grid gap-[7px] rounded-lg border border-border bg-panel p-2.5">
-          <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-            <Wand2 size={13} /> {t("voiceSynthTitle")}
-          </label>
+        <div className="grid gap-[7px] rounded-lg bg-panel">
           <div className="grid gap-1.5">
             <VoiceField label={t("voiceEngine")}>
               <Select
@@ -458,7 +359,13 @@ export function VoicePanel({
                         </SelectContent>
                       </Select>
                     ) : (
-                      <p className="m-0 text-ui-xs leading-[26px] text-muted-foreground">{t("voiceLibraryPickEmpty")}</p>
+                      <Input
+                        value=""
+                        disabled
+                        readOnly
+                        aria-label={t("voiceLibraryPick")}
+                        placeholder={t("voiceLibraryPickEmpty")}
+                      />
                     )}
                   </VoiceField>
                   {/* 语速跟着**引擎能力**走:F5 的 infer 吃 speed,fish 的请求结构里根本没有
@@ -559,177 +466,40 @@ export function VoicePanel({
           >
             <Wand2 size={13} /> {t("voiceGenerate")}
           </Button>
-          {engine === "clone" && !activeVoice && <p className="m-0 text-ui-xs leading-[1.45] text-muted-foreground">{t("voiceNeedVoice")}</p>}
           {engine !== "clone" && voiceChoices.length === 0 && activeEngine?.needs_voice_id && !engineVoice.trim() && (
             <p className="m-0 text-ui-xs leading-[1.45] text-muted-foreground">{t("voiceNeedEngineVoice")}</p>
           )}
           {isPodcast && !engineReady && <p className="m-0 text-ui-xs leading-[1.45] text-muted-foreground">{t("voicePodcastNeedTwo")}</p>}
           {/* 克隆这一条的 note 会随"装没装"变 —— 以前不显示它,于是"没装"这件事只能等到
               点了生成、收到一句拒绝才知道。 */}
-          {activeEngine?.note && (
+          {engine !== "clone" && activeEngine?.note && (
             <p className={cn("m-0 text-ui-xs leading-[1.45] text-muted-foreground", activeEngine.ready === false && "text-destructive")}>
               {activeEngine.note}
             </p>
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-2 text-xs font-semibold text-muted-foreground">
-          <span>{t("voiceLibrary")}</span>
-          <div className="flex shrink-0 gap-1">
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setSpeakerOpen((open) => !open);
-                setUploadOpen(false);
-              }}
-            >
-              <UsersRound size={12} /> {t("voiceFromSpeaker")}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setUploadOpen((open) => !open);
-                setSpeakerOpen(false);
-              }}
-            >
-              <Upload size={12} /> {t("voiceUpload")}
-            </Button>
-          </div>
-        </div>
-
-        {speakerOpen && (
-          <div className="grid gap-1.5 rounded-lg border border-dashed border-border-strong p-2.5">
-            <Combobox
-              value={spAsset}
-              options={clipAssets.map((asset) => ({ value: asset.id, label: asset.name }))}
-              placeholder={t("voicePickAsset")}
-              emptyText={t("cmdkEmpty")}
-              className="w-full"
-              onValueChange={(value) => {
-                setSpAsset(value);
-                setSpSpeaker("");
-              }}
-            />
-            {spAsset &&
-              (transcript.isError ? (
-                <p className="m-0 text-ui-xs leading-[1.45] text-muted-foreground">{t("voiceNoTranscript")}</p>
-              ) : speakers.length > 0 ? (
-                <Select value={spSpeaker} onValueChange={setSpSpeaker}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("voicePickSpeaker")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {speakers.map((speaker) => (
-                      <SelectItem key={speaker} value={speaker}>
-                        {speaker}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : transcript.isLoading ? null : (
-                <p className="m-0 text-ui-xs leading-[1.45] text-muted-foreground">{t("voiceNoSpeakers")}</p>
-              ))}
-            <Input placeholder={t("voiceName")} value={spName} onChange={(event) => setSpName(event.target.value)} />
-            <div className="flex items-center justify-between gap-2">
-              <span className="m-0 text-ui-xs leading-[1.45] text-muted-foreground">{t("voiceFromSpeakerHint")}</span>
-              <Button
-                size="sm"
-                disabled={!spAsset || !spSpeaker} loading={fromSpeaker.isPending}
-                onClick={() => fromSpeaker.mutate()}
-              >
-                {fromSpeaker.isPending ? <Loader2 size={12} className="animate-openstudio-spin" /> : null} {t("voiceDoClone")}
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {uploadOpen && (
-          // 这个框一直长着虚线边 —— 那是"往这儿拖"的样子。以前它只是长得像,拖上去什么都不会
-          // 发生;既然长成这样,就让它真的收。
-          <div
-            className={cn(
-              "grid gap-1.5 rounded-lg border border-dashed border-border-strong p-2.5 transition-colors duration-100",
-              dragOver && "border-primary bg-[color-mix(in_oklab,var(--primary)_6%,transparent)]",
-            )}
-            onDragOver={(event) => {
-              event.preventDefault();
-              setDragOver(true);
-            }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={(event) => {
-              event.preventDefault();
-              setDragOver(false);
-              const dropped = event.dataTransfer.files?.[0];
-              if (dropped) setFile(dropped);
-            }}
-          >
-            <Input placeholder={t("voiceName")} value={name} onChange={(event) => setName(event.target.value)} />
-            <Textarea
-              placeholder={t("voiceRefText")}
-              value={refText}
-              rows={2}
-              onChange={(event) => setRefText(event.target.value)}
-            />
-            <input
-              ref={fileRef}
-              type="file"
-              accept="audio/*,video/*"
-              className="hidden"
-              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-            />
-            {/* 选好的音频要**看得见、去得掉**。以前它只是把按钮文字换成截断的文件名 ——
-                既看不出到底选没选,也没有反悔的路。 */}
-            {file && !recording && (
-              <div className="flex items-center gap-1.5 rounded-md border border-border bg-secondary px-2 py-1">
-                <AudioLines size={12} className="shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1 truncate text-ui-xs" title={file.name}>{file.name}</span>
-                <span className="shrink-0 text-ui-2xs tabular-nums text-muted-foreground">{formatBytes(file.size)}</span>
-                <button
-                  type="button"
-                  className="shrink-0 cursor-pointer rounded-sm border-0 bg-transparent p-0.5 leading-none text-muted-foreground hover:text-destructive"
-                  aria-label={t("voiceClearFile")}
-                  title={t("voiceClearFile")}
-                  onClick={() => setFile(null)}
-                >
-                  <X size={12} />
-                </button>
-              </div>
-            )}
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex min-w-0 items-center gap-1">
-                <Button size="sm" variant="outline" disabled={recording} onClick={() => fileRef.current?.click()}>
-                  <Upload size={12} /> {file && !recording ? t("voiceReplaceFile") : t("voicePickFile")}
-                </Button>
-                {recording ? (
-                  <Button size="sm" variant="destructive" onClick={stopRecording}>
-                    <Square size={11} /> {recordSecs}s
+        {/* Voice rows are reference material for the local clone path. Remote engines own their
+            catalogues, so showing this library under Edge/Volcano/etc. implies a relationship
+            that does not exist and wastes most of the narrow editor panel. */}
+        {engine === "clone" && (
+          <>
+            <div className="flex items-center justify-between gap-2 text-xs font-semibold text-muted-foreground">
+              <span>{t("voiceLibrary")}</span>
+              {list.length > 0 && (
+                <div className="flex shrink-0 gap-1">
+                  <Button size="sm" variant="ghost" onClick={() => setSpeakerOpen(true)}>
+                    <UsersRound size={12} /> {t("voiceFromSpeaker")}
                   </Button>
-                ) : (
-                  <Button size="sm" variant="ghost" onClick={startRecording}>
-                    <Mic size={12} /> {t("voiceRecord")}
+                  <Button size="sm" variant="outline" onClick={() => setUploadOpen(true)}>
+                    <Upload size={12} /> {t("voiceUpload")}
                   </Button>
-                )}
-              </div>
-              <Button
-                size="sm"
-                disabled={!name.trim() || !file || recording} loading={upload.isPending}
-                onClick={() => upload.mutate()}
-              >
-                {upload.isPending ? <Loader2 size={12} className="animate-openstudio-spin" /> : null} {t("confirm")}
-              </Button>
+                </div>
+              )}
             </div>
-            {/* 「确认」灰着的时候要说**还差什么**。以前这里永远是同一句通用说明,
-                于是按钮为什么点不动只能靠猜。 */}
-            <p className={cn("m-0 text-ui-xs leading-[1.45] text-muted-foreground", cloneBlocker && "text-destructive")}>
-              {recording ? t("voiceRecording") : cloneBlocker ? t(cloneBlocker) : t("voiceUploadHint")}
-            </p>
-          </div>
-        )}
 
-        <div className="grid gap-1.5">
-          {list.map((voice) => (
+            <div className="grid gap-1.5">
+              {list.map((voice) => (
             <div
               key={voice.id}
               className={cn("flex cursor-pointer items-center justify-between gap-2 rounded-md border border-border bg-background px-2.5 py-2 transition-[border-color,background] duration-100 hover:bg-secondary", voice.id === activeVoice && "border-primary bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] hover:bg-[color-mix(in_srgb,var(--primary)_8%,transparent)]")}
@@ -789,8 +559,8 @@ export function VoicePanel({
                 </button>
               </div>
             </div>
-          ))}
-          {editing && (
+              ))}
+              {editing && (
             <div className="grid gap-1.5 rounded-md border border-dashed border-border-strong p-2.5">
               <Input value={editName} placeholder={t("voiceName")} onChange={(event) => setEditName(event.target.value)} />
               <Textarea
@@ -813,10 +583,53 @@ export function VoicePanel({
                 </Button>
               </div>
             </div>
-          )}
-          {list.length === 0 && !voices.isLoading && <p className="m-0 px-2 py-4 text-center text-xs text-muted-foreground">{t("voiceEmpty")}</p>}
-        </div>
+              )}
+              {list.length === 0 && !voices.isLoading && (
+            <EmptyState
+              size="compact"
+              icon={<Mic size={16} />}
+              title={t("voiceLibraryEmpty")}
+              body={t("voiceEmpty")}
+              className="my-1 max-w-none! py-5 [&>div:first-child]:border-0 [&>div:first-child]:bg-transparent"
+              action={
+                <div className="mt-1 flex flex-wrap items-center justify-center gap-1.5">
+                  <Button size="sm" variant="ghost" onClick={() => setSpeakerOpen(true)}>
+                    <UsersRound size={12} /> {t("voiceFromSpeaker")}
+                  </Button>
+                  <Button size="sm" onClick={() => setUploadOpen(true)}>
+                    <Upload size={12} /> {t("voiceUpload")}
+                  </Button>
+                </div>
+              }
+            />
+              )}
+            </div>
+          </>
+        )}
       </div>
+      {engine === "clone" && (
+        <>
+          <VoiceFromSpeakerDialog
+            open={speakerOpen}
+            workspace={workspace}
+            project={project}
+            onCreated={(voice) => {
+              void qc.invalidateQueries({ queryKey: ["voices", workspace.id] });
+              setSelected(voice.id);
+            }}
+            onClose={() => setSpeakerOpen(false)}
+          />
+          <UploadVoiceDialog
+            open={uploadOpen}
+            workspace={workspace}
+            onCreated={(voice) => {
+              void qc.invalidateQueries({ queryKey: ["voices", workspace.id] });
+              setSelected(voice.id);
+            }}
+            onClose={() => setUploadOpen(false)}
+          />
+        </>
+      )}
     </section>
   );
 }

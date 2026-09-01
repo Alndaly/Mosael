@@ -48,6 +48,11 @@
 - 时间线的几何计算住在 `domain/timeline/geometry.ts`,是有测试的纯函数;组件里不内联几何。
 - 动态长列表的下拉用共享的可搜索 Combobox;拖拽交互用 dnd-kit。
 - 会发请求的按钮必须显示 `loading`,而不只是 `disabled`(棘轮:`app/buttonPending.test.ts`)。
+- 参考音频录制统一使用 `features/voice/useReferenceAudioRecorder.ts`，设置页与剪辑页的音色创建统一
+  使用 `features/voice/VoiceCreationDialogs.tsx`。不要在页面组件里另写 `getUserMedia` / `MediaRecorder`；
+  弹窗取消、切换入口和卸载都必须停止轨道，权限拒绝、录音器故障和空录音必须是不同错误。
+- 领域资源跟随能力显示：工作区音色库只属于本地克隆引擎；远程 TTS 选择后只显示该供应商的音色目录，
+  不保留本地音色卡片、空状态或创建入口。
 
 ## 后端约定
 

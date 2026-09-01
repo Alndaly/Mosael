@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AudioLines, Check, Mic, Pause, Pencil, Play, Plus, Trash2, Upload, Wand2, X } from "lucide-react";
+import { Check, Mic, Pause, Pencil, Play, Plus, Trash2, Wand2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -8,19 +8,18 @@ import {
   listVoices,
   recognizeReference,
   updateVoice,
-  uploadVoice,
   voiceSampleUrl,
   type Voice,
   type Workspace,
 } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { ConfirmDialog, DIALOG_FIELD, ModalShell } from "@/components/app/modals";
+import { ConfirmDialog } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useSamplePlayer } from "@/features/editor/useSamplePlayer";
-import { formatBytes } from "@/lib/bytes";
+import { UploadVoiceDialog } from "@/features/voice/VoiceCreationDialogs";
 import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
 
 /**
@@ -34,7 +33,7 @@ import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
  * 现在默认只显示名字、来源和参考文本首行;编辑要点一下才展开,操作按钮 hover 才亮;
  * 试听走一个播放按钮(原生 audio 控件又高又占地方,而且每行一个)。
  *
- * 新建走**上传一段参考音频** —— 它不需要任何项目上下文,一个音频文件就够。
+ * 新建走**上传或录制一段参考音频** —— 它不需要任何项目上下文,一个音频文件就够。
  * 「从转写出的说话人建」仍然只在剪辑页:那条路要求素材**已经转写过**(后端
  * `create_from_speaker` 上来就找 Transcript),而转写和素材的上下文都在那边。
  */
@@ -99,9 +98,11 @@ export function VoiceLibrarySection({ workspace }: { workspace: Workspace }) {
         )}
         </div>
       </SettingsBlock>
-      <NewVoiceDialog
+      <UploadVoiceDialog
         open={creating}
         workspace={workspace}
+        title={t("voiceNewTitle")}
+        submitLabel={t("voiceCreate")}
         onCreated={invalidate}
         onClose={() => setCreating(false)}
       />
@@ -247,123 +248,5 @@ function VoiceRow({
         </Button>
       </div>
     </div>
-  );
-}
-
-/** 新建音色:传一段参考音频。**参考文本可以留空** —— 建完点那一行的编辑、再点「识别」,
-    让本机转写引擎听一遍填上,比让用户当场打一遍自己说过的话强。 */
-function NewVoiceDialog({
-  open,
-  workspace,
-  onCreated,
-  onClose,
-}: {
-  open: boolean;
-  workspace: Workspace;
-  onCreated: () => void;
-  onClose: () => void;
-}) {
-  const t = useI18n();
-  const [name, setName] = React.useState("");
-  const [refText, setRefText] = React.useState("");
-  const [file, setFile] = React.useState<File | null>(null);
-  const fileRef = React.useRef<HTMLInputElement | null>(null);
-  const formId = React.useId();
-
-  const upload = useMutation({
-    mutationFn: () => uploadVoice({ workspaceId: workspace.id, name, referenceText: refText, file: file as File }),
-    onSuccess: () => {
-      onCreated();
-      onClose();
-      toast.success(t("voiceCreated"));
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
-
-  React.useEffect(() => {
-    if (!open) return;
-    setName("");
-    setRefText("");
-    setFile(null);
-    if (fileRef.current) fileRef.current.value = "";
-    upload.reset();
-  }, [open]);
-
-  return (
-    <ModalShell
-      open={open}
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen && !upload.isPending) onClose();
-      }}
-      title={t("voiceNewTitle")}
-      className="sm:max-w-md"
-      footer={
-        <>
-          <Button size="sm" variant="ghost" disabled={upload.isPending} onClick={onClose}>
-            {t("cancel")}
-          </Button>
-          <Button
-            size="sm"
-            type="submit"
-            form={formId}
-            title={!file ? t("voiceNeedRefAudioHere") : !name.trim() ? t("voiceNeedName") : undefined}
-            disabled={!name.trim() || !file}
-            loading={upload.isPending}
-          >
-            {t("voiceCreate")}
-          </Button>
-        </>
-      }
-    >
-      <form
-        id={formId}
-        className="grid gap-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (name.trim() && file) upload.mutate();
-        }}
-      >
-        <label className={DIALOG_FIELD}>
-          <span>{t("voiceName")}</span>
-          <Input value={name} onChange={(event) => setName(event.target.value)} autoFocus />
-        </label>
-        <label className={DIALOG_FIELD}>
-          <span>{t("voiceReferenceTextOptional")}</span>
-          <Textarea rows={3} value={refText} onChange={(event) => setRefText(event.target.value)} />
-        </label>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="audio/*,video/*"
-          className="hidden"
-          onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-        />
-        <div className="grid gap-2">
-          <Button type="button" size="sm" variant="outline" className="justify-self-start" onClick={() => fileRef.current?.click()}>
-            <Upload size={12} /> {file ? t("voiceReplaceFile") : t("voicePickFile")}
-          </Button>
-          {/* 选好的音频要**看得见、去得掉** —— 只把按钮文字换成文件名的话,既看不出选没选,
-              也没有反悔的路(剪辑页那处踩过这个)。 */}
-          {file && (
-            <div className="flex min-w-0 items-center gap-1.5 rounded-md border border-border bg-secondary px-2 py-1.5">
-              <AudioLines size={12} className="shrink-0 text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate text-ui-xs" title={file.name}>{file.name}</span>
-              <span className="shrink-0 text-ui-2xs tabular-nums text-muted-foreground">{formatBytes(file.size)}</span>
-              <button
-                type="button"
-                className="shrink-0 cursor-pointer rounded-sm border-0 bg-transparent p-0.5 leading-none text-muted-foreground hover:text-destructive"
-                aria-label={t("voiceClearFile")}
-                onClick={() => {
-                  setFile(null);
-                  if (fileRef.current) fileRef.current.value = "";
-                }}
-              >
-                <X size={12} />
-              </button>
-            </div>
-          )}
-        </div>
-      </form>
-    </ModalShell>
   );
 }
