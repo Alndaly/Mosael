@@ -38,7 +38,7 @@ def _has_implementation(vendor: str, capability: str) -> bool:
 
         return get_provider(vendor, capability) is not None
     if capability == "tts":
-        from app.ai.providers.speech import REMOTE_ENGINES
+        from app.ai.providers import REMOTE_ENGINES
 
         return vendor in REMOTE_ENGINES
     if capability == "podcast":

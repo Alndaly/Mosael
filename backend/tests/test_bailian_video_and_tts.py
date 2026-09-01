@@ -15,7 +15,7 @@ import pytest
 from app.ai.providers.contracts.generation import GenerationRequest, ProviderContext, ProviderError
 from app.ai.providers.contracts.generation import FIRST_FRAME, SourceAsset
 from app.ai.providers.adapters.alibaba.video import build_submit_payload, extract_video_url
-from app.ai.providers.speech import BailianTTS, extract_bailian_audio_url
+from app.ai.providers import BailianTTS, extract_bailian_audio_url
 
 
 def _req(**kw) -> GenerationRequest:
@@ -140,7 +140,7 @@ def test_档案填的是对话端点时_语音要归一到原生根() -> None:
     直接往后拼会得到 `…/compatible-mode/v1/api/v1/services/…` —— 一个必然 404 的地址。
     图像那边早就解决过同一个坑(qwen_image.resolve_qwen_edit_base),语音沿用同一条判据。
     """
-    from app.ai.providers.speech import DASHSCOPE_NATIVE_BASE, resolve_dashscope_native_base
+    from app.ai.providers import DASHSCOPE_NATIVE_BASE, resolve_dashscope_native_base
 
     assert resolve_dashscope_native_base("https://dashscope.aliyuncs.com/compatible-mode/v1") == DASHSCOPE_NATIVE_BASE
     assert resolve_dashscope_native_base("") == DASHSCOPE_NATIVE_BASE
@@ -151,7 +151,7 @@ def test_档案填的是对话端点时_语音要归一到原生根() -> None:
 def test_构造签名要收voice() -> None:
     """build_remote_provider 的兜底分支是 cls(api_key=…, voice=…, model=…, base_url=…),
     少收一个参数就是 TypeError —— 而那条路径只有真去合成时才会走到。"""
-    from app.ai.providers.speech import build_remote_provider
+    from app.ai.providers import build_remote_provider
 
     engine = build_remote_provider("alibaba", api_key="k", voice="Serena")
     assert isinstance(engine, BailianTTS)
@@ -184,7 +184,7 @@ def test_认不出的模型回空_由界面退回填id() -> None:
     """
     assert BailianTTS.voices_for("qwen3-tts-vd-2026-01-26") == ()
     # v3-plus / v3.5-* 即使用 _v3 音色也回 418(多半账号未开通);v1 明确说"不支持 http call"。
-    from app.ai.providers.speech import CosyVoiceTTS
+    from app.ai.providers import CosyVoiceTTS
 
     for model in ("cosyvoice-v1", "cosyvoice-v3-plus", "cosyvoice-v3.5-flash"):
         assert CosyVoiceTTS.voices_for(model) == (), model
@@ -207,7 +207,7 @@ def test_cosyvoice走另一个端点和另一种请求体() -> None:
     · qwen-tts → 多模态生成端点,音色在 input.voice
     · CosyVoice → /api/v1/services/audio/tts/SpeechSynthesizer,音色在 parameters.voice
     """
-    from app.ai.providers.speech import SpeechRequest
+    from app.ai.providers import SpeechRequest
 
     qwen_payload, qwen_path = BailianTTS(api_key="k", model="qwen-tts")._request_for(
         SpeechRequest(text="嗨", voice="Cherry")
@@ -227,7 +227,7 @@ def test_cosyvoice走另一个端点和另一种请求体() -> None:
 def test_语速只发给收得住的那一族() -> None:
     """真机实测:CosyVoice 的 rate=1.5 把 2.25 秒的句子变成 1.50 秒,正好 1.5 倍(真变速)。
     qwen-tts 没有这个参数,发过去只会被拒或忽略。"""
-    from app.ai.providers.speech import SpeechRequest
+    from app.ai.providers import SpeechRequest
 
     cosy, _ = BailianTTS(api_key="k", model="cosyvoice-v2")._request_for(SpeechRequest(text="嗨", speed=1.5))
     assert cosy["parameters"]["rate"] == 1.5
@@ -238,7 +238,7 @@ def test_语速只发给收得住的那一族() -> None:
 
 def test_语速是1时不发这个参数() -> None:
     """1.0 是"引擎自然语速"。显式发 1.0 和不发在语义上一样,但少一个字段就少一处能出错的地方。"""
-    from app.ai.providers.speech import SpeechRequest
+    from app.ai.providers import SpeechRequest
 
     cosy, _ = BailianTTS(api_key="k", model="cosyvoice-v2")._request_for(SpeechRequest(text="嗨", speed=1.0))
     assert "rate" not in cosy["parameters"]
@@ -257,7 +257,7 @@ def test_cosyvoice音色按主版本分表_跨版本不通用() -> None:
 
     两张表逐个真机验证过(2026-08-24),不是照文档抄的 —— v3-flash 比 v2 多出 8 个。
     """
-    from app.ai.providers.speech import CosyVoiceTTS
+    from app.ai.providers import CosyVoiceTTS
 
     v2 = CosyVoiceTTS.voices_for("cosyvoice-v2")
     v3 = CosyVoiceTTS.voices_for("cosyvoice-v3-flash")
@@ -272,7 +272,7 @@ def test_cosyvoice音色按主版本分表_跨版本不通用() -> None:
 def test_v3plus不会误配到v3flash的表() -> None:
     """前缀匹配最怕这种:`cosyvoice-v3-plus` 和 `cosyvoice-v3-flash` 前 13 个字符一样。
     误配的话用户会拿到一张看着合法、发出去全是 418 的音色表。"""
-    from app.ai.providers.speech import CosyVoiceTTS
+    from app.ai.providers import CosyVoiceTTS
 
     assert CosyVoiceTTS.voices_for("cosyvoice-v3-plus") == ()
 
@@ -281,7 +281,7 @@ def test_播客音色不能显示成原始id() -> None:
     """真机截图抓到的回归:固定音色改从 describe_engines() 出之后,标签丢了 ——
     engine 目录里的 voices 是纯 id,而 (id, 名字) 成对的表在别处。只查 edge 的话,
     播客那四个会显示成 `zh_male_dayixiansheng_v2_saturn_bigtts`。"""
-    from app.ai.providers.speech import EDGE_BUILTIN_VOICES, PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES
+    from app.ai.providers import EDGE_BUILTIN_VOICES, PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES
 
     labels = {**dict(EDGE_BUILTIN_VOICES), **dict(PODCAST_SPEAKERS), **dict(VOLCANO_BUILTIN_VOICES)}
     for voice, expected in PODCAST_SPEAKERS:
@@ -295,7 +295,7 @@ def test_两个引擎共用同一条连接的凭据() -> None:
     """和火山那两条的差别在**钥匙**:火山 TTS 与播客来自两个控制台、两把 Key,所以是两个
     vendor;百炼这两套共用一把 DashScope Key,拆 vendor 会让用户把同一把钥匙填两遍
     (bytedance 当年就是这么拆的,后来合了)。所以只拆引擎,凭据仍指向 alibaba。"""
-    from app.ai.providers.speech import CosyVoiceTTS, vendor_for_engine
+    from app.ai.providers import CosyVoiceTTS, vendor_for_engine
 
     assert vendor_for_engine(CosyVoiceTTS.id) == "alibaba"
     assert vendor_for_engine("alibaba") == "alibaba"
@@ -307,7 +307,7 @@ def test_两个引擎共用同一条连接的凭据() -> None:
 def test_模型按族筛_免得把qwen的模型发去cosyvoice() -> None:
     """一条连接下可以同时挂 qwen-tts 和 cosyvoice-v2。不筛的话切到 CosyVoice 引擎会把
     qwen 的模型名发去 CosyVoice 的端点,得到一句看不懂的 `url error`。"""
-    from app.ai.providers.speech import BailianTTS as B, CosyVoiceTTS as C
+    from app.ai.providers import BailianTTS as B, CosyVoiceTTS as C
 
     assert B.MODEL_PREFIXES == ("qwen-tts", "qwen3-tts")
     assert C.MODEL_PREFIXES == ("cosyvoice",)
@@ -318,7 +318,7 @@ def test_模型按族筛_免得把qwen的模型发去cosyvoice() -> None:
 
 def test_两个引擎各自的音色和语速() -> None:
     """面板上显示什么,不该取决于用户在这条连接下当前恰好配了哪个模型 —— 这正是分开列的理由。"""
-    from app.ai.providers.speech import CosyVoiceTTS
+    from app.ai.providers import CosyVoiceTTS
     from app.domain.voices.engine_catalog import describe_engines
 
     entries = {e["id"]: e for e in describe_engines()}
@@ -331,7 +331,7 @@ def test_两个引擎各自的音色和语速() -> None:
 def test_cosyvoice引擎默认就是能用的模型() -> None:
     """这条连接还没配任何 cosyvoice 模型时,引擎也该能跑 —— 回落到 DEFAULT_MODEL,
     而不是把空模型名发出去。"""
-    from app.ai.providers.speech import CosyVoiceTTS
+    from app.ai.providers import CosyVoiceTTS
 
     assert CosyVoiceTTS(api_key="k")._model == "cosyvoice-v2"
     assert CosyVoiceTTS.voices_for(CosyVoiceTTS.DEFAULT_MODEL), "默认模型没有音色"

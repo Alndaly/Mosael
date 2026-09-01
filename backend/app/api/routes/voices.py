@@ -223,7 +223,7 @@ def list_tts_voices(engine: str, db: DbSession, user: CurrentUser) -> list[dict]
     account and each voice carries its family. Without them, the built-in list still works;
     it is smaller and can go stale, which is a far better failure than an empty dropdown.
     """
-    from app.ai.providers.speech import EDGE_BUILTIN_VOICES, PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES
+    from app.ai.providers import EDGE_BUILTIN_VOICES, PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES
     from app.domain.voices.engine_catalog import describe_engines
     from app.domain.providers import resolve_profile, profile_extra
 
@@ -231,7 +231,7 @@ def list_tts_voices(engine: str, db: DbSession, user: CurrentUser) -> list[dict]
     # `if engine != "volcano": return []` —— 于是加一个引擎要改两处(引擎目录 + 这里),
     # 漏掉第二处的表现是"引擎选得出来,但音色下拉是空的"。百炼刚接进来时就是这样。
     # 音色清单只有一个产地:describe_engines()。这里只负责**火山那条实时的**。
-    from app.ai.providers.speech import REMOTE_ENGINES, BailianTTS
+    from app.ai.providers import REMOTE_ENGINES, BailianTTS
 
     if engine in (BailianTTS.id, "alibaba-cosyvoice"):
         # 百炼的音色**跟着模型走**(qwen3-tts-flash 有 qwen-tts 没有的几个,CosyVoice 的

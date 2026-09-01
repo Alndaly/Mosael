@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from app.ai.providers.speech import (
+from app.ai.providers import (
     REMOTE_PARALLEL,
     OpenAITTS,
     SpeechRequest,

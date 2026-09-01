@@ -1,22 +1,34 @@
-"""供应商适配器注册表:pluggable, never hardcoded in routes/UI.
+"""AI Provider 的稳定公共 Interface。
 
-**Adapter Implementation 按供应商组织,能力 Interface 单独放在 contracts。**
-``adapters/`` 里的每个名字是一套连接协议；一家横跨几种能力时，能力是它内部的模块名
-（例如 ``adapters/alibaba/image.py``、``video.py``、``speech.py``）—— 百炼的 qwen
-图像与万相视频共用一把 Key、同样的 HTTP 形状，
-没理由分处两棵树。一套协议服务多种能力的网关(comfyui/、evolink.py)按同一规矩
-各成一个单元。公共能力契约在 ``contracts/``，下载 Seam 在 ``media_transfer.py``；
-本 Module 只保留稳定公共 Interface，注册装配随后收敛到 ``registry.py``。
+调用方从这里取得能力契约和 Registry 查询；``contracts`` 定义 Seam，``adapters`` 保存供应商
+协议 Implementation，``registry`` 是唯一装配入口。领域 Module 不应直接选择具体 Adapter。
 """
 
-from __future__ import annotations
-
+from app.ai.providers.adapters.alibaba.speech import (
+    DASHSCOPE_NATIVE_BASE,
+    BailianTTS,
+    CosyVoiceTTS,
+    extract_bailian_audio_url,
+    is_cosyvoice,
+    resolve_dashscope_native_base,
+)
+from app.ai.providers.adapters.edge import EDGE_BUILTIN_VOICES, EdgeTTS
+from app.ai.providers.adapters.openai.speech import OpenAITTS
+from app.ai.providers.adapters.volcano import (
+    PODCAST_SPEAKERS,
+    VOLCANO_BUILTIN_VOICES,
+    VolcanoTTS,
+)
 from app.ai.providers.contracts.generation import (
+    DRIVING_AUDIO,
+    FIRST_CLIP,
     FIRST_FRAME,
     LAST_FRAME,
+    REFERENCE_AUDIO,
     REFERENCE_IMAGE,
     REFERENCE_VIDEO,
     SOURCE_ROLES,
+    SOURCE_VIDEO,
     GenerationCallbacks,
     GenerationProvider,
     GenerationRequest,
@@ -27,57 +39,60 @@ from app.ai.providers.contracts.generation import (
     allowed_source_url_parameters,
     roles_supplied_via_url,
 )
-from app.ai.providers.adapters.comfyui import ComfyUIProvider
-from app.ai.providers.adapters.kuaishou.kling import KlingProvider
-from app.ai.providers.adapters.openai.image import OpenAIImageProvider
-from app.ai.providers.adapters.alibaba.image import QwenImageProvider
-from app.ai.providers.adapters.alibaba.video import WanVideoProvider
-from app.ai.providers.adapters.bytedance.video import SeedanceProvider
-from app.ai.providers.adapters.bytedance.image import SeedreamProvider
-from app.ai.providers.adapters.minimax import MiniMaxVideoProvider
-from app.ai.providers.adapters.google import VeoProvider
-from app.ai.providers.adapters.evolink import EvolinkProvider
-
-_PROVIDERS: dict[tuple[str, str], GenerationProvider] = {}
-
-
-def _register(provider: GenerationProvider) -> None:
-    _PROVIDERS[(provider.name, provider.kind)] = provider
-
-
-_register(QwenImageProvider())
-_register(WanVideoProvider())
-_register(SeedanceProvider())
-_register(SeedreamProvider())
-_register(MiniMaxVideoProvider())
-_register(VeoProvider())
-_register(KlingProvider())
-_register(OpenAIImageProvider("openai"))
-_register(OpenAIImageProvider("openai-compatible"))
-_register(ComfyUIProvider("image"))
-_register(ComfyUIProvider("video"))
-_register(EvolinkProvider("image"))
-_register(EvolinkProvider("video"))
-
-
-def get_provider(name: str, kind: str) -> GenerationProvider | None:
-    return _PROVIDERS.get((name, kind))
-
+from app.ai.providers.contracts.speech import (
+    REMOTE_PARALLEL,
+    REMOTE_TIMEOUT_SECONDS,
+    SpeechRequest,
+    TTSError,
+    TTSProvider,
+    synthesize_many,
+)
+from app.ai.providers.registry import (
+    REMOTE_ENGINES,
+    build_remote_provider,
+    get_provider,
+    vendor_for_engine,
+)
 
 __all__ = [
+    "DASHSCOPE_NATIVE_BASE",
+    "DRIVING_AUDIO",
+    "EDGE_BUILTIN_VOICES",
+    "FIRST_CLIP",
     "FIRST_FRAME",
     "LAST_FRAME",
+    "PODCAST_SPEAKERS",
+    "REFERENCE_AUDIO",
     "REFERENCE_IMAGE",
     "REFERENCE_VIDEO",
+    "REMOTE_ENGINES",
+    "REMOTE_PARALLEL",
+    "REMOTE_TIMEOUT_SECONDS",
     "SOURCE_ROLES",
-    "SourceAsset",
+    "SOURCE_VIDEO",
+    "VOLCANO_BUILTIN_VOICES",
+    "BailianTTS",
+    "CosyVoiceTTS",
+    "EdgeTTS",
     "GenerationCallbacks",
     "GenerationProvider",
     "GenerationRequest",
     "GenerationResult",
+    "OpenAITTS",
     "ProviderContext",
     "ProviderError",
-    "get_provider",
+    "SourceAsset",
+    "SpeechRequest",
+    "TTSError",
+    "TTSProvider",
+    "VolcanoTTS",
     "allowed_source_url_parameters",
+    "build_remote_provider",
+    "extract_bailian_audio_url",
+    "get_provider",
+    "is_cosyvoice",
+    "resolve_dashscope_native_base",
     "roles_supplied_via_url",
+    "synthesize_many",
+    "vendor_for_engine",
 ]

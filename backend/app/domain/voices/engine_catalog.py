@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from app.ai.providers.speech import (
+from app.ai.providers import (
     EDGE_BUILTIN_VOICES,
     PODCAST_SPEAKERS,
     VOLCANO_BUILTIN_VOICES,
