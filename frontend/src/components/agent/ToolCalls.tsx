@@ -1,11 +1,11 @@
 import React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { Brain, Check, ChevronRight, CircleAlert, FileWarning, Loader2, Music } from "lucide-react";
 
 import { api, assetFileUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { AgentMarkdown } from "@/components/agent/Markdown";
-import { useImagePreview } from "@/components/app/image-preview";
+import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
 import { AudioPlayerBar } from "@/components/app/media-playback";
 import { HighlightedCode } from "@/components/agent/HighlightedCode";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
@@ -124,7 +124,7 @@ function collectAssetIds(value: unknown, out: Set<string> = new Set()): Set<stri
 }
 
 /** 媒体预览卡:按素材 kind 渲染图/视频/音频,让智能体「返回」的素材在聊天里可见可播。 */
-function MediaPreview({ assetId }: { assetId: string }) {
+function MediaPreview({ assetId, gallery }: { assetId: string; gallery?: ImagePreviewItem[] }) {
   const t = useI18n();
   const { openImagePreview } = useImagePreview();
   const asset = useQuery({
@@ -154,7 +154,9 @@ function MediaPreview({ assetId }: { assetId: string }) {
         <button
           type="button"
           className="block cursor-zoom-in border-0 bg-transparent p-0 focus-visible:rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          onClick={() => openImagePreview({ src, title: asset.data.name })}
+          //: 点开不是孤零零一张 —— 同一个工具结果里的全部图/视频装进画廊,
+          //: 灯箱里可以左右翻(单张结果时 gallery 为空,行为和原来一样)。
+          onClick={() => openImagePreview({ src, title: asset.data.name, gallery })}
         >
           <img className="max-h-[200px] w-full rounded-lg border border-border bg-black object-contain" src={src} alt={asset.data.name} loading="lazy" />
         </button>
@@ -177,6 +179,31 @@ function MediaPreview({ assetId }: { assetId: string }) {
       )}
       <figcaption className="truncate text-ui-xs text-muted-foreground">{asset.data.name}</figcaption>
     </figure>
+  );
+}
+
+/** 一个工具结果的全部媒体产出。画廊在这里拼:每张卡各自查自己的素材,
+ *  但点开图片时要把**这一批**里的图/视频一起交给灯箱,才能左右翻。 */
+function MediaPreviewGrid({ assetIds }: { assetIds: string[] }) {
+  const queries = useQueries({
+    queries: assetIds.map((id) => ({
+      queryKey: ["agent-asset", id],
+      queryFn: () => api<Asset>(`/api/assets/${id}`),
+      staleTime: 60_000,
+      retry: false,
+    })),
+  });
+  const gallery: ImagePreviewItem[] = queries
+    .map((query) => query.data)
+    .filter((asset): asset is Asset => Boolean(asset))
+    .filter((asset) => asset.kind === "image" || asset.kind === "video")
+    .map((asset) => ({ src: assetFileUrl(asset.id), title: asset.name, video: asset.kind === "video" }));
+  return (
+    <div className="ml-[13px] mt-1.5 flex flex-wrap gap-2 border-l border-border pl-3">
+      {assetIds.map((id) => (
+        <MediaPreview key={id} assetId={id} gallery={gallery} />
+      ))}
+    </div>
   );
 }
 
@@ -325,13 +352,7 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
         </div>
       )}
       {/* 媒体产出**不跟着折叠** —— 生成出来的那张图是这一步的成果,不是它的明细。 */}
-      {assetIds.length > 0 && (
-        <div className="ml-[13px] mt-1.5 flex flex-wrap gap-2 border-l border-border pl-3">
-          {assetIds.map((id) => (
-            <MediaPreview key={id} assetId={id} />
-          ))}
-        </div>
-      )}
+      {assetIds.length > 0 && <MediaPreviewGrid assetIds={assetIds} />}
     </div>
   );
 }
