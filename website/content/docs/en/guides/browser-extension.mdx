@@ -25,12 +25,15 @@ Open a video and click the extension icon. The panel reads captions supplied by 
 them into a timed transcript:
 
 - Click a row to seek to that timestamp.
-- The current cue is highlighted during playback.
+- Playback highlights the current cue and keeps it in view.
 - Search matches both source text and translations.
 - Moving to another video tab refreshes the panel for that page.
+- The UI follows Chrome by default, or can be pinned to Simplified Chinese or English in connection settings.
 
-The extension does not invent a transcript when a video has no captions. Import it into Open Studio
-and run media transcription instead.
+Selecting a target language keeps the source line and adds a second line. The extension prefers a
+site-provided caption or YouTube translation track and only uses Open Studio translation when no
+matching track exists. If a video has no captions, **Generate transcript with Open Studio** runs URL
+import, speech recognition, and timed-result loading as one flow.
 
 ## Translation, import, and frame capture
 
@@ -38,8 +41,10 @@ The first use of these three actions asks you to connect Open Studio from panel 
 local backend address (`http://127.0.0.1:8800` by default), sign in with an Open Studio account, and
 choose a workspace and optional project.
 
-- **Translate** completes the selected target language in one action; long transcripts are batched
-  automatically without changing cue order.
+- **Bilingual subtitles** keep the source and prefer site captions; Open Studio batches long fallback
+  translations without changing cue order.
+- **Automatic transcription** downloads an uncaptioned video, runs the selected ASR engine, and loads
+  the timed transcript back into the panel.
 - **Import video** submits the current page URL as a background media-library download.
 - **Capture current frame** crops the currently visible player into a PNG and uses the normal asset
   upload endpoint.

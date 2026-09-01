@@ -5,7 +5,7 @@ export const PAGE_RESPONSE_CHANNEL = "openstudio-extension-page";
 
 export type ContentRequest =
   | { type: "GET_CONTEXT" }
-  | { type: "GET_TRANSCRIPT" }
+  | { type: "GET_TRANSCRIPT"; trackId?: string }
   | { type: "SEEK"; seconds: number }
   | { type: "GET_CAPTURE_GEOMETRY" };
 
@@ -28,6 +28,7 @@ export type PageRequest = {
   channel: typeof PAGE_REQUEST_CHANNEL;
   id: string;
   type: "READ_TRANSCRIPT";
+  trackId?: string;
 };
 
 export type PageResponse = {

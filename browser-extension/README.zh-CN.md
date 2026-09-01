@@ -7,12 +7,14 @@
 
 ## 功能
 
-- 读取 YouTube 与 B 站已有字幕并显示为逐字稿。
-- 点击任意句子跳转到对应时间点，播放时自动标记当前句。
-- 搜索逐字稿，并一键翻译为中文、英文、日文、韩文、法文、德文或西班牙文。
+- 读取 YouTube 与 B 站已有字幕并显示为逐字稿；站点无字幕时可交给 Open Studio 自动下载并转写。
+- 点击任意句子跳转到对应时间点，播放时自动标记并滚动到当前句。
+- 原文与第二语言并排显示为双语字幕，搜索同时匹配两行内容。
+- 第二语言优先读取站点现有字幕或 YouTube 翻译轨；没有可用轨道时再调用 Open Studio 翻译。
 - 一键把当前视频链接提交到 Open Studio 素材库。
 - 截取播放器当前可见画面并作为 PNG 素材入库。
 - 选择目标工作区和可选项目。
+- 界面支持跟随 Chrome 语言，也可在设置中固定为简体中文或 English。
 
 ## 安装
 
@@ -38,8 +40,9 @@ pnpm build:extension
 
 1. 启动 Open Studio，确认本机后端运行在 `http://127.0.0.1:8800`。
 2. 在 Chrome 打开 YouTube 或 B 站视频页，点击扩展图标打开右侧 Side Panel。
-3. 逐字稿本身无需登录 Open Studio 即可使用。
-4. 首次翻译、导入或截帧时，点侧栏右上角设置，用 Open Studio 账号登录并选择素材工作区。
+3. 站点已有的逐字稿与第二字幕轨无需登录 Open Studio 即可使用。
+4. 首次自动转写、AI 翻译、导入或截帧时，点侧栏右上角设置，用 Open Studio 账号登录并选择素材工作区。
+5. 界面语言默认跟随 Chrome；需要固定语言时，在同一设置页选择「简体中文」或「English」。
 
 密码只用于调用 `/api/auth/login` 换取会话，不写入 `chrome.storage`；扩展只保存返回的会话、后端地址
 和素材目标。可以随时在设置中断开连接并删除本地会话。
@@ -59,10 +62,16 @@ pnpm build:extension
 逐字稿可使用当前网页本身已有的字幕权限，但**视频导入**仍由 Open Studio 后端下载；这类内容需要在
 Open Studio 的浏览器池中选择对应登录身份后从应用内导入。
 
+## 无字幕时自动转写
+
+站点没有返回字幕时，侧栏会显示「使用 Open Studio 生成逐字稿」。点击后按已有后端流程执行：链接下载
+入库、启动语音识别、轮询后台任务，完成后把带时间码的结果直接放回侧栏。生成结果仍支持播放跟随、
+点击跳转、搜索和双语字幕。下载和识别是后台任务，长视频所需时间取决于网络与已选择的转写引擎。
+
 ## 已知限制
 
 - 仅支持 Chrome 116+ 的 Manifest V3 Side Panel；Edge 可能兼容，但当前不作为验证目标。
-- 逐字稿依赖站点已有字幕。没有字幕的视频请先导入 Open Studio，再运行语音转写。
+- Open Studio 自动转写需要本机后端在线、账户已连接，并且后端能够下载当前链接。
 - 截帧按播放器当前可见区域裁切；播放器完全滚出视口时会拒绝操作。
 - 当前连接目标为本机 `localhost` / `127.0.0.1` 后端，避免请求宽泛的网站访问权限。
 
@@ -74,5 +83,7 @@ pnpm --dir browser-extension typecheck
 pnpm --dir browser-extension build
 ```
 
-构建脚本把 `src/background.ts`、`src/content.ts`、`src/page-bridge.ts` 和 `src/sidepanel.ts` 分别打包，
-再把 manifest、样式、HTML 和图标复制到 `dist/`。扩展版本由根 `package.json` 注入，与桌面版本一致。
+侧栏使用 React、Tailwind CSS v4 与扩展内自有的 shadcn/ui 组件；功能层不直接使用原生表单控件，也不维护
+旧式手写 class 样式表。构建脚本把 `src/background.ts`、`src/content.ts`、`src/page-bridge.ts` 和
+`src/sidepanel.tsx` 分别打包，编译 `src/styles.css` 中的 Tailwind 主题，并把 manifest、`_locales`、HTML
+和图标写入 `dist/`。扩展版本由根 `package.json` 注入，与桌面版本一致。

@@ -29,7 +29,7 @@ function currentContext(): VideoContext {
   };
 }
 
-function readTranscript(): Promise<Transcript> {
+function readTranscript(trackId?: string): Promise<Transcript> {
   const id = crypto.randomUUID();
   return new Promise((resolve, reject) => {
     const timeout = window.setTimeout(() => {
@@ -44,7 +44,7 @@ function readTranscript(): Promise<Transcript> {
       else reject(new Error(event.data.error || "字幕读取失败"));
     };
     window.addEventListener("message", receive);
-    const request: PageRequest = { channel: PAGE_REQUEST_CHANNEL, id, type: "READ_TRANSCRIPT" };
+    const request: PageRequest = { channel: PAGE_REQUEST_CHANNEL, id, type: "READ_TRANSCRIPT", trackId };
     window.postMessage(request, "*");
   });
 }
@@ -72,7 +72,7 @@ function captureGeometry(): CaptureGeometry {
 async function handle(message: ContentRequest): Promise<ContentResponse> {
   try {
     if (message.type === "GET_CONTEXT") return { ok: true, data: currentContext() };
-    if (message.type === "GET_TRANSCRIPT") return { ok: true, data: await readTranscript() };
+    if (message.type === "GET_TRANSCRIPT") return { ok: true, data: await readTranscript(message.trackId) };
     if (message.type === "GET_CAPTURE_GEOMETRY") return { ok: true, data: captureGeometry() };
     const video = videoElement();
     video.currentTime = Math.max(0, Math.min(Number.isFinite(video.duration) ? video.duration : message.seconds, message.seconds));

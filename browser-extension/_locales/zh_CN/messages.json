@@ -1,0 +1,11 @@
+{
+  "extensionName": {
+    "message": "Open Studio 视频助手"
+  },
+  "extensionDescription": {
+    "message": "在 Chrome 侧栏查看同步双语逐字稿，并将视频或当前帧导入 Open Studio。"
+  },
+  "actionTitle": {
+    "message": "打开 Open Studio 视频助手"
+  }
+}

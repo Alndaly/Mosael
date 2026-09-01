@@ -1,6 +1,6 @@
-import { normalizeBilibiliTranscript } from "./platforms/bilibili";
+import { listBilibiliTranscriptTracks, normalizeBilibiliTranscript } from "./platforms/bilibili";
 import { detectVideoPlatform } from "./platforms/detect";
-import { normalizeYouTubeTranscript } from "./platforms/youtube";
+import { listYouTubeTranscriptTracks, parseYouTubeTranscriptBody } from "./platforms/youtube";
 import {
   PAGE_REQUEST_CHANNEL,
   PAGE_RESPONSE_CHANNEL,
@@ -19,33 +19,28 @@ declare global {
   }
 }
 
-function text(value: unknown): string {
-  if (typeof value === "string") return value;
-  if (value && typeof value === "object" && Array.isArray((value as LooseRecord).runs)) {
-    return (value as LooseRecord).runs.map((item: LooseRecord) => item?.text || "").join("");
-  }
-  return "";
-}
-
-async function readYouTubeTranscript(): Promise<Transcript> {
+async function readYouTubeTranscript(trackId?: string): Promise<Transcript> {
   // YouTube is a SPA. The global value can still describe the previous watch page after an
   // in-place navigation, while the watch element is updated for the current URL first.
   const player = (document.querySelector("ytd-watch-flexy") as any)?.playerData || window.ytInitialPlayerResponse;
-  const tracks = player?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-  if (!Array.isArray(tracks) || tracks.length === 0) {
+  const candidates = listYouTubeTranscriptTracks(player || {});
+  if (candidates.length === 0) {
     throw new Error("当前视频没有可用字幕");
   }
-  const track = tracks.find((item: LooseRecord) => item?.kind !== "asr") || tracks[0];
-  const endpoint = new URL(String(track.baseUrl));
+  const track = candidates.find((item) => item.id === trackId)
+    || candidates.find((item) => item.kind === "source")
+    || candidates[0];
+  const endpoint = new URL(track.url);
   endpoint.searchParams.set("fmt", "json3");
   const response = await fetch(endpoint.toString(), { credentials: "include" });
   if (!response.ok) throw new Error(`字幕读取失败（${response.status}）`);
-  const cues = normalizeYouTubeTranscript(await response.json());
-  if (cues.length === 0) throw new Error("字幕内容为空");
+  const cues = parseYouTubeTranscriptBody(await response.text());
   return {
-    language: String(track.languageCode || ""),
-    languageLabel: text(track.name) || String(track.languageCode || "字幕"),
+    trackId: track.id,
+    language: track.language,
+    languageLabel: track.languageLabel,
     cues,
+    tracks: candidates.map(({ url: _url, ...candidate }) => candidate),
   };
 }
 
@@ -58,7 +53,7 @@ function bilibiliIdentity(): { bvid: string; cid: string } {
   return { bvid, cid };
 }
 
-async function readBilibiliTranscript(): Promise<Transcript> {
+async function readBilibiliTranscript(trackId?: string): Promise<Transcript> {
   const { bvid, cid } = bilibiliIdentity();
   let tracks = window.__playinfo__?.data?.subtitle?.subtitles;
   if (!Array.isArray(tracks) || tracks.length === 0) {
@@ -71,8 +66,9 @@ async function readBilibiliTranscript(): Promise<Transcript> {
     tracks = listing?.data?.subtitle?.subtitles;
   }
   if (!Array.isArray(tracks) || tracks.length === 0) throw new Error("当前视频没有可用字幕");
-  const track = tracks.find((item: LooseRecord) => !item?.ai_type) || tracks[0];
-  const rawUrl = String(track.subtitle_url || track.subtitleUrl || "");
+  const candidates = listBilibiliTranscriptTracks(tracks);
+  const track = candidates.find((item) => item.id === trackId) || candidates[0];
+  const rawUrl = track.url;
   const subtitleUrl = rawUrl.startsWith("//") ? `https:${rawUrl}` : rawUrl;
   if (!subtitleUrl) throw new Error("字幕地址为空");
   const response = await fetch(subtitleUrl, { credentials: "include" });
@@ -80,16 +76,18 @@ async function readBilibiliTranscript(): Promise<Transcript> {
   const cues = normalizeBilibiliTranscript(await response.json());
   if (cues.length === 0) throw new Error("字幕内容为空");
   return {
-    language: String(track.lan || ""),
-    languageLabel: String(track.lan_doc || track.lan || "字幕"),
+    trackId: track.id,
+    language: track.language,
+    languageLabel: track.languageLabel,
     cues,
+    tracks: candidates.map(({ url: _url, ...candidate }) => candidate),
   };
 }
 
-async function readTranscript(): Promise<Transcript> {
+async function readTranscript(trackId?: string): Promise<Transcript> {
   const platform = detectVideoPlatform(location.href);
-  if (platform === "youtube") return readYouTubeTranscript();
-  if (platform === "bilibili") return readBilibiliTranscript();
+  if (platform === "youtube") return readYouTubeTranscript(trackId);
+  if (platform === "bilibili") return readBilibiliTranscript(trackId);
   throw new Error("当前页面暂不支持逐字稿");
 }
 
@@ -98,7 +96,7 @@ window.addEventListener("message", (event: MessageEvent<PageRequest>) => {
     return;
   }
   const id = event.data.id;
-  void readTranscript()
+  void readTranscript(event.data.trackId)
     .then((data) => {
       const response: PageResponse = { channel: PAGE_RESPONSE_CHANNEL, id, ok: true, data };
       window.postMessage(response, "*");

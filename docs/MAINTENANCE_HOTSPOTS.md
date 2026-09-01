@@ -9,10 +9,18 @@
 
 - `page-bridge.ts` 在页面主世界，只读站点播放器/字幕对象；不得持有 Open Studio token。
 - `content.ts` 在隔离世界，负责页面 DOM、时间跳转和播放器可见矩形；不得渲染产品 UI。
-- `sidepanel.ts` 是 Chrome Side Panel，持有 Open Studio 会话并调用后端；不得读取站点 Cookie。
+- `sidepanel.tsx` 是 React Chrome Side Panel，持有 Open Studio 会话并调用后端；不得读取站点 Cookie。
+
+侧栏控件必须经 `browser-extension/src/components/ui/` 的 shadcn/Radix 封装，页面布局使用 Tailwind v4；
+`styles.css` 仅放主题 token 与 base layer，禁止恢复旧的 `sidepanel.css` DOM selector 样式。新增可见文案
+必须同时补 `i18n.ts` 的简中和英文；manifest 可见字段则补 `_locales/en` 与 `_locales/zh_CN`。
 
 站点字幕响应先收敛为 `TranscriptCue {start,end,text}`，再进入 UI。YouTube / B 站字段变化时只改各自
-Adapter 与测试，不要让站点 JSON 形状穿进侧栏。后端 CORS 的 Origin 正则必须继续限制为 32 位 a-p
+Adapter 与测试，不要让站点 JSON 形状穿进侧栏。双语轨按时间重叠对齐，不能假设两个供应商按同一
+句子分段；缺失 duration 的 cue 必须补成可命中的区间，否则播放跟随永远找不到活动句。站点无字幕
+的回退必须复用 URL 导入 → job → ASR → transcript API，不能在扩展里另写下载或识别实现。
+
+后端 CORS 的 Origin 正则必须继续限制为 32 位 a-p
 扩展 id，不能换成 `chrome-extension://.*` 或 `*`；CORS 也不能代替 Bearer 会话与工作区鉴权。
 
 改动扩展时至少运行：

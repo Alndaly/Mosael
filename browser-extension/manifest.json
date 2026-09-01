@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Open Studio 视频助手",
-  "description": "在 Chrome 侧栏查看视频逐字稿、翻译，并将视频或当前帧导入 Open Studio。",
+  "name": "__MSG_extensionName__",
+  "description": "__MSG_extensionDescription__",
+  "default_locale": "en",
   "version": "0.1.0",
   "minimum_chrome_version": "116",
   "permissions": ["activeTab", "sidePanel", "storage", "tabs"],
@@ -15,7 +16,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "打开 Open Studio 视频助手"
+    "default_title": "__MSG_actionTitle__"
   },
   "side_panel": {
     "default_path": "sidepanel.html"

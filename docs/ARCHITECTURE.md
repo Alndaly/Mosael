@@ -19,7 +19,13 @@
 对象，隔离世界里的 `content` 只转发数据、定位 `<video>` 和执行时间跳转，`sidepanel` 负责 UI 与
 Open Studio API。网页中没有可见注入节点，也没有悬浮层。
 
-扩展复用公开 API：`/api/translate`、`/api/assets/import-url` 与 `/api/assets/import`，所以翻译记账、
+侧栏本身是 React 19 入口 `sidepanel.tsx`，表单与交互控件只经扩展自己的 `components/ui/`（Radix /
+shadcn）暴露，布局使用 Tailwind v4 utility；`styles.css` 只保留 Tailwind 入口、产品色 token 与基础层，
+不回到按 DOM id 维护手写样式。Chrome `_locales` 负责扩展名称、描述与工具栏标题；运行中 UI 字典由
+`i18n.ts` 管理，支持跟随浏览器或固定简中 / English，选择保存在 `chrome.storage.local`。
+
+扩展复用公开 API：`/api/translate`、`/api/assets/import-url`、`/api/assets/{id}/transcribe`、
+`/api/jobs/{id}`、`/api/assets/{id}/transcript` 与 `/api/assets/import`，所以双语回退、无字幕自动转写、
 工作区权限、后台任务和素材入库仍走原来的事实源。它用 `/api/auth/login` 换取独立 `AuthSession`，
 只把会话保存到 `chrome.storage.local`，不保存密码；后端 CORS 仅额外接受形如
 `chrome-extension://[a-p]{32}` 的真实扩展 Origin，接口本身仍逐条认证和鉴权。

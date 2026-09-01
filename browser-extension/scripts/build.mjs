@@ -3,6 +3,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { build } from "esbuild";
+import postcss from "postcss";
+import tailwindcss from "@tailwindcss/postcss";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repo = resolve(root, "..");
@@ -15,19 +17,26 @@ await build({
     background: resolve(root, "src/background.ts"),
     content: resolve(root, "src/content.ts"),
     "page-bridge": resolve(root, "src/page-bridge.ts"),
-    sidepanel: resolve(root, "src/sidepanel.ts"),
+    sidepanel: resolve(root, "src/sidepanel.tsx"),
   },
   outdir,
   bundle: true,
   format: "iife",
   platform: "browser",
   target: "chrome116",
+  jsx: "automatic",
+  minify: true,
   sourcemap: true,
 });
 
-for (const name of ["sidepanel.html", "sidepanel.css"]) {
-  await cp(resolve(root, name), resolve(outdir, name));
-}
+const sourceCss = await readFile(resolve(root, "src/styles.css"), "utf8");
+const compiledCss = await postcss([tailwindcss()]).process(sourceCss, {
+  from: resolve(root, "src/styles.css"),
+  to: resolve(outdir, "sidepanel.css"),
+});
+await writeFile(resolve(outdir, "sidepanel.css"), compiledCss.css);
+await cp(resolve(root, "sidepanel.html"), resolve(outdir, "sidepanel.html"));
+await cp(resolve(root, "_locales"), resolve(outdir, "_locales"), { recursive: true });
 await cp(resolve(repo, "build/icon.png"), resolve(outdir, "icon.png"));
 
 const manifest = JSON.parse(await readFile(resolve(root, "manifest.json"), "utf8"));

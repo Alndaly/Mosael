@@ -1,0 +1,89 @@
+@import "tailwindcss";
+@source "./**/*.{ts,tsx}";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-field: var(--field);
+  --color-ring: var(--ring);
+}
+
+:root {
+  color-scheme: light;
+  --background: #f6f4f0;
+  --foreground: #2c2a33;
+  --card: #fdfcfa;
+  --card-foreground: #2c2a33;
+  --popover: #fdfcfa;
+  --popover-foreground: #2c2a33;
+  --primary: #6a5cd8;
+  --primary-foreground: #ffffff;
+  --secondary: #edeae4;
+  --secondary-foreground: #3f3c49;
+  --muted: #f2efe9;
+  --muted-foreground: #756f80;
+  --accent: #ece9fb;
+  --accent-foreground: #4f43b8;
+  --destructive: #d8544b;
+  --border: #e6e1d8;
+  --input: #ddd7cc;
+  --field: #f1eee8;
+  --ring: #b7adf0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --background: #141218;
+    --foreground: #e9e6f0;
+    --card: #1c1a23;
+    --card-foreground: #e9e6f0;
+    --popover: #24212d;
+    --popover-foreground: #e9e6f0;
+    --primary: #8a7bf0;
+    --primary-foreground: #f7f5ff;
+    --secondary: #282433;
+    --secondary-foreground: #d3cfe0;
+    --muted: #191720;
+    --muted-foreground: #918a9f;
+    --accent: #2b2542;
+    --accent-foreground: #b7aaff;
+    --destructive: #e0645c;
+    --border: #2b2836;
+    --input: #3a3448;
+    --field: #211e2b;
+    --ring: #5f53b8;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    @apply m-0 bg-background text-foreground antialiased;
+    font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+}

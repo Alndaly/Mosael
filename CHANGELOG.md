@@ -3,6 +3,22 @@
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 
+## [0.26.9] - 2026-09-02
+
+### Added
+
+- Added playback-synced bilingual subtitles to the Chrome Side Panel, preferring site-provided or
+  YouTube translation tracks before using Open Studio translation.
+- Added one-click Open Studio download and speech transcription when a video page has no captions.
+- Added a localized React Side Panel that follows Chrome or can be pinned to Simplified Chinese or
+  English, using Tailwind CSS v4 and shadcn/ui controls.
+
+### Fixed
+
+- Fixed Chrome rejecting account connections with `Failed to execute 'fetch' on 'Window': Illegal invocation`.
+- Replaced raw empty YouTube JSON failures with a clear no-caption state and kept undelimited cues
+  active for playback following.
+
 ## [0.26.8] - 2026-09-02
 
 ### Added
@@ -35,4 +51,6 @@ commit list and downloadable artifacts.
   flashing each section's list page first.
 - Prevented the editor assistant from covering the workspace when opened.
 
+[0.26.9]: https://github.com/Alndaly/OpenStudio/releases/tag/v0.26.9
+[0.26.8]: https://github.com/Alndaly/OpenStudio/releases/tag/v0.26.8
 [0.26.7]: https://github.com/Alndaly/OpenStudio/releases/tag/v0.26.7

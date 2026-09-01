@@ -116,10 +116,12 @@ app restarts.
 ### Chrome browser extension
 
 The Chrome extension uses the browser's native Side Panel instead of placing a floating overlay on
-the page. While watching YouTube or Bilibili, click the extension icon to read the transcript, seek
-by sentence, translate it, and import either the current video or the player's current frame into the
+the page. While watching YouTube or Bilibili, click the extension icon to read a playback-synced
+bilingual transcript, seek by sentence, and let Open Studio transcribe videos whose sites provide no
+captions. You can also import either the current video or the player's current frame into the
 Open Studio media library. The extension uses a separate Open Studio login session, never stores the
-password, and does not read or export Chrome cookies. See
+password, and does not read or export Chrome cookies. Its UI follows Chrome by default and can be
+pinned to Simplified Chinese or English. See
 [browser-extension/README.md](browser-extension/README.md) for installation and limitations.
 
 ### Plugins
