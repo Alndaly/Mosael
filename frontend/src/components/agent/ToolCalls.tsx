@@ -6,7 +6,7 @@ import { api, assetFileUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { AgentMarkdown } from "@/components/agent/Markdown";
 import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
-import { AudioPlayerBar } from "@/components/app/media-playback";
+import { AudioPlayerBar, VideoPlayer } from "@/components/app/media-playback";
 import { HighlightedCode } from "@/components/agent/HighlightedCode";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { decodeByteFallback } from "@/lib/byteFallback";
@@ -161,7 +161,9 @@ function MediaPreview({ assetId, gallery }: { assetId: string; gallery?: ImagePr
           <img className="max-h-[200px] w-full rounded-lg border border-border bg-black object-contain" src={src} alt={asset.data.name} loading="lazy" />
         </button>
       ) : asset.data.kind === "video" ? (
-        <video className="max-h-[200px] w-full rounded-lg border border-border bg-black object-contain" src={src} controls preload="metadata" />
+        //: 不用原生 controls —— 全站共享的 VideoPlayer(画板节点、大图灯箱同一副面孔)。
+        //: 卡片尺寸与图/音频对齐(240×135):播放器悬停出控件,静止时压一枚大播放键。
+        <VideoPlayer assetSrc={src} className="h-[135px] w-[240px] rounded-lg border border-border" />
       ) : asset.data.kind === "audio" ? (
         //: 不用原生 controls(各家各样、不吃主题)—— 全站共享的音频条,画板节点也是它。
         //: **卡片轮廓与图/视频对齐**(同宽同高):音频没有画面,但一条 40px 的瘦条夹在一排

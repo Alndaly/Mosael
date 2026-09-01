@@ -1,6 +1,7 @@
 import React from "react";
-import { Music, Pause, Play, Volume2, VolumeX } from "lucide-react";
+import { Maximize2, Music, Pause, Play, Volume2, VolumeX } from "lucide-react";
 
+import { assetFileUrl } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
 
@@ -103,6 +104,92 @@ export function Scrubber({
           className="h-full rounded-full bg-current"
           style={{ width: `${total > 0 ? Math.min(100, (at / total) * 100) : 0}%` }}
         />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 视频播放器:画面 + 悬停才出现的控件条 + 没在播时压一枚大播放键。
+ *
+ * 画板节点、大图灯箱、智能体工具结果共用这一副面孔 —— 原生 controls 各家各样、
+ * 不吃主题,深色界面里会压进来一条亮条(音频条那里同理)。
+ *
+ * 两条交互规矩(都在画板上真实踩过):
+ * - **不挂 nodrag/nowheel/nopan 在画面或整条控件带上** —— 挂上去节点就拖不动、滚轮就卡住;
+ *   进度条的 nodrag 写在 Scrubber 自己内部,按钮点一下不是拖动。
+ * - 藏起来的控件条**连 pointer-events 一起收掉**,别只靠 opacity —— 透明不等于不吃事件。
+ */
+export function VideoPlayer({
+  assetId,
+  assetSrc,
+  autoPlay,
+  className,
+  onNaturalSize,
+}: {
+  /** 按素材 id 取带令牌的地址。 */
+  assetId?: string;
+  /** 手上已经是一个地址时直接给。**两者给一个就行。** */
+  assetSrc?: string;
+  autoPlay?: boolean;
+  className?: string;
+  /** 画面的自然尺寸 —— 调用方(如画板节点)拿它校正自己的宽高比。 */
+  onNaturalSize?: (width: number, height: number) => void;
+}) {
+  const t = useI18n();
+  const ref = React.useRef<HTMLVideoElement | null>(null);
+  const { playing, muted, at, total, setTotal, toggle, toggleMute, bind } = usePlayback(ref);
+
+  return (
+    <div className={cn("group/player relative h-full w-full overflow-hidden bg-black", className)}>
+      <video
+        ref={ref}
+        src={assetSrc ?? assetFileUrl(assetId ?? "")}
+        preload="metadata"
+        autoPlay={autoPlay}
+        playsInline
+        //: **这里不挂 nodrag** —— 视频铺满整个容器,挂上去就等于整块都拖不动。
+        className="h-full w-full object-contain"
+        onClick={toggle}
+        onLoadedMetadata={(event) => {
+          const video = event.currentTarget;
+          setTotal(video.duration);
+          if (video.videoWidth && video.videoHeight) onNaturalSize?.(video.videoWidth, video.videoHeight);
+        }}
+        {...bind}
+      />
+
+      {/* 没在播时压一个大的播放键 —— 一块静止的画面本身看不出它是段视频。 */}
+      {!playing && (
+        <button
+          type="button"
+          aria-label={t("boardPlay")}
+          onClick={toggle}
+          className="absolute inset-0 grid cursor-pointer place-items-center bg-black/10 transition-colors hover:bg-black/20"
+        >
+          <span className="grid h-9 w-9 place-items-center rounded-full bg-black/55 text-white backdrop-blur">
+            <Play size={15} className="translate-x-px" fill="currentColor" />
+          </span>
+        </button>
+      )}
+
+      {/* 控件条悬停才出现;藏起来时连指针事件一起收掉(透明不等于不吃事件)。 */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-black/80 to-transparent px-2 pb-1.5 pt-4 text-white opacity-0 transition-all group-hover/player:pointer-events-auto group-hover/player:translate-y-0 group-hover/player:opacity-100">
+        <Scrubber media={ref} at={at} total={total} className="mb-0.5" trackClassName="bg-white/30" />
+        <div className="flex items-center gap-1.5">
+          <button type="button" aria-label={t(playing ? "boardPause" : "boardPlay")} onClick={toggle} className="cursor-pointer opacity-90 hover:opacity-100">
+            {playing ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" />}
+          </button>
+          <span className="text-ui-2xs tabular-nums opacity-90">
+            {mediaClock(at)} / {mediaClock(total)}
+          </span>
+          <button type="button" aria-label={t(muted ? "boardUnmute" : "boardMute")} onClick={toggleMute} className="ml-auto cursor-pointer opacity-90 hover:opacity-100">
+            {muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
+          </button>
+          <button type="button" aria-label={t("boardFullscreen")} onClick={() => void ref.current?.requestFullscreen?.()} className="cursor-pointer opacity-90 hover:opacity-100">
+            <Maximize2 size={13} />
+          </button>
+        </div>
       </div>
     </div>
   );
