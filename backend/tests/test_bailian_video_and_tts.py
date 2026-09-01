@@ -14,7 +14,7 @@ import pytest
 
 from app.ai.providers.contracts.generation import GenerationRequest, ProviderContext, ProviderError
 from app.ai.providers.contracts.generation import FIRST_FRAME, SourceAsset
-from app.ai.providers.alibaba.video import build_submit_payload, extract_video_url
+from app.ai.providers.adapters.alibaba.video import build_submit_payload, extract_video_url
 from app.ai.providers.speech import BailianTTS, extract_bailian_audio_url
 
 
@@ -467,7 +467,7 @@ def test_内置目录里的模型不该被标成已不存在() -> None:
 def test_档位名要映射成像素对() -> None:
     """生成面板的**视频**分支发的是 `resolution`(720p 这种档位名)——那是按火山/可灵定的形状。
     万相收的是像素对,把 "720p" 原样当尺寸发过去会被百炼拒掉。"""
-    from app.ai.providers.alibaba.video import resolve_size
+    from app.ai.providers.adapters.alibaba.video import resolve_size
 
     assert resolve_size({"resolution": "720p"}) == "1280*720"
     assert resolve_size({"resolution": "480p"}) == "832*480"
@@ -493,8 +493,8 @@ def test_共享约定住在能力契约里_不住在某一家() -> None:
     """first_frame_value 此前定义在 kling.py:wan_video 得反过来 import 那一家,seedance 抄了
     一遍。一个三家共用的约定住在某个供应商的文件里,读的人只会以为它是那家特有的。"""
     from app.ai.providers.contracts import generation
-    from app.ai.providers.alibaba import video as wan
-    from app.ai.providers.kuaishou import kling
+    from app.ai.providers.adapters.alibaba import video as wan
+    from app.ai.providers.adapters.kuaishou import kling
 
     assert hasattr(generation, "first_frame_value")
     assert kling.first_frame_value is generation.first_frame_value

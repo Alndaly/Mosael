@@ -21,7 +21,7 @@ from app.ai.providers.contracts.generation import (
     ProviderError,
     metering_from_request,
 )
-from app.ai.providers.comfyui.client import ComfyUIClient, apply_workflow_params, inject_generation_params
+from app.ai.providers.adapters.comfyui.client import ComfyUIClient, apply_workflow_params, inject_generation_params
 
 """
 ComfyUI adapter: a local (or LAN) ComfyUI instance becomes a zero-credential image/video

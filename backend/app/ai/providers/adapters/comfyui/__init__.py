@@ -8,7 +8,7 @@
 而不是"提交到云端再轮询"。
 """
 
-from app.ai.providers.comfyui.provider import (
+from app.ai.providers.adapters.comfyui.provider import (
     DEFAULT_BASE,
     DEFAULT_TEMPLATE,
     OUTPUT_KEYS,

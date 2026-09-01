@@ -87,7 +87,7 @@ class Test按角色取素材:
 
 class TestSeedance:
     def test_首尾帧各自带着_role_进_content(self, images) -> None:
-        from app.ai.providers.bytedance.video import build_submit_payload
+        from app.ai.providers.adapters.bytedance.video import build_submit_payload
 
         payload = build_submit_payload(_video_request(images, FIRST_FRAME, LAST_FRAME, model="seedance-2-0-260128"))
         images_in_content = [item for item in payload["content"] if item["type"] == "image_url"]
@@ -95,7 +95,7 @@ class TestSeedance:
 
     def test_seedance1_不认_role_只发首帧(self, images) -> None:
         """老版本的 content 没有 role 字段:多发一张图,它只会当成又一张参考,而不是尾帧。"""
-        from app.ai.providers.bytedance.video import build_submit_payload
+        from app.ai.providers.adapters.bytedance.video import build_submit_payload
 
         payload = build_submit_payload(_video_request(images, FIRST_FRAME, LAST_FRAME, model="seedance-1-0-lite"))
         images_in_content = [item for item in payload["content"] if item["type"] == "image_url"]
@@ -105,7 +105,7 @@ class TestSeedance:
 
 class TestKling:
     def test_尾帧走_image_tail(self, images) -> None:
-        from app.ai.providers.kuaishou.kling import build_submit_payload
+        from app.ai.providers.adapters.kuaishou.kling import build_submit_payload
 
         payload = build_submit_payload(_video_request(images, FIRST_FRAME, LAST_FRAME, model="kling"))
         assert payload["image"] and payload["image_tail"]
@@ -113,7 +113,7 @@ class TestKling:
 
     def test_只给尾帧不成立(self, images) -> None:
         """那条接口是 image2video,首帧是它的必填项 —— 光有尾帧发过去只会拿回一个 400。"""
-        from app.ai.providers.kuaishou.kling import build_submit_payload
+        from app.ai.providers.adapters.kuaishou.kling import build_submit_payload
 
         payload = build_submit_payload(_video_request(images, LAST_FRAME, model="kling"))
         assert "image_tail" not in payload
@@ -121,7 +121,7 @@ class TestKling:
 
 class TestMiniMax:
     def test_三种角色都进_content(self, images) -> None:
-        from app.ai.providers.minimax import build_submit_payload
+        from app.ai.providers.adapters.minimax import build_submit_payload
         from app.ai.providers.contracts.generation import ProviderContext
 
         context = ProviderContext(profile_id=None, vendor="minimax", api_key="k")
@@ -132,7 +132,7 @@ class TestMiniMax:
         assert roles == [FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE]
 
     def test_有首帧时比例恒为_adaptive(self, images) -> None:
-        from app.ai.providers.minimax import build_submit_payload
+        from app.ai.providers.adapters.minimax import build_submit_payload
         from app.ai.providers.contracts.generation import ProviderContext
 
         context = ProviderContext(profile_id=None, vendor="minimax", api_key="k")

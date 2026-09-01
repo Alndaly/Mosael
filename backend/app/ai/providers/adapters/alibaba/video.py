@@ -26,7 +26,7 @@ from app.ai.providers.contracts.generation import (
     metering_from_request,
     provider_http_error,
 )
-from app.ai.providers.alibaba.image import (
+from app.ai.providers.adapters.alibaba.image import (
     DASHSCOPE_BASE,
     download_result_asset,
     resolve_dashscope_base,

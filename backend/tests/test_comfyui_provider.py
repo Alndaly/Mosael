@@ -15,10 +15,10 @@ import httpx
 import pytest
 
 from app.ai.providers import get_provider
-from app.ai.providers.comfyui import client as comfyui_client
-from app.ai.providers.comfyui import provider as comfyui
+from app.ai.providers.adapters.comfyui import client as comfyui_client
+from app.ai.providers.adapters.comfyui import provider as comfyui
 from app.ai.providers.contracts.generation import GenerationRequest, ProviderContext, ProviderError
-from app.ai.providers.comfyui import (
+from app.ai.providers.adapters.comfyui import (
     DEFAULT_TEMPLATE,
     ComfyUIProvider,
     collect_output_files,

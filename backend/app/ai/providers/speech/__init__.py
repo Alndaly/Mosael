@@ -1,7 +1,7 @@
 """语音合成的**门面**:契约(base.py)+ 注册表,实现在各家供应商目录里。
 
-providers/ 按供应商组织(见上一级 __init__.py 的规矩):百炼的 qwen-tts 住在
-`alibaba/speech.py`,和百炼的万相视频同一棵树 —— 它们共用一把 Key、同样的 HTTP 形状。
+Adapter 按供应商组织(见上一级 __init__.py 的规矩):百炼的 qwen-tts 住在
+`adapters/alibaba/speech.py`,和百炼的万相视频同一棵树 —— 它们共用一把 Key、同样的 HTTP 形状。
 这个包只剩两个角色:契约长什么样(base.py)、有哪些远程引擎怎么造(这里)。
 vendor 实现 import 契约,注册表 import vendor 实现 —— 单向,不成环。
 
@@ -9,7 +9,7 @@ vendor 实现 import 契约,注册表 import vendor 实现 —— 单向,不成�
 `ai` 和 `audio` 互相依赖成环。这里只管"有哪些远程引擎、怎么把它造出来"。
 """
 
-from app.ai.providers.alibaba.speech import (
+from app.ai.providers.adapters.alibaba.speech import (
     DASHSCOPE_NATIVE_BASE,
     BailianTTS,
     CosyVoiceTTS,
@@ -25,9 +25,9 @@ from app.ai.providers.contracts.speech import (
     TTSProvider,
     synthesize_many,
 )
-from app.ai.providers.edge import EDGE_BUILTIN_VOICES, EdgeTTS
-from app.ai.providers.openai.speech import OpenAITTS
-from app.ai.providers.volcano import PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES, VolcanoTTS
+from app.ai.providers.adapters.edge import EDGE_BUILTIN_VOICES, EdgeTTS
+from app.ai.providers.adapters.openai.speech import OpenAITTS
+from app.ai.providers.adapters.volcano import PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES, VolcanoTTS
 
 _ENGINE_VENDOR = {CosyVoiceTTS.id: BailianTTS.id}
 

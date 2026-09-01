@@ -1009,7 +1009,7 @@ def _catalog_entries(profile: ResolvedProvider) -> dict[str, dict]:
         # ComfyUI 是工作流引擎,没有模型目录 —— 它的"目录"就是实例里保存的工作流。
         # 走同一个接缝而不是在前端分叉:这样「加入 / 启停 / 删除 / 设能力」整套交互
         # 对工作流原样成立,只有文案不同。连不上就返回空,和端点没模型是同一种表现。
-        from app.ai.providers.comfyui.client import ComfyUIClient
+        from app.ai.providers.adapters.comfyui.client import ComfyUIClient
 
         try:
             items = ComfyUIClient(profile.base_url or "http://127.0.0.1:8188").list_workflows()

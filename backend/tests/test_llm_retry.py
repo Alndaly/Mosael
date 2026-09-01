@@ -179,7 +179,7 @@ def test_重试对所有_AI_出站调用生效(monkeypatch):
     #: 放宽的话下一个真绕过重试的也会一起溜过去。
     NO_HTTP = {
         # Edge 走 edge_tts 库(它自己开 WebSocket),这个模块里没有一次 HTTP 调用可以被包起来。
-        "app.ai.providers.edge",
+        "app.ai.providers.adapters.edge",
     }
 
     #: **不自己建连接**的模块 —— 请求是拿调用方给的 client 发的,而那个 client 就是
@@ -188,7 +188,7 @@ def test_重试对所有_AI_出站调用生效(monkeypatch):
     BORROWS_CLIENT = {
         # 可灵的主体库:建主体是生成流程里的一步,用的是 kling.py 已经开好的那个连接
         # (同一个 base_url、同一份 JWT 鉴权)。自己再开一个等于把鉴权逻辑抄第二遍。
-        "app.ai.providers.kuaishou.elements",
+        "app.ai.providers.adapters.kuaishou.elements",
     }
 
     missing = []

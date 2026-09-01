@@ -11,7 +11,7 @@ from typing import Any
 import httpx
 
 from app.core.http_retry import RetryingClient
-from app.ai.providers.kuaishou.elements import build_element_contents, ensure_element
+from app.ai.providers.adapters.kuaishou.elements import build_element_contents, ensure_element
 
 from app.ai.providers.contracts.generation import (
     poll_until_ready,

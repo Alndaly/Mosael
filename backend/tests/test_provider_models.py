@@ -190,7 +190,7 @@ def test_comfyui_的目录是它的工作流而不是模型() -> None:
         def __init__(self, base): pass
         def list_workflows(self): return [{"path": "a.json", "name": "a"}, {"path": "b.json", "name": "b"}]
 
-    import app.ai.providers.comfyui.client as cc
+    import app.ai.providers.adapters.comfyui.client as cc
 
     original = cc.ComfyUIClient
     cc.ComfyUIClient = _Client  # type: ignore[assignment]
