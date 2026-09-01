@@ -28,6 +28,7 @@ from app.ai.providers.base import (
     metering_from_request,
     provider_http_error,
 )
+from app.ai.providers.media_transfer import download_to_path
 
 """
 Kling video adapter:
@@ -57,10 +58,24 @@ def uses_contents_array(model: str) -> bool:
     return name in _V3_MODELS or name.startswith("kling-v3") or name.startswith("kling-3")
 
 
-def v3_endpoint(model: str) -> str:
-    """新接口的路径把型号写在 URL 里,而不是请求体的 model 字段。"""
-    name = str(model or "").strip().lower()
-    return "/image-to-video/kling-3.0-turbo" if "turbo" in name else "/image-to-video/kling-3.0"
+def v3_endpoint(request: GenerationRequest, *, has_elements: bool = False) -> str:
+    """新接口的路径同时编码生成模式和型号，不能固定走图生视频。"""
+    name = str(request.model or "").strip().lower()
+    if "omni" in name:
+        model = "kling-3.0-omni"
+    elif "turbo" in name:
+        model = "kling-3.0-turbo"
+    else:
+        model = "kling-3.0"
+    if has_elements and "omni" not in name:
+        raise ProviderError("Kling reference elements require the Kling 3.0 Omni model")
+    if "omni" in name or has_elements:
+        mode = "omni-video"
+    elif first_frame_value(request):
+        mode = "image-to-video"
+    else:
+        mode = "text-to-video"
+    return f"/{mode}/{model}"
 
 
 def build_v3_payload(
@@ -86,6 +101,10 @@ def build_v3_payload(
         "duration": int(float(request.parameters.get("duration_seconds", 5))),
         "resolution": str(request.parameters.get("resolution", "720p")).lower(),
     }
+    # 图生视频跟随首帧比例；文生/Omni 没有首帧时才发送用户选择的画幅。
+    aspect_ratio = str(request.parameters.get("aspect_ratio") or "").strip()
+    if aspect_ratio and not first_frame:
+        settings["aspect_ratio"] = aspect_ratio
     # 音画同出:给了才发,不替用户默认打开 —— 有声比无声贵。
     if request.parameters.get("generate_audio"):
         settings["audio"] = "native"
@@ -110,16 +129,12 @@ def build_submit_payload(request: GenerationRequest, context: ProviderContext | 
     payload: dict[str, Any] = {
         "model_name": model,
         "prompt": request.prompt,
-        "mode": str(request.parameters.get("mode") or ("pro" if resolution == "1080p" else "std")),
+        "mode": "pro" if resolution == "1080p" else "std",
         "aspect_ratio": str(request.parameters.get("aspect_ratio", "16:9")),
         "duration": duration,
     }
     if request.negative_prompt:
         payload["negative_prompt"] = request.negative_prompt
-    for key in ("cfg_scale", "camera_control", "external_task_id"):
-        if request.parameters.get(key) not in (None, ""):
-            payload[key] = request.parameters[key]
-
     first_frame = first_frame_value(request)
     if first_frame:
         payload["image"] = str(first_frame)
@@ -215,7 +230,7 @@ class KlingProvider(GenerationProvider):
                         if references
                         else []
                     )
-                    endpoint = v3_endpoint(model)
+                    endpoint = v3_endpoint(request, has_elements=bool(element_ids))
                     body = build_v3_payload(request, context, element_ids=element_ids)
                     # 新接口查任务是统一的 /tasks?task_ids=,不是在生成路径底下。
                     poll_path_for = lambda task: f"/tasks?task_ids={task}"
@@ -237,9 +252,7 @@ class KlingProvider(GenerationProvider):
 
                 output_dir.mkdir(parents=True, exist_ok=True)
                 target = output_dir / "generated.mp4"
-                download = client.get(url)
-                download.raise_for_status()
-                target.write_bytes(download.content)
+                download_to_path(url, target)
                 return GenerationResult(output_paths=[target], usage=metering_from_request(request), raw_usage=poll_payload)
         except httpx.HTTPError as exc:
             raise ProviderError(provider_http_error("Kling request failed", exc, context.api_key)) from exc

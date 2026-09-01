@@ -201,9 +201,20 @@ _Avoid_: 仅凭 vendor 文案推断能力
 
 **Evolink 平台 Adapter**:
 `ai/providers/evolink.py` 按一份平台协议承载图像与视频生成,上游引擎由模型 id 区分,不是每个引擎再写
-一份 Adapter。本地引用图先传 Files API,任务走 `/v1/images|videos/generations` + `/v1/tasks/{id}`,
-限时结果立即落回本地素材库。它与各家原生 Adapter 并列,不复用 OAuth Gateway,也不在本地承诺绕过
-上游内容审核。
+一份 Adapter。Seedance 2.5 连**模式**也在模型 id 里(`-text-to-video` / `-image-to-video` /
+`-reference-to-video` / `-video-edit` / `-video-extend` 是五个 id),描述符按 id 各给一份而不是加模式
+开关。网关按图片的**张数与位置**认帧(1 张 = 首帧,2 张 = 首+尾),单独的尾帧会被当成首帧;编辑/续写
+的 `video_urls` 第一位永远是被处理的那段。本地引用素材先传 Files API(图片做浏览器归一化,视频/音频
+原样),任务走 `/v1/images|videos/generations` + `/v1/tasks/{id}`,限时结果立即落回本地素材库。
+它与各家原生 Adapter 并列,不复用 OAuth Gateway,也不在本地承诺绕过上游内容审核。
+
+**生成能力契约**:
+`domain/generation/catalog.py` 只按精确 `(vendor, model, kind)` 返回能力；未知/手填模型保留提示词
+提交，但 `parameter_keys=[]`，不会继承同供应商第一款型号，也不会伪造 1024、720p、5 秒等默认值。
+描述符同时表达布尔参数、供应商枚举、特殊时长与“分辨率 → 合法时长”组合，AI 工作台、无限画布、
+工作流和 MCP 共用。Adapter 只读取已声明参数并翻译字段名；外链素材与素材库文件使用同一角色语义。
+供应商结果与远程输入统一经 `ai/providers/media_transfer.py`：预签名地址不携带 API 凭据、跨源跳转
+主动丢弃受信头、流式下载经 `.part` 原子落盘。
 
 **订阅额度**:
 `domain/provider_quota.py`,六家(anthropic / codex / openrouter / kimi / xai / copilot)各一个解析器。

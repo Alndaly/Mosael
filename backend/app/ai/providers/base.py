@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import math
 import mimetypes
 import re
 import time
@@ -8,6 +9,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 from collections.abc import Callable
+from collections import Counter
 from typing import Any, TypeVar
 
 import httpx
@@ -21,8 +23,6 @@ bookkeeping happen in the domain runner, never here.
 """
 
 MAX_NUM_IMAGES = 4
-MAX_VIDEO_DURATION_SECONDS = 10
-ALLOWED_VIDEO_RESOLUTIONS = ("480p", "720p", "1080p")
 
 
 class ProviderError(RuntimeError):
@@ -161,7 +161,13 @@ class GenerationProvider(ABC):
         return True
 
     def validate_request(self, request: GenerationRequest) -> None:
-        """Shared guardrails (plan §18.5); providers may add their own."""
+        """Provider-neutral shape guardrails; model limits live in the capability catalog.
+
+        A shared Adapter base cannot own a vendor/model allowlist: 2K/4K and 15/30-second
+        models are valid product capabilities. The domain entry point validates those exact
+        bounds before the runner reaches this seam; this method only rejects malformed values
+        so direct/legacy callers cannot submit nonsense.
+        """
         if not request.prompt.strip():
             raise ProviderError("Prompt must not be empty")
         if request.kind == "image":
@@ -170,11 +176,10 @@ class GenerationProvider(ABC):
                 raise ProviderError(f"num_images must be between 1 and {MAX_NUM_IMAGES}")
         if request.kind == "video":
             duration = float(request.parameters.get("duration_seconds", 5))
-            if not 1 <= duration <= MAX_VIDEO_DURATION_SECONDS:
-                raise ProviderError(f"duration_seconds must be between 1 and {MAX_VIDEO_DURATION_SECONDS}")
-            resolution = str(request.parameters.get("resolution", "720p"))
-            if resolution not in ALLOWED_VIDEO_RESOLUTIONS:
-                raise ProviderError(f"resolution must be one of {', '.join(ALLOWED_VIDEO_RESOLUTIONS)}")
+            if not math.isfinite(duration) or (duration != -1 and duration <= 0):
+                raise ProviderError("duration_seconds must be positive or -1 (auto)")
+            if "resolution" in request.parameters and not str(request.parameters["resolution"]).strip():
+                raise ProviderError("resolution must not be empty")
 
     @abstractmethod
     def generate(self, request: GenerationRequest, context: ProviderContext, output_dir: Path) -> GenerationResult:
@@ -314,6 +319,33 @@ ROLE_URL_PARAMETERS = {
 }
 
 
+def source_url_values(parameters: dict[str, Any], role: str, kind: str) -> tuple[str, ...]:
+    """某个语义角色通过 URL 参数提供的全部值，去重且保持输入顺序。
+
+    这是 URL 参数名到领域角色的唯一映射入口。Adapter 不应再自行拼
+    ``<role>_url``，否则 ``video_url`` 这类别名以及 ``image_url`` 的按 kind 解释会分叉。
+    """
+    names = list(ROLE_URL_PARAMETERS.get(role, ()))
+    if _UNTYPED_IMAGE_ROLE_BY_KIND.get(kind) == role:
+        names.append(_UNTYPED_IMAGE_URL)
+    values: list[str] = []
+    for name in names:
+        for value in _as_list(parameters.get(name)):
+            text = str(value)
+            if text not in values:
+                values.append(text)
+    return tuple(values)
+
+
+def allowed_source_url_parameters(roles: set[str], kind: str) -> set[str]:
+    """这些领域角色允许使用的 URL 参数名（含兼容别名）。"""
+    allowed = {name for role in roles for name in ROLE_URL_PARAMETERS.get(role, ())}
+    untyped_role = _UNTYPED_IMAGE_ROLE_BY_KIND.get(kind)
+    if untyped_role in roles:
+        allowed.add(_UNTYPED_IMAGE_URL)
+    return allowed
+
+
 def source_value(request: GenerationRequest, role: str) -> str | None:
     """取某个角色的素材,拿成可以直接塞进请求体的字符串:**先看参数里的 url,再回落上传的文件**。
 
@@ -321,13 +353,9 @@ def source_value(request: GenerationRequest, role: str) -> str | None:
     kling.py:万相得反过来 import 那一家,seedance 干脆整段抄了一遍。一个共享约定住在某个
     供应商的文件里,读的人只会以为它是那家特有的东西。
     """
-    for name in ROLE_URL_PARAMETERS.get(role, ()):
-        value = request.parameters.get(name)
-        if value:
-            return str(value)
-    untyped = _untyped_image_url(request, role)
-    if untyped:
-        return untyped
+    urls = source_url_values(request.parameters, role, request.kind)
+    if urls:
+        return urls[0]
     path = request.source_for(role)
     return image_file_to_data_url(path) if path is not None else None
 
@@ -359,13 +387,9 @@ def source_values(request: GenerationRequest, role: str) -> tuple[str, ...]:
 
     首尾帧这种天然只有一份的角色照样可以用它,拿回来的元组长度就是 1。
     """
-    urls = [str(value) for name in ROLE_URL_PARAMETERS.get(role, ()) for value in _as_list(request.parameters.get(name))]
-    untyped = _untyped_image_url(request, role)
-    if untyped and untyped not in urls:
-        urls.append(untyped)
-    if urls:
-        return tuple(urls)
-    return tuple(image_file_to_data_url(path) for path in request.sources_for(role))
+    urls = list(source_url_values(request.parameters, role, request.kind))
+    urls.extend(image_file_to_data_url(path) for path in request.sources_for(role))
+    return tuple(urls)
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -373,6 +397,19 @@ def _as_list(value: Any) -> list[Any]:
     if value is None or value == "":
         return []
     return [one for one in value if one] if isinstance(value, (list, tuple)) else [value]
+
+
+def roles_supplied_via_url(parameters: dict[str, Any], kind: str) -> Counter[str]:
+    """外链(`<role>_url`)实际供了哪些角色、各几份。
+
+    界面和智能体都可以不选素材、直接粘链接 —— 两条路进来的是同一样(见
+    ROLE_URL_PARAMETERS)。提交前校验(requires_source / source_limits / requires_companion)
+    只数素材库那一路的话,粘链接的用户会被误拦在「必须给一份首帧」上。
+    """
+    counts: Counter[str] = Counter()
+    for role in ROLE_URL_PARAMETERS:
+        counts[role] = len(source_url_values(parameters, role, kind))
+    return counts
 
 
 def first_frame_value(request: GenerationRequest) -> str | None:

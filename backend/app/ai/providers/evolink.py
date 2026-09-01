@@ -23,28 +23,39 @@ from urllib.parse import urlparse
 import httpx
 
 from app.ai.providers.base import (
+    FIRST_CLIP,
     FIRST_FRAME,
     LAST_FRAME,
+    REFERENCE_AUDIO,
     REFERENCE_IMAGE,
+    REFERENCE_VIDEO,
+    SOURCE_VIDEO,
     GenerationProvider,
     GenerationRequest,
     GenerationResult,
     ProviderContext,
     ProviderError,
-    ROLE_URL_PARAMETERS,
     metering_from_request,
     poll_until_ready,
     provider_http_error,
+    source_url_values,
 )
 from app.core.http_retry import RetryingClient
 from app.media.image_preview import browser_compatible_image
+from app.ai.providers.media_transfer import download_to_path
 
 BASE_URL = "https://api.evolink.ai/v1"
 FILES_BASE_URL = "https://files-api.evolink.ai"
 POLL_INTERVAL_SECONDS = 10.0
 POLL_TIMEOUT_SECONDS = 600.0
 
+#: 图片角色的迭代顺序即 `image_urls` 的数组顺序:首帧在前、尾帧在后(网关按位置认帧)。
+#: 参考图和帧不会同时出现 —— 描述符按模型 id 把两条路分开了,所以进同一个数组是安全的。
 _VIDEO_IMAGE_ROLES = (FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE)
+#: 视频角色的迭代顺序即 `video_urls` 的数组顺序:**被编辑/被续写的那段必须在第一位**
+#: (文档原文:the first video is the video being edited / extended),其余位置才是参考。
+_VIDEO_VIDEO_ROLES = (SOURCE_VIDEO, FIRST_CLIP, REFERENCE_VIDEO)
+_VIDEO_AUDIO_ROLES = (REFERENCE_AUDIO,)
 _FAILED_STATUSES = {"failed", "cancelled", "canceled", "expired"}
 
 
@@ -64,18 +75,7 @@ def _parameter_urls(request: GenerationRequest, roles: tuple[str, ...]) -> list[
     data URLs. Evolink's schema requires actual URLs, hence this adapter reads
     URL parameters directly and uses the Files API for local paths.
     """
-    urls: list[str] = []
-    for role in roles:
-        names = ROLE_URL_PARAMETERS.get(role, ())
-        if request.kind == "image" and role == REFERENCE_IMAGE:
-            names = (*names, "image_url")
-        elif request.kind == "video" and role == FIRST_FRAME:
-            names = (*names, "image_url")
-        for name in names:
-            value = request.parameters.get(name)
-            values = value if isinstance(value, (list, tuple)) else [value]
-            urls.extend(str(one) for one in values if one)
-    return urls
+    return [url for role in roles for url in source_url_values(request.parameters, role, request.kind)]
 
 
 def build_image_payload(request: GenerationRequest, image_urls: list[str] | None = None) -> dict[str, Any]:
@@ -90,7 +90,12 @@ def build_image_payload(request: GenerationRequest, image_urls: list[str] | None
     return payload
 
 
-def build_video_payload(request: GenerationRequest, image_urls: list[str] | None = None) -> dict[str, Any]:
+def build_video_payload(
+    request: GenerationRequest,
+    image_urls: list[str] | None = None,
+    video_urls: list[str] | None = None,
+    audio_urls: list[str] | None = None,
+) -> dict[str, Any]:
     payload: dict[str, Any] = {"model": request.model, "prompt": request.prompt}
     if request.parameters.get("duration_seconds") is not None:
         payload["duration"] = int(request.parameters["duration_seconds"])
@@ -100,9 +105,17 @@ def build_video_payload(request: GenerationRequest, image_urls: list[str] | None
         payload["aspect_ratio"] = str(request.parameters["aspect_ratio"])
     if request.parameters.get("generate_audio") is not None:
         payload["generate_audio"] = bool(request.parameters["generate_audio"])
-    urls = image_urls if image_urls is not None else _parameter_urls(request, _VIDEO_IMAGE_ROLES)
-    if urls:
-        payload["image_urls"] = urls
+    images = image_urls if image_urls is not None else _parameter_urls(request, _VIDEO_IMAGE_ROLES)
+    if images:
+        payload["image_urls"] = images
+    # 全能参考与视频编辑/续写走 video_urls / audio_urls(Seedance 2.5 的五份文档,2026-09-01
+    # 核)。1.5 与 2.5-i2v 的描述符不声明视频/音频角色,这两段在那些模型上自然为空。
+    videos = video_urls if video_urls is not None else _parameter_urls(request, _VIDEO_VIDEO_ROLES)
+    if videos:
+        payload["video_urls"] = videos
+    audios = audio_urls if audio_urls is not None else _parameter_urls(request, _VIDEO_AUDIO_ROLES)
+    if audios:
+        payload["audio_urls"] = audios
     return payload
 
 
@@ -138,11 +151,17 @@ def _task_id(payload: dict[str, Any]) -> str:
     return str(task.get("id") or task.get("task_id") or "").strip()
 
 
-def _upload(path: Path, context: ProviderContext) -> str:
-    compatible = browser_compatible_image(path, path.parent)
-    if compatible is None:
-        raise ProviderError(f"Evolink 无法读取输入图片: {path.name}")
-    upload_path, mime = compatible
+def _upload(path: Path, context: ProviderContext, *, image: bool = True) -> str:
+    mime: str | None = None
+    upload_path = path
+    if image:
+        compatible = browser_compatible_image(path, path.parent)
+        if compatible is None:
+            raise ProviderError(f"Evolink 无法读取输入图片: {path.name}")
+        upload_path, mime = compatible
+    if mime is None:
+        # 参考视频/音频原样上传 —— 网关收 .mp4/.mov/.wav/.mp3,图像归一化对它们既不适用也会失败。
+        mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     headers = {"Authorization": f"Bearer {context.api_key}"}
     # Bytes make retries safe: unlike a streaming file handle, the request body
     # can be replayed after a transient 429/5xx.
@@ -160,15 +179,41 @@ def _upload(path: Path, context: ProviderContext) -> str:
     return str(url)
 
 
-def collect_image_urls(request: GenerationRequest, context: ProviderContext) -> list[str]:
-    roles = (REFERENCE_IMAGE,) if request.kind == "image" else _VIDEO_IMAGE_ROLES
-    urls = _parameter_urls(request, roles)
+def _collect_role_urls(
+    request: GenerationRequest,
+    context: ProviderContext,
+    roles: tuple[str, ...],
+    *,
+    image: bool,
+    limit: int,
+    label: str,
+) -> list[str]:
+    """一类媒体的外链 + 本地上传,按角色顺序排好。上限是**协议天花板**(图 30 / 视频 10 /
+    音频 10);每个模型各自的更严上限由描述符的 source_limits 在提交前就拦掉了。"""
+    urls: list[str] = []
     for role in roles:
-        urls.extend(_upload(path, context) for path in request.sources_for(role))
-    limit = 14 if request.kind == "image" else 9
+        urls.extend(source_url_values(request.parameters, role, request.kind))
+        urls.extend(_upload(path, context, image=image) for path in request.sources_for(role))
     if len(urls) > limit:
-        raise ProviderError(f"Evolink {request.kind} 最多接收 {limit} 张输入图片")
+        raise ProviderError(f"Evolink {request.kind} 最多接收 {limit} 份{label}")
     return urls
+
+
+def collect_media_urls(request: GenerationRequest, context: ProviderContext) -> dict[str, list[str]]:
+    """把输入素材按网关的三个数组收齐:image_urls / video_urls / audio_urls。
+
+    视频角色排首位的是被处理的那段(见 _VIDEO_VIDEO_ROLES),数组顺序就是语义,
+    不能按"先收集到的在前"排。
+    """
+    if request.kind == "image":
+        return {
+            "image_urls": _collect_role_urls(request, context, (REFERENCE_IMAGE,), image=True, limit=14, label="图片")
+        }
+    return {
+        "image_urls": _collect_role_urls(request, context, _VIDEO_IMAGE_ROLES, image=True, limit=30, label="图片"),
+        "video_urls": _collect_role_urls(request, context, _VIDEO_VIDEO_ROLES, image=False, limit=10, label="视频"),
+        "audio_urls": _collect_role_urls(request, context, _VIDEO_AUDIO_ROLES, image=False, limit=10, label="音频"),
+    }
 
 
 def _suffix(url: str, kind: str, content_type: str) -> str:
@@ -182,15 +227,12 @@ def _suffix(url: str, kind: str, content_type: str) -> str:
 def download_results(urls: list[str], output_dir: Path, kind: str) -> list[Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     targets: list[Path] = []
-    with RetryingClient(timeout=180) as client:
-        for index, url in enumerate(urls, start=1):
-            with client.stream("GET", url) as response:
-                response.raise_for_status()
-                target = output_dir / f"generated-{index}{_suffix(url, kind, response.headers.get('content-type', ''))}"
-                with target.open("wb") as handle:
-                    for chunk in response.iter_bytes():
-                        handle.write(chunk)
-            targets.append(target)
+    for index, url in enumerate(urls, start=1):
+        staged = output_dir / f"generated-{index}.download"
+        content_type = download_to_path(url, staged, timeout=180)
+        target = output_dir / f"generated-{index}{_suffix(url, kind, content_type)}"
+        staged.replace(target)
+        targets.append(target)
     return targets
 
 
@@ -203,8 +245,8 @@ class EvolinkProvider(GenerationProvider):
         self.kind = kind
 
     def validate_request(self, request: GenerationRequest) -> None:
-        # Evolink's public contract allows 3–15 second videos and 4K, wider
-        # than the legacy provider-neutral guardrail (10s / 1080p).
+        # Evolink 网关的协议范围:视频 3–30 秒(Seedance 2.5 已放到 4–30,2026-09-01 文档)、
+        # 最高 4K。每个模型自己的更严限制由描述符在提交前拦,这里只是兜底。
         if not request.prompt.strip():
             raise ProviderError("Prompt must not be empty")
         if request.kind == "image":
@@ -213,8 +255,8 @@ class EvolinkProvider(GenerationProvider):
                 raise ProviderError("num_images must be between 1 and 4")
         else:
             duration = int(request.parameters.get("duration_seconds", 5))
-            if not 3 <= duration <= 15:
-                raise ProviderError("duration_seconds must be between 3 and 15")
+            if duration != -1 and not 3 <= duration <= 30:
+                raise ProviderError("duration_seconds must be -1 (auto) or between 3 and 30")
             quality = str(request.parameters.get("resolution", "720p"))
             if quality not in {"480p", "720p", "1080p", "4k"}:
                 raise ProviderError("resolution must be one of 480p, 720p, 1080p, 4k")
@@ -226,11 +268,13 @@ class EvolinkProvider(GenerationProvider):
             raise ProviderError(f"Evolink {self.kind} adapter received a {request.kind} request")
         headers = {"Authorization": f"Bearer {context.api_key}", "Content-Type": "application/json"}
         try:
-            image_urls = collect_image_urls(request, context)
+            media = collect_media_urls(request, context)
             payload = (
-                build_image_payload(request, image_urls)
+                build_image_payload(request, media["image_urls"])
                 if self.kind == "image"
-                else build_video_payload(request, image_urls)
+                else build_video_payload(
+                    request, media["image_urls"], media.get("video_urls"), media.get("audio_urls")
+                )
             )
             path = "/images/generations" if self.kind == "image" else "/videos/generations"
             with RetryingClient(base_url=resolve_base_url(context), headers=headers, timeout=60) as client:

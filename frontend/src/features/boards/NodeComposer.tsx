@@ -19,17 +19,20 @@ import { ROLE_COPY, SOURCE_ROLES, type SourceRole } from "@/features/ai-studio/s
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   aspectRatioOptions,
-  capabilityNumber,
+  booleanParameterKeys,
+  capabilityBoolean,
   exclusiveSourceGroups,
   capabilityString,
-  durationOptions,
-  durationRange,
+  defaultDuration,
+  durationChoices,
   maxImages,
+  parameterChoiceEntries,
   sizeOptions,
   sourceLimit,
   supportsParameter,
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
+import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_LABELS } from "@/app/generationParameterLabels";
 import { cn } from "@/lib/utils";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
 
@@ -334,15 +337,39 @@ export function NodeComposer({
 
   //: 每一项的默认值都**从描述符取**(default_* 那几条),而不是前端挑一个 —— 后端那份才是
   //: 对着真机核过的。换模型时跟着换,所以用 key 重挂而不是 useState 记着上一个模型的值。
-  const durations = durationOptions(current);
-  const range = durationRange(current);
   const savedParameters = saved.parameters ?? {};
   const [ratio, setRatio] = React.useState(() => String(savedParameters.aspect_ratio ?? capabilityString(current, "default_aspect_ratio", aspectRatioOptions(current)[0] ?? "")));
   const [resolution, setResolution] = React.useState(() => String(savedParameters.resolution ?? capabilityString(current, "default_resolution", videoResolutionOptions(current)[0] ?? "")));
   const [size, setSize] = React.useState(() => String(savedParameters.size ?? capabilityString(current, "default_size", sizeOptions(current)[0] ?? "")));
-  const [duration, setDuration] = React.useState(() => Number(savedParameters.duration_seconds ?? capabilityNumber(current, "default_duration_seconds", durations[0] ?? 5)));
-  const [audio, setAudio] = React.useState(Boolean(savedParameters.generate_audio));
+  const [duration, setDuration] = React.useState(() => Number(savedParameters.duration_seconds ?? defaultDuration(current)));
+  const durations = durationChoices(current, resolution);
+  const [audio, setAudio] = React.useState(() =>
+    savedParameters.generate_audio === undefined
+      ? capabilityBoolean(current, "default_generate_audio")
+      : Boolean(savedParameters.generate_audio),
+  );
+  const booleanKeys = booleanParameterKeys(current).filter((key) => key !== "generate_audio");
+  const [booleanParameters, setBooleanParameters] = React.useState<Record<string, boolean>>(() =>
+    Object.fromEntries(
+      booleanKeys.map((key) => [
+        key,
+        savedParameters[key] === undefined
+          ? capabilityBoolean(current, `default_${key}`)
+          : Boolean(savedParameters[key]),
+      ]),
+    ),
+  );
+  const enumEntries = parameterChoiceEntries(current);
+  const [enumParameters, setEnumParameters] = React.useState<Record<string, string>>(() =>
+    Object.fromEntries(enumEntries.map(([key, choices]) => [
+      key,
+      String(savedParameters[key] ?? capabilityString(current, `default_${key}`, choices[0] ?? "")),
+    ])),
+  );
   const [count, setCount] = React.useState(Number(savedParameters.num_images ?? 1));
+  React.useEffect(() => {
+    if (durations.length > 0 && !durations.includes(duration)) setDuration(durations[0]);
+  }, [durations, duration]);
   //: 挂上去的输入素材,按角色分。**角色和上限都由描述符说了算** —— 参考图九张还是三张、
   //: 认不认尾帧,每个模型不一样;写死一套的话换个模型就要么少给要么超限。
   const [sources, setSources] = React.useState<{ role: string; assetId: string }[]>(() =>
@@ -451,10 +478,17 @@ export function NodeComposer({
     if (supportsParameter(current, "resolution") && resolution) parameters.resolution = resolution;
     if (supportsParameter(current, "size") && size) parameters.size = size;
     if (supportsParameter(current, "duration_seconds")) parameters.duration_seconds = duration;
-    if (current?.capabilities?.supports_audio && audio) parameters.generate_audio = true;
+    // 布尔值必须显式发送两边。只在 true 时发送会让“静音”落回供应商默认；Evolink
+    // Seedance 2.5 的默认恰好是有声，于是 UI 显示静音、成片却带声音。
+    if (supportsParameter(current, "generate_audio")) parameters.generate_audio = audio;
+    for (const key of booleanKeys) parameters[key] = booleanParameters[key] ?? capabilityBoolean(current, `default_${key}`);
+    for (const [key, choices] of enumEntries) {
+      const value = enumParameters[key] ?? capabilityString(current, `default_${key}`, choices[0] ?? "");
+      if (value) parameters[key] = value;
+    }
     if (maxImages(current) > 1 && count > 1) parameters.num_images = count;
     return parameters;
-  }, [current, ratio, resolution, size, duration, audio, count]);
+  }, [current, ratio, resolution, size, duration, audio, booleanKeys, booleanParameters, enumEntries, enumParameters, count]);
 
   const editableForm = React.useMemo<NonNullable<BoardItem["form"]>>(
     () => ({
@@ -626,7 +660,33 @@ export function NodeComposer({
             <>
               <span className="flex shrink-0 items-center gap-0.5 rounded-full px-1 transition-colors hover:bg-secondary">
                 <Sparkles size={12} className="shrink-0 text-muted-foreground" />
-                <Pick value={modelValue} onChange={setPicked} options={options.map((one) => ({ value: `${one.provider}/${one.model}`, label: one.model }))} />
+                <Pick
+                  value={modelValue}
+                  onChange={(next) => {
+                    setPicked(next);
+                    const target = options.find((one) => `${one.provider}/${one.model}` === next) ?? null;
+                    setRatio(capabilityString(target, "default_aspect_ratio", aspectRatioOptions(target)[0] ?? ""));
+                    setResolution(capabilityString(target, "default_resolution", videoResolutionOptions(target)[0] ?? ""));
+                    setSize(capabilityString(target, "default_size", sizeOptions(target)[0] ?? ""));
+                    setDuration(defaultDuration(target));
+                    setAudio(capabilityBoolean(target, "default_generate_audio"));
+                    setBooleanParameters(Object.fromEntries(
+                      booleanParameterKeys(target)
+                        .filter((key) => key !== "generate_audio")
+                        .map((key) => [key, capabilityBoolean(target, `default_${key}`)]),
+                    ));
+                    setEnumParameters(Object.fromEntries(
+                      parameterChoiceEntries(target).map(([key, choices]) => [
+                        key,
+                        capabilityString(target, `default_${key}`, choices[0] ?? ""),
+                      ]),
+                    ));
+                    setCount(1);
+                    setMode("");
+                    touched.current = false;
+                  }}
+                  options={options.map((one) => ({ value: `${one.provider}/${one.model}`, label: one.model }))}
+                />
               </span>
 
               <span aria-hidden className="h-3.5 w-px shrink-0 bg-border" />
@@ -647,28 +707,63 @@ export function NodeComposer({
                   <Pick value={ratio} onChange={setRatio} options={aspectRatioOptions(current).map((one) => ({ value: one, label: one }))} />
                 )}
                 {supportsParameter(current, "resolution") && (
-                  <Pick value={resolution} onChange={setResolution} options={videoResolutionOptions(current).map((one) => ({ value: one, label: one }))} />
+                  <Pick
+                    value={resolution}
+                    onChange={(next) => {
+                      setResolution(next);
+                      const nextDurations = durationChoices(current, next);
+                      if (nextDurations.length > 0 && !nextDurations.includes(duration)) setDuration(nextDurations[0]);
+                    }}
+                    options={videoResolutionOptions(current).map((one) => ({ value: one, label: one }))}
+                  />
                 )}
                 {supportsParameter(current, "size") && (
                   <Pick value={size} onChange={setSize} options={sizeOptions(current).map((one) => ({ value: one, label: one }))} />
                 )}
-                {supportsParameter(current, "duration_seconds") && (durations.length > 0 || range) && (
+                {supportsParameter(current, "duration_seconds") && durations.length > 0 && (
                   <Pick
                     value={String(duration)}
                     onChange={(next) => setDuration(Number(next))}
-                    options={
-                      durations.length > 0
-                        ? durations.map((one) => ({ value: String(one), label: `${one}s` }))
-                        : durationRangeOptions(range as { min: number; max: number })
-                    }
+                    options={durations.map((one) => ({
+                      value: String(one),
+                      label: one === -1 ? t("genDurationAuto") : `${one}s`,
+                    }))}
                   />
                 )}
+                {booleanKeys.map((key) => {
+                  const labelKey = GENERATION_BOOLEAN_LABELS[key];
+                  return (
+                    <Pick
+                      key={key}
+                      value={booleanParameters[key] ? "on" : "off"}
+                      onChange={(next) => setBooleanParameters((values) => ({ ...values, [key]: next === "on" }))}
+                      options={[
+                        { value: "on", label: labelKey ? `${t(labelKey)} · ${t("wfGenToggleOn")}` : `${key} · on` },
+                        { value: "off", label: labelKey ? `${t(labelKey)} · ${t("wfGenToggleOff")}` : `${key} · off` },
+                      ]}
+                    />
+                  );
+                })}
+                {enumEntries.map(([key, choices]) => {
+                  const labelKey = GENERATION_PARAMETER_LABELS[key];
+                  return (
+                    <Pick
+                      key={key}
+                      value={enumParameters[key] ?? capabilityString(current, `default_${key}`, choices[0] ?? "")}
+                      onChange={(next) => setEnumParameters((values) => ({ ...values, [key]: next }))}
+                      options={choices.map((choice) => ({
+                        value: choice,
+                        label: labelKey ? `${t(labelKey)} · ${choice}` : `${key} · ${choice}`,
+                      }))}
+                    />
+                  );
+                })}
               </span>
 
               {/* **出声与否是一项独立的配置**,不是那串参数里的一格 —— 它决定成片有没有
                   声音,和「多大、多长」不是一类事。所以拆出来自成一段,并且写成 有声/静音
                   两个字:一个喇叭图标读起来像预览的静音键,而它其实是在配置**要不要生成**。 */}
-              {Boolean(current?.capabilities?.supports_audio) && (
+              {supportsParameter(current, "generate_audio") && (
                 <>
                   <span aria-hidden className="h-3.5 w-px shrink-0 bg-border" />
                   <span className="flex shrink-0 items-center gap-0.5 rounded-full px-1 transition-colors hover:bg-secondary">

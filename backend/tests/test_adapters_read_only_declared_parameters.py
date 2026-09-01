@@ -22,11 +22,10 @@
 真实那次 ComfyUI 是两个描述符**都**漏了,所以它拦得住;只漏一半的话得靠别的方式发现。
 不写在这儿的话,下一个人会以为这条已经把这一类全包了。
 
-## 这条是棘轮:名单只减不增
+## 内部传输键
 
-`_UNDECLARED` 里是**已知还没对齐的**键,每一条都写清了为什么。想加新的键?
-去描述符里声明它 —— 那才是让它真正可用的动作。名单变长意味着又多了一个
-"写了但够不着"的能力,所以这里只允许它变短。
+`_INTERNAL_PARAMETERS` 只容纳 Adapter 在归一化本地/外链素材后写入临时请求的传输键；它们
+不是用户能力，不能进入描述符。除此之外的新键必须去描述符显式声明。
 """
 
 from __future__ import annotations
@@ -46,25 +45,12 @@ _READS = re.compile(r'(?:request\.)?parameters(?:\.get\(|\[)\s*["\']([a-z_0-9]+)
 #: 语音适配器不走生成校验那条路(它们的入口是配音/克隆,没有 parameter_keys 这个概念)。
 _NOT_GENERATION = {"speech"}
 
-#: **已知的缺口。只减不增。** 每一条都是「适配器实现了,但用户够不着」。
-_UNDECLARED = {
-    # 可灵的真旋钮,描述符里一个都没有 —— 而可灵本身就是唯一没拿真机核过的一家
-    # (没有密钥),所以补声明之前得先确认这些键名和取值是对的,照文档补等于把没验证过的
-    # 东西又往前推一层。
-    ("kling.py", "mode"),
-    ("kling.py", "external_task_id"),
-    # Veo:这三个键**全仓没有任何地方设置**,读了个寂寞。要么把喂它们的那一半接上,
-    # 要么把这几行删掉 —— 同样等有 Google 密钥能验证之后再动。
+#: Veo 把本地文件/不可信 URL 归一化为 inlineData 后写入的内部传输字段。调用方只能给
+#: first_frame，不能绕过素材下载边界直接给 base64/MIME。
+_INTERNAL_PARAMETERS = {
     ("veo.py", "first_frame_base64"),
     ("veo.py", "first_frame_mime_type"),
     ("veo.py", "image_base64"),
-    ("veo.py", "person_generation"),
-    # 万相:`duration_seconds or duration` 的后半段。`duration` 没被任何描述符声明,
-    # 也就永远到不了 —— 是个够不着的兼容分支。
-    ("wan.py", "duration"),
-    # 这两个是各自厂商的真旋钮,只是还没接进描述符。
-    ("openai.py", "output_format"),
-    ("qwen.py", "prompt_extend"),
 }
 
 
@@ -126,7 +112,7 @@ def test_适配器读的参数键都被声明过() -> None:
             if key not in declared:
                 gaps.add((path.name, key))
 
-    new = sorted(gaps - _UNDECLARED)
+    new = sorted(gaps - _INTERNAL_PARAMETERS)
     assert not new, (
         "这些参数键适配器读了、却没有任何描述符声明 —— 发它会被校验器拦下,不发它这段代码就是死的:\n"
         + "\n".join(f"  {where}: {key}" for where, key in new)
@@ -141,7 +127,7 @@ def test_豁免名单没有过期的条目() -> None:
     by_module = _vendor_by_module()
     file_to_vendors = {module.rsplit(".", 1)[-1] + ".py": vendors for module, vendors in by_module.items()}
     stale = []
-    for where, key in sorted(_UNDECLARED):
+    for where, key in sorted(_INTERNAL_PARAMETERS):
         vendors = file_to_vendors.get(where)
         if not vendors:
             continue
@@ -149,4 +135,4 @@ def test_豁免名单没有过期的条目() -> None:
         # 按全体判会把它误报成"已经修好了"。
         if key in set().union(*(by_vendor.get(v, set()) for v in vendors)):
             stale.append((where, key))
-    assert not stale, f"这些条目已经被描述符声明了,把它们从 _UNDECLARED 里删掉:{stale}"
+    assert not stale, f"这些内部传输键已经被描述符声明了,请重新确认边界:{stale}"

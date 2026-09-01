@@ -15,6 +15,8 @@ from app.ai.providers.base import (
     ProviderContext,
     ProviderError,
     SourceAsset,
+    allowed_source_url_parameters,
+    roles_supplied_via_url,
 )
 from app.ai.providers.comfyui import ComfyUIProvider
 from app.ai.providers.video.kling import KlingProvider
@@ -67,4 +69,6 @@ __all__ = [
     "ProviderContext",
     "ProviderError",
     "get_provider",
+    "allowed_source_url_parameters",
+    "roles_supplied_via_url",
 ]

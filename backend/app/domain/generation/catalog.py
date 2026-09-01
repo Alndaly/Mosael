@@ -34,7 +34,7 @@ SOURCE_ROLE_LABELS = {
 #: 视频」都是视频,分不清的话它会拿编辑模型去做参考生成,而画面出得来、只是不是那一段。
 SOURCE_ROLE_HELP = {
     "first_frame": "成片的第一格画面;asset_id 或 first_frame_url 外链",
-    "last_frame": "成片的最后一格;要和首帧一起给,单独给尾帧不成立",
+    "last_frame": "成片的最后一格;有的模型要求它和首帧一起给(看各模型自己的规矩),有的可以单独给",
     "reference_image": "照着它的风格和主体来拍;它自己一帧都不出现在成片里",
     "reference_video": "照着它的风格和主体来拍;成片是新的,不是它",
     "reference_audio": "参考音色/风格,不驱动画面",
@@ -63,7 +63,20 @@ REFERENCE_SCENE_LIMITS = {"reference_image": 9, "reference_video": 3, "reference
 OPENAI_IMAGE_CAPABILITIES = {
     "modes": ["text-to-image", "image-to-image"],
     "max_prompt_chars": 8000,
-    "parameter_keys": ["size", "num_images", "reference_image"],
+    "parameter_keys": [
+        "size", "num_images", "reference_image",
+        "quality", "background", "output_format", "moderation",
+    ],
+    "parameter_choices": {
+        "quality": ["auto", "low", "medium", "high"],
+        "background": ["auto", "transparent", "opaque"],
+        "output_format": ["png", "webp", "jpeg"],
+        "moderation": ["auto", "low"],
+    },
+    "default_quality": "auto",
+    "default_background": "auto",
+    "default_output_format": "png",
+    "default_moderation": "auto",
     # **这一条没探出来**:走的是 147ai 这类转售网关,它对张数一律放行,官方端点又没有密钥可打。
     # 16 来自 OpenAI 文档(`/images/edits` 的 `image[]` 上限),适配器此前也是硬编码的 16 —— 
     # 只是把那个数字从代码里挪进描述符,别把它当成和上面几家同等确信的东西。
@@ -77,7 +90,9 @@ OPENAI_IMAGE_CAPABILITIES = {
 QWEN_TEXT_IMAGE_CAPABILITIES = {
     "modes": ["text-to-image"],
     "max_prompt_chars": 8000,
-    "parameter_keys": ["size", "num_images", "seed", "negative_prompt"],
+    "parameter_keys": ["size", "num_images", "seed", "negative_prompt", "prompt_extend"],
+    "boolean_parameters": ["prompt_extend"],
+    "default_prompt_extend": True,
     "sizes": ["1024x576", "1024x1024", "576x1024", "768x768", "1280x720"],
     "default_size": "1024x576",
     "max_num_images": 4,
@@ -90,7 +105,9 @@ QWEN_TEXT_IMAGE_CAPABILITIES = {
 QWEN_PRO_IMAGE_CAPABILITIES = {
     "modes": ["text-to-image", "image-to-image"],
     "max_prompt_chars": 8000,
-    "parameter_keys": ["size", "num_images", "seed", "negative_prompt", "reference_image"],
+    "parameter_keys": ["size", "num_images", "seed", "negative_prompt", "prompt_extend", "reference_image"],
+    "boolean_parameters": ["prompt_extend"],
+    "default_prompt_extend": True,
     "source_limits": {"reference_image": 3},
     "sizes": ["1024x1024", "1536x1024", "1024x1536", "1280x720", "720x1280"],
     "default_size": "1024x1024",
@@ -301,7 +318,7 @@ KLING_LEGACY_VIDEO_CAPABILITIES = {
 
 #: 可灵 3.0(新接口 `/image-to-video/kling-3.0`,请求体是 contents 数组)。
 #:
-#: **多图参考在这一代才有,而且不是「挂几张图」。** 可灵要你先用 2～4 张图建一个**主体**
+#: **多图参考只属于这一代的 Omni 型号,而且不是「挂几张图」。** 可灵要你先用 2～4 张图建一个**主体**
 #: (进主体库、有名字、能复用),生成时引用它的 id,提示词里用 `@名字` 点名;一次最多引 3 个。
 #: 这一步由适配器代劳(见 ai/providers/video/kling_elements):界面上照旧是挂参考图,
 #: 底下自动查/建主体。所以这里的 `reference_image` 上限是 4 —— 那是**一个主体**的取图上限,
@@ -313,26 +330,35 @@ KLING_LEGACY_VIDEO_CAPABILITIES = {
 #: **没有可灵密钥可核。** 这一份是照文档写的,不是真机探的 —— 和上面几家不一样,别把它
 #: 当成同等确信的东西:等有密钥了要按 test_capabilities_match_reality 的法子重核一遍。
 KLING_V3_VIDEO_CAPABILITIES = {
-    "modes": ["text-to-video", "image-to-video", "keyframes-to-video", "reference-to-video"],
+    "modes": ["text-to-video", "image-to-video", "keyframes-to-video"],
     "payload_shape": "contents",
     "parameter_keys": [
-        "duration_seconds", "resolution", "aspect_ratio", "negative_prompt",
-        "first_frame", "last_frame", "reference_image",
-        "generate_audio", "multi_shot",
+        "duration_seconds", "resolution", "aspect_ratio",
+        "first_frame", "last_frame", "generate_audio", "multi_shot", "external_task_id",
     ],
+    "boolean_parameters": ["generate_audio", "multi_shot"],
     "duration_seconds": [],
     "default_duration_seconds": 5,
     "resolutions": ["720p", "1080p", "4k"],
     "default_resolution": "720p",
     "aspect_ratios": ["16:9", "9:16", "1:1"],
     "default_aspect_ratio": "16:9",
-    "source_limits": {"first_frame": 1, "last_frame": 1, "reference_image": 4},
-    # 建主体要 1 张正面图 + 1～3 张其他角度,少于两张建不起来。
-    "min_reference_images": 2,
+    "source_limits": {"first_frame": 1, "last_frame": 1},
     "requires_companion": {"last_frame": ["first_frame"]},
     "min_duration_seconds": 3,
     "max_duration_seconds": 15,
     "supports_audio": True,
+    "supports_generate_audio": True,
+}
+
+#: 主体参考只属于 Omni；普通版 / Turbo 挂主体不能靠 Adapter 偷偷换模型。
+KLING_V3_OMNI_VIDEO_CAPABILITIES = {
+    **KLING_V3_VIDEO_CAPABILITIES,
+    "modes": [*KLING_V3_VIDEO_CAPABILITIES["modes"], "reference-to-video"],
+    "parameter_keys": [*KLING_V3_VIDEO_CAPABILITIES["parameter_keys"], "reference_image"],
+    "source_limits": {"first_frame": 1, "last_frame": 1, "reference_image": 4},
+    # 当前 Adapter 先建可复用主体：1 张正面 + 1～3 张其他角度。
+    "min_reference_images": 2,
 }
 
 
@@ -387,8 +413,9 @@ SEEDANCE_2_VIDEO_CAPABILITIES = {
     "parameter_keys": [
         "duration_seconds", "resolution", "aspect_ratio",
         "first_frame", "last_frame",
-        "reference_image", "reference_video", "reference_audio",
+        "reference_image", "reference_video", "reference_audio", "generate_audio",
     ],
+    "boolean_parameters": ["generate_audio"],
     "source_limits": {"first_frame": 1, "last_frame": 1, **REFERENCE_SCENE_LIMITS},
     "exclusive_source_groups": [KEYFRAME_GROUP, REFERENCE_GROUP],
     # 参考音频不能单独上场,得搭着参考图或参考视频给 —— 接口自己这么说的。
@@ -405,6 +432,7 @@ SEEDANCE_2_VIDEO_CAPABILITIES = {
     "min_duration_seconds": 4,
     "max_duration_seconds": 15,
     "supports_audio": True,
+    "supports_generate_audio": True,
 }
 
 #: 2.0 fast / mini:除了**分辨率只到 720p**,其余和 2.0 base 一样(文档原话:
@@ -432,6 +460,7 @@ SEEDANCE_1_VIDEO_CAPABILITIES = {
     # seed / camera_fixed 是文档明确写「Seedance 1.5 pro / 1.0 pro / 1.0 pro fast」支持的两项,
     # **2.0 系列不在支持名单里** —— 所以它们只挂在 1.x 这一族。
     "parameter_keys": ["duration_seconds", "resolution", "aspect_ratio", "seed", "camera_fixed", "first_frame"],
+    "boolean_parameters": ["camera_fixed"],
     "duration_seconds": [],
     "default_duration_seconds": 5,
     "resolutions": ["480p", "720p", "1080p"],
@@ -459,6 +488,9 @@ SEEDANCE_15_VIDEO_CAPABILITIES = {
     "default_resolution": "720p",
     "default_aspect_ratio": "adaptive",
     "supports_audio": True,
+    "supports_generate_audio": True,
+    "parameter_keys": [*SEEDANCE_1_VIDEO_CAPABILITIES["parameter_keys"], "generate_audio"],
+    "boolean_parameters": ["camera_fixed", "generate_audio"],
 }
 
 
@@ -556,13 +588,121 @@ EVOLINK_SEEDANCE_15_CAPABILITIES = {
     **EVOLINK_VIDEO_I2V_CAPABILITIES,
     "modes": ["text-to-video", "image-to-video", "keyframes-to-video"],
     "parameter_keys": [
-        "duration_seconds", "resolution", "aspect_ratio", "first_frame", "last_frame",
+        "duration_seconds", "resolution", "aspect_ratio", "first_frame", "last_frame", "generate_audio",
     ],
+    "boolean_parameters": ["generate_audio"],
     "source_limits": {"first_frame": 1, "last_frame": 1},
-    "requires_source": {"last_frame": ["first_frame"]},
+    # Evolink 按**张数与位置**认图(文档原文:0 张 = 文生、1 张 = 图生、2 张 = 首尾帧),
+    # 单独的「尾帧」会被当成首帧 —— 不是报错,是悄悄生成反的。所以尾帧必须搭着首帧给;
+    # 只给首帧(单帧图生)不受这条限制。
+    "requires_companion": {"last_frame": ["first_frame"]},
     "min_duration_seconds": 4,
     "max_duration_seconds": 12,
     "supports_audio": True,
+    "supports_generate_audio": True,
+}
+
+#: Seedance 2.5 在 Evolink 上是**五个模型 id,模式在名字里而不是参数里**
+#: (逐字核过 2026-09-01 的五份 OpenAPI:seedance-2.5-{text,image,reference}-to-video 与
+#: video-{edit,extend})。所以每个 id 一份描述符,而不是一份描述符加一个模式开关 ——
+#: 后者正是「只有首尾帧模式」那个错觉的来源:加了 -image-to-video 的人拿不到参考模式。
+#: 五份共用:480p/720p/1080p 默认 720p、prompt 上限 10000 token、generate_audio 默认开。
+EVOLINK_SEEDANCE_25_BASE = {
+    "max_prompt_chars": 10000,
+    "resolutions": ["480p", "720p", "1080p"],
+    "default_resolution": "720p",
+    "supports_audio": True,
+    "supports_generate_audio": True,
+    "default_generate_audio": True,
+    "boolean_parameters": ["generate_audio"],
+}
+
+#: 2.5 的时长是 4–30 秒任意整数,另有 `-1` = 自动(按实际出片计费)。两者分别由区间与
+#: `duration_special_values` 表达，三个 UI 与 MCP 都读取同一份。
+EVOLINK_SEEDANCE_25_DURATION = {
+    "duration_seconds": [],
+    "duration_special_values": [-1],
+    "default_duration_seconds": 5,
+    "min_duration_seconds": 4,
+    "max_duration_seconds": 30,
+}
+
+EVOLINK_SEEDANCE_25_RATIOS = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"]
+
+EVOLINK_SEEDANCE_25_T2V_CAPABILITIES = {
+    **EVOLINK_SEEDANCE_25_BASE,
+    **EVOLINK_SEEDANCE_25_DURATION,
+    "modes": ["text-to-video"],
+    "parameter_keys": ["duration_seconds", "resolution", "aspect_ratio", "generate_audio"],
+    # 文档原文:text-to-video only,does not support image/video/audio input —— 不声明任何
+    # 素材角色,挂了素材的那条路在提交前就被自己的校验拦下,而不是发给网关吃 400。
+    "aspect_ratios": EVOLINK_SEEDANCE_25_RATIOS,
+    "default_aspect_ratio": "adaptive",
+}
+
+EVOLINK_SEEDANCE_25_I2V_CAPABILITIES = {
+    **EVOLINK_SEEDANCE_25_BASE,
+    **EVOLINK_SEEDANCE_25_DURATION,
+    "modes": ["image-to-video", "keyframes-to-video"],
+    "parameter_keys": ["duration_seconds", "resolution", "aspect_ratio", "first_frame", "last_frame", "generate_audio"],
+    # 文档原文:image_urls 必填、1–2 张,1 张自动为首帧、2 张按位置为首帧+尾帧。
+    # 位置语义下「只给尾帧」会被当成首帧,所以首帧必填、尾帧可选(单帧图生不受影响)。
+    "source_limits": {"first_frame": 1, "last_frame": 1},
+    "requires_source": [["first_frame"]],
+    # 文档原文:the only value this model accepts —— 固定比例发过去就是 400。
+    "aspect_ratios": ["adaptive"],
+    "default_aspect_ratio": "adaptive",
+}
+
+EVOLINK_SEEDANCE_25_R2V_CAPABILITIES = {
+    **EVOLINK_SEEDANCE_25_BASE,
+    **EVOLINK_SEEDANCE_25_DURATION,
+    "modes": ["reference-to-video"],
+    "parameter_keys": [
+        "duration_seconds", "resolution", "aspect_ratio",
+        "reference_image", "reference_video", "reference_audio", "generate_audio",
+    ],
+    # 文档原文:图 1–30 / 视频 1–10 / 音频 1–10,三者**至少给一份**。提示词里用
+    # @image1/@video1/@audio1 指认素材,编号跟着各自数组的顺序走。
+    "source_limits": {"reference_image": 30, "reference_video": 10, "reference_audio": 10},
+    "requires_source": [["reference_image", "reference_video", "reference_audio"]],
+    "aspect_ratios": EVOLINK_SEEDANCE_25_RATIOS,
+    "default_aspect_ratio": "adaptive",
+}
+
+#: edit / extend 的视频数组**第一位永远是被处理的那一段**(文档原文:the first video is
+#: the video being edited / extended),其余位置才算参考 —— 所以待编辑/待续写必填且限一份,
+#: 视频总数上限 10,参考视频的上限因此是 9。两条路的宽高比都只收 adaptive(跟随输入)。
+EVOLINK_SEEDANCE_25_VIDEO_EDIT_CAPABILITIES = {
+    **EVOLINK_SEEDANCE_25_BASE,
+    "modes": ["video-edit"],
+    # 时长只收 -1(跟随输入;文档原文 only -1 is supported,自定义时长会被拒)。它作为特殊
+    # 值显式声明，界面显示“自动”，Adapter 也原样发送，不能依赖网关默认值碰巧相同。
+    "parameter_keys": [
+        "duration_seconds", "resolution", "aspect_ratio",
+        "source_video", "reference_image", "reference_video", "reference_audio", "generate_audio",
+    ],
+    "duration_seconds": [],
+    "duration_special_values": [-1],
+    "default_duration_seconds": -1,
+    "source_limits": {"source_video": 1, "reference_image": 30, "reference_video": 9, "reference_audio": 10},
+    "requires_source": [["source_video"]],
+    "aspect_ratios": ["adaptive"],
+    "default_aspect_ratio": "adaptive",
+}
+
+EVOLINK_SEEDANCE_25_VIDEO_EXTEND_CAPABILITIES = {
+    **EVOLINK_SEEDANCE_25_BASE,
+    **EVOLINK_SEEDANCE_25_DURATION,
+    "modes": ["video-extend"],
+    "parameter_keys": [
+        "duration_seconds", "resolution", "aspect_ratio",
+        "first_clip", "reference_image", "reference_video", "reference_audio", "generate_audio",
+    ],
+    "source_limits": {"first_clip": 1, "reference_image": 30, "reference_video": 9, "reference_audio": 10},
+    "requires_source": [["first_clip"]],
+    "aspect_ratios": ["adaptive"],
+    "default_aspect_ratio": "adaptive",
 }
 
 EVOLINK_IMAGE_SIZES = [
@@ -588,6 +728,12 @@ EVOLINK_BUILTIN_MODELS = [
     # Seedance 经 Evolink 是一条独立于火山方舟的路由；不在本地做「真人」关键词拦截，
     # 实际审核仍由 Evolink 当前选中的上游型号决定。
     ("seedance-1.5-pro", "video", EVOLINK_SEEDANCE_15_CAPABILITIES),
+    # Seedance 2.5 的五种模式是五个模型 id(见上方 EVOLINK_SEEDANCE_25_* 的注释)。
+    ("seedance-2.5-text-to-video", "video", EVOLINK_SEEDANCE_25_T2V_CAPABILITIES),
+    ("seedance-2.5-image-to-video", "video", EVOLINK_SEEDANCE_25_I2V_CAPABILITIES),
+    ("seedance-2.5-reference-to-video", "video", EVOLINK_SEEDANCE_25_R2V_CAPABILITIES),
+    ("seedance-2.5-video-edit", "video", EVOLINK_SEEDANCE_25_VIDEO_EDIT_CAPABILITIES),
+    ("seedance-2.5-video-extend", "video", EVOLINK_SEEDANCE_25_VIDEO_EXTEND_CAPABILITIES),
     # Evolink README 的 Seedance 2.0 示例使用这个 id；静态 MCP 目录仍保留旧 placeholder，
     # 两边更新节奏不同，所以只把当前示例 id 纳入，不把 placeholder 冒充成可用模型。
     ("seedance-2.0-text-to-video", "video", EVOLINK_VIDEO_T2V_CAPABILITIES),
@@ -801,17 +947,20 @@ BUILTIN_MODELS = [
         "model": "veo",
         "capabilities": {
             "modes": ["text-to-video", "image-to-video"],
-            "parameter_keys": ["duration_seconds", "resolution", "aspect_ratio", "first_frame"],
+            "parameter_keys": ["duration_seconds", "resolution", "aspect_ratio", "first_frame", "seed"],
             # 没有 Google 密钥,这一份仍是照文档写的 —— Veo 3.x 文档上还有参考图和续写,
             # 都没接,等有密钥再核。
             "source_limits": {"first_frame": 1},
             "duration_seconds": [4, 6, 8],
             "default_duration_seconds": 8,
-            "resolutions": ["720p", "1080p"],
-            "default_resolution": "1080p",
+            "resolutions": ["720p", "1080p", "4k"],
+            "default_resolution": "720p",
+            "duration_by_resolution": {"1080p": [8], "4k": [8]},
             "aspect_ratios": ["16:9", "9:16"],
             "default_aspect_ratio": "16:9",
             "max_duration_seconds": 8,
+            # Veo 3.x 原生生成音频；它没有 generate_audio 开关。
+            "supports_audio": True,
         },
     },
     {
@@ -834,7 +983,7 @@ BUILTIN_MODELS = [
         "provider": "kuaishou",
         "kind": "video",
         "model": "kling-v3-omni",
-        "capabilities": KLING_V3_VIDEO_CAPABILITIES,
+        "capabilities": KLING_V3_OMNI_VIDEO_CAPABILITIES,
     },
     {
         "id": "kuaishou:kling-3.0-turbo:video",
@@ -850,17 +999,11 @@ BUILTIN_MODELS = [
 _FALLBACK_BY_KIND: dict[str, dict[str, Any]] = {
     "image": {
         "modes": ["text-to-image"],
-        "parameter_keys": ["size", "negative_prompt"],
-        "sizes": ["1024x1024"],
-        "default_size": "1024x1024",
-        "max_num_images": 1,
+        "parameter_keys": [],
     },
     "video": {
         "modes": ["text-to-video"],
-        "parameter_keys": ["duration_seconds"],
-        "duration_seconds": [5],
-        "default_duration_seconds": 5,
-        "max_duration_seconds": 10,
+        "parameter_keys": [],
     },
 }
 
@@ -873,10 +1016,14 @@ def capabilities_for(vendor: str, model: str, kind: str) -> dict[str, Any]:
     答案:设置页看 provider_models,生成页看 generation_models,两边永远对不齐(ComfyUI 的
     工作流只在后者里,而且是个叫 `workflow` 的假模型 id)。
 
-    精确匹配 (provider, model, kind) 优先;同 vendor 同 kind 的第一条次之(同系模型参数通常
-    一致);都没有就用按 kind 的保守兜底。
+    只精确匹配 (provider, model, kind)。查不到时返回一份**不猜参数**的 kind 级兜底，只让
+    界面保留提示词和提交入口。即使同一个供应商，同系列不同型号的时长、素材角色和枚举值也
+    经常不同；继承目录第一项会让界面主动发送用户没有选择、目标模型也未必支持的参数。
     """
-    return known_capabilities_for(vendor, model, kind) or dict(_FALLBACK_BY_KIND.get(kind, {}))
+    exact = known_capabilities_for(vendor, model, kind)
+    if exact is not None:
+        return exact
+    return dict(_FALLBACK_BY_KIND.get(kind, {}))
 
 
 def known_capabilities_for(vendor: str, model: str, kind: str) -> dict[str, Any] | None:
@@ -888,9 +1035,6 @@ def known_capabilities_for(vendor: str, model: str, kind: str) -> dict[str, Any]
     """
     for item in BUILTIN_MODELS:
         if item["provider"] == vendor and item["model"] == model and item["kind"] == kind:
-            return dict(item["capabilities"])
-    for item in BUILTIN_MODELS:
-        if item["provider"] == vendor and item["kind"] == kind:
             return dict(item["capabilities"])
     return None
 

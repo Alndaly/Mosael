@@ -54,13 +54,13 @@ def test_图生视频的比例恒为_adaptive(tmp_path: Path) -> None:
     assert "first_frame" in roles
 
 
-def test_时长夹在官方区间内() -> None:
-    """4–15 秒。夹住而不是报错 —— 上游给的是 UI 档位,超界时跑最近的合法值比抛 400 有用。"""
-    for given, expect in ((1, 4), (6, 6), (99, 15)):
+def test_时长由统一能力校验负责_适配器不得静默改写() -> None:
+    """Adapter 只翻译；越界由统一入口报错，不能把用户要的 99 秒偷偷改成 15 秒。"""
+    for given in (1, 6, 99):
         payload = build_submit_payload(
             GenerationRequest(kind="video", model="", prompt="p", parameters={"duration_seconds": given}), _ctx()
         )
-        assert payload["duration"] == expect
+        assert payload["duration"] == given
 
 
 def test_没指定模型时回落到_H3() -> None:

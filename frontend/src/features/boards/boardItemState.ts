@@ -30,6 +30,28 @@ export function runningState(jobId: string): NonNullable<BoardItem["run"]> {
   return { status: "running", job_id: jobId };
 }
 
+/** 服务端轮询到终态后写回本地节点的补丁。成功必须连同服务端已重置的 form 一起落下。 */
+export function boardSettlementPatch(item: BoardItem): Partial<BoardItem> | null {
+  if (item.asset_id) {
+    return {
+      asset_id: item.asset_id,
+      form: item.form,
+      run: item.run ?? { status: "succeeded" },
+      job_id: undefined,
+      error: undefined,
+    };
+  }
+  const error = itemError(item);
+  if (error) {
+    return {
+      run: item.run ?? { status: "failed", error },
+      job_id: undefined,
+      error: undefined,
+    };
+  }
+  return null;
+}
+
 /**
  * Composer 的局部交互状态只在“节点拿到一份新产物”时重建。
  *

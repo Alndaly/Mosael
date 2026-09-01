@@ -546,6 +546,15 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
             )
             continue
         settled = {k: v for k, v in item.items() if k not in ("job_id", "error")}
+        # 成功结束一次编辑周期：提示词和引用素材已经被消费，保留模型/参数方便继续同风格创作。
+        # 失败/取消不走这里，因此原输入仍完整保留给重试。
+        if isinstance(settled.get("form"), dict):
+            form = dict(settled["form"])
+            form["prompt"] = ""
+            form["source_assets"] = []
+            form["mentioned_asset_ids"] = []
+            form.pop("prompt_document", None)
+            settled["form"] = form
         settled["run"] = {"status": "succeeded"}
         kept.append({**settled, "asset_id": asset_ids[0]})
         #: 多出来的那几张挨着它往右排。宽度按这一项自己的宽 —— 用户可能已经把它拉大了,

@@ -19,6 +19,7 @@ from app.ai.providers.base import (
     metering_from_request,
     provider_http_error,
 )
+from app.ai.providers.media_transfer import download_to_path
 
 """
 ByteDance Seedream(豆包生图)adapter。
@@ -96,12 +97,7 @@ class SeedreamProvider(GenerationProvider):
 
                 output_dir.mkdir(parents=True, exist_ok=True)
                 target = output_dir / "generated.png"
-                # 结果是预签名的对象存储 URL:不能带着 ARK 的 Authorization 去下载,
-                # 多余的头会破坏签名校验(与 DashScope 同坑)。
-                with RetryingClient(timeout=120) as downloader:
-                    download = downloader.get(url)
-                    download.raise_for_status()
-                    target.write_bytes(download.content)
+                download_to_path(url, target, timeout=120)
                 return GenerationResult(output_paths=[target], usage=metering_from_request(request), raw_usage=payload)
         except httpx.HTTPError as exc:
             raise ProviderError(provider_http_error("ARK image request failed", exc, context.api_key)) from exc

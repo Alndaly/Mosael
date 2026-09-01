@@ -315,14 +315,21 @@ def test_设置页加了什么_生成页就有什么() -> None:
     assert client.get("/api/generation/options?kind=image").json() == []
 
 
-def test_描述符按模型查_查不到给保守兜底() -> None:
-    """参数描述符是关于供应商 API 的静态知识。目录里没登记的模型(私有部署、别名、
-    ComfyUI 的任意工作流名)照样要能给出一组可用参数 —— 缺描述符不等于不能用。"""
+def test_描述符按模型查_查不到给不猜参数的保守兜底() -> None:
+    """目录外模型仍能提交提示词，但不能继承别的型号或被伪造一组参数。"""
     from app.domain.generation import capabilities_for
 
     assert capabilities_for("bytedance", "doubao-seedance-2-0-260128", "video")["resolutions"]
-    # 同 vendor 同 kind 的兜底
-    assert capabilities_for("comfyui", "随便什么名字.json", "image")["sizes"]
+    assert capabilities_for("comfyui", "随便什么名字.json", "image") == {
+        "modes": ["text-to-image"],
+        "parameter_keys": [],
+    }
     # 完全不认识的 vendor
-    assert capabilities_for("nobody", "x", "image")["default_size"] == "1024x1024"
-    assert capabilities_for("nobody", "x", "video")["max_duration_seconds"] == 10
+    assert capabilities_for("nobody", "x", "image") == {
+        "modes": ["text-to-image"],
+        "parameter_keys": [],
+    }
+    assert capabilities_for("nobody", "x", "video") == {
+        "modes": ["text-to-video"],
+        "parameter_keys": [],
+    }

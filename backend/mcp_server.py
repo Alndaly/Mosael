@@ -623,7 +623,13 @@ def _parameter_help(capabilities: dict[str, Any]) -> dict[str, Any]:
             suffix = f";最多 {cap} 份" if cap and int(cap) > 1 else ""
             help_[key] = f"{SOURCE_ROLE_LABELS.get(key, key)}({key})的 asset_id —— {SOURCE_ROLE_HELP[key]}{suffix}"
             continue
-        choices = capabilities.get(_PARAMETER_CHOICES.get(key, ""))
+        if key in (capabilities.get("boolean_parameters") or []):
+            default = capabilities.get(f"default_{key}")
+            help_[key] = {"choices": [True, False], "default": default} if default is not None else {"choices": [True, False]}
+            continue
+        choices = (capabilities.get("parameter_choices") or {}).get(key)
+        if choices is None:
+            choices = capabilities.get(_PARAMETER_CHOICES.get(key, ""))
         default = capabilities.get(f"default_{key}")
         if choices:
             help_[key] = {"choices": choices, "default": default} if default is not None else {"choices": choices}

@@ -161,8 +161,8 @@ function TypeLabel({ kind }: { kind: BoardItem["kind"] }) {
 /**
  * 节点状态是节点外壳的一部分，不只是空槽里的一枚转圈。
  *
- * 这样即使节点已经有旧产物（重跑失败时仍展示旧图），用户也能从描边和标签看出这一次运行
- * 的状态。选择态继续只用四角缩放点表达，两套视觉信号不会互相覆盖。
+ * 即使节点已有旧产物（重跑失败时仍展示旧图），用户也必须看得出**这一轮**的状态。
+ * 描边负责快速扫视，文字标签负责消除“选中/失败/完成”的歧义；两者不是重复信息。
  */
 const RUN_STATE_CLASS: Record<BoardItemRunStatus, string> = {
   idle: "ring-0",
@@ -266,21 +266,15 @@ export function NoteNode({ data, selected }: NodeProps) {
 }
 
 /**
- * 还在生成的样子:转圈 + 那句提示词。
- *
- * **要看得见提示词**。画布上同时跑三四个生成时,四个一模一样的转圈框分不出谁是谁 ——
- * 而用户想撤掉的往往正是其中某一个。
+ * 还在生成的样子:静态骨架 + 转圈 + 提示词摘要。提示词让并行生成的多个空槽可以区分，
+ * 但只显示三行且允许任意长 URL 换行，不能撑破节点。
  */
 function Generating({ text }: { text?: string }) {
   return (
     <div className="relative grid h-full w-full place-items-center overflow-hidden rounded-lg">
-      {/* **骨架屏,不是一个干转的圈。** 出图要几十秒,一个圈在那儿转看不出「快好了还是卡住了」;
-          一块和产出同形状的灰底至少说明「这一格将来是张图」,画布上一眼扫过去也分得清哪几格在跑。 */}
-      <Skeleton className="absolute inset-0 h-full w-full rounded-lg" />
+      <Skeleton className="absolute inset-0 h-full w-full animate-none rounded-lg" />
       <div className="relative grid w-full min-w-0 max-w-full justify-items-center gap-1.5 px-3 text-center">
         <Loader2 size={16} className="animate-spin text-primary" />
-        {/* **要看得见提示词**。同时跑三四个生成时,四个一模一样的框分不出谁是谁 ——
-            而用户想撤掉的往往正是其中某一个。 */}
         {text ? (
           <span className="line-clamp-3 min-w-0 max-w-full [overflow-wrap:anywhere] text-ui-2xs leading-relaxed text-muted-foreground">
             {text}

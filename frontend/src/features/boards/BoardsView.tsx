@@ -37,7 +37,7 @@ import { SIDEBAR_HANDLE_CLASS, useResizableSidebar } from "@/lib/useResizableSid
 import { BoardCanvas, type BoardCanvasApi } from "@/features/boards/BoardCanvas";
 import { useAutosave } from "@/features/boards/useAutosave";
 import { AssetPickerDialog } from "@/features/boards/AssetPickerDialog";
-import { itemError, itemIsRunning, itemJobId } from "@/features/boards/boardItemState";
+import { boardSettlementPatch, itemError, itemIsRunning, itemJobId } from "@/features/boards/boardItemState";
 import { runNoteWrite, type NoteWriteInput } from "@/features/boards/noteWriteLifecycle";
 
 /**
@@ -415,13 +415,13 @@ function BoardDetail({
           settled.push(id);
         } else if (item.asset_id) {
           //: 产出到了:填上 asset_id,并把 job_id 摘掉 —— 两个都在的话画布不知道该画转圈还是画图。
-          api?.patch(id, { asset_id: item.asset_id, run: item.run ?? { status: "succeeded" }, job_id: undefined, error: undefined });
+          api?.patch(id, boardSettlementPatch(item) ?? {});
           settled.push(id);
         } else if (itemError(item)) {
           //: **跑挂了也要落到画布上。** 此前这里只把 id 从「还在等」的名单里划掉,却没告诉
           //: 画布 —— 而画布的节点只在挂载时从 canvas 建一次,那一格于是永远带着 job_id:
           //: 框里一直转圈,底下那个提交按钮(busy 看的就是 job_id)也一直按不动。
-          api?.patch(id, { run: item.run ?? { status: "failed", error: itemError(item) }, job_id: undefined, error: undefined });
+          api?.patch(id, boardSettlementPatch(item) ?? {});
           settled.push(id);
         }
       }

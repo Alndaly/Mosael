@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { BoardItem } from "@/api/client";
-import { itemFormResetKey, itemIsRunning, itemRunStatus } from "./boardItemState";
+import { boardSettlementPatch, itemFormResetKey, itemIsRunning, itemRunStatus } from "./boardItemState";
 
 function image(extra: Partial<BoardItem> = {}): BoardItem {
   return { id: "image-1", kind: "image", x: 0, y: 0, ...extra };
@@ -35,5 +35,16 @@ describe("画布节点状态", () => {
     const replaced = image({ asset_id: "asset-2", run: { status: "idle" } });
     expect(itemFormResetKey(succeeded)).not.toBe(itemFormResetKey(running));
     expect(itemFormResetKey(replaced)).not.toBe(itemFormResetKey(succeeded));
+  });
+});
+
+describe("终态轮询补丁", () => {
+  it("成功时同步服务端清空后的表单，而不是只换 asset_id", () => {
+    const item = image({
+      asset_id: "asset-1",
+      form: { prompt: "", provider: "evolink", model: "m", source_assets: [], mentioned_asset_ids: [] },
+      run: { status: "succeeded" },
+    });
+    expect(boardSettlementPatch(item)).toMatchObject({ asset_id: "asset-1", form: item.form });
   });
 });

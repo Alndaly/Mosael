@@ -9,7 +9,14 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ai.providers import FIRST_FRAME, REFERENCE_IMAGE, SOURCE_ROLES, get_provider
+from app.ai.providers import (
+    FIRST_FRAME,
+    REFERENCE_IMAGE,
+    SOURCE_ROLES,
+    allowed_source_url_parameters,
+    get_provider,
+    roles_supplied_via_url,
+)
 from app.domain.generation.catalog import SOURCE_ROLE_LABELS, known_capabilities_for
 from app.db.models import Asset, GenerationJob, GenerationSession, ProviderProfile, now
 from app.domain.jobs import create_job
@@ -17,6 +24,16 @@ from app.domain.jobs import create_job
 
 class GenerationDomainError(ValueError):
     pass
+
+
+def requested_negative_prompt(negative_prompt: str, parameters: dict[str, Any]) -> str:
+    """兼容统一参数入口，同时保持领域请求只有一个负向提示字段。
+
+    UI 有独立输入框，智能体/工作流则会按能力描述符把它放进 parameters。装配时提升一次，
+    Adapter 永远只读 ``GenerationRequest.negative_prompt``，避免每家实现两套优先级。
+    """
+    explicit = str(negative_prompt or "").strip()
+    return explicit or str(parameters.get("negative_prompt") or "").strip()
 
 
 def create_generation_job(
@@ -50,6 +67,7 @@ def create_generation_job(
 
     validate_against_capabilities(provider, model, kind, parameters, source_assets)
     _validate_source_assets(db, workspace_id, source_assets)
+    negative_prompt = requested_negative_prompt(negative_prompt, parameters)
 
     session = _resolve_session(db, workspace_id=workspace_id, session_id=session_id, prompt=prompt)
     request = {
@@ -183,12 +201,6 @@ def parse_source_assets(value: Any, *, kind: str) -> list[dict[str, str]]:
             text = str(item).strip()
             if not text:
                 continue
-            # **从右边找冒号,而且只认后半段真是个角色名的那一种。**
-            #
-            # 从左边切(partition)的话,`{{node.a:b}}` 这种模板串会被腰斩成
-            # asset_id=`{{node.a` + role=`b}}`,然后报一句「未知的素材角色」——
-            # 而用户看着自己那行写得好好的,完全不知道哪里错了。前端序列化时用的就是
-            # 右起规则(features/workflows/sourceAssetLines),两边得是同一条。
             # 从**右边**切,因为模板串自己也可能带冒号(`{{node.a:b}}`)。从左边切的话那种
             # 写法会被腰斩成 `{{node.a` + 角色 `b}}`,报一句「未知的素材角色」,而用户看着
             # 自己那行写得好好的。前端序列化用的就是右起规则,两边得是同一条。
@@ -210,15 +222,7 @@ def parse_source_assets(value: Any, *, kind: str) -> list[dict[str, str]]:
     return out
 
 
-#: 每种能力都认的通用参数 —— 它们不进描述符的 parameter_keys(那一栏说的是「这个模型有什么
-#: 可调的」),但每条路径都可能带上。
-_ALWAYS_ALLOWED = {"negative_prompt", "seed"}
-
-#: 素材角色也可以用 `<role>_url` 直接给外链,见 ai/providers/base.ROLE_URL_PARAMETERS。
-_ROLE_URL_KEYS = {f"{role}_url" for role in SOURCE_ROLES} | {"image_url"}
-
-
-def allowed_parameter_keys(capabilities: dict[str, Any]) -> set[str]:
+def allowed_parameter_keys(capabilities: dict[str, Any], kind: str | None = None) -> set[str]:
     """这个模型**认哪些参数键**。
 
     抽出来是因为有两个人要问同一个问题:校验器(拦下不认的)和棘轮
@@ -226,13 +230,43 @@ def allowed_parameter_keys(capabilities: dict[str, Any]) -> set[str]:
     各算一遍的话两边会分头演进 —— 而那正是这条规则要防的事:棘轮以为某个键不被允许、
     校验器其实放行,于是它报一个不存在的问题;反过来则是漏报。
     """
-    allowed = set(capabilities.get("parameter_keys") or ()) | _ALWAYS_ALLOWED | _ROLE_URL_KEYS
-    # 「能不能出声」已经作为 `supports_audio` 声明过了(真机核过的那一份),所以开关本身
-    # **从它推出来**,不在 parameter_keys 里再抄一遍 —— 抄一遍就会出现两处说法不一致的可能:
-    # 声明说支持、参数名单里没有,于是这个开关谁都发不出去(seedance 2.0 与 1.5 正是这样)。
-    if capabilities.get("supports_audio"):
+    declared = set(capabilities.get("parameter_keys") or ())
+    roles = declared & set(SOURCE_ROLES)
+    # kind 只影响无类型别名 image_url。棘轮只关心 Adapter 是否读到“某个允许键”，没有 kind
+    # 时取两个领域含义的并集；真正的提交校验总会传 kind，因此不会多放行。
+    url_keys = (
+        allowed_source_url_parameters(roles, kind)
+        if kind is not None
+        else allowed_source_url_parameters(roles, "image") | allowed_source_url_parameters(roles, "video")
+    )
+    # seed / negative_prompt 不是跨引擎通用能力。只有描述符显式声明、Adapter 确实会发送时
+    # 才能放行；否则任务可能成功，但用户要求被静默丢弃。
+    allowed = declared | url_keys
+    # “输出可能带声音”与“API 有 generate_audio 开关”不是一回事。万相能携带驱动音频，
+    # 但没有这个布尔参数；把 supports_audio 当开关会让 UI 发一个 Adapter 完全不读的键。
+    if capabilities.get("supports_generate_audio"):
         allowed.add("generate_audio")
     return allowed
+
+
+def _integer_parameter(provider: str, model: str, name: str, value: Any) -> int:
+    """Canonical integer parameters fail at submission instead of crashing in an Adapter.
+
+    Workflow fields may legitimately arrive as numeric strings, but booleans and fractional
+    numbers must not be truncated by ``int()`` (``5.9`` silently becoming five seconds).
+    """
+    if isinstance(value, bool):
+        raise GenerationDomainError(f"{provider}/{model} 的 {name} 必须是整数")
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        if value.is_integer():
+            return int(value)
+        raise GenerationDomainError(f"{provider}/{model} 的 {name} 必须是整数")
+    text = str(value).strip()
+    if not re.fullmatch(r"-?\d+", text):
+        raise GenerationDomainError(f"{provider}/{model} 的 {name} 必须是整数")
+    return int(text)
 
 
 def validate_against_capabilities(
@@ -258,35 +292,58 @@ def validate_against_capabilities(
     keys = capabilities.get("parameter_keys")
     if not keys:
         return
-    allowed = allowed_parameter_keys(capabilities)
+    allowed = allowed_parameter_keys(capabilities, kind)
     unknown = sorted(set(parameters) - allowed)
     if unknown:
         raise GenerationDomainError(
             f"{provider}/{model} 不支持这些参数:{'、'.join(unknown)};可用的是:{'、'.join(sorted(keys))}"
         )
+    for name in capabilities.get("boolean_parameters") or ():
+        if name in parameters and not isinstance(parameters[name], bool):
+            raise GenerationDomainError(f"{provider}/{model} 的 {name} 必须是布尔值 true/false")
     for name, choices_key in (("size", "sizes"), ("resolution", "resolutions"), ("aspect_ratio", "aspect_ratios")):
         choices = capabilities.get(choices_key)
         value = parameters.get(name)
         if choices and value and str(value) not in [str(one) for one in choices]:
             raise GenerationDomainError(f"{provider}/{model} 的 {name} 只能是:{'、'.join(str(c) for c in choices)}")
+    for name, choices in (capabilities.get("parameter_choices") or {}).items():
+        value = parameters.get(name)
+        if choices and value is not None and str(value) not in [str(one) for one in choices]:
+            raise GenerationDomainError(f"{provider}/{model} 的 {name} 只能是:{'、'.join(str(c) for c in choices)}")
     # 时长有两种形状:**枚举**(只收这几个档)或**区间**(min..max 内的任意整数)。
     # 只校验枚举的话,区间型的模型这里全放行,越界的值要等供应商拒了才知道 —— 而那时
     # 任务已经建好、扣了一次配额,报的还是一句英文的 InvalidParameter。
     durations = capabilities.get("duration_seconds")
+    special_durations = [int(one) for one in capabilities.get("duration_special_values") or ()]
     duration = parameters.get("duration_seconds")
     if duration is not None:
-        if durations:
-            if int(duration) not in [int(one) for one in durations]:
+        numeric_duration = _integer_parameter(provider, model, "duration_seconds", duration)
+        if numeric_duration in special_durations:
+            pass
+        elif durations:
+            if numeric_duration not in [int(one) for one in durations]:
                 raise GenerationDomainError(
                     f"{provider}/{model} 的时长只能是:{'、'.join(str(one) for one in durations)} 秒"
                 )
         else:
             low = capabilities.get("min_duration_seconds")
             high = capabilities.get("max_duration_seconds")
-            if (low is not None and int(duration) < int(low)) or (high is not None and int(duration) > int(high)):
+            outside_range = low is None and high is None
+            outside_range = outside_range or (low is not None and numeric_duration < int(low))
+            outside_range = outside_range or (high is not None and numeric_duration > int(high))
+            if outside_range:
+                special = f"，或 {'、'.join(str(one) for one in special_durations)}（自动）" if special_durations else ""
                 raise GenerationDomainError(
-                    f"{provider}/{model} 的时长要在 {low or 1}–{high} 秒之间"
+                    f"{provider}/{model} 的时长要在 {low or 1}–{high} 秒之间{special}"
                 )
+        resolution = str(parameters.get("resolution") or "")
+        duration_by_resolution = capabilities.get("duration_by_resolution") or {}
+        resolution_durations = duration_by_resolution.get(resolution)
+        if resolution_durations and numeric_duration not in [int(one) for one in resolution_durations]:
+            raise GenerationDomainError(
+                f"{provider}/{model} 的 {resolution} 分辨率只支持 "
+                f"{'、'.join(str(one) for one in resolution_durations)} 秒"
+            )
     counts: Counter[str] = Counter()
     for entry in source_assets:
         role = entry.get("role") or ""
@@ -296,6 +353,9 @@ def validate_against_capabilities(
                 f"{'、'.join(one for one in keys if one in SOURCE_ROLES) or '无'}"
             )
         counts[role] += 1
+    # 外链与素材库同权:`<role>_url` 供的角色也计入 —— 只数 source_assets 的话,
+    # 粘链接(不选素材)的用户会被 requires_source 误拦在「必须给一份首帧」上。
+    counts.update(roles_supplied_via_url(parameters, kind))
     _check_source_counts(provider, model, capabilities, counts)
     _check_conditional_duration(provider, model, capabilities, counts, parameters)
 

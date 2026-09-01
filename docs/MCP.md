@@ -89,6 +89,11 @@ summaries — never raw internal schemas.
 否则发送采样帧 + 已有转写。OAuth Gateway 没有原生 video block，因此 `auto` 走抽帧、`native`
 明确失败；它不需要 `base_url`，也不会静默换成 `gpt-4o-mini` 或另一条连接。
 
+`list_generation_models` 返回完整模型能力描述符；`generate_image` / `generate_video` 的参数说明也从
+同一描述符生成。未知模型的 `parameter_keys` 明确为空：智能体可以提交提示词，但不能从同供应商其他
+型号猜时长、尺寸或素材角色。素材参数既可给 `asset_id`，也可按角色给 URL；两种传输形式进入相同的
+必填、份数、互斥与搭伴校验。
+
 工作流画布能做的事智能体都能做 —— 由 `tests/test_agent_workflow_parity.py` 钉住:节点类型
 没有对应工具、又没写明为什么不需要,测试就红。
 

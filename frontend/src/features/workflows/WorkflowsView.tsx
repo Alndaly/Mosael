@@ -86,16 +86,17 @@ import { ROW_HANDLE_CLASS, SIDEBAR_HANDLE_CLASS, handleOffset, useResizableRow, 
 import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
 import {
   aspectRatioOptions,
-  capabilityNumber,
-  durationRange,
-  capabilityString,
-  durationOptions,
+  booleanParameterKeys,
+  durationChoices,
   sizeOptions,
   maxImages,
+  parameterChoiceEntries,
+  parseGenerationParameterInput,
   supportsParameter,
   sourceLimit,
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
+import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_LABELS } from "@/app/generationParameterLabels";
 import { cn } from "@/lib/utils";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { relativeTime } from "@/lib/time";
@@ -489,12 +490,6 @@ interface GenField {
   range?: { min: number; max: number };
   toggle?: boolean;
 }
-
-/** 开关类参数 —— 描述符声明了才出现。有声比无声贵,不替用户默认打开。 */
-const TOGGLE_PARAMS: Array<[string, MessageKey]> = [
-  ["generate_audio", "wfGenAudio"],
-  ["multi_shot", "wfGenMultiShot"],
-];
 
 const FIELD_BOX =
   "grid gap-1.5 [&>span]:flex [&>span]:items-center [&>span]:gap-1 [&>span]:text-ui-sm [&>span]:font-medium [&>span]:text-foreground " +
@@ -3221,7 +3216,13 @@ function NodeInspector({
     const next = { ...genParams };
     // 空值就删掉这一项,而不是塞空串:后端会把空串当"显式指定了空"传给供应商。
     if (value === "") delete next[key];
-    else next[key] = /^-?\d+(\.\d+)?$/.test(value) ? Number(value) : value;
+    else next[key] = parseGenerationParameterInput(value);
+    if (key === "resolution" && genModel && next.duration_seconds !== undefined) {
+      const durations = durationChoices(genModel, value);
+      if (durations.length > 0 && !durations.includes(Number(next.duration_seconds))) {
+        next.duration_seconds = durations[0];
+      }
+    }
     setConfig("parameters", next);
   };
   /**
@@ -3248,22 +3249,23 @@ function NodeInspector({
     } else {
       const resolutions = videoResolutionOptions(genModel);
       if (resolutions.length > 0) out.push({ key: "resolution", label: t("wfGenResolution"), options: resolutions });
-      const durations = durationOptions(genModel);
+      const durations = durationChoices(genModel, String(genParams.resolution ?? ""));
       if (durations.length > 0) {
         out.push({ key: "duration_seconds", label: t("wfGenDuration"), options: durations.map(String) });
-      } else {
-        // 枚举为空 = 这是个区间。上下界从描述符来 —— 写死的话,界面允许的值供应商会当场拒。
-        const range = durationRange(genModel);
-        if (range) out.push({ key: "duration_seconds", label: t("wfGenDuration"), options: [], range });
       }
     }
     // 开关类。**只在模型声明了的时候出现** —— 声明即接口,这里不按 kind 猜。
-    for (const [key, labelKey] of TOGGLE_PARAMS) {
-      if (supportsParameter(genModel, key)) out.push({ key, label: t(labelKey), options: [], toggle: true });
+    for (const key of booleanParameterKeys(genModel)) {
+      const labelKey = GENERATION_BOOLEAN_LABELS[key];
+      out.push({ key, label: labelKey ? t(labelKey) : key, options: [], toggle: true });
+    }
+    for (const [key, options] of parameterChoiceEntries(genModel)) {
+      const labelKey = GENERATION_PARAMETER_LABELS[key];
+      out.push({ key, label: labelKey ? t(labelKey) : key, options });
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [genModel]);
+  }, [genModel, genParams.resolution]);
 
   /** 配置里那段 `id:role` 文本,解析成一条条素材。 */
   const genSourceLines = React.useMemo(
@@ -3802,7 +3804,7 @@ function NodeInspector({
                         <SelectContent>
                           {options.map((option) => (
                             <SelectItem key={option} value={option}>
-                              {option}
+                              {key === "duration_seconds" && option === "-1" ? t("genDurationAuto") : option}
                             </SelectItem>
                           ))}
                         </SelectContent>

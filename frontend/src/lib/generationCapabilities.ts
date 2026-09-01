@@ -39,6 +39,12 @@ export function capabilityNumber(model: GenerationModel | null, key: string, fal
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
+/** 布尔默认值也属于模型契约。缺失时使用调用方给的保守默认。 */
+export function capabilityBoolean(model: GenerationModel | null, key: string, fallback = false): boolean {
+  const value = model?.capabilities?.[key];
+  return typeof value === "boolean" ? value : fallback;
+}
+
 /**
  * 这个角色最多能挂几份。目录里没写就是 1 —— **保守的那一边**:多挂一份的下场是提交时被拒,
  * 少挂一份只是少一张参考图。
@@ -80,8 +86,29 @@ export function parameterKeys(model: GenerationModel | null): string[] {
 }
 
 export function supportsParameter(model: GenerationModel | null, key: string) {
-  const keys = parameterKeys(model);
-  return keys.length === 0 || keys.includes(key);
+  if (key === "generate_audio" && model?.capabilities?.supports_generate_audio === true) return true;
+  const declared = model?.capabilities?.parameter_keys;
+  // 缺字段是旧后端/旧缓存，维持兼容；明确给 [] 则表示“不要猜任何参数”。此前把两者都
+  // 压成空数组，未知模型会反而被判成全支持，UI 又自动补出 1024/720p/5 秒。
+  if (!Array.isArray(declared)) return true;
+  return declared.map(String).includes(key);
+}
+
+/** 需要开关控件的参数。参数类型也是能力契约的一部分，不能在各页面各抄一张名单。 */
+export function booleanParameterKeys(model: GenerationModel | null): string[] {
+  const value = model?.capabilities?.boolean_parameters;
+  if (!Array.isArray(value)) return [];
+  return value.map(String).filter((key) => key && supportsParameter(model, key));
+}
+
+/** 供应商特有的枚举参数，例如 OpenAI quality/background/output_format。 */
+export function parameterChoiceEntries(model: GenerationModel | null): Array<[string, string[]]> {
+  const value = model?.capabilities?.parameter_choices;
+  if (!value || typeof value !== "object") return [];
+  return Object.entries(value as Record<string, unknown>)
+    .filter(([key, choices]) => supportsParameter(model, key) && Array.isArray(choices))
+    .map(([key, choices]) => [key, (choices as unknown[]).map(String).filter(Boolean)] as [string, string[]])
+    .filter(([, choices]) => choices.length > 0);
 }
 
 /** 这个模型能出哪些尺寸。**不限图像** —— 万相视频收的也是 `宽*高` 的像素对,
@@ -118,6 +145,14 @@ export function durationOptions(model: GenerationModel | null): number[] {
   return value.map((item) => Number(item)).filter((item) => Number.isFinite(item) && item > 0);
 }
 
+/** 区间以外的合法时长值，例如 Seedance 2.5 的 -1=自动。 */
+export function durationSpecialValues(model: GenerationModel | null): number[] {
+  if (!supportsParameter(model, "duration_seconds")) return [];
+  const value = model?.capabilities?.duration_special_values;
+  if (!Array.isArray(value)) return [];
+  return value.map(Number).filter(Number.isFinite);
+}
+
 /** 时长是区间时的上下界;不是区间(或没声明上界)时返回 null。 */
 export function durationRange(model: GenerationModel | null): { min: number; max: number } | null {
   if (durationOptions(model).length > 0) return null;
@@ -126,7 +161,40 @@ export function durationRange(model: GenerationModel | null): { min: number; max
   return { min: capabilityNumber(model, "min_duration_seconds", 1) || 1, max };
 }
 
+/** 所有可在 UI 中选择的时长值：特殊值、离散档位或完整整数区间。 */
+export function durationChoices(model: GenerationModel | null, resolution = ""): number[] {
+  const special = durationSpecialValues(model);
+  const discrete = durationOptions(model);
+  const range = durationRange(model);
+  const regular = discrete.length > 0
+    ? discrete
+    : range
+      ? Array.from({ length: Math.floor(range.max) - Math.ceil(range.min) + 1 }, (_, index) => Math.ceil(range.min) + index)
+      : [];
+  const byResolution = model?.capabilities?.duration_by_resolution;
+  const constrained = byResolution && typeof byResolution === "object"
+    ? (byResolution as Record<string, unknown>)[resolution]
+    : undefined;
+  const allowed = Array.isArray(constrained)
+    ? constrained.map(Number).filter((item) => Number.isFinite(item) && item > 0)
+    : regular;
+  return [...new Set([...special, ...allowed])];
+}
+
+/** 默认时长允许是 -1；通用 capabilityNumber 有意只接收正数，不适合这里。 */
+export function defaultDuration(model: GenerationModel | null, fallback = 5): number {
+  const declared = Number(model?.capabilities?.default_duration_seconds);
+  if (Number.isFinite(declared)) return declared;
+  return durationChoices(model)[0] ?? fallback;
+}
+
+/** 工作流字符串表单写回类型化参数，避免 "false" 在 Python 中被 bool("false") 判成 true。 */
+export function parseGenerationParameterInput(value: string): string | number | boolean {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return /^-?\d+(\.\d+)?$/.test(value) ? Number(value) : value;
+}
+
 export function maxImages(model: GenerationModel | null): number {
   return capabilityNumber(model, "max_num_images", 4);
 }
-

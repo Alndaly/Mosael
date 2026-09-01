@@ -48,6 +48,18 @@ def test_时长与种子透传() -> None:
     assert payload["parameters"]["seed"] == 42
 
 
+def test_万相27的比例字段叫ratio而不是aspect_ratio() -> None:
+    """2.7 官方请求体在 parameters 下收 `ratio`；发成 `aspect_ratio` 会被忽略或拒绝。"""
+    payload = build_submit_payload(
+        _req(
+            model="wan2.7-t2v",
+            parameters={"duration_seconds": 8, "resolution": "1080P", "aspect_ratio": "9:16"},
+        )
+    )
+    assert payload["parameters"]["ratio"] == "9:16"
+    assert "aspect_ratio" not in payload["parameters"]
+
+
 def test_图生视频走同一个端点_只多一个首帧(tmp_path) -> None:
     """和火山 / MiniMax 不同:那两家图生视频有独立路径或独立 content 数组,这家只是 input 多一项。"""
     png = tmp_path / "first.png"

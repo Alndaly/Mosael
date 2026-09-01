@@ -47,7 +47,8 @@ Open Studio 的 AI 能力(智能体对话、文生图 / 视频、配音、转写
 
 Evolink 是统一图像/视频网关：只需一份 Evolink API Key，同一连接下可分别加入 Seedance、Kling、
 Veo、海螺、WAN、Sora、GPT Image、Gemini、Seedream 等模型。Open Studio 会把本地参考图先上传到
-Evolink Files API，按模型 id 提交异步任务，再把限时产物地址立即下载回本地素材库。
+Evolink Files API；视频与音频输入也走同一入口，但保留首尾帧、参考、编辑源和续写片段等角色。
+系统按精确模型 id 提交异步任务，再把限时产物地址立即下载回本地素材库。
 
 这条路由与火山方舟的 Seedance Adapter 相互独立，可按内容策略、地区与账号可用性选择。Open Studio
 不会在本地额外拦「真人」提示词，但也不承诺绕过审核：最终是否通过仍由 Evolink 当前路由的上游模型决定。

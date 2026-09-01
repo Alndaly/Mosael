@@ -110,26 +110,29 @@ def build_submit_payload(request: GenerationRequest) -> dict[str, Any]:
     Seedance / MiniMax 那两家不同(它们各自有独立路径或独立的 content 数组),所以这里不做
     路径分支,只在 input 上加字段。
     """
-    parameters: dict[str, Any] = {}
+    provider_options: dict[str, Any] = {}
     if uses_media_array(request.model):
         # 2.7 按**清晰度档**出片,不收 `宽*高`:传 size 会被终态拒成
         # `Invalid input format, expected format like '480*832'` 或
         # `Input should be '1080P' or '720P'`。比例单独走 aspect_ratio。
         resolution = str(request.parameters.get("resolution") or "").strip()
         if resolution:
-            parameters["resolution"] = resolution.upper()
+            provider_options["resolution"] = resolution.upper()
         ratio = str(request.parameters.get("aspect_ratio") or "").strip()
         if ratio:
-            parameters["aspect_ratio"] = ratio
+            # Wan 2.7 calls this field `ratio` (not the domain-facing `aspect_ratio`).
+            # Keeping the translation at the Adapter seam lets every caller use one
+            # canonical parameter name without leaking provider vocabulary upward.
+            provider_options["ratio"] = ratio
     else:
         size = resolve_size(request.parameters)
         if size:
-            parameters["size"] = size
-    duration = request.parameters.get("duration_seconds") or request.parameters.get("duration")
+            provider_options["size"] = size
+    duration = request.parameters.get("duration_seconds")
     if duration is not None:
-        parameters["duration"] = int(duration)
+        provider_options["duration"] = int(duration)
     if request.parameters.get("seed") is not None:
-        parameters["seed"] = int(request.parameters["seed"])
+        provider_options["seed"] = int(request.parameters["seed"])
 
     payload: dict[str, Any] = {"model": request.model, "input": {"prompt": request.prompt}}
     if request.negative_prompt:
@@ -149,8 +152,8 @@ def build_submit_payload(request: GenerationRequest) -> dict[str, Any]:
         first_frame = first_frame_value(request)
         if first_frame:
             payload["input"]["img_url"] = first_frame
-    if parameters:
-        payload["parameters"] = parameters
+    if provider_options:
+        payload["parameters"] = provider_options
     return payload
 
 

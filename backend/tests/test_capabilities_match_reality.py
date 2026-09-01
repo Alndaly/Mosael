@@ -195,6 +195,26 @@ class Test海螺视频:
         assert set(C.MINIMAX_VIDEO_CAPABILITIES["resolutions"]) == {"768P", "2K"}
 
 
+class TestVeo31官方文档:
+    """Google Gemini API 文档，2026-09-01：Veo 3.1 支持 720p/1080p/4k；后两档只支持 8 秒。"""
+
+    def test_4k在目录且默认是720p(self) -> None:
+        model = next(item for item in C.BUILTIN_MODELS if item["id"] == "google:veo:video")
+        cap = model["capabilities"]
+        assert cap["resolutions"] == ["720p", "1080p", "4k"]
+        assert cap["default_resolution"] == "720p"
+        assert cap["duration_by_resolution"] == {"1080p": [8], "4k": [8]}
+        assert cap["supports_audio"] is True
+
+
+class TestOpenAI图片参数:
+    def test_高级参数有明确枚举而不是够不着的_adapter_分支(self) -> None:
+        cap = C.OPENAI_IMAGE_CAPABILITIES
+        assert set(cap["parameter_keys"]) >= {"quality", "background", "output_format", "moderation"}
+        assert cap["parameter_choices"]["quality"] == ["auto", "low", "medium", "high"]
+        assert cap["parameter_choices"]["output_format"] == ["png", "webp", "jpeg"]
+
+
 class Test参考素材的份数上限:
     """核查日期 2026-08-27。火山方舟与 MiniMax 各自报出的数字**完全一致**。
 
@@ -360,6 +380,88 @@ class Test万相27三个型号各认各的:
         assert C.WAN_27_R2V_CAPABILITIES["conditional_max_duration_seconds"] == {"reference_video": 10}
 
 
+class TestEvolinkSeedance25:
+    """核查日期 2026-09-01,Evolink 文档站五份 OpenAPI 逐字核
+    (seedance-2.5-{text,image,reference}-to-video、video-{edit,extend})。
+
+    Evolink 把 Seedance 2.5 的五种用法拆成**五个模型 id**,模式在名字里而不是参数里。
+    此前目录里一个 2.5 的条目都没有:手动加 `seedance-2.5-image-to-video` 会经「同 vendor
+    同 kind 第一条」落到 1.5 的描述符上 —— 时长被压到 4–12(实际 4–30)、默认分辨率错、
+    文生不放图也能提交(实际 image_urls 必填,网关 400)。
+    """
+
+    def test_五个模式各是一个模型id(self) -> None:
+        ids = {model for model, kind, _capabilities in C.EVOLINK_BUILTIN_MODELS if kind == "video"}
+        for model in (
+            "seedance-2.5-text-to-video",
+            "seedance-2.5-image-to-video",
+            "seedance-2.5-reference-to-video",
+            "seedance-2.5-video-edit",
+            "seedance-2.5-video-extend",
+        ):
+            assert model in ids, f"内置清单缺 {model} —— 用户得手动加,然后落到 1.5 的描述符上"
+
+    def test_时长是_4_到_30_的区间(self) -> None:
+        """文档原文:any integer value between 4–30 seconds,另有 -1 = 自动(描述符表达不了,
+        先不放 —— 放了会被区间校验拦下)。"""
+        for descriptor in (
+            C.EVOLINK_SEEDANCE_25_T2V_CAPABILITIES,
+            C.EVOLINK_SEEDANCE_25_I2V_CAPABILITIES,
+            C.EVOLINK_SEEDANCE_25_R2V_CAPABILITIES,
+            C.EVOLINK_SEEDANCE_25_VIDEO_EXTEND_CAPABILITIES,
+        ):
+            assert descriptor["min_duration_seconds"] == 4
+            assert descriptor["max_duration_seconds"] == 30
+
+    def test_图生视频首帧必填_尾帧可选(self) -> None:
+        """文档原文:image_urls 必填、1–2 张,1 张自动为首帧、2 张按位置为首帧+尾帧。
+        位置语义下「只给尾帧」会被当成首帧 —— 不报错,是悄悄生成反的。"""
+        assert C.EVOLINK_SEEDANCE_25_I2V_CAPABILITIES["requires_source"] == [["first_frame"]]
+        assert C.EVOLINK_SEEDANCE_25_I2V_CAPABILITIES["source_limits"] == {"first_frame": 1, "last_frame": 1}
+
+    def test_图生视频的宽高比只收_adaptive(self) -> None:
+        """文档原文:the only value this model accepts。继承公用那份比例清单的话,
+        界面默认发 16:9,网关 400。"""
+        assert C.EVOLINK_SEEDANCE_25_I2V_CAPABILITIES["aspect_ratios"] == ["adaptive"]
+
+    def test_全能参考三类素材至少给一份(self) -> None:
+        """文档原文:图 1–30 / 视频 1–10 / 音频 1–10,at least one must be provided。"""
+        descriptor = C.EVOLINK_SEEDANCE_25_R2V_CAPABILITIES
+        assert descriptor["requires_source"] == [["reference_image", "reference_video", "reference_audio"]]
+        assert descriptor["source_limits"] == {
+            "reference_image": 30, "reference_video": 10, "reference_audio": 10,
+        }
+
+    def test_文生视频一个素材角色都不声明(self) -> None:
+        """文档原文:does not support image/video/audio input。声明了的话界面会长出素材槽,
+        挂上去的图被网关 400 拒掉 —— 或者更糟:被默默忽略。"""
+        roles = [k for k in C.EVOLINK_SEEDANCE_25_T2V_CAPABILITIES["parameter_keys"] if k in _SOURCE_ROLE_NAMES]
+        assert roles == [], f"2.5 t2v 不收素材,却声明了:{roles}"
+
+    def test_视频编辑只提供自动时长(self) -> None:
+        """文档原文:duration 只收 -1(跟随输入,自定义时长被拒)。
+
+        与其把参数藏掉、依赖网关默认，不如把唯一合法值明确声明为“自动”；这样界面、智能体
+        和校验器看到的是同一份契约。
+        """
+        descriptor = C.EVOLINK_SEEDANCE_25_VIDEO_EDIT_CAPABILITIES
+        assert "duration_seconds" in descriptor["parameter_keys"]
+        assert descriptor["duration_special_values"] == [-1]
+        assert descriptor["default_duration_seconds"] == -1
+
+    def test_被处理的那段必填且限一份(self) -> None:
+        """文档原文:the first video is the video being edited / extended。视频总数上限 10,
+        所以参考视频的上限是 9 而不是 10。"""
+        edit = C.EVOLINK_SEEDANCE_25_VIDEO_EDIT_CAPABILITIES
+        extend = C.EVOLINK_SEEDANCE_25_VIDEO_EXTEND_CAPABILITIES
+        assert edit["requires_source"] == [["source_video"]]
+        assert edit["source_limits"]["source_video"] == 1
+        assert edit["source_limits"]["reference_video"] == 9
+        assert extend["requires_source"] == [["first_clip"]]
+        assert extend["source_limits"]["first_clip"] == 1
+        assert extend["source_limits"]["reference_video"] == 9
+
+
 def test_这道棘轮扫得到东西() -> None:
     """假阴性比红更危险:哪天描述符改了名,上面几条会一起真空通过。"""
     assert C.WAN_VIDEO_CAPABILITIES["sizes"]
@@ -370,3 +472,5 @@ def test_这道棘轮扫得到东西() -> None:
     assert C.WAN_VIDEO_EDIT_CAPABILITIES["source_limits"]
     assert C.WAN_27_I2V_CAPABILITIES["source_limits"]
     assert C.WAN_27_R2V_CAPABILITIES["source_limits"]
+    assert C.EVOLINK_SEEDANCE_25_R2V_CAPABILITIES["source_limits"]
+    assert C.EVOLINK_SEEDANCE_25_VIDEO_EDIT_CAPABILITIES["source_limits"]

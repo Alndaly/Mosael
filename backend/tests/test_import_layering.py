@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import ast
 import collections
-import subprocess
 from pathlib import Path
 
 """模块依赖的结构性约束。
@@ -22,19 +21,18 @@ LOWER_LAYERS = ("app.domain", "app.core", "app.media", "app.ai", "app.ai.runtime
 
 
 def _modules() -> list[tuple[str, Path]]:
-    out = subprocess.run(["git", "ls-files", "app"], cwd=BACKEND, capture_output=True, text=True).stdout
     mods = []
-    for rel in out.split():
-        if not rel.endswith(".py"):
+    # 看**当前工作树**而不是 git 索引。新增模块尚未 git add 时正是最该检查分层的时刻；
+    # 旧实现看不见它，会把 `app.ai.providers.media_transfer` 错认成已知父包
+    # `app.ai.providers`，既可能制造假环，也可能漏掉新文件里的真环。
+    for path in sorted((BACKEND / APP).rglob("*.py")):
+        if "__pycache__" in path.parts:
             continue
-        # git ls-files 会列出"已删除但还没暂存"的文件。删一个模块之后到 git add 之前,
-        # 这里会去打开一个不存在的路径,让整组分层测试红在一个与分层无关的原因上。
-        if not (BACKEND / rel).exists():
-            continue
+        rel = path.relative_to(BACKEND).as_posix()
         name = rel[:-3].replace("/", ".")
         if name.endswith(".__init__"):
             name = name[: -len(".__init__")]
-        mods.append((name, BACKEND / rel))
+        mods.append((name, path))
     return mods
 
 

@@ -4,6 +4,7 @@ import base64
 import mimetypes
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -18,7 +19,9 @@ from app.ai.providers.base import (
     ProviderError,
     metering_from_request,
     provider_http_error,
+    source_url_values,
 )
+from app.ai.providers.media_transfer import fetch_bytes
 
 """
 OpenAI Images-compatible adapter:
@@ -53,7 +56,7 @@ def build_edit_fields(request: GenerationRequest) -> dict[str, str]:
     size = request.parameters.get("size")
     if size:
         fields["size"] = str(size).replace("*", "x")
-    for key in ("quality", "background", "output_format", "moderation", "input_fidelity"):
+    for key in ("quality", "background", "output_format", "moderation"):
         value = request.parameters.get(key)
         if value:
             fields[key] = str(value)
@@ -90,13 +93,19 @@ class OpenAIImageProvider(GenerationProvider):
         try:
             with RetryingClient(base_url=base_url, timeout=120, headers=headers) as client:
                 references = request.sources_for(REFERENCE_IMAGE)
-                if references:
+                reference_urls = source_url_values(request.parameters, REFERENCE_IMAGE, request.kind)
+                if references or reference_urls:
                     files = []
                     handles = []
                     try:
                         # 张数由描述符管(见 domain/generation/catalog 的 source_limits),
                         # 提交前那道统一校验已经拦过。这里再截一刀的话,超出的那几张会被
                         # 悄悄丢掉 —— 任务照样成功,只是用的图和用户挂的不一样。
+                        for index, url in enumerate(reference_urls, start=1):
+                            remote = fetch_bytes(url)
+                            name = Path(urlsplit(url).path).name or f"reference-{index}"
+                            mime_type = remote.content_type or mimetypes.guess_type(name)[0] or "image/png"
+                            files.append(("image[]", (name, remote.data, mime_type)))
                         for path in references:
                             handle = path.open("rb")
                             handles.append(handle)
@@ -113,18 +122,16 @@ class OpenAIImageProvider(GenerationProvider):
                 data = [one for one in (content.get("data") or []) if isinstance(one, dict)]
                 #: 两种回法:外链和内联 base64。**都要全取** —— n 是几就有几条,
                 #: 只取第一条的话后面那几张连同它们的钱一起消失。
-                if data and any(one.get("url") for one in data):
-                    images: list[bytes] = []
-                    for one in data:
-                        if not one.get("url"):
-                            continue
-                        download = client.get(str(one["url"]))
-                        download.raise_for_status()
-                        images.append(download.content)
-                    if not images:
-                        raise ProviderError("Provider returned no image data")
-                else:
-                    images = extract_image_bytes(content)
+                images: list[bytes] = []
+                for one in data:
+                    if one.get("b64_json"):
+                        images.append(base64.b64decode(str(one["b64_json"])))
+                    elif one.get("url"):
+                        # Provider results are commonly pre-signed object-storage URLs. Never
+                        # reuse the API client carrying the OpenAI bearer token.
+                        images.append(fetch_bytes(str(one["url"])).data)
+                if not images:
+                    raise ProviderError("Provider returned no image data")
                 output_dir.mkdir(parents=True, exist_ok=True)
                 suffix = str(request.parameters.get("output_format") or "png").lower().lstrip(".")
                 if suffix not in {"png", "jpg", "jpeg", "webp"}:

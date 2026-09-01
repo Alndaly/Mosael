@@ -277,6 +277,23 @@ failed 错误色、cancelled 虚线弱化；即使节点已有旧产物，重跑
 - 事件时间线、子任务列表等嵌套 grid 的内容列必须是 `minmax(0,1fr)`，对应子项也要 `min-w-0`；只在
   最内层补断词规则无法修复父级固有宽度。
 
+## 17. 生成描述符不能替未知模型猜能力
+
+能力目录、Adapter、三个生成界面与 MCP 是一条契约链：
+
+- `known_capabilities_for` 只给提交校验使用；精确查不到表示平台不知道，不能套用同 vendor 的第一项；
+- `capabilities_for` 给 UI/MCP 的未知模型返回 `parameter_keys: []`，仍可提交提示词，但不自动发送尺寸、
+  时长、画幅或素材；前端必须区分“字段缺失的旧描述符”和“明确为空”；
+- Adapter 只翻译已声明参数。新增 `request.parameters.get("x")` 时，必须同时声明 `x` 并让 UI/MCP
+  能表达它；编辑专属等模式级参数在契约支持模式范围前不要伪装成全模型参数；
+- `supports_audio` 只表示输出可能有声音，只有 `supports_generate_audio` / `boolean_parameters` 才能
+  生成开关；枚举放 `parameter_choices`，分辨率限定时长放 `duration_by_resolution`；
+- 外链和素材库文件是同一个领域角色，必填、上限、互斥和搭伴校验必须同时计数。
+
+回归至少运行 `test_generation_capability_contract.py`、`test_capabilities_match_reality.py`、
+`test_adapters_read_only_declared_parameters.py` 与前端 `generationCapabilities.test.ts`。供应商结果下载
+必须走 `media_transfer`，不得复用携带 API 凭据的提交客户端去请求预签名对象存储地址。
+
 ## Verification rule
 
 每个 slice 至少跑:

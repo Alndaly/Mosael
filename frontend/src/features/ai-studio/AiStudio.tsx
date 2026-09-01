@@ -50,17 +50,20 @@ import { usePersistentTab } from "@/lib/usePersistentTab";
 import { MessageFooter, MessageTime, formatCostMicros } from "@/features/ai-studio/messageUsage";
 import {
   aspectRatioOptions,
-  capabilityNumber,
-  durationRange,
+  booleanParameterKeys,
+  capabilityBoolean,
   capabilityString,
-  durationOptions,
+  defaultDuration,
+  durationChoices,
   sizeOptions,
   maxImages,
+  parameterChoiceEntries,
   supportsParameter,
   sourceLimit,
   exclusiveSourceGroups,
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
+import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_LABELS } from "@/app/generationParameterLabels";
 import { FrameSlotField, KeyframePairField } from "@/features/ai-studio/FrameSlotField";
 import { SessionList } from "@/features/ai-studio/SessionList";
 import { AI_PANEL_BOUNDS } from "@/features/ai-studio/ChatWorkspace";
@@ -91,6 +94,9 @@ type GenerationConfig = {
   seed: string;
   negativePrompt: string;
   durationSeconds: string;
+  generateAudio: boolean;
+  booleanParameters: Record<string, boolean>;
+  enumParameters: Record<string, string>;
   resolution: string;
   aspectRatio: string;
   /** 带角色的输入素材:首帧 / 尾帧 / 参考图。它们是同一种东西,差的只是用途。 */
@@ -114,7 +120,6 @@ type GenerationEngineOption = GenerationOption & { value: string };
 
 function defaultGenerationConfig(model: GenerationModel | null): GenerationConfig {
   const sizes = sizeOptions(model);
-  const durations = durationOptions(model);
   const resolutions = videoResolutionOptions(model);
   const ratios = aspectRatioOptions(model);
   return {
@@ -122,7 +127,19 @@ function defaultGenerationConfig(model: GenerationModel | null): GenerationConfi
     numImages: "1",
     seed: "",
     negativePrompt: "",
-    durationSeconds: String(capabilityNumber(model, "default_duration_seconds", durations[0] ?? 5)),
+    durationSeconds: String(defaultDuration(model)),
+    generateAudio: capabilityBoolean(model, "default_generate_audio"),
+    booleanParameters: Object.fromEntries(
+      booleanParameterKeys(model)
+        .filter((key) => key !== "generate_audio")
+        .map((key) => [key, capabilityBoolean(model, `default_${key}`)]),
+    ),
+    enumParameters: Object.fromEntries(
+      parameterChoiceEntries(model).map(([key, choices]) => [
+        key,
+        capabilityString(model, `default_${key}`, choices[0] ?? ""),
+      ]),
+    ),
     resolution: capabilityString(model, "default_resolution", resolutions[0] ?? ""),
     aspectRatio: capabilityString(model, "default_aspect_ratio", ratios[0] ?? ""),
     frames: emptyFrames(),
@@ -138,22 +155,27 @@ function generationParameters(model: GenerationModel, config: GenerationConfig) 
   // **图像和视频都要的那几项先放这儿。** 此前它们写在 image 分支里,于是视频那条路上
   // 控件照常渲染、值却在这一行被丢掉 —— 用户选了 ComfyUI 工作流没反应、填了种子不生效,
   // 而界面什么都没说。控件的显示条件本来就不分 kind(见 supportsParameter 那几处)。
-  const shared: Record<string, string | number> = {};
+  const shared: Record<string, string | number | boolean> = {};
   if (model.provider === "comfyui" && config.workflow) shared.workflow = config.workflow;
   if (supportsParameter(model, "seed") && config.seed.trim()) shared.seed = Number(config.seed);
+  for (const key of booleanParameterKeys(model)) {
+    if (key !== "generate_audio") shared[key] = config.booleanParameters[key] ?? capabilityBoolean(model, `default_${key}`);
+  }
+  for (const [key, choices] of parameterChoiceEntries(model)) {
+    const value = config.enumParameters[key] ?? capabilityString(model, `default_${key}`, choices[0] ?? "");
+    if (value) shared[key] = value;
+  }
 
   if (model.kind === "image") {
-    const params: Record<string, string | number> = { ...shared };
+    const params: Record<string, string | number | boolean> = { ...shared };
     if (supportsParameter(model, "size") && config.size) params.size = config.size;
     if (supportsParameter(model, "num_images")) params.num_images = Math.max(1, Math.min(maxImages(model), Number(config.numImages) || 1));
     return params;
   }
-  const params: Record<string, string | number> = { ...shared };
+  const params: Record<string, string | number | boolean> = { ...shared };
   if (supportsParameter(model, "duration_seconds")) {
-    params.duration_seconds = Math.max(
-      capabilityNumber(model, "min_duration_seconds", 1),
-      Math.min(capabilityNumber(model, "max_duration_seconds", 10), Number(config.durationSeconds) || 5),
-    );
+    // 不在前端悄悄夹到上下界：-1 这类特殊值会被夹坏，真正非法的值应由统一校验器明确报错。
+    params.duration_seconds = Number(config.durationSeconds);
   }
   // 尺寸**按模型声明的来**。这一支此前只认 `resolution`(720p 那种档位名)—— 那是按火山 /
   // 可灵那几家定的形状,而万相收的是 `宽*高` 的像素对。声明了 size 的模型于是一个尺寸都发不出去,
@@ -161,6 +183,7 @@ function generationParameters(model: GenerationModel, config: GenerationConfig) 
   if (supportsParameter(model, "size") && config.size) params.size = config.size;
   if (supportsParameter(model, "resolution") && config.resolution) params.resolution = config.resolution;
   if (supportsParameter(model, "aspect_ratio") && config.aspectRatio) params.aspect_ratio = config.aspectRatio;
+  if (supportsParameter(model, "generate_audio")) params.generate_audio = config.generateAudio;
   // 外链形式的输入素材:first_frame_url / last_frame_url / reference_image_url。
   // 三种角色一条路 —— 此前只有首帧那一条,而且是手写的。
   Object.assign(params, frameUrlParameters(config.frames, (role) => supportsParameter(model, role)));
@@ -324,9 +347,15 @@ function GenerateWorkspace({
   const selectedModel = (modelId ? optionByValue.get(modelId) : null) ?? sessionOption ?? defaultImageOption ?? modelOptions[0] ?? null;
   const selectedAdapterAvailable = selectedModel?.adapter_available ?? false;
   const selectedSizes = sizeOptions(selectedModel);
-  const selectedDurations = durationOptions(selectedModel);
+  const selectedDurations = durationChoices(selectedModel, generationConfig.resolution);
   const selectedResolutions = videoResolutionOptions(selectedModel);
   const selectedAspectRatios = aspectRatioOptions(selectedModel);
+  React.useEffect(() => {
+    const current = Number(generationConfig.durationSeconds);
+    if (selectedDurations.length > 0 && !selectedDurations.includes(current)) {
+      setGenerationConfig((config) => ({ ...config, durationSeconds: String(selectedDurations[0]) }));
+    }
+  }, [generationConfig.durationSeconds, selectedDurations]);
   const supportsNegativePrompt = supportsParameter(selectedModel, "negative_prompt");
   const supportsReferenceImage = supportsParameter(selectedModel, "reference_image");
   const supportsFirstFrame = selectedModel?.kind === "video" && supportsParameter(selectedModel, "first_frame");
@@ -974,7 +1003,7 @@ function GenerateWorkspace({
                 {supportsParameter(selectedModel, "duration_seconds") && (
                   <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
                     <span>{t("genDuration")}</span>
-                    {selectedDurations.length > 1 ? (
+                    {selectedDurations.length > 0 ? (
                       <Select value={generationConfig.durationSeconds} onValueChange={(value) => setConfigValue("durationSeconds", value)}>
                         <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground">
                           <SelectValue />
@@ -982,7 +1011,7 @@ function GenerateWorkspace({
                         <SelectContent>
                           {selectedDurations.map((duration) => (
                             <SelectItem key={duration} value={String(duration)}>
-                              {duration}
+                              {duration === -1 ? t("genDurationAuto") : `${duration}s`}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -991,21 +1020,47 @@ function GenerateWorkspace({
                       <Input
                         className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-ui-sm font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
                         type="number"
-                        // 上下界都从描述符来 —— 写死的话,界面允许的值供应商会当场拒掉
-                        // (Seedance 2 实测 3 秒被拒、4 秒可以)。
-                        min={durationRange(selectedModel)?.min ?? 1}
-                        max={durationRange(selectedModel)?.max ?? capabilityNumber(selectedModel, "max_duration_seconds", 10)}
-                        placeholder={(() => { const r = durationRange(selectedModel); return r ? `${r.min}–${r.max}` : ""; })()}
                         value={generationConfig.durationSeconds}
                         onChange={(event) => setConfigValue("durationSeconds", event.target.value)}
                       />
                     )}
                   </label>
                 )}
+                {supportsParameter(selectedModel, "generate_audio") && (
+                  <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
+                    <span>{t("genGenerateAudio")}</span>
+                    <Select
+                      value={generationConfig.generateAudio ? "true" : "false"}
+                      onValueChange={(value) =>
+                        setGenerationConfig((current) => ({ ...current, generateAudio: value === "true" }))
+                      }
+                    >
+                      <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="true">{t("boardWithSound")}</SelectItem>
+                        <SelectItem value="false">{t("boardMuted")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </label>
+                )}
                 {supportsParameter(selectedModel, "resolution") && selectedResolutions.length > 0 && (
                   <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
                     <span>{t("genResolution")}</span>
-                    <Select value={generationConfig.resolution} onValueChange={(value) => setConfigValue("resolution", value)}>
+                    <Select
+                      value={generationConfig.resolution}
+                      onValueChange={(value) => {
+                        const durations = durationChoices(selectedModel, value);
+                        setGenerationConfig((current) => ({
+                          ...current,
+                          resolution: value,
+                          durationSeconds: durations.length > 0 && !durations.includes(Number(current.durationSeconds))
+                            ? String(durations[0])
+                            : current.durationSeconds,
+                        }));
+                      }}
+                    >
                       <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground">
                         <SelectValue />
                       </SelectTrigger>
@@ -1082,6 +1137,51 @@ function GenerateWorkspace({
                 ))}
               </>
             )}
+            {booleanParameterKeys(selectedModel).filter((key) => key !== "generate_audio").map((key) => {
+              const labelKey = GENERATION_BOOLEAN_LABELS[key];
+              return (
+                <label key={key} className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
+                  <span>{labelKey ? t(labelKey) : key}</span>
+                  <Select
+                    value={generationConfig.booleanParameters[key] ? "true" : "false"}
+                    onValueChange={(value) => setGenerationConfig((current) => ({
+                      ...current,
+                      booleanParameters: { ...current.booleanParameters, [key]: value === "true" },
+                    }))}
+                  >
+                    <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="true">{t("wfGenToggleOn")}</SelectItem>
+                      <SelectItem value="false">{t("wfGenToggleOff")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </label>
+              );
+            })}
+            {parameterChoiceEntries(selectedModel).map(([key, choices]) => {
+              const labelKey = GENERATION_PARAMETER_LABELS[key];
+              return (
+                <label key={key} className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
+                  <span>{labelKey ? t(labelKey) : key}</span>
+                  <Select
+                    value={generationConfig.enumParameters[key] ?? capabilityString(selectedModel, `default_${key}`, choices[0] ?? "")}
+                    onValueChange={(value) => setGenerationConfig((current) => ({
+                      ...current,
+                      enumParameters: { ...current.enumParameters, [key]: value },
+                    }))}
+                  >
+                    <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {choices.map((choice) => <SelectItem key={choice} value={choice}>{choice}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </label>
+              );
+            })}
           </>
         )}
       </aside>

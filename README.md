@@ -157,8 +157,11 @@ report remaining quota and reset windows.
 
 Evolink is available as one image/video gateway provider: configure one Evolink API key, then add
 Seedance, Kling, Veo, Hailuo, WAN, Sora, GPT Image, Gemini or Seedream model rows under that
-connection. Local reference images are uploaded through Evolink's Files API; completed results are
-downloaded immediately into the local media library because gateway URLs expire.
+connection. Local images, videos, and audio references are uploaded through Evolink's Files API;
+their semantic roles (first/last frame, reference, edit source, or extension clip) stay distinct.
+Completed results are downloaded immediately into the local media library because gateway URLs expire.
+Generation controls come from the exact model descriptor; manually added unknown models remain usable
+without inheriting another model's guessed duration, resolution, or input rules.
 
 Plugins run as subprocess scripts or connect to MCP servers, declaring their permissions in a
 manifest. Install one from the built-in market or any zip URL — the package is fetched and its

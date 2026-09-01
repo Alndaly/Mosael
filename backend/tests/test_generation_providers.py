@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from app.ai.providers import get_provider
-from app.ai.providers.base import FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, SourceAsset
+from app.ai.providers.base import FIRST_FRAME, FIRST_CLIP, LAST_FRAME, REFERENCE_AUDIO, REFERENCE_IMAGE, REFERENCE_VIDEO, SOURCE_VIDEO, SourceAsset
 import httpx
 
 from app.ai.providers.base import (
@@ -13,11 +13,20 @@ from app.ai.providers.base import (
     metering_from_request,
     provider_http_error,
     sanitize_provider_error,
+    source_values,
 )
+from app.ai.providers.media_transfer import DownloadedBytes
 from app.ai.providers.video.kling import build_submit_payload as kling_payload, extract_video_url as extract_kling_video_url
-from app.ai.providers.image.openai import build_edit_fields as openai_edit_fields, build_submit_payload as openai_payload, extract_image_bytes
+from app.ai.providers.image.openai import (
+    OpenAIImageProvider,
+    build_edit_fields as openai_edit_fields,
+    build_submit_payload as openai_payload,
+    extract_image_bytes,
+)
 from app.ai.providers.image.qwen import (
     DASHSCOPE_BASE,
+    EDIT_PATH,
+    QwenImageProvider,
     build_edit_payload as qwen_edit_payload,
     build_submit_payload as qwen_payload,
     download_result_asset,
@@ -36,7 +45,8 @@ from app.ai.providers.evolink import (
     _upload as evolink_upload,
     build_image_payload as evolink_image_payload,
     build_video_payload as evolink_video_payload,
-    collect_image_urls as evolink_collect_image_urls,
+    collect_media_urls as evolink_collect_media_urls,
+    download_results as evolink_download_results,
     extract_result_urls as extract_evolink_result_urls,
 )
 
@@ -65,11 +75,24 @@ def test_guardrails_reject_out_of_bounds() -> None:
         provider.validate_request(make_request("image", num_images=9))
     video = get_provider("bytedance", "video")
     with pytest.raises(ProviderError, match="duration_seconds"):
-        video.validate_request(make_request("video", duration_seconds=60))
+        video.validate_request(make_request("video", duration_seconds=0))
     with pytest.raises(ProviderError, match="resolution"):
-        video.validate_request(make_request("video", resolution="8k"))
+        video.validate_request(make_request("video", resolution=""))
     with pytest.raises(ProviderError, match="Prompt"):
         video.validate_request(GenerationRequest(kind="video", model="m", prompt="  "))
+
+
+def test_openai_image_advanced_parameters_are_sent_by_generation_and_edit() -> None:
+    parameters = {
+        "quality": "high",
+        "background": "transparent",
+        "output_format": "webp",
+        "moderation": "low",
+    }
+    request = GenerationRequest(kind="image", model="gpt-image-2", prompt="x", parameters=parameters)
+    for payload in (openai_payload(request), openai_edit_fields(request)):
+        for key, value in parameters.items():
+            assert payload[key] == value
 
 
 def test_evolink_uses_gateway_parameter_names_and_wider_video_limits() -> None:
@@ -96,9 +119,9 @@ def test_evolink_uses_gateway_parameter_names_and_wider_video_limits() -> None:
         "image_urls": ["https://files.example/first.jpg", "https://files.example/last.jpg"],
     }
     provider = get_provider("evolink", "video")
-    provider.validate_request(make_request("video", duration_seconds=15, resolution="4k"))
-    with pytest.raises(ProviderError, match="3 and 15"):
-        provider.validate_request(make_request("video", duration_seconds=16))
+    provider.validate_request(make_request("video", duration_seconds=30, resolution="4k"))
+    with pytest.raises(ProviderError, match="3 and 30"):
+        provider.validate_request(make_request("video", duration_seconds=31))
 
 
 def test_evolink_image_payload_preserves_all_reference_urls() -> None:
@@ -121,6 +144,29 @@ def test_evolink_image_payload_preserves_all_reference_urls() -> None:
     }
 
 
+def test_qwen_prompt_extension_is_explicit_for_supported_models_only() -> None:
+    text = GenerationRequest(
+        kind="image", model="qwen-image", prompt="draw", parameters={"prompt_extend": False}
+    )
+    assert qwen_payload(text)["parameters"]["prompt_extend"] is False
+
+    pro = GenerationRequest(
+        kind="image",
+        model="qwen-image-2.0-pro",
+        prompt="edit",
+        parameters={"prompt_extend": False, "reference_image_url": "https://x/a.png"},
+    )
+    assert qwen_edit_payload(pro)["parameters"]["prompt_extend"] is False
+
+    legacy_edit = GenerationRequest(
+        kind="image",
+        model="qwen-image-edit",
+        prompt="edit",
+        parameters={"reference_image_url": "https://x/a.png"},
+    )
+    assert "prompt_extend" not in qwen_edit_payload(legacy_edit)["parameters"]
+
+
 def test_evolink_uploads_local_inputs_in_semantic_role_order(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     first = tmp_path / "first.png"
     last = tmp_path / "last.png"
@@ -139,14 +185,140 @@ def test_evolink_uploads_local_inputs_in_semantic_role_order(tmp_path, monkeypat
     )
     monkeypatch.setattr(
         "app.ai.providers.evolink._upload",
-        lambda path, _context: f"https://files.example/{path.name}",
+        lambda path, _context, **_kwargs: f"https://files.example/{path.name}",
     )
-    urls = evolink_collect_image_urls(request, ProviderContext("p", "evolink", "key"))
+    urls = evolink_collect_media_urls(request, ProviderContext("p", "evolink", "key"))["image_urls"]
     assert urls == [
         "https://files.example/first.png",
         "https://files.example/last.png",
         "https://files.example/reference.png",
     ]
+
+
+def test_evolink_collects_video_and_audio_urls_with_edit_target_first(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """视频编辑/续写的 video_urls **第一位必须是被处理的那段**(文档原文:the first video is
+    the video being edited)。按"先收集到的在前"排的话,参考视频一多,被编辑的就可能不在首位 ——
+    不报错,只是编辑了错的那段。"""
+    target = tmp_path / "target.mp4"
+    extra = tmp_path / "extra.mp4"
+    bgm = tmp_path / "bgm.mp3"
+    for path in (target, extra, bgm):
+        path.write_bytes(path.stem.encode())
+    request = GenerationRequest(
+        kind="video",
+        model="seedance-2.5-video-edit",
+        prompt="edit",
+        sources=(
+            SourceAsset(role=REFERENCE_VIDEO, path=extra),
+            SourceAsset(role=SOURCE_VIDEO, path=target),
+            SourceAsset(role=REFERENCE_AUDIO, path=bgm),
+        ),
+    )
+    monkeypatch.setattr(
+        "app.ai.providers.evolink._upload",
+        lambda path, _context, **_kwargs: f"https://files.example/{path.name}",
+    )
+    media = evolink_collect_media_urls(request, ProviderContext("p", "evolink", "key"))
+    assert media["video_urls"] == ["https://files.example/target.mp4", "https://files.example/extra.mp4"]
+    assert media["audio_urls"] == ["https://files.example/bgm.mp3"]
+
+    payload = evolink_video_payload(request, [], media["video_urls"], media["audio_urls"])
+    assert payload["video_urls"] == ["https://files.example/target.mp4", "https://files.example/extra.mp4"]
+    assert payload["audio_urls"] == ["https://files.example/bgm.mp3"]
+    assert "image_urls" not in payload
+
+
+def test_evolink_mixed_external_and_local_sources_keep_role_order(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """不能先收完全部外链再收本地文件；那会把远端参考片段排到本地待编辑视频之前。"""
+    target = tmp_path / "target.mp4"
+    first = tmp_path / "first.png"
+    target.write_bytes(b"target")
+    first.write_bytes(b"first")
+    request = GenerationRequest(
+        kind="video",
+        model="seedance-2.5-video-edit",
+        prompt="edit",
+        parameters={
+            "reference_video_url": "https://remote.example/reference.mp4",
+            "last_frame_url": "https://remote.example/last.png",
+        },
+        sources=(
+            SourceAsset(role=SOURCE_VIDEO, path=target),
+            SourceAsset(role=FIRST_FRAME, path=first),
+        ),
+    )
+    monkeypatch.setattr(
+        "app.ai.providers.evolink._upload",
+        lambda path, _context, **_kwargs: f"https://upload.example/{path.name}",
+    )
+
+    media = evolink_collect_media_urls(request, ProviderContext("p", "evolink", "key"))
+
+    assert media["video_urls"] == [
+        "https://upload.example/target.mp4",
+        "https://remote.example/reference.mp4",
+    ]
+    assert media["image_urls"] == [
+        "https://upload.example/first.png",
+        "https://remote.example/last.png",
+    ]
+
+
+def test_shared_source_values_combine_external_and_local_inputs(tmp_path) -> None:
+    """所有使用共享 source_values 的引擎都必须同时收到 URL 与素材库输入。"""
+    local = tmp_path / "local.png"
+    local.write_bytes(b"local")
+    request = GenerationRequest(
+        kind="image",
+        model="m",
+        prompt="edit",
+        parameters={"reference_image_url": "https://remote.example/reference.png"},
+        sources=(SourceAsset(role=REFERENCE_IMAGE, path=local),),
+    )
+
+    assert source_values(request, REFERENCE_IMAGE) == (
+        "https://remote.example/reference.png",
+        "data:image/png;base64,bG9jYWw=",
+    )
+
+
+def test_evolink_non_image_uploads_skip_browser_normalization(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """参考视频/音频原样上传:它们不是图片,浏览器归一化既不适用也会失败。"""
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"mp4")
+
+    def fail_normalization(_path, _directory):
+        raise AssertionError("视频走了图片归一化")
+
+    captured: dict[str, object] = {}
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {"success": True, "data": {"file_url": "https://files.example/clip.mp4"}}
+
+    class FakeClient:
+        def __init__(self, **kwargs) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+        def post(self, path: str, **kwargs):
+            captured["files"] = kwargs["files"]
+            return FakeResponse()
+
+    monkeypatch.setattr("app.ai.providers.evolink.browser_compatible_image", fail_normalization)
+    monkeypatch.setattr("app.ai.providers.evolink.RetryingClient", FakeClient)
+
+    url = evolink_upload(clip, ProviderContext("p", "evolink", "secret"), image=False)
+    assert url == "https://files.example/clip.mp4"
+    assert captured["files"]["file"][2] == "video/mp4"
 
 
 def test_evolink_upload_reuses_browser_image_normalization(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -204,6 +376,24 @@ def test_evolink_task_terminal_states() -> None:
         extract_evolink_result_urls(
             {"status": "failed", "error": {"code": "content_policy", "message": "policy rejected"}}
         )
+
+
+def test_evolink_results_use_shared_atomic_transfer_and_content_type_suffix(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[tuple[str, str]] = []
+
+    def fake_download(url, target, **_kwargs):
+        calls.append((url, target.name))
+        target.write_bytes(b"image")
+        return "image/webp"
+
+    monkeypatch.setattr("app.ai.providers.evolink.download_to_path", fake_download)
+    targets = evolink_download_results(["https://cdn.example/no-extension"], tmp_path, "image")
+
+    assert calls == [("https://cdn.example/no-extension", "generated-1.download")]
+    assert targets == [tmp_path / "generated-1.webp"]
+    assert targets[0].read_bytes() == b"image"
 
 
 def test_generation_metering_estimates_prompt_tokens() -> None:
@@ -309,15 +499,40 @@ def test_qwen_多张产出一张都不能少() -> None:
 def test_qwen_download_result_url_does_not_reuse_dashscope_headers(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, object] = {}
 
+    def fake_download(url: str, target, **kwargs) -> None:
+        captured.update(url=url, kwargs=kwargs)
+        target.write_bytes(b"png-bytes")
+
+    monkeypatch.setattr("app.ai.providers.image.qwen.download_to_path", fake_download)
+    target = tmp_path / "generated.png"
+    signed_url = "https://dashscope-oss.example.com/out.png?Signature=abc"
+
+    download_result_asset(signed_url, target)
+
+    assert captured["url"] == signed_url
+    assert "trusted_headers" not in captured["kwargs"]
+    assert target.read_bytes() == b"png-bytes"
+
+
+def test_qwen_url_only_reference_uses_edit_endpoint(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """URL 参考图与素材库参考图是同一个领域角色，不能因为没有本地 Path 就走文生图。"""
+    posted: list[tuple[str, dict[str, object]]] = []
+
     class FakeResponse:
-        content = b"png-bytes"
+        content = b"result"
+
+        def __init__(self, payload: dict[str, object] | None = None) -> None:
+            self._payload = payload or {}
 
         def raise_for_status(self) -> None:
             return None
 
+        def json(self) -> dict[str, object]:
+            return self._payload
+
     class FakeClient:
-        def __init__(self, **kwargs) -> None:
-            captured["kwargs"] = kwargs
+        def __init__(self, **_kwargs) -> None:
+            return None
 
         def __enter__(self):
             return self
@@ -325,21 +540,32 @@ def test_qwen_download_result_url_does_not_reuse_dashscope_headers(tmp_path, mon
         def __exit__(self, *_args) -> None:
             return None
 
-        def get(self, url: str) -> FakeResponse:
-            captured["url"] = url
+        def post(self, path: str, **kwargs) -> FakeResponse:
+            posted.append((path, kwargs))
+            return FakeResponse(
+                {"output": {"choices": [{"message": {"content": [{"image": "https://result.example/out.png"}]}}]}}
+            )
+
+        def get(self, _url: str) -> FakeResponse:
             return FakeResponse()
 
-    # 下载走的是带重试的传输层(RetryingClient),桩要打在它上面 —— 打 httpx.Client 拦不住,
-    # 因为子类在导入期就绑定了真类,结果会真的去连那个域名。
     monkeypatch.setattr("app.ai.providers.image.qwen.RetryingClient", FakeClient)
-    target = tmp_path / "generated.png"
-    signed_url = "https://dashscope-oss.example.com/out.png?Signature=abc"
+    monkeypatch.setattr(
+        "app.ai.providers.image.qwen.download_to_path",
+        lambda _url, target, **_kwargs: target.write_bytes(b"result"),
+    )
+    request = GenerationRequest(
+        kind="image",
+        model="qwen-image-2.0-pro",
+        prompt="edit",
+        parameters={"reference_image_url": "https://assets.example/reference.png"},
+    )
 
-    download_result_asset(signed_url, target)
+    QwenImageProvider().generate(request, ProviderContext("p", "alibaba", "secret"), tmp_path)
 
-    assert captured["url"] == signed_url
-    assert "headers" not in captured["kwargs"]
-    assert target.read_bytes() == b"png-bytes"
+    assert posted[0][0] == EDIT_PATH
+    content = posted[0][1]["json"]["input"]["messages"][0]["content"]
+    assert content[0] == {"image": "https://assets.example/reference.png"}
 
 
 def test_seedance_payload_shape() -> None:
@@ -364,6 +590,18 @@ def test_seedance_payload_shape() -> None:
     assert payload["resolution"] == "720p"
     assert "ratio" not in payload
     assert payload["generate_audio"] is True
+
+
+def test_seedance_1x_sends_declared_seed_and_camera_fixed_even_when_false() -> None:
+    request = GenerationRequest(
+        kind="video",
+        model="doubao-seedance-1-5-pro-251215",
+        prompt="waves",
+        parameters={"seed": 0, "camera_fixed": False},
+    )
+    payload = seedance_payload(request)
+    assert payload["seed"] == 0
+    assert payload["camera_fixed"] is False
 
 
 def test_seedance_payload_accepts_uploaded_first_frame(tmp_path) -> None:
@@ -447,11 +685,13 @@ def test_openai_image_payload_and_parsing() -> None:
         extract_image_bytes({"data": []})
 
 
-def test_openai_image_edit_fields() -> None:
+def test_openai_image_edit_fields_only_forward_declared_parameters() -> None:
     request = GenerationRequest(
         kind="image",
         model="gpt-image-2",
         prompt="edit it",
+        # input_fidelity is deliberately not part of the shared model descriptor yet: it is edit-only,
+        # while this contract currently describes parameters at model level rather than operation level.
         parameters={"size": "1024*1024", "num_images": 2, "quality": "high", "input_fidelity": "high"},
     )
     assert openai_edit_fields(request) == {
@@ -460,8 +700,57 @@ def test_openai_image_edit_fields() -> None:
         "n": "2",
         "size": "1024x1024",
         "quality": "high",
-        "input_fidelity": "high",
     }
+
+
+def test_openai_url_only_reference_uses_edit_endpoint_without_forwarding_api_key(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Canonical reference_image URLs must behave like local references and be fetched cleanly."""
+    captured: dict[str, object] = {}
+
+    def fake_fetch(url: str, **kwargs) -> DownloadedBytes:
+        captured["source_fetch"] = (url, kwargs)
+        return DownloadedBytes(b"reference", "image/png")
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self):
+            return {"data": [{"b64_json": "cmVzdWx0"}]}
+
+    class FakeClient:
+        def __init__(self, **kwargs) -> None:
+            captured["api_client"] = kwargs
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+        def post(self, path: str, **kwargs):
+            captured["post"] = (path, kwargs)
+            return FakeResponse()
+
+    monkeypatch.setattr("app.ai.providers.image.openai.fetch_bytes", fake_fetch)
+    monkeypatch.setattr("app.ai.providers.image.openai.RetryingClient", FakeClient)
+    request = GenerationRequest(
+        kind="image",
+        model="gpt-image-2",
+        prompt="edit",
+        parameters={"reference_image_url": "https://assets.example/ref.png"},
+    )
+
+    result = OpenAIImageProvider().generate(
+        request, ProviderContext("p", "openai", "secret-openai-key"), tmp_path
+    )
+
+    assert captured["source_fetch"] == ("https://assets.example/ref.png", {})
+    assert captured["post"][0] == "/images/edits"
+    assert captured["post"][1]["files"][0][1][1] == b"reference"
+    assert result.output_paths[0].read_bytes() == b"result"
 
 
 def test_veo_payload_and_parsing() -> None:
@@ -501,6 +790,28 @@ def test_veo_payload_accepts_uploaded_first_frame(tmp_path) -> None:
         "mimeType": "image/jpeg",
         "data": "aW1hZ2UtYnl0ZXM=",
     }
+
+
+def test_veo_fetching_external_first_frame_never_leaks_google_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_fetch(url: str, **kwargs) -> DownloadedBytes:
+        captured.update(url=url, kwargs=kwargs)
+        return DownloadedBytes(b"image", "image/png")
+
+    monkeypatch.setattr("app.ai.providers.video.veo.fetch_bytes", fake_fetch)
+    request = GenerationRequest(
+        kind="video",
+        model="veo",
+        prompt="p",
+        parameters={"first_frame_url": "https://assets.example/frame.png"},
+    )
+
+    converted = _with_first_frame_inline(request, "secret-google-key")
+
+    assert converted.parameters["first_frame_base64"] == "aW1hZ2U="
+    assert captured["url"] == "https://assets.example/frame.png"
+    assert "trusted_headers" not in captured["kwargs"]
 
 
 def test_kling_payload_and_parsing() -> None:

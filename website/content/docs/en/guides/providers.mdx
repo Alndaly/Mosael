@@ -49,8 +49,9 @@ Providers can be **enabled / disabled** at any time without deleting.
 
 Evolink is a unified image/video gateway. One Evolink API key can host Seedance, Kling, Veo,
 Hailuo, WAN, Sora, GPT Image, Gemini and Seedream model rows under the same connection. Open Studio
-uploads local reference images through the Evolink Files API, submits the asynchronous task by model
-id, then immediately downloads expiring results into the local media library.
+uploads local image, video and audio inputs through the Evolink Files API while preserving their
+roles (keyframe, reference, edit source, or extension clip), submits the asynchronous task by exact
+model id, then immediately downloads expiring results into the local media library.
 
 This route is independent from the native Volcengine Seedance adapter, so you can choose it for
 different regional, account or content-policy behaviour. Open Studio adds no local "real person"

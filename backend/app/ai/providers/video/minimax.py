@@ -25,6 +25,7 @@ from app.ai.providers.base import (
     metering_from_request,
     provider_http_error,
 )
+from app.ai.providers.media_transfer import download_to_path
 
 """
 MiniMax 海螺(Hailuo)视频生成。
@@ -83,9 +84,9 @@ def build_submit_payload(request: GenerationRequest, context: ProviderContext) -
 
     duration = request.parameters.get("duration_seconds")
     if duration:
-        # 官方区间 4–15 秒。夹住而不是报错:上游给的是 UI 上的档位,超出范围时按最近的合法值
-        # 跑完一次,比让用户对着一个 400 猜哪里不对有用。
-        payload["duration"] = max(4, min(15, int(duration)))
+        # 范围由 domain/generation 的模型描述符统一校验。Adapter 只翻译，不能把用户要的
+        # 99 秒静默改成 15 秒；那会让任务“成功”却交付错误结果。
+        payload["duration"] = int(duration)
     resolution = request.parameters.get("resolution")
     if resolution:
         payload["resolution"] = str(resolution)
@@ -137,12 +138,7 @@ class MiniMaxVideoProvider(GenerationProvider):
 
                 output_dir.mkdir(parents=True, exist_ok=True)
                 target = output_dir / "generated.mp4"
-                # 下载地址是外链(9 小时后失效),不带 Authorization —— 带上反而可能被拒。
-                with httpx.Client(timeout=120) as fetcher, fetcher.stream("GET", url) as download:
-                    download.raise_for_status()
-                    with target.open("wb") as out:
-                        for chunk in download.iter_bytes():
-                            out.write(chunk)
+                download_to_path(url, target, timeout=120)
                 return GenerationResult(
                     output_paths=[target], usage=metering_from_request(request), raw_usage=poll_payload
                 )

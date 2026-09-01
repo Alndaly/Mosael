@@ -186,7 +186,23 @@ def _pending_board(client, ws: str) -> tuple[str, str]:
     """一张板 + 一项「正在生成」的占位。返回 (board_id, item_id)。"""
     board_id = client.post("/api/boards", json={"workspace_id": ws}).json()["id"]
     canvas = {
-        "items": [{"id": "gen-1", "kind": "image", "x": 0, "y": 0, "job_id": "job-x", "text": "一只猫"}],
+        "items": [{
+            "id": "gen-1",
+            "kind": "image",
+            "x": 0,
+            "y": 0,
+            "job_id": "job-x",
+            "text": "一只猫",
+            "form": {
+                "prompt": "画一只猫",
+                "prompt_document": {"type": "doc", "content": []},
+                "provider": "evolink",
+                "model": "gpt-image-2",
+                "parameters": {"size": "1024x1024"},
+                "source_assets": [{"asset_id": "ref-1", "role": "reference_image"}],
+                "mentioned_asset_ids": ["ref-1"],
+            },
+        }],
         "edges": [],
     }
     client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "canvas": canvas})
@@ -220,6 +236,14 @@ def test_任务成功后占位就地变成素材() -> None:
 
     assert item["asset_id"] == "asset-42"
     assert "job_id" not in item, "填完素材还留着 job_id,界面会一直显示在生成"
+    assert item["form"] == {
+        "prompt": "",
+        "provider": "evolink",
+        "model": "gpt-image-2",
+        "parameters": {"size": "1024x1024"},
+        "source_assets": [],
+        "mentioned_asset_ids": [],
+    }
 
 
 def test_任务失败时留着这一项并写上原因() -> None:
@@ -249,6 +273,8 @@ def test_任务失败时留着这一项并写上原因() -> None:
     failed = items[0]
     assert "job_id" not in failed, "任务已经结束了,job_id 还留着 —— 画布会一直转圈"
     assert failed["run"] == {"status": "failed", "error": "供应商说这个提示词不行"}
+    assert failed["form"]["prompt"] == "画一只猫", "失败后输入必须留给重试"
+    assert failed["form"]["source_assets"], "失败后参考素材不能消失"
 
 
 def test_任务失败但没留下原因时不写空() -> None:

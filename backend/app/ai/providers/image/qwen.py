@@ -15,11 +15,11 @@ from app.ai.providers.base import (
     GenerationResult,
     ProviderContext,
     ProviderError,
-    image_file_to_data_url,
     source_values,
     metering_from_request,
     provider_http_error,
 )
+from app.ai.providers.media_transfer import download_to_path
 
 """
 Alibaba DashScope qwen-image adapter (async task API):
@@ -45,6 +45,8 @@ def build_submit_payload(request: GenerationRequest) -> dict[str, Any]:
         payload["input"]["negative_prompt"] = request.negative_prompt
     if request.parameters.get("seed") is not None:
         payload["parameters"]["seed"] = int(request.parameters["seed"])
+    if request.parameters.get("prompt_extend") is not None:
+        payload["parameters"]["prompt_extend"] = bool(request.parameters["prompt_extend"])
     return payload
 
 
@@ -133,13 +135,9 @@ def extract_result_urls(task_payload: dict[str, Any]) -> list[str] | None:
 
 
 def download_result_asset(url: str, target: Path) -> None:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    # DashScope returns a pre-signed OSS URL. Do not reuse the DashScope client here:
-    # carrying Authorization or DashScope headers into OSS changes signature validation.
-    with RetryingClient(timeout=120) as client:
-        response = client.get(url)
-        response.raise_for_status()
-        target.write_bytes(response.content)
+    # Compatibility wrapper used by Wan and older callers. The shared transfer seam keeps
+    # credentials off pre-signed OSS URLs and writes through a temporary file.
+    download_to_path(url, target, timeout=120)
 
 
 def _download_all(urls: list[str], output_dir: Path) -> list[Path]:
@@ -159,7 +157,9 @@ class QwenImageProvider(GenerationProvider):
             raise ProviderError("DashScope API key is not configured (settings → 生成服务)")
         base_url = resolve_dashscope_base(context)
         try:
-            if request.sources_for(REFERENCE_IMAGE):
+            # URL 与本地素材同属 reference_image。只看 sources_for 会让 URL-only 请求
+            # 静默走到文生图端点，参考图完全没被使用。
+            if source_values(request, REFERENCE_IMAGE):
                 headers = {"Authorization": f"Bearer {context.api_key}", "Content-Type": "application/json"}
                 with RetryingClient(base_url=resolve_qwen_edit_base(context), timeout=120, headers=headers) as client:
                     submit = client.post(EDIT_PATH, json=build_edit_payload(request, context))

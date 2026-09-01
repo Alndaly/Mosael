@@ -21,6 +21,7 @@ from app.ai.providers.base import (
     metering_from_request,
     provider_http_error,
 )
+from app.ai.providers.media_transfer import download_to_path, fetch_bytes
 
 """
 Google Veo adapter via Gemini long-running prediction:
@@ -55,8 +56,6 @@ def build_submit_payload(request: GenerationRequest) -> dict[str, Any]:
         parameters["durationSeconds"] = str(int(float(request.parameters["duration_seconds"])))
     if request.parameters.get("resolution"):
         parameters["resolution"] = str(request.parameters["resolution"])
-    if request.parameters.get("person_generation"):
-        parameters["personGeneration"] = str(request.parameters["person_generation"])
     if request.parameters.get("seed") not in (None, "", "auto"):
         parameters["seed"] = int(request.parameters["seed"])
     return {"instances": [instance], "parameters": parameters}
@@ -107,9 +106,14 @@ class VeoProvider(GenerationProvider):
 
                 output_dir.mkdir(parents=True, exist_ok=True)
                 target = output_dir / "generated.mp4"
-                download = client.get(uri)
-                download.raise_for_status()
-                target.write_bytes(download.content)
+                # Gemini may return either its own file URI (needs x-goog-api-key) or a signed
+                # storage URL. The transfer seam sends the key only to the configured API origin.
+                download_to_path(
+                    uri,
+                    target,
+                    trusted_base_url=base_url,
+                    trusted_headers=headers,
+                )
                 return GenerationResult(output_paths=[target], usage=metering_from_request(request), raw_usage=poll_payload)
         except httpx.HTTPError as exc:
             raise ProviderError(provider_http_error("Google Veo request failed", exc, context.api_key)) from exc
@@ -137,22 +141,19 @@ def _with_first_frame_inline(request: GenerationRequest, api_key: str) -> Genera
     if not first_frame_url:
         return request
     try:
-        with RetryingClient(timeout=30, follow_redirects=True) as client:
-            response = client.get(str(first_frame_url), headers={"x-goog-api-key": api_key})
-            response.raise_for_status()
-            mime_type = response.headers.get("content-type", "").split(";")[0]
-            if not mime_type:
-                mime_type = mimetypes.guess_type(str(first_frame_url))[0] or "image/png"
-            parameters = dict(request.parameters)
-            parameters["first_frame_base64"] = base64.b64encode(response.content).decode("ascii")
-            parameters["first_frame_mime_type"] = mime_type
-            return GenerationRequest(
-                kind=request.kind,
-                model=request.model,
-                prompt=request.prompt,
-                negative_prompt=request.negative_prompt,
-                parameters=parameters,
-                sources=request.sources,
-            )
+        # User/asset-service URLs are untrusted. fetch_bytes never receives the Google key.
+        remote = fetch_bytes(str(first_frame_url), timeout=30)
+        mime_type = remote.content_type or mimetypes.guess_type(str(first_frame_url))[0] or "image/png"
+        parameters = dict(request.parameters)
+        parameters["first_frame_base64"] = base64.b64encode(remote.data).decode("ascii")
+        parameters["first_frame_mime_type"] = mime_type
+        return GenerationRequest(
+            kind=request.kind,
+            model=request.model,
+            prompt=request.prompt,
+            negative_prompt=request.negative_prompt,
+            parameters=parameters,
+            sources=request.sources,
+        )
     except httpx.HTTPError as exc:
         raise ProviderError(provider_http_error("Failed to fetch Veo first frame", exc, api_key)) from exc

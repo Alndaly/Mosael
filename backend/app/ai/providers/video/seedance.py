@@ -24,6 +24,7 @@ from app.ai.providers.base import (
     metering_from_request,
     provider_http_error,
 )
+from app.ai.providers.media_transfer import download_to_path
 
 """
 ByteDance Seedance adapter.
@@ -103,8 +104,14 @@ def build_submit_payload(request: GenerationRequest, context: ProviderContext | 
     # 传了反而会触发裁剪(居中裁)。
     if ratio and not first_frame:
         payload["ratio"] = ratio
-    if request.parameters.get("generate_audio"):
-        payload["generate_audio"] = True
+    # 这两项只由 1.x 描述符暴露，但 Adapter 仍按“给了就原样发送”处理。
+    # 特别注意 camera_fixed=False 也是一个有意义的显式值，不能用 truthy 判断吞掉。
+    if request.parameters.get("seed") is not None:
+        payload["seed"] = int(request.parameters["seed"])
+    if request.parameters.get("camera_fixed") is not None:
+        payload["camera_fixed"] = bool(request.parameters["camera_fixed"])
+    if request.parameters.get("generate_audio") is not None:
+        payload["generate_audio"] = bool(request.parameters["generate_audio"])
     return payload
 
 
@@ -146,11 +153,7 @@ class SeedanceProvider(GenerationProvider):
 
                 output_dir.mkdir(parents=True, exist_ok=True)
                 target = output_dir / "generated.mp4"
-                with client.stream("GET", url) as download:
-                    download.raise_for_status()
-                    with target.open("wb") as out:
-                        for chunk in download.iter_bytes():
-                            out.write(chunk)
+                download_to_path(url, target)
                 return GenerationResult(output_paths=[target], usage=metering_from_request(request), raw_usage=poll_payload)
         except httpx.HTTPError as exc:
             raise ProviderError(provider_http_error("ARK request failed", exc, context.api_key)) from exc

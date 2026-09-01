@@ -109,9 +109,20 @@ class Test两代接口:
         assert not kling.uses_contents_array("kling-v2-6")
         assert not kling.uses_contents_array("kling-v1-6")
 
-    def test_型号写在路径里_不在请求体(self) -> None:
-        assert kling.v3_endpoint("kling-3.0-turbo").endswith("kling-3.0-turbo")
-        assert kling.v3_endpoint("kling-v3").endswith("kling-3.0")
+    def test_端点跟着生成模式走_型号写在路径里(self) -> None:
+        text = GenerationRequest(kind="video", model="kling-3.0-turbo", prompt="x")
+        image = GenerationRequest(
+            kind="video", model="kling-v3", prompt="x", parameters={"first_frame_url": "https://x/a.png"}
+        )
+        omni = GenerationRequest(kind="video", model="kling-v3-omni", prompt="x")
+        assert kling.v3_endpoint(text).endswith("/text-to-video/kling-3.0-turbo")
+        assert kling.v3_endpoint(image).endswith("/image-to-video/kling-3.0")
+        assert kling.v3_endpoint(omni, has_elements=True).endswith("/omni-video/kling-3.0-omni")
+
+    def test_普通版不能靠挂主体偷偷换成_omni(self) -> None:
+        request = GenerationRequest(kind="video", model="kling-v3", prompt="x")
+        with pytest.raises(ProviderError, match="Omni"):
+            kling.v3_endpoint(request, has_elements=True)
 
     def test_新接口的请求体是_contents_数组(self) -> None:
         request = GenerationRequest(
@@ -123,6 +134,19 @@ class Test两代接口:
         payload = kling.build_v3_payload(request, element_ids=["173"])
         assert [one["type"] for one in payload["contents"]] == ["prompt", "first_frame", "element"]
         assert payload["settings"] == {"duration": 10, "resolution": "4k"}
+
+    def test_文生视频发送宽高比_图生视频跟随首帧(self) -> None:
+        text = GenerationRequest(
+            kind="video", model="kling-v3", prompt="x", parameters={"aspect_ratio": "9:16"}
+        )
+        assert kling.build_v3_payload(text)["settings"]["aspect_ratio"] == "9:16"
+        image = GenerationRequest(
+            kind="video",
+            model="kling-v3",
+            prompt="x",
+            parameters={"aspect_ratio": "9:16", "first_frame_url": "https://x/a.png"},
+        )
+        assert "aspect_ratio" not in kling.build_v3_payload(image)["settings"]
 
     def test_不支持仅尾帧(self) -> None:
         """文档原话:支持仅首帧和首尾帧,不支持仅尾帧。没首帧时尾帧要丢掉,

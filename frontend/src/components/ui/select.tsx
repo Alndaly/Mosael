@@ -73,7 +73,11 @@ const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "relative z-50 max-h-[--radix-select-content-available-height] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border bg-popover text-popover-foreground  data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-[--radix-select-content-transform-origin]",
+        // 限高两层,缺一不可:Radix 的 available-height 管「不顶出屏幕」,但它允许菜单长到
+        // 近千像素(触发器在屏幕底部、向上展开时)——时长区间 4–30s 列成 27 项就是这个下场,
+        // 顶部的选项直接跑出窗口外。所以再叠一个固定上限,长列表在菜单内部滚(滚动按钮
+        // 是 ScrollUp/DownButton,已在下面挂着)。fallback 100vh 兜住 var 不存在的非 popper 场景。
+        "relative z-50 max-h-[min(20rem,var(--radix-select-content-available-height,100vh))] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border bg-popover text-popover-foreground  data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-[--radix-select-content-transform-origin]",
         // 菜单**不窄于**字段(对齐好看),但也**不被字段封顶**:此前这里是
         // `max-w-[trigger-width]`,于是任何一个窄字段都会把自己的菜单压成一样窄 ——
         // 配音面板 65px 的引擎格里,「F5-TTS」「Fish Speech S2 Pro」实测显示成
