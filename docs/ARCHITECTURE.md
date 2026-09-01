@@ -123,8 +123,9 @@ SQLite(WAL)+ SQLAlchemy 2.0。所有实体挂 `workspace_id`,路由层 `ensure_w
 `Base.metadata.create_all` 建出新装机需要的全部表,再依次跑 `app/db/migrations.py` 里的一串 `_migrate_*`
 函数,给**已装机**补上 `create_all` 不会施加的变更(加列、改外键、回填)。
 
-改表结构因此是两步:①改 `models.py`(新装机由此得到正确结构);②加一个 `_migrate_*`(已装机由此
-跟上)。只做①的话,新装机正常、老用户升级后崩在缺列上。
+改表结构因此是两步:①改拥有该表的 `model_slices/<domain>.py`(尚未切片的表仍在 `models.py`,
+新装机由 ORM metadata 得到正确结构);②加一个 `_migrate_*`(已装机由此跟上)。只做①的话,
+新装机正常、老用户升级后崩在缺列上。
 
 发版 CI 还会运行 `test/bundle.smoke.mjs`:它先用 `test/upgrade_db_fixture.py` 造一份最小旧库,再真正
 启动打包后的 Electron。通过条件不是「安装包能解压」,而是冻结后端完成升级并健康、打包 renderer
@@ -141,6 +142,10 @@ SQLite(WAL)+ SQLAlchemy 2.0。所有实体挂 `workspace_id`,路由层 `ensure_w
 文件布局可以按领域切片:`app/db/model_slices/*`、`app/api/schemas/*`、`frontend/src/api/domains/*`
 提高 Locality,但切片不是公共 Interface。调用方仍分别只从 `app.db.models`、`app.api.schemas`、
 `@/api/client` 这三个统一装配入口导入,因此继续拆文件不会把布局变化扩散到全仓。
+当前已完成 browser、publish、jobs/task-events、notifications、scheduler、workflows、boards 的三侧切片；
+`SourceAssetRef` 也已作为生成域共享 schema 独立出来，boards 只依赖该契约而不反向依赖装配入口。
+`tests/test_domain_assembly_entries.py` 与 `frontend/src/api/clientAssembly.test.ts` 钉住重导出身份和 ORM
+metadata 注册，防止“文件移动成功、统一入口漏装配”这种只在运行期出现的错误。
 
 **主机权限 vs 内容权限**:工作流的 `code` 节点在后端主机上执行任意 Python(进程隔离 + 超时 +
 输出上限,但**不是沙箱**)。单机安装下作者就是机器主人,无所谓;团队/远程后端下,`edit` 是所有

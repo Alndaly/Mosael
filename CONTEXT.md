@@ -106,7 +106,8 @@ _Avoid_: 把「预览和导出不一样」一概当 bug——调色的不一样�
 
 **表结构演进**:
 运行时**不跑迁移框架**。`init_db()` = `create_all`(新装机建全表)+ 一串 `_migrate_*`(已装机补差)。
-改表 = 改 `models.py` **且** 加一个 `_migrate_*`,少一步就是「新装机好、老用户崩」。
+改表 = 改该领域的 `model_slices/*.py`(尚未切片的表仍在 `models.py`) **且** 加一个 `_migrate_*`,
+少一步就是「新装机好、老用户崩」。
 `test/bundle.smoke.mjs` 会拿 `test/upgrade_db_fixture.py` 生成的旧库启动真正的打包 Electron,同时验证
 冻结后端升级、health、renderer 加载与升级后数据,不是只检查产物存在。
 _Avoid_: 说「加个 Alembic 迁移」——那套已随漂移移除

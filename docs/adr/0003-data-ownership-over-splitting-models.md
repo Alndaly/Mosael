@@ -16,3 +16,12 @@ SQLAlchemy 模型可以放进 `app/db/model_slices/<domain>.py`,但这些文件�
 
 **Considered options**:让调用方直接 import 各领域切片 — 拒绝：文件布局会变成公共 interface，移动类
 会扩散到全仓；ORM session 事件校验 — 拒绝：运行时才报错，棘轮在测试期就挡住且零运行时成本。
+
+## 当前落实状态（2026-09-01）
+
+browser、publish、jobs/task-events、notifications、scheduler、workflows 与 boards 已同时拥有 ORM、API
+schema 和前端 API client 的领域切片；`SourceAssetRef` 位于生成域 schema，供生成接口与画板接口共享。
+三个稳定装配入口不变，路由、领域服务与 UI 不直接导入切片文件。
+
+装配正确性由两组测试固定：后端断言重导出的类身份相同且表已注册进 `Base.metadata`，前端断言领域
+函数从 `@/api/client` 重导出。新增切片时必须同步扩展这两组测试。

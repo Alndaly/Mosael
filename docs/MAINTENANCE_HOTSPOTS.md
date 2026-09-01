@@ -74,7 +74,7 @@ Interface 从「全局 class 名 + cascade」变成了「设计刻度」——�
 
 ## 4. 超大 feature 文件
 
-`WorkflowsView.tsx`(3341 行,还在长)、`EditorView.tsx`(1305)、`timeline/Timeline.tsx`(1.2k)。
+`WorkflowsView.tsx`(4086 行,还在长)、`EditorView.tsx`(1305)、`timeline/Timeline.tsx`(1.2k)。
 
 按**内聚度**过一遍之后(2026-08-25 重新量过),结论和最初的判断不一样 —— 行数不是判据:
 
@@ -107,6 +107,23 @@ Interface 从「全局 class 名 + cascade」变成了「设计刻度」——�
 
 > 教训:「这个文件太大了」不是一条可执行的判据。**查询数与 state 分组**才是 —— 前者说明它
 > 承担了多少件事,后者说明那些事彼此相不相干。
+
+### 4.1 三个数据装配文件 — 第一阶段已完成（2026-09-01）
+
+`models.py`、`api/schemas/__init__.py`、`api/client.ts` 曾分别混放所有领域的 Implementation，修改画板
+或调度需要在三个大文件里寻找对应块。现在 browser、publish、jobs/task-events、notifications、
+scheduler、workflows、boards 已按同一领域边界完成三侧切片，稳定 Interface 仍是：
+
+- `app.db.models`
+- `app.api.schemas`
+- `@/api/client`
+
+这轮同时消除了调度页 8 处直接拼路由、重复的 job 获取函数、手写 notification schema，以及 boards
+对 schema 装配入口的潜在循环依赖。完成后的聚合文件约为 1154 / 1858 / 930 行。
+
+**Remaining**：继续拆时只选已经存在领域 Module、具有独立路由和测试面的实体；不要为了清零聚合文件
+按行数机械搬运。优先候选是 assets/media、timeline/sequences 与 provider configuration。每个切片必须
+保留统一重导出，并扩展后端 metadata/身份测试与前端 client 装配测试。
 
 ## 5. 预览与导出 — ✅ 已按契约收口(2026-07-28)
 
