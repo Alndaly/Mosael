@@ -157,7 +157,6 @@ def test_analyze_endpoint_end_to_end(monkeypatch, tmp_path: Path) -> None:
     assert captured["parts"] == 2  # text + one image
 
 
-@pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")
 def test_analyze_heic_sends_real_jpeg_bytes_and_mime(monkeypatch) -> None:
     """不能只修界面:同一份 HEIC 交给视觉模型时也要走那份兼容预览。"""
     client = fresh_client()

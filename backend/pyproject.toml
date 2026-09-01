@@ -13,6 +13,10 @@ dependencies = [
   "httpx>=0.28.1",
   "lark-oapi>=1.7.1",
   "fonttools>=4.50", # 读取上传字体的 name 表,取真实族名供 libass 匹配
+  # HEIC/HEIF 预览不能依赖系统 ffmpeg 的可选 codec 矩阵。pillow-heif 自带跨平台 libheif wheel，
+  # Pillow 是 image_preview 的直接 import，因此两项都显式声明，不借用传递依赖。
+  "pillow>=11.3",
+  "pillow-heif>=1.3.0",
   # 火山播客 TTS 走 WebSocket。uvicorn[standard] 也会装它,但依赖别人的传递依赖
   # 意味着对方换实现时这里会静默失效,所以显式声明。
   "websockets>=13.0",

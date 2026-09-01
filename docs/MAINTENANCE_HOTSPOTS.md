@@ -225,13 +225,15 @@ HEIC 在素材分析入口能成功，在画布「看图」入口却以错误 MI
 
 画布现已复用 `app.media.image_preview.browser_compatible_image`：
 
-- HEIC/HEIF 等容器生成并缓存派生 JPEG，原件不动；
+- HEIC/HEIF 等容器由随应用打包的 `pillow-heif/libheif` 解码，生成并缓存派生 JPEG，原件不动；
 - JPEG/PNG/WebP/GIF/AVIF 保留原始字节并携带真实 MIME；
 - 转换失败时只跳过这一份素材，与视频抽帧失败保持相同的尽力而为语义。
 
 这个 Seam 有足够的 Depth：素材预览、缩略图、智能体附件、素材分析和无限画布都只学习一个 Interface，
 格式支持的修改具有 Locality。画布回归测试钉住 HEIC 的真实 JPEG 字节和 MIME，以及 WebP 原字节与
-真实 MIME；素材分析已有独立 HEIC 回归。图片数量、编码大小和视频输入仍由各传输 Adapter 按自身协议
+真实 MIME；素材分析已有独立 HEIC 回归。这里不能只检查“系统里有 ffmpeg”：Linux 发行版常裁掉 HEIC
+demuxer，二进制存在不代表具备该能力。回归还会禁用 ffmpeg 路径，确保安装包使用自带解码器。图片数量、
+编码大小和视频输入仍由各传输 Adapter 按自身协议
 限制，不强行塞进格式归一化 Module。
 
 ## 14. `analyze_asset` 有两种调用身份，不能共用一套选模假设

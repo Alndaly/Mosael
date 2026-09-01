@@ -817,7 +817,6 @@ def test_连过来的图片会让模型看着写() -> None:
     assert last[1]["type"] == "image_url" and last[1]["image_url"]["url"].startswith("data:image/png;base64,")
 
 
-@pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")
 def test_连过来的_heic_会复用视觉分析的兼容图片() -> None:
     """画布与素材分析必须共享同一条归一化 Seam，不能把 HEIC 原字节伪装成 JPEG。"""
     from app.api.routes.boards import _look_at

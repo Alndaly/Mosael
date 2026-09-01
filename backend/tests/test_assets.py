@@ -50,6 +50,27 @@ def test_heic_has_a_browser_compatible_full_size_preview() -> None:
     assert original.content == TINY_HEIC
 
 
+def test_heic_preview_does_not_depend_on_the_installed_ffmpeg_codec_matrix(monkeypatch) -> None:
+    """Linux 发行版的 ffmpeg 常有二进制却没有 HEIC demuxer；预览不能把两件事当成一件事。"""
+    from app.media import image_preview
+
+    def unexpected_ffmpeg(*_args, **_kwargs):
+        raise AssertionError("HEIC 应由随应用打包的解码器处理，不能依赖系统 ffmpeg 的可选 codec")
+
+    monkeypatch.setattr(image_preview, "run_logged", unexpected_ffmpeg)
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    asset = client.post(
+        "/api/assets/import",
+        data={"workspace_id": ws["id"]},
+        files={"file": ("photo.heic", TINY_HEIC, "image/heic")},
+    ).json()
+
+    preview = client.get(f"/api/assets/{asset['id']}/preview")
+    assert preview.status_code == 200, preview.text
+    assert preview.content.startswith(b"\xff\xd8")
+
+
 def test_update_asset_moves_it_between_projects() -> None:
     """智能体的 update_asset 靠这个字段归档素材。
 
