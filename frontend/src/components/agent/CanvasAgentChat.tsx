@@ -47,9 +47,9 @@ export type CanvasAgentMode = "docked" | "floating";
 
 
 /**
- * 画布上的常驻智能体面板 —— 工作流和创意画板**共用这一个**。
+ * 工作区里的常驻智能体面板 —— 工作流、创意画板和剪辑页**共用这一个**。
  *
- * 它不是第二套 AI:会话池、消息、队列、确认卡走的都是同一套 agent session。两个入口的差别
+ * 它不是第二套 AI:会话池、消息、队列、确认卡走的都是同一套 agent session。各入口的差别
  * 只有三样东西 —— 给每条消息附加的隐藏上下文、空态那句话、输入框的例子。所以这里收参数,
  * 而不是各存一份六百行的副本:副本改一处只会改好其中一个,而两边看起来一模一样。
  */
@@ -59,7 +59,7 @@ export function CanvasAgentChat({
   /** 空态那句话 —— 说清这个面板能干什么。 */
   emptyHint,
   placeholder,
-  /** 悬浮窗几何记忆的键。**两个入口各记各的**:工作流那扇窗的大小位置,和画板那扇没关系。 */
+  /** 悬浮窗几何记忆的键。**各入口各记各的**:工作流、画板、剪辑页的大小位置互不干扰。 */
   rectKey,
   workspaceId,
   mode,
@@ -267,7 +267,7 @@ export function CanvasAgentChat({
   }, [running, sessionId]);
 
   // Same leak as the AI-studio chat: an unstoppable reader pins an HTTP/1.1 connection, and
-  // this panel is conditionally mounted ({agentOpen && <WorkflowAgentChat/>}), so closing it
+  // this panel is conditionally mounted by each workspace surface, so closing it
   // mid-stream is the normal case rather than an edge one.
   const abortRef = React.useRef<AbortController | null>(null);
 

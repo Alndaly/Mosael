@@ -800,11 +800,19 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   // 检查器只在选中片段时占用右栏 — 空的「未选中片段」面板不该
   // 一直吃掉宽度;紧凑模式(≤1000px)下改为浮动抽屉,不占列。
   const showInspector = selectedClip !== null;
-  // Where the panels row ends, measured from the grid's bottom edge: padding (10) + the
-  // timeline's height + the row gap (6). Keeps the column resizers out of the timeline.
+  // Where the panels row ends, measured from the grid's bottom edge: padding (8) + the
+  // timeline's height + the row gap (8). Keeps the column resizers out of the timeline.
   const panelsRowBottom = panels.sizes.timeline + 16;
   const inspectorInGrid = showInspector && !panels.compact;
   const dockedAgent = agentOpen === "on" && agentMode === "docked";
+  const editorColumns = [
+    `${panels.leftWidth}px`,
+    "minmax(0, 1fr)",
+    inspectorInGrid ? `${panels.sizes.right}px` : null,
+    dockedAgent ? `${agentSidebar.width}px` : null,
+  ]
+    .filter((column): column is string => column !== null)
+    .join(" ");
   const agentContext = t("editorAgentContext")
     .replace("{project}", project.name)
     .replace("{projectId}", project.id)
@@ -820,48 +828,16 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       onDragCancel={onAssetDragStop}
     >
     <div
+      data-testid="editor-layout"
       className="relative grid h-full grid-cols-[252px_minmax(0,1fr)_264px] grid-rows-[minmax(0,1fr)_252px] gap-2 p-2"
       style={{
-        gridTemplateColumns: inspectorInGrid
-          ? `${panels.leftWidth}px minmax(0, 1fr) ${panels.sizes.right}px`
-          : `${panels.leftWidth}px minmax(0, 1fr)`,
+        gridTemplateColumns: editorColumns,
         gridTemplateRows: `minmax(0, 1fr) ${panels.sizes.timeline}px`,
       }}
     >
       {/* Uploaded fonts must be registered before the monitor or the style panel can paint
           text in them. */}
       <FontFaces fonts={fonts.data ?? []} />
-      {agentOpen === "on" && (
-        // 停靠态贴住编辑器右上工作区，不侵占时间线；浮动态由 CanvasAgentChat 自己 fixed 定位，
-        // 外层用 contents，避免凭空成为 grid 的第四个单元、把现有面板挤乱。
-        <div
-          className={cn(
-            "z-30",
-            dockedAgent ? "absolute right-2 top-2 grid min-h-0 min-w-0" : "contents",
-          )}
-          style={dockedAgent ? { width: agentSidebar.width, bottom: panelsRowBottom } : undefined}
-        >
-          <CanvasAgentChat
-            contextLine={agentContext}
-            emptyHint={t("editorAgentEmpty")}
-            placeholder={t("editorAgentPlaceholder")}
-            rectKey="openstudio.editor.agent.rect.v1"
-            workspaceId={workspace.id}
-            mode={agentMode}
-            onModeChange={setAgentMode}
-            onClose={() => setAgentOpen("off")}
-          />
-        </div>
-      )}
-      {dockedAgent && (
-        <div
-          className={`absolute top-2 z-40 ${HANDLE_COLUMN}`}
-          style={{ right: agentSidebar.width + 4, bottom: panelsRowBottom }}
-          role="separator"
-          aria-orientation="vertical"
-          onPointerDown={agentSidebar.startDragFromRight}
-        />
-      )}
       <ConfirmDialog
         open={trackPendingRemoval !== null}
         title={t("removeTrackConfirmTitle")}
@@ -888,8 +864,22 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       {inspectorInGrid && (
         <div
           className={`absolute bottom-3 top-3 z-10 ${HANDLE_COLUMN}`}
-          style={{ right: handleOffset(panels.sizes.right, EDITOR_GRID), bottom: panelsRowBottom }}
+          style={{
+            right: handleOffset(panels.sizes.right, {
+              padding: EDITOR_GRID.padding + (dockedAgent ? agentSidebar.width + 8 : 0),
+            }),
+            bottom: panelsRowBottom,
+          }}
           onPointerDown={panels.startDrag("right")}
+        />
+      )}
+      {dockedAgent && (
+        <div
+          className={`absolute bottom-3 top-3 z-10 ${HANDLE_COLUMN}`}
+          style={{ right: handleOffset(agentSidebar.width, EDITOR_GRID), bottom: panelsRowBottom }}
+          role="separator"
+          aria-orientation="vertical"
+          onPointerDown={agentSidebar.startDragFromRight}
         />
       )}
       <div
@@ -1030,6 +1020,25 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           );
           return panels.compact ? <div className="fixed bottom-0 right-0 top-11 z-[60] grid w-[min(320px,calc(100vw-96px))] border-l border-border-strong bg-panel [&>section]:h-full [&>section]:rounded-none [&>section]:border-0">{inspector}</div> : inspector;
         })()}
+      {agentOpen === "on" && (
+        // 停靠态是 top row 的最后一列：监视器真实让出宽度，而不是被一块 absolute 面板盖住。
+        // 浮动态由 CanvasAgentChat 自己 fixed 定位；contents 防止外层生成一个空 grid 单元。
+        <div
+          data-testid="editor-agent-slot"
+          className={dockedAgent ? "z-30 grid min-h-0 min-w-0" : "contents"}
+        >
+          <CanvasAgentChat
+            contextLine={agentContext}
+            emptyHint={t("editorAgentEmpty")}
+            placeholder={t("editorAgentPlaceholder")}
+            rectKey="openstudio.editor.agent.rect.v1"
+            workspaceId={workspace.id}
+            mode={agentMode}
+            onModeChange={setAgentMode}
+            onClose={() => setAgentOpen("off")}
+          />
+        </div>
+      )}
       <section className="col-span-full min-h-0 overflow-hidden rounded-md border border-border shadow-[var(--shadow-panel)] bg-[var(--timeline-bg)]">
         <Timeline
           sequence={sequence}

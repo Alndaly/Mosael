@@ -103,6 +103,11 @@ describe("剪辑页智能体入口", () => {
     await user.click(trigger);
 
     expect(trigger).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("editor-layout")).toHaveStyle({
+      gridTemplateColumns: "252px minmax(0, 1fr) 400px",
+    });
+    expect(screen.getByTestId("editor-agent-slot")).toHaveClass("grid");
+    expect(screen.getByTestId("editor-agent-slot")).not.toHaveClass("absolute");
     expect(screen.getByTestId("editor-agent-panel")).toHaveAttribute(
       "data-context",
       "project=宣传片;project_id=project-1;sequence=主时间线;sequence_id=sequence-1",
