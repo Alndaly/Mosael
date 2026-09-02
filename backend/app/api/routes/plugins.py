@@ -59,7 +59,10 @@ def scan_packages(db: DbSession, user: CurrentUser) -> list[dict]:
 
 
 #: 内置的市场索引。部署管理员可以在设置里换成自己那一份(DeploymentConfig.plugin_registry_url)。
-DEFAULT_REGISTRY_URL = "https://mosael.team/plugins/registry.json"
+DEFAULT_REGISTRY_URL = (
+    "https://raw.githubusercontent.com/Alndaly/Mosael/main/"
+    "website/public/plugins/registry.json"
+)
 
 
 def _registry_url(db: DbSession) -> str:

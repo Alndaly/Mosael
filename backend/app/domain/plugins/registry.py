@@ -62,7 +62,13 @@ def fetch_index(url: str) -> list[dict[str, Any]]:
     if not url.startswith(("http://", "https://")):
         raise PluginDomainError("插件市场地址只能是 http/https")
     try:
-        with RetryingClient(timeout=REGISTRY_TIMEOUT_SECONDS, follow_redirects=True) as client:
+        # 市场列表是一段前台交互,不能继承 AI 供应商那套多次退避重试。远端挂掉时应在一次
+        # 明确的超时后把错误交给界面,否则 15 秒会被放大数倍,用户只会一直看到骨架屏。
+        with RetryingClient(
+            timeout=REGISTRY_TIMEOUT_SECONDS,
+            follow_redirects=True,
+            max_retries=0,
+        ) as client:
             response = client.get(url)
             response.raise_for_status()
             payload = response.json()

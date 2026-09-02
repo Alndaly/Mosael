@@ -14,7 +14,6 @@ from __future__ import annotations
 import io
 import json
 import zipfile
-from pathlib import Path
 
 import pytest
 
@@ -137,6 +136,42 @@ class Test不悄悄覆盖:
 
 
 class Test索引:
+    def test_默认市场指向仓库里实际发布的索引(self) -> None:
+        from app.api.routes.plugins import DEFAULT_REGISTRY_URL
+
+        assert DEFAULT_REGISTRY_URL == (
+            "https://raw.githubusercontent.com/Alndaly/Mosael/main/"
+            "website/public/plugins/registry.json"
+        )
+
+    def test_市场请求不继承_ai_请求的全局重试(self, monkeypatch) -> None:
+        seen: dict[str, object] = {}
+
+        class FakeResponse:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"plugins": []}
+
+        class FakeClient:
+            def __init__(self, **kwargs):
+                seen.update(kwargs)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def get(self, url):
+                return FakeResponse()
+
+        monkeypatch.setattr(market, "RetryingClient", FakeClient)
+
+        assert market.fetch_index("https://e/r.json") == []
+        assert seen["max_retries"] == 0
+
     def test_只认_http(self) -> None:
         with pytest.raises(PluginDomainError, match="http"):
             market.fetch_index("file:///etc/passwd")
