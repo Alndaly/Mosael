@@ -159,7 +159,7 @@ export function HomeHero({
           onClick={onRefreshPoem}
           disabled={poemLoading}
         >
-          <RefreshCcw size={12} className={poemLoading ? "animate-openstudio-spin" : undefined} />
+          <RefreshCcw size={12} className={poemLoading ? "animate-mosael-spin" : undefined} />
         </button>
       </figure>
     </section>

@@ -44,7 +44,7 @@ MAX_ELEMENTS_PER_TASK = 3
 _NAME_LIMIT = 20
 _DESCRIPTION_LIMIT = 100
 
-#: 我们建的主体统一带这个前缀,方便用户在可灵的主体库里认出哪些是 Open Studio 建的。
+#: 我们建的主体统一带这个前缀,方便用户在可灵的主体库里认出哪些是 Mosael 建的。
 NAME_PREFIX = "os-"
 
 _TERMINAL_OK = ("succeed",)
@@ -72,7 +72,7 @@ def build_create_payload(images: list[str], *, description: str = "") -> dict[st
     return {
         "element_name": element_name_for(images),
         # 描述是必填的。用户没写就拿提示词凑一句 —— 空字符串会被拒。
-        "element_description": (description or "Open Studio 多图参考主体")[:_DESCRIPTION_LIMIT],
+        "element_description": (description or "Mosael 多图参考主体")[:_DESCRIPTION_LIMIT],
         "reference_type": "image_refer",
         "element_image_list": {
             "frontal_image": frontal,

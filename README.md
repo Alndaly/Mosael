@@ -1,33 +1,46 @@
-# Open Studio
+<p align="center">
+  <img src="brand/mosael-wordmark.png" alt="Mosael" width="440" />
+</p>
+
+<p align="center">
+  <strong>Where ideas find their timeline.</strong><br />
+  An AI video studio that lives on your computer, from the first clip to the final publish.
+</p>
+
+<p align="center">
+  <a href="https://mosael.team/en">Website</a> ·
+  <a href="https://github.com/Alndaly/Mosael/releases">Download</a> ·
+  <a href="https://mosael.team/en/docs/start/intro">Guide</a> ·
+  <a href="https://x.com/KindaHuax">Maker on X</a>
+</p>
 
 **English** | [简体中文](README.zh-CN.md)
 
-Open Studio is a local-first AI video studio that brings **multi-track editing, AI generation,
-creative agents, visual workflows, and multi-platform publishing** into one desktop app.
+Mosael brings editing, AI generation, agents, workflows, and publishing into one desktop app. Start
+with a clip, cut the pauses from its transcript, ask AI to find a shot or make a voiceover, and publish
+the finished story without shuttling the project between a pile of tools.
 
-From importing footage and cutting against a transcript to generating shots, exporting a final cut,
-and publishing it, data stays on your own machine by default. The app combines Electron, FastAPI,
-SQLite, and React; cloud AI features use provider accounts that you configure yourself.
+> Your media and projects stay local by default. Only AI services you choose to configure and use go online.
 
-![The Open Studio editor with a multi-track timeline, monitor, and transcript](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260902003526649.png)
+![The Mosael editor with a multi-track timeline, monitor, and transcript](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260902003526649.png)
 
 ## Download and run
 
-Download a build from [GitHub Releases](https://github.com/Alndaly/OpenStudio/releases):
+Download a build from [GitHub Releases](https://github.com/Alndaly/Mosael/releases):
 
 - macOS: `.dmg` for Apple silicon
 - Windows: installer for Windows 10/11 x64
 
 Launch the installed app directly. It starts the bundled backend (default `127.0.0.1:8800`), loads
 the frontend, and starts the publishing executor; no services need to be launched manually. If a
-healthy Open Studio backend is already listening on port 8800, the desktop app reuses it.
+healthy Mosael backend is already listening on port 8800, the desktop app reuses it.
 
 Local features can be explored without additional setup. Before using AI chat, image or video
 generation, voiceover, or transcription, add a connection and model under **Settings → Providers**.
 
-## Core capabilities
+## What you can make with it
 
-### Editing and transcripts
+### Cut from the transcript
 
 - Multiple timelines and tracks with split, snap, ripple delete, speed ramps, fades,
   picture-in-picture, and undo/redo.
@@ -41,7 +54,7 @@ generation, voiceover, or transcription, add a connection and model under **Sett
 
 ![Per-cue voiceover output on a dedicated dub track](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260902003526649.png)
 
-### AI agent
+### Let AI lend a real hand
 
 The agent uses MCP tools to inspect and operate media, timelines, workflows, browser profiles, and
 publishing tasks. Any action that changes the project or external state first surfaces a confirmation
@@ -60,7 +73,7 @@ card and runs only after you approve it.
 
 ![The agent workspace and conversation experience](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260831143139609.png)
 
-### AI generation and providers
+### Turn an idea into picture and sound
 
 Provider configuration has two levels: a **connection** stores the endpoint, API key, or OAuth state;
 a **model** declares chat, image, video, and audio capabilities along with context, reasoning, vision,
@@ -77,7 +90,7 @@ guess from a similar model name.
 - Custom models without a catalogued descriptor remain usable but do not inherit another model's
   parameter rules.
 
-### Media and creative boards
+### Spread ideas out on a creative board
 
 - Import local video, audio, and images with automatic thumbnails and preview proxies.
 - URL import probes a listing first, then lets you choose entries, audio/video, and quality tiers that
@@ -91,7 +104,7 @@ guess from a similar model name.
 
 ![Creative board](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260901162232470.png)
 
-### Workflows and scheduling
+### Draw the repetitive part once
 
 The visual DAG connects retrieval, generation, transcription, assembly, export, and publishing into
 reusable flows triggered manually, on a schedule, or by webhook. Node groups collapse into arbitrarily
@@ -100,7 +113,7 @@ execution engine as the top level.
 
 ![Marquee a group of nodes and collapse it into a subgraph](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260831143122120.png)
 
-### Browser Pool and publishing
+### Publish to more places from one window
 
 All persistent logins are stored as browser profiles shared by publishing, workflow RPA, URL import,
 and the agent. Before borrowing an identity, the agent must receive explicit per-use authorization;
@@ -117,9 +130,9 @@ app restarts.
 
 The Chrome extension uses the browser's native Side Panel instead of placing a floating overlay on
 the page. Open any video URL recognized by the installed yt-dlp build: YouTube and Bilibili use native
-captions when available, while Open Studio can download and transcribe other sites. Pages with a usable
+captions when available, while Mosael can download and transcribe other sites. Pages with a usable
 HTML5 player get playback following, word-precise seeking, and clean video-frame capture without HTML
-controls. The extension uses a separate Open Studio session, never stores the password, and does not
+controls. The extension uses a separate Mosael session, never stores the password, and does not
 read or export Chrome cookies; restricted content can use an existing Browser Pool identity and proxy.
 Its UI follows Chrome by default and can be pinned to Simplified Chinese or English. See
 [browser-extension/README.md](browser-extension/README.md) for installation and limitations.
@@ -127,13 +140,13 @@ Its UI follows Chrome by default and can be pinned to Simplified Chinese or Engl
 ### Plugins
 
 A plugin can be a local subprocess script or a connection to an existing MCP server. Before
-installation, Open Studio reads the manifest and shows its permissions, credentials, and tools.
+installation, Mosael reads the manifest and shows its permissions, credentials, and tools.
 Once enabled, the same tools are available to both agents and workflows. Plugins can receive media,
 return files, and use persistent secrets managed by the host.
 
 ## Documentation
 
-Complete user guides live at **[openstudio.team](https://openstudio.team)**; their source is under
+Complete user guides live at **[mosael.team](https://mosael.team)**; their source is under
 `website/content/docs/`. Implementation references in this repository:
 
 | Document | Covers |
@@ -198,7 +211,7 @@ cd frontend && pnpm gen:api        # after backend OpenAPI changes
 cd website && pnpm build           # after website or documentation changes
 ```
 
-Current baseline: 2,440 backend tests and 815 frontend tests.
+Current baseline: 2,451 backend tests and 818 frontend tests.
 
 ### Common issues
 
@@ -229,7 +242,7 @@ pnpm dist:mac    # build a macOS DMG
 | `pnpm build:sidecar` | `agent-sidecar/dist/sidecar.cjs` |
 | `pnpm build:extension` | `browser-extension/dist` |
 | `pnpm fetch:tts-python` | Standalone CPython used for voice cloning |
-| `pnpm build:backend` | `backend/dist/open-studio-backend` |
+| `pnpm build:backend` | `backend/dist/mosael-backend` |
 
 A release updates the root `package.json` and tag together:
 
@@ -237,7 +250,7 @@ A release updates the root `package.json` and tag together:
 VERSION=x.y.z
 npm pkg set version="$VERSION"
 git commit -am "chore(release): v$VERSION"
-git tag -a "v$VERSION" -m "Open Studio v$VERSION"
+git tag -a "v$VERSION" -m "Mosael v$VERSION"
 git push origin main "v$VERSION"
 ```
 
@@ -253,15 +266,15 @@ currently unsigned, so updates use check-and-download rather than silent install
 
 | Location | Contents |
 | --- | --- |
-| `~/.open-studio/open-studio.db` | Main SQLite database |
-| `~/.open-studio/media/` | Imported, generated, and exported media |
+| `~/.mosael/mosael.db` | Main SQLite database |
+| `~/.mosael/media/` | Imported, generated, and exported media |
 | `<userData>/logs/backend.log` | Packaged backend log |
 | `<userData>/logs/publisher.log` | Publishing executor log |
 | `<userData>/Partitions/` | Persistent browser profiles |
 | `<userData>/custom.css` | Custom CSS from Settings → Appearance |
 
-On macOS, `<userData>` is `~/Library/Application Support/Open Studio`; on Windows it is
-`%APPDATA%\Open Studio`. The app displays resolved paths for dynamic locations such as plugins.
+On macOS, `<userData>` is `~/Library/Application Support/Mosael`; on Windows it is
+`%APPDATA%\Mosael`. The app displays resolved paths for dynamic locations such as plugins.
 
 ## Repository layout
 
@@ -273,7 +286,7 @@ agent-sidecar/    Agent runtime
 browser-extension/ Chrome Side Panel video companion
 contracts/        Executable contract corpus shared across implementations
 plugins/          Plugin examples and manifests
-website/          The openstudio.team documentation site
+website/          The mosael.team documentation site
 docs/             Architecture, permissions, publishing, and ADRs
 scripts/          Build and documentation-sync scripts
 ```
@@ -288,15 +301,15 @@ and do not migrate automatically with SQLite data.
 Google and Apple sign-in are optional and configured in `backend/.env`:
 
 ```dotenv
-OPEN_STUDIO_GOOGLE_CLIENT_ID=...
-OPEN_STUDIO_GOOGLE_CLIENT_SECRET=...
-OPEN_STUDIO_APPLE_CLIENT_ID=...
-OPEN_STUDIO_APPLE_CLIENT_SECRET=...
-OPEN_STUDIO_OAUTH_REDIRECT_BASE=...
+MOSAEL_GOOGLE_CLIENT_ID=...
+MOSAEL_GOOGLE_CLIENT_SECRET=...
+MOSAEL_APPLE_CLIENT_ID=...
+MOSAEL_APPLE_CLIENT_SECRET=...
+MOSAEL_OAUTH_REDIRECT_BASE=...
 ```
 
 ## License
 
 The source is visible but **all rights are reserved**. It may be used only for evaluation, learning,
 and personal non-commercial purposes; commercial use and redistribution require written permission.
-See [LICENSE](LICENSE). Contact the author for commercial licensing.
+See [LICENSE](LICENSE). Contact the maker, [Kinda Hall](https://x.com/KindaHuax), for commercial licensing.

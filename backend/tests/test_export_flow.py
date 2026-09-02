@@ -140,7 +140,7 @@ def test_friendly_render_error_names_corrupt_input() -> None:
 
     tail = (
         "[in#4] 0x00 at pos 36 invalid as first byte of an EBML number\n"
-        "Error opening input file /Users/x/.open-studio/media/assets/w/a/摄像头-1784712022145.webm.\n"
+        "Error opening input file /Users/x/.mosael/media/assets/w/a/摄像头-1784712022145.webm.\n"
         "Error opening input files: End of file\n"
     )
     msg = _friendly_render_error(RenderExecutionError("FFmpeg exited with code 187", stderr_tail=tail))

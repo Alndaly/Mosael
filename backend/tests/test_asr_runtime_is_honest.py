@@ -16,7 +16,7 @@
 顺带:那一页的「下载」按钮也走同一条解释器探测(`_resolve_python`),所以在缺环境的机器上,
 点下载同样只会报错 —— 页面上没有任何一个动作是能成的。TTS 那边早就解决了这个问题(托管 venv,
 点下载时后端自己把环境建好,见 ai/runtime/tts_models.ensure_engine_runtime),ASR 还停在"请你自己
-去设置 OPEN_STUDIO_ASR_PYTHON"。
+去设置 MOSAEL_ASR_PYTHON"。
 """
 
 from __future__ import annotations
@@ -88,7 +88,7 @@ def test_there_is_a_way_to_install_the_runtime() -> None:
     """必须有一条**从界面走得通**的路把环境装上。
 
     TTS 早就解决了这件事(托管 venv,点下载时后端自己建环境,见 tts_models.ensure_engine_runtime),
-    而 ASR 停在"请你自己去设置 OPEN_STUDIO_ASR_PYTHON"。对一个桌面应用的用户,那句话等于
+    而 ASR 停在"请你自己去设置 MOSAEL_ASR_PYTHON"。对一个桌面应用的用户,那句话等于
     "这个功能你用不了" —— 尤其 FunASR 是中文转写的默认引擎,他会第一个撞上。
     """
     assert hasattr(asr_models, "ensure_engine_runtime")

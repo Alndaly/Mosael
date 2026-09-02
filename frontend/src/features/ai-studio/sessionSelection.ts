@@ -1,7 +1,7 @@
 export function agentSessionSelectionKey(workspaceId: string): string {
-  return `openstudio.agent.session.${workspaceId}`;
+  return `mosael.agent.session.${workspaceId}`;
 }
 
 export function generationSessionSelectionKey(workspaceId: string): string {
-  return `openstudio.generation.session.${workspaceId}`;
+  return `mosael.generation.session.${workspaceId}`;
 }

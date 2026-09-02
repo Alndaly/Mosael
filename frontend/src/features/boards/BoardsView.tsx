@@ -626,7 +626,7 @@ function BoardDetail({
             contextLine={t("boardAgentContext").replace("{id}", board.id).replace("{name}", board.name)}
             emptyHint={t("boardAgentEmpty")}
             placeholder={t("boardAgentPlaceholder")}
-            rectKey="openstudio.board.agent.rect.v1"
+            rectKey="mosael.board.agent.rect.v1"
             workspaceId={workspaceId}
             mode={agentMode}
             onModeChange={setAgentMode}

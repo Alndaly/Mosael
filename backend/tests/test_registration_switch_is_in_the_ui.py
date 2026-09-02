@@ -1,6 +1,6 @@
 """「开不开放自助注册」在管理页里改,不必去改环境变量重启后端。
 
-它此前只读 `OPEN_STUDIO_OPEN_REGISTRATION`。一个只能改环境变量的开关意味着:改它要能碰到部署
+它此前只读 `MOSAEL_OPEN_REGISTRATION`。一个只能改环境变量的开关意味着:改它要能碰到部署
 机、要重启进程 —— 而这是一个**部署管理员在界面上就该能做的决定**,和发邀请码、授予管理员
 是同一类事。
 
@@ -53,12 +53,12 @@ def test_the_env_var_only_seeds_the_first_row(monkeypatch) -> None:
     admin = fresh_client()
     with engine.begin() as conn:
         conn.execute(text("DELETE FROM deployment_config"))
-    monkeypatch.setenv("OPEN_STUDIO_OPEN_REGISTRATION", "0")
+    monkeypatch.setenv("MOSAEL_OPEN_REGISTRATION", "0")
     _migrate_deployment_config()
     assert admin.get("/api/auth/bootstrap").json()["open_registration"] is False
 
     # 库里已经有行之后,环境变量再变也不影响 —— 它只播种一次。
-    monkeypatch.setenv("OPEN_STUDIO_OPEN_REGISTRATION", "1")
+    monkeypatch.setenv("MOSAEL_OPEN_REGISTRATION", "1")
     _migrate_deployment_config()
     assert admin.get("/api/auth/bootstrap").json()["open_registration"] is False
 
@@ -67,7 +67,7 @@ def test_the_ui_actually_has_the_switch() -> None:
     """文件名说的是「在界面里」—— 那就守住这一条,而不只是守住路由存在。
 
     一个只有后端的开关和一个只有环境变量的开关,对使用者是同一件事:改不了。同时守住旧文案
-    不再回来 —— 它教人去改 OPEN_STUDIO_OPEN_REGISTRATION。
+    不再回来 —— 它教人去改 MOSAEL_OPEN_REGISTRATION。
     """
     from pathlib import Path
 
@@ -78,4 +78,4 @@ def test_the_ui_actually_has_the_switch() -> None:
 
     for name in ("app/messages.ts", "features/settings/DeploymentSection.tsx"):
         text = (frontend / name).read_text()
-        assert "OPEN_STUDIO_OPEN_REGISTRATION" not in text, f"{name} 还在教人改环境变量"
+        assert "MOSAEL_OPEN_REGISTRATION" not in text, f"{name} 还在教人改环境变量"

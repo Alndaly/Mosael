@@ -413,7 +413,7 @@ def test_run_code_confirmation_cannot_see_the_backend_env() -> None:
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    os.environ["OPEN_STUDIO_SECRET_PROBE"] = "leaked"
+    os.environ["MOSAEL_SECRET_PROBE"] = "leaked"
     try:
         confirmation = client.post(
             "/api/confirmations",
@@ -421,14 +421,14 @@ def test_run_code_confirmation_cannot_see_the_backend_env() -> None:
                 "workspace_id": ws["id"],
                 "tool": "run_code",
                 "requested_by": "pi",
-                "payload": {"code": "import os\noutput = os.environ.get('OPEN_STUDIO_SECRET_PROBE', '')"},
+                "payload": {"code": "import os\noutput = os.environ.get('MOSAEL_SECRET_PROBE', '')"},
             },
         ).json()
         approved = client.post(f"/api/confirmations/{confirmation['id']}/approve").json()
         assert approved["status"] == "executed", approved.get("error")
         assert approved["result"]["output"] == ""
     finally:
-        os.environ.pop("OPEN_STUDIO_SECRET_PROBE", None)
+        os.environ.pop("MOSAEL_SECRET_PROBE", None)
 
 
 def test_http_request_confirmation_goes_through_the_shared_node_implementation(monkeypatch) -> None:

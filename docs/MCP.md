@@ -1,4 +1,4 @@
-# Open Studio MCP Server
+# Mosael MCP Server
 
 Minimal external-agent surface. Tools return stable product
 summaries — never raw internal schemas.
@@ -143,7 +143,7 @@ A turn started from Feishu gets its card posted back into that same Feishu chat,
 approval happens where the request was made rather than forcing a switch to the desktop app.
 
 Authorisation reuses the existing account model — it is **not** a second scheme. The clicker
-must already be bound to an Open Studio account (`feishu_bindings`) **and still be a member of
+must already be bound to an Mosael account (`feishu_bindings`) **and still be a member of
 the workspace**. Seeing the card in a group chat does not confer the right to approve it.
 Binding is keyed by `open_id`, never `user_id` — mixing the two silently rejects people who did
 bind.
@@ -171,18 +171,18 @@ sequence).
 ## Running
 
 The backend HTTP API must be running (default `http://127.0.0.1:8800`,
-override with `OPEN_STUDIO_API`). The API requires local authentication, so pass a
-session token via `OPEN_STUDIO_TOKEN` (obtain one with `POST /api/auth/login`).
+override with `MOSAEL_API`). The API requires local authentication, so pass a
+session token via `MOSAEL_TOKEN` (obtain one with `POST /api/auth/login`).
 
 ```bash
 cd backend
-OPEN_STUDIO_TOKEN=<session-token> .venv/bin/python mcp_server.py   # stdio transport
+MOSAEL_TOKEN=<session-token> .venv/bin/python mcp_server.py   # stdio transport
 ```
 
 Register with an MCP client, e.g. Claude Code:
 
 ```bash
-claude mcp add open-studio -- /path/to/OpenStudio/backend/.venv/bin/python /path/to/OpenStudio/backend/mcp_server.py
+claude mcp add mosael -- /path/to/Mosael/backend/.venv/bin/python /path/to/Mosael/backend/mcp_server.py
 ```
 
 ## Roadmap

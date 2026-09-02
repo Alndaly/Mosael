@@ -3,7 +3,7 @@ import React from "react";
 import { useMediaMatch } from "@/lib/useMediaMatch";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 
-const PANEL_SIZES_KEY = "openstudio.editor.panels.v2";
+const PANEL_SIZES_KEY = "mosael.editor.panels.v2";
 
 export const LEFT_TABS = ["media", "transcript", "subtitle", "voice"] as const;
 export type LeftTab = (typeof LEFT_TABS)[number];

@@ -32,8 +32,8 @@ def test_the_worker_fetches_the_checkpoint_from_modelscope(monkeypatch, tmp_path
         tts_worker, "_modelscope_file",
         lambda repo, path, local_dir: grabbed.append((repo, path)) or str(tmp_path / path),
     )
-    monkeypatch.setenv("OPEN_STUDIO_MODEL_SOURCE", "modelscope")
-    monkeypatch.setenv("OPEN_STUDIO_F5_MODEL_DIR", str(tmp_path))
+    monkeypatch.setenv("MOSAEL_MODEL_SOURCE", "modelscope")
+    monkeypatch.setenv("MOSAEL_F5_MODEL_DIR", str(tmp_path))
 
     tts_worker.fetch_f5_weights()
 
@@ -46,8 +46,8 @@ def test_it_does_not_touch_modelscope_on_the_hf_path(monkeypatch, tmp_path) -> N
     from app.ai.runtime.workers import tts as tts_worker
     called = []
     monkeypatch.setattr(tts_worker, "_modelscope_file", lambda *a, **k: called.append(a))
-    monkeypatch.setenv("OPEN_STUDIO_MODEL_SOURCE", "hf")
-    monkeypatch.setenv("OPEN_STUDIO_F5_MODEL_DIR", str(tmp_path))
+    monkeypatch.setenv("MOSAEL_MODEL_SOURCE", "hf")
+    monkeypatch.setenv("MOSAEL_F5_MODEL_DIR", str(tmp_path))
 
     tts_worker.fetch_f5_weights()
 

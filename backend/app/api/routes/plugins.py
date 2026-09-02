@@ -59,7 +59,7 @@ def scan_packages(db: DbSession, user: CurrentUser) -> list[dict]:
 
 
 #: 内置的市场索引。部署管理员可以在设置里换成自己那一份(DeploymentConfig.plugin_registry_url)。
-DEFAULT_REGISTRY_URL = "https://openstudio.team/plugins/registry.json"
+DEFAULT_REGISTRY_URL = "https://mosael.team/plugins/registry.json"
 
 
 def _registry_url(db: DbSession) -> str:
@@ -137,7 +137,7 @@ def install_from_url(body: PluginInstallRequest, db: DbSession, user: CurrentUse
 def plugins_directory(user: CurrentUser) -> dict[str, str]:
     """插件目录的**真实绝对路径**,给前端的空态引导用。
 
-    这条路径曾经写死在前端文案里(`~/.open-studio/plugins/`)。那是 POSIX 写法:Windows 上
+    这条路径曾经写死在前端文案里(`~/.mosael/plugins/`)。那是 POSIX 写法:Windows 上
     `~/` 对用户没有任何意义,照着找是找不到的。路径由谁算就由谁报。
     """
     return {"path": str(settings.plugins_dir)}

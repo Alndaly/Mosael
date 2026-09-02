@@ -4,11 +4,11 @@
  *
  * 声音克隆的两个引擎(f5-tts / fish-speech)需要一个真 Python 来建 venv 并装依赖,而打包版的
  * 后端是 PyInstaller 冻结二进制、`sys.executable` 指向它自己,建不了 venv。所以随包带一个
- * 解释器,由 electron/main.cjs 经 OPEN_STUDIO_TTS_BASE_PYTHON 指给后端。
+ * 解释器,由 electron/main.cjs 经 MOSAEL_TTS_BASE_PYTHON 指给后端。
  *
  * **只带解释器(~40MB),不带引擎依赖**:torch + torchaudio + transformers 实测 2.5–3.5GB,
  * 预装会把安装包从 ~700MB 顶到约 4GB,而多数用户根本不用声音克隆。重的部分在用户点「下载」
- * 时装进 ~/.open-studio/tts/venv(见 backend/app/domain/tts_config.py)。
+ * 时装进 ~/.mosael/tts/venv(见 backend/app/domain/tts_config.py)。
  *
  * 产物已在(且看着完整)则跳过,便于反复构建。设 FORCE=1 可强制重抓。
  */

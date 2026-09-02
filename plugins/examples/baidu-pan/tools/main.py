@@ -231,7 +231,7 @@ def _post_form(url: str, fields: dict) -> dict:
 
 def _upload_chunk(remote_path: str, uploadid: str, index: int, data: bytes) -> None:
     """传一片。multipart 手搓 —— 标准库没有现成的,而为这一件事引一个依赖不值当。"""
-    boundary = "----OpenStudioBoundary"
+    boundary = "----MosaelBoundary"
     head = (
         f"--{boundary}\r\n"
         f'Content-Disposition: form-data; name="file"; filename="chunk"\r\n'

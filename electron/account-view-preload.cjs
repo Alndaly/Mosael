@@ -1,6 +1,6 @@
 // 内嵌账号视图的 preload:只做反检测补丁。
 //
-// 返回主 UI 走内嵌浏览器工具栏(主窗口 HTML 的「← 返回 Open Studio」+ Esc,见 accountViews.ts /
+// 返回主 UI 走内嵌浏览器工具栏(主窗口 HTML 的「← 返回 Mosael」+ Esc,见 accountViews.ts /
 // App.tsx)——曾经往页面里注入过一个悬浮返回钮兜底 macOS 焦点吞点击,现已移除:工具栏那条本身
 // 在主窗口视图里,不涉及跨 webContents 首点丢失,注入钮反而挡住平台页面右上角。
 const { webFrame } = require("electron");

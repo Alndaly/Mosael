@@ -69,7 +69,7 @@ async def _run(manifest: dict[str, Any], env: dict[str, str], fn: Callable[[Clie
             "PATH": os.environ.get("PATH", ""),
             "HOME": os.environ.get("HOME", ""),
             "LANG": os.environ.get("LANG", "en_US.UTF-8"),
-            "OPEN_STUDIO_PLUGIN": "1",
+            "MOSAEL_PLUGIN": "1",
             **env,
         }
         params = StdioServerParameters(

@@ -7,15 +7,15 @@
 
 `browser-extension/` 有三个运行世界，不能为了少一层消息把它们揉在一起：
 
-- `page-bridge.ts` 在页面主世界，只读站点播放器/字幕对象；不得持有 Open Studio token。
+- `page-bridge.ts` 在页面主世界，只读站点播放器/字幕对象；不得持有 Mosael token。
 - `content.ts` 在隔离世界，负责页面 DOM、时间跳转、视频像素截帧与跨域捕获时覆盖层的短暂隐藏/恢复；不得渲染产品 UI。
-- `sidepanel.tsx` 是 React Chrome Side Panel，持有 Open Studio 会话并调用后端；不得读取站点 Cookie。
+- `sidepanel.tsx` 是 React Chrome Side Panel，持有 Mosael 会话并调用后端；不得读取站点 Cookie。
 
 侧栏控件必须经 `browser-extension/src/components/ui/` 的 shadcn/Radix 封装，页面布局使用 Tailwind v4；
 `styles.css` 仅放主题 token 与 base layer，禁止恢复旧的 `sidepanel.css` DOM selector 样式。新增可见文案
 必须同时补 `i18n.ts` 的简中和英文；manifest 可见字段则补 `_locales/en` 与 `_locales/zh_CN`。
 
-站点字幕响应先收敛为 `TranscriptCue {start,end,text,tokens?}`，再进入 UI。Open Studio 返回的 token
+站点字幕响应先收敛为 `TranscriptCue {start,end,text,tokens?}`，再进入 UI。Mosael 返回的 token
 时间戳不能在分行时丢弃：行用于阅读，token 才是精确点击和播放高亮的定位单位。YouTube / B 站字段变化时只改各自
 Adapter 与测试，不要让站点 JSON 形状穿进侧栏。双语轨按时间重叠对齐，不能假设两个供应商按同一
 句子分段；缺失 duration 的 cue 必须补成可命中的区间，否则播放跟随永远找不到活动句。站点无字幕
@@ -191,7 +191,7 @@ base 归属由 [`contracts/scene-cases.json`](../contracts/scene-cases.json) 双
 
 ## 7. 兼容垫片会**持续**制造真 bug — ✅ 已清除(2026-08-04)
 
-上一次改名(旧名 → Open Studio)留下的一批"单向兼容垫片"曾经出过下面这些**功能性**问题,
+上一次改名(旧名 → Mosael)留下的一批"单向兼容垫片"曾经出过下面这些**功能性**问题,
 全都不是文案问题:
 
 - 建发布账号仍造旧前缀的登录分区 → 每个新账号一出生就是"待迁移的旧数据"

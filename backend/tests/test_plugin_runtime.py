@@ -24,7 +24,7 @@ def make_plugin(tmp_path: Path, entry_body: str, entry: str = "main.py") -> tupl
 
 def _example() -> tuple[Path, str]:
     """入口从清单里现取 —— 让这条端到端测试连"清单怎么说入口"也一起走一遍。"""
-    raw = json.loads((EXAMPLE / "open-studio.plugin.json").read_text(encoding="utf-8"))
+    raw = json.loads((EXAMPLE / "mosael.plugin.json").read_text(encoding="utf-8"))
     return EXAMPLE, parse(raw, str(EXAMPLE)).runtime.entry
 
 
@@ -71,7 +71,7 @@ def test_invoke_api_records_success_and_failure(tmp_path, monkeypatch) -> None:
     plugins_dir = tmp_path / "plugins"
     target = plugins_dir / "text-toolkit"
     target.mkdir(parents=True)
-    (target / "open-studio.plugin.json").write_text((EXAMPLE / "open-studio.plugin.json").read_text(encoding="utf-8"), "utf-8")
+    (target / "mosael.plugin.json").write_text((EXAMPLE / "mosael.plugin.json").read_text(encoding="utf-8"), "utf-8")
     (target / "tools").mkdir()
     (target / "tools" / "main.py").write_text((EXAMPLE / "tools" / "main.py").read_text(encoding="utf-8"), "utf-8")
     monkeypatch.setattr(type(app_settings), "plugins_dir", property(lambda self: plugins_dir))
@@ -79,7 +79,7 @@ def test_invoke_api_records_success_and_failure(tmp_path, monkeypatch) -> None:
     client = fresh_client()
     client.post("/api/workspaces", json={"name": "W"})  # plugin admin routes need an admin
     plugins = client.post("/api/plugins/scan").json()
-    assert plugins[0]["id"] == "dev.openstudio.text-toolkit"
+    assert plugins[0]["id"] == "dev.mosael.text-toolkit"
     # 无配置无凭据的包扫进来就自带一个默认连接;启用的是连接,不是包。
     instance_id = plugins[0]["instances"][0]["id"]
     client.patch(f"/api/plugins/instances/{instance_id}", json={"enabled": True})

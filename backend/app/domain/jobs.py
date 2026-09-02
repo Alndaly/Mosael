@@ -25,7 +25,7 @@ TERMINAL_STATUSES = ("succeeded", "failed")
 # 在此一处捕获最省事;非工作流路径下取默认 None,即顶层任务。每个节点在自己的线程里 set/reset,
 # 线程间天然隔离。
 _current_parent_job: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "open_studio_current_parent_job", default=None
+    "mosael_current_parent_job", default=None
 )
 
 
@@ -49,7 +49,7 @@ def current_parent_job_id() -> str | None:
 #: 各自有各自的入口函数。逐个加参数意味着**每加一种能被智能体触发的任务,都要再改一处**,
 #: 而漏掉的那一处不会报错 —— 只是那种任务的回执永远送不到。
 _current_receipt: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar(
-    "open_studio_current_receipt", default=None
+    "mosael_current_receipt", default=None
 )
 
 
@@ -191,7 +191,7 @@ def register_receipt_deliverer(kind: str, deliver: Callable[[Session, Job, dict[
 
 #: 这次事务里刚落终态、等着送回执的 job id。挂在 session.info 上而不是模块级 ——
 #: 后台线程各有各的 session,模块级变量会让两个线程的回执串到一起。
-_PENDING_RECEIPTS = "open_studio_pending_receipts"
+_PENDING_RECEIPTS = "mosael_pending_receipts"
 
 
 @event.listens_for(Session, "after_flush")
@@ -274,7 +274,7 @@ EVENT_RETENTION_DAYS = 30
 # - "in_process"(默认):领域模块 spawn 守护线程,进程死任务亡——重启时 reconcile 判失败。
 # - "external":外部 worker 经 claim/report 协议(/api/jobs/worker/*,worker key 鉴权)驱动,
 #   任务跨后端重启存活。发布器是第一个外部 worker;任何计算类 kind(render/transcribe…)
-#   都可以经 OPEN_STUDIO_EXTERNAL_JOB_KINDS 或 register_external_kind() 翻成 external,
+#   都可以经 MOSAEL_EXTERNAL_JOB_KINDS 或 register_external_kind() 翻成 external,
 #   由团队服务器旁的独立 worker 机器认领——这是"多机"的接缝,不是新架构。
 #
 # publish 由 publish 领域自己注册(app/domain/publish/__init__.py);

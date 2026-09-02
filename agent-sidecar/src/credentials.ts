@@ -1,5 +1,5 @@
 /**
- * pi 的 CredentialStore,实现在 Open Studio 后端之上。
+ * pi 的 CredentialStore,实现在 Mosael 后端之上。
  *
  * sidecar 是**每轮对话新起的短命进程**,而 OAuth 凭据会过期、刷新时还会轮换 —— 存在进程里
  * 等于每轮都要重新登录。所以存储归后端(库里的 provider_profiles.oauth_credential),这里只是

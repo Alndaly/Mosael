@@ -99,7 +99,7 @@ def _run(job_id: str) -> None:
     failed = 0
     asset_ids: list[str] = []
     total = len(items)
-    workdir = Path(tempfile.mkdtemp(prefix="open-studio-url-import-"))
+    workdir = Path(tempfile.mkdtemp(prefix="mosael-url-import-"))
     cookie_file = _cookie_file(workspace_id, profile_id, workdir) if profile_id else None
     try:
         for index, item in enumerate(items):

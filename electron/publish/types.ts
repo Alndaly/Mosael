@@ -1,5 +1,5 @@
 // 从桌面发布器移植的最小类型集。这里只保留 pageDriver/accountViews/adapters 用到的形状;
-// 任务的持久化/状态源在 Open Studio 后端(/api/publish),publishWorker.ts 负责把后端任务映射成
+// 任务的持久化/状态源在 Mosael 后端(/api/publish),publishWorker.ts 负责把后端任务映射成
 // 适配器期望的 PublishTask 形状。
 import type { SupportedPlatform } from "./platforms";
 

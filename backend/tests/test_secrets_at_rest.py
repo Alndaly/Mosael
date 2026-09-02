@@ -16,7 +16,7 @@
 
 密钥**不放在库里**(放在同一个文件里等于把钥匙和锁放进同一个抽屉),按顺序取:
 
-    OPEN_STUDIO_SECRET_KEY   环境变量 —— 服务端部署的答案(systemd/docker/k8s secret)
+    MOSAEL_SECRET_KEY   环境变量 —— 服务端部署的答案(systemd/docker/k8s secret)
                              桌面版由 Electron 从系统钥匙串取出后传进来
     <数据目录>/secret.key     0600 的文件 —— 裸跑 uvicorn 时的兜底,只挡"库文件单独泄露"
 """
@@ -136,7 +136,7 @@ def test_the_environment_wins_over_the_key_file(monkeypatch, tmp_path) -> None:
     from cryptography.fernet import Fernet
 
     supplied = Fernet.generate_key()
-    monkeypatch.setenv("OPEN_STUDIO_SECRET_KEY", supplied.decode())
+    monkeypatch.setenv("MOSAEL_SECRET_KEY", supplied.decode())
     secrets_at_rest.master_key.cache_clear()
     try:
         assert secrets_at_rest.master_key() == supplied
@@ -168,7 +168,7 @@ def test_an_unreadable_secret_reads_as_absent_instead_of_garbage(monkeypatch) ->
 
     from cryptography.fernet import Fernet
 
-    monkeypatch.setenv("OPEN_STUDIO_SECRET_KEY", Fernet.generate_key().decode())
+    monkeypatch.setenv("MOSAEL_SECRET_KEY", Fernet.generate_key().decode())
     secrets_at_rest.master_key.cache_clear()
     try:
         with SessionLocal() as db:

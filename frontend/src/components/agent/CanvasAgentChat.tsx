@@ -508,7 +508,7 @@ export function CanvasAgentChat({
           <div className="relative w-full min-w-0 max-w-full text-ui-md leading-[1.65] [word-break:break-word]">
             <AgentTurnContent timeline={streamTimeline} />
             <div className="mt-1.5 flex min-h-[18px] items-center gap-1.5 text-muted-foreground">
-              <Loader2 size={11} className="animate-openstudio-spin" />
+              <Loader2 size={11} className="animate-mosael-spin" />
               <span className="timecode text-ui-xs text-muted-foreground">
                 {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
               </span>
@@ -519,7 +519,7 @@ export function CanvasAgentChat({
           <div className="relative flex w-full min-w-0 max-w-full flex-col items-stretch gap-1.5 text-ui-md leading-[1.65] text-muted-foreground [word-break:break-word]">
             <AgentTurnContent timeline={streamTimeline} />
             <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-              <Loader2 size={12} className="animate-openstudio-spin" /> {t("chatThinking")}
+              <Loader2 size={12} className="animate-mosael-spin" /> {t("chatThinking")}
               <span className="timecode text-ui-xs text-muted-foreground">
                 {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
               </span>

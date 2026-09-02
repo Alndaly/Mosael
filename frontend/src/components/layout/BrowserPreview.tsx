@@ -10,7 +10,7 @@ import { useI18n } from "@/app/preferences";
  * (见 accountViews 的 MAX_PANELS),超额的会话、以及宿主窗口不在时的任务,一个像素都拿不到 ——
  * 那种情况下这个条子是唯一的进度来源,所以留着。已挂面板的会话在这里会被跳过,免得和卡片堆重叠。
  * dataUrl 因此通常是空的(取像需要视图参与合成,而没挂面板就不合成)。
- * 停帧 ~3s 无新帧就淡出;可手动关掉。非 Electron 环境 window.openStudioBrowser 不存在,组件自然什么都不渲染。
+ * 停帧 ~3s 无新帧就淡出;可手动关掉。非 Electron 环境 window.mosaelBrowser 不存在,组件自然什么都不渲染。
  */
 export function BrowserPreview() {
   const t = useI18n();
@@ -24,14 +24,14 @@ export function BrowserPreview() {
   const [panelled, setPanelled] = React.useState<Set<string>>(new Set());
 
   React.useEffect(() => {
-    const off = window.openStudioPublish?.onPanels?.((cards) =>
+    const off = window.mosaelPublish?.onPanels?.((cards) =>
       setPanelled(new Set(cards.map((card) => card.id))),
     );
     return () => off?.();
   }, []);
 
   React.useEffect(() => {
-    const bridge = window.openStudioBrowser;
+    const bridge = window.mosaelBrowser;
     if (!bridge) return;
     const off = bridge.onFrame((next) => {
       setFrame(next);
@@ -78,7 +78,7 @@ export function BrowserPreview() {
             {settled ? (
               <Square size={12} className="shrink-0" />
             ) : (
-              <Loader2 size={12} className="animate-openstudio-spin" />
+              <Loader2 size={12} className="animate-mosael-spin" />
             )}
             <span>{settled ? t("browserPreviewNoPixelsDone") : t("browserPreviewNoPixels")}</span>
           </div>

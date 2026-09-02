@@ -1,9 +1,9 @@
 /**
- * Open Studio agent sidecar — entry point (S1 scaffold).
+ * Mosael agent sidecar — entry point (S1 scaffold).
  *
  * A long-lived Node process the Python backend spawns once and drives over
  * stdio (see protocol.ts). It will embed pi's `Agent` (pi-agent-core) to run
- * turns, bridge Open Studio's tools, and stream events back. S1 only proves the
+ * turns, bridge Mosael's tools, and stream events back. S1 only proves the
  * transport: it echoes each run_turn's prompt back as streamed text. pi is
  * wired in S2.
  */

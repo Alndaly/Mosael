@@ -112,17 +112,17 @@ describe("剪辑页智能体入口", () => {
       "data-context",
       "project=宣传片;project_id=project-1;sequence=主时间线;sequence_id=sequence-1",
     );
-    expect(localStorage.getItem("openstudio:tab:editor-agent")).toBe("on");
+    expect(localStorage.getItem("mosael:tab:editor-agent")).toBe("on");
   });
 
   it("助手可从面板关闭,不会留下遮挡编辑区的空容器", async () => {
     const user = userEvent.setup();
-    localStorage.setItem("openstudio:tab:editor-agent", "on");
+    localStorage.setItem("mosael:tab:editor-agent", "on");
     renderEditor();
 
     await user.click(await screen.findByRole("button", { name: "close-agent" }));
 
     expect(screen.queryByTestId("editor-agent-panel")).toBeNull();
-    expect(localStorage.getItem("openstudio:tab:editor-agent")).toBe("off");
+    expect(localStorage.getItem("mosael:tab:editor-agent")).toBe("off");
   });
 });

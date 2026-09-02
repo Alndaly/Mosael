@@ -74,7 +74,7 @@ export function evalCurve(points: CurvePoint[], x: number): number {
   return pts[n - 1][1];
 }
 
-export const CURVES_FILTER_ID = "openstudio-color-curves";
+export const CURVES_FILTER_ID = "mosael-color-curves";
 
 /** 每通道的 feComponentTransfer tableValues,identity 时返回 null。
  *

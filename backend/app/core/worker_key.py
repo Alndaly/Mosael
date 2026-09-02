@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 #: Header the worker sends it in. Custom (not Authorization) so it can never be confused with a
 #: user session — and, usefully, a custom header forces a CORS preflight, which a cross-origin
 #: page then fails.
-WORKER_KEY_HEADER = "X-Open-Studio-Worker-Key"
+WORKER_KEY_HEADER = "X-Mosael-Worker-Key"
 
 _KEY_FILENAME = "publish-worker.key"
 _key: str | None = None

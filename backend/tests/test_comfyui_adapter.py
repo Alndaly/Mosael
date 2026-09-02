@@ -1,6 +1,6 @@
 """ComfyUI:零密钥的本地生成供应商。
 
-The contract worth pinning: an arbitrary ComfyUI graph fits Open Studio's prompt→image call
+The contract worth pinning: an arbitrary ComfyUI graph fits Mosael's prompt→image call
 through placeholder substitution (typed, injection-safe), the built-in template works on a
 stock install by discovering the checkpoint live, and every failure a user can hit — bad
 template JSON, no models, graph rejected, server down — surfaces as a message they can act
@@ -123,7 +123,7 @@ def test_full_flow_discovers_checkpoint_submits_and_downloads(monkeypatch, tmp_p
         if path == "/history/abc123def":
             return httpx.Response(200, json={"abc123def": {
                 "status": {"status_str": "success", "completed": True},
-                "outputs": {"9": {"images": [{"filename": "openstudio_00001_.png", "subfolder": "", "type": "output"}]}},
+                "outputs": {"9": {"images": [{"filename": "mosael_00001_.png", "subfolder": "", "type": "output"}]}},
             }})
         if path == "/view":
             return httpx.Response(200, content=b"png-bytes")

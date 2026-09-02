@@ -7,7 +7,7 @@ export function emitOpenEvent(event: string, id: string): void {
   }
 }
 
-/** 深链通道:跳到业务页,并在页面挂载后用 openstudio:open-* 事件打开指定记录。 */
+/** 深链通道:跳到业务页,并在页面挂载后用 mosael:open-* 事件打开指定记录。 */
 export function gotoRecord(route: string, event?: string, id?: unknown): void {
   window.location.hash = route.replace(/^#/, "");
   if (event && typeof id === "string" && id) emitOpenEvent(event, id);
@@ -15,24 +15,24 @@ export function gotoRecord(route: string, event?: string, id?: unknown): void {
 
 /** 通知类型 → 打开单条记录的事件名 + payload 里的记录 id 字段。 */
 export const NOTIFICATION_DEEP_LINKS: Record<string, { event: string; payloadKey: string }> = {
-  publish: { event: "openstudio:open-publish-task", payloadKey: "task_id" },
-  workflow: { event: "openstudio:open-workflow", payloadKey: "workflow_id" },
+  publish: { event: "mosael:open-publish-task", payloadKey: "task_id" },
+  workflow: { event: "mosael:open-workflow", payloadKey: "workflow_id" },
 };
 
-/** 跳到设置的某个分区(如未配置模型 → 直达「模型服务」)。SettingsView 监听 openstudio:open-settings。 */
+/** 跳到设置的某个分区(如未配置模型 → 直达「模型服务」)。SettingsView 监听 mosael:open-settings。 */
 export function gotoSettings(section: string): void {
-  gotoRecord("/settings", "openstudio:open-settings", section);
+  gotoRecord("/settings", "mosael:open-settings", section);
 }
 
-/** openstudio:// 深链里 view → 打开单条记录的事件名。没有对应事件的页面就只跳页。 */
+/** mosael:// 深链里 view → 打开单条记录的事件名。没有对应事件的页面就只跳页。 */
 const VIEW_RECORD_EVENTS: Record<string, string> = {
-  workflows: "openstudio:open-workflow",
-  publish: "openstudio:open-publish-task",
-  settings: "openstudio:open-settings",
+  workflows: "mosael:open-workflow",
+  publish: "mosael:open-publish-task",
+  settings: "mosael:open-settings",
 };
 
 /**
- * 挂上 openstudio:// 深链与「拖到应用图标上的文件」的监听。桌面端 preload 把主进程的
+ * 挂上 mosael:// 深链与「拖到应用图标上的文件」的监听。桌面端 preload 把主进程的
  * IPC 转成同名 window 事件,这里是渲染层这一侧的落点。
  *
  * 深链只导航:主进程那边已经把 view 限死在白名单里、id 限死了字符集(见
@@ -48,10 +48,10 @@ export function listenDesktopDeepLinks(onFiles: (paths: string[]) => void): () =
     const paths = (event as CustomEvent<string[]>).detail;
     if (Array.isArray(paths) && paths.length) onFiles(paths);
   };
-  window.addEventListener("openstudio:deep-link", onLink);
-  window.addEventListener("openstudio:open-files", onOpenFiles);
+  window.addEventListener("mosael:deep-link", onLink);
+  window.addEventListener("mosael:open-files", onOpenFiles);
   return () => {
-    window.removeEventListener("openstudio:deep-link", onLink);
-    window.removeEventListener("openstudio:open-files", onOpenFiles);
+    window.removeEventListener("mosael:deep-link", onLink);
+    window.removeEventListener("mosael:open-files", onOpenFiles);
   };
 }

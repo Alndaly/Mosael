@@ -187,7 +187,7 @@ def start_login(
         raise LoginError(f"pi sidecar 未构建:{sidecar}(在 agent-sidecar 目录执行 pnpm build)")
 
     env = {**os.environ}
-    if os.environ.get("OPEN_STUDIO_AGENT_BIN_NODE"):
+    if os.environ.get("MOSAEL_AGENT_BIN_NODE"):
         env["ELECTRON_RUN_AS_NODE"] = "1"
     # 授权换令牌走的是同一条出站链路 —— 被判地区不支持时,这一步和后面的对话请求一起被拒。
     env = _proxy_env(env)

@@ -4,7 +4,7 @@
 
     语音合成失败:
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    ^^^^^^^^^^^^^^^^^^^^^^ File "/Users/kinda/.open-studio/tts/fish-speech-src/
+    ^^^^^^^^^^^^^^^^^^^^^^ File "/Users/kinda/.mosael/tts/fish-speech-src/
     fish_speech/utils/__init__.py", line 3, in <module> from .file import
     get_latest_checkpoint File ".../file.py", line 6, in <module>
     from natsort import natsorted
@@ -26,9 +26,9 @@ RAW = '''Traceback (most recent call last):
   File "/x/tts_worker.py", line 152, in run_fish
     from tools.server.inference import inference_wrapper
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/kinda/.open-studio/tts/fish-speech-src/fish_speech/utils/__init__.py", line 3, in <module>
+  File "/Users/kinda/.mosael/tts/fish-speech-src/fish_speech/utils/__init__.py", line 3, in <module>
     from .file import get_latest_checkpoint
-  File "/Users/kinda/.open-studio/tts/fish-speech-src/fish_speech/utils/file.py", line 6, in <module>
+  File "/Users/kinda/.mosael/tts/fish-speech-src/fish_speech/utils/file.py", line 6, in <module>
     from natsort import natsorted
 ModuleNotFoundError: No module named 'natsort'
 '''

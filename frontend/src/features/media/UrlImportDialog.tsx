@@ -169,7 +169,7 @@ export function UrlImportDialog({
 
         {probe.isPending && (
           <p className="m-0 flex items-center gap-1.5 text-ui-xs text-muted-foreground">
-            <Loader2 size={12} className="animate-openstudio-spin" /> {t("urlImportProbing")}
+            <Loader2 size={12} className="animate-mosael-spin" /> {t("urlImportProbing")}
           </p>
         )}
 

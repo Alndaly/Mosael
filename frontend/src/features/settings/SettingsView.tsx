@@ -72,7 +72,7 @@ const SECTION_IDS: SectionId[] = [
   "backend",
 ];
 
-const SECTION_STORAGE_KEY = "openstudio:settings-section";
+const SECTION_STORAGE_KEY = "mosael:settings-section";
 
 export function SettingsView({ workspace }: { workspace: Workspace }) {
   // 导航项是短标签,不是长内容 —— 用紧凑档,宽度让给右边真正在配的东西。
@@ -89,7 +89,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
     setSectionState(id);
   };
 
-  // 深链:别处(如工作流「模型未配置」提示)→ openstudio:open-settings 直达对应分区。
+  // 深链:别处(如工作流「模型未配置」提示)→ mosael:open-settings 直达对应分区。
   React.useEffect(() => {
     const onOpen = (event: Event) => {
       const detail = (event as CustomEvent<string>).detail;
@@ -114,8 +114,8 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
         setFocusProviderCapability(focus ?? null);
       }
     };
-    window.addEventListener("openstudio:open-settings", onOpen);
-    return () => window.removeEventListener("openstudio:open-settings", onOpen);
+    window.addEventListener("mosael:open-settings", onOpen);
+    return () => window.removeEventListener("mosael:open-settings", onOpen);
   }, []);
 
   const nav: Array<{ id: SectionId; label: string; icon: React.ReactNode }> = [
@@ -348,7 +348,7 @@ function AccountSection() {
           >
             {avatarSrc ? <img src={avatarSrc} className="h-full w-full object-cover" alt="" /> : initial}
             <span className="absolute inset-0 grid place-items-center bg-[rgb(0_0_0/0.45)] text-white opacity-0 transition-opacity duration-100 group-hover/avatar:opacity-100">
-              {avatarPending ? <Loader2 size={13} className="animate-openstudio-spin" /> : <Camera size={13} />}
+              {avatarPending ? <Loader2 size={13} className="animate-mosael-spin" /> : <Camera size={13} />}
             </span>
           </button>
           <input
@@ -376,7 +376,7 @@ function AccountSection() {
           >
             {saveState === "idle" ? null : saveState === "saving" ? (
               <>
-                <Loader2 size={12} className="animate-openstudio-spin" /> {t("profileSaving")}
+                <Loader2 size={12} className="animate-mosael-spin" /> {t("profileSaving")}
               </>
             ) : saveState === "error" ? (
               t("profileSaveFailed")
@@ -452,7 +452,7 @@ function AccountSection() {
             </label>
             <div className="flex items-end justify-end">
               <Button size="sm" disabled={!canUpdatePassword} onClick={() => void submitPassword()}>
-                {passwordPending ? <Loader2 size={13} className="animate-openstudio-spin" /> : null} {t("updatePassword")}
+                {passwordPending ? <Loader2 size={13} className="animate-mosael-spin" /> : null} {t("updatePassword")}
               </Button>
             </div>
           </div>
@@ -488,8 +488,8 @@ function profileKey(profile: { username: string; display_name: string; signature
  *  后端进程存活(后端是主进程 spawn 的子进程),两者缺一,到点就不会触发。 */
 export function StartupRow() {
   const t = useI18n();
-  const get = window.openStudioDesktop?.getOpenAtLogin;
-  const set = window.openStudioDesktop?.setOpenAtLogin;
+  const get = window.mosaelDesktop?.getOpenAtLogin;
+  const set = window.mosaelDesktop?.setOpenAtLogin;
   // null = 还没问到;"unsupported" = 主进程说这个环境不提供(开发模式:execPath 是裸
   // Electron,写进登录项会污染开发机);其余是系统回读的状态。
   type State = { enabled: boolean; needsApproval: boolean };
@@ -529,7 +529,7 @@ export function StartupRow() {
 function UpdateCheckButton() {
   const t = useI18n();
   const [checking, setChecking] = React.useState(false);
-  const check = window.openStudioDesktop?.checkUpdates;
+  const check = window.mosaelDesktop?.checkUpdates;
   if (!check) return null;
   return (
     <Button
@@ -557,7 +557,7 @@ function UpdateCheckButton() {
         }
       }}
     >
-      {checking ? <Loader2 size={13} className="animate-openstudio-spin" /> : <RefreshCw size={13} />}
+      {checking ? <Loader2 size={13} className="animate-mosael-spin" /> : <RefreshCw size={13} />}
       {t("updateCheck")}
     </Button>
   );

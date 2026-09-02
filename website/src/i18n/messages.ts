@@ -12,8 +12,8 @@ import type { Locale } from "./config";
  */
 const zh = {
   meta: {
-    title: "Open Studio · 让灵感落进时间线",
-    description: "本地优先的 AI 视频工作台。剪辑、生成、编排、分发，素材不出本机。",
+    title: "Mosael · 让灵感落进时间线",
+    description: "从一段灵感到一条成片：剪辑、生成、AI 协作与发布，都在自己的电脑里完成。",
   },
   nav: {
     docs: "文档",
@@ -47,17 +47,17 @@ const zh = {
     /** 标题拆成两截，后半截上品牌色 —— 整行变紫会廉价，一句里挑三个字刚好。 */
     titleLead: "让灵感落进",
     titleAccent: "时间线",
-    lede: "剪辑、AI 生成、工作流编排、一键分发 —— 一个本地工作台完成全部创作。素材留在你自己的机器上。",
+    lede: "剪片、找素材、生成画面、让 AI 帮你动手，最后把作品发出去 —— 不必在一堆工具之间来回搬运。你的素材默认留在自己的电脑里。",
     ctaDownload: "下载 App",
     ctaSource: "看看源码",
     platforms: "macOS(Apple Silicon)· Windows 10/11 x64 · 离线可用",
-    heroShotAlt: "Open Studio 剪辑页：多轨时间线、双监看器、素材与逐字稿面板",
+    heroShotAlt: "Mosael 剪辑页：多轨时间线、双监看器、素材与逐字稿面板",
     heroShotCaption: "剪辑页 —— 多轨时间线、逐字稿驱动剪辑、调色与字幕，导出一步到位。",
 
     /** 走马灯色带。是一句话拆成的词，不是导航，所以整条对读屏软件隐藏。 */
-    marquee: ["多轨时间线", "逐字稿驱动剪辑", "AI 智能体", "可视化工作流", "知识库", "一键分发", "本地优先", "开源"],
+    marquee: ["多轨时间线", "逐字稿驱动剪辑", "AI 智能体", "可视化工作流", "知识库", "一键分发", "本地优先", "源码可见"],
 
-    chaptersTitle: "从一段素材到一条发布，中间不用换应用",
+    chaptersTitle: "一段素材，一条成片，中间不必来回搬家",
     chapters: [
       {
         label: "剪辑",
@@ -82,7 +82,7 @@ const zh = {
     localTitle: "为什么是本地优先",
     localBody: [
       "素材不上传，工程不上传，渲染在本机。模型你自己挑 —— 接自己的 API key，或者干脆用本地跑的 Whisper 和开源权重。哪一步走云、哪一步不走，是你的选择而不是默认值。",
-      "全部状态落在 ~/.open-studio 一个目录里，拔掉网线也能剪完一条片子。",
+      "全部状态落在 ~/.mosael 一个目录里，拔掉网线也能剪完一条片子。",
     ],
 
     moreTitle: "还有",
@@ -101,15 +101,16 @@ const zh = {
       },
     ],
 
-    communityTitle: "找个人说话",
-    communityBody: "用着别扭、想要什么功能、或者只是想看看别人怎么剪 —— 群里说比提 issue 快。",
+    communityTitle: "和作者聊聊",
+    communityBody: "用着别扭、想要什么功能，或者只是想看看别人怎么剪 —— 欢迎来群里，也可以在 X 上找到作者。",
     communityGroup: "影像交流群",
     communityGroupHint: "微信扫码进群",
     communityAuthor: "作者微信",
     communityAuthorHint: "商业授权、深度合作直接找我",
+    communityAuthorX: "在 X 上关注 @KindaHuax",
 
-    closingTitle: "开源，免费下载",
-    closingBody: "macOS 与 Windows 都有安装包。源码在 GitHub 上，遇到问题可以直接提 issue。",
+    closingTitle: "把下一条作品，留给 Mosael",
+    closingBody: "macOS 与 Windows 都有安装包。先下载、导入一段素材，然后让灵感落进时间线。",
   },
   plugins: {
     title: "插件",
@@ -170,11 +171,12 @@ const zh = {
     ],
   },
   footer: {
-    tagline: "本地优先的 AI 视频工作台",
+    tagline: "让灵感落进时间线",
     community: "社区",
     project: "项目",
     download: "下载",
     github: "GitHub",
+    authorX: "作者 X",
     contact: "联系",
     issues: "反馈问题",
     rights: "保留所有权利。",
@@ -191,9 +193,9 @@ export type Messages = typeof zh;
 /** 结构必须和 zh 完全一致 —— 类型在这里替我们盯着英文版有没有掉队。 */
 const en: Messages = {
   meta: {
-    title: "Open Studio · Where ideas land on the timeline",
+    title: "Mosael · Where ideas find their timeline",
     description:
-      "A local-first AI video workstation. Edit, generate, orchestrate and publish — your footage never leaves your machine.",
+      "From a spark to a finished video: edit, generate, work with AI, and publish from your own computer.",
   },
   nav: {
     docs: "Docs",
@@ -223,14 +225,14 @@ const en: Messages = {
   },
   home: {
     eyebrow: "Local-first · Desktop app",
-    title: "Where ideas land on the timeline",
-    titleLead: "Where ideas land on the",
+    title: "Where ideas find their timeline",
+    titleLead: "Where ideas find their",
     titleAccent: "timeline",
-    lede: "Editing, AI generation, workflow orchestration, one-click publishing — one local workstation for the whole thing. Your footage stays on your own machine.",
+    lede: "Cut footage, find the right moment, generate a shot, let AI lend a hand, and publish the result — without moving your project between a pile of tools. Your media stays on your computer by default.",
     ctaDownload: "Download",
     ctaSource: "Read the source",
     platforms: "macOS (Apple Silicon) · Windows 10/11 x64 · Works offline",
-    heroShotAlt: "The Open Studio editor: multi-track timeline, dual monitors, media and transcript panels",
+    heroShotAlt: "The Mosael editor: multi-track timeline, dual monitors, media and transcript panels",
     heroShotCaption:
       "The editor — multi-track timeline, transcript-driven cuts, color and subtitles, export in one step.",
 
@@ -242,10 +244,10 @@ const en: Messages = {
       "Knowledge base",
       "One-click publishing",
       "Local-first",
-      "Open source",
+      "Source available",
     ],
 
-    chaptersTitle: "From a raw clip to a published cut, without switching apps",
+    chaptersTitle: "One raw clip, one finished story, no tool-hopping in between",
     chapters: [
       {
         label: "Editing",
@@ -270,7 +272,7 @@ const en: Messages = {
     localTitle: "Why local-first",
     localBody: [
       "Footage isn't uploaded. Projects aren't uploaded. Rendering happens on your machine. You pick the models — bring your own API key, or run Whisper and open weights locally. Which step goes to the cloud is a choice you make, not a default you inherit.",
-      "Every bit of state lives in a single ~/.open-studio directory, so you can finish a cut with the network unplugged.",
+      "Every bit of state lives in a single ~/.mosael directory, so you can finish a cut with the network unplugged.",
     ],
 
     moreTitle: "Also inside",
@@ -289,16 +291,17 @@ const en: Messages = {
       },
     ],
 
-    communityTitle: "Talk to someone",
+    communityTitle: "Talk with the maker",
     communityBody:
-      "Something feels off, a feature you want, or just curious how other people cut — the group is faster than an issue.",
+      "Something feels off, there is a feature you want, or you are curious how other people cut — join the group or find the maker on X.",
     communityGroup: "WeChat group",
     communityGroupHint: "Scan to join",
     communityAuthor: "The author",
     communityAuthorHint: "Commercial licensing and partnerships — reach me directly",
+    communityAuthorX: "Follow @KindaHuax on X",
 
-    closingTitle: "Open source, free to download",
-    closingBody: "Installers for macOS and Windows. The source lives on GitHub — open an issue if something breaks.",
+    closingTitle: "Give your next idea a timeline",
+    closingBody: "Mosael is available for macOS and Windows. Download it, bring in a clip, and start shaping the story.",
   },
   plugins: {
     title: "Plugins",
@@ -366,11 +369,12 @@ const en: Messages = {
     ],
   },
   footer: {
-    tagline: "A local-first AI video workstation",
+    tagline: "Where ideas find their timeline",
     community: "Community",
     project: "Project",
     download: "Download",
     github: "GitHub",
+    authorX: "Author on X",
     contact: "Contact",
     issues: "Report an issue",
     rights: "All rights reserved.",

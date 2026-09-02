@@ -109,7 +109,7 @@ export function MobileMenu({
               )}
             </button>
             <a
-              href="https://github.com/Alndaly/OpenStudio"
+              href="https://github.com/Alndaly/Mosael"
               target="_blank"
               rel="noreferrer"
               className="flex items-center gap-2 border-2 border-ink px-4 py-3 font-medium"
@@ -118,7 +118,7 @@ export function MobileMenu({
               {labels.github}
             </a>
             <a
-              href="https://github.com/Alndaly/OpenStudio/releases/latest"
+              href="https://github.com/Alndaly/Mosael/releases/latest"
               target="_blank"
               rel="noreferrer"
               className="border-2 border-ink bg-flame px-4 py-3 text-center font-bold text-primary-foreground"

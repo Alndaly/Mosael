@@ -1,29 +1,44 @@
 const { app, BrowserWindow, Menu, Notification, dialog, ipcMain, nativeImage, shell } = require("electron");
 const { spawn } = require("node:child_process");
+const fs = require("node:fs");
 const path = require("node:path");
 
 // 应用名。开发态跑的是未打包的 Electron.app,菜单栏首项 / Dock 名默认显示 "Electron"。
 // macOS dev 的菜单/Dock 名读 Electron.app 的 CFBundleName,由 electron/brand-dev.cjs 在启动前补丁;
 // 这里的 setName 影响 app.getName()/部分弹窗,setAppUserModelId 影响 Windows 任务栏归组。
 // 打包版统一由 electron-builder 的 productName 决定。必须在 app ready 前调用。
-app.setName("Open Studio");
-// 保留旧的 AppUserModelId(Windows 任务栏归组的不透明 id;改了等于换一个应用,得不偿失)。
-app.setAppUserModelId("dev.openstudio.app");
+app.setName("Mosael");
+app.setAppUserModelId("dev.mosael.app");
+
+// productName 改名会让 Electron 换一个 userData 目录。第一次启动 Mosael 时把旧目录整体
+// 搬过来，浏览器池登录态、窗口状态和 Chromium 存储才能无缝延续。只在新目录尚不存在时做。
+function migrateLegacyUserData() {
+  const target = app.getPath("userData");
+  const legacy = path.join(app.getPath("appData"), "Open Studio");
+  if (fs.existsSync(target) || !fs.existsSync(legacy)) return;
+  try {
+    fs.renameSync(legacy, target);
+  } catch {
+    fs.cpSync(legacy, target, { recursive: true, errorOnExist: false });
+  }
+}
 
 // 发布内嵌浏览器拟真:引擎层去掉自动化标记(navigator.webdriver 等),让平台风控不把用户
 // 授权的自动化发布误判为爬虫。页面级补丁见 electron/publish/stealth.ts。
 app.commandLine.appendSwitch("disable-blink-features", "AutomationControlled");
 
-const BACKEND_PORT = Number(process.env.OPEN_STUDIO_BACKEND_PORT || 8800);
+const BACKEND_PORT = Number(process.env.MOSAEL_BACKEND_PORT || 8800);
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
 const isDev = !app.isPackaged;
 // 打包产物冒烟由 CI 显式开启。结果写文件而不是只看退出码：壳、冻结后端、renderer
 // 任一层提前退出都可能同样得到 code 0，结构化结果才说得清实际走到了哪一步。
-const smokeResultPath = process.env.OPEN_STUDIO_SMOKE_TEST_RESULT || "";
+const smokeResultPath = process.env.MOSAEL_SMOKE_TEST_RESULT || "";
 const isSmokeTest = Boolean(smokeResultPath);
 
+if (!isSmokeTest) migrateLegacyUserData();
+
 // 冒烟必须能和开发版/已安装版并行跑。Electron 的单实例锁跟 userData 目录绑定；如果继续
-// 使用真实用户目录，本机开着 Open Studio 时打包产物会在 requestSingleInstanceLock()
+// 使用真实用户目录，本机开着 Mosael 时打包产物会在 requestSingleInstanceLock()
 // 这里提前退出，CI/本地测试都没有真正穿过后端启动与数据库升级这条 Seam。
 // 结果文件本来就在 mkdtemp 目录中，顺手把 userData 也隔离到同一个可回收目录。
 if (isSmokeTest) {
@@ -33,7 +48,6 @@ if (isSmokeTest) {
 function reportSmoke(result) {
   if (!smokeResultPath) return;
   try {
-    const fs = require("node:fs");
     fs.mkdirSync(path.dirname(smokeResultPath), { recursive: true });
     fs.writeFileSync(
       smokeResultPath,
@@ -71,7 +85,7 @@ try {
 
 // 单实例:第二次启动不再开一个新应用,而是把参数交给已经在跑的这个并把它唤到前台。
 //
-// 这不只是为了协议唤起(Windows/Linux 上 openstudio:// 与「用 Open Studio 打开某文件」都是
+// 这不只是为了协议唤起(Windows/Linux 上 mosael:// 与「用 Mosael 打开某文件」都是
 // 靠再启动一个进程、把 URL/路径放进 argv 传过来)。没有这把锁,双击两次图标就会有两个实例:
 // 两个发布 worker 抢同一批任务、两套内嵌浏览器争同一个登录分区(分区有单会话租约,后到的
 // 会被拒),而后端因为 ensureBackend 见端口健康就复用,反而看起来"没问题"——很难查。
@@ -81,7 +95,7 @@ if (!app.requestSingleInstanceLock()) {
   // 说清楚为什么退出。开发时最容易撞上:上一个实例还开着(或没退干净)就跑 pnpm dev,
   // 新进程拿不到锁直接 quit,concurrently 只看到「electron exited」就把整套 dev 栈 SIGTERM 掉,
   // 现象是「刚起来就全挂了」而没有任何解释。打包版撞上则是双击图标没反应 —— 同样需要说明。
-  console.warn("[open-studio] 已有一个实例在运行,本次启动退出(窗口会被唤到前台)。");
+  console.warn("[mosael] 已有一个实例在运行,本次启动退出(窗口会被唤到前台)。");
   app.quit();
 } else {
   app.on("second-instance", (_event, argv) => {
@@ -113,8 +127,8 @@ function backendCommand() {
       cwd: backendDir,
     };
   }
-  const packagedDir = path.join(process.resourcesPath, "backend", "open-studio-backend");
-  const executable = process.platform === "win32" ? "open-studio-backend.exe" : "open-studio-backend";
+  const packagedDir = path.join(process.resourcesPath, "backend", "mosael-backend");
+  const executable = process.platform === "win32" ? "mosael-backend.exe" : "mosael-backend";
   return { command: path.join(packagedDir, executable), args: [], cwd: packagedDir };
 }
 
@@ -140,7 +154,7 @@ async function waitForBackend(timeoutMs) {
 }
 
 async function ensureBackend() {
-  // Port already serving a healthy Open Studio backend (e.g. dev uvicorn) → reuse it.
+  // Port already serving a healthy Mosael backend (e.g. dev uvicorn) → reuse it.
   if (await isHealthy()) return true;
 
   const { command, args, cwd } = backendCommand();
@@ -148,7 +162,6 @@ async function ensureBackend() {
   let stdio = "inherit";
   if (!isDev) {
     try {
-      const fs = require("node:fs");
       const logDir = path.join(app.getPath("userData"), "logs");
       fs.mkdirSync(logDir, { recursive: true });
       const fd = fs.openSync(path.join(logDir, "backend.log"), "a");
@@ -161,27 +174,26 @@ async function ensureBackend() {
   // (拖到应用图标上的文件由后端直接按路径读)。团队服务器不会有这个标记,那个接口在那边 404。
   const backendEnv = {
     ...process.env,
-    OPEN_STUDIO_BACKEND_PORT: String(BACKEND_PORT),
-    OPEN_STUDIO_LOCAL_DESKTOP: "1",
+    MOSAEL_BACKEND_PORT: String(BACKEND_PORT),
+    MOSAEL_LOCAL_DESKTOP: "1",
     // 应用版本的唯一真相在 package.json,壳读得到而后端读不到(打包版是 PyInstaller
     // 冻结二进制,连仓库都不在)。所以由壳传进去 —— 后端自己维护第二个版本号必然漂移,
     // 智能体能力面板此前就一直显示 pyproject 里那个从未更新过的 0.1.0。
-    OPEN_STUDIO_APP_VERSION: app.getVersion(),
+    MOSAEL_APP_VERSION: app.getVersion(),
   };
   if (!isDev) {
     // 打包版:pi sidecar 随资源分发,用 Electron 二进制(当 node)拉起
-    backendEnv.OPEN_STUDIO_PI_SIDECAR = path.join(process.resourcesPath, "agent-sidecar", "sidecar.cjs");
-    backendEnv.OPEN_STUDIO_AGENT_BIN_NODE = process.execPath;
+    backendEnv.MOSAEL_PI_SIDECAR = path.join(process.resourcesPath, "agent-sidecar", "sidecar.cjs");
+    backendEnv.MOSAEL_AGENT_BIN_NODE = process.execPath;
     // 声音克隆的运行环境由后端在用户数据目录里自建(见 domain/tts_config.MANAGED_TTS_VENV),
     // 但打包版后端是 PyInstaller 冻结二进制,建不了 venv——所以把随包分发的独立解释器指给它。
     // 只带解释器(~40MB),torch 等数 GB 依赖点「下载」时才装,不进安装包。
-    const fsMod = require("node:fs");
     const ttsPython = path.join(
       process.resourcesPath,
       "python",
       process.platform === "win32" ? "python.exe" : path.join("bin", "python3"),
     );
-    if (fsMod.existsSync(ttsPython)) backendEnv.OPEN_STUDIO_TTS_BASE_PYTHON = ttsPython;
+    if (fs.existsSync(ttsPython)) backendEnv.MOSAEL_TTS_BASE_PYTHON = ttsPython;
   }
   backend = spawn(command, args, {
     cwd,
@@ -200,7 +212,7 @@ async function ensureBackend() {
   backend.on("exit", (code) => {
     backend = null;
     if (!quitting && code !== 0 && code !== null) {
-      dialog.showErrorBox("Open Studio backend stopped", `The local backend exited unexpectedly (code ${code}). Please restart Open Studio.`);
+      dialog.showErrorBox("Mosael backend stopped", `The local backend exited unexpectedly (code ${code}). Please restart Mosael.`);
     }
   });
   return waitForBackend(30000);
@@ -219,7 +231,7 @@ function stopBackend() {
 // 时,可在此平滑升级为 electron-updater 的全自动下载安装,渲染层接口不变。
 // 必须是 GitHub 上的规范仓库名(大小写一致)。写错大小写 API 会返回 301,虽然 fetch
 // 默认跟随重定向仍能work,但更新检查的失败是静默的——一旦重定向失效就再没人发现。
-const UPDATE_REPO = "Alndaly/OpenStudio";
+const UPDATE_REPO = "Alndaly/Mosael";
 
 function compareVersions(a, b) {
   const parse = (value) => String(value).replace(/^v/i, "").split(".").map((part) => parseInt(part, 10) || 0);
@@ -233,7 +245,7 @@ function compareVersions(a, b) {
 
 async function checkForUpdates() {
   const res = await fetch(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`, {
-    headers: { Accept: "application/vnd.github+json", "User-Agent": "open-studio-updater" },
+    headers: { Accept: "application/vnd.github+json", "User-Agent": "mosael-updater" },
   });
   if (!res.ok) throw new Error(`GitHub ${res.status}`);
   const release = await res.json();
@@ -256,12 +268,12 @@ async function checkForUpdates() {
 function buildAppMenu() {
   const isMac = process.platform === "darwin";
   const about = {
-    label: "关于 Open Studio",
+    label: "关于 Mosael",
     click: () =>
       dialog.showMessageBox({
         type: "info",
-        title: "Open Studio",
-        message: "Open Studio",
+        title: "Mosael",
+        message: "Mosael",
         detail: `版本 ${app.getVersion()}`,
         buttons: ["好"],
       }),
@@ -270,17 +282,17 @@ function buildAppMenu() {
     ...(isMac
       ? [
           {
-            label: "Open Studio",
+            label: "Mosael",
             submenu: [
               about,
               { type: "separator" },
               { role: "services", label: "服务" },
               { type: "separator" },
-              { role: "hide", label: "隐藏 Open Studio" },
+              { role: "hide", label: "隐藏 Mosael" },
               { role: "hideOthers", label: "隐藏其他" },
               { role: "unhide", label: "全部显示" },
               { type: "separator" },
-              { role: "quit", label: "退出 Open Studio" },
+              { role: "quit", label: "退出 Mosael" },
             ],
           },
         ]
@@ -354,7 +366,7 @@ function createWindow() {
     height: 900,
     minWidth: 980,
     minHeight: 640,
-    title: "Open Studio",
+    title: "Mosael",
     backgroundColor: "#f0f1f3",
     // 无边框标题栏(参考前身项目):mac 红绿灯悬在左上侧栏顶部,
     // Win/Linux 用 titleBarOverlay 把窗口控件叠在右上(高度 = 顶栏 44px)。
@@ -385,7 +397,7 @@ function createWindow() {
   );
   // 全屏时系统窗口控件(mac 红绿灯 / Win 标题栏三键)消失,顶栏为它们预留的边距要撤掉。
   const sendFullscreen = () => {
-    if (!win.isDestroyed()) win.webContents.send("openstudio:fullscreen", win.isFullScreen());
+    if (!win.isDestroyed()) win.webContents.send("mosael:fullscreen", win.isFullScreen());
   };
   win.on("enter-full-screen", sendFullscreen);
   win.on("leave-full-screen", sendFullscreen);
@@ -412,7 +424,7 @@ function createWindow() {
     });
   }
   if (isDev) {
-    win.loadURL(process.env.OPEN_STUDIO_FRONTEND_URL || "http://127.0.0.1:5173");
+    win.loadURL(process.env.MOSAEL_FRONTEND_URL || "http://127.0.0.1:5173");
   } else {
     win.loadFile(path.join(__dirname, "..", "frontend", "dist", "index.html"));
   }
@@ -505,9 +517,9 @@ app.whenReady().then(async () => {
       return;
     }
     dialog.showErrorBox(
-      "Open Studio backend failed to start",
+      "Mosael backend failed to start",
       `The local backend did not become healthy on port ${BACKEND_PORT}. ` +
-        "Check that the port is free and see logs in ~/.open-studio/logs if available.",
+        "Check that the port is free and see logs in ~/.mosael/logs if available.",
     );
     app.quit();
     return;
@@ -547,7 +559,7 @@ app.whenReady().then(async () => {
       return { ok: false, error: String(err && err.message ? err.message : err) };
     }
   });
-  // 账号视图里注入的「返回 Open Studio」按钮(account-view-preload.cjs)→ 收起内嵌视图。
+  // 账号视图里注入的「返回 Mosael」按钮(account-view-preload.cjs)→ 收起内嵌视图。
   ipcMain.on("publish:exit", () => {
     try {
       requirePublish().hidePublishView();
@@ -558,7 +570,7 @@ app.whenReady().then(async () => {
 
   // 更新检查:设置页「检查更新」按钮主动调;打包版启动后再静默查一次,
   // 有新版把信息推给渲染层弹提示。检查失败(离线/私有仓库)不打扰。
-  ipcMain.handle("openstudio:check-updates", async () => {
+  ipcMain.handle("mosael:check-updates", async () => {
     try {
       return await checkForUpdates();
     } catch (error) {
@@ -570,7 +582,7 @@ app.whenReady().then(async () => {
       try {
         const info = await checkForUpdates();
         if (info.hasUpdate) {
-          for (const win of BrowserWindow.getAllWindows()) win.webContents.send("openstudio:update-available", info);
+          for (const win of BrowserWindow.getAllWindows()) win.webContents.send("mosael:update-available", info);
         }
       } catch {
         /* 静默 */
@@ -580,15 +592,15 @@ app.whenReady().then(async () => {
 
   buildAppMenu();
   // 关于面板信息(mac 标准关于弹窗)。
-  app.setAboutPanelOptions({ applicationName: "Open Studio", applicationVersion: app.getVersion() });
+  app.setAboutPanelOptions({ applicationName: "Mosael", applicationVersion: app.getVersion() });
   // Dock 图标:打包版走 .icns;开发态未打包时 Dock 用的是 Electron 默认图标,这里用打进仓库的
   // build/icon.png 覆盖(路径不存在时 createFromPath 返回空图,跳过)。
   if (process.platform === "darwin" && app.dock) {
     const dockIcon = nativeImage.createFromPath(path.join(__dirname, "..", "build", "icon.png"));
     if (!dockIcon.isEmpty()) app.dock.setIcon(dockIcon);
   }
-  // Win/Linux:标题栏三键叠层颜色随前端主题(openStudioDesktop.setTitleOverlay)。mac 无叠层。
-  ipcMain.on("openstudio:title-overlay", (event, colors) => {
+  // Win/Linux:标题栏三键叠层颜色随前端主题(mosaelDesktop.setTitleOverlay)。mac 无叠层。
+  ipcMain.on("mosael:title-overlay", (event, colors) => {
     if (process.platform === "darwin" || !colors) return;
     const win = BrowserWindow.fromWebContents(event.sender);
     try {
@@ -621,7 +633,7 @@ app.whenReady().then(async () => {
       showWindow,
       isDev,
       iconPath: path.join(__dirname, "..", "build", "icon.png"),
-      trayIconPath: path.join(__dirname, "..", "build", "trayTemplate.png"),
+      trayIconPath: undefined,
     });
     // 渲染层把「有几个任务在跑」推上来 —— 托盘文案和防睡眠都吃这一份,系统层不反查后端。
     ipcMain.on("system:status", (_e, status) => systemHandle?.pushStatus(status || {}));

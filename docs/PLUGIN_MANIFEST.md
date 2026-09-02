@@ -1,6 +1,6 @@
 # 写一个插件
 
-插件是 Open Studio 里**唯一一处能力由第三方提供**的地方。一个插件写好之后,它的工具同时出现在
+插件是 Mosael 里**唯一一处能力由第三方提供**的地方。一个插件写好之后,它的工具同时出现在
 三个地方:智能体的工具表、工作流的节点面板、插件页的手动试跑 —— 你不需要为哪一边额外做适配。
 
 架构与取舍见 [PLUGIN_ARCHITECTURE.md](PLUGIN_ARCHITECTURE.md) 与 [ADR 0005](adr/0005-plugin-package-instance-capability.md)。
@@ -10,8 +10,8 @@
 ## 三十秒版本
 
 ```
-~/.open-studio/plugins/我的插件/
-  open-studio.plugin.json     ← 清单
+~/.mosael/plugins/我的插件/
+  mosael.plugin.json     ← 清单
   main.py                     ← 代码(MCP 插件可以没有)
 ```
 
@@ -88,7 +88,7 @@ except Exception as exc:
 
 ```python
 # 一、你自己下好了。**必须写在给你的目录里**
-out = os.environ["OPEN_STUDIO_PLUGIN_OUTPUT_DIR"]
+out = os.environ["MOSAEL_PLUGIN_OUTPUT_DIR"]
 path = os.path.join(out, "video.mp4")
 download_to(path)
 return {"artifact": {"path": "video.mp4"}}       # 相对这个目录,或者绝对路径
@@ -108,7 +108,7 @@ return {"artifact": {
 就是一个素材 id,和其它产素材的工具一样。暂存目录用完即删,所以那个路径不会传给下游 ——
 它在返回的那一刻就已经失效了。
 
-限制:单份 8GB;`url` 只能是 http/https;`path` 必须落在 `OPEN_STUDIO_PLUGIN_OUTPUT_DIR`
+限制:单份 8GB;`url` 只能是 http/https;`path` 必须落在 `MOSAEL_PLUGIN_OUTPUT_DIR`
 里面(插件本来就以你的身份运行、读得到你读得到的一切,这条挡的不是提权,是「随手交出一个
 别处的文件」—— 素材库里的东西是能被发布出去的)。
 
@@ -313,7 +313,7 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 
 插件进程只拿到 `PATH` / `HOME` / `LANG`,加上**它自己这个连接**声明的配置与凭据。
 
-拿不到:Open Studio 的供应商 API Key、数据库、内部 API token、别的插件的凭据。
+拿不到:Mosael 的供应商 API Key、数据库、内部 API token、别的插件的凭据。
 
 这是有意的。插件因此**绕不过确认卡和权限系统** —— 它不能替用户批准任何东西,只能返回数据,
 由智能体带着那份数据去走正常的确认流程。

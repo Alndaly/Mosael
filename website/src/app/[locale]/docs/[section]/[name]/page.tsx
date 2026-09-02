@@ -28,7 +28,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   const doc = readDoc(locale, section, name);
   if (!doc) return {};
   return {
-    title: `${doc.title} · Open Studio`,
+    title: `${doc.title} · Mosael`,
     description: doc.description,
     alternates: {
       canonical: `/${locale}/docs/${section}/${name}`,

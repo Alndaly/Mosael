@@ -313,7 +313,7 @@ export function TranscriptPanel({
       {/* 按钮只放**短**的:一个动词 + 进度。后端那句状态("funasr 转写中(首次会自动下载模型)")
           可以很长,塞进这个为四个字做的胶囊里会折成两行、把图标挤到一边 —— 它属于下面那行状态,
           不属于控件本身。 */}
-      {asrRunning ? <Loader2 size={12} className="shrink-0 animate-openstudio-spin" /> : <Mic size={12} className="shrink-0" />}
+      {asrRunning ? <Loader2 size={12} className="shrink-0 animate-mosael-spin" /> : <Mic size={12} className="shrink-0" />}
       <span className="whitespace-nowrap">
         {asrRunning ? `${t("transcribing")}${asrProgress ? ` ${asrProgress}` : ""}` : t("aiTranscribe")}
       </span>
@@ -508,7 +508,7 @@ export function TranscriptPanel({
     const busyMessage = asrJob.data?.message || runningJob?.message || "";
     return (
       <div className="m-auto grid max-w-[260px] content-center justify-items-center gap-1.5 px-3.5 py-5 text-center text-muted-foreground [&_p]:m-0 [&_p]:text-xs [&_p]:leading-[1.55] [&>button]:mt-1">
-        {busy ? <Loader2 size={18} className="animate-openstudio-spin" /> : <MessageSquareText size={18} />}
+        {busy ? <Loader2 size={18} className="animate-mosael-spin" /> : <MessageSquareText size={18} />}
         <p>{busy ? t("transcribing") : t("transcriptEmpty")}</p>
         {!busy && (
           <p className="max-w-[220px] text-ui-xs leading-[1.6] text-muted-foreground">{t("transcriptFlowHint")}</p>
@@ -562,7 +562,7 @@ export function TranscriptPanel({
             的记录,给它挂一个语言选择器,等于让人在记录里做译制。 */}
         {onGenerateSubtitles && (
           <button type="button" className={PILL} disabled={generatingSubtitles} title={t("transcriptGenerateSubtitlesHint")} onClick={onGenerateSubtitles}>
-            {generatingSubtitles ? <Loader2 size={12} className="animate-openstudio-spin" /> : <Captions size={12} />}
+            {generatingSubtitles ? <Loader2 size={12} className="animate-mosael-spin" /> : <Captions size={12} />}
             {t("transcriptGenerateSubtitles")}
           </button>
         )}

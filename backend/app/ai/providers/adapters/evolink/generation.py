@@ -10,7 +10,7 @@ Official protocol (evolink-media-mcp):
 * local inputs -> ``files-api.evolink.ai/api/v1/files/upload/stream``;
 * submit -> ``/v1/images/generations`` or ``/v1/videos/generations``;
 * poll -> ``/v1/tasks/{task_id}``;
-* result URLs are short lived, so download them into OpenStudio immediately.
+* result URLs are short lived, so download them into Mosael immediately.
 """
 
 from __future__ import annotations

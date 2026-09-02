@@ -12,7 +12,7 @@ describe("extension i18n", () => {
 
   it("keeps every locale on the same typed message contract", () => {
     expect(Object.keys(messages.en).sort()).toEqual(Object.keys(messages["zh-CN"]).sort());
-    expect(translate("en", "generateTranscript")).toBe("Generate with Open Studio");
-    expect(translate("zh-CN", "generateTranscript")).toBe("使用 Open Studio 生成逐字稿");
+    expect(translate("en", "generateTranscript")).toBe("Generate with Mosael");
+    expect(translate("zh-CN", "generateTranscript")).toBe("使用 Mosael 生成逐字稿");
   });
 });

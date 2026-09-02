@@ -5,7 +5,7 @@
 Electron 的浏览器 worker 认领 queued 动作 → 用 PageDriver 在会话分区的视图上执行 → 回报结果。
 
 会话分区(见 models.BrowserSession):临时 `ephemeral-<id>`(内存态)、具名 `persist:rpa-<name>`、
-池档案会话用其档案分区(BrowserProfile.partition,可为发布登录的 `persist:openstudio-<accountId>`)。
+池档案会话用其档案分区(BrowserProfile.partition,可为发布登录的 `persist:mosael-<accountId>`)。
 「浏览器池」把持久登录身份统一成 BrowserProfile(不再只服务发布);池档案会话受**租约**(一档案
 一时刻一会话)约束,接入智能体时再叠**显式授权**闸——见 open_session / _open_profile_session。
 """
@@ -59,7 +59,7 @@ def create_profile(
     db: Session, *, workspace_id: str, name: str, owner: User, proxy: str | None = None, partition: str | None = None
 ) -> BrowserProfile:
     """新建一个池档案。默认通用档案分区 persist:pool-<id>;发布账号建档时传 partition=
-    persist:openstudio-<accountId> 沿用其既有登录分区(见 publish.create_account,登录态不丢)。
+    persist:mosael-<accountId> 沿用其既有登录分区(见 publish.create_account,登录态不丢)。
 
     `owner` 是必填的:一个已登录的浏览器是**某人的身份**,不是工作区的公共资产。做成必填参数
     而不是"事后由调用点补一句 claim",是因为漏掉的那个调用点建出来的档案会没有主人 —— 于是谁

@@ -511,7 +511,7 @@ export function ChatWorkspace({
                       分隔线同一种语汇。图标显式 size-3:Marker 会把没有 size- 类的 svg 撑到 16px。 */}
                   <Marker className="mt-1.5 min-h-[18px]">
                     <MarkerIcon>
-                      <Loader2 className="size-3 animate-openstudio-spin" />
+                      <Loader2 className="size-3 animate-mosael-spin" />
                     </MarkerIcon>
                     <MarkerContent className="timecode">
                       {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
@@ -524,7 +524,7 @@ export function ChatWorkspace({
                   <AgentTurnContent timeline={streamTimeline} />
                   <Marker>
                     <MarkerIcon>
-                      <Loader2 className="size-3 animate-openstudio-spin" />
+                      <Loader2 className="size-3 animate-mosael-spin" />
                     </MarkerIcon>
                     <MarkerContent className="flex items-center gap-1.5 whitespace-nowrap">
                       {t("chatThinking")}
@@ -616,7 +616,7 @@ export function ChatWorkspace({
                           event.currentTarget.value = "";
                         }}
                       />
-                      {attach.uploading ? <Loader2 size={14} className="animate-openstudio-spin" /> : <Paperclip size={14} />}
+                      {attach.uploading ? <Loader2 size={14} className="animate-mosael-spin" /> : <Paperclip size={14} />}
                     </label>
                   </Button>
                   <ModelPicker workspaceId={workspace.id} session={session.data ?? null} />

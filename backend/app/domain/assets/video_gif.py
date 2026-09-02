@@ -87,7 +87,7 @@ def _body(job_id: str, asset_id: str, fps: int, width: int, start: float, durati
         source = resolve_key(asset.file_key)
         if not source.is_file():
             raise VideoGifError("视频素材文件不存在")
-        with tempfile.TemporaryDirectory(prefix="open-studio-gif-") as tmp:
+        with tempfile.TemporaryDirectory(prefix="mosael-gif-") as tmp:
             target = Path(tmp) / f"{source.stem}.gif"
             encode_video_gif(source, target, fps=fps, width=width, start=start, duration=duration)
             made = register_file_asset(

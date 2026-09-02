@@ -14,7 +14,7 @@ import { useEditorPanels } from "./useEditorPanels";
  * 会撞进 `|| fallback`,栏位不是收到最小值而是弹回默认宽 —— 拖得越狠反而越宽。
  */
 
-const KEY = "openstudio.editor.panels.v2";
+const KEY = "mosael.editor.panels.v2";
 
 function drag(hook: { current: ReturnType<typeof useEditorPanels> }, which: "left" | "right" | "timeline", dx: number, dy = 0) {
   act(() => {

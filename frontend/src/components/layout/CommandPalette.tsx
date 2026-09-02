@@ -87,10 +87,10 @@ export function CommandPalette({
     // 顶栏搜索按钮通过该事件打开(它和面板不在同一组件树)。
     const onOpenEvent = () => setOpen(true);
     document.addEventListener("keydown", onKeyDown);
-    window.addEventListener("openstudio:open-cmdk", onOpenEvent);
+    window.addEventListener("mosael:open-cmdk", onOpenEvent);
     return () => {
       document.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("openstudio:open-cmdk", onOpenEvent);
+      window.removeEventListener("mosael:open-cmdk", onOpenEvent);
     };
   }, []);
 
@@ -115,7 +115,7 @@ export function CommandPalette({
     staleTime: 30_000,
   });
 
-  // 工作流与发布记录都有现成的深链通道(openstudio:open-*),接进来就能跳。
+  // 工作流与发布记录都有现成的深链通道(mosael:open-*),接进来就能跳。
   const workflows = useQuery({
     queryKey: ["workflows", workspace.id],
     queryFn: () => listWorkflows(workspace.id),
@@ -286,7 +286,7 @@ export function CommandPalette({
                 onSelect={() =>
                   run(() => {
                     onNavigate("workflows");
-                    emitOpenEvent("openstudio:open-workflow", workflow.id);
+                    emitOpenEvent("mosael:open-workflow", workflow.id);
                   })
                 }
               >
@@ -309,7 +309,7 @@ export function CommandPalette({
                 onSelect={() =>
                   run(() => {
                     onNavigate("publish");
-                    emitOpenEvent("openstudio:open-publish-task", task.id);
+                    emitOpenEvent("mosael:open-publish-task", task.id);
                   })
                 }
               >
@@ -331,7 +331,7 @@ export function CommandPalette({
                   run(() => {
                     onNavigate("media");
                     // 素材库监听该事件后打开预览(跨页面深链的最小通道)。
-                    emitOpenEvent("openstudio:open-asset", asset.id);
+                    emitOpenEvent("mosael:open-asset", asset.id);
                   })
                 }
               >

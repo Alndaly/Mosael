@@ -17,7 +17,7 @@ from app.domain.providers import auth_types_for_vendor, normalize_auth_type, pi_
 """OAuth 凭据的互斥刷新。
 
 这里要挡的是一个**偶发、难复现、后果却是「刚登录就被登出」**的故障:订阅制的 refresh token
-多为一次性 —— 换出新 access token 的同时旧 refresh 立刻作废。Open Studio 每轮对话新起一个
+多为一次性 —— 换出新 access token 的同时旧 refresh 立刻作废。Mosael 每轮对话新起一个
 sidecar,而对话页 / 工作流 / 飞书可以同时开工;两个 sidecar 拿同一份凭据同时刷新时,后手会让
 先手刚存好的那份当场失效。
 

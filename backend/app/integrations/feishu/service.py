@@ -198,8 +198,8 @@ def seen_recently(message_id: str, window_seconds: float = 300) -> bool:
 
 CAPABILITY_NOTES = {
     "readonly": "本会话为只读档:只允许使用只读工具(list/inspect),不要提交任何确认卡。",
-    "editor": "本会话为编辑档:可以提交时间线修改与生成的确认卡,等待用户在 Open Studio 中批准。",
-    "full": "本会话为完整档:可使用全部工具,变更仍需用户在 Open Studio 中批准确认卡。",
+    "editor": "本会话为编辑档:可以提交时间线修改与生成的确认卡,等待用户在 Mosael 中批准。",
+    "full": "本会话为完整档:可使用全部工具,变更仍需用户在 Mosael 中批准确认卡。",
 }
 
 
@@ -271,7 +271,7 @@ def _describe_unsupported(message_type: str) -> str:
         "share_user": "个人名片",
     }
     what = known.get(message_type, f"「{message_type}」类型的消息")
-    return f"我暂时看不了{what}。可以发文字或图片给我,或者把文件先传进 Open Studio 的素材库再让我处理。"
+    return f"我暂时看不了{what}。可以发文字或图片给我,或者把文件先传进 Mosael 的素材库再让我处理。"
 
 
 def handle_incoming(
@@ -310,7 +310,7 @@ def handle_incoming(
                 send_text(
                     bot,
                     chat_id,
-                    "你还没有绑定 Open Studio 账号,无法使用本机器人。请在 Open Studio『设置 → 飞书机器人』生成绑定码,"
+                    "你还没有绑定 Mosael 账号,无法使用本机器人。请在 Mosael『设置 → 飞书机器人』生成绑定码,"
                     "然后把绑定码直接发给我完成绑定。",
                 )
             return
@@ -475,7 +475,7 @@ def _is_member(db: Session, workspace_id: str, user_id: str) -> bool:
 
 
 def _resolve_sender(db: Session, workspace_id: str, open_id: str) -> User | None:
-    """The Open Studio account bound to this Feishu sender — only if still a workspace member."""
+    """The Mosael account bound to this Feishu sender — only if still a workspace member."""
     binding = db.get(FeishuBinding, {"workspace_id": workspace_id, "open_id": open_id})
     if binding is None or not _is_member(db, workspace_id, binding.user_id):
         return None
@@ -757,7 +757,7 @@ def announce_confirmation(db: Session, confirmation: Any) -> None:
 
         summary = confirmation.summary or confirmation.tool
         tail = f"\n\n(飞书内直接批准需要:{_CARD_SETUP_HINT})" if missing_capability else ""
-        send_text(bot, chat_id, f"有一个变更等待确认:{summary}\n请到 Open Studio 里批准。{tail}")
+        send_text(bot, chat_id, f"有一个变更等待确认:{summary}\n请到 Mosael 里批准。{tail}")
         if missing_capability:
             # 写进机器人状态,设置页那行小字会显示 —— 否则用户只在聊天里看到一次就过去了。
             bot_row = db.get(FeishuBot, bot.id)
@@ -779,7 +779,7 @@ def _toast(message: str) -> CardDecision:
 def handle_card_action(open_id: str, value: dict[str, Any]) -> CardDecision:
     """处理确认卡的按钮点击。
 
-    授权按**点击者**走,和发消息完全同一条路径(_resolve_sender):必须已绑定 Open Studio
+    授权按**点击者**走,和发消息完全同一条路径(_resolve_sender):必须已绑定 Mosael
     账号、且此刻仍是该工作区成员。不是发起者也要过这关 —— 群里任何人都看得见这张卡,但看得见
     不等于能批。用 open_id 而不是 user_id:绑定表就是按 open_id 建的,两者混用会让明明绑过的人
     被拒(这是 Hermes 在飞书审批上踩过的坑)。
@@ -811,7 +811,7 @@ def handle_card_action(open_id: str, value: dict[str, Any]) -> CardDecision:
 
         user = _resolve_sender(db, confirmation.workspace_id, open_id) if open_id else None
         if user is None:
-            return _toast("请先在 Open Studio 的「飞书机器人」里绑定你的账号")
+            return _toast("请先在 Mosael 的「飞书机器人」里绑定你的账号")
 
         summary, tool = confirmation.summary, confirmation.tool
         try:
@@ -827,7 +827,7 @@ def handle_card_action(open_id: str, value: dict[str, Any]) -> CardDecision:
             return _toast(str(exc))
         except Exception:  # noqa: BLE001 — 含权限不足(code 节点)与执行失败
             logger.exception("feishu card decision failed confirmation=%s", confirmation_id)
-            return _toast("处理失败,请到 Open Studio 里查看")
+            return _toast("处理失败,请到 Mosael 里查看")
 
         return CardDecision(
             {

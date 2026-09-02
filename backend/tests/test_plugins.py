@@ -111,7 +111,7 @@ def install(*manifests: dict, entry: str = ENV_ENTRY):
     for manifest in manifests:
         directory = plugins_root() / manifest["id"].rsplit(".", 1)[-1]
         directory.mkdir(parents=True, exist_ok=True)
-        (directory / "open-studio.plugin.json").write_text(json.dumps(manifest), encoding="utf-8")
+        (directory / "mosael.plugin.json").write_text(json.dumps(manifest), encoding="utf-8")
         (directory / "main.py").write_text(entry, encoding="utf-8")
     with SessionLocal() as db:
         # 扫描的是**某个人** —— 自动建的默认接入归他(接入归人,见 db.models.PluginInstance)。
@@ -140,8 +140,24 @@ def test_通用文件名被改成规范名() -> None:
     with SessionLocal() as db:
         installer.sync(db, plugins_root(), owner_user_id=_first_user_id(db))
 
-    assert (directory / "open-studio.plugin.json").exists()
+    assert (directory / "mosael.plugin.json").exists()
     assert not (directory / "plugin.json").exists()
+    assert "dev.legacy" in packages(client)
+
+
+def test_品牌更名前的清单文件名被迁移() -> None:
+    client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})
+    shutil.rmtree(plugins_root(), ignore_errors=True)
+    directory = plugins_root() / "pre-mosael"
+    directory.mkdir(parents=True)
+    (directory / "open-studio.plugin.json").write_text(json.dumps(LEGACY), encoding="utf-8")
+    (directory / "main.py").write_text(ENV_ENTRY, encoding="utf-8")
+    with SessionLocal() as db:
+        installer.sync(db, plugins_root(), owner_user_id=_first_user_id(db))
+
+    assert (directory / "mosael.plugin.json").exists()
+    assert not (directory / "open-studio.plugin.json").exists()
     assert "dev.legacy" in packages(client)
 
 
@@ -272,7 +288,7 @@ def test_插件只拿到自己的凭据_拿不到应用的(monkeypatch) -> None:
     assert "OPENAI_API_KEY" not in env
     # 我们**主动**给的就这几个;别的都是操作系统塞进子进程的(macOS 的
     # __CF_USER_TEXT_ENCODING 之类),不是我们透传的应用状态。
-    assert set(env) & {"PATH", "HOME", "LANG", "OPEN_STUDIO_PLUGIN"} == {"PATH", "HOME", "LANG", "OPEN_STUDIO_PLUGIN"}
+    assert set(env) & {"PATH", "HOME", "LANG", "MOSAEL_PLUGIN"} == {"PATH", "HOME", "LANG", "MOSAEL_PLUGIN"}
     assert not any(key.endswith("_API_KEY") or key.endswith("_TOKEN") for key in env)
 
 
@@ -417,7 +433,7 @@ def test_旧写法的清单在扫描时就地迁移成新写法() -> None:
 
     client = install(LEGACY)
     directory = plugins_root() / "legacy"
-    migrated = json.loads((directory / "open-studio.plugin.json").read_text(encoding="utf-8"))
+    migrated = json.loads((directory / "mosael.plugin.json").read_text(encoding="utf-8"))
 
     assert migrated["manifest_version"] == MANIFEST_VERSION
     assert migrated["runtime"] == {"kind": "process", "entry": "main.py"}      # 顶层 kind/entry 收进 runtime
@@ -428,7 +444,7 @@ def test_旧写法的清单在扫描时就地迁移成新写法() -> None:
     assert "kind" not in migrated and "credentials" not in migrated            # 老字段清干净
 
     # 原文件留一份备份,并且不再作为清单被认出来。
-    assert (directory / "open-studio.plugin.json.bak").exists()
+    assert (directory / "mosael.plugin.json.bak").exists()
 
     # 迁移完照样能用,而且工具没被悄悄关掉。
     package = packages(client)["dev.legacy"]
@@ -440,7 +456,7 @@ def test_旧写法的清单在扫描时就地迁移成新写法() -> None:
 
 def test_迁移是幂等的_跑第二次不再改动() -> None:
     client = install(LEGACY)
-    path = plugins_root() / "legacy" / "open-studio.plugin.json"
+    path = plugins_root() / "legacy" / "mosael.plugin.json"
     first = path.read_text(encoding="utf-8")
     with SessionLocal() as db:
         installer.sync(db, plugins_root(), owner_user_id=_first_user_id(db))

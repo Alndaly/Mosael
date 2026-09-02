@@ -6,7 +6,7 @@
 // 定时截帧推给前端做预览 —— 那是"看不见就只能截图"时代的产物。现在动作到来时把视图挂成面板:
 // 画面是真实渲染的(不必截帧),而且视图参与合成之后**可信指针输入可用**,智能体的点击不再只有
 // isTrusted=false 那一条路。分区照旧严格隔离:ephemeral-*(内存态)/ persist:rpa-* 与发布的
-// persist:openstudio-* 互不相干。
+// persist:mosael-* 互不相干。
 import { sharedViews } from "./accountViews";
 import { executeBrowserAction } from "./browserActions";
 import { browserBackend, type ClaimedAction } from "./browserBackend";

@@ -6,7 +6,7 @@
 
 用法(需要先起好前端与一个**独立数据目录**的后端,别对着自己的真实数据录):
 
-    OPEN_STUDIO_DATA_DIR=/tmp/demo-data backend/.venv/bin/python -m uvicorn app.main:app --port 8801
+    MOSAEL_DATA_DIR=/tmp/demo-data backend/.venv/bin/python -m uvicorn app.main:app --port 8801
     pnpm --dir frontend dev                      # 5173,CORS 允许的源
     backend/.venv/bin/python scripts/record-doc-media.py --token <会话令牌>
 
@@ -103,15 +103,15 @@ class Recorder:
 def open_app(page: Page, base: str, api: str, token: str, theme: str) -> None:
     """把服务器地址、令牌和主题一次性写进 localStorage,再重载让应用带着它们启动。
 
-    主题写的是 `openstudio.preferences`(见 frontend/src/app/preferences.tsx)——
+    主题写的是 `mosael.preferences`(见 frontend/src/app/preferences.tsx)——
     不能只靠 Playwright 的 `color_scheme`:应用自己存偏好,默认 light,系统色不参与。
     """
     page.goto(base, wait_until="domcontentloaded")
     page.evaluate(
-        "([api, token, theme, panels]) => { localStorage.setItem('openstudio.server.url', api);"
-        " localStorage.setItem('openstudio.auth.token', token);"
-        " localStorage.setItem('openstudio.preferences', JSON.stringify({ theme, locale: 'zh-CN' }));"
-        " localStorage.setItem('openstudio.editor.panels.v2', panels); }",
+        "([api, token, theme, panels]) => { localStorage.setItem('mosael.server.url', api);"
+        " localStorage.setItem('mosael.auth.token', token);"
+        " localStorage.setItem('mosael.preferences', JSON.stringify({ theme, locale: 'zh-CN' }));"
+        " localStorage.setItem('mosael.editor.panels.v2', panels); }",
         [api, token, theme, json.dumps(EDITOR_PANELS)],
     )
     page.goto(base, wait_until="networkidle")
@@ -494,13 +494,13 @@ def record_login(page: Page, tmp: Path) -> None:
     放在场景表的最后,并且拍完立刻还原 —— 否则后面的场景全都会被踢回登录页。
     """
     base = page.url.split("#")[0]
-    token = page.evaluate("() => localStorage.getItem('openstudio.auth.token')")
+    token = page.evaluate("() => localStorage.getItem('mosael.auth.token')")
     frames = tmp / "login"
     frames.mkdir()
     rec = Recorder(page, frames)
 
     try:
-        page.evaluate("() => localStorage.removeItem('openstudio.auth.token')")
+        page.evaluate("() => localStorage.removeItem('mosael.auth.token')")
         page.goto(base, wait_until="networkidle")
         page.wait_for_timeout(1200)
         page.screenshot(path=str(MEDIA / "login.png"))
@@ -520,7 +520,7 @@ def record_login(page: Page, tmp: Path) -> None:
     finally:
         # 还原登录态。放在 finally 里:中间任何一步抛错都不能把这台机器留在登出状态。
         if token:
-            page.evaluate("(t) => localStorage.setItem('openstudio.auth.token', t)", token)
+            page.evaluate("(t) => localStorage.setItem('mosael.auth.token', t)", token)
         page.goto(base, wait_until="networkidle")
 
 

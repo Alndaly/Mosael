@@ -31,7 +31,7 @@ describe("会活过导航的 tab", () => {
   });
 
   it("存着一个已经不存在的 tab 时回落 —— 别把人卡在一个删掉的页面上", () => {
-    window.localStorage.setItem("openstudio:tab:x", "删掉的tab");
+    window.localStorage.setItem("mosael:tab:x", "删掉的tab");
     expect(renderHook(() => usePersistentTab("x", "media", ["media"] as const)).result.current[0]).toBe("media");
   });
 
@@ -54,19 +54,19 @@ describe("会活过导航的选中", () => {
   });
 
   it("选中的东西被删掉了就当没选过 —— 而不是指着一个不存在的 id", () => {
-    window.localStorage.setItem("openstudio:selected:w", "已经删了");
+    window.localStorage.setItem("mosael:selected:w", "已经删了");
     expect(renderHook(() => usePersistentSelection("w", ["a", "b"])).result.current[0]).toBeNull();
   });
 
   it("列表还没加载出来时不清空,并显式标记正在恢复", () => {
-    window.localStorage.setItem("openstudio:selected:w", "a");
+    window.localStorage.setItem("mosael:selected:w", "a");
     const loading = renderHook(() => usePersistentSelection("w", undefined));
     expect(loading.result.current[0]).toBe("a");
     expect(loading.result.current[2].restoring).toBe(true);
   });
 
   it("列表已经加载且为空时判为无效 —— 空数组不是加载中", () => {
-    window.localStorage.setItem("openstudio:selected:w", "a");
+    window.localStorage.setItem("mosael:selected:w", "a");
     const empty = renderHook(() => usePersistentSelection("w", []));
     expect(empty.result.current[0]).toBeNull();
     expect(empty.result.current[2].restoring).toBe(false);
@@ -127,7 +127,7 @@ describe("usePersistentViewport", () => {
       ["zoom 为 0", '{"x":1,"y":2,"zoom":0}'],
       ["zoom 为负", '{"x":1,"y":2,"zoom":-1}'],
     ])("%s", (_name, raw) => {
-      localStorage.setItem("openstudio:viewport:wf-1", raw);
+      localStorage.setItem("mosael:viewport:wf-1", raw);
       expect(renderHook(() => usePersistentViewport("wf-1")).result.current.saved).toBeNull();
     });
   });

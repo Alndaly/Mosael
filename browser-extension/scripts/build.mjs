@@ -38,6 +38,8 @@ await writeFile(resolve(outdir, "sidepanel.css"), compiledCss.css);
 await cp(resolve(root, "sidepanel.html"), resolve(outdir, "sidepanel.html"));
 await cp(resolve(root, "_locales"), resolve(outdir, "_locales"), { recursive: true });
 await cp(resolve(repo, "build/icon.png"), resolve(outdir, "icon.png"));
+await cp(resolve(repo, "brand/mosael-icon-light.png"), resolve(outdir, "mosael-icon-light.png"));
+await cp(resolve(repo, "brand/mosael-icon-dark.png"), resolve(outdir, "mosael-icon-dark.png"));
 
 const manifest = JSON.parse(await readFile(resolve(root, "manifest.json"), "utf8"));
 const packageJson = JSON.parse(await readFile(resolve(repo, "package.json"), "utf8"));

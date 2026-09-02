@@ -90,7 +90,7 @@ def extractor_classes() -> tuple[type[Any], ...]:
 def matching_extractor(url: str) -> str | None:
     """Identify a URL without making a network request.
 
-    yt-dlp owns the URL patterns. Keeping a second domain catalogue in Open Studio would always
+    yt-dlp owns the URL patterns. Keeping a second domain catalogue in Mosael would always
     lag behind upgrades and was the reason the browser extension only covered three sites.
     """
     candidate = url.strip()

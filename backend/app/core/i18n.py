@@ -567,7 +567,7 @@ MESSAGES: dict[str, dict[str, str]] = {
 #: 十二个答案 —— 漏一个,那一屏的任务就还是另一种语言。序列化那一层拿不到 Request,ContextVar 是
 #: 让它知道"这一次是谁在问"的唯一办法。
 #: 没有请求上下文时(飞书机器人、定时任务、后台线程)取缺省 —— 那正是它该给的答案。
-_current_locale: ContextVar[str] = ContextVar("openstudio_locale", default=DEFAULT_LOCALE)
+_current_locale: ContextVar[str] = ContextVar("mosael_locale", default=DEFAULT_LOCALE)
 
 
 def set_current_locale(locale: str) -> None:

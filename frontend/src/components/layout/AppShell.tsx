@@ -120,7 +120,7 @@ export function AppShell({
 
   // 桌面端启动静默更新检查的回报:有新版弹一条可点开发布页的提示(不打断)。
   React.useEffect(() => {
-    return window.openStudioDesktop?.onUpdateAvailable?.((info) => {
+    return window.mosaelDesktop?.onUpdateAvailable?.((info) => {
       if (!info?.hasUpdate) return;
       toast(t("updateAvailable").replace("{version}", info.latest ?? ""), {
         duration: 12000,
@@ -182,7 +182,7 @@ export function AppShell({
           <button
             type="button"
             className="inline-flex h-[26px] cursor-pointer items-center gap-1.5 rounded-md border border-border bg-transparent px-[9px] text-xs text-muted-foreground transition-[border-color,color] duration-100 hover:border-border-strong hover:text-foreground max-[760px]:[&_kbd]:hidden max-[760px]:[&_span]:hidden [&_kbd]:rounded-sm [&_kbd]:border [&_kbd]:border-border [&_kbd]:px-1 [&_kbd]:text-ui-2xs [&_kbd]:leading-[15px] [&_kbd]:text-muted-foreground [&_kbd]:[font-family:inherit]"
-            onClick={() => window.dispatchEvent(new CustomEvent("openstudio:open-cmdk"))}
+            onClick={() => window.dispatchEvent(new CustomEvent("mosael:open-cmdk"))}
           >
             <Search size={13} />
             <span>{t("cmdkTitle")}</span>
@@ -223,8 +223,8 @@ export function AppShell({
       <aside
         data-glass-surface
         className="col-start-1 row-start-2 flex flex-col items-center gap-0.5 border-r border-border bg-panel px-0 py-2 supports-[backdrop-filter]:bg-[var(--glass-chrome)] supports-[backdrop-filter]:[-webkit-backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[backdrop-filter:blur(14px)_saturate(1.4)] [.is-desktop_&]:[-webkit-app-region:drag] [.is-desktop_&_:is(button,a)]:[-webkit-app-region:no-drag]">
-        <div className="mb-2.5 grid h-[30px] w-[30px] select-none place-items-center rounded-md bg-primary text-[15px] font-bold text-primary-foreground" aria-hidden>
-          <BrandMark size={22} />
+        <div className="mb-2.5 grid h-[30px] w-[30px] select-none place-items-center" aria-hidden>
+          <BrandMark size={30} />
         </div>
         {PRIMARY_NAV.map((item) => (
           <RailButton
@@ -541,7 +541,7 @@ function RailUserMenu({ onOpenSettings }: { onOpenSettings: () => void }) {
             <LogOut size={13} /> {t("signOut")}
           </button>
         </div>
-        <div className="border-t border-border pt-2 text-center text-ui-2xs tabular-nums text-muted-foreground">Open Studio v{__APP_VERSION__}</div>
+        <div className="border-t border-border pt-2 text-center text-ui-2xs tabular-nums text-muted-foreground">Mosael v{__APP_VERSION__}</div>
       </PopoverContent>
     </Popover>
   );

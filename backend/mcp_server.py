@@ -1,12 +1,12 @@
-"""Open Studio MCP server (stdio).
+"""Mosael MCP server (stdio).
 
 Minimal external-agent surface per plan §17: stable product semantics only —
 summaries, never raw internal schemas. Talks to the local backend HTTP API so
 domain rules and (future) permissions apply uniformly.
 
 Run:  .venv/bin/python mcp_server.py            (from backend/)
-Env:  OPEN_STUDIO_API   (default http://127.0.0.1:8800)
-      OPEN_STUDIO_TOKEN (session token from login; required now that the API
+Env:  MOSAEL_API   (default http://127.0.0.1:8800)
+      MOSAEL_TOKEN (session token from login; required now that the API
                   enforces local authentication)
 """
 
@@ -27,7 +27,7 @@ from mcp.server.mcpserver import MCPServer
 #: at import time, so every tool 401'd or misrouted the moment the backend ran on any port
 #: other than 8800 — a packaged build picking a free port, or two instances side by side.
 _API_BASE: contextvars.ContextVar[str] = contextvars.ContextVar(
-    "open_studio_api_base", default=os.environ.get("OPEN_STUDIO_API", "http://127.0.0.1:8800")
+    "mosael_api_base", default=os.environ.get("MOSAEL_API", "http://127.0.0.1:8800")
 )
 
 
@@ -44,7 +44,7 @@ def api_base() -> str:
 # handles many users' turns concurrently and each needs its own credential. A global would leak
 # one caller's token into another's request.
 _API_TOKEN: contextvars.ContextVar[str] = contextvars.ContextVar(
-    "open_studio_api_token", default=os.environ.get("OPEN_STUDIO_TOKEN", "")
+    "mosael_api_token", default=os.environ.get("MOSAEL_TOKEN", "")
 )
 
 
@@ -57,7 +57,7 @@ def _auth_headers() -> dict[str, str]:
     token = _API_TOKEN.get()
     return {"Authorization": f"Bearer {token}"} if token else {}
 
-mcp = MCPServer("open-studio")
+mcp = MCPServer("mosael")
 
 
 def _raise_with_detail(response: httpx.Response) -> None:
@@ -248,7 +248,7 @@ MUTATING_TOOLS = frozenset(
 
 # 确认卡上显示的请求方。经 /api/agent/tools 间接调用时由调用方标注(如 "pi-agent"),
 # 直连 MCP(Claude CLI 等)保持默认。
-_REQUESTED_BY: contextvars.ContextVar[str] = contextvars.ContextVar("open_studio_requested_by", default="mcp-agent")
+_REQUESTED_BY: contextvars.ContextVar[str] = contextvars.ContextVar("mosael_requested_by", default="mcp-agent")
 
 
 def set_requested_by(name: str) -> contextvars.Token:
@@ -261,7 +261,7 @@ def set_requested_by(name: str) -> contextvars.Token:
 #:
 #: 确认卡**不再**读它:归属由开卡请求自己的令牌决定(routes/confirmations)。这里少一条转述,
 #: 就少一处能和令牌打架的说法。默认空串 = 没有会话(MCP 直连等)。
-_SESSION_ID: contextvars.ContextVar[str] = contextvars.ContextVar("open_studio_session_id", default="")
+_SESSION_ID: contextvars.ContextVar[str] = contextvars.ContextVar("mosael_session_id", default="")
 
 
 def set_session_id(session_id: str) -> contextvars.Token:
@@ -274,7 +274,7 @@ def _confirmation_reply(confirmation: dict[str, Any]) -> dict[str, Any]:
         "status": confirmation["status"],
         "permission": confirmation["permission"],
         "summary": confirmation["summary"],
-        "message": "等待用户在 Open Studio 中确认。用 get_confirmation 轮询结果；批准后 result 才会填充。",
+        "message": "等待用户在 Mosael 中确认。用 get_confirmation 轮询结果；批准后 result 才会填充。",
     }
 
 
@@ -392,7 +392,7 @@ def edit_timeline(sequence_id: str, operations: list[dict[str, Any]], workspace_
 
     Use ONLY for clips/tracks/cuts/trims/effects on a sequence_id after
     inspect_sequence. Requires the user's approval; no edit is applied unless
-    they approve it in Open Studio.
+    they approve it in Mosael.
     Do NOT use for workflow canvas nodes/edges such as add_node, connect,
     set_node_config, remove_node, or remove_edge — use edit_workflow for those.
 
@@ -773,7 +773,7 @@ def analyze_asset(asset_id: str, question: str = "", mode: str = "auto") -> dict
 def list_plugin_tools() -> list[dict[str, Any]]:
     """Read-only: list tools exposed by the user's enabled plugin connections.
 
-    Use only when the built-in Open Studio tools do not cover the user's request and a
+    Use only when the built-in Mosael tools do not cover the user's request and a
     plugin-specific capability may. Each entry has instance_id (which connection),
     instance_name, name, description and input_schema; call with invoke_plugin_tool.
     Do NOT use for built-in timeline/workflow/media operations when a first-party
@@ -788,7 +788,7 @@ def invoke_plugin_tool(instance_id: str, tool_name: str, input: dict[str, Any]) 
 
     Use only with an instance_id/tool_name/input_schema you got from list_plugin_tools —
     instance_id picks WHICH connection (the same plugin can be connected more than once,
-    e.g. one per platform). Built-in Open Studio edits, renders, generations,
+    e.g. one per platform). Built-in Mosael edits, renders, generations,
     operations, and workflow runs should use their dedicated first-party tools instead.
     Returns status, output, and error.
     """
@@ -893,7 +893,7 @@ def update_plan(steps: list[Any]) -> dict[str, Any]:
     """
     session_id = _SESSION_ID.get()
     if not session_id:
-        return {"error": "update_plan 只能在 Open Studio 的对话会话里使用"}
+        return {"error": "update_plan 只能在 Mosael 的对话会话里使用"}
     session = _put(f"/api/agent/sessions/{session_id}/plan", {"steps": steps})
     return {"plan": session.get("plan") or []}
 
@@ -1045,7 +1045,7 @@ def browser_close(session_id: str, workspace_id: str = "") -> dict[str, Any]:
 def web_search(query: str, count: int = 5) -> list[dict[str, Any]]:
     """Read-only: search the public web for up-to-date external information.
 
-    Use when the user needs current facts beyond local Open Studio data. Returns up to
+    Use when the user needs current facts beyond local Mosael data. Returns up to
     count results as {title, url, snippet}; follow up with fetch_url to read a
     promising page. Do NOT use for the user's local assets, projects, or
     workflows — use list_assets/list_projects/list_workflows.
@@ -1059,7 +1059,7 @@ def fetch_url(url: str) -> dict[str, Any]:
 
     Use after web_search when you need the page body. Returns {title, url, text}.
     Only http/https public pages are allowed; internal/localhost addresses are
-    blocked. Do NOT use for local Open Studio assets/workflows.
+    blocked. Do NOT use for local Mosael assets/workflows.
     """
     return _get("/api/webfetch", {"url": url})
 
@@ -1301,7 +1301,7 @@ def get_confirmation(confirmation_id: str) -> dict[str, Any]:
 
     Use only after a confirmation-required tool returns {confirmation_id,
     status:"pending"}. Status becomes executed/rejected/failed after the user
-    decides in Open Studio; result/error explain the outcome. Do NOT call this to find
+    decides in Mosael; result/error explain the outcome. Do NOT call this to find
     projects, assets, workflows, jobs, or arbitrary IDs.
     """
     confirmation = _get(f"/api/confirmations/{confirmation_id}")
@@ -1477,7 +1477,7 @@ def ask_user(questions: list[dict[str, Any]], workspace_id: str = "") -> dict[st
     return {
         "question_id": created["id"],
         "status": created["status"],
-        "message": "等待用户在 Open Studio 中选择。用 get_answer 轮询结果。",
+        "message": "等待用户在 Mosael 中选择。用 get_answer 轮询结果。",
     }
 
 

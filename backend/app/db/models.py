@@ -619,7 +619,7 @@ class ProviderDefault(Base):
 class ProviderPricingRule(Base):
     """Versioned price rule for one provider capability.
 
-    Pricing is deliberately outside ProviderProfile: a profile tells Open Studio how to call an
+    Pricing is deliberately outside ProviderProfile: a profile tells Mosael how to call an
     Adapter, while this table tells the usage Module how to estimate spend for a metered unit.
     """
 
@@ -745,7 +745,7 @@ class NetworkConfig(Base):
 class TtsConfig(Base):
     """Singleton (id='default') runtime config for voice cloning: which engine,
     the external interpreter that has f5-tts/fish-speech installed, and the model
-    download source. Overrides the OPEN_STUDIO_TTS_* env fallback so it's UI-editable."""
+    download source. Overrides the MOSAEL_TTS_* env fallback so it's UI-editable."""
 
     __tablename__ = "tts_config"
 
@@ -946,7 +946,7 @@ class FeishuBot(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
-    name: Mapped[str] = mapped_column(String(160), nullable=False, default="Open Studio 助手")
+    name: Mapped[str] = mapped_column(String(160), nullable=False, default="Mosael 助手")
     app_id: Mapped[str] = mapped_column(String(120), nullable=False)
     app_secret: Mapped[str] = mapped_column(EncryptedText, nullable=False)
     capability: Mapped[str] = mapped_column(String(24), nullable=False, default="editor")  # readonly|editor|full
@@ -958,7 +958,7 @@ class FeishuBot(Base):
 
 
 class FeishuBinding(Base):
-    """Binds a Feishu sender (open_id) to a Open Studio account within a workspace, so the bot
+    """Binds a Feishu sender (open_id) to a Mosael account within a workspace, so the bot
     acts with THAT member's permissions instead of a blanket owner identity."""
 
     __tablename__ = "feishu_bindings"

@@ -16,7 +16,7 @@ def _insert_legacy_account(conn, *, account_id: str, ws: str, platform: str, pro
     conn.execute(
         text('INSERT INTO browser_profiles (id, workspace_id, name, "partition", enabled, created_at, updated_at) '
              "VALUES (:id, :ws, '空壳', :part, 1, datetime('now'), datetime('now'))"),
-        {"id": profile_id, "ws": ws, "part": f"persist:openstudio-{account_id}"},
+        {"id": profile_id, "ws": ws, "part": f"persist:mosael-{account_id}"},
     )
     conn.execute(
         text(

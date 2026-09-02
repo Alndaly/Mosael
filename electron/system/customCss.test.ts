@@ -15,7 +15,7 @@ import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({
-  userData: "/tmp/openstudio-test-userdata",
+  userData: "/tmp/mosael-test-userdata",
   watch: vi.fn(() => ({ close: vi.fn() })),
   existsSync: vi.fn(),
   readFileSync: vi.fn(),
@@ -48,9 +48,9 @@ beforeEach(() => {
 
 describe("自定义 CSS 的文件位置", () => {
   it("住在客户端自己的 userData 里,不在后端的数据目录", () => {
-    // 后端的家是 ~/.open-studio,而后端可能压根不在这台机器上 —— 外观是逐设备的。
+    // 后端的家是 ~/.mosael,而后端可能压根不在这台机器上 —— 外观是逐设备的。
     expect(customCssPath()).toBe(path.join(h.userData, "custom.css"));
-    expect(customCssPath()).not.toContain(".open-studio");
+    expect(customCssPath()).not.toContain(".mosael");
   });
 
   it("读不到时给空串,不抛 —— 没有自定义样式不该让应用出问题", () => {

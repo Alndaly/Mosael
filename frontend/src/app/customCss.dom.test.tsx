@@ -18,16 +18,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CustomCssProvider, useCustomCss } from "@/app/customCss";
 
-const STYLE_ID = "openstudio-custom-css";
+const STYLE_ID = "mosael-custom-css";
 
 let pushChange: ((css: string) => void) | undefined;
 
 function installBridge(css: string) {
-  (window as unknown as { openStudioDesktop?: unknown }).openStudioDesktop = {
+  (window as unknown as { mosaelDesktop?: unknown }).mosaelDesktop = {
     platform: "darwin",
     customCss: {
       read: vi.fn().mockResolvedValue(css),
-      path: vi.fn().mockResolvedValue("/Users/x/Library/Application Support/Open Studio/custom.css"),
+      path: vi.fn().mockResolvedValue("/Users/x/Library/Application Support/Mosael/custom.css"),
       open: vi.fn().mockResolvedValue("/x/custom.css"),
       reveal: vi.fn().mockResolvedValue("/x/custom.css"),
       onChange: (cb: (css: string) => void) => {
@@ -66,7 +66,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  delete (window as unknown as { openStudioDesktop?: unknown }).openStudioDesktop;
+  delete (window as unknown as { mosaelDesktop?: unknown }).mosaelDesktop;
 });
 
 describe("自定义 CSS 的注入", () => {

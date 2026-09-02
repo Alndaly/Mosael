@@ -122,7 +122,7 @@ export function useResizableSidebar(
   // v2:紧凑档换过一次默认宽度。存着旧值的用户会一直看到旧的宽度,而那正是这次要改的东西 ——
   // 换键名让它重新从新默认值起步。这是**一次性迁移**,不是兼容层:旧键没人再读,它会随
   // localStorage 自然消失。
-  const storageKey = `openstudio.sidebar.v2.${key}`;
+  const storageKey = `mosael.sidebar.v2.${key}`;
   const [width, setWidth] = React.useState(() => {
     try {
       return clampSaved(bounds, window.localStorage.getItem(storageKey));
@@ -188,7 +188,7 @@ export function useSidePanels(
   key: string,
   bounds: { left: SidebarBounds; right: SidebarBounds },
 ): SidePanels {
-  const storageKey = `openstudio.panels.${key}`;
+  const storageKey = `mosael.panels.${key}`;
   const [panels, setPanels] = React.useState(() => {
     try {
       const parsed = JSON.parse(window.localStorage.getItem(storageKey) ?? "{}");
@@ -246,7 +246,7 @@ export interface ResizableRow {
  * 甚至 clamp 的语义(宽 vs 高)都不同,合在一起的参数表会比两份实现加起来还难读。
  */
 export function useResizableRow(key: string, bounds: SidebarBounds): ResizableRow {
-  const storageKey = `openstudio.row.${key}`;
+  const storageKey = `mosael.row.${key}`;
   const [height, setHeight] = React.useState(() => {
     try {
       return clampSaved(bounds, window.localStorage.getItem(storageKey));

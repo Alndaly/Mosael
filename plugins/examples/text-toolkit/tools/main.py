@@ -1,4 +1,4 @@
-"""Text Toolkit — Open Studio 插件 entry 脚本示例。
+"""Text Toolkit — Mosael 插件 entry 脚本示例。
 
 协议:stdin 读一个 JSON 请求 {"tool": name, "input": {...}},stdout 写一个
 JSON 响应 {"ok": true, "output": {...}} 或 {"ok": false, "error": "..."}。

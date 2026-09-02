@@ -1,6 +1,6 @@
-import Image from "next/image";
 import Link from "next/link";
 
+import { BrandIcon } from "@/components/brand-logo";
 import { GithubMark } from "@/components/icons";
 import { LocaleSwitch } from "@/components/locale-switch";
 import { MobileMenu } from "@/components/mobile-menu";
@@ -35,9 +35,9 @@ export function SiteHeader({ locale }: { locale: Locale }) {
     <header className="sticky top-0 z-50 border-b-2 border-ink bg-paper">
       <div className="mx-auto flex h-16 max-w-[96rem] items-center gap-3 px-5 sm:gap-6 sm:px-8">
         <Link href={localePath(locale)} className="flex shrink-0 items-center gap-2 sm:gap-3">
-          <Image src="/mark.svg" alt="" width={32} height={32} className="shrink-0" />
+          <BrandIcon size={36} />
           {/* 手机上这几个字按 text-lg 要占掉半个屏宽(实测 251/390),收一档。 */}
-          <span className="font-display text-base font-extrabold tracking-tight uppercase sm:text-lg">Open Studio</span>
+          <span className="font-display text-base font-extrabold tracking-tight uppercase sm:text-lg">Mosael</span>
         </Link>
 
         {/* 窄屏藏起来,入口收进 MobileMenu —— 一行放不下站名 + 三个入口 + 四个动作,

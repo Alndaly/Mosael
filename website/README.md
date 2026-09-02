@@ -1,4 +1,4 @@
-# Open Studio 官网(website)
+# Mosael 官网(website)
 
 Next.js 16 + Tailwind 4 + shadcn/ui。中英双语,文档正文也在这里 —— 它取代了原来的 Astro
 Starlight 文档站。

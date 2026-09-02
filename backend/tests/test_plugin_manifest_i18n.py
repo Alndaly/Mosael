@@ -28,7 +28,7 @@ from app.domain.plugins.manifest import parse, text_of
 
 ROOT = Path(__file__).resolve().parents[2]
 EXAMPLES = ROOT / "plugins" / "examples"
-MANIFEST_NAME = "open-studio.plugin.json"
+MANIFEST_NAME = "mosael.plugin.json"
 CJK = re.compile(r"[一-鿿]")
 
 

@@ -8,7 +8,7 @@
 **保留本文的原因**:P1(合成器修黑闪、翻默认)与「文字层不进 canvas」的调研结论仍然有效且已生效;
 被否决的只是 P2–P4 的「canvas 合成导出帧」路线。否决理由:①它会让导出丢掉 `curves` 与 `lut3d`
 ——OffscreenCanvas 解析不了 `url(#svg-filter)`(浏览器既定限制),canvas 2D 也没有 3D LUT 等价物,
-等于把权威从高保真侧换到低保真侧;②帧由浏览器产出会废掉 `OPEN_STUDIO_EXTERNAL_JOB_KINDS=render`
+等于把权威从高保真侧换到低保真侧;②帧由浏览器产出会废掉 `MOSAEL_EXTERNAL_JOB_KINDS=render`
 的外派能力,团队/远程后端不可用;③1080p30 十分钟约 149 GB 原始 RGBA 的传输量。
 
 **取而代之**:可见层/z 序/base 归属由 `contracts/scene-cases.json` 双侧钉死(治掉全部已发生的

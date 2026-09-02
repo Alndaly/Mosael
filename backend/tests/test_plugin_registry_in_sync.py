@@ -19,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 EXAMPLES = ROOT / "plugins" / "examples"
 REGISTRY = ROOT / "website" / "public" / "plugins" / "registry.json"
-MANIFEST_NAME = "open-studio.plugin.json"
+MANIFEST_NAME = "mosael.plugin.json"
 
 
 def _registry() -> dict[str, dict]:

@@ -6,7 +6,7 @@ import { DEFAULT_LOCALE, type Locale } from "@/i18n/config";
 /**
  * 官方插件索引。
  *
- * **数据源是仓库里那些真的能装的 manifest**(`plugins/examples/<名字>/open-studio.plugin.json`),
+ * **数据源是仓库里那些真的能装的 manifest**(`plugins/examples/<名字>/mosael.plugin.json`),
  * 构建期读进来 —— 不是在这里另抄一份。抄一份的下场是插件改了版本号、改了权限,官网还挂着
  * 半年前那版,而访客照着它去装。
  *
@@ -59,7 +59,7 @@ export function listPlugins(locale: Locale = DEFAULT_LOCALE): PluginEntry[] {
   if (!fs.existsSync(EXAMPLES)) return [];
   return fs
     .readdirSync(EXAMPLES)
-    .map((dir) => path.join(EXAMPLES, dir, "open-studio.plugin.json"))
+    .map((dir) => path.join(EXAMPLES, dir, "mosael.plugin.json"))
     .filter((file) => fs.existsSync(file))
     .map((file): PluginEntry => {
       const manifest = JSON.parse(fs.readFileSync(file, "utf8")) as Manifest;

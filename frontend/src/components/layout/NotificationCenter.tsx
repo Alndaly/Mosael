@@ -78,7 +78,7 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
   const items = query.data?.items ?? [];
   const unread = (query.data?.unread ?? 0) + pendingInvites.length;
 
-  // 点通知 → 跳业务页并打开那条记录(payload 里带记录 id,走 openstudio:open-* 深链通道)。
+  // 点通知 → 跳业务页并打开那条记录(payload 里带记录 id,走 mosael:open-* 深链通道)。
   const openItem = (item: AppNotification) => {
     if (!item.read_at) readOne.mutate(item.id);
     if (item.link) {

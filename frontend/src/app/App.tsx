@@ -10,7 +10,6 @@ import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
-  Film,
   FolderPlus,
   Loader2,
   RotateCw,
@@ -35,6 +34,7 @@ import {
 import { Toaster, toast } from "sonner";
 import { LoginView } from "@/features/auth/LoginView";
 import { AppShell, type StudioView } from "@/components/layout/AppShell";
+import { BrandMark } from "@/components/layout/BrandMark";
 import { STUDIO_VIEWS } from "@/components/layout/navLabels";
 import { CommandPalette } from "@/components/layout/CommandPalette";
 import { ConfirmationCenter } from "@/components/layout/ConfirmationCenter";
@@ -84,7 +84,7 @@ const queryClient = new QueryClient({
 export function App() {
   // 桌面(Electron 无边框窗)样式适配:红绿灯占位、标题拖拽区按 is-desktop/is-mac 生效。
   React.useEffect(() => {
-    const desktop = window.openStudioDesktop;
+    const desktop = window.mosaelDesktop;
     if (!desktop) return;
     const isWin = desktop.platform !== "darwin";
     document.documentElement.classList.add(
@@ -110,7 +110,7 @@ export function App() {
 
   // 全屏时系统窗口控件消失 → 撤掉顶栏为它们预留的边距(mac 76px / Win 148px)。
   React.useEffect(() => {
-    const desktop = window.openStudioDesktop;
+    const desktop = window.mosaelDesktop;
     if (!desktop?.onFullscreen) return;
     return desktop.onFullscreen((fullscreen) => {
       document.documentElement.classList.toggle("is-fullscreen", fullscreen);
@@ -145,7 +145,7 @@ export function App() {
  *  由 contracts/shared-constants.json 钉住。 */
 export const PUBLISH_BAR_HEIGHT = 48;
 
-/** Electron 内嵌发布视图可见时的顶部浏览器工具栏:后退/前进/刷新 + 地址栏 + 返回 Open Studio。
+/** Electron 内嵌发布视图可见时的顶部浏览器工具栏:后退/前进/刷新 + 地址栏 + 返回 Mosael。
  *  条底可拖窗(-webkit-app-region: drag),控件各自 no-drag。 */
 function PublishViewBar() {
   const t = useI18n();
@@ -157,7 +157,7 @@ function PublishViewBar() {
   const [address, setAddress] = React.useState("");
   const [editing, setEditing] = React.useState(false);
   React.useEffect(
-    () => window.openStudioPublish?.onViewState((next) => setState(next)),
+    () => window.mosaelPublish?.onViewState((next) => setState(next)),
     [],
   );
   // 地址随导航更新,但用户正在输入时不覆盖(否则打字被主进程回报打断)。
@@ -169,7 +169,7 @@ function PublishViewBar() {
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     const value = address.trim();
-    if (value) void window.openStudioPublish?.navigate(value);
+    if (value) void window.mosaelPublish?.navigate(value);
     (
       event.currentTarget.querySelector("input") as HTMLInputElement | null
     )?.blur();
@@ -188,7 +188,7 @@ function PublishViewBar() {
           type="button"
           className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-foreground enabled:hover:bg-secondary disabled:cursor-default disabled:opacity-35"
           disabled={!state.canGoBack}
-          onClick={() => void window.openStudioPublish?.back()}
+          onClick={() => void window.mosaelPublish?.back()}
           title={t("navBack")}
           aria-label={t("navBack")}
         >
@@ -198,7 +198,7 @@ function PublishViewBar() {
           type="button"
           className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-foreground enabled:hover:bg-secondary disabled:cursor-default disabled:opacity-35"
           disabled={!state.canGoForward}
-          onClick={() => void window.openStudioPublish?.forward()}
+          onClick={() => void window.mosaelPublish?.forward()}
           title={t("navForward")}
           aria-label={t("navForward")}
         >
@@ -207,7 +207,7 @@ function PublishViewBar() {
         <button
           type="button"
           className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-foreground enabled:hover:bg-secondary disabled:cursor-default disabled:opacity-35"
-          onClick={() => void window.openStudioPublish?.reload()}
+          onClick={() => void window.mosaelPublish?.reload()}
           title={state.loading ? t("navStop") : t("navReload")}
           aria-label={state.loading ? t("navStop") : t("navReload")}
         >
@@ -221,7 +221,7 @@ function PublishViewBar() {
         {state.loading && (
           <Loader2
             size={13}
-            className="flex-none animate-openstudio-spin text-muted-foreground"
+            className="flex-none animate-mosael-spin text-muted-foreground"
           />
         )}
         <Input
@@ -242,7 +242,7 @@ function PublishViewBar() {
       <button
         type="button"
         className="[-webkit-app-region:no-drag] inline-flex cursor-pointer items-center gap-[5px] whitespace-nowrap rounded-md border border-border bg-transparent px-2.5 py-[5px] text-ui-sm text-foreground hover:border-border-strong hover:bg-secondary"
-        onClick={() => void window.openStudioPublish?.hideView()}
+        onClick={() => void window.mosaelPublish?.hideView()}
       >
         <ArrowLeft size={14} /> {t("publishBackToApp")}
       </button>
@@ -320,7 +320,7 @@ function OfflineView() {
   );
 }
 
-const ACTIVE_WORKSPACE_KEY = "openstudio:workspace";
+const ACTIVE_WORKSPACE_KEY = "mosael:workspace";
 
 function readStoredWorkspaceId(): string | null {
   try {
@@ -397,8 +397,8 @@ function WorkspaceGate() {
       <PreShellScreen>
         <Card className="w-[min(384px,calc(100vw-32px))]">
           <CardContent className="grid justify-items-center gap-4 px-7 pb-[22px] pt-[30px] text-center [&_h1]:m-0 [&_p]:m-0">
-            <Film size={34} />
-            <h1>Open Studio</h1>
+            <BrandMark size={56} className="block" />
+            <h1>Mosael</h1>
             <p>{t("welcomeText")}</p>
             <Button
               loading={createWorkspace.isPending}
@@ -502,7 +502,7 @@ function Studio({
   // 而不是各页各建一个 —— 见 useCreateProject 里那条「先写缓存再跳转」的说明。
   const createProject = useCreateProject(workspace.id, openProject);
 
-  // 桌面端外部唤起:openstudio:// 深链(只导航)与拖到应用图标上的媒体文件(入库)。
+  // 桌面端外部唤起:mosael:// 深链(只导航)与拖到应用图标上的媒体文件(入库)。
   // 挂在 App 这一层,是因为它要跨页面生效——不能等某个页面挂载了才开始听。
   React.useEffect(() => {
     return listenDesktopDeepLinks((paths) => {

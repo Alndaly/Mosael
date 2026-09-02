@@ -65,6 +65,13 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
     metadataBase: new URL(SITE.url),
     title: t.meta.title,
     description: t.meta.description,
+    icons: {
+      icon: [
+        { url: "/brand/mosael-icon-light.png", media: "(prefers-color-scheme: light)" },
+        { url: "/brand/mosael-icon-dark.png", media: "(prefers-color-scheme: dark)" },
+      ],
+      apple: "/brand/mosael-icon-light.png",
+    },
     // hreflang:两个语言版本互相指认,搜索引擎才不会把它们当重复内容处理。
     alternates: {
       canonical: `/${locale}`,
@@ -72,7 +79,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
     },
     openGraph: {
       type: "website",
-      siteName: "Open Studio",
+      siteName: "Mosael",
       title: t.meta.title,
       description: t.meta.description,
       locale: HTML_LANG[locale],

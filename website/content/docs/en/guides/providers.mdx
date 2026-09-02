@@ -4,7 +4,7 @@ description: Add AI providers per capability, set default models, cost rules.
 order: 1
 ---
 
-Open Studio's AI features (agent chat, text-to-image / video, voiceover, transcription) are bring-your-own-key: most vendors take an **API key**, subscription plans use **authorized sign-in** (below). Credentials never leave this machine; the settings API returns a masked hint or just "linked / not linked", never the plaintext.
+Mosael's AI features (agent chat, text-to-image / video, voiceover, transcription) are bring-your-own-key: most vendors take an **API key**, subscription plans use **authorized sign-in** (below). Credentials never leave this machine; the settings API returns a masked hint or just "linked / not linked", never the plaintext.
 
 ## Configured per capability
 
@@ -30,7 +30,7 @@ At the top of each section is the **default model**: the default provider and mo
 A vendor is **not** a model or a connection. A connection records where the current user connects
 and which credential they use, and it can hold **any number of models**. Endpoint/non-secret options
 and API-key/OAuth state are stored separately so they can evolve independently, but both belong only
-to their creator; Open Studio never lists, selects, or falls back to another user's connection.
+to their creator; Mosael never lists, selects, or falls back to another user's connection.
 Click the chevron on a provider row to see that connection's model list.
 
 ## Add a provider
@@ -52,19 +52,19 @@ Providers can be **enabled / disabled** at any time without deleting.
 
 Volcengine Ark's Seedream / Seedance generation APIs and Volcengine Speech's TTS / podcast APIs both
 belong to ByteDance, but their consoles, credentials, endpoints and request protocols are not
-interchangeable. Open Studio groups them under one company namespace while retaining separate
+interchangeable. Mosael groups them under one company namespace while retaining separate
 Adapters and stable connection types; directory ownership does not merge the two credential sets.
 
 ### Evolink: several generation engines under one connection
 
 Evolink is a unified image/video gateway. One Evolink API key can host Seedance, Kling, Veo,
-Hailuo, WAN, Sora, GPT Image, Gemini and Seedream model rows under the same connection. Open Studio
+Hailuo, WAN, Sora, GPT Image, Gemini and Seedream model rows under the same connection. Mosael
 uploads local image, video and audio inputs through the Evolink Files API while preserving their
 roles (keyframe, reference, edit source, or extension clip), submits the asynchronous task by exact
 model id, then immediately downloads expiring results into the local media library.
 
 This route is independent from the native Volcengine Seedance adapter, so you can choose it for
-different regional, account or content-policy behaviour. Open Studio adds no local "real person"
+different regional, account or content-policy behaviour. Mosael adds no local "real person"
 keyword block, but it cannot promise policy bypass: acceptance still belongs to Evolink's current
 upstream model.
 

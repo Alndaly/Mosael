@@ -1,7 +1,7 @@
 """OAuth 凭据的存放与互斥刷新。
 
 **为什么需要互斥而不是「谁写谁算」**:订阅制凭据(Claude Pro/Max、Kimi Code 等)的 refresh
-token 通常是**一次性**的 —— 换出新 access token 的同时旧 refresh 作废。而 Open Studio 每一轮
+token 通常是**一次性**的 —— 换出新 access token 的同时旧 refresh 作废。而 Mosael 每一轮
 对话都会新起一个 sidecar 进程,多个会话(对话页 / 工作流 / 飞书)可以同时开工。两个 sidecar
 若同时拿同一份凭据去刷新,后手那次会让先手刚存进来的凭据当场失效,用户看到的是「刚登录就被
 登出」,而且是偶发、不可复现的那种。

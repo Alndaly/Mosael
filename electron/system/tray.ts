@@ -16,9 +16,7 @@ import type { Capability, SystemContext, SystemStatus } from "./types";
 const ICON_SIZE = 18;
 
 function buildIcon(ctx: SystemContext) {
-  // macOS 的菜单栏图标惯例是**单色字形**,由系统按明暗菜单栏自动反色、并在非活动窗口时变淡。
-  // 直接塞彩色应用图标,在一排单色图标里像块补丁,深色菜单栏下还容易糊成一团。
-  // Windows/Linux 的托盘惯例相反(彩色),继续用应用图标。
+  // Mosael 的新图标本身承载品牌渐变，因此各平台都使用应用图标；旧的单色模板不再分发。
   const template = process.platform === "darwin" && ctx.trayIconPath;
   const image = nativeImage.createFromPath(template ? ctx.trayIconPath! : ctx.iconPath);
   if (image.isEmpty()) return image;
@@ -46,12 +44,12 @@ export const tray: Capability = {
 
     const rebuild = () => {
       const busy = status.runningJobs > 0;
-      trayIcon.setToolTip(busy ? `Open Studio · ${status.runningJobs} 个任务运行中` : "Open Studio");
+      trayIcon.setToolTip(busy ? `Mosael · ${status.runningJobs} 个任务运行中` : "Mosael");
       trayIcon.setContextMenu(
         Menu.buildFromTemplate([
           { label: busy ? `${status.runningJobs} 个任务运行中` : "空闲", enabled: false },
           { type: "separator" },
-          { label: "打开 Open Studio", click: () => ctx.showWindow() },
+          { label: "打开 Mosael", click: () => ctx.showWindow() },
           ...(ctx.isDev
             ? []
             : [
@@ -68,7 +66,7 @@ export const tray: Capability = {
                 },
               ]),
           { type: "separator" },
-          { label: "退出 Open Studio", click: () => app.quit() },
+          { label: "退出 Mosael", click: () => app.quit() },
         ]),
       );
     };

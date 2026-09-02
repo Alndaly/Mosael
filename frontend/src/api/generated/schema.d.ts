@@ -45,7 +45,7 @@ export interface paths {
          *              → 改实例配置 / 存 code 节点 → 在服务端执行任意 Python
          *
          *     空库时照常放行:那时没有任何人可以给第一个账号发邀请。之后只能由已有成员邀请
-         *     (见 workspaces 的 invitations 路由),想保持开放的部署显式打开 OPEN_STUDIO_OPEN_REGISTRATION。
+         *     (见 workspaces 的 invitations 路由),想保持开放的部署显式打开 MOSAEL_OPEN_REGISTRATION。
          */
         post: operations["register_api_auth_register_post"];
         delete?: never;
@@ -924,7 +924,7 @@ export interface paths {
         put?: never;
         /**
          * Import Local Asset
-         * @description 按本机绝对路径导入(桌面端把文件拖到应用图标上 / 「用 Open Studio 打开」)。
+         * @description 按本机绝对路径导入(桌面端把文件拖到应用图标上 / 「用 Mosael 打开」)。
          *
          *     **只在桌面端自带的后端上可用**。团队服务器部署没有 local_desktop 标记,这个接口直接
          *     404 —— 否则任何一个客户端都能让服务器去读它自己的文件系统,那是任意文件读取。
@@ -3995,7 +3995,7 @@ export interface paths {
          * Plugins Directory
          * @description 插件目录的**真实绝对路径**,给前端的空态引导用。
          *
-         *     这条路径曾经写死在前端文案里(`~/.open-studio/plugins/`)。那是 POSIX 写法:Windows 上
+         *     这条路径曾经写死在前端文案里(`~/.mosael/plugins/`)。那是 POSIX 写法:Windows 上
          *     `~/` 对用户没有任何意义,照着找是找不到的。路径由谁算就由谁报。
          */
         get: operations["plugins_directory_api_plugins_dir_get"];
@@ -6115,7 +6115,7 @@ export interface components {
             workspace_id: string;
             /**
              * Name
-             * @default Open Studio 助手
+             * @default Mosael 助手
              */
             name: string;
             /** App Id */

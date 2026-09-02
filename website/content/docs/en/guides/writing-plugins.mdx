@@ -4,11 +4,11 @@ description: A directory, a manifest, a script — and how to get it into the ma
 order: 8
 ---
 
-A plugin is how capability from outside Open Studio gets in. Writing one does not mean reading
+A plugin is how capability from outside Mosael gets in. Writing one does not mean reading
 framework source: a directory, a manifest, a script — that is all of it.
 
 This page is about **writing** one; [Plugins](/docs/guides/plugins) is about using them, and the
-[manifest reference](https://github.com/Alndaly/OpenStudio/blob/main/docs/PLUGIN_MANIFEST.md)
+[manifest reference](https://github.com/Alndaly/Mosael/blob/main/docs/PLUGIN_MANIFEST.md)
 is the full field list.
 
 ## First decide: script or MCP
@@ -29,7 +29,7 @@ One directory, two files:
 
 ```
 my-plugin/
-  open-studio.plugin.json
+  mosael.plugin.json
   main.py
 ```
 
@@ -69,7 +69,7 @@ except Exception as exc:
 ```
 
 Drop the directory into the plugins folder — the Plugins page tells you where it is;
-**don't go looking for `~/.open-studio/plugins`**, that path does not exist on Windows —
+**don't go looking for `~/.mosael/plugins`**, that path does not exist on Windows —
 then hit **Scan**. It shows up in the list.
 
 Use a reverse-domain `id`. It is the **unique key on this machine**: the installed directory is
@@ -114,7 +114,7 @@ library, put `artifact` in `output`. Two ways:
 
 ```python
 # 1. You downloaded it yourself. It must live in the directory you were given
-out = os.environ["OPEN_STUDIO_PLUGIN_OUTPUT_DIR"]
+out = os.environ["MOSAEL_PLUGIN_OUTPUT_DIR"]
 path = os.path.join(out, "video.mp4")
 download_to(path)
 return {"artifact": {"path": "video.mp4"}}

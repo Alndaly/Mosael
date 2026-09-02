@@ -1,5 +1,5 @@
 import React from "react";
-import { CircleAlert, Film, Languages } from "lucide-react";
+import { CircleAlert, Languages } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { oauthPending, oauthProviders, oauthStart } from "@/api/client";
 import { useAuth } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
+import { BrandMark } from "@/components/layout/BrandMark";
 import loginHeroUrl from "@/assets/login-hero.jpg";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -109,9 +110,7 @@ export function LoginView() {
       <main className="grid min-h-screen grid-rows-[minmax(0,1fr)_auto] justify-items-center overflow-y-auto px-6 py-8">
         <div className="grid w-[min(340px,100%)] content-center gap-6">
           <div className="grid gap-2.5 [&_h1]:m-0 [&_h1]:text-[22px] [&_h1]:font-[640] [&_h1]:leading-[1.15] [&_h1]:tracking-[-0.02em] [&_h1]:text-foreground [&_p]:m-0 [&_p]:text-ui-md [&_p]:leading-normal [&_p]:text-muted-foreground">
-            <div className="mb-1.5 grid h-11 w-11 place-items-center rounded-xl bg-primary text-primary-foreground">
-              <Film size={21} />
-            </div>
+            <BrandMark size={48} className="mb-1.5 block" />
             {/* 空库 = 这个部署还没有管理员。直说他正在创建什么,而不是一句泛泛的"创建账户"。 */}
             <h1>{mode === "login" ? t("loginWelcomeBack") : hasUsers ? t("loginCreateTitle") : t("bootstrapTitle")}</h1>
             <p>

@@ -28,7 +28,7 @@ import { Separator } from "./components/ui/separator";
 import { cropScreenshot, frameDataUrlToBlob } from "./capture";
 import { localeFromLanguage, translate, type MessageKey, type UiLocale } from "./i18n";
 import { cn } from "./lib/utils";
-import { OpenStudioClient, type BrowserProfile, type Job, type Project, type Workspace } from "./openstudio/client";
+import { MosaelClient, type BrowserProfile, type Job, type Project, type Workspace } from "./mosael/client";
 import { mergePolledVideoContext } from "./platforms/detect";
 import { videoPlatformLabel } from "./platforms/labels";
 import type { CapturedVideoFrame, CaptureGeometry, ContentRequest, ContentResponse } from "./shared/protocol";
@@ -49,8 +49,10 @@ type LocaleSetting = "auto" | UiLocale;
 type SettingsNotice = { message: string; error: boolean } | null;
 type TranscriptNotice = { message: string; kind: "loading" | "error" } | null;
 
-const CONNECTION_KEY = "openstudio.connection";
-const LOCALE_KEY = "openstudio.locale";
+const CONNECTION_KEY = "mosael.connection";
+const LOCALE_KEY = "mosael.locale";
+const LEGACY_CONNECTION_KEY = "openstudio.connection";
+const LEGACY_LOCALE_KEY = "openstudio.locale";
 const NO_PROJECT = "__none__";
 const NO_PROFILE = "__public__";
 
@@ -79,14 +81,16 @@ function safeFilename(value: string): string {
 }
 
 async function storedConnection(): Promise<Connection | null> {
-  const result = await chrome.storage.local.get(CONNECTION_KEY);
-  const value = result[CONNECTION_KEY];
+  const result = await chrome.storage.local.get([CONNECTION_KEY, LEGACY_CONNECTION_KEY]);
+  const value = result[CONNECTION_KEY] || result[LEGACY_CONNECTION_KEY];
+  if (!result[CONNECTION_KEY] && value) await chrome.storage.local.set({ [CONNECTION_KEY]: value });
   return value && typeof value === "object" ? (value as Connection) : null;
 }
 
 async function storedLocale(): Promise<LocaleSetting> {
-  const result = await chrome.storage.local.get(LOCALE_KEY);
-  const value = result[LOCALE_KEY];
+  const result = await chrome.storage.local.get([LOCALE_KEY, LEGACY_LOCALE_KEY]);
+  const value = result[LOCALE_KEY] || result[LEGACY_LOCALE_KEY];
+  if (!result[LOCALE_KEY] && value) await chrome.storage.local.set({ [LOCALE_KEY]: value });
   return value === "zh-CN" || value === "en" ? value : "auto";
 }
 
@@ -191,9 +195,9 @@ function App(): React.ReactElement {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  const apiFor = React.useCallback((value = connection): OpenStudioClient => {
+  const apiFor = React.useCallback((value = connection): MosaelClient => {
     if (!value?.token) throw new Error(t("connectionRequired"));
-    return new OpenStudioClient({ baseUrl: value.baseUrl, token: value.token });
+    return new MosaelClient({ baseUrl: value.baseUrl, token: value.token });
   }, [connection, t]);
 
   const loadDestinations = React.useCallback(async (value: Connection, available?: Workspace[]) => {
@@ -277,7 +281,7 @@ function App(): React.ReactElement {
 
   React.useEffect(() => {
     document.documentElement.lang = locale;
-    document.title = locale === "zh-CN" ? "Open Studio 视频助手" : "Open Studio Video Assistant";
+    document.title = locale === "zh-CN" ? "Mosael 视频助手" : "Mosael Video Assistant";
   }, [locale]);
 
   React.useEffect(() => {
@@ -344,7 +348,7 @@ function App(): React.ReactElement {
     setConnecting(true);
     setSettingsNotice({ message: t("connecting"), error: false });
     try {
-      const api = new OpenStudioClient({ baseUrl: server });
+      const api = new MosaelClient({ baseUrl: server });
       const auth = await api.login(username, password);
       const available = await api.listWorkspaces();
       const workspace = available[0];
@@ -423,9 +427,9 @@ function App(): React.ReactElement {
         },
       });
       const nextTranscript: Transcript = {
-        trackId: `openstudio:${generated.assetId}`,
+        trackId: `mosael:${generated.assetId}`,
         language: generated.language,
-        languageLabel: generated.language ? `Open Studio · ${generated.language}` : "Open Studio",
+        languageLabel: generated.language ? `Mosael · ${generated.language}` : "Mosael",
         cues: generated.cues,
         tracks: [],
       };
@@ -542,7 +546,10 @@ function App(): React.ReactElement {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background/85 px-4 backdrop-blur-xl">
-        <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-violet-400 to-violet-700 text-xs font-black text-white">OS</div>
+        <picture className="block size-10 shrink-0" aria-hidden="true">
+          <source srcSet="mosael-icon-dark.png" media="(prefers-color-scheme: dark)" />
+          <img src="mosael-icon-light.png" alt="" className="size-full object-contain" draggable={false} />
+        </picture>
         <div className="min-w-0 flex-1 leading-tight">
           <div className="truncate text-sm font-bold">{t("brand")}</div>
           <div className="mt-1 truncate text-xs text-muted-foreground">{connection?.workspaceName || t("disconnected")}</div>

@@ -24,11 +24,11 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
   const t = useI18n();
   const qc = useQueryClient();
   const [open, setOpen] = React.useState(false);
-  // 深链通道(与 openstudio:open-* 约定一致):首页任务磁贴等入口用事件打开任务中心弹层。
+  // 深链通道(与 mosael:open-* 约定一致):首页任务磁贴等入口用事件打开任务中心弹层。
   React.useEffect(() => {
     const onOpen = () => setOpen(true);
-    window.addEventListener("openstudio:open-tasks", onOpen);
-    return () => window.removeEventListener("openstudio:open-tasks", onOpen);
+    window.addEventListener("mosael:open-tasks", onOpen);
+    return () => window.removeEventListener("mosael:open-tasks", onOpen);
   }, []);
   const [detailJob, setDetailJob] = React.useState<Job | null>(null);
 
@@ -79,8 +79,8 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
     const route = jobRoute(job);
     if (!route) return;
     const payload = (job.payload ?? {}) as Record<string, unknown>;
-    if (job.kind === "publish") gotoRecord(route, "openstudio:open-publish-task", payload.task_id);
-    else if (job.kind === "workflow") gotoRecord(route, "openstudio:open-workflow", payload.workflow_id);
+    if (job.kind === "publish") gotoRecord(route, "mosael:open-publish-task", payload.task_id);
+    else if (job.kind === "workflow") gotoRecord(route, "mosael:open-workflow", payload.workflow_id);
     else gotoRecord(route);
     setDetailJob(null);
   };
@@ -96,7 +96,7 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
     return sum > 0 ? sum / active.length : null;
   }, [active]);
   React.useEffect(() => {
-    window.openStudioDesktop?.reportStatus?.({ runningJobs: active.length, progress: aggregateProgress });
+    window.mosaelDesktop?.reportStatus?.({ runningJobs: active.length, progress: aggregateProgress });
   }, [active.length, aggregateProgress]);
 
   // 任务完成提示:只在「上一轮还在跑、这一轮结束了」的跃迁上弹一次,
@@ -138,7 +138,7 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
         else toast.error(`${label} · ${t("jobFailed")}`, { description: job.error ?? undefined });
         // 同一件事也告诉系统层。这里无条件调用、由主进程决定发不发:窗口收进托盘或切到别的
         // app 时,上面这个 toast 弹在一个看不见的窗口里等于没弹,那时才需要系统通知。
-        window.openStudioDesktop?.notifyTask?.({
+        window.mosaelDesktop?.notifyTask?.({
           title: `${label} · ${job.status === "succeeded" ? t("jobDone") : t("jobFailed")}`,
           body: job.error ?? job.message ?? "",
         });
@@ -158,7 +158,7 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
               className="relative"
               aria-label={t("taskCenter")}
             >
-              {active.length > 0 ? <Loader2 size={15} className="animate-openstudio-spin" /> : <Activity size={15} />}
+              {active.length > 0 ? <Loader2 size={15} className="animate-mosael-spin" /> : <Activity size={15} />}
               {active.length > 0 && <em className="absolute -top-0.5 right-[-3px] h-3.5 min-w-3.5 rounded-full bg-primary px-[3px] text-center text-[9.5px] font-bold not-italic leading-[14px] text-primary-foreground">{active.length}</em>}
             </Button>
           </PopoverTrigger>

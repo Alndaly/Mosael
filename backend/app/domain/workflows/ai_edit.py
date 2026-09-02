@@ -20,7 +20,7 @@ from app.domain.workflows import NODE_TYPES, WorkflowDomainError, validate_graph
 
 TIMEOUT_SECONDS = 120
 
-_SYSTEM = """你是 Open Studio 视频创作工作台的工作流编辑器。工作流是一个 DAG:
+_SYSTEM = """你是 Mosael 视频创作工作台的工作流编辑器。工作流是一个 DAG:
 {"nodes": [{"id", "type", "name", "position": {"x", "y"}, "config"}], "edges": [{"id", "source", "target"}]}
 
 可用节点类型(config 字段与输出见注册表):

@@ -148,14 +148,14 @@ def _handle_callback(provider: str, params: dict[str, str], db: Session) -> HTML
     with _pending_lock:
         entry = _pending.get(pending_id)
     if entry is None or entry["provider"] != provider or not secrets.compare_digest(entry["state"], state):
-        return _result_page("登录请求已过期或不匹配,请回到 Open Studio 重试。", ok=False)
+        return _result_page("登录请求已过期或不匹配,请回到 Mosael 重试。", ok=False)
     if params.get("error"):
         _finish(pending_id, error=f"授权被拒绝:{params['error']}")
         return _result_page("授权被拒绝,可以关闭本页。", ok=False)
     code = params.get("code") or ""
     if not code:
         _finish(pending_id, error="提供方未返回授权码")
-        return _result_page("提供方未返回授权码,请回到 Open Studio 重试。", ok=False)
+        return _result_page("提供方未返回授权码,请回到 Mosael 重试。", ok=False)
     try:
         claims = _exchange_code(provider, code, entry["verifier"])
         user = _find_or_create_user(
@@ -169,8 +169,8 @@ def _handle_callback(provider: str, params: dict[str, str], db: Session) -> HTML
         _finish(pending_id, token=token, user={"id": user.id, "username": user.username, "display_name": user.display_name})
     except Exception as exc:  # 把原因带回前端轮询,而不是让用户对着浏览器空页猜
         _finish(pending_id, error=str(exc)[:300])
-        return _result_page("登录失败,请回到 Open Studio 查看原因。", ok=False)
-    return _result_page("登录成功,回到 Open Studio 即可,本页可以关闭。", ok=True)
+        return _result_page("登录失败,请回到 Mosael 查看原因。", ok=False)
+    return _result_page("登录成功,回到 Mosael 即可,本页可以关闭。", ok=True)
 
 
 def _finish(pending_id: str, *, token: str | None = None, user: dict | None = None, error: str | None = None) -> None:
@@ -253,7 +253,7 @@ def _find_or_create_user(db: Session, *, provider: str, subject: str, email: str
 def _result_page(message: str, *, ok: bool) -> HTMLResponse:
     tone = "#2f9e8f" if ok else "#c0554d"
     return HTMLResponse(
-        "<!doctype html><meta charset='utf-8'><title>Open Studio</title>"
+        "<!doctype html><meta charset='utf-8'><title>Mosael</title>"
         "<body style=\"display:grid;place-items:center;min-height:96vh;margin:0;"
         "font-family:system-ui,-apple-system,'PingFang SC',sans-serif;background:#f6f4f0;color:#3d3a45\">"
         f"<div style='text-align:center'><div style='font-size:34px;color:{tone}'>{'✓' if ok else '✕'}</div>"

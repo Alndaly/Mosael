@@ -3,7 +3,7 @@
 跑出来的现状(第 5 步动手前,`run_python` 的实际能力):
 
     读应用数据库   允许   53514c69746520666f726d6174203300   ← 整个库,含所有人的密钥
-    写文件到主目录  允许   ~/.open-studio/PWNED
+    写文件到主目录  允许   ~/.mosael/PWNED
     起子进程      允许   uid=501(kinda) ...
     连本机服务     允许   连上了                              ← 后端自己就在 127.0.0.1
     读环境变量     允许   ['LC_CTYPE', 'PATH', ...]
@@ -53,7 +53,7 @@ def test_it_cannot_read_the_application_database() -> None:
     _skip_without_backend()
     code = (
         "import os\n"
-        "p = os.path.expanduser('~/.open-studio/open-studio.db')\n"
+        "p = os.path.expanduser('~/.mosael/mosael.db')\n"
         "try:\n"
         "    output = open(p, 'rb').read(16).hex()\n"
         "except OSError as exc:\n"
@@ -74,7 +74,7 @@ def test_它读不到宿主机家目录里的文件() -> None:
     埋一个哨兵再去读它,两种后端给出同一个可观察结果,而它测的正是真正要防的那件事。
     """
     _skip_without_backend()
-    with tempfile.NamedTemporaryFile(dir=Path.home(), prefix=".openstudio-sentinel-", suffix=".txt") as sentinel:
+    with tempfile.NamedTemporaryFile(dir=Path.home(), prefix=".mosael-sentinel-", suffix=".txt") as sentinel:
         sentinel.write(b"host-only-secret")
         sentinel.flush()
         code = (
@@ -94,7 +94,7 @@ def test_it_cannot_write_outside_its_own_scratch_space() -> None:
     code = (
         "import os\n"
         "try:\n"
-        "    open(os.path.expanduser('~/OPEN_STUDIO_SANDBOX_ESCAPE'), 'w').write('x')\n"
+        "    open(os.path.expanduser('~/MOSAEL_SANDBOX_ESCAPE'), 'w').write('x')\n"
         "    output = 'wrote'\n"
         "except OSError as exc:\n"
         "    output = f'blocked:{type(exc).__name__}'\n"
@@ -113,11 +113,11 @@ def test_it_cannot_read_the_backends_environment() -> None:
     # python 镜像自带 PYTHON_VERSION / PYTHON_SHA256,于是白名单在 Linux 上必然红,而那两个
     # 变量根本不是后端的东西。改成从后端这一侧埋一个独一无二的名字,直接问"它传进去了没有" ——
     # 这才是要防的那件事(后端的环境里有各家模型的密钥)。
-    os.environ["OPEN_STUDIO_SANDBOX_SENTINEL"] = "must-not-leak"
+    os.environ["MOSAEL_SANDBOX_SENTINEL"] = "must-not-leak"
     try:
-        got = _run("import os\noutput = os.environ.get('OPEN_STUDIO_SANDBOX_SENTINEL', 'absent')")
+        got = _run("import os\noutput = os.environ.get('MOSAEL_SANDBOX_SENTINEL', 'absent')")
     finally:
-        os.environ.pop("OPEN_STUDIO_SANDBOX_SENTINEL", None)
+        os.environ.pop("MOSAEL_SANDBOX_SENTINEL", None)
     assert got == "absent", f"后端的环境漏进了沙箱:{got}"
 
 
@@ -138,7 +138,7 @@ def test_it_has_no_network() -> None:
 def test_a_child_process_is_confined_too() -> None:
     """起子进程本身不是逃逸 —— 只要子进程也在同一层隔离里。这一条锁住的正是"也在"。"""
     _skip_without_backend()
-    with tempfile.NamedTemporaryFile(dir=Path.home(), prefix=".openstudio-sentinel-", suffix=".txt") as sentinel:
+    with tempfile.NamedTemporaryFile(dir=Path.home(), prefix=".mosael-sentinel-", suffix=".txt") as sentinel:
         sentinel.write(b"host-only-secret")
         sentinel.flush()
         # 子进程去读同一个哨兵:读到了才叫逃逸。判据同上 —— 不看它怎么失败,只看它有没有拿到。

@@ -3,7 +3,7 @@
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 
-## Unreleased
+## [0.27.0] - 2026-09-02
 
 ### Added
 
@@ -17,6 +17,15 @@ commit list and downloadable artifacts.
 
 ### Changed
 
+- Renamed the product, application packages, desktop shell, backend, website, browser extension,
+  plugin format, workflow format, environment variables, deep links, and documentation to Mosael.
+- Replaced the previous mark with the supplied Mosael identity: separate light and dark app icons
+  now follow the active theme, while the supplied wordmark appears in the README and website.
+- Refined the bilingual README, website, and sign-in copy around the shared “ideas find their
+  timeline” voice, and added the author's X profile to the main project touchpoints.
+- Added one-time compatibility migration for existing local data, Electron user data, environment
+  overrides, browser-extension sessions, frontend preferences, plugin manifests, workflow files,
+  and deep links created before the Mosael rename.
 - Separated backend import/transcription capability from in-page playback capability: custom,
   embedded, or protected players can still be imported when yt-dlp supports them, while seek and
   frame controls remain disabled unless a usable HTML5 video is present.
@@ -30,16 +39,16 @@ commit list and downloadable artifacts.
 - Routed every image presentation surface through the browser-compatible preview endpoint, fixing
   broken HEIC/HEIF rendering in asset details, the editor compositor, compare view, boards, AI
   galleries, frame slots, and agent tool results while preserving original-file downloads.
-- Replaced the asset-detail dialog's browser-native audio controls with the shared Open Studio audio
+- Replaced the asset-detail dialog's browser-native audio controls with the shared Mosael audio
   player, keeping playback, seeking, elapsed time, mute, and autoplay behavior consistent.
 
 ## [0.26.10] - 2026-09-02
 
 ### Added
 
-- Added Pornhub video-page support with Open Studio transcription fallback and stable source-URL
+- Added Pornhub video-page support with Mosael transcription fallback and stable source-URL
   recovery, so completed transcripts are reused instead of generated again.
-- Added word-level transcript navigation for Open Studio ASR results while preserving readable
+- Added word-level transcript navigation for Mosael ASR results while preserving readable
   sentence grouping and sentence-level fallback for legacy data.
 
 ### Fixed
@@ -58,8 +67,8 @@ commit list and downloadable artifacts.
 ### Added
 
 - Added playback-synced bilingual subtitles to the Chrome Side Panel, preferring site-provided or
-  YouTube translation tracks before using Open Studio translation.
-- Added one-click Open Studio download and speech transcription when a video page has no captions.
+  YouTube translation tracks before using Mosael translation.
+- Added one-click Mosael download and speech transcription when a video page has no captions.
 - Added a localized React Side Panel that follows Chrome or can be pinned to Simplified Chinese or
   English, using Tailwind CSS v4 and shadcn/ui controls.
 
@@ -74,8 +83,8 @@ commit list and downloadable artifacts.
 ### Added
 
 - Added a Chrome 116+ Side Panel extension for YouTube and Bilibili transcripts, timestamp seeking,
-  transcript translation, current-video import, and visible-player frame capture into the Open
-  Studio media library.
+  transcript translation, current-video import, and visible-player frame capture into the Mosael
+  media library.
 
 ## [0.26.7] - 2026-09-02
 
@@ -101,7 +110,8 @@ commit list and downloadable artifacts.
   flashing each section's list page first.
 - Prevented the editor assistant from covering the workspace when opened.
 
-[0.26.10]: https://github.com/Alndaly/OpenStudio/releases/tag/v0.26.10
-[0.26.9]: https://github.com/Alndaly/OpenStudio/releases/tag/v0.26.9
-[0.26.8]: https://github.com/Alndaly/OpenStudio/releases/tag/v0.26.8
-[0.26.7]: https://github.com/Alndaly/OpenStudio/releases/tag/v0.26.7
+[0.26.10]: https://github.com/Alndaly/Mosael/releases/tag/v0.26.10
+[0.27.0]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.0
+[0.26.9]: https://github.com/Alndaly/Mosael/releases/tag/v0.26.9
+[0.26.8]: https://github.com/Alndaly/Mosael/releases/tag/v0.26.8
+[0.26.7]: https://github.com/Alndaly/Mosael/releases/tag/v0.26.7

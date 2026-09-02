@@ -4,7 +4,7 @@
 去 `-m venv` 不会建出环境,只会把整个后端再启动一遍 —— Windows 上用户看到的就是这一幕:
 
     创建运行环境失败:… ERROR: [Errno 10048] error while attempting to bind on
-    address ('127.0.0.1', 8800) … INFO: Open Studio backend shutting down
+    address ('127.0.0.1', 8800) … INFO: Mosael backend shutting down
 
 "创建失败的原因"里印的其实是另一个自己的启动日志。同样地,探测「这个解释器装了 f5_tts 吗」
 是要**执行**它的,拿冻结的 exe 去探同样会再起一个后端。
@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 #: 壳(Electron)把随包分发的独立 CPython 路径经这个环境变量注入进来。
-BASE_PYTHON_ENV = "OPEN_STUDIO_TTS_BASE_PYTHON"
+BASE_PYTHON_ENV = "MOSAEL_TTS_BASE_PYTHON"
 
 
 def is_frozen() -> bool:

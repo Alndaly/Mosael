@@ -121,7 +121,7 @@ def select_native_video_connection(
 
 def extract_video_frames(path: Path, count: int | None = None) -> list[bytes]:
     """Evenly sampled JPEG frames via a single ffmpeg pass. count=None → 按时长自适应帧数。"""
-    with tempfile.TemporaryDirectory(prefix="open-studio-frames-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="mosael-frames-") as tmp:
         pattern = Path(tmp) / "frame-%02d.jpg"
         try:
             probe = run_logged(

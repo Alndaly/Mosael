@@ -46,7 +46,7 @@ def test_a_deployment_admin_can() -> None:
 def test_the_client_reports_its_own_version() -> None:
     """版本由客户端在请求头里报 —— 后端进程的版本回答不了"**他**装的是哪一版"。"""
     admin, mate = _admin_and_member()
-    mate.headers["X-Open-Studio-Client"] = "0.7.3"
+    mate.headers["X-Mosael-Client"] = "0.7.3"
     mate.get("/api/auth/me")
 
     rows = {row["username"]: row for row in admin.get("/api/admin/users").json()}
@@ -56,9 +56,9 @@ def test_the_client_reports_its_own_version() -> None:
 def test_a_newer_version_replaces_the_old_one() -> None:
     """他升级了就该显示新的 —— 这一栏说的是"他现在跑的是哪一版"。"""
     admin, mate = _admin_and_member()
-    mate.headers["X-Open-Studio-Client"] = "0.7.3"
+    mate.headers["X-Mosael-Client"] = "0.7.3"
     mate.get("/api/auth/me")
-    mate.headers["X-Open-Studio-Client"] = "0.9.1"
+    mate.headers["X-Mosael-Client"] = "0.9.1"
     mate.get("/api/auth/me")
 
     rows = {row["username"]: row for row in admin.get("/api/admin/users").json()}
@@ -76,7 +76,7 @@ def test_a_client_that_never_says_leaves_it_blank() -> None:
 def test_a_junk_version_string_does_not_get_stored() -> None:
     """请求头是外部输入。只收像版本号的,别让它变成一条能塞任意文本的通道。"""
     admin, mate = _admin_and_member()
-    mate.headers["X-Open-Studio-Client"] = "<script>alert(1)</script>" + "x" * 500
+    mate.headers["X-Mosael-Client"] = "<script>alert(1)</script>" + "x" * 500
     mate.get("/api/auth/me")
     rows = {row["username"]: row for row in admin.get("/api/admin/users").json()}
     assert rows["mate"]["client_version"] == ""

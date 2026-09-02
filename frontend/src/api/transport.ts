@@ -1,6 +1,6 @@
 import { humanError } from "@/api/errorMessage";
 
-const SERVER_KEY = "openstudio.server.url";
+const SERVER_KEY = "mosael.server.url";
 export const DEFAULT_API_BASE = "http://127.0.0.1:8800";
 export const API_BASE = (
   typeof window === "undefined" ? DEFAULT_API_BASE : window.localStorage.getItem(SERVER_KEY) || DEFAULT_API_BASE
@@ -18,7 +18,7 @@ export function isCustomServer(): boolean {
   return API_BASE !== DEFAULT_API_BASE;
 }
 
-const TOKEN_KEY = "openstudio.auth.token";
+const TOKEN_KEY = "mosael.auth.token";
 let authToken: string | null = typeof window === "undefined" ? null : window.localStorage.getItem(TOKEN_KEY);
 let onUnauthorized: (() => void) | null = null;
 let apiLocale = "zh";
@@ -50,7 +50,7 @@ export function setUnauthorizedHandler(handler: (() => void) | null): void {
 /** Unified HTTP seam for every domain client. */
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const auth: Record<string, string> = {
-    "X-Open-Studio-Client": __APP_VERSION__,
+    "X-Mosael-Client": __APP_VERSION__,
     "Accept-Language": apiLocale,
     ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
   };

@@ -552,7 +552,7 @@ def _migrate_drop_deployment_defaults() -> None:
 def _migrate_deployment_config() -> None:
     """建部署配置行,并用**环境变量播一次种**。
 
-    老部署可能显式设过 `OPEN_STUDIO_OPEN_REGISTRATION=0`,那是它的选择,不该在升级时被默认值
+    老部署可能显式设过 `MOSAEL_OPEN_REGISTRATION=0`,那是它的选择,不该在升级时被默认值
     冲掉。播种只发生一次:库里有行之后环境变量再变也不影响 —— 唯一真相是库。
     """
     import os
@@ -564,7 +564,7 @@ def _migrate_deployment_config() -> None:
         exists = conn.execute(text("SELECT 1 FROM deployment_config WHERE id = 'default'")).scalar()
         if exists:
             return
-        raw = (os.environ.get("OPEN_STUDIO_OPEN_REGISTRATION") or "").strip().lower()
+        raw = (os.environ.get("MOSAEL_OPEN_REGISTRATION") or "").strip().lower()
         seeded = 0 if raw in ("0", "false", "no", "off") else 1
         conn.execute(
             text(

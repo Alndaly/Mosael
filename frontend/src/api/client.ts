@@ -340,7 +340,7 @@ export type PluginInvocation = components["schemas"]["PluginInvocationOut"];
 export type PluginPermissionGrant = components["schemas"]["PluginPermissionGrantOut"];
 export type PluginCredential = components["schemas"]["PluginCredentialOut"];
 
-/** 桌面端把文件拖到应用图标上 / 「用 Open Studio 打开」:后端按本机绝对路径入库。
+/** 桌面端把文件拖到应用图标上 / 「用 Mosael 打开」:后端按本机绝对路径入库。
  *  只有桌面端自带的后端提供这个接口(团队服务器上 404)。 */
 /** 供应商端点上的一个可用模型。context_window / max_output_tokens 端点没给就是 null —— 不要
  *  用默认值填补,那正是智能体侧硬编 128000 的来源。 */

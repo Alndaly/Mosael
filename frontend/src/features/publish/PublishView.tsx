@@ -45,7 +45,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   const { locale } = usePreferences();
   const qc = useQueryClient();
 
-  // 任务中心深链(openstudio:open-* 事件通道):直接选中那条发布记录。
+  // 任务中心深链(mosael:open-* 事件通道):直接选中那条发布记录。
   React.useEffect(() => {
     const onOpenTask = (event: Event) => {
       const id = (event as CustomEvent<string>).detail;
@@ -53,8 +53,8 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
         setOpenId(id);
       }
     };
-    window.addEventListener("openstudio:open-publish-task", onOpenTask);
-    return () => window.removeEventListener("openstudio:open-publish-task", onOpenTask);
+    window.addEventListener("mosael:open-publish-task", onOpenTask);
+    return () => window.removeEventListener("mosael:open-publish-task", onOpenTask);
   }, []);
   const [creating, setCreating] = React.useState(false);
   const [deleting, setDeleting] = React.useState<PublishTask | null>(null);
@@ -295,7 +295,7 @@ function statusTone(status: string) {
 
 function StatusIcon({ status }: { status: string }) {
   const { Icon, tone, spin } = statusTone(status);
-  return <Icon size={13} className={cn("shrink-0", tone, spin && "animate-openstudio-spin")} aria-hidden />;
+  return <Icon size={13} className={cn("shrink-0", tone, spin && "animate-mosael-spin")} aria-hidden />;
 }
 
 /** 后端时间无时区标记,补 Z 再按本地时区显示(与 lib/time、lib/dayGroups 同一约定)。 */
@@ -319,7 +319,7 @@ function PublishCard({ task, selecting = false }: { task: PublishTask; selecting
     // 同一排卡片横着看过去像三种模板。
     <article className="flex h-full flex-col gap-1.5 rounded-lg border border-border bg-panel p-2.5 shadow-[var(--shadow-panel)] transition-colors hover:border-border-strong">
       <div className="flex items-center gap-1.5">
-        <Icon size={13} className={cn("shrink-0", tone, spin && "animate-openstudio-spin")} />
+        <Icon size={13} className={cn("shrink-0", tone, spin && "animate-mosael-spin")} />
         <span className={cn("text-ui-xs font-semibold", tone)}>{t(`batchStatus_${task.status}` as never)}</span>
         {/* 选择态下右上角让给勾选圈 —— 两者叠在一起时间会被盖掉一半,不如干脆不显示。 */}
         {!selecting && (
@@ -358,13 +358,13 @@ function PublishDetailDialog({ task, onClose, onDelete }: { task: PublishTask | 
       footer={
         task ? (
           <>
-            {window.openStudioPublish && (
+            {window.mosaelPublish && (
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => {
                   onClose();
-                  window.openStudioPublish
+                  window.mosaelPublish
                     ?.openPage(task.account_id, task.platform)
                     .catch((error: Error) => toast.error(error.message));
                 }}

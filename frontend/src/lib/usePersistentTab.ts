@@ -6,7 +6,7 @@ import React from "react";
  * 避免 storage 里的陈旧/非法值把视图带到不存在的分支。
  */
 export function usePersistentTab<T extends string>(key: string, initial: T, allowed: readonly T[]): [T, (value: T) => void] {
-  const storageKey = `openstudio:tab:${key}`;
+  const storageKey = `mosael:tab:${key}`;
   const [tab, setTab] = React.useState<T>(() => {
     try {
       const stored = localStorage.getItem(storageKey) as T | null;
@@ -43,7 +43,7 @@ export function usePersistentSelection(
   key: string,
   ids: readonly string[] | undefined,
 ): [string | null, (value: string | null) => void, { restoring: boolean }] {
-  const storageKey = `openstudio:selected:${key}`;
+  const storageKey = `mosael:selected:${key}`;
   const [selected, setSelected] = React.useState<string | null>(() => {
     try {
       return localStorage.getItem(storageKey);
@@ -107,7 +107,7 @@ export function usePersistentViewport(key: string): {
   saved: StoredViewport | null;
   remember: (viewport: StoredViewport) => void;
 } {
-  const storageKey = `openstudio:viewport:${key}`;
+  const storageKey = `mosael:viewport:${key}`;
   const [saved] = React.useState<StoredViewport | null>(() => {
     try {
       return parseViewport(localStorage.getItem(storageKey));

@@ -93,8 +93,8 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
       // 统一先进详情卡(图片也一样),要看大图再从卡里点开;避免图片直接跳全屏、看不到数据。
       setPreviewing(asset);
     };
-    window.addEventListener("openstudio:open-asset", onOpenAsset);
-    return () => window.removeEventListener("openstudio:open-asset", onOpenAsset);
+    window.addEventListener("mosael:open-asset", onOpenAsset);
+    return () => window.removeEventListener("mosael:open-asset", onOpenAsset);
   }, [assets.data]);
 
   const uploadAsset = useMutation({
@@ -239,7 +239,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           <span className="grid justify-items-center gap-2 rounded-lg border-2 border-dashed border-primary px-6 py-4 text-ui-md font-semibold text-primary">
             {dropUpload.isPending ? (
               <>
-                <Loader2 size={20} className="animate-openstudio-spin" />
+                <Loader2 size={20} className="animate-mosael-spin" />
                 {t("mediaDropUploading")}
               </>
             ) : (

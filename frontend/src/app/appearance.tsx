@@ -32,8 +32,8 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
   { id: "forest", label: "松林", css: "linear-gradient(150deg, #064e3b 0%, #065f46 45%, #0f766e 100%)" },
 ];
 
-const PARAMS_KEY = "openstudio.appearance";
-const IMAGE_KEY = "openstudio.appearance.image";
+const PARAMS_KEY = "mosael.appearance";
+const IMAGE_KEY = "mosael.appearance.image";
 
 const DEFAULTS: AppearanceState = { kind: "none", preset: "aurora", surfaceOpacity: 0.72, blur: 16, dim: 0.28 };
 

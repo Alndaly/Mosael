@@ -28,7 +28,7 @@ ComfyUI adapter: a local (or LAN) ComfyUI instance becomes a zero-credential ima
 provider. POST /prompt submits an API-format workflow graph, /history/{id} is polled until
 the graph finishes, outputs are fetched via /view.
 
-The seam that makes arbitrary ComfyUI graphs fit Open Studio's prompt→media contract is a
+The seam that makes arbitrary ComfyUI graphs fit Mosael's prompt→media contract is a
 *template with placeholders*: the profile may carry a workflow exported from ComfyUI
 (API format) in which `{{prompt}}` `{{negative}}` `{{seed}}` `{{width}}` `{{height}}`
 `{{steps}}` `{{duration_seconds}}` are substituted per request. Images fall back to a
@@ -65,7 +65,7 @@ DEFAULT_TEMPLATE: dict[str, Any] = {
     "6": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["4", 1], "text": "{{prompt}}"}},
     "7": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["4", 1], "text": "{{negative}}"}},
     "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["4", 2]}},
-    "9": {"class_type": "SaveImage", "inputs": {"filename_prefix": "openstudio", "images": ["8", 0]}},
+    "9": {"class_type": "SaveImage", "inputs": {"filename_prefix": "mosael", "images": ["8", 0]}},
 }
 
 

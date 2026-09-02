@@ -5,7 +5,7 @@ import { deepLinkFromArgv, parseDeepLink, PROTOCOL, type DeepLink } from "./deep
 import type { Capability, SystemContext } from "./types";
 
 /**
- * openstudio:// 协议唤起 + 拖到应用图标上的媒体文件。
+ * mosael:// 协议唤起 + 拖到应用图标上的媒体文件。
  *
  * 两件事放一起,是因为它们在系统层面是同一类东西:**别的程序把一个东西交给我们**。
  * mac 走 open-url / open-file 事件,Windows/Linux 走命令行参数(第二个实例的 argv)。
@@ -36,15 +36,15 @@ function deliver(channel: string, payload: unknown): void {
 }
 
 export function handleDeepLink(link: DeepLink | null): void {
-  if (link) deliver("openstudio:deep-link", link);
+  if (link) deliver("mosael:deep-link", link);
 }
 
 export function handleOpenFiles(paths: readonly string[]): void {
   const media = paths.filter((p) => typeof p === "string" && MEDIA_EXTENSIONS.has(path.extname(p).toLowerCase()));
-  if (media.length) deliver("openstudio:open-files", media);
+  if (media.length) deliver("mosael:open-files", media);
 }
 
-/** 从 argv 里挑出可入库的文件路径(Windows/Linux 的「用 Open Studio 打开」走这条)。 */
+/** 从 argv 里挑出可入库的文件路径(Windows/Linux 的「用 Mosael 打开」走这条)。 */
 export function filesFromArgv(argv: readonly string[]): string[] {
   return argv.filter(
     (arg) => typeof arg === "string" && !arg.startsWith("-") && MEDIA_EXTENSIONS.has(path.extname(arg).toLowerCase()),
@@ -56,7 +56,7 @@ export const protocol: Capability = {
   register(ctx) {
     context = ctx;
 
-    // 开发模式下 execPath 是 Electron 二进制,注册协议会把 openstudio:// 指向裸 Electron ——
+    // 开发模式下 execPath 是 Electron 二进制,注册协议会把 mosael:// 指向裸 Electron ——
     // 而且这个注册是**系统级**的,卸载开发版之后还留在系统里劫持真实安装版。所以只在打包版注册。
     if (!ctx.isDev) {
       try {

@@ -179,7 +179,7 @@ export function SubtitlePanel({
       <div className="flex flex-wrap justify-center gap-1.5 border-t border-border px-2 py-1.5">
         {onGenerate && (
           <button type="button" className={PILL} title={t("subtitleGenerateHint")} onClick={onGenerate} disabled={generating}>
-            {generating ? <Loader2 size={12} className="animate-openstudio-spin" /> : <Sparkles size={12} />} {t("subtitleGenerate")}
+            {generating ? <Loader2 size={12} className="animate-mosael-spin" /> : <Sparkles size={12} />} {t("subtitleGenerate")}
           </button>
         )}
         <button type="button" className={PILL} title={t("addSubtitleAtPlayhead")} onClick={onAddSubtitle}>
@@ -764,7 +764,7 @@ function SubtitleStyleControls({
                 title={t("subFontUpload")}
                 onClick={() => fileRef.current?.click()}
               >
-                {uploadingFont ? <Loader2 size={12} className="animate-openstudio-spin" /> : <Upload size={12} />}
+                {uploadingFont ? <Loader2 size={12} className="animate-mosael-spin" /> : <Upload size={12} />}
               </Button>
             )}
             {s.font_id && onDeleteFont && (

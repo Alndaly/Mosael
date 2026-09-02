@@ -4,18 +4,18 @@ description: Read, seek, and translate transcripts, then import a video or its c
 order: 7
 ---
 
-The Open Studio Chrome extension uses the browser's native **Side Panel** and never covers the page
+The Mosael Chrome extension uses the browser's native **Side Panel** and never covers the page
 with a floating window. It currently supports YouTube and Bilibili video pages and follows the active
 tab as you switch between videos.
 
 ## Install
 
-Download and unzip `open-studio-browser-extension.zip` from a GitHub Release:
+Download and unzip `mosael-browser-extension.zip` from a GitHub Release:
 
 1. Open `chrome://extensions`.
 2. Enable **Developer mode**.
 3. Choose **Load unpacked** and select the extracted directory.
-4. Pin the Open Studio video companion to the toolbar.
+4. Pin the Mosael video companion to the toolbar.
 
 Developers can run `pnpm build:extension` and load `browser-extension/dist/` instead.
 
@@ -31,17 +31,17 @@ them into a timed transcript:
 - The UI follows Chrome by default, or can be pinned to Simplified Chinese or English in connection settings.
 
 Selecting a target language keeps the source line and adds a second line. The extension prefers a
-site-provided caption or YouTube translation track and only uses Open Studio translation when no
-matching track exists. If a video has no captions, **Generate transcript with Open Studio** runs URL
+site-provided caption or YouTube translation track and only uses Mosael translation when no
+matching track exists. If a video has no captions, **Generate transcript with Mosael** runs URL
 import, speech recognition, and timed-result loading as one flow.
 
 ## Translation, import, and frame capture
 
-The first use of these three actions asks you to connect Open Studio from panel settings. Enter the
-local backend address (`http://127.0.0.1:8800` by default), sign in with an Open Studio account, and
+The first use of these three actions asks you to connect Mosael from panel settings. Enter the
+local backend address (`http://127.0.0.1:8800` by default), sign in with an Mosael account, and
 choose a workspace and optional project.
 
-- **Bilingual subtitles** keep the source and prefer site captions; Open Studio batches long fallback
+- **Bilingual subtitles** keep the source and prefer site captions; Mosael batches long fallback
   translations without changing cue order.
 - **Automatic transcription** downloads an uncaptioned video, runs the selected ASR engine, and loads
   the timed transcript back into the panel.
@@ -51,7 +51,7 @@ choose a workspace and optional project.
 
 The password is used only to mint a session and is never stored. The extension does not request
 cookie access or export Chrome login state. Download members-only, private, or region-locked content
-from Open Studio with the matching [Browser Pool](/en/docs/guides/browser-pool) profile.
+from Mosael with the matching [Browser Pool](/en/docs/guides/browser-pool) profile.
 
 ## Why the permissions are needed
 
@@ -59,8 +59,8 @@ from Open Studio with the matching [Browser Pool](/en/docs/guides/browser-pool) 
 | --- | --- |
 | Side Panel | Open Chrome's native right-hand panel |
 | Tabs / Active Tab | Follow video pages, seek, and capture the visible player |
-| Storage | Keep the Open Studio session and destination workspace |
+| Storage | Keep the Mosael session and destination workspace |
 | YouTube / Bilibili | Read current-page player and caption data |
-| localhost / 127.0.0.1 | Call the local Open Studio API |
+| localhost / 127.0.0.1 | Call the local Mosael API |
 
 Chrome 116+ is required. At least part of the player must be visible for frame capture.

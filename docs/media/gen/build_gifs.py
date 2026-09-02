@@ -77,8 +77,8 @@ def record(base: str, token: str, name: str, theme: str = "light") -> Path:
             color_scheme=theme,
         )
         context.add_init_script(
-            f"window.localStorage.setItem('openstudio.auth.token', {token!r});"
-            f"window.localStorage.setItem('openstudio.preferences', "
+            f"window.localStorage.setItem('mosael.auth.token', {token!r});"
+            f"window.localStorage.setItem('mosael.preferences', "
             f"JSON.stringify({{theme: {theme!r}, locale: 'zh-CN'}}));"
         )
         page = context.new_page()

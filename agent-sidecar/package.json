@@ -1,8 +1,8 @@
 {
-  "name": "@open-studio/agent-sidecar",
+  "name": "@mosael/agent-sidecar",
   "version": "0.1.0",
   "private": true,
-  "description": "Open Studio AI agent sidecar — embeds the pi coding agent (pi-agent-core) and speaks newline-delimited JSON over stdio with the Python backend.",
+  "description": "Mosael AI agent sidecar — embeds the pi coding agent (pi-agent-core) and speaks newline-delimited JSON over stdio with the Python backend.",
   "type": "module",
   "main": "dist/sidecar.cjs",
   "// build 的 --ignore-annotations": [

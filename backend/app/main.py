@@ -68,7 +68,7 @@ from app.workers.scheduler import start_scheduler_loop, stop_scheduler_loop
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     configure_logging()  # 先配好日志,后续启动步骤才追溯得到
-    logger.info("Open Studio backend starting (host=%s port=%s)", settings.backend_host, settings.backend_port)
+    logger.info("Mosael backend starting (host=%s port=%s)", settings.backend_host, settings.backend_port)
     init_db()
     # 「配置从数据库读」「代理怎么算」这两道缝装在 _wire_seams(导入期),不在这里 —— 见那里的注释。
     _prepare_network()
@@ -110,9 +110,9 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             logger.info("notified %d feishu chat(s) about a turn interrupted by restart", notified)
 
         autostart_enabled_bots()
-    logger.info("Open Studio backend ready")
+    logger.info("Mosael backend ready")
     yield
-    logger.info("Open Studio backend shutting down")
+    logger.info("Mosael backend shutting down")
     stop_scheduler_loop()
     if settings.feishu_autostart:
         stop_all_connections()
@@ -206,7 +206,7 @@ _wire_seams()
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Open Studio API", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="Mosael API", version="0.1.0", lifespan=lifespan)
     _install_permission_handlers(app)
     # Auth is bearer-token (no cookies) and the packaged Electron shell loads the frontend
     # from file://, whose fetches carry Origin: null — hence an explicit "null" here rather

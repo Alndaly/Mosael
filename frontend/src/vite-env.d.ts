@@ -15,7 +15,7 @@ interface PublishViewState {
 }
 
 /** Electron preload 暴露的发布执行器桥;浏览器环境下为 undefined。 */
-interface OpenStudioPublishBridge {
+interface MosaelPublishBridge {
   login: (accountId: string, platform: string) => Promise<void>;
   openPage: (accountId: string, platform: string) => Promise<void>;
   inspect: (accountId: string, platform: string) => Promise<boolean>;
@@ -50,7 +50,7 @@ interface LivePanelCard {
 }
 
 /** 应用更新检查结果(Electron 主进程查 GitHub Releases)。 */
-interface OpenStudioUpdateInfo {
+interface MosaelUpdateInfo {
   current?: string;
   latest?: string;
   hasUpdate?: boolean;
@@ -71,18 +71,18 @@ interface LiveViewFrame {
 }
 
 interface Window {
-  openStudioPublish?: OpenStudioPublishBridge;
-  openStudioBrowser?: {
+  mosaelPublish?: MosaelPublishBridge;
+  mosaelBrowser?: {
     onFrame: (callback: (frame: LiveViewFrame) => void) => () => void;
     /** 通用池档案登录:在该档案分区开 app 内嵌视图登任意站点(与发布登录同一套视图),cookie 落分区。 */
     openLogin?: (opts: { partition: string; url: string; name?: string; proxy?: string | null }) => Promise<{ ok: boolean; error?: string }>;
   };
-  openStudioDesktop?: {
+  mosaelDesktop?: {
     platform: string;
     setTitleOverlay?: (colors: { color: string; symbolColor: string }) => void;
     onFullscreen?: (callback: (fullscreen: boolean) => void) => () => void;
-    checkUpdates?: () => Promise<OpenStudioUpdateInfo>;
-    onUpdateAvailable?: (callback: (info: OpenStudioUpdateInfo) => void) => () => void;
+    checkUpdates?: () => Promise<MosaelUpdateInfo>;
+    onUpdateAvailable?: (callback: (info: MosaelUpdateInfo) => void) => () => void;
     /** 把运行中的任务数推给主进程:托盘文案 + 有任务时阻止系统睡眠。 */
     reportStatus?: (status: { runningJobs: number; progress?: number | null }) => void;
     /** 任务结束时告知系统层;窗口有焦点时主进程会跳过(应用内已有 toast)。 */

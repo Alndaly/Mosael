@@ -1,5 +1,5 @@
 /**
- * Open Studio tools as pi AgentTools — generated entirely from the backend registry.
+ * Mosael tools as pi AgentTools — generated entirely from the backend registry.
  *
  * pi has no MCP, so tools come from GET /api/agent/tools (the manifest derived from
  * mcp_server.py, the single tool registry) and execute via POST /api/agent/tools/{name}.
@@ -49,7 +49,7 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 interface Confirmation { id: string; status: string; result: unknown; error?: string | null }
 
 /**
- * Block until the user resolves a confirmation card in Open Studio.
+ * Block until the user resolves a confirmation card in Mosael.
  * pending -> approved -> executed(result) | failed(error) | rejected. This is the
  * confirmation gate: the agent's turn waits here until the user acts.
  */
@@ -107,7 +107,7 @@ const TOOL_LABELS: Record<string, string> = {
   notify_agent_session: "通知另一个智能体",
 };
 
-/** All Open Studio tools for a turn, generated from the backend manifest. */
+/** All Mosael tools for a turn, generated from the backend manifest. */
 export async function buildAllTools(
   apiBase: string,
   token: string,
@@ -155,7 +155,7 @@ export async function buildAllTools(
           })) as { result?: unknown; error?: string };
           if (response?.error) throw new Error(response.error);
           if (!spec.confirmation) return jsonResult(response?.result ?? null);
-          // 确认门控:调用只创建了待确认卡,阻塞等用户在 Open Studio 里批准后把执行结果给模型。
+          // 确认门控:调用只创建了待确认卡,阻塞等用户在 Mosael 里批准后把执行结果给模型。
           const card = (response?.result ?? {}) as { confirmation_id?: string };
           if (!card.confirmation_id) throw new Error("确认卡创建失败(缺 confirmation_id)");
           return jsonResult(await awaitConfirmation(apiBase, token, card.confirmation_id, signal));

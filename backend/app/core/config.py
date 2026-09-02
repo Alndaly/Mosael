@@ -1,26 +1,61 @@
 from __future__ import annotations
 
 import os
+import shutil
 from datetime import timedelta
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-ENV_PREFIX = "OPEN_STUDIO_"
+ENV_PREFIX = "MOSAEL_"
+LEGACY_ENV_PREFIX = "OPEN_STUDIO_"
+
+
+def _adopt_legacy_environment() -> None:
+    """Map pre-Mosael environment variables when no new-name override exists."""
+    for key, value in tuple(os.environ.items()):
+        if key.startswith(LEGACY_ENV_PREFIX):
+            os.environ.setdefault(f"{ENV_PREFIX}{key.removeprefix(LEGACY_ENV_PREFIX)}", value)
+
+
+def _migrate_default_data_dir() -> Path:
+    """Move the previous local data directory once so upgrades retain every workspace."""
+    target = Path.home() / ".mosael"
+    legacy = Path.home() / ".open-studio"
+    if os.environ.get(f"{ENV_PREFIX}DATA_DIR") or os.environ.get(f"{LEGACY_ENV_PREFIX}DATA_DIR"):
+        return target
+    if not target.exists() and legacy.exists():
+        try:
+            legacy.replace(target)
+        except OSError:
+            shutil.copytree(legacy, target, dirs_exist_ok=True)
+    old_db = target / "open-studio.db"
+    new_db = target / "mosael.db"
+    if old_db.exists() and not new_db.exists():
+        old_db.replace(new_db)
+        for suffix in ("-wal", "-shm"):
+            old_sidecar = target / f"open-studio.db{suffix}"
+            if old_sidecar.exists():
+                old_sidecar.replace(target / f"mosael.db{suffix}")
+    return target
+
+
+_adopt_legacy_environment()
+DEFAULT_DATA_DIR = _migrate_default_data_dir()
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix=ENV_PREFIX, env_file=".env", extra="ignore")
 
-    data_dir: Path = Path.home() / ".open-studio"
+    data_dir: Path = DEFAULT_DATA_DIR
     backend_host: str = "127.0.0.1"
 
     # 「允不允许自助注册」曾经在这里。它搬进库了(见 db.models.DeploymentConfig):改它是
     # 部署管理员在界面上就该能做的决定,而环境变量意味着要能碰到部署机、要重启进程。
-    # `OPEN_STUDIO_OPEN_REGISTRATION` 仍然被读一次 —— 只在首次迁移时播种(core/db)。
+    # `MOSAEL_OPEN_REGISTRATION` 仍然被读一次 —— 只在首次迁移时播种(core/db)。
 
     backend_port: int = 8800
-    # 后端日志级别(OPEN_STUDIO_LOG_LEVEL=DEBUG 看更细的追溯,=WARNING 只看告警/错误)。
+    # 后端日志级别(MOSAEL_LOG_LEVEL=DEBUG 看更细的追溯,=WARNING 只看告警/错误)。
     # 不配的话 app.* 日志会冒泡到没挂 handler 的 root 被丢弃——见 core/logging.py。
     log_level: str = "INFO"
     #: 访问日志的详略。默认 "quiet":压掉 sidecar 每秒一次的轮询(`/worker/…` 且成功的那些),
@@ -48,11 +83,11 @@ class Settings(BaseSettings):
     oauth_redirect_base: str = ""  # 团队部署时覆盖回调基址(默认 http://<host>:<port>)
 
     # 逗号分隔的 job kind 列表,把这些 kind 的执行模式翻成 external:任务只入队,
-    # 由外部 worker 经 /api/jobs/worker/* 认领执行(如 OPEN_STUDIO_EXTERNAL_JOB_KINDS=render
+    # 由外部 worker 经 /api/jobs/worker/* 认领执行(如 MOSAEL_EXTERNAL_JOB_KINDS=render
     # 让渲染由团队服务器旁的独立 worker 机器承担)。默认全部 in_process。
     external_job_kinds: str = ""
 
-    # ffmpeg/ffprobe binaries. Default to PATH; override (OPEN_STUDIO_FFMPEG / OPEN_STUDIO_FFPROBE) to
+    # ffmpeg/ffprobe binaries. Default to PATH; override (MOSAEL_FFMPEG / MOSAEL_FFPROBE) to
     # point at a full build — Homebrew's core `ffmpeg` is slim (no libass/freetype), so
     # subtitle burn-in needs e.g. /opt/homebrew/opt/ffmpeg-full/bin/ffmpeg.
     ffmpeg: str = "ffmpeg"
@@ -60,12 +95,12 @@ class Settings(BaseSettings):
 
     # Preview proxies: on video import, transcode a 720p H.264 short-GOP proxy the
     # WebCodecs compositor decodes instead of the original (export still uses the
-    # original). Disable (OPEN_STUDIO_GENERATE_PROXIES=0) in tests to avoid spawning ffmpeg.
+    # original). Disable (MOSAEL_GENERATE_PROXIES=0) in tests to avoid spawning ffmpeg.
     generate_proxies: bool = True
 
     # 硬件加速导出:探测并优先使用 GPU/媒体引擎编码器(macOS VideoToolbox /
     # Windows NVENC·QSV·AMF),比 libx264 软件编码快数倍且几乎不占 CPU;都不可用时
-    # 回落 libx264+CRF。测试里关掉(OPEN_STUDIO_HW_ENCODE=0)以保证软件编码的确定性,
+    # 回落 libx264+CRF。测试里关掉(MOSAEL_HW_ENCODE=0)以保证软件编码的确定性,
     # 并避开 CI/VM 里硬件编码器缺失导致的失败。
     hw_encode: bool = True
 
@@ -89,7 +124,7 @@ class Settings(BaseSettings):
 
     @property
     def db_path(self) -> Path:
-        return self.data_dir / "open-studio.db"
+        return self.data_dir / "mosael.db"
 
     @property
     def database_url(self) -> str:
@@ -106,8 +141,8 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-_DEFAULT_DATA_DIR = Path.home() / ".open-studio"
-_DB_NAMES = ("open-studio.db",)
+_DEFAULT_DATA_DIR = DEFAULT_DATA_DIR
+_DB_NAMES = ("mosael.db",)
 
 
 def _db_has_rows(path: Path) -> bool:

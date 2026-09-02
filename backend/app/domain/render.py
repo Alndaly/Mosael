@@ -259,7 +259,7 @@ def grab_sequence_frame(db: Session, sequence_id: str, at: float, *, created_by:
     plan = build_plan_for_sequence(db, sequence_id)
     sequence = db.get(Sequence, sequence_id)
     assert sequence is not None
-    with tempfile.TemporaryDirectory(prefix="open-studio-still-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="mosael-still-") as tmp:
         target = Path(tmp) / "frame.jpg"
         render_still(plan, resolve_key, target, at)
         return register_file_asset(
@@ -293,7 +293,7 @@ def start_export(db: Session, sequence_id: str, export_params: dict | None = Non
         message="Export queued",
     )
     # 「怎么跑」在这里,「由谁跑」是任务总线的决定:render 翻成 external 模式时
-    # (OPEN_STUDIO_EXTERNAL_JOB_KINDS=render),任务留在 queued 等外部 worker 认领,本函数不变。
+    # (MOSAEL_EXTERNAL_JOB_KINDS=render),任务留在 queued 等外部 worker 认领,本函数不变。
     dispatch_job(db, job, lambda: _run_export(job.id, plan))
     return job
 

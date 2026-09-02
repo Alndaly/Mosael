@@ -1,10 +1,10 @@
 import type { Transcript, VideoContext } from "./types";
 import type { PlatformResourceResponse } from "../platform-resource";
 
-export const PAGE_REQUEST_CHANNEL = "openstudio-extension";
-export const PAGE_RESPONSE_CHANNEL = "openstudio-extension-page";
-export const PAGE_RESOURCE_REQUEST_CHANNEL = "openstudio-extension-resource";
-export const PAGE_RESOURCE_RESPONSE_CHANNEL = "openstudio-extension-resource-response";
+export const PAGE_REQUEST_CHANNEL = "mosael-extension";
+export const PAGE_RESPONSE_CHANNEL = "mosael-extension-page";
+export const PAGE_RESOURCE_REQUEST_CHANNEL = "mosael-extension-resource";
+export const PAGE_RESOURCE_RESPONSE_CHANNEL = "mosael-extension-resource-response";
 
 export type PlatformResourceRequest = { type: "FETCH_PLATFORM_RESOURCE"; url: string };
 

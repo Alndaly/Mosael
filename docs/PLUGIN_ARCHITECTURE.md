@@ -36,7 +36,7 @@ PluginPackage  一个磁盘目录 + 一份 manifest。没有「启用」状态�
 
 ```jsonc
 {
-  "id": "dev.openstudio.tikhub",
+  "id": "dev.mosael.tikhub",
   "name": "TikHub",                      // 包名,与任何一次接入无关
   "version": "1.0.0",
 
@@ -116,7 +116,7 @@ PluginPackage  一个磁盘目录 + 一份 manifest。没有「启用」状态�
 是死结,而它们都不是边缘情况:
 
 **要交出一个文件。** 一个 2GB 的 mp4 塞不进 JSON。加 `artifact`:插件要么把文件写进
-`OPEN_STUDIO_PLUGIN_OUTPUT_DIR`(用完即删,路径受限 —— 挡的不是提权,插件本来就以用户身份
+`MOSAEL_PLUGIN_OUTPUT_DIR`(用完即删,路径受限 —— 挡的不是提权,插件本来就以用户身份
 运行,挡的是「随手交出一个别处的文件」,而素材库里的东西是能被发布出去的),要么交出
 url + 请求头让宿主去下。
 

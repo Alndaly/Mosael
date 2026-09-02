@@ -29,7 +29,7 @@ TIMEOUT_SECONDS = 12.0
 
 #: Anthropic 的 usage 端点按 User-Agent 分限流桶,不带 claude-code/* 会落进一个很紧的桶里
 #: 持续 429。这不是伪装成别的客户端 —— 我们确实是在用它签发给该订阅的凭据查它自己的额度。
-_CLAUDE_UA = "claude-code/1.0 (Open Studio)"
+_CLAUDE_UA = "claude-code/1.0 (Mosael)"
 
 
 class QuotaUnavailable(RuntimeError):

@@ -16,6 +16,6 @@ describe("StartupLoading", () => {
     expect(status).toHaveAttribute("aria-busy", "true");
     expect(status).toHaveTextContent("正在连接后端");
     expect(status).toHaveTextContent("正在等待服务响应，请稍候");
-    expect(container.querySelector(".animate-openstudio-spin")).toBeTruthy();
+    expect(container.querySelector(".animate-mosael-spin")).toBeTruthy();
   });
 });

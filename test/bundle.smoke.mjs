@@ -27,12 +27,12 @@ function packagedExecutable() {
   if (explicit) return resolve(explicit);
   const files = walk(join(root, "release"));
   if (process.platform === "darwin") {
-    return files.find((path) => path.endsWith("Open Studio.app/Contents/MacOS/Open Studio"));
+    return files.find((path) => path.endsWith("Mosael.app/Contents/MacOS/Mosael"));
   }
   if (process.platform === "win32") {
-    return files.find((path) => /win-unpacked[\\/]Open Studio\.exe$/.test(path));
+    return files.find((path) => /win-unpacked[\\/]Mosael\.exe$/.test(path));
   }
-  return files.find((path) => basename(path) === "open-studio");
+  return files.find((path) => basename(path) === "mosael");
 }
 
 async function freePort() {
@@ -49,7 +49,7 @@ async function freePort() {
 const executable = packagedExecutable();
 if (!executable) throw new Error("packaged Electron executable not found under release/");
 
-const scratch = mkdtempSync(join(tmpdir(), "open-studio-bundle-smoke-"));
+const scratch = mkdtempSync(join(tmpdir(), "mosael-bundle-smoke-"));
 const dataDir = join(scratch, "data");
 const resultPath = join(scratch, "result.json");
 const python = process.platform === "win32" ? "python" : "python3";
@@ -62,9 +62,9 @@ try {
   const child = spawn(executable, [], {
     env: {
       ...process.env,
-      OPEN_STUDIO_DATA_DIR: dataDir,
-      OPEN_STUDIO_BACKEND_PORT: String(await freePort()),
-      OPEN_STUDIO_SMOKE_TEST_RESULT: resultPath,
+      MOSAEL_DATA_DIR: dataDir,
+      MOSAEL_BACKEND_PORT: String(await freePort()),
+      MOSAEL_SMOKE_TEST_RESULT: resultPath,
     },
     stdio: "inherit",
   });

@@ -41,10 +41,10 @@ function cleanBaseUrl(value: string): string {
   return value.trim().replace(/\/+$/, "");
 }
 
-class OpenStudioResponseError extends Error {
+class MosaelResponseError extends Error {
   constructor(readonly status: number, message: string) {
     super(message);
-    this.name = "OpenStudioResponseError";
+    this.name = "MosaelResponseError";
   }
 }
 
@@ -56,10 +56,10 @@ async function responseError(response: Response): Promise<Error> {
   } catch {
     detail = await response.text().catch(() => "");
   }
-  return new OpenStudioResponseError(response.status, detail || `Open Studio 请求失败（${response.status}）`);
+  return new MosaelResponseError(response.status, detail || `Mosael 请求失败（${response.status}）`);
 }
 
-export class OpenStudioClient {
+export class MosaelClient {
   readonly baseUrl: string;
   token: string;
   private readonly fetcher: typeof fetch;
@@ -80,7 +80,7 @@ export class OpenStudioClient {
       headers: {
         ...(form ? {} : { "Content-Type": "application/json" }),
         "Accept-Language": "zh-CN",
-        "X-Open-Studio-Client": "browser-extension",
+        "X-Mosael-Client": "browser-extension",
         ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
         ...(init.headers || {}),
       },
@@ -165,11 +165,11 @@ export class OpenStudioClient {
       onProgress?.(job);
       if (job.status === "succeeded") return job;
       if (job.status === "failed" || job.status === "cancelled") {
-        throw new Error(job.error || "Open Studio 任务未能完成");
+        throw new Error(job.error || "Mosael 任务未能完成");
       }
       await new Promise((resolve) => setTimeout(resolve, 1_200));
     }
-    throw new Error("Open Studio 生成逐字稿超时，请在任务中心查看进度");
+    throw new Error("Mosael 生成逐字稿超时，请在任务中心查看进度");
   }
 
   async generateTranscriptFromVideo({
@@ -191,7 +191,7 @@ export class OpenStudioClient {
     const imported = await this.waitForJob(importJob.id, (job) => onProgress?.("import", job));
     const assetIds = imported.result?.asset_ids;
     const assetId = Array.isArray(assetIds) && typeof assetIds[0] === "string" ? assetIds[0] : "";
-    if (!assetId) throw new Error("视频已下载，但 Open Studio 没有返回素材编号");
+    if (!assetId) throw new Error("视频已下载，但 Mosael 没有返回素材编号");
 
     const transcription = await this.request<ImportJob>(`/api/assets/${encodeURIComponent(assetId)}/transcribe`, {
       method: "POST",
@@ -202,7 +202,7 @@ export class OpenStudioClient {
       segments?: TranscriptSegmentInput[];
     }>(`/api/assets/${encodeURIComponent(assetId)}/transcript`);
     const cues = transcriptSegmentsToCues(transcript.segments || []);
-    if (cues.length === 0) throw new Error("Open Studio 已完成识别，但逐字稿内容为空");
+    if (cues.length === 0) throw new Error("Mosael 已完成识别，但逐字稿内容为空");
     return { assetId, language: String(transcript.language || ""), cues };
   }
 
@@ -212,7 +212,7 @@ export class OpenStudioClient {
     try {
       transcript = await this.request<TranscriptResponse>(`/api/assets/transcript-by-source?${query}`);
     } catch (cause) {
-      if (cause instanceof OpenStudioResponseError && cause.status === 404) return null;
+      if (cause instanceof MosaelResponseError && cause.status === 404) return null;
       throw cause;
     }
     const cues = transcriptSegmentsToCues(transcript.segments || []);

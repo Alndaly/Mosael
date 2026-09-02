@@ -94,7 +94,7 @@ SHOTS: dict[str, dict] = {
 def mint_token() -> str:
     """给这台机器的第一个用户铸一个会话令牌。"""
     sys.path.insert(0, str(REPO / "backend"))
-    os.environ.setdefault("OPEN_STUDIO_DATA_DIR", str(Path.home() / ".open-studio"))
+    os.environ.setdefault("MOSAEL_DATA_DIR", str(Path.home() / ".mosael"))
     from sqlalchemy import select
 
     from app.core.db import SessionLocal
@@ -125,8 +125,8 @@ def capture(base: str, token: str, names: list[str], theme: str = "light") -> No
         # 令牌和主题都要在页面脚本跑之前就位,否则会先闪一下登录页 / 浅色再切过去,
         # 而截图很可能正好落在那一下上。
         context.add_init_script(
-            f"window.localStorage.setItem('openstudio.auth.token', {token!r});"
-            f"window.localStorage.setItem('openstudio.preferences', "
+            f"window.localStorage.setItem('mosael.auth.token', {token!r});"
+            f"window.localStorage.setItem('mosael.preferences', "
             f"JSON.stringify({{theme: {theme!r}, locale: 'zh-CN'}}));"
         )
         page = context.new_page()

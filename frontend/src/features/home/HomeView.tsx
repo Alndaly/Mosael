@@ -175,7 +175,7 @@ export function HomeView({
     () => [...projects].sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))[0],
     [projects],
   );
-  const openTaskCenter = () => window.dispatchEvent(new CustomEvent("openstudio:open-tasks"));
+  const openTaskCenter = () => window.dispatchEvent(new CustomEvent("mosael:open-tasks"));
 
   const stats = summary.data;
   const statTiles = stats

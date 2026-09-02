@@ -1,9 +1,9 @@
 /**
- * openstudio:// 深链的解析。
+ * mosael:// 深链的解析。
  *
  * ## 为什么只导航、不执行
  *
- * 自定义协议是一个**外部输入面**:任何网页只要 `location = "openstudio://…"` 就能触发它,
+ * 自定义协议是一个**外部输入面**:任何网页只要 `location = "mosael://…"` 就能触发它,
  * 不需要用户点击确认,也不需要任何权限。所以这里刻意只支持「打开某个页面」,不支持
  * 「运行某个工作流 / 发布某条内容」——后者意味着用户随便访问一个网站,那个网站就能静默
  * 驱动他的自动化:工作流带着登录态、发布权限和模型额度,这是实打实的越权。
@@ -13,7 +13,7 @@
  * 用户明确同意后才执行 —— 而不是把执行入口直接暴露在协议上。
  *
  * ## 形状
- *   openstudio://open?view=workflows&id=<记录 id>
+ *   mosael://open?view=workflows&id=<记录 id>
  * view 必须在白名单里(和前端 StudioView 一一对应);id 可选,用于打开具体记录。
  */
 
@@ -35,7 +35,8 @@ const ALLOWED_VIEWS = new Set([
 /** 记录 id 是后端生成的十六进制串;限死字符集,免得经由 hash 注入奇怪的东西。 */
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
-export const PROTOCOL = "openstudio";
+export const PROTOCOL = "mosael";
+const LEGACY_PROTOCOL = "openstudio";
 
 export interface DeepLink {
   view: string;
@@ -51,8 +52,8 @@ export function parseDeepLink(raw: string): DeepLink | null {
   } catch {
     return null;
   }
-  if (url.protocol !== `${PROTOCOL}:`) return null;
-  // openstudio://open?... —— host 是 "open",其余动作一律不认(见文件头:只导航)。
+  if (url.protocol !== `${PROTOCOL}:` && url.protocol !== `${LEGACY_PROTOCOL}:`) return null;
+  // mosael://open?... —— host 是 "open",其余动作一律不认(见文件头:只导航)。
   if (url.hostname !== "open") return null;
 
   const view = url.searchParams.get("view") || "";
@@ -67,7 +68,7 @@ export function parseDeepLink(raw: string): DeepLink | null {
 /** 从进程参数里挑出深链(Windows/Linux 上协议唤起是作为命令行参数传进来的)。 */
 export function deepLinkFromArgv(argv: readonly string[]): DeepLink | null {
   for (const arg of argv) {
-    if (typeof arg === "string" && arg.startsWith(`${PROTOCOL}://`)) {
+    if (typeof arg === "string" && (arg.startsWith(`${PROTOCOL}://`) || arg.startsWith(`${LEGACY_PROTOCOL}://`))) {
       const parsed = parseDeepLink(arg);
       if (parsed) return parsed;
     }

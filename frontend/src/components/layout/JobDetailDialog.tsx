@@ -83,7 +83,7 @@ export function JobDetailDialog({
               )}
             >
               {active ? (
-                <Loader2 size={13} className="animate-openstudio-spin" />
+                <Loader2 size={13} className="animate-mosael-spin" />
               ) : current.status === "succeeded" ? (
                 <CheckCircle2 size={13} />
               ) : (

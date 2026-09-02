@@ -54,7 +54,7 @@ def test_the_worker_is_told_which_source_to_use(monkeypatch) -> None:
     monkeypatch.setattr(tts_config, "_cached", None, raising=False)
     env = tts_models._worker_env()
 
-    assert "OPEN_STUDIO_MODEL_SOURCE" in env
+    assert "MOSAEL_MODEL_SOURCE" in env
 
 
 def test_an_inapplicable_source_falls_back_instead_of_failing() -> None:
@@ -93,8 +93,8 @@ def test_the_worker_pulls_from_modelscope_when_told_to(monkeypatch, tmp_path) ->
 
     monkeypatch.setattr(tts_worker, "_modelscope_snapshot", fake_ms_download)
     monkeypatch.setattr(tts_worker, "_hf_snapshot", fake_hf_download)
-    monkeypatch.setenv("OPEN_STUDIO_MODEL_SOURCE", "modelscope")
-    monkeypatch.setenv("OPEN_STUDIO_FISH_MODEL_DIR", str(tmp_path))
+    monkeypatch.setenv("MOSAEL_MODEL_SOURCE", "modelscope")
+    monkeypatch.setenv("MOSAEL_FISH_MODEL_DIR", str(tmp_path))
 
     tts_worker.fetch_fish_weights()
 
@@ -107,8 +107,8 @@ def test_the_worker_pulls_from_huggingface_otherwise(monkeypatch, tmp_path) -> N
     called: dict[str, object] = {}
     monkeypatch.setattr(tts_worker, "_modelscope_snapshot", lambda *a, **k: called.setdefault("backend", "modelscope"))
     monkeypatch.setattr(tts_worker, "_hf_snapshot", lambda **k: called.setdefault("backend", "huggingface"))
-    monkeypatch.setenv("OPEN_STUDIO_MODEL_SOURCE", "hf")
-    monkeypatch.setenv("OPEN_STUDIO_FISH_MODEL_DIR", str(tmp_path))
+    monkeypatch.setenv("MOSAEL_MODEL_SOURCE", "hf")
+    monkeypatch.setenv("MOSAEL_FISH_MODEL_DIR", str(tmp_path))
 
     tts_worker.fetch_fish_weights()
 

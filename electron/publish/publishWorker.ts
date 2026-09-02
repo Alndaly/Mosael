@@ -30,10 +30,10 @@ const running = new Set<string>();
 const rechecking = new Set<string>();
 // 用户已开始登录接管的账号:后台复检遇到它直接放弃,避免和登录抢同一个视图 goto(表现为空白)。
 const loginAccounts = new Set<string>();
-// 有限并发上限:默认 3,可用 OPEN_STUDIO_PUBLISH_CONCURRENCY 覆盖(夹在 1–5)。多账号同时后台发布更快,但
+// 有限并发上限:默认 3,可用 MOSAEL_PUBLISH_CONCURRENCY 覆盖(夹在 1–5)。多账号同时后台发布更快,但
 // 同机高频操作对平台风控/机器资源更重,故设上限而非全并发。
 const MAX_CONCURRENT = (() => {
-  const n = Number.parseInt(process.env.OPEN_STUDIO_PUBLISH_CONCURRENCY || "", 10);
+  const n = Number.parseInt(process.env.MOSAEL_PUBLISH_CONCURRENCY || "", 10);
   return Number.isFinite(n) ? Math.min(5, Math.max(1, n)) : 3;
 })();
 let stopped = false;
@@ -498,7 +498,7 @@ export function stopPublishWorker(): void {
     loginPollTimer = null;
   }
   // 销毁并清空 views,让下次 startPublishWorker 能重新绑定新窗口(mac 关窗→重新激活)。持久化会话
-  // 在磁盘分区里(persist:openstudio-<id>),销毁视图不丢登录态。
+  // 在磁盘分区里(persist:mosael-<id>),销毁视图不丢登录态。
   destroySharedViews();
   views = null;
   onFrame = null;
@@ -635,7 +635,7 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
           /* 回写失败下个 ttl 再纠正 */
         }
         // 登上了 = 这个内嵌浏览器的差事办完了,自己收回去。此前它会一直挂在前台,用户得再点一次
-        // 「返回 Open Studio」才能回来 —— 而他刚做完的事本来就以"回到账号池看到已登录"为终点。
+        // 「返回 Mosael」才能回来 —— 而他刚做完的事本来就以"回到账号池看到已登录"为终点。
         if (views?.visibleAccountId === accountId) views.hide();
         endLogin(gen, accountId, true);
         return;

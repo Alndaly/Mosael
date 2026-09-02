@@ -69,7 +69,7 @@ function outputsText(outputs: Record<string, unknown>): string {
 function RunIcon({ status }: { status: string }) {
   if (status === "succeeded") return <CheckCircle2 size={13} className="text-[#3fb950]" />;
   if (status === "failed") return <XCircle size={13} className="text-[#e5484d]" />;
-  if (RUNNING.has(status)) return <Loader2 size={13} className="animate-openstudio-spin text-primary" />;
+  if (RUNNING.has(status)) return <Loader2 size={13} className="animate-mosael-spin text-primary" />;
   return <CircleDashed size={13} />;
 }
 
@@ -91,7 +91,7 @@ export function WorkflowRunHistory({
 }) {
   const isFloating = mode === "floating";
   const { style: floatStyle, startDrag, handles, focusProps } = useFloatingPanel({
-    storageKey: "openstudio.wf.history.rect.v1",
+    storageKey: "mosael.wf.history.rect.v1",
     floating: isFloating,
     // 历史是列表,窄一点就够;高度给足,一屏能看到步骤和产物。
     preferredW: 400,
@@ -248,7 +248,7 @@ export function WorkflowRunHistory({
                         ) : s.status === "skipped" ? (
                           <SkipForward size={12} className="shrink-0" />
                         ) : (
-                          <Loader2 size={12} className="animate-openstudio-spin shrink-0 text-primary" />
+                          <Loader2 size={12} className="animate-mosael-spin shrink-0 text-primary" />
                         )}
                         <span className="min-w-0 flex-1 truncate">{s.name}</span>
                         {s.status === "skipped" ? (

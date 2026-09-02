@@ -44,7 +44,7 @@ describe("刷新详情页时恢复持久化选择", () => {
   });
 
   it("创意画板首帧保持详情上下文,不闪现画板列表", () => {
-    localStorage.setItem("openstudio:selected:boards:w1", "board-1");
+    localStorage.setItem("mosael:selected:boards:w1", "board-1");
     renderWithQuery(<BoardsView workspace={workspace} />);
 
     expect(screen.getByTestId("boards-detail-restoring")).toBeInTheDocument();
@@ -52,7 +52,7 @@ describe("刷新详情页时恢复持久化选择", () => {
   });
 
   it("工作流首帧保持详情上下文,不闪现工作流列表", () => {
-    localStorage.setItem("openstudio:selected:workflows", "workflow-1");
+    localStorage.setItem("mosael:selected:workflows", "workflow-1");
     renderWithQuery(<WorkflowsView workspace={workspace} />);
 
     expect(screen.getByTestId("workflows-detail-restoring")).toBeInTheDocument();
@@ -60,7 +60,7 @@ describe("刷新详情页时恢复持久化选择", () => {
   });
 
   it("工作流对象先恢复、节点类型仍在加载时也不回落列表", async () => {
-    localStorage.setItem("openstudio:selected:workflows", "workflow-1");
+    localStorage.setItem("mosael:selected:workflows", "workflow-1");
     let resolveWorkflows!: (value: Array<Record<string, unknown>>) => void;
     apiMocks.listWorkflows.mockReturnValue(new Promise((resolve) => {
       resolveWorkflows = resolve;

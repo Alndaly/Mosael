@@ -6,18 +6,18 @@ order: 1
 
 ## Source repository
 
-The source code is hosted on GitHub: **[Alndaly/OpenStudio](https://github.com/Alndaly/OpenStudio)**.
+The source code is hosted on GitHub: **[Alndaly/Mosael](https://github.com/Alndaly/Mosael)**.
 
-- Desktop installers: [GitHub Releases](https://github.com/Alndaly/OpenStudio/releases) (macOS arm64 `.dmg` / Windows x64 installer, built and uploaded by CI on every tag)
-- Bug reports / feature requests: [GitHub Issues](https://github.com/Alndaly/OpenStudio/issues)
+- Desktop installers: [GitHub Releases](https://github.com/Alndaly/Mosael/releases) (macOS arm64 `.dmg` / Windows x64 installer, built and uploaded by CI on every tag)
+- Bug reports / feature requests: [GitHub Issues](https://github.com/Alndaly/Mosael/issues)
 
 ## Author
 
-**Kinda Hall** (GitHub [@Alndaly](https://github.com/Alndaly)).
+**Kinda Hall** (GitHub [@Alndaly](https://github.com/Alndaly) · X [@KindaHuax](https://x.com/KindaHuax)).
 
 ## License
 
-Open Studio is **source-available, not open source**, under a proprietary license (full text in the repository's [LICENSE](https://github.com/Alndaly/OpenStudio/blob/main/LICENSE)):
+Mosael is **source-available, not open source**, under a proprietary license (full text in the repository's [LICENSE](https://github.com/Alndaly/Mosael/blob/main/LICENSE)):
 
 - Allowed: viewing the source, building and running locally for evaluation, learning and **personal non-commercial** use.
 - Not allowed: any commercial use (selling, paid services, SaaS hosting, embedding in commercial products) or redistribution.
@@ -30,7 +30,7 @@ Open Studio is **source-available, not open source**, under a proprietary licens
 | Desktop shell | Electron (with a built-in publish executor driving embedded browser views for logins / uploads) |
 | Frontend | Vite + React + TypeScript + Tailwind |
 | Backend | FastAPI (Python) + SQLite, single source of truth; packaged with PyInstaller |
-| AI agent | hosts an external coding-agent CLI (opencode-style) using Open Studio's MCP server as its tool surface |
-| Docs site | Astro Starlight (this site) |
+| AI agent | hosts an external coding-agent CLI (opencode-style) using Mosael's MCP server as its tool surface |
+| Docs site | Next.js (this site) |
 
-All user data lives locally in `~/.open-studio` — no cloud dependency.
+All user data lives locally in `~/.mosael` — no cloud dependency.

@@ -1,7 +1,7 @@
 """Standalone TTS / voice-clone worker (ported from the predecessor project's tts engines).
 
 Runs inside the *TTS interpreter* — a Python that has f5-tts and/or fish-speech
-installed (configured via OPEN_STUDIO_TTS_PYTHON, autodetected from a sibling
+installed (configured via MOSAEL_TTS_PYTHON, autodetected from a sibling
 a sibling venv in dev). Must import nothing from this app at module level
 besides the standard library, so the host backend can ship it to a foreign
 interpreter.
@@ -37,7 +37,7 @@ from typing import Any
 # ---------------------------------------------------------------------------
 #: 和宿主约定的协议前缀(见 ai/runtime/tts_daemon)。引擎自己会往这个通道打 tqdm 和 loguru,
 #: 所以只有带前缀的行才是协议。
-EVENT_PREFIX = "@@OPEN-STUDIO-TTS "
+EVENT_PREFIX = "@@MOSAEL-TTS "
 
 #: 已经加载好的引擎。**常驻模式存在的全部理由就是这个字典** —— 实测一次 Fish Speech 的
 #: 权重加载要 511.9 秒,而解码本身只有几十秒。
@@ -97,7 +97,7 @@ def run_f5(request: dict[str, Any], output_path: str) -> str:
         # 走 ModelScope 下下来的那份在我们自己的目录里,F5TTS 不会自己去找 —— 显式指过去。
         # 声码器仍由它自己从 HF 拉(ModelScope 上没有 vocos)。
         announce_f5_fetch(request.get("reference_text") or "")
-        managed = os.environ.get("OPEN_STUDIO_F5_MODEL_DIR", "").strip()
+        managed = os.environ.get("MOSAEL_F5_MODEL_DIR", "").strip()
         # 用**这次请求指定的**那份权重。语言支持是模型的属性,不是引擎的(见 ai/runtime/f5_models);
         # 没指定就还是基础模型 —— 老请求、以及从别处直接调 worker 的路径原样能跑。
         ckpt = Path(managed) / (request.get("checkpoint") or F5_CHECKPOINT) if managed else None
@@ -123,7 +123,7 @@ def run_f5(request: dict[str, Any], output_path: str) -> str:
 
 _FISH_HINT = (
     "Fish Speech S2 不可用:需要 fishaudio/s2-pro 权重 + 官方 fish-speech 源码检出。"
-    "在设置→声音克隆填『源码目录』『模型目录』,或设置 OPEN_STUDIO_FISH_REPO_DIR / OPEN_STUDIO_FISH_MODEL_DIR。"
+    "在设置→声音克隆填『源码目录』『模型目录』,或设置 MOSAEL_FISH_REPO_DIR / MOSAEL_FISH_MODEL_DIR。"
 )
 
 
@@ -145,7 +145,7 @@ def _pick_device() -> str:
 def _fish_repo_dir() -> Path:
     """The official fish-speech source checkout — its ``tools.server.*`` modules live at
     the repo root (not in the pip ``fish_speech`` package), so it must go on sys.path."""
-    configured = os.environ.get("OPEN_STUDIO_FISH_REPO_DIR", "").strip()
+    configured = os.environ.get("MOSAEL_FISH_REPO_DIR", "").strip()
     if configured and Path(configured).expanduser().is_dir():
         return Path(configured).expanduser()
     raise RuntimeError(_FISH_HINT + "(源码目录未找到)")
@@ -153,7 +153,7 @@ def _fish_repo_dir() -> Path:
 
 def _fish_model_dir() -> Path:
     """The weights directory: config.json + model safetensors + codec.pth at its root."""
-    configured = os.environ.get("OPEN_STUDIO_FISH_MODEL_DIR", "").strip()
+    configured = os.environ.get("MOSAEL_FISH_MODEL_DIR", "").strip()
     if configured:
         path = Path(configured).expanduser()
         if (path / "codec.pth").is_file():
@@ -300,9 +300,9 @@ def fetch_f5_weights() -> None:
 
     选 HF 时这里什么都不做:F5TTS 构造时自己会拉,抢着下一份只会下两遍。
     """
-    if os.environ.get("OPEN_STUDIO_MODEL_SOURCE", "").strip() != "modelscope":
+    if os.environ.get("MOSAEL_MODEL_SOURCE", "").strip() != "modelscope":
         return
-    target = os.environ.get("OPEN_STUDIO_F5_MODEL_DIR", "").strip()
+    target = os.environ.get("MOSAEL_F5_MODEL_DIR", "").strip()
     if not target:
         return
     for path in (F5_CHECKPOINT, F5_VOCAB):
@@ -322,7 +322,7 @@ def fetch_named_model(request: dict[str, Any]) -> str:
     没有的社区微调只能走 HF。两个文件逐个拉,不拉整仓 —— `Jmica/F5TTS` 整仓有四份检查点,
     而我们只要其中一份。
     """
-    target = request.get("target") or os.environ.get("OPEN_STUDIO_F5_MODEL_DIR", "").strip()
+    target = request.get("target") or os.environ.get("MOSAEL_F5_MODEL_DIR", "").strip()
     if not target:
         raise RuntimeError("没有指定权重目录")
     # 每个模型落进自己的子目录:这些社区权重的 vocab **全叫 vocab.txt**,共用一个目录会互相覆盖。
@@ -331,7 +331,7 @@ def fetch_named_model(request: dict[str, Any]) -> str:
         target = str(Path(target) / subdir)
     files = [path for path in (request.get("checkpoint"), request.get("vocab")) if path]
     modelscope_repo = (request.get("modelscope_repo") or "").strip()
-    use_modelscope = bool(modelscope_repo) and os.environ.get("OPEN_STUDIO_MODEL_SOURCE", "").strip() == "modelscope"
+    use_modelscope = bool(modelscope_repo) and os.environ.get("MOSAEL_MODEL_SOURCE", "").strip() == "modelscope"
     for index, path in enumerate(files):
         _progress("download", 0.1 + 0.8 * index / max(1, len(files)), f"下载 {path}")
         if use_modelscope:
@@ -357,7 +357,7 @@ def _hf_snapshot(**kwargs: Any) -> str:
 def fetch_fish_weights() -> None:
     """把 Fish Speech 的权重拉到托管目录。
 
-    走哪条路由宿主通过 `OPEN_STUDIO_MODEL_SOURCE` 告诉这里。ModelScope **不是** HF 兼容端点,
+    走哪条路由宿主通过 `MOSAEL_MODEL_SOURCE` 告诉这里。ModelScope **不是** HF 兼容端点,
     `HF_ENDPOINT` 那一套对它无效,得换一个客户端 —— 此前"选 ModelScope"只是把 HF_ENDPOINT
     设成了 huggingface.co,于是那个选项列在那里、选得中、却什么都不改变。
 
@@ -365,8 +365,8 @@ def fetch_fish_weights() -> None:
     46 KB/s —— 9 GB 是 14 分钟和 55 小时的区别。
     """
     # 落成扁平目录(codec.pth + config 在根上,run_fish 就是这么读的);没给目标目录就退到各自的缓存。
-    target = os.environ.get("OPEN_STUDIO_FISH_MODEL_DIR", "").strip()
-    if os.environ.get("OPEN_STUDIO_MODEL_SOURCE", "").strip() == "modelscope":
+    target = os.environ.get("MOSAEL_FISH_MODEL_DIR", "").strip()
+    if os.environ.get("MOSAEL_MODEL_SOURCE", "").strip() == "modelscope":
         _modelscope_snapshot(FISH_MODELSCOPE_REPO, local_dir=target)
         return
     if target:

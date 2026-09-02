@@ -375,7 +375,7 @@ function EngineCard({ model, busy, unsaved, onDownload }: { model: TtsEngine; bu
           {downloading && (
             // 没有分母的阶段(装运行环境)不报百分比 —— 一个恒定的「0%」和"卡住了"长得一样。
             <span className="inline-flex items-center gap-[5px] text-xs tabular-nums text-muted-foreground">
-              <Loader2 size={13} className="animate-openstudio-spin" />
+              <Loader2 size={13} className="animate-mosael-spin" />
               {model.total_bytes > 0 ? `${pct}%` : ""}
             </span>
           )}
@@ -413,7 +413,7 @@ function EngineCard({ model, busy, unsaved, onDownload }: { model: TtsEngine; bu
             <div className="flex items-center gap-1.5 text-ui-xs text-muted-foreground">
               {/* 没有分母时,分子和速度仍然值得说 —— 「已下载 5.2 GB · 12.4 MB/s」比一个
                   光转的圈有用得多,而且它是判断"卡住没有"的唯一依据。 */}
-              <Loader2 size={12} className="shrink-0 animate-openstudio-spin" />
+              <Loader2 size={12} className="shrink-0 animate-mosael-spin" />
               {model.downloaded_bytes > 0 && (
                 <span className="tabular-nums">{formatBytes(model.downloaded_bytes)}</span>
               )}

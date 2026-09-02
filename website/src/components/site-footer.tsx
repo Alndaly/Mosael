@@ -1,6 +1,6 @@
-import Image from "next/image";
 import Link from "next/link";
 
+import { BrandWordmark } from "@/components/brand-logo";
 import { GithubMark } from "@/components/icons";
 import { localePath, type Locale } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
@@ -39,6 +39,7 @@ export function SiteFooter({ locale }: { locale: Locale }) {
       title: t.footer.project,
       links: [
         { label: t.footer.github, href: SITE.repo, external: true },
+        { label: t.footer.authorX, href: SITE.authorX, external: true },
         { label: t.footer.download, href: SITE.releases, external: true },
         { label: t.footer.issues, href: `${SITE.repo}/issues`, external: true },
       ],
@@ -50,9 +51,8 @@ export function SiteFooter({ locale }: { locale: Locale }) {
       <div className="mx-auto max-w-[96rem] px-5 py-16 sm:px-8">
         <div className="grid gap-12 md:grid-cols-2 lg:grid-cols-[1.4fr_repeat(3,1fr)] lg:gap-16">
           <div>
-            <Link href={localePath(locale)} className="flex items-center gap-3">
-              <Image src="/mark.svg" alt="" width={32} height={32} />
-              <span className="font-display text-lg font-extrabold tracking-tight uppercase">Open Studio</span>
+            <Link href={localePath(locale)} className="inline-flex">
+              <BrandWordmark className="w-44" />
             </Link>
             <p className="mt-5 mb-0 max-w-xs text-invert-foreground/70">{t.footer.tagline}</p>
             <a
@@ -102,7 +102,7 @@ export function SiteFooter({ locale }: { locale: Locale }) {
       <div className="border-t-2 border-invert-foreground/20">
         <div className="mx-auto flex max-w-[96rem] flex-wrap items-center gap-x-6 gap-y-2 px-5 py-6 font-mono text-xs tracking-wider text-invert-foreground/50 uppercase sm:px-8">
           <span>
-            © {year} Open Studio. {t.footer.rights}
+            © {year} Mosael. {t.footer.rights}
           </span>
           <a className="ml-auto transition-colors hover:text-invert-foreground" href={SITE.email}>
             {t.footer.contact}

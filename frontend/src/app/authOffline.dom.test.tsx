@@ -19,10 +19,10 @@ vi.mock("@/api/client", async (importOriginal) => {
   return {
     ...real,
     api: vi.fn(),
-    getAuthToken: () => window.localStorage.getItem("openstudio.auth.token"),
+    getAuthToken: () => window.localStorage.getItem("mosael.auth.token"),
     setAuthToken: (token: string | null) => {
-      if (token) window.localStorage.setItem("openstudio.auth.token", token);
-      else window.localStorage.removeItem("openstudio.auth.token");
+      if (token) window.localStorage.setItem("mosael.auth.token", token);
+      else window.localStorage.removeItem("mosael.auth.token");
     },
     setUnauthorizedHandler: () => undefined,
   };
@@ -47,7 +47,7 @@ function mount() {
 
 describe("启动时够不着后端", () => {
   beforeEach(() => {
-    window.localStorage.setItem("openstudio.auth.token", "still-good");
+    window.localStorage.setItem("mosael.auth.token", "still-good");
     vi.mocked(api).mockReset();
   });
 
@@ -55,13 +55,13 @@ describe("启动时够不着后端", () => {
     vi.mocked(api).mockRejectedValue(new ApiOfflineError("连不上"));
     mount();
     await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("offline"));
-    expect(window.localStorage.getItem("openstudio.auth.token")).toBe("still-good");
+    expect(window.localStorage.getItem("mosael.auth.token")).toBe("still-good");
   });
 
   it("服务端真的拒了才登出 —— 那时令牌确实不该留着", async () => {
     vi.mocked(api).mockRejectedValue(new Error("Not authenticated"));
     mount();
     await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("anonymous"));
-    expect(window.localStorage.getItem("openstudio.auth.token")).toBeNull();
+    expect(window.localStorage.getItem("mosael.auth.token")).toBeNull();
   });
 });

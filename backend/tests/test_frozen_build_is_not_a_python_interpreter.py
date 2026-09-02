@@ -3,7 +3,7 @@
 Windows 打包版上,用户点「下载」拿到两条报错,它们是同一件事的两面:
 
     创建运行环境失败:… ERROR: [Errno 10048] error while attempting to bind on
-    address ('127.0.0.1', 8800) … INFO: Open Studio backend shutting down
+    address ('127.0.0.1', 8800) … INFO: Mosael backend shutting down
 
     …\\resources\\python\\python.exe: can't open file
     '…\\_internal\\app\\audio\\tts_worker.py': [Errno 2] No such file or directory
@@ -37,7 +37,7 @@ from app.core import interpreter
 @pytest.fixture
 def frozen(monkeypatch, tmp_path):
     """假装自己是打包版:sys.frozen 为真,sys.executable 指向那个 .exe。"""
-    fake_exe = tmp_path / "Open Studio.exe"
+    fake_exe = tmp_path / "Mosael.exe"
     fake_exe.write_text("not a python", encoding="utf-8")
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "executable", str(fake_exe))
@@ -46,7 +46,7 @@ def frozen(monkeypatch, tmp_path):
 
 def test_the_frozen_exe_is_never_offered_as_an_interpreter(frozen, monkeypatch) -> None:
     """冻结的 .exe 拿去 `-m venv` 只会把后端再启动一遍(用户看到的 10048 就是这个)。"""
-    monkeypatch.delenv("OPEN_STUDIO_TTS_BASE_PYTHON", raising=False)
+    monkeypatch.delenv("MOSAEL_TTS_BASE_PYTHON", raising=False)
     monkeypatch.setattr(interpreter.shutil, "which", lambda name: None)
 
     assert interpreter.base_python() == "", "把应用自己当成了 Python"
@@ -56,7 +56,7 @@ def test_the_shell_can_hand_us_a_real_one(frozen, monkeypatch, tmp_path) -> None
     """壳随包带了一个独立 CPython,经环境变量指进来 —— 那个才是能建 venv 的。"""
     real = tmp_path / "python.exe"
     real.write_text("", encoding="utf-8")
-    monkeypatch.setenv("OPEN_STUDIO_TTS_BASE_PYTHON", str(real))
+    monkeypatch.setenv("MOSAEL_TTS_BASE_PYTHON", str(real))
 
     assert interpreter.base_python() == str(real)
 

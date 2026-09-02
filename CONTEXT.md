@@ -1,4 +1,4 @@
-# Open Studio
+# Mosael
 
 本地优先的 AI 视频创作工作室(Electron 桌面应用)。这份文档定义架构讨论用的统一语言——
 子系统文档见 docs/,决策记录见 docs/adr/。
@@ -7,18 +7,18 @@
 
 ### 命名
 
-**Open Studio**:
-产品名,也是仓库名。一切对外可见处一律用它——GitHub(`Alndaly/OpenStudio`,大小写敏感:
+**Mosael**:
+产品名,也是仓库名。一切对外可见处一律用它——GitHub(`Alndaly/Mosael`,大小写敏感:
 更新检查直连 GitHub API,写错大小写会吃 301,而检查失败是静默的)、App 名、文档站、README、
-数据目录 `~/.open-studio/` 与主库 `open-studio.db`、打包二进制 `open-studio-backend`。
+数据目录 `~/.mosael/` 与主库 `mosael.db`、打包二进制 `mosael-backend`。
 
 | | 规范名 |
 | --- | --- |
-| 环境变量前缀 | `OPEN_STUDIO_`(`config.ENV_PREFIX`) |
-| preload 桥 | `window.openStudioDesktop` |
-| 深链事件通道 | `openstudio:open-*` |
-| 浏览器分区前缀 | `openstudio` |
-| MCP 环境变量 | `OPEN_STUDIO_API` / `OPEN_STUDIO_TOKEN` |
+| 环境变量前缀 | `MOSAEL_`(`config.ENV_PREFIX`) |
+| preload 桥 | `window.mosaelDesktop` |
+| 深链事件通道 | `mosael:open-*` |
+| 浏览器分区前缀 | `mosael` |
+| MCP 环境变量 | `MOSAEL_API` / `MOSAEL_TOKEN` |
 
 ### 进程与协议
 

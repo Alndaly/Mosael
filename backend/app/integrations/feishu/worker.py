@@ -56,7 +56,7 @@ def main(bot_id: str) -> None:
             if ((getattr(sender, "sender_type", "") or "").lower()) == "bot":
                 return  # never answer bots (including ourselves) — loop protection
             sender_id = getattr(sender, "sender_id", None)
-            open_id = getattr(sender_id, "open_id", "") or ""  # who sent it → maps to an Open Studio member
+            open_id = getattr(sender_id, "open_id", "") or ""  # who sent it → maps to an Mosael member
             message = getattr(event, "message", None)
             if message is None:
                 return
@@ -98,7 +98,7 @@ def main(bot_id: str) -> None:
             return service.handle_card_action(open_id, dict(value))
         except Exception:
             logger.exception("feishu card action failed bot=%s", bot_id)
-            return {"toast": {"type": "error", "content": "处理失败,请到 Open Studio 里查看"}}
+            return {"toast": {"type": "error", "content": "处理失败,请到 Mosael 里查看"}}
 
     handler = (
         lark.EventDispatcherHandler.builder("", "")

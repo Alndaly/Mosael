@@ -9,7 +9,7 @@ Contract with the plugin's entry script:
     stdout: {"ok": true, "output": {...}, "state": {...}} | {"ok": false, "error": str}
 
 - 要交出一个**文件**(而不是一段 JSON)时,output 里放 `artifact`,写在
-  OPEN_STUDIO_PLUGIN_OUTPUT_DIR 指的目录里,或者给一个后端去下的 url。见 artifacts。
+  MOSAEL_PLUGIN_OUTPUT_DIR 指的目录里,或者给一个后端去下的 url。见 artifacts。
 - 要**记住**一点东西到下次调用(刷新出来的 access_token、同步游标)时,放 `state` ——
   它和 output 平级,**不进 output** 是有意的:output 会交给调用方和模型,而刷新出来的
   令牌不该出现在那里。见 state。
@@ -102,7 +102,7 @@ def execute_tool(
     variables — never the app's.
 
     `scratch_dir` 是这次调用的产出目录:插件要交出一个文件时写在那儿,路径经
-    OPEN_STUDIO_PLUGIN_OUTPUT_DIR 告诉它(见 artifacts 的说明)。协议本身只搬 JSON,
+    MOSAEL_PLUGIN_OUTPUT_DIR 告诉它(见 artifacts 的说明)。协议本身只搬 JSON,
     所以搬字节这件事得另开一条路。"""
     entry_path = resolve_entry(plugin_dir, entry)
     request = json.dumps({"tool": tool_name, "input": input_payload}, ensure_ascii=False)
@@ -110,7 +110,7 @@ def execute_tool(
         "PATH": os.environ.get("PATH", ""),
         "HOME": os.environ.get("HOME", ""),
         "LANG": os.environ.get("LANG", "en_US.UTF-8"),
-        "OPEN_STUDIO_PLUGIN": "1",
+        "MOSAEL_PLUGIN": "1",
         **({ARTIFACT_SCRATCH_ENV: str(scratch_dir)} if scratch_dir is not None else {}),
         **(credentials or {}),
     }

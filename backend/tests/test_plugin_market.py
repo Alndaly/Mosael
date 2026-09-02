@@ -42,7 +42,7 @@ def make_zip(files: dict[str, str], *, prefix: str = "") -> bytes:
 def good_zip(prefix: str = "", manifest: dict | None = None) -> bytes:
     return make_zip(
         {
-            "open-studio.plugin.json": json.dumps(manifest or MANIFEST, ensure_ascii=False),
+            "mosael.plugin.json": json.dumps(manifest or MANIFEST, ensure_ascii=False),
             "main.py": "print('{}')",
         },
         prefix=prefix,
@@ -53,7 +53,7 @@ class Test装得上:
     def test_平铺的包(self, tmp_path) -> None:
         raw = market.install_archive(good_zip(), tmp_path)
         assert raw["id"] == "dev.test.demo"
-        assert (tmp_path / "dev.test.demo" / "open-studio.plugin.json").is_file()
+        assert (tmp_path / "dev.test.demo" / "mosael.plugin.json").is_file()
         assert (tmp_path / "dev.test.demo" / "main.py").is_file()
 
     def test_GitHub_那种外面套一层的包(self, tmp_path) -> None:
@@ -72,7 +72,7 @@ class Test挡住的东西:
     def test_路径穿越(self, tmp_path) -> None:
         """zip 里的路径是压缩包作者写的字符串,可以是 ../../.ssh/authorized_keys。"""
         data = make_zip(
-            {"open-studio.plugin.json": json.dumps(MANIFEST), "../../跑出去了.txt": "x"}
+            {"mosael.plugin.json": json.dumps(MANIFEST), "../../跑出去了.txt": "x"}
         )
         with pytest.raises(PluginDomainError, match="越界路径"):
             market.install_archive(data, tmp_path)
@@ -83,7 +83,7 @@ class Test挡住的东西:
         解出来之后,后面任何按相对路径写文件的动作都会写到那儿去。"""
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w") as archive:
-            archive.writestr("open-studio.plugin.json", json.dumps(MANIFEST))
+            archive.writestr("mosael.plugin.json", json.dumps(MANIFEST))
             info = zipfile.ZipInfo("link")
             info.external_attr = (0o120777 << 16)  # S_IFLNK
             archive.writestr(info, "/etc")
@@ -93,7 +93,7 @@ class Test挡住的东西:
     def test_解压炸弹(self, tmp_path, monkeypatch) -> None:
         """一个 1MB 的 zip 能解出几十 GB。上限查的是**声明的解压后大小**,在解之前。"""
         monkeypatch.setattr(market, "MAX_UNPACKED_BYTES", 100)
-        data = make_zip({"open-studio.plugin.json": json.dumps(MANIFEST), "big.txt": "x" * 5000})
+        data = make_zip({"mosael.plugin.json": json.dumps(MANIFEST), "big.txt": "x" * 5000})
         with pytest.raises(PluginDomainError, match="解压后超过"):
             market.install_archive(data, tmp_path)
 
@@ -105,7 +105,7 @@ class Test挡住的东西:
 
     def test_清单不合法的包(self, tmp_path) -> None:
         """先看清楚再落地 —— 不合法的包不该在插件目录里留下任何东西。"""
-        data = make_zip({"open-studio.plugin.json": json.dumps({"name": "缺 id"})})
+        data = make_zip({"mosael.plugin.json": json.dumps({"name": "缺 id"})})
         with pytest.raises(PluginDomainError, match="清单不合法"):
             market.install_archive(data, tmp_path)
         assert list(tmp_path.iterdir()) == []
@@ -130,7 +130,7 @@ class Test不悄悄覆盖:
 
     def test_覆盖时旧文件不残留(self, tmp_path) -> None:
         """留着的话,一个上个版本才有的脚本会一直躺在那儿 —— 而清单已经不提它了。"""
-        market.install_archive(make_zip({"open-studio.plugin.json": json.dumps(MANIFEST), "旧脚本.py": "x"}), tmp_path)
+        market.install_archive(make_zip({"mosael.plugin.json": json.dumps(MANIFEST), "旧脚本.py": "x"}), tmp_path)
         assert (tmp_path / "dev.test.demo" / "旧脚本.py").is_file()
         market.install_archive(good_zip(), tmp_path, overwrite=True)
         assert not (tmp_path / "dev.test.demo" / "旧脚本.py").exists()

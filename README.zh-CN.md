@@ -1,31 +1,44 @@
-# Open Studio
+<p align="center">
+  <img src="brand/mosael-wordmark.png" alt="Mosael" width="440" />
+</p>
+
+<p align="center">
+  <strong>让灵感落进时间线。</strong><br />
+  一间装在电脑里的 AI 影像工作室，从第一段素材陪你走到最后一次发布。
+</p>
+
+<p align="center">
+  <a href="https://mosael.team">官网</a> ·
+  <a href="https://github.com/Alndaly/Mosael/releases">下载</a> ·
+  <a href="https://mosael.team/zh/docs/start/intro">使用指南</a> ·
+  <a href="https://x.com/KindaHuax">作者 X</a>
+</p>
 
 [English](README.md) | **简体中文**
 
-Open Studio 是一款运行在本机的 AI 视频工作室，把**多轨剪辑、AI 生成、创作型智能体、
-可视化工作流和多平台发布**放进同一个桌面应用。
+Mosael 把剪辑、AI 生成、智能体、工作流和发布放在同一个桌面应用里。你可以从一段素材开始，
+对着逐字稿剪掉废话，让 AI 找画面或补配音，再把完成的作品直接发出去，不必在不同工具之间反复搬运。
 
-从导入素材、对着逐字稿剪辑，到生成画面、导出成片和发布，数据默认留在自己的机器上。
-应用由 Electron、FastAPI、SQLite 与 React 组成；需要联网的 AI 能力由你配置自己的供应商账号。
+> 素材和项目默认留在本机；只有你主动配置并调用的 AI 服务会联网。
 
-![Open Studio 剪辑页：多轨时间线、监看器与逐字稿](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260902003526649.png)
+![Mosael 剪辑页：多轨时间线、监看器与逐字稿](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260902003526649.png)
 
 ## 下载与运行
 
-从 [GitHub Releases](https://github.com/Alndaly/OpenStudio/releases) 下载：
+从 [GitHub Releases](https://github.com/Alndaly/Mosael/releases) 下载：
 
 - macOS：Apple 芯片版 `.dmg`
 - Windows：Windows 10/11 x64 安装程序
 
 安装后直接启动即可。应用会自动拉起内置后端（默认 `127.0.0.1:8800`）、加载前端并启动发布执行器，
-不需要手动运行服务。如果 8800 端口已经有健康的 Open Studio 后端，桌面端会复用它。
+不需要手动运行服务。如果 8800 端口已经有健康的 Mosael 后端，桌面端会复用它。
 
 浏览本地功能无需额外配置；使用 AI 对话、绘图、视频生成、配音或转写前，请先到
 **设置 → 供应商**添加连接与模型。
 
-## 核心能力
+## 你可以用它做什么
 
-### 剪辑与逐字稿
+### 从逐字稿开始剪片
 
 - 多时间线、多轨道剪辑，支持切分、吸附、涟漪删除、变速、淡入淡出、画中画和撤销/重做。
 - 逐字稿与时间线共用同一份编辑语义：删除句子或单词，画面同步裁切。
@@ -35,7 +48,7 @@ Open Studio 是一款运行在本机的 AI 视频工作室，把**多轨剪辑�
 
 ![逐条字幕配音，产物落到独立配音轨](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260902003526649.png)
 
-### AI 智能体
+### 让 AI 真正帮你动手
 
 智能体通过 MCP 工具读取和操作素材、时间线、工作流、浏览器池与发布任务。会改变工程或外部状态的
 动作先显示确认卡，由你批准后才执行。
@@ -49,7 +62,7 @@ Open Studio 是一款运行在本机的 AI 视频工作室，把**多轨剪辑�
 
 ![智能体工作台与会话交互](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260831143139609.png)
 
-### AI 生成与供应商
+### 把想法变成画面和声音
 
 供应商配置分为两层：**连接**保存 Endpoint、API Key 或 OAuth 状态；**模型**声明对话、图像、视频、
 音频能力以及上下文、推理、视觉和生成参数。界面只显示当前模型真正支持的控件，不从相似型号猜测。
@@ -60,7 +73,7 @@ Open Studio 是一款运行在本机的 AI 视频工作室，把**多轨剪辑�
 - 字节跳动接入按产品协议区分：方舟 Ark 承载 Seedream/Seedance，火山语音承载 TTS 与播客接口。
 - 未收录能力描述的自定义模型仍可使用，但不会继承其他模型的参数规则。
 
-### 素材与创意画板
+### 把灵感铺在画板上
 
 - 本地导入视频、音频和图片，自动生成缩略图与预览代理。
 - URL 导入先探测清单，再选择条目、音频/视频和实际可用画质；需要登录时可复用浏览器池档案。
@@ -71,14 +84,14 @@ Open Studio 是一款运行在本机的 AI 视频工作室，把**多轨剪辑�
 
 ![创意画板](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260901162232470.png)
 
-### 工作流与调度
+### 把重复步骤画成流程
 
 可视化 DAG 把检索、生成、转写、拼装、导出和发布串成可复用流程，支持手动、定时和 Webhook 触发。
 节点组可以折叠为任意嵌套的子图，跨边界引用会自动重连；循环体与顶层使用同一并行执行引擎。
 
 ![框选节点并折叠为子图](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260831143122120.png)
 
-### 浏览器池与发布
+### 从一个窗口发到多个平台
 
 所有持久登录统一保存为浏览器档案，供发布、工作流 RPA、URL 导入和智能体复用。智能体借用某个身份
 前必须逐次获得明确授权，确认卡会点名具体档案。
@@ -91,10 +104,10 @@ Open Studio 是一款运行在本机的 AI 视频工作室，把**多轨剪辑�
 ### Chrome 浏览器扩展
 
 Chrome 扩展使用浏览器原生 Side Panel，不在网页上覆盖浮动面板。打开已安装 yt-dlp 能识别的视频链接时，
-点击扩展图标即可在右侧查看逐字稿；YouTube 与 B 站优先读取原生字幕，其余站点可由 Open Studio 自动
+点击扩展图标即可在右侧查看逐字稿；YouTube 与 B 站优先读取原生字幕，其余站点可由 Mosael 自动
 下载并转写。存在可用 HTML5 播放器时，逐字稿跟随播放，逐词时间戳支持精确跳转，并可把不含播放器控件
-的纯视频帧导入素材库。扩展使用单独的 Open Studio 登录会话且不保存密码，也不读取或导出 Chrome
-Cookie；受限内容可以选择 Open Studio 浏览器池中已有的登录身份与代理。界面默认跟随 Chrome 语言，
+的纯视频帧导入素材库。扩展使用单独的 Mosael 登录会话且不保存密码，也不读取或导出 Chrome
+Cookie；受限内容可以选择 Mosael 浏览器池中已有的登录身份与代理。界面默认跟随 Chrome 语言，
 也可固定为简体中文或 English。安装、权限与能力边界见
 [browser-extension/README.zh-CN.md](browser-extension/README.zh-CN.md)。
 
@@ -105,7 +118,7 @@ Cookie；受限内容可以选择 Open Studio 浏览器池中已有的登录身�
 
 ## 文档
 
-完整使用指南位于 **[openstudio.team](https://openstudio.team)**，源码在 `website/content/docs/`。
+完整使用指南位于 **[mosael.team](https://mosael.team)**，源码在 `website/content/docs/`。
 仓库内的实现文档：
 
 | 文档 | 内容 |
@@ -168,7 +181,7 @@ cd frontend && pnpm gen:api        # 后端 OpenAPI 变化后运行
 cd website && pnpm build           # 修改官网或文档后运行
 ```
 
-当前基线：后端 2,440 个用例，前端 815 个用例。
+当前基线：后端 2,451 个用例，前端 818 个用例。
 
 ### 常见问题
 
@@ -199,7 +212,7 @@ pnpm dist:mac    # 构建 macOS DMG
 | `pnpm build:sidecar` | `agent-sidecar/dist/sidecar.cjs` |
 | `pnpm build:extension` | `browser-extension/dist` |
 | `pnpm fetch:tts-python` | 声音克隆使用的独立 CPython |
-| `pnpm build:backend` | `backend/dist/open-studio-backend` |
+| `pnpm build:backend` | `backend/dist/mosael-backend` |
 
 发版时同时更新根 `package.json` 与 tag：
 
@@ -207,7 +220,7 @@ pnpm dist:mac    # 构建 macOS DMG
 VERSION=x.y.z
 npm pkg set version="$VERSION"
 git commit -am "chore(release): v$VERSION"
-git tag -a "v$VERSION" -m "Open Studio v$VERSION"
+git tag -a "v$VERSION" -m "Mosael v$VERSION"
 git push origin main "v$VERSION"
 ```
 
@@ -221,15 +234,15 @@ Windows NSIS 安装包、Chrome 扩展和插件 zip。两个桌面平台都通�
 
 | 位置 | 内容 |
 | --- | --- |
-| `~/.open-studio/open-studio.db` | SQLite 主库 |
-| `~/.open-studio/media/` | 导入、生成与导出的素材 |
+| `~/.mosael/mosael.db` | SQLite 主库 |
+| `~/.mosael/media/` | 导入、生成与导出的素材 |
 | `<userData>/logs/backend.log` | 打包后端日志 |
 | `<userData>/logs/publisher.log` | 发布执行器日志 |
 | `<userData>/Partitions/` | 持久浏览器档案 |
 | `<userData>/custom.css` | 设置 → 外观中的自定义 CSS |
 
-`<userData>` 在 macOS 上是 `~/Library/Application Support/Open Studio`，在 Windows 上是
-`%APPDATA%\Open Studio`。应用内会显示插件等动态目录的实际路径。
+`<userData>` 在 macOS 上是 `~/Library/Application Support/Mosael`，在 Windows 上是
+`%APPDATA%\Mosael`。应用内会显示插件等动态目录的实际路径。
 
 ## 仓库结构
 
@@ -241,7 +254,7 @@ agent-sidecar/    智能体运行时
 browser-extension/ Chrome Side Panel 视频助手
 contracts/        前后端共享的可执行契约语料
 plugins/          插件示例与清单
-website/          openstudio.team 文档站
+website/          mosael.team 文档站
 docs/             架构、权限、发布和 ADR
 scripts/          构建与文档同步脚本
 ```
@@ -254,14 +267,14 @@ scripts/          构建与文档同步脚本
 Google / Apple 登录是可选能力，通过 `backend/.env` 配置：
 
 ```dotenv
-OPEN_STUDIO_GOOGLE_CLIENT_ID=...
-OPEN_STUDIO_GOOGLE_CLIENT_SECRET=...
-OPEN_STUDIO_APPLE_CLIENT_ID=...
-OPEN_STUDIO_APPLE_CLIENT_SECRET=...
-OPEN_STUDIO_OAUTH_REDIRECT_BASE=...
+MOSAEL_GOOGLE_CLIENT_ID=...
+MOSAEL_GOOGLE_CLIENT_SECRET=...
+MOSAEL_APPLE_CLIENT_ID=...
+MOSAEL_APPLE_CLIENT_SECRET=...
+MOSAEL_OAUTH_REDIRECT_BASE=...
 ```
 
 ## 许可
 
 源码可见但**保留所有权利**：仅限评估、学习与个人非商业用途；未经书面授权不得商用或再分发。
-详见 [LICENSE](LICENSE)。商业授权请联系作者。
+详见 [LICENSE](LICENSE)。商业授权请联系作者 [Kinda Hall](https://x.com/KindaHuax)。

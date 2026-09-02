@@ -128,11 +128,11 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
 
   const login = (p: BrowserProfile) => {
     if (p.bound_account_id && p.platform) {
-      window.openStudioPublish
+      window.mosaelPublish
         ?.login(p.bound_account_id, p.platform)
         .then(() => toast.success(t("poolLoginOpened")))
         .catch((e: Error) => toast.error(e.message));
-    } else if (window.openStudioBrowser?.openLogin) {
+    } else if (window.mosaelBrowser?.openLogin) {
       setLoginFor(p); // 通用档案:填登录网址 → 在该档案分区开可见登录窗
     } else {
       toast.info(t("publishNeedDesktop"));
@@ -143,7 +143,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
   // 弹走,用户看到的是一次莫名其妙的跳转,而账号还会被标成 checking。openPage 则直接亮出
   // 它的视图(有页面就恢复,没有就进创作首页),这才是「我想看看这个账号」要的东西。
   const openPage = (p: BrowserProfile) => {
-    window.openStudioPublish
+    window.mosaelPublish
       ?.openPage(p.bound_account_id!, p.platform!)
       .catch((e: Error) => toast.error(e.message));
   };
@@ -251,8 +251,8 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                       <Button
                         size="sm"
                         variant="outline"
-                        title={window.openStudioPublish || window.openStudioBrowser?.openLogin ? undefined : t("publishNeedDesktop")}
-                        disabled={bound ? !window.openStudioPublish : !window.openStudioBrowser?.openLogin}
+                        title={window.mosaelPublish || window.mosaelBrowser?.openLogin ? undefined : t("publishNeedDesktop")}
+                        disabled={bound ? !window.mosaelPublish : !window.mosaelBrowser?.openLogin}
                         onClick={() => (loggedIn ? openPage(p) : login(p))}
                       >
                         {loggedIn ? (
@@ -368,7 +368,7 @@ function LoginUrlDialog({
     if (!u) return;
     if (!/^https?:\/\//i.test(u)) u = `https://${u}`;
     setPending(true);
-    const res = await window.openStudioBrowser?.openLogin?.({ partition: profile.partition, url: u, name: profile.name, proxy: profile.proxy });
+    const res = await window.mosaelBrowser?.openLogin?.({ partition: profile.partition, url: u, name: profile.name, proxy: profile.proxy });
     setPending(false);
     if (res?.ok) {
       toast.success(t("poolLoginOpened"));

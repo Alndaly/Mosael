@@ -14,7 +14,7 @@ from pathlib import Path
 
 def seed(data_dir: Path) -> None:
     data_dir.mkdir(parents=True, exist_ok=True)
-    database = data_dir / "open-studio.db"
+    database = data_dir / "mosael.db"
     with sqlite3.connect(database) as db:
         db.executescript(
             """
@@ -45,7 +45,7 @@ def seed(data_dir: Path) -> None:
 
 
 def verify(data_dir: Path) -> None:
-    database = data_dir / "open-studio.db"
+    database = data_dir / "mosael.db"
     with sqlite3.connect(database) as db:
         columns = {row[1] for row in db.execute("PRAGMA table_info(publish_tasks)")}
         if "options" not in columns:

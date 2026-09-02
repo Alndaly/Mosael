@@ -42,7 +42,7 @@ def register(body: RegisterCredentials, db: DbSession) -> AuthOut:
              → 改实例配置 / 存 code 节点 → 在服务端执行任意 Python
 
     空库时照常放行:那时没有任何人可以给第一个账号发邀请。之后只能由已有成员邀请
-    (见 workspaces 的 invitations 路由),想保持开放的部署显式打开 OPEN_STUDIO_OPEN_REGISTRATION。
+    (见 workspaces 的 invitations 路由),想保持开放的部署显式打开 MOSAEL_OPEN_REGISTRATION。
     """
     invite = _usable_invite(db, body.invite_code)
     if not deployment.open_registration(db) and invite is None and db.scalar(select(User).limit(1)) is not None:

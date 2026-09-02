@@ -448,7 +448,7 @@ def get_agent_skills(db: DbSession, user: CurrentUser) -> list[dict]:
 @router.get("/agent/manifest", response_model=AgentManifestOut)
 def get_agent_manifest(db: DbSession, user: CurrentUser) -> AgentManifestOut:
     return AgentManifestOut(
-        app="open-studio",
+        app="mosael",
         version=app_version(),
         openapi_url="/openapi.json",
         skills=[AgentSkillOut.model_validate(skill) for skill in list_agent_skills(db, user.id)],

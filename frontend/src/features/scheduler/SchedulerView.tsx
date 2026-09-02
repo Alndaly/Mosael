@@ -557,7 +557,7 @@ function RunRow({ run, job }: { run: ScheduledTaskRun; job: Job | null }) {
         )}
       >
         {running ? (
-          <Loader2 size={12} className="animate-openstudio-spin" />
+          <Loader2 size={12} className="animate-mosael-spin" />
         ) : run.status === "succeeded" ? (
           <CheckCircle2 size={12} />
         ) : (

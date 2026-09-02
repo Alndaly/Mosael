@@ -4,7 +4,7 @@ Mirrors app/audio/asr_models.py: a catalog of downloadable TTS engine weights,
 install detection by probing the HuggingFace cache, deliberate download via the
 worker's warmup action (runs in the external TTS interpreter), byte-poll
 progress with speed + ETA. The heavy engines (f5-tts / fish-speech) live in a
-separate Python resolved from OPEN_STUDIO_TTS_PYTHON.
+separate Python resolved from MOSAEL_TTS_PYTHON.
 """
 from __future__ import annotations
 
@@ -411,13 +411,13 @@ def _worker_env(engine_python: str = "") -> dict[str, str]:
     env["HF_ENDPOINT"] = cfg.hf_endpoint
     # 下载跑在 worker 子进程里,它得知道这一次走哪条路 —— ModelScope 不是 HF 兼容端点,
     # HF_ENDPOINT 那一套对它无效,得换一个客户端。
-    env["OPEN_STUDIO_MODEL_SOURCE"] = effective_source(cfg.engine, cfg.source)
+    env["MOSAEL_MODEL_SOURCE"] = effective_source(cfg.engine, cfg.source)
     if cfg.resolved_fish_repo:
-        env["OPEN_STUDIO_FISH_REPO_DIR"] = cfg.resolved_fish_repo
+        env["MOSAEL_FISH_REPO_DIR"] = cfg.resolved_fish_repo
     if cfg.resolved_fish_model:
-        env["OPEN_STUDIO_FISH_MODEL_DIR"] = cfg.resolved_fish_model
+        env["MOSAEL_FISH_MODEL_DIR"] = cfg.resolved_fish_model
     # F5 走 ModelScope 时权重落在这里,worker 据此显式指给 F5TTS。
-    env["OPEN_STUDIO_F5_MODEL_DIR"] = str(tts_config.MANAGED_F5_MODEL)
+    env["MOSAEL_F5_MODEL_DIR"] = str(tts_config.MANAGED_F5_MODEL)
     # 让 torchcodec 找得到一份它认得的 FFmpeg。排在最前:dlopen 按这个顺序找,而系统里那份
     # 太新的正是加载不上的那个。找不到就什么都不做 —— 那种机器上错误信息会说清楚要装什么。
     ffmpeg_lib = _ffmpeg_runtime_dir(engine_python) if engine_python else ""
@@ -997,7 +997,7 @@ def _download_body(engine_id: str) -> None:
         # for live progress — resolved_fish_model won't resolve until codec.pth lands.
         progress_dir = tts_config.MANAGED_FISH_MODEL
         progress_dir.mkdir(parents=True, exist_ok=True)
-        env["OPEN_STUDIO_FISH_MODEL_DIR"] = str(progress_dir)
+        env["MOSAEL_FISH_MODEL_DIR"] = str(progress_dir)
         python = _download_python(engine_id)
     else:
         # 预热是**去下权重**:优先能跑引擎的那个解释器,没有就退到第一个存在的候选

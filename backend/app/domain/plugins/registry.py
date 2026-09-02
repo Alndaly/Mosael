@@ -136,7 +136,7 @@ def inspect_archive(data: bytes) -> tuple[dict[str, Any], Path, Path]:
     **先看清楚再落地**:清单不合法、或者根本没有清单的包,不该在插件目录里留下任何东西。
     调用方负责删掉临时根目录。
     """
-    workdir = Path(tempfile.mkdtemp(prefix="open-studio-plugin-install-"))
+    workdir = Path(tempfile.mkdtemp(prefix="mosael-plugin-install-"))
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             _safe_extract(archive, workdir)

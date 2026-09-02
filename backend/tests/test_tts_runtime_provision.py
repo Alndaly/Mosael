@@ -47,13 +47,13 @@ def test_base_python_prefers_the_injected_bundled_interpreter(monkeypatch: pytes
     """壳注入的随包解释器优先——打包版后端是冻结二进制,只有它建得了 venv。"""
     fake = tmp_path / "python3"
     fake.write_text("#!/bin/sh\n")
-    monkeypatch.setenv("OPEN_STUDIO_TTS_BASE_PYTHON", str(fake))
+    monkeypatch.setenv("MOSAEL_TTS_BASE_PYTHON", str(fake))
     assert interpreter.base_python() == str(fake)
 
 
 def test_base_python_ignores_a_missing_injected_path(monkeypatch: pytest.MonkeyPatch) -> None:
     """注入了但文件不在(资源没打进去)→ 退回本解释器,而不是拿着坏路径去建 venv。"""
-    monkeypatch.setenv("OPEN_STUDIO_TTS_BASE_PYTHON", "/nope/python3")
+    monkeypatch.setenv("MOSAEL_TTS_BASE_PYTHON", "/nope/python3")
     import sys
 
     assert interpreter.base_python() == sys.executable

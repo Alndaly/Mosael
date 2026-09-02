@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Open Studio 宣传片生成器。
+"""Mosael 宣传片生成器。
 
 与上一版的根本区别:**上一版是九张纯 SVG 幻灯片,没有一帧真实产品画面**——观众看完不知道
 这东西长什么样、能不能用。这一版反过来,真实素材占主体,生成的图形只做连接与强调:
@@ -11,7 +11,7 @@
 配色取 tokens.css 的浅色「暖纸面」主题,与真实截图一致。
 
 用法:
-    python3 docs/media/gen/build_promo.py            # → docs/media/open-studio-promo.mp4
+    python3 docs/media/gen/build_promo.py            # → docs/media/mosael-promo.mp4
     python3 docs/media/gen/build_promo.py --preview  # 只出分镜联络图,快速看构图
 """
 from __future__ import annotations
@@ -124,7 +124,7 @@ def shot_open() -> str:
     return svg(
         f'<circle cx="{W/2}" cy="424" r="250" fill="{PRIMARY}" opacity="0.08" filter="url(#soft)"/>'
         + logo(W / 2, 424, 1.5)
-        + centered("Open Studio", 700, 104, spacing=2)
+        + centered("Mosael", 700, 104, spacing=2)
         + centered("本地优先的 AI 视频创作工作室", 774, 34, MUTE, 400, spacing=6)
     )
 
@@ -179,8 +179,8 @@ def shot_local() -> str:
 def shot_cta() -> str:
     return svg(
         logo(W / 2, 396, 1.25)
-        + centered("Open Studio", 612, 90, spacing=2)
-        + centered("openstudio.team", 702, 42, PRIMARY, 600, spacing=2, family=MONO)
+        + centered("Mosael", 612, 90, spacing=2)
+        + centered("mosael.team", 702, 42, PRIMARY, 600, spacing=2, family=MONO)
         + centered("macOS · Windows   |   源码可见", 792, 28, MUTE, 400, spacing=1)
     )
 
@@ -289,7 +289,7 @@ def build() -> str:
     audio = (f"aevalsrc=0.055*sin(2*PI*146.83*t)+0.04*sin(2*PI*220*t)+0.018*sin(2*PI*293.66*t):"
              f"s=44100:d={total:.2f},tremolo=f=0.13:d=0.45,lowpass=f=1100,"
              f"afade=t=in:st=0:d=1.4,afade=t=out:st={total-1.6:.2f}:d=1.6,volume=0.45[a]")
-    out = os.path.join(MEDIA, "open-studio-promo.mp4")
+    out = os.path.join(MEDIA, "mosael-promo.mp4")
     run(["ffmpeg", "-y", "-v", "error", *inputs,
          "-filter_complex", chain.rstrip(";") + ";" + audio,
          "-map", f"[{prev}]", "-map", "[a]",

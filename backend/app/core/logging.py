@@ -5,7 +5,7 @@
 丢弃——现有那几条 `logger.info` 从来没人看得到。
 
 方案:给 `app` 命名空间挂一个 stderr handler(所有 `logging.getLogger(__name__)`
-在 app 包下的都归它),级别由 OPEN_STUDIO_LOG_LEVEL 决定,`propagate=False` 避免与 root/uvicorn
+在 app 包下的都归它),级别由 MOSAEL_LOG_LEVEL 决定,`propagate=False` 避免与 root/uvicorn
 重复打印。noisy 的第三方库压到 WARNING。
 """
 
@@ -84,7 +84,7 @@ def configure_logging() -> None:
     for noisy in _NOISY_LIBRARIES:
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
-    # 轮询请求不刷屏。OPEN_STUDIO_LOG_ACCESS=all 恢复全量 —— 排查 sidecar 本身时就要看它们。
+    # 轮询请求不刷屏。MOSAEL_LOG_ACCESS=all 恢复全量 —— 排查 sidecar 本身时就要看它们。
     access = logging.getLogger("uvicorn.access")
     access.filters = [f for f in access.filters if not isinstance(f, AccessLogFilter)]
     access.addFilter(AccessLogFilter(quiet=settings.log_access.strip().lower() != "all"))

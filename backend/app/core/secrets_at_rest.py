@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 主密钥**不放在库里**(同一个文件里的钥匙和锁等于没锁),按顺序取:
 
-    OPEN_STUDIO_SECRET_KEY    环境变量 —— 服务端部署的答案(systemd EnvironmentFile、docker
+    MOSAEL_SECRET_KEY    环境变量 —— 服务端部署的答案(systemd EnvironmentFile、docker
                               secret、k8s secret)。桌面版由 Electron 从系统钥匙串取出后传进来,
                               于是桌面与服务端走的是同一条路,不需要第二套机制。
     <数据目录>/secret.key      0600 的文件 —— 裸跑 uvicorn 时的兜底。它只挡"库文件单独泄露",
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 "这里记得解密、那里忘了"的可能。
 """
 
-ENV_VAR = "OPEN_STUDIO_SECRET_KEY"
+ENV_VAR = "MOSAEL_SECRET_KEY"
 KEY_FILENAME = "secret.key"
 
 #: 装秘密的列。**登记在这一处**,棘轮据此检查它们确实用了加密类型

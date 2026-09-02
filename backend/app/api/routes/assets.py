@@ -96,7 +96,7 @@ def probe_url(body: UrlProbeRequest, db: DbSession, user: CurrentUser) -> dict:
 
         from app.domain.assets.from_url import _cookie_file
 
-        workdir = _Path(tempfile.mkdtemp(prefix="open-studio-probe-"))
+        workdir = _Path(tempfile.mkdtemp(prefix="mosael-probe-"))
         cookie_file = _cookie_file(body.workspace_id, body.profile_id, workdir)
     try:
         listing = ytdlp.probe(body.url.strip(), cookie_file=cookie_file, start=body.start)
@@ -163,7 +163,7 @@ def import_local_asset(
     db: DbSession,
     user: CurrentUser,
 ) -> Asset:
-    """按本机绝对路径导入(桌面端把文件拖到应用图标上 / 「用 Open Studio 打开」)。
+    """按本机绝对路径导入(桌面端把文件拖到应用图标上 / 「用 Mosael 打开」)。
 
     **只在桌面端自带的后端上可用**。团队服务器部署没有 local_desktop 标记,这个接口直接
     404 —— 否则任何一个客户端都能让服务器去读它自己的文件系统,那是任意文件读取。
@@ -479,7 +479,7 @@ def grab_asset_frame(asset_id: str, body: AssetFrameRequest, db: DbSession, user
         raise HTTPException(status_code=400, detail="只能从视频里取帧")
 
     source = resolve_key(asset.file_key)
-    with tempfile.TemporaryDirectory(prefix="open-studio-still-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="mosael-still-") as tmp:
         target = Path(tmp) / "frame.jpg"
         try:
             grab_frame(source, body.at, target)

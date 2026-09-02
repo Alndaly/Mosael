@@ -48,8 +48,8 @@
   --radius-lg: calc(var(--radius) + 2px);
   --radius-xl: calc(var(--radius) + 6px);
 
-  --animate-openstudio-spin: openstudio-spin 0.9s linear infinite;
-  @keyframes openstudio-spin {
+  --animate-mosael-spin: mosael-spin 0.9s linear infinite;
+  @keyframes mosael-spin {
     to {
       transform: rotate(360deg);
     }
@@ -105,7 +105,7 @@
 }
 
 /*
- * Open Studio design tokens — 2026-07「暖纸面」重做。
+ * Mosael design tokens — 2026-07「暖纸面」重做。
  * 昼:暖白纸底 + 柔靛紫,文字用暖灰紫系;夜:暖檀黑 + 长春花紫,独立调校
  * 而非明档翻转。层级仍靠发丝边框 + 背景明度台阶(FLAT,无投影),
  * 「不尖锐」靠圆角升档(--radius 8px)与低饱和主色实现。

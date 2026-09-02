@@ -2,9 +2,9 @@
 
 ## 三段自举:App 启动时发生了什么
 
-`open "Open Studio.app"` 一条命令背后是三件事,顺序由 `electron/main.cjs` 编排:
+`open "Mosael.app"` 一条命令背后是三件事,顺序由 `electron/main.cjs` 编排:
 
-1. **拉起后端** — spawn 打包的 `open-studio-backend` 二进制(开发模式则是 `uvicorn`),轮询 `/api/health` 等它就绪(30s 超时)。
+1. **拉起后端** — spawn 打包的 `mosael-backend` 二进制(开发模式则是 `uvicorn`),轮询 `/api/health` 等它就绪(30s 超时)。
    若 8800 已有健康后端(如 dev server),**复用它**,不再起新进程(`ensureBackend()` 里的 `isHealthy()` 检查)。
 2. **开窗加载前端** — 打包版 `loadFile(frontend/dist/index.html)`,开发版 `loadURL(localhost:5173)`。
    hash 路由(`#/editor?p=<id>`)——因为 `file://` 下 path 路由不可用。
@@ -18,7 +18,7 @@
 `chrome.sidePanel` 打开原生侧栏；`page-bridge` 在站点主世界读取 YouTube / B 站自己的播放器与字幕
 对象，其他 HTTP(S) 页面走通用 HTML5 播放器适配；隔离世界里的 `content` 只转发数据、从多个候选中
 选择真正可见且可播放的 `<video>`、执行词/句级时间跳转与视频像素截帧，`sidepanel` 负责 UI 与
-Open Studio API。网页中没有可见注入节点，也没有悬浮层。
+Mosael API。网页中没有可见注入节点，也没有悬浮层。
 
 侧栏本身是 React 19 入口 `sidepanel.tsx`，表单与交互控件只经扩展自己的 `components/ui/`（Radix /
 shadcn）暴露，布局使用 Tailwind v4 utility；`styles.css` 只保留 Tailwind 入口、产品色 token 与基础层，
@@ -33,7 +33,7 @@ shadcn）暴露，布局使用 Tailwind v4 utility；`styles.css` 只保留 Tail
 只把会话保存到 `chrome.storage.local`，不保存密码；后端 CORS 仅额外接受形如
 `chrome-extension://[a-p]{32}` 的真实扩展 Origin，接口本身仍逐条认证和鉴权。
 
-扩展故意不申请 `cookies` 权限：Chrome Cookie 不会被导出到后端。用户可在侧栏选择 Open Studio
+扩展故意不申请 `cookies` 权限：Chrome Cookie 不会被导出到后端。用户可在侧栏选择 Mosael
 已经管理的浏览器池档案；下载任务只把 `profile_id` 交给后端，由既有浏览器池复用档案 Cookie 与代理。
 前端先用 DOM 判断是否有可操作播放器，再用 `/api/assets/url-support` 查询当前安装的 yt-dlp extractor；
 因此「后端可导入/转写」与「页面可跳转/截帧」是独立能力，不能用站点域名枚举混为一个布尔值。截帧优先对 origin-clean 的
@@ -62,7 +62,7 @@ shadcn）暴露，布局使用 Tailwind v4 utility；`styles.css` 只保留 Tail
 | `assets/video_gif.py`(配 `media/video_gif.py`) | 视频转 GIF:领域层排任务并登记派生素材,媒体层只负责 ffmpeg 转码。来源关系只写到新 GIF 的 `media_info`,原视频字节与记录都不改;素材页右键与工作流节点共用这一条路径 |
 | `plugins/` | 插件:子进程执行 + 权限门 + MCP 暴露;市场索引与安装(`registry.py`)、文件双向搬运(`artifacts.py` 交出 / `inputs.py` 收下)、跨调用状态(`state.py`)。**不认识素材库** —— `media_bridge.py` 只定义来源与落点的契约,由 `domain/assets/plugin_bridge` 在组装根登记(同 jobs 不认识智能体) |
 | `core/pip_install.py` | **通往 pip 的唯一一道门**(声音克隆 / 转写共用)。带上设置页那个镜像、`--prefer-binary`(挡的是"为了新版本号去本机编译 Rust")、够用的超时重试;失败时挑出 pip 自己的结论行而不是取输出尾巴,并把完整输出落盘 |
-| `core/run_log.py` | 子进程的完整输出落盘(`~/.open-studio/logs/`)。装依赖、下权重两条路共用 —— 界面只放一句话,而排查要全文,此前全文哪儿都没有 |
+| `core/run_log.py` | 子进程的完整输出落盘(`~/.mosael/logs/`)。装依赖、下权重两条路共用 —— 界面只放一句话,而排查要全文,此前全文哪儿都没有 |
 | `core/text.blame_line` | 从子进程输出里挑出**说明失败原因**的那一行。**不取最后一行**:那常常是收尾提示、分隔线,或者一根 tqdm 进度条(这个坑踩过三次,判据因此收在一处) |
 | `audio/remote_size.py` | 问下载源要**实际的**文件大小(HuggingFace `?blobs=true` / ModelScope `/repo/files?Recursive=True`),按这次真正要取的文件算而不是整仓。问不到就退回目录里的估算**并说出它是估算** |
 | `jobs.py` | **任务总线**:所有后台工作(导出/转写/生成/工作流/发布)统一为 `jobs` + `task_events`;终态时按 payload 里的 `receipt` 回执给发起方(监听状态变化,不认某个函数 —— 各处写法不一) |
@@ -78,7 +78,7 @@ TaskEvent 行只在总线创建。
 
 每种 kind 有一个**执行模式**:`in_process`(默认,守护线程)或 `external`(外部 worker 经
 `/api/jobs/worker/*` 的 claim/report 协议认领,跨后端重启存活——发布器同款模式的推广,
-见 [ADR-0002](adr/0002-claim-report-worker-protocol.md))。`OPEN_STUDIO_EXTERNAL_JOB_KINDS=render`
+见 [ADR-0002](adr/0002-claim-report-worker-protocol.md))。`MOSAEL_EXTERNAL_JOB_KINDS=render`
 即可把渲染交给独立 worker 机器,领域代码不改。
 
 ### 创意画板:生成能力的第五个入口
@@ -199,9 +199,9 @@ f5-tts / fish-speech 都要 torch + torchaudio + transformers,**2.5–3.5 GB**�
 
 - **随包只带解释器**(`build/python`,~48MB,由 `pnpm fetch:tts-python` 在构建期抓取)。
   打包版后端是 PyInstaller 冻结二进制、`sys.executable` 指向自己**建不了 venv**,所以壳经
-  `OPEN_STUDIO_TTS_BASE_PYTHON` 把它指给后端(`electron/main.cjs`)。
+  `MOSAEL_TTS_BASE_PYTHON` 把它指给后端(`electron/main.cjs`)。
 - **重的部分按需装**:用户点「下载」时 `ensure_engine_runtime` 用那个解释器在
-  `~/.open-studio/tts/venv` 建环境、装引擎依赖,再拉模型权重。顺序不能反——权重是用那个环境里的
+  `~/.mosael/tts/venv` 建环境、装引擎依赖,再拉模型权重。顺序不能反——权重是用那个环境里的
   huggingface_hub 拉的。
 
 探测顺序是 用户覆盖 → 托管 venv → 本进程解释器(`tts_models.candidate_pythons`),所以点过下载
@@ -404,7 +404,7 @@ Gateway 的边界与安全不变量见
 - **表单一律 shadcn Form**(react-hook-form + zod),字段级错误就地红字,表单级错误用 destructive Alert。
 - **拖拽一律 dnd-kit**(原生 HTML5 DnD 在 Electron 下真实鼠标不触发);dnd 相关 hooks 必须在任何 early-return 之前。
 - **文案全部走 i18n**(`app/messages.ts`,zh-CN / en-US 双份,键必须成对)。
-- **深链事件通道**:跨页面跳转用 `openstudio:open-*` CustomEvent(`open-cmdk` / `open-asset` / `open-kb-doc` / `open-publish-task` …),派发统一走 `lib/deepLink.ts` 的 80/300/800ms 三连发(目标视图挂载慢时单发会丢)。
+- **深链事件通道**:跨页面跳转用 `mosael:open-*` CustomEvent(`open-cmdk` / `open-asset` / `open-kb-doc` / `open-publish-task` …),派发统一走 `lib/deepLink.ts` 的 80/300/800ms 三连发(目标视图挂载慢时单发会丢)。
 - **详情恢复先恢复身份、再取数据**:`usePersistentSelection` 同步读取 localStorage 中的稳定 id，
   `CanvasDetailLoading` 在 React Query 返回前保留详情语义。工作流、画板、调度、插件和素材不能先以
   `null` 渲染列表页再异步切回详情，否则刷新会闪一次错误页面。
@@ -414,7 +414,7 @@ Gateway 的边界与安全不变量见
 
 ### 桌面适配
 
-前端通过 `window.openStudioDesktop`(preload 暴露)判断是否在 Electron 里,给 `<html>` 打 `is-desktop` / `is-mac` / `is-win`:
+前端通过 `window.mosaelDesktop`(preload 暴露)判断是否在 Electron 里,给 `<html>` 打 `is-desktop` / `is-mac` / `is-win`:
 
 - 无边框窗:顶栏全宽横贯,mac 红绿灯落在顶栏左侧(面包屑让位 88px),Win/Linux 用 `titleBarOverlay` 并给顶栏右侧留位。
 - 拖拽区:顶栏与侧栏可拖窗(`-webkit-app-region: drag`),其中交互元素必须 `no-drag`,否则点击被当成拖窗吃掉。
@@ -441,14 +441,14 @@ Gateway 的边界与安全不变量见
 | `power` | 有任务在跑时 `prevent-app-suspension`。渲染/发布是分钟到小时级,机器合盖会把 ffmpeg 一起挂起 |
 | `badge` | mac/Linux 角标数字、Windows 任务栏进度。切走之后也看得到进度 |
 | `notify` | 任务完成通知,**窗口有焦点时不发**(应用内已有 toast,否则同一件事说两遍) |
-| `protocol` | `openstudio://` 唤起 + 视频/音频文件关联 + 全局快捷键 |
+| `protocol` | `mosael://` 唤起 + 视频/音频文件关联 + 全局快捷键 |
 
 两条贯穿性的约束:
 
 - **状态是推进来的,不是拉出去的。** 系统层不认识后端、也不知道「任务」是什么,只知道有个数字叫
   `runningJobs`(渲染层的 TaskCenter 本就在轮询 `/api/jobs`,顺手推给它)。托盘文案、角标、防睡眠
   吃同一份快照。这条单向依赖是这一层能被单独测、也能被整体摘掉的原因。
-- **协议只导航,不执行。** 自定义协议是外部输入面:任何网页 `location = "openstudio://…"` 就能触发,
+- **协议只导航,不执行。** 自定义协议是外部输入面:任何网页 `location = "mosael://…"` 就能触发,
   不需要用户确认。所以只支持「打开某个页面」(view 走白名单、id 限字符集),不支持「运行工作流」
   —— 后者意味着随便访问一个网站就能静默驱动你的自动化。将来要做,正确形态是链接只发起一个
   **待确认请求**,由应用内弹确认卡。
@@ -494,7 +494,7 @@ steering 存在「最后一次取队列之后 settle」的竞态,而 sidecar 是
 
 ## 服务器切换(团队模式)
 
-`API_BASE` 在**模块加载时**从 `localStorage["openstudio.server.url"]` 解析一次,默认 `http://127.0.0.1:8800`。
+`API_BASE` 在**模块加载时**从 `localStorage["mosael.server.url"]` 解析一次,默认 `http://127.0.0.1:8800`。
 切服务器 = 写 localStorage + **整页 reload** 让它重新解析(会话随之失效,落回登录页)。
 
 因为 `hasUsers` 探测与 `login` 都打向 `API_BASE`,**服务器入口必须在登录之前**——所以 `ServerPicker`

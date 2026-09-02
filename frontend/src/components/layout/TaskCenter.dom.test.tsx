@@ -65,7 +65,7 @@ const running = (kind: string) =>
  * 「刚刚完成」,于是什么都不刷新 —— 那是测试自己的竞态。判据用任务中心按钮上的转圈图标,
  * 它就是"running 已经进到组件里了"。 */
 async function finish(kind: string, status: "succeeded" | "failed", error: string | null = null) {
-  await waitFor(() => expect(document.querySelector(".animate-openstudio-spin")).not.toBeNull(), {
+  await waitFor(() => expect(document.querySelector(".animate-mosael-spin")).not.toBeNull(), {
     timeout: 4000,
   });
   h.state.jobs = [{ id: "j1", kind, status, progress: 1, message: null, error, payload: {} }];

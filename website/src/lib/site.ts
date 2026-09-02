@@ -1,7 +1,8 @@
 /** 站外地址集中一处 —— 仓库改名、换域名时不用在十个组件里搜 URL。 */
 export const SITE = {
-  url: "https://openstudio.team",
-  repo: "https://github.com/Alndaly/OpenStudio",
-  releases: "https://github.com/Alndaly/OpenStudio/releases/latest",
+  url: "https://mosael.team",
+  repo: "https://github.com/Alndaly/Mosael",
+  releases: "https://github.com/Alndaly/Mosael/releases/latest",
+  authorX: "https://x.com/KindaHuax",
   email: "mailto:1142704468@qq.com",
 } as const;

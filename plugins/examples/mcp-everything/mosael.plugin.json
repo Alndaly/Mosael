@@ -1,5 +1,5 @@
 {
-  "id": "dev.openstudio.mcp-everything",
+  "id": "dev.mosael.mcp-everything",
   "manifest_version": 1,
   "name": {
     "zh": "MCP 接入范例",
@@ -23,8 +23,8 @@
     {
       "id": "mcp-example",
       "description": {
-        "zh": "把一个现成的 MCP server 接成 Open Studio 插件的范例。工具清单由 server 自己提供,不写在这个文件里。",
-        "en": "An example of wiring an existing MCP server up as an Open Studio plugin. The tool list comes from the server itself, not from this file."
+        "zh": "把一个现成的 MCP server 接成 Mosael 插件的范例。工具清单由 server 自己提供,不写在这个文件里。",
+        "en": "An example of wiring an existing MCP server up as an Mosael plugin. The tool list comes from the server itself, not from this file."
       }
     }
   ]

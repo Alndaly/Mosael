@@ -1,11 +1,11 @@
 {
   "extensionName": {
-    "message": "Open Studio Video Assistant"
+    "message": "Mosael Video Assistant"
   },
   "extensionDescription": {
-    "message": "Read synchronized bilingual transcripts and send videos or current frames to Open Studio from the Chrome side panel."
+    "message": "Read synchronized bilingual transcripts and send videos or current frames to Mosael from the Chrome side panel."
   },
   "actionTitle": {
-    "message": "Open Open Studio Video Assistant"
+    "message": "Open Mosael Video Assistant"
   }
 }

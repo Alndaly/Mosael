@@ -1031,7 +1031,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
             contextLine={agentContext}
             emptyHint={t("editorAgentEmpty")}
             placeholder={t("editorAgentPlaceholder")}
-            rectKey="openstudio.editor.agent.rect.v1"
+            rectKey="mosael.editor.agent.rect.v1"
             workspaceId={workspace.id}
             mode={agentMode}
             onModeChange={setAgentMode}
@@ -1201,7 +1201,7 @@ function LeftTabs({
   );
 }
 
-const EXPORT_PARAMS_KEY = "openstudio.export.params";
+const EXPORT_PARAMS_KEY = "mosael.export.params";
 
 function ExportControl({
   workspaceId,
@@ -1281,7 +1281,7 @@ function ExportControl({
         </span>
       )}
       <Button size="sm" variant="outline" className="h-7" disabled={busy} onClick={() => setConfigOpen(true)}>
-        {busy ? <Loader2 size={13} className="animate-openstudio-spin" /> : <Download size={13} />}
+        {busy ? <Loader2 size={13} className="animate-mosael-spin" /> : <Download size={13} />}
         {busy ? t("exporting") : t("exportVideo")}
       </Button>
       <ModalShell

@@ -1,8 +1,8 @@
-import type { GeneratedTranscript } from "./openstudio/client";
+import type { GeneratedTranscript } from "./mosael/client";
 import type { Transcript } from "./shared/types";
 
 type ResolvedTranscript = {
-  origin: "site" | "openstudio";
+  origin: "site" | "mosael";
   transcript: Transcript;
 };
 
@@ -16,11 +16,11 @@ export async function resolveTranscriptSource(
     const stored = readStored ? await readStored() : null;
     if (!stored) throw siteError;
     return {
-      origin: "openstudio",
+      origin: "mosael",
       transcript: {
-        trackId: `openstudio:${stored.assetId}`,
+        trackId: `mosael:${stored.assetId}`,
         language: stored.language,
-        languageLabel: stored.language ? `Open Studio · ${stored.language}` : "Open Studio",
+        languageLabel: stored.language ? `Mosael · ${stored.language}` : "Mosael",
         cues: stored.cues,
         tracks: [],
       },

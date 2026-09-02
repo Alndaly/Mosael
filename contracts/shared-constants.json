@@ -9,7 +9,7 @@
   "constants": [
     {
       "name": "publish_partition_prefix",
-      "value": "openstudio",
+      "value": "mosael",
       "why": "发布账号的登录分区名(persist:<前缀>-<accountId>)。两边拼的是**同一个磁盘目录**:后端按它清理/迁移账号目录,Electron 按它创建会话分区。改了其中一个,所有已登录的发布账号的 cookie 会凭空消失,用户得重新登录每一个平台 —— 而且不会有任何报错。",
       "implementations": [
         { "runtime": "python", "location": "backend/app/core/db.py", "symbol": "PARTITION_PREFIX" },

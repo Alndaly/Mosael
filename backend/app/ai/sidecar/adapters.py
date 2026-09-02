@@ -10,9 +10,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 """
-Agent CLI adapters: Open Studio hosts a specialized external coding-agent (pi — the
+Agent CLI adapters: Mosael hosts a specialized external coding-agent (pi — the
 instead of a homegrown loop. The agent gets
-Open Studio's MCP server (with a session token) as its tool surface; mutations still
+Mosael's MCP server (with a session token) as its tool surface; mutations still
 flow through the confirmation cards.
 """
 
@@ -93,7 +93,7 @@ def gateway_complete(
         "options": options or {},
     }
     env = {**os.environ}
-    if os.environ.get("OPEN_STUDIO_AGENT_BIN_NODE"):
+    if os.environ.get("MOSAEL_AGENT_BIN_NODE"):
         env["ELECTRON_RUN_AS_NODE"] = "1"
     env = _proxy_env(env)
     process = popen_text(
@@ -256,9 +256,9 @@ def _proxy_env(base: dict[str, str]) -> dict[str, str]:
 
 def pi_sidecar_command() -> tuple[str, str]:
     """跑 sidecar 用的 (node, 脚本路径)。登录流程也起同一个 sidecar,所以这里是公开的。"""
-    node = os.environ.get("OPEN_STUDIO_AGENT_BIN_NODE") or shutil.which("node") or "node"
+    node = os.environ.get("MOSAEL_AGENT_BIN_NODE") or shutil.which("node") or "node"
     repo_root = Path(__file__).resolve().parents[4]
-    sidecar = os.environ.get("OPEN_STUDIO_PI_SIDECAR") or str(repo_root / "agent-sidecar" / "dist" / "sidecar.cjs")
+    sidecar = os.environ.get("MOSAEL_PI_SIDECAR") or str(repo_root / "agent-sidecar" / "dist" / "sidecar.cjs")
     return node, sidecar
 
 
@@ -280,7 +280,7 @@ def _run_pi(
     images: list[dict[str, str]] | None = None,
 ) -> TurnResult:
     """Spawn the pi sidecar (Node, embeds pi-agent-core) for one turn and stream
-    its JSONL events. The sidecar's tools call back into Open Studio's REST with the
+    its JSONL events. The sidecar's tools call back into Mosael's REST with the
     service token; mutations still flow through confirmation cards. adapter_state
     carries pi's serialized messages for multi-turn memory (round-tripped)."""
     if not provider or not model:
@@ -326,10 +326,10 @@ def _run_pi(
         # 文本模型不接收它们，正文里的 asset_id 仍可让智能体回落 analyze_asset。
         "images": images or [],
     }
-    # 打包版把 Electron 二进制当 node 用(OPEN_STUDIO_AGENT_BIN_NODE),需 ELECTRON_RUN_AS_NODE=1;
+    # 打包版把 Electron 二进制当 node 用(MOSAEL_AGENT_BIN_NODE),需 ELECTRON_RUN_AS_NODE=1;
     # 真 node(dev)会忽略该变量,所以仅在显式指定 node 时加,最稳妥。
     env = {**os.environ}
-    if os.environ.get("OPEN_STUDIO_AGENT_BIN_NODE"):
+    if os.environ.get("MOSAEL_AGENT_BIN_NODE"):
         env["ELECTRON_RUN_AS_NODE"] = "1"
     # 出站代理:Node 默认不认这几个变量,sidecar 自己会装 EnvHttpProxyAgent 来读(见 proxy.ts)。
     env = _proxy_env(env)
@@ -472,7 +472,7 @@ def compact_session(
         "sessionState": adapter_state,
     }
     env = {**os.environ}
-    if os.environ.get("OPEN_STUDIO_AGENT_BIN_NODE"):
+    if os.environ.get("MOSAEL_AGENT_BIN_NODE"):
         env["ELECTRON_RUN_AS_NODE"] = "1"
     env = _proxy_env(env)
     process = popen_text(
@@ -522,7 +522,7 @@ def refresh_oauth_credential(*, api_base: str, token: str, pi_provider: str, pro
         "token": token,
     }
     env = {**os.environ}
-    if os.environ.get("OPEN_STUDIO_AGENT_BIN_NODE"):
+    if os.environ.get("MOSAEL_AGENT_BIN_NODE"):
         env["ELECTRON_RUN_AS_NODE"] = "1"
     env = _proxy_env(env)
     process = popen_text(

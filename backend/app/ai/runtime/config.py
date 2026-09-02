@@ -1,5 +1,5 @@
 """Runtime config for voice cloning (TTS). DB singleton (TtsConfig id='default')
-overrides the OPEN_STUDIO_TTS_* env fallback so engine / interpreter / download source /
+overrides the MOSAEL_TTS_* env fallback so engine / interpreter / download source /
 Fish Speech source+weights dirs are editable from Settings. Cached; call refresh()
 after a write."""
 from __future__ import annotations

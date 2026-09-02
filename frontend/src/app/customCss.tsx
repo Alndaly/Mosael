@@ -4,7 +4,7 @@ import React from "react";
  * 用户自定义 CSS。
  *
  * 文件在客户端自己的存储里(`<userData>/custom.css`,见 electron/system/customCss.ts 里
- * 关于「为什么不是 `~/.open-studio`」的说明),内容由主进程读出来推过来,这里负责注入。
+ * 关于「为什么不是 `~/.mosael`」的说明),内容由主进程读出来推过来,这里负责注入。
  *
  * **注入方式决定它到底压不压得住。** 应用样式分两拨:Tailwind 的 `@layer base/components/
  * utilities`,以及 tokens.css 里少量无层级的规则。CSS 的规则是无层级 > 任何层,同层级再比
@@ -18,8 +18,8 @@ import React from "react";
  * 关掉不删文件 —— 它的用处正是「我的界面坏了,先关掉看看是不是我写的 CSS 干的」。
  */
 
-const STYLE_ID = "openstudio-custom-css";
-const ENABLED_KEY = "openstudio.customCss.enabled";
+const STYLE_ID = "mosael-custom-css";
+const ENABLED_KEY = "mosael.customCss.enabled";
 
 function readEnabled(): boolean {
   try {
@@ -71,7 +71,7 @@ export interface CustomCssState {
 const CustomCssContext = React.createContext<CustomCssState | null>(null);
 
 export function CustomCssProvider({ children }: { children: React.ReactNode }): React.ReactElement {
-  const bridge = typeof window === "undefined" ? undefined : window.openStudioDesktop?.customCss;
+  const bridge = typeof window === "undefined" ? undefined : window.mosaelDesktop?.customCss;
   const supported = Boolean(bridge);
   const [css, setCss] = React.useState("");
   const [path, setPath] = React.useState("");

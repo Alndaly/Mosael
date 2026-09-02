@@ -62,7 +62,7 @@ def node_type_id(plugin_id: str, tool_name: str) -> str:
 def parse_node_type(node_type: str) -> tuple[str, str] | None:
     """`plugin.<插件id>.<工具名>` → (插件id, 工具名);不是插件节点返回 None。
 
-    插件 id 里有点号(`dev.openstudio.tikhub`),所以按**最后一个**点切 —— 工具名是标识符,
+    插件 id 里有点号(`dev.mosael.tikhub`),所以按**最后一个**点切 —— 工具名是标识符,
     不含点。反过来按第一个点切会把插件 id 拆散。
     """
     if not node_type.startswith(PLUGIN_NODE_PREFIX):

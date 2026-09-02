@@ -12,7 +12,7 @@ ComfyUI 深度接入的隔离层:所有「ComfyUI 内部格式」知识只在这
 
 ComfyUI 保存的工作流是 UI 图格式(nodes/links/widgets_values),而 /prompt 只吃 API 格式
 (node_id → {class_type, inputs}),两者的转换在 ComfyUI 前端的 graphToPrompt 里、没有后端端点。
-这里复现那套转换,并自动把 Open Studio 的 prompt/seed/尺寸注入到识别出的节点。
+这里复现那套转换,并自动把 Mosael 的 prompt/seed/尺寸注入到识别出的节点。
 
 耦合都收在此处:ComfyUIGenerationAdapter 只调这里的函数,core(runner / GenerationAdapter 协议)对
 ComfyUI 的 graph/widget/object_info 一无所知。转换是「尽力适配」——认不出的非常规工作流由
@@ -111,7 +111,7 @@ def graph_to_api_prompt(ui_graph: dict[str, Any], object_info: dict[str, Any]) -
 
 
 def inject_generation_params(api_prompt: dict[str, Any], values: dict[str, Any]) -> dict[str, Any]:
-    """把 Open Studio 的 prompt/negative/seed/width/height 注入到转换出的 API prompt(就地改并返回)。
+    """把 Mosael 的 prompt/negative/seed/width/height 注入到转换出的 API prompt(就地改并返回)。
 
     自动识别:从采样器的 positive/negative 出发**递归追溯**到 CLIPTextEncode.text 写提示词——
     穿过 ControlNet/条件拼接等中间节点(优先追同名条件槽,正负不混);采样器 seed/noise_seed 写
@@ -221,7 +221,7 @@ def _describe_param(
 def extract_workflow_params(ui_graph: dict[str, Any], object_info: dict[str, Any]) -> list[dict[str, Any]]:
     """从工作流提取「可调的字面量输入」,供前端动态生成参数表单。每项含节点/输入名/类型/当前值/
     取值范围(INT/FLOAT 的 min/max/step、COMBO 的 options),并标出语义角色(prompt/negative/seed/
-    width/height)让前端把 Open Studio 的主提示词/尺寸对上去。连接来的输入(值来自上游节点)不可调,跳过。"""
+    width/height)让前端把 Mosael 的主提示词/尺寸对上去。连接来的输入(值来自上游节点)不可调,跳过。"""
     api = graph_to_api_prompt(ui_graph, object_info)
     titles: dict[str, str] = {}
     for node in ui_graph.get("nodes") or []:

@@ -58,7 +58,7 @@ export function PluginsView() {
   const qc = useQueryClient();
 
   const packages = useQuery({ queryKey: ["plugins"], queryFn: () => api<PluginPackage[]>("/api/plugins") });
-  // 插件目录由后端算、后端报:Windows 上它不是 `~/.open-studio/`,文案里写死找不到地方。
+  // 插件目录由后端算、后端报:Windows 上它不是 `~/.mosael/`,文案里写死找不到地方。
   const pluginsDir = useQuery({
     queryKey: ["plugins-dir"],
     queryFn: () => api<{ path: string }>("/api/plugins/dir"),
@@ -199,13 +199,13 @@ function ScanButton({ pending, onScan, size = "sm" }: { pending: boolean; onScan
         disabled={pending}
         onClick={onScan}
       >
-        <RefreshCcw size={13} className={pending ? "animate-openstudio-spin" : undefined} />
+        <RefreshCcw size={13} className={pending ? "animate-mosael-spin" : undefined} />
       </Button>
     );
   }
   return (
     <Button size="default" disabled={pending} onClick={onScan}>
-      <RefreshCcw size={15} className={pending ? "animate-openstudio-spin" : undefined} />
+      <RefreshCcw size={15} className={pending ? "animate-mosael-spin" : undefined} />
       {label}
     </Button>
   );

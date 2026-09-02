@@ -137,7 +137,7 @@ export class TiktokAdapter implements PublishAdapter {
     //
     // 三条都要:这个 Select 的触发器只认 pointerdown/mousedown 一类事件,单发 el.click() 打不开
     // (实测第一次跑就是这样:下拉根本没开,于是可见性停在 Everyone,被回读校验挡下)。而可信
-    // 指针点击又会被**话题联想面板**遮住(实测 hit:false,命中的是那个浮层里的 #OpenStudio),
+    // 指针点击又会被**话题联想面板**遮住(实测 hit:false,命中的是那个浮层里的 #Mosael),
     // 所以它也不能是唯一手段。
     await this.driver.pointerClickCss(this.s.visibilityTrigger).catch(async () => {
       await this.driver.dispatchFullClickCss(this.s.visibilityTrigger).catch(async () => {

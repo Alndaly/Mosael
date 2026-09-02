@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   const { locale } = await params;
   if (!isLocale(locale)) return {};
   const t = getMessages(locale).plugins;
-  return { title: `${t.title} · Open Studio`, description: t.lede };
+  return { title: `${t.title} · Mosael`, description: t.lede };
 }
 
 export default async function PluginsPage({ params }: { params: Params }) {

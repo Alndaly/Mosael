@@ -10,7 +10,7 @@ type StartupLoadingProps = {
 /**
  * 应用壳出现之前的阻塞式加载反馈。
  *
- * 品牌标记让这段等待仍然属于 Open Studio；外圈只表达「仍在工作」，不伪造无法得知的进度。
+ * 品牌标记让这段等待仍然属于 Mosael；外圈只表达「仍在工作」，不伪造无法得知的进度。
  * reduced-motion 由全局动效规则统一降级，即使不旋转，文案和 aria-busy 也仍能说明状态。
  */
 export function StartupLoading({ label, detail }: StartupLoadingProps) {
@@ -25,11 +25,9 @@ export function StartupLoading({ label, detail }: StartupLoadingProps) {
         <Loader2
           size={72}
           strokeWidth={1.25}
-          className="absolute inset-0 animate-openstudio-spin opacity-55"
+          className="absolute inset-0 animate-mosael-spin opacity-55"
         />
-        <div className="grid size-12 place-items-center rounded-2xl border border-primary/25 bg-primary/10">
-          <BrandMark size={27} />
-        </div>
+        <BrandMark size={46} className="relative block" />
       </div>
 
       <div className="grid gap-1.5">

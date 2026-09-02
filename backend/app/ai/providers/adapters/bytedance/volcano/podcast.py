@@ -103,7 +103,7 @@ def _session_payload(
 ) -> dict:
     params: dict = {
         # 调用方自取的请求标识(火山不校验其内容);改名一并跟上。
-        "input_id": "open-studio",
+        "input_id": "mosael",
         "action": int(action),
         "input_text": input_text or "",
         "prompt_text": prompt_text or "",

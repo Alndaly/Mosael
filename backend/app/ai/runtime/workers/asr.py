@@ -1,7 +1,7 @@
 """Standalone ASR worker (ported from the predecessor project's pluggable ASR layer).
 
 Runs inside the *ASR interpreter* — a Python that has funasr and/or whisperx
-installed (configured via OPEN_STUDIO_ASR_PYTHON, autodetected from a sibling
+installed (configured via MOSAEL_ASR_PYTHON, autodetected from a sibling
 a sibling checkout in dev). It must not import anything from this app at
 module level besides the standard library, so the host backend can ship it to
 a foreign interpreter.

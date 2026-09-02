@@ -1,2 +1,2 @@
-"""Open Studio backend package."""
+"""Mosael backend package."""
 

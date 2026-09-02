@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { ArrowRight, BookOpen, Puzzle, Send } from "lucide-react";
 
+import { BrandWordmark } from "@/components/brand-logo";
 import { Marquee } from "@/components/marquee";
 import { QrCards } from "@/components/qr-cards";
 import { Reveal } from "@/components/reveal";
@@ -49,6 +50,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
       <section className="border-b-2 border-ink bg-paper bg-rule bg-[size:80px_80px]">
         <div className="mx-auto max-w-[96rem] px-5 pt-20 pb-16 sm:px-8 sm:pt-28">
           <Reveal className="max-w-5xl">
+            <BrandWordmark className="mb-10 w-[min(24rem,72vw)]" priority />
             <p className="m-0 inline-flex items-center gap-2.5 border-2 border-ink bg-card px-3 py-1.5 font-mono text-xs font-bold tracking-widest uppercase">
               <span className="size-2 bg-flame" />
               {t.eyebrow}
@@ -192,6 +194,14 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
                 {t.communityTitle}
               </h2>
               <p className="m-0 max-w-(--measure) text-lg text-muted-foreground">{t.communityBody}</p>
+              <a
+                className="mt-6 inline-flex border-b-2 border-ink pb-1 font-bold transition-colors hover:border-flame hover:text-flame"
+                href={SITE.authorX}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {t.communityAuthorX}
+              </a>
             </div>
 
             <div className="mt-12 lg:col-span-7 lg:mt-0">

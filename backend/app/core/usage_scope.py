@@ -31,7 +31,7 @@ from contextlib import contextmanager
 from typing import Any, TypeVar
 
 #: 当前上下文归属的工作区;空串 = 不知道(登录、实例级配置、后台巡检等)。
-_workspace: contextvars.ContextVar[str] = contextvars.ContextVar("open_studio_usage_workspace", default="")
+_workspace: contextvars.ContextVar[str] = contextvars.ContextVar("mosael_usage_workspace", default="")
 
 T = TypeVar("T")
 

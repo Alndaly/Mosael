@@ -8,7 +8,7 @@ import type { Capability, SystemContext } from "./types";
 /**
  * 用户自定义 CSS:一个磁盘上的文件,内容注入渲染层,改一下存盘就立刻生效。
  *
- * **为什么在 userData 而不是 `~/.open-studio`。** 那个目录是**后端**的家(主库、媒体),而
+ * **为什么在 userData 而不是 `~/.mosael`。** 那个目录是**后端**的家(主库、媒体),而
  * 这个应用支持分布式部署 —— 后端可能根本不在这台机器上。把外观放过去意味着:你的个人配色
  * 住在服务器上、对该服务器的所有人生效、换台机器还不跟着你走。userData 才是客户端自己的
  * 存储(logs/ 和各账号的 Partitions/ 已经住在这儿),而外观在这个仓库里本来就是逐设备的
@@ -22,7 +22,7 @@ import type { Capability, SystemContext } from "./types";
 const FILE_NAME = "custom.css";
 
 /** 新建时写进去的模板。空文件对着一片空白无从下手,给几个真的能改的东西。 */
-const TEMPLATE = `/* Open Studio —— 自定义 CSS
+const TEMPLATE = `/* Mosael —— 自定义 CSS
  *
  * 这个文件里的样式**压过应用自带的所有样式**(它是无层级的,而且注入在最后),
  * 所以多数时候不需要 !important。存盘即生效,不用重启。
@@ -99,7 +99,7 @@ export const customCss: Capability = {
     const push = (): void => {
       const win = ctx.getWindow();
       if (!win || win.isDestroyed()) return;
-      win.webContents.send("openstudio:custom-css", readCustomCss());
+      win.webContents.send("mosael:custom-css", readCustomCss());
     };
 
     try {

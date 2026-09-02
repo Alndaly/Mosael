@@ -39,7 +39,7 @@ class Test暂存目录:
             """
             import json, os, sys
             sys.stdin.read()
-            print(json.dumps({"ok": True, "output": {"dir": os.environ.get("OPEN_STUDIO_PLUGIN_OUTPUT_DIR", "")}}))
+            print(json.dumps({"ok": True, "output": {"dir": os.environ.get("MOSAEL_PLUGIN_OUTPUT_DIR", "")}}))
             """,
         )
         scratch = tmp_path / "out"
@@ -54,7 +54,7 @@ class Test暂存目录:
             """
             import json, os, sys
             sys.stdin.read()
-            print(json.dumps({"ok": True, "output": {"has": "OPEN_STUDIO_PLUGIN_OUTPUT_DIR" in os.environ}}))
+            print(json.dumps({"ok": True, "output": {"has": "MOSAEL_PLUGIN_OUTPUT_DIR" in os.environ}}))
             """,
         )
         assert execute_tool(*plugin, "x", {}).output["has"] is False
@@ -316,7 +316,7 @@ class Test端到端:
                 """
                 import json, os, sys
                 sys.stdin.read()
-                out = os.environ["OPEN_STUDIO_PLUGIN_OUTPUT_DIR"]
+                out = os.environ["MOSAEL_PLUGIN_OUTPUT_DIR"]
                 with open(os.path.join(out, "pulled.txt"), "w") as f:
                     f.write("从网盘拉下来的字节")
                 print(json.dumps({"ok": True, "output": {"artifact": {"path": "pulled.txt"}, "quota": "9GB"}}))
@@ -331,7 +331,7 @@ class Test端到端:
             "runtime": {"kind": "process", "entry": "main.py"},
             "tools": {"declare": [{"name": "pull", "description": "拉一个文件"}], "expose": "all"},
         }
-        (plugin_dir / "open-studio.plugin.json").write_text(_json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+        (plugin_dir / "mosael.plugin.json").write_text(_json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
 
         with SessionLocal() as db:
             package = PluginPackage(

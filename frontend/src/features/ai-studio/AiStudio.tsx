@@ -1295,7 +1295,7 @@ function GenerationTurn({
           <GenerationFailureCard error={job?.error ?? ""} />
         ) : (
           <span className="inline-flex items-center gap-1.5 py-2 text-ui-sm text-muted-foreground">
-            <Loader2 size={13} className="animate-openstudio-spin" /> {status === "running" ? t("generating") : t("genQueued")}
+            <Loader2 size={13} className="animate-mosael-spin" /> {status === "running" ? t("generating") : t("genQueued")}
           </span>
         )}
         <small className="flex flex-wrap items-center gap-2 justify-self-start text-ui-xs text-muted-foreground [&_span+span:before]:mr-2 [&_span+span:before]:content-['·']">

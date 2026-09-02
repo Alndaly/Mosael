@@ -6,7 +6,7 @@ import { setApiLocale } from "@/api/client";
 type Theme = "light" | "dark" | "system";
 type Locale = "zh-CN" | "en-US";
 
-const STORAGE_KEY = "openstudio.preferences";
+const STORAGE_KEY = "mosael.preferences";
 
 
 

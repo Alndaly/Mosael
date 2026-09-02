@@ -529,7 +529,7 @@ def _resolve_python(engine: str) -> str:
         probe = run_logged([str(python), "-c", f"import {engine}"], capture_output=True, timeout=120, what="转写引擎探测", level=logging.DEBUG)
         if probe.returncode == 0:
             return str(python)
-    raise RuntimeError(f"未找到安装了 {engine} 的 Python 解释器,请设置 OPEN_STUDIO_ASR_PYTHON")
+    raise RuntimeError(f"未找到安装了 {engine} 的 Python 解释器,请设置 MOSAEL_ASR_PYTHON")
 
 
 def ensure_engine_runtime(engine: str, *, progress_key: str | None = None) -> None:

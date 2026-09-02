@@ -17,7 +17,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   const { locale } = await params;
   if (!isLocale(locale)) return {};
   const t = getMessages(locale).workflows;
-  return { title: `${t.title} · Open Studio`, description: t.lede };
+  return { title: `${t.title} · Mosael`, description: t.lede };
 }
 
 export default async function WorkflowsPage({ params }: { params: Params }) {

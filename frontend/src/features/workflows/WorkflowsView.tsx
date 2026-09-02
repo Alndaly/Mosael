@@ -501,7 +501,7 @@ const FIELD_BOX =
   "[&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none";
 
 /** 助手面板的开合记忆。 */
-const AGENT_PANEL_KEY = "openstudio:workflow-agent-open";
+const AGENT_PANEL_KEY = "mosael:workflow-agent-open";
 
 const NODE_COMPONENT_TYPES = { wf: WfNode };
 
@@ -602,14 +602,14 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   const [menuRenaming, setMenuRenaming] = React.useState<Workflow | null>(null);
   const [menuDeleting, setMenuDeleting] = React.useState<Workflow | null>(null);
 
-  // 通知/任务中心深链(openstudio:open-* 事件通道):直接选中对应工作流。
+  // 通知/任务中心深链(mosael:open-* 事件通道):直接选中对应工作流。
   React.useEffect(() => {
     const onOpenWorkflow = (event: Event) => {
       const id = (event as CustomEvent<string>).detail;
       if (typeof id === "string" && id) setSelectedId(id);
     };
-    window.addEventListener("openstudio:open-workflow", onOpenWorkflow);
-    return () => window.removeEventListener("openstudio:open-workflow", onOpenWorkflow);
+    window.addEventListener("mosael:open-workflow", onOpenWorkflow);
+    return () => window.removeEventListener("mosael:open-workflow", onOpenWorkflow);
   }, []);
 
   const workflows = useQuery({
@@ -642,11 +642,11 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
       void qc.invalidateQueries({ queryKey: ["workflows", workspace.id] });
     },
   });
-  // 导出:取后端信封(格式/版本权威在后端)→ 落成 .openstudio-workflow.json 文件。
+  // 导出:取后端信封(格式/版本权威在后端)→ 落成 .mosael-workflow.json 文件。
   const menuExport = useMutation({
     mutationFn: async (workflow: Workflow) => {
       const envelope = await exportWorkflowFile(workflow.id);
-      saveJsonToDisk(`${workflow.name}.openstudio-workflow.json`, envelope);
+      saveJsonToDisk(`${workflow.name}.mosael-workflow.json`, envelope);
     },
     onError: (error: Error) => toast.error(t("wfExportFailed"), { description: error.message }),
   });
@@ -1166,12 +1166,12 @@ function WorkflowEditor({
   const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(null);
   const [renaming, setRenaming] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
-  // 导出走后端信封(格式和版本的权威在后端),落成 .openstudio-workflow.json —— 和列表页
+  // 导出走后端信封(格式和版本的权威在后端),落成 .mosael-workflow.json —— 和列表页
   // 右键那条是同一个函数,不另写一份:两份迟早会在文件名或格式上分叉。
   const exportFile = useMutation({
     mutationFn: async () => {
       const envelope = await exportWorkflowFile(workflow.id);
-      saveJsonToDisk(`${workflow.name}.openstudio-workflow.json`, envelope);
+      saveJsonToDisk(`${workflow.name}.mosael-workflow.json`, envelope);
     },
     onError: (error: Error) => toast.error(t("wfExportFailed"), { description: error.message }),
   });
@@ -1777,7 +1777,7 @@ function WorkflowEditor({
       contextLine={t("wfAgentContext").replace("{id}", workflow.id).replace("{name}", workflow.name)}
       emptyHint={t("wfAgentEmpty")}
       placeholder={t("wfAgentPlaceholder")}
-      rectKey="openstudio.wf.agent.rect.v2"
+      rectKey="mosael.wf.agent.rect.v2"
       workspaceId={workflow.workspace_id}
       mode={agentMode}
       onModeChange={setAgentMode}
@@ -2274,7 +2274,7 @@ function WorkflowEditor({
               <span className="grid justify-items-center gap-2 rounded-lg border-2 border-dashed border-primary px-6 py-4 text-ui-md font-semibold text-primary">
                 {dropUpload.isPending ? (
                   <>
-                    <Loader2 size={20} className="animate-openstudio-spin" />
+                    <Loader2 size={20} className="animate-mosael-spin" />
                     {t("mediaDropUploading")}
                   </>
                 ) : (

@@ -56,7 +56,7 @@ def test_it_actually_runs_and_stays_isolated() -> None:
     import tempfile
     from pathlib import Path
 
-    with tempfile.NamedTemporaryFile(dir=Path.home(), prefix=".openstudio-sentinel-", suffix=".txt") as sentinel:
+    with tempfile.NamedTemporaryFile(dir=Path.home(), prefix=".mosael-sentinel-", suffix=".txt") as sentinel:
         sentinel.write(b"host-only-secret")
         sentinel.flush()
         blocked = run_python(

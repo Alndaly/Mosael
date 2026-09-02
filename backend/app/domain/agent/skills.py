@@ -10,7 +10,7 @@ from app.db.models import PluginInstance
 
 CORE_SKILLS = [
     {
-        "id": "open-studio.assets",
+        "id": "mosael.assets",
         "name": "Assets",
         "description": "Import, list, and inspect media assets.",
         "source": "core",
@@ -21,7 +21,7 @@ CORE_SKILLS = [
         "permissions": ["assets:read", "assets:write"],
     },
     {
-        "id": "open-studio.sequences",
+        "id": "mosael.sequences",
         "name": "Sequences",
         "description": "Create timelines and apply edit operations.",
         "source": "core",
@@ -36,7 +36,7 @@ CORE_SKILLS = [
         "permissions": ["sequence:read", "sequence:write"],
     },
     {
-        "id": "open-studio.ai_generation",
+        "id": "mosael.ai_generation",
         "name": "AI Generation",
         "description": "Create image and video generation jobs across configured providers, and optimize an image prompt for a target platform's conventions.",
         "source": "core",
@@ -48,7 +48,7 @@ CORE_SKILLS = [
         "permissions": ["generation:read", "generation:write"],
     },
     {
-        "id": "open-studio.scheduler",
+        "id": "mosael.scheduler",
         "name": "Scheduler",
         "description": "Create scheduled tasks and run them on demand.",
         "source": "core",
@@ -59,7 +59,7 @@ CORE_SKILLS = [
         "permissions": ["scheduler:read", "scheduler:write"],
     },
     {
-        "id": "open-studio.plugins",
+        "id": "mosael.plugins",
         "name": "Plugins",
         "description": "Scan plugins, list enabled tools, and record plugin invocations.",
         "source": "core",

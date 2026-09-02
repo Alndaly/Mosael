@@ -136,7 +136,7 @@ function MediaPreview({ assetId, gallery }: { assetId: string; gallery?: ImagePr
   if (asset.isLoading) {
     return (
       <div className="m-0 flex max-w-[240px] items-center gap-1.5 rounded-lg border border-border bg-muted px-2.5 py-2 text-ui-xs text-muted-foreground">
-        <Loader2 size={13} className="animate-openstudio-spin" />
+        <Loader2 size={13} className="animate-mosael-spin" />
       </div>
     );
   }
@@ -295,7 +295,7 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
             {/* 图标显式带 size-3:Marker 会把没有 size- 类的 svg 统一撑到 16px,
                 而这一行的节奏是按 12px 图标定的。 */}
             {tool.status === "running" ? (
-              <Loader2 className="size-3 animate-openstudio-spin" />
+              <Loader2 className="size-3 animate-mosael-spin" />
             ) : tool.status === "error" ? (
               <CircleAlert className="size-3" />
             ) : (
@@ -460,7 +460,7 @@ function ThinkingBlock({ text, done }: { text: string; done?: boolean }) {
           {/* 图标显式带 size-3:Marker 会把没有 size- 类的 svg 统一撑到 16px,
               而这一行的节奏是按 12px 图标定的(同 ToolCallCard)。 */}
           <MarkerIcon className="inline-flex items-center justify-center">
-            {done ? <Brain className="size-3" /> : <Loader2 className="size-3 animate-openstudio-spin" />}
+            {done ? <Brain className="size-3" /> : <Loader2 className="size-3 animate-mosael-spin" />}
           </MarkerIcon>
           <MarkerContent className="flex min-w-0 flex-1 items-baseline gap-1.5">
             <span className="flex-none">{done ? t("agentThought") : t("agentThinking")}</span>

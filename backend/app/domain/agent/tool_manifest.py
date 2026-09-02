@@ -65,7 +65,7 @@ def _plugin_tool_specs(db: Any, user_id: str | None = None) -> list[ToolSpec]:
         ToolSpec(
             name=agent_tool_name(tool["instance_id"], tool["name"]),
             # 标明出处:模型据此知道这不是内置能力,失败时该建议用户去插件页看,而不是
-            # 以为 Open Studio 自己坏了。实例名(「TikHub · 哔哩哔哩」)也就在这里起作用 ——
+            # 以为 Mosael 自己坏了。实例名(「TikHub · 哔哩哔哩」)也就在这里起作用 ——
             # 同名工具来自不同连接时,模型靠它分辨。
             description=f"[插件·{tool['instance_name']}] {tool['description']}".strip(),
             parameters=tool["input_schema"] or {"type": "object", "properties": {}},

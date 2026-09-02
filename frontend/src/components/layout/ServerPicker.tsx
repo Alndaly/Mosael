@@ -108,7 +108,7 @@ export function ServerPicker() {
           disabled={testing || (mode === "remote" && !url.trim())}
           onClick={() => void apply(false)}
         >
-          {testing ? <Loader2 size={13} className="animate-openstudio-spin" /> : null}{" "}
+          {testing ? <Loader2 size={13} className="animate-mosael-spin" /> : null}{" "}
           {mode === "local" ? t("serverConnectLocal") : t("serverConnect")}
         </Button>
         {failed && mode === "remote" && (

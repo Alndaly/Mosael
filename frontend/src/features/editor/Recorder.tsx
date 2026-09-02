@@ -35,8 +35,8 @@ export function Recorder({
   // 这么来的),必须能换。选择记进 localStorage,下次直接沿用。
   const [mics, setMics] = React.useState<MediaDeviceInfo[]>([]);
   const [cameras, setCameras] = React.useState<MediaDeviceInfo[]>([]);
-  const [micId, setMicId] = React.useState<string>(() => localStorage.getItem("openstudio.recorder.mic") ?? "");
-  const [cameraId, setCameraId] = React.useState<string>(() => localStorage.getItem("openstudio.recorder.camera") ?? "");
+  const [micId, setMicId] = React.useState<string>(() => localStorage.getItem("mosael.recorder.mic") ?? "");
+  const [cameraId, setCameraId] = React.useState<string>(() => localStorage.getItem("mosael.recorder.camera") ?? "");
   const [level, setLevel] = React.useState(0); // 0-1 实时输入电平(有声音才有柱,哑设备当场现形)
   const audioCtxRef = React.useRef<AudioContext | null>(null);
   const levelRafRef = React.useRef<number | null>(null);
@@ -248,7 +248,7 @@ export function Recorder({
                   onValueChange={(next) => {
                     const id = next === "default" ? "" : next;
                     setCameraId(id);
-                    localStorage.setItem("openstudio.recorder.camera", id);
+                    localStorage.setItem("mosael.recorder.camera", id);
                   }}
                   disabled={recording}
                 >
@@ -271,7 +271,7 @@ export function Recorder({
                 onValueChange={(next) => {
                   const id = next === "default" ? "" : next;
                   setMicId(id);
-                  localStorage.setItem("openstudio.recorder.mic", id);
+                  localStorage.setItem("mosael.recorder.mic", id);
                 }}
                 disabled={recording}
               >

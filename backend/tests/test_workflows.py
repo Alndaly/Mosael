@@ -993,7 +993,7 @@ def test_workflow_export_import_roundtrip() -> None:
     assert res.status_code == 200
     assert "attachment" in res.headers["content-disposition"]
     envelope = res.json()
-    assert envelope["format"] == "openstudio-workflow" and envelope["version"] == 1
+    assert envelope["format"] == "mosael-workflow" and envelope["version"] == 1
     assert envelope["name"] == "出海流程"
     assert envelope["graph"] == linear_graph()
 
@@ -1016,8 +1016,25 @@ def test_workflow_export_writes_the_current_format() -> None:
         "/api/workflows", json={"workspace_id": ws["id"], "name": "x", "graph": linear_graph()}
     ).json()
     res = client.get(f"/api/workflows/{created['id']}/export")
-    assert res.json()["format"] == "openstudio-workflow"
-    assert "openstudio-workflow.json" in res.headers["content-disposition"]
+    assert res.json()["format"] == "mosael-workflow"
+    assert "mosael-workflow.json" in res.headers["content-disposition"]
+
+
+def test_workflow_import_accepts_pre_mosael_exports() -> None:
+    """The rename must not strand workflow files exported by an earlier installation."""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    legacy = {
+        "format": "openstudio-workflow",
+        "version": 1,
+        "name": "Legacy workflow",
+        "graph": linear_graph(),
+    }
+
+    response = client.post("/api/workflows/import", json={"workspace_id": ws["id"], "data": legacy})
+
+    assert response.status_code == 200
+    assert response.json()["name"] == "Legacy workflow"
 
 
 def test_workflow_import_rejects_bad_files() -> None:
@@ -1028,19 +1045,19 @@ def test_workflow_import_rejects_bad_files() -> None:
     assert client.post("/api/workflows/import", json={"workspace_id": ws["id"], "data": {"format": "other"}}).status_code == 422
     assert (
         client.post(
-            "/api/workflows/import", json={"workspace_id": ws["id"], "data": {"format": "openstudio-workflow", "version": 1}}
+            "/api/workflows/import", json={"workspace_id": ws["id"], "data": {"format": "mosael-workflow", "version": 1}}
         ).status_code
         == 422
     )
 
     # 版本过新
-    too_new = {"format": "openstudio-workflow", "version": 99, "name": "x", "graph": {"nodes": [], "edges": []}}
+    too_new = {"format": "mosael-workflow", "version": 99, "name": "x", "graph": {"nodes": [], "edges": []}}
     res = client.post("/api/workflows/import", json={"workspace_id": ws["id"], "data": too_new})
     assert res.status_code == 422 and "版本" in res.json()["detail"]
 
     # 未知节点类型(伪造的新版文件)→ 明确报错而不是落一个坏图
     unknown_node = {
-        "format": "openstudio-workflow",
+        "format": "mosael-workflow",
         "version": 1,
         "name": "x",
         "graph": {"nodes": [{"id": "n1", "type": "not-a-node", "config": {}}], "edges": []},

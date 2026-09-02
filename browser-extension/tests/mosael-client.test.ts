@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { OpenStudioClient } from "../src/openstudio/client";
+import { MosaelClient } from "../src/mosael/client";
 
 
 function json(body: unknown, status = 200): Response {
@@ -10,7 +10,7 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-describe("OpenStudioClient", () => {
+describe("MosaelClient", () => {
   it("keeps the native fetch receiver when no custom fetcher is supplied", async () => {
     const nativeLikeFetch = vi.fn(function (this: unknown) {
       if (this !== globalThis) throw new TypeError("Illegal invocation");
@@ -18,7 +18,7 @@ describe("OpenStudioClient", () => {
     });
     vi.stubGlobal("fetch", nativeLikeFetch);
 
-    const client = new OpenStudioClient({ baseUrl: "http://127.0.0.1:8800" });
+    const client = new MosaelClient({ baseUrl: "http://127.0.0.1:8800" });
     await client.login("demo", "secret");
 
     expect(nativeLikeFetch).toHaveBeenCalledOnce();
@@ -27,7 +27,7 @@ describe("OpenStudioClient", () => {
 
   it("revokes the stored backend session when disconnecting", async () => {
     const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => json({ ok: true }));
-    const client = new OpenStudioClient({ baseUrl: "http://127.0.0.1:8800", token: "session", fetcher });
+    const client = new MosaelClient({ baseUrl: "http://127.0.0.1:8800", token: "session", fetcher });
 
     await client.logout();
 
@@ -43,7 +43,7 @@ describe("OpenStudioClient", () => {
       const request = JSON.parse(String(init?.body));
       return json({ translations: request.texts.map((value: string) => `T:${value}`) });
     });
-    const client = new OpenStudioClient({ baseUrl: "http://127.0.0.1:8800", token: "session", fetcher });
+    const client = new MosaelClient({ baseUrl: "http://127.0.0.1:8800", token: "session", fetcher });
     const texts = Array.from({ length: 620 }, (_, index) => `cue-${index}`);
 
     const translations = await client.translate("workspace", texts, "en");
@@ -58,7 +58,7 @@ describe("OpenStudioClient", () => {
 
   it("imports exactly the current page as one video job", async () => {
     const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => json({ id: "job-1", status: "queued" }));
-    const client = new OpenStudioClient({ baseUrl: "http://127.0.0.1:8800/", token: "session", fetcher });
+    const client = new MosaelClient({ baseUrl: "http://127.0.0.1:8800/", token: "session", fetcher });
 
     await client.importVideo("workspace", "project", "https://www.youtube.com/watch?v=abc", "A video");
 
@@ -76,7 +76,7 @@ describe("OpenStudioClient", () => {
 
   it("asks the backend yt-dlp registry about custom-player pages", async () => {
     const fetcher = vi.fn(async (_input: RequestInfo | URL) => json({ supported: true, extractor: "vimeo" }));
-    const client = new OpenStudioClient({ baseUrl: "http://127.0.0.1:8800", token: "session", fetcher });
+    const client = new MosaelClient({ baseUrl: "http://127.0.0.1:8800", token: "session", fetcher });
 
     await expect(client.supportsVideoUrl("workspace", "https://vimeo.com/76979871")).resolves.toEqual({
       supported: true,
@@ -117,7 +117,7 @@ describe("OpenStudioClient", () => {
       }
       return json({ detail: "unexpected request" }, 404);
     });
-    const client = new OpenStudioClient({ baseUrl: "http://127.0.0.1:8800", token: "session", fetcher });
+    const client = new MosaelClient({ baseUrl: "http://127.0.0.1:8800", token: "session", fetcher });
 
     const generated = await client.generateTranscriptFromVideo({
       workspaceId: "workspace",
@@ -162,7 +162,7 @@ describe("OpenStudioClient", () => {
       language: "ja",
       segments: [{ start_time: 2, end_time: 4, text: "既存の字幕。", tokens: [] }],
     }));
-    const client = new OpenStudioClient({ baseUrl: "http://127.0.0.1:8800", token: "session", fetcher });
+    const client = new MosaelClient({ baseUrl: "http://127.0.0.1:8800", token: "session", fetcher });
 
     const transcript = await client.findTranscriptFromVideo(
       "workspace",
@@ -181,14 +181,14 @@ describe("OpenStudioClient", () => {
 
   it("treats a missing previously generated transcript as a cache miss", async () => {
     const fetcher = vi.fn(async () => json({ detail: "Transcript not found" }, 404));
-    const client = new OpenStudioClient({ baseUrl: "http://127.0.0.1:8800", token: "session", fetcher });
+    const client = new MosaelClient({ baseUrl: "http://127.0.0.1:8800", token: "session", fetcher });
 
     await expect(client.findTranscriptFromVideo("workspace", "https://example.com/video")).resolves.toBeNull();
   });
 
   it("uploads a captured frame through the normal asset import seam", async () => {
     const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => json({ id: "asset-1" }));
-    const client = new OpenStudioClient({ baseUrl: "http://127.0.0.1:8800", token: "session", fetcher });
+    const client = new MosaelClient({ baseUrl: "http://127.0.0.1:8800", token: "session", fetcher });
 
     await client.uploadFrame("workspace", null, "frame-12.3.png", new Blob(["png"], { type: "image/png" }));
 

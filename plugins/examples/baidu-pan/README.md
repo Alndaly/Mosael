@@ -43,7 +43,7 @@ md5 是流式算的,不整个载进内存 —— 上传的常常是几个 G 的�
 
 1. 去 [百度网盘开放平台](https://pan.baidu.com/union) 注册一个应用,拿到 AppKey / SecretKey
 2. 走一次 OAuth 拿到 `refresh_token`(有效期 10 年)
-3. 在 Open Studio 的插件页接入这个包,把这三样填进去
+3. 在 Mosael 的插件页接入这个包,把这三样填进去
 
 「Access Token」那一栏**留空即可** —— 插件会用 refresh_token 自己换。
 

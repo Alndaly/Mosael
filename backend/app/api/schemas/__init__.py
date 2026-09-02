@@ -1690,7 +1690,7 @@ class AgentMessageOut(OrmModel):
 
 class FeishuBotCreate(BaseModel):
     workspace_id: str
-    name: str = Field(default="Open Studio 助手", max_length=160)
+    name: str = Field(default="Mosael 助手", max_length=160)
     app_id: str = Field(min_length=1, max_length=120)
     app_secret: str = Field(min_length=1, max_length=200)
     capability: str = Field(default="editor", pattern="^(readonly|editor|full)$")

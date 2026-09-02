@@ -11,4 +11,13 @@ import "@/design/tokens.css";
 import "./styles.css";
 import { App } from "@/app/App";
 
+// One release-time bridge: keep local UI preferences and sessions from pre-Mosael installs.
+for (const key of Object.keys(window.localStorage)) {
+  if (!key.startsWith("openstudio") && !key.startsWith("open-studio")) continue;
+  const nextKey = key.replace(/^openstudio/, "mosael").replace(/^open-studio/, "mosael");
+  if (window.localStorage.getItem(nextKey) === null) {
+    window.localStorage.setItem(nextKey, window.localStorage.getItem(key) ?? "");
+  }
+}
+
 createRoot(document.getElementById("root")!).render(<App />);

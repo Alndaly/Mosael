@@ -123,7 +123,7 @@ class _DarwinSandbox:
     def run(self, payload: bytes, timeout: float) -> Attempt:
         import sys
 
-        with tempfile.TemporaryDirectory(prefix="open-studio-sandbox-") as scratch:
+        with tempfile.TemporaryDirectory(prefix="mosael-sandbox-") as scratch:
             profile = Path(scratch) / "policy.sb"
             # 解释器自己往往就装在 home 底下(venv、pyenv、homebrew --user)。挡住整个 home
             # 会连它都读不到,所以**逐条放行解释器自己的目录** —— 放行的是 Python 安装,

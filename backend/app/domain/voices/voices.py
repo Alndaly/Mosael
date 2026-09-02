@@ -581,7 +581,7 @@ def _run_synthesis_body(
             # 把**这次要跑的解释器**交出去:torchcodec 的 FFmpeg 库路径按那个 venv 里装的版本定,
             # 而不同引擎的 venv 装的 torchcodec 可以不是一个版本。
             worker_env = tts_models._worker_env(python)
-            with tempfile.TemporaryDirectory(prefix="open-studio-tts-") as tmp:
+            with tempfile.TemporaryDirectory(prefix="mosael-tts-") as tmp:
                 out_wav = Path(tmp) / "speech.wav"
                 request = {
                     "action": "synthesize",
@@ -706,7 +706,7 @@ def _synthesize_remote(
         model=model,
         base_url=(profile.base_url if profile else "") or "",
     )
-    with tempfile.TemporaryDirectory(prefix="open-studio-tts-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="mosael-tts-") as tmp:
         # 火山与 Edge 产出 mp3;其余(OpenAI 家族)按请求要的 wav 落盘。
         out = Path(tmp) / ("speech.mp3" if engine in {"volcano", "edge"} else "speech.wav")
         # 语音合成此前一条账都不记。各家 TTS 普遍按**字符**计费,所以计量是字符数而不是 token
@@ -839,7 +839,7 @@ def _run_podcast_body(
         token = (profile.api_key if profile else None) or ""
         appid = str((profile.extra if profile else {}).get("appid") or "")
 
-        with tempfile.TemporaryDirectory(prefix="open-studio-podcast-") as tmp:
+        with tempfile.TemporaryDirectory(prefix="mosael-podcast-") as tmp:
             out = Path(tmp) / "podcast.mp3"
             with billable(
                 db,

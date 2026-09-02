@@ -30,7 +30,7 @@ from app.ai.runtime import workers
 logger = logging.getLogger(__name__)
 
 #: 协议行的前缀。子进程的其它输出一律当日志。
-EVENT_PREFIX = "@@OPEN-STUDIO-TTS "
+EVENT_PREFIX = "@@MOSAEL-TTS "
 
 WORKER_PATH = workers.tts_script()
 
@@ -249,7 +249,7 @@ class WorkerPool:
                 return worker
             if worker:
                 logger.info("%s 的合成进程已经不在了,重新起一个", engine)
-            # env 在**起进程时**定下:fish 靠 OPEN_STUDIO_FISH_* 找检出和权重。配置改了之后
+            # env 在**起进程时**定下:fish 靠 MOSAEL_FISH_* 找检出和权重。配置改了之后
             # 常驻进程会抱着旧 env 不放,所以设置页保存时调 shutdown() 让它重起(见 routes/voices)。
             worker = _Worker(engine, python, self._worker_path, env)
             self._workers[(engine, python)] = worker

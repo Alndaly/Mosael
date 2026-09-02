@@ -36,7 +36,7 @@ from app.domain.plugins import media_bridge
 logger = logging.getLogger(__name__)
 
 #: 插件写产出文件的地方。目录由后端建、用完就删,路径经环境变量告诉插件。
-SCRATCH_ENV = "OPEN_STUDIO_PLUGIN_OUTPUT_DIR"
+SCRATCH_ENV = "MOSAEL_PLUGIN_OUTPUT_DIR"
 
 #: 一份产出最大多少。不是怕慢,是怕**一个跑飞的插件把磁盘写满** —— 那时候整个应用都动不了,
 #: 而现象和插件毫无关系(渲染失败、数据库写不进去)。
@@ -50,7 +50,7 @@ class ArtifactError(RuntimeError):
 
 
 def make_scratch_dir() -> Path:
-    return Path(tempfile.mkdtemp(prefix="open-studio-plugin-out-"))
+    return Path(tempfile.mkdtemp(prefix="mosael-plugin-out-"))
 
 
 def cleanup_scratch_dir(path: Path | None) -> None:

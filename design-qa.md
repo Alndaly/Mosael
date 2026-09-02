@@ -1,4 +1,4 @@
-# OpenStudio design QA log
+# Mosael design QA log
 
 ## Modal visual QA
 
@@ -12,8 +12,8 @@
   - `/var/folders/yw/0kg9jbhj3xx00gq05_14d1lw0000gn/T/TemporaryItems/NSIRD_screencaptureui_Qxi1LN/Screenshot 2026-09-01 at 19.36.43.png` (992×1434)
   - `/var/folders/yw/0kg9jbhj3xx00gq05_14d1lw0000gn/T/TemporaryItems/NSIRD_screencaptureui_aQJTEQ/Screenshot 2026-09-01 at 18.55.53.png` (3456×2234)
 - Browser-rendered implementation:
-  - `/tmp/openstudio-modal-qa/command.png` (1280×720, deviceScaleFactor 1)
-  - `/tmp/openstudio-modal-qa/recorder.png` (1280×720, deviceScaleFactor 1)
+  - `/tmp/mosael-modal-qa/command.png` (1280×720, deviceScaleFactor 1)
+  - `/tmp/mosael-modal-qa/recorder.png` (1280×720, deviceScaleFactor 1)
   - `output/playwright/editor-upload-voice-dialog.png`
   - `output/playwright/editor-from-speaker-dialog.png`
   - `output/playwright/editor-voice-empty-state-full.png`
@@ -30,6 +30,49 @@
   - Provider editing now shows `百炼 API Endpoint` with protocol-specific help and omits the create-only initial-model field; the browser snapshot verifies the AI Video entry point rather than only the chat settings page.
 - Focused region: the modal surfaces and footer were isolated because the requested changes concern only layering and alignment, not the surrounding media grid.
 - Console/runtime check: production TypeScript/Vite build passed; targeted DOM tests passed.
+
+final result: passed
+
+---
+
+## Mosael brand migration
+
+### Visual truth and rendered evidence
+
+- Light icon source: `/Users/kinda/Desktop/Codex Image Sep 2, 2026, 02_55_47 PM.png` (`1254 × 1254`).
+- Dark icon source: `/Users/kinda/Desktop/Codex Image Sep 2, 2026, 02_55_42 PM.png` (`1254 × 1254`).
+- Wordmark source: `/Users/kinda/Desktop/Codex Image Sep 2, 2026, 02_55_38 PM.png` (`2172 × 724`).
+- Light website: `docs/media/design-qa/mosael-brand/website-light-final.jpg`.
+- Dark website: `docs/media/design-qa/mosael-brand/website-dark-final.jpg`.
+- Dark app login: `docs/media/design-qa/mosael-brand/app-dark-final.jpg`.
+- Author-link/footer state: `docs/media/design-qa/mosael-brand/website-footer-light.jpg`.
+- Combined source/implementation comparison: `docs/media/design-qa/mosael-brand/brand-comparison.png`.
+
+The website and app captures use a `1280 × 720` CSS viewport. Browser capture normalized the output to `1280 × 720` pixels. The combined comparison places all three supplied assets above the corresponding light website, dark website, and app states, so icon shape, color treatment, wordmark, and theme choice can be judged in one view.
+
+### Findings
+
+No actionable P0, P1, or P2 findings remain.
+
+- Asset fidelity: the supplied raster artwork is used directly. No traced SVG, CSS approximation, or redrawn mark was introduced.
+- Theme behavior: the pale icon is visible in light UI; the dark, luminous icon is visible in dark UI. Both keep their native aspect ratio and resolution.
+- Brand hierarchy: the wordmark anchors the README, website hero, and footer. Compact app surfaces use the icon so labels and controls retain enough room.
+- Copy and voice: the Chinese and English hero, README, login, closing CTA, and footer now share one idea—“让灵感落进时间线 / Where ideas find their timeline.” Supporting copy speaks in user tasks rather than architecture jargon.
+- Author identity: `https://x.com/KindaHuax` appears in both READMEs, the website community section, footer, About, and Contact pages.
+- Interaction and layout: light/dark switching preserves the mark, hero hierarchy, navigation, CTA layout, and responsive flow. The footer X links resolve to the requested URL.
+
+### Comparison history
+
+1. The first website render passed the assets through the Next image optimizer, which returned `400` for the supplied PNGs; the header and wordmark appeared broken (P1). Brand images were changed to direct, unoptimized delivery and rechecked.
+2. The first app login render still used the previous generic film glyph in one auth state (P2). It was replaced with the shared theme-aware `BrandMark` and rechecked.
+3. The final pass added a friendlier bilingual brand voice and the author X touchpoints. The production website build and browser-rendered light, dark, and footer states show no clipping, broken assets, or new layout regressions.
+
+### Verification
+
+- `pnpm --dir website build` — 55 static pages generated successfully.
+- `pnpm --dir frontend exec vitest run` — 129 files and 818 tests passed.
+- `pnpm --dir frontend build` — TypeScript and Vite production build passed.
+- Browser checks confirmed the expected theme class, real `1254px`/`2172px` source dimensions, updated brand copy, and two visible author-X destinations.
 
 final result: passed
 
@@ -77,8 +120,8 @@ final result: passed
 ### Comparison target
 
 - Source visual truth: `/var/folders/yw/0kg9jbhj3xx00gq05_14d1lw0000gn/T/TemporaryItems/NSIRD_screencaptureui_OKxCRA/Screenshot 2026-09-02 at 00.14.42.png`.
-- Browser-rendered implementation: `/tmp/openstudio-design-qa/startup-loading-implementation-1728x1117.png`.
-- Combined source/implementation comparison: `/tmp/openstudio-design-qa/startup-loading-comparison.png`.
+- Browser-rendered implementation: `/tmp/mosael-design-qa/startup-loading-implementation-1728x1117.png`.
+- Combined source/implementation comparison: `/tmp/mosael-design-qa/startup-loading-comparison.png`.
 - State: initial authentication boot with an intentionally reachable-but-non-responsive backend, so the loading state remains visible without changing production timing.
 
 ### Viewport and normalization
@@ -97,7 +140,7 @@ No actionable P0/P1/P2 findings remain in the requested startup state.
 - Colors and visual tokens: the mark, ring, foreground, muted foreground, border, and surface use existing semantic tokens. The light implementation capture verifies contrast; dark rendering follows the same already-established token pairs visible in the source application.
 - Image quality and asset fidelity: no raster image or approximation was introduced. The existing vector `BrandMark` and the application's standard Lucide loading icon are reused.
 - Copy and content: the state now distinguishes backend connection from the later workspace restoration phase. Both Chinese and English messages are present.
-- Accessibility and motion: the cluster exposes `role=status`, `aria-live=polite`, and `aria-busy=true`. The standard OpenStudio spinner is covered by the repository-wide `prefers-reduced-motion` override, while the textual status remains understandable without motion.
+- Accessibility and motion: the cluster exposes `role=status`, `aria-live=polite`, and `aria-busy=true`. The standard Mosael spinner is covered by the repository-wide `prefers-reduced-motion` override, while the textual status remains understandable without motion.
 
 ### Full-view and focused-region evidence
 
@@ -124,9 +167,9 @@ final result: passed
 
 - Source visual truth: `/var/folders/yw/0kg9jbhj3xx00gq05_14d1lw0000gn/T/TemporaryItems/NSIRD_screencaptureui_C8rYpV/Screenshot 2026-09-01 at 23.57.43.png`
 - Browser-rendered implementation: the authenticated editor is an Electron-only state; the in-app browser reached the unauthenticated login screen and was not used as visual evidence.
-- Implementation screenshot: `/var/folders/yw/0kg9jbhj3xx00gq05_14d1lw0000gn/T/com.openai.sky.CUAService/Open Studio Screenshot 2026-09-01 at 11.59.57 PM.jpeg`
-- Focused implementation crop: `/tmp/openstudio-design-qa/transcript-row-implementation.png`
-- Combined source/implementation comparison: `/tmp/openstudio-design-qa/transcript-row-comparison.png`
+- Implementation screenshot: `/var/folders/yw/0kg9jbhj3xx00gq05_14d1lw0000gn/T/com.openai.sky.CUAService/Mosael Screenshot 2026-09-01 at 11.59.57 PM.jpeg`
+- Focused implementation crop: `/tmp/mosael-design-qa/transcript-row-implementation.png`
+- Combined source/implementation comparison: `/tmp/mosael-design-qa/transcript-row-comparison.png`
 - State: dark theme, editor transcript panel, multiple detected speakers, long sentence wrapping to a second line, row actions at rest.
 
 ### Viewport and normalization
@@ -154,7 +197,7 @@ The full Electron capture shows the transcript panel in its actual authenticated
 
 ### Focused-region comparison evidence
 
-The combined comparison at `/tmp/openstudio-design-qa/transcript-row-comparison.png` places the user's reported row above the revised rendered row. The revised row removes the oversized body line box, aligns left metadata to the first text line, and hides the action rail in the resting state.
+The combined comparison at `/tmp/mosael-design-qa/transcript-row-comparison.png` places the user's reported row above the revised rendered row. The revised row removes the oversized body line box, aligns left metadata to the first text line, and hides the action rail in the resting state.
 
 ### Comparison history
 
@@ -179,8 +222,8 @@ final result: passed
 ## Asset audio preview player
 
 - Source visual truth: `/var/folders/yw/0kg9jbhj3xx00gq05_14d1lw0000gn/T/TemporaryItems/NSIRD_screencaptureui_iHiRmT/Screenshot 2026-09-02 at 15.46.59.png`
-- Rendered implementation: `/tmp/openstudio-audio-preview-dark-1076x488.png`
-- Combined comparison: `/tmp/openstudio-audio-preview-comparison.png`
+- Rendered implementation: `/tmp/mosael-audio-preview-dark-1076x488.png`
+- Combined comparison: `/tmp/mosael-audio-preview-comparison.png`
 - State: dark theme, asset library, audio asset detail dialog open
 - Viewport: 1076 × 488 CSS px
 - Density normalization: source 2152 × 976 px at inferred 2× density, normalized to 1076 × 488 px; implementation 1076 × 488 px at 1× density
@@ -195,7 +238,7 @@ No actionable P0, P1, or P2 issues remain.
 - Image quality and asset fidelity: no image assets were introduced or replaced; Lucide icons match the product's existing control language.
 - Copy and content: existing localized play, pause, mute, and unmute labels are reused.
 
-The visible difference from the supplied screenshot is intentional: the browser-native gray control is replaced by Open Studio's shared player with a primary play button, branded progress bar, elapsed/total time, and mute control.
+The visible difference from the supplied screenshot is intentional: the browser-native gray control is replaced by Mosael's shared player with a primary play button, branded progress bar, elapsed/total time, and mute control.
 
 ## Interaction evidence
 

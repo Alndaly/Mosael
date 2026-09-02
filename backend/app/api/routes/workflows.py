@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.core.i18n import get_current_locale, t
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from app.api.schemas import (
     AgentSessionOut,
@@ -131,7 +131,8 @@ def create(body: WorkflowCreate, db: DbSession, user: CurrentUser) -> Workflow:
 # 信封格式:{format, version, name, description, graph}。graph 原样携带 —— 节点里
 # 引用的工作区资源(素材/序列/供应商档案等)跨工作区导入后可能悬空,这与「保存放行、
 # 就绪检查提示、运行时拦截」的既有分层一致,导入不做资源级校验。
-WORKFLOW_FILE_FORMAT = "openstudio-workflow"
+WORKFLOW_FILE_FORMAT = "mosael-workflow"
+LEGACY_WORKFLOW_FILE_FORMAT = "openstudio-workflow"
 WORKFLOW_FILE_VERSION = 1
 WORKFLOW_FILE_SUFFIX = f".{WORKFLOW_FILE_FORMAT}.json"
 
@@ -163,9 +164,9 @@ def export_one(workflow_id: str, db: DbSession, user: CurrentUser) -> Response:
 def import_one(body: WorkflowImportRequest, db: DbSession, user: CurrentUser) -> Workflow:
     ensure_workspace_perm(db, user, body.workspace_id, "edit")
     data = body.data
-    accepted = (WORKFLOW_FILE_FORMAT,)
+    accepted = (WORKFLOW_FILE_FORMAT, LEGACY_WORKFLOW_FILE_FORMAT)
     if data.get("format") not in accepted or not isinstance(data.get("graph"), dict):
-        raise HTTPException(status_code=422, detail="不是有效的 Open Studio 工作流文件")
+        raise HTTPException(status_code=422, detail="不是有效的 Mosael 工作流文件")
     try:
         version = int(data.get("version", 0))
     except (TypeError, ValueError):

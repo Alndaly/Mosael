@@ -239,7 +239,7 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
 
             asset = db.get(Asset, asset_id)
             source = resolve_key(asset.file_key)
-            with tempfile.TemporaryDirectory(prefix="open-studio-asr-") as tmp:
+            with tempfile.TemporaryDirectory(prefix="mosael-asr-") as tmp:
                 wav = Path(tmp) / "audio.wav"
                 _extract_audio(source, wav)
                 job.progress = 0.25

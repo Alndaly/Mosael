@@ -191,7 +191,7 @@ class Test错误翻成人话:
 class Test清单和实现对得上:
     def test_声明的工具都实现了(self) -> None:
         """声明即接口 —— 声明了没实现的话,用户在插件页勾得上,一调就是「unknown tool」。"""
-        manifest = json.loads((PLUGIN / "open-studio.plugin.json").read_text(encoding="utf-8"))
+        manifest = json.loads((PLUGIN / "mosael.plugin.json").read_text(encoding="utf-8"))
         declared = {t["name"] for t in manifest["tools"]["declare"]}
         source = ENTRY.read_text(encoding="utf-8")
         implemented = set(json.loads(json.dumps(sorted(declared))))  # 名字集合
@@ -202,7 +202,7 @@ class Test清单和实现对得上:
     def test_清单能被宿主解析(self) -> None:
         from app.domain.plugins.manifest import parse
 
-        raw = json.loads((PLUGIN / "open-studio.plugin.json").read_text(encoding="utf-8"))
+        raw = json.loads((PLUGIN / "mosael.plugin.json").read_text(encoding="utf-8"))
         manifest = parse(raw, str(PLUGIN))
         assert manifest.runtime.kind == "process"
         assert manifest.runtime.entry == "tools/main.py"
@@ -210,7 +210,7 @@ class Test清单和实现对得上:
 
     def test_只读的那两个标了只读(self) -> None:
         """标错的话,列目录这种纯查询也会被当成会改东西的工具,子智能体就用不了它。"""
-        manifest = json.loads((PLUGIN / "open-studio.plugin.json").read_text(encoding="utf-8"))
+        manifest = json.loads((PLUGIN / "mosael.plugin.json").read_text(encoding="utf-8"))
         by_name = {t["name"]: t for t in manifest["tools"]["declare"]}
         assert by_name["pan_list"]["read_only"] is True
         assert by_name["pan_search"]["read_only"] is True
@@ -434,7 +434,7 @@ class Test上传:
     def test_插件拿到的是路径而不是_id(self) -> None:
         """`asset_id` 在清单里标了 format:asset,宿主交过来的已经是本地路径
         (见 tests/test_plugin_inputs)。插件这一侧不知道素材库存在。"""
-        manifest = json.loads((PLUGIN / "open-studio.plugin.json").read_text(encoding="utf-8"))
+        manifest = json.loads((PLUGIN / "mosael.plugin.json").read_text(encoding="utf-8"))
         upload = next(t for t in manifest["tools"]["declare"] if t["name"] == "pan_upload")
         assert upload["input_schema"]["properties"]["asset_id"]["format"] == "asset"
         source = ENTRY.read_text(encoding="utf-8")

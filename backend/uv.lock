@@ -1147,7 +1147,7 @@ wheels = [
 ]
 
 [[package]]
-name = "open-studio-backend"
+name = "mosael-backend"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

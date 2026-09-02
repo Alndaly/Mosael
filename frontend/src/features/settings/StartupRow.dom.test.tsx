@@ -26,7 +26,7 @@ import { StartupRow } from "@/features/settings/SettingsView";
 type State = { enabled: boolean; needsApproval: boolean } | null;
 
 function desktop(get: State, set: State = get) {
-  (window as unknown as { openStudioDesktop?: unknown }).openStudioDesktop = {
+  (window as unknown as { mosaelDesktop?: unknown }).mosaelDesktop = {
     getOpenAtLogin: vi.fn(async () => get),
     setOpenAtLogin: vi.fn(async () => set),
   };
@@ -36,7 +36,7 @@ beforeEach(() => {
   toasts.error.mockReset();
 });
 afterEach(() => {
-  delete (window as unknown as { openStudioDesktop?: unknown }).openStudioDesktop;
+  delete (window as unknown as { mosaelDesktop?: unknown }).mosaelDesktop;
 });
 
 describe("开机时启动", () => {

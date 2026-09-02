@@ -22,12 +22,12 @@ export function LivePanels() {
   const [labels, setLabels] = React.useState<Record<string, string>>({});
 
   React.useEffect(() => {
-    const off = window.openStudioPublish?.onPanels?.((next) => setCards(next));
+    const off = window.mosaelPublish?.onPanels?.((next) => setCards(next));
     return () => off?.();
   }, []);
 
   React.useEffect(() => {
-    const off = window.openStudioBrowser?.onFrame((frame) => {
+    const off = window.mosaelBrowser?.onFrame((frame) => {
       if (!frame.label) return;
       setLabels((prev) =>
         prev[frame.sessionId] === frame.label ? prev : { ...prev, [frame.sessionId]: frame.label! },
@@ -93,7 +93,7 @@ export function LivePanels() {
                   isTop
                     ? (event) =>
                         startDrag(event, (dx, dy) =>
-                          void window.openStudioPublish?.setPanelLayout?.({ x: top.x + dx, y: top.y + dy }),
+                          void window.mosaelPublish?.setPanelLayout?.({ x: top.x + dx, y: top.y + dy }),
                         )
                     : undefined
                 }
@@ -120,7 +120,7 @@ export function LivePanels() {
                   className="pointer-events-auto grid h-5 w-4 shrink-0 cursor-ew-resize place-items-center rounded border-0 bg-transparent text-muted-foreground hover:text-foreground"
                   onPointerDown={(event) =>
                     startDrag(event, (dx) =>
-                      void window.openStudioPublish?.setPanelLayout?.({ width: top.width + dx }),
+                      void window.mosaelPublish?.setPanelLayout?.({ width: top.width + dx }),
                     )
                   }
                 >
@@ -132,7 +132,7 @@ export function LivePanels() {
                 type="button"
                 aria-label={t("close")}
                 className="pointer-events-auto grid h-5 w-5 shrink-0 place-items-center rounded border-0 bg-transparent text-muted-foreground transition-colors hover:text-foreground"
-                onClick={() => void window.openStudioPublish?.closePanel?.(card.id)}
+                onClick={() => void window.mosaelPublish?.closePanel?.(card.id)}
               >
                 <X size={11} />
               </button>

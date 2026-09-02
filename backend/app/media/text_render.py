@@ -35,7 +35,7 @@ _SUBTITLE_FONT_STACK = (
 def find_frontend_dist() -> Path | None:
     """定位构建好的前端 dist(含 index-*.css 里的 @font-face)。
 
-    OPEN_STUDIO_FRONTEND_DIST 覆盖;否则从后端相对仓库结构里找。打包版由 Electron 侧注入该路径。"""
+    MOSAEL_FRONTEND_DIST 覆盖;否则从后端相对仓库结构里找。打包版由 Electron 侧注入该路径。"""
     override = getattr(settings, "frontend_dist", "") or ""
     candidates = [Path(override)] if override else []
     here = Path(__file__).resolve()

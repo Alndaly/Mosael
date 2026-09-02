@@ -1,22 +1,24 @@
 {
-  "name": "open-studio",
-  "version": "0.26.10",
+  "name": "mosael",
+  "version": "0.27.0",
   "private": true,
   "license": "SEE LICENSE IN LICENSE",
-  "description": "Open Studio — AI video creative studio",
-  "repository": "https://github.com/Alndaly/OpenStudio",
+  "description": "Mosael — AI video creative studio",
+  "author": "Kinda Hall (https://x.com/KindaHuax)",
+  "homepage": "https://mosael.team",
+  "repository": "https://github.com/Alndaly/Mosael",
   "main": "electron/main.cjs",
   "packageManager": "pnpm@11.20.0",
   "scripts": {
     "build:frontend": "pnpm --dir frontend build",
     "build:sidecar": "pnpm --dir agent-sidecar build",
     "build:extension": "pnpm --dir browser-extension build",
-    "build:backend": "cd backend && uv run --frozen pyinstaller --noconfirm --clean --onedir --name open-studio-backend --hidden-import uvicorn.logging --hidden-import uvicorn.loops.auto --hidden-import uvicorn.protocols.http.auto --hidden-import uvicorn.protocols.websockets.auto --hidden-import uvicorn.lifespan.on --add-data app/ai/runtime/workers/tts.py:app/ai/runtime/workers --add-data app/ai/runtime/workers/asr.py:app/ai/runtime/workers run_backend.py",
+    "build:backend": "cd backend && uv run --frozen pyinstaller --noconfirm --clean --onedir --name mosael-backend --hidden-import uvicorn.logging --hidden-import uvicorn.loops.auto --hidden-import uvicorn.protocols.http.auto --hidden-import uvicorn.protocols.websockets.auto --hidden-import uvicorn.lifespan.on --add-data app/ai/runtime/workers/tts.py:app/ai/runtime/workers --add-data app/ai/runtime/workers/asr.py:app/ai/runtime/workers run_backend.py",
     "build:mac": "pnpm fetch:tts-python && pnpm build:publisher && pnpm build:system && pnpm build:frontend && pnpm build:sidecar && pnpm build:backend && electron-builder --mac dir",
     "dist:mac": "pnpm fetch:tts-python && pnpm build:publisher && pnpm build:system && pnpm build:frontend && pnpm build:sidecar && pnpm build:backend && electron-builder --mac dmg",
     "build:publisher": "pnpm typecheck:electron && esbuild electron/publish/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=electron/publish.bundle.cjs",
     "watch:publisher": "esbuild electron/publish/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=electron/publish.bundle.cjs --watch=forever",
-    "dev:backend": "cd backend && .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port ${OPEN_STUDIO_BACKEND_PORT:-8800} --reload",
+    "dev:backend": "cd backend && .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port ${MOSAEL_BACKEND_PORT:-8800} --reload",
     "dev": "pnpm --dir frontend electron:dev",
     "fetch:tts-python": "node scripts/fetch-tts-python.mjs",
     "typecheck:electron": "pnpm -C frontend exec tsc --noEmit -p ../electron/tsconfig.json",
@@ -30,13 +32,13 @@
     "openapi-typescript": "^7.13.0"
   },
   "build": {
-    "appId": "dev.openstudio.app",
-    "productName": "Open Studio",
+    "appId": "dev.mosael.app",
+    "productName": "Mosael",
     "publish": [
       {
         "provider": "github",
         "owner": "Alndaly",
-        "repo": "OpenStudio"
+        "repo": "Mosael"
       }
     ],
     "directories": {
@@ -46,14 +48,12 @@
       "electron/**",
       "frontend/dist/**",
       "package.json",
-      "build/icon.png",
-      "build/trayTemplate.png",
-      "build/trayTemplate@2x.png"
+      "build/icon.png"
     ],
     "extraResources": [
       {
-        "from": "backend/dist/open-studio-backend",
-        "to": "backend/open-studio-backend"
+        "from": "backend/dist/mosael-backend",
+        "to": "backend/mosael-backend"
       },
       {
         "from": "agent-sidecar/dist/sidecar.cjs",
@@ -82,16 +82,16 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "include": "build/installer.nsh",
-      "shortcutName": "Open Studio",
+      "shortcutName": "Mosael",
       "createStartMenuShortcut": true,
       "menuCategory": false,
-      "uninstallDisplayName": "Open Studio"
+      "uninstallDisplayName": "Mosael"
     },
     "protocols": [
       {
-        "name": "Open Studio",
+        "name": "Mosael",
         "schemes": [
-          "openstudio"
+          "mosael"
         ]
       }
     ],

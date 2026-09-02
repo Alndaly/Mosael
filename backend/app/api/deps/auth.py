@@ -17,7 +17,7 @@ from app.core.security import find_session, renew_if_stale
 from app.db.models import AuthSession, User, now
 
 #: 客户端自报版本的请求头。前端在 api/client 里统一带上(见 __APP_VERSION__)。
-CLIENT_VERSION_HEADER = "X-Open-Studio-Client"
+CLIENT_VERSION_HEADER = "X-Mosael-Client"
 
 #: 版本号里能出现的字符。请求头是**外部输入** —— 只收像版本号的东西,别让这一栏变成一条
 #: 能塞任意文本的通道(它会被原样显示在管理员的表格里)。

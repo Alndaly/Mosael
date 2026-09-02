@@ -9,7 +9,7 @@ def _preflight(origin: str):
         headers={
             "Origin": origin,
             "Access-Control-Request-Method": "GET",
-            "Access-Control-Request-Headers": "authorization,x-open-studio-client",
+            "Access-Control-Request-Headers": "authorization,x-mosael-client",
         },
     )
 

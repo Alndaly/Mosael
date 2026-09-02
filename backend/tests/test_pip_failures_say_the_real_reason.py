@@ -39,10 +39,10 @@ Collecting torch
   Downloading torch-2.9.0-cp312-cp312-win_amd64.whl (241.6 MB)
 Installing collected packages: torch
 Traceback (most recent call last):
-  File "C:\\Users\\k\\AppData\\Local\\Programs\\Open Studio\\resources\\python\\Lib\\zipfile\\__init__.py", line 1118, in read
+  File "C:\\Users\\k\\AppData\\Local\\Programs\\Mosael\\resources\\python\\Lib\\zipfile\\__init__.py", line 1118, in read
     buf += self._read1(self.MAX_N)
            ^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\\Users\\k\\AppData\\Local\\Programs\\Open Studio\\resources\\python\\Lib\\zipfile\\__init__.py", line 1068, in _read1
+  File "C:\\Users\\k\\AppData\\Local\\Programs\\Mosael\\resources\\python\\Lib\\zipfile\\__init__.py", line 1068, in _read1
     data = self._decompressor.decompress(data, n)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 MemoryError: Unable to allocate output buffer.

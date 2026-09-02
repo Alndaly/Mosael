@@ -110,14 +110,14 @@ jobs:
           node-version: 22
           cache: pnpm
       - name: Install browser extension dependencies
-        run: pnpm install --frozen-lockfile --filter open-studio-browser-extension...
+        run: pnpm install --frozen-lockfile --filter mosael-browser-extension...
       - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
             gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
-              --draft --generate-notes --title "Open Studio $GITHUB_REF_NAME"
+              --draft --generate-notes --title "Mosael $GITHUB_REF_NAME"
 
       # 插件包和平台无关,所以在这里打一次,而不是 mac/win 各打一遍。
       # 市场索引里的下载地址指的就是这些附件(website/public/plugins/registry.json)——
@@ -126,7 +126,7 @@ jobs:
         run: |
           mkdir -p dist/plugins
           for dir in plugins/examples/*/; do
-            id=$(python3 -c "import json,sys;print(json.load(open('$dir/open-studio.plugin.json'))['id'])")
+            id=$(python3 -c "import json,sys;print(json.load(open('$dir/mosael.plugin.json'))['id'])")
             (cd "$dir" && zip -qr "$GITHUB_WORKSPACE/dist/plugins/$id.zip" .)
             echo "packed $id"
           done
@@ -141,13 +141,13 @@ jobs:
         run: |
           pnpm build:extension
           mkdir -p dist/browser-extension
-          (cd browser-extension/dist && zip -qr "$GITHUB_WORKSPACE/dist/browser-extension/open-studio-browser-extension.zip" .)
-          unzip -l dist/browser-extension/open-studio-browser-extension.zip
+          (cd browser-extension/dist && zip -qr "$GITHUB_WORKSPACE/dist/browser-extension/mosael-browser-extension.zip" .)
+          unzip -l dist/browser-extension/mosael-browser-extension.zip
 
       - name: Upload Chrome extension to release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber dist/browser-extension/open-studio-browser-extension.zip
+        run: gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber dist/browser-extension/mosael-browser-extension.zip
 
   build:
     needs: [test, draft]
@@ -243,7 +243,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v7
         with:
-          name: open-studio-${{ runner.os }}
+          name: mosael-${{ runner.os }}
           path: ${{ matrix.asset_glob }}
           if-no-files-found: error
 

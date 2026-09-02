@@ -77,7 +77,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
 /** 把第一个 svg 图标替换成转圈;一个图标都没有就在最前面补一个。 */
 function BusyChildren({ children }: { children?: React.ReactNode }) {
-  const spinner = <Loader2 key="__busy" className="animate-openstudio-spin" />
+  const spinner = <Loader2 key="__busy" className="animate-mosael-spin" />
   const nodes = React.Children.toArray(children)
   const iconAt = nodes.findIndex(
     (node) => React.isValidElement(node) && typeof node.type !== "string",

@@ -1,6 +1,6 @@
 /**
  * pi integration (S2): build an OpenAI-compatible provider from the config
- * Open Studio passes per turn (base URL + key + model), then run a turn through pi's
+ * Mosael passes per turn (base URL + key + model), then run a turn through pi's
  * Agent and stream text deltas back out. Tools/hooks come in S3+.
  */
 import { Agent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
@@ -40,7 +40,7 @@ import {
   type SubagentToolEvent,
 } from "./subagent.js";
 
-const PROVIDER_ID = "open-studio";
+const PROVIDER_ID = "mosael";
 
 /** 主智能体手里的 run_subagent。子智能体只拿只读工具(理由见 subagent.ts),
  *  它的每一步都当作父工具卡的进度上报 —— 否则界面上是一段几十秒的静默。 */
@@ -249,13 +249,13 @@ export function buildModels(
   };
   const provider = createProvider({
     id: PROVIDER_ID,
-    name: "Open Studio provider",
+    name: "Mosael provider",
     baseUrl,
     // 本地服务(Ollama/LM Studio 等)通常不需要 key,但 pi 缺少 apiKey 时会直接报
     // "No API key for provider" —— 所以补一个占位值,这类端点会忽略它。
     auth: {
       apiKey: {
-        name: "Open Studio provider key",
+        name: "Mosael provider key",
         resolve: async () => ({ auth: { apiKey: apiKey || "not-required" } }),
       },
     },
@@ -395,7 +395,7 @@ export interface PiTurnInput {
   };
   model: string;
   tools: AgentTool[];
-  /** 回连 Open Studio 的地址与凭证 —— 订阅计划刷新令牌时要写回后端。 */
+  /** 回连 Mosael 的地址与凭证 —— 订阅计划刷新令牌时要写回后端。 */
   apiBase: string;
   token: string;
   /** pi 上轮序列化的消息数组(多轮记忆);首轮为空。 */

@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Open Studio API",
+    "title": "Mosael API",
     "version": "0.1.0"
   },
   "paths": {
@@ -49,7 +49,7 @@
           "auth"
         ],
         "summary": "Register",
-        "description": "注册。**引导之后转邀请制** —— 见 ADR 0008 §0。\n\n这是个多租户产品:一个后端可以服务多个人,而开放注册让「任何能连到这个端口的人」直接成为\n里面的一个租户。那正是下面这条(跑出来过的)链的第一环:\n\n    注册 → 自己建一个工作区(在里面是 owner)→ 满足当时那道自助的实例管理员判据\n         → 改实例配置 / 存 code 节点 → 在服务端执行任意 Python\n\n空库时照常放行:那时没有任何人可以给第一个账号发邀请。之后只能由已有成员邀请\n(见 workspaces 的 invitations 路由),想保持开放的部署显式打开 OPEN_STUDIO_OPEN_REGISTRATION。",
+        "description": "注册。**引导之后转邀请制** —— 见 ADR 0008 §0。\n\n这是个多租户产品:一个后端可以服务多个人,而开放注册让「任何能连到这个端口的人」直接成为\n里面的一个租户。那正是下面这条(跑出来过的)链的第一环:\n\n    注册 → 自己建一个工作区(在里面是 owner)→ 满足当时那道自助的实例管理员判据\n         → 改实例配置 / 存 code 节点 → 在服务端执行任意 Python\n\n空库时照常放行:那时没有任何人可以给第一个账号发邀请。之后只能由已有成员邀请\n(见 workspaces 的 invitations 路由),想保持开放的部署显式打开 MOSAEL_OPEN_REGISTRATION。",
         "operationId": "register_api_auth_register_post",
         "requestBody": {
           "content": {
@@ -2393,7 +2393,7 @@
           "assets"
         ],
         "summary": "Import Local Asset",
-        "description": "按本机绝对路径导入(桌面端把文件拖到应用图标上 / 「用 Open Studio 打开」)。\n\n**只在桌面端自带的后端上可用**。团队服务器部署没有 local_desktop 标记,这个接口直接\n404 —— 否则任何一个客户端都能让服务器去读它自己的文件系统,那是任意文件读取。\n标记由 Electron 在 spawn 后端时置入(见 electron/main.cjs)。",
+        "description": "按本机绝对路径导入(桌面端把文件拖到应用图标上 / 「用 Mosael 打开」)。\n\n**只在桌面端自带的后端上可用**。团队服务器部署没有 local_desktop 标记,这个接口直接\n404 —— 否则任何一个客户端都能让服务器去读它自己的文件系统,那是任意文件读取。\n标记由 Electron 在 spawn 后端时置入(见 electron/main.cjs)。",
         "operationId": "import_local_asset_api_assets_import_local_post",
         "requestBody": {
           "content": {
@@ -11642,7 +11642,7 @@
           "plugins"
         ],
         "summary": "Plugins Directory",
-        "description": "插件目录的**真实绝对路径**,给前端的空态引导用。\n\n这条路径曾经写死在前端文案里(`~/.open-studio/plugins/`)。那是 POSIX 写法:Windows 上\n`~/` 对用户没有任何意义,照着找是找不到的。路径由谁算就由谁报。",
+        "description": "插件目录的**真实绝对路径**,给前端的空态引导用。\n\n这条路径曾经写死在前端文案里(`~/.mosael/plugins/`)。那是 POSIX 写法:Windows 上\n`~/` 对用户没有任何意义,照着找是找不到的。路径由谁算就由谁报。",
         "operationId": "plugins_directory_api_plugins_dir_get",
         "responses": {
           "200": {
@@ -17175,7 +17175,7 @@
             "type": "string",
             "maxLength": 160,
             "title": "Name",
-            "default": "Open Studio 助手"
+            "default": "Mosael 助手"
           },
           "app_id": {
             "type": "string",

@@ -5,14 +5,14 @@ import { EMBED_HEADER_HEIGHT, type ViewState } from "./types";
 import { PageDriver } from "./pageDriver";
 
 const noop = (): void => undefined;
-// 账号视图 preload:注入「← 返回 Open Studio」悬浮按钮(见 electron/account-view-preload.cjs)。运行时
+// 账号视图 preload:注入「← 返回 Mosael」悬浮按钮(见 electron/account-view-preload.cjs)。运行时
 // 该文件与打包出的 publish.bundle.cjs 同在 electron/ 下,故按 __dirname 定位。
 const ACCOUNT_VIEW_PRELOAD = path.join(__dirname, "account-view-preload.cjs");
 
 /** 发布账号登录分区前缀(完整名 persist:<PARTITION_PREFIX>-<accountId>)。
  *  必须与后端 app/core/db.py 的 PARTITION_PREFIX 一致 —— 两边拼的是同一个磁盘目录。
  *  由 contracts/shared-constants.json 钉住。 */
-export const PARTITION_PREFIX = "openstudio";
+export const PARTITION_PREFIX = "mosael";
 
 /** 连按两次 Esc 判定为「退出内嵌浏览器」的时间窗(见 ensure() 里的 before-input-event)。 */
 const DOUBLE_ESCAPE_MS = 700;
@@ -83,7 +83,7 @@ export interface PanelCard {
 
 /**
  * Owns one embedded WebContentsView per account. Each view uses a persistent
- * session partition (`persist:openstudio-<id>`) so cookies / localStorage are isolated
+ * session partition (`persist:mosael-<id>`) so cookies / localStorage are isolated
  * and survive restarts — this replaces the old Playwright per-account profile
  * directory. The view is laid into the host BaseWindow below a fixed header
  * strip that the renderer keeps clear for its own controls.
@@ -93,7 +93,7 @@ export class AccountViewManager {
   private drivers = new Map<string, PageDriver>();
   private appliedProxy = new Map<string, string | null>();
   // 泛化:非发布账号的视图(浏览器池通用档案)显式登记其分区与显示名;发布账号不登记,
-  // 沿用 persist:openstudio-<accountId>。这样同一套内嵌视图既服务发布登录、也服务池档案登录。
+  // 沿用 persist:mosael-<accountId>。这样同一套内嵌视图既服务发布登录、也服务池档案登录。
   private partitions = new Map<string, string>();
   private names = new Map<string, string>();
   // 正在以悬浮面板形式挂载的账号,按挂载顺序 —— 决定叠放次序(后挂的在上)。
@@ -155,7 +155,7 @@ export class AccountViewManager {
   }
 
   /** 通用:在给定分区开一个内嵌视图、亮出并导航到 url —— 供「浏览器池」通用档案登录复用**同一套**
-   *  内嵌视图(与发布账号登录一致:同容器、同「返回 Open Studio」、同顶栏工具条),不弹外部系统窗。
+   *  内嵌视图(与发布账号登录一致:同容器、同「返回 Mosael」、同顶栏工具条),不弹外部系统窗。
    *  viewId 用分区名(唯一,且不与发布 accountId 冲突)。 */
   async openView(opts: { viewId: string; partition: string; name?: string; url: string; proxy?: string | null }): Promise<void> {
     // 池档案的分区名直接来自数据库,不经 partitionFor,故这里也要触发一次遗留目录迁移。
@@ -181,7 +181,7 @@ export class AccountViewManager {
    *
    * 供 RPA / 智能体会话复用同一套内嵌视图(此前它们自己起离屏 BrowserWindow —— 见已删除的
    * browserSessions.ts)。分区照旧严格隔离:ephemeral-*(内存态)/ persist:rpa-* 与发布的
-   * persist:openstudio-* 互不相干。
+   * persist:mosael-* 互不相干。
    */
   registerSession(viewId: string, partition: string): PageDriver {
     this.partitions.set(viewId, partition);
@@ -245,7 +245,7 @@ export class AccountViewManager {
     // Re-adding the same View is the current View API's z-order operation:
     // Electron reorders it to the topmost child of the window content view.
     this.window.contentView.addChildView(view);
-    console.info("[open-studio:view] shown", {
+    console.info("[mosael:view] shown", {
       accountId,
       bounds: view.getBounds(),
       childCount: this.window.contentView.children.length,
@@ -396,7 +396,7 @@ export class AccountViewManager {
       if (!idleMs) continue; // 没声明超时的(发布任务)由所有者自己撤
       const touchedAt = this.panelTouchedAt.get(accountId) ?? now;
       if (now - touchedAt > idleMs) {
-        console.info("[open-studio:view] panel auto-closed (idle)", { accountId, idleMs });
+        console.info("[mosael:view] panel auto-closed (idle)", { accountId, idleMs });
         this.panelDetach(accountId);
       }
     }
@@ -634,7 +634,7 @@ export class AccountViewManager {
       // 否则 visibleId 会一直指着它,顶部工具条永远收不回去,而复用它的每一处都在 undefined 上取属性。
       view.webContents.on("destroyed", () => this.forget(accountId));
       view.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
-        console.warn("[open-studio:view] load failed", {
+        console.warn("[mosael:view] load failed", {
           accountId,
           errorCode,
           errorDescription,

@@ -19,7 +19,7 @@ export interface RunTurnRequest {
   /** Prior turns, already trimmed by the backend (may be empty). */
   history?: Array<{ role: "user" | "assistant"; content: string }>;
   workspaceId: string;
-  /** Base URL + bearer token for calling Open Studio's HTTP API from tools (S3+). */
+  /** Base URL + bearer token for calling Mosael's HTTP API from tools (S3+). */
   apiBase: string;
   token: string;
   /** Resolved provider for pi-ai (S2+): OpenAI-compatible endpoint + model. */

@@ -4,11 +4,11 @@ description: 从一个目录、一份清单、一个脚本开始，到装进市�
 order: 8
 ---
 
-插件是把 Open Studio 之外的能力接进来的那道口子。写一个不需要读框架源码 —— 一个目录、
+插件是把 Mosael 之外的能力接进来的那道口子。写一个不需要读框架源码 —— 一个目录、
 一份清单、一个脚本，就是全部。
 
 这篇讲**怎么写**；[插件](/docs/guides/plugins)讲怎么用；
-[manifest 字段说明](https://github.com/Alndaly/OpenStudio/blob/main/docs/PLUGIN_MANIFEST.md)
+[manifest 字段说明](https://github.com/Alndaly/Mosael/blob/main/docs/PLUGIN_MANIFEST.md)
 是完整的字段表。
 
 ## 先决定一件事：脚本还是 MCP
@@ -28,7 +28,7 @@ order: 8
 
 ```
 my-plugin/
-  open-studio.plugin.json
+  mosael.plugin.json
   main.py
 ```
 
@@ -67,7 +67,7 @@ except Exception as exc:
     json.dump({"ok": False, "error": str(exc)}, sys.stdout, ensure_ascii=False)
 ```
 
-把这个目录放进插件目录（应用的插件页会告诉你它在哪 —— **别照着 `~/.open-studio/plugins`
+把这个目录放进插件目录（应用的插件页会告诉你它在哪 —— **别照着 `~/.mosael/plugins`
 去找**，Windows 上那个路径不存在），点「扫描」。它就出现在列表里了。
 
 `id` 用反写域名式的写法。它是**这台机器上的唯一键**：装进来的目录按它命名，重名会被当成
@@ -111,7 +111,7 @@ key = os.environ["MY_API_KEY"]
 
 ```python
 # 一、你自己下好了。必须写在给你的目录里
-out = os.environ["OPEN_STUDIO_PLUGIN_OUTPUT_DIR"]
+out = os.environ["MOSAEL_PLUGIN_OUTPUT_DIR"]
 path = os.path.join(out, "video.mp4")
 download_to(path)
 return {"artifact": {"path": "video.mp4"}}
