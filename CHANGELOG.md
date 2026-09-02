@@ -3,7 +3,7 @@
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 
-## [Unreleased]
+## [0.27.4] - 2026-09-02
 
 ### Changed
 
