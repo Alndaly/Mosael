@@ -3,6 +3,6 @@ export const SITE = {
   url: "https://mosael.team",
   repo: "https://github.com/Alndaly/Mosael",
   releases: "https://github.com/Alndaly/Mosael/releases/latest",
-  authorX: "https://x.com/KindaHuax",
+  authorX: "https://x.com/KindaHuaX",
   email: "mailto:1142704468@qq.com",
 } as const;

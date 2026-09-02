@@ -167,7 +167,7 @@ export function SearchDialog({ locale, labels }: { locale: Locale; labels: Label
         onClick={() => setOpen(true)}
         title={labels.search}
         aria-label={labels.search}
-        className="inline-flex h-9 items-center gap-2 border-2 border-ink px-2.5 text-sm transition-colors hover:bg-ink hover:text-paper"
+        className="inline-flex h-9 items-center gap-2 rounded-lg px-2.5 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
       >
         <Search className="size-4" />
         {/* 窄屏只留放大镜:顶栏那点宽度得留给导航。 */}
@@ -176,18 +176,18 @@ export function SearchDialog({ locale, labels }: { locale: Locale; labels: Label
 
       {open && (
         <div
-          className="fixed inset-0 z-100 flex items-start justify-center bg-ink/40 p-4 pt-[12vh] backdrop-blur-sm"
+          className="fixed inset-0 z-100 flex items-start justify-center bg-ink/45 p-4 pt-[12vh]"
           onClick={() => setOpen(false)}
           role="presentation"
         >
           <div
-            className="w-full max-w-2xl border-2 border-ink bg-paper shadow-block-lg"
+            className="w-full max-w-2xl overflow-hidden rounded-2xl border border-border bg-paper"
             onClick={(event) => event.stopPropagation()}
             role="dialog"
             aria-modal
             aria-label={labels.search}
           >
-            <div className="flex items-center gap-3 border-b-2 border-ink px-4">
+            <div className="flex items-center gap-3 border-b border-border px-4">
               <Search className="size-5 shrink-0" />
               <input
                 autoFocus
@@ -230,8 +230,8 @@ export function SearchDialog({ locale, labels }: { locale: Locale; labels: Label
                       onMouseEnter={() => setActive(index)}
                       onClick={() => go(entry)}
                       className={cn(
-                        "block w-full border-b-2 border-ink/10 px-4 py-3 text-left transition-colors",
-                        index === active && "bg-flame text-primary-foreground",
+                        "block w-full border-b border-border/70 px-4 py-3 text-left transition-colors",
+                        index === active && "bg-primary text-primary-foreground",
                       )}
                     >
                       <p className="m-0 flex items-baseline gap-2">

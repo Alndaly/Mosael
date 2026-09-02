@@ -23,7 +23,7 @@ export function LocaleSwitch({ locale, label }: { locale: Locale; label: string 
       hrefLang={other}
       aria-label={label}
       title={label}
-      className="inline-flex h-9 items-center justify-center border-2 border-ink px-2.5 font-mono text-xs font-bold uppercase transition-colors hover:bg-ink hover:text-paper"
+      className="inline-flex h-9 items-center justify-center rounded-lg px-2.5 text-xs font-semibold uppercase text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
     >
       {LOCALE_SHORT[other]}
     </Link>

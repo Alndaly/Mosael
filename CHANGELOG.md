@@ -3,6 +3,16 @@
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 
+## [Unreleased]
+
+### Changed
+
+- Rebuilt the bilingual Mosael website around a flowing product-story timeline, with a calmer
+  warm-white and violet visual system, deliberate editorial spacing, and responsive navigation.
+- Gave Infinite Canvas, timeline editing, the AI agent, and visual workflows equal prominence using
+  current product captures, while keeping the local-first promise and KindaHuaX attribution clear.
+- Removed the outdated knowledge-base claim and the nonexistent product X account from website copy.
+
 ## [0.27.3] - 2026-09-02
 
 ### Changed

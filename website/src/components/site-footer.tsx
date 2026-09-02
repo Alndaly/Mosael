@@ -47,27 +47,19 @@ export function SiteFooter({ locale }: { locale: Locale }) {
   ];
 
   return (
-    <footer className="border-t-2 border-ink bg-invert text-invert-foreground">
-      <div className="mx-auto max-w-[96rem] px-5 py-16 sm:px-8">
-        <div className="grid gap-12 md:grid-cols-2 lg:grid-cols-[1.4fr_repeat(3,1fr)] lg:gap-16">
+    <footer className="border-t border-border bg-paper text-foreground">
+      <div className="mx-auto max-w-[90rem] px-5 py-14 sm:px-8 lg:px-12">
+        <div className="grid gap-12 md:grid-cols-2 lg:grid-cols-[1.55fr_repeat(3,1fr)] lg:gap-12">
           <div>
             <Link href={localePath(locale)} className="inline-flex">
-              <BrandWordmark className="w-44" />
+              <BrandWordmark className="w-36" />
             </Link>
-            <p className="mt-5 mb-0 max-w-xs text-invert-foreground/70">{t.footer.tagline}</p>
-            <a
-              className="mt-7 inline-flex items-center gap-2 border-2 border-invert-foreground bg-flame px-5 py-2.5 text-sm font-bold text-primary-foreground transition-transform hover:-translate-y-0.5"
-              href={SITE.releases}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {t.footer.download}
-            </a>
+            <p className="mt-5 mb-0 max-w-xs text-sm leading-6 text-muted-foreground">{t.footer.tagline}</p>
           </div>
 
           {columns.map((column) => (
             <nav key={column.title} className="text-sm">
-              <p className="m-0 mb-4 font-mono text-xs font-bold tracking-widest text-flame uppercase">
+              <p className="m-0 mb-4 text-xs font-semibold tracking-[0.14em] text-primary uppercase">
                 {column.title}
               </p>
               <ul className="m-0 list-none space-y-3 p-0">
@@ -75,7 +67,7 @@ export function SiteFooter({ locale }: { locale: Locale }) {
                   <li key={link.href} className="m-0">
                     {"external" in link && link.external ? (
                       <a
-                        className="inline-flex items-center gap-1.5 text-invert-foreground/70 transition-colors hover:text-invert-foreground"
+                        className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
                         href={link.href}
                         target="_blank"
                         rel="noreferrer"
@@ -85,7 +77,7 @@ export function SiteFooter({ locale }: { locale: Locale }) {
                       </a>
                     ) : (
                       <Link
-                        className="text-invert-foreground/70 transition-colors hover:text-invert-foreground"
+                        className="text-muted-foreground transition-colors hover:text-foreground"
                         href={link.href}
                       >
                         {link.label}
@@ -99,12 +91,12 @@ export function SiteFooter({ locale }: { locale: Locale }) {
         </div>
       </div>
 
-      <div className="border-t-2 border-invert-foreground/20">
-        <div className="mx-auto flex max-w-[96rem] flex-wrap items-center gap-x-6 gap-y-2 px-5 py-6 font-mono text-xs tracking-wider text-invert-foreground/50 uppercase sm:px-8">
+      <div className="border-t border-border">
+        <div className="mx-auto flex max-w-[90rem] flex-wrap items-center gap-x-6 gap-y-2 px-5 py-6 text-xs text-muted-foreground sm:px-8 lg:px-12">
           <span>
             © {year} Mosael. {t.footer.rights}
           </span>
-          <a className="ml-auto transition-colors hover:text-invert-foreground" href={SITE.email}>
+          <a className="ml-auto transition-colors hover:text-foreground" href={SITE.email}>
             {t.footer.contact}
           </a>
         </div>

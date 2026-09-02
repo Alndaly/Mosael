@@ -8,6 +8,7 @@ import { useTheme } from "next-themes";
 
 import { GithubMark } from "@/components/icons";
 import { LOCALE_LABEL, LOCALES, type Locale } from "@/i18n/config";
+import { SITE } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 /**
@@ -57,14 +58,14 @@ export function MobileMenu({
         onClick={() => setOpen((value) => !value)}
         aria-label={labels.menu}
         aria-expanded={open}
-        className="inline-flex size-9 items-center justify-center border-2 border-ink transition-colors hover:bg-ink hover:text-paper md:hidden"
+        className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground lg:hidden"
       >
         {open ? <X className="size-4" /> : <Menu className="size-4" />}
       </button>
 
       {open && (
-        <div className="fixed inset-x-0 top-16 bottom-0 z-40 overflow-y-auto border-t-2 border-ink bg-paper md:hidden">
-          <nav className="flex flex-col">
+        <div className="fixed inset-x-0 top-[4.5rem] bottom-0 z-40 overflow-y-auto border-t border-border bg-paper lg:hidden">
+          <nav className="flex flex-col px-5 pt-6">
             {links.map((link) => {
               const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
               return (
@@ -72,8 +73,8 @@ export function MobileMenu({
                   key={link.href}
                   href={link.href}
                   className={cn(
-                    "border-b-2 border-ink px-5 py-5 font-display text-xl font-bold tracking-tight",
-                    active && "bg-flame text-primary-foreground",
+                    "rounded-xl px-4 py-4 font-display text-xl font-semibold tracking-tight transition-colors",
+                    active ? "bg-brand-soft text-primary" : "text-foreground hover:bg-secondary",
                   )}
                 >
                   {link.label}
@@ -82,11 +83,11 @@ export function MobileMenu({
             })}
           </nav>
 
-          <div className="flex flex-col gap-3 p-5">
+          <div className="flex flex-col gap-2 px-5 pt-6 pb-8">
             <Link
               href={`/${other}${rest ? `/${rest}` : ""}`}
               hrefLang={other}
-              className="flex items-center justify-between border-2 border-ink px-4 py-3 font-medium"
+              className="flex items-center justify-between rounded-xl border border-border px-4 py-3 font-medium"
             >
               {labels.language}
               <span className="font-mono text-xs tracking-wider uppercase">{LOCALE_LABEL[other]}</span>
@@ -94,7 +95,7 @@ export function MobileMenu({
             <button
               type="button"
               onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-              className="flex items-center justify-between border-2 border-ink px-4 py-3 font-medium"
+              className="flex items-center justify-between rounded-xl border border-border px-4 py-3 font-medium"
             >
               {labels.theme}
               {/* 挂载前不画图标:服务端不知道用户的主题,直接画会 hydration 不一致。 */}
@@ -109,19 +110,19 @@ export function MobileMenu({
               )}
             </button>
             <a
-              href="https://github.com/Alndaly/Mosael"
+              href={SITE.repo}
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-2 border-2 border-ink px-4 py-3 font-medium"
+              className="flex items-center gap-2 rounded-xl border border-border px-4 py-3 font-medium"
             >
               <GithubMark className="size-4" />
               {labels.github}
             </a>
             <a
-              href="https://github.com/Alndaly/Mosael/releases/latest"
+              href={SITE.releases}
               target="_blank"
               rel="noreferrer"
-              className="border-2 border-ink bg-flame px-4 py-3 text-center font-bold text-primary-foreground"
+              className="rounded-xl bg-primary px-4 py-3 text-center font-semibold text-primary-foreground"
             >
               {labels.download}
             </a>

@@ -1,42 +1,45 @@
+import Image from "next/image";
+import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, BookOpen, Puzzle, Send } from "lucide-react";
+import { ArrowRight, Download } from "lucide-react";
 
-import { BrandWordmark } from "@/components/brand-logo";
-import { Marquee } from "@/components/marquee";
-import { QrCards } from "@/components/qr-cards";
+import { BrandIcon, BrandWordmark } from "@/components/brand-logo";
+import { GithubMark } from "@/components/icons";
 import { Reveal } from "@/components/reveal";
-import { Shot } from "@/components/shot";
-import { isLocale } from "@/i18n/config";
+import { isLocale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { SITE } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
-/**
- * 首页只讲一件事:本地优先的 AI 视频工作台。
- *
- * 版面按**整幅色带**切开 —— 纸、墨、朱轮流铺满整个宽度,段与段之间是一条 2px 的硬边。
- * 不用卡片网格:七张一样大的卡片等于什么都没强调,而色带自己就说清了"这是新的一段"。
- *
- * 三段叙述(剪辑 / 智能体 / 工作流)各配一张真实界面,左右交替。知识库、发布、插件收在
- * 末尾的"还有"里 —— 它们是补充,不是并列的主角。
- *
- * 文案全在 `@/i18n/messages`:JSX 会把源码换行折成空格,中文里那是凭空多出来的字距,
- * 只在浏览器里看得见。这里只留结构。
- */
+const CHAPTERS = [
+  { id: "infinite-canvas", image: "/media/home/infinite-canvas.webp", width: 2400, height: 1552, href: "/docs/guides/boards" },
+  { id: "editing", image: "/media/home/editor.webp", width: 2400, height: 1560, href: "/docs/guides/editing" },
+  { id: "agent", image: "/media/screens/dark/ai-chat.png", width: 2880, height: 1520, href: "/docs/guides/ai-studio" },
+  { id: "workflows", image: "/media/home/workflows.webp", width: 2400, height: 1401, href: "/workflows" },
+] as const;
 
-/**
- * 与 `messages.home.chapters` 一一对应 —— 文案在那边,图在这边,按顺序配对。
- *
- * 只写路径,尺寸由 `Shot` 从文件头读:重录一次换了分辨率,这里不用跟着改。
- */
-const CHAPTER_SHOTS = ["/media/gifs/timeline-edit.gif", "/media/screens/ai-chat.png", "/media/screens/workflows.png"];
+function ProductShot({ src, alt, width, height, priority = false, className }: { src: string; alt: string; width: number; height: number; priority?: boolean; className?: string }) {
+  return (
+    <figure className={cn("m-0 overflow-hidden rounded-[1.35rem] border border-border/70 bg-[#15131d]", className)}>
+      <Image src={src} alt={alt} width={width} height={height} priority={priority} sizes="(min-width: 1024px) 64vw, 100vw" className="block h-auto w-full" />
+    </figure>
+  );
+}
 
-/** 「还有」那三条的图标与顶条颜色,同样按顺序配对。 */
-const MORE_MARKS = [
-  { icon: BookOpen, bar: "bg-flame" },
-  { icon: Send, bar: "bg-indigo" },
-  { icon: Puzzle, bar: "bg-ink" },
-];
+function PrimaryActions({ download, source, compact = false }: { download: string; source: string; compact?: boolean }) {
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <a href={SITE.releases} target="_blank" rel="noreferrer" className={cn("inline-flex items-center justify-center gap-2 rounded-lg bg-primary font-semibold text-primary-foreground transition-colors hover:bg-primary/88 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring", compact ? "min-h-10 px-4 text-sm" : "min-h-12 px-5 text-[0.9375rem]")}>
+        <Download className="size-4" aria-hidden />
+        {download}
+      </a>
+      <a href={SITE.repo} target="_blank" rel="noreferrer" className={cn("inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-background font-semibold text-foreground transition-colors hover:bg-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring", compact ? "min-h-10 px-4 text-sm" : "min-h-12 px-5 text-[0.9375rem]")}>
+        <GithubMark className="size-4" />
+        {source}
+      </a>
+    </div>
+  );
+}
 
 export default async function Home({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
@@ -44,88 +47,52 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
   const t = getMessages(locale).home;
 
   return (
-    <>
-      {/* ── 首屏:纸 ──────────────────────────────────────────────────────────
-          标题占满版心,底下压着一整张界面 —— 一屏之内把"这是什么"和"长什么样"都给完。 */}
-      <section className="border-b-2 border-ink bg-paper bg-rule bg-[size:80px_80px]">
-        <div className="mx-auto max-w-[96rem] px-5 pt-20 pb-16 sm:px-8 sm:pt-28">
-          <Reveal className="max-w-5xl">
-            <BrandWordmark className="mb-10 w-[min(24rem,72vw)]" priority />
-            <p className="m-0 inline-flex items-center gap-2.5 border-2 border-ink bg-card px-3 py-1.5 font-mono text-xs font-bold tracking-widest uppercase">
-              <span className="size-2 bg-flame" />
-              {t.eyebrow}
-            </p>
-
-            <h1 className="mt-8 mb-0 font-display text-[clamp(2.75rem,9vw,7.5rem)] leading-[0.92] font-extrabold tracking-[-0.03em]">
-              {t.titleLead}
-              <br />
-              <span className="mt-2 inline-block bg-flame px-3 text-primary-foreground sm:mt-4">{t.titleAccent}</span>
+    <div className="overflow-hidden bg-paper">
+      <section id="product" className="relative border-b border-border/60">
+        <div className="mx-auto grid max-w-[90rem] gap-14 px-5 pt-20 pb-20 sm:px-8 sm:pt-24 lg:grid-cols-12 lg:items-center lg:gap-10 lg:px-12 lg:pt-28 lg:pb-24">
+          <Reveal className="lg:col-span-4">
+            <p className="m-0 text-xs font-semibold tracking-[0.16em] text-primary uppercase">{t.eyebrow}</p>
+            <h1 className="mt-6 mb-0 max-w-[11ch] font-display text-[clamp(3.25rem,6.4vw,6.6rem)] leading-[0.94] font-[720] tracking-[-0.055em] text-balance">
+              {t.titleLead} <span className="text-primary">{t.titleAccent}</span>
             </h1>
-
-            <p className="mt-10 mb-0 max-w-2xl text-lg text-muted-foreground sm:text-xl">{t.lede}</p>
-
-            <div className="mt-10 flex flex-wrap items-center gap-4">
-              <a
-                href={SITE.releases}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-3 border-2 border-ink bg-flame px-7 py-4 text-base font-bold text-primary-foreground shadow-block transition-transform hover:translate-x-1 hover:translate-y-1 hover:shadow-none"
-              >
-                {t.ctaDownload}
-                <ArrowRight className="size-5" />
-              </a>
-              <a
-                href={SITE.repo}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center border-2 border-ink px-7 py-4 text-base font-bold transition-colors hover:bg-ink hover:text-paper"
-              >
-                {t.ctaSource}
-              </a>
-              <span className="font-mono text-xs tracking-wider text-muted-foreground uppercase">{t.platforms}</span>
-            </div>
+            <p className="mt-8 mb-0 max-w-[32em] text-base leading-7 text-muted-foreground sm:text-[1.0625rem]">{t.lede}</p>
+            <div className="mt-9"><PrimaryActions download={t.ctaDownload} source={t.ctaSource} /></div>
+            <p className="mt-5 mb-0 text-xs leading-5 text-muted-foreground">{t.platforms}</p>
           </Reveal>
 
-          <Reveal delay={120} className="mt-16 sm:mt-20">
-            {/* 不写死宽高:Shot 会从 public/ 下的文件头读真实尺寸。写死的后果是重录一次
-                换了分辨率,比例就对不上,图被纵向拉伸 —— 而且只在浏览器里看得出来。 */}
-            <Shot src="/media/screens/editor.png" alt={t.heroShotAlt} caption={t.heroShotCaption} framed priority />
+          <Reveal delay={100} className="lg:col-span-8 lg:pl-4">
+            <ProductShot src="/media/home/overview.webp" alt={t.heroShotAlt} width={2400} height={1552} priority />
           </Reveal>
         </div>
       </section>
 
-      <Marquee items={t.marquee} />
-
-      {/* ── 三章:墨 ────────────────────────────────────────────────────────── */}
-      <section className="border-b-2 border-ink bg-invert text-invert-foreground">
-        <div className="mx-auto max-w-[96rem] px-5 py-24 sm:px-8 sm:py-32">
-          <Reveal>
-            <h2 className="mt-0 mb-20 max-w-4xl font-display text-[clamp(1.75rem,5vw,3.75rem)] leading-[1.05] font-extrabold tracking-[-0.02em]">
-              {t.chaptersTitle}
-            </h2>
-          </Reveal>
-
-          <div className="flex flex-col gap-24 sm:gap-32">
+      <section className="relative isolate border-b border-border/60">
+        <Image src="/media/home/timeline-path.webp" alt="" width={837} height={1880} aria-hidden className="pointer-events-none absolute top-[8%] left-1/2 -z-10 hidden h-[84%] w-[48rem] -translate-x-1/2 object-fill opacity-65 lg:block dark:hidden" />
+        <div className="mx-auto max-w-[90rem] px-5 py-24 sm:px-8 sm:py-28 lg:px-12 lg:py-36">
+          <div className="flex flex-col gap-28 sm:gap-36 lg:gap-44">
             {t.chapters.map((chapter, index) => {
-              const shot = CHAPTER_SHOTS[index];
-              // 左右交替。三段同一个方向排下来像一张清单,交替之后才有翻页的节奏。
-              const flipped = index % 2 === 1;
+              const config = CHAPTERS[index];
+              const copyOnRight = index % 2 === 1;
               return (
-                <Reveal as="article" key={chapter.label} className="lg:grid lg:grid-cols-12 lg:items-center lg:gap-16">
-                  <div className={cn("lg:col-span-5", flipped && "lg:order-2 lg:col-start-8")}>
-                    <p className="m-0 flex items-baseline gap-4 font-mono text-xs font-bold tracking-widest uppercase">
-                      <span className="font-display text-5xl leading-none text-flame">
-                        {String(index + 1).padStart(2, "0")}
-                      </span>
-                      {chapter.label}
-                    </p>
-                    <h3 className="mt-6 mb-5 font-display text-2xl font-bold tracking-tight sm:text-4xl">
-                      {chapter.title}
-                    </h3>
-                    <p className="m-0 max-w-(--measure) text-invert-foreground/70">{chapter.body}</p>
+                <Reveal as="article" key={config.id} className="grid gap-10 lg:grid-cols-12 lg:items-center lg:gap-x-14">
+                  <div className={cn("lg:col-span-4", copyOnRight ? "lg:order-2 lg:col-start-9" : "lg:col-start-1")}>
+                    <div className="flex items-start gap-5">
+                      <span className="font-display text-[clamp(3.5rem,6vw,5.75rem)] leading-none font-semibold tracking-[-0.06em] text-primary/35">{String(index + 1).padStart(2, "0")}</span>
+                      <div className="pt-2 sm:pt-3">
+                        <p className="m-0 text-[0.6875rem] font-bold tracking-[0.16em] text-primary uppercase">{chapter.label}</p>
+                        <h2 className="mt-4 mb-0 font-display text-[clamp(2rem,4vw,3.35rem)] leading-[1.04] font-[680] tracking-[-0.04em] text-balance">{chapter.title}</h2>
+                      </div>
+                    </div>
+                    <p className="mt-6 mb-0 max-w-[31em] text-[0.9375rem] leading-7 text-muted-foreground">{chapter.body}</p>
+                    <ul className="mt-6 mb-0 grid list-disc gap-2.5 pl-5 text-sm leading-6 text-foreground/82 marker:text-primary">
+                      {chapter.points.map((point) => <li key={point}>{point}</li>)}
+                    </ul>
+                    <Link href={localePath(locale, config.href)} className="mt-7 inline-flex items-center gap-2 text-sm font-semibold text-primary transition-colors hover:text-primary/75">
+                      {chapter.cta}<ArrowRight className="size-4" aria-hidden />
+                    </Link>
                   </div>
-                  <div className={cn("mt-10 lg:col-span-7 lg:mt-0", flipped && "lg:order-1 lg:col-start-1")}>
-                    <Shot src={shot} alt={chapter.shotAlt} framed />
+                  <div className={cn("lg:col-span-8", copyOnRight ? "lg:order-1 lg:col-start-1" : "lg:col-start-5")}>
+                    <ProductShot src={config.image} alt={chapter.shotAlt} width={config.width} height={config.height} />
                   </div>
                 </Reveal>
               );
@@ -134,113 +101,51 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
         </div>
       </section>
 
-      {/* ── 本地优先:朱 ──────────────────────────────────────────────────────
-          全站唯一一处主张,给它一整幅最烈的颜色 —— 撞色就该用在有话要说的地方。 */}
-      <section className="border-b-2 border-ink bg-flame text-primary-foreground">
-        <div className="mx-auto max-w-[96rem] px-5 py-24 sm:px-8 sm:py-32">
-          <Reveal className="lg:grid lg:grid-cols-12 lg:gap-16">
-            <h2 className="mt-0 mb-8 font-display text-[clamp(1.75rem,5vw,3.5rem)] leading-[1.05] font-extrabold tracking-[-0.02em] lg:col-span-5 lg:mb-0">
-              {t.localTitle}
-            </h2>
-            <div className="lg:col-span-7">
-              {t.localBody.map((paragraph) => (
-                <p key={paragraph} className="mt-0 mb-6 text-lg last:mb-0">
-                  {paragraph}
-                </p>
-              ))}
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ── 还有:纸 ────────────────────────────────────────────────────────── */}
-      <section className="border-b-2 border-ink bg-paper">
-        <div className="mx-auto max-w-[96rem] px-5 py-24 sm:px-8 sm:py-32">
-          <Reveal>
-            <h2 className="mt-0 mb-14 font-display text-[clamp(1.75rem,5vw,3.5rem)] leading-none font-extrabold tracking-[-0.02em]">
-              {t.moreTitle}
-            </h2>
-          </Reveal>
-          <div className="grid gap-8 sm:grid-cols-3">
-            {t.more.map((item, index) => {
-              const { icon: Icon, bar } = MORE_MARKS[index];
-              return (
-                <Reveal
-                  key={item.title}
-                  delay={index * 80}
-                  className="border-2 border-ink bg-card transition-transform hover:-translate-y-1"
-                >
-                  <div className={cn("h-2.5", bar)} />
-                  <div className="p-7">
-                    <Icon className="mb-6 size-6" aria-hidden />
-                    <h3 className="mt-0 mb-3 font-display text-xl font-bold tracking-tight">{item.title}</h3>
-                    <p className="m-0 text-muted-foreground">{item.body}</p>
-                  </div>
-                </Reveal>
-              );
-            })}
+      <section className="border-b border-border/60 bg-brand-soft">
+        <Reveal className="mx-auto grid max-w-[90rem] gap-10 px-5 py-16 sm:px-8 lg:grid-cols-12 lg:items-center lg:px-12 lg:py-20">
+          <div className="lg:col-span-6">
+            <p className="m-0 text-xs font-semibold tracking-[0.16em] text-primary uppercase">{t.localEyebrow}</p>
+            <h2 className="mt-4 mb-0 font-display text-[clamp(2rem,4vw,3.4rem)] leading-[1.04] font-[680] tracking-[-0.04em]">{t.localTitle}</h2>
+            <p className="mt-5 mb-0 max-w-[38em] text-[0.9375rem] leading-7 text-muted-foreground">{t.localBody}</p>
           </div>
-        </div>
+          <ul className="m-0 grid list-none gap-4 p-0 sm:grid-cols-3 lg:col-span-6">
+            {t.localPoints.map((point) => (
+              <li key={point.title} className="border-l-2 border-primary/45 pl-4"><strong className="block text-sm font-semibold">{point.title}</strong><span className="mt-1 block text-xs leading-5 text-muted-foreground">{point.body}</span></li>
+            ))}
+          </ul>
+        </Reveal>
       </section>
 
-      {/* ── 社区:纸 ────────────────────────────────────────────────────────
-          两张二维码。放在收尾 CTA **之前** —— 下载完就走的人不会再往下滚,而"想找个人问问"
-          恰恰发生在决定下载之前。 */}
-      <section className="border-b-2 border-ink bg-paper">
-        <div className="mx-auto max-w-[96rem] px-5 py-24 sm:px-8 sm:py-32">
-          <Reveal className="lg:grid lg:grid-cols-12 lg:items-center lg:gap-16">
-            <div className="lg:col-span-5">
-              <h2 className="mt-0 mb-6 font-display text-[clamp(1.75rem,5vw,3.5rem)] leading-[1.05] font-extrabold tracking-[-0.02em]">
-                {t.communityTitle}
-              </h2>
-              <p className="m-0 max-w-(--measure) text-lg text-muted-foreground">{t.communityBody}</p>
-              <a
-                className="mt-6 inline-flex border-b-2 border-ink pb-1 font-bold transition-colors hover:border-flame hover:text-flame"
-                href={SITE.authorX}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {t.communityAuthorX}
-              </a>
-            </div>
-
-            <div className="mt-12 lg:col-span-7 lg:mt-0">
-              <QrCards
-                group={t.communityGroup}
-                groupHint={t.communityGroupHint}
-                author={t.communityAuthor}
-                authorHint={t.communityAuthorHint}
-              />
-            </div>
+      <section className="border-b border-border/60">
+        <div className="mx-auto max-w-[90rem] px-5 py-20 sm:px-8 lg:px-12 lg:py-24">
+          <Reveal className="grid gap-8 lg:grid-cols-[minmax(14rem,0.8fr)_repeat(2,minmax(0,1fr))] lg:gap-0">
+            <div className="pr-8"><p className="m-0 text-xs font-semibold tracking-[0.16em] text-primary uppercase">{t.moreEyebrow}</p><h2 className="mt-4 mb-0 font-display text-3xl leading-tight font-[660] tracking-[-0.035em]">{t.moreTitle}</h2></div>
+            {t.more.map((item, index) => (
+              <div key={item.title} className={cn("border-t border-border/60 pt-6 lg:border-t-0 lg:border-l lg:px-8 lg:pt-0", index === 1 && "lg:pr-0")}>
+                <h3 className="m-0 font-display text-xl font-semibold tracking-[-0.02em]">{item.title}</h3>
+                <p className="mt-3 mb-0 max-w-[31em] text-sm leading-6 text-muted-foreground">{item.body}</p>
+                <Link href={localePath(locale, item.href)} className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-primary hover:text-primary/75">{item.cta}<ArrowRight className="size-4" aria-hidden /></Link>
+              </div>
+            ))}
           </Reveal>
         </div>
       </section>
 
-      {/* ── 收尾:墨 ────────────────────────────────────────────────────────── */}
-      <section className="bg-invert text-invert-foreground">
-        <div className="mx-auto max-w-[96rem] px-5 py-24 sm:px-8 sm:py-32">
-          <Reveal>
-            <h2 className="mt-0 mb-6 max-w-3xl font-display text-[clamp(2rem,6vw,4.5rem)] leading-[1.02] font-extrabold tracking-[-0.03em]">
-              {t.closingTitle}
-            </h2>
-            <p className="mt-0 mb-10 max-w-xl text-lg text-invert-foreground/70">{t.closingBody}</p>
-            <div className="flex flex-wrap items-center gap-4">
-              <a
-                href={SITE.releases}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-3 border-2 border-invert-foreground bg-flame px-7 py-4 text-base font-bold text-primary-foreground transition-transform hover:-translate-y-1"
-              >
-                {t.ctaDownload}
-                <ArrowRight className="size-5" />
-              </a>
-              <span className="font-mono text-xs tracking-wider text-invert-foreground/60 uppercase">
-                {t.platforms}
-              </span>
-            </div>
-          </Reveal>
-        </div>
+      <section className="border-b border-border/60">
+        <Reveal className="mx-auto grid max-w-[90rem] gap-8 px-5 py-16 sm:px-8 lg:grid-cols-12 lg:items-center lg:px-12 lg:py-20">
+          <div className="lg:col-span-7"><p className="m-0 text-xs font-semibold tracking-[0.16em] text-primary uppercase">{t.makerEyebrow}</p><h2 className="mt-4 mb-0 font-display text-[clamp(2rem,4vw,3.4rem)] leading-[1.04] font-[680] tracking-[-0.04em]">{t.makerTitle}</h2><p className="mt-5 mb-0 max-w-[38em] text-[0.9375rem] leading-7 text-muted-foreground">{t.makerBody}</p></div>
+          <div className="flex items-center gap-5 lg:col-span-5 lg:justify-end"><BrandIcon size={64} className="rounded-2xl" /><div><p className="m-0 font-display text-xl font-semibold tracking-[-0.02em]">KindaHuaX</p><a href={SITE.authorX} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-primary hover:text-primary/75">{t.makerX}<ArrowRight className="size-4" aria-hidden /></a></div></div>
+        </Reveal>
       </section>
-    </>
+
+      <section className="border-b border-border/60 bg-brand-soft">
+        <Reveal className="mx-auto grid max-w-[90rem] gap-8 px-5 py-16 sm:px-8 lg:grid-cols-12 lg:items-center lg:px-12 lg:py-20">
+          <div className="lg:col-span-6"><h2 className="m-0 font-display text-[clamp(2.25rem,5vw,4.25rem)] leading-[0.98] font-[700] tracking-[-0.05em] text-balance">{t.closingTitle}</h2><p className="mt-5 mb-0 max-w-xl text-[0.9375rem] leading-7 text-muted-foreground">{t.closingBody}</p></div>
+          <div className="lg:col-span-6 lg:justify-self-end"><PrimaryActions download={t.ctaDownload} source={t.ctaSource} compact /><p className="mt-4 mb-0 text-xs text-muted-foreground lg:text-right">{t.platforms}</p></div>
+        </Reveal>
+      </section>
+
+      <div className="mx-auto flex max-w-[90rem] items-center justify-between gap-8 px-5 py-8 sm:px-8 lg:px-12"><BrandWordmark className="w-28" /><p className="m-0 text-right text-xs leading-5 text-muted-foreground">{t.bottomLine}</p></div>
+    </div>
   );
 }

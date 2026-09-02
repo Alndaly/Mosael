@@ -13,7 +13,7 @@ pnpm build          # 构建期把 36 个页面全部静态生成(文档正文�
 
 ```
 content/docs/<语言>/<分区>/<页>.mdx   文档正文(zh / en,分区为 start / guides / about)
-public/media/{screens,gifs}          界面配图,由 scripts/record-doc-media.py 生成
+public/media/{home,screens,gifs}     首页产品实拍与文档配图
 src/app/[locale]/                    全站路由;这一层的 layout 就是根布局
 src/i18n/messages.ts                 除文档正文外的全部文案,中英各一份
 src/lib/registry.ts                  插件索引 —— 构建期直接读 plugins/examples 里的 manifest
@@ -25,10 +25,13 @@ src/lib/registry.ts                  插件索引 —— 构建期直接读 plug
 `<html>/<body>` 这一层拿不到 className 的基础排版、以及 MDX 渲染出来的裸标签
 (`.docs-body`)。和主应用 `frontend/src/app/styles.css` 顶部那条约定一致。
 
-**颜色只有四个**:纸、墨、朱、靛。它们注册在 `@theme` 里,所以 `bg-flame`、`border-ink`
-这些是 Tailwind 生成的 utility。需要在深浅色之间翻转的整幅色带用
-`bg-invert text-invert-foreground` —— 夜档里「反相」不是翻成纸色,而是一块抬起来的深色面板,
-否则一整幅近白压在深色页面上会闪得人睁不开眼。
+**品牌层级以暖白、墨色和紫色为主。** 暖白负责留白，墨色保证阅读，紫色只用于路径、编号、
+链接和主操作。首页不使用阴影来制造层级，而是依靠间距、字号、细分割线和真实产品截图。
+颜色都注册在 `@theme` 中，组件只使用 Tailwind utility。
+
+**首页按一条创作路径组织。** 四个核心章节依次是无限画布、时间线剪辑、AI 智能体和可视化
+工作流；不要加入产品尚未提供的知识库，也不要把作者账号写成官方品牌账号。唯一的 X 链接是
+`https://x.com/KindaHuaX`。
 
 **文案不要写进 JSX。** JSX 会把源码里的换行 + 缩进折成一个空格,英文里正好是词间距,
 中文里就是凭空多出来的空格,而且只在浏览器里看得见。中文散文一律放 `messages.ts`。
