@@ -3,6 +3,15 @@
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 
+## [0.27.2] - 2026-09-02
+
+### Changed
+
+- Replaced the macOS menu-bar and Windows notification-area icons with the supplied Mosael mark,
+  using native 1×/2× resources sized for persistent system status surfaces.
+- Made the Windows tray mark follow the system appearance with dedicated dark-on-light and
+  light-on-dark variants, while macOS uses a template image for automatic menu-bar contrast.
+
 ## [0.27.1] - 2026-09-02
 
 ### Changed
@@ -128,6 +137,7 @@ commit list and downloadable artifacts.
   flashing each section's list page first.
 - Prevented the editor assistant from covering the workspace when opened.
 
+[0.27.2]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.2
 [0.27.1]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.1
 [0.27.0]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.0
 [0.26.10]: https://github.com/Alndaly/Mosael/releases/tag/v0.26.10
