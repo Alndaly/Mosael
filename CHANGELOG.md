@@ -12,6 +12,9 @@ commit list and downloadable artifacts.
 
 ### Fixed
 
+- Recovered pre-Mosael backend libraries and Electron user data even when first launch had already
+  created the new directories, with automatic one-time migration, database sidecar renaming, conflict
+  protection, and recoverable backups of the replaced bootstrap directories.
 - Extended inner-page hero backgrounds behind the floating navigation instead of leaving a separate page-color
   strip above Workflows, Plugins, and plugin details.
 - Removed redundant screenshot shells from homepage product chapters and tightened the Mosael wordmark asset so

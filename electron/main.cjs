@@ -2,6 +2,7 @@ const { app, BrowserWindow, Menu, Notification, dialog, ipcMain, nativeImage, sh
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
+const { migrateLegacyUserData } = require("./user-data-migration.cjs");
 
 // 应用名。开发态跑的是未打包的 Electron.app,菜单栏首项 / Dock 名默认显示 "Electron"。
 // macOS dev 的菜单/Dock 名读 Electron.app 的 CFBundleName,由 electron/brand-dev.cjs 在启动前补丁;
@@ -10,16 +11,25 @@ const path = require("node:path");
 app.setName("Mosael");
 app.setAppUserModelId("dev.mosael.app");
 
-// productName 改名会让 Electron 换一个 userData 目录。第一次启动 Mosael 时把旧目录整体
-// 搬过来，浏览器池登录态、窗口状态和 Chromium 存储才能无缝延续。只在新目录尚不存在时做。
-function migrateLegacyUserData() {
+// productName 改名会让 Electron 换一个 userData 目录。Electron 会在这里执行前先创建
+// 新目录，所以不能用「目标目录存在」判断迁移完成；迁移器会先备份这个启动空壳，再以
+// marker 保证浏览器池登录态、窗口状态和 Chromium 存储只接管一次。
+function migrateLegacyElectronUserData() {
   const target = app.getPath("userData");
-  const legacy = path.join(app.getPath("appData"), "Open Studio");
-  if (fs.existsSync(target) || !fs.existsSync(legacy)) return;
+  const appData = app.getPath("appData");
   try {
-    fs.renameSync(legacy, target);
-  } catch {
-    fs.cpSync(legacy, target, { recursive: true, errorOnExist: false });
+    const result = migrateLegacyUserData({
+      target,
+      legacyCandidates: ["Open Studio", "OpenStudio"].map((name) => path.join(appData, name)),
+    });
+    if (result.status === "migrated" || result.status === "copied") {
+      console.warn(
+        `[mosael] migrated Electron user data from ${result.source} to ${result.target}` +
+          (result.backup ? ` (backup: ${result.backup})` : ""),
+      );
+    }
+  } catch (error) {
+    console.error(`[mosael] could not migrate Electron user data; continuing with ${target}`, error);
   }
 }
 
@@ -35,7 +45,7 @@ const isDev = !app.isPackaged;
 const smokeResultPath = process.env.MOSAEL_SMOKE_TEST_RESULT || "";
 const isSmokeTest = Boolean(smokeResultPath);
 
-if (!isSmokeTest) migrateLegacyUserData();
+if (!isSmokeTest) migrateLegacyElectronUserData();
 
 // 冒烟必须能和开发版/已安装版并行跑。Electron 的单实例锁跟 userData 目录绑定；如果继续
 // 使用真实用户目录，本机开着 Mosael 时打包产物会在 requestSingleInstanceLock()

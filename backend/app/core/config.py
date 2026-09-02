@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
 import os
-import shutil
 from datetime import timedelta
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.core.data_migration import migrate_default_data_dir
 
 ENV_PREFIX = "MOSAEL_"
 LEGACY_ENV_PREFIX = "OPEN_STUDIO_"
@@ -19,25 +21,32 @@ def _adopt_legacy_environment() -> None:
 
 
 def _migrate_default_data_dir() -> Path:
-    """Move the previous local data directory once so upgrades retain every workspace."""
+    """Move the previous local data directory before settings create the new database."""
     target = Path.home() / ".mosael"
-    legacy = Path.home() / ".open-studio"
     if os.environ.get(f"{ENV_PREFIX}DATA_DIR") or os.environ.get(f"{LEGACY_ENV_PREFIX}DATA_DIR"):
         return target
-    if not target.exists() and legacy.exists():
-        try:
-            legacy.replace(target)
-        except OSError:
-            shutil.copytree(legacy, target, dirs_exist_ok=True)
-    old_db = target / "open-studio.db"
-    new_db = target / "mosael.db"
-    if old_db.exists() and not new_db.exists():
-        old_db.replace(new_db)
-        for suffix in ("-wal", "-shm"):
-            old_sidecar = target / f"open-studio.db{suffix}"
-            if old_sidecar.exists():
-                old_sidecar.replace(target / f"mosael.db{suffix}")
-    return target
+    try:
+        result = migrate_default_data_dir(Path.home())
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "Could not migrate pre-Mosael data; continuing with %s", target
+        )
+        return target
+    if result.changed:
+        logging.getLogger(__name__).warning(
+            "Migrated pre-Mosael data from %s to %s (backup=%s, source_preserved=%s)",
+            result.source,
+            result.target,
+            result.backup,
+            result.source_preserved,
+        )
+    elif result.status not in {"no-legacy-data"}:
+        logging.getLogger(__name__).warning(
+            "Did not migrate pre-Mosael data from %s: %s",
+            result.source,
+            result.status,
+        )
+    return result.target
 
 
 _adopt_legacy_environment()
@@ -140,37 +149,6 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
-_DEFAULT_DATA_DIR = DEFAULT_DATA_DIR
-_DB_NAMES = ("mosael.db",)
-
-
-def _db_has_rows(path: Path) -> bool:
-    """这个 SQLite 文件里有没有真实的用户数据(以 workspaces 表有行为准)。
-
-    判「有没有数据」而不是判「文件在不在」:一个已建好表结构、但一行没有的空库也有几百 KB,
-    靠体积区分不了。只读打开,任何异常(文件不是库、缺表、被占用)都当作"没有数据"。
-    """
-    if not path.is_file():
-        return False
-    try:
-        import sqlite3
-
-        connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
-        try:
-            row = connection.execute("SELECT COUNT(*) FROM workspaces").fetchone()
-            return bool(row and row[0])
-        finally:
-            connection.close()
-    except Exception:
-        return False
-
-
-def _dir_has_user_data(directory: Path) -> bool:
-    return any(_db_has_rows(directory / name) for name in _DB_NAMES)
-
-
-
 
 def app_version() -> str:
     """当前应用版本。
