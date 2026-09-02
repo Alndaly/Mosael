@@ -30,6 +30,8 @@ commit list and downloadable artifacts.
 - Routed every image presentation surface through the browser-compatible preview endpoint, fixing
   broken HEIC/HEIF rendering in asset details, the editor compositor, compare view, boards, AI
   galleries, frame slots, and agent tool results while preserving original-file downloads.
+- Replaced the asset-detail dialog's browser-native audio controls with the shared Open Studio audio
+  player, keeping playback, seeking, elapsed time, mute, and autoplay behavior consistent.
 
 ## [0.26.10] - 2026-09-02
 

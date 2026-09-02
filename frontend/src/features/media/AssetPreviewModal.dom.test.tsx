@@ -31,6 +31,15 @@ const imageAsset = {
   media_info: { width: 512, height: 512 },
 };
 
+const audioAsset = {
+  ...imageAsset,
+  id: "audio-asset",
+  name: "longxiaochun_v2 · 配音",
+  original_filename: "speech.wav",
+  kind: "audio",
+  media_info: { duration: 2.9 },
+};
+
 describe("AssetPreviewModal", () => {
   beforeEach(() => openImagePreview.mockReset());
 
@@ -45,5 +54,18 @@ describe("AssetPreviewModal", () => {
       src: "/preview/heic-asset",
       title: "IMG_0665.HEIC",
     });
+  });
+
+  it("renders audio with the shared custom player instead of native controls", () => {
+    render(<AssetPreviewModal asset={audioAsset as never} onClose={vi.fn()} />);
+
+    // Dialog content is portaled into document.body, outside Testing Library's render container.
+    const audio = document.querySelector("audio");
+    expect(audio).not.toBeNull();
+    expect(audio?.getAttribute("src")).toBe("/file/audio-asset");
+    expect(audio?.hasAttribute("controls")).toBe(false);
+    expect(audio?.hasAttribute("autoplay")).toBe(true);
+    expect(screen.getByRole("button", { name: "boardPlay" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "boardMute" })).toBeInTheDocument();
   });
 });

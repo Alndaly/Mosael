@@ -6,6 +6,7 @@ import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useImagePreview } from "@/components/app/image-preview";
+import { AudioPlayerBar } from "@/components/app/media-playback";
 import { formatTimecode } from "@/domain/timeline/geometry";
 import { cn } from "@/lib/utils";
 
@@ -95,7 +96,12 @@ export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onC
                 <span className="grid h-16 w-16 place-items-center rounded-full bg-[rgb(255_255_255/0.06)] text-muted-foreground">
                   <FileAudio size={26} />
                 </span>
-                <audio className="w-full" src={src} controls autoPlay />
+                <AudioPlayerBar
+                  src={src}
+                  autoPlay
+                  showIcon={false}
+                  className="h-12 rounded-xl border border-[rgb(255_255_255/0.1)] bg-[rgb(255_255_255/0.05)] px-3"
+                />
               </div>
             )}
           </div>

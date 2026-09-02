@@ -201,7 +201,17 @@ export function VideoPlayer({
  * 和视频不同,音频的**控件一直在**:一段音频除了这条控件之外没有别的可看,藏起来等于
  * 那里什么都没有。画板节点、智能体工具结果、素材预览三处共用这一副面孔。
  */
-export function AudioPlayerBar({ src, className, showIcon = true }: { src: string; className?: string; showIcon?: boolean }) {
+export function AudioPlayerBar({
+  src,
+  className,
+  showIcon = true,
+  autoPlay = false,
+}: {
+  src: string;
+  className?: string;
+  showIcon?: boolean;
+  autoPlay?: boolean;
+}) {
   const t = useI18n();
   const ref = React.useRef<HTMLAudioElement | null>(null);
   const { playing, muted, at, total, setTotal, toggle, toggleMute, bind } = usePlayback(ref);
@@ -211,6 +221,7 @@ export function AudioPlayerBar({ src, className, showIcon = true }: { src: strin
       <audio
         ref={ref}
         src={src}
+        autoPlay={autoPlay}
         preload="metadata"
         className="hidden"
         onLoadedMetadata={(event) => setTotal(event.currentTarget.duration)}
