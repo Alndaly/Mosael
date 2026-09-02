@@ -1231,7 +1231,12 @@ def session_context(db: Session, session: AgentSession) -> dict | None:
     而实际上它早就在按 32k 压缩了。
     """
     try:
-        provider_dict, agent_model, _profile = resolve_chat_provider(db, session.provider_profile_id, session.model or "", user_id=session.owner_user_id)
+        provider_dict, agent_model, profile = resolve_chat_provider(
+            db,
+            session.provider_profile_id,
+            session.model or "",
+            user_id=session.owner_user_id,
+        )
     except Exception:  # noqa: BLE001 — 没配供应商时不该让会话详情整个失败
         return None
     if not provider_dict or not agent_model:
@@ -1239,7 +1244,12 @@ def session_context(db: Session, session: AgentSession) -> dict | None:
     window = provider_dict.get("context_window")
     if not window:
         # 订阅计划的窗口在 pi 的目录里,后端拿不到;登录时存下的 model_catalog 有这份。
-        for entry in session_model_catalog(db, session.provider_profile_id, session.owner_user_id):
+        # 会话没有显式选模型时,resolve_chat_provider 会落到用户的默认模型。此时
+        # session.provider_profile_id 仍为空,但目录属于刚解析出来的 profile —— 继续拿
+        # session 上的空值去查会错过真实窗口,回落成 32k。结果就是 K3 的 1M 窗口在一条
+        # 消息都没有时也显示「剩余 50%」。
+        resolved_profile_id = getattr(profile, "id", None) or session.provider_profile_id
+        for entry in session_model_catalog(db, resolved_profile_id, session.owner_user_id):
             if entry.get("id") == agent_model:
                 window = entry.get("contextWindow") or entry.get("context_window")
                 break

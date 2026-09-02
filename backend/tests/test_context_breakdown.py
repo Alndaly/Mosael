@@ -54,3 +54,43 @@ def test_free_space_never_goes_negative() -> None:
     parts = context_breakdown([], system_prompt="", tool_tokens=50000, window=32000)
     by_kind = {part["kind"]: part["tokens"] for part in parts["parts"]}
     assert by_kind["free"] == 0
+
+
+def test_default_chat_model_uses_its_resolved_profile_catalog_window(monkeypatch) -> None:
+    """会话沿用默认模型时 profile_id 不写在会话上,但窗口仍应从那条默认连接的目录读取。"""
+    from types import SimpleNamespace
+
+    from app.domain.agent import host
+
+    session = SimpleNamespace(
+        provider_profile_id=None,
+        model=None,
+        owner_user_id="user-1",
+        adapter_state=None,
+        workspace_id="workspace-1",
+        project_id=None,
+        plan=None,
+        analysis_video_mode="auto",
+    )
+    monkeypatch.setattr(
+        host,
+        "resolve_chat_provider",
+        lambda *_args, **_kwargs: ({"context_window": None}, "k3", SimpleNamespace(id="profile-kimi")),
+    )
+    monkeypatch.setattr(
+        host,
+        "session_model_catalog",
+        lambda _db, profile_id, user_id: (
+            [{"id": "k3", "contextWindow": 1_048_576}]
+            if (profile_id, user_id) == ("profile-kimi", "user-1")
+            else []
+        ),
+    )
+    monkeypatch.setattr(host, "build_system_prompt", lambda *_args: "")
+    monkeypatch.setattr(host, "tool_definition_tokens", lambda *_args: 0)
+
+    context = host.session_context(object(), session)
+
+    assert context is not None
+    assert context["window"] == 1_048_576
+    assert context["used"] == 0
