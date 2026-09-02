@@ -243,7 +243,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
   );
 }
 
-function AccountSection() {
+export function AccountSection() {
   const t = useI18n();
   const { user, updateProfile, changePassword, updateAvatar, logout } = useAuth();
   const [profile, setProfile] = React.useState(() => profileFromUser(user));
@@ -389,7 +389,7 @@ function AccountSection() {
         </div>
       </SettingsBlock>
       <SettingsBlock>
-        <SettingsForm className="grid-cols-2">
+        <SettingsForm>
           <SettingsField label={t("settingsUsername")} description={t("settingsUsernameDesc")}>
             <Input
               value={profile.username}
@@ -404,7 +404,7 @@ function AccountSection() {
               onChange={(event) => setProfile((current) => ({ ...current, display_name: event.target.value }))}
             />
           </SettingsField>
-          <SettingsField label={t("signature")} description={t("signatureDesc")} className="col-span-full">
+          <SettingsField label={t("signature")} description={t("signatureDesc")}>
             <Textarea
               className="resize-y"
               rows={3}
@@ -422,40 +422,40 @@ function AccountSection() {
             <strong>{t("settingsPassword")}</strong>
             <small>{t("settingsPasswordDesc")}</small>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="grid min-w-0 gap-1.5 [&>span]:text-ui-sm [&>span]:font-semibold [&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground">
-              <span>{t("currentPassword")}</span>
+          <SettingsForm>
+            {/* 当前密码是这次变更的前提，不是两个新值中的一个；单独成行后，阅读顺序与验证逻辑一致。 */}
+            <SettingsField label={t("currentPassword")}>
               <Input
                 type="password"
                 value={passwords.current}
                 autoComplete="current-password"
                 onChange={(event) => setPasswords((current) => ({ ...current, current: event.target.value }))}
               />
-            </label>
-            <label className="grid min-w-0 gap-1.5 [&>span]:text-ui-sm [&>span]:font-semibold [&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground">
-              <span>{t("newPassword")}</span>
-              <Input
-                type="password"
-                value={passwords.next}
-                autoComplete="new-password"
-                onChange={(event) => setPasswords((current) => ({ ...current, next: event.target.value }))}
-              />
-            </label>
-            <label className="grid min-w-0 gap-1.5 [&>span]:text-ui-sm [&>span]:font-semibold [&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground">
-              <span>{t("confirmPassword")}</span>
-              <Input
-                type="password"
-                value={passwords.confirm}
-                autoComplete="new-password"
-                onChange={(event) => setPasswords((current) => ({ ...current, confirm: event.target.value }))}
-              />
-            </label>
+            </SettingsField>
+            <div data-slot="password-pair" className="grid grid-cols-2 gap-3 max-[720px]:grid-cols-1">
+              <SettingsField label={t("newPassword")}>
+                <Input
+                  type="password"
+                  value={passwords.next}
+                  autoComplete="new-password"
+                  onChange={(event) => setPasswords((current) => ({ ...current, next: event.target.value }))}
+                />
+              </SettingsField>
+              <SettingsField label={t("confirmPassword")}>
+                <Input
+                  type="password"
+                  value={passwords.confirm}
+                  autoComplete="new-password"
+                  onChange={(event) => setPasswords((current) => ({ ...current, confirm: event.target.value }))}
+                />
+              </SettingsField>
+            </div>
             <div className="flex items-end justify-end">
               <Button size="sm" disabled={!canUpdatePassword} onClick={() => void submitPassword()}>
                 {passwordPending ? <Loader2 size={13} className="animate-mosael-spin" /> : null} {t("updatePassword")}
               </Button>
             </div>
-          </div>
+          </SettingsForm>
         </div>
       </SettingsBlock>
     </SettingsGroup>

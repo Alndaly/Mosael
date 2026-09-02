@@ -81,7 +81,7 @@ function DefaultRow({
     <SettingsRow
       id={`provider-default-${capability}`}
       className={cn(
-        "grid-cols-[140px_minmax(0,1fr)] py-2.5 transition-[background,box-shadow] duration-[160ms]",
+        "grid-cols-[140px_minmax(0,1fr)] transition-[background,box-shadow] duration-[160ms]",
         highlighted && "bg-[color-mix(in_srgb,var(--primary)_3%,transparent)] shadow-[inset_2px_0_0_color-mix(in_srgb,var(--primary)_72%,transparent)]",
       )}
       controlClassName="w-full min-w-0 shrink"

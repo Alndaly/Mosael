@@ -35,6 +35,47 @@ final result: passed
 
 ---
 
+## Account settings full-width form layout
+
+- Source visual truth: `/var/folders/yw/0kg9jbhj3xx00gq05_14d1lw0000gn/T/TemporaryItems/NSIRD_screencaptureui_uLFIrx/Screenshot 2026-09-03 at 00.04.09.png`
+- Browser-rendered implementation: `/tmp/mosael-account-password-layout-after.png`
+- Combined comparison: `/tmp/mosael-account-layout-comparison.png`
+- Viewport: implementation 1280 × 720 CSS px at 1× density; source 3456 × 2234 px, normalized to 1280 px width and top-cropped to the same 1280 × 720 comparison frame.
+- State: dark theme, Settings → Account; implementation settings panel scrolled to expose the complete password form.
+
+## Findings
+
+No actionable P0, P1, or P2 issues remain.
+
+- Fonts and typography: existing account headings, field labels, descriptions, and control text are unchanged.
+- Spacing and layout rhythm: username, display name, and signature now each occupy a full-width row. Current password occupies its own full-width prerequisite row; new password and confirmation form one full-width two-column pair that collapses to one column below 720px.
+- Colors and visual tokens: existing panel, border, input, muted, success, and primary tokens are preserved.
+- Image quality and asset fidelity: the existing user avatar and product icons are unchanged; no new raster or decorative assets were introduced.
+- Copy and content: labels, descriptions, placeholders, autocomplete semantics, autosave behavior, and password validation copy are unchanged.
+
+## Full-view comparison evidence
+
+The combined comparison shows the reported partial-width profile fields and mixed current/new password row on the left, and the revised full-width field rhythm with a standalone current-password row on the right. The form now uses all available content width without adding nested cards or changing the surrounding settings shell.
+
+## Focused-region comparison evidence
+
+A separate crop was not needed: the normalized comparison keeps all profile fields and the complete password field hierarchy legible in one frame.
+
+## Comparison history
+
+1. Initial source: profile fields stopped at the form's former readable-width cap; username and display name shared a row, while current and new password shared a row and confirmation sat alone below.
+2. Revised implementation: the account form fills the content column, profile fields stack as full-width rows, current password is isolated, and the two new-password values remain paired. No P0/P1/P2 mismatch remained in the browser capture.
+
+## Verification
+
+- Account layout DOM test covers the full-width profile form, standalone current-password row, and paired new-password fields.
+- Frontend suite: 135 test files and 838 tests passed.
+- Production TypeScript/Vite build passed.
+
+final result: passed
+
+---
+
 ## Settings typography hierarchy
 
 ### Comparison target

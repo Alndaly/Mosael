@@ -44,7 +44,7 @@ export function SettingsGroup({
         data-slot="settings-group-header"
         className={cn(
           "flex items-center justify-between gap-4 px-0.5",
-          hasContent && "border-b border-border/70 pb-3",
+          hasContent && "border-b border-border/70 pb-4",
         )}
       >
         <div className="min-w-0">
@@ -93,7 +93,11 @@ export function SettingsRow({
   children?: React.ReactNode;
 }) {
   return (
-    <div id={id} className={cn("grid grid-cols-[minmax(0,1fr)_auto] items-center gap-5 px-0.5 py-3.5", className)}>
+    <div
+      id={id}
+      data-slot="settings-row"
+      className={cn("grid grid-cols-[minmax(0,1fr)_auto] items-center gap-5 px-0.5 py-3", className)}
+    >
       <div className="grid min-w-0 gap-1">
         <span data-slot="settings-row-label" className="text-[15px] font-semibold leading-[1.35]">{label}</span>
         {description && (
@@ -124,7 +128,7 @@ export function SettingsList({
 }
 
 export function SettingsListItem({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("px-0.5 py-2.5", className)} {...props} />;
+  return <div data-slot="settings-list-item" className={cn("px-0.5 py-3", className)} {...props} />;
 }
 
 function flattenSections(children: React.ReactNode): React.ReactNode[] {
@@ -155,8 +159,12 @@ export function SettingsSectionStack({
       )}
     >
       {sections.map((section, index) => (
-        <React.Fragment key={React.isValidElement(section) && section.key != null ? String(section.key) : index}>
-          {index > 0 && <Separator className="my-3.5 bg-border/70" />}
+        <React.Fragment
+          key={`settings-section-${index}-${React.isValidElement(section) && section.key != null ? String(section.key) : ""}`}
+        >
+          {/* 分割线属于上一节的收尾：紧贴上一节，只用下边距为下一节标题留出层级。
+              如果这里使用 my-*, 会和上一节最后一行的 py-3 叠加，造成视觉上的下宽上窄。 */}
+          {index > 0 && <Separator className="mb-3 bg-border/70" />}
           {section}
         </React.Fragment>
       ))}
@@ -183,7 +191,7 @@ export function SettingsField({
   children: React.ReactNode;
 }) {
   return (
-    <label className={cn("grid min-w-0 gap-1.5", className)}>
+    <label data-slot="settings-field" className={cn("grid min-w-0 gap-1.5", className)}>
       <span className="text-[15px] font-semibold leading-[1.35] text-foreground">{label}</span>
       {description && <small className="text-ui-sm leading-[1.5] text-muted-foreground">{description}</small>}
       {children}
@@ -191,12 +199,7 @@ export function SettingsField({
   );
 }
 
-/**
- * 表单的可读宽度上限。
- *
- * 一个用户名输入框铺满 900px 是没道理的 —— 眼睛要从标签一路扫到光标。设置页此前所有表单
- * 都跟着容器走,窗口越宽越难填。
- */
+/** 表单负责占满设置内容列；字段是否并排由调用方按信息关系显式组织。 */
 export function SettingsForm({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className={cn("grid max-w-[42rem] gap-3", className)}>{children}</div>;
+  return <div data-slot="settings-form" className={cn("grid w-full gap-3", className)}>{children}</div>;
 }

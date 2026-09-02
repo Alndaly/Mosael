@@ -2,11 +2,11 @@
    Global rhythm(2026-07 起样式全部内联为组件里的 Tailwind 类,
    本文件只保留拿不到 className 的第三方 portal 覆盖;新样式一律
    写在 TSX 上,并保持以下刻度):
-   - Spacing: 4px base — 容器 pad 6/10,页面 pad 10px,面板/壳 gap 6,
-     分组 gap 12。
-   - Radius: 3 (chips) / 4 (controls) / 6 (rows, inner cards) /
-     8 (panels, popovers) / 10 (hero surfaces) / 999 (pills)。
-     Tailwind 端由 --radius: 4px 派生(tokens.css)。无 5/7px。
+   - Spacing: 4px base — 紧凑控件 8px,行与分组 12px,页面区段 16px；
+     同一层级不要另写 10/14px 形成看不见的节奏漂移。
+   - Radius: sm/md/lg/xl = 6/8/10/14px,分别用于小控件、面板、
+     内层内容卡与浮层；胶囊才用 full。Tailwind 端由 --radius: 8px
+     派生(tokens.css)。任意值只留给聊天输入框、轨道等由形状决定的组件。
    - 分段控件(seg):全局同一尺寸,不做局部 padding/字号覆盖;
      发丝边框拼接组,选中段 accent 淡底。
    - 主从页(settings/plugins/scheduler 等):列表列 200–260px,
@@ -22,7 +22,6 @@
 [data-radix-popper-content-wrapper] {
   z-index: 120 !important;
 }
-
 /* ============================================================
    磨玻璃(2026-07 精致化):半透明 + 背景模糊,只给浮层与 chrome。
    内容面板(.panel/.card)保持不透明 —— 可读性与平面身份优先。
@@ -42,4 +41,3 @@
     backdrop-filter: blur(20px) saturate(1.6);
   }
 }
-

@@ -17,12 +17,13 @@ describe("settings section layout", () => {
     const header = container.querySelector('[data-slot="settings-group-header"]');
     expect(content).not.toBeNull();
     expect(header).toHaveClass("border-b");
+    expect(header).toHaveClass("pb-4");
     expect(content).not.toHaveClass("rounded-lg");
     expect(content).not.toHaveClass("border");
     expect(content).not.toHaveClass("bg-panel");
   });
 
-  it("uses separators rather than cards between sibling sections", () => {
+  it("puts each section divider against the previous content and spaces the next header", () => {
     const { container } = render(
       <SettingsSectionStack>
         <SettingsGroup title="外观" />
@@ -34,7 +35,26 @@ describe("settings section layout", () => {
     );
 
     expect(screen.getAllByRole("heading")).toHaveLength(3);
-    expect(container.querySelectorAll('[data-slot="separator"]')).toHaveLength(2);
+    const separators = container.querySelectorAll('[data-slot="separator"]');
+    expect(separators).toHaveLength(2);
+    separators.forEach((separator) => {
+      expect(separator).toHaveClass("mb-3");
+      expect(separator).not.toHaveClass("mt-3", "my-3");
+    });
+  });
+
+  it("keeps rows and flat-list items on the same 12px vertical rhythm", () => {
+    const { container } = render(
+      <SettingsGroup title="模型">
+        <SettingsRow label="默认模型">K3</SettingsRow>
+        <SettingsList>
+          <SettingsListItem>供应商 A</SettingsListItem>
+        </SettingsList>
+      </SettingsGroup>,
+    );
+
+    expect(container.querySelector('[data-slot="settings-row"]')).toHaveClass("py-3");
+    expect(container.querySelector('[data-slot="settings-list-item"]')).toHaveClass("py-3");
   });
 
   it("gives the page, section, and row copy distinct typography levels", () => {
