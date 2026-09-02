@@ -5,22 +5,35 @@ import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 
-/**
- * 站头导航项。当前区段用一条朱色底线标出 —— 按前缀判断,`/zh/docs/guides/x` 也算在「文档」里。
- * 用底线而不是换底色:顶栏本来就只有一条墨线和一个朱色按钮,再加一块底色会打架。
- */
-export function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+export function isNavLinkActive(pathname: string, match: string, exact = false) {
+  return exact ? pathname === match : pathname === match || pathname.startsWith(`${match}/`);
+}
+
+/** 站头导航项。首页必须精确匹配；文档等栏目按路径前缀匹配。 */
+export function NavLink({
+  href,
+  match,
+  exact = false,
+  children,
+}: {
+  href: string;
+  match?: string;
+  exact?: boolean;
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
   const cleanHref = href.split("#")[0];
-  const active = cleanHref !== "" && (pathname === cleanHref || pathname.startsWith(`${cleanHref}/`));
+  const active = cleanHref !== "" && isNavLinkActive(pathname, match ?? cleanHref, exact);
 
   return (
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "rounded-md px-2.5 py-2 whitespace-nowrap transition-colors",
-        active ? "text-primary" : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+        "relative rounded-full px-3.5 py-2 whitespace-nowrap transition-colors",
+        active
+          ? "bg-brand-soft text-primary"
+          : "text-muted-foreground hover:bg-secondary/75 hover:text-foreground",
       )}
     >
       {children}

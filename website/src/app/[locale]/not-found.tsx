@@ -14,18 +14,18 @@ export default function NotFound() {
   const t = getMessages(DEFAULT_LOCALE).notFound;
 
   return (
-    <div className="mx-auto flex max-w-[96rem] flex-col items-start px-5 py-32 sm:px-8">
+    <div className="relative isolate -mt-20 flex min-h-[78svh] flex-col items-start justify-center overflow-hidden px-5 pt-28 pb-24 sm:px-8">
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_20%_20%,rgba(114,87,233,0.2),transparent_38%),radial-gradient(circle_at_80%_70%,rgba(255,139,120,0.16),transparent_35%)]" />
+      <div className="mx-auto w-full max-w-[88rem]">
       <p className="m-0 font-mono text-sm font-bold tracking-widest text-flame uppercase">404</p>
       <h1 className="mt-6 mb-5 font-display text-[clamp(2rem,7vw,4.5rem)] leading-none font-extrabold tracking-[-0.03em]">
         {t.title}
       </h1>
       <p className="mt-0 mb-10 max-w-xl text-lg text-muted-foreground">{t.body}</p>
-      <Link
-        href={localePath(DEFAULT_LOCALE)}
-        className="border-2 border-ink bg-flame px-6 py-3 font-bold text-primary-foreground shadow-block transition-transform hover:translate-x-1 hover:translate-y-1 hover:shadow-none"
-      >
+      <Link href={localePath(DEFAULT_LOCALE)} className="inline-flex min-h-12 items-center rounded-full bg-primary px-6 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-85">
         {t.back}
       </Link>
+      </div>
     </div>
   );
 }

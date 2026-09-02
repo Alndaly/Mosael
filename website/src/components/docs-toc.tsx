@@ -39,7 +39,7 @@ export function DocsToc({ entries, label, className }: { entries: TocEntry[]; la
   if (entries.length === 0) return null;
 
   const list = (
-    <ul className="m-0 list-none border-l-2 border-ink p-0">
+    <ul className="m-0 list-none border-l border-border p-0">
       {entries.map((entry) => {
         const current = entry.id === active;
         return (
@@ -48,11 +48,11 @@ export function DocsToc({ entries, label, className }: { entries: TocEntry[]; la
               href={`#${entry.id}`}
               aria-current={current ? "location" : undefined}
               className={cn(
-                "-ml-0.5 block border-l-2 py-1 transition-colors",
+                "-ml-px block border-l py-1 transition-colors",
                 entry.depth === 3 ? "pl-7" : "pl-4",
                 current
                   ? "border-flame font-bold text-foreground"
-                  : "border-transparent text-muted-foreground hover:border-ink hover:text-foreground",
+                  : "border-transparent text-muted-foreground hover:border-foreground/35 hover:text-foreground",
               )}
             >
               {entry.text}
@@ -67,9 +67,9 @@ export function DocsToc({ entries, label, className }: { entries: TocEntry[]; la
     <>
       {/* 窄屏折起来 —— 本页目录排在正文前面时是"这一页讲了什么"的摘要,但摊开十几行就成了
           一堵墙。桌面端它在右栏,不占正文的位置,照常展开。 */}
-      <details className={cn("border-2 border-ink text-sm xl:hidden", className)}>
-        <summary className="cursor-pointer list-none px-4 py-3 font-display font-bold tracking-tight">{label}</summary>
-        <div className="border-t-2 border-ink px-4 py-3">{list}</div>
+      <details className={cn("rounded-xl bg-secondary/70 text-sm xl:hidden", className)}>
+        <summary className="cursor-pointer list-none px-4 py-3 font-display font-semibold tracking-tight">{label}</summary>
+        <div className="border-t border-border px-4 py-3">{list}</div>
       </details>
       <nav aria-label={label} className={cn("hidden text-sm xl:block", className)}>
         <p className="m-0 mb-4 font-mono text-xs font-bold tracking-widest text-flame uppercase">{label}</p>

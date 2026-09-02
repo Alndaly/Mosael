@@ -62,7 +62,7 @@ export function Shot({
       sizes="(min-width: 80rem) 80rem, 100vw"
       className={cn(
         "h-auto w-full",
-        framed ? "block" : "border-2 border-current bg-muted",
+        framed ? "block" : "rounded-xl border border-border/80 bg-muted",
         hasDark && (theme === "dark" ? "hidden dark:block" : "dark:hidden"),
       )}
     />
@@ -80,15 +80,7 @@ export function Shot({
   return (
     <figure className={cn("m-0", className)}>
       {framed ? (
-        <div className="border-2 border-current bg-card shadow-block-lg">
-          {/* 窗口顶栏。三颗灯是"这是一个桌面应用"最省字的说法。 */}
-          <div className="flex h-8 items-center gap-2 border-b-2 border-ink bg-card px-3">
-            <span className="size-2.5 rounded-full bg-flame" />
-            <span className="size-2.5 rounded-full border-2 border-ink" />
-            <span className="size-2.5 rounded-full border-2 border-ink" />
-          </div>
-          {image}
-        </div>
+        <div className="overflow-hidden rounded-[1.5rem] border border-border/80 bg-card">{image}</div>
       ) : (
         image
       )}

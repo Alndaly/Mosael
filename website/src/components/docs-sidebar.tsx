@@ -36,7 +36,7 @@ export function DocsSidebar({
       {groups.map((group) => (
         <div key={group.label} className="mb-8">
           <p className="m-0 mb-3 font-mono text-xs font-bold tracking-widest text-flame uppercase">{group.label}</p>
-          <ul className="m-0 list-none border-l-2 border-ink p-0">
+          <ul className="m-0 list-none border-l border-border p-0">
             {group.items.map((item) => {
               const active = pathname === item.href;
               return (
@@ -45,10 +45,10 @@ export function DocsSidebar({
                     href={item.href}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "-ml-0.5 block border-l-2 py-1.5 pl-4 transition-colors",
+                      "-ml-px block border-l py-1.5 pl-4 transition-colors",
                       active
                         ? "border-flame font-bold text-foreground"
-                        : "border-transparent text-muted-foreground hover:border-ink hover:text-foreground",
+                        : "border-transparent text-muted-foreground hover:border-foreground/35 hover:text-foreground",
                     )}
                   >
                     {item.title}
@@ -66,9 +66,9 @@ export function DocsSidebar({
     <>
       {/* 手机上把整棵目录塞在正文前面,要滚过两屏导航才看得到内容。折起来,想翻再点开。
           `<details>` 而不是自己写一套开合状态:无 JS 也能用,键盘和读屏软件都认。 */}
-      <details className="border-2 border-ink text-sm lg:hidden">
-        <summary className="cursor-pointer list-none px-4 py-3 font-display font-bold tracking-tight">{label}</summary>
-        <div className="border-t-2 border-ink px-4 pt-4 pb-1">{list}</div>
+      <details className="rounded-xl bg-secondary/70 text-sm lg:hidden">
+        <summary className="cursor-pointer list-none px-4 py-3 font-display font-semibold tracking-tight">{label}</summary>
+        <div className="border-t border-border px-4 pt-4 pb-1">{list}</div>
       </details>
       <nav className={cn("hidden text-sm lg:block", className)}>{list}</nav>
     </>

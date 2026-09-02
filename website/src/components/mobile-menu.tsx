@@ -5,8 +5,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, Moon, Sun, X } from "lucide-react";
 import { useTheme } from "next-themes";
+import { createPortal } from "react-dom";
 
 import { GithubMark } from "@/components/icons";
+import { isNavLinkActive } from "@/components/nav-link";
 import { LOCALE_LABEL, LOCALES, type Locale } from "@/i18n/config";
 import { SITE } from "@/lib/site";
 import { cn } from "@/lib/utils";
@@ -27,7 +29,7 @@ export function MobileMenu({
   labels,
 }: {
   locale: Locale;
-  links: { href: string; label: string }[];
+  links: { href: string; match: string; exact?: boolean; label: string }[];
   labels: { menu: string; language: string; github: string; download: string; theme: string };
 }) {
   const [open, setOpen] = React.useState(false);
@@ -58,22 +60,22 @@ export function MobileMenu({
         onClick={() => setOpen((value) => !value)}
         aria-label={labels.menu}
         aria-expanded={open}
-        className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground lg:hidden"
+        className="inline-flex size-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground lg:hidden"
       >
         {open ? <X className="size-4" /> : <Menu className="size-4" />}
       </button>
 
-      {open && (
-        <div className="fixed inset-x-0 top-[4.5rem] bottom-0 z-40 overflow-y-auto border-t border-border bg-paper lg:hidden">
-          <nav className="flex flex-col px-5 pt-6">
+      {mounted && open && createPortal(
+        <div className="fixed inset-0 z-40 overflow-y-auto bg-paper/95 px-3 pt-24 backdrop-blur-xl lg:hidden">
+          <nav className="mx-auto flex max-w-lg flex-col gap-1">
             {links.map((link) => {
-              const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
+              const active = isNavLinkActive(pathname, link.match, link.exact);
               return (
                 <Link
                   key={link.href}
                   href={link.href}
                   className={cn(
-                    "rounded-xl px-4 py-4 font-display text-xl font-semibold tracking-tight transition-colors",
+                    "rounded-2xl px-5 py-4 font-display text-xl font-semibold tracking-tight transition-colors",
                     active ? "bg-brand-soft text-primary" : "text-foreground hover:bg-secondary",
                   )}
                 >
@@ -83,11 +85,11 @@ export function MobileMenu({
             })}
           </nav>
 
-          <div className="flex flex-col gap-2 px-5 pt-6 pb-8">
+          <div className="mx-auto flex max-w-lg flex-col border-t border-border pt-4 pb-8">
             <Link
               href={`/${other}${rest ? `/${rest}` : ""}`}
               hrefLang={other}
-              className="flex items-center justify-between rounded-xl border border-border px-4 py-3 font-medium"
+              className="flex items-center justify-between border-b border-border px-1 py-3.5 font-medium"
             >
               {labels.language}
               <span className="font-mono text-xs tracking-wider uppercase">{LOCALE_LABEL[other]}</span>
@@ -95,7 +97,7 @@ export function MobileMenu({
             <button
               type="button"
               onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-              className="flex items-center justify-between rounded-xl border border-border px-4 py-3 font-medium"
+              className="flex items-center justify-between border-b border-border px-1 py-3.5 font-medium"
             >
               {labels.theme}
               {/* 挂载前不画图标:服务端不知道用户的主题,直接画会 hydration 不一致。 */}
@@ -113,7 +115,7 @@ export function MobileMenu({
               href={SITE.repo}
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-2 rounded-xl border border-border px-4 py-3 font-medium"
+              className="flex items-center gap-2 border-b border-border px-1 py-3.5 font-medium"
             >
               <GithubMark className="size-4" />
               {labels.github}
@@ -122,12 +124,13 @@ export function MobileMenu({
               href={SITE.releases}
               target="_blank"
               rel="noreferrer"
-              className="rounded-xl bg-primary px-4 py-3 text-center font-semibold text-primary-foreground"
+              className="mt-4 rounded-full bg-primary px-4 py-3 text-center font-semibold text-primary-foreground"
             >
               {labels.download}
             </a>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );

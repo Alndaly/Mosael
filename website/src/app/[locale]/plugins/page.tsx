@@ -30,17 +30,17 @@ export default async function PluginsPage({ params }: { params: Params }) {
       <PageHero title={t.title} lede={t.lede} />
 
       {/* 两种写法:并排两块,中间一条墨线 —— 它们是二选一,不是清单。 */}
-      <section className="border-b-2 border-ink bg-paper">
-        <div className="mx-auto max-w-[96rem] px-5 py-20 sm:px-8">
-          <h2 className="mt-0 mb-12 font-display text-[clamp(1.5rem,4vw,2.75rem)] font-extrabold tracking-tight">
+      <section className="bg-paper">
+        <div className="mx-auto max-w-[88rem] px-5 pb-24 sm:px-8 sm:pb-32">
+          <h2 className="mt-0 mb-14 max-w-[14ch] font-display text-[clamp(2.5rem,6vw,5rem)] leading-[0.96] font-[700] tracking-[-0.05em]">
             {t.howTitle}
           </h2>
-          <div className="grid border-2 border-ink sm:grid-cols-2">
+          <div className="grid border-t border-border sm:grid-cols-2">
             {t.how.map((item, index) => (
               <Reveal
                 key={item.title}
                 delay={index * 80}
-                className="border-ink p-8 not-last:border-b-2 sm:not-last:border-r-2 sm:not-last:border-b-0"
+                className="border-border py-9 not-last:border-b sm:px-10 sm:not-last:border-r sm:not-last:border-b-0 sm:first:pl-0"
               >
                 <p className="m-0 mb-4 font-mono text-xs font-bold tracking-widest text-flame uppercase">
                   {String(index + 1).padStart(2, "0")}
@@ -54,54 +54,50 @@ export default async function PluginsPage({ params }: { params: Params }) {
       </section>
 
       {/* 权限:一整幅墨色 —— 这是插件这一页真正想让人记住的一句。 */}
-      <section className="border-b-2 border-ink bg-invert text-invert-foreground">
-        <div className="mx-auto max-w-[96rem] px-5 py-20 sm:px-8 lg:grid lg:grid-cols-12 lg:gap-16">
-          <h2 className="mt-0 mb-6 font-display text-[clamp(1.5rem,4vw,2.75rem)] leading-tight font-extrabold tracking-tight lg:col-span-5 lg:mb-0">
+      <section className="bg-[#17141f] text-[#fbf9ff]">
+        <div className="mx-auto max-w-[88rem] px-5 py-24 sm:px-8 sm:py-32 lg:grid lg:grid-cols-12 lg:gap-16">
+          <h2 className="mt-0 mb-6 font-display text-[clamp(2.5rem,6vw,5rem)] leading-[0.96] font-[700] tracking-[-0.05em] lg:col-span-5 lg:mb-0">
             {t.permissionsTitle}
           </h2>
-          <p className="m-0 text-lg text-invert-foreground/70 lg:col-span-7">{t.permissionsBody}</p>
+          <p className="m-0 text-lg leading-8 text-white/58 lg:col-span-7">{t.permissionsBody}</p>
         </div>
       </section>
 
       <section className="bg-paper">
-        <div className="mx-auto max-w-[96rem] px-5 py-20 sm:px-8">
-          <h2 className="mt-0 mb-3 font-display text-[clamp(1.5rem,4vw,2.75rem)] font-extrabold tracking-tight">
+        <div className="mx-auto max-w-[88rem] px-5 py-24 sm:px-8 sm:py-32">
+          <h2 className="mt-0 mb-3 max-w-[14ch] font-display text-[clamp(2.5rem,6vw,5rem)] leading-[0.96] font-[700] tracking-[-0.05em]">
             {t.officialTitle}
           </h2>
           <p className="mt-0 mb-10 text-muted-foreground">{t.officialBody}</p>
 
           {/* 这份列表来自仓库里真的能装的 manifest,不是另抄的一份。 */}
-          <ul className="m-0 grid list-none gap-6 p-0 lg:grid-cols-3">
+          <ul className="m-0 mt-14 list-none border-t border-border p-0">
             {plugins.map((plugin, index) => (
               <Reveal
                 as="li"
                 key={plugin.id}
                 delay={index * 70}
-                className="flex flex-col border-2 border-ink bg-card transition-shadow hover:shadow-block"
+                className="group grid gap-5 border-b border-border py-7 md:grid-cols-[minmax(14rem,0.8fr)_minmax(0,1.5fr)_auto] md:items-center"
               >
-                <div className="flex items-center gap-3 border-b-2 border-ink px-6 py-4">
-                  <h3 className="m-0 font-display text-lg font-bold tracking-tight">
+                <div className="flex min-w-0 items-center gap-3">
+                  <h3 className="m-0 font-display text-xl font-semibold tracking-[-0.02em]">
                     <Link className="hover:text-flame" href={localePath(locale, `/plugins/${plugin.slug}`)}>
                       {plugin.name}
                     </Link>
                   </h3>
-                  <span className="ml-auto shrink-0 border-2 border-ink px-2 py-0.5 font-mono text-[0.65rem] font-bold tracking-wider uppercase">
+                  <span className="shrink-0 rounded-full bg-brand-soft px-2.5 py-1 font-mono text-[0.65rem] font-bold tracking-wider text-primary uppercase">
                     {plugin.kind === "mcp" ? t.kindMcp : t.kindScript}
                   </span>
                 </div>
-                <div className="flex flex-1 flex-col gap-4 p-6">
-                  <p className="m-0 font-mono text-xs text-muted-foreground">
-                    {plugin.id} · v{plugin.version}
-                  </p>
-                  <p className="m-0 flex-1 text-muted-foreground">{plugin.summary}</p>
-                  <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
+                <div className="min-w-0"><p className="m-0 text-sm leading-7 text-muted-foreground">{plugin.summary}</p><p className="mt-2 mb-0 font-mono text-[0.6875rem] text-muted-foreground/70">{plugin.id} · v{plugin.version}</p></div>
+                  <div className="flex flex-wrap items-center gap-2 font-mono text-xs md:justify-end">
                     {plugin.permissions.length === 0 ? (
-                      <span className="border-2 border-dashed border-muted-foreground/40 px-2 py-0.5 text-muted-foreground">
+                      <span className="text-muted-foreground">
                         {t.noPermissions}
                       </span>
                     ) : (
                       plugin.permissions.map((permission) => (
-                        <span key={permission} className="bg-ink px-2 py-0.5 text-paper">
+                        <span key={permission} className="rounded-full bg-secondary px-2.5 py-1 text-muted-foreground">
                           {permission}
                         </span>
                       ))
@@ -109,24 +105,23 @@ export default async function PluginsPage({ params }: { params: Params }) {
                     {/* 主行动是「看详情」而不是「看源码」:大多数人想知道的是它能干什么、
                         要什么权限,而不是它怎么实现的。源码链接留在详情页里。 */}
                     <Link
-                      className="ml-auto inline-flex items-center gap-1 font-sans font-bold text-flame hover:underline"
+                      className="ml-2 inline-flex items-center gap-1 font-sans font-semibold text-primary transition-opacity hover:opacity-70"
                       href={localePath(locale, `/plugins/${plugin.slug}`)}
                     >
                       {t.detailLink}
                       <ArrowUpRight className="size-3.5" />
                     </Link>
                   </div>
-                </div>
               </Reveal>
             ))}
           </ul>
 
           <p className="mt-12 mb-0 flex flex-wrap gap-8 text-sm font-bold">
-            <Link className="border-b-2 border-flame pb-0.5" href={localePath(locale, "/docs/guides/plugins")}>
+            <Link className="text-primary hover:opacity-70" href={localePath(locale, "/docs/guides/plugins")}>
               {t.guideLink}
             </Link>
             <a
-              className="border-b-2 border-flame pb-0.5"
+              className="text-primary hover:opacity-70"
               href={`${SITE.repo}/blob/main/docs/PLUGIN_MANIFEST.md`}
               target="_blank"
               rel="noreferrer"

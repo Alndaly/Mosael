@@ -116,7 +116,8 @@ export default async function LocaleLayout({
           </a>
           <NavProgress />
           <SiteHeader locale={current} />
-          <main id="main">{children}</main>
+          {/* 站头固定悬浮。内页保留呼吸位；首页自己以负 margin 把品牌渐变延伸到站头背后。 */}
+          <main id="main" className="pt-20">{children}</main>
           <SiteFooter locale={current} />
         </ThemeProvider>
       </body>

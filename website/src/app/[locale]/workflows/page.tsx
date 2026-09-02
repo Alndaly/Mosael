@@ -30,8 +30,8 @@ export default async function WorkflowsPage({ params }: { params: Params }) {
     <>
       <PageHero title={t.title} lede={t.lede} />
 
-      <section className="border-b-2 border-ink bg-paper">
-        <div className="mx-auto max-w-[96rem] px-5 py-20 sm:px-8">
+      <section className="bg-paper">
+        <div className="mx-auto max-w-[88rem] px-5 pb-24 sm:px-8 sm:pb-32">
           <Reveal>
             <Shot src="/media/screens/workflows.png" alt={t.shotAlt} caption={t.shotCaption} framed />
           </Reveal>
@@ -39,18 +39,17 @@ export default async function WorkflowsPage({ params }: { params: Params }) {
       </section>
 
       {/* 画廊。空的时候不摆占位卡片 —— 那是在假装已经有内容。 */}
-      <section className="border-b-2 border-ink bg-invert text-invert-foreground">
-        <div className="mx-auto max-w-[96rem] px-5 py-20 sm:px-8">
-          <h2 className="mt-0 mb-12 font-display text-[clamp(1.5rem,4vw,2.75rem)] font-extrabold tracking-tight">
+      <section className="bg-[#17141f] text-[#fbf9ff]">
+        <div className="mx-auto max-w-[88rem] px-5 py-24 sm:px-8 sm:py-32">
+          <h2 className="mt-0 mb-14 max-w-[14ch] font-display text-[clamp(2.5rem,6vw,5rem)] leading-[0.96] font-[700] tracking-[-0.05em]">
             {t.galleryTitle}
           </h2>
 
           {workflows.length === 0 ? (
-            <Reveal className="max-w-3xl border-2 border-invert-foreground p-8 sm:p-12">
-              <h3 className="mt-0 mb-4 font-display text-2xl font-bold tracking-tight">{t.galleryEmptyTitle}</h3>
-              <p className="mt-0 mb-8 text-invert-foreground/70">{t.galleryEmptyBody}</p>
+            <Reveal className="grid max-w-5xl gap-8 border-t border-white/15 pt-8 md:grid-cols-12 md:items-end">
+              <div className="md:col-span-8"><h3 className="mt-0 mb-4 font-display text-2xl font-semibold tracking-[-0.025em]">{t.galleryEmptyTitle}</h3><p className="m-0 max-w-2xl text-white/58">{t.galleryEmptyBody}</p></div>
               <a
-                className="inline-flex items-center gap-2 border-2 border-invert-foreground bg-flame px-6 py-3 font-bold text-primary-foreground transition-transform hover:-translate-y-1"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-primary px-6 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-85 md:col-span-4 md:justify-self-end"
                 href={`${SITE.repo}/issues/new`}
                 target="_blank"
                 rel="noreferrer"
@@ -62,7 +61,7 @@ export default async function WorkflowsPage({ params }: { params: Params }) {
           ) : (
             <ul className="m-0 grid list-none gap-6 p-0 lg:grid-cols-3">
               {workflows.map((workflow) => (
-                <li key={workflow.id} className="m-0 border-2 border-invert-foreground p-6">
+                <li key={workflow.id} className="m-0 border-t border-white/15 py-6">
                   <h3 className="m-0 font-display text-lg font-bold tracking-tight">{workflow.name}</h3>
                   <p className="mt-3 mb-4 text-invert-foreground/70">{workflow.summary}</p>
                   <p className="m-0 font-mono text-xs text-invert-foreground/60">
@@ -77,16 +76,16 @@ export default async function WorkflowsPage({ params }: { params: Params }) {
 
       {/* 条目形状:编号 + 字段名 + 一句解释,像一份表格的说明,而不是四张卡。 */}
       <section className="bg-paper">
-        <div className="mx-auto max-w-[96rem] px-5 py-20 sm:px-8">
-          <h2 className="mt-0 mb-12 font-display text-[clamp(1.5rem,4vw,2.75rem)] font-extrabold tracking-tight">
+        <div className="mx-auto max-w-[88rem] px-5 py-24 sm:px-8 sm:py-32">
+          <h2 className="mt-0 mb-14 max-w-[14ch] font-display text-[clamp(2.5rem,6vw,5rem)] leading-[0.96] font-[700] tracking-[-0.05em]">
             {t.fieldsTitle}
           </h2>
-          <dl className="m-0 border-t-2 border-ink">
+          <dl className="m-0 border-t border-border">
             {t.fields.map((field, index) => (
               <Reveal
                 key={field.name}
                 delay={index * 60}
-                className="grid gap-2 border-b-2 border-ink py-6 sm:grid-cols-12 sm:items-baseline sm:gap-8"
+                className="grid gap-2 border-b border-border py-7 sm:grid-cols-12 sm:items-baseline sm:gap-8"
               >
                 <span className="font-mono text-xs font-bold tracking-widest text-flame uppercase sm:col-span-1">
                   {String(index + 1).padStart(2, "0")}
@@ -98,7 +97,7 @@ export default async function WorkflowsPage({ params }: { params: Params }) {
           </dl>
 
           <p className="mt-12 mb-0 text-sm font-bold">
-            <Link className="border-b-2 border-flame pb-0.5" href={localePath(locale, "/docs/guides/workflows")}>
+            <Link className="inline-flex items-center gap-2 text-primary hover:opacity-70" href={localePath(locale, "/docs/guides/workflows")}>
               {t.guideLink}
             </Link>
           </p>

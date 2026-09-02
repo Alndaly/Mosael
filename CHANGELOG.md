@@ -3,6 +3,27 @@
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 
+## [0.27.6] - 2026-09-02
+
+### Changed
+
+- Rebuilt the Mosael website around a centered editorial hero, a larger product stage, open full-width
+  chapters, and a more distinctive violet-to-coral brand rhythm across light and dark themes.
+- Reworked the product story and bilingual headline around a continuous creative path from scattered ideas
+  to a finished story, while keeping the real Infinite Canvas, editor, agent, and workflow captures central.
+- Carried the same open, lightly divided visual language through Workflows, Plugins, plugin details,
+  documentation, mobile navigation, not-found pages, and the footer instead of enclosing every section in a card.
+- Replaced the edge-attached site bar with a fixed translucent capsule that floats over the homepage color,
+  and removed the redundant Infinite Canvas navigation tab.
+
+### Fixed
+
+- Corrected active navigation matching so Product is highlighted only on the homepage and Docs stays active
+  across every documentation route.
+- Prevented the mobile navigation overlay from being clipped by the blurred header container.
+- Replaced the unusable generation composer state with direct model-configuration actions in both the composer
+  and engine panel when no image or video generation model is available.
+
 ## [0.27.5] - 2026-09-02
 
 ### Fixed

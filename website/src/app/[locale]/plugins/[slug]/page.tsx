@@ -79,31 +79,35 @@ export default async function PluginDetailPage({
 
   return (
     <div className="bg-paper">
-      <div className="mx-auto max-w-[72rem] px-5 py-16 sm:px-8">
+      <div className="relative isolate overflow-hidden px-5 pt-16 pb-18 sm:px-8 sm:pt-24 sm:pb-24">
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_12%_20%,rgba(114,87,233,0.15),transparent_34%),radial-gradient(circle_at_88%_0%,rgba(255,139,120,0.13),transparent_30%)]" />
+        <div className="mx-auto max-w-[76rem]">
         <Link
-          className="inline-flex items-center gap-1.5 text-sm font-bold text-muted-foreground hover:text-flame"
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-primary"
           href={localePath(locale, "/plugins")}
         >
           <ArrowLeft className="size-4" />
           {t.backToList}
         </Link>
 
-        <header className="mt-8 border-b-2 border-ink pb-8">
+        <header className="mt-10">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="m-0 font-display text-[clamp(1.75rem,5vw,3rem)] font-extrabold tracking-tight">
+            <h1 className="m-0 font-display text-[clamp(3rem,7vw,6rem)] leading-[0.92] font-[720] tracking-[-0.055em]">
               {plugin.name}
             </h1>
-            <span className="shrink-0 border-2 border-ink px-2 py-0.5 font-mono text-[0.65rem] font-bold tracking-wider uppercase">
+            <span className="shrink-0 rounded-full bg-brand-soft px-3 py-1 font-mono text-[0.65rem] font-bold tracking-wider text-primary uppercase">
               {plugin.kind === "mcp" ? t.kindMcp : t.kindScript}
             </span>
           </div>
           <p className="mt-3 mb-0 font-mono text-xs text-muted-foreground">
             {plugin.id} · v{plugin.version}
           </p>
-          <p className="mt-4 mb-0 max-w-[52rem] text-lg text-muted-foreground">{plugin.summary}</p>
+          <p className="mt-6 mb-0 max-w-[52rem] text-lg leading-8 text-muted-foreground">{plugin.summary}</p>
         </header>
+        </div>
+      </div>
 
-        <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_18rem]">
+      <div className="mx-auto grid max-w-[76rem] gap-12 px-5 py-20 sm:px-8 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="min-w-0">
             <h2 className="mt-0 mb-4 font-display text-2xl font-extrabold tracking-tight">{t.docTitle}</h2>
             {doc ? (
@@ -114,17 +118,17 @@ export default async function PluginDetailPage({
             )}
           </div>
 
-          <aside className="grid content-start gap-8">
+          <aside className="grid content-start gap-8 border-t border-border pt-8 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-8">
             <section>
               <h2 className="mt-0 mb-3 font-display text-lg font-extrabold tracking-tight">{t.permissionsTitle}</h2>
               <div className="flex flex-wrap gap-2 font-mono text-xs">
                 {plugin.permissions.length === 0 ? (
-                  <span className="border-2 border-dashed border-muted-foreground/40 px-2 py-0.5 text-muted-foreground">
+                  <span className="text-muted-foreground">
                     {t.noPermissions}
                   </span>
                 ) : (
                   plugin.permissions.map((permission) => (
-                    <span key={permission} className="bg-ink px-2 py-0.5 text-paper">
+                    <span key={permission} className="rounded-full bg-secondary px-2.5 py-1 text-muted-foreground">
                       {permission}
                     </span>
                   ))
@@ -156,7 +160,7 @@ export default async function PluginDetailPage({
             </section>
 
             <a
-              className="inline-flex items-center gap-1 text-sm font-bold text-flame hover:underline"
+              className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:opacity-70"
               href={`${SITE.repo}/tree/main/${plugin.source}`}
               target="_blank"
               rel="noreferrer"
@@ -165,7 +169,6 @@ export default async function PluginDetailPage({
               <ArrowUpRight className="size-3.5" />
             </a>
           </aside>
-        </div>
       </div>
     </div>
   );

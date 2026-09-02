@@ -47,19 +47,19 @@ export function SiteFooter({ locale }: { locale: Locale }) {
   ];
 
   return (
-    <footer className="border-t border-border bg-paper text-foreground">
-      <div className="mx-auto max-w-[90rem] px-5 py-14 sm:px-8 lg:px-12">
-        <div className="grid gap-12 md:grid-cols-2 lg:grid-cols-[1.55fr_repeat(3,1fr)] lg:gap-12">
+    <footer className="bg-[#17141f] text-[#fbf9ff]">
+      <div className="mx-auto max-w-[92rem]">
+        <div className="grid gap-12 px-6 py-16 sm:px-10 lg:grid-cols-[1.55fr_repeat(3,1fr)] lg:gap-12 lg:px-14 lg:py-20">
           <div>
             <Link href={localePath(locale)} className="inline-flex">
-              <BrandWordmark className="w-36" />
+              <BrandWordmark className="w-32" />
             </Link>
-            <p className="mt-5 mb-0 max-w-xs text-sm leading-6 text-muted-foreground">{t.footer.tagline}</p>
+            <p className="mt-5 mb-0 max-w-xs text-sm leading-6 text-white/52">{t.footer.tagline}</p>
           </div>
 
           {columns.map((column) => (
             <nav key={column.title} className="text-sm">
-              <p className="m-0 mb-4 text-xs font-semibold tracking-[0.14em] text-primary uppercase">
+              <p className="m-0 mb-4 text-xs font-semibold tracking-[0.14em] text-[#b9a9ff] uppercase">
                 {column.title}
               </p>
               <ul className="m-0 list-none space-y-3 p-0">
@@ -67,7 +67,7 @@ export function SiteFooter({ locale }: { locale: Locale }) {
                   <li key={link.href} className="m-0">
                     {"external" in link && link.external ? (
                       <a
-                        className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
+                        className="inline-flex items-center gap-1.5 text-white/52 transition-colors hover:text-white"
                         href={link.href}
                         target="_blank"
                         rel="noreferrer"
@@ -77,7 +77,7 @@ export function SiteFooter({ locale }: { locale: Locale }) {
                       </a>
                     ) : (
                       <Link
-                        className="text-muted-foreground transition-colors hover:text-foreground"
+                        className="text-white/52 transition-colors hover:text-white"
                         href={link.href}
                       >
                         {link.label}
@@ -89,16 +89,15 @@ export function SiteFooter({ locale }: { locale: Locale }) {
             </nav>
           ))}
         </div>
-      </div>
-
-      <div className="border-t border-border">
-        <div className="mx-auto flex max-w-[90rem] flex-wrap items-center gap-x-6 gap-y-2 px-5 py-6 text-xs text-muted-foreground sm:px-8 lg:px-12">
-          <span>
-            © {year} Mosael. {t.footer.rights}
-          </span>
-          <a className="ml-auto transition-colors hover:text-foreground" href={SITE.email}>
-            {t.footer.contact}
-          </a>
+        <div className="border-t border-white/10">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-6 py-6 text-xs text-white/40 sm:px-10 lg:px-14">
+            <span>
+              © {year} Mosael. {t.footer.rights}
+            </span>
+            <a className="ml-auto transition-colors hover:text-foreground" href={SITE.email}>
+              {t.footer.contact}
+            </a>
+          </div>
         </div>
       </div>
     </footer>

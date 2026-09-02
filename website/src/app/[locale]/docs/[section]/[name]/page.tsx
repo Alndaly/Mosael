@@ -83,7 +83,7 @@ export default async function DocPage({ params }: { params: Params }) {
   return (
     // `pt-12` 和两侧的 `top-sticky` 是**配套**的(见 globals.css 里 --spacing-sticky 的算式):
     // 侧栏一开始就停在它粘住的位置上,于是滚动时不会先往上滑一小段再顿住。
-    <div className="mx-auto grid max-w-[88rem] gap-x-14 gap-y-12 px-5 pt-12 pb-20 sm:px-8 lg:grid-cols-[13rem_minmax(0,1fr)] xl:grid-cols-[13rem_minmax(0,1fr)_13rem]">
+    <div className="mx-auto grid max-w-[88rem] gap-x-14 gap-y-12 px-5 pt-16 pb-24 sm:px-8 lg:grid-cols-[13rem_minmax(0,1fr)] xl:grid-cols-[13rem_minmax(0,1fr)_13rem]">
       {/* sticky 要直接挂在 grid item 上,并且配 `self-start`:grid 默认把子项拉伸到整行高,
           被拉满的元素在自己的格子里没有可滑动的余量,`position: sticky` 就完全不起作用。 */}
       <DocsSidebar
@@ -100,11 +100,11 @@ export default async function DocPage({ params }: { params: Params }) {
       />
 
       <article className="min-w-0 lg:col-start-2 lg:row-start-1">
-        <header className="mb-12 border-b-2 border-ink pb-8">
+        <header className="relative mb-14 overflow-hidden border-b border-border pb-10">
           <p className="m-0 mb-4 font-mono text-xs font-bold tracking-widest text-flame uppercase">
             {t.sections[doc.section]}
           </p>
-          <h1 className="mt-0 mb-4 font-display text-[clamp(1.875rem,4vw,3rem)] leading-[1.05] font-extrabold tracking-[-0.02em]">
+          <h1 className="mt-0 mb-4 max-w-[14ch] font-display text-[clamp(2.75rem,6vw,5rem)] leading-[0.96] font-[700] tracking-[-0.05em]">
             {doc.title}
           </h1>
           {doc.description && <p className="m-0 text-lg text-muted-foreground">{doc.description}</p>}
@@ -113,10 +113,10 @@ export default async function DocPage({ params }: { params: Params }) {
         <div className="docs-body">{content}</div>
 
         <footer className="mt-20">
-          <div className="grid border-2 border-ink sm:grid-cols-2">
+          <div className="grid border-t border-border sm:grid-cols-2">
             {prev ? (
               <Link
-                className="flex items-center gap-3 border-ink p-6 transition-colors not-last:border-b-2 hover:bg-ink hover:text-paper sm:not-last:border-r-2 sm:not-last:border-b-0"
+                className="flex items-center gap-3 border-border py-6 transition-colors not-last:border-b hover:text-primary sm:px-6 sm:first:pl-0 sm:not-last:border-r sm:not-last:border-b-0"
                 href={docHref(locale, prev)}
               >
                 <ArrowLeft className="size-5 shrink-0" />
@@ -132,7 +132,7 @@ export default async function DocPage({ params }: { params: Params }) {
             )}
             {next && (
               <Link
-                className="flex items-center justify-end gap-3 border-t-2 border-ink p-6 text-right transition-colors hover:bg-ink hover:text-paper sm:border-t-0"
+                className="flex items-center justify-end gap-3 border-t border-border py-6 text-right transition-colors hover:text-primary sm:border-t-0 sm:px-6 sm:last:pr-0"
                 href={docHref(locale, next)}
               >
                 <span>
@@ -147,7 +147,7 @@ export default async function DocPage({ params }: { params: Params }) {
           </div>
           <p className="mt-8 mb-0 text-xs">
             <a
-              className="border-b-2 border-flame pb-0.5 font-bold"
+              className="font-semibold text-primary hover:opacity-70"
               href={`${SITE.repo}/blob/main/website/content/docs/${locale as Locale}/${section}/${name}.mdx`}
               target="_blank"
               rel="noreferrer"
