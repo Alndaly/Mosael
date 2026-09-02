@@ -475,10 +475,15 @@ function BoardDetail({
 
   const save = React.useCallback(
     (next: Canvas) => {
-      updateBoard(board.id, { workspace_id: workspaceId, canvas: next })
-        .then(onSaved)
+      return updateBoard(board.id, { workspace_id: workspaceId, canvas: next })
+        .then(() => onSaved())
         // 存不上必须说 —— 画板是攒想法的地方,默默丢掉是最糟的失败方式。
-        .catch((error: Error) => toast.error(t("boardsSaveFailed"), { description: error.message }));
+        .catch((error: Error) => {
+          toast.error(t("boardsSaveFailed"), { description: error.message });
+          // 自动保存只在 Promise 完成后才把这份画布视为已落库。告诉它失败了,
+          // 下一次编辑仍会以最后一份真正成功的画布为基准。
+          throw error;
+        });
     },
     [board.id, workspaceId, onSaved, t],
   );

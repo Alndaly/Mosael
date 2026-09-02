@@ -1,8 +1,19 @@
 /** @vitest-environment jsdom */
+import React from "react";
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useAutosave } from "@/features/boards/useAutosave";
+
+function deferred() {
+  let resolve!: () => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<void>((onResolve, onReject) => {
+    resolve = onResolve;
+    reject = onReject;
+  });
+  return { promise, resolve, reject };
+}
 
 describe("useAutosave", () => {
   beforeEach(() => vi.useFakeTimers());
@@ -60,7 +71,7 @@ describe("useAutosave", () => {
   });
 
   it("存完之后再改同一个值还会再存", () => {
-    // settled 只是"上次落定的那份";用户撤销回到旧值也是一次真实编辑。
+    // confirmedValue 只是"上次落定的那份";用户撤销回到旧值也是一次真实编辑。
     const save = vi.fn();
     const { rerender } = renderHook(({ value }) => useAutosave(value, save, 500), {
       initialProps: { value: "a" as string | null },
@@ -85,5 +96,103 @@ describe("useAutosave", () => {
 
     act(() => void vi.advanceTimersByTime(500));
     expect(result.current.pending).toBe(false);
+  });
+
+  it("服务端真正确认后才把这份内容视为已保存", async () => {
+    const first = deferred();
+    const save = vi.fn(() => first.promise);
+    const { result, rerender } = renderHook(({ value }) => useAutosave(value, save, 500), {
+      initialProps: { value: "a" as string | null },
+    });
+
+    rerender({ value: "b" });
+    act(() => void vi.advanceTimersByTime(500));
+
+    expect(save).toHaveBeenCalledWith("b");
+    expect(result.current.pending).toBe(true);
+
+    await act(async () => first.resolve());
+    expect(result.current.pending).toBe(false);
+  });
+
+  it("一次只存一份,飞行期间的连续编辑只追存最新值", async () => {
+    const first = deferred();
+    const latest = deferred();
+    const save = vi.fn()
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => latest.promise);
+    const { result, rerender } = renderHook(({ value }) => useAutosave(value, save, 500), {
+      initialProps: { value: "a" as string | null },
+    });
+
+    rerender({ value: "b" });
+    act(() => void vi.advanceTimersByTime(500));
+    rerender({ value: "c" });
+    rerender({ value: "d" });
+
+    expect(save.mock.calls.map((call) => call[0])).toEqual(["b"]);
+
+    await act(async () => first.resolve());
+    expect(save.mock.calls.map((call) => call[0])).toEqual(["b", "d"]);
+    expect(result.current.pending).toBe(true);
+
+    await act(async () => latest.resolve());
+    expect(result.current.pending).toBe(false);
+  });
+
+  it("失败的保存会继续标记为待落库", async () => {
+    const save = vi.fn()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce(undefined);
+    const { result, rerender } = renderHook(({ value }) => useAutosave(value, save, 500), {
+      initialProps: { value: "a" as string | null },
+    });
+
+    rerender({ value: "b" });
+    act(() => void vi.advanceTimersByTime(500));
+    await act(async () => undefined);
+    expect(result.current.pending).toBe(true);
+
+    // 先回到确实已保存的 a,再重做 b。如果失败的 b 被当成 confirmedValue,
+    // 第二次 b 就会被错误地跳过。
+    rerender({ value: "a" });
+    rerender({ value: "b" });
+    act(() => void vi.advanceTimersByTime(500));
+    await act(async () => undefined);
+
+    expect(save.mock.calls.map((call) => call[0])).toEqual(["b", "b"]);
+  });
+
+  it("在 StrictMode 重新执行 effect 后仍能回报保存完成", async () => {
+    const saving = deferred();
+    const { result, rerender } = renderHook(({ value }) => useAutosave(value, () => saving.promise, 500), {
+      initialProps: { value: "a" as string | null },
+      wrapper: React.StrictMode,
+    });
+
+    rerender({ value: "b" });
+    act(() => void vi.advanceTimersByTime(500));
+    expect(result.current.pending).toBe(true);
+
+    await act(async () => saving.resolve());
+    expect(result.current.pending).toBe(false);
+  });
+
+  it("卸载时有一份正在保存,也会在它结束后追存最后的编辑", async () => {
+    const first = deferred();
+    const save = vi.fn()
+      .mockImplementationOnce(() => first.promise)
+      .mockResolvedValueOnce(undefined);
+    const { rerender, unmount } = renderHook(({ value }) => useAutosave(value, save, 500), {
+      initialProps: { value: "a" as string | null },
+    });
+
+    rerender({ value: "b" });
+    act(() => void vi.advanceTimersByTime(500));
+    rerender({ value: "c" });
+    unmount();
+
+    await act(async () => first.resolve());
+    expect(save.mock.calls.map((call) => call[0])).toEqual(["b", "c"]);
   });
 });
