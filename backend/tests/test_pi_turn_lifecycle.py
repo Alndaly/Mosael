@@ -58,6 +58,17 @@ for _ in sys.stdin:
     pass
 '''
 
+ERROR_SIDECAR = '''
+import json, sys
+line = sys.stdin.readline()
+turn = json.loads(line)["turnId"]
+print(json.dumps({"type": "error", "turnId": turn, "message": "provider failed"}), flush=True)
+# A real sidecar keeps the steering channel open until the backend closes it.  The error path
+# must close that channel too; otherwise the child and the session's live-turn entry both leak.
+for _ in sys.stdin:
+    pass
+'''
+
 
 @pytest.fixture
 def fake_sidecar(tmp_path: Path, monkeypatch):
@@ -99,6 +110,18 @@ def test_the_live_channel_is_released_when_the_turn_ends(fake_sidecar) -> None:
     """A stale entry would let a later steer write into a finished turn's stdin."""
     _run(session_id="sess-1")
     assert "sess-1" not in adapters._LIVE
+
+
+def test_the_live_channel_is_released_when_the_sidecar_reports_an_error(tmp_path: Path, monkeypatch) -> None:
+    script = tmp_path / "error_sidecar.py"
+    script.write_text(ERROR_SIDECAR)
+    monkeypatch.setattr(adapters, "pi_sidecar_command", lambda: (sys.executable, str(script)))
+    monkeypatch.setattr(Path, "exists", lambda self: True, raising=False)
+
+    with pytest.raises(adapters.AdapterError, match="provider failed"):
+        _run(session_id="sess-error")
+
+    assert "sess-error" not in adapters._LIVE
 
 
 def test_steering_reaches_a_running_turn_and_not_a_finished_one(fake_sidecar) -> None:

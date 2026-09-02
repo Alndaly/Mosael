@@ -354,51 +354,57 @@ def _run_pi(
     result_compaction: dict | None = None
     saw_tool = False
     aborted = False
-    for line in child.lines():
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        kind = event.get("type")
-        if kind == "text_delta" and on_delta is not None:
-            on_delta(str(event.get("delta", "")))
-        elif kind in ("thinking_delta", "thinking_end") and on_thinking is not None:
-            on_thinking(event)
-        elif kind in ("tool_start", "tool_end", "subtool", "subagent_result"):
-            # subtool 走同一条工具事件通道:它就是一次工具调用,只是发生在子智能体里、
-            # 挂在 run_subagent 那张卡名下(parentCallId)。
-            saw_tool = True
-            if on_tool is not None:
-                on_tool(event)
-        elif kind == "turn_done":
-            result_text = str(event.get("text", ""))
-            result_state = event.get("sessionState")
-            usage = event.get("usage")
-            result_usage = usage if isinstance(usage, dict) else None
-            context = event.get("context")
-            result_context = context if isinstance(context, dict) else None
-            compaction = event.get("compaction")
-            result_compaction = compaction if isinstance(compaction, dict) else None
-            # Stop reading here rather than waiting for the process to exit. stdin now stays
-            # open for the whole turn so steering has somewhere to go, which means the sidecar's
-            # readline loop no longer ends on its own — waiting for EOF left every turn
-            # "running" until the timeout, long after the answer had finished streaming.
-            break
-        elif kind == "error":
-            detail = _tail(str(event.get("message", "pi sidecar error")))
-            # 还没产出任何文本/工具调用就失败,基本都是供应商配置问题(端点不对、模型不存在、
-            # 鉴权失败),给一句可操作的提示;已经跑起来后的失败就只报原始错误。
-            if not saw_tool:
-                raise AdapterError(f"{detail}\n{_PROVIDER_HINT}")
-            raise AdapterError(detail)
-        elif kind == "aborted":
-            aborted = True
-    live.close()
-    if session_id:
-        with _LIVE_LOCK:
-            if _LIVE.get(session_id) is live:
-                del _LIVE[session_id]
-    stderr_tail = _tail(child.finish())
+    stderr_tail = ""
+    try:
+        for line in child.lines():
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            kind = event.get("type")
+            if kind == "text_delta" and on_delta is not None:
+                on_delta(str(event.get("delta", "")))
+            elif kind in ("thinking_delta", "thinking_end") and on_thinking is not None:
+                on_thinking(event)
+            elif kind in ("tool_start", "tool_end", "subtool", "subagent_result"):
+                # subtool 走同一条工具事件通道:它就是一次工具调用,只是发生在子智能体里、
+                # 挂在 run_subagent 那张卡名下(parentCallId)。
+                saw_tool = True
+                if on_tool is not None:
+                    on_tool(event)
+            elif kind == "turn_done":
+                result_text = str(event.get("text", ""))
+                result_state = event.get("sessionState")
+                usage = event.get("usage")
+                result_usage = usage if isinstance(usage, dict) else None
+                context = event.get("context")
+                result_context = context if isinstance(context, dict) else None
+                compaction = event.get("compaction")
+                result_compaction = compaction if isinstance(compaction, dict) else None
+                # Stop reading here rather than waiting for the process to exit. stdin now stays
+                # open for the whole turn so steering has somewhere to go, which means the sidecar's
+                # readline loop no longer ends on its own — waiting for EOF left every turn
+                # "running" until the timeout, long after the answer had finished streaming.
+                break
+            elif kind == "error":
+                detail = _tail(str(event.get("message", "pi sidecar error")))
+                # 还没产出任何文本/工具调用就失败,基本都是供应商配置问题(端点不对、模型不存在、
+                # 鉴权失败),给一句可操作的提示;已经跑起来后的失败就只报原始错误。
+                if not saw_tool:
+                    raise AdapterError(f"{detail}\n{_PROVIDER_HINT}")
+                raise AdapterError(detail)
+            elif kind == "aborted":
+                aborted = True
+    finally:
+        # Every terminal path owns the same cleanup: success, protocol error, callback error,
+        # timeout, and user abort. Close and unregister the steering channel before reaping the
+        # child so concurrent requests immediately see that this turn can no longer be steered.
+        live.close()
+        if session_id:
+            with _LIVE_LOCK:
+                if _LIVE.get(session_id) is live:
+                    del _LIVE[session_id]
+        stderr_tail = _tail(child.finish())
     if child.timed_out:
         raise AdapterError(
             f"智能体运行超过 {TURN_TIMEOUT_SECONDS} 秒未返回,已终止。" + (f"\n{stderr_tail}" if stderr_tail else "")
