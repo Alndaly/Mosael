@@ -67,6 +67,7 @@ import {
 import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_LABELS } from "@/app/generationParameterLabels";
 import { FrameSlotField, KeyframePairField } from "@/features/ai-studio/FrameSlotField";
 import { SessionList } from "@/features/ai-studio/SessionList";
+import { GenerationModelGate } from "@/features/ai-studio/GenerationModelGate";
 import { AI_PANEL_BOUNDS } from "@/features/ai-studio/ChatWorkspace";
 import { useMediaMatch } from "@/lib/useMediaMatch";
 import { SIDEBAR_HANDLE_CLASS, handleOffset, useSidePanels } from "@/lib/useResizableSidebar";
@@ -346,6 +347,7 @@ function GenerateWorkspace({
       : null;
   const defaultImageOption = defaultGenerationOption(modelOptions, defaults.data ?? [], "image");
   const selectedModel = (modelId ? optionByValue.get(modelId) : null) ?? sessionOption ?? defaultImageOption ?? modelOptions[0] ?? null;
+  const generationModelsLoading = imageOptions.isPending || videoOptions.isPending;
   const selectedAdapterAvailable = selectedModel?.adapter_available ?? false;
   const selectedSizes = sizeOptions(selectedModel);
   const selectedDurations = durationChoices(selectedModel, generationConfig.resolution);
@@ -828,6 +830,7 @@ function GenerateWorkspace({
                   {selectedModel.label}
                 </span>
               )}
+              <GenerationModelGate hasModel={Boolean(selectedModel)} loading={generationModelsLoading} />
               {selectedModel?.kind === "image" && (
                 <Button
                   type="button"
@@ -862,6 +865,16 @@ function GenerateWorkspace({
         <div className="-mx-3 flex min-h-[38px] items-center justify-between border-b border-border px-3 py-2.5 max-[1180px]:col-span-full [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
           <h2 className="text-xs tracking-[0.02em] text-muted-foreground">{t("generationEngineSettings")}</h2>
         </div>
+        {!selectedModel && !generationModelsLoading && (
+          <ConfigNotice
+            message={t("aiCapabilityNotConfigured").replace("{capability}", capabilityLabel("image"))}
+            actionLabel={t("wfGoConfigure")}
+            section="providers:image"
+            className="items-center gap-[7px] rounded-lg px-[9px] py-2 text-ui-xs leading-[1.45]"
+            textClassName="line-clamp-3"
+            actionClassName="self-center"
+          />
+        )}
         {selectedModel && selectedCapabilityMissing && (
           <ConfigNotice
             message={t("aiCapabilityNotConfigured").replace("{capability}", capabilityLabel(selectedModel.kind))}
