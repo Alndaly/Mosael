@@ -9,15 +9,12 @@ import "@fontsource-variable/jetbrains-mono";
 import "lxgw-wenkai-screen-webfont/lxgwwenkaigbscreen.css";
 import "@/design/tokens.css";
 import "./styles.css";
-import { App } from "@/app/App";
+import { migrateLegacyLocalStorage } from "@/app/legacyStorage";
 
-// One release-time bridge: keep local UI preferences and sessions from pre-Mosael installs.
-for (const key of Object.keys(window.localStorage)) {
-  if (!key.startsWith("openstudio") && !key.startsWith("open-studio")) continue;
-  const nextKey = key.replace(/^openstudio/, "mosael").replace(/^open-studio/, "mosael");
-  if (window.localStorage.getItem(nextKey) === null) {
-    window.localStorage.setItem(nextKey, window.localStorage.getItem(key) ?? "");
-  }
-}
+migrateLegacyLocalStorage(window.localStorage);
 
-createRoot(document.getElementById("root")!).render(<App />);
+// App and its API singletons are loaded only after the storage keys have moved. Static imports are
+// evaluated before this module body, which would make the first upgraded launch read empty new keys.
+void import("@/app/App").then(({ App }) => {
+  createRoot(document.getElementById("root")!).render(<App />);
+});

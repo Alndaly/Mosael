@@ -38,12 +38,6 @@ HF_ENDPOINTS = {
     "hf-mirror": "https://hf-mirror.com",
 }
 
-#: 已经不存在的下载源 → 与它**等价**的那一个。等价才迁,否则就是替用户改了设置。
-#: (ModelScope 现在是真的了,所以它不在这里。迁移动作本身在 domain/voices/tts_settings ——
-#: 它要碰数据库,而这一层不认识数据库。)
-
-
-
 # App 托管的 TTS 运行环境:两个引擎(f5-tts / fish-speech)共用这一个 venv。
 #
 # 用户**不需要**自己准备 Python。点「下载」时后端用随 App 分发的独立解释器在这里建 venv 并

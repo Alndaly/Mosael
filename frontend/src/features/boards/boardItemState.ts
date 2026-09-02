@@ -2,21 +2,17 @@ import type { BoardItem } from "@/api/client";
 
 export type BoardItemRunStatus = NonNullable<BoardItem["run"]>["status"];
 
-/** 旧画布会在第一次保存时由后端迁到 run；前端在那之前也必须正确显示。 */
 export function itemJobId(item: BoardItem): string | undefined {
-  return item.run?.job_id ?? item.job_id;
+  return item.run?.job_id;
 }
 
 export function itemError(item: BoardItem): string | undefined {
-  return item.run?.error ?? item.error;
+  return item.run?.error;
 }
 
-/** 所有画布节点共用的六态解释。旧画布没有 run 时仍从 job/error 恢复语义。 */
+/** 所有画布节点共用的六态解释。 */
 export function itemRunStatus(item: BoardItem): BoardItemRunStatus {
-  if (item.run?.status) return item.run.status;
-  if (item.error) return "failed";
-  if (item.job_id) return "running";
-  return "idle";
+  return item.run?.status ?? "idle";
 }
 
 export function itemIsRunning(item: BoardItem): boolean {
@@ -37,16 +33,12 @@ export function boardSettlementPatch(item: BoardItem): Partial<BoardItem> | null
       asset_id: item.asset_id,
       form: item.form,
       run: item.run ?? { status: "succeeded" },
-      job_id: undefined,
-      error: undefined,
     };
   }
   const error = itemError(item);
   if (error) {
     return {
       run: item.run ?? { status: "failed", error },
-      job_id: undefined,
-      error: undefined,
     };
   }
   return null;

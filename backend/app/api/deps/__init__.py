@@ -26,7 +26,6 @@ def require_worker_key(request: Request) -> None:
     page cannot read that file, which is exactly what separates the worker from any other caller
     able to reach 127.0.0.1.
     """
-    # 旧头名一并接受:升级后第一次启动可能是「新壳 + 复用的旧后端」,反之亦然。
     sent = request.headers.get(WORKER_KEY_HEADER)
     if not verify_worker_key(sent):
         raise HTTPException(status_code=401, detail="Invalid or missing worker key")

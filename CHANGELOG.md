@@ -7,6 +7,12 @@ commit list and downloadable artifacts.
 
 ### Changed
 
+- Consolidated compatibility handling around one rule: owned data migrates once to the current shape,
+  while mixed-version desktop components are not supported; the documented direct-upgrade floor is v0.1.0.
+- Migrated legacy board job/error state into the current `run` object at startup and removed the matching
+  frontend dual-read branches, the obsolete TTS source migration, and the generation-model type alias.
+- Stopped guessing that workspaces named “Workspace” or “默认工作区” are system defaults, preserving names
+  exactly as their owners entered them.
 - Retired the legacy `openstudio://` deep-link scheme; desktop navigation now accepts only the registered
   `mosael://` protocol.
 - Updated the homepage hero and editing chapter to use the supplied current editor capture, and added a
@@ -14,6 +20,10 @@ commit list and downloadable artifacts.
 
 ### Fixed
 
+- Made pre-Mosael browser and extension storage migration remove its legacy source after a successful copy,
+  preventing cleared sessions, preferences, or extension connections from returning on the next launch.
+- Migrated `open-studio.db` and its SQLite sidecars inside explicitly configured data directories, with
+  transactional rollback, bootstrap backup, established-library conflict protection, and fail-closed startup.
 - Portaled the documentation search modal outside the blurred floating header so its dimming layer and
   click-away target cover the full viewport, and added a rhythm-matched divider below the app rail logo.
 - Recovered pre-Mosael backend libraries and Electron user data even when first launch had already

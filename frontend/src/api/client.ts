@@ -327,8 +327,6 @@ export function updateTtsConfig(body: {
 }
 /** 一个「用哪条连接的哪个模型来生成」的选项。后端联接好的那份 —— 见 /generation/options。 */
 export type GenerationOption = components["schemas"]["GenerationOptionOut"];
-/** 兼容别名:参数描述符的读取函数(lib/generationCapabilities)对两者一视同仁。 */
-export type GenerationModel = GenerationOption;
 export type GenerationJob = components["schemas"]["GenerationJobOut"];
 export type GenerationCreateResponse = components["schemas"]["GenerationCreateResponse"];
 export type PluginPackage = components["schemas"]["PluginPackageOut"];

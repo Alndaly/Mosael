@@ -8,10 +8,8 @@ function image(extra: Partial<BoardItem> = {}): BoardItem {
 }
 
 describe("画布节点状态", () => {
-  it("旧节点也能恢复运行语义", () => {
+  it("没有运行态时为空闲", () => {
     expect(itemRunStatus(image())).toBe("idle");
-    expect(itemRunStatus(image({ job_id: "job-1" }))).toBe("running");
-    expect(itemRunStatus(image({ error: "failed" }))).toBe("failed");
   });
 
   it("只有带 job id 的排队/运行节点才进入轮询", () => {

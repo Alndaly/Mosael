@@ -21,7 +21,7 @@ import { assetFileUrl, assetPreviewUrl } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
 
-import type { BoardCanvas as Canvas, BoardItem, GenerationModel } from "@/api/client";
+import type { BoardCanvas as Canvas, BoardItem, GenerationOption } from "@/api/client";
 import { NodeComposer } from "@/features/boards/NodeComposer";
 import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
 import { usePersistentViewport } from "@/lib/usePersistentTab";
@@ -140,7 +140,7 @@ interface Props {
     context: string[];
   }) => Promise<unknown>;
   /** 可用的生成模型 —— 提示词面板要让人选。 */
-  models?: GenerationModel[];
+  models?: GenerationOption[];
   /** 全览开着没有。占右下角一块不小的地方,图小的时候纯属挡视线。 */
   showMinimap?: boolean;
   /** 系统里拖进来的文件:上层负责传进素材库,回来的每一份就地摆到落点上。 */
@@ -518,8 +518,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
    * 就地改某一项。**画布上的一切改动都走它** —— 填产出、写文字、标记开始生成,此前是三段
    * 各写一遍的 setNodes,而它们只在「改哪个字段」上不同。
    *
-   * 值给 undefined 表示**删掉这个字段**:产出到了要把 job_id 摘掉,留着的话一个项同时带着
-   * job_id 和 asset_id,画布不知道该画转圈还是画图。
+   * 值给 undefined 表示**删掉这个字段**；调用方不需要为不同字段各维护一套节点更新逻辑。
    */
   const patch = React.useCallback(
     (itemId: string, next: Partial<BoardItem>) => {
@@ -1031,7 +1030,7 @@ function ItemToolbar({
               onPickAsset(item.kind as MediaKind, (assetId) =>
                 // 手动换素材不是上一轮 AI 任务的“成功产物”。把运行态归回 idle，同时 asset_id
                 // 变化会让对应 Composer 从节点表单重新水合，清掉上一轮局部 touched/submitting。
-                patch(item.id, { asset_id: assetId, run: { status: "idle" }, job_id: undefined, error: undefined }),
+                patch(item.id, { asset_id: assetId, run: { status: "idle" } }),
               )
             }
           >

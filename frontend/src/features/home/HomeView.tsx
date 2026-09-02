@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 
 import { api, deleteProject, renameProject, workspaceSummary, type Project, type ProjectWithStats, type Workspace } from "@/api/client";
-import { displayWorkspaceName, useI18n, usePreferences } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
 import { gotoRecord } from "@/lib/deepLink";
 import {
   ActivityChart,
@@ -223,7 +223,7 @@ export function HomeView({
     <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
       <HomeHero
         greeting={t(greetingKey)}
-        workspaceName={displayWorkspaceName(workspace.name, t)}
+        workspaceName={workspace.name}
         now={now}
         poem={poem}
         poemLoading={poemLoading}
@@ -346,7 +346,7 @@ export function HomeView({
                   <article className="grid grid-cols-[minmax(0,1fr)] gap-2 rounded-lg border border-border bg-panel p-3 shadow-[var(--shadow-panel)] transition-[border-color] duration-100 hover:border-border-strong" onDoubleClick={() => onOpenProject(project.id)}>
                     <div className="min-w-0">
                       <strong className="block truncate text-ui-md font-semibold">{project.name}</strong>
-                      <small className="mt-0.5 block text-xs text-muted-foreground">{displayWorkspaceName(workspace.name, t)}</small>
+                      <small className="mt-0.5 block text-xs text-muted-foreground">{workspace.name}</small>
                     </div>
                     <div className="flex flex-wrap items-center gap-2.5 text-ui-xs text-muted-foreground">
                       <span className="inline-flex items-center gap-1 whitespace-nowrap" title={t("projectStatDuration")}>

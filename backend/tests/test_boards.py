@@ -107,11 +107,47 @@ def test_没名字时给个默认名() -> None:
     assert client.post("/api/boards", json={"workspace_id": ws}).json()["name"] == "新画板"
 
 
+def test_启动迁移把旧节点状态收进run并持久化() -> None:
+    from app.core.db import SessionLocal
+    from app.db.migrations import init_db
+    from app.db.models import Board
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id = client.post("/api/boards", json={"workspace_id": ws, "name": "旧画布"}).json()["id"]
+    with SessionLocal() as db:
+        board = db.get(Board, board_id)
+        assert board is not None
+        board.canvas = {
+            "items": [
+                {"id": "running", "kind": "image", "x": 0, "y": 0, "text": "旧提示", "job_id": "job-1"},
+                {"id": "failed", "kind": "video", "x": 1, "y": 1, "error": "上游失败"},
+            ],
+            "edges": [],
+        }
+        db.commit()
+
+    init_db()
+
+    canvas = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]
+    assert canvas["items"][0]["run"] == {"status": "running", "job_id": "job-1"}
+    assert canvas["items"][0]["form"] == {"prompt": "旧提示"}
+    assert canvas["items"][1]["run"] == {"status": "failed", "error": "上游失败"}
+    assert all("job_id" not in item and "error" not in item for item in canvas["items"])
+
+    # Re-running startup is a no-op and must not recreate legacy fields.
+    init_db()
+    with SessionLocal() as db:
+        stored = db.get(Board, board_id)
+        assert stored is not None
+        assert stored.canvas == canvas
+
+
 # ── 画布校验 ────────────────────────────────────────────────────────────────
 
 
 def test_空画布和缺字段都读得回来() -> None:
-    """宽进:新板、旧版本存的、少写的字段,都要能打开。"""
+    """当前格式允许空画布与可选字段缺省。"""
     assert normalize_canvas(None) == {"items": [], "edges": []}
     assert normalize_canvas({}) == {"items": [], "edges": []}
     got = normalize_canvas({"items": [{"id": "a", "kind": "note", "x": 1, "y": 2}]})
@@ -169,7 +205,7 @@ def test_图片视频项的三种状态都存得下() -> None:
         {
             "items": [
                 {"id": "a", "kind": "image", "x": 0, "y": 0},
-                {"id": "b", "kind": "image", "x": 0, "y": 0, "job_id": "j1"},
+                {"id": "b", "kind": "image", "x": 0, "y": 0, "run": {"status": "running", "job_id": "j1"}},
                 {"id": "c", "kind": "video", "x": 0, "y": 0, "asset_id": "abc"},
             ]
         }
@@ -177,6 +213,11 @@ def test_图片视频项的三种状态都存得下() -> None:
     assert "asset_id" not in empty and "run" not in empty
     assert running["run"] == {"status": "running", "job_id": "j1"}
     assert done["asset_id"] == "abc"
+
+
+def test_当前画布解析器不再解释旧状态字段() -> None:
+    with pytest.raises(BoardDomainError, match="已停用"):
+        normalize_canvas({"items": [{"id": "legacy", "kind": "image", "x": 0, "y": 0, "job_id": "old-job"}]})
 
 
 # ── 在画板上生成 ────────────────────────────────────────────────────────────
@@ -191,7 +232,7 @@ def _pending_board(client, ws: str) -> tuple[str, str]:
             "kind": "image",
             "x": 0,
             "y": 0,
-            "job_id": "job-x",
+            "run": {"status": "running", "job_id": "job-x"},
             "text": "一只猫",
             "form": {
                 "prompt": "画一只猫",
@@ -211,7 +252,9 @@ def _pending_board(client, ws: str) -> tuple[str, str]:
 
 def test_正在生成的项可以没有素材() -> None:
     """「还没有」和「不该有」是两件事。前者要占着位置让用户看见"这儿在生成"。"""
-    got = normalize_canvas({"items": [{"id": "g", "kind": "image", "x": 0, "y": 0, "job_id": "j1"}]})
+    got = normalize_canvas(
+        {"items": [{"id": "g", "kind": "image", "x": 0, "y": 0, "run": {"status": "running", "job_id": "j1"}}]}
+    )
     assert got["items"][0]["run"] == {"status": "running", "job_id": "j1"}
     assert "asset_id" not in got["items"][0]
 
@@ -235,7 +278,7 @@ def test_任务成功后占位就地变成素材() -> None:
     db.close()
 
     assert item["asset_id"] == "asset-42"
-    assert "job_id" not in item, "填完素材还留着 job_id,界面会一直显示在生成"
+    assert "job_id" not in item.get("run", {}), "填完素材还留着 job_id,界面会一直显示在生成"
     assert item["form"] == {
         "prompt": "",
         "provider": "evolink",
@@ -249,9 +292,9 @@ def test_任务成功后占位就地变成素材() -> None:
 def test_任务失败时留着这一项并写上原因() -> None:
     """失败是这一项的一种**状态**,不是删掉它的理由。
 
-    三种写法里只有一种是对的:留着 job_id(画布永远转圈,用户以为还在跑)、整项删掉
+    三种写法里只有一种是对的:保留 running(画布永远转圈,用户以为还在跑)、整项删掉
     (框凭空消失,连同刚写的提示词 —— 而他要做的下一件事十有八九是"改个字再来一次")、
-    或者摘掉 job_id、留下这一项和原因。这里钉的是第三种。"""
+    或者写入 failed、留下这一项和原因。这里钉的是第三种。"""
     from types import SimpleNamespace
 
     from app.db.models import Board
@@ -271,7 +314,7 @@ def test_任务失败时留着这一项并写上原因() -> None:
 
     assert [one["id"] for one in items] == [item_id], "失败了却把这一项从画布上删了"
     failed = items[0]
-    assert "job_id" not in failed, "任务已经结束了,job_id 还留着 —— 画布会一直转圈"
+    assert "job_id" not in failed.get("run", {}), "任务已经结束了,job_id 还留着 —— 画布会一直转圈"
     assert failed["run"] == {"status": "failed", "error": "供应商说这个提示词不行"}
     assert failed["form"]["prompt"] == "画一只猫", "失败后输入必须留给重试"
     assert failed["form"]["source_assets"], "失败后参考素材不能消失"
@@ -311,7 +354,7 @@ def test_跑挂了也留着连进来的那条线() -> None:
     canvas = {
         "items": [
             {"id": "note-1", "kind": "note", "x": 0, "y": 0, "text": "一只猫"},
-            {"id": "gen-1", "kind": "image", "x": 300, "y": 0, "job_id": "job-x"},
+            {"id": "gen-1", "kind": "image", "x": 300, "y": 0, "run": {"status": "running", "job_id": "job-x"}},
         ],
         "edges": [{"id": "e1", "source": "note-1", "target": "gen-1"}],
     }
@@ -349,7 +392,6 @@ def test_客户端不会覆盖它还不知道的产出() -> None:
     from types import SimpleNamespace
 
     from app.core.db import SessionLocal
-    from app.db.models import Board
     from app.domain.boards import deliver_generated, receipt_to_item
 
     client = fresh_client()
@@ -368,7 +410,7 @@ def test_客户端不会覆盖它还不知道的产出() -> None:
     item = got["canvas"]["items"][0]
 
     assert item["asset_id"] == "asset-9", "客户端那份把已经到达的产出覆盖掉了"
-    assert "job_id" not in item
+    assert "job_id" not in item.get("run", {})
 
 
 def test_客户端不会把已经失败的节点重新写成_loading() -> None:
@@ -393,7 +435,7 @@ def test_客户端不会把已经失败的节点重新写成_loading() -> None:
     got = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "canvas": stale}).json()
     item = got["canvas"]["items"][0]
     assert item["run"] == {"status": "failed", "error": "引用素材已删除"}
-    assert "job_id" not in item
+    assert "job_id" not in item.get("run", {})
 
 
 def test_旧自动保存不会覆盖便签写作的成功正文和空表单() -> None:
@@ -549,7 +591,14 @@ def test_在已有的空槽上生成不会撞上自己() -> None:
         workspace_id=ws,
         board_id=board_id,
         # 路由拿不到用户把节点拖到了哪儿,发过来的是默认坐标 —— 不能拿它覆盖。
-        item={"id": "img-1", "kind": "image", "x": 0, "y": 0, "job_id": "job-1", "text": "一个女孩"},
+        item={
+            "id": "img-1",
+            "kind": "image",
+            "x": 0,
+            "y": 0,
+            "run": {"status": "running", "job_id": "job-1"},
+            "form": {"prompt": "一个女孩"},
+        },
     )
 
     items = updated.canvas["items"]
@@ -581,7 +630,16 @@ def test_一次出多张时每一张都落回画布() -> None:
             "workspace_id": ws,
             "name": "B",
             "canvas": {
-                "items": [{"id": "img-1", "kind": "image", "x": 100, "y": 50, "width": 200, "job_id": "job-x"}],
+                "items": [
+                    {
+                        "id": "img-1",
+                        "kind": "image",
+                        "x": 100,
+                        "y": 50,
+                        "width": 200,
+                        "run": {"status": "running", "job_id": "job-x"},
+                    }
+                ],
                 "edges": [],
             },
         },
@@ -597,7 +655,7 @@ def test_一次出多张时每一张都落回画布() -> None:
     db.close()
 
     assert [one["asset_id"] for one in items] == ["a", "b", "c"], f"只落回了一部分:{items}"
-    assert all("job_id" not in one for one in items), "还留着转圈的占位"
+    assert all("job_id" not in one.get("run", {}) for one in items), "还留着转圈的占位"
     # 挨着原处往右排,别叠在一起 —— 叠住的话看起来就还是只出了一张。
     assert [one["x"] for one in items] == [100, 324, 548]
     assert {one["y"] for one in items} == {50}
@@ -987,7 +1045,12 @@ def test_语音合成的产出也能落回画板() -> None:
         json={
             "workspace_id": ws,
             "name": "B",
-            "canvas": {"items": [{"id": "a1", "kind": "audio", "x": 0, "y": 0, "job_id": "job-tts"}], "edges": []},
+            "canvas": {
+                "items": [
+                    {"id": "a1", "kind": "audio", "x": 0, "y": 0, "run": {"status": "running", "job_id": "job-tts"}}
+                ],
+                "edges": [],
+            },
         },
     ).json()["id"]
 
@@ -1002,7 +1065,7 @@ def test_语音合成的产出也能落回画板() -> None:
 
     assert len(items) == 1, f"占位被摘掉了:{items}"
     assert items[0]["asset_id"] == "snd-1"
-    assert "job_id" not in items[0]
+    assert "job_id" not in items[0].get("run", {})
 
 
 def test_截取范围写错时当场拒绝_而不是让_ffmpeg_去发现() -> None:
@@ -1051,7 +1114,12 @@ def test_截取产出走的是画板同一套回执() -> None:
         json={
             "workspace_id": ws,
             "name": "B",
-            "canvas": {"items": [{"id": "v1", "kind": "video", "x": 0, "y": 0, "job_id": "job-trim"}], "edges": []},
+            "canvas": {
+                "items": [
+                    {"id": "v1", "kind": "video", "x": 0, "y": 0, "run": {"status": "running", "job_id": "job-trim"}}
+                ],
+                "edges": [],
+            },
         },
     ).json()["id"]
 
@@ -1063,7 +1131,7 @@ def test_截取产出走的是画板同一套回执() -> None:
     )
     items = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]["items"]
     db.close()
-    assert items[0]["asset_id"] == "cut-1" and "job_id" not in items[0]
+    assert items[0]["asset_id"] == "cut-1" and "job_id" not in items[0].get("run", {})
 
 
 def test_帧条按需生成并缓存在素材旁边() -> None:
@@ -1125,7 +1193,8 @@ def test_取帧要精确到那一秒_而不是最近的关键帧() -> None:
         _p.Path(pathlib_target).write_bytes(b"\xff\xd8\xff\xd9")
         return None
 
-    import pathlib, tempfile
+    import pathlib
+    import tempfile
 
     with tempfile.TemporaryDirectory() as tmp:
         source = pathlib.Path(tmp) / "in.mp4"

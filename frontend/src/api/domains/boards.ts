@@ -28,10 +28,6 @@ export interface BoardItem {
     job_id?: string;
     error?: string;
   };
-  /** @deprecated 仅用于读取升级前的画布。 */
-  job_id?: string;
-  /** @deprecated 仅用于读取升级前的画布。 */
-  error?: string;
   move_children?: boolean;
 }
 

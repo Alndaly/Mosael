@@ -16,7 +16,7 @@ import {
   importAsset,
   listBoards,
   updateBoard,
-  type GenerationModel,
+  type GenerationOption,
   type Board,
   type BoardCanvas as Canvas,
   type BoardItem,
@@ -241,8 +241,8 @@ function BoardDetail({
     queryKey: ["generation-options", "board"],
     queryFn: async () => {
       const [image, video] = await Promise.all([
-        api2<GenerationModel[]>("/api/generation/options?kind=image"),
-        api2<GenerationModel[]>("/api/generation/options?kind=video"),
+        api2<GenerationOption[]>("/api/generation/options?kind=image"),
+        api2<GenerationOption[]>("/api/generation/options?kind=video"),
       ]);
       return [...image, ...video];
     },
@@ -305,7 +305,7 @@ function BoardDetail({
       //: 上一次的报错要一起清掉 —— 重来一次的时候还挂着上次为什么挂,用户会以为这次也挂了。
       const pending = ((placed.canvas?.items ?? []) as BoardItem[]).find((one) => one.id === itemId);
       const jobId = pending ? itemJobId(pending) : undefined;
-      if (jobId) api?.patch(itemId, { form: pending?.form ?? input.form, run: { status: "running", job_id: jobId }, job_id: undefined, error: undefined });
+      if (jobId) api?.patch(itemId, { form: pending?.form ?? input.form, run: { status: "running", job_id: jobId } });
       setRunning((current) => (current.includes(itemId) ? current : [...current, itemId]));
     },
     [board.id, workspaceId, t, api],
@@ -355,7 +355,7 @@ function BoardDetail({
       //: 和生成那条一样:马上把这一格标成在跑,不然画布上看不出发生了什么。
       const pending = ((placed.canvas?.items ?? []) as BoardItem[]).find((one) => one.id === input.itemId);
       const jobId = pending ? itemJobId(pending) : undefined;
-      if (jobId) api?.patch(input.itemId, { run: { status: "running", job_id: jobId }, job_id: undefined, error: undefined });
+      if (jobId) api?.patch(input.itemId, { run: { status: "running", job_id: jobId } });
       setRunning((current) => (current.includes(input.itemId) ? current : [...current, input.itemId]));
     },
     [board.id, workspaceId, api, t],
@@ -433,13 +433,13 @@ function BoardDetail({
         if (!item) {
           settled.push(id);
         } else if (item.asset_id) {
-          //: 产出到了:填上 asset_id,并把 job_id 摘掉 —— 两个都在的话画布不知道该画转圈还是画图。
+          //: 产出到了:服务端返回 asset_id 与终态 run，整组写回，避免本地继续显示运行中。
           api?.patch(id, boardSettlementPatch(item) ?? {});
           settled.push(id);
         } else if (itemError(item)) {
           //: **跑挂了也要落到画布上。** 此前这里只把 id 从「还在等」的名单里划掉,却没告诉
-          //: 画布 —— 而画布的节点只在挂载时从 canvas 建一次,那一格于是永远带着 job_id:
-          //: 框里一直转圈,底下那个提交按钮(busy 看的就是 job_id)也一直按不动。
+          //: 画布 —— 而画布的节点只在挂载时从 canvas 建一次,那一格于是会一直保留 running:
+          //: 框里持续转圈,底下那个提交按钮也一直按不动。
           api?.patch(id, boardSettlementPatch(item) ?? {});
           settled.push(id);
         }

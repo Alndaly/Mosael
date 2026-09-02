@@ -27,10 +27,9 @@ import {
   type ComfyParam,
   type GenerationCreateResponse,
   type GenerationJob,
-  type GenerationModel,
+  type GenerationOption,
   type Job,
   type Workspace,
-  type GenerationOption,
 } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { JumpToLatest, useStickToBottom } from "@/components/agent/stickToBottom";
@@ -120,7 +119,7 @@ const VIDEO_INPUT_HINTS = {
  *  都是这么来的。 */
 type GenerationEngineOption = GenerationOption & { value: string };
 
-function defaultGenerationConfig(model: GenerationModel | null): GenerationConfig {
+function defaultGenerationConfig(model: GenerationOption | null): GenerationConfig {
   const sizes = sizeOptions(model);
   const resolutions = videoResolutionOptions(model);
   const ratios = aspectRatioOptions(model);
@@ -153,7 +152,7 @@ function defaultGenerationConfig(model: GenerationModel | null): GenerationConfi
   };
 }
 
-function generationParameters(model: GenerationModel, config: GenerationConfig) {
+function generationParameters(model: GenerationOption, config: GenerationConfig) {
   // **图像和视频都要的那几项先放这儿。** 此前它们写在 image 分支里,于是视频那条路上
   // 控件照常渲染、值却在这一行被丢掉 —— 用户选了 ComfyUI 工作流没反应、填了种子不生效,
   // 而界面什么都没说。控件的显示条件本来就不分 kind(见 supportsParameter 那几处)。

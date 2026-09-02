@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.core.data_migration import migrate_default_data_dir
+from app.core.data_migration import migrate_default_data_dir, migrate_legacy_database_in_data_dir
 
 ENV_PREFIX = "MOSAEL_"
 LEGACY_ENV_PREFIX = "OPEN_STUDIO_"
@@ -20,18 +20,42 @@ def _adopt_legacy_environment() -> None:
             os.environ.setdefault(f"{ENV_PREFIX}{key.removeprefix(LEGACY_ENV_PREFIX)}", value)
 
 
-def _migrate_default_data_dir() -> Path:
-    """Move the previous local data directory before settings create the new database."""
+def _prepare_data_dir() -> Path:
+    """Resolve the data directory and finish any pre-settings migration it requires."""
     target = Path.home() / ".mosael"
-    if os.environ.get(f"{ENV_PREFIX}DATA_DIR") or os.environ.get(f"{LEGACY_ENV_PREFIX}DATA_DIR"):
+    configured = os.environ.get(f"{ENV_PREFIX}DATA_DIR") or os.environ.get(
+        f"{LEGACY_ENV_PREFIX}DATA_DIR"
+    )
+    if configured:
+        target = Path(configured).expanduser().resolve()
+        try:
+            result = migrate_legacy_database_in_data_dir(target)
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "Could not migrate pre-Mosael database inside %s; refusing to start with an empty replacement",
+                target,
+            )
+            raise
+        if result.changed:
+            logging.getLogger(__name__).warning(
+                "Migrated pre-Mosael database inside %s (backup=%s)",
+                target,
+                result.backup,
+            )
+        elif result.status != "no-legacy-data":
+            logging.getLogger(__name__).warning(
+                "Did not migrate pre-Mosael database inside %s: %s",
+                target,
+                result.status,
+            )
         return target
     try:
         result = migrate_default_data_dir(Path.home())
     except Exception:
         logging.getLogger(__name__).exception(
-            "Could not migrate pre-Mosael data; continuing with %s", target
+            "Could not migrate pre-Mosael data; refusing to start with an empty replacement",
         )
-        return target
+        raise
     if result.changed:
         logging.getLogger(__name__).warning(
             "Migrated pre-Mosael data from %s to %s (backup=%s, source_preserved=%s)",
@@ -50,7 +74,7 @@ def _migrate_default_data_dir() -> Path:
 
 
 _adopt_legacy_environment()
-DEFAULT_DATA_DIR = _migrate_default_data_dir()
+DEFAULT_DATA_DIR = _prepare_data_dir()
 
 
 class Settings(BaseSettings):

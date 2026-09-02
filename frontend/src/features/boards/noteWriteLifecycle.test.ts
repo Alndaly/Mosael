@@ -37,8 +37,6 @@ describe("便签 AI 写作生命周期", () => {
     const pending = runNoteWrite({ input, request, patch });
     expect(patch).toHaveBeenNthCalledWith(1, "note-1", {
       run: { status: "running" },
-      job_id: undefined,
-      error: undefined,
     });
 
     resolve(
@@ -68,8 +66,6 @@ describe("便签 AI 写作生命周期", () => {
         mentioned_asset_ids: [],
       },
       run: { status: "succeeded" },
-      job_id: undefined,
-      error: undefined,
     });
   });
 
@@ -83,8 +79,6 @@ describe("便签 AI 写作生命周期", () => {
 
     expect(patch).toHaveBeenLastCalledWith("note-1", {
       run: { status: "failed", error: "模型拒绝了请求" },
-      job_id: undefined,
-      error: undefined,
     });
     expect(patch.mock.calls.at(-1)?.[1]).not.toHaveProperty("form");
   });

@@ -4,7 +4,7 @@ import { ArrowLeftRight, ArrowUp, Loader2, Plus, Sparkles, Volume2, VolumeX, X }
 
 import { useQuery } from "@tanstack/react-query";
 
-import { assetPreviewUrl, assetThumbnailUrl, listAssets, type Asset, type BoardItem, type GenerationModel } from "@/api/client";
+import { assetPreviewUrl, assetThumbnailUrl, listAssets, type Asset, type BoardItem, type GenerationOption } from "@/api/client";
 import { useImagePreview } from "@/components/app/image-preview";
 import {
   collect,
@@ -125,7 +125,7 @@ export function roleAccepts(role: string): "image" | "video" | "audio" {
  *
  * 只留这个模型真认的角色;剩不下角色的组直接不出现。不足两组就没得选,返回空 =「不显示开关」。
  */
-export function sourceModes(model: GenerationModel | null): { key: string; roles: string[] }[] {
+export function sourceModes(model: GenerationOption | null): { key: string; roles: string[] }[] {
   const groups = exclusiveSourceGroups(model)
     .map((roles) => roles.filter((role) => supportsParameter(model, role)))
     .filter((roles) => roles.length > 0)
@@ -219,7 +219,7 @@ export function mergeSourceAssets(
  * sourceLimit 对没声明的角色兜底返回 1,拿它当支持判定用的话,图片模型也会长出首尾帧槽。
  */
 export function sourceSlots(
-  model: GenerationModel | null,
+  model: GenerationOption | null,
   /** 当前生成方式的角色。给了就只出这一组 —— 互斥的另一组同时摆出来,挂满了才在提交时被拒。 */
   activeRoles?: string[],
 ): { role: string; limit: number }[] {
@@ -263,7 +263,7 @@ export function autoAssign(
  */
 export function defaultMode(
   modes: { key: string; roles: string[] }[],
-  model: GenerationModel | null,
+  model: GenerationOption | null,
   upstream: { assetId: string; kind: string }[],
 ): string {
   if (modes.length === 0) return "";
@@ -294,7 +294,7 @@ export function NodeComposer({
 }: {
   item: BoardItem;
   /** 这种能力下可选的模型。空数组 = 还没配 —— 那时该说清楚,而不是给一个点了没反应的按钮。 */
-  models: GenerationModel[];
+  models: GenerationOption[];
   busy: boolean;
   onSubmit: (input: {
     prompt: string;

@@ -7,14 +7,14 @@
 import { describe, expect, it } from "vitest";
 
 import { mergeSourceAssets, roleAccepts, sourceSlots } from "./NodeComposer";
-import type { GenerationModel } from "@/api/client";
+import type { GenerationOption } from "@/api/client";
 
-const model = (keys: string[], limits: Record<string, number> = {}): GenerationModel =>
+const model = (keys: string[], limits: Record<string, number> = {}): GenerationOption =>
   ({
     provider: "p",
     model: "m",
     capabilities: { parameter_keys: keys, source_limits: limits },
-  }) as unknown as GenerationModel;
+  }) as unknown as GenerationOption;
 
 describe("角色收哪一类素材", () => {
   it("八个角色都判对 —— 兜底成图片会把源视频/首段/驱动音频判错三个", () => {

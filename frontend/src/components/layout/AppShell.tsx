@@ -29,7 +29,7 @@ import { toast } from "sonner";
 
 import { api, createWorkspace, deleteWorkspace, renameWorkspace, userAvatarUrl, type Workspace } from "@/api/client";
 import { useAuth } from "@/app/auth";
-import { displayWorkspaceName, useI18n, usePreferences } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -392,7 +392,7 @@ function WorkspaceSwitcher({
   });
 
   if (!onSelectWorkspace) {
-    return <span className="shrink-0">{displayWorkspaceName(workspaceName, t)}</span>;
+    return <span className="shrink-0">{workspaceName}</span>;
   }
 
   return (
@@ -400,7 +400,7 @@ function WorkspaceSwitcher({
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button type="button" className="-mx-1 inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-1 py-[3px] text-inherit transition-colors duration-100 [font:inherit] hover:bg-secondary hover:text-foreground [&_svg]:text-muted-foreground" aria-label={t("workspaceSwitch")}>
-            {displayWorkspaceName(workspaceName, t)}
+            {workspaceName}
             <ChevronsUpDown size={12} />
           </button>
         </PopoverTrigger>
@@ -424,7 +424,7 @@ function WorkspaceSwitcher({
                       if (ws.id !== workspaceId) onSelectWorkspace(ws.id);
                     }}
                   >
-                    <span className="truncate">{displayWorkspaceName(ws.name, t)}</span>
+                    <span className="truncate">{ws.name}</span>
                     {ws.id === workspaceId && <Check size={13} />}
                   </button>
                 </ContextMenuTrigger>

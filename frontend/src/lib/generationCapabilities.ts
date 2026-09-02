@@ -8,39 +8,39 @@
  * 抽到这里是因为有两个消费方:AI Studio 的生成面板,和工作流「AI 生成素材」节点的参数区。
  * 同一份规则解释两遍,迟早会在某一处漏掉新参数。
  */
-import type { GenerationModel } from "@/api/client";
+import type { GenerationOption } from "@/api/client";
 
 //: 目录没声明时的兜底。刻意保守:给一个能跑的常见值,而不是空(空会让参数区整个消失)。
 export const FALLBACK_IMAGE_SIZES = ["1024x1024"];
 export const FALLBACK_VIDEO_RESOLUTIONS = ["720p"];
 export const FALLBACK_ASPECT_RATIOS = ["16:9"];
 
-export function capabilityList(model: GenerationModel | null, key: string, fallback: string[]): string[] {
+export function capabilityList(model: GenerationOption | null, key: string, fallback: string[]): string[] {
   const value = model?.capabilities?.[key];
   if (!Array.isArray(value)) return fallback;
   const items = value.map((item) => String(item).trim()).filter(Boolean);
   return items.length > 0 ? items : fallback;
 }
 
-export function capabilityNumberList(model: GenerationModel | null, key: string, fallback: number[]): number[] {
+export function capabilityNumberList(model: GenerationOption | null, key: string, fallback: number[]): number[] {
   const value = model?.capabilities?.[key];
   if (!Array.isArray(value)) return fallback;
   const items = value.map((item) => Number(item)).filter((item) => Number.isFinite(item) && item > 0);
   return items.length > 0 ? items : fallback;
 }
 
-export function capabilityString(model: GenerationModel | null, key: string, fallback: string): string {
+export function capabilityString(model: GenerationOption | null, key: string, fallback: string): string {
   const value = model?.capabilities?.[key];
   return typeof value === "string" ? value : fallback;
 }
 
-export function capabilityNumber(model: GenerationModel | null, key: string, fallback: number): number {
+export function capabilityNumber(model: GenerationOption | null, key: string, fallback: number): number {
   const value = Number(model?.capabilities?.[key]);
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
 /** 布尔默认值也属于模型契约。缺失时使用调用方给的保守默认。 */
-export function capabilityBoolean(model: GenerationModel | null, key: string, fallback = false): boolean {
+export function capabilityBoolean(model: GenerationOption | null, key: string, fallback = false): boolean {
   const value = model?.capabilities?.[key];
   return typeof value === "boolean" ? value : fallback;
 }
@@ -58,7 +58,7 @@ export function capabilityBoolean(model: GenerationModel | null, key: string, fa
  * **不是支持判定。** 没声明的角色它返回兜底的 1 —— 想问「这个模型认不认某个角色」,
  * 用 supportsParameter(它查描述符的 parameter_keys)。两者混用会让图片模型也长出首尾帧槽。
  */
-export function sourceLimit(model: GenerationModel | null, role: string): number {
+export function sourceLimit(model: GenerationOption | null, role: string): number {
   const limits = model?.capabilities?.source_limits;
   if (!limits || typeof limits !== "object") return 1;
   const value = Number((limits as Record<string, unknown>)[role]);
@@ -72,7 +72,7 @@ export function sourceLimit(model: GenerationModel | null, role: string): number
  * 火山把这条画成硬约束(`first/last frame content cannot be mixed with reference media
  * content`)。界面照着它把另一组灰掉,免得用户挂满了才在提交时吃一个英文 400。
  */
-export function exclusiveSourceGroups(model: GenerationModel | null): string[][] {
+export function exclusiveSourceGroups(model: GenerationOption | null): string[][] {
   const groups = model?.capabilities?.exclusive_source_groups;
   if (!Array.isArray(groups)) return [];
   return groups
@@ -81,28 +81,28 @@ export function exclusiveSourceGroups(model: GenerationModel | null): string[][]
     .filter((group) => group.length > 0);
 }
 
-export function parameterKeys(model: GenerationModel | null): string[] {
+export function parameterKeys(model: GenerationOption | null): string[] {
   return capabilityList(model, "parameter_keys", []);
 }
 
-export function supportsParameter(model: GenerationModel | null, key: string) {
+export function supportsParameter(model: GenerationOption | null, key: string) {
   if (key === "generate_audio" && model?.capabilities?.supports_generate_audio === true) return true;
   const declared = model?.capabilities?.parameter_keys;
-  // 缺字段是旧后端/旧缓存，维持兼容；明确给 [] 则表示“不要猜任何参数”。此前把两者都
-  // 压成空数组，未知模型会反而被判成全支持，UI 又自动补出 1024/720p/5 秒。
-  if (!Array.isArray(declared)) return true;
+  // 参数描述符是当前接口契约。缺失与明确为空都表示“不要猜”，否则前端会主动发送
+  // 供应商未声明的尺寸、时长或素材角色，最终只会得到一次可以提前避免的 400。
+  if (!Array.isArray(declared)) return false;
   return declared.map(String).includes(key);
 }
 
 /** 需要开关控件的参数。参数类型也是能力契约的一部分，不能在各页面各抄一张名单。 */
-export function booleanParameterKeys(model: GenerationModel | null): string[] {
+export function booleanParameterKeys(model: GenerationOption | null): string[] {
   const value = model?.capabilities?.boolean_parameters;
   if (!Array.isArray(value)) return [];
   return value.map(String).filter((key) => key && supportsParameter(model, key));
 }
 
 /** 供应商特有的枚举参数，例如 OpenAI quality/background/output_format。 */
-export function parameterChoiceEntries(model: GenerationModel | null): Array<[string, string[]]> {
+export function parameterChoiceEntries(model: GenerationOption | null): Array<[string, string[]]> {
   const value = model?.capabilities?.parameter_choices;
   if (!value || typeof value !== "object") return [];
   return Object.entries(value as Record<string, unknown>)
@@ -113,17 +113,17 @@ export function parameterChoiceEntries(model: GenerationModel | null): Array<[st
 
 /** 这个模型能出哪些尺寸。**不限图像** —— 万相视频收的也是 `宽*高` 的像素对,
  *  而名字里带 image 会让人以为视频不该有这一栏(它此前就是这么被漏掉的)。 */
-export function sizeOptions(model: GenerationModel | null): string[] {
+export function sizeOptions(model: GenerationOption | null): string[] {
   if (!supportsParameter(model, "size")) return [];
   return capabilityList(model, "sizes", model?.kind === "video" ? [] : FALLBACK_IMAGE_SIZES);
 }
 
-export function videoResolutionOptions(model: GenerationModel | null): string[] {
+export function videoResolutionOptions(model: GenerationOption | null): string[] {
   if (!supportsParameter(model, "resolution")) return [];
   return capabilityList(model, "resolutions", FALLBACK_VIDEO_RESOLUTIONS);
 }
 
-export function aspectRatioOptions(model: GenerationModel | null): string[] {
+export function aspectRatioOptions(model: GenerationOption | null): string[] {
   if (!supportsParameter(model, "aspect_ratio")) return [];
   return capabilityList(model, "aspect_ratios", FALLBACK_ASPECT_RATIOS);
 }
@@ -138,7 +138,7 @@ export function aspectRatioOptions(model: GenerationModel | null): string[] {
  * `[5]`,于是区间型的模型永远显示成一个只有 5 的下拉。Seedance 2 收 4–15 秒,而界面
  * 只给一个选项,正是这么来的。
  */
-export function durationOptions(model: GenerationModel | null): number[] {
+export function durationOptions(model: GenerationOption | null): number[] {
   if (!supportsParameter(model, "duration_seconds")) return [];
   const value = model?.capabilities?.duration_seconds;
   if (!Array.isArray(value)) return [5];
@@ -146,7 +146,7 @@ export function durationOptions(model: GenerationModel | null): number[] {
 }
 
 /** 区间以外的合法时长值，例如 Seedance 2.5 的 -1=自动。 */
-export function durationSpecialValues(model: GenerationModel | null): number[] {
+export function durationSpecialValues(model: GenerationOption | null): number[] {
   if (!supportsParameter(model, "duration_seconds")) return [];
   const value = model?.capabilities?.duration_special_values;
   if (!Array.isArray(value)) return [];
@@ -154,7 +154,7 @@ export function durationSpecialValues(model: GenerationModel | null): number[] {
 }
 
 /** 时长是区间时的上下界;不是区间(或没声明上界)时返回 null。 */
-export function durationRange(model: GenerationModel | null): { min: number; max: number } | null {
+export function durationRange(model: GenerationOption | null): { min: number; max: number } | null {
   if (durationOptions(model).length > 0) return null;
   const max = capabilityNumber(model, "max_duration_seconds", 0);
   if (max <= 0) return null;
@@ -162,7 +162,7 @@ export function durationRange(model: GenerationModel | null): { min: number; max
 }
 
 /** 所有可在 UI 中选择的时长值：特殊值、离散档位或完整整数区间。 */
-export function durationChoices(model: GenerationModel | null, resolution = ""): number[] {
+export function durationChoices(model: GenerationOption | null, resolution = ""): number[] {
   const special = durationSpecialValues(model);
   const discrete = durationOptions(model);
   const range = durationRange(model);
@@ -182,7 +182,7 @@ export function durationChoices(model: GenerationModel | null, resolution = ""):
 }
 
 /** 默认时长允许是 -1；通用 capabilityNumber 有意只接收正数，不适合这里。 */
-export function defaultDuration(model: GenerationModel | null, fallback = 5): number {
+export function defaultDuration(model: GenerationOption | null, fallback = 5): number {
   const declared = Number(model?.capabilities?.default_duration_seconds);
   if (Number.isFinite(declared)) return declared;
   return durationChoices(model)[0] ?? fallback;
@@ -195,6 +195,6 @@ export function parseGenerationParameterInput(value: string): string | number | 
   return /^-?\d+(\.\d+)?$/.test(value) ? Number(value) : value;
 }
 
-export function maxImages(model: GenerationModel | null): number {
+export function maxImages(model: GenerationOption | null): number {
   return capabilityNumber(model, "max_num_images", 4);
 }

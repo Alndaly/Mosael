@@ -42,7 +42,7 @@ import {
   runWorkflow,
   updateWorkflow,
   type Asset,
-  type GenerationModel,
+  type GenerationOption,
   type PluginTool,
   type TaskEvent,
   type Workflow,
@@ -3062,8 +3062,8 @@ function NodeInspector({
     // 现在两种能力各取一次再合并 —— 和 AI 工作台看到的是同一份(后端联接好的)。
     queryFn: async () => {
       const [image, video] = await Promise.all([
-        api<GenerationModel[]>("/api/generation/options?kind=image"),
-        api<GenerationModel[]>("/api/generation/options?kind=video"),
+        api<GenerationOption[]>("/api/generation/options?kind=image"),
+        api<GenerationOption[]>("/api/generation/options?kind=video"),
       ]);
       return [...image, ...video];
     },

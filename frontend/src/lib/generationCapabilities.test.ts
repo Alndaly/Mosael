@@ -68,10 +68,10 @@ describe("尺寸这一栏跟着描述符走", () => {
     expect(sizeOptions(bare)).toEqual([]);
   });
 
-  it("没有 parameter_keys 的模型一律放行(老数据不该因为没填就什么都不能调)", () => {
-    const legacy = { kind: "image", capabilities: {} } as unknown as Model;
-    expect(supportsParameter(legacy, "size")).toBe(true);
-    expect(supportsParameter(legacy, "anything")).toBe(true);
+  it("没有 parameter_keys 就不猜测参数能力", () => {
+    const incomplete = { kind: "image", capabilities: {} } as unknown as Model;
+    expect(supportsParameter(incomplete, "size")).toBe(false);
+    expect(supportsParameter(incomplete, "anything")).toBe(false);
   });
 
   it("明确为空的 parameter_keys 表示未知能力_不能再猜默认参数", () => {

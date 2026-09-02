@@ -43,9 +43,9 @@ def test_but_it_is_still_offered_where_it_works() -> None:
 
 
 def test_no_source_is_silently_rewritten_anymore() -> None:
-    """迁移表现在是空的:modelscope 成了真的,不该再被换成别的。
+    """旧来源迁移已经退役:modelscope 成了真的,不该再被换成别的。
 
     「等价才迁」—— 一次不等价的迁移就是替用户改了设置,而这台机器上那正好是把一条
     9 MB/s 的路换成 46 KB/s 的路。
     """
-    assert tts_settings._LEGACY_SOURCES == {}
+    assert not hasattr(tts_settings, "migrate_legacy_sources")

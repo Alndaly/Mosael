@@ -173,6 +173,8 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
         kind = str(entry["kind"]).strip()
         if kind not in ITEM_KINDS:
             raise BoardDomainError(f"未知的画板项类型:{kind};可用的是 {'、'.join(ITEM_KINDS)}")
+        if "job_id" in entry or "error" in entry:
+            raise BoardDomainError(f"画板项 {item_id} 使用了已停用的顶层运行态；请改用 run.status/run.job_id/run.error")
 
         item: dict[str, Any] = {
             "id": item_id,
@@ -196,10 +198,6 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
             item["text"] = text
 
         form = _normalize_form(entry.get("form"), item_id)
-        # 旧画布把媒体提示词塞在 text 里。读到时迁到 form.prompt；从此 text 只负责节点
-        # 展示内容/素材名，运行时拼出来的提示词也不会再污染下一次编辑。
-        if form is None and kind in _NEEDS_ASSET and isinstance(text, str) and text:
-            form = {"prompt": text}
         if form is not None:
             item["form"] = form
 
@@ -231,19 +229,13 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
         # 填回来(见 deliver_generated)。**这是"还没有"和"不该有"的区别** —— 前者要占着位置
         # 让用户看见"这儿在生成",后者才是错误。
         run = _normalize_run(entry.get("run"), item_id)
-        # 兼容旧结构，但归一化输出只有一份状态事实。这样旧数据库一经读写就自然升级，前端
-        # 不必永远同时判断 job_id/error 和 run。
-        if run is None and entry.get("job_id") is not None:
-            run = _normalize_run({"status": "running", "job_id": entry.get("job_id")}, item_id)
-        if run is None and entry.get("error") is not None:
-            run = _normalize_run({"status": "failed", "error": entry.get("error")}, item_id)
         if run is not None:
             item["run"] = run
 
         # **空槽是合法的。** 一个图片/视频项有四种状态,缺一不可:
         #   · 空槽(都没有)   —— 刚放下,底下挂着提示词面板等你写;
-        #   · 生成中(有 job_id) —— 提交了,等回执把 asset_id 填回来;
-        #   · 跑挂了(有 error)  —— 提示词还在,可以改一改再来一次;
+        #   · 生成中(run.running) —— 提交了,等回执把 asset_id 填回来;
+        #   · 跑挂了(run.failed)  —— 提示词还在,可以改一改再来一次;
         #   · 有产出(有 asset_id)。
         # 前两种此前都被当成错误拒掉了 —— 而"节点本身就是生成单元"这件事,正要从空槽开始。
 
@@ -330,7 +322,7 @@ def _keep_arrived_results(stored: Any, incoming: dict[str, Any]) -> dict[str, An
     """**客户端不该覆盖它还不知道的产出。**
 
     这是一个必然的竞态,不是偶发:画板自动保存,而生成是异步的 ——
-      t1 客户端存了一份带占位(有 job_id、没 asset_id)的画布;
+      t1 客户端存了一份带占位(run 里有 job_id、没 asset_id)的画布;
       t2 任务跑完,回执把 asset_id 填进那一项;
       t3 用户又拖了一下,客户端把**它手上那份**存回来 —— 那份里还是占位。
     产出就这么没了,而且不报错:那一项看着还在转圈,可任务早就结束了。
@@ -418,10 +410,9 @@ def place_pending(db: Session, *, workspace_id: str, board_id: str, item: dict[s
         keep = {k: v for k, v in item.items() if k not in ("x", "y", "width", "height")}
         merged = {**items[index], **keep}
         #: 四个状态两两互斥 —— 重新生成时旧产出、上一次的失败都让位给这次的占位。
-        #: 不清的话,一个项会同时带着 job_id 和 asset_id(画布不知道该画哪个),或者一边转圈
-        #: 一边挂着上次的报错(用户以为这次也挂了)。
+        #: 不清的话,一个项会同时带着 run.running 和 asset_id(画布不知道该画哪个),
+        #: 或者一边转圈一边挂着上次的报错(用户以为这次也挂了)。
         merged.pop("asset_id", None)
-        merged.pop("error", None)
         items[index] = merged
 
     board.canvas = normalize_canvas({**canvas, "items": items})
@@ -452,8 +443,6 @@ def set_text_write_run(
     if error.strip():
         run["error"] = error.strip()[:300]
     items[index] = {**items[index], "run": run}
-    items[index].pop("job_id", None)
-    items[index].pop("error", None)
     board.canvas = normalize_canvas({**canvas, "items": items})
     db.commit()
     db.refresh(board)
@@ -488,8 +477,6 @@ def write_text(
         form.pop("prompt_document", None)
         updated["form"] = form
         updated["run"] = {"status": "succeeded"}
-        updated.pop("job_id", None)
-        updated.pop("error", None)
     items[index] = updated
     board.canvas = normalize_canvas({**canvas, "items": items})
     db.commit()
@@ -529,14 +516,14 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
             kept.append(item)
             continue
         if not asset_ids:
-            # 失败/被取消:**摘掉 job_id,留下这一项和它的提示词**,并把原因写在上面。
+            # 失败/被取消:结束 run.running,留下这一项和它的提示词,并把原因写在上面。
             #
             # 此前是整项删掉。那让画布上的框凭空消失,连同用户刚写的提示词 —— 而他要做的
             # 下一件事十有八九是"改一个字再来一次"。留着才能重来;原因写在上面,他也不必
             # 去任务中心翻一遍才知道为什么。
             kept.append(
                 {
-                    **{k: v for k, v in item.items() if k not in ("job_id", "error")},
+                    **item,
                     "run": {
                         "status": "cancelled" if str(job.status) == "cancelled" else "failed",
                         #: 「生成失败」这句话由界面说；这里只存真正原因。
@@ -545,7 +532,7 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
                 }
             )
             continue
-        settled = {k: v for k, v in item.items() if k not in ("job_id", "error")}
+        settled = dict(item)
         # 成功结束一次编辑周期：提示词和引用素材已经被消费，保留模型/参数方便继续同风格创作。
         # 失败/取消不走这里，因此原输入仍完整保留给重试。
         if isinstance(settled.get("form"), dict):

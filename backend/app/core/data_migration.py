@@ -120,12 +120,18 @@ def _legacy_database(directory: Path) -> Path | None:
 
 def _next_backup_path(target: Path) -> Path:
     base = target.with_name(f"{target.name}.bak-before-open-studio-migration")
-    if not base.exists():
+    if not any(
+        base.with_name(f"{base.name}{suffix}").exists()
+        for suffix in ("", "-wal", "-shm")
+    ):
         return base
     suffix = 2
     while True:
         candidate = base.with_name(f"{base.name}-{suffix}")
-        if not candidate.exists():
+        if not any(
+            candidate.with_name(f"{candidate.name}{part}").exists()
+            for part in ("", "-wal", "-shm")
+        ):
             return candidate
         suffix += 1
 
@@ -140,24 +146,84 @@ def _move_directory(source: Path, target: Path) -> bool:
         return True
 
 
-def _rename_database(directory: Path, legacy_name: str) -> None:
+def _rename_database(directory: Path, legacy_name: str) -> Path | None:
+    """Move a SQLite database and its sidecars as one rollback-capable file set."""
     old_database = directory / legacy_name
     new_database = directory / TARGET_DATABASE_NAME
     if old_database == new_database:
-        return
-    if new_database.exists():
-        new_database.replace(directory / f"{TARGET_DATABASE_NAME}.bak-before-open-studio-migration")
-    old_database.replace(new_database)
-    for suffix in ("-wal", "-shm"):
-        old_sidecar = directory / f"{legacy_name}{suffix}"
-        if not old_sidecar.exists():
-            continue
-        new_sidecar = directory / f"{TARGET_DATABASE_NAME}{suffix}"
-        if new_sidecar.exists():
-            new_sidecar.replace(
-                directory / f"{TARGET_DATABASE_NAME}{suffix}.bak-before-open-studio-migration"
+        return None
+
+    suffixes = ("", "-wal", "-shm")
+    has_current_files = any(
+        (directory / f"{TARGET_DATABASE_NAME}{suffix}").exists()
+        for suffix in suffixes
+    )
+    backup = _next_backup_path(new_database) if has_current_files else None
+    backed_up: list[tuple[Path, Path]] = []
+    moved: list[tuple[Path, Path]] = []
+    try:
+        if backup is not None:
+            for suffix in suffixes:
+                current = directory / f"{TARGET_DATABASE_NAME}{suffix}"
+                if not current.exists():
+                    continue
+                destination = backup.with_name(f"{backup.name}{suffix}")
+                current.replace(destination)
+                backed_up.append((current, destination))
+        for suffix in suffixes:
+            source = directory / f"{legacy_name}{suffix}"
+            if not source.exists():
+                continue
+            destination = directory / f"{TARGET_DATABASE_NAME}{suffix}"
+            source.replace(destination)
+            moved.append((source, destination))
+    except Exception:
+        for source, destination in reversed(moved):
+            if destination.exists() and not source.exists():
+                destination.replace(source)
+        for current, saved in reversed(backed_up):
+            if saved.exists() and not current.exists():
+                saved.replace(current)
+        raise
+    return backup
+
+
+def migrate_legacy_database_in_data_dir(directory: Path) -> DataMigrationResult:
+    """Adopt a legacy database filename inside an explicitly configured data directory.
+
+    Environment-variable migration keeps the directory path unchanged, so the directory move used
+    for the default location cannot help here. The same conservative rule applies: established
+    Mosael content wins; a bootstrap-only new database is backed up before the legacy library is
+    adopted.
+    """
+    directory = directory.expanduser().resolve()
+    legacy_database = _legacy_database(directory) if directory.is_dir() else None
+    if legacy_database is None:
+        return DataMigrationResult(target=directory, status="no-legacy-data")
+
+    target_database = directory / TARGET_DATABASE_NAME
+    if target_database.exists():
+        target_state = _database_state(target_database)
+        if not target_state.readable:
+            return DataMigrationResult(
+                target=directory,
+                status="target-unreadable",
+                source=directory,
             )
-        old_sidecar.replace(new_sidecar)
+        if target_state.has_user_content:
+            return DataMigrationResult(
+                target=directory,
+                status="target-has-user-data",
+                source=directory,
+            )
+    backup = _rename_database(directory, legacy_database.name)
+
+    return DataMigrationResult(
+        target=directory,
+        status="migrated",
+        source=directory,
+        backup=backup,
+    )
 
 
 def migrate_default_data_dir(home: Path | None = None) -> DataMigrationResult:

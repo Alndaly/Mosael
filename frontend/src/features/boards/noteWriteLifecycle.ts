@@ -13,7 +13,7 @@ export interface NoteWriteInput {
  * 同步写作也有完整的节点生命周期。
  *
  * 请求本身不需要后台 job，但 loading / success / failure 仍然属于节点，而不是提交按钮。
- * 服务端返回的节点是最终事实；fallback 只用于兼容升级前还没返回 form/run 的后端。
+ * 服务端返回的节点是最终事实；fallback 只防御一次不完整响应。
  */
 export async function runNoteWrite({
   input,
@@ -26,8 +26,6 @@ export async function runNoteWrite({
 }): Promise<Board> {
   patch(input.itemId, {
     run: { status: "running" },
-    job_id: undefined,
-    error: undefined,
   });
 
   try {
@@ -42,16 +40,12 @@ export async function runNoteWrite({
         mentioned_asset_ids: [],
       },
       run: written?.run ?? { status: "succeeded" },
-      job_id: undefined,
-      error: undefined,
     });
     return board;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     patch(input.itemId, {
       run: { status: "failed", error: message },
-      job_id: undefined,
-      error: undefined,
     });
     throw error;
   }

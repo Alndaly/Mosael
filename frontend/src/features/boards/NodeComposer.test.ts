@@ -8,10 +8,10 @@
 import { describe, expect, it } from "vitest";
 
 import { durationRangeOptions, sourceSlots } from "./NodeComposer";
-import type { GenerationModel } from "@/api/client";
+import type { GenerationOption } from "@/api/client";
 
 const model = (parameterKeys: string[], sourceLimits: Record<string, number> = {}) =>
-  ({ capabilities: { parameter_keys: parameterKeys, source_limits: sourceLimits } }) as unknown as GenerationModel;
+  ({ capabilities: { parameter_keys: parameterKeys, source_limits: sourceLimits } }) as unknown as GenerationOption;
 
 describe("输入素材槽照描述符出", () => {
   it("只声明参考图的模型不给首尾帧", () => {
@@ -70,7 +70,7 @@ const seedance = () =>
         ["reference_image", "reference_video", "reference_audio"],
       ],
     },
-  }) as unknown as GenerationModel;
+  }) as unknown as GenerationOption;
 
 const img = (id: string) => ({ assetId: id, kind: "image" });
 
@@ -89,7 +89,7 @@ describe("生成方式照描述符的互斥分组出", () => {
         parameter_keys: ["first_frame"],
         exclusive_source_groups: [["first_frame"], ["reference_image"]],
       },
-    } as unknown as GenerationModel;
+    } as unknown as GenerationOption;
     expect(sourceModes(model)).toEqual([]);
   });
 

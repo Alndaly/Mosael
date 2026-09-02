@@ -1309,6 +1309,7 @@ def init_db() -> None:
     _migrate_plugin_instances()
     Base.metadata.create_all(bind=engine)
     _migrate_drop_local_publish_accounts()
+    _migrate_board_canvas_state()
     _backfill_browser_pool()
     # 必须在 create_all 之后:provider_models 是新表,之前还不存在。
     _backfill_provider_models()
@@ -1323,9 +1324,59 @@ def init_db() -> None:
     _migrate_job_message_i18n()
     _migrate_prepared_publish_tasks()
     _migrate_track_role()
-    _migrate_legacy_tts_sources()
     _migrate_browser_boolean_options()
     _migrate_shared_venvs()
+
+
+def _migrate_board_canvas_state() -> None:
+    """Move pre-``run`` board state into the current node shape.
+
+    Board JSON is owned data, so it is upgraded in place rather than forcing every current reader
+    to understand top-level ``job_id``/``error`` forever. This historical transform intentionally
+    carries its own old-shape rules instead of depending on the evolving domain validator.
+    """
+    inspector = inspect(engine)
+    if "boards" not in set(inspector.get_table_names()):
+        return
+    with engine.begin() as conn:
+        rows = conn.execute(text("SELECT id, canvas FROM boards")).fetchall()
+        for row in rows:
+            try:
+                canvas = json.loads(row[1]) if isinstance(row[1], str) else row[1]
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(canvas, dict) or not isinstance(canvas.get("items"), list):
+                continue
+            touched = False
+            for item in canvas["items"]:
+                if not isinstance(item, dict):
+                    continue
+                if item.get("run") is None:
+                    job_id = item.get("job_id")
+                    error = item.get("error")
+                    if isinstance(job_id, str) and job_id.strip():
+                        item["run"] = {"status": "running", "job_id": job_id.strip()}
+                        touched = True
+                    elif isinstance(error, str):
+                        run: dict[str, str] = {"status": "failed"}
+                        if error.strip():
+                            run["error"] = error.strip()[:300]
+                        item["run"] = run
+                        touched = True
+                if item.get("form") is None and item.get("kind") in {"image", "video", "audio"}:
+                    prompt = item.get("text")
+                    if isinstance(prompt, str) and prompt:
+                        item["form"] = {"prompt": prompt}
+                        touched = True
+                for legacy_key in ("job_id", "error"):
+                    if legacy_key in item:
+                        item.pop(legacy_key)
+                        touched = True
+            if touched:
+                conn.execute(
+                    text("UPDATE boards SET canvas = :canvas WHERE id = :id"),
+                    {"canvas": json.dumps(canvas, ensure_ascii=False), "id": row[0]},
+                )
 
 
 def _migrate_shared_venvs() -> None:
@@ -1390,14 +1441,6 @@ def _migrate_browser_boolean_options() -> None:
                     text("UPDATE workflows SET graph = :graph WHERE id = :id"),
                     {"graph": json.dumps(graph, ensure_ascii=False), "id": row[0]},
                 )
-
-
-def _migrate_legacy_tts_sources() -> None:
-    """「ModelScope」这个下载源和「HuggingFace」指向同一个端点,已删除;已存的值迁到 hf。"""
-
-    from app.domain.voices import tts_settings
-
-    tts_settings.migrate_legacy_sources()
 
 
 def _migrate_plugin_instances() -> None:

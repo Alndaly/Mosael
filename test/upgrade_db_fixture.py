@@ -1,12 +1,13 @@
 """Build and verify the smallest supported pre-upgrade database used by the packaged smoke.
 
 This fixture deliberately owns only facts required by the upgrade contract. ``create_all`` must
-build everything else; the historical ``publish_tasks`` table proves that startup migrations add
-columns to an existing table rather than succeeding only on a clean install.
+build everything else; historical publish-task and board shapes prove that startup migrations
+upgrade both table schemas and JSON data rather than succeeding only on a clean install.
 """
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import sys
 from pathlib import Path
@@ -40,6 +41,21 @@ def seed(data_dir: Path) -> None:
                 'legacy-task', 'legacy-workspace', 'legacy-account', 'legacy-asset',
                 'prepared', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE boards (
+                id VARCHAR(64) PRIMARY KEY,
+                workspace_id VARCHAR(64) NOT NULL,
+                name VARCHAR(180) NOT NULL,
+                canvas JSON NOT NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL
+            );
+            INSERT INTO boards (id, workspace_id, name, canvas, created_at, updated_at)
+            VALUES (
+                'legacy-board', 'legacy-workspace', 'Legacy board',
+                '{"items":[{"id":"image-1","kind":"image","x":0,"y":0,"text":"old prompt","job_id":"job-1"}],"edges":[]}',
+                CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            );
             """
         )
 
@@ -57,6 +73,15 @@ def verify(data_dir: Path) -> None:
             raise SystemExit(f"upgrade failed: prepared task stayed {status!r}")
         if options not in ("{}", {}):
             raise SystemExit(f"upgrade failed: options default is {options!r}")
+        canvas = db.execute("SELECT canvas FROM boards WHERE id = 'legacy-board'").fetchone()[0]
+        board = json.loads(canvas) if isinstance(canvas, str) else canvas
+        item = board["items"][0]
+        if item.get("run") != {"status": "running", "job_id": "job-1"}:
+            raise SystemExit(f"upgrade failed: board run state is {item.get('run')!r}")
+        if item.get("form") != {"prompt": "old prompt"}:
+            raise SystemExit(f"upgrade failed: board form is {item.get('form')!r}")
+        if "job_id" in item or "error" in item:
+            raise SystemExit(f"upgrade failed: board kept legacy state fields: {item!r}")
 
 
 if __name__ == "__main__":
