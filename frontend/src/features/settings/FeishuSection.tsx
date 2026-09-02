@@ -131,6 +131,7 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
     <SettingsGroup
       title={t("feishuTitle")}
       description={t("feishuDesc")}
+      contentClassName={!hasBots ? "min-h-0" : undefined}
       actions={
         <>
           {/* 两种绑定方式是平级选择,同一视觉重量,不做主次 */}
@@ -152,7 +153,7 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
         </>
       }
     >
-      <SettingsBlock>
+      <SettingsBlock className={!hasBots ? "h-full min-h-0" : undefined}>
         {beginScan.isError && <p className="m-0 text-xs text-destructive">{String((beginScan.error as Error).message)}</p>}
 
         {/* 这里曾常驻一条「还需去开发者后台开交互卡片」的横幅。**扫码一键创建已经把这两项配好了**,

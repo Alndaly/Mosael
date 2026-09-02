@@ -454,7 +454,7 @@ function ThinkingBlock({ text, done }: { text: string; done?: boolean }) {
     <div className="w-full min-w-0">
       <Marker
         asChild
-        className="rounded-md px-1.5 py-1 transition-colors duration-100 enabled:cursor-pointer enabled:hover:bg-muted"
+        className="gap-1 rounded-md px-1.5 py-1 transition-colors duration-100 enabled:cursor-pointer enabled:hover:bg-muted"
       >
         <button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open} disabled={!text}>
           {/* 图标显式带 size-3:Marker 会把没有 size- 类的 svg 统一撑到 16px,

@@ -185,7 +185,12 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
         <div {...sidebar.handleProps} />
         {/* 右栏是**一块占满高度的面板**,内部滚动 —— 此前它跟着内容走,内容少时就是半截,
             左边是个完整的带边框面板、右边飘着一段,两边看着不像同一层东西。 */}
-        <div className="grid min-h-0 min-w-0 content-start overflow-y-auto rounded-md border border-border bg-panel px-3 py-2.5 shadow-[var(--shadow-panel)]">
+        <div
+          className={cn(
+            "grid min-h-0 min-w-0 overflow-y-auto rounded-md border border-border bg-panel px-3 py-2.5 shadow-[var(--shadow-panel)]",
+            selected ? "content-start" : "place-items-center",
+          )}
+        >
           {selected ? (
             <TaskDetail key={selected.id} task={selected} workspaceId={workspace.id} />
           ) : (
@@ -479,9 +484,10 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
         </dl>
       </header>
 
-      {/* 绑定与 webhook 是**要动手的**,留在卡片里;上面那些是只读事实。 */}
+      {/* 绑定与 webhook 是**要动手的**,但不需要再套卡片。详情页本身已经有完整边界,
+          这里用行间分隔就够了;额外的圆角框只会形成框中框。 */}
       {(task.kind === "workflow" || task.trigger_type === "webhook") && (
-        <div className="overflow-hidden rounded-lg border border-border bg-panel">
+        <div className="grid divide-y divide-border/70">
           {task.kind === "workflow" && <BoundWorkflowRow task={task} workspaceId={workspaceId} />}
           {task.trigger_type === "webhook" && <WebhookUrlRow task={task} />}
         </div>

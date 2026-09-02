@@ -206,28 +206,21 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   if (tasks.isSuccess && (tasks.data ?? []).length === 0) {
     return (
       <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
-        <div className="flex h-full min-h-0 flex-col gap-1.5">
-          {seg}
-          {/* 高度由 flex-1 撑满剩余空间;不能再叠 min-h-full——那是「父容器整高」,
-              会把上方分段条的高度顶出去,整页多出一截可滚动。 */}
-          <div className="grid min-h-0 flex-1 place-items-center overflow-y-auto">
-            <EmptyState
-              icon={<Rocket size={22} />}
-              title={t("publishEmptyTitle")}
-              body={t("publishEmptyBody")}
-              action={
-                <div className="flex items-center gap-1.5">
-                  <Button onClick={() => setCreating(true)}>
-                    <Plus size={15} /> {t("publishCreate")}
-                  </Button>
-                  <Button variant="outline" onClick={() => gotoRecord("/browser-pool")}>
-                    <Users size={15} /> {t("publishAccountAdd")}
-                  </Button>
-                </div>
-              }
-            />
-          </div>
-        </div>
+        <EmptyState
+          icon={<Rocket size={22} />}
+          title={t("publishEmptyTitle")}
+          body={t("publishEmptyBody")}
+          action={
+            <div className="flex items-center gap-1.5">
+              <Button onClick={() => setCreating(true)}>
+                <Plus size={15} /> {t("publishCreate")}
+              </Button>
+              <Button variant="outline" onClick={() => gotoRecord("/browser-pool")}>
+                <Users size={15} /> {t("publishAccountAdd")}
+              </Button>
+            </div>
+          }
+        />
         {dialogs}
       </div>
     );

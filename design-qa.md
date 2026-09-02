@@ -35,6 +35,32 @@ final result: passed
 
 ---
 
+## Empty states, agent controls, and context meter
+
+- Source visual truth: the user-supplied workflow, board, browser-pool, publish, media, settings, and AI Studio screenshots from 2026-09-02.
+- Visual baseline: the workflow empty state (one centered icon/title/description/action cluster, with no duplicate empty toolbar).
+- States checked: light and dark themes, empty collection views, empty detail panes, no configured chat model, active thinking state, and a new zero-message Kimi K3 session.
+
+## Findings and corrections
+
+- Empty collection pages now use the workflow page's full available content box as the centering reference. Board, Browser Pool, Publish, and Media omit list-only toolbars while empty and keep their primary actions inside the centered state.
+- Plugin and scheduler detail placeholders, plus the Feishu binding placeholder, now center against the remaining detail-pane height instead of a content-sized grid row.
+- Settings groups retain a divider beneath their header, and a single-section settings page assigns the entire post-header row to its content. The pricing-rules and Feishu empty states therefore center inside the true remaining height without crossing the header.
+- The scheduler's bound-workflow region is flat and separated by dividers rather than wrapped in an additional card.
+- AI Studio replaces the unavailable model selector with a compact “Configure chat model” action, while loading and failed model queries do not flash a false unconfigured state.
+- Thinking markers use a shared square flex box, and the expanded thinking header/body share the same text start. The overall loading marker and label are vertically centered on the same line.
+- A new session that inherits the default provider now resolves its context-window metadata from that provider's stored model catalog. Kimi K3 reports its actual 1,048,576-token window instead of the 32,000-token fallback, changing the reproduced empty-session display from about 50% remaining to about 98% remaining.
+
+## Verification
+
+- Frontend DOM coverage checks the no-model navigation affordance, loading-state suppression, settings layout-class passthrough, and thinking-marker alignment.
+- Backend context-breakdown coverage reproduces a session with no explicit profile and verifies catalog lookup through the resolved default profile.
+- The live local API returned a 1,048,576-token window with 1,032,496 tokens free for the reproduced K3 session.
+
+final result: passed
+
+---
+
 ## Mosael brand migration
 
 ### Visual truth and rendered evidence

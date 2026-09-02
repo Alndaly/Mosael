@@ -14,7 +14,9 @@ describe("settings section layout", () => {
     );
 
     const content = container.querySelector('[data-slot="settings-group-content"]');
+    const header = container.querySelector('[data-slot="settings-group-header"]');
     expect(content).not.toBeNull();
+    expect(header).toHaveClass("border-b");
     expect(content).not.toHaveClass("rounded-lg");
     expect(content).not.toHaveClass("border");
     expect(content).not.toHaveClass("bg-panel");
@@ -47,5 +49,19 @@ describe("settings section layout", () => {
     expect(list).toHaveClass("divide-y");
     expect(list?.firstElementChild).not.toHaveClass("border");
     expect(list?.firstElementChild).not.toHaveClass("rounded-md");
+  });
+
+  it("lets a single-section empty state fill the settings pane", () => {
+    const { container } = render(
+      <SettingsSectionStack>
+        <SettingsGroup title="飞书机器人" contentClassName="min-h-0">
+          <div>empty</div>
+        </SettingsGroup>
+      </SettingsSectionStack>,
+    );
+
+    expect(container.querySelector('[data-slot="settings-section-stack"]')).toHaveClass("h-full");
+    expect(container.querySelector('[data-slot="settings-group"]')).toHaveClass("grid");
+    expect(container.querySelector('[data-slot="settings-group-content"]')).toHaveClass("min-h-0");
   });
 });

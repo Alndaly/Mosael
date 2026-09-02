@@ -150,6 +150,38 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
 
   const items = profiles.data ?? [];
 
+  // 空池沿用工作流空页：去掉只剩标题和重复操作的顶栏，让说明与下一步动作一起落在
+  // 页面中心。这样中心按整个内容区计算，不会被一条没有内容价值的顶栏向下推。
+  if (profiles.isSuccess && items.length === 0) {
+    return (
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
+        <EmptyState
+          icon={<Boxes size={22} />}
+          title={t("poolEmptyTitle")}
+          body={t("poolEmptyBody")}
+          action={
+            <span className="inline-flex items-center gap-2">
+              <Button onClick={() => setCreating(true)}>
+                <Plus size={15} /> {t("poolCreate")}
+              </Button>
+              <Button variant="outline" onClick={() => setAddingAccount(true)}>
+                <Users size={15} /> {t("publishAccountAdd")}
+              </Button>
+            </span>
+          }
+        />
+        <AddAccountDialog open={addingAccount} workspace={workspace} onClose={() => setAddingAccount(false)} />
+        {creating && (
+          <CreateProfileDialog
+            onCancel={() => setCreating(false)}
+            onCreate={(body) => create.mutate(body)}
+            pending={create.isPending}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="grid min-h-full grid-rows-[auto_minmax(0,1fr)] gap-2 p-2">
       <div className="flex items-center gap-2">
@@ -166,22 +198,17 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
         </Button>
       </div>
 
-      {profiles.isSuccess && items.length === 0 ? (
-        <div className="grid place-items-center">
-          <EmptyState icon={<Boxes size={22} />} title={t("poolEmptyTitle")} body={t("poolEmptyBody")} />
-        </div>
-      ) : (
-        <div className="grid content-start gap-1.5 grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
-          {profiles.isLoading &&
-            items.length === 0 &&
-            [0, 1, 2, 3].map((i) => (
-              <div key={`sk${i}`} className="space-y-2 rounded-md border border-border bg-panel p-3" aria-hidden>
-                <Skeleton className="h-4 w-1/2 rounded" />
-                <Skeleton className="h-3 w-2/3 rounded" />
-                <Skeleton className="h-3 w-1/3 rounded" />
-              </div>
-            ))}
-          {items.map((p) => {
+      <div className="grid content-start gap-1.5 grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
+        {profiles.isLoading &&
+          items.length === 0 &&
+          [0, 1, 2, 3].map((i) => (
+            <div key={`sk${i}`} className="space-y-2 rounded-md border border-border bg-panel p-3" aria-hidden>
+              <Skeleton className="h-4 w-1/2 rounded" />
+              <Skeleton className="h-3 w-2/3 rounded" />
+              <Skeleton className="h-3 w-1/3 rounded" />
+            </div>
+          ))}
+        {items.map((p) => {
             const bound = Boolean(p.bound_account_id);
             // 「已登录」只认 bound 这一个状态:checking/unknown 是"还不知道",不能当成"能用"。
             const loggedIn = bound && p.binding_status === "bound";
@@ -318,9 +345,8 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                 </ContextMenuContent>
               </ContextMenu>
             );
-          })}
-        </div>
-      )}
+        })}
+      </div>
 
       <AddAccountDialog open={addingAccount} workspace={workspace} onClose={() => setAddingAccount(false)} />
       {loginFor && <LoginUrlDialog profile={loginFor} onCancel={() => setLoginFor(null)} onDone={refresh} />}

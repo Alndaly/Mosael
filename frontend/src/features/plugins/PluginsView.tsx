@@ -161,9 +161,14 @@ export function PluginsView() {
       {/* 搜索条钉在头里、列表在滚动体里 —— 滚动由 ModalShell 那一层管,这里**不再自己套一层
           overflow**:套两层的后果是标题跟着列表滚走,而且贴着裁剪线的搜索框焦点框会缺半圈。 */}
       <PluginMarketDialog open={marketOpen} onOpenChange={setMarketOpen} onInstalled={() => invalidatePlugins(qc)} />
-        {/* 右栏是**一块占满高度的面板**,内部滚动 —— 此前它跟着内容走,内容少时就是半截,
-            左边是个完整的带边框面板、右边飘着一段,两边看着不像同一层东西。 */}
-        <div className="grid min-h-0 min-w-0 content-start overflow-y-auto rounded-md border border-border bg-panel px-3 py-2.5 shadow-[var(--shadow-panel)]">
+        {/* 右栏是**一块占满高度的面板**,内部滚动。详情从顶部开始;没有选中项时则让空状态
+            在整块可用区域内真正居中,而不是被 content-start 锁在顶部。 */}
+        <div
+          className={cn(
+            "grid min-h-0 min-w-0 overflow-y-auto rounded-md border border-border bg-panel px-3 py-2.5 shadow-[var(--shadow-panel)]",
+            selected ? "content-start" : "place-items-center",
+          )}
+        >
           {selected ? (
             <PackageDetail key={selected.id} pkg={selected} />
           ) : (

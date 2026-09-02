@@ -20,32 +20,43 @@ export function SettingsGroup({
   title,
   description,
   actions,
+  className,
+  contentClassName,
   children,
 }: {
   title: string;
   description?: string;
   actions?: React.ReactNode;
+  className?: string;
+  contentClassName?: string;
   /** 没有内容时**不画那个框** —— 只有标题和说明的分组(比如"自助注册已开放")本来就没有行,
    *  空着渲染出来是一条无缘无故的横线。 */
   children?: React.ReactNode;
 }) {
+  const hasContent = React.Children.toArray(children).some(Boolean);
   return (
-    <section data-slot="settings-group" className="grid gap-2.5">
+    <section data-slot="settings-group" className={cn("grid gap-0", className)}>
       {/* 动作**对齐整个抬头的竖向中心**,不是对齐标题那一行,也不是对齐整块的底边。
           三种都试过:`items-end` 在说明一长时把按钮拖到最后一行旁边,看着像那句话的一部分;
           `items-start` 则在说明有两三行时把按钮顶在最上面,右边空出一大块。
           `items-center` 两头都不沾 —— 按钮始终落在这一节抬头的视觉重心上。 */}
-      <header className="flex items-center justify-between gap-4 px-0.5">
+      <header
+        data-slot="settings-group-header"
+        className={cn(
+          "flex items-center justify-between gap-4 px-0.5",
+          hasContent && "border-b border-border/70 pb-2.5",
+        )}
+      >
         <div className="min-w-0">
           <h2 className="m-0 text-[17px] font-[650] leading-[1.3] tracking-[-0.015em]">{title}</h2>
           {description && <p className="mb-0 mt-[5px] text-ui-sm leading-[1.55] text-muted-foreground">{description}</p>}
         </div>
         {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
       </header>
-      {React.Children.toArray(children).some(Boolean) && (
+      {hasContent && (
         <div
           data-slot="settings-group-content"
-          className="grid [&>*+*]:border-t [&>*+*]:border-border/70"
+          className={cn("grid [&>*+*]:border-t [&>*+*]:border-border/70", contentClassName)}
         >
           {children}
         </div>
@@ -81,8 +92,8 @@ export function SettingsRow({
 }
 
 /** Full-width slot inside a group (forms, QR panels, lists). */
-export function SettingsBlock({ children }: { children: React.ReactNode }) {
-  return <div className="grid gap-2 px-0.5 py-3">{children}</div>;
+export function SettingsBlock({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <div className={cn("grid gap-2 px-0.5 py-3", className)}>{children}</div>;
 }
 
 /** Flat settings collection: sibling rows are separated without becoming a stack of cards. */
@@ -120,7 +131,13 @@ export function SettingsSectionStack({
   const sections = flattenSections(children).filter(Boolean);
 
   return (
-    <div data-slot="settings-section-stack" className={cn("grid content-start", className)}>
+    <div
+      data-slot="settings-section-stack"
+      className={cn(
+        "grid h-full min-h-0 content-start [&>[data-slot=settings-group]:only-child]:h-full [&>[data-slot=settings-group]:only-child]:min-h-0 [&>[data-slot=settings-group]:only-child]:grid-rows-[auto_minmax(0,1fr)]",
+        className,
+      )}
+    >
       {sections.map((section, index) => (
         <React.Fragment key={React.isValidElement(section) && section.key != null ? String(section.key) : index}>
           {index > 0 && <Separator className="my-2.5 bg-border/70" />}

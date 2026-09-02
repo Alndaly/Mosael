@@ -257,135 +257,142 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
       {/* 负外边距和外壳的内边距**是同一个数**:它靠 -mx 把自己拉到容器边缘,好让 sticky 时的
           底色铺满整宽。外壳从 px-3.5 收到 px-2 之后这层耦合就断了 —— 工具条比容器宽出 12px,
           整页于是能左右滚(真机)。两个数写在一起,下次改 padding 时才看得见要一起改。 */}
-      <div className="sticky top-0 z-20 -mx-2 flex flex-col gap-2 bg-background px-2 pt-2 pb-2">
-      <div className="flex flex-wrap items-center justify-between gap-1.5">
-        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-          <Button asChild size="sm">
-            <label className="inline-flex cursor-pointer items-center gap-1.5">
-              <input
-                type="file"
-                accept="video/*,audio/*,image/*"
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.currentTarget.files?.[0];
-                  if (file) uploadAsset.mutate(file);
-                  event.currentTarget.value = "";
-                }}
+      {(!assets.isSuccess || (assets.data ?? []).length > 0) && (
+        <div className="sticky top-0 z-20 -mx-2 flex flex-col gap-2 bg-background px-2 pt-2 pb-2">
+          <div className="flex flex-wrap items-center justify-between gap-1.5">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <Button asChild size="sm">
+                <label className="inline-flex cursor-pointer items-center gap-1.5">
+                  <input
+                    type="file"
+                    accept="video/*,audio/*,image/*"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.currentTarget.files?.[0];
+                      if (file) uploadAsset.mutate(file);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                  <ImagePlus size={13} /> {t("import")}
+                </label>
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setUrlImportOpen(true)}>
+                <Link2 size={13} /> {t("urlImport")}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setRecorderOpen(true)}>
+                <CircleDot size={13} /> {t("record")}
+              </Button>
+              <div
+                className="inline-flex h-8 overflow-hidden rounded-md border border-border bg-panel text-xs"
+                role="group"
+                aria-label={t("mediaKindGroup")}
+              >
+                {KIND_FILTERS.map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    className={cn(
+                      "border-r border-border px-3 text-muted-foreground transition-colors last:border-r-0 hover:bg-secondary hover:text-foreground",
+                      kindFilter === kind && "bg-accent text-accent-foreground",
+                    )}
+                    onClick={() => setKindFilter(kind)}
+                  >
+                    {kindLabel[kind]}
+                  </button>
+                ))}
+              </div>
+              <Input
+                className="h-8 w-44 border-border bg-panel px-[9px] text-xs focus-visible:border-primary focus-visible:ring-0"
+                value={search}
+                placeholder={t("searchAssets")}
+                onChange={(event) => setSearch(event.target.value)}
               />
-              <ImagePlus size={13} /> {t("import")}
-            </label>
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setUrlImportOpen(true)}>
-            <Link2 size={13} /> {t("urlImport")}
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setRecorderOpen(true)}>
-            <CircleDot size={13} /> {t("record")}
-          </Button>
-          <div
-            className="inline-flex h-8 overflow-hidden rounded-md border border-border bg-panel text-xs"
-            role="group"
-            aria-label={t("mediaKindGroup")}
-          >
-            {KIND_FILTERS.map((kind) => (
-              <button
-                key={kind}
-                type="button"
-                className={cn(
-                  "border-r border-border px-3 text-muted-foreground transition-colors last:border-r-0 hover:bg-secondary hover:text-foreground",
-                  kindFilter === kind && "bg-accent text-accent-foreground",
-                )}
-                onClick={() => setKindFilter(kind)}
-              >
-                {kindLabel[kind]}
-              </button>
-            ))}
+              <Select value={sortKey} onValueChange={(value) => setSortKey(value as SortKey)}>
+                <SelectTrigger className="h-8 w-auto min-w-32 bg-field text-xs" aria-label={t("sortNewest")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-w-none">
+                  <SelectItem value="created">{t("sortNewest")}</SelectItem>
+                  <SelectItem value="updated">{t("sortUpdated")}</SelectItem>
+                  <SelectItem value="name">{t("sortName")}</SelectItem>
+                  <SelectItem value="duration">{t("sortDuration")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              {selectMode ? (
+                <>
+                  <span className="whitespace-nowrap text-xs text-muted-foreground">
+                    {t("mediaSelectedCount").replace("{n}", String(selectedIds.size))}
+                  </span>
+                  <Button variant="outline" size="sm" onClick={() => selectAll(visible)}>
+                    <ListChecks size={13} />{" "}
+                    {allSelected(visible) ? t("mediaDeselectAll") : t("mediaSelectAll")}
+                  </Button>
+                  {/* 对比只对图片有意义;视频要同步播放/逐帧,是另一套设计。少于两张时禁用并说明原因。 */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={comparable.length < 2}
+                    title={comparable.length < 2 ? t("mediaCompareHint") : undefined}
+                    onClick={() => setComparing(true)}
+                  >
+                    <Columns2 size={13} /> {t("mediaCompare")}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={selectedIds.size === 0}
+                    onClick={() => setBatchTagging(true)}
+                  >
+                    <Tag size={13} /> {t("addTags")}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="hover:border-destructive/50 hover:text-destructive"
+                    disabled={selectedIds.size === 0}
+                    onClick={() => setBatchDeleting(true)}
+                  >
+                    <Trash2 size={13} /> {t("delete")}
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={exitSelectMode}>
+                    <X size={13} /> {t("cancel")}
+                  </Button>
+                </>
+              ) : (
+                <Button variant="outline" size="sm" onClick={() => setSelectMode(true)}>
+                  <Check size={13} /> {t("mediaSelectMode")}
+                </Button>
+              )}
+            </div>
           </div>
-          <Input
-            className="h-8 w-44 border-border bg-panel px-[9px] text-xs focus-visible:border-primary focus-visible:ring-0"
-            value={search}
-            placeholder={t("searchAssets")}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-          <Select value={sortKey} onValueChange={(value) => setSortKey(value as SortKey)}>
-            <SelectTrigger className="h-8 w-auto min-w-32 bg-field text-xs" aria-label={t("sortNewest")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="max-w-none">
-              <SelectItem value="created">{t("sortNewest")}</SelectItem>
-              <SelectItem value="updated">{t("sortUpdated")}</SelectItem>
-              <SelectItem value="name">{t("sortName")}</SelectItem>
-              <SelectItem value="duration">{t("sortDuration")}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-          {selectMode ? (
-            <>
-              <span className="whitespace-nowrap text-xs text-muted-foreground">
-                {t("mediaSelectedCount").replace("{n}", String(selectedIds.size))}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => selectAll(visible)}
-              >
-                <ListChecks size={13} />{" "}
-                {allSelected(visible) ? t("mediaDeselectAll") : t("mediaSelectAll")}
-              </Button>
-              {/* 对比只对图片有意义;视频要同步播放/逐帧,是另一套设计。少于两张时禁用并说明原因。 */}
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={comparable.length < 2}
-                title={comparable.length < 2 ? t("mediaCompareHint") : undefined}
-                onClick={() => setComparing(true)}
-              >
-                <Columns2 size={13} /> {t("mediaCompare")}
-              </Button>
-              <Button variant="outline" size="sm" disabled={selectedIds.size === 0} onClick={() => setBatchTagging(true)}>
-                <Tag size={13} /> {t("addTags")}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="hover:border-destructive/50 hover:text-destructive"
-                disabled={selectedIds.size === 0}
-                onClick={() => setBatchDeleting(true)}
-              >
-                <Trash2 size={13} /> {t("delete")}
-              </Button>
-              <Button variant="ghost" size="sm" onClick={exitSelectMode}>
-                <X size={13} /> {t("cancel")}
-              </Button>
-            </>
-          ) : (
-            <Button variant="outline" size="sm" onClick={() => setSelectMode(true)}>
-              <Check size={13} /> {t("mediaSelectMode")}
-            </Button>
+          {/* 标签筛选单独一行:塞进上面的工具条会把下拉/按钮挤乱,标签多了还会换行错位。 */}
+          {allTags.length > 0 && (
+            <div
+              className="flex flex-wrap items-center gap-1 text-muted-foreground"
+              role="group"
+              aria-label={t("filterByTag")}
+            >
+              <Tags size={13} className="shrink-0" />
+              {allTags.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  aria-pressed={tagFilter === tag}
+                  className={cn(
+                    "inline-flex max-w-full items-center gap-[3px] truncate rounded-full border border-border bg-panel px-[9px] py-px text-ui-xs text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground",
+                    tagFilter === tag && "border-primary bg-accent text-accent-foreground hover:text-accent-foreground",
+                  )}
+                  onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
           )}
         </div>
-      </div>
-      {/* 标签筛选单独一行:塞进上面的工具条会把下拉/按钮挤乱,标签多了还会换行错位。 */}
-      {allTags.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1 text-muted-foreground" role="group" aria-label={t("filterByTag")}>
-          <Tags size={13} className="shrink-0" />
-          {allTags.map((tag) => (
-            <button
-              key={tag}
-              type="button"
-              aria-pressed={tagFilter === tag}
-              className={cn(
-                "inline-flex max-w-full items-center gap-[3px] truncate rounded-full border border-border bg-panel px-[9px] py-px text-ui-xs text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground",
-                tagFilter === tag && "border-primary bg-accent text-accent-foreground hover:text-accent-foreground",
-              )}
-              onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
-            >
-              {tag}
-            </button>
-          ))}
-        </div>
       )}
-      </div>
       <Recorder open={recorderOpen} onOpenChange={setRecorderOpen} onRecorded={(file) => uploadAsset.mutate(file)} />
       <UrlImportDialog
         open={urlImportOpen}
@@ -396,8 +403,37 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
         onQueued={() => void qc.invalidateQueries({ queryKey: ["assets"] })}
       />
 
-      {(assets.data ?? []).length === 0 ? (
-        <EmptyState icon={<FolderOpen size={22} />} title={t("mediaEmptyTitle")} body={t("mediaEmptyBody")} />
+      {assets.isSuccess && (assets.data ?? []).length === 0 ? (
+        <EmptyState
+          icon={<FolderOpen size={22} />}
+          title={t("mediaEmptyTitle")}
+          body={t("mediaEmptyBody")}
+          action={
+            <span className="inline-flex flex-wrap items-center justify-center gap-2">
+              <Button asChild>
+                <label className="inline-flex cursor-pointer items-center gap-1.5">
+                  <input
+                    type="file"
+                    accept="video/*,audio/*,image/*"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.currentTarget.files?.[0];
+                      if (file) uploadAsset.mutate(file);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                  <ImagePlus size={15} /> {t("import")}
+                </label>
+              </Button>
+              <Button variant="outline" onClick={() => setUrlImportOpen(true)}>
+                <Link2 size={15} /> {t("urlImport")}
+              </Button>
+              <Button variant="outline" onClick={() => setRecorderOpen(true)}>
+                <CircleDot size={15} /> {t("record")}
+              </Button>
+            </span>
+          }
+        />
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-2.5">
           {visible.map((asset) => (

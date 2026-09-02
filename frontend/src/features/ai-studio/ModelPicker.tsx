@@ -1,11 +1,13 @@
 import React from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Settings2 } from "lucide-react";
 
 import { api, listProviderModels } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
+import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { gotoSettings } from "@/lib/deepLink";
 
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type AgentSession = components["schemas"]["AgentSessionOut"];
@@ -64,7 +66,24 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
     },
   });
 
-  if (!session || options.length === 0) return null;
+  const loading = providers.isPending || defaults.isPending || modelQueries.some((query) => query.isPending);
+  const failed = providers.isError || defaults.isError || modelQueries.some((query) => query.isError);
+  if (loading || failed) return null;
+  if (options.length === 0) {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-7 gap-1 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground"
+        onClick={() => gotoSettings("providers:chat")}
+      >
+        <Settings2 size={13} />
+        {t("agentConfigureModel")}
+      </Button>
+    );
+  }
+  if (!session) return null;
   const currentProfileId = session.provider_profile_id ?? defaultChat?.provider_profile_id ?? "";
   const currentModel = session.model ?? defaultChat?.model ?? "";
   const current = currentProfileId && currentModel ? `${currentProfileId}${SEP}${currentModel}` : "";

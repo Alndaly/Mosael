@@ -98,6 +98,25 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
     );
   }
 
+  // 没有画板时整页只保留一个明确入口。把标题栏和同一个「新建」按钮再留在右上角，
+  // 会让空状态的视觉中心下移，也让同一动作出现两遍；工作流空页已经给出了统一模式。
+  if (boards.isSuccess && list.length === 0) {
+    return (
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
+        <EmptyState
+          icon={<LayoutGrid size={22} />}
+          title={t("boardsEmptyTitle")}
+          body={t("boardsEmptyHint")}
+          action={
+            <Button loading={create.isPending} onClick={() => create.mutate()}>
+              <Plus size={15} /> {t("boardsNew")}
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+
   // 容器、内边距、卡片栅格都跟着工作流列表页走 —— 同一层级的两个页面长得不一样,
   // 用户会以为自己切到了别的应用里。
   return (
@@ -117,12 +136,6 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
             {[0, 1, 2].map((n) => (
               <Skeleton key={n} className="h-[74px] rounded-lg" />
             ))}
-          </div>
-        ) : list.length === 0 ? (
-          // **撑满再居中。** EmptyState 自带 m-auto,但它只在父级真的给了高度时才起作用 ——
-          // 少了这层 h-full,空态会贴在顶上,看着像没加载完。
-          <div className="grid h-full place-items-center">
-            <EmptyState icon={<LayoutGrid size={22} />} title={t("boardsEmptyTitle")} body={t("boardsEmptyHint")} />
           </div>
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(232px,1fr))] gap-2">

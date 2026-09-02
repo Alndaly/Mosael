@@ -35,6 +35,10 @@ describe("思考块", () => {
     // 转圈用 animate-mosael-spin —— 全仓库都是它,思考块此前是唯一用 animate-spin 的
     // 特例(那两个动画曲线不一样,并排时看得出快慢不同)。
     expect(container.querySelector(".animate-mosael-spin")).toBeTruthy();
+    // 标题文字与左竖线后的正文共用同一内容起点;默认 gap-2 会让标题比正文右偏 4px。
+    expect(container.querySelector('[data-slot="marker"]')).toHaveClass("gap-1");
+    // 图标槽自身负责垂直居中,所有状态行都不再依赖每个调用点补一遍 flex 类。
+    expect(container.querySelector('[data-slot="marker-icon"]')).toHaveClass("items-center", "justify-center");
   });
 
   it("结束后默认收起,标题仍在", () => {
