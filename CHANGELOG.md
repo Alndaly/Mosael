@@ -3,6 +3,16 @@
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 
+## [0.27.5] - 2026-09-02
+
+### Fixed
+
+- Restored the plugin marketplace by pointing its default feed at the repository's published registry
+  instead of the unavailable `mosael.team` endpoint.
+- Prevented marketplace requests from inheriting AI-provider retry behavior, so an unavailable feed
+  now reaches a clear error state instead of leaving the dialog on loading placeholders for multiple
+  retry cycles.
+
 ## [0.27.4] - 2026-09-02
 
 ### Changed
