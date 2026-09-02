@@ -146,7 +146,10 @@ TaskEvent 行只在总线创建。
 
 ### 数据模型要点
 
-SQLite(WAL)+ SQLAlchemy 2.0。所有实体挂 `workspace_id`,路由层 `ensure_workspace_access` 强制隔离(方法感知:写门禁读 ASGI 中间件绑定的 HTTP 方法)。
+SQLite(WAL)+ SQLAlchemy 2.0。工作区资源挂 `workspace_id`:只读入口显式调
+`ensure_workspace_access`,写入入口显式调 `ensure_workspace_perm`。权限不从 HTTP 方法推断,
+因此同一领域 Interface 从 worker / MCP / 飞书调用时不会静默改变语义。用户级资源
+(如 Provider Profile /凭据)按 owner 隔离;实例配置由 `ensure_deployment_admin` 守卫。
 
 **表结构怎么演进**(重要,曾被误记为 Alembic):运行时**不跑迁移框架**。`init_db()` 做两件事——
 `Base.metadata.create_all` 建出新装机需要的全部表,再依次跑 `app/db/migrations.py` 里的一串 `_migrate_*`
@@ -166,7 +169,8 @@ SQLite(WAL)+ SQLAlchemy 2.0。所有实体挂 `workspace_id`,路由层 `ensure_w
 升级夹具。仓库里一度还留着 30 个 Alembic 迁移文件,但它们从不被执行、且自
 2026-07-23 起就与 `models.py` 漂移(此后模型改了 6 次、迁移 0 次),已随这条规约一并移除。
 
-团队成员是**邀请制**:管理员按用户名发邀请(`workspace_invitations`),对方在站内通知里接受/拒绝,四级角色 + 逐权限覆盖。
+团队成员是**邀请制**:管理员按用户名发邀请(`workspace_invitations`),对方在站内通知里接受/拒绝。
+工作区授权只使用 `owner > admin > editor > viewer` 四级角色,不再维护逐权限覆盖矩阵。
 每张表归一个领域所有(`app/domain/ownership.py`),行创建只发生在拥有方,棘轮测试强制
 (见 [ADR-0003](adr/0003-data-ownership-over-splitting-models.md))。
 文件布局可以按领域切片:`app/db/model_slices/*`、`app/api/schemas/*`、`frontend/src/api/domains/*`
@@ -177,12 +181,11 @@ SQLite(WAL)+ SQLAlchemy 2.0。所有实体挂 `workspace_id`,路由层 `ensure_w
 `tests/test_domain_assembly_entries.py` 与 `frontend/src/api/clientAssembly.test.ts` 钉住重导出身份和 ORM
 metadata 注册，防止“文件移动成功、统一入口漏装配”这种只在运行期出现的错误。
 
-**主机权限 vs 内容权限**:工作流的 `code` 节点在后端主机上执行任意 Python(进程隔离 + 超时 +
-输出上限,但**不是沙箱**)。单机安装下作者就是机器主人,无所谓;团队/远程后端下,`edit` 是所有
-写路由的门而 editor 默认就有 `edit`,不额外设防就等于「能改内容」隐含「能拿服务器」。因此四条
-落库路径(create / import / patch / 确认卡审批)都过 `ensure_graph_node_privileges`,要求
-`ensure_instance_admin`——与供应商凭据、解释器路径同级。扫描**递归进子图/循环体**,否则
-「折叠为子图」即可绕过。
+**代码节点是内容,隔离是执行器责任**:工作流的 `code` 节点与其他节点一样按
+`edit` 授权。它通过 `app/domain/sandbox` 执行:默认无网、不继承后端环境变量,
+并限制文件、内存与时长。macOS 使用 `sandbox-exec`,其他平台可用 Docker;
+无可用隔离后端时 fail closed。旧的 `PRIVILEGED_NODE_TYPES` 与
+`ensure_graph_node_privileges` 已删除,不得以普通子进程作为回落。
 
 - `sequences` / `tracks` / `clips` — 时间线;`sequence_operations` 记录每次编辑及其逆操作(撤销)
 - `jobs` / `task_events` — 任务总线
@@ -405,7 +408,9 @@ Gateway 的边界与安全不变量见
 - **表单一律 shadcn Form**(react-hook-form + zod),字段级错误就地红字,表单级错误用 destructive Alert。
 - **拖拽一律 dnd-kit**(原生 HTML5 DnD 在 Electron 下真实鼠标不触发);dnd 相关 hooks 必须在任何 early-return 之前。
 - **文案全部走 i18n**(`app/messages.ts`,zh-CN / en-US 双份,键必须成对)。
-- **深链事件通道**:跨页面跳转用 `mosael:open-*` CustomEvent(`open-cmdk` / `open-asset` / `open-kb-doc` / `open-publish-task` …),派发统一走 `lib/deepLink.ts` 的 80/300/800ms 三连发(目标视图挂载慢时单发会丢)。
+- **深链事件通道**:跨页面跳转用 `mosael:open-*` CustomEvent(当前有 workflow /
+  publish task / settings)。派发统一走 `lib/deepLink.ts` 的 80/300/800ms 三连发
+  (目标视图挂载慢时单发会丢);Mosael 没有知识库能力,不保留对应的事件或兼容分支。
 - **详情恢复先恢复身份、再取数据**:`usePersistentSelection` 同步读取 localStorage 中的稳定 id，
   `CanvasDetailLoading` 在 React Query 返回前保留详情语义。工作流、画板、调度、插件和素材不能先以
   `null` 渲染列表页再异步切回详情，否则刷新会闪一次错误页面。

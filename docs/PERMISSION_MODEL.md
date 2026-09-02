@@ -24,23 +24,23 @@
 - **读取只返回已解析连接。** `ResolvedConnection` 是稳定连接 + 动态秘密的运行时快照；
   `resolve_connection` / `require_connection` 按 owner 过滤，不跨用户找“第一条能用的”。
 
-## 2. 闸门有哪些
+## 2. 当前闸门
 
-| 闸门 | 判据 | 写路由用它的条数 |
+| 闸门 | 唯一判据 | 用途 |
 | --- | --- | --- |
-| `ensure_workspace_access` | 是这个工作区的成员;**且当前请求是写方法时**额外要 `edit` | 43 |
-| `ensure_instance_admin` | 在**任意**工作区里是 owner/admin,且在那里持有该权限 | 32 |
-| `require_sequence_access` | 序列存在 + 上面那条 | 29 |
-| `ensure_workspace_perm` | 点名某个权限位(`ai` / `publish` / `members` / `credentials`…) | 24 |
-| `ensure_workspace_role` | 角色不低于某档(admin / owner) | 少数 |
-| `ensure_graph_node_privileges` | 图里有 `code` 节点时 → `ensure_instance_admin` | 3 |
-| `require_worker_key` | 本机 worker 的进程密钥(路由级依赖) | 3 组 worker 路由 |
-| 确认卡 | 15 个智能体工具 → 用户逐张点头(或三档权限模式自动放行) | —— |
+| `ensure_workspace_access` | 是工作区成员 | 只读入口;非成员统一 404 |
+| `ensure_workspace_member` | 是工作区成员 | 语义上只读、但传输层使用 POST 的检索入口 |
+| `ensure_workspace_perm` | 操作名映射到最低角色 | 写入入口,调用点必须显式点名操作 |
+| `ensure_workspace_role` | 角色不低于指定档 | 成员管理等明确需要 admin / owner 的入口 |
+| `ensure_deployment_admin` | `User.is_deployment_admin` | 网络、插件、解释器和模型下载等整个部署的配置 |
+| `require_asset` / `require_sequence_access` | 资源存在 + 上述读/写闸门 | 资源定位与授权收在同一领域入口 |
+| `require_worker_key` | 数据目录下的进程密钥 | 本机卫星进程的 claim / report / heartbeat |
+| 确认卡 | 工具 manifest 的 `confirmation` + 会话规则 | 智能体对不可逆或对外动作的用户授权 |
 
-角色与权限位:`owner > admin > editor > viewer`;`editor` 默认持有除 `members` 外的**全部**权限位,
-其中包括 `credentials`。
+工作区只使用 `owner > admin > editor > viewer` 四级角色。`ensure_workspace_perm`
+保留操作名是为了让调用点可读,而不是恢复可逐位覆盖的权限矩阵。
 
-## 3. 对不上的地方
+## 3. 已修复的历史问题
 
 ### 3.1 实例管理员曾可自助获得 — ✅ 已修复
 
@@ -73,25 +73,22 @@ viewer 取供应商凭据 -> 200
 旧问题的根因不是少加一个 `ai` 权限检查，而是凭据没有 owner。现在由资源归属解决：即使知道 id，
 也无法读取、刷新或给别人的连接写入自己的凭据。
 
-### 3.3 写权限靠「当前请求是不是 POST」推断
+### 3.3 写权限曾从 HTTP 方法推断 — ✅ 已修复
 
-`ensure_workspace_access` 读的是一个只在 ASGI 中间件里绑定的 ContextVar,默认 `"GET"`。它守着
-43 条写路由。任何不经 HTTP 的调用路径(后台线程、队列消费、定时任务)拿到的都是默认值,于是
-「写要 `edit`」这半条静默失效。
+`ensure_workspace_access` 现在是纯只读闸门,不读 ASGI ContextVar。所有写入入口显式
+调用 `ensure_workspace_perm`;非 HTTP 路径复用同一领域 Interface 时也不会默认放行。
+`tests/test_write_permission_is_explicit.py` 防止新写入路由回到隐式推断。
 
-本轮已经把确认卡的批准/拒绝改成显式 `ensure_workspace_perm`(那条是授权路径,复现过 viewer 在
-后台线程里批准成功且真的执行了)。**其余 43 条还是这个形状** —— 今天安全,因为它们都只从 HTTP
-进来;它是一颗按「以后没人把它挪到后台」下注的雷。
+### 3.4 逐权限覆盖曾与角色重叠 — ✅ 已修复
 
-### 3.4 `credentials` 权限位仍需改名
+可编辑权限矩阵已删除,工作区只保留四级角色。供应商凭据不属于工作区权限,
+而是由 Provider Profile 与 Provider Credential 的 owner 决定。
 
-`_ROLE_DEFAULTS` 里 editor 仍包含 `credentials`，但供应商连接已经按用户 owner 授权，不再借这个
-工作区权限位判断。该名称如今主要服务工作区内的发布/插件秘密，范围仍显得过宽。
+### 3.5 `code` 节点曾靠特权角色止血 — ✅ 已修复
 
-### 3.5 多个概念仍用同一个词:`credentials`
-
-它同时是工作区权限位、ProviderCredential 和插件凭据表的名字。三处含义分别是“能否管理工作区秘密”、
-“某用户调用 AI 的身份”和“插件保存的密钥”；后续应在 UI 文案中继续区分。
+`code` 现在是普通工作流内容,执行收口在 `app/domain/sandbox`。沙箱默认无网、
+不继承后端环境,并在没有隔离后端时 fail closed。旧的 `ensure_graph_node_privileges`
+和 `PRIVILEGED_NODE_TYPES` 已删除。
 
 ## 4. 已经对上的地方
 
@@ -100,26 +97,17 @@ viewer 取供应商凭据 -> 200
 - **工作区边界是严的**:不是成员一律 404(不泄露存在性),35 张表全部按 `workspace_id` 过滤。
 - **不可逆动作有专门的一档**:`external`(公开发布 / 对外写请求 / 本机跑代码),措辞和徽标都不同,
   三档权限模式下 auto 也不放行它 —— 要么规则命中,要么隔离判断者点头。
-- **危险节点有独立闸门**:`code` 节点的四条落库路径(create / import / patch / 确认卡审批)现在
-  全部要过 `ensure_graph_node_privileges`(第四条是本轮补的)。
+- **代码执行 fail closed**:`code` 节点只能通过隔离执行器运行,无沙箱时不回落。
 - **凭据本身有周期**:`AuthSession` 现在会过期、会自清,服务令牌 30 分钟。
 - **worker 通道不走用户身份**:本机 worker 用启动时下发的进程密钥,网页读不到那个文件。
 
-## 5. 如果要修,顺序是
+## 5. 剩余差距
 
-> **决定已经做了,见 [ADR 0008](adr/0008-three-principals.md)**(第五稿)—— 它把这里列的问题
-> 归到一句话上:**设计是多租户的,而实现里到处假设只有一个人**。
-> 另外那份文档纠正了本文的一处措辞:本文说这是「本地优先的桌面应用」,而产品本身是多租户的,
-> 单机只是租户数等于一的退化情况 —— 不是另一种形态。下面这段是当时的依赖分析,保留为过程记录。
-
-
-1. **先有「实例管理员」这个概念**(§3.1)。在它存在之前,3.2 / 3.4 都没有可收敛的目标 ——
-   收紧任何一处都只是把「谁能自助升级」换个地方问一遍。最小形态可能是 `User.is_instance_admin`,
-   由**第一个注册的用户**持有(本地优先的桌面应用里,那个人就是机器的主人),其余人由他授予。
-2. 有了它,`ensure_instance_admin` 改成认它,`code` 节点、供应商密钥、网络代理、解释器路径、
-   插件启用一起收紧,§3.4 自动消失(`credentials` 权限位退回它字面的意思:能不能在工作区里配连接)。
-3. §3.2 单独可修,而且不依赖第 1 条:给凭据接口加上 `ai` 权限位,让闸门对上它自己写的理由。
-4. §3.3 是逐条的机械改动(43 条),可以分批;判据是「这条路由以后有没有可能不从 HTTP 进来」。
+- 默认仍是本地单用户部署;远程多用户部署的全部路径需继续用隔离测试验证。
+- `credentials` 这个词仍同时出现在 Provider Credential 和插件凭据中;它们的归属已分开,
+  但 UI 文案和新文档必须继续明确区分「我的 AI 连接」与「工作区插件秘密」。
+- worker key 证明的是卫星进程,不是最终用户;将 external job 放到其他机器前,
+  需单独解决该部署的密钥下发与信任范围。
 
 ## 6. 这份文档怎么核对
 

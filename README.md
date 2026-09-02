@@ -254,13 +254,16 @@ git tag -a "v$VERSION" -m "Mosael v$VERSION"
 git push origin main "v$VERSION"
 ```
 
-`.github/workflows/release.yml` runs the full backend and frontend suites, creates a draft Release,
-and builds the macOS DMG, Windows NSIS installer, Chrome extension, and plugin zip files in parallel. The Release is
-promoted to latest only after both desktop packages pass packaging and database-upgrade smoke tests.
-Manually dispatching the workflow produces artifacts only and does not publish a version.
+`.github/workflows/release.yml` validates the backend, frontend, browser extension, and website before
+creating a draft Release. It then builds the macOS DMG, Windows NSIS installer, Chrome extension, and
+plugin zip files. A stable tag is promoted to Latest only after both desktop packages pass packaging and
+database-upgrade smoke tests. A tag containing a prerelease suffix, such as `v1.0.0-beta1`, is published as
+a GitHub prerelease and does not replace the latest stable version. Manually dispatching the workflow
+produces artifacts only and does not publish a version.
 
-Packaged builds check the latest Release and prompt when an update is available. The macOS package is
-currently unsigned, so updates use check-and-download rather than silent installation.
+Packaged builds check the latest stable Release and prompt when an update is available. Prereleases must be
+downloaded explicitly from GitHub Releases. The macOS package is currently unsigned, so updates use
+check-and-download rather than silent installation.
 
 ## Data and logs
 

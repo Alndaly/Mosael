@@ -15,7 +15,8 @@ Mosael 是本地优先的桌面应用：剪辑、导出、工作流全程可离�
 | macOS | `Mosael-<版本>-arm64.dmg` | Apple Silicon(M 系列) |
 | Windows | `Mosael Setup <版本>.exe` | Windows 10 / 11(x64),NSIS 安装器 |
 
-应用启动后会静默比对 Releases 最新版本，发现新版会提示前往下载；设置 → 本地后端 → 版本 里也有「检查更新」按钮。
+应用启动后会静默比对 Releases 的最新稳定版，发现新版会提示前往下载；设置 → 本地后端 → 版本 里也有
+「检查更新」按钮。GitHub 预发布版不会主动推送，需要从 Releases 页面明确选择下载。
 
 <Aside type="note" title="未签名安装包提示">
 
@@ -45,7 +46,8 @@ pnpm build:mac    # 前端 + 边车 + 发布器 + 后端(PyInstaller)+ .app
 pnpm dist:mac     # 同流程,产出 .dmg(分发时用)
 ```
 
-正式发版由 CI 完成：维护者推送 `v*` tag,GitHub Actions 自动打包 mac / win 双平台并挂到 Releases(详见仓库 README)。
+正式发版由 CI 完成：维护者推送 `v*` tag，GitHub Actions 自动打包 macOS / Windows 双平台并挂到
+Releases。带 `-beta1` 等后缀的 tag 保持为预发布，不会覆盖当前稳定版（详见仓库 README）。
 
 ## 数据在哪
 

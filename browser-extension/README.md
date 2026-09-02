@@ -40,7 +40,7 @@ Load `browser-extension/dist/` from `chrome://extensions`.
 
 1. Start Mosael and make sure its local backend is running at `http://127.0.0.1:8800`.
 2. Open a video URL recognized by yt-dlp and click the extension icon to open the Side Panel.
-3. Reading site captions and a site-provided secondary track does not require an Mosael connection.
+3. Reading site captions and a site-provided secondary track does not require a Mosael connection.
 4. The first time you auto-transcribe, use AI translation, import, or capture, open settings in the panel, sign in with your
    Mosael account, and choose a destination workspace. For member-only, private, region-restricted, or bot-protected
    media, optionally choose an identity already signed in and configured with a proxy in Mosael's Browser Pool.

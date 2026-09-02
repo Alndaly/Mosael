@@ -15,7 +15,7 @@ Installers are published on **[GitHub Releases](https://github.com/Alndaly/Mosae
 | macOS | `Mosael-<version>-arm64.dmg` | Apple Silicon (M-series) |
 | Windows | `Mosael Setup <version>.exe` | Windows 10 / 11 (x64), NSIS installer |
 
-The app silently checks Releases for a newer version after launch and prompts you to download; there is also a "Check for updates" button under Settings → Local backend → Version.
+The app silently checks the latest stable Release after launch and prompts you to download; there is also a "Check for updates" button under Settings → Local backend → Version. GitHub prereleases are opt-in and must be downloaded from the Releases page explicitly.
 
 <Aside type="note" title="Unsigned installers">
 
@@ -45,7 +45,7 @@ pnpm build:mac    # frontend + sidecar + publisher + backend (PyInstaller) + .ap
 pnpm dist:mac     # same flow, produces a .dmg for distribution
 ```
 
-Official releases are built by CI: maintainers push a `v*` tag and GitHub Actions packages mac / win and attaches both to the Release (see the repository README).
+Official releases are built by CI: maintainers push a `v*` tag and GitHub Actions packages macOS and Windows and attaches both installers to the Release. Tags with a suffix such as `-beta1` remain prereleases and do not replace the latest stable build (see the repository README).
 
 ## Where your data lives
 

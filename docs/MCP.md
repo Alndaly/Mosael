@@ -143,7 +143,7 @@ A turn started from Feishu gets its card posted back into that same Feishu chat,
 approval happens where the request was made rather than forcing a switch to the desktop app.
 
 Authorisation reuses the existing account model — it is **not** a second scheme. The clicker
-must already be bound to an Mosael account (`feishu_bindings`) **and still be a member of
+must already be bound to a Mosael account (`feishu_bindings`) **and still be a member of
 the workspace**. Seeing the card in a group chat does not confer the right to approve it.
 Binding is keyed by `open_id`, never `user_id` — mixing the two silently rejects people who did
 bind.

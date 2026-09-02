@@ -6,7 +6,7 @@ Starlight 文档站。
 ```bash
 pnpm install
 pnpm dev            # http://localhost:3000
-pnpm build          # 构建期把 36 个页面全部静态生成(文档正文中英各 13 篇)
+pnpm build          # 构建期静态生成全站页面(文档正文中英各 16 篇)
 ```
 
 ## 目录

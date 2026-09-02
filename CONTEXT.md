@@ -63,12 +63,11 @@ _Avoid_: 队列服务、调度中心
 **引擎(engine.py)**:
 纯 DAG 调度器:拓扑、并行、条件路由、取消边界、事件与进度。对具体领域零 import。
 
-**主机权限节点(PRIVILEGED_NODE_TYPES)**:
-能在后端主机上跑任意代码的节点(今天只有 `code`)。它的写入权限是**主机权限而非内容权限**:
-进程隔离 + 超时 + 输出上限**不是沙箱**。所有落库入口(create / import / patch / 确认卡审批)
-额外要 `ensure_instance_admin`,且扫描必须**递归进 `config["body"]`**——否则「折叠为子图」
-一步就绕过。新增同类节点(shell/exec/eval…)必须登记进这个集合。
-_Avoid_: 把它当普通节点按 `edit` 权限放行、只扫顶层 nodes
+**代码节点隔离**:
+`code` 是普通的工作流内容,写入只需 `edit`;安全性由 `app/domain/sandbox`
+的执行隔离保证,不靠把节点归给特权角色。执行器默认无网络、不继承后端环境变量、
+限制写盘/内存/时长;当前平台没有可验证的隔离后端时**拒绝执行**(fail closed)。
+_Avoid_: 恢复 `PRIVILEGED_NODE_TYPES` / `ensure_graph_node_privileges`;没有隔离时回落到普通子进程执行
 
 ### 剪辑
 

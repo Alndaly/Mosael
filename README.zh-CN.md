@@ -224,11 +224,13 @@ git tag -a "v$VERSION" -m "Mosael v$VERSION"
 git push origin main "v$VERSION"
 ```
 
-`.github/workflows/release.yml` 会先运行后端与前端全量测试，再创建草稿 Release，并行构建 macOS DMG、
-Windows NSIS 安装包、Chrome 扩展和插件 zip。两个桌面平台都通过打包与数据库升级冒烟后，Release 才会转为正式最新版。
+`.github/workflows/release.yml` 会先校验后端、前端、浏览器扩展和官网，再创建草稿 Release，构建 macOS DMG、
+Windows NSIS 安装包、Chrome 扩展和插件 zip。两个桌面平台都通过打包与数据库升级冒烟后，稳定版才会标记为
+Latest；带预发布后缀的 tag（例如 `v1.0.0-beta1`）会发布为 GitHub Pre-release，不会覆盖当前稳定版。
 手动触发同一工作流只生成 workflow artifact，不发布版本。
 
-打包版会检查最新 Release 并提示更新。macOS 安装包当前未签名，因此采用“检查并提示下载”，不做静默安装。
+打包版会检查最新稳定版并提示更新；预发布版需要从 GitHub Releases 主动下载。macOS 安装包当前未签名，
+因此采用“检查并提示下载”，不做静默安装。
 
 ## 数据与日志
 

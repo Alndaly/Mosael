@@ -441,7 +441,8 @@ hint 说明各 Adapter 如何把兼容地址归一到原生 API 根。
 - `cd backend && ./.venv/bin/python -m pytest -q` when touching backend — **跑满,别只跑相关文件**:
   测试间的隔离缺陷(线程写进正被重建的库、状态串台)只在满载和特定顺序下才现形,单文件全绿说明不了什么
 - `pnpm --dir agent-sidecar test:bundle` when touching sidecar deps or its build config
-- `cd website && pnpm build` when touching 官网或文档(它不在 release CI 里,坏了不会有人告诉你)
+- `pnpm --dir website build` when touching 官网或文档;release CI 会重跑这道门禁,
+  但本地先跑可以在提交前发现 TypeScript、路由、MDX 与服务端渲染问题
 - targeted browser smoke only when the change affects actual platform page driving
 - **桌面端**(不是浏览器预览)when the change touches 拖拽区 / 无边框窗 / 内嵌浏览器 —— 见第 10 条
 - **拿真实凭据跑一次** when the change touches 供应商凭据、令牌刷新或额度解析 —— 见第 11 条
