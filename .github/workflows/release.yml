@@ -9,7 +9,7 @@
 #
 # 手动触发(workflow_dispatch)= 试打包:只传 workflow artifact,不碰 Releases。
 #
-# 顺序:test(后端 pytest + 前端 vitest)→ draft → build(mac / win 并行)→ publish。
+# 顺序:test(后端 + 前端 + 浏览器扩展 + 官网)→ draft → build(mac / win 并行)→ publish。
 # 测试不过就不建草稿、不出包 —— 打了 tag 不等于代码是好的,这道闸就是用来把这两件事重新
 # 绑在一起的。
 name: Release
@@ -45,6 +45,9 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            website/pnpm-lock.yaml
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           enable-cache: true
@@ -70,6 +73,7 @@ jobs:
       - name: Install dependencies
         run: |
           pnpm install --frozen-lockfile
+          pnpm --dir website install --frozen-lockfile
           cd backend && uv sync --frozen --python 3.13
 
       - name: Validate release version
@@ -96,6 +100,12 @@ jobs:
           pnpm --dir browser-extension typecheck
           pnpm build:extension
 
+      # 官网是独立 pnpm 工作区,不会被根目录的 install/build 顺带覆盖。
+      # production build 同时检查 TypeScript、路由、MDX 和服务端渲染边界。
+      # 当前 typescript-eslint 拒绝 TS 7,不能把一条必红的 lint 伪装成门禁。
+      - name: Website production build
+        run: pnpm --dir website build
+
   # 先建好草稿 Release(自动生成变更说明),两个平台的构建往同一个草稿传产物,
   # 全部成功后才转正——避免用户在「检查更新」里看到缺产物的半成品版本。
   draft:
@@ -115,9 +125,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
-            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
-              --draft --generate-notes --title "Mosael $GITHUB_REF_NAME"
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            exit 0
+          fi
+          release_flags=(--draft --generate-notes --title "Mosael $GITHUB_REF_NAME")
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            release_flags+=(--prerelease --latest=false)
+          fi
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" "${release_flags[@]}"
 
       # 插件包和平台无关,所以在这里打一次,而不是 mac/win 各打一遍。
       # 市场索引里的下载地址指的就是这些附件(website/public/plugins/registry.json)——
@@ -256,4 +271,11 @@ jobs:
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+        run: |
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --draft=false --prerelease --latest=false
+          else
+            gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --draft=false --prerelease=false --latest
+          fi
