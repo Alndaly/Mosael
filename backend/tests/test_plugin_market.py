@@ -136,13 +136,10 @@ class Test不悄悄覆盖:
 
 
 class Test索引:
-    def test_默认市场指向仓库里实际发布的索引(self) -> None:
+    def test_默认市场指向官网实际发布的索引(self) -> None:
         from app.api.routes.plugins import DEFAULT_REGISTRY_URL
 
-        assert DEFAULT_REGISTRY_URL == (
-            "https://raw.githubusercontent.com/Alndaly/Mosael/main/"
-            "website/public/plugins/registry.json"
-        )
+        assert DEFAULT_REGISTRY_URL == "https://mosael.com/plugins/registry.json"
 
     def test_市场请求不继承_ai_请求的全局重试(self, monkeypatch) -> None:
         seen: dict[str, object] = {}

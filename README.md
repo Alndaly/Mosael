@@ -8,9 +8,9 @@
 </p>
 
 <p align="center">
-  <a href="https://mosael.team/en">Website</a> ·
-  <a href="https://github.com/Alndaly/Mosael/releases">Download</a> ·
-  <a href="https://mosael.team/en/docs/start/intro">Guide</a> ·
+  <a href="https://mosael.com/en">Website</a> ·
+  <a href="https://github.com/Alndaly/Moseal/releases">Download</a> ·
+  <a href="https://mosael.com/en/docs/start/intro">Guide</a> ·
   <a href="https://x.com/KindaHuax">Maker on X</a>
 </p>
 
@@ -26,7 +26,7 @@ the finished story without shuttling the project between a pile of tools.
 
 ## Download and run
 
-Download a build from [GitHub Releases](https://github.com/Alndaly/Mosael/releases):
+Download a build from [GitHub Releases](https://github.com/Alndaly/Moseal/releases):
 
 - macOS: `.dmg` for Apple silicon
 - Windows: installer for Windows 10/11 x64
@@ -146,7 +146,7 @@ return files, and use persistent secrets managed by the host.
 
 ## Documentation
 
-Complete user guides live at **[mosael.team](https://mosael.team)**; their source is under
+Complete user guides live at **[mosael.com](https://mosael.com)**; their source is under
 `website/content/docs/`. Implementation references in this repository:
 
 | Document | Covers |
@@ -286,7 +286,7 @@ agent-sidecar/    Agent runtime
 browser-extension/ Chrome Side Panel video companion
 contracts/        Executable contract corpus shared across implementations
 plugins/          Plugin examples and manifests
-website/          The mosael.team documentation site
+website/          The mosael.com documentation site
 docs/             Architecture, permissions, publishing, and ADRs
 scripts/          Build and documentation-sync scripts
 ```

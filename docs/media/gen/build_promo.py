@@ -180,7 +180,7 @@ def shot_cta() -> str:
     return svg(
         logo(W / 2, 396, 1.25)
         + centered("Mosael", 612, 90, spacing=2)
-        + centered("mosael.team", 702, 42, PRIMARY, 600, spacing=2, family=MONO)
+        + centered("mosael.com", 702, 42, PRIMARY, 600, spacing=2, family=MONO)
         + centered("macOS · Windows   |   源码可见", 792, 28, MUTE, 400, spacing=1)
     )
 

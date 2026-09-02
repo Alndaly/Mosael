@@ -7,8 +7,8 @@ commit list and downloadable artifacts.
 
 ### Fixed
 
-- Restored the plugin marketplace by pointing its default feed at the repository's published registry
-  instead of the unavailable `mosael.team` endpoint.
+- Restored the plugin marketplace by replacing its retired website endpoint with a reachable
+  published registry.
 - Prevented marketplace requests from inheriting AI-provider retry behavior, so an unavailable feed
   now reaches a clear error state instead of leaving the dialog on loading placeholders for multiple
   retry cycles.
@@ -166,11 +166,11 @@ commit list and downloadable artifacts.
   flashing each section's list page first.
 - Prevented the editor assistant from covering the workspace when opened.
 
-[0.27.3]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.3
-[0.27.2]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.2
-[0.27.1]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.1
-[0.27.0]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.0
-[0.26.10]: https://github.com/Alndaly/Mosael/releases/tag/v0.26.10
-[0.26.9]: https://github.com/Alndaly/Mosael/releases/tag/v0.26.9
-[0.26.8]: https://github.com/Alndaly/Mosael/releases/tag/v0.26.8
-[0.26.7]: https://github.com/Alndaly/Mosael/releases/tag/v0.26.7
+[0.27.3]: https://github.com/Alndaly/Moseal/releases/tag/v0.27.3
+[0.27.2]: https://github.com/Alndaly/Moseal/releases/tag/v0.27.2
+[0.27.1]: https://github.com/Alndaly/Moseal/releases/tag/v0.27.1
+[0.27.0]: https://github.com/Alndaly/Moseal/releases/tag/v0.27.0
+[0.26.10]: https://github.com/Alndaly/Moseal/releases/tag/v0.26.10
+[0.26.9]: https://github.com/Alndaly/Moseal/releases/tag/v0.26.9
+[0.26.8]: https://github.com/Alndaly/Moseal/releases/tag/v0.26.8
+[0.26.7]: https://github.com/Alndaly/Moseal/releases/tag/v0.26.7

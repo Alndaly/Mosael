@@ -28,7 +28,7 @@ MANIFEST_NAME = "mosael.plugin.json"
 #: 产出,两者各走各的。写死版本号的话,发了新版而网站还没重新部署,索引就指向一个还不存在
 #: 的附件 —— 而那正是这条上一版踩的坑(索引里挂着 plugins-v1.0.0,那个 tag 从来没有过)。
 #: latest 由 GitHub 转发到最新一次 Release,永远指得到东西。
-DOWNLOAD_TEMPLATE = "https://github.com/Alndaly/Mosael/releases/latest/download/{id}.zip"
+DOWNLOAD_TEMPLATE = "https://github.com/Alndaly/Moseal/releases/latest/download/{id}.zip"
 
 
 def entry(manifest_path: Path) -> dict:
@@ -44,7 +44,7 @@ def entry(manifest_path: Path) -> dict:
         # 主页**先用插件自己写的**:那是它的文档站,是用户装之前真正想看的东西。
         # 没写才退到仓库里它的目录 —— 至少还能读到源码和 README。
         "homepage": str(raw.get("homepage") or "").strip()
-        or f"https://github.com/Alndaly/Mosael/tree/main/plugins/examples/{manifest_path.parent.name}",
+        or f"https://github.com/Alndaly/Moseal/tree/main/plugins/examples/{manifest_path.parent.name}",
         "download": DOWNLOAD_TEMPLATE.format(id=raw["id"]),
         # 权限**从清单来**:界面在装之前把它摊开给用户看,写错等于骗人。
         "permissions": [p for p in (raw.get("permissions") or []) if isinstance(p, str)],

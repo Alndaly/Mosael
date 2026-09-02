@@ -8,9 +8,9 @@
 </p>
 
 <p align="center">
-  <a href="https://mosael.team">官网</a> ·
-  <a href="https://github.com/Alndaly/Mosael/releases">下载</a> ·
-  <a href="https://mosael.team/zh/docs/start/intro">使用指南</a> ·
+  <a href="https://mosael.com">官网</a> ·
+  <a href="https://github.com/Alndaly/Moseal/releases">下载</a> ·
+  <a href="https://mosael.com/zh/docs/start/intro">使用指南</a> ·
   <a href="https://x.com/KindaHuax">作者 X</a>
 </p>
 
@@ -25,7 +25,7 @@ Mosael 把剪辑、AI 生成、智能体、工作流和发布放在同一个桌�
 
 ## 下载与运行
 
-从 [GitHub Releases](https://github.com/Alndaly/Mosael/releases) 下载：
+从 [GitHub Releases](https://github.com/Alndaly/Moseal/releases) 下载：
 
 - macOS：Apple 芯片版 `.dmg`
 - Windows：Windows 10/11 x64 安装程序
@@ -118,7 +118,7 @@ Cookie；受限内容可以选择 Mosael 浏览器池中已有的登录身份与
 
 ## 文档
 
-完整使用指南位于 **[mosael.team](https://mosael.team)**，源码在 `website/content/docs/`。
+完整使用指南位于 **[mosael.com](https://mosael.com)**，源码在 `website/content/docs/`。
 仓库内的实现文档：
 
 | 文档 | 内容 |
@@ -254,7 +254,7 @@ agent-sidecar/    智能体运行时
 browser-extension/ Chrome Side Panel 视频助手
 contracts/        前后端共享的可执行契约语料
 plugins/          插件示例与清单
-website/          mosael.team 文档站
+website/          mosael.com 文档站
 docs/             架构、权限、发布和 ADR
 scripts/          构建与文档同步脚本
 ```

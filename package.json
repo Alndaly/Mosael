@@ -5,8 +5,8 @@
   "license": "SEE LICENSE IN LICENSE",
   "description": "Mosael — AI video creative studio",
   "author": "Kinda Hall (https://x.com/KindaHuaX)",
-  "homepage": "https://mosael.team",
-  "repository": "https://github.com/Alndaly/Mosael",
+  "homepage": "https://mosael.com",
+  "repository": "https://github.com/Alndaly/Moseal",
   "main": "electron/main.cjs",
   "packageManager": "pnpm@11.20.0",
   "scripts": {
