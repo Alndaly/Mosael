@@ -13,7 +13,7 @@
       },
       "author": "Mosael",
       "homepage": "https://pan.baidu.com/union/doc/",
-      "download": "https://github.com/Alndaly/Moseal/releases/latest/download/dev.mosael.baidu-pan.zip",
+      "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.baidu-pan.zip",
       "permissions": [
         "network:baidu-pan"
       ]
@@ -31,7 +31,7 @@
       },
       "author": "Mosael",
       "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/everything",
-      "download": "https://github.com/Alndaly/Moseal/releases/latest/download/dev.mosael.mcp-everything.zip",
+      "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.mcp-everything.zip",
       "permissions": [
         "process:spawn"
       ]
@@ -45,8 +45,8 @@
         "en": "Small text utilities: count words, pull out hashtags, draft title candidates. All local, no permissions needed."
       },
       "author": "Mosael",
-      "homepage": "https://github.com/Alndaly/Moseal/tree/main/plugins/examples/text-toolkit",
-      "download": "https://github.com/Alndaly/Moseal/releases/latest/download/dev.mosael.text-toolkit.zip",
+      "homepage": "https://github.com/Alndaly/Mosael/tree/main/plugins/examples/text-toolkit",
+      "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.text-toolkit.zip",
       "permissions": []
     },
     {
@@ -59,7 +59,7 @@
       },
       "author": "Mosael",
       "homepage": "https://docs.tikhub.io/",
-      "download": "https://github.com/Alndaly/Moseal/releases/latest/download/dev.mosael.tikhub.zip",
+      "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.tikhub.zip",
       "permissions": [
         "network:tikhub"
       ]

@@ -8,9 +8,9 @@
 ### 命名
 
 **Mosael**:
-产品与 App 的正式名称。GitHub 仓库使用规范名 `Alndaly/Moseal`（仓库拼写与产品名不同，
-大小写敏感；更新检查直连 GitHub API），官网使用 `mosael.com`。README、数据目录
-`~/.mosael/`、主库 `mosael.db` 与打包二进制 `mosael-backend` 继续使用产品名拼写。
+产品名,也是仓库名。一切对外可见处一律使用它——GitHub(`Alndaly/Mosael`,大小写敏感；
+更新检查直连 GitHub API)、App 名、README、数据目录 `~/.mosael/`、主库 `mosael.db`
+与打包二进制 `mosael-backend`。官网使用 `mosael.com`。
 
 | | 规范名 |
 | --- | --- |

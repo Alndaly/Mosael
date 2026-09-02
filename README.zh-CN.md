@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="https://mosael.com">官网</a> ·
-  <a href="https://github.com/Alndaly/Moseal/releases">下载</a> ·
+  <a href="https://github.com/Alndaly/Mosael/releases">下载</a> ·
   <a href="https://mosael.com/zh/docs/start/intro">使用指南</a> ·
   <a href="https://x.com/KindaHuax">作者 X</a>
 </p>
@@ -25,7 +25,7 @@ Mosael 把剪辑、AI 生成、智能体、工作流和发布放在同一个桌�
 
 ## 下载与运行
 
-从 [GitHub Releases](https://github.com/Alndaly/Moseal/releases) 下载：
+从 [GitHub Releases](https://github.com/Alndaly/Mosael/releases) 下载：
 
 - macOS：Apple 芯片版 `.dmg`
 - Windows：Windows 10/11 x64 安装程序

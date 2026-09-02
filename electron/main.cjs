@@ -231,7 +231,7 @@ function stopBackend() {
 // 时,可在此平滑升级为 electron-updater 的全自动下载安装,渲染层接口不变。
 // 必须是 GitHub 上的规范仓库名(大小写一致)。写错大小写 API 会返回 301,虽然 fetch
 // 默认跟随重定向仍能work,但更新检查的失败是静默的——一旦重定向失效就再没人发现。
-const UPDATE_REPO = "Alndaly/Moseal";
+const UPDATE_REPO = "Alndaly/Mosael";
 
 function compareVersions(a, b) {
   const parse = (value) => String(value).replace(/^v/i, "").split(".").map((part) => parseInt(part, 10) || 0);

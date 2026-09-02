@@ -166,11 +166,11 @@ commit list and downloadable artifacts.
   flashing each section's list page first.
 - Prevented the editor assistant from covering the workspace when opened.
 
-[0.27.3]: https://github.com/Alndaly/Moseal/releases/tag/v0.27.3
-[0.27.2]: https://github.com/Alndaly/Moseal/releases/tag/v0.27.2
-[0.27.1]: https://github.com/Alndaly/Moseal/releases/tag/v0.27.1
-[0.27.0]: https://github.com/Alndaly/Moseal/releases/tag/v0.27.0
-[0.26.10]: https://github.com/Alndaly/Moseal/releases/tag/v0.26.10
-[0.26.9]: https://github.com/Alndaly/Moseal/releases/tag/v0.26.9
-[0.26.8]: https://github.com/Alndaly/Moseal/releases/tag/v0.26.8
-[0.26.7]: https://github.com/Alndaly/Moseal/releases/tag/v0.26.7
+[0.27.3]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.3
+[0.27.2]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.2
+[0.27.1]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.1
+[0.27.0]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.0
+[0.26.10]: https://github.com/Alndaly/Mosael/releases/tag/v0.26.10
+[0.26.9]: https://github.com/Alndaly/Mosael/releases/tag/v0.26.9
+[0.26.8]: https://github.com/Alndaly/Mosael/releases/tag/v0.26.8
+[0.26.7]: https://github.com/Alndaly/Mosael/releases/tag/v0.26.7

@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="https://mosael.com/en">Website</a> ·
-  <a href="https://github.com/Alndaly/Moseal/releases">Download</a> ·
+  <a href="https://github.com/Alndaly/Mosael/releases">Download</a> ·
   <a href="https://mosael.com/en/docs/start/intro">Guide</a> ·
   <a href="https://x.com/KindaHuax">Maker on X</a>
 </p>
@@ -26,7 +26,7 @@ the finished story without shuttling the project between a pile of tools.
 
 ## Download and run
 
-Download a build from [GitHub Releases](https://github.com/Alndaly/Moseal/releases):
+Download a build from [GitHub Releases](https://github.com/Alndaly/Mosael/releases):
 
 - macOS: `.dmg` for Apple silicon
 - Windows: installer for Windows 10/11 x64

@@ -6,7 +6,7 @@
   "description": "Mosael — AI video creative studio",
   "author": "Kinda Hall (https://x.com/KindaHuaX)",
   "homepage": "https://mosael.com",
-  "repository": "https://github.com/Alndaly/Moseal",
+  "repository": "https://github.com/Alndaly/Mosael",
   "main": "electron/main.cjs",
   "packageManager": "pnpm@11.20.0",
   "scripts": {
