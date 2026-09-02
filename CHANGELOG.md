@@ -3,6 +3,24 @@
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 
+## [0.27.1] - 2026-09-02
+
+### Changed
+
+- Standardized empty collections on the workflow-page pattern: the board, Browser Pool, publish,
+  media, plugin, scheduler, and supported settings states now center within their true remaining
+  content height, while list-only toolbars stay hidden until they are useful.
+- Kept settings section headers visually separate from their content and removed the extra frame
+  around a scheduled task's bound workflow.
+- Replaced the AI Studio model picker with a direct configuration action when no chat model exists,
+  and aligned expanded thinking and loading markers with their text.
+
+### Fixed
+
+- Resolved inherited default-provider model metadata before calculating context usage, so a new
+  Kimi K3 conversation uses its real catalog window instead of incorrectly reporting only half of
+  the fallback window as available.
+
 ## [0.27.0] - 2026-09-02
 
 ### Added
@@ -110,8 +128,9 @@ commit list and downloadable artifacts.
   flashing each section's list page first.
 - Prevented the editor assistant from covering the workspace when opened.
 
-[0.26.10]: https://github.com/Alndaly/Mosael/releases/tag/v0.26.10
+[0.27.1]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.1
 [0.27.0]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.0
+[0.26.10]: https://github.com/Alndaly/Mosael/releases/tag/v0.26.10
 [0.26.9]: https://github.com/Alndaly/Mosael/releases/tag/v0.26.9
 [0.26.8]: https://github.com/Alndaly/Mosael/releases/tag/v0.26.8
 [0.26.7]: https://github.com/Alndaly/Mosael/releases/tag/v0.26.7
