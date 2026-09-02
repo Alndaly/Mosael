@@ -21,7 +21,7 @@ import { describe, expect, it } from "vitest";
 
 const SRC = join(import.meta.dirname, "..");
 /** 四档之外的特例:徽标/角标(9–9.5px)、区块大标题(15–22px)。 */
-const ALLOWED = new Set(["9px", "9.5px", "15px", "17px", "21px", "22px"]);
+const ALLOWED = new Set(["9px", "9.5px", "15px", "17px", "18px", "21px", "22px"]);
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

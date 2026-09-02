@@ -57,7 +57,7 @@ export function SettingsGroup({
           {description && (
             <p
               data-slot="settings-group-description"
-              className="mb-0 mt-1.5 max-w-[72rem] text-[13.5px] leading-[1.55] text-muted-foreground"
+              className="mb-0 mt-1.5 max-w-[72rem] text-ui-md leading-[1.55] text-muted-foreground"
             >
               {description}
             </p>
@@ -97,7 +97,7 @@ export function SettingsRow({
       <div className="grid min-w-0 gap-1">
         <span data-slot="settings-row-label" className="text-[15px] font-semibold leading-[1.35]">{label}</span>
         {description && (
-          <small data-slot="settings-row-description" className="text-[13px] leading-[1.5] text-muted-foreground">
+          <small data-slot="settings-row-description" className="text-ui-sm leading-[1.5] text-muted-foreground">
             {description}
           </small>
         )}
@@ -185,7 +185,7 @@ export function SettingsField({
   return (
     <label className={cn("grid min-w-0 gap-1.5", className)}>
       <span className="text-[15px] font-semibold leading-[1.35] text-foreground">{label}</span>
-      {description && <small className="text-[13px] leading-[1.5] text-muted-foreground">{description}</small>}
+      {description && <small className="text-ui-sm leading-[1.5] text-muted-foreground">{description}</small>}
       {children}
     </label>
   );

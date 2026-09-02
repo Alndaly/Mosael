@@ -58,7 +58,7 @@ describe("settings section layout", () => {
     expect(titles[0]).toHaveClass("text-[18px]");
     expect(titles[1]).toHaveClass("text-[18px]");
     expect(rowLabel).toHaveClass("text-[15px]", "font-semibold");
-    expect(rowDescription).toHaveClass("text-[13px]", "leading-[1.5]");
+    expect(rowDescription).toHaveClass("text-ui-sm", "leading-[1.5]");
   });
 
   it("renders settings collections as divided flat rows", () => {
