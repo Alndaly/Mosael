@@ -606,6 +606,22 @@ def with_origin_envelope(content: str, marker: dict[str, object]) -> str:
     return content
 
 
+def _claim_idle_session(db: Session, session_id: str) -> bool:
+    """Atomically reserve the session for exactly one direct sender or queue drain.
+
+    Reading ``session.status`` and assigning it later is not a claim: another request can start a
+    turn in that gap. Keep the conditional update in one shared primitive so the direct-message
+    and drain paths cannot drift back to different locking rules.
+    """
+    return bool(
+        db.execute(
+            update(AgentSession)
+            .where(AgentSession.id == session_id, AgentSession.status != "running")
+            .values(status="running")
+        ).rowcount
+    )
+
+
 def post_user_message(
     db: Session,
     session: AgentSession,
@@ -624,7 +640,7 @@ def post_user_message(
     # 另一个智能体会话发来的通知:落库带结构化来源(前端画徽章靠它),
     # 且**不参与**会话自动命名 —— 标题应当是人提的第一件事,不是别的智能体的信封。
     origin_marker = origin_marker_for(origin_session_id, origin_job_id)
-    if session.status == "running":
+    if not _claim_idle_session(db, session.id):
         # Queued, not steered. These are two different things and only one of them should be
         # the default: queuing waits for the whole reason-act loop to finish and then runs as
         # its own turn, which is what someone typing a follow-up almost always means. Steering
@@ -668,7 +684,6 @@ def post_user_message(
             **origin_marker,
         },
     )
-    session.status = "running"
     if session.title == "新对话" and content.strip() and not origin_session_id:
         session.title = content.strip()[:60]
     db.add(message)
@@ -908,11 +923,7 @@ def _drain_queue_locked(session_id: str) -> None:
         # **先抢占,再看队列。** 「读到 idle」和「置成 running」如果不是一步,两个 drain 会同时
         # 通过检查、同时取走同一条消息、同时起一轮 —— 用户看到那条消息被回答了两遍。
         # 条件更新让数据库来裁决:rowcount 是 0 就是别人抢到了,直接让位。
-        claimed = db.execute(
-            update(AgentSession)
-            .where(AgentSession.id == session_id, AgentSession.status != "running")
-            .values(status="running")
-        ).rowcount
+        claimed = _claim_idle_session(db, session_id)
         db.commit()
         if not claimed:
             return

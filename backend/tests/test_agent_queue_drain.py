@@ -10,19 +10,13 @@ drain 过一次 —— 那次看到的队列还是空的,而消息随后才落�
 
 两个都不会在日常使用里天天出现,但都会在机器忙的时候出现,而且都**不报错**。
 
-## 「跑两遍」那一半没有测试,是有意的
-
-试过三种办法逼它发生:两个线程直接撞、在取消息处设栅栏、在读状态处设栅栏。**三种都逼不出来**
-—— 抢占改回"读一次再写"之后,测试照样全绿。原因是 SQLite 把写串起来了:第二个 drain 再去
-查队列时,第一个早已把那条消息出队并提交,于是它查到的是空的,自己就退了。
-
-也就是说,在当前这个后端上,抢占更像**防御**而不是在修一个能复现的故障;它挡的是"写不被串起来"
-的那类后端(以及将来把状态判断挪到别处的改动)。与其留一条无论代码对错都绿的测试充数,
-不如把这件事写在这儿 —— 一条永远不会红的测试比没有测试更糟,它会让人以为这里有把关。
+两个入口必须共用同一个条件更新。只在 drain 里抢占还不够：直接发送若先读 status、稍后再写，
+就可能和上一轮结束时的 drain 同时起新轮。并发测试直接钉住这个共享抢占原语只能有一个赢家。
 """
 
 from __future__ import annotations
 
+import threading
 import time
 
 from app.ai.sidecar.adapters import TurnResult
@@ -36,7 +30,6 @@ from tests.util import fresh_client
 def _queue_one(session_id: str, content: str = "排队的") -> None:
     """直接往库里放一条排队消息 —— 绕开发消息那条路,好把 drain 单独拿出来测。"""
     with SessionLocal() as db:
-        user_id = db.query(AgentMessage).first()
         owner = db.execute(  # 会话的创建者就是唯一那个用户
             __import__("sqlalchemy").select(__import__("app.db.models", fromlist=["User"]).User)
         ).scalars().first()
@@ -84,6 +77,31 @@ def test_抢到了却没活干_要把状态放回去(monkeypatch) -> None:
     host._drain_queue(sid)  # 队列是空的
 
     assert _status(sid) == "idle", "抢占之后没放回状态,会话哑了"
+
+
+def test_直接发送和_drain_共用的会话抢占只有一个赢家() -> None:
+    """两个入口同时看见 idle 时，只允许一个把它变成 running。"""
+    client = fresh_client()
+    sid = _session(client)
+    _set_status(sid, "idle")
+    barrier = threading.Barrier(2)
+    winners: list[bool] = []
+
+    def _claim() -> None:
+        with SessionLocal() as db:
+            barrier.wait()
+            winners.append(host._claim_idle_session(db, sid))
+            db.commit()
+
+    threads = [threading.Thread(target=_claim), threading.Thread(target=_claim)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=5)
+
+    assert not any(thread.is_alive() for thread in threads)
+    assert sorted(winners) == [False, True]
+    assert _status(sid) == "running"
 
 
 def test_排队落库之后自己再_drain_一次(monkeypatch) -> None:

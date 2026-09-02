@@ -20,6 +20,8 @@ commit list and downloadable artifacts.
   failures, with localized error states instead of raw `Failed to fetch` messages.
 - Replaced remaining native selects and shadow-heavy extension styling with the shared Tailwind and
   shadcn/ui treatment.
+- Made direct agent messages and queued-message draining share one atomic session claim, preventing
+  rare duplicate turns when a new message arrives as the previous turn finishes.
 
 ## [0.26.9] - 2026-09-02
 
