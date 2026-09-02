@@ -3,6 +3,24 @@
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 
+## [0.26.10] - 2026-09-02
+
+### Added
+
+- Added Pornhub video-page support with Open Studio transcription fallback and stable source-URL
+  recovery, so completed transcripts are reused instead of generated again.
+- Added word-level transcript navigation for Open Studio ASR results while preserving readable
+  sentence grouping and sentence-level fallback for legacy data.
+
+### Fixed
+
+- Changed current-frame import to prefer decoded video pixels and exclude HTML playback controls;
+  cross-origin media now uses a temporary overlay-free capture fallback.
+- Hardened Bilibili subtitle fetching against translated pages, expired resources, and CORS/network
+  failures, with localized error states instead of raw `Failed to fetch` messages.
+- Replaced remaining native selects and shadow-heavy extension styling with the shared Tailwind and
+  shadcn/ui treatment.
+
 ## [0.26.9] - 2026-09-02
 
 ### Added
@@ -51,6 +69,7 @@ commit list and downloadable artifacts.
   flashing each section's list page first.
 - Prevented the editor assistant from covering the workspace when opened.
 
+[0.26.10]: https://github.com/Alndaly/OpenStudio/releases/tag/v0.26.10
 [0.26.9]: https://github.com/Alndaly/OpenStudio/releases/tag/v0.26.9
 [0.26.8]: https://github.com/Alndaly/OpenStudio/releases/tag/v0.26.8
 [0.26.7]: https://github.com/Alndaly/OpenStudio/releases/tag/v0.26.7

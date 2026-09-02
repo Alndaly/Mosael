@@ -235,7 +235,7 @@ pnpm dist:mac    # build a macOS DMG
 A release updates the root `package.json` and tag together:
 
 ```bash
-VERSION=0.26.7
+VERSION=x.y.z
 npm pkg set version="$VERSION"
 git commit -am "chore(release): v$VERSION"
 git tag -a "v$VERSION" -m "Open Studio v$VERSION"

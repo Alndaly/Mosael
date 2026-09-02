@@ -203,7 +203,7 @@ pnpm dist:mac    # 构建 macOS DMG
 发版时同时更新根 `package.json` 与 tag：
 
 ```bash
-VERSION=0.26.7
+VERSION=x.y.z
 npm pkg set version="$VERSION"
 git commit -am "chore(release): v$VERSION"
 git tag -a "v$VERSION" -m "Open Studio v$VERSION"
