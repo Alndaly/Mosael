@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable
 
@@ -71,6 +72,37 @@ _REMOTE_COMPONENTS = ["ejs:github"]
 
 class YtdlpError(RuntimeError):
     pass
+
+
+@lru_cache(maxsize=1)
+def extractor_classes() -> tuple[type[Any], ...]:
+    """Return yt-dlp's current site-specific extractor registry.
+
+    The generic extractor deliberately stays outside this list: it accepts almost every HTTP
+    URL, so treating it as proof of support would make an ordinary article look like a video.
+    Generic pages are still usable in the extension when an actual HTML video is present.
+    """
+    from yt_dlp.extractor import gen_extractor_classes
+
+    return tuple(extractor for extractor in gen_extractor_classes() if extractor.IE_NAME != "generic")
+
+
+def matching_extractor(url: str) -> str | None:
+    """Identify a URL without making a network request.
+
+    yt-dlp owns the URL patterns. Keeping a second domain catalogue in Open Studio would always
+    lag behind upgrades and was the reason the browser extension only covered three sites.
+    """
+    candidate = url.strip()
+    if not candidate.lower().startswith(("http://", "https://")):
+        return None
+    for extractor in extractor_classes():
+        try:
+            if extractor.suitable(candidate):
+                return str(extractor.IE_NAME)
+        except Exception:  # noqa: BLE001 — one broken third-party regex must not break the registry
+            logger.debug("yt-dlp extractor %s rejected URL matching", extractor.IE_NAME, exc_info=True)
+    return None
 
 
 @dataclass(frozen=True)
@@ -272,6 +304,10 @@ def _explain(exc: Exception) -> str:
         return "这条内容是私有的 / 会员专属,没有登录态就取不到。"
     if "sign in" in lowered or "cookies" in lowered or "bot" in lowered:
         return "站点要求登录或人机验证才能取这条内容。"
+    if "ip address is blocked" in lowered or "geo restricted" in lowered or "not available in your country" in lowered:
+        return "当前网络出口被站点或地区策略限制。请为浏览器档案配置可用代理后重试。"
+    if "http error 403" in lowered or "http error 412" in lowered or "forbidden" in lowered or "precondition failed" in lowered:
+        return "站点拒绝了匿名取流。请选择已登录的浏览器档案，或为档案配置可用代理后重试。"
     if "requested format is not available" in lowered:
         return (
             "这个站点没有给出可下载的格式。多半是登录态与取流方式对不上 —— "

@@ -1,4 +1,4 @@
-export type VideoPlatform = "youtube" | "bilibili" | "pornhub";
+export type VideoPlatform = "youtube" | "bilibili" | "pornhub" | "generic";
 
 export type TranscriptToken = {
   start: number;
@@ -32,6 +32,10 @@ export type Transcript = {
 export type VideoContext = {
   supported: boolean;
   platform?: VideoPlatform;
+  /** yt-dlp extractor selected by the backend for players without a readable HTML video. */
+  extractor?: string;
+  /** Whether the page exposes a video element that can seek and return decoded pixels. */
+  playable: boolean;
   title: string;
   url: string;
   currentTime: number;

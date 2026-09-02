@@ -3,6 +3,31 @@
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 
+## Unreleased
+
+### Added
+
+- Extended the Chrome Side Panel from three hard-coded sites to every HTTP(S) video URL recognized
+  by the installed yt-dlp extractor registry, while preserving native caption adapters for YouTube
+  and Bilibili.
+- Added a lightweight authenticated URL-support endpoint and optional Browser Pool identity selection
+  for restricted, signed-in, proxied, or region-sensitive imports and automatic transcription.
+- Added a registry-wide contract test that checks every canonical yt-dlp extractor sample without
+  making network requests.
+
+### Changed
+
+- Separated backend import/transcription capability from in-page playback capability: custom,
+  embedded, or protected players can still be imported when yt-dlp supports them, while seek and
+  frame controls remain disabled unless a usable HTML5 video is present.
+- Replaced site-specific manifest host lists with explicit HTTP(S) page access, required for generic
+  player discovery and clean video-frame fallback capture.
+
+### Fixed
+
+- Replaced opaque yt-dlp 403, 412, login, geo, and IP-block failures with guidance to select a
+  matching Browser Pool identity or proxy.
+
 ## [0.26.10] - 2026-09-02
 
 ### Added

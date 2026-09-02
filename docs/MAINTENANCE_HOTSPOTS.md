@@ -20,8 +20,14 @@
 Adapter 与测试，不要让站点 JSON 形状穿进侧栏。双语轨按时间重叠对齐，不能假设两个供应商按同一
 句子分段；缺失 duration 的 cue 必须补成可命中的区间，否则播放跟随永远找不到活动句。站点无字幕
 的回退必须复用 URL 导入 → job → ASR → transcript API，不能在扩展里另写下载或识别实现。
-Pornhub 页面可能同时存在隐藏广告、占位与主播放器，DOM 能力必须通过 `platforms/video-element.ts`
+任意页面都可能同时存在隐藏广告、占位与主播放器，DOM 能力必须通过 `platforms/video-element.ts`
 集中选择，禁止退回 `querySelector("video")` 取第一个元素。
+
+新增 yt-dlp 站点支持时不要继续扩展 `VideoPlatform` 域名枚举：通用页面由后端 `matching_extractor()`
+按当前安装版本判断，只有需要读取站点私有字幕数据的页面才增加专用 Adapter。必须保留两个独立能力：
+yt-dlp 可导入/转写，不代表页面中一定有可控制的 HTML5 `<video>`；后者不存在时应禁用跳转和截帧。
+`tests/test_url_import.py` 的 extractor 合约测试必须遍历 yt-dlp 自带 canonical `_TESTS`，避免升级 yt-dlp
+后静默缩小扩展支持面。
 
 截帧的主路径必须读取 `<video>` 解码像素，不能把 `captureVisibleTab` 当事实源。后者只允许作为跨域
 Canvas 的兼容路径，并且截图前必须关闭原生 controls、隐藏视频上方的页面覆盖层，finally 或超时都要

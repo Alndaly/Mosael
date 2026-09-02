@@ -70,7 +70,21 @@ describe("OpenStudioClient", () => {
       items: [{ url: "https://www.youtube.com/watch?v=abc", title: "A video" }],
       kind: "video",
       max_height: 0,
+      profile_id: null,
     });
+  });
+
+  it("asks the backend yt-dlp registry about custom-player pages", async () => {
+    const fetcher = vi.fn(async (_input: RequestInfo | URL) => json({ supported: true, extractor: "vimeo" }));
+    const client = new OpenStudioClient({ baseUrl: "http://127.0.0.1:8800", token: "session", fetcher });
+
+    await expect(client.supportsVideoUrl("workspace", "https://vimeo.com/76979871")).resolves.toEqual({
+      supported: true,
+      extractor: "vimeo",
+    });
+    expect(String(fetcher.mock.calls[0]?.[0])).toBe(
+      "http://127.0.0.1:8800/api/assets/url-support?workspace_id=workspace&url=https%3A%2F%2Fvimeo.com%2F76979871",
+    );
   });
 
   it("imports, transcribes, and returns a timed transcript when a site has no captions", async () => {

@@ -90,11 +90,12 @@ Open Studio 是一款运行在本机的 AI 视频工作室，把**多轨剪辑�
 
 ### Chrome 浏览器扩展
 
-Chrome 扩展使用浏览器原生 Side Panel，不在网页上覆盖浮动面板。浏览 YouTube、B 站或 Pornhub 视频时，
-点击扩展图标即可在右侧查看跟随播放的双语逐字稿；Open Studio 生成的逐词时间戳支持点击任意词精确
-跳转，站点没有字幕时可自动下载并转写。当前视频或不含播放器控件的纯视频帧也可以一键导入 Open Studio 素材库。扩展使用单独的
-Open Studio 登录会话，密码不会保存，也不会读取或
-导出 Chrome Cookie。界面默认跟随 Chrome 语言，也可固定为简体中文或 English。安装与限制见
+Chrome 扩展使用浏览器原生 Side Panel，不在网页上覆盖浮动面板。打开已安装 yt-dlp 能识别的视频链接时，
+点击扩展图标即可在右侧查看逐字稿；YouTube 与 B 站优先读取原生字幕，其余站点可由 Open Studio 自动
+下载并转写。存在可用 HTML5 播放器时，逐字稿跟随播放，逐词时间戳支持精确跳转，并可把不含播放器控件
+的纯视频帧导入素材库。扩展使用单独的 Open Studio 登录会话且不保存密码，也不读取或导出 Chrome
+Cookie；受限内容可以选择 Open Studio 浏览器池中已有的登录身份与代理。界面默认跟随 Chrome 语言，
+也可固定为简体中文或 English。安装、权限与能力边界见
 [browser-extension/README.zh-CN.md](browser-extension/README.zh-CN.md)。
 
 ### 插件

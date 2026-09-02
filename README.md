@@ -116,13 +116,12 @@ app restarts.
 ### Chrome browser extension
 
 The Chrome extension uses the browser's native Side Panel instead of placing a floating overlay on
-the page. While watching YouTube, Bilibili, or Pornhub, click the extension icon to read a playback-synced
-bilingual transcript, seek precisely by word when Open Studio alignment is available, and let Open Studio
-transcribe videos whose sites provide no captions. You can also import either the current video or a clean
-video frame without HTML player controls into the
-Open Studio media library. The extension uses a separate Open Studio login session, never stores the
-password, and does not read or export Chrome cookies. Its UI follows Chrome by default and can be
-pinned to Simplified Chinese or English. See
+the page. Open any video URL recognized by the installed yt-dlp build: YouTube and Bilibili use native
+captions when available, while Open Studio can download and transcribe other sites. Pages with a usable
+HTML5 player get playback following, word-precise seeking, and clean video-frame capture without HTML
+controls. The extension uses a separate Open Studio session, never stores the password, and does not
+read or export Chrome cookies; restricted content can use an existing Browser Pool identity and proxy.
+Its UI follows Chrome by default and can be pinned to Simplified Chinese or English. See
 [browser-extension/README.md](browser-extension/README.md) for installation and limitations.
 
 ### Plugins

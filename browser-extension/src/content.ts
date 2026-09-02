@@ -1,4 +1,4 @@
-import { detectVideoPlatform } from "./platforms/detect";
+import { detectVideoPlatform, supportsVideoPage } from "./platforms/detect";
 import { cleanVideoPageTitle } from "./platforms/labels";
 import { selectPrimaryVideo } from "./platforms/video-element";
 import { captureVideoFrame } from "./video-frame";
@@ -28,9 +28,12 @@ function videoElement(): HTMLVideoElement {
 function currentContext(): VideoContext {
   const platform = detectVideoPlatform(location.href);
   const video = selectPrimaryVideo(document.querySelectorAll("video"));
+  const playable = video instanceof HTMLVideoElement;
+  const supported = supportsVideoPage(platform, playable);
   return {
-    supported: platform !== null,
-    ...(platform ? { platform } : {}),
+    supported,
+    ...(supported && platform ? { platform } : {}),
+    playable,
     title: cleanVideoPageTitle(document.title),
     url: location.href,
     currentTime: video instanceof HTMLVideoElement && Number.isFinite(video.currentTime) ? video.currentTime : 0,

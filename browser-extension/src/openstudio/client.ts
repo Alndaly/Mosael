@@ -2,6 +2,7 @@ import { transcriptSegmentsToCues, type TranscriptSegmentInput } from "../transc
 
 export type Workspace = { id: string; name: string };
 export type Project = { id: string; name: string; workspace_id: string };
+export type BrowserProfile = { id: string; name: string; enabled: boolean };
 export type ImportJob = { id: string; status: string };
 export type Job = {
   id: string;
@@ -15,6 +16,7 @@ export type GeneratedTranscript = {
   language: string;
   cues: Array<{ start: number; end: number; text: string }>;
 };
+export type UrlSupport = { supported: boolean; extractor: string };
 
 type TranscriptResponse = {
   asset_id: string;
@@ -110,6 +112,15 @@ export class OpenStudioClient {
     return this.request<Project[]>(`/api/projects?workspace_id=${encodeURIComponent(workspaceId)}`);
   }
 
+  listBrowserProfiles(workspaceId: string): Promise<BrowserProfile[]> {
+    return this.request<BrowserProfile[]>(`/api/browser/profiles?workspace_id=${encodeURIComponent(workspaceId)}`);
+  }
+
+  supportsVideoUrl(workspaceId: string, url: string): Promise<UrlSupport> {
+    const query = new URLSearchParams({ workspace_id: workspaceId, url });
+    return this.request<UrlSupport>(`/api/assets/url-support?${query}`);
+  }
+
   async translate(workspaceId: string, texts: string[], targetLanguage: string): Promise<string[]> {
     const translations: string[] = [];
     for (let offset = 0; offset < texts.length; offset += TRANSLATE_BATCH) {
@@ -127,7 +138,13 @@ export class OpenStudioClient {
     return translations;
   }
 
-  importVideo(workspaceId: string, projectId: string | null, url: string, title: string): Promise<ImportJob> {
+  importVideo(
+    workspaceId: string,
+    projectId: string | null,
+    url: string,
+    title: string,
+    profileId: string | null = null,
+  ): Promise<ImportJob> {
     return this.request<ImportJob>("/api/assets/import-url", {
       method: "POST",
       body: JSON.stringify({
@@ -136,6 +153,7 @@ export class OpenStudioClient {
         items: [{ url, title }],
         kind: "video",
         max_height: 0,
+        profile_id: profileId,
       }),
     });
   }
@@ -159,15 +177,17 @@ export class OpenStudioClient {
     projectId,
     url,
     title,
+    profileId,
     onProgress,
   }: {
     workspaceId: string;
     projectId: string | null;
     url: string;
     title: string;
+    profileId?: string | null;
     onProgress?: (stage: "import" | "transcribe", job: Job) => void;
   }): Promise<GeneratedTranscript> {
-    const importJob = await this.importVideo(workspaceId, projectId, url, title);
+    const importJob = await this.importVideo(workspaceId, projectId, url, title, profileId || null);
     const imported = await this.waitForJob(importJob.id, (job) => onProgress?.("import", job));
     const assetIds = imported.result?.asset_ids;
     const assetId = Array.isArray(assetIds) && typeof assetIds[0] === "string" ? assetIds[0] : "";

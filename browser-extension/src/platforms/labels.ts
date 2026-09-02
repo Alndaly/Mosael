@@ -4,10 +4,16 @@ const PLATFORM_LABELS: Record<VideoPlatform, string> = {
   youtube: "YouTube",
   bilibili: "Bilibili",
   pornhub: "Pornhub",
+  generic: "",
 };
 
-export function videoPlatformLabel(platform: VideoPlatform): string {
-  return PLATFORM_LABELS[platform];
+export function videoPlatformLabel(platform: VideoPlatform, rawUrl = ""): string {
+  if (platform !== "generic") return PLATFORM_LABELS[platform];
+  try {
+    return new URL(rawUrl).hostname.replace(/^www\./i, "") || "Web video";
+  } catch {
+    return "Web video";
+  }
 }
 
 export function cleanVideoPageTitle(title: string): string {

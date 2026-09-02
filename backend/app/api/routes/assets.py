@@ -3,12 +3,12 @@ from __future__ import annotations
 import mimetypes
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, Response, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import or_, select
 
 from app.api.deps import CurrentUser, DbSession, PresentedToken
-from app.api.schemas import AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, AssetUpdate, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, VideoToGifRequest
+from app.api.schemas import AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, AssetUpdate, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, UrlSupportResponse, VideoToGifRequest
 from app.domain.voices.transcription import ASRError, start_transcription
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, require_asset
 from app.db.models import Asset, Clip, Job, Transcript, Project
@@ -25,6 +25,25 @@ from app.media.thumbnails import generate_thumbnail, thumbnail_path
 from app.media.waveform import waveform_path
 
 router = APIRouter(tags=["assets"])
+
+
+@router.get("/assets/url-support", response_model=UrlSupportResponse)
+def url_support(
+    workspace_id: str,
+    db: DbSession,
+    user: CurrentUser,
+    url: str = Query(min_length=4, max_length=2000),
+) -> dict[str, str | bool]:
+    """Classify a page through yt-dlp's registry without downloading it.
+
+    This is intentionally distinct from ``probe-url``: the side panel only needs to know whether
+    importing the active page is meaningful. It must not make the user wait for remote metadata.
+    """
+    ensure_workspace_access(db, user, workspace_id)
+    from app.media.ytdlp import matching_extractor
+
+    extractor = matching_extractor(url)
+    return {"supported": extractor is not None, "extractor": extractor or ""}
 
 
 @router.post("/assets", response_model=AssetOut)

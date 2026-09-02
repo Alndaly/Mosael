@@ -1043,6 +1043,13 @@ class UrlProbeResponse(BaseModel):
     truncated: bool = False
 
 
+class UrlSupportResponse(BaseModel):
+    """Cheap URL classification backed by yt-dlp's installed extractor registry."""
+
+    supported: bool
+    extractor: str = ""
+
+
 class UrlImportItem(BaseModel):
     url: str = Field(min_length=4, max_length=2000)
     title: str = Field(default="", max_length=300)

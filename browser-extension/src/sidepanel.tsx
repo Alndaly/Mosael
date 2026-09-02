@@ -26,10 +26,10 @@ import { Label } from "./components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
 import { Separator } from "./components/ui/separator";
 import { cropScreenshot, frameDataUrlToBlob } from "./capture";
-import { requestFrameCapturePermission } from "./frame-capture-permission";
 import { localeFromLanguage, translate, type MessageKey, type UiLocale } from "./i18n";
 import { cn } from "./lib/utils";
-import { OpenStudioClient, type Job, type Project, type Workspace } from "./openstudio/client";
+import { OpenStudioClient, type BrowserProfile, type Job, type Project, type Workspace } from "./openstudio/client";
+import { mergePolledVideoContext } from "./platforms/detect";
 import { videoPlatformLabel } from "./platforms/labels";
 import type { CapturedVideoFrame, CaptureGeometry, ContentRequest, ContentResponse } from "./shared/protocol";
 import type { Transcript, TranscriptCue, VideoContext } from "./shared/types";
@@ -42,6 +42,7 @@ type Connection = {
   workspaceId: string;
   workspaceName: string;
   projectId: string;
+  profileId: string;
 };
 
 type LocaleSetting = "auto" | UiLocale;
@@ -51,6 +52,7 @@ type TranscriptNotice = { message: string; kind: "loading" | "error" } | null;
 const CONNECTION_KEY = "openstudio.connection";
 const LOCALE_KEY = "openstudio.locale";
 const NO_PROJECT = "__none__";
+const NO_PROFILE = "__public__";
 
 const TARGET_LANGUAGES = [
   ["zh-CN", "中文"],
@@ -155,6 +157,7 @@ function App(): React.ReactElement {
   const [connecting, setConnecting] = React.useState(false);
   const [workspaces, setWorkspaces] = React.useState<Workspace[]>([]);
   const [projects, setProjects] = React.useState<Project[]>([]);
+  const [profiles, setProfiles] = React.useState<BrowserProfile[]>([]);
 
   const [activeTab, setActiveTab] = React.useState<chrome.tabs.Tab | null>(null);
   const activeTabRef = React.useRef<chrome.tabs.Tab | null>(null);
@@ -198,15 +201,20 @@ function App(): React.ReactElement {
     const nextWorkspaces = available || await api.listWorkspaces();
     if (nextWorkspaces.length === 0) throw new Error(t("noWorkspace"));
     const workspace = nextWorkspaces.find((item) => item.id === value.workspaceId) || nextWorkspaces[0];
-    const nextProjects = await api.listProjects(workspace.id);
+    const [nextProjects, nextProfiles] = await Promise.all([
+      api.listProjects(workspace.id),
+      api.listBrowserProfiles(workspace.id),
+    ]);
     const next = {
       ...value,
       workspaceId: workspace.id,
       workspaceName: workspace.name,
       projectId: nextProjects.some((item) => item.id === value.projectId) ? value.projectId : "",
+      profileId: nextProfiles.some((item) => item.id === value.profileId && item.enabled) ? value.profileId : "",
     };
     setWorkspaces(nextWorkspaces);
     setProjects(nextProjects);
+    setProfiles(nextProfiles.filter((item) => item.enabled));
     await persistConnection(next);
   }, [apiFor, persistConnection, t]);
 
@@ -224,6 +232,23 @@ function App(): React.ReactElement {
     setTranscriptNotice({ message: t("readingPage"), kind: "loading" });
     try {
       nextContext = await sendToTab<VideoContext>(tab, { type: "GET_CONTEXT" }, t);
+      if (version !== refreshVersion.current) return;
+      if (!nextContext.supported && connection?.token && connection.workspaceId) {
+        try {
+          const support = await apiFor(connection).supportsVideoUrl(connection.workspaceId, nextContext.url);
+          if (support.supported) {
+            nextContext = {
+              ...nextContext,
+              supported: true,
+              platform: "generic",
+              extractor: support.extractor,
+            };
+          }
+        } catch {
+          // URL classification is an enhancement. A disconnected backend must not replace the
+          // more useful page-level state with a connection error.
+        }
+      }
       if (version !== refreshVersion.current) return;
       setContext(nextContext);
       if (!nextContext.supported) {
@@ -246,7 +271,7 @@ function App(): React.ReactElement {
       if (version !== refreshVersion.current) return;
       const raw = cause instanceof Error ? cause.message : String(cause);
       setTranscriptNotice({ message: localizePageError(raw, t), kind: "error" });
-      setCanGenerate(Boolean(nextContext?.supported || /youtube|bilibili|pornhub/i.test(tab?.url || "")));
+      setCanGenerate(Boolean(nextContext?.supported));
     }
   }, [apiFor, connection, t]);
 
@@ -291,7 +316,7 @@ function App(): React.ReactElement {
     const timer = window.setInterval(() => {
       if (!document.hidden && activeTabRef.current) {
         void sendToTab<VideoContext>(activeTabRef.current, { type: "GET_CONTEXT" }, t)
-          .then(setContext)
+          .then((polled) => setContext((current) => mergePolledVideoContext(current, polled)))
           .catch(() => undefined);
       }
     }, 600);
@@ -330,6 +355,7 @@ function App(): React.ReactElement {
         workspaceId: workspace.id,
         workspaceName: workspace.name,
         projectId: "",
+        profileId: "",
       };
       setConnection(next);
       setPassword("");
@@ -351,6 +377,7 @@ function App(): React.ReactElement {
     await persistConnection(null);
     setWorkspaces([]);
     setProjects([]);
+    setProfiles([]);
     setSettingsNotice({ message: t("disconnectedMessage"), error: false });
   };
 
@@ -372,6 +399,11 @@ function App(): React.ReactElement {
     await persistConnection({ ...connection, projectId: projectId === NO_PROJECT ? "" : projectId });
   };
 
+  const changeProfile = async (profileId: string) => {
+    if (!connection) return;
+    await persistConnection({ ...connection, profileId: profileId === NO_PROFILE ? "" : profileId });
+  };
+
   const generateTranscript = async () => {
     if (!context?.supported) throw new Error(t("supportedVideoRequired"));
     const destination = requireConnection();
@@ -383,6 +415,7 @@ function App(): React.ReactElement {
         projectId: destination.projectId || null,
         url: context.url,
         title: context.title,
+        profileId: destination.profileId || null,
         onProgress: (stage: "import" | "transcribe", job: Job) => {
           const percent = Math.round(Math.max(0, Math.min(1, Number(job.progress) || 0)) * 100);
           const progress = percent ? ` ${percent}%` : "";
@@ -446,6 +479,7 @@ function App(): React.ReactElement {
         destination.projectId || null,
         context.url,
         context.title,
+        destination.profileId || null,
       );
       showToast(t("importCreated", { id: job.id }));
     } finally {
@@ -454,14 +488,10 @@ function App(): React.ReactElement {
   };
 
   const captureCurrentFrame = async () => {
-    if (!activeTab?.windowId) throw new Error(t("noActiveTab"));
+    if (!activeTab?.windowId || !context?.playable) throw new Error(t("playableVideoRequired"));
     const destination = requireConnection();
     setCaptureBusy(true);
     try {
-      // Request before the first await so Chrome still associates it with the button click.
-      // `activeTab` is temporary and may have expired while this persistent panel stayed open.
-      const permitted = await requestFrameCapturePermission().catch(() => false);
-      if (!permitted) throw new Error(t("capturePermissionDenied"));
       let frame: CapturedVideoFrame | null = null;
       try {
         frame = await sendToTab<CapturedVideoFrame>(activeTab, { type: "CAPTURE_VIDEO_FRAME" }, t);
@@ -575,6 +605,17 @@ function App(): React.ReactElement {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-2">
+                <Label>{t("browserIdentityOptional")}</Label>
+                <Select value={connection.profileId || NO_PROFILE} onValueChange={(value) => run(() => changeProfile(value))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_PROFILE}>{t("publicAccess")}</SelectItem>
+                    {profiles.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs leading-relaxed text-muted-foreground">{t("browserIdentityHelp")}</p>
+              </div>
               <Button className="w-full" variant="destructive" onClick={() => void disconnect()}><Unplug />{t("disconnect")}</Button>
             </div>
           )}
@@ -591,11 +632,11 @@ function App(): React.ReactElement {
           {context?.supported ? (
             <>
               <section className="space-y-3 border-b border-border p-4">
-                <div className="flex items-center gap-2"><Badge>{context.platform ? videoPlatformLabel(context.platform) : ""}</Badge><span className="text-xs text-muted-foreground">{context.duration > 0 ? formatTime(context.duration) : ""}</span></div>
+                <div className="flex items-center gap-2"><Badge>{context.platform ? videoPlatformLabel(context.platform, context.url) : ""}</Badge><span className="text-xs text-muted-foreground">{context.duration > 0 ? formatTime(context.duration) : ""}</span></div>
                 <h1 className="break-words text-base font-bold leading-snug">{context.title}</h1>
                 <div className="grid grid-cols-1 gap-2 min-[440px]:grid-cols-2">
                   <Button variant="outline" loading={importBusy} onClick={() => run(importCurrentVideo)}><Download />{t("importVideo")}</Button>
-                  <Button variant="outline" loading={captureBusy} onClick={() => run(captureCurrentFrame)}><Camera />{t("captureFrame")}</Button>
+                  <Button variant="outline" loading={captureBusy} disabled={!context.playable} title={!context.playable ? t("playableVideoRequired") : undefined} onClick={() => run(captureCurrentFrame)}><Camera />{t("captureFrame")}</Button>
                 </div>
               </section>
 
@@ -641,6 +682,7 @@ function App(): React.ReactElement {
                         <Button
                           variant="ghost"
                           className="mr-1 h-auto w-12 shrink-0 justify-start rounded-md p-0 pt-0.5 font-mono text-[11px] font-normal text-muted-foreground"
+                          disabled={!context.playable}
                           onClick={() => run(async () => { await sendToTab(activeTab, { type: "SEEK", seconds: cue.start }, t); setContext((current) => current ? { ...current, currentTime: cue.start } : current); })}
                         >
                           {formatTime(cue.start)}
@@ -655,6 +697,7 @@ function App(): React.ReactElement {
                                   "inline h-auto min-w-0 rounded-sm px-0.5 py-0 align-baseline font-normal leading-[inherit] text-inherit",
                                   context && context.currentTime >= token.start && context.currentTime < token.end && "bg-primary/25",
                                 )}
+                                disabled={!context.playable}
                                 onClick={() => run(async () => { await sendToTab(activeTab, { type: "SEEK", seconds: token.start }, t); setContext((current) => current ? { ...current, currentTime: token.start } : current); })}
                               >
                                 <Highlight value={token.text} query={query} />
@@ -664,6 +707,7 @@ function App(): React.ReactElement {
                             <Button
                               variant="ghost"
                               className="inline h-auto min-w-0 whitespace-normal rounded-sm p-0 text-left align-baseline font-normal leading-[inherit] text-inherit"
+                              disabled={!context.playable}
                               onClick={() => run(async () => { await sendToTab(activeTab, { type: "SEEK", seconds: cue.start }, t); setContext((current) => current ? { ...current, currentTime: cue.start } : current); })}
                             >
                               <Highlight value={cue.text} query={query} />

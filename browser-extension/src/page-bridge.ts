@@ -89,7 +89,7 @@ async function readTranscript(trackId?: string): Promise<Transcript> {
   const platform = detectVideoPlatform(location.href);
   if (platform === "youtube") return readYouTubeTranscript(trackId);
   if (platform === "bilibili") return readBilibiliTranscript(trackId);
-  if (platform === "pornhub") throw new Error("当前视频没有可用字幕");
+  if (platform === "pornhub" || platform === "generic") throw new Error("当前站点没有可直接读取的字幕");
   throw new Error("当前页面暂不支持逐字稿");
 }
 

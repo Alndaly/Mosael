@@ -85,6 +85,8 @@ def test_error_messages_say_what_to_do() -> None:
     assert "私有" in ytdlp._explain(Exception("ERROR: Private video. Sign in if you've been granted access"))
     assert "下架" in ytdlp._explain(Exception("ERROR: Video unavailable"))
     assert "超时" in ytdlp._explain(Exception("ERROR: The read operation timed out"))
+    assert "浏览器档案" in ytdlp._explain(Exception("HTTP Error 412: Precondition Failed"))
+    assert "代理" in ytdlp._explain(Exception("Your IP address is blocked from accessing this post"))
     # 认不出来的照样要给一句话,而不是空串。
     assert ytdlp._explain(Exception("something else entirely")).strip()
 
@@ -222,3 +224,53 @@ def test_probe_start_shifts_the_window() -> None:
         assert captured["playlist_items"] == f"201-{200 + ytdlp.MAX_ENTRIES}"
     finally:
         sys.modules.pop("yt_dlp", None)
+
+
+def test_url_support_uses_the_installed_ytdlp_registry() -> None:
+    assert ytdlp.matching_extractor("https://vimeo.com/76979871") == "vimeo"
+    assert ytdlp.matching_extractor("https://www.dailymotion.com/video/x84sh87") == "dailymotion"
+    assert ytdlp.matching_extractor("https://www.tiktok.com/@scout2015/video/6718335390845095173") == "TikTok"
+    assert ytdlp.matching_extractor("https://soundcloud.com/iameden/rock-roll") == "soundcloud"
+    assert ytdlp.matching_extractor("https://example.com/video") is None
+    assert ytdlp.matching_extractor("file:///tmp/video.mp4") is None
+
+
+def test_url_support_api_exposes_registry_matching_without_network() -> None:
+    client = fresh_client()
+    workspace_id = _workspace(client)
+    response = client.get(
+        "/api/assets/url-support",
+        params={"workspace_id": workspace_id, "url": "https://vimeo.com/76979871"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"supported": True, "extractor": "vimeo"}
+
+
+def test_every_ytdlp_site_extractor_with_a_sample_remains_routable() -> None:
+    """Exercise the entire installed registry without hitting 1,750 remote services.
+
+    Live calls to every extractor are impossible (many require accounts, geo access or deleted
+    media), but each extractor ships canonical test URLs. Every such site must still route through
+    the same registry used by ``url-support`` after a yt-dlp upgrade.
+    """
+    unmatched: list[str] = []
+    checked = 0
+    for extractor in ytdlp.extractor_classes():
+        samples = getattr(extractor, "_TESTS", ()) or ()
+        sample = next(
+            (
+                str(item.get("url"))
+                for item in samples
+                if isinstance(item, dict)
+                and str(item.get("url") or "").lower().startswith(("http://", "https://"))
+            ),
+            "",
+        )
+        if not sample:
+            continue
+        checked += 1
+        matched = ytdlp.matching_extractor(sample)
+        if matched != str(extractor.IE_NAME):
+            unmatched.append(f"{extractor.IE_NAME} routed to {matched}: {sample}")
+    assert checked >= 1_000
+    assert unmatched == []
