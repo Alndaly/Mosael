@@ -35,6 +35,46 @@ final result: passed
 
 ---
 
+## Settings typography hierarchy
+
+### Comparison target
+
+- Source visual truth: `/var/folders/yw/0kg9jbhj3xx00gq05_14d1lw0000gn/T/TemporaryItems/NSIRD_screencaptureui_Zkwqbt/Screenshot 2026-09-02 at 18.32.56.png`.
+- Browser-rendered implementation: `docs/media/design-qa/settings-hierarchy/implementation.png`.
+- Equal-density focused comparison: `docs/media/design-qa/settings-hierarchy/comparison.png`.
+- State: light theme, Settings → Appearance, production `SettingsView` and shared settings components rendered through an isolated visual-QA entry so no user account data is needed.
+
+### Viewport and normalization
+
+- Source pixels: `3456 × 2234`, representing a `1728 × 1117` CSS-pixel Electron capture at 2× density.
+- Implementation viewport and pixels: `1728 × 1117` at device pixel ratio `1`.
+- Focused comparison: the 66 px Electron application header was removed from the source, both settings regions were normalized to `1728 × 1084`, and the results were placed side by side.
+
+### Findings
+
+No actionable P0/P1/P2 findings remain in the requested settings hierarchy.
+
+- Fonts and typography: the first group now establishes the page at `22px / 700`; later group titles use `18px / 650`; setting labels use `15px / 600`; row descriptions use `13px / 1.5`. This creates three immediately visible reading levels without enlarging control text or changing the application's global scale.
+- Spacing and layout rhythm: group header padding, row label/description spacing, row height, and inter-group separators were increased slightly. The page remains compact while labels no longer visually merge with their supporting copy.
+- Colors and visual tokens: foreground, muted foreground, selected navigation, borders, and surfaces remain on the existing semantic tokens. Hierarchy comes from size, weight, and rhythm rather than new cards, shadows, or accent colors.
+- Controls and alignment: theme, language, background, reset, and CSS actions retain their existing dimensions and right alignment. The larger copy does not collide with or shift the controls at the tested source viewport.
+- Reuse and consistency: the change lives in the shared `SettingsGroup`, `SettingsRow`, `SettingsField`, and `SettingsSectionStack` primitives, so every settings section receives the same hierarchy instead of accumulating page-specific overrides.
+
+### Comparison history
+
+1. Baseline: the page title, group titles, row labels, and explanations sat within a narrow visual range, so horizontal dividers carried most of the information hierarchy.
+2. Revised capture: a `22 / 18 / 15 / 13` type ladder and slightly wider vertical intervals make page, section, action label, and explanation readable at a glance. The combined comparison showed no clipping, wrapping regression, or control misalignment.
+
+### Verification
+
+- `pnpm --dir frontend exec vitest run src/features/settings/ui.dom.test.tsx` — 5 tests passed.
+- `pnpm --dir frontend exec tsc --noEmit` — passed.
+- In-app browser computed-style verification confirmed `22px/700`, `18px/650`, `15px/600`, and `13px/19.5px` at the normalized source viewport.
+
+final result: passed
+
+---
+
 ## Desktop status icon
 
 ### Visual truth and implementation evidence

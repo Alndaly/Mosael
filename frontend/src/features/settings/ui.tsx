@@ -44,12 +44,24 @@ export function SettingsGroup({
         data-slot="settings-group-header"
         className={cn(
           "flex items-center justify-between gap-4 px-0.5",
-          hasContent && "border-b border-border/70 pb-2.5",
+          hasContent && "border-b border-border/70 pb-3",
         )}
       >
         <div className="min-w-0">
-          <h2 className="m-0 text-[17px] font-[650] leading-[1.3] tracking-[-0.015em]">{title}</h2>
-          {description && <p className="mb-0 mt-[5px] text-ui-sm leading-[1.55] text-muted-foreground">{description}</p>}
+          <h2
+            data-slot="settings-group-title"
+            className="m-0 text-[18px] font-[650] leading-[1.25] tracking-[-0.018em]"
+          >
+            {title}
+          </h2>
+          {description && (
+            <p
+              data-slot="settings-group-description"
+              className="mb-0 mt-1.5 max-w-[72rem] text-[13.5px] leading-[1.55] text-muted-foreground"
+            >
+              {description}
+            </p>
+          )}
         </div>
         {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
       </header>
@@ -81,10 +93,14 @@ export function SettingsRow({
   children?: React.ReactNode;
 }) {
   return (
-    <div id={id} className={cn("grid grid-cols-[minmax(0,1fr)_auto] items-center gap-5 px-0.5 py-3", className)}>
-      <div className="grid min-w-0 gap-0.5">
-        <span className="text-ui-md font-medium">{label}</span>
-        {description && <small className="text-xs leading-[1.45] text-muted-foreground">{description}</small>}
+    <div id={id} className={cn("grid grid-cols-[minmax(0,1fr)_auto] items-center gap-5 px-0.5 py-3.5", className)}>
+      <div className="grid min-w-0 gap-1">
+        <span data-slot="settings-row-label" className="text-[15px] font-semibold leading-[1.35]">{label}</span>
+        {description && (
+          <small data-slot="settings-row-description" className="text-[13px] leading-[1.5] text-muted-foreground">
+            {description}
+          </small>
+        )}
       </div>
       {children && <div className={cn("flex shrink-0 items-center gap-1.5", controlClassName)}>{children}</div>}
     </div>
@@ -134,13 +150,13 @@ export function SettingsSectionStack({
     <div
       data-slot="settings-section-stack"
       className={cn(
-        "grid h-full min-h-0 content-start [&>[data-slot=settings-group]:only-child]:h-full [&>[data-slot=settings-group]:only-child]:min-h-0 [&>[data-slot=settings-group]:only-child]:grid-rows-[auto_minmax(0,1fr)]",
+        "grid h-full min-h-0 content-start [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-description]]:text-ui-md [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-title]]:text-[22px] [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-title]]:font-bold [&>[data-slot=settings-group]:only-child]:h-full [&>[data-slot=settings-group]:only-child]:min-h-0 [&>[data-slot=settings-group]:only-child]:grid-rows-[auto_minmax(0,1fr)]",
         className,
       )}
     >
       {sections.map((section, index) => (
         <React.Fragment key={React.isValidElement(section) && section.key != null ? String(section.key) : index}>
-          {index > 0 && <Separator className="my-2.5 bg-border/70" />}
+          {index > 0 && <Separator className="my-3.5 bg-border/70" />}
           {section}
         </React.Fragment>
       ))}
@@ -168,8 +184,8 @@ export function SettingsField({
 }) {
   return (
     <label className={cn("grid min-w-0 gap-1.5", className)}>
-      <span className="text-ui-sm font-semibold text-foreground">{label}</span>
-      {description && <small className="text-ui-xs leading-[1.45] text-muted-foreground">{description}</small>}
+      <span className="text-[15px] font-semibold leading-[1.35] text-foreground">{label}</span>
+      {description && <small className="text-[13px] leading-[1.5] text-muted-foreground">{description}</small>}
       {children}
     </label>
   );

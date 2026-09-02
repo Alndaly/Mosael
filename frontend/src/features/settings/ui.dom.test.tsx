@@ -37,6 +37,30 @@ describe("settings section layout", () => {
     expect(container.querySelectorAll('[data-slot="separator"]')).toHaveLength(2);
   });
 
+  it("gives the page, section, and row copy distinct typography levels", () => {
+    const { container } = render(
+      <SettingsSectionStack>
+        <SettingsGroup title="外观" description="界面主题与语言">
+          <SettingsRow label="主题" description="跟随系统自动切换">
+            深色
+          </SettingsRow>
+        </SettingsGroup>
+        <SettingsGroup title="背景与磨玻璃" />
+      </SettingsSectionStack>,
+    );
+
+    const stack = container.querySelector('[data-slot="settings-section-stack"]');
+    const titles = container.querySelectorAll('[data-slot="settings-group-title"]');
+    const rowLabel = container.querySelector('[data-slot="settings-row-label"]');
+    const rowDescription = container.querySelector('[data-slot="settings-row-description"]');
+
+    expect(stack?.className).toContain("first-child_[data-slot=settings-group-title]");
+    expect(titles[0]).toHaveClass("text-[18px]");
+    expect(titles[1]).toHaveClass("text-[18px]");
+    expect(rowLabel).toHaveClass("text-[15px]", "font-semibold");
+    expect(rowDescription).toHaveClass("text-[13px]", "leading-[1.5]");
+  });
+
   it("renders settings collections as divided flat rows", () => {
     const { container } = render(
       <SettingsList>
