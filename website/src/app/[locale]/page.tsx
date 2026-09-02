@@ -27,7 +27,7 @@ const CHAPTER_TONES = [
 
 function ProductShot({ src, alt, width, height, priority = false }: { src: string; alt: string; width: number; height: number; priority?: boolean }) {
   return (
-    <figure className="m-0 overflow-hidden rounded-[1.5rem] border border-white/12 bg-[#0e0c13]">
+    <figure className="m-0">
       <Image src={src} alt={alt} width={width} height={height} priority={priority} sizes="(min-width: 1024px) 78vw, 100vw" className="block h-auto w-full" />
     </figure>
   );

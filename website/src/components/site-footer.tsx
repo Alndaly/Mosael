@@ -49,20 +49,20 @@ export function SiteFooter({ locale }: { locale: Locale }) {
   return (
     <footer className="bg-[#17141f] text-[#fbf9ff]">
       <div className="mx-auto max-w-[92rem]">
-        <div className="grid gap-12 px-6 py-16 sm:px-10 lg:grid-cols-[1.55fr_repeat(3,1fr)] lg:gap-12 lg:px-14 lg:py-20">
+        <div className="grid gap-16 px-6 py-20 sm:px-10 lg:grid-cols-[1.55fr_repeat(3,1fr)] lg:gap-16 lg:px-14 lg:py-24">
           <div>
             <Link href={localePath(locale)} className="inline-flex">
               <BrandWordmark className="w-32" />
             </Link>
-            <p className="mt-5 mb-0 max-w-xs text-sm leading-6 text-white/52">{t.footer.tagline}</p>
+            <p className="mt-8 mb-0 max-w-xs text-sm leading-7 text-white/52">{t.footer.tagline}</p>
           </div>
 
           {columns.map((column) => (
             <nav key={column.title} className="text-sm">
-              <p className="m-0 mb-4 text-xs font-semibold tracking-[0.14em] text-[#b9a9ff] uppercase">
+              <p className="m-0 mb-6 text-xs font-semibold tracking-[0.14em] text-[#b9a9ff] uppercase">
                 {column.title}
               </p>
-              <ul className="m-0 list-none space-y-3 p-0">
+              <ul className="m-0 list-none space-y-4 p-0 leading-6">
                 {column.links.map((link) => (
                   <li key={link.href} className="m-0">
                     {"external" in link && link.external ? (

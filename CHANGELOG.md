@@ -3,6 +3,16 @@
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 
+## Unreleased
+
+### Fixed
+
+- Extended inner-page hero backgrounds behind the floating navigation instead of leaving a separate page-color
+  strip above Workflows, Plugins, and plugin details.
+- Removed redundant screenshot shells from homepage product chapters and tightened the Mosael wordmark asset so
+  footer alignment, navigation sizing, and closing-brand spacing follow the visible artwork rather than transparent padding.
+- Increased footer group and link spacing so the lower navigation remains easy to scan in both languages.
+
 ## [0.27.6] - 2026-09-02
 
 ### Changed

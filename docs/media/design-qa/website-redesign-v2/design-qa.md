@@ -5,6 +5,9 @@
 - User correction reference: `Screenshot 2026-09-02 at 20.33.04.png` (2256×522)
 - Prototype capture: `prototype-home-final.png` (1440×930)
 - Side-by-side comparison: `reference-vs-prototype-final.png`
+- Inner-page seam check: `workflows-seam-final.png` (1440×930)
+- Screenshot-shell check: `home-framing-final.png` (1440×930)
+- Footer alignment check: `footer-spacing-final.png` (1440×930)
 - Responsive check: 390×844
 
 ## Direction
@@ -31,6 +34,11 @@ the footer instead of stopping at the homepage.
   chapter numerals instead of four rounded cards.
 - Workflows and Plugins use open page headers, full-width product proof, hairline-separated rows, and dark
   emphasis bands; plugin details and docs share the same lighter hierarchy.
+- The inner-page radial background begins at the top of the viewport and remains visible behind the floating
+  header, without a separate paper-colored strip.
+- Homepage product captures render without a second border, background, or rounded shell around the window
+  already present in the supplied image.
+- The tightly cropped wordmark aligns with the footer copy, and link groups use a more relaxed vertical rhythm.
 - The 390 px layout keeps both primary actions on screen, preserves headline hierarchy, and turns navigation
   into a functional full-screen menu.
 - The mobile menu is rendered outside the blurred header containing block, so it fills the viewport rather

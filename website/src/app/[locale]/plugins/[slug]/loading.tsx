@@ -10,7 +10,7 @@
  */
 export default function PluginDetailLoading() {
   return (
-    <div className="bg-paper">
+    <div className="-mt-20 bg-paper pt-20">
       <div className="mx-auto max-w-[72rem] animate-pulse px-5 py-16 sm:px-8">
         <div className="h-4 w-28 bg-muted" />
 

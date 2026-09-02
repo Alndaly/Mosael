@@ -14,10 +14,10 @@ export function BrandIcon({ size = 32, className }: { size?: number; className?:
 export function BrandWordmark({ className, priority = false }: { className?: string; priority?: boolean }) {
   return (
     <Image
-      src="/brand/mosael-wordmark.png"
+      src="/brand/mosael-wordmark-tight.png"
       alt="Mosael"
-      width={1086}
-      height={362}
+      width={1456}
+      height={234}
       priority={priority}
       unoptimized
       className={cn("h-auto object-contain", className)}
