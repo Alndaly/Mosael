@@ -3,6 +3,15 @@
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 
+## [0.27.3] - 2026-09-02
+
+### Changed
+
+- Strengthened the visual hierarchy across Settings with a clearer page, section, item, and
+  supporting-copy type scale, plus more deliberate row and section spacing.
+- Kept controls, dividers, and the flat panel structure unchanged so the denser information remains
+  familiar while becoming easier to scan.
+
 ## [0.27.2] - 2026-09-02
 
 ### Changed
@@ -137,6 +146,7 @@ commit list and downloadable artifacts.
   flashing each section's list page first.
 - Prevented the editor assistant from covering the workspace when opened.
 
+[0.27.3]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.3
 [0.27.2]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.2
 [0.27.1]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.1
 [0.27.0]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.0
