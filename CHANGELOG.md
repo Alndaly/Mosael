@@ -7,6 +7,8 @@ commit list and downloadable artifacts.
 
 ### Changed
 
+- Retired the legacy `openstudio://` deep-link scheme; desktop navigation now accepts only the registered
+  `mosael://` protocol.
 - Updated the homepage hero and editing chapter to use the supplied current editor capture, and added a
   dedicated media-management chapter with the supplied library and recording view.
 

@@ -36,7 +36,6 @@ const ALLOWED_VIEWS = new Set([
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
 export const PROTOCOL = "mosael";
-const LEGACY_PROTOCOL = "openstudio";
 
 export interface DeepLink {
   view: string;
@@ -52,7 +51,7 @@ export function parseDeepLink(raw: string): DeepLink | null {
   } catch {
     return null;
   }
-  if (url.protocol !== `${PROTOCOL}:` && url.protocol !== `${LEGACY_PROTOCOL}:`) return null;
+  if (url.protocol !== `${PROTOCOL}:`) return null;
   // mosael://open?... —— host 是 "open",其余动作一律不认(见文件头:只导航)。
   if (url.hostname !== "open") return null;
 
@@ -68,7 +67,7 @@ export function parseDeepLink(raw: string): DeepLink | null {
 /** 从进程参数里挑出深链(Windows/Linux 上协议唤起是作为命令行参数传进来的)。 */
 export function deepLinkFromArgv(argv: readonly string[]): DeepLink | null {
   for (const arg of argv) {
-    if (typeof arg === "string" && (arg.startsWith(`${PROTOCOL}://`) || arg.startsWith(`${LEGACY_PROTOCOL}://`))) {
+    if (typeof arg === "string" && arg.startsWith(`${PROTOCOL}://`)) {
       const parsed = parseDeepLink(arg);
       if (parsed) return parsed;
     }
