@@ -12,6 +12,7 @@ from __future__ import annotations
 import pytest
 
 from app.domain.assets.from_url import MAX_ITEMS, UrlImportError, start_url_import
+from app.domain.assets.source_url import source_url_key
 from app.core.db import SessionLocal
 from app.media import ytdlp
 from tests.util import fresh_client
@@ -35,6 +36,13 @@ def test_flat_entries_get_a_usable_url() -> None:
     # 已经给了完整地址就用它自己的,不要覆盖成 YouTube —— yt-dlp 支持上千个站点。
     other = ytdlp._entry({"id": "1", "webpage_url": "https://www.bilibili.com/video/BV1"}, "https://x")
     assert other.url == "https://www.bilibili.com/video/BV1"
+
+
+def test_supported_video_urls_have_stable_source_identities() -> None:
+    assert source_url_key("https://cn.pornhub.com/view_video.php?viewkey=abc&utm_source=x") == "pornhub:abc"
+    assert source_url_key("https://youtu.be/video-id?t=20") == "youtube:video-id"
+    assert source_url_key("https://www.youtube.com/watch?v=video-id&feature=share") == "youtube:video-id"
+    assert source_url_key("https://www.bilibili.com/video/BV1Ab411?spm_id_from=333") == "bilibili:BV1Ab411"
 
 
 def test_refuses_an_empty_selection() -> None:

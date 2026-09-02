@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.core.db import SessionLocal
 from app.db.models import Job
 from app.domain.assets import register_file_asset
+from app.domain.assets.source_url import remember_asset_source
 from app.domain.jobs import create_job, dispatch_job, emit_job_event, say
 from app.media import ytdlp
 
@@ -85,7 +86,6 @@ def _run(job_id: str) -> None:
             return
         payload = job.payload or {}
         workspace_id = job.workspace_id
-        created_by = job.created_by
         project_id = payload.get("project_id")
         items: list[dict[str, Any]] = list(payload.get("items") or [])
         kind = str(payload.get("kind") or "video")
@@ -138,6 +138,8 @@ def _run(job_id: str) -> None:
                     name=path.name,
                     source="downloaded",
                 )
+                remember_asset_source(asset, item["url"])
+                db.commit()
                 asset_ids.append(asset.id)
             path.unlink(missing_ok=True)
             done += 1

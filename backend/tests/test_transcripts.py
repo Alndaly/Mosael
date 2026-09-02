@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from app.core.db import Base, engine
-from app.db.migrations import init_db
-from app.main import app
+from app.core.db import SessionLocal
+from app.db.models import Job
 from tests.util import fresh_client
 
 
@@ -86,3 +85,64 @@ def test_attach_validation_and_missing() -> None:
 
     no_transcript = client.get(f"/api/assets/{asset['id']}/transcript")
     assert no_transcript.status_code == 404
+
+
+def test_find_existing_transcript_by_legacy_url_import_job() -> None:
+    """扩展生成后重开侧栏，应复用既有逐字稿，不能再次要求下载和转写。"""
+    client = reset()
+    asset = make_asset(client)
+    client.put(f"/api/assets/{asset['id']}/transcript", json={"language": "zh", "segments": SEGMENTS})
+    with SessionLocal() as db:
+        db.add(Job(
+            workspace_id=asset["workspace_id"],
+            kind="url_import",
+            status="succeeded",
+            payload={
+                "items": [{
+                    "url": "https://www.pornhub.com/view_video.php?viewkey=abc123&utm_source=test",
+                    "title": "A video",
+                }],
+            },
+            result={"asset_ids": [asset["id"]]},
+        ))
+        db.commit()
+
+    response = client.get(
+        "/api/assets/transcript-by-source",
+        params={
+            "workspace_id": asset["workspace_id"],
+            "url": "https://cn.pornhub.com/view_video.php?viewkey=abc123",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["asset_id"] == asset["id"]
+    assert response.json()["segments"][0]["text"] == SEGMENTS[0]["text"]
+
+
+def test_find_existing_transcript_by_remembered_source_url() -> None:
+    client = reset()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+    asset = client.post(
+        "/api/assets",
+        json={
+            "workspace_id": workspace["id"],
+            "kind": "video",
+            "source": "downloaded",
+            "name": "Talk",
+            "file_key": "media/talk.mp4",
+            "media_info": {
+                "source_url": "https://www.youtube.com/watch?v=abc123&utm_source=old",
+                "source_url_key": "youtube:abc123",
+            },
+        },
+    ).json()
+    client.put(f"/api/assets/{asset['id']}/transcript", json={"language": "zh", "segments": SEGMENTS})
+
+    response = client.get(
+        "/api/assets/transcript-by-source",
+        params={"workspace_id": workspace["id"], "url": "https://youtu.be/abc123?t=5"},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["asset_id"] == asset["id"]

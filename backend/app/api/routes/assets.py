@@ -15,6 +15,7 @@ from app.db.models import Asset, Clip, Job, Transcript, Project
 from app.core.config import settings
 from app.domain.assets import import_uploaded_asset, register_file_asset
 from app.domain.assets.proxies import start_proxy_job
+from app.domain.assets.source_url import find_transcript_by_source
 from app.domain.transcripts import attach_transcript, get_transcript_for_asset
 from app.domain.transcripts.operations import SegmentIn, TokenIn, TranscriptDomainError
 from app.media.image_preview import browser_compatible_image
@@ -191,6 +192,16 @@ def list_assets(
         stmt = stmt.where(Asset.name.contains(name_contains))
     stmt = stmt.order_by(Asset.created_at.desc())
     return list(db.scalars(stmt))
+
+
+@router.get("/assets/transcript-by-source", response_model=TranscriptOut)
+def get_transcript_by_source(workspace_id: str, url: str, db: DbSession, user: CurrentUser) -> Transcript:
+    """Resolve a completed transcript for a previously imported video URL."""
+    ensure_workspace_access(db, user, workspace_id)
+    transcript = find_transcript_by_source(db, workspace_id, url)
+    if transcript is None:
+        raise HTTPException(status_code=404, detail="Transcript not found")
+    return transcript
 
 
 @router.get("/assets/{asset_id}", response_model=AssetOut)
