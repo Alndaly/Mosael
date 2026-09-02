@@ -633,7 +633,9 @@ app.whenReady().then(async () => {
       showWindow,
       isDev,
       iconPath: path.join(__dirname, "..", "build", "icon.png"),
-      trayIconPath: undefined,
+      trayTemplatePath: path.join(__dirname, "..", "build", "trayTemplate.png"),
+      trayLightPath: path.join(__dirname, "..", "build", "tray-light.png"),
+      trayDarkPath: path.join(__dirname, "..", "build", "tray-dark.png"),
     });
     // 渲染层把「有几个任务在跑」推上来 —— 托盘文案和防睡眠都吃这一份,系统层不反查后端。
     ipcMain.on("system:status", (_e, status) => systemHandle?.pushStatus(status || {}));

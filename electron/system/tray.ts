@@ -1,4 +1,4 @@
-import { app, Menu, nativeImage, Tray } from "electron";
+import { app, Menu, nativeImage, nativeTheme, Tray } from "electron";
 
 import { getOpenAtLogin, setOpenAtLogin } from "./loginItem";
 import type { Capability, SystemContext, SystemStatus } from "./types";
@@ -12,19 +12,47 @@ import type { Capability, SystemContext, SystemStatus } from "./types";
  * 菜单里放运行中的任务数,是因为窗口藏起来之后那是唯一能看到「它还在替我干活」的地方。
  */
 
-/** 托盘图标像素尺寸:menu bar / 通知区域都按小图标渲染,给原图会糊或过大。 */
+/** Linux 没有专用资源时仍从主图标缩到通知区域尺寸。 */
 const ICON_SIZE = 18;
 
+export interface TrayAsset {
+  path: string;
+  template: boolean;
+  dedicated: boolean;
+}
+
+/** 平台外观只决定用哪张资源；做成纯函数，免得主题切换逻辑只能靠真机撞。 */
+export function resolveTrayAsset(
+  ctx: SystemContext,
+  platform: NodeJS.Platform = process.platform,
+  dark = nativeTheme.shouldUseDarkColors,
+): TrayAsset {
+  if (platform === "darwin" && ctx.trayTemplatePath) {
+    return { path: ctx.trayTemplatePath, template: true, dedicated: true };
+  }
+  if (platform === "win32") {
+    const themed = dark ? ctx.trayDarkPath : ctx.trayLightPath;
+    if (themed) return { path: themed, template: false, dedicated: true };
+  }
+  return { path: ctx.iconPath, template: false, dedicated: false };
+}
+
 function buildIcon(ctx: SystemContext) {
-  // Mosael 的新图标本身承载品牌渐变，因此各平台都使用应用图标；旧的单色模板不再分发。
-  const template = process.platform === "darwin" && ctx.trayIconPath;
-  const image = nativeImage.createFromPath(template ? ctx.trayIconPath! : ctx.iconPath);
+  let asset = resolveTrayAsset(ctx);
+  let image = nativeImage.createFromPath(asset.path);
+  // 专用资源被误删/漏打包时退回主图标，托盘入口不能跟着消失。
+  if (image.isEmpty() && asset.path !== ctx.iconPath) {
+    asset = { path: ctx.iconPath, template: false, dedicated: false };
+    image = nativeImage.createFromPath(asset.path);
+  }
   if (image.isEmpty()) return image;
-  if (template) {
+  if (asset.template) {
     // 模板图像交给系统着色,自己不要再 resize:@2x 那份会被一起丢掉,Retina 上就糊了。
     image.setTemplateImage(true);
     return image;
   }
+  // Windows 专用图标带有 1x/2x 表示，保留它们让系统自己选择 DPI；主图标才需要缩小。
+  if (asset.dedicated) return image;
   return image.resize({ width: ICON_SIZE, height: ICON_SIZE });
 }
 
@@ -41,6 +69,13 @@ export const tray: Capability = {
 
     const trayIcon = new Tray(icon);
     let status: SystemStatus = { runningJobs: 0 };
+
+    // Windows 没有 macOS template image：准备同一标记的深浅两份，系统主题变化时即时换色。
+    const syncWindowsTheme = () => {
+      const next = buildIcon(ctx);
+      if (!next.isEmpty()) trayIcon.setImage(next);
+    };
+    if (process.platform === "win32") nativeTheme.on("updated", syncWindowsTheme);
 
     const rebuild = () => {
       const busy = status.runningJobs > 0;
@@ -82,7 +117,10 @@ export const tray: Capability = {
         status = next;
         rebuild();
       },
-      dispose: () => trayIcon.destroy(),
+      dispose: () => {
+        if (process.platform === "win32") nativeTheme.off("updated", syncWindowsTheme);
+        trayIcon.destroy();
+      },
     };
   },
 };

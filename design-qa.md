@@ -35,6 +35,43 @@ final result: passed
 
 ---
 
+## Desktop status icon
+
+### Visual truth and implementation evidence
+
+- Source visual truth: `/Users/kinda/Desktop/Codex Image Sep 2, 2026, 04_30_52 PM.png` (`1536 × 1024`, transparent RGBA; visible-mark bounds `988 × 526`).
+- Preserved source asset: `brand/mosael-tray-mark.png`.
+- Rendered implementation comparison: `docs/media/design-qa/mosael-tray/tray-comparison.png` (`960 × 240`).
+- State: supplied Mosael mark beside the generated Windows light-taskbar and dark-taskbar resources. The same alpha silhouette drives the macOS template resource.
+- Density normalization: the source mark is shown at `280 × 149`; the `32 × 32` 2× tray outputs are enlarged with nearest-neighbor sampling so their actual pixel decisions remain visible rather than being smoothed by the QA sheet.
+
+### Findings
+
+No actionable P0, P1, or P2 findings remain.
+
+- Fonts and typography: not applicable; the persistent status item is icon-only and introduces no text.
+- Spacing and layout rhythm: macOS uses an `18 × 18` logical canvas with a `36 × 36` Retina representation. Windows uses `16 × 16` plus `32 × 32` 2× resources. The wide mark is optically centered with transparent breathing room and no background tile or shadow.
+- Colors and visual tokens: macOS receives a template image so the OS owns menu-bar contrast. Windows receives the same silhouette in black for light taskbars and white for dark taskbars, switching with `nativeTheme`.
+- Image quality and asset fidelity: all six runtime resources are rasterized directly from the supplied transparent PNG. The wave, crossing cut, lower curve, and detached dot remain recognizable at native status-icon size; no SVG, CSS drawing, or substitute glyph was introduced.
+- Copy and content: not applicable; tray tooltip and menu copy remain unchanged.
+
+### Comparison history
+
+1. The previous tray template used an unrelated node/graph glyph, while Windows reused the square application icon (P1 brand mismatch).
+2. The supplied mark was cropped to its real alpha bounds and rendered as platform-sized 1×/2× resources. The combined light/dark comparison shows no clipping, background fringe, or lost detached dot.
+
+### Verification
+
+- `pnpm typecheck:electron` — passed.
+- `pnpm --dir frontend exec vitest run ../electron/system/tray.test.ts` — 4 tests passed.
+- `pnpm build:system` — passed.
+- An unpacked macOS package built successfully from the local Electron distribution; `app.asar` contains the macOS template pair and both Windows light/dark 1×/2× pairs.
+- Focused-region evidence was not split out because the comparison sheet is already a single-purpose, pixel-enlarged icon study.
+
+final result: passed
+
+---
+
 ## Empty states, agent controls, and context meter
 
 - Source visual truth: the user-supplied workflow, board, browser-pool, publish, media, settings, and AI Studio screenshots from 2026-09-02.
