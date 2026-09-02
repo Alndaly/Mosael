@@ -5,6 +5,8 @@ commit list and downloadable artifacts.
 
 ## Unreleased
 
+## [1.0.0-beta1] - 2026-09-03
+
 ### Changed
 
 - Consolidated compatibility handling around one rule: owned data migrates once to the current shape,
@@ -17,6 +19,8 @@ commit list and downloadable artifacts.
   `mosael://` protocol.
 - Updated the homepage hero and editing chapter to use the supplied current editor capture, and added a
   dedicated media-management chapter with the supplied library and recording view.
+- Extended the release gate to build the browser extension and bilingual website, and kept beta tags as
+  GitHub prereleases instead of replacing the latest stable release.
 
 ### Fixed
 
@@ -34,6 +38,12 @@ commit list and downloadable artifacts.
 - Removed redundant screenshot shells from homepage product chapters and tightened the Mosael wordmark asset so
   footer alignment, navigation sizing, and closing-brand spacing follow the visible artwork rather than transparent padding.
 - Increased footer group and link spacing so the lower navigation remains easy to scan in both languages.
+- Normalized Settings section rhythm and full-width form rows, with the current password separated from
+  the new-password pair so account editing follows the same hierarchy as the other settings pages.
+- Serialized creative-board autosaves, waited for server confirmation before clearing pending state, and
+  retained the latest canvas for a later retry after a failed write.
+- Released AI sidecar steering channels on provider errors, callback failures, timeouts, and aborts as well
+  as successful turns, preventing stale sessions and child processes from lingering.
 
 ## [0.27.6] - 2026-09-02
 
@@ -219,6 +229,10 @@ commit list and downloadable artifacts.
   flashing each section's list page first.
 - Prevented the editor assistant from covering the workspace when opened.
 
+[1.0.0-beta1]: https://github.com/Alndaly/Mosael/releases/tag/v1.0.0-beta1
+[0.27.6]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.6
+[0.27.5]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.5
+[0.27.4]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.4
 [0.27.3]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.3
 [0.27.2]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.2
 [0.27.1]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.1
