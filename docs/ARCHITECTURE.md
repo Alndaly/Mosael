@@ -16,7 +16,8 @@
 
 `browser-extension/` 是独立分发的 Chrome MV3 客户端，不进 Electron 安装包。点击工具栏图标由
 `chrome.sidePanel` 打开原生侧栏；`page-bridge` 在站点主世界读取 YouTube / B 站自己的播放器与字幕
-对象，隔离世界里的 `content` 只转发数据、定位 `<video>` 和执行时间跳转，`sidepanel` 负责 UI 与
+对象，并明确标记 Pornhub 当前没有结构化字幕；隔离世界里的 `content` 只转发数据、从多个候选中选择
+真正可见且可播放的 `<video>`、执行词/句级时间跳转与视频像素截帧，`sidepanel` 负责 UI 与
 Open Studio API。网页中没有可见注入节点，也没有悬浮层。
 
 侧栏本身是 React 19 入口 `sidepanel.tsx`，表单与交互控件只经扩展自己的 `components/ui/`（Radix /
@@ -25,14 +26,17 @@ shadcn）暴露，布局使用 Tailwind v4 utility；`styles.css` 只保留 Tail
 `i18n.ts` 管理，支持跟随浏览器或固定简中 / English，选择保存在 `chrome.storage.local`。
 
 扩展复用公开 API：`/api/translate`、`/api/assets/import-url`、`/api/assets/{id}/transcribe`、
-`/api/jobs/{id}`、`/api/assets/{id}/transcript` 与 `/api/assets/import`，所以双语回退、无字幕自动转写、
+`/api/jobs/{id}`、`/api/assets/{id}/transcript`、`/api/assets/transcript-by-source` 与 `/api/assets/import`，
+所以双语回退、无字幕自动转写、已生成逐字稿恢复、
 工作区权限、后台任务和素材入库仍走原来的事实源。它用 `/api/auth/login` 换取独立 `AuthSession`，
 只把会话保存到 `chrome.storage.local`，不保存密码；后端 CORS 仅额外接受形如
 `chrome-extension://[a-p]{32}` 的真实扩展 Origin，接口本身仍逐条认证和鉴权。
 
 扩展故意不申请 `cookies` 权限：浏览器 Cookie 不会被导出到后端。受限视频下载仍应从 Open Studio
-里选浏览器池档案；扩展的一键导入适用于后端可直接获取的当前链接。截帧也不直接对跨域 `<video>`
-做 `drawImage`（那会污染 Canvas），而是用 `captureVisibleTab` 后按播放器可见矩形裁切。
+里选浏览器池档案；扩展的一键导入适用于后端可直接获取的当前链接。截帧优先对 origin-clean 的
+`<video>` 直接 `drawImage`，保留媒体固有分辨率且不含 HTML 控件；跨域媒体污染 Canvas 时，隔离世界
+临时隐藏覆盖在视频矩形上的页面元素和原生 controls，等两个 animation frame 后再由侧栏
+`captureVisibleTab` 裁切，最终无论哪条路径都只入库视频画面。
 
 ## 后端:领域内核 + 薄路由
 

@@ -8,17 +8,28 @@
 `browser-extension/` 有三个运行世界，不能为了少一层消息把它们揉在一起：
 
 - `page-bridge.ts` 在页面主世界，只读站点播放器/字幕对象；不得持有 Open Studio token。
-- `content.ts` 在隔离世界，负责页面 DOM、时间跳转和播放器可见矩形；不得渲染产品 UI。
+- `content.ts` 在隔离世界，负责页面 DOM、时间跳转、视频像素截帧与跨域捕获时覆盖层的短暂隐藏/恢复；不得渲染产品 UI。
 - `sidepanel.tsx` 是 React Chrome Side Panel，持有 Open Studio 会话并调用后端；不得读取站点 Cookie。
 
 侧栏控件必须经 `browser-extension/src/components/ui/` 的 shadcn/Radix 封装，页面布局使用 Tailwind v4；
 `styles.css` 仅放主题 token 与 base layer，禁止恢复旧的 `sidepanel.css` DOM selector 样式。新增可见文案
 必须同时补 `i18n.ts` 的简中和英文；manifest 可见字段则补 `_locales/en` 与 `_locales/zh_CN`。
 
-站点字幕响应先收敛为 `TranscriptCue {start,end,text}`，再进入 UI。YouTube / B 站字段变化时只改各自
+站点字幕响应先收敛为 `TranscriptCue {start,end,text,tokens?}`，再进入 UI。Open Studio 返回的 token
+时间戳不能在分行时丢弃：行用于阅读，token 才是精确点击和播放高亮的定位单位。YouTube / B 站字段变化时只改各自
 Adapter 与测试，不要让站点 JSON 形状穿进侧栏。双语轨按时间重叠对齐，不能假设两个供应商按同一
 句子分段；缺失 duration 的 cue 必须补成可命中的区间，否则播放跟随永远找不到活动句。站点无字幕
 的回退必须复用 URL 导入 → job → ASR → transcript API，不能在扩展里另写下载或识别实现。
+Pornhub 页面可能同时存在隐藏广告、占位与主播放器，DOM 能力必须通过 `platforms/video-element.ts`
+集中选择，禁止退回 `querySelector("video")` 取第一个元素。
+
+截帧的主路径必须读取 `<video>` 解码像素，不能把 `captureVisibleTab` 当事实源。后者只允许作为跨域
+Canvas 的兼容路径，并且截图前必须关闭原生 controls、隐藏视频上方的页面覆盖层，finally 或超时都要
+恢复；否则播放按钮、进度条或站点弹层会被错误写进素材。
+
+URL 转写的复用身份集中在 `domain/assets/source_url.py`。新素材把 `source_url` / `source_url_key` 合并进
+`media_info`，旧素材由其成功的单条 URL 导入任务反查；扩展只调用 `transcript-by-source`，不得自行拉取
+整库素材后按标题猜测，也不得把一次生成结果仅留在 React 内存中。
 
 后端 CORS 的 Origin 正则必须继续限制为 32 位 a-p
 扩展 id，不能换成 `chrome-extension://.*` 或 `*`；CORS 也不能代替 Bearer 会话与工作区鉴权。
