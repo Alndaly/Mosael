@@ -223,9 +223,10 @@ export function AppShell({
       <aside
         data-glass-surface
         className="col-start-1 row-start-2 flex flex-col items-center gap-0.5 border-r border-border bg-panel px-0 py-2 supports-[backdrop-filter]:bg-[var(--glass-chrome)] supports-[backdrop-filter]:[-webkit-backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[backdrop-filter:blur(14px)_saturate(1.4)] [.is-desktop_&]:[-webkit-app-region:drag] [.is-desktop_&_:is(button,a)]:[-webkit-app-region:no-drag]">
-        <div className="mb-2.5 grid h-[30px] w-[30px] select-none place-items-center" aria-hidden>
+        <div className="grid h-[30px] w-[30px] select-none place-items-center" aria-hidden>
           <BrandMark size={30} />
         </div>
+        <div className="my-2 h-px w-6 bg-border" />
         {PRIMARY_NAV.map((item) => (
           <RailButton
             key={item.view}

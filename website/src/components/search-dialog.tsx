@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
+import { createPortal } from "react-dom";
 
 import type { Locale } from "@/i18n/config";
 import type { SearchEntry } from "@/lib/search";
@@ -174,8 +175,9 @@ export function SearchDialog({ locale, labels }: { locale: Locale; labels: Label
         <span className="hidden font-mono text-xs tracking-wider lg:inline">⌘K</span>
       </button>
 
-      {open && (
+      {open && createPortal(
         <div
+          data-search-overlay
           className="fixed inset-0 z-100 flex items-start justify-center bg-ink/45 p-4 pt-[12vh]"
           onClick={() => setOpen(false)}
           role="presentation"
@@ -260,7 +262,8 @@ export function SearchDialog({ locale, labels }: { locale: Locale; labels: Label
               )}
             </ul>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );

@@ -12,6 +12,8 @@ commit list and downloadable artifacts.
 
 ### Fixed
 
+- Portaled the documentation search modal outside the blurred floating header so its dimming layer and
+  click-away target cover the full viewport, and added a rhythm-matched divider below the app rail logo.
 - Recovered pre-Mosael backend libraries and Electron user data even when first launch had already
   created the new directories, with automatic one-time migration, database sidecar renaming, conflict
   protection, and recoverable backups of the replaced bootstrap directories.
