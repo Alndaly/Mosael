@@ -1,7 +1,7 @@
 import React from "react";
 import { Columns2, FlipHorizontal, Grid2x2, Link2, Link2Off, Maximize2, X } from "lucide-react";
 
-import { assetFileUrl, type Asset } from "@/api/client";
+import { assetPreviewUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -160,7 +160,7 @@ function Pane({
         onPointerDown={onPointerDown}
       >
         <img
-          src={assetFileUrl(asset.id)}
+          src={assetPreviewUrl(asset.id)}
           alt={asset.name || asset.original_filename}
           draggable={false}
           className="pointer-events-none absolute left-1/2 top-1/2 max-h-full max-w-full select-none object-contain"
@@ -266,11 +266,11 @@ function SplitPane({
       onWheel={onWheel}
       onPointerDown={startPan}
     >
-      <img src={assetFileUrl(a.id)} alt="" draggable={false} className="pointer-events-none absolute left-1/2 top-1/2 max-h-full max-w-full select-none object-contain" style={style} />
+      <img src={assetPreviewUrl(a.id)} alt="" draggable={false} className="pointer-events-none absolute left-1/2 top-1/2 max-h-full max-w-full select-none object-contain" style={style} />
       {/* B 层只露出分割线右侧。clip-path 而不是 width:两张图的定位必须完全一致,
           否则擦除时画面会横向跳一下。 */}
       <div className="pointer-events-none absolute inset-0" style={{ clipPath: `inset(0 0 0 ${split}%)` }}>
-        <img src={assetFileUrl(b.id)} alt="" draggable={false} className="absolute left-1/2 top-1/2 max-h-full max-w-full select-none object-contain" style={style} />
+        <img src={assetPreviewUrl(b.id)} alt="" draggable={false} className="absolute left-1/2 top-1/2 max-h-full max-w-full select-none object-contain" style={style} />
       </div>
 
       {/* 命中区 12px、可见线 1px:分割线越细,两侧的差异越是紧挨着可比;而 1px 宽的东西
@@ -475,7 +475,7 @@ export function AssetCompareView({ assets, onClose }: { assets: Asset[]; onClose
                   slot === null ? "border-border opacity-60 hover:opacity-100" : "border-primary",
                 )}
               >
-                <img src={assetFileUrl(asset.id)} alt="" className="h-full w-full object-cover" />
+                <img src={assetPreviewUrl(asset.id)} alt="" className="h-full w-full object-cover" />
                 {slot !== null && (
                   <span className="pointer-events-none absolute left-0.5 top-0.5 rounded bg-primary px-1 text-[9.5px] font-bold leading-[14px] text-primary-foreground">
                     {slot === 0 ? "A" : "B"}

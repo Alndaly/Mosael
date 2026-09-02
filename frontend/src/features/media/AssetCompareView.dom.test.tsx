@@ -21,7 +21,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/app/preferences", () => ({ useI18n: () => (k: string) => k, usePreferences: () => ({ locale: "zh-CN" }) }));
 vi.mock("@/api/client", async () => ({
-  assetFileUrl: (id: string) => `/files/${id}`,
+  assetPreviewUrl: (id: string) => `/previews/${id}`,
   type: undefined,
 }));
 

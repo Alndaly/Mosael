@@ -1,6 +1,6 @@
 import React from "react";
 
-import { assetFileUrl, assetProxyUrl, type Asset, type Clip } from "@/api/client";
+import { assetPreviewUrl, assetProxyUrl, type Asset, type Clip } from "@/api/client";
 import { CURVES_FILTER_ID } from "@/features/editor/colorCurves";
 import { computeFilters, type ClipEffects } from "@/features/editor/monitorFilters";
 import { ProxyVideoSource } from "@/features/editor/playback/ProxyVideoSource";
@@ -143,7 +143,7 @@ export function CanvasCompositor({
         // retry ONCE without crossOrigin: the picture paints (canvas becomes tainted → only readback
         // /scopes degrade, never the image itself). onload marks dirty so a late image repaints even
         // if the paused canvas had already settled on black.
-        const url = assetFileUrl(id);
+        const url = assetPreviewUrl(id);
         img.crossOrigin = "anonymous";
         img.onload = () => {
           dirtyRef.current = true;

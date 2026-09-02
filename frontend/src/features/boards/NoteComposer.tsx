@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import { Film, Music, X } from "lucide-react";
 
-import { assetFileUrl, assetThumbnailUrl } from "@/api/client";
+import { assetFileUrl, assetPreviewUrl, assetThumbnailUrl } from "@/api/client";
 import { useImagePreview } from "@/components/app/image-preview";
 import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
@@ -157,7 +157,11 @@ export function NoteComposer({
                 <button
                   type="button"
                   title={asset.name || asset.original_filename || ""}
-                  onClick={() => openImagePreview({ src: assetFileUrl(asset.id), title: asset.name || "" })}
+                  onClick={() => openImagePreview({
+                    src: asset.kind === "image" ? assetPreviewUrl(asset.id) : assetFileUrl(asset.id),
+                    title: asset.name || "",
+                    ...(asset.kind === "video" ? { video: true } : {}),
+                  })}
                   className="block h-8 w-8 cursor-zoom-in overflow-hidden rounded-md border border-border transition-colors hover:border-border-strong"
                 >
                   {asset.kind === "image" ? (

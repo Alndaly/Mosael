@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import {
   api,
   assetFileUrl,
+  assetPreviewUrl,
   assetThumbnailUrl,
   listComfyuiWorkflows,
   listComfyuiWorkflowParams,
@@ -576,7 +577,7 @@ function GenerateWorkspace({
               ? [generation.result_asset_id]
               : [];
           return ids.map((assetId) => ({
-            src: assetFileUrl(assetId),
+            src: assetPreviewUrl(assetId),
             title: String(generation.request.prompt ?? generation.model),
           }));
         }),
@@ -1272,7 +1273,7 @@ function GenerationTurn({
                 )}
                 onClick={() =>
                   openImagePreview({
-                    src: assetFileUrl(assetId),
+                    src: assetPreviewUrl(assetId),
                     title: String(generation.request.prompt ?? generation.model),
                     gallery,
                   })

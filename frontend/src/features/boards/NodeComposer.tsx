@@ -4,7 +4,7 @@ import { ArrowLeftRight, ArrowUp, Loader2, Plus, Sparkles, Volume2, VolumeX, X }
 
 import { useQuery } from "@tanstack/react-query";
 
-import { assetFileUrl, assetThumbnailUrl, listAssets, type Asset, type BoardItem, type GenerationModel } from "@/api/client";
+import { assetPreviewUrl, assetThumbnailUrl, listAssets, type Asset, type BoardItem, type GenerationModel } from "@/api/client";
 import { useImagePreview } from "@/components/app/image-preview";
 import {
   collect,
@@ -586,7 +586,7 @@ export function NodeComposer({
                         type="button"
                         title={`${roleLabel(t, slot.role)} —— ${t("boardOpenLarge")}`}
                         onClick={() =>
-                          openImagePreview({ src: assetFileUrl(one.assetId), title: roleLabel(t, slot.role) })
+                          openImagePreview({ src: assetPreviewUrl(one.assetId), title: roleLabel(t, slot.role) })
                         }
                         className="block h-8 w-8 cursor-zoom-in overflow-hidden rounded-md border border-border transition-colors hover:border-border-strong"
                       >

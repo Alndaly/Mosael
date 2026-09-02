@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Check, Copy, FileAudio, Maximize2 } from "lucide-react";
 
-import { assetFileUrl, type Asset } from "@/api/client";
+import { assetFileUrl, assetPreviewUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -53,7 +53,9 @@ export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onC
   const height = Number(media.height) || 0;
   const fps = Number(media.fps) || 0;
   const duration = media.duration != null ? Number(media.duration) : null;
-  const src = assetFileUrl(asset.id);
+  // Chromium does not decode HEIC/HEIF. Images must use the backend's browser-compatible
+  // representation; video and audio still stream the untouched original file.
+  const src = asset.kind === "image" ? assetPreviewUrl(asset.id) : assetFileUrl(asset.id);
   const kindLabel = asset.kind === "video" ? t("kindVideo") : asset.kind === "audio" ? t("kindAudio") : t("kindImage");
   const sourceLabel =
     asset.source === "generated" ? t("mediaSourceGenerated") : asset.source === "exported" ? t("mediaSourceExported") : t("mediaSourceImported");

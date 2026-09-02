@@ -17,7 +17,7 @@ import {
 } from "@xyflow/react";
 import { Copy, FileUp, Group, Loader2, Maximize2, Replace, Scissors, Sparkles, Trash2 } from "lucide-react";
 
-import { assetFileUrl } from "@/api/client";
+import { assetFileUrl, assetPreviewUrl } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
 
@@ -994,7 +994,9 @@ function ItemToolbar({
             title={t("boardPreviewTitle")}
             onClick={() =>
               openImagePreview({
-                src: assetFileUrl(item.asset_id as string),
+                src: item.kind === "image"
+                  ? assetPreviewUrl(item.asset_id as string)
+                  : assetFileUrl(item.asset_id as string),
                 title: item.text || "",
                 //: 视频走同一个灯箱,只是那一项渲染成播放器 —— 见 image-preview。
                 video: item.kind === "video",

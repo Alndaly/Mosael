@@ -2,7 +2,7 @@ import React from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Brain, Check, ChevronRight, CircleAlert, FileWarning, Loader2, Music } from "lucide-react";
 
-import { api, assetFileUrl, type Asset } from "@/api/client";
+import { api, assetFileUrl, assetPreviewUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { AgentMarkdown } from "@/components/agent/Markdown";
 import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
@@ -147,7 +147,7 @@ function MediaPreview({ assetId, gallery }: { assetId: string; gallery?: ImagePr
       </div>
     );
   }
-  const src = assetFileUrl(asset.data.id);
+  const src = asset.data.kind === "image" ? assetPreviewUrl(asset.data.id) : assetFileUrl(asset.data.id);
   return (
     <figure className="m-0 flex max-w-[240px] flex-col gap-1">
       {asset.data.kind === "image" ? (
@@ -199,7 +199,11 @@ function MediaPreviewGrid({ assetIds }: { assetIds: string[] }) {
     .map((query) => query.data)
     .filter((asset): asset is Asset => Boolean(asset))
     .filter((asset) => asset.kind === "image" || asset.kind === "video")
-    .map((asset) => ({ src: assetFileUrl(asset.id), title: asset.name, video: asset.kind === "video" }));
+    .map((asset) => ({
+      src: asset.kind === "image" ? assetPreviewUrl(asset.id) : assetFileUrl(asset.id),
+      title: asset.name,
+      video: asset.kind === "video",
+    }));
   return (
     <div className="ml-[13px] mt-1.5 flex flex-wrap gap-2 border-l border-border pl-3">
       {assetIds.map((id) => (

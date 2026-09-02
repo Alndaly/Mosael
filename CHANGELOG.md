@@ -27,6 +27,9 @@ commit list and downloadable artifacts.
 
 - Replaced opaque yt-dlp 403, 412, login, geo, and IP-block failures with guidance to select a
   matching Browser Pool identity or proxy.
+- Routed every image presentation surface through the browser-compatible preview endpoint, fixing
+  broken HEIC/HEIF rendering in asset details, the editor compositor, compare view, boards, AI
+  galleries, frame slots, and agent tool results while preserving original-file downloads.
 
 ## [0.26.10] - 2026-09-02
 

@@ -2,7 +2,7 @@ import React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeftRight, Music, Plus, X } from "lucide-react";
 
-import { assetFileUrl, assetThumbnailUrl, importAsset, type Asset } from "@/api/client";
+import { assetPreviewUrl, assetThumbnailUrl, importAsset, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
 import { Button } from "@/components/ui/button";
@@ -93,7 +93,7 @@ function Tile({
           onClick={() =>
             isAudio
               ? undefined
-              : openImagePreview({ src: assetFileUrl(slot.assetId), title: slot.assetName || t(copy.label) })
+              : openImagePreview({ src: assetPreviewUrl(slot.assetId), title: slot.assetName || t(copy.label) })
           }
         >
           {isAudio ? (

@@ -2,7 +2,7 @@ import React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CircleDot, Download, FileAudio, FileImage, FileVideo, ImagePlus, ListPlus, Pencil, Plus, Search, Tag, Trash2 } from "lucide-react";
 
-import { assetFileUrl, assetThumbnailUrl, deleteAsset, renameAsset, setAssetTags, type Asset } from "@/api/client";
+import { assetPreviewUrl, assetThumbnailUrl, deleteAsset, renameAsset, setAssetTags, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -270,7 +270,7 @@ function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
         onClick={(event) => {
           if (asset.kind !== "image") return;
           event.stopPropagation();
-          openImagePreview({ src: assetFileUrl(asset.id), title: asset.name });
+          openImagePreview({ src: assetPreviewUrl(asset.id), title: asset.name });
         }}
       >
         {hasThumb ? <img src={assetThumbnailUrl(asset.id)} alt="" loading="lazy" onError={() => setThumbFailed(true)} /> : kindIcon(asset.kind)}
