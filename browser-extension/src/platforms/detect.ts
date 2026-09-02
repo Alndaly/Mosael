@@ -16,5 +16,12 @@ export function detectVideoPlatform(rawUrl: string): VideoPlatform | null {
   if ((host === "bilibili.com" || host.endsWith(".bilibili.com")) && /^\/(video|bangumi\/play)\//.test(url.pathname)) {
     return "bilibili";
   }
+  if (
+    (host === "pornhub.com" || host.endsWith(".pornhub.com"))
+    && url.pathname === "/view_video.php"
+    && Boolean(url.searchParams.get("viewkey"))
+  ) {
+    return "pornhub";
+  }
   return null;
 }

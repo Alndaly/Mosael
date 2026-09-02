@@ -33,3 +33,12 @@ export async function cropScreenshot(dataUrl: string, geometry: CaptureGeometry)
     canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("当前帧编码失败"))), "image/png");
   });
 }
+
+export function frameDataUrlToBlob(dataUrl: string): Blob {
+  const match = /^data:([^;,]+);base64,(.+)$/s.exec(dataUrl);
+  if (!match) throw new Error("当前视频帧格式无效");
+  const decoded = atob(match[2]);
+  const bytes = new Uint8Array(decoded.length);
+  for (let index = 0; index < decoded.length; index += 1) bytes[index] = decoded.charCodeAt(index);
+  return new Blob([bytes], { type: match[1] });
+}

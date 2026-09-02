@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { listBilibiliTranscriptTracks, normalizeBilibiliTranscript } from "../src/platforms/bilibili";
+import {
+  listBilibiliTranscriptTracks,
+  normalizeBilibiliTranscript,
+  readBilibiliTranscript,
+} from "../src/platforms/bilibili";
 
 
 describe("normalizeBilibiliTranscript", () => {
@@ -39,5 +43,30 @@ describe("normalizeBilibiliTranscript", () => {
         url: "//ai.test",
       },
     ]);
+  });
+
+  it("refreshes the signed subtitle URL instead of reusing a stale page listing", async () => {
+    const requested: string[] = [];
+    const transcript = await readBilibiliTranscript({
+      bvid: "BV-current",
+      cid: "42",
+      fetchText: async (url) => {
+        requested.push(url);
+        if (url.includes("/x/player/v2")) {
+          return JSON.stringify({
+            data: {
+              subtitle: {
+                subtitles: [{ id: 9, lan: "zh-CN", lan_doc: "中文", subtitle_url: "//aisubtitle.hdslb.com/bfs/ai_subtitle/current.json" }],
+              },
+            },
+          });
+        }
+        return JSON.stringify({ body: [{ from: 1, to: 2, content: "当前视频字幕" }] });
+      },
+    });
+
+    expect(requested[0]).toContain("bvid=BV-current&cid=42");
+    expect(requested[1]).toBe("https://aisubtitle.hdslb.com/bfs/ai_subtitle/current.json");
+    expect(transcript.cues).toEqual([{ start: 1, end: 2, text: "当前视频字幕" }]);
   });
 });

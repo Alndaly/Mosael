@@ -6,9 +6,18 @@
   "version": "0.1.0",
   "minimum_chrome_version": "116",
   "permissions": ["activeTab", "sidePanel", "storage", "tabs"],
+  "optional_host_permissions": ["<all_urls>"],
   "host_permissions": [
     "https://*.youtube.com/*",
+    "https://youtu.be/*",
+    "https://*.youtube-nocookie.com/*",
+    "https://*.googlevideo.com/*",
+    "https://*.ytimg.com/*",
     "https://*.bilibili.com/*",
+    "https://*.hdslb.com/*",
+    "https://*.bilivideo.com/*",
+    "https://*.bilivideo.cn/*",
+    "https://*.pornhub.com/*",
     "http://127.0.0.1/*",
     "http://localhost/*"
   ],
@@ -23,13 +32,13 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://*.youtube.com/*", "https://*.bilibili.com/*"],
+      "matches": ["https://*.youtube.com/*", "https://*.bilibili.com/*", "https://*.pornhub.com/*"],
       "js": ["page-bridge.js"],
       "run_at": "document_start",
       "world": "MAIN"
     },
     {
-      "matches": ["https://*.youtube.com/*", "https://*.bilibili.com/*"],
+      "matches": ["https://*.youtube.com/*", "https://*.bilibili.com/*", "https://*.pornhub.com/*"],
       "js": ["content.js"],
       "run_at": "document_start"
     }

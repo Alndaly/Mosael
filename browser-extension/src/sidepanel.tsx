@@ -4,8 +4,10 @@ import {
   Bot,
   Camera,
   CheckCircle2,
+  CircleAlert,
   Download,
   Languages,
+  Loader2,
   Play,
   RefreshCw,
   Search,
@@ -23,13 +25,16 @@ import { Input } from "./components/ui/input";
 import { Label } from "./components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
 import { Separator } from "./components/ui/separator";
-import { cropScreenshot } from "./capture";
+import { cropScreenshot, frameDataUrlToBlob } from "./capture";
+import { requestFrameCapturePermission } from "./frame-capture-permission";
 import { localeFromLanguage, translate, type MessageKey, type UiLocale } from "./i18n";
 import { cn } from "./lib/utils";
 import { OpenStudioClient, type Job, type Project, type Workspace } from "./openstudio/client";
-import type { CaptureGeometry, ContentRequest, ContentResponse } from "./shared/protocol";
+import { videoPlatformLabel } from "./platforms/labels";
+import type { CapturedVideoFrame, CaptureGeometry, ContentRequest, ContentResponse } from "./shared/protocol";
 import type { Transcript, TranscriptCue, VideoContext } from "./shared/types";
-import { alignSecondaryCues, languageMatches } from "./transcript";
+import { alignSecondaryCues, languageMatches, transcriptTokensNeedSpace } from "./transcript";
+import { resolveTranscriptSource } from "./transcript-source";
 
 type Connection = {
   baseUrl: string;
@@ -41,6 +46,7 @@ type Connection = {
 
 type LocaleSetting = "auto" | UiLocale;
 type SettingsNotice = { message: string; error: boolean } | null;
+type TranscriptNotice = { message: string; kind: "loading" | "error" } | null;
 
 const CONNECTION_KEY = "openstudio.connection";
 const LOCALE_KEY = "openstudio.locale";
@@ -123,8 +129,10 @@ function Highlight({ value, query }: { value: string; query: string }): React.Re
   );
 }
 
-function localizePageError(message: string, locale: UiLocale, t: (key: MessageKey) => string): string {
-  if (locale === "zh-CN") return message;
+function localizePageError(message: string, t: (key: MessageKey) => string): string {
+  if (/Failed to fetch|NetworkError|Load failed|fetch failed|字幕服务暂时无法连接|字幕服务响应超时|字幕服务请求失败/i.test(message)) {
+    return t("transcriptFetchFailed");
+  }
   if (/没有可用字幕|没有返回字幕|字幕内容为空|Unexpected end of JSON/i.test(message)) return t("noCaptions");
   return message;
 }
@@ -156,7 +164,7 @@ function App(): React.ReactElement {
   const [secondaryLanguageLabel, setSecondaryLanguageLabel] = React.useState("");
   const [targetLanguage, setTargetLanguage] = React.useState("zh-CN");
   const [query, setQuery] = React.useState("");
-  const [transcriptStatus, setTranscriptStatus] = React.useState("");
+  const [transcriptNotice, setTranscriptNotice] = React.useState<TranscriptNotice>(null);
   const [canGenerate, setCanGenerate] = React.useState(false);
   const [translationBusy, setTranslationBusy] = React.useState(false);
   const [generationBusy, setGenerationBusy] = React.useState(false);
@@ -213,28 +221,34 @@ function App(): React.ReactElement {
     setTranslations(null);
     setSecondaryLanguageLabel("");
     setCanGenerate(false);
-    setTranscriptStatus(t("readingPage"));
+    setTranscriptNotice({ message: t("readingPage"), kind: "loading" });
     try {
       nextContext = await sendToTab<VideoContext>(tab, { type: "GET_CONTEXT" }, t);
       if (version !== refreshVersion.current) return;
       setContext(nextContext);
       if (!nextContext.supported) {
-        setTranscriptStatus("");
+        setTranscriptNotice(null);
         return;
       }
-      setTranscriptStatus(t("readingTranscript"));
-      const nextTranscript = await sendToTab<Transcript>(tab, { type: "GET_TRANSCRIPT" }, t);
+      setTranscriptNotice({ message: t("readingTranscript"), kind: "loading" });
+      const resolved = await resolveTranscriptSource(
+        () => sendToTab<Transcript>(tab, { type: "GET_TRANSCRIPT" }, t),
+        connection?.token && connection.workspaceId
+          ? () => apiFor(connection).findTranscriptFromVideo(connection.workspaceId, nextContext!.url)
+          : undefined,
+      );
+      const nextTranscript = resolved.transcript;
       if (version !== refreshVersion.current) return;
       setTranscript(nextTranscript);
       setTargetLanguage(/^zh/i.test(nextTranscript.language) ? "en" : "zh-CN");
-      setTranscriptStatus("");
+      setTranscriptNotice(null);
     } catch (cause) {
       if (version !== refreshVersion.current) return;
       const raw = cause instanceof Error ? cause.message : String(cause);
-      setTranscriptStatus(localizePageError(raw, locale, t));
-      setCanGenerate(Boolean(nextContext?.supported || /youtube|bilibili/i.test(tab?.url || "")));
+      setTranscriptNotice({ message: localizePageError(raw, t), kind: "error" });
+      setCanGenerate(Boolean(nextContext?.supported || /youtube|bilibili|pornhub/i.test(tab?.url || "")));
     }
-  }, [locale, t]);
+  }, [apiFor, connection, t]);
 
   React.useEffect(() => {
     document.documentElement.lang = locale;
@@ -387,7 +401,7 @@ function App(): React.ReactElement {
       setSecondaryLanguageLabel("");
       setTargetLanguage(/^zh/i.test(generated.language) ? "en" : "zh-CN");
       setCanGenerate(false);
-      setTranscriptStatus("");
+      setTranscriptNotice(null);
       showToast(t("generatedTranscript", { count: generated.cues.length }));
     } finally {
       setGenerationBusy(false);
@@ -444,10 +458,36 @@ function App(): React.ReactElement {
     const destination = requireConnection();
     setCaptureBusy(true);
     try {
-      const geometry = await sendToTab<CaptureGeometry>(activeTab, { type: "GET_CAPTURE_GEOMETRY" }, t);
-      const screenshot = await chrome.tabs.captureVisibleTab(activeTab.windowId, { format: "png" });
-      const blob = await cropScreenshot(screenshot, geometry);
-      const name = `${safeFilename(geometry.title)}-${geometry.currentTime.toFixed(1)}s.png`;
+      // Request before the first await so Chrome still associates it with the button click.
+      // `activeTab` is temporary and may have expired while this persistent panel stayed open.
+      const permitted = await requestFrameCapturePermission().catch(() => false);
+      if (!permitted) throw new Error(t("capturePermissionDenied"));
+      let frame: CapturedVideoFrame | null = null;
+      try {
+        frame = await sendToTab<CapturedVideoFrame>(activeTab, { type: "CAPTURE_VIDEO_FRAME" }, t);
+      } catch {
+        // Cross-origin media can taint a canvas. In that browser-enforced case, temporarily hide
+        // every HTML overlay above the video before cropping the tab surface.
+      }
+      let blob: Blob;
+      let title: string;
+      let currentTime: number;
+      if (frame) {
+        blob = frameDataUrlToBlob(frame.dataUrl);
+        title = frame.title;
+        currentTime = frame.currentTime;
+      } else {
+        const geometry = await sendToTab<CaptureGeometry>(activeTab, { type: "PREPARE_FRAME_CAPTURE" }, t);
+        try {
+          const screenshot = await chrome.tabs.captureVisibleTab(activeTab.windowId, { format: "png" });
+          blob = await cropScreenshot(screenshot, geometry);
+        } finally {
+          await sendToTab(activeTab, { type: "RESTORE_FRAME_CAPTURE" }, t).catch(() => undefined);
+        }
+        title = geometry.title;
+        currentTime = geometry.currentTime;
+      }
+      const name = `${safeFilename(title)}-${currentTime.toFixed(1)}s.png`;
       await apiFor(destination).uploadFrame(destination.workspaceId, destination.projectId || null, name, blob);
       showToast(t("frameImported", { name }));
     } finally {
@@ -550,35 +590,42 @@ function App(): React.ReactElement {
         <main>
           {context?.supported ? (
             <>
-              <section className="space-y-4 border-b border-border p-4">
-                <div className="flex items-center gap-2"><Badge>{context.platform === "youtube" ? "YouTube" : "Bilibili"}</Badge><span className="text-xs text-muted-foreground">{context.duration > 0 ? formatTime(context.duration) : ""}</span></div>
-                <h1 className="break-words text-lg font-bold leading-snug">{context.title}</h1>
-                <div className="grid grid-cols-2 gap-2">
+              <section className="space-y-3 border-b border-border p-4">
+                <div className="flex items-center gap-2"><Badge>{context.platform ? videoPlatformLabel(context.platform) : ""}</Badge><span className="text-xs text-muted-foreground">{context.duration > 0 ? formatTime(context.duration) : ""}</span></div>
+                <h1 className="break-words text-base font-bold leading-snug">{context.title}</h1>
+                <div className="grid grid-cols-1 gap-2 min-[440px]:grid-cols-2">
                   <Button variant="outline" loading={importBusy} onClick={() => run(importCurrentVideo)}><Download />{t("importVideo")}</Button>
                   <Button variant="outline" loading={captureBusy} onClick={() => run(captureCurrentFrame)}><Camera />{t("captureFrame")}</Button>
                 </div>
               </section>
 
               <section>
-                <div className="sticky top-16 z-20 flex items-center justify-between gap-3 border-b border-border bg-background/90 px-4 py-3 backdrop-blur-xl">
+                <div className="sticky top-16 z-20 flex flex-col items-stretch gap-3 min-[430px]:flex-row min-[430px]:items-center min-[430px]:justify-between border-b border-border bg-background/90 px-4 py-3 backdrop-blur-xl">
                   <div className="min-w-0"><div className="font-bold">{t("transcript")}</div><div className="mt-1 truncate text-xs text-muted-foreground">{transcriptLanguage}</div></div>
-                  <div className="flex shrink-0 items-center gap-1">
+                  {transcript ? (
+                  <div className="flex items-center gap-2 min-[430px]:shrink-0">
                     <Select value={targetLanguage} onValueChange={(value) => { setTargetLanguage(value); setTranslations(null); setSecondaryLanguageLabel(""); }}>
-                      <SelectTrigger className="h-8 w-[104px] border-0 bg-transparent px-2 text-xs" aria-label={t("targetLanguage")}><Languages /><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="h-9 min-w-0 flex-1 border-input bg-field px-3 text-sm min-[430px]:w-[112px] min-[430px]:flex-none" aria-label={t("targetLanguage")}><Languages className="size-4 shrink-0" /><SelectValue /></SelectTrigger>
                       <SelectContent>{TARGET_LANGUAGES.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
                     </Select>
-                    <Button variant="ghost" size="sm" loading={translationBusy} disabled={!transcript} onClick={() => run(showBilingual)}>{t("bilingualSubtitles")}</Button>
+                    <Button variant="outline" size="sm" loading={translationBusy} onClick={() => run(showBilingual)}>{t("bilingualSubtitles")}</Button>
                   </div>
+                  ) : null}
                 </div>
 
+                {transcript ? (
                 <div className="p-4 pb-2">
                   <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("searchTranscript")} /></div>
                 </div>
+                ) : null}
 
-                {transcriptStatus ? (
-                  <div className="space-y-3 px-4 py-3">
-                    <Alert><AlertDescription>{transcriptStatus}</AlertDescription></Alert>
-                    {canGenerate ? <Button className="w-full" loading={generationBusy} onClick={() => run(generateTranscript)}><Bot />{generationLabel || t("generateTranscript")}</Button> : null}
+                {transcriptNotice ? (
+                  <div className="px-4 py-8 text-center">
+                    <div className={cn("mx-auto grid size-10 place-items-center rounded-full bg-muted text-muted-foreground", transcriptNotice.kind === "error" && "bg-destructive/10 text-destructive")}>
+                      {transcriptNotice.kind === "loading" ? <Loader2 className="size-5 animate-spin" /> : <CircleAlert className="size-5" />}
+                    </div>
+                    <p className={cn("mx-auto mt-3 max-w-xs text-sm leading-relaxed text-muted-foreground", transcriptNotice.kind === "error" && "text-destructive")}>{transcriptNotice.message}</p>
+                    {canGenerate ? <Button className="mt-5 w-full" loading={generationBusy} onClick={() => run(generateTranscript)}><Bot />{generationLabel || t("generateTranscript")}</Button> : null}
                   </div>
                 ) : null}
 
@@ -587,20 +634,44 @@ function App(): React.ReactElement {
                 <ol className="space-y-1 px-2 pb-6">
                   {filteredCues.map(({ cue, index, translated }) => (
                     <li key={`${cue.start}-${index}`} ref={(node) => { if (node) cueRefs.current.set(index, node); else cueRefs.current.delete(index); }}>
-                      <Button
-                        variant="ghost"
-                        className={cn(
-                          "h-auto w-full items-start justify-start whitespace-normal rounded-xl px-3 py-2.5 text-left font-normal",
-                          activeCueIndex === index && "bg-primary/15 hover:bg-primary/15",
-                        )}
-                        onClick={() => run(async () => { await sendToTab(activeTab, { type: "SEEK", seconds: cue.start }, t); setContext((current) => current ? { ...current, currentTime: cue.start } : current); })}
-                      >
-                        <span className="w-12 shrink-0 pt-0.5 font-mono text-[11px] text-muted-foreground">{formatTime(cue.start)}</span>
+                      <div className={cn(
+                        "flex w-full items-start rounded-xl px-3 py-2.5 text-left",
+                        activeCueIndex === index && "bg-primary/15",
+                      )}>
+                        <Button
+                          variant="ghost"
+                          className="mr-1 h-auto w-12 shrink-0 justify-start rounded-md p-0 pt-0.5 font-mono text-[11px] font-normal text-muted-foreground"
+                          onClick={() => run(async () => { await sendToTab(activeTab, { type: "SEEK", seconds: cue.start }, t); setContext((current) => current ? { ...current, currentTime: cue.start } : current); })}
+                        >
+                          {formatTime(cue.start)}
+                        </Button>
                         <span className="min-w-0 flex-1 break-words leading-relaxed">
-                          <Highlight value={cue.text} query={query} />
+                          {cue.tokens?.length ? cue.tokens.map((token, tokenIndex) => (
+                            <React.Fragment key={`${token.start}-${tokenIndex}`}>
+                              {tokenIndex > 0 && transcriptTokensNeedSpace(cue.tokens![tokenIndex - 1].text, token.text) ? " " : null}
+                              <Button
+                                variant="ghost"
+                                className={cn(
+                                  "inline h-auto min-w-0 rounded-sm px-0.5 py-0 align-baseline font-normal leading-[inherit] text-inherit",
+                                  context && context.currentTime >= token.start && context.currentTime < token.end && "bg-primary/25",
+                                )}
+                                onClick={() => run(async () => { await sendToTab(activeTab, { type: "SEEK", seconds: token.start }, t); setContext((current) => current ? { ...current, currentTime: token.start } : current); })}
+                              >
+                                <Highlight value={token.text} query={query} />
+                              </Button>
+                            </React.Fragment>
+                          )) : (
+                            <Button
+                              variant="ghost"
+                              className="inline h-auto min-w-0 whitespace-normal rounded-sm p-0 text-left align-baseline font-normal leading-[inherit] text-inherit"
+                              onClick={() => run(async () => { await sendToTab(activeTab, { type: "SEEK", seconds: cue.start }, t); setContext((current) => current ? { ...current, currentTime: cue.start } : current); })}
+                            >
+                              <Highlight value={cue.text} query={query} />
+                            </Button>
+                          )}
                           {translated ? <span className="mt-1 block text-xs leading-relaxed text-muted-foreground"><Highlight value={translated} query={query} /></span> : null}
                         </span>
-                      </Button>
+                      </div>
                     </li>
                   ))}
                 </ol>
@@ -608,10 +679,10 @@ function App(): React.ReactElement {
             </>
           ) : (
             <section className="grid min-h-[calc(100vh-4rem)] place-items-center p-8 text-center">
-              <Card className="w-full border-0 bg-transparent p-6 shadow-none">
+              <Card className="w-full border-0 bg-transparent p-6">
                 <div className="mx-auto grid size-14 place-items-center rounded-2xl bg-primary/15 text-primary"><Play /></div>
                 <h1 className="mt-5 text-lg font-bold">{t("openVideo")}</h1>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{transcriptStatus || t("openVideoDescription")}</p>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{transcriptNotice?.message || t("openVideoDescription")}</p>
               </Card>
             </section>
           )}
@@ -619,7 +690,7 @@ function App(): React.ReactElement {
       )}
 
       {toast ? (
-        <Alert className="fixed bottom-4 left-4 right-4 z-50 border-border bg-popover shadow-2xl">
+        <Alert className="fixed bottom-4 left-4 right-4 z-50 border-border bg-popover">
           <Sparkles />
           <AlertDescription>{toast}</AlertDescription>
         </Alert>

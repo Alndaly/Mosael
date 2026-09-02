@@ -88,8 +88,16 @@ describe("OpenStudioClient", () => {
         return json({
           language: "en",
           segments: [
-            { start_time: 1.2, end_time: 3.5, text: "Hello" },
-            { start_time: 3.5, end_time: 5, text: "world" },
+            {
+              start_time: 1.2,
+              end_time: 5,
+              text: "Hello world. Again.",
+              tokens: [
+                { start_time: 1.2, end_time: 2, text: "Hello" },
+                { start_time: 2, end_time: 3.5, text: "world." },
+                { start_time: 3.8, end_time: 5, text: "Again." },
+              ],
+            },
           ],
         });
       }
@@ -108,8 +116,21 @@ describe("OpenStudioClient", () => {
       assetId: "asset-1",
       language: "en",
       cues: [
-        { start: 1.2, end: 3.5, text: "Hello" },
-        { start: 3.5, end: 5, text: "world" },
+        {
+          start: 1.2,
+          end: 3.5,
+          text: "Hello world.",
+          tokens: [
+            { start: 1.2, end: 2, text: "Hello" },
+            { start: 2, end: 3.5, text: "world." },
+          ],
+        },
+        {
+          start: 3.8,
+          end: 5,
+          text: "Again.",
+          tokens: [{ start: 3.8, end: 5, text: "Again." }],
+        },
       ],
     });
     expect(fetcher.mock.calls.map(([input]) => String(input))).toEqual([
@@ -119,6 +140,36 @@ describe("OpenStudioClient", () => {
       "http://127.0.0.1:8800/api/jobs/transcribe-1",
       "http://127.0.0.1:8800/api/assets/asset-1/transcript",
     ]);
+  });
+
+  it("loads a previously generated transcript by video URL without importing again", async () => {
+    const fetcher = vi.fn(async (_input: RequestInfo | URL) => json({
+      asset_id: "asset-existing",
+      language: "ja",
+      segments: [{ start_time: 2, end_time: 4, text: "既存の字幕。", tokens: [] }],
+    }));
+    const client = new OpenStudioClient({ baseUrl: "http://127.0.0.1:8800", token: "session", fetcher });
+
+    const transcript = await client.findTranscriptFromVideo(
+      "workspace",
+      "https://www.pornhub.com/view_video.php?viewkey=abc&foo=bar",
+    );
+
+    expect(transcript).toEqual({
+      assetId: "asset-existing",
+      language: "ja",
+      cues: [{ start: 2, end: 4, text: "既存の字幕。" }],
+    });
+    expect(String(fetcher.mock.calls[0]?.[0])).toBe(
+      "http://127.0.0.1:8800/api/assets/transcript-by-source?workspace_id=workspace&url=https%3A%2F%2Fwww.pornhub.com%2Fview_video.php%3Fviewkey%3Dabc%26foo%3Dbar",
+    );
+  });
+
+  it("treats a missing previously generated transcript as a cache miss", async () => {
+    const fetcher = vi.fn(async () => json({ detail: "Transcript not found" }, 404));
+    const client = new OpenStudioClient({ baseUrl: "http://127.0.0.1:8800", token: "session", fetcher });
+
+    await expect(client.findTranscriptFromVideo("workspace", "https://example.com/video")).resolves.toBeNull();
   });
 
   it("uploads a captured frame through the normal asset import seam", async () => {

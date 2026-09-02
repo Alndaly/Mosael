@@ -1,3 +1,5 @@
+import { transcriptSegmentsToCues, type TranscriptSegmentInput } from "../transcript";
+
 export type Workspace = { id: string; name: string };
 export type Project = { id: string; name: string; workspace_id: string };
 export type ImportJob = { id: string; status: string };
@@ -12,6 +14,12 @@ export type GeneratedTranscript = {
   assetId: string;
   language: string;
   cues: Array<{ start: number; end: number; text: string }>;
+};
+
+type TranscriptResponse = {
+  asset_id: string;
+  language?: string | null;
+  segments?: TranscriptSegmentInput[];
 };
 
 type ClientOptions = {
@@ -31,6 +39,13 @@ function cleanBaseUrl(value: string): string {
   return value.trim().replace(/\/+$/, "");
 }
 
+class OpenStudioResponseError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+    this.name = "OpenStudioResponseError";
+  }
+}
+
 async function responseError(response: Response): Promise<Error> {
   let detail = "";
   try {
@@ -39,7 +54,7 @@ async function responseError(response: Response): Promise<Error> {
   } catch {
     detail = await response.text().catch(() => "");
   }
-  return new Error(detail || `Open Studio 请求失败（${response.status}）`);
+  return new OpenStudioResponseError(response.status, detail || `Open Studio 请求失败（${response.status}）`);
 }
 
 export class OpenStudioClient {
@@ -164,18 +179,29 @@ export class OpenStudioClient {
     await this.waitForJob(transcription.id, (job) => onProgress?.("transcribe", job));
     const transcript = await this.request<{
       language?: string | null;
-      segments?: Array<{ start_time?: number; end_time?: number; text?: string }>;
+      segments?: TranscriptSegmentInput[];
     }>(`/api/assets/${encodeURIComponent(assetId)}/transcript`);
-    const cues = (transcript.segments || []).flatMap((segment) => {
-      const start = Number(segment.start_time);
-      const end = Number(segment.end_time);
-      const text = String(segment.text || "").trim();
-      return Number.isFinite(start) && Number.isFinite(end) && text
-        ? [{ start: Math.max(0, start), end: Math.max(start, end), text }]
-        : [];
-    });
+    const cues = transcriptSegmentsToCues(transcript.segments || []);
     if (cues.length === 0) throw new Error("Open Studio 已完成识别，但逐字稿内容为空");
     return { assetId, language: String(transcript.language || ""), cues };
+  }
+
+  async findTranscriptFromVideo(workspaceId: string, url: string): Promise<GeneratedTranscript | null> {
+    const query = new URLSearchParams({ workspace_id: workspaceId, url });
+    let transcript: TranscriptResponse;
+    try {
+      transcript = await this.request<TranscriptResponse>(`/api/assets/transcript-by-source?${query}`);
+    } catch (cause) {
+      if (cause instanceof OpenStudioResponseError && cause.status === 404) return null;
+      throw cause;
+    }
+    const cues = transcriptSegmentsToCues(transcript.segments || []);
+    if (cues.length === 0) return null;
+    return {
+      assetId: transcript.asset_id,
+      language: String(transcript.language || ""),
+      cues,
+    };
   }
 
   uploadFrame(workspaceId: string, projectId: string | null, name: string, blob: Blob): Promise<{ id: string }> {

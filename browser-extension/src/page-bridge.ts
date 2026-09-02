@@ -1,10 +1,14 @@
-import { listBilibiliTranscriptTracks, normalizeBilibiliTranscript } from "./platforms/bilibili";
+import { readBilibiliTranscript as readFreshBilibiliTranscript } from "./platforms/bilibili";
 import { detectVideoPlatform } from "./platforms/detect";
 import { listYouTubeTranscriptTracks, parseYouTubeTranscriptBody } from "./platforms/youtube";
 import {
   PAGE_REQUEST_CHANNEL,
+  PAGE_RESOURCE_REQUEST_CHANNEL,
+  PAGE_RESOURCE_RESPONSE_CHANNEL,
   PAGE_RESPONSE_CHANNEL,
   type PageRequest,
+  type PageResourceRequest,
+  type PageResourceResponse,
   type PageResponse,
 } from "./shared/protocol";
 import type { Transcript } from "./shared/types";
@@ -15,8 +19,33 @@ declare global {
   interface Window {
     ytInitialPlayerResponse?: LooseRecord;
     __INITIAL_STATE__?: LooseRecord;
-    __playinfo__?: LooseRecord;
   }
+}
+
+function fetchPlatformText(url: string): Promise<string> {
+  const id = crypto.randomUUID();
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      window.removeEventListener("message", receive);
+      reject(new Error("字幕服务响应超时，请稍后重试"));
+    }, 15_000);
+    const receive = (event: MessageEvent<PageResourceResponse>) => {
+      if (event.source !== window || event.data?.channel !== PAGE_RESOURCE_RESPONSE_CHANNEL || event.data.id !== id) return;
+      window.clearTimeout(timeout);
+      window.removeEventListener("message", receive);
+      if (event.data.ok) resolve(event.data.body);
+      else if (event.data.error === "http_error") reject(new Error(`字幕服务请求失败（${event.data.status || 0}）`));
+      else reject(new Error("字幕服务暂时无法连接，请检查网络后重试"));
+    };
+    window.addEventListener("message", receive);
+    const request: PageResourceRequest = {
+      channel: PAGE_RESOURCE_REQUEST_CHANNEL,
+      id,
+      type: "FETCH_PLATFORM_RESOURCE",
+      url,
+    };
+    window.postMessage(request, "*");
+  });
 }
 
 async function readYouTubeTranscript(trackId?: string): Promise<Transcript> {
@@ -32,9 +61,7 @@ async function readYouTubeTranscript(trackId?: string): Promise<Transcript> {
     || candidates[0];
   const endpoint = new URL(track.url);
   endpoint.searchParams.set("fmt", "json3");
-  const response = await fetch(endpoint.toString(), { credentials: "include" });
-  if (!response.ok) throw new Error(`字幕读取失败（${response.status}）`);
-  const cues = parseYouTubeTranscriptBody(await response.text());
+  const cues = parseYouTubeTranscriptBody(await fetchPlatformText(endpoint.toString()));
   return {
     trackId: track.id,
     language: track.language,
@@ -55,39 +82,14 @@ function bilibiliIdentity(): { bvid: string; cid: string } {
 
 async function readBilibiliTranscript(trackId?: string): Promise<Transcript> {
   const { bvid, cid } = bilibiliIdentity();
-  let tracks = window.__playinfo__?.data?.subtitle?.subtitles;
-  if (!Array.isArray(tracks) || tracks.length === 0) {
-    const response = await fetch(
-      `https://api.bilibili.com/x/player/v2?bvid=${encodeURIComponent(bvid)}&cid=${encodeURIComponent(cid)}`,
-      { credentials: "include" },
-    );
-    if (!response.ok) throw new Error(`字幕清单读取失败（${response.status}）`);
-    const listing = await response.json();
-    tracks = listing?.data?.subtitle?.subtitles;
-  }
-  if (!Array.isArray(tracks) || tracks.length === 0) throw new Error("当前视频没有可用字幕");
-  const candidates = listBilibiliTranscriptTracks(tracks);
-  const track = candidates.find((item) => item.id === trackId) || candidates[0];
-  const rawUrl = track.url;
-  const subtitleUrl = rawUrl.startsWith("//") ? `https:${rawUrl}` : rawUrl;
-  if (!subtitleUrl) throw new Error("字幕地址为空");
-  const response = await fetch(subtitleUrl, { credentials: "include" });
-  if (!response.ok) throw new Error(`字幕读取失败（${response.status}）`);
-  const cues = normalizeBilibiliTranscript(await response.json());
-  if (cues.length === 0) throw new Error("字幕内容为空");
-  return {
-    trackId: track.id,
-    language: track.language,
-    languageLabel: track.languageLabel,
-    cues,
-    tracks: candidates.map(({ url: _url, ...candidate }) => candidate),
-  };
+  return readFreshBilibiliTranscript({ bvid, cid, trackId, fetchText: fetchPlatformText });
 }
 
 async function readTranscript(trackId?: string): Promise<Transcript> {
   const platform = detectVideoPlatform(location.href);
   if (platform === "youtube") return readYouTubeTranscript(trackId);
   if (platform === "bilibili") return readBilibiliTranscript(trackId);
+  if (platform === "pornhub") throw new Error("当前视频没有可用字幕");
   throw new Error("当前页面暂不支持逐字稿");
 }
 
