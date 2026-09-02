@@ -9,6 +9,14 @@
 - Screenshot-shell check: `home-framing-final.png` (1440×930)
 - Footer alignment check: `footer-spacing-final.png` (1440×930)
 - Responsive check: 390×844
+- Editor source: `website/public/media/home/editor-showcase.webp` (3680×2392), supplied for both the
+  homepage hero and editing chapter
+- Media-library source: `website/public/media/home/media-library.webp` (3592×2060), supplied for the new
+  media-management chapter
+- Updated homepage captures: `home-editor-hero-final.png`, `home-media-library-final.png`, and
+  `home-editing-final.png` at 1440×930
+- Updated responsive captures: `home-editor-hero-mobile-final.png` and
+  `home-media-library-mobile-final.png` at 390×844
 
 ## Direction
 
@@ -30,8 +38,13 @@ the footer instead of stopping at the homepage.
   artificial browser-chrome wrapper.
 - Product captures keep their native aspect ratios and remain legible instead of being cropped into small
   decorative cards.
-- The four core capabilities use edge-to-edge color fields, alternating editorial composition, and oversized
-  chapter numerals instead of four rounded cards.
+- The five core capabilities use edge-to-edge color fields, alternating editorial composition, and oversized
+  chapter numerals instead of rounded cards; media management now has its own chapter between the Infinite
+  Canvas and editing story.
+- The homepage hero and editing chapter share the current editor capture, while the media-management chapter
+  uses the supplied library and recording view at its native aspect ratio.
+- At 390 px, the new hero capture and media-management chapter remain fully contained with no horizontal
+  overflow, and the browser console reports no warnings or errors.
 - Workflows and Plugins use open page headers, full-width product proof, hairline-separated rows, and dark
   emphasis bands; plugin details and docs share the same lighter hierarchy.
 - The inner-page radial background begins at the top of the viewport and remains visible behind the floating

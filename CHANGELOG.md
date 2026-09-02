@@ -5,6 +5,11 @@ commit list and downloadable artifacts.
 
 ## Unreleased
 
+### Changed
+
+- Updated the homepage hero and editing chapter to use the supplied current editor capture, and added a
+  dedicated media-management chapter with the supplied library and recording view.
+
 ### Fixed
 
 - Extended inner-page hero backgrounds behind the floating navigation instead of leaving a separate page-color

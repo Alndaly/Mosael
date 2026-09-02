@@ -13,7 +13,8 @@ import { cn } from "@/lib/utils";
 
 const CHAPTERS = [
   { id: "infinite-canvas", image: "/media/home/infinite-canvas.webp", width: 2400, height: 1552, href: "/docs/guides/boards" },
-  { id: "editing", image: "/media/home/editor.webp", width: 2400, height: 1560, href: "/docs/guides/editing" },
+  { id: "media-library", image: "/media/home/media-library.webp", width: 3592, height: 2060, href: "/docs/guides/media" },
+  { id: "editing", image: "/media/home/editor-showcase.webp", width: 3680, height: 2392, href: "/docs/guides/editing" },
   { id: "agent", image: "/media/screens/dark/ai-chat.png", width: 2880, height: 1520, href: "/docs/guides/ai-studio" },
   { id: "workflows", image: "/media/home/workflows.webp", width: 2400, height: 1401, href: "/workflows" },
 ] as const;
@@ -21,8 +22,9 @@ const CHAPTERS = [
 const CHAPTER_TONES = [
   "bg-[#17141f] text-[#fbf9ff]",
   "bg-[#eee9ff] text-[#18131f] dark:bg-[#211b31] dark:text-foreground",
-  "bg-[#eaf2ff] text-[#171725] dark:bg-[#171e2d] dark:text-foreground",
   "bg-[#f7eaf4] text-[#21141f] dark:bg-[#291b29] dark:text-foreground",
+  "bg-[#eaf2ff] text-[#171725] dark:bg-[#171e2d] dark:text-foreground",
+  "bg-[#f5efe8] text-[#201814] dark:bg-[#2a211d] dark:text-foreground",
 ] as const;
 
 function ProductShot({ src, alt, width, height, priority = false }: { src: string; alt: string; width: number; height: number; priority?: boolean }) {
@@ -66,7 +68,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
         </Reveal>
         <Reveal className="relative mx-auto mt-16 max-w-[92rem] sm:mt-20" delay={90}>
           <div className="pointer-events-none absolute -inset-x-20 top-1/4 bottom-0 -z-10 bg-[radial-gradient(ellipse_at_center,rgba(114,87,233,0.2),rgba(255,161,190,0.12)_44%,transparent_72%)]" />
-          <ProductShot src="/media/home/overview.webp" alt={t.heroShotAlt} width={2400} height={1552} priority />
+          <ProductShot src="/media/home/editor-showcase.webp" alt={t.heroShotAlt} width={3680} height={2392} priority />
         </Reveal>
       </section>
 
