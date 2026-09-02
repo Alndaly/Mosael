@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import { Geist, Geist_Mono, Syne } from "next/font/google";
 import { notFound } from "next/navigation";
 
@@ -36,6 +37,10 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
+
+// GA4 的 Measurement ID 是公开配置，但仍只从部署环境读取：没有配置的构建不会加载
+// Google 脚本，也不会向分析服务发送任何数据。
+const googleAnalyticsId = process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS_ID?.trim();
 
 /**
  * 这一层就是**根布局** —— `app/` 下没有第二个 layout。`<html lang>` 必须跟着语言变,
@@ -121,6 +126,7 @@ export default async function LocaleLayout({
           <SiteFooter locale={current} />
         </ThemeProvider>
       </body>
+      {googleAnalyticsId ? <GoogleAnalytics gaId={googleAnalyticsId} /> : null}
     </html>
   );
 }

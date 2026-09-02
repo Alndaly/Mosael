@@ -9,6 +9,18 @@ pnpm dev            # http://localhost:3000
 pnpm build          # 构建期静态生成全站页面(文档正文中英各 16 篇)
 ```
 
+## Google Analytics
+
+官网通过 Next.js 官方的 `@next/third-parties/google` 组件接入 GA4。开发时复制
+`.env.example` 为 `.env.local`；部署时在构建环境设置同名变量：
+
+```bash
+NEXT_PUBLIC_GOOGLE_ANALYTICS_ID=G-YDRX2Y5WZS
+```
+
+未配置该变量时不会注入 Google Analytics 脚本，也不会发送分析数据。`NEXT_PUBLIC_*`
+变量会在构建时写入前端产物，修改后需要重新构建并部署。
+
 ## 目录
 
 ```
