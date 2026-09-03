@@ -7,12 +7,20 @@ import { Button } from "@/components/ui/button";
 import { ModalShell } from "@/components/app/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import {
+  createRecordingSession,
+  EmptyRecordingError,
+  type RecordingInput,
+  type RecordingSession,
+} from "./recordingSession";
 
-type Source = "screen" | "camera" | "mic";
+type Source = "screen" | "camera" | "screenCamera" | "mic";
 
-/** Capture screen / webcam / mic via MediaRecorder → hand the recorded File to the caller
- *  (imported as an asset). Screen capture in the packaged app needs the Electron main-process
- *  display-media handler (electron/main.cjs). */
+const SOURCES: readonly Source[] = ["screen", "camera", "screenCamera", "mic"];
+
+/** Capture screen / webcam / mic via MediaRecorder and hand independent files to the caller.
+ *  A screen + camera session deliberately stays as two assets. Screen capture in the packaged
+ *  app needs the Electron main-process display-media handler (electron/main.cjs). */
 export function Recorder({
   open,
   onOpenChange,
@@ -20,15 +28,18 @@ export function Recorder({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onRecorded: (file: File) => void;
+  onRecorded: (files: File[]) => void;
 }) {
   const t = useI18n();
   const [source, setSource] = React.useState<Source>("screen");
+  const capturesScreen = source === "screen" || source === "screenCamera";
+  const capturesCamera = source === "camera" || source === "screenCamera";
+  const capturesMicrophone = source !== "screen";
   const [recording, setRecording] = React.useState(false);
   const [secs, setSecs] = React.useState(0);
-  const videoRef = React.useRef<HTMLVideoElement | null>(null);
-  const recorderRef = React.useRef<MediaRecorder | null>(null);
-  const streamRef = React.useRef<MediaStream | null>(null);
+  const screenVideoRef = React.useRef<HTMLVideoElement | null>(null);
+  const cameraVideoRef = React.useRef<HTMLVideoElement | null>(null);
+  const sessionRef = React.useRef<RecordingSession | null>(null);
   const timerRef = React.useRef<number | null>(null);
 
   // 输入设备选择:默认设备可能是不出数据的虚拟/连续互通设备(录了半天 0.6s 就是
@@ -99,87 +110,100 @@ export function Recorder({
     }
   }, []);
 
-  const cleanup = React.useCallback(() => {
+  const cleanupUi = React.useCallback(() => {
     if (timerRef.current) window.clearInterval(timerRef.current);
     timerRef.current = null;
     stopLevelMeter();
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
-    if (videoRef.current) videoRef.current.srcObject = null;
+    if (screenVideoRef.current) screenVideoRef.current.srcObject = null;
+    if (cameraVideoRef.current) cameraVideoRef.current.srcObject = null;
   }, [stopLevelMeter]);
 
-  const stop = React.useCallback(() => {
-    recorderRef.current?.stop(); // onstop emits the file + cleans up
-    recorderRef.current = null;
+  const cancel = React.useCallback(() => {
+    sessionRef.current?.cancel();
+    sessionRef.current = null;
+    setRecording(false);
+    cleanupUi();
+  }, [cleanupUi]);
+
+  const stop = React.useCallback(async () => {
+    const session = sessionRef.current;
+    if (!session) return;
+    // Claim the session before awaiting so the Stop button and the OS "stop sharing"
+    // event cannot both finalize and import the same files.
+    sessionRef.current = null;
     setRecording(false);
     if (timerRef.current) window.clearInterval(timerRef.current);
     timerRef.current = null;
-  }, []);
+    try {
+      const files = await session.stop();
+      onRecorded(files);
+      onOpenChange(false);
+    } catch (error) {
+      toast.error(t(error instanceof EmptyRecordingError ? "recordEmpty" : "recordFailed"));
+    } finally {
+      cleanupUi();
+    }
+  }, [cleanupUi, onOpenChange, onRecorded, t]);
 
   // Closing the dialog aborts an in-flight recording.
   React.useEffect(() => {
-    if (!open && recorderRef.current) {
-      recorderRef.current.ondataavailable = null;
-      recorderRef.current.onstop = null;
-      recorderRef.current.stop();
-      recorderRef.current = null;
-      setRecording(false);
-      cleanup();
-    }
-  }, [open, cleanup]);
-  React.useEffect(() => () => cleanup(), [cleanup]);
+    if (!open && sessionRef.current) cancel();
+  }, [open, cancel]);
+  React.useEffect(() => () => cancel(), [cancel]);
 
   const start = async () => {
+    const acquiredStreams: MediaStream[] = [];
     try {
       const media = navigator.mediaDevices;
       // exact 而不是 ideal:用户点名选的设备拿不到就该报错,而不是静默换一个继续录。
       const audioConstraint: MediaTrackConstraints | boolean = micId ? { deviceId: { exact: micId } } : true;
       const videoConstraint: MediaTrackConstraints | boolean = cameraId ? { deviceId: { exact: cameraId } } : true;
-      const stream =
-        source === "screen"
-          ? await media.getDisplayMedia({ video: true, audio: true })
-          : source === "camera"
-            ? await media.getUserMedia({ video: videoConstraint, audio: audioConstraint })
-            : await media.getUserMedia({ audio: audioConstraint });
-      streamRef.current = stream;
-      startLevelMeter(stream);
-      if (videoRef.current && source !== "mic") {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play().catch(() => undefined);
+      const inputs: RecordingInput[] = [];
+      let screenStream: MediaStream | null = null;
+      let cameraStream: MediaStream | null = null;
+
+      if (capturesScreen) {
+        screenStream = await media.getDisplayMedia({ video: true, audio: true });
+        acquiredStreams.push(screenStream);
+        inputs.push({ kind: "screen", stream: screenStream, filenamePrefix: t("record_screen_file") });
       }
-      const recorder = new MediaRecorder(stream);
-      const chunks: Blob[] = [];
-      recorder.ondataavailable = (event) => {
-        if (event.data.size) chunks.push(event.data);
-      };
-      recorder.onerror = () => {
-        toast.error(t("recordEmpty"));
-        cleanup();
-        setRecording(false);
-      };
-      recorder.onstop = () => {
-        const type = recorder.mimeType || (source === "mic" ? "audio/webm" : "video/webm");
-        const blob = new Blob(chunks, { type });
-        const label = source === "mic" ? "录音" : source === "camera" ? "摄像头" : "屏幕录制";
-        cleanup();
-        // 设备不出数据时 MediaRecorder 只吐 ~110B 的容器头(摄像头/麦克风被占用或
-        // 虚拟设备):导入这种空壳只会得到坏素材,拦下并留在弹窗里让用户重试。
-        if (blob.size < 2048) {
-          toast.error(t("recordEmpty"));
-          return;
-        }
-        onRecorded(new File([blob], `${label}-${Date.now()}.webm`, { type }));
-        onOpenChange(false);
-      };
+      if (capturesCamera) {
+        cameraStream = await media.getUserMedia({ video: videoConstraint, audio: audioConstraint });
+        acquiredStreams.push(cameraStream);
+        inputs.push({ kind: "camera", stream: cameraStream, filenamePrefix: t("record_camera_file") });
+      }
+      if (source === "mic") {
+        const micStream = await media.getUserMedia({ audio: audioConstraint });
+        acquiredStreams.push(micStream);
+        inputs.push({ kind: "mic", stream: micStream, filenamePrefix: t("record_mic_file") });
+      }
+
+      if (screenVideoRef.current && screenStream) {
+        screenVideoRef.current.srcObject = screenStream;
+        void screenVideoRef.current.play().catch(() => undefined);
+      }
+      if (cameraVideoRef.current && cameraStream) {
+        cameraVideoRef.current.srcObject = cameraStream;
+        void cameraVideoRef.current.play().catch(() => undefined);
+      }
+      const levelStream = cameraStream ?? screenStream ?? inputs[0]?.stream;
+      if (levelStream) startLevelMeter(levelStream);
+
+      const session = createRecordingSession(inputs, { onError: () => void stop() });
+      sessionRef.current = session;
       // If the user ends screen sharing from the browser/OS chrome, stop the recording.
-      stream.getVideoTracks()[0]?.addEventListener("ended", stop);
-      // 1s 切片:数据持续落 chunks,即使收尾环节出岔子也不至于两手空空。
-      recorder.start(1000);
-      recorderRef.current = recorder;
+      screenStream?.getVideoTracks()[0]?.addEventListener("ended", () => void stop(), { once: true });
+      // The session starts every recorder in one synchronous turn and keeps one-second chunks.
+      session.start();
       setRecording(true);
       setSecs(0);
       timerRef.current = window.setInterval(() => setSecs((value) => value + 1), 1000);
     } catch {
+      const session = sessionRef.current;
+      session?.cancel();
+      sessionRef.current = null;
+      if (!session) acquiredStreams.forEach((stream) => stream.getTracks().forEach((track) => track.stop()));
+      cleanupUi();
       toast.error(t("recordDenied"));
     }
   };
@@ -194,34 +218,87 @@ export function Recorder({
       className="w-[520px]"
       footer={
         <div className="flex w-full min-w-0 items-center justify-between gap-4">
-          <span className="min-w-0 text-ui-xs leading-[1.4] text-muted-foreground">{t(`record_${source}_hint` as never) as string}</span>
+          <span className="min-w-0 text-ui-xs leading-[1.4] text-muted-foreground">
+            {t(`record_${source}_hint` as never) as string}
+          </span>
           {!recording ? (
-            <Button className="shrink-0" size="sm" onClick={start}><Circle size={11} className="fill-destructive text-destructive" /> {t("recordStart")}</Button>
+            <Button className="shrink-0" size="sm" onClick={start}>
+              <Circle size={11} className="fill-destructive text-destructive" /> {t("recordStart")}
+            </Button>
           ) : (
-            <Button className="shrink-0" size="sm" variant="destructive" onClick={stop}><Square size={11} /> {t("recordStop")}</Button>
+            <Button className="shrink-0" size="sm" variant="destructive" onClick={stop}>
+              <Square size={11} /> {t("recordStop")}
+            </Button>
           )}
         </div>
       }
     >
       <div className="grid w-full gap-2.5">
-        <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border w-fit justify-self-start" role="group" aria-label={t("recordTitle")}>
-          {(["screen", "camera", "mic"] as Source[]).map((s) => (
+        <div
+          className="inline-flex h-7 w-fit items-stretch justify-self-start overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border"
+          role="group"
+          aria-label={t("recordTitle")}
+        >
+          {SOURCES.map((s) => (
             <button
               key={s}
               type="button"
               disabled={recording}
-              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", source === s && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+              className={cn(
+                "inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground",
+                source === s &&
+                  "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground",
+              )}
               onClick={() => setSource(s)}
             >
-              {s === "screen" ? <ScreenIcon size={13} /> : s === "camera" ? <Video size={13} /> : <Mic size={13} />}{" "}
+              {s === "screen" ? (
+                <ScreenIcon size={13} />
+              ) : s === "camera" ? (
+                <Video size={13} />
+              ) : s === "screenCamera" ? (
+                <span className="inline-flex items-center -space-x-1" aria-hidden>
+                  <ScreenIcon size={13} />
+                  <Video size={11} className="rounded-sm bg-current/10" />
+                </span>
+              ) : (
+                <Mic size={13} />
+              )}{" "}
               {t(`record_${s}` as never)}
             </button>
           ))}
         </div>
-        <div className={cn("relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-lg border border-border bg-panel-inset", recording && "bg-black")}>
-          {/* Video stays mounted for screen/camera so the ref is stable when start() attaches
-              the stream; the idle placeholder covers it until recording begins. */}
-          {source !== "mic" && <video ref={videoRef} className="h-full w-full bg-black object-contain" muted playsInline />}
+        <div
+          className={cn(
+            "relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-lg border border-border bg-panel-inset",
+            recording && "bg-black",
+          )}
+        >
+          {/* Video stays mounted for the selected source so refs are stable when start() attaches
+              streams. In dual mode the split preview makes the two independent outputs explicit. */}
+          {source === "screenCamera" ? (
+            <div className="grid h-full w-full grid-cols-2 gap-px bg-border">
+              <div className="relative min-w-0 overflow-hidden bg-black">
+                <video ref={screenVideoRef} className="h-full w-full object-contain" muted playsInline />
+                {recording && (
+                  <span className="absolute bottom-2 left-2 rounded-full bg-black/65 px-2 py-0.5 text-ui-xs text-white">
+                    {t("record_screen")}
+                  </span>
+                )}
+              </div>
+              <div className="relative min-w-0 overflow-hidden bg-black">
+                <video ref={cameraVideoRef} className="h-full w-full object-contain" muted playsInline />
+                {recording && (
+                  <span className="absolute bottom-2 left-2 rounded-full bg-black/65 px-2 py-0.5 text-ui-xs text-white">
+                    {t("record_camera")}
+                  </span>
+                )}
+              </div>
+            </div>
+          ) : source === "screen" ? (
+            <video ref={screenVideoRef} className="h-full w-full bg-black object-contain" muted playsInline />
+          ) : source === "camera" ? (
+            <video ref={cameraVideoRef} className="h-full w-full bg-black object-contain" muted playsInline />
+          ) : null}
           {recording && source === "mic" && (
             <div className="text-[color-mix(in_oklab,var(--primary)_70%,#fff)]">
               <Mic size={30} />
@@ -229,20 +306,43 @@ export function Recorder({
           )}
           {!recording && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-panel-inset text-xs text-muted-foreground">
-              {source === "screen" ? <ScreenIcon size={24} /> : source === "camera" ? <Video size={24} /> : <Mic size={24} />}
+              {source === "screen" ? (
+                <ScreenIcon size={24} />
+              ) : source === "camera" ? (
+                <Video size={24} />
+              ) : source === "screenCamera" ? (
+                <span className="inline-flex items-center gap-1" aria-hidden>
+                  <ScreenIcon size={24} />
+                  <Video size={22} />
+                </span>
+              ) : (
+                <Mic size={24} />
+              )}
               <span>{t(`record_${source}_placeholder` as never) as string}</span>
             </div>
           )}
-          {recording && <span className="absolute left-2.5 top-2.5 h-2.5 w-2.5 animate-recorder-blink rounded-full bg-destructive" aria-hidden />}
-          <span className="timecode absolute bottom-2 right-2.5 tabular-nums text-white [text-shadow:0_1px_3px_rgb(0_0_0/0.7)]">{fmt(secs)}</span>
+          {recording && (
+            <span
+              className="absolute left-2.5 top-2.5 h-2.5 w-2.5 animate-recorder-blink rounded-full bg-destructive"
+              aria-hidden
+            />
+          )}
+          <span className="timecode absolute bottom-2 right-2.5 tabular-nums text-white [text-shadow:0_1px_3px_rgb(0_0_0/0.7)]">
+            {fmt(secs)}
+          </span>
         </div>
 
         {/* 设备选择 + 输入电平:摄像头/麦克风模式可指定设备;电平柱有声即动,
             哑设备(录了 0 秒那种)当场现形。录制中锁定选择。 */}
-        {source !== "screen" && (
+        {capturesMicrophone && (
           <div className="grid gap-1.5">
-            <div className={cn("grid gap-1.5", source === "camera" && "grid-cols-2 max-[560px]:grid-cols-1")}>
-              {source === "camera" && (
+            <div
+              className={cn(
+                "grid gap-1.5",
+                capturesCamera && "grid-cols-2 max-[560px]:grid-cols-1",
+              )}
+            >
+              {capturesCamera && (
                 <Select
                   value={cameraId || "default"}
                   onValueChange={(next) => {
@@ -294,7 +394,10 @@ export function Recorder({
                 <Mic size={11} className="shrink-0 text-muted-foreground" />
                 <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-panel-inset">
                   <div
-                    className={cn("h-full rounded-full transition-[width] duration-75", level > 0.02 ? "bg-[var(--success)]" : "bg-border-strong")}
+                    className={cn(
+                      "h-full rounded-full transition-[width] duration-75",
+                      level > 0.02 ? "bg-[var(--success)]" : "bg-border-strong",
+                    )}
                     style={{ width: `${Math.min(100, Math.round(level * 130))}%` }}
                   />
                 </div>
@@ -302,7 +405,6 @@ export function Recorder({
             )}
           </div>
         )}
-
       </div>
     </ModalShell>
   );

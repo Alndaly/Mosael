@@ -137,7 +137,11 @@ export function MediaPool({
           </Button>
         </div>
       </div>
-      <Recorder open={recorderOpen} onOpenChange={setRecorderOpen} onRecorded={onImportFile} />
+      <Recorder
+        open={recorderOpen}
+        onOpenChange={setRecorderOpen}
+        onRecorded={(files) => files.forEach(onImportFile)}
+      />
       <div className="grid gap-1.5 border-b border-border p-1.5">
         <div className="relative grid [&_svg]:pointer-events-none [&_svg]:absolute [&_svg]:left-2 [&_svg]:top-1/2 [&_svg]:z-[1] [&_svg]:-translate-y-1/2 [&_svg]:text-muted-foreground [&_input]:h-7 [&_input]:pl-7 [&_input]:text-xs">
           <Search size={13} />

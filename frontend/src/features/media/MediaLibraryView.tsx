@@ -393,7 +393,11 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           )}
         </div>
       )}
-      <Recorder open={recorderOpen} onOpenChange={setRecorderOpen} onRecorded={(file) => uploadAsset.mutate(file)} />
+      <Recorder
+        open={recorderOpen}
+        onOpenChange={setRecorderOpen}
+        onRecorded={(files) => files.forEach((file) => uploadAsset.mutate(file))}
+      />
       <UrlImportDialog
         open={urlImportOpen}
         onOpenChange={setUrlImportOpen}
