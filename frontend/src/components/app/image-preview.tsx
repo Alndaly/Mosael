@@ -32,6 +32,7 @@ const ImagePreviewContext = React.createContext<ImagePreviewContextValue | null>
 
 export function ImagePreviewProvider({ children }: { children: React.ReactNode }) {
   const t = useI18n();
+  const portalHostRef = React.useRef<HTMLDivElement>(null);
   const [images, setImages] = React.useState<ImagePreviewItem[]>([]);
   const [index, setIndex] = React.useState(0);
   const [visible, setVisible] = React.useState(false);
@@ -60,7 +61,16 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
   return (
     <ImagePreviewContext.Provider value={value}>
       {children}
+      {/* Radix Dialog 会把 body 设成 pointer-events:none，只给自己的 Content 恢复交互。
+       * 灯箱若直接 portal 到 body，保留下层 Dialog 后就会“看得见但点不动”。专用宿主明确
+       * 恢复顶层交互；关闭动画开始时立即禁用，避免透明 Portal 短暂挡住应用。 */}
+      <div
+        ref={portalHostRef}
+        data-image-preview-portal-host
+        style={{ pointerEvents: visible ? "auto" : "none" }}
+      />
       <PhotoSlider
+        portalContainer={portalHostRef.current ?? undefined}
         images={images.map((item) => ({
           key: item.src,
           //: **视频那一项不给 src。** 库里 render 的优先级比 src 低(它的注释原话),给了
