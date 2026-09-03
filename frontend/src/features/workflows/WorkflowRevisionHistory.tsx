@@ -58,9 +58,13 @@ export function WorkflowRevisionHistory({
   const qc = useQueryClient();
   const [pending, setPending] = React.useState<WorkflowRevision | null>(null);
   const revisions = useQuery({
-    queryKey: ["workflow-revisions", workflow.id],
+    // 修订号属于查询身份。只按 workflow.id 缓存时，面板第一次在 v3 打开后会一直复用那三行，
+    // 即使后台轮询已经把工作流本身更新到 v7——标题显示 v7，列表却只到 v3。
+    queryKey: ["workflow-revisions", workflow.id, workflow.revision],
     queryFn: () => listWorkflowRevisions(workflow.id),
     enabled: open,
+    // Dialog 组件常驻，只切 open；每次重开都重新确认服务端窗口，不能把旧缓存当完整历史。
+    refetchOnMount: "always",
   });
   const restore = useMutation({
     mutationFn: (revision: number) => restoreWorkflowRevision(workflow.id, revision),

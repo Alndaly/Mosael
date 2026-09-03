@@ -17,6 +17,14 @@ from app.db.model_base import now
 from app.db.models import Workflow, WorkflowRevision
 
 
+#: 版本历史是给人恢复工作流用的浏览窗口，不是运行快照的生命周期。
+#:
+#: 自动保存会持续追加不可变修订；不限制列表会让一个长期编辑的工作流一次返回成千上万行和
+#: 对应 JSON 图。这里只限制历史面板/API 的读取窗口，底层修订仍然保留——已经排队的任务通过
+#: ``workflow_revision_id`` 固定到其中一行，贸然删除会让一次合法运行在启动后找不到自己的图。
+WORKFLOW_REVISION_HISTORY_LIMIT = 100
+
+
 class WorkflowRevisionError(RuntimeError):
     pass
 
@@ -102,12 +110,24 @@ def commit_graph_revision(
     return revision
 
 
-def list_workflow_revisions(db: Session, workflow_id: str) -> list[WorkflowRevision]:
+def list_workflow_revisions(
+    db: Session,
+    workflow_id: str,
+    *,
+    limit: int = WORKFLOW_REVISION_HISTORY_LIMIT,
+) -> list[WorkflowRevision]:
+    """按新到旧返回有限的可恢复历史。
+
+    调用方可以为内部用途收紧窗口，但不能越过产品级上限，避免重新引入无界读取。
+    """
+
+    bounded = max(1, min(limit, WORKFLOW_REVISION_HISTORY_LIMIT))
     return list(
         db.scalars(
             select(WorkflowRevision)
             .where(WorkflowRevision.workflow_id == workflow_id)
             .order_by(WorkflowRevision.revision.desc())
+            .limit(bounded)
         )
     )
 

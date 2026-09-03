@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from app.core.db import SessionLocal
-from app.db.models import Job, ProviderProfile, TaskEvent, Workflow
+from app.db.models import Job, TaskEvent, Workflow
 from app.domain.workflows import (
     NODE_TYPES,
     WorkflowDomainError,
@@ -243,6 +243,37 @@ def test_workflow_revisions_are_immutable_and_restore_appends() -> None:
         assert job.payload["workflow_revision"] == 3
         assert job.payload["workflow_graph_hash"] == restored.json()["graph_hash"]
         assert job.payload["workflow_revision_id"]
+
+
+def test_workflow_revision_history_returns_the_latest_bounded_window() -> None:
+    """自动保存可以产生很多不可变快照，但历史面板不能做一次无界 JSON 查询。
+
+    这里只约束可浏览窗口；旧修订仍是运行任务可能引用的快照，不能为省列表长度而删除。
+    """
+
+    from app.domain.workflows.revisions import (
+        WORKFLOW_REVISION_HISTORY_LIMIT,
+        get_workflow_revision,
+        list_workflow_revisions,
+    )
+
+    client = fresh_client()
+    workspace_id = client.post("/api/workspaces", json={"name": "Bounded history"}).json()["id"]
+    graph = linear_graph()
+    with SessionLocal() as db:
+        workflow = create_workflow(db, workspace_id=workspace_id, name="Many revisions", graph=graph)
+        total = WORKFLOW_REVISION_HISTORY_LIMIT + 3
+        for revision in range(2, total + 1):
+            changed = linear_graph()
+            changed["nodes"][1]["config"]["template"] = f"revision {revision}"
+            update_workflow(db, workflow, {"graph": changed})
+
+        visible = list_workflow_revisions(db, workflow.id)
+        assert len(visible) == WORKFLOW_REVISION_HISTORY_LIMIT
+        assert visible[0].revision == total
+        assert visible[-1].revision == total - WORKFLOW_REVISION_HISTORY_LIMIT + 1
+        # The read limit must not break a queued or historical run pinned to an older snapshot.
+        assert get_workflow_revision(db, workflow.id, 1) is not None
 
 
 def test_queued_run_executes_the_revision_pinned_at_enqueue(monkeypatch) -> None:
