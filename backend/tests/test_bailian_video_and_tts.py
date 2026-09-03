@@ -128,10 +128,11 @@ def test_没有key直接拒绝_而不是发一个必然失败的请求() -> None
 
 def test_引擎id就是vendor_id() -> None:
     """domain/voices/voices.py 拿 engine 去 resolve_connection,对不上就找不到那份凭据。"""
-    from app.domain.provider_presets import VENDOR_PRESETS
+    from app.domain.provider_presets import provider_definition
 
-    assert BailianSpeechAdapter.engine_id in VENDOR_PRESETS
-    assert "tts" in VENDOR_PRESETS[BailianSpeechAdapter.engine_id]["capability_ids"]
+    definition = provider_definition(BailianSpeechAdapter.engine_id)
+    assert definition is not None
+    assert "tts" in definition.capability_ids
 
 
 def test_档案填的是对话端点时_语音要归一到原生根() -> None:

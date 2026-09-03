@@ -19,7 +19,7 @@ from __future__ import annotations
 from app.core.db import SessionLocal
 from app.db.models import ProviderProfile
 from app.domain import provider_credentials
-from app.domain.providers import VENDOR_PRESETS
+from app.domain.provider_presets import provider_definition
 from tests.util import fresh_client
 
 
@@ -34,7 +34,9 @@ def _comfy(client) -> str:
 
 def test_the_preset_says_it_needs_no_key() -> None:
     """免密钥是 vendor 的属性,写在预设里 —— 不是从"用户填没填"猜出来的。"""
-    assert VENDOR_PRESETS["comfyui"].get("keyless") is True
+    comfyui = provider_definition("comfyui")
+    assert comfyui is not None
+    assert comfyui.keyless is True
 
 
 def test_it_resolves_without_any_credential() -> None:

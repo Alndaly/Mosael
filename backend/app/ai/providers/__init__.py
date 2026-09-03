@@ -57,6 +57,7 @@ from app.ai.providers.registry import (
     REMOTE_SPEECH_ADAPTERS,
     build_speech_adapter,
     get_generation_adapter,
+    has_capability_implementation,
     connection_vendor_for_speech_engine,
 )
 
@@ -99,6 +100,7 @@ __all__ = [
     "build_speech_adapter",
     "extract_bailian_audio_url",
     "get_generation_adapter",
+    "has_capability_implementation",
     "is_cosyvoice",
     "resolve_dashscope_native_base",
     "roles_supplied_via_url",

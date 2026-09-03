@@ -17,48 +17,24 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
-from app.domain.provider_presets import VENDOR_PRESETS
+from app.ai.providers import has_capability_implementation
+from app.domain.provider_presets import provider_definition, provider_definitions
 
 # 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
 RATCHET = True
 
-#: chat 走通用兼容客户端,不按 vendor 分适配器 —— 它不该被要求有一个专属实现。
-_NO_PER_VENDOR_ADAPTER = {"chat"}
-
-
-def _has_implementation(vendor: str, capability: str) -> bool:
-    if capability in _NO_PER_VENDOR_ADAPTER:
-        return True
-    if capability in ("image", "video"):
-        from app.ai.providers import get_generation_adapter
-
-        return get_generation_adapter(vendor, capability) is not None
-    if capability == "tts":
-        from app.ai.providers import REMOTE_SPEECH_ADAPTERS
-
-        return vendor in REMOTE_SPEECH_ADAPTERS
-    if capability == "podcast":
-        # 播客是独立的 WebSocket 实现,不在 REMOTE_SPEECH_ADAPTERS 里(它的构造参数是 appid + Access
-        # Token,不是 API Key)。派发处按 **vendor 名**分支,所以判据也必须按 vendor 判 ——
-        # 第一版这里写的是"模块里有没有 PODCAST_SPEAKERS",那是个模块级事实,任何 vendor 都
-        # 为真,于是给别人加一个 podcast 也不会红。破坏性验证当场把这一点抓了出来。
-        import re
-
-        source = (Path(__file__).resolve().parents[1] / "app" / "domain" / "voices" / "voices.py").read_text(encoding="utf-8")
-        return bool(re.search(rf'resolve_connection\(db, "{re.escape(vendor)}"', source))
-    raise AssertionError(f"新能力 {capability!r} 还没说清谁来执行它 —— 请在这里补上判据")
-
-
 @pytest.mark.parametrize(
     ("vendor", "capability"),
-    [(vendor, cap) for vendor, preset in sorted(VENDOR_PRESETS.items()) for cap in preset.get("capability_ids", [])],
+    [
+        (definition.vendor, capability)
+        for definition in provider_definitions()
+        for capability in definition.capability_ids
+    ],
 )
 def test_每一档声明的能力都有人执行(vendor: str, capability: str) -> None:
-    assert _has_implementation(vendor, capability), (
+    assert has_capability_implementation(vendor, capability), (
         f"预设 {vendor!r} 声明了 {capability!r},但没有任何东西能执行它 —— "
         f"界面会把这一档摆出来,而用户要等到点了生成才发现。"
         f"要么接上适配器,要么把它从 capability_ids 里去掉。"
@@ -67,6 +43,8 @@ def test_每一档声明的能力都有人执行(vendor: str, capability: str) -
 
 def test_百炼四档齐全() -> None:
     """点名钉住这一家:它是"同一把 Key 挂着四种能力"的典型,少写一样用户就得多建一个档案。"""
-    assert VENDOR_PRESETS["alibaba"]["capability_ids"] == ["chat", "image", "video", "tts"]
+    alibaba = provider_definition("alibaba")
+    assert alibaba is not None
+    assert alibaba.capability_ids == ("chat", "image", "video", "tts")
     for capability in ("image", "video", "tts"):
-        assert _has_implementation("alibaba", capability), f"百炼的 {capability} 没接上"
+        assert has_capability_implementation("alibaba", capability), f"百炼的 {capability} 没接上"

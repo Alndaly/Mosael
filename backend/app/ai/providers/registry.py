@@ -65,6 +65,12 @@ def get_generation_adapter(vendor_id: str, media_kind: str) -> GenerationAdapter
     return _GENERATION_ADAPTERS.get((vendor_id, media_kind))
 
 
+# Podcast synthesis has a distinct request/result contract and therefore is not
+# disguised as a SpeechAdapter.  It is nevertheless registered here so capability
+# availability has one composition-time answer instead of source-code inspection.
+_PODCAST_ADAPTER_VENDORS = frozenset({"volcano-podcast"})
+
+
 def _index_speech_adapters(adapters: Iterable[type[SpeechAdapter]]) -> dict[str, type[SpeechAdapter]]:
     indexed: dict[str, type[SpeechAdapter]] = {}
     for adapter in adapters:
@@ -93,6 +99,19 @@ def connection_vendor_for_speech_engine(engine: str) -> str:
     return _SPEECH_ENGINE_CONNECTION_VENDOR.get(engine, engine)
 
 
+def has_capability_implementation(vendor_id: str, capability: str) -> bool:
+    """Whether the composed runtime can execute one declared Provider capability."""
+    if capability == "chat":
+        return True  # Chat uses the generic OpenAI-compatible/sidecar transport.
+    if capability in {"image", "video"}:
+        return get_generation_adapter(vendor_id, capability) is not None
+    if capability == "tts":
+        return vendor_id in REMOTE_SPEECH_ADAPTERS
+    if capability == "podcast":
+        return vendor_id in _PODCAST_ADAPTER_VENDORS
+    return False
+
+
 def build_speech_adapter(
     engine: str,
     api_key: str,
@@ -111,4 +130,10 @@ def build_speech_adapter(
     return adapter(api_key=api_key, voice=voice, model=model, base_url=base_url)
 
 
-__all__ = ["REMOTE_SPEECH_ADAPTERS", "build_speech_adapter", "get_generation_adapter", "connection_vendor_for_speech_engine"]
+__all__ = [
+    "REMOTE_SPEECH_ADAPTERS",
+    "build_speech_adapter",
+    "connection_vendor_for_speech_engine",
+    "get_generation_adapter",
+    "has_capability_implementation",
+]

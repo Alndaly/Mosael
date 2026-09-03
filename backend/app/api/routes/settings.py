@@ -67,10 +67,9 @@ from app.domain.provider_quota import QuotaUnavailable, fetch_quota, is_expired,
 from app.domain import provider_health
 from app.domain.provider_auth import acquire_lease, commit_credential, read_credential
 from app.domain.provider_credentials import is_keyless
+from app.domain.provider_presets import ProviderField, provider_definition, provider_definitions
 from app.domain.providers import (
-    VENDOR_PRESETS,
     pi_provider_id,
-    auth_types_for_vendor,
     capability_ids_for_vendor,
     normalize_auth_type,
     normalize_capability_ids,
@@ -121,31 +120,24 @@ def _profile_out(db: DbSession, profile: ProviderProfile, user: CurrentUser) -> 
     return out
 
 
-def _spec_for(vendor: str, key: str) -> dict:
-    return next((spec for spec in _field_specs(vendor) if str(spec.get("key", "")) == key), {})
-
-
-def _field_specs(vendor: str) -> list[dict]:
-    return list(VENDOR_PRESETS.get(vendor, {}).get("fields", []))  # type: ignore[arg-type]
-
-
-def _field_storage(spec: dict) -> str:
-    return str(spec.get("storage") or "extra")
+def _field_specs(vendor: str) -> tuple[ProviderField, ...]:
+    definition = provider_definition(vendor)
+    return definition.fields if definition else ()
 
 
 def _read_config_field(
-    db: DbSession, profile: ProviderProfile, spec: dict, credential: ProviderCredential | None = None
+    db: DbSession, profile: ProviderProfile, spec: ProviderField, credential: ProviderCredential | None = None
 ) -> str:
     """表单上的一个字段当前的值。
 
     密的那几个跟着**钥匙**走(见 domain/provider_credentials):`credential` 是读的那个人自己的
     那把,给 None 就当没配过 —— 别人的钥匙在这里读不出来,连尾四位也读不出来。
     """
-    storage = _field_storage(spec)
-    key = str(spec.get("key", ""))
+    storage = spec.storage
+    key = spec.key
     if storage == "api_key":
         return (credential.api_key if credential else "") or ""
-    if spec.get("secret"):
+    if spec.secret:
         return str((credential.secrets if credential else {}).get(key) or "")
     if storage == "base_url":
         return profile.base_url or ""
@@ -159,16 +151,16 @@ def _read_config_field(
 
 
 def _write_config_field(
-    profile: ProviderProfile, spec: dict, value: str, credential: ProviderCredential | None = None
+    profile: ProviderProfile, spec: ProviderField, value: str, credential: ProviderCredential | None = None
 ) -> None:
     """写一个表单字段。密的落到**写的人自己**那把钥匙上,其余落到这条连接上。"""
-    storage = _field_storage(spec)
-    key = str(spec.get("key", ""))
+    storage = spec.storage
+    key = spec.key
     if storage == "api_key":
         if credential is not None:
             credential.api_key = value
         return
-    if spec.get("secret"):
+    if spec.secret:
         if credential is not None:
             credential.secrets = {**(credential.secrets or {}), key: value} if value else {
                 k: v for k, v in (credential.secrets or {}).items() if k != key
@@ -193,11 +185,11 @@ def _masked_config(
 ) -> dict[str, str]:
     out: dict[str, str] = {}
     for spec in _field_specs(profile.vendor):
-        key = str(spec.get("key", ""))
+        key = spec.key
         value = _read_config_field(db, profile, spec, credential)
         if not key or not value:
             continue
-        out[key] = f"…{value[-4:]}" if spec.get("secret") else value
+        out[key] = f"…{value[-4:]}" if spec.secret else value
     return out
 
 
@@ -210,7 +202,7 @@ def _masked_extra(profile: ProviderProfile, credential: ProviderCredential | Non
     # 连接的非密附加配置 + **我自己**那把钥匙上的密字段。别人的密字段这里取不到。
     stored = {**(profile.extra or {}), **((credential.secrets if credential else {}) or {})}
     secret_keys = {
-        spec["key"] for spec in _field_specs(profile.vendor) if _field_storage(spec) == "extra" and spec.get("secret")
+        spec.key for spec in _field_specs(profile.vendor) if spec.storage == "extra" and spec.secret
     }
     out: dict[str, str] = {}
     for key, value in stored.items():
@@ -231,7 +223,7 @@ def merge_profile_extra(profile: ProviderProfile, incoming: dict[str, str]) -> d
     """
     merged = dict(profile.extra or {})
     secret_keys = {
-        spec["key"] for spec in _field_specs(profile.vendor) if _field_storage(spec) == "extra" and spec.get("secret")
+        spec.key for spec in _field_specs(profile.vendor) if spec.storage == "extra" and spec.secret
     }
     for key, value in incoming.items():
         text_value = (value or "").strip()
@@ -255,18 +247,18 @@ def _apply_profile_config(
     credential: ProviderCredential | None = None,
 ) -> None:
     """把表单值折进这条连接;密的那几个折进 `credential`(写的人自己那把)。"""
-    preset = VENDOR_PRESETS.get(profile.vendor, {})
+    definition = provider_definition(profile.vendor)
     if creating:
-        profile.base_url = str(preset.get("base_url", "") or "")
+        profile.base_url = definition.base_url if definition else ""
         profile.extra = {}
 
     specs = _field_specs(profile.vendor)
     for spec in specs:
-        key = str(spec.get("key", ""))
+        key = spec.key
         if not key:
             continue
         raw_value = incoming.get(key)
-        default_value = str(spec.get("default", "") or "")
+        default_value = spec.default
         if raw_value is None:
             if creating and default_value:
                 _write_config_field(profile, spec, credential=credential, value=default_value)
@@ -277,19 +269,19 @@ def _apply_profile_config(
             _write_config_field(profile, spec, credential=credential, value=value)
             continue
 
-        if spec.get("secret") and not creating:
+        if spec.secret and not creating:
             continue
         if default_value and creating:
             _write_config_field(profile, spec, credential=credential, value=default_value)
         else:
             _write_config_field(profile, spec, credential=credential, value="")
 
-    def _submitted(spec: dict) -> str:
+    def _submitted(spec: ProviderField) -> str:
         """校验用的值。default_model 这类字段落成的是模型行,而模型行在校验**之后**才建 ——
         拿"读回来的模型"去判必填永远是空,新建档案会一律报缺少默认模型。"""
-        key = str(spec.get("key", ""))
-        if _field_storage(spec) == "default_model":
-            return (incoming.get(key) or str(spec.get("default", "") or "")).strip() or _read_config_field(
+        key = spec.key
+        if spec.storage == "default_model":
+            return (incoming.get(key) or spec.default).strip() or _read_config_field(
                 db, profile, spec
             )
         return _read_config_field(db, profile, spec)
@@ -298,9 +290,9 @@ def _apply_profile_config(
     # 一条还没有任何人填过钥匙的连接是完全正常的状态 —— 每个人带自己的那把(见
     # domain/provider_credentials),建连接的人不必替所有人先填一个。
     missing = [
-        str(spec.get("label") or spec.get("key"))
+        spec.label
         for spec in specs
-        if spec.get("required") and not spec.get("secret") and not _submitted(spec).strip()
+        if spec.required and not spec.secret and not _submitted(spec).strip()
     ]
     if missing:
         raise HTTPException(status_code=422, detail=f"缺少必要配置: {', '.join(missing)}")
@@ -310,16 +302,16 @@ def _apply_profile_config(
 def list_vendor_presets(user: CurrentUser) -> list[VendorPresetOut]:
     return [
         VendorPresetOut(
-            vendor=vendor,
-            label=preset.get("label", vendor),
-            capability_ids=capability_ids_for_vendor(vendor),
-            base_url=preset.get("base_url", ""),
-            default_model=preset.get("default_model", ""),
-            capabilities=preset.get("capabilities", ""),
-            fields=[VendorFieldOut(**spec) for spec in preset.get("fields", [])],  # type: ignore[arg-type]
-            auth=auth_types_for_vendor(vendor),
+            vendor=definition.vendor,
+            label=definition.label,
+            capability_ids=list(definition.capability_ids),
+            base_url=definition.base_url,
+            default_model=definition.default_model,
+            capabilities=definition.capabilities,
+            fields=[VendorFieldOut(**vars(field)) for field in definition.fields],
+            auth=list(definition.auth_types),
         )
-        for vendor, preset in VENDOR_PRESETS.items()
+        for definition in provider_definitions()
     ]
 
 
@@ -457,16 +449,16 @@ def _sync_model_row(db: DbSession, profile: ProviderProfile, incoming: dict[str,
 
     能力留空,由 effective_capabilities 回落 vendor 预设;用户想细分就去模型列表里改。
     """
-    preset = VENDOR_PRESETS.get(profile.vendor, {})
-    specs = [spec for spec in _field_specs(profile.vendor) if _field_storage(spec) == "default_model"]
+    definition = provider_definition(profile.vendor)
+    specs = [spec for spec in _field_specs(profile.vendor) if spec.storage == "default_model"]
     model_id = ""
     for spec in specs:
-        key = str(spec.get("key", ""))
-        model_id = (incoming.get(key) or str(spec.get("default", "") or "")).strip()
+        key = spec.key
+        model_id = (incoming.get(key) or spec.default).strip()
         if model_id:
             break
     if not model_id:
-        model_id = str(preset.get("default_model", "") or "").strip()
+        model_id = definition.default_model.strip() if definition else ""
     if not model_id:
         return
     provider_models.upsert(db, profile, model_id, source="manual")
@@ -493,9 +485,9 @@ def create_provider_profile(body: ProviderProfileCreate, db: DbSession, user: Cu
         # 只能从**自己的**连接复制密钥 —— 否则这就是一条读到别人钥匙的路。
         source = _require_profile(db, body.copy_credentials_from, user)
         for spec in _field_specs(body.vendor):
-            if not spec.get("secret"):
+            if not spec.secret:
                 continue
-            key = str(spec.get("key", ""))
+            key = spec.key
             if incoming.get(key, "").strip():
                 continue  # 显式提供的密钥优先
             copied = _read_config_field(db, source, spec, provider_credentials.get(db, source.id, user.id))

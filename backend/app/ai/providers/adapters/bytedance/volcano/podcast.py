@@ -4,7 +4,7 @@ This is a different product from the v3 speech endpoint, not a mode of it, and t
 that bites first is the credential: the podcast socket authenticates with an appid and an
 access token from the speech console and rejects the v3 API Key outright. Mixing the two is
 the single most common way to get an unexplained handshake failure, which is why they remain
-separate persisted vendor ids — see VENDOR_PRESETS.
+separate persisted vendor ids — see the ProviderDefinition registry.
 
 The flow is a state machine, not a request: start the connection, wait for it to be accepted,
 start a session carrying the whole job description, then read frames until the server says the

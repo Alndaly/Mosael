@@ -481,10 +481,10 @@ class ProviderProfile(Base):
     vendor: Mapped[str] = mapped_column(String(60), nullable=False)  # alibaba|bytedance|openai|moonshot|minimax|openai-compatible|...
     base_url: Mapped[str] = mapped_column(String(300), nullable=False, default="")
     #: 鉴权方式。"api_key" = 每个人自己的那把(见 ProviderCredential);"oauth" = 订阅计划
-    #: (Claude Pro/Max、Kimi Code 等),密钥同样按人存。哪些方式可用由 VENDOR_PRESETS 声明。
+    #: (Claude Pro/Max、Kimi Code 等),密钥同样按人存。哪些方式可用由 ProviderDefinition 声明。
     auth_type: Mapped[str] = mapped_column(String(20), nullable=False, default="api_key")
     #: 这条连接的**非密**附加配置(区域、端点变体等)。密的那几个(火山 ak/sk、快手 secret_key)
-    #: 跟着钥匙走,存在 ProviderCredential.secrets 里 —— 哪些字段是密的由 VENDOR_PRESETS 的
+    #: 跟着钥匙走,存在 ProviderCredential.secrets 里 —— 哪些字段是密的由 ProviderDefinition 的
     #: `secret: True` 声明,而那也正是渲染表单的同一份声明。
     extra: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -517,7 +517,7 @@ class ProviderCredential(Base):
     #: 各家 OAuth 的附加字段(Copilot 的 endpoint、Codex 的 account_id)由 pi 自己解释,
     #: 这边拆一次就等于把各家协议复制进 Python,下次上游加字段就悄悄丢了。
     oauth_credential: Mapped[dict | None] = mapped_column(EncryptedJSON, nullable=True, default=None)
-    #: VENDOR_PRESETS 里标了 `secret: True` 而又不落 api_key 的那几个(火山 ak/sk、快手 secret_key)。
+    #: ProviderDefinition 里标了 `secret: True` 而又不落 api_key 的那几个(火山 ak/sk、快手 secret_key)。
     secrets: Mapped[dict] = mapped_column(EncryptedJSON, nullable=False, default=dict, server_default="{}")
     #: 订阅计划登录后拿到的可用模型目录([{id, name, contextWindow, maxTokens}])。跟着钥匙走:
     #: 它是**这次登录**的结果 —— Copilot 的模型随订阅档位变,两个人的订阅目录可以不一样。

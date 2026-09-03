@@ -4,14 +4,126 @@
 (判断这家要不要钥匙),而前者在顶层 import 后者 —— 预设留在 providers 里的话,后者反过来读它
 就成环了(见 tests/test_import_layering)。
 
-一张表说清"这一家怎么连、有哪些能力、表单长什么样"。加一家供应商 = 加一条,不改任何代码。
+模块内部的一张表负责书写数据，模块外只暴露校验后的不可变 ``ProviderDefinition``。
+加一家供应商仍然只需加一条，但业务代码不能再自行解释自由字典。
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
-VENDOR_PRESETS: dict[str, dict[str, Any]] = {
+KNOWN_CAPABILITY_IDS = ("chat", "image", "video", "tts", "podcast")
+KNOWN_AUTH_TYPES = ("oauth", "api_key")
+KNOWN_FIELD_STORAGES = ("api_key", "base_url", "default_model", "extra")
+
+
+@dataclass(frozen=True)
+class ProviderField:
+    """One typed configuration input owned by a Provider definition."""
+
+    key: str
+    label: str
+    storage: str = "extra"
+    secret: bool = False
+    required: bool = False
+    default: str = ""
+    hint: str = ""
+    multiline: bool = False
+
+    @classmethod
+    def from_mapping(cls, vendor: str, value: Mapping[str, object]) -> ProviderField:
+        key = str(value.get("key") or "").strip()
+        label = str(value.get("label") or "").strip()
+        storage = str(value.get("storage") or "extra").strip()
+        if not key or not label:
+            raise ValueError(f"Provider {vendor!r} 的字段必须同时声明 key 和 label")
+        if storage not in KNOWN_FIELD_STORAGES:
+            raise ValueError(f"Provider {vendor!r} 字段 {key!r} 使用未知存储位置 {storage!r}")
+        return cls(
+            key=key,
+            label=label,
+            storage=storage,
+            secret=bool(value.get("secret", False)),
+            required=bool(value.get("required", False)),
+            default=str(value.get("default") or ""),
+            hint=str(value.get("hint") or ""),
+            multiline=bool(value.get("multiline", False)),
+        )
+
+
+@dataclass(frozen=True)
+class ProviderDefinition:
+    """Stable Provider metadata consumed by settings, credentials and runtime selection.
+
+    Protocol implementations deliberately do not live here.  They are composed by
+    ``app.ai.providers.registry`` so declaring a capability and implementing it remain
+    separate, independently testable decisions.
+    """
+
+    vendor: str
+    label: str
+    capability_ids: tuple[str, ...] = ()
+    base_url: str = ""
+    default_model: str = ""
+    capabilities: str = ""
+    fields: tuple[ProviderField, ...] = ()
+    auth_types: tuple[str, ...] = ("api_key",)
+    pi_provider: str = ""
+    keyless: bool = False
+    health_path: str = ""
+
+    @classmethod
+    def from_mapping(cls, vendor: str, value: Mapping[str, object]) -> ProviderDefinition:
+        vendor = vendor.strip()
+        if not vendor:
+            raise ValueError("Provider vendor 不能为空")
+        capability_ids = tuple(str(item) for item in value.get("capability_ids", ()))
+        unknown_capabilities = set(capability_ids) - set(KNOWN_CAPABILITY_IDS)
+        if unknown_capabilities:
+            raise ValueError(f"Provider {vendor!r} 声明了未知能力 {sorted(unknown_capabilities)!r}")
+        auth_types = tuple(str(item) for item in value.get("auth", ())) or ("api_key",)
+        unknown_auth = set(auth_types) - set(KNOWN_AUTH_TYPES)
+        if unknown_auth:
+            raise ValueError(f"Provider {vendor!r} 声明了未知鉴权方式 {sorted(unknown_auth)!r}")
+
+        raw_fields = value.get("fields", ())
+        if not isinstance(raw_fields, (list, tuple)):
+            raise ValueError(f"Provider {vendor!r} 的 fields 必须是列表")
+        fields = tuple(
+            ProviderField.from_mapping(vendor, field)
+            for field in raw_fields
+            if isinstance(field, Mapping)
+        )
+        if len(fields) != len(raw_fields):
+            raise ValueError(f"Provider {vendor!r} 的 fields 包含无效字段")
+        field_keys = [field.key for field in fields]
+        duplicates = sorted({key for key in field_keys if field_keys.count(key) > 1})
+        if duplicates:
+            raise ValueError(f"Provider {vendor!r} 存在重复字段 {duplicates!r}")
+
+        health_path = str(value.get("health_path") or "")
+        if health_path and not health_path.startswith("/"):
+            raise ValueError(f"Provider {vendor!r} 的 health_path 必须以 / 开头")
+        return cls(
+            vendor=vendor,
+            label=str(value.get("label") or vendor),
+            capability_ids=capability_ids,
+            base_url=str(value.get("base_url") or ""),
+            default_model=str(value.get("default_model") or ""),
+            capabilities=str(value.get("capabilities") or ""),
+            fields=fields,
+            auth_types=auth_types,
+            pi_provider=str(value.get("pi_provider") or ""),
+            keyless=bool(value.get("keyless", False)),
+            health_path=health_path,
+        )
+
+    def field(self, key: str) -> ProviderField | None:
+        return next((field for field in self.fields if field.key == key), None)
+
+_VENDOR_PRESETS: dict[str, dict[str, Any]] = {
     "alibaba": {
         # 平台叫**百炼**,DashScope 是它的 API 名字。此前写作「阿里云 DashScope (qwen)」——
         # 那个 (qwen) 后缀会让人以为这条连接只能配通义千问,而同一把 Key 上挂着的还有万相
@@ -456,3 +568,19 @@ VENDOR_PRESETS: dict[str, dict[str, Any]] = {
         ],
     },
 }
+
+
+_PROVIDER_DEFINITIONS = tuple(
+    ProviderDefinition.from_mapping(vendor, preset) for vendor, preset in _VENDOR_PRESETS.items()
+)
+_PROVIDER_DEFINITIONS_BY_VENDOR = {definition.vendor: definition for definition in _PROVIDER_DEFINITIONS}
+
+
+def provider_definitions() -> tuple[ProviderDefinition, ...]:
+    """Return Provider definitions in their intentional UI order."""
+    return _PROVIDER_DEFINITIONS
+
+
+def provider_definition(vendor: str) -> ProviderDefinition | None:
+    """Look up a known Provider without manufacturing metadata for unknown ids."""
+    return _PROVIDER_DEFINITIONS_BY_VENDOR.get(vendor)

@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.db.models import ProviderCredential, ProviderProfile
 
 # 叶子模块:预设是纯数据。从 providers 引会成环(它在顶层 import 本模块)。
-from app.domain.provider_presets import VENDOR_PRESETS
+from app.domain.provider_presets import provider_definition
 
 
 @dataclass(frozen=True)
@@ -109,7 +109,8 @@ def is_keyless(vendor: str) -> bool:
     由预设声明,不从"有没有 secret 字段"反推:那个推论对 openrouter / anthropic 这些
     `fields: []` 但确实收 key 的 vendor 是错的(它们的 key 走通用的「我的密钥」入口)。
     """
-    return bool(VENDOR_PRESETS.get(vendor, {}).get("keyless"))
+    definition = provider_definition(vendor)
+    return bool(definition and definition.keyless)
 
 
 def _keyless(profile: ProviderProfile) -> ResolvedConnection:

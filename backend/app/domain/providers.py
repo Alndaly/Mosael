@@ -11,23 +11,21 @@ from sqlalchemy.orm import Session
 
 from app.db.models import ProviderProfile
 from app.domain import provider_credentials
-from app.domain.provider_presets import VENDOR_PRESETS as _PRESETS
+from app.domain.provider_presets import (
+    KNOWN_AUTH_TYPES,
+    KNOWN_CAPABILITY_IDS,
+    provider_definition,
+)
 from app.domain.provider_credentials import ResolvedConnection
 
-#: 从叶子模块引进来(见 provider_presets);这里 re-export,调用方不必改。
-VENDOR_PRESETS = _PRESETS
-
-
 #: 已知鉴权方式。顺序即 UI 上的优先级(订阅制排前面,因为不需要用户去找 Key)。
-AUTH_TYPES = ("oauth", "api_key")
+AUTH_TYPES = KNOWN_AUTH_TYPES
 
 
 def auth_types_for_vendor(vendor: str) -> list[str]:
     """该 vendor 支持的鉴权方式;没声明的一律是纯 API Key(现存的十几个都是)。"""
-    declared = VENDOR_PRESETS.get(vendor, {}).get("auth")
-    if not declared:
-        return ["api_key"]
-    return [value for value in declared if value in AUTH_TYPES] or ["api_key"]
+    definition = provider_definition(vendor)
+    return list(definition.auth_types) if definition else ["api_key"]
 
 
 def default_auth_type(vendor: str) -> str:
@@ -36,7 +34,8 @@ def default_auth_type(vendor: str) -> str:
 
 def pi_provider_id(vendor: str) -> str:
     """该 vendor 对应的 pi 内置 Provider id;非订阅制的返回空串(走自建的 OpenAI 兼容 provider)。"""
-    return str(VENDOR_PRESETS.get(vendor, {}).get("pi_provider", ""))
+    definition = provider_definition(vendor)
+    return definition.pi_provider if definition else ""
 
 
 def normalize_auth_type(vendor: str, value: str | None) -> str:
@@ -46,7 +45,7 @@ def normalize_auth_type(vendor: str, value: str | None) -> str:
 
 
 # 已知能力全集(建/改档案时校验覆盖值,过滤掉无意义的能力名)。
-ALL_CAPABILITY_IDS = ("chat", "image", "video", "tts", "podcast")
+ALL_CAPABILITY_IDS = KNOWN_CAPABILITY_IDS
 
 
 def capability_ids_for_vendor(vendor: str) -> list[str]:
@@ -55,7 +54,8 @@ def capability_ids_for_vendor(vendor: str) -> list[str]:
     This is the providers Module's capability Interface: the UI, defaults, and
     validation all ask here instead of re-reading a free-form capability string.
     """
-    return list(VENDOR_PRESETS.get(vendor, {}).get("capability_ids", []))
+    definition = provider_definition(vendor)
+    return list(definition.capability_ids) if definition else []
 
 
 def normalize_capability_ids(values: list[str] | None) -> list[str] | None:

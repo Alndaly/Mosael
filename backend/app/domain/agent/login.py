@@ -8,7 +8,7 @@
 —— sidecar 直接经 CredentialStore 写回后端,和刷新走同一条路径(见 agent_credentials 路由)。
 
 **授权流程本身一个字都不在这边**:各家的设备码 / PKCE / 粘贴授权码全在 pi 的 Provider 定义里。
-新增一家订阅供应商只需要在 VENDOR_PRESETS 里加一条。
+新增一家订阅供应商只需要增加一条 ProviderDefinition 数据。
 """
 
 from __future__ import annotations

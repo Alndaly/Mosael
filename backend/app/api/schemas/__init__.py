@@ -755,7 +755,7 @@ class ProviderCredentialIn(BaseModel):
     """我在某条连接上的钥匙。"""
 
     api_key: str | None = None
-    #: VENDOR_PRESETS 里标了 secret 而不落 api_key 的那几个(火山 ak/sk、快手 secret_key)。
+    #: ProviderDefinition 里标了 secret 而不落 api_key 的那几个(火山 ak/sk、快手 secret_key)。
     secrets: dict[str, str] = Field(default_factory=dict)
 
 

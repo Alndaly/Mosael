@@ -4,7 +4,7 @@
 真去生成一次才在任务失败里看到一句 502。本地类端点(ComfyUI / Ollama / LM Studio)尤其如此:
 它们最常见的故障就是"忘了启动",而这件事一秒钟就能测出来。
 
-**探针路径由 vendor 声明**(VENDOR_PRESETS 的 `health_path`),不在这里按名字写死一张表 ——
+**探针路径由 ProviderDefinition 声明**,不在这里按名字写死一张表 ——
 那种表和 providers.py 里的预设一定会漂移。没有声明的走 OpenAI 兼容的 `/models`,那是这些
 端点里唯一算得上通用的只读入口。
 
@@ -22,7 +22,7 @@ import httpx
 
 from app.domain.provider_credentials import ResolvedConnection
 from app.core.http_retry import RetryingClient
-from app.domain.providers import VENDOR_PRESETS
+from app.domain.provider_presets import provider_definition
 
 #: 探活要快。这不是业务请求 —— 慢到几秒的端点,用户想知道的也正是"它慢"。
 PROBE_TIMEOUT_SECONDS = 6
@@ -42,9 +42,8 @@ class HealthResult:
 
 
 def health_path_for(vendor: str) -> str:
-    preset = VENDOR_PRESETS.get(vendor) or {}
-    declared = preset.get("health_path")
-    return str(declared) if isinstance(declared, str) and declared else DEFAULT_HEALTH_PATH
+    definition = provider_definition(vendor)
+    return definition.health_path if definition and definition.health_path else DEFAULT_HEALTH_PATH
 
 
 def probe(profile: ResolvedConnection) -> HealthResult:
