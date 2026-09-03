@@ -69,7 +69,9 @@
       "category": "public.app-category.video",
       "icon": "build/icon.icns",
       "extendInfo": {
-        "NSAudioCaptureUsageDescription": "Mosael needs access to system audio when you include device audio in a screen recording."
+        "NSAudioCaptureUsageDescription": "Mosael needs access to system audio when you include device audio in a screen recording.",
+        "NSCameraUsageDescription": "Mosael needs camera access when you record a camera asset.",
+        "NSMicrophoneUsageDescription": "Mosael needs microphone access when you record narration or a camera asset."
       },
       "target": [
         "dir"

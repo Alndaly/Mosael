@@ -37,6 +37,11 @@ contextBridge.exposeInMainWorld("mosaelDesktop", {
   notifyTask: (notice) => ipcRenderer.send("system:notify", notice),
   getOpenAtLogin: () => ipcRenderer.invoke("system:getOpenAtLogin"),
   setOpenAtLogin: (enabled) => ipcRenderer.invoke("system:setOpenAtLogin", enabled),
+  recordingPermissions: {
+    getStatus: (kind) => ipcRenderer.invoke("recording-permissions:status", kind),
+    request: (kind) => ipcRenderer.invoke("recording-permissions:request", kind),
+    openSettings: (kind) => ipcRenderer.invoke("recording-permissions:open-settings", kind),
+  },
   // 更新:checkUpdates 主动查(设置页按钮);onUpdateAvailable 订阅启动静默检查的结果。
   checkUpdates: () => ipcRenderer.invoke("mosael:check-updates"),
   onUpdateAvailable: (callback) => {

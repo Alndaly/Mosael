@@ -1,8 +1,19 @@
-const { app, BrowserWindow, Menu, Notification, dialog, ipcMain, nativeImage, shell } = require("electron");
+const {
+  app,
+  BrowserWindow,
+  Menu,
+  Notification,
+  dialog,
+  ipcMain,
+  nativeImage,
+  shell,
+  systemPreferences,
+} = require("electron");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const { migrateLegacyUserData } = require("./user-data-migration.cjs");
+const { createRecordingPermissionService } = require("./recording-permissions.cjs");
 
 // 应用名。开发态跑的是未打包的 Electron.app,菜单栏首项 / Dock 名默认显示 "Electron"。
 // macOS dev 的菜单/Dock 名读 Electron.app 的 CFBundleName,由 electron/brand-dev.cjs 在启动前补丁;
@@ -44,6 +55,11 @@ const isDev = !app.isPackaged;
 // 任一层提前退出都可能同样得到 code 0，结构化结果才说得清实际走到了哪一步。
 const smokeResultPath = process.env.MOSAEL_SMOKE_TEST_RESULT || "";
 const isSmokeTest = Boolean(smokeResultPath);
+const recordingPermissions = createRecordingPermissionService({
+  platform: process.platform,
+  shell,
+  systemPreferences,
+});
 
 if (!isSmokeTest) migrateLegacyElectronUserData();
 
@@ -594,6 +610,9 @@ app.whenReady().then(async () => {
       return { error: error.message };
     }
   });
+  ipcMain.handle("recording-permissions:status", (_event, kind) => recordingPermissions.getStatus(kind));
+  ipcMain.handle("recording-permissions:request", (_event, kind) => recordingPermissions.request(kind));
+  ipcMain.handle("recording-permissions:open-settings", (_event, kind) => recordingPermissions.openSettings(kind));
   if (app.isPackaged && !isSmokeTest) {
     setTimeout(async () => {
       try {

@@ -26,16 +26,22 @@ editable on the timeline. If either capture is empty, neither file is imported, 
 Enable **Mirror camera** for a selfie-style composition. Both the camera preview and saved camera asset
 are flipped horizontally, while the screen asset stays unchanged. The choice is remembered for later recordings.
 
+Mosael does not access the camera or microphone merely because the recorder was opened. After selecting a mode
+that needs those devices, choose **Allow access** to trigger the operating-system prompts. A denied permission
+stays visible as an actionable state with links to the relevant system settings and a retry action. Screen and
+system-audio consent is requested by the operating system's sharing picker, as required by macOS.
+
 Once capture starts, the recorder collapses into a controller in the bottom-right corner without covering or
 locking the app. You can browse media, enter the editor, or use other features while recording continues. When
 stopped, the files still return to the workspace or project where the recording was started.
 
-**Device audio** is enabled by default for screen recordings and captures sound playing on the computer. If the
+**System audio** is enabled by default for screen recordings and captures sound playing on the computer. If the
 system sharing picker also presents a **Share audio** option, allow it there as well; turn the switch off for
 picture-only capture. If the picker returns no live audio track, Mosael stops the capture and asks you to retry
 instead of silently creating a mute asset. In **Screen + camera** mode, system audio stays with the screen asset while microphone audio
 stays with the camera asset, so both remain independently editable. Availability depends on the operating system
-and the capabilities exposed by its sharing picker.
+and the capabilities exposed by its sharing picker. On macOS, a previously denied permission can be re-enabled
+from the recorder via **Privacy & Security → Screen & System Audio Recording**.
 
 ## From a link
 

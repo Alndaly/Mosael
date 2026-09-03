@@ -90,6 +90,12 @@ interface Window {
     /** null = 这个环境不提供(开发模式)。`needsApproval` 见 electron/system/loginItem。 */
     getOpenAtLogin?: () => Promise<{ enabled: boolean; needsApproval: boolean } | null>;
     setOpenAtLogin?: (enabled: boolean) => Promise<{ enabled: boolean; needsApproval: boolean } | null>;
+    /** 原生录制权限。屏幕授权由 getDisplayMedia 的系统选择器发起；这里负责状态、相机/麦克风申请和设置入口。 */
+    recordingPermissions?: {
+      getStatus?: (kind: RecordingPermissionKind) => Promise<RecordingPermissionStatus>;
+      request?: (kind: Exclude<RecordingPermissionKind, "screen">) => Promise<boolean | null>;
+      openSettings?: (kind: RecordingPermissionKind) => Promise<boolean>;
+    };
     /** 用户自定义 CSS(userData/custom.css)。桌面端独有:浏览器读不到本地文件。 */
     customCss?: {
       read: () => Promise<string>;
@@ -101,3 +107,6 @@ interface Window {
     };
   };
 }
+
+type RecordingPermissionKind = "camera" | "microphone" | "screen";
+type RecordingPermissionStatus = "not-determined" | "granted" | "denied" | "restricted" | "unknown";

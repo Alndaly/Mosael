@@ -1,5 +1,16 @@
 import React from "react";
-import { Circle, FlipHorizontal2, Mic, Monitor as ScreenIcon, Square, Video, Volume2 } from "lucide-react";
+import {
+  Circle,
+  FlipHorizontal2,
+  Mic,
+  Monitor as ScreenIcon,
+  Settings,
+  ShieldAlert,
+  ShieldCheck,
+  Square,
+  Video,
+  Volume2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { useI18n } from "@/app/preferences";
@@ -27,6 +38,8 @@ interface PreviewStreams {
   screen: MediaStream | null;
   camera: MediaStream | null;
 }
+
+type PermissionIssue = "screen" | "systemAudio" | "cameraMicrophone" | "microphone";
 
 class SystemAudioUnavailableError extends Error {
   constructor() {
@@ -112,37 +125,89 @@ export function Recorder({
   const [captureSystemAudio, setCaptureSystemAudio] = React.useState(
     () => localStorage.getItem(SYSTEM_AUDIO_STORAGE_KEY) !== "false",
   );
+  const [permissionIssue, setPermissionIssue] = React.useState<PermissionIssue | null>(null);
+  const [inputPermissionsReady, setInputPermissionsReady] = React.useState(false);
+  const [requestingPermissions, setRequestingPermissions] = React.useState(false);
   const [level, setLevel] = React.useState(0); // 0-1 实时输入电平(有声音才有柱,哑设备当场现形)
   const audioCtxRef = React.useRef<AudioContext | null>(null);
   const levelRafRef = React.useRef<number | null>(null);
 
-  // 枚举设备:label 需要权限,弹窗打开时先请求一次再列(拿到即释放)。
+  const enumerateInputDevices = React.useCallback(async () => {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      setMics(devices.filter((device) => device.kind === "audioinput" && device.deviceId));
+      setCameras(devices.filter((device) => device.kind === "videoinput" && device.deviceId));
+    } catch {
+      /* 枚举失败:退回默认设备。授权操作仍可使用系统默认设备。 */
+    }
+  }, []);
+
+  // 只枚举，不在弹窗打开时偷偷触发摄像头/麦克风系统授权。用户选择相关录制源后，
+  // 通过下面明确的“申请权限”动作授权；授权后再枚举一次即可拿到设备名称。
   React.useEffect(() => {
     if (!open) return;
+    void enumerateInputDevices();
+  }, [enumerateInputDevices, open]);
+
+  React.useEffect(() => {
+    if (!open || recording) return;
     let disposed = false;
-    const enumerate = async () => {
-      try {
-        const probe = await navigator.mediaDevices.getUserMedia({ audio: true, video: true }).catch(() =>
-          navigator.mediaDevices.getUserMedia({ audio: true }),
-        );
-        probe?.getTracks().forEach((track) => track.stop());
-      } catch {
-        /* 权限被拒:仍尝试枚举(可能只有无 label 的条目) */
+    setPermissionIssue(null);
+    setInputPermissionsReady(false);
+    const bridge = window.mosaelDesktop?.recordingPermissions;
+    const check = bridge?.getStatus;
+    if (!check) return;
+
+    const readStatuses = async () => {
+      if (capturesScreen) {
+        const status = await check("screen");
+        if (!disposed && (status === "denied" || status === "restricted")) setPermissionIssue("screen");
       }
-      try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        if (disposed) return;
-        setMics(devices.filter((d) => d.kind === "audioinput" && d.deviceId));
-        setCameras(devices.filter((d) => d.kind === "videoinput" && d.deviceId));
-      } catch {
-        /* 枚举失败:退回默认设备 */
-      }
+      const required: Array<"camera" | "microphone"> = [];
+      if (capturesCamera) required.push("camera");
+      if (capturesMicrophone) required.push("microphone");
+      if (required.length === 0) return;
+      const statuses = await Promise.all(required.map((kind) => check(kind)));
+      if (!disposed) setInputPermissionsReady(statuses.every((status) => status === "granted"));
     };
-    void enumerate();
+    void readStatuses().catch(() => undefined);
     return () => {
       disposed = true;
     };
-  }, [open]);
+  }, [capturesCamera, capturesMicrophone, capturesScreen, open, recording, source]);
+
+  const requestInputPermissions = React.useCallback(async () => {
+    setRequestingPermissions(true);
+    setPermissionIssue(null);
+    const required: Array<"camera" | "microphone"> = [];
+    if (capturesCamera) required.push("camera");
+    if (capturesMicrophone) required.push("microphone");
+    const bridgeRequest = window.mosaelDesktop?.recordingPermissions?.request;
+    try {
+      let useWebRequest = !bridgeRequest;
+      if (bridgeRequest) {
+        for (const kind of required) {
+          const granted = await bridgeRequest(kind);
+          if (granted === false) throw new DOMException(`${kind} permission denied`, "NotAllowedError");
+          if (granted === null) useWebRequest = true;
+        }
+      }
+      if (useWebRequest) {
+        const probe = await navigator.mediaDevices.getUserMedia({
+          video: capturesCamera,
+          audio: capturesMicrophone,
+        });
+        probe.getTracks().forEach((track) => track.stop());
+      }
+      setInputPermissionsReady(true);
+      await enumerateInputDevices();
+    } catch {
+      setPermissionIssue(capturesCamera ? "cameraMicrophone" : "microphone");
+      toast.error(t("recordDenied"));
+    } finally {
+      setRequestingPermissions(false);
+    }
+  }, [capturesCamera, capturesMicrophone, enumerateInputDevices, t]);
 
   const stopLevelMeter = React.useCallback(() => {
     if (levelRafRef.current) cancelAnimationFrame(levelRafRef.current);
@@ -223,6 +288,8 @@ export function Recorder({
       const index = acquiredStreams.indexOf(stream);
       if (index >= 0) acquiredStreams.splice(index, 1);
     };
+    let acquiring: "screen" | "cameraMicrophone" | "microphone" | null = null;
+    setPermissionIssue(null);
     try {
       const media = navigator.mediaDevices;
       // exact 而不是 ideal:用户点名选的设备拿不到就该报错,而不是静默换一个继续录。
@@ -232,6 +299,7 @@ export function Recorder({
       let cameraStream: MediaStream | null = null;
 
       if (capturesScreen) {
+        acquiring = "screen";
         screenStream = await media.getDisplayMedia({ video: true, audio: captureSystemAudio });
         acquiredStreams.push(screenStream);
         // macOS may return a perfectly valid screen stream after the user leaves audio disabled
@@ -244,10 +312,12 @@ export function Recorder({
         transferStreamOwnership(screenStream);
       }
       if (capturesCamera) {
+        acquiring = "cameraMicrophone";
         cameraStream = await media.getUserMedia({ video: videoConstraint, audio: audioConstraint });
         acquiredStreams.push(cameraStream);
       }
       if (source === "mic") {
+        acquiring = "microphone";
         const micStream = await media.getUserMedia({ audio: audioConstraint });
         acquiredStreams.push(micStream);
         inputs.push({ kind: "mic", stream: micStream, filenamePrefix: t("record_mic_file") });
@@ -287,6 +357,7 @@ export function Recorder({
       setRecording(true);
       setSecs(0);
       timerRef.current = window.setInterval(() => setSecs((value) => value + 1), 1000);
+      setInputPermissionsReady(capturesMicrophone);
     } catch (error) {
       const session = sessionRef.current;
       session?.cancel();
@@ -296,6 +367,7 @@ export function Recorder({
         acquiredStreams.forEach((stream) => stream.getTracks().forEach((track) => track.stop()));
       }
       cleanupUi();
+      setPermissionIssue(error instanceof SystemAudioUnavailableError ? "systemAudio" : acquiring);
       toast.error(t(error instanceof SystemAudioUnavailableError ? "recordSystemAudioMissing" : "recordDenied"));
     }
   };
@@ -479,6 +551,108 @@ export function Recorder({
               aria-label={t("recordSystemAudio")}
             />
           </label>
+        )}
+
+        {capturesMicrophone && !recording && !inputPermissionsReady && !permissionIssue && (
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-panel px-3 py-2.5">
+            <span className="flex min-w-0 items-start gap-2">
+              <ShieldCheck size={14} className="mt-0.5 shrink-0 text-muted-foreground" />
+              <span className="grid min-w-0 gap-0.5">
+                <span className="text-xs font-medium text-foreground">{t("recordPermissionsTitle")}</span>
+                <span className="text-ui-xs leading-[1.4] text-muted-foreground">{t("recordPermissionsHint")}</span>
+              </span>
+            </span>
+            <Button
+              className="shrink-0"
+              size="sm"
+              variant="outline"
+              disabled={requestingPermissions}
+              onClick={() => void requestInputPermissions()}
+            >
+              {t("recordRequestPermissions")}
+            </Button>
+          </div>
+        )}
+
+        {permissionIssue && !recording && (
+          <div
+            role="alert"
+            className="grid gap-2 rounded-lg border border-destructive/35 bg-destructive/5 px-3 py-2.5"
+          >
+            <span className="flex min-w-0 items-start gap-2">
+              <ShieldAlert size={14} className="mt-0.5 shrink-0 text-destructive" />
+              <span className="grid min-w-0 gap-0.5">
+                <span className="text-xs font-medium text-foreground">
+                  {t(
+                    permissionIssue === "systemAudio"
+                      ? "recordSystemAudioPermissionTitle"
+                      : permissionIssue === "screen"
+                        ? "recordScreenPermissionTitle"
+                        : "recordInputPermissionTitle",
+                  )}
+                </span>
+                <span className="text-ui-xs leading-[1.4] text-muted-foreground">
+                  {t(
+                    permissionIssue === "systemAudio"
+                      ? "recordSystemAudioPermissionHint"
+                      : permissionIssue === "screen"
+                        ? "recordScreenPermissionHint"
+                        : "recordInputPermissionHint",
+                  )}
+                </span>
+              </span>
+            </span>
+            <div className="flex flex-wrap justify-end gap-2">
+              {(permissionIssue === "screen" || permissionIssue === "systemAudio") &&
+                window.mosaelDesktop?.recordingPermissions?.openSettings && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void window.mosaelDesktop?.recordingPermissions?.openSettings?.("screen")}
+                  >
+                    <Settings size={12} /> {t("recordOpenSystemSettings")}
+                  </Button>
+                )}
+              {(permissionIssue === "cameraMicrophone" || permissionIssue === "microphone") && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={requestingPermissions}
+                  onClick={() => void requestInputPermissions()}
+                >
+                  {t("recordRequestPermissions")}
+                </Button>
+              )}
+              {(permissionIssue === "cameraMicrophone" || permissionIssue === "microphone") &&
+                window.mosaelDesktop?.recordingPermissions?.openSettings && (
+                  <>
+                    {permissionIssue === "cameraMicrophone" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          void window.mosaelDesktop?.recordingPermissions?.openSettings?.("camera")
+                        }
+                      >
+                        <Settings size={12} /> {t("recordOpenCameraSettings")}
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        void window.mosaelDesktop?.recordingPermissions?.openSettings?.("microphone")
+                      }
+                    >
+                      <Settings size={12} /> {t("recordOpenMicrophoneSettings")}
+                    </Button>
+                  </>
+                )}
+              <Button size="sm" onClick={() => void start()}>
+                {t("recordRetry")}
+              </Button>
+            </div>
+          </div>
         )}
 
         {/* 设备选择 + 输入电平:摄像头/麦克风模式可指定设备;电平柱有声即动,

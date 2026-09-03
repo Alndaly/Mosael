@@ -14,6 +14,9 @@ commit list and downloadable artifacts.
 
 ### Added
 
+- Added an explicit recording-permission flow: camera and microphone access is now requested only after a user
+  action, denied screen/system-audio capture offers the relevant operating-system settings and retry actions,
+  and packaged macOS builds declare all camera, microphone, and system-audio usage descriptions.
 - Added synchronized screen-and-camera recording to the media library and editor media pool, producing
   two independent assets from one recording session instead of baking the camera into the screen capture.
 - Added an optional, remembered camera mirror that flips both the live preview and saved camera asset while
