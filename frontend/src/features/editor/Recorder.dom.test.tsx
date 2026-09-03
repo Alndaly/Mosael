@@ -54,6 +54,9 @@ function fakeStream({ audio = false }: { audio?: boolean } = {}) {
         onEnded = typeof listener === "function" ? listener : (event) => listener.handleEvent(event);
       }
     }),
+    removeEventListener: vi.fn((type: string) => {
+      if (type === "ended") onEnded = null;
+    }),
   };
   const audioTrack = {
     stop: vi.fn(),

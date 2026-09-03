@@ -19,38 +19,24 @@ import { ModalShell } from "@/components/app/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { createMirroredCameraCapture } from "./cameraCapture";
 import { selectableRecordingDevices } from "./recordingDevices";
 import {
-  createRecordingSession,
-  EmptyRecordingError,
-  releaseRecordingInputs,
-  type RecordingInput,
-  type RecordingSession,
-} from "./recordingSession";
+  createRecordingController,
+  RecordingCancelledError,
+  RecordingStartError,
+  type RecordingController,
+  type RecordingPermissionIssue,
+  type RecordingSource,
+} from "./recordingController";
+import { EmptyRecordingError } from "./recordingSession";
 
-type Source = "screen" | "camera" | "screenCamera" | "mic";
-
-const SOURCES: readonly Source[] = ["screen", "camera", "screenCamera", "mic"];
+const SOURCES: readonly RecordingSource[] = ["screen", "camera", "screenCamera", "mic"];
 const CAMERA_MIRROR_STORAGE_KEY = "mosael.recorder.cameraMirror";
 const SYSTEM_AUDIO_STORAGE_KEY = "mosael.recorder.systemAudio";
 
 interface PreviewStreams {
   screen: MediaStream | null;
   camera: MediaStream | null;
-}
-
-type PermissionIssue = "screen" | "systemAudio" | "cameraMicrophone" | "microphone";
-
-class SystemAudioUnavailableError extends Error {
-  constructor() {
-    super("System audio was requested but the display picker did not grant a live audio track.");
-    this.name = "SystemAudioUnavailableError";
-  }
-}
-
-function hasLiveAudioTrack(stream: MediaStream): boolean {
-  return stream.getAudioTracks().some((track) => track.readyState === "live");
 }
 
 /**
@@ -102,16 +88,17 @@ export function Recorder({
   onRecorded: (files: File[]) => void;
 }) {
   const t = useI18n();
-  const [source, setSource] = React.useState<Source>("screen");
+  const [source, setSource] = React.useState<RecordingSource>("screen");
   const capturesScreen = source === "screen" || source === "screenCamera";
   const capturesCamera = source === "camera" || source === "screenCamera";
   const capturesMicrophone = source !== "screen";
   const [recording, setRecording] = React.useState(false);
+  const [starting, setStarting] = React.useState(false);
   const [secs, setSecs] = React.useState(0);
   const [previewStreams, setPreviewStreams] = React.useState<PreviewStreams>({ screen: null, camera: null });
   const screenVideoRef = React.useRef<HTMLVideoElement | null>(null);
   const cameraVideoRef = React.useRef<HTMLVideoElement | null>(null);
-  const sessionRef = React.useRef<RecordingSession | null>(null);
+  const controllerRef = React.useRef<RecordingController | null>(null);
   const timerRef = React.useRef<number | null>(null);
 
   // 输入设备选择:默认设备可能是不出数据的虚拟/连续互通设备(录了半天 0.6s 就是
@@ -126,7 +113,7 @@ export function Recorder({
   const [captureSystemAudio, setCaptureSystemAudio] = React.useState(
     () => localStorage.getItem(SYSTEM_AUDIO_STORAGE_KEY) !== "false",
   );
-  const [permissionIssue, setPermissionIssue] = React.useState<PermissionIssue | null>(null);
+  const [permissionIssue, setPermissionIssue] = React.useState<RecordingPermissionIssue | null>(null);
   const [inputPermissionsReady, setInputPermissionsReady] = React.useState(false);
   const [requestingPermissions, setRequestingPermissions] = React.useState(false);
   const [level, setLevel] = React.useState(0); // 0-1 实时输入电平(有声音才有柱,哑设备当场现形)
@@ -250,23 +237,24 @@ export function Recorder({
   }, [stopLevelMeter]);
 
   const cancel = React.useCallback(() => {
-    sessionRef.current?.cancel();
-    sessionRef.current = null;
+    controllerRef.current?.cancel();
+    controllerRef.current = null;
+    setStarting(false);
     setRecording(false);
     cleanupUi();
   }, [cleanupUi]);
 
   const stop = React.useCallback(async () => {
-    const session = sessionRef.current;
-    if (!session) return;
-    // Claim the session before awaiting so the Stop button and the OS "stop sharing"
+    const controller = controllerRef.current;
+    if (!controller) return;
+    // Claim the controller before awaiting so the Stop button and the OS "stop sharing"
     // event cannot both finalize and import the same files.
-    sessionRef.current = null;
+    controllerRef.current = null;
     setRecording(false);
     if (timerRef.current) window.clearInterval(timerRef.current);
     timerRef.current = null;
     try {
-      const files = await session.stop();
+      const files = await controller.stop();
       onRecorded(files);
       onOpenChange(false);
     } catch (error) {
@@ -278,98 +266,52 @@ export function Recorder({
 
   // Closing the dialog aborts an in-flight recording.
   React.useEffect(() => {
-    if (!open && sessionRef.current) cancel();
+    if (!open && controllerRef.current) cancel();
   }, [open, cancel]);
   React.useEffect(() => () => cancel(), [cancel]);
 
   const start = async () => {
-    const acquiredStreams: MediaStream[] = [];
-    const inputs: RecordingInput[] = [];
-    const transferStreamOwnership = (stream: MediaStream) => {
-      const index = acquiredStreams.indexOf(stream);
-      if (index >= 0) acquiredStreams.splice(index, 1);
-    };
-    let acquiring: "screen" | "cameraMicrophone" | "microphone" | null = null;
+    if (controllerRef.current) return;
     setPermissionIssue(null);
+    setStarting(true);
+    const controller = createRecordingController();
+    controllerRef.current = controller;
     try {
-      const media = navigator.mediaDevices;
-      // exact 而不是 ideal:用户点名选的设备拿不到就该报错,而不是静默换一个继续录。
-      const audioConstraint: MediaTrackConstraints | boolean = micId ? { deviceId: { exact: micId } } : true;
-      const videoConstraint: MediaTrackConstraints | boolean = cameraId ? { deviceId: { exact: cameraId } } : true;
-      let screenStream: MediaStream | null = null;
-      let cameraStream: MediaStream | null = null;
-
-      if (capturesScreen) {
-        acquiring = "screen";
-        screenStream = await media.getDisplayMedia({ video: true, audio: captureSystemAudio });
-        acquiredStreams.push(screenStream);
-        // macOS may return a perfectly valid screen stream after the user leaves audio disabled
-        // in the system picker. Treat that as a rejected requested capability, not a successful
-        // recording: silently continuing creates a video that can never contain system sound.
-        if (captureSystemAudio && !hasLiveAudioTrack(screenStream)) {
-          throw new SystemAudioUnavailableError();
-        }
-        inputs.push({ kind: "screen", stream: screenStream, filenamePrefix: t("record_screen_file") });
-        transferStreamOwnership(screenStream);
-      }
-      if (capturesCamera) {
-        acquiring = "cameraMicrophone";
-        cameraStream = await media.getUserMedia({ video: videoConstraint, audio: audioConstraint });
-        acquiredStreams.push(cameraStream);
-      }
-      if (source === "mic") {
-        acquiring = "microphone";
-        const micStream = await media.getUserMedia({ audio: audioConstraint });
-        acquiredStreams.push(micStream);
-        inputs.push({ kind: "mic", stream: micStream, filenamePrefix: t("record_mic_file") });
-        transferStreamOwnership(micStream);
-      }
-
-      if (screenVideoRef.current && screenStream) {
-        screenVideoRef.current.srcObject = screenStream;
-        void screenVideoRef.current.play().catch(() => undefined);
-      }
-      if (cameraVideoRef.current && cameraStream) {
-        cameraVideoRef.current.srcObject = cameraStream;
-        await cameraVideoRef.current.play().catch(() => undefined);
-        if (mirrorCamera) {
-          const capture = createMirroredCameraCapture(cameraStream, cameraVideoRef.current);
-          inputs.push({
-            kind: "camera",
-            stream: capture.stream,
-            filenamePrefix: t("record_camera_file"),
-            release: capture.release,
-          });
-        } else {
-          inputs.push({ kind: "camera", stream: cameraStream, filenamePrefix: t("record_camera_file") });
-        }
-        transferStreamOwnership(cameraStream);
-      }
-      setPreviewStreams({ screen: screenStream, camera: cameraStream });
-      const levelStream = cameraStream ?? screenStream ?? inputs[0]?.stream;
-      if (levelStream) startLevelMeter(levelStream);
-
-      const session = createRecordingSession(inputs, { onError: () => void stop() });
-      sessionRef.current = session;
-      // If the user ends screen sharing from the browser/OS chrome, stop the recording.
-      screenStream?.getVideoTracks()[0]?.addEventListener("ended", () => void stop(), { once: true });
-      // The session starts every recorder in one synchronous turn and keeps one-second chunks.
-      session.start();
+      const active = await controller.start({
+        source,
+        captureSystemAudio,
+        cameraId,
+        micId,
+        mirrorCamera,
+        filenames: {
+          screen: t("record_screen_file"),
+          camera: t("record_camera_file"),
+          mic: t("record_mic_file"),
+        },
+        requestStop: () => void stop(),
+        previewElements: {
+          screen: screenVideoRef.current,
+          camera: cameraVideoRef.current,
+        },
+      });
+      setPreviewStreams(active.previewStreams);
+      if (active.levelStream) startLevelMeter(active.levelStream);
+      setStarting(false);
       setRecording(true);
       setSecs(0);
       timerRef.current = window.setInterval(() => setSecs((value) => value + 1), 1000);
       setInputPermissionsReady(capturesMicrophone);
     } catch (error) {
-      const session = sessionRef.current;
-      session?.cancel();
-      sessionRef.current = null;
-      if (!session) {
-        releaseRecordingInputs(inputs);
-        acquiredStreams.forEach((stream) => stream.getTracks().forEach((track) => track.stop()));
-      }
+      if (controllerRef.current === controller) controllerRef.current = null;
+      setStarting(false);
       cleanupUi();
-      setPermissionIssue(error instanceof SystemAudioUnavailableError ? "systemAudio" : acquiring);
-      toast.error(t(error instanceof SystemAudioUnavailableError ? "recordSystemAudioMissing" : "recordDenied"));
+      if (error instanceof RecordingCancelledError) return;
+      if (error instanceof RecordingStartError) {
+        setPermissionIssue(error.issue);
+        toast.error(t(error.issue === "systemAudio" ? "recordSystemAudioMissing" : "recordDenied"));
+        return;
+      }
+      toast.error(t("recordFailed"));
     }
   };
 
@@ -397,7 +339,7 @@ export function Recorder({
             {t(`record_${source}_hint` as never) as string}
           </span>
           {!recording ? (
-            <Button className="shrink-0" size="sm" onClick={start}>
+            <Button className="shrink-0" size="sm" disabled={starting} onClick={start}>
               <Circle size={11} className="fill-destructive text-destructive" /> {t("recordStart")}
             </Button>
           ) : (

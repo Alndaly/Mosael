@@ -34,6 +34,7 @@ class FakeMediaRecorder {
 function fakeStream({ audio = false }: { audio?: boolean } = {}) {
   const track = {
     addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
     getSettings: () => ({ width: 1280, height: 720, frameRate: 30 }),
     stop: vi.fn(),
   };
