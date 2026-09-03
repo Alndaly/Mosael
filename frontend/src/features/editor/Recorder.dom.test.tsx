@@ -2,7 +2,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
@@ -11,6 +11,15 @@ import { Recorder } from "./Recorder";
 import { toast } from "sonner";
 
 const originalCanvasCaptureStream = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, "captureStream");
+
+beforeAll(() => {
+  Object.assign(Element.prototype, {
+    hasPointerCapture: () => false,
+    setPointerCapture: () => {},
+    releasePointerCapture: () => {},
+    scrollIntoView: () => {},
+  });
+});
 
 class FakeMediaRecorder {
   static streams: MediaStream[] = [];
@@ -62,6 +71,10 @@ function fakeStream({ audio = false }: { audio?: boolean } = {}) {
   };
 }
 
+function fakeDevice(kind: MediaDeviceKind, deviceId: string, label: string): MediaDeviceInfo {
+  return { kind, deviceId, label, groupId: "group", toJSON: () => ({}) };
+}
+
 describe("Recorder", () => {
   const enumerateDevices = vi.fn();
   const getUserMedia = vi.fn();
@@ -99,6 +112,23 @@ describe("Recorder", () => {
 
     await waitFor(() => expect(enumerateDevices).toHaveBeenCalledOnce());
     expect(getUserMedia).not.toHaveBeenCalled();
+  });
+
+  it("shows one synthetic system-default option instead of the browser default alias", async () => {
+    enumerateDevices.mockResolvedValue([
+      fakeDevice("audioinput", "default", "Default - MacBook Pro Microphone (Built-in)"),
+      fakeDevice("audioinput", "built-in-mic", "MacBook Pro Microphone (Built-in)"),
+    ]);
+    const user = userEvent.setup();
+
+    render(<Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+
+    await waitFor(() => expect(enumerateDevices).toHaveBeenCalledOnce());
+    await user.click(screen.getByRole("button", { name: "record_mic" }));
+    await user.click(screen.getByRole("combobox", { name: "recordMic" }));
+
+    expect(screen.queryByText("Default - MacBook Pro Microphone (Built-in)")).not.toBeInTheDocument();
+    expect(screen.getByText("MacBook Pro Microphone (Built-in)")).toBeVisible();
   });
 
   it("lets the user explicitly request camera and microphone permissions", async () => {

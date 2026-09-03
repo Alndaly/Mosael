@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { createMirroredCameraCapture } from "./cameraCapture";
+import { selectableRecordingDevices } from "./recordingDevices";
 import {
   createRecordingSession,
   EmptyRecordingError,
@@ -135,8 +136,8 @@ export function Recorder({
   const enumerateInputDevices = React.useCallback(async () => {
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
-      setMics(devices.filter((device) => device.kind === "audioinput" && device.deviceId));
-      setCameras(devices.filter((device) => device.kind === "videoinput" && device.deviceId));
+      setMics(selectableRecordingDevices(devices, "audioinput"));
+      setCameras(selectableRecordingDevices(devices, "videoinput"));
     } catch {
       /* 枚举失败:退回默认设备。授权操作仍可使用系统默认设备。 */
     }

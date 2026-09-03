@@ -7,6 +7,8 @@ commit list and downloadable artifacts.
 
 ### Fixed
 
+- Removed browser-provided default/communications aliases from recorder device menus, preventing duplicate
+  system-default entries and two simultaneous selected states while preserving explicit physical devices.
 - Kept screen and camera streams attached to the live preview when the recorder changes from its setup dialog
   into the floating controller, preventing both preview panes from turning black during an active recording.
 - Prevented requested system-audio capture from silently degrading into a mute screen recording when the macOS
