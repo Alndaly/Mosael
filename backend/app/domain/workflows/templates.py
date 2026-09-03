@@ -9,12 +9,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy.orm import Session
-
 from app.db.models import ProviderModel
 from app.domain.generation.catalog import known_capabilities_for
 from app.domain.provider_defaults import get_row
 from app.domain.workflows import WorkflowDomainError
+from sqlalchemy.orm import Session
 
 FULL_VIDEO_GENERATION = "full_video_generation"
 TRANSCRIPT_VIDEO_CLEANUP = "transcript_video_cleanup"
@@ -135,6 +134,36 @@ def _creative_brief_schema() -> dict[str, Any]:
             "items": {"type": "string"},
             "description": "不得凭空断言、需要用户复核的事实边界",
         },
+    }
+    return _object(fields, list(fields))
+
+
+def _narrative_script_schema() -> dict[str, Any]:
+    beat_fields = {
+        "beat_number": {"type": "integer", "minimum": 1},
+        "start_seconds": {"type": "number", "minimum": 0},
+        "end_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "objective": {"type": "string", "description": "这一段对主旨推进的唯一任务"},
+        "narration": {"type": "string", "description": "该时间段的完整口播或对白"},
+    }
+    fields = {
+        "opening_hook": {"type": "string"},
+        "narrative_arc": {"type": "string"},
+        "full_narration": {"type": "string"},
+        "beats": {"type": "array", "minItems": 1, "items": _object(beat_fields, list(beat_fields))},
+    }
+    return _object(fields, list(fields))
+
+
+def _visual_bible_schema() -> dict[str, Any]:
+    fields = {
+        "subject_bible": {"type": "string", "description": "人物或主体跨镜头保持一致的外观与行为"},
+        "environment_bible": {"type": "string", "description": "空间、时代、材质与关键道具约束"},
+        "camera_language": {"type": "string", "description": "景别、焦段、机位与运镜的统一语法"},
+        "lighting_plan": {"type": "string"},
+        "color_palette": {"type": "string"},
+        "continuity_rules": {"type": "array", "items": {"type": "string"}},
+        "global_negative_prompt": {"type": "string"},
     }
     return _object(fields, list(fields))
 
@@ -378,17 +407,29 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
         {"id": "export_notice", "source": "export_clean_video", "target": "done_notice"},
         {"id": "notice_output", "source": "done_notice", "target": "output"},
     ]
-    return {"nodes": nodes, "edges": edges}
+    return {
+        "meta": {"template_id": TRANSCRIPT_VIDEO_CLEANUP, "template_version": 1, "source": "official"},
+        "nodes": nodes,
+        "edges": edges,
+    }
 
 
 def full_video_generation_graph(*, chat: ModelChoice, video: ModelChoice) -> dict[str, Any]:
-    """主题 → 核心主旨 → 专业时间分镜 → 逐镜视频 → 时间线合成 → 成片导出。"""
+    """主题 → 主旨 → 并行脚本/视觉开发 → 时间分镜 → 逐镜生成合成 → 导出。"""
 
     video_plan = _video_plan(video)
 
     brief_system = """你是资深创意总监和纪录片策划。先把用户给出的主题收敛为全片唯一核心主旨，
 建立清晰的受众收益、叙事因果和可执行视觉母题。不要编造未经输入支持的具体数字、引语、人物经历
 或研究结论；需要核实的内容写入 factual_boundaries。只输出符合 JSON Schema 的对象。"""
+
+    narrative_system = """你是资深编剧和旁白导演。围绕唯一核心主旨规划完整叙事，不引入创意简报之外
+的事实。按目标时长拆成首尾连续的叙事节拍：开头尽快建立观看理由，中段用因果而不是信息堆砌推进，
+结尾回收主旨。口播要自然、可说、符合指定语言。只输出符合 JSON Schema 的对象。"""
+
+    visual_system = """你是摄影指导、美术指导和连续性监制。根据创意简报建立可供多个视频片段共享的
+视觉圣经，明确主体、环境、光线、色彩、镜头语言与连续性规则。规则必须具体到视频生成模型可以复用，
+避免空泛风格词；不得要求画面生成字幕、UI、Logo 或水印。只输出符合 JSON Schema 的对象。"""
 
     storyboard_system = f"""你是导演、摄影指导、分镜师和视频生成提示词工程师。把创意简报拆成连续的
 {video_plan.clip_seconds} 秒镜头。每镜必须给出精确起止时间、口播、景别、机位、构图、主体动作、光线、色彩、声音设计、
@@ -452,7 +493,7 @@ JSON Schema 的对象。"""
             "id": "start",
             "type": "start",
             "name": "填写视频主题",
-            "position": {"x": 60, "y": 220},
+            "position": {"x": 40, "y": 300},
             "config": {
                 "params": {
                     "topic": "请把这里改成你的视频主题",
@@ -472,7 +513,7 @@ JSON Schema 的对象。"""
             "id": "creative_brief",
             "type": "llm",
             "name": "提炼核心主旨与创意简报",
-            "position": {"x": 360, "y": 220},
+            "position": {"x": 340, "y": 300},
             "config": {
                 "profile_id": chat.profile_id,
                 "model": chat.model,
@@ -495,17 +536,84 @@ JSON Schema 的对象。"""
             },
         },
         {
+            "id": "narrative_script",
+            "type": "llm",
+            "name": "编写叙事脚本与时间节拍",
+            "position": {"x": 680, "y": 80},
+            "config": {
+                "profile_id": chat.profile_id,
+                "model": chat.model,
+                "preset": "precise",
+                "system": narrative_system,
+                "prompt": """创意简报：
+{{creative_brief.text}}
+
+目标时长：{{start.target_duration_seconds}} 秒
+成片语言：{{start.language}}
+请输出完整口播，并把叙事拆成按时间连续的 beats。每个 beat 必须有明确叙事任务。""",
+                "response_format": "json_schema",
+                "json_schema_name": "professional_video_narrative_script",
+                "json_schema": _narrative_script_schema(),
+                "json_schema_strict": "true",
+                "temperature": 0.4,
+                "max_tokens": 5000,
+            },
+        },
+        {
+            "id": "visual_bible",
+            "type": "llm",
+            "name": "建立视觉圣经与连续性规则",
+            "position": {"x": 680, "y": 520},
+            "config": {
+                "profile_id": chat.profile_id,
+                "model": chat.model,
+                "preset": "creative",
+                "system": visual_system,
+                "prompt": """创意简报：
+{{creative_brief.text}}
+
+画幅：{{start.aspect_ratio}}；表达气质：{{start.tone}}。
+请建立整条视频共享的视觉圣经、摄影语言和跨镜头连续性规则。""",
+                "response_format": "json_schema",
+                "json_schema_name": "professional_video_visual_bible",
+                "json_schema": _visual_bible_schema(),
+                "json_schema_strict": "true",
+                "temperature": 0.55,
+                "max_tokens": 4000,
+            },
+        },
+        {
+            "id": "video_project",
+            "type": "project_sequence_create",
+            "name": "建立成片项目与时间线",
+            "position": {"x": 680, "y": 300},
+            "config": {
+                "name": "{{creative_brief.json.title}} · 自动成片",
+                "width": "{{start.width}}",
+                "height": "{{start.height}}",
+                "fps": "{{start.fps}}",
+            },
+        },
+        {
             "id": "storyboard",
             "type": "llm",
             "name": "按时间拆解专业脚本与分镜",
-            "position": {"x": 690, "y": 220},
+            "position": {"x": 1040, "y": 300},
             "config": {
                 "profile_id": chat.profile_id,
                 "model": chat.model,
                 "preset": "creative",
                 "system": storyboard_system,
-                "prompt": f"""请把以下创意简报制作成专业拍摄脚本与时间分镜：
+                "prompt": f"""请把叙事脚本与视觉圣经合并成可直接生成的专业时间分镜。
+
+创意简报：
 {{{{creative_brief.text}}}}
+
+叙事脚本与节拍：
+{{{{narrative_script.text}}}}
+
+视觉圣经与连续性规则：
+{{{{visual_bible.text}}}}
 
 成片目标时长：{{{{start.target_duration_seconds}}}} 秒；画幅：{{{{start.aspect_ratio}}}}；
 语言：{{{{start.language}}}}。每个镜头固定 {video_plan.clip_seconds} 秒，镜头数按目标时长除以
@@ -519,22 +627,10 @@ JSON Schema 的对象。"""
             },
         },
         {
-            "id": "video_project",
-            "type": "project_sequence_create",
-            "name": "建立成片项目与时间线",
-            "position": {"x": 1020, "y": 220},
-            "config": {
-                "name": "{{creative_brief.json.title}} · 自动成片",
-                "width": "{{start.width}}",
-                "height": "{{start.height}}",
-                "fps": "{{start.fps}}",
-            },
-        },
-        {
             "id": "generate_and_assemble",
             "type": "loop_foreach",
             "name": "逐镜生成视频并按时间合成",
-            "position": {"x": 1350, "y": 220},
+            "position": {"x": 1400, "y": 300},
             "config": {
                 "items": "{{storyboard.json.shots}}",
                 "inputs": {
@@ -552,14 +648,14 @@ JSON Schema 的对象。"""
             "id": "export_final",
             "type": "export_sequence",
             "name": "合成并导出最终视频",
-            "position": {"x": 1680, "y": 220},
+            "position": {"x": 1740, "y": 300},
             "config": {"sequence_id": "{{video_project.sequence_id}}"},
         },
         {
             "id": "done_notice",
             "type": "notify",
             "name": "成片完成通知",
-            "position": {"x": 1990, "y": 220},
+            "position": {"x": 2080, "y": 120},
             "config": {
                 "title": "视频已生成：{{creative_brief.json.title}}",
                 "body": "脚本、分镜、视频片段和最终合成均已完成。最终素材 ID：{{export_final.asset_id}}",
@@ -569,12 +665,14 @@ JSON Schema 的对象。"""
             "id": "output",
             "type": "output",
             "name": "交付完整制作结果",
-            "position": {"x": 2300, "y": 220},
+            "position": {"x": 2080, "y": 480},
             "config": {
                 "values": {
                     "title": "{{creative_brief.json.title}}",
                     "core_thesis": "{{creative_brief.json.core_thesis}}",
                     "creative_brief": "{{creative_brief.json}}",
+                    "narrative_script": "{{narrative_script.json}}",
+                    "visual_bible": "{{visual_bible.json}}",
                     "storyboard": "{{storyboard.json}}",
                     "generated_clip_asset_ids": "{{generate_and_assemble.results}}",
                     "project_id": "{{video_project.project_id}}",
@@ -586,11 +684,19 @@ JSON Schema 的对象。"""
     ]
     edges = [
         {"id": "start_brief", "source": "start", "target": "creative_brief"},
-        {"id": "brief_storyboard", "source": "creative_brief", "target": "storyboard"},
-        {"id": "storyboard_project", "source": "storyboard", "target": "video_project"},
+        {"id": "brief_narrative", "source": "creative_brief", "target": "narrative_script"},
+        {"id": "brief_visual", "source": "creative_brief", "target": "visual_bible"},
+        {"id": "brief_project", "source": "creative_brief", "target": "video_project"},
+        {"id": "narrative_storyboard", "source": "narrative_script", "target": "storyboard"},
+        {"id": "visual_storyboard", "source": "visual_bible", "target": "storyboard"},
+        {"id": "storyboard_generate", "source": "storyboard", "target": "generate_and_assemble"},
         {"id": "project_generate", "source": "video_project", "target": "generate_and_assemble"},
         {"id": "generate_export", "source": "generate_and_assemble", "target": "export_final"},
         {"id": "export_notice", "source": "export_final", "target": "done_notice"},
-        {"id": "notice_output", "source": "done_notice", "target": "output"},
+        {"id": "export_output", "source": "export_final", "target": "output"},
     ]
-    return {"nodes": nodes, "edges": edges}
+    return {
+        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 2, "source": "official"},
+        "nodes": nodes,
+        "edges": edges,
+    }

@@ -4,8 +4,14 @@ import { api } from "@/api/transport";
 
 export type Workflow = components["schemas"]["WorkflowOut"];
 export type WorkflowNodeType = components["schemas"]["WorkflowNodeTypeOut"];
+export type WorkflowTemplateId = "full_video_generation" | "transcript_video_cleanup";
 
 export interface WorkflowGraph {
+  meta?: {
+    template_id?: WorkflowTemplateId;
+    template_version?: number;
+    source?: string;
+  };
   nodes: Array<{
     id: string;
     type: string;
@@ -36,7 +42,7 @@ export function createWorkflow(body: {
   name: string;
   description?: string;
   graph?: WorkflowGraph | null;
-  template_id?: "full_video_generation" | "transcript_video_cleanup";
+  template_id?: WorkflowTemplateId;
 }): Promise<Workflow> {
   return api<Workflow>("/api/workflows", { method: "POST", body: JSON.stringify(body) });
 }

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   analyzeWorkflow,
   extractRefs,
+  isNestedScopeConfig,
   outputType,
   typesCompatible,
   type AnalyzeContext,
@@ -74,6 +75,24 @@ describe("extractRefs", () => {
   it("ignores non-strings and plain text", () => {
     expect(extractRefs(42)).toEqual([]);
     expect(extractRefs("no vars here")).toEqual([]);
+  });
+  it("walks nested objects and arrays used by loop inputs and model parameters", () => {
+    expect(
+      extractRefs({ project_id: "{{project.project_id}}", nested: ["{{start.aspect_ratio}}", 30] }),
+    ).toEqual([
+      { ref: "{{project.project_id}}", sourceId: "project" },
+      { ref: "{{start.aspect_ratio}}", sourceId: "start" },
+    ]);
+  });
+});
+
+describe("isNestedScopeConfig", () => {
+  it("keeps parent validation out of loop and subgraph internal scopes", () => {
+    expect(isNestedScopeConfig("loop_foreach", "body")).toBe(true);
+    expect(isNestedScopeConfig("loop_foreach", "output")).toBe(true);
+    expect(isNestedScopeConfig("subgraph", "body")).toBe(true);
+    expect(isNestedScopeConfig("loop_foreach", "inputs")).toBe(false);
+    expect(isNestedScopeConfig("llm", "body")).toBe(false);
   });
 });
 

@@ -28,7 +28,6 @@ import {
   Check,
   CircleCheck,
   Download,
-  Film,
   FileUp,
   History,
   Link2,
@@ -43,8 +42,8 @@ import {
   Redo2,
   Repeat,
   Search,
-  Scissors,
   Spline,
+  Store,
   Trash2,
   Type,
   Undo2,
@@ -76,6 +75,7 @@ import {
   type Workflow,
   type WorkflowGraph,
   type WorkflowNodeType,
+  type WorkflowTemplateId,
   type Workspace,
 } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -109,6 +109,7 @@ import { MapField } from "@/features/workflows/MapField";
 import { CodeEditor, type CodeEditorHandle } from "@/components/app/code-editor";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/components/agent/CanvasAgentChat";
 import { WorkflowRunHistory } from "@/features/workflows/WorkflowRunHistory";
+import { WorkflowCommunityDialog } from "@/features/workflows/WorkflowCommunityDialog";
 import { createWorkflowGraphStore } from "@/stores/workflowGraphStore";
 import { saveJsonToDisk } from "@/lib/download";
 import { ROW_HANDLE_CLASS, SIDEBAR_HANDLE_CLASS, handleOffset, useResizableRow, useResizableSidebar } from "@/lib/useResizableSidebar";
@@ -139,6 +140,7 @@ import {
   extractRefs,
   fieldDataType,
   inputType,
+  isNestedScopeConfig,
   outputType,
 } from "@/features/workflows/analyze";
 import { RunOutputs, outputSummary } from "@/features/workflows/RunOutputs";
@@ -273,12 +275,14 @@ const EDGE_SHAPE_LABEL = {
 const DEFAULT_EDGE_OPTIONS = {
   markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12, color: "var(--border-strong)" },
 };
+const EMPTY_SCOPE_VARIABLES: string[] = [];
 
 export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   const qc = useQueryClient();
   const [menuRenaming, setMenuRenaming] = React.useState<Workflow | null>(null);
   const [menuDeleting, setMenuDeleting] = React.useState<Workflow | null>(null);
+  const [communityOpen, setCommunityOpen] = React.useState(false);
 
   // 通知/任务中心深链(mosael:open-* 事件通道):直接选中对应工作流。
   React.useEffect(() => {
@@ -299,7 +303,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   const nodeTypes = useQuery({ queryKey: ["workflow-node-types"], queryFn: fetchWorkflowNodeTypes, staleTime: Infinity });
 
   const create = useMutation({
-    mutationFn: (templateId?: "full_video_generation" | "transcript_video_cleanup") => {
+    mutationFn: (templateId?: WorkflowTemplateId) => {
       if (!templateId) {
         return createWorkflow({ workspace_id: workspace.id, name: t("wfDefaultName"), description: "" });
       }
@@ -313,7 +317,11 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
         template_id: templateId,
       });
     },
-    onSuccess: (workflow) => {
+    onSuccess: (workflow, templateId) => {
+      if (templateId) {
+        setCommunityOpen(false);
+        toast.success(t("wfCommunityAdded").replace("{name}", workflow.name));
+      }
       setSelectedId(workflow.id);
       void qc.invalidateQueries({ queryKey: ["workflows", workspace.id] });
     },
@@ -417,6 +425,16 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
     return <CanvasDetailLoading testId="workflows-detail-restoring" />;
   }
 
+  const communityDialog = (
+    <WorkflowCommunityDialog
+      open={communityOpen}
+      workflows={workflows.data ?? []}
+      installingId={create.isPending ? (create.variables ?? null) : null}
+      onOpenChange={setCommunityOpen}
+      onInstall={(templateId) => create.mutate(templateId)}
+    />
+  );
+
   if (workflows.isSuccess && (workflows.data ?? []).length === 0) {
     return (
       <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
@@ -426,22 +444,15 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
           body={t("wfEmptyBody")}
           action={
             <span className="inline-flex flex-wrap items-center justify-center gap-2">
-              <Button loading={create.isPending && create.variables === undefined} onClick={() => create.mutate(undefined)}>
+              <Button onClick={() => setCommunityOpen(true)}>
+                <Store size={15} /> {t("wfCommunity")}
+              </Button>
+              <Button
+                variant="outline"
+                loading={create.isPending && create.variables === undefined}
+                onClick={() => create.mutate(undefined)}
+              >
                 <Plus size={15} /> {t("wfCreate")}
-              </Button>
-              <Button
-                variant="outline"
-                loading={create.isPending && create.variables === "full_video_generation"}
-                onClick={() => create.mutate("full_video_generation")}
-              >
-                <Film size={15} /> {t("wfCreateFullVideo")}
-              </Button>
-              <Button
-                variant="outline"
-                loading={create.isPending && create.variables === "transcript_video_cleanup"}
-                onClick={() => create.mutate("transcript_video_cleanup")}
-              >
-                <Scissors size={15} /> {t("wfCreateTranscriptCleanup")}
               </Button>
               <Button variant="outline" loading={importFile.isPending} onClick={() => importInputRef.current?.click()}>
                 <FileUp size={15} /> {t("wfImport")}
@@ -460,6 +471,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
             </span>
           }
         />
+        {communityDialog}
       </div>
     );
   }
@@ -535,21 +547,8 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
               <Button variant="outline" size="sm" loading={importFile.isPending} onClick={() => importInputRef.current?.click()}>
                 <FileUp size={13} /> {t("wfImport")}
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                loading={create.isPending && create.variables === "full_video_generation"}
-                onClick={() => create.mutate("full_video_generation")}
-              >
-                <Film size={13} /> {t("wfCreateFullVideo")}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                loading={create.isPending && create.variables === "transcript_video_cleanup"}
-                onClick={() => create.mutate("transcript_video_cleanup")}
-              >
-                <Scissors size={13} /> {t("wfCreateTranscriptCleanup")}
+              <Button variant="outline" size="sm" onClick={() => setCommunityOpen(true)}>
+                <Store size={13} /> {t("wfCommunity")}
               </Button>
               <Button size="sm" loading={create.isPending && create.variables === undefined} onClick={() => create.mutate(undefined)}>
                 <Plus size={13} /> {t("wfCreate")}
@@ -595,6 +594,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
         </div>
       </div>
       {importControl}
+      {communityDialog}
       <RenameDialog
         open={menuRenaming !== null}
         title={t("rename")}
@@ -2420,6 +2420,16 @@ function LoopBodyEditor({
   };
 
   const selectedNode = selectedId ? (body.nodes.find((node) => node.id === selectedId) ?? null) : null;
+  const scopeVariables = React.useMemo(() => {
+    const rawInputs = loopNode.config?.inputs;
+    const inputVariables =
+      rawInputs && typeof rawInputs === "object" && !Array.isArray(rawInputs)
+        ? Object.keys(rawInputs).map((key) => `{{input.${key}}}`)
+        : [];
+    return loopNode.type === "subgraph"
+      ? inputVariables
+      : ["{{loop.item}}", "{{loop.index}}", ...inputVariables];
+  }, [loopNode.config?.inputs, loopNode.type]);
 
   return (
     // 工具条和主编辑器一样浮在画布上 —— 子图也是画布,没有理由这里就顶一条实心横带。
@@ -2550,6 +2560,7 @@ function LoopBodyEditor({
             meta={registry.get(selectedNode.type) ?? null}
             graph={body}
             registry={registry}
+            scopeVariables={scopeVariables}
             workspaceId={workspaceId}
             onChange={(patch) =>
               commit({ ...body, nodes: body.nodes.map((node) => (node.id === selectedNode.id ? { ...node, ...patch } : node)) })
@@ -2580,6 +2591,7 @@ function NodeInspector({
   meta,
   graph,
   registry,
+  scopeVariables = EMPTY_SCOPE_VARIABLES,
   workspaceId,
   onChange,
   onApplyGraph,
@@ -2595,6 +2607,8 @@ function NodeInspector({
   meta: WorkflowNodeType | null;
   graph: WorkflowGraph;
   registry: Map<string, WorkflowNodeType>;
+  /** 子图作用域的虚拟变量；它们不是图节点，但在运行时由循环/子图执行器注入。 */
+  scopeVariables?: string[];
   workspaceId: string;
   onChange: (patch: Partial<WorkflowGraph["nodes"][number]>) => void;
   onApplyGraph: (next: WorkflowGraph) => void;
@@ -2611,23 +2625,25 @@ function NodeInspector({
   const fieldRefs = React.useRef<Record<string, HTMLTextAreaElement | HTMLInputElement | null>>({});
   // 每字段的输入方式:手动填写 vs 连接上游输出(ComfyUI 式)。默认从值推断(纯引用=连接)。
   const variables = React.useMemo(
-    () => upstreamVariables(graph, node.id, registry),
-    [graph, node.id, registry],
+    () => Array.from(new Set([...scopeVariables, ...upstreamVariables(graph, node.id, registry)])),
+    [graph, node.id, registry, scopeVariables],
   );
 
   // 失效引用:本节点配置里引用了图中已不存在的节点(通常是上游被删)。
   const staleRefs = React.useMemo(() => {
     const ids = new Set(graph.nodes.map((n) => n.id));
+    const scopeRoots = new Set(scopeVariables.flatMap((value) => extractRefs(value).map(({ sourceId }) => sourceId)));
     const found: Array<{ key: string; ref: string }> = [];
     for (const [key, val] of Object.entries(node.config ?? {})) {
+      if (isNestedScopeConfig(node.type, key)) continue;
       for (const { ref, sourceId } of extractRefs(val)) {
-        if (!ids.has(sourceId) && !found.some((f) => f.key === key && f.ref === ref)) {
+        if (!ids.has(sourceId) && !scopeRoots.has(sourceId) && !found.some((f) => f.key === key && f.ref === ref)) {
           found.push({ key, ref });
         }
       }
     }
     return found;
-  }, [node.config, graph.nodes]);
+  }, [node.config, graph.nodes, scopeVariables]);
 
   // 动态选项源:按需拉取,只有对应节点类型选中时才请求。
   const providers = useQuery({

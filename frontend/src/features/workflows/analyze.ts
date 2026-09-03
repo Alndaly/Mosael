@@ -117,8 +117,15 @@ const GENERATE_MODEL_KEYS = new Set(["provider", "model", "kind"]);
 const NESTED_BODY_TYPES = new Set(["loop_foreach", "loop_while", "subgraph"]);
 const NESTED_BODY_RAW_KEYS = new Set(["body", "output", "condition"]);
 
+/** 这些字段属于内嵌图自己的作用域，父图不能拿自己的节点表去判定其中的引用。 */
+export function isNestedScopeConfig(nodeType: string, configKey: string): boolean {
+  return NESTED_BODY_TYPES.has(nodeType) && NESTED_BODY_RAW_KEYS.has(configKey);
+}
+
 /** 从任意配置值里抽出 `{{id.output}}` 引用,返回 [{ ref, sourceId }]。 */
 export function extractRefs(value: unknown): Array<{ ref: string; sourceId: string }> {
+  if (Array.isArray(value)) return value.flatMap(extractRefs);
+  if (value && typeof value === "object") return Object.values(value).flatMap(extractRefs);
   if (typeof value !== "string" || !value.includes("{{")) return [];
   const out: Array<{ ref: string; sourceId: string }> = [];
   for (const match of value.matchAll(VAR_RE)) {
@@ -211,7 +218,7 @@ export function analyzeWorkflow(
         }
       }
       // 子图/循环体的 body/output/condition 引用子作用域或内部节点,顶层不做失效检查(否则误报)。
-      if (NESTED_BODY_TYPES.has(node.type) && NESTED_BODY_RAW_KEYS.has(key)) continue;
+      if (isNestedScopeConfig(node.type, key)) continue;
       for (const { ref, sourceId } of extractRefs(config[key])) {
         // start 的 *params 通配前缀不算节点 id;引用不存在的节点即失效。
         if (!nodeIds.has(sourceId)) push("error", "stale-var", { configKey: key, ref });
