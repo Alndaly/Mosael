@@ -240,9 +240,19 @@ export function Recorder({
   return (
     <ModalShell
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={(next) => {
+        if (!next && recording) return;
+        onOpenChange(next);
+      }}
       title={t("recordTitle")}
-      className="w-[520px]"
+      dismissible={!recording}
+      modal={!recording}
+      className={cn(
+        "w-[520px]",
+        recording &&
+          "!bottom-3 !left-auto !right-3 !top-auto !w-[360px] !max-w-[calc(100vw-1.5rem)] !translate-x-0 !translate-y-0",
+      )}
+      bodyClassName={recording ? "px-3 py-3" : undefined}
       footer={
         <div className="flex w-full min-w-0 items-center justify-between gap-4">
           <span className="min-w-0 text-ui-xs leading-[1.4] text-muted-foreground">
@@ -261,40 +271,43 @@ export function Recorder({
       }
     >
       <div className="grid w-full gap-2.5">
-        <div
-          className="inline-flex h-7 w-fit items-stretch justify-self-start overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border"
-          role="group"
-          aria-label={t("recordTitle")}
-        >
-          {SOURCES.map((s) => (
-            <button
-              key={s}
-              type="button"
-              disabled={recording}
-              className={cn(
-                "inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground",
-                source === s &&
-                  "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground",
-              )}
-              onClick={() => setSource(s)}
-            >
-              {s === "screen" ? (
-                <ScreenIcon size={13} />
-              ) : s === "camera" ? (
-                <Video size={13} />
-              ) : s === "screenCamera" ? (
-                <span className="inline-flex items-center -space-x-1" aria-hidden>
+        {!recording && (
+          <div
+            key="source-picker"
+            className="inline-flex h-7 w-fit items-stretch justify-self-start overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border"
+            role="group"
+            aria-label={t("recordTitle")}
+          >
+            {SOURCES.map((s) => (
+              <button
+                key={s}
+                type="button"
+                className={cn(
+                  "inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground",
+                  source === s &&
+                    "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground",
+                )}
+                onClick={() => setSource(s)}
+              >
+                {s === "screen" ? (
                   <ScreenIcon size={13} />
-                  <Video size={11} className="rounded-sm bg-current/10" />
-                </span>
-              ) : (
-                <Mic size={13} />
-              )}{" "}
-              {t(`record_${s}` as never)}
-            </button>
-          ))}
-        </div>
+                ) : s === "camera" ? (
+                  <Video size={13} />
+                ) : s === "screenCamera" ? (
+                  <span className="inline-flex items-center -space-x-1" aria-hidden>
+                    <ScreenIcon size={13} />
+                    <Video size={11} className="rounded-sm bg-current/10" />
+                  </span>
+                ) : (
+                  <Mic size={13} />
+                )}{" "}
+                {t(`record_${s}` as never)}
+              </button>
+            ))}
+          </div>
+        )}
         <div
+          key="preview"
           className={cn(
             "relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-lg border border-border bg-panel-inset",
             recording && "bg-black",
@@ -371,7 +384,7 @@ export function Recorder({
 
         {/* 设备选择 + 输入电平:摄像头/麦克风模式可指定设备;电平柱有声即动,
             哑设备(录了 0 秒那种)当场现形。录制中锁定选择。 */}
-        {capturesMicrophone && (
+        {capturesMicrophone && !recording && (
           <div className="grid gap-1.5">
             <div
               className={cn(

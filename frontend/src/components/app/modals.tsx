@@ -76,6 +76,8 @@ export function ModalShell({
   children,
   className,
   bodyClassName,
+  dismissible = true,
+  modal = true,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -89,11 +91,23 @@ export function ModalShell({
   className?: string;
   /** 覆盖滚动区的内边距 —— 内容自己就是通栏的(比如一张图)时用。 */
   bodyClassName?: string;
+  /** Non-dismissible panels stay open until their own primary action completes. */
+  dismissible?: boolean;
+  /** Non-modal panels leave the rest of the application interactive and omit the overlay. */
+  modal?: boolean;
 }) {
   useUnlockBodyOnClose(open);
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange} modal={modal}>
       <DialogContent
+        showClose={dismissible}
+        showOverlay={modal}
+        onEscapeKeyDown={(event) => {
+          if (!dismissible) event.preventDefault();
+        }}
+        onPointerDownOutside={(event) => {
+          if (!dismissible) event.preventDefault();
+        }}
         className={cn(
           "flex min-w-0 max-h-[90vh] flex-col gap-0 overflow-hidden bg-transparent p-0 backdrop-blur-xl",
           className,

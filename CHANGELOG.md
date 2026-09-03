@@ -11,6 +11,8 @@ commit list and downloadable artifacts.
   two independent assets from one recording session instead of baking the camera into the screen capture.
 - Added an optional, remembered camera mirror that flips both the live preview and saved camera asset while
   leaving the independently recorded screen asset unchanged.
+- Kept active recordings alive across app navigation and collapsed the recorder into a non-blocking controller,
+  so the rest of Mosael remains usable while captured files retain their original workspace or project destination.
 
 ## [1.0.0-beta1] - 2026-09-03
 

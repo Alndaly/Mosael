@@ -10,7 +10,6 @@ import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { TagsDialog } from "@/features/media/TagsDialog";
 import { useImagePreview } from "@/components/app/image-preview";
 import { Input } from "@/components/ui/input";
-import { Recorder } from "@/features/editor/Recorder";
 import { formatTimecode } from "@/domain/timeline/geometry";
 import { useEditorStore } from "@/stores/editorStore";
 import { cn } from "@/lib/utils";
@@ -24,18 +23,19 @@ export function MediaPool({
   assets,
   uploading,
   onImportFile,
+  onRecord,
   onAddToTimeline,
   tabs,
 }: {
   assets: Asset[];
   uploading: boolean;
   onImportFile: (file: File) => void;
+  onRecord: () => void;
   onAddToTimeline: (asset: Asset) => void;
   tabs?: React.ReactNode;
 }) {
   const t = useI18n();
   const qc = useQueryClient();
-  const [recorderOpen, setRecorderOpen] = React.useState(false);
   const [renaming, setRenaming] = React.useState<Asset | null>(null);
   const [editingTags, setEditingTags] = React.useState<Asset | null>(null);
   const [deleting, setDeleting] = React.useState<Asset | null>(null);
@@ -129,7 +129,7 @@ export function MediaPool({
             variant="ghost"
             size="icon"
             className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            onClick={() => setRecorderOpen(true)}
+            onClick={onRecord}
             title={t("record")}
             aria-label={t("record")}
           >
@@ -137,11 +137,6 @@ export function MediaPool({
           </Button>
         </div>
       </div>
-      <Recorder
-        open={recorderOpen}
-        onOpenChange={setRecorderOpen}
-        onRecorded={(files) => files.forEach(onImportFile)}
-      />
       <div className="grid gap-1.5 border-b border-border p-1.5">
         <div className="relative grid [&_svg]:pointer-events-none [&_svg]:absolute [&_svg]:left-2 [&_svg]:top-1/2 [&_svg]:z-[1] [&_svg]:-translate-y-1/2 [&_svg]:text-muted-foreground [&_input]:h-7 [&_input]:pl-7 [&_input]:text-xs">
           <Search size={13} />

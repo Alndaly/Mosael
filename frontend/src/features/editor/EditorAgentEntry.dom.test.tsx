@@ -56,6 +56,7 @@ vi.mock("@/features/editor/FontFaces", () => ({ FontFaces: () => null }));
 
 import type { Project, Sequence, Workspace } from "@/api/client";
 import { EditorView } from "@/features/editor/EditorView";
+import { RecordingProvider } from "@/features/media/RecordingProvider";
 
 const workspace = { id: "workspace-1", name: "工作区" } as Workspace;
 const project = { id: "project-1", name: "宣传片" } as Project;
@@ -76,7 +77,9 @@ function renderEditor() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <EditorView workspace={workspace} project={project} onCreateProject={vi.fn()} creatingProject={false} />
+      <RecordingProvider workspaceId={workspace.id}>
+        <EditorView workspace={workspace} project={project} onCreateProject={vi.fn()} creatingProject={false} />
+      </RecordingProvider>
     </QueryClientProvider>,
   );
 }

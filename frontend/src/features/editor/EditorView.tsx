@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot, Camera, CircleAlert, CircleCheck, Download, FolderPlus, Loader2, Plus, Redo2, Scissors, Sparkles, Type, Undo2 } from "lucide-react";
 
 import { toast } from "sonner";
+import { useRecorder } from "@/features/media/RecordingProvider";
 
 import {
   API_BASE,
@@ -118,6 +119,7 @@ export function EditorView({
 function Editor({ workspace, project }: { workspace: Workspace; project: Project }) {
   const t = useI18n();
   const qc = useQueryClient();
+  const { openRecorder } = useRecorder();
   const selectedClipId = useEditorStore((state) => state.selectedClipId);
   // 在哪个 tab 是**这个人怎么用这个工具**的一部分,不是这一刻的临时值 —— 切走再回来不该重置
   // (面板宽度早就是这么存的,见 PANEL_SIZES_KEY)。用项目里已有的那个钩子,它自带白名单:
@@ -892,6 +894,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           assets={assets.data ?? []}
           uploading={uploadAsset.isPending}
           onImportFile={(file) => uploadAsset.mutate(file)}
+          onRecord={() => openRecorder({ projectId: project.id })}
           onAddToTimeline={addAssetToTimeline}
           tabs={<LeftTabs tab={panels.tab} onChange={panels.setTab} />}
         />

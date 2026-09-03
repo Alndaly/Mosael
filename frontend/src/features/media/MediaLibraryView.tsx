@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/layout/EmptyState";
-import { Recorder } from "@/features/editor/Recorder";
+import { useRecorder } from "@/features/media/RecordingProvider";
 import { AssetPreviewModal } from "@/features/media/AssetPreviewModal";
 import { TagsDialog } from "@/features/media/TagsDialog";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
@@ -54,6 +54,7 @@ function compareAssets(a: Asset, b: Asset, key: SortKey): number {
 export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   const qc = useQueryClient();
+  const { openRecorder } = useRecorder();
   const [renaming, setRenaming] = React.useState<Asset | null>(null);
   const [deleting, setDeleting] = React.useState<Asset | null>(null);
   const [previewing, setPreviewing] = React.useState<Asset | null>(null);
@@ -67,7 +68,6 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const [comparing, setComparing] = React.useState(false);
   const [batchTagging, setBatchTagging] = React.useState(false);
   const [batchDeleting, setBatchDeleting] = React.useState(false);
-  const [recorderOpen, setRecorderOpen] = React.useState(false);
   const [urlImportOpen, setUrlImportOpen] = React.useState(false);
 
   const assets = useQuery({
@@ -279,7 +279,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
               <Button variant="outline" size="sm" onClick={() => setUrlImportOpen(true)}>
                 <Link2 size={13} /> {t("urlImport")}
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setRecorderOpen(true)}>
+              <Button variant="outline" size="sm" onClick={() => openRecorder()}>
                 <CircleDot size={13} /> {t("record")}
               </Button>
               <div
@@ -393,11 +393,6 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           )}
         </div>
       )}
-      <Recorder
-        open={recorderOpen}
-        onOpenChange={setRecorderOpen}
-        onRecorded={(files) => files.forEach((file) => uploadAsset.mutate(file))}
-      />
       <UrlImportDialog
         open={urlImportOpen}
         onOpenChange={setUrlImportOpen}
@@ -432,7 +427,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
               <Button variant="outline" onClick={() => setUrlImportOpen(true)}>
                 <Link2 size={15} /> {t("urlImport")}
               </Button>
-              <Button variant="outline" onClick={() => setRecorderOpen(true)}>
+              <Button variant="outline" onClick={() => openRecorder()}>
                 <CircleDot size={15} /> {t("record")}
               </Button>
             </span>

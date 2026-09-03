@@ -57,6 +57,7 @@ import { AiStudio } from "@/features/ai-studio/AiStudio";
 import { EditorView } from "@/features/editor/EditorView";
 import { HomeView } from "@/features/home/HomeView";
 import { MediaLibraryView } from "@/features/media/MediaLibraryView";
+import { RecordingProvider } from "@/features/media/RecordingProvider";
 import { PublishView } from "@/features/publish/PublishView";
 import { BrowserPoolView } from "@/features/browser-pool/BrowserPoolView";
 import { PluginsView } from "@/features/plugins/PluginsView";
@@ -522,56 +523,58 @@ function Studio({
   }, [workspace.id, qc, t]);
 
   return (
-    <AppShell
-      view={view}
-      onViewChange={setView}
-      workspaceId={workspace.id}
-      workspaceName={workspace.name}
-      workspaces={workspaces}
-      onSelectWorkspace={onSelectWorkspace}
-      projectName={project?.name ?? null}
-      projects={(projects.data ?? []).map((p) => ({ id: p.id, name: p.name }))}
-      currentProjectId={project?.id ?? null}
-      onSwitchProject={openProject}
-      onCreateProject={() => createProject.mutate()}
-      creatingProject={createProject.isPending}
-    >
-      {view === "home" && (
-        <HomeView
+    <RecordingProvider workspaceId={workspace.id}>
+      <AppShell
+        view={view}
+        onViewChange={setView}
+        workspaceId={workspace.id}
+        workspaceName={workspace.name}
+        workspaces={workspaces}
+        onSelectWorkspace={onSelectWorkspace}
+        projectName={project?.name ?? null}
+        projects={(projects.data ?? []).map((p) => ({ id: p.id, name: p.name }))}
+        currentProjectId={project?.id ?? null}
+        onSwitchProject={openProject}
+        onCreateProject={() => createProject.mutate()}
+        creatingProject={createProject.isPending}
+      >
+        {view === "home" && (
+          <HomeView
+            workspace={workspace}
+            projects={projects.data ?? []}
+            onOpenProject={openProject}
+            onCreateProject={() => createProject.mutate()}
+            creatingProject={createProject.isPending}
+          />
+        )}
+        {view === "media" && <MediaLibraryView workspace={workspace} />}
+        {view === "editor" && (
+          <EditorView
+            workspace={workspace}
+            project={project}
+            onCreateProject={() => createProject.mutate()}
+            creatingProject={createProject.isPending}
+          />
+        )}
+        {view === "ai" && <AiStudio workspace={workspace} />}
+        {view === "publish" && <PublishView workspace={workspace} />}
+        {view === "browser-pool" && <BrowserPoolView workspace={workspace} />}
+        {view === "settings" && <SettingsView workspace={workspace} />}
+        {view === "admin" && <AdminView />}
+        {view === "workflows" && <WorkflowsView workspace={workspace} />}
+        {view === "boards" && <BoardsView workspace={workspace} />}
+        {view === "scheduler" && (
+          <SchedulerView workspace={workspace} project={project} />
+        )}
+        {view === "plugins" && <PluginsView />}
+        <CommandPalette
           workspace={workspace}
           projects={projects.data ?? []}
+          onNavigate={setView}
           onOpenProject={openProject}
-          onCreateProject={() => createProject.mutate()}
-          creatingProject={createProject.isPending}
         />
-      )}
-      {view === "media" && <MediaLibraryView workspace={workspace} />}
-      {view === "editor" && (
-        <EditorView
-          workspace={workspace}
-          project={project}
-          onCreateProject={() => createProject.mutate()}
-          creatingProject={createProject.isPending}
-        />
-      )}
-      {view === "ai" && <AiStudio workspace={workspace} />}
-      {view === "publish" && <PublishView workspace={workspace} />}
-      {view === "browser-pool" && <BrowserPoolView workspace={workspace} />}
-      {view === "settings" && <SettingsView workspace={workspace} />}
-      {view === "admin" && <AdminView />}
-      {view === "workflows" && <WorkflowsView workspace={workspace} />}
-      {view === "boards" && <BoardsView workspace={workspace} />}
-      {view === "scheduler" && (
-        <SchedulerView workspace={workspace} project={project} />
-      )}
-      {view === "plugins" && <PluginsView />}
-      <CommandPalette
-        workspace={workspace}
-        projects={projects.data ?? []}
-        onNavigate={setView}
-        onOpenProject={openProject}
-      />
-      <ConfirmationCenter workspaceId={workspace.id} />
-    </AppShell>
+        <ConfirmationCenter workspaceId={workspace.id} />
+      </AppShell>
+    </RecordingProvider>
   );
 }

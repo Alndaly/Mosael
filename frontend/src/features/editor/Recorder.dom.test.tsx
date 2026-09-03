@@ -100,6 +100,46 @@ describe("Recorder", () => {
     expect(localStorage.getItem("mosael.recorder.cameraMirror")).toBe("true");
   });
 
+  it("keeps the app interactive while a recording is running", async () => {
+    const probe = fakeStream();
+    const screenCapture = fakeStream();
+    getUserMedia.mockResolvedValueOnce(probe.stream);
+    getDisplayMedia.mockResolvedValueOnce(screenCapture.stream);
+    const onWorkspaceAction = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <>
+        <button type="button" onClick={onWorkspaceAction}>
+          workspaceAction
+        </button>
+        <Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />
+      </>,
+    );
+
+    await user.click(screen.getByRole("button", { name: /recordStart/ }));
+    await screen.findByRole("button", { name: /recordStop/ });
+    await user.click(await screen.findByRole("button", { name: "workspaceAction" }));
+
+    expect(onWorkspaceAction).toHaveBeenCalledOnce();
+  });
+
+  it("collapses configuration into a compact recording controller after start", async () => {
+    const probe = fakeStream();
+    const screenCapture = fakeStream();
+    getUserMedia.mockResolvedValueOnce(probe.stream);
+    getDisplayMedia.mockResolvedValueOnce(screenCapture.stream);
+    const user = userEvent.setup();
+
+    render(<Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /recordStart/ }));
+    await screen.findByRole("button", { name: /recordStop/ });
+
+    expect(screen.queryByRole("group", { name: "recordTitle" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /recordStop/ })).toBeVisible();
+  });
+
   it("records the screen and camera as two separate files", async () => {
     const probe = fakeStream();
     const screenCapture = fakeStream();
