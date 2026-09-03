@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 
 import httpx
+import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import Job, ProviderProfile, TaskEvent, Workflow
@@ -535,6 +536,107 @@ def test_llm_node_sends_advanced_openai_payload_and_parses_json(monkeypatch) -> 
             },
         },
     }
+
+
+def test_llm_node_falls_back_when_provider_rejects_response_format(monkeypatch) -> None:
+    """官方工作流不能因为默认聊天模型不实现 response_format 就整条失败。"""
+    import json as _json
+
+    from app.domain.workflows.executors import ai as ai_nodes
+
+    client = fresh_client()
+    workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    attempts: list[dict] = []
+
+    def handler(request):
+        payload = _json.loads(request.content)
+        attempts.append(payload)
+        if payload.get("response_format"):
+            return httpx.Response(
+                400,
+                json={"error": {"message": "This response_format type is unavailable now"}},
+            )
+        return httpx.Response(200, json={"choices": [{"message": {"content": '{"title":"海边"}'}}]})
+
+    _install_llm_transport(monkeypatch, ai_nodes, handler)
+
+    with SessionLocal() as db:
+        profile = add_provider(
+            db,
+            name="LLM",
+            vendor="openai-compatible",
+            base_url="https://example.test/v1",
+            api_key="sk-test",
+            model="deepseek-v4-flash",
+        )
+        workflow = Workflow(workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []})
+        db.add(workflow)
+        db.flush()
+
+        with acting_as(db):
+            result = ai_nodes.llm(
+                db,
+                workflow,
+                {
+                    "profile_id": profile.id,
+                    "prompt": "生成标题",
+                    "response_format": "json_schema",
+                    "json_schema_name": "title",
+                    "json_schema": {
+                        "type": "object",
+                        "properties": {"title": {"type": "string"}},
+                        "required": ["title"],
+                        "additionalProperties": False,
+                    },
+                },
+            )
+
+    assert result == {"text": '{"title":"海边"}', "json": {"title": "海边"}}
+    assert [one.get("response_format", {}).get("type") for one in attempts] == [
+        "json_schema",
+        "json_object",
+        None,
+    ]
+    fallback_messages = attempts[-1]["messages"]
+    assert any(
+        "JSON Schema" in str(one.get("content")) and '"title"' in str(one.get("content"))
+        for one in fallback_messages
+    )
+
+
+def test_llm_node_locally_validates_schema_after_provider_response(monkeypatch) -> None:
+    from app.domain.workflows.executors import ai as ai_nodes
+
+    client = fresh_client()
+    workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    _install_llm_transport(
+        monkeypatch,
+        ai_nodes,
+        lambda request: httpx.Response(200, json={"choices": [{"message": {"content": '{"title":7}'}}]}),
+    )
+
+    with SessionLocal() as db:
+        profile = add_provider(
+            db, name="LLM", vendor="openai-compatible", base_url="https://example.test/v1", api_key="sk", model="m"
+        )
+        workflow = Workflow(workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []})
+        db.add(workflow)
+        db.flush()
+        with acting_as(db), pytest.raises(WorkflowDomainError, match="不符合 Schema"):
+            ai_nodes.llm(
+                db,
+                workflow,
+                {
+                    "profile_id": profile.id,
+                    "prompt": "生成标题",
+                    "response_format": "json_schema",
+                    "json_schema": {
+                        "type": "object",
+                        "properties": {"title": {"type": "string"}},
+                        "required": ["title"],
+                    },
+                },
+            )
 
 
 def test_llm_node_uses_the_tool_free_gateway_for_oauth(monkeypatch) -> None:

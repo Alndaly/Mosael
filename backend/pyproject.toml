@@ -30,6 +30,9 @@ dependencies = [
   # 联网搜索解析网页用(domain/websearch)。此前一直没声明,靠环境里碰巧装着 —— 一次
   # `uv sync` 就把它清掉了,而后端从那一刻起连启动都启动不了。
   "beautifulsoup4>=4.12",
+  # 工作流结构化输出在供应商不支持 response_format 时会降级为提示词约束；结果必须在本地
+  # 重新按同一份 Schema 校验，不能把“能 json.loads”误当成契约满足。
+  "jsonschema>=4.23",
 ]
 
 [dependency-groups]

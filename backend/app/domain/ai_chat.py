@@ -133,11 +133,13 @@ def chat(
     client: httpx.Client | None = None,
     call: BillableCall | None = None,
     label: str = "AI 调用",
+    allow_response_format_fallback: bool = False,
 ) -> str:
     """跑一次对话补全,返回助手消息的文本。
 
     client 给了就复用它(整批字幕共用连接,省掉每条一次 TLS 握手);此时重试由该 client 决定。
     call 给了就把 token 计量报进那次记账(见 domain/usage.billable)。
+    allow_response_format_fallback 只供会在本地继续解析/校验 JSON 的调用方开启。
     """
     payload: dict[str, Any] = {"model": target.model, "messages": messages, "temperature": temperature}
     if json_object:
@@ -162,13 +164,26 @@ def chat(
     headers = _auth_headers(target.api_key)
 
     try:
-        if client is not None:
-            response = client.post(url, headers=headers, json=payload, timeout=timeout)
-        else:
-            response = ai_retry.post(url, headers=headers, json=payload, timeout=timeout, max_retries=max_retries)
-        response.raise_for_status()
-        body = response.json()
-        content = str(body["choices"][0]["message"]["content"])
+        while True:
+            if client is not None:
+                response = client.post(url, headers=headers, json=payload, timeout=timeout)
+            else:
+                response = ai_retry.post(url, headers=headers, json=payload, timeout=timeout, max_retries=max_retries)
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError:
+                fallback = (
+                    _response_format_fallback_payload(payload, response)
+                    if allow_response_format_fallback
+                    else None
+                )
+                if fallback is None:
+                    raise
+                payload = fallback
+                continue
+            body = response.json()
+            content = str(body["choices"][0]["message"]["content"])
+            break
     except httpx.HTTPStatusError as exc:
         raise AiChatError(_sanitize(f"{label}失败:{_provider_detail(exc.response, target.model)}", target.api_key)) from exc
     except httpx.RequestError as exc:
@@ -296,6 +311,7 @@ def _chat_gateway(
 #: OpenAI 兼容接口的硬性要求:用 `response_format: json_object` 时,**提示词里必须出现
 #: "json" 这个词**,否则直接 400。deepseek、月之暗面等跟着 OpenAI 的实现都照做。
 _JSON_MODE_HINT = "Respond with a single valid JSON object."
+_JSON_FALLBACK_MARKER = "Mosael response-format compatibility contract"
 
 
 def _satisfy_json_mode(messages: list[dict[str, Any]], response_format: Any) -> list[dict[str, Any]]:
@@ -313,6 +329,59 @@ def _satisfy_json_mode(messages: list[dict[str, Any]], response_format: Any) -> 
     if any("json" in str(one.get("content") or "").lower() for one in messages):
         return messages
     return [{"role": "system", "content": _JSON_MODE_HINT}, *messages]
+
+
+def _response_format_fallback_payload(payload: dict[str, Any], response: httpx.Response) -> dict[str, Any] | None:
+    """供应商明确不支持结构化输出时，逐级降级而不丢失 JSON 契约。
+
+    json_schema → json_object → 纯文本。只处理可识别的能力错误；Schema 写错、鉴权失败等普通
+    400 仍原样抛出。调用方必须继续解析（并在有 Schema 时本地校验）结果，才可开启此策略。
+    """
+    current = payload.get("response_format")
+    if not isinstance(current, dict) or current.get("type") not in {"json_schema", "json_object"}:
+        return None
+    if response.status_code != 400:
+        return None
+    detail = response.text.lower()
+    try:
+        body = response.json()
+    except (ValueError, json.JSONDecodeError):
+        body = None
+    if isinstance(body, dict):
+        error = body.get("error")
+        if isinstance(error, dict):
+            detail += " " + str(error.get("message") or "").lower()
+        elif error:
+            detail += " " + str(error).lower()
+    unsupported = any(
+        phrase in detail
+        for phrase in ("unavailable", "not supported", "unsupported", "must be one of")
+    )
+    if "response_format" not in detail or not unsupported:
+        return None
+
+    messages = list(payload.get("messages") or [])
+    if not any(_JSON_FALLBACK_MARKER in str(one.get("content") or "") for one in messages):
+        json_schema = current.get("json_schema") if current.get("type") == "json_schema" else None
+        schema = json_schema.get("schema") if isinstance(json_schema, dict) else None
+        contract = (
+            "The provider cannot enforce response_format. Return only one valid JSON object that "
+            "matches this JSON Schema exactly; do not use Markdown fences:\n"
+            + json.dumps(schema, ensure_ascii=False, separators=(",", ":"))
+            if isinstance(schema, dict)
+            else "The provider cannot enforce response_format. Return only one valid JSON object; "
+            "do not use Markdown fences or explanatory text."
+        )
+        messages = [{"role": "system", "content": f"{_JSON_FALLBACK_MARKER}.\n{contract}"}, *messages]
+
+    fallback = dict(payload)
+    if current.get("type") == "json_schema":
+        fallback["response_format"] = {"type": "json_object"}
+        fallback["messages"] = _satisfy_json_mode(messages, fallback["response_format"])
+    else:
+        fallback.pop("response_format", None)
+        fallback["messages"] = messages
+    return fallback
 
 
 def _auth_headers(api_key: str) -> dict[str, str]:

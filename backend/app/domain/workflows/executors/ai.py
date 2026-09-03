@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from jsonschema import SchemaError, ValidationError, validate as validate_json_schema
 from sqlalchemy.orm import Session
 
 from app.db.models import Workflow
@@ -151,6 +152,7 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
     try:
         target = target_for(db, profile, model=str(config.get("model") or ""), surface="automation")
         payload = _request_payload(config, target.model, messages)
+        allow_response_format_fallback = "response_format" in payload
         with billable(
             db,
             capability="chat",
@@ -168,6 +170,7 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
                 max_retries=configured_max_retries(db),
                 call=call,
                 label="调用 LLM",
+                allow_response_format_fallback=allow_response_format_fallback,
             ).strip()
     except AiChatError as exc:
         raise WorkflowDomainError(str(exc)) from exc
@@ -177,6 +180,13 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
             result["json"] = json.loads(text)
         except json.JSONDecodeError as exc:
             raise WorkflowDomainError("LLM 未返回合法 JSON") from exc
+        if str(config.get("response_format")) == "json_schema":
+            try:
+                validate_json_schema(instance=result["json"], schema=config.get("json_schema"))
+            except SchemaError as exc:
+                raise WorkflowDomainError(f"JSON Schema 无效:{exc.message}") from exc
+            except ValidationError as exc:
+                raise WorkflowDomainError(f"LLM 返回的 JSON 不符合 Schema:{exc.message}") from exc
     return result
 
 
