@@ -1,5 +1,6 @@
 import { Notification } from "electron";
 
+import { IPC } from "../ipc-contract.cjs";
 import type { Capability, SystemContext } from "./types";
 
 /**
@@ -35,7 +36,7 @@ export function showTaskNotification(notice: TaskNotice): boolean {
     context?.showWindow();
     const win = context?.getWindow();
     // 点通知就该看到那件事本身,而不是落在你上次停留的页面上。TaskCenter 监听这个事件。
-    if (win && !win.isDestroyed()) win.webContents.send("mosael:open-tasks");
+    if (win && !win.isDestroyed()) win.webContents.send(IPC.event.openTasks);
   });
   notification.show();
   return true;

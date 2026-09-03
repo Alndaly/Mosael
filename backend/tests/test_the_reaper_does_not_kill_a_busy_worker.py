@@ -15,6 +15,7 @@ import textwrap
 import time
 
 from app.ai.runtime import tts_daemon
+from app.ai.runtime.workers.tts_protocol import EVENT_PREFIX
 
 
 def _slow_worker(tmp_path) -> str:
@@ -24,13 +25,13 @@ def _slow_worker(tmp_path) -> str:
         textwrap.dedent(
             f"""
             import json, sys, time
-            PREFIX = {tts_daemon.EVENT_PREFIX!r}
+            PREFIX = {EVENT_PREFIX!r}
             for line in sys.stdin:
                 if not line.strip():
                     continue
                 request = json.loads(line)
                 time.sleep(1.5)
-                sys.stdout.write(PREFIX + json.dumps({{"event": "done", "output": "ok"}}) + "\\n")
+                sys.stdout.write(PREFIX + json.dumps({{"event": "done", "engine": "fish-speech", "output": "ok"}}) + "\\n")
                 sys.stdout.flush()
             """
         ),

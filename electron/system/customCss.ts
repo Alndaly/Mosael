@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { app, shell } from "electron";
 
+import { IPC } from "../ipc-contract.cjs";
 import type { Capability, SystemContext } from "./types";
 
 /**
@@ -99,7 +100,7 @@ export const customCss: Capability = {
     const push = (): void => {
       const win = ctx.getWindow();
       if (!win || win.isDestroyed()) return;
-      win.webContents.send("mosael:custom-css", readCustomCss());
+      win.webContents.send(IPC.event.customCss, readCustomCss());
     };
 
     try {

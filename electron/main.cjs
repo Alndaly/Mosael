@@ -14,6 +14,17 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { migrateLegacyUserData } = require("./user-data-migration.cjs");
 const { createRecordingPermissionService } = require("./recording-permissions.cjs");
+const {
+  IPC,
+  parseBrowserLogin,
+  parsePanelId,
+  parsePanelLayout,
+  parsePublishTarget,
+  parseSystemStatus,
+  parseTaskNotice,
+  parseTitleOverlay,
+  parseUrlRequest,
+} = require("./ipc-contract.cjs");
 
 // 应用名。开发态跑的是未打包的 Electron.app,菜单栏首项 / Dock 名默认显示 "Electron"。
 // macOS dev 的菜单/Dock 名读 Electron.app 的 CFBundleName,由 electron/brand-dev.cjs 在启动前补丁;
@@ -430,7 +441,7 @@ function createWindow() {
   );
   // 全屏时系统窗口控件(mac 红绿灯 / Win 标题栏三键)消失,顶栏为它们预留的边距要撤掉。
   const sendFullscreen = () => {
-    if (!win.isDestroyed()) win.webContents.send("mosael:fullscreen", win.isFullScreen());
+    if (!win.isDestroyed()) win.webContents.send(IPC.event.fullscreen, win.isFullScreen());
   };
   win.on("enter-full-screen", sendFullscreen);
   win.on("leave-full-screen", sendFullscreen);
@@ -470,18 +481,18 @@ function createWindow() {
       publish.startPublishWorker({
         window: win,
         onViewChanged: (state) => {
-          if (!win.isDestroyed()) win.webContents.send("publish:view", state);
+          if (!win.isDestroyed()) win.webContents.send(IPC.event.publishView, state);
         },
         // 悬浮卡片几何:原生 WebContentsView 画不了圆角/阴影,所以渲染层照这些矩形在视图**下方**
         // 画卡片外壳(子视图永远盖在宿主页面之上,于是卡片的圆角边框会在视图四周露出来)。
         onPanels: (cards) => {
-          if (!win.isDestroyed()) win.webContents.send("publish:panels", cards);
+          if (!win.isDestroyed()) win.webContents.send(IPC.event.publishPanels, cards);
         },
         // 发布任务在后台不可见的账号视图里跑,用户否则完全看不到它在做什么。走与 RPA 相同的
         // browser:frame 通道和同一个前端面板——「自动化浏览器在干什么」对用户是一件事,不该
         // 因为内部分了两个 worker 就冒出两个窗口。
         onFrame: (frame) => {
-          if (!win.isDestroyed()) win.webContents.send("browser:frame", frame);
+          if (!win.isDestroyed()) win.webContents.send(IPC.event.browserFrame, frame);
         },
         // 只报**任务中心看不到的那些状态**。
         //
@@ -567,58 +578,63 @@ app.whenReady().then(async () => {
         : "发布执行器不可用:electron/publish.bundle.cjs 缺失(先跑 pnpm build:publisher)",
     );
   };
-  ipcMain.handle("publish:login", (_e, { accountId, platform }) => requirePublish().openLogin(accountId, platform));
-  ipcMain.handle("publish:openPage", (_e, { accountId, platform }) => requirePublish().openPage(accountId, platform));
-  ipcMain.handle("publish:inspect", (_e, { accountId, platform }) => requirePublish().inspectAccount(accountId, platform));
-  ipcMain.handle("publish:navigate", (_e, { url }) => requirePublish().navigateView(url));
-  ipcMain.handle("publish:back", () => requirePublish().viewBack());
-  ipcMain.handle("publish:forward", () => requirePublish().viewForward());
-  ipcMain.handle("publish:reload", () => requirePublish().viewReload());
-  ipcMain.handle("publish:hideView", () => requirePublish().hidePublishView());
+  ipcMain.handle(IPC.invoke.publishLogin, (_e, payload) => {
+    const { accountId, platform } = parsePublishTarget(payload, IPC.invoke.publishLogin);
+    return requirePublish().openLogin(accountId, platform);
+  });
+  ipcMain.handle(IPC.invoke.publishOpenPage, (_e, payload) => {
+    const { accountId, platform } = parsePublishTarget(payload, IPC.invoke.publishOpenPage);
+    return requirePublish().openPage(accountId, platform);
+  });
+  ipcMain.handle(IPC.invoke.publishInspect, (_e, payload) => {
+    const { accountId, platform } = parsePublishTarget(payload, IPC.invoke.publishInspect);
+    return requirePublish().inspectAccount(accountId, platform);
+  });
+  ipcMain.handle(IPC.invoke.publishNavigate, (_e, payload) => {
+    const { url } = parseUrlRequest(payload, IPC.invoke.publishNavigate);
+    return requirePublish().navigateView(url);
+  });
+  ipcMain.handle(IPC.invoke.publishBack, () => requirePublish().viewBack());
+  ipcMain.handle(IPC.invoke.publishForward, () => requirePublish().viewForward());
+  ipcMain.handle(IPC.invoke.publishReload, () => requirePublish().viewReload());
+  ipcMain.handle(IPC.invoke.publishHideView, () => requirePublish().hidePublishView());
   // 悬浮面板:渲染层拖动/缩放/关闭。几何由主进程持有(layout() 要用,还要落盘)。
-  ipcMain.handle("publish:panelLayout", (_e, patch) => requirePublish().setPanelLayout(patch || {}));
-  ipcMain.handle("publish:closePanel", (_e, { id }) => requirePublish().closePanel(id));
+  ipcMain.handle(IPC.invoke.publishPanelLayout, (_e, payload) =>
+    requirePublish().setPanelLayout(parsePanelLayout(payload)),
+  );
+  ipcMain.handle(IPC.invoke.publishClosePanel, (_e, payload) => {
+    const { id } = parsePanelId(payload);
+    return requirePublish().closePanel(id);
+  });
   // 通用池档案登录:复用发布账号那套 app **内嵌视图**(不弹外部系统窗,体验与发布登录一致)。
   // 安全:只放行 persist:pool-* 分区(发布账号走 publish:login),只放行 http(s)。
-  ipcMain.handle("browser:openLogin", async (_e, { partition, url, name, proxy }) => {
+  ipcMain.handle(IPC.invoke.browserOpenLogin, async (_e, payload) => {
     try {
-      const part = String(partition || "");
-      if (!part.startsWith("persist:pool-")) return { ok: false, error: "只支持通用池档案的登录" };
-      const target = String(url || "").trim();
-      if (!/^https?:\/\//i.test(target)) return { ok: false, error: "请输入 http(s) 网址" };
-      await requirePublish().openPoolLogin({ partition: part, url: target, name: name || "", proxy: proxy ?? null });
+      const request = parseBrowserLogin(payload);
+      await requirePublish().openPoolLogin(request);
       return { ok: true };
     } catch (err) {
       return { ok: false, error: String(err && err.message ? err.message : err) };
     }
   });
-  // 账号视图里注入的「返回 Mosael」按钮(account-view-preload.cjs)→ 收起内嵌视图。
-  ipcMain.on("publish:exit", () => {
-    try {
-      requirePublish().hidePublishView();
-    } catch (e) {
-      console.warn("[publish] exit 忽略:", e.message);
-    }
-  });
-
   // 更新检查:设置页「检查更新」按钮主动调;打包版启动后再静默查一次,
   // 有新版把信息推给渲染层弹提示。检查失败(离线/私有仓库)不打扰。
-  ipcMain.handle("mosael:check-updates", async () => {
+  ipcMain.handle(IPC.invoke.checkUpdates, async () => {
     try {
       return await checkForUpdates();
     } catch (error) {
       return { error: error.message };
     }
   });
-  ipcMain.handle("recording-permissions:status", (_event, kind) => recordingPermissions.getStatus(kind));
-  ipcMain.handle("recording-permissions:request", (_event, kind) => recordingPermissions.request(kind));
-  ipcMain.handle("recording-permissions:open-settings", (_event, kind) => recordingPermissions.openSettings(kind));
+  ipcMain.handle(IPC.invoke.recordingStatus, (_event, kind) => recordingPermissions.getStatus(kind));
+  ipcMain.handle(IPC.invoke.recordingRequest, (_event, kind) => recordingPermissions.request(kind));
+  ipcMain.handle(IPC.invoke.recordingOpenSettings, (_event, kind) => recordingPermissions.openSettings(kind));
   if (app.isPackaged && !isSmokeTest) {
     setTimeout(async () => {
       try {
         const info = await checkForUpdates();
         if (info.hasUpdate) {
-          for (const win of BrowserWindow.getAllWindows()) win.webContents.send("mosael:update-available", info);
+          for (const win of BrowserWindow.getAllWindows()) win.webContents.send(IPC.event.updateAvailable, info);
         }
       } catch {
         /* 静默 */
@@ -636,8 +652,9 @@ app.whenReady().then(async () => {
     if (!dockIcon.isEmpty()) app.dock.setIcon(dockIcon);
   }
   // Win/Linux:标题栏三键叠层颜色随前端主题(mosaelDesktop.setTitleOverlay)。mac 无叠层。
-  ipcMain.on("mosael:title-overlay", (event, colors) => {
-    if (process.platform === "darwin" || !colors) return;
+  ipcMain.on(IPC.send.titleOverlay, (event, payload) => {
+    if (process.platform === "darwin") return;
+    const colors = parseTitleOverlay(payload);
     const win = BrowserWindow.fromWebContents(event.sender);
     try {
       win?.setTitleBarOverlay({ color: colors.color, symbolColor: colors.symbolColor, height: 44 });
@@ -674,22 +691,22 @@ app.whenReady().then(async () => {
       trayDarkPath: path.join(__dirname, "..", "build", "tray-dark.png"),
     });
     // 渲染层把「有几个任务在跑」推上来 —— 托盘文案和防睡眠都吃这一份,系统层不反查后端。
-    ipcMain.on("system:status", (_e, status) => systemHandle?.pushStatus(status || {}));
+    ipcMain.on(IPC.send.systemStatus, (_e, payload) => systemHandle?.pushStatus(parseSystemStatus(payload)));
     // 渲染层在任务结束时调用。发不发由主进程判(窗口藏起来时渲染层的 hasFocus 不可靠)。
-    ipcMain.on("system:notify", (_e, notice) => {
-      if (notice?.title) system.showTaskNotification({ title: String(notice.title), body: String(notice.body || "") });
-    });
+    ipcMain.on(IPC.send.systemNotify, (_e, payload) => system.showTaskNotification(parseTaskNotice(payload)));
     // 开发模式返回 null = 「本环境不支持」,设置页据此隐藏开关。不能只是让它失效:
     // dev 下 process.execPath 是 Electron 二进制,写进登录项等于让开发机开机启动一个裸 Electron。
-    ipcMain.handle("system:getOpenAtLogin", () => (isDev ? null : system.getOpenAtLogin()));
-    ipcMain.handle("system:setOpenAtLogin", (_e, enabled) => (isDev ? null : system.setOpenAtLogin(Boolean(enabled))));
+    ipcMain.handle(IPC.invoke.getOpenAtLogin, () => (isDev ? null : system.getOpenAtLogin()));
+    ipcMain.handle(IPC.invoke.setOpenAtLogin, (_e, enabled) =>
+      isDev ? null : system.setOpenAtLogin(Boolean(enabled)),
+    );
 
     // 自定义 CSS:渲染层要三样东西 —— 内容(启动时读一次,之后靠推送)、路径(设置页显示)、
     // 以及打开/定位这个文件的两个动作。写入始终由用户在自己的编辑器里完成,应用不代写。
-    ipcMain.handle("customCss:read", () => system.readCustomCss());
-    ipcMain.handle("customCss:path", () => system.customCssPath());
-    ipcMain.handle("customCss:open", () => system.openCustomCss());
-    ipcMain.handle("customCss:reveal", () => system.revealCustomCss());
+    ipcMain.handle(IPC.invoke.customCssRead, () => system.readCustomCss());
+    ipcMain.handle(IPC.invoke.customCssPath, () => system.customCssPath());
+    ipcMain.handle(IPC.invoke.customCssOpen, () => system.openCustomCss());
+    ipcMain.handle(IPC.invoke.customCssReveal, () => system.revealCustomCss());
 
     // 开机自启拉起时静默驻留托盘,不弹窗口。
     if (system.isHiddenLaunch()) BrowserWindow.getAllWindows()[0]?.hide();

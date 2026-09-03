@@ -1,6 +1,7 @@
 import { app } from "electron";
 import path from "node:path";
 
+import { IPC } from "../ipc-contract.cjs";
 import { deepLinkFromArgv, parseDeepLink, PROTOCOL, type DeepLink } from "./deepLink";
 import type { Capability, SystemContext } from "./types";
 
@@ -36,12 +37,12 @@ function deliver(channel: string, payload: unknown): void {
 }
 
 export function handleDeepLink(link: DeepLink | null): void {
-  if (link) deliver("mosael:deep-link", link);
+  if (link) deliver(IPC.event.deepLink, link);
 }
 
 export function handleOpenFiles(paths: readonly string[]): void {
   const media = paths.filter((p) => typeof p === "string" && MEDIA_EXTENSIONS.has(path.extname(p).toLowerCase()));
-  if (media.length) deliver("mosael:open-files", media);
+  if (media.length) deliver(IPC.event.openFiles, media);
 }
 
 /** 从 argv 里挑出可入库的文件路径(Windows/Linux 的「用 Mosael 打开」走这条)。 */

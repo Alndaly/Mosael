@@ -31,21 +31,24 @@ import wave
 from pathlib import Path
 from typing import Any
 
+if __package__:
+    from .tts_protocol import encode_event_line
+else:
+    # Executed directly by the engine's isolated interpreter; its sys.path only
+    # contains this directory, not the application package.
+    from tts_protocol import encode_event_line
+
 
 # ---------------------------------------------------------------------------
 # 常驻模式
 # ---------------------------------------------------------------------------
-#: 和宿主约定的协议前缀(见 ai/runtime/tts_daemon)。引擎自己会往这个通道打 tqdm 和 loguru,
-#: 所以只有带前缀的行才是协议。
-EVENT_PREFIX = "@@MOSAEL-TTS "
-
 #: 已经加载好的引擎。**常驻模式存在的全部理由就是这个字典** —— 实测一次 Fish Speech 的
 #: 权重加载要 511.9 秒,而解码本身只有几十秒。
 _LOADED: dict[str, Any] = {}
 
 
 def _emit(payload: dict[str, Any]) -> None:
-    sys.stdout.write(EVENT_PREFIX + json.dumps(payload, ensure_ascii=False) + "\n")
+    sys.stdout.write(encode_event_line(payload))
     sys.stdout.flush()
 
 
@@ -399,6 +402,21 @@ def warmup(request: dict[str, Any], output_path: str) -> str:
         raise
 
 
+def execute_request(request: dict[str, Any]) -> tuple[str, str]:
+    """Dispatch one wire request for both daemon and one-shot execution modes."""
+    action = str(request.get("action") or "synthesize").strip().lower()
+    if action == "fetch_model":
+        return fetch_named_model(request), ""
+    output_path = str(request.get("output_path") or "").strip()
+    if not output_path:
+        raise ValueError(f"TTS worker action {action!r} requires output_path")
+    if action == "warmup":
+        return warmup(request, output_path), output_path
+    if action == "synthesize":
+        return synthesize(request, output_path), output_path
+    raise ValueError(f"unknown TTS worker action: {action}")
+
+
 def _watch_parent(original_ppid: int) -> None:
     """父进程没了就自己走。
 
@@ -425,10 +443,8 @@ def serve() -> None:
             continue
         try:
             request = json.loads(line)
-            output_path = request["output_path"]
-            engine = (request.get("engine") or "f5-tts").strip().lower()
             _progress("load", 0.05, "准备引擎")
-            engine_used = synthesize(request, output_path)
+            engine_used, output_path = execute_request(request)
             _emit({"event": "done", "engine": engine_used, "output": output_path})
         except Exception as exc:  # noqa: BLE001 — 常驻进程要**活下去**,把失败报回去就行
             traceback.print_exc(file=sys.stderr)
@@ -441,13 +457,8 @@ def main() -> None:
         return
     request = json.loads(sys.stdin.read())
     output_path = sys.argv[1]
-    action = (request.get("action") or "synthesize").strip().lower()
-    if action == "fetch_model":
-        engine_used = fetch_named_model(request)
-    elif action == "warmup":
-        engine_used = warmup(request, output_path)
-    else:
-        engine_used = synthesize(request, output_path)
+    request["output_path"] = output_path
+    engine_used, _ = execute_request(request)
     # Sidecar result file so the host knows which engine actually ran.
     with open(output_path + ".json", "w", encoding="utf-8") as handle:
         json.dump({"engine": engine_used}, handle)

@@ -28,6 +28,7 @@ import time
 import pytest
 
 from app.ai.runtime import tts_daemon
+from app.ai.runtime.workers.tts_protocol import EVENT_PREFIX
 
 
 def _mute_worker(tmp_path) -> str:
@@ -73,8 +74,6 @@ def test_the_slot_is_released_after_a_timeout(tmp_path) -> None:
 
 def test_a_later_request_still_works(tmp_path) -> None:
     """一次超时不该把这条路堵死 —— 下一次合成要能起一个新进程。"""
-    import json
-
     good = tmp_path / "good.py"
     good.write_text(
         textwrap.dedent(
@@ -83,7 +82,7 @@ def test_a_later_request_still_works(tmp_path) -> None:
             for line in sys.stdin:
                 if not line.strip():
                     continue
-                sys.stdout.write({tts_daemon.EVENT_PREFIX!r} + json.dumps({{"event": "done", "ok": True}}) + "\\n")
+                sys.stdout.write({EVENT_PREFIX!r} + json.dumps({{"event": "done", "engine": "fish-speech", "output": "", "ok": True}}) + "\\n")
                 sys.stdout.flush()
             """
         ),

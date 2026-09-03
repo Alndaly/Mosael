@@ -18,16 +18,23 @@ RATCHET = True
 import ast
 import pathlib
 
+from app.ai.runtime import workers
+
 WORKERS = pathlib.Path(__file__).resolve().parents[1] / "app" / "ai" / "runtime" / "workers"
 
 
-def _scripts() -> list[pathlib.Path]:
+def _modules() -> list[pathlib.Path]:
     return [p for p in sorted(WORKERS.glob("*.py")) if p.name != "__init__.py"]
+
+
+def _entry_scripts() -> tuple[pathlib.Path, ...]:
+    """入口由 workers 包公开声明；共享模块可以与入口脚本放在同一运行时边界内。"""
+    return (workers.asr_script(), workers.tts_script())
 
 
 def test_worker不认识本仓库() -> None:
     offenders: list[str] = []
-    for path in _scripts():
+    for path in _modules():
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             names: list[str] = []
             if isinstance(node, ast.ImportFrom) and node.module:
@@ -45,12 +52,13 @@ def test_worker不认识本仓库() -> None:
 
 
 def test_worker是能独立跑的脚本() -> None:
-    """有 `__main__` 入口才叫脚本。没有的话它就只是个被放错地方的模块。"""
-    for path in _scripts():
+    """公开声明的入口必须可独立运行；协议等共享模块不应伪装成入口。"""
+    for path in _entry_scripts():
         source = path.read_text(encoding="utf-8")
-        assert "__main__" in source, f"{path.name} 放在 workers/ 里却没有入口"
+        assert "__main__" in source, f"{path.name} 被声明为 worker 入口却没有 __main__"
 
 
 def test_目录不是空的() -> None:
     """扫描类的检查最怕"没东西可扫所以通过"。上一次改判据时就出过这个假绿。"""
-    assert _scripts(), "workers/ 空了 —— 要么真没有了(那这条测试该删),要么路径写错了"
+    assert _modules(), "workers/ 空了 —— 要么真没有了(那这条测试该删),要么路径写错了"
+    assert all(path in _modules() for path in _entry_scripts()), "公开入口必须位于受约束的 workers/ 边界内"

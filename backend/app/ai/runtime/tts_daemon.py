@@ -26,11 +26,9 @@ from collections.abc import Callable
 from pathlib import Path
 
 from app.ai.runtime import workers
+from app.ai.runtime.workers.tts_protocol import decode_event_line
 
 logger = logging.getLogger(__name__)
-
-#: 协议行的前缀。子进程的其它输出一律当日志。
-EVENT_PREFIX = "@@MOSAEL-TTS "
 
 WORKER_PATH = workers.tts_script()
 
@@ -145,12 +143,12 @@ class _Worker:
     def _read_until_done(self, on_progress: Callable[[dict], None] | None) -> dict:
         assert self.process.stdout is not None
         for line in self.process.stdout:
-            if not line.startswith(EVENT_PREFIX):
+            event = decode_event_line(line)
+            if event is None:
                 text = line.rstrip()
                 if text:
                     logger.debug("[%s worker] %s", self.engine, text[:400])
                 continue
-            event = json.loads(line[len(EVENT_PREFIX):])
             kind = event.get("event")
             if kind == "progress":
                 if on_progress:

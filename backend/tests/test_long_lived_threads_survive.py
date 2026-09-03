@@ -20,6 +20,7 @@ import textwrap
 import time
 
 from app.ai.runtime import tts_daemon
+from app.ai.runtime.workers.tts_protocol import EVENT_PREFIX
 
 
 def test_the_reaper_survives_a_bad_worker_entry(tmp_path) -> None:
@@ -35,7 +36,7 @@ def test_the_reaper_survives_a_bad_worker_entry(tmp_path) -> None:
             import json, sys
             for line in sys.stdin:
                 if line.strip():
-                    sys.stdout.write({tts_daemon.EVENT_PREFIX!r} + json.dumps({{"event": "done"}}) + "\\n")
+                    sys.stdout.write({EVENT_PREFIX!r} + json.dumps({{"event": "done", "engine": "fish-speech", "output": ""}}) + "\\n")
                     sys.stdout.flush()
             """
         ),
@@ -76,7 +77,7 @@ def test_the_stderr_drain_survives_bad_bytes(tmp_path) -> None:
             sys.stderr.flush()
             for line in sys.stdin:
                 if line.strip():
-                    sys.stdout.write({tts_daemon.EVENT_PREFIX!r} + json.dumps({{"event": "done", "ok": True}}) + "\\n")
+                    sys.stdout.write({EVENT_PREFIX!r} + json.dumps({{"event": "done", "engine": "fish-speech", "output": "", "ok": True}}) + "\\n")
                     sys.stdout.flush()
             """
         ),

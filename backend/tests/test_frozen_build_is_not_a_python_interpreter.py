@@ -100,10 +100,10 @@ def test_only_one_place_decides_what_python_means() -> None:
     )
 
 
-def _scripts_run_by_another_interpreter() -> set[str]:
-    """哪些 .py 会被**另一个解释器当文件打开**。两条判据,缺一不可:
+def _worker_runtime_files() -> set[str]:
+    """另一个解释器运行 worker 所需的真实文件。两条判据,缺一不可:
 
-    1. `app/ai/runtime/workers/` 下的一切 —— 那个目录的存在意义就是这个(见它的说明);
+    1. `app/ai/runtime/workers/` 下的一切 —— 包括入口及其本地协议/支持模块;
     2. 任何 `Path(__file__).with_name("x.py")` —— 老写法,别处可能还有。
 
     只留第 2 条会**假绿**:worker 挪进 workers/ 之后不再用 with_name 定位(改成
@@ -130,8 +130,8 @@ def _scripts_run_by_another_interpreter() -> set[str]:
     return wanted
 
 
-def test_every_worker_script_ships_as_a_real_file() -> None:
-    """冻结之后源码只在归档里。被当脚本跑的那几个必须在打包命令里点名带上。
+def test_every_worker_runtime_file_ships_as_a_real_file() -> None:
+    """冻结之后源码只在归档里。worker 入口及本地依赖必须在打包命令里点名带上。
 
     用户看到的 `can't open file '…\\_internal\\app\\audio\\tts_worker.py'` 就是漏了这一步。
 
@@ -142,11 +142,11 @@ def test_every_worker_script_ships_as_a_real_file() -> None:
     command = next(line for line in build.splitlines() if '"build:backend"' in line)
 
     missing = [
-        script for script in sorted(_scripts_run_by_another_interpreter())
+        script for script in sorted(_worker_runtime_files())
         if f"--add-data {script}:" not in command
     ]
 
     assert missing == [], (
-        "这些脚本要被另一个解释器当文件打开,但打包时没带上 —— 装好的用户会拿到 "
-        "'No such file or directory':\n  " + "\n  ".join(missing)
+        "这些 worker 运行时文件没有随包带上 —— 入口会打不开,或其本地 import 会失败:\n  "
+        + "\n  ".join(missing)
     )

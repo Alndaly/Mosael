@@ -19,7 +19,6 @@
 
 from __future__ import annotations
 
-import json
 import sys
 import textwrap
 import time
@@ -27,6 +26,7 @@ import time
 import pytest
 
 from app.ai.runtime import tts_daemon
+from app.ai.runtime.workers.tts_protocol import EVENT_PREFIX
 
 
 def _fake_worker(tmp_path, body: str) -> str:
@@ -36,7 +36,7 @@ def _fake_worker(tmp_path, body: str) -> str:
         textwrap.dedent(
             f"""
             import json, sys
-            PREFIX = {tts_daemon.EVENT_PREFIX!r}
+            PREFIX = {EVENT_PREFIX!r}
             def emit(payload):
                 sys.stdout.write(PREFIX + json.dumps(payload) + "\\n")
                 sys.stdout.flush()
@@ -57,8 +57,8 @@ def _fake_worker(tmp_path, body: str) -> str:
 ECHO = """
 loaded += 1
 print("噪声:模型加载中 47%|=====   |", flush=True)
-emit({"event": "progress", "phase": "generate", "fraction": 0.5})
-emit({"event": "done", "output": request["output_path"], "loads": loaded})
+emit({"event": "progress", "phase": "generate", "fraction": 0.5, "message": ""})
+emit({"event": "done", "engine": request.get("engine", "fish-speech"), "output": request["output_path"], "loads": loaded})
 """
 
 
