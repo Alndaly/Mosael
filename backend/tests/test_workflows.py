@@ -724,6 +724,52 @@ def test_llm_node_sends_advanced_openai_payload_and_parses_json(monkeypatch) -> 
     }
 
 
+@pytest.mark.parametrize(
+    "content",
+    [
+        '```json\n{"title":"海边"}\n```',
+        '这是整理结果：\n{"title":"海边"}\n以上内容可直接使用。',
+    ],
+)
+def test_llm_node_parses_json_wrapped_by_text_model(monkeypatch, content: str) -> None:
+    """结构化输出降级为普通文本后，兼容模型常见的代码块和说明文字。"""
+    from app.domain.workflows.executors import ai as ai_nodes
+
+    client = fresh_client()
+    workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    _install_llm_transport(
+        monkeypatch,
+        ai_nodes,
+        lambda request: httpx.Response(200, json={"choices": [{"message": {"content": content}}]}),
+    )
+
+    with SessionLocal() as db:
+        profile = add_provider(
+            db,
+            name="LLM",
+            vendor="openai-compatible",
+            base_url="https://example.test/v1",
+            api_key="sk-test",
+            model="text-only-model",
+        )
+        workflow = Workflow(workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []})
+        db.add(workflow)
+        db.flush()
+
+        with acting_as(db):
+            result = ai_nodes.llm(
+                db,
+                workflow,
+                {
+                    "profile_id": profile.id,
+                    "prompt": "只返回 JSON 标题",
+                    "response_format": "json_object",
+                },
+            )
+
+    assert result == {"text": content, "json": {"title": "海边"}}
+
+
 def test_llm_node_falls_back_when_provider_rejects_response_format(monkeypatch) -> None:
     """官方工作流不能因为默认聊天模型不实现 response_format 就整条失败。"""
     import json as _json

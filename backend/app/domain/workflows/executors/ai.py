@@ -107,6 +107,30 @@ def _response_format(config: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def _parse_json_response(text: str) -> Any:
+    """Parse one JSON value even when a text-only model wraps it in prose.
+
+    Providers that reject ``response_format`` are retried in plain-text mode by
+    the shared chat gateway. Those models commonly return a Markdown fence or a
+    short explanation around an otherwise valid value. ``raw_decode`` keeps the
+    fallback structural (and safe for nested JSON) without trying to repair a
+    truncated or malformed answer.
+    """
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as strict_error:
+        decoder = json.JSONDecoder()
+        for index, character in enumerate(text):
+            if character not in "[{":
+                continue
+            try:
+                value, _end = decoder.raw_decode(text, index)
+            except json.JSONDecodeError:
+                continue
+            return value
+        raise strict_error
+
+
 def _request_payload(config: dict[str, Any], model: str, messages: list[dict[str, Any]]) -> dict[str, Any]:
     payload: dict[str, Any] = {"model": model, "messages": messages}
     temperature = _float_config(config, "temperature", min_value=0, max_value=2)
@@ -177,7 +201,7 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
     result: dict[str, Any] = {"text": text}
     if str(config.get("response_format") or "text") in {"json_object", "json_schema"}:
         try:
-            result["json"] = json.loads(text)
+            result["json"] = _parse_json_response(text)
         except json.JSONDecodeError as exc:
             raise WorkflowDomainError("LLM 未返回合法 JSON") from exc
         if str(config.get("response_format")) == "json_schema":
