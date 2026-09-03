@@ -128,9 +128,12 @@ export function deleteAsset(assetId: string): Promise<unknown> {
   return api(`/api/assets/${assetId}`, { method: "DELETE" });
 }
 
-/** Empty language selects the Chinese preset; `auto` explicitly asks the engine to detect it. */
-export function transcribeAsset(assetId: string, language = ""): Promise<Job> {
-  const query = language ? `?language=${encodeURIComponent(language)}` : "";
+/** Empty language lets the engine detect it; empty engine follows the saved ASR preference. */
+export function transcribeAsset(assetId: string, language = "", engine = ""): Promise<Job> {
+  const params = new URLSearchParams();
+  if (language) params.set("language", language);
+  if (engine) params.set("engine", engine);
+  const query = params.size > 0 ? `?${params.toString()}` : "";
   return api<Job>(`/api/assets/${assetId}/transcribe${query}`, { method: "POST" });
 }
 

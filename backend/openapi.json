@@ -2811,7 +2811,7 @@
           "assets"
         ],
         "summary": "Transcribe Asset",
-        "description": "`language` 空 = 由已选 ASR 引擎自动检测。\n\n语言只传给识别模型，不暗中切换引擎；FunASR 使用多语种 SenseVoice 权重。运行时选择见\n`transcription.resolve_transcription_runtime`。",
+        "description": "`language` 空 = 由已选 ASR 引擎自动检测；`engine` 空或 auto = 跟随设置页。\n\n语言只传给识别模型，不暗中切换引擎；显式指定 funasr / whisperx 时只影响本次任务。\nFunASR 使用多语种 SenseVoice 权重。运行时选择见 `transcription.resolve_transcription_runtime`。",
         "operationId": "transcribe_asset_api_assets__asset_id__transcribe_post",
         "parameters": [
           {
@@ -2831,6 +2831,16 @@
               "type": "string",
               "default": "",
               "title": "Language"
+            }
+          },
+          {
+            "name": "engine",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Engine"
             }
           }
         ],

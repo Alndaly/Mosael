@@ -26,7 +26,12 @@ def transcribe_asset(db: Session, workflow: Workflow, config: dict[str, Any]) ->
     from app.domain.voices.transcription import start_transcription
 
     asset_id = str(config.get("asset_id", ""))
-    child = start_transcription(db, asset_id, created_by=current_actor(db))
+    child = start_transcription(
+        db,
+        asset_id,
+        created_by=current_actor(db),
+        engine=str(config.get("engine") or "auto"),
+    )
     wait_for_job(child.id)
     transcript = db.scalars(
         select(Transcript).where(Transcript.asset_id == asset_id).order_by(Transcript.created_at.desc())

@@ -3122,7 +3122,7 @@ function NodeInspector({
                 </div>
               ) : options ? (
                 spec?.options ? (
-                  <Select value={String(value ?? "")} onValueChange={(next) => setConfig(key, next)}>
+                  <Select value={String(value ?? spec.default ?? "")} onValueChange={(next) => setConfig(key, next)}>
                     <SelectTrigger>
                       <SelectValue placeholder={t("wfPickOption")} />
                     </SelectTrigger>

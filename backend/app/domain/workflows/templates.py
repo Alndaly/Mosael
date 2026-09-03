@@ -286,7 +286,7 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
             "type": "transcribe_asset",
             "name": "生成带时间码逐字稿",
             "position": {"x": 650, "y": 100},
-            "config": {"asset_id": "{{source_video.asset_id}}"},
+            "config": {"asset_id": "{{source_video.asset_id}}", "engine": "auto"},
         },
         {
             "id": "cleanup_project",

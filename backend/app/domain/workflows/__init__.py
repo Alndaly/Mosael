@@ -344,7 +344,15 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "category": "wfCat_ai",
         "label": "wfNode_transcribe_asset",
         "description": "wfNode_transcribe_asset_desc",
-        "config": {"asset_id": {"type": "template", "required": True, "description": "wfNode_transcribe_asset_asset_id"}},
+        "config": {
+            "asset_id": {"type": "template", "required": True, "description": "wfNode_transcribe_asset_asset_id"},
+            "engine": {
+                "type": "string",
+                "default": "auto",
+                "description": "wfNode_transcribe_asset_engine",
+                "options": ["auto", "funasr", "whisperx"],
+            },
+        },
         "outputs": ["text", "timed_text", "segments", "language", "transcript_id", "duration"],
         "output_types": {"segments": "json", "duration": "number"},
     },

@@ -56,6 +56,25 @@ def test_an_explicit_setting_still_wins(monkeypatch: pytest.MonkeyPatch) -> None
     assert transcription.resolve_transcription_runtime("zh")[1] == "whisperx"
 
 
+def test_a_per_job_engine_choice_wins_over_the_global_setting(monkeypatch: pytest.MonkeyPatch) -> None:
+    """工作流节点选的是这一次任务的执行方式，不应该被全局偏好悄悄改回去。"""
+    monkeypatch.setattr(transcription.settings, "asr_provider", "whisperx")
+    assert transcription.resolve_transcription_runtime("zh", engine="funasr")[1] == "funasr"
+
+
+def test_an_unknown_per_job_engine_is_rejected() -> None:
+    with pytest.raises(transcription.ASRError, match="ASR"):
+        transcription.resolve_transcription_runtime(engine="not-an-engine")
+
+
+def test_the_workflow_node_exposes_every_supported_engine() -> None:
+    from app.domain.workflows import NODE_TYPES
+
+    engine = NODE_TYPES["transcribe_asset"]["config"]["engine"]
+    assert engine["default"] == "auto"
+    assert engine["options"] == ["auto", "funasr", "whisperx"]
+
+
 def test_warmup_and_transcribe_build_the_same_pipeline() -> None:
     """**预热要预热的,必须正是转写要用的那些。**
 

@@ -50,6 +50,50 @@ describe("projectTranscript", () => {
   it("returns nothing for assets without transcripts", () => {
     expect(projectTranscript([clip("c1", "missing", 0, 0, 5)], segments)).toEqual([]);
   });
+
+  it("restores punctuation and spaces from segment text before rendering timed tokens", () => {
+    const source = new Map<string, SegmentLike[]>([["a1", [{
+      id: "punctuated",
+      start_time: 0,
+      end_time: 3,
+      text: "你好。 Hello world!",
+      tokens: [
+        { start_time: 0, end_time: 0.4, text: "你" },
+        { start_time: 0.4, end_time: 0.8, text: "好" },
+        { start_time: 1, end_time: 1.5, text: "Hello" },
+        { start_time: 1.6, end_time: 2.2, text: "world" },
+      ],
+    }]]]);
+
+    const result = projectTranscript([clip("c1", "a1", 0, 0, 3)], source);
+
+    expect(result).toHaveLength(2);
+    expect(result.map((sentence) => sentence.text)).toEqual(["你好。", "Hello world!"]);
+    expect(result.map((sentence) => sentence.tokens.map((token) => token.text).join(""))).toEqual([
+      "你好。 ",
+      "Hello world!",
+    ]);
+  });
+
+  it("turns provider-sized paragraphs into readable rows at pauses", () => {
+    const source = new Map<string, SegmentLike[]>([["a1", [{
+      id: "paragraph",
+      start_time: 0,
+      end_time: 20,
+      text: "first part second part",
+      tokens: [
+        { start_time: 0, end_time: 1, text: "first" },
+        { start_time: 1.1, end_time: 2, text: "part" },
+        { start_time: 4, end_time: 5, text: "second" },
+        { start_time: 5.1, end_time: 6, text: "part" },
+      ],
+    }]]]);
+
+    const result = projectTranscript([clip("c1", "a1", 0, 0, 20)], source);
+
+    expect(result.map((sentence) => sentence.text)).toEqual(["first part", "second part"]);
+    expect(new Set(result.map((sentence) => sentence.segmentId)).size).toBe(2);
+  });
 });
 
 describe("detectSilences", () => {
@@ -94,6 +138,7 @@ describe("isFillerToken", () => {
   it("matches Chinese and English fillers, ignoring punctuation and case", () => {
     expect(isFillerToken("呃")).toBe(true);
     expect(isFillerToken("嗯,")).toBe(true);
+    expect(isFillerToken("嗯，")).toBe(true);
     expect(isFillerToken("Um")).toBe(true);
     expect(isFillerToken("hello")).toBe(false);
   });
@@ -121,10 +166,11 @@ describe("token clamping at clip edges", () => {
         ],
       ],
     ]);
-    const [projected] = projectTranscript([clip], segments);
-    expect(projected.tokens.map((t) => t.text)).toEqual(["b", "c", "d"]);
-    expect(projected.tokens[0]).toMatchObject({ start_time: 1.0, end_time: 1.4 });
-    expect(projected.tokens[2]).toMatchObject({ start_time: 2.8, end_time: 3.0 });
+    const projected = projectTranscript([clip], segments);
+    const tokens = projected.flatMap((sentence) => sentence.tokens);
+    expect(tokens.map((t) => t.text)).toEqual(["b", "c", "d"]);
+    expect(tokens[0]).toMatchObject({ start_time: 1.0, end_time: 1.4 });
+    expect(tokens[2]).toMatchObject({ start_time: 2.8, end_time: 3.0 });
   });
 });
 

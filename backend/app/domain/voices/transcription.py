@@ -40,7 +40,11 @@ class ASRError(RuntimeError):
     pass
 
 
-def resolve_transcription_runtime(language: str = "") -> tuple[str, str]:  # noqa: ARG001 — 语言不选引擎,见下
+def resolve_transcription_runtime(
+    language: str = "",
+    *,
+    engine: str = "",
+) -> tuple[str, str]:  # noqa: ARG001 — 语言不选引擎,见下
     """(解释器路径, 引擎)。探测与缓存都在 asr_models —— **这件事只有一份实现**。
 
     此前这里自己又探测了一遍,和 asr_models 那份各带一份缓存。两份实现意味着两个答案:托管 venv
@@ -57,12 +61,23 @@ def resolve_transcription_runtime(language: str = "") -> tuple[str, str]:  # noq
     """
     from app.ai.runtime.asr_models import resolve_engine_python
 
-    preferred = settings.asr_provider.strip().lower()
+    requested = engine.strip().lower()
+    if requested not in ("", "auto", "funasr", "whisperx"):
+        raise ASRError(f"不支持的 ASR 引擎:{engine}")
+    # 单次任务的显式选择优先；auto/留空才跟随设置页。这样工作流是可复现的，同时旧节点
+    # 仍保持原来的全局偏好语义。
+    preferred = (
+        requested
+        if requested not in ("", "auto")
+        else settings.asr_provider.strip().lower()
+    )
     engines = ["funasr", "whisperx"] if preferred in ("", "auto") else [preferred]
     for engine in engines:
         python_executable = resolve_engine_python(engine)
         if python_executable:
             return python_executable, engine
+    if requested not in ("", "auto"):
+        raise ASRError(f"所选 ASR 引擎 {requested} 的运行环境不可用,请先到设置的「转写模型」安装。")
     raise ASRError(
         # 纯文本,不要 markdown —— 这句话会原样显示在界面上,星号只会以星号的样子出现。
         "缺的是运行环境,不是模型:模型权重已经下好的话不用再下一遍,"
@@ -187,7 +202,14 @@ def _mirror_model_download_progress(job_id: str, engine_id: str) -> threading.Ev
     return stop
 
 
-def start_transcription(db: Session, asset_id: str, *, created_by: str | None, language: str = "") -> Job:
+def start_transcription(
+    db: Session,
+    asset_id: str,
+    *,
+    created_by: str | None,
+    language: str = "",
+    engine: str = "",
+) -> Job:
     asset = db.get(Asset, asset_id)
     if asset is None:
         raise ASRError("Asset not found")
@@ -208,7 +230,12 @@ def start_transcription(db: Session, asset_id: str, *, created_by: str | None, l
         db,
         workspace_id=asset.workspace_id,
         kind="transcribe",
-        payload={"asset_id": asset_id, "language": (language or "").strip(), "subject": asset.name},
+        payload={
+            "asset_id": asset_id,
+            "language": (language or "").strip(),
+            "engine": (engine or "auto").strip().lower(),
+            "subject": asset.name,
+        },
         created_by=created_by,
         message="jobMsg_asrQueued",
     )
@@ -229,7 +256,8 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
             return
         try:
             language = str((job.payload or {}).get("language") or "")
-            python_executable, engine_id = resolve_transcription_runtime(language)
+            requested_engine = str((job.payload or {}).get("engine") or "")
+            python_executable, engine_id = resolve_transcription_runtime(language, engine=requested_engine)
             job.status = "running"
             say(job, "jobMsg_asrRunning", provider=engine_id)
             job.progress = 0.1

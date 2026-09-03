@@ -305,6 +305,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_transcribe_asset": {"zh": "素材转写", "en": "Transcribe asset"},
     "wfNode_transcribe_asset_desc": {"zh": "对音视频素材跑 ASR,输出全文。", "en": "Run ASR over an audio or video asset and output the full text."},
     "wfNode_transcribe_asset_asset_id": {"zh": "要转写的素材 —— 只收视频或音频,图片会被拒", "en": "The asset to transcribe — audio or video only; images are rejected"},
+    "wfNode_transcribe_asset_engine": {"zh": "auto 跟随设置页；显式选择会固定本次工作流使用的 ASR 技术栈。", "en": "Auto follows Settings; an explicit choice pins the ASR engine for this workflow run."},
     "wfNode_export_sequence": {"zh": "导出时间线", "en": "Export timeline"},
     "wfNode_export_sequence_desc": {"zh": "渲染导出一条时间线,产出新素材。", "en": "Render a timeline to a file and register it as a new asset."},
     "wfNode_video_to_gif": {"zh": "视频转 GIF", "en": "Video to GIF"},

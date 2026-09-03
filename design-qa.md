@@ -35,6 +35,56 @@ final result: passed
 
 ---
 
+# Design QA — ASR engine selection and transcript readability
+
+- Source visual truth:
+  - `/var/folders/yw/0kg9jbhj3xx00gq05_14d1lw0000gn/T/TemporaryItems/NSIRD_screencaptureui_zva0g7/Screenshot 2026-09-04 at 01.41.55.png`
+  - `/var/folders/yw/0kg9jbhj3xx00gq05_14d1lw0000gn/T/TemporaryItems/NSIRD_screencaptureui_N6HAmS/Screenshot 2026-09-04 at 01.42.49.png`
+- Browser-rendered implementation: unavailable; the in-app browser automation runtime was not exposed in this session.
+- Viewport: source captures 950 × 800 px and 2332 × 1680 px; implementation viewport and density could not be measured.
+- State: dark theme; workflow transcribe node selected, and editor transcript tab showing a FunASR transcript.
+
+## Findings
+
+- Functional evidence confirms the workflow inspector now receives an ASR engine select with `auto`, `funasr`, and `whisperx` options.
+- Functional evidence confirms timed tokens recover punctuation and English spacing from the provider paragraph, then split on sentence endings, pauses, duration, and readable line length.
+- Fonts and typography: no typography tokens or styles were changed.
+- Spacing and layout rhythm: the new workflow field uses the existing node-inspector Select component and field stack; no custom spacing was added.
+- Colors and visual tokens: no color tokens were changed; the existing Select inherits current theme tokens.
+- Image quality and asset fidelity: no image or decorative asset changed.
+- Copy and content: the engine field explains that auto follows Settings and explicit choices pin the workflow engine.
+
+## Full-view and focused comparison evidence
+
+The supplied source captures were opened and measured. A matching rendered implementation capture could not be produced because the required in-app browser control surface was unavailable, so a valid combined visual comparison was not possible. No visual pass is claimed from source inspection or tests alone.
+
+## Primary interactions tested
+
+- DOM/domain regression: punctuation and English spaces survive timed-token rendering.
+- Domain regression: provider-sized paragraphs split into separate readable rows at sentence endings and pauses.
+- API regression: a requested WhisperX engine reaches the persisted transcription job payload.
+- Runtime regression: an explicit per-job engine overrides the global ASR preference; invalid engines are rejected.
+- Full frontend suite and focused backend workflow/ASR suites passed.
+
+## Implementation checklist
+
+- [x] Expose ASR engine selection in the workflow node
+- [x] Preserve backwards-compatible auto selection
+- [x] Carry the selected engine through API, job payload, and worker resolution
+- [x] Restore punctuation/spacing without losing word-level edit timing
+- [x] Split long ASR paragraphs into navigation-friendly editing rows
+- [ ] Capture and compare the rendered workflow inspector and transcript editor states
+
+## Comparison history
+
+1. Initial source review identified the missing engine control and minute-long unpunctuated editor rows.
+2. Functional fixes were applied and regression-tested.
+3. Post-fix visual comparison remains blocked by the unavailable browser automation surface.
+
+final result: blocked
+
+---
+
 ## Account settings full-width form layout
 
 - Source visual truth: `/var/folders/yw/0kg9jbhj3xx00gq05_14d1lw0000gn/T/TemporaryItems/NSIRD_screencaptureui_uLFIrx/Screenshot 2026-09-03 at 00.04.09.png`
@@ -478,4 +528,3 @@ No additional crop was needed because the combined image keeps both complete rig
 No P3 follow-up is required for this focused change.
 
 final result: passed
-

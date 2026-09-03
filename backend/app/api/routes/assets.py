@@ -375,16 +375,22 @@ def put_transcript(asset_id: str, body: TranscriptAttachRequest, db: DbSession, 
 
 
 @router.post("/assets/{asset_id}/transcribe", response_model=JobOut)
-def transcribe_asset(asset_id: str, db: DbSession, user: CurrentUser, language: str = ""):
-    """`language` 空 = 由已选 ASR 引擎自动检测。
+def transcribe_asset(
+    asset_id: str,
+    db: DbSession,
+    user: CurrentUser,
+    language: str = "",
+    engine: str = "",
+):
+    """`language` 空 = 由已选 ASR 引擎自动检测；`engine` 空或 auto = 跟随设置页。
 
-    语言只传给识别模型，不暗中切换引擎；FunASR 使用多语种 SenseVoice 权重。运行时选择见
-    `transcription.resolve_transcription_runtime`。
+    语言只传给识别模型，不暗中切换引擎；显式指定 funasr / whisperx 时只影响本次任务。
+    FunASR 使用多语种 SenseVoice 权重。运行时选择见 `transcription.resolve_transcription_runtime`。
     """
     asset = require_asset(db, user, asset_id)
     ensure_workspace_perm(db, user, asset.workspace_id, "ai")
     try:
-        return start_transcription(db, asset_id, created_by=user.id, language=language)
+        return start_transcription(db, asset_id, created_by=user.id, language=language, engine=engine)
     except ASRError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
