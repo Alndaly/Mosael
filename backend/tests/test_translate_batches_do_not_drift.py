@@ -1,7 +1,7 @@
 """前端的分批大小不能超过后端的上限。
 
 真机反馈:「翻译最多只能翻译 500 条 超出就会报错」。500 是这个接口的安全阀,而分批放在了
-前端的 `translateTexts`(唯一出口)。两个数字分处两个仓目录,谁也不认识谁 —— 后端哪天把上限
+前端 editor 领域客户端的 `translateTexts`(唯一出口)。两个数字分处两个仓目录,谁也不认识谁 —— 后端哪天把上限
 调小,前端仍按老数字切,于是又变回「超过就报错」,而且只在长字幕轨上才现形。
 
 所以这里把两边钉在一起。
@@ -13,7 +13,7 @@ from pathlib import Path
 
 from app.api.schemas import TranslateRequest
 
-FRONTEND = Path(__file__).resolve().parents[2] / "frontend" / "src" / "api" / "client.ts"
+FRONTEND = Path(__file__).resolve().parents[2] / "frontend" / "src" / "api" / "domains" / "editor.ts"
 
 
 def _backend_cap() -> int:
