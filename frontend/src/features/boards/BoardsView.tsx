@@ -35,8 +35,13 @@ import { relativeTime } from "@/lib/time";
 import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/components/agent/CanvasAgentChat";
-import { CANVAS_PANEL_EDGE_INSET_PX, canvasPanelTop } from "@/components/app/canvasPanelLayout";
-import { SIDEBAR_HANDLE_CLASS, useResizableSidebar } from "@/lib/useResizableSidebar";
+import {
+  CANVAS_GLASS_SURFACE_CLASS,
+  canvasDockedPanelEdges,
+  canvasRightDockOcclusion,
+} from "@/components/app/canvasPanelLayout";
+import { RightDockResizeHandle } from "@/components/app/RightDockResizeHandle";
+import { useResizableSidebar } from "@/lib/useResizableSidebar";
 import { BoardCanvas, type BoardCanvasApi } from "@/features/boards/BoardCanvas";
 import { useAutosave } from "@/features/boards/useAutosave";
 import { AssetPickerDialog } from "@/features/boards/AssetPickerDialog";
@@ -506,8 +511,8 @@ function BoardDetail({
   // 版式跟着工作流详情页:**画布铺满,两组胶囊浮在上面** —— 左边是身份(回哪儿去、这是谁),
   // 右边是操作。悬浮不等于没有边界:两组各有自己的底,否则它们会散在画布上和内容抢注意力。
   return (
-    <div className="relative grid h-full min-h-0 p-2">
-      <div className="pointer-events-none absolute inset-x-4 top-4 z-20 flex flex-wrap items-start justify-between gap-2 [&>*]:pointer-events-auto">
+    <div className="relative grid h-full min-h-0">
+      <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex flex-wrap items-start justify-between gap-2 [&>*]:pointer-events-auto">
         {/* 和工作流详情页、子图共用同一颗胶囊(components/app/canvasTitle)—— 它们是同一类
             东西:「你现在在哪儿」。此前这里是自己写的一份,标题的 font-semibold 挂在 <button>
             上,被 tokens.css 那条无层级的 `button { font: inherit }` 压掉了,于是画板的标题
@@ -525,7 +530,7 @@ function BoardDetail({
             bg-panel/95 + backdrop-blur。分三组是按"这是哪一类动作"分的 ——
             往画布上加东西 / 看画布 / 处置这张板。混成一条的话,删除会挨着「加便签」。 */}
         <div className="flex flex-wrap items-start justify-end gap-2">
-          <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
+          <div className={cn("flex flex-wrap items-center gap-1 rounded-full p-1", CANVAS_GLASS_SURFACE_CLASS)}>
             {/* 「往画布上加东西」收成一个 + —— 和工作流详情页的「添加节点」同一颗控件
                 (SearchableSelect):六个图标排一排要逐个认,弹层里名字写出来就不用猜。
                 「贴一份现成的」和「放一个空槽去生成」是两件事,弹层里分成两组。 */}
@@ -561,7 +566,7 @@ function BoardDetail({
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
+          <div className={cn("flex flex-wrap items-center gap-1 rounded-full p-1", CANVAS_GLASS_SURFACE_CLASS)}>
             {/* 全览可关 —— 它占着右下角一块不小的地方,图小的时候纯属挡视线。记在本地。 */}
             <Button
               variant="ghost"
@@ -614,7 +619,7 @@ function BoardDetail({
             </Button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
+          <div className={cn("flex flex-wrap items-center gap-1 rounded-full p-1", CANVAS_GLASS_SURFACE_CLASS)}>
             <Button
               variant="ghost"
               size="icon"
@@ -630,18 +635,14 @@ function BoardDetail({
       </div>
 
       {agentOpen === "on" && (
-        // 停靠时贴右侧,从工具条底下起、到画布底边止(和工作流详情页同一套刻度);
-        // 切到浮动模式后它自己脱离文档流,这一层就只是个容器。
+        // 停靠时与满铺画布四周保持标准内缩,从工具条底下起(和工作流详情页同一套刻度)。
+        // 悬浮时 wrapper 必须是 display:contents:助手自身已经 fixed 脱离文档流；若这个空 wrapper
+        // 仍作为 grid item，根网格会凭空多出一行，把 React Flow 压到页面下半截。
         <div
-          className={cn(
-            "z-10 grid min-h-0 min-w-0",
-            dockedAgent && "absolute",
-          )}
+          className={dockedAgent ? "absolute z-10 grid min-h-0 min-w-0" : "contents"}
           style={dockedAgent ? {
             width: agentPanel.width,
-            top: canvasPanelTop(16),
-            right: CANVAS_PANEL_EDGE_INSET_PX,
-            bottom: CANVAS_PANEL_EDGE_INSET_PX,
+            ...canvasDockedPanelEdges(8),
           } : undefined}
         >
           <CanvasAgentChat
@@ -657,17 +658,14 @@ function BoardDetail({
         </div>
       )}
       {dockedAgent && (
-        <div
-          className={SIDEBAR_HANDLE_CLASS}
-          style={{ right: agentPanel.width + 4 }}
-          onPointerDown={agentPanel.startDrag}
-        />
+        <RightDockResizeHandle panel={agentPanel} toolbarTop={8} />
       )}
 
       <BoardCanvas
         boardId={board.id}
         workspaceId={workspaceId}
         canvas={board.canvas ?? { items: [], edges: [] }}
+        rightOverlayWidth={dockedAgent ? canvasRightDockOcclusion(agentPanel.width) : 0}
         onChange={setCanvas}
         onPickAsset={(kind, place) => setPicking({ kind, place })}
         onGenerate={generate}

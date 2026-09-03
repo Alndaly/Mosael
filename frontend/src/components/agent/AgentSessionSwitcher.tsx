@@ -52,12 +52,14 @@ export function AgentSessionSwitcher<T extends AgentSessionChoice>({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="flex h-7 min-w-0 max-w-full flex-1 cursor-pointer items-center gap-1.5 border-0 bg-transparent px-0 text-left text-ui-sm font-semibold text-foreground hover:text-primary"
+          className="group/session flex h-7 w-fit min-w-0 max-w-full cursor-pointer items-center gap-1 border-0 bg-transparent px-0 text-left text-ui-sm font-semibold text-foreground hover:text-primary"
           aria-label={t("wfAgentSessions")}
           title={title}
         >
-          <span className="min-w-0 flex-1 truncate">{title}</span>
-          <ChevronDown size={12} className="shrink-0 text-muted-foreground" />
+          <span className="min-w-0 truncate">{title}</span>
+          <span className="grid size-[18px] shrink-0 place-items-center rounded-md text-muted-foreground transition-colors group-hover/session:bg-secondary group-hover/session:text-foreground">
+            <ChevronDown size={11} className={cn("transition-transform duration-100", open && "rotate-180")} />
+          </span>
         </button>
       </PopoverTrigger>
       <PopoverContent

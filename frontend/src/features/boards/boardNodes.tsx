@@ -1,6 +1,6 @@
 import React from "react";
 import { Handle, NodeResizer, Position, useStore, type NodeProps } from "@xyflow/react";
-import { AlertTriangle, Ban, CheckCircle2, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Loader2, Music, Plus, Square as SquareIcon, StickyNote, type LucideIcon } from "lucide-react";
+import { AlertTriangle, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Loader2, Music, Plus, Square as SquareIcon, StickyNote, type LucideIcon } from "lucide-react";
 
 import type { BoardItem } from "@/api/client";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
@@ -159,10 +159,10 @@ function TypeLabel({ kind }: { kind: BoardItem["kind"] }) {
 }
 
 /**
- * 节点状态是节点外壳的一部分，不只是空槽里的一枚转圈。
+ * 节点状态留在外壳和内容态里，不额外占用节点右上方。
  *
- * 即使节点已有旧产物（重跑失败时仍展示旧图），用户也必须看得出**这一轮**的状态。
- * 描边负责快速扫视，文字标签负责消除“选中/失败/完成”的歧义；两者不是重复信息。
+ * 运行中/排队中的空槽已有明确反馈；重跑已有产物时则用描边保留这一轮状态。这样既不会把
+ * “已完成”之类的常驻文案堆在画布上，也不会丢掉失败和执行中的可见性。
  */
 const RUN_STATE_CLASS: Record<BoardItemRunStatus, string> = {
   idle: "ring-0",
@@ -180,41 +180,6 @@ function nodeRunProps(item: BoardItem) {
     "data-board-run-status": status,
     className: RUN_STATE_CLASS[status],
   } as const;
-}
-
-const RUN_STATE_META: Partial<
-  Record<BoardItemRunStatus, { icon: LucideIcon; label: MessageKey; className: string; spin?: boolean }>
-> = {
-  queued: { icon: Clock3, label: "boardNodeQueued", className: "text-primary" },
-  running: { icon: Loader2, label: "boardNodeRunning", className: "text-primary", spin: true },
-  succeeded: { icon: CheckCircle2, label: "boardNodeSucceeded", className: "text-success" },
-  failed: { icon: AlertTriangle, label: "boardNodeFailed", className: "text-destructive" },
-  cancelled: { icon: Ban, label: "boardNodeCancelled", className: "text-muted-foreground" },
-};
-
-/** 状态标签跟类型标签一样反缩放，拉远画布后仍能读，且不遮挡节点内容。 */
-function RunStatusLabel({ item }: { item: BoardItem }) {
-  const t = useI18n();
-  const status = itemRunStatus(item);
-  const meta = RUN_STATE_META[status];
-  const zoom = useStore((state) => state.transform[2]) || 1;
-  if (!meta) return null;
-  const Icon = meta.icon;
-  const label = t(meta.label);
-  return (
-    <span
-      aria-label={label}
-      title={label}
-      className={cn(
-        "pointer-events-none absolute bottom-full right-0 inline-flex origin-bottom-right items-center gap-1 pb-1 text-ui-2xs font-medium",
-        meta.className,
-      )}
-      style={{ transform: `scale(${1 / zoom})` }}
-    >
-      <Icon size={11} className={meta.spin ? "animate-spin" : undefined} />
-      {label}
-    </span>
-  );
 }
 
 /** 便签:双击进入编辑。**单击不进** —— 单击是选中/拖动,想法摆位比改字更频繁。 */
@@ -245,7 +210,6 @@ export function NoteNode({ data, selected }: NodeProps) {
     >
       <NodeResizer minWidth={120} minHeight={80} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
       <TypeLabel kind="note" />
-      <RunStatusLabel item={item} />
       <Ports visible={selected} />
       {editing ? (
         <textarea
@@ -385,7 +349,6 @@ export function ImageNode({ data, selected }: NodeProps) {
     >
       <NodeResizer minWidth={80} minHeight={60} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
       <TypeLabel kind="image" />
-      <RunStatusLabel item={item} />
       <Ports visible={selected} />
       {!item.asset_id ? (
         <PendingSlot item={item} icon={<ImageIcon size={20} />} />
@@ -454,7 +417,6 @@ export function FrameNode({ data, selected }: NodeProps) {
           </span>
         )}
       </div>
-      <RunStatusLabel item={item} />
     </div>
   );
 }
@@ -477,7 +439,6 @@ export function VideoNode({ data, selected }: NodeProps) {
     >
       <NodeResizer minWidth={120} minHeight={80} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
       <TypeLabel kind="video" />
-      <RunStatusLabel item={item} />
       <Ports visible={selected} />
       {!item.asset_id ? (
         <PendingSlot item={item} icon={<FilmIcon size={20} />} />
@@ -507,7 +468,6 @@ function AudioNode({ data, selected }: NodeProps) {
     >
       <NodeResizer minWidth={200} minHeight={64} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
       <TypeLabel kind="audio" />
-      <RunStatusLabel item={item} />
       <Ports visible={selected} />
       <div className="grid h-full w-full place-items-center overflow-hidden rounded-lg px-2">
         {!item.asset_id ? (

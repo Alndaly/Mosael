@@ -28,6 +28,18 @@ function Panel({ id }: { id: string }) {
   );
 }
 
+function DraggablePanel({ id }: { id: string }) {
+  const { style, startDrag } = useFloatingPanel({ storageKey: id, floating: true });
+  return (
+    <div data-testid={id} style={style}>
+      <div data-testid={`${id}-header`} onPointerDown={startDrag}>
+        <span data-testid={`${id}-drag-region`} />
+        <button data-testid={`${id}-button`} type="button">action</button>
+      </div>
+    </div>
+  );
+}
+
 const z = (view: ReturnType<typeof render>, id: string) =>
   Number((view.getByTestId(id) as HTMLElement).style.zIndex);
 
@@ -78,5 +90,28 @@ describe("悬浮窗叠放次序", () => {
     combo("[");
     expect(z(view, "low-a")).toBeGreaterThanOrEqual(55);
     view.unmount();
+  });
+});
+
+describe("悬浮窗标题栏拖动", () => {
+  it("从标题栏空白处拖动窗口，但不从内部按钮起拖", () => {
+    const view = render(<DraggablePanel id="drag-panel" />);
+    const panel = view.getByTestId("drag-panel") as HTMLElement;
+    const initialLeft = Number.parseFloat(panel.style.left);
+    const initialTop = Number.parseFloat(panel.style.top);
+
+    fireEvent.pointerDown(view.getByTestId("drag-panel-drag-region"), { clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(window, { clientX: 60, clientY: 75 });
+    fireEvent.pointerUp(window, { clientX: 60, clientY: 75 });
+
+    expect(Number.parseFloat(panel.style.left)).toBe(initialLeft - 40);
+    expect(Number.parseFloat(panel.style.top)).toBe(initialTop - 25);
+
+    fireEvent.pointerDown(view.getByTestId("drag-panel-button"), { clientX: 140, clientY: 125 });
+    fireEvent.pointerMove(window, { clientX: 190, clientY: 160 });
+    fireEvent.pointerUp(window, { clientX: 190, clientY: 160 });
+
+    expect(Number.parseFloat(panel.style.left)).toBe(initialLeft - 40);
+    expect(Number.parseFloat(panel.style.top)).toBe(initialTop - 25);
   });
 });

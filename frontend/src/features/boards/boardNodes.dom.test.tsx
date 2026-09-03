@@ -107,14 +107,14 @@ describe("无限画布节点运行状态", () => {
     }
   });
 
-  it.each(Object.entries(STATUS_LABEL))("%s 状态在节点上直接说明当前发生了什么", (status, label) => {
-    const { getByLabelText } = renderNode("image", status as keyof typeof STATUS_LABEL);
-    expect(getByLabelText(label)).toBeTruthy();
+  it.each(Object.entries(STATUS_LABEL))("%s 状态不再重复显示在节点右上角", (status, label) => {
+    const { queryByLabelText } = renderNode("image", status as keyof typeof STATUS_LABEL);
+    expect(queryByLabelText(label)).toBeNull();
   });
 
   it("取消不是空槽，而是明确的终态", () => {
     const { getAllByText, queryByText } = renderNode("video", "cancelled");
-    expect(getAllByText("已取消")).toHaveLength(2);
+    expect(getAllByText("已取消")).toHaveLength(1);
     expect(queryByText("生成中")).toBeNull();
   });
 

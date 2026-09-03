@@ -109,13 +109,19 @@ import { RefEditor } from "@/features/workflows/RefEditor";
 import { MapField } from "@/features/workflows/MapField";
 import { CodeEditor } from "@/components/app/code-editor";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/components/agent/CanvasAgentChat";
-import { CANVAS_PANEL_EDGE_INSET_PX, canvasPanelTop } from "@/components/app/canvasPanelLayout";
+import {
+  CANVAS_GLASS_SURFACE_CLASS,
+  canvasDockedPanelEdges,
+  canvasRightDockOcclusion,
+} from "@/components/app/canvasPanelLayout";
+import { fitCanvasViewport } from "@/components/app/fitCanvasViewport";
+import { RightDockResizeHandle } from "@/components/app/RightDockResizeHandle";
 import { WorkflowRunHistory } from "@/features/workflows/WorkflowRunHistory";
 import { WorkflowRevisionHistory } from "@/features/workflows/WorkflowRevisionHistory";
 import { WorkflowCommunityDialog } from "@/features/workflows/WorkflowCommunityDialog";
 import { createWorkflowGraphStore } from "@/stores/workflowGraphStore";
 import { saveJsonToDisk } from "@/lib/download";
-import { ROW_HANDLE_CLASS, SIDEBAR_HANDLE_CLASS, handleOffset, useResizableRow, useResizableSidebar } from "@/lib/useResizableSidebar";
+import { ROW_HANDLE_CLASS, handleOffset, useResizableRow, useResizableSidebar } from "@/lib/useResizableSidebar";
 import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
 import {
   aspectRatioOptions,
@@ -497,7 +503,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   // ── 详情页:整页给画布。返回列表是**唯一**的出口,所以放在最左、和标题同一行。
   if (selected && nodeTypes.data) {
     return (
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-hidden p-2 [&>*]:shrink-0">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-hidden [&>*]:shrink-0">
         {/* 这一层给编辑器高度:页面容器是 [&>*]:shrink-0,不套 flex-1 的话画布会塌成 0。 */}
         <div className="grid min-h-0 flex-1">
           <WorkflowEditor
@@ -810,6 +816,7 @@ function WorkflowEditor({
   );
   const [editingLoopId, setEditingLoopId] = usePersistentSelection(`workflow-drill:${workflow.id}`, drillableIds);
   const rfRef = React.useRef<ReactFlowInstance | null>(null);
+  const canvasSurfaceRef = React.useRef<HTMLDivElement | null>(null);
   // 画布姿态(是否已 fitView、视口动过几次、正不正在平移)。三条各自的来历见 useCanvasPosture
   // —— 它们是 React Flow 的机制,不是工作流的概念,所以不和图 / 弹窗 / 搜索那些 state 混在一起。
   const canvas = useCanvasPosture();
@@ -1434,6 +1441,18 @@ function WorkflowEditor({
   // 右栏可拖 —— 和别处同一套(lib/useResizableSidebar)。此前是 minmax(360,420) 的固定范围:
   // AI 助手里的长回复和执行历史的步骤名在 360px 里都读得很挤,而画布这边常常有大片空白。
   const rightPanel = useResizableSidebar("workflow-right", { min: 320, max: 640, fallback: 400 });
+  const fitCanvas = React.useCallback(
+    (instance: ReactFlowInstance, duration = 250) => {
+      if (!canvasSurfaceRef.current) return;
+      void fitCanvasViewport(
+        instance,
+        canvasSurfaceRef.current,
+        { right: rightPanels > 0 ? canvasRightDockOcclusion(rightPanel.width) : 0 },
+        { padding: 0.3, duration, maxZoom: 1 },
+      );
+    },
+    [rightPanel.width, rightPanels],
+  );
   // 助手与执行历史上下分。上界给得宽 —— 只想看助手时把它拉满是合理的用法。
   const agentRow = useResizableRow("workflow-agent", { min: 160, max: 900, fallback: 420 });
 
@@ -1611,7 +1630,7 @@ function WorkflowEditor({
             细竖线隔开,找一个键要从头扫到尾。分组是:编辑图 / 理解图 / 跑这张图 / 看的方式 /
             这份文档。竖线换成真正断开,因为断开比线更快被看见。 */}
         <div className="flex flex-wrap items-start justify-end gap-2">
-        <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
+        <div className={cn("flex flex-wrap items-center gap-1 rounded-full p-1", CANVAS_GLASS_SURFACE_CLASS)}>
           {/* 工具条统一刻度:胶囊(rounded-full)、h-8、text-xs;图标钮 h-8 w-8。 */}
           <SearchableSelect
             value=""
@@ -1639,7 +1658,7 @@ function WorkflowEditor({
             <Redo2 size={14} />
           </Button>
         </div>
-        <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
+        <div className={cn("flex flex-wrap items-center gap-1 rounded-full p-1", CANVAS_GLASS_SURFACE_CLASS)}>
           <Button
             variant="ghost"
             size="icon"
@@ -1797,7 +1816,7 @@ function WorkflowEditor({
             <Play size={14} />
           </Button>
         </div>
-        <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
+        <div className={cn("flex flex-wrap items-center gap-1 rounded-full p-1", CANVAS_GLASS_SURFACE_CLASS)}>
           {/* 走线方式:四种够用,直接摆成一排图标钮而不是下拉 —— 它是"试一下看哪种顺眼"的
               设置,藏进下拉就得点两次才能比较一次。 */}
           {/* **不再套一个方框。** 分段控件自带 rounded-md 边框,而外层组是 rounded-full ——
@@ -1843,12 +1862,14 @@ function WorkflowEditor({
             className="h-8 w-8"
             aria-label={t("boardsFitView")}
             title={t("boardsFitView")}
-            onClick={() => rfRef.current?.fitView({ padding: 0.3, duration: 250 })}
+            onClick={() => {
+              if (rfRef.current) fitCanvas(rfRef.current);
+            }}
           >
             <Maximize2 size={14} />
           </Button>
         </div>
-        <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
+        <div className={cn("flex flex-wrap items-center gap-1 rounded-full p-1", CANVAS_GLASS_SURFACE_CLASS)}>
           {/* 导出。**放在这一组**(历史/删除)而不是运行旁边:这几个都是对"这份工作流"整体
               做的事,而运行、就绪检查、加节点是对**画布内容**做的事。此前导出只藏在列表页的
               右键菜单里 —— 而人想导出的时机,恰恰是刚在详情页里把它调好的那一刻。 */}
@@ -1902,22 +1923,15 @@ function WorkflowEditor({
         {/* 拖柄:面板浮起来之后它不再是"两栏之间的界",而是浮窗自己的左边缘 —— 所以贴着
             浮窗左侧,并跟着浮窗一起压在画布上(z-10),否则会被画布吃掉指针事件。 */}
         {rightPanels > 0 && (
-          <div
-            className={cn(SIDEBAR_HANDLE_CLASS, "z-10")}
-            style={{
-              right: rightPanel.width + CANVAS_PANEL_EDGE_INSET_PX,
-              top: canvasPanelTop(8),
-              bottom: CANVAS_PANEL_EDGE_INSET_PX,
-            }}
-            onPointerDown={rightPanel.startDragFromRight}
-          />
+          <RightDockResizeHandle panel={rightPanel} toolbarTop={8} className="z-10" />
         )}
         {/* 从访达直接把视频/图片拖进画布:先进素材库,再在**落点**放一个「素材」节点。
             省掉「先去素材页上传 → 回来找那个 id」那一圈。 */}
         <div
+          ref={canvasSurfaceRef}
           //: 底色和创意画板那张画布同一个(bg-background)—— 两者都是「摊开东西的地方」,
           //: 而 bg-panel 是「一块面板」。用两种底色的话,在两页之间切换会觉得走进了另一个应用。
-          className="relative min-h-0 overflow-hidden rounded-lg border border-border bg-background"
+          className="relative min-h-0 overflow-hidden bg-background"
           {...canvasDrop.handlers}
           onDrop={(event) => {
             // 落点要在这一刻算 —— 只有事件里才有鼠标位置。存进 ref 给上面那个回调用。
@@ -1928,14 +1942,13 @@ function WorkflowEditor({
             canvasDrop.handlers.onDrop(event);
           }}
         >
-          {/* inset-0 一点不留:留边就会在四角露出没被盖住的缝。虚线框收到中间那块提示上,
-              而不是描在整块区域的边上 —— 后者会和画布自己的圆角错开。 */}
+          {/* inset-0 一点不留:提示盖住整块画布,虚线只收在中间那块文字上。 */}
           {(canvasDrop.active || dropUpload.isPending) && (
             // **要盖过画布上的一切**,包括节点检查器那张浮层(z-30)和子流程面板(同样 z-30)。
             // z-20 的时候,选中某个节点再拖文件进来,检查器就压在提示上面 —— 用户看到的是
             // 半块被切掉的虚线框,不知道松手到底会发生什么。拖拽反馈是**全局态**,不该和
             // 画布里某个局部面板比高矮。
-            <div className="pointer-events-none absolute inset-0 z-40 grid place-items-center rounded-lg bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]">
+            <div className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]">
               <span className="grid justify-items-center gap-2 rounded-lg border-2 border-dashed border-primary px-6 py-4 text-ui-md font-semibold text-primary">
                 {dropUpload.isPending ? (
                   <>
@@ -1956,8 +1969,10 @@ function WorkflowEditor({
             nodes={displayNodes}
             edges={displayEdges}
             nodeTypes={WORKFLOW_NODE_TYPES}
+            minZoom={0.1}
             onInit={(instance) => {
-              rfRef.current = instance as unknown as ReactFlowInstance;
+              const flow = instance as unknown as ReactFlowInstance;
+              rfRef.current = flow;
               // 只在挂载时定位一次(切换工作流会因 key 重挂而重跑)。用命令式而非声明式
               // fitView 属性:后者会在每次新增未测量节点时重新 fit,把手动聚焦覆盖掉。
               // 定位完成前画布不可见:首帧按默认视口渲染会让所有节点在错位处闪一下。
@@ -1966,8 +1981,8 @@ function WorkflowEditor({
               // 把所有节点框回视野 —— 图一大,用户每次回来都得重新找到刚才在看的那一块,
               // 而他离开时的位置本来就是最有价值的信息。
               requestAnimationFrame(() => {
-                if (viewport.saved) instance.setViewport(viewport.saved);
-                else instance.fitView({ padding: 0.25, maxZoom: 1 });
+                if (viewport.saved) flow.setViewport(viewport.saved);
+                else fitCanvas(flow, 0);
                 canvas.handlers.onInit();
               });
             }}
@@ -2097,9 +2112,7 @@ function WorkflowEditor({
             // 就把历史那块拉大,而平分是个谁都不满意的折中。
             style={{
               width: rightPanel.width,
-              top: canvasPanelTop(8),
-              right: CANVAS_PANEL_EDGE_INSET_PX,
-              bottom: CANVAS_PANEL_EDGE_INSET_PX,
+              ...canvasDockedPanelEdges(8),
               ...(dockedAgent && dockedHistory
                 ? { gridTemplateRows: `${agentRow.height}px minmax(0,1fr)` }
                 : {}),
@@ -2490,7 +2503,7 @@ function LoopBodyEditor({
             运行 / 就绪检查 / 导出 / 历史 / 删除都是主图或整份文档的事,放进来只会让人以为
             自己能在子图里跑一次;撤销也没有 —— 子图编辑器没有历史栈,画一个按钮却不能用,
             比没有更糟。 */}
-        <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-panel/95 p-1 shadow-[var(--shadow-panel)] backdrop-blur">
+        <div className={cn("flex flex-wrap items-center gap-1 rounded-full p-1", CANVAS_GLASS_SURFACE_CLASS)}>
           <SearchableSelect
             value=""
             onValueChange={addNode}

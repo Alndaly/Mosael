@@ -406,12 +406,11 @@ export function CanvasAgentChat({
       aria-label={t("wfAgentTitle")}
     >
       {handles}
-      <div className={cn(PANEL_HEADER_CLASS, isFloating && "cursor-move")} onPointerDown={startDrag}>
-        <h2
-          className="min-w-0"
-          data-no-drag
-          onPointerDown={(event) => event.stopPropagation()}
-        >
+      <div className={PANEL_HEADER_CLASS} onPointerDown={startDrag}>
+        {/* h2 会吃满按钮以外的剩余标题栏，悬浮时这整段都是拖动命中区。会话标题本身仍是
+            button，useFloatingPanel 会排除它，所以单击切会话与拖窗口不会互相抢事件。此前把
+            data-no-drag 挂在整个 h2 上，等于把标题栏唯一的大块空白也一起禁用了。 */}
+        <h2 className={cn("min-w-0", isFloating && "cursor-move")}>
           <AgentSessionSwitcher
             sessions={sessionList}
             activeSession={activeSession}

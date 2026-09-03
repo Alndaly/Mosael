@@ -20,6 +20,7 @@ import { Copy, FileUp, Group, Loader2, Maximize2, Replace, Scissors, Sparkles, T
 import { assetFileUrl, assetPreviewUrl } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
+import { fitCanvasViewport } from "@/components/app/fitCanvasViewport";
 
 import type { BoardCanvas as Canvas, BoardItem, GenerationOption } from "@/api/client";
 import { NodeComposer } from "@/features/boards/NodeComposer";
@@ -146,14 +147,17 @@ interface Props {
   /** 系统里拖进来的文件:上层负责传进素材库,回来的每一份就地摆到落点上。 */
   onDropFiles?: (files: File[]) => Promise<{ id: string; name: string; kind: "image" | "video" }[]>;
   uploading?: boolean;
+  /** Pixels covered by a docked panel on the right; excluded from fit-to-content. */
+  rightOverlayWidth?: number;
   /** 把「加一项」交给上层 —— 顶栏那两组胶囊要摆在一起(和工作流详情页一致),
    *  而 add 依赖画布内部的 rf 实例和 setNodes,只能由画布提供。 */
   onReady?: (api: BoardCanvasApi) => void;
 }
 
-function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, onSpeak, onTrim, onGrabFrame, models, showMinimap = true, onDropFiles, uploading, onReady }: Props) {
+function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, onSpeak, onTrim, onGrabFrame, models, showMinimap = true, onDropFiles, uploading, rightOverlayWidth = 0, onReady }: Props) {
   const t = useI18n();
   const rf = React.useRef<ReactFlowInstance | null>(null);
+  const surface = React.useRef<HTMLDivElement | null>(null);
   const viewport = usePersistentViewport(`board:${boardId}`);
   const [ready, setReady] = React.useState(false);
 
@@ -576,19 +580,23 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     onReady?.({
       add,
       patch,
-      fitView: () => rf.current?.fitView({ padding: 0.3, duration: 250 }),
+      fitView: () => {
+        if (rf.current && surface.current) {
+          void fitCanvasViewport(rf.current, surface.current, { right: rightOverlayWidth });
+        }
+      },
       undo: stepBack,
       redo: stepForward,
       canUndo: canUndo(history),
       canRedo: canRedo(history),
     });
-  }, [add, patch, onReady, stepBack, stepForward, history]);
+  }, [add, patch, onReady, rightOverlayWidth, stepBack, stepForward, history]);
 
   return (
-    // 画布放在**带边框的圆角卡片**里(和工作流详情页同一个形态)—— 通栏铺到窗口边的话,
-    // 它和外面的应用外壳之间没有界,画布看起来是"漏出来的"而不是一块内容区。
+    // 详情页本身就是画布边界:四边满铺,不再套第二层卡片边框或圆角。
     <div
-      className="relative h-full w-full overflow-hidden rounded-lg border border-border bg-background"
+      ref={surface}
+      className="relative h-full w-full overflow-hidden bg-background"
       {...drop.handlers}
       // 坐标换算要在 drop 那一刻做 —— 这里把鼠标位置存下来给上面的回调用。
       onDragOver={(event) => {
@@ -601,6 +609,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         nodes={displayNodes}
         edges={edges}
         nodeTypes={BOARD_NODE_TYPES}
+        minZoom={0.1}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={(connection: Connection) => setEdges((current) => addEdge(connection, current))}
@@ -647,7 +656,9 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           rf.current = instance as unknown as ReactFlowInstance;
           requestAnimationFrame(() => {
             if (viewport.saved) instance.setViewport(viewport.saved);
-            else instance.fitView({ padding: 0.3, maxZoom: 1 });
+            else if (surface.current) {
+              void fitCanvasViewport(instance, surface.current, { right: rightOverlayWidth }, { maxZoom: 1 });
+            }
             setReady(true);
           });
         }}
@@ -677,7 +688,6 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         panOnScroll
         zoomOnScroll={false}
         zoomOnPinch
-        minZoom={0.1}
         maxZoom={2.5}
         deleteKeyCode={["Backspace", "Delete"]}
       >
@@ -697,10 +707,9 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       </ReactFlow>
 
 
-      {/* 拖着文件悬在上面时的提示。**盖住整块**,虚线收在中间那段字上而不是描边 ——
-          描边会和画布自己的圆角错开(工作流那边写过同一段理由)。 */}
+      {/* 拖着文件悬在上面时的提示。**盖住整块**,虚线只收在中间那段字上。 */}
       {(drop.active || uploading) && (
-        <div className="pointer-events-none absolute inset-0 z-40 grid place-items-center rounded-lg bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]">
+        <div className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]">
           <span className="grid justify-items-center gap-2 rounded-lg border-2 border-dashed border-primary px-6 py-4 text-ui-md font-semibold text-primary">
             {uploading ? <Loader2 size={20} className="animate-spin" /> : <FileUp size={20} />}
             {t(uploading ? "boardUploading" : "boardDropHere")}

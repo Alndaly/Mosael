@@ -1,6 +1,7 @@
 import React from "react";
 
 import { cn } from "@/lib/utils";
+import { CANVAS_GLASS_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
 
 /**
  * 「可停靠 / 可悬浮」面板的几何与交互:标题栏拖动 + 八向缩放 + 位置尺寸记忆。
@@ -17,7 +18,7 @@ export const PANEL_HEADER_CLASS =
 
 /** 停靠和悬浮面板共用的外框。智能体与执行历史必须是一套圆角和边界。 */
 export const DOCKABLE_PANEL_FRAME_CLASS =
-  "overflow-hidden rounded-lg border border-border bg-panel";
+  `overflow-hidden rounded-lg ${CANVAS_GLASS_SURFACE_CLASS}`;
 
 /**
  * 悬浮窗的叠放次序:一个从底到顶的 id 序列,z-index = BASE + 下标。

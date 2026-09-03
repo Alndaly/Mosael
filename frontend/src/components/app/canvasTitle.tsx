@@ -2,6 +2,8 @@ import * as React from "react";
 import { ChevronLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { CANVAS_GLASS_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
+import { cn } from "@/lib/utils";
 
 /**
  * 画布类页面左上角那颗**身份胶囊**:回哪儿去 · 这是什么。
@@ -53,7 +55,7 @@ export function CanvasTitle({
   );
 
   return (
-    <div className="flex items-center gap-1 rounded-full border border-border bg-panel/95 p-1 pr-2.5 shadow-[var(--shadow-panel)] backdrop-blur">
+    <div className={cn("flex items-center gap-1 rounded-full p-1 pr-2.5", CANVAS_GLASS_SURFACE_CLASS)}>
       {/* 返回键**给它一个底**。透明底的图标钮在胶囊里没有自己的轮廓,左边和胶囊边缘之间那点
           空白就显得忽大忽小 —— 有了底,它的占位是确定的,和右边的竖线、名字也就对齐了。 */}
       <Button
