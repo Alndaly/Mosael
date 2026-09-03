@@ -7,12 +7,13 @@
 from __future__ import annotations
 
 import json
+import math
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Asset, Sequence, Transcript, Workflow
+from app.db.models import Asset, Clip, Sequence, Transcript, Workflow
 from app.domain.sequences.errors import SequenceDomainError
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import register
@@ -28,13 +29,36 @@ def transcribe_asset(db: Session, workflow: Workflow, config: dict[str, Any]) ->
     child = start_transcription(db, asset_id, created_by=current_actor(db))
     wait_for_job(child.id)
     transcript = db.scalars(
-        select(Transcript).where(Transcript.asset_id == asset_id).order_by(Transcript.id.desc())
+        select(Transcript).where(Transcript.asset_id == asset_id).order_by(Transcript.created_at.desc())
     ).first()
     if transcript is None:
         raise WorkflowDomainError("转写完成但没有找到文稿")
     db.refresh(transcript)
-    text = "\n".join(segment.text for segment in transcript.segments)
-    return {"text": text}
+    segments = [
+        {
+            "start": segment.start_time,
+            "end": segment.end_time,
+            "text": segment.text,
+            "speaker": segment.speaker or "",
+            "tokens": [
+                {"start": token.start_time, "end": token.end_time, "text": token.text}
+                for token in segment.tokens
+            ],
+        }
+        for segment in transcript.segments
+    ]
+    text = "\n".join(segment["text"] for segment in segments)
+    # JSON 而不是 Python repr:模板把它嵌进 LLM 提示词时仍是一份机器可读、时间精确的逐字稿。
+    timed_text = json.dumps(segments, ensure_ascii=False, separators=(",", ":"))
+    duration = max((float(segment["end"]) for segment in segments), default=0.0)
+    return {
+        "text": text,
+        "timed_text": timed_text,
+        "segments": segments,
+        "language": transcript.language,
+        "transcript_id": transcript.id,
+        "duration": duration,
+    }
 
 
 @register("export_sequence")
@@ -222,7 +246,9 @@ def inspect_sequence(db: Session, workflow: Workflow, config: dict[str, Any]) ->
     )
     # 顺手把第一条视频/音频轨的 id 摆出来 —— 下游「接素材」想指定轨道时,不用自己去
     # tracks 里翻。绝大多数时间线各只有一条。
-    first = lambda kind: next((one["id"] for one in tracks if one["kind"] == kind), "")
+    def first(kind: str) -> str:
+        return next((one["id"] for one in tracks if one["kind"] == kind), "")
+
     return {
         "sequence_id": sequence.id,
         "revision": sequence.revision,
@@ -355,6 +381,105 @@ def timeline_clear(db: Session, workflow: Workflow, config: dict[str, Any]) -> d
     return {"removed": len(clip_ids), "sequence_id": sequence.id}
 
 
+@register("timeline_cut_ranges")
+def timeline_cut_ranges(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    """一次删除同一片段的多个源时间范围，并把保留段首尾相接。
+
+    不能循环调用 cut_clip_range：第一次裁切后原 clip_id 已经不存在。批量算子在删除原片段前先
+    归并全部范围，因此正好承接逐字稿分析节点产出的多个停顿、口头禅和重录区间。
+    """
+    from app.domain.sequences.operations import CutClipRanges, cut_clip_ranges
+
+    sequence = _sequence_in(db, workflow, str(config.get("sequence_id") or "").strip())
+    clip_id = str(config.get("clip_id") or "").strip()
+    if not clip_id:
+        raise WorkflowDomainError("批量裁切缺少 clip_id")
+    clip = db.get(Clip, clip_id)
+    if clip is None or clip.sequence_id != sequence.id:
+        raise WorkflowDomainError("要整理的片段不在这条时间线上")
+    try:
+        confidence_raw = config.get("min_confidence")
+        ratio_raw = config.get("max_removal_ratio")
+        min_confidence = float(0 if confidence_raw in (None, "") else confidence_raw)
+        max_removal_ratio = float(1 if ratio_raw in (None, "") else ratio_raw)
+    except (TypeError, ValueError) as exc:
+        raise WorkflowDomainError("最低置信度和最大删除比例必须是 0–1 的数字") from exc
+    if not 0 <= min_confidence <= 1 or not 0 <= max_removal_ratio <= 1:
+        raise WorkflowDomainError("最低置信度和最大删除比例必须在 0–1 之间")
+    raw_ranges = config.get("ranges")
+    if isinstance(raw_ranges, str):
+        try:
+            raw_ranges = json.loads(raw_ranges)
+        except json.JSONDecodeError as exc:
+            raise WorkflowDomainError(f"裁切范围不是合法 JSON:{exc}") from exc
+    if not isinstance(raw_ranges, list):
+        raise WorkflowDomainError("裁切范围必须是数组")
+
+    ranges: list[tuple[float, float]] = []
+    normalized: list[dict[str, Any]] = []
+    for item in raw_ranges:
+        if not isinstance(item, dict):
+            continue
+        try:
+            start = float(item.get("src_start"))
+            end = float(item.get("src_end"))
+        except (TypeError, ValueError):
+            continue
+        try:
+            confidence = float(item.get("confidence", 1))
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(start) or not math.isfinite(end) or not math.isfinite(confidence):
+            continue
+        if confidence < min_confidence:
+            continue
+        start = max(start, clip.src_in)
+        end = min(end, clip.src_out)
+        if end <= start:
+            continue
+        ranges.append((start, end))
+        normalized.append({**item, "src_start": start, "src_end": end})
+    if not ranges:
+        return {
+            "removed": 0,
+            "removed_seconds": 0.0,
+            "ranges": [],
+            "sequence_id": sequence.id,
+            "revision": sequence.revision,
+        }
+
+    merged = _merged_ranges(ranges)
+    removed_seconds = sum(end - start for start, end in merged)
+    source_seconds = max(clip.src_out - clip.src_in, 0.001)
+    if removed_seconds / source_seconds > max_removal_ratio + 1e-9:
+        raise WorkflowDomainError(
+            f"整理方案准备删除 {removed_seconds:.2f} 秒,超过允许的 {max_removal_ratio:.0%};"
+            "请收紧整理尺度或检查方案"
+        )
+    try:
+        cut_clip_ranges(db, sequence.id, CutClipRanges(clip_id=clip_id, ranges=tuple(ranges)))
+    except SequenceDomainError as exc:
+        raise WorkflowDomainError(str(exc)) from exc
+    db.refresh(sequence)
+    return {
+        "removed": len(ranges),
+        "removed_seconds": round(removed_seconds, 3),
+        "ranges": normalized,
+        "sequence_id": sequence.id,
+        "revision": sequence.revision,
+    }
+
+
+def _merged_ranges(ranges: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    merged: list[list[float]] = []
+    for start, end in sorted(ranges):
+        if merged and start <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+    return [(start, end) for start, end in merged]
+
+
 @register("asset")
 def asset_node(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     """指向一份素材,把它的 id 交给下游。
@@ -371,9 +496,20 @@ def asset_node(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[
     asset = db.get(Asset, asset_id)
     if asset is None or asset.workspace_id != workflow.workspace_id:
         raise WorkflowDomainError("素材不在这个工作区里")
+    media_info = asset.media_info or {}
+
+    def number(name: str, default: float) -> float:
+        try:
+            return float(media_info.get(name) or default)
+        except (TypeError, ValueError):
+            return default
+
     return {
         "asset_id": asset.id,
         "name": asset.name,
         "kind": asset.kind,
-        "duration": float((asset.media_info or {}).get("duration") or 0.0),
+        "duration": number("duration", 0.0),
+        "width": int(number("width", 1920)),
+        "height": int(number("height", 1080)),
+        "fps": number("fps", 30.0),
     }

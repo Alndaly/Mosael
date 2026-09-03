@@ -17,6 +17,7 @@ from app.domain.provider_defaults import get_row
 from app.domain.workflows import WorkflowDomainError
 
 FULL_VIDEO_GENERATION = "full_video_generation"
+TRANSCRIPT_VIDEO_CLEANUP = "transcript_video_cleanup"
 
 
 @dataclass(frozen=True)
@@ -100,12 +101,15 @@ def _video_plan(choice: ModelChoice) -> VideoPlan:
 
 
 def built_in_template_graph(db: Session, template_id: str, *, user_id: str) -> dict[str, Any]:
-    if template_id != FULL_VIDEO_GENERATION:
-        raise WorkflowDomainError(f"未知的内置工作流模板:{template_id}")
-    return full_video_generation_graph(
-        chat=_default_model(db, "chat", user_id),
-        video=_default_model(db, "video", user_id),
-    )
+    chat = _default_model(db, "chat", user_id)
+    if template_id == FULL_VIDEO_GENERATION:
+        return full_video_generation_graph(
+            chat=chat,
+            video=_default_model(db, "video", user_id),
+        )
+    if template_id == TRANSCRIPT_VIDEO_CLEANUP:
+        return transcript_video_cleanup_graph(chat=chat)
+    raise WorkflowDomainError(f"未知的内置工作流模板:{template_id}")
 
 
 def _object(properties: dict[str, Any], required: list[str]) -> dict[str, Any]:
@@ -175,6 +179,206 @@ def _storyboard_schema(clip_seconds: int) -> dict[str, Any]:
         "shots": {"type": "array", "minItems": 1, "items": _shot_schema(clip_seconds)},
     }
     return _object(fields, list(fields))
+
+
+def _cleanup_schema() -> dict[str, Any]:
+    issue_fields = {
+        "issue_type": {
+            "type": "string",
+            "enum": ["silence", "filler", "repetition", "false_start", "off_topic", "verbal_noise", "structure"],
+        },
+        "start_seconds": {"type": "number", "minimum": 0},
+        "end_seconds": {"type": "number", "minimum": 0},
+        "excerpt": {"type": "string"},
+        "diagnosis": {"type": "string"},
+        "recommendation": {"type": "string"},
+        "auto_cut": {"type": "boolean"},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    }
+    range_fields = {
+        "src_start": {"type": "number", "minimum": 0},
+        "src_end": {"type": "number", "exclusiveMinimum": 0},
+        "issue_type": {
+            "type": "string",
+            "enum": ["silence", "filler", "repetition", "false_start", "off_topic", "verbal_noise"],
+        },
+        "reason": {"type": "string"},
+        "transcript_excerpt": {"type": "string"},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    }
+    fields = {
+        "editorial_summary": {"type": "string", "description": "素材问题、整理策略和预期改善"},
+        "revised_outline": {"type": "array", "items": {"type": "string"}},
+        "issues": {"type": "array", "items": _object(issue_fields, list(issue_fields))},
+        "remove_ranges": {"type": "array", "items": _object(range_fields, list(range_fields))},
+        "cleaned_verbatim": {"type": "string", "description": "按保留内容重排版的逐字稿，不改写原话"},
+        "review_notes": {"type": "array", "items": {"type": "string"}},
+        "estimated_removed_seconds": {"type": "number", "minimum": 0},
+    }
+    return _object(fields, list(fields))
+
+
+def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
+    """视频 → 带时间码逐字稿 → 智能诊断 → 多区间波纹裁切 → 整理版导出。"""
+
+    cleanup_system = """你是一名资深口播、访谈与课程剪辑师。你会收到词级或段级时间码逐字稿，
+任务是在不改写观点、不改变事实、不打乱时间顺序的前提下，让视频更紧凑、清楚、自然。识别长停顿、
+无语义口头禅、重复表达、错误起句后重录、明显跑题和噪声词。只把高置信度且能从时间码精确定位的
+问题放入 remove_ranges；结构跳跃、可能有意的停顿、语气表达或任何含义不确定的内容只写进 issues
+和 review_notes，不自动删除。范围必须按 src_start 升序、互不重叠、src_end 大于 src_start，并在
+素材时长内。删除口头禅时只切独立词；删除停顿时在相邻有效语音两侧各保留约 0.12–0.20 秒自然呼吸。
+若重复录制同一句，保留表达最完整自然的一遍。cleaned_verbatim 只能拼接保留的原话，不得润色或
+新增内容。只输出符合 JSON Schema 的对象。"""
+
+    nodes: list[dict[str, Any]] = [
+        {
+            "id": "start",
+            "type": "start",
+            "name": "设置智能整理尺度",
+            "position": {"x": 40, "y": 260},
+            "config": {
+                "params": {
+                    "cleanup_style": "自然紧凑，保留真实语气和必要呼吸",
+                    "silence_threshold_seconds": 1.0,
+                    "filler_policy": "保守：只删除独立且无语义的口头禅",
+                    "max_removal_ratio": 0.35,
+                }
+            },
+        },
+        {
+            "id": "source_video",
+            "type": "asset",
+            "name": "选择要整理的视频",
+            "position": {"x": 330, "y": 260},
+            "config": {"asset_id": ""},
+        },
+        {
+            "id": "verbatim_transcript",
+            "type": "transcribe_asset",
+            "name": "生成带时间码逐字稿",
+            "position": {"x": 650, "y": 100},
+            "config": {"asset_id": "{{source_video.asset_id}}"},
+        },
+        {
+            "id": "cleanup_project",
+            "type": "project_sequence_create",
+            "name": "建立非破坏性整理副本",
+            "position": {"x": 650, "y": 420},
+            "config": {
+                "name": "{{source_video.name}} · 智能整理",
+                "width": "{{source_video.width}}",
+                "height": "{{source_video.height}}",
+                "fps": "{{source_video.fps}}",
+            },
+        },
+        {
+            "id": "source_on_timeline",
+            "type": "timeline_append",
+            "name": "复制原视频到新时间线",
+            "position": {"x": 970, "y": 420},
+            "config": {
+                "sequence_id": "{{cleanup_project.sequence_id}}",
+                "asset_id": "{{source_video.asset_id}}",
+                "track_id": "{{cleanup_project.video_track_id}}",
+                "start": 0,
+                "end": "{{source_video.duration}}",
+            },
+        },
+        {
+            "id": "cleanup_plan",
+            "type": "llm",
+            "name": "诊断杂乱问题并生成整理方案",
+            "position": {"x": 1290, "y": 260},
+            "config": {
+                "profile_id": chat.profile_id,
+                "model": chat.model,
+                "preset": "precise",
+                "system": cleanup_system,
+                "prompt": """素材名称：{{source_video.name}}
+素材时长：{{source_video.duration}} 秒
+逐字稿语言：{{verbatim_transcript.language}}
+整理风格：{{start.cleanup_style}}
+长停顿阈值：{{start.silence_threshold_seconds}} 秒
+口头禅策略：{{start.filler_policy}}
+最多删除原时长比例：{{start.max_removal_ratio}}
+
+下面是按原视频源时间记录的逐字稿 JSON，每段含 start/end，可能含词级 tokens：
+{{verbatim_transcript.timed_text}}
+
+请逐项诊断并生成安全的 remove_ranges。所有自动删除范围的总时长不得超过规定比例；无法从逐字稿
+确定的画面杂乱、跳剪需求或语义取舍写入 review_notes，不得猜测时间范围。""",
+                "response_format": "json_schema",
+                "json_schema_name": "transcript_video_cleanup_plan",
+                "json_schema": _cleanup_schema(),
+                "json_schema_strict": "true",
+                "temperature": 0.15,
+                "max_tokens": 10000,
+            },
+        },
+        {
+            "id": "apply_cleanup",
+            "type": "timeline_cut_ranges",
+            "name": "按逐字稿批量波纹整理",
+            "position": {"x": 1620, "y": 260},
+            "config": {
+                "sequence_id": "{{cleanup_project.sequence_id}}",
+                "clip_id": "{{source_on_timeline.clip_id}}",
+                "ranges": "{{cleanup_plan.json.remove_ranges}}",
+                "min_confidence": 0.8,
+                "max_removal_ratio": "{{start.max_removal_ratio}}",
+            },
+        },
+        {
+            "id": "export_clean_video",
+            "type": "export_sequence",
+            "name": "导出智能整理版视频",
+            "position": {"x": 1950, "y": 260},
+            "config": {"sequence_id": "{{cleanup_project.sequence_id}}"},
+        },
+        {
+            "id": "done_notice",
+            "type": "notify",
+            "name": "整理完成通知",
+            "position": {"x": 2260, "y": 260},
+            "config": {
+                "title": "视频逐字稿与智能整理已完成",
+                "body": "{{source_video.name}} 已生成逐字稿、问题诊断和非破坏性整理版视频。",
+            },
+        },
+        {
+            "id": "output",
+            "type": "output",
+            "name": "交付逐字稿、方案与成片",
+            "position": {"x": 2570, "y": 260},
+            "config": {
+                "values": {
+                    "source_asset_id": "{{source_video.asset_id}}",
+                    "verbatim_transcript": "{{verbatim_transcript.text}}",
+                    "timed_transcript": "{{verbatim_transcript.segments}}",
+                    "cleanup_plan": "{{cleanup_plan.json}}",
+                    "applied_ranges": "{{apply_cleanup.ranges}}",
+                    "removed_seconds": "{{apply_cleanup.removed_seconds}}",
+                    "project_id": "{{cleanup_project.project_id}}",
+                    "sequence_id": "{{cleanup_project.sequence_id}}",
+                    "final_asset_id": "{{export_clean_video.asset_id}}",
+                }
+            },
+        },
+    ]
+    edges = [
+        {"id": "start_source", "source": "start", "target": "source_video"},
+        {"id": "source_transcript", "source": "source_video", "target": "verbatim_transcript"},
+        {"id": "source_project", "source": "source_video", "target": "cleanup_project"},
+        {"id": "source_append", "source": "source_video", "target": "source_on_timeline"},
+        {"id": "project_append", "source": "cleanup_project", "target": "source_on_timeline"},
+        {"id": "transcript_plan", "source": "verbatim_transcript", "target": "cleanup_plan"},
+        {"id": "append_plan", "source": "source_on_timeline", "target": "cleanup_plan"},
+        {"id": "plan_apply", "source": "cleanup_plan", "target": "apply_cleanup"},
+        {"id": "apply_export", "source": "apply_cleanup", "target": "export_clean_video"},
+        {"id": "export_notice", "source": "export_clean_video", "target": "done_notice"},
+        {"id": "notice_output", "source": "done_notice", "target": "output"},
+    ]
+    return {"nodes": nodes, "edges": edges}
 
 
 def full_video_generation_graph(*, chat: ModelChoice, video: ModelChoice) -> dict[str, Any]:

@@ -35,6 +35,7 @@ import {
   Repeat,
   Rocket,
   ScanText,
+  Scissors,
   SkipForward,
   Sparkles,
   Tags,
@@ -124,6 +125,7 @@ const NODE_ICONS: Record<string, React.ReactNode> = {
   asset_update: <FolderInput size={13} />,
   project_create: <FolderPlus size={13} />,
   project_sequence_create: <FolderPlus size={13} />,
+  timeline_cut_ranges: <Scissors size={13} />,
 };
 
 /** Shared semantic presentation for canvas nodes and their inspector header. */

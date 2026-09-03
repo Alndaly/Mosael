@@ -34,6 +34,7 @@ NODE_TO_TOOL: dict[str, str] = {
     "timeline_append": "edit_timeline",
     "timeline_add_track": "edit_timeline",
     "timeline_clear": "edit_timeline",
+    "timeline_cut_ranges": "edit_timeline",
     "llm": "",  # 见 NOT_A_TOOL
     "plugin_tool": "",  # 插件工具已展开成一等公民(plugin__<连接>__<工具>),不是固定的一个名字
     "transcribe_asset": "transcribe_asset",

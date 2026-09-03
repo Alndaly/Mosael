@@ -43,6 +43,7 @@ import {
   Redo2,
   Repeat,
   Search,
+  Scissors,
   Spline,
   Trash2,
   Type,
@@ -298,17 +299,20 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   const nodeTypes = useQuery({ queryKey: ["workflow-node-types"], queryFn: fetchWorkflowNodeTypes, staleTime: Infinity });
 
   const create = useMutation({
-    mutationFn: (templateId?: "full_video_generation") =>
-      createWorkflow(
-        templateId
-          ? {
-              workspace_id: workspace.id,
-              name: t("wfFullVideoTemplateName"),
-              description: t("wfFullVideoTemplateDescription"),
-              template_id: templateId,
-            }
-          : { workspace_id: workspace.id, name: t("wfDefaultName"), description: "" },
-      ),
+    mutationFn: (templateId?: "full_video_generation" | "transcript_video_cleanup") => {
+      if (!templateId) {
+        return createWorkflow({ workspace_id: workspace.id, name: t("wfDefaultName"), description: "" });
+      }
+      const transcriptCleanup = templateId === "transcript_video_cleanup";
+      return createWorkflow({
+        workspace_id: workspace.id,
+        name: t(transcriptCleanup ? "wfTranscriptCleanupTemplateName" : "wfFullVideoTemplateName"),
+        description: t(
+          transcriptCleanup ? "wfTranscriptCleanupTemplateDescription" : "wfFullVideoTemplateDescription",
+        ),
+        template_id: templateId,
+      });
+    },
     onSuccess: (workflow) => {
       setSelectedId(workflow.id);
       void qc.invalidateQueries({ queryKey: ["workflows", workspace.id] });
@@ -432,6 +436,13 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
               >
                 <Film size={15} /> {t("wfCreateFullVideo")}
               </Button>
+              <Button
+                variant="outline"
+                loading={create.isPending && create.variables === "transcript_video_cleanup"}
+                onClick={() => create.mutate("transcript_video_cleanup")}
+              >
+                <Scissors size={15} /> {t("wfCreateTranscriptCleanup")}
+              </Button>
               <Button variant="outline" loading={importFile.isPending} onClick={() => importInputRef.current?.click()}>
                 <FileUp size={15} /> {t("wfImport")}
               </Button>
@@ -531,6 +542,14 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
                 onClick={() => create.mutate("full_video_generation")}
               >
                 <Film size={13} /> {t("wfCreateFullVideo")}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                loading={create.isPending && create.variables === "transcript_video_cleanup"}
+                onClick={() => create.mutate("transcript_video_cleanup")}
+              >
+                <Scissors size={13} /> {t("wfCreateTranscriptCleanup")}
               </Button>
               <Button size="sm" loading={create.isPending && create.variables === undefined} onClick={() => create.mutate(undefined)}>
                 <Plus size={13} /> {t("wfCreate")}
