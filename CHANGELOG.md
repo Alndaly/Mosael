@@ -15,6 +15,8 @@ commit list and downloadable artifacts.
   so the rest of Mosael remains usable while captured files retain their original workspace or project destination.
 - Added optional device-audio capture to screen recordings, including Windows loopback grants and the macOS
   packaged-app permission required by supported system sharing pickers.
+- Added clip-level circular and rounded-rectangle video masks plus configurable drop shadows, with matching
+  Canvas preview, undoable project persistence, and FFmpeg export rendering.
 
 ## [1.0.0-beta1] - 2026-09-03
 

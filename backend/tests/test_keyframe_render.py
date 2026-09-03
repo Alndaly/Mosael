@@ -108,6 +108,39 @@ def test_static_transform_still_uses_fixed_integer_position() -> None:
     assert "if(lt(" not in graph  # nothing animates
 
 
+def test_circle_mask_centre_crops_and_writes_an_alpha_plane() -> None:
+    graph = _graph(overlay_clips=[{
+        "id": "c2", "asset_id": "b", "timeline_start": 0, "src_in": 0, "src_out": 4,
+        "effects": {"appearance": {"mask": {"shape": "circle"}}},
+    }])
+    assert "crop=180:180" in graph
+    assert "pow(X-W/2,2)+pow(Y-H/2,2)" in graph
+    assert "alpha(X,Y)" in graph
+
+
+def test_shadow_is_built_from_the_masked_alpha_and_composited_behind_video() -> None:
+    graph = _graph(overlay_clips=[{
+        "id": "c2", "asset_id": "b", "timeline_start": 0, "src_in": 0, "src_out": 4,
+        "effects": {"appearance": {
+            "mask": {"shape": "rounded", "radius": 0.2},
+            "shadow": {"enabled": True, "color": "#123456", "opacity": 0.6, "blur": 20,
+                       "offset_x": 5, "offset_y": 7},
+        }},
+    }])
+    assert "geq=r='18':g='52':b='86':a='alpha(X,Y)*0.6000'" in graph
+    assert "gblur=sigma=20.0000:planes=8" in graph
+    assert "[oa0shadow][oa0fgpad]overlay=0:0:format=auto[oa0appearance]" in graph
+
+
+def test_base_clip_appearance_uses_the_same_compositing_pipeline() -> None:
+    graph = _graph(clips=[{
+        "id": "c1", "asset_id": "a", "timeline_start": 0, "src_in": 0, "src_out": 4,
+        "effects": {"appearance": {"mask": {"shape": "circle"}}},
+    }])
+    assert "[ba0mask]scale=w='iw*1.00000':h='ih*1.00000'[bt0s]" in graph
+    assert "[bg0][bt0s]overlay=" in graph
+
+
 class TestKfExprMultiKeyframe:
     """回归:_kf_expr 生成的 ffmpeg 表达式必须和参考插值 _kf_sample 逐点吻合,尤其 3+ 关键帧。
     历史 bug 是嵌套 if 顺序反了 → 任何早期 prog 都命中最后一段、恒取末值(如缩放全程卡在

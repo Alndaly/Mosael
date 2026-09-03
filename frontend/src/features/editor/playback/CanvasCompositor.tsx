@@ -2,6 +2,7 @@ import React from "react";
 
 import { assetPreviewUrl, assetProxyUrl, type Asset, type Clip } from "@/api/client";
 import { CURVES_FILTER_ID } from "@/features/editor/colorCurves";
+import { readClipAppearance } from "@/features/editor/clipAppearance";
 import { computeFilters, type ClipEffects } from "@/features/editor/monitorFilters";
 import { ProxyVideoSource } from "@/features/editor/playback/ProxyVideoSource";
 import { paintScene, type ScenePaintLayer } from "@/features/editor/playback/scenePaint";
@@ -248,7 +249,15 @@ export function CanvasCompositor({
         const layer = currentLayers[i];
         // 关键帧:按播放头在片段内的进度插值,画布合成才随预览动起来(拖拽手柄时 override 优先)。
         const tf = layer.transformOverride ?? sampleTransform(readTransform(layer.clip.transform), clipProgress(layer.clip, playhead));
-        paintLayers.push({ img: media.source, mw: media.w, mh: media.h, tf, filter: filtersRef.current[i]?.filter || "", isBase: i === 0 });
+        paintLayers.push({
+          img: media.source,
+          mw: media.w,
+          mh: media.h,
+          tf,
+          filter: filtersRef.current[i]?.filter || "",
+          isBase: i === 0,
+          appearance: readClipAppearance(layer.clip.effects),
+        });
       }
       paintScene(ctx, paintLayers, { width, height, fillMode: fillModeRef.current });
     };

@@ -4,7 +4,8 @@
 可被外部 worker 认领跑在别的机器上([ADR-0002](0002-claim-report-worker-protocol.md))。两个约束
 各自成立,合起来决定了画面模型**必然存在于两种语言里**——「只有一份实现」不是可选项。因此一致性
 由**契约 + 语言中立语料**保证:`contracts/scene-cases.json` 同时驱动 `sceneModel.parity.test.ts`
-与 `test_scene_parity.py`,任一侧改了语义而另一侧没跟上,两边 CI 都会红。语义边界按「谁是权威」
+与 `test_scene_parity.py`;片段蒙版/阴影的读取与钳制则由 `contracts/clip-appearance-cases.json`
+同时驱动前后端测试。任一侧改了语义而另一侧没跟上,两边 CI 都会红。语义边界按「谁是权威」
 划分:**可见层/z 序/base 归属必须逐字一致**(所有已发生的 parity bug 都在这里),**调色则 ffmpeg
 权威、预览近似**并在 UI 明示(LUT 提示已写明预览不显示)。
 

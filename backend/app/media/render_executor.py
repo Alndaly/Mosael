@@ -12,7 +12,14 @@ from app.core.child_process import ChildProcess, popen_text, run_logged
 
 from app.core.config import settings
 from app.media.probe import guess_kind, probe_has_audio_many
-from app.media.render_plan import FILTER_PRESETS, RenderPlan, TextOverlayItem, Transform
+from app.media.render_plan import (
+    DEFAULT_APPEARANCE,
+    FILTER_PRESETS,
+    ClipAppearance,
+    RenderPlan,
+    TextOverlayItem,
+    Transform,
+)
 
 """
 RenderExecutor (plan §11): turns a RenderPlan into one FFmpeg invocation.
@@ -297,6 +304,70 @@ def _element_transform(
     cx = (0.5 + tf.x * 0.5) * width
     cy = (0.5 + tf.y * 0.5) * height
     return filters, label, str(int(round(cx - ow / 2))), str(int(round(cy - oh / 2)))
+
+
+def _appearance_filters(
+    in_label: str,
+    appearance: ClipAppearance,
+    width: int,
+    height: int,
+    prefix: str,
+) -> tuple[list[str], str, bool]:
+    """Apply mask + shadow in local element space before transform.
+
+    Returns filters, output label, and whether the resulting element must be scaled from its own
+    dimensions (circle centre-crops to a square; shadow adds symmetric transparent padding).
+    """
+    filters: list[str] = []
+    label = in_label
+    element_width, element_height = width, height
+    if appearance.mask.shape == "circle":
+        side = min(width, height)
+        filters.append(f"[{label}]crop={side}:{side}:(iw-{side})/2:(ih-{side})/2[{prefix}crop]")
+        label = f"{prefix}crop"
+        element_width = element_height = side
+
+    if appearance.mask.shape != "none":
+        if appearance.mask.shape == "circle":
+            alpha = "if(lte(pow(X-W/2,2)+pow(Y-H/2,2),pow(min(W,H)/2,2)),alpha(X,Y),0)"
+        else:
+            radius = min(element_width, element_height) * appearance.mask.radius
+            alpha = (
+                "if(lte("
+                f"pow(max({radius:.4f}-min(X,W-1-X),0),2)+"
+                f"pow(max({radius:.4f}-min(Y,H-1-Y),0),2),"
+                f"pow({radius:.4f},2)),alpha(X,Y),0)"
+            )
+        filters.append(
+            f"[{label}]format=yuva420p,geq=lum='lum(X,Y)':cb='cb(X,Y)':cr='cr(X,Y)':a='{alpha}'[{prefix}mask]"
+        )
+        label = f"{prefix}mask"
+
+    shadow = appearance.shadow
+    if shadow.enabled and shadow.opacity > 0:
+        pad = int(math.ceil(shadow.blur * 3 + max(abs(shadow.offset_x), abs(shadow.offset_y))))
+        padded_width = element_width + pad * 2
+        padded_height = element_height + pad * 2
+        red = int(shadow.color[1:3], 16)
+        green = int(shadow.color[3:5], 16)
+        blue = int(shadow.color[5:7], 16)
+        blur_filter = f",gblur=sigma={shadow.blur:.4f}:planes=8" if shadow.blur > 0 else ""
+        filters.append(f"[{label}]split=2[{prefix}fg][{prefix}shsrc]")
+        filters.append(
+            f"[{prefix}shsrc]format=rgba,"
+            f"geq=r='{red}':g='{green}':b='{blue}':a='alpha(X,Y)*{shadow.opacity:.4f}'"
+            f"{blur_filter},"
+            f"pad={padded_width}:{padded_height}:{pad + shadow.offset_x:.4f}:{pad + shadow.offset_y:.4f}:color=black@0"
+            f"[{prefix}shadow]"
+        )
+        filters.append(
+            f"[{prefix}fg]pad={padded_width}:{padded_height}:{pad}:{pad}:color=black@0[{prefix}fgpad]"
+        )
+        filters.append(f"[{prefix}shadow][{prefix}fgpad]overlay=0:0:format=auto[{prefix}appearance]")
+        label = f"{prefix}appearance"
+        return filters, label, True
+
+    return filters, label, appearance.mask.shape == "circle"
 
 
 def _volume_expr(gain: float, keyframes: tuple[tuple[float, float], ...], duration: float) -> str:
@@ -726,7 +797,7 @@ def build_ffmpeg_command(
             preset = f",{FILTER_PRESETS[segment.filter]}" if segment.filter else ""
             lut_path = _escape_filter_path(resolve(segment.lut)) if segment.lut else ""
             preset += _grade_filter(dict(segment.grade), segment.curves, lut_path)
-            if segment.transform.is_identity:
+            if segment.transform.is_identity and segment.appearance == DEFAULT_APPEARANCE:
                 filters.append(
                     _base_video_chain(
                         input_index, i, tin, tout, setpts, width, height, fps,
@@ -742,9 +813,20 @@ def build_ffmpeg_command(
                     f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}"
                     f"{preset}{video_fades},fps={fps},setsar=1[elt{i}]"
                 )
+                appearance_filters, appearance_label, appearance_sized = _appearance_filters(
+                    f"elt{i}", segment.appearance, width, height, f"ba{i}"
+                )
+                filters += appearance_filters
                 # setpts reset the segment to t=0, so progress runs over start=0..duration.
                 tfilters, tlabel, ox, oy = _element_transform(
-                    f"elt{i}", segment.transform, width, height, f"bt{i}", start=0.0, duration=segment.duration
+                    appearance_label,
+                    segment.transform,
+                    width,
+                    height,
+                    f"bt{i}",
+                    start=0.0,
+                    duration=segment.duration,
+                    element_sized=appearance_sized,
                 )
                 filters += tfilters
                 filters.append(
@@ -791,9 +873,20 @@ def build_ffmpeg_command(
             f"setpts=PTS-STARTPTS+{overlay.start}/TB,"
             f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}[oelt{i}]"
         )
+        appearance_filters, appearance_label, appearance_sized = _appearance_filters(
+            f"oelt{i}", overlay.appearance, width, height, f"oa{i}"
+        )
+        filters += appearance_filters
         # Overlay lives on the main timeline; progress runs over its start..start+duration.
         tfilters, tlabel, ox, oy = _element_transform(
-            f"oelt{i}", overlay.transform, width, height, f"ot{i}", start=overlay.start, duration=overlay.duration
+            appearance_label,
+            overlay.transform,
+            width,
+            height,
+            f"ot{i}",
+            start=overlay.start,
+            duration=overlay.duration,
+            element_sized=appearance_sized,
         )
         filters += tfilters
         out_label = f"[vov{i}]"

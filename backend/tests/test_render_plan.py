@@ -71,6 +71,44 @@ def test_hash_stable_for_same_content():
     assert p1.render_plan_hash == p2.render_plan_hash
 
 
+def test_clip_appearance_is_validated_for_base_and_overlay_video():
+    """Mask/shadow are render semantics, not inspector-only decoration."""
+    base = clip("c1", "a1", 0, 0, 4)
+    base["effects"] = {
+        "appearance": {
+            "mask": {"shape": "circle", "radius": 99},
+            "shadow": {
+                "enabled": True,
+                "color": "#123456",
+                "opacity": 0.65,
+                "blur": 32,
+                "offset_x": 12,
+                "offset_y": -8,
+            },
+        }
+    }
+    overlay = clip("c2", "a2", 0, 0, 4)
+    overlay["effects"] = {"appearance": {"mask": {"shape": "rounded", "radius": 0.2}}}
+
+    plan = build_render_plan(
+        sequence_id="seq1",
+        revision=1,
+        width=1920,
+        height=1080,
+        fps=30,
+        clips=[base],
+        overlay_clips=[overlay],
+        assets={"a1": {"file_key": "a1.mp4"}, "a2": {"file_key": "a2.mp4"}},
+    )
+
+    assert plan.video_segments[0].appearance.mask.shape == "circle"
+    assert plan.video_segments[0].appearance.mask.radius == 0.5
+    assert plan.video_segments[0].appearance.shadow.color == "#123456"
+    assert plan.video_segments[0].appearance.shadow.opacity == 0.65
+    assert plan.overlays[0].appearance.mask.shape == "rounded"
+    assert plan.overlays[0].appearance.mask.radius == 0.2
+
+
 def test_clip_curves_emit_ffmpeg_specs():
     c = clip("c1", "a1", 0, 0, 5)
     c["effects"] = {"color": {"curves": {

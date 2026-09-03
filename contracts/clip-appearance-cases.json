@@ -1,0 +1,40 @@
+{
+  "contract": "clip-appearance",
+  "version": 1,
+  "cases": [
+    {
+      "name": "missing effects uses stable defaults",
+      "effects": null,
+      "expected": {
+        "mask": { "shape": "none", "radius": 0.0 },
+        "shadow": { "enabled": false, "color": "#000000", "opacity": 0.4, "blur": 24.0, "offset_x": 0.0, "offset_y": 12.0 }
+      }
+    },
+    {
+      "name": "valid circle and shadow survive",
+      "effects": {
+        "appearance": {
+          "mask": { "shape": "circle", "radius": 0.25 },
+          "shadow": { "enabled": true, "color": "#123456", "opacity": 0.65, "blur": 32, "offset_x": 12, "offset_y": -8 }
+        }
+      },
+      "expected": {
+        "mask": { "shape": "circle", "radius": 0.25 },
+        "shadow": { "enabled": true, "color": "#123456", "opacity": 0.65, "blur": 32.0, "offset_x": 12.0, "offset_y": -8.0 }
+      }
+    },
+    {
+      "name": "unknown values fall back and numbers clamp",
+      "effects": {
+        "appearance": {
+          "mask": { "shape": "star", "radius": 9 },
+          "shadow": { "enabled": "yes", "color": "invalid", "opacity": -4, "blur": 999, "offset_x": -999, "offset_y": 999 }
+        }
+      },
+      "expected": {
+        "mask": { "shape": "none", "radius": 0.5 },
+        "shadow": { "enabled": false, "color": "#000000", "opacity": 0.0, "blur": 200.0, "offset_x": -500.0, "offset_y": 500.0 }
+      }
+    }
+  ]
+}

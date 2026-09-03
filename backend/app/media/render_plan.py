@@ -74,6 +74,39 @@ IDENTITY_TRANSFORM = Transform()
 
 
 @dataclass(frozen=True)
+class MaskSpec:
+    """A geometric alpha mask applied in the clip's local coordinate space.
+
+    ``circle`` is a true centred circle (the renderer centre-crops a square first), while
+    ``rounded`` keeps the media rectangle and uses ``radius`` as a fraction of its shorter side.
+    """
+
+    shape: str = "none"  # none | rounded | circle
+    radius: float = 0.0  # 0..0.5, used by rounded
+
+
+@dataclass(frozen=True)
+class ShadowSpec:
+    """Drop shadow in output-frame pixels, applied after masking and before placement."""
+
+    enabled: bool = False
+    color: str = "#000000"
+    opacity: float = 0.4
+    blur: float = 24.0
+    offset_x: float = 0.0
+    offset_y: float = 12.0
+
+
+@dataclass(frozen=True)
+class ClipAppearance:
+    mask: MaskSpec = MaskSpec()
+    shadow: ShadowSpec = ShadowSpec()
+
+
+DEFAULT_APPEARANCE = ClipAppearance()
+
+
+@dataclass(frozen=True)
 class Segment:
     """One contiguous piece of the output timeline: a clip or a gap.
 
@@ -107,6 +140,7 @@ class Segment:
     # Free-element placement over the frame (Canvas Phase 1b). Identity → the clip fills
     # the frame per fill_mode (fast path); otherwise it's composited over black.
     transform: Transform = IDENTITY_TRANSFORM
+    appearance: ClipAppearance = DEFAULT_APPEARANCE
     # 音量关键帧:(t, gain) 归一化时间点,让片段自带音频的增益随时间插值(volume 时间表达式)。
     gain_keyframes: tuple[tuple[float, float], ...] = ()
 
@@ -131,6 +165,7 @@ class OverlayItem:
     duration: float
     source: ClipSource
     transform: Transform = IDENTITY_TRANSFORM
+    appearance: ClipAppearance = DEFAULT_APPEARANCE
 
 
 @dataclass(frozen=True)
@@ -388,6 +423,7 @@ def build_render_plan(
                 curves=_curve_specs(grade.get("curves")),
                 lut=lut_key,
                 transform=_read_transform(clip),
+                appearance=_read_appearance(effects),
             )
         )
         cursor = start + duration
@@ -408,6 +444,7 @@ def build_render_plan(
                 duration=round(clip_duration, 6),
                 source=source,
                 transform=_read_transform(clip),
+                appearance=_read_appearance(clip.get("effects") or {}),
             )
         )
         duration = max(duration, float(clip["timeline_start"]) + clip_duration)
@@ -601,6 +638,46 @@ def _read_gain_keyframes(effects: dict) -> tuple[tuple[float, float], ...]:
             continue
         pts.append((t, g))
     return tuple(sorted(pts))
+
+
+def _read_appearance(effects: object) -> ClipAppearance:
+    """Read the versioned-in-place ``effects.appearance`` contract defensively.
+
+    Effects are user/project JSON and may come from older builds, so every leaf is validated here.
+    Export never consumes the untrusted mapping directly; preview mirrors this reader in TypeScript.
+    """
+    if not isinstance(effects, dict) or not isinstance(effects.get("appearance"), dict):
+        return DEFAULT_APPEARANCE
+    raw = effects["appearance"]
+    raw_mask = raw.get("mask") if isinstance(raw.get("mask"), dict) else {}
+    shape = raw_mask.get("shape")
+    if shape not in {"none", "rounded", "circle"}:
+        shape = "none"
+
+    def number(value: object, default: float, lo: float, hi: float) -> float:
+        if isinstance(value, bool):
+            return default
+        try:
+            return max(lo, min(hi, float(value)))
+        except (TypeError, ValueError):
+            return default
+
+    radius = number(raw_mask.get("radius"), 0.0, 0.0, 0.5)
+    raw_shadow = raw.get("shadow") if isinstance(raw.get("shadow"), dict) else {}
+    color = str(raw_shadow.get("color") or "#000000")
+    if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+        color = "#000000"
+    return ClipAppearance(
+        mask=MaskSpec(shape=shape, radius=radius),
+        shadow=ShadowSpec(
+            enabled=raw_shadow.get("enabled") is True,
+            color=color.lower(),
+            opacity=number(raw_shadow.get("opacity"), 0.4, 0.0, 1.0),
+            blur=number(raw_shadow.get("blur"), 24.0, 0.0, 200.0),
+            offset_x=number(raw_shadow.get("offset_x"), 0.0, -500.0, 500.0),
+            offset_y=number(raw_shadow.get("offset_y"), 12.0, -500.0, 500.0),
+        ),
+    )
 
 
 def _read_transform(clip: dict) -> Transform:

@@ -17,6 +17,7 @@ import { useEditorStore } from "@/stores/editorStore";
 import { CurveEditor } from "@/features/editor/CurveEditor";
 import type { ColorCurves } from "@/features/editor/colorCurves";
 import { COLOR_PRESETS, matchColorPreset, presetColorPayload } from "@/features/editor/colorPresets";
+import { ClipAppearancePanel } from "@/features/editor/ClipAppearancePanel";
 import { LutPicker } from "@/features/editor/LutPicker";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
@@ -84,6 +85,7 @@ export function Inspector({
   const [tab, setTab] = usePersistentTab<"props" | "color">("editor-inspector", "props", INSPECTOR_TABS);
   const asset = selectedClip?.asset_id ? assets.find((item) => item.id === selectedClip.asset_id) : null;
   const isTextClip = Boolean(selectedClip && !selectedClip.asset_id && selectedClip.text_override != null);
+  const isVisualClip = asset?.kind === "video" || asset?.kind === "image";
   const effects = (selectedClip?.effects ?? {}) as {
     fade_in?: number;
     fade_out?: number;
@@ -356,6 +358,7 @@ export function Inspector({
                 ))}
               </div>
             )}
+            {isVisualClip && <ClipAppearancePanel clip={selectedClip} onSetEffects={onSetEffects} />}
             {(!isTextClip || isTitleText) && onSetTransform && (
               <div className="flex flex-col gap-1.5 border-t border-border pt-2.5">
                 <div className="flex items-center justify-between">
