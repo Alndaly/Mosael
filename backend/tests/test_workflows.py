@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from copy import deepcopy
 
 import httpx
 import pytest
@@ -243,6 +244,56 @@ def test_workflow_revisions_are_immutable_and_restore_appends() -> None:
         assert job.payload["workflow_revision"] == 3
         assert job.payload["workflow_graph_hash"] == restored.json()["graph_hash"]
         assert job.payload["workflow_revision_id"]
+
+
+def test_layout_autosave_persists_without_creating_an_execution_revision() -> None:
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "Layout"}).json()
+    original = linear_graph()
+    created = client.post(
+        "/api/workflows",
+        json={"workspace_id": workspace["id"], "name": "Layout workflow", "graph": original},
+    ).json()
+
+    moved = deepcopy(original)
+    moved["nodes"][0]["position"] = {"x": 480, "y": 320}
+    moved["nodes"][1]["position"] = {"x": 840, "y": 320}
+    saved = client.patch(f"/api/workflows/{created['id']}", json={"graph": moved})
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["revision"] == 1
+    assert saved.json()["graph"] == moved
+    assert saved.json()["graph_hash"] != created["graph_hash"]
+
+    revisions = client.get(f"/api/workflows/{created['id']}/revisions").json()
+    assert [item["revision"] for item in revisions] == [1]
+    # 修订仍是创建时的不可变快照；当前投影单独保存最新布局。
+    first = client.get(f"/api/workflows/{created['id']}/revisions/1").json()
+    assert first["graph"] == original
+
+    # 布局与修订快照不同仍可运行；执行固定到语义一致的 v1。
+    run = client.post(f"/api/workflows/{created['id']}/run", json={"params": {}})
+    assert run.status_code == 200, run.text
+    assert run.json()["payload"]["workflow_revision"] == 1
+
+    edited = deepcopy(moved)
+    edited["nodes"][1]["config"]["template"] = "执行语义已经改变"
+    changed = client.patch(f"/api/workflows/{created['id']}", json={"graph": edited})
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["revision"] == 2
+
+
+def test_revision_digest_only_ignores_graph_node_positions() -> None:
+    from app.domain.workflows.revisions import revision_digest
+
+    original = linear_graph()
+    moved = deepcopy(original)
+    moved["nodes"][0]["position"] = {"x": 999, "y": 888}
+    assert revision_digest(moved) == revision_digest(original)
+
+    # 配置里同名的 position 可能是插件的真实参数，不能被当成画布坐标丢掉。
+    configured = deepcopy(original)
+    configured["nodes"][0]["config"]["position"] = "foreground"
+    assert revision_digest(configured) != revision_digest(original)
 
 
 def test_workflow_revision_history_returns_the_latest_bounded_window() -> None:

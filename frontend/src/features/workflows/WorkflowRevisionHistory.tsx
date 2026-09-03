@@ -159,7 +159,7 @@ export function WorkflowRevisionHistory({
                       size="sm"
                       variant="outline"
                       className="shrink-0"
-                      disabled={sameContent || restore.isPending}
+                      disabled={current || sameContent || restore.isPending}
                       onClick={() => setPending(item)}
                     >
                       <RotateCcw size={13} />

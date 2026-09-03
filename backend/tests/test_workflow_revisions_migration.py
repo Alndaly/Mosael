@@ -93,6 +93,13 @@ def test_reentrant_migration_preserves_and_repairs_the_current_revision() -> Non
         workflow = response.json()
     assert workflow["revision"] == 3
 
+    # 布局会进入当前投影但不产生执行版本；启动迁移也必须理解这条边界。
+    graph = json.loads(json.dumps(graph))
+    graph["nodes"][0]["position"] = {"x": 640, "y": 360}
+    layout_saved = client.patch(f"/api/workflows/{workflow['id']}", json={"graph": graph})
+    assert layout_saved.status_code == 200
+    assert layout_saved.json()["revision"] == 3
+
     # 正常重启不能把已经编辑到 v3 的工作流迁回 v1。
     _migrate_workflow_revisions()
     with engine.begin() as connection:

@@ -60,6 +60,10 @@ def _migrate_workflow_revisions() -> None:
     tables = set(inspector.get_table_names())
     if "workflows" not in tables or "workflow_revisions" not in tables:
         return
+    # 完整摘要算法是历史迁移格式，留在本函数内；「哪些字段构成一个版本」则是当前领域规则，
+    # 启动自愈必须和保存入口共用同一定义，否则一次纯布局保存会在下次启动时被误升成新版本。
+    from app.domain.workflows.revisions import revision_digest
+
     columns = {column["name"] for column in inspector.get_columns("workflows")}
     with engine.begin() as conn:
         if "revision" not in columns:
@@ -115,8 +119,8 @@ def _migrate_workflow_revisions() -> None:
                 )
                 latest_digest = hashlib.sha256(latest_canonical.encode("utf-8")).hexdigest()
 
-                if latest["graph_hash"] == latest_digest == digest:
-                    # 正常重跑和旧缺陷的自愈都走这里：图不动，只把当前指针指回最新快照。
+                if latest["graph_hash"] == latest_digest and revision_digest(latest_graph) == revision_digest(graph):
+                    # 正常重跑、纯布局保存和旧缺陷的自愈都走这里：图不动，只校正当前指针。
                     current_revision = int(latest["revision"])
                 else:
                     # 当前投影没有对应的不可变快照。保住用户眼前的图，并把它提升为最新修订。

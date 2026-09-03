@@ -1258,8 +1258,10 @@ function WorkflowEditor({
       lastSyncedRef.current = saved.updated_at;
       selfSaveRef.current = true; // 兜底:即便两端 updated_at 序列化不一致也不重建画布
       void qc.invalidateQueries({ queryKey: ["workflows", workspaceId] });
-      // 历史面板可能正开着；保存产生了新修订时，它必须和工具栏版本号一起更新。
-      void qc.invalidateQueries({ queryKey: ["workflow-revisions", workflow.id] });
+      // 纯布局保存不会成版，也不需要重拉历史；执行语义变化时才同步版本面板。
+      if (saved.revision !== workflow.revision) {
+        void qc.invalidateQueries({ queryKey: ["workflow-revisions", workflow.id] });
+      }
     },
     onError: (error: Error) => toast.error(t("wfSaveFailed"), { description: error.message }),
   });
