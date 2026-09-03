@@ -19,11 +19,12 @@ __pycache__/
 dist/
 .vite/
 
-# esbuild 单文件 bundle:main.cjs 在运行时 require 它们,由 build:publisher / build:system 生成。
+# esbuild 单文件 bundle:main.cjs 在运行时加载它们,由对应的 build:* 脚本生成。
 # 不入库是因为它们是纯产物;代价是**新克隆必须先构建**,所以 dev 脚本(frontend 的 electron:dev)
-# 里两个都要构建到位,否则跑起来会静默缺少发布执行器或系统能力层。
+# 里这些 bundle 都要构建到位,否则跑起来会缺少桌面桥、发布执行器或系统能力层。
 electron/publish.bundle.cjs
 electron/system.bundle.cjs
+electron/preload.bundle.cjs
 
 # 后端 PyInstaller:dist/ 是冻结二进制,build/ 是中间件,.spec 每次按 --name 重新生成。
 backend/build/

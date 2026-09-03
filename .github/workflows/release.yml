@@ -227,8 +227,9 @@ jobs:
       - name: Typecheck publisher
         run: pnpm typecheck:electron
 
-      - name: Build frontend / sidecar / publisher / backend
+      - name: Build desktop bundles / frontend / sidecar / backend
         run: |
+          pnpm build:preload
           pnpm build:publisher
           pnpm build:system
           pnpm build:frontend

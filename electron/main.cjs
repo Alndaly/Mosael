@@ -415,7 +415,10 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      preload: path.join(__dirname, "preload.cjs"),
+      // Electron 20+ sandboxes preload scripts by default. A sandboxed preload may only require
+      // Electron and a tiny built-in allowlist, so our shared IPC contract must be bundled into
+      // this single file rather than loaded through a relative require at runtime.
+      preload: path.join(__dirname, "preload.bundle.cjs"),
     },
   });
   // 无边框自绘标题:菜单栏默认隐藏,Win/Linux 下按 Alt 唤起(快捷键始终有效)。
@@ -454,9 +457,17 @@ function createWindow() {
     return { action: "deny" };
   });
   if (isSmokeTest) {
-    win.webContents.once("did-finish-load", () => {
-      reportSmoke({ backendHealthy: true, rendererLoaded: true });
-      app.quit();
+    win.webContents.once("did-finish-load", async () => {
+      // `did-finish-load` does not mean the preload succeeded: Electron logs a preload exception
+      // and still finishes the renderer. Verify the public bridge so packaged smoke tests cross
+      // the actual sandbox boundary that window chrome and every privileged desktop feature use.
+      const desktopBridgeReady = await win.webContents.executeJavaScript(
+        `typeof window.mosaelDesktop === "object" && ` +
+          `window.mosaelDesktop.platform === ${JSON.stringify(process.platform)}`,
+      );
+      reportSmoke({ backendHealthy: true, rendererLoaded: true, desktopBridgeReady });
+      if (desktopBridgeReady) app.quit();
+      else app.exit(1);
     });
     win.webContents.once("did-fail-load", (_event, code, description) => {
       reportSmoke({ backendHealthy: true, rendererLoaded: false, error: `${code}: ${description}` });

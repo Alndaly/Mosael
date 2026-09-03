@@ -82,7 +82,7 @@ try {
   if (exitCode !== 0) throw new Error(`packaged Electron exited with ${exitCode}`);
   if (!existsSync(resultPath)) throw new Error("packaged Electron did not write a smoke result");
   const result = JSON.parse(readFileSync(resultPath, "utf8"));
-  if (!result.packaged || !result.backendHealthy || !result.rendererLoaded) {
+  if (!result.packaged || !result.backendHealthy || !result.rendererLoaded || !result.desktopBridgeReady) {
     throw new Error(`incomplete packaged startup: ${JSON.stringify(result)}`);
   }
 
