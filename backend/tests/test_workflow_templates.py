@@ -10,6 +10,7 @@ from app.domain.workflows.templates import (
     full_video_generation_graph,
     transcript_video_cleanup_graph,
 )
+from app.domain.workflows.normalization import canonicalize_data_bindings
 
 REF_RE = re.compile(r"\{\{\s*([\w.-]+)\s*\}\}")
 
@@ -69,7 +70,7 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "full_video_generation",
-        "template_version": 2,
+        "template_version": 3,
         "source": "official",
     }
 
@@ -85,6 +86,16 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     assert _invalid_references(body, virtual_roots={"loop", "input"}) == []
     body_ids = {node["id"] for node in body["nodes"]}
     assert {reference.split(".")[0] for reference in _references(loop["config"]["output"])} <= body_ids
+    organize = next(node for node in body["nodes"] if node["id"] == "organize_clip")
+    assert organize["inputs"] == ["asset_ids"]
+    assert any(
+        edge.get("kind") == "data"
+        and edge.get("source") == "generate_clip"
+        and edge.get("source_output") == "asset_id"
+        and edge.get("target") == "organize_clip"
+        and edge.get("target_input") == "asset_ids"
+        for edge in body["edges"]
+    )
 
 
 def test_transcript_cleanup_template_has_valid_refs_and_provenance() -> None:
@@ -97,6 +108,59 @@ def test_transcript_cleanup_template_has_valid_refs_and_provenance() -> None:
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "transcript_video_cleanup",
-        "template_version": 1,
+        "template_version": 2,
         "source": "official",
     }
+
+    transcript = next(node for node in graph["nodes"] if node["id"] == "verbatim_transcript")
+    assert transcript["config"]["asset_id"] == ""
+    assert "asset_id" in transcript["inputs"]
+    binding = next(
+        edge
+        for edge in graph["edges"]
+        if edge.get("target") == "verbatim_transcript" and edge.get("target_input") == "asset_id"
+    )
+    assert {key: binding[key] for key in ("source", "source_output", "target", "target_input", "kind")} == {
+        "source": "source_video",
+        "source_output": "asset_id",
+        "target": "verbatim_transcript",
+        "target_input": "asset_id",
+        "kind": "data",
+    }
+    assert not any(
+        edge["source"] == "source_video"
+        and edge["target"] == "verbatim_transcript"
+        and edge.get("kind", "control") == "control"
+        for edge in graph["edges"]
+    )
+
+
+def test_data_binding_normalization_is_lossless_and_idempotent() -> None:
+    legacy = {
+        "nodes": [
+            {"id": "source", "type": "asset", "config": {"asset_id": "asset-1"}},
+            {
+                "id": "transcript",
+                "type": "transcribe_asset",
+                "config": {"asset_id": "{{ source.asset_id }}", "engine": "auto"},
+            },
+            {
+                "id": "notice",
+                "type": "notify",
+                "config": {"title": "完成", "body": "已处理 {{source.name}}"},
+            },
+        ],
+        "edges": [
+            {"id": "source_transcript", "source": "source", "target": "transcript"},
+            {"id": "transcript_notice", "source": "transcript", "target": "notice"},
+        ],
+    }
+
+    normalized = canonicalize_data_bindings(legacy, node_types=NODE_TYPES)
+
+    assert legacy["nodes"][1]["config"]["asset_id"] == "{{ source.asset_id }}"
+    assert normalized["nodes"][1]["config"]["asset_id"] == ""
+    assert normalized["nodes"][1]["inputs"] == ["asset_id"]
+    assert normalized["nodes"][2]["config"]["body"] == "已处理 {{source.name}}"
+    assert not any(edge["id"] == "source_transcript" for edge in normalized["edges"])
+    assert canonicalize_data_bindings(normalized, node_types=NODE_TYPES) == normalized

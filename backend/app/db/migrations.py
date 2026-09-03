@@ -153,6 +153,39 @@ def _migrate_workflow_revisions() -> None:
                 )
 
 
+def _migrate_official_workflow_data_bindings() -> None:
+    """Turn exact output references in installed official workflows into native data edges.
+
+    Official templates are editable copies, so regenerating them would erase user changes.  The
+    canonicalizer changes only the one representation that is provably equivalent and leaves every
+    other node, value and layout coordinate intact.  The following revision migration notices the
+    semantic graph change and records it as a new immutable revision.
+    """
+
+    if "workflows" not in set(inspect(engine).get_table_names()):
+        return
+    from app.domain.workflows import NODE_TYPES
+    from app.domain.workflows.normalization import canonicalize_data_bindings
+
+    with engine.begin() as conn:
+        rows = conn.execute(text("SELECT id, graph FROM workflows")).mappings().all()
+        for row in rows:
+            raw_graph = row["graph"]
+            try:
+                graph = json.loads(raw_graph) if isinstance(raw_graph, str) else raw_graph
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(graph, dict) or (graph.get("meta") or {}).get("source") != "official":
+                continue
+            normalized = canonicalize_data_bindings(graph, node_types=NODE_TYPES)
+            if normalized == graph:
+                continue
+            conn.execute(
+                text("UPDATE workflows SET graph = :graph WHERE id = :id"),
+                {"graph": json.dumps(normalized, ensure_ascii=False), "id": row["id"]},
+            )
+
+
 def _migrate_resource_ownership() -> None:
     """五张表补 `owner_user_id`,并给每条已存在的记录建一行「共享给它当前所在的工作区」。
 
@@ -1680,6 +1713,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_prepared_publish_tasks,
                 _migrate_track_role,
                 _migrate_browser_boolean_options,
+                _migrate_official_workflow_data_bindings,
                 _migrate_workflow_revisions,
             ),
             *_steps(MigrationPhase.FILESYSTEM, _migrate_shared_venvs),

@@ -183,6 +183,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_all": {"zh": "全部", "en": "All"},
     "wfField_asset_id": {"zh": "素材", "en": "Asset"},
     "wfField_asset_ids": {"zh": "素材", "en": "Assets"},
+    "wfField_clip_id": {"zh": "片段", "en": "Clip"},
     "wfField_attribute": {"zh": "取哪个属性", "en": "Attribute"},
     "wfField_body": {"zh": "子图", "en": "Subgraph"},
     "wfField_code": {"zh": "代码", "en": "Code"},

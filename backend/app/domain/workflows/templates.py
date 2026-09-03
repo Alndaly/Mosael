@@ -12,7 +12,8 @@ from typing import Any
 from app.db.models import ProviderModel
 from app.domain.generation.catalog import known_capabilities_for
 from app.domain.provider_defaults import get_row
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows import NODE_TYPES, WorkflowDomainError
+from app.domain.workflows.normalization import canonicalize_data_bindings
 from sqlalchemy.orm import Session
 
 FULL_VIDEO_GENERATION = "full_video_generation"
@@ -407,11 +408,12 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
         {"id": "export_notice", "source": "export_clean_video", "target": "done_notice"},
         {"id": "notice_output", "source": "done_notice", "target": "output"},
     ]
-    return {
-        "meta": {"template_id": TRANSCRIPT_VIDEO_CLEANUP, "template_version": 1, "source": "official"},
+    graph = {
+        "meta": {"template_id": TRANSCRIPT_VIDEO_CLEANUP, "template_version": 2, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }
+    return canonicalize_data_bindings(graph, node_types=NODE_TYPES)
 
 
 def full_video_generation_graph(*, chat: ModelChoice, video: ModelChoice) -> dict[str, Any]:
@@ -695,8 +697,9 @@ JSON Schema 的对象。"""
         {"id": "export_notice", "source": "export_final", "target": "done_notice"},
         {"id": "export_output", "source": "export_final", "target": "output"},
     ]
-    return {
-        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 2, "source": "official"},
+    graph = {
+        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 3, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }
+    return canonicalize_data_bindings(graph, node_types=NODE_TYPES)

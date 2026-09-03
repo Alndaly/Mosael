@@ -7,8 +7,9 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Asset, Project, Sequence, Track, Workflow
+from app.db.models import Asset, Project, Workflow
 from app.domain.notifications import notify
+from app.domain.sequences import create_sequence_scaffold
 from app.domain.workflows import WorkflowDomainError
 from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX
 from app.domain.workflows.executors import register, register_prefix
@@ -261,24 +262,20 @@ def project_sequence_create(db: Session, workflow: Workflow, config: dict[str, A
         raise WorkflowDomainError("新建成片项目:帧率必须在 1 到 240 之间")
 
     project = Project(workspace_id=workflow.workspace_id, name=name)
-    sequence = Sequence(
-        workspace_id=workflow.workspace_id,
-        project=project,
+    scaffold = create_sequence_scaffold(
+        db,
+        project,
         name=name,
         width=width,
         height=height,
         fps=fps,
     )
-    video = Track(sequence=sequence, kind="video", name="V1", position=0)
-    audio = Track(sequence=sequence, kind="audio", name="A1", position=1)
-    db.add_all([project, sequence, video, audio])
-    db.flush()
-    project.active_sequence_id = sequence.id
+    project.active_sequence_id = scaffold.sequence.id
     db.commit()
     return {
         "project_id": project.id,
-        "sequence_id": sequence.id,
-        "video_track_id": video.id,
-        "audio_track_id": audio.id,
+        "sequence_id": scaffold.sequence.id,
+        "video_track_id": scaffold.video_track.id,
+        "audio_track_id": scaffold.audio_track.id,
         "name": project.name,
     }

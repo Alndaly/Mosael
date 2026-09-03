@@ -127,6 +127,7 @@ _FIELD_LABELS = {
     "all": "wfField_all",
     "asset_id": "wfField_asset_id",
     "asset_ids": "wfField_asset_ids",
+    "clip_id": "wfField_clip_id",
     "attribute": "wfField_attribute",
     "body": "wfField_body",
     "code": "wfField_code",
@@ -1238,8 +1239,12 @@ def create_workflow(
     revision_note: str = "",
 ) -> Workflow:
     graph = graph if graph is not None else default_graph()
+    from app.domain.workflows.normalization import canonicalize_data_bindings
+
+    extra_types = _plugin_types(db)
+    graph = canonicalize_data_bindings(graph, node_types={**NODE_TYPES, **extra_types})
     # 保存放行「还没配完」:必填缺失交给就绪检查与运行时,否则新节点存不下来。
-    errors = validate_graph(graph, require_config=False, allow_missing_start=True, extra_types=_plugin_types(db))
+    errors = validate_graph(graph, require_config=False, allow_missing_start=True, extra_types=extra_types)
     if errors:
         raise WorkflowDomainError("；".join(errors))
     workflow = Workflow(workspace_id=workspace_id, name=name, description=description, graph=graph)
@@ -1269,7 +1274,11 @@ def update_workflow(
 ) -> Workflow:
     graph = changes.get("graph")
     if "graph" in changes and changes["graph"] is not None:
-        errors = validate_graph(graph, require_config=False, allow_missing_start=True, extra_types=_plugin_types(db))
+        from app.domain.workflows.normalization import canonicalize_data_bindings
+
+        extra_types = _plugin_types(db)
+        graph = canonicalize_data_bindings(graph, node_types={**NODE_TYPES, **extra_types})
+        errors = validate_graph(graph, require_config=False, allow_missing_start=True, extra_types=extra_types)
         if errors:
             raise WorkflowDomainError("；".join(errors))
     if changes.get("name"):
