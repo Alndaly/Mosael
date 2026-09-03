@@ -1,13 +1,20 @@
 import { describe, expect, it } from "vitest";
 
 import * as client from "@/api/client";
+import * as assets from "@/api/domains/assets";
 import * as boards from "@/api/domains/boards";
 import * as browser from "@/api/domains/browser";
+import * as editor from "@/api/domains/editor";
+import * as generation from "@/api/domains/generation";
+import * as identity from "@/api/domains/identity";
 import * as jobs from "@/api/domains/jobs";
 import * as notifications from "@/api/domains/notifications";
 import * as publish from "@/api/domains/publish";
 import * as scheduler from "@/api/domains/scheduler";
+import * as sessions from "@/api/domains/sessions";
+import * as speech from "@/api/domains/speech";
 import * as workflows from "@/api/domains/workflows";
+import * as workspaces from "@/api/domains/workspaces";
 import * as transport from "@/api/transport";
 
 describe("unified API client assembly", () => {
@@ -49,5 +56,29 @@ describe("unified API client assembly", () => {
   it("re-exports the workflow domain client", () => {
     expect(client.listWorkflows).toBe(workflows.listWorkflows);
     expect(client.runWorkflow).toBe(workflows.runWorkflow);
+  });
+
+  it("re-exports the identity and workspace domain clients", () => {
+    expect(client.updateMe).toBe(identity.updateMe);
+    expect(client.createWorkspace).toBe(workspaces.createWorkspace);
+    expect(client.listMembers).toBe(workspaces.listMembers);
+  });
+
+  it("re-exports the asset and editor domain clients", () => {
+    expect(client.importAsset).toBe(assets.importAsset);
+    expect(client.assetFileUrl).toBe(assets.assetFileUrl);
+    expect(client.insertClip).toBe(editor.insertClip);
+    expect(client.translateTexts).toBe(editor.translateTexts);
+  });
+
+  it("re-exports the speech and generation domain clients", () => {
+    expect(client.synthesizeWithEngine).toBe(speech.synthesizeWithEngine);
+    expect(client.listProviderModels).toBe(generation.listProviderModels);
+    expect(client.optimizeImagePrompt).toBe(generation.optimizeImagePrompt);
+  });
+
+  it("re-exports the shared-session domain client", () => {
+    expect(client.listSessionGroups).toBe(sessions.listSessionGroups);
+    expect(client.setResourceShared).toBe(sessions.setResourceShared);
   });
 });
