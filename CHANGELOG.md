@@ -7,6 +7,8 @@ commit list and downloadable artifacts.
 
 ### Fixed
 
+- Gave the macOS development shell its own Mosael bundle identity and re-signed it after branding, so privacy
+  permissions register under Mosael instead of an invalid generic Electron identity; packaged identity is unchanged.
 - Removed browser-provided default/communications aliases from recorder device menus, preventing duplicate
   system-default entries and two simultaneous selected states while preserving explicit physical devices.
 - Kept screen and camera streams attached to the live preview when the recorder changes from its setup dialog

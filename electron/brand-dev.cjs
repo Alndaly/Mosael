@@ -1,6 +1,7 @@
-// dev-only:让未打包的 Electron.app 在 macOS 菜单栏/Dock 显示 "Mosael"。
-// macOS 的应用名读 Electron.app 的 CFBundleName/CFBundleDisplayName,app.setName() 在 dev 下压不住;
-// 打包版由 electron-builder 的 productName 决定,无需此步。
+// dev-only:给未打包的 Electron.app 一个稳定、独立的 Mosael 身份。
+// 只改 CFBundleName 会破坏 Electron 原有签名,而屏幕/摄像头/麦克风权限由 TCC 按 bundle 身份
+// 和代码签名登记,结果就是系统设置里不出现 Mosael 或授权无法复用。因此这里同时设置独立的
+// dev bundle id、权限用途说明,并在修改后做一次 ad-hoc 重签。打包版由 electron-builder 负责。
 // 改的是本地 node_modules 里的 Electron.app —— 重装 electron 会重置,所以每次 dev 启动前跑一次(幂等)。
 const { execFileSync } = require("node:child_process");
 const fs = require("node:fs");
@@ -25,15 +26,46 @@ try {
       return "";
     }
   };
-  if (read("CFBundleName") === "Mosael" && read("CFBundleDisplayName") === "Mosael") process.exit(0);
-
-  for (const key of ["CFBundleName", "CFBundleDisplayName"]) {
+  const expected = {
+    CFBundleIdentifier: "dev.mosael.app.dev",
+    CFBundleName: "Mosael",
+    CFBundleDisplayName: "Mosael",
+    NSCameraUsageDescription: "Mosael needs camera access when you record a camera asset.",
+    NSMicrophoneUsageDescription: "Mosael needs microphone access when you record narration or a camera asset.",
+    NSAudioCaptureUsageDescription:
+      "Mosael needs access to system audio when you include device audio in a screen recording.",
+  };
+  let changed = false;
+  for (const [key, value] of Object.entries(expected)) {
+    if (read(key) === value) continue;
     // Set 已存在的键;不存在则 Add。
     try {
-      execFileSync("/usr/libexec/PlistBuddy", ["-c", `Set :${key} Mosael`, plist]);
+      execFileSync("/usr/libexec/PlistBuddy", ["-c", `Set :${key} ${value}`, plist]);
     } catch {
-      execFileSync("/usr/libexec/PlistBuddy", ["-c", `Add :${key} string Mosael`, plist]);
+      execFileSync("/usr/libexec/PlistBuddy", ["-c", `Add :${key} string ${value}`, plist]);
     }
+    changed = true;
+  }
+
+  const signatureIsValid = () => {
+    try {
+      execFileSync("/usr/bin/codesign", ["--verify", "--deep", "--strict", app], { stdio: "ignore" });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  if (changed || !signatureIsValid()) {
+    // Preserve Electron's helper entitlements while replacing the now-invalid outer signature.
+    // The dedicated dev identifier deliberately stays separate from the packaged app's identity.
+    execFileSync("/usr/bin/codesign", [
+      "--force",
+      "--deep",
+      "--sign",
+      "-",
+      "--preserve-metadata=entitlements,requirements,flags,runtime",
+      app,
+    ]);
   }
   // 触碰 .app 让 LaunchServices 刷新名称缓存。
   try {
@@ -41,7 +73,7 @@ try {
   } catch {
     /* ignore */
   }
-  console.log("[brand-dev] Electron.app 已改名为 Mosael(dev)");
+  console.log("[brand-dev] Electron.app 已设置为独立且签名有效的 Mosael(dev)");
 } catch (error) {
   console.warn("[brand-dev] 跳过:", error.message);
 }
