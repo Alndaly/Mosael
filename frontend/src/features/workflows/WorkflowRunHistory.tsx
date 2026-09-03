@@ -5,6 +5,7 @@ import { CheckCircle2, ChevronDown, ChevronRight, CircleDashed, Clock, History, 
 import { api, listJobEvents, listWorkflowRuns, type Asset, type Job, type TaskEvent } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
+import type { RegistryLike } from "@/features/workflows/analyze";
 import { assetOutputs, parseIso, toSteps, type Step } from "@/features/workflows/runSteps";
 import { PANEL_HEADER_CLASS, useFloatingPanel } from "@/features/workflows/useFloatingPanel";
 import type { CanvasAgentMode } from "@/components/agent/CanvasAgentChat";
@@ -75,13 +76,16 @@ function RunIcon({ status }: { status: string }) {
 
 export function WorkflowRunHistory({
   workflowId,
+  registry,
   nodeTypeById = {},
   mode,
   onModeChange,
   onClose,
 }: {
   workflowId: string;
-  /** 节点 id → 类型。用来查这一步的输出里哪些是素材(见 OUTPUT_TYPES)。
+  /** 运行时节点注册表是输出类型的单一事实来源。 */
+  registry: RegistryLike;
+  /** 节点 id → 类型。用来查这一步的输出里哪些是素材。
    *  历史里的节点可能已被删改,查不到就退回纯文本 —— 不猜。 */
   nodeTypeById?: Record<string, string>;
   /** 与 AI 助手同一套:停靠在右栏,或浮成可拖动、可八向缩放的小窗。 */
@@ -271,8 +275,8 @@ export function WorkflowRunHistory({
                           {s.error}
                         </p>
                       )}
-                      {open && s.outputs && assetOutputs(nodeTypeById[s.nid] ?? "", s.outputs).length > 0 && (
-                        <StepAssets assetIds={assetOutputs(nodeTypeById[s.nid] ?? "", s.outputs)} />
+                      {open && s.outputs && assetOutputs(registry, nodeTypeById[s.nid] ?? "", s.outputs).length > 0 && (
+                        <StepAssets assetIds={assetOutputs(registry, nodeTypeById[s.nid] ?? "", s.outputs)} />
                       )}
                       {open && s.outputs && Object.keys(s.outputs).length > 0 && (
                         <pre className="mx-1.5 mb-1 mt-0.5 max-h-44 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-muted px-2 py-1.5 font-mono text-ui-2xs leading-[1.55] text-muted-foreground">

@@ -122,6 +122,9 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(outputs, list) or not outputs:
         # 默认一个口子装整份返回。插件想拆成具名输出就自己声明 outputs。
         outputs = ["output"]
+    output_types = declared.get("output_types")
+    if not isinstance(output_types, dict):
+        output_types = {}
     label = str(declared.get("label") or tool.get("label") or tool.get("name") or "")
     description = str(declared.get("description") or tool.get("description") or "")
     return {
@@ -141,6 +144,7 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
             **config,
         },
         "outputs": [str(name) for name in outputs],
+        "output_types": {str(name): str(data_type) for name, data_type in output_types.items()},
         # 前端据此在节点上标出处;也让"缺插件"的报错说得出是谁。
         "plugin_name": tool.get("instance_name", ""),
         "tool_name": tool.get("name", ""),

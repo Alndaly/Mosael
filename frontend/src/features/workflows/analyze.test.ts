@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   analyzeWorkflow,
   extractRefs,
+  outputType,
   typesCompatible,
   type AnalyzeContext,
   type RegistryLike,
@@ -11,16 +12,24 @@ import type { WorkflowGraph } from "@/api/client";
 
 const registry: RegistryLike = {
   get(type) {
-    const table: Record<string, { config?: Record<string, { type?: string; required?: boolean; data_type?: string }> }> = {
+    const table: Record<
+      string,
+      {
+        config?: Record<string, { type?: string; required?: boolean; data_type?: string }>;
+        output_types?: Record<string, string>;
+      }
+    > = {
       start: { config: { params: { type: "object" } } },
       llm: {
         config: {
           prompt: { type: "template", required: true },
           profile_id: { type: "string" },
         },
+        output_types: { text: "text", json: "json" },
       },
       ai_generate: {
         config: { provider: { type: "string", required: true }, prompt: { type: "template", required: true } },
+        output_types: { asset_id: "asset", generation_id: "text" },
       },
       // `data_type` 由后端按字段名推出来(见 domain/workflows.config_data_type),随节点声明
       // 一起发过来 —— 前端不再自己维护一张"哪个字段是素材"的表。
@@ -31,6 +40,18 @@ const registry: RegistryLike = {
     return table[type];
   },
 };
+
+describe("outputType", () => {
+  it("reads output types from the runtime registry instead of guessing from a node name", () => {
+    const runtimeRegistry: RegistryLike = {
+      get: () => ({ output_types: { artifact: "asset", count: "number" } }),
+    };
+
+    expect(outputType(runtimeRegistry, "plugin.example.runtime", "artifact")).toBe("asset");
+    expect(outputType(runtimeRegistry, "plugin.example.runtime", "count")).toBe("number");
+    expect(outputType(runtimeRegistry, "plugin.example.runtime", "undeclared")).toBe("any");
+  });
+});
 
 const fullCtx: AnalyzeContext = {
   providerIds: new Set(["p1"]),

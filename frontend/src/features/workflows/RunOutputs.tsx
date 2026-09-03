@@ -5,7 +5,7 @@ import { Check, ChevronRight, Copy } from "lucide-react";
 import { api, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
-import { outputType } from "@/features/workflows/analyze";
+import { outputType, type RegistryLike } from "@/features/workflows/analyze";
 import type { Step } from "@/features/workflows/runSteps";
 
 /**
@@ -55,11 +55,15 @@ export function outputText(value: unknown): string {
 }
 
 /** 一行摘要:给节点卡片用 —— 一眼看见"这步给了什么",不用点开检查器。 */
-export function outputSummary(nodeType: string, outputs: Record<string, unknown> | undefined): string {
+export function outputSummary(
+  registry: RegistryLike,
+  nodeType: string,
+  outputs: Record<string, unknown> | undefined,
+): string {
   if (!outputs) return "";
   for (const [key, value] of Object.entries(outputs)) {
     // 素材另有缩略图,不在这儿重复;裸 id 也不是给人看的东西。
-    if (outputType(nodeType, key) === "asset") continue;
+    if (outputType(registry, nodeType, key) === "asset") continue;
     const text = outputText(value).replace(/\s+/g, " ").trim();
     if (text) return text;
   }
@@ -130,13 +134,16 @@ function AssetRow({ assetIds }: { assetIds: string[] }) {
   );
 }
 
-export function RunOutputs({ nodeType, step }: { nodeType: string; step: Step }) {
+export function RunOutputs({ registry, nodeType, step }: { registry: RegistryLike; nodeType: string; step: Step }) {
   const t = useI18n();
   const entries = Object.entries(step.outputs ?? {});
   const assetIds = entries
-    .filter(([key, value]) => outputType(nodeType, key) === "asset" && typeof value === "string" && value.trim())
+    .filter(
+      ([key, value]) =>
+        outputType(registry, nodeType, key) === "asset" && typeof value === "string" && value.trim(),
+    )
     .map(([, value]) => String(value));
-  const scalars = entries.filter(([key]) => outputType(nodeType, key) !== "asset");
+  const scalars = entries.filter(([key]) => outputType(registry, nodeType, key) !== "asset");
 
   return (
     <div className="grid min-w-0 gap-1.5 border-t border-border pt-2.5">

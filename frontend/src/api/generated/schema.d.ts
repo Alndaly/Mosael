@@ -9309,6 +9309,10 @@ export interface components {
             };
             /** Outputs */
             outputs: string[];
+            /** Output Types */
+            output_types?: {
+                [key: string]: string;
+            };
             /**
              * Plugin Name
              * @default

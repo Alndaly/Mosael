@@ -36,23 +36,12 @@ export interface NodeIssue {
 /** 软数据类型:仅用于就绪检查提示,不阻断运行(模板终究是字符串插值)。 */
 export type DataType = "text" | "asset" | "sequence" | "number" | "json" | "any";
 
-// 节点输出类型。未列出的输出(plugin_tool.output / code.output / start.*)按 any。
-const OUTPUT_TYPES: Record<string, Record<string, DataType>> = {
-  llm: { text: "text" },
-  kb_search: { text: "text", results: "json" },
-  transcribe_asset: { text: "text" },
-  export_sequence: { asset_id: "asset" },
-  ai_generate: { asset_id: "asset", generation_id: "text" },
-  inspect_sequence: { sequence_id: "sequence", duration: "number" },
-  timeline_append: { sequence_id: "sequence", timeline_start: "number", timeline_end: "number" },
-  timeline_add_track: { sequence_id: "sequence" },
-  timeline_clear: { sequence_id: "sequence", removed: "number" },
-  edit_timeline: { sequence_id: "sequence", applied: "number" },
-  publish: { result: "json" },
-  condition: { result: "text" },
-  http_request: { status: "number", text: "text", json: "json" },
-  template: { text: "text" },
-};
+const DATA_TYPES = new Set<DataType>(["text", "asset", "sequence", "number", "json", "any"]);
+
+function normalizeDataType(value: unknown): DataType {
+  const declared = String(value ?? "").trim() as DataType;
+  return DATA_TYPES.has(declared) ? declared : "any";
+}
 
 /**
  * 一个输入字段**装的是什么** —— 素材?时间线?还是随便什么值。
@@ -66,8 +55,7 @@ const OUTPUT_TYPES: Record<string, Record<string, DataType>> = {
  * 加一种节点忘了补表不会报错,只是安静地少了选择器和类型校验。
  */
 export function fieldDataType(spec: ConfigSpecLike | null | undefined): DataType {
-  const declared = String((spec as { data_type?: unknown } | null | undefined)?.data_type ?? "").trim();
-  return (declared || "any") as DataType;
+  return normalizeDataType((spec as { data_type?: unknown } | null | undefined)?.data_type);
 }
 
 /** 从注册表里取某个字段的类型。有 registry 在手时用它,省得调用方自己翻两层。 */
@@ -76,8 +64,14 @@ export function inputType(registry: RegistryLike, nodeType: string, key: string)
   return fieldDataType(config?.[key]);
 }
 
-export function outputType(nodeType: string, output: string): DataType {
-  return OUTPUT_TYPES[nodeType]?.[output] ?? "any";
+/**
+ * 从运行时节点注册表读取输出类型。
+ *
+ * 节点可以来自内置实现或运行时插件，前端不能凭节点名维护第二张映射表；未声明或未知的类型
+ * 退回 `any`，保持软类型检查不误报。
+ */
+export function outputType(registry: RegistryLike, nodeType: string, output: string): DataType {
+  return normalizeDataType(registry.get(nodeType)?.output_types?.[output]);
 }
 
 /** 软兼容:any 通配;text 槽接受一切(都能字符串化);同类型兼容;否则不兼容。 */
@@ -105,6 +99,8 @@ interface ConfigSpecLike {
 interface NodeMetaLike {
   // registry 的 config 值在 OpenAPI 里是 unknown;取用时按 ConfigSpecLike 收窄。
   config?: Record<string, unknown>;
+  /** 每个输出承载的数据类型，由后端节点注册表统一声明。 */
+  output_types?: Record<string, string>;
 }
 
 export interface RegistryLike {
@@ -251,7 +247,7 @@ export function analyzeWorkflow(
     const source = nodeById.get(edge.source);
     const target = nodeById.get(edge.target);
     if (!source || !target) continue;
-    const actual = outputType(source.type, edge.source_output);
+    const actual = outputType(registry, source.type, edge.source_output);
     const expected = inputType(registry, target.type, edge.target_input);
     if (!typesCompatible(actual, expected)) {
       issues.push({

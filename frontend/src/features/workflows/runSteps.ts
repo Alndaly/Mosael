@@ -1,5 +1,5 @@
 import type { TaskEvent } from "@/api/client";
-import { outputType } from "@/features/workflows/analyze";
+import { outputType, type RegistryLike } from "@/features/workflows/analyze";
 
 /**
  * 一次运行的事件流 → 每个节点的状态。
@@ -62,13 +62,16 @@ export function stepsByNode(events: TaskEvent[]): Record<string, Step> {
   return Object.fromEntries(toSteps(events).map((step) => [step.nid, step]));
 }
 
-/** 这一步输出里声明为素材的那些(节点注册表里 outputType === "asset")。
+/** 这一步输出里由运行时节点注册表声明为素材的那些。
  *
  *  以前历史面板把 `asset_id: 535f288eaeb4…` 一串裸十六进制直接铺在文本块里 —— 同一次生成,
  *  在智能体对话里是一张图,在执行历史里却要用户自己拿着 id 去素材库翻。 */
-export function assetOutputs(nodeType: string, outputs: Record<string, unknown>): string[] {
+export function assetOutputs(registry: RegistryLike, nodeType: string, outputs: Record<string, unknown>): string[] {
   if (!nodeType) return [];
   return Object.entries(outputs)
-    .filter(([key, value]) => outputType(nodeType, key) === "asset" && typeof value === "string" && value.trim())
+    .filter(
+      ([key, value]) =>
+        outputType(registry, nodeType, key) === "asset" && typeof value === "string" && value.trim(),
+    )
     .map(([, value]) => String(value));
 }

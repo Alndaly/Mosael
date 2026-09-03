@@ -52,3 +52,20 @@ def test_用哪个连接是高级项() -> None:
 
     meta = node_meta({"name": "t", "input_schema": {"properties": {"q": {"type": "string"}}}})
     assert meta["config"]["instance_id"]["advanced"] is True
+
+
+def test_插件声明的输出类型会进入运行时节点注册表() -> None:
+    """插件是运行时节点，前端不可能按节点名预先猜出它的输出类型。"""
+    from app.domain.plugins.nodes import node_meta
+
+    meta = node_meta(
+        {
+            "name": "render",
+            "node": {
+                "outputs": ["artifact", "count"],
+                "output_types": {"artifact": "asset", "count": "number"},
+            },
+        }
+    )
+
+    assert meta["output_types"] == {"artifact": "asset", "count": "number"}

@@ -24304,6 +24304,13 @@
             "type": "array",
             "title": "Outputs"
           },
+          "output_types": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Output Types"
+          },
           "plugin_name": {
             "type": "string",
             "title": "Plugin Name",

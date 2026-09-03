@@ -22,7 +22,7 @@ import {
   type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { AlertTriangle, AlignLeft, Film, Maximize2, Image as ImageIcon, Map as MapIcon, AppWindow, ArrowLeft, AudioLines, Bell, BookOpen, Bot, Boxes, Braces, CaseSensitive, Check, CheckCircle2, ChevronRight, CircleCheck, Code2, Download, FileOutput, FileUp, Filter, Flag, FolderInput, FolderPlus, GitBranch, Globe, History, Hourglass, Keyboard, Languages, Link2, ListChecks, Loader2, Mic, MousePointer2, MousePointerClick, PanelTopClose, PenLine, Pencil, Play, Plus, Redo2, RefreshCw, Repeat, Rocket, ScanText, Search, SkipForward, Sparkles, Spline, Tags, Timer, Trash2, Type, Undo2, Wand2, Waypoints, Workflow as WorkflowIcon, Wrench, X, XCircle, type LucideIcon } from "lucide-react";
+import { AlertTriangle, AlignLeft, Film, Maximize2, Image as ImageIcon, Map as MapIcon, AppWindow, ArrowLeft, AudioLines, Bell, Bot, Boxes, Braces, CaseSensitive, Check, CheckCircle2, ChevronRight, CircleCheck, Code2, Download, FileOutput, FileUp, Filter, Flag, FolderInput, FolderPlus, GitBranch, Globe, History, Hourglass, Keyboard, Languages, Link2, ListChecks, Loader2, Mic, MousePointer2, MousePointerClick, PanelTopClose, PenLine, Pencil, Play, Plus, Redo2, RefreshCw, Repeat, Rocket, ScanText, Search, SkipForward, Sparkles, Spline, Tags, Timer, Trash2, Type, Undo2, Wand2, Waypoints, Workflow as WorkflowIcon, Wrench, X, XCircle, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -137,7 +137,6 @@ function supportsAutomationChat(profile: ProviderProfile): boolean {
 const WF_NODE_COLORS: Record<string, string> = {
   start: "#16a34a",
   llm: "#7c3aed",
-  kb_search: "#2563eb",
   plugin_tool: "#d97706",
   transcribe_asset: "#0891b2",
   export_sequence: "#e11d48",
@@ -170,7 +169,6 @@ const ASSET_KIND_ICONS: Record<string, React.ReactNode> = {
 const NODE_ICONS: Record<string, React.ReactNode> = {
   start: <Flag size={13} />,
   llm: <Sparkles size={13} />,
-  kb_search: <BookOpen size={13} />,
   plugin_tool: <Wrench size={13} />,
   transcribe_asset: <Mic size={13} />,
   export_sequence: <Download size={13} />,
@@ -228,6 +226,10 @@ interface WfNodeData extends Record<string, unknown> {
   configSummary?: string;
   /** 每个输入接点收什么类型 —— 卡片按它给接点上色。 */
   inputTypes?: Record<string, string>;
+  /** 输入接点在人机界面上的名字，由节点声明提供。 */
+  inputLabels?: Record<string, string>;
+  /** 每个输出接点承载什么类型，由节点声明提供。 */
+  outputTypes?: Record<string, string>;
 }
 
 /** 画布节点:语义色图标 + 名称 + 类型标签,全平面卡片。
@@ -426,9 +428,9 @@ function WfNode({ data, selected }: NodeProps) {
                   className="h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-primary! bg-panel! data-[dtype=any]:border-border-strong! data-[dtype=asset]:border-[#c026d3]! data-[dtype=json]:border-[#0891b2]! data-[dtype=number]:border-[#d97706]! data-[dtype=sequence]:border-[#e11d48]! data-[dtype=text]:border-[#64748b]! left-[-12px]!"
                   data-dtype={(d.inputTypes ?? {})[key] ?? "any"}
                 />
-                {/* 有本地化标签走正文字体;裸标识符(如 items)与输出侧同用 mono,同卡不混排。 */}
-                <span className={cn("whitespace-nowrap text-ui-2xs text-muted-foreground", !FIELD_LABEL_KEYS[key] && "font-mono")}>
-                  {FIELD_LABEL_KEYS[key] ? t(FIELD_LABEL_KEYS[key]) : key}
+                {/* 有声明标签走正文字体;裸标识符(如 items)与输出侧同用 mono。 */}
+                <span className={cn("whitespace-nowrap text-ui-2xs text-muted-foreground", !(d.inputLabels ?? {})[key] && "font-mono")}>
+                  {(d.inputLabels ?? {})[key] || key}
                 </span>
               </div>
             ))}
@@ -442,7 +444,7 @@ function WfNode({ data, selected }: NodeProps) {
                   type="source"
                   position={Position.Right}
                   className="h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-primary! bg-panel! data-[dtype=any]:border-border-strong! data-[dtype=asset]:border-[#c026d3]! data-[dtype=json]:border-[#0891b2]! data-[dtype=number]:border-[#d97706]! data-[dtype=sequence]:border-[#e11d48]! data-[dtype=text]:border-[#64748b]! right-[-12px]!"
-                  data-dtype={outputType(d.nodeType, output)}
+                  data-dtype={(d.outputTypes ?? {})[output] ?? "any"}
                 />
               </div>
             ))}
@@ -507,39 +509,6 @@ const NODE_COMPONENT_TYPES = { wf: WfNode };
 
 
 /** 贴靠面板的几何:宽度固定,高度自适应但封顶;与节点之间留 10px 间隙,离窗口边至少 12px。 */
-
-
-/** 配置字段 key → 人类可读标签键(Dify 式:面板不暴露裸 config key)。 */
-const FIELD_LABEL_KEYS: Record<string, MessageKey> = {
-  prompt: "wffPrompt",
-  system: "wffSystem",
-  profile_id: "wffProfile",
-  model: "wffModel",
-  query: "wffQuery",
-  limit: "wffLimit",
-  plugin_id: "wffPlugin",
-  tool_name: "wffTool",
-  input: "wffInput",
-  asset_id: "wffAsset",
-  sequence_id: "wffSequence",
-  provider: "wffProvider",
-  kind: "wffKind",
-  account_id: "wffAccount",
-  title: "wffTitle",
-  description: "wffDescription",
-  left: "wffLeft",
-  op: "wffOp",
-  right: "wffRight",
-  method: "wffMethod",
-  url: "wffUrl",
-  headers: "wffHeaders",
-  body: "wffBody",
-  code: "wffCode",
-  template: "wffTemplate",
-  params: "wffParams",
-  negative_prompt: "wffNegativePrompt",
-  source_asset_ids: "wffSourceAssets",
-};
 
 
 /** 「AI 生成素材」自己渲染这几项,不走通用字段列表。
@@ -991,7 +960,7 @@ function toFlowEdges(graph: WorkflowGraph, t: ReturnType<typeof useI18n>, regist
         edge.source_output &&
         edge.target_input &&
         !typesCompatible(
-          outputType(nodeType.get(edge.source) ?? "", edge.source_output),
+          outputType(registry, nodeType.get(edge.source) ?? "", edge.source_output),
           inputType(registry, nodeType.get(edge.target) ?? "", edge.target_input),
         );
       return {
@@ -1023,21 +992,23 @@ function toFlowEdges(graph: WorkflowGraph, t: ReturnType<typeof useI18n>, regist
 }
 
 /** issue code → 本地化文案(角标 tooltip / checklist 行都用它)。 */
-function issueText(t: ReturnType<typeof useI18n>, issue: NodeIssue): string {
+function issueText(
+  t: ReturnType<typeof useI18n>,
+  issue: NodeIssue,
+  registry: Map<string, WorkflowNodeType>,
+): string {
   switch (issue.code) {
     case "missing-start":
       return t("wfIssueMissingStart");
     case "required-missing":
       // 显示界面上真实出现的名字。原始 key(provider / json_schema)对用户没有意义,
       // 尤其是它在面板上根本不叫这个名字的时候。
-      return t("wfIssueRequired").replace(
-        "{k}",
-        issue.nodeType === "ai_generate" && issue.configKey === "model"
-          ? t("wfGenModel")
-          : issue.configKey && FIELD_LABEL_KEYS[issue.configKey]
-            ? t(FIELD_LABEL_KEYS[issue.configKey])
-            : (issue.configKey ?? ""),
-      );
+      return t("wfIssueRequired").replace("{k}", (() => {
+        if (issue.nodeType === "ai_generate" && issue.configKey === "model") return t("wfGenModel");
+        if (!issue.configKey) return "";
+        const spec = registry.get(issue.nodeType)?.config?.[issue.configKey] as { label?: unknown } | undefined;
+        return String(spec?.label ?? "").trim() || issue.configKey;
+      })());
     case "stale-var":
       return t("wfIssueStaleVar").replace("{ref}", issue.ref ?? "");
     case "disconnected":
@@ -1787,6 +1758,7 @@ function WorkflowEditor({
   const historyPanel = (
     <WorkflowRunHistory
       workflowId={workflow.id}
+      registry={registry}
       // 历史面板据此判断某一步的输出是不是素材(节点注册表里声明为 asset),
       // 是就渲染成缩略图/播放器而不是一串裸 id。
       nodeTypeById={Object.fromEntries(graph.nodes.map((n) => [n.id, n.type]))}
@@ -1904,7 +1876,7 @@ function WorkflowEditor({
         const severity = analysis.severityByNode.get(node.id);
         const badge =
           nodeIssues && severity
-            ? { severity, count: nodeIssues.length, title: nodeIssues.map((i) => issueText(t, i)).join("\n") }
+            ? { severity, count: nodeIssues.length, title: nodeIssues.map((i) => issueText(t, i, registry)).join("\n") }
             : null;
         const step = runByNode[node.id];
         return {
@@ -1914,8 +1886,8 @@ function WorkflowEditor({
             ...node.data,
             badge,
             run: step ? { status: step.status, ms: step.ms, error: step.error } : null,
-            runAssets: step?.outputs ? assetOutputs(node.data.nodeType as string, step.outputs) : [],
-            runSummary: outputSummary(node.data.nodeType as string, step?.outputs),
+            runAssets: step?.outputs ? assetOutputs(registry, node.data.nodeType as string, step.outputs) : [],
+            runSummary: outputSummary(registry, node.data.nodeType as string, step?.outputs),
             // **这两项算在这里,不在 toFlowNodes。** 那个函数跑在 useState 的初始化里,
             // 那一刻节点类型还没拉回来、registry 是空的 —— 算出来的永远是空值,而且不会重算。
             // (素材节点的缩略图和图标就是这么丢的:改成读注册表之后,读的是一张还没到货的表。)
@@ -1924,6 +1896,20 @@ function WorkflowEditor({
               ((node.data as WfNodeData).inputs ?? []).map((key) => [
                 key,
                 inputType(registry, node.data.nodeType as string, key),
+              ]),
+            ),
+            inputLabels: Object.fromEntries(
+              ((node.data as WfNodeData).inputs ?? []).map((key) => {
+                const spec = registry.get(node.data.nodeType as string)?.config?.[key] as
+                  | { label?: unknown }
+                  | undefined;
+                return [key, String(spec?.label ?? "").trim()];
+              }),
+            ),
+            outputTypes: Object.fromEntries(
+              ((node.data as WfNodeData).outputs ?? []).map((key) => [
+                key,
+                outputType(registry, node.data.nodeType as string, key),
               ]),
             ),
           },
@@ -2127,7 +2113,7 @@ function WorkflowEditor({
                         >
                           <AlertTriangle size={12} />
                           <span className="whitespace-nowrap text-xs font-semibold">{issue.nodeName}</span>
-                          <span className="truncate text-ui-xs text-muted-foreground">{issueText(t, issue)}</span>
+                          <span className="truncate text-ui-xs text-muted-foreground">{issueText(t, issue, registry)}</span>
                         </button>
                       ))}
                   </div>
@@ -3407,10 +3393,8 @@ function NodeInspector({
           const options = spec?.options
             ? spec.options.map((option) => ({ value: option, label: option }))
             : dynamicOptions(key, spec as { plugin_instances?: boolean } | undefined);
-          // 标签**优先用声明里带来的那个**(后端 domain/workflows.config_label,插件节点也有);
-          // FIELD_LABEL_KEYS 是本地那张老表,留作回落,最后才退到裸键名。
+          // 标签由节点声明提供(后端内置节点和运行时插件走同一份接口),最后才退到裸键名。
           const declaredLabel = String((spec as { label?: unknown } | undefined)?.label ?? "").trim();
-          const labelKey = FIELD_LABEL_KEYS[key];
           // ComfyUI 式:非 object 字段都可切到"连接"(暴露输入接点,再从画布拖数据边或下拉选源)。
           const canConnect = !isObject;
           const connected = canConnect && connectedInputs.includes(key);
@@ -3419,7 +3403,7 @@ function NodeInspector({
           return (
             <div className={FIELD_BOX} key={key}>
               <span>
-                {declaredLabel || (labelKey ? t(labelKey) : key)}
+                {declaredLabel || key}
                 {spec?.required ? <em className="font-bold not-italic text-destructive">*</em> : null}
                 {canConnect && (
                   <button
@@ -4089,7 +4073,7 @@ function NodeInspector({
           </div>
         )}
         {/* 「输出变量」列的是**名字**,这里是**这次的值** —— 调工作流时真正要问的是后者。 */}
-        {area === "run" && step && <RunOutputs nodeType={node.type} step={step} />}
+        {area === "run" && step && <RunOutputs registry={registry} nodeType={node.type} step={step} />}
       </div>
     </aside>
     </NodeToolbar>

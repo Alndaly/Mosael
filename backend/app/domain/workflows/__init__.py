@@ -246,6 +246,39 @@ def config_data_type(key: str, spec: dict[str, Any]) -> str:
     return ""
 
 
+_OUTPUT_DATA_TYPES = {
+    "applied": "number",
+    "count": "number",
+    "duration": "number",
+    "iterations": "number",
+    "json": "json",
+    "length": "number",
+    "removed": "number",
+    "revision": "number",
+    "status": "number",
+    "text": "text",
+    "timeline_end": "number",
+    "timeline_start": "number",
+    "waited": "number",
+}
+_WORKFLOW_DATA_TYPES = frozenset({"text", "asset", "sequence", "number", "json", "any"})
+
+
+def output_data_type(key: str, node_spec: dict[str, Any]) -> str:
+    """Return the declared semantic type for one node output, always with an ``any`` fallback."""
+
+    declared = node_spec.get("output_types")
+    if isinstance(declared, dict):
+        explicit = str(declared.get(key) or "").strip()
+        if explicit in _WORKFLOW_DATA_TYPES:
+            return explicit
+    if key == "asset_id" or key.endswith("_asset_id"):
+        return "asset"
+    if key == "sequence_id" or key.endswith("_sequence_id"):
+        return "sequence"
+    return _OUTPUT_DATA_TYPES.get(key, "any")
+
+
 NODE_TYPES: dict[str, dict[str, Any]] = {
     "start": {
         "category": "wfCat_flow",
@@ -434,6 +467,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "description": {"type": "template"},
         },
         "outputs": ["result"],
+        "output_types": {"result": "json"},
     },
     "condition": {
         "category": "wfCat_flow",
@@ -450,6 +484,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "right": {"type": "template", "description": "wfNode_condition_right"},
         },
         "outputs": ["result"],
+        "output_types": {"result": "text"},
         "branches": ["true", "false"],
     },
     "http_request": {

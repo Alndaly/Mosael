@@ -212,6 +212,23 @@ def test_标签真的发到接口上() -> None:
         assert click["config"]["selector"]["label"] == expected, f"{header} 下标签没翻出来"
 
 
+def test_输出类型真的发到接口上() -> None:
+    """输出类型属于节点声明；前端不能再靠 node type 手抄一张不完整的表。"""
+    from tests.util import fresh_client
+
+    types = fresh_client().get("/api/workflows/node-types").json()
+    by_type = {item["type"]: item for item in types}
+
+    assert by_type["ai_generate"]["output_types"]["asset_id"] == "asset"
+    assert by_type["http_request"]["output_types"] == {
+        "status": "number",
+        "text": "text",
+        "json": "json",
+    }
+    assert by_type["publish"]["output_types"]["result"] == "json"
+    assert by_type["condition"]["output_types"]["result"] == "text"
+
+
 def test_名字到值的映射不该让用户手写_JSON() -> None:
     """入参映射、请求头、具名输出、启动参数……绝大多数 object 字段其实是「名字 → 值」,
     而值往往是上游节点的引用(`{{llm-1.text}}`)。
@@ -239,4 +256,3 @@ def test_只有真正自由结构的才留原始_JSON() -> None:
     assert config_editor("whatever", {"type": "object", "editor": "json"}) == "json"
     # 非 object 不归它管。
     assert config_editor("prompt", {"type": "template"}) == ""
-

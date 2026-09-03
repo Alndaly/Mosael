@@ -30,6 +30,7 @@ from app.domain.workflows import (
     config_data_type,
     config_editor,
     config_label,
+    output_data_type,
     WorkflowDomainError,
     create_workflow,
     list_workflows,
@@ -99,6 +100,7 @@ def node_types(db: DbSession, user: CurrentUser) -> list[dict]:
             # 「素材」节点本身就漏了,而插件节点它永远也覆盖不到。
             "config": {key: _translated_spec(_with_data_type(key, spec), locale) for key, spec in meta["config"].items()},
             "outputs": list(meta["outputs"]),
+            "output_types": {output: output_data_type(output, meta) for output in meta["outputs"]},
             "plugin_name": meta.get("plugin_name", ""),
         }
         for key, meta in registry.items()

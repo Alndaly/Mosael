@@ -16,13 +16,24 @@ vi.mock("@/components/app/asset-preview", () => ({
 }));
 
 import { RunOutputs } from "@/features/workflows/RunOutputs";
+import type { RegistryLike } from "@/features/workflows/analyze";
 import type { Step } from "@/features/workflows/runSteps";
+
+const registry: RegistryLike = {
+  get(nodeType) {
+    const table: Record<string, { output_types: Record<string, string> }> = {
+      ai_generate: { output_types: { asset_id: "asset", generation_id: "text" } },
+      llm: { output_types: { text: "text" } },
+    };
+    return table[nodeType];
+  },
+};
 
 function mount(step: Step, nodeType = "llm") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <RunOutputs nodeType={nodeType} step={step} />
+      <RunOutputs registry={registry} nodeType={nodeType} step={step} />
     </QueryClientProvider>,
   );
 }
