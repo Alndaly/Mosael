@@ -1,6 +1,7 @@
 import Image from "next/image";
 
 import { mediaVersion } from "@/lib/media";
+import { cn } from "@/lib/utils";
 
 /**
  * 两张微信二维码,并排。
@@ -18,11 +19,13 @@ export function QrCards({
   groupHint,
   author,
   authorHint,
+  className,
 }: {
   group: string;
   groupHint: string;
   author: string;
   authorHint: string;
+  className?: string;
 }) {
   const cards = [
     { src: "/media/qr-group.png", title: group, hint: groupHint },
@@ -30,10 +33,10 @@ export function QrCards({
   ];
 
   return (
-    <div className="my-8 grid gap-6 not-prose sm:grid-cols-2">
+    <div className={cn("my-8 grid gap-8 not-prose sm:grid-cols-2", className)}>
       {cards.map((card) => (
-        <figure key={card.src} className="m-0 flex flex-col border-2 border-ink bg-card">
-          <div className="relative aspect-4/5 w-full border-b-2 border-ink bg-secondary">
+        <figure key={card.src} className="m-0 flex min-w-0 flex-col">
+          <div className="relative aspect-4/5 w-full overflow-hidden rounded-[1.5rem] border border-black/8 bg-white">
             <Image
               src={`${card.src}?v=${mediaVersion(card.src)}`}
               alt={card.title}
@@ -42,9 +45,9 @@ export function QrCards({
               className="object-contain"
             />
           </div>
-          <figcaption className="p-5">
-            <p className="m-0 font-display text-lg font-bold tracking-tight">{card.title}</p>
-            <p className="m-0 mt-1 text-sm text-muted-foreground">{card.hint}</p>
+          <figcaption className="pt-5">
+            <p className="m-0 font-display text-lg font-semibold tracking-[-0.02em]">{card.title}</p>
+            <p className="m-0 mt-1 text-sm leading-6 text-current/55">{card.hint}</p>
           </figcaption>
         </figure>
       ))}

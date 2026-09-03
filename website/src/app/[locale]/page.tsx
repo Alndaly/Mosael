@@ -5,6 +5,7 @@ import { ArrowRight, Download } from "lucide-react";
 
 import { BrandIcon, BrandWordmark } from "@/components/brand-logo";
 import { GithubMark } from "@/components/icons";
+import { QrCards } from "@/components/qr-cards";
 import { Reveal } from "@/components/reveal";
 import { isLocale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
@@ -117,7 +118,27 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
       </section>
 
       <section className="bg-[linear-gradient(125deg,#eee9ff_0%,#f9edf5_52%,#fff4e8_100%)] px-5 py-20 text-[#1a1520] sm:px-8 sm:py-28 lg:px-12 dark:bg-[linear-gradient(125deg,#211b31_0%,#291b29_52%,#2d211c_100%)] dark:text-foreground">
-        <Reveal className="mx-auto grid max-w-[84rem] gap-12 lg:grid-cols-12 lg:items-center"><div className="lg:col-span-7"><p className="m-0 text-xs font-bold tracking-[0.16em] text-primary uppercase">{t.makerEyebrow}</p><h2 className="mt-4 mb-0 max-w-[13ch] font-display text-[clamp(2.5rem,5vw,4.8rem)] leading-[0.98] font-[700] tracking-[-0.05em]">{t.makerTitle}</h2><p className="mt-6 mb-0 max-w-xl text-sm leading-7 text-current/62">{t.makerBody}</p></div><div className="flex items-center gap-5 lg:col-span-5 lg:justify-end"><BrandIcon size={72} className="rounded-[1.4rem]" /><div><p className="m-0 font-display text-2xl font-semibold tracking-[-0.025em]">KindaHuaX</p><a href={SITE.authorX} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-primary hover:opacity-70">{t.makerX}<ArrowRight className="size-4" aria-hidden /></a></div></div></Reveal>
+        <Reveal className="mx-auto grid max-w-[84rem] gap-14 lg:grid-cols-12 lg:items-start">
+          <div className="lg:col-span-5 lg:sticky lg:top-28">
+            <p className="m-0 text-xs font-bold tracking-[0.16em] text-primary uppercase">{t.makerEyebrow}</p>
+            <h2 className="mt-4 mb-0 max-w-[13ch] font-display text-[clamp(2.5rem,5vw,4.8rem)] leading-[0.98] font-[700] tracking-[-0.05em]">{t.makerTitle}</h2>
+            <p className="mt-6 mb-0 max-w-xl text-sm leading-7 text-current/62">{t.makerBody}</p>
+            <div className="mt-9 flex items-center gap-5">
+              <BrandIcon size={72} className="rounded-[1.4rem]" />
+              <div>
+                <p className="m-0 font-display text-2xl font-semibold tracking-[-0.025em]">KindaHuaX</p>
+                <a href={SITE.authorX} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-primary hover:opacity-70">{t.makerX}<ArrowRight className="size-4" aria-hidden /></a>
+              </div>
+            </div>
+          </div>
+          <QrCards
+            group={t.makerGroup}
+            groupHint={t.makerGroupHint}
+            author={t.makerWechat}
+            authorHint={t.makerWechatHint}
+            className="m-0 lg:col-span-7"
+          />
+        </Reveal>
       </section>
 
       <section className="bg-[#17141f] px-5 py-24 text-center text-[#fbf9ff] sm:px-8 sm:py-36">
