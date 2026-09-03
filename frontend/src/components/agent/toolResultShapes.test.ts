@@ -113,9 +113,6 @@ describe("single-object shapes (get_workflow / update_asset_tags)", () => {
     expect(detectShape({ asset_id: "a1", name: "素材.mp4", tags: ["旅行", "vlog"] })).toBe("tagged");
   });
 
-  it("recognises a single document reference (created note)", () => {
-    expect(detectShape({ document_id: "d1", title: "口播稿" })).toBe("docref");
-  });
 });
 
 describe("common tool and workflow result cards", () => {
@@ -148,7 +145,7 @@ describe("common tool and workflow result cards", () => {
   });
 
   it("recognises nested result lists from workflow nodes", () => {
-    expect(detectShape({ text: "命中文档", results: [{ document_id: "d1", snippet: "s" }] })).toBe("nestedResults");
+    expect(detectShape({ text: "匹配 1 条", results: [{ id: "r1", score: 0.9 }] })).toBe("nestedResults");
   });
 
   it("uses generic rows for otherwise valid object lists", () => {

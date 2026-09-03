@@ -1789,19 +1789,6 @@ class AgentSkillOut(BaseModel):
     source: str
     tools: list = Field(default_factory=list)
     permissions: list = Field(default_factory=list)
-
-
-# ---------- 知识库(Dify 式 dataset) ----------
-
-
-
-
-
-
-
-
-
-
 class AgentManifestOut(BaseModel):
     app: str
     version: str

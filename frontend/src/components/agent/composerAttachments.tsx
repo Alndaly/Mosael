@@ -19,7 +19,7 @@ import { toast } from "sonner";
  * - 其余(压缩包、PDF…)拒绝并说明,不静默丢掉。
  */
 
-/** 内联文本的大小上限。再大就该走知识库,而不是塞进一轮对话的上下文。 */
+/** 内联文本的大小上限。再大应拆分或放到外部文件里按需读取,不能塞满一轮对话上下文。 */
 const MAX_TEXT_BYTES = 200 * 1024;
 
 const MEDIA_TYPE = /^(image|video|audio)\//;

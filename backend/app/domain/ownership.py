@@ -90,7 +90,6 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "PluginPermissionGrant": ("app/domain/plugins/",),
     "PluginCredential": ("app/domain/plugins/",),
     "PluginInvocation": ("app/domain/plugins/",),
-    # 知识库
 }
 
 # 路由层与测试不受限:路由是薄转译(建实体前已被鉴权链把关),测试需要自由造数据。

@@ -17,8 +17,8 @@ import { AssetPreviewModal } from "@/features/media/AssetPreviewModal";
  * A shape test is true of both.
  *
  * Every recogniser is deliberately strict: it must find the keys that make the card
- * meaningful. A loose test that matches "an array of objects" would render a KB search as a
- * broken asset list, which is worse than the JSON it replaced.
+ * meaningful. A loose test that matches "an array of objects" could render an unrelated result
+ * as a broken asset list, which is worse than the JSON it replaced.
  */
 
 /** Unwrap what actually reaches the UI, whatever the runtime wrapped it in. */
@@ -444,15 +444,6 @@ function NestedResults({ value }: { value: Record<string, unknown> }) {
   );
 }
 
-function DocRef({ value }: { value: Record<string, unknown> }) {
-  return (
-    <div className="flex w-full min-w-0 items-center gap-2 border-0 bg-transparent p-0 text-left">
-      <span className="min-w-0 flex-1 truncate text-foreground">{String(value.title ?? value.document_id)}</span>
-      <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">知识库笔记</span>
-    </div>
-  );
-}
-
 function LongText({ text }: { text: string }) {
   return <div className="max-h-[260px] overflow-y-auto whitespace-pre-wrap text-xs leading-[1.6] text-foreground">{text}</div>;
 }
@@ -527,7 +518,6 @@ export type ResultShape =
   | "refs"
   | "pluginOutput"
   | "nestedResults"
-  | "docref"
   | "genModels"
   | "records"
   | "empty"
@@ -539,7 +529,7 @@ export type ResultShape =
  * Which card fits this value, or null when JSON is the honest answer.
  *
  * Separated from the rendering so the decision itself is testable: it is the part that can
- * quietly regress into showing a KB search as a broken asset list. Order matters — several
+ * quietly regress into showing an unrelated result as a broken asset list. Order matters — several
  * shapes are arrays of objects, and the first match wins, so the specific tests come first.
  */
 export function detectShape(value: unknown): ResultShape {
@@ -572,8 +562,7 @@ export function detectShape(value: unknown): ResultShape {
     if (["workflow_id", "project_id", "sequence_id", "job_id", "generation_id"].some((key) => typeof value[key] === "string" && String(value[key]).trim())) {
       return "refs";
     }
-    if ("document_id" in value && "title" in value && !("snippet" in value)) return "docref";
-    // analyze_asset / fetch_url / read_kb_document / llm nodes: prose, not raw data.
+    // analyze_asset / fetch_url / LLM nodes: prose, not raw data.
     for (const key of ["answer", "text", "content", "body"]) {
       const text = value[key];
       if (typeof text === "string" && text.trim()) return "text";
@@ -622,8 +611,6 @@ export function ToolResultCard({ value }: { value: unknown }): React.ReactElemen
       return <PluginOutput value={value as Record<string, unknown>} />;
     case "nestedResults":
       return <NestedResults value={value as Record<string, unknown>} />;
-    case "docref":
-      return <DocRef value={value as Record<string, unknown>} />;
     case "genModels":
       return <GenerationModelList rows={value as Record<string, unknown>[]} />;
     case "records":

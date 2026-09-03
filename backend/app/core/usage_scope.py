@@ -5,7 +5,7 @@
 ## 为什么是环境变量而不是穿参
 
 `ProviderUsageEvent.workspace_id` 是 NOT NULL,而发起供应商调用的地方普遍很深:翻译在
-字幕面板底下、图谱抽取在知识库入库的线程池里、素材分析在一个只拿得到 ORM 对象的叶子函数里。
+字幕面板底下、素材分析在一个只拿得到 ORM 对象的叶子函数里。
 把 workspace_id 一路穿下去,代价是**每个调用点收一次,并且对未来每个新调用点重复收费** ——
 而事实是:八个对话调用点里,曾经零个上报。税太高的接口没人交税。
 
@@ -19,8 +19,8 @@
 
 ## 线程
 
-contextvars **不会**自动跨到 ThreadPoolExecutor 的工作线程。字幕整批翻译和知识库图谱抽取
-都是线程池,所以它们得用 `run_in_scope` 提交任务,否则工作线程里读到的是空。
+contextvars **不会**自动跨到 ThreadPoolExecutor 的工作线程。字幕整批翻译使用线程池,
+所以它得用 `run_in_scope` 提交任务,否则工作线程里读到的是空。
 """
 
 from __future__ import annotations
