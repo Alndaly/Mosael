@@ -109,6 +109,7 @@ import { RefEditor } from "@/features/workflows/RefEditor";
 import { MapField } from "@/features/workflows/MapField";
 import { CodeEditor } from "@/components/app/code-editor";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/components/agent/CanvasAgentChat";
+import { CANVAS_PANEL_EDGE_INSET_PX, canvasPanelTop } from "@/components/app/canvasPanelLayout";
 import { WorkflowRunHistory } from "@/features/workflows/WorkflowRunHistory";
 import { WorkflowRevisionHistory } from "@/features/workflows/WorkflowRevisionHistory";
 import { WorkflowCommunityDialog } from "@/features/workflows/WorkflowCommunityDialog";
@@ -1903,7 +1904,11 @@ function WorkflowEditor({
         {rightPanels > 0 && (
           <div
             className={cn(SIDEBAR_HANDLE_CLASS, "z-10")}
-            style={{ right: rightPanel.width + 8, top: 54, bottom: 8 }}
+            style={{
+              right: rightPanel.width + CANVAS_PANEL_EDGE_INSET_PX,
+              top: canvasPanelTop(8),
+              bottom: CANVAS_PANEL_EDGE_INSET_PX,
+            }}
             onPointerDown={rightPanel.startDragFromRight}
           />
         )}
@@ -2085,13 +2090,16 @@ function WorkflowEditor({
             className={cn(
               // 浮窗:贴右侧,从工具条底下起、到画布底边止。z-10 —— 压过画布,让过工具条(z-20)
               // 和节点检查器(z-30):检查器是"你正在改的那个东西",它该在最上面。
-              "absolute bottom-2 right-2 top-[54px] z-10 grid min-h-0 min-w-0 gap-2",
+              "absolute z-10 grid min-h-0 min-w-0 gap-2",
               dockedAgent && dockedHistory ? "grid-rows-[minmax(0,1fr)_minmax(0,1fr)]" : "grid-rows-[minmax(0,1fr)]",
             )}
             // 两个都开时上面那块用记住的高度,下面那块吃掉剩下的 —— 运行时想看某一步的输出
             // 就把历史那块拉大,而平分是个谁都不满意的折中。
             style={{
               width: rightPanel.width,
+              top: canvasPanelTop(8),
+              right: CANVAS_PANEL_EDGE_INSET_PX,
+              bottom: CANVAS_PANEL_EDGE_INSET_PX,
               ...(dockedAgent && dockedHistory
                 ? { gridTemplateRows: `${agentRow.height}px minmax(0,1fr)` }
                 : {}),

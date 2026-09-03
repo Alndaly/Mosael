@@ -407,3 +407,75 @@ The audio-control region was inspected in the combined comparison. No additional
 - [x] Verify interaction state and console output.
 
 final result: passed
+
+---
+
+# Design QA — canvas assistant and workflow run history
+
+- Source visual truth: `/var/folders/yw/0kg9jbhj3xx00gq05_14d1lw0000gn/T/TemporaryItems/NSIRD_screencaptureui_5YXNhV/Screenshot 2026-09-04 at 01.38.35.png`
+- Browser-rendered implementation: `/tmp/mosael-design-qa-implementation.png`
+- Combined comparison: `/tmp/mosael-design-qa-comparison.png`
+- Route/state: `http://127.0.0.1:5173/#/workflows`, dark theme, “视频逐字稿 · 智能整理”, assistant and failed execution history both docked
+- Viewport: 1024 × 1021 CSS px, implementation capture 1024 × 1021 px at 1× density
+- Source: 1218 × 2028 px cropped reference; normalized proportionally to 613 × 1021 px for the combined focused comparison
+
+## Findings
+
+No actionable P0/P1/P2 findings remain.
+
+- Fonts and typography: existing product fonts, weights, timecode treatment, line heights, and hierarchy are preserved. The compact error text remains readable without competing with the selected run title.
+- Spacing and layout rhythm: the assistant and run-history frames use the same 10 px computed radius and 1 px border. The workflow toolbar-to-panel gap and the gap between docked panels both measure 8 px. Run details now begin 13 px below the selected run instead of being pushed to the lower half by an empty fixed grid track.
+- Colors and visual tokens: panel, border, muted text, accent selection, and destructive colors all come from the existing theme tokens. The error card adds a restrained destructive tint and border rather than an isolated bare red line.
+- Image quality and asset fidelity: no raster imagery or custom illustrative assets are part of the changed surfaces; existing Lucide interface icons remain sharp and consistent.
+- Copy and content: existing Chinese labels and the provider error message are unchanged; only their presentation changed.
+
+## Full-view comparison evidence
+
+The combined comparison shows the same workflow, selected failed run, assistant content, and run steps. The implementation intentionally differs from the source in the two requested areas: rounded assistant framing and immediate, card-based error placement. The canvas remains visible and both panels stay within the viewport.
+
+## Focused-region comparison evidence
+
+The right-panel region was inspected at original implementation resolution. Computed browser measurements confirm:
+
+- AI assistant: `border-radius: 10px`, `border-width: 1px`, `overflow: hidden`
+- Execution history: `border-radius: 10px`, `border-width: 1px`, `overflow: hidden`
+- Assistant/history gap: 8 px
+- Selected run bottom: 620.46 px; error card top: 633.46 px
+
+No additional crop was needed because the combined image keeps both complete right-side panels readable.
+
+## Comparison history
+
+1. Initial reference findings:
+   - P1: a fixed 45%/55% two-row layout left a large empty block between the selected run and its error details.
+   - P2: the assistant frame did not share the execution-history radius/border contract across its multiple entry points.
+   - P2: the workflow toolbar-to-panel gap was 4 px while the infinite-canvas pattern used 8 px.
+2. Fixes applied:
+   - Replaced fixed history tracks with a content-sized run list capped at 40%, followed by a flexible scrolling detail region.
+   - Added a compact semantic error card directly below the selected run.
+   - Centralized dockable-panel framing and canvas-panel geometry, then applied them to every shared assistant entry point.
+3. Post-fix evidence:
+   - Combined visual comparison and computed browser measurements above show all three issues resolved.
+   - Browser console checked with no error or warning entries from the application.
+
+## Primary interactions tested
+
+- Opened the target workflow from the workflow list.
+- Opened the docked assistant.
+- Opened the docked execution history and selected the existing failed run.
+- Verified the failure summary, step list, scrolling region, shared panel radius, and panel spacing.
+
+## Implementation checklist
+
+- [x] Shared frame contract used by assistant and execution history
+- [x] Shared 8 px canvas panel gap
+- [x] Error details follow the selected run without dead space
+- [x] Error state uses semantic alert markup and existing design tokens
+- [x] Frontend build, full frontend test suite, backend workflow tests, and browser console check passed
+
+## Follow-up polish
+
+No P3 follow-up is required for this focused change.
+
+final result: passed
+

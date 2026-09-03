@@ -15,6 +15,10 @@ import { cn } from "@/lib/utils";
 export const PANEL_HEADER_CLASS =
   "flex h-[34px] cursor-default select-none touch-none items-center gap-1 border-b border-border pl-2.5 pr-1.5 [&_h2]:m-0 [&_h2]:flex [&_h2]:flex-1 [&_h2]:items-center [&_h2]:gap-1.5 [&_h2]:text-ui-sm [&_h2]:font-semibold";
 
+/** 停靠和悬浮面板共用的外框。智能体与执行历史必须是一套圆角和边界。 */
+export const DOCKABLE_PANEL_FRAME_CLASS =
+  "overflow-hidden rounded-lg border border-border bg-panel";
+
 /**
  * 悬浮窗的叠放次序:一个从底到顶的 id 序列,z-index = BASE + 下标。
  *

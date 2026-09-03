@@ -35,6 +35,7 @@ import { relativeTime } from "@/lib/time";
 import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/components/agent/CanvasAgentChat";
+import { CANVAS_PANEL_EDGE_INSET_PX, canvasPanelTop } from "@/components/app/canvasPanelLayout";
 import { SIDEBAR_HANDLE_CLASS, useResizableSidebar } from "@/lib/useResizableSidebar";
 import { BoardCanvas, type BoardCanvasApi } from "@/features/boards/BoardCanvas";
 import { useAutosave } from "@/features/boards/useAutosave";
@@ -634,11 +635,14 @@ function BoardDetail({
         <div
           className={cn(
             "z-10 grid min-h-0 min-w-0",
-            //: 起点算出来的,不是抄工作流那个 54:这一页的工具条挂在 top-4(容器内 16px)、
-            //: 高 42px,底边落在 58px —— 再留 8px 才是这里的 66。抄数字的话删除键会叠在面板上。
-            dockedAgent && "absolute bottom-2 right-2 top-[66px]",
+            dockedAgent && "absolute",
           )}
-          style={dockedAgent ? { width: agentPanel.width } : undefined}
+          style={dockedAgent ? {
+            width: agentPanel.width,
+            top: canvasPanelTop(16),
+            right: CANVAS_PANEL_EDGE_INSET_PX,
+            bottom: CANVAS_PANEL_EDGE_INSET_PX,
+          } : undefined}
         >
           <CanvasAgentChat
             contextLine={t("boardAgentContext").replace("{id}", board.id).replace("{name}", board.name)}

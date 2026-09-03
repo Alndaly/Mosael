@@ -36,7 +36,7 @@ import { formatElapsedSeconds } from "@/lib/time";
 import { CompactionNotice, type CompactionInfo, type ContextInfo } from "@/components/agent/ContextMeter";
 import { PlanCard, type PlanStep } from "@/components/agent/PlanCard";
 import { SessionSettingsMenu } from "@/components/agent/SessionSettingsMenu";
-import { PANEL_HEADER_CLASS, useFloatingPanel } from "@/features/workflows/useFloatingPanel";
+import { DOCKABLE_PANEL_FRAME_CLASS, PANEL_HEADER_CLASS, useFloatingPanel } from "@/features/workflows/useFloatingPanel";
 import { cn } from "@/lib/utils";
 
 type AgentMessage = components["schemas"]["AgentMessageOut"];
@@ -394,10 +394,11 @@ export function CanvasAgentChat({
   return (
     <aside
       className={cn(
-        "grid grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden bg-panel",
+        "grid grid-rows-[auto_minmax(0,1fr)_auto]",
+        DOCKABLE_PANEL_FRAME_CLASS,
         isFloating
-          ? "fixed min-h-[380px] min-w-[320px] max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)] rounded-lg border border-border-strong"
-          : "relative z-[1] h-full w-full min-h-0 min-w-0 border-0 shadow-none",
+          ? "fixed min-h-[380px] min-w-[320px] max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)] border-border-strong"
+          : "relative z-[1] h-full w-full min-h-0 min-w-0 shadow-none",
       )}
       style={floatStyle}
       {...focusProps}

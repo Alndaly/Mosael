@@ -7,7 +7,7 @@ import { useI18n } from "@/app/preferences";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
 import type { RegistryLike } from "@/features/workflows/analyze";
 import { assetOutputs, parseIso, toSteps, type Step } from "@/features/workflows/runSteps";
-import { PANEL_HEADER_CLASS, useFloatingPanel } from "@/features/workflows/useFloatingPanel";
+import { DOCKABLE_PANEL_FRAME_CLASS, PANEL_HEADER_CLASS, useFloatingPanel } from "@/features/workflows/useFloatingPanel";
 import type { CanvasAgentMode } from "@/components/agent/CanvasAgentChat";
 import { cn } from "@/lib/utils";
 
@@ -157,7 +157,8 @@ export function WorkflowRunHistory({
   return (
     <aside
       className={cn(
-        "flex flex-col overflow-hidden rounded-lg border border-border bg-panel",
+        "flex flex-col",
+        DOCKABLE_PANEL_FRAME_CLASS,
         isFloating
           ? "fixed max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)] border-border-strong"
           : "relative min-h-0 min-w-0",
@@ -191,8 +192,10 @@ export function WorkflowRunHistory({
           <X size={13} />
         </button>
       </div>
-      <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <div className="overflow-y-auto border-b border-border p-1">
+      <div className="flex min-h-0 flex-1 flex-col">
+        {/* 少量记录按内容占高；多了才在 40% 高度内滚动。详情因此总是紧跟所选记录，
+            不会被固定的上下分栏推到面板底部。 */}
+        <div className="max-h-[40%] shrink-0 overflow-y-auto border-b border-border p-1">
           {runs.data && runs.data.length === 0 && (
             <div className="grid h-full place-items-center">
               <p className="m-0 px-2 text-center text-ui-xs text-muted-foreground">{t("wfHistoryEmpty")}</p>
@@ -223,14 +226,22 @@ export function WorkflowRunHistory({
             </button>
           ))}
         </div>
-        <div className="overflow-y-auto px-2.5 py-2">
+        <div className="min-h-0 flex-1 overflow-y-auto px-2.5 py-2">
           {!selected ? (
             <div className="grid h-full place-items-center">
               <p className="m-0 px-2 text-center text-ui-xs text-muted-foreground">{t("wfHistoryPick")}</p>
             </div>
           ) : (
             <>
-              {selected.error && <p className="mb-2 mt-0 whitespace-pre-wrap text-ui-xs text-destructive">{selected.error}</p>}
+              {selected.error && (
+                <div
+                  role="alert"
+                  className="mb-2 flex items-start gap-2 rounded-md border border-[color-mix(in_srgb,var(--destructive)_32%,var(--border))] bg-[color-mix(in_srgb,var(--destructive)_8%,transparent)] px-2.5 py-2 text-ui-xs leading-[1.5] text-destructive"
+                >
+                  <XCircle size={13} className="mt-0.5 shrink-0" />
+                  <p className="m-0 min-w-0 whitespace-pre-wrap break-words">{selected.error}</p>
+                </div>
+              )}
               <ol className="m-0 flex list-none flex-col gap-0.5 p-0">
                 {steps.map((s) => {
                   const hasDetail = (s.outputs && Object.keys(s.outputs).length > 0) || Boolean(s.error);
