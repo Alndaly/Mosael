@@ -5,6 +5,11 @@ commit list and downloadable artifacts.
 
 ## Unreleased
 
+### Fixed
+
+- Kept screen and camera streams attached to the live preview when the recorder changes from its setup dialog
+  into the floating controller, preventing both preview panes from turning black during an active recording.
+
 ### Added
 
 - Added synchronized screen-and-camera recording to the media library and editor media pool, producing

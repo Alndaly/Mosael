@@ -140,6 +140,26 @@ describe("Recorder", () => {
     expect(screen.getByRole("button", { name: /recordStop/ })).toBeVisible();
   });
 
+  it("keeps both live previews attached after the recorder becomes a floating controller", async () => {
+    const probe = fakeStream();
+    const screenCapture = fakeStream();
+    const cameraCapture = fakeStream();
+    getUserMedia.mockResolvedValueOnce(probe.stream).mockResolvedValueOnce(cameraCapture.stream);
+    getDisplayMedia.mockResolvedValueOnce(screenCapture.stream);
+    const user = userEvent.setup();
+
+    render(<Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "record_screenCamera" }));
+    await user.click(screen.getByRole("button", { name: /recordStart/ }));
+    await screen.findByRole("button", { name: /recordStop/ });
+
+    const previews = [...document.querySelectorAll("video")];
+    expect(previews).toHaveLength(2);
+    expect(previews[0].srcObject).toBe(screenCapture.stream);
+    expect(previews[1].srcObject).toBe(cameraCapture.stream);
+  });
+
   it("lets the user opt out of device audio when recording the screen", async () => {
     const probe = fakeStream();
     const screenCapture = fakeStream();
