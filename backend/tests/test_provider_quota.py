@@ -198,7 +198,7 @@ def _expired_oauth_client(name: str):
     """建一个凭据已过期的订阅档案,返回 (client, profile_id)。"""
     import time as _time
 
-    from app.api.routes import settings as settings_routes
+    from app.api.routes.settings import provider_profiles as settings_routes
     from app.core.db import SessionLocal
     from tests.util import add_provider, fresh_client
 
@@ -225,7 +225,7 @@ def test_列出档案时自动刷新过期令牌(monkeypatch):
     """**过期本身不该走到用户面前**:订阅计划的 access token 只有几小时,刷新是协议里
     就有的一步。此前只有对话和查额度会触发刷新,于是隔夜打开设置页必然看到一行已过期 ——
     而它只要被用到就会自己好。这条锁住:列表接口自己先刷,刷成了就不再报过期。"""
-    from app.api.routes import settings as settings_routes
+    from app.api.routes.settings import provider_profiles as settings_routes
     from app.core.db import SessionLocal
     from app.db.models import ProviderCredential
 
@@ -261,7 +261,7 @@ def test_列出档案时自动刷新过期令牌(monkeypatch):
 def test_刷新失败才报过期_且不会每次都重试(monkeypatch):
     """刷不动才是用户需要知道的事(refresh token 被吊销、账号在别处登出)—— 那时前端用
     警告色说"需重新授权"。同时:失败不该让最常被拉的这个接口每次都去起一次 node 撞同一堵墙。"""
-    from app.api.routes import settings as settings_routes
+    from app.api.routes.settings import provider_profiles as settings_routes
     from app.ai.sidecar.adapters import AdapterError
 
     client, profile_id, _ = _expired_oauth_client("掉线的订阅")
@@ -285,7 +285,7 @@ def test_令牌过期时先刷新再查(monkeypatch):
     而档案上明明写着已授权。这条锁住:过期时旁路也会先让 pi 刷新一次。"""
     import time as _time
 
-    from app.api.routes import settings as settings_routes
+    from app.api.routes.settings import provider_oauth as settings_routes
     from app.core.db import SessionLocal
     from tests.util import add_provider, fresh_client
 

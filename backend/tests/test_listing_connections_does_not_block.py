@@ -20,7 +20,7 @@ from __future__ import annotations
 import threading
 import time
 
-from app.api.routes import settings as settings_routes
+from app.api.routes.settings import provider_profiles as settings_routes
 from tests.util import add_provider, fresh_client
 from app.core.db import SessionLocal
 

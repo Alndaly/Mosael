@@ -454,7 +454,7 @@ def test_内置目录里的模型不该被标成已不存在() -> None:
 
     一个永远为真的警告等于没有警告 —— 更糟的是它会让用户去删一个好模型。
     """
-    from app.api.routes.settings import _is_known_model
+    from app.api.routes.settings.provider_models import _is_known_model
 
     # 实时目录里没有,内置目录里有 → 认得
     assert _is_known_model("alibaba", "wan2.7-i2v", {}) is True
