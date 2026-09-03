@@ -9,11 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-type TemplateCategory = "generation" | "editing";
-
 interface TemplateDefinition {
   id: WorkflowTemplateId;
-  category: TemplateCategory;
   title: MessageKey;
   description: MessageKey;
   stages: MessageKey[];
@@ -24,7 +21,6 @@ interface TemplateDefinition {
 const TEMPLATES: TemplateDefinition[] = [
   {
     id: "full_video_generation",
-    category: "generation",
     title: "wfFullVideoTemplateName",
     description: "wfFullVideoTemplateDescription",
     stages: [
@@ -39,7 +35,6 @@ const TEMPLATES: TemplateDefinition[] = [
   },
   {
     id: "transcript_video_cleanup",
-    category: "editing",
     title: "wfTranscriptCleanupTemplateName",
     description: "wfTranscriptCleanupTemplateDescription",
     stages: [
@@ -53,12 +48,6 @@ const TEMPLATES: TemplateDefinition[] = [
     icon: Scissors,
   },
 ];
-
-const CATEGORY_KEYS: Record<"all" | TemplateCategory, MessageKey> = {
-  all: "wfCommunityAll",
-  generation: "wfCommunityGeneration",
-  editing: "wfCommunityEditing",
-};
 
 export function WorkflowCommunityDialog({
   open,
@@ -75,13 +64,11 @@ export function WorkflowCommunityDialog({
 }) {
   const t = useI18n();
   const [query, setQuery] = React.useState("");
-  const [category, setCategory] = React.useState<"all" | TemplateCategory>("all");
   const [selectedId, setSelectedId] = React.useState<WorkflowTemplateId>(TEMPLATES[0].id);
 
   React.useEffect(() => {
     if (!open) return;
     setQuery("");
-    setCategory("all");
   }, [open]);
 
   const installedCounts = React.useMemo(() => {
@@ -96,11 +83,10 @@ export function WorkflowCommunityDialog({
   const filtered = React.useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
     return TEMPLATES.filter((template) => {
-      if (category !== "all" && template.category !== category) return false;
       if (!needle) return true;
       return `${t(template.title)} ${t(template.description)}`.toLocaleLowerCase().includes(needle);
     });
-  }, [category, query, t]);
+  }, [query, t]);
 
   React.useEffect(() => {
     if (filtered.length > 0 && !filtered.some((template) => template.id === selectedId)) {
@@ -123,32 +109,16 @@ export function WorkflowCommunityDialog({
           <p className="m-0 text-ui-xs font-normal leading-relaxed text-muted-foreground">
             {t("wfCommunitySubtitle")}
           </p>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <label className="relative min-w-0 flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={14} />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={t("wfCommunitySearch")}
-                aria-label={t("wfCommunitySearch")}
-                className="pl-9"
-              />
-            </label>
-            <div className="flex gap-1 overflow-x-auto" aria-label={t("wfCommunityCategory")}>
-              {(Object.keys(CATEGORY_KEYS) as Array<keyof typeof CATEGORY_KEYS>).map((value) => (
-                <Button
-                  key={value}
-                  type="button"
-                  size="sm"
-                  variant={category === value ? "secondary" : "ghost"}
-                  aria-pressed={category === value}
-                  onClick={() => setCategory(value)}
-                >
-                  {t(CATEGORY_KEYS[value])}
-                </Button>
-              ))}
-            </div>
-          </div>
+          <label className="relative min-w-0">
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={14} />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={t("wfCommunitySearch")}
+              aria-label={t("wfCommunitySearch")}
+              className="pl-9"
+            />
+          </label>
         </div>
       }
       footer={
