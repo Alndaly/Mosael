@@ -1,3 +1,5 @@
+/** @vitest-environment jsdom */
+
 /**
  * 无边框窗顶栏给系统按钮让位的规则,**只能有一份**。
  *
@@ -14,7 +16,9 @@ export const RATCHET = true;
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+import { installWindowChrome } from "@/lib/windowChrome";
 
 const SRC = join(import.meta.dirname, "..");
 const OWNER = join(SRC, "lib", "windowChrome.ts");
@@ -31,6 +35,33 @@ function sourceFiles(dir: string): string[] {
 }
 
 describe("窗口装饰让位", () => {
+  it("macOS 窗口退出全屏后恢复系统按钮安全区状态", () => {
+    const callbacks: Array<(fullscreen: boolean) => void> = [];
+    const remove = vi.fn();
+    const root = document.createElement("html");
+    const cleanup = installWindowChrome(
+      {
+        platform: "darwin",
+        onFullscreen: (callback) => {
+          callbacks.push(callback);
+          callback(true);
+          return remove;
+        },
+      },
+      root,
+    );
+
+    expect(root.classList.contains("is-desktop")).toBe(true);
+    expect(root.classList.contains("is-mac")).toBe(true);
+    expect(root.classList.contains("is-fullscreen")).toBe(true);
+
+    callbacks[0]?.(false);
+    expect(root.classList.contains("is-fullscreen")).toBe(false);
+
+    cleanup();
+    expect(remove).toHaveBeenCalledOnce();
+  });
+
   it("让位的尺寸只写在 windowChrome.ts 里", () => {
     const offenders = sourceFiles(SRC)
       .filter((file) => file !== OWNER && !file.endsWith("windowChrome.test.ts"))

@@ -15,3 +15,46 @@
  */
 export const WINDOW_CHROME_INSET =
   "[.is-desktop.is-mac:not(.is-fullscreen)_&]:pl-[88px] [.is-desktop.is-win:not(.is-fullscreen)_&]:pr-[148px]";
+
+type WindowChromeBridge = Pick<
+  NonNullable<Window["mosaelDesktop"]>,
+  "platform" | "onFullscreen" | "setTitleOverlay"
+>;
+
+/**
+ * 安装无边框桌面窗口的根状态。
+ *
+ * 这必须在 React 首屏之前调用:安全区是窗口外壳的固有状态,不属于某个页面或组件。把它放进
+ * App 的 effect 会让第一帧没有 `is-mac`,也会让 HMR/重挂载期间出现短暂的错误布局。
+ */
+export function installWindowChrome(
+  desktop: WindowChromeBridge | undefined = window.mosaelDesktop,
+  root: HTMLElement = document.documentElement,
+): () => void {
+  if (!desktop) return () => undefined;
+
+  const usesTitleBarOverlay = desktop.platform !== "darwin";
+  root.classList.add("is-desktop", usesTitleBarOverlay ? "is-win" : "is-mac");
+
+  const removeFullscreenListener = desktop.onFullscreen?.((fullscreen) => {
+    root.classList.toggle("is-fullscreen", fullscreen);
+  });
+
+  let observer: MutationObserver | undefined;
+  if (usesTitleBarOverlay && desktop.setTitleOverlay) {
+    const pushOverlay = () =>
+      desktop.setTitleOverlay!(
+        root.classList.contains("dark")
+          ? { color: "#15181e", symbolColor: "#e7eaf0" }
+          : { color: "#ffffff", symbolColor: "#656c78" },
+      );
+    pushOverlay();
+    observer = new MutationObserver(pushOverlay);
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+  }
+
+  return () => {
+    removeFullscreenListener?.();
+    observer?.disconnect();
+  };
+}

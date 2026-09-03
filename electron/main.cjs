@@ -14,6 +14,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { migrateLegacyUserData } = require("./user-data-migration.cjs");
 const { createRecordingPermissionService } = require("./recording-permissions.cjs");
+const { bindFullscreenState } = require("./window-state.cjs");
 const {
   IPC,
   parseBrowserLogin,
@@ -440,12 +441,7 @@ function createWindow() {
     { useSystemPicker: true },
   );
   // 全屏时系统窗口控件(mac 红绿灯 / Win 标题栏三键)消失,顶栏为它们预留的边距要撤掉。
-  const sendFullscreen = () => {
-    if (!win.isDestroyed()) win.webContents.send(IPC.event.fullscreen, win.isFullScreen());
-  };
-  win.on("enter-full-screen", sendFullscreen);
-  win.on("leave-full-screen", sendFullscreen);
-  win.webContents.on("did-finish-load", sendFullscreen);
+  bindFullscreenState(win, IPC.event.fullscreen);
   // 视图状态是**推的**,渲染层没法主动问。它一旦重新加载(⌘R、HMR、崩溃恢复),PublishViewBar
   // 就回到初始的 visible:false —— 而原生视图还盖在窗口上,表现为「内嵌浏览器还在,顶部工具条没了」。
   // 和上面的全屏状态同一个道理,补播一次。

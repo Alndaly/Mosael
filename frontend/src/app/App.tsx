@@ -83,40 +83,6 @@ const queryClient = new QueryClient({
 });
 
 export function App() {
-  // 桌面(Electron 无边框窗)样式适配:红绿灯占位、标题拖拽区按 is-desktop/is-mac 生效。
-  React.useEffect(() => {
-    const desktop = window.mosaelDesktop;
-    if (!desktop) return;
-    const isWin = desktop.platform !== "darwin";
-    document.documentElement.classList.add(
-      "is-desktop",
-      isWin ? "is-win" : "is-mac",
-    );
-    // Win/Linux:标题栏三键叠层颜色随主题(mac 无叠层)。跟 <html> 的 .dark 类走。
-    if (!isWin || !desktop.setTitleOverlay) return;
-    const push = () =>
-      desktop.setTitleOverlay!(
-        document.documentElement.classList.contains("dark")
-          ? { color: "#15181e", symbolColor: "#e7eaf0" }
-          : { color: "#ffffff", symbolColor: "#656c78" },
-      );
-    push();
-    const observer = new MutationObserver(push);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-    return () => observer.disconnect();
-  }, []);
-
-  // 全屏时系统窗口控件消失 → 撤掉顶栏为它们预留的边距(mac 76px / Win 148px)。
-  React.useEffect(() => {
-    const desktop = window.mosaelDesktop;
-    if (!desktop?.onFullscreen) return;
-    return desktop.onFullscreen((fullscreen) => {
-      document.documentElement.classList.toggle("is-fullscreen", fullscreen);
-    });
-  }, []);
   return (
     <QueryClientProvider client={queryClient}>
       <PreferencesProvider>
