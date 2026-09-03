@@ -41,7 +41,7 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
  */
 export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onClose: () => void }) {
   const t = useI18n();
-  const { openImagePreview } = useImagePreview();
+  const { openImagePreview, isImagePreviewOpen } = useImagePreview();
   const [copied, setCopied] = React.useState(false);
   React.useEffect(() => {
     setCopied(false);
@@ -69,8 +69,14 @@ export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onC
     });
   };
 
+  const handleOpenChange = (open: boolean) => {
+    // PhotoSlider lives in its own portal above this Dialog. Its Esc and pointer events are
+    // "outside" from Radix's perspective, so both modal layers otherwise close together.
+    if (!open && !isImagePreviewOpen) onClose();
+  };
+
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
+    <Dialog open onOpenChange={handleOpenChange}>
       <DialogContent className="w-[min(960px,calc(100vw-32px))] max-w-[calc(100vw-32px)] gap-0 overflow-hidden p-0">
         <div className="grid max-h-[86vh] grid-cols-1 md:grid-cols-[minmax(0,1fr)_300px]">
           {/* 媒体区 */}

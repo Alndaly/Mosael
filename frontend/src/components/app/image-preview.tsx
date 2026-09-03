@@ -24,6 +24,8 @@ type ImagePreviewState = ImagePreviewItem & {
 
 type ImagePreviewContextValue = {
   openImagePreview: (image: ImagePreviewState) => void;
+  /** 顶层灯箱是否正在显示。下层 Dialog 用它避免响应同一次 Esc / 外部点击。 */
+  isImagePreviewOpen: boolean;
 };
 
 const ImagePreviewContext = React.createContext<ImagePreviewContextValue | null>(null);
@@ -50,7 +52,10 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
   const close = React.useCallback(() => setVisible(false), []);
   const reset = React.useCallback(() => setImages([]), []);
 
-  const value = React.useMemo<ImagePreviewContextValue>(() => ({ openImagePreview }), [openImagePreview]);
+  const value = React.useMemo<ImagePreviewContextValue>(
+    () => ({ openImagePreview, isImagePreviewOpen: visible }),
+    [openImagePreview, visible],
+  );
 
   return (
     <ImagePreviewContext.Provider value={value}>

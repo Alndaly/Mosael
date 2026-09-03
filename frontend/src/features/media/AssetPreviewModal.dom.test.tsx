@@ -4,6 +4,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const openImagePreview = vi.fn();
+let imagePreviewOpen = false;
 
 vi.mock("@/api/client", () => ({
   assetFileUrl: (id: string) => `/file/${id}`,
@@ -15,7 +16,7 @@ vi.mock("@/app/preferences", () => ({
 }));
 
 vi.mock("@/components/app/image-preview", () => ({
-  useImagePreview: () => ({ openImagePreview }),
+  useImagePreview: () => ({ openImagePreview, isImagePreviewOpen: imagePreviewOpen }),
 }));
 
 import { AssetPreviewModal } from "./AssetPreviewModal";
@@ -41,7 +42,10 @@ const audioAsset = {
 };
 
 describe("AssetPreviewModal", () => {
-  beforeEach(() => openImagePreview.mockReset());
+  beforeEach(() => {
+    openImagePreview.mockReset();
+    imagePreviewOpen = false;
+  });
 
   it("uses the browser-compatible image endpoint in both inline and zoomed previews", () => {
     render(<AssetPreviewModal asset={imageAsset as never} onClose={vi.fn()} />);
@@ -67,5 +71,24 @@ describe("AssetPreviewModal", () => {
     expect(audio?.hasAttribute("autoplay")).toBe(true);
     expect(screen.getByRole("button", { name: "boardPlay" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "boardMute" })).toBeInTheDocument();
+  });
+
+  it("keeps the asset details open while the fullscreen image preview is open", () => {
+    imagePreviewOpen = true;
+    const onClose = vi.fn();
+    render(<AssetPreviewModal asset={imageAsset as never} onClose={onClose} />);
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("still closes the asset details when no fullscreen preview is open", () => {
+    const onClose = vi.fn();
+    render(<AssetPreviewModal asset={imageAsset as never} onClose={onClose} />);
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(onClose).toHaveBeenCalledOnce();
   });
 });
