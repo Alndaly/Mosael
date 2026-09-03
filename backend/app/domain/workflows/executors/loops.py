@@ -49,13 +49,19 @@ def loop_foreach(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
         raise WorkflowDomainError("循环·遍历的 items 必须是列表(或多行文本)")
     body = config.get("body") or {"nodes": [], "edges": []}
     output_tpl = config.get("output", "")
+    inputs = config.get("inputs")
+    shared_inputs = dict(inputs) if isinstance(inputs, dict) else {}
     if len(items) > LOOP_FOREACH_HARD_CAP:
         raise WorkflowDomainError(
             f"循环·遍历的 items 有 {len(items)} 项,超过上限 {LOOP_FOREACH_HARD_CAP};请先筛选或分批"
         )
     results: list[Any] = []
     for index, item in enumerate(items):
-        ctx = run_subgraph(body, {"loop": {"item": item, "index": index}}, workflow_id=workflow.id)
+        ctx = run_subgraph(
+            body,
+            {"loop": {"item": item, "index": index}, "input": shared_inputs},
+            workflow_id=workflow.id,
+        )
         if output_tpl:
             results.append(interpolate(output_tpl, ctx))
         else:

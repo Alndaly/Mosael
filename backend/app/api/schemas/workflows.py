@@ -12,6 +12,7 @@ class WorkflowCreate(BaseModel):
     name: str = Field(min_length=1, max_length=180)
     description: str = Field(default="", max_length=2000)
     graph: dict | None = None
+    template_id: str | None = Field(default=None, max_length=80)
 
 
 class WorkflowUpdate(BaseModel):

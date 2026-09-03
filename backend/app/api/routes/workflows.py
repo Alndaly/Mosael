@@ -38,6 +38,7 @@ from app.domain.workflows import (
 )
 from app.domain.plugins.nodes import plugin_node_types
 from app.domain.workflows.engine import start_workflow_job
+from app.domain.workflows.templates import built_in_template_graph
 
 if TYPE_CHECKING:
     from app.db.models import AgentSession
@@ -122,8 +123,13 @@ def list_all(workspace_id: str, db: DbSession, user: CurrentUser) -> list[Workfl
 def create(body: WorkflowCreate, db: DbSession, user: CurrentUser) -> Workflow:
     ensure_workspace_perm(db, user, body.workspace_id, "edit")
     try:
+        graph = body.graph
+        if body.template_id:
+            if graph is not None:
+                raise WorkflowDomainError("创建工作流时不能同时提交模板和自定义图")
+            graph = built_in_template_graph(db, body.template_id, user_id=user.id)
         return create_workflow(
-            db, workspace_id=body.workspace_id, name=body.name, description=body.description, graph=body.graph
+            db, workspace_id=body.workspace_id, name=body.name, description=body.description, graph=graph
         )
     except WorkflowDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

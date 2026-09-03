@@ -36,6 +36,7 @@ export function createWorkflow(body: {
   name: string;
   description?: string;
   graph?: WorkflowGraph | null;
+  template_id?: "full_video_generation";
 }): Promise<Workflow> {
   return api<Workflow>("/api/workflows", { method: "POST", body: JSON.stringify(body) });
 }

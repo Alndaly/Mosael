@@ -123,6 +123,7 @@ const NODE_ICONS: Record<string, React.ReactNode> = {
   asset_tag: <Tags size={13} />,
   asset_update: <FolderInput size={13} />,
   project_create: <FolderPlus size={13} />,
+  project_sequence_create: <FolderPlus size={13} />,
 };
 
 /** Shared semantic presentation for canvas nodes and their inspector header. */

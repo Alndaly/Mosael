@@ -144,6 +144,7 @@ _FIELD_LABELS = {
     "frequency_penalty": "wfField_frequency_penalty",
     "gone": "wfField_gone",
     "headers": "wfField_headers",
+    "height": "wfField_height",
     "input": "wfField_input",
     "inputs": "wfField_inputs",
     "instance_id": "wfField_instance_id",
@@ -596,6 +597,10 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "required": True,
                 "description": "wfNode_loop_foreach_items",
             },
+            "inputs": {
+                "type": "object",
+                "description": "wfNode_loop_foreach_inputs",
+            },
             "body": {"type": "graph", "description": "wfNode_loop_foreach_body"},
             "output": {
                 "type": "template",
@@ -669,6 +674,18 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "name": {"type": "template", "required": True, "description": "wfNode_project_create_name"},
         },
         "outputs": ["project_id", "name"],
+    },
+    "project_sequence_create": {
+        "category": "wfCat_asset",
+        "label": "wfNode_project_sequence_create",
+        "description": "wfNode_project_sequence_create_desc",
+        "config": {
+            "name": {"type": "template", "required": True, "description": "wfNode_project_sequence_create_name"},
+            "width": {"type": "number", "description": "wfNode_project_sequence_create_width"},
+            "height": {"type": "number", "description": "wfNode_project_sequence_create_height"},
+            "fps": {"type": "number", "description": "wfNode_project_sequence_create_fps"},
+        },
+        "outputs": ["project_id", "sequence_id", "video_track_id", "audio_track_id", "name"],
     },
     # 组合/嵌套:把工作流当子流程调用,声明工作流的输出契约。
     "call_workflow": {
@@ -980,7 +997,10 @@ def _unresolvable_body_refs(nodes: list[Any], scope: str) -> list[str]:
     the inner body's node names as out-of-scope references. Its `inputs`/`items` (outer-facing) are
     still scanned, since those resolve in *this* scope.
     """
-    known = {scope} | {str(node.get("id", "")) for node in nodes if isinstance(node, dict)}
+    # 循环体除 loop.item/index 外还能读取显式传入的 input.*。这不是偷看外层作用域:
+    # 外层值必须逐项写进循环节点的 inputs,因此依赖在画布上仍然清楚可见。
+    roots = {scope, "input"} if scope == "loop" else {scope}
+    known = roots | {str(node.get("id", "")) for node in nodes if isinstance(node, dict)}
     unknown: set[str] = set()
     for node in nodes:
         if not isinstance(node, dict):
@@ -996,7 +1016,10 @@ def _unresolvable_body_refs(nodes: list[Any], scope: str) -> list[str]:
     if not unknown:
         return []
     if scope == "loop":
-        return [f"循环体引用了循环外的节点:{', '.join(sorted(unknown))};循环体只能引用 loop 与体内节点"]
+        return [
+            f"循环体引用了循环外的节点:{', '.join(sorted(unknown))};"
+            "循环体只能引用 loop、input 与体内节点"
+        ]
     return [f"子图引用了作用域外的节点:{', '.join(sorted(unknown))};子图只能引用 input 与体内节点"]
 
 
@@ -1062,6 +1085,7 @@ INTERNAL_NODE_TYPES = frozenset(
         "asset_tag",
         "asset_update",
         "project_create",
+        "project_sequence_create",
         "output",
         "subgraph",
     }

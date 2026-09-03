@@ -9316,6 +9316,8 @@ export interface components {
             graph?: {
                 [key: string]: unknown;
             } | null;
+            /** Template Id */
+            template_id?: string | null;
         };
         /**
          * WorkflowImportRequest

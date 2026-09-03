@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Asset, Project, Workflow
+from app.db.models import Asset, Project, Sequence, Track, Workflow
 from app.domain.notifications import notify
 from app.domain.workflows import WorkflowDomainError
 from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX
@@ -237,3 +237,48 @@ def project_create(db: Session, workflow: Workflow, config: dict[str, Any]) -> d
     db.commit()
     db.refresh(project)
     return {"project_id": project.id, "name": project.name}
+
+
+@register("project_sequence_create")
+def project_sequence_create(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    """建立可立即编排和导出的项目骨架。
+
+    普通「新建项目」只负责归档素材；自动成片需要的是项目 + 序列 + 默认音视频轨。如果让模板
+    分别创建这四行，就会有半成品泄漏和轨道 id 无处获取的问题，因此把它们作为一个事务节点。
+    """
+    name = str(config.get("name") or "").strip()
+    if not name:
+        raise WorkflowDomainError("新建成片项目:项目名不能为空")
+    try:
+        width = int(config.get("width") or 1920)
+        height = int(config.get("height") or 1080)
+        fps = float(config.get("fps") or 30)
+    except (TypeError, ValueError) as exc:
+        raise WorkflowDomainError("新建成片项目:宽、高和帧率必须是数字") from exc
+    if not 16 <= width <= 16384 or not 16 <= height <= 16384:
+        raise WorkflowDomainError("新建成片项目:画布宽高必须在 16 到 16384 之间")
+    if not 1 <= fps <= 240:
+        raise WorkflowDomainError("新建成片项目:帧率必须在 1 到 240 之间")
+
+    project = Project(workspace_id=workflow.workspace_id, name=name)
+    sequence = Sequence(
+        workspace_id=workflow.workspace_id,
+        project=project,
+        name=name,
+        width=width,
+        height=height,
+        fps=fps,
+    )
+    video = Track(sequence=sequence, kind="video", name="V1", position=0)
+    audio = Track(sequence=sequence, kind="audio", name="A1", position=1)
+    db.add_all([project, sequence, video, audio])
+    db.flush()
+    project.active_sequence_id = sequence.id
+    db.commit()
+    return {
+        "project_id": project.id,
+        "sequence_id": sequence.id,
+        "video_track_id": video.id,
+        "audio_track_id": audio.id,
+        "name": project.name,
+    }

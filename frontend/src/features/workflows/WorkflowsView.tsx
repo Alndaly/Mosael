@@ -28,6 +28,7 @@ import {
   Check,
   CircleCheck,
   Download,
+  Film,
   FileUp,
   History,
   Link2,
@@ -297,11 +298,22 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   const nodeTypes = useQuery({ queryKey: ["workflow-node-types"], queryFn: fetchWorkflowNodeTypes, staleTime: Infinity });
 
   const create = useMutation({
-    mutationFn: () => createWorkflow({ workspace_id: workspace.id, name: t("wfDefaultName"), description: "" }),
+    mutationFn: (templateId?: "full_video_generation") =>
+      createWorkflow(
+        templateId
+          ? {
+              workspace_id: workspace.id,
+              name: t("wfFullVideoTemplateName"),
+              description: t("wfFullVideoTemplateDescription"),
+              template_id: templateId,
+            }
+          : { workspace_id: workspace.id, name: t("wfDefaultName"), description: "" },
+      ),
     onSuccess: (workflow) => {
       setSelectedId(workflow.id);
       void qc.invalidateQueries({ queryKey: ["workflows", workspace.id] });
     },
+    onError: (error: Error) => toast.error(t("wfCreateFailed"), { description: error.message }),
   });
 
   const menuRename = useMutation({
@@ -409,9 +421,16 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
           title={t("wfEmptyTitle")}
           body={t("wfEmptyBody")}
           action={
-            <span className="inline-flex items-center gap-2">
-              <Button loading={create.isPending} onClick={() => create.mutate()}>
+            <span className="inline-flex flex-wrap items-center justify-center gap-2">
+              <Button loading={create.isPending && create.variables === undefined} onClick={() => create.mutate(undefined)}>
                 <Plus size={15} /> {t("wfCreate")}
+              </Button>
+              <Button
+                variant="outline"
+                loading={create.isPending && create.variables === "full_video_generation"}
+                onClick={() => create.mutate("full_video_generation")}
+              >
+                <Film size={15} /> {t("wfCreateFullVideo")}
               </Button>
               <Button variant="outline" loading={importFile.isPending} onClick={() => importInputRef.current?.click()}>
                 <FileUp size={15} /> {t("wfImport")}
@@ -505,7 +524,15 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
               <Button variant="outline" size="sm" loading={importFile.isPending} onClick={() => importInputRef.current?.click()}>
                 <FileUp size={13} /> {t("wfImport")}
               </Button>
-              <Button size="sm" loading={create.isPending} onClick={() => create.mutate()}>
+              <Button
+                variant="outline"
+                size="sm"
+                loading={create.isPending && create.variables === "full_video_generation"}
+                onClick={() => create.mutate("full_video_generation")}
+              >
+                <Film size={13} /> {t("wfCreateFullVideo")}
+              </Button>
+              <Button size="sm" loading={create.isPending && create.variables === undefined} onClick={() => create.mutate(undefined)}>
                 <Plus size={13} /> {t("wfCreate")}
               </Button>
             </>

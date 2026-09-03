@@ -50,6 +50,8 @@ NODE_TO_TOOL: dict[str, str] = {
     "asset_tag": "update_asset_tags",
     "asset_update": "update_asset",
     "project_create": "create_project",
+    # 画布上的自动成片便利节点会顺手建立默认序列和轨道；智能体侧对应的用户目标仍是新建项目。
+    "project_sequence_create": "create_project",
     "call_workflow": "run_workflow",
     "browser_open": "browser_open",
     "browser_navigate": "browser_navigate",
