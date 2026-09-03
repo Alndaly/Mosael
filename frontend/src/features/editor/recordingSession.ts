@@ -4,6 +4,8 @@ export interface RecordingInput {
   kind: RecordingKind;
   stream: MediaStream;
   filenamePrefix: string;
+  /** Releases resources not represented by `stream`, such as a camera feeding a canvas stream. */
+  release?: () => void;
 }
 
 export interface RecordingSession {
@@ -24,6 +26,14 @@ export class EmptyRecordingError extends Error {
     super(`The ${kind} capture did not contain usable media.`);
     this.name = "EmptyRecordingError";
   }
+}
+
+/** Releases every capture resource exactly through the ownership contract declared by its input. */
+export function releaseRecordingInputs(inputs: readonly RecordingInput[]): void {
+  const streams = new Set(inputs.filter((input) => !input.release).map((input) => input.stream));
+  const releases = new Set(inputs.flatMap((input) => (input.release ? [input.release] : [])));
+  releases.forEach((release) => release());
+  streams.forEach((stream) => stream.getTracks().forEach((track) => track.stop()));
 }
 
 /**
@@ -90,8 +100,7 @@ export function createRecordingSession(
   const releaseStreams = () => {
     if (released) return;
     released = true;
-    const streams = new Set(inputs.map((input) => input.stream));
-    streams.forEach((stream) => stream.getTracks().forEach((track) => track.stop()));
+    releaseRecordingInputs(inputs);
   };
 
   const cancel = () => {

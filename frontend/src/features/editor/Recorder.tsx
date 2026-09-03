@@ -1,15 +1,18 @@
 import React from "react";
-import { Circle, Mic, Monitor as ScreenIcon, Square, Video } from "lucide-react";
+import { Circle, FlipHorizontal2, Mic, Monitor as ScreenIcon, Square, Video } from "lucide-react";
 import { toast } from "sonner";
 
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ModalShell } from "@/components/app/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { createMirroredCameraCapture } from "./cameraCapture";
 import {
   createRecordingSession,
   EmptyRecordingError,
+  releaseRecordingInputs,
   type RecordingInput,
   type RecordingSession,
 } from "./recordingSession";
@@ -17,6 +20,7 @@ import {
 type Source = "screen" | "camera" | "screenCamera" | "mic";
 
 const SOURCES: readonly Source[] = ["screen", "camera", "screenCamera", "mic"];
+const CAMERA_MIRROR_STORAGE_KEY = "mosael.recorder.cameraMirror";
 
 /** Capture screen / webcam / mic via MediaRecorder and hand independent files to the caller.
  *  A screen + camera session deliberately stays as two assets. Screen capture in the packaged
@@ -48,6 +52,9 @@ export function Recorder({
   const [cameras, setCameras] = React.useState<MediaDeviceInfo[]>([]);
   const [micId, setMicId] = React.useState<string>(() => localStorage.getItem("mosael.recorder.mic") ?? "");
   const [cameraId, setCameraId] = React.useState<string>(() => localStorage.getItem("mosael.recorder.camera") ?? "");
+  const [mirrorCamera, setMirrorCamera] = React.useState(
+    () => localStorage.getItem(CAMERA_MIRROR_STORAGE_KEY) === "true",
+  );
   const [level, setLevel] = React.useState(0); // 0-1 实时输入电平(有声音才有柱,哑设备当场现形)
   const audioCtxRef = React.useRef<AudioContext | null>(null);
   const levelRafRef = React.useRef<number | null>(null);
@@ -153,12 +160,16 @@ export function Recorder({
 
   const start = async () => {
     const acquiredStreams: MediaStream[] = [];
+    const inputs: RecordingInput[] = [];
+    const transferStreamOwnership = (stream: MediaStream) => {
+      const index = acquiredStreams.indexOf(stream);
+      if (index >= 0) acquiredStreams.splice(index, 1);
+    };
     try {
       const media = navigator.mediaDevices;
       // exact 而不是 ideal:用户点名选的设备拿不到就该报错,而不是静默换一个继续录。
       const audioConstraint: MediaTrackConstraints | boolean = micId ? { deviceId: { exact: micId } } : true;
       const videoConstraint: MediaTrackConstraints | boolean = cameraId ? { deviceId: { exact: cameraId } } : true;
-      const inputs: RecordingInput[] = [];
       let screenStream: MediaStream | null = null;
       let cameraStream: MediaStream | null = null;
 
@@ -166,16 +177,17 @@ export function Recorder({
         screenStream = await media.getDisplayMedia({ video: true, audio: true });
         acquiredStreams.push(screenStream);
         inputs.push({ kind: "screen", stream: screenStream, filenamePrefix: t("record_screen_file") });
+        transferStreamOwnership(screenStream);
       }
       if (capturesCamera) {
         cameraStream = await media.getUserMedia({ video: videoConstraint, audio: audioConstraint });
         acquiredStreams.push(cameraStream);
-        inputs.push({ kind: "camera", stream: cameraStream, filenamePrefix: t("record_camera_file") });
       }
       if (source === "mic") {
         const micStream = await media.getUserMedia({ audio: audioConstraint });
         acquiredStreams.push(micStream);
         inputs.push({ kind: "mic", stream: micStream, filenamePrefix: t("record_mic_file") });
+        transferStreamOwnership(micStream);
       }
 
       if (screenVideoRef.current && screenStream) {
@@ -184,7 +196,19 @@ export function Recorder({
       }
       if (cameraVideoRef.current && cameraStream) {
         cameraVideoRef.current.srcObject = cameraStream;
-        void cameraVideoRef.current.play().catch(() => undefined);
+        await cameraVideoRef.current.play().catch(() => undefined);
+        if (mirrorCamera) {
+          const capture = createMirroredCameraCapture(cameraStream, cameraVideoRef.current);
+          inputs.push({
+            kind: "camera",
+            stream: capture.stream,
+            filenamePrefix: t("record_camera_file"),
+            release: capture.release,
+          });
+        } else {
+          inputs.push({ kind: "camera", stream: cameraStream, filenamePrefix: t("record_camera_file") });
+        }
+        transferStreamOwnership(cameraStream);
       }
       const levelStream = cameraStream ?? screenStream ?? inputs[0]?.stream;
       if (levelStream) startLevelMeter(levelStream);
@@ -202,7 +226,10 @@ export function Recorder({
       const session = sessionRef.current;
       session?.cancel();
       sessionRef.current = null;
-      if (!session) acquiredStreams.forEach((stream) => stream.getTracks().forEach((track) => track.stop()));
+      if (!session) {
+        releaseRecordingInputs(inputs);
+        acquiredStreams.forEach((stream) => stream.getTracks().forEach((track) => track.stop()));
+      }
       cleanupUi();
       toast.error(t("recordDenied"));
     }
@@ -286,7 +313,12 @@ export function Recorder({
                 )}
               </div>
               <div className="relative min-w-0 overflow-hidden bg-black">
-                <video ref={cameraVideoRef} className="h-full w-full object-contain" muted playsInline />
+                <video
+                  ref={cameraVideoRef}
+                  className={cn("h-full w-full object-contain", mirrorCamera && "-scale-x-100")}
+                  muted
+                  playsInline
+                />
                 {recording && (
                   <span className="absolute bottom-2 left-2 rounded-full bg-black/65 px-2 py-0.5 text-ui-xs text-white">
                     {t("record_camera")}
@@ -297,7 +329,12 @@ export function Recorder({
           ) : source === "screen" ? (
             <video ref={screenVideoRef} className="h-full w-full bg-black object-contain" muted playsInline />
           ) : source === "camera" ? (
-            <video ref={cameraVideoRef} className="h-full w-full bg-black object-contain" muted playsInline />
+            <video
+              ref={cameraVideoRef}
+              className={cn("h-full w-full bg-black object-contain", mirrorCamera && "-scale-x-100")}
+              muted
+              playsInline
+            />
           ) : null}
           {recording && source === "mic" && (
             <div className="text-[color-mix(in_oklab,var(--primary)_70%,#fff)]">
@@ -389,6 +426,23 @@ export function Recorder({
                 </SelectContent>
               </Select>
             </div>
+            {capturesCamera && (
+              <label className="flex min-h-8 items-center justify-between gap-3 rounded-md border border-border bg-field px-3 py-1.5">
+                <span className="inline-flex min-w-0 items-center gap-2 text-ui-sm">
+                  <FlipHorizontal2 size={13} className="shrink-0 text-muted-foreground" />
+                  <span>{t("recordCameraMirror")}</span>
+                </span>
+                <Switch
+                  aria-label={t("recordCameraMirror")}
+                  checked={mirrorCamera}
+                  disabled={recording}
+                  onCheckedChange={(checked) => {
+                    setMirrorCamera(checked);
+                    localStorage.setItem(CAMERA_MIRROR_STORAGE_KEY, String(checked));
+                  }}
+                />
+              </label>
+            )}
             {recording && (
               <div className="flex items-center gap-2" title={t("recordLevel")}>
                 <Mic size={11} className="shrink-0 text-muted-foreground" />

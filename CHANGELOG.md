@@ -9,6 +9,8 @@ commit list and downloadable artifacts.
 
 - Added synchronized screen-and-camera recording to the media library and editor media pool, producing
   two independent assets from one recording session instead of baking the camera into the screen capture.
+- Added an optional, remembered camera mirror that flips both the live preview and saved camera asset while
+  leaving the independently recorded screen asset unchanged.
 
 ## [1.0.0-beta1] - 2026-09-03
 

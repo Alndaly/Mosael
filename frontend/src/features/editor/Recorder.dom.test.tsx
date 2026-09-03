@@ -8,14 +8,19 @@ vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 
 import { Recorder } from "./Recorder";
 
+const originalCanvasCaptureStream = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, "captureStream");
+
 class FakeMediaRecorder {
+  static streams: MediaStream[] = [];
   state: RecordingState = "inactive";
   mimeType = "video/webm";
   ondataavailable: ((event: BlobEvent) => void) | null = null;
   onstop: ((event: Event) => void) | null = null;
   onerror: ((event: Event) => void) | null = null;
 
-  constructor(_stream: MediaStream) {}
+  constructor(stream: MediaStream) {
+    FakeMediaRecorder.streams.push(stream);
+  }
 
   start() {
     this.state = "recording";
@@ -32,6 +37,7 @@ function fakeStream() {
   let onEnded: EventListener | null = null;
   const track = {
     stop: vi.fn(),
+    getSettings: () => ({ width: 1280, height: 720, frameRate: 30 }),
     addEventListener: vi.fn((type: string, listener: EventListenerOrEventListenerObject) => {
       if (type === "ended") {
         onEnded = typeof listener === "function" ? listener : (event) => listener.handleEvent(event);
@@ -55,6 +61,8 @@ describe("Recorder", () => {
   const getDisplayMedia = vi.fn();
 
   beforeEach(() => {
+    localStorage.clear();
+    FakeMediaRecorder.streams = [];
     enumerateDevices.mockReset().mockResolvedValue([]);
     getUserMedia.mockReset();
     getDisplayMedia.mockReset();
@@ -67,8 +75,29 @@ describe("Recorder", () => {
   });
 
   afterEach(() => {
+    if (originalCanvasCaptureStream) {
+      Object.defineProperty(HTMLCanvasElement.prototype, "captureStream", originalCanvasCaptureStream);
+    } else {
+      Reflect.deleteProperty(HTMLCanvasElement.prototype, "captureStream");
+    }
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it("lets the user mirror the camera preview and remembers the choice", async () => {
+    const probe = fakeStream();
+    getUserMedia.mockResolvedValueOnce(probe.stream);
+    const user = userEvent.setup();
+
+    render(<Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "record_camera" }));
+    const mirror = screen.getByRole("switch", { name: "recordCameraMirror" });
+    await user.click(mirror);
+
+    expect(mirror).toBeChecked();
+    expect(document.querySelector("video")).toHaveClass("-scale-x-100");
+    expect(localStorage.getItem("mosael.recorder.cameraMirror")).toBe("true");
   });
 
   it("records the screen and camera as two separate files", async () => {
@@ -97,6 +126,46 @@ describe("Recorder", () => {
     expect(getUserMedia).toHaveBeenLastCalledWith({ video: true, audio: true });
     expect(screenCapture.track.stop).toHaveBeenCalledOnce();
     expect(cameraCapture.track.stop).toHaveBeenCalledOnce();
+  });
+
+  it("records mirrored camera frames without transforming the screen asset", async () => {
+    const probe = fakeStream();
+    const screenCapture = fakeStream();
+    const cameraCapture = fakeStream();
+    const mirroredCapture = fakeStream();
+    Object.assign(mirroredCapture.stream, { addTrack: vi.fn() });
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      clearRect: vi.fn(),
+      drawImage: vi.fn(),
+      restore: vi.fn(),
+      save: vi.fn(),
+      scale: vi.fn(),
+      translate: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+    Object.defineProperty(HTMLCanvasElement.prototype, "captureStream", {
+      configurable: true,
+      value: vi.fn(() => mirroredCapture.stream),
+    });
+    getUserMedia.mockResolvedValueOnce(probe.stream).mockResolvedValueOnce(cameraCapture.stream);
+    getDisplayMedia.mockResolvedValueOnce(screenCapture.stream);
+    localStorage.setItem("mosael.recorder.cameraMirror", "true");
+    const onRecorded = vi.fn();
+    const user = userEvent.setup();
+
+    render(<Recorder open onOpenChange={vi.fn()} onRecorded={onRecorded} />);
+
+    await user.click(screen.getByRole("button", { name: "record_screenCamera" }));
+    await user.click(screen.getByRole("button", { name: /recordStart/ }));
+    await screen.findByRole("button", { name: /recordStop/ });
+
+    expect(FakeMediaRecorder.streams).toEqual([screenCapture.stream, mirroredCapture.stream]);
+
+    await user.click(screen.getByRole("button", { name: /recordStop/ }));
+    await waitFor(() => expect(onRecorded).toHaveBeenCalledOnce());
+    expect(onRecorded.mock.calls[0][0]).toHaveLength(2);
+    expect(screenCapture.track.stop).toHaveBeenCalledOnce();
+    expect(cameraCapture.track.stop).toHaveBeenCalledOnce();
+    expect(mirroredCapture.track.stop).toHaveBeenCalledOnce();
   });
 
   it("stops both captures when screen sharing ends from the operating system", async () => {
