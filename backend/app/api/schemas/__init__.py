@@ -448,12 +448,34 @@ class CutClipRangesRequest(BaseModel):
     ranges: list[CutClipRangeRequest] = Field(min_length=1)
 
 
+class ClipRangeCutsRequest(BaseModel):
+    clip_id: str
+    ranges: list[CutClipRangeRequest] = Field(min_length=1)
+
+
+class CutClipRangesBatchRequest(BaseModel):
+    """一次字幕裁切手势涉及的全部片段。整批只产生一条时间线操作。"""
+
+    cuts: list[ClipRangeCutsRequest] = Field(min_length=1)
+
+
 class SplitClipRequest(BaseModel):
     src_time: float
 
 
 class SplitClipPointsRequest(BaseModel):
     src_times: list[float] = Field(min_length=1)
+
+
+class ClipPointSplitsRequest(BaseModel):
+    clip_id: str
+    src_times: list[float] = Field(min_length=1)
+
+
+class SplitClipPointsBatchRequest(BaseModel):
+    """一次字幕切分手势涉及的全部片段。整批只产生一条时间线操作。"""
+
+    splits: list[ClipPointSplitsRequest] = Field(min_length=1)
 
 
 class MoveTrackRequest(BaseModel):

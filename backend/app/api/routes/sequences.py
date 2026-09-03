@@ -14,6 +14,7 @@ from app.api.schemas import (
     AddTrackRequest,
     CutClipRangeRequest,
     CutClipRangesRequest,
+    CutClipRangesBatchRequest,
     ExportRequest,
     InsertClipRequest,
     InsertTextClipRequest,
@@ -35,6 +36,7 @@ from app.api.schemas import (
     GenerateSubtitlesRequest,
     MoveTrackRequest,
     SplitClipPointsRequest,
+    SplitClipPointsBatchRequest,
     SubtitleDubRequest,
     SplitClipRequest,
     TrimClipRequest,
@@ -49,6 +51,8 @@ from app.domain.sequences.operations import (
     AddTrack,
     CutClipRange,
     CutClipRanges,
+    ClipRangeCuts,
+    CutClipRangesBatch,
     DeleteClip,
     DeleteClipsBatch,
     RippleDeleteClipsBatch,
@@ -73,10 +77,13 @@ from app.domain.sequences.operations import (
     SetTrackState,
     SplitClip,
     SplitClipPoints,
+    ClipPointSplits,
+    SplitClipPointsBatch,
     TrimClip,
     add_track as add_track_operation,
     cut_clip_range as cut_clip_range_operation,
     cut_clip_ranges as cut_clip_ranges_operation,
+    cut_clip_ranges_batch as cut_clip_ranges_batch_operation,
     delete_clip as delete_clip_operation,
     delete_clips_batch as delete_clips_batch_operation,
     ripple_delete_clips_batch as ripple_delete_clips_batch_operation,
@@ -92,6 +99,7 @@ from app.domain.sequences.operations import (
     set_track_state as set_track_state_operation,
     split_clip as split_clip_operation,
     split_clip_at_points as split_clip_points_operation,
+    split_clip_points_batch as split_clip_points_batch_operation,
     insert_clip as insert_clip_operation,
     generate_subtitles as generate_subtitles_operation,
     insert_text_clip as insert_text_clip_operation,
@@ -248,6 +256,22 @@ def trim_clip(sequence_id: str, clip_id: str, body: TrimClipRequest, db: DbSessi
     return _sequence_response(_get_sequence(db, sequence_id))
 
 
+@router.post("/sequences/{sequence_id}/clips/cut-ranges", response_model=SequenceOut)
+def cut_clip_ranges_batch(
+    sequence_id: str, body: CutClipRangesBatchRequest, db: DbSession, user: CurrentUser
+) -> Response:
+    require_sequence_access(db, user, sequence_id, perm="edit")
+    cuts = tuple(
+        ClipRangeCuts(
+            clip_id=cut.clip_id,
+            ranges=tuple((item.src_start, item.src_end) for item in cut.ranges),
+        )
+        for cut in body.cuts
+    )
+    _apply(lambda: cut_clip_ranges_batch_operation(db, sequence_id, CutClipRangesBatch(cuts=cuts)))
+    return _sequence_response(_get_sequence(db, sequence_id))
+
+
 @router.post("/sequences/{sequence_id}/clips/{clip_id}/cut-range", response_model=SequenceOut)
 def cut_clip_range(sequence_id: str, clip_id: str, body: CutClipRangeRequest, db: DbSession, user: CurrentUser) -> Response:
     require_sequence_access(db, user, sequence_id, perm="edit")
@@ -269,6 +293,19 @@ def cut_clip_ranges(
 def split_clip(sequence_id: str, clip_id: str, body: SplitClipRequest, db: DbSession, user: CurrentUser) -> Response:
     require_sequence_access(db, user, sequence_id, perm="edit")
     _apply(lambda: split_clip_operation(db, sequence_id, SplitClip(clip_id=clip_id, src_time=body.src_time)))
+    return _sequence_response(_get_sequence(db, sequence_id))
+
+
+@router.post("/sequences/{sequence_id}/clips/split-points", response_model=SequenceOut)
+def split_clip_points_batch(
+    sequence_id: str, body: SplitClipPointsBatchRequest, db: DbSession, user: CurrentUser
+) -> Response:
+    require_sequence_access(db, user, sequence_id, perm="edit")
+    splits = tuple(
+        ClipPointSplits(clip_id=split.clip_id, src_times=tuple(split.src_times))
+        for split in body.splits
+    )
+    _apply(lambda: split_clip_points_batch_operation(db, sequence_id, SplitClipPointsBatch(splits=splits)))
     return _sequence_response(_get_sequence(db, sequence_id))
 
 

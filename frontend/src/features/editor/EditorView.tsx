@@ -16,7 +16,7 @@ import {
   uploadFont,
   deleteFont,
   cutClipRange,
-  cutClipRanges,
+  cutClipRangesBatch,
   deleteClip,
   deleteClipsBatch,
   rippleDeleteClip,
@@ -34,7 +34,7 @@ import {
   setTrackState,
   grabSequenceFrame,
   splitClip,
-  splitClipAtPoints,
+  splitClipAtPointsBatch,
   setClipEffects,
   detachClipAudio,
   setClipGain,
@@ -500,15 +500,14 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     },
   });
   const cutRangesMutation = useMutation({
-    mutationFn: async (cuts: Array<{ clipId: string; ranges: Array<{ srcStart: number; srcEnd: number }> }>) => {
-      for (const cut of cuts) {
-        await cutClipRanges(
-          sequence!.id,
-          cut.clipId,
-          cut.ranges.map((range) => ({ src_start: range.srcStart, src_end: range.srcEnd })),
-        );
-      }
-    },
+    mutationFn: (cuts: Array<{ clipId: string; ranges: Array<{ srcStart: number; srcEnd: number }> }>) =>
+      cutClipRangesBatch(
+        sequence!.id,
+        cuts.map((cut) => ({
+          clip_id: cut.clipId,
+          ranges: cut.ranges.map((range) => ({ src_start: range.srcStart, src_end: range.srcEnd })),
+        })),
+      ),
     onSuccess: () => {
       useEditorStore.getState().selectClip(null);
       void refreshSequences();
@@ -518,21 +517,16 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     mutationFn: ({ clipId, srcTime }: { clipId: string; srcTime: number }) => splitClip(sequence!.id, clipId, srcTime),
     onSuccess: refreshSequences,
   });
-  // Transcript-driven split (按句切分 / 单句独立 / 在此切一刀): divide each named clip at
-  // its source-time points. Per-clip try/catch so a clip with no interior cut just no-ops.
+  // Transcript-driven split (按句切分 / 单句独立 / 在此切一刀): all named clips belong to
+  // one user gesture, so the sequence Module records and undoes the whole batch atomically.
   const splitPointsMutation = useMutation({
-    mutationFn: async (cuts: Array<{ clipId: string; srcTimes: number[] }>) => {
-      let latest: Sequence | null = null;
-      for (const cut of cuts) {
-        if (cut.srcTimes.length === 0) continue;
-        try {
-          latest = await splitClipAtPoints(sequence!.id, cut.clipId, cut.srcTimes);
-        } catch {
-          /* clip had no valid interior split point — skip it */
-        }
-      }
-      return latest;
-    },
+    mutationFn: (cuts: Array<{ clipId: string; srcTimes: number[] }>) =>
+      splitClipAtPointsBatch(
+        sequence!.id,
+        cuts
+          .filter((cut) => cut.srcTimes.length > 0)
+          .map((cut) => ({ clip_id: cut.clipId, src_times: cut.srcTimes })),
+      ),
     onSuccess: (updated) => {
       if (updated) applySequence(updated);
       else void refreshSequences();

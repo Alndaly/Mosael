@@ -520,6 +520,16 @@ export function cutClipRanges(
   });
 }
 
+export function cutClipRangesBatch(
+  sequenceId: string,
+  cuts: Array<{ clip_id: string; ranges: Array<{ src_start: number; src_end: number }> }>,
+): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/clips/cut-ranges`, {
+    method: "POST",
+    body: JSON.stringify({ cuts }),
+  });
+}
+
 export function setClipSpeed(sequenceId: string, clipId: string, speed: number): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/speed`, {
     method: "PATCH",
@@ -575,6 +585,16 @@ export function splitClipAtPoints(sequenceId: string, clipId: string, srcTimes: 
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/split-points`, {
     method: "POST",
     body: JSON.stringify({ src_times: srcTimes }),
+  });
+}
+
+export function splitClipAtPointsBatch(
+  sequenceId: string,
+  splits: Array<{ clip_id: string; src_times: number[] }>,
+): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/clips/split-points`, {
+    method: "POST",
+    body: JSON.stringify({ splits }),
   });
 }
 

@@ -832,6 +832,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assets/url-support": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Url Support
+         * @description Classify a page through yt-dlp's registry without downloading it.
+         *
+         *     This is intentionally distinct from ``probe-url``: the side panel only needs to know whether
+         *     importing the active page is meaningful. It must not make the user wait for remote metadata.
+         */
+        get: operations["url_support_api_assets_url_support_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/assets": {
         parameters: {
             query?: never;
@@ -931,6 +954,26 @@ export interface paths {
          *     标记由 Electron 在 spawn 后端时置入(见 electron/main.cjs)。
          */
         post: operations["import_local_asset_api_assets_import_local_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assets/transcript-by-source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Transcript By Source
+         * @description Resolve a completed transcript for a previously imported video URL.
+         */
+        get: operations["get_transcript_by_source_api_assets_transcript_by_source_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1837,6 +1880,23 @@ export interface paths {
         patch: operations["trim_clip_api_sequences__sequence_id__clips__clip_id__trim_patch"];
         trace?: never;
     };
+    "/api/sequences/{sequence_id}/clips/cut-ranges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cut Clip Ranges Batch */
+        post: operations["cut_clip_ranges_batch_api_sequences__sequence_id__clips_cut_ranges_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sequences/{sequence_id}/clips/{clip_id}/cut-range": {
         parameters: {
             query?: never;
@@ -1882,6 +1942,23 @@ export interface paths {
         put?: never;
         /** Split Clip */
         post: operations["split_clip_api_sequences__sequence_id__clips__clip_id__split_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sequences/{sequence_id}/clips/split-points": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Split Clip Points Batch */
+        post: operations["split_clip_points_batch_api_sequences__sequence_id__clips_split_points_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5542,10 +5619,7 @@ export interface components {
         };
         /**
          * BoardSpeak
-         * @description 把一段文字念成音频,产出落回画板上那一格。
-         *
-         *     和写文案**不是一条路**:写字几秒就回所以同步;念出来要起合成任务(可能还在另一台机器上跑),
-         *     所以走和出图出片同一套 —— 先摆占位、起任务、回执把产出填回来。
+         * @description 把文字异步合成为音频并落回画板占位。
          */
         BoardSpeak: {
             /** Workspace Id */
@@ -5572,7 +5646,7 @@ export interface components {
         };
         /**
          * BoardTrim
-         * @description 把一段视频/音频截出起止,产出落回画板上那一格。
+         * @description 截取视频或音频并把新素材落回画板；原素材不变。
          */
         BoardTrim: {
             /** Workspace Id */
@@ -5617,10 +5691,7 @@ export interface components {
         };
         /**
          * BoardWrite
-         * @description 让 AI 往画板上的一张便签里写字。
-         *
-         *     和 BoardGenerate **不是一条路**:出图出片要几十秒,所以那边先摆占位、起任务、回执填回来;
-         *     写字几秒就回,同步返回反而更直接 —— 为它铺一套任务/回执,用户看到的只是一个多余的转圈。
+         * @description 让 AI 同步写入一张画板便签。
          */
         BoardWrite: {
             /** Workspace Id */
@@ -5849,6 +5920,20 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** ClipPointSplitsRequest */
+        ClipPointSplitsRequest: {
+            /** Clip Id */
+            clip_id: string;
+            /** Src Times */
+            src_times: number[];
+        };
+        /** ClipRangeCutsRequest */
+        ClipRangeCutsRequest: {
+            /** Clip Id */
+            clip_id: string;
+            /** Ranges */
+            ranges: components["schemas"]["CutClipRangeRequest"][];
+        };
         /** ClipTextEntry */
         ClipTextEntry: {
             /** Clip Id */
@@ -5942,6 +6027,14 @@ export interface components {
             src_start: number;
             /** Src End */
             src_end: number;
+        };
+        /**
+         * CutClipRangesBatchRequest
+         * @description 一次字幕裁切手势涉及的全部片段。整批只产生一条时间线操作。
+         */
+        CutClipRangesBatchRequest: {
+            /** Cuts */
+            cuts: components["schemas"]["ClipRangeCutsRequest"][];
         };
         /** CutClipRangesRequest */
         CutClipRangesRequest: {
@@ -8326,11 +8419,7 @@ export interface components {
         };
         /**
          * SourceAssetRef
-         * @description 一份输入素材,**带着它的用途**。
-         *
-         *     此前这里是一个裸的 id 列表,谁是首帧靠「第 0 个」这条约定 —— 尾帧、参考图、参考视频
-         *     因此都没地方放。role 的取值见 ai/providers/contracts/generation.SOURCE_ROLES;哪个模型认哪几种,
-         *     由 domain/generation/catalog 的描述符声明。
+         * @description 一份输入素材及其在生成请求中的用途。
          */
         SourceAssetRef: {
             /** Asset Id */
@@ -8340,6 +8429,14 @@ export interface components {
              * @default first_frame
              */
             role: string;
+        };
+        /**
+         * SplitClipPointsBatchRequest
+         * @description 一次字幕切分手势涉及的全部片段。整批只产生一条时间线操作。
+         */
+        SplitClipPointsBatchRequest: {
+            /** Splits */
+            splits: components["schemas"]["ClipPointSplitsRequest"][];
         };
         /** SplitClipPointsRequest */
         SplitClipPointsRequest: {
@@ -8916,6 +9013,19 @@ export interface components {
              * @default false
              */
             truncated: boolean;
+        };
+        /**
+         * UrlSupportResponse
+         * @description Cheap URL classification backed by yt-dlp's installed extractor registry.
+         */
+        UrlSupportResponse: {
+            /** Supported */
+            supported: boolean;
+            /**
+             * Extractor
+             * @default
+             */
+            extractor: string;
         };
         /** UserOut */
         UserOut: {
@@ -11145,6 +11255,38 @@ export interface operations {
             };
         };
     };
+    url_support_api_assets_url_support_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+                url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UrlSupportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_assets_api_assets_get: {
         parameters: {
             query: {
@@ -11331,6 +11473,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_transcript_by_source_api_assets_transcript_by_source_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+                url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscriptOut"];
                 };
             };
             /** @description Validation Error */
@@ -13149,6 +13323,41 @@ export interface operations {
             };
         };
     };
+    cut_clip_ranges_batch_api_sequences__sequence_id__clips_cut_ranges_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CutClipRangesBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     cut_clip_range_api_sequences__sequence_id__clips__clip_id__cut_range_post: {
         parameters: {
             query?: never;
@@ -13234,6 +13443,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SplitClipRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    split_clip_points_batch_api_sequences__sequence_id__clips_split_points_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SplitClipPointsBatchRequest"];
             };
         };
         responses: {

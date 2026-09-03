@@ -152,3 +152,16 @@ class SplitClip:
 
 # 字幕编辑落到时间线上就是「一个片段换成若干片段」,和切分同一个形状,复用同一对实现。
 undoable("apply_transcript_edit")(SplitClip)
+
+
+@undoable("apply_transcript_edits_batch")
+class TranscriptEditsBatch:
+    """Several original clips replaced together by one transcript gesture."""
+
+    def inverse(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
+        for edit in reversed(payload["edits"]):
+            SplitClip.inverse(db, sequence, edit)
+
+    def forward(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
+        for edit in payload["edits"]:
+            SplitClip.forward(db, sequence, edit)

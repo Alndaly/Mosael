@@ -1279,13 +1279,71 @@ class CutClipRanges:
     actor_id: str | None = None
 
 
+@dataclass(frozen=True)
+class ClipRangeCuts:
+    clip_id: str
+    ranges: tuple[tuple[float, float], ...]
+
+
+@dataclass(frozen=True)
+class CutClipRangesBatch:
+    """Remove ranges from several clips as one user gesture and one undo step."""
+
+    cuts: tuple[ClipRangeCuts, ...]
+    actor_id: str | None = None
+
+
 def cut_clip_ranges(db: Session, sequence_id: str, op: CutClipRanges) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
-    clip = _require_clip(db, sequence_id, op.clip_id)
+    edit = _apply_clip_range_cuts(db, sequence, op.clip_id, op.ranges)
+
+    _record_operation(
+        db,
+        sequence,
+        kind="apply_transcript_edit",
+        payload=edit,
+        summary={
+            "operation": "apply_transcript_edit",
+            "clip_id": edit["original"]["clip_id"],
+            "created": len(edit["created"]),
+        },
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
+def cut_clip_ranges_batch(db: Session, sequence_id: str, op: CutClipRangesBatch) -> Sequence:
+    sequence = _require_sequence(db, sequence_id)
+    clip_ids = [cut.clip_id for cut in op.cuts]
+    if len(clip_ids) != len(set(clip_ids)):
+        raise SequenceDomainError("Each clip may only appear once in a batch cut")
+    edits = [_apply_clip_range_cuts(db, sequence, cut.clip_id, cut.ranges) for cut in op.cuts]
+    _record_operation(
+        db,
+        sequence,
+        kind="apply_transcript_edits_batch",
+        payload={"edits": edits},
+        summary={"operation": "apply_transcript_edits_batch", "clips": len(edits)},
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
+def _apply_clip_range_cuts(
+    db: Session,
+    sequence: Sequence,
+    clip_id: str,
+    ranges: tuple[tuple[float, float], ...],
+) -> dict[str, Any]:
+    """Apply one clip's range cuts without committing or recording an operation."""
+
+    clip = _require_clip(db, sequence.id, clip_id)
 
     clamped = sorted(
         (max(float(start), clip.src_in), min(float(end), clip.src_out))
-        for start, end in op.ranges
+        for start, end in ranges
         if min(float(end), clip.src_out) > max(float(start), clip.src_in)
     )
     if not clamped:
@@ -1330,21 +1388,12 @@ def cut_clip_ranges(db: Session, sequence_id: str, op: CutClipRanges) -> Sequenc
         created.append(_clip_payload(piece))
         timeline_cursor += (src_end - src_start) / speed
 
-    _record_operation(
-        db,
-        sequence,
-        kind="apply_transcript_edit",
-        payload={
-            "clip_id": original["clip_id"],
-            "ranges": [[start, end] for start, end in merged],
-            "original": original,
-            "created": created,
-        },
-        summary={"operation": "apply_transcript_edit", "clip_id": original["clip_id"], "created": len(created)},
-        actor_id=op.actor_id,
-    )
-    db.commit()
-    return sequence
+    return {
+        "clip_id": original["clip_id"],
+        "ranges": [[start, end] for start, end in merged],
+        "original": original,
+        "created": created,
+    }
 
 
 @dataclass
@@ -1361,15 +1410,72 @@ class SplitClipPoints:
     actor_id: str | None = None
 
 
+@dataclass(frozen=True)
+class ClipPointSplits:
+    clip_id: str
+    src_times: tuple[float, ...]
+
+
+@dataclass(frozen=True)
+class SplitClipPointsBatch:
+    """Split several clips as one user gesture and one undo step."""
+
+    splits: tuple[ClipPointSplits, ...]
+    actor_id: str | None = None
+
+
 def split_clip_at_points(db: Session, sequence_id: str, op: SplitClipPoints) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
-    clip = _require_clip(db, sequence_id, op.clip_id)
+    edit = _apply_clip_point_splits(db, sequence, op.clip_id, op.src_times)
+    _record_operation(
+        db,
+        sequence,
+        kind="split_clip",
+        payload=edit,
+        summary={
+            "operation": "split_clip",
+            "clip_id": edit["original"]["clip_id"],
+            "created": len(edit["created"]),
+        },
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
+def split_clip_points_batch(db: Session, sequence_id: str, op: SplitClipPointsBatch) -> Sequence:
+    sequence = _require_sequence(db, sequence_id)
+    clip_ids = [split.clip_id for split in op.splits]
+    if len(clip_ids) != len(set(clip_ids)):
+        raise SequenceDomainError("Each clip may only appear once in a batch split")
+    edits = [_apply_clip_point_splits(db, sequence, split.clip_id, split.src_times) for split in op.splits]
+    _record_operation(
+        db,
+        sequence,
+        kind="apply_transcript_edits_batch",
+        payload={"edits": edits},
+        summary={"operation": "apply_transcript_edits_batch", "clips": len(edits)},
+        actor_id=op.actor_id,
+    )
+    db.commit()
+    return sequence
+
+
+def _apply_clip_point_splits(
+    db: Session,
+    sequence: Sequence,
+    clip_id: str,
+    src_times: tuple[float, ...],
+) -> dict[str, Any]:
+    """Apply one clip's point splits without committing or recording an operation."""
+
+    clip = _require_clip(db, sequence.id, clip_id)
     speed = clip.speed or 1
 
     # Interior points only, sorted; drop any too close to a neighbour or to the clip ends.
     points: list[float] = []
     cursor = clip.src_in
-    for value in sorted({float(p) for p in op.src_times}):
+    for value in sorted({float(point) for point in src_times}):
         if value - cursor > MIN_CUT_REMAINDER and clip.src_out - value > MIN_CUT_REMAINDER:
             points.append(value)
             cursor = value
@@ -1403,16 +1509,12 @@ def split_clip_at_points(db: Session, sequence_id: str, op: SplitClipPoints) -> 
         db.flush()
         created.append(_clip_payload(piece))
 
-    _record_operation(
-        db,
-        sequence,
-        kind="split_clip",
-        payload={"clip_id": original["clip_id"], "src_time": points[0], "original": original, "created": created},
-        summary={"operation": "split_clip", "clip_id": original["clip_id"], "created": len(created)},
-        actor_id=op.actor_id,
-    )
-    db.commit()
-    return sequence
+    return {
+        "clip_id": original["clip_id"],
+        "src_time": points[0],
+        "original": original,
+        "created": created,
+    }
 
 
 MIN_CUT_REMAINDER = 0.05
