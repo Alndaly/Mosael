@@ -31,15 +31,16 @@ class FakeMediaRecorder {
   }
 }
 
-function fakeStream() {
+function fakeStream({ audio = false }: { audio?: boolean } = {}) {
   const track = {
     addEventListener: vi.fn(),
     getSettings: () => ({ width: 1280, height: 720, frameRate: 30 }),
     stop: vi.fn(),
   };
+  const audioTrack = { readyState: "live", stop: vi.fn() };
   return {
-    getAudioTracks: () => [],
-    getTracks: () => [track],
+    getAudioTracks: () => (audio ? [audioTrack] : []),
+    getTracks: () => (audio ? [track, audioTrack] : [track]),
     getVideoTracks: () => [track],
   } as unknown as MediaStream;
 }
@@ -71,7 +72,7 @@ describe("RecordingProvider", () => {
     vi.mocked(importAsset).mockClear();
     enumerateDevices.mockReset().mockResolvedValue([]);
     getUserMedia.mockReset().mockResolvedValueOnce(fakeStream());
-    getDisplayMedia.mockReset().mockResolvedValueOnce(fakeStream());
+    getDisplayMedia.mockReset().mockResolvedValueOnce(fakeStream({ audio: true }));
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,
       value: { enumerateDevices, getUserMedia, getDisplayMedia },

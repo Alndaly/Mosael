@@ -28,6 +28,17 @@ interface PreviewStreams {
   camera: MediaStream | null;
 }
 
+class SystemAudioUnavailableError extends Error {
+  constructor() {
+    super("System audio was requested but the display picker did not grant a live audio track.");
+    this.name = "SystemAudioUnavailableError";
+  }
+}
+
+function hasLiveAudioTrack(stream: MediaStream): boolean {
+  return stream.getAudioTracks().some((track) => track.readyState === "live");
+}
+
 /**
  * A live preview owns the DOM-to-stream binding, rather than treating it as a one-off command.
  * Radix replaces its dialog content when the recorder changes from modal setup to a non-modal
@@ -223,6 +234,12 @@ export function Recorder({
       if (capturesScreen) {
         screenStream = await media.getDisplayMedia({ video: true, audio: captureSystemAudio });
         acquiredStreams.push(screenStream);
+        // macOS may return a perfectly valid screen stream after the user leaves audio disabled
+        // in the system picker. Treat that as a rejected requested capability, not a successful
+        // recording: silently continuing creates a video that can never contain system sound.
+        if (captureSystemAudio && !hasLiveAudioTrack(screenStream)) {
+          throw new SystemAudioUnavailableError();
+        }
         inputs.push({ kind: "screen", stream: screenStream, filenamePrefix: t("record_screen_file") });
         transferStreamOwnership(screenStream);
       }
@@ -270,7 +287,7 @@ export function Recorder({
       setRecording(true);
       setSecs(0);
       timerRef.current = window.setInterval(() => setSecs((value) => value + 1), 1000);
-    } catch {
+    } catch (error) {
       const session = sessionRef.current;
       session?.cancel();
       sessionRef.current = null;
@@ -279,7 +296,7 @@ export function Recorder({
         acquiredStreams.forEach((stream) => stream.getTracks().forEach((track) => track.stop()));
       }
       cleanupUi();
-      toast.error(t("recordDenied"));
+      toast.error(t(error instanceof SystemAudioUnavailableError ? "recordSystemAudioMissing" : "recordDenied"));
     }
   };
 

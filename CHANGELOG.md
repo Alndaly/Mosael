@@ -9,6 +9,8 @@ commit list and downloadable artifacts.
 
 - Kept screen and camera streams attached to the live preview when the recorder changes from its setup dialog
   into the floating controller, preventing both preview panes from turning black during an active recording.
+- Prevented requested system-audio capture from silently degrading into a mute screen recording when the macOS
+  sharing picker returns no live audio track, and now explains how to retry with audio sharing enabled.
 
 ### Added
 

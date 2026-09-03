@@ -5,8 +5,10 @@ import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
+vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
 import { Recorder } from "./Recorder";
+import { toast } from "sonner";
 
 const originalCanvasCaptureStream = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, "captureStream");
 
@@ -33,7 +35,7 @@ class FakeMediaRecorder {
   }
 }
 
-function fakeStream() {
+function fakeStream({ audio = false }: { audio?: boolean } = {}) {
   let onEnded: EventListener | null = null;
   const track = {
     stop: vi.fn(),
@@ -44,13 +46,18 @@ function fakeStream() {
       }
     }),
   };
+  const audioTrack = {
+    stop: vi.fn(),
+    readyState: "live" as MediaStreamTrackState,
+  };
   return {
     stream: {
-      getTracks: () => [track],
+      getTracks: () => (audio ? [track, audioTrack] : [track]),
       getVideoTracks: () => [track],
-      getAudioTracks: () => [],
+      getAudioTracks: () => (audio ? [audioTrack] : []),
     } as unknown as MediaStream,
     track,
+    audioTrack,
     end: () => onEnded?.(new Event("ended")),
   };
 }
@@ -66,6 +73,7 @@ describe("Recorder", () => {
     enumerateDevices.mockReset().mockResolvedValue([]);
     getUserMedia.mockReset();
     getDisplayMedia.mockReset();
+    vi.mocked(toast.error).mockReset();
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,
       value: { enumerateDevices, getUserMedia, getDisplayMedia },
@@ -102,7 +110,7 @@ describe("Recorder", () => {
 
   it("keeps the app interactive while a recording is running", async () => {
     const probe = fakeStream();
-    const screenCapture = fakeStream();
+    const screenCapture = fakeStream({ audio: true });
     getUserMedia.mockResolvedValueOnce(probe.stream);
     getDisplayMedia.mockResolvedValueOnce(screenCapture.stream);
     const onWorkspaceAction = vi.fn();
@@ -126,7 +134,7 @@ describe("Recorder", () => {
 
   it("collapses configuration into a compact recording controller after start", async () => {
     const probe = fakeStream();
-    const screenCapture = fakeStream();
+    const screenCapture = fakeStream({ audio: true });
     getUserMedia.mockResolvedValueOnce(probe.stream);
     getDisplayMedia.mockResolvedValueOnce(screenCapture.stream);
     const user = userEvent.setup();
@@ -142,7 +150,7 @@ describe("Recorder", () => {
 
   it("keeps both live previews attached after the recorder becomes a floating controller", async () => {
     const probe = fakeStream();
-    const screenCapture = fakeStream();
+    const screenCapture = fakeStream({ audio: true });
     const cameraCapture = fakeStream();
     getUserMedia.mockResolvedValueOnce(probe.stream).mockResolvedValueOnce(cameraCapture.stream);
     getDisplayMedia.mockResolvedValueOnce(screenCapture.stream);
@@ -177,9 +185,26 @@ describe("Recorder", () => {
     expect(getDisplayMedia).toHaveBeenCalledWith({ video: true, audio: false });
   });
 
-  it("records the screen and camera as two separate files", async () => {
+  it("does not silently create a mute recording when requested system audio was not granted", async () => {
     const probe = fakeStream();
     const screenCapture = fakeStream();
+    getUserMedia.mockResolvedValueOnce(probe.stream);
+    getDisplayMedia.mockResolvedValueOnce(screenCapture.stream);
+    const user = userEvent.setup();
+
+    render(<Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /recordStart/ }));
+
+    await waitFor(() => expect(screenCapture.track.stop).toHaveBeenCalledOnce());
+    expect(screen.queryByRole("button", { name: /recordStop/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /recordStart/ })).toBeEnabled();
+    expect(toast.error).toHaveBeenCalledWith("recordSystemAudioMissing");
+  });
+
+  it("records the screen and camera as two separate files", async () => {
+    const probe = fakeStream();
+    const screenCapture = fakeStream({ audio: true });
     const cameraCapture = fakeStream();
     getUserMedia.mockResolvedValueOnce(probe.stream).mockResolvedValueOnce(cameraCapture.stream);
     getDisplayMedia.mockResolvedValueOnce(screenCapture.stream);
@@ -207,7 +232,7 @@ describe("Recorder", () => {
 
   it("records mirrored camera frames without transforming the screen asset", async () => {
     const probe = fakeStream();
-    const screenCapture = fakeStream();
+    const screenCapture = fakeStream({ audio: true });
     const cameraCapture = fakeStream();
     const mirroredCapture = fakeStream();
     Object.assign(mirroredCapture.stream, { addTrack: vi.fn() });
@@ -247,7 +272,7 @@ describe("Recorder", () => {
 
   it("stops both captures when screen sharing ends from the operating system", async () => {
     const probe = fakeStream();
-    const screenCapture = fakeStream();
+    const screenCapture = fakeStream({ audio: true });
     const cameraCapture = fakeStream();
     getUserMedia.mockResolvedValueOnce(probe.stream).mockResolvedValueOnce(cameraCapture.stream);
     getDisplayMedia.mockResolvedValueOnce(screenCapture.stream);
@@ -269,7 +294,7 @@ describe("Recorder", () => {
 
   it("releases an acquired screen if camera permission is denied", async () => {
     const probe = fakeStream();
-    const screenCapture = fakeStream();
+    const screenCapture = fakeStream({ audio: true });
     getUserMedia.mockResolvedValueOnce(probe.stream).mockRejectedValueOnce(new Error("denied"));
     getDisplayMedia.mockResolvedValueOnce(screenCapture.stream);
     const onRecorded = vi.fn();

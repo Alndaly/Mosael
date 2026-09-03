@@ -32,7 +32,8 @@ stopped, the files still return to the workspace or project where the recording 
 
 **Device audio** is enabled by default for screen recordings and captures sound playing on the computer. If the
 system sharing picker also presents a **Share audio** option, allow it there as well; turn the switch off for
-picture-only capture. In **Screen + camera** mode, device audio stays with the screen asset while microphone audio
+picture-only capture. If the picker returns no live audio track, Mosael stops the capture and asks you to retry
+instead of silently creating a mute asset. In **Screen + camera** mode, system audio stays with the screen asset while microphone audio
 stays with the camera asset, so both remain independently editable. Availability depends on the operating system
 and the capabilities exposed by its sharing picker.
 
