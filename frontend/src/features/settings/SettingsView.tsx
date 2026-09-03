@@ -2,6 +2,7 @@ import React from "react";
 import {
   AudioLines,
   Brain,
+  Database,
   ImageIcon,
   MessageSquare,
   Mic,
@@ -27,6 +28,7 @@ import { AsrModelsSection } from "@/features/settings/AsrModelsSection";
 import { AutopilotRulesSection } from "@/features/settings/AutopilotRulesSection";
 import { BackendSection } from "@/features/settings/BackendSection";
 import { BuiltinTtsSection } from "@/features/settings/BuiltinTtsSection";
+import { DataDiagnosticsSection } from "@/features/settings/DataDiagnosticsSection";
 import { FeishuSection } from "@/features/settings/FeishuSection";
 import { ProviderDefaultsSection } from "@/features/settings/ProviderDefaultsSection";
 import { ProviderPricingSection } from "@/features/settings/ProviderPricingSection";
@@ -51,6 +53,7 @@ type SectionId =
   | "transcribe"
   | "voice"
   | "feishu"
+  | "data"
   | "backend";
 
 const SECTION_IDS: SectionId[] = [
@@ -68,6 +71,7 @@ const SECTION_IDS: SectionId[] = [
   "transcribe",
   "voice",
   "feishu",
+  "data",
   "backend",
 ];
 
@@ -136,6 +140,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
     { id: "transcribe", label: t("asrModelsTitle"), icon: <Mic size={14} /> },
     { id: "voice", label: t("voiceCloneTitle"), icon: <AudioLines size={14} /> },
     { id: "feishu", label: t("feishuTitle"), icon: <MessageSquare size={14} /> },
+    { id: "data", label: t("dataDiagnosticsTitle"), icon: <Database size={14} /> },
     // 部署与本地后端挨着:两者说的都是"这台后端",而不是某个工作区。
     { id: "backend", label: t("settingsBackend"), icon: <Server size={14} /> },
   ];
@@ -235,6 +240,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
             </>
           )}
           {section === "feishu" && <FeishuSection workspace={workspace} />}
+          {section === "data" && <DataDiagnosticsSection />}
           {section === "backend" && <BackendSection workspace={workspace} />}
         </SettingsSectionStack>
       </div>

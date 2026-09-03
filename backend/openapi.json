@@ -9629,6 +9629,49 @@
         }
       }
     },
+    "/api/settings/providers/{profile_id}/health": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Probe Provider Health",
+        "description": "探一次这条连接通不通、往返多久。\n\n**只在被问到时探**,不做后台轮询:探针会真的打到用户的端点上(本地 ComfyUI、云端 /models),\n定时轮询等于替用户持续产生请求 —— 而\"它现在通不通\"这个问题只在他看着这一页时才有意义。",
+        "operationId": "probe_provider_health_api_settings_providers__profile_id__health_get",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderHealthOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings/providers/{profile_id}/oauth/login": {
       "post": {
         "tags": [
@@ -9826,49 +9869,6 @@
         }
       }
     },
-    "/api/settings/providers/{profile_id}/health": {
-      "get": {
-        "tags": [
-          "settings"
-        ],
-        "summary": "Probe Provider Health",
-        "description": "探一次这条连接通不通、往返多久。\n\n**只在被问到时探**,不做后台轮询:探针会真的打到用户的端点上(本地 ComfyUI、云端 /models),\n定时轮询等于替用户持续产生请求 —— 而\"它现在通不通\"这个问题只在他看着这一页时才有意义。",
-        "operationId": "probe_provider_health_api_settings_providers__profile_id__health_get",
-        "parameters": [
-          {
-            "name": "profile_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Profile Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProviderHealthOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/settings/providers/{profile_id}/quota": {
       "post": {
         "tags": [
@@ -9941,379 +9941,6 @@
                 }
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/settings/providers/{profile_id}/pricing/prefill": {
-      "post": {
-        "tags": [
-          "settings"
-        ],
-        "summary": "Prefill Provider Pricing",
-        "description": "按该供应商的模型目录补齐缺失的计价规则。\n\n**只补不改**:已有规则一概不动 —— 目录报价是厂商挂牌价,用户填过的才是他核对过的账。\n目录里为 0 的项也不写(那是「未标价 / 订阅内含」,不是「免费」)。",
-        "operationId": "prefill_provider_pricing_api_settings_providers__profile_id__pricing_prefill_post",
-        "parameters": [
-          {
-            "name": "profile_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Profile Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PricingPrefillOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/settings/provider-defaults": {
-      "get": {
-        "tags": [
-          "settings"
-        ],
-        "summary": "List Provider Defaults",
-        "description": "**我**在每种能力下的默认供应商+模型。我没设过的就是空 —— 没有部署兜底那一档。",
-        "operationId": "list_provider_defaults_api_settings_provider_defaults_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ProviderDefaultOut"
-                  },
-                  "type": "array",
-                  "title": "Response List Provider Defaults Api Settings Provider Defaults Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/settings/capability-models/{capability}": {
-      "get": {
-        "tags": [
-          "settings"
-        ],
-        "summary": "List Capability Models",
-        "description": "某能力下所有可用模型,跨连接。**任何登录用户都读得到** —— 挡住它等于让人闭着眼睛\n选自己的默认模型(见 tests/test_who_owns_each_setting.py)。\n\n界面直接列它,而不是\"先选供应商再选模型\" —— 后者是模型还不是实体时的形状,逼着用户\n先知道\"这个模型在哪条连接下\",而那恰恰是他不关心的事。",
-        "operationId": "list_capability_models_api_settings_capability_models__capability__get",
-        "parameters": [
-          {
-            "name": "capability",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Capability"
-            }
-          },
-          {
-            "name": "surface",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "enum": [
-                "all",
-                "agent",
-                "direct",
-                "gateway",
-                "automation"
-              ],
-              "type": "string",
-              "default": "all",
-              "title": "Surface"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/CapabilityModelOut"
-                  },
-                  "title": "Response List Capability Models Api Settings Capability Models  Capability  Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/settings/provider-defaults/{capability}": {
-      "put": {
-        "tags": [
-          "settings"
-        ],
-        "summary": "Set Provider Default",
-        "description": "设**我自己**在这项能力下的默认模型。**只有这一档。**\n\n不要求部署管理员:「我默认用哪个模型」是个人偏好,和钥匙一样(见 db.models.ProviderDefault)。\n曾经有过 `for_deployment` —— 写那一行 `owner_user_id=\"\"` 当作\"还没设过的人的起点\" ——\n删掉了:替人做的选择必须是他自己做的(见 domain/provider_defaults.get_row)。",
-        "operationId": "set_provider_default_api_settings_provider_defaults__capability__put",
-        "parameters": [
-          {
-            "name": "capability",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Capability"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ProviderDefaultUpdate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProviderDefaultOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/settings/provider-pricing-rules": {
-      "get": {
-        "tags": [
-          "settings"
-        ],
-        "summary": "List Provider Pricing Rules",
-        "operationId": "list_provider_pricing_rules_api_settings_provider_pricing_rules_get",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Workspace Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ProviderPricingRuleOut"
-                  },
-                  "title": "Response List Provider Pricing Rules Api Settings Provider Pricing Rules Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "settings"
-        ],
-        "summary": "Create Provider Pricing Rule",
-        "operationId": "create_provider_pricing_rule_api_settings_provider_pricing_rules_post",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ProviderPricingRuleCreate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProviderPricingRuleOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/settings/provider-pricing-rules/{rule_id}": {
-      "patch": {
-        "tags": [
-          "settings"
-        ],
-        "summary": "Update Provider Pricing Rule",
-        "operationId": "update_provider_pricing_rule_api_settings_provider_pricing_rules__rule_id__patch",
-        "parameters": [
-          {
-            "name": "rule_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Rule Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ProviderPricingRuleUpdate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProviderPricingRuleOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "settings"
-        ],
-        "summary": "Delete Provider Pricing Rule",
-        "operationId": "delete_provider_pricing_rule_api_settings_provider_pricing_rules__rule_id__delete",
-        "parameters": [
-          {
-            "name": "rule_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Rule Id"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -10531,6 +10158,379 @@
         }
       }
     },
+    "/api/settings/provider-defaults": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "List Provider Defaults",
+        "description": "**我**在每种能力下的默认供应商+模型。我没设过的就是空 —— 没有部署兜底那一档。",
+        "operationId": "list_provider_defaults_api_settings_provider_defaults_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderDefaultOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Provider Defaults Api Settings Provider Defaults Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/capability-models/{capability}": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "List Capability Models",
+        "description": "某能力下所有可用模型,跨连接。**任何登录用户都读得到** —— 挡住它等于让人闭着眼睛\n选自己的默认模型(见 tests/test_who_owns_each_setting.py)。\n\n界面直接列它,而不是\"先选供应商再选模型\" —— 后者是模型还不是实体时的形状,逼着用户\n先知道\"这个模型在哪条连接下\",而那恰恰是他不关心的事。",
+        "operationId": "list_capability_models_api_settings_capability_models__capability__get",
+        "parameters": [
+          {
+            "name": "capability",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Capability"
+            }
+          },
+          {
+            "name": "surface",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "all",
+                "agent",
+                "direct",
+                "gateway",
+                "automation"
+              ],
+              "type": "string",
+              "default": "all",
+              "title": "Surface"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CapabilityModelOut"
+                  },
+                  "title": "Response List Capability Models Api Settings Capability Models  Capability  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/provider-defaults/{capability}": {
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Set Provider Default",
+        "description": "设**我自己**在这项能力下的默认模型。**只有这一档。**\n\n不要求部署管理员:「我默认用哪个模型」是个人偏好,和钥匙一样(见 db.models.ProviderDefault)。\n曾经有过 `for_deployment` —— 写那一行 `owner_user_id=\"\"` 当作\"还没设过的人的起点\" ——\n删掉了:替人做的选择必须是他自己做的(见 domain/provider_defaults.get_row)。",
+        "operationId": "set_provider_default_api_settings_provider_defaults__capability__put",
+        "parameters": [
+          {
+            "name": "capability",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Capability"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderDefaultUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderDefaultOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/providers/{profile_id}/pricing/prefill": {
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Prefill Provider Pricing",
+        "description": "按该供应商的模型目录补齐缺失的计价规则。\n\n**只补不改**:已有规则一概不动 —— 目录报价是厂商挂牌价,用户填过的才是他核对过的账。\n目录里为 0 的项也不写(那是「未标价 / 订阅内含」,不是「免费」)。",
+        "operationId": "prefill_provider_pricing_api_settings_providers__profile_id__pricing_prefill_post",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PricingPrefillOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/provider-pricing-rules": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "List Provider Pricing Rules",
+        "operationId": "list_provider_pricing_rules_api_settings_provider_pricing_rules_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderPricingRuleOut"
+                  },
+                  "title": "Response List Provider Pricing Rules Api Settings Provider Pricing Rules Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Create Provider Pricing Rule",
+        "operationId": "create_provider_pricing_rule_api_settings_provider_pricing_rules_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderPricingRuleCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderPricingRuleOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/provider-pricing-rules/{rule_id}": {
+      "patch": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Update Provider Pricing Rule",
+        "operationId": "update_provider_pricing_rule_api_settings_provider_pricing_rules__rule_id__patch",
+        "parameters": [
+          {
+            "name": "rule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Rule Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderPricingRuleUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderPricingRuleOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Delete Provider Pricing Rule",
+        "operationId": "delete_provider_pricing_rule_api_settings_provider_pricing_rules__rule_id__delete",
+        "parameters": [
+          {
+            "name": "rule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Rule Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings/network": {
       "get": {
         "tags": [
@@ -10656,6 +10656,73 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AiRuntimeConfigOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/data/backup": {
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Download Backup",
+        "operationId": "download_backup_api_settings_data_backup_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/data/restore/stage": {
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Stage Restore",
+        "operationId": "stage_restore_api_settings_data_restore_stage_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_stage_restore_api_settings_data_restore_stage_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Stage Restore Api Settings Data Restore Stage Post"
                 }
               }
             }
@@ -16282,6 +16349,20 @@
           "file"
         ],
         "title": "Body_import_asset_api_assets_import_post"
+      },
+      "Body_stage_restore_api_settings_data_restore_stage_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_stage_restore_api_settings_data_restore_stage_post"
       },
       "Body_upload_avatar_api_auth_me_avatar_post": {
         "properties": {

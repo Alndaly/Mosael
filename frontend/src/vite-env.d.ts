@@ -96,6 +96,11 @@ interface Window {
       request?: (kind: Exclude<RecordingPermissionKind, "screen">) => Promise<boolean | null>;
       openSettings?: (kind: RecordingPermissionKind) => Promise<boolean>;
     };
+    data?: {
+      exportDiagnostics: () => Promise<{ status: "saved" | "cancelled"; path?: string }>;
+      createBackup: (token: string) => Promise<{ status: "saved" | "cancelled"; path?: string }>;
+      applyRestore: (stageId: string) => Promise<{ status: "restarting" }>;
+    };
     /** 用户自定义 CSS(userData/custom.css)。桌面端独有:浏览器读不到本地文件。 */
     customCss?: {
       read: () => Promise<string>;

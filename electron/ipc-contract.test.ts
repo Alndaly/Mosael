@@ -19,6 +19,8 @@ const contract = require("./ipc-contract.cjs") as {
     proxy: string | null;
   };
   parsePanelLayout: (value: unknown) => Record<string, number>;
+  parseAuthToken: (value: unknown, channel: string) => { token: string };
+  parseRestoreStage: (value: unknown) => { stageId: string };
 };
 
 const ROOT = path.resolve(__dirname);
@@ -30,6 +32,9 @@ describe("Electron IPC contract", () => {
     expect(new Set(channels).size).toBe(channels.length);
     expect(channels).toContain("recording-permissions:request");
     expect(channels).toContain("publish:panels");
+    expect(channels).toContain("data:exportDiagnostics");
+    expect(channels).toContain("data:createBackup");
+    expect(channels).toContain("data:applyRestore");
     expect(channels).not.toContain("publish:exit");
   });
 
@@ -74,5 +79,18 @@ describe("Electron IPC contract", () => {
 
     expect(contract.parsePanelLayout({ x: 10, y: 20, width: undefined, ignored: 3 })).toEqual({ x: 10, y: 20 });
     expect(() => contract.parsePanelLayout({ width: Number.NaN })).toThrow(/width/);
+  });
+
+  it("accepts only a bounded authentication token for privileged data IPC", () => {
+    expect(contract.parseAuthToken({ token: " bearer-token " }, "data:createBackup"))
+      .toEqual({ token: "bearer-token" });
+    expect(() => contract.parseAuthToken({ token: "" }, "data:createBackup")).toThrow(/token/);
+    expect(() => contract.parseAuthToken({ token: "x".repeat(16_385) }, "data:createBackup"))
+      .toThrow(/token/);
+  });
+
+  it("accepts only opaque restore stage identifiers", () => {
+    expect(contract.parseRestoreStage({ stageId: "a".repeat(32) })).toEqual({ stageId: "a".repeat(32) });
+    expect(() => contract.parseRestoreStage({ stageId: "../live" })).toThrow(/stageId/);
   });
 });

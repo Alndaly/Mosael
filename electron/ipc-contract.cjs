@@ -18,6 +18,9 @@ const IPC = Object.freeze({
     customCssPath: "customCss:path",
     customCssOpen: "customCss:open",
     customCssReveal: "customCss:reveal",
+    dataExportDiagnostics: "data:exportDiagnostics",
+    dataCreateBackup: "data:createBackup",
+    dataApplyRestore: "data:applyRestore",
     publishLogin: "publish:login",
     publishOpenPage: "publish:openPage",
     publishInspect: "publish:inspect",
@@ -59,6 +62,21 @@ function requiredString(value, key, channel) {
   const text = typeof value[key] === "string" ? value[key].trim() : "";
   if (!text) throw new TypeError(`${channel}: ${key} must be a non-empty string`);
   return text;
+}
+
+function parseAuthToken(value, channel) {
+  const payload = record(value, channel);
+  const token = requiredString(payload, "token", channel);
+  if (token.length > 16_384) throw new TypeError(`${channel}: token is too long`);
+  return { token };
+}
+
+function parseRestoreStage(value) {
+  const channel = IPC.invoke.dataApplyRestore;
+  const payload = record(value, channel);
+  const stageId = requiredString(payload, "stageId", channel);
+  if (!/^[a-f0-9]{32}$/.test(stageId)) throw new TypeError(`${channel}: stageId is invalid`);
+  return { stageId };
 }
 
 function parsePublishTarget(value, channel) {
@@ -145,6 +163,8 @@ function parseTaskNotice(value) {
 
 module.exports = {
   IPC,
+  parseAuthToken,
+  parseRestoreStage,
   parseBrowserLogin,
   parsePanelId,
   parsePanelLayout,

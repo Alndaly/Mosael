@@ -21,6 +21,9 @@ export const IPC: {
     publishPanelLayout: "publish:panelLayout";
     publishClosePanel: "publish:closePanel";
     browserOpenLogin: "browser:openLogin";
+    dataExportDiagnostics: "data:exportDiagnostics";
+    dataCreateBackup: "data:createBackup";
+    dataApplyRestore: "data:applyRestore";
   }>;
   readonly send: Readonly<{
     titleOverlay: "mosael:title-overlay";
@@ -41,6 +44,8 @@ export const IPC: {
 };
 
 export function parsePublishTarget(value: unknown, channel: string): { accountId: string; platform: string };
+export function parseAuthToken(value: unknown, channel: string): { token: string };
+export function parseRestoreStage(value: unknown): { stageId: string };
 export function parseUrlRequest(value: unknown, channel: string): { url: string };
 export function parsePanelId(value: unknown): { id: string };
 export function parsePanelLayout(value: unknown): Partial<Record<"x" | "y" | "width" | "height", number>>;

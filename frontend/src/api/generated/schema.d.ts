@@ -3302,6 +3302,29 @@ export interface paths {
         patch: operations["update_provider_profile_api_settings_providers__profile_id__patch"];
         trace?: never;
     };
+    "/api/settings/providers/{profile_id}/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Probe Provider Health
+         * @description 探一次这条连接通不通、往返多久。
+         *
+         *     **只在被问到时探**,不做后台轮询:探针会真的打到用户的端点上(本地 ComfyUI、云端 /models),
+         *     定时轮询等于替用户持续产生请求 —— 而"它现在通不通"这个问题只在他看着这一页时才有意义。
+         */
+        get: operations["probe_provider_health_api_settings_providers__profile_id__health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/providers/{profile_id}/oauth/login": {
         parameters: {
             query?: never;
@@ -3360,29 +3383,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/settings/providers/{profile_id}/health": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Probe Provider Health
-         * @description 探一次这条连接通不通、往返多久。
-         *
-         *     **只在被问到时探**,不做后台轮询:探针会真的打到用户的端点上(本地 ComfyUI、云端 /models),
-         *     定时轮询等于替用户持续产生请求 —— 而"它现在通不通"这个问题只在他看着这一页时才有意义。
-         */
-        get: operations["probe_provider_health_api_settings_providers__profile_id__health_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/settings/providers/{profile_id}/quota": {
         parameters: {
             query?: never;
@@ -3430,7 +3430,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/settings/providers/{profile_id}/pricing/prefill": {
+    "/api/settings/providers/{profile_id}/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Provider Models
+         * @description 这条连接下的模型:**已配置的行 + 实时目录 + 内置目录**。
+         *
+         *     三者合并而不是二选一 —— 实时目录说端点现在有什么(会变),模型行说用户做过什么(不该被
+         *     目录冲掉),内置目录补上**实时目录看不见的那些**。
+         *
+         *     第三份不是可有可无的:实时目录读的是 OpenAI 兼容的 `/models`,而有些能力走供应商的原生
+         *     端点、根本不在那份清单里 —— 百炼的万相视频就是这样(真机实测:那个接口对百炼只返回两个
+         *     wan **图像**模型,一个视频模型都没有)。少了这一份,用户在设置里看不到、加不进来,于是
+         *     生成页的下拉里那一家整个是空的,而他并不知道为什么。
+         *
+         *     已配置的排在前面:那是用户实际在用的;其余可一键加入。
+         */
+        get: operations["list_provider_models_api_settings_providers__profile_id__models_get"];
+        put?: never;
+        /**
+         * Add Provider Model
+         * @description 把一个模型加进这条连接。目录里选的和手填的走同一条路 —— 区别只在 source,
+         *     手填是为了私有部署与别名:目录查不到不等于不能用。
+         */
+        post: operations["add_provider_model_api_settings_providers__profile_id__models_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/providers/{profile_id}/models/{model_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -3439,18 +3474,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        post?: never;
         /**
-         * Prefill Provider Pricing
-         * @description 按该供应商的模型目录补齐缺失的计价规则。
-         *
-         *     **只补不改**:已有规则一概不动 —— 目录报价是厂商挂牌价,用户填过的才是他核对过的账。
-         *     目录里为 0 的项也不写(那是「未标价 / 订阅内含」,不是「免费」)。
+         * Delete Provider Model
+         * @description 移除一行。目录里仍有的模型移除后会回到"未配置"状态(还能再加回来),
+         *     手填的则彻底消失 —— 它本来就只存在于这一行里。
          */
-        post: operations["prefill_provider_pricing_api_settings_providers__profile_id__pricing_prefill_post"];
-        delete?: never;
+        delete: operations["delete_provider_model_api_settings_providers__profile_id__models__model_id__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Provider Model
+         * @description 改一行。
+         *
+         *     **model_id 必须用 :path 转换器**:模型 id 里带斜杠是常态(kimi/kimi-k2.7-code、
+         *     MiniMax/MiniMax-M2.5、ZHIPU/GLM-5),而普通路径参数不跨 `/`,路由直接匹配不上 ——
+         *     表现是删除/修改一律 404,而且只有那些带斜杠的模型才复现。
+         *     运行时项传 null 即清除、回到跟随目录 —— 与"没传"是两回事,后者不动它。
+         */
+        patch: operations["update_provider_model_api_settings_providers__profile_id__models__model_id__patch"];
         trace?: never;
     };
     "/api/settings/provider-defaults": {
@@ -3521,6 +3563,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/providers/{profile_id}/pricing/prefill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Prefill Provider Pricing
+         * @description 按该供应商的模型目录补齐缺失的计价规则。
+         *
+         *     **只补不改**:已有规则一概不动 —— 目录报价是厂商挂牌价,用户填过的才是他核对过的账。
+         *     目录里为 0 的项也不写(那是「未标价 / 订阅内含」,不是「免费」)。
+         */
+        post: operations["prefill_provider_pricing_api_settings_providers__profile_id__pricing_prefill_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/provider-pricing-rules": {
         parameters: {
             query?: never;
@@ -3555,71 +3620,6 @@ export interface paths {
         head?: never;
         /** Update Provider Pricing Rule */
         patch: operations["update_provider_pricing_rule_api_settings_provider_pricing_rules__rule_id__patch"];
-        trace?: never;
-    };
-    "/api/settings/providers/{profile_id}/models": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Provider Models
-         * @description 这条连接下的模型:**已配置的行 + 实时目录 + 内置目录**。
-         *
-         *     三者合并而不是二选一 —— 实时目录说端点现在有什么(会变),模型行说用户做过什么(不该被
-         *     目录冲掉),内置目录补上**实时目录看不见的那些**。
-         *
-         *     第三份不是可有可无的:实时目录读的是 OpenAI 兼容的 `/models`,而有些能力走供应商的原生
-         *     端点、根本不在那份清单里 —— 百炼的万相视频就是这样(真机实测:那个接口对百炼只返回两个
-         *     wan **图像**模型,一个视频模型都没有)。少了这一份,用户在设置里看不到、加不进来,于是
-         *     生成页的下拉里那一家整个是空的,而他并不知道为什么。
-         *
-         *     已配置的排在前面:那是用户实际在用的;其余可一键加入。
-         */
-        get: operations["list_provider_models_api_settings_providers__profile_id__models_get"];
-        put?: never;
-        /**
-         * Add Provider Model
-         * @description 把一个模型加进这条连接。目录里选的和手填的走同一条路 —— 区别只在 source,
-         *     手填是为了私有部署与别名:目录查不到不等于不能用。
-         */
-        post: operations["add_provider_model_api_settings_providers__profile_id__models_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/settings/providers/{profile_id}/models/{model_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete Provider Model
-         * @description 移除一行。目录里仍有的模型移除后会回到"未配置"状态(还能再加回来),
-         *     手填的则彻底消失 —— 它本来就只存在于这一行里。
-         */
-        delete: operations["delete_provider_model_api_settings_providers__profile_id__models__model_id__delete"];
-        options?: never;
-        head?: never;
-        /**
-         * Update Provider Model
-         * @description 改一行。
-         *
-         *     **model_id 必须用 :path 转换器**:模型 id 里带斜杠是常态(kimi/kimi-k2.7-code、
-         *     MiniMax/MiniMax-M2.5、ZHIPU/GLM-5),而普通路径参数不跨 `/`,路由直接匹配不上 ——
-         *     表现是删除/修改一律 404,而且只有那些带斜杠的模型才复现。
-         *     运行时项传 null 即清除、回到跟随目录 —— 与"没传"是两回事,后者不动它。
-         */
-        patch: operations["update_provider_model_api_settings_providers__profile_id__models__model_id__patch"];
         trace?: never;
     };
     "/api/settings/network": {
@@ -3662,6 +3662,40 @@ export interface paths {
          */
         put: operations["set_ai_runtime_api_settings_ai_runtime_put"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/data/backup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Download Backup */
+        post: operations["download_backup_api_settings_data_backup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/data/restore/stage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stage Restore */
+        post: operations["stage_restore_api_settings_data_restore_stage_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5723,6 +5757,11 @@ export interface components {
             project_id?: string | null;
             /** Name */
             name?: string | null;
+            /** File */
+            file: string;
+        };
+        /** Body_stage_restore_api_settings_data_restore_stage_post */
+        Body_stage_restore_api_settings_data_restore_stage_post: {
             /** File */
             file: string;
         };
@@ -16459,6 +16498,37 @@ export interface operations {
             };
         };
     };
+    probe_provider_health_api_settings_providers__profile_id__health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderHealthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     start_oauth_login_api_settings_providers__profile_id__oauth_login_post: {
         parameters: {
             query?: never;
@@ -16588,37 +16658,6 @@ export interface operations {
             };
         };
     };
-    probe_provider_health_api_settings_providers__profile_id__health_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                profile_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderHealthOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     fetch_provider_quota_api_settings_providers__profile_id__quota_post: {
         parameters: {
             query?: never;
@@ -16668,262 +16707,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderProfileOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    prefill_provider_pricing_api_settings_providers__profile_id__pricing_prefill_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                profile_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PricingPrefillOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_provider_defaults_api_settings_provider_defaults_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderDefaultOut"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_capability_models_api_settings_capability_models__capability__get: {
-        parameters: {
-            query?: {
-                surface?: "all" | "agent" | "direct" | "gateway" | "automation";
-            };
-            header?: never;
-            path: {
-                capability: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CapabilityModelOut"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    set_provider_default_api_settings_provider_defaults__capability__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                capability: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProviderDefaultUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderDefaultOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_provider_pricing_rules_api_settings_provider_pricing_rules_get: {
-        parameters: {
-            query?: {
-                workspace_id?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderPricingRuleOut"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_provider_pricing_rule_api_settings_provider_pricing_rules_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProviderPricingRuleCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderPricingRuleOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_provider_pricing_rule_api_settings_provider_pricing_rules__rule_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                rule_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_provider_pricing_rule_api_settings_provider_pricing_rules__rule_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                rule_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProviderPricingRuleUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderPricingRuleOut"];
                 };
             };
             /** @description Validation Error */
@@ -17069,6 +16852,262 @@ export interface operations {
             };
         };
     };
+    list_provider_defaults_api_settings_provider_defaults_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderDefaultOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_capability_models_api_settings_capability_models__capability__get: {
+        parameters: {
+            query?: {
+                surface?: "all" | "agent" | "direct" | "gateway" | "automation";
+            };
+            header?: never;
+            path: {
+                capability: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CapabilityModelOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_provider_default_api_settings_provider_defaults__capability__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                capability: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderDefaultUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderDefaultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    prefill_provider_pricing_api_settings_providers__profile_id__pricing_prefill_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PricingPrefillOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_provider_pricing_rules_api_settings_provider_pricing_rules_get: {
+        parameters: {
+            query?: {
+                workspace_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderPricingRuleOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_provider_pricing_rule_api_settings_provider_pricing_rules_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderPricingRuleCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderPricingRuleOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_provider_pricing_rule_api_settings_provider_pricing_rules__rule_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_provider_pricing_rule_api_settings_provider_pricing_rules__rule_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderPricingRuleUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderPricingRuleOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_network_config_api_settings_network_get: {
         parameters: {
             query?: never;
@@ -17180,6 +17219,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AiRuntimeConfigOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_backup_api_settings_data_backup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stage_restore_api_settings_data_restore_stage_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_stage_restore_api_settings_data_restore_stage_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */

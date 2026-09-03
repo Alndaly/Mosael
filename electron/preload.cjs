@@ -43,6 +43,11 @@ contextBridge.exposeInMainWorld("mosaelDesktop", {
     request: (kind) => ipcRenderer.invoke(IPC.invoke.recordingRequest, kind),
     openSettings: (kind) => ipcRenderer.invoke(IPC.invoke.recordingOpenSettings, kind),
   },
+  data: {
+    exportDiagnostics: () => ipcRenderer.invoke(IPC.invoke.dataExportDiagnostics),
+    createBackup: (token) => ipcRenderer.invoke(IPC.invoke.dataCreateBackup, { token }),
+    applyRestore: (stageId) => ipcRenderer.invoke(IPC.invoke.dataApplyRestore, { stageId }),
+  },
   // 更新:checkUpdates 主动查(设置页按钮);onUpdateAvailable 订阅启动静默检查的结果。
   checkUpdates: () => ipcRenderer.invoke(IPC.invoke.checkUpdates),
   onUpdateAvailable: (callback) => {

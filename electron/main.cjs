@@ -11,15 +11,25 @@ const {
 } = require("electron");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
+const { Readable } = require("node:stream");
+const { pipeline } = require("node:stream/promises");
+const {
+  activateStagedRestore,
+  finalizeActivatedRestore,
+  writeDiagnosticArchive,
+} = require("./data-management.cjs");
 const { createRecordingPermissionService } = require("./recording-permissions.cjs");
 const { bindFullscreenState } = require("./window-state.cjs");
 const {
   IPC,
+  parseAuthToken,
   parseBrowserLogin,
   parsePanelId,
   parsePanelLayout,
   parsePublishTarget,
+  parseRestoreStage,
   parseSystemStatus,
   parseTaskNotice,
   parseTitleOverlay,
@@ -57,6 +67,51 @@ const recordingPermissions = createRecordingPermissionService({
 if (isSmokeTest) {
   app.setPath("userData", path.join(path.dirname(smokeResultPath), "electron-user-data"));
 }
+
+const electronLogDir = path.join(app.getPath("userData"), "logs");
+const mainLogPath = path.join(electronLogDir, "main.log");
+const configuredDataDir = process.env.MOSAEL_DATA_DIR
+  ? path.resolve(process.env.MOSAEL_DATA_DIR)
+  : path.join(os.homedir(), ".mosael");
+
+function rotateLogIfLarge(file, maxBytes = 5 * 1024 * 1024) {
+  try {
+    if (fs.statSync(file).size <= maxBytes) return;
+    fs.rmSync(`${file}.1`, { force: true });
+    fs.renameSync(file, `${file}.1`);
+  } catch (error) {
+    if (error && error.code !== "ENOENT") throw error;
+  }
+}
+
+function appendMainLog(kind, detail) {
+  try {
+    fs.mkdirSync(electronLogDir, { recursive: true });
+    rotateLogIfLarge(mainLogPath);
+    const message = detail instanceof Error ? detail.stack || detail.message : String(detail ?? "");
+    fs.appendFileSync(mainLogPath, `${new Date().toISOString()} ${kind} ${message}\n`, {
+      encoding: "utf8",
+      mode: 0o600,
+    });
+  } catch {
+    // A full/read-only disk must not turn logging into a second crash.
+  }
+}
+
+process.on("uncaughtExceptionMonitor", (error) => appendMainLog("uncaught-exception", error));
+process.on("unhandledRejection", (reason) => appendMainLog("unhandled-rejection", reason));
+app.on("render-process-gone", (_event, webContents, details) => {
+  let url = "";
+  try {
+    url = webContents.getURL();
+  } catch {
+    // A destroyed WebContents may no longer expose its last URL.
+  }
+  appendMainLog("render-process-gone", JSON.stringify({ url, ...details }));
+});
+app.on("child-process-gone", (_event, details) => {
+  appendMainLog("child-process-gone", JSON.stringify(details));
+});
 
 function reportSmoke(result) {
   if (!smokeResultPath) return;
@@ -177,7 +232,9 @@ async function ensureBackend() {
     try {
       const logDir = path.join(app.getPath("userData"), "logs");
       fs.mkdirSync(logDir, { recursive: true });
-      const fd = fs.openSync(path.join(logDir, "backend.log"), "a");
+      const backendLogPath = path.join(logDir, "backend.log");
+      rotateLogIfLarge(backendLogPath, 10 * 1024 * 1024);
+      const fd = fs.openSync(backendLogPath, "a", 0o600);
       stdio = ["ignore", fd, fd];
     } catch {
       stdio = "ignore";
@@ -188,6 +245,10 @@ async function ensureBackend() {
   const backendEnv = {
     ...process.env,
     MOSAEL_BACKEND_PORT: String(BACKEND_PORT),
+    // Always pass an absolute path. Python and Electron otherwise resolve a relative
+    // MOSAEL_DATA_DIR from different working directories, which would make restore
+    // staging target one directory while the shell swaps another.
+    MOSAEL_DATA_DIR: configuredDataDir,
     MOSAEL_LOCAL_DESKTOP: "1",
     // 应用版本的唯一真相在 package.json,壳读得到而后端读不到(打包版是 PyInstaller
     // 冻结二进制,连仓库都不在)。所以由壳传进去 —— 后端自己维护第二个版本号必然漂移,
@@ -208,7 +269,7 @@ async function ensureBackend() {
     );
     if (fs.existsSync(ttsPython)) backendEnv.MOSAEL_TTS_BASE_PYTHON = ttsPython;
   }
-  backend = spawn(command, args, {
+  const spawnedBackend = spawn(command, args, {
     cwd,
     env: backendEnv,
     stdio,
@@ -222,9 +283,11 @@ async function ensureBackend() {
     // 非 Windows 上该字段被忽略。
     windowsHide: true,
   });
-  backend.on("exit", (code) => {
-    backend = null;
+  backend = spawnedBackend;
+  spawnedBackend.on("exit", (code) => {
+    if (backend === spawnedBackend) backend = null;
     if (!quitting && code !== 0 && code !== null) {
+      appendMainLog("backend-exit", `code=${code}`);
       dialog.showErrorBox("Mosael backend stopped", `The local backend exited unexpectedly (code ${code}). Please restart Mosael.`);
     }
   });
@@ -236,6 +299,26 @@ function stopBackend() {
     backend.kill("SIGTERM");
     backend = null;
   }
+}
+
+async function stopManagedBackendForRestore() {
+  const child = backend;
+  if (!child || child.exitCode !== null) {
+    throw new Error("Restore requires the backend managed by this desktop app");
+  }
+  await new Promise((resolve, reject) => {
+    let forceTimer;
+    const hardTimer = setTimeout(() => {
+      reject(new Error("The backend did not stop in time"));
+    }, 15_000);
+    child.once("exit", () => {
+      clearTimeout(forceTimer);
+      clearTimeout(hardTimer);
+      resolve();
+    });
+    child.kill("SIGTERM");
+    forceTimer = setTimeout(() => child.kill("SIGKILL"), 8_000);
+  });
 }
 
 // ---------------- 应用更新(检查-提示式) ----------------
@@ -550,6 +633,9 @@ app.whenReady().then(async () => {
     app.quit();
     return;
   }
+  finalizeActivatedRestore(configuredDataDir)
+    .then((cleaned) => cleaned && appendMainLog("restore-finalized", "previous data removed after health check"))
+    .catch((error) => appendMainLog("restore-finalize-failed", error));
   // publish:* handler 只注册一次(activate 重建窗口时不能二次注册)。恒注册:执行器加载失败时
   // 也给渲染层抛清晰错误。
   const requirePublish = () => {
@@ -611,6 +697,83 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.invoke.recordingStatus, (_event, kind) => recordingPermissions.getStatus(kind));
   ipcMain.handle(IPC.invoke.recordingRequest, (_event, kind) => recordingPermissions.request(kind));
   ipcMain.handle(IPC.invoke.recordingOpenSettings, (_event, kind) => recordingPermissions.openSettings(kind));
+  ipcMain.handle(IPC.invoke.dataExportDiagnostics, async () => {
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const picked = await dialog.showSaveDialog({
+      title: "导出 Mosael 诊断包",
+      defaultPath: path.join(app.getPath("downloads"), `Mosael-diagnostics-${stamp}.zip`),
+      filters: [{ name: "ZIP archive", extensions: ["zip"] }],
+    });
+    if (picked.canceled || !picked.filePath) return { status: "cancelled" };
+    const secretValues = Object.entries(process.env)
+      .filter(([key, value]) => value && /(KEY|TOKEN|PASSWORD|SECRET)/i.test(key))
+      .map(([, value]) => value);
+    await writeDiagnosticArchive(picked.filePath, {
+      appVersion: app.getVersion(),
+      platform: process.platform,
+      arch: process.arch,
+      homeDir: os.homedir(),
+      dataDir: configuredDataDir,
+      userDataDir: app.getPath("userData"),
+      secrets: secretValues,
+      logFiles: [
+        path.join(electronLogDir, "backend.log"),
+        path.join(electronLogDir, "backend.log.1"),
+        mainLogPath,
+        `${mainLogPath}.1`,
+        path.join(configuredDataDir, "logs", "mosael.log"),
+      ],
+    });
+    return { status: "saved", path: picked.filePath };
+  });
+  ipcMain.handle(IPC.invoke.dataCreateBackup, async (_event, payload) => {
+    const { token } = parseAuthToken(payload, IPC.invoke.dataCreateBackup);
+    const stamp = new Date().toISOString().slice(0, 10);
+    const picked = await dialog.showSaveDialog({
+      title: "创建 Mosael 数据备份",
+      defaultPath: path.join(app.getPath("downloads"), `Mosael-${stamp}.mosael-backup`),
+      filters: [{ name: "Mosael backup", extensions: ["mosael-backup"] }],
+    });
+    if (picked.canceled || !picked.filePath) return { status: "cancelled" };
+
+    const temporaryPath = `${picked.filePath}.${process.pid}.${Date.now()}.partial`;
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/settings/data/backup`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(30 * 60 * 1000),
+      });
+      if (!response.ok || !response.body) {
+        throw new Error(`Backup request failed (${response.status})`);
+      }
+      await pipeline(
+        Readable.fromWeb(response.body),
+        fs.createWriteStream(temporaryPath, { flags: "wx", mode: 0o600 }),
+      );
+      await fs.promises.rm(picked.filePath, { force: true });
+      await fs.promises.rename(temporaryPath, picked.filePath);
+      return { status: "saved", path: picked.filePath };
+    } catch (error) {
+      await fs.promises.rm(temporaryPath, { force: true }).catch(() => {});
+      throw error;
+    }
+  });
+  ipcMain.handle(IPC.invoke.dataApplyRestore, async (_event, payload) => {
+    const { stageId } = parseRestoreStage(payload);
+    quitting = true;
+    try {
+      await stopManagedBackendForRestore();
+      activateStagedRestore(configuredDataDir, stageId);
+      appendMainLog("restore-activated", `stage=${stageId}`);
+      app.relaunch();
+      setTimeout(() => app.exit(0), 100);
+      return { status: "restarting" };
+    } catch (error) {
+      quitting = false;
+      await ensureBackend().catch(() => false);
+      throw error;
+    }
+  });
   if (app.isPackaged && !isSmokeTest) {
     setTimeout(async () => {
       try {
