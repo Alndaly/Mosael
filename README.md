@@ -11,7 +11,8 @@
   <a href="https://mosael.com/en">Website</a> ·
   <a href="https://github.com/Alndaly/Mosael/releases">Download</a> ·
   <a href="https://mosael.com/en/docs/start/intro">Guide</a> ·
-  <a href="https://x.com/KindaHuax">Maker on X</a>
+  <a href="https://mosael.com/en/docs/about/contact#wechat">WeChat community</a> ·
+  <a href="https://x.com/KindaHuaX">Maker on X</a>
 </p>
 
 **English** | [简体中文](README.zh-CN.md)
@@ -315,4 +316,5 @@ MOSAEL_OAUTH_REDIRECT_BASE=...
 
 The source is visible but **all rights are reserved**. It may be used only for evaluation, learning,
 and personal non-commercial purposes; commercial use and redistribution require written permission.
-See [LICENSE](LICENSE). Contact the maker, [Kinda Hall](https://x.com/KindaHuax), for commercial licensing.
+See [LICENSE](LICENSE). Contact the maker through the [community and contact page](https://mosael.com/en/docs/about/contact),
+or follow [KindaHuaX on X](https://x.com/KindaHuaX), for commercial licensing.

@@ -11,7 +11,8 @@
   <a href="https://mosael.com">官网</a> ·
   <a href="https://github.com/Alndaly/Mosael/releases">下载</a> ·
   <a href="https://mosael.com/zh/docs/start/intro">使用指南</a> ·
-  <a href="https://x.com/KindaHuax">作者 X</a>
+  <a href="https://mosael.com/zh/docs/about/contact#%E5%BE%AE%E4%BF%A1">交流群 / 作者微信</a> ·
+  <a href="https://x.com/KindaHuaX">作者 X</a>
 </p>
 
 [English](README.md) | **简体中文**
@@ -279,4 +280,5 @@ MOSAEL_OAUTH_REDIRECT_BASE=...
 ## 许可
 
 源码可见但**保留所有权利**：仅限评估、学习与个人非商业用途；未经书面授权不得商用或再分发。
-详见 [LICENSE](LICENSE)。商业授权请联系作者 [Kinda Hall](https://x.com/KindaHuax)。
+详见 [LICENSE](LICENSE)。商业授权可通过[交流群与作者微信](https://mosael.com/zh/docs/about/contact#%E5%BE%AE%E4%BF%A1)
+联系，也可以在 X 关注 [KindaHuaX](https://x.com/KindaHuaX)。
