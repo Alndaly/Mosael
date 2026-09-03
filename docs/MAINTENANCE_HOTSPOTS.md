@@ -46,7 +46,7 @@ URL 转写的复用身份集中在 `domain/assets/source_url.py`。新素材把 
 pnpm --dir browser-extension test
 pnpm --dir browser-extension typecheck
 pnpm --dir browser-extension build
-cd backend && uv run pytest -q tests/test_browser_extension_cors.py
+cd backend && uv run --frozen python -m pytest -q tests/test_browser_extension_cors.py
 ```
 
 ## Provider 分类 — ✅ 已解决(2026-09-01)

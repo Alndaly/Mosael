@@ -185,7 +185,7 @@ Browser development mode with frontend hot reload:
 
 ```bash
 # Terminal 1: backend
-cd backend && uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8800
+cd backend && uv run --frozen python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8800
 
 # Terminal 2: frontend
 cd frontend && pnpm dev
@@ -205,7 +205,7 @@ on macOS is `Cmd+Option+I`.
 ### Tests and checks
 
 ```bash
-cd backend && uv run pytest -q
+cd backend && uv run --frozen python -m pytest -q
 cd frontend && pnpm vitest run
 cd frontend && pnpm exec tsc -b --noEmit
 cd frontend && pnpm gen:api        # after backend OpenAPI changes
@@ -225,7 +225,7 @@ pnpm rebuild electron
 The virtual environment reports `bad interpreter` after the repository was moved:
 
 ```bash
-cd backend && uv venv --clear && uv sync
+cd backend && uv venv --clear && uv sync --frozen
 ```
 
 ## Building and releasing

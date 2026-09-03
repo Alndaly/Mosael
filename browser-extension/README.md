@@ -114,7 +114,7 @@ parameters and fragments so one video is not split into separate identities.
 pnpm --dir browser-extension test
 pnpm --dir browser-extension typecheck
 pnpm --dir browser-extension build
-cd backend && uv run pytest tests/test_url_import.py
+cd backend && uv run --frozen python -m pytest tests/test_url_import.py
 ```
 
 The backend test performs a network-free contract check against every canonical HTTP(S) extractor

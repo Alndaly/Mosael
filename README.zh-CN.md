@@ -157,7 +157,7 @@ cd backend && uv sync && cd ..
 
 ```bash
 # 终端 1：后端
-cd backend && uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8800
+cd backend && uv run --frozen python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8800
 
 # 终端 2：前端
 cd frontend && pnpm dev
@@ -175,7 +175,7 @@ pnpm dev
 ### 测试与检查
 
 ```bash
-cd backend && uv run pytest -q
+cd backend && uv run --frozen python -m pytest -q
 cd frontend && pnpm vitest run
 cd frontend && pnpm exec tsc -b --noEmit
 cd frontend && pnpm gen:api        # 后端 OpenAPI 变化后运行
@@ -195,7 +195,7 @@ pnpm rebuild electron
 移动仓库后虚拟环境出现 `bad interpreter`：
 
 ```bash
-cd backend && uv venv --clear && uv sync
+cd backend && uv venv --clear && uv sync --frozen
 ```
 
 ## 构建与发布

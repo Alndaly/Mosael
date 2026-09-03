@@ -99,7 +99,7 @@ YouTube / B 站的后台网络代理仍只允许适配器需要的官方字幕 A
 pnpm --dir browser-extension test
 pnpm --dir browser-extension typecheck
 pnpm --dir browser-extension build
-cd backend && uv run pytest tests/test_url_import.py
+cd backend && uv run --frozen python -m pytest tests/test_url_import.py
 ```
 
 后端测试会对 yt-dlp 自带的全部 canonical HTTP(S) extractor 样例执行无网络合约检查；真实站点抽样仍会
