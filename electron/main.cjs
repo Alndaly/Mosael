@@ -12,7 +12,6 @@ const {
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
-const { migrateLegacyUserData } = require("./user-data-migration.cjs");
 const { createRecordingPermissionService } = require("./recording-permissions.cjs");
 const { bindFullscreenState } = require("./window-state.cjs");
 const {
@@ -34,28 +33,6 @@ const {
 app.setName("Mosael");
 app.setAppUserModelId("dev.mosael.app");
 
-// productName 改名会让 Electron 换一个 userData 目录。Electron 会在这里执行前先创建
-// 新目录，所以不能用「目标目录存在」判断迁移完成；迁移器会先备份这个启动空壳，再以
-// marker 保证浏览器池登录态、窗口状态和 Chromium 存储只接管一次。
-function migrateLegacyElectronUserData() {
-  const target = app.getPath("userData");
-  const appData = app.getPath("appData");
-  try {
-    const result = migrateLegacyUserData({
-      target,
-      legacyCandidates: ["Open Studio", "OpenStudio"].map((name) => path.join(appData, name)),
-    });
-    if (result.status === "migrated" || result.status === "copied") {
-      console.warn(
-        `[mosael] migrated Electron user data from ${result.source} to ${result.target}` +
-          (result.backup ? ` (backup: ${result.backup})` : ""),
-      );
-    }
-  } catch (error) {
-    console.error(`[mosael] could not migrate Electron user data; continuing with ${target}`, error);
-  }
-}
-
 // 发布内嵌浏览器拟真:引擎层去掉自动化标记(navigator.webdriver 等),让平台风控不把用户
 // 授权的自动化发布误判为爬虫。页面级补丁见 electron/publish/stealth.ts。
 app.commandLine.appendSwitch("disable-blink-features", "AutomationControlled");
@@ -72,8 +49,6 @@ const recordingPermissions = createRecordingPermissionService({
   shell,
   systemPreferences,
 });
-
-if (!isSmokeTest) migrateLegacyElectronUserData();
 
 // 冒烟必须能和开发版/已安装版并行跑。Electron 的单实例锁跟 userData 目录绑定；如果继续
 // 使用真实用户目录，本机开着 Mosael 时打包产物会在 requestSingleInstanceLock()

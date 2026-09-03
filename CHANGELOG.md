@@ -42,8 +42,7 @@ commit list and downloadable artifacts.
   frontend dual-read branches, the obsolete TTS source migration, and the generation-model type alias.
 - Stopped guessing that workspaces named “Workspace” or “默认工作区” are system defaults, preserving names
   exactly as their owners entered them.
-- Retired the legacy `openstudio://` deep-link scheme; desktop navigation now accepts only the registered
-  `mosael://` protocol.
+- Desktop navigation accepts only the registered `mosael://` protocol.
 - Updated the homepage hero and editing chapter to use the supplied current editor capture, and added a
   dedicated media-management chapter with the supplied library and recording view.
 - Extended the release gate to build the browser extension and bilingual website, and kept beta tags as
@@ -51,15 +50,8 @@ commit list and downloadable artifacts.
 
 ### Fixed
 
-- Made pre-Mosael browser and extension storage migration remove its legacy source after a successful copy,
-  preventing cleared sessions, preferences, or extension connections from returning on the next launch.
-- Migrated `open-studio.db` and its SQLite sidecars inside explicitly configured data directories, with
-  transactional rollback, bootstrap backup, established-library conflict protection, and fail-closed startup.
 - Portaled the documentation search modal outside the blurred floating header so its dimming layer and
   click-away target cover the full viewport, and added a rhythm-matched divider below the app rail logo.
-- Recovered pre-Mosael backend libraries and Electron user data even when first launch had already
-  created the new directories, with automatic one-time migration, database sidecar renaming, conflict
-  protection, and recoverable backups of the replaced bootstrap directories.
 - Extended inner-page hero backgrounds behind the floating navigation instead of leaving a separate page-color
   strip above Workflows, Plugins, and plugin details.
 - Removed redundant screenshot shells from homepage product chapters and tightened the Mosael wordmark asset so

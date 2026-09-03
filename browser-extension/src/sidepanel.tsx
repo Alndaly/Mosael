@@ -33,7 +33,6 @@ import { mergePolledVideoContext } from "./platforms/detect";
 import { videoPlatformLabel } from "./platforms/labels";
 import type { CapturedVideoFrame, CaptureGeometry, ContentRequest, ContentResponse } from "./shared/protocol";
 import type { Transcript, TranscriptCue, VideoContext } from "./shared/types";
-import { clearCurrentAndLegacy, readMigratedValue } from "./storageMigration";
 import { alignSecondaryCues, languageMatches, transcriptTokensNeedSpace } from "./transcript";
 import { resolveTranscriptSource } from "./transcript-source";
 
@@ -52,8 +51,6 @@ type TranscriptNotice = { message: string; kind: "loading" | "error" } | null;
 
 const CONNECTION_KEY = "mosael.connection";
 const LOCALE_KEY = "mosael.locale";
-const LEGACY_CONNECTION_KEY = "openstudio.connection";
-const LEGACY_LOCALE_KEY = "openstudio.locale";
 const NO_PROJECT = "__none__";
 const NO_PROFILE = "__public__";
 
@@ -82,12 +79,14 @@ function safeFilename(value: string): string {
 }
 
 async function storedConnection(): Promise<Connection | null> {
-  const value = await readMigratedValue<Connection>(chrome.storage.local, CONNECTION_KEY, LEGACY_CONNECTION_KEY);
+  const stored = await chrome.storage.local.get(CONNECTION_KEY);
+  const value = stored[CONNECTION_KEY];
   return value && typeof value === "object" ? (value as Connection) : null;
 }
 
 async function storedLocale(): Promise<LocaleSetting> {
-  const value = await readMigratedValue<LocaleSetting>(chrome.storage.local, LOCALE_KEY, LEGACY_LOCALE_KEY);
+  const stored = await chrome.storage.local.get(LOCALE_KEY);
+  const value = stored[LOCALE_KEY];
   return value === "zh-CN" || value === "en" ? value : "auto";
 }
 
@@ -183,9 +182,8 @@ function App(): React.ReactElement {
     setConnection(next);
     if (next) {
       await chrome.storage.local.set({ [CONNECTION_KEY]: next });
-      await chrome.storage.local.remove(LEGACY_CONNECTION_KEY);
     } else {
-      await clearCurrentAndLegacy(chrome.storage.local, CONNECTION_KEY, LEGACY_CONNECTION_KEY);
+      await chrome.storage.local.remove(CONNECTION_KEY);
     }
   }, []);
 

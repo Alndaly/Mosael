@@ -1,79 +1,20 @@
 from __future__ import annotations
 
-import logging
 import os
 from datetime import timedelta
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.core.data_migration import migrate_default_data_dir, migrate_legacy_database_in_data_dir
-
 ENV_PREFIX = "MOSAEL_"
-LEGACY_ENV_PREFIX = "OPEN_STUDIO_"
-
-
-def _adopt_legacy_environment() -> None:
-    """Map pre-Mosael environment variables when no new-name override exists."""
-    for key, value in tuple(os.environ.items()):
-        if key.startswith(LEGACY_ENV_PREFIX):
-            os.environ.setdefault(f"{ENV_PREFIX}{key.removeprefix(LEGACY_ENV_PREFIX)}", value)
 
 
 def _prepare_data_dir() -> Path:
-    """Resolve the data directory and finish any pre-settings migration it requires."""
-    target = Path.home() / ".mosael"
-    configured = os.environ.get(f"{ENV_PREFIX}DATA_DIR") or os.environ.get(
-        f"{LEGACY_ENV_PREFIX}DATA_DIR"
-    )
-    if configured:
-        target = Path(configured).expanduser().resolve()
-        try:
-            result = migrate_legacy_database_in_data_dir(target)
-        except Exception:
-            logging.getLogger(__name__).exception(
-                "Could not migrate pre-Mosael database inside %s; refusing to start with an empty replacement",
-                target,
-            )
-            raise
-        if result.changed:
-            logging.getLogger(__name__).warning(
-                "Migrated pre-Mosael database inside %s (backup=%s)",
-                target,
-                result.backup,
-            )
-        elif result.status != "no-legacy-data":
-            logging.getLogger(__name__).warning(
-                "Did not migrate pre-Mosael database inside %s: %s",
-                target,
-                result.status,
-            )
-        return target
-    try:
-        result = migrate_default_data_dir(Path.home())
-    except Exception:
-        logging.getLogger(__name__).exception(
-            "Could not migrate pre-Mosael data; refusing to start with an empty replacement",
-        )
-        raise
-    if result.changed:
-        logging.getLogger(__name__).warning(
-            "Migrated pre-Mosael data from %s to %s (backup=%s, source_preserved=%s)",
-            result.source,
-            result.target,
-            result.backup,
-            result.source_preserved,
-        )
-    elif result.status not in {"no-legacy-data"}:
-        logging.getLogger(__name__).warning(
-            "Did not migrate pre-Mosael data from %s: %s",
-            result.source,
-            result.status,
-        )
-    return result.target
+    """Resolve the Mosael data directory from the current namespace only."""
+    configured = os.environ.get(f"{ENV_PREFIX}DATA_DIR")
+    return Path(configured).expanduser().resolve() if configured else Path.home() / ".mosael"
 
 
-_adopt_legacy_environment()
 DEFAULT_DATA_DIR = _prepare_data_dir()
 
 
@@ -173,6 +114,7 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
 
 def app_version() -> str:
     """当前应用版本。

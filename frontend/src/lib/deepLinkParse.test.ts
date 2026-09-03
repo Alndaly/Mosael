@@ -25,7 +25,6 @@ describe("mosael:// 深链解析", () => {
   });
 
   it("拒绝别的协议", () => {
-    expect(parseDeepLink("openstudio://open?view=workflows&id=legacy1")).toBeNull();
     expect(parseDeepLink("https://evil.example/open?view=workflows")).toBeNull();
     expect(parseDeepLink("file:///etc/passwd")).toBeNull();
   });
@@ -49,7 +48,6 @@ describe("mosael:// 深链解析", () => {
 
   it("从 argv 里挑出深链(Windows/Linux 的唤起方式)", () => {
     expect(deepLinkFromArgv(["C:\\app.exe", "--flag", "mosael://open?view=kb"])).toEqual({ view: "kb" });
-    expect(deepLinkFromArgv(["C:\\app.exe", "openstudio://open?view=kb"])).toBeNull();
     expect(deepLinkFromArgv(["C:\\app.exe", "--flag"])).toBeNull();
     // 混着一个不合法的和一个合法的:取合法的那个,不因为前一个失败就放弃。
     expect(deepLinkFromArgv(["app", "mosael://run?x=1", "mosael://open?view=media"])).toEqual({

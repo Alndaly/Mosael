@@ -145,22 +145,6 @@ def test_通用文件名被改成规范名() -> None:
     assert "dev.legacy" in packages(client)
 
 
-def test_品牌更名前的清单文件名被迁移() -> None:
-    client = fresh_client()
-    client.post("/api/workspaces", json={"name": "W"})
-    shutil.rmtree(plugins_root(), ignore_errors=True)
-    directory = plugins_root() / "pre-mosael"
-    directory.mkdir(parents=True)
-    (directory / "open-studio.plugin.json").write_text(json.dumps(LEGACY), encoding="utf-8")
-    (directory / "main.py").write_text(ENV_ENTRY, encoding="utf-8")
-    with SessionLocal() as db:
-        installer.sync(db, plugins_root(), owner_user_id=_first_user_id(db))
-
-    assert (directory / "mosael.plugin.json").exists()
-    assert not (directory / "open-studio.plugin.json").exists()
-    assert "dev.legacy" in packages(client)
-
-
 def test_无配置的包装上就自动有一个默认连接() -> None:
     """text-toolkit 这种装上就能用的东西,不该逼用户先去"新建一个连接"。"""
     client = install(SIMPLE)

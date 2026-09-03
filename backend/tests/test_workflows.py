@@ -1009,7 +1009,7 @@ def test_workflow_export_import_roundtrip() -> None:
 
 
 def test_workflow_export_writes_the_current_format() -> None:
-    """导出只写新标识——兼容是单向的,不能让旧名靠导出重新繁殖。"""
+    """导出始终使用当前格式标识。"""
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     created = client.post(
@@ -1018,23 +1018,6 @@ def test_workflow_export_writes_the_current_format() -> None:
     res = client.get(f"/api/workflows/{created['id']}/export")
     assert res.json()["format"] == "mosael-workflow"
     assert "mosael-workflow.json" in res.headers["content-disposition"]
-
-
-def test_workflow_import_accepts_pre_mosael_exports() -> None:
-    """The rename must not strand workflow files exported by an earlier installation."""
-    client = fresh_client()
-    ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    legacy = {
-        "format": "openstudio-workflow",
-        "version": 1,
-        "name": "Legacy workflow",
-        "graph": linear_graph(),
-    }
-
-    response = client.post("/api/workflows/import", json={"workspace_id": ws["id"], "data": legacy})
-
-    assert response.status_code == 200
-    assert response.json()["name"] == "Legacy workflow"
 
 
 def test_workflow_import_rejects_bad_files() -> None:

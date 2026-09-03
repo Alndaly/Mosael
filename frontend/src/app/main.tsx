@@ -9,14 +9,9 @@ import "@fontsource-variable/jetbrains-mono";
 import "lxgw-wenkai-screen-webfont/lxgwwenkaigbscreen.css";
 import "@/design/tokens.css";
 import "./styles.css";
-import { migrateLegacyLocalStorage } from "@/app/legacyStorage";
 import { installWindowChrome } from "@/lib/windowChrome";
 
-migrateLegacyLocalStorage(window.localStorage);
 installWindowChrome();
-
-// App and its API singletons are loaded only after the storage keys have moved. Static imports are
-// evaluated before this module body, which would make the first upgraded launch read empty new keys.
 void import("@/app/App").then(({ App }) => {
   createRoot(document.getElementById("root")!).render(<App />);
 });
