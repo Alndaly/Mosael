@@ -13,6 +13,8 @@ commit list and downloadable artifacts.
   leaving the independently recorded screen asset unchanged.
 - Kept active recordings alive across app navigation and collapsed the recorder into a non-blocking controller,
   so the rest of Mosael remains usable while captured files retain their original workspace or project destination.
+- Added optional device-audio capture to screen recordings, including Windows loopback grants and the macOS
+  packaged-app permission required by supported system sharing pickers.
 
 ## [1.0.0-beta1] - 2026-09-03
 

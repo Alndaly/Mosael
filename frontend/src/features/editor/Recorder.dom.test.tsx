@@ -140,6 +140,23 @@ describe("Recorder", () => {
     expect(screen.getByRole("button", { name: /recordStop/ })).toBeVisible();
   });
 
+  it("lets the user opt out of device audio when recording the screen", async () => {
+    const probe = fakeStream();
+    const screenCapture = fakeStream();
+    getUserMedia.mockResolvedValueOnce(probe.stream);
+    getDisplayMedia.mockResolvedValueOnce(screenCapture.stream);
+    const user = userEvent.setup();
+
+    render(<Recorder open onOpenChange={vi.fn()} onRecorded={vi.fn()} />);
+
+    const deviceAudio = screen.getByRole("switch", { name: "recordSystemAudio" });
+    expect(deviceAudio).toBeChecked();
+    await user.click(deviceAudio);
+    await user.click(screen.getByRole("button", { name: /recordStart/ }));
+
+    expect(getDisplayMedia).toHaveBeenCalledWith({ video: true, audio: false });
+  });
+
   it("records the screen and camera as two separate files", async () => {
     const probe = fakeStream();
     const screenCapture = fakeStream();

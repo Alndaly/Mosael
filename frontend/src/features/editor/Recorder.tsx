@@ -1,5 +1,5 @@
 import React from "react";
-import { Circle, FlipHorizontal2, Mic, Monitor as ScreenIcon, Square, Video } from "lucide-react";
+import { Circle, FlipHorizontal2, Mic, Monitor as ScreenIcon, Square, Video, Volume2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { useI18n } from "@/app/preferences";
@@ -21,6 +21,7 @@ type Source = "screen" | "camera" | "screenCamera" | "mic";
 
 const SOURCES: readonly Source[] = ["screen", "camera", "screenCamera", "mic"];
 const CAMERA_MIRROR_STORAGE_KEY = "mosael.recorder.cameraMirror";
+const SYSTEM_AUDIO_STORAGE_KEY = "mosael.recorder.systemAudio";
 
 /** Capture screen / webcam / mic via MediaRecorder and hand independent files to the caller.
  *  A screen + camera session deliberately stays as two assets. Screen capture in the packaged
@@ -54,6 +55,9 @@ export function Recorder({
   const [cameraId, setCameraId] = React.useState<string>(() => localStorage.getItem("mosael.recorder.camera") ?? "");
   const [mirrorCamera, setMirrorCamera] = React.useState(
     () => localStorage.getItem(CAMERA_MIRROR_STORAGE_KEY) === "true",
+  );
+  const [captureSystemAudio, setCaptureSystemAudio] = React.useState(
+    () => localStorage.getItem(SYSTEM_AUDIO_STORAGE_KEY) !== "false",
   );
   const [level, setLevel] = React.useState(0); // 0-1 实时输入电平(有声音才有柱,哑设备当场现形)
   const audioCtxRef = React.useRef<AudioContext | null>(null);
@@ -174,7 +178,7 @@ export function Recorder({
       let cameraStream: MediaStream | null = null;
 
       if (capturesScreen) {
-        screenStream = await media.getDisplayMedia({ video: true, audio: true });
+        screenStream = await media.getDisplayMedia({ video: true, audio: captureSystemAudio });
         acquiredStreams.push(screenStream);
         inputs.push({ kind: "screen", stream: screenStream, filenamePrefix: t("record_screen_file") });
         transferStreamOwnership(screenStream);
@@ -381,6 +385,26 @@ export function Recorder({
             {fmt(secs)}
           </span>
         </div>
+
+        {capturesScreen && !recording && (
+          <label className="flex items-center justify-between gap-4 rounded-lg border border-border bg-panel px-3 py-2.5">
+            <span className="flex min-w-0 items-start gap-2">
+              <Volume2 size={14} className="mt-0.5 shrink-0 text-muted-foreground" />
+              <span className="grid min-w-0 gap-0.5">
+                <span className="text-xs font-medium text-foreground">{t("recordSystemAudio")}</span>
+                <span className="text-ui-xs leading-[1.4] text-muted-foreground">{t("recordSystemAudioHint")}</span>
+              </span>
+            </span>
+            <Switch
+              checked={captureSystemAudio}
+              onCheckedChange={(checked) => {
+                setCaptureSystemAudio(checked);
+                localStorage.setItem(SYSTEM_AUDIO_STORAGE_KEY, String(checked));
+              }}
+              aria-label={t("recordSystemAudio")}
+            />
+          </label>
+        )}
 
         {/* 设备选择 + 输入电平:摄像头/麦克风模式可指定设备;电平柱有声即动,
             哑设备(录了 0 秒那种)当场现形。录制中锁定选择。 */}

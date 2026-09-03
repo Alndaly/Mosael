@@ -396,11 +396,18 @@ function createWindow() {
   // 屏幕录制:getDisplayMedia 在 Electron 里需要主进程给出捕获源。优先用系统原生选择器
   // (mac 15+/Win 支持);否则回退到 desktopCapturer 授予主屏。macOS 首次会弹「屏幕录制」系统授权。
   const { desktopCapturer } = require("electron");
+  const { createDisplayMediaGrant } = require("./display-media.cjs");
   win.webContents.session.setDisplayMediaRequestHandler(
-    (_request, callback) => {
+    (request, callback) => {
       desktopCapturer
         .getSources({ types: ["screen", "window"] })
-        .then((sources) => callback(sources[0] ? { video: sources[0] } : {}))
+        .then((sources) =>
+          callback(
+            sources[0]
+              ? createDisplayMediaGrant(sources[0], { audioRequested: request.audioRequested })
+              : {},
+          ),
+        )
         .catch(() => callback({}));
     },
     { useSystemPicker: true },

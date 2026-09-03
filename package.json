@@ -68,6 +68,9 @@
     "mac": {
       "category": "public.app-category.video",
       "icon": "build/icon.icns",
+      "extendInfo": {
+        "NSAudioCaptureUsageDescription": "Mosael needs access to system audio when you include device audio in a screen recording."
+      },
       "target": [
         "dir"
       ],
