@@ -14,6 +14,14 @@ import type { WorkflowNodeData } from "@/features/workflows/WorkflowNode";
 type NodeRegistry = Map<string, WorkflowNodeType>;
 type Translate = (key: MessageKey) => string;
 
+/** Keep React Flow's visual selection in lockstep with the node shown by the inspector. */
+export function withSingleNodeSelected<T extends Node>(nodes: T[], nodeId: string | null): T[] {
+  return nodes.map((node) => {
+    const selected = node.id === nodeId;
+    return node.selected === selected ? node : { ...node, selected };
+  });
+}
+
 /** Return a concrete configured asset id; template references cannot be previewed before a run. */
 export function configAssetId(
   node: WorkflowGraph["nodes"][number],

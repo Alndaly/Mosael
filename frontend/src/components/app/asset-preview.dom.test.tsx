@@ -17,6 +17,17 @@ import { AssetInlinePreview } from "./asset-preview";
 beforeEach(() => openImagePreview.mockReset());
 
 describe("素材行内预览", () => {
+  it("plain 视频预览的容器铺满调用方宽度", () => {
+    const { container } = render(
+      <AssetInlinePreview assetId="v" name="视频" kind="video" plain className="h-20 w-full object-cover" />,
+    );
+
+    const video = container.querySelector("video");
+    expect(video).not.toBeNull();
+    expect(video?.parentElement?.className).toContain("w-full");
+    expect(video?.parentElement?.className).not.toContain("w-fit");
+  });
+
   it("图片显示兼容预览,点开时把整段聊天媒体交给 react-photo-view", () => {
     const gallery = [
       { src: "/preview/a", title: "第一张" },

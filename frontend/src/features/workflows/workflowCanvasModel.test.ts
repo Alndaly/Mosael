@@ -6,6 +6,7 @@ import {
   configAssetId,
   toWorkflowFlowEdges,
   toWorkflowFlowNodes,
+  withSingleNodeSelected,
   workflowIssueText,
 } from "@/features/workflows/workflowCanvasModel";
 import type { NodeIssue } from "@/features/workflows/analyze";
@@ -35,6 +36,19 @@ const translate = ((key: MessageKey) => {
 }) as (key: MessageKey) => string;
 
 describe("workflow canvas model", () => {
+  it("keeps the visual node selection aligned with the inspector target", () => {
+    const nodes = [
+      { id: "source", position: { x: 0, y: 0 }, data: {}, selected: true },
+      { id: "project", position: { x: 100, y: 0 }, data: {}, selected: false },
+    ];
+
+    expect(withSingleNodeSelected(nodes, "project").map((node) => [node.id, node.selected])).toEqual([
+      ["source", false],
+      ["project", true],
+    ]);
+    expect(withSingleNodeSelected(nodes, null).every((node) => node.selected === false)).toBe(true);
+  });
+
   it("projects runtime node metadata into the canvas node", () => {
     const registry = new Map([
       ["llm", meta("llm", {}, ["text", "*debug"])],

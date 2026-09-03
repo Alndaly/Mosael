@@ -173,54 +173,26 @@ export function RefEditor({
     editor.commands.setContent(piecesToDoc(parsePieces(value)), { emitUpdate: false });
   }, [value, editor]);
 
-  /** 把一个引用插到光标处。上游 chip 点一下走这里。 */
-  const insert = (ref: string) => {
-    if (!editor) return;
-    editor
-      .chain()
-      .focus()
-      .insertContent({ type: "ref", attrs: { ref: ref.replace(/^\{\{|\}\}$/g, "") } })
-      .run();
-  };
-
   return (
-    <div className="grid gap-1">
-      <div className="relative">
-        <EditorContent editor={editor} />
-        <menu.Portal>
-          {(ref, index) => (
-            <button
-              key={ref}
-              type="button"
-              className={cn(
-                "block w-full cursor-pointer rounded-[5px] border-0 bg-transparent px-2 py-1 text-left font-mono text-ui-xs text-foreground",
-                index === (menu.menu?.active ?? 0) ? "bg-secondary" : "hover:bg-secondary",
-              )}
-              // mousedown 会先让编辑器失焦,失焦又会收起菜单 —— 拦掉,让 click 有机会跑到。
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => menu.choose(ref)}
-            >
-              {ref.replace(/^\{\{|\}\}$/g, "")}
-            </button>
-          )}
-        </menu.Portal>
-      </div>
-      {variables.length > 0 && (
-        // 上游有什么直接摆出来,点一下插到光标处 —— 不用记 `{{}}` 怎么写,也不用回画布上看
-        // 输出变量叫什么。
-        <div className="flex flex-wrap gap-1">
-          {variables.map((ref) => (
-            <button
-              key={ref}
-              type="button"
-              className="cursor-pointer rounded-md border-0 bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] px-1.5 py-0.5 font-mono text-ui-2xs text-primary transition-colors hover:bg-[color-mix(in_srgb,var(--primary)_20%,transparent)]"
-              onClick={() => insert(ref)}
-            >
-              {ref.replace(/^\{\{|\}\}$/g, "")}
-            </button>
-          ))}
-        </div>
-      )}
+    <div className="relative">
+      <EditorContent editor={editor} />
+      <menu.Portal>
+        {(ref, index) => (
+          <button
+            key={ref}
+            type="button"
+            className={cn(
+              "block w-full cursor-pointer rounded-[5px] border-0 bg-transparent px-2 py-1 text-left font-mono text-ui-xs text-foreground",
+              index === (menu.menu?.active ?? 0) ? "bg-secondary" : "hover:bg-secondary",
+            )}
+            // mousedown 会先让编辑器失焦,失焦又会收起菜单 —— 拦掉,让 click 有机会跑到。
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => menu.choose(ref)}
+          >
+            {ref.replace(/^\{\{|\}\}$/g, "")}
+          </button>
+        )}
+      </menu.Portal>
     </div>
   );
 }

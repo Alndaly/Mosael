@@ -88,7 +88,7 @@ export function AssetInlinePreview({
   }
   if (kind === "video") {
     return (
-      <div className="relative w-fit max-w-full">
+      <div className={cn("relative max-w-full", plain ? "w-full" : "w-fit")}>
         {/* nodrag:播放条要能点、能拖进度,不能让画布把 pointerdown 抢去拖节点。 */}
         <video
           src={src}

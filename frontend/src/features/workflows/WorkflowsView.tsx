@@ -106,7 +106,7 @@ import { useCanvasPosture } from "@/features/workflows/useCanvasPosture";
 import { withDependentsCleared } from "@/features/workflows/dependents";
 import { RefEditor } from "@/features/workflows/RefEditor";
 import { MapField } from "@/features/workflows/MapField";
-import { CodeEditor, type CodeEditorHandle } from "@/components/app/code-editor";
+import { CodeEditor } from "@/components/app/code-editor";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/components/agent/CanvasAgentChat";
 import { WorkflowRunHistory } from "@/features/workflows/WorkflowRunHistory";
 import { WorkflowCommunityDialog } from "@/features/workflows/WorkflowCommunityDialog";
@@ -156,6 +156,7 @@ import {
   configAssetId,
   toWorkflowFlowEdges,
   toWorkflowFlowNodes,
+  withSingleNodeSelected,
   workflowIssueText,
 } from "@/features/workflows/workflowCanvasModel";
 
@@ -809,18 +810,26 @@ function WorkflowEditor({
   // 每张工作流各记各的位置 —— 换一张图不该继承上一张停在哪儿。
   const viewport = usePersistentViewport(`workflow:${workflow.id}`);
 
+  /** 检查器节点与 React Flow 的紫色选中框必须由同一个动作更新，不能各记各的。 */
+  const selectInspectorNode = React.useCallback((nodeId: string | null) => {
+    setSelectedNodeId(nodeId);
+    setNodes((current) => withSingleNodeSelected(current, nodeId));
+  }, []);
+
   /**
    * 把视口居中到某坐标上。用坐标而非 getNode:新加节点此刻还没同步进 React Flow 内部 store,
    * getNode 会取空;而 setCenter 只改视口变换,不依赖节点已登记。
    *
-   * 不再为「躲开右侧检查器」额外右移:配置面板贴着节点浮现(NodeToolbar,和节点同层),
-   * 右侧不再有常驻遮挡,再偏移反而把节点推离视觉中心。
+   * 检查器在节点下方，聚焦时把「节点 + 检查器」作为整体居中；如果只把节点放正中，
+   * 560px 高的面板必然掉出画布底边。面板本身不随画布缩放，所以屏幕像素要除以 zoom
+   * 再换回流程坐标。
    */
   const focusPosition = React.useCallback((x: number, y: number, duration = 350) => {
     const instance = rfRef.current;
     if (!instance) return;
     const zoom = Math.max(instance.getZoom(), 0.6);
-    instance.setCenter(x + 210 / 2, y + 72 / 2, { zoom, duration });
+    const inspectorOffset = Math.min(220, window.innerHeight * 0.2) / zoom;
+    instance.setCenter(x + 210 / 2, y + 72 / 2 + inspectorOffset, { zoom, duration });
   }, []);
 
   /** 选中并聚焦某节点(节点搜索用;从当前 graph 取坐标)。 */
@@ -828,10 +837,10 @@ function WorkflowEditor({
     (nodeId: string) => {
       const target = graph.nodes.find((node) => node.id === nodeId);
       if (!target) return;
-      setSelectedNodeId(nodeId);
+      selectInspectorNode(nodeId);
       focusPosition(target.position?.x ?? 0, target.position?.y ?? 0);
     },
-    [graph.nodes, focusPosition],
+    [graph.nodes, focusPosition, selectInspectorNode],
   );
 
   // 智能体经确认卡改图后 updated_at 变化:画布无本地改动时自动跟进服务端版本。
@@ -902,11 +911,10 @@ function WorkflowEditor({
         return;
       }
       applyGraph(res.graph);
-      setSelectedNodeId(res.subgraphId);
-      setNodes((current) => current.map((node) => ({ ...node, selected: node.id === res.subgraphId })));
+      selectInspectorNode(res.subgraphId);
       toast.success(t("wfCollapseDone"));
     },
-    [graph, applyGraph, t],
+    [graph, applyGraph, selectInspectorNode, t],
   );
 
   // 节点剪贴板(应用内,按 workflow 编辑器实例存活)。存被选中的节点 + 其内部边,
@@ -1173,7 +1181,7 @@ function WorkflowEditor({
       nodes: [...graph.nodes, { id, type, name: meta.label, position, config }],
     };
     applyGraph(next);
-    setSelectedNodeId(id);
+    selectInspectorNode(id);
     // 新节点排在最右、又会被右侧检查器盖住 → 加完把视口聚焦过去,别让人找不到。
     // 延后两帧 + 瞬时定位(duration 0):applyGraph 会替换整份节点数组触发重挂重测量,
     // 期间的重渲染会打断 setCenter 的 d3 过渡(动画停在起点=看似没动);瞬时定位无过渡可打断,
@@ -1729,7 +1737,7 @@ function WorkflowEditor({
                             "grid cursor-pointer grid-cols-[14px_auto_1fr] items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1.5 text-left hover:bg-muted",
                             issue.severity === "error" ? "[&>svg]:text-destructive" : "[&>svg]:text-[#d97706]",
                           )}
-                          onClick={() => setSelectedNodeId(issue.nodeId)}
+                          onClick={() => focusNode(issue.nodeId)}
                         >
                           <AlertTriangle size={12} />
                           <span className="whitespace-nowrap text-xs font-semibold">{issue.nodeName}</span>
@@ -1929,7 +1937,8 @@ function WorkflowEditor({
             connectionLineStyle={{ stroke: "var(--primary)", strokeWidth: 1.5, strokeDasharray: "5 4" }}
             onNodeClick={(_event, node) => {
               blurFloatingPanels(); // 层级快捷键交还给画布
-              setSelectedNodeId(node.id);
+              if (selectedNodeId === node.id) selectInspectorNode(node.id);
+              else focusNode(node.id);
             }}
             onNodeDoubleClick={(_event, node) => {
               const g = graph.nodes.find((item) => item.id === node.id);
@@ -1938,7 +1947,7 @@ function WorkflowEditor({
             }}
             onPaneClick={() => {
               blurFloatingPanels();
-              setSelectedNodeId(null);
+              selectInspectorNode(null);
             }}
             /* 触控板约定(Figma / Miro 那套):双指滑动 = 平移,捏合 = 缩放。
                React Flow 默认 zoomOnScroll:true,而 macOS 触控板双指滑动发出的正是 wheel 事件,
@@ -2011,14 +2020,14 @@ function WorkflowEditor({
                   (edge) => edge.source !== selectedNode.id && edge.target !== selectedNode.id,
                 ),
               });
-              setSelectedNodeId(null);
+              selectInspectorNode(null);
             }}
             onDrillIn={
               selectedNode.type === "subgraph" || selectedNode.type.startsWith("loop_")
                 ? () => setEditingLoopId(selectedNode.id)
                 : undefined
             }
-            onClose={() => setSelectedNodeId(null)}
+            onClose={() => selectInspectorNode(null)}
           />
         )}
           </ReactFlow>
@@ -2184,39 +2193,9 @@ function JsonField({ value, onChange }: { value: unknown; onChange: (parsed: unk
   );
 }
 
-/** code 字段:CodeMirror Python + 上游变量 chip(插到光标处)。 */
-function CodeField({
-  value,
-  onChange,
-  variables,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  variables: string[];
-}) {
-  const t = useI18n();
-  const handle = React.useRef<CodeEditorHandle>(null);
-  return (
-    <>
-      <CodeEditor ref={handle} value={value} language="python" minHeight={140} onChange={onChange} />
-      {variables.length > 0 && (
-        <div className="flex flex-wrap gap-[3px]">
-          {variables.map((ref) => (
-            <button
-              key={ref}
-              type="button"
-              className="cursor-pointer rounded-md border border-border bg-[color-mix(in_srgb,var(--primary)_6%,transparent)] px-1.5 py-px font-mono text-ui-2xs text-primary transition-[border-color,background] duration-100 hover:border-primary hover:bg-[color-mix(in_srgb,var(--primary)_12%,transparent)]"
-              title={t("wfInsertVar")}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => handle.current?.insertAtCursor(ref)}
-            >
-              {ref.replace(/[{}]/g, "")}
-            </button>
-          ))}
-        </div>
-      )}
-    </>
-  );
+/** code 字段保持纯编辑器；上游变量不再作为整片提示标签铺在表单下面。 */
+function CodeField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  return <CodeEditor value={value} language="python" minHeight={140} onChange={onChange} />;
 }
 
 /** Dify 式节点属性浮层:枚举字段用 Select,模板字段带上游变量插入器。 */
@@ -3120,7 +3099,7 @@ function NodeInspector({
                   />
                 )
               ) : spec?.type === "code" ? (
-                <CodeField value={String(value ?? "")} onChange={(next) => setConfig(key, next)} variables={variables} />
+                <CodeField value={String(value ?? "")} onChange={(next) => setConfig(key, next)} />
               ) : spec?.type === "template" ? (
                 // 模板字段:多行,而且里面的 `{{上游.输出}}` 显示成**可整体删除的标签** ——
                 // 纯文本时退格会把它咬成 `{{llm-1.tex`,而半截引用在运行前看不出错。
@@ -3220,7 +3199,7 @@ function NodeInspector({
       className={cn(
         // 380 而不是 320:两列并排的参数(Temperature / Top P 这种)在 320 里各自只剩 130px,
         // 长一点的标签就换行。
-        "grid max-h-[560px] min-h-0 w-[380px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border border-border-strong bg-panel shadow-[var(--shadow-panel)]",
+        "grid max-h-[min(560px,calc(100vh-210px))] min-h-0 w-[380px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border border-border-strong bg-panel shadow-[var(--shadow-panel)]",
         // **搬进画布之后必须挂这三个。** 面板现在长在 React Flow 里面,而画布自己要监听
         // pointerdown 来平移、滚轮来缩放 —— 不声明的话这些事件在到达输入框之前就被画布截走:
         // 点输入框不聚焦、打字没反应、下拉点不开。此前面板是 fixed 在画布外面的,画布看不到
