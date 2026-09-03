@@ -28,3 +28,19 @@
 - Visual verification: blocked — the in-app Browser renderer is not available in this session, and
   the design workflow forbids silently switching to a second browser.
 - final result: blocked
+
+## 2026-09-04 — 工作流节点端口显示名
+
+- Reference: user screenshot showing a single workflow canvas mixing Chinese input labels with raw
+  output identifiers such as `timed_text`, `sequence_id`, and `timeline_end`.
+- Implemented: stable English port keys remain the graph/edge/export contract; localized
+  `output_labels` now travel beside them from the backend registry. Inputs and outputs are projected
+  through one frontend presentation function, while hover titles retain the underlying key for
+  debugging. Built-in labels share one semantic dictionary; plugins can override output labels and
+  otherwise receive a human-readable fallback.
+- Automated evidence: bilingual API completeness assertions, plugin override coverage, shared
+  frontend port-projection coverage, 914 frontend tests, 2,527 backend tests, Ruff, and the production
+  frontend build all pass.
+- Visual verification: blocked — the in-app Browser renderer is not available in this session, and
+  the design workflow forbids silently switching to a second browser.
+- final result: blocked

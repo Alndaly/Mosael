@@ -66,6 +66,35 @@ export function toWorkflowFlowNodes(graph: WorkflowGraph, registry: NodeRegistry
   }));
 }
 
+/**
+ * Resolve the presentation metadata for both sides of a node without changing its stable port keys.
+ *
+ * This stays outside the React component because the registry arrives asynchronously: the initial
+ * graph projection may run before node metadata has loaded, while every later render can call this
+ * pure function with the current registry.
+ */
+export function workflowPortPresentation(
+  node: Pick<WorkflowNodeData, "nodeType" | "inputs" | "outputs">,
+  registry: NodeRegistry,
+): Pick<WorkflowNodeData, "inputTypes" | "inputLabels" | "outputTypes" | "outputLabels"> {
+  const meta = registry.get(node.nodeType);
+  const inputs = node.inputs ?? [];
+  const outputs = node.outputs ?? [];
+  return {
+    inputTypes: Object.fromEntries(inputs.map((key) => [key, inputType(registry, node.nodeType, key)])),
+    inputLabels: Object.fromEntries(
+      inputs.map((key) => {
+        const spec = meta?.config?.[key] as { label?: unknown } | undefined;
+        return [key, String(spec?.label ?? "").trim()];
+      }),
+    ),
+    outputTypes: Object.fromEntries(outputs.map((key) => [key, outputType(registry, node.nodeType, key)])),
+    outputLabels: Object.fromEntries(
+      outputs.map((key) => [key, String(meta?.output_labels?.[key] ?? "").trim()]),
+    ),
+  };
+}
+
 /** Domain edges → React Flow handles, labels and soft type-mismatch styling. */
 export function toWorkflowFlowEdges(
   graph: WorkflowGraph,

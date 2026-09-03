@@ -148,9 +148,7 @@ import {
   analyzeWorkflow,
   extractRefs,
   fieldDataType,
-  inputType,
   isNestedScopeConfig,
-  outputType,
 } from "@/features/workflows/analyze";
 import { RunOutputs, outputSummary } from "@/features/workflows/RunOutputs";
 import { collapseToSubgraph } from "@/features/workflows/collapse";
@@ -166,6 +164,7 @@ import {
   toWorkflowFlowEdges,
   toWorkflowFlowNodes,
   withSingleNodeSelected,
+  workflowPortPresentation,
   workflowIssueText,
 } from "@/features/workflows/workflowCanvasModel";
 
@@ -288,7 +287,7 @@ const DEFAULT_EDGE_OPTIONS = {
 const EMPTY_SCOPE_VARIABLES: string[] = [];
 
 export function WorkflowsView({ workspace }: { workspace: Workspace }) {
-  const t = useI18n();
+  const { t, locale } = usePreferences();
   const qc = useQueryClient();
   const [menuRenaming, setMenuRenaming] = React.useState<Workflow | null>(null);
   const [menuDeleting, setMenuDeleting] = React.useState<Workflow | null>(null);
@@ -310,7 +309,13 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
     // 智能体经确认卡改图后 updated_at 变化,轮询让画布自动跟进。
     refetchInterval: 5000,
   });
-  const nodeTypes = useQuery({ queryKey: ["workflow-node-types"], queryFn: fetchWorkflowNodeTypes, staleTime: Infinity });
+  const nodeTypes = useQuery({
+    // 节点名、字段名和输出接点名都由后端按 Accept-Language 翻译。
+    // 语言不进 key 会让 Infinity 缓存把上一种语言永久留在画布上。
+    queryKey: ["workflow-node-types", locale],
+    queryFn: fetchWorkflowNodeTypes,
+    staleTime: Infinity,
+  });
 
   const create = useMutation({
     mutationFn: (templateId?: WorkflowTemplateId) => {
@@ -1574,26 +1579,7 @@ function WorkflowEditor({
             // 那一刻节点类型还没拉回来、registry 是空的 —— 算出来的永远是空值,而且不会重算。
             // (素材节点的缩略图和图标就是这么丢的:改成读注册表之后,读的是一张还没到货的表。)
             configAssetId: configAssetId(graphNode(node.id), registry),
-            inputTypes: Object.fromEntries(
-              ((node.data as WorkflowNodeData).inputs ?? []).map((key) => [
-                key,
-                inputType(registry, node.data.nodeType as string, key),
-              ]),
-            ),
-            inputLabels: Object.fromEntries(
-              ((node.data as WorkflowNodeData).inputs ?? []).map((key) => {
-                const spec = registry.get(node.data.nodeType as string)?.config?.[key] as
-                  | { label?: unknown }
-                  | undefined;
-                return [key, String(spec?.label ?? "").trim()];
-              }),
-            ),
-            outputTypes: Object.fromEntries(
-              ((node.data as WorkflowNodeData).outputs ?? []).map((key) => [
-                key,
-                outputType(registry, node.data.nodeType as string, key),
-              ]),
-            ),
+            ...workflowPortPresentation(node.data as WorkflowNodeData, registry),
           },
         };
       });

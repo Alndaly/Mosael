@@ -69,3 +69,20 @@ def test_插件声明的输出类型会进入运行时节点注册表() -> None:
     )
 
     assert meta["output_types"] == {"artifact": "asset", "count": "number"}
+
+
+def test_插件声明的输出显示名会保留() -> None:
+    """第三方节点的专业术语不能被应用自作主张地改写。"""
+    from app.domain.plugins.nodes import node_meta
+
+    meta = node_meta(
+        {
+            "name": "render",
+            "node": {
+                "outputs": ["artifact", "count"],
+                "output_labels": {"artifact": "渲染成品", "count": "产出数"},
+            },
+        }
+    )
+
+    assert meta["output_labels"] == {"artifact": "渲染成品", "count": "产出数"}

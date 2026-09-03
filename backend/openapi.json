@@ -24562,6 +24562,13 @@
             "type": "object",
             "title": "Output Types"
           },
+          "output_labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Output Labels"
+          },
           "plugin_name": {
             "type": "string",
             "title": "Plugin Name",

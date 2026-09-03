@@ -7,6 +7,7 @@ import {
   toWorkflowFlowEdges,
   toWorkflowFlowNodes,
   withSingleNodeSelected,
+  workflowPortPresentation,
   workflowIssueText,
 } from "@/features/workflows/workflowCanvasModel";
 import type { NodeIssue } from "@/features/workflows/analyze";
@@ -24,6 +25,7 @@ function meta(
     config,
     outputs,
     output_types: {},
+    output_labels: {},
     plugin_name: "",
   };
 }
@@ -104,6 +106,31 @@ describe("workflow canvas model", () => {
     };
 
     expect(workflowIssueText(translate, issue, registry)).toBe("缺少 输入素材");
+  });
+
+  it("keeps stable port keys while projecting localized labels for both sides", () => {
+    const registry = new Map([
+      [
+        "timeline",
+        {
+          ...meta("timeline", { sequence_id: { label: "时间线", data_type: "sequence" } }, ["sequence_id", "revision"]),
+          output_types: { sequence_id: "sequence", revision: "number" },
+          output_labels: { sequence_id: "时间线", revision: "版本" },
+        },
+      ],
+    ]);
+
+    expect(
+      workflowPortPresentation(
+        { nodeType: "timeline", inputs: ["sequence_id"], outputs: ["sequence_id", "revision"] },
+        registry,
+      ),
+    ).toEqual({
+      inputTypes: { sequence_id: "sequence" },
+      inputLabels: { sequence_id: "时间线" },
+      outputTypes: { sequence_id: "sequence", revision: "number" },
+      outputLabels: { sequence_id: "时间线", revision: "版本" },
+    });
   });
 
   it("finds a concrete configured asset by the declared input type", () => {

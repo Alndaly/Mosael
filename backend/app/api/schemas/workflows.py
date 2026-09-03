@@ -67,6 +67,7 @@ class WorkflowNodeTypeOut(BaseModel):
     config: dict
     outputs: list[str]
     output_types: dict[str, str] = Field(default_factory=dict)
+    output_labels: dict[str, str] = Field(default_factory=dict)
     #: 插件节点带来源插件名(内置节点为空)。面板据此在同名工具之间区分是谁提供的。
     plugin_name: str = ""
 

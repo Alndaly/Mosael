@@ -125,6 +125,9 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
     output_types = declared.get("output_types")
     if not isinstance(output_types, dict):
         output_types = {}
+    output_labels = declared.get("output_labels")
+    if not isinstance(output_labels, dict):
+        output_labels = {}
     label = str(declared.get("label") or tool.get("label") or tool.get("name") or "")
     description = str(declared.get("description") or tool.get("description") or "")
     return {
@@ -145,6 +148,8 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
         },
         "outputs": [str(name) for name in outputs],
         "output_types": {str(name): str(data_type) for name, data_type in output_types.items()},
+        # 插件可以给专业术语一个更好的名字;未声明的由共用词典/可读降级兜底。
+        "output_labels": {str(name): str(label) for name, label in output_labels.items()},
         # 前端据此在节点上标出处;也让"缺插件"的报错说得出是谁。
         "plugin_name": tool.get("instance_name", ""),
         "tool_name": tool.get("name", ""),

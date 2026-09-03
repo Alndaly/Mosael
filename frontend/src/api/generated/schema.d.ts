@@ -9405,6 +9405,10 @@ export interface components {
             output_types?: {
                 [key: string]: string;
             };
+            /** Output Labels */
+            output_labels?: {
+                [key: string]: string;
+            };
             /**
              * Plugin Name
              * @default

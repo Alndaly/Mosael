@@ -158,6 +158,8 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   inputLabels?: Record<string, string>;
   /** 每个输出接点承载什么类型，由节点声明提供。 */
   outputTypes?: Record<string, string>;
+  /** 输出接点在人机界面上的名字;稳定英文 key 仍用于连线和导出。 */
+  outputLabels?: Record<string, string>;
 }
 
 /** 画布节点:语义色图标 + 名称 + 类型标签,全平面卡片。
@@ -357,8 +359,11 @@ function WorkflowNode({ data, selected }: NodeProps) {
                   className="h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-primary! bg-panel! data-[dtype=any]:border-border-strong! data-[dtype=asset]:border-[#c026d3]! data-[dtype=json]:border-[#0891b2]! data-[dtype=number]:border-[#d97706]! data-[dtype=sequence]:border-[#e11d48]! data-[dtype=text]:border-[#64748b]! left-[-12px]!"
                   data-dtype={(d.inputTypes ?? {})[key] ?? "any"}
                 />
-                {/* 有声明标签走正文字体;裸标识符(如 items)与输出侧同用 mono。 */}
-                <span className={cn("whitespace-nowrap text-ui-2xs text-muted-foreground", !(d.inputLabels ?? {})[key] && "font-mono")}>
+                {/* 有声明标签走正文字体;旧服务端没发显示名时才用 mono 显示稳定键。 */}
+                <span
+                  className={cn("whitespace-nowrap text-ui-2xs text-muted-foreground", !(d.inputLabels ?? {})[key] && "font-mono")}
+                  title={key}
+                >
                   {(d.inputLabels ?? {})[key] || key}
                 </span>
               </div>
@@ -367,7 +372,12 @@ function WorkflowNode({ data, selected }: NodeProps) {
           <div className="flex min-w-0 flex-col gap-[3px]">
             {outputs.map((output) => (
               <div className="relative flex min-h-4 items-center justify-end" key={output}>
-                <span className="whitespace-nowrap font-mono text-ui-2xs text-muted-foreground">{output}</span>
+                <span
+                  className={cn("whitespace-nowrap text-ui-2xs text-muted-foreground", !(d.outputLabels ?? {})[output] && "font-mono")}
+                  title={output}
+                >
+                  {(d.outputLabels ?? {})[output] || output}
+                </span>
                 <Handle
                   id={`out:${output}`}
                   type="source"

@@ -120,8 +120,9 @@ def config_editor(key: str, spec: dict[str, Any]) -> str:
 #: 今天这是第三次撞见同一个形状了(智能体的角色表、字段类型表、现在是标签表):一份该住在
 #: 声明里的知识,被抄到了消费方那边,于是加东西时漏掉不报错,只是界面上默默露出一个英文单词。
 #:
-#: 按**键名**给,不按节点给 —— `selector` 在六种浏览器节点里是同一个意思,写六遍只会让它们
-#: 迟早不一致。某个节点要特别说法,在它自己的 spec 里写 `label` 覆盖。
+#: 配置字段和输出接点共享的**语义名字典**。连线和执行始终使用稳定的英文键,
+#: 人机界面才把键映射成当前语言的显示名。按键名给、不按节点给,避免 `sequence_id`
+#: 在每个时间线节点里各写一次后慢慢分叉。特殊语义可用节点自己的 label 覆盖。
 _FIELD_LABELS = {
     "account_id": "wfField_account_id",
     "all": "wfField_all",
@@ -212,13 +213,58 @@ _FIELD_LABELS = {
     "voice_id": "wfField_voice_id",
     "workflow_id": "wfField_workflow_id",
     "width": "wfField_width",
+    # 下列主要出现在输出端,也可被同名配置字段复用。
+    "applied": "wfField_applied",
+    "assets": "wfField_assets",
+    "audio_track_id": "wfField_audio_track_id",
+    "count": "wfField_count",
+    "generation_id": "wfField_generation_id",
+    "ids": "wfField_ids",
+    "iterations": "wfField_iterations",
+    "json": "wfField_json",
+    "language": "wfField_language",
+    "length": "wfField_length",
+    "removed": "wfField_removed",
+    "removed_seconds": "wfField_removed_seconds",
+    "result": "wfField_result",
+    "results": "wfField_results",
+    "revision": "wfField_revision",
+    "segments": "wfField_segments",
+    "sent": "wfField_sent",
+    "source_asset_id": "wfField_source_asset_id",
+    "status": "wfField_status",
+    "timed_text": "wfField_timed_text",
+    "timeline_end": "wfField_timeline_end",
+    "timeline_start": "wfField_timeline_start",
+    "tracks": "wfField_tracks",
+    "transcript_id": "wfField_transcript_id",
+    "updated": "wfField_updated",
+    "video_track_id": "wfField_video_track_id",
+    "waited": "wfField_waited",
 }
 
 
+def _humanize_field_key(key: str) -> str:
+    """不认识的插件字段也不直接暴露 snake_case。
+
+    内置语义都由 _FIELD_LABELS 翻译;这里只是第三方声明不完整时的可读降级。
+    """
+    words = key.removeprefix("*").replace("_", " ").strip()
+    return words[:1].upper() + words[1:] if words else key
+
+
 def config_label(key: str, spec: dict[str, Any]) -> str:
-    """这个配置字段在界面上叫什么。没有登记就返回空串(界面退回显示键名)。"""
+    """这个配置字段在界面上叫什么。"""
     explicit = str(spec.get("label") or "").strip()
-    return explicit or _FIELD_LABELS.get(key, "")
+    return explicit or _FIELD_LABELS.get(key, "") or _humanize_field_key(key)
+
+
+def output_label(key: str, node_spec: dict[str, Any]) -> str:
+    """输出接点的显示名;英文 key 本身仍是连线与序列化契约。"""
+    declared = node_spec.get("output_labels")
+    explicit = str(declared.get(key) or "").strip() if isinstance(declared, dict) else ""
+    canonical = key.removeprefix("*")
+    return explicit or _FIELD_LABELS.get(canonical, "") or _humanize_field_key(key)
 
 
 #: 一个配置字段**装的是什么东西** —— 素材?时间线?还是随便什么值。

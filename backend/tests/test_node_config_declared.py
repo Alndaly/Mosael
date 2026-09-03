@@ -175,15 +175,31 @@ def test_每个配置字段都有中文标签() -> None:
     这是同一个形状第三次出现(智能体的角色表、字段类型表、标签表):一份该住在声明里的知识
     被抄到消费方那边,加东西时漏掉不报错,只是界面上默默露出一个英文单词。
     """
+    from app.core.i18n import MESSAGES
     from app.domain.workflows import NODE_TYPES, config_label
 
     missing = [
         f"{name}.{key}"
         for name, spec in NODE_TYPES.items()
         for key, meta in (spec.get("config") or {}).items()
-        if not config_label(key, meta)
+        # 可读降级只给未知插件托底;内置字段必须是真正可翻译的语义名。
+        if config_label(key, meta) not in MESSAGES
     ]
     assert missing == [], f"这些字段会在界面上露出英文键名:{missing}"
+
+
+def test_每个内置输出接点都有可翻译的语义名() -> None:
+    """人性化键名只是插件降级;内置节点不允许靠它遮住漏翻译。"""
+    from app.core.i18n import MESSAGES
+    from app.domain.workflows import NODE_TYPES, output_label
+
+    missing = [
+        f"{name}.{key}"
+        for name, spec in NODE_TYPES.items()
+        for key in spec.get("outputs") or []
+        if output_label(key, spec) not in MESSAGES
+    ]
+    assert missing == [], f"这些输出接点没有可翻译的语义名:{missing}"
 
 
 def test_节点自己的_label_压过共用表() -> None:
@@ -227,6 +243,31 @@ def test_输出类型真的发到接口上() -> None:
     }
     assert by_type["publish"]["output_types"]["result"] == "json"
     assert by_type["condition"]["output_types"]["result"] == "text"
+
+
+def test_每个输出接点都有随请求语言变化的显示名() -> None:
+    """连线依赖稳定的英文键,人看到的却必须是当前界面语言下的名字。
+
+    输入端已经有 config.label,输出端没有同等契约,所以画布上会同时出现「时间线」、
+    ``sequence_id`` 和 ``timeline_end``。这条棘轮同时钉住完整性、中文和英文出口。
+    """
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    by_locale: dict[str, dict[str, dict]] = {}
+    for locale in ("zh-CN", "en-US"):
+        items = client.get("/api/workflows/node-types", headers={"Accept-Language": locale}).json()
+        by_locale[locale] = {item["type"]: item for item in items}
+        for item in items:
+            assert set(item["output_labels"]) == set(item["outputs"]), (
+                f"{locale} {item['type']} 的输出显示名不完整"
+            )
+            assert all(str(label).strip() for label in item["output_labels"].values())
+
+    assert by_locale["zh-CN"]["transcribe_asset"]["output_labels"]["timed_text"] == "带时间码文本"
+    assert by_locale["en-US"]["transcribe_asset"]["output_labels"]["timed_text"] == "Timed text"
+    assert by_locale["zh-CN"]["timeline_append"]["output_labels"]["timeline_end"] == "时间线结束位置"
+    assert by_locale["en-US"]["timeline_append"]["output_labels"]["timeline_end"] == "Timeline end"
 
 
 def test_名字到值的映射不该让用户手写_JSON() -> None:
