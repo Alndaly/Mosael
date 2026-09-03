@@ -44,3 +44,19 @@
 - Visual verification: blocked — the in-app Browser renderer is not available in this session, and
   the design workflow forbids silently switching to a second browser.
 - final result: blocked
+
+## 2026-09-04 — 无限画布生成节点的音频参考
+
+- Reference: user screenshots showing an audio node connected to a Seedance 2.5 video-edit composer,
+  where the populated reference slot rendered as a broken image and opened the image lightbox.
+- Implemented: source slots now preserve media kind through presentation. Images keep image preview,
+  videos open the shared lightbox in video mode, and audio renders an audio control that plays and
+  pauses the source in place. The slot picker now requests audio assets for audio roles instead of
+  falling back to the image picker. Actual library kind is preferred, with the role contract as the
+  loading/legacy fallback.
+- Automated evidence: DOM tests cover audio and video preview dispatch; pure contract tests cover
+  audio-edge assignment to `reference_audio`; all 917 frontend tests, the production build, and 8
+  focused Seedance/EvoLink capability and adapter tests pass.
+- Visual verification: blocked — the in-app Browser renderer is not available in this session, and
+  the design workflow forbids silently switching to a second browser.
+- final result: blocked

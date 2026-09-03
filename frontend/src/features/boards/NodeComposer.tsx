@@ -1,11 +1,10 @@
 import React from "react";
 import { NodeToolbar, Position } from "@xyflow/react";
-import { ArrowLeftRight, ArrowUp, Loader2, Plus, Sparkles, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowLeftRight, ArrowUp, Loader2, Plus, Sparkles, Volume2, VolumeX } from "lucide-react";
 
 import { useQuery } from "@tanstack/react-query";
 
-import { assetPreviewUrl, assetThumbnailUrl, listAssets, type Asset, type BoardItem, type GenerationOption } from "@/api/client";
-import { useImagePreview } from "@/components/app/image-preview";
+import { listAssets, type Asset, type BoardItem, type GenerationOption } from "@/api/client";
 import {
   collect,
   PromptEditor,
@@ -35,6 +34,7 @@ import {
 import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_LABELS } from "@/app/generationParameterLabels";
 import { cn } from "@/lib/utils";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
+import { SourceAssetSlotPreview } from "@/features/boards/SourceAssetSlotPreview";
 
 /**
  * 挂在节点**下方**的提示词面板 —— 「节点本身就是生成单元」这件事的那一半。
@@ -307,7 +307,7 @@ export function NodeComposer({
   /** 每一次编辑都写回节点，而不是留在面板组件的临时 state 里。 */
   onFormChange: (form: NonNullable<BoardItem["form"]>) => void;
   /** 挂输入素材时开选择器 —— 和画布上「换一份」用的是同一个。 */
-  onPickAsset: (kind: "image" | "video", place: (assetId: string) => void) => void;
+  onPickAsset: (kind: "image" | "video" | "audio", place: (assetId: string) => void) => void;
   /** **连到这个节点上的上游产出**,按连线顺序。它们会自动挂进当前生成方式的槽位 ——
    *  连了线还要再挂一遍素材的话,那条线就只是根装饰。 */
   upstream?: { assetId: string; kind: string }[];
@@ -318,7 +318,6 @@ export function NodeComposer({
   workspaceId: string;
 }) {
   const t = useI18n();
-  const { openImagePreview } = useImagePreview();
   const saved = item.form ?? {};
   const [prompt, setPrompt] = React.useState(saved.prompt ?? item.text ?? "");
   const [promptDocument, setPromptDocument] = React.useState<PromptDocument | undefined>(
@@ -434,6 +433,10 @@ export function NodeComposer({
     queryFn: () => listAssets(workspaceId),
     enabled: slots.length > 0,
   });
+  const assetKindById = React.useMemo(
+    () => new Map((library.data ?? []).map((asset: Asset) => [asset.id, asset.kind])),
+    [library.data],
+  );
   const accepted = React.useMemo(() => new Set(slots.map((slot) => roleAccepts(slot.role))), [slots]);
   const candidates = React.useCallback(
     (query: string) => {
@@ -578,38 +581,30 @@ export function NodeComposer({
                       <ArrowLeftRight size={12} />
                     </button>
                   )}
-                  {mine.map((one) => (
-                    // 点图看大图,叉叉才是移除。**两件事分开** —— 挂上去之后最想做的是
-                    // 「确认一下挂对了没有」,而此前点一下就把它摘掉了:想看清楚,反而弄丢了。
-                    <span key={one.assetId} className="group/thumb relative shrink-0">
-                      <button
-                        type="button"
-                        title={`${roleLabel(t, slot.role)} —— ${t("boardOpenLarge")}`}
-                        onClick={() =>
-                          openImagePreview({ src: assetPreviewUrl(one.assetId), title: roleLabel(t, slot.role) })
-                        }
-                        className="block h-8 w-8 cursor-zoom-in overflow-hidden rounded-md border border-border transition-colors hover:border-border-strong"
-                      >
-                        <img src={assetThumbnailUrl(one.assetId)} alt="" className="h-full w-full object-cover" />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`${t("boardRemove")}${roleLabel(t, slot.role)}`}
-                        title={t("boardRemove")}
-                        onClick={() => setSources((all) => all.filter((x) => x.assetId !== one.assetId))}
-                        //: 悬浮才出。常驻的话,这一排小图上会挂满一圈叉,比图本身还显眼。
-                        className="absolute -right-1 -top-1 grid h-4 w-4 cursor-pointer place-items-center rounded-full border border-border bg-panel text-muted-foreground opacity-0 shadow-sm transition-opacity hover:border-destructive hover:text-destructive group-hover/thumb:opacity-100"
-                      >
-                        <X size={9} />
-                      </button>
-                    </span>
-                  ))}
+                  {mine.map((one) => {
+                    const label = roleLabel(t, slot.role);
+                    // 素材库数据到了以后以真实类型为准；首屏尚未取回时按角色兜底。两条信息都来自
+                    // 同一份领域契约，旧表单里即使没存 kind 也不会退回“全部当图片”。
+                    const kind = assetKindById.get(one.assetId);
+                    const previewKind = kind === "image" || kind === "video" || kind === "audio"
+                      ? kind
+                      : roleAccepts(slot.role);
+                    return (
+                      <SourceAssetSlotPreview
+                        key={one.assetId}
+                        assetId={one.assetId}
+                        kind={previewKind}
+                        label={label}
+                        onRemove={() => setSources((all) => all.filter((x) => x.assetId !== one.assetId))}
+                      />
+                    );
+                  })}
                   {mine.length < slot.limit && (
                     <button
                       type="button"
                       title={roleLabel(t, slot.role)}
                       onClick={() =>
-                        onPickAsset(roleAccepts(slot.role) === "video" ? "video" : "image", (assetId) =>
+                        onPickAsset(roleAccepts(slot.role), (assetId) =>
                           setSources((all) => [...all, { role: slot.role, assetId }]),
                         )
                       }

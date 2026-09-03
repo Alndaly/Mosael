@@ -149,6 +149,16 @@ describe("上游产出自动挂进槽位", () => {
     expect(roleAccepts("reference_video")).toBe("video");
     expect(roleAccepts("reference_audio")).toBe("audio");
   });
+
+  it("音频连线只会挂进参考音频槽，并保留 reference_audio 角色", () => {
+    const audioModel = model(
+      ["reference_image", "reference_video", "reference_audio"],
+      { reference_audio: 10 },
+    );
+    expect(autoAssign(sourceSlots(audioModel), [{ assetId: "music", kind: "audio" }])).toEqual([
+      { role: "reference_audio", assetId: "music" },
+    ]);
+  });
 });
 
 /**
