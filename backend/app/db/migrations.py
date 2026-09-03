@@ -22,6 +22,7 @@ from sqlalchemy import inspect, text
 from app.core.config import LOGIN_SESSION_TTL, settings
 from app.core.db import Base, PARTITION_PREFIX, engine, now
 from app.core.tokens import TOKEN_SCHEME, token_digest
+from app.db.migration_runner import MigrationPhase, MigrationPlan, MigrationStep
 
 logger = logging.getLogger(__name__)
 
@@ -1263,69 +1264,14 @@ def _migrate_drop_local_publish_accounts() -> None:
 
 
 def init_db() -> None:
+    """Prepare storage, then execute the validated startup migration plan."""
+
     from app.db import models  # noqa: F401
 
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     settings.media_dir.mkdir(parents=True, exist_ok=True)
     settings.plugins_dir.mkdir(parents=True, exist_ok=True)
-    _migrate_provider_capabilities()
-    _migrate_provider_defaults_per_person()
-    # 最后跑:它按 ENCRYPTED_COLUMNS 扫列,前面的迁移得先把列都补齐。
-    _migrate_encrypt_secrets()
-    _migrate_deployment_config()
-    _migrate_drop_deployment_defaults()
-    _migrate_connections_get_an_owner()
-    _migrate_plugin_instances_get_an_owner()
-    _migrate_drop_the_knowledge_base()
-    _migrate_hash_session_tokens()
-    _migrate_client_version()
-    _migrate_job_actor()
-    _migrate_provider_credentials()
-    _drop_shared_credentials()
-    _migrate_tool_confirmations_session()
-    _migrate_auth_session_expiry()
-    _migrate_permission_modes()
-    _migrate_deployment_admin()
-    _drop_member_perm_overrides()
-    _migrate_tts_pip_index()
-    _migrate_agent_thinking_level()
-    _migrate_agent_session_plan()
-    _migrate_agent_session_groups()
-    _migrate_session_groups_serve_both()
-    _migrate_source_assets_get_a_role()
-    _migrate_workflow_source_assets()
-    _migrate_plugin_registry_url()
-    _cleanup_orphan_resource_shares()
-    _migrate_generation_job_message_keys()
-    _migrate_agent_session_order()
-    _migrate_agent_notice_envelope_out_of_content()
-    _drop_generation_models()
-    _adopt_deepseek_vendor()
-    _merge_split_vendors()
-    _merge_openai_tts_engine()
-    _migrate_job_parent()
-    _migrate_browser_pool()
-    # 重命名必须在 create_all 之前:否则它会建一张空的 plugin_packages,旧数据无人认领。
-    _migrate_plugin_instances()
-    Base.metadata.create_all(bind=engine)
-    _migrate_drop_local_publish_accounts()
-    _migrate_board_canvas_state()
-    _backfill_browser_pool()
-    # 必须在 create_all 之后:provider_models 是新表,之前还不存在。
-    _backfill_provider_models()
-    _migrate_provider_default_model_fk()
-    # 回填与外键都落定之后再删旧列 —— 它们正是回填的输入。
-    _drop_legacy_profile_columns()
-    # 实例表由 create_all 建好之后才能填。
-    _backfill_plugin_instances()
-    # 必须在 create_all 之后:resource_shares 是新表。
-    _migrate_resource_ownership()
-    _migrate_publish_task_options()
-    _migrate_job_message_i18n()
-    _migrate_prepared_publish_tasks()
-    _migrate_track_role()
-    _migrate_browser_boolean_options()
-    _migrate_shared_venvs()
+    migration_plan().run()
 
 
 def _migrate_board_canvas_state() -> None:
@@ -1531,3 +1477,97 @@ def _backfill_plugin_instances() -> None:
             conn.execute(text(f"DROP TABLE IF EXISTS {table}_legacy"))
         if enabled_col:
             conn.execute(text("ALTER TABLE plugin_packages DROP COLUMN enabled"))
+
+
+def _create_current_schema() -> None:
+    """The single boundary between migrations for existing tables and new-table creation."""
+
+    Base.metadata.create_all(bind=engine)
+
+
+def _steps(phase: MigrationPhase, *operations: Any) -> tuple[MigrationStep, ...]:
+    """Give private Python operations stable, log-friendly migration identities."""
+
+    return tuple(
+        MigrationStep(operation.__name__.lstrip("_").replace("_", "-"), phase, operation)
+        for operation in operations
+    )
+
+
+def migration_plan() -> MigrationPlan:
+    """Declare startup migration order in one validated plan.
+
+    The function bodies remain historical snapshots next to the data shapes they understand.  This
+    plan is the one place that decides *when* they run.  In particular, table renames and column
+    additions that must see the old schema cannot accidentally drift past ``create-current-schema``.
+    """
+
+    return MigrationPlan(
+        (
+            *_steps(
+                MigrationPhase.BEFORE_SCHEMA,
+                _migrate_provider_capabilities,
+                _migrate_provider_defaults_per_person,
+                # It scans ENCRYPTED_COLUMNS; migrations above must first expose those columns.
+                _migrate_encrypt_secrets,
+                _migrate_deployment_config,
+                _migrate_drop_deployment_defaults,
+                _migrate_connections_get_an_owner,
+                _migrate_plugin_instances_get_an_owner,
+                _migrate_drop_the_knowledge_base,
+                _migrate_hash_session_tokens,
+                _migrate_client_version,
+                _migrate_job_actor,
+                _migrate_provider_credentials,
+                _drop_shared_credentials,
+                _migrate_tool_confirmations_session,
+                _migrate_auth_session_expiry,
+                _migrate_permission_modes,
+                _migrate_deployment_admin,
+                _drop_member_perm_overrides,
+                _migrate_tts_pip_index,
+                _migrate_agent_thinking_level,
+                _migrate_agent_session_plan,
+                _migrate_agent_session_groups,
+                _migrate_session_groups_serve_both,
+                _migrate_source_assets_get_a_role,
+                _migrate_workflow_source_assets,
+                _migrate_plugin_registry_url,
+                _cleanup_orphan_resource_shares,
+                _migrate_generation_job_message_keys,
+                _migrate_agent_session_order,
+                _migrate_agent_notice_envelope_out_of_content,
+                _drop_generation_models,
+                _adopt_deepseek_vendor,
+                _merge_split_vendors,
+                _merge_openai_tts_engine,
+                _migrate_job_parent,
+                _migrate_browser_pool,
+                # Must precede schema creation or an empty plugin_packages table hides legacy data.
+                _migrate_plugin_instances,
+            ),
+            MigrationStep(
+                "create-current-schema",
+                MigrationPhase.SCHEMA,
+                _create_current_schema,
+            ),
+            *_steps(
+                MigrationPhase.AFTER_SCHEMA,
+                _migrate_drop_local_publish_accounts,
+                _migrate_board_canvas_state,
+                _backfill_browser_pool,
+                _backfill_provider_models,
+                _migrate_provider_default_model_fk,
+                # The legacy columns are inputs to the two provider backfills above.
+                _drop_legacy_profile_columns,
+                _backfill_plugin_instances,
+                _migrate_resource_ownership,
+                _migrate_publish_task_options,
+                _migrate_job_message_i18n,
+                _migrate_prepared_publish_tasks,
+                _migrate_track_role,
+                _migrate_browser_boolean_options,
+            ),
+            *_steps(MigrationPhase.FILESYSTEM, _migrate_shared_venvs),
+        )
+    )
