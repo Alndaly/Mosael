@@ -7,7 +7,16 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import Job, ProviderProfile, TaskEvent, Workflow
-from app.domain.workflows import NODE_TYPES, WorkflowDomainError, default_graph, interpolate, topo_order, validate_graph
+from app.domain.workflows import (
+    NODE_TYPES,
+    WorkflowDomainError,
+    create_workflow,
+    default_graph,
+    interpolate,
+    topo_order,
+    update_workflow,
+    validate_graph,
+)
 from tests.util import acting_as, add_provider, fresh_client
 
 
@@ -182,6 +191,101 @@ def test_workflow_crud_and_run() -> None:
 
     gone = client.delete(f"/api/workflows/{workflow_id}")
     assert gone.status_code == 204
+
+
+def test_workflow_revisions_are_immutable_and_restore_appends() -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "版本工作区"}).json()
+    original = linear_graph()
+    created = client.post(
+        "/api/workflows",
+        json={"workspace_id": ws["id"], "name": "可追溯工作流", "graph": original},
+    )
+    assert created.status_code == 200, created.text
+    workflow = created.json()
+    assert workflow["revision"] == 1
+    assert len(workflow["graph_hash"]) == 64
+
+    # 相同内容和纯元数据修改不制造空修订。
+    same = client.patch(f"/api/workflows/{workflow['id']}", json={"name": "已改名", "graph": original})
+    assert same.status_code == 200, same.text
+    assert same.json()["revision"] == 1
+
+    edited = linear_graph()
+    edited["nodes"][1]["config"]["template"] = "围绕 {{start.topic}} 写一句"
+    changed = client.patch(f"/api/workflows/{workflow['id']}", json={"graph": edited})
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["revision"] == 2
+
+    revisions = client.get(f"/api/workflows/{workflow['id']}/revisions").json()
+    assert [item["revision"] for item in revisions] == [2, 1]
+    assert revisions[0]["graph_hash"] != revisions[1]["graph_hash"]
+    first = client.get(f"/api/workflows/{workflow['id']}/revisions/1").json()
+    assert first["graph"] == original
+
+    restored = client.post(f"/api/workflows/{workflow['id']}/revisions/1/restore")
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["revision"] == 3
+    assert restored.json()["graph"] == original
+    latest = client.get(f"/api/workflows/{workflow['id']}/revisions").json()[0]
+    assert latest["source"] == "restore"
+    assert latest["note"] == "v1"
+
+    exported = client.get(f"/api/workflows/{workflow['id']}/export").json()
+    assert exported["workflow_revision"] == 3
+    assert exported["graph_hash"] == restored.json()["graph_hash"]
+
+    run = client.post(f"/api/workflows/{workflow['id']}/run", json={"params": {}})
+    assert run.status_code == 200, run.text
+    with SessionLocal() as db:
+        job = db.get(Job, run.json()["id"])
+        assert job is not None
+        assert job.payload["workflow_revision"] == 3
+        assert job.payload["workflow_graph_hash"] == restored.json()["graph_hash"]
+        assert job.payload["workflow_revision_id"]
+
+
+def test_queued_run_executes_the_revision_pinned_at_enqueue(monkeypatch) -> None:
+    """排队后继续编辑画布，已经创建的任务仍执行原图。"""
+
+    from app.domain.workflows import engine as workflow_engine
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "Pinned"}).json()
+    pending: dict[str, object] = {}
+
+    class DeferredThread:
+        def __init__(self, *, target, args, daemon):
+            pending.update(target=target, args=args, daemon=daemon)
+
+        def start(self) -> None:
+            return None
+
+    real_thread = workflow_engine.threading.Thread
+    monkeypatch.setattr(workflow_engine.threading, "Thread", DeferredThread)
+    before = linear_graph()
+    before["nodes"][1]["config"]["template"] = "入队前"
+    with SessionLocal() as db:
+        workflow = create_workflow(db, workspace_id=ws["id"], name="固定修订", graph=before)
+        job = workflow_engine.start_workflow_job(db, workflow, created_by=None)
+        job_id = job.id
+        monkeypatch.setattr(workflow_engine.threading, "Thread", real_thread)
+
+        after = linear_graph()
+        after["nodes"][1]["config"]["template"] = "入队后"
+        update_workflow(db, workflow, {"graph": after})
+
+    target = pending["target"]
+    assert callable(target)
+    target(*pending["args"])
+
+    with SessionLocal() as db:
+        job = db.get(Job, job_id)
+        assert job is not None
+        assert job.status == "succeeded"
+        assert job.payload["workflow_revision"] == 1
+        assert job.result["workflow_revision"] == 1
+        assert job.result["context"]["search"]["text"] == "入队前"
 
 
 def test_branching_code_and_template_nodes() -> None:

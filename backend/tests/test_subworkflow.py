@@ -7,7 +7,7 @@ import time
 
 from app.core.db import SessionLocal
 from app.db.models import Job, Workflow
-from app.domain.workflows import NODE_TYPES, create_workflow
+from app.domain.workflows import NODE_TYPES, create_workflow, update_workflow
 from app.domain.workflows.engine import start_workflow_job
 from app.domain.workflows.executors import registered_types
 from tests.util import fresh_client
@@ -109,8 +109,7 @@ def test_self_recursion_is_rejected() -> None:
         for node in graph["nodes"]:
             if node["id"] == "call":
                 node["config"]["workflow_id"] = wf_id  # 指向自己
-        wf.graph = graph
-        db.commit()
+        update_workflow(db, wf, {"graph": graph})
 
     status, _result, err, _ = _run(wf_id)
     assert status == "failed"

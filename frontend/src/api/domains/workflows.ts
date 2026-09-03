@@ -3,6 +3,8 @@ import type { Job } from "@/api/domains/jobs";
 import { api } from "@/api/transport";
 
 export type Workflow = components["schemas"]["WorkflowOut"];
+export type WorkflowRevision = components["schemas"]["WorkflowRevisionOut"];
+export type WorkflowRevisionDetail = components["schemas"]["WorkflowRevisionDetailOut"];
 export type WorkflowNodeType = components["schemas"]["WorkflowNodeTypeOut"];
 export type WorkflowTemplateId = "full_video_generation" | "transcript_video_cleanup";
 
@@ -58,7 +60,7 @@ export function deleteWorkflow(workflowId: string): Promise<void> {
   return api<void>(`/api/workflows/${workflowId}`, { method: "DELETE" });
 }
 
-/** 导出文件信封:{format, version, name, description, graph}。 */
+/** 导出文件信封包含文件格式版本、工作流修订与图摘要。 */
 export function exportWorkflowFile(workflowId: string): Promise<Record<string, unknown>> {
   return api<Record<string, unknown>>(`/api/workflows/${workflowId}/export`);
 }
@@ -78,4 +80,18 @@ export function fetchWorkflowNodeTypes(): Promise<WorkflowNodeType[]> {
 /** Execution history — this workflow's run jobs, newest first. */
 export function listWorkflowRuns(workflowId: string): Promise<Job[]> {
   return api<Job[]>(`/api/workflows/${workflowId}/runs`);
+}
+
+/** 不可变工作流修订，最新版本在前。 */
+export function listWorkflowRevisions(workflowId: string): Promise<WorkflowRevision[]> {
+  return api<WorkflowRevision[]>(`/api/workflows/${workflowId}/revisions`);
+}
+
+export function getWorkflowRevision(workflowId: string, revision: number): Promise<WorkflowRevisionDetail> {
+  return api<WorkflowRevisionDetail>(`/api/workflows/${workflowId}/revisions/${revision}`);
+}
+
+/** 恢复会追加一个新修订，不会覆盖目标或当前历史。 */
+export function restoreWorkflowRevision(workflowId: string, revision: number): Promise<Workflow> {
+  return api<Workflow>(`/api/workflows/${workflowId}/revisions/${revision}/restore`, { method: "POST" });
 }

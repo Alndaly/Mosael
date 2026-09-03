@@ -20,7 +20,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
-from app.db.models import Job, Workflow
+from app.db.models import Job, Workflow, WorkflowRevision
 from app.domain.jobs import create_job, emit_job_event, reset_parent_job, set_parent_job, say
 from app.domain.notifications import notify
 from app.domain.workflows import (
@@ -31,6 +31,7 @@ from app.domain.workflows import (
 )
 from app.domain.workflows.binding import apply_data_edges, interpolate_node_config
 from app.domain.workflows.executors import get_executor
+from app.domain.workflows.revisions import WorkflowRevisionError, current_workflow_revision
 
 logger = logging.getLogger(__name__)
 
@@ -40,39 +41,57 @@ MAX_PARALLEL_NODES = 8
 def start_workflow_job(
     db: Session, workflow: Workflow, *, created_by: str | None, params: dict[str, Any] | None = None, job: Job | None = None
 ) -> Job:
-    """创建(或复用)workflow job 并启动执行线程。"""
+    """创建(或复用)workflow job，并把它固定到启动瞬间的不可变修订。"""
     from app.domain.plugins.nodes import plugin_node_types
 
-    errors = validate_graph(workflow.graph, extra_types=plugin_node_types(db))
+    try:
+        revision = current_workflow_revision(db, workflow)
+    except WorkflowRevisionError as exc:
+        raise WorkflowDomainError(str(exc)) from exc
+    errors = validate_graph(revision.graph, extra_types=plugin_node_types(db))
     if errors:
         raise WorkflowDomainError("；".join(errors))
+    pinned_payload = {
+        "workflow_id": workflow.id,
+        "workflow_revision_id": revision.id,
+        "workflow_revision": revision.revision,
+        "workflow_graph_hash": revision.graph_hash,
+        "params": params or {},
+        "subject": workflow.name,
+    }
     if job is None:
         job = create_job(
             db,
             workspace_id=workflow.workspace_id,
             kind="workflow",
             created_by=created_by,
-            payload={"workflow_id": workflow.id, "params": params or {}, "subject": workflow.name},
+            payload=pinned_payload,
             message="jobMsg_workflowQueued", message_params={"name": workflow.name},
         )
-        db.commit()
+    else:
+        # 调度器/子工作流可复用外部创建的 job；同样必须把修订钉进审计载荷。
+        job.payload = {**(job.payload or {}), **pinned_payload}
+    db.commit()
     threading.Thread(
         target=_run_workflow_thread,
-        args=(workflow.id, job.id, params or {}),
+        args=(workflow.id, revision.id, job.id, params or {}),
         daemon=True,
     ).start()
     return job
 
 
-def _run_workflow_thread(workflow_id: str, job_id: str, params: dict[str, Any]) -> None:
+def _run_workflow_thread(workflow_id: str, revision_id: str, job_id: str, params: dict[str, Any]) -> None:
     with SessionLocal() as db:
         job = db.get(Job, job_id)
         workflow = db.get(Workflow, workflow_id)
+        revision = db.get(WorkflowRevision, revision_id)
         if job is None or workflow is None:
             return
         try:
+            if revision is None or revision.workflow_id != workflow.id:
+                raise WorkflowDomainError("工作流执行绑定的修订快照不存在")
             logger.info("workflow job %s: running '%s'", job_id, workflow.name)
-            run_workflow(db, workflow, job, params)
+            run_workflow(db, workflow, revision, job, params)
             db.refresh(job)
             logger.info("workflow job %s: '%s' finished (%s)", job_id, workflow.name, job.status)
         except Exception as exc:  # noqa: BLE001 — 线程内兜底,失败必须落到 job 上
@@ -257,9 +276,15 @@ def execute_graph(
     return context, cancelled
 
 
-def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, Any]) -> dict[str, Any]:
-    """顶层工作流执行:走 execute_graph,收尾算「输出」节点契约并落 job.result。"""
-    graph = workflow.graph
+def run_workflow(
+    db: Session,
+    workflow: Workflow,
+    revision: WorkflowRevision,
+    job: Job,
+    params: dict[str, Any],
+) -> dict[str, Any]:
+    """执行固定修订；编辑当前工作流不会改变已排队任务的图。"""
+    graph = revision.graph
     node_types = {str(node["id"]): str(node.get("type")) for node in (graph.get("nodes") or [])}
     job.status = "running"
     say(job, "jobMsg_workflowRunning", name=workflow.name)
@@ -279,10 +304,18 @@ def run_workflow(db: Session, workflow: Workflow, job: Job, params: dict[str, An
     job.progress = 1.0
     say(job, "jobMsg_workflowDone", name=workflow.name)
     job.result = {
+        "workflow_revision_id": revision.id,
+        "workflow_revision": revision.revision,
+        "workflow_graph_hash": revision.graph_hash,
         "context": {nid: _trim_outputs(out) for nid, out in context.items()},
         "output": output_values,
     }
-    emit_job_event(db, job.id, "workflow.finished", {"nodes": len(node_types), "executed": len(context)})
+    emit_job_event(
+        db,
+        job.id,
+        "workflow.finished",
+        {"nodes": len(node_types), "executed": len(context), "workflow_revision": revision.revision},
+    )
     db.commit()
     return context
 

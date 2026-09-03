@@ -5,6 +5,7 @@ from pathlib import Path
 
 from app.core.config import settings
 from app.db.migrations import init_db
+from app.db.safety import DATABASE_SCHEMA_VERSION
 from tests.test_auth import fresh_client
 
 
@@ -31,7 +32,7 @@ def test_existing_database_is_snapshotted_once_before_schema_upgrade() -> None:
             "Must survive",
         )
     with sqlite3.connect(settings.db_path) as database:
-        assert database.execute("PRAGMA user_version").fetchone() == (1,)
+        assert database.execute("PRAGMA user_version").fetchone() == (DATABASE_SCHEMA_VERSION,)
 
     init_db()
 

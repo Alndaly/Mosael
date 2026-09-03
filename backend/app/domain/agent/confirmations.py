@@ -668,6 +668,8 @@ def _execute_approved(db: Session, confirmation: ToolConfirmation) -> dict[str, 
             name=str(payload["name"]),
             description=str(payload.get("description", "")),
             graph=payload.get("graph"),
+            source="agent",
+            created_by=actor,
         )
         return {"workflow_id": workflow.id}
     if confirmation.tool == "update_workflow":
@@ -680,6 +682,8 @@ def _execute_approved(db: Session, confirmation: ToolConfirmation) -> dict[str, 
             db,
             workflow,
             {key: payload[key] for key in ("name", "description", "graph") if key in payload},
+            source="agent",
+            created_by=actor,
         )
         return {"workflow_id": workflow.id}
     if confirmation.tool == "edit_workflow":
@@ -691,7 +695,13 @@ def _execute_approved(db: Session, confirmation: ToolConfirmation) -> dict[str, 
         assert workflow is not None
         # Re-apply onto the CURRENT graph at approval time (not the request-time snapshot).
         new_graph = apply_graph_ops(workflow.graph or {}, payload["operations"])
-        update_workflow(db, workflow, {"graph": new_graph})
+        update_workflow(
+            db,
+            workflow,
+            {"graph": new_graph},
+            source="agent",
+            created_by=actor,
+        )
         return {"workflow_id": workflow.id, "nodes": len(new_graph.get("nodes", []))}
     if confirmation.tool == "edit_board":
         from app.db.models import Board

@@ -444,7 +444,7 @@ from app.db.model_slices.notifications import Notification  # noqa: E402,F401
 from app.db.model_slices.scheduler import ScheduledTask, ScheduledTaskRun  # noqa: E402,F401
 
 
-from app.db.model_slices.workflows import Workflow  # noqa: E402,F401
+from app.db.model_slices.workflows import Workflow, WorkflowRevision  # noqa: E402,F401
 
 
 from app.db.model_slices.boards import Board  # noqa: E402,F401

@@ -213,6 +213,7 @@ export function WorkflowRunHistory({
                 <span className="truncate text-xs">{run.message || run.status}</span>
                 <span className="timecode text-ui-2xs text-muted-foreground">
                   {run.created_at ? relTime(run.created_at, now) : ""}
+                  {typeof run.payload?.workflow_revision === "number" && ` · v${run.payload.workflow_revision}`}
                   {run.created_at && RUNNING.has(run.status)
                     ? ` · ${Math.max(0, (now - parseIso(run.created_at)) / 1000).toFixed(0)}s`
                     : run.created_at && run.updated_at && ` · ${(ms(run.created_at, run.updated_at) / 1000).toFixed(1)}s`}

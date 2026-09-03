@@ -19,11 +19,13 @@ from app.api.schemas import (
     WorkflowImportRequest,
     WorkflowNodeTypeOut,
     WorkflowOut,
+    WorkflowRevisionDetailOut,
+    WorkflowRevisionOut,
     WorkflowRunRequest,
     WorkflowUpdate,
 )
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
-from app.db.models import Job, Workflow
+from app.db.models import Job, Workflow, WorkflowRevision
 from app.domain.workflows import (
     NODE_CATEGORIES,
     NODE_TYPES,
@@ -38,6 +40,12 @@ from app.domain.workflows import (
 )
 from app.domain.plugins.nodes import plugin_node_types
 from app.domain.workflows.engine import start_workflow_job
+from app.domain.workflows.revisions import (
+    WorkflowRevisionError,
+    get_workflow_revision,
+    list_workflow_revisions,
+    restore_workflow_revision,
+)
 from app.domain.workflows.templates import built_in_template_graph
 
 if TYPE_CHECKING:
@@ -129,14 +137,21 @@ def create(body: WorkflowCreate, db: DbSession, user: CurrentUser) -> Workflow:
                 raise WorkflowDomainError("创建工作流时不能同时提交模板和自定义图")
             graph = built_in_template_graph(db, body.template_id, user_id=user.id)
         return create_workflow(
-            db, workspace_id=body.workspace_id, name=body.name, description=body.description, graph=graph
+            db,
+            workspace_id=body.workspace_id,
+            name=body.name,
+            description=body.description,
+            graph=graph,
+            source="template" if body.template_id else "create",
+            created_by=user.id,
+            revision_note=f"template:{body.template_id}" if body.template_id else "",
         )
     except WorkflowDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 # ---------------- 文件导出/导入 ----------------
-# 信封格式:{format, version, name, description, graph}。graph 原样携带 —— 节点里
+# 信封格式:{format, version, workflow_revision, graph_hash, name, description, graph}。graph 原样携带 —— 节点里
 # 引用的工作区资源(素材/序列/供应商档案等)跨工作区导入后可能悬空,这与「保存放行、
 # 就绪检查提示、运行时拦截」的既有分层一致,导入不做资源级校验。
 WORKFLOW_FILE_FORMAT = "mosael-workflow"
@@ -153,6 +168,8 @@ def export_one(workflow_id: str, db: DbSession, user: CurrentUser) -> Response:
         "version": WORKFLOW_FILE_VERSION,
         "name": workflow.name,
         "description": workflow.description,
+        "workflow_revision": workflow.revision,
+        "graph_hash": workflow.graph_hash,
         "graph": workflow.graph,
     }
     # ASCII 兜底文件名 + RFC 5987 UTF-8 全名,中文工作流名两头都不乱码。
@@ -195,6 +212,9 @@ def import_one(body: WorkflowImportRequest, db: DbSession, user: CurrentUser) ->
             name=candidate,
             description=str(data.get("description") or "")[:2000],
             graph=data["graph"],
+            source="import",
+            created_by=user.id,
+            revision_note=f"file:v{version}",
         )
     except WorkflowDomainError as exc:
         # 未知节点类型(更新版本导出的文件)/结构非法都会在这里给出具体原因
@@ -214,9 +234,37 @@ def update(workflow_id: str, body: WorkflowUpdate, db: DbSession, user: CurrentU
     ensure_workspace_perm(db, user, workflow.workspace_id, "edit")
     changes = body.model_dump(exclude_unset=True)
     try:
-        return update_workflow(db, workflow, changes)
+        return update_workflow(db, workflow, changes, source="edit", created_by=user.id)
     except WorkflowDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/workflows/{workflow_id}/revisions", response_model=list[WorkflowRevisionOut])
+def list_revisions(workflow_id: str, db: DbSession, user: CurrentUser) -> list[WorkflowRevision]:
+    workflow = _get(db, workflow_id)
+    ensure_workspace_access(db, user, workflow.workspace_id)
+    return list_workflow_revisions(db, workflow.id)
+
+
+@router.get("/workflows/{workflow_id}/revisions/{revision}", response_model=WorkflowRevisionDetailOut)
+def get_revision(workflow_id: str, revision: int, db: DbSession, user: CurrentUser) -> WorkflowRevision:
+    workflow = _get(db, workflow_id)
+    ensure_workspace_access(db, user, workflow.workspace_id)
+    item = get_workflow_revision(db, workflow.id, revision)
+    if item is None:
+        raise HTTPException(status_code=404, detail="工作流修订不存在")
+    return item
+
+
+@router.post("/workflows/{workflow_id}/revisions/{revision}/restore", response_model=WorkflowOut)
+def restore_revision(workflow_id: str, revision: int, db: DbSession, user: CurrentUser) -> Workflow:
+    workflow = _get(db, workflow_id)
+    ensure_workspace_perm(db, user, workflow.workspace_id, "edit")
+    try:
+        restore_workflow_revision(db, workflow, revision, created_by=user.id)
+    except WorkflowRevisionError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return workflow
 
 
 @router.delete("/workflows/{workflow_id}", status_code=204)

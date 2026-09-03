@@ -25,6 +25,8 @@ from app.api.schemas.workflows import (
     WorkflowImportRequest,
     WorkflowNodeTypeOut,
     WorkflowOut,
+    WorkflowRevisionDetailOut,
+    WorkflowRevisionOut,
     WorkflowRunRequest,
     WorkflowUpdate,
 )

@@ -34,8 +34,25 @@ class WorkflowOut(OrmModel):
     name: str
     description: str
     graph: dict
+    revision: int
+    graph_hash: str
     created_at: datetime
     updated_at: datetime
+
+
+class WorkflowRevisionOut(OrmModel):
+    id: str
+    workflow_id: str
+    revision: int
+    graph_hash: str
+    source: str
+    note: str
+    created_by: str | None
+    created_at: datetime
+
+
+class WorkflowRevisionDetailOut(WorkflowRevisionOut):
+    graph: dict
 
 
 class WorkflowRunRequest(BaseModel):

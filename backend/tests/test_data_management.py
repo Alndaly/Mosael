@@ -10,6 +10,7 @@ from pathlib import Path
 
 from app.core.config import app_version, settings
 from app.core.secrets_at_rest import key_path, master_key
+from app.db.safety import DATABASE_SCHEMA_VERSION
 from tests.test_auth import fresh_client, second_client
 
 
@@ -69,7 +70,7 @@ def test_backup_is_consistent_complete_and_excludes_rebuildable_data(tmp_path: P
         manifest = json.loads(archive.read("manifest.json"))
         assert manifest["format"] == "mosael-backup"
         assert manifest["version"] == 1
-        assert manifest["schema_version"] == 1
+        assert manifest["schema_version"] == DATABASE_SCHEMA_VERSION
         assert manifest["files"]["data/media/assets/sample.txt"]["sha256"]
         snapshot = tmp_path / "mosael.db"
         snapshot.write_bytes(archive.read("data/mosael.db"))

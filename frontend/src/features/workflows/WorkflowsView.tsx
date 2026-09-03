@@ -29,6 +29,7 @@ import {
   CircleCheck,
   Download,
   FileUp,
+  GitCommitVertical,
   History,
   Link2,
   ListChecks,
@@ -109,6 +110,7 @@ import { MapField } from "@/features/workflows/MapField";
 import { CodeEditor } from "@/components/app/code-editor";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/components/agent/CanvasAgentChat";
 import { WorkflowRunHistory } from "@/features/workflows/WorkflowRunHistory";
+import { WorkflowRevisionHistory } from "@/features/workflows/WorkflowRevisionHistory";
 import { WorkflowCommunityDialog } from "@/features/workflows/WorkflowCommunityDialog";
 import { createWorkflowGraphStore } from "@/stores/workflowGraphStore";
 import { saveJsonToDisk } from "@/lib/download";
@@ -631,7 +633,7 @@ function WorkflowCard({ workflow }: { workflow: Workflow }) {
   const { locale } = usePreferences();
   const nodes = (workflow.graph as unknown as WorkflowGraph).nodes ?? [];
   return (
-    // 同 PublishCard:名字贴顶、"几个节点 · 多久前"贴底,中间留给长短不一的说明。
+    // 同 PublishCard:名字贴顶、"几个节点 · 版本 · 多久前"贴底,中间留给长短不一的说明。
     <article className="flex h-full flex-col gap-1.5 rounded-lg border border-border bg-panel p-2.5 shadow-[var(--shadow-panel)] transition-colors hover:border-border-strong">
       <div className="flex items-center gap-1.5">
         <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary">
@@ -648,6 +650,8 @@ function WorkflowCard({ workflow }: { workflow: Workflow }) {
       )}
       <div className="mt-auto flex items-center gap-1.5 pt-0.5 text-ui-xs text-muted-foreground">
         <span className="tabular-nums">{t("wfNodeCount").replace("{n}", String(nodes.length))}</span>
+        <span aria-hidden>·</span>
+        <span className="font-mono tabular-nums">v{workflow.revision}</span>
         <span aria-hidden>·</span>
         <span className="truncate">{relativeTime(workflow.updated_at, locale)}</span>
       </div>
@@ -718,6 +722,7 @@ function WorkflowEditor({
   const [edges, setEdges] = React.useState<Edge[]>(() => toWorkflowFlowEdges(workflow.graph as unknown as WorkflowGraph, t, registry));
   const [dirty, setDirty] = React.useState(false);
   const [showHistory, setShowHistory] = React.useState(false);
+  const [showRevisions, setShowRevisions] = React.useState(false);
 
   // 撤销/重做:temporal 改的是 store.graph,再从新 graph 重建 React Flow 的 nodes/edges。
   const syncFromGraph = React.useCallback(() => {
@@ -815,7 +820,6 @@ function WorkflowEditor({
     setSelectedNodeId(nodeId);
     setNodes((current) => withSingleNodeSelected(current, nodeId));
   }, []);
-
   /**
    * 把视口居中到某坐标上。用坐标而非 getNode:新加节点此刻还没同步进 React Flow 内部 store,
    * getNode 会取空;而 setCenter 只改视口变换,不依赖节点已登记。
@@ -1065,7 +1069,6 @@ function WorkflowEditor({
       return next;
     });
   }, []);
-
   const onConnect = React.useCallback(
     (connection: Connection) => {
       if (!connection.source || !connection.target) return;
@@ -1288,6 +1291,33 @@ function WorkflowEditor({
       flush();
     };
   }, []);
+  const openRevisions = React.useCallback(async () => {
+    // 历史必须以已落库的当前图为基准。若自动保存还在等待，先复用同一条保存 Interface，
+    // 成功后再开；否则用户可能恢复旧版后又被 700ms 前排队的本地保存覆盖。
+    if (pendingSaveRef.current) {
+      try {
+        await save.mutateAsync();
+      } catch {
+        return;
+      }
+    }
+    setShowRevisions(true);
+  }, [save]);
+  const acceptRestoredWorkflow = React.useCallback(
+    (saved: Workflow) => {
+      const next = structuredClone(saved.graph as unknown as WorkflowGraph);
+      lastSyncedRef.current = saved.updated_at;
+      setGraph(next);
+      rebuildNodes(next);
+      setEdges(toWorkflowFlowEdges(next, t, registry));
+      graphStore.temporal.getState().clear();
+      selectInspectorNode(null);
+      selfSaveRef.current = false;
+      pendingSaveRef.current = false;
+      setDirty(false);
+    },
+    [graphStore, rebuildNodes, registry, selectInspectorNode, setGraph, t],
+  );
   const rename = useMutation({
     mutationFn: (name: string) => updateWorkflow(workflow.id, { name }),
     onSuccess: () => {
@@ -1819,6 +1849,18 @@ function WorkflowEditor({
               右键菜单里 —— 而人想导出的时机,恰恰是刚在详情页里把它调好的那一刻。 */}
           <Button
             variant="ghost"
+            size="sm"
+            aria-label={t("wfRevisionHistory")}
+            title={t("wfRevisionHistory")}
+            className="h-8 gap-1 px-2 font-mono text-ui-xs"
+            loading={save.isPending}
+            onClick={() => void openRevisions()}
+          >
+            <GitCommitVertical size={14} />
+            v{workflow.revision}
+          </Button>
+          <Button
+            variant="ghost"
             size="icon"
             aria-label={t("wfExport")}
             title={t("wfExport")}
@@ -2111,6 +2153,12 @@ function WorkflowEditor({
         body={t("wfDeleteBody")}
         onCancel={() => setDeleting(false)}
         onConfirm={() => remove.mutate()}
+      />
+      <WorkflowRevisionHistory
+        workflow={workflow}
+        open={showRevisions}
+        onOpenChange={setShowRevisions}
+        onRestored={acceptRestoredWorkflow}
       />
     </div>
   );

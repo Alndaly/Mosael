@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import uuid
@@ -41,6 +42,58 @@ def _migrate_tool_confirmations_session() -> None:
         return
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE tool_confirmations ADD COLUMN session_id VARCHAR(64)"))
+
+
+def _migrate_workflow_revisions() -> None:
+    """把现有工作流的当前图提升为不可变的 revision 1。
+
+    新表由前一阶段的 ``create-current-schema`` 建好；这里仅补已有 workflows 表不会被
+    ``create_all`` 添加的两列，并为每条老数据写首份快照。摘要算法在迁移内自包含，避免将来
+    领域实现变化后重放历史迁移得到不同结果。
+    """
+
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if "workflows" not in tables or "workflow_revisions" not in tables:
+        return
+    columns = {column["name"] for column in inspector.get_columns("workflows")}
+    with engine.begin() as conn:
+        if "revision" not in columns:
+            conn.execute(text("ALTER TABLE workflows ADD COLUMN revision INTEGER NOT NULL DEFAULT 1"))
+        if "graph_hash" not in columns:
+            conn.execute(text("ALTER TABLE workflows ADD COLUMN graph_hash VARCHAR(64) NOT NULL DEFAULT ''"))
+
+        rows = conn.execute(text("SELECT id, graph, created_at FROM workflows")).mappings().all()
+        for row in rows:
+            raw_graph = row["graph"]
+            try:
+                graph = json.loads(raw_graph) if isinstance(raw_graph, str) else raw_graph
+            except (TypeError, ValueError):
+                graph = {}
+            canonical = json.dumps(graph or {}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+            stored_graph = raw_graph if isinstance(raw_graph, str) else json.dumps(graph or {}, ensure_ascii=False)
+            conn.execute(
+                text(
+                    """
+                    INSERT OR IGNORE INTO workflow_revisions
+                        (id, workflow_id, revision, graph, graph_hash, source, note, created_by, created_at)
+                    VALUES
+                        (:id, :workflow_id, 1, :graph, :graph_hash, 'migration', '', NULL, :created_at)
+                    """
+                ),
+                {
+                    "id": uuid.uuid4().hex,
+                    "workflow_id": row["id"],
+                    "graph": stored_graph,
+                    "graph_hash": digest,
+                    "created_at": row["created_at"] or datetime.now(UTC).replace(tzinfo=None),
+                },
+            )
+            conn.execute(
+                text("UPDATE workflows SET revision = 1, graph_hash = :digest WHERE id = :id"),
+                {"digest": digest, "id": row["id"]},
+            )
 
 
 def _migrate_resource_ownership() -> None:
@@ -1570,6 +1623,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_prepared_publish_tasks,
                 _migrate_track_role,
                 _migrate_browser_boolean_options,
+                _migrate_workflow_revisions,
             ),
             *_steps(MigrationPhase.FILESYSTEM, _migrate_shared_venvs),
         )

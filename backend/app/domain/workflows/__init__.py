@@ -1219,7 +1219,15 @@ def list_workflows(db: Session, workspace_id: str) -> list[Workflow]:
 
 
 def create_workflow(
-    db: Session, *, workspace_id: str, name: str, description: str = "", graph: dict[str, Any] | None = None
+    db: Session,
+    *,
+    workspace_id: str,
+    name: str,
+    description: str = "",
+    graph: dict[str, Any] | None = None,
+    source: str = "create",
+    created_by: str | None = None,
+    revision_note: str = "",
 ) -> Workflow:
     graph = graph if graph is not None else default_graph()
     # 保存放行「还没配完」:必填缺失交给就绪检查与运行时,否则新节点存不下来。
@@ -1228,21 +1236,49 @@ def create_workflow(
         raise WorkflowDomainError("；".join(errors))
     workflow = Workflow(workspace_id=workspace_id, name=name, description=description, graph=graph)
     db.add(workflow)
+    from app.domain.workflows.revisions import create_initial_revision
+
+    create_initial_revision(
+        db,
+        workflow,
+        source=source,
+        created_by=created_by,
+        note=revision_note,
+    )
     db.commit()
     db.refresh(workflow)
     return workflow
 
 
-def update_workflow(db: Session, workflow: Workflow, changes: dict[str, Any]) -> Workflow:
+def update_workflow(
+    db: Session,
+    workflow: Workflow,
+    changes: dict[str, Any],
+    *,
+    source: str = "edit",
+    created_by: str | None = None,
+    revision_note: str = "",
+) -> Workflow:
+    graph = changes.get("graph")
     if "graph" in changes and changes["graph"] is not None:
-        errors = validate_graph(changes["graph"], require_config=False, allow_missing_start=True, extra_types=_plugin_types(db))
+        errors = validate_graph(graph, require_config=False, allow_missing_start=True, extra_types=_plugin_types(db))
         if errors:
             raise WorkflowDomainError("；".join(errors))
-        workflow.graph = changes["graph"]
     if changes.get("name"):
         workflow.name = changes["name"]
     if changes.get("description") is not None:
         workflow.description = changes["description"]
+    if graph is not None:
+        from app.domain.workflows.revisions import commit_graph_revision
+
+        commit_graph_revision(
+            db,
+            workflow,
+            graph,
+            source=source,
+            created_by=created_by,
+            note=revision_note,
+        )
     db.commit()
     db.refresh(workflow)
     return workflow

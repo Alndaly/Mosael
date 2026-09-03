@@ -8195,6 +8195,154 @@
         }
       }
     },
+    "/api/workflows/{workflow_id}/revisions": {
+      "get": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "List Revisions",
+        "operationId": "list_revisions_api_workflows__workflow_id__revisions_get",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workflow Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkflowRevisionOut"
+                  },
+                  "title": "Response List Revisions Api Workflows  Workflow Id  Revisions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workflows/{workflow_id}/revisions/{revision}": {
+      "get": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Get Revision",
+        "operationId": "get_revision_api_workflows__workflow_id__revisions__revision__get",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workflow Id"
+            }
+          },
+          {
+            "name": "revision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Revision"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRevisionDetailOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workflows/{workflow_id}/revisions/{revision}/restore": {
+      "post": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Restore Revision",
+        "operationId": "restore_revision_api_workflows__workflow_id__revisions__revision__restore_post",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workflow Id"
+            }
+          },
+          {
+            "name": "revision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Revision"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/workflows/{workflow_id}/run": {
       "post": {
         "tags": [
@@ -24443,6 +24591,14 @@
             "type": "object",
             "title": "Graph"
           },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "graph_hash": {
+            "type": "string",
+            "title": "Graph Hash"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -24461,10 +24617,130 @@
           "name",
           "description",
           "graph",
+          "revision",
+          "graph_hash",
           "created_at",
           "updated_at"
         ],
         "title": "WorkflowOut"
+      },
+      "WorkflowRevisionDetailOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "workflow_id": {
+            "type": "string",
+            "title": "Workflow Id"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "graph_hash": {
+            "type": "string",
+            "title": "Graph Hash"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "graph": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Graph"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workflow_id",
+          "revision",
+          "graph_hash",
+          "source",
+          "note",
+          "created_by",
+          "created_at",
+          "graph"
+        ],
+        "title": "WorkflowRevisionDetailOut"
+      },
+      "WorkflowRevisionOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "workflow_id": {
+            "type": "string",
+            "title": "Workflow Id"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "graph_hash": {
+            "type": "string",
+            "title": "Graph Hash"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workflow_id",
+          "revision",
+          "graph_hash",
+          "source",
+          "note",
+          "created_by",
+          "created_at"
+        ],
+        "title": "WorkflowRevisionOut"
       },
       "WorkflowRunRequest": {
         "properties": {
