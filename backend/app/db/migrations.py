@@ -45,11 +45,15 @@ def _migrate_tool_confirmations_session() -> None:
 
 
 def _migrate_workflow_revisions() -> None:
-    """把现有工作流的当前图提升为不可变的 revision 1。
+    """初始化旧工作流的修订历史，并保持当前投影与最新修订一致。
 
     新表由前一阶段的 ``create-current-schema`` 建好；这里仅补已有 workflows 表不会被
     ``create_all`` 添加的两列，并为每条老数据写首份快照。摘要算法在迁移内自包含，避免将来
     领域实现变化后重放历史迁移得到不同结果。
+
+    启动迁移没有 alembic 的「只执行一次」账本，因此这里必须真正可重入。已有修订时，当前图
+    若等于最新快照，只校正 ``workflows`` 的当前指针；若不等，则把当前图追加成恢复修订，绝不
+    覆盖用户数据或旧快照。这个校正也会修复曾被旧版迁移错误重置为 v1 的工作流。
     """
 
     inspector = inspect(engine)
@@ -63,7 +67,7 @@ def _migrate_workflow_revisions() -> None:
         if "graph_hash" not in columns:
             conn.execute(text("ALTER TABLE workflows ADD COLUMN graph_hash VARCHAR(64) NOT NULL DEFAULT ''"))
 
-        rows = conn.execute(text("SELECT id, graph, created_at FROM workflows")).mappings().all()
+        rows = conn.execute(text("SELECT id, graph, revision, graph_hash, created_at FROM workflows")).mappings().all()
         for row in rows:
             raw_graph = row["graph"]
             try:
@@ -73,27 +77,76 @@ def _migrate_workflow_revisions() -> None:
             canonical = json.dumps(graph or {}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
             digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
             stored_graph = raw_graph if isinstance(raw_graph, str) else json.dumps(graph or {}, ensure_ascii=False)
-            conn.execute(
+            latest = conn.execute(
                 text(
-                    """
-                    INSERT OR IGNORE INTO workflow_revisions
-                        (id, workflow_id, revision, graph, graph_hash, source, note, created_by, created_at)
-                    VALUES
-                        (:id, :workflow_id, 1, :graph, :graph_hash, 'migration', '', NULL, :created_at)
-                    """
+                    "SELECT revision, graph, graph_hash FROM workflow_revisions "
+                    "WHERE workflow_id = :id ORDER BY revision DESC LIMIT 1"
                 ),
-                {
-                    "id": uuid.uuid4().hex,
-                    "workflow_id": row["id"],
-                    "graph": stored_graph,
-                    "graph_hash": digest,
-                    "created_at": row["created_at"] or datetime.now(UTC).replace(tzinfo=None),
-                },
-            )
-            conn.execute(
-                text("UPDATE workflows SET revision = 1, graph_hash = :digest WHERE id = :id"),
-                {"digest": digest, "id": row["id"]},
-            )
+                {"id": row["id"]},
+            ).mappings().one_or_none()
+
+            if latest is None:
+                conn.execute(
+                    text(
+                        """
+                        INSERT INTO workflow_revisions
+                            (id, workflow_id, revision, graph, graph_hash, source, note, created_by, created_at)
+                        VALUES
+                            (:id, :workflow_id, 1, :graph, :graph_hash, 'migration', '', NULL, :created_at)
+                        """
+                    ),
+                    {
+                        "id": uuid.uuid4().hex,
+                        "workflow_id": row["id"],
+                        "graph": stored_graph,
+                        "graph_hash": digest,
+                        "created_at": row["created_at"] or datetime.now(UTC).replace(tzinfo=None),
+                    },
+                )
+                current_revision = 1
+            else:
+                latest_raw_graph = latest["graph"]
+                try:
+                    latest_graph = json.loads(latest_raw_graph) if isinstance(latest_raw_graph, str) else latest_raw_graph
+                except (TypeError, ValueError):
+                    latest_graph = {}
+                latest_canonical = json.dumps(
+                    latest_graph or {}, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+                )
+                latest_digest = hashlib.sha256(latest_canonical.encode("utf-8")).hexdigest()
+
+                if latest["graph_hash"] == latest_digest == digest:
+                    # 正常重跑和旧缺陷的自愈都走这里：图不动，只把当前指针指回最新快照。
+                    current_revision = int(latest["revision"])
+                else:
+                    # 当前投影没有对应的不可变快照。保住用户眼前的图，并把它提升为最新修订。
+                    current_revision = int(latest["revision"]) + 1
+                    conn.execute(
+                        text(
+                            """
+                            INSERT INTO workflow_revisions
+                                (id, workflow_id, revision, graph, graph_hash, source, note, created_by, created_at)
+                            VALUES
+                                (:id, :workflow_id, :revision, :graph, :graph_hash,
+                                 'migration', 'recovered current projection', NULL, :created_at)
+                            """
+                        ),
+                        {
+                            "id": uuid.uuid4().hex,
+                            "workflow_id": row["id"],
+                            "revision": current_revision,
+                            "graph": stored_graph,
+                            "graph_hash": digest,
+                            "created_at": datetime.now(UTC).replace(tzinfo=None),
+                        },
+                    )
+                    logger.warning("工作流 %s 的当前图没有对应修订，已恢复为 v%d", row["id"], current_revision)
+
+            if row["revision"] != current_revision or row["graph_hash"] != digest:
+                conn.execute(
+                    text("UPDATE workflows SET revision = :revision, graph_hash = :digest WHERE id = :id"),
+                    {"revision": current_revision, "digest": digest, "id": row["id"]},
+                )
 
 
 def _migrate_resource_ownership() -> None:
