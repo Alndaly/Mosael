@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import sqlite3
 import tempfile
@@ -21,6 +22,7 @@ from pathlib import Path, PurePosixPath
 from typing import BinaryIO
 
 from app.core.config import app_version, settings
+from app.db.safety import DATABASE_SCHEMA_VERSION, database_version
 
 BACKUP_FORMAT = "mosael-backup"
 BACKUP_FORMAT_VERSION = 1
@@ -29,10 +31,32 @@ BACKUP_FILES = ("secret.key",)
 RESTORE_MARKER = ".mosael-restore.json"
 MAX_ARCHIVE_ENTRIES = 100_000
 MAX_MANIFEST_BYTES = 5 * 1024 * 1024
+_SEMVER = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$")
 
 
 class RestoreValidationError(ValueError):
     """The uploaded file is not a safe, intact Mosael backup."""
+
+
+def _semver_key(value: str) -> tuple | None:
+    match = _SEMVER.match(value.strip())
+    if match is None:
+        return None
+    core = tuple(int(part) for part in match.groups()[:3])
+    prerelease = match.group(4)
+    if prerelease is None:
+        return (*core, 1, ())
+    identifiers = tuple(
+        (0, int(part)) if part.isdigit() else (1, part.lower())
+        for part in prerelease.split(".")
+    )
+    return (*core, 0, identifiers)
+
+
+def _created_by_newer_app(source: str, current: str) -> bool:
+    source_key = _semver_key(source)
+    current_key = _semver_key(current)
+    return source_key is not None and current_key is not None and source_key > current_key
 
 
 def _snapshot_database(destination: Path) -> None:
@@ -93,6 +117,7 @@ def create_backup_archive() -> Path:
                 "version": BACKUP_FORMAT_VERSION,
                 "created_at": datetime.now(UTC).isoformat(),
                 "app_version": app_version(),
+                "schema_version": database_version(snapshot_path),
                 "files": files,
             }
             archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
@@ -138,6 +163,16 @@ def _read_manifest(archive: zipfile.ZipFile) -> dict:
         raise RestoreValidationError("unsupported backup format")
     if manifest.get("version") != BACKUP_FORMAT_VERSION:
         raise RestoreValidationError("unsupported backup version")
+    source_app_version = manifest.get("app_version")
+    if not isinstance(source_app_version, str) or not source_app_version.strip():
+        raise RestoreValidationError("backup app version is missing")
+    if _created_by_newer_app(source_app_version, app_version()):
+        raise RestoreValidationError("backup was created by a newer version of Mosael")
+    schema_version = manifest.get("schema_version")
+    if not isinstance(schema_version, int) or isinstance(schema_version, bool) or schema_version < 0:
+        raise RestoreValidationError("backup database schema version is missing or invalid")
+    if schema_version > DATABASE_SCHEMA_VERSION:
+        raise RestoreValidationError("backup database schema is newer than this version of Mosael")
     files = manifest.get("files")
     if not isinstance(files, dict) or not files or len(files) > MAX_ARCHIVE_ENTRIES:
         raise RestoreValidationError("backup file list is invalid")
@@ -211,6 +246,11 @@ def stage_restore_archive(file: BinaryIO) -> tuple[str, dict]:
         if not database_path.is_file():
             raise RestoreValidationError("backup database is missing")
         _validate_database(database_path)
+        actual_schema_version = database_version(database_path)
+        if actual_schema_version != manifest["schema_version"]:
+            raise RestoreValidationError(
+                "backup database schema version does not match its manifest"
+            )
         (stage / RESTORE_MARKER).write_text(
             json.dumps(
                 {
@@ -218,6 +258,7 @@ def stage_restore_archive(file: BinaryIO) -> tuple[str, dict]:
                     "version": BACKUP_FORMAT_VERSION,
                     "stage_id": stage_id,
                     "source_app_version": manifest.get("app_version"),
+                    "schema_version": manifest["schema_version"],
                 },
                 ensure_ascii=False,
             ),
