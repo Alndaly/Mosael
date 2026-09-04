@@ -16,7 +16,7 @@ import {
   type Node,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { Copy, FileUp, Group, Loader2, Maximize2, MessageSquare, Replace, Scissors, Sparkles, Trash2 } from "lucide-react";
+import { Copy, FileUp, Group, Loader2, Maximize2, MessageSquare, Replace, Scissors, Sparkles, Trash2, X } from "lucide-react";
 
 import { assetFileUrl, assetPreviewUrl, type CollaborationComment, type WorkspaceMember } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -162,6 +162,31 @@ export function shouldSuppressCommentPlacement(gesture: {
   return gesture.moved
     || gesture.dismissedActive
     || (gesture.startedInsideOverlay && !gesture.endedInsideOverlay);
+}
+
+export function BoardCommentModeHint({ onExit }: { onExit?: () => void }) {
+  const t = useI18n();
+  return (
+    <div
+      data-board-comment-mode-hint=""
+      className="absolute left-1/2 top-2 z-30 flex h-[42px] -translate-x-1/2 items-center rounded-full border border-primary/30 bg-panel/80 py-1 pl-3 pr-1.5 text-ui-xs text-foreground shadow-[var(--shadow-panel)] backdrop-blur-xl"
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <span className="font-semibold text-primary">{t("boardCommentMode")}</span>
+      <span className="mx-1.5 text-muted-foreground">·</span>
+      <span className="text-muted-foreground">{t("boardCommentModeHint")}</span>
+      <button
+        type="button"
+        className="ml-2 grid h-7 w-7 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+        title={t("boardExitCommentMode")}
+        aria-label={t("boardExitCommentMode")}
+        onClick={onExit}
+      >
+        <X size={14} />
+      </button>
+    </div>
+  );
 }
 
 interface Props {
@@ -744,7 +769,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       onPointerDownCapture={(event) => {
         if (!commentMode || event.button !== 0) return;
         const target = event.target instanceof Element ? event.target : null;
-        if (target?.closest("[data-suggestion-menu]")) return;
+        if (target?.closest("[data-suggestion-menu], [data-board-comment-mode-hint]")) return;
         const startedInsideOverlay = Boolean(target?.closest("[data-board-comment-overlay]"));
         const dismissedActive = Boolean(activeCommentId || draftAnchor);
         paneGesture.current = {
@@ -1104,22 +1129,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       </ReactFlow>
 
       {commentMode && (
-        <button
-          type="button"
-          data-board-comment-mode-hint=""
-          className="absolute left-1/2 top-2 z-30 flex h-[42px] -translate-x-1/2 items-center rounded-full border border-primary/30 bg-panel/80 px-3 text-ui-xs text-foreground shadow-[var(--shadow-panel)] backdrop-blur-xl transition-colors hover:bg-panel/95"
-          title={t("boardExitCommentMode")}
-          aria-label={t("boardExitCommentMode")}
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation();
-            onExitCommentMode?.();
-          }}
-        >
-          <span className="font-semibold text-primary">{t("boardCommentMode")}</span>
-          <span className="mx-1.5 text-muted-foreground">·</span>
-          <span className="text-muted-foreground">{t("boardCommentModeHint")}</span>
-        </button>
+        <BoardCommentModeHint onExit={onExitCommentMode} />
       )}
 
 
