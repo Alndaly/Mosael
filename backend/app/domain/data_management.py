@@ -17,6 +17,7 @@ import tempfile
 import uuid
 import zipfile
 from collections.abc import Iterable
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import BinaryIO
@@ -181,7 +182,10 @@ def _read_manifest(archive: zipfile.ZipFile) -> dict:
 
 def _validate_database(path: Path) -> None:
     try:
-        with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as database:
+        # closing():`with sqlite3.connect(...)` 只结束事务,不关连接。这里泄漏的是**待还原
+        # 备份库**的句柄,而 stage_restore_archive 的说明正指望「Windows 看不到开着的 SQLite」
+        # —— 换目录那一步会撞 WinError 32。
+        with closing(sqlite3.connect(f"file:{path}?mode=ro", uri=True)) as database:
             rows = database.execute("PRAGMA integrity_check").fetchall()
     except sqlite3.DatabaseError as exc:
         raise RestoreValidationError("backup database is invalid") from exc
