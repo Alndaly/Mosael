@@ -25374,6 +25374,11 @@
             "type": "string",
             "title": "Plugin Name",
             "default": ""
+          },
+          "tool_name": {
+            "type": "string",
+            "title": "Tool Name",
+            "default": ""
           }
         },
         "type": "object",

@@ -114,6 +114,7 @@ def node_types(db: DbSession, user: CurrentUser) -> list[dict]:
             # 英文键留给连线/导出,翻译后的名字留给人;两者不再混成一个字段。
             "output_labels": {output: t(output_label(output, meta), locale) for output in meta["outputs"]},
             "plugin_name": meta.get("plugin_name", ""),
+            "tool_name": meta.get("tool_name", ""),
         }
         for key, meta in registry.items()
     ]

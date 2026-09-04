@@ -70,6 +70,8 @@ class WorkflowNodeTypeOut(BaseModel):
     output_labels: dict[str, str] = Field(default_factory=dict)
     #: 插件节点带来源插件名(内置节点为空)。面板据此在同名工具之间区分是谁提供的。
     plugin_name: str = ""
+    #: 插件工具的稳定调用名。只参与搜索/诊断，不拿它顶替给人看的 label。
+    tool_name: str = ""
 
 
 class WorkflowAiEditRequest(BaseModel):

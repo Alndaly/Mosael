@@ -12,6 +12,8 @@ type Option = {
   description?: string;
   /** 分组标题。相邻的同名项归一组;顺序即传入顺序,这里不排序 —— 谁提供选项,谁决定顺序。 */
   group?: string;
+  /** 不展示但参与搜索的稳定名/别名。展示名变成人话后，仍可按内部标识精确查找。 */
+  keywords?: string[];
 };
 
 /**
@@ -122,7 +124,7 @@ export function SearchableSelect({
                 <CommandItem
                   key={item.value}
                   // 描述也参与搜索:用户记得住"发抖音"却未必记得节点叫「发布」。
-                  value={`${item.label} ${item.description ?? ""}`}
+                  value={`${item.label} ${item.description ?? ""} ${(item.keywords ?? []).join(" ")}`}
                   onSelect={() => {
                     onValueChange(item.value);
                     setOpen(false);

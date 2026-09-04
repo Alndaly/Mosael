@@ -9651,6 +9651,11 @@ export interface components {
              * @default
              */
             plugin_name: string;
+            /**
+             * Tool Name
+             * @default
+             */
+            tool_name: string;
         };
         /** WorkflowOut */
         WorkflowOut: {

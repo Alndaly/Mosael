@@ -12,13 +12,49 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.i18n import get_current_locale
 from app.db.models import PluginInstance, PluginInvocation, PluginPackage
 from app.domain.plugins import artifacts, inputs as plugin_inputs, instances as inst, state as plugin_state
 from app.domain.plugins.artifacts import ArtifactError, cleanup_scratch_dir, make_scratch_dir
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.manifest import Manifest
+from app.domain.plugins.manifest import Manifest, text_of
 from app.domain.plugins.mcp_bridge import McpBridgeError, call_tool as mcp_call, discover_tools
 from app.domain.plugins.runtime import PluginRuntimeError, check_required_input, execute_tool
+
+
+def _short_description_label(description: str) -> str:
+    """从缺少 ``title`` 的旧 MCP 工具描述里取一个可读名称。
+
+    MCP 的 ``Tool.title`` 是可选字段，TikHub 等不少服务只把短名称写在 description，形如
+    ``获取视频详情/Get video detail``。把整段描述永远当标题会制造另一种坏 UI，所以这里只
+    接受第一行里足够短的一半；不满足就继续回退到人性化后的稳定名。
+    """
+    first_line = next((line.strip() for line in description.splitlines() if line.strip()), "")
+    if not first_line:
+        return ""
+    parts = [part.strip() for part in first_line.split("/", 1)]
+    locale = get_current_locale()
+    candidate = parts[1] if locale == "en" and len(parts) > 1 else parts[0]
+    candidate = candidate.strip().rstrip("。.!！?？;；")
+    return candidate if 1 <= len(candidate) <= 48 else ""
+
+
+def _humanize_tool_name(name: str) -> str:
+    """最后一道展示兜底；稳定的调用名仍原样保存在 ``name``。"""
+    words = " ".join(name.replace("-", "_").split("_")).strip()
+    return words[:1].upper() + words[1:] if words else name
+
+
+def _display_label(tool: dict[str, Any], override_label: str = "") -> str:
+    """插件工具唯一的展示名称解析入口。"""
+    description = text_of(tool.get("description"))
+    return (
+        override_label.strip()
+        or text_of(tool.get("title"))
+        or text_of(tool.get("label"))
+        or _short_description_label(description)
+        or _humanize_tool_name(str(tool.get("name") or ""))
+    )
 
 
 def all_tools(db: Session, instance: PluginInstance) -> list[dict[str, Any]]:
@@ -34,12 +70,14 @@ def all_tools(db: Session, instance: PluginInstance) -> list[dict[str, Any]]:
         if not isinstance(tool, dict) or not isinstance(tool.get("name"), str):
             continue
         override = manifest.overrides.get(tool["name"])
+        description = (override.description if override and override.description else "") or text_of(
+            tool.get("description")
+        )
         out.append(
             {
                 "name": tool["name"],
-                "label": (override.label if override and override.label else "") or tool["name"],
-                "description": (override.description if override and override.description else "")
-                or str(tool.get("description") or ""),
+                "label": _display_label(tool, override.label if override else ""),
+                "description": description,
                 "input_schema": tool.get("input_schema") or {"type": "object", "properties": {}},
                 # 只读默认 False:插件跑的是别人的代码,没有确认门也照样能发请求、写文件,
                 # 所以"不确定"落在保守那边 —— 子智能体只拿只读工具。

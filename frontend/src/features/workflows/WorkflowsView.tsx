@@ -695,6 +695,7 @@ function useNodePicker(nodeTypes: WorkflowNodeType[], t: ReturnType<typeof useI1
         // 同名工具可能来自不同插件(两个平台的 fetch_one_video),副标题点名是谁提供的。
         description: meta.plugin_name ? `${meta.plugin_name} · ${meta.description}` : meta.description,
         group: meta.category || t("wfNodeGroupOther"),
+        keywords: meta.tool_name ? [meta.tool_name] : undefined,
       }));
   }, [nodeTypes, t]);
 

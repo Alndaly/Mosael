@@ -117,6 +117,9 @@ def discover_tools(manifest: dict[str, Any], env: dict[str, str] | None = None) 
         return [
             {
                 "name": tool.name,
+                # MCP Tool.title 是给人看的名字；name 是机器调用用的稳定标识。两者不能互相
+                # 顶替，否则节点面板会把 bilibili_web_fetch_one_video 当成产品文案。
+                "title": tool.title or "",
                 "description": tool.description or "",
                 # mcp 2.0 起字段名统一为 snake_case(原 inputSchema)。
                 "input_schema": tool.input_schema or {"type": "object", "properties": {}},

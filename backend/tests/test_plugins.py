@@ -13,7 +13,6 @@ from pathlib import Path
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.domain.plugins import install as installer
-from app.domain.plugins import packages as pkg
 from tests.util import fresh_client
 
 
@@ -297,6 +296,30 @@ def test_expose_all_的包全开() -> None:
     instance = packages(client)["dev.simple"]["instances"][0]
     client.patch(f"/api/plugins/instances/{instance['id']}", json={"enabled": True})
     assert [t["name"] for t in client.get("/api/plugins/tools").json()] == ["shout"]
+
+
+def test_插件工具的展示名和调用名各司其职() -> None:
+    """name 是稳定协议，label 才是节点面板里给人看的名字。
+
+    很多 MCP 服务（TikHub 也是）没填可选的 Tool.title，只把简短双语名称放在
+    description 里；这时不能把 snake_case 的调用名直接当产品文案。
+    """
+    client = install(SIMPLE)
+    instance = packages(client)["dev.simple"]["instances"][0]
+    client.patch(f"/api/plugins/instances/{instance['id']}", json={"enabled": True})
+
+    tool = client.get("/api/plugins/tools").json()[0]
+    assert tool["name"] == "shout"
+    assert tool["label"] == "把文本变大写"
+
+    node = next(
+        item
+        for item in client.get("/api/workflows/node-types").json()
+        if item["type"] == "plugin.dev.simple.shout"
+    )
+    assert node["label"] == "把文本变大写"
+    assert node["tool_name"] == "shout"
+    assert node["plugin_name"] == "简单工具"
 
 
 def test_能力开关可以逐个改() -> None:

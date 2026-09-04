@@ -27,6 +27,7 @@ function meta(
     output_types: {},
     output_labels: {},
     plugin_name: "",
+    tool_name: "",
   };
 }
 
