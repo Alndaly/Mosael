@@ -43,20 +43,26 @@ export function toSteps(events: TaskEvent[]): Step[] {
       if (!byNode.has(nid)) order.push(nid);
       byNode.set(nid, { nid, name: p.name ?? nid, status: "running", startAt: e.created_at ? parseIso(e.created_at) : undefined });
     } else if (e.type === "workflow.node.finished") {
-      const s = byNode.get(nid);
-      if (s) {
-        s.status = "done";
-        s.outputs = p.outputs;
-        if (s.startAt != null && e.created_at) s.ms = Math.max(0, parseIso(e.created_at) - s.startAt);
+      let s = byNode.get(nid);
+      if (!s) {
+        order.push(nid);
+        s = { nid, name: p.name ?? nid, status: "done" };
+        byNode.set(nid, s);
       }
+      s.status = "done";
+      s.outputs = p.outputs;
+      if (s.startAt != null && e.created_at) s.ms = Math.max(0, parseIso(e.created_at) - s.startAt);
     } else if (e.type === "workflow.node.failed") {
-      const s = byNode.get(nid);
-      if (s) {
-        s.status = "failed";
-        s.error = p.error;
-        s.details = p.details;
-        if (s.startAt != null && e.created_at) s.ms = Math.max(0, parseIso(e.created_at) - s.startAt);
+      let s = byNode.get(nid);
+      if (!s) {
+        order.push(nid);
+        s = { nid, name: p.name ?? nid, status: "failed" };
+        byNode.set(nid, s);
       }
+      s.status = "failed";
+      s.error = p.error;
+      s.details = p.details;
+      if (s.startAt != null && e.created_at) s.ms = Math.max(0, parseIso(e.created_at) - s.startAt);
     } else if (e.type === "workflow.node.skipped") {
       if (!byNode.has(nid)) order.push(nid);
       byNode.set(nid, { nid, name: p.name ?? nid, status: "skipped" });

@@ -39,4 +39,25 @@ describe("工作流失败步骤", () => {
       },
     ]);
   });
+
+  it("旧记录即使缺少 started 事件也保留已完成步骤", () => {
+    const events = [
+      {
+        id: "e1",
+        job_id: "j1",
+        type: "workflow.node.finished",
+        created_at: "2026-09-04T08:00:01Z",
+        payload: { node_id: "copy", name: "复制原视频", outputs: { sequence_id: "s1" } },
+      },
+    ] as TaskEvent[];
+
+    expect(toSteps(events)).toEqual([
+      {
+        nid: "copy",
+        name: "复制原视频",
+        status: "done",
+        outputs: { sequence_id: "s1" },
+      },
+    ]);
+  });
 });

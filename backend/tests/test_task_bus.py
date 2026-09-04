@@ -40,6 +40,21 @@ def test_retention_rules() -> None:
         assert db.get(Job, old_done.id) is not None   # the job summary row stays
 
 
+def test_retention_keeps_complete_recent_workflow_history() -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    with SessionLocal() as db:
+        workflow = Job(workspace_id=ws["id"], kind="workflow", status="failed", message="x")
+        db.add(workflow)
+        db.flush()
+        for index in range(12):
+            db.add(TaskEvent(job_id=workflow.id, type=f"workflow.event.{index}", payload={}))
+        db.commit()
+
+        assert prune_task_events(db) == 0
+        assert event_count(db, workflow.id) == 12
+
+
 def test_job_events_endpoint_and_clear_finished() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()

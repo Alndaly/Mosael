@@ -596,6 +596,11 @@ def prune_task_events(db: Session, *, now: datetime | None = None) -> int:
             result = db.execute(delete(TaskEvent).where(TaskEvent.job_id == job.id))
             removed += result.rowcount or 0
             continue
+        # 工作流历史靠 started/finished/failed 事件配对还原每一个节点。通用的“只留最后 5 条”
+        # 会稳定地裁掉前半程，让失败运行看起来只执行了最后一个报错节点。30 天窗口已经给存储
+        # 设了明确上限；窗口内保留完整工作流事件，才能让“执行历史”名副其实。
+        if job.kind == "workflow":
+            continue
         keep_ids = list(
             db.scalars(
                 select(TaskEvent.id)
