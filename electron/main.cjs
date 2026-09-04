@@ -113,18 +113,40 @@ app.on("child-process-gone", (_event, details) => {
   appendMainLog("child-process-gone", JSON.stringify(details));
 });
 
+// 冒烟悬挂时,超时那一侧只知道「它没退出」。阶段轨迹**边走边落盘**,于是「卡在哪一站」
+// 是一条可读的事实,而不是靠读 356 行 diff 猜 —— Windows 上这一步从 6 秒变成跑不完 90 秒,
+// 而 CI 日志里一个字都没有,那次除了「timed out」什么线索都没留下。
+const smokeStages = [];
+// 结果是**累积**的,不是每次覆盖:阶段打点(`reportSmoke({})`)发生在最终结论之后
+// (before-quit / will-quit 都在 app.quit() 之后触发),覆盖式写入会把 backendHealthy
+// 那几个字段抹掉,外面读到的就成了「启动不完整」——一个纯粹由诊断代码制造的假失败。
+let smokeResult = {};
+
 function reportSmoke(result) {
   if (!smokeResultPath) return;
+  smokeResult = { ...smokeResult, ...result };
   try {
     fs.mkdirSync(path.dirname(smokeResultPath), { recursive: true });
     fs.writeFileSync(
       smokeResultPath,
-      JSON.stringify({ packaged: app.isPackaged, version: app.getVersion(), ...result }, null, 2),
+      JSON.stringify(
+        { packaged: app.isPackaged, version: app.getVersion(), stages: smokeStages, ...smokeResult },
+        null,
+        2,
+      ),
       "utf8",
     );
   } catch (error) {
     console.error("[smoke] 写结果失败:", error);
   }
+}
+
+/** 记一站。带上进程已运行的毫秒数 —— 是「慢」还是「停」要能分得开。 */
+function markSmokeStage(stage) {
+  if (!isSmokeTest) return;
+  smokeStages.push(`${stage}@${Math.round(process.uptime() * 1000)}ms`);
+  appendMainLog("smoke-stage", stage);
+  reportSmoke({});
 }
 
 let backend = null;
@@ -514,16 +536,33 @@ function createWindow() {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
     return { action: "deny" };
   });
+  markSmokeStage("window-created");
   if (isSmokeTest) {
     win.webContents.once("did-finish-load", async () => {
       // `did-finish-load` does not mean the preload succeeded: Electron logs a preload exception
       // and still finishes the renderer. Verify the public bridge so packaged smoke tests cross
       // the actual sandbox boundary that window chrome and every privileged desktop feature use.
-      const desktopBridgeReady = await win.webContents.executeJavaScript(
-        `typeof window.mosaelDesktop === "object" && ` +
-          `window.mosaelDesktop.platform === ${JSON.stringify(process.platform)}`,
-      );
-      reportSmoke({ backendHealthy: true, rendererLoaded: true, desktopBridgeReady });
+      markSmokeStage("did-finish-load");
+      let desktopBridgeReady = false;
+      let bridgeError = null;
+      try {
+        desktopBridgeReady = await win.webContents.executeJavaScript(
+          `typeof window.mosaelDesktop === "object" && ` +
+            `window.mosaelDesktop.platform === ${JSON.stringify(process.platform)}`,
+        );
+      } catch (error) {
+        // 这个 handler 是 async 的:rejection 此前没人接,于是既不写结果也不退出,外面
+        // 只看到一条 90 秒超时。失败也要说话。
+        bridgeError = error instanceof Error ? error.message : String(error);
+      }
+      markSmokeStage("bridge-checked");
+      reportSmoke({
+        backendHealthy: true,
+        rendererLoaded: true,
+        desktopBridgeReady,
+        ...(bridgeError ? { bridgeError } : {}),
+      });
+      markSmokeStage("quit-requested");
       if (desktopBridgeReady) app.quit();
       else app.exit(1);
     });
@@ -633,6 +672,7 @@ app.whenReady().then(async () => {
     app.quit();
     return;
   }
+  markSmokeStage("backend-healthy");
   finalizeActivatedRestore(configuredDataDir)
     .then((cleaned) => cleaned && appendMainLog("restore-finalized", "previous data removed after health check"))
     .catch((error) => appendMainLog("restore-finalize-failed", error));
@@ -866,10 +906,14 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  markSmokeStage("before-quit");
   quitting = true;
   systemHandle?.dispose();
   stopBackend();
 });
 
-app.on("will-quit", stopBackend);
+app.on("will-quit", () => {
+  markSmokeStage("will-quit");
+  stopBackend();
+});
 process.on("exit", stopBackend);

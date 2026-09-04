@@ -68,10 +68,32 @@ try {
     },
     stdio: "inherit",
   });
+  // 超时本身说明不了任何事:这一步平时 6-7 秒,一旦跑不完 90 秒,「卡在哪」才是要的答案。
+  // 主进程沿途把阶段写进 result.json,这里在清理临时目录**之前**把它和两份日志一起读出来。
+  const tail = (file, lines) => {
+    try {
+      if (!existsSync(file)) return `${basename(file)}=<absent>`;
+      return `${basename(file)} tail:\n${readFileSync(file, "utf8").trimEnd().split("\n").slice(-lines).join("\n")}`;
+    } catch (error) {
+      return `${basename(file)}=<unreadable: ${error.message}>`;
+    }
+  };
+  const evidence = () => {
+    const logs = join(scratch, "electron-user-data", "logs");
+    return [
+      existsSync(resultPath)
+        ? `result.json=${readFileSync(resultPath, "utf8").replace(/\s+/g, " ")}`
+        : "result.json=<never written — 主进程没走到任何一站>",
+      tail(join(logs, "main.log"), 25),
+      tail(join(logs, "backend.log"), 15),
+    ].join("\n");
+  };
+
   const exitCode = await new Promise((resolveExit, reject) => {
     const timeout = setTimeout(() => {
+      const seen = evidence();
       child.kill();
-      reject(new Error("packaged Electron smoke timed out after 90s"));
+      reject(new Error(`packaged Electron smoke timed out after 90s\n${seen}`));
     }, 90_000);
     child.once("error", reject);
     child.once("exit", (code) => {
@@ -79,7 +101,7 @@ try {
       resolveExit(code);
     });
   });
-  if (exitCode !== 0) throw new Error(`packaged Electron exited with ${exitCode}`);
+  if (exitCode !== 0) throw new Error(`packaged Electron exited with ${exitCode}\n${evidence()}`);
   if (!existsSync(resultPath)) throw new Error("packaged Electron did not write a smoke result");
   const result = JSON.parse(readFileSync(resultPath, "utf8"));
   if (!result.packaged || !result.backendHealthy || !result.rendererLoaded || !result.desktopBridgeReady) {
