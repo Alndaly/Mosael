@@ -126,6 +126,14 @@ export function canMoveComment(authorId: string | null, currentUserId: string | 
   return Boolean(authorId && currentUserId && authorId === currentUserId);
 }
 
+export function shouldDismissCommentOverlay(
+  hasActiveComment: boolean,
+  hasDraft: boolean,
+  pointerInsideOverlay: boolean,
+): boolean {
+  return (hasActiveComment || hasDraft) && !pointerInsideOverlay;
+}
+
 interface Props {
   boardId: string;
   /** 提示词面板里 `@` 引用素材时去哪个工作区找。 */
@@ -226,6 +234,19 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     if (!commentMode) setDraftAnchor(null);
     else setNodes((current) => current.map((node) => (node.selected ? { ...node, selected: false } : node)));
   }, [commentMode, setNodes]);
+
+  React.useEffect(() => {
+    if (!shouldDismissCommentOverlay(Boolean(activeCommentId), Boolean(draftAnchor), false)) return;
+    const dismissOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const insideOverlay = Boolean(target?.closest("[data-board-comment-overlay], [data-suggestion-menu]"));
+      if (!shouldDismissCommentOverlay(Boolean(activeCommentId), Boolean(draftAnchor), insideOverlay)) return;
+      if (activeCommentId) onSelectComment?.(null);
+      if (draftAnchor) setDraftAnchor(null);
+    };
+    document.addEventListener("pointerdown", dismissOnOutsidePointer, true);
+    return () => document.removeEventListener("pointerdown", dismissOnOutsidePointer, true);
+  }, [activeCommentId, draftAnchor, onSelectComment]);
 
   // 文字改动直接落进节点 data —— 走 setNodes 而不是回写上层,理由同上:
   // 上层一变就重建节点,正在打字的 textarea 会失焦。
@@ -676,7 +697,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       onPointerDownCapture={(event) => {
         if (!commentMode || event.button !== 0) return;
         const target = event.target instanceof Element ? event.target : null;
-        if (target?.closest("[data-board-comment-overlay]")) return;
+        if (target?.closest("[data-board-comment-overlay], [data-suggestion-menu]")) return;
         const dismissedActive = Boolean(activeCommentId || draftAnchor);
         paneGesture.current = { x: event.clientX, y: event.clientY, moved: false, dismissedActive };
         if (activeCommentId) onSelectComment?.(null);
@@ -910,7 +931,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
                     {index + 1}
                   </button>
                   {active && (
-                    <div className="-translate-y-3 w-64 rounded-xl border border-border-strong bg-panel/95 p-3 text-left shadow-[var(--shadow-panel)] backdrop-blur-xl">
+                    <div className="-ml-3.5 -translate-y-3 w-64 rounded-xl border border-border-strong bg-panel/95 p-3 text-left shadow-[var(--shadow-panel)] backdrop-blur-xl">
                       <p className="mb-1 text-ui-xs font-semibold text-foreground">
                         {comment.author?.display_name || comment.author?.username || t("teamSystemActor")}
                       </p>
@@ -933,7 +954,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
                 <span className="grid h-7 w-7 -translate-x-1/2 -translate-y-1/2 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-panel)]">
                   <MessageSquare size={13} />
                 </span>
-                <div className="-translate-y-3">
+                <div className="-ml-3.5 -translate-y-3">
                   <BoardCommentComposer
                     members={members}
                     onCancel={() => setDraftAnchor(null)}
@@ -962,7 +983,10 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       </ReactFlow>
 
       {commentMode && (
-        <div className="pointer-events-none absolute left-1/2 top-16 z-30 -translate-x-1/2 rounded-full border border-primary/30 bg-panel/80 px-3 py-1.5 text-ui-xs text-foreground shadow-[var(--shadow-panel)] backdrop-blur-xl">
+        <div
+          data-board-comment-mode-hint=""
+          className="pointer-events-none absolute left-1/2 top-16 z-30 flex h-[42px] -translate-x-1/2 items-center rounded-full border border-primary/30 bg-panel/80 px-3 text-ui-xs text-foreground shadow-[var(--shadow-panel)] backdrop-blur-xl"
+        >
           <span className="font-semibold text-primary">{t("boardCommentMode")}</span>
           <span className="mx-1.5 text-muted-foreground">·</span>
           <span className="text-muted-foreground">{t("boardCommentModeHint")}</span>

@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Node } from "@xyflow/react";
 
-import { canMoveComment, canPlaceCommentDraft, focusBoardNode } from "./BoardCanvas";
+import {
+  canMoveComment,
+  canPlaceCommentDraft,
+  focusBoardNode,
+  shouldDismissCommentOverlay,
+} from "./BoardCanvas";
 
 describe("画板节点聚焦", () => {
   it("一次点击就只选中目标节点", () => {
@@ -38,5 +43,12 @@ describe("画布评论落点", () => {
     expect(canMoveComment("author-1", "author-1")).toBe(true);
     expect(canMoveComment("author-1", "member-2")).toBe(false);
     expect(canMoveComment(null, "member-2")).toBe(false);
+  });
+
+  it("评论浮层仅在点击自身时保持，点击画布或应用其他区域都会收起", () => {
+    expect(shouldDismissCommentOverlay(true, false, false)).toBe(true);
+    expect(shouldDismissCommentOverlay(false, true, false)).toBe(true);
+    expect(shouldDismissCommentOverlay(true, false, true)).toBe(false);
+    expect(shouldDismissCommentOverlay(false, false, false)).toBe(false);
   });
 });

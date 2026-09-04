@@ -208,6 +208,7 @@ export function useSuggestionMenu<T>({
       return createPortal(
         <div
           ref={menuEl}
+          data-suggestion-menu=""
           className={cn(
             className ??
               "fixed left-0 top-0 z-50 max-h-48 min-w-[180px] rounded-md border border-border bg-panel p-1 shadow-[var(--shadow-panel)]",

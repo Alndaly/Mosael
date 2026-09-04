@@ -685,7 +685,7 @@ function BoardDetail({
             />
           </div>
 
-          <div className={cn("flex flex-wrap items-center gap-1 rounded-full p-1", CANVAS_GLASS_SURFACE_CLASS)}>
+          <div data-board-toolbar-actions="" className={cn("flex flex-wrap items-center gap-1 rounded-full p-1", CANVAS_GLASS_SURFACE_CLASS)}>
             <Button
               variant="ghost"
               size="icon"
