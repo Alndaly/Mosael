@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
 from app.db.models import Job, Workflow, WorkflowRevision
-from app.domain.jobs import create_job, emit_job_event, reset_parent_job, set_parent_job, say
+from app.domain.jobs import create_job, dispatch_job, emit_job_event, reset_parent_job, set_parent_job, say
 from app.domain.notifications import notify
 from app.domain.workflows import (
     NODE_TYPES,
@@ -71,12 +71,13 @@ def start_workflow_job(
     else:
         # 调度器/子工作流可复用外部创建的 job；同样必须把修订钉进审计载荷。
         job.payload = {**(job.payload or {}), **pinned_payload}
-    db.commit()
-    threading.Thread(
-        target=_run_workflow_thread,
-        args=(workflow.id, revision.id, job.id, params or {}),
-        daemon=True,
-    ).start()
+    # 经总线派发,不自己起线程。此前这里是一句裸的 threading.Thread —— 于是工作流成了唯一
+    # 绕开 dispatch_job 的 job kind,代价有两个:一是它的执行模式形同虚设(把 workflow 注册成
+    # external 也照样在进程内跑),二是线程没有 JOB_THREAD_NAME,`wait_for_idle_jobs()` 按名字
+    # 找不到它 —— 测试里 fresh_client() 就会在一个还活着的工作流线程底下 drop_all,炸成
+    # 「no such table: task_events」,而且记在当时恰好在跑的那条**无关**用例头上。
+    # (那正是 jobs.py 里 JOB_THREAD_NAME 的注释所断言的不变量:派发点只有一处。)
+    dispatch_job(db, job, lambda: _run_workflow_thread(workflow.id, revision.id, job.id, params or {}))
     return job
 
 

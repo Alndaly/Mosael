@@ -8,6 +8,7 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import Job, TaskEvent, Workflow
+from app.domain.jobs import JOB_THREAD_NAME
 from app.domain.workflows import (
     NODE_TYPES,
     WorkflowDomainError,
@@ -337,8 +338,10 @@ def test_queued_run_executes_the_revision_pinned_at_enqueue(monkeypatch) -> None
     pending: dict[str, object] = {}
 
     class DeferredThread:
-        def __init__(self, *, target, args, daemon):
-            pending.update(target=target, args=args, daemon=daemon)
+        # 派发走 dispatch_job:它用闭包起线程并命名 JOB_THREAD_NAME,没有 args。桩必须跟着
+        # 真实签名走 —— 否则这条用例挡下的是一个 TypeError,而不是它真正要验的「入队即定版」。
+        def __init__(self, *, target, name=None, args=(), daemon=False):
+            pending.update(target=target, name=name, args=args, daemon=daemon)
 
         def start(self) -> None:
             return None
@@ -359,6 +362,9 @@ def test_queued_run_executes_the_revision_pinned_at_enqueue(monkeypatch) -> None
 
     target = pending["target"]
     assert callable(target)
+    # 工作流线程必须叫这个名字,`wait_for_idle_jobs()` 才看得见它 —— 看不见就意味着
+    # fresh_client() 会在它还活着的时候 drop_all,把失败甩给一条无关的用例。
+    assert pending["name"] == JOB_THREAD_NAME
     target(*pending["args"])
 
     with SessionLocal() as db:
