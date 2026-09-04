@@ -149,6 +149,15 @@ def chat(
     # 与其把十来个参数提到签名上,不如让需要的那一处显式传进来。
     if extra:
         payload.update({k: v for k, v in extra.items() if k not in ("model", "messages")})
+    # DeepSeek V4 默认开启 high thinking，而 max_tokens 同时覆盖推理与最终正文。长逐字稿的
+    # 结构化任务会出现“推理耗尽预算、HTTP 200、content 为空”；这种调用的契约是最终 JSON，
+    # 不是展示思考过程，所以默认关闭思考，把预算完整留给可解析结果。显式传入 thinking 时尊重调用方。
+    if (
+        target.vendor.strip().lower() == "deepseek"
+        and isinstance(payload.get("response_format"), dict)
+        and payload["response_format"].get("type") in {"json_schema", "json_object"}
+    ):
+        payload.setdefault("thinking", {"type": "disabled"})
     payload["messages"] = _satisfy_json_mode(payload.get("messages") or [], payload.get("response_format"))
     if target.execution_surface == "gateway":
         return _chat_gateway(
@@ -162,6 +171,8 @@ def chat(
         )
     url = f"{target.base_url.rstrip('/')}/chat/completions"
     headers = _auth_headers(target.api_key)
+    if call is not None:
+        call.describe(provider=target.vendor, model=target.model, provider_profile_id=target.profile_id or None)
 
     try:
         while True:
@@ -182,7 +193,17 @@ def chat(
                 payload = fallback
                 continue
             body = response.json()
-            content = str(body["choices"][0]["message"]["content"])
+            # 空 content 也可能已经消耗了推理 token；每个 200 尝试都累计到同一条账，而不是
+            # 只记最终可见答案。BillableCall.meter 明确定义为可多次累加。
+            if call is not None:
+                call.meter_openai_tokens(body.get("usage"))
+            raw_content = body["choices"][0]["message"]["content"]
+            content = "" if raw_content is None else str(raw_content)
+            if allow_response_format_fallback and not content.strip():
+                fallback = _downgrade_response_format_payload(payload)
+                if fallback is not None:
+                    payload = fallback
+                    continue
             break
     except httpx.HTTPStatusError as exc:
         raise AiChatError(_sanitize(f"{label}失败:{_provider_detail(exc.response, target.model)}", target.api_key)) from exc
@@ -195,9 +216,6 @@ def chat(
     except (KeyError, IndexError, TypeError, ValueError) as exc:
         raise AiChatError(_sanitize(f"{label}失败:供应商返回的结构不认识({exc})", target.api_key)) from exc
 
-    if call is not None:
-        call.describe(provider=target.vendor, model=target.model, provider_profile_id=target.profile_id or None)
-        call.meter_openai_tokens(body.get("usage"))
     return content
 
 
@@ -358,6 +376,15 @@ def _response_format_fallback_payload(payload: dict[str, Any], response: httpx.R
         for phrase in ("unavailable", "not supported", "unsupported", "must be one of")
     )
     if "response_format" not in detail or not unsupported:
+        return None
+
+    return _downgrade_response_format_payload(payload)
+
+
+def _downgrade_response_format_payload(payload: dict[str, Any]) -> dict[str, Any] | None:
+    """把结构化输出逐级降级，并在提示词中保留原始 JSON 契约。"""
+    current = payload.get("response_format")
+    if not isinstance(current, dict) or current.get("type") not in {"json_schema", "json_object"}:
         return None
 
     messages = list(payload.get("messages") or [])

@@ -332,7 +332,8 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
 口头禅策略：{{start.filler_policy}}
 最多删除原时长比例：{{start.max_removal_ratio}}
 
-下面是按原视频源时间记录的逐字稿 JSON，每段含 start/end，可能含词级 tokens：
+下面是按原视频源时间记录的紧凑逐字稿 JSON。每段含 start/end/text；tokens 为短数组，列顺序由
+顶层 token_columns 声明（默认是 start/end/text）：
 {{verbatim_transcript.timed_text}}
 
 请逐项诊断并生成安全的 remove_ranges。所有自动删除范围的总时长不得超过规定比例；无法从逐字稿
@@ -409,7 +410,7 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
         {"id": "notice_output", "source": "done_notice", "target": "output"},
     ]
     graph = {
-        "meta": {"template_id": TRANSCRIPT_VIDEO_CLEANUP, "template_version": 2, "source": "official"},
+        "meta": {"template_id": TRANSCRIPT_VIDEO_CLEANUP, "template_version": 3, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

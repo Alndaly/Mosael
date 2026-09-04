@@ -21,6 +21,33 @@ from app.domain.jobs import current_actor
 from app.domain.workflows.executors.common import wait_for_job
 
 
+def _compact_timed_text(segments: list[dict[str, Any]]) -> str:
+    """把完整逐字稿编码成适合 LLM 的紧凑 JSON。
+
+    段落正文不能省：ASR token 常省略标点，偶尔还会缺少段尾。真正冗余的是每个字都重复一次
+    ``start/end/text`` 字段名，以及每段都写空 speaker。token 改成按文档声明列顺序的短数组，
+    仍保留每个词的精确起止时间和正文，供自动裁切安全定位。
+    """
+    compact: list[dict[str, Any]] = []
+    for segment in segments:
+        row: dict[str, Any] = {
+            "start": segment["start"],
+            "end": segment["end"],
+            "text": segment["text"],
+        }
+        if segment.get("speaker"):
+            row["speaker"] = segment["speaker"]
+        tokens = segment.get("tokens")
+        if isinstance(tokens, list) and tokens:
+            row["tokens"] = [[token["start"], token["end"], token["text"]] for token in tokens]
+        compact.append(row)
+    return json.dumps(
+        {"token_columns": ["start", "end", "text"], "segments": compact},
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+
+
 @register("transcribe_asset")
 def transcribe_asset(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     from app.domain.voices.transcription import start_transcription
@@ -54,7 +81,7 @@ def transcribe_asset(db: Session, workflow: Workflow, config: dict[str, Any]) ->
     ]
     text = "\n".join(segment["text"] for segment in segments)
     # JSON 而不是 Python repr:模板把它嵌进 LLM 提示词时仍是一份机器可读、时间精确的逐字稿。
-    timed_text = json.dumps(segments, ensure_ascii=False, separators=(",", ":"))
+    timed_text = _compact_timed_text(segments)
     duration = max((float(segment["end"]) for segment in segments), default=0.0)
     return {
         "text": text,

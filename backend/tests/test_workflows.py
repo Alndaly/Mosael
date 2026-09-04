@@ -836,6 +836,89 @@ def test_llm_node_falls_back_when_provider_rejects_response_format(monkeypatch) 
     )
 
 
+def test_llm_node_falls_back_when_json_mode_returns_empty_content(monkeypatch) -> None:
+    """DeepSeek 的 JSON Output 可能 200 但 content 为空；这仍需继续降级，不能交给 JSON 解析器。"""
+    import json as _json
+
+    from app.domain.workflows.executors import ai as ai_nodes
+
+    client = fresh_client()
+    workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    attempts: list[dict] = []
+
+    def handler(request):
+        payload = _json.loads(request.content)
+        attempts.append(payload)
+        mode = (payload.get("response_format") or {}).get("type")
+        if mode == "json_schema":
+            return httpx.Response(
+                400,
+                json={"error": {"message": "response_format.type must be one of text, json_object"}},
+            )
+        if mode == "json_object":
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": ""}}],
+                    "usage": {"prompt_tokens": 3, "completion_tokens": 5},
+                },
+            )
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": '{"title":"海边"}'}}],
+                "usage": {"prompt_tokens": 7, "completion_tokens": 11},
+            },
+        )
+
+    _install_llm_transport(monkeypatch, ai_nodes, handler)
+
+    with SessionLocal() as db:
+        profile = add_provider(
+            db,
+            name="DeepSeek",
+            vendor="deepseek",
+            base_url="https://api.deepseek.com",
+            api_key="sk-test",
+            model="deepseek-v4-flash",
+        )
+        workflow = Workflow(workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []})
+        db.add(workflow)
+        db.flush()
+
+        with acting_as(db):
+            result = ai_nodes.llm(
+                db,
+                workflow,
+                {
+                    "profile_id": profile.id,
+                    "prompt": "生成标题",
+                    "response_format": "json_schema",
+                    "json_schema_name": "title",
+                    "json_schema": {
+                        "type": "object",
+                        "properties": {"title": {"type": "string"}},
+                        "required": ["title"],
+                        "additionalProperties": False,
+                    },
+                },
+            )
+            db.commit()
+
+    assert result == {"text": '{"title":"海边"}', "json": {"title": "海边"}}
+    assert [(one.get("response_format") or {}).get("type") for one in attempts] == [
+        "json_schema",
+        "json_object",
+        None,
+    ]
+    assert all(one.get("thinking") == {"type": "disabled"} for one in attempts)
+    with SessionLocal() as db:
+        from app.db.models import ProviderUsageEvent
+
+        usage = db.query(ProviderUsageEvent).filter_by(workspace_id=workspace_id).one()
+        assert usage.units == {"input_tokens": 10, "output_tokens": 16}
+
+
 def test_llm_node_locally_validates_schema_after_provider_response(monkeypatch) -> None:
     from app.domain.workflows.executors import ai as ai_nodes
 

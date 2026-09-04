@@ -108,7 +108,7 @@ def test_transcript_cleanup_template_has_valid_refs_and_provenance() -> None:
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "transcript_video_cleanup",
-        "template_version": 2,
+        "template_version": 3,
         "source": "official",
     }
 
@@ -133,6 +133,8 @@ def test_transcript_cleanup_template_has_valid_refs_and_provenance() -> None:
         and edge.get("kind", "control") == "control"
         for edge in graph["edges"]
     )
+    cleanup_plan = next(node for node in graph["nodes"] if node["id"] == "cleanup_plan")
+    assert "token_columns" in cleanup_plan["config"]["prompt"]
 
 
 def test_data_binding_normalization_is_lossless_and_idempotent() -> None:
