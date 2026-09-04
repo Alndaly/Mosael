@@ -5,6 +5,34 @@ commit list and downloadable artifacts.
 
 ## Unreleased
 
+## [1.0.0-beta2] - 2026-09-04
+
+### Added
+
+- Added synchronized screen-and-camera recording, optional system-audio capture, remembered camera
+  mirroring, explicit device-permission recovery, and a floating controller that keeps recordings alive
+  while navigating the rest of Mosael.
+- Added circular and rounded-rectangle clip masks plus configurable drop shadows, with matching preview,
+  project persistence, undo, and FFmpeg export behavior.
+- Added data backup and diagnostics settings, startup migration-plan validation, safer database restore and
+  upgrade handling, and relocatable local-backend launch paths.
+- Added a workflow community, end-to-end topic-video and transcript-cleanup workflows, immutable workflow
+  version history, and complete per-node execution history and output inspection.
+- Added optimistic revision conflict detection, actor-attributed activity events, and Notion-style spatial
+  discussions on Infinite Canvas with mentions, direct deletion, and author-controlled dragging.
+
+### Changed
+
+- Exposed Seedance 2.0 reference and first/last-frame video modes, stabilized media-reference slots, and
+  previewed audio references with the correct media interaction.
+- Made workflow node metadata and official data bindings authoritative, localized node ports consistently,
+  and limited executable revisions to changes that can affect a run.
+- Preserved ASR punctuation, exposed transcription-engine selection, and reduced structured transcript
+  analysis payloads while retaining the time-coded evidence needed by the model.
+- Replaced technical plugin function identifiers with human-readable tool names and descriptions.
+- Split Settings, workflow canvas presentation, provider definitions, process protocols, and API clients
+  along their domain boundaries without changing persisted user data.
+
 ### Fixed
 
 - Gave the macOS development shell its own Mosael bundle identity and re-signed it after branding, so privacy
@@ -16,21 +44,16 @@ commit list and downloadable artifacts.
 - Prevented requested system-audio capture from silently degrading into a mute screen recording when the macOS
   sharing picker returns no live audio track, and now explains how to retry with audio sharing enabled.
 
-### Added
-
-- Added an explicit recording-permission flow: camera and microphone access is now requested only after a user
-  action, denied screen/system-audio capture offers the relevant operating-system settings and retry actions,
-  and packaged macOS builds declare all camera, microphone, and system-audio usage descriptions.
-- Added synchronized screen-and-camera recording to the media library and editor media pool, producing
-  two independent assets from one recording session instead of baking the camera into the screen capture.
-- Added an optional, remembered camera mirror that flips both the live preview and saved camera asset while
-  leaving the independently recorded screen asset unchanged.
-- Kept active recordings alive across app navigation and collapsed the recorder into a non-blocking controller,
-  so the rest of Mosael remains usable while captured files retain their original workspace or project destination.
-- Added optional device-audio capture to screen recordings, including Windows loopback grants and the macOS
-  packaged-app permission required by supported system sharing pickers.
-- Added clip-level circular and rounded-rectangle video masks plus configurable drop shadows, with matching
-  Canvas preview, undoable project persistence, and FFmpeg export rendering.
+- Preserved raw LLM responses and parser diagnostics when structured output fails, accepted wrapped JSON,
+  handled unsupported response formats, and retained the full successful-to-failed workflow event history.
+- Stabilized workflow focus, inspector layout, current revisions across restarts, bounded version-history
+  refreshes, node-output framing, and the official video-pipeline bindings used by bundled workflows.
+- Fixed Infinite Canvas comment-mode click-through, accidental comment creation after drags, canvas scrolling
+  across comment nodes, comment draft focus and dragging, overlay dismissal, reference-slot focus, and node
+  interaction inside full-bleed overlays.
+- Restored nested image-preview interaction and kept media details visible beneath previews.
+- Unified Settings spacing ownership, typography, colors, radii, list/header rhythm, and bounded Team Activity
+  to an internally scrolling region instead of letting it grow with the event history.
 
 ## [1.0.0-beta1] - 2026-09-03
 
@@ -248,6 +271,7 @@ commit list and downloadable artifacts.
   flashing each section's list page first.
 - Prevented the editor assistant from covering the workspace when opened.
 
+[1.0.0-beta2]: https://github.com/Alndaly/Mosael/releases/tag/v1.0.0-beta2
 [1.0.0-beta1]: https://github.com/Alndaly/Mosael/releases/tag/v1.0.0-beta1
 [0.27.6]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.6
 [0.27.5]: https://github.com/Alndaly/Mosael/releases/tag/v0.27.5
