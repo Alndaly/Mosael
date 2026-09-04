@@ -185,7 +185,7 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
             source_type="workflow",
             source_id=workflow.id,
         ) as call:
-            text = chat(
+            raw_text = chat(
                 target,
                 messages,
                 temperature=float(payload.pop("temperature", 0.4)),
@@ -195,7 +195,8 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
                 call=call,
                 label="调用 LLM",
                 allow_response_format_fallback=allow_response_format_fallback,
-            ).strip()
+            )
+            text = raw_text.strip()
     except AiChatError as exc:
         raise WorkflowDomainError(str(exc)) from exc
     result: dict[str, Any] = {"text": text}
@@ -203,14 +204,32 @@ def llm(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, An
         try:
             result["json"] = _parse_json_response(text)
         except json.JSONDecodeError as exc:
-            raise WorkflowDomainError("LLM 未返回合法 JSON") from exc
+            raise WorkflowDomainError(
+                "LLM 未返回合法 JSON",
+                details={
+                    "kind": "llm_json_response",
+                    "model": target.model,
+                    "response_format": str(config.get("response_format")),
+                    "raw_response": raw_text,
+                    "parse_error": str(exc),
+                },
+            ) from exc
         if str(config.get("response_format")) == "json_schema":
             try:
                 validate_json_schema(instance=result["json"], schema=config.get("json_schema"))
             except SchemaError as exc:
                 raise WorkflowDomainError(f"JSON Schema 无效:{exc.message}") from exc
             except ValidationError as exc:
-                raise WorkflowDomainError(f"LLM 返回的 JSON 不符合 Schema:{exc.message}") from exc
+                raise WorkflowDomainError(
+                    f"LLM 返回的 JSON 不符合 Schema:{exc.message}",
+                    details={
+                        "kind": "llm_json_response",
+                        "model": target.model,
+                        "response_format": "json_schema",
+                        "raw_response": raw_text,
+                        "schema_error": exc.message,
+                    },
+                ) from exc
     return result
 
 

@@ -10,6 +10,7 @@ const h = vi.hoisted(() => ({
   error:
     "ARK request failed: https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks; " +
     '{"code":"InputImageSensitiveContentDetected.PrivacyInformation","request_id":"021788160646919b9f489096afc36acf450c00ec3935d23a968bb2"}',
+  events: [] as Array<Record<string, unknown>>,
 }));
 
 vi.mock("@/app/preferences", () => ({
@@ -19,7 +20,7 @@ vi.mock("@/app/preferences", () => ({
 vi.mock("@/api/client", () => ({
   getJob: async () => null,
   listJobChildren: async () => [],
-  listJobEvents: async () => [],
+  listJobEvents: async () => h.events,
 }));
 
 import { JobDetailDialog } from "./JobDetailDialog";
@@ -55,5 +56,39 @@ describe("任务执行详情宽度", () => {
     expect(dialog.className).toContain("w-[calc(100vw-2rem)]");
     expect(dialog.className).toContain("min-w-0");
     expect(error.parentElement?.className).toContain("min-w-0");
+  });
+
+  it("失败的 LLM 节点直接展示实际返回和解析原因", async () => {
+    h.events = [
+      {
+        id: "event-1",
+        job_id: "job-1",
+        type: "workflow.node.failed",
+        created_at: "2026-08-31T14:00:01Z",
+        payload: {
+          node_id: "llm",
+          name: "整理方案",
+          error: "LLM 未返回合法 JSON",
+          details: {
+            kind: "llm_json_response",
+            model: "m",
+            response_format: "json_object",
+            raw_response: "模型说：稍等，我来整理。",
+            parse_error: "Expecting value: line 1 column 1 (char 0)",
+          },
+        },
+      },
+    ];
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <JobDetailDialog job={{ ...job, kind: "workflow" }} onClose={vi.fn()} />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("模型说：稍等，我来整理。")).toBeTruthy();
+    expect(screen.getByText("json_object")).toBeTruthy();
+    expect(screen.getByText(/Expecting value/)).toBeTruthy();
   });
 });

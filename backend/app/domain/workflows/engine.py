@@ -96,10 +96,14 @@ def _run_workflow_thread(workflow_id: str, revision_id: str, job_id: str, params
             logger.info("workflow job %s: '%s' finished (%s)", job_id, workflow.name, job.status)
         except Exception as exc:  # noqa: BLE001 — 线程内兜底,失败必须落到 job 上
             logger.exception("workflow job %s ('%s') crashed", job_id, workflow.name)
+            failure = _failure_payload(exc)
             job.status = "failed"
-            job.error = str(exc)[:500]
+            job.error = failure["error"]
+            # JobOut 也保留一份终态现场。事件流是完整时间线；result.failure 让只读取 job 的
+            # 消费方同样能展示诊断，而不是只能看到一句“失败”。
+            job.result = {**(job.result or {}), "failure": failure}
             say(job, "jobMsg_workflowFailed")
-            emit_job_event(db, job.id, "workflow.failed", {"error": str(exc)[:500]})
+            emit_job_event(db, job.id, "workflow.failed", failure)
             notify(
                 db,
                 workflow.workspace_id,
@@ -110,6 +114,15 @@ def _run_workflow_thread(workflow_id: str, revision_id: str, job_id: str, params
                 payload={"workflow_id": workflow.id, "job_id": job.id},
             )
             db.commit()
+
+
+def _failure_payload(exc: Exception) -> dict[str, Any]:
+    """把异常变成任务总线可持久化的失败现场。"""
+    payload: dict[str, Any] = {"error": str(exc)[:500]}
+    details = getattr(exc, "details", None)
+    if isinstance(details, dict) and details:
+        payload["details"] = details
+    return payload
 
 
 def execute_graph(
@@ -257,7 +270,10 @@ def execute_graph(
                     outputs = future.result()
                 except Exception as exc:  # noqa: BLE001 —— 任一节点失败即整流失败
                     error = exc
-                    event("workflow.node.failed", {"node_id": nid, "name": node_label(nid), "error": str(exc)[:500]})
+                    event(
+                        "workflow.node.failed",
+                        {"node_id": nid, "name": node_label(nid), **_failure_payload(exc)},
+                    )
                     break
                 with lock:
                     context[nid] = outputs

@@ -932,8 +932,69 @@ def test_llm_node_rejects_invalid_json_response(monkeypatch) -> None:
                 ai_nodes.llm(db, workflow, {"profile_id": profile.id, "prompt": "x", "response_format": "json_object"})
         except WorkflowDomainError as exc:
             assert "合法 JSON" in str(exc)
+            assert exc.details == {
+                "kind": "llm_json_response",
+                "model": "m",
+                "response_format": "json_object",
+                "raw_response": "not json",
+                "parse_error": "Expecting value: line 1 column 1 (char 0)",
+            }
         else:
             raise AssertionError("expected WorkflowDomainError")
+
+
+def test_failed_llm_run_keeps_raw_response_in_job_events(monkeypatch) -> None:
+    """后台线程失败后，任务历史仍能回答“模型到底返回了什么”。"""
+    from app.domain.workflows.executors import ai as ai_nodes
+
+    client = fresh_client()
+    workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    _install_llm_transport(
+        monkeypatch,
+        ai_nodes,
+        lambda request: httpx.Response(200, json={"choices": [{"message": {"content": "模型返回的非 JSON 原文"}}]}),
+    )
+
+    with SessionLocal() as db:
+        profile = add_provider(
+            db, name="LLM", vendor="openai-compatible", base_url="https://example.test/v1", api_key="sk", model="m"
+        )
+        profile_id = profile.id
+        db.commit()
+
+    graph = {
+        "nodes": [
+            {"id": "start", "type": "start", "config": {"params": {}}},
+            {
+                "id": "llm",
+                "type": "llm",
+                "name": "整理方案",
+                "config": {
+                    "profile_id": profile_id,
+                    "prompt": "返回 JSON",
+                    "response_format": "json_object",
+                },
+            },
+        ],
+        "edges": [{"id": "e1", "source": "start", "target": "llm"}],
+    }
+    workflow = client.post(
+        "/api/workflows", json={"workspace_id": workspace_id, "name": "W", "graph": graph}
+    ).json()
+    job_id = client.post(f"/api/workflows/{workflow['id']}/run", json={"params": {}}).json()["id"]
+
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        job = client.get(f"/api/jobs/{job_id}").json()
+        if job["status"] in {"succeeded", "failed"}:
+            break
+        time.sleep(0.05)
+    assert job["status"] == "failed"
+
+    events = client.get(f"/api/jobs/{job_id}/events").json()
+    failed = next(event for event in events if event["type"] == "workflow.node.failed")
+    assert failed["payload"]["details"]["raw_response"] == "模型返回的非 JSON 原文"
+    assert failed["payload"]["details"]["response_format"] == "json_object"
 
 
 def test_llm_node_surfaces_provider_error_body(monkeypatch) -> None:

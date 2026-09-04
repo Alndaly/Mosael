@@ -7,6 +7,7 @@ import { useI18n } from "@/app/preferences";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
 import { outputType, type RegistryLike } from "@/features/workflows/analyze";
 import type { Step } from "@/features/workflows/runSteps";
+import { WorkflowFailureDetails } from "@/features/workflows/WorkflowFailureDetails";
 
 /**
  * 一次运行里,某个节点**真正产出了什么**。
@@ -159,6 +160,7 @@ export function RunOutputs({ registry, nodeType, step }: { registry: RegistryLik
           {step.error}
         </pre>
       )}
+      <WorkflowFailureDetails details={step.details} />
       {assetIds.length > 0 && <AssetRow assetIds={assetIds} />}
       {scalars.map(([key, value]) => (
         <ValueRow key={key} name={key} value={value} />

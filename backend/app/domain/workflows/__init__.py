@@ -62,7 +62,15 @@ def _generation_parameters_help() -> dict[str, str]:
 
 
 class WorkflowDomainError(RuntimeError):
-    pass
+    """可安全展示给工作流操作者的领域错误。
+
+    ``details`` 是给任务事件/历史界面的结构化诊断，不拼进短错误文案。这样列表仍然可读，
+    同时失败现场（例如 LLM 的真实响应）不会在异常跨过执行线程时被丢掉。
+    """
+
+    def __init__(self, message: str, *, details: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.details = details or {}
 
 
 # 节点类型注册表:同时驱动后端校验、前端节点面板和智能体的图编辑提示。

@@ -7,6 +7,7 @@ import { useI18n } from "@/app/preferences";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
 import type { RegistryLike } from "@/features/workflows/analyze";
 import { assetOutputs, parseIso, toSteps, type Step } from "@/features/workflows/runSteps";
+import { WorkflowFailureDetails } from "@/features/workflows/WorkflowFailureDetails";
 import { DOCKABLE_PANEL_FRAME_CLASS, PANEL_HEADER_CLASS, useFloatingPanel } from "@/features/workflows/useFloatingPanel";
 import type { CanvasAgentMode } from "@/components/agent/CanvasAgentChat";
 import { cn } from "@/lib/utils";
@@ -132,6 +133,14 @@ export function WorkflowRunHistory({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settledKey]);
   const steps = React.useMemo(() => toSteps(events.data ?? []), [events.data]);
+  React.useEffect(() => {
+    const failedWithDetails = steps.filter((step) => step.status === "failed" && step.details).map((step) => step.nid);
+    if (failedWithDetails.length === 0) return;
+    setExpanded((previous) => {
+      if (failedWithDetails.every((nid) => previous.has(nid))) return previous;
+      return new Set([...previous, ...failedWithDetails]);
+    });
+  }, [steps]);
 
   // 数据 2s 一轮询,但耗时显示要每秒走字:运行中的 run/节点用 now 与开始时间实时求差,
   // 而不是等下一次轮询把 updated_at 带回来。没有任何东西在跑时不启动定时器。
@@ -244,7 +253,7 @@ export function WorkflowRunHistory({
               )}
               <ol className="m-0 flex list-none flex-col gap-0.5 p-0">
                 {steps.map((s) => {
-                  const hasDetail = (s.outputs && Object.keys(s.outputs).length > 0) || Boolean(s.error);
+                  const hasDetail = (s.outputs && Object.keys(s.outputs).length > 0) || Boolean(s.error) || Boolean(s.details);
                   const open = expanded.has(s.nid);
                   return (
                     <li key={s.nid} className={cn("rounded-md text-xs", s.status === "skipped" && "opacity-55")}>
@@ -286,6 +295,11 @@ export function WorkflowRunHistory({
                         <p className="mx-1.5 mb-1 mt-0.5 whitespace-pre-wrap break-words rounded-md bg-[color-mix(in_oklab,var(--destructive)_12%,transparent)] px-2 py-1.5 text-ui-2xs leading-[1.5] text-destructive">
                           {s.error}
                         </p>
+                      )}
+                      {open && s.details && (
+                        <div className="mx-1.5 mb-1 mt-1">
+                          <WorkflowFailureDetails details={s.details} />
+                        </div>
                       )}
                       {open && s.outputs && assetOutputs(registry, nodeTypeById[s.nid] ?? "", s.outputs).length > 0 && (
                         <StepAssets assetIds={assetOutputs(registry, nodeTypeById[s.nid] ?? "", s.outputs)} />

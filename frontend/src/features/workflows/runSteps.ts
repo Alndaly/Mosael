@@ -20,6 +20,7 @@ export type Step = {
   startAt?: number;
   outputs?: Record<string, unknown>;
   error?: string;
+  details?: Record<string, unknown>;
 };
 
 
@@ -29,7 +30,13 @@ export function toSteps(events: TaskEvent[]): Step[] {
   const byNode = new Map<string, Step>();
   const sorted = [...events].sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? ""));
   for (const e of sorted) {
-    const p = (e.payload ?? {}) as { node_id?: string; name?: string; outputs?: Record<string, unknown>; error?: string };
+    const p = (e.payload ?? {}) as {
+      node_id?: string;
+      name?: string;
+      outputs?: Record<string, unknown>;
+      error?: string;
+      details?: Record<string, unknown>;
+    };
     const nid = p.node_id ?? "";
     if (!nid) continue;
     if (e.type === "workflow.node.started") {
@@ -47,6 +54,7 @@ export function toSteps(events: TaskEvent[]): Step[] {
       if (s) {
         s.status = "failed";
         s.error = p.error;
+        s.details = p.details;
         if (s.startAt != null && e.created_at) s.ms = Math.max(0, parseIso(e.created_at) - s.startAt);
       }
     } else if (e.type === "workflow.node.skipped") {
