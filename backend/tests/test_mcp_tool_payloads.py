@@ -50,6 +50,8 @@ ARGS: dict[str, dict[str, Any]] = {
     },
     "get_answer": {"question_id": "does-not-exist"},
     "list_generation_models": {},
+    # 空参 = 全部能力、全部执行面。真正会 422 的是 surface,而它在工具里就地校验了。
+    "list_provider_models": {},
     "list_plugin_tools": {},
     "list_publish_accounts": {},
     "browser_pool_list": {},

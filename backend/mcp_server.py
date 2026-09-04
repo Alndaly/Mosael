@@ -202,6 +202,7 @@ READ_ONLY_TOOLS = frozenset(
         "list_assets",
         "list_boards",
         "list_generation_models",
+        "list_provider_models",
         "list_jobs",
         "list_memories",
         "list_plugin_tools",
@@ -529,6 +530,73 @@ def generate_image(
         },
     )
     return _confirmation_reply(confirmation)
+
+
+#: 执行面的合法取值。后端那一侧是 Literal,填错只会换回一个 422 —— 而模型看到 422 不会说
+#: "我填错了参数",它会换个词再试一次。在这里当场拒绝,并且把合法值说出来。
+_SURFACES = ("all", "agent", "direct", "gateway", "automation")
+
+
+@mcp.tool()
+def list_provider_models(capability: str = "", surface: str = "") -> dict[str, Any]:
+    """List the AI connections and models this user has actually configured, by capability.
+
+    Read-only, no confirmation. Mosael has no built-in or fallback model — every AI call
+    names a connection the user created. So read this before writing a model into a workflow
+    `llm` node or a board node, and before telling the user what their setup can do. Do not
+    guess a model string from a vendor's name: an unconfigured one is not usable, and a
+    plausible-looking guess fails only later, at run time.
+
+    Each entry carries both halves a config needs: `profile_id` (the connection) and `model`.
+    A workflow `llm` node requires BOTH — the id cannot be derived from the provider's name,
+    and two connections can carry the same model.
+
+    `surface` is the execution channel, and it changes the answer. The AI Studio conversation
+    runs on "agent"; workflow `llm` nodes and board writing run on "automation", which is
+    "direct" (an API-key connection that has a base_url) plus "gateway" (a signed-in OAuth
+    subscription) — the run time picks between those two by how the connection authenticates.
+    So both kinds of connection do work inside a workflow. What does not is an API-key
+    connection with no base_url: it answers on "agent" and has no automation channel at all.
+    Pass the surface the config will actually run on; leave it empty to see everything. An
+    empty `models` list means different things per surface, so read the echoed `surface`
+    before telling the user they have nothing configured.
+
+    `capability` filters to one of the returned `capabilities`; empty returns all.
+
+    This answers "which models exist". For what an image or video model ACCEPTS — sizes,
+    durations, which source roles it takes — call list_generation_models instead.
+    """
+    if surface and surface not in _SURFACES:
+        raise ValueError(f"unknown surface {surface!r}; valid values are {list(_SURFACES)}")
+    # 能力清单从 provider-defaults 的回包推导 —— 它每种能力回一行。在这里另抄一份
+    # DEFAULTABLE_CAPABILITIES 就成了第二份名单,而后端加一种能力时没有任何东西会提醒它。
+    defaults = _get("/api/settings/provider-defaults")
+    known = [row["capability"] for row in defaults]
+    if capability and capability not in known:
+        raise ValueError(f"unknown capability {capability!r}; this backend has {known}")
+    #: 只收他**自己设过**的那一格:没设过就是没设过,不替他推断一个。
+    chosen = {
+        row["capability"]: (row.get("provider_profile_id"), row.get("model"))
+        for row in defaults
+        if row.get("provider_profile_id")
+    }
+    models: list[dict[str, Any]] = []
+    for one in [capability] if capability else known:
+        for item in _get(f"/api/settings/capability-models/{one}", {"surface": surface or "all"}):
+            models.append(
+                {
+                    "capability": one,
+                    "profile_id": item["provider_profile_id"],
+                    "provider": item["provider_name"],
+                    "model": item["model"],
+                    "display_name": item.get("display_name") or "",
+                    "is_default": chosen.get(one) == (item["provider_profile_id"], item["model"]),
+                    # 思考能力挂在**模型**上,不挂在供应商上。None = 还没探明,按"可能会"处理。
+                    "reasoning": item.get("reasoning"),
+                    "reasoning_effort": item.get("reasoning_effort"),
+                }
+            )
+    return {"surface": surface or "all", "capabilities": known, "models": models}
 
 
 @mcp.tool()

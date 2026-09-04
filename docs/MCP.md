@@ -7,7 +7,7 @@ summaries — never raw internal schemas.
 
 <!-- BEGIN generated: tools -->
 
-共 **64** 个工具,其中 **17** 个走确认卡。
+共 **65** 个工具,其中 **17** 个走确认卡。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -56,6 +56,7 @@ summaries — never raw internal schemas.
 | `list_memories` | 直接执行 | Read-only: list what you already remember in this workspace. |
 | `list_plugin_tools` | 直接执行 | Read-only: list tools exposed by the user's enabled plugin connections. |
 | `list_projects` | 直接执行 | Read-only: list video projects in a workspace (id, name, active_sequence_id). |
+| `list_provider_models` | 直接执行 | List the AI connections and models this user has actually configured, by capability. |
 | `list_publish_accounts` | 直接执行 | Read-only: the platform accounts already logged in, for publish_asset. |
 | `list_workflow_node_types` | 直接执行 | Read-only: list allowed workflow node types, or inspect one type in full. |
 | `list_workflows` | 直接执行 | Read-only: list VISUAL WORKFLOWS in a workspace. |
