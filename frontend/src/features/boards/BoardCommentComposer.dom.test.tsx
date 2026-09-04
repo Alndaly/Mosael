@@ -30,6 +30,29 @@ describe("画布评论编辑器", () => {
     })).toEqual(["user-2"]);
   });
 
+  it("点击评论正文时聚焦编辑器且不会把按下事件交给画布", async () => {
+    const user = userEvent.setup();
+    const onCanvasPointerDown = vi.fn();
+    const view = render(
+      <div onPointerDown={onCanvasPointerDown}>
+        <BoardCommentComposer
+          members={[]}
+          onSubmit={vi.fn()}
+          onCancel={vi.fn()}
+        />
+      </div>,
+    );
+    const editor = await waitFor(() =>
+      view.container.querySelector<HTMLElement>("[contenteditable='true']"),
+    );
+    expect(editor).toBeTruthy();
+
+    await user.click(editor as HTMLElement);
+
+    expect(editor).toHaveFocus();
+    expect(onCanvasPointerDown).not.toHaveBeenCalled();
+  });
+
   it("提交结构化正文与纯文本摘要", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const view = render(

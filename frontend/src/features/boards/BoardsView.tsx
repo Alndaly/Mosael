@@ -233,7 +233,7 @@ function BoardDetail({
   const [renaming, setRenaming] = React.useState(false);
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
   const [collaborationOpen, setCollaborationOpen] = React.useState(false);
-  const [reviewMode, setReviewMode] = React.useState(false);
+  const [commentMode, setCommentMode] = React.useState(false);
   const [activeCommentId, setActiveCommentId] = React.useState<string | null>(null);
 
   //: 画布上的助手。**和工作流那扇是同一个面板** —— 会话池、消息、确认卡都走同一套 agent
@@ -670,11 +670,11 @@ function BoardDetail({
             <Button
               variant="ghost"
               size="icon"
-              className={cn("h-8 w-8", reviewMode && "bg-secondary text-foreground")}
-              title={reviewMode ? t("boardReviewModeHint") : t("boardReviewMode")}
-              aria-label={t("boardReviewMode")}
-              aria-pressed={reviewMode}
-              onClick={() => setReviewMode((current) => !current)}
+              className={cn("h-8 w-8", commentMode && "bg-secondary text-foreground")}
+              title={commentMode ? t("boardCommentModeHint") : t("boardCommentMode")}
+              aria-label={t("boardCommentMode")}
+              aria-pressed={commentMode}
+              onClick={() => setCommentMode((current) => !current)}
             >
               <MessageSquarePlus size={14} />
             </Button>
@@ -682,8 +682,8 @@ function BoardDetail({
               variant="ghost"
               size="icon"
               className="h-8 w-8"
-              title={t("boardReviewOverview")}
-              aria-label={t("boardReviewOverview")}
+              title={t("boardDiscussionCenter")}
+              aria-label={t("boardDiscussionCenter")}
               onClick={() => setCollaborationOpen(true)}
             >
               <ListChecks size={14} />
@@ -798,7 +798,7 @@ function BoardDetail({
         showMinimap={showMinimap}
         onDropFiles={(files) => upload.mutateAsync(files)}
         uploading={upload.isPending}
-        reviewMode={reviewMode}
+        commentMode={commentMode}
         comments={comments.data ?? []}
         members={members.data?.members ?? []}
         activeCommentId={activeCommentId}
@@ -827,7 +827,7 @@ function BoardDetail({
         onOpenChange={setCollaborationOpen}
         board={board}
         onJumpToComment={(comment) => {
-          setReviewMode(true);
+          setCommentMode(true);
           setActiveCommentId(comment.id);
           setCollaborationOpen(false);
           requestAnimationFrame(() => api?.focusComment(comment));

@@ -111,6 +111,12 @@ export function focusBoardNode(nodes: Node[], nodeId: string): Node[] {
   return changed ? next : nodes;
 }
 
+/** A draft is a transient editor, not a canvas selection. Keep it stable until it is submitted or
+ * cancelled so clicks used to focus/type cannot silently move it to a new anchor. */
+export function canPlaceCommentDraft(commentMode: boolean, hasDraft: boolean): boolean {
+  return commentMode && !hasDraft;
+}
+
 interface Props {
   boardId: string;
   /** 提示词面板里 `@` 引用素材时去哪个工作区找。 */
@@ -167,8 +173,8 @@ interface Props {
   uploading?: boolean;
   /** Pixels covered by a docked panel on the right; excluded from fit-to-content. */
   rightOverlayWidth?: number;
-  /** Review mode is a separate interaction mode: a click places feedback instead of editing nodes. */
-  reviewMode?: boolean;
+  /** Comment mode is separate: a canvas or node click anchors a discussion instead of editing nodes. */
+  commentMode?: boolean;
   comments?: CollaborationComment[];
   members?: WorkspaceMember[];
   activeCommentId?: string | null;
@@ -179,7 +185,7 @@ interface Props {
   onReady?: (api: BoardCanvasApi) => void;
 }
 
-function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, onSpeak, onTrim, onGrabFrame, models, showMinimap = true, onDropFiles, uploading, rightOverlayWidth = 0, reviewMode = false, comments = [], members = [], activeCommentId, onSelectComment, onCreateComment, onReady }: Props) {
+function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, onSpeak, onTrim, onGrabFrame, models, showMinimap = true, onDropFiles, uploading, rightOverlayWidth = 0, commentMode = false, comments = [], members = [], activeCommentId, onSelectComment, onCreateComment, onReady }: Props) {
   const t = useI18n();
   const rf = React.useRef<ReactFlowInstance | null>(null);
   const surface = React.useRef<HTMLDivElement | null>(null);
@@ -193,9 +199,9 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
   );
 
   React.useEffect(() => {
-    if (!reviewMode) setDraftAnchor(null);
+    if (!commentMode) setDraftAnchor(null);
     else setNodes((current) => current.map((node) => (node.selected ? { ...node, selected: false } : node)));
-  }, [reviewMode, setNodes]);
+  }, [commentMode, setNodes]);
 
   // 文字改动直接落进节点 data —— 走 setNodes 而不是回写上层,理由同上:
   // 上层一变就重建节点,正在打字的 textarea 会失焦。
@@ -652,7 +658,8 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={(event, node) => {
-          if (reviewMode) {
+          if (commentMode) {
+            if (!canPlaceCommentDraft(commentMode, Boolean(draftAnchor))) return;
             const instance = rf.current;
             if (!instance) return;
             const point = instance.screenToFlowPosition({ x: event.clientX, y: event.clientY });
@@ -665,7 +672,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           setNodes((current) => focusBoardNode(current, node.id));
         }}
         onPaneClick={(event) => {
-          if (!reviewMode || !rf.current) return;
+          if (!canPlaceCommentDraft(commentMode, Boolean(draftAnchor)) || !rf.current) return;
           const point = rf.current.screenToFlowPosition({ x: event.clientX, y: event.clientY });
           setDraftAnchor({ kind: "canvas", x: point.x, y: point.y });
         }}
@@ -722,7 +729,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         onMoveEnd={(_event, next) => viewport.remember(next)}
         // 双击空白处直接加一张便签 —— 想法来的时候不该先去找按钮。
         onDoubleClick={(event) => {
-          if (reviewMode) return;
+          if (commentMode) return;
           if ((event.target as HTMLElement).closest(".react-flow__node")) return;
           const instance = rf.current;
           if (!instance) return;
@@ -737,7 +744,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           };
           setNodes((current) => [...current, ...toNodes([item])]);
         }}
-        className={cn(!ready && "opacity-0", reviewMode && "cursor-crosshair")}
+        className={cn(!ready && "opacity-0", commentMode && "cursor-crosshair")}
         proOptions={{ hideAttribution: false }}
         /* 触控板约定(Figma / Miro 那套):双指滑动 = 平移,捏合 = 缩放。**和工作流画布同一套** ——
            React Flow 默认 zoomOnScroll:true,而 macOS 触控板双指滑动发出的正是 wheel 事件,
@@ -748,12 +755,12 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         zoomOnPinch
         maxZoom={2.5}
         deleteKeyCode={["Backspace", "Delete"]}
-        nodesDraggable={!reviewMode}
-        nodesConnectable={!reviewMode}
-        elementsSelectable={!reviewMode}
+        nodesDraggable={!commentMode}
+        nodesConnectable={!commentMode}
+        elementsSelectable={!commentMode}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.2} />
-        {reviewMode && (
+        {commentMode && (
           <ViewportPortal>
             {comments.map((comment, index) => {
               const x = comment.anchor?.x;
@@ -763,9 +770,12 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
               return (
                 <div
                   key={comment.id}
-                  className="nodrag nopan absolute z-10 flex items-start gap-2"
+                  className="nodrag nopan pointer-events-auto absolute z-10 flex items-start gap-2"
                   style={{ left: x, top: y }}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onMouseDown={(event) => event.stopPropagation()}
                   onClick={(event) => event.stopPropagation()}
+                  onDoubleClick={(event) => event.stopPropagation()}
                 >
                   <button
                     type="button"
@@ -794,9 +804,12 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
             })}
             {draftAnchor && typeof draftAnchor.x === "number" && typeof draftAnchor.y === "number" && (
               <div
-                className="nodrag nopan absolute z-20 flex items-start gap-2"
+                className="nodrag nopan pointer-events-auto absolute z-20 flex items-start gap-2"
                 style={{ left: draftAnchor.x, top: draftAnchor.y }}
+                onPointerDown={(event) => event.stopPropagation()}
+                onMouseDown={(event) => event.stopPropagation()}
                 onClick={(event) => event.stopPropagation()}
+                onDoubleClick={(event) => event.stopPropagation()}
               >
                 <span className="grid h-7 w-7 -translate-x-1/2 -translate-y-1/2 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-panel)]">
                   <MessageSquare size={13} />
@@ -829,11 +842,11 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         />}
       </ReactFlow>
 
-      {reviewMode && (
+      {commentMode && (
         <div className="pointer-events-none absolute left-1/2 top-16 z-30 -translate-x-1/2 rounded-full border border-primary/30 bg-panel/80 px-3 py-1.5 text-ui-xs text-foreground shadow-[var(--shadow-panel)] backdrop-blur-xl">
-          <span className="font-semibold text-primary">{t("boardReviewMode")}</span>
+          <span className="font-semibold text-primary">{t("boardCommentMode")}</span>
           <span className="mx-1.5 text-muted-foreground">·</span>
-          <span className="text-muted-foreground">{t("boardReviewModeHint")}</span>
+          <span className="text-muted-foreground">{t("boardCommentModeHint")}</span>
         </div>
       )}
 

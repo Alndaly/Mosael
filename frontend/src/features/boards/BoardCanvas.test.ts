@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Node } from "@xyflow/react";
 
-import { focusBoardNode } from "./BoardCanvas";
+import { canPlaceCommentDraft, focusBoardNode } from "./BoardCanvas";
 
 describe("画板节点聚焦", () => {
   it("一次点击就只选中目标节点", () => {
@@ -19,5 +19,13 @@ describe("画板节点聚焦", () => {
   it("目标已选中时保持对象稳定", () => {
     const target = { id: "target", selected: true } as Node;
     expect(focusBoardNode([target], "target")[0]).toBe(target);
+  });
+});
+
+describe("画布评论落点", () => {
+  it("已有未发送评论时不允许点击画布迁移或重建评论卡", () => {
+    expect(canPlaceCommentDraft(true, false)).toBe(true);
+    expect(canPlaceCommentDraft(true, true)).toBe(false);
+    expect(canPlaceCommentDraft(false, false)).toBe(false);
   });
 });

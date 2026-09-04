@@ -132,7 +132,7 @@ export function BoardCommentComposer({
     autofocus: "end",
     editorProps: {
       attributes: {
-        class: "nodrag nopan nowheel min-h-20 w-full px-3 py-2 text-ui-sm leading-relaxed text-foreground outline-none",
+        class: "nodrag nopan nowheel min-h-20 w-full cursor-text px-3 py-2 text-ui-sm leading-relaxed text-foreground outline-none",
         "aria-label": t("commentCanvasPlaceholder"),
       },
       handleKeyDown: (_view, event) => {
@@ -164,7 +164,13 @@ export function BoardCommentComposer({
   submitRef.current = submit;
 
   return (
-    <div className="nodrag nopan nowheel w-72 overflow-hidden rounded-xl border border-border-strong bg-panel/95 shadow-[var(--shadow-panel)] backdrop-blur-xl">
+    <div
+      className="nodrag nopan nowheel w-72 cursor-default overflow-hidden rounded-xl border border-border-strong bg-panel/95 shadow-[var(--shadow-panel)] backdrop-blur-xl"
+      onPointerDown={(event) => event.stopPropagation()}
+      onMouseDown={(event) => event.stopPropagation()}
+      onClick={(event) => event.stopPropagation()}
+      onDoubleClick={(event) => event.stopPropagation()}
+    >
       <EditorContent editor={editor} />
       <div className="flex items-center justify-between border-t border-border px-2 py-1.5">
         <span className="text-ui-2xs text-muted-foreground">{t("commentMentionHint")}</span>
