@@ -134,6 +134,17 @@ export function shouldDismissCommentOverlay(
   return (hasActiveComment || hasDraft) && !pointerInsideOverlay;
 }
 
+export function shouldSuppressCommentPlacement(gesture: {
+  moved: boolean;
+  dismissedActive: boolean;
+  startedInsideOverlay: boolean;
+  endedInsideOverlay: boolean;
+}): boolean {
+  return gesture.moved
+    || gesture.dismissedActive
+    || (gesture.startedInsideOverlay && !gesture.endedInsideOverlay);
+}
+
 interface Props {
   boardId: string;
   /** 提示词面板里 `@` 引用素材时去哪个工作区找。 */
@@ -199,12 +210,14 @@ interface Props {
   onSelectComment?: (comment: CollaborationComment | null) => void;
   onCreateComment?: (anchor: NonNullable<CollaborationComment["anchor"]>, draft: CommentDraft) => Promise<unknown>;
   onMoveComment?: (comment: CollaborationComment, anchor: NonNullable<CollaborationComment["anchor"]>) => Promise<unknown>;
+  onDeleteComment?: (comment: CollaborationComment) => Promise<unknown>;
+  onExitCommentMode?: () => void;
   /** 把「加一项」交给上层 —— 顶栏那两组胶囊要摆在一起(和工作流详情页一致),
    *  而 add 依赖画布内部的 rf 实例和 setNodes,只能由画布提供。 */
   onReady?: (api: BoardCanvasApi) => void;
 }
 
-function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, onSpeak, onTrim, onGrabFrame, models, showMinimap = true, onDropFiles, uploading, rightOverlayWidth = 0, commentMode = false, comments = [], members = [], currentUserId, activeCommentId, onSelectComment, onCreateComment, onMoveComment, onReady }: Props) {
+function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, onSpeak, onTrim, onGrabFrame, models, showMinimap = true, onDropFiles, uploading, rightOverlayWidth = 0, commentMode = false, comments = [], members = [], currentUserId, activeCommentId, onSelectComment, onCreateComment, onMoveComment, onDeleteComment, onExitCommentMode, onReady }: Props) {
   const t = useI18n();
   const rf = React.useRef<ReactFlowInstance | null>(null);
   const surface = React.useRef<HTMLDivElement | null>(null);
@@ -212,7 +225,13 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
   const [ready, setReady] = React.useState(false);
   const [draftAnchor, setDraftAnchor] = React.useState<NonNullable<CollaborationComment["anchor"]> | null>(null);
   const [commentPositions, setCommentPositions] = React.useState<Record<string, { x: number; y: number }>>({});
-  const paneGesture = React.useRef<{ x: number; y: number; moved: boolean; dismissedActive: boolean } | null>(null);
+  const paneGesture = React.useRef<{
+    x: number;
+    y: number;
+    moved: boolean;
+    dismissedActive: boolean;
+    startedInsideOverlay: boolean;
+  } | null>(null);
   const suppressPaneClick = React.useRef(false);
   const commentDrag = React.useRef<{
     id: string;
@@ -389,8 +408,11 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
   //: 渲染用的节点 = 数据 + 这一轮的回调。**每轮重新贴** —— 回调闭包着最新的 setNodes,
   //: 而把它们存进节点数据会让节点的初值反过来依赖 setNodes,那个循环绕不开。
   const displayNodes = React.useMemo(
-    () => nodes.map((node) => ({ ...node, data: { ...node.data, onText: setText, onAspect: setAspect } })),
-    [nodes, setText, setAspect],
+    () => nodes.map((node) => ({
+      ...node,
+      data: { ...node.data, onText: setText, onAspect: setAspect, commentMode },
+    })),
+    [nodes, setText, setAspect, commentMode],
   );
 
   const serialized = React.useMemo(() => JSON.stringify(toCanvas(nodes, edges)), [nodes, edges]);
@@ -697,9 +719,17 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       onPointerDownCapture={(event) => {
         if (!commentMode || event.button !== 0) return;
         const target = event.target instanceof Element ? event.target : null;
-        if (target?.closest("[data-board-comment-overlay], [data-suggestion-menu]")) return;
+        if (target?.closest("[data-suggestion-menu]")) return;
+        const startedInsideOverlay = Boolean(target?.closest("[data-board-comment-overlay]"));
         const dismissedActive = Boolean(activeCommentId || draftAnchor);
-        paneGesture.current = { x: event.clientX, y: event.clientY, moved: false, dismissedActive };
+        paneGesture.current = {
+          x: event.clientX,
+          y: event.clientY,
+          moved: false,
+          dismissedActive: startedInsideOverlay ? false : dismissedActive,
+          startedInsideOverlay,
+        };
+        if (startedInsideOverlay) return;
         if (activeCommentId) onSelectComment?.(null);
         if (draftAnchor) setDraftAnchor(null);
       }}
@@ -708,10 +738,13 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         if (!gesture) return;
         if (Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) > 5) gesture.moved = true;
       }}
-      onPointerUpCapture={() => {
+      onPointerUpCapture={(event) => {
         const gesture = paneGesture.current;
         paneGesture.current = null;
-        if (!gesture?.moved && !gesture?.dismissedActive) return;
+        if (!gesture) return;
+        const target = event.target instanceof Element ? event.target : null;
+        const endedInsideOverlay = Boolean(target?.closest("[data-board-comment-overlay], [data-suggestion-menu]"));
+        if (!shouldSuppressCommentPlacement({ ...gesture, endedInsideOverlay })) return;
         // pointerup is followed by click. Keep the guard through that click, then release it.
         suppressPaneClick.current = true;
         window.setTimeout(() => { suppressPaneClick.current = false; }, 0);
@@ -746,13 +779,17 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           const point = rf.current.screenToFlowPosition({ x: event.clientX, y: event.clientY });
           setDraftAnchor({ kind: "canvas", x: point.x, y: point.y });
         }}
-        onConnect={(connection: Connection) => setEdges((current) => addEdge(connection, current))}
+        onConnect={(connection: Connection) => {
+          if (commentMode) return;
+          setEdges((current) => addEdge(connection, current));
+        }}
         // 可见的 + 在边界外，而真实锚点贴在边界上。扩大屏幕命中半径后，拖到 + 上即可
         // 自动吸附，不必再精确瞄准那个透明的 8px handle。
         connectionRadius={32}
         //: 线拉到空白处松手 —— 用户已经想好了「从这儿接下去」,弹一张单子让他直接选。
         //: 连到别的节点上时 isValid 为真,那是正常连线,不该弹。
         onConnectEnd={(event, connection) => {
+          if (commentMode) return;
           const instance = rf.current;
           const from = connection.fromNode?.id;
           if (connection.isValid || !instance || !from) return;
@@ -839,6 +876,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
               if (typeof x !== "number" || typeof y !== "number") return null;
               const active = activeCommentId === comment.id;
               const movable = Boolean(onMoveComment) && canMoveComment(comment.author_id, currentUserId);
+              const deletable = Boolean(onDeleteComment) && canMoveComment(comment.author_id, currentUserId);
               return (
                 <div
                   key={comment.id}
@@ -932,9 +970,25 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
                   </button>
                   {active && (
                     <div className="-ml-3.5 -translate-y-3 w-64 rounded-xl border border-border-strong bg-panel/95 p-3 text-left shadow-[var(--shadow-panel)] backdrop-blur-xl">
-                      <p className="mb-1 text-ui-xs font-semibold text-foreground">
-                        {comment.author?.display_name || comment.author?.username || t("teamSystemActor")}
-                      </p>
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <p className="min-w-0 truncate text-ui-xs font-semibold text-foreground">
+                          {comment.author?.display_name || comment.author?.username || t("teamSystemActor")}
+                        </p>
+                        {deletable && (
+                          <button
+                            type="button"
+                            data-delete-comment=""
+                            className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                            title={t("delete")}
+                            aria-label={t("delete")}
+                            onClick={() => {
+                              void Promise.resolve(onDeleteComment?.(comment)).catch(() => undefined);
+                            }}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </div>
                       <p className="whitespace-pre-wrap text-ui-sm leading-relaxed text-foreground">{comment.body}</p>
                     </div>
                   )}
@@ -983,14 +1037,22 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       </ReactFlow>
 
       {commentMode && (
-        <div
+        <button
+          type="button"
           data-board-comment-mode-hint=""
-          className="pointer-events-none absolute left-1/2 top-16 z-30 flex h-[42px] -translate-x-1/2 items-center rounded-full border border-primary/30 bg-panel/80 px-3 text-ui-xs text-foreground shadow-[var(--shadow-panel)] backdrop-blur-xl"
+          className="absolute left-1/2 top-2 z-30 flex h-[42px] -translate-x-1/2 items-center rounded-full border border-primary/30 bg-panel/80 px-3 text-ui-xs text-foreground shadow-[var(--shadow-panel)] backdrop-blur-xl transition-colors hover:bg-panel/95"
+          title={t("boardExitCommentMode")}
+          aria-label={t("boardExitCommentMode")}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            onExitCommentMode?.();
+          }}
         >
           <span className="font-semibold text-primary">{t("boardCommentMode")}</span>
           <span className="mx-1.5 text-muted-foreground">·</span>
           <span className="text-muted-foreground">{t("boardCommentModeHint")}</span>
-        </div>
+        </button>
       )}
 
 

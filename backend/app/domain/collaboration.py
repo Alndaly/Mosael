@@ -273,6 +273,28 @@ def move_comment(
     return comment
 
 
+def delete_comment(db: Session, comment: Comment, *, actor_id: str) -> None:
+    """Delete an author's own comment while retaining an immutable audit event."""
+    if comment.author_id != actor_id:
+        raise CommentOwnershipError("只能删除自己发布的评论")
+    for mention in db.scalars(
+        select(CommentMention).where(CommentMention.comment_id == comment.id)
+    ):
+        db.delete(mention)
+    record_activity(
+        db,
+        workspace_id=comment.workspace_id,
+        actor_id=actor_id,
+        action="comment.deleted",
+        subject_type=comment.subject_type,
+        subject_id=comment.subject_id,
+        summary="删除了评论",
+        payload={"comment_id": comment.id},
+    )
+    db.delete(comment)
+    db.flush()
+
+
 def request_review(
     db: Session,
     *,

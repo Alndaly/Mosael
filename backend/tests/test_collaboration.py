@@ -176,6 +176,46 @@ def test_team_member_cannot_move_another_authors_comment() -> None:
     assert listed[0]["anchor"]["y"] == 120
 
 
+def test_comment_author_can_delete_own_comment_but_team_member_cannot() -> None:
+    owner, mate, workspace, _users = _team()
+    board = owner.post("/api/boards", json={"workspace_id": workspace["id"]}).json()
+    created = owner.post(
+        "/api/comments",
+        json={
+            "workspace_id": workspace["id"],
+            "subject_type": "board",
+            "subject_id": board["id"],
+            "body": "这条评论可以由作者删除",
+            "anchor": {"kind": "canvas", "x": 100, "y": 120},
+        },
+    ).json()
+
+    denied = mate.delete(
+        f"/api/comments/{created['id']}", params={"workspace_id": workspace["id"]}
+    )
+    assert denied.status_code == 403
+
+    deleted = owner.delete(
+        f"/api/comments/{created['id']}", params={"workspace_id": workspace["id"]}
+    )
+    assert deleted.status_code == 204, deleted.text
+    listed = owner.get(
+        "/api/comments",
+        params={
+            "workspace_id": workspace["id"],
+            "subject_type": "board",
+            "subject_id": board["id"],
+        },
+    ).json()
+    assert listed == []
+    activity = owner.get(
+        "/api/activity",
+        params={"workspace_id": workspace["id"], "subject_type": "board", "subject_id": board["id"]},
+    ).json()
+    assert activity[0]["action"] == "comment.deleted"
+    assert activity[0]["payload"] == {"comment_id": created["id"]}
+
+
 def test_review_can_only_be_decided_by_assigned_reviewer() -> None:
     owner, mate, workspace, users = _team()
     board = owner.post("/api/boards", json={"workspace_id": workspace["id"]}).json()

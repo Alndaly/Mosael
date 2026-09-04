@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas.collaboration import (
@@ -17,6 +17,7 @@ from app.domain.collaboration import (
     CollaborationError,
     CommentOwnershipError,
     create_comment,
+    delete_comment,
     decide_review,
     list_activity,
     list_comments,
@@ -111,6 +112,21 @@ def update_comment_anchor(comment_id: str, body: CommentAnchorUpdate, db: DbSess
     except CollaborationError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.delete("/comments/{comment_id}", status_code=204)
+def remove_comment(comment_id: str, workspace_id: str, db: DbSession, user: CurrentUser) -> Response:
+    ensure_workspace_perm(db, user, workspace_id, "edit")
+    comment = db.get(Comment, comment_id)
+    if comment is None or comment.workspace_id != workspace_id:
+        raise HTTPException(status_code=404, detail="评论不存在")
+    try:
+        delete_comment(db, comment, actor_id=user.id)
+        db.commit()
+        return Response(status_code=204)
+    except CommentOwnershipError as exc:
+        db.rollback()
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
 @router.get("/reviews", response_model=list[ReviewOut])

@@ -6,6 +6,7 @@ import {
   canPlaceCommentDraft,
   focusBoardNode,
   shouldDismissCommentOverlay,
+  shouldSuppressCommentPlacement,
 } from "./BoardCanvas";
 
 describe("画板节点聚焦", () => {
@@ -37,6 +38,21 @@ describe("画布评论落点", () => {
   it("拖动画布或刚收起已有评论时不会在松手处创建评论", () => {
     expect(canPlaceCommentDraft(true, false, true, false)).toBe(false);
     expect(canPlaceCommentDraft(true, false, false, true)).toBe(false);
+  });
+
+  it("从已有评论内容拖到画布时不会把松手位置当成新评论落点", () => {
+    expect(shouldSuppressCommentPlacement({
+      moved: true,
+      dismissedActive: false,
+      startedInsideOverlay: true,
+      endedInsideOverlay: false,
+    })).toBe(true);
+    expect(shouldSuppressCommentPlacement({
+      moved: false,
+      dismissedActive: false,
+      startedInsideOverlay: true,
+      endedInsideOverlay: true,
+    })).toBe(false);
   });
 
   it("只有评论作者可以移动评论锚点", () => {

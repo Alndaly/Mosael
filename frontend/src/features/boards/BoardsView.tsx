@@ -16,6 +16,7 @@ import {
   getBoard,
   importAsset,
   addComment,
+  deleteComment,
   moveComment,
   listComments,
   listMembers,
@@ -294,6 +295,17 @@ function BoardDetail({
     onSuccess: (moved) => {
       queryClient.setQueryData<CollaborationComment[]>(commentsKey, (current) =>
         current?.map((comment) => (comment.id === moved.id ? moved : comment)),
+      );
+      void queryClient.invalidateQueries({ queryKey: ["activity", board.workspace_id] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const removeComment = useMutation({
+    mutationFn: (comment: CollaborationComment) => deleteComment(comment.id, board.workspace_id),
+    onSuccess: (_result, comment) => {
+      setActiveCommentId((current) => (current === comment.id ? null : current));
+      queryClient.setQueryData<CollaborationComment[]>(commentsKey, (current) =>
+        current?.filter((item) => item.id !== comment.id),
       );
       void queryClient.invalidateQueries({ queryKey: ["activity", board.workspace_id] });
     },
@@ -832,6 +844,8 @@ function BoardDetail({
           },
         })}
         onMoveComment={(comment, anchor) => moveCommentAnchor.mutateAsync({ comment, anchor })}
+        onDeleteComment={(comment) => removeComment.mutateAsync(comment)}
+        onExitCommentMode={() => setCommentMode(false)}
         onReady={setApi}
       />
 

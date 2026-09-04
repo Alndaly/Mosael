@@ -44,6 +44,8 @@ export type BoardNodeData = {
   onText: (id: string, text: string) => void;
   /** 媒体加载出来之后报一次自然宽高比 —— 节点据此把高度校正过来,画面才铺得满。 */
   onAspect: (id: string, ratio: number) => void;
+  /** 评论模式只接受标注，不暴露会修改画布结构的连线入口。 */
+  commentMode?: boolean;
 };
 
 /** 两侧各一个接点。**始终渲染但默认透明** —— 只在悬停/选中时显形:
@@ -56,7 +58,7 @@ export type BoardNodeData = {
  *
  * 默认透明是因为想法之间的关系是次要信息:一上来每个节点四周都挂着圆圈,画布看着像电路图。
  */
-function Ports({ visible }: { visible?: boolean }) {
+function Ports({ visible, disabled = false }: { visible?: boolean; disabled?: boolean }) {
   //: **handle 元素自己要小、要贴着边**,因为连线的锚点是从它的矩形算出来的 —— 把它做大
   //: 或者整个挪出去,线头就跟着跑,节点和线之间裂开一段空白(试过一版横跨边线的大盒子,
   //: 不成立:线头跟着可见的圆圈走了)。
@@ -68,6 +70,7 @@ function Ports({ visible }: { visible?: boolean }) {
   //: 点(点不中),拉近时又胀成一个盘子。同一份 transform 里连位移一起抵消,离节点的那段
   //: 距离也就不会跟着变(transform 从右往左作用,先位移再缩放)。
   const zoom = useStore((state) => state.transform[2]) || 1;
+  if (disabled) return null;
   //: **锚点是 handle 在那一侧的外边缘,不是中心** —— 源码里 Position.Right 返回 x+width、
   //: Position.Left 返回 x。而默认样式把 handle 居中骑在边线上(translate ±50%),于是线头
   //: 天生就落在边外 width/2 处;handle 越大离得越远(横跨边线的大盒子那版差了 28px)。
@@ -184,7 +187,7 @@ function nodeRunProps(item: BoardItem) {
 
 /** 便签:双击进入编辑。**单击不进** —— 单击是选中/拖动,想法摆位比改字更频繁。 */
 export function NoteNode({ data, selected }: NodeProps) {
-  const { item, onText } = data as unknown as BoardNodeData;
+  const { item, onText, commentMode } = data as unknown as BoardNodeData;
   const t = useI18n();
   const [editing, setEditing] = React.useState(false);
   const ref = React.useRef<HTMLTextAreaElement | null>(null);
@@ -210,7 +213,7 @@ export function NoteNode({ data, selected }: NodeProps) {
     >
       <NodeResizer minWidth={120} minHeight={80} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
       <TypeLabel kind="note" />
-      <Ports visible={selected} />
+      <Ports visible={selected} disabled={commentMode} />
       {editing ? (
         <textarea
           ref={ref}
@@ -331,7 +334,7 @@ function EmptySlot({ icon }: { icon: React.ReactNode }) {
 
 /** 图片:指向素材库的一份。加载不出来时说清楚 —— 素材可能已经被删了。 */
 export function ImageNode({ data, selected }: NodeProps) {
-  const { item, onAspect } = data as unknown as BoardNodeData;
+  const { item, onAspect, commentMode } = data as unknown as BoardNodeData;
   const state = nodeRunProps(item);
 
   return (
@@ -349,7 +352,7 @@ export function ImageNode({ data, selected }: NodeProps) {
     >
       <NodeResizer minWidth={80} minHeight={60} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
       <TypeLabel kind="image" />
-      <Ports visible={selected} />
+      <Ports visible={selected} disabled={commentMode} />
       {!item.asset_id ? (
         <PendingSlot item={item} icon={<ImageIcon size={20} />} />
       ) : (
@@ -423,7 +426,7 @@ export function FrameNode({ data, selected }: NodeProps) {
 
 /** 视频:就地播。**不自动播、不循环** —— 画板上可能同时摆着五段片子,一起动是噪音。 */
 export function VideoNode({ data, selected }: NodeProps) {
-  const { item, onAspect } = data as unknown as BoardNodeData;
+  const { item, onAspect, commentMode } = data as unknown as BoardNodeData;
   const state = nodeRunProps(item);
 
   return (
@@ -439,7 +442,7 @@ export function VideoNode({ data, selected }: NodeProps) {
     >
       <NodeResizer minWidth={120} minHeight={80} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
       <TypeLabel kind="video" />
-      <Ports visible={selected} />
+      <Ports visible={selected} disabled={commentMode} />
       {!item.asset_id ? (
         <PendingSlot item={item} icon={<FilmIcon size={20} />} />
       ) : (
@@ -459,7 +462,7 @@ export function VideoNode({ data, selected }: NodeProps) {
 /** 音频项。配音、旁白、BGM —— 摊在画板上的想法不该只有能看的。
  *  和图片/视频同一套三状态:空槽 / 生成中 / 有产出。 */
 function AudioNode({ data, selected }: NodeProps) {
-  const { item } = data as unknown as BoardNodeData;
+  const { item, commentMode } = data as unknown as BoardNodeData;
   const state = nodeRunProps(item);
   return (
     <div
@@ -468,7 +471,7 @@ function AudioNode({ data, selected }: NodeProps) {
     >
       <NodeResizer minWidth={200} minHeight={64} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
       <TypeLabel kind="audio" />
-      <Ports visible={selected} />
+      <Ports visible={selected} disabled={commentMode} />
       <div className="grid h-full w-full place-items-center overflow-hidden rounded-lg px-2">
         {!item.asset_id ? (
           <PendingSlot item={item} icon={<Music size={20} />} />

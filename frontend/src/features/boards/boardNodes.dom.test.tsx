@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BoardItem } from "@/api/client";
 
 vi.mock("@xyflow/react", () => ({
-  Handle: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  Handle: ({ children }: { children?: React.ReactNode }) => <div data-testid="connection-handle">{children}</div>,
   NodeResizer: () => null,
   Position: { Left: "left", Right: "right" },
   useStore: (selector: (state: { transform: [number, number, number] }) => unknown) =>
@@ -72,6 +72,7 @@ function renderNode(
   kind: BoardItem["kind"],
   status: NonNullable<BoardItem["run"]>["status"],
   extra: Partial<BoardItem> = {},
+  commentMode = false,
 ) {
   const Node = BOARD_NODE_TYPES[kind];
   const item: BoardItem = {
@@ -90,13 +91,18 @@ function renderNode(
   };
   const props = {
     id: item.id,
-    data: { item, onText: vi.fn(), onAspect: vi.fn() },
+    data: { item, onText: vi.fn(), onAspect: vi.fn(), commentMode },
     selected: false,
   } as unknown as React.ComponentProps<typeof Node>;
   return render(<Node {...props} />);
 }
 
 describe("无限画布节点运行状态", () => {
+  it.each(KINDS)("评论模式下 %s 节点不提供连线入口", (kind) => {
+    const { queryAllByTestId } = renderNode(kind, "idle", {}, true);
+    expect(queryAllByTestId("connection-handle")).toHaveLength(0);
+  });
+
   it.each(KINDS)("%s 节点的六种状态都有自己的节点级样式", (kind) => {
     for (const status of STATUSES) {
       const { container, unmount } = renderNode(kind, status);

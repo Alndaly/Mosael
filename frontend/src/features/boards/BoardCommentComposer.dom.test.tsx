@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import React from "react";
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -51,6 +51,23 @@ describe("画布评论编辑器", () => {
 
     expect(editor).toHaveFocus();
     expect(onCanvasPointerDown).not.toHaveBeenCalled();
+  });
+
+  it("触控板滚动经过评论编辑器时继续交给画布平移", async () => {
+    const onCanvasWheel = vi.fn();
+    const view = render(
+      <div onWheel={onCanvasWheel}>
+        <BoardCommentComposer members={[]} onSubmit={vi.fn()} onCancel={vi.fn()} />
+      </div>,
+    );
+    const editor = await waitFor(() =>
+      view.container.querySelector<HTMLElement>("[contenteditable='true']"),
+    );
+    expect(editor?.className).not.toContain("nowheel");
+    expect(editor?.closest(".nowheel")).toBeNull();
+
+    fireEvent.wheel(editor as HTMLElement, { deltaY: 80 });
+    expect(onCanvasWheel).toHaveBeenCalledTimes(1);
   });
 
   it("提交结构化正文与纯文本摘要", async () => {
