@@ -11,6 +11,15 @@ from app.api.schemas.browser import BrowserProfileCreate, BrowserProfileOut, Bro
 from app.api.schemas.jobs import JobOut, TaskEventOut
 from app.api.schemas.generation import SourceAssetRef
 from app.api.schemas.notifications import NotificationListOut, NotificationOut, NotifyRequest
+from app.api.schemas.collaboration import (
+    ActivityOut,
+    ActorOut,
+    CommentCreate,
+    CommentOut,
+    ReviewCreate,
+    ReviewDecision,
+    ReviewOut,
+)
 from app.api.schemas.scheduler import (
     RunScheduledTaskResponse,
     ScheduledTaskCreate,

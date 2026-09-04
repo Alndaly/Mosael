@@ -56,6 +56,9 @@ export interface BoardCanvasApi {
    *  从 canvas 建一次,回写上层的 canvas 状态它看不见,用户会以为「点了没反应」。
    *  值给 undefined 表示删掉那个字段。 */
   patch: (itemId: string, next: Partial<BoardItem>) => void;
+  /** Replace the local projection after a server conflict. This is intentionally explicit: normal
+   *  prop changes must not interrupt an in-progress drag or text edit. */
+  replace: (canvas: Canvas) => void;
   fitView: () => void;
   undo: () => void;
   redo: () => void;
@@ -592,6 +595,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     onReady?.({
       add,
       patch,
+      replace: (next) => restore(JSON.stringify(next)),
       fitView: () => {
         if (rf.current && surface.current) {
           void fitCanvasViewport(rf.current, surface.current, { right: rightOverlayWidth });
@@ -602,7 +606,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       canUndo: canUndo(history),
       canRedo: canRedo(history),
     });
-  }, [add, patch, onReady, rightOverlayWidth, stepBack, stepForward, history]);
+  }, [add, patch, onReady, rightOverlayWidth, stepBack, stepForward, history, restore]);
 
   return (
     // 详情页本身就是画布边界:四边满铺,不再套第二层卡片边框或圆角。

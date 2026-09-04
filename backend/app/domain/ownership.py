@@ -45,6 +45,10 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "Job": ("app/domain/jobs.py",),
     "TaskEvent": ("app/domain/jobs.py",),
     "Notification": ("app/domain/notifications.py",),
+    "ActivityEvent": ("app/domain/collaboration.py",),
+    "Comment": ("app/domain/collaboration.py",),
+    "CommentMention": ("app/domain/collaboration.py",),
+    "Review": ("app/domain/collaboration.py",),
     # 编排
     # 「谁的」与「共享给谁」是同一张表管的,所以它只归 sharing 域写。
     # 部署级开关只归 deployment 域写 —— 「这台后端怎么对外」只该有一处答案。

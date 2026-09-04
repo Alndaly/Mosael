@@ -22,6 +22,7 @@ import { toast } from "sonner";
 
 import {
   inviteMember,
+  listActivity,
   deleteWorkspace,
   listMembers,
   removeMember,
@@ -29,9 +30,10 @@ import {
   setMemberRole,
   type Workspace,
   type WorkspaceMember,
+  type ActivityEvent,
 } from "@/api/client";
 import { useAuth } from "@/app/auth";
-import { useI18n } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
@@ -41,11 +43,33 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { SettingsBlock, SettingsGroup, SettingsList, SettingsListItem } from "@/features/settings/ui";
+import { relativeTime } from "@/lib/time";
 
 /** Per-permission icon for the member-permissions popover (scannability). */
 const ROLE_RANK: Record<string, number> = { viewer: 0, editor: 1, admin: 2, owner: 3 };
 const atLeast = (role: string, min: string) => (ROLE_RANK[role] ?? -1) >= ROLE_RANK[min];
 const ASSIGNABLE = ["admin", "editor", "viewer"] as const;
+const ACTIVITY_LABELS: Record<string, string> = {
+  "board.created": "activity_board_created",
+  "board.updated": "activity_board_updated",
+  "board.renamed": "activity_board_renamed",
+  "board.deleted": "activity_board_deleted",
+  "workflow.revision_created": "activity_workflow_revision_created",
+  "sequence.operation": "activity_sequence_operation",
+  "job.created": "activity_job_created",
+  "comment.created": "activity_comment_created",
+  "review.requested": "activity_review_requested",
+  "review.approved": "activity_review_approved",
+  "review.changes_requested": "activity_review_changes_requested",
+  "review.cancelled": "activity_review_cancelled",
+};
+const ACTIVITY_SUBJECT_LABELS: Record<string, string> = {
+  board: "activitySubject_board",
+  workflow: "activitySubject_workflow",
+  sequence: "activitySubject_sequence",
+  asset: "activitySubject_asset",
+  job: "activitySubject_job",
+};
 
 export function TeamSection({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
@@ -54,6 +78,7 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
   const wid = workspace.id;
   const key = ["members", wid];
   const members = useQuery({ queryKey: key, queryFn: () => listMembers(wid) });
+  const activity = useQuery({ queryKey: ["activity", wid], queryFn: () => listActivity(wid) });
   const invalidate = () => void qc.invalidateQueries({ queryKey: key });
   const onErr = (error: Error) => toast.error(error.message);
   const [renameOpen, setRenameOpen] = React.useState(false);
@@ -128,6 +153,20 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
       </SettingsBlock>
 
       <SettingsBlock>
+        <div className="mb-3 flex items-center gap-2 text-ui-md font-semibold">
+          <Clock size={15} /> {t("teamActivity")}
+        </div>
+        <SettingsList>
+          {(activity.data ?? []).slice(0, 20).map((event) => (
+            <ActivityRow key={event.id} event={event} />
+          ))}
+          {activity.isSuccess && activity.data.length === 0 && (
+            <div className="px-3 py-5 text-center text-ui-sm text-muted-foreground">{t("teamActivityEmpty")}</div>
+          )}
+        </SettingsList>
+      </SettingsBlock>
+
+      <SettingsBlock>
         <SettingsList>
           {members.data?.members.map((m) => (
             <MemberRow
@@ -176,6 +215,25 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
         }}
       />
     </SettingsGroup>
+  );
+}
+
+function ActivityRow({ event }: { event: ActivityEvent }) {
+  const t = useI18n();
+  const { locale } = usePreferences();
+  const actor = event.actor?.display_name || event.actor?.username || t("teamSystemActor");
+  const actionKey = ACTIVITY_LABELS[event.action];
+  const summary = actionKey ? t(actionKey as never) : event.summary;
+  const subjectKey = ACTIVITY_SUBJECT_LABELS[event.subject_type];
+  const subject = subjectKey ? t(subjectKey as never) : event.subject_type;
+  return (
+    <SettingsListItem className="flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <div className="truncate text-ui-sm"><span className="font-semibold">{actor}</span> {summary}</div>
+        <div className="mt-0.5 truncate text-ui-xs text-muted-foreground">{subject} · {event.subject_id}</div>
+      </div>
+      <span className="shrink-0 text-ui-xs text-muted-foreground">{relativeTime(event.created_at, locale)}</span>
+    </SettingsListItem>
   );
 }
 

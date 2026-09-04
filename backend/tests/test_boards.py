@@ -52,6 +52,54 @@ def test_建改读删一条龙() -> None:
     assert client.get("/api/boards", params={"workspace_id": ws}).json() == []
 
 
+def test_base_revision_detects_stale_canvas_without_overwriting() -> None:
+    client = fresh_client()
+    ws = _workspace(client)
+    board = client.post("/api/boards", json={"workspace_id": ws, "name": "并发"}).json()
+    assert board["revision"] == 1
+
+    first = client.patch(
+        f"/api/boards/{board['id']}",
+        json={
+            "workspace_id": ws,
+            "base_revision": 1,
+            "canvas": {"items": [{"id": "a", "kind": "note", "x": 0, "y": 0}], "edges": []},
+        },
+    )
+    assert first.status_code == 200
+    assert first.json()["revision"] == 2
+
+    stale = client.patch(
+        f"/api/boards/{board['id']}",
+        json={
+            "workspace_id": ws,
+            "base_revision": 1,
+            "canvas": {"items": [{"id": "lost", "kind": "note", "x": 1, "y": 1}], "edges": []},
+        },
+    )
+    assert stale.status_code == 409
+    assert stale.json()["detail"] == {
+        "code": "board_revision_conflict",
+        "base_revision": 1,
+        "current_revision": 2,
+        "message": "画板已被其他操作更新（本地 v1，当前 v2）",
+    }
+    current = client.get(f"/api/boards/{board['id']}", params={"workspace_id": ws}).json()
+    assert current["canvas"]["items"][0]["id"] == "a"
+
+
+def test_identical_canvas_is_not_a_new_revision() -> None:
+    client = fresh_client()
+    ws = _workspace(client)
+    board = client.post("/api/boards", json={"workspace_id": ws}).json()
+    same = client.patch(
+        f"/api/boards/{board['id']}",
+        json={"workspace_id": ws, "base_revision": board["revision"], "canvas": board["canvas"]},
+    )
+    assert same.status_code == 200
+    assert same.json()["revision"] == board["revision"]
+
+
 def test_改名和存画布互不覆盖() -> None:
     """自动保存只发 canvas、重命名只发 name —— 各发各的那一半,另一半不能被 None 抹掉。
 

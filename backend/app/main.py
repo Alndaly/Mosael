@@ -40,6 +40,7 @@ from app.api.routes.settings import router as settings_router
 from app.api.routes.shares import router as shares_router
 from app.api.routes.publish import router as publish_router
 from app.api.routes.notifications import router as notifications_router
+from app.api.routes.collaboration import router as collaboration_router
 from app.api.routes.job_worker import router as job_worker_router
 from app.api.routes.browser_worker import router as browser_worker_router
 from app.api.routes.publish_worker import router as publish_worker_router
@@ -279,6 +280,7 @@ def create_app() -> FastAPI:
     app.include_router(sequences_router, prefix="/api", dependencies=protected)
     app.include_router(jobs_router, prefix="/api", dependencies=protected)
     app.include_router(notifications_router, prefix="/api", dependencies=protected)
+    app.include_router(collaboration_router, prefix="/api", dependencies=protected)
     app.include_router(generation_router, prefix="/api", dependencies=protected)
     app.include_router(scheduler_router, prefix="/api", dependencies=protected)
     app.include_router(workflows_router, prefix="/api", dependencies=protected)

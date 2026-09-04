@@ -96,6 +96,21 @@ def create_initial_revision(
         created_by=created_by,
     )
     db.add(revision)
+    db.flush()
+    from app.domain.collaboration import record_activity
+
+    record_activity(
+        db,
+        workspace_id=workflow.workspace_id,
+        actor_id=created_by,
+        action="workflow.revision_created",
+        subject_type="workflow",
+        subject_id=workflow.id,
+        summary="创建了工作流版本",
+        payload={"revision": 1, "source": source},
+        source_type="workflow_revision",
+        source_id=revision.id,
+    )
     return revision
 
 
@@ -171,6 +186,20 @@ def commit_graph_revision(
         )
         db.add(revision)
         db.flush()
+        from app.domain.collaboration import record_activity
+
+        record_activity(
+            db,
+            workspace_id=workflow.workspace_id,
+            actor_id=created_by,
+            action="workflow.revision_created",
+            subject_type="workflow",
+            subject_id=workflow.id,
+            summary="恢复了工作流版本" if source == "restore" else "保存了工作流版本",
+            payload={"revision": revision_number, "source": source},
+            source_type="workflow_revision",
+            source_id=revision.id,
+        )
         db.refresh(workflow)
         return revision
 

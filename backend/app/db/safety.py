@@ -11,7 +11,7 @@ from pathlib import Path
 # Bump this exactly when startup migrations change the persistent database shape.
 # SQLite stores it in the database header, making a real upgrade distinguishable
 # from an ordinary restart before any migration code touches user data.
-DATABASE_SCHEMA_VERSION = 2
+DATABASE_SCHEMA_VERSION = 3
 
 
 class DatabaseVersionTooNew(RuntimeError):

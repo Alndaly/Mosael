@@ -2556,6 +2556,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Activity */
+        get: operations["activity_api_activity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Comments */
+        get: operations["comments_api_comments_get"];
+        put?: never;
+        /** Add Comment */
+        post: operations["add_comment_api_comments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reviews */
+        get: operations["reviews_api_reviews_get"];
+        put?: never;
+        /** Add Review */
+        post: operations["add_review_api_reviews_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reviews/{review_id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review Decision */
+        post: operations["review_decision_api_reviews__review_id__decision_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/generation/sessions": {
         parameters: {
             query?: never;
@@ -5012,6 +5082,53 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** ActivityOut */
+        ActivityOut: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Actor Id */
+            actor_id?: string | null;
+            actor?: components["schemas"]["ActorOut"] | null;
+            /** Action */
+            action: string;
+            /** Subject Type */
+            subject_type: string;
+            /** Subject Id */
+            subject_id: string;
+            /** Summary */
+            summary: string;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** ActorOut */
+        ActorOut: {
+            /** Id */
+            id?: string | null;
+            /**
+             * Username
+             * @default
+             */
+            username: string;
+            /**
+             * Display Name
+             * @default
+             */
+            display_name: string;
+            /**
+             * Avatar Key
+             * @default
+             */
+            avatar_key: string;
+        };
         /** AddTrackRequest */
         AddTrackRequest: {
             /** Kind */
@@ -5639,6 +5756,8 @@ export interface components {
         BoardGenerate: {
             /** Workspace Id */
             workspace_id: string;
+            /** Base Revision */
+            base_revision?: number | null;
             /** Item Id */
             item_id: string;
             /**
@@ -5691,6 +5810,8 @@ export interface components {
             canvas: {
                 [key: string]: unknown;
             };
+            /** Revision */
+            revision: number;
             /**
              * Created At
              * Format: date-time
@@ -5709,6 +5830,8 @@ export interface components {
         BoardSpeak: {
             /** Workspace Id */
             workspace_id: string;
+            /** Base Revision */
+            base_revision?: number | null;
             /** Item Id */
             item_id: string;
             /** Text */
@@ -5736,6 +5859,8 @@ export interface components {
         BoardTrim: {
             /** Workspace Id */
             workspace_id: string;
+            /** Base Revision */
+            base_revision?: number | null;
             /** Item Id */
             item_id: string;
             /** Asset Id */
@@ -5767,6 +5892,8 @@ export interface components {
         BoardUpdate: {
             /** Workspace Id */
             workspace_id: string;
+            /** Base Revision */
+            base_revision?: number | null;
             /** Name */
             name?: string | null;
             /** Canvas */
@@ -5781,6 +5908,8 @@ export interface components {
         BoardWrite: {
             /** Workspace Id */
             workspace_id: string;
+            /** Base Revision */
+            base_revision?: number | null;
             /** Item Id */
             item_id: string;
             /** Prompt */
@@ -6037,6 +6166,50 @@ export interface components {
             workspace_id: string;
             /** Session Id */
             session_id: string;
+        };
+        /** CommentCreate */
+        CommentCreate: {
+            /** Workspace Id */
+            workspace_id: string;
+            /**
+             * Subject Type
+             * @enum {string}
+             */
+            subject_type: "board" | "workflow" | "sequence" | "asset";
+            /** Subject Id */
+            subject_id: string;
+            /** Body */
+            body: string;
+            /** Mentioned User Ids */
+            mentioned_user_ids?: string[];
+        };
+        /** CommentOut */
+        CommentOut: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Subject Type */
+            subject_type: string;
+            /** Subject Id */
+            subject_id: string;
+            /** Author Id */
+            author_id?: string | null;
+            author?: components["schemas"]["ActorOut"] | null;
+            /** Body */
+            body: string;
+            /** Mentioned User Ids */
+            mentioned_user_ids?: string[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** CommitIn */
         CommitIn: {
@@ -8176,6 +8349,70 @@ export interface components {
         RenameRequest: {
             /** Name */
             name: string;
+        };
+        /** ReviewCreate */
+        ReviewCreate: {
+            /** Workspace Id */
+            workspace_id: string;
+            /**
+             * Subject Type
+             * @enum {string}
+             */
+            subject_type: "board" | "workflow" | "sequence" | "asset";
+            /** Subject Id */
+            subject_id: string;
+            /** Reviewer Id */
+            reviewer_id: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+        };
+        /** ReviewDecision */
+        ReviewDecision: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "approved" | "changes_requested" | "cancelled";
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+        };
+        /** ReviewOut */
+        ReviewOut: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Subject Type */
+            subject_type: string;
+            /** Subject Id */
+            subject_id: string;
+            /** Requested By */
+            requested_by?: string | null;
+            requester?: components["schemas"]["ActorOut"] | null;
+            /** Reviewer Id */
+            reviewer_id: string;
+            reviewer?: components["schemas"]["ActorOut"] | null;
+            /** Status */
+            status: string;
+            /** Note */
+            note: string;
+            /** Decision Note */
+            decision_note: string;
+            /** Decided By */
+            decided_by?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Decided At */
+            decided_at?: string | null;
         };
         /** RunScheduledTaskResponse */
         RunScheduledTaskResponse: {
@@ -14791,6 +15028,207 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activity_api_activity_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+                subject_type?: string | null;
+                subject_id?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    comments_api_comments_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+                subject_type: string;
+                subject_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_comment_api_comments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommentCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reviews_api_reviews_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+                subject_type: string;
+                subject_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_review_api_reviews_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_decision_api_reviews__review_id__decision_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                review_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewOut"];
                 };
             };
             /** @description Validation Error */

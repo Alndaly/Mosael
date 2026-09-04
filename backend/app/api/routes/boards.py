@@ -9,6 +9,7 @@ from app.api.schemas import BoardCreate, BoardGenerate, BoardOut, BoardSpeak, Bo
 from app.db.models import Board
 from app.domain.boards import (
     BoardDomainError,
+    BoardRevisionConflict,
     create_board,
     delete_board,
     get_board,
@@ -24,6 +25,20 @@ from app.domain.permissions import ensure_workspace_access, ensure_workspace_per
 router = APIRouter(tags=["boards"])
 
 
+def _board_http_error(exc: BoardDomainError, *, default_status: int) -> HTTPException:
+    if isinstance(exc, BoardRevisionConflict):
+        return HTTPException(
+            status_code=409,
+            detail={
+                "code": "board_revision_conflict",
+                "base_revision": exc.base_revision,
+                "current_revision": exc.current_revision,
+                "message": str(exc),
+            },
+        )
+    return HTTPException(status_code=default_status, detail=str(exc))
+
+
 @router.get("/boards", response_model=list[BoardOut])
 def list_all(workspace_id: str, db: DbSession, user: CurrentUser) -> list[Board]:
     ensure_workspace_access(db, user, workspace_id)
@@ -36,14 +51,14 @@ def read(board_id: str, workspace_id: str, db: DbSession, user: CurrentUser) -> 
     try:
         return get_board(db, workspace_id, board_id)
     except BoardDomainError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _board_http_error(exc, default_status=404) from exc
 
 
 @router.post("/boards", response_model=BoardOut)
 def create(body: BoardCreate, db: DbSession, user: CurrentUser) -> Board:
     ensure_workspace_perm(db, user, body.workspace_id, "edit")
     try:
-        return create_board(db, workspace_id=body.workspace_id, name=body.name, canvas=body.canvas)
+        return create_board(db, workspace_id=body.workspace_id, name=body.name, canvas=body.canvas, actor_id=user.id)
     except BoardDomainError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -53,8 +68,24 @@ def update(board_id: str, body: BoardUpdate, db: DbSession, user: CurrentUser) -
     ensure_workspace_perm(db, user, body.workspace_id, "edit")
     try:
         return update_board(
-            db, workspace_id=body.workspace_id, board_id=board_id, name=body.name, canvas=body.canvas
+            db,
+            workspace_id=body.workspace_id,
+            board_id=board_id,
+            name=body.name,
+            canvas=body.canvas,
+            base_revision=body.base_revision,
+            actor_id=user.id,
         )
+    except BoardRevisionConflict as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "board_revision_conflict",
+                "base_revision": exc.base_revision,
+                "current_revision": exc.current_revision,
+                "message": str(exc),
+            },
+        ) from exc
     except BoardDomainError as exc:
         # 「画板不存在」是 404,「画布不合法」是 400 —— 两者对调用方意味着完全不同的下一步。
         status = 404 if "不存在" in str(exc) else 400
@@ -65,9 +96,9 @@ def update(board_id: str, body: BoardUpdate, db: DbSession, user: CurrentUser) -
 def remove(board_id: str, workspace_id: str, db: DbSession, user: CurrentUser) -> dict[str, bool]:
     ensure_workspace_perm(db, user, workspace_id, "edit")
     try:
-        delete_board(db, workspace_id, board_id)
+        delete_board(db, workspace_id, board_id, actor_id=user.id)
     except BoardDomainError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _board_http_error(exc, default_status=404) from exc
     return {"ok": True}
 
 
@@ -89,7 +120,11 @@ def generate(board_id: str, body: BoardGenerate, db: DbSession, user: CurrentUse
     try:
         board = get_board(db, body.workspace_id, board_id)
     except BoardDomainError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _board_http_error(exc, default_status=404) from exc
+    if body.base_revision is not None and body.base_revision != board.revision:
+        raise _board_http_error(
+            BoardRevisionConflict(body.base_revision, board.revision), default_status=409
+        )
 
     provider, model = body.provider.strip(), body.model.strip()
     if not provider or not model:
@@ -150,7 +185,11 @@ def generate(board_id: str, body: BoardGenerate, db: DbSession, user: CurrentUse
                 },
                 "run": {"status": "running", "job_id": job.id},
             },
+            base_revision=body.base_revision,
+            actor_id=user.id,
         )
+    except BoardRevisionConflict as exc:
+        raise HTTPException(status_code=409, detail={"code": "board_revision_conflict", "base_revision": exc.base_revision, "current_revision": exc.current_revision, "message": str(exc)}) from exc
     except BoardDomainError as exc:
         # 画布放不下这一项是**请求的问题**,不是服务器崩了 —— 漏出去的话调用方收到 500
         # 和一整页 traceback,而真正的原因(比如坐标不合法)一个字都看不到。
@@ -185,7 +224,7 @@ def write(board_id: str, body: BoardWrite, db: DbSession, user: CurrentUser) -> 
     try:
         board = get_board(db, body.workspace_id, board_id)
     except BoardDomainError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _board_http_error(exc, default_status=404) from exc
     existing = next(
         (str(one.get("text") or "") for one in (board.canvas or {}).get("items", []) if one.get("id") == body.item_id),
         "",
@@ -200,9 +239,11 @@ def write(board_id: str, body: BoardWrite, db: DbSession, user: CurrentUser) -> 
             board_id=board_id,
             item_id=body.item_id,
             status="running",
+            base_revision=body.base_revision,
+            actor_id=user.id,
         )
     except BoardDomainError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _board_http_error(exc, default_status=404) from exc
 
     #: 上游连过来的图 + 正文里 @ 到的图。**只收图片** —— 视频和音频这条路吃不下
     #: (要抽帧、要转写,那是 analyze_asset 的事),悄悄发过去只会换回一句看不懂的报错。
@@ -277,6 +318,7 @@ def write(board_id: str, body: BoardWrite, db: DbSession, user: CurrentUser) -> 
             item_id=body.item_id,
             status="failed",
             error=str(exc),
+            actor_id=user.id,
         )
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -294,9 +336,10 @@ def write(board_id: str, body: BoardWrite, db: DbSession, user: CurrentUser) -> 
                 "model": body.model,
                 "mentioned_asset_ids": [],
             },
+            actor_id=user.id,
         )
     except BoardDomainError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _board_http_error(exc, default_status=404) from exc
 
 
 @router.post("/boards/{board_id}/speak", response_model=BoardOut)
@@ -311,6 +354,11 @@ def speak(board_id: str, body: BoardSpeak, db: DbSession, user: CurrentUser) -> 
     from app.domain.voices.voices import VoiceError, start_synthesis
 
     ensure_workspace_perm(db, user, body.workspace_id, "edit")
+    board = get_board(db, body.workspace_id, board_id)
+    if body.base_revision is not None and body.base_revision != board.revision:
+        raise _board_http_error(
+            BoardRevisionConflict(body.base_revision, board.revision), default_status=409
+        )
     text = body.text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="没有可念的文字")
@@ -343,9 +391,11 @@ def speak(board_id: str, body: BoardSpeak, db: DbSession, user: CurrentUser) -> 
                 "form": {"prompt": text, "voice_id": body.voice_id},
                 "run": {"status": "running", "job_id": job.id},
             },
+            base_revision=body.base_revision,
+            actor_id=user.id,
         )
     except BoardDomainError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise _board_http_error(exc, default_status=400) from exc
 
 
 @router.post("/boards/{board_id}/trim", response_model=BoardOut)
@@ -359,6 +409,11 @@ def trim(board_id: str, body: BoardTrim, db: DbSession, user: CurrentUser) -> Bo
     from app.domain.jobs import reset_receipt, set_receipt
 
     ensure_workspace_perm(db, user, body.workspace_id, "edit")
+    board = get_board(db, body.workspace_id, board_id)
+    if body.base_revision is not None and body.base_revision != board.revision:
+        raise _board_http_error(
+            BoardRevisionConflict(body.base_revision, board.revision), default_status=409
+        )
     asset = db.get(Asset, body.asset_id)
     if asset is None or asset.workspace_id != body.workspace_id:
         raise HTTPException(status_code=404, detail="这个工作区里没有这份素材")
@@ -386,9 +441,11 @@ def trim(board_id: str, body: BoardTrim, db: DbSession, user: CurrentUser) -> Bo
                 "form": {"parameters": {"start": body.start, "end": body.end, "mute": body.mute}},
                 "run": {"status": "running", "job_id": job.id},
             },
+            base_revision=body.base_revision,
+            actor_id=user.id,
         )
     except BoardDomainError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise _board_http_error(exc, default_status=400) from exc
 
 
 def _look_at(db: DbSession, workspace_id: str, asset_ids: list[str]) -> tuple[list[dict], list[str]]:

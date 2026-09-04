@@ -377,6 +377,20 @@ def create_job(
     say(job, message, **(message_params or {}))
     db.add(job)
     db.flush()
+    from app.domain.collaboration import record_activity
+
+    record_activity(
+        db,
+        workspace_id=workspace_id,
+        actor_id=created_by,
+        action="job.created",
+        subject_type="job",
+        subject_id=job.id,
+        summary="发起了任务",
+        payload={"kind": kind, "status": job.status},
+        source_type="job",
+        source_id=job.id,
+    )
     # 事件里存 **key + 参数 + 缺省语言渲染的那句**,不是光存 key:界面上「执行记录」直接显示
     # payload.message,只存 key 的话用户看到的就是 `jobMsg_ttsRunning` 这种东西(真出过)。
     # 三样都留着,出口才能按请求方的语言重翻,而不翻的消费者也有一句人话可读 —— 与 say 同构。

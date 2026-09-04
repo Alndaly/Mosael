@@ -1471,6 +1471,95 @@ def _migrate_board_canvas_state() -> None:
                 )
 
 
+def _migrate_board_revision() -> None:
+    """Add the optimistic concurrency token to existing boards.
+
+    ``create_all`` creates it for new databases but cannot alter an existing table. Existing
+    projections all start at revision 1; the first accepted write advances them to 2.
+    """
+
+    inspector = inspect(engine)
+    if "boards" not in set(inspector.get_table_names()):
+        return
+    if "revision" in {column["name"] for column in inspector.get_columns("boards")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE boards ADD COLUMN revision INTEGER NOT NULL DEFAULT 1"))
+
+
+def _backfill_activity_events() -> None:
+    """Project existing actor-bearing history into the unified workspace activity stream.
+
+    The source pair is unique, so startup remains idempotent. The original rows stay authoritative
+    for workflow replay, sequence undo and job execution; ActivityEvent is their human-facing audit
+    projection, not a replacement for domain history.
+    """
+
+    tables = set(inspect(engine).get_table_names())
+    if "activity_events" not in tables:
+        return
+    with engine.begin() as conn:
+        if {"workflows", "workflow_revisions"}.issubset(tables):
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO activity_events
+                        (id, workspace_id, actor_id, action, subject_type, subject_id, summary,
+                         payload, source_type, source_id, created_at)
+                    SELECT lower(hex(randomblob(16))), w.workspace_id, r.created_by,
+                           'workflow.revision_created', 'workflow', r.workflow_id,
+                           CASE WHEN r.source = 'restore' THEN '恢复了工作流版本' ELSE '保存了工作流版本' END,
+                           json_object('revision', r.revision, 'source', r.source),
+                           'workflow_revision', r.id, r.created_at
+                    FROM workflow_revisions r JOIN workflows w ON w.id = r.workflow_id
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM activity_events e
+                        WHERE e.source_type = 'workflow_revision' AND e.source_id = r.id
+                    )
+                    """
+                )
+            )
+        if "sequence_operations" in tables:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO activity_events
+                        (id, workspace_id, actor_id, action, subject_type, subject_id, summary,
+                         payload, source_type, source_id, created_at)
+                    SELECT lower(hex(randomblob(16))), o.workspace_id, o.actor_id,
+                           'sequence.operation', 'sequence', o.sequence_id, '编辑了时间线',
+                           json_object('kind', o.kind, 'revision_before', o.revision_before,
+                                       'revision_after', o.revision_after),
+                           'sequence_operation', o.id, o.created_at
+                    FROM sequence_operations o
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM activity_events e
+                        WHERE e.source_type = 'sequence_operation' AND e.source_id = o.id
+                    )
+                    """
+                )
+            )
+        if "jobs" in tables:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO activity_events
+                        (id, workspace_id, actor_id, action, subject_type, subject_id, summary,
+                         payload, source_type, source_id, created_at)
+                    SELECT lower(hex(randomblob(16))), j.workspace_id, j.created_by,
+                           'job.created', 'job', j.id, '发起了任务',
+                           json_object('kind', j.kind, 'status', j.status),
+                           'job', j.id, j.created_at
+                    FROM jobs j
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM activity_events e
+                        WHERE e.source_type = 'job' AND e.source_id = j.id
+                    )
+                    """
+                )
+            )
+
+
 def _migrate_shared_venvs() -> None:
     """一个引擎一个运行环境。分开之前那个共用 venv 搬到它实际服务的引擎名下 —— 不留兼容路径,
     因为"一个环境被两个引擎装东西"正是「装一边弄坏另一边」的机制本身。"""
@@ -1700,6 +1789,7 @@ def migration_plan() -> MigrationPlan:
             *_steps(
                 MigrationPhase.AFTER_SCHEMA,
                 _migrate_drop_local_publish_accounts,
+                _migrate_board_revision,
                 _migrate_board_canvas_state,
                 _backfill_browser_pool,
                 _backfill_provider_models,
@@ -1715,6 +1805,9 @@ def migration_plan() -> MigrationPlan:
                 _migrate_browser_boolean_options,
                 _migrate_official_workflow_data_bindings,
                 _migrate_workflow_revisions,
+                # Projection comes last so rows synthesized by earlier migrations are visible
+                # immediately, rather than waiting for the next application startup.
+                _backfill_activity_events,
             ),
             *_steps(MigrationPhase.FILESYSTEM, _migrate_shared_venvs),
         )

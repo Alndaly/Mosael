@@ -89,6 +89,25 @@ _Avoid_: 恢复 `PRIVILEGED_NODE_TYPES` / `ensure_graph_node_privileges`;没有�
 批量操作**先全量校验再落库**:一个非法就整批不落,不留下改了一半的时间线。
 _Avoid_: 前端 `for (const id of ids) await 单个操作(...)`;把顺序依赖(如波纹删除要从后往前)留在前端
 
+### 协作
+
+**画板修订(Board revision)**:
+`Board.revision` 是无限画布当前投影的乐观并发令牌，不是历史快照编号。客户端每次写入携带
+`base_revision`，服务端以条件 UPDATE 原子认领并递增；内容未变化不递增。冲突返回 409 和当前
+修订，客户端重新载入当前投影，不得用一份过期的完整 canvas 静默覆盖队友或异步任务的结果。
+
+**活动事件(Activity event)**:
+工作区级、追加写、不可变的协作审计投影。产品领域通过 `domain/collaboration.record_activity`
+发布，事件保留 `actor_id` 并在读取时解析显示名；已有 WorkflowRevision.created_by、
+SequenceOperation.actor_id、Job.created_by 投影进同一事件流。领域历史仍是各自复现/撤销的事实源，
+Activity 不替代它们。
+
+**评论 / 提及 / 审阅(Comment / Mention / Review)**:
+都绑定 `(workspace_id, subject_type, subject_id)`，当前支持 board/workflow/sequence/asset。评论是
+协作事实；提及是评论与成员的关系，并借站内通知投递；审阅有 pending → approved / changes_requested /
+cancelled 的显式生命周期。通知只是送达机制，不是评论或审阅的事实源。
+_Avoid_: 把评论塞进画布 JSON；把通知当审计历史；仅在前端判断谁能作出审阅决定
+
 ### 渲染
 
 **场景模型**:

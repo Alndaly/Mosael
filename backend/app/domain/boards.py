@@ -22,10 +22,10 @@ import json
 import logging
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.db.models import Board
+from app.db.models import Board, now
 
 
 logger = logging.getLogger(__name__)
@@ -33,6 +33,15 @@ logger = logging.getLogger(__name__)
 
 class BoardDomainError(ValueError):
     pass
+
+
+class BoardRevisionConflict(BoardDomainError):
+    """The caller edited a projection older than the server's current board."""
+
+    def __init__(self, base_revision: int, current_revision: int):
+        self.base_revision = base_revision
+        self.current_revision = current_revision
+        super().__init__(f"画板已被其他操作更新（本地 v{base_revision}，当前 v{current_revision}）")
 
 
 #: 画板上能放什么。
@@ -280,13 +289,28 @@ def get_board(db: Session, workspace_id: str, board_id: str) -> Board:
     return board
 
 
-def create_board(db: Session, *, workspace_id: str, name: str, canvas: Any = None) -> Board:
+def create_board(
+    db: Session, *, workspace_id: str, name: str, canvas: Any = None, actor_id: str | None = None
+) -> Board:
     board = Board(
         workspace_id=workspace_id,
         name=(name or "").strip() or "新画板",
         canvas=normalize_canvas(canvas),
     )
     db.add(board)
+    db.flush()
+    from app.domain.collaboration import record_activity
+
+    record_activity(
+        db,
+        workspace_id=workspace_id,
+        actor_id=actor_id,
+        action="board.created",
+        subject_type="board",
+        subject_id=board.id,
+        summary="创建了无限画布",
+        payload={"revision": board.revision},
+    )
     db.commit()
     db.refresh(board)
     return board
@@ -299,6 +323,8 @@ def update_board(
     board_id: str,
     name: str | None = None,
     canvas: Any = None,
+    base_revision: int | None = None,
+    actor_id: str | None = None,
 ) -> Board:
     """改名和改画布是同一个入口,因为它们都是"这张板变了"。
 
@@ -306,16 +332,50 @@ def update_board(
     另一半不该被 None 覆盖掉。
     """
     board = get_board(db, workspace_id, board_id)
+    expected = board.revision if base_revision is None else base_revision
+    if expected != board.revision:
+        raise BoardRevisionConflict(expected, board.revision)
+    next_name = board.name
+    next_canvas = board.canvas
     if name is not None:
         cleaned = name.strip()
         if not cleaned:
             raise BoardDomainError("画板名不能为空")
-        board.name = cleaned
+        next_name = cleaned
     if canvas is not None:
-        board.canvas = _keep_arrived_results(board.canvas, normalize_canvas(canvas))
+        next_canvas = _keep_arrived_results(board.canvas, normalize_canvas(canvas))
+    if next_name == board.name and next_canvas == board.canvas:
+        return board
+    result = db.execute(
+        update(Board)
+        .where(
+            Board.id == board_id,
+            Board.workspace_id == workspace_id,
+            Board.revision == expected,
+        )
+        .values(name=next_name, canvas=next_canvas, revision=Board.revision + 1, updated_at=now())
+        .execution_options(synchronize_session=False)
+    )
+    if int(result.rowcount or 0) != 1:
+        db.rollback()
+        current = get_board(db, workspace_id, board_id)
+        raise BoardRevisionConflict(expected, current.revision)
+    from app.domain.collaboration import record_activity
+
+    action = "board.renamed" if name is not None and canvas is None else "board.updated"
+    record_activity(
+        db,
+        workspace_id=workspace_id,
+        actor_id=actor_id,
+        action=action,
+        subject_type="board",
+        subject_id=board_id,
+        summary="重命名了无限画布" if action == "board.renamed" else "编辑了无限画布",
+        payload={"base_revision": expected, "revision": expected + 1},
+    )
     db.commit()
-    db.refresh(board)
-    return board
+    db.expire_all()
+    return get_board(db, workspace_id, board_id)
 
 
 def _keep_arrived_results(stored: Any, incoming: dict[str, Any]) -> dict[str, Any]:
@@ -362,8 +422,20 @@ def _keep_arrived_results(stored: Any, incoming: dict[str, Any]) -> dict[str, An
     return {**incoming, "items": items}
 
 
-def delete_board(db: Session, workspace_id: str, board_id: str) -> None:
+def delete_board(db: Session, workspace_id: str, board_id: str, *, actor_id: str | None = None) -> None:
     board = get_board(db, workspace_id, board_id)
+    from app.domain.collaboration import record_activity
+
+    record_activity(
+        db,
+        workspace_id=workspace_id,
+        actor_id=actor_id,
+        action="board.deleted",
+        subject_type="board",
+        subject_id=board_id,
+        summary="删除了无限画布",
+        payload={"name": board.name, "revision": board.revision},
+    )
     db.delete(board)
     db.commit()
 
@@ -384,7 +456,15 @@ def receipt_to_item(board_id: str, item_id: str) -> dict[str, Any]:
     return {"kind": RECEIPT_KIND, "board_id": board_id, "item_id": item_id}
 
 
-def place_pending(db: Session, *, workspace_id: str, board_id: str, item: dict[str, Any]) -> Board:
+def place_pending(
+    db: Session,
+    *,
+    workspace_id: str,
+    board_id: str,
+    item: dict[str, Any],
+    base_revision: int | None = None,
+    actor_id: str | None = None,
+) -> Board:
     """把某一项的「正在生成」状态放到画布上,再去起任务。
 
     **顺序是这样的原因**:生成要几十秒,而用户点完就在看画布。先放一个占位,他立刻看得见
@@ -415,10 +495,14 @@ def place_pending(db: Session, *, workspace_id: str, board_id: str, item: dict[s
         merged.pop("asset_id", None)
         items[index] = merged
 
-    board.canvas = normalize_canvas({**canvas, "items": items})
-    db.commit()
-    db.refresh(board)
-    return board
+    return update_board(
+        db,
+        workspace_id=workspace_id,
+        board_id=board_id,
+        canvas={**canvas, "items": items},
+        base_revision=base_revision,
+        actor_id=actor_id,
+    )
 
 
 def set_text_write_run(
@@ -429,6 +513,8 @@ def set_text_write_run(
     item_id: str,
     status: str,
     error: str = "",
+    base_revision: int | None = None,
+    actor_id: str | None = None,
 ) -> Board:
     """同步便签写作的运行态也落在节点内；失败时不碰表单，用户可以原样重试。"""
     if status not in ("running", "failed"):
@@ -443,10 +529,14 @@ def set_text_write_run(
     if error.strip():
         run["error"] = error.strip()[:300]
     items[index] = {**items[index], "run": run}
-    board.canvas = normalize_canvas({**canvas, "items": items})
-    db.commit()
-    db.refresh(board)
-    return board
+    return update_board(
+        db,
+        workspace_id=workspace_id,
+        board_id=board_id,
+        canvas={**canvas, "items": items},
+        base_revision=base_revision,
+        actor_id=actor_id,
+    )
 
 
 def write_text(
@@ -458,6 +548,8 @@ def write_text(
     text: str,
     reset_form: bool = False,
     completed_form: dict[str, Any] | None = None,
+    base_revision: int | None = None,
+    actor_id: str | None = None,
 ) -> Board:
     """把一段写好的文字放进某一项。
 
@@ -478,38 +570,30 @@ def write_text(
         updated["form"] = form
         updated["run"] = {"status": "succeeded"}
     items[index] = updated
-    board.canvas = normalize_canvas({**canvas, "items": items})
-    db.commit()
-    db.refresh(board)
-    return board
+    return update_board(
+        db,
+        workspace_id=workspace_id,
+        board_id=board_id,
+        canvas={**canvas, "items": items},
+        base_revision=base_revision,
+        actor_id=actor_id,
+    )
 
 
-def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
-    """任务落终态 → 把产出填进画板上那一项。
+def _canvas_with_delivered_result(
+    canvas: dict[str, Any],
+    *,
+    item_id: str,
+    asset_ids: list[str],
+    job_status: str,
+    job_error: str,
+) -> dict[str, Any]:
+    """Merge one asynchronous receipt into the newest board projection.
 
-    **成功和失败都要处理。** 只处理成功的话,失败时画布上会永远留着一个转圈的占位 ——
-    用户不知道它是还在跑还是已经死了,而这两件事的下一步完全不同。失败就把占位摘掉,
-    任务中心那条失败记录才是讲原因的地方。
-
-    **一次可能出多张。** 图像接口的 n 选了几就回几张:第一张落进占位,其余的挨着它往右
-    摆开。只填第一张的话,用户按 4 张付了钱,画布上只多出一张 —— 而另外三张确实在素材库里,
-    只是他不知道。
+    The merge is deliberately pure so a compare-and-swap conflict can reload the latest canvas
+    and retry without replaying any task side effects.
     """
-    board = db.get(Board, str(receipt.get("board_id") or ""))
-    item_id = str(receipt.get("item_id") or "")
-    if board is None or not item_id:
-        return
-
-    canvas = board.canvas or {"items": [], "edges": []}
     items = list(canvas.get("items") or [])
-    #: **两种形状都要读。** 生成任务一次可能出多张,给的是 asset_ids;语音合成一次只出一段,
-    #: 给的是 asset_id —— 这不是新旧兼容,是两种任务本来就不同。只认一种的话,另一种落终态
-    #: 时占位会被当成失败摘掉:用户看到音频「生成完就没了」。
-    result = (job.result or {}) if job.status == "succeeded" else {}
-    asset_ids = [str(one) for one in (result.get("asset_ids") or []) if one]
-    if not asset_ids and result.get("asset_id"):
-        asset_ids = [str(result["asset_id"])]
-
     kept: list[dict[str, Any]] = []
     for item in items:
         if item.get("id") != item_id:
@@ -525,9 +609,9 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
                 {
                     **item,
                     "run": {
-                        "status": "cancelled" if str(job.status) == "cancelled" else "failed",
+                        "status": "cancelled" if job_status == "cancelled" else "failed",
                         #: 「生成失败」这句话由界面说；这里只存真正原因。
-                        "error": str(getattr(job, "error", "") or "")[:300] or str(job.status),
+                        "error": job_error[:300] or job_status,
                     },
                 }
             )
@@ -560,9 +644,60 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
     # 连线可能指着刚被摘掉的那一项 —— normalize 会拒绝悬空的线,所以先把它们去掉。
     alive = {item["id"] for item in kept}
     edges = [edge for edge in (canvas.get("edges") or []) if edge.get("source") in alive and edge.get("target") in alive]
-    board.canvas = normalize_canvas({"items": kept, "edges": edges})
-    db.commit()
-    logger.info("board %s item %s -> %s", board.id, item_id, ", ".join(asset_ids) or "(dropped)")
+    return {"items": kept, "edges": edges}
+
+
+def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
+    """任务落终态 → 把产出填进画板上那一项。
+
+    **成功和失败都要处理。** 失败时保留可重试的节点并结束转圈状态。
+
+    **一次可能出多张。** 第一张落进占位，其余产出挨着它向右排列。
+
+    **回执也遵守乐观并发。** 用户可能在任务完成的同一刻移动节点；冲突时重新读取最新画布，
+    只把任务终态合并进去再 CAS，既不覆盖用户编辑，也不让已完成的结果丢失。
+    """
+    board_id = str(receipt.get("board_id") or "")
+    item_id = str(receipt.get("item_id") or "")
+    if not board_id or not item_id:
+        return
+
+    job_status = str(job.status)
+    job_error = str(getattr(job, "error", "") or "")
+    actor_id = getattr(job, "created_by", None)
+    #: **两种形状都要读。** 生成任务一次可能出多张,给的是 asset_ids;语音合成一次只出一段,
+    #: 给的是 asset_id —— 这不是新旧兼容,是两种任务本来就不同。
+    result = (job.result or {}) if job_status == "succeeded" else {}
+    asset_ids = [str(one) for one in (result.get("asset_ids") or []) if one]
+    if not asset_ids and result.get("asset_id"):
+        asset_ids = [str(result["asset_id"])]
+
+    for attempt in range(4):
+        board = db.get(Board, board_id)
+        if board is None:
+            return
+        db.refresh(board)
+        canvas = _canvas_with_delivered_result(
+            board.canvas or {"items": [], "edges": []},
+            item_id=item_id,
+            asset_ids=asset_ids,
+            job_status=job_status,
+            job_error=job_error,
+        )
+        try:
+            update_board(
+                db,
+                workspace_id=board.workspace_id,
+                board_id=board.id,
+                canvas=canvas,
+                base_revision=board.revision,
+                actor_id=actor_id,
+            )
+            logger.info("board %s item %s -> %s", board.id, item_id, ", ".join(asset_ids) or "(failed)")
+            return
+        except BoardRevisionConflict:
+            if attempt == 3:
+                raise
 
 
 def install() -> None:

@@ -48,6 +48,7 @@ export interface Board {
   workspace_id: string;
   name: string;
   canvas: BoardCanvas;
+  revision: number;
   created_at: string;
   updated_at: string;
 }
@@ -66,7 +67,7 @@ export function createBoard(body: { workspace_id: string; name?: string }): Prom
 
 export function updateBoard(
   boardId: string,
-  body: { workspace_id: string; name?: string; canvas?: BoardCanvas },
+  body: { workspace_id: string; base_revision: number; name?: string; canvas?: BoardCanvas },
 ): Promise<Board> {
   return api<Board>(`/api/boards/${boardId}`, { method: "PATCH", body: JSON.stringify(body) });
 }
@@ -79,6 +80,7 @@ export function generateOnBoard(
   boardId: string,
   body: {
     workspace_id: string;
+    base_revision?: number;
     item_id: string;
     kind: "image" | "video";
     prompt: string;
@@ -98,6 +100,7 @@ export function writeOnBoard(
   boardId: string,
   body: {
     workspace_id: string;
+    base_revision?: number;
     item_id: string;
     prompt: string;
     provider_profile_id?: string;
@@ -111,7 +114,7 @@ export function writeOnBoard(
 
 export function speakOnBoard(
   boardId: string,
-  body: { workspace_id: string; item_id: string; text: string; voice_id?: string; x?: number; y?: number },
+  body: { workspace_id: string; base_revision?: number; item_id: string; text: string; voice_id?: string; x?: number; y?: number },
 ): Promise<Board> {
   return api<Board>(`/api/boards/${boardId}/speak`, { method: "POST", body: JSON.stringify(body) });
 }
@@ -120,6 +123,7 @@ export function trimOnBoard(
   boardId: string,
   body: {
     workspace_id: string;
+    base_revision?: number;
     item_id: string;
     asset_id: string;
     start: number;

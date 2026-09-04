@@ -17,6 +17,7 @@ function board(item: BoardItem): Board {
     id: "board-1",
     workspace_id: "workspace-1",
     name: "画板",
+    revision: 2,
     canvas: { items: [item], edges: [] },
     created_at: "",
     updated_at: "",

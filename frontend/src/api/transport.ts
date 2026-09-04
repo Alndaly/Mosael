@@ -31,6 +31,18 @@ export class ApiOfflineError extends Error {
   readonly offline = true;
 }
 
+/** HTTP failure with machine-readable status/body for conflict-aware domain clients. */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly body: string,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 export function setAuthToken(token: string | null): void {
   authToken = token;
   if (typeof window !== "undefined") {
@@ -74,7 +86,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     console.warn(
       `[api] ${method} ${path} → ${response.status} ${response.statusText}${body ? `: ${body}` : ""}`,
     );
-    throw new Error(humanError(response.status, response.statusText, body));
+    throw new ApiError(humanError(response.status, response.statusText, body), response.status, body);
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;

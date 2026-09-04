@@ -1716,8 +1716,7 @@ def _record_operation(
     ).rowcount
     if claimed == 0:
         raise SequenceDomainError("这个序列刚被改过,请刷新后重试")
-    db.add(
-        SequenceOperation(
+    operation = SequenceOperation(
             workspace_id=sequence.workspace_id,
             sequence_id=sequence.id,
             revision_before=before,
@@ -1727,6 +1726,21 @@ def _record_operation(
             actor_id=actor_id,
             undo_of=undo_of,
         )
+    db.add(operation)
+    db.flush()
+    from app.domain.collaboration import record_activity
+
+    record_activity(
+        db,
+        workspace_id=sequence.workspace_id,
+        actor_id=actor_id,
+        action="sequence.operation",
+        subject_type="sequence",
+        subject_id=sequence.id,
+        summary="编辑了时间线",
+        payload={"kind": kind, "revision_before": before, "revision_after": after},
+        source_type="sequence_operation",
+        source_id=operation.id,
     )
     db.add(
         SequenceRevision(
