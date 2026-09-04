@@ -394,7 +394,12 @@ export function CanvasAgentChat({
   return (
     <aside
       className={cn(
-        "grid grid-rows-[auto_minmax(0,1fr)_auto]",
+        // 行方向锁了,列方向也得锁:这个 grid 没声明 grid-template-columns,隐式列按 auto
+        // (= max-content)定尺 —— 标题栏那个 nowrap 的会话名会把整列撑到内容宽度。于是
+        // h2 的 truncate 永远不触发(它根本没被压缩过),省略号出不来;右端新建/停靠/关闭
+        // 三个按钮被推出面板,最后由外框的 overflow-hidden 一刀切掉。停靠态看着是「正文被
+        // 硬裁」,悬浮态看着是「窗口被内容撑宽」—— 同一个成因的两种样子。
+        "grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto]",
         DOCKABLE_PANEL_FRAME_CLASS,
         isFloating
           ? "fixed min-h-[380px] min-w-[320px] max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)] border-border-strong"

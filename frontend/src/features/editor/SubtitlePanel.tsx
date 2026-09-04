@@ -88,8 +88,10 @@ export function SubtitlePanel({
     [sequence],
   );
 
+  // 列轴要和行轴一起锁:不声明 grid-cols 的话隐式列按 max-content 定尺,样式条里任何一段
+  // nowrap 文案(字体名、时间码)都会把整栏撑过左侧面板的固定宽度。
   return (
-    <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto]">
+    <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto]">
       {onSetStyle && (
         <SubtitleStyleControls
           style={style}
