@@ -68,6 +68,8 @@ def add_comment(body: CommentCreate, db: DbSession, user: CurrentUser) -> dict:
             author_id=user.id,
             body=body.body,
             mentioned_user_ids=body.mentioned_user_ids,
+            anchor=body.anchor.model_dump(exclude_none=True) if body.anchor else None,
+            body_document=body.body_document,
         )
         comment_id = comment.id
         db.commit()

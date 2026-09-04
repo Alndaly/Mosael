@@ -6057,6 +6057,24 @@ export interface components {
             enabled?: boolean | null;
         };
         /**
+         * CanvasCommentAnchor
+         * @description Stable flow-space location for feedback attached to a board.
+         */
+        CanvasCommentAnchor: {
+            /**
+             * Kind
+             * @default canvas
+             * @constant
+             */
+            kind: "canvas";
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+            /** Node Id */
+            node_id?: string | null;
+        };
+        /**
          * CapabilityModelOut
          * @description 某能力下的一个候选模型(跨连接)。
          *
@@ -6182,6 +6200,11 @@ export interface components {
             body: string;
             /** Mentioned User Ids */
             mentioned_user_ids?: string[];
+            anchor?: components["schemas"]["CanvasCommentAnchor"] | null;
+            /** Body Document */
+            body_document?: {
+                [key: string]: unknown;
+            };
         };
         /** CommentOut */
         CommentOut: {
@@ -6200,6 +6223,11 @@ export interface components {
             body: string;
             /** Mentioned User Ids */
             mentioned_user_ids?: string[];
+            anchor?: components["schemas"]["CanvasCommentAnchor"] | null;
+            /** Body Document */
+            body_document?: {
+                [key: string]: unknown;
+            };
             /**
              * Created At
              * Format: date-time

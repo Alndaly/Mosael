@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, LayoutGrid, Map as MapIcon, Maximize2, MessageSquare, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
+import { Bot, LayoutGrid, ListChecks, Map as MapIcon, Maximize2, MessageSquarePlus, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -15,6 +15,9 @@ import {
   writeOnBoard,
   getBoard,
   importAsset,
+  addComment,
+  listComments,
+  listMembers,
   listBoards,
   updateBoard,
   type GenerationOption,
@@ -22,6 +25,7 @@ import {
   type BoardCanvas as Canvas,
   type BoardItem,
   type Workspace,
+  type CollaborationComment,
 } from "@/api/client";
 import type { MediaKind } from "@/features/boards/boardNodes";
 import { useI18n, usePreferences } from "@/app/preferences";
@@ -225,9 +229,12 @@ function BoardDetail({
   onSaved: () => void;
 }) {
   const t = useI18n();
+  const queryClient = useQueryClient();
   const [renaming, setRenaming] = React.useState(false);
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
   const [collaborationOpen, setCollaborationOpen] = React.useState(false);
+  const [reviewMode, setReviewMode] = React.useState(false);
+  const [activeCommentId, setActiveCommentId] = React.useState<string | null>(null);
 
   //: 画布上的助手。**和工作流那扇是同一个面板** —— 会话池、消息、确认卡都走同一套 agent
   //: session,两边的差别只有附给智能体的那行上下文。各记各的停靠状态和宽度:在画板上
@@ -244,6 +251,35 @@ function BoardDetail({
   //: 画布交出来的把手。顶栏那组按钮要和身份胶囊并排,而它们依赖画布内部状态。
   //: **类型从画布导出**,别在这儿再抄一份 —— 抄的那份少一个动作不会报错,只会让按钮点了没反应。
   const [api, setApi] = React.useState<BoardCanvasApi | null>(null);
+  const commentsKey = ["comments", board.workspace_id, "board", board.id] as const;
+  const comments = useQuery({
+    queryKey: commentsKey,
+    queryFn: () => listComments(board.workspace_id, "board", board.id),
+  });
+  const members = useQuery({
+    queryKey: ["members", board.workspace_id],
+    queryFn: () => listMembers(board.workspace_id),
+  });
+  const createComment = useMutation({
+    mutationFn: ({ anchor, draft }: {
+      anchor: NonNullable<CollaborationComment["anchor"]>;
+      draft: { body: string; bodyDocument: Record<string, unknown>; mentionedUserIds: string[] };
+    }) => addComment({
+      workspace_id: board.workspace_id,
+      subject_type: "board",
+      subject_id: board.id,
+      body: draft.body,
+      body_document: draft.bodyDocument,
+      mentioned_user_ids: draft.mentionedUserIds,
+      anchor,
+    }),
+    onSuccess: (comment) => {
+      setActiveCommentId(comment.id);
+      void queryClient.invalidateQueries({ queryKey: commentsKey });
+      void queryClient.invalidateQueries({ queryKey: ["activity", board.workspace_id] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
   // Every mutation reads and advances this token. Keeping it in a ref avoids rebuilding callbacks
   // after each autosave while still making the next request depend on the latest server response.
   const revision = React.useRef(board.revision);
@@ -631,17 +667,28 @@ function BoardDetail({
           </div>
 
           <div className={cn("flex flex-wrap items-center gap-1 rounded-full p-1", CANVAS_GLASS_SURFACE_CLASS)}>
-            {/* 全览可关 —— 它占着右下角一块不小的地方,图小的时候纯属挡视线。记在本地。 */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn("h-8 w-8", reviewMode && "bg-secondary text-foreground")}
+              title={reviewMode ? t("boardReviewModeHint") : t("boardReviewMode")}
+              aria-label={t("boardReviewMode")}
+              aria-pressed={reviewMode}
+              onClick={() => setReviewMode((current) => !current)}
+            >
+              <MessageSquarePlus size={14} />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
               className="h-8 w-8"
-              title={t("boardCollaboration")}
-              aria-label={t("boardCollaboration")}
+              title={t("boardReviewOverview")}
+              aria-label={t("boardReviewOverview")}
               onClick={() => setCollaborationOpen(true)}
             >
-              <MessageSquare size={14} />
+              <ListChecks size={14} />
             </Button>
+            {/* 全览可关 —— 它占着右下角一块不小的地方,图小的时候纯属挡视线。记在本地。 */}
             <Button
               variant="ghost"
               size="icon"
@@ -751,6 +798,19 @@ function BoardDetail({
         showMinimap={showMinimap}
         onDropFiles={(files) => upload.mutateAsync(files)}
         uploading={upload.isPending}
+        reviewMode={reviewMode}
+        comments={comments.data ?? []}
+        members={members.data?.members ?? []}
+        activeCommentId={activeCommentId}
+        onSelectComment={(comment) => setActiveCommentId(comment.id)}
+        onCreateComment={(anchor, draft) => createComment.mutateAsync({
+          anchor,
+          draft: {
+            body: draft.body,
+            bodyDocument: draft.bodyDocument as Record<string, unknown>,
+            mentionedUserIds: draft.mentionedUserIds,
+          },
+        })}
         onReady={setApi}
       />
 
@@ -762,7 +822,17 @@ function BoardDetail({
         onSubmit={rename}
       />
 
-      <BoardCollaborationDialog open={collaborationOpen} onOpenChange={setCollaborationOpen} board={board} />
+      <BoardCollaborationDialog
+        open={collaborationOpen}
+        onOpenChange={setCollaborationOpen}
+        board={board}
+        onJumpToComment={(comment) => {
+          setReviewMode(true);
+          setActiveCommentId(comment.id);
+          setCollaborationOpen(false);
+          requestAnimationFrame(() => api?.focusComment(comment));
+        }}
+      />
 
       <ConfirmDialog
         open={confirmingDelete}

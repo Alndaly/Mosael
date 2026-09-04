@@ -17343,6 +17343,43 @@
         "type": "object",
         "title": "BrowserProfileUpdate"
       },
+      "CanvasCommentAnchor": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "canvas",
+            "title": "Kind",
+            "default": "canvas"
+          },
+          "x": {
+            "type": "number",
+            "title": "X"
+          },
+          "y": {
+            "type": "number",
+            "title": "Y"
+          },
+          "node_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Node Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "CanvasCommentAnchor",
+        "description": "Stable flow-space location for feedback attached to a board."
+      },
       "CapabilityModelOut": {
         "properties": {
           "provider_profile_id": {
@@ -17665,6 +17702,21 @@
             },
             "type": "array",
             "title": "Mentioned User Ids"
+          },
+          "anchor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CanvasCommentAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "body_document": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Body Document"
           }
         },
         "type": "object",
@@ -17725,6 +17777,21 @@
             },
             "type": "array",
             "title": "Mentioned User Ids"
+          },
+          "anchor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CanvasCommentAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "body_document": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Body Document"
           },
           "created_at": {
             "type": "string",

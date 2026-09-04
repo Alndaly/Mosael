@@ -7,6 +7,7 @@ import {
   NodeToolbar,
   Position,
   ReactFlowProvider,
+  ViewportPortal,
   addEdge,
   useEdgesState,
   useNodesState,
@@ -15,9 +16,9 @@ import {
   type Node,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { Copy, FileUp, Group, Loader2, Maximize2, Replace, Scissors, Sparkles, Trash2 } from "lucide-react";
+import { Copy, FileUp, Group, Loader2, Maximize2, MessageSquare, Replace, Scissors, Sparkles, Trash2 } from "lucide-react";
 
-import { assetFileUrl, assetPreviewUrl } from "@/api/client";
+import { assetFileUrl, assetPreviewUrl, type CollaborationComment, type WorkspaceMember } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
 import { fitCanvasViewport } from "@/components/app/fitCanvasViewport";
@@ -34,6 +35,7 @@ import { NoteComposer } from "@/features/boards/NoteComposer";
 import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, kindIcon, kindText, SPAWNABLE_KINDS, type MediaKind } from "@/features/boards/boardNodes";
 import { itemFormResetKey, itemIsRunning } from "@/features/boards/boardItemState";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
+import { BoardCommentComposer, type CommentDraft } from "@/features/boards/BoardCommentComposer";
 
 /**
  * 创意画板的画布。
@@ -60,6 +62,7 @@ export interface BoardCanvasApi {
    *  prop changes must not interrupt an in-progress drag or text edit. */
   replace: (canvas: Canvas) => void;
   fitView: () => void;
+  focusComment: (comment: CollaborationComment) => void;
   undo: () => void;
   redo: () => void;
   canUndo: boolean;
@@ -164,22 +167,35 @@ interface Props {
   uploading?: boolean;
   /** Pixels covered by a docked panel on the right; excluded from fit-to-content. */
   rightOverlayWidth?: number;
+  /** Review mode is a separate interaction mode: a click places feedback instead of editing nodes. */
+  reviewMode?: boolean;
+  comments?: CollaborationComment[];
+  members?: WorkspaceMember[];
+  activeCommentId?: string | null;
+  onSelectComment?: (comment: CollaborationComment) => void;
+  onCreateComment?: (anchor: NonNullable<CollaborationComment["anchor"]>, draft: CommentDraft) => Promise<unknown>;
   /** 把「加一项」交给上层 —— 顶栏那两组胶囊要摆在一起(和工作流详情页一致),
    *  而 add 依赖画布内部的 rf 实例和 setNodes,只能由画布提供。 */
   onReady?: (api: BoardCanvasApi) => void;
 }
 
-function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, onSpeak, onTrim, onGrabFrame, models, showMinimap = true, onDropFiles, uploading, rightOverlayWidth = 0, onReady }: Props) {
+function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, onSpeak, onTrim, onGrabFrame, models, showMinimap = true, onDropFiles, uploading, rightOverlayWidth = 0, reviewMode = false, comments = [], members = [], activeCommentId, onSelectComment, onCreateComment, onReady }: Props) {
   const t = useI18n();
   const rf = React.useRef<ReactFlowInstance | null>(null);
   const surface = React.useRef<HTMLDivElement | null>(null);
   const viewport = usePersistentViewport(`board:${boardId}`);
   const [ready, setReady] = React.useState(false);
+  const [draftAnchor, setDraftAnchor] = React.useState<NonNullable<CollaborationComment["anchor"]> | null>(null);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(toNodes(canvas.items));
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(
     canvas.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target })),
   );
+
+  React.useEffect(() => {
+    if (!reviewMode) setDraftAnchor(null);
+    else setNodes((current) => current.map((node) => (node.selected ? { ...node, selected: false } : node)));
+  }, [reviewMode, setNodes]);
 
   // 文字改动直接落进节点 data —— 走 setNodes 而不是回写上层,理由同上:
   // 上层一变就重建节点,正在打字的 textarea 会失焦。
@@ -601,6 +617,13 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           void fitCanvasViewport(rf.current, surface.current, { right: rightOverlayWidth });
         }
       },
+      focusComment: (comment) => {
+        const x = comment.anchor?.x;
+        const y = comment.anchor?.y;
+        if (rf.current && typeof x === "number" && typeof y === "number") {
+          void rf.current.setCenter(x, y, { zoom: Math.max(rf.current.getZoom(), 0.9), duration: 350 });
+        }
+      },
       undo: stepBack,
       redo: stepForward,
       canUndo: canUndo(history),
@@ -629,10 +652,22 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={(event, node) => {
+          if (reviewMode) {
+            const instance = rf.current;
+            if (!instance) return;
+            const point = instance.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+            setDraftAnchor({ kind: "canvas", x: point.x, y: point.y, node_id: node.id });
+            return;
+          }
           // 修饰键交给 React Flow 保留框选/多选语义；普通点击则显式聚焦，不能依赖它的内部
           // selection change 与受控 nodes 回写谁先落地，否则偶发要第二次点击才会稳定选中。
           if (event.shiftKey || event.metaKey || event.ctrlKey) return;
           setNodes((current) => focusBoardNode(current, node.id));
+        }}
+        onPaneClick={(event) => {
+          if (!reviewMode || !rf.current) return;
+          const point = rf.current.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+          setDraftAnchor({ kind: "canvas", x: point.x, y: point.y });
         }}
         onConnect={(connection: Connection) => setEdges((current) => addEdge(connection, current))}
         // 可见的 + 在边界外，而真实锚点贴在边界上。扩大屏幕命中半径后，拖到 + 上即可
@@ -687,6 +722,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         onMoveEnd={(_event, next) => viewport.remember(next)}
         // 双击空白处直接加一张便签 —— 想法来的时候不该先去找按钮。
         onDoubleClick={(event) => {
+          if (reviewMode) return;
           if ((event.target as HTMLElement).closest(".react-flow__node")) return;
           const instance = rf.current;
           if (!instance) return;
@@ -701,7 +737,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           };
           setNodes((current) => [...current, ...toNodes([item])]);
         }}
-        className={cn(!ready && "opacity-0")}
+        className={cn(!ready && "opacity-0", reviewMode && "cursor-crosshair")}
         proOptions={{ hideAttribution: false }}
         /* 触控板约定(Figma / Miro 那套):双指滑动 = 平移,捏合 = 缩放。**和工作流画布同一套** ——
            React Flow 默认 zoomOnScroll:true,而 macOS 触控板双指滑动发出的正是 wheel 事件,
@@ -712,8 +748,73 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         zoomOnPinch
         maxZoom={2.5}
         deleteKeyCode={["Backspace", "Delete"]}
+        nodesDraggable={!reviewMode}
+        nodesConnectable={!reviewMode}
+        elementsSelectable={!reviewMode}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.2} />
+        {reviewMode && (
+          <ViewportPortal>
+            {comments.map((comment, index) => {
+              const x = comment.anchor?.x;
+              const y = comment.anchor?.y;
+              if (typeof x !== "number" || typeof y !== "number") return null;
+              const active = activeCommentId === comment.id;
+              return (
+                <div
+                  key={comment.id}
+                  className="nodrag nopan absolute z-10 flex items-start gap-2"
+                  style={{ left: x, top: y }}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    className={cn(
+                      "grid h-7 w-7 -translate-x-1/2 -translate-y-1/2 shrink-0 place-items-center rounded-full border text-ui-2xs font-semibold shadow-[var(--shadow-panel)] transition-transform hover:scale-110",
+                      active
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border-strong bg-panel/90 text-foreground backdrop-blur-xl",
+                    )}
+                    title={comment.body}
+                    aria-label={`${t("comments")} ${index + 1}`}
+                    onClick={() => onSelectComment?.(comment)}
+                  >
+                    {index + 1}
+                  </button>
+                  {active && (
+                    <div className="-translate-y-3 w-64 rounded-xl border border-border-strong bg-panel/95 p-3 text-left shadow-[var(--shadow-panel)] backdrop-blur-xl">
+                      <p className="mb-1 text-ui-xs font-semibold text-foreground">
+                        {comment.author?.display_name || comment.author?.username || t("teamSystemActor")}
+                      </p>
+                      <p className="whitespace-pre-wrap text-ui-sm leading-relaxed text-foreground">{comment.body}</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {draftAnchor && typeof draftAnchor.x === "number" && typeof draftAnchor.y === "number" && (
+              <div
+                className="nodrag nopan absolute z-20 flex items-start gap-2"
+                style={{ left: draftAnchor.x, top: draftAnchor.y }}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <span className="grid h-7 w-7 -translate-x-1/2 -translate-y-1/2 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-panel)]">
+                  <MessageSquare size={13} />
+                </span>
+                <div className="-translate-y-3">
+                  <BoardCommentComposer
+                    members={members}
+                    onCancel={() => setDraftAnchor(null)}
+                    onSubmit={async (draft) => {
+                      await onCreateComment?.(draftAnchor, draft);
+                      setDraftAnchor(null);
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </ViewportPortal>
+        )}
         {/* 缩放钮/预览图**不吃应用主题**(xyflow 默认一律白底)—— 深色下就是右下角一块白。
             把 --xy-* 映射到设计令牌,和工作流页用的是同一套(见 WorkflowsView 里那段说明)。 */}
         {showMinimap && <MiniMap
@@ -727,6 +828,14 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           nodeStrokeColor="transparent"
         />}
       </ReactFlow>
+
+      {reviewMode && (
+        <div className="pointer-events-none absolute left-1/2 top-16 z-30 -translate-x-1/2 rounded-full border border-primary/30 bg-panel/80 px-3 py-1.5 text-ui-xs text-foreground shadow-[var(--shadow-panel)] backdrop-blur-xl">
+          <span className="font-semibold text-primary">{t("boardReviewMode")}</span>
+          <span className="mx-1.5 text-muted-foreground">·</span>
+          <span className="text-muted-foreground">{t("boardReviewModeHint")}</span>
+        </div>
+      )}
 
 
       {/* 拖着文件悬在上面时的提示。**盖住整块**,虚线只收在中间那段字上。 */}

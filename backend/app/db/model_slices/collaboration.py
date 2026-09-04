@@ -50,6 +50,10 @@ class Comment(Base):
     subject_id: Mapped[str] = mapped_column(String(64), nullable=False)
     author_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     body: Mapped[str] = mapped_column(Text, nullable=False)
+    # Board comments are spatial collaboration records, not board items. Keeping their anchor and
+    # editor document here lets the canvas projection evolve independently from the review thread.
+    anchor: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    body_document: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

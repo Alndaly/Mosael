@@ -150,6 +150,8 @@ def create_comment(
     author_id: str,
     body: str,
     mentioned_user_ids: list[str] | None = None,
+    anchor: dict[str, Any] | None = None,
+    body_document: dict[str, Any] | None = None,
 ) -> Comment:
     ensure_subject(db, workspace_id, subject_type, subject_id)
     cleaned = body.strip()
@@ -163,6 +165,8 @@ def create_comment(
         subject_id=subject_id,
         author_id=author_id,
         body=cleaned,
+        anchor=anchor or {},
+        body_document=body_document or {},
     )
     db.add(comment)
     db.flush()
@@ -187,7 +191,11 @@ def create_comment(
         subject_type=subject_type,
         subject_id=subject_id,
         summary="发表了评论",
-        payload={"comment_id": comment.id, "mentioned_user_ids": [user.id for user in mentioned]},
+        payload={
+            "comment_id": comment.id,
+            "mentioned_user_ids": [user.id for user in mentioned],
+            **({"anchor": comment.anchor} if comment.anchor else {}),
+        },
     )
     return comment
 
@@ -221,6 +229,8 @@ def list_comments(db: Session, workspace_id: str, subject_type: str, subject_id:
             "author": _actor(user, comment.author_id),
             "body": comment.body,
             "mentioned_user_ids": mentions.get(comment.id, []),
+            "anchor": comment.anchor or None,
+            "body_document": comment.body_document or {},
             "created_at": comment.created_at,
             "updated_at": comment.updated_at,
         }

@@ -1487,6 +1487,20 @@ def _migrate_board_revision() -> None:
         conn.execute(text("ALTER TABLE boards ADD COLUMN revision INTEGER NOT NULL DEFAULT 1"))
 
 
+def _migrate_comment_canvas_context() -> None:
+    """Preserve spatial anchors and rich-text documents for existing comment tables."""
+
+    inspector = inspect(engine)
+    if "comments" not in set(inspector.get_table_names()):
+        return
+    columns = {column["name"] for column in inspector.get_columns("comments")}
+    with engine.begin() as conn:
+        if "anchor" not in columns:
+            conn.execute(text("ALTER TABLE comments ADD COLUMN anchor JSON NOT NULL DEFAULT '{}'"))
+        if "body_document" not in columns:
+            conn.execute(text("ALTER TABLE comments ADD COLUMN body_document JSON NOT NULL DEFAULT '{}'"))
+
+
 def _backfill_activity_events() -> None:
     """Project existing actor-bearing history into the unified workspace activity stream.
 
@@ -1790,6 +1804,7 @@ def migration_plan() -> MigrationPlan:
                 MigrationPhase.AFTER_SCHEMA,
                 _migrate_drop_local_publish_accounts,
                 _migrate_board_revision,
+                _migrate_comment_canvas_context,
                 _migrate_board_canvas_state,
                 _backfill_browser_pool,
                 _backfill_provider_models,

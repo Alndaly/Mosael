@@ -1,10 +1,9 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, MessageSquare, RotateCcw, Send } from "lucide-react";
+import { Check, LocateFixed, MessageSquare, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import {
-  addComment,
   decideReview,
   listComments,
   listMembers,
@@ -12,6 +11,7 @@ import {
   requestReview,
   type Board,
   type CollaborationActor,
+  type CollaborationComment,
 } from "@/api/client";
 import { useAuth } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
@@ -30,10 +30,12 @@ export function BoardCollaborationDialog({
   open,
   onOpenChange,
   board,
+  onJumpToComment,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   board: Board;
+  onJumpToComment: (comment: CollaborationComment) => void;
 }) {
   const t = useI18n();
   const { locale } = usePreferences();
@@ -57,7 +59,6 @@ export function BoardCollaborationDialog({
     queryFn: () => listMembers(board.workspace_id),
     enabled: open,
   });
-  const [comment, setComment] = React.useState("");
   const [reviewer, setReviewer] = React.useState("");
   const [reviewNote, setReviewNote] = React.useState("");
   const refresh = () => {
@@ -65,16 +66,6 @@ export function BoardCollaborationDialog({
     void qc.invalidateQueries({ queryKey: reviewsKey });
     void qc.invalidateQueries({ queryKey: ["activity", board.workspace_id] });
   };
-  const commentMut = useMutation({
-    mutationFn: () => addComment({
-      workspace_id: board.workspace_id,
-      subject_type: "board",
-      subject_id: board.id,
-      body: comment,
-    }),
-    onSuccess: () => { setComment(""); refresh(); },
-    onError: (error: Error) => toast.error(error.message),
-  });
   const reviewMut = useMutation({
     mutationFn: () => requestReview({
       workspace_id: board.workspace_id,
@@ -101,26 +92,33 @@ export function BoardCollaborationDialog({
         </DialogHeader>
         <div className="min-h-0 space-y-6 overflow-y-auto px-5 pb-5">
           <section className="space-y-3 pt-1">
-            <h3 className="text-ui-md font-semibold">{t("comments")}</h3>
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-ui-md font-semibold">{t("comments")}</h3>
+              <span className="text-ui-xs text-muted-foreground">{comments.data?.length ?? 0}</span>
+            </div>
             <div className="space-y-2">
               {(comments.data ?? []).map((item) => (
-                <div key={item.id} className="rounded-lg border border-border bg-secondary/30 px-3 py-2.5">
+                <button
+                  key={item.id}
+                  type="button"
+                  disabled={typeof item.anchor?.x !== "number" || typeof item.anchor?.y !== "number"}
+                  className="group w-full rounded-lg border border-border bg-secondary/30 px-3 py-2.5 text-left transition-colors enabled:hover:border-border-strong enabled:hover:bg-secondary/60 disabled:cursor-default"
+                  onClick={() => onJumpToComment(item)}
+                >
                   <div className="mb-1 flex items-center justify-between gap-3 text-ui-xs text-muted-foreground">
                     <span className="font-semibold text-foreground">{actorName(item.author, t("teamSystemActor"))}</span>
-                    <span>{relativeTime(item.created_at, locale)}</span>
+                    <span className="flex items-center gap-2">
+                      {relativeTime(item.created_at, locale)}
+                      {typeof item.anchor?.x === "number" && <LocateFixed size={13} className="transition-colors group-hover:text-primary" />}
+                    </span>
                   </div>
                   <p className="whitespace-pre-wrap text-ui-sm leading-relaxed">{item.body}</p>
-                </div>
+                  {item.anchor?.node_id && <p className="mt-1 truncate text-ui-2xs text-muted-foreground">{item.anchor.node_id}</p>}
+                </button>
               ))}
               {comments.isSuccess && comments.data.length === 0 && <p className="text-ui-sm text-muted-foreground">{t("commentsEmpty")}</p>}
             </div>
-            <div className="flex items-end gap-2">
-              <Textarea value={comment} onChange={(event) => setComment(event.target.value)} placeholder={t("commentPlaceholder")} rows={2} />
-              <Button size="icon" disabled={!comment.trim()} loading={commentMut.isPending} onClick={() => commentMut.mutate()} aria-label={t("send")}>
-                <Send size={15} />
-              </Button>
-            </div>
-            <p className="text-ui-xs text-muted-foreground">{t("mentionHint")}</p>
+            <p className="text-ui-xs text-muted-foreground">{t("boardReviewModeHint")}</p>
           </section>
 
           <section className="space-y-3 border-t border-border pt-5">

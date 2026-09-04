@@ -29,12 +29,23 @@ class ActivityOut(BaseModel):
     created_at: datetime
 
 
+class CanvasCommentAnchor(BaseModel):
+    """Stable flow-space location for feedback attached to a board."""
+
+    kind: Literal["canvas"] = "canvas"
+    x: float
+    y: float
+    node_id: str | None = Field(default=None, max_length=64)
+
+
 class CommentCreate(BaseModel):
     workspace_id: str
     subject_type: SubjectType
     subject_id: str
     body: str = Field(min_length=1, max_length=5000)
     mentioned_user_ids: list[str] = Field(default_factory=list)
+    anchor: CanvasCommentAnchor | None = None
+    body_document: dict = Field(default_factory=dict)
 
 
 class CommentOut(BaseModel):
@@ -46,6 +57,8 @@ class CommentOut(BaseModel):
     author: ActorOut | None = None
     body: str
     mentioned_user_ids: list[str] = Field(default_factory=list)
+    anchor: CanvasCommentAnchor | None = None
+    body_document: dict = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
 

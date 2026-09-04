@@ -29,8 +29,17 @@ export interface CollaborationComment {
   author: CollaborationActor | null;
   body: string;
   mentioned_user_ids: string[];
+  anchor: CollaborationCommentAnchor | null;
+  body_document: Record<string, unknown>;
   created_at: string;
   updated_at: string;
+}
+
+export interface CollaborationCommentAnchor {
+  kind?: "canvas";
+  x?: number;
+  y?: number;
+  node_id?: string;
 }
 
 export interface CollaborationReview {
@@ -71,6 +80,8 @@ export function addComment(body: {
   subject_id: string;
   body: string;
   mentioned_user_ids?: string[];
+  anchor?: CollaborationCommentAnchor;
+  body_document?: Record<string, unknown>;
 }): Promise<CollaborationComment> {
   return api<CollaborationComment>("/api/comments", { method: "POST", body: JSON.stringify(body) });
 }
