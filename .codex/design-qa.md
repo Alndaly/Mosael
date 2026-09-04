@@ -60,3 +60,19 @@
 - Visual verification: blocked — the in-app Browser renderer is not available in this session, and
   the design workflow forbids silently switching to a second browser.
 - final result: blocked
+
+## 2026-09-04 — 参考素材排序、音频详情与节点单击聚焦
+
+- Reference: user screenshots showing a connected audio reference behind two generic empty add
+  slots, no detail dialog after clicking the audio reference, and intermittent first-click node
+  selection failure.
+- Implemented: populated reference roles are presented before empty add affordances while directional
+  first/last-frame order remains fixed; audio references open the same full asset-detail dialog used
+  by the media library and agent tool results; ordinary node clicks explicitly reconcile the
+  controlled React Flow selection to one focused node while modifier-key multi-selection remains
+  native.
+- Automated evidence: regression tests cover reference ordering, fixed frame order, audio-dialog
+  dispatch, and idempotent single-node focus; all 921 frontend tests and the production build pass.
+- Visual verification: blocked — the in-app Browser renderer is not available in this session, and
+  the design workflow forbids silently switching to a second browser.
+- final result: blocked

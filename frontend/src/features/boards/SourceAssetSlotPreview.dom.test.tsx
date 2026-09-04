@@ -4,15 +4,21 @@ import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const openImagePreview = vi.fn();
+const modal = vi.fn();
 
 vi.mock("@/components/app/image-preview", () => ({
   useImagePreview: () => ({ openImagePreview, isImagePreviewOpen: false }),
 }));
 
+vi.mock("@/features/media/AssetPreviewModalById", () => ({
+  AssetPreviewModalById: (props: { id: string | null }) => {
+    modal(props);
+    return props.id ? <div data-testid="asset-preview-modal">{props.id}</div> : null;
+  },
+}));
+
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => ({
-    boardPlaySource: "播放{name}",
-    boardPauseSource: "暂停{name}",
     boardPreviewSource: "预览{name}",
     boardRemove: "移除",
   })[key] ?? key,
@@ -29,20 +35,19 @@ import { SourceAssetSlotPreview } from "./SourceAssetSlotPreview";
 describe("生成节点的参考素材预览", () => {
   beforeEach(() => {
     openImagePreview.mockReset();
-    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
-    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+    modal.mockClear();
   });
 
-  it("音频显示音频控件，不请求缩略图也不打开图片灯箱", () => {
+  it("音频不请求缩略图，点击后打开素材详情弹窗", () => {
     const { container } = render(
       <SourceAssetSlotPreview assetId="audio-1" kind="audio" label="参考音频" onRemove={() => {}} />,
     );
 
     expect(container.querySelector("img")).toBeNull();
-    expect(container.querySelector("audio")).toHaveAttribute("src", "/files/audio-1");
+    expect(container.querySelector("audio")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "播放参考音频" }));
-    expect(HTMLMediaElement.prototype.play).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: "预览参考音频" }));
+    expect(screen.getByTestId("asset-preview-modal")).toHaveTextContent("audio-1");
     expect(openImagePreview).not.toHaveBeenCalled();
   });
 

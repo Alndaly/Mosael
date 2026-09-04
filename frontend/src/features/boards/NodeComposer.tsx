@@ -233,6 +233,25 @@ export function sourceSlots(
 }
 
 /**
+ * 参考素材栏先展示已经挂上的内容，再展示尚可添加的角色。
+ *
+ * 角色的原始顺序仍决定自动分配和提交语义；这里只调整展示。首尾帧是有方向的固定序列，不能因为
+ * 尾帧先填就把它搬到首帧前面。参考图/视频/音频没有方向，已连接的音频若排在两个通用 `+` 后面，
+ * 看起来就像前两份素材加载失败。
+ */
+export function prioritizeFilledSourceSlots<T extends { role: string }>(
+  slots: T[],
+  sources: { role: string; assetId: string }[],
+): T[] {
+  if (slots.some((slot) => slot.role.endsWith("_frame"))) return slots;
+  const filledRoles = new Set(sources.map((source) => source.role));
+  return [
+    ...slots.filter((slot) => filledRoles.has(slot.role)),
+    ...slots.filter((slot) => !filledRoles.has(slot.role)),
+  ];
+}
+
+/**
  * 把上游节点的产出自动挂到槽位上,按槽位顺序、各自的份数上限来。
  *
  * 连了线却还要再挂一遍素材,那条线就只是根装饰。类别对不上的跳过(视频挂不进首帧),
@@ -388,6 +407,10 @@ export function NodeComposer({
   const slots = React.useMemo(
     () => sourceSlots(current, activeMode?.roles),
     [current, activeMode],
+  );
+  const displaySlots = React.useMemo(
+    () => prioritizeFilledSourceSlots(slots, sources),
+    [slots, sources],
   );
 
   //: 换模型、换方式、或者上游连线变了 —— 都重新照上游挂一遍。
@@ -548,10 +571,10 @@ export function NodeComposer({
         {slots.length > 0 && (
           // 槽位行和提示词之间给一道界:上面挂的是**素材**,下面写的是**话**,两件事。
           <div className="mb-1.5 flex flex-wrap items-center gap-1 border-b border-border px-1 pb-1.5">
-            {slots.map((slot, index) => {
+            {displaySlots.map((slot, index) => {
               // 首尾帧和参考素材**分属互斥的两组**(厂商硬约束,描述符里声明着)——
               // 组与组之间给一道竖线,否则一排虚线框读起来像五个平级的槽。
-              const previous = slots[index - 1]?.role;
+              const previous = displaySlots[index - 1]?.role;
               const groupChanged =
                 previous !== undefined &&
                 previous.endsWith("_frame") !== slot.role.endsWith("_frame");

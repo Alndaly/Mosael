@@ -93,6 +93,18 @@ export function toCanvas(nodes: Node[], edges: Edge[]): Canvas {
   };
 }
 
+/** 一次普通点击的选择结果。显式收口，避免 React Flow 的内部选择事件与受控 nodes 回写竞态。 */
+export function focusBoardNode(nodes: Node[], nodeId: string): Node[] {
+  let changed = false;
+  const next = nodes.map((node) => {
+    const selected = node.id === nodeId;
+    if (Boolean(node.selected) === selected) return node;
+    changed = true;
+    return { ...node, selected };
+  });
+  return changed ? next : nodes;
+}
+
 interface Props {
   boardId: string;
   /** 提示词面板里 `@` 引用素材时去哪个工作区找。 */
@@ -612,6 +624,12 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         minZoom={0.1}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onNodeClick={(event, node) => {
+          // 修饰键交给 React Flow 保留框选/多选语义；普通点击则显式聚焦，不能依赖它的内部
+          // selection change 与受控 nodes 回写谁先落地，否则偶发要第二次点击才会稳定选中。
+          if (event.shiftKey || event.metaKey || event.ctrlKey) return;
+          setNodes((current) => focusBoardNode(current, node.id));
+        }}
         onConnect={(connection: Connection) => setEdges((current) => addEdge(connection, current))}
         // 可见的 + 在边界外，而真实锚点贴在边界上。扩大屏幕命中半径后，拖到 + 上即可
         // 自动吸附，不必再精确瞄准那个透明的 8px handle。

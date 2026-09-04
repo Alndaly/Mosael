@@ -1,10 +1,9 @@
 import React from "react";
 
 import { Maximize2, Play } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
 
-import { api, assetThumbnailUrl, type Asset } from "@/api/client";
-import { AssetPreviewModal } from "@/features/media/AssetPreviewModal";
+import { assetThumbnailUrl } from "@/api/client";
+import { AssetPreviewModalById } from "@/features/media/AssetPreviewModalById";
 
 /**
  * Renders a tool result as something you can read, falling back to JSON only when nothing
@@ -70,17 +69,6 @@ function seconds(value: unknown): string {
 }
 
 /* ---------- cards ---------- */
-
-/** 点击素材行 → 按 id 现取完整素材、打开与「素材」标签页同款的详情预览弹窗。
-    工具结果里可能只有投影(id/name/kind),所以不能直接拿行数据喂弹窗,得按 id 重取。 */
-function AssetPreviewModalById({ id, onClose }: { id: string | null; onClose: () => void }) {
-  const asset = useQuery({
-    queryKey: ["asset", id],
-    enabled: Boolean(id),
-    queryFn: () => api<Asset>(`/api/assets/${id}`),
-  });
-  return <AssetPreviewModal asset={id ? asset.data ?? null : null} onClose={onClose} />;
-}
 
 const PLAYABLE = new Set(["video", "audio", "image"]);
 

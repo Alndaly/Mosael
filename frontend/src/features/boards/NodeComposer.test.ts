@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { durationRangeOptions, sourceSlots } from "./NodeComposer";
+import { durationRangeOptions, prioritizeFilledSourceSlots, sourceSlots } from "./NodeComposer";
 import type { GenerationOption } from "@/api/client";
 
 const model = (parameterKeys: string[], sourceLimits: Record<string, number> = {}) =>
@@ -37,6 +37,27 @@ describe("输入素材槽照描述符出", () => {
 
   it("没模型就没槽", () => {
     expect(sourceSlots(null)).toEqual([]);
+  });
+
+  it("参考模式把已有素材排在空的添加入口前面", () => {
+    const slots = [
+      { role: "reference_image", limit: 4 },
+      { role: "reference_video", limit: 2 },
+      { role: "reference_audio", limit: 2 },
+    ];
+    expect(prioritizeFilledSourceSlots(slots, [{ role: "reference_audio", assetId: "music" }])).toEqual([
+      { role: "reference_audio", limit: 2 },
+      { role: "reference_image", limit: 4 },
+      { role: "reference_video", limit: 2 },
+    ]);
+  });
+
+  it("首尾帧保持固定语义顺序", () => {
+    const slots = [
+      { role: "first_frame", limit: 1 },
+      { role: "last_frame", limit: 1 },
+    ];
+    expect(prioritizeFilledSourceSlots(slots, [{ role: "last_frame", assetId: "ending" }])).toEqual(slots);
   });
 });
 
