@@ -1,7 +1,7 @@
 /**
  * 设置组件自己拥有纵向节奏，调用方不能再从外面叠加一层。
  *
- * SettingsGroup/Row/Block/ListItem/Field/Form 分别已经定义 header、row、block 与字段间距。
+ * SettingsGroup/Row/Block/ListBlock/ListItem/Field/Form 分别已经定义 header、row、block 与字段间距。
  * 外部若再传 mt/mb/my/pt/pb/py，或把自带 py 的 SettingsList 塞进自带 py+gap 的 SettingsRow，
  * 视觉间距会随组合方式翻倍。
  */
@@ -32,7 +32,7 @@ describe("settings spacing ownership", () => {
 
     for (const file of sourceFiles(SRC)) {
       const source = readFileSync(file, "utf8");
-      for (const match of source.matchAll(/<Settings(?:Group|Row|Block|ListItem|Field|Form)\b[\s\S]*?>/g)) {
+      for (const match of source.matchAll(/<Settings(?:Group|Row|Block|ListBlock|ListItem|Field|Form)\b[\s\S]*?>/g)) {
         const props = match[0];
         for (const classMatch of props.matchAll(/(?:className|contentClassName)="([^"]*)"/g)) {
           if (VERTICAL_SPACE.test(classMatch[1])) {
@@ -50,6 +50,12 @@ describe("settings spacing ownership", () => {
       for (const match of source.matchAll(/<SettingsRow\b[\s\S]*?<\/SettingsRow>/g)) {
         if (match[0].includes("<SettingsList")) {
           offenders.push(`${file.slice(SRC.length + 1)} → SettingsList nested in SettingsRow`);
+        }
+      }
+
+      for (const match of source.matchAll(/<SettingsBlock\b[\s\S]*?<\/SettingsBlock>/g)) {
+        if (match[0].includes("<SettingsList") && !match[0].includes("<SettingsBlockTitle")) {
+          offenders.push(`${file.slice(SRC.length + 1)} → untitled SettingsList nested in SettingsBlock`);
         }
       }
     }

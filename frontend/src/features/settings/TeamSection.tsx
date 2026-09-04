@@ -42,7 +42,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { SettingsBlock, SettingsBlockTitle, SettingsGroup, SettingsList, SettingsListItem } from "@/features/settings/ui";
+import { SettingsBlock, SettingsBlockTitle, SettingsGroup, SettingsList, SettingsListBlock, SettingsListItem } from "@/features/settings/ui";
 import { relativeTime } from "@/lib/time";
 
 /** Per-permission icon for the member-permissions popover (scannability). */
@@ -156,7 +156,7 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
         <SettingsBlockTitle>
           <Clock size={15} /> {t("teamActivity")}
         </SettingsBlockTitle>
-        <SettingsList>
+        <SettingsList scrollable>
           {(activity.data ?? []).slice(0, 20).map((event) => (
             <ActivityRow key={event.id} event={event} />
           ))}
@@ -166,22 +166,20 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
         </SettingsList>
       </SettingsBlock>
 
-      <SettingsBlock>
-        <SettingsList>
-          {members.data?.members.map((m) => (
-            <MemberRow
-              key={m.user_id}
-              member={m}
-              canManage={canManage}
-              isOwner={isOwner}
-              selfId={user?.id}
-              roleLabel={roleLabel}
-              onRole={(role) => roleMut.mutate({ userId: m.user_id, role })}
-              onRemove={() => removeMut.mutate(m.user_id)}
-            />
-          ))}
-        </SettingsList>
-      </SettingsBlock>
+      <SettingsListBlock>
+        {members.data?.members.map((m) => (
+          <MemberRow
+            key={m.user_id}
+            member={m}
+            canManage={canManage}
+            isOwner={isOwner}
+            selfId={user?.id}
+            roleLabel={roleLabel}
+            onRole={(role) => roleMut.mutate({ userId: m.user_id, role })}
+            onRemove={() => removeMut.mutate(m.user_id)}
+          />
+        ))}
+      </SettingsListBlock>
 
       {canManage && (
         <SettingsBlock>

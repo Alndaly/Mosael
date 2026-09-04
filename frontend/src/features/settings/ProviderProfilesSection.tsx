@@ -21,7 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ProviderModelList } from "@/features/settings/ProviderModelList";
 import { ProviderHealth } from "@/features/settings/ProviderHealth";
 import { ProviderQuota } from "@/features/settings/ProviderQuota";
-import { SettingsBlock, SettingsGroup, SettingsList, SettingsListItem } from "@/features/settings/ui";
+import { SettingsBlock, SettingsGroup, SettingsListBlock, SettingsListItem } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
 import { BulkActionBar, BulkCheckbox, BulkSelectTrigger, useBulkSelection } from "@/components/app/bulkSelection";
 
@@ -456,22 +456,24 @@ export function ProviderProfilesSection({
         onConfirm={() => bulkRemove.mutate(bulk.selectedIds)}
       />
 
-      <SettingsBlock>
-        <div className="grid gap-1.5">
-          <BulkActionBar active={bulk.active} count={bulk.count} allSelected={bulk.allSelected} onToggleAll={bulk.toggleAll} onExit={bulk.exit}>
-            <Button variant="outline" size="sm" disabled={bulkBusy} loading={bulkPatch.isPending} onClick={() => bulkPatch.mutate({ ids: bulk.selectedIds, enabled: true })}>
-              {t("bulkEnable")}
-            </Button>
-            <Button variant="outline" size="sm" disabled={bulkBusy} loading={bulkPatch.isPending} onClick={() => bulkPatch.mutate({ ids: bulk.selectedIds, enabled: false })}>
-              {t("bulkDisable")}
-            </Button>
-            <Button variant="outline" size="sm" disabled={bulkBusy} onClick={() => setBulkDeleting(true)}>
-              <Trash2 size={12} /> {t("bulkDelete")}
-            </Button>
-          </BulkActionBar>
-          <SettingsList>
-            {visibleProfiles.map((profile) => (
-              <SettingsListItem
+      {profiles.isSuccess && visibleProfiles.length > 0 ? (
+        <SettingsListBlock
+          toolbar={bulk.active ? (
+            <BulkActionBar active={bulk.active} count={bulk.count} allSelected={bulk.allSelected} onToggleAll={bulk.toggleAll} onExit={bulk.exit}>
+              <Button variant="outline" size="sm" disabled={bulkBusy} loading={bulkPatch.isPending} onClick={() => bulkPatch.mutate({ ids: bulk.selectedIds, enabled: true })}>
+                {t("bulkEnable")}
+              </Button>
+              <Button variant="outline" size="sm" disabled={bulkBusy} loading={bulkPatch.isPending} onClick={() => bulkPatch.mutate({ ids: bulk.selectedIds, enabled: false })}>
+                {t("bulkDisable")}
+              </Button>
+              <Button variant="outline" size="sm" disabled={bulkBusy} onClick={() => setBulkDeleting(true)}>
+                <Trash2 size={12} /> {t("bulkDelete")}
+              </Button>
+            </BulkActionBar>
+          ) : undefined}
+        >
+          {visibleProfiles.map((profile) => (
+            <SettingsListItem
                 className={cn(
                   "grid items-center gap-2",
                   bulk.active ? "grid-cols-[auto_28px_minmax(0,1fr)_auto_auto]" : "grid-cols-[28px_minmax(0,1fr)_auto_auto]",
@@ -592,9 +594,11 @@ export function ProviderProfilesSection({
                   <ProviderModelList profileId={profile.id} vendor={profile.vendor} />
                 </div>
               )}
-              </SettingsListItem>
-            ))}
-          </SettingsList>
+            </SettingsListItem>
+          ))}
+        </SettingsListBlock>
+      ) : (
+        <SettingsBlock>
           {/* **「没有」和「没问出来」是两回事。** 空状态此前挂在 `profiles.data && …` 后面:
               请求失败(401、后端没起、网络断)时 data 是 undefined,那一行被短路掉,而外层容器
               照画 —— 于是失败长得和"空"一模一样,而"空"又长得像什么都没发生。用户看到的就是
@@ -616,8 +620,8 @@ export function ProviderProfilesSection({
           {profiles.isSuccess && visibleProfiles.length === 0 && (
             <p className="m-0 text-xs text-muted-foreground">{capability ? t("providerNoCapabilityProfiles") : t("providerNoProfiles")}</p>
           )}
-        </div>
-      </SettingsBlock>
+        </SettingsBlock>
+      )}
 
       {authing && (
         <ProviderOAuthDialog

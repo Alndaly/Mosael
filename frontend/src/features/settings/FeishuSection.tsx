@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
 import { ModalShell } from "@/components/app/modals";
-import { SettingsBlock, SettingsGroup, SettingsList, SettingsListItem } from "@/features/settings/ui";
+import { SettingsBlock, SettingsGroup, SettingsList, SettingsListBlock, SettingsListItem } from "@/features/settings/ui";
 
 type FeishuBot = components["schemas"]["FeishuBotOut"];
 type Onboarding = components["schemas"]["FeishuOnboardingOut"];
@@ -153,18 +153,21 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
         </>
       }
     >
-      <SettingsBlock className={!hasBots ? "h-full min-h-0" : undefined}>
-        {beginScan.isError && <p className="m-0 text-xs text-destructive">{String((beginScan.error as Error).message)}</p>}
+      {beginScan.isError && (
+        <SettingsBlock>
+          <p className="m-0 text-xs text-destructive">{String((beginScan.error as Error).message)}</p>
+        </SettingsBlock>
+      )}
 
-        {/* 这里曾常驻一条「还需去开发者后台开交互卡片」的横幅。**扫码一键创建已经把这两项配好了**,
-            对绝大多数用户它就是一条错的指令 —— 照着去后台反而会怀疑自己漏配了什么。
-            手动建的应用确实可能没开:那种情况后端在发卡片撞上 200340 时会把具体步骤写进机器人
-            状态那行小字(见 feishu/service.py 的 _CARD_SETUP_HINT),只在真需要时出现。 */}
+      {/* 这里曾常驻一条「还需去开发者后台开交互卡片」的横幅。**扫码一键创建已经把这两项配好了**,
+          对绝大多数用户它就是一条错的指令 —— 照着去后台反而会怀疑自己漏配了什么。
+          手动建的应用确实可能没开:那种情况后端在发卡片撞上 200340 时会把具体步骤写进机器人
+          状态那行小字(见 feishu/service.py 的 _CARD_SETUP_HINT),只在真需要时出现。 */}
 
-        {hasBots && (
-          <SettingsList>
-            {(bots.data ?? []).map((bot) => (
-              <SettingsListItem className="grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-2.5" key={bot.id}>
+      {hasBots ? (
+        <SettingsListBlock>
+          {(bots.data ?? []).map((bot) => (
+            <SettingsListItem className="grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-2.5" key={bot.id}>
                 <span className="grid h-8 w-8 place-items-center rounded-lg bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-primary">
                   <MessageSquare size={15} />
                 </span>
@@ -209,15 +212,14 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
                     <Trash2 size={14} />
                   </Button>
                 </div>
-              </SettingsListItem>
-            ))}
-          </SettingsList>
-        )}
-
-        {!hasBots && (
+            </SettingsListItem>
+          ))}
+        </SettingsListBlock>
+      ) : (
+        <SettingsBlock className="h-full min-h-0">
           <EmptyState icon={<MessageSquare size={22} />} title={t("feishuNoBots")} body={t("feishuEmptyBody")} />
-        )}
-      </SettingsBlock>
+        </SettingsBlock>
+      )}
 
       <ModalShell
         open={scanning}

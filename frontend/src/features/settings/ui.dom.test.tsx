@@ -8,6 +8,7 @@ import {
   SettingsBlockTitle,
   SettingsGroup,
   SettingsList,
+  SettingsListBlock,
   SettingsListItem,
   SettingsRow,
   SettingsSectionStack,
@@ -101,6 +102,40 @@ describe("settings section layout", () => {
     expect(list).toHaveClass("divide-y");
     expect(list?.firstElementChild).not.toHaveClass("border");
     expect(list?.firstElementChild).not.toHaveClass("rounded-md");
+  });
+
+  it("gives pure list sections a single vertical spacing owner", () => {
+    const { container } = render(
+      <SettingsListBlock>
+        <SettingsListItem>飞书机器人</SettingsListItem>
+      </SettingsListBlock>,
+    );
+
+    const block = container.querySelector('[data-slot="settings-list-block"]');
+    expect(block).toBeInTheDocument();
+    expect(block?.className).not.toMatch(/\bpy-/);
+    expect(block?.querySelector('[data-slot="settings-list-item"]')).toHaveClass("py-3");
+  });
+
+  it("keeps optional list tools inside the same spacing contract", () => {
+    const { container } = render(
+      <SettingsListBlock toolbar={<div>已选择 2 项</div>}>
+        <SettingsListItem>成本规则</SettingsListItem>
+      </SettingsListBlock>,
+    );
+
+    expect(container.querySelector('[data-slot="settings-list-toolbar"]')).toHaveClass("px-0.5", "pt-3");
+    expect(container.querySelector('[data-slot="settings-list-block"]')?.className).not.toMatch(/\bpy-/);
+  });
+
+  it("can bound a long settings list and scroll it internally", () => {
+    const { container } = render(
+      <SettingsList scrollable>
+        <SettingsListItem>团队动态</SettingsListItem>
+      </SettingsList>,
+    );
+
+    expect(container.firstElementChild).toHaveClass("max-h-80", "overflow-y-auto", "overscroll-contain");
   });
 
   it("lets a single-section empty state fill the settings pane", () => {

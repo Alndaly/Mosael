@@ -13,7 +13,7 @@ import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { BulkActionBar, BulkCheckbox, BulkSelectTrigger, useBulkSelection } from "@/components/app/bulkSelection";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { SettingsBlock, SettingsGroup, SettingsList, SettingsListItem } from "@/features/settings/ui";
+import { SettingsBlock, SettingsGroup, SettingsListBlock, SettingsListItem } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -453,62 +453,63 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
         onConfirm={() => removeMany.mutate(bulk.selectedIds)}
       />
 
-      <SettingsBlock className={rules.data && ruleList.length === 0 ? "h-full min-h-0" : undefined}>
-        <div className={cn("grid gap-1.5", rules.data && ruleList.length === 0 && "min-h-full")}>
-          {rules.data && ruleList.length === 0 ? (
+      {rules.data && ruleList.length === 0 ? (
+        <SettingsBlock className="h-full min-h-0">
+          <div className="grid min-h-full">
             <EmptyState icon={<ReceiptText size={22} />} title={t("pricingRulesEmpty")} />
-          ) : (
-            <>
-              <BulkActionBar active={bulk.active} count={bulk.count} allSelected={bulk.allSelected} onToggleAll={bulk.toggleAll} onExit={bulk.exit}>
-                <Button variant="outline" size="sm" loading={removeMany.isPending} onClick={() => setBulkDeleting(true)}>
-                  <Trash2 size={12} /> {t("bulkDelete")}
+          </div>
+        </SettingsBlock>
+      ) : (
+        <SettingsListBlock
+          toolbar={bulk.active ? (
+            <BulkActionBar active={bulk.active} count={bulk.count} allSelected={bulk.allSelected} onToggleAll={bulk.toggleAll} onExit={bulk.exit}>
+              <Button variant="outline" size="sm" loading={removeMany.isPending} onClick={() => setBulkDeleting(true)}>
+                <Trash2 size={12} /> {t("bulkDelete")}
+              </Button>
+            </BulkActionBar>
+          ) : undefined}
+        >
+          {ruleList.map((rule) => (
+            <SettingsListItem
+              className={cn(
+                "grid items-center gap-2",
+                bulk.active ? "grid-cols-[auto_28px_minmax(0,1fr)_auto_auto]" : "grid-cols-[28px_minmax(0,1fr)_auto_auto]",
+                bulk.isSelected(rule.id) && "rounded-md bg-[color-mix(in_srgb,var(--primary)_7%,transparent)]",
+              )}
+              key={rule.id}
+            >
+              {bulk.active && (
+                <BulkCheckbox
+                  checked={bulk.isSelected(rule.id)}
+                  onToggle={(event) => bulk.toggle(rule.id, event)}
+                  label={t("bulkSelectRow")}
+                />
+              )}
+              <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-accent-foreground">
+                <ReceiptText size={13} />
+              </span>
+              <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-ui-md [&_strong]:font-semibold">
+                <strong>
+                  {capabilityLabel(rule.capability)} · {profileLabel(rule.provider_profile_id, rule.provider)}
+                </strong>
+                <small>
+                  {rule.model || t("pricingAnyModel")} · {formatRuleAmount(rule, unitLabel(rule.billing_unit))}
+                  {rule.notes ? ` · ${rule.notes}` : ""}
+                </small>
+              </div>
+              <span className="whitespace-nowrap text-xs text-muted-foreground">{formatRuleAmount(rule, unitLabel(rule.billing_unit))}</span>
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="icon" onClick={() => openEdit(rule)} aria-label={t("pricingRuleEdit")}>
+                  <Pencil size={13} />
                 </Button>
-              </BulkActionBar>
-              <SettingsList>
-                {ruleList.map((rule) => (
-                  <SettingsListItem
-                    className={cn(
-                      "grid items-center gap-2",
-                      bulk.active ? "grid-cols-[auto_28px_minmax(0,1fr)_auto_auto]" : "grid-cols-[28px_minmax(0,1fr)_auto_auto]",
-                      bulk.isSelected(rule.id) && "rounded-md bg-[color-mix(in_srgb,var(--primary)_7%,transparent)]",
-                    )}
-                    key={rule.id}
-                  >
-                  {bulk.active && (
-                    <BulkCheckbox
-                      checked={bulk.isSelected(rule.id)}
-                      onToggle={(event) => bulk.toggle(rule.id, event)}
-                      label={t("bulkSelectRow")}
-                    />
-                  )}
-                  <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-accent-foreground">
-                    <ReceiptText size={13} />
-                  </span>
-                  <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-ui-md [&_strong]:font-semibold">
-                    <strong>
-                      {capabilityLabel(rule.capability)} · {profileLabel(rule.provider_profile_id, rule.provider)}
-                    </strong>
-                    <small>
-                      {rule.model || t("pricingAnyModel")} · {formatRuleAmount(rule, unitLabel(rule.billing_unit))}
-                      {rule.notes ? ` · ${rule.notes}` : ""}
-                    </small>
-                  </div>
-                  <span className="whitespace-nowrap text-xs text-muted-foreground">{formatRuleAmount(rule, unitLabel(rule.billing_unit))}</span>
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => openEdit(rule)} aria-label={t("pricingRuleEdit")}>
-                      <Pencil size={13} />
-                    </Button>
-                    <Button variant="ghost" size="icon" loading={remove.isPending && remove.variables === rule.id} onClick={() => remove.mutate(rule.id)} aria-label={t("delete")}>
-                      <Trash2 size={13} />
-                    </Button>
-                  </div>
-                  </SettingsListItem>
-                ))}
-              </SettingsList>
-            </>
-          )}
-        </div>
-      </SettingsBlock>
+                <Button variant="ghost" size="icon" loading={remove.isPending && remove.variables === rule.id} onClick={() => remove.mutate(rule.id)} aria-label={t("delete")}>
+                  <Trash2 size={13} />
+                </Button>
+              </div>
+            </SettingsListItem>
+          ))}
+        </SettingsListBlock>
+      )}
     </SettingsGroup>
   );
 }

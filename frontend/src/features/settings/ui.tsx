@@ -131,11 +131,46 @@ export function SettingsBlockTitle({ className, ...props }: React.ComponentProps
 export function SettingsList({
   children,
   className,
+  scrollable = false,
 }: {
   children: React.ReactNode;
   className?: string;
+  scrollable?: boolean;
 }) {
-  return <div className={cn("grid divide-y divide-border/70", className)}>{children}</div>;
+  return (
+    <div
+      data-slot="settings-list"
+      className={cn(
+        "grid divide-y divide-border/70",
+        scrollable && "max-h-80 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Pure list section: list rows own the vertical edge spacing, so no outer block padding is added. */
+export function SettingsListBlock({
+  children,
+  className,
+  toolbar,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  toolbar?: React.ReactNode;
+}) {
+  return (
+    <div data-slot="settings-list-block" className={cn("grid min-h-0 gap-1.5", className)}>
+      {toolbar && (
+        <div data-slot="settings-list-toolbar" className="px-0.5 pt-3">
+          {toolbar}
+        </div>
+      )}
+      <SettingsList>{children}</SettingsList>
+    </div>
+  );
 }
 
 export function SettingsListItem({ className, ...props }: React.ComponentProps<"div">) {
