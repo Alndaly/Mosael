@@ -50,6 +50,22 @@ test("用户显式关掉推理模型时照办", () => {
   assert.equal(model.reasoning, false);
 });
 
+test("模型目录给出 1M 时原样采用，不被通用回退值压低", () => {
+  const { model } = buildModels("https://api.example.com/v1", "k", "advanced", {
+    contextWindow: 1_000_000,
+    maxOutputTokens: 64_000,
+  });
+  assert.equal(model.contextWindow, 1_000_000);
+  assert.equal(model.maxTokens, 64_000);
+});
+
+test("无效的零窗口不覆盖云端 128K 回退", () => {
+  const { model } = buildModels("https://api.example.com/v1", "k", "unknown", {
+    contextWindow: 0,
+  });
+  assert.equal(model.contextWindow, 128_000);
+});
+
 test("必须走 streamSimple —— 思考档位的翻译只发生在它里面", () => {
   // pi 的 Agent 把档位放在 options.reasoning,而拼请求体的地方读 options.reasoningEffort;
   // 两者之间的翻译(含按模型 clamp)只在 streamSimple 里。走 stream 的话 reasoningEffort

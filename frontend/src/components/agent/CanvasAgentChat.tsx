@@ -410,7 +410,7 @@ export function CanvasAgentChat({
         {/* h2 会吃满按钮以外的剩余标题栏，悬浮时这整段都是拖动命中区。会话标题本身仍是
             button，useFloatingPanel 会排除它，所以单击切会话与拖窗口不会互相抢事件。此前把
             data-no-drag 挂在整个 h2 上，等于把标题栏唯一的大块空白也一起禁用了。 */}
-        <h2 className={cn("min-w-0", isFloating && "cursor-move")}>
+        <h2 className={cn("min-w-0 overflow-hidden", isFloating && "cursor-move")}>
           <AgentSessionSwitcher
             sessions={sessionList}
             activeSession={activeSession}
@@ -421,7 +421,7 @@ export function CanvasAgentChat({
         </h2>
         <button
           type="button"
-          className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
+          className="grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
           aria-label={t("wfAgentNewSession")}
           title={t("wfAgentNewSession")}
           disabled={newSession.isPending}
@@ -431,14 +431,14 @@ export function CanvasAgentChat({
         </button>
         <button
           type="button"
-          className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive ml-auto"
+          className="ml-auto grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
           aria-label={isFloating ? t("wfAgentDock") : t("wfAgentFloat")}
           title={isFloating ? t("wfAgentDock") : t("wfAgentFloat")}
           onClick={() => onModeChange(isFloating ? "docked" : "floating")}
         >
           {isFloating ? <PanelRight size={13} /> : <Move size={13} />}
         </button>
-        <button type="button" className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive" aria-label={t("close")} onClick={onClose}>
+        <button type="button" className="grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive" aria-label={t("close")} onClick={onClose}>
           <X size={13} />
         </button>
       </div>

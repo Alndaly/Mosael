@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import ipaddress
 import json
 import logging
 import math
 import re
 import threading
 import time
+from urllib.parse import urlparse
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -1144,10 +1146,24 @@ def compact_session_context(db: Session, session: AgentSession, user: User) -> d
     return {"context": session_context(db, session), "compaction": result.compaction}
 
 
-#: 目录查不到、也没手动设时的窗口。**必须与 sidecar 的 FALLBACK_CONTEXT_WINDOW 一致** ——
-#: 运行时压缩用的就是那个数,界面显示另一个数会让水位和实际行为对不上。
+#: 目录查不到、也没手动设时的窗口。**必须与 sidecar 的两个 fallback 常量一致** ——
+#: 云端按 128K、本机/LAN 按 32K；界面与运行时用不同值会让水位和压缩行为对不上。
 #: 由 contracts/context-meter-cases.json 钉住,两侧测试跑同一份语料。
-FALLBACK_CONTEXT_WINDOW = 32000
+FALLBACK_CONTEXT_WINDOW = 128000
+LOCAL_FALLBACK_CONTEXT_WINDOW = 32000
+
+
+def fallback_context_window(base_url: str) -> int:
+    """未知云模型按 128K；本机/LAN 推理端点继续采用保守窗口。"""
+    try:
+        hostname = (urlparse(base_url).hostname or "").lower()
+        if hostname == "localhost" or hostname.endswith(".local"):
+            return LOCAL_FALLBACK_CONTEXT_WINDOW
+        if hostname and ipaddress.ip_address(hostname).is_private:
+            return LOCAL_FALLBACK_CONTEXT_WINDOW
+    except ValueError:
+        pass
+    return FALLBACK_CONTEXT_WINDOW
 
 
 def _prompt_fingerprint(text: str) -> str:
@@ -1227,8 +1243,7 @@ def session_context(db: Session, session: AgentSession) -> dict | None:
     """会话当前的上下文水位。
 
     没配供应商时返回 None(整条不显示)。但**窗口取不到不等于未知**:sidecar 那边一直在用
-    32000 的回退值跑压缩,所以这里也回落到同一个数 —— 藏起来会让用户以为"没有上限",
-    而实际上它早就在按 32k 压缩了。
+    sidecar 会按端点位置选择回退值，所以这里也走同一规则 —— 藏起来会让用户以为"没有上限"。
     """
     try:
         provider_dict, agent_model, profile = resolve_chat_provider(
@@ -1246,14 +1261,13 @@ def session_context(db: Session, session: AgentSession) -> dict | None:
         # 订阅计划的窗口在 pi 的目录里,后端拿不到;登录时存下的 model_catalog 有这份。
         # 会话没有显式选模型时,resolve_chat_provider 会落到用户的默认模型。此时
         # session.provider_profile_id 仍为空,但目录属于刚解析出来的 profile —— 继续拿
-        # session 上的空值去查会错过真实窗口,回落成 32k。结果就是 K3 的 1M 窗口在一条
-        # 消息都没有时也显示「剩余 50%」。
+        # session 上的空值去查会错过真实窗口。结果就是 K3 的 1M 窗口显示成通用回退值。
         resolved_profile_id = getattr(profile, "id", None) or session.provider_profile_id
         for entry in session_model_catalog(db, resolved_profile_id, session.owner_user_id):
             if entry.get("id") == agent_model:
                 window = entry.get("contextWindow") or entry.get("context_window")
                 break
-    window = int(window) if window else FALLBACK_CONTEXT_WINDOW
+    window = int(window) if window else fallback_context_window(str(provider_dict.get("base_url") or ""))
     return {
         "tokens": context_tokens(session.adapter_state),
         "window": window,

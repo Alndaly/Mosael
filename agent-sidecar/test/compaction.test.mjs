@@ -34,6 +34,7 @@ const {
   compact,
   contextTokens,
   estimateTokens,
+  fitTurnContext,
   shouldCompact,
   splitPoint,
   summaryMessage,
@@ -63,6 +64,24 @@ test("工具参数与结果要计入 —— 它们往往是最占地方的那部
   assert.ok(estimateTokens(withTool) > 100);
 });
 
+test("轮内大工具结果会被压进预算，给模型回答保留空间", () => {
+  const huge = JSON.stringify(Array.from({ length: 300 }, (_, index) => ({ index, detail: "配置说明".repeat(80) })));
+  const messages = [
+    user("请修改工作流"),
+    assistant("我先检查", { input: 17_000, output: 20 }),
+    { role: "toolResult", toolName: "list_workflow_node_types", content: [{ type: "text", text: huge }] },
+  ];
+  const fitted = fitTurnContext(messages, 23_000);
+  assert.ok(contextTokens(fitted) <= 23_000, `轮内上下文应压到预算内，实际 ${contextTokens(fitted)}`);
+  assert.match(JSON.stringify(fitted), /内容过长已截断/);
+  assert.equal(JSON.stringify(messages).includes("内容过长已截断"), false, "只能裁发送副本，完整历史仍要保存");
+});
+
+test("预算充足时不改写工具结果", () => {
+  const messages = [user("x"), { role: "toolResult", content: [{ type: "text", text: "short" }] }];
+  assert.strictEqual(fitTurnContext(messages, 10_000), messages);
+});
+
 test("超过窗口的 80% 才触发", () => {
   const messages = [assistant("a", { input: 79, output: 0 })];
   assert.equal(shouldCompact(messages, 100), false);
@@ -87,6 +106,19 @@ test("切点回退到 user 边界,不切断工具调用与结果的配对", () =
 
 test("短对话不切", () => {
   assert.equal(splitPoint([user("a"), assistant("b")]), 0);
+});
+
+test("单轮工具结果已经超窗时也能压缩，而不是因消息不足八条永远卡死", async () => {
+  const messages = [
+    user("检查工作流"),
+    assistant("开始检查", { input: 17_000, output: 20 }),
+    { role: "toolResult", content: [{ type: "text", text: "完整配置".repeat(12_000) }] },
+    assistant("我", { input: 31_999, output: 1 }),
+  ];
+  const result = await compact(messages, { contextWindow: 32_000, summarize: async () => "已检查工作流，待继续修改。" });
+  assert.ok(result.info, "超窗的单轮历史必须能够整理");
+  assert.equal(result.messages.length, 1);
+  assert.match(String(result.messages[0].content), /待继续修改/);
 });
 
 test("压缩把早期换成摘要,并报告压掉了多少", async () => {

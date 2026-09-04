@@ -57,7 +57,7 @@ summaries — never raw internal schemas.
 | `list_plugin_tools` | 直接执行 | Read-only: list tools exposed by the user's enabled plugin connections. |
 | `list_projects` | 直接执行 | Read-only: list video projects in a workspace (id, name, active_sequence_id). |
 | `list_publish_accounts` | 直接执行 | Read-only: the platform accounts already logged in, for publish_asset. |
-| `list_workflow_node_types` | 直接执行 | Read-only: list allowed workflow node types, config fields, and outputs. |
+| `list_workflow_node_types` | 直接执行 | Read-only: list allowed workflow node types, or inspect one type in full. |
 | `list_workflows` | 直接执行 | Read-only: list VISUAL WORKFLOWS in a workspace. |
 | `list_workspaces` | 直接执行 | Read-only: list the workspaces this user has, newest first. |
 | `notify_agent_session` | 直接执行 | Runs directly: send a message to ANOTHER agent session (@-mention style). |

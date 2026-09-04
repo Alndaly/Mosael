@@ -38,6 +38,7 @@ describe("AgentSessionSwitcher", () => {
     const trigger = screen.getByRole("button", { name: "会话" });
     expect(trigger).toHaveTextContent(sessions[0].title);
     expect(trigger).toHaveClass("border-0", "bg-transparent");
+    expect(trigger).toHaveClass("w-full");
     expect(trigger.querySelector("span")).toHaveClass("truncate");
   });
 

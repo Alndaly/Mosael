@@ -447,7 +447,7 @@ export function ChatWorkspace({
           {/* 当前会话名常驻头部:和子代理视图的面包屑首段(父会话名)是同一个东西 ——
               进了子代理它变成面包屑的第一段,回来它就是标题本身。没有会话时不占位。 */}
           {activeSession && (
-            <span className="min-w-0 max-w-[260px] truncate text-ui-sm font-medium text-foreground" title={activeSession.title}>
+            <span className="min-w-0 flex-1 truncate text-ui-sm font-medium text-foreground" title={activeSession.title}>
               {activeSession.title}
             </span>
           )}
@@ -472,7 +472,7 @@ export function ChatWorkspace({
           )}
           {/* 「N 个子代理」:这个会话派出过的子智能体入口(DSH 同款位置)。没派过就不渲染。 */}
           {!viewingSubagent && (
-            <span className="ml-auto">
+            <span className="ml-auto shrink-0">
               <SubagentButton timeline={subagentSourceTimeline} onOpen={setViewingSubagent} />
             </span>
           )}
@@ -992,4 +992,3 @@ function collectRecentToolCalls(messages: AgentMessage[], streamTimeline: AgentT
   pushTimeline(streamTimeline, "stream");
   return tools.reverse();
 }
-

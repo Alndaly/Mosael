@@ -28,7 +28,9 @@ import {
   SUMMARY_PROMPT,
   compact,
   FALLBACK_CONTEXT_WINDOW,
+  fallbackContextWindow,
   contextTokens,
+  fitTurnContext,
 } from "./compaction";
 import {
   SubagentManager,
@@ -143,16 +145,23 @@ function buildSubagentTools(
   return [dispatchTool, waitTool];
 }
 
-// 轮内兜底:一轮里工具调用可能连着追加十几条消息,而按 token 的压缩只在**轮与轮之间**做
-// (见 prepareContext)。这条只防"单轮内爆炸"这一种情况,阈值放得很宽,正常对话碰不到它。
+// 轮内兜底:工具结果是在轮前摘要之后才出现的。除了防连续调用堆出过多消息，还要按 token
+// 控制单个超大结果，否则 pi 会把 max_tokens 压到 1，留下「我」这样的碎片。
 const RUNAWAY_TURN_MESSAGES = 120;
 const RUNAWAY_KEEP = 60;
 
-function guardRunawayTurn(messages: AgentMessage[]): AgentMessage[] {
-  if (messages.length <= RUNAWAY_TURN_MESSAGES) return messages;
-  let start = messages.length - RUNAWAY_KEEP;
-  while (start > 0 && (messages[start] as { role?: string }).role !== "user") start -= 1;
-  return start > 0 ? messages.slice(start) : messages;
+function guardRunawayTurn(messages: AgentMessage[], contextWindow: number): AgentMessage[] {
+  let guarded = messages;
+  if (guarded.length > RUNAWAY_TURN_MESSAGES) {
+    let start = guarded.length - RUNAWAY_KEEP;
+    while (start > 0 && (guarded[start] as { role?: string }).role !== "user") start -= 1;
+    if (start > 0) guarded = guarded.slice(start);
+  }
+  // 至少保留四分之一窗口给下一次回答和可能的下一次工具调用。
+  return fitTurnContext(
+    guarded as unknown as CompactionMessage[],
+    Math.floor(contextWindow * 0.75),
+  ) as unknown as AgentMessage[];
 }
 
 /**
@@ -175,8 +184,10 @@ async function prepareContext(
     summarize: async (early) => {
       // 摘要用同一个模型:换个便宜模型看着省钱,但它读不懂这段对话里的专有名词和 id,
       // 摘出来的东西反而会误导后续几十轮。工具留空 —— 摘要不该顺手去调工具。
+      // 摘要器本身也必须留出输出空间：触发这里的常常正是一个超大的工具结果。
+      const summaryInput = fitTurnContext(early, Math.floor(contextWindow * 0.75));
       const summarizer = new Agent({
-        initialState: { systemPrompt: "你是一个严谨的对话摘要器。", model, tools: [], messages: [...early] as unknown as AgentMessage[] },
+        initialState: { systemPrompt: "你是一个严谨的对话摘要器。", model, tools: [], messages: summaryInput as unknown as AgentMessage[] },
         streamFn,
       });
       await summarizer.prompt(SUMMARY_PROMPT);
@@ -193,12 +204,6 @@ async function prepareContext(
   });
   return { messages: result.messages as unknown as AgentMessage[], info: result.info };
 }
-
-/** 端点没告诉我们上下文窗口时的回退。
- *
- * 取**小**值是刻意的:这个数只用于 pi 决定何时压缩上下文,估大了会把超窗的请求原样发出去,
- * 由服务端拒掉(用户看到的是一次失败的对话);估小了只是压缩得早一点。以前这里硬编 128000,
- * 配 8k 上下文的本地模型时就是前一种。真实值现在由后端从供应商 /models 目录取。 */
 
 const FALLBACK_MAX_TOKENS = 4096;
 
@@ -239,8 +244,14 @@ export function buildModels(
     reasoning: limits.reasoning ?? true,
     input: limits.vision ? ["text", "image"] : ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: limits.contextWindow ?? FALLBACK_CONTEXT_WINDOW,
-    maxTokens: limits.maxOutputTokens ?? FALLBACK_MAX_TOKENS,
+    contextWindow:
+      typeof limits.contextWindow === "number" && limits.contextWindow > 0
+        ? limits.contextWindow
+        : fallbackContextWindow(baseUrl),
+    maxTokens:
+      typeof limits.maxOutputTokens === "number" && limits.maxOutputTokens > 0
+        ? limits.maxOutputTokens
+        : FALLBACK_MAX_TOKENS,
     // Ollama / vLLM / LM Studio 等本地 OpenAI 兼容服务不认 developer role 与 reasoning_effort
     compat: {
       supportsDeveloperRole: limits.developerRole ?? false,
@@ -563,8 +574,9 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
     },
     streamFn,
     // 轮内兜底:只防单轮里工具调用把消息堆爆,正常对话碰不到。
-    transformContext: async (messages) => guardRunawayTurn(messages),
+    transformContext: async (messages) => guardRunawayTurn(messages, Number(model?.contextWindow) || FALLBACK_CONTEXT_WINDOW),
   });
+  const turnStartIndex = priorMessages.length;
   // One queued message per turn, in the order they were sent. Draining the whole queue at
   // once merges several questions into a single answer, which reads as the agent ignoring
   // all but the last — a queue the user can see the order of has to be answered in that order.
@@ -615,18 +627,27 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
     else throw err;
   }
   const messages = agent.state.messages;
+  const turnMessages = messages.slice(turnStartIndex);
   // 最近一条标记为 error 的消息即本轮的失败原因(如 base_url 不是 OpenAI 兼容端点、
   // 模型不存在、鉴权失败)。
-  const failed = [...messages]
+  const failed = [...turnMessages]
     .reverse()
     .find((message) => (message as { stopReason?: string }).stopReason === "error") as
     | { errorMessage?: string }
     | undefined;
+  const terminal = [...turnMessages]
+    .reverse()
+    .find((message) => (message as { role?: string }).role === "assistant") as
+    | { stopReason?: string }
+    | undefined;
+  const tinyTruncation = terminal?.stopReason === "length" && full.trim().length < 24;
   return {
     text: full,
-    usage: collectUsage(messages),
+    usage: collectUsage(messages, turnStartIndex),
     sessionState: messages,
-    errorMessage: aborted ? undefined : failed?.errorMessage,
+    errorMessage: aborted
+      ? undefined
+      : failed?.errorMessage ?? (tinyTruncation ? "上下文空间不足，模型回复被截断。请整理上下文后重试。" : undefined),
     aborted,
     // 每轮都回报水位:前端据此画进度条。窗口按**当前模型**给 —— 换个模型上限就变了,
     // 用一个全局常量会在小窗口模型上显示成"还早得很"。
@@ -649,9 +670,9 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
  * 字段名对齐后端 `_turn_metering` 认的那组(input_tokens / output_tokens / total_tokens),
  * 认到了就不会再估算。cacheRead/cacheWrite 另记:它们计价不同,压平进 input 会让费用偏高。
  */
-function collectUsage(messages: readonly unknown[]): Record<string, number> {
+function collectUsage(messages: readonly unknown[], startIndex = 0): Record<string, number> {
   let input = 0, output = 0, cacheRead = 0, cacheWrite = 0, reasoning = 0, requests = 0;
-  for (const message of messages) {
+  for (const message of messages.slice(startIndex)) {
     const usage = (message as { role?: string; usage?: Record<string, number> }).usage;
     if (!usage || (message as { role?: string }).role !== "assistant") continue;
     requests += 1;

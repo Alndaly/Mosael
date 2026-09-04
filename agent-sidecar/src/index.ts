@@ -67,8 +67,8 @@ async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promi
       },
     );
     if (result.aborted) send({ type: "aborted", turnId });
-    // 模型调用失败但没产出任何文本 → 报错,别把它当成一轮"成功但空"的回答。
-    else if (result.errorMessage && !result.text.trim()) {
+    // 失败就是失败。尤其 stopReason=length 只挤出「我」这类碎片时，不能把非空当作成功。
+    else if (result.errorMessage) {
       send({ type: "error", turnId, message: result.errorMessage });
       return;
     }

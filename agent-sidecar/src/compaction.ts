@@ -48,14 +48,36 @@ export const CHARS_PER_TOKEN = 3.5;
 
 /** 端点没告诉我们上下文窗口时的回退。
  *
- * 取**小**值是刻意的:这个数只用于决定何时压缩上下文,估大了会把超窗的请求原样发出去,
- * 由服务端拒掉(用户看到的是一次失败的对话);估小了只是压缩得早一点。以前硬编 128000,
- * 配 8k 上下文的本地模型时就是前一种。真实值由后端从供应商 /models 目录取。
+ * 云端与本地不能共用一个猜测:云端按当代常见的 128K，本机/LAN 服务按 32K。真实值仍由
+ * 供应商 /models 目录或用户覆盖优先；这里仅处理两者都缺失的连接。
  *
- * **和后端 `ai/agent/host.FALLBACK_CONTEXT_WINDOW` 是同一个数**,由
+ * **和后端 `ai/agent/host` 的两个 fallback 常量是同一套规则**,由
  * `contracts/context-meter-cases.json` 钉住:运行时压缩用这个数,界面显示另一个数,
  * 水位就会和实际行为对不上。 */
-export const FALLBACK_CONTEXT_WINDOW = 32000;
+/** 未知云模型的默认窗口。2026 年主流云端模型普遍至少 128K；继续按 32K 会主动浪费容量。 */
+export const FALLBACK_CONTEXT_WINDOW = 128000;
+/** 本机/LAN 推理服务仍保守：它们最可能运行用户自选的小窗口模型。 */
+export const LOCAL_FALLBACK_CONTEXT_WINDOW = 32000;
+
+export function fallbackContextWindow(baseUrl: string): number {
+  if (!baseUrl) return FALLBACK_CONTEXT_WINDOW;
+  try {
+    const hostname = new URL(baseUrl).hostname.toLowerCase().replace(/^\[|\]$/g, "");
+    const octets = hostname.split(".").map(Number);
+    const privateIpv4 =
+      octets.length === 4 &&
+      (octets[0] === 10 ||
+        octets[0] === 127 ||
+        (octets[0] === 192 && octets[1] === 168) ||
+        (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31));
+    if (hostname === "localhost" || hostname === "::1" || hostname.endsWith(".local") || privateIpv4) {
+      return LOCAL_FALLBACK_CONTEXT_WINDOW;
+    }
+  } catch {
+    // 自定义网关地址格式不标准时不擅自把它当成本地小模型。
+  }
+  return FALLBACK_CONTEXT_WINDOW;
+}
 
 function textOf(message: Message): string {
   const content = message.content;
@@ -125,6 +147,54 @@ export function shouldCompact(messages: readonly Message[], contextWindow: numbe
   return contextTokens(messages) > contextWindow * COMPACT_RATIO;
 }
 
+const MIN_TOOL_RESULT_CHARS = 320;
+
+/**
+ * 给同一轮里的后续模型调用留出回答空间。
+ *
+ * 轮前摘要救不了「模型先调用工具，工具一次返回几万字」：这些结果是在本轮中途才出现的。
+ * pi 会按声明的 contextWindow 把 max_tokens 压到剩余空间，最坏时只剩 1 token，于是用户看到
+ * 「我」「抱歉」这类碎片。这里仅裁剪交给模型的副本，Agent state 和执行记录仍保留完整结果。
+ */
+export function fitTurnContext(messages: readonly Message[], targetTokens: number): Message[] {
+  if (targetTokens <= 0 || contextTokens(messages) <= targetTokens) return messages as Message[];
+
+  const next = [...messages];
+  const candidates: Array<{ messageIndex: number; partIndex: number; text: string }> = [];
+  for (let messageIndex = 0; messageIndex < messages.length; messageIndex += 1) {
+    const message = messages[messageIndex];
+    if (message?.role !== "toolResult" || !Array.isArray(message.content)) continue;
+    message.content.forEach((part, partIndex) => {
+      if (part && typeof part === "object" && typeof (part as { text?: unknown }).text === "string") {
+        const text = (part as { text: string }).text;
+        if (text.length > MIN_TOOL_RESULT_CHARS) candidates.push({ messageIndex, partIndex, text });
+      }
+    });
+  }
+  candidates.sort((left, right) => right.text.length - left.text.length);
+
+  for (const candidate of candidates) {
+    const overTokens = contextTokens(next) - targetTokens;
+    if (overTokens <= 0) break;
+    const wantedChars = Math.max(
+      MIN_TOOL_RESULT_CHARS,
+      candidate.text.length - Math.ceil(overTokens * CHARS_PER_TOKEN),
+    );
+    if (wantedChars >= candidate.text.length) continue;
+    const marker = "\n\n【工具结果内容过长已截断；完整结果仍保存在执行记录中。请缩小查询范围后再次调用。】\n\n";
+    const bodyChars = Math.max(0, wantedChars - marker.length);
+    const headChars = Math.ceil(bodyChars * 0.7);
+    const tailChars = Math.max(0, bodyChars - headChars);
+    const shortened = `${candidate.text.slice(0, headChars)}${marker}${tailChars ? candidate.text.slice(-tailChars) : ""}`;
+
+    const originalMessage = next[candidate.messageIndex];
+    const content = [...(originalMessage.content as unknown[])];
+    content[candidate.partIndex] = { ...(content[candidate.partIndex] as Record<string, unknown>), text: shortened };
+    next[candidate.messageIndex] = { ...originalMessage, content };
+  }
+  return next;
+}
+
 /**
  * 找到切点:保留最近 KEEP_RECENT 条,再往前退到最近的一条 user 消息。
  *
@@ -176,7 +246,13 @@ export async function compact(
   if (!options.force && !shouldCompact(messages, options.contextWindow)) {
     return { messages: [...messages], info: null };
   }
-  const cut = splitPoint(messages);
+  let cut = splitPoint(messages);
+  if (cut <= 0 && messages.length > 1) {
+    // 一个工具回包就可能把首轮撑爆，此时消息还不足 KEEP_RECENT，旧逻辑永远找不到切点。
+    // 优先在下一条 user 前切；只有一个 user 时概括整轮，下一条新问题会在摘要之后追加。
+    const nextUser = messages.findIndex((message, index) => index > 0 && message.role === "user");
+    cut = nextUser > 0 ? nextUser : messages.length;
+  }
   if (cut <= 0) return { messages: [...messages], info: null };
 
   const early = messages.slice(0, cut);

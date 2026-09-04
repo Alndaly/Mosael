@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from app.domain.agent.host import FALLBACK_CONTEXT_WINDOW
+from app.domain.agent.host import FALLBACK_CONTEXT_WINDOW, LOCAL_FALLBACK_CONTEXT_WINDOW, fallback_context_window
 from app.domain.context_meter import CHARS_PER_TOKEN, context_tokens
 
 _CONTRACT = Path(__file__).resolve().parents[2] / "contracts" / "context-meter-cases.json"
@@ -56,6 +56,12 @@ def test_constants_match_the_contract() -> None:
 
     assert CHARS_PER_TOKEN == constants["chars_per_token"]
     assert FALLBACK_CONTEXT_WINDOW == constants["fallback_context_window"]
+    assert LOCAL_FALLBACK_CONTEXT_WINDOW == constants["local_fallback_context_window"]
+
+
+@pytest.mark.parametrize("case", _load()["fallback_cases"])
+def test_unknown_model_window_fallback_matches_contract(case: dict) -> None:
+    assert fallback_context_window(case["base_url"]) == case["context_window"]
 
 
 @pytest.mark.parametrize("case", _cases(), ids=_ids())

@@ -54,6 +54,11 @@ commit list and downloadable artifacts.
 - Restored nested image-preview interaction and kept media details visible beneath previews.
 - Unified Settings spacing ownership, typography, colors, radii, list/header rhythm, and bounded Team Activity
   to an internally scrolling region instead of letting it grow with the event history.
+- Restored long-running AI Studio conversations by budgeting in-turn tool results, returning a compact workflow-node
+  catalog, rejecting one-token truncation fragments, and reporting only the current turn's usage; unknown cloud models
+  now default to a 128K context window while local endpoints retain a conservative fallback.
+- Kept AI Studio and embedded-agent headers inside narrow panels by allowing long session titles to shrink and truncate
+  without pushing tabs or window controls beyond the panel edge.
 
 ## [1.0.0-beta1] - 2026-09-03
 

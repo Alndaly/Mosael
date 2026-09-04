@@ -18,7 +18,7 @@ import path from "node:path";
 // 从打包产物里取实现,和真正跑的是同一份代码(源码是 TS,这里不引 ts 运行时)。
 const here = path.dirname(fileURLToPath(import.meta.url));
 const bundle = readFileSync(path.join(here, "..", "dist", "sidecar.cjs"), "utf-8");
-const match = bundle.match(/function collectUsage\(messages\) \{[\s\S]*?\n\}/);
+const match = bundle.match(/function collectUsage\(messages, startIndex[^)]*\) \{[\s\S]*?\n\}/);
 assert.ok(match, "打包产物里找不到 collectUsage —— 是不是被改名或内联了?");
 const collectUsage = new Function(`${match[0]}; return collectUsage;`)();
 
@@ -58,4 +58,19 @@ const assistant = (usage) => ({ role: "assistant", usage });
   assert.deepEqual(out, { requests: 1 }, "非助手消息的 usage 不该被计入本轮");
 }
 
-console.log("PASS  collectUsage 4 组断言全过");
+// 5) 历史消息只用于上下文，不能重复记到本轮账单里
+{
+  const out = collectUsage(
+    [
+      assistant({ input: 10_000, output: 500 }),
+      { role: "user" },
+      assistant({ input: 300, output: 50 }),
+    ],
+    2,
+  );
+  assert.equal(out.input_tokens, 300, "本轮用量不能累计历史 assistant 的 usage");
+  assert.equal(out.output_tokens, 50);
+  assert.equal(out.requests, 1);
+}
+
+console.log("PASS  collectUsage 5 组断言全过");

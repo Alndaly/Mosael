@@ -1,6 +1,6 @@
 {
   "contract": "context-meter",
-  "version": 1,
+  "version": 2,
   "readme": "contracts/README.md",
   "description": "上下文水位:一组 pi 消息占了多少 token。sidecar 用它决定**压不压**,后端用它在界面上显示**还能聊多久**。两边算出不同的数,就会出现「水位显示 90% 而压缩迟迟不触发」。后端 backend/tests/test_context_meter_parity.py 与 sidecar test/context-meter.parity.test.mjs 跑同一份语料。",
   "notes": [
@@ -10,8 +10,16 @@
   ],
   "constants": {
     "chars_per_token": 3.5,
-    "fallback_context_window": 32000
+    "fallback_context_window": 128000,
+    "local_fallback_context_window": 32000
   },
+  "fallback_cases": [
+    { "base_url": "https://api.example.com/v1", "context_window": 128000 },
+    { "base_url": "", "context_window": 128000 },
+    { "base_url": "http://127.0.0.1:11434/v1", "context_window": 32000 },
+    { "base_url": "http://localhost:1234/v1", "context_window": 32000 },
+    { "base_url": "http://192.168.1.20:8000/v1", "context_window": 32000 }
+  ],
   "cases": [
     {
       "name": "empty",

@@ -154,3 +154,35 @@ def test_冒烟清单里没有已经删掉的工具() -> None:
     tools = {tool.name for tool in asyncio.run(mcp_server.mcp.list_tools())}
     stale = sorted((set(ARGS) | set(SKIP)) - tools)
     assert stale == [], f"登记了不存在的工具: {stale}"
+
+
+def test_节点类型先返回轻量目录_指定类型才返回完整配置(monkeypatch) -> None:
+    rows = [
+        {
+            "type": "llm",
+            "label": "LLM",
+            "description": "调用语言模型",
+            "category": "AI",
+            "config": {"model": {"type": "string"}, "prompt": {"type": "textarea"}},
+            "outputs": ["text", "json"],
+            "output_types": {"text": "text"},
+            "output_labels": {"text": "文本"},
+            "plugin_name": "",
+            "tool_name": "",
+        }
+    ]
+    monkeypatch.setattr(mcp_server, "_get", lambda _path: rows)
+
+    catalog = mcp_server.list_workflow_node_types()
+    assert catalog == [
+        {
+            "type": "llm",
+            "label": "LLM",
+            "category": "AI",
+            "config_fields": ["model", "prompt"],
+            "outputs": ["text", "json"],
+            "plugin_name": "",
+            "tool_name": "",
+        }
+    ]
+    assert mcp_server.list_workflow_node_types("llm") == rows[0]

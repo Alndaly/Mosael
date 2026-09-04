@@ -27,7 +27,7 @@ export interface RunTurnRequest {
     baseUrl: string;
     apiKey: string;
     vendor: string;
-    /** 来自供应商 /models 目录;端点没给就缺省,由 pi.ts 用保守回退。 */
+    /** 来自供应商 /models 目录;端点没给就缺省,由 pi.ts 按云端/本地选择回退值。 */
     contextWindow?: number | null;
     maxOutputTokens?: number | null;
     /** 按模型的手动覆盖。没填就是 undefined —— 由 sidecar 保持保守默认,而不是当成 false。 */

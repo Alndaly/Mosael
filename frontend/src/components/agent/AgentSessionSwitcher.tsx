@@ -52,7 +52,7 @@ export function AgentSessionSwitcher<T extends AgentSessionChoice>({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="group/session flex h-7 w-fit min-w-0 max-w-full cursor-pointer items-center gap-1 border-0 bg-transparent px-0 text-left text-ui-sm font-semibold text-foreground hover:text-primary"
+          className="group/session flex h-7 w-full min-w-0 max-w-full cursor-pointer items-center gap-1 overflow-hidden border-0 bg-transparent px-0 text-left text-ui-sm font-semibold text-foreground hover:text-primary"
           aria-label={t("wfAgentSessions")}
           title={title}
         >

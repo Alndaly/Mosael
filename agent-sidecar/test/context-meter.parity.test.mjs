@@ -41,7 +41,7 @@ async function load(entry) {
   return import(pathToFileURL(outfile).href);
 }
 
-const { contextTokens, CHARS_PER_TOKEN, FALLBACK_CONTEXT_WINDOW } = await load("compaction.ts");
+const { contextTokens, CHARS_PER_TOKEN, FALLBACK_CONTEXT_WINDOW, LOCAL_FALLBACK_CONTEXT_WINDOW, fallbackContextWindow } = await load("compaction.ts");
 
 test("语料在,且带版本号 —— 找不到就静默跳过是最坏的结果", () => {
   assert.equal(contract.contract, "context-meter");
@@ -52,7 +52,14 @@ test("语料在,且带版本号 —— 找不到就静默跳过是最坏的结�
 test("两个常量由语料说了算,不再靠两侧注释互相叮嘱", () => {
   assert.equal(CHARS_PER_TOKEN, contract.constants.chars_per_token);
   assert.equal(FALLBACK_CONTEXT_WINDOW, contract.constants.fallback_context_window);
+  assert.equal(LOCAL_FALLBACK_CONTEXT_WINDOW, contract.constants.local_fallback_context_window);
 });
+
+for (const testCase of contract.fallback_cases) {
+  test(`${testCase.base_url || "empty"} · 未知模型窗口回退`, () => {
+    assert.equal(fallbackContextWindow(testCase.base_url), testCase.context_window);
+  });
+}
 
 for (const testCase of contract.cases) {
   test(`${testCase.name} · 上下文水位`, () => {

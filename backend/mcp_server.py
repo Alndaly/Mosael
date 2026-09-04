@@ -1096,14 +1096,35 @@ def get_workflow(workflow_id: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-def list_workflow_node_types() -> list[dict[str, Any]]:
-    """Read-only: list allowed workflow node types, config fields, and outputs.
+def list_workflow_node_types(node_type: str = "") -> list[dict[str, Any]] | dict[str, Any]:
+    """Read-only: list allowed workflow node types, or inspect one type in full.
 
-    Use before create_workflow/edit_workflow when adding or configuring workflow
-    canvas nodes. Reference upstream outputs downstream as {{node_id.output}}.
+    With no node_type, returns a compact catalog (type, label, category, config field
+    names and outputs). Pass one catalog type back as node_type to get its complete
+    config schema and output metadata before creating/configuring that node. Reference
+    upstream outputs downstream as {{node_id.output}}.
     Do NOT use for video timeline tracks/clips or media asset tags.
     """
-    return _get("/api/workflows/node-types")
+    rows = _get("/api/workflows/node-types")
+    wanted = node_type.strip()
+    if wanted:
+        match = next((row for row in rows if row.get("type") == wanted), None)
+        if match is None:
+            known = ", ".join(str(row.get("type") or "") for row in rows[:20])
+            raise ValueError(f"Unknown workflow node type {wanted!r}. Known types: {known}")
+        return match
+    return [
+        {
+            "type": row.get("type", ""),
+            "label": row.get("label", ""),
+            "category": row.get("category", ""),
+            "config_fields": list((row.get("config") or {}).keys()),
+            "outputs": row.get("outputs") or [],
+            "plugin_name": row.get("plugin_name", ""),
+            "tool_name": row.get("tool_name", ""),
+        }
+        for row in rows
+    ]
 
 
 @mcp.tool()
