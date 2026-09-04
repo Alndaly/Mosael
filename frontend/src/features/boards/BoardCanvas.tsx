@@ -126,6 +126,25 @@ export function canMoveComment(authorId: string | null, currentUserId: string | 
   return Boolean(authorId && currentUserId && authorId === currentUserId);
 }
 
+type CanvasCommentAnchor = NonNullable<CollaborationComment["anchor"]>;
+type ScreenPoint = { x: number; y: number };
+
+/** Keep comment movement stable at every zoom level by measuring the pointer delta in flow space. */
+export function moveCommentAnchorByScreenDelta(
+  anchor: CanvasCommentAnchor,
+  startScreen: ScreenPoint,
+  currentScreen: ScreenPoint,
+  screenToFlowPosition: (point: ScreenPoint) => ScreenPoint,
+): CanvasCommentAnchor {
+  const start = screenToFlowPosition(startScreen);
+  const current = screenToFlowPosition(currentScreen);
+  return {
+    ...anchor,
+    x: (anchor.x ?? 0) + current.x - start.x,
+    y: (anchor.y ?? 0) + current.y - start.y,
+  };
+}
+
 export function shouldDismissCommentOverlay(
   hasActiveComment: boolean,
   hasDraft: boolean,
@@ -241,6 +260,12 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     nodeId?: string;
     moved: boolean;
     last?: { x: number; y: number };
+  } | null>(null);
+  const draftCommentDrag = React.useRef<{
+    pointerId: number;
+    startScreen: ScreenPoint;
+    origin: CanvasCommentAnchor;
+    moved: boolean;
   } | null>(null);
   const suppressCommentClick = React.useRef<string | null>(null);
 
@@ -1005,9 +1030,51 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
                 onClick={(event) => event.stopPropagation()}
                 onDoubleClick={(event) => event.stopPropagation()}
               >
-                <span className="grid h-7 w-7 -translate-x-1/2 -translate-y-1/2 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-panel)]">
+                <button
+                  type="button"
+                  data-comment-drag-handle=""
+                  className="grid h-7 w-7 touch-none -translate-x-1/2 -translate-y-1/2 shrink-0 cursor-grab place-items-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-panel)] active:cursor-grabbing"
+                  aria-label={t("comments")}
+                  onPointerDown={(event) => {
+                    if (event.button !== 0) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    draftCommentDrag.current = {
+                      pointerId: event.pointerId,
+                      startScreen: { x: event.clientX, y: event.clientY },
+                      origin: draftAnchor,
+                      moved: false,
+                    };
+                  }}
+                  onPointerMove={(event) => {
+                    const drag = draftCommentDrag.current;
+                    const instance = rf.current;
+                    if (!drag || drag.pointerId !== event.pointerId || !instance) return;
+                    if (!drag.moved && Math.hypot(event.clientX - drag.startScreen.x, event.clientY - drag.startScreen.y) <= 4) return;
+                    drag.moved = true;
+                    setDraftAnchor(moveCommentAnchorByScreenDelta(
+                      drag.origin,
+                      drag.startScreen,
+                      { x: event.clientX, y: event.clientY },
+                      (point) => instance.screenToFlowPosition(point),
+                    ));
+                  }}
+                  onPointerUp={(event) => {
+                    const drag = draftCommentDrag.current;
+                    if (!drag || drag.pointerId !== event.pointerId) return;
+                    draftCommentDrag.current = null;
+                    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+                  }}
+                  onPointerCancel={(event) => {
+                    const drag = draftCommentDrag.current;
+                    if (!drag || drag.pointerId !== event.pointerId) return;
+                    draftCommentDrag.current = null;
+                    setDraftAnchor(drag.origin);
+                  }}
+                >
                   <MessageSquare size={13} />
-                </span>
+                </button>
                 <div className="-ml-3.5 -translate-y-3">
                   <BoardCommentComposer
                     members={members}

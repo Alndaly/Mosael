@@ -5,6 +5,7 @@ import {
   canMoveComment,
   canPlaceCommentDraft,
   focusBoardNode,
+  moveCommentAnchorByScreenDelta,
   shouldDismissCommentOverlay,
   shouldSuppressCommentPlacement,
 } from "./BoardCanvas";
@@ -29,6 +30,18 @@ describe("画板节点聚焦", () => {
 });
 
 describe("画布评论落点", () => {
+  it("编辑中的评论可以从消息圆点按屏幕位移拖动，并保留节点锚定关系", () => {
+    const anchor = { kind: "canvas" as const, x: 120, y: 80, node_id: "video-1" };
+    const screenToFlowPosition = ({ x, y }: { x: number; y: number }) => ({ x: x / 2, y: y / 2 });
+
+    expect(moveCommentAnchorByScreenDelta(
+      anchor,
+      { x: 200, y: 100 },
+      { x: 260, y: 140 },
+      screenToFlowPosition,
+    )).toEqual({ kind: "canvas", x: 150, y: 100, node_id: "video-1" });
+  });
+
   it("已有未发送评论时不允许点击画布迁移或重建评论卡", () => {
     expect(canPlaceCommentDraft(true, false)).toBe(true);
     expect(canPlaceCommentDraft(true, true)).toBe(false);
