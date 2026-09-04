@@ -9,7 +9,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { SettingsGroup, SettingsList, SettingsListItem, SettingsRow, SettingsSectionStack } from "@/features/settings/ui";
+import {
+  SettingsBlock,
+  SettingsBlockTitle,
+  SettingsGroup,
+  SettingsList,
+  SettingsListItem,
+  SettingsRow,
+  SettingsSectionStack,
+} from "@/features/settings/ui";
 
 type DeploymentUser = {
   id: string;
@@ -133,7 +141,8 @@ export function DeploymentSection({ showAdmins = true }: { showAdmins?: boolean 
           </div>
         </SettingsRow>
         {(invites.data ?? []).length > 0 && (
-          <SettingsRow label={t("deployInviteList")} className="grid-cols-1 items-start">
+          <SettingsBlock>
+            <SettingsBlockTitle>{t("deployInviteList")}</SettingsBlockTitle>
             <SettingsList className="w-full">
               {(invites.data ?? []).map((invite) => (
                 <SettingsListItem
@@ -162,7 +171,7 @@ export function DeploymentSection({ showAdmins = true }: { showAdmins?: boolean 
                 </SettingsListItem>
               ))}
             </SettingsList>
-          </SettingsRow>
+          </SettingsBlock>
         )}
       </SettingsGroup>
       )}

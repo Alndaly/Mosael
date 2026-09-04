@@ -42,7 +42,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { SettingsBlock, SettingsGroup, SettingsList, SettingsListItem } from "@/features/settings/ui";
+import { SettingsBlock, SettingsBlockTitle, SettingsGroup, SettingsList, SettingsListItem } from "@/features/settings/ui";
 import { relativeTime } from "@/lib/time";
 
 /** Per-permission icon for the member-permissions popover (scannability). */
@@ -153,9 +153,9 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
       </SettingsBlock>
 
       <SettingsBlock>
-        <div className="mb-3 flex items-center gap-2 text-ui-md font-semibold">
+        <SettingsBlockTitle>
           <Clock size={15} /> {t("teamActivity")}
-        </div>
+        </SettingsBlockTitle>
         <SettingsList>
           {(activity.data ?? []).slice(0, 20).map((event) => (
             <ActivityRow key={event.id} event={event} />

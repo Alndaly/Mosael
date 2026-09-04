@@ -3,7 +3,15 @@ import React from "react";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { SettingsGroup, SettingsList, SettingsListItem, SettingsRow, SettingsSectionStack } from "./ui";
+import {
+  SettingsBlock,
+  SettingsBlockTitle,
+  SettingsGroup,
+  SettingsList,
+  SettingsListItem,
+  SettingsRow,
+  SettingsSectionStack,
+} from "./ui";
 
 describe("settings section layout", () => {
   it("keeps groups flat inside the page panel", () => {
@@ -107,5 +115,21 @@ describe("settings section layout", () => {
     expect(container.querySelector('[data-slot="settings-section-stack"]')).toHaveClass("h-full");
     expect(container.querySelector('[data-slot="settings-group"]')).toHaveClass("grid");
     expect(container.querySelector('[data-slot="settings-group-content"]')).toHaveClass("min-h-0");
+  });
+
+  it("lets the block own the distance between its title and content", () => {
+    const { container } = render(
+      <SettingsBlock>
+        <SettingsBlockTitle>团队动态</SettingsBlockTitle>
+        <SettingsList>
+          <SettingsListItem>创建了画板</SettingsListItem>
+        </SettingsList>
+      </SettingsBlock>,
+    );
+
+    expect(container.querySelector('[data-slot="settings-block"]')).toHaveClass("gap-2", "py-3");
+    const title = container.querySelector('[data-slot="settings-block-title"]');
+    expect(title).toHaveClass("m-0");
+    expect(title?.className).not.toMatch(/m[tyb]-/);
   });
 });

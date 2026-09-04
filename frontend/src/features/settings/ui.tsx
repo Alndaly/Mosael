@@ -113,7 +113,18 @@ export function SettingsRow({
 
 /** Full-width slot inside a group (forms, QR panels, lists). */
 export function SettingsBlock({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className={cn("grid gap-2 px-0.5 py-3", className)}>{children}</div>;
+  return <div data-slot="settings-block" className={cn("grid gap-2 px-0.5 py-3", className)}>{children}</div>;
+}
+
+/** Block 内的小标题不自带外边距；它与后续内容的距离由 SettingsBlock 的 gap 统一控制。 */
+export function SettingsBlockTitle({ className, ...props }: React.ComponentProps<"h3">) {
+  return (
+    <h3
+      data-slot="settings-block-title"
+      className={cn("m-0 flex items-center gap-2 text-ui-md font-semibold", className)}
+      {...props}
+    />
+  );
 }
 
 /** Flat settings collection: sibling rows are separated without becoming a stack of cards. */
