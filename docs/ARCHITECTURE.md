@@ -281,6 +281,8 @@ Evolink 是「平台 Adapter」的例子：一个 `(evolink, image|video)` 协�
 上传到 Files API（图片归一化，视频/音频原样上传），按角色与顺序组装 `image_urls` / `video_urls` /
 `audio_urls`，再走统一异步任务协议并立即下载限时结果；不会按引擎复制 HTTP Adapter。原生
 火山 Seedance 与 Evolink Seedance 是两条独立连接，能力描述符仍按 `(vendor, model, kind)` 分开。
+各模型族的已接通能力、证据等级与尚未接通差距见
+[视频生成引擎能力矩阵](VIDEO_GENERATION_CAPABILITIES.md)。
 
 所有远程媒体下载共用 `ai/providers/media_transfer.py`。API 客户端的 Authorization/API Key 只发往
 显式受信同源；对象存储预签名地址不带凭据，重定向一旦跨源立即丢头。大文件流式写 `.part` 后原子

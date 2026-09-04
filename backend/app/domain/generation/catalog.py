@@ -602,6 +602,74 @@ EVOLINK_SEEDANCE_15_CAPABILITIES = {
     "supports_generate_audio": True,
 }
 
+#: Seedance 2.0 在 Evolink 上和 2.5 一样，**模式属于模型 id**，不是一个模型上的运行时开关。
+#: 官方网关文档（2026-09-04 核）列出标准 / Fast 各三条路：
+#:
+#: * ``*-text-to-video`` 只收文本；
+#: * ``*-image-to-video`` 收 1～2 张图，按数组位置解释为首帧 / 首尾帧；
+#: * ``*-reference-to-video`` 收最多 9 图、3 视频、3 音频，音频不能单独提交。
+#:
+#: 因此不能复用方舟直连的 ``SEEDANCE_2_VIDEO_CAPABILITIES``：方舟用一个 model id + role
+#: 区分模式，而 Evolink 用六个 model id + 三个媒体数组。把两者混成一份，纯文生会长出素材槽，
+#: 图生又无法表达「首帧必填」，最终不是 400 就是素材被静默忽略。
+EVOLINK_SEEDANCE_20_BASE = {
+    "max_prompt_chars": 5000,
+    "duration_seconds": [],
+    "default_duration_seconds": 5,
+    "min_duration_seconds": 4,
+    "max_duration_seconds": 15,
+    "resolutions": ["480p", "720p", "1080p"],
+    "default_resolution": "720p",
+    "aspect_ratios": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"],
+    "default_aspect_ratio": "16:9",
+    "supports_audio": True,
+    "supports_generate_audio": True,
+    "default_generate_audio": True,
+    "boolean_parameters": ["generate_audio"],
+}
+
+EVOLINK_SEEDANCE_20_T2V_CAPABILITIES = {
+    **EVOLINK_SEEDANCE_20_BASE,
+    "modes": ["text-to-video"],
+    "parameter_keys": ["duration_seconds", "resolution", "aspect_ratio", "generate_audio"],
+}
+
+EVOLINK_SEEDANCE_20_I2V_CAPABILITIES = {
+    **EVOLINK_SEEDANCE_20_BASE,
+    "modes": ["image-to-video", "keyframes-to-video"],
+    "parameter_keys": [
+        "duration_seconds", "resolution", "aspect_ratio", "first_frame", "last_frame", "generate_audio",
+    ],
+    "source_limits": {"first_frame": 1, "last_frame": 1},
+    "requires_source": [["first_frame"]],
+    "requires_companion": {"last_frame": ["first_frame"]},
+}
+
+EVOLINK_SEEDANCE_20_R2V_CAPABILITIES = {
+    **EVOLINK_SEEDANCE_20_BASE,
+    "modes": ["reference-to-video"],
+    "parameter_keys": [
+        "duration_seconds", "resolution", "aspect_ratio",
+        "reference_image", "reference_video", "reference_audio", "generate_audio",
+    ],
+    "source_limits": {"reference_image": 9, "reference_video": 3, "reference_audio": 3},
+    "requires_companion": {"reference_audio": ["reference_image", "reference_video"]},
+}
+
+#: Fast 的输入协议和标准版一致，但网关只承诺 480p / 720p；不能让它继承标准版的 1080p。
+EVOLINK_SEEDANCE_20_FAST_T2V_CAPABILITIES = {
+    **EVOLINK_SEEDANCE_20_T2V_CAPABILITIES,
+    "resolutions": ["480p", "720p"],
+}
+EVOLINK_SEEDANCE_20_FAST_I2V_CAPABILITIES = {
+    **EVOLINK_SEEDANCE_20_I2V_CAPABILITIES,
+    "resolutions": ["480p", "720p"],
+}
+EVOLINK_SEEDANCE_20_FAST_R2V_CAPABILITIES = {
+    **EVOLINK_SEEDANCE_20_R2V_CAPABILITIES,
+    "resolutions": ["480p", "720p"],
+}
+
 #: Seedance 2.5 在 Evolink 上是**五个模型 id,模式在名字里而不是参数里**
 #: (逐字核过 2026-09-01 的五份 OpenAPI:seedance-2.5-{text,image,reference}-to-video 与
 #: video-{edit,extend})。所以每个 id 一份描述符,而不是一份描述符加一个模式开关 ——
@@ -734,9 +802,13 @@ EVOLINK_BUILTIN_MODELS = [
     ("seedance-2.5-reference-to-video", "video", EVOLINK_SEEDANCE_25_R2V_CAPABILITIES),
     ("seedance-2.5-video-edit", "video", EVOLINK_SEEDANCE_25_VIDEO_EDIT_CAPABILITIES),
     ("seedance-2.5-video-extend", "video", EVOLINK_SEEDANCE_25_VIDEO_EXTEND_CAPABILITIES),
-    # Evolink README 的 Seedance 2.0 示例使用这个 id；静态 MCP 目录仍保留旧 placeholder，
-    # 两边更新节奏不同，所以只把当前示例 id 纳入，不把 placeholder 冒充成可用模型。
-    ("seedance-2.0-text-to-video", "video", EVOLINK_VIDEO_T2V_CAPABILITIES),
+    # Seedance 2.0 标准 / Fast 各自拆成文生、图生（含首尾帧）、全能参考三条模型 id。
+    ("seedance-2.0-text-to-video", "video", EVOLINK_SEEDANCE_20_T2V_CAPABILITIES),
+    ("seedance-2.0-image-to-video", "video", EVOLINK_SEEDANCE_20_I2V_CAPABILITIES),
+    ("seedance-2.0-reference-to-video", "video", EVOLINK_SEEDANCE_20_R2V_CAPABILITIES),
+    ("seedance-2.0-fast-text-to-video", "video", EVOLINK_SEEDANCE_20_FAST_T2V_CAPABILITIES),
+    ("seedance-2.0-fast-image-to-video", "video", EVOLINK_SEEDANCE_20_FAST_I2V_CAPABILITIES),
+    ("seedance-2.0-fast-reference-to-video", "video", EVOLINK_SEEDANCE_20_FAST_R2V_CAPABILITIES),
     ("sora-2-preview", "video", EVOLINK_VIDEO_I2V_CAPABILITIES),
     ("kling-o3-text-to-video", "video", EVOLINK_VIDEO_T2V_CAPABILITIES),
     ("kling-o3-image-to-video", "video", EVOLINK_VIDEO_I2V_CAPABILITIES),

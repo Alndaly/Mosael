@@ -203,6 +203,56 @@ class Test按描述符校验:
                 {"first_frame_url": ["https://e/a.png", "https://e/b.png"]},
             )
 
+    def test_seedance20图生必须有首帧且尾帧不能单独提交(self) -> None:
+        _check(
+            "evolink",
+            "seedance-2.0-image-to-video",
+            "video",
+            {},
+            [{"asset_id": "first", "role": "first_frame"}],
+        )
+        _check(
+            "evolink",
+            "seedance-2.0-image-to-video",
+            "video",
+            {},
+            [
+                {"asset_id": "first", "role": "first_frame"},
+                {"asset_id": "last", "role": "last_frame"},
+            ],
+        )
+        with pytest.raises(GenerationDomainError, match="必须给一份首帧"):
+            _check("evolink", "seedance-2.0-image-to-video", "video")
+        # 图生模型的起点规则先于搭伴规则执行；只给尾帧时应直接指出缺少首帧。
+        with pytest.raises(GenerationDomainError, match="必须给一份首帧"):
+            _check(
+                "evolink",
+                "seedance-2.0-image-to-video",
+                "video",
+                {},
+                [{"asset_id": "last", "role": "last_frame"}],
+            )
+
+    def test_seedance20参考音频必须搭配图或视频(self) -> None:
+        with pytest.raises(GenerationDomainError, match="参考音频.*参考图.*参考视频"):
+            _check(
+                "evolink",
+                "seedance-2.0-reference-to-video",
+                "video",
+                {},
+                [{"asset_id": "audio", "role": "reference_audio"}],
+            )
+        _check(
+            "evolink",
+            "seedance-2.0-reference-to-video",
+            "video",
+            {},
+            [
+                {"asset_id": "image", "role": "reference_image"},
+                {"asset_id": "audio", "role": "reference_audio"},
+            ],
+        )
+
 
 class Test智能体拿得到描述符:
     def test_每个模型都报得出它认哪些参数(self) -> None:

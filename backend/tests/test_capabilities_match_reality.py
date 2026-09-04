@@ -461,6 +461,60 @@ class TestEvolinkSeedance25:
         assert extend["source_limits"]["reference_video"] == 9
 
 
+class TestEvolinkSeedance20:
+    """核查日期 2026-09-04，Evolink 的 Seedance 2.0 网关文档逐项核。
+
+    2.0 标准版与 Fast 都拆成文生、图生、全能参考三个模型 id。此前目录只有文生一条，
+    所以模型虽然有首尾帧和参考能力，Mosael 的模型选择器与素材槽都不可能把它们呈现出来。
+    """
+
+    def test_标准版与_fast_的三种模式都在目录里(self) -> None:
+        ids = {model for model, kind, _capabilities in C.EVOLINK_BUILTIN_MODELS if kind == "video"}
+        for model in (
+            "seedance-2.0-text-to-video",
+            "seedance-2.0-image-to-video",
+            "seedance-2.0-reference-to-video",
+            "seedance-2.0-fast-text-to-video",
+            "seedance-2.0-fast-image-to-video",
+            "seedance-2.0-fast-reference-to-video",
+        ):
+            assert model in ids
+
+    def test_图生视频用一张首帧或两张首尾帧(self) -> None:
+        descriptor = C.EVOLINK_SEEDANCE_20_I2V_CAPABILITIES
+        assert descriptor["modes"] == ["image-to-video", "keyframes-to-video"]
+        assert descriptor["source_limits"] == {"first_frame": 1, "last_frame": 1}
+        assert descriptor["requires_source"] == [["first_frame"]]
+        assert descriptor["requires_companion"] == {"last_frame": ["first_frame"]}
+
+    def test_全能参考的数量与音频搭伴约束准确(self) -> None:
+        descriptor = C.EVOLINK_SEEDANCE_20_R2V_CAPABILITIES
+        assert descriptor["source_limits"] == {
+            "reference_image": 9,
+            "reference_video": 3,
+            "reference_audio": 3,
+        }
+        assert descriptor["requires_companion"] == {
+            "reference_audio": ["reference_image", "reference_video"],
+        }
+
+    def test_文生模型不冒充素材模型(self) -> None:
+        roles = [
+            key for key in C.EVOLINK_SEEDANCE_20_T2V_CAPABILITIES["parameter_keys"]
+            if key in _SOURCE_ROLE_NAMES
+        ]
+        assert roles == []
+
+    def test_fast_不展示它不支持的_1080p(self) -> None:
+        assert C.EVOLINK_SEEDANCE_20_BASE["resolutions"] == ["480p", "720p", "1080p"]
+        for descriptor in (
+            C.EVOLINK_SEEDANCE_20_FAST_T2V_CAPABILITIES,
+            C.EVOLINK_SEEDANCE_20_FAST_I2V_CAPABILITIES,
+            C.EVOLINK_SEEDANCE_20_FAST_R2V_CAPABILITIES,
+        ):
+            assert descriptor["resolutions"] == ["480p", "720p"]
+
+
 def test_这道棘轮扫得到东西() -> None:
     """假阴性比红更危险:哪天描述符改了名,上面几条会一起真空通过。"""
     assert C.WAN_VIDEO_CAPABILITIES["sizes"]
@@ -473,3 +527,5 @@ def test_这道棘轮扫得到东西() -> None:
     assert C.WAN_27_R2V_CAPABILITIES["source_limits"]
     assert C.EVOLINK_SEEDANCE_25_R2V_CAPABILITIES["source_limits"]
     assert C.EVOLINK_SEEDANCE_25_VIDEO_EDIT_CAPABILITIES["source_limits"]
+    assert C.EVOLINK_SEEDANCE_20_I2V_CAPABILITIES["source_limits"]
+    assert C.EVOLINK_SEEDANCE_20_R2V_CAPABILITIES["source_limits"]
