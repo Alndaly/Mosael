@@ -21,6 +21,7 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-warning: var(--warning);
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
   --color-panel: var(--panel);
@@ -130,7 +131,9 @@
   --accent: #ece9fb;
   --accent-foreground: #4f43b8;
   --destructive: #d8544b;
-  --success: #359460;
+  /* 状态色按正文尺寸校验对比度；不要在组件里回退到 Tailwind 原色。 */
+  --success: #2f7f52;
+  --warning: #9a5b0b;
   --border: #e6e1d8;
   --input: #ddd7cc;
   --field: #f1eee8;
@@ -226,6 +229,7 @@
   --accent-foreground: #b7aaff;
   --destructive: #e0645c;
   --success: #4cb87e;
+  --warning: #d19b3d;
   --border: #2b2836;
   --input: #3a3448;
   --field: #211e2b;

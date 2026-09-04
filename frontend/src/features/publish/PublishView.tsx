@@ -228,9 +228,9 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
-      <div className="flex h-full min-h-0 flex-col gap-1.5">
+      <div className="flex h-full min-h-0 flex-col gap-2">
       {seg}
-      <div className="min-h-0 flex-1 overflow-y-auto pt-1">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {groups.map((group) => {
           const day = dayGroupOf(group.key, now, locale);
           return (
@@ -280,9 +280,9 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
 function statusTone(status: string) {
   if (ACTIVE.has(status)) return { Icon: Loader2, tone: "text-muted-foreground", spin: true };
   if (status === "succeeded" || status === "success") {
-    return { Icon: CheckCircle2, tone: "text-[#16a34a]", spin: false };
+    return { Icon: CheckCircle2, tone: "text-success", spin: false };
   }
-  if (BLOCKED.has(status)) return { Icon: CircleAlert, tone: "text-[#d97706]", spin: false };
+  if (BLOCKED.has(status)) return { Icon: CircleAlert, tone: "text-warning", spin: false };
   return { Icon: CircleAlert, tone: "text-destructive", spin: false };
 }
 

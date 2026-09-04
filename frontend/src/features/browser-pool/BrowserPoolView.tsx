@@ -202,7 +202,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
         {profiles.isLoading &&
           items.length === 0 &&
           [0, 1, 2, 3].map((i) => (
-            <div key={`sk${i}`} className="space-y-2 rounded-md border border-border bg-panel p-3" aria-hidden>
+            <div key={`sk${i}`} className="grid gap-2 rounded-md border border-border bg-panel p-3" aria-hidden>
               <Skeleton className="h-4 w-1/2 rounded" />
               <Skeleton className="h-3 w-2/3 rounded" />
               <Skeleton className="h-3 w-1/3 rounded" />
@@ -246,9 +246,9 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                         <em
                           className={cn(
                             "rounded-full bg-secondary px-1.5 text-ui-2xs not-italic text-muted-foreground",
-                            p.binding_status === "bound" && "bg-[color-mix(in_srgb,#16a34a_12%,transparent)] text-[#16a34a]",
+                            p.binding_status === "bound" && "bg-[color-mix(in_srgb,var(--success)_12%,transparent)] text-success",
                             ["login_required", "manual_required", "permission_required"].includes(p.binding_status ?? "") &&
-                              "bg-[color-mix(in_srgb,#d97706_12%,transparent)] text-[#d97706]",
+                              "bg-[color-mix(in_srgb,var(--warning)_12%,transparent)] text-warning",
                           )}
                         >
                           {t(`binding_${p.binding_status}` as never)}

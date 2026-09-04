@@ -135,7 +135,7 @@ export function ModalShell({
         {footer && (
           <DialogFooter
             data-slot="modal-footer"
-            className="sticky bottom-0 z-10 shrink-0 gap-2 space-x-0 border-t border-border/60 bg-popover/90 px-5 py-3.5 backdrop-blur-xl sm:items-center sm:gap-2 sm:space-x-0"
+            className="sticky bottom-0 z-10 shrink-0 gap-2 border-t border-border/60 bg-popover/90 px-5 py-3.5 backdrop-blur-xl sm:items-center"
           >
             {footer}
           </DialogFooter>
@@ -227,9 +227,9 @@ export function ConfirmDialog({
           <AlertDialogTitle>{title}</AlertDialogTitle>
           {body ? <AlertDialogDescription>{body}</AlertDialogDescription> : null}
         </AlertDialogHeader>
-        <AlertDialogFooter className="gap-1.5 space-x-0 sm:gap-1.5 sm:space-x-0">
+        <AlertDialogFooter className="gap-1.5">
           {/* 与任务详情等浮层统一:size=sm 的胶囊按钮,右下角对齐;确认沿用 destructive 红以示危险。 */}
-          <AlertDialogCancel className="mt-0 h-8 rounded-full px-3 text-xs sm:mt-0">
+          <AlertDialogCancel className="h-8 rounded-full px-3 text-xs">
             {t("cancel")}
           </AlertDialogCancel>
           <AlertDialogAction

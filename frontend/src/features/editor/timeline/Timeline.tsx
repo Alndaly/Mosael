@@ -821,7 +821,7 @@ export function Timeline({
           {tracks.map((track, trackIndex) => (
             <div className="group/label flex flex-col justify-center gap-1 border-b border-[var(--track-lane-line)] px-2 text-ui-xs font-semibold text-muted-foreground" key={track.id} style={{ height: TRACK_HEIGHT }}>
               <div className="flex min-w-0 items-center gap-1.5">
-                <span className={cn("h-[7px] w-[7px] rounded-sm bg-[var(--track-video-border)]", track.kind === "audio" && "bg-[var(--track-audio-border)]", track.kind === "subtitle" && "bg-[#a855f7]")} />
+                <span className={cn("h-[7px] w-[7px] rounded-sm bg-[var(--track-video-border)]", track.kind === "audio" && "bg-[var(--track-audio-border)]", track.kind === "subtitle" && "bg-[var(--track-subtitle-border)]")} />
                 <span className="truncate">{track.name}</span>
                 {/* Reorder sits with the name: it answers "which layer is this", not "what does
                     this track do". That also leaves the row below wide enough for the controls. */}

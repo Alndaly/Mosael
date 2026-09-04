@@ -28,10 +28,10 @@ export function ConfigNotice({
       "flex items-start gap-1.5 rounded-lg border px-2.5 py-2 text-ui-xs leading-normal text-foreground",
       tone === "error"
         ? "border-[color-mix(in_oklab,var(--destructive)_45%,var(--border))] bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)]"
-        : "border-[color-mix(in_oklab,#d97706_40%,var(--border))] bg-[color-mix(in_oklab,#d97706_10%,transparent)]",
+        : "border-[color-mix(in_oklab,var(--warning)_40%,var(--border))] bg-[color-mix(in_oklab,var(--warning)_10%,transparent)]",
       className,
     )}>
-      <AlertTriangle size={13} className={cn("mt-px flex-none", tone === "error" ? "text-destructive" : "text-[#d97706]")} />
+      <AlertTriangle size={13} className={cn("mt-px flex-none", tone === "error" ? "text-destructive" : "text-warning")} />
       <span className={cn("min-w-0 flex-1", textClassName)}>{message}</span>
       <button type="button" className={cn("inline-flex flex-none cursor-pointer items-center gap-0.5 whitespace-nowrap border-0 bg-transparent p-0 text-ui-xs font-semibold text-primary hover:underline", actionClassName)} onClick={() => gotoSettings(section)}>
         {actionLabel} <ArrowRight size={12} />

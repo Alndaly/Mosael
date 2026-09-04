@@ -137,7 +137,7 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
               (tasks.data ?? []).length === 0 &&
               [0, 1, 2, 3].map((i) => (
                 <div key={`sk${i}`} className="flex items-center gap-[9px] px-2 py-1.5" aria-hidden>
-                  <div className="min-w-0 flex-1 space-y-1.5">
+                  <div className="grid min-w-0 flex-1 gap-1.5">
                     <Skeleton className="h-3.5 w-3/4 rounded" />
                     <Skeleton className="h-2.5 w-1/3 rounded" />
                   </div>
@@ -151,7 +151,7 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
                     className={cn("flex cursor-pointer items-center gap-[9px] rounded-md border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted max-[880px]:shrink-0 max-[880px]:py-1", selected?.id === task.id && "bg-accent hover:bg-accent")}
                     onClick={() => setSelectedId(task.id)}
                   >
-                    <span className={cn("h-[7px] w-[7px] shrink-0 rounded-full bg-border-strong", task.enabled && "bg-[#22c55e]")} />
+                    <span className={cn("h-[7px] w-[7px] shrink-0 rounded-full bg-border-strong", task.enabled && "bg-success")} />
                     <span className="min-w-0 [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-ui-sm [&_strong]:font-semibold max-[880px]:[&_small]:hidden">
                       <strong>{task.name}</strong>
                       <small>
@@ -558,7 +558,7 @@ function RunRow({ run, job }: { run: ScheduledTaskRun; job: Job | null }) {
         className={cn(
           "grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full border border-border text-muted-foreground",
           running && "border-[color-mix(in_srgb,var(--primary)_35%,var(--border))] bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] text-primary",
-          !running && run.status === "succeeded" && "border-[color-mix(in_srgb,#16a34a_35%,var(--border))] bg-[color-mix(in_srgb,#16a34a_8%,transparent)] text-[#16a34a]",
+          !running && run.status === "succeeded" && "border-[color-mix(in_srgb,var(--success)_35%,var(--border))] bg-[color-mix(in_srgb,var(--success)_8%,transparent)] text-success",
           !running && run.status === "failed" && "border-[color-mix(in_srgb,var(--destructive)_35%,var(--border))] bg-[color-mix(in_srgb,var(--destructive)_8%,transparent)] text-destructive",
         )}
       >
@@ -588,7 +588,7 @@ function RunRow({ run, job }: { run: ScheduledTaskRun; job: Job | null }) {
         className={cn(
           "shrink-0 rounded-full bg-secondary px-2 text-ui-2xs not-italic leading-[18px] text-muted-foreground",
           running && "bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-primary",
-          !running && run.status === "succeeded" && "bg-[color-mix(in_srgb,#16a34a_12%,transparent)] text-[#16a34a]",
+          !running && run.status === "succeeded" && "bg-[color-mix(in_srgb,var(--success)_12%,transparent)] text-success",
           !running && run.status === "failed" && "bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] text-destructive",
           !running && run.status === "queued" && "bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-primary",
         )}

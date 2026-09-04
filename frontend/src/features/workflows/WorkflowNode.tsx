@@ -255,10 +255,10 @@ function WorkflowNode({ data, selected }: NodeProps) {
         showIo && inputs.length > 0 && outputs.length > 0 && "min-w-[210px]",
         badge && !selected && (badge.severity === "error"
           ? "border-[color-mix(in_srgb,var(--destructive)_60%,var(--border))]"
-          : "border-[color-mix(in_srgb,#d97706_55%,var(--border))]"),
+          : "border-[color-mix(in_srgb,var(--warning)_55%,var(--border))]"),
         // 运行态压过就绪角标:正在跑/跑挂了是此刻更要紧的信息。
         d.run?.status === "running" && "border-primary shadow-[0_0_0_1px_var(--primary)]",
-        d.run?.status === "done" && "border-[color-mix(in_srgb,#3fb950_55%,var(--border))]",
+        d.run?.status === "done" && "border-[color-mix(in_srgb,var(--success)_55%,var(--border))]",
         d.run?.status === "failed" && "border-[color-mix(in_srgb,var(--destructive)_70%,var(--border))]",
         d.run?.status === "skipped" && "opacity-55",
         selected && "border-primary shadow-[0_0_0_1px_var(--primary)] hover:border-primary",
@@ -277,7 +277,7 @@ function WorkflowNode({ data, selected }: NodeProps) {
           {d.run.status === "running" ? (
             <Loader2 size={11} className="animate-spin text-primary" />
           ) : d.run.status === "done" ? (
-            <CheckCircle2 size={11} className="text-[#3fb950]" />
+            <CheckCircle2 size={11} className="text-success" />
           ) : d.run.status === "failed" ? (
             <XCircle size={11} className="text-destructive" />
           ) : (
@@ -321,7 +321,7 @@ function WorkflowNode({ data, selected }: NodeProps) {
         <span
           className={cn(
             "absolute -right-[7px] -top-[7px] inline-flex h-4 min-w-4 items-center gap-0.5 rounded-full px-1 text-ui-2xs font-bold leading-none text-white",
-            badge.severity === "error" ? "bg-destructive" : "bg-[#d97706]",
+            badge.severity === "error" ? "bg-destructive" : "bg-warning",
           )}
           title={badge.title}
           aria-label={badge.title}
@@ -332,14 +332,14 @@ function WorkflowNode({ data, selected }: NodeProps) {
       )}
       {isCondition ? (
         <>
-          <Handle id="true" type="source" position={Position.Right} className={cn("h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-border-strong! bg-panel! transition-[border-color,transform] duration-100 after:absolute after:-inset-[7px] after:rounded-full after:content-[''] hover:border-primary! group-hover/node:border-primary! [&.react-flow\_\_handle-left:hover]:[transform:translate(-50%,-50%)_scale(1.35)]! [&.react-flow\_\_handle-right:hover]:[transform:translate(50%,-50%)_scale(1.35)]!", "border-[#16a34a]!", selected && "border-primary!")} style={{ top: "32%" }} />
-          <Handle id="false" type="source" position={Position.Right} className={cn("h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-border-strong! bg-panel! transition-[border-color,transform] duration-100 after:absolute after:-inset-[7px] after:rounded-full after:content-[''] hover:border-primary! group-hover/node:border-primary! [&.react-flow\_\_handle-left:hover]:[transform:translate(-50%,-50%)_scale(1.35)]! [&.react-flow\_\_handle-right:hover]:[transform:translate(50%,-50%)_scale(1.35)]!", "border-[#e11d48]!", selected && "border-primary!")} style={{ top: "68%" }} />
+          <Handle id="true" type="source" position={Position.Right} className={cn("h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-border-strong! bg-panel! transition-[border-color,transform] duration-100 after:absolute after:-inset-[7px] after:rounded-full after:content-[''] hover:border-primary! group-hover/node:border-primary! [&.react-flow\_\_handle-left:hover]:[transform:translate(-50%,-50%)_scale(1.35)]! [&.react-flow\_\_handle-right:hover]:[transform:translate(50%,-50%)_scale(1.35)]!", "border-success!", selected && "border-primary!")} style={{ top: "32%" }} />
+          <Handle id="false" type="source" position={Position.Right} className={cn("h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-border-strong! bg-panel! transition-[border-color,transform] duration-100 after:absolute after:-inset-[7px] after:rounded-full after:content-[''] hover:border-primary! group-hover/node:border-primary! [&.react-flow\_\_handle-left:hover]:[transform:translate(-50%,-50%)_scale(1.35)]! [&.react-flow\_\_handle-right:hover]:[transform:translate(50%,-50%)_scale(1.35)]!", "border-destructive!", selected && "border-primary!")} style={{ top: "68%" }} />
           {/* 真/假走 i18n:英文界面下这两个字此前还是中文 —— 它们贴在连线端点上,是整张图里
               最该看懂的两个词。 */}
           {/* **锚左边缘,不是右边缘。** `-right-5` 钉的是文字的右边,于是文字一变长就往左长 ——
               中文「真/假」两个字时看着还行,换成 True/False 就压在连接点上了。 */}
-          <span className="pointer-events-none absolute left-full top-[calc(32%-7px)] ml-2 whitespace-nowrap text-ui-2xs font-semibold text-[#16a34a]">{t("wfBranchTrue")}</span>
-          <span className="pointer-events-none absolute left-full top-[calc(68%-7px)] ml-2 whitespace-nowrap text-ui-2xs font-semibold text-[#e11d48]">{t("wfBranchFalse")}</span>
+          <span className="pointer-events-none absolute left-full top-[calc(32%-7px)] ml-2 whitespace-nowrap text-ui-2xs font-semibold text-success">{t("wfBranchTrue")}</span>
+          <span className="pointer-events-none absolute left-full top-[calc(68%-7px)] ml-2 whitespace-nowrap text-ui-2xs font-semibold text-destructive">{t("wfBranchFalse")}</span>
         </>
       ) : (
         <Handle type="source" position={Position.Right} className={cn("h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-border-strong! bg-panel! transition-[border-color,transform] duration-100 after:absolute after:-inset-[7px] after:rounded-full after:content-[''] hover:border-primary! group-hover/node:border-primary! [&.react-flow\_\_handle-left:hover]:[transform:translate(-50%,-50%)_scale(1.35)]! [&.react-flow\_\_handle-right:hover]:[transform:translate(50%,-50%)_scale(1.35)]!", selected && "border-primary!")} style={{ top: 22 }} />

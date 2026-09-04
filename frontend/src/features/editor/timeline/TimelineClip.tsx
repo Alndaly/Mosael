@@ -52,7 +52,7 @@ export function TimelineClip({
     trackKind === "video" && "[&_svg]:inset-auto [&_svg]:bottom-0.5 [&_svg]:left-px [&_svg]:right-px [&_svg]:h-[42%]",
     trackKind === "audio" && "border-[var(--track-audio-border)] bg-[var(--track-audio-bg)] text-[var(--track-audio-text)]",
     trackKind === "subtitle" &&
-      "border-[color-mix(in_oklab,#a855f7_45%,var(--border))] bg-[color-mix(in_oklab,#a855f7_18%,var(--panel))] text-[var(--track-subtitle-text)]",
+      "border-[color-mix(in_oklab,var(--track-subtitle-border)_45%,var(--border))] bg-[color-mix(in_oklab,var(--track-subtitle-border)_18%,var(--panel))] text-[var(--track-subtitle-text)]",
     // 松手落位/涟漪让位由这组过渡完成;拖拽本体靠下面的 duration-0 覆盖成 1:1 跟手
     // (依赖 cn/tailwind-merge 的后者胜出,dragging 分支必须排在 animate 之后)。
     animate && "transition-[left,width,transform] duration-200 ease-out motion-reduce:transition-none",

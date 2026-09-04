@@ -46,7 +46,7 @@ export function BoardCollaborationDialog({
       <DialogContent className="h-[min(680px,calc(100vh-32px))] w-[min(900px,calc(100vw-32px))] max-w-[calc(100vw-32px)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0">
         <DialogHeader className="border-b border-border/70 px-6 py-5 pr-14">
           <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-1.5">
+            <div className="grid gap-1.5">
               <DialogTitle className="flex items-center gap-2"><MessageSquare size={18} /> {t("boardCollaboration")}</DialogTitle>
               <DialogDescription>{t("boardCollaborationHint")}</DialogDescription>
             </div>
@@ -67,7 +67,7 @@ export function BoardCollaborationDialog({
               </div>
               <p className="mt-1 text-ui-xs leading-relaxed text-muted-foreground">{t("discussionListHint")}</p>
             </div>
-            <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
+            <div className="grid min-h-0 flex-1 content-start gap-0.5 overflow-y-auto px-2 pb-3">
               {commentItems.map((item, index) => (
                 <button
                   key={item.id}
@@ -106,9 +106,9 @@ export function BoardCollaborationDialog({
             <section
               role="region"
               aria-label={t("currentDiscussion")}
-              className="space-y-5"
+              className="grid content-start gap-5"
             >
-              <div className="mb-4 flex items-center justify-between gap-3">
+              <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-ui-xs font-medium uppercase tracking-wide text-muted-foreground">{t("currentDiscussion")}</p>
                   <h3 className="mt-1 text-ui-md font-semibold">{selectedComment ? actorName(selectedComment.author, t("teamSystemActor")) : t("commentsEmpty")}</h3>
@@ -126,7 +126,7 @@ export function BoardCollaborationDialog({
                 )}
               </div>
               {selectedComment ? (
-                <article className="space-y-5 py-1">
+                <article className="grid gap-5 py-1">
                   <div className="flex items-center gap-3">
                     <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/12 text-ui-xs font-semibold text-primary">
                       {actorName(selectedComment.author, t("teamSystemActor")).slice(0, 1).toUpperCase()}

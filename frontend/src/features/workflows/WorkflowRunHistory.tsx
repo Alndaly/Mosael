@@ -69,8 +69,8 @@ function outputsText(outputs: Record<string, unknown>): string {
 }
 
 function RunIcon({ status }: { status: string }) {
-  if (status === "succeeded") return <CheckCircle2 size={13} className="text-[#3fb950]" />;
-  if (status === "failed") return <XCircle size={13} className="text-[#e5484d]" />;
+  if (status === "succeeded") return <CheckCircle2 size={13} className="text-success" />;
+  if (status === "failed") return <XCircle size={13} className="text-destructive" />;
   if (RUNNING.has(status)) return <Loader2 size={13} className="animate-mosael-spin text-primary" />;
   return <CircleDashed size={13} />;
 }
@@ -267,9 +267,9 @@ export function WorkflowRunHistory({
                         aria-expanded={hasDetail ? open : undefined}
                       >
                         {s.status === "done" ? (
-                          <CheckCircle2 size={12} className="shrink-0 text-[#3fb950]" />
+                          <CheckCircle2 size={12} className="shrink-0 text-success" />
                         ) : s.status === "failed" ? (
-                          <XCircle size={12} className="shrink-0 text-[#e5484d]" />
+                          <XCircle size={12} className="shrink-0 text-destructive" />
                         ) : s.status === "skipped" ? (
                           <SkipForward size={12} className="shrink-0" />
                         ) : (

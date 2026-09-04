@@ -308,7 +308,7 @@ function MarketRow({ entry, busy, onPick }: { entry: MarketEntry; busy: boolean;
             {/* 状态用**标记**说,不藏在副标题那行小字里 —— 那一行还挂着版本号和作者,
                 「已装 v0.3.0」混在里面读不出来"这条我已经有了"。 */}
             {stance === "update" && (
-              <span className="shrink-0 rounded-full bg-[color-mix(in_srgb,#d97706_16%,transparent)] px-1.5 py-px text-ui-2xs font-semibold text-[#b45309]">
+              <span className="shrink-0 rounded-full bg-[color-mix(in_srgb,var(--warning)_16%,transparent)] px-1.5 py-px text-ui-2xs font-semibold text-warning">
                 {t("pluginMarketHasUpdate")}
               </span>
             )}

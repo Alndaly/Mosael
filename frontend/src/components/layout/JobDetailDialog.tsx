@@ -79,7 +79,7 @@ export function JobDetailDialog({
                 "inline-flex items-center gap-1 rounded-full bg-secondary px-[9px] py-px text-ui-xs text-muted-foreground",
                 (active || current.status === "running" || current.status === "pending" || current.status === "queued") &&
                   "bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-primary",
-                !active && current.status === "succeeded" && "bg-[color-mix(in_srgb,#16a34a_12%,transparent)] text-[#16a34a]",
+                !active && current.status === "succeeded" && "bg-[color-mix(in_srgb,var(--success)_12%,transparent)] text-success",
                 !active && current.status === "failed" && "bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] text-destructive",
               )}
             >
@@ -136,7 +136,7 @@ export function JobDetailDialog({
                           childActive
                             ? "text-primary"
                             : child.status === "succeeded"
-                              ? "text-[#16a34a]"
+                              ? "text-success"
                               : "text-destructive",
                         )}
                       >

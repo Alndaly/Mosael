@@ -305,7 +305,7 @@ function JobRow({ job, count = 1, onOpen, onCancel }: { job: Job; count?: number
               <span title={job.updated_at}>{relativeTime(job.updated_at, locale)}</span>
             )}
             {job.status === "succeeded" ? (
-              <CheckCircle2 size={12} className="text-[#16a34a]" />
+              <CheckCircle2 size={12} className="text-success" />
             ) : job.status === "failed" ? (
               <CircleAlert size={12} className="text-destructive" />
             ) : job.progress > 0 ? (

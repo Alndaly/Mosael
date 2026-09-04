@@ -135,8 +135,8 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
   // 容器、内边距、卡片栅格都跟着工作流列表页走 —— 同一层级的两个页面长得不一样,
   // 用户会以为自己切到了别的应用里。
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
-      <div className="flex items-center justify-between pb-2">
+    <div className="flex h-full min-h-0 flex-col items-stretch gap-2 overflow-auto p-2 [&>*]:shrink-0">
+      <div className="flex items-center justify-between">
         <h2 className="m-0 inline-flex items-center gap-1.5 text-ui-md font-semibold text-foreground">
           <LayoutGrid size={13} /> {t("navBoards")}
         </h2>

@@ -44,4 +44,29 @@ describe("ModalShell sticky layout", () => {
     expect(footer?.className).toContain("bg-popover/90");
     expect(footer?.className).toContain("backdrop-blur-xl");
   });
+
+  it("uses one gap system and the shared surface radius", () => {
+    render(
+      <ModalShell
+        open
+        onOpenChange={vi.fn()}
+        title="Edit labels"
+        header={<div>Filters</div>}
+        footer={<button type="button">Save</button>}
+      >
+        <div>Body</div>
+      </ModalShell>,
+    );
+
+    const dialog = screen.getByRole("dialog");
+    const header = dialog.querySelector('[data-slot="modal-header"]');
+    const footer = dialog.querySelector('[data-slot="modal-footer"]');
+
+    expect(dialog.className).toContain("rounded-xl");
+    expect(dialog.className).not.toContain("sm:rounded-2xl");
+    expect(header?.className).toContain("gap-2.5");
+    expect(header?.className).not.toMatch(/space-y-/);
+    expect(footer?.className).toContain("gap-2");
+    expect(footer?.className).not.toMatch(/space-x-/);
+  });
 });

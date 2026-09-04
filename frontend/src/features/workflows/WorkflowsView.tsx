@@ -527,8 +527,8 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   // ── 列表页:卡片 grid。卡面上给的是**判断"是不是这一条"所需的**:名字、说明、
   //     多少个节点、上次改动是什么时候。
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
-      <div className="flex items-center justify-between pb-2">
+    <div className="flex h-full min-h-0 flex-col items-stretch gap-2 overflow-auto p-2 [&>*]:shrink-0">
+      <div className="flex items-center justify-between">
         <h2 className="m-0 inline-flex items-center gap-1.5 text-ui-md font-semibold text-foreground">
           <WorkflowIcon size={13} /> {t("navWorkflows")}
         </h2>
@@ -1477,7 +1477,7 @@ function WorkflowEditor({
         ? {
             ...edge,
             className: `${edge.className ?? ""} wf-edge-taken`.trim(),
-            style: { ...(edge.style ?? {}), stroke: "#3fb950", strokeWidth: 2.4 },
+            style: { ...(edge.style ?? {}), stroke: "var(--success)", strokeWidth: 2.4 },
           }
         : edge;
     });
@@ -1738,8 +1738,8 @@ function WorkflowEditor({
                   analysis.errorCount
                     ? "bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] text-destructive hover:bg-[color-mix(in_srgb,var(--destructive)_18%,transparent)] hover:text-destructive"
                     : analysis.warnCount
-                      ? "bg-[color-mix(in_srgb,#f59e0b_12%,transparent)] text-[#f59e0b] hover:bg-[color-mix(in_srgb,#f59e0b_18%,transparent)] hover:text-[#f59e0b]"
-                      : "bg-[color-mix(in_srgb,#22c55e_10%,transparent)] text-[#22c55e] hover:bg-[color-mix(in_srgb,#22c55e_16%,transparent)] hover:text-[#22c55e]",
+                      ? "bg-[color-mix(in_srgb,var(--warning)_12%,transparent)] text-warning hover:bg-[color-mix(in_srgb,var(--warning)_18%,transparent)] hover:text-warning"
+                      : "bg-[color-mix(in_srgb,var(--success)_10%,transparent)] text-success hover:bg-[color-mix(in_srgb,var(--success)_16%,transparent)] hover:text-success",
                 )}
                 aria-label={`${t("wfChecklist")}: ${checklistLabel}`}
                 title={checklistLabel}
@@ -1757,7 +1757,7 @@ function WorkflowEditor({
             </PopoverTrigger>
             <PopoverContent align="end" className="w-80 p-1.5">
               {analysis.issues.length === 0 ? (
-                <div className="flex items-center gap-1.5 p-2 text-ui-sm text-[#16a34a]">
+                <div className="flex items-center gap-1.5 p-2 text-ui-sm text-success">
                   <CircleCheck size={14} /> {t("wfChecklistReady")}
                 </div>
               ) : (
@@ -1776,7 +1776,7 @@ function WorkflowEditor({
                           type="button"
                           className={cn(
                             "grid cursor-pointer grid-cols-[14px_auto_1fr] items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1.5 text-left hover:bg-muted",
-                            issue.severity === "error" ? "[&>svg]:text-destructive" : "[&>svg]:text-[#d97706]",
+                            issue.severity === "error" ? "[&>svg]:text-destructive" : "[&>svg]:text-warning",
                           )}
                           onClick={() => focusNode(issue.nodeId)}
                         >
@@ -1901,7 +1901,7 @@ function WorkflowEditor({
       </div>
 
       <div className={cn(
-        "relative grid min-h-0 grid-cols-[minmax(0,1fr)] gap-2 [&_.react-flow\_\_background]:bg-background [&_.react-flow\_\_controls]:overflow-hidden [&_.react-flow\_\_controls]:rounded-md [&_.react-flow\_\_controls]:border [&_.react-flow\_\_controls]:border-border [&_.react-flow\_\_controls]:shadow-none [&_.react-flow\_\_controls-button]:border-b [&_.react-flow\_\_controls-button]:border-border [&_.react-flow\_\_controls-button]:bg-panel [&_.react-flow\_\_controls-button]:text-foreground [&_.react-flow\_\_controls-button:hover]:bg-secondary [&_.react-flow\_\_edge-path]:stroke-border-strong [&_.react-flow\_\_edge-path]:[stroke-width:1.5] [&_.react-flow\_\_edge-path]:[stroke-linecap:round] [&_.react-flow\_\_edge-path]:[transition:stroke_120ms,stroke-width_120ms] [&_.react-flow\_\_edge.selected_.react-flow\_\_edge-path]:stroke-primary [&_.react-flow\_\_edge.selected_.react-flow\_\_edge-path]:[stroke-width:2.2] [&_.react-flow\_\_edge:hover_.react-flow\_\_edge-path]:[stroke-width:2.2] [&_.react-flow\_\_edge-textbg]:fill-panel [&_.react-flow\_\_edge-text]:fill-muted-foreground [&_.react-flow\_\_edge-text]:text-[9.5px] [&_.react-flow\_\_attribution]:bg-transparent [&_.react-flow\_\_attribution]:text-muted-foreground [&_.wf-edge-true_.react-flow\_\_edge-path]:stroke-[#16a34a] [&_.wf-edge-false_.react-flow\_\_edge-path]:stroke-[#e11d48] [&_.wf-edge-data_.react-flow\_\_edge-path]:animate-wf-dash [&_.wf-edge-data_.react-flow\_\_edge-path]:stroke-primary [&_.wf-edge-data_.react-flow\_\_edge-path]:[stroke-width:2] [&_.wf-edge-data_.react-flow\_\_edge-path]:[stroke-dasharray:6_5] [&_.wf-edge-data.selected_.react-flow\_\_edge-path]:[stroke-width:2.6] [&_.wf-edge-data.wf-edge-mismatch_.react-flow\_\_edge-path]:stroke-[#d97706] [&_.react-flow\_\_minimap]:overflow-hidden [&_.react-flow\_\_minimap]:rounded-md [&_.react-flow\_\_minimap]:border [&_.react-flow\_\_minimap]:border-border [&_.react-flow\_\_minimap]:bg-background [&_.react-flow\_\_minimap-mask]:fill-[color-mix(in_srgb,var(--foreground)_6%,transparent)] [&_.react-flow\_\_minimap-node]:fill-border-strong",
+        "relative grid min-h-0 grid-cols-[minmax(0,1fr)] gap-2 [&_.react-flow\_\_background]:bg-background [&_.react-flow\_\_controls]:overflow-hidden [&_.react-flow\_\_controls]:rounded-md [&_.react-flow\_\_controls]:border [&_.react-flow\_\_controls]:border-border [&_.react-flow\_\_controls]:shadow-none [&_.react-flow\_\_controls-button]:border-b [&_.react-flow\_\_controls-button]:border-border [&_.react-flow\_\_controls-button]:bg-panel [&_.react-flow\_\_controls-button]:text-foreground [&_.react-flow\_\_controls-button:hover]:bg-secondary [&_.react-flow\_\_edge-path]:stroke-border-strong [&_.react-flow\_\_edge-path]:[stroke-width:1.5] [&_.react-flow\_\_edge-path]:[stroke-linecap:round] [&_.react-flow\_\_edge-path]:[transition:stroke_120ms,stroke-width_120ms] [&_.react-flow\_\_edge.selected_.react-flow\_\_edge-path]:stroke-primary [&_.react-flow\_\_edge.selected_.react-flow\_\_edge-path]:[stroke-width:2.2] [&_.react-flow\_\_edge:hover_.react-flow\_\_edge-path]:[stroke-width:2.2] [&_.react-flow\_\_edge-textbg]:fill-panel [&_.react-flow\_\_edge-text]:fill-muted-foreground [&_.react-flow\_\_edge-text]:text-[9.5px] [&_.react-flow\_\_attribution]:bg-transparent [&_.react-flow\_\_attribution]:text-muted-foreground [&_.wf-edge-true_.react-flow\_\_edge-path]:stroke-success [&_.wf-edge-false_.react-flow\_\_edge-path]:stroke-destructive [&_.wf-edge-data_.react-flow\_\_edge-path]:animate-wf-dash [&_.wf-edge-data_.react-flow\_\_edge-path]:stroke-primary [&_.wf-edge-data_.react-flow\_\_edge-path]:[stroke-width:2] [&_.wf-edge-data_.react-flow\_\_edge-path]:[stroke-dasharray:6_5] [&_.wf-edge-data.selected_.react-flow\_\_edge-path]:[stroke-width:2.6] [&_.wf-edge-data.wf-edge-mismatch_.react-flow\_\_edge-path]:stroke-warning [&_.react-flow\_\_minimap]:overflow-hidden [&_.react-flow\_\_minimap]:rounded-md [&_.react-flow\_\_minimap]:border [&_.react-flow\_\_minimap]:border-border [&_.react-flow\_\_minimap]:bg-background [&_.react-flow\_\_minimap-mask]:fill-[color-mix(in_srgb,var(--foreground)_6%,transparent)] [&_.react-flow\_\_minimap-node]:fill-border-strong",
       )}
         // 画布**始终占满**:助手和执行历史改成浮在上面,不再从画布身上切走一列。
         // 工具条已经浮起来了,右边再留一条实心栏,画布就被两面夹住 —— 而这一页的主角是画布。

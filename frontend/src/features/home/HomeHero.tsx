@@ -99,7 +99,7 @@ export function HomeHero({
   const HolidayIcon = holiday?.Icon;
 
   return (
-    <section className="relative mb-2 flex items-stretch justify-between gap-2 max-[880px]:flex-col">
+    <section className="relative flex items-stretch justify-between gap-2 max-[880px]:flex-col">
       {holiday ? <HolidayParticles holiday={holiday} /> : <IdleDecor />}
 
       <div className="relative flex min-w-0 flex-col justify-center gap-0.5">

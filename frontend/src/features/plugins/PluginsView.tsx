@@ -118,7 +118,7 @@ export function PluginsView() {
               list.length === 0 &&
               [0, 1, 2].map((i) => (
                 <div key={`sk${i}`} className="flex items-center gap-[9px] px-2 py-1.5" aria-hidden>
-                  <div className="min-w-0 flex-1 space-y-1.5">
+                  <div className="grid min-w-0 flex-1 gap-1.5">
                     <Skeleton className="h-3.5 w-3/4 rounded" />
                     <Skeleton className="h-2.5 w-1/3 rounded" />
                   </div>
@@ -136,7 +136,7 @@ export function PluginsView() {
                   )}
                   onClick={() => setSelectedId(item.id)}
                 >
-                  <span className={cn("h-[7px] w-[7px] shrink-0 rounded-full bg-border-strong", live > 0 && "bg-[#22c55e]")} />
+                  <span className={cn("h-[7px] w-[7px] shrink-0 rounded-full bg-border-strong", live > 0 && "bg-success")} />
                   <span className="min-w-0 [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-ui-sm [&_strong]:font-semibold max-[880px]:[&_small]:hidden">
                     <strong>{item.name}</strong>
                     <small>
@@ -828,7 +828,7 @@ function InvocationRow({ invocation, onDelete }: { invocation: PluginInvocation;
           className="flex w-full cursor-pointer items-center gap-1.5 border-0 bg-transparent px-2 py-[9px] text-left hover:bg-secondary"
           onClick={() => setOpen((value) => !value)}
         >
-          {ok ? <CheckCircle2 size={14} className="text-[#16a34a]" /> : <CircleAlert size={14} className="text-destructive" />}
+          {ok ? <CheckCircle2 size={14} className="text-success" /> : <CircleAlert size={14} className="text-destructive" />}
           <div className="min-w-0 [&_small]:block [&_small]:truncate [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:block [&_strong]:text-ui-sm [&_strong]:font-semibold">
             <strong>{invocation.tool_name}</strong>
             <small>{invocation.status}</small>
@@ -872,7 +872,7 @@ function ResultBlock({ ok, body }: { ok: boolean; body: unknown }) {
         className={cn(
           "m-0 max-h-[200px] overflow-auto whitespace-pre-wrap rounded-md px-2 py-1.5 font-mono text-ui-xs leading-[1.5] [word-break:break-word]",
           ok
-            ? "border border-[color-mix(in_oklab,#22c55e_30%,var(--border))] bg-[color-mix(in_oklab,#22c55e_8%,var(--background))]"
+            ? "border border-[color-mix(in_oklab,var(--success)_30%,var(--border))] bg-[color-mix(in_oklab,var(--success)_8%,var(--background))]"
             : "border border-[color-mix(in_oklab,var(--destructive)_30%,var(--border))] bg-[color-mix(in_oklab,var(--destructive)_7%,var(--background))] text-destructive",
         )}
       >
