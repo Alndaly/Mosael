@@ -41,6 +41,11 @@ function mount(step: Step, nodeType = "llm") {
 const base: Step = { nid: "n1", name: "LLM", status: "done", ms: 1234 };
 
 describe("这一步给了什么", () => {
+  it("内容区顶部不重复绘制分割线", () => {
+    const { container } = mount({ ...base, outputs: { text: "x" } });
+    expect(container.firstElementChild?.className).not.toContain("border-t");
+  });
+
   it("值和键名都摆出来", () => {
     mount({ ...base, outputs: { text: "模型回的那段话" } });
     expect(screen.getByText("text")).toBeTruthy();

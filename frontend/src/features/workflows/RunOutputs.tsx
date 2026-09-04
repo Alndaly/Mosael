@@ -147,7 +147,7 @@ export function RunOutputs({ registry, nodeType, step }: { registry: RegistryLik
   const scalars = entries.filter(([key]) => outputType(registry, nodeType, key) !== "asset");
 
   return (
-    <div className="grid min-w-0 gap-1.5 border-t border-border pt-2.5">
+    <div className="grid min-w-0 gap-1.5 pt-2.5">
       <div className="flex items-center gap-1.5 text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
         <span>{t("wfRunOutputs")}</span>
         <span className={`ml-auto font-normal normal-case tracking-normal ${step.status === "failed" ? "text-destructive" : ""}`}>
