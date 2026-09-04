@@ -84,8 +84,10 @@ try {
       existsSync(resultPath)
         ? `result.json=${readFileSync(resultPath, "utf8").replace(/\s+/g, " ")}`
         : "result.json=<never written — 主进程没走到任何一站>",
-      tail(join(logs, "main.log"), 25),
-      tail(join(logs, "backend.log"), 15),
+      tail(join(logs, "main.log"), 40),
+      // 后端启动崩溃时这份日志很小,而**异常那一行在整个 traceback 的最后** —— 15 行的窗口
+      // 只够装几个 fastapi/contextlib 的中间帧,正好把结论切掉了(第一次就是这样)。
+      tail(join(logs, "backend.log"), 150),
     ].join("\n");
   };
 
