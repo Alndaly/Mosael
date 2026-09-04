@@ -5,20 +5,23 @@ from fastapi import APIRouter, HTTPException
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas.collaboration import (
     ActivityOut,
+    CommentAnchorUpdate,
     CommentCreate,
     CommentOut,
     ReviewCreate,
     ReviewDecision,
     ReviewOut,
 )
-from app.db.models import Review
+from app.db.models import Comment, Review
 from app.domain.collaboration import (
     CollaborationError,
+    CommentOwnershipError,
     create_comment,
     decide_review,
     list_activity,
     list_comments,
     list_reviews,
+    move_comment,
     request_review,
 )
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
@@ -78,6 +81,33 @@ def add_comment(body: CommentCreate, db: DbSession, user: CurrentUser) -> dict:
             for one in list_comments(db, body.workspace_id, body.subject_type, body.subject_id)
             if one["id"] == comment_id
         )
+    except CollaborationError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.patch("/comments/{comment_id}", response_model=CommentOut)
+def update_comment_anchor(comment_id: str, body: CommentAnchorUpdate, db: DbSession, user: CurrentUser) -> dict:
+    ensure_workspace_perm(db, user, body.workspace_id, "edit")
+    comment = db.get(Comment, comment_id)
+    if comment is None or comment.workspace_id != body.workspace_id:
+        raise HTTPException(status_code=404, detail="评论不存在")
+    try:
+        move_comment(
+            db,
+            comment,
+            actor_id=user.id,
+            anchor=body.anchor.model_dump(exclude_none=True),
+        )
+        db.commit()
+        return next(
+            one
+            for one in list_comments(db, comment.workspace_id, comment.subject_type, comment.subject_id)
+            if one["id"] == comment.id
+        )
+    except CommentOwnershipError as exc:
+        db.rollback()
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except CollaborationError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc

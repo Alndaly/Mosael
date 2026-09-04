@@ -16,6 +16,7 @@ import {
   getBoard,
   importAsset,
   addComment,
+  moveComment,
   listComments,
   listMembers,
   listBoards,
@@ -27,6 +28,7 @@ import {
   type Workspace,
   type CollaborationComment,
 } from "@/api/client";
+import { useAuth } from "@/app/auth";
 import type { MediaKind } from "@/features/boards/boardNodes";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -230,6 +232,7 @@ function BoardDetail({
 }) {
   const t = useI18n();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [renaming, setRenaming] = React.useState(false);
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
   const [collaborationOpen, setCollaborationOpen] = React.useState(false);
@@ -276,6 +279,22 @@ function BoardDetail({
     onSuccess: (comment) => {
       setActiveCommentId(comment.id);
       void queryClient.invalidateQueries({ queryKey: commentsKey });
+      void queryClient.invalidateQueries({ queryKey: ["activity", board.workspace_id] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const moveCommentAnchor = useMutation({
+    mutationFn: ({ comment, anchor }: {
+      comment: CollaborationComment;
+      anchor: NonNullable<CollaborationComment["anchor"]>;
+    }) => moveComment(comment.id, {
+      workspace_id: board.workspace_id,
+      anchor,
+    }),
+    onSuccess: (moved) => {
+      queryClient.setQueryData<CollaborationComment[]>(commentsKey, (current) =>
+        current?.map((comment) => (comment.id === moved.id ? moved : comment)),
+      );
       void queryClient.invalidateQueries({ queryKey: ["activity", board.workspace_id] });
     },
     onError: (error: Error) => toast.error(error.message),
@@ -801,8 +820,9 @@ function BoardDetail({
         commentMode={commentMode}
         comments={comments.data ?? []}
         members={members.data?.members ?? []}
+        currentUserId={user?.id ?? null}
         activeCommentId={activeCommentId}
-        onSelectComment={(comment) => setActiveCommentId(comment.id)}
+        onSelectComment={(comment) => setActiveCommentId(comment?.id ?? null)}
         onCreateComment={(anchor, draft) => createComment.mutateAsync({
           anchor,
           draft: {
@@ -811,6 +831,7 @@ function BoardDetail({
             mentionedUserIds: draft.mentionedUserIds,
           },
         })}
+        onMoveComment={(comment, anchor) => moveCommentAnchor.mutateAsync({ comment, anchor })}
         onReady={setApi}
       />
 

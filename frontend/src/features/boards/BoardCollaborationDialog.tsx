@@ -44,36 +44,36 @@ export function BoardCollaborationDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="h-[min(680px,calc(100vh-32px))] w-[min(900px,calc(100vw-32px))] max-w-[calc(100vw-32px)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b border-border px-6 py-5 pr-14">
+        <DialogHeader className="border-b border-border/70 px-6 py-5 pr-14">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="space-y-1.5">
               <DialogTitle className="flex items-center gap-2"><MessageSquare size={18} /> {t("boardCollaboration")}</DialogTitle>
               <DialogDescription>{t("boardCollaborationHint")}</DialogDescription>
             </div>
-            <div className="flex items-center gap-2 text-ui-xs text-muted-foreground">
-              <span className="rounded-full border border-border bg-secondary/40 px-2.5 py-1">{t("discussionCount").replace("{count}", String(commentItems.length))}</span>
-            </div>
+            <span className="pt-1 text-ui-xs tabular-nums text-muted-foreground">
+              {t("discussionCount").replace("{count}", String(commentItems.length))}
+            </span>
           </div>
         </DialogHeader>
         <div className="grid min-h-0 grid-cols-1 md:grid-cols-[300px_minmax(0,1fr)]">
           <nav
             aria-label={t("discussionNavigation")}
-            className="flex min-h-0 flex-col border-b border-border bg-secondary/10 md:border-b-0 md:border-r"
+            className="flex min-h-0 flex-col border-b border-border/70 bg-secondary/10 md:border-b-0 md:border-r"
           >
-            <div className="border-b border-border px-4 py-3">
+            <div className="px-5 pb-2 pt-5">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="text-ui-sm font-semibold">{t("discussionList")}</h3>
                 <span className="text-ui-xs tabular-nums text-muted-foreground">{commentItems.length}</span>
               </div>
               <p className="mt-1 text-ui-xs leading-relaxed text-muted-foreground">{t("discussionListHint")}</p>
             </div>
-            <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
+            <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
               {commentItems.map((item, index) => (
                 <button
                   key={item.id}
                   type="button"
                   aria-current={selectedComment?.id === item.id ? "true" : undefined}
-                  className="group flex w-full gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left transition-colors hover:bg-secondary/50 aria-[current=true]:border-border-strong aria-[current=true]:bg-secondary/70"
+                  className="group flex w-full gap-3 rounded-md px-3 py-3 text-left transition-colors hover:bg-secondary/45 aria-[current=true]:bg-secondary/70"
                   onClick={() => setSelectedCommentId(item.id)}
                 >
                   <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/12 text-ui-2xs font-semibold text-primary">
@@ -115,7 +115,7 @@ export function BoardCollaborationDialog({
                 </div>
                 {selectedComment && (
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     disabled={typeof selectedComment.anchor?.x !== "number" || typeof selectedComment.anchor?.y !== "number"}
                     onClick={() => onJumpToComment(selectedComment)}
@@ -126,8 +126,8 @@ export function BoardCollaborationDialog({
                 )}
               </div>
               {selectedComment ? (
-                <div className="overflow-hidden rounded-xl border border-border bg-secondary/15">
-                  <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+                <article className="space-y-5 py-1">
+                  <div className="flex items-center gap-3">
                     <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/12 text-ui-xs font-semibold text-primary">
                       {actorName(selectedComment.author, t("teamSystemActor")).slice(0, 1).toUpperCase()}
                     </span>
@@ -136,24 +136,24 @@ export function BoardCollaborationDialog({
                       <p className="text-ui-xs text-muted-foreground">{relativeTime(selectedComment.created_at, locale)}</p>
                     </div>
                   </div>
-                  <p className="whitespace-pre-wrap px-4 py-5 text-ui-sm leading-7 text-foreground">{selectedComment.body}</p>
+                  <p className="whitespace-pre-wrap text-ui-sm leading-7 text-foreground">{selectedComment.body}</p>
                   {(selectedComment.anchor?.node_id || selectedComment.mentioned_user_ids.length > 0) && (
-                    <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-3 text-ui-xs text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-2 text-ui-xs text-muted-foreground">
                       {selectedComment.anchor?.node_id && (
-                        <span className="rounded-full bg-secondary px-2 py-0.5">{t("discussionAttachedNode")} · {selectedComment.anchor.node_id}</span>
+                        <span>{t("discussionAttachedNode")} · {selectedComment.anchor.node_id}</span>
                       )}
                       {selectedComment.mentioned_user_ids.length > 0 && (
                         <span>{t("discussionMentionCount").replace("{count}", String(selectedComment.mentioned_user_ids.length))}</span>
                       )}
                     </div>
                   )}
-                </div>
+                </article>
               ) : (
-                <div className="rounded-xl border border-dashed border-border px-5 py-8 text-center text-ui-sm text-muted-foreground">
+                <div className="py-8 text-center text-ui-sm text-muted-foreground">
                   {t("discussionEmpty")}
                 </div>
               )}
-              <div className="rounded-xl border border-dashed border-border px-4 py-3 text-ui-xs leading-relaxed text-muted-foreground">
+              <div className="border-t border-border/60 pt-4 text-ui-xs leading-relaxed text-muted-foreground">
                 {t("discussionCanvasHint")}
               </div>
             </section>

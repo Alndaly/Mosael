@@ -48,6 +48,11 @@ class CommentCreate(BaseModel):
     body_document: dict = Field(default_factory=dict)
 
 
+class CommentAnchorUpdate(BaseModel):
+    workspace_id: str
+    anchor: CanvasCommentAnchor
+
+
 class CommentOut(BaseModel):
     id: str
     workspace_id: str

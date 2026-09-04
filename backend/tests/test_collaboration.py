@@ -109,6 +109,73 @@ def test_canvas_comment_preserves_anchor_and_tiptap_document() -> None:
     assert activity[0]["payload"]["anchor"] == anchor
 
 
+def test_comment_author_can_move_own_canvas_comment() -> None:
+    owner, _mate, workspace, _users = _team()
+    board = owner.post("/api/boards", json={"workspace_id": workspace["id"]}).json()
+    created = owner.post(
+        "/api/comments",
+        json={
+            "workspace_id": workspace["id"],
+            "subject_type": "board",
+            "subject_id": board["id"],
+            "body": "请看这里",
+            "anchor": {"kind": "canvas", "x": 100, "y": 120},
+        },
+    ).json()
+
+    moved = owner.patch(
+        f"/api/comments/{created['id']}",
+        json={
+            "workspace_id": workspace["id"],
+            "anchor": {"kind": "canvas", "x": 480.5, "y": 260.25},
+        },
+    )
+
+    assert moved.status_code == 200, moved.text
+    assert moved.json()["anchor"] == {"kind": "canvas", "x": 480.5, "y": 260.25, "node_id": None}
+    activity = owner.get(
+        "/api/activity",
+        params={"workspace_id": workspace["id"], "subject_type": "board", "subject_id": board["id"]},
+    ).json()
+    assert activity[0]["action"] == "comment.moved"
+    assert activity[0]["payload"]["anchor"] == {"kind": "canvas", "x": 480.5, "y": 260.25}
+
+
+def test_team_member_cannot_move_another_authors_comment() -> None:
+    owner, mate, workspace, _users = _team()
+    board = owner.post("/api/boards", json={"workspace_id": workspace["id"]}).json()
+    created = owner.post(
+        "/api/comments",
+        json={
+            "workspace_id": workspace["id"],
+            "subject_type": "board",
+            "subject_id": board["id"],
+            "body": "作者决定放在哪里",
+            "anchor": {"kind": "canvas", "x": 100, "y": 120},
+        },
+    ).json()
+
+    denied = mate.patch(
+        f"/api/comments/{created['id']}",
+        json={
+            "workspace_id": workspace["id"],
+            "anchor": {"kind": "canvas", "x": 500, "y": 300},
+        },
+    )
+
+    assert denied.status_code == 403
+    listed = owner.get(
+        "/api/comments",
+        params={
+            "workspace_id": workspace["id"],
+            "subject_type": "board",
+            "subject_id": board["id"],
+        },
+    ).json()
+    assert listed[0]["anchor"]["x"] == 100
+    assert listed[0]["anchor"]["y"] == 120
+
+
 def test_review_can_only_be_decided_by_assigned_reviewer() -> None:
     owner, mate, workspace, users = _team()
     board = owner.post("/api/boards", json={"workspace_id": workspace["id"]}).json()

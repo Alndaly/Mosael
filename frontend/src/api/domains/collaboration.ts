@@ -86,6 +86,16 @@ export function addComment(body: {
   return api<CollaborationComment>("/api/comments", { method: "POST", body: JSON.stringify(body) });
 }
 
+export function moveComment(commentId: string, body: {
+  workspace_id: string;
+  anchor: CollaborationCommentAnchor;
+}): Promise<CollaborationComment> {
+  return api<CollaborationComment>(`/api/comments/${commentId}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
 export function listReviews(workspaceId: string, subjectType: string, subjectId: string): Promise<CollaborationReview[]> {
   return api<CollaborationReview[]>(`/api/reviews?${subjectQuery(workspaceId, subjectType, subjectId)}`);
 }

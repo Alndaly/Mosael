@@ -113,8 +113,17 @@ export function focusBoardNode(nodes: Node[], nodeId: string): Node[] {
 
 /** A draft is a transient editor, not a canvas selection. Keep it stable until it is submitted or
  * cancelled so clicks used to focus/type cannot silently move it to a new anchor. */
-export function canPlaceCommentDraft(commentMode: boolean, hasDraft: boolean): boolean {
-  return commentMode && !hasDraft;
+export function canPlaceCommentDraft(
+  commentMode: boolean,
+  hasDraft: boolean,
+  gestureMoved = false,
+  dismissedActiveComment = false,
+): boolean {
+  return commentMode && !hasDraft && !gestureMoved && !dismissedActiveComment;
+}
+
+export function canMoveComment(authorId: string | null, currentUserId: string | null | undefined): boolean {
+  return Boolean(authorId && currentUserId && authorId === currentUserId);
 }
 
 interface Props {
@@ -177,21 +186,36 @@ interface Props {
   commentMode?: boolean;
   comments?: CollaborationComment[];
   members?: WorkspaceMember[];
+  currentUserId?: string | null;
   activeCommentId?: string | null;
-  onSelectComment?: (comment: CollaborationComment) => void;
+  onSelectComment?: (comment: CollaborationComment | null) => void;
   onCreateComment?: (anchor: NonNullable<CollaborationComment["anchor"]>, draft: CommentDraft) => Promise<unknown>;
+  onMoveComment?: (comment: CollaborationComment, anchor: NonNullable<CollaborationComment["anchor"]>) => Promise<unknown>;
   /** 把「加一项」交给上层 —— 顶栏那两组胶囊要摆在一起(和工作流详情页一致),
    *  而 add 依赖画布内部的 rf 实例和 setNodes,只能由画布提供。 */
   onReady?: (api: BoardCanvasApi) => void;
 }
 
-function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, onSpeak, onTrim, onGrabFrame, models, showMinimap = true, onDropFiles, uploading, rightOverlayWidth = 0, commentMode = false, comments = [], members = [], activeCommentId, onSelectComment, onCreateComment, onReady }: Props) {
+function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, onSpeak, onTrim, onGrabFrame, models, showMinimap = true, onDropFiles, uploading, rightOverlayWidth = 0, commentMode = false, comments = [], members = [], currentUserId, activeCommentId, onSelectComment, onCreateComment, onMoveComment, onReady }: Props) {
   const t = useI18n();
   const rf = React.useRef<ReactFlowInstance | null>(null);
   const surface = React.useRef<HTMLDivElement | null>(null);
   const viewport = usePersistentViewport(`board:${boardId}`);
   const [ready, setReady] = React.useState(false);
   const [draftAnchor, setDraftAnchor] = React.useState<NonNullable<CollaborationComment["anchor"]> | null>(null);
+  const [commentPositions, setCommentPositions] = React.useState<Record<string, { x: number; y: number }>>({});
+  const paneGesture = React.useRef<{ x: number; y: number; moved: boolean; dismissedActive: boolean } | null>(null);
+  const suppressPaneClick = React.useRef(false);
+  const commentDrag = React.useRef<{
+    id: string;
+    pointerId: number;
+    startScreen: { x: number; y: number };
+    origin: { x: number; y: number };
+    nodeId?: string;
+    moved: boolean;
+    last?: { x: number; y: number };
+  } | null>(null);
+  const suppressCommentClick = React.useRef<string | null>(null);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(toNodes(canvas.items));
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(
@@ -649,6 +673,31 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         const instance = rf.current;
         if (instance) dropAt.current = instance.screenToFlowPosition({ x: event.clientX, y: event.clientY });
       }}
+      onPointerDownCapture={(event) => {
+        if (!commentMode || event.button !== 0) return;
+        const target = event.target instanceof Element ? event.target : null;
+        if (target?.closest("[data-board-comment-overlay]")) return;
+        const dismissedActive = Boolean(activeCommentId || draftAnchor);
+        paneGesture.current = { x: event.clientX, y: event.clientY, moved: false, dismissedActive };
+        if (activeCommentId) onSelectComment?.(null);
+        if (draftAnchor) setDraftAnchor(null);
+      }}
+      onPointerMoveCapture={(event) => {
+        const gesture = paneGesture.current;
+        if (!gesture) return;
+        if (Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) > 5) gesture.moved = true;
+      }}
+      onPointerUpCapture={() => {
+        const gesture = paneGesture.current;
+        paneGesture.current = null;
+        if (!gesture?.moved && !gesture?.dismissedActive) return;
+        // pointerup is followed by click. Keep the guard through that click, then release it.
+        suppressPaneClick.current = true;
+        window.setTimeout(() => { suppressPaneClick.current = false; }, 0);
+      }}
+      onPointerCancelCapture={() => {
+        paneGesture.current = null;
+      }}
     >
       <ReactFlow
         nodes={displayNodes}
@@ -659,7 +708,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         onEdgesChange={onEdgesChange}
         onNodeClick={(event, node) => {
           if (commentMode) {
-            if (!canPlaceCommentDraft(commentMode, Boolean(draftAnchor))) return;
+            if (!canPlaceCommentDraft(commentMode, Boolean(draftAnchor), suppressPaneClick.current)) return;
             const instance = rf.current;
             if (!instance) return;
             const point = instance.screenToFlowPosition({ x: event.clientX, y: event.clientY });
@@ -672,7 +721,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           setNodes((current) => focusBoardNode(current, node.id));
         }}
         onPaneClick={(event) => {
-          if (!canPlaceCommentDraft(commentMode, Boolean(draftAnchor)) || !rf.current) return;
+          if (!canPlaceCommentDraft(commentMode, Boolean(draftAnchor), suppressPaneClick.current) || !rf.current) return;
           const point = rf.current.screenToFlowPosition({ x: event.clientX, y: event.clientY });
           setDraftAnchor({ kind: "canvas", x: point.x, y: point.y });
         }}
@@ -763,13 +812,16 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         {commentMode && (
           <ViewportPortal>
             {comments.map((comment, index) => {
-              const x = comment.anchor?.x;
-              const y = comment.anchor?.y;
+              const preview = commentPositions[comment.id];
+              const x = preview?.x ?? comment.anchor?.x;
+              const y = preview?.y ?? comment.anchor?.y;
               if (typeof x !== "number" || typeof y !== "number") return null;
               const active = activeCommentId === comment.id;
+              const movable = Boolean(onMoveComment) && canMoveComment(comment.author_id, currentUserId);
               return (
                 <div
                   key={comment.id}
+                  data-board-comment-overlay=""
                   className="nodrag nopan pointer-events-auto absolute z-10 flex items-start gap-2"
                   style={{ left: x, top: y }}
                   onPointerDown={(event) => event.stopPropagation()}
@@ -780,14 +832,80 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
                   <button
                     type="button"
                     className={cn(
-                      "grid h-7 w-7 -translate-x-1/2 -translate-y-1/2 shrink-0 place-items-center rounded-full border text-ui-2xs font-semibold shadow-[var(--shadow-panel)] transition-transform hover:scale-110",
+                      "grid h-7 w-7 touch-none -translate-x-1/2 -translate-y-1/2 shrink-0 place-items-center rounded-full border text-ui-2xs font-semibold shadow-[var(--shadow-panel)] transition-transform hover:scale-110",
+                      movable && "cursor-grab active:cursor-grabbing",
                       active
                         ? "border-primary bg-primary text-primary-foreground"
                         : "border-border-strong bg-panel/90 text-foreground backdrop-blur-xl",
                     )}
                     title={comment.body}
                     aria-label={`${t("comments")} ${index + 1}`}
-                    onClick={() => onSelectComment?.(comment)}
+                    onPointerDown={(event) => {
+                      event.stopPropagation();
+                      if (!movable || event.button !== 0) return;
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                      commentDrag.current = {
+                        id: comment.id,
+                        pointerId: event.pointerId,
+                        startScreen: { x: event.clientX, y: event.clientY },
+                        origin: { x, y },
+                        nodeId: comment.anchor?.node_id,
+                        moved: false,
+                      };
+                    }}
+                    onPointerMove={(event) => {
+                      const drag = commentDrag.current;
+                      const instance = rf.current;
+                      if (!drag || drag.id !== comment.id || drag.pointerId !== event.pointerId || !instance) return;
+                      if (!drag.moved && Math.hypot(event.clientX - drag.startScreen.x, event.clientY - drag.startScreen.y) <= 4) return;
+                      drag.moved = true;
+                      const start = instance.screenToFlowPosition(drag.startScreen);
+                      const current = instance.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+                      drag.last = {
+                        x: drag.origin.x + current.x - start.x,
+                        y: drag.origin.y + current.y - start.y,
+                      };
+                      const next = drag.last;
+                      setCommentPositions((positions) => ({ ...positions, [comment.id]: next }));
+                    }}
+                    onPointerUp={(event) => {
+                      const drag = commentDrag.current;
+                      if (!drag || drag.id !== comment.id || drag.pointerId !== event.pointerId) return;
+                      commentDrag.current = null;
+                      if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+                      if (!drag.moved || !drag.last) return;
+                      suppressCommentClick.current = comment.id;
+                      window.setTimeout(() => {
+                        if (suppressCommentClick.current === comment.id) suppressCommentClick.current = null;
+                      }, 0);
+                      const anchor = { kind: "canvas" as const, ...drag.last, ...(drag.nodeId ? { node_id: drag.nodeId } : {}) };
+                      void Promise.resolve(onMoveComment?.(comment, anchor))
+                        .catch(() => undefined)
+                        .finally(() => {
+                          setCommentPositions((positions) => {
+                            const next = { ...positions };
+                            delete next[comment.id];
+                            return next;
+                          });
+                        });
+                    }}
+                    onPointerCancel={(event) => {
+                      const drag = commentDrag.current;
+                      if (!drag || drag.id !== comment.id || drag.pointerId !== event.pointerId) return;
+                      commentDrag.current = null;
+                      setCommentPositions((positions) => {
+                        const next = { ...positions };
+                        delete next[comment.id];
+                        return next;
+                      });
+                    }}
+                    onClick={() => {
+                      if (suppressCommentClick.current === comment.id) {
+                        suppressCommentClick.current = null;
+                        return;
+                      }
+                      onSelectComment?.(comment);
+                    }}
                   >
                     {index + 1}
                   </button>
@@ -804,6 +922,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
             })}
             {draftAnchor && typeof draftAnchor.x === "number" && typeof draftAnchor.y === "number" && (
               <div
+                data-board-comment-overlay=""
                 className="nodrag nopan pointer-events-auto absolute z-20 flex items-start gap-2"
                 style={{ left: draftAnchor.x, top: draftAnchor.y }}
                 onPointerDown={(event) => event.stopPropagation()}

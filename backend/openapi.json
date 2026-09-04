@@ -7299,6 +7299,58 @@
         }
       }
     },
+    "/api/comments/{comment_id}": {
+      "patch": {
+        "tags": [
+          "collaboration"
+        ],
+        "summary": "Update Comment Anchor",
+        "operationId": "update_comment_anchor_api_comments__comment_id__patch",
+        "parameters": [
+          {
+            "name": "comment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Comment Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommentAnchorUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/reviews": {
       "get": {
         "tags": [
@@ -17669,6 +17721,23 @@
           "session_id"
         ],
         "title": "CloseRequest"
+      },
+      "CommentAnchorUpdate": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "anchor": {
+            "$ref": "#/components/schemas/CanvasCommentAnchor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "anchor"
+        ],
+        "title": "CommentAnchorUpdate"
       },
       "CommentCreate": {
         "properties": {

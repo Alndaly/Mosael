@@ -32,6 +32,10 @@ class CollaborationError(ValueError):
     pass
 
 
+class CommentOwnershipError(CollaborationError):
+    pass
+
+
 SUBJECT_MODELS = {
     "board": Board,
     "workflow": Workflow,
@@ -236,6 +240,37 @@ def list_comments(db: Session, workspace_id: str, subject_type: str, subject_id:
         }
         for comment, user in rows
     ]
+
+
+def move_comment(
+    db: Session,
+    comment: Comment,
+    *,
+    actor_id: str,
+    anchor: dict[str, Any],
+) -> Comment:
+    """Move a spatial comment without turning it into board content.
+
+    A comment's author owns its placement. Workspace editors may read the same discussion, but
+    cannot rearrange somebody else's canvas annotations.
+    """
+    if comment.author_id != actor_id:
+        raise CommentOwnershipError("只能移动自己发布的评论")
+    if comment.subject_type != "board":
+        raise CollaborationError("只有画布评论支持移动")
+    comment.anchor = anchor
+    record_activity(
+        db,
+        workspace_id=comment.workspace_id,
+        actor_id=actor_id,
+        action="comment.moved",
+        subject_type=comment.subject_type,
+        subject_id=comment.subject_id,
+        summary="移动了评论",
+        payload={"comment_id": comment.id, "anchor": anchor},
+    )
+    db.flush()
+    return comment
 
 
 def request_review(

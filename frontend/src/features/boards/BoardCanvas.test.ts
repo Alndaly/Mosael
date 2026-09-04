@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Node } from "@xyflow/react";
 
-import { canPlaceCommentDraft, focusBoardNode } from "./BoardCanvas";
+import { canMoveComment, canPlaceCommentDraft, focusBoardNode } from "./BoardCanvas";
 
 describe("画板节点聚焦", () => {
   it("一次点击就只选中目标节点", () => {
@@ -27,5 +27,16 @@ describe("画布评论落点", () => {
     expect(canPlaceCommentDraft(true, false)).toBe(true);
     expect(canPlaceCommentDraft(true, true)).toBe(false);
     expect(canPlaceCommentDraft(false, false)).toBe(false);
+  });
+
+  it("拖动画布或刚收起已有评论时不会在松手处创建评论", () => {
+    expect(canPlaceCommentDraft(true, false, true, false)).toBe(false);
+    expect(canPlaceCommentDraft(true, false, false, true)).toBe(false);
+  });
+
+  it("只有评论作者可以移动评论锚点", () => {
+    expect(canMoveComment("author-1", "author-1")).toBe(true);
+    expect(canMoveComment("author-1", "member-2")).toBe(false);
+    expect(canMoveComment(null, "member-2")).toBe(false);
   });
 });
