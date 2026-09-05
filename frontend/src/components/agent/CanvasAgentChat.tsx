@@ -17,6 +17,7 @@ import { toast } from "sonner";
 
 import { AttachmentChips, textAttachmentBlock, useComposerAttachments } from "@/components/agent/composerAttachments";
 import { DictateButton } from "@/components/agent/DictateButton";
+import { VoiceModeButton } from "@/components/agent/VoiceModeButton";
 
 import { API_BASE, api, getAuthToken, importAsset, type Asset } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -179,6 +180,16 @@ export function CanvasAgentChat({
     refetchOnWindowFocus: true,
   });
   const running = live.data?.status === "running";
+  //: 最新一条助手回复的正文 —— 免提模式念的就是它。失败的那条不念(它的 content 是
+  //: 「智能体执行失败」这类占位),但**失败要出声**由错误提示那条路负责,不是靠念它。
+  const lastAssistantText = React.useMemo(() => {
+    const rows = messages.data ?? [];
+    for (let index = rows.length - 1; index >= 0; index -= 1) {
+      const row = rows[index];
+      if (row.role === "assistant" && !row.error) return (row.content || "").trim();
+    }
+    return "";
+  }, [messages.data]);
   // Same contract as the studio chat: a message typed mid-turn is a correction, the backend
   // injects it into the running turn, and one button covers stop-vs-send.
   // Same source of truth as the studio chat: the server knows what is still waiting.
@@ -612,6 +623,14 @@ export function CanvasAgentChat({
                 // **追加**,不覆盖 —— 他可能先打了半句再改用说的。
                 setDraft((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text))
               }
+            />
+            {/* 免提是另一件事:说话输入把话填进框里等你过目,这个直接发出去。做成一个按钮的
+                两种模式的话,每次都要先想清楚自己现在处在哪一种,而两者的后果差得很远。 */}
+            <VoiceModeButton
+              workspaceId={workspaceId}
+              busy={running}
+              reply={lastAssistantText}
+              onUtterance={(text) => send.mutateAsync({ text, files: [], mediaAssets: [] }).then(() => undefined)}
             />
             <ModelPicker workspaceId={workspaceId} session={activeSession} />
             {/* 与 AI Studio 用同一个组件:此前两边各写各的工具行,同一个功能的位置、顺序、

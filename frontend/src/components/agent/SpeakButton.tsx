@@ -19,18 +19,8 @@ import { toast } from "sonner";
 import { API_BASE, getAuthToken } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { playSpeech, stopSpeaking } from "@/components/agent/speechPlayback";
 import { cn } from "@/lib/utils";
-
-/**
- * 当前在响的那一个。**模块级** —— 换成组件内 state 的话,每个按钮只知道自己,
- * 连点两条消息就会两段一起响。
- */
-let playing: { audio: HTMLAudioElement; stop: () => void } | null = null;
-
-/** 停掉正在响的那一段。打断(barge-in)之后也会用这个入口。 */
-export function stopSpeaking(): void {
-  playing?.stop();
-}
 
 export function SpeakButton({
   text,
@@ -43,25 +33,17 @@ export function SpeakButton({
 }) {
   const t = useI18n();
   const [state, setState] = React.useState<"idle" | "loading" | "playing">("idle");
-  const mine = React.useRef<HTMLAudioElement | null>(null);
-
-  const reset = React.useCallback(() => {
-    if (mine.current) {
-      URL.revokeObjectURL(mine.current.src);
-      mine.current = null;
-    }
-    setState("idle");
-  }, []);
+  const reset = React.useCallback(() => setState("idle"), []);
 
   React.useEffect(() => {
     // 组件没了(切会话、清空对话)声音也该停 —— 否则它会继续念一条已经不在屏幕上的消息。
     return () => {
-      if (mine.current) {
-        playing?.stop();
-        reset();
-      }
+      if (stateRef.current === "playing") stopSpeaking();
     };
-  }, [reset]);
+  }, []);
+
+  const stateRef = React.useRef(state);
+  stateRef.current = state;
 
   async function play() {
     stopSpeaking();
@@ -83,18 +65,10 @@ export function SpeakButton({
         setState("idle");
         return;
       }
-      const audio = new Audio(URL.createObjectURL(await response.blob()));
-      mine.current = audio;
-      const stop = () => {
-        audio.pause();
-        reset();
-        if (playing?.audio === audio) playing = null;
-      };
-      playing = { audio, stop };
-      audio.onended = stop;
-      audio.onerror = stop;
-      await audio.play();
       setState("playing");
+      // playSpeech 会接管前一段(见 speechPlayback):连点两条消息时,前一条自己停掉。
+      await playSpeech(await response.blob());
+      reset();
     } catch {
       toast.error(t("speakFailed"));
       setState("idle");
