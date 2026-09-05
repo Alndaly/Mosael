@@ -161,6 +161,7 @@ Complete user guides live at **[mosael.com](https://mosael.com)**; their source 
 | [docs/PLUGIN_MANIFEST.md](docs/PLUGIN_MANIFEST.md) | Plugin manifest and permissions |
 | [docs/PLUGIN_ARCHITECTURE.md](docs/PLUGIN_ARCHITECTURE.md) | Plugin packaging, instances, and capability injection |
 | [docs/CONVENTIONS.md](docs/CONVENTIONS.md) | Coding conventions and architectural ratchets |
+| [docs/PROCESS_STATE.md](docs/PROCESS_STATE.md) | In-process state, what a restart loses, and what blocks a second backend process |
 | [docs/MAINTENANCE_HOTSPOTS.md](docs/MAINTENANCE_HOTSPOTS.md) | High-risk areas and required verification |
 | [browser-extension/README.md](browser-extension/README.md) | Chrome Side Panel extension setup, usage, and permissions |
 | [docs/adr/](docs/adr/) | Architecture decision records |

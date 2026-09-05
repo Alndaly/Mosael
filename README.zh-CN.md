@@ -133,6 +133,7 @@ Cookie；受限内容可以选择 Mosael 浏览器池中已有的登录身份与
 | [docs/PLUGIN_MANIFEST.md](docs/PLUGIN_MANIFEST.md) | 插件清单格式与权限 |
 | [docs/PLUGIN_ARCHITECTURE.md](docs/PLUGIN_ARCHITECTURE.md) | 插件打包、实例化与能力注入 |
 | [docs/CONVENTIONS.md](docs/CONVENTIONS.md) | 编码约定与架构棘轮 |
+| [docs/PROCESS_STATE.md](docs/PROCESS_STATE.md) | 进程内状态清单:重启会丢什么,以及什么挡着起第二个后端进程 |
 | [docs/MAINTENANCE_HOTSPOTS.md](docs/MAINTENANCE_HOTSPOTS.md) | 高风险区域与验证要求 |
 | [browser-extension/README.zh-CN.md](browser-extension/README.zh-CN.md) | Chrome 侧栏扩展的安装、使用与权限 |
 | [docs/adr/](docs/adr/) | 架构决策记录 |
