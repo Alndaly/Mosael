@@ -5,7 +5,7 @@
     "zh": "百度网盘",
     "en": "Baidu Netdisk"
   },
-  "version": "0.4.1",
+  "version": "0.5.0",
   "homepage": "https://pan.baidu.com/union/doc/",
   "runtime": {
     "kind": "process",
@@ -133,6 +133,13 @@
               "description": {
                 "zh": "限定在这个目录下搜,留空搜全盘",
                 "en": "Search only under this directory; empty searches the whole netdisk"
+              }
+            },
+            "limit": {
+              "type": "integer",
+              "description": {
+                "zh": "最多返回多少条,默认 100,上限 1000。",
+                "en": "How many entries at most; 100 by default, 1000 at the top."
               }
             }
           },

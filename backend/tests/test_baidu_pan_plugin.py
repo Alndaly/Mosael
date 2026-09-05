@@ -143,6 +143,18 @@ class Test搜索:
         _, calls = run("pan_search", {"keyword": "海边"}, [LIST_OK])
         assert "recursion=1" in calls[0]["url"]
 
+    def test_搜索也自己保证条数(self) -> None:
+        """搜索天然会命中一大片(实测一个词回了 50 条),而这些条目直接进模型的上下文 ——
+        一次没约束的搜索能顶掉半个对话的可用篇幅。"""
+        many = {"errno": 0, "list": [
+            {"fs_id": i, "server_filename": f"f{i}", "path": f"/f{i}", "isdir": 0, "size": 1}
+            for i in range(50)
+        ]}
+        out, calls = run("pan_search", {"keyword": "demo", "limit": 3}, [many])
+        assert len(out["output"]["entries"]) == 3
+        # 不往请求里塞:百度的 search 没有这个参数,凭空发一个只会让人以为是它在起作用。
+        assert "limit=" not in calls[0]["url"]
+
     def test_关键词不能为空(self) -> None:
         out, _ = run("pan_search", {"keyword": "  "}, [])
         assert out["ok"] is False and "keyword" in out["error"]

@@ -167,12 +167,18 @@ def pan_search(payload: dict) -> dict:
     keyword = str(payload.get("keyword") or "").strip()
     if not keyword:
         raise PanError("keyword 不能为空")
+    limit = max(1, min(int(payload.get("limit") or 100), 1000))
     params = {"method": "search", "key": keyword, "recursion": 1}
     path = str(payload.get("path") or "").strip()
     if path:
         params["dir"] = path
     data = _call("/file", {**params})
-    return {"keyword": keyword, "entries": [_entry(one) for one in data.get("list") or []]}
+    entries = [_entry(one) for one in data.get("list") or []]
+    # 和 pan_list 同一个道理:**限制由我们兜底**。搜索天然会命中一大片(实测一个词回了 50 条),
+    # 而这些条目是直接进模型上下文的 —— 一次没约束的搜索能顶掉半个对话的可用篇幅。
+    # 这里不往请求里塞 limit:百度的 search 没有这个参数(list 有,但它也不照办),
+    # 凭空发一个未声明的参数只会让人以为是它在起作用。
+    return {"keyword": keyword, "entries": entries[:limit]}
 
 
 def pan_import(payload: dict) -> dict:

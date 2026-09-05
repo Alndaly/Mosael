@@ -12,8 +12,10 @@ from typing import Any
 from app.db.models import ProviderModel
 from app.domain.generation.catalog import known_capabilities_for
 from app.domain.provider_defaults import get_row
+from app.domain.provider_models import effective_capabilities
 from app.domain.workflows import NODE_TYPES, WorkflowDomainError
 from app.domain.workflows.normalization import canonicalize_data_bindings
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 FULL_VIDEO_GENERATION = "full_video_generation"
@@ -47,6 +49,53 @@ def _default_model(db: Session, capability: str, user_id: str) -> ModelChoice:
         provider=model.profile.vendor,
         model=model.model_id,
     )
+
+
+def _supports_text_to_video(choice: ModelChoice) -> bool:
+    """这个模型能不能只凭一段文字出片。
+
+    认不出来的模型(用户自建、ComfyUI)算**能** —— 落到"不认识"的时候拿窄名单去拦,
+    会把本来能用的模型挡在外面(见 known_capabilities_for 的说明)。
+    """
+    capabilities = known_capabilities_for(choice.provider, choice.model, "video")
+    if capabilities is None:
+        return bool(choice.model)
+    return "text-to-video" in (capabilities.get("modes") or ())
+
+
+def _text_to_video_model(db: Session, user_id: str) -> ModelChoice:
+    """给示范工作流挑一个**能纯文生视频**的模型。
+
+    不能直接用 video 能力的默认模型:图生视频类的模型(seedance-*-image-to-video、
+    wan2.7-i2v 这些,内置目录里有十来个)只声明了 image-to-video —— 而这条工作流的
+    generate_clip 只给一段提示词,没有首帧可喂。默认模型恰好是其中之一时,生成的示范
+    工作流从第一次运行起就是坏的,而报错发生在跑到那一步之后,离"我只是打开了示范模板"
+    已经很远了。
+
+    默认模型能文生视频就用它(用户自己的选择优先);不能就在他**已经配好的**模型里挑一个
+    能的。一个都没有时留空 —— 节点上的模型格空着,界面会让他去选,那比塞一个必然失败的
+    模型进去诚实。
+    """
+    chosen = _default_model(db, "video", user_id)
+    if _supports_text_to_video(chosen):
+        return chosen
+    # 「是不是视频模型」不是一个列 —— 能力是从行上写的、模型名推的、vendor 预设里
+    # 依次得出的(见 provider_models.effective_capabilities)。所以只能取出已启用的行
+    # 再逐个问,不能在 SQL 里筛。
+    rows = db.scalars(select(ProviderModel).where(ProviderModel.enabled.is_(True)))
+    for model in rows:
+        if model.profile is None or not model.profile.enabled:
+            continue
+        if "video" not in effective_capabilities(model):
+            continue
+        candidate = ModelChoice(
+            profile_id=model.provider_profile_id,
+            provider=model.profile.vendor,
+            model=model.model_id,
+        )
+        if _supports_text_to_video(candidate):
+            return candidate
+    return ModelChoice()
 
 
 def _video_plan(choice: ModelChoice) -> VideoPlan:
@@ -105,7 +154,8 @@ def built_in_template_graph(db: Session, template_id: str, *, user_id: str) -> d
     if template_id == FULL_VIDEO_GENERATION:
         return full_video_generation_graph(
             chat=chat,
-            video=_default_model(db, "video", user_id),
+            # 这条工作流只给提示词,所以要的是**能文生视频**的那种,不是"video 的默认模型"。
+            video=_text_to_video_model(db, user_id),
         )
     if template_id == TRANSCRIPT_VIDEO_CLEANUP:
         return transcript_video_cleanup_graph(chat=chat)

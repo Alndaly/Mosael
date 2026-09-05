@@ -576,7 +576,11 @@ function CapabilityPicker({
               **content-start + auto-rows-min 不能少**:行的根节点带 overflow-hidden,而带
               overflow 的网格项自动最小尺寸失效(min-height:auto 只对 overflow:visible 生效)。
               少了这两个类,41 行会被压进 420px —— 每行成为一条 4px 的横线,里面什么都看不见。 */}
-          <div className="-mx-1 grid max-h-[420px] auto-rows-min content-start gap-1.5 overflow-y-auto px-1">
+          {/* 不封高度、也不自己滚。**展开一个工具的试运行表单之后,420px 里装不下它** ——
+              于是表单在一个内层滚动区里,外面页面还有一条滚动条,两条嵌套着谁也用不顺手。
+              工具多(MCP 端点能报四十上百个)靠上面的搜索和「只看已开」收,那是按名字收,
+              比按像素截一刀有用得多。 */}
+          <div className="-mx-1 grid auto-rows-min content-start gap-1.5 px-1">
             {matched.map((tool) => (
               <ToolRow
                 key={tool.name}

@@ -166,3 +166,92 @@ def test_data_binding_normalization_is_lossless_and_idempotent() -> None:
     assert normalized["nodes"][2]["config"]["body"] == "已处理 {{source.name}}"
     assert not any(edge["id"] == "source_transcript" for edge in normalized["edges"])
     assert canonicalize_data_bindings(normalized, node_types=NODE_TYPES) == normalized
+
+
+class Test示范工作流要挑得动的模型:
+    """`generate_clip` **只给一段提示词**,所以模型必须能纯文生视频。
+
+    内置目录里有十几个只声明 image-to-video 的视频模型(seedance-*-image-to-video、
+    wan2.7-i2v 等)。用户的 video 默认模型恰好是其中之一时,示范工作流从第一次运行起就是
+    坏的 —— 而报错发生在跑到那一步之后,离"我只是打开了示范模板"已经很远,没人会往
+    "模板挑错了模型"上想。
+    """
+
+    def test_只会图生视频的模型不该被选中(self) -> None:
+        from app.domain.workflows.templates import _supports_text_to_video
+
+        # 内置目录里真实存在的两类,直接拿它们断言 —— 编一个假模型名会落进"不认识"那条路。
+        assert not _supports_text_to_video(ModelChoice(provider="alibaba", model="wan2.7-i2v"))
+        assert _supports_text_to_video(ModelChoice(provider="minimax", model="MiniMax-H3"))
+
+    def test_认不出来的模型算能(self) -> None:
+        """用户自建的、ComfyUI 的工作流查不到能力表。落到"不认识"时拿窄名单去拦,
+        会把本来能用的模型挡在外面 —— 见 known_capabilities_for 的说明。"""
+        from app.domain.workflows.templates import _supports_text_to_video
+
+        assert _supports_text_to_video(ModelChoice(provider="self-hosted", model="my-own-t2v"))
+        # 但"根本没有模型"不算能:那是空,不是未知。
+        assert not _supports_text_to_video(ModelChoice())
+
+    def test_生成节点不喂首帧所以不能用图生视频(self) -> None:
+        """把节点实际的输入摆出来:它只有 prompt / negative_prompt / parameters,
+        没有任何首帧字段。这条测试在有人给 generate_clip 加首帧时会失败 —— 那时候
+        上面挑模型的规矩就该跟着改,而不是让两边悄悄对不上。"""
+        graph = full_video_generation_graph(
+            chat=ModelChoice(provider="p", model="c"),
+            video=ModelChoice(provider="minimax", model="MiniMax-H3"),
+        )
+        # 它在 loop_foreach 的 body 里,不是顶层节点。
+        loop = next(n for n in graph["nodes"] if n["id"] == "generate_and_assemble")
+        node = next(n for n in loop["config"]["body"]["nodes"] if n["id"] == "generate_clip")
+        config = node["config"]
+        assert config["prompt"]
+        assert not any(key in config for key in ("first_frame", "image", "asset_id", "first_frame_url"))
+
+
+class Test挑模型走真实的库:
+    """上面几条验的是判断规则,这一条验的是**选择**:默认模型只会图生视频时,
+    真的会绕开它去挑另一个。规则对而选择错,症状和完全没修一模一样。"""
+
+    def _model(self, db, owner: str, vendor: str, model_id: str):
+        from app.db.models import ProviderModel, ProviderProfile
+
+        profile = ProviderProfile(owner_user_id=owner, vendor=vendor, name=vendor, enabled=True)
+        db.add(profile)
+        db.flush()
+        row = ProviderModel(
+            provider_profile_id=profile.id, model_id=model_id, enabled=True, capability_ids=["video"]
+        )
+        db.add(row)
+        db.flush()
+        return row
+
+    def test_默认是图生视频时换一个能文生视频的(self) -> None:
+        from app.core.db import SessionLocal
+        from app.domain.provider_defaults import set_default
+        from app.domain.workflows.templates import _text_to_video_model
+        from tests.util import fresh_client
+
+        fresh_client()
+        user_id = "u1"
+        with SessionLocal() as db:
+            # 用户把默认设成了只会图生视频的那个。
+            i2v = self._model(db, user_id, "alibaba", "wan2.7-i2v")
+            t2v = self._model(db, user_id, "minimax", "MiniMax-H3")
+            set_default(db, "video", i2v, owner_user_id=user_id)
+            db.commit()
+
+            picked = _text_to_video_model(db, user_id)
+            assert picked.model == t2v.model_id, "只会图生视频的默认模型必须被绕开"
+
+    def test_一个能文生视频的都没有就留空(self) -> None:
+        """留空好过塞一个必然失败的进去:节点上的模型格空着,界面会让他去选。"""
+        from app.core.db import SessionLocal
+        from app.domain.workflows.templates import _text_to_video_model
+        from tests.util import fresh_client
+
+        fresh_client()
+        with SessionLocal() as db:
+            self._model(db, "u1", "alibaba", "wan2.7-i2v")
+            db.commit()
+            assert _text_to_video_model(db, "u1").model == ""
