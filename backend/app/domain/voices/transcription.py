@@ -22,7 +22,7 @@ from app.db.models import Asset, Job
 from app.domain.jobs import create_job, dispatch_job, emit_job_event
 from app.domain.transcripts.operations import SegmentIn, TokenIn, attach_transcript
 from app.media.paths import resolve_key
-from app.media.probe import probe_has_audio
+from app.media.probe import probe_has_audio, probe_media
 from app.core.child_process import run_logged
 
 logger = logging.getLogger(__name__)
@@ -89,6 +89,41 @@ def _extract_audio(source: Path, target: Path) -> None:
         timeout=600, what="音频提取")
     if result.returncode != 0:
         raise ASRError(f"音频提取失败:{blame_line(result.stderr, fallback='ffmpeg 没有说明原因')}")
+
+
+#: 一段听写最长多久。语音输入是"说一句话",不是"传一段素材" —— 上限存在的意义是让越界
+#: 当场被拒,而不是让一段四十分钟的录音悄悄占住那个唯一的识别名额。
+DICTATION_MAX_SECONDS = 120.0
+
+
+class DictationTooLong(ASRError):
+    """说得太长了。单独一个类型,因为它该变成 4xx 而不是 5xx —— 是输入的问题。"""
+
+
+def transcribe_clip(source: Path, *, language: str = "", engine: str = "") -> str:
+    """把一小段录音转成一句话。**不入库、不建任务。**
+
+    和「转写素材」是两件事,不该走同一条路:后者的产出是一份要留存、要能编辑、要投影回
+    时间线的逐字稿,所以它建 job、产出素材、记进任务中心。听写要的只是"用户刚才说了什么",
+    说完就用完了 —— 走那条路的话,输入框里每说一句,素材库就多一个 wav 和一条转写记录。
+
+    识别本身仍然是同一份实现(transcribe_with_engine + 常驻 worker),只是**产物的归属不同**。
+    """
+    duration = float(probe_media(source).get("duration") or 0.0)
+    if duration > DICTATION_MAX_SECONDS:
+        raise DictationTooLong(
+            f"这段录音 {duration:.0f} 秒,超过了听写的 {DICTATION_MAX_SECONDS:.0f} 秒上限 —— "
+            "长内容请作为素材导入再转写。"
+        )
+    python_executable, engine_id = resolve_transcription_runtime(language, engine=engine)
+    with tempfile.TemporaryDirectory(prefix="mosael-dictate-") as tmp:
+        # 引擎要 16k 单声道 wav;浏览器给的是 webm/opus 之类,统一在这儿转。
+        wav = Path(tmp) / "clip.wav"
+        _extract_audio(source, wav)
+        result = transcribe_with_engine(wav, python_executable, engine_id, language)
+    # 分段是给逐字稿用的结构;听写要的是一句话。**中间不补空格** —— 中文里那是错的,
+    # 而引擎给的分段边界本来就落在停顿处,拼起来就是他说的那句。
+    return "".join(str(one.get("text") or "").strip() for one in (result.get("segments") or [])).strip()
 
 
 def transcribe_with_engine(
@@ -173,7 +208,6 @@ def parse_transcript_segments(segments: list[dict]) -> list[SegmentIn]:
 def _mirror_model_download_progress(job_id: str, engine_id: str) -> threading.Event:
     """While a transcribe is running, if its model isn't installed yet, poll the
     download and map it onto job progress 0.25→0.9. Returns a stop Event."""
-    from app.ai.runtime import asr_models
 
     stop = threading.Event()
     entry = asr_models.entry_for_transcribe(engine_id)
