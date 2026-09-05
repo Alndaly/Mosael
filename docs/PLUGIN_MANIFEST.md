@@ -434,3 +434,42 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 | `POST /api/plugins/instances/{id}/tools/{工具}/invoke` | 执行一次,留痕 |
 
 智能体、工作流、手动试跑走的是**同一条**执行路径:权限校验、凭据注入、调用留痕都在那里。
+
+## `instance.oauth` —— 让插件自己走一次授权
+
+声明了它,连接页上就多一个「去授权」的入口,用户不必自己手抄 refresh_token。
+
+```json
+"instance": {
+  "credentials": [
+    { "key": "BAIDU_PAN_APP_KEY", "label": "AppKey", "required": true },
+    { "key": "BAIDU_PAN_SECRET_KEY", "label": "SecretKey", "required": true },
+    { "key": "BAIDU_PAN_REFRESH_TOKEN", "label": "Refresh Token", "required": true },
+    { "key": "BAIDU_PAN_ACCESS_TOKEN", "label": "Access Token" }
+  ],
+  "oauth": {
+    "authorize_url": "https://openapi.baidu.com/oauth/2.0/authorize",
+    "token_url": "https://openapi.baidu.com/oauth/2.0/token",
+    "client_id_field": "BAIDU_PAN_APP_KEY",
+    "client_secret_field": "BAIDU_PAN_SECRET_KEY",
+    "scope": "basic,netdisk",
+    "redirect_uri": "oob",
+    "stores": { "refresh_token": "BAIDU_PAN_REFRESH_TOKEN", "access_token": "BAIDU_PAN_ACCESS_TOKEN" }
+  }
+}
+```
+
+几条要点:
+
+- **块写在 `instance` 里**,不是顶层。放错了不会报错,只会让授权按钮静默不出现
+  (`test_plugin_oauth_does_the_mechanical_part.py` 钉着这一条)。
+- `client_id_field` / `client_secret_field` **指向已有的凭据键**。注册应用、拿 AppKey 这一步
+  替代不了 —— 那是用户和开放平台之间的事。能替代的是后面那段机械动作:拼授权链接、拿 code
+  换令牌、把令牌存回哪几个键,而那正是最容易抄错、抄错了只换回一句 `invalid_client` 的部分。
+- `stores` 把**令牌响应里的字段**映射到**凭据键**。响应里叫什么由对方定,存进哪个键由你定。
+  对方没回的字段不会被写 —— 刷新时常常只回 `access_token`,当成空串写回去会抹掉已有的
+  refresh_token,而那一份丢了要重新授权一遍。
+- `redirect_uri` 默认 `oob`(对方把授权码显示出来让人贴回来)。本地应用没有公网可达的回调
+  地址,多这一次粘贴换来的是这条路上没有任何可伪造的输入。
+- **声明不全就当没声明**:缺 `token_url` / `client_id_field` / `stores` 中任何一个,整块作废。
+  半个声明会让界面长出一个点了必然失败的按钮。

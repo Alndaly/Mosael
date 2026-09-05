@@ -5,7 +5,7 @@
     "zh": "百度网盘",
     "en": "Baidu Netdisk"
   },
-  "version": "0.3.1",
+  "version": "0.4.0",
   "homepage": "https://pan.baidu.com/union/doc/",
   "runtime": {
     "kind": "process",
@@ -28,6 +28,18 @@
     "name_template": {
       "zh": "百度网盘",
       "en": "Baidu Netdisk"
+    },
+    "oauth": {
+      "authorize_url": "https://openapi.baidu.com/oauth/2.0/authorize",
+      "token_url": "https://openapi.baidu.com/oauth/2.0/token",
+      "client_id_field": "BAIDU_PAN_APP_KEY",
+      "client_secret_field": "BAIDU_PAN_SECRET_KEY",
+      "scope": "basic,netdisk",
+      "redirect_uri": "oob",
+      "stores": {
+        "refresh_token": "BAIDU_PAN_REFRESH_TOKEN",
+        "access_token": "BAIDU_PAN_ACCESS_TOKEN"
+      }
     },
     "credentials": [
       {

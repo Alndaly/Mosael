@@ -622,7 +622,8 @@ export function ChatWorkspace({
               <div className="flex items-center justify-between gap-1.5 pt-0.5">
                 <div className="flex items-center gap-1.5">
                   {switcher}
-                  <Button asChild variant="ghost" size="icon" aria-label={t("attachFile")} disabled={attach.uploading}>
+                  {/* 28px —— 和画布助手那一行同一个刻度。见那边的说明。 */}
+                  <Button asChild variant="ghost" size="icon" className="h-7 w-7" aria-label={t("attachFile")} disabled={attach.uploading}>
                     <label>
                       <input
                         type="file"

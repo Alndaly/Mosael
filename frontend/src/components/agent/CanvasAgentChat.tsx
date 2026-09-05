@@ -641,15 +641,18 @@ export function CanvasAgentChat({
         />
         <div className="flex items-center justify-between gap-1.5">
           <div className="flex min-w-0 items-center gap-1">
+            {/* 28px:这一行的刻度由模型选择器(h-7)定,而它和全应用的工具栏是同一档
+                (时间线、编辑器、设置页都是 h-7 w-7)。默认的 size="icon" 是 36px,
+                在这一行里会比旁边的胶囊高出一截 —— 圆形按钮尤其藏不住这 8px。 */}
             <Button
               variant="ghost"
               size="icon"
-              className="rounded-full"
+              className="h-7 w-7"
               aria-label={t("wfAgentAttach")}
               title={t("wfAgentAttach")}
               onClick={() => fileRef.current?.click()}
             >
-              <Paperclip size={15} />
+              <Paperclip size={14} />
             </Button>
             {/* 说话输入紧挨着附件:两者都是"往输入框里放东西",而模型选择是"怎么处理它"。 */}
             <DictateButton

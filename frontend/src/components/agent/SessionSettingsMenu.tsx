@@ -55,7 +55,7 @@ export function SessionSettingsMenu({
           aria-label={t("agentSessionSettings")}
           title={t("agentSessionSettings")}
         >
-          <SlidersHorizontal size={13} />
+          <SlidersHorizontal size={14} />
           {mode !== "manual" && (
             <span
               className={cn(

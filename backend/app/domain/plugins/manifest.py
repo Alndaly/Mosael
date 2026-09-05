@@ -293,7 +293,10 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
         overrides=overrides,
         declared_tools=declared,
         homepage=web_url(raw.get("homepage")),
-        oauth=_oauth(raw.get("oauth")),
+        # **读 instance 里那一层。** oauth 块引用的 client_id_field / stores 全是
+        # instance.credentials 里的键,放在顶层的话作者会把它写在它引用的东西旁边(合理),
+        # 然后得到一个静默消失的授权按钮 —— 这个坑第一个踩进去的就是写解析器的人。
+        oauth=_oauth(instance.get("oauth")),
     )
 
 

@@ -104,3 +104,47 @@ def test_声明不全就当没声明() -> None:
         "client_id_field": "K",
         "stores": {"refresh_token": "R"},
     }) is not None
+
+
+def test_oauth_块读的是_instance_那一层() -> None:
+    """位置钉死在这里,因为放错了**不会报错**,只会让授权按钮静默不出现。
+
+    界面上那个按钮的显示条件是 `manifest.oauth is not None`。块写在顶层(它引用的
+    client_id_field / stores 都在 instance.credentials 里,写在旁边是很自然的选择)时,
+    解析器读不到,于是 oauth 为 None,按钮不出现,而**没有任何一处报错** —— 用户看到的
+    只是"没有授权入口",作者看到的是"我明明声明了"。写解析器的人自己就踩进去过一次。
+    """
+    from app.domain.plugins.manifest import parse
+
+    block = {
+        "authorize_url": "https://x.test/auth",
+        "token_url": "https://x.test/token",
+        "client_id_field": "KEY",
+        "stores": {"refresh_token": "R"},
+    }
+    base = {"id": "x.y", "manifest_version": 1, "name": "X", "version": "1", "_path": "/tmp/x"}
+
+    assert parse({**base, "instance": {"oauth": block}}, "x").oauth is not None
+    # 顶层写法读不到 —— 这一条不是"支持两种",是钉住只有一种。
+    assert parse({**base, "oauth": block, "instance": {}}, "x").oauth is None
+
+
+def test_百度网盘自己声明了_oauth() -> None:
+    """机制做完了却没在任何插件上声明,等于对用户不存在 —— 这正是它上线时的样子:
+    oauth.py 有、路由有、按钮有,唯独 manifest 里没声明,于是那条路一次也没被走到。"""
+    import json
+    import pathlib
+
+    from app.domain.plugins.manifest import parse
+
+    root = pathlib.Path(__file__).resolve().parents[2]
+    raw = json.loads((root / "plugins/examples/baidu-pan/mosael.plugin.json").read_text(encoding="utf-8"))
+    raw["_path"] = str(root)
+    manifest = parse(raw, "baidu-pan")
+
+    assert manifest.oauth is not None, "百度网盘要能自己走授权,否则用户只能手抄 refresh_token"
+    # stores 指向的必须是真实存在的凭据键,否则换回来的令牌无处可存。
+    keys = {field.key for field in manifest.credentials}
+    assert set(manifest.oauth.stores.values()) <= keys
+    assert manifest.oauth.client_id_field in keys
+    assert manifest.oauth.client_secret_field in keys

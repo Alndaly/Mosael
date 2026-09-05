@@ -6,7 +6,7 @@
         "zh": "百度网盘",
         "en": "Baidu Netdisk"
       },
-      "version": "0.3.1",
+      "version": "0.4.0",
       "description": {
         "zh": "在百度网盘和素材库之间搬文件。拉:用 pan_list 或 pan_search 找到 fs_id,再用 pan_import 导进来。传:用 pan_upload 把素材库里的东西存到网盘(传 asset_id 和目标路径)。",
         "en": "Move files between Baidu Netdisk and the asset library. To pull: find an fs_id with pan_list or pan_search, then bring it in with pan_import. To push: use pan_upload to save something from the asset library to the netdisk (pass an asset_id and a target path)."
