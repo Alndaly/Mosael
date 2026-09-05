@@ -110,6 +110,32 @@ class Test列目录:
         _, calls = run("pan_list", {"limit": 99999}, [LIST_OK])
         assert "limit=1000" in calls[0]["url"]
 
+    def test_对方不照办时也只返回那么多条(self) -> None:
+        """**这条才是 limit 的意义所在。**
+
+        原来只断言「limit 拼进了 URL」—— 验证的是我们问了,不是我们兑现了。而百度这个接口
+        恰好收下 limit 却不照办:实测 limit=2 和 limit=10 都回了根目录全部 57 条,于是几十条
+        目录直接进了模型的上下文,而这正是这个参数当初被加进来要防的事。
+
+        声明了就得做到。对调用方来说,"我们问了、对方没听"和没有这个参数完全一样。
+        """
+        many = {"errno": 0, "list": [
+            {"fs_id": i, "server_filename": f"f{i}", "path": f"/f{i}", "isdir": 0, "size": 1}
+            for i in range(57)
+        ]}
+        out, calls = run("pan_list", {"limit": 2}, [many])
+        assert "limit=2" in calls[0]["url"], "照样要问 —— 哪天它生效就能少传一大段回来"
+        assert len(out["output"]["entries"]) == 2
+
+    def test_对方给得比要的少就照给(self) -> None:
+        """兜底是**截断**,不是补齐 —— 目录里只有 3 个文件时不该硬凑出 10 条。"""
+        few = {"errno": 0, "list": [
+            {"fs_id": i, "server_filename": f"f{i}", "path": f"/f{i}", "isdir": 0, "size": 1}
+            for i in range(3)
+        ]}
+        out, _ = run("pan_list", {"limit": 10}, [few])
+        assert len(out["output"]["entries"]) == 3
+
 
 class Test搜索:
     def test_带上递归(self) -> None:

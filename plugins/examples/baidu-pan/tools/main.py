@@ -153,7 +153,14 @@ def pan_list(payload: dict) -> dict:
     path = str(payload.get("path") or "").strip() or "/"
     limit = max(1, min(int(payload.get("limit") or 100), 1000))
     data = _call("/file", {"method": "list", "dir": path, "limit": limit})
-    return {"path": path, "entries": [_entry(one) for one in data.get("list") or []]}
+    entries = [_entry(one) for one in data.get("list") or []]
+    # **限制由我们兜底,不指望对方。** 百度这个接口收下 limit 却不照办:实测 limit=2 和
+    # limit=10 都回了根目录全部 57 条。原因不明(参数名和文档一致),但原因不重要 —— 这个
+    # 参数存在的意义是**别让几十条目录塞进模型的上下文**,而"我们问了、对方没听"对调用方
+    # 来说和没这个参数完全一样。声明了就得做到,做不到的那部分自己补上。
+    #
+    # 仍然照样发出去:哪天它开始生效,就能少传一大段回来。
+    return {"path": path, "entries": entries[:limit]}
 
 
 def pan_search(payload: dict) -> dict:
