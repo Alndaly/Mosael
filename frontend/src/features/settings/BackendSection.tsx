@@ -61,9 +61,8 @@ function UpdateCheckButton() {
   if (!check) return null;
   return (
     <Button
-      size="sm"
+      size="xs"
       variant="outline"
-      className="h-7"
       disabled={checking}
       onClick={async () => {
         setChecking(true);

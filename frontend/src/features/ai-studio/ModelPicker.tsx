@@ -74,8 +74,8 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
       <Button
         type="button"
         variant="outline"
-        size="sm"
-        className="h-7 gap-1 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground"
+        size="xs"
+        className="gap-1 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground"
         onClick={() => gotoSettings("providers:chat")}
       >
         <Settings2 size={13} />

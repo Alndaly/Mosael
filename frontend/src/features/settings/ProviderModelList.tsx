@@ -197,8 +197,7 @@ export function ProviderModelList({
             />
             <Button
               variant="ghost"
-              size="icon"
-              className="h-7 w-7"
+              size="icon-xs"
               aria-label={t("modelSettingsTitle")}
               onClick={() => setEditing(row.id)}
             >
@@ -206,8 +205,7 @@ export function ProviderModelList({
             </Button>
             <Button
               variant="ghost"
-              size="icon"
-              className="h-7 w-7"
+              size="icon-xs"
               aria-label={t("delete")}
               loading={remove.isPending && remove.variables === row.id}
               onClick={() => remove.mutate(row.id)}

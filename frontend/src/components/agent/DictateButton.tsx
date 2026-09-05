@@ -118,11 +118,11 @@ export function DictateButton({ onText, disabled }: { onText: (text: string) => 
   return (
     <Button
       variant="ghost"
-      size={recording ? "sm" : "icon"}
       //: 两种形态都钉在 28px 高。**录制时会从圆变成带计时的胶囊**,高度再变的话整条
       //: 工具行会跟着跳一下 —— 而那一跳发生在你刚开口的瞬间,看着像点错了什么。
-      //: 28 是这一行(以及全应用工具栏)的刻度,size 的 icon(36)/sm(32) 都比它大。
-      className={cn("h-7 rounded-full", recording ? "gap-1.5 px-2.5 text-destructive" : "w-7")}
+      //: 所以换的是 xs↔icon-xs 这一对(同一档的胶囊和圆),不是 sm↔icon(32↔36)。
+      size={recording ? "xs" : "icon-xs"}
+      className={cn(recording && "gap-1.5 text-destructive")}
       aria-label={recording ? t("dictateStop") : t("dictate")}
       title={recording ? t("dictateStop") : t("dictate")}
       disabled={disabled || busy}

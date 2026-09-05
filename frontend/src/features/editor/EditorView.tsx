@@ -947,8 +947,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         <div className="flex items-center gap-1 border-b border-b-[color:rgb(255_255_255/0.08)] px-2 py-1 [&_button]:text-[#c6cbd2] [&_button:hover]:bg-[rgb(255_255_255/0.08)] [&_button:hover]:text-white">
           <Button
             variant="ghost"
-            size="sm"
-            className="h-7 gap-1 px-2 text-ui-2xs"
+            size="xs"
+            className="gap-1 px-2 text-ui-2xs"
             title={t("editorSplitHere")}
             onClick={() => splitAtPlayhead()}
           >
@@ -956,8 +956,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           </Button>
           <Button
             variant="ghost"
-            size="sm"
-            className="h-7 gap-1 px-2 text-ui-2xs"
+            size="xs"
+            className="gap-1 px-2 text-ui-2xs"
             title={t("editorGrabFrameTitle")}
             loading={grabFrameMutation.isPending}
             onClick={() => grabFrameMutation.mutate()}
@@ -969,9 +969,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           <div className="ml-auto border-l border-l-[color:rgb(255_255_255/0.08)] pl-1">
             <Button
               variant="ghost"
-              size="sm"
+              size="xs"
               className={cn(
-                "h-7 gap-1 px-2 text-ui-2xs",
+                "gap-1 px-2 text-ui-2xs",
                 agentOpen === "on" && "!bg-[rgb(255_255_255/0.12)] !text-white",
               )}
               title={t("wfAgentTitle")}
@@ -1074,8 +1074,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
+                    size="icon-xs"
                     disabled={!sequence.can_undo} loading={undoMutation.isPending}
                     onClick={() => undoMutation.mutate()}
                     aria-label={t("undo")}
@@ -1089,8 +1088,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
+                    size="icon-xs"
                     disabled={!sequence.can_redo} loading={redoMutation.isPending}
                     onClick={() => redoMutation.mutate()}
                     aria-label={t("redoAction")}
@@ -1104,8 +1102,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
+                    size="icon-xs"
                     loading={addSubtitleMutation.isPending}
                     onClick={() => addSubtitleMutation.mutate()}
                     aria-label={t("addSubtitleAtPlayhead")}
@@ -1119,8 +1116,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
+                    size="icon-xs"
                     loading={addTextMutation.isPending}
                     onClick={() => addTextMutation.mutate()}
                     aria-label={t("addTextAtPlayhead")}
@@ -1277,7 +1273,7 @@ function ExportControl({
           <CircleAlert size={13} /> {t("exportFailed")}
         </span>
       )}
-      <Button size="sm" variant="outline" className="h-7" disabled={busy} onClick={() => setConfigOpen(true)}>
+      <Button size="xs" variant="outline" disabled={busy} onClick={() => setConfigOpen(true)}>
         {busy ? <Loader2 size={13} className="animate-mosael-spin" /> : <Download size={13} />}
         {busy ? t("exporting") : t("exportVideo")}
       </Button>

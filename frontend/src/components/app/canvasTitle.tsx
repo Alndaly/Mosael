@@ -60,8 +60,8 @@ export function CanvasTitle({
           空白就显得忽大忽小 —— 有了底,它的占位是确定的,和右边的竖线、名字也就对齐了。 */}
       <Button
         variant="secondary"
-        size="icon"
-        className="h-8 w-8 shrink-0"
+        size="icon-sm"
+        className="shrink-0"
         onClick={onBack}
         title={backLabel}
         aria-label={backLabel}
