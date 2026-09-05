@@ -657,36 +657,47 @@ __all__ = [
 ]
 
 
-def _synthesize_remote(
+def speak_to_file(
     db,
-    job,
+    *,
+    text: str,
     engine: str,
     engine_voice: str,
-    text: str,
     speed: float,
-    *,
     workspace_id: str,
-    project_id: str | None,
+    user_id: str | None,
+    out_dir: Path,
     voice_resource: str = "",
     provider_profile_id: str | None = None,
     model_override: str = "",
-) -> None:
-    """Synthesise through a remote engine and register the result, mirroring the clone path.
+    source_type: str,
+    source_id: str,
+    job_id: str | None = None,
+) -> Path:
+    """用远端引擎合成一段语音,落到 `out_dir` 里,**不管产物归谁**。
 
-    No reference clip and no local model, so none of the worker-subprocess machinery applies —
-    but the outcome has to look identical to the caller: an audio asset on the job's result.
+    产出型(配音:登记成素材、挂在任务上)和临时型(对话里念一句、说完就扔)只在最后那一步
+    不同 —— 解析连接、按引擎那一族筛模型、建适配器、记账,两条路必须逐字一样。抄第二份的话,
+    "百炼一条连接两个引擎"这类坑只会在其中一条上被填。
+
+    记账的来源由调用方给:配音挂在 job 上,临时合成挂在别的东西上 —— 但**两边都要记**,
+    各家 TTS 按字符计费,念一句也是钱。
     """
-    from app.ai.providers import SpeechSynthesisRequest, build_speech_adapter
+    from app.ai.providers import (
+        REMOTE_SPEECH_ADAPTERS,
+        SpeechSynthesisRequest,
+        build_speech_adapter,
+        connection_vendor_for_speech_engine,
+    )
     from app.domain.providers import resolve_connection
 
     # The profile carries base_url too. Reading only the key would send a proxy user's request
     # to api.openai.com with a key that is not valid there — a 401 with no hint as to why.
-    # 这次配音替谁干,job 上记着 —— 后台线程手里只有它(见 Job.created_by)。
     # 引擎 id 通常就是 vendor id,百炼是唯一的例外:qwen-tts 与 CosyVoice 是两个引擎、
     # 一条连接、一把 Key(见 providers.registry.connection_vendor_for_speech_engine)。
-    from app.ai.providers import REMOTE_SPEECH_ADAPTERS, connection_vendor_for_speech_engine
-
-    profile = resolve_connection(db, connection_vendor_for_speech_engine(engine), provider_profile_id, user_id=job.created_by)
+    profile = resolve_connection(
+        db, connection_vendor_for_speech_engine(engine), provider_profile_id, user_id=user_id
+    )
     api_key = (profile.api_key if profile else None) or ""
     # **模型要按引擎那一族筛**。同一条连接下可以同时挂着 qwen-tts 和 cosyvoice-v2,
     # 不筛的话切到 CosyVoice 引擎会把 qwen 的模型名发去 CosyVoice 的端点(得到 `url error`)。
@@ -706,25 +717,63 @@ def _synthesize_remote(
         model=model,
         base_url=(profile.base_url if profile else "") or "",
     )
+    # 火山与 Edge 产出 mp3;其余(OpenAI 家族)按请求要的 wav 落盘。
+    out = out_dir / ("speech.mp3" if engine in {"volcano", "edge"} else "speech.wav")
+    # 各家 TTS 普遍按**字符**计费,所以计量是字符数而不是 token —— 计量因供应商而异,
+    # 正是 billable 留给调用方的那一半。
+    with billable(
+        db,
+        capability="tts",
+        operation="synthesize_speech",
+        workspace_id=workspace_id,
+        provider=engine,
+        model=model,
+        provider_profile_id=profile.id if profile else None,
+        source_type=source_type,
+        source_id=source_id,
+        job_id=job_id,
+    ) as call:
+        call.meter(characters=len(text), requests=1)
+        adapter.synthesize(SpeechSynthesisRequest(text=text, voice=engine_voice, speed=speed), out)
+    return out
+
+
+def _synthesize_remote(
+    db,
+    job,
+    engine: str,
+    engine_voice: str,
+    text: str,
+    speed: float,
+    *,
+    workspace_id: str,
+    project_id: str | None,
+    voice_resource: str = "",
+    provider_profile_id: str | None = None,
+    model_override: str = "",
+) -> None:
+    """Synthesise through a remote engine and register the result, mirroring the clone path.
+
+    No reference clip and no local model, so none of the worker-subprocess machinery applies —
+    but the outcome has to look identical to the caller: an audio asset on the job's result.
+    """
     with tempfile.TemporaryDirectory(prefix="mosael-tts-") as tmp:
-        # 火山与 Edge 产出 mp3;其余(OpenAI 家族)按请求要的 wav 落盘。
-        out = Path(tmp) / ("speech.mp3" if engine in {"volcano", "edge"} else "speech.wav")
-        # 语音合成此前一条账都不记。各家 TTS 普遍按**字符**计费,所以计量是字符数而不是 token
-        # —— 计量因供应商而异正是 billable 留给调用方的那一半。
-        with billable(
+        out = speak_to_file(
             db,
-            capability="tts",
-            operation="synthesize_speech",
+            text=text,
+            engine=engine,
+            engine_voice=engine_voice,
+            speed=speed,
             workspace_id=workspace_id,
-            provider=engine,
-            model=model,
-            provider_profile_id=profile.id if profile else None,
+            user_id=job.created_by,
+            voice_resource=voice_resource,
+            provider_profile_id=provider_profile_id,
+            model_override=model_override,
+            out_dir=Path(tmp),
             source_type="job",
             source_id=job.id,
             job_id=job.id,
-        ) as call:
-            call.meter(characters=len(text), requests=1)
-            adapter.synthesize(SpeechSynthesisRequest(text=text, voice=engine_voice, speed=speed), out)
+        )
         job.progress = 0.85
         db.commit()
         asset = register_file_asset(
