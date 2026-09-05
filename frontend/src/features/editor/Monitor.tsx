@@ -567,7 +567,7 @@ export function Monitor({
           <Button variant="ghost" size="icon" onClick={() => setPlayhead(Math.max(0, playhead - frameStep))} aria-label={t("monFrameBack")}>
             <StepBack size={14} />
           </Button>
-          <Button variant="secondary" size="icon" className="h-7 w-7 rounded-full! bg-white! text-[#17181a]! transition-transform duration-[120ms] hover:scale-[1.06] hover:bg-white! hover:text-[#17181a]!" onClick={playToggle} aria-label={t("playPause")}>
+          <Button variant="secondary" size="icon-xs" className="rounded-full! bg-white! text-[#17181a]! transition-transform duration-[120ms] hover:scale-[1.06] hover:bg-white! hover:text-[#17181a]!" onClick={playToggle} aria-label={t("playPause")}>
             {playing ? <Pause size={14} /> : <Play size={14} className="ml-px" />}
           </Button>
           <Button variant="ghost" size="icon" onClick={() => setPlayhead(Math.min(totalDuration, playhead + frameStep))} aria-label={t("monFrameForward")}>

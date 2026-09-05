@@ -202,13 +202,13 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
                     </SelectContent>
                   </Select>
                   <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
-                  <Button variant="ghost" size="icon" className="h-8 w-8" loading={issueCode.isPending && issueCode.variables === bot.id} onClick={() => issueCode.mutate(bot.id)} title={t("feishuBind")} aria-label={t("feishuBind")}>
+                  <Button variant="ghost" size="icon-sm" loading={issueCode.isPending && issueCode.variables === bot.id} onClick={() => issueCode.mutate(bot.id)} title={t("feishuBind")} aria-label={t("feishuBind")}>
                     <Link2 size={14} />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" loading={restartBot.isPending && restartBot.variables === bot.id} onClick={() => restartBot.mutate(bot.id)} title={t("feishuRestart")} aria-label={t("feishuRestart")}>
+                  <Button variant="ghost" size="icon-sm" loading={restartBot.isPending && restartBot.variables === bot.id} onClick={() => restartBot.mutate(bot.id)} title={t("feishuRestart")} aria-label={t("feishuRestart")}>
                     <RefreshCcw size={14} />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" loading={removeBot.isPending && removeBot.variables === bot.id} onClick={() => removeBot.mutate(bot.id)} title={t("feishuRemove")} aria-label={t("feishuRemove")}>
+                  <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-destructive" loading={removeBot.isPending && removeBot.variables === bot.id} onClick={() => removeBot.mutate(bot.id)} title={t("feishuRemove")} aria-label={t("feishuRemove")}>
                     <Trash2 size={14} />
                   </Button>
                 </div>
@@ -300,8 +300,8 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
                   <span className="truncate">{binding.username}</span>
                   <Button
                     variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                    size="icon-xs"
+                    className="text-muted-foreground hover:text-destructive"
                     loading={removeBinding.isPending && removeBinding.variables === binding.open_id} onClick={() => removeBinding.mutate(binding.open_id)}
                     title={t("feishuUnbind")}
                     aria-label={t("feishuUnbind")}

@@ -700,8 +700,8 @@ function BoardDetail({
           <div data-board-toolbar-actions="" className={cn("flex flex-wrap items-center gap-1 rounded-full p-1", CANVAS_GLASS_SURFACE_CLASS)}>
             <Button
               variant="ghost"
-              size="icon"
-              className={cn("h-8 w-8", commentMode && "bg-secondary text-foreground")}
+              size="icon-sm"
+              className={cn(commentMode && "bg-secondary text-foreground")}
               title={commentMode ? t("boardCommentModeHint") : t("boardCommentMode")}
               aria-label={t("boardCommentMode")}
               aria-pressed={commentMode}
@@ -711,8 +711,7 @@ function BoardDetail({
             </Button>
             <Button
               variant="ghost"
-              size="icon"
-              className="h-8 w-8"
+              size="icon-sm"
               title={t("boardDiscussionCenter")}
               aria-label={t("boardDiscussionCenter")}
               onClick={() => setCollaborationOpen(true)}
@@ -722,8 +721,8 @@ function BoardDetail({
             {/* 全览可关 —— 它占着右下角一块不小的地方,图小的时候纯属挡视线。记在本地。 */}
             <Button
               variant="ghost"
-              size="icon"
-              className={cn("h-8 w-8", showMinimap && "bg-secondary text-foreground")}
+              size="icon-sm"
+              className={cn(showMinimap && "bg-secondary text-foreground")}
               title={t("wfMinimap")}
               aria-label={t("wfMinimap")}
               aria-pressed={showMinimap}
@@ -731,15 +730,14 @@ function BoardDetail({
             >
               <MapIcon size={14} />
             </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" title={t("boardsFitView")} aria-label={t("boardsFitView")} onClick={() => api?.fitView()}>
+            <Button variant="ghost" size="icon-sm" title={t("boardsFitView")} aria-label={t("boardsFitView")} onClick={() => api?.fitView()}>
               <Maximize2 size={14} />
             </Button>
             {/* 撤销/重做。画布上最容易「手一滑」—— 拖错一个节点、误删一项,没有退路的话
                 用户只能凭记忆手动摆回去。快捷键是 ⌘Z / ⌘⇧Z,按钮是给不知道有快捷键的人。 */}
             <Button
               variant="ghost"
-              size="icon"
-              className="h-8 w-8"
+              size="icon-sm"
               title={`${t("undo")}  ⌘Z`}
               aria-label={t("undo")}
               disabled={!api?.canUndo}
@@ -749,8 +747,7 @@ function BoardDetail({
             </Button>
             <Button
               variant="ghost"
-              size="icon"
-              className="h-8 w-8"
+              size="icon-sm"
               title={`${t("redo")}  ⌘⇧Z`}
               aria-label={t("redo")}
               disabled={!api?.canRedo}
@@ -760,8 +757,8 @@ function BoardDetail({
             </Button>
             <Button
               variant="ghost"
-              size="icon"
-              className={cn("h-8 w-8", agentOpen === "on" && "bg-secondary text-foreground")}
+              size="icon-sm"
+              className={cn(agentOpen === "on" && "bg-secondary text-foreground")}
               title={t("wfAgentTitle")}
               aria-label={t("wfAgentTitle")}
               aria-pressed={agentOpen === "on"}
@@ -774,8 +771,8 @@ function BoardDetail({
           <div className={cn("flex flex-wrap items-center gap-1 rounded-full p-1", CANVAS_GLASS_SURFACE_CLASS)}>
             <Button
               variant="ghost"
-              size="icon"
-              className="h-8 w-8 hover:text-destructive"
+              size="icon-sm"
+              className="hover:text-destructive"
               title={t("delete")}
               aria-label={t("delete")}
               onClick={() => setConfirmingDelete(true)}

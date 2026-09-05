@@ -50,8 +50,8 @@ export function SessionSettingsMenu({
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
-          size="icon"
-          className="relative h-7 w-7"
+          size="icon-xs"
+          className="relative"
           aria-label={t("agentSessionSettings")}
           title={t("agentSessionSettings")}
         >

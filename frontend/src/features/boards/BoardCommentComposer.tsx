@@ -175,10 +175,10 @@ export function BoardCommentComposer({
       <div className="flex items-center justify-between border-t border-border px-2 py-1.5">
         <span className="text-ui-2xs text-muted-foreground">{t("commentMentionHint")}</span>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onCancel} aria-label={t("cancel")}>
+          <Button variant="ghost" size="icon-xs" onClick={onCancel} aria-label={t("cancel")}>
             <X size={13} />
           </Button>
-          <Button size="icon" className="h-7 w-7" disabled={empty} loading={submitting} onClick={submit} aria-label={t("send")}>
+          <Button size="icon-xs" disabled={empty} loading={submitting} onClick={submit} aria-label={t("send")}>
             <Send size={13} />
           </Button>
         </div>

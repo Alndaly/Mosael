@@ -110,7 +110,7 @@ export function MediaPool({
         {tabs ?? <h2>{t("media")}</h2>}
         <div className="flex shrink-0 gap-1">
           {/* Icon-only so the four CJK tabs + these two actions fit the narrow media panel. */}
-          <Button asChild variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" disabled={uploading} title={t("import")} aria-label={t("import")}>
+          <Button asChild variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" disabled={uploading} title={t("import")} aria-label={t("import")}>
             <label>
               <input
                 type="file"
@@ -127,8 +127,8 @@ export function MediaPool({
           </Button>
           <Button
             variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            size="icon-sm"
+            className="text-muted-foreground hover:text-foreground"
             onClick={onRecord}
             title={t("record")}
             aria-label={t("record")}

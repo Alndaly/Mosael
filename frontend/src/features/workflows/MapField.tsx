@@ -132,8 +132,7 @@ export function MapField({
           <Button
             type="button"
             variant="ghost"
-            size="icon"
-            className="h-7 w-7"
+            size="icon-xs"
             aria-label={t("delete")}
             onClick={() => push(rows.filter((_, i) => i !== index))}
           >
@@ -147,8 +146,8 @@ export function MapField({
       <Button
         type="button"
         variant="ghost"
-        size="sm"
-        className="h-7 w-fit justify-start px-1.5 text-ui-xs"
+        size="xs"
+        className="w-fit justify-start px-1.5"
         onClick={() => push([...rows, { key: "", value: "" }])}
       >
         <Plus size={12} />

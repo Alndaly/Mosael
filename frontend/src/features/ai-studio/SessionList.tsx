@@ -318,8 +318,7 @@ export function SessionList({
             <span className="flex items-center gap-0.5">
               <Button
                 variant="ghost"
-                size="icon"
-                className="h-7 w-7"
+                size="icon-xs"
                 title={allSelected(visible) ? t("mediaDeselectAll") : t("mediaSelectAll")}
                 aria-label={allSelected(visible) ? t("mediaDeselectAll") : t("mediaSelectAll")}
                 onClick={() => selectAll(visible)}
@@ -328,8 +327,8 @@ export function SessionList({
               </Button>
               <Button
                 variant="ghost"
-                size="icon"
-                className="h-7 w-7 hover:text-destructive"
+                size="icon-xs"
+                className="hover:text-destructive"
                 title={t("delete")}
                 aria-label={t("delete")}
                 disabled={selectedIds.size === 0}
@@ -337,7 +336,7 @@ export function SessionList({
               >
                 <Trash2 size={14} />
               </Button>
-              <Button variant="ghost" size="icon" className="h-7 w-7" title={t("cancel")} aria-label={t("cancel")} onClick={exit}>
+              <Button variant="ghost" size="icon-xs" title={t("cancel")} aria-label={t("cancel")} onClick={exit}>
                 <X size={14} />
               </Button>
             </span>
@@ -348,8 +347,7 @@ export function SessionList({
             <span className="flex items-center gap-0.5">
               <Button
                 variant="ghost"
-                size="icon"
-                className="h-7 w-7"
+                size="icon-xs"
                 title={t("chatNewGroup")}
                 aria-label={t("chatNewGroup")}
                 onClick={() => setCreatingGroup(true)}
@@ -358,8 +356,7 @@ export function SessionList({
               </Button>
               <Button
                 variant="ghost"
-                size="icon"
-                className="h-7 w-7"
+                size="icon-xs"
                 title={t("mediaSelectMode")}
                 aria-label={t("mediaSelectMode")}
                 disabled={sessions.length === 0}
@@ -369,8 +366,7 @@ export function SessionList({
               </Button>
               <Button
                 variant="ghost"
-                size="icon"
-                className="h-7 w-7"
+                size="icon-xs"
                 title={t(spec.newSession)}
                 aria-label={t(spec.newSession)}
                 onClick={onCreate}

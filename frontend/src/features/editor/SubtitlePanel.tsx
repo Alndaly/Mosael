@@ -759,8 +759,8 @@ function SubtitleStyleControls({
             {onUploadFont && (
               <Button
                 variant="ghost"
-                size="icon"
-                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+                size="icon-xs"
+                className="shrink-0 text-muted-foreground hover:text-foreground"
                 disabled={uploadingFont}
                 aria-label={t("subFontUpload")}
                 title={t("subFontUpload")}
@@ -772,8 +772,8 @@ function SubtitleStyleControls({
             {s.font_id && onDeleteFont && (
               <Button
                 variant="ghost"
-                size="icon"
-                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                size="icon-xs"
+                className="shrink-0 text-muted-foreground hover:text-destructive"
                 aria-label={t("subFontRemove")}
                 title={t("subFontRemove")}
                 onClick={() => {

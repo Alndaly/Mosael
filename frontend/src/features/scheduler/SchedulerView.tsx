@@ -128,7 +128,7 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
         <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
           <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
             <h2>{t("tasks")}</h2>
-            <Button variant="outline" size="icon" className="h-7 w-7" title={t("createTask")} aria-label={t("createTask")} onClick={() => setCreating(true)}>
+            <Button variant="outline" size="icon-xs" title={t("createTask")} aria-label={t("createTask")} onClick={() => setCreating(true)}>
               <Plus size={14} />
             </Button>
           </div>

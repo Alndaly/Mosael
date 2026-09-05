@@ -646,8 +646,7 @@ export function CanvasAgentChat({
                 在这一行里会比旁边的胶囊高出一截 —— 圆形按钮尤其藏不住这 8px。 */}
             <Button
               variant="ghost"
-              size="icon"
-              className="h-7 w-7"
+              size="icon-xs"
               aria-label={t("wfAgentAttach")}
               title={t("wfAgentAttach")}
               onClick={() => fileRef.current?.click()}

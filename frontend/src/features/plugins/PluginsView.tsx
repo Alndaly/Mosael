@@ -90,8 +90,8 @@ export function PluginsView() {
             <span className="flex items-center gap-1">
               <Button
                 variant="ghost"
-                size="sm"
-                className="h-7 gap-1 px-2 text-ui-2xs"
+                size="xs"
+                className="gap-1 px-2 text-ui-2xs"
                 onClick={() => setMarketOpen(true)}
               >
                 <Store size={12} /> {t("pluginMarket")}
@@ -183,8 +183,7 @@ function ScanButton({ pending, onScan, size = "sm" }: { pending: boolean; onScan
     return (
       <Button
         variant="outline"
-        size="icon"
-        className="h-7 w-7 rounded-full"
+        size="icon-xs"
         title={label}
         aria-label={label}
         disabled={pending}

@@ -1638,18 +1638,18 @@ function WorkflowEditor({
               </button>
             }
           />
-          <Button variant="ghost" size="icon" className="h-8 w-8" title={`${t("undo")} ⌘Z`} aria-label={t("undo")} disabled={!canUndo} onClick={undo}>
+          <Button variant="ghost" size="icon-sm" title={`${t("undo")} ⌘Z`} aria-label={t("undo")} disabled={!canUndo} onClick={undo}>
             <Undo2 size={14} />
           </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" title={`${t("redo")} ⇧⌘Z`} aria-label={t("redo")} disabled={!canRedo} onClick={redo}>
+          <Button variant="ghost" size="icon-sm" title={`${t("redo")} ⇧⌘Z`} aria-label={t("redo")} disabled={!canRedo} onClick={redo}>
             <Redo2 size={14} />
           </Button>
         </div>
         <div className={cn("flex flex-wrap items-center gap-1 rounded-full p-1", CANVAS_GLASS_SURFACE_CLASS)}>
           <Button
             variant="ghost"
-            size="icon"
-            className={cn("h-8 w-8", agentOpen && "bg-secondary text-foreground")}
+            size="icon-sm"
+            className={cn(agentOpen && "bg-secondary text-foreground")}
             aria-label={t("wfAgentTitle")}
             title={t("wfAgentTitle")}
             aria-pressed={agentOpen}
@@ -1668,7 +1668,7 @@ function WorkflowEditor({
             }}
           >
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" aria-label={t("wfNodeSearch")} title={t("wfNodeSearch")}>
+              <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" aria-label={t("wfNodeSearch")} title={t("wfNodeSearch")}>
                 <Search size={14} />
               </Button>
             </PopoverTrigger>
@@ -1793,8 +1793,7 @@ function WorkflowEditor({
           {/* 不再挂「未保存/保存中」文案:自动保存本就静默,状态条只会闪来闪去制造焦虑;
               脏状态期间运行按钮自会禁用并带「保存中」提示,足够了。 */}
           <Button
-            size="icon"
-            className="h-8 w-8"
+            size="icon-sm"
             disabled={dirty || !analysis.runnable} loading={run.isPending}
             aria-label={t("wfRun")}
             title={dirty ? t("wfSaving") : !analysis.runnable ? t("wfRunBlocked") : t("wfRun")}
@@ -1816,8 +1815,8 @@ function WorkflowEditor({
                 <Button
                   key={shape}
                   variant={edgeShape === shape ? "secondary" : "ghost"}
-                  size="icon"
-                  className={cn("h-8 w-8", edgeShape === shape && "bg-secondary text-foreground")}
+                  size="icon-sm"
+                  className={cn(edgeShape === shape && "bg-secondary text-foreground")}
                   aria-label={t(EDGE_SHAPE_LABEL[shape])}
                   title={t(EDGE_SHAPE_LABEL[shape])}
                   aria-pressed={edgeShape === shape}
@@ -1832,8 +1831,8 @@ function WorkflowEditor({
               又是最有用的东西 —— 所以给开关,不替用户决定。记在本地,下次进来还是这个样子。 */}
           <Button
             variant="ghost"
-            size="icon"
-            className={cn("h-8 w-8", showMinimap && "bg-secondary text-foreground")}
+            size="icon-sm"
+            className={cn(showMinimap && "bg-secondary text-foreground")}
             aria-label={t("wfMinimap")}
             title={t("wfMinimap")}
             aria-pressed={showMinimap}
@@ -1845,8 +1844,7 @@ function WorkflowEditor({
               而那组控件被撤掉了 —— 缩放有触控板和滚轮,「我找不到我的图了」却只有它能解。 */}
           <Button
             variant="ghost"
-            size="icon"
-            className="h-8 w-8"
+            size="icon-sm"
             aria-label={t("boardsFitView")}
             title={t("boardsFitView")}
             onClick={() => {
@@ -1865,7 +1863,7 @@ function WorkflowEditor({
             size="sm"
             aria-label={t("wfRevisionHistory")}
             title={t("wfRevisionHistory")}
-            className="h-8 gap-1 px-2 font-mono text-ui-xs"
+            className="gap-1 px-2 font-mono text-ui-xs"
             loading={save.isPending}
             onClick={() => void openRevisions()}
           >
@@ -1874,10 +1872,9 @@ function WorkflowEditor({
           </Button>
           <Button
             variant="ghost"
-            size="icon"
+            size="icon-sm"
             aria-label={t("wfExport")}
             title={t("wfExport")}
-            className="h-8 w-8"
             loading={exportFile.isPending}
             onClick={() => exportFile.mutate()}
           >
@@ -1885,15 +1882,14 @@ function WorkflowEditor({
           </Button>
           <Button
             variant="ghost"
-            size="icon"
+            size="icon-sm"
             aria-label={t("wfHistory")}
             title={t("wfHistory")}
-            className="h-8 w-8"
             onClick={() => setShowHistory((v) => !v)}
           >
             <History size={14} />
           </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t("delete")} onClick={() => setDeleting(true)}>
+          <Button variant="ghost" size="icon-sm" aria-label={t("delete")} onClick={() => setDeleting(true)}>
             <Trash2 size={14} />
           </Button>
         </div>
@@ -2512,8 +2508,7 @@ function LoopBodyEditor({
               退出子图之后再按撤销,退回去的是哪一步就说不清了。 */}
           <Button
             variant="ghost"
-            size="icon"
-            className="h-8 w-8"
+            size="icon-sm"
             title={`${t("undo")} ⌘Z`}
             aria-label={t("undo")}
             disabled={!canUndo}
@@ -2523,8 +2518,7 @@ function LoopBodyEditor({
           </Button>
           <Button
             variant="ghost"
-            size="icon"
-            className="h-8 w-8"
+            size="icon-sm"
             title={`${t("redo")} ⇧⌘Z`}
             aria-label={t("redo")}
             disabled={!canRedo}
@@ -2539,8 +2533,8 @@ function LoopBodyEditor({
               <Button
                 key={shape}
                 variant={edgeShape === shape ? "secondary" : "ghost"}
-                size="icon"
-                className={cn("h-8 w-8", edgeShape === shape && "bg-secondary text-foreground")}
+                size="icon-sm"
+                className={cn(edgeShape === shape && "bg-secondary text-foreground")}
                 aria-label={t(EDGE_SHAPE_LABEL[shape])}
                 title={t(EDGE_SHAPE_LABEL[shape])}
                 aria-pressed={edgeShape === shape}

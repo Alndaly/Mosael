@@ -141,7 +141,7 @@ export function SubagentButton({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button size="sm" variant="ghost" className="h-7 gap-1 text-ui-xs text-muted-foreground">
+        <Button size="xs" variant="ghost" className="gap-1 text-muted-foreground">
           {running ? <Loader2 size={12} className="animate-mosael-spin" /> : <Bot size={12} />}
           {t("chatSubagents").replace("{n}", String(runs.length))}
           <ChevronDown size={11} />

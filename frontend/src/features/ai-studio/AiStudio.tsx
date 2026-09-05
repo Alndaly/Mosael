@@ -834,8 +834,8 @@ function GenerateWorkspace({
                 <Button
                   type="button"
                   variant="ghost"
-                  size="sm"
-                  className="h-7 gap-1 rounded-full px-2.5 text-xs text-muted-foreground hover:text-foreground"
+                  size="xs"
+                  className="gap-1 text-muted-foreground hover:text-foreground"
                   // createGeneration 是**别的**操作在跑,那是 disable;自己在跑才是 loading。
                   disabled={!prompt.trim() || !selectedAdapterAvailable || createGeneration.isPending}
                   loading={optimizePrompt.isPending}

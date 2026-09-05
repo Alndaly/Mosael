@@ -18,8 +18,8 @@ export function GenerationModelGate({ hasModel, loading }: { hasModel: boolean; 
     <Button
       type="button"
       variant="outline"
-      size="sm"
-      className="h-7 gap-1 rounded-full px-2.5 text-xs text-muted-foreground hover:text-foreground"
+      size="xs"
+      className="gap-1 text-muted-foreground hover:text-foreground"
       onClick={() => gotoSettings("providers:image")}
     >
       <Settings2 size={13} />

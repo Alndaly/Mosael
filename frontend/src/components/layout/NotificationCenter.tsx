@@ -154,17 +154,16 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
               </small>
               <div className="flex gap-1.5">
                 <Button
-                  size="sm"
-                  className="h-7"
+                  size="xs"
                   loading={respond.isPending}
                   onClick={() => respond.mutate({ id: inv.id, accept: true })}
                 >
                   <Check size={12} /> {t("notifInviteAccept")}
                 </Button>
                 <Button
-                  size="sm"
+                  size="xs"
                   variant="outline"
-                  className="h-7 text-muted-foreground"
+                  className="text-muted-foreground"
                   loading={respond.isPending}
                   onClick={() => respond.mutate({ id: inv.id, accept: false })}
                 >

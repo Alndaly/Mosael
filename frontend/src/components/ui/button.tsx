@@ -23,12 +23,21 @@ const buttonVariants = cva(
       },
       size: {
         default: "h-9 rounded-full px-4 py-2",
+        // 28px 的带文字胶囊。工具栏那一行放的都是次要动作,sm(32px)在里面偏高、px-3 偏宽;
+        // 高度压到 28 之后 text-ui-sm 会把胶囊顶满,所以这一档自带 text-ui-xs —— 字号跟着
+        // 高度走,不必每个调用点再补一遍。
+        xs: "h-7 rounded-full px-2.5 text-ui-xs",
         sm: "h-8 rounded-full px-3",
         lg: "h-10 rounded-full px-8",
         icon: "h-9 w-9 rounded-full",
         // 与 sm 同高的方形图标按钮。卡片、工具栏这类窄容器里,次要动作放不下文字标签,
         // 而 icon(36px)在一排 sm(32px)按钮中间会高出一截。
         "icon-sm": "size-8 rounded-full",
+        // 28px:全应用工具栏的**实际**刻度(时间线、编辑器、设置页、智能体输入框都是这一档)。
+        // 这一档以前没有 token,于是几十处各自写 `h-7 w-7` 盖在 size="icon" 上 —— 盖漏一处
+        // 就是一个 36px 的圆按钮杵在一排 28px 控件中间,智能体输入框刚栽过这一下。
+        // 棘轮:`components/ui/buttonScale.test.ts` 拦下一处再手搓。
+        "icon-xs": "size-7 rounded-full",
       },
     },
     defaultVariants: {
