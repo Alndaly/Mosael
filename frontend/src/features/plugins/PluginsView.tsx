@@ -649,7 +649,10 @@ function CredentialRows({ instanceId }: { instanceId: string }) {
           (`draft` 非空)是整组的:改任何一格,每一行都长出一个按钮,四个密钥就是四个
           "保存",点哪个都一样 —— 看起来像四件事,其实是同一件。 */}
       {Object.keys(draft).length > 0 && (
-        <div className="flex justify-end px-1 pb-1">
+        // 组的分割线契约是 `[&>*+*]:border-t`:每个非首位子元素画一条上边框,因为**每个子元素
+        // 都是一项设置**。保存按钮不是一项设置,是上面那组凭据的动作 —— 带上分割线就等于
+        // 在它和它所属的那组之间划了一刀,视觉上它反而成了下一项的开头。
+        <div className="flex justify-end px-1 pb-1 !border-t-0">
           <Button size="sm" loading={save.isPending} onClick={() => save.mutate()}>
             <KeyRound size={13} /> {t("pluginCredentialsSave")}
           </Button>
