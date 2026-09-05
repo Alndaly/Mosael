@@ -213,16 +213,24 @@ def create_app() -> FastAPI:
     # from file://, whose fetches carry Origin: null — hence an explicit "null" here rather
     # than a same-origin policy.
     #
-    # NOT "*": that reasoning ("authentication gates every request") holds only for the
-    # authenticated routers below. The publish-worker channel is deliberately unauthenticated,
-    # so with a wildcard any page the user happened to be browsing could call it AND READ THE
-    # REPLY — which includes publish tasks across every workspace and account proxy strings
-    # with credentials in them. Naming the origins we actually ship from means such a page
-    # fails the CORS check and cannot read the response.
+    # NOT "*": a wildcard switches off the browser's origin check on every reply, and the
+    # routes that carry no user session are what that check is standing in front of.
     #
-    # This bounds disclosure, not side effects: a simple cross-origin POST still reaches the
-    # handler even when the browser refuses to hand back the body. Authenticating the worker
-    # channel is the actual fix and needs a change on the Electron side too.
+    # The hole this comment used to describe — an unauthenticated publish-worker channel that
+    # any page could call AND READ THE REPLY of, exposing publish tasks and account proxy
+    # strings with credentials in them — is closed. All three worker routers are mounted
+    # behind require_worker_key (a per-process secret written to the data directory, which a
+    # web page cannot read), and the webhook trigger compares a per-task secret.
+    #
+    # What stays open by nature is /api/auth. On a first-run empty database, or on a
+    # deployment that set MOSAEL_OPEN_REGISTRATION, register succeeds for anyone who can reach
+    # the port — and under a wildcard any page the user happened to be browsing could mint
+    # itself a session here and read the token back.
+    #
+    # This bounds disclosure, not side effects: a plain cross-origin POST still reaches the
+    # handler even when the browser refuses to hand back the body. Naming the origins we
+    # actually ship from is also what keeps the next route that ships open by mistake from
+    # being readable by every page at once.
     @app.middleware("http")
     async def _carry_locale(request, call_next):  # type: ignore[no-untyped-def]
         """把这次请求的语言放进 ContextVar,序列化那一层照它翻(见 core/i18n)。
