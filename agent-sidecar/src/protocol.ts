@@ -228,7 +228,11 @@ export type Event =
       context?: { tokens: number; window: number };
       compaction?: { droppedMessages: number; tokensBefore: number; tokensAfter: number; summary: string } | null;
     }
-  | { type: "error"; turnId: string | null; message: string }
+  //: 失败也要把 sessionState 交出来。pi 的一轮**跑完了**才带 errorMessage(它不抛异常,
+  //: 把失败记在最后一条 assistant 消息上),此时工具可能已经调过很多次、副作用已经落库。
+  //: 不交出来的话,后端只能把记忆回滚到上一次成功 —— 模型下次醒来时不知道自己做过那些事,
+  //: 于是会再做一遍。
+  | { type: "error"; turnId: string | null; message: string; sessionState?: unknown; usage?: Record<string, unknown> }
   // ── 登录流程 ───────────────────────────────────────────────────────────────
   // pi 要展示给用户的东西(授权链接、设备码、进度)原样转发:`event` 就是 pi 的 AuthEvent,
   // 不在这里翻译成自定义结构 —— 上游加一种事件类型时,前端至少还能拿到原文。

@@ -29,7 +29,19 @@ _PROVIDER_HINT = (
 
 
 class AdapterError(RuntimeError):
-    pass
+    """一次调用失败。
+
+    `adapter_state` 是**失败时 sidecar 已经产出的那份记忆**。pi 的一轮跑完了才带 errorMessage
+    (它不抛异常,把失败记在最后一条 assistant 消息上),所以失败点之前的工具调用是真的发生过、
+    副作用是真的落库了。不把这份记忆交回去,下一轮模型的记忆会回滚到上一次成功 —— 它不知道
+    自己已经改过那些东西,于是会再做一遍。
+
+    拿不到就是 None(sidecar 整个进程没了、协议出错),那时候确实无从补起。
+    """
+
+    def __init__(self, message: str, adapter_state: object | None = None) -> None:
+        super().__init__(message)
+        self.adapter_state = adapter_state
 
 
 @dataclass(frozen=True)
@@ -390,9 +402,11 @@ def _run_pi(
                 detail = _tail(str(event.get("message", "pi sidecar error")))
                 # 还没产出任何文本/工具调用就失败,基本都是供应商配置问题(端点不对、模型不存在、
                 # 鉴权失败),给一句可操作的提示;已经跑起来后的失败就只报原始错误。
+                # 失败也可能带着记忆回来(见 AdapterError 的说明)。
+                failed_state = event.get("sessionState")
                 if not saw_tool:
-                    raise AdapterError(f"{detail}\n{_PROVIDER_HINT}")
-                raise AdapterError(detail)
+                    raise AdapterError(f"{detail}\n{_PROVIDER_HINT}", failed_state)
+                raise AdapterError(detail, failed_state)
             elif kind == "aborted":
                 aborted = True
     finally:

@@ -85,3 +85,31 @@ def test_从没成功过也补得出来() -> None:
 
         note = unseen_since_last_success(db, session)
         assert "开场就炸的那一句" in note and "供应商没配" in note
+
+
+def test_失败带回来的记忆要存下来() -> None:
+    """pi 的一轮**跑完了**才带 errorMessage —— 失败点之前的工具调用是真发生过的。
+
+    不回存的话记忆回滚到上一次成功,模型下次醒来不知道自己已经建过项目、改过时间线,
+    于是会再做一遍。这是比「不知道失败过」更贵的那个后果。
+    """
+    from app.ai.sidecar.adapters import AdapterError
+
+    error = AdapterError("上游 5xx", [{"role": "assistant", "content": "我已经建好项目了"}])
+    assert error.adapter_state == [{"role": "assistant", "content": "我已经建好项目了"}]
+
+    # 拿不到就是 None —— sidecar 整个进程没了的那种,确实无从补起。
+    assert AdapterError("进程没了").adapter_state is None
+
+
+def test_sidecar_在错误事件里带上记忆() -> None:
+    """协议这一侧:sidecar 手里有 sessionState,失败时也要交出来。
+
+    此前 index.ts 在 result.errorMessage 时只发一个 error 事件就 return,那份记忆连线都没上。
+    """
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[2] / "agent-sidecar" / "src" / "index.ts").read_text()
+    error_send = source.split('type: "error", turnId, message: result.errorMessage', 1)
+    assert len(error_send) == 2, "错误事件的发送点变了,这条测试要跟着改"
+    assert "sessionState: result.sessionState" in error_send[1][:200], "错误事件没有带上 sessionState"

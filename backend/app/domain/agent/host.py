@@ -871,6 +871,13 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                 # 而写入代码、读取代码单看都是对的(真机上最近 300 条消息里快照 0 条)。
                 assistant_message.payload = {**(assistant_message.payload or {}), "usage": usage}
         except AdapterError as exc:
+            # **失败也回存记忆(拿得到的话)。** 这一轮是跑过的:失败点之前的工具调用真的发生了,
+            # 它们改过的东西留在库里。不回存的话记忆回滚到上一次成功,模型下次醒来不知道自己
+            # 已经做过那些事,于是会再做一遍 —— 而它做的是建项目、改时间线这类有副作用的事。
+            # 拿不到就保持原样(sidecar 整个没了),那时确实无从补起,由 unseen_since_last_success
+            # 把「有过一轮、失败了」这件事补给它。
+            if getattr(exc, "adapter_state", None) is not None:
+                session.adapter_state = exc.adapter_state
             usage = _usage_from_started(turn_started)
             usage["metering"] = _turn_metering(prompt, "", None)
             assistant_message = AgentMessage(

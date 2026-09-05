@@ -69,7 +69,9 @@ async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promi
     if (result.aborted) send({ type: "aborted", turnId });
     // 失败就是失败。尤其 stopReason=length 只挤出「我」这类碎片时，不能把非空当作成功。
     else if (result.errorMessage) {
-      send({ type: "error", turnId, message: result.errorMessage });
+      // 带上 sessionState:这一轮**跑过**,只是结果是错的。丢掉它等于让后端把记忆回滚到
+      // 上一次成功,而那几次工具调用的副作用是真的留在库里了。
+      send({ type: "error", turnId, message: result.errorMessage, sessionState: result.sessionState, usage: result.usage });
       return;
     }
     send({
