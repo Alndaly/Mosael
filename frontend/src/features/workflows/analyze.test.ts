@@ -47,6 +47,9 @@ const registry: RegistryLike = {
         required_one_of: [["voice_id", "engine_voice"]],
       },
       subgraph: { config: { inputs: { type: "object" }, body: { type: "graph" }, output: { type: "template" } } },
+      loop_foreach: {
+        config: { items: { type: "template", required: true }, body: { type: "graph" }, output: { type: "template" } },
+      },
     };
     return table[type];
   },
@@ -338,5 +341,72 @@ describe("二选一的必填", () => {
       (i) => i.code === "required-missing",
     );
     expect(missing).toEqual([]);
+  });
+});
+
+
+describe("循环体和子图里的节点", () => {
+  /**
+   * 此前只走顶层,于是体里的节点从没被检查过 —— 而最贵的那几步恰恰住在里面(示范模板的
+   * 整个"逐镜生成"都在循环体里)。表现是画布全绿、点了运行、前面几步跑完花了钱,才在
+   * 循环里第一镜上失败。
+   */
+  const withBody = (inner: Record<string, unknown>[]) =>
+    graph(
+      [
+        { id: "start", type: "start", config: {} },
+        {
+          id: "loop",
+          type: "loop_foreach",
+          name: "逐镜生成",
+          config: { items: "{{start.params}}", body: { nodes: inner, edges: [] } },
+        },
+      ],
+      [{ id: "e1", source: "start", target: "loop" }],
+    );
+
+  it("体里缺必填也要拦住运行", () => {
+    const a = analyzeWorkflow(withBody([{ id: "inner", type: "template", name: "拼一句", config: { template: "" } }]), registry, fullCtx);
+    expect(a.runnable).toBe(false);
+    expect(a.errorCount).toBe(1);
+  });
+
+  it("问题记在外层那个节点头上，名字带路径", () => {
+    // 画布上只画得出顶层节点 —— 给一个画不出来的 id 挂角标,等于这条问题没人看得见。
+    const a = analyzeWorkflow(withBody([{ id: "inner", type: "template", name: "拼一句", config: { template: "" } }]), registry, fullCtx);
+    expect(a.byNode.get("inner")).toBeUndefined();
+    expect(a.byNode.get("loop")).toEqual([
+      expect.objectContaining({ nodeId: "loop", nodeName: "逐镜生成 › 拼一句", code: "required-missing" }),
+    ]);
+    expect(a.severityByNode.get("loop")).toBe("error");
+  });
+
+  it("体里的 {{loop.*}} / {{input.*}} 不算失效引用", () => {
+    // 它们引用的不是节点,是这一层注入的变量。不认的话,递归下去会把每一条正常引用都报成失效
+    // —— 那比不检查更糟:满屏红点,而真正的问题淹在里面。
+    const a = analyzeWorkflow(
+      withBody([
+        { id: "inner", type: "template", config: { template: "{{loop.item.narration}} / {{input.voice_id}}" } },
+      ]),
+      registry,
+      fullCtx,
+    );
+    expect(a.issues.filter((i) => i.code === "stale-var")).toEqual([]);
+    expect(a.runnable).toBe(true);
+  });
+
+  it("体里引用一个不存在的兄弟节点仍然要报", () => {
+    const a = analyzeWorkflow(
+      withBody([{ id: "inner", type: "template", config: { template: "{{nobody.text}}" } }]),
+      registry,
+      fullCtx,
+    );
+    expect(a.issues).toContainEqual(expect.objectContaining({ code: "stale-var", ref: "{{nobody.text}}" }));
+  });
+
+  it("体里没有 start 不算缺开始节点", () => {
+    // 循环体由外层驱动,它本来就没有 start。
+    const a = analyzeWorkflow(withBody([{ id: "inner", type: "template", config: { template: "ok" } }]), registry, fullCtx);
+    expect(a.issues.filter((i) => i.code === "missing-start")).toEqual([]);
   });
 });

@@ -175,16 +175,34 @@ export interface Analysis {
   runnable: boolean;
 }
 
-export function analyzeWorkflow(
+/**
+ * 收集一层图里的问题。
+ *
+ * **循环体和子图要一起收。** 此前只走顶层,于是 `loop_foreach` / `subgraph` 体里的节点
+ * 从没被检查过 —— 而最贵的那几步恰恰住在里面(示范模板的整个"逐镜生成"都在循环体里)。
+ * 表现是画布全绿、点了运行、前面几步跑完花了钱,才在循环里第一镜上失败。
+ *
+ * `scopeExtras` 是这一层**注入的变量名**:体内的 `{{loop.item.x}}` 和 `{{input.y}}` 引用的
+ * 不是节点,是作用域给的东西。不把它们算进来的话,递归下去会把每一条正常引用都报成失效。
+ *
+ * `insideName` 有值时,这一层的问题**记在外层那个节点头上** —— 画布上只画得出顶层节点,
+ * 给一个画不出来的 id 挂角标等于这条问题没人看得见。名字里带上路径("逐镜生成 › 合成口播"),
+ * 于是点开哪一个仍然一目了然。
+ */
+function collect(
   graph: WorkflowGraph,
   registry: RegistryLike,
   ctx: AnalyzeContext,
-): Analysis {
-  const issues: NodeIssue[] = [];
-  const nodeIds = new Set(graph.nodes.map((n) => n.id));
+  issues: NodeIssue[],
+  scopeExtras: ReadonlySet<string> = new Set(),
+  attributeTo = "",
+  insideName = "",
+): void {
+  const nodeIds = new Set([...graph.nodes.map((n) => n.id), ...scopeExtras]);
   const reachable = reachableFromStart(graph);
+  // 「没有开始节点」只对顶层成立 —— 循环体本来就没有 start,它由外层驱动。
   const hasStart = graph.nodes.some((n) => n.type === "start");
-  if (!hasStart) {
+  if (!hasStart && !attributeTo) {
     issues.push({
       nodeId: "__workflow__",
       nodeName: "Workflow",
@@ -205,7 +223,14 @@ export function analyzeWorkflow(
     const meta = registry.get(node.type);
     const config = (node.config ?? {}) as Record<string, unknown>;
     const push = (severity: IssueSeverity, code: IssueCode, extra?: Partial<NodeIssue>) =>
-      issues.push({ nodeId: node.id, nodeName, nodeType: node.type, severity, code, ...extra });
+      issues.push({
+        nodeId: attributeTo || node.id,
+        nodeName: insideName ? `${insideName} › ${nodeName}` : nodeName,
+        nodeType: node.type,
+        severity,
+        code,
+        ...extra,
+      });
 
     // 必填字段 + 失效引用(逐字段)
     for (const [key, rawSpec] of Object.entries(meta?.config ?? {})) {
@@ -241,6 +266,22 @@ export function analyzeWorkflow(
       if (!anyFilled) push("error", "required-missing", { configKey: group[0] });
     }
 
+    // 往里走一层。体里的节点和外面一样会缺必填、会引用不存在的东西 —— 只是此前没人看。
+    const body = (node.config as Record<string, unknown> | undefined)?.body;
+    if (body && typeof body === "object" && Array.isArray((body as WorkflowGraph).nodes)) {
+      collect(
+        body as WorkflowGraph,
+        registry,
+        ctx,
+        issues,
+        // 这一层注入的两个名字。`loop.*` 只有循环有,`input.*` 循环和子图都有 —— 一起给,
+        // 多认一个名字的代价是漏报一条,而少认一个的代价是把正常引用报成失效。
+        new Set(["loop", "input"]),
+        attributeTo || node.id,
+        insideName ? `${insideName} › ${nodeName}` : nodeName,
+      );
+    }
+
     // 绑定校验(与属性面板 bindingNotice 同源)
     if (node.type === "llm") {
       if (ctx.providersLoaded && ctx.providerIds.size === 0) push("warn", "no-providers");
@@ -274,8 +315,10 @@ export function analyzeWorkflow(
     const expected = inputType(registry, target.type, edge.target_input);
     if (!typesCompatible(actual, expected)) {
       issues.push({
-        nodeId: target.id,
-        nodeName: target.name || target.type,
+        nodeId: attributeTo || target.id,
+        nodeName: insideName
+          ? `${insideName} › ${target.name || target.type}`
+          : target.name || target.type,
         nodeType: target.type,
         severity: "warn",
         code: "type-mismatch",
@@ -285,6 +328,16 @@ export function analyzeWorkflow(
       });
     }
   }
+
+}
+
+export function analyzeWorkflow(
+  graph: WorkflowGraph,
+  registry: RegistryLike,
+  ctx: AnalyzeContext,
+): Analysis {
+  const issues: NodeIssue[] = [];
+  collect(graph, registry, ctx, issues);
 
   const byNode = new Map<string, NodeIssue[]>();
   const severityByNode = new Map<string, IssueSeverity>();
