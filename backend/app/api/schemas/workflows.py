@@ -65,6 +65,9 @@ class WorkflowNodeTypeOut(BaseModel):
     description: str
     category: str = ""  # 面板分组;空=通用组
     config: dict
+    #: 「这几个字段里至少要填一个」。per-field 的 required 表达不了二选一(语音合成的
+    #: 克隆音色 / 引擎音色就是),而不表达的话就绪度检查漏掉的正是"一个都没选"。
+    required_one_of: list[list[str]] = Field(default_factory=list)
     outputs: list[str]
     output_types: dict[str, str] = Field(default_factory=dict)
     output_labels: dict[str, str] = Field(default_factory=dict)

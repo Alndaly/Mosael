@@ -109,6 +109,8 @@ def node_types(db: DbSession, user: CurrentUser) -> list[dict]:
             # 画不画缩略图、连线时类型对不对得上 —— 此前这份知识是前端自己抄的一张表,
             # 「素材」节点本身就漏了,而插件节点它永远也覆盖不到。
             "config": {key: _translated_spec(_with_data_type(key, spec), locale) for key, spec in meta["config"].items()},
+            # 「这几个里至少要有一个」。就绪度检查要用它 —— 见 NODE_TYPES 里的说明。
+            "required_one_of": [list(group) for group in meta.get("required_one_of", ())],
             "outputs": list(meta["outputs"]),
             "output_types": {output: output_data_type(output, meta) for output in meta["outputs"]},
             # 英文键留给连线/导出,翻译后的名字留给人;两者不再混成一个字段。

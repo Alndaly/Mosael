@@ -18,6 +18,7 @@ const registry: RegistryLike = {
       {
         config?: Record<string, { type?: string; required?: boolean; data_type?: string }>;
         output_types?: Record<string, string>;
+        required_one_of?: string[][];
       }
     > = {
       start: { config: { params: { type: "object" } } },
@@ -36,6 +37,15 @@ const registry: RegistryLike = {
       // 一起发过来 —— 前端不再自己维护一张"哪个字段是素材"的表。
       transcribe_asset: { config: { asset_id: { type: "template", required: true, data_type: "asset" } } },
       template: { config: { template: { type: "template", required: true } } },
+      // 二选一:克隆音色或引擎音色。两边都不是 required(标了就是撒谎),靠 required_one_of。
+      synthesize_speech: {
+        config: {
+          text: { type: "template", required: true },
+          voice_id: { type: "string" },
+          engine_voice: { type: "string" },
+        },
+        required_one_of: [["voice_id", "engine_voice"]],
+      },
       subgraph: { config: { inputs: { type: "object" }, body: { type: "graph" }, output: { type: "template" } } },
     };
     return table[type];
@@ -277,5 +287,56 @@ describe("analyzeWorkflow", () => {
     });
     // profile_id is set but providers not loaded yet — don't false-alarm.
     expect(a.byNode.get("llm-1")?.some((i) => i.code === "provider-missing")).toBeFalsy();
+  });
+});
+
+
+describe("二选一的必填", () => {
+  /**
+   * per-field 的 `required` 表达不了「这几个里至少要有一个」。语音合成要么克隆音色、
+   * 要么引擎音色:两边都标必填是撒谎(填了一边照样被红星拦),两边都不标则**一个都没选**
+   * 这件事在画布上看不出来 —— 节点是绿的,跑到那一步才失败,而那时前面几步已经花过时间和钱。
+   */
+  const node = (config: Record<string, unknown>) =>
+    graph(
+      [
+        { id: "start", type: "start", config: {} },
+        { id: "sp", type: "synthesize_speech", config },
+      ],
+      [{ id: "e1", source: "start", target: "sp" }],
+    );
+
+  it("一个都没填就报错，并指向组里第一个字段", () => {
+    const a = analyzeWorkflow(node({ text: "念一句" }), registry, fullCtx);
+    expect(a.byNode.get("sp")).toContainEqual(
+      expect.objectContaining({ code: "required-missing", configKey: "voice_id", severity: "error" }),
+    );
+    expect(a.runnable).toBe(false);
+  });
+
+  it("填了任意一个就不报", () => {
+    for (const filled of [{ voice_id: "v1" }, { engine_voice: "zh_female_x" }]) {
+      const a = analyzeWorkflow(node({ text: "念一句", ...filled }), registry, fullCtx);
+      const missing = (a.byNode.get("sp") ?? []).filter((i) => i.code === "required-missing");
+      expect(missing, JSON.stringify(filled)).toEqual([]);
+    }
+  });
+
+  it("由数据边接上的也算填了", () => {
+    // 上游算出一个音色 id 接过来 —— 那和手填是同一件事,不该报"没填"。
+    const g = graph(
+      [
+        { id: "start", type: "start", config: {} },
+        { id: "sp", type: "synthesize_speech", config: { text: "念一句", voice_id: "" } },
+      ],
+      [
+        { id: "e1", source: "start", target: "sp" },
+        { id: "d1", source: "start", target: "sp", kind: "data", source_output: "params", target_input: "voice_id" },
+      ],
+    );
+    const missing = (analyzeWorkflow(g, registry, fullCtx).byNode.get("sp") ?? []).filter(
+      (i) => i.code === "required-missing",
+    );
+    expect(missing).toEqual([]);
   });
 });

@@ -26113,6 +26113,16 @@
             "type": "object",
             "title": "Config"
           },
+          "required_one_of": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Required One Of"
+          },
           "outputs": {
             "items": {
               "type": "string"

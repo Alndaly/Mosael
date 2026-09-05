@@ -99,6 +99,8 @@ interface ConfigSpecLike {
 interface NodeMetaLike {
   // registry 的 config 值在 OpenAPI 里是 unknown;取用时按 ConfigSpecLike 收窄。
   config?: Record<string, unknown>;
+  /** 「这几个字段里至少要有一个」。**由后端声明**,不在这里按节点名写死 —— 见下面的说明。 */
+  required_one_of?: string[][];
   /** 每个输出承载的数据类型，由后端节点注册表统一声明。 */
   output_types?: Record<string, string>;
 }
@@ -223,6 +225,20 @@ export function analyzeWorkflow(
         // start 的 *params 通配前缀不算节点 id;引用不存在的节点即失效。
         if (!nodeIds.has(sourceId)) push("error", "stale-var", { configKey: key, ref });
       }
+    }
+
+    // 「二选一」:per-field 的 required 表达不了它。语音合成要么克隆音色、要么引擎音色,
+    // 把两边都标成必填是撒谎(填了一边照样被红星拦),两边都不标则**一个都没选**这件事
+    // 在画布上看不出来 —— 节点是绿的,跑到那一步才失败,而那时前面几步已经花过时间和钱了。
+    //
+    // 规则由后端声明(NODE_TYPES 的 required_one_of),这里通用地消费:按节点名写死的话,
+    // 下一个有二选一的节点又要来改这里,而漏改不报错。
+    for (const group of meta?.required_one_of ?? []) {
+      const anyFilled = group.some(
+        (key) => !isEmpty(config[key]) || dataBound.has(`${node.id}:${key}`),
+      );
+      // 指向组里第一个字段:面板要滚到某一格上,而"第一个"是这组里最主的那个。
+      if (!anyFilled) push("error", "required-missing", { configKey: group[0] });
     }
 
     // 绑定校验(与属性面板 bindingNotice 同源)

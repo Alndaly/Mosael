@@ -685,6 +685,10 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             },
             "speed": {"advanced": True, "type": "number", "description": "wfNode_synthesize_speech_speed"},
         },
+        # 「这几个里至少要有一个」。**per-field 的 required 表达不了二选一** —— 把两边都标成
+        # 必填是撒谎(填了引擎音色照样被红星拦),两边都不标则就绪度检查看不出"一个都没选",
+        # 于是节点在画布上是绿的、跑起来才失败,而那时用户已经等了前面几步。
+        "required_one_of": [["voice_id", "engine_voice"]],
         "outputs": ["asset_id"],
     },
     "notify": {

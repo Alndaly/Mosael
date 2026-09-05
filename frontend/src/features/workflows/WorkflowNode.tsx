@@ -13,8 +13,10 @@ import {
   CheckCircle2,
   Code2,
   Download,
+  Eraser,
   FileOutput,
   FileUp,
+  FileVideo,
   Film,
   Filter,
   Flag,
@@ -26,6 +28,7 @@ import {
   Image as ImageIcon,
   Keyboard,
   Languages,
+  ListPlus,
   Loader2,
   Mic,
   MousePointer2,
@@ -34,9 +37,12 @@ import {
   RefreshCw,
   Repeat,
   Rocket,
+  Rows3,
   ScanText,
   Scissors,
+  Search,
   SkipForward,
+  SlidersHorizontal,
   Sparkles,
   Tags,
   Timer,
@@ -126,6 +132,15 @@ const NODE_ICONS: Record<string, React.ReactNode> = {
   project_create: <FolderPlus size={13} />,
   project_sequence_create: <FolderPlus size={13} />,
   timeline_cut_ranges: <Scissors size={13} />,
+  // 时间线那一族:此前只有 timeline_cut_ranges 有图标,同排的另外三个退到通用的文字图标 ——
+  // 一排本该成套的节点里三个顶着"T",看起来像它们不是同一类东西。
+  timeline_append: <ListPlus size={13} />,
+  timeline_add_track: <Rows3 size={13} />,
+  timeline_clear: <Eraser size={13} />,
+  edit_timeline: <SlidersHorizontal size={13} />,
+  inspect_sequence: <Search size={13} />,
+  video_to_gif: <FileVideo size={13} />,
+  asset: <ImageIcon size={13} />,
 };
 
 /** Shared semantic presentation for canvas nodes and their inspector header. */
