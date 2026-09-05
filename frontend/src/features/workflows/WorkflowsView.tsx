@@ -107,6 +107,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useCanvasPosture } from "@/features/workflows/useCanvasPosture";
 import { withDependentsCleared } from "@/features/workflows/dependents";
+import { speechFieldVisible } from "@/features/workflows/speechFields";
 import { RefEditor } from "@/features/workflows/RefEditor";
 import { MapField } from "@/features/workflows/MapField";
 import { CodeEditor } from "@/components/app/code-editor";
@@ -3032,8 +3033,13 @@ function NodeInspector({
       return (voices.data ?? []).map((voice) => ({ value: voice.id, label: voice.name }));
     }
     if (node.type === "synthesize_speech" && key === "engine") {
-      // 没就绪的引擎(缺 Key、没装运行环境)列出来只会让人选中之后才失败。
-      return (ttsEngines.data ?? []).filter((one) => one.ready).map((one) => ({ value: one.id, label: one.label }));
+      // 「克隆音色」排在引擎清单最前面:它和各个引擎是**同一个层次的选择** —— 嗓子从哪来。
+      // 把它单独做成另一个字段的话,界面上就会出现两格都叫"音色"的东西(用户报过)。
+      return [
+        { value: "clone", label: t("wfSpeechEngineClone") },
+        // 没就绪的引擎(缺 Key、没装运行环境)列出来只会让人选中之后才失败。
+        ...(ttsEngines.data ?? []).filter((one) => one.ready).map((one) => ({ value: one.id, label: one.label })),
+      ];
     }
     if (node.type === "synthesize_speech" && key === "engine_voice") {
       return (ttsVoices.data ?? []).map((one) => ({ value: one.value, label: one.label }));
@@ -3055,7 +3061,9 @@ function NodeInspector({
   // 面板真正要渲染的字段:llm / ai_generate 的那几项由各自的专区管,不走通用列表。
   const visibleSpecs = specs
     .filter(([key]) => !(node.type === "llm" && LLM_SPECIAL_CONFIG_KEYS.has(key)))
-    .filter(([key]) => !(node.type === "ai_generate" && GENERATE_SPECIAL_CONFIG_KEYS.has(key)));
+    .filter(([key]) => !(node.type === "ai_generate" && GENERATE_SPECIAL_CONFIG_KEYS.has(key)))
+    // 语音合成的两条路互斥,只渲染当前那条 —— 规则和它的来龙去脉在 speechFields.ts。
+    .filter(([key]) => speechFieldVisible(node.type, key, config.engine));
   // 分级:留空也能跑的专业旋钮收进折叠区(由后端 NODE_TYPES 的 advanced 声明),第一眼只留下
   // 决定「这个节点在做什么」的字段 —— 十几个采样参数一上来就糊到脸上,新手根本无从下手。
   const basicSpecs = visibleSpecs.filter(([, spec]) => !spec?.advanced);

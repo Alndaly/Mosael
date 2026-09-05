@@ -655,10 +655,21 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         # 两条路,**任选其一**:克隆音色(voice_id,念你自己录的那把嗓子)或者引擎音色
         # (engine + engine_voice,用现成的)。所以两边都不是 required —— 缺哪一边由执行体
         # 一次说清楚,而不是让表单在必填星号上撒谎(填了引擎音色照样被红星拦住)。
+        #
+        # **界面上只出现一对「引擎 + 音色」**:engine 先选嗓子从哪来(克隆 / 某个引擎),
+        # 音色那一格再按它列对应的清单。voice_id 和 engine_voice 是两个存储键,但它们从不
+        # 同时出现 —— 三个字段并排、名字还都带"音色",等于让用户自己去理解一个互斥关系,
+        # 而那种表单的典型结果是两个都填或者两个都空。
         "config": {
             "text": {"type": "template", "required": True},
             "voice_id": {"type": "string", "description": "wfNode_synthesize_speech_voice_id"},
-            "engine": {"type": "string", "description": "wfNode_synthesize_speech_engine"},
+            "engine": {
+                "type": "string",
+                # 留空 = 克隆,和执行体一致;给个 default 只是让下拉一打开就显示"克隆音色",
+                # 而不是一个"请选择"——它并不往 config 里写值,老工作流照旧。
+                "default": "clone",
+                "description": "wfNode_synthesize_speech_engine",
+            },
             # 换引擎就换了一整套音色 id,旧的那个在新引擎下不存在 —— 由 depends_on 声明,
             # 前端的 withDependentsCleared 据此清空,不必为这个节点写一处特例。
             "engine_voice": {

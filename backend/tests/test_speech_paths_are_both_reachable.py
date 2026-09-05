@@ -100,3 +100,30 @@ def test_节点契约把两条路都摆出来() -> None:
     assert config["text"].get("required") is True
     for key in ("engine", "engine_voice", "engine_voice_resource", "speed"):
         assert key in config, key
+
+
+def test_界面上不会同时出现两格音色() -> None:
+    """互斥的两条路**不能摊成并排字段**。
+
+    第一版就是这么做的:音色(克隆)、引擎、引擎音色三格并排,两格名字里都带"音色",
+    各自还写着"用另一个时留空" —— 等于让用户自己去理解一个互斥关系,而那种表单的典型
+    结果是两个都填或者两个都空。用户一眼就说"重复了"。
+
+    现在是一对「引擎 + 音色」:engine 先选嗓子从哪来(克隆 / 某个引擎),音色那一格按它
+    列对应清单。存储上仍是 voice_id / engine_voice 两个键,但**从不同时渲染**
+    (见 WorkflowsView 的 visibleSpecs)。这里守住后端这一半:两个键的标签都是「音色」,
+    而说明里不再有"留空"这种要求用户自己推理的话。
+    """
+    from app.core.i18n import MESSAGES
+    from app.domain.workflows import NODE_TYPES, config_label
+
+    config = NODE_TYPES["synthesize_speech"]["config"]
+    labels = {key: MESSAGES[config_label(key, meta)]["zh"] for key, meta in config.items()}
+    assert labels["voice_id"] == labels["engine_voice"] == "音色"
+
+    for key in ("voice_id", "engine", "engine_voice"):
+        text = MESSAGES[config["engine" if key == "engine" else key]["description"]]["zh"]
+        assert "留空" not in text, f"{key} 的说明还在要求用户自己推理互斥关系:{text}"
+
+    # engine 是唯一入口,所以它得有个默认显示值,否则一打开是"请选择"而语义其实是克隆。
+    assert config["engine"]["default"] == "clone"
