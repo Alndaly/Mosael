@@ -7,6 +7,7 @@ import { useI18n } from "@/app/preferences";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
 import type { RegistryLike } from "@/features/workflows/analyze";
 import { assetOutputs, parseIso, toSteps, type Step } from "@/features/workflows/runSteps";
+import { JobChildrenList, useJobChildren } from "@/components/layout/JobChildren";
 import { WorkflowFailureDetails } from "@/features/workflows/WorkflowFailureDetails";
 import { DOCKABLE_PANEL_FRAME_CLASS, PANEL_HEADER_CLASS, useFloatingPanel } from "@/features/workflows/useFloatingPanel";
 import type { CanvasAgentMode } from "@/components/agent/CanvasAgentChat";
@@ -133,6 +134,8 @@ export function WorkflowRunHistory({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settledKey]);
   const steps = React.useMemo(() => toSteps(events.data ?? []), [events.data]);
+  //: 这次运行派生的子任务(出片、配音、导出…)。循环体里的那些只在这里看得见。
+  const children = useJobChildren(selectedId, Boolean(selected && RUNNING.has(selected.status)));
   React.useEffect(() => {
     const failedWithDetails = steps.filter((step) => step.status === "failed" && step.details).map((step) => step.nid);
     if (failedWithDetails.length === 0) return;
@@ -314,6 +317,16 @@ export function WorkflowRunHistory({
                 })}
                 {steps.length === 0 && events.isFetched && <p className="px-2 py-3 text-center text-ui-xs text-muted-foreground">{t("wfHistoryNoSteps")}</p>}
               </ol>
+              {/* **循环体里的节点不发事件**(子图不带 job,见 engine.execute_graph),所以上面
+                  那份按节点画的清单在一次跑六镜的运行里只有「逐镜生成」一个条目在转圈。而那六次
+                  出片其实各自都建了任务,parent_job_id 指着这次运行 —— 数据一直在,只是工作流
+                  这一侧从没去取。摆出来,而不是发明一种新的事件。 */}
+              {(children.data ?? []).length > 0 && (
+                <div className="grid min-w-0 gap-1 border-t border-border px-2 pt-2">
+                  <span className="text-ui-xs font-semibold text-muted-foreground">{t("jobDetailChildren")}</span>
+                  <JobChildrenList>{children.data ?? []}</JobChildrenList>
+                </div>
+              )}
             </>
           )}
         </div>

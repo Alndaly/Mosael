@@ -2,7 +2,8 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, CheckCircle2, CircleAlert, ExternalLink, Loader2 } from "lucide-react";
 
-import { getJob, listJobChildren, listJobEvents, type Job } from "@/api/client";
+import { getJob, listJobEvents, type Job } from "@/api/client";
+import { JobChildrenList, useJobChildren } from "@/components/layout/JobChildren";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -50,12 +51,7 @@ export function JobDetailDialog({
   });
 
   // 工作流派生的子任务(发布/导出/转写/生成/配音)在这里「收纳」展示——任务中心已不再平铺它们。
-  const children = useQuery({
-    queryKey: ["job-children", job?.id],
-    queryFn: () => listJobChildren(job!.id),
-    enabled: !!job,
-    refetchInterval: active ? 1500 : false,
-  });
+  const children = useJobChildren(job?.id ?? null, active);
 
   return (
     <ModalShell
@@ -113,39 +109,7 @@ export function JobDetailDialog({
           {(children.data ?? []).length > 0 && (
             <div className="grid min-w-0 gap-1 border-t border-border pt-2">
               <span className="text-ui-xs font-semibold text-muted-foreground">{t("jobDetailChildren")}</span>
-              <ul className="m-0 grid list-none gap-0 p-0">
-                {(children.data ?? []).map((child) => {
-                  const childActive = ACTIVE.has(child.status);
-                  const statusKey = childActive
-                    ? "running"
-                    : child.status === "succeeded" || child.status === "failed"
-                      ? child.status
-                      : null;
-                  return (
-                    <li
-                      className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-2 py-[5px] [&+&]:border-t [&+&]:border-border"
-                      key={child.id}
-                    >
-                      <div className="grid min-w-0 gap-px">
-                        <span className="text-ui-xs text-foreground">{t(`jobKind${kindKey(child.kind)}` as never)}</span>
-                        {child.message && <small className="truncate text-ui-xs text-muted-foreground">{child.message}</small>}
-                      </div>
-                      <span
-                        className={cn(
-                          "shrink-0 text-ui-2xs",
-                          childActive
-                            ? "text-primary"
-                            : child.status === "succeeded"
-                              ? "text-success"
-                              : "text-destructive",
-                        )}
-                      >
-                        {statusKey ? t(`runStatus_${statusKey}` as never) : child.status}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
+              <JobChildrenList>{children.data ?? []}</JobChildrenList>
             </div>
           )}
 
