@@ -175,6 +175,33 @@ def _humanized(entry: dict[str, Any], *keys: str) -> dict[str, Any]:
     return {**entry, **picked} if picked else entry
 
 
+#: JSON Schema 里给人看的键。**这两个会显示在界面上**,别的(type、format、enum…)是数据。
+_SCHEMA_TEXT_KEYS = ("description", "title")
+
+
+def _humanized_schema(value: Any) -> Any:
+    """把 `input_schema` 里的 description / title 也定下语言。
+
+    工具自己的 description 一直是翻的,而**参数的那一份不是** —— 于是试运行面板里每个
+    参数标签后面跟着一句 `[object Object]`,因为界面直接把 `{"zh": …, "en": …}` 这个对象
+    渲染了出来。作者按清单里到处都能用的写法写了双语,而这一处偏偏不认。
+
+    整棵树走一遍而不是只看 `properties`:JSON Schema 里说明文字可以出现在 items、
+    oneOf、$defs 的任何一层,只认一层等于换个写法就又漏了。
+    """
+    if isinstance(value, dict):
+        out = {key: _humanized_schema(item) for key, item in value.items()}
+        for key in _SCHEMA_TEXT_KEYS:
+            # 只有本来就是「语言对象」的才动。普通字符串经过 text_of 也原样返回,
+            # 但显式判断能让"这里为什么不会误伤别的结构"一眼看得出来。
+            if isinstance(value.get(key), dict):
+                out[key] = text_of(value[key])
+        return out
+    if isinstance(value, list):
+        return [_humanized_schema(item) for item in value]
+    return value
+
+
 def _fields(raw: Any, *, secret: bool) -> list[Field]:
     if not isinstance(raw, list):
         return []
@@ -248,7 +275,7 @@ def _tools_policy(raw: dict[str, Any]) -> tuple[str, list[str], dict[str, ToolOv
             node=spec.get("node") if isinstance(spec.get("node"), dict) else None,
         )
     declared = [
-        _humanized(t, "label", "description")
+        _humanized_schema(_humanized(t, "label", "description"))
         for t in (tools.get("declare") or [])
         if isinstance(t, dict) and isinstance(t.get("name"), str)
     ]

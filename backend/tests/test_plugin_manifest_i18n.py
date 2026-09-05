@@ -121,3 +121,79 @@ def test_文档链接只认_http() -> None:
 
     for bad in ("javascript:alert(1)", "file:///etc/passwd", "ftp://x/y", "docs.example.com", ""):
         assert parse({**base, "homepage": bad}, "").homepage == "", bad
+
+
+def test_input_schema_里的说明也要定语言() -> None:
+    """参数说明写成双语对象时,界面上不能出现 `[object Object]`。
+
+    工具自己的 description 一直是翻的,而**参数的那一份不是** —— 于是试运行面板里每个参数
+    标签后面跟着一句 `[object Object]`。作者按清单里到处都能用的写法写了双语,而这一处偏偏
+    不认;这种"大部分地方能用"的不一致最难自己发现,因为写的人根本不会怀疑它。
+    """
+    from app.domain.plugins.manifest import parse
+
+    raw = {
+        "id": "x.y",
+        "manifest_version": 1,
+        "name": "X",
+        "version": "1",
+        "_path": "/tmp/x",
+        "tools": {
+            "declare": [
+                {
+                    "name": "t",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "path": {"type": "string", "description": {"zh": "路径", "en": "Path"}},
+                            "plain": {"type": "string", "description": "已经是字符串"},
+                        },
+                    },
+                }
+            ]
+        },
+    }
+    set_current_locale("zh")
+    props = parse(raw, "x").declared_tools[0]["input_schema"]["properties"]
+    assert props["path"]["description"] == "路径"
+    # 两种语言都断言:只断言一种的话,它可能只是碰巧和当前语言一致 —— 而"根本没翻"
+    # 在那种写法下同样能通过。
+    set_current_locale("en")
+    assert parse(raw, "x").declared_tools[0]["input_schema"]["properties"]["path"]["description"] == "Path"
+    # 普通字符串原样不动 —— 大多数插件是这么写的,别为了修双语把它们弄坏。
+    assert props["plain"]["description"] == "已经是字符串"
+    # type 这类数据一个字不动。
+    assert props["path"]["type"] == "string"
+
+
+def test_嵌套层里的说明同样要定语言() -> None:
+    """只认 `properties` 那一层等于换个写法就又漏了 —— JSON Schema 里说明文字可以出现在
+    items、oneOf、$defs 的任何一层,而那时的表现和这次一模一样:一句 `[object Object]`。"""
+    from app.domain.plugins.manifest import parse
+
+    raw = {
+        "id": "x.y",
+        "manifest_version": 1,
+        "name": "X",
+        "version": "1",
+        "_path": "/tmp/x",
+        "tools": {
+            "declare": [
+                {
+                    "name": "t",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "items": {
+                                "type": "array",
+                                "items": {"type": "string", "description": {"zh": "一项", "en": "One"}},
+                            }
+                        },
+                    },
+                }
+            ]
+        },
+    }
+    set_current_locale("zh")
+    schema = parse(raw, "x").declared_tools[0]["input_schema"]
+    assert schema["properties"]["items"]["items"]["description"] == "一项"

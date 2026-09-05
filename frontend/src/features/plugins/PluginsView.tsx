@@ -489,7 +489,7 @@ function ConnectionCard({ pkg, instance }: { pkg: PluginPackage; instance: Plugi
       <CapabilityPicker
         instanceId={instance.id}
         tools={instance.tools ?? []}
-        blocked={Boolean(instance.blocked_reason)}
+        blockedReason={instance.blocked_reason ?? ""}
         onToggle={(tools) => setCapabilities.mutate(tools)}
         pending={setCapabilities.isPending}
       />
@@ -509,13 +509,16 @@ function ConnectionCard({ pkg, instance }: { pkg: PluginPackage; instance: Plugi
 function CapabilityPicker({
   instanceId,
   tools,
-  blocked,
+  blockedReason,
   onToggle,
   pending,
 }: {
   instanceId: string;
   tools: ToolState[];
-  blocked: boolean;
+  /** 整个连接为什么还不能用(「未启用」「缺少凭据」…)。空串 = 可以用。
+   *  一路传**字符串**而不是布尔:理由在这里被丢掉的话,底下那个灰按钮就再也说不出
+   *  自己为什么灰了 —— 而它离显示这句话的组标题有好几百像素。 */
+  blockedReason: string;
   onToggle: (tools: Record<string, boolean>) => void;
   pending: boolean;
 }) {
@@ -579,7 +582,8 @@ function CapabilityPicker({
                 key={tool.name}
                 instanceId={instanceId}
                 tool={tool}
-                runnable={!blocked && tool.exposed}
+                // 传**理由**而不是布尔:一个灰着的按钮不说明自己为什么灰,等于没有反馈。
+                blockedReason={blockedReason || (tool.exposed ? "" : t("pluginToolNotExposed"))}
                 onToggle={(exposed) => onToggle({ [tool.name]: exposed })}
               />
             ))}
@@ -602,7 +606,7 @@ function CapabilityPicker({
  * 触发它),也不在本机开监听端口(重定向地址要在对方控制台预先登记,而后端端口会变)。
  * 详见 backend/app/domain/plugins/oauth.py 的文件头。多一次粘贴,换这条路上没有可伪造的输入。
  */
-function PluginOAuth({ instanceId }: { instanceId: string }) {
+function PluginOAuth({ instanceId, save }: { instanceId: string; save?: React.ReactNode }) {
   const t = useI18n();
   const qc = useQueryClient();
   const [url, setUrl] = React.useState("");
@@ -633,16 +637,17 @@ function PluginOAuth({ instanceId }: { instanceId: string }) {
   });
 
   return (
-    <div className="grid gap-2 px-1 pb-1 pt-2 !border-t-0">
-      <div className="flex items-center justify-between gap-2">
-        <small className="text-ui-sm leading-[1.5] text-muted-foreground">{t("pluginOauthHint")}</small>
+    <>
+      <GroupActions hint={t("pluginOauthHint")}>
         <Button size="sm" variant="outline" loading={begin.isPending} onClick={() => begin.mutate()}>
           <ExternalLink size={13} /> {t("pluginOauthStart")}
         </Button>
-      </div>
+        {save}
+      </GroupActions>
       {url && (
-        // 链接留着:弹窗拦截、或者他想换个浏览器登录时,总得有个能点的东西。
-        <div className="grid gap-1.5 rounded-md border border-border bg-panel p-2.5">
+        <div className="px-0.5 pb-3 !border-t-0">
+          {/* 链接留着:弹窗拦截、或者他想换个浏览器登录时,总得有个能点的东西。 */}
+          <div className="grid gap-1.5 rounded-md border border-border bg-panel p-2.5">
           <a
             className="inline-flex w-fit items-center gap-1 text-ui-xs font-medium text-primary no-underline hover:underline"
             href={url}
@@ -662,14 +667,38 @@ function PluginOAuth({ instanceId }: { instanceId: string }) {
             <Button size="sm" disabled={!code.trim()} loading={finish.isPending} onClick={() => finish.mutate()}>
               <KeyRound size={13} /> {t("pluginOauthExchange")}
             </Button>
+            </div>
           </div>
         </div>
       )}
+    </>
+  );
+}
+
+/**
+ * 一组设置末尾的动作行。
+ *
+ * **抽出来是因为已经漂了两份。** 保存按钮写的是 `px-1 pb-1`(没有上内距),授权那块写的是
+ * `px-1 pt-2 pb-1` —— 上 8 下 4,方向还是反的,而行本身是 `px-0.5 py-3`。三种刻度叠在一起,
+ * 于是"下面那道缝比上面窄"这种事没人能从代码里一眼看出来。
+ *
+ * 内边距**和行一样**(`px-0.5 py-3`):它排在行的序列里,只有共用同一个节奏才不显得突兀。
+ * 不画上边框:组的契约是 `[&>*+*]:border-t`,因为每个子元素都是**一项设置** —— 而这是上面
+ * 那组的动作,画一条线等于在它和它所属的东西之间切了一刀,视觉上反倒成了下一项的开头。
+ */
+function GroupActions({ hint, children }: { hint?: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2 px-0.5 py-3 !border-t-0">
+      {/* 说明文字挤走按钮的话按钮会掉行 —— min-w-0 + flex-1 让它先缩。 */}
+      {hint && <small className="min-w-0 flex-1 text-ui-sm leading-[1.5] text-muted-foreground">{hint}</small>}
+      <div className="flex shrink-0 items-center gap-2">{children}</div>
     </div>
   );
 }
 
-function CredentialRows({ instanceId, oauth }: { instanceId: string; oauth: boolean }) {
+//: 导出**只为测试**。这两个组件里各有一处靠肉眼才发现的毛病(两个动作叠成两块、
+//: 灰按钮不说明理由),而它们都是结构性的 —— 结构该由测试盯着,不该由下一次截图盯着。
+export function CredentialRows({ instanceId, oauth }: { instanceId: string; oauth: boolean }) {
   const t = useI18n();
   const qc = useQueryClient();
   type Credential = { key: string; label: string; help: string; secret: boolean; filled: boolean; value: string };
@@ -690,6 +719,17 @@ function CredentialRows({ instanceId, oauth }: { instanceId: string; oauth: bool
       invalidatePlugins(qc);
     },
   });
+
+  // 整组一次提交,不逐格失焦即存:密钥输错一个字符和输对长得一模一样,而逐格自动保存会让
+  // "改了一半"和"改完了"在后端无法区分 —— 改到一半正好等于一条连不上的连接。一个显式的
+  // 保存按钮同时也是"现在去重连试试"的时机。**它是一个,不是每行一个**:显示条件
+  // (`draft` 非空)是整组的,画在 map 里的话改任何一格每行都会长出一个"保存"。
+  const dirty = Object.keys(draft).length > 0;
+  const saveButton = (
+    <Button size="sm" loading={save.isPending} onClick={() => save.mutate()}>
+      <KeyRound size={13} /> {t("pluginCredentialsSave")}
+    </Button>
+  );
 
   return (
     <>
@@ -715,17 +755,14 @@ function CredentialRows({ instanceId, oauth }: { instanceId: string; oauth: bool
           **所以它是一个,不是每行一个。** 此前这个按钮画在 map 里,而它的显示条件
           (`draft` 非空)是整组的:改任何一格,每一行都长出一个按钮,四个密钥就是四个
           "保存",点哪个都一样 —— 看起来像四件事,其实是同一件。 */}
-      {Object.keys(draft).length > 0 && (
-        // 组的分割线契约是 `[&>*+*]:border-t`:每个非首位子元素画一条上边框,因为**每个子元素
-        // 都是一项设置**。保存按钮不是一项设置,是上面那组凭据的动作 —— 带上分割线就等于
-        // 在它和它所属的那组之间划了一刀,视觉上它反而成了下一项的开头。
-        <div className="flex justify-end px-1 pb-1 !border-t-0">
-          <Button size="sm" loading={save.isPending} onClick={() => save.mutate()}>
-            <KeyRound size={13} /> {t("pluginCredentialsSave")}
-          </Button>
-        </div>
+      {/* 保存和「去授权」是**同一组凭据上的两个动作**,所以排在同一行里,而不是各自
+          占一块上下叠着 —— 叠起来时两颗按钮贴得极近、一颗有说明文字一颗没有,看着像
+          两件互不相干的事。主动作(保存)在最右,和全应用一致。 */}
+      {oauth ? (
+        <PluginOAuth instanceId={instanceId} save={dirty ? saveButton : null} />
+      ) : (
+        dirty && <GroupActions>{saveButton}</GroupActions>
       )}
-      {oauth && <PluginOAuth instanceId={instanceId} />}
     </>
   );
 }
@@ -746,15 +783,16 @@ type InputSchema = { properties?: Record<string, { type?: string; description?: 
  *
  * **记忆化**:改一个勾会重新拉整份 /api/plugins,41 行随之重渲染 —— 而展开着大结果的那几行
  * 每次都要把那段文本重新排版一次。props 没变就别重渲染。 */
-const ToolRow = React.memo(function ToolRow({
+export const ToolRow = React.memo(function ToolRow({
   instanceId,
   tool,
-  runnable,
+  blockedReason,
   onToggle,
 }: {
   instanceId: string;
   tool: ToolState;
-  runnable: boolean;
+  /** 为什么这个工具现在跑不了。空串 = 跑得了。 */
+  blockedReason: string;
   onToggle: (exposed: boolean) => void;
 }) {
   const t = useI18n();
@@ -844,8 +882,21 @@ const ToolRow = React.memo(function ToolRow({
               />
             </label>
           ))}
-          <div className="flex justify-end">
-            <Button size="sm" disabled={!runnable || missingRequired} loading={invoke.isPending} onClick={() => invoke.mutate()}>
+          {/* **把理由摆在按钮旁边。** 「未启用」这句话本来只写在整组的标题下,而工具行
+              可能在它下面好几百像素处 —— 用户看到的就只是一个灰着的按钮,试不出所以然。
+              缺必填参数同理:不说的话,他会以为是插件坏了。 */}
+          <div className="flex items-center justify-end gap-2">
+            {(blockedReason || missingRequired) && (
+              <small className="min-w-0 truncate text-ui-xs text-muted-foreground">
+                {blockedReason || t("pluginToolMissingRequired")}
+              </small>
+            )}
+            <Button
+              size="sm"
+              disabled={Boolean(blockedReason) || missingRequired}
+              loading={invoke.isPending}
+              onClick={() => invoke.mutate()}
+            >
               <Play size={13} /> {t("runTool")}
             </Button>
           </div>
