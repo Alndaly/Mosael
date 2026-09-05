@@ -365,6 +365,8 @@ def speak(board_id: str, body: BoardSpeak, db: DbSession, user: CurrentUser) -> 
 
     token = set_receipt(receipt_to_item(board_id, body.item_id))
     try:
+        # 引擎音色和克隆音色两条都要能走。此前这里只传 voice_id,于是 start_synthesis 的
+        # `engine` 落到默认的 "clone",画板配音也就只认克隆音色 —— 和工作流那个节点同一个漏法。
         job = start_synthesis(
             db,
             text=text,
@@ -372,6 +374,10 @@ def speak(board_id: str, body: BoardSpeak, db: DbSession, user: CurrentUser) -> 
             created_by=user.id,
             voice_id=body.voice_id or None,
             workspace_id=body.workspace_id,
+            engine=body.engine.strip() or "clone",
+            engine_voice=body.engine_voice,
+            engine_voice_resource=body.engine_voice_resource,
+            speed=body.speed,
         )
     except VoiceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

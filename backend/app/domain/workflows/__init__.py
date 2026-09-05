@@ -219,6 +219,9 @@ _FIELD_LABELS = {
     "value": "wfField_value",
     "values": "wfField_values",
     "voice_id": "wfField_voice_id",
+    "engine_voice": "wfField_engine_voice",
+    "engine_voice_resource": "wfField_engine_voice_resource",
+    "speed": "wfField_speed",
     "workflow_id": "wfField_workflow_id",
     "width": "wfField_width",
     # 下列主要出现在输出端,也可被同名配置字段复用。
@@ -649,9 +652,27 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "category": "wfCat_ai",
         "label": "wfNode_synthesize_speech",
         "description": "wfNode_synthesize_speech_desc",
+        # 两条路,**任选其一**:克隆音色(voice_id,念你自己录的那把嗓子)或者引擎音色
+        # (engine + engine_voice,用现成的)。所以两边都不是 required —— 缺哪一边由执行体
+        # 一次说清楚,而不是让表单在必填星号上撒谎(填了引擎音色照样被红星拦住)。
         "config": {
-            "voice_id": {"type": "string", "required": True, "description": "wfNode_synthesize_speech_voice_id"},
             "text": {"type": "template", "required": True},
+            "voice_id": {"type": "string", "description": "wfNode_synthesize_speech_voice_id"},
+            "engine": {"type": "string", "description": "wfNode_synthesize_speech_engine"},
+            # 换引擎就换了一整套音色 id,旧的那个在新引擎下不存在 —— 由 depends_on 声明,
+            # 前端的 withDependentsCleared 据此清空,不必为这个节点写一处特例。
+            "engine_voice": {
+                "type": "string",
+                "depends_on": "engine",
+                "description": "wfNode_synthesize_speech_engine_voice",
+            },
+            "engine_voice_resource": {
+                "advanced": True,
+                "type": "string",
+                "depends_on": "engine",
+                "description": "wfNode_synthesize_speech_engine_voice_resource",
+            },
+            "speed": {"advanced": True, "type": "number", "description": "wfNode_synthesize_speech_speed"},
         },
         "outputs": ["asset_id"],
     },

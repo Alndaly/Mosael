@@ -67,6 +67,8 @@ import {
   listProviderModels,
   importAsset,
   listPublishAccounts,
+  listTtsEngines,
+  listTtsVoices,
   listVoices,
   listWorkflows,
   runWorkflow,
@@ -2741,6 +2743,20 @@ function NodeInspector({
     queryFn: () => listVoices(workspaceId),
     enabled: node.type === "synthesize_speech",
   });
+  // 引擎音色那条路。和配音、智能体语音问的是**同一组接口** —— 这里只是另一处选择,
+  // 不是另一份目录。
+  const ttsEngines = useQuery({
+    queryKey: ["tts-engines"],
+    queryFn: listTtsEngines,
+    enabled: node.type === "synthesize_speech",
+    staleTime: 30_000,
+  });
+  const pickedEngine = String(config.engine ?? "");
+  const ttsVoices = useQuery({
+    queryKey: ["tts-voices", pickedEngine],
+    queryFn: () => listTtsVoices(pickedEngine),
+    enabled: node.type === "synthesize_speech" && Boolean(pickedEngine),
+  });
   // 强类型 asset 字段(如 素材转写.asset_id)手动模式下,给工作区素材下拉,免手填 UUID。
   const hasAssetField = specs.some(([, spec]) => fieldDataType(spec) === "asset");
   const assets = useQuery({
@@ -2805,8 +2821,17 @@ function NodeInspector({
   }, [onClose]);
 
   // 换了父字段就清掉依赖它的子字段 —— 规则抽在 dependents.ts(有测试),这里只负责接线。
-  const setConfig = (key: string, value: unknown) =>
-    onChange({ config: withDependentsCleared(config, key, value, (meta?.config ?? {}) as Record<string, ConfigSpec>) });
+  const setConfig = (key: string, value: unknown) => {
+    let next = withDependentsCleared(config, key, value, (meta?.config ?? {}) as Record<string, ConfigSpec>);
+    // 少数引擎(火山)的音色还带一个资源号,而它只有在**列音色时**才拿得到(那份清单是用
+    // 用户自己的密钥现查的)。选了音色顺手填上,否则用户得自己去别处把它抄过来 —— 而不抄
+    // 的后果是合成时那个音色不生效,并且不报错。
+    if (node.type === "synthesize_speech" && key === "engine_voice") {
+      const picked = (ttsVoices.data ?? []).find((one) => one.value === value);
+      next = { ...next, engine_voice_resource: picked?.resource_id ?? "" };
+    }
+    onChange({ config: next });
+  };
   const responseFormat = String(config.response_format || "text");
   const setTextConfig = (key: string) => (event: React.ChangeEvent<HTMLInputElement>) => setConfig(key, event.target.value);
 
@@ -3005,6 +3030,13 @@ function NodeInspector({
     }
     if (node.type === "synthesize_speech" && key === "voice_id") {
       return (voices.data ?? []).map((voice) => ({ value: voice.id, label: voice.name }));
+    }
+    if (node.type === "synthesize_speech" && key === "engine") {
+      // 没就绪的引擎(缺 Key、没装运行环境)列出来只会让人选中之后才失败。
+      return (ttsEngines.data ?? []).filter((one) => one.ready).map((one) => ({ value: one.id, label: one.label }));
+    }
+    if (node.type === "synthesize_speech" && key === "engine_voice") {
+      return (ttsVoices.data ?? []).map((one) => ({ value: one.value, label: one.label }));
     }
     if (node.type === "call_workflow" && key === "workflow_id") {
       // 列出可调用的工作流;选到自己/成环由后端运行时守卫拒绝。

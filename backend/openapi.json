@@ -17406,6 +17406,26 @@
             "title": "Voice Id",
             "default": ""
           },
+          "engine": {
+            "type": "string",
+            "title": "Engine",
+            "default": ""
+          },
+          "engine_voice": {
+            "type": "string",
+            "title": "Engine Voice",
+            "default": ""
+          },
+          "engine_voice_resource": {
+            "type": "string",
+            "title": "Engine Voice Resource",
+            "default": ""
+          },
+          "speed": {
+            "type": "number",
+            "title": "Speed",
+            "default": 1.0
+          },
           "x": {
             "type": "number",
             "title": "X",

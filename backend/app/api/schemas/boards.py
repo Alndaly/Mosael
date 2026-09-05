@@ -71,7 +71,13 @@ class BoardSpeak(BaseModel):
     base_revision: int | None = Field(default=None, ge=1)
     item_id: str
     text: str
+    #: 克隆音色(配音库里那一行)。和下面的引擎音色**二选一**。
     voice_id: str = ""
+    #: 引擎音色:用现成的嗓子,不必先克隆。留空则走克隆那条(voice_id)。
+    engine: str = ""
+    engine_voice: str = ""
+    engine_voice_resource: str = ""
+    speed: float = 1.0
     x: float = 0
     y: float = 0
 

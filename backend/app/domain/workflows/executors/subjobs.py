@@ -171,14 +171,34 @@ def video_to_gif(db: Session, workflow: Workflow, config: dict[str, Any]) -> dic
 
 @register("synthesize_speech")
 def synthesize_speech(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    """把文本念出来。两条路:克隆音色,或者引擎的现成音色。
+
+    **此前只有克隆那条,而且不是设计如此** —— 这里只传了 voice_id,于是 start_synthesis 的
+    `engine` 落到它的默认值 `"clone"`,而 clone 那条必须查到一行 Voice。没有任何一处写着
+    "这个节点只支持克隆音色",是一个默认参数替它做的决定;用户填了引擎音色也没用,因为
+    根本没传下去。字幕配音那条(subtitle_dub)一直是把整组合成参数原样转交的,那才是对的写法。
+
+    留空 engine 仍然走克隆:已经存下来的工作流里只有 voice_id,不能因为加了一条路就把它们弄坏。
+    """
     from app.domain.voices.voices import start_synthesis
 
+    engine = str(config.get("engine") or "").strip() or "clone"
+    voice_id = str(config.get("voice_id") or "").strip()
+    if engine == "clone" and not voice_id:
+        # 两边都空。说清楚有哪两条路 —— 「音色不存在」会让人以为是自己选的那个没了。
+        raise WorkflowDomainError("语音合成要么选一个克隆音色(配音库),要么选一个引擎音色")
     child = start_synthesis(
         db,
-        voice_id=str(config.get("voice_id", "")),
         text=str(config.get("text", "")),
         project_id=None,
         created_by=current_actor(db),
+        voice_id=voice_id or None,
+        # 引擎那条要一个工作区来认领产出(克隆那条从 Voice 行上取)。
+        workspace_id=workflow.workspace_id,
+        engine=engine,
+        engine_voice=str(config.get("engine_voice") or ""),
+        engine_voice_resource=str(config.get("engine_voice_resource") or ""),
+        speed=float(config.get("speed") or 1.0),
     )
     final = wait_for_job(child.id)
     return {"asset_id": str((final.result or {}).get("asset_id", ""))}
