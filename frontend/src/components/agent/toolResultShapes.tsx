@@ -256,8 +256,14 @@ function NamedList({ rows }: { rows: Record<string, unknown>[] }) {
     <ul className="m-0 grid list-none gap-1 p-0">
       {rows.map((row, index) => (
         <li className="flex w-full min-w-0 items-center gap-2 border-0 bg-transparent p-0 text-left" key={String(row.id ?? row.type ?? index)}>
-          <span className="min-w-0 flex-1 truncate text-foreground">{String(row.name ?? row.label ?? row.type)}</span>
-          <span className="line-clamp-2 text-ui-xs leading-[1.45] text-muted-foreground">{String(row.description ?? "")}</span>
+          {/* 名字**不参与抢宽度**。此前它是 `flex-1 min-w-0`(basis 0、可以缩到零),而右边的说明
+              没有 min-w-0 —— 说明的自动最小尺寸是 min-content,于是长说明把名字挤成 **0 宽**,
+              truncate 连省略号都画不出:节点目录里说明长的那几行左边整个是空的,说明短的那几行
+              名字又好好的,看着像随机丢字。现在反过来:名字按内容宽、最多占四成,说明拿剩下的。 */}
+          <span className="min-w-0 max-w-[45%] shrink-0 truncate text-foreground" title={String(row.name ?? row.label ?? row.type)}>
+            {String(row.name ?? row.label ?? row.type)}
+          </span>
+          <span className="min-w-0 flex-1 line-clamp-2 text-right text-ui-xs leading-[1.45] text-muted-foreground">{String(row.description ?? "")}</span>
         </li>
       ))}
     </ul>
