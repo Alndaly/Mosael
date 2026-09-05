@@ -180,6 +180,34 @@ export function CanvasAgentChat({
     refetchOnWindowFocus: true,
   });
   const running = live.data?.status === "running";
+  //: 语音模式要念的三样东西。**用和子组件完全相同的 queryKey** —— react-query 按键共享缓存,
+  //: 所以这里不会多发一次请求;另起一个键才会变成两套轮询。
+  const pendingQuestions = useQuery({
+    queryKey: ["agent-questions", activeSession?.id ?? ""],
+    queryFn: () => api<{ id: string; questions: { question: string; options: { label: string }[] }[] }[]>(
+      `/api/agent/questions?session_id=${activeSession?.id ?? ""}`,
+    ),
+    enabled: Boolean(activeSession),
+    refetchInterval: 2000,
+  });
+  const pendingCards = useQuery({
+    queryKey: ["confirmations", workspaceId, "pending", activeSession?.id ?? ""],
+    queryFn: () =>
+      api<{ id: string; summary: string }[]>(
+        `/api/confirmations?workspace_id=${workspaceId}&status=pending&session_id=${encodeURIComponent(activeSession?.id ?? "")}`,
+      ),
+    enabled: Boolean(activeSession),
+    refetchInterval: 1500,
+  });
+
+  //: 语音只答**第一题**:一次念四道题再逐个记住答案,人是记不住的 —— 答完一题界面会把
+  //: 下一题推上来,自然就轮到它。
+  const voiceQuestion = React.useMemo(() => {
+    const first = (pendingQuestions.data ?? [])[0]?.questions?.[0];
+    return first ? { question: first.question, options: first.options.map((one) => one.label) } : null;
+  }, [pendingQuestions.data]);
+  const voiceQuestionId = (pendingQuestions.data ?? [])[0]?.id ?? "";
+
   //: 最新一条助手回复的正文 —— 免提模式念的就是它。失败的那条不念(它的 content 是
   //: 「智能体执行失败」这类占位),但**失败要出声**由错误提示那条路负责,不是靠念它。
   const lastAssistantText = React.useMemo(() => {
@@ -189,6 +217,13 @@ export function CanvasAgentChat({
       if (row.role === "assistant" && !row.error) return (row.content || "").trim();
     }
     return "";
+  }, [messages.data]);
+  //: 最近一条失败。**语音模式下必须出声** —— 静默的失败会被理解成"它没听见",
+  //: 于是你再说一遍,然后再失败一次。
+  const lastFailure = React.useMemo(() => {
+    const rows = messages.data ?? [];
+    const last = rows[rows.length - 1];
+    return last?.role === "assistant" && last.error ? last.error : "";
   }, [messages.data]);
   // Same contract as the studio chat: a message typed mid-turn is a correction, the backend
   // injects it into the running turn, and one button covers stop-vs-send.
@@ -631,6 +666,18 @@ export function CanvasAgentChat({
               busy={running}
               reply={lastAssistantText}
               onUtterance={(text) => send.mutateAsync({ text, files: [], mediaAssets: [] }).then(() => undefined)}
+              question={voiceQuestion}
+              onAnswer={async (index) => {
+                const asked = voiceQuestion;
+                if (!asked || !voiceQuestionId) return;
+                await api(`/api/agent/questions/${voiceQuestionId}/answer`, {
+                  method: "POST",
+                  body: JSON.stringify({ answers: { [asked.question]: [asked.options[index]] } }),
+                });
+                void qc.invalidateQueries({ queryKey: ["agent-questions", activeSession?.id ?? ""] });
+              }}
+              pendingConfirmations={(pendingCards.data ?? []).map((one) => one.summary)}
+              failure={lastFailure}
             />
             <ModelPicker workspaceId={workspaceId} session={activeSession} />
             {/* 与 AI Studio 用同一个组件:此前两边各写各的工具行,同一个功能的位置、顺序、

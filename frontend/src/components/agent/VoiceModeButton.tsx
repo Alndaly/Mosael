@@ -24,19 +24,18 @@ const ICONS: Record<Exclude<VoiceLoopState, "off">, React.ComponentType<{ size?:
   speaking: Volume2,
 };
 
-export function VoiceModeButton({
-  workspaceId,
-  onUtterance,
-  reply,
-  busy,
-}: {
+export function VoiceModeButton(props: {
   workspaceId: string;
   onUtterance: (text: string) => Promise<void> | void;
   reply: string;
   busy: boolean;
+  question?: { question: string; options: string[] } | null;
+  onAnswer?: (index: number) => Promise<void> | void;
+  pendingConfirmations?: string[];
+  failure?: string;
 }) {
   const t = useI18n();
-  const loop = useVoiceLoop({ workspaceId, onUtterance, reply, busy });
+  const loop = useVoiceLoop(props);
   const Icon = loop.state === "off" ? Mic : ICONS[loop.state];
   const label = loop.state === "off" ? t("voiceModeStart") : t(`voiceMode_${loop.state}` as "voiceMode_listening");
 

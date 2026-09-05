@@ -19,6 +19,7 @@ import { toast } from "sonner";
 
 import { API_BASE, getAuthToken } from "@/api/client";
 import { playSpeech, stopSpeaking } from "@/components/agent/speechPlayback";
+import { matchSpokenChoice } from "@/components/agent/spokenChoice";
 import { UtteranceDetector } from "@/components/agent/utteranceDetector";
 
 export type VoiceLoopState = "off" | "listening" | "hearing" | "thinking" | "speaking";
@@ -34,11 +35,23 @@ export function useVoiceLoop({
   reply,
   /** 外面那一轮还在跑吗 —— 语音模式下"在想"就是它。 */
   busy,
+  /** 待答的选择题。有它的时候,下一句话是**答它**,不是发给模型。 */
+  question,
+  /** 用语音答了。 */
+  onAnswer,
+  /** 待批准的变更卡。**只念,不接受语音批准** —— 见下面那段说明。 */
+  pendingConfirmations,
+  /** 这一轮失败了,失败原因。语音模式下静默失败会被理解成"它没听见"。 */
+  failure,
 }: {
   workspaceId: string;
   onUtterance: (text: string) => Promise<void> | void;
   reply: string;
   busy: boolean;
+  question?: { question: string; options: string[] } | null;
+  onAnswer?: (index: number) => Promise<void> | void;
+  pendingConfirmations?: string[];
+  failure?: string;
 }) {
   const [state, setState] = React.useState<VoiceLoopState>("off");
   const stateRef = React.useRef<VoiceLoopState>("off");
@@ -52,6 +65,36 @@ export function useVoiceLoop({
   const detectorRef = React.useRef(new UtteranceDetector());
   const onUtteranceRef = React.useRef(onUtterance);
   onUtteranceRef.current = onUtterance;
+  const questionRef = React.useRef(question);
+  questionRef.current = question;
+  const onAnswerRef = React.useRef(onAnswer);
+  onAnswerRef.current = onAnswer;
+
+  /** 念一句话。**只有这一条路** —— 回复、确认卡、提问、失败,用户听到的都是同一个声音。 */
+  const say = React.useCallback(
+    async (text: string) => {
+      if (!text.trim()) return;
+      try {
+        const token = getAuthToken();
+        const response = await fetch(`${API_BASE}/api/agent/speech`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          body: JSON.stringify({ text: text.slice(0, 4000), workspace_id: workspaceId }),
+        });
+        if (!response.ok) {
+          const detail = (await response.json().catch(() => null))?.detail;
+          toast[response.status === 409 ? "message" : "error"](detail || "这段没能念出来");
+          return;
+        }
+        await playSpeech(await response.blob());
+      } catch {
+        toast.error("这段没能念出来");
+      }
+    },
+    [workspaceId],
+  );
+  const sayRef = React.useRef(say);
+  sayRef.current = say;
 
   const teardown = React.useCallback(() => {
     if (timerRef.current !== null) window.clearInterval(timerRef.current);
@@ -91,6 +134,24 @@ export function useVoiceLoop({
         }
         const text = (payload?.text ?? "").trim();
         if (!text) {
+          setState("listening");
+          return;
+        }
+        // 有待答的选择题时,这一句是**答它**,不是一条新的指令 —— 否则模型会收到
+        // 一句"告白场景",而它正等着你在卡片上点。
+        const asked = questionRef.current;
+        if (asked) {
+          const match = matchSpokenChoice(text, asked.options);
+          if (match.kind === "picked") {
+            await onAnswerRef.current?.(match.index);
+            return;
+          }
+          // **拿不准就再问一次,不猜。** 猜错的代价是它顺着一条你没选的路做下去。
+          await sayRef.current(
+            match.kind === "ambiguous"
+              ? `这几个都像:${match.indexes.map((one) => asked.options[one]).join("、")}。说得再具体一点?`
+              : `没对上任何一个。可以说第几个,或者念出选项:${asked.options.join("、")}`,
+          );
           setState("listening");
           return;
         }
@@ -172,28 +233,41 @@ export function useVoiceLoop({
     spokenRef.current = reply;
     setState("speaking");
     void (async () => {
-      try {
-        const token = getAuthToken();
-        const response = await fetch(`${API_BASE}/api/agent/speech`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-          body: JSON.stringify({ text: reply.slice(0, 4000), workspace_id: workspaceId }),
-        });
-        if (!response.ok) {
-          const detail = (await response.json().catch(() => null))?.detail;
-          toast[response.status === 409 ? "message" : "error"](detail || "这段没能念出来");
-          return;
-        }
-        // 走共享播放器,打断才掐得掉它 —— 自己 new Audio 的话 stopSpeaking() 管不到。
-        await playSpeech(await response.blob());
-      } catch {
-        toast.error("这段没能念出来");
-      } finally {
-        // 念完(或被打断)都回到听 —— 语音模式下"没有下一步"等于死在那儿。
-        setState((current) => (current === "speaking" ? "listening" : current));
-      }
+      await sayRef.current(reply);
+      // 念完(或被打断)都回到听 —— 语音模式下"没有下一步"等于死在那儿。
+      setState((current) => (current === "speaking" ? "listening" : current));
     })();
-  }, [busy, reply, state, workspaceId]);
+  }, [busy, reply, state]);
+
+  // 有待批准的变更 —— **只念,不接受语音批准**。
+  //
+  // 改工作流、建项目这类都要过确认卡,而确认卡的意义是"看得见的那道闸"。语音里说一声"好"
+  // 就批准的话,识别错一个字的代价是它真的去改了你的东西 —— 而你多半没在看屏幕。所以这里
+  // 只把"我要做什么"念出来,批准仍然要在屏幕上点。顺畅度让位给这一条。
+  const announcedRef = React.useRef("");
+  React.useEffect(() => {
+    const pending = (pendingConfirmations ?? []).join("、");
+    if (state === "off" || !pending || pending === announcedRef.current) return;
+    announcedRef.current = pending;
+    void sayRef.current(`我要${pending}。这一步会改东西,去屏幕上确认一下。`);
+  }, [pendingConfirmations, state]);
+
+  // 有待答的选择题 —— 念出来,然后等你说。
+  const askedRef = React.useRef("");
+  React.useEffect(() => {
+    if (state === "off" || !question || question.question === askedRef.current) return;
+    askedRef.current = question.question;
+    void sayRef.current(`${question.question} 可选:${question.options.join("、")}。`);
+  }, [question, state]);
+
+  // 这一轮失败了 —— **必须出声**。语音模式下一次静默的失败会被理解成"它没听见",
+  // 于是你再说一遍,然后再失败一次。
+  const toldRef = React.useRef("");
+  React.useEffect(() => {
+    if (state === "off" || !failure || failure === toldRef.current) return;
+    toldRef.current = failure;
+    void sayRef.current(`刚才那一步没成:${failure}`);
+  }, [failure, state]);
 
   return { state, start, stop, on: state !== "off" };
 }
