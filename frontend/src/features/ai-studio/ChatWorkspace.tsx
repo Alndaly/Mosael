@@ -483,7 +483,7 @@ export function ChatWorkspace({
             查看子代理时整个主区换成它的会话视图(无输入框:它的进程已结束,不可继续 ——
             装一个发不出去的输入框比没有更糟)。 */}
         {viewingSubagent ? (
-          <SubagentSessionView run={viewingSubagent} />
+          <SubagentSessionView run={viewingSubagent} workspaceId={workspace.id} />
         ) : (
           <>
             {view === "trace" ? (
@@ -501,6 +501,7 @@ export function ChatWorkspace({
                 <ChatBubble
                   key={message.id}
                   message={message}
+                  workspaceId={workspace.id}
                   usageEvents={usageByMessage.get(message.id) ?? []}
                   mediaGallery={mediaGallery}
                 />

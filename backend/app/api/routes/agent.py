@@ -487,8 +487,7 @@ def speak(body: AgentSpeechRequest, db: DbSession, user: CurrentUser) -> Respons
         raise HTTPException(status_code=422, detail="没有要念的内容")
     # 念一句是**花钱的**(各家 TTS 按字符计费),所以要 ai 权限,和对话、生成同一档。
     # 记账挂在这个工作区上,那它就得先证明自己在这个工作区里能花钱。
-    if body.workspace_id:
-        ensure_workspace_perm(db, user, body.workspace_id, "ai")
+    ensure_workspace_perm(db, user, body.workspace_id, "ai")
     try:
         pref = agent_voice.require(db, user.id)
     except agent_voice.AgentVoiceNotConfigured as exc:

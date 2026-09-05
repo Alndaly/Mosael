@@ -302,7 +302,7 @@ function synthesize(run: SubagentRun): { timeline: AgentTimelineItem[]; messages
 }
 
 /** 子代理的会话视图:它自己的 对话 / 轨迹。占据主内容区,由面包屑返回。 */
-export function SubagentSessionView({ run }: { run: SubagentRun }) {
+export function SubagentSessionView({ run, workspaceId }: { run: SubagentRun; workspaceId: string }) {
   const t = useI18n();
   const [view, setView] = React.useState<"chat" | "trace">("chat");
   const { timeline, messages } = React.useMemo(() => synthesize(run), [run]);
@@ -348,7 +348,7 @@ export function SubagentSessionView({ run }: { run: SubagentRun }) {
            和悬停脚注的助手消息,失败走同一张错误卡(所以 tabs 行不再单独挂红字)。 */
         <div className="flex min-w-0 flex-col gap-3.5 overflow-y-auto overflow-x-hidden px-4 pb-4 pt-7">
           {(messages as ChatMessage[]).map((message) => (
-            <ChatBubble key={message.id} message={message} usageEvents={[]} mediaGallery={mediaGallery} />
+            <ChatBubble key={message.id} message={message} usageEvents={[]} mediaGallery={mediaGallery} workspaceId={workspaceId} />
           ))}
         </div>
       )}

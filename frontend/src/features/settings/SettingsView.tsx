@@ -27,6 +27,7 @@ import { AppearanceSection, BackgroundSection, CustomCssSection } from "@/featur
 import { AsrModelsSection } from "@/features/settings/AsrModelsSection";
 import { AutopilotRulesSection } from "@/features/settings/AutopilotRulesSection";
 import { BackendSection } from "@/features/settings/BackendSection";
+import { AgentVoiceSection } from "@/features/settings/AgentVoiceSection";
 import { BuiltinTtsSection } from "@/features/settings/BuiltinTtsSection";
 import { DataDiagnosticsSection } from "@/features/settings/DataDiagnosticsSection";
 import { FeishuSection } from "@/features/settings/FeishuSection";
@@ -216,6 +217,8 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
           )}
           {section === "provider-audio" && (
             <>
+              {/* 语音对话排在配音前面:它是"它怎么跟我说话",而下面几节是"怎么给成片配音"。 */}
+              <AgentVoiceSection workspaceId={workspace.id} />
               <BuiltinTtsSection onOpenVoiceClone={() => setSection("voice")} />
               <ProviderProfilesSection
                 capability="tts"

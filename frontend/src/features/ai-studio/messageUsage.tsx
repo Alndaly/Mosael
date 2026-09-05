@@ -2,6 +2,7 @@ import React from "react";
 import { Check, Copy } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
+import { SpeakButton } from "@/components/agent/SpeakButton";
 import { usePreferences } from "@/app/preferences";
 import { formatElapsedSeconds, relativeTime, useNow } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -184,11 +185,14 @@ export function MessageUsageFooter({
   content,
   usageEvents,
   durationOverride,
+  workspaceId,
   className,
 }: {
   content: string;
   usageEvents: AgentUsageEvent[];
   durationOverride?: number | null;
+  /** 念这一句记在哪个工作区的账上 —— TTS 按字符计费,记账要有归属。 */
+  workspaceId?: string;
   className?: string;
 }) {
   const t = useI18n();
@@ -203,6 +207,8 @@ export function MessageUsageFooter({
 
   return (
     <MessageFooter content={content} className={className}>
+      {/* 念出来挨着复制:两个都是"把这条内容带走",只是一个用眼睛一个用耳朵。 */}
+      <SpeakButton text={content} workspaceId={workspaceId} />
       {typeof duration === "number" && (
         <span className="timecode text-ui-xs text-muted-foreground">
           {t("usageDuration").replace("{t}", formatElapsedSeconds(duration))}

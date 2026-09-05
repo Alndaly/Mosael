@@ -56,10 +56,13 @@ export function ChatBubble({
   message,
   usageEvents,
   mediaGallery,
+  workspaceId,
 }: {
   message: AgentMessage;
   usageEvents: AgentUsageEvent[];
   mediaGallery?: ImagePreviewItem[];
+  /** 念这一条记在哪个工作区的账上,也决定要不要 ai 权限(见 routes/agent.speak)。 */
+  workspaceId: string;
 }) {
   const t = useI18n();
   const payload = message.payload as
@@ -127,6 +130,7 @@ export function ChatBubble({
           用户这边是发出的时间。都只在悬停时显形 —— 常态下这一行是空的,不该占视线。 */}
       {message.role === "assistant" ? (
         <MessageUsageFooter
+          workspaceId={workspaceId}
           content={message.content}
           usageEvents={usageEvents}
           durationOverride={payload?.usage?.duration_seconds}

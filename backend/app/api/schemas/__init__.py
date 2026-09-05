@@ -909,7 +909,9 @@ class AgentSpeechRequest(BaseModel):
     """念一句话。**不产出素材** —— 见 routes/agent.speak。"""
 
     text: str = Field(min_length=1, max_length=4000)
-    workspace_id: str = ""
+    #: **必填**。念一句要 ai 权限,而"没填就不检查"等于给了一条绕过去的路;
+    #: 记账也要有归属(TTS 按字符计费)。
+    workspace_id: str = Field(min_length=1)
 
 
 class ProviderDefaultUpdate(BaseModel):

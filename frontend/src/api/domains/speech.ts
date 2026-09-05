@@ -188,3 +188,14 @@ export function updateTtsConfig(body: {
 }): Promise<TtsConfig> {
   return api<TtsConfig>("/api/settings/tts", { method: "PUT", body: JSON.stringify(body) });
 }
+
+export type AgentVoice = components["schemas"]["AgentVoiceOut"];
+
+/** 语音对话用哪个音色。**和配音的 TTS 默认是两行配置** —— 配音要质量,对话要延迟。 */
+export function getAgentVoice(): Promise<AgentVoice> {
+  return api<AgentVoice>("/api/settings/agent-voice");
+}
+
+export function setAgentVoice(body: components["schemas"]["AgentVoiceUpdate"]): Promise<AgentVoice> {
+  return api<AgentVoice>("/api/settings/agent-voice", { method: "PUT", body: JSON.stringify(body) });
+}

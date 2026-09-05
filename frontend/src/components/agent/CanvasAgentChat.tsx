@@ -501,6 +501,7 @@ export function CanvasAgentChat({
               )}
               {message.role === "assistant" && (
                 <MessageUsageFooter
+                  workspaceId={workspaceId}
                   content={message.content}
                   usageEvents={usageByMessage.get(message.id) ?? []}
                   durationOverride={duration}
