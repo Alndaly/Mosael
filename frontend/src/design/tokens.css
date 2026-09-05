@@ -86,6 +86,19 @@
     0%, 100% { transform: scale(1); opacity: 0.65; }
     50% { transform: scale(1.14); opacity: 1; }
   }
+  /* 语音浮标的两圈。**它们表达的是"轮到谁说话"** —— 呼吸圈=在等你开口,
+     涟漪=它在念。静止的图标下,这两种状态长得一模一样,而那正是让人搞不清
+     该说还是该听的地方。条形的高度由真实音量驱动,不在这儿(见 VoiceOrb)。 */
+  --animate-voice-breathe: voice-breathe 2.6s ease-in-out infinite;
+  @keyframes voice-breathe {
+    0%, 100% { transform: scale(1); opacity: 0.35; }
+    50% { transform: scale(1.12); opacity: 0.7; }
+  }
+  --animate-voice-ripple: voice-ripple 1.6s ease-out infinite;
+  @keyframes voice-ripple {
+    0% { transform: scale(0.92); opacity: 0.55; }
+    100% { transform: scale(1.45); opacity: 0; }
+  }
   --animate-confirm-in: confirm-in 160ms ease-out;
   --animate-wf-dash: wf-dash 0.6s linear infinite;
   @keyframes wf-dash {

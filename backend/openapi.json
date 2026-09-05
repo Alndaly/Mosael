@@ -14697,6 +14697,97 @@
         }
       }
     },
+    "/api/agent/sessions/{session_id}/view": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Set Pending View",
+        "description": "智能体要求界面跳到哪儿。**待消费一次**,前端跳完就清。\n\n方向是反的:智能体跑在后端,而切页面是前端的事。落在会话行上而不是流里 —— 前端本来就在\n轮询会话状态,而免提浮标那种没开 SSE 的场景照样收得到,那恰恰是\"带我过去\"最有用的时候。",
+        "operationId": "set_pending_view_api_agent_sessions__session_id__view_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentPendingView"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Set Pending View Api Agent Sessions  Session Id  View Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Clear Pending View",
+        "description": "跳完了。**由前端来清,不是读一次就清** —— 读了就清的话,两个开着的界面里\n只有先读到的那个会跳,而另一个永远不知道发生过什么。",
+        "operationId": "clear_pending_view_api_agent_sessions__session_id__view_delete",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/session-groups": {
       "get": {
         "tags": [
@@ -15981,6 +16072,28 @@
         ],
         "title": "AgentMessageOut"
       },
+      "AgentPendingView": {
+        "properties": {
+          "view": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "View"
+          },
+          "id": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Id",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "view"
+        ],
+        "title": "AgentPendingView",
+        "description": "智能体要求界面跳到哪一页。`view` 的合法值由 mcp_server._VIEWS 把关。"
+      },
       "AgentPlanUpdate": {
         "properties": {
           "steps": {
@@ -16334,6 +16447,11 @@
           "status": {
             "type": "string",
             "title": "Status"
+          },
+          "pending_view": {
+            "type": "string",
+            "title": "Pending View",
+            "default": ""
           },
           "context": {
             "anyOf": [

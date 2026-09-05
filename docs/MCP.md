@@ -7,7 +7,7 @@ summaries — never raw internal schemas.
 
 <!-- BEGIN generated: tools -->
 
-共 **65** 个工具,其中 **17** 个走确认卡。
+共 **66** 个工具,其中 **17** 个走确认卡。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -63,6 +63,7 @@ summaries — never raw internal schemas.
 | `list_workspaces` | 直接执行 | Read-only: list the workspaces this user has, newest first. |
 | `notify_agent_session` | 直接执行 | Runs directly: send a message to ANOTHER agent session (@-mention style). |
 | `notify_workspace` | 直接执行 | Runs directly: push an in-app notification to the workspace members. |
+| `open_view` | 直接执行 | Take the user to a page in Mosael — optionally to one specific record. |
 | `publish_asset` | 确认卡 | Confirmation required: publish an asset to a platform with a logged-in account. |
 | `remember` | 直接执行 | Runs directly: save a durable fact or convention to cross-session memory. |
 | `render_sequence` | 确认卡 | Confirmation required: export an existing VIDEO TIMELINE sequence to mp4. |

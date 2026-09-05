@@ -203,6 +203,7 @@ READ_ONLY_TOOLS = frozenset(
         "list_boards",
         "list_generation_models",
         "list_provider_models",
+        "open_view",
         "list_jobs",
         "list_memories",
         "list_plugin_tools",
@@ -535,6 +536,48 @@ def generate_image(
 #: 执行面的合法取值。后端那一侧是 Literal,填错只会换回一个 422 —— 而模型看到 422 不会说
 #: "我填错了参数",它会换个词再试一次。在这里当场拒绝,并且把合法值说出来。
 _SURFACES = ("all", "agent", "direct", "gateway", "automation")
+
+
+#: 能跳到哪儿。**白名单**,和前端的 StudioView 一一对应 —— 透传任意字符串等于让模型
+#: 往 location.hash 里塞东西,而它拼错一个字的表现是"点了没反应"。
+_VIEWS = (
+    "home", "media", "editor", "ai", "publish", "settings",
+    "workflows", "boards", "scheduler", "plugins", "browser-pool", "admin",
+)
+
+
+@mcp.tool()
+def open_view(view: str, id: str = "") -> dict[str, Any]:
+    """Take the user to a page in Mosael — optionally to one specific record.
+
+    Read-only, no confirmation: navigating changes nothing. The worst case is the user
+    looking at a page they did not ask for, and they can click back.
+
+    Use it when the answer is somewhere in the app rather than in your reply: they asked
+    where a workflow is, which clip has the shot, how to change a setting. Finding it and
+    describing where it lives still leaves them to walk there — say what you found AND take
+    them to it.
+
+    This is also the second half of "search for X and take me to it": find it with the tool
+    that lists that kind of thing (list_assets, list_projects, list_workflows, list_boards,
+    list_publish_accounts, list_jobs), then call this with the page it lives on.
+
+    `view` is one of: home, media, editor, ai, publish, settings, workflows, boards,
+    scheduler, plugins, browser-pool, admin. `id` selects one **project** and only applies to
+    `editor` — the other pages keep their own selection, so an id there would be ignored and
+    the user would land on a list after you told them you were taking them to one thing.
+
+    Do NOT use it to shuffle the user around while you work — a page that changes under
+    someone reading it is worse than no navigation at all. One destination, once you have one.
+    """
+    if view not in _VIEWS:
+        raise ValueError(f"unknown view {view!r}; valid views are {list(_VIEWS)}")
+    session_id = _SESSION_ID.get()
+    if not session_id:
+        # 飞书 / 外部 MCP 客户端没有界面可跳 —— 说清楚,别假装做了。
+        return {"error": "这次调用没有界面上下文,跳不了 —— 直接在回复里说清楚在哪一页。"}
+    _post(f"/api/agent/sessions/{session_id}/view", {"view": view, "id": id.strip()})
+    return {"view": view, "id": id.strip(), "message": "已经把界面带过去了。"}
 
 
 @mcp.tool()

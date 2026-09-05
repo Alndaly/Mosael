@@ -39,6 +39,7 @@ import { STUDIO_VIEWS } from "@/components/layout/navLabels";
 import { CommandPalette } from "@/components/layout/CommandPalette";
 import { ConfirmationCenter } from "@/components/layout/ConfirmationCenter";
 import { VoiceDock } from "@/components/agent/VoiceDock";
+import { useAgentNavigation } from "@/components/agent/useAgentNavigation";
 import { PlugZap } from "lucide-react";
 
 import { ServerPicker } from "@/components/layout/ServerPicker";
@@ -467,6 +468,18 @@ function Studio({
     setProjectId(id);
     setView("editor");
   };
+
+  // 智能体说"带你去看看"时,界面真的过去。挂在 Studio 这一层是因为它要跨页面生效,
+  // 而且**助手面板收起来时也要管用** —— 免提对话下这条路是唯一的一条。
+  useAgentNavigation({
+    workspaceId: workspace.id,
+    onNavigate: (next, id) => {
+      // 白名单在后端 mcp_server._VIEWS 那一侧,这里再挡一道:两边都可能先改。
+      if (!VALID_VIEWS.includes(next)) return;
+      if (next === "editor" && id) openProject(id);
+      else setView(next as StudioView);
+    },
+  });
   // 新建项目的入口不止首页一处(顶栏切换器、剪辑页空态也有),所以在这里建一次往下传,
   // 而不是各页各建一个 —— 见 useCreateProject 里那条「先写缓存再跳转」的说明。
   const createProject = useCreateProject(workspace.id, openProject);

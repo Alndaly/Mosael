@@ -54,6 +54,13 @@ export function useVoiceLoop({
   failure?: string;
 }) {
   const [state, setState] = React.useState<VoiceLoopState>("off");
+  //: 当前音量,**以"开口阈值"为 1.0** 归一化。用 ref 不用 state:采样是 20 次/秒,
+  //: 每次都 setState 会把整个浮标(以及它挂着的两个查询订阅)重渲染 20 次/秒,
+  //: 而这个数只有一个消费者 —— 那几根条,它自己在 rAF 里读。
+  const levelRef = React.useRef(0);
+  //: 最近听清的一句。浮标把它显示出来 —— 语音里最让人不安的是"我说了,它有没有听见",
+  //: 而把听到的原话摆出来一次性回答了这个问题(包括听错时,你当场就知道错在哪儿)。
+  const [heard, setHeard] = React.useState("");
   const stateRef = React.useRef<VoiceLoopState>("off");
   stateRef.current = state;
 
@@ -107,6 +114,7 @@ export function useVoiceLoop({
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     detectorRef.current.reset();
+    levelRef.current = 0;
   }, []);
 
   React.useEffect(() => teardown, [teardown]);
@@ -133,6 +141,7 @@ export function useVoiceLoop({
           return;
         }
         const text = (payload?.text ?? "").trim();
+        setHeard(text);
         if (!text) {
           setState("listening");
           return;
@@ -196,6 +205,8 @@ export function useVoiceLoop({
       for (const sample of buffer) sum += sample * sample;
       const rms = Math.sqrt(sum / buffer.length);
       const event = detectorRef.current.push(rms, performance.now());
+      // 阈值 = 1.0。上限放到 2.5 而不是 1:顶格之后再大声也没有反馈,人会以为它卡住了。
+      levelRef.current = Math.min(rms / Math.max(detectorRef.current.triggerLevel, 1e-6), 2.5);
 
       if (event === "speaking" && !recorderRef.current) {
         // **打断在这里发生。** 它正在念,而你开口了 —— 掐掉播放,开始录。
@@ -269,5 +280,5 @@ export function useVoiceLoop({
     void sayRef.current(`刚才那一步没成:${failure}`);
   }, [failure, state]);
 
-  return { state, start, stop, on: state !== "off" };
+  return { state, start, stop, on: state !== "off", levelRef, heard };
 }

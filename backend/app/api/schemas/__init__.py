@@ -880,6 +880,13 @@ class CapabilityModelOut(BaseModel):
     reasoning_effort: bool | None = None
 
 
+class AgentPendingView(BaseModel):
+    """智能体要求界面跳到哪一页。`view` 的合法值由 mcp_server._VIEWS 把关。"""
+
+    view: str = Field(min_length=1, max_length=40)
+    id: str = Field(default="", max_length=64)
+
+
 class PluginOAuthCode(BaseModel):
     """对方显示出来、由用户贴回来的授权码。"""
 
@@ -1709,6 +1716,8 @@ class AgentSessionOut(OrmModel):
     analysis_video_mode: str = "auto"
     thinking_level: str = "off"
     status: str
+    #: 智能体要求界面跳到哪儿(`view` 或 `view:id`)。跳完由前端 DELETE 掉。
+    pending_view: str = ""
     #: 当前上下文水位。**每次请求现算**,而不是等某一轮回报 —— 打开旧会话、刚换过模型、
     #: 上一轮失败了,这些时候都没有新的一轮可以带回这个数,而"还能聊多久"这个问题恰恰在
     #: 开口之前就要有答案。窗口取当前模型的,换模型即变。

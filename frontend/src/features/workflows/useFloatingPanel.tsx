@@ -107,6 +107,15 @@ export interface FloatingPanelOptions {
   /** 悬浮时的初始大小(会按视口夹取)。 */
   preferredW?: number;
   preferredH?: number;
+  /**
+   * 整个面板都是拖动把手,不只是标题栏。
+   *
+   * 面板有标题栏可拖,所以默认排除按钮、输入框这些控件 —— 在文本框里选一段字不该
+   * 把窗口甩走。**但语音浮标整个就是一颗按钮**:那条排除规则把它的全部表面都算成了
+   * "控件",于是它一步也拖不动。开了这个之后只剩 `[data-no-drag]` 一道排除,
+   * 需要保持可点的东西自己标出来。
+   */
+  dragAnywhere?: boolean;
 }
 
 export function useFloatingPanel({
@@ -116,6 +125,7 @@ export function useFloatingPanel({
   minH = 380,
   preferredW = 480,
   preferredH = 640,
+  dragAnywhere = false,
 }: FloatingPanelOptions) {
   const clampRect = React.useCallback(
     (rect: FloatRect): FloatRect => {
@@ -150,17 +160,26 @@ export function useFloatingPanel({
     [storageKey],
   );
 
+  /** 这一次按下之后指针挪了多远。**给"整个面板都能拖"的调用方分辨拖和点用** ——
+   *  同一颗按钮既要拖得走又要点得开,而"拖完手一松顺带触发了一次点击"是最气人的一种。 */
+  const movedRef = React.useRef(0);
+
   const startDrag = (event: React.PointerEvent) => {
     if (!floating) return;
-    // 标题栏里的控件不该带着窗口跑。
-    if ((event.target as HTMLElement).closest("button,input,textarea,a,[role='combobox'],[data-no-drag]")) return;
+    // 标题栏里的控件不该带着窗口跑。整体拖动时只认显式标记的那些。
+    const exclude = dragAnywhere ? "[data-no-drag]" : "button,input,textarea,a,[role='combobox'],[data-no-drag]";
+    if ((event.target as HTMLElement).closest(exclude)) return;
     event.preventDefault();
+    movedRef.current = 0;
     const startX = event.clientX;
     const startY = event.clientY;
     const origin = { ...rect };
     const at = (cx: number, cy: number) =>
       clampRect({ ...origin, x: origin.x + (cx - startX), y: origin.y + (cy - startY) });
-    const onMove = (e: PointerEvent) => setRect(at(e.clientX, e.clientY));
+    const onMove = (e: PointerEvent) => {
+      movedRef.current = Math.max(movedRef.current, Math.abs(e.clientX - startX) + Math.abs(e.clientY - startY));
+      setRect(at(e.clientX, e.clientY));
+    };
     const onUp = (e: PointerEvent) => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
@@ -168,6 +187,17 @@ export function useFloatingPanel({
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+  };
+
+  /** 刚才那一下是拖动,不是点击。阈值 4px:手不稳带来的一两像素不该吃掉一次点击。
+   *
+   *  **读一次就清零**,所以它只对紧接着的那一次点击有效。不清的话,键盘敲回车触发的
+   *  click 会读到上一次拖动留下的位移 —— 拖过一次之后这颗按钮就再也按不动了,
+   *  而这种失效只有用键盘的人碰得到。 */
+  const wasDragged = () => {
+    const dragged = movedRef.current > 4;
+    movedRef.current = 0;
+    return dragged;
   };
 
   // 拖 n/w 边时同步移动 x/y(锚定对边)。用自定义手柄而不是原生 resize:后者只有右下一个
@@ -263,6 +293,7 @@ export function useFloatingPanel({
         } as const)
       : undefined,
     startDrag,
+    wasDragged,
     handles,
     focusProps,
   };

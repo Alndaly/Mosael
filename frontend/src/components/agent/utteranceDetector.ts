@@ -60,6 +60,17 @@ export class UtteranceDetector {
 
   constructor(private readonly options: UtteranceOptions = DEFAULT_UTTERANCE_OPTIONS) {}
 
+  /** 此刻要多响才算"开口了"。
+   *
+   * 给可视化用,而不是给判决用 —— 判决在 push 里。浮标把音量画成"相对这条线的高度",
+   * 于是那根跳动的条不是装饰:它越过刻度的那一刻,正是检测器认定你在说话的那一刻。
+   * 画一个固定量程的话,安静房间里永远是一小截、吵的房间里永远顶格,而两种情况下
+   * 用户都会得出同一个结论 —— "它没在听我"。
+   */
+  get triggerLevel(): number {
+    return Math.max(this.floor, 0.005) * this.options.startFactor;
+  }
+
   /** 说到现在多久了(毫秒)。UI 用它显示"正在听"。 */
   get speakingForMs(): number {
     return this.speaking ? this.lastAt - this.startedAt : 0;
