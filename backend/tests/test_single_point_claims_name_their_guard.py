@@ -56,23 +56,27 @@ GUARD_HINT = re.compile(r"tests?/test_[\w.]+\.py|test_[\w]+\.py|contracts/[\w.-]
 #: 断言前后各看几行 —— 一段注释的说明和它点名的检查通常隔着几句。
 CONTEXT_LINES = 6
 
-#: 存量:说了这话但还没有检查在守的地方,记成 `文件:行号:命中的措辞`。**只减不增。**
+#: 存量:说了这话但还没有检查在守的地方,记成 `文件:措辞`。**只减不增。**
+#:
+#: **不记行号。** 第一版记了,然后在 models.py 上方插一个模型就让整份清单错位 —— 那不是
+#: 断言变了,只是它往下挪了几行。同一个文件里同一种措辞出现两次会合成一条,可以接受:
+#: 这条棘轮拦的是「又多了一句没人守的话」,不是给每一句编号。
 ALLOWLIST: frozenset[str] = frozenset({
-    "app/ai/providers/__init__.py:4:唯一装配入口",
-    "app/ai/providers/registry.py:1:唯一装配入口",
-    "app/ai/runtime/asr_models.py:518:唯一的探测实现",
-    "app/core/config.py:43:唯一真相",
-    "app/core/usage_scope.py:40:唯一真源",
-    "app/db/migrations.py:701:唯一真相",
-    "app/db/models.py:713:唯一真相",
-    "app/domain/agent/confirmations.py:91:唯一实现",
-    "app/domain/ai_chat.py:1:唯一实现",
-    "app/domain/assets/importer.py:141:唯一实现",
-    "app/domain/deployment.py:12:唯一真相",
-    "app/domain/plugins/tools.py:175:唯一的执行路径",
-    "app/domain/plugins/tools.py:3:唯一的执行路径",
-    "app/domain/workflows/__init__.py:531:唯一入口",
-    "app/domain/workflows/binding.py:4:唯一实现",
+    "app/ai/providers/__init__.py:唯一装配入口",
+    "app/ai/providers/registry.py:唯一装配入口",
+    "app/ai/runtime/asr_models.py:唯一的探测实现",
+    "app/core/config.py:唯一真相",
+    "app/core/usage_scope.py:唯一真源",
+    "app/db/migrations.py:唯一真相",
+    "app/db/models.py:唯一真相",
+    "app/domain/agent/confirmations.py:唯一实现",
+    "app/domain/ai_chat.py:唯一实现",
+    "app/domain/assets/importer.py:唯一实现",
+    "app/domain/deployment.py:唯一真相",
+    "app/domain/plugins/tools.py:唯一的执行路径",
+    "app/domain/plugins/tools.py:唯一的执行路径",
+    "app/domain/workflows/__init__.py:唯一入口",
+    "app/domain/workflows/binding.py:唯一实现",
 })
 
 
@@ -89,7 +93,7 @@ def _scan() -> set[str]:
                 lines[max(0, index - CONTEXT_LINES) : index + CONTEXT_LINES + 1]
             )
             if not GUARD_HINT.search(window):
-                found.add(f"{rel}:{index + 1}:{hit}")
+                found.add(f"{rel}:{hit}")
     return found
 
 

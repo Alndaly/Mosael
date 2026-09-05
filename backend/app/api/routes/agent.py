@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import tempfile
+from pathlib import Path
+
 import asyncio
 import json
 
@@ -11,6 +14,7 @@ from app.domain.agent import host
 from app.domain import sharing
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
+    AgentSpeechRequest,
     AgentManifestOut,
     AgentMemoryCreate,
     AgentMemoryOut,
@@ -461,3 +465,56 @@ def get_agent_manifest(db: DbSession, user: CurrentUser) -> AgentManifestOut:
         openapi_url="/openapi.json",
         skills=[AgentSkillOut.model_validate(skill) for skill in list_agent_skills(db, user.id)],
     )
+
+
+@router.post("/agent/speech")
+def speak(body: AgentSpeechRequest, db: DbSession, user: CurrentUser) -> Response:
+    """念一句话,把音频**直接回给调用方**。
+
+    **不建任务、不入素材库。** 对话里念出来的每一句都登记成素材的话,说十句就是十个音频
+    文件 —— 而它们说完就没用了。这和配音是两件事:配音的产出要留存、要进时间线,所以它
+    走 job + register_file_asset;这里的产出活到播完为止。
+
+    这条路同时给三件事用:消息底部的播放、确认卡与提问的语音化、失败出声。它们共用同一个
+    音色配置(settings/agent-voice),因为对用户来说那就是"它的声音"。
+
+    没设过音色就说没设 —— 不替他挑一个(同 provider-defaults 的立场)。
+    """
+    from app.domain.voices import agent_voice, voices as voices_domain
+
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="没有要念的内容")
+    # 念一句是**花钱的**(各家 TTS 按字符计费),所以要 ai 权限,和对话、生成同一档。
+    # 记账挂在这个工作区上,那它就得先证明自己在这个工作区里能花钱。
+    if body.workspace_id:
+        ensure_workspace_perm(db, user, body.workspace_id, "ai")
+    try:
+        pref = agent_voice.require(db, user.id)
+    except agent_voice.AgentVoiceNotConfigured as exc:
+        # 409 而不是 500:这是"还没配置",一个用户点两下就能解决的状态。
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    with tempfile.TemporaryDirectory(prefix="mosael-say-") as tmp:
+        try:
+            out = voices_domain.speak_to_file(
+                db,
+                text=text,
+                engine=pref.engine,
+                engine_voice=pref.engine_voice,
+                speed=pref.speed,
+                workspace_id=body.workspace_id,
+                user_id=user.id,
+                voice_resource=pref.engine_voice_resource,
+                provider_profile_id=pref.provider_profile_id,
+                model_override=pref.engine_model,
+                out_dir=Path(tmp),
+                # 记账的来源:不是 job,是这个人的这次对话发声。**照样要记** ——
+                # 各家 TTS 按字符计费,念一句也是钱(见 speak_to_file)。
+                source_type="agent_speech",
+                source_id=user.id,
+            )
+        except Exception as exc:  # noqa: BLE001 — 合成失败是结果,不是服务端故障
+            raise HTTPException(status_code=422, detail=str(exc)[:300]) from exc
+        audio = out.read_bytes()
+        media_type = "audio/mpeg" if out.suffix == ".mp3" else "audio/wav"
+    return Response(content=audio, media_type=media_type, headers={"Cache-Control": "no-store"})

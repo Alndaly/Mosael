@@ -5,7 +5,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import CapabilityModelOut, ProviderDefaultOut, ProviderDefaultUpdate
+from app.api.schemas import AgentVoiceOut, AgentVoiceUpdate, CapabilityModelOut, ProviderDefaultOut, ProviderDefaultUpdate
 from app.db.models import ProviderModel
 from app.domain import provider_models
 from app.domain.provider_defaults import DEFAULTABLE_CAPABILITIES, set_default
@@ -109,3 +109,56 @@ def set_provider_default(
     )
 
 
+
+
+@router.get("/settings/agent-voice", response_model=AgentVoiceOut)
+def get_agent_voice(db: DbSession, user: CurrentUser) -> AgentVoiceOut:
+    """**我**在语音对话里用哪个音色。没设过就回一份空的(enabled=False)。
+
+    和 /settings/provider-defaults 的 tts 那一格是两回事:配音要质量(本地克隆、首次加载
+    十几分钟也认),对话要延迟。同一个默认服务两件事,必然在某一边是错的。
+    """
+    from app.domain.voices import agent_voice
+
+    row = agent_voice.get_row(db, user.id)
+    if row is None:
+        return AgentVoiceOut()
+    return AgentVoiceOut(
+        engine=row.engine,
+        engine_voice=row.engine_voice,
+        engine_voice_resource=row.engine_voice_resource,
+        engine_model=row.engine_model,
+        provider_profile_id=row.provider_profile_id,
+        voice_id=row.voice_id,
+        speed=row.speed,
+        enabled=row.enabled,
+    )
+
+
+@router.put("/settings/agent-voice", response_model=AgentVoiceOut)
+def set_agent_voice(body: AgentVoiceUpdate, db: DbSession, user: CurrentUser) -> AgentVoiceOut:
+    """设**我自己**的对话音色。只有这一档 —— 没有部署默认(同 provider-defaults)。"""
+    from app.domain.voices import agent_voice
+
+    row = agent_voice.upsert(
+        db,
+        user.id,
+        engine=body.engine,
+        engine_voice=body.engine_voice,
+        engine_voice_resource=body.engine_voice_resource,
+        engine_model=body.engine_model,
+        provider_profile_id=body.provider_profile_id,
+        voice_id=body.voice_id,
+        speed=body.speed,
+        enabled=body.enabled,
+    )
+    return AgentVoiceOut(
+        engine=row.engine,
+        engine_voice=row.engine_voice,
+        engine_voice_resource=row.engine_voice_resource,
+        engine_model=row.engine_model,
+        provider_profile_id=row.provider_profile_id,
+        voice_id=row.voice_id,
+        speed=row.speed,
+        enabled=row.enabled,
+    )

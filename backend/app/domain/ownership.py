@@ -92,6 +92,7 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "PluginPackage": ("app/domain/plugins/",),
     "PluginInstance": ("app/domain/plugins/",),
     "PluginCapability": ("app/domain/plugins/",),
+    "AgentVoicePref": ("app/domain/voices/",),
     "PluginPermissionGrant": ("app/domain/plugins/",),
     "PluginCredential": ("app/domain/plugins/",),
     "PluginInvocation": ("app/domain/plugins/",),

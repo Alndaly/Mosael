@@ -1265,6 +1265,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/asr/dictate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dictate
+         * @description 把一小段录音转成文字,**用完即弃**。
+         *
+         *     输入框里的语音输入走这条:它不建任务、不入素材库 —— 用户要的是"把我说的话填进去",
+         *     而不是在素材库里留下几十个几秒钟的 wav。识别本身仍是同一份实现(常驻 worker)。
+         *
+         *     没有 workspace 参数:这段音频不属于任何工作区,它连库都不进。鉴权到"是个登录用户"为止。
+         */
+        post: operations["dictate_api_asr_dictate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/voices": {
         parameters: {
             query?: never;
@@ -2601,7 +2626,8 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /** Remove Comment */
+        delete: operations["remove_comment_api_comments__comment_id__delete"];
         options?: never;
         head?: never;
         /** Update Comment Anchor */
@@ -3701,6 +3727,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/agent-voice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Agent Voice
+         * @description **我**在语音对话里用哪个音色。没设过就回一份空的(enabled=False)。
+         *
+         *     和 /settings/provider-defaults 的 tts 那一格是两回事:配音要质量(本地克隆、首次加载
+         *     十几分钟也认),对话要延迟。同一个默认服务两件事,必然在某一边是错的。
+         */
+        get: operations["get_agent_voice_api_settings_agent_voice_get"];
+        /**
+         * Set Agent Voice
+         * @description 设**我自己**的对话音色。只有这一档 —— 没有部署默认(同 provider-defaults)。
+         */
+        put: operations["set_agent_voice_api_settings_agent_voice_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/providers/{profile_id}/pricing/prefill": {
         parameters: {
             query?: never;
@@ -4781,6 +4834,8 @@ export interface paths {
         /**
          * Dismiss Question
          * @description 不想答。模型会收到「用户跳过了」并继续往下走,而不是卡在那儿等。
+         *
+         *     「收到」是这里送过去的:ask_user 不阻塞,那一轮多半早就结束了,不送就真的卡在那儿。
          */
         post: operations["dismiss_question_api_agent_questions__question_id__dismiss_post"];
         delete?: never;
@@ -4853,6 +4908,35 @@ export interface paths {
         get: operations["get_agent_manifest_api_agent_manifest_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/speech": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Speak
+         * @description 念一句话,把音频**直接回给调用方**。
+         *
+         *     **不建任务、不入素材库。** 对话里念出来的每一句都登记成素材的话,说十句就是十个音频
+         *     文件 —— 而它们说完就没用了。这和配音是两件事:配音的产出要留存、要进时间线,所以它
+         *     走 job + register_file_asset;这里的产出活到播完为止。
+         *
+         *     这条路同时给三件事用:消息底部的播放、确认卡与提问的语音化、失败出声。它们共用同一个
+         *     音色配置(settings/agent-voice),因为对用户来说那就是"它的声音"。
+         *
+         *     没设过音色就说没设 —— 不替他挑一个(同 provider-defaults 的立场)。
+         */
+        post: operations["speak_api_agent_speech_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5549,6 +5633,96 @@ export interface components {
             /** Permissions */
             permissions?: unknown[];
         };
+        /**
+         * AgentSpeechRequest
+         * @description 念一句话。**不产出素材** —— 见 routes/agent.speak。
+         */
+        AgentSpeechRequest: {
+            /** Text */
+            text: string;
+            /**
+             * Workspace Id
+             * @default
+             */
+            workspace_id: string;
+        };
+        /**
+         * AgentVoiceOut
+         * @description 语音对话的音色。**和配音的 TTS 默认是两行配置** —— 见 db.models.AgentVoicePref。
+         */
+        AgentVoiceOut: {
+            /**
+             * Engine
+             * @default
+             */
+            engine: string;
+            /**
+             * Engine Voice
+             * @default
+             */
+            engine_voice: string;
+            /**
+             * Engine Voice Resource
+             * @default
+             */
+            engine_voice_resource: string;
+            /**
+             * Engine Model
+             * @default
+             */
+            engine_model: string;
+            /** Provider Profile Id */
+            provider_profile_id?: string | null;
+            /** Voice Id */
+            voice_id?: string | null;
+            /**
+             * Speed
+             * @default 1
+             */
+            speed: number;
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+        };
+        /** AgentVoiceUpdate */
+        AgentVoiceUpdate: {
+            /**
+             * Engine
+             * @default
+             */
+            engine: string;
+            /**
+             * Engine Voice
+             * @default
+             */
+            engine_voice: string;
+            /**
+             * Engine Voice Resource
+             * @default
+             */
+            engine_voice_resource: string;
+            /**
+             * Engine Model
+             * @default
+             */
+            engine_model: string;
+            /** Provider Profile Id */
+            provider_profile_id?: string | null;
+            /** Voice Id */
+            voice_id?: string | null;
+            /**
+             * Speed
+             * @default 1
+             */
+            speed: number;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+        };
         /** AiRuntimeConfigOut */
         AiRuntimeConfigOut: {
             /**
@@ -5945,6 +6119,21 @@ export interface components {
             source_assets?: string[];
             /** Context */
             context?: string[];
+        };
+        /** Body_dictate_api_asr_dictate_post */
+        Body_dictate_api_asr_dictate_post: {
+            /** Clip */
+            clip: string;
+            /**
+             * Language
+             * @default
+             */
+            language: string;
+            /**
+             * Engine
+             * @default
+             */
+            engine: string;
         };
         /** Body_import_asset_api_assets_import_post */
         Body_import_asset_api_assets_import_post: {
@@ -12540,6 +12729,41 @@ export interface operations {
             };
         };
     };
+    dictate_api_asr_dictate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_dictate_api_asr_dictate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_voices_api_voices_get: {
         parameters: {
             query: {
@@ -15197,6 +15421,37 @@ export interface operations {
             };
         };
     };
+    remove_comment_api_comments__comment_id__delete: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path: {
+                comment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_comment_anchor_api_comments__comment_id__patch: {
         parameters: {
             query?: never;
@@ -17670,6 +17925,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderDefaultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_agent_voice_api_settings_agent_voice_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentVoiceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_agent_voice_api_settings_agent_voice_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentVoiceUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentVoiceOut"];
                 };
             };
             /** @description Validation Error */
@@ -20218,6 +20535,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentManifestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    speak_api_agent_speech_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentSpeechRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

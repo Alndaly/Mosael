@@ -3337,6 +3337,52 @@
         }
       }
     },
+    "/api/asr/dictate": {
+      "post": {
+        "tags": [
+          "asr"
+        ],
+        "summary": "Dictate",
+        "description": "把一小段录音转成文字,**用完即弃**。\n\n输入框里的语音输入走这条:它不建任务、不入素材库 —— 用户要的是\"把我说的话填进去\",\n而不是在素材库里留下几十个几秒钟的 wav。识别本身仍是同一份实现(常驻 worker)。\n\n没有 workspace 参数:这段音频不属于任何工作区,它连库都不进。鉴权到\"是个登录用户\"为止。",
+        "operationId": "dictate_api_asr_dictate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_dictate_api_asr_dictate_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Dictate Api Asr Dictate Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/voices": {
       "get": {
         "tags": [
@@ -7349,6 +7395,48 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "collaboration"
+        ],
+        "summary": "Remove Comment",
+        "operationId": "remove_comment_api_comments__comment_id__delete",
+        "parameters": [
+          {
+            "name": "comment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Comment Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/reviews": {
@@ -10867,6 +10955,78 @@
         }
       }
     },
+    "/api/settings/agent-voice": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get Agent Voice",
+        "description": "**我**在语音对话里用哪个音色。没设过就回一份空的(enabled=False)。\n\n和 /settings/provider-defaults 的 tts 那一格是两回事:配音要质量(本地克隆、首次加载\n十几分钟也认),对话要延迟。同一个默认服务两件事,必然在某一边是错的。",
+        "operationId": "get_agent_voice_api_settings_agent_voice_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentVoiceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Set Agent Voice",
+        "description": "设**我自己**的对话音色。只有这一档 —— 没有部署默认(同 provider-defaults)。",
+        "operationId": "set_agent_voice_api_settings_agent_voice_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentVoiceUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentVoiceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings/providers/{profile_id}/pricing/prefill": {
       "post": {
         "tags": [
@@ -14112,7 +14272,7 @@
           "agent"
         ],
         "summary": "Dismiss Question",
-        "description": "不想答。模型会收到「用户跳过了」并继续往下走,而不是卡在那儿等。",
+        "description": "不想答。模型会收到「用户跳过了」并继续往下走,而不是卡在那儿等。\n\n「收到」是这里送过去的:ask_user 不阻塞,那一轮多半早就结束了,不送就真的卡在那儿。",
         "operationId": "dismiss_question_api_agent_questions__question_id__dismiss_post",
         "parameters": [
           {
@@ -14379,6 +14539,46 @@
                 "schema": {
                   "$ref": "#/components/schemas/AgentManifestOut"
                 }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/speech": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Speak",
+        "description": "念一句话,把音频**直接回给调用方**。\n\n**不建任务、不入素材库。** 对话里念出来的每一句都登记成素材的话,说十句就是十个音频\n文件 —— 而它们说完就没用了。这和配音是两件事:配音的产出要留存、要进时间线,所以它\n走 job + register_file_asset;这里的产出活到播完为止。\n\n这条路同时给三件事用:消息底部的播放、确认卡与提问的语音化、失败出声。它们共用同一个\n音色配置(settings/agent-voice),因为对用户来说那就是\"它的声音\"。\n\n没设过音色就说没设 —— 不替他挑一个(同 provider-defaults 的立场)。",
+        "operationId": "speak_api_agent_speech_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentSpeechRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -16222,6 +16422,148 @@
         ],
         "title": "AgentSkillOut"
       },
+      "AgentSpeechRequest": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "AgentSpeechRequest",
+        "description": "念一句话。**不产出素材** —— 见 routes/agent.speak。"
+      },
+      "AgentVoiceOut": {
+        "properties": {
+          "engine": {
+            "type": "string",
+            "title": "Engine",
+            "default": ""
+          },
+          "engine_voice": {
+            "type": "string",
+            "title": "Engine Voice",
+            "default": ""
+          },
+          "engine_voice_resource": {
+            "type": "string",
+            "title": "Engine Voice Resource",
+            "default": ""
+          },
+          "engine_model": {
+            "type": "string",
+            "title": "Engine Model",
+            "default": ""
+          },
+          "provider_profile_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Profile Id"
+          },
+          "voice_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Id"
+          },
+          "speed": {
+            "type": "number",
+            "title": "Speed",
+            "default": 1.0
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "AgentVoiceOut",
+        "description": "语音对话的音色。**和配音的 TTS 默认是两行配置** —— 见 db.models.AgentVoicePref。"
+      },
+      "AgentVoiceUpdate": {
+        "properties": {
+          "engine": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Engine",
+            "default": ""
+          },
+          "engine_voice": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Engine Voice",
+            "default": ""
+          },
+          "engine_voice_resource": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Engine Voice Resource",
+            "default": ""
+          },
+          "engine_model": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Engine Model",
+            "default": ""
+          },
+          "provider_profile_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Profile Id"
+          },
+          "voice_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Id"
+          },
+          "speed": {
+            "type": "number",
+            "title": "Speed",
+            "default": 1.0
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "AgentVoiceUpdate"
+      },
       "AiRuntimeConfigOut": {
         "properties": {
           "max_retries": {
@@ -17031,6 +17373,30 @@
         ],
         "title": "BoardWrite",
         "description": "让 AI 同步写入一张画板便签。"
+      },
+      "Body_dictate_api_asr_dictate_post": {
+        "properties": {
+          "clip": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "Clip"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "default": ""
+          },
+          "engine": {
+            "type": "string",
+            "title": "Engine",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "clip"
+        ],
+        "title": "Body_dictate_api_asr_dictate_post"
       },
       "Body_import_asset_api_assets_import_post": {
         "properties": {

@@ -880,6 +880,38 @@ class CapabilityModelOut(BaseModel):
     reasoning_effort: bool | None = None
 
 
+class AgentVoiceOut(BaseModel):
+    """语音对话的音色。**和配音的 TTS 默认是两行配置** —— 见 db.models.AgentVoicePref。"""
+
+    engine: str = ""
+    engine_voice: str = ""
+    engine_voice_resource: str = ""
+    engine_model: str = ""
+    provider_profile_id: str | None = None
+    voice_id: str | None = None
+    speed: float = 1.0
+    #: 没设过时是 False,而且 engine 为空 —— 界面据此提示去选一个,而不是显示一个假的默认。
+    enabled: bool = False
+
+
+class AgentVoiceUpdate(BaseModel):
+    engine: str = Field(default="", max_length=40)
+    engine_voice: str = Field(default="", max_length=120)
+    engine_voice_resource: str = Field(default="", max_length=200)
+    engine_model: str = Field(default="", max_length=120)
+    provider_profile_id: str | None = None
+    voice_id: str | None = None
+    speed: float = 1.0
+    enabled: bool = True
+
+
+class AgentSpeechRequest(BaseModel):
+    """念一句话。**不产出素材** —— 见 routes/agent.speak。"""
+
+    text: str = Field(min_length=1, max_length=4000)
+    workspace_id: str = ""
+
+
 class ProviderDefaultUpdate(BaseModel):
     provider_profile_id: str | None = None
     model: str = Field(default="", max_length=120)
