@@ -11,12 +11,10 @@
 
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Volume2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { getAgentVoice, listTtsEngines, listTtsVoices, setAgentVoice } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { SettingsGroup, SettingsRow } from "@/features/settings/ui";
@@ -69,6 +67,22 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
 
   const enabled = pref.data?.enabled ?? false;
   const ready = Boolean(engine && voice);
+
+  //: **改完即存,没有保存按钮。** 但存的时机有个条件:换引擎会把音色清空(旧音色在新引擎下
+  //: 不存在),那一瞬间的组合是「新引擎 + 空音色」—— 存下去等于存了一份用不了的配置。
+  //: 所以只在组合完整时存,而"完整"正好也是它能用的条件。
+  const savedRef = React.useRef("");
+  React.useEffect(() => {
+    if (!hydrated.current || !ready) return;
+    const shape = `${engine}|${voice}|${speed}`;
+    if (!savedRef.current) {
+      // 水合之后的第一次:记下现状,别把服务端刚给的那份再写回去。
+      savedRef.current = `${pref.data?.engine ?? ""}|${pref.data?.engine_voice ?? ""}|${pref.data?.speed ?? 1}`;
+    }
+    if (shape === savedRef.current) return;
+    savedRef.current = shape;
+    save.mutate(enabled || true);
+  }, [engine, voice, speed, ready, enabled, pref.data, save]);
 
   return (
     <SettingsGroup title={t("agentVoiceTitle")} description={t("agentVoiceDesc")}>
@@ -138,13 +152,6 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
           </SelectContent>
         </Select>
       </SettingsRow>
-      {/* 显式的保存:引擎、音色、语速是一组要一起生效的选择,逐项即存会在中间态发出
-          "这个引擎 + 那个引擎的音色"这种组合。 */}
-      <div className="flex justify-end px-1 pb-1 !border-t-0">
-        <Button size="sm" disabled={!ready} loading={save.isPending} onClick={() => save.mutate(enabled || ready)}>
-          <Volume2 size={13} /> {t("agentVoiceSave")}
-        </Button>
-      </div>
     </SettingsGroup>
   );
 }

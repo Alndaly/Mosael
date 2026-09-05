@@ -18,8 +18,8 @@ import { toast } from "sonner";
 
 import { API_BASE, getAuthToken } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { Button } from "@/components/ui/button";
 import { playSpeech, stopSpeaking } from "@/components/agent/speechPlayback";
+import { FOOTER_ACTION_CLASS } from "@/features/ai-studio/messageUsage";
 import { cn } from "@/lib/utils";
 
 export function SpeakButton({
@@ -78,22 +78,24 @@ export function SpeakButton({
   const busy = state === "loading";
   const active = state === "playing";
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      className={cn("size-6 rounded-md text-muted-foreground hover:text-foreground", className)}
+    // 和「复制」同一套外形(FOOTER_ACTION_CLASS):图标 11px、带文字、同样的圆角与内边距。
+    // 并排的两个动作长得不一样时,读起来像两个不同来处的东西。
+    <button
+      type="button"
+      className={cn(FOOTER_ACTION_CLASS, className)}
       aria-label={active ? t("speakStop") : t("speak")}
       title={active ? t("speakStop") : t("speak")}
       disabled={busy || !text.trim()}
       onClick={() => (active ? stopSpeaking() : void play())}
     >
       {busy ? (
-        <Loader2 size={13} className="animate-mosael-spin" />
+        <Loader2 size={11} className="animate-mosael-spin" />
       ) : active ? (
         <Square size={11} className="fill-current" />
       ) : (
-        <Volume2 size={13} />
+        <Volume2 size={11} />
       )}
-    </Button>
+      {active ? t("speakStopLabel") : t("speakLabel")}
+    </button>
   );
 }
