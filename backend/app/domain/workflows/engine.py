@@ -76,7 +76,8 @@ def start_workflow_job(
     # external 也照样在进程内跑),二是线程没有 JOB_THREAD_NAME,`wait_for_idle_jobs()` 按名字
     # 找不到它 —— 测试里 fresh_client() 就会在一个还活着的工作流线程底下 drop_all,炸成
     # 「no such table: task_events」,而且记在当时恰好在跑的那条**无关**用例头上。
-    # (那正是 jobs.py 里 JOB_THREAD_NAME 的注释所断言的不变量:派发点只有一处。)
+    # (那正是 jobs.py 里 JOB_THREAD_NAME 的注释所断言的不变量:派发点只有一处 ——
+    # 由 tests/test_jobs_are_dispatched_by_the_bus.py 守着。)
     dispatch_job(db, job, lambda: _run_workflow_thread(workflow.id, revision.id, job.id, params or {}))
     return job
 

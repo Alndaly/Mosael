@@ -138,11 +138,16 @@ def _import_stream(
     name: str | None,
     source: str = "imported",
 ) -> Asset:
-    """入库的**唯一实现**:落盘 → 探测 → 缩略图/波形 → 建记录 → 起 proxy。
+    """**有字节的素材**入库的唯一实现:落盘 → 探测 → 缩略图/波形 → 建记录 → 起 proxy。
 
     三个入口(浏览器上传、本机路径注册、渲染/配音/生成产出的文件)只在「字节从哪来」和
     source 标签上不同,后面的步骤完全一样。曾经上传走一份、按路径注册走另一份逐行重复的副本,
     改探测逻辑要记得改两处 —— 现在只有这一处。
+
+    **但它不是 Asset 行的唯一来源。** `POST /api/assets`(`routes/assets.py:create_asset`)直接
+    `Asset(**body)` 建行,底下没有文件,也就没有探测、缩略图、波形和 proxy。全仓只有测试在调它
+    (前端、智能体、扩展都不用),它同时也是数据归属棘轮那 11 处豁免之一。要么让它走这里,
+    要么删掉 —— 在那之前,这句话得说全,否则下一个人会以为拿到 Asset 就一定有这些派生物。
     """
     asset_id = new_id()
     target_dir = asset_dir(workspace_id, asset_id)

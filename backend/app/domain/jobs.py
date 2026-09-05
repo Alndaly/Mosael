@@ -295,6 +295,8 @@ def external_kinds() -> tuple[str, ...]:
 
 
 #: 每个在进程内跑的 job 线程都叫这个名字 —— 派发点只有 dispatch_job 一处,所以名字必然覆盖全部。
+#: 这句话曾经有 4 个反例(workflow / proxy / video_to_gif / trim 各自裸起线程),现在由
+#: tests/test_jobs_are_dispatched_by_the_bus.py 守着 —— 措辞守不住不变量,会红的检查才行。
 #: 见 `wait_for_idle_jobs` 及它在 tests/util.fresh_client 里的用处。
 JOB_THREAD_NAME = "job-run"
 
