@@ -5,7 +5,6 @@
 """
 from __future__ import annotations
 
-import json
 import logging
 import threading
 import tempfile
@@ -14,7 +13,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.ai.runtime import asr_models
+from app.ai.runtime import asr_daemon, asr_models
 from app.core.config import settings
 from app.core.text import blame_line
 from app.core.db import SessionLocal
@@ -28,11 +27,6 @@ from app.core.child_process import run_logged
 
 logger = logging.getLogger(__name__)
 
-# worker 住在 ai/runtime(它是"在这台机器上跑模型"的那一层),这个文件是领域流程 —— 不同目录。
-# **从 runtime 那边取,而不是在这里拼路径**:那个模块自己知道 worker 在哪,而打包检查
-# (test_frozen_build_is_not_a_python_interpreter)也是顺着 `__file__.with_name` 去发现
-# "哪些脚本要被当文件打开"的 —— 在这里另拼一份,它就会去找一个不存在的路径。
-WORKER_PATH = asr_models.WORKER_PATH
 ASR_TIMEOUT_SECONDS = 3600
 
 
@@ -125,31 +119,30 @@ FUNASR_MODEL = "iic/SenseVoiceSmall"
 
 
 def _invoke_asr_worker(audio_path: Path, python_executable: str, request: dict[str, Any]) -> dict:
-    # Results travel via a file: funasr and hub downloads write progress bars
-    # straight to stdout, which would corrupt an inline JSON pipe.
-    output_path = audio_path.with_name("asr-result.json")
-    result = run_logged(
-        [python_executable, str(WORKER_PATH), str(output_path)],
-        input=json.dumps(request),
-        capture_output=True,
-        text=True,
-        timeout=ASR_TIMEOUT_SECONDS,
-        what="转写 worker",
-    )
-    if result.returncode != 0:
-        engine_id = str(request.get("provider") or "unknown")
-        raise ASRError(
-            f"转写失败({engine_id}):{blame_line(result.stderr, fallback='子进程没有留下原因')}"
-        )
+    """把一次识别交给常驻 worker。
+
+    **常驻的理由是不要每次都重读一遍模型** —— 见 ai/runtime/asr_daemon。此前这里每次识别
+    起一个新进程,权重跟着进程一起生一起灭:一段十秒的音频,绝大部分时间花在加载上。
+
+    结果不再走临时文件。那个做法是为了绕开 stdout 上的进度条噪声,而哨兵前缀把同一个问题
+    解得更直接(见 workers/asr_protocol);文件那条路也带不了进度,常驻之后更是每次请求都得
+    另约一个路径。
+
+    引擎按 `provider` 分池:一个进程只抱一套权重,funasr 和 whisperx 不会挤在一起。
+    """
+    engine_id = str(request.get("provider") or "funasr")
     try:
-        return json.loads(output_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        # **这一处回显原文,不挑行**:读不出 JSON 时想看的就是"它到底吐了什么",而
-        # blame_line 挑的是"哪一行像错误" —— 一段截断的 JSON 里一行都不像,反倒会说成
-        # 「输出是空的」,而它并不空。和插件那处同一个判断(见 plugins/runtime)。
-        # worker 真打了 traceback 时,异常行本来就在这段原文的末尾。
-        raw = (result.stdout or "").strip()
-        raise ASRError(f"转写输出无法解析:{raw[-300:] if raw else '子进程什么都没输出'}") from exc
+        event = asr_daemon.pool().request(
+            engine_id,
+            python_executable,
+            request,
+            timeout=ASR_TIMEOUT_SECONDS,
+        )
+    except RuntimeError as exc:
+        # 常驻进程把失败**报回来**而不是退出,所以这里拿到的就是它自己的那句话;进程真死了
+        # (加载时被 OOM 杀掉之类)由池子转成一句明确的错误,不会变成"一直没有回音"。
+        raise ASRError(f"转写失败({engine_id}):{exc}") from exc
+    return {"language": event.get("language", ""), "segments": event.get("segments") or []}
 
 
 def parse_transcript_segments(segments: list[dict]) -> list[SegmentIn]:

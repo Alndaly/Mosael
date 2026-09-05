@@ -17,10 +17,21 @@ Errors exit non-zero with the message on stderr.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
+import threading
+import time
+import traceback
 import unicodedata
 from typing import Any
+
+if __package__:
+    from .asr_protocol import encode_event_line
+else:
+    # Executed directly by the ASR interpreter; its sys.path only contains this
+    # directory, not the application package.
+    from asr_protocol import encode_event_line
 
 
 def _sec(value: Any) -> float:
@@ -248,14 +259,64 @@ def warmup_whisperx(request: dict[str, Any]) -> dict[str, Any]:
     return {"ok": True}
 
 
-def main() -> None:
-    request = json.loads(sys.stdin.read())
+def _emit(payload: dict[str, Any]) -> None:
+    sys.stdout.write(encode_event_line(payload))
+    sys.stdout.flush()
+
+
+def _watch_parent(parent_pid: int) -> None:
+    """宿主没了就跟着退。
+
+    常驻进程最坏的下场是变成孤儿:后端重启了,它还抱着几个 GB 的权重躺在那儿,而没有任何
+    东西会去收它 —— 用户只会发现内存莫名其妙少了一块。
+    """
+    while True:
+        time.sleep(5)
+        try:
+            os.kill(parent_pid, 0)
+        except OSError:
+            os._exit(0)
+
+
+def execute_request(request: dict[str, Any]) -> dict[str, Any]:
     provider = (request.get("provider") or "funasr").strip().lower()
     action = (request.get("action") or "transcribe").strip().lower()
     if action == "warmup":
-        output = warmup_funasr(request) if provider == "funasr" else warmup_whisperx(request)
-    else:
-        output = run_funasr(request) if provider == "funasr" else run_whisperx(request)
+        return warmup_funasr(request) if provider == "funasr" else warmup_whisperx(request)
+    return run_funasr(request) if provider == "funasr" else run_whisperx(request)
+
+
+def serve() -> None:
+    """按行收请求,权重留在内存里。
+
+    常驻模式存在的全部理由就是**不要每次识别都重读一遍模型**:一次性模式下,一段十秒的
+    音频里绝大部分时间花在加载上,而上一次识别刚把同一个模型读进内存、进程一退就全扔了。
+    """
+    threading.Thread(target=_watch_parent, args=(os.getppid(),), daemon=True).start()
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            output = execute_request(json.loads(line))
+            _emit({
+                "event": "done",
+                "language": str(output.get("language") or ""),
+                "segments": output.get("segments") or [],
+            })
+        except Exception as exc:  # noqa: BLE001 — 常驻进程要**活下去**,把失败报回去就行
+            traceback.print_exc(file=sys.stderr)
+            _emit({"event": "error", "message": f"{type(exc).__name__}: {exc}"})
+
+
+def main() -> None:
+    # 一次性模式仍然在:预热/下载走它 —— 那是一次性的长任务,结果写文件、进度靠盘上字节数
+    # 去看(见 ai/runtime/asr_models),不需要也不该占着一个常驻进程。
+    if "--serve" in sys.argv[1:]:
+        serve()
+        return
+    request = json.loads(sys.stdin.read())
+    output = execute_request(request)
     with open(sys.argv[1], "w", encoding="utf-8") as handle:
         json.dump(output, handle, ensure_ascii=False)
 
