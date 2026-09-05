@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner";
 
 import { AttachmentChips, textAttachmentBlock, useComposerAttachments } from "@/components/agent/composerAttachments";
+import { DictateButton } from "@/components/agent/DictateButton";
 
 import { API_BASE, api, getAuthToken, importAsset, type Asset } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -604,6 +605,13 @@ export function CanvasAgentChat({
             >
               <Paperclip size={15} />
             </Button>
+            {/* 说话输入紧挨着附件:两者都是"往输入框里放东西",而模型选择是"怎么处理它"。 */}
+            <DictateButton
+              onText={(text) =>
+                // **追加**,不覆盖 —— 他可能先打了半句再改用说的。
+                setDraft((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text))
+              }
+            />
             <ModelPicker workspaceId={workspaceId} session={activeSession} />
             {/* 与 AI Studio 用同一个组件:此前两边各写各的工具行,同一个功能的位置、顺序、
                 有无都不一致。工作流助手不做素材分析,那一项在这里是死的,关掉。 */}

@@ -17,6 +17,7 @@ import { SessionList } from "@/features/ai-studio/SessionList";
 import { UserMessageContent, attachmentToken, chatMediaGallery } from "@/features/ai-studio/userMessage";
 import { MessageUsageFooter, type AgentUsageEvent } from "@/features/ai-studio/messageUsage";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { DictateButton } from "@/components/agent/DictateButton";
 import { ModelPicker } from "@/features/ai-studio/ModelPicker";
 import { SessionSettingsMenu } from "@/components/agent/SessionSettingsMenu";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
@@ -619,6 +620,12 @@ export function ChatWorkspace({
                       {attach.uploading ? <Loader2 size={14} className="animate-mosael-spin" /> : <Paperclip size={14} />}
                     </label>
                   </Button>
+                  {/* 和工作区助手共用同一个组件:两边各写一份的话,位置、顺序、有无迟早不一致。 */}
+                  <DictateButton
+                    onText={(text) =>
+                      setDraft((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text))
+                    }
+                  />
                   <ModelPicker workspaceId={workspace.id} session={session.data ?? null} />
                   {/* 分析方式、思考档位、上下文整理收进这里 —— 它们是"配好就不再动"的东西,
                       和每次都要用的模式/附件/模型平铺在一起只会稀释后者。 */}
