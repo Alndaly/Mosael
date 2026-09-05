@@ -880,6 +880,12 @@ class CapabilityModelOut(BaseModel):
     reasoning_effort: bool | None = None
 
 
+class PluginOAuthCode(BaseModel):
+    """对方显示出来、由用户贴回来的授权码。"""
+
+    code: str = Field(min_length=1, max_length=2000)
+
+
 class AgentVoiceOut(BaseModel):
     """语音对话的音色。**和配音的 TTS 默认是两行配置** —— 见 db.models.AgentVoicePref。"""
 

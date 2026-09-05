@@ -11,6 +11,7 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
+    PluginOAuthCode,
     PluginCapabilityUpdate,
     PluginCredentialOut,
     PluginCredentialUpdate,
@@ -407,3 +408,59 @@ def uninstall_package(package_id: str, db: DbSession, user: CurrentUser) -> None
         pkg.uninstall(db, package_id, settings.plugins_dir)
     except PluginDomainError as exc:
         raise _fail(exc, 404) from exc
+
+
+@router.get("/plugins/instances/{instance_id}/oauth")
+def plugin_oauth_start(instance_id: str, db: DbSession, user: CurrentUser) -> dict[str, str]:
+    """拿授权链接。**只是拼一个 URL**,这一步不碰网络也不写任何东西。
+
+    用户点开它、在对方站点上登录并同意,然后把授权码贴回来(见下面的 complete)。
+    多这一次粘贴,换来的是这条通路上没有任何可伪造的输入 —— 详见 domain/plugins/oauth
+    里那段"为什么不用 mosael:// 接回调"。
+    """
+    from app.domain.plugins import oauth as plugin_oauth
+
+    instance = my_instance(db, instance_id, user)
+    manifest = inst.manifest_for(db, instance)
+    try:
+        spec = plugin_oauth.spec_of(manifest)
+        url = plugin_oauth.authorize_url(spec, inst.credential_values(db, instance.id))
+    except plugin_oauth.PluginOAuthError as exc:
+        # 422:是"还差点什么"(没声明 oauth、没填 AppKey),不是服务端故障。
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"authorize_url": url, "redirect_uri": spec.redirect_uri}
+
+
+@router.post("/plugins/instances/{instance_id}/oauth", response_model=list[PluginCredentialOut])
+def plugin_oauth_complete(
+    instance_id: str, body: PluginOAuthCode, db: DbSession, user: CurrentUser
+) -> list[dict]:
+    """拿授权码换令牌,写回插件声明的那几个凭据键。
+
+    **只写对方真的回了的字段**(见 credentials_from_token):刷新时常常只回 access_token,
+    把缺失当空串写回去会抹掉已有的 refresh_token —— 而那一份丢了要重新走一遍授权。
+    """
+    from app.core import http_retry
+    from app.domain.plugins import oauth as plugin_oauth
+
+    instance = my_instance(db, instance_id, user)
+    manifest = inst.manifest_for(db, instance)
+    try:
+        spec = plugin_oauth.spec_of(manifest)
+        stored = inst.credential_values(db, instance.id)
+        payload = plugin_oauth.token_request(spec, stored, body.code)
+        # 走统一的重试传输层:令牌端点一样会限流,而"刚授权完就失败"最让人摸不着头脑。
+        with http_retry.RetryingClient(timeout=30) as client:
+            response = client.post(spec.token_url, data=payload)
+        response.raise_for_status()
+        values = plugin_oauth.credentials_from_token(spec, response.json())
+    except plugin_oauth.PluginOAuthError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 — 换令牌失败是结果,不是服务端故障
+        raise HTTPException(status_code=422, detail=f"换令牌失败:{str(exc)[:200]}") from exc
+    inst.set_credentials(db, instance, values)
+    try:
+        tools_domain.refresh_tools(db, instance)
+    except PluginDomainError:
+        pass
+    return inst.describe_credentials(db, instance)

@@ -86,6 +86,36 @@ class Runtime:
 
 
 @dataclass(frozen=True)
+class OAuthSpec:
+    """插件自己去走一次 OAuth,而不是让用户手抄 refresh_token。
+
+    **这些字段是插件作者声明的,不是我们猜的。** 每家的授权端点、参数名、返回体都不一样,
+    而我们既不认识百度网盘也不认识下一个 —— 作者知道,所以由清单说。
+
+    `client_id_field` / `client_secret_field` 指向**已有的凭据键**:AppKey 和 SecretKey 本来
+    就要用户去开放平台注册,那一步替代不了。能替代的是后面那一段 —— 拼授权链接、拿 code
+    换 token、把 token 存回哪几个键,这些是纯机械的,却正是最容易抄错的部分。
+
+    `stores` 把令牌响应里的字段映射到凭据键(`{"refresh_token": "REFRESH_TOKEN"}`):
+    响应里叫什么由对方定,存进哪个键由插件定,两边都不该由我们写死。
+    """
+
+    authorize_url: str = ""
+    token_url: str = ""
+    client_id_field: str = ""
+    client_secret_field: str = ""
+    scope: str = ""
+    #: 重定向地址。`oob` = 对方把授权码显示出来让人贴回来(百度网盘等支持)。
+    redirect_uri: str = "oob"
+    #: 令牌响应字段 → 凭据键。
+    stores: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def usable(self) -> bool:
+        return bool(self.authorize_url and self.token_url and self.client_id_field and self.stores)
+
+
+@dataclass(frozen=True)
 class ToolOverride:
     label: str = ""
     description: str = ""
@@ -117,6 +147,8 @@ class Manifest:
     #: 插件**自己的**文档/主页。界面上给一个「文档」链接 —— 一个插件带来几十个工具、一串权限
     #: 和一套要去某个后台申请的凭据,而这些怎么用只有作者说得清;我们能做的是把人送到那儿。
     homepage: str = ""
+    #: 声明了就能在设置页点「去授权」,不必手抄令牌(见 domain/plugins/oauth)。
+    oauth: OAuthSpec | None = None
 
     @property
     def is_mcp(self) -> bool:
@@ -261,7 +293,28 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
         overrides=overrides,
         declared_tools=declared,
         homepage=web_url(raw.get("homepage")),
+        oauth=_oauth(raw.get("oauth")),
     )
+
+
+def _oauth(raw: object) -> OAuthSpec | None:
+    """解析 oauth 块。**声明不全就当没声明** —— 半个声明会让界面长出一个点了必然失败的按钮。"""
+    if not isinstance(raw, dict):
+        return None
+    spec = OAuthSpec(
+        authorize_url=web_url(raw.get("authorize_url")),
+        token_url=web_url(raw.get("token_url")),
+        client_id_field=text_of(raw.get("client_id_field")).strip(),
+        client_secret_field=text_of(raw.get("client_secret_field")).strip(),
+        scope=text_of(raw.get("scope")).strip(),
+        redirect_uri=text_of(raw.get("redirect_uri")).strip() or "oob",
+        stores={
+            str(key): str(value)
+            for key, value in (raw.get("stores") or {}).items()
+            if isinstance(key, str) and isinstance(value, str) and key and value
+        },
+    )
+    return spec if spec.usable else None
 
 
 #: 清单里插件目录的绝对路径。下划线开头 = 运行时注入,不是作者写的。
