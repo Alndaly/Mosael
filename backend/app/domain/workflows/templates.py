@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from app.db.models import ProviderModel
+from app.db.models import ProviderModel, Voice
 from app.domain.generation.catalog import known_capabilities_for
 from app.domain.provider_defaults import get_row
 from app.domain.provider_models import effective_capabilities
@@ -149,13 +149,17 @@ def _video_plan(choice: ModelChoice) -> VideoPlan:
     )
 
 
-def built_in_template_graph(db: Session, template_id: str, *, user_id: str) -> dict[str, Any]:
+def built_in_template_graph(
+    db: Session, template_id: str, *, user_id: str, workspace_id: str = ""
+) -> dict[str, Any]:
     chat = _default_model(db, "chat", user_id)
     if template_id == FULL_VIDEO_GENERATION:
         return full_video_generation_graph(
             chat=chat,
             # 这条工作流只给提示词,所以要的是**能文生视频**的那种,不是"video 的默认模型"。
             video=_text_to_video_model(db, user_id),
+            # 音色是工作区的(克隆音色存在工作区名下),所以按工作区取,不按人。
+            voice_id=_first_voice_id(db, workspace_id),
         )
     if template_id == TRANSCRIPT_VIDEO_CLEANUP:
         return transcript_video_cleanup_graph(chat=chat)
@@ -467,7 +471,21 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
     return canonicalize_data_bindings(graph, node_types=NODE_TYPES)
 
 
-def full_video_generation_graph(*, chat: ModelChoice, video: ModelChoice) -> dict[str, Any]:
+def _first_voice_id(db: Session, workspace_id: str) -> str:
+    """工作区里第一个可用音色,没有就空串。
+
+    模板不可能替用户猜一个音色,而 synthesize_speech 的 voice_id 是必填的。有就预填、
+    没有就留空并整段跳过 —— 得到的是一部默片,而不是一个跑到第一镜就失败的工作流。
+    """
+    if not workspace_id:
+        return ""
+    voice = db.scalars(
+        select(Voice).where(Voice.workspace_id == workspace_id).order_by(Voice.created_at)
+    ).first()
+    return voice.id if voice else ""
+
+
+def full_video_generation_graph(*, chat: ModelChoice, video: ModelChoice, voice_id: str = "") -> dict[str, Any]:
     """主题 → 主旨 → 并行脚本/视觉开发 → 时间分镜 → 逐镜生成合成 → 导出。"""
 
     video_plan = _video_plan(video)
@@ -538,8 +556,56 @@ JSON Schema 的对象。"""
         "edges": [
             {"id": "shot_generate_organize", "source": "generate_clip", "target": "organize_clip"},
             {"id": "shot_organize_append", "source": "organize_clip", "target": "append_clip"},
+            {"id": "shot_append_voice_gate", "source": "append_clip", "target": "has_voice"},
+            {"id": "shot_voice_gate_narration", "source": "has_voice", "target": "has_narration", "branch": "true"},
+            {"id": "shot_narration_speak", "source": "has_narration", "target": "narrate", "branch": "true"},
+            {"id": "shot_speak_append", "source": "narrate", "target": "append_narration"},
         ],
     }
+    # 分镜给每镜写了 narration,而此前**没有任何一个节点用它** —— 成片是默哑的。口播是
+    # 这条工作流叙事的一半(创意简报、脚本、分镜都在为它服务),生成完却只接了画面。
+    #
+    # 两道闸,因为两件事都可能缺:
+    # · 没选音色 —— voice_id 是 synthesize_speech 的必填项,而模板不可能替用户猜一个。
+    #   空着就整段跳过:得到的是和今天一样的默片,而不是一个跑到一半失败的工作流。
+    # · 这一镜没有口播 —— 分镜的 schema 明说"无则写空字符串",纯画面镜头是正常的。
+    #   空文本交给合成会失败,而那一镜失败会拖垮整轮循环。
+    shot_body["nodes"].extend([
+        {
+            "id": "has_voice",
+            "type": "condition",
+            "name": "选了配音音色吗",
+            "position": {"x": 80, "y": 300},
+            "config": {"left": "{{input.voice_id}}", "op": "not_empty"},
+        },
+        {
+            "id": "has_narration",
+            "type": "condition",
+            "name": "这一镜有口播吗",
+            "position": {"x": 390, "y": 300},
+            "config": {"left": "{{loop.item.narration}}", "op": "not_empty"},
+        },
+        {
+            "id": "narrate",
+            "type": "synthesize_speech",
+            "name": "合成该镜口播",
+            "position": {"x": 700, "y": 300},
+            "config": {"voice_id": "{{input.voice_id}}", "text": "{{loop.item.narration}}"},
+        },
+        {
+            "id": "append_narration",
+            "type": "timeline_append",
+            "name": "把口播接到音轨",
+            "position": {"x": 1010, "y": 300},
+            "config": {
+                "sequence_id": "{{input.sequence_id}}",
+                "asset_id": "{{narrate.asset_id}}",
+                "track_id": "{{input.audio_track_id}}",
+                # 不写 start/end:音频按自己的实际长度接在音轨末尾。画面是每镜定长的,
+                # 口播不是 —— 硬裁到 clip_seconds 会把话切掉半句。
+            },
+        },
+    ])
 
     nodes: list[dict[str, Any]] = [
         {
@@ -559,6 +625,10 @@ JSON Schema 的对象。"""
                     "width": video_plan.width,
                     "height": video_plan.height,
                     "fps": 30,
+                    # 配音音色。**留空 = 不配音**(成片只有画面),而不是跑到一半失败 ——
+                    # 见循环体里那两道闸。工作区里已经有音色时预填第一个,省掉"我明明有音色
+                    # 却还要去别处把 id 抄过来"这一步。
+                    "voice_id": voice_id,
                 }
             },
         },
@@ -690,6 +760,8 @@ JSON Schema 的对象。"""
                     "project_id": "{{video_project.project_id}}",
                     "sequence_id": "{{video_project.sequence_id}}",
                     "video_track_id": "{{video_project.video_track_id}}",
+                    "audio_track_id": "{{video_project.audio_track_id}}",
+                    "voice_id": "{{start.voice_id}}",
                     "aspect_ratio": "{{start.aspect_ratio}}",
                     "resolution": "{{start.resolution}}",
                 },

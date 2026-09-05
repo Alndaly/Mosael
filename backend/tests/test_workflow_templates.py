@@ -255,3 +255,72 @@ class Test挑模型走真实的库:
             self._model(db, "u1", "alibaba", "wan2.7-i2v")
             db.commit()
             assert _text_to_video_model(db, "u1").model == ""
+
+
+class Test分镜写了口播就要真的配上:
+    """分镜的 schema 给每镜留了 narration,创意简报、脚本、分镜三步都在为它服务 ——
+    而此前**没有任何一个节点用它**,成片是默哑的。写了却不用,比不写更容易让人以为是坏了。
+    """
+
+    def _body(self, voice_id: str = "v1") -> dict[str, Any]:
+        graph = full_video_generation_graph(
+            chat=ModelChoice(provider="p", model="c"),
+            video=ModelChoice(provider="minimax", model="MiniMax-H3"),
+            voice_id=voice_id,
+        )
+        loop = next(n for n in graph["nodes"] if n["id"] == "generate_and_assemble")
+        return graph, loop["config"]
+
+    def test_口播被合成并接进音轨(self) -> None:
+        _, loop = self._body()
+        nodes = {n["id"]: n for n in loop["body"]["nodes"]}
+
+        assert nodes["narrate"]["type"] == "synthesize_speech"
+        assert nodes["narrate"]["config"]["text"] == "{{loop.item.narration}}"
+        # 接的是**音轨**,不是画面那条 —— 接错轨道的话口播会把画面顶掉。
+        assert nodes["append_narration"]["config"]["track_id"] == "{{input.audio_track_id}}"
+        assert loop["inputs"]["audio_track_id"] == "{{video_project.audio_track_id}}"
+        # 指向别的节点的引用会被规范化成一条**有类型的数据边**,配置里留空
+        # (见 normalization.canonicalize_data_bindings)—— 所以断言那条边,不是那个字符串。
+        assert any(
+            e.get("kind") == "data"
+            and e["source"] == "narrate"
+            and e["target"] == "append_narration"
+            and e.get("source_output") == "asset_id"
+            and e.get("target_input") == "asset_id"
+            for e in loop["body"]["edges"]
+        )
+
+    def test_口播不按镜头定长裁(self) -> None:
+        """画面每镜定长,口播不是。硬裁到 clip_seconds 会把话切掉半句。"""
+        _, loop = self._body()
+        nodes = {n["id"]: n for n in loop["body"]["nodes"]}
+        assert "end" not in nodes["append_narration"]["config"]
+
+    def test_没选音色时整段跳过而不是失败(self) -> None:
+        """voice_id 是 synthesize_speech 的必填项,模板不可能替用户猜一个。空着要得到
+        一部默片,而不是一个跑到第一镜就失败的工作流。"""
+        _, loop = self._body(voice_id="")
+        nodes = {n["id"]: n for n in loop["body"]["nodes"]}
+        gate = nodes["has_voice"]
+        assert gate["type"] == "condition"
+        assert gate["config"] == {"left": "{{input.voice_id}}", "op": "not_empty"}
+        # 合成只挂在 true 分支上。
+        to_narration = [e for e in loop["body"]["edges"] if e["source"] == "has_voice"]
+        assert all(e.get("branch") == "true" for e in to_narration)
+
+    def test_这一镜没口播也跳过(self) -> None:
+        """分镜 schema 明说"无则写空字符串" —— 纯画面镜头是正常的,而空文本交给合成会失败,
+        那一镜失败会拖垮整轮循环。"""
+        _, loop = self._body()
+        nodes = {n["id"]: n for n in loop["body"]["nodes"]}
+        assert nodes["has_narration"]["config"] == {"left": "{{loop.item.narration}}", "op": "not_empty"}
+        edges = [e for e in loop["body"]["edges"] if e["source"] == "has_narration"]
+        assert all(e.get("branch") == "true" for e in edges)
+
+    def test_口播链路不影响画面(self) -> None:
+        """加配音不该动到已经能用的那半边。"""
+        _, loop = self._body()
+        nodes = {n["id"]: n for n in loop["body"]["nodes"]}
+        assert nodes["append_clip"]["config"]["track_id"] == "{{input.video_track_id}}"
+        assert loop["output"] == "{{generate_clip.asset_id}}"

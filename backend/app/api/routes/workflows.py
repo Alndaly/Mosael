@@ -139,7 +139,7 @@ def create(body: WorkflowCreate, db: DbSession, user: CurrentUser) -> Workflow:
         if body.template_id:
             if graph is not None:
                 raise WorkflowDomainError("创建工作流时不能同时提交模板和自定义图")
-            graph = built_in_template_graph(db, body.template_id, user_id=user.id)
+            graph = built_in_template_graph(db, body.template_id, user_id=user.id, workspace_id=body.workspace_id)
         return create_workflow(
             db,
             workspace_id=body.workspace_id,
