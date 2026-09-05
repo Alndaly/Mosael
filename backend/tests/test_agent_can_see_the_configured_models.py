@@ -161,3 +161,23 @@ def test_它作为只读工具送达各运行时() -> None:
         spec = next(s for s in tool_manifest.agent_tool_specs(db, user_id) if s.name == "list_provider_models")
     assert spec.confirmation is False
     assert spec.read_only is True
+
+
+def test_描述里名出全部合法能力() -> None:
+    """参数的合法取值要写在**模型看得到的地方**,不能只在回包里。
+
+    真机上撞过:模型要查 LLM,写了 `capability="text"` —— 这套词汇里它叫 `chat`,而当时描述只写
+    「filters to one of the returned capabilities」,那份清单要等回包才看得到。于是白跑一轮,
+    用户的轨迹里留下一个红色的「失败」,而工具本身是好的。
+
+    `surface` 当时把四个取值都写进了描述,`capability` 没有 —— 这条测试钉的就是这个不对称,
+    并且防止后端加一种能力之后描述开始说谎(那正是被它自己的枚举挡下来的那类错误)。
+    """
+    import asyncio
+
+    from app.domain.provider_defaults import DEFAULTABLE_CAPABILITIES
+
+    tools = {tool.name: tool for tool in asyncio.run(mcp_server.mcp.list_tools())}
+    description = tools["list_provider_models"].description or ""
+    missing = [one for one in DEFAULTABLE_CAPABILITIES if one not in description]
+    assert not missing, f"这些能力没有写进工具描述,模型只能靠猜:{missing}"
