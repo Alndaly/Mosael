@@ -52,7 +52,8 @@ def _compact_timed_text(segments: list[dict[str, Any]]) -> str:
 def transcribe_asset(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     from app.domain.voices.transcription import start_transcription
 
-    asset_id = str(config.get("asset_id", ""))
+    # 收进工作区:转写结果会**返回到工作流输出里**,不挡等于让别的工作区的内容流出来。
+    asset_id = _asset_in(db, workflow, str(config.get("asset_id", "")).strip()).id
     child = start_transcription(
         db,
         asset_id,
@@ -97,7 +98,10 @@ def transcribe_asset(db: Session, workflow: Workflow, config: dict[str, Any]) ->
 def export_sequence(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
     from app.domain.render import start_export
 
-    child = start_export(db, str(config.get("sequence_id", "")), created_by=current_actor(db))
+    # start_export 会把渲染任务建在**序列所属的那个工作区**(workspace_id=sequence.workspace_id),
+    # 所以不挡的话,A 工作区的工作流能在 B 工作区里起一个渲染任务并拿到产出的 asset_id。
+    sequence = _sequence_in(db, workflow, str(config.get("sequence_id", "")).strip())
+    child = start_export(db, sequence.id, created_by=current_actor(db))
     final = wait_for_job(child.id)
     asset_id = str((final.result or {}).get("asset_id", ""))
     return {"asset_id": asset_id}
@@ -242,9 +246,14 @@ def edit_timeline(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
     """
     from app.domain.sequences.operations import apply_edit_operations
 
-    sequence_id = str(config.get("sequence_id", "")).strip()
-    if not sequence_id:
-        raise WorkflowDomainError("时间线节点缺少 sequence_id")
+    # **过 _sequence_in,和这一族的其它节点一样。** 此前这里只判了非空就把 id 交下去,而
+    # apply_edit_operations 没有工作区的概念 —— 于是 A 工作区的工作流能改 B 工作区的时间线。
+    # sequence_id 常常来自上游节点,而上游拿得到任何地方的 id。
+    #
+    # 智能体走同一个算子却不受影响:它在确认卡**建立时**就查过归属(见 agent/confirmations
+    # 的 _validate_payload)。漏的只有这一条路。
+    sequence = _sequence_in(db, workflow, str(config.get("sequence_id", "")).strip())
+    sequence_id = sequence.id
     operations = config.get("operations")
     if isinstance(operations, str):
         # 上游节点常常给一段 JSON 文本(比如 code 节点算出来的),接住它省得再加一个解析节点。
@@ -309,6 +318,20 @@ def inspect_sequence(db: Session, workflow: Workflow, config: dict[str, Any]) ->
         "video_track_id": first("video"),
         "audio_track_id": first("audio"),
     }
+
+
+def _asset_in(db: Session, workflow: Workflow, asset_id: str) -> Asset:
+    """取这份素材,并确认它属于本工作流所在的工作区。和 _sequence_in 成对。
+
+    asset_id 同样常常来自上游节点。少了这一条,A 工作区的工作流能转写 B 工作区的素材
+    ——而转写结果是**要返回到工作流输出里**的,那是把别人的内容读出来。
+    """
+    if not asset_id:
+        raise WorkflowDomainError("缺少 asset_id")
+    asset = db.get(Asset, asset_id)
+    if asset is None or asset.workspace_id != workflow.workspace_id:
+        raise WorkflowDomainError("素材不在这个工作区里")
+    return asset
 
 
 def _sequence_in(db: Session, workflow: Workflow, sequence_id: str) -> Sequence:
