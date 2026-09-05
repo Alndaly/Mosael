@@ -1,4 +1,5 @@
 import React from "react";
+import { carriedByFrame } from "@/features/boards/frameCarry";
 import {
   Background,
   BackgroundVariant,
@@ -422,16 +423,20 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       const right = left + (node.width ?? DEFAULT_SIZE.frame.width);
       const bottom = top + (node.height ?? DEFAULT_SIZE.frame.height);
       dragFrom.current = { ...node.position };
-      carried.current = nodes
-        .filter((one) => one.id !== node.id && one.type !== "frame")
-        //: 按**中心**判在不在框里,不是按有没有碰到 —— 压着边线的那一项,用碰撞判会
-        //: 跟着走,而它看起来明明在框外。
-        .filter((one) => {
-          const cx = one.position.x + (one.width ?? 0) / 2;
-          const cy = one.position.y + (one.height ?? 0) / 2;
-          return cx >= left && cx <= right && cy >= top && cy <= bottom;
-        })
-        .map((one) => ({ id: one.id, from: { ...one.position } }));
+      //: 判定规则在 frameCarry.ts —— 它是一条规则不是渲染,而它出过一个只有嵌套时
+      //: 才看得见的错(外框把内框里的东西带走了,却把内框留在原地)。
+      const positions = new Map(nodes.map((one) => [one.id, one.position]));
+      carried.current = carriedByFrame(
+        { id: node.id, kind: "frame", x: left, y: top, width: right - left, height: bottom - top },
+        nodes.map((one) => ({
+          id: one.id,
+          kind: String(one.type ?? ""),
+          x: one.position.x,
+          y: one.position.y,
+          width: one.width ?? 0,
+          height: one.height ?? 0,
+        })),
+      ).map((one) => ({ id: one.id, from: { ...(positions.get(one.id) ?? { x: one.x, y: one.y }) } }));
     },
     [nodes],
   );

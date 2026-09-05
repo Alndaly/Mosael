@@ -603,7 +603,9 @@ function BoardDetail({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  });
+    // 空依赖:这个监听不读任何会变的东西(它用 querySelector 现找那个按钮)。
+    // 漏掉依赖数组的话,每次渲染都要拆一次装一次 —— 而画布拖动时那是每帧一次。
+  }, []);
 
   const save = React.useCallback(
     (next: Canvas) => {
