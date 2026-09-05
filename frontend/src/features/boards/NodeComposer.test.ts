@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { durationRangeOptions, prioritizeFilledSourceSlots, sourceSlots } from "./NodeComposer";
+import { durationRangeOptions, mergeableSourceSlots, prioritizeFilledSourceSlots, sourceSlots } from "./NodeComposer";
 import type { GenerationOption } from "@/api/client";
 
 const model = (parameterKeys: string[], sourceLimits: Record<string, number> = {}) =>
@@ -215,5 +215,44 @@ describe("槽位和正文引用合到一起", () => {
 
   it("库里查不到的 id 也不发 —— 认不出类别就找不到该落哪儿", () => {
     expect(mergeSourceAssets([], ["幽灵"], lib, slots)).toEqual([]);
+  });
+});
+
+describe("参考素材格子的合并判据", () => {
+  it("每种媒体类型只出现一次时收成一个格子", () => {
+    const reference = [
+      { role: "reference_image", limit: 9 },
+      { role: "reference_video", limit: 3 },
+      { role: "reference_audio", limit: 3 },
+    ];
+    expect(mergeableSourceSlots(reference)).toEqual(reference);
+  });
+
+  it("首尾帧不合并 —— 两个都是图片,而且有方向", () => {
+    expect(
+      mergeableSourceSlots([
+        { role: "first_frame", limit: 1 },
+        { role: "last_frame", limit: 1 },
+      ]),
+    ).toBeNull();
+  });
+
+  it("视频编辑/续写不合并 —— 参考视频和被处理的那段都是视频", () => {
+    expect(
+      mergeableSourceSlots([
+        { role: "reference_video", limit: 3 },
+        { role: "source_video", limit: 1 },
+      ]),
+    ).toBeNull();
+    expect(
+      mergeableSourceSlots([
+        { role: "reference_video", limit: 3 },
+        { role: "first_clip", limit: 1 },
+      ]),
+    ).toBeNull();
+  });
+
+  it("只有一个角色时没有可合并的东西", () => {
+    expect(mergeableSourceSlots([{ role: "reference_image", limit: 4 }])).toBeNull();
   });
 });

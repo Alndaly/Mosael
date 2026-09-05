@@ -16,6 +16,7 @@ import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { ROLE_COPY, SOURCE_ROLES, type SourceRole } from "@/features/ai-studio/sourceFrames";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   aspectRatioOptions,
   booleanParameterKeys,
@@ -233,6 +234,27 @@ export function sourceSlots(
 }
 
 /**
+ * 这一组角色能不能收成**一个**格子。
+ *
+ * 判据不是「这是不是全能参考」—— 按模式名写死会变成第二张要跟着描述符走的表。判据是
+ * **这组里每种媒体类型只出现一次**:那样一份素材归哪个角色由它自己的类型唯一决定,用户
+ * 没有可选的余地,而三个长得一模一样、只靠 tooltip 区分的虚线框就只是在让他猜。
+ *
+ * 同类型有两个角色时必须分开,那时候格子数量是真的在表达信息:
+ *
+ *   · 首尾帧 —— 两个都是图片,而且有方向(哪一张是开头);
+ *   · 视频编辑 / 续写 —— reference_video 与 source_video / first_clip 都是视频。
+ *
+ * 各类型的份数上限**按模型各不相同**(9/3/3 只是火山与 MiniMax 恰好一致),所以合并之后
+ * 「还能加几份」要按 slot.limit 现算,不能在文案里写死数字。
+ */
+export function mergeableSourceSlots<T extends { role: string }>(slots: T[]): T[] | null {
+  if (slots.length < 2) return null;
+  const kinds = slots.map((slot) => roleAccepts(slot.role));
+  return new Set(kinds).size === kinds.length ? slots : null;
+}
+
+/**
  * 参考素材栏先展示已经挂上的内容，再展示尚可添加的角色。
  *
  * 角色的原始顺序仍决定自动分配和提交语义；这里只调整展示。首尾帧是有方向的固定序列，不能因为
@@ -413,6 +435,11 @@ export function NodeComposer({
     [slots, sources],
   );
 
+  //: 每种媒体类型只出现一次时收成一个格子 —— 见 mergeableSourceSlots。首尾帧、视频编辑那种
+  //: 同类型两个角色的组合仍旧一格一个,那时候格子数量是真的在表达信息。
+  const mergedSlots = React.useMemo(() => mergeableSourceSlots(displaySlots), [displaySlots]);
+  const [addOpen, setAddOpen] = React.useState(false);
+
   //: 换模型、换方式、或者上游连线变了 —— 都重新照上游挂一遍。
   //:
   //: 这三件事任一变化,原来挂着的东西就可能已经不属于现在这组槽位了(尾帧换到参考组里
@@ -571,7 +598,76 @@ export function NodeComposer({
         {slots.length > 0 && (
           // 槽位行和提示词之间给一道界:上面挂的是**素材**,下面写的是**话**,两件事。
           <div className="mb-1.5 flex flex-wrap items-center gap-1 border-b border-border px-1 pb-1.5">
-            {displaySlots.map((slot, index) => {
+            {mergedSlots ? (
+              <>
+                {mergedSlots.flatMap((slot) =>
+                  sources
+                    .filter((one) => one.role === slot.role)
+                    .map((one) => {
+                      const kind = assetKindById.get(one.assetId);
+                      return (
+                        <SourceAssetSlotPreview
+                          key={one.assetId}
+                          assetId={one.assetId}
+                          kind={kind === "image" || kind === "video" || kind === "audio" ? kind : roleAccepts(slot.role)}
+                          label={roleLabel(t, slot.role)}
+                          onRemove={() => setSources((all) => all.filter((x) => x.assetId !== one.assetId))}
+                        />
+                      );
+                    }),
+                )}
+                {mergedSlots.some(
+                  (slot) => sources.filter((one) => one.role === slot.role).length < slot.limit,
+                ) && (
+                  // **一个**加号,不是三个。一份素材归哪个角色由它自己的类型唯一决定
+                  // (mergeableSourceSlots 保证了这一点),所以让用户先在三个长得一样、
+                  // 只靠 tooltip 区分的虚线框之间选,等于让他猜一件他不需要知道的事。
+                  // 份数上限按模型各不相同,所以「还能加几份」在这里现算,不写进文案。
+                  <Popover open={addOpen} onOpenChange={setAddOpen}>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        title={t("boardAddSource")}
+                        aria-label={t("boardAddSource")}
+                        className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-md border border-dashed border-border-strong text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+                      >
+                        <Plus size={13} />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent align="start" className="w-[248px] p-1.5">
+                      <p className="m-0 px-1.5 pb-1.5 pt-1 text-ui-xs leading-[1.5] text-muted-foreground">
+                        {t("boardAddSourceHint")}
+                      </p>
+                      <div className="grid gap-0.5">
+                        {mergedSlots.map((slot) => {
+                          const left = slot.limit - sources.filter((one) => one.role === slot.role).length;
+                          return (
+                            <button
+                              key={slot.role}
+                              type="button"
+                              disabled={left <= 0}
+                              onClick={() => {
+                                setAddOpen(false);
+                                onPickAsset(roleAccepts(slot.role), (assetId) =>
+                                  setSources((all) => [...all, { role: slot.role, assetId }]),
+                                );
+                              }}
+                              className="flex w-full min-w-0 cursor-pointer items-center justify-between gap-2 rounded-md border-0 bg-transparent px-1.5 py-1.5 text-left text-ui-sm text-foreground hover:bg-secondary disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
+                            >
+                              <span className="min-w-0 truncate">{roleLabel(t, slot.role)}</span>
+                              <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">
+                                {left > 0 ? t("boardSourceRemaining").replace("{n}", String(left)) : t("boardSourceFull")}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
+              </>
+            ) : (
+              displaySlots.map((slot, index) => {
               // 首尾帧和参考素材**分属互斥的两组**(厂商硬约束,描述符里声明着)——
               // 组与组之间给一道竖线,否则一排虚线框读起来像五个平级的槽。
               const previous = displaySlots[index - 1]?.role;
@@ -638,7 +734,8 @@ export function NodeComposer({
                   )}
                 </React.Fragment>
               );
-            })}
+              })
+            )}
           </div>
         )}
 
