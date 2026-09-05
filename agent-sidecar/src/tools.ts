@@ -16,25 +16,87 @@ import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 
 import { log } from "./protocol.js";
 
+/**
+ * 一次调用等后端的时限。
+ *
+ * 不设的话生效的是 undici 的默认 headersTimeout(300s),而它抛出来的是一句 `fetch failed`。
+ * 真机上模型读到这句话得出的结论是「可能是临时网络问题,我重试一次」—— 然后第二次撞进同一
+ * 堵墙。后端就在回环地址上,这里几乎不可能是网络;把这一点说清楚,重试才不会被当成办法。
+ *
+ * 180s 的来历:最长的**合法**单次调用是 sleep(封顶 60s,见 mcp_server.SLEEP_CAP_SECONDS),
+ * 浏览器等待默认 15s。留足余量,同时**必须低于** undici 的 300s —— 要由我们先超时,否则抛
+ * 出来的还是那句没有信息的 fetch failed。
+ */
+const TOOL_CALL_TIMEOUT_MS = 180_000;
+
+/** 把这一轮的取消信号和调用时限合成一个:停止这一轮时,在飞的 HTTP 也要真的断掉。 */
+function deadline(signal: AbortSignal | undefined, ms: number): AbortSignal {
+  const limit = AbortSignal.timeout(ms);
+  return signal ? AbortSignal.any([signal, limit]) : limit;
+}
+
+/**
+ * 发一次请求,并且**把失败说清楚**。
+ *
+ * `fetch failed` 是 undici 把一切传输层问题压成的一句话:超时、连接被拒、进程没了,读起来
+ * 完全一样。模型拿它没有任何可依据的下一步,于是只会重试。这里把三件事分开说。
+ */
+async function request(
+  url: string | URL,
+  init: RequestInit,
+  what: string,
+  ms: number,
+  signal?: AbortSignal,
+): Promise<Response> {
+  const started = Date.now();
+  try {
+    return await fetch(url, { ...init, signal: deadline(signal, ms) });
+  } catch (error) {
+    const waited = Math.round((Date.now() - started) / 1000);
+    if (signal?.aborted) throw new Error(`${what} 已取消(这一轮被停止)`);
+    const reason = (error as { name?: string })?.name;
+    if (reason === "TimeoutError" || reason === "AbortError") {
+      throw new Error(
+        `${what}:本机后端 ${waited}s 没有响应。它跑在回环地址上,这不是网络问题 —— ` +
+          "重试大概率还是同一个结果。先做别的,或者让用户看一眼后端日志。",
+      );
+    }
+    throw new Error(`${what}:连不上本机后端(${waited}s 后 ${String(error)})—— 它可能已经退出了。`);
+  }
+}
+
 async function apiGet(
   apiBase: string,
   token: string,
   path: string,
   params?: Record<string, string | number>,
+  signal?: AbortSignal,
 ): Promise<unknown> {
   const url = new URL(apiBase + path);
   if (params) for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const res = await request(url, { headers: { Authorization: `Bearer ${token}` } }, `GET ${path}`, TOOL_CALL_TIMEOUT_MS, signal);
   if (!res.ok) throw new Error(`GET ${path} -> ${res.status}: ${(await res.text()).slice(0, 300)}`);
   return res.json();
 }
 
-async function apiPost(apiBase: string, token: string, path: string, body: unknown): Promise<unknown> {
-  const res = await fetch(apiBase + path, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+async function apiPost(
+  apiBase: string,
+  token: string,
+  path: string,
+  body: unknown,
+  signal?: AbortSignal,
+): Promise<unknown> {
+  const res = await request(
+    apiBase + path,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+    `POST ${path}`,
+    TOOL_CALL_TIMEOUT_MS,
+    signal,
+  );
   if (!res.ok) throw new Error(`POST ${path} -> ${res.status}: ${(await res.text()).slice(0, 300)}`);
   return res.json();
 }
@@ -61,7 +123,7 @@ async function awaitConfirmation(
 ): Promise<unknown> {
   // 人工批准是人速的,轮询上限给足(后端 turn 超时 600s 兜底)
   for (let waited = 0; waited < 590_000; waited += 1500) {
-    const cur = (await apiGet(apiBase, token, `/api/confirmations/${confirmationId}`)) as Confirmation;
+    const cur = (await apiGet(apiBase, token, `/api/confirmations/${confirmationId}`, undefined, signal)) as Confirmation;
     if (cur.status === "executed") return cur.result;
     if (cur.status === "rejected") throw new Error("用户拒绝了该操作");
     if (cur.status === "failed") throw new Error(`执行失败:${cur.error ?? "unknown"}`);
@@ -152,7 +214,7 @@ export async function buildAllTools(
             // **不再转述 sessionId**:这次调用属于哪次对话,后端从 token 认出来(turn 令牌铸造时
             // 就带着它)。转述的东西可以被伪造,而确认卡的归属决定它出现在谁面前、以后还决定
             // 要不要自动放行。
-          })) as { result?: unknown; error?: string };
+          }, signal)) as { result?: unknown; error?: string };
           if (response?.error) throw new Error(response.error);
           if (!spec.confirmation) return jsonResult(response?.result ?? null);
           // 确认门控:调用只创建了待确认卡,阻塞等用户在 Mosael 里批准后把执行结果给模型。

@@ -111,11 +111,19 @@ function withoutNoise(value: unknown): unknown {
  * asset would also drag in workflow, project and confirmation ids, each costing a failed
  * request and a "missing media" tile.
  */
-function collectAssetIds(value: unknown, out: Set<string> = new Set()): Set<string> {
+//: 工作流图是一份**计划**,不是这次调用碰过的媒体。图里节点配置上的 asset_id 指的是这条流程
+//: 将来要读或要产出的东西 —— 官方模板留的占位、还没跑出来的产物,查过去多半 404,于是
+//: `get_workflow` 的结果下面挂出两张「素材不可用」,而用户根本没让谁给他看素材。
+//:
+//: 判据用结构而不是工具名单:名单要跟着工具表走,而"图里的 id 是计划"这件事不会变。
+const PLAN_KEYS = new Set(["graph"]);
+
+export function collectAssetIds(value: unknown, out: Set<string> = new Set()): Set<string> {
   if (Array.isArray(value)) {
     for (const item of value) collectAssetIds(item, out);
   } else if (value && typeof value === "object") {
     for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+      if (PLAN_KEYS.has(key)) continue;
       if (/asset_?id/i.test(key) && typeof val === "string" && val.trim()) out.add(val.trim());
       else collectAssetIds(val, out);
     }

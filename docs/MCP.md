@@ -12,7 +12,7 @@ summaries — never raw internal schemas.
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
 | `analyze_asset` | 直接执行 | Analyze an EXISTING image/video media asset with a multimodal model. |
-| `ask_user` | 直接执行 | Blocks until the user picks: ask them to choose between options you cannot decide for them. |
+| `ask_user` | 直接执行 | Ask the user to choose between options you cannot decide for them. |
 | `browser_click` | 直接执行 | Click an element by CSS selector or visible text in the open session (one of selector/text). |
 | `browser_close` | 直接执行 | Close a browser session (frees the view; a throwaway session's cookies/storage are wiped). |
 | `browser_evaluate` | 直接执行 | Advanced: evaluate a JS expression in the open session's page and return its value. |

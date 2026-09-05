@@ -1535,7 +1535,12 @@ def list_agent_sessions(workspace_id: str = "") -> list[dict[str, Any]]:
 
 @mcp.tool()
 def ask_user(questions: list[dict[str, Any]], workspace_id: str = "") -> dict[str, Any]:
-    """Blocks until the user picks: ask them to choose between options you cannot decide for them.
+    """Ask the user to choose between options you cannot decide for them.
+
+    **This returns immediately with a `question_id`; it does NOT block.** The card goes up in
+    Mosael and the user answers in their own time — poll `get_answer(question_id)` until it
+    stops saying "pending". Treating the return value as the answer means building on a choice
+    that was never made.
 
     Use at a genuine fork — two or three routes all make sense and which one is right depends on
     what the user wants. Picking one yourself and building on it means a whole stretch of work
