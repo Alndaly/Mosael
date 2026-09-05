@@ -38,6 +38,7 @@ import { BrandMark } from "@/components/layout/BrandMark";
 import { STUDIO_VIEWS } from "@/components/layout/navLabels";
 import { CommandPalette } from "@/components/layout/CommandPalette";
 import { ConfirmationCenter } from "@/components/layout/ConfirmationCenter";
+import { VoiceDock } from "@/components/agent/VoiceDock";
 import { PlugZap } from "lucide-react";
 
 import { ServerPicker } from "@/components/layout/ServerPicker";
@@ -415,6 +416,7 @@ function Studio({
   workspaces: Workspace[];
   onSelectWorkspace: (id: string) => void;
 }) {
+  const { voiceDock, setVoiceDock } = usePreferences();
   const t = useI18n();
   const qc = useQueryClient();
   const initial = React.useMemo(readHash, []);
@@ -540,6 +542,9 @@ function Studio({
           onOpenProject={openProject}
         />
         <ConfirmationCenter workspaceId={workspace.id} />
+        {/* 免提浮标挂在**应用级**,不挂在助手面板里:它存在的意义正是"手在别处、面板收起来了"
+            的时候还叫得动。默认不浮,由设置里那个开关决定(本地偏好,见 app/preferences)。 */}
+        {voiceDock && <VoiceDock workspaceId={workspace.id} onClose={() => setVoiceDock(false)} />}
       </AppShell>
     </RecordingProvider>
   );

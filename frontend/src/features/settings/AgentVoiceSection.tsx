@@ -14,7 +14,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { getAgentVoice, listTtsEngines, listTtsVoices, setAgentVoice } from "@/api/client";
-import { useI18n } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { SettingsGroup, SettingsRow } from "@/features/settings/ui";
@@ -24,6 +24,7 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
 
 export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
   const t = useI18n();
+  const { voiceDock, setVoiceDock } = usePreferences();
   const qc = useQueryClient();
   const pref = useQuery({ queryKey: ["agent-voice"], queryFn: getAgentVoice });
   const engines = useQuery({ queryKey: ["tts-engines"], queryFn: listTtsEngines, staleTime: 30_000 });
@@ -93,6 +94,9 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
           onCheckedChange={(next) => save.mutate(next)}
           aria-label={t("agentVoiceEnabled")}
         />
+      </SettingsRow>
+      <SettingsRow label={t("voiceDockTitle")} description={t("voiceDockDesc")}>
+        <Switch checked={voiceDock} onCheckedChange={setVoiceDock} aria-label={t("voiceDockTitle")} />
       </SettingsRow>
       <SettingsRow label={t("agentVoiceEngine")} description={t("agentVoiceEngineDesc")}>
         <Select

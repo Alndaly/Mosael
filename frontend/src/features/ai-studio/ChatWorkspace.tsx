@@ -18,7 +18,6 @@ import { UserMessageContent, attachmentToken, chatMediaGallery } from "@/feature
 import { MessageUsageFooter, type AgentUsageEvent } from "@/features/ai-studio/messageUsage";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { DictateButton } from "@/components/agent/DictateButton";
-import { VoiceModeButton } from "@/components/agent/VoiceModeButton";
 import { ModelPicker } from "@/features/ai-studio/ModelPicker";
 import { SessionSettingsMenu } from "@/components/agent/SessionSettingsMenu";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
@@ -643,14 +642,9 @@ export function ChatWorkspace({
                       setDraft((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text))
                     }
                   />
-                  {/* 和工作区助手一致:两个入口的工具行不该有一个多一个少。 */}
-                  <VoiceModeButton
-                    workspaceId={workspace.id}
-                    busy={running}
-                    reply={lastAssistantText}
-                    failure={lastFailure}
-                    onUtterance={(text) => sendMessage.mutateAsync(text).then(() => undefined)}
-                  />
+                  {/* 免提不在这一行:它是"手离开键盘"的模式,而工具行只在助手面板打开时才在屏幕上 ——
+                      恰好在最需要它的时候不见了。改成应用级的浮标(components/agent/VoiceDock),
+                      由设置里的开关决定浮不浮。说话输入留着:那个是"把话填进这个框",本来就属于这里。 */}
                   <ModelPicker workspaceId={workspace.id} session={session.data ?? null} />
                   {/* 分析方式、思考档位、上下文整理收进这里 —— 它们是"配好就不再动"的东西,
                       和每次都要用的模式/附件/模型平铺在一起只会稀释后者。 */}

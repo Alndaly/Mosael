@@ -17,7 +17,6 @@ import { toast } from "sonner";
 
 import { AttachmentChips, textAttachmentBlock, useComposerAttachments } from "@/components/agent/composerAttachments";
 import { DictateButton } from "@/components/agent/DictateButton";
-import { VoiceModeButton } from "@/components/agent/VoiceModeButton";
 
 import { API_BASE, api, getAuthToken, importAsset, type Asset } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -661,24 +660,9 @@ export function CanvasAgentChat({
             />
             {/* 免提是另一件事:说话输入把话填进框里等你过目,这个直接发出去。做成一个按钮的
                 两种模式的话,每次都要先想清楚自己现在处在哪一种,而两者的后果差得很远。 */}
-            <VoiceModeButton
-              workspaceId={workspaceId}
-              busy={running}
-              reply={lastAssistantText}
-              onUtterance={(text) => send.mutateAsync({ text, files: [], mediaAssets: [] }).then(() => undefined)}
-              question={voiceQuestion}
-              onAnswer={async (index) => {
-                const asked = voiceQuestion;
-                if (!asked || !voiceQuestionId) return;
-                await api(`/api/agent/questions/${voiceQuestionId}/answer`, {
-                  method: "POST",
-                  body: JSON.stringify({ answers: { [asked.question]: [asked.options[index]] } }),
-                });
-                void qc.invalidateQueries({ queryKey: ["agent-questions", activeSession?.id ?? ""] });
-              }}
-              pendingConfirmations={(pendingCards.data ?? []).map((one) => one.summary)}
-              failure={lastFailure}
-            />
+            {/* 免提不在这一行:它是"手离开键盘"的模式,而工具行只在助手面板打开时才在屏幕上 ——
+                恰好在最需要它的时候不见了。改成应用级的浮标(components/agent/VoiceDock),
+                由设置里的开关决定浮不浮。说话输入留着:那个是"把话填进这个框",本来就属于这里。 */}
             <ModelPicker workspaceId={workspaceId} session={activeSession} />
             {/* 与 AI Studio 用同一个组件:此前两边各写各的工具行,同一个功能的位置、顺序、
                 有无都不一致。工作流助手不做素材分析,那一项在这里是死的,关掉。 */}
