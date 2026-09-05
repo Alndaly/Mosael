@@ -15,7 +15,6 @@ from __future__ import annotations
 import logging
 import subprocess
 import tempfile
-import threading
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -24,7 +23,7 @@ from app.core.child_process import run_logged
 from app.core.db import SessionLocal
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
-from app.domain.jobs import create_job, emit_job_event, run_job_guarded, say
+from app.domain.jobs import create_job, dispatch_job, emit_job_event, run_job_guarded, say
 from app.media.paths import resolve_key
 
 logger = logging.getLogger(__name__)
@@ -63,12 +62,16 @@ def start_trim(
         message="jobMsg_trimQueued",
     )
     db.commit()
-    threading.Thread(
-        target=lambda: run_job_guarded(
+    # 经总线派发。此前这里是一句裸的线程创建 —— 线程没有 JOB_THREAD_NAME,
+    # `wait_for_idle_jobs()` 按名字找不到它(测试里 fresh_client() 就会在它还活着时
+    # drop_all),而且这个 kind 的执行模式形同虚设:注册成 external 也照样在进程内跑。
+    dispatch_job(
+        db,
+        job,
+        lambda: run_job_guarded(
             job.id, lambda: _trim_body(job.id, asset.id, start, end, mute), what="素材截取"
         ),
-        daemon=True,
-    ).start()
+    )
     return job
 
 

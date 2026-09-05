@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import tempfile
-import threading
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -12,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.db import SessionLocal
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
-from app.domain.jobs import RENDER_SLOTS, create_job, emit_job_event, run_job_guarded, say
+from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, run_job_guarded, say
 from app.media.paths import resolve_key
 from app.media.video_gif import encode_video_gif
 
@@ -56,10 +55,10 @@ def start_video_to_gif(
         message="jobMsg_videoGifQueued",
     )
     db.commit()
-    threading.Thread(
-        target=lambda: _run(job.id, asset.id, fps, width, start, duration),
-        daemon=True,
-    ).start()
+    # 经总线派发。此前这里是一句裸的线程创建 —— 线程没有 JOB_THREAD_NAME,
+    # `wait_for_idle_jobs()` 按名字找不到它(测试里 fresh_client() 就会在它还活着时
+    # drop_all),而且这个 kind 的执行模式形同虚设:注册成 external 也照样在进程内跑。
+    dispatch_job(db, job, lambda: _run(job.id, asset.id, fps, width, start, duration))
     return job
 
 

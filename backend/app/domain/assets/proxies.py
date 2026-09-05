@@ -9,7 +9,6 @@
 
 from __future__ import annotations
 
-import threading
 from pathlib import Path
 
 from sqlalchemy import select
@@ -18,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.db.models import Asset, Job
-from app.domain.jobs import create_job, emit_job_event, run_job_guarded, say
+from app.domain.jobs import create_job, dispatch_job, emit_job_event, run_job_guarded, say
 from app.media.paths import resolve_key
 from app.media.proxy import PROXY_NAME, TRANSCODE_SLOTS, build_proxy, proxy_path
 
@@ -71,7 +70,10 @@ def start_proxy_job(db: Session, asset: Asset, *, created_by: str | None, force:
     info.pop("proxy_key", None)
     asset.media_info = info
     db.commit()
-    threading.Thread(target=_run_proxy, args=(job.id, asset.id), daemon=True).start()
+    # 经总线派发。此前这里是一句裸的线程创建 —— 线程没有 JOB_THREAD_NAME,
+    # `wait_for_idle_jobs()` 按名字找不到它(测试里 fresh_client() 就会在它还活着时
+    # drop_all),而且这个 kind 的执行模式形同虚设:注册成 external 也照样在进程内跑。
+    dispatch_job(db, job, lambda: _run_proxy(job.id, asset.id))
     return job
 
 

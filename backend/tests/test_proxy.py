@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.core.db import SessionLocal
 from app.db.models import Asset, Job
 from app.domain.assets import proxies as proxyjobs
+import app.domain.jobs as jobs_bus
 from app.media import proxy as proxymod
 from app.media.probe import probe_media
 from tests.util import fresh_client
@@ -74,7 +75,8 @@ def test_import_queues_proxy_and_job_runs(tmp_path: Path, monkeypatch: pytest.Mo
     # conftest disables proxies suite-wide; turn them on for this test but keep the
     # transcode synchronous (fake the thread) so the assertions are deterministic.
     monkeypatch.setattr(settings, "generate_proxies", True)
-    monkeypatch.setattr(proxyjobs.threading, "Thread", _FakeThread)
+    # 线程由总线创建(start_proxy_job 现在走 dispatch_job),所以桩挂在总线那一侧。
+    monkeypatch.setattr(jobs_bus.threading, "Thread", _FakeThread)
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
@@ -110,7 +112,8 @@ def test_import_queues_proxy_and_job_runs(tmp_path: Path, monkeypatch: pytest.Mo
 
 def test_non_video_import_skips_proxy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "generate_proxies", True)
-    monkeypatch.setattr(proxyjobs.threading, "Thread", _FakeThread)
+    # 线程由总线创建(start_proxy_job 现在走 dispatch_job),所以桩挂在总线那一侧。
+    monkeypatch.setattr(jobs_bus.threading, "Thread", _FakeThread)
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     img = tmp_path / "pic.png"

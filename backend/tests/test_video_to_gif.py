@@ -45,7 +45,7 @@ def test_素材接口只给视频排任务且原素材不变() -> None:
     ).json()
 
     # 不让后台线程在这条 API 契约用例里读取假视频；编码器有上面的真 ffmpeg 用例覆盖。
-    with patch("app.domain.assets.video_gif.threading.Thread") as thread:
+    with patch("app.domain.jobs.threading.Thread") as thread:  # 线程由总线创建
         response = client.post(f"/api/assets/{video['id']}/convert-gif", json={"fps": 10, "width": 640})
     assert response.status_code == 200, response.text
     job = response.json()
@@ -96,7 +96,7 @@ def test_智能体转换工具先确认再创建同一类任务() -> None:
     pending = card.json()
     assert pending["permission"] == "render-cost"
     assert "原视频不变" in pending["summary"]
-    with patch("app.domain.assets.video_gif.threading.Thread") as thread:
+    with patch("app.domain.jobs.threading.Thread") as thread:  # 线程由总线创建
         approved = client.post(f"/api/confirmations/{pending['id']}/approve").json()
     assert approved["status"] == "executed", approved.get("error")
     assert approved["result"]["source_asset_id"] == video["id"]
