@@ -1463,6 +1463,8 @@ class PluginPackageOut(BaseModel):
     homepage: str = ""
     config_fields: list[PluginFieldOut] = Field(default_factory=list)
     credential_fields: list[PluginFieldOut] = Field(default_factory=list)
+    #: 这个插件能不能自己走 OAuth。界面据此决定要不要给「去授权」。
+    oauth: bool = False
     instances: list[PluginInstanceOut] = Field(default_factory=list)
 
 

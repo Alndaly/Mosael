@@ -67,21 +67,7 @@
         }
       }
     ],
-    "config": [
-      {
-        "key": "BAIDU_PAN_ROOT",
-        "label": {
-          "zh": "起始目录",
-          "en": "Start directory"
-        },
-        "type": "string",
-        "required": false,
-        "help": {
-          "zh": "留空就是网盘根目录 /。填 /我的资源 这样的路径可以让 pan_list 默认从那里开始。",
-          "en": "Empty means the netdisk root, /. A path like /My files makes pan_list start there by default."
-        }
-      }
-    ]
+    "config": []
   },
   "tools": {
     "expose": "all",
@@ -99,8 +85,8 @@
             "path": {
               "type": "string",
               "description": {
-                "zh": "网盘路径,如 /我的资源/素材。留空用起始目录。",
-                "en": "A netdisk path, e.g. /My files/footage. Empty uses the start directory."
+                "zh": "网盘路径,如 /我的资源/素材。留空就是网盘根目录 /。",
+                "en": "A netdisk path, e.g. /My files/footage. Empty means the netdisk root, /."
               }
             },
             "limit": {

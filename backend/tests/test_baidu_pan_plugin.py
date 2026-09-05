@@ -95,14 +95,16 @@ class Test列目录:
         out, _ = run("pan_list", {"path": "/素材"}, [LIST_OK])
         assert out["output"]["entries"][1]["is_dir"] is True
 
-    def test_没给路径时用配置里的起始目录(self) -> None:
-        out, calls = run("pan_list", {}, [LIST_OK], env={"BAIDU_PAN_ROOT": "/我的资源"})
-        assert "dir=%2F%E6%88%91%E7%9A%84%E8%B5%84%E6%BA%90" in calls[0]["url"]
-        assert out["output"]["path"] == "/我的资源"
+    def test_没给路径就从根目录列起(self) -> None:
+        """这里**曾经**有个「起始目录」配置项,只在这一行起作用。
 
-    def test_起始目录也没配就是根(self) -> None:
-        out, _ = run("pan_list", {}, [LIST_OK])
+        它既不限制智能体去别的目录(照样能传 path),也不省事 —— 不指定路径时,列根目录和列
+        某个子目录,下一步都要继续往里翻。名字听起来像一道边界,实际只是个默认值,却占着设置页
+        一整行去解释一件它没做的事。删了;要真把智能体圈在某个目录里,得让**所有**路径操作受限。
+        """
+        out, calls = run("pan_list", {}, [LIST_OK])
         assert out["output"]["path"] == "/"
+        assert "dir=%2F" in calls[0]["url"]
 
     def test_limit_夹在上限内(self) -> None:
         _, calls = run("pan_list", {"limit": 99999}, [LIST_OK])

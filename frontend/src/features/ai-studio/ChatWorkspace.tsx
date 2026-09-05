@@ -18,6 +18,7 @@ import { UserMessageContent, attachmentToken, chatMediaGallery } from "@/feature
 import { MessageUsageFooter, type AgentUsageEvent } from "@/features/ai-studio/messageUsage";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { DictateButton } from "@/components/agent/DictateButton";
+import { VoiceModeButton } from "@/components/agent/VoiceModeButton";
 import { ModelPicker } from "@/features/ai-studio/ModelPicker";
 import { SessionSettingsMenu } from "@/components/agent/SessionSettingsMenu";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
@@ -176,6 +177,21 @@ export function ChatWorkspace({
     refetchOnWindowFocus: true,
   });
   const running = session.data?.status === "running";
+  //: 免提模式念的就是最后一条**成功**的助手回复;失败的那条由 failure 单独念(它的 content
+  //: 是「智能体执行失败」这类占位,念它等于什么都没说)。
+  const lastAssistantText = React.useMemo(() => {
+    const rows = messages.data ?? [];
+    for (let index = rows.length - 1; index >= 0; index -= 1) {
+      const row = rows[index];
+      if (row.role === "assistant" && !row.error) return (row.content || "").trim();
+    }
+    return "";
+  }, [messages.data]);
+  const lastFailure = React.useMemo(() => {
+    const rows = messages.data ?? [];
+    const last = rows[rows.length - 1];
+    return last?.role === "assistant" && last.error ? last.error : "";
+  }, [messages.data]);
   const usageEvents = useQuery({
     queryKey: ["agent-usage-events", activeSession?.id],
     enabled: Boolean(activeSession),
@@ -626,6 +642,14 @@ export function ChatWorkspace({
                     onText={(text) =>
                       setDraft((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text))
                     }
+                  />
+                  {/* 和工作区助手一致:两个入口的工具行不该有一个多一个少。 */}
+                  <VoiceModeButton
+                    workspaceId={workspace.id}
+                    busy={running}
+                    reply={lastAssistantText}
+                    failure={lastFailure}
+                    onUtterance={(text) => sendMessage.mutateAsync(text).then(() => undefined)}
                   />
                   <ModelPicker workspaceId={workspace.id} session={session.data ?? null} />
                   {/* 分析方式、思考档位、上下文整理收进这里 —— 它们是"配好就不再动"的东西,

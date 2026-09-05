@@ -1,21 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  BookOpen,
-  CheckCircle2,
-  Copy,
-  ChevronDown,
-  ChevronRight,
-  CircleAlert,
-  KeyRound,
-  Play,
-  Plug,
-  Plus,
-  RefreshCcw,
-  Terminal,
-  Store,
-  Trash2,
-} from "lucide-react";
+import { BookOpen, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, Copy, ExternalLink, KeyRound, Play, Plug, Plus, RefreshCcw, Store, Terminal, Trash2 } from "lucide-react";
 
 import {
   api,
@@ -25,6 +10,7 @@ import {
   type PluginPackage,
   type PluginPermissionGrant,
 } from "@/api/client";
+import { toast } from "sonner";
 import { useI18n } from "@/app/preferences";
 import { ConfirmDialog } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
@@ -484,7 +470,9 @@ function ConnectionCard({ pkg, instance }: { pkg: PluginPackage; instance: Plugi
         </SettingsRow>
       ))}
 
-      {(pkg.credential_fields ?? []).length > 0 && <CredentialRows instanceId={instance.id} />}
+      {(pkg.credential_fields ?? []).length > 0 && (
+        <CredentialRows instanceId={instance.id} oauth={Boolean(pkg.oauth)} />
+      )}
 
       {(grants.data ?? []).map((grant) => (
         <SettingsRow key={grant.permission} label={grant.permission} description={t("permissionRowDesc")}>
@@ -602,7 +590,86 @@ function CapabilityPicker({
   );
 }
 
-function CredentialRows({ instanceId }: { instanceId: string }) {
+
+/**
+ * 「去授权」:替用户走完 OAuth 里那段机械的部分。
+ *
+ * 注册应用拿 AppKey/SecretKey 是他和开放平台之间的事,替代不了。这里替代的是后面那一段 ——
+ * 拼授权链接、拿 code 换令牌、把 refresh_token 抄进表单。每一步抄错换回来的都是一句
+ * `invalid_client` 之类的英文报错,看不出错在哪一格。
+ *
+ * **为什么还要粘贴一次 code。** 回调不走 mosael://(自定义协议是外部输入面,任何网页都能
+ * 触发它),也不在本机开监听端口(重定向地址要在对方控制台预先登记,而后端端口会变)。
+ * 详见 backend/app/domain/plugins/oauth.py 的文件头。多一次粘贴,换这条路上没有可伪造的输入。
+ */
+function PluginOAuth({ instanceId }: { instanceId: string }) {
+  const t = useI18n();
+  const qc = useQueryClient();
+  const [url, setUrl] = React.useState("");
+  const [code, setCode] = React.useState("");
+
+  const begin = useMutation({
+    mutationFn: () => api<{ authorize_url: string }>(`/api/plugins/instances/${instanceId}/oauth`),
+    onSuccess: (data) => {
+      setUrl(data.authorize_url);
+      // 直接开出去 —— 主进程把 http(s) 交给系统浏览器(见 electron/main 的 setWindowOpenHandler)。
+      window.open(data.authorize_url, "_blank", "noreferrer");
+    },
+    // 「先填 AppKey」这类原因由后端说,原样转出来:换成"授权失败"等于把唯一有用的信息扔掉。
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const finish = useMutation({
+    mutationFn: () =>
+      api(`/api/plugins/instances/${instanceId}/oauth`, { method: "POST", body: JSON.stringify({ code }) }),
+    onSuccess: () => {
+      setUrl("");
+      setCode("");
+      toast.success(t("pluginOauthDone"));
+      void qc.invalidateQueries({ queryKey: ["plugin-credentials", instanceId] });
+      invalidatePlugins(qc);
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  return (
+    <div className="grid gap-2 px-1 pb-1 pt-2 !border-t-0">
+      <div className="flex items-center justify-between gap-2">
+        <small className="text-ui-sm leading-[1.5] text-muted-foreground">{t("pluginOauthHint")}</small>
+        <Button size="sm" variant="outline" loading={begin.isPending} onClick={() => begin.mutate()}>
+          <ExternalLink size={13} /> {t("pluginOauthStart")}
+        </Button>
+      </div>
+      {url && (
+        // 链接留着:弹窗拦截、或者他想换个浏览器登录时,总得有个能点的东西。
+        <div className="grid gap-1.5 rounded-md border border-border bg-panel p-2.5">
+          <a
+            className="inline-flex w-fit items-center gap-1 text-ui-xs font-medium text-primary no-underline hover:underline"
+            href={url}
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            {t("pluginOauthOpenLink")}
+            <ExternalLink size={11} />
+          </a>
+          <div className="flex items-center gap-1.5">
+            <Input
+              className="min-w-0 flex-1"
+              value={code}
+              placeholder={t("pluginOauthCodePlaceholder")}
+              onChange={(event) => setCode(event.target.value)}
+            />
+            <Button size="sm" disabled={!code.trim()} loading={finish.isPending} onClick={() => finish.mutate()}>
+              <KeyRound size={13} /> {t("pluginOauthExchange")}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CredentialRows({ instanceId, oauth }: { instanceId: string; oauth: boolean }) {
   const t = useI18n();
   const qc = useQueryClient();
   type Credential = { key: string; label: string; help: string; secret: boolean; filled: boolean; value: string };
@@ -658,6 +725,7 @@ function CredentialRows({ instanceId }: { instanceId: string }) {
           </Button>
         </div>
       )}
+      {oauth && <PluginOAuth instanceId={instanceId} />}
     </>
   );
 }

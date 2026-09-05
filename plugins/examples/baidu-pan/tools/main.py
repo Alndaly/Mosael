@@ -100,10 +100,6 @@ def _refresh() -> None:
         _SESSION["state"]["BAIDU_PAN_REFRESH_TOKEN"] = rotated
 
 
-def _root() -> str:
-    return (os.environ.get("BAIDU_PAN_ROOT") or "/").strip() or "/"
-
-
 #: 百度用 errno 表达失败,HTTP 状态码永远是 200。挑几个最常撞上的翻成人话 ——
 #: 光报一个数字等于让用户去搜,而这几个的处置方式完全不同。
 ERRNO_MESSAGES = {
@@ -149,7 +145,12 @@ def _entry(item: dict) -> dict:
 
 
 def pan_list(payload: dict) -> dict:
-    path = str(payload.get("path") or "").strip() or _root()
+    # 不给路径就从网盘根目录列起。**这里曾经有一个「起始目录」配置项**,而它只在这一行
+    # 起作用:既不限制智能体去别的目录(它照样可以传 path),也不省事(不指定路径时,
+    # 列根目录和列某个子目录,下一步都要继续往里翻)。名字听起来像一道边界,实际是一个
+    # 默认值 —— 占着设置页一整行去解释一件它没做的事。真要把智能体圈在某个目录里,那是
+    # 另一回事:得让**所有**路径操作都受限,而不是只改这一个兜底值。
+    path = str(payload.get("path") or "").strip() or "/"
     limit = max(1, min(int(payload.get("limit") or 100), 1000))
     data = _call("/file", {"method": "list", "dir": path, "limit": limit})
     return {"path": path, "entries": [_entry(one) for one in data.get("list") or []]}

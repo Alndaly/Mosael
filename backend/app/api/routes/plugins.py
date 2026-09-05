@@ -188,6 +188,9 @@ def _packages(db: DbSession, user: CurrentUser) -> list[dict]:
                 "homepage": manifest.homepage,
                 "config_fields": [_field(f) for f in manifest.config],
                 "credential_fields": [_field(f) for f in manifest.credentials],
+                #: 声明了 OAuth 就给一个「去授权」的入口,不必手抄令牌(见 domain/plugins/oauth)。
+                #: 声明不全的当没声明 —— 半个声明会长出一个点了必然失败的按钮。
+                "oauth": manifest.oauth is not None,
                 "instances": [
                     _instance(db, i)
                     for i in pkg.instances_of(db, package.id)

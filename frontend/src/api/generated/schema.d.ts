@@ -4542,6 +4542,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plugins/instances/{instance_id}/oauth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Plugin Oauth Start
+         * @description 拿授权链接。**只是拼一个 URL**,这一步不碰网络也不写任何东西。
+         *
+         *     用户点开它、在对方站点上登录并同意,然后把授权码贴回来(见下面的 complete)。
+         *     多这一次粘贴,换来的是这条通路上没有任何可伪造的输入 —— 详见 domain/plugins/oauth
+         *     里那段"为什么不用 mosael:// 接回调"。
+         */
+        get: operations["plugin_oauth_start_api_plugins_instances__instance_id__oauth_get"];
+        put?: never;
+        /**
+         * Plugin Oauth Complete
+         * @description 拿授权码换令牌,写回插件声明的那几个凭据键。
+         *
+         *     **只写对方真的回了的字段**(见 credentials_from_token):刷新时常常只回 access_token,
+         *     把缺失当空串写回去会抹掉已有的 refresh_token —— 而那一份丢了要重新走一遍授权。
+         */
+        post: operations["plugin_oauth_complete_api_plugins_instances__instance_id__oauth_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agent/sessions": {
         parameters: {
             query?: never;
@@ -5640,10 +5671,7 @@ export interface components {
         AgentSpeechRequest: {
             /** Text */
             text: string;
-            /**
-             * Workspace Id
-             * @default
-             */
+            /** Workspace Id */
             workspace_id: string;
         };
         /**
@@ -7588,6 +7616,14 @@ export interface components {
              */
             installed_version: string;
         };
+        /**
+         * PluginOAuthCode
+         * @description 对方显示出来、由用户贴回来的授权码。
+         */
+        PluginOAuthCode: {
+            /** Code */
+            code: string;
+        };
         /** PluginPackageOut */
         PluginPackageOut: {
             /** Id */
@@ -7617,6 +7653,11 @@ export interface components {
             config_fields?: components["schemas"]["PluginFieldOut"][];
             /** Credential Fields */
             credential_fields?: components["schemas"]["PluginFieldOut"][];
+            /**
+             * Oauth
+             * @default false
+             */
+            oauth: boolean;
             /** Instances */
             instances?: components["schemas"]["PluginInstanceOut"][];
         };
@@ -19703,6 +19744,74 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    plugin_oauth_start_api_plugins_instances__instance_id__oauth_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    plugin_oauth_complete_api_plugins_instances__instance_id__oauth_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PluginOAuthCode"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginCredentialOut"][];
+                };
             };
             /** @description Validation Error */
             422: {

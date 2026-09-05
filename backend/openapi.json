@@ -13396,6 +13396,108 @@
         }
       }
     },
+    "/api/plugins/instances/{instance_id}/oauth": {
+      "get": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Plugin Oauth Start",
+        "description": "拿授权链接。**只是拼一个 URL**,这一步不碰网络也不写任何东西。\n\n用户点开它、在对方站点上登录并同意,然后把授权码贴回来(见下面的 complete)。\n多这一次粘贴,换来的是这条通路上没有任何可伪造的输入 —— 详见 domain/plugins/oauth\n里那段\"为什么不用 mosael:// 接回调\"。",
+        "operationId": "plugin_oauth_start_api_plugins_instances__instance_id__oauth_get",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Plugin Oauth Start Api Plugins Instances  Instance Id  Oauth Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Plugin Oauth Complete",
+        "description": "拿授权码换令牌,写回插件声明的那几个凭据键。\n\n**只写对方真的回了的字段**(见 credentials_from_token):刷新时常常只回 access_token,\n把缺失当空串写回去会抹掉已有的 refresh_token —— 而那一份丢了要重新走一遍授权。",
+        "operationId": "plugin_oauth_complete_api_plugins_instances__instance_id__oauth_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PluginOAuthCode"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PluginCredentialOut"
+                  },
+                  "title": "Response Plugin Oauth Complete Api Plugins Instances  Instance Id  Oauth Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/agent/sessions": {
       "post": {
         "tags": [
@@ -16432,13 +16534,14 @@
           },
           "workspace_id": {
             "type": "string",
-            "title": "Workspace Id",
-            "default": ""
+            "minLength": 1,
+            "title": "Workspace Id"
           }
         },
         "type": "object",
         "required": [
-          "text"
+          "text",
+          "workspace_id"
         ],
         "title": "AgentSpeechRequest",
         "description": "念一句话。**不产出素材** —— 见 routes/agent.speak。"
@@ -20774,6 +20877,22 @@
         "title": "PluginMarketEntry",
         "description": "市场里的一条。索引给什么就是什么 —— 不做补全,免得看起来比实际更可信。"
       },
+      "PluginOAuthCode": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "PluginOAuthCode",
+        "description": "对方显示出来、由用户贴回来的授权码。"
+      },
       "PluginPackageOut": {
         "properties": {
           "id": {
@@ -20823,6 +20942,11 @@
             },
             "type": "array",
             "title": "Credential Fields"
+          },
+          "oauth": {
+            "type": "boolean",
+            "title": "Oauth",
+            "default": false
           },
           "instances": {
             "items": {
