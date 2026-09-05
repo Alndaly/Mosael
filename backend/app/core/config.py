@@ -61,6 +61,16 @@ class Settings(BaseSettings):
     # 让渲染由团队服务器旁的独立 worker 机器承担)。默认全部 in_process。
     external_job_kinds: str = ""
 
+    #: 额外允许的浏览器来源(逗号分隔),给**部署到服务器**用。
+    #:
+    #: 默认那份白名单是照桌面端写死的:Electron 的 `file://`(Origin: null)和两个 dev 端口。
+    #: 前端本来就能指向任意后端(设置里的「服务端地址」),但浏览器会先按 CORS 拦下来 ——
+    #: 于是"能不能给几个人共用一台服务器"这件事,卡在一行写死的名单上。
+    #:
+    #: **仍然不接受 `*`**,理由见 main.py 那段:/api/auth 按性质开放,通配符下任何页面都能在
+    #: 这个后端上给自己开个号并读回 token。要哪个域名就写哪个域名。
+    cors_origins: str = ""
+
     # ffmpeg/ffprobe binaries. Default to PATH; override (MOSAEL_FFMPEG / MOSAEL_FFPROBE) to
     # point at a full build — Homebrew's core `ffmpeg` is slim (no libass/freetype), so
     # subtitle burn-in needs e.g. /opt/homebrew/opt/ffmpeg-full/bin/ffmpeg.

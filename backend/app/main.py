@@ -253,6 +253,11 @@ def create_app() -> FastAPI:
             "http://127.0.0.1:5273",
             "http://localhost:8800",   # backend serving the built frontend
             "http://127.0.0.1:8800",
+            # 部署到服务器时额外允许的来源(MOSAEL_CORS_ORIGINS,逗号分隔)。上面那份是照桌面端
+            # 写死的;前端本来就能指向任意后端(设置里的「服务端地址」),而"几个人共用一台
+            # 服务器"这件事此前卡在这份写死的名单上。**要哪个域名写哪个域名,不接受 `*`** ——
+            # 理由见上面那段:/api/auth 按性质开放,通配符下任何页面都能在这里给自己开个号。
+            *[one.strip().rstrip("/") for one in settings.cors_origins.split(",") if one.strip()],
         ],
         # Chrome MV3 side panels have their own opaque extension origin. Keep this deliberately
         # narrower than ``chrome-extension://.*``: a real extension id is exactly 32 chars from
