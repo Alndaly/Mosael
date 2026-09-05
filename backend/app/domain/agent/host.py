@@ -550,6 +550,53 @@ class HostError(RuntimeError):
     pass
 
 
+def unseen_since_last_success(db: Session, session: AgentSession) -> str:
+    """失败的那几轮,模型其实从来没见过 —— 把它们如实补给它。
+
+    模型的记忆是 `session.adapter_state`(pi 序列化的消息),而**只有成功的回合会回存它**
+    (见下面那两条 except:它们写 AgentMessage、记账、标失败,唯独不碰 adapter_state)。
+    于是一失败,界面上的对话和模型的对话就分叉:用户看得见自己说过的话和那条「执行失败」,
+    模型两样都没有,它的记忆停在最后一次成功的回合。
+
+    真机上的样子是:用户说「再试一次」,模型答「这句含义不太明确」,然后照着**上一次成功**
+    那轮的话题往下推。它不是在装傻 —— 它确实不知道中间试过什么、又为什么没成。
+
+    这里不替它重放那次请求(那是用户的决定,不是我们的),只把丢掉的那一段说清楚:
+    当时说了什么、失败在哪。没有失败就返回空串,一个字都不加。
+    """
+    last_ok = db.scalar(
+        select(AgentMessage.created_at)
+        .where(
+            AgentMessage.session_id == session.id,
+            AgentMessage.role == "assistant",
+            AgentMessage.error.is_(None),
+        )
+        .order_by(AgentMessage.created_at.desc())
+        .limit(1)
+    )
+    stmt = select(AgentMessage).where(
+        AgentMessage.session_id == session.id,
+        AgentMessage.role.in_(("user", "assistant")),
+    )
+    if last_ok is not None:
+        stmt = stmt.where(AgentMessage.created_at > last_ok)
+    rows = list(db.scalars(stmt.order_by(AgentMessage.created_at)).all())
+    if not any(row.error for row in rows):
+        return ""
+    lines: list[str] = []
+    for row in rows:
+        if row.role == "user":
+            lines.append(f"· 用户说:{(row.content or '').strip()[:300]}")
+        elif row.error:
+            lines.append(f"· 那一轮失败了:{row.error.strip()[:300]}")
+    return (
+        "【上面这些你没有见过】下面几轮因为执行失败,没有进入你的对话记忆 —— "
+        "它们在用户的界面上是可见的,所以他会以为你知道:\n"
+        + "\n".join(lines)
+        + "\n如果这次的消息是在指代它们(比如「再试一次」),按这段来理解;不要说你不明白他在说什么。"
+    )
+
+
 def _prompt_with_context(content: str, context: str | None) -> str:
     context = (context or "").strip()
     if not context:
@@ -638,6 +685,8 @@ def post_user_message(
     # 模型收到的那一份可以比落库的正文多两样东西:上下文集锦,以及"这条是别的会话发来的"信封。
     # 两样都不进 content —— content 是**用户在对话里看到的**那份。
     prompt = _prompt_with_context(content, context)
+    # 第三样:失败的那几轮模型没见过(失败不回存 adapter_state),而用户以为它见过。
+    prompt = _prompt_with_context(prompt, unseen_since_last_success(db, session))
     prompt = with_origin_envelope(prompt, origin_marker_for(origin_session_id, origin_job_id))
     # 另一个智能体会话发来的通知:落库带结构化来源(前端画徽章靠它),
     # 且**不参与**会话自动命名 —— 标题应当是人提的第一件事,不是别的智能体的信封。
