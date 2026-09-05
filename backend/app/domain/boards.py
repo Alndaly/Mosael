@@ -68,10 +68,22 @@ MAX_TEXT_CHARS = 20_000
 RUN_STATUSES = ("idle", "queued", "running", "succeeded", "failed", "cancelled")
 
 
-def _number(value: Any, field: str, item_id: str) -> float:
+def finite_number(value: Any, field: str, item_id: str = "") -> float:
+    """画布上的一个坐标或尺寸。**算子那一侧共用这一个** —— 两份各写各的必然漂,而漂的那
+    一半就是没挡住的那条路。"""
+    where = f"画板项 {item_id} 的 " if item_id else ""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise BoardDomainError(f"画板项 {item_id} 的 {field} 必须是数字,收到 {value!r}")
-    return float(value)
+        raise BoardDomainError(f"{where}{field} 必须是数字,收到 {value!r}")
+    # NaN / Infinity 是合法的 Python float,`json.dumps` 也照写不误 —— 而写出来的
+    # `{"x": NaN}` **不是合法 JSON**,浏览器 `JSON.parse` 直接抛。一张画板只要混进一个,
+    # 它就再也打不开了:用户看到的是"画板坏了",而库里那份数据其实完好。
+    #
+    # 不是只有恶意客户端造得出:前端算坐标时一次除以零(缩放为 0、宽度为 0)就是 NaN,
+    # 而它会一路存进去、不报错。一个瞬时的计算失误换一张永久打不开的画板,不成比例。
+    number = float(value)
+    if number != number or number in (float("inf"), float("-inf")):
+        raise BoardDomainError(f"{where}{field} 必须是有限的数字,收到 {value!r}")
+    return number
 
 
 def _normalize_form(value: Any, item_id: str) -> dict[str, Any] | None:
@@ -188,12 +200,12 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
         item: dict[str, Any] = {
             "id": item_id,
             "kind": kind,
-            "x": _number(entry["x"], "x", item_id),
-            "y": _number(entry["y"], "y", item_id),
+            "x": finite_number(entry["x"], "x", item_id),
+            "y": finite_number(entry["y"], "y", item_id),
         }
         for field in ("width", "height"):
             if entry.get(field) is not None:
-                size = _number(entry[field], field, item_id)
+                size = finite_number(entry[field], field, item_id)
                 if size <= 0:
                     raise BoardDomainError(f"画板项 {item_id} 的 {field} 必须大于 0")
                 item[field] = size

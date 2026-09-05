@@ -13,7 +13,7 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from app.domain.boards import ITEM_KINDS, NOTE_COLORS, BoardDomainError
+from app.domain.boards import ITEM_KINDS, NOTE_COLORS, BoardDomainError, finite_number
 
 BOARD_OP_KINDS = (
     "add_item",
@@ -42,12 +42,6 @@ def _require(by_id: dict[str, dict], item_id: str) -> dict:
     if item is None:
         raise BoardDomainError(f"画板项不存在:{item_id or '(空)'}")
     return item
-
-
-def _number(value: Any, field: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise BoardDomainError(f"{field} 必须是数字,收到 {value!r}")
-    return float(value)
 
 
 def apply_board_ops(canvas: dict[str, Any], operations: list[dict[str, Any]]) -> dict[str, Any]:
@@ -89,10 +83,10 @@ def apply_board_ops(canvas: dict[str, Any], operations: list[dict[str, Any]]) ->
             item: dict[str, Any] = {
                 "id": item_id,
                 "kind": item_kind,
-                "x": _number(op["x"], "x") if op.get("x") is not None else default_x,
-                "y": _number(op["y"], "y") if op.get("y") is not None else default_y,
-                "width": _number(op["width"], "width") if op.get("width") is not None else float(width),
-                "height": _number(op["height"], "height") if op.get("height") is not None else float(height),
+                "x": finite_number(op["x"], "x") if op.get("x") is not None else default_x,
+                "y": finite_number(op["y"], "y") if op.get("y") is not None else default_y,
+                "width": finite_number(op["width"], "width") if op.get("width") is not None else float(width),
+                "height": finite_number(op["height"], "height") if op.get("height") is not None else float(height),
             }
             if op.get("text") is not None:
                 item["text"] = str(op["text"])
@@ -114,14 +108,14 @@ def apply_board_ops(canvas: dict[str, Any], operations: list[dict[str, Any]]) ->
 
         elif kind == "move_item":
             item = _require(by_id, str(op.get("item_id", "")))
-            item["x"] = _number(op.get("x"), "x")
-            item["y"] = _number(op.get("y"), "y")
+            item["x"] = finite_number(op.get("x"), "x")
+            item["y"] = finite_number(op.get("y"), "y")
 
         elif kind == "resize_item":
             item = _require(by_id, str(op.get("item_id", "")))
             for field in ("width", "height"):
                 if op.get(field) is not None:
-                    size = _number(op[field], field)
+                    size = finite_number(op[field], field)
                     if size <= 0:
                         raise BoardDomainError(f"{field} 必须大于 0")
                     item[field] = size
