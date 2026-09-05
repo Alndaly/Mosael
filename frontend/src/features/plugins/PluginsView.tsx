@@ -632,25 +632,29 @@ function CredentialRows({ instanceId }: { instanceId: string }) {
           label={item.label}
           description={item.help || (item.filled ? t("pluginCredentialFilled") : t("pluginCredentialEmpty"))}
         >
-          <div className="flex items-center gap-1.5">
-            <Input
-              className="w-[240px] max-w-full"
-              type={item.secret ? "password" : "text"}
-              value={draft[item.key] ?? item.value}
-              placeholder={item.key}
-              onChange={(event) => setDraft((current) => ({ ...current, [item.key]: event.target.value }))}
-            />
-            {/* 整组一次提交,不逐格失焦即存:密钥输错一个字符和输对长得一模一样,而逐格
-                自动保存会让"改了一半"和"改完了"在后端无法区分 —— 改到一半正好等于一条连不上
-                的连接。一个显式的保存按钮同时也是"现在去重连试试"的时机。 */}
-            {Object.keys(draft).length > 0 && (
-              <Button size="sm" loading={save.isPending} onClick={() => save.mutate()}>
-                <KeyRound size={13} /> {t("pluginCredentialsSave")}
-              </Button>
-            )}
-          </div>
+          <Input
+            className="w-[240px] max-w-full"
+            type={item.secret ? "password" : "text"}
+            value={draft[item.key] ?? item.value}
+            placeholder={item.key}
+            onChange={(event) => setDraft((current) => ({ ...current, [item.key]: event.target.value }))}
+          />
         </SettingsRow>
       ))}
+      {/* 整组一次提交,不逐格失焦即存:密钥输错一个字符和输对长得一模一样,而逐格自动保存
+          会让"改了一半"和"改完了"在后端无法区分 —— 改到一半正好等于一条连不上的连接。
+          一个显式的保存按钮同时也是"现在去重连试试"的时机。
+
+          **所以它是一个,不是每行一个。** 此前这个按钮画在 map 里,而它的显示条件
+          (`draft` 非空)是整组的:改任何一格,每一行都长出一个按钮,四个密钥就是四个
+          "保存",点哪个都一样 —— 看起来像四件事,其实是同一件。 */}
+      {Object.keys(draft).length > 0 && (
+        <div className="flex justify-end px-1 pb-1">
+          <Button size="sm" loading={save.isPending} onClick={() => save.mutate()}>
+            <KeyRound size={13} /> {t("pluginCredentialsSave")}
+          </Button>
+        </div>
+      )}
     </>
   );
 }
