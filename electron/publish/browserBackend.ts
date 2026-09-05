@@ -8,6 +8,11 @@ const BASE =
   process.env.MOSAEL_BACKEND_URL || `http://127.0.0.1:${process.env.MOSAEL_BACKEND_PORT || 8800}`;
 
 function readWorkerKey(): string {
+// 配了 MOSAEL_WORKER_KEY 就用它:后端在**另一台机器**上时,本地这份文件要么过期要么不存在
+// (密钥写在后端自己的数据目录里)。两边配同一个值,这条通道就跨得过网络 —— 见后端
+// core/worker_key 里那段"为什么不是用用户会话换令牌"。
+  const configured = (process.env.MOSAEL_WORKER_KEY || "").trim();
+  if (configured) return configured;
   const dir = process.env.MOSAEL_DATA_DIR || join(homedir(), ".mosael");
   try {
     return readFileSync(join(dir, "publish-worker.key"), "utf8").trim();

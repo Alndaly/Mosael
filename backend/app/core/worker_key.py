@@ -23,7 +23,7 @@ import os
 import secrets
 import stat
 
-from app.core.config import settings
+from app.core.config import ENV_PREFIX, settings
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +41,23 @@ def key_path():
 
 
 def issue_worker_key() -> str:
-    """Mint this process's key and write it where only the local user can read it."""
+    """Mint this process's key and write it where only the local user can read it.
+
+    **配了 MOSAEL_WORKER_KEY 就用它,不再随机生成。** 那是给「执行器和后端不在同一台机器上」
+    准备的:上面那套的前提是"worker 读得到本地文件",而后端搬到服务器之后这个前提就没了 ——
+    本机执行器读到的是自己那份(过期的,或者根本没有),远程要的是它自己那份,于是发布、
+    浏览器自动化、external 模式的任务全都 401。
+
+    **为什么不是"用用户会话换一张 worker 令牌"。** worker 通道是**全部署范围**的:
+    `claim_next_pending` 认领的是任何人的待发布任务(它的注释还写着原子性依赖"只有一个
+    worker")。把它挂到用户会话上,等于让共享服务器上任何登录用户的执行器去认领所有人的任务 ——
+    那是提权,不是认证。持有这个密钥的就是"这个部署的那一个执行器",这句话本来就是它的语义。
+
+    仍然写文件:本机执行器照旧读它,两种拓扑用同一条路。
+    """
     global _key
-    _key = secrets.token_hex(32)
+    configured = (os.environ.get(f"{ENV_PREFIX}WORKER_KEY") or "").strip()
+    _key = configured or secrets.token_hex(32)
     path = key_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     # Write then chmod, and open with 0600 from the start — writing world-readable and
