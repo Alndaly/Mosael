@@ -16,7 +16,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import AgentQuestion, now
+from app.db.models import AgentQuestion, AgentSession, User, now
 
 MAX_QUESTIONS = 4
 MAX_OPTIONS = 6
@@ -124,6 +124,44 @@ def dismiss(db: Session, row: AgentQuestion) -> AgentQuestion:
         db.commit()
         db.refresh(row)
     return row
+
+
+def deliver_to_session(db: Session, row: AgentQuestion, user: User) -> None:
+    """把用户的选择送回那次对话 —— 不送的话,答完就没有下文了。
+
+    `ask_user` **不阻塞**:模型建完问题拿回一个 id,轮询一次多半还是 pending,然后这一轮就
+    结束了(它没有别的办法等下去)。用户随后在界面上选了 —— 而"选"只是把一行状态改成
+    answered,没有任何东西会再开一轮。真机上的样子就是:点完之后**什么都不发生**。
+
+    `dismiss` 的说明写着「模型会收到『用户跳过了』并继续往下走」—— 回合都结束了,它拿什么收到。
+    这句话要成立,就得有人把结果送回去。
+
+    走的是任务回执那条现成的路(见 domain/agent/receipts):会话闲就立刻开新一轮,忙就排队。
+
+    **忙的时候也送。** 那一轮可能正好自己 get_answer 拿到了,于是多出一轮"我选了 X"的确认,
+    有点冗余。但反过来判断「在跑就不送」是个竞态:检查时它在跑、送出去之前它结束了,答案
+    就再一次掉进空里。多一轮看得出来,也忽略得掉;死路看不出来。
+    """
+    from app.domain.agent import host
+
+    session = db.get(AgentSession, row.session_id)
+    if session is None:
+        return
+    host.post_user_message(db, session, _as_user_words(row), user)
+
+
+def _as_user_words(row: AgentQuestion) -> str:
+    """回执的正文 —— 用户在对话里看到的也是这一句,所以要像他自己说的话。"""
+    if row.status == "dismissed":
+        return "我跳过了那几个问题,你按自己的判断继续。"
+    picked = row.answers or {}
+    if not picked:
+        return "我已经在选择卡上做了选择。"
+    lines = [
+        f"· {question}:{'、'.join(one) if isinstance(one, list) else one}"
+        for question, one in picked.items()
+    ]
+    return "我选好了:\n" + "\n".join(lines)
 
 
 def pending_for(db: Session, session_id: str) -> list[AgentQuestion]:

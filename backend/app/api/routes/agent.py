@@ -367,17 +367,25 @@ def answer_question(
     row = _require_question(db, user, question_id)
     ensure_workspace_perm(db, user, row.workspace_id, "ai")
     try:
-        return agent_questions.answer(db, row, body.answers)
+        answered = agent_questions.answer(db, row, body.answers)
     except agent_questions.QuestionError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    # 选完要有下文:ask_user 不阻塞,模型多半已经结束了这一轮(见 deliver_to_session)。
+    agent_questions.deliver_to_session(db, answered, user)
+    return answered
 
 
 @router.post("/agent/questions/{question_id}/dismiss", response_model=AgentQuestionOut)
 def dismiss_question(question_id: str, db: DbSession, user: CurrentUser) -> AgentQuestion:
-    """不想答。模型会收到「用户跳过了」并继续往下走,而不是卡在那儿等。"""
+    """不想答。模型会收到「用户跳过了」并继续往下走,而不是卡在那儿等。
+
+    「收到」是这里送过去的:ask_user 不阻塞,那一轮多半早就结束了,不送就真的卡在那儿。
+    """
     row = _require_question(db, user, question_id)
     ensure_workspace_perm(db, user, row.workspace_id, "ai")
-    return agent_questions.dismiss(db, row)
+    dismissed = agent_questions.dismiss(db, row)
+    agent_questions.deliver_to_session(db, dismissed, user)
+    return dismissed
 
 
 def _require_question(db: DbSession, user: CurrentUser, question_id: str) -> AgentQuestion:
