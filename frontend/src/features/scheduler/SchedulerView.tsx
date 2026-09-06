@@ -1,6 +1,6 @@
-import { CollectionDetail, DETAIL_INDEX_ITEM, DETAIL_INDEX_SELECTED, DETAIL_INDEX_TEXT } from "@/components/layout/CollectionDetail";
+import { CollectionDetail, COLLECTION_DETAIL_PAGE, COLLECTION_DETAIL_HEADING, DETAIL_INDEX_ITEM, DETAIL_INDEX_SELECTED, DETAIL_INDEX_TEXT } from "@/components/layout/CollectionDetail";
 import React from "react";
-import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
+import { PageHeading } from "@/components/layout/StudioPage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { GitBranch, CalendarClock, CheckCircle2, CircleAlert, Copy, Loader2, Play, Plus, Power, Timer, Trash2, Users2 } from "lucide-react";
 import { toast } from "sonner";
@@ -104,8 +104,9 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
 
   if (tasks.isSuccess && (tasks.data ?? []).length === 0) {
     return (
-      <div className={STUDIO_PAGE}>
-        <PageHeading title={t("tasks")} description={t("studioSchedulerDesc")} />
+      <div className={COLLECTION_DETAIL_PAGE}>
+        <PageHeading className={COLLECTION_DETAIL_HEADING} title={t("tasks")} description={t("studioSchedulerDesc")} />
+        <div className="flex min-h-0 flex-1 overflow-y-auto">
         <EmptyState
           icon={<Timer size={22} />}
           title={t("noTasks")}
@@ -116,14 +117,15 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
             </Button>
           }
         />
+        </div>
         {createDialog}
       </div>
     );
   }
 
   return (
-    <div className={STUDIO_PAGE}>
-      <PageHeading title={t("tasks")} description={t("studioSchedulerDesc")} count={tasks.data?.length} actions={<Button onClick={() => setCreating(true)}><Plus />{t("createTask")}</Button>} />
+    <div className={COLLECTION_DETAIL_PAGE}>
+      <PageHeading className={COLLECTION_DETAIL_HEADING} title={t("tasks")} description={t("studioSchedulerDesc")} count={tasks.data?.length} actions={<Button onClick={() => setCreating(true)}><Plus />{t("createTask")}</Button>} />
       <CollectionDetail storageKey="scheduler" label={t("tasks")} selected={!!selected} index={<>
             {tasks.isLoading &&
               (tasks.data ?? []).length === 0 &&

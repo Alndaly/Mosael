@@ -1,5 +1,5 @@
-import { CollectionDetail, DETAIL_INDEX_ITEM, DETAIL_INDEX_SELECTED, DETAIL_INDEX_TEXT } from "@/components/layout/CollectionDetail";
-import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
+import { CollectionDetail, COLLECTION_DETAIL_PAGE, COLLECTION_DETAIL_HEADING, DETAIL_INDEX_ITEM, DETAIL_INDEX_SELECTED, DETAIL_INDEX_TEXT } from "@/components/layout/CollectionDetail";
+import { PageHeading } from "@/components/layout/StudioPage";
 import React from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -71,14 +71,14 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
   const selected = list.find((item) => item.id === selectedId) ?? list[0] ?? null;
 
 
-  const heading = <PageHeading title={t("pluginsTitle")} description={t("studioPluginsDesc")} count={packages.data?.length} actions={<><ScanButton pending={scan.isPending} onScan={() => scan.mutate()} /><Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button></>} />;
-  if (empty) return <div className={STUDIO_PAGE}>
-    {heading}<div className="flex flex-1"><EmptyState icon={<Plug size={28} />} title={t("pluginsTitle")} body={t("noPluginsGuide").replace("{dir}", pluginsDir.data?.path ?? "")} action={<Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button>} /></div>
+  const heading = <PageHeading className={COLLECTION_DETAIL_HEADING} title={t("pluginsTitle")} description={t("studioPluginsDesc")} count={packages.data?.length} actions={<><ScanButton pending={scan.isPending} onScan={() => scan.mutate()} /><Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button></>} />;
+  if (empty) return <div className={COLLECTION_DETAIL_PAGE}>
+    {heading}<div className="flex min-h-0 flex-1 overflow-y-auto"><EmptyState icon={<Plug size={28} />} title={t("pluginsTitle")} body={t("noPluginsGuide").replace("{dir}", pluginsDir.data?.path ?? "")} action={<Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button>} /></div>
     <PluginMarketDialog open={marketOpen} onOpenChange={setMarketOpen} onInstalled={() => invalidatePlugins(qc)} />
   </div>;
 
   return (
-    <div className={STUDIO_PAGE}>
+    <div className={COLLECTION_DETAIL_PAGE}>
       {heading}
       <CollectionDetail storageKey="plugins" label={t("pluginsTitle")} selected={!!selected} index={<>
             {packages.isLoading &&
