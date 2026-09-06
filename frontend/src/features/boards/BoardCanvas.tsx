@@ -468,9 +468,9 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
   const displayNodes = React.useMemo(
     () => nodes.map((node) => ({
       ...node,
-      data: { ...node.data, onText: setText, onAspect: setAspect, commentMode },
+      data: { ...node.data, onText: setText, onAspect: setAspect, commentMode, workspaceId, boardId },
     })),
-    [nodes, setText, setAspect, commentMode],
+    [nodes, setText, setAspect, commentMode, workspaceId, boardId],
   );
 
   const serialized = React.useMemo(() => JSON.stringify(toCanvas(nodes, edges)), [nodes, edges]);

@@ -482,6 +482,7 @@ from app.db.model_slices.workflows import Workflow, WorkflowRevision  # noqa: E4
 
 
 from app.db.model_slices.boards import Board  # noqa: E402,F401
+from app.db.model_slices.notes import Note, NoteRevision  # noqa: E402,F401
 
 
 from app.db.model_slices.collaboration import ActivityEvent, Comment, CommentMention, Review  # noqa: E402,F401

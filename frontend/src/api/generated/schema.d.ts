@@ -3273,6 +3273,128 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/notes/sources/message/{message_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Source Message */
+        get: operations["source_message_api_notes_sources_message__message_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Notes */
+        get: operations["list_notes_api_notes_get"];
+        put?: never;
+        /** Create */
+        post: operations["create_api_notes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notes/{note_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read */
+        get: operations["read_api_notes__note_id__get"];
+        put?: never;
+        post?: never;
+        /** Permanently Delete */
+        delete: operations["permanently_delete_api_notes__note_id__delete"];
+        options?: never;
+        head?: never;
+        /** Edit */
+        patch: operations["edit_api_notes__note_id__patch"];
+        trace?: never;
+    };
+    "/api/notes/{note_id}/append": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Append */
+        post: operations["append_api_notes__note_id__append_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notes/{note_id}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Revisions */
+        get: operations["revisions_api_notes__note_id__revisions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notes/{note_id}/revisions/{revision}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Revision Content */
+        get: operations["revision_content_api_notes__note_id__revisions__revision__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notes/{note_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore */
+        post: operations["restore_api_notes__note_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/publish/platforms": {
         parameters: {
             query?: never;
@@ -7329,6 +7451,175 @@ export interface components {
             proxy_url?: string | null;
             /** No Proxy */
             no_proxy?: string | null;
+        };
+        /** NoteAppend */
+        NoteAppend: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Base Revision */
+            base_revision: number;
+            /** Markdown */
+            markdown: string;
+            /** Sources */
+            sources?: components["schemas"]["NoteSource"][];
+        };
+        /** NoteCreate */
+        NoteCreate: {
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Markdown
+             * @default
+             */
+            markdown: string;
+            /** Project Id */
+            project_id?: string | null;
+            /** Tags */
+            tags?: string[];
+            /** Topics */
+            topics?: string[];
+            /** Sources */
+            sources?: components["schemas"]["NoteSource"][];
+            /**
+             * Favorite
+             * @default false
+             */
+            favorite: boolean;
+            /**
+             * Trashed
+             * @default false
+             */
+            trashed: boolean;
+            /** Workspace Id */
+            workspace_id: string;
+        };
+        /** NoteOut */
+        NoteOut: {
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Markdown
+             * @default
+             */
+            markdown: string;
+            /** Project Id */
+            project_id?: string | null;
+            /** Tags */
+            tags?: string[];
+            /** Topics */
+            topics?: string[];
+            /** Sources */
+            sources?: components["schemas"]["NoteSource"][];
+            /**
+             * Favorite
+             * @default false
+             */
+            favorite: boolean;
+            /**
+             * Trashed
+             * @default false
+             */
+            trashed: boolean;
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Revision */
+            revision: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** NoteRestore */
+        NoteRestore: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Base Revision */
+            base_revision: number;
+            /** Revision */
+            revision: number;
+        };
+        /** NoteSource */
+        NoteSource: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "asset" | "message" | "board" | "note" | "url";
+            /**
+             * Id
+             * @default
+             */
+            id: string;
+            /**
+             * Label
+             * @default
+             */
+            label: string;
+            /**
+             * Quote
+             * @default
+             */
+            quote: string;
+            /** Start */
+            start?: number | null;
+            /** End */
+            end?: number | null;
+            /**
+             * Url
+             * @default
+             */
+            url: string;
+            /** Revision */
+            revision?: number | null;
+        };
+        /** NoteUpdate */
+        NoteUpdate: {
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Markdown
+             * @default
+             */
+            markdown: string;
+            /** Project Id */
+            project_id?: string | null;
+            /** Tags */
+            tags?: string[];
+            /** Topics */
+            topics?: string[];
+            /** Sources */
+            sources?: components["schemas"]["NoteSource"][];
+            /**
+             * Favorite
+             * @default false
+             */
+            favorite: boolean;
+            /**
+             * Trashed
+             * @default false
+             */
+            trashed: boolean;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Base Revision */
+            base_revision: number;
         };
         /** NotificationListOut */
         NotificationListOut: {
@@ -17118,6 +17409,344 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BoardOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    source_message_api_notes_sources_message__message_id__get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_notes_api_notes_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+                q?: string;
+                trashed?: boolean;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_api_notes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_api_notes__note_id__get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path: {
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    permanently_delete_api_notes__note_id__delete: {
+        parameters: {
+            query: {
+                workspace_id: string;
+                base_revision: number;
+            };
+            header?: never;
+            path: {
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_api_notes__note_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    append_api_notes__note_id__append_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteAppend"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revisions_api_notes__note_id__revisions_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path: {
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revision_content_api_notes__note_id__revisions__revision__get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path: {
+                note_id: string;
+                revision: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_api_notes__note_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteRestore"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteOut"];
                 };
             };
             /** @description Validation Error */

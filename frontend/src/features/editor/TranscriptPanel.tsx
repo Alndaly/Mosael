@@ -1,3 +1,5 @@
+import { SaveToNote } from "@/features/notes/SaveToNote";
+import type { NoteSource } from "@/api/domains/notes";
 import React from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AudioLines, Captions, Loader2, MessageSquareText, Mic, Scissors, Sparkles, Split, SplitSquareVertical, Trash2, X } from "lucide-react";
@@ -524,10 +526,21 @@ export function TranscriptPanel({
     );
   }
 
+  const excerptSegments = projected.filter(segment => selected.size
+    ? [...selected.values()].some(token => token.clipId === segment.clipId && token.srcStart < segment.srcEnd && token.srcEnd > segment.srcStart)
+    : playhead >= segment.timelineStart && playhead < segment.timelineEnd);
+  const excerptSources: NoteSource[] = excerptSegments.flatMap(segment => {
+    const clip = clipById.get(segment.clipId);
+    return clip?.asset_id ? [{kind: "asset" as const, id: clip.asset_id, label: sequence.name,
+      quote: segment.text, start: segment.srcStart, end: segment.srcEnd}] : [];
+  });
+  const excerptText = excerptSources.map(source => `> ${source.quote.replace(/\n/g, "\n> ")}\n\n${source.label} · ${source.start?.toFixed(1)}–${source.end?.toFixed(1)}s`).join("\n\n");
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-wrap gap-2 border-b border-border px-3 py-3">
         {transcribeButton}
+        <SaveToNote workspaceId={sequence.workspace_id} content={excerptText} sources={excerptSources} className={PILL} />
         <button
           type="button"
           className={cn(PILL, showSilences && "border-[color-mix(in_oklab,var(--primary)_40%,var(--border))] bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))] text-primary enabled:hover:text-primary")}

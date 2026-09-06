@@ -1,3 +1,4 @@
+import { useNoteAttachments } from "@/features/notes/useNoteAttachments";
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -80,6 +81,7 @@ export function CanvasAgentChat({
   const t = useI18n();
   const qc = useQueryClient();
   const [draft, setDraft] = React.useState("");
+  const noteAttach = useNoteAttachments(workspaceId);
   const [streamText, setStreamText] = React.useState("");
   const [streamTimeline, setStreamTimeline] = React.useState<AgentTimelineItem[]>([]);
   // 附件三种入口(选文件 / 拖放 / 粘贴)与对话页共用同一套逻辑,见 composerAttachments。
@@ -293,7 +295,7 @@ export function CanvasAgentChat({
       api<{ steered: boolean }>(`/api/agent/sessions/${sessionId}/queue/${messageId}/steer`, { method: "POST" }),
     onSuccess: refreshQueue,
   });
-  const showStop = running && !draft.trim() && attach.isEmpty;
+  const showStop = running && !draft.trim() && attach.isEmpty && !noteAttach.hasNotes;
   const stopTurn = useMutation({
     mutationFn: () => api(`/api/agent/sessions/${sessionId}/stop`, { method: "POST" }),
     meta: { silentError: true },
@@ -403,8 +405,9 @@ export function CanvasAgentChat({
       const fileBlock = textAttachmentBlock(files, t("wfAgentAttached"));
       let visibleContent = text || files.map((file) => `[${t("wfAgentAttached")} ${file.name}]`).join("\n");
       for (const asset of mediaAssets) visibleContent += attachmentToken(asset);
+      if (noteAttach.hasNotes) visibleContent += `\n${noteAttach.summary}`;
       visibleContent = visibleContent.trim();
-      const context = [contextLine, fileBlock].filter(Boolean).join("\n\n");
+      const context = [contextLine, fileBlock, noteAttach.context].filter(Boolean).join("\n\n");
       let targetId = sessionId;
       if (!targetId) {
         const created = await api<AgentSession>("/api/agent/sessions", {
@@ -426,6 +429,7 @@ export function CanvasAgentChat({
     },
     onSuccess: ({ targetId }) => {
       setDraft("");
+      noteAttach.clear();
       attach.clear();
       void qc.invalidateQueries({ queryKey: ["agent-queue", targetId] });
       void qc.invalidateQueries({ queryKey: ["agent-messages", targetId] });
@@ -436,7 +440,7 @@ export function CanvasAgentChat({
 
   const submit = () => {
     // `running` is deliberately not a guard: the backend steers a mid-turn message.
-    if ((!draft.trim() && attach.isEmpty) || send.isPending) return;
+    if ((!draft.trim() && attach.isEmpty && !noteAttach.hasNotes) || send.isPending) return;
     send.mutate({ text: draft.trim(), files: attach.files, mediaAssets: attach.media });
   };
 
@@ -551,6 +555,7 @@ export function CanvasAgentChat({
               )}
               {message.role === "assistant" && (
                 <MessageUsageFooter
+                  messageId={message.id}
                   workspaceId={workspaceId}
                   content={message.content}
                   usageEvents={usageByMessage.get(message.id) ?? []}
@@ -630,6 +635,7 @@ export function CanvasAgentChat({
           }}
         />
         {/* 内层去底色/边框/焦点环:外层输入卡已是表面,双层盒子叠着难看(对话页同款处理)。 */}
+        {noteAttach.chips}{noteAttach.dialog}
         <Textarea
           rows={1}
           className="max-h-[220px] min-h-9 w-full min-w-0 resize-none border-0 bg-transparent px-0.5 pb-1.5 pt-0.5 text-ui-md leading-[1.55] shadow-none outline-none placeholder:text-muted-foreground placeholder:opacity-100 focus-visible:ring-0"
@@ -638,6 +644,7 @@ export function CanvasAgentChat({
           onChange={(event) => setDraft(event.target.value)}
           onPaste={attach.onPaste}
           onKeyDown={(event) => {
+            if (noteAttach.onKeyDown(event)) return;
             if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault();
               submit();
@@ -646,6 +653,7 @@ export function CanvasAgentChat({
         />
         <div className="flex items-center justify-between gap-1.5">
           <div className="flex min-w-0 items-center gap-1">
+            {noteAttach.trigger}
             {/* icon-xs(28px)是工具栏那一档,整行统一走它。默认的 icon 是 36px,
                 在这一行里会比旁边的胶囊高出一截 —— 圆形按钮尤其藏不住这 8px。 */}
             <Button
@@ -695,7 +703,7 @@ export function CanvasAgentChat({
               size="icon"
               className="rounded-full"
               aria-label={running ? t("chatSteer") : t("chatSend")}
-              disabled={(!draft.trim() && attach.isEmpty) || attach.uploading} loading={send.isPending}
+              disabled={(!draft.trim() && attach.isEmpty && !noteAttach.hasNotes) || attach.uploading} loading={send.isPending}
               onClick={submit}
             >
               <Send size={14} />

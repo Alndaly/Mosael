@@ -5,6 +5,7 @@ import { WrapText } from "lucide-react";
 
 import { codeHighlighter } from "@/components/agent/codeHighlighter";
 import { cn } from "@/lib/utils";
+import { CitationLink } from "./CitationLink";
 
 import { useI18n } from "@/app/preferences";
 
@@ -103,7 +104,7 @@ function CodeCard({ children }: React.ComponentProps<"pre"> & { node?: unknown }
 }
 
 /** 定值:组件表每次换新对象都会让 Streamdown 重建一遍内部的 components。 */
-const COMPONENTS: Components = { pre: CodeCard };
+const COMPONENTS: Components = { pre: CodeCard, a: CitationLink };
 
 export function AgentMarkdown({ children }: { children: string }) {
   const t = useI18n();

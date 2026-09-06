@@ -55,6 +55,7 @@ const ICONS: Record<StudioView, React.ReactNode> = {
   home: <Home size={17} />,
   statistics: <ChartNoAxesCombined size={17} />,
   media: <FolderOpen size={17} />,
+  notes: <BookOpen size={17} />,
   editor: <Scissors size={17} />,
   ai: <Bot size={17} />,
   publish: <Rocket size={17} />,

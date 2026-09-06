@@ -1,3 +1,4 @@
+import { SaveToNote } from "@/features/notes/SaveToNote";
 import React from "react";
 import { Check, Copy } from "lucide-react";
 
@@ -190,6 +191,7 @@ export function MessageTime({ iso }: { iso: string | null | undefined }) {
 
 /** 助手回复页脚:复制 + 耗时 + tokens + 计费。durationOverride 用消息 payload 里的耗时兜底。 */
 export function MessageUsageFooter({
+  messageId,
   content,
   usageEvents,
   durationOverride,
@@ -197,6 +199,7 @@ export function MessageUsageFooter({
   className,
 }: {
   content: string;
+  messageId?: string;
   usageEvents: AgentUsageEvent[];
   durationOverride?: number | null;
   /** 念这一句记在哪个工作区的账上 —— TTS 按字符计费,记账要有归属。 */
@@ -215,6 +218,7 @@ export function MessageUsageFooter({
 
   return (
     <MessageFooter content={content} className={className}>
+      {workspaceId && <SaveToNote workspaceId={workspaceId} content={content} className={FOOTER_ACTION_CLASS} sources={messageId ? [{kind: "message", id: messageId, label: content.slice(0, 60), quote: ""}] : []} />}
       {/* 念出来挨着复制:两个都是"把这条内容带走",只是一个用眼睛一个用耳朵。 */}
       <SpeakButton text={content} workspaceId={workspaceId} />
       {typeof duration === "number" && (

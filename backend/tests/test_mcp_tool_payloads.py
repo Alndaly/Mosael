@@ -37,6 +37,10 @@ ARGS: dict[str, dict[str, Any]] = {
     "list_boards": {},
     "list_workflow_node_types": {},
     "list_memories": {},
+    "search_notes": {"query": "灵感"},
+    "read_note": {"note_id": "no-such-note"},
+    "create_note": {"title": "冒烟笔记", "markdown": "正文"},
+    "append_note": {"note_id": "no-such-note", "base_revision": 1, "markdown": "补充"},
     # 问一个形状合法的问题:载荷要能被 /api/agent/questions 接住。没有会话上下文时它会
     # 早退(返回 error),那条路不打后端 —— 所以这里主要盯的是**有**会话时那一份形状。
     "ask_user": {

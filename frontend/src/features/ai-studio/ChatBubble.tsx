@@ -130,6 +130,7 @@ export function ChatBubble({
           用户这边是发出的时间。都只在悬停时显形 —— 常态下这一行是空的,不该占视线。 */}
       {message.role === "assistant" ? (
         <MessageUsageFooter
+                  messageId={message.id}
           workspaceId={workspaceId}
           content={message.content}
           usageEvents={usageEvents}

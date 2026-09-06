@@ -84,6 +84,11 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
     boards.data?.map((board) => board.id),
   );
   const open = list.find((board) => board.id === openId) ?? null;
+  React.useEffect(() => {
+    const onOpen = (event: Event) => { const id = (event as CustomEvent<string>).detail; if (list.some(b => b.id === id)) setOpenId(id); };
+    window.addEventListener("mosael:open-board", onOpen);
+    return () => window.removeEventListener("mosael:open-board", onOpen);
+  }, [list, setOpenId]);
 
   const create = useMutation({
     mutationFn: () => createBoard({ workspace_id: workspace.id }),

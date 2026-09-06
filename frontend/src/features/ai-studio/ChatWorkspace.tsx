@@ -1,3 +1,4 @@
+import { useNoteAttachments } from "@/features/notes/useNoteAttachments";
 import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
 import React from "react";
 import { StudioIndex } from "@/components/layout/StudioIndex";
@@ -64,6 +65,7 @@ export function ChatWorkspace({
   const sessionKey = agentSessionSelectionKey(workspace.id);
   const [sessionId, setSessionId] = React.useState<string | null>(() => window.localStorage.getItem(sessionKey));
   const [draft, setDraft] = React.useState("");
+  const noteAttach = useNoteAttachments(workspace.id);
   // 附件三种入口(选文件 / 拖放 / 粘贴)与工作流助手共用同一套逻辑,见 composerAttachments。
   const attach = useComposerAttachments(workspace.id);
   const manifest = useQuery({
@@ -230,7 +232,7 @@ export function ChatWorkspace({
       refreshQueue();
     },
   });
-  const showStop = running && !draft.trim() && attach.isEmpty;
+  const showStop = running && !draft.trim() && attach.isEmpty && !noteAttach.hasNotes;
   const stopTurn = useMutation({
     mutationFn: () => api<{ stopped: boolean }>(`/api/agent/sessions/${activeSession?.id}/stop`, { method: "POST" }),
     // Nothing to report either way: a successful stop is visible as the turn ending, and
@@ -280,12 +282,13 @@ export function ChatWorkspace({
       }
       const message = await api<AgentMessage>(`/api/agent/sessions/${targetId}/messages`, {
         method: "POST",
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, context: noteAttach.context }),
       });
       return { message, targetId };
     },
     onSuccess: ({ targetId }, _content, _ctx) => {
       setDraft("");
+      noteAttach.clear();
       void qc.invalidateQueries({ queryKey: ["agent-queue", targetId] });
       void qc.invalidateQueries({ queryKey: ["agent-messages", targetId] });
       void qc.invalidateQueries({ queryKey: ["agent-sessions", workspace.id] });
@@ -314,12 +317,13 @@ export function ChatWorkspace({
     event.preventDefault();
     // `running` is deliberately NOT a guard any more: a message typed while the agent works
     // is a correction, and the backend injects it into the running turn (pi steering queue).
-    if ((!draft.trim() && attach.isEmpty) || sendMessage.isPending) return;
+    if ((!draft.trim() && attach.isEmpty && !noteAttach.hasNotes) || sendMessage.isPending) return;
     stick.scrollToBottom(); // 自己发的消息一定要看得见
     // 文本文件内联成围栏上下文、媒体编码成附件标记 —— 与工作流助手同一种拼法,
     // 于是两边发出来的气泡也长得一样。
     const fileBlock = textAttachmentBlock(attach.files, t("chatAttached"));
     let content = draft.trim() || attach.files.map((file) => `[${t("chatAttached")} ${file.name}]`).join("\n");
+    if (noteAttach.hasNotes) content += `\n${noteAttach.summary}`;
     for (const asset of attach.media) content += attachmentToken(asset);
     sendMessage.mutate([content.trim(), fileBlock].filter(Boolean).join("\n\n"));
     attach.clear();
@@ -619,6 +623,7 @@ export function ChatWorkspace({
             >
               {/* 附件条属于输入框内部(文本框上方),而不是飘在圆角框外的左上角。 */}
               <AttachmentChips attachments={attach} className="flex flex-wrap gap-1.5 px-0.5 pb-1" />
+              {noteAttach.chips}{noteAttach.dialog}
               <Textarea
                 data-chat-composer
                 rows={3}
@@ -632,6 +637,7 @@ export function ChatWorkspace({
                 }}
                 onPaste={attach.onPaste}
                 onKeyDown={(event) => {
+                  if (noteAttach.onKeyDown(event)) return;
                   if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
                     event.preventDefault();
                     submit(event);
@@ -640,6 +646,7 @@ export function ChatWorkspace({
               />
               <div className="flex items-center justify-between gap-1.5 pt-0.5">
                 <div className="flex items-center gap-1.5">
+                  {noteAttach.trigger}
                   {/* 28px —— 和画布助手那一行同一个刻度。见那边的说明。 */}
                   <Button asChild variant="ghost" size="icon-xs" aria-label={t("attachFile")} disabled={attach.uploading}>
                     <label>
@@ -694,7 +701,7 @@ export function ChatWorkspace({
                     size="icon"
                     className="shrink-0 rounded-full"
                     aria-label={running ? t("chatSteer") : t("chatSend")}
-                    disabled={(!draft.trim() && attach.isEmpty) || attach.uploading} loading={sendMessage.isPending}
+                    disabled={(!draft.trim() && attach.isEmpty && !noteAttach.hasNotes) || attach.uploading} loading={sendMessage.isPending}
                   >
                     <Send size={15} />
                   </Button>
