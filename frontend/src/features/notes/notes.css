@@ -84,3 +84,15 @@
 @container (max-width:380px) {
   .note-format .note-format-history { margin-left:0; }
 }
+
+/* One stable document toolbar: formatting sits between save state and view actions. */
+.note-document-header { flex-wrap:nowrap; gap:8px; padding:10px 16px; }
+.note-document-header .note-status { margin-right:0; white-space:nowrap; flex-shrink:0; }
+.note-header-format { flex:1; min-width:0; overflow-x:auto; scrollbar-width:thin; }
+.note-header-format .note-format { position:static; flex-wrap:nowrap; width:max-content; margin:0 auto; padding:0 8px; gap:6px; }
+.note-header-format .note-format::before { display:none; }
+.note-header-format .note-format-history { margin-left:0; }
+.note-header-actions { display:flex; flex-shrink:0; align-items:center; gap:4px; white-space:nowrap; }
+.note-header-format:empty { overflow:visible; }
+.note-paper { padding-top:20px; }
+@media(max-width:1100px) { .note-document-header .note-status { display:none; } .note-header-format .note-format-insert span { display:none; } .note-document-header { gap:4px; padding-inline:10px; } }
