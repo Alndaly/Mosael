@@ -1,6 +1,22 @@
 {
-  "fetchedAt": "2026-09-06T09:17:09.873019+00:00",
+  "fetchedAt": "2026-09-06T17:06:38.166217+00:00",
   "releases": [
+    {
+      "tag_name": "v1.0.0",
+      "name": "Mosael v1.0.0",
+      "body": "Mosael **1.0.0** is the stable release of the local-first creative studio.\n\n**Mosael 1.0.0 正式发布。** 剪辑、素材管理、智能体、工作流、定时任务和发布能力整合在同一个桌面应用中。\n\n## 新版界面\n\n- 统一按钮、筛选、弹窗与菜单，降低边框和分割线的对比度；悬浮窗口采用半透明模糊背景，并适配自定义背景。\n- 重构剪辑工作区和媒体预览，压缩重复标题，统一面板与工具栏。视频、音频和图片使用新的预览布局，长名称不再撑破弹窗。\n- 修复素材页多个菜单同时展开、画布 @ 菜单定位、悬浮助手标题栏拖动，以及助手打开时的节点可视区域居中。\n- 设置 → 外观新增全局字体选择，内置中英文字体组合，包括 Space Grotesk、Newsreader、Caveat 和 Kalam 手写风格。\n\n## 官网与文档\n\n- 全面核对 40 篇中英文文档，补充外观字体与定时任务指南，修正导航、发布账号入口及运行环境说明。\n- 重录 136 张截图、52 个 GIF 和 52 段可暂停 MP4，覆盖浅色 / 深色、中文 / 英文的编辑器、素材预览、画板、工作流、AI Studio、插件、发布和设置。\n- 官网首页改用当前界面实拍；README 加入不同主题与字体的错层截图展示。媒体附来源与校验清单，旧宣传视频和过期配图退役。\n\n## English\n\n- Unified controls, filters, menus and frosted dialogs, softened separators, and preserved custom backgrounds across workspaces.\n- Rebuilt the editing workspace and media previews; removed duplicate headings and contained long titles.\n- Fixed overlapping asset menus, canvas mention positioning, floating-assistant header dragging and centering nodes in the visible canvas area.\n- Added global bundled interface fonts with Chinese companions, including Space Grotesk, Newsreader and handwritten Caveat / Kalam.\n- Refreshed bilingual guides and all active product captures in both themes, with controllable MP4 recordings, media credits and integrity checks.\n\n## 安装 / Install\n\nThis is the **stable 1.0.0 release** and the latest stable update. Download the macOS Apple Silicon DMG or Windows x64 installer below. The Chrome extension and plugin packages are included in the release assets.\n\n这是 **1.0.0 正式版本**，已进入稳定更新渠道。macOS 请下载 Apple Silicon DMG，Windows 请下载 x64 安装程序；下方同时提供浏览器扩展和示例插件。\n\nBack up your active backend data directory before upgrading. Remote desktop/backend installations should be updated together. Existing project data remains outside the application bundle.\n\nWebsite: https://mosael.com\n\n[Full changelog](https://github.com/Alndaly/Mosael/compare/v0.27.6...v1.0.0) · [Documentation](https://mosael.com/zh/docs/start/intro) · [Media credits](https://mosael.com/en/docs/about/project#media-credits)\n",
+      "draft": false,
+      "prerelease": false,
+      "published_at": "2026-09-06T17:02:47Z"
+    },
+    {
+      "tag_name": "v1.0.0-beta5",
+      "name": "Mosael v1.0.0-beta5",
+      "body": "Mosael 1.0.0-beta5 updates the desktop interface and replaces the website's product documentation and media with captures from the current application.\n\n## 新版界面\n\n- 统一按钮、筛选、弹窗与菜单，降低边框和分割线的对比度；悬浮窗口采用半透明模糊背景，并适配自定义背景。\n- 重构剪辑工作区和媒体预览，压缩重复标题，统一面板与工具栏。视频、音频和图片使用新的预览布局，长名称不再撑破弹窗。\n- 修复素材页多个菜单同时展开、画布 @ 菜单定位、悬浮助手标题栏拖动，以及助手打开时的节点可视区域居中。\n- 设置 → 外观新增全局字体选择，内置中英文字体组合，包括 Space Grotesk、Newsreader、Caveat 和 Kalam 手写风格。\n\n## 官网与文档\n\n- 全面核对 40 篇中英文文档，补充外观字体与定时任务指南，修正导航、发布账号入口及运行环境说明。\n- 重录 136 张截图、52 个 GIF 和 52 段可暂停 MP4，覆盖浅色 / 深色、中文 / 英文的编辑器、素材预览、画板、工作流、AI Studio、插件、发布和设置。\n- 官网首页改用当前界面实拍；README 加入不同主题与字体的错层截图展示。媒体附来源与校验清单，旧宣传视频和过期配图退役。\n\n## English\n\n- Unified controls, filters, menus and frosted dialogs, softened separators, and preserved custom backgrounds across workspaces.\n- Rebuilt the editing workspace and media previews; removed duplicate headings and contained long titles.\n- Fixed overlapping asset menus, canvas mention positioning, floating-assistant header dragging and centering nodes in the visible canvas area.\n- Added global bundled interface fonts with Chinese companions, including Space Grotesk, Newsreader and handwritten Caveat / Kalam.\n- Refreshed bilingual guides and all active product captures in both themes, with controllable MP4 recordings, media credits and integrity checks.\n\n## 安装 / Install\n\nThis is an opt-in prerelease. Download the macOS Apple Silicon DMG or Windows x64 installer below. The Chrome extension and plugin packages are included in the release assets. This beta does not replace the latest stable release used by automatic update checks.\n\nBack up your active backend data directory before upgrading. Remote desktop/backend installations should be updated together. Existing project data remains outside the application bundle.\n\nWebsite: https://mosael.com\n\n[Full changelog](https://github.com/Alndaly/Mosael/compare/v1.0.0-beta4...v1.0.0-beta5) · [Documentation](https://mosael.com/zh/docs/start/intro) · [Media credits](https://mosael.com/en/docs/about/project#media-credits)\n",
+      "draft": false,
+      "prerelease": true,
+      "published_at": "2026-09-06T16:39:58Z"
+    },
     {
       "tag_name": "v1.0.0-beta4",
       "name": "Mosael v1.0.0-beta4",
@@ -224,22 +240,6 @@
       "draft": false,
       "prerelease": false,
       "published_at": "2026-08-18T11:58:26Z"
-    },
-    {
-      "tag_name": "v0.18.12",
-      "name": "Open Studio v0.18.12",
-      "body": "**Full Changelog**: https://github.com/Alndaly/OpenStudio/compare/v0.18.8...v0.18.12",
-      "draft": false,
-      "prerelease": false,
-      "published_at": "2026-08-18T11:45:05Z"
-    },
-    {
-      "tag_name": "v0.18.8",
-      "name": "Open Studio v0.18.8",
-      "body": "**Full Changelog**: https://github.com/Alndaly/OpenStudio/compare/v0.18.7...v0.18.8",
-      "draft": false,
-      "prerelease": false,
-      "published_at": "2026-08-18T10:47:39Z"
     }
   ]
 }
