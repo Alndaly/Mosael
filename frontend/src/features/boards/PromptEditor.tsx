@@ -1,3 +1,4 @@
+import { FLOATING_SURFACE } from "@/components/ui/floating";
 import React from "react";
 import {
   EditorContent,
@@ -326,7 +327,7 @@ export function PromptEditor({
     <>
       <EditorContent editor={editor} />
       <menu.Portal
-        className="fixed left-0 top-0 z-50 max-h-64 w-72 rounded-lg border border-border-strong bg-panel p-1 shadow-[var(--shadow-panel)]"
+        className={cn(FLOATING_SURFACE, "fixed left-0 top-0 z-50 max-h-64 w-72 p-1")}
         header={
           <div className="grid gap-1 border-b border-border px-1 pb-1.5 pt-0.5">
             {/* 快捷分类。**只摆真的有东西的那几档** —— 一个按下去必然空的筛选钮,

@@ -5,6 +5,8 @@ import * as SelectPrimitive from "@radix-ui/react-select"
 import { Check, ChevronDown, ChevronUp } from "lucide-react"
 
 import { FIELD_TRIGGER_CLASS } from "@/components/ui/field-trigger"
+import { FLOATING_SURFACE, FLOATING_MOTION, MENU_SEPARATOR } from "./floating"
+
 import { cn } from "@/lib/utils"
 
 const Select = SelectPrimitive.Root
@@ -77,7 +79,8 @@ const SelectContent = React.forwardRef<
         // 近千像素(触发器在屏幕底部、向上展开时)——时长区间 4–30s 列成 27 项就是这个下场,
         // 顶部的选项直接跑出窗口外。所以再叠一个固定上限,长列表在菜单内部滚(滚动按钮
         // 是 ScrollUp/DownButton,已在下面挂着)。fallback 100vh 兜住 var 不存在的非 popper 场景。
-        "relative z-50 max-h-[min(20rem,var(--radix-select-content-available-height,100vh))] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-xl border bg-popover shadow-[var(--shadow-panel)] text-popover-foreground  data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-[--radix-select-content-transform-origin]",
+        FLOATING_SURFACE, FLOATING_MOTION,
+        "relative z-50 max-h-[min(20rem,var(--radix-select-content-available-height,100vh))] min-w-[8rem] overflow-y-auto overflow-x-hidden",
         // 菜单**不窄于**字段(对齐好看),但也**不被字段封顶**:此前这里是
         // `max-w-[trigger-width]`,于是任何一个窄字段都会把自己的菜单压成一样窄 ——
         // 配音面板 65px 的引擎格里,「F5-TTS」「Fish Speech S2 Pro」实测显示成
@@ -85,7 +88,7 @@ const SelectContent = React.forwardRef<
         // 上限交给 Radix 算出来的可用宽度,这样它仍然不会顶出屏幕。
         position === "popper" && "min-w-[var(--radix-select-trigger-width)] max-w-[--radix-select-content-available-width]",
         position === "popper" &&
-          "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
+          "data-[side=bottom]:translate-y-1.5 data-[side=left]:-translate-x-1.5 data-[side=right]:translate-x-1.5 data-[side=top]:-translate-y-1.5",
         className
       )}
       position={position}
@@ -94,7 +97,7 @@ const SelectContent = React.forwardRef<
       <SelectScrollUpButton />
       <SelectPrimitive.Viewport
         className={cn(
-          "p-1",
+          "p-1.5",
           position === "popper" &&
             "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]"
         )}
@@ -126,7 +129,7 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full min-w-0 cursor-default select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>span:last-child]:block [&>span:last-child]:min-w-0 [&>span:last-child]:truncate",
+      "relative flex min-h-9 w-full min-w-0 cursor-default select-none items-center rounded-md py-2 pl-2.5 pr-8 text-ui-sm leading-5 outline-none focus:bg-secondary data-[disabled]:pointer-events-none data-[disabled]:opacity-40 [&>span:last-child]:block [&>span:last-child]:min-w-0 [&>span:last-child]:truncate",
       className
     )}
     {...props}
@@ -147,7 +150,7 @@ const SelectSeparator = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SelectPrimitive.Separator
     ref={ref}
-    className={cn("-mx-1 my-1 h-px bg-muted", className)}
+    className={cn(MENU_SEPARATOR, className)}
     {...props}
   />
 ))

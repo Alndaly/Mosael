@@ -4,6 +4,8 @@ import * as React from "react"
 import * as ContextMenuPrimitive from "@radix-ui/react-context-menu"
 import { Check, ChevronRight, Circle } from "lucide-react"
 
+import { FLOATING_SURFACE, FLOATING_MOTION, MENU_ITEM, MENU_SEPARATOR } from "./floating"
+
 import { cn } from "@/lib/utils"
 
 const ContextMenu = ContextMenuPrimitive.Root
@@ -27,8 +29,8 @@ const ContextMenuSubTrigger = React.forwardRef<
   <ContextMenuPrimitive.SubTrigger
     ref={ref}
     className={cn(
-      "flex cursor-default select-none items-center gap-2 rounded-md px-2.5 py-2 text-ui-md outline-none focus:bg-accent focus:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground [&_svg]:size-3.5 [&_svg]:shrink-0 [&_svg]:opacity-70",
-      inset && "pl-7",
+      MENU_ITEM, "data-[state=open]:bg-secondary",
+      inset && "pl-8",
       className
     )}
     {...props}
@@ -51,7 +53,8 @@ const ContextMenuSubContent = React.forwardRef<
     <ContextMenuPrimitive.SubContent
       ref={ref}
       className={cn(
-        "z-50 min-w-[164px] overflow-hidden rounded-xl border bg-popover shadow-[var(--shadow-panel)] p-1 text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-[--radix-context-menu-content-transform-origin]",
+        FLOATING_SURFACE, FLOATING_MOTION,
+        "z-50 min-w-48 max-w-[min(24rem,calc(100vw-1rem))] max-h-[var(--radix-context-menu-content-available-height)] overflow-y-auto p-1.5",
         className
       )}
       {...props}
@@ -68,7 +71,8 @@ const ContextMenuContent = React.forwardRef<
     <ContextMenuPrimitive.Content
       ref={ref}
       className={cn(
-        "z-50 max-h-[--radix-context-menu-content-available-height] min-w-[164px] overflow-y-auto overflow-x-hidden rounded-xl border bg-popover shadow-[var(--shadow-panel)] p-1 text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-[--radix-context-menu-content-transform-origin]",
+        FLOATING_SURFACE, FLOATING_MOTION,
+        "z-50 max-h-[var(--radix-context-menu-content-available-height)] min-w-48 max-w-[min(24rem,calc(100vw-1rem))] overflow-y-auto overflow-x-hidden p-1.5",
         className
       )}
       {...props}
@@ -86,9 +90,9 @@ const ContextMenuItem = React.forwardRef<
   <ContextMenuPrimitive.Item
     ref={ref}
     className={cn(
-      // 图标统一 14px、随行文字变色(destructive/focus 一起变),透明度压出「哑」感。
-      "relative flex cursor-default select-none items-center gap-2 rounded-md px-2.5 py-2 text-ui-md outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-3.5 [&_svg]:shrink-0 [&_svg]:opacity-70",
-      inset && "pl-7",
+      // Shared menu metrics apply to regular, checked and nested actions.
+      MENU_ITEM,
+      inset && "pl-8",
       className
     )}
     {...props}
@@ -103,7 +107,7 @@ const ContextMenuCheckboxItem = React.forwardRef<
   <ContextMenuPrimitive.CheckboxItem
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center gap-2 rounded-md py-2 pl-7 pr-2 text-ui-md outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      MENU_ITEM, "pl-8",
       className
     )}
     checked={checked}
@@ -127,14 +131,14 @@ const ContextMenuRadioItem = React.forwardRef<
   <ContextMenuPrimitive.RadioItem
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center gap-2 rounded-md py-2 pl-7 pr-2 text-ui-md outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      MENU_ITEM, "pl-8",
       className
     )}
     {...props}
   >
     <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
       <ContextMenuPrimitive.ItemIndicator>
-        <Circle className="h-2 w-2 fill-current" />
+        <Circle className="!size-2 fill-current" />
       </ContextMenuPrimitive.ItemIndicator>
     </span>
     {children}
@@ -152,7 +156,7 @@ const ContextMenuLabel = React.forwardRef<
     ref={ref}
     className={cn(
       "px-2 py-1 text-ui-xs font-medium text-muted-foreground",
-      inset && "pl-7",
+      inset && "pl-8",
       className
     )}
     {...props}
@@ -166,7 +170,7 @@ const ContextMenuSeparator = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <ContextMenuPrimitive.Separator
     ref={ref}
-    className={cn("-mx-1 my-1 h-px bg-border", className)}
+    className={cn(MENU_SEPARATOR, className)}
     {...props}
   />
 ))

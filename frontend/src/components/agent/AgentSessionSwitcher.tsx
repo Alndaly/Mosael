@@ -64,7 +64,7 @@ export function AgentSessionSwitcher<T extends AgentSessionChoice>({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="z-[120] w-[min(360px,calc(100vw-32px))] overflow-hidden border-0 bg-popover/95 p-0 shadow-[var(--shadow-raised)] supports-[backdrop-filter]:backdrop-blur-xl"
+        className="z-[120] w-[min(360px,calc(100vw-32px))] overflow-hidden p-0"
         aria-label={t("wfAgentSessions")}
       >
         <label className="flex h-9 items-center gap-2 border-b border-border px-2.5 text-muted-foreground focus-within:text-foreground">

@@ -1,3 +1,4 @@
+import { ACTION_MENU } from "@/components/ui/floating";
 import { PageHeading, CollectionTabs } from "@/components/layout/StudioPage";
 import { LayoutGrid, List, MoreHorizontal, Search } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger, PopoverClose } from "@/components/ui/popover";
@@ -392,7 +393,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                   {selectMode && <SelectionCheck selected={selectedIds.has(asset.id)} />}
                   {!selectMode && <div className="absolute right-2 top-2 z-10" onClick={e => e.stopPropagation()}>
                     <Popover><PopoverTrigger asChild><Button variant="secondary" size="icon-xs" aria-label={`${t("studioActions")}: ${asset.name}`}><MoreHorizontal /></Button></PopoverTrigger>
-                    <PopoverContent className="grid w-48 gap-1 p-2" align="end">
+                    <PopoverContent className={cn(ACTION_MENU, "w-48")} align="end">
                       <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => saveAssetToDisk(asset)}><Download />{t("assetSaveLocal")}</Button></PopoverClose>
                       <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setRenaming(asset)}><Pencil />{t("rename")}</Button></PopoverClose>
                       <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setEditingTags(asset)}><Tag />{t("editTags")}</Button></PopoverClose>

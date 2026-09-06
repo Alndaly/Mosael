@@ -1,3 +1,4 @@
+import { FLOATING_SURFACE } from "@/components/ui/floating";
 import React from "react";
 import { carriedByFrame } from "@/features/boards/frameCarry";
 import {
@@ -1024,7 +1025,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
                     {index + 1}
                   </button>
                   {active && (
-                    <div className="-ml-3.5 -translate-y-3 w-64 rounded-xl border border-border-strong bg-panel/95 p-3 text-left shadow-[var(--shadow-panel)] backdrop-blur-xl">
+                    <div className={cn(FLOATING_SURFACE, "-ml-3.5 -translate-y-3 w-64 p-3 text-left")}>
                       <div className="mb-1 flex items-center justify-between gap-2">
                         <p className="min-w-0 truncate text-ui-xs font-semibold text-foreground">
                           {comment.author?.display_name || comment.author?.username || t("teamSystemActor")}
@@ -1164,7 +1165,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
             />
           </svg>
           <div
-            className="fixed z-50 w-56 overflow-hidden rounded-xl border border-border-strong bg-panel p-1 shadow-[var(--shadow-panel)]"
+            className={cn(FLOATING_SURFACE, "fixed z-50 w-56 overflow-hidden p-1.5")}
             style={{ left: linkMenu.screenX + 8, top: linkMenu.screenY + 8 }}
           >
             <p className="px-2 py-1.5 text-ui-2xs text-muted-foreground">{t("boardSpawnTitle")}</p>

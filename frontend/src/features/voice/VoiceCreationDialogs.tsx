@@ -101,7 +101,7 @@ export function UploadVoiceDialog({
       className="sm:max-w-md"
       footer={
         <>
-          <Button type="button" size="sm" variant="ghost" disabled={upload.isPending} onClick={close}>
+          <Button type="button" size="sm" variant="outline" disabled={upload.isPending} onClick={close}>
             {t("cancel")}
           </Button>
           <Button
@@ -272,7 +272,7 @@ export function VoiceFromSpeakerDialog({
       className="sm:max-w-md"
       footer={
         <>
-          <Button type="button" size="sm" variant="ghost" disabled={create.isPending} onClick={close}>
+          <Button type="button" size="sm" variant="outline" disabled={create.isPending} onClick={close}>
             {t("cancel")}
           </Button>
           <Button

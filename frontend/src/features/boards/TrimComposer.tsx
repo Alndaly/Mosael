@@ -1,3 +1,4 @@
+import { FLOATING_SURFACE } from "@/components/ui/floating";
 import React from "react";
 import { NodeToolbar, Position } from "@xyflow/react";
 import { Camera, Loader2, Scissors, Volume2, VolumeX } from "lucide-react";
@@ -72,7 +73,7 @@ export function TrimComposer({
 
   return (
     <NodeToolbar nodeId={item.id} isVisible position={Position.Bottom} offset={BOARD_NODE_PANEL_OFFSET}>
-      <div className="nodrag nopan nowheel grid w-[420px] gap-2 rounded-xl border border-border-strong bg-panel p-2 shadow-[var(--shadow-panel)]">
+      <div className={cn(FLOATING_SURFACE, "nodrag nopan nowheel grid w-[420px] gap-2 p-2")}>
         {/* 看着片子本身去剪。**填数字的问题不在麻烦,在于你不知道第 3.2 秒是什么** ——
             要么反复播放去数,要么剪出来再看一眼、不对再来一次。 */}
         {duration ? (

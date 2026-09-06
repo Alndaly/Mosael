@@ -4,6 +4,8 @@ import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { X } from "lucide-react"
 
+import { FLOATING_MOTION, MODAL_SURFACE, MODAL_OVERLAY, MODAL_TITLE, MODAL_DESCRIPTION, MODAL_FOOTER } from "./floating"
+
 import { cn } from "@/lib/utils"
 import { useModalTeardownGuard } from "@/lib/modalTeardownGuard"
 
@@ -22,7 +24,7 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "[.is-desktop_&]:[-webkit-app-region:no-drag] fixed inset-0 z-50 bg-black/45  data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      MODAL_OVERLAY, FLOATING_MOTION,
       className
     )}
     {...props}
@@ -45,14 +47,16 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "[.is-desktop_&]:[-webkit-app-region:no-drag] fixed left-[50%] top-[50%] z-50 grid min-w-0 w-[calc(100vw-2rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-5 rounded-2xl border bg-popover p-6 shadow-[var(--shadow-raised)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+        "[.is-desktop_&]:[-webkit-app-region:no-drag] fixed left-[50%] top-[50%] z-50 grid min-w-0 w-[calc(100vw-2rem)] max-w-[min(32rem,calc(100vw-2rem))] max-h-[calc(100dvh-2rem)] overflow-y-auto translate-x-[-50%] translate-y-[-50%] gap-6 p-6",
+          MODAL_SURFACE, FLOATING_MOTION,
+          showClose && "[&_[data-slot=dialog-title]]:pr-8",
         className
       )}
       {...props}
     >
       {children}
       {showClose && (
-        <DialogPrimitive.Close className="absolute right-4 top-4 z-20 grid size-8 place-items-center rounded-md opacity-70 hover:bg-secondary ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+        <DialogPrimitive.Close className="absolute right-4 top-4 z-20 grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none">
           <X className="h-4 w-4" />
           <span className="sr-only">Close</span>
         </DialogPrimitive.Close>
@@ -69,7 +73,7 @@ const DialogHeader = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col gap-1.5 text-center sm:text-left",
+      "flex flex-col gap-2 text-left",
       className
     )}
     {...props}
@@ -83,7 +87,7 @@ const DialogFooter = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+      MODAL_FOOTER,
       className
     )}
     {...props}
@@ -96,9 +100,10 @@ const DialogTitle = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
+    data-slot="dialog-title"
     ref={ref}
     className={cn(
-      "text-xl font-semibold leading-snug tracking-tight",
+      MODAL_TITLE,
       className
     )}
     {...props}
@@ -112,7 +117,7 @@ const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn("text-sm text-muted-foreground", className)}
+    className={cn(MODAL_DESCRIPTION, className)}
     {...props}
   />
 ))

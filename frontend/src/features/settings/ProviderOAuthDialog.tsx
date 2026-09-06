@@ -238,7 +238,7 @@ export function ProviderOAuthDialog({
       onOpenChange={(next) => !next && close()}
       title={`${t("providerOauthTitle")} · ${profileName}`}
       footer={
-        <Button type="button" variant={status === "done" ? "default" : "ghost"} size="sm" onClick={close}>
+        <Button type="button" variant={status === "done" ? "default" : "outline"} size="sm" onClick={close}>
           {status === "done" ? t("close") : t("cancel")}
         </Button>
       }

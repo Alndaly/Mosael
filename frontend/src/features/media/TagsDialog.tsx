@@ -50,7 +50,7 @@ export function TagsDialog({
       title={title}
       footer={
         <>
-          <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+          <Button type="button" variant="outline" size="sm" onClick={onCancel}>
             {t("cancel")}
           </Button>
           <Button type="button" size="sm" onClick={() => onSubmit(commitDraft())}>

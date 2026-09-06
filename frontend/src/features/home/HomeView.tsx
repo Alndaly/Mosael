@@ -1,3 +1,4 @@
+import { ACTION_MENU } from "@/components/ui/floating";
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -259,10 +260,10 @@ function ProjectPresentation({ project, cover, featured = false, className, onOp
           </div>
           <Popover open={menuOpen} onOpenChange={setMenuOpen}>
             <PopoverTrigger asChild><Button variant="ghost" size="icon-sm" aria-label={`${t("projectActions")}: ${project.name}`}><MoreHorizontal /></Button></PopoverTrigger>
-            <PopoverContent className="grid w-48 gap-1 p-1.5" align="end">
+            <PopoverContent className={cn(ACTION_MENU, "w-48")} align="end">
               <Button variant="ghost" className="justify-start" onClick={() => { setMenuOpen(false); open(); }}><Scissors />{t("homeOpenEditor")}</Button>
               <Button variant="ghost" className="justify-start" onClick={() => { setMenuOpen(false); onRename(project); }}><Pencil />{t("rename")}</Button>
-              <div className="border-t border-border" />
+              <div className="mx-2 my-1 h-px bg-divider" />
               <Button variant="ghost" className="justify-start text-destructive hover:text-destructive" onClick={() => { setMenuOpen(false); onDelete(project); }}><Trash2 />{t("delete")}</Button>
             </PopoverContent>
           </Popover>

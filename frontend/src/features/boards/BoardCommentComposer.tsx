@@ -1,3 +1,5 @@
+import { FLOATING_SURFACE } from "@/components/ui/floating";
+import { cn } from "@/lib/utils";
 import React from "react";
 import Placeholder from "@tiptap/extension-placeholder";
 import {
@@ -165,7 +167,7 @@ export function BoardCommentComposer({
 
   return (
     <div
-      className="nodrag nopan w-72 cursor-default overflow-hidden rounded-xl border border-border-strong bg-panel/95 shadow-[var(--shadow-panel)] backdrop-blur-xl"
+      className={cn(FLOATING_SURFACE, "nodrag nopan w-72 cursor-default overflow-hidden")}
       onPointerDown={(event) => event.stopPropagation()}
       onMouseDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}

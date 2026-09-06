@@ -226,7 +226,7 @@ export function PluginMarketDialog({
           title={t("pluginInstallConfirmTitle")}
           footer={
             <>
-              <Button variant="ghost" size="sm" onClick={() => setPending(null)}>{t("cancel")}</Button>
+              <Button variant="outline" size="sm" onClick={() => setPending(null)}>{t("cancel")}</Button>
               <Button size="sm" loading={install.isPending} onClick={() => install.mutate({ url: pending.url, overwrite: !!pending.preview.installed })}>
                 {pending.preview.installed ? t("pluginUpdate") : t("pluginInstall")}
               </Button>

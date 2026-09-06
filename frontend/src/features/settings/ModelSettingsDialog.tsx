@@ -163,7 +163,7 @@ export function ModelSettingsDialog({
       title={vendor === "comfyui" ? t("workflowSettingsTitle") : t("modelSettingsTitle")}
       footer={
         <>
-          <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
           <Button type="submit" form={formId} size="sm" disabled={!current} loading={save.isPending}>{t("save")}</Button>
         </>
       }

@@ -1,3 +1,4 @@
+import { ACTION_MENU } from "@/components/ui/floating";
 import type { ReactNode } from "react";
 import { MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,7 @@ export function ActionMenu({ label, actions }: { label: string; actions: Action[
       <PopoverTrigger asChild>
         <Button variant="ghost" size="icon-sm" aria-label={label}><MoreHorizontal /></Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="grid w-52 gap-1 p-2">
+      <PopoverContent align="end" className={cn(ACTION_MENU, "w-52")}>
         {actions.map(action => (
           <PopoverClose key={action.label} asChild>
             <Button

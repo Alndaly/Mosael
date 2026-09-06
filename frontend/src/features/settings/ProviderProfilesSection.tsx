@@ -1,3 +1,4 @@
+import { ACTION_MENU } from "@/components/ui/floating";
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -559,7 +560,7 @@ export function ProviderProfilesSection({
                       <MoreHorizontal size={13} />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent align="end" className="w-[168px] p-1">
+                  <PopoverContent align="end" className={cn(ACTION_MENU, "w-48")}>
                     {isOauth(profile) && (
                       <MenuItem
                         icon={<LogIn size={13} />}

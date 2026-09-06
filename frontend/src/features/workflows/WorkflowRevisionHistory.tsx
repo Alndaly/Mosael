@@ -88,8 +88,8 @@ export function WorkflowRevisionHistory({
         }}
       >
         <DialogContent className="max-h-[min(720px,calc(100vh-32px))] w-[min(620px,calc(100vw-32px))] max-w-[calc(100vw-32px)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden p-0">
-          <DialogHeader className="border-b border-border px-5 pb-4 pt-5 pr-12">
-            <DialogTitle className="flex items-center gap-2 text-ui-lg">
+          <DialogHeader className="border-b border-divider px-6 py-6 pr-14">
+            <DialogTitle className="flex items-center gap-2">
               <GitCommitVertical size={17} className="text-primary" />
               {t("wfRevisionHistory")}
               <Badge variant="secondary" className="ml-1 px-1.5 py-0 font-mono text-ui-2xs">

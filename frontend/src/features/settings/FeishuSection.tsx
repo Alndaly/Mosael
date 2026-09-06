@@ -261,7 +261,7 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
         title={t("feishuManualToggle")}
         footer={
           <>
-            <Button variant="ghost" size="sm" onClick={() => setManualOpen(false)}>{t("cancel")}</Button>
+            <Button variant="outline" size="sm" onClick={() => setManualOpen(false)}>{t("cancel")}</Button>
             <Button size="sm" disabled={!appId.trim() || !appSecret.trim()} loading={addBot.isPending} onClick={() => addBot.mutate()}>
               {t("feishuAdd")}
             </Button>

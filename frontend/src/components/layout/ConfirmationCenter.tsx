@@ -1,3 +1,5 @@
+import { FLOATING_SURFACE } from "@/components/ui/floating";
+import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ShieldAlert, X } from "lucide-react";
 
@@ -55,7 +57,7 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
   return (
     <div className="fixed right-4 top-14 z-[60] grid w-[340px] gap-2" role="region" aria-label={t("confirmTitle")}>
       {items.map((item) => (
-        <div className="animate-confirm-in rounded-lg border border-border-strong bg-popover px-3 py-2.5 shadow-[var(--shadow-raised)]" key={item.id}>
+        <div className={cn(FLOATING_SURFACE, "animate-confirm-in px-3 py-2.5")} key={item.id}>
           <div className="mb-1.5 flex items-center justify-between gap-1.5">
             <span className="inline-flex items-center gap-1.5 text-ui-xs font-semibold uppercase tracking-[0.04em] text-muted-foreground">
               <ShieldAlert size={13} /> {t("confirmTitle")} · {item.requested_by}

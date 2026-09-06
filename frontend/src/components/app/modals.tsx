@@ -116,7 +116,7 @@ export function ModalShell({
         <DialogHeader
           data-slot="modal-header"
           className={cn(
-            "sticky top-0 z-10 shrink-0 border-b border-border/60 bg-popover px-6 pb-5 pt-6",
+            "sticky top-0 z-10 shrink-0 bg-popover px-6 pb-0 pt-6",
             header && "gap-2.5",
           )}
         >
@@ -135,7 +135,7 @@ export function ModalShell({
         {footer && (
           <DialogFooter
             data-slot="modal-footer"
-            className="sticky bottom-0 z-10 shrink-0 gap-2 border-t border-border/60 bg-panel-subtle px-6 py-4 sm:items-center"
+            className="sticky bottom-0 z-10 shrink-0 gap-2 border-t border-divider bg-popover px-6 py-4 sm:items-center"
           >
             {footer}
           </DialogFooter>
@@ -176,10 +176,10 @@ export function RenameDialog({
       title={title}
       footer={
         <>
-          <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+          <Button type="button" variant="outline" onClick={onCancel}>
             {t("cancel")}
           </Button>
-          <Button type="submit" form={formId} size="sm">
+          <Button type="submit" form={formId}>
             {t("confirm")}
           </Button>
         </>
@@ -227,13 +227,13 @@ export function ConfirmDialog({
           <AlertDialogTitle>{title}</AlertDialogTitle>
           {body ? <AlertDialogDescription>{body}</AlertDialogDescription> : null}
         </AlertDialogHeader>
-        <AlertDialogFooter className="gap-1.5">
-          {/* 与任务详情等浮层统一:size=sm 的胶囊按钮,右下角对齐;确认沿用 destructive 红以示危险。 */}
-          <AlertDialogCancel className="h-8 rounded-full px-3 text-xs">
+        <AlertDialogFooter>
+          {/* Confirm and cancel share the same control scale as form dialogs. */}
+          <AlertDialogCancel>
             {t("cancel")}
           </AlertDialogCancel>
           <AlertDialogAction
-            className="h-8 rounded-full bg-destructive px-3 text-xs text-white hover:bg-destructive/90"
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             onClick={(event) => {
               event.preventDefault();
               onConfirm();

@@ -1,3 +1,4 @@
+import { FLOATING_SURFACE } from "@/components/ui/floating";
 import React from "react";
 import { NodeToolbar, Position } from "@xyflow/react";
 import { ArrowUp, Loader2, Sparkles } from "lucide-react";
@@ -147,7 +148,7 @@ export function NoteComposer({
 
   return (
     <NodeToolbar nodeId={item.id} isVisible position={Position.Bottom} offset={BOARD_NODE_PANEL_OFFSET}>
-      <div className="nodrag nopan nowheel w-[420px] rounded-xl border border-border-strong bg-panel p-2 shadow-[var(--shadow-panel)]">
+      <div className={cn(FLOATING_SURFACE, "nodrag nopan nowheel w-[420px] p-2")}>
         {/* 连过来的素材摆在最上面。**看得见才知道它在起作用** —— 一条线连过来之后表单上
             什么都不变的话,用户不知道模型到底看没看见那张图。点一下开大图,叉叉解开引用。 */}
         {referenced.length > 0 && (

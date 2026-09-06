@@ -1,3 +1,5 @@
+import { FLOATING_SURFACE } from "@/components/ui/floating";
+import { cn } from "@/lib/utils";
 import React from "react";
 import { Loader2, MonitorPlay, Square, X } from "lucide-react";
 
@@ -48,7 +50,7 @@ export function BrowserPreview() {
   const settled = frame.settled === true;
   return (
     <div style={{ bottom: panelled.size ? 16 + 244 + 12 : 16 }}
-      className="fixed right-4 z-[80] w-[320px] max-w-[calc(100vw-32px)] overflow-hidden rounded-lg border border-border-strong bg-panel shadow-[var(--shadow-raised)]">
+      className={cn(FLOATING_SURFACE, "fixed right-4 z-[80] w-[320px] max-w-[calc(100vw-32px)] overflow-hidden")}>
       <div className="flex items-center gap-1.5 border-b border-border px-2.5 py-1.5">
         <MonitorPlay size={13} className="shrink-0 text-primary" />
         <span className="shrink-0 text-ui-sm font-semibold">{t("browserPreviewTitle")}</span>

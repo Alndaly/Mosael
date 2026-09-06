@@ -1,3 +1,4 @@
+import { FLOATING_SURFACE, ACTION_MENU } from "@/components/ui/floating";
 import React from "react";
 import { ActionMenu } from "@/components/layout/ActionMenu";
 import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
@@ -3247,7 +3248,7 @@ function NodeInspector({
         两组都按"有才出":没跑过就没有「本次产出」,不是子图就没有「进入子图」。
         和面板一样长在画布坐标系里,所以同样要挂 nodrag/nopan —— 不然按下去是在拖节点。 */}
     <NodeToolbar nodeId={node.id} isVisible position={Position.Top} align="center" offset={12}>
-      <div className="nodrag nopan flex items-center gap-1 rounded-lg border border-border-strong bg-panel px-1 py-1 shadow-[var(--shadow-panel)]">
+      <div className={cn(FLOATING_SURFACE, "nodrag nopan flex items-center gap-1 px-1 py-1")}>
         {areas.map((id) => (
           <button
             key={id}
@@ -3298,7 +3299,8 @@ function NodeInspector({
       className={cn(
         // 380 而不是 320:两列并排的参数(Temperature / Top P 这种)在 320 里各自只剩 130px,
         // 长一点的标签就换行。
-        "grid max-h-[min(560px,calc(100vh-210px))] min-h-0 w-[380px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border border-border-strong bg-panel shadow-[var(--shadow-panel)]",
+        FLOATING_SURFACE,
+        "grid max-h-[min(560px,calc(100vh-210px))] min-h-0 w-[380px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden",
         // **搬进画布之后必须挂这三个。** 面板现在长在 React Flow 里面,而画布自己要监听
         // pointerdown 来平移、滚轮来缩放 —— 不声明的话这些事件在到达输入框之前就被画布截走:
         // 点输入框不聚焦、打字没反应、下拉点不开。此前面板是 fixed 在画布外面的,画布看不到
@@ -3378,7 +3380,7 @@ function NodeInspector({
                       {t("wfRepoint")}
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent align="end" className="flex w-[200px] flex-col gap-0.5 p-[5px]">
+                  <PopoverContent align="end" className={cn(ACTION_MENU, "w-[200px]")}>
                     {variables.map((valid) => (
                       <button
                         key={valid}

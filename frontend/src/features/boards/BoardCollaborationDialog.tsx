@@ -44,7 +44,7 @@ export function BoardCollaborationDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="h-[min(680px,calc(100vh-32px))] w-[min(900px,calc(100vw-32px))] max-w-[calc(100vw-32px)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b border-border/70 px-6 py-5 pr-14">
+        <DialogHeader className="border-b border-divider px-6 py-6 pr-14">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="grid gap-1.5">
               <DialogTitle className="flex items-center gap-2"><MessageSquare size={18} /> {t("boardCollaboration")}</DialogTitle>

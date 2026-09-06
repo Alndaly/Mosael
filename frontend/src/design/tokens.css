@@ -163,6 +163,9 @@
   --glass-bg: color-mix(in srgb, var(--popover) 80%, transparent);
   --glass-chrome: color-mix(in srgb, var(--panel) 70%, transparent);
   /* Quiet depth separates floating tools from the canvas beneath them. */
+  --overlay-modal: rgb(20 25 35 / 0.28);
+  --shadow-floating: 0 4px 16px rgb(24 32 48 / 0.10);
+  --shadow-modal: 0 16px 48px rgb(24 32 48 / 0.16);
   --shadow-panel: 0 2px 8px rgb(32 40 59 / 0.06), 0 8px 24px rgb(32 40 59 / 0.04);
   --shadow-raised: 0 8px 32px rgb(32 40 59 / 0.12), 0 24px 64px rgb(32 40 59 / 0.06);
 
@@ -252,6 +255,9 @@
   --panel-subtle: #191b1e;
   --panel-inset: #101113;
   --border-strong: #626a76;
+  --overlay-modal: rgb(0 0 0 / 0.48);
+  --shadow-floating: 0 4px 16px rgb(0 0 0 / 0.24);
+  --shadow-modal: 0 16px 48px rgb(0 0 0 / 0.32);
   --shadow-panel: 0 2px 12px rgb(0 0 0 / 0.2);
   --shadow-raised: 0 12px 48px rgb(0 0 0 / 0.48);
 

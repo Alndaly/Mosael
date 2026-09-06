@@ -1,3 +1,4 @@
+import { FLOATING_SURFACE } from "@/components/ui/floating";
 import React from "react";
 import { createPortal } from "react-dom";
 import { autoUpdate, computePosition, flip, offset, shift } from "@floating-ui/dom";
@@ -210,8 +211,8 @@ export function useSuggestionMenu<T>({
           ref={menuEl}
           data-suggestion-menu=""
           className={cn(
-            className ??
-              "fixed left-0 top-0 z-50 max-h-48 min-w-[180px] rounded-md border border-border bg-panel p-1 shadow-[var(--shadow-panel)]",
+            FLOATING_SURFACE,
+            className ?? "fixed left-0 top-0 z-50 max-h-48 min-w-48 p-1.5",
             banded ? "flex flex-col overflow-hidden" : "overflow-auto",
           )}
         >

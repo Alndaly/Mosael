@@ -41,7 +41,7 @@ describe("ModalShell sticky layout", () => {
     expect(footer?.className).toContain("sticky");
     expect(footer?.className).toContain("bottom-0");
     expect(footer?.className).toContain("sm:items-center");
-    expect(footer?.className).toContain("bg-panel-subtle");
+    expect(footer?.className).toContain("bg-popover");
     expect(footer?.className).not.toContain("backdrop-blur-xl");
   });
 

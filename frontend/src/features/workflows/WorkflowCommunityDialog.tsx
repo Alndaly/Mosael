@@ -123,7 +123,7 @@ export function WorkflowCommunityDialog({
       }
       footer={
         <>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t("cancel")}
           </Button>
           <Button
