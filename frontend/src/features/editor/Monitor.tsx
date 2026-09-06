@@ -9,13 +9,14 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { clipEnd, formatTimecode, sequenceDuration } from "@/domain/timeline/geometry";
 import { CURVES_FILTER_ID, colorCurvesTables, type ColorCurves } from "@/features/editor/colorCurves";
 import { CanvasCompositor, type CompositorLayer } from "@/features/editor/playback/CanvasCompositor";
-import { WebAudioMixer, type AudioSourceSpec } from "@/features/editor/playback/WebAudioMixer";
+import { WebAudioMixer } from "@/features/editor/playback/WebAudioMixer";
+import { buildAudioSources } from "@/features/editor/playback/audioMix";
 import { compositorSupported } from "@/features/editor/playback/compositorFlag";
 import { PreviewUnavailable } from "@/features/editor/playback/PreviewUnavailable";
 import { blockingPreviewState } from "@/features/editor/playback/previewReadiness";
 import { readSubtitleStyle, subtitleCss } from "@/features/editor/subtitleStyle";
 import { readTextStyle, textStyleCss } from "@/features/editor/textStyle";
-import { applyTransformCommit, clipProgress, sampleTransform, type GainKeyframe } from "@/features/editor/keyframes";
+import { applyTransformCommit, clipProgress, sampleTransform } from "@/features/editor/keyframes";
 import { TransformOverlay, readTransform, transformCss, type Transform } from "@/features/editor/TransformOverlay";
 import { useEditorStore } from "@/stores/editorStore";
 
@@ -323,32 +324,10 @@ export function Monitor({
   // WebAudio mixer, which filters by the live playhead itself. Passing the full set — not just
   // the currently-active clips — means a clip that comes up under the advancing playhead is
   // already in the mixer's list, so it starts on time instead of one render late.
-  const audioSources = React.useMemo<AudioSourceSpec[]>(() => {
-    const list: AudioSourceSpec[] = [];
-    for (const track of videoTracks) {
-      for (const clip of track.clips ?? []) {
-        if (!clip.asset_id || assetById.get(clip.asset_id)?.kind !== "video") continue; // images have no audio
-        list.push({
-          key: clip.id, assetId: clip.asset_id, srcIn: clip.src_in, srcOut: clip.src_out,
-          timelineStart: clip.timeline_start, speed: clip.speed || 1, gain: clip.gain ?? 1,
-          gainKeyframes: (clip.effects as { gain_keyframes?: GainKeyframe[] } | undefined)?.gain_keyframes,
-          muted: Boolean(clip.muted), trackMuted: Boolean(track.muted),
-        });
-      }
-    }
-    for (const track of audioTracks) {
-      for (const clip of track.clips ?? []) {
-        if (!clip.asset_id) continue;
-        list.push({
-          key: clip.id, assetId: clip.asset_id, srcIn: clip.src_in, srcOut: clip.src_out,
-          timelineStart: clip.timeline_start, speed: clip.speed || 1, gain: clip.gain ?? 1,
-          gainKeyframes: (clip.effects as { gain_keyframes?: GainKeyframe[] } | undefined)?.gain_keyframes,
-          muted: Boolean(clip.muted), trackMuted: Boolean(track.muted),
-        });
-      }
-    }
-    return list;
-  }, [videoTracks, audioTracks, assetById]);
+  const audioSources = React.useMemo(
+    () => buildAudioSources(sequence.tracks ?? [], assetById),
+    [sequence.tracks, assetById],
+  );
 
 
   const frameStep = 1 / (sequence.fps || 30);

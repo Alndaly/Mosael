@@ -1,7 +1,8 @@
 import React from "react";
 
 import { assetFileUrl } from "@/api/client";
-import { sampleGain, type GainKeyframe } from "@/features/editor/keyframes";
+import { audioGainAt, type AudioSourceSpec } from "./audioMix";
+export type { AudioSourceSpec } from "./audioMix";
 import { useEditorStore } from "@/stores/editorStore";
 
 /**
@@ -15,19 +16,6 @@ import { useEditorStore } from "@/stores/editorStore";
  *
  * Mounted only when the compositor is active; Monitor's interval clock stands down meanwhile.
  */
-
-export interface AudioSourceSpec {
-  key: string; // clip id
-  assetId: string;
-  srcIn: number;
-  srcOut: number;
-  timelineStart: number;
-  speed: number;
-  gain: number;
-  gainKeyframes?: GainKeyframe[]; // 音量关键帧;有则按播放头采样,否则用静态 gain
-  muted: boolean;
-  trackMuted: boolean;
-}
 
 const TICK_MS = 40;
 // The store playhead equals the value we last set unless someone else moved it; a divergence
@@ -68,17 +56,8 @@ export function WebAudioMixer({
     const clipEnd = (s: AudioSourceSpec) => s.timelineStart + Math.max(0, (s.srcOut - s.srcIn) / (s.speed || 1));
     // Effective linear gain: clip gain × master volume, zeroed by any mute. 音量关键帧存在时,
     // 按播放头在片段内的进度采样增益(与 AudioElement 和导出的 volume 表达式一致)。
-    const gainValue = (s: AudioSourceSpec, volume: number, masterMuted: boolean, playhead: number) => {
-      if (s.muted || s.trackMuted || masterMuted) return 0;
-      let g = s.gain ?? 1;
-      const kfs = s.gainKeyframes;
-      if (Array.isArray(kfs) && kfs.length > 0) {
-        const dur = (s.srcOut - s.srcIn) / (s.speed || 1);
-        const p = dur > 1e-9 ? Math.max(0, Math.min(1, (playhead - s.timelineStart) / dur)) : 0;
-        g = sampleGain(kfs, s.gain ?? 1, p);
-      }
-      return Math.min(1, Math.max(0, g)) * volume;
-    };
+    const gainValue = (s: AudioSourceSpec, volume: number, masterMuted: boolean, playhead: number) =>
+      audioGainAt(s, sourcesRef.current, playhead, volume, masterMuted);
 
     const stopAll = () => {
       for (const { node } of active.values()) {

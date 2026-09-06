@@ -1,0 +1,12 @@
+{
+  "contract": "audio-mix", "version": 1,
+  "cases": [
+    {"name":"amplification and speed-aware fades", "clips":[{"id":"music","src_out":8,"speed":2,"gain":2,"effects":{"fade_in":1,"fade_out":1}}], "samples":[{"t":0.5,"gains":{"music":1}},{"t":1.5,"gains":{"music":2}},{"t":3.5,"gains":{"music":1}}]},
+    {"name":"overlapping fades are scaled to fit", "clips":[{"id":"music","src_out":4,"gain":2,"effects":{"fade_in":3,"fade_out":3}}], "samples":[{"t":0.5,"gains":{"music":0.5}},{"t":2,"gains":{"music":2}},{"t":3.5,"gains":{"music":0.5}}]},
+    {"name":"ducking follows sped-up voice window", "clips":[{"id":"music","src_out":4,"gain":2,"duck":true},{"id":"voice","timeline_start":1,"src_out":2,"speed":2,"gain":0.5}], "samples":[{"t":0.5,"gains":{"music":2,"voice":0}},{"t":1.5,"gains":{"music":0.6,"voice":0.5}},{"t":2.5,"gains":{"music":2,"voice":0}}]},
+    {"name":"solo excludes non-solo tracks", "solo_active":true, "clips":[{"id":"music","src_out":4,"gain":2},{"id":"voice","src_out":4,"gain":0.5,"solo":true}], "samples":[{"t":1,"gains":{"music":0,"voice":0.5}}]},
+    {"name":"muted voice does not duck music", "clips":[{"id":"music","src_out":4,"gain":2,"duck":true},{"id":"voice","src_out":4,"muted":true}], "samples":[{"t":1,"gains":{"music":2,"voice":0}}]},
+    {"name":"gain automation reaches four", "clips":[{"id":"music","src_out":4,"effects":{"gain_keyframes":[{"t":0,"gain":0},{"t":1,"gain":4}]}}], "samples":[{"t":1,"gains":{"music":1}},{"t":3,"gains":{"music":3}}]},
+    {"name":"one keyframe keeps static gain", "clips":[{"id":"music","src_out":4,"gain":2,"effects":{"gain_keyframes":[{"t":0,"gain":0}]}}], "samples":[{"t":1,"gains":{"music":2}}]}
+  ]
+}

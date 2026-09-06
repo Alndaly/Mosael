@@ -36,7 +36,7 @@ function videoTracksSorted(tracks: Track[]): Track[] {
 
 /** Video tracks that actually carry picture, ascending (top row first). A track holding only text
     clips is not one of them — treating it as picture would make it a base with no media. */
-function videoTracksWithMedia(tracks: Track[], assetById: Map<string, Asset>): Track[] {
+export function videoTracksWithMedia(tracks: Track[], assetById: Map<string, Asset>): Track[] {
   return videoTracksSorted(tracks).filter((tr) => (tr.clips ?? []).some((c) => isVisualClip(c, assetById)));
 }
 
