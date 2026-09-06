@@ -340,7 +340,9 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
         job = db.get(Job, job_id)
         if job is None:
             return
-        job.status = "running"
+        if not finish_job(db, job, status="running"):
+            db.commit()
+            return
         say(job, _export_message(PHASE_PREPARE, None))
         emit_job_event(db, job.id, "job.running", {"render_plan_hash": plan.render_plan_hash})
         db.commit()
@@ -353,7 +355,7 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
         def write_progress(fraction: float | None, message: str) -> None:
             with SessionLocal() as progress_db:
                 progress_job = progress_db.get(Job, job_id)
-                if progress_job is not None:
+                if progress_job is not None and finish_job(progress_db, progress_job, status="running"):
                     if fraction is not None:
                         progress_job.progress = round(fraction, 4)
                     say(progress_job, message)
@@ -367,7 +369,7 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
                 last_fraction = -1.0
                 with SessionLocal() as fb_db:
                     fb_job = fb_db.get(Job, job_id)
-                    if fb_job is not None:
+                    if fb_job is not None and finish_job(fb_db, fb_job, status="running"):
                         fb_job.progress = 0.0
                         say(fb_job, _export_message(name, None))
                         emit_job_event(fb_db, job_id, "job.encode_fallback", {})

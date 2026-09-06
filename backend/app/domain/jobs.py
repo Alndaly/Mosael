@@ -73,6 +73,11 @@ def register_job_child(job_id: str, child: Any) -> None:
     """Associate a killable child (anything with .kill()) with a job for its lifetime."""
     with _CHILDREN_LOCK:
         _CHILDREN[job_id] = child
+    # Cancellation may have committed before the subprocess existed.
+    with SessionLocal() as db:
+        job = db.get(Job, job_id)
+        if job is None or job.status in TERMINAL_STATUSES:
+            child.kill()
 
 
 def unregister_job_child(job_id: str) -> None:
@@ -118,9 +123,7 @@ def run_job_guarded(job_id: str, body: Callable[[], None], *, what: str = "job")
         try:
             with SessionLocal() as db:
                 job = db.get(Job, job_id)
-                if job is not None and job.status not in TERMINAL_STATUSES:
-                    job.status = "failed"
-                    job.error = str(exc)[:500]
+                if job is not None and finish_job(db, job, status="failed", error=str(exc)[:500]):
                     say(job, "jobMsg_genericFailed", what=what)
                     db.add(TaskEvent(job_id=job.id, type="job.failed", payload={"stage": "worker"}))
                     db.commit()
@@ -145,6 +148,21 @@ def say(job: Job, key: str, **params: object) -> None:
     job.message = t(key, DEFAULT_LOCALE, **job.message_params)
 
 
+def lock_active_job(db: Session, job: Job) -> bool:
+    """Acquire the SQLite write transaction before reading/changing an active job.
+
+    The conditional no-op update closes the refresh→commit cancellation race while
+    keeping ORM status history (and terminal receipts) intact. Caller commits promptly.
+    """
+    with db.no_autoflush:
+        changed = db.execute(
+            Job.__table__.update().where(Job.id == job.id, Job.status.in_(("queued", "running")))
+            .values(status=Job.status)
+        ).rowcount
+        db.refresh(job, ["status"] if changed else None)
+    return bool(changed)
+
+
 def finish_job(db: Session, job: Job, **fields: Any) -> bool:
     """Write a terminal state unless the job already reached one.
 
@@ -159,8 +177,7 @@ def finish_job(db: Session, job: Job, **fields: Any) -> bool:
     # 它挡不了自己刚写的那一笔。
     if job.status in TERMINAL_STATUSES:
         return False
-    db.refresh(job)
-    if job.status in TERMINAL_STATUSES:
+    if not lock_active_job(db, job):
         return False
     for key, value in fields.items():
         setattr(job, key, value)
@@ -367,6 +384,10 @@ def create_job(
     """
     # 显式传入优先;否则取当前工作流上下文(工作流节点里派生的子任务自动归到父 job 下)。
     parent = parent_job_id if parent_job_id is not None else _current_parent_job.get()
+    if parent:
+        parent_job = db.get(Job, parent)
+        if parent_job is not None and not lock_active_job(db, parent_job):
+            raise ValueError("父任务已结束,不能再派生任务")
     receipt = _current_receipt.get()
     if receipt is not None and "receipt" not in payload:
         payload = {**payload, "receipt": receipt}
@@ -445,7 +466,7 @@ def reconcile_orphaned_jobs(db: Session) -> int:
 
 def _cancel_job_row(db: Session, job: Job) -> bool:
     """把单个 job 落取消态 + 掐子进程 + 撤发布单(不 commit)。返回它是否原本还在跑。"""
-    if job.status not in ("queued", "running"):
+    if job.status not in ("queued", "running") or not lock_active_job(db, job):
         return False
     job.status = "failed"
     job.error = "已取消"
@@ -472,7 +493,9 @@ def cancel_job(db: Session, job: Job) -> Job:
     """
     if job.status not in ("queued", "running"):
         raise ValueError("任务已结束,无法取消")
-    _cancel_job_row(db, job)
+    if not _cancel_job_row(db, job):
+        db.rollback()
+        raise ValueError("任务已结束,无法取消")
     # 广度遍历后代,连嵌套子工作流一并取消。
     frontier, seen = [job.id], {job.id}
     while frontier:

@@ -103,3 +103,37 @@ def test_run_state_syncs_from_job() -> None:
         run = db.get(ScheduledTaskRun, created[0])
         assert run.status == "succeeded"
         assert run.finished_at is not None
+
+
+def test_scheduled_export_cancels_child_and_stays_cancelled(monkeypatch):
+    from app.domain.jobs import create_job, cancel_job
+    from app.workers.scheduler import dispatch_job_for_task, _sync_run_states
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    def export(db, sequence_id, *, created_by):
+        child = create_job(db, workspace_id=ws, kind="render", payload={}, created_by=created_by)
+        db.commit()
+        return child
+    monkeypatch.setattr("app.domain.render.start_export", export)
+    with SessionLocal() as db:
+        task = ScheduledTask(workspace_id=ws, name="export", kind="render", trigger_type="manual", payload={})
+        job = create_job(db, workspace_id=ws, kind="scheduled", payload={}, created_by=None)
+        db.add(task)
+        db.flush()
+        run = ScheduledTaskRun(scheduled_task_id=task.id, job_id=job.id, status="queued")
+        db.add(run)
+        db.commit()
+        dispatch_job_for_task(db, task, run, job)
+        child = db.get(Job, job.result["export_job_id"])
+        assert child.parent_job_id == job.id
+        cancel_job(db, job)
+        db.refresh(child)
+        assert child.status == "failed"
+        # A legacy worker's late result must not change the cancelled wrapper.
+        child.status = "succeeded"
+        db.commit()
+        _sync_run_states(db)
+        db.refresh(job)
+        assert job.status == "failed" and job.error == "已取消"
+        assert run.status == "failed"

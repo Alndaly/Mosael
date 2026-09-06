@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
-from app.domain.jobs import prune_task_events, say
+from app.domain.jobs import prune_task_events, say, finish_job, set_parent_job, reset_parent_job
 from app.db.models import Job, ScheduledTask, ScheduledTaskRun, now
 from app.domain.scheduler.operations import run_scheduled_task
 
@@ -96,6 +96,7 @@ def tick(db: Session) -> list[str]:
 def dispatch_job_for_task(db: Session, task: ScheduledTask, run: ScheduledTaskRun, job: Job) -> None:
     """Route known task kinds to their executors; unknown kinds stay queued."""
     payload: dict[str, Any] = task.payload or {}
+    token = set_parent_job(job.id)
     try:
         if task.kind == "workflow":
             from app.db.models import Workflow
@@ -138,7 +139,9 @@ def dispatch_job_for_task(db: Session, task: ScheduledTask, run: ScheduledTaskRu
                 parameters=dict(payload.get("parameters") or {}),
                 source_assets=parse_source_assets(payload.get("source_assets"), kind=kind),
             )
-            job.status = "running"
+            if not finish_job(db, job, status="running"):
+                db.commit()
+                return
             say(job, f"Dispatched generation {generation.id}")
             run.status = "running"
             job.result = {"generation_id": generation.id, "generation_job_id": generation.job_id}
@@ -149,7 +152,9 @@ def dispatch_job_for_task(db: Session, task: ScheduledTask, run: ScheduledTaskRu
 
             sequence_id = str(payload.get("sequence_id", ""))
             export_job = start_export(db, sequence_id, created_by=task.owner_user_id)
-            job.status = "running"
+            if not finish_job(db, job, status="running"):
+                db.commit()
+                return
             say(job, f"Dispatched export {export_job.id}")
             run.status = "running"
             job.result = {"export_job_id": export_job.id}
@@ -158,12 +163,16 @@ def dispatch_job_for_task(db: Session, task: ScheduledTask, run: ScheduledTaskRu
             say(job, f"No executor for task kind {task.kind}")
             db.commit()
     except Exception as exc:
-        job.status = "failed"
+        if not finish_job(db, job, status="failed", error=str(exc)[:500]):
+            db.commit()
+            return
         job.error = str(exc)[:500]
         run.status = "failed"
         run.error = str(exc)[:500]
         run.finished_at = now()
         db.commit()
+    finally:
+        reset_parent_job(token)
 
 
 def _has_active_run(db: Session, task_id: str) -> bool:
@@ -191,8 +200,11 @@ def _sync_run_states(db: Session) -> None:
         if job is None:
             continue
         child_job_id = (job.result or {}).get("generation_job_id") or (job.result or {}).get("export_job_id")
-        source = db.get(Job, child_job_id) if child_job_id else job
+        db.refresh(job)
+        source = job if job.status in TERMINAL_STATUSES else (db.get(Job, child_job_id) if child_job_id else job)
         if source is not None and source.status in TERMINAL_STATUSES:
+            if source is not job and not finish_job(db, job, status=source.status, error=source.error):
+                source = job
             run.status = source.status
             run.error = source.error
             run.finished_at = now()

@@ -106,3 +106,65 @@ def test_a_finished_job_stops_being_cancellable() -> None:
         except ValueError:
             return
     raise AssertionError("cancelling an already-finished job should be refused")
+
+
+def test_cancelled_queued_export_never_starts_renderer(monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from app.domain import render
+
+    _, ws = _workspace()
+    job_id = _job(ws, status="queued")
+    with SessionLocal() as db:
+        cancel_job(db, db.get(Job, job_id))
+    renderer = Mock(side_effect=RuntimeError("renderer must not start"))
+    monkeypatch.setattr(render, "execute_render", renderer)
+    render._run_export(job_id, SimpleNamespace(render_plan_hash="test"))
+    renderer.assert_not_called()
+    with SessionLocal() as db:
+        assert db.get(Job, job_id).error == "已取消"
+
+
+def test_child_registered_after_cancellation_is_killed():
+    from unittest.mock import Mock
+
+    _, ws = _workspace()
+    job_id = _job(ws)
+    with SessionLocal() as db:
+        cancel_job(db, db.get(Job, job_id))
+    child = Mock()
+    try:
+        register_job_child(job_id, child)
+        child.kill.assert_called_once()
+    finally:
+        unregister_job_child(job_id)
+
+
+def test_generation_cancelled_during_provider_call_does_not_import_results(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from app.db.models import GenerationJob
+    from app.domain.generation import runner
+
+    _, ws = _workspace()
+    job_id = _job(ws, status="queued")
+    with SessionLocal() as db:
+        generation = GenerationJob(workspace_id=ws, job_id=job_id, kind="image", provider="test", model="test", request={})
+        db.add(generation)
+        db.commit()
+        generation_id = generation.id
+    def generate(*args):
+        with SessionLocal() as other:
+            cancel_job(other, other.get(Job, job_id))
+        return SimpleNamespace(output_paths=[tmp_path / "not-imported.png"])
+    adapter = SimpleNamespace(requires_credentials=lambda: False, validate_request=lambda r: None,
+                              supports_progress_callbacks=False, generate=generate)
+    monkeypatch.setattr(runner, "get_generation_adapter", lambda *a: adapter)
+    monkeypatch.setattr("app.domain.providers.resolve_connection", lambda *a, **kw: None)
+    monkeypatch.setattr(runner, "_record_generation_usage", lambda *a, **kw: None)
+    importer = Mock(side_effect=AssertionError("cancelled output must not be imported"))
+    monkeypatch.setattr(runner, "register_file_asset", importer)
+    runner._run_generation(generation_id)
+    importer.assert_not_called()
+    with SessionLocal() as db:
+        assert db.get(Job, job_id).error == "已取消"

@@ -22,7 +22,7 @@ from app.ai.providers.contracts.generation import sanitize_adapter_error
 from app.core.db import SessionLocal
 from app.db.models import Asset, GeneratedAsset, GenerationJob, Job
 from app.domain import provider_models
-from app.domain.jobs import dispatch_job, emit_job_event, say
+from app.domain.jobs import dispatch_job, emit_job_event, finish_job, say
 from app.domain.assets.importer import register_file_asset
 from app.media.paths import resolve_key
 from app.domain.usage import billable
@@ -57,6 +57,11 @@ def _run_generation(generation_id: str) -> None:
         if job is None:
             return
 
+        if not finish_job(db, job, status="running"):
+            db.commit()
+            return
+        db.commit()
+
         adapter = get_generation_adapter(generation.provider, generation.kind)
         if adapter is None:
             _fail(db, job, f"No adapter for provider {generation.provider}/{generation.kind}")
@@ -79,7 +84,9 @@ def _run_generation(generation_id: str) -> None:
             configured_model_id=provider_models.model_id_for(db, profile, generation.kind),
             options=dict(profile.extra or {}) if profile is not None else {},
         )
-        job.status = "running"
+        if not finish_job(db, job, status="running"):
+            db.commit()
+            return
         say(job, "jobMsg_generationRunning")
         emit_job_event(db, job.id, "job.running", {"provider": generation.provider})
         db.commit()
@@ -108,6 +115,11 @@ def _run_generation(generation_id: str) -> None:
                 result = adapter.generate(request, context, workdir, callbacks=_job_callbacks(db, job))
             else:
                 result = adapter.generate(request, context, workdir)
+            if not finish_job(db, job, status="running"):
+                _record_generation_usage(db, generation, job, request, context, result, started, "succeeded")
+                db.commit()
+                return
+            db.commit()
             #: **每一份产出都登记。** 图像接口的 n 一次会返回多张,此前这里只收一份 ——
             #: 用户选了 4 张、按 4 张计了费,库里只多出一张,其余的连同它们的钱一起消失。
             assets = [
@@ -136,9 +148,11 @@ def _run_generation(generation_id: str) -> None:
                 )
             #: 这一栏是**封面**:一次生成对多份产出,而它只放得下一个。想要全部的走
             #: GeneratedAsset(每一份都有一行),或者读回执里的 asset_ids。
-            generation.result_asset_id = assets[0].id
             asset_ids = [one.id for one in assets]
-            job.status = "succeeded"
+            if not finish_job(db, job, status="succeeded"):
+                db.commit()
+                return
+            generation.result_asset_id = assets[0].id
             job.progress = 1.0
             say(job, "jobMsg_generationDone")
             #: 回执里放**一串**。收成单数的话,消费方拿到的永远只是第一张 —— 而这正是
@@ -179,6 +193,9 @@ def _job_callbacks(db, job: Job):
     from app.ai.providers import GenerationProgressCallbacks
 
     def on_progress(fraction: float, message: str) -> None:
+        if not finish_job(db, job, status="running"):
+            db.commit()
+            return
         job.progress = min(0.95, max(float(job.progress or 0.0), float(fraction)))
         if message:
             say(job, message[:200])
@@ -192,7 +209,9 @@ def _job_callbacks(db, job: Job):
 
 
 def _fail(db, job: Job, message: str) -> None:
-    job.status = "failed"
+    if not finish_job(db, job, status="failed", error=message[:500]):
+        db.commit()
+        return
     say(job, "jobMsg_generationFailed")
     job.error = message[:500]
     emit_job_event(db, job.id, "job.failed", {})
