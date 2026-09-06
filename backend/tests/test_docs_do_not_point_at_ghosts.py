@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import pathlib
 import re
+import json
 
 RATCHET = True
 
@@ -34,14 +35,40 @@ def _docs() -> list[pathlib.Path]:
     return [one for one in found if one.exists()]
 
 
+def _missing_code_paths(root: pathlib.Path, text: str) -> list[str]:
+    # 构建产物可以尚未生成,但必须有真实的构建声明。不能按 .bundle.cjs 后缀
+    # 一概豁免,否则拼错的产物路径也会被放过。
+    scripts = json.loads((root / "package.json").read_text(encoding="utf-8"))["scripts"]
+    outputs = {
+        output
+        for command in scripts.values()
+        for output in re.findall(r"--outfile=([\w./-]+)", command)
+    }
+    return [
+        path for path in sorted(set(PATH_RE.findall(text)))
+        if path not in outputs and not (root / path).exists()
+    ]
+
+
 def test_文档里的代码路径都还在() -> None:
     ghosts: list[str] = []
     for doc in _docs():
         text = doc.read_text(encoding="utf-8")
-        for path in sorted(set(PATH_RE.findall(text))):
-            if not (ROOT / path).exists():
-                ghosts.append(f"{doc.relative_to(ROOT)} → {path}")
+        for path in _missing_code_paths(ROOT, text):
+            ghosts.append(f"{doc.relative_to(ROOT)} → {path}")
     assert not ghosts, "文档指到了不存在的文件(搬过家或改了名):\n  " + "\n  ".join(ghosts)
+
+
+def test_干净检出允许已声明的产物但仍拒绝失效路径(tmp_path: pathlib.Path) -> None:
+    (tmp_path / "package.json").write_text(json.dumps({
+        "scripts": {"build:preload": "esbuild electron/preload.cjs --outfile=electron/preload.bundle.cjs"},
+    }), encoding="utf-8")
+    (tmp_path / "electron").mkdir()
+    (tmp_path / "electron" / "preload.cjs").write_text("", encoding="utf-8")
+    assert _missing_code_paths(tmp_path, " ".join([
+        "`electron/preload.cjs`", "`electron/preload.bundle.cjs`",
+        "`electron/typo.bundle.cjs`", "`electron/deleted.cjs`",
+    ])) == ["electron/deleted.cjs", "electron/typo.bundle.cjs"]
 
 
 def test_发布文档列的状态和权威清单一致() -> None:
