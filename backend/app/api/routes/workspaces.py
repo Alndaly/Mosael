@@ -35,7 +35,11 @@ from app.domain import members as members_svc
 
 router = APIRouter(tags=["workspaces"])
 
-PUBLISH_ACTIVE_STATUSES = frozenset({"pending", "queued", "running"})
+#: 发布任务的状态怎么归到首页那三档。**三个集合合起来必须正好是 TASK_STATUSES**
+#: (由 test_publish_statuses_are_all_classified 钉住)—— 下面那个兜底会把没归类的状态
+#: 悄悄算成"进行中",于是漏掉一个的表现不是报错,是首页永远显示有几条在跑。
+#: `queued` 曾经就在这里,而发布任务根本没有这个状态(建出来是 pending,之后只走 report_task)。
+PUBLISH_ACTIVE_STATUSES = frozenset({"pending", "running"})
 PUBLISH_BLOCKED_STATUSES = frozenset({"login_required", "waiting_manual", "permission_required", "blocked"})
 
 
