@@ -1,6 +1,7 @@
 import React from "react";
 
 import { messages, type MessageKey } from "@/app/messages";
+import { INTERFACE_FONTS, loadInterfaceFont, normalizeInterfaceFont, type InterfaceFont } from "@/app/interfaceFonts";
 import { setApiLocale } from "@/api/client";
 
 type Theme = "light" | "dark" | "system";
@@ -12,6 +13,8 @@ const STORAGE_KEY = "mosael.preferences";
 
 
 type PreferencesContextValue = {
+  font: InterfaceFont;
+  setFont: (font: InterfaceFont) => void;
   theme: Theme;
   setTheme: (theme: Theme) => void;
   /** 免提浮标浮不浮着。本地偏好 —— 见 provider 里那段说明。 */
@@ -25,6 +28,12 @@ type PreferencesContextValue = {
 const PreferencesContext = React.createContext<PreferencesContextValue | null>(null);
 
 export function PreferencesProvider({ children }: { children: React.ReactNode }) {
+  const [font, setFontState] = React.useState<InterfaceFont>(() => readPreferences().font);
+  React.useLayoutEffect(() => {
+    document.documentElement.style.setProperty("--font-sans", INTERFACE_FONTS.find((entry) => entry.id === font)!.family);
+    document.documentElement.dataset.font = font;
+    void loadInterfaceFont(font).catch(() => { /* Keep the readable fallback if a local font cannot load. */ });
+  }, [font]);
   const [theme, setThemeState] = React.useState<Theme>(() => readPreferences().theme);
   const [locale, setLocaleState] = React.useState<Locale>(() => readPreferences().locale);
   //: 免提浮标要不要浮着。**本地偏好**:同一个账号在两台机器上,想不想要一颗浮窗完全可以不同,
@@ -42,15 +51,17 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
     };
     apply();
     document.documentElement.lang = locale;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ theme, locale, voiceDock }));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ theme, locale, voiceDock, font }));
     if (theme === "system") {
       media.addEventListener("change", apply);
       return () => media.removeEventListener("change", apply);
     }
-  }, [theme, locale, voiceDock]);
+  }, [theme, locale, voiceDock, font]);
 
   const value = React.useMemo<PreferencesContextValue>(
     () => ({
+      font,
+      setFont: setFontState,
       theme,
       setTheme: setThemeState,
       voiceDock,
@@ -59,7 +70,7 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
       setLocale: setLocaleState,
       t: (key) => messages[locale][key],
     }),
-    [locale, theme, voiceDock],
+    [locale, theme, voiceDock, font],
   );
 
   return <PreferencesContext.Provider value={value}>{children}</PreferencesContext.Provider>;
@@ -75,21 +86,23 @@ export function useI18n() {
   return usePreferences().t;
 }
 
-function readPreferences(): { theme: Theme; locale: Locale; voiceDock: boolean } {
-  if (typeof window === "undefined") return { theme: "light", locale: "zh-CN", voiceDock: false };
+function readPreferences(): { font: InterfaceFont; theme: Theme; locale: Locale; voiceDock: boolean } {
+  if (typeof window === "undefined") return { font: "default", theme: "light", locale: "zh-CN", voiceDock: false };
   try {
     const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "{}") as Partial<{
+      font: InterfaceFont;
       theme: Theme;
       locale: Locale;
       voiceDock: boolean;
     }>;
     return {
+      font: normalizeInterfaceFont(parsed.font),
       theme: parsed.theme === "dark" || parsed.theme === "system" ? parsed.theme : "light",
       locale: parsed.locale === "en-US" ? "en-US" : "zh-CN",
       //: 默认不浮 —— 一颗常驻的浮窗该由人主动要,而不是装完就在那儿。
       voiceDock: parsed.voiceDock === true,
     };
   } catch {
-    return { theme: "light", locale: "zh-CN", voiceDock: false };
+    return { font: "default", theme: "light", locale: "zh-CN", voiceDock: false };
   }
 }

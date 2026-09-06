@@ -1,8 +1,9 @@
 import React from "react";
-import { ImageIcon, MonitorCog, Moon, RotateCcw, Sun, Upload, X } from "lucide-react";
+import { Check, ImageIcon, MonitorCog, Moon, RotateCcw, Sun, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { BACKGROUND_PRESETS, type BackgroundKind, compressImageFile, useAppearance } from "@/app/appearance";
+import { INTERFACE_FONTS, loadInterfaceFont } from "@/app/interfaceFonts";
 import { useCustomCss } from "@/app/customCss";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,10 @@ import { cn } from "@/lib/utils";
 
 export function AppearanceSection() {
   const t = useI18n();
-  const { theme, setTheme, locale, setLocale } = usePreferences();
+  const { theme, setTheme, locale, setLocale, font, setFont } = usePreferences();
+  React.useEffect(() => {
+    void Promise.allSettled(INTERFACE_FONTS.map((entry) => loadInterfaceFont(entry.id)));
+  }, []);
   return (
     <SettingsGroup title={t("settingsAppearance")} description={t("settingsAppearanceDesc")}>
       <SettingsRow label={t("settingsTheme")} description={t("settingsThemeDesc")}>
@@ -59,6 +63,24 @@ export function AppearanceSection() {
           </button>
         </div>
       </SettingsRow>
+      <SettingsBlock>
+        <div className="grid gap-1">
+          <span className="text-ui-md font-medium">{t("settingsFont")}</span>
+          <p className="text-ui-sm text-muted-foreground">{t("settingsFontDesc")}</p>
+        </div>
+        <div role="radiogroup" aria-label={t("settingsFont")} className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {INTERFACE_FONTS.map((entry) => (
+            <label key={entry.id} className={cn("relative grid min-w-0 cursor-pointer gap-2 rounded-lg p-4 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring", font === entry.id ? "bg-accent text-accent-foreground" : "bg-control hover:bg-secondary")}>
+              <input className="sr-only" type="radio" name="interface-font" aria-label={t(entry.label)} checked={font === entry.id} onChange={() => setFont(entry.id)} />
+              <span className="flex items-center justify-between gap-2 text-ui-sm font-medium">{t(entry.label)}{font === entry.id && <Check size={15} aria-hidden />}</span>
+              <span style={{ fontFamily: entry.family }} className="grid gap-1 leading-relaxed">
+                <span className="text-lg">{t("fontPreview")}</span>
+                <span className="text-base">{t("fontPreviewEnglish")}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </SettingsBlock>
     </SettingsGroup>
   );
 }

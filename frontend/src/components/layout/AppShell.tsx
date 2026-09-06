@@ -304,14 +304,14 @@ function ProjectSwitcher({
           <ChevronsUpDown size={12} className="shrink-0" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="grid max-h-[min(60vh,360px)] w-64 gap-0.5 overflow-auto p-1.5" align="start" sideOffset={8}>
+      <PopoverContent className="grid max-h-[min(60vh,360px)] w-80 grid-cols-[minmax(0,1fr)] gap-0.5 overflow-x-hidden overflow-y-auto p-1.5" align="start" sideOffset={8}>
         <div className="px-2 pb-1.5 pt-1 text-ui-xs font-semibold tracking-[0.02em] text-muted-foreground">{t("timelineSwitch")}</div>
         {projects.map((p) => (
           <button
             key={p.id}
             type="button"
             className={cn(
-              "flex cursor-pointer items-center justify-between gap-2 rounded-md border-0 bg-transparent px-2 py-[7px] text-left text-ui-sm text-foreground transition-colors duration-100 hover:bg-secondary [&_svg]:shrink-0 [&_svg]:text-primary",
+              "flex min-w-0 w-full cursor-pointer items-center justify-between gap-2 rounded-md border-0 bg-transparent px-2 py-[7px] text-left text-ui-sm text-foreground transition-colors duration-100 hover:bg-secondary [&_svg]:shrink-0 [&_svg]:text-primary",
               p.id === currentProjectId && "font-semibold text-primary",
             )}
             onClick={() => {
@@ -319,7 +319,7 @@ function ProjectSwitcher({
               if (p.id !== currentProjectId) onSwitchProject(p.id);
             }}
           >
-            <span className="truncate">{p.name}</span>
+            <span className="min-w-0 flex-1 truncate" title={p.name}>{p.name}</span>
             {p.id === currentProjectId && <Check size={13} />}
           </button>
         ))}

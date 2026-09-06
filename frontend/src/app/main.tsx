@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import "@fontsource-variable/inter";
 import "@fontsource-variable/jetbrains-mono";
-// Retain the bundled poem typeface for custom CSS; UI uses the native Chinese sans stack.
+// WenKai is also available as a global interface font in Appearance.
 import "lxgw-wenkai-screen-webfont/lxgwwenkaigbscreen.css";
 import "@/design/tokens.css";
 import "./styles.css";

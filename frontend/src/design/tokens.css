@@ -231,8 +231,7 @@
   --track-overlay-text: #8f3a63;
 
 
-  /* Inter is bundled for offline Latin/numerals; Chinese uses the platform's native sans.
-     The bundled WenKai remains available for poem content and custom CSS. */
+  /* Default stack; the appearance preference overrides this token for the whole interface. */
   --font-sans: "Inter Variable", -apple-system, BlinkMacSystemFont, "PingFang SC",
     "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
   --font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
