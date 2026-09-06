@@ -1,3 +1,4 @@
+import { useSceneFullscreen } from "./useSceneFullscreen";
 import { SceneHistory } from "./SceneHistory";
 import { SceneCameraPanel } from "./SceneCameraPanel";
 import { SceneInspector } from "./SceneInspector";
@@ -10,6 +11,8 @@ import {
   Camera,
   Check,
   Download,
+  Maximize,
+  Minimize,
   ChevronRight,
   MousePointer2,
   HelpCircle,
@@ -208,6 +211,8 @@ function SceneEditor({
   initial: Scene;
   onBack: () => void;
 }) {
+  const studioRoot = React.useRef<HTMLDivElement>(null);
+  const fullscreen = useSceneFullscreen(studioRoot);
   const qc = useQueryClient(),
     [draft, setDraft] = React.useState(() => ({
       name: initial.name,
@@ -568,30 +573,36 @@ function SceneEditor({
     );
   }
   return (
-    <div className="scene-studio">
+    <div
+      ref={studioRoot}
+      className="scene-studio"
+      data-screen-mode={fullscreen.mode ?? undefined}
+    >
       <header className="scene-header">
         <Tool label="返回场景列表" onClick={onBack}>
           <ArrowLeft size={17} />
         </Tool>
-        <input
-          className="scene-name"
-          aria-label="场景名称"
-          maxLength={160}
-          value={draft.name}
-          onChange={(e) => change({ ...draft, name: e.target.value })}
-        />
-        <span className="scene-save">
-          {error ? (
-            "未保存"
-          ) : autosave.pending ? (
-            "保存中…"
-          ) : (
-            <>
-              <Check size={13} />
-              已保存
-            </>
-          )}
-        </span>
+        <div className="scene-heading">
+          <input
+            className="scene-name"
+            aria-label="场景名称"
+            maxLength={160}
+            value={draft.name}
+            onChange={(e) => change({ ...draft, name: e.target.value })}
+          />
+          <span className="scene-save" role="status">
+            {error ? (
+              "未保存"
+            ) : autosave.pending ? (
+              "保存中…"
+            ) : (
+              <>
+                <Check size={13} />
+                已保存
+              </>
+            )}
+          </span>
+        </div>
         <div className="scene-actions">
           <Tool
             label="撤销"
@@ -602,6 +613,18 @@ function SceneEditor({
           </Tool>
           <Tool label="重做" onClick={redo} disabled={!future.length || !!busy}>
             <RotateCw size={16} />
+          </Tool>
+          <Tool
+            label={
+              fullscreen.mode === "workspace" ? "退出工作台全屏" : "工作台全屏"
+            }
+            onClick={() => void fullscreen.toggle("workspace")}
+          >
+            {fullscreen.mode === "workspace" ? (
+              <Minimize size={16} />
+            ) : (
+              <Maximize size={16} />
+            )}
           </Tool>
           <Tool label="版本记录" onClick={() => setRevisions(true)}>
             <History size={16} />
@@ -829,6 +852,21 @@ function SceneEditor({
                   </PopoverContent>
                 </Popover>
               )}
+              <button
+                className="scene-labeled-tool"
+                aria-label={
+                  fullscreen.mode === "viewport" ? "退出视图全屏" : "视图全屏"
+                }
+                aria-pressed={fullscreen.mode === "viewport"}
+                onClick={() => void fullscreen.toggle("viewport")}
+              >
+                {fullscreen.mode === "viewport" ? (
+                  <Minimize size={15} />
+                ) : (
+                  <Maximize size={15} />
+                )}
+                {fullscreen.mode === "viewport" ? "退出全屏" : "全屏"}
+              </button>
               <Popover>
                 <PopoverTrigger asChild>
                   <button className="scene-tool" aria-label="操作说明">
@@ -887,6 +925,25 @@ function SceneEditor({
                   取消
                 </Button>
               )}
+            </div>
+          )}
+          {fullscreen.mode === "viewport" && step !== "camera" && (
+            <div className="scene-fullscreen-playback">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setPreview(true);
+                  if (time >= shot.duration) setTime(0);
+                  setPlaying(!playing);
+                }}
+              >
+                {playing ? <Pause size={16} /> : <Play size={16} />}{" "}
+                {playing ? "暂停镜头" : "播放镜头"}
+              </Button>
+              <span>
+                {time.toFixed(1)} / {shot.duration.toFixed(1)} s
+              </span>
             </div>
           )}
           <div className="scene-stage-hint">

@@ -880,3 +880,69 @@
     max-width: 200px;
   }
 }
+
+/* Keep the same viewport mounted: ResizeObserver resizes its renderer and camera. */
+.scene-studio[data-screen-mode] {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  width: 100%;
+  height: 100dvh;
+  background: var(--background);
+}
+.scene-studio[data-screen-mode="viewport"] > .scene-header,
+.scene-studio[data-screen-mode="viewport"] > .scene-steps,
+.scene-studio[data-screen-mode="viewport"] .scene-side,
+.scene-studio[data-screen-mode="viewport"] .scene-agent-dock,
+.scene-studio[data-screen-mode="viewport"] .scene-agent-floating {
+  display: none;
+}
+.scene-studio[data-screen-mode="viewport"] .scene-workspace {
+  display: flex;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+.scene-studio[data-screen-mode="viewport"] .scene-stage {
+  flex: 1;
+  min-height: 0;
+  border-radius: 0;
+}
+.scene-studio[data-screen-mode="viewport"] .scene-stage-bar {
+  top: 16px;
+  left: 16px;
+  right: 16px;
+}
+.scene-fullscreen-playback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px;
+  background: var(--workspace-subtle);
+}
+.scene-fullscreen-playback span {
+  color: var(--muted-foreground);
+  font-size: var(--text-ui-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.scene-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.scene-heading .scene-name {
+  field-sizing: content;
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 96px;
+  max-width: min(32vw, 360px);
+  padding-inline: 4px;
+}
+.scene-heading .scene-save {
+  flex-shrink: 0;
+  margin: 0;
+}
