@@ -28,6 +28,8 @@ Mosael 把剪辑、AI 生成、智能体、工作流和发布放在同一个桌�
 
 ## 下载与运行
 
+当前正式版本：**[Mosael 1.0.0](https://github.com/Alndaly/Mosael/releases/tag/v1.0.0)**。
+
 从 [GitHub Releases](https://github.com/Alndaly/Mosael/releases) 下载：
 
 - macOS：Apple 芯片版 `.dmg`
@@ -285,4 +287,4 @@ MOSAEL_OAUTH_REDIRECT_BASE=...
 详见 [LICENSE](LICENSE)。商业授权可通过[交流群与作者微信](https://mosael.com/zh/docs/about/contact#%E5%BE%AE%E4%BF%A1)
 联系，也可以在 X 关注 [KindaHuaX](https://x.com/KindaHuaX)。
 
-界面演示已更新至 **1.0.0-beta5**。查看[外观与字体](https://mosael.com/zh/docs/guides/appearance)、[定时任务](https://mosael.com/zh/docs/guides/scheduler)和[实拍素材署名](docs/media/README.md)。
+界面演示已更新至 **1.0.0**。查看[外观与字体](https://mosael.com/zh/docs/guides/appearance)、[定时任务](https://mosael.com/zh/docs/guides/scheduler)和[实拍素材署名](docs/media/README.md)。

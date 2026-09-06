@@ -6,10 +6,12 @@ import crypto from 'node:crypto';
 
 const media = path.resolve('public/media');
 const docs = path.resolve('content/docs');
+const version = JSON.parse(fs.readFileSync('../package.json', 'utf8')).version;
 const manifest = JSON.parse(fs.readFileSync(path.join(media, 'capture-manifest.json'), 'utf8'));
 const files = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory() ? files(path.join(dir, e.name)) : [path.join(dir, e.name)]);
 
 test('every current screenshot and recording has an intact live-capture provenance entry', () => {
+  assert.equal(manifest.documentedVersion ?? manifest.version, version);
   for (const kind of ['screens', 'gifs', 'videos']) {
     for (const file of files(path.join(media, kind))) {
       const relative = path.relative(media, file);
@@ -38,7 +40,7 @@ test('localized docs reference existing media, use the correct language, and hav
     const locale = relative.split(path.sep)[0];
     assert.ok(fs.existsSync(path.join(docs, relative.replace(/^(zh|en)/, locale === 'zh' ? 'en' : 'zh'))), relative);
     const body = fs.readFileSync(file, 'utf8');
-    assert.match(body, /version: 1\.0\.0-beta5/);
+    assert.equal(body.match(/^version: (.+)$/m)?.[1], version, relative);
     for (const match of body.matchAll(/\/media\/(?:screens|gifs|videos)\/[^\s"')]+/g)) {
       const src = match[0];
       assert.ok(fs.existsSync(path.join('public', src)), `${relative}: ${src}`);

@@ -5,6 +5,17 @@ commit list and downloadable artifacts.
 
 ## Unreleased
 
+## [1.0.0] - 2026-09-07
+
+### Stable release
+
+- Promoted the completed 1.0 feature set to the stable channel with versioned macOS Apple Silicon
+  and Windows x64 installers; 1.0.0 is the latest stable update.
+- Includes the unified frosted interface, redesigned editor and media previews, global bundled
+  fonts, agent voice, workflow scheduling, plugin connections and multi-worker publishing.
+- Updated all 40 bilingual website guides and current product captures, with a layered README
+  showcase, controllable recordings and verified documentation links.
+
 ## [1.0.0-beta5] - 2026-09-07
 
 ### Changed

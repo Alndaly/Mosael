@@ -1,5 +1,9 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v1.0.0": {
+    zh: ["1.0 正式发布，提供 macOS Apple Silicon 与 Windows x64 安装包。", "统一磨砂界面、剪辑与媒体预览，内置中英文及手写字体。", "整合智能体语音、工作流与定时任务、插件连接和多执行器发布。", "更新 40 篇中英文指南与全部当前界面配图、GIF、录屏，README 加入错层截图展示。"],
+    en: ["The stable 1.0 release is available for macOS Apple Silicon and Windows x64.", "Unified frosted interface, rebuilt editing and media previews, and bundled multilingual and handwritten fonts.", "Includes agent voice, workflows and scheduling, plugin connections and multi-worker publishing.", "Refreshed 40 bilingual guides and all current captures, GIFs and recordings, with a layered README showcase."],
+  },
   "v1.0.0-beta5": {
     zh: ["统一半透明模糊弹窗与菜单，柔化边界，适配自定义背景。", "重构剪辑工作区与音视频预览，修复长标题、画布菜单定位和可视区域居中。", "新增全局中英文字体，包含 Caveat 与 Kalam 手写风格。", "全面更新中英文文档与明暗主题实拍，新增外观、定时任务指南和可暂停录屏。"],
     en: ["Unified frosted dialogs and menus, softened boundaries and preserved custom backgrounds.", "Rebuilt the editor and media previews; fixed long titles, canvas menus and visible-area centering.", "Added global Chinese/English font combinations, including Caveat and Kalam handwriting.", "Refreshed bilingual guides and light/dark captures, with Appearance and Scheduled Tasks guides and controllable recordings."],

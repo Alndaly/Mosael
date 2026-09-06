@@ -1,6 +1,6 @@
 # Current interface captures
 
-The website and both READMEs use the **1.0.0-beta5** interface captured from the running app, not reconstructed UI or generated mockups. The canonical files live in [`website/public/media`](../../website/public/media). Historical design-review attachments elsewhere in `docs` are not current product documentation.
+The website and both READMEs use the **1.0.0** interface captured from the running app, not reconstructed UI or generated mockups. The canonical files live in [`website/public/media`](../../website/public/media). Historical design-review attachments elsewhere in `docs` are not current product documentation.
 
 ## Source and credit
 
@@ -41,3 +41,5 @@ After recording, review screenshots and moving frames, update the related biling
 ## README showcase
 
 `readme-showcase.png` is an AI-assisted decorative composition of the three unaltered application captures preserved in `readme-shots/`. The layers show dark Space Grotesk editing, light Caveat handwriting, and dark Newsreader media browsing. The composite is promotional artwork; use the original captures and canonical website images to inspect interface details. These additional screenshots share the sample-footage credit above.
+
+The canonical capture manifest retains the original capture version (`1.0.0-beta5`) and records `documentedVersion: 1.0.0`. The stable release uses the same interface code; only release metadata changed after capture.

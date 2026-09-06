@@ -170,7 +170,8 @@ def main():
     themes=['light','dark'] if args.theme=='both' else [args.theme]
     locales=['zh','en'] if args.locale=='both' else [args.locale]
     manifest=PUBLIC/'capture-manifest.json';data=json.loads(manifest.read_text()) if manifest.exists() else {'captures':{}}
-    data.update({'version':json.loads((ROOT/'package.json').read_text())['version'],'sourceCommit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),'capturedAt':datetime.now(timezone.utc).isoformat(),'viewport':VIEWPORT,'note':'Live interface captures. Licensed sample footage and manually prepared editing exercise; no simulated AI replies or publishing successes.'})
+    version=json.loads((ROOT/'package.json').read_text())['version']
+    data.update({'version':version,'documentedVersion':version,'sourceCommit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),'capturedAt':datetime.now(timezone.utc).isoformat(),'viewport':VIEWPORT,'note':'Live interface captures. Licensed sample footage and manually prepared editing exercise; no simulated AI replies or publishing successes.'})
     with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='mosael-record-') as tmp:
         browser=p.chromium.launch()
         for locale in locales:

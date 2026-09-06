@@ -29,6 +29,8 @@ the finished story without shuttling the project between a pile of tools.
 
 ## Download and run
 
+Current stable release: **[Mosael 1.0.0](https://github.com/Alndaly/Mosael/releases/tag/v1.0.0)**.
+
 Download a build from [GitHub Releases](https://github.com/Alndaly/Mosael/releases):
 
 - macOS: `.dmg` for Apple silicon
@@ -322,4 +324,4 @@ and personal non-commercial purposes; commercial use and redistribution require 
 See [LICENSE](LICENSE). Contact the maker through the [community and contact page](https://mosael.com/en/docs/about/contact),
 or follow [KindaHuaX on X](https://x.com/KindaHuaX), for commercial licensing.
 
-Interface captures are updated for **1.0.0-beta5**. See [Appearance and fonts](https://mosael.com/en/docs/guides/appearance), [Scheduled tasks](https://mosael.com/en/docs/guides/scheduler), and [capture credits](docs/media/README.md).
+Interface captures are updated for **1.0.0**. See [Appearance and fonts](https://mosael.com/en/docs/guides/appearance), [Scheduled tasks](https://mosael.com/en/docs/guides/scheduler), and [capture credits](docs/media/README.md).
