@@ -1,5 +1,6 @@
 import { FLOATING_SURFACE } from "@/components/ui/floating";
 import React from "react";
+import { createPortal } from "react-dom";
 import { carriedByFrame } from "@/features/boards/frameCarry";
 import {
   Background,
@@ -11,6 +12,7 @@ import {
   ReactFlowProvider,
   ViewportPortal,
   addEdge,
+  getBezierPath,
   useEdgesState,
   useNodesState,
   type Connection,
@@ -639,16 +641,25 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     {
       screenX: number;
       screenY: number;
-      /** 那条线的起点(屏幕坐标)—— 松手后 React Flow 会把它正在拖的线撤掉,
-       *  而菜单还开着:没有这段线,看起来就像刚拉的那条线没了。 */
+      /** Keep the released connection in flow coordinates, just like the live preview. */
       fromX: number;
       fromY: number;
+      fromPosition: Position;
       x: number;
       y: number;
       from: string;
       fromIsSource: boolean;
     } | null
   >(null);
+
+  React.useEffect(() => {
+    if (!linkMenu) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setLinkMenu(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [linkMenu]);
 
   /**
    * 从某一项长出下一项,并连上。
@@ -848,25 +859,16 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           if (commentMode) return;
           const instance = rf.current;
           const from = connection.fromNode?.id;
-          if (connection.isValid || !instance || !from) return;
+          if (connection.isValid || !instance || !from || !connection.from || !connection.fromPosition) return;
           const point = "changedTouches" in event ? event.changedTouches[0] : (event as MouseEvent);
           if (!point) return;
           const flow = instance.screenToFlowPosition({ x: point.clientX, y: point.clientY });
-          //: 起点取那个 handle 自己的位置 —— 菜单开着的这段时间要把线接上,
-          //: 否则用户看到的是「我拉的线松手就没了」。
-          const handle = document
-            .querySelector(`.react-flow__node[data-id="${CSS.escape(from)}"]`)
-            ?.querySelector(
-              connection.fromHandle?.type === "target"
-                ? ".react-flow__handle-left"
-                : ".react-flow__handle-right",
-            )
-            ?.getBoundingClientRect();
           setLinkMenu({
             screenX: point.clientX,
             screenY: point.clientY,
-            fromX: handle ? handle.x + handle.width / 2 : point.clientX,
-            fromY: handle ? handle.y + handle.height / 2 : point.clientY,
+            fromX: connection.from.x,
+            fromY: connection.from.y,
+            fromPosition: connection.fromPosition,
             x: flow.x,
             y: flow.y,
             from,
@@ -889,6 +891,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
             setReady(true);
           });
         }}
+        onMoveStart={() => setLinkMenu(null)}
         onMoveEnd={(_event, next) => viewport.remember(next)}
         // 双击空白处直接加一张便签 —— 想法来的时候不该先去找按钮。
         onDoubleClick={(event) => {
@@ -1153,46 +1156,58 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           单子出现在别处等于要他把视线再挪一趟。 */}
       {linkMenu && (
         <>
-          {/* 点别处就收起来。铺满整块,但在菜单**下面**。 */}
-          <div className="fixed inset-0 z-40" onPointerDown={() => setLinkMenu(null)} />
-          {/* 把那条线接着画到菜单上。**画的是一根线,不是一条边** —— 这时还没有第二个节点,
-              真的边无从连起;而没有它,松手的一瞬间线就断在半空,像是操作没生效。 */}
-          <svg className="pointer-events-none fixed inset-0 z-40 h-full w-full" aria-hidden>
-            <path
-              d={`M${linkMenu.fromX},${linkMenu.fromY} C${(linkMenu.fromX + linkMenu.screenX) / 2},${linkMenu.fromY} ${(linkMenu.fromX + linkMenu.screenX) / 2},${linkMenu.screenY} ${linkMenu.screenX},${linkMenu.screenY}`}
-              className="fill-none stroke-border-strong"
-              strokeWidth={1.5}
-            />
-          </svg>
-          <div
-            className={cn(FLOATING_SURFACE, "fixed z-50 w-56 overflow-hidden p-1.5")}
-            style={{ left: linkMenu.screenX + 8, top: linkMenu.screenY + 8 }}
-          >
-            <p className="px-2 py-1.5 text-ui-2xs text-muted-foreground">{t("boardSpawnTitle")}</p>
-            {SPAWNABLE_KINDS.map((kind) => {
-              const Icon = kindIcon(kind);
-              const { label, hint } = kindText(t, kind);
-              return (
-                <button
-                  key={kind}
-                  type="button"
-                  onClick={() => {
-                    spawnLinked(kind, linkMenu.from, { x: linkMenu.x, y: linkMenu.y }, linkMenu.fromIsSource);
-                    setLinkMenu(null);
-                  }}
-                  className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-secondary"
-                >
-                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-secondary text-muted-foreground">
-                    <Icon size={14} />
-                  </span>
-                  <span className="grid min-w-0 gap-0.5">
-                    <span className="truncate text-ui-xs text-foreground">{label}</span>
-                    <span className="truncate text-ui-2xs text-muted-foreground">{hint}</span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          {/* Same viewport and Bézier algorithm as React Flow's live connection. */}
+          <ViewportPortal>
+            <svg className="pointer-events-none absolute left-0 top-0 h-px w-px overflow-visible" aria-hidden data-pending-board-connection>
+              <path
+                d={getBezierPath({
+                  sourceX: linkMenu.fromX,
+                  sourceY: linkMenu.fromY,
+                  sourcePosition: linkMenu.fromPosition,
+                  targetX: linkMenu.x,
+                  targetY: linkMenu.y,
+                  targetPosition: linkMenu.fromIsSource ? Position.Left : Position.Right,
+                })[0]}
+                className="react-flow__connection-path"
+              />
+            </svg>
+          </ViewportPortal>
+          {/* Screen coordinates must escape ancestors with backdrop-filter/transform. */}
+          {createPortal(
+            <>
+              <div className="fixed inset-0 z-40" onPointerDown={() => setLinkMenu(null)} />
+              <div
+                className={cn(FLOATING_SURFACE, "fixed z-50 w-56 overflow-hidden p-1.5")}
+                style={{ left: linkMenu.screenX + 8, top: linkMenu.screenY + 8 }}
+              >
+                <p className="px-2 py-1.5 text-ui-2xs text-muted-foreground">{t("boardSpawnTitle")}</p>
+                {SPAWNABLE_KINDS.map((kind) => {
+                  const Icon = kindIcon(kind);
+                  const { label, hint } = kindText(t, kind);
+                  return (
+                    <button
+                      key={kind}
+                      type="button"
+                      onClick={() => {
+                        spawnLinked(kind, linkMenu.from, { x: linkMenu.x, y: linkMenu.y }, linkMenu.fromIsSource);
+                        setLinkMenu(null);
+                      }}
+                      className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-secondary"
+                    >
+                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-secondary text-muted-foreground">
+                        <Icon size={14} />
+                      </span>
+                      <span className="grid min-w-0 gap-0.5">
+                        <span className="truncate text-ui-xs text-foreground">{label}</span>
+                        <span className="truncate text-ui-2xs text-muted-foreground">{hint}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </>,
+            document.body,
+          )}
         </>
       )}
 

@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -16,6 +16,20 @@ vi.mock("@/app/preferences", () => ({
 }));
 
 import { AgentSessionSwitcher } from "./AgentSessionSwitcher";
+import { useFloatingPanel } from "@/features/workflows/useFloatingPanel";
+
+function FloatingSessionHeader() {
+  const { style, startDrag } = useFloatingPanel({ storageKey: "session-header-test", floating: true });
+  return (
+    <aside data-testid="panel" style={style}>
+      <header onPointerDown={startDrag}>
+        <h2 data-testid="header-space">
+          <AgentSessionSwitcher sessions={sessions} activeSession={sessions[1]} deleting={false} onSelect={() => {}} onDelete={() => {}} />
+        </h2>
+      </header>
+    </aside>
+  );
+}
 
 const sessions = [
   { id: "one", title: "一个非常非常长的会话标题，需要在窗口标题处省略" },
@@ -24,6 +38,26 @@ const sessions = [
 ];
 
 describe("AgentSessionSwitcher", () => {
+  it("标题旁的空白可以拖动，只有标题入口打开会话菜单", async () => {
+    render(<FloatingSessionHeader />);
+    const panel = screen.getByTestId("panel");
+    const blank = screen.getByTestId("header-space");
+    const before = [parseFloat(panel.style.left), parseFloat(panel.style.top)];
+    await userEvent.click(blank);
+    expect(screen.queryByRole("searchbox")).toBeNull();
+
+    fireEvent.pointerDown(blank, { clientX: 150, clientY: 100 });
+    fireEvent.pointerMove(window, { clientX: 110, clientY: 80 });
+    fireEvent.pointerUp(window, { clientX: 110, clientY: 80 });
+    expect([parseFloat(panel.style.left), parseFloat(panel.style.top)]).toEqual([before[0] - 40, before[1] - 20]);
+    expect(screen.queryByRole("searchbox")).toBeNull();
+
+    const trigger = screen.getByRole("button", { name: "会话" });
+    trigger.focus();
+    await userEvent.keyboard("{Enter}");
+    expect(screen.getByRole("searchbox")).toBeVisible();
+  });
+
   it("左上角直接显示当前会话名且标题入口没有外框", () => {
     render(
       <AgentSessionSwitcher
@@ -38,7 +72,7 @@ describe("AgentSessionSwitcher", () => {
     const trigger = screen.getByRole("button", { name: "会话" });
     expect(trigger).toHaveTextContent(sessions[0].title);
     expect(trigger).toHaveClass("border-0", "bg-transparent");
-    expect(trigger).toHaveClass("w-full");
+    expect(trigger).toHaveClass("w-fit", "max-w-full");
     expect(trigger.querySelector("span")).toHaveClass("truncate");
   });
 
