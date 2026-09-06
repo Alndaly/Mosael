@@ -333,7 +333,7 @@ Gateway 的边界与安全不变量见
 ## 智能体的上下文:预算与整理
 
 **窗口来自模型**:模型行的 `context_window` → 供应商目录 → 保守回退 **32000**。这个回退值在 sidecar
-(`agent-sidecar/src/pi.ts`)和后端(`ai/agent/host.py`)各有一份,**必须一致**——否则前端显示的水位
+(`agent-sidecar/src/pi.ts`)和后端(`backend/app/domain/agent/host.py`)各有一份,**必须一致**——否则前端显示的水位
 和真正触发整理的时机会对不上。
 
 **用量估算锚定真实 usage**:取最后一条带 usage 的助手消息(供应商回的 input+output),此后的新消息
@@ -368,7 +368,7 @@ Gateway 的边界与安全不变量见
 (理由与被否决的方案见 [ADR-0004](adr/0004-preview-export-parity-by-contract.md)):
 
 - **可见层 / z 序 / base 归属 —— 必须逐字一致**。这是所有已发生 parity bug 的所在地。
-  两侧实现(`frontend/.../playback/sceneModel.ts` 与 `backend/app/media/scene.py`)由
+  两侧实现(`frontend/src/features/editor/playback/sceneModel.ts` 与 `backend/app/media/scene.py`)由
   [`contracts/scene-cases.json`](../contracts/scene-cases.json) 钉死:同一份语言中立语料,
   两侧测试各跑一遍,任一侧单方面改语义 → 两边 CI 一起红。**改语义先改语料**。
 - **调色 —— ffmpeg 权威,预览近似**,这是**有意的**而非缺陷。导出用 `eq`/`curves`/`lut3d`

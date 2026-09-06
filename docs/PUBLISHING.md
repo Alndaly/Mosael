@@ -24,12 +24,16 @@
 
 ## worker 协议(后端 ↔ 桌面执行器)
 
-执行器是个无 token 的 Node 进程,走 `/api/publish/worker/*`(**免鉴权,localhost 信任边界**,与老版一致):
+执行器是个没有用户会话的 Node 进程,走 `/api/publish/worker/*`。这条通道**要带共享密钥**
+(`X-Mosael-Worker-Key`,由 `require_worker_key` 校验)—— 「只监听 127.0.0.1」挡不住浏览器:
+用户随便打开一个网页就能 POST 到本机。真正把执行器和网页分开的是那把密钥(见
+`backend/app/core/worker_key.py`)。后端每次启动写进数据目录(0600);跨机部署时两边配同一个
+`MOSAEL_WORKER_KEY`。
 
 | 端点 | 用途 |
 | --- | --- |
-| `POST /worker/claim` | 认领最老的 pending 任务并原子翻成 running(排除正在跑的账号 → 同账号串行) |
-| `PATCH /worker/report` | 回报富状态:`pending/running/prepared/success/failed/login_required/waiting_manual/permission_required/blocked/cancelled` |
+| `POST /worker/claim` | 认领最老的 pending 任务并原子翻成 running。带上执行器身份(`worker`),排除**任何执行器**正在跑的账号 → 同账号串行 |
+| `PATCH /worker/report` | 回报富状态:`pending/running/success/failed/login_required/waiting_manual/permission_required/blocked/cancelled`(权威清单在 `domain/publish.TASK_STATUSES`,`report_task` 按它校验) |
 | `POST /worker/claim-check` | 认领一个待复检登录态的账号 |
 | `POST /worker/mark-due` | 开机全量巡检:把所有账号标记待复检 |
 | `PATCH /worker/account` | 回写 `binding_status` / `last_error` / `profile_name`(平台侧昵称) |
@@ -37,6 +41,22 @@
 
 任务富状态会同步映射到任务总线的 `job`,并产生站内通知(成功/失败/需重登/被拦截…)。
 **已取消的任务不给后到的回报复活**(`report_task` 里的规则)。
+
+### 多个执行器
+
+支持,而且**必须靠身份区分**。回收悬挂任务有两条判据:
+
+1. **「这个账号不在我当前在跑的集合里」** —— 只有**认领者**说了才算数,所以它只作用于
+   `claimed_by` 等于自己的任务。拿自己的集合去判别人的任务,结论必然是"孤儿",于是两个
+   执行器会互相把对方正在跑的任务标成失败,而错误文案还写着「请到平台确认是否已发布」。
+2. **「多久没动静了」**(`STALE_RUNNING_MINUTES`)—— 这条是全局的,而且必须是:执行器彻底
+   死掉之后没人再来认领它的任务,只有这条能把它们收回来。
+
+执行器的身份跨重启稳定(`userData/publish-worker.id`,可用 `MOSAEL_WORKER_ID` 覆盖 ——
+容器里数据目录常常是临时的)。**稳定是必需的**:重启后第一拍要认出自己那些没跑完的任务,
+那正是判据 1 存在的理由。不报身份的老执行器行为不变(单执行器部署)。
+
+回收一律置 `failed` 而不是重排:任务可能其实已经发出去了,重排会造成重复投稿。
 
 ## 账号矩阵
 

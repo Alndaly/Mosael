@@ -270,7 +270,7 @@ pi-ai 0.82 重排模块后,`api/*.lazy` 入口一旦被 esbuild 打进单文件,
 
 ## 12. 同一个常量在 sidecar 和后端各写了一份
 
-`FALLBACK_CONTEXT_WINDOW = 32000`(`agent-sidecar/src/pi.ts` ↔ `backend/app/ai/agent/host.py`)与
+`FALLBACK_CONTEXT_WINDOW = 32000`(`agent-sidecar/src/pi.ts` ↔ `backend/app/domain/agent/host.py`)与
 `CHARS_PER_TOKEN = 3.5`(`compaction.ts` ↔ `domain/context_meter.py`)。
 
 不是疏忽:整理决策必须在 sidecar 里做(它才拿得到消息与 usage),而水位显示必须在后端算(前端只认
