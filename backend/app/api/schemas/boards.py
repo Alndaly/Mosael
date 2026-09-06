@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.api.schemas.base import OrmModel
+from app.api.schemas.base import ApiModel, OrmModel
 from app.api.schemas.generation import SourceAssetRef
 
 
@@ -18,13 +18,13 @@ class BoardOut(OrmModel):
     updated_at: datetime
 
 
-class BoardCreate(BaseModel):
+class BoardCreate(ApiModel):
     workspace_id: str
     name: str = ""
     canvas: dict | None = None
 
 
-class BoardUpdate(BaseModel):
+class BoardUpdate(ApiModel):
     workspace_id: str
     #: New clients always send this. Optional only keeps pre-revision desktop clients able to save
     #: during a rolling upgrade; conflict detection is active whenever the token is present.
@@ -34,7 +34,7 @@ class BoardUpdate(BaseModel):
     canvas: dict | None = None
 
 
-class BoardGenerate(BaseModel):
+class BoardGenerate(ApiModel):
     workspace_id: str
     base_revision: int | None = Field(default=None, ge=1)
     #: 前端先编好 id —— 占位项和回执要指同一个东西,由前端定名字省掉一次往返。
@@ -51,7 +51,7 @@ class BoardGenerate(BaseModel):
     form: dict = Field(default_factory=dict)
 
 
-class BoardWrite(BaseModel):
+class BoardWrite(ApiModel):
     """让 AI 同步写入一张画板便签。"""
 
     workspace_id: str
@@ -64,7 +64,7 @@ class BoardWrite(BaseModel):
     context: list[str] = Field(default_factory=list)
 
 
-class BoardSpeak(BaseModel):
+class BoardSpeak(ApiModel):
     """把文字异步合成为音频并落回画板占位。"""
 
     workspace_id: str
@@ -82,7 +82,7 @@ class BoardSpeak(BaseModel):
     y: float = 0
 
 
-class BoardTrim(BaseModel):
+class BoardTrim(ApiModel):
     """截取视频或音频并把新素材落回画板；原素材不变。"""
 
     workspace_id: str

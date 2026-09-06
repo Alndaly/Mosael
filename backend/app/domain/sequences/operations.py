@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -1682,6 +1683,20 @@ def _require_clip(db: Session, sequence_id: str, clip_id: str) -> Clip:
 
 
 def _validate_clip_range(timeline_start: float, src_in: float, src_out: float) -> None:
+    """片段在时间线上和素材内的位置。
+
+    **先要求有限,再比大小。** 任何和 NaN 的比较都是 False —— 只靠 `< 0` / `<= src_in`
+    这几条,NaN 会把它们全部"满足"而畅通无阻;Infinity 同理(inf < 0 是 False,而
+    src_out=inf 比任何 src_in 都大,于是"出点要晚于入点"也成立)。
+
+    放进去的代价不对称:NaN 存下之后,这条时间线序列化出的 `{"timeline_start": NaN}`
+    不是合法 JSON,浏览器再也打不开它;src_out=inf 则是一段**无限长**的片段,会一路进到
+    渲染计划里。而来源不必是恶意客户端 —— 前端算时间码时一次除以零(时长为 0 的素材、
+    缩放为 0)就是 NaN,智能体的 edit_timeline 也直接收这几个数。
+    """
+    for name, value in (("timeline_start", timeline_start), ("src_in", src_in), ("src_out", src_out)):
+        if not math.isfinite(value):
+            raise SequenceDomainError(f"{name} must be a finite number")
     if timeline_start < 0:
         raise SequenceDomainError("timeline_start must be non-negative")
     if src_in < 0:

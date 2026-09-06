@@ -4,10 +4,10 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.api.schemas.base import OrmModel
+from app.api.schemas.base import ApiModel, OrmModel
 
 
-class WorkflowCreate(BaseModel):
+class WorkflowCreate(ApiModel):
     workspace_id: str
     name: str = Field(min_length=1, max_length=180)
     description: str = Field(default="", max_length=2000)
@@ -15,13 +15,13 @@ class WorkflowCreate(BaseModel):
     template_id: str | None = Field(default=None, max_length=80)
 
 
-class WorkflowUpdate(BaseModel):
+class WorkflowUpdate(ApiModel):
     name: str | None = Field(default=None, min_length=1, max_length=180)
     description: str | None = Field(default=None, max_length=2000)
     graph: dict | None = None
 
 
-class WorkflowImportRequest(BaseModel):
+class WorkflowImportRequest(ApiModel):
     """导入工作流:data 是导出文件的完整 JSON(format/version/name/graph 信封)。"""
 
     workspace_id: str
@@ -55,11 +55,11 @@ class WorkflowRevisionDetailOut(WorkflowRevisionOut):
     graph: dict
 
 
-class WorkflowRunRequest(BaseModel):
+class WorkflowRunRequest(ApiModel):
     params: dict = Field(default_factory=dict)
 
 
-class WorkflowNodeTypeOut(BaseModel):
+class WorkflowNodeTypeOut(ApiModel):
     type: str
     label: str
     description: str
@@ -77,12 +77,12 @@ class WorkflowNodeTypeOut(BaseModel):
     tool_name: str = ""
 
 
-class WorkflowAiEditRequest(BaseModel):
+class WorkflowAiEditRequest(ApiModel):
     instruction: str = Field(min_length=1, max_length=4000)
     graph: dict | None = None
     profile_id: str | None = None
 
 
-class WorkflowAiEditResponse(BaseModel):
+class WorkflowAiEditResponse(ApiModel):
     graph: dict
     summary: str = ""

@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.api.schemas.base import OrmModel
+from app.api.schemas.base import ApiModel, OrmModel
 from app.api.schemas.boards import BoardCreate, BoardGenerate, BoardOut, BoardSpeak, BoardTrim, BoardUpdate, BoardWrite
 from app.api.schemas.browser import BrowserProfileCreate, BrowserProfileOut, BrowserProfileUpdate
 from app.api.schemas.jobs import JobOut, TaskEventOut
@@ -52,7 +52,7 @@ from app.api.schemas.publish import (
     PublishTaskOut,
 )
 
-class AuthCredentials(BaseModel):
+class AuthCredentials(ApiModel):
     username: str = Field(min_length=2, max_length=80)
     password: str = Field(min_length=4, max_length=200)
 
@@ -63,11 +63,11 @@ class RegisterCredentials(AuthCredentials):
     invite_code: str = Field(default="", max_length=64)
 
 
-class DeploymentAdminUpdate(BaseModel):
+class DeploymentAdminUpdate(ApiModel):
     granted: bool
 
 
-class InviteCreate(BaseModel):
+class InviteCreate(ApiModel):
     note: str = Field(default="", max_length=120)
 
 
@@ -83,7 +83,7 @@ class UserOut(OrmModel):
     is_deployment_admin: bool = False
 
 
-class AdminUserOut(BaseModel):
+class AdminUserOut(ApiModel):
     """管理员看到的一个人。"""
 
     id: str
@@ -99,20 +99,20 @@ class AdminUserOut(BaseModel):
     workspaces: int = 0
 
 
-class DaySeriesPoint(BaseModel):
+class DaySeriesPoint(ApiModel):
     day: str
     total: int = 0
     failed: int = 0
 
 
-class UserSpendPoint(BaseModel):
+class UserSpendPoint(ApiModel):
     user_id: str = ""
     username: str = ""
     cost_micros: int = 0
     calls: int = 0
 
 
-class AdminOverviewOut(BaseModel):
+class AdminOverviewOut(ApiModel):
     users: int = 0
     active_users_7d: int = 0
     workspaces: int = 0
@@ -124,7 +124,7 @@ class AdminOverviewOut(BaseModel):
     window_days: int = 30
 
 
-class BootstrapOut(BaseModel):
+class BootstrapOut(ApiModel):
     """登录页开屏问的两件事(见 routes/auth.bootstrap)。不需要登录就能读。"""
 
     #: 这个部署里已经有账号了吗。没有 → 界面进「创建管理员账户」。
@@ -133,27 +133,27 @@ class BootstrapOut(BaseModel):
     open_registration: bool = True
 
 
-class AuthOut(BaseModel):
+class AuthOut(ApiModel):
     token: str
     user: UserOut
 
 
-class UserProfileUpdate(BaseModel):
+class UserProfileUpdate(ApiModel):
     username: str = Field(min_length=2, max_length=80)
     display_name: str = Field(min_length=1, max_length=120)
     signature: str = Field(default="", max_length=500)
 
 
-class PasswordUpdate(BaseModel):
+class PasswordUpdate(ApiModel):
     current_password: str = Field(min_length=4, max_length=200)
     new_password: str = Field(min_length=4, max_length=200)
 
 
-class RenameRequest(BaseModel):
+class RenameRequest(ApiModel):
     name: str = Field(min_length=1, max_length=200)
 
 
-class WorkspaceCreate(BaseModel):
+class WorkspaceCreate(ApiModel):
     name: str = Field(min_length=1, max_length=160)
 
 
@@ -163,7 +163,7 @@ class WorkspaceOut(OrmModel):
     role: str | None = None  # the caller's role in this workspace (None if unknown)
 
 
-class WorkspaceMemberOut(BaseModel):
+class WorkspaceMemberOut(ApiModel):
     user_id: str
     username: str
     display_name: str
@@ -171,17 +171,17 @@ class WorkspaceMemberOut(BaseModel):
     is_self: bool = False
 
 
-class MembersOut(BaseModel):
+class MembersOut(ApiModel):
     members: list[WorkspaceMemberOut]
     my_role: str
 
 
-class InviteMemberRequest(BaseModel):
+class InviteMemberRequest(ApiModel):
     username: str = Field(min_length=2, max_length=80)
     role: str = Field(default="editor", pattern="^(admin|editor|viewer)$")
 
 
-class InvitationOut(BaseModel):
+class InvitationOut(ApiModel):
     id: str
     workspace_id: str
     workspace_name: str
@@ -194,15 +194,15 @@ class InvitationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class InvitationListOut(BaseModel):
+class InvitationListOut(ApiModel):
     invitations: list[InvitationOut]
 
 
-class SetRoleRequest(BaseModel):
+class SetRoleRequest(ApiModel):
     role: str = Field(pattern="^(owner|admin|editor|viewer)$")
 
 
-class ProjectCreate(BaseModel):
+class ProjectCreate(ApiModel):
     workspace_id: str
     name: str = Field(min_length=1, max_length=180)
 
@@ -224,7 +224,7 @@ class ProjectWithStatsOut(ProjectOut):
     updated_at: datetime | None = None
 
 
-class AssetCreate(BaseModel):
+class AssetCreate(ApiModel):
     workspace_id: str
     project_id: str | None = None
     kind: str
@@ -249,7 +249,7 @@ class AssetOut(OrmModel):
     updated_at: datetime | None = None
 
 
-class AssetUpdate(BaseModel):
+class AssetUpdate(ApiModel):
     name: str | None = Field(default=None, min_length=1, max_length=240)
     tags: list[str] | None = Field(default=None, max_length=24)
     #: 归入某个项目;空串 = 移出项目(回到"未归档")。工作流的「素材整理」节点一直能做这件事,
@@ -275,17 +275,17 @@ class FontOut(OrmModel):
     created_at: datetime | None = None
 
 
-class LutUpdate(BaseModel):
+class LutUpdate(ApiModel):
     name: str = Field(min_length=1, max_length=200)
 
 
-class TranscriptTokenIn(BaseModel):
+class TranscriptTokenIn(ApiModel):
     start_time: float
     end_time: float
     text: str = Field(max_length=120)
 
 
-class TranscriptSegmentIn(BaseModel):
+class TranscriptSegmentIn(ApiModel):
     start_time: float
     end_time: float
     text: str
@@ -293,7 +293,7 @@ class TranscriptSegmentIn(BaseModel):
     tokens: list[TranscriptTokenIn] = Field(default_factory=list)
 
 
-class TranscriptAttachRequest(BaseModel):
+class TranscriptAttachRequest(ApiModel):
     language: str = Field(default="", max_length=24)
     source: str = Field(default="imported", max_length=40)
     segments: list[TranscriptSegmentIn] = Field(default_factory=list)
@@ -326,7 +326,7 @@ class TranscriptOut(OrmModel):
     segments: list[TranscriptSegmentOut] = Field(default_factory=list)
 
 
-class SequenceCreate(BaseModel):
+class SequenceCreate(ApiModel):
     workspace_id: str
     project_id: str
     name: str = Field(min_length=1, max_length=180)
@@ -376,7 +376,7 @@ class TrackOut(OrmModel):
     clips: list[ClipOut] = Field(default_factory=list)
 
 
-class SetSequenceReframeRequest(BaseModel):
+class SetSequenceReframeRequest(ApiModel):
     width: int = Field(ge=16, le=8192)
     height: int = Field(ge=16, le=8192)
     fill_mode: str = Field(default="cover", pattern="^(cover|contain|blur)$")
@@ -403,7 +403,7 @@ class SequenceOut(OrmModel):
     tracks: list[TrackOut] = Field(default_factory=list)
 
 
-class InsertClipRequest(BaseModel):
+class InsertClipRequest(ApiModel):
     track_id: str
     asset_id: str
     timeline_start: float = 0.0
@@ -412,37 +412,37 @@ class InsertClipRequest(BaseModel):
     ripple: bool = False
 
 
-class MoveClipRequest(BaseModel):
+class MoveClipRequest(ApiModel):
     timeline_start: float
     track_id: str | None = None
     ripple: bool = False
 
 
-class ClipMoveEntry(BaseModel):
+class ClipMoveEntry(ApiModel):
     clip_id: str
     timeline_start: float
     track_id: str | None = None
 
 
-class ClipIdsRequest(BaseModel):
+class ClipIdsRequest(ApiModel):
     """多选批量操作的通用入参:一次手势一条操作,撤销一步全部还原。"""
 
     clip_ids: list[str] = Field(min_length=1)
 
 
-class MoveClipsBatchRequest(BaseModel):
+class MoveClipsBatchRequest(ApiModel):
     """框选后整组拖动。没有 ripple —— 一组片段要"挤开"什么没有唯一解,组拖按覆盖语义。"""
 
     moves: list[ClipMoveEntry] = Field(min_length=1)
 
 
-class TrimClipRequest(BaseModel):
+class TrimClipRequest(ApiModel):
     timeline_start: float
     src_in: float
     src_out: float
 
 
-class ExportRequest(BaseModel):
+class ExportRequest(ApiModel):
     """导出参数;整个 body 可省略(老调用方/工作流节点按默认档导出)。"""
 
     resolution: Literal["original", "1080p", "720p", "480p"] = "original"
@@ -450,89 +450,89 @@ class ExportRequest(BaseModel):
     quality: Literal["high", "standard", "compact"] = "standard"
 
 
-class CutClipRangeRequest(BaseModel):
+class CutClipRangeRequest(ApiModel):
     src_start: float
     src_end: float
 
 
-class CutClipRangesRequest(BaseModel):
+class CutClipRangesRequest(ApiModel):
     ranges: list[CutClipRangeRequest] = Field(min_length=1)
 
 
-class ClipRangeCutsRequest(BaseModel):
+class ClipRangeCutsRequest(ApiModel):
     clip_id: str
     ranges: list[CutClipRangeRequest] = Field(min_length=1)
 
 
-class CutClipRangesBatchRequest(BaseModel):
+class CutClipRangesBatchRequest(ApiModel):
     """一次字幕裁切手势涉及的全部片段。整批只产生一条时间线操作。"""
 
     cuts: list[ClipRangeCutsRequest] = Field(min_length=1)
 
 
-class SplitClipRequest(BaseModel):
+class SplitClipRequest(ApiModel):
     src_time: float
 
 
-class SplitClipPointsRequest(BaseModel):
+class SplitClipPointsRequest(ApiModel):
     src_times: list[float] = Field(min_length=1)
 
 
-class ClipPointSplitsRequest(BaseModel):
+class ClipPointSplitsRequest(ApiModel):
     clip_id: str
     src_times: list[float] = Field(min_length=1)
 
 
-class SplitClipPointsBatchRequest(BaseModel):
+class SplitClipPointsBatchRequest(ApiModel):
     """一次字幕切分手势涉及的全部片段。整批只产生一条时间线操作。"""
 
     splits: list[ClipPointSplitsRequest] = Field(min_length=1)
 
 
-class MoveTrackRequest(BaseModel):
+class MoveTrackRequest(ApiModel):
     direction: str = Field(pattern="^(up|down)$")
 
 
-class SubtitleCueInput(BaseModel):
+class SubtitleCueInput(ApiModel):
     text: str
     timeline_start: float
     duration: float
 
 
-class GenerateSubtitlesRequest(BaseModel):
+class GenerateSubtitlesRequest(ApiModel):
     track_id: str
     cues: list[SubtitleCueInput] = Field(min_length=1)
 
 
-class SetSubtitleStyleRequest(BaseModel):
+class SetSubtitleStyleRequest(ApiModel):
     style: dict
 
 
-class SetTrackStateRequest(BaseModel):
+class SetTrackStateRequest(ApiModel):
     muted: bool | None = None
     locked: bool | None = None
     solo: bool | None = None
     duck: bool | None = None
 
 
-class AddTrackRequest(BaseModel):
+class AddTrackRequest(ApiModel):
     kind: str = Field(pattern="^(video|audio|subtitle)$")
 
 
-class SetClipEffectsRequest(BaseModel):
+class SetClipEffectsRequest(ApiModel):
     effects: dict = Field(default_factory=dict)
 
 
-class SetClipSpeedRequest(BaseModel):
+class SetClipSpeedRequest(ApiModel):
     speed: float = Field(ge=0.25, le=4.0)
 
 
-class SetClipGainRequest(BaseModel):
+class SetClipGainRequest(ApiModel):
     gain: float = Field(ge=0.0, le=4.0)
     muted: bool = False
 
 
-class TranslateRequest(BaseModel):
+class TranslateRequest(ApiModel):
     #: 这次翻译算在哪个工作区头上。以前没有这个字段 —— 于是这个接口回答不了「这笔钱算谁的」,
     #: 而用量表的 workspace_id 是 NOT NULL,AI 翻译因此一条账都记不了。补的是建模缺失,
     #: 不是一道闸门:它同时把这个接口纳入了工作区权限体系。
@@ -546,36 +546,36 @@ class TranslateRequest(BaseModel):
     profile_id: str | None = None
 
 
-class TranslateResponse(BaseModel):
+class TranslateResponse(ApiModel):
     translations: list[str]
 
 
-class SetClipTransformRequest(BaseModel):
+class SetClipTransformRequest(ApiModel):
     transform: dict = Field(default_factory=dict)  # {scale,x,y,rotation,opacity};后端按范围钳制
 
 
-class InsertTextClipRequest(BaseModel):
+class InsertTextClipRequest(ApiModel):
     track_id: str
     text: str = Field(min_length=1, max_length=500)
     timeline_start: float = 0.0
     duration: float = Field(default=2.0, gt=0)
 
 
-class SetClipTextRequest(BaseModel):
+class SetClipTextRequest(ApiModel):
     text: str = Field(min_length=1, max_length=500)
 
 
-class ClipTextEntry(BaseModel):
+class ClipTextEntry(ApiModel):
     clip_id: str
     text: str = Field(min_length=1, max_length=500)
 
 
-class SetClipTextsRequest(BaseModel):
+class SetClipTextsRequest(ApiModel):
     # Bounded so one request cannot rewrite an unbounded number of clips in a single revision.
     texts: list[ClipTextEntry] = Field(min_length=1, max_length=2000)
 
 
-class ProviderModelOut(BaseModel):
+class ProviderModelOut(ApiModel):
     """一条连接下的一个模型 —— **已配置的行与供应商目录合并后的样子**。
 
     两个来源缺一不可:目录说"这个端点有什么"(会变),模型行说"我对它做过什么"(不该被目录
@@ -605,7 +605,7 @@ class ProviderModelOut(BaseModel):
     developer_role: bool | None = None
 
 
-class ProviderModelUpdate(BaseModel):
+class ProviderModelUpdate(ApiModel):
     """模型行的增改。传 null 的运行时项表示**清除**、回到跟随目录/保守默认。"""
 
     model_id: str | None = Field(default=None, min_length=1, max_length=160)
@@ -620,7 +620,7 @@ class ProviderModelUpdate(BaseModel):
     developer_role: bool | None = None
 
 
-class OAuthPromptOut(BaseModel):
+class OAuthPromptOut(ApiModel):
     """登录流程中需要用户作答的一步(输入授权码、选账号……)。"""
 
     prompt_id: str
@@ -630,7 +630,7 @@ class OAuthPromptOut(BaseModel):
     options: list[dict] = Field(default_factory=list)
 
 
-class OAuthLoginOut(BaseModel):
+class OAuthLoginOut(ApiModel):
     """一次登录的当前状态。前端轮询它,拿到什么就展示什么。"""
 
     login_id: str
@@ -643,14 +643,14 @@ class OAuthLoginOut(BaseModel):
     models: list[ProviderModelOut] = Field(default_factory=list)
 
 
-class AgentContextPart(BaseModel):
+class AgentContextPart(ApiModel):
     """堆叠条里的一段。kind ∈ messages|tools|system|free。"""
 
     kind: str
     tokens: int
 
 
-class AgentContextOut(BaseModel):
+class AgentContextOut(ApiModel):
     """窗口被**什么**占满了,不只是占了多少。
 
     一个百分比回答不了任何该做的决定:满了要清什么?清对话有用吗?而这个应用里最大的一块
@@ -666,7 +666,7 @@ class AgentContextOut(BaseModel):
     parts: list[AgentContextPart] = []
 
 
-class AgentCompactOut(BaseModel):
+class AgentCompactOut(ApiModel):
     """一次手动压缩的结果。
 
     `compaction` 为 None 表示没有可压缩的内容(对话还太短)—— 界面据此说"暂时不需要整理",
@@ -677,7 +677,7 @@ class AgentCompactOut(BaseModel):
     compaction: dict | None = None
 
 
-class ProviderHealthOut(BaseModel):
+class ProviderHealthOut(ApiModel):
     """一次探活的结果。`supported=False` 表示这类档案没法探(订阅计划没有我们持有的端点),
     界面据此整列不显示,而不是显示一个假的"离线"。"""
 
@@ -687,7 +687,7 @@ class ProviderHealthOut(BaseModel):
     detail: str = ""
 
 
-class ProviderQuotaMetricOut(BaseModel):
+class ProviderQuotaMetricOut(ApiModel):
     """一条额度指标。
 
     各家的额度类型和周期对不齐,所以不压成单一数字:每条指标自带 kind(百分比 / 余额)、
@@ -705,7 +705,7 @@ class ProviderQuotaMetricOut(BaseModel):
     unlimited: bool = False
 
 
-class ProviderQuotaOut(BaseModel):
+class ProviderQuotaOut(ApiModel):
     """一次额度查询的结果。
 
     `supported=False` 与 `error` 是两回事:前者是这家压根没有可查的端点(界面该说"不支持"),
@@ -719,7 +719,7 @@ class ProviderQuotaOut(BaseModel):
     error: str = ""
 
 
-class PricingPrefillOut(BaseModel):
+class PricingPrefillOut(ApiModel):
     """按模型目录预填计价规则的结果。三个数分开报,是为了让「一条没建」可解释:
     是目录本身没报价(多数 OpenAI 兼容端点如此),还是规则早就配齐了。"""
 
@@ -731,12 +731,12 @@ class PricingPrefillOut(BaseModel):
     models_seen: int
 
 
-class OAuthAnswerIn(BaseModel):
+class OAuthAnswerIn(ApiModel):
     prompt_id: str
     answer: str
 
 
-class LocalImportRequest(BaseModel):
+class LocalImportRequest(ApiModel):
     """按本机绝对路径导入素材(仅桌面端自带后端可用,见 routes/assets.import_local_asset)。"""
 
     workspace_id: str
@@ -744,14 +744,14 @@ class LocalImportRequest(BaseModel):
     project_id: str | None = None
 
 
-class AnalyzeAssetRequest(BaseModel):
+class AnalyzeAssetRequest(ApiModel):
     question: str = Field(default="", max_length=2000)
     profile_id: str | None = None
     #: 视频分析方式:auto(有原生能力就走原生,否则抽帧)/ native(强制原生)/ frames(强制抽帧+转写)。
     mode: str = "auto"
 
 
-class AnalyzeAssetResponse(BaseModel):
+class AnalyzeAssetResponse(ApiModel):
     answer: str
     provider: str
     model: str
@@ -762,7 +762,7 @@ class AnalyzeAssetResponse(BaseModel):
     used_transcript: bool = False
 
 
-class ProviderCredentialIn(BaseModel):
+class ProviderCredentialIn(ApiModel):
     """我在某条连接上的钥匙。"""
 
     api_key: str | None = None
@@ -770,13 +770,13 @@ class ProviderCredentialIn(BaseModel):
     secrets: dict[str, str] = Field(default_factory=dict)
 
 
-class ProviderCredentialOut(BaseModel):
+class ProviderCredentialOut(ApiModel):
     profile_id: str
     key_hint: str = ""
     is_mine: bool = True
 
 
-class ProviderProfileCreate(BaseModel):
+class ProviderProfileCreate(ApiModel):
     name: str = Field(min_length=1, max_length=120)
     vendor: str = Field(min_length=1, max_length=60)
     #: Adapter-specific form values, keyed by VendorFieldOut.key.
@@ -789,7 +789,7 @@ class ProviderProfileCreate(BaseModel):
     auth_type: str | None = None
 
 
-class ProviderProfileUpdate(BaseModel):
+class ProviderProfileUpdate(ApiModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     #: Adapter-specific form values, keyed by VendorFieldOut.key.
     config: dict[str, str] | None = None
@@ -797,7 +797,7 @@ class ProviderProfileUpdate(BaseModel):
     auth_type: str | None = None
 
 
-class VendorFieldOut(BaseModel):
+class VendorFieldOut(ApiModel):
     """One adapter-specific setting the form should collect."""
 
     key: str
@@ -853,7 +853,7 @@ class ProviderProfileOut(OrmModel):
         return value if value is not None else []
 
 
-class ProviderDefaultOut(BaseModel):
+class ProviderDefaultOut(ApiModel):
     capability: str
     provider_profile_id: str | None = None
     model: str = ""
@@ -862,7 +862,7 @@ class ProviderDefaultOut(BaseModel):
     is_mine: bool = False
 
 
-class CapabilityModelOut(BaseModel):
+class CapabilityModelOut(ApiModel):
     """某能力下的一个候选模型(跨连接)。
 
     界面直接列它 —— 一个模型现在自带能力与连接,"先选供应商再选模型"那两级下拉是模型还不是
@@ -880,20 +880,20 @@ class CapabilityModelOut(BaseModel):
     reasoning_effort: bool | None = None
 
 
-class AgentPendingView(BaseModel):
+class AgentPendingView(ApiModel):
     """智能体要求界面跳到哪一页。`view` 的合法值由 mcp_server._VIEWS 把关。"""
 
     view: str = Field(min_length=1, max_length=40)
     id: str = Field(default="", max_length=64)
 
 
-class PluginOAuthCode(BaseModel):
+class PluginOAuthCode(ApiModel):
     """对方显示出来、由用户贴回来的授权码。"""
 
     code: str = Field(min_length=1, max_length=2000)
 
 
-class AgentVoiceOut(BaseModel):
+class AgentVoiceOut(ApiModel):
     """语音对话的音色。**和配音的 TTS 默认是两行配置** —— 见 db.models.AgentVoicePref。"""
 
     engine: str = ""
@@ -907,7 +907,7 @@ class AgentVoiceOut(BaseModel):
     enabled: bool = False
 
 
-class AgentVoiceUpdate(BaseModel):
+class AgentVoiceUpdate(ApiModel):
     engine: str = Field(default="", max_length=40)
     engine_voice: str = Field(default="", max_length=120)
     engine_voice_resource: str = Field(default="", max_length=200)
@@ -918,7 +918,7 @@ class AgentVoiceUpdate(BaseModel):
     enabled: bool = True
 
 
-class AgentSpeechRequest(BaseModel):
+class AgentSpeechRequest(ApiModel):
     """念一句话。**不产出素材** —— 见 routes/agent.speak。"""
 
     text: str = Field(min_length=1, max_length=4000)
@@ -927,12 +927,12 @@ class AgentSpeechRequest(BaseModel):
     workspace_id: str = Field(min_length=1)
 
 
-class ProviderDefaultUpdate(BaseModel):
+class ProviderDefaultUpdate(ApiModel):
     provider_profile_id: str | None = None
     model: str = Field(default="", max_length=120)
 
 
-class ProviderPricingRuleCreate(BaseModel):
+class ProviderPricingRuleCreate(ApiModel):
     workspace_id: str | None = None
     provider_profile_id: str | None = None
     provider: str = Field(default="", max_length=80)
@@ -947,7 +947,7 @@ class ProviderPricingRuleCreate(BaseModel):
     effective_to: datetime | None = None
 
 
-class ProviderPricingRuleUpdate(BaseModel):
+class ProviderPricingRuleUpdate(ApiModel):
     workspace_id: str | None = None
     provider_profile_id: str | None = None
     provider: str | None = Field(default=None, max_length=80)
@@ -1005,7 +1005,7 @@ class ProviderUsageEventOut(OrmModel):
 
 
 
-class NetworkConfigOut(BaseModel):
+class NetworkConfigOut(ApiModel):
     """出站代理设置。空 proxy_url = 直连。"""
 
     proxy_url: str = ""
@@ -1014,21 +1014,21 @@ class NetworkConfigOut(BaseModel):
     effective_no_proxy: str = ""
 
 
-class NetworkConfigUpdate(BaseModel):
+class NetworkConfigUpdate(ApiModel):
     proxy_url: str | None = None
     no_proxy: str | None = None
 
 
-class AiRuntimeConfigOut(BaseModel):
+class AiRuntimeConfigOut(ApiModel):
     max_retries: int = 3
 
 
-class AiRuntimeConfigUpdate(BaseModel):
+class AiRuntimeConfigUpdate(ApiModel):
     # 供应商瞬断时的最大重试次数(不含首次);0 表示不重试。
     max_retries: int = Field(ge=0, le=10)
 
 
-class VoiceOut(BaseModel):
+class VoiceOut(ApiModel):
     id: str
     name: str
     reference_text: str = ""
@@ -1038,7 +1038,7 @@ class VoiceOut(BaseModel):
     created_at: datetime
 
 
-class VoiceUpdate(BaseModel):
+class VoiceUpdate(ApiModel):
     """改音色。**只改说明性的字段** —— 参考音频不在其中:换了音频就是另一个音色了,
     而已经用它生成过的配音还在时间线上,让同一个 id 底下的声音悄悄换人比新建一条更糟。"""
 
@@ -1046,7 +1046,7 @@ class VoiceUpdate(BaseModel):
     reference_text: str | None = None
 
 
-class TtsEngineOut(BaseModel):
+class TtsEngineOut(ApiModel):
     id: str
     label: str
     detail: str
@@ -1081,7 +1081,7 @@ class TtsEngineOut(BaseModel):
     runtime_checked: bool = True
 
 
-class SynthesizeRequest(BaseModel):
+class SynthesizeRequest(ApiModel):
     text: str = Field(min_length=1, max_length=2000)
     project_id: str | None = None
     #: 这一次用哪个本地引擎(f5-tts / fish-speech)。空 = 用设置页那个默认 ——
@@ -1093,7 +1093,7 @@ class SynthesizeRequest(BaseModel):
     speed: float = Field(default=1.0, ge=0.5, le=2.0)
 
 
-class UrlProbeRequest(BaseModel):
+class UrlProbeRequest(ApiModel):
     workspace_id: str
     url: str = Field(min_length=4, max_length=2000)
     #: 探测也可能需要登录态:私享列表不登录就是"不可用"。
@@ -1102,7 +1102,7 @@ class UrlProbeRequest(BaseModel):
     start: int = Field(default=1, ge=1)
 
 
-class RemoteEntryOut(BaseModel):
+class RemoteEntryOut(ApiModel):
     id: str
     url: str
     title: str
@@ -1113,7 +1113,7 @@ class RemoteEntryOut(BaseModel):
     heights: list[int] = Field(default_factory=list)
 
 
-class UrlProbeResponse(BaseModel):
+class UrlProbeResponse(ApiModel):
     title: str
     is_playlist: bool
     entries: list[RemoteEntryOut]
@@ -1123,19 +1123,19 @@ class UrlProbeResponse(BaseModel):
     truncated: bool = False
 
 
-class UrlSupportResponse(BaseModel):
+class UrlSupportResponse(ApiModel):
     """Cheap URL classification backed by yt-dlp's installed extractor registry."""
 
     supported: bool
     extractor: str = ""
 
 
-class UrlImportItem(BaseModel):
+class UrlImportItem(ApiModel):
     url: str = Field(min_length=4, max_length=2000)
     title: str = Field(default="", max_length=300)
 
 
-class UrlImportRequest(BaseModel):
+class UrlImportRequest(ApiModel):
     workspace_id: str
     project_id: str | None = None
     items: list[UrlImportItem] = Field(min_length=1, max_length=50)
@@ -1147,7 +1147,7 @@ class UrlImportRequest(BaseModel):
     max_height: int = Field(default=0, ge=0, le=4320)
 
 
-class SubtitleDubRequest(BaseModel):
+class SubtitleDubRequest(ApiModel):
     """给选中的字幕条配音。音色/引擎那一套与 /tts/synthesize 同构 —— 配音就是合成,只是文本
     来自字幕、产物直接落到时间线上。"""
 
@@ -1172,7 +1172,7 @@ class SubtitleDubRequest(BaseModel):
     speed: float = Field(default=1.0, ge=0.25, le=3.0)
 
 
-class EngineSynthesizeRequest(BaseModel):
+class EngineSynthesizeRequest(ApiModel):
     """Synthesis through a remote engine, which speaks in a stock voice and so has no Voice row."""
 
     workspace_id: str
@@ -1189,7 +1189,7 @@ class EngineSynthesizeRequest(BaseModel):
     project_id: str | None = None
 
 
-class PodcastRequest(BaseModel):
+class PodcastRequest(ApiModel):
     """A 火山 podcast: two voices reading or discussing the given material."""
 
     workspace_id: str
@@ -1203,7 +1203,7 @@ class PodcastRequest(BaseModel):
     speed: float = Field(default=1.0, ge=0.25, le=3.0)
 
 
-class TtsVoiceOut(BaseModel):
+class TtsVoiceOut(ApiModel):
     """One selectable voice. `resource_id` is 火山-specific: the synthesis header must name the
     voice's family, and only the listing knows it — inferring it from the id is guesswork that
     fails with an opaque 55000000."""
@@ -1213,7 +1213,7 @@ class TtsVoiceOut(BaseModel):
     resource_id: str = ""
 
 
-class TtsEngineChoiceOut(BaseModel):
+class TtsEngineChoiceOut(ApiModel):
     """An engine the配音 UI can offer. Distinct from TtsEngineOut, which describes a downloadable
     LOCAL model — same word, different thing, and defining both as TtsEngineOut silently
     shadowed the older one and broke /tts/models' response validation."""
@@ -1232,13 +1232,13 @@ class TtsEngineChoiceOut(BaseModel):
     ready: bool = True
 
 
-class VoiceFromSpeakerRequest(BaseModel):
+class VoiceFromSpeakerRequest(ApiModel):
     asset_id: str
     speaker: str | None = None
     name: str = ""
 
 
-class TtsConfigOut(BaseModel):
+class TtsConfigOut(ApiModel):
     engine: str
     python_path: str = ""
     source: str = "hf-mirror"
@@ -1252,7 +1252,7 @@ class TtsConfigOut(BaseModel):
     worker_checked: bool = True
 
 
-class TtsConfigUpdate(BaseModel):
+class TtsConfigUpdate(ApiModel):
     engine: str = Field(pattern="^(f5-tts|fish-speech)$")
     python_path: str = ""
     source: str = Field(default="hf-mirror", pattern="^(hf|hf-mirror|modelscope)$")
@@ -1262,7 +1262,7 @@ class TtsConfigUpdate(BaseModel):
     fish_model_dir: str = ""
 
 
-class AsrModelOut(BaseModel):
+class AsrModelOut(ApiModel):
     id: str
     engine: str
     label: str
@@ -1286,7 +1286,7 @@ class AsrModelOut(BaseModel):
     message: str = ""
 
 
-class VendorPresetOut(BaseModel):
+class VendorPresetOut(ApiModel):
     vendor: str
     label: str
     capability_ids: list[str] = Field(default_factory=list)
@@ -1300,7 +1300,7 @@ class VendorPresetOut(BaseModel):
     auth: list[str] = Field(default_factory=lambda: ["api_key"])
 
 
-class GenerationOptionOut(BaseModel):
+class GenerationOptionOut(ApiModel):
     """一个「用哪条连接的哪个模型来生成」的选项。
 
     **后端做联接**:以前这份列表由前端拿三张表(生成目录 / 启用的档案 / 能力默认)现拼,
@@ -1330,7 +1330,7 @@ class GenerationModelOut(OrmModel):
     adapter_available: bool
 
 
-class GenerationCreate(BaseModel):
+class GenerationCreate(ApiModel):
     workspace_id: str
     session_id: str | None = None
     project_id: str | None = None
@@ -1369,12 +1369,12 @@ class GenerationJobOut(OrmModel):
     cost_confidence: str | None = None
 
 
-class GenerationCreateResponse(BaseModel):
+class GenerationCreateResponse(ApiModel):
     generation: GenerationJobOut
     job: JobOut
 
 
-class PromptOptimizeRequest(BaseModel):
+class PromptOptimizeRequest(ApiModel):
     workspace_id: str
     #: 目标图像平台(provider/model)——只用来选平台提示词习惯,不是重写用的 LLM。
     provider: str = Field(min_length=1, max_length=80)
@@ -1385,14 +1385,14 @@ class PromptOptimizeRequest(BaseModel):
     language: str = Field(default="zh", max_length=10)
 
 
-class PromptOptimizeResponse(BaseModel):
+class PromptOptimizeResponse(ApiModel):
     prompt: str
     negative_prompt: str = ""
     notes: str = ""
     platform: str = ""
 
 
-class GenerationSessionCreate(BaseModel):
+class GenerationSessionCreate(ApiModel):
     workspace_id: str
     title: str = Field(default="新生成", max_length=200)
     provider_profile_id: str | None = None
@@ -1400,7 +1400,7 @@ class GenerationSessionCreate(BaseModel):
     kind: str | None = Field(default=None, pattern="^(image|video)$")
 
 
-class GenerationSessionUpdate(BaseModel):
+class GenerationSessionUpdate(ApiModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     #: 收进哪个分组;空串或 null 表示退回未分组。
     group_id: str | None = None
@@ -1425,7 +1425,7 @@ class GenerationSessionOut(OrmModel):
     updated_at: datetime
 
 
-class PluginFieldOut(BaseModel):
+class PluginFieldOut(ApiModel):
     """一个配置项或凭据项。凭据只是 secret=True 的配置 —— 差别在控件和回显,不在语义。"""
 
     key: str
@@ -1438,7 +1438,7 @@ class PluginFieldOut(BaseModel):
     default: str = ""
 
 
-class PluginToolStateOut(BaseModel):
+class PluginToolStateOut(ApiModel):
     name: str
     label: str = ""
     description: str = ""
@@ -1448,7 +1448,7 @@ class PluginToolStateOut(BaseModel):
     exposed: bool = False
 
 
-class PluginInstanceOut(BaseModel):
+class PluginInstanceOut(ApiModel):
     id: str
     package_id: str
     name: str
@@ -1459,7 +1459,7 @@ class PluginInstanceOut(BaseModel):
     tools: list[PluginToolStateOut] = Field(default_factory=list)
 
 
-class PluginPackageOut(BaseModel):
+class PluginPackageOut(ApiModel):
     id: str
     name: str
     version: str
@@ -1475,19 +1475,19 @@ class PluginPackageOut(BaseModel):
     instances: list[PluginInstanceOut] = Field(default_factory=list)
 
 
-class AgentQuestionOption(BaseModel):
+class AgentQuestionOption(ApiModel):
     label: str
     description: str = ""
 
 
-class AgentQuestionItem(BaseModel):
+class AgentQuestionItem(ApiModel):
     header: str = ""
     question: str
     multi_select: bool = False
     options: list[AgentQuestionOption] = Field(default_factory=list)
 
 
-class AgentQuestionCreate(BaseModel):
+class AgentQuestionCreate(ApiModel):
     workspace_id: str
     session_id: str
     #: 形状由 domain/agent/questions.normalize 校 —— 校验和展示用同一份规则,
@@ -1495,7 +1495,7 @@ class AgentQuestionCreate(BaseModel):
     questions: list[dict] = Field(default_factory=list)
 
 
-class AgentQuestionAnswer(BaseModel):
+class AgentQuestionAnswer(ApiModel):
     #: {问题正文: [选中的 label]}。单选也是列表(长度 1)—— 两种形状分开的话消费端要解析两遍。
     answers: dict[str, list[str]] = Field(default_factory=dict)
 
@@ -1511,7 +1511,7 @@ class AgentQuestionOut(OrmModel):
     answered_at: datetime | None = None
 
 
-class PluginMarketEntry(BaseModel):
+class PluginMarketEntry(ApiModel):
     """市场里的一条。索引给什么就是什么 —— 不做补全,免得看起来比实际更可信。"""
 
     id: str
@@ -1527,14 +1527,14 @@ class PluginMarketEntry(BaseModel):
     installed_version: str = ""
 
 
-class PluginInstallRequest(BaseModel):
+class PluginInstallRequest(ApiModel):
     url: str = Field(min_length=1, max_length=1000)
     #: 覆盖已装的同 id 包。要单独同意 —— 那个目录里可能已经有用户填过的东西,
     #: 而且新版本可能声明了完全不同的权限。
     overwrite: bool = False
 
 
-class PluginInstallPreview(BaseModel):
+class PluginInstallPreview(ApiModel):
     """装之前先看清楚:它是谁、要什么权限。"""
 
     id: str
@@ -1548,23 +1548,23 @@ class PluginInstallPreview(BaseModel):
     installed_version: str = ""
 
 
-class PluginInstanceCreate(BaseModel):
+class PluginInstanceCreate(ApiModel):
     name: str = ""
     config: dict = Field(default_factory=dict)
 
 
-class PluginInstanceUpdate(BaseModel):
+class PluginInstanceUpdate(ApiModel):
     name: str | None = None
     config: dict | None = None
     enabled: bool | None = None
 
 
-class PluginCapabilityUpdate(BaseModel):
+class PluginCapabilityUpdate(ApiModel):
     #: 工具名 → 暴不暴露。
     tools: dict[str, bool] = Field(default_factory=dict)
 
 
-class PluginEnableRequest(BaseModel):
+class PluginEnableRequest(ApiModel):
     enabled: bool
 
 
@@ -1576,11 +1576,11 @@ class PluginPermissionGrantOut(OrmModel):
     updated_at: datetime
 
 
-class PluginPermissionGrantUpdate(BaseModel):
+class PluginPermissionGrantUpdate(ApiModel):
     grants: dict[str, bool] = Field(default_factory=dict)
 
 
-class PluginCredentialOut(BaseModel):
+class PluginCredentialOut(ApiModel):
     """插件声明的一项凭据 + 当前状态。secret 项的 value 是掩码,不是原值。"""
 
     key: str
@@ -1592,12 +1592,12 @@ class PluginCredentialOut(BaseModel):
     value: str = ""
 
 
-class PluginCredentialUpdate(BaseModel):
+class PluginCredentialUpdate(ApiModel):
     #: 键 → 值。掩码原样回传表示"这项没改";空串表示清空。
     values: dict[str, str] = Field(default_factory=dict)
 
 
-class PluginToolOut(BaseModel):
+class PluginToolOut(ApiModel):
     """一个**已暴露**的工具。智能体工具表与工作流节点面板读的就是这个。"""
 
     instance_id: str
@@ -1610,7 +1610,7 @@ class PluginToolOut(BaseModel):
     input_schema: dict = Field(default_factory=dict)
 
 
-class PluginInvokeRequest(BaseModel):
+class PluginInvokeRequest(ApiModel):
     input: dict = Field(default_factory=dict)
 
 
@@ -1625,7 +1625,7 @@ class PluginInvocationOut(OrmModel):
     created_at: datetime
 
 
-class VideoToGifRequest(BaseModel):
+class VideoToGifRequest(ApiModel):
     """Options for creating a new GIF asset from a video asset."""
 
     fps: int = Field(default=12, ge=1, le=30)
@@ -1634,7 +1634,7 @@ class VideoToGifRequest(BaseModel):
     duration: float | None = Field(default=None, gt=0)
 
 
-class AssetFrameRequest(BaseModel):
+class AssetFrameRequest(ApiModel):
     """从一段视频里取某一时刻的一帧,存成一份新素材。"""
 
     at: float = 0
@@ -1642,13 +1642,13 @@ class AssetFrameRequest(BaseModel):
     project_id: str | None = None
 
 
-class SequenceFrameRequest(BaseModel):
+class SequenceFrameRequest(ApiModel):
     """把时间线在某一时刻的合成画面存成一份新素材。"""
 
     at: float = 0
 
 
-class AgentSessionCreate(BaseModel):
+class AgentSessionCreate(ApiModel):
     workspace_id: str
     project_id: str | None = None
     title: str = Field(default="新对话", max_length=200)
@@ -1657,14 +1657,14 @@ class AgentSessionCreate(BaseModel):
     model: str | None = Field(default=None, max_length=120)
 
 
-class SessionGroupCreate(BaseModel):
+class SessionGroupCreate(ApiModel):
     workspace_id: str
     #: 挂在哪一种会话上。两边各自一套,见 db/models.SESSION_GROUP_KINDS。
     kind: str = Field(default="agent", pattern="^(agent|generation)$")
     name: str = Field(min_length=1, max_length=80)
 
 
-class SessionGroupUpdate(BaseModel):
+class SessionGroupUpdate(ApiModel):
     name: str | None = Field(default=None, min_length=1, max_length=80)
     sort_order: int | None = None
 
@@ -1680,7 +1680,7 @@ class SessionGroupOut(OrmModel):
     updated_at: datetime
 
 
-class AgentSessionUpdate(BaseModel):
+class AgentSessionUpdate(ApiModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     provider_profile_id: str | None = None
     model: str | None = Field(default=None, max_length=120)
@@ -1728,7 +1728,7 @@ class AgentSessionOut(OrmModel):
     updated_at: datetime
 
 
-class AgentPlanUpdate(BaseModel):
+class AgentPlanUpdate(ApiModel):
     steps: list = Field(default_factory=list)
 
 
@@ -1743,18 +1743,18 @@ class AgentMemoryOut(OrmModel):
     updated_at: datetime
 
 
-class AgentMemoryCreate(BaseModel):
+class AgentMemoryCreate(ApiModel):
     workspace_id: str
     project_id: str | None = None
     content: str = Field(min_length=1, max_length=500)
     source: str = "user"
 
 
-class AgentMemoryUpdate(BaseModel):
+class AgentMemoryUpdate(ApiModel):
     content: str = Field(min_length=1, max_length=500)
 
 
-class AgentMessageCreate(BaseModel):
+class AgentMessageCreate(ApiModel):
     content: str = Field(min_length=1, max_length=8000)
     context: str | None = Field(default=None, max_length=4000)
     #: 发起方是另一个智能体会话时带上它的 id(notify_agent_session)。结构化而不是靠文案前缀:
@@ -1772,7 +1772,7 @@ class AgentMessageOut(OrmModel):
     created_at: datetime
 
 
-class FeishuBotCreate(BaseModel):
+class FeishuBotCreate(ApiModel):
     workspace_id: str
     name: str = Field(default="Mosael 助手", max_length=160)
     app_id: str = Field(min_length=1, max_length=120)
@@ -1780,7 +1780,7 @@ class FeishuBotCreate(BaseModel):
     capability: str = Field(default="editor", pattern="^(readonly|editor|full)$")
 
 
-class FeishuBotUpdate(BaseModel):
+class FeishuBotUpdate(ApiModel):
     name: str | None = Field(default=None, max_length=160)
     capability: str | None = Field(default=None, pattern="^(readonly|editor|full)$")
     enabled: bool | None = None
@@ -1798,7 +1798,7 @@ class FeishuBotOut(OrmModel):
     created_at: datetime
 
 
-class FeishuOnboardingOut(BaseModel):
+class FeishuOnboardingOut(ApiModel):
     phase: str
     qr_url: str | None = None
     user_code: str | None = None
@@ -1806,18 +1806,18 @@ class FeishuOnboardingOut(BaseModel):
     app_id: str | None = None
 
 
-class FeishuBindCodeOut(BaseModel):
+class FeishuBindCodeOut(ApiModel):
     code: str
     expires_at: datetime
 
 
-class FeishuBindingOut(BaseModel):
+class FeishuBindingOut(ApiModel):
     open_id: str
     user_id: str
     username: str
 
 
-class ConfirmationCreate(BaseModel):
+class ConfirmationCreate(ApiModel):
     workspace_id: str
     tool: str = Field(min_length=1, max_length=80)
     payload: dict = Field(default_factory=dict)
@@ -1844,21 +1844,21 @@ class ConfirmationOut(OrmModel):
     resolved_at: datetime | None
 
 
-class AgentSkillOut(BaseModel):
+class AgentSkillOut(ApiModel):
     id: str
     name: str
     description: str
     source: str
     tools: list = Field(default_factory=list)
     permissions: list = Field(default_factory=list)
-class AgentManifestOut(BaseModel):
+class AgentManifestOut(ApiModel):
     app: str
     version: str
     openapi_url: str
     skills: list[AgentSkillOut]
 
 
-class DailyActivityOut(BaseModel):
+class DailyActivityOut(ApiModel):
     """一天的任务活动(首页活动图的一根柱)。date 为 YYYY-MM-DD(UTC)。"""
 
     date: str
@@ -1866,7 +1866,7 @@ class DailyActivityOut(BaseModel):
     failed: int
 
 
-class DailyPublishOut(BaseModel):
+class DailyPublishOut(ApiModel):
     """一天的发布活动(首页发布图的一根柱)。date 为 YYYY-MM-DD(UTC)。"""
 
     date: str
@@ -1876,7 +1876,7 @@ class DailyPublishOut(BaseModel):
     blocked: int
 
 
-class DailyUsageOut(BaseModel):
+class DailyUsageOut(ApiModel):
     """一天的供应商费用/用量。cost_micros 是已知估算费用,unknown 是未定价事件数。"""
 
     date: str
@@ -1885,7 +1885,7 @@ class DailyUsageOut(BaseModel):
     unknown: int
 
 
-class DailyUsageTokensOut(BaseModel):
+class DailyUsageTokensOut(ApiModel):
     """一天的 AI token 用量。total_tokens 允许供应商只返回总量,不拆输入/输出。"""
 
     date: str
@@ -1898,7 +1898,7 @@ class DailyUsageTokensOut(BaseModel):
     total_tokens: int
 
 
-class WorkspaceSummaryOut(BaseModel):
+class WorkspaceSummaryOut(ApiModel):
     """首页仪表数字。一次请求给全一屏,避免首页发 N 个列表请求做 .length 聚合。"""
 
     project_count: int

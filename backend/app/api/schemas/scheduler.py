@@ -4,11 +4,11 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.api.schemas.base import OrmModel
+from app.api.schemas.base import ApiModel, OrmModel
 from app.api.schemas.jobs import JobOut
 
 
-class ScheduledTaskCreate(BaseModel):
+class ScheduledTaskCreate(ApiModel):
     workspace_id: str
     project_id: str | None = None
     name: str = Field(min_length=1, max_length=180)
@@ -20,7 +20,7 @@ class ScheduledTaskCreate(BaseModel):
     payload: dict = Field(default_factory=dict)
 
 
-class ScheduledTaskUpdate(BaseModel):
+class ScheduledTaskUpdate(ApiModel):
     name: str | None = Field(default=None, min_length=1, max_length=180)
     trigger_type: str | None = Field(default=None, pattern="^(manual|once|interval|daily|weekly|webhook)$")
     schedule: dict | None = None
@@ -62,7 +62,7 @@ class ScheduledTaskRunOut(OrmModel):
     finished_at: datetime | None
 
 
-class RunScheduledTaskResponse(BaseModel):
+class RunScheduledTaskResponse(ApiModel):
     task: ScheduledTaskOut
     run: ScheduledTaskRunOut
     job: JobOut

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from app.api.schemas.base import ApiModel
 from pydantic import BaseModel, Field
 
 
-class BrowserProfileOut(BaseModel):
+class BrowserProfileOut(ApiModel):
     id: str
     workspace_id: str
     name: str
@@ -28,13 +29,13 @@ class BrowserProfileOut(BaseModel):
     shared: bool = False
 
 
-class BrowserProfileCreate(BaseModel):
+class BrowserProfileCreate(ApiModel):
     workspace_id: str
     name: str = Field(min_length=1, max_length=160)
     proxy: str | None = None
 
 
-class BrowserProfileUpdate(BaseModel):
+class BrowserProfileUpdate(ApiModel):
     name: str | None = Field(default=None, max_length=160)
     proxy: str | None = None
     enabled: bool | None = None

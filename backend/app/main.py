@@ -6,6 +6,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+import math
+
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from fastapi import Depends
@@ -165,6 +168,30 @@ def _install_permission_handlers(app: FastAPI) -> None:
     @app.exception_handler(PermissionDenied)
     async def _denied(_request: Request, exc: PermissionDenied) -> JSONResponse:
         return JSONResponse(status_code=403, content={"detail": str(exc)})
+
+    @app.exception_handler(RequestValidationError)
+    async def _invalid_request(_request: Request, exc: RequestValidationError) -> JSONResponse:
+        """校验失败的 422。**自己渲染,因为默认那份渲染不出来。**
+
+        FastAPI 默认会把出错的原值回显进错误体,而 Starlette 的 JSONResponse 用
+        `allow_nan=False` 编码(对的 —— NaN 不是合法 JSON)。于是"请求里有个 NaN"这件事的
+        结局是编码器抛异常、客户端收到 500:一个**因为拒绝得对而崩掉**的响应,而 500 会让人
+        以为是服务端坏了,去查完全不相干的地方。
+
+        所以把原值过一遍:非有限的数换成它的字面写法(照样看得出是 NaN 还是 Infinity),
+        其余原样。不整个丢掉 input —— 少了它,"哪个字段不对"要靠 loc 自己拼。
+        """
+
+        def safe(value: object) -> object:
+            if isinstance(value, float) and not math.isfinite(value):
+                return repr(value)
+            if isinstance(value, dict):
+                return {key: safe(item) for key, item in value.items()}
+            if isinstance(value, (list, tuple)):
+                return [safe(item) for item in value]
+            return value
+
+        return JSONResponse(status_code=422, content={"detail": safe(exc.errors())})
 
 
 def _wire_seams() -> None:

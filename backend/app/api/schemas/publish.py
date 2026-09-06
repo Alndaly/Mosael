@@ -7,15 +7,15 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from app.api.schemas.base import OrmModel
+from app.api.schemas.base import ApiModel, OrmModel
 
 
-class PublishOptionChoice(BaseModel):
+class PublishOptionChoice(ApiModel):
     value: str
     label: str
 
 
-class PublishOptionSpec(BaseModel):
+class PublishOptionSpec(ApiModel):
     """一个平台专属发布选项的声明。**前端照它渲染控件,后端照它校验** —— 只有这一份。"""
 
     key: str
@@ -26,7 +26,7 @@ class PublishOptionSpec(BaseModel):
     description: str = ""
 
 
-class PublishPlatformOut(BaseModel):
+class PublishPlatformOut(ApiModel):
     platform: str
     label: str
     description: str
@@ -37,7 +37,7 @@ class PublishPlatformOut(BaseModel):
     options: list[PublishOptionSpec] = Field(default_factory=list)
 
 
-class PublishAccountCreate(BaseModel):
+class PublishAccountCreate(ApiModel):
     workspace_id: str
     platform: str = Field(min_length=1, max_length=40)
     name: str = Field(min_length=1, max_length=160)
@@ -45,7 +45,7 @@ class PublishAccountCreate(BaseModel):
     proxy: str | None = Field(default=None, max_length=300)
 
 
-class PublishAccountUpdate(BaseModel):
+class PublishAccountUpdate(ApiModel):
     name: str | None = Field(default=None, min_length=1, max_length=160)
     config: dict | None = None
     enabled: bool | None = None
@@ -67,7 +67,7 @@ class PublishAccountOut(OrmModel):
     created_at: datetime
 
 
-class PublishCreate(BaseModel):
+class PublishCreate(ApiModel):
     workspace_id: str
     account_id: str
     asset_id: str
@@ -78,7 +78,7 @@ class PublishCreate(BaseModel):
     options: dict[str, Any] = Field(default_factory=dict)
 
 
-class PublishTaskOut(BaseModel):
+class PublishTaskOut(ApiModel):
     id: str
     workspace_id: str
     account_id: str
@@ -96,14 +96,14 @@ class PublishTaskOut(BaseModel):
     created_at: datetime
 
 
-class PublishCopyRequest(BaseModel):
+class PublishCopyRequest(ApiModel):
     workspace_id: str
     asset_id: str | None = None
     brief: str = Field(default="", max_length=2000)
     profile_id: str | None = None
 
 
-class PublishCopyResponse(BaseModel):
+class PublishCopyResponse(ApiModel):
     title: str
     description: str
     tags: list[str]

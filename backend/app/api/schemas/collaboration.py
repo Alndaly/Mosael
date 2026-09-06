@@ -3,20 +3,21 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
+from app.api.schemas.base import ApiModel
 from pydantic import BaseModel, Field
 
 
 SubjectType = Literal["board", "workflow", "sequence", "asset"]
 
 
-class ActorOut(BaseModel):
+class ActorOut(ApiModel):
     id: str | None = None
     username: str = ""
     display_name: str = ""
     avatar_key: str = ""
 
 
-class ActivityOut(BaseModel):
+class ActivityOut(ApiModel):
     id: str
     workspace_id: str
     actor_id: str | None = None
@@ -29,7 +30,7 @@ class ActivityOut(BaseModel):
     created_at: datetime
 
 
-class CanvasCommentAnchor(BaseModel):
+class CanvasCommentAnchor(ApiModel):
     """Stable flow-space location for feedback attached to a board."""
 
     kind: Literal["canvas"] = "canvas"
@@ -38,7 +39,7 @@ class CanvasCommentAnchor(BaseModel):
     node_id: str | None = Field(default=None, max_length=64)
 
 
-class CommentCreate(BaseModel):
+class CommentCreate(ApiModel):
     workspace_id: str
     subject_type: SubjectType
     subject_id: str
@@ -48,12 +49,12 @@ class CommentCreate(BaseModel):
     body_document: dict = Field(default_factory=dict)
 
 
-class CommentAnchorUpdate(BaseModel):
+class CommentAnchorUpdate(ApiModel):
     workspace_id: str
     anchor: CanvasCommentAnchor
 
 
-class CommentOut(BaseModel):
+class CommentOut(ApiModel):
     id: str
     workspace_id: str
     subject_type: str
@@ -68,7 +69,7 @@ class CommentOut(BaseModel):
     updated_at: datetime
 
 
-class ReviewCreate(BaseModel):
+class ReviewCreate(ApiModel):
     workspace_id: str
     subject_type: SubjectType
     subject_id: str
@@ -76,12 +77,12 @@ class ReviewCreate(BaseModel):
     note: str = Field(default="", max_length=2000)
 
 
-class ReviewDecision(BaseModel):
+class ReviewDecision(ApiModel):
     status: Literal["approved", "changes_requested", "cancelled"]
     note: str = Field(default="", max_length=2000)
 
 
-class ReviewOut(BaseModel):
+class ReviewOut(ApiModel):
     id: str
     workspace_id: str
     subject_type: str

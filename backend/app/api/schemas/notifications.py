@@ -6,7 +6,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.api.schemas.base import OrmModel
+from app.api.schemas.base import ApiModel, OrmModel
 
 
 class NotificationOut(OrmModel):
@@ -21,12 +21,12 @@ class NotificationOut(OrmModel):
     created_at: datetime
 
 
-class NotifyRequest(BaseModel):
+class NotifyRequest(ApiModel):
     workspace_id: str
     title: str = Field(min_length=1, max_length=200)
     body: str = Field(default="", max_length=2000)
 
 
-class NotificationListOut(BaseModel):
+class NotificationListOut(ApiModel):
     items: list[NotificationOut]
     unread: int
