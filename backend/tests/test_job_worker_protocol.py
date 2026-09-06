@@ -113,7 +113,7 @@ class TestReport:
         job_id = _make_job(workspace_id)
         with SessionLocal() as db:
             job = claim_next_job(db)
-            report_job(db, job, status="running", progress=0.4, message="干活中")
+            report_job(db, job, lease_token=job.lease_token, status="running", progress=0.4, message="干活中")
             db.refresh(job)
             assert job.status == "running" and job.progress == 0.4 and job.message == "干活中"
 
@@ -122,7 +122,7 @@ class TestReport:
         _make_job(workspace_id)
         with SessionLocal() as db:
             job = claim_next_job(db)
-            report_job(db, job, status="succeeded", result={"asset_id": "a1"})
+            report_job(db, job, lease_token=job.lease_token, status="succeeded", result={"asset_id": "a1"})
             db.refresh(job)
             assert job.status == "succeeded" and job.progress == 1.0
             assert job.result == {"asset_id": "a1"}
@@ -134,7 +134,7 @@ class TestReport:
         with SessionLocal() as db:
             job = claim_next_job(db)
             cancel_job(db, job)
-            report_job(db, job, status="succeeded", result={"asset_id": "a1"})
+            report_job(db, job, lease_token=job.lease_token, status="succeeded", result={"asset_id": "a1"})
             db.refresh(job)
             assert job.status == "failed" and job.error == "已取消"
             assert job.result != {"asset_id": "a1"}
@@ -145,7 +145,7 @@ class TestReport:
         with SessionLocal() as db:
             job = claim_next_job(db)
             with pytest.raises(ValueError):
-                report_job(db, job, status="prepared")
+                report_job(db, job, lease_token=job.lease_token, status="prepared")
 
 
 class TestReconcile:
@@ -183,7 +183,7 @@ class TestHttpChannel:
 
         reported = client.patch(
             "/api/jobs/worker/report",
-            json={"job_id": job_id, "status": "succeeded", "result": {"ok": True}},
+            json={"job_id": job_id, "lease_token": claimed["job"]["lease_token"], "status": "succeeded", "result": {"ok": True}},
             headers=self._headers(),
         ).json()
         assert reported["status"] == "succeeded"
@@ -266,3 +266,77 @@ class TestDispatchWiring:
             job = db.get(Job, job_id)
             assert job.status == "queued" and job.message == "等待执行器认领"
             assert claim_next_job(db, kinds=["ai_generation"]).id == job_id
+
+
+class TestLeases:
+    def test_expired_claim_is_settled_and_cannot_report_success(self, external_demo):
+        from datetime import timedelta
+        from app.db.model_base import now
+        ws = _workspace()
+        _make_job(ws)
+        with SessionLocal() as db:
+            job = claim_next_job(db, worker="gone")
+            token = getattr(job, "lease_token", None)
+            assert token, "claims need a persisted ownership token"
+            job.lease_expires_at = now() - timedelta(seconds=1)
+            db.commit()
+            assert jobs_bus.expire_worker_leases(db) == 1
+            report_job(db, job, lease_token=job.lease_token, status="succeeded")
+            assert job.status == "failed" and "失联" in job.error
+            assert claim_next_job(db, worker="new") is None  # no automatic duplicate external side effects
+
+    def test_heartbeat_survives_memory_reset_and_only_renews_its_claim(self, external_demo):
+        from datetime import timedelta
+        from app.db.model_base import now
+        from app.api.routes import job_worker
+        client = fresh_client()
+        ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+        _make_job(ws)
+        headers = {WORKER_KEY_HEADER: current_worker_key() or ""}
+        claimed = client.post("/api/jobs/worker/claim", json={"worker": "w"}, headers=headers).json()["job"]
+        assert claimed.get("lease_token")
+        with SessionLocal() as db:
+            row = db.get(Job, claimed["id"])
+            row.lease_expires_at = now() + timedelta(seconds=5)
+            db.commit()
+        job_worker._HEARTBEATS.clear()  # simulate the backend losing its process-local state
+        body = {"worker": "other", "claims": [{"job_id": claimed["id"], "lease_token": claimed["lease_token"]}]}
+        assert client.post("/api/jobs/worker/heartbeat", json=body, headers=headers).json()["renewed"] == []
+        body["worker"] = "w"
+        beat = client.post("/api/jobs/worker/heartbeat", json=body, headers=headers).json()
+        assert beat["renewed"] == [claimed["id"]]
+        bad = client.patch("/api/jobs/worker/report", json={"job_id": claimed["id"], "status": "succeeded", "lease_token": "wrong"}, headers=headers)
+        assert bad.status_code == 422
+        with SessionLocal() as db:
+            assert db.get(Job, claimed["id"]).lease_expires_at > now() + timedelta(seconds=30)
+            assert db.get(Job, claimed["id"]).status == "running"
+
+
+def test_old_running_worker_without_lease_is_reconciled(external_demo):
+    from datetime import timedelta
+    from app.db.model_base import now
+    ws = _workspace()
+    jid = _make_job(ws)
+    with SessionLocal() as db:
+        job = db.get(Job, jid)
+        job.status = "running"
+        job.updated_at = now() - timedelta(minutes=5)
+        db.commit()
+        assert reconcile_orphaned_jobs(db) == 1
+        assert db.get(Job, jid).status == "failed"
+
+
+def test_lease_migration_is_idempotent_and_preserves_existing_jobs(monkeypatch):
+    from sqlalchemy import create_engine, text
+    from app.db import migrations
+    engine = create_engine("sqlite://")
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE jobs (id TEXT PRIMARY KEY, status TEXT)"))
+        connection.execute(text("INSERT INTO jobs VALUES ('old', 'running')"))
+    monkeypatch.setattr(migrations, "engine", engine)
+    migrations._migrate_job_worker_leases()
+    migrations._migrate_job_worker_leases()
+    with engine.connect() as connection:
+        row = connection.execute(text("SELECT id, status, lease_token, lease_worker, lease_expires_at FROM jobs")).one()
+        assert tuple(row) == ("old", "running", None, None, None)
+    engine.dispose()

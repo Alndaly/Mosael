@@ -7220,6 +7220,13 @@ export interface components {
              */
             updated_at: string;
         };
+        /** LeaseClaim */
+        LeaseClaim: {
+            /** Job Id */
+            job_id: string;
+            /** Lease Token */
+            lease_token: string;
+        };
         /** LeaseOut */
         LeaseOut: {
             /** Lease */
@@ -10290,6 +10297,8 @@ export interface components {
         };
         /** HeartbeatRequest */
         app__api__routes__job_worker__HeartbeatRequest: {
+            /** Claims */
+            claims?: components["schemas"]["LeaseClaim"][];
             /** Worker */
             worker: string;
             /** Kinds */
@@ -10301,6 +10310,8 @@ export interface components {
             job_id: string;
             /** Status */
             status: string;
+            /** Lease Token */
+            lease_token?: string | null;
             /** Progress */
             progress?: number | null;
             /** Message */

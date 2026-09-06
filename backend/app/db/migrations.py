@@ -1760,6 +1760,17 @@ def _backfill_plugin_instances() -> None:
             conn.execute(text("ALTER TABLE plugin_packages DROP COLUMN enabled"))
 
 
+def _migrate_job_worker_leases() -> None:
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(jobs)"))}
+        if not columns:
+            return
+        for name, kind in (("lease_token", "VARCHAR(64)"), ("lease_worker", "VARCHAR(64)"), ("lease_expires_at", "DATETIME")):
+            if name not in columns:
+                conn.execute(text(f"ALTER TABLE jobs ADD COLUMN {name} {kind}"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_jobs_status_lease_expires ON jobs(status, lease_expires_at)"))
+
+
 def _create_current_schema() -> None:
     """The single boundary between migrations for existing tables and new-table creation."""
 
@@ -1823,6 +1834,7 @@ def migration_plan() -> MigrationPlan:
                 _merge_split_vendors,
                 _merge_openai_tts_engine,
                 _migrate_job_parent,
+                _migrate_job_worker_leases,
                 _migrate_browser_pool,
                 # Must precede schema creation or an empty plugin_packages table hides legacy data.
                 _migrate_plugin_instances,

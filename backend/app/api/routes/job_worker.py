@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 
 from app.api.deps import DbSession
 from app.db.models import Job
-from app.domain.jobs import claim_next_job, external_kinds, report_job
+from app.domain.jobs import claim_next_job, external_kinds, renew_worker_leases, report_job
 
 router = APIRouter(tags=["job-worker"])
 
@@ -24,21 +24,28 @@ _HEARTBEATS: dict[str, dict[str, Any]] = {}
 
 
 class ClaimRequest(BaseModel):
-    worker: str = ""
+    worker: str = Field(default="", max_length=64)
     kinds: list[str] = Field(default_factory=list)
 
 
 class ReportRequest(BaseModel):
     job_id: str
     status: str
+    lease_token: str | None = Field(default=None, max_length=64)
     progress: float | None = None
     message: str | None = None
     error: str | None = None
     result: dict[str, Any] | None = None
 
 
+class LeaseClaim(BaseModel):
+    job_id: str
+    lease_token: str = Field(min_length=1, max_length=64)
+
+
 class HeartbeatRequest(BaseModel):
-    worker: str
+    claims: list[LeaseClaim] = Field(default_factory=list, max_length=1000)
+    worker: str = Field(max_length=64)
     kinds: list[str] = Field(default_factory=list)
 
 
@@ -53,6 +60,8 @@ def claim(body: ClaimRequest, db: DbSession) -> dict[str, Any]:
             "kind": job.kind,
             "workspace_id": job.workspace_id,
             "payload": job.payload or {},
+            "lease_token": job.lease_token,
+            "lease_expires_at": job.lease_expires_at.isoformat() + "Z",
         }
     }
 
@@ -67,6 +76,7 @@ def report(body: ReportRequest, db: DbSession) -> dict[str, Any]:
             db,
             job,
             status=body.status,
+            lease_token=body.lease_token,
             progress=body.progress,
             message=body.message,
             error=body.error,
@@ -78,6 +88,7 @@ def report(body: ReportRequest, db: DbSession) -> dict[str, Any]:
 
 
 @router.post("/jobs/worker/heartbeat")
-def heartbeat(body: HeartbeatRequest) -> dict[str, Any]:
+def heartbeat(body: HeartbeatRequest, db: DbSession) -> dict[str, Any]:
     _HEARTBEATS[body.worker] = {"last_seen": time.time(), "kinds": list(body.kinds)}
-    return {"ok": True, "external_kinds": list(external_kinds())}
+    renewed = renew_worker_leases(db, worker=body.worker, claims=[claim.model_dump() for claim in body.claims])
+    return {"ok": True, "external_kinds": list(external_kinds()), "renewed": renewed}

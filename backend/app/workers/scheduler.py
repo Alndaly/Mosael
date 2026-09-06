@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
-from app.domain.jobs import prune_task_events, say, finish_job, set_parent_job, reset_parent_job
+from app.domain.jobs import expire_worker_leases, prune_task_events, say, finish_job, set_parent_job, reset_parent_job
 from app.db.models import Job, ScheduledTask, ScheduledTaskRun, now
 from app.domain.scheduler.operations import run_scheduled_task
 
@@ -64,6 +64,7 @@ def _loop(stop: threading.Event) -> None:
 
 def tick(db: Session) -> list[str]:
     """One pass: sync run states, then claim + dispatch due tasks. Returns run ids created."""
+    expire_worker_leases(db)
     _sync_run_states(db)
 
     created: list[str] = []

@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import contextvars
 import logging
+import secrets
 import threading
 import time
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import delete, event, inspect, select
+from sqlalchemy import and_, delete, event, inspect, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
@@ -157,7 +158,7 @@ def lock_active_job(db: Session, job: Job) -> bool:
     with db.no_autoflush:
         changed = db.execute(
             Job.__table__.update().where(Job.id == job.id, Job.status.in_(("queued", "running")))
-            .values(status=Job.status)
+            .values(status=Job.status, updated_at=Job.updated_at)
         ).rowcount
         db.refresh(job, ["status"] if changed else None)
     return bool(changed)
@@ -461,7 +462,7 @@ def reconcile_orphaned_jobs(db: Session) -> int:
         db.add(TaskEvent(job_id=job.id, type="job.failed", payload={"reason": "backend_restart"}))
     if stale:
         db.commit()
-    return len(stale)
+    return len(stale) + expire_worker_leases(db)
 
 
 def _cancel_job_row(db: Session, job: Job) -> bool:
@@ -484,6 +485,22 @@ def _cancel_job_row(db: Session, job: Job) -> bool:
     return True
 
 
+def _cancel_descendants(db: Session, job_id: str) -> set[str]:
+    frontier, seen = [job_id], {job_id}
+    while frontier:
+        parent_id = frontier.pop()
+        children = db.scalars(
+            select(Job).where(Job.parent_job_id == parent_id, Job.status.in_(("queued", "running")))
+        ).all()
+        for child in children:
+            if child.id in seen:
+                continue
+            seen.add(child.id)
+            _cancel_job_row(db, child)
+            frontier.append(child.id)
+    return seen
+
+
 def cancel_job(db: Session, job: Job) -> Job:
     """用户主动取消:job 落终态,发布任务同步撤单,工作流在节点边界停下。
 
@@ -497,18 +514,7 @@ def cancel_job(db: Session, job: Job) -> Job:
         db.rollback()
         raise ValueError("任务已结束,无法取消")
     # 广度遍历后代,连嵌套子工作流一并取消。
-    frontier, seen = [job.id], {job.id}
-    while frontier:
-        parent_id = frontier.pop()
-        children = db.scalars(
-            select(Job).where(Job.parent_job_id == parent_id, Job.status.in_(("queued", "running")))
-        ).all()
-        for child in children:
-            if child.id in seen:
-                continue
-            seen.add(child.id)
-            _cancel_job_row(db, child)
-            frontier.append(child.id)
+    seen = _cancel_descendants(db, job.id)
     db.commit()
     db.refresh(job)
     logger.info("job %s [%s] cancelled by user (cascaded %d descendants)", job.id, job.kind, len(seen) - 1)
@@ -522,6 +528,7 @@ def cancel_job(db: Session, job: Job) -> Job:
 # /api/publish/worker/*(任务粒度是 PublishTask);其余 external kind 走这里。
 
 CLAIMABLE_STATUSES = ("queued",)
+WORKER_LEASE_SECONDS = 60
 
 
 def claim_next_job(db: Session, *, kinds: list[str] | None = None, worker: str = "") -> Job | None:
@@ -530,7 +537,9 @@ def claim_next_job(db: Session, *, kinds: list[str] | None = None, worker: str =
     只允许认领 external 模式的 kind——in_process 的 kind 已有线程在跑,被外部
     worker 抢走会双跑。CAS(status 仍是 queued 才更新)保证并发认领不重复。
     """
-    allowed = set(external_kinds())
+    expire_worker_leases(db)
+    # PublishTask has its own ownership/recovery protocol.
+    allowed = set(external_kinds()) - {"publish"}
     if kinds:
         allowed &= set(kinds)
     if not allowed:
@@ -552,6 +561,9 @@ def claim_next_job(db: Session, *, kinds: list[str] | None = None, worker: str =
             .where(Job.id == job.id, Job.status.in_(CLAIMABLE_STATUSES))
             .values(
                 status="running",
+                lease_token=secrets.token_hex(24),
+                lease_worker=worker[:64],
+                lease_expires_at=models_now() + timedelta(seconds=WORKER_LEASE_SECONDS),
                 message_key="jobMsg_claimed",
                 message=t("jobMsg_claimed", DEFAULT_LOCALE),
             )
@@ -565,6 +577,46 @@ def claim_next_job(db: Session, *, kinds: list[str] | None = None, worker: str =
         db.rollback()  # 另一个 worker 抢先了;重试下一条
 
 
+def expire_worker_leases(db: Session) -> int:
+    """Settle abandoned work; never automatically repeat a potentially billable side effect."""
+    now = models_now()
+    legacy_kinds = set(external_kinds()) - {"publish"}
+    candidates = db.scalars(select(Job).where(Job.status == "running", or_(
+        Job.lease_expires_at <= now,
+        and_(Job.lease_expires_at.is_(None), Job.kind.in_(legacy_kinds), Job.updated_at <= now - timedelta(seconds=WORKER_LEASE_SECONDS)),
+    ))).all()
+    expired = 0
+    for job in candidates:
+        if not lock_active_job(db, job):
+            continue
+        db.refresh(job, ["lease_expires_at", "updated_at"])
+        # A heartbeat may have renewed after the candidate query but before our write lock.
+        if (job.lease_expires_at and job.lease_expires_at > now) or (job.lease_expires_at is None and job.updated_at > now - timedelta(seconds=WORKER_LEASE_SECONDS)):
+            continue
+        if finish_job(db, job, status="failed", error="执行器失联,任务已停止；请检查产出后重新发起"):
+            say(job, "执行器失联")
+            db.add(TaskEvent(job_id=job.id, type="job.failed", payload={"reason": "worker_lease_expired"}))
+            _cancel_descendants(db, job.id)
+            expired += 1
+    db.commit()
+    return expired
+
+
+def renew_worker_leases(db: Session, *, worker: str, claims: list[dict[str, str]]) -> list[str]:
+    expire_worker_leases(db)
+    now = models_now()
+    renewed = []
+    for claim in claims:
+        count = db.execute(Job.__table__.update().where(
+            Job.id == claim["job_id"], Job.status == "running", Job.lease_worker == worker,
+            Job.lease_token == claim["lease_token"], Job.lease_expires_at > now,
+        ).values(lease_expires_at=now + timedelta(seconds=WORKER_LEASE_SECONDS))).rowcount
+        if count:
+            renewed.append(claim["job_id"])
+    db.commit()
+    return renewed
+
+
 def report_job(
     db: Session,
     job: Job,
@@ -574,6 +626,7 @@ def report_job(
     message: str | None = None,
     error: str | None = None,
     result: dict[str, Any] | None = None,
+    lease_token: str | None = None,
 ) -> Job:
     """外部 worker 回报:running 更新进度,succeeded/failed 落终态。
 
@@ -582,9 +635,20 @@ def report_job(
     """
     if status not in ("running", "succeeded", "failed"):
         raise ValueError(f"未知回报状态: {status}")
-    db.refresh(job)
-    if job.status in TERMINAL_STATUSES:
+    expire_worker_leases(db)
+    if not lock_active_job(db, job):
+        db.commit()
         return job
+    db.refresh(job, ["lease_token", "lease_expires_at", "lease_worker"])
+    if not job.lease_token or not secrets.compare_digest(job.lease_token, lease_token or ""):
+        db.rollback()
+        raise ValueError("执行器租约无效,请使用认领返回的 lease_token")
+    if job.lease_expires_at is None or job.lease_expires_at <= models_now():
+        db.rollback()
+        expire_worker_leases(db)
+        db.refresh(job)
+        return job
+    job.lease_expires_at = models_now() + timedelta(seconds=WORKER_LEASE_SECONDS)
     if status == "running":
         if progress is not None:
             job.progress = max(0.0, min(1.0, float(progress)))

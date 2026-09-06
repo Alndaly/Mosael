@@ -18,7 +18,10 @@ from app.db.model_base import new_id, now
 
 class Job(Base):
     __tablename__ = "jobs"
-    __table_args__ = (Index("idx_jobs_workspace_status_updated", "workspace_id", "status", "updated_at"),)
+    __table_args__ = (
+        Index("idx_jobs_workspace_status_updated", "workspace_id", "status", "updated_at"),
+        Index("idx_jobs_status_lease_expires", "status", "lease_expires_at"),
+    )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
@@ -34,6 +37,9 @@ class Job(Base):
     # 不再与父工作流平铺成两行。顶层任务(用户直接发起)为 None。软引用,不设外键级联。
     parent_job_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="queued")
+    lease_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lease_worker: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     progress: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     #: 给人看的那句话。**它是渲染结果**(缺省语言),留着是因为不翻译的消费者也读它:
     #: 工作流把子任务的 message 拼进自己的错误里、日志、直接读库的运维脚本。
