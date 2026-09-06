@@ -56,7 +56,7 @@ def _browser_platforms() -> list[str]:
 STALE_RUNNING_MINUTES = 30
 
 
-def reclaim_orphaned_running(db: Session, exclude_accounts: list[str]) -> int:
+def reclaim_orphaned_running(db: Session, exclude_accounts: list[str], *, worker: str = "") -> int:
     """自愈悬挂的 running 任务——账号自愈(claim_check)只管登录态复检,任务这条链一直没有兜底:
     执行器认领后翻成 running,若中途崩溃/重启(丢了在飞任务)或彻底卡死,任务就永远停在
     "运行中",UI 上一直转圈。两条判据:
@@ -67,7 +67,16 @@ def reclaim_orphaned_running(db: Session, exclude_accounts: list[str]) -> int:
     stale_before = now() - timedelta(minutes=STALE_RUNNING_MINUTES)
     reclaimed = 0
     for task in db.scalars(select(PublishTask).where(PublishTask.status == "running")).all():
-        orphaned = task.account_id not in exclude_accounts
+        #: **判据 1 只能用在自己认领的任务上。** 「这个账号不在我当前在跑的集合里」这句话
+        #: 只有认领者说了才算数;拿自己的集合去判别人的任务,结论必然是"孤儿",于是两个
+        #: 执行器会互相把对方正在跑的任务标成中断,而错误文案还写着"请到平台确认是否已发布"。
+        #:
+        #: `worker` 为空 = 老执行器不报身份。那时保持原样(单执行器部署行为不变);而认得
+        #: 自己名字的执行器,不去碰无主的老任务 —— 它不知道那是谁的,交给判据 2 兜底。
+        mine = task.claimed_by == worker if worker else True
+        orphaned = mine and task.account_id not in exclude_accounts
+        #: **判据 2 是全局的,而且必须是。** 执行器彻底死掉之后没人再来认领它的任务,
+        #: 只有"多久没动静"这条能把它们收回来 —— 限制成只有认领者能判,等于它们永远挂着。
         stalled = task.updated_at is not None and task.updated_at < stale_before
         if not (orphaned or stalled):
             continue
@@ -81,13 +90,18 @@ def reclaim_orphaned_running(db: Session, exclude_accounts: list[str]) -> int:
     return reclaimed
 
 
-def claim_next_pending(db: Session, exclude_accounts: list[str]) -> dict[str, Any] | None:
+def claim_next_pending(
+    db: Session, exclude_accounts: list[str], *, worker: str = ""
+) -> dict[str, Any] | None:
     """认领最老的一条 pending 浏览器任务并翻成 running。
 
-    单进程 SQLite 后端 + 单个 worker:同事务内 select→update 即原子。
+    单进程 SQLite 后端:同事务内 select→update 即原子。**多个执行器也安全**,因为下面
+    还排除了「任何人正在跑的账号」—— 而不是只排除调用方自己在跑的那些。
+
+    `worker` 是执行器的稳定身份,记在 claimed_by 上,给回收那一侧分辨归属用。
     """
     # 每次轮询顺手回收悬挂的 running 任务(worker 活着就会持续调这里,重启后第一拍即清理)。
-    reclaim_orphaned_running(db, exclude_accounts)
+    reclaim_orphaned_running(db, exclude_accounts, worker=worker)
     stmt = (
         select(PublishTask, PublishAccount)
         .join(PublishAccount, PublishAccount.id == PublishTask.account_id)
@@ -98,8 +112,17 @@ def claim_next_pending(db: Session, exclude_accounts: list[str]) -> dict[str, An
         )
         .order_by(PublishTask.created_at)
     )
-    if exclude_accounts:
-        stmt = stmt.where(PublishTask.account_id.not_in(exclude_accounts))
+    #: 排除**任何人**正在跑的账号,不只是调用方自己在跑的那些。
+    #:
+    #: 一个平台账号同时被两条任务驱动是不行的(平台侧的登录态、上传队列都只有一份),而
+    #: 此前唯一的守卫是调用方自报的 exclude_accounts —— 那在多执行器下等于没有守卫:
+    #: B 不知道 A 在跑哪个账号,照样会认领同一个账号的下一条。
+    busy = set(
+        db.scalars(select(PublishTask.account_id).where(PublishTask.status == "running")).all()
+    )
+    blocked = busy | set(exclude_accounts)
+    if blocked:
+        stmt = stmt.where(PublishTask.account_id.not_in(sorted(blocked)))
     row = db.execute(stmt.limit(1)).first()
     if row is None:
         return None
@@ -113,6 +136,7 @@ def claim_next_pending(db: Session, exclude_accounts: list[str]) -> dict[str, An
         return None
 
     task.status = "running"
+    task.claimed_by = worker
     if task.job_id:
         job = db.get(Job, task.job_id)
         if job is not None:

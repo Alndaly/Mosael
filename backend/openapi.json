@@ -26820,6 +26820,12 @@
             },
             "type": "array",
             "title": "Exclude Accounts"
+          },
+          "worker": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Worker",
+            "default": ""
           }
         },
         "type": "object",

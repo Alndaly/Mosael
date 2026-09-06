@@ -57,6 +57,11 @@ class PublishTask(Base):
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="pending")
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     screenshot_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: 是哪个执行器认领的。**多执行器下,「孤儿任务」只能由认领它的那个来判** —— 那条判据是
+    #: 「这个账号不在我当前在跑的集合里」,而这句话只有认领者说了才算数。别人拿自己的集合去判,
+    #: 会把对方正在跑的任务判成中断(见 publish/worker.reclaim_orphaned_running)。
+    #: 空串 = 老任务,或不报身份的执行器。
+    claimed_by: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     job_id: Mapped[str | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)

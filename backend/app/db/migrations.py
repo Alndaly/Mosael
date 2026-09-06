@@ -1487,6 +1487,22 @@ def _migrate_board_revision() -> None:
         conn.execute(text("ALTER TABLE boards ADD COLUMN revision INTEGER NOT NULL DEFAULT 1"))
 
 
+def _migrate_publish_task_claimed_by() -> None:
+    """已装机的库补上 publish_tasks.claimed_by。
+
+    `create_all` 只建缺失的**表**,从不给已存在的表加列 —— 少了这一步,新装机一切正常,
+    升级的机器上后端起不来(no such column)。
+    """
+
+    inspector = inspect(engine)
+    if "publish_tasks" not in set(inspector.get_table_names()):
+        return
+    columns = {column["name"] for column in inspector.get_columns("publish_tasks")}
+    if "claimed_by" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE publish_tasks ADD COLUMN claimed_by VARCHAR(64) NOT NULL DEFAULT ''"))
+
+
 def _migrate_agent_pending_view() -> None:
     """已装机的库补上 agent_sessions.pending_view。
 
@@ -1822,6 +1838,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_board_revision,
                 _migrate_comment_canvas_context,
                 _migrate_agent_pending_view,
+                _migrate_publish_task_claimed_by,
                 _migrate_board_canvas_state,
                 _backfill_browser_pool,
                 _backfill_provider_models,

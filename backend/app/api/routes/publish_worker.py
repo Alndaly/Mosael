@@ -23,6 +23,9 @@ router = APIRouter(tags=["publish-worker"])
 
 class ClaimRequest(BaseModel):
     exclude_accounts: list[str] = Field(default_factory=list)
+    #: 执行器的稳定身份(跨重启不变)。多执行器下用它分辨任务归属 —— 见
+    #: publish/worker.reclaim_orphaned_running。老执行器不报,那时行为和以前一样。
+    worker: str = Field(default="", max_length=64)
 
 
 class ReportRequest(BaseModel):
@@ -41,7 +44,7 @@ class AccountPatchRequest(BaseModel):
 
 @router.post("/publish/worker/claim")
 def claim(body: ClaimRequest, db: DbSession) -> dict[str, Any]:
-    return {"task": publish_worker.claim_next_pending(db, body.exclude_accounts)}
+    return {"task": publish_worker.claim_next_pending(db, body.exclude_accounts, worker=body.worker)}
 
 
 @router.patch("/publish/worker/report")
