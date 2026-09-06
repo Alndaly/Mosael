@@ -5,6 +5,35 @@ commit list and downloadable artifacts.
 
 ## Unreleased
 
+## [1.0.0-beta3] - 2026-09-06
+
+### Added
+
+- Added agent dictation, spoken replies, interruptible hands-free conversations, and navigation from
+  tool-result references; voice input no longer creates temporary media-library assets.
+- Added plugin OAuth authorization, remote worker connections, multiple publishing workers, and
+  child-task visibility in scheduled runs and workflow history.
+
+### Fixed
+
+- Restored Baidu Netdisk imports and uploads from the plugin tool panel by passing the selected
+  workspace, and corrected OAuth declarations, result limits, and parameter descriptions.
+- Preserved cancellation across workers, scheduled children, nested workflows, and browser publishing;
+  persisted worker ownership leases so abandoned jobs settle instead of remaining active indefinitely.
+- Matched upper-track effects, playback speed, audio gain, fades, solo, and ducking between editor
+  preview and export, including speed-aware workflow timeline operations.
+- Rejected non-finite numeric API inputs, enforced workspace ownership in workflow nodes, validated
+  nested workflow configurations, and corrected nested canvas frame movement.
+- Restored workflow speech synthesis with either cloned or engine-provided voices and improved the
+  bundled examples, plugin controls, and workflow canvas responsiveness.
+
+### Upgrade notes
+
+- Code nodes now require Docker with Linux containers and the pre-pulled `python:3.13-alpine` image.
+  Code runs without host mounts or network access, with bounded memory, processes, time, and output.
+- Custom external job workers must adopt the claim/heartbeat/report lease protocol. Update desktop
+  and backend components together; see `docs/adr/0002-claim-report-worker-protocol.md`.
+
 ## [1.0.0-beta2] - 2026-09-04
 
 ### Added
