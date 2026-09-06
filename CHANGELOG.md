@@ -5,6 +5,8 @@ commit list and downloadable artifacts.
 
 ## Unreleased
 
+- 笔记工具栏增加正文与 H1–H6 选择器，随光标同步段落样式，并统一列表选中状态与正文层级。
+
 ## [1.0.0] - 2026-09-07
 
 ### Stable release

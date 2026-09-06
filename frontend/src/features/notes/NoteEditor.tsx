@@ -2,7 +2,7 @@ import { createPortal } from "react-dom";
 import { useEditor, EditorContent, useEditorState } from "@tiptap/react";
 import Placeholder from "@tiptap/extension-placeholder";
 import React from "react";
-import { Bold, Italic, List, ListOrdered, Quote, Heading2, Undo2, Redo2, AtSign, ImagePlus, Table2, ListTodo, Code2, Link, Minus, Strikethrough, Plus, ChevronDown } from "lucide-react";
+import { Bold, Italic, List, ListOrdered, Quote, Undo2, Redo2, AtSign, ImagePlus, Table2, ListTodo, Code2, Link, Minus, Strikethrough, Plus, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { useNoteStrings } from "./strings";
 import { noteExtensions } from "./editorExtensions";
@@ -10,6 +10,7 @@ import { RefSuggestion } from "@/components/app/refSuggestion";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
 import { listNotes, noteHref, type Note } from "@/api/domains/notes";
 import { importAsset } from "@/api/domains/assets";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export function NoteReader({ markdown }: { markdown: string }) {
@@ -67,7 +68,7 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
     return () => observer.disconnect();
   }, [editable, editor]);
   const state = useEditorState({ editor, selector: ({editor: e}) => ({
-    bold: e?.isActive("bold"), italic: e?.isActive("italic"), strike: e?.isActive("strike"), heading: e?.isActive("heading"),
+    bold: e?.isActive("bold"), italic: e?.isActive("italic"), strike: e?.isActive("strike"), heading: e?.isActive("heading") ? Number(e.getAttributes("heading").level) : 0,
     bullet: e?.isActive("bulletList"), ordered: e?.isActive("orderedList"), task: e?.isActive("taskList"),
     quote: e?.isActive("blockquote"), code: e?.isActive("codeBlock"), table: e?.isActive("table"),
     undo: e?.can().undo(), redo: e?.can().redo(),
@@ -98,7 +99,6 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
     { name: s.bold, icon: Bold, active: state?.bold, action: () => editor.chain().focus().toggleBold().run() },
     { name: s.italic, icon: Italic, active: state?.italic, action: () => editor.chain().focus().toggleItalic().run() },
     { name: s.strike, icon: Strikethrough, active: state?.strike, action: () => editor.chain().focus().toggleStrike().run() },
-    { name: s.heading, icon: Heading2, active: state?.heading, action: () => editor.chain().focus().toggleHeading({level: 2}).run() },
     { name: s.bulletList, icon: List, active: state?.bullet, action: () => editor.chain().focus().toggleBulletList().run() },
     { name: s.numberedList, icon: ListOrdered, active: state?.ordered, action: () => editor.chain().focus().toggleOrderedList().run() },
     { name: s.taskList, icon: ListTodo, active: state?.task, action: () => editor.chain().focus().toggleTaskList().run() },
@@ -112,11 +112,24 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
   ];
   const actionButton = (a: typeof actions[number]) => <button key={a.name} type="button" title={a.name} aria-label={a.name} aria-pressed={a.active} disabled={a.disabled} onMouseDown={e => e.preventDefault()} onClick={a.action}><a.icon size={16} strokeWidth={1.7} /></button>;
   const toolbar = <div className="note-format" data-stuck={stuck} role="toolbar" aria-label={s.write}>
-    <div className="note-format-group">{actions.slice(0,4).map(actionButton)}</div>
-    <div className="note-format-group">{actions.slice(4,7).map(actionButton)}</div>
+    <div className="note-format-group">
+      <Select value={String(state?.heading ?? 0)} onValueChange={value => {
+        const chain = editor.chain().focus();
+        if (value === "0") chain.setParagraph().run();
+        else chain.setHeading({level: Number(value) as 1|2|3|4|5|6}).run();
+      }}>
+        <SelectTrigger className="note-block-style" aria-label={s.heading} title={s.heading}><SelectValue /></SelectTrigger>
+        <SelectContent onCloseAutoFocus={event => event.preventDefault()}>
+          <SelectItem value="0">{s.paragraph}</SelectItem>
+          {s.headingLevels.map((label, index) => <SelectItem key={label} value={String(index + 1)}><span className="note-heading-option"><span>H{index + 1}</span>{label}</span></SelectItem>)}
+        </SelectContent>
+      </Select>
+      {actions.slice(0,3).map(actionButton)}
+    </div>
+    <div className="note-format-group">{actions.slice(3,6).map(actionButton)}</div>
     <div className="note-format-group">
     <Popover open={insertOpen} onOpenChange={setInsertOpen}><PopoverTrigger asChild><button className="note-format-insert" aria-label={s.insert} title={s.insert}><Plus size={16} strokeWidth={1.7} /><span>{s.insert}</span><ChevronDown size={12} /></button></PopoverTrigger>
-      <PopoverContent align="start" className="grid w-48 gap-1 p-1.5">{actions.slice(7,12).map(a => <button key={a.name} type="button" disabled={a.disabled} aria-pressed={a.active} className="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-ui-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" onClick={() => { setInsertOpen(false); a.action(); }}><a.icon size={16} /><span>{a.name}</span></button>)}</PopoverContent>
+      <PopoverContent align="start" className="grid w-48 gap-1 p-1.5">{actions.slice(6,11).map(a => <button key={a.name} type="button" disabled={a.disabled} aria-pressed={a.active} className="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-ui-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" onClick={() => { setInsertOpen(false); a.action(); }}><a.icon size={16} /><span>{a.name}</span></button>)}</PopoverContent>
     </Popover>
     <Popover open={linkOpen} onOpenChange={open => { setLinkOpen(open); if (open) setUrl(String(editor.getAttributes("link").href || "")); }}><PopoverTrigger asChild><button title={s.link} aria-label={s.link}><Link size={16} /></button></PopoverTrigger><PopoverContent className="w-80 p-3"><form className="grid gap-3" onSubmit={e => { e.preventDefault(); if (url && !/^https?:\/\//i.test(url)) return; const chain = editor.chain().focus().extendMarkRange("link"); if (!url) chain.unsetLink().run(); else if (editor.state.selection.empty) chain.insertContent({type: "text", text: url, marks: [{type:"link", attrs:{href:url}}]}).run(); else chain.setLink({href:url}).run(); setLinkOpen(false); }}><label className="text-sm">{s.link}<input className="mt-2 w-full rounded-md bg-secondary p-2 text-sm" aria-label={s.link} placeholder="https://" type="url" value={url} onChange={e => setUrl(e.target.value)} /></label><button className="rounded-md bg-secondary p-2 text-sm" type="submit">{s.apply}</button></form></PopoverContent></Popover>
     <Popover><PopoverTrigger asChild><button title={s.table} aria-label={s.table} aria-pressed={state?.table}><Table2 size={16} /></button></PopoverTrigger><PopoverContent className="grid w-48 gap-1 p-2">{(state?.table ? [
@@ -124,7 +137,7 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
       [s.deleteRow, () => editor.chain().focus().deleteRow().run()], [s.deleteColumn, () => editor.chain().focus().deleteColumn().run()], [s.deleteTable, () => editor.chain().focus().deleteTable().run()],
     ] : [[s.insertTable, () => editor.chain().focus().insertTable({rows:3,cols:3,withHeaderRow:true}).run()]]).map(([label, action]) => <button className="rounded-md px-2 py-1.5 text-left text-sm hover:bg-secondary" key={String(label)} onClick={action as () => void}>{String(label)}</button>)}</PopoverContent></Popover>
     </div>
-    <div className="note-format-group note-format-history">{actions.slice(12).map(actionButton)}</div>
+    <div className="note-format-group note-format-history">{actions.slice(11).map(actionButton)}</div>
     <input type="file" hidden multiple ref={fileInput} accept="image/*" onChange={e => { upload.current(Array.from(e.target.files || [])); e.target.value = ""; }} />
   </div>;
   return <>{editable && (toolbarTarget ? createPortal(toolbar, toolbarTarget) : <><div ref={sentinel} className="note-format-sentinel" aria-hidden="true" />{toolbar}</>)}{title}<EditorContent editor={editor} />
