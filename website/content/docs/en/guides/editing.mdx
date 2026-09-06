@@ -2,19 +2,19 @@
 title: Editing & color grading
 description: Timeline, transcript-driven editing, color grading, subtitles and filters, export.
 order: 2
+updated: 2026-09-07
+version: 1.0.0-beta5
 ---
 
-The **Edit** page is a multi-track timeline editor: media / transcript / subtitles on the left, dual monitors in the middle, the timeline at the bottom, properties / grading on the right.
+The **Edit** page centers on one monitor and a bottom timeline. The left panel switches between **Media / Transcript / Subtitles / Voice**; selecting a clip makes its inspector available on the right. AI assistant and Export sit in the top toolbar.
 
-![Editor: multi-track timeline, monitor, media panel](/media/screens/editor.png)
+![Editor: media panel, single monitor and multiple tracks](/media/screens/en/editor.png)
 
-**Create the main timeline and import media** — the Import button sits at the top right of the media pool; video / audio / images all work, with preview proxies and thumbnails generated automatically:
+Import a file in the media panel and drag it onto a track. This demonstration uses a prepared video, narration and subtitle sequence, then selects clips, opens the inspector and plays the timeline.
 
-![Demo: create the main timeline and import two clips](/media/gifs/editor-import.gif)
+<Recording src="/media/videos/en/timeline-edit.mp4" poster="/media/screens/en/editor.png" caption="Live capture: inspect clips and play the timeline" />
 
-**Drag clips onto the track, move the playhead, press S to split at the playhead**:
-
-![Demo: drag clips onto V1, position the playhead, split into segments](/media/gifs/timeline-edit.gif)
+The project dropdown in the title bar switches timelines. Long names ellipsize; hover to read the full name. Resize panel edges to adjust your workspace.
 
 ## Timeline
 
@@ -42,7 +42,7 @@ current conversation — click it to search or switch sessions.
 
 ## Color grading
 
-The **Grading** tab on the right:
+Select a video clip, then open **Grading** in its right-hand inspector:
 
 - **Curves**: Luma / R / G / B channel curves with an independent undo stack (each drag is one step).
 - **Style presets**: vivid / black & white / warm / cool / cinematic / faded.
@@ -64,9 +64,9 @@ workspace and reads the sentence. Google is the default — it costs nothing and
 
 ### Dubbing
 
-![Subtitle dubbing: a per-cue entry point, landing on a dedicated dub track](/media/screens/subtitle-dub.png)
+![Subtitle dubbing: a per-cue entry point, landing on a dedicated dub track](/media/screens/en/subtitle-dub.png)
 
-![Demo: open the dub popover and turn on "fit to cue length"](/media/gifs/subtitle-dub.gif)
+![Demo: inspect subtitle dubbing settings and open Transcript](/media/gifs/en/subtitle-dub.gif)
 
 Every cue carries its own dub button, and you can dub a batch. The audio lands on a dedicated **dub
 track**: the original audio is untouched, delete the track and you are back where you started, and

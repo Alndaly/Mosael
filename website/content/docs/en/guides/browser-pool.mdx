@@ -2,6 +2,8 @@
 title: Browser pool
 description: One place for every persistent login, reused by publishing, workflows and the agent — with per-use authorization.
 order: 12
+updated: 2026-09-07
+version: 1.0.0-beta5
 ---
 
 Automating anything on the open web runs into the same wall: **the site wants you logged in**.
@@ -77,3 +79,5 @@ anybody's hands, because what is shared is the session, not the password.
 Sessions live under Electron's user data directory (`Partitions/`), not in the SQLite database.
 They are per-machine by nature: a browser session is bound to the browser that created it, so
 switching to a team backend does not carry logins along with it.
+
+![Browser Pool: platform accounts and general profiles](/media/screens/en/browser-pool.png)

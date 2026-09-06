@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { Shot } from "@/components/shot";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, Download } from "lucide-react";
@@ -13,11 +13,11 @@ import { SITE } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 const CHAPTERS = [
-  { id: "infinite-canvas", image: "/media/home/infinite-canvas.webp", width: 2400, height: 1552, href: "/docs/guides/boards" },
-  { id: "media-library", image: "/media/home/media-library.webp", width: 3592, height: 2060, href: "/docs/guides/media" },
-  { id: "editing", image: "/media/home/editor-showcase.webp", width: 3680, height: 2392, href: "/docs/guides/editing" },
-  { id: "agent", image: "/media/screens/dark/ai-chat.png", width: 2880, height: 1520, href: "/docs/guides/ai-studio" },
-  { id: "workflows", image: "/media/home/workflows.webp", width: 2400, height: 1401, href: "/workflows" },
+  { id: "infinite-canvas", image: "/media/screens/boards.png", width: 2880, height: 1800, href: "/docs/guides/boards" },
+  { id: "media-library", image: "/media/screens/media.png", width: 2880, height: 1800, href: "/docs/guides/media" },
+  { id: "editing", image: "/media/screens/editor.png", width: 2880, height: 1800, href: "/docs/guides/editing" },
+  { id: "agent", image: "/media/screens/ai-chat.png", width: 2880, height: 1800, href: "/docs/guides/ai-studio" },
+  { id: "workflows", image: "/media/screens/workflows.png", width: 2880, height: 1800, href: "/workflows" },
 ] as const;
 
 const CHAPTER_TONES = [
@@ -28,12 +28,8 @@ const CHAPTER_TONES = [
   "bg-[#f5efe8] text-[#201814] dark:bg-[#2a211d] dark:text-foreground",
 ] as const;
 
-function ProductShot({ src, alt, width, height, priority = false }: { src: string; alt: string; width: number; height: number; priority?: boolean }) {
-  return (
-    <figure className="m-0">
-      <Image src={src} alt={alt} width={width} height={height} priority={priority} sizes="(min-width: 1024px) 78vw, 100vw" className="block h-auto w-full" />
-    </figure>
-  );
+function ProductShot({ src, alt, priority = false }: { src: string; alt: string; width?: number; height?: number; priority?: boolean }) {
+  return <Shot src={src} alt={alt} priority={priority} framed />;
 }
 
 function PrimaryActions({ download, source, inverted = false }: { download: string; source: string; inverted?: boolean }) {
@@ -69,7 +65,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
         </Reveal>
         <Reveal className="relative mx-auto mt-16 max-w-[92rem] sm:mt-20" delay={90}>
           <div className="pointer-events-none absolute -inset-x-20 top-1/4 bottom-0 -z-10 bg-[radial-gradient(ellipse_at_center,rgba(114,87,233,0.2),rgba(255,161,190,0.12)_44%,transparent_72%)]" />
-          <ProductShot src="/media/home/editor-showcase.webp" alt={t.heroShotAlt} width={3680} height={2392} priority />
+          <ProductShot src={locale === "en" ? "/media/screens/en/editor.png" : "/media/screens/editor.png"} alt={t.heroShotAlt} width={2880} height={1800} priority />
         </Reveal>
       </section>
 
@@ -96,7 +92,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
                   <ul className="mt-7 mb-0 grid list-none gap-2 p-0 text-sm">{chapter.points.map((point) => <li key={point} className="flex items-center gap-3"><span className={cn("h-px w-5", dark ? "bg-white/28" : "bg-current/25")} />{point}</li>)}</ul>
                   <Link href={localePath(locale, config.href)} className={cn("mt-8 inline-flex items-center gap-2 text-sm font-semibold transition-opacity hover:opacity-70", dark ? "text-[#c9beff]" : "text-primary")}>{chapter.cta}<ArrowRight className="size-4" aria-hidden /></Link>
                 </div>
-                <div className={cn("lg:col-span-7", reverse && "lg:order-1")}><ProductShot src={config.image} alt={chapter.shotAlt} width={config.width} height={config.height} /></div>
+                <div className={cn("lg:col-span-7", reverse && "lg:order-1")}><ProductShot src={locale === "en" ? config.image.replace("/screens/", "/screens/en/") : config.image} alt={chapter.shotAlt} width={config.width} height={config.height} /></div>
               </Reveal>
             </article>
           );

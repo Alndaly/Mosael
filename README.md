@@ -23,7 +23,9 @@ the finished story without shuttling the project between a pile of tools.
 
 > Your media and projects stay local by default. Only AI services you choose to configure and use go online.
 
-![The Mosael editor with a multi-track timeline, monitor, and transcript](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260902003526649.png)
+![Mosael: layered views of the editor, handwritten Studio and serif media library](docs/media/readme-showcase.png)
+
+<p align="center"><sub>A composed showcase of actual captures · Space Grotesk / Caveat / Newsreader · <a href="docs/media/readme-shots">Original screenshots</a> · <a href="docs/media/README.md">Media credits</a></sub></p>
 
 ## Download and run
 
@@ -53,13 +55,12 @@ generation, voiceover, or transcription, add a connection and model under **Sett
   without overwriting the original sound.
 - Curves, LUTs, scopes, filters, and subtitles follow the same preview/export contract.
 
-![Per-cue voiceover output on a dedicated dub track](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260902003526649.png)
+![Subtitle voiceover settings in the current editor](website/public/media/screens/en/subtitle-dub.png)
 
 ### Let AI lend a real hand
 
 The agent uses MCP tools to inspect and operate media, timelines, workflows, browser profiles, and
-publishing tasks. Any action that changes the project or external state first surfaces a confirmation
-card and runs only after you approve it.
+publishing tasks. Actions that require approval surface a confirmation card before execution.
 
 - AI Studio, the editor, workflows, and creative boards share one conversation pool.
 - Workspace assistants dock as real layout columns by default and can float when needed, so opening
@@ -72,7 +73,7 @@ card and runs only after you approve it.
 - Context can be compacted automatically near the limit or manually, with the compaction kept in the
   conversation record.
 
-![The agent workspace and conversation experience](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260831143139609.png)
+![The agent workspace and conversation experience](website/public/media/screens/en/ai-chat.png)
 
 ### Turn an idea into picture and sound
 
@@ -101,9 +102,9 @@ guess from a similar model name.
 - Creative boards support notes, media, links, trimming, `@` asset references, and AI-assisted edits;
   node state and generation lifecycle are persisted.
 
-![URL import: probe first, then choose content and quality](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260831142758052.png)
+![URL import: probe first, then choose content and quality](website/public/media/screens/en/url-import.png)
 
-![Creative board](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260901162232470.png)
+![Creative board](website/public/media/screens/en/boards.png)
 
 ### Draw the repetitive part once
 
@@ -112,7 +113,7 @@ reusable flows triggered manually, on a schedule, or by webhook. Node groups col
 nested subgraphs with boundary references reconnected automatically; loops use the same parallel
 execution engine as the top level.
 
-![Marquee a group of nodes and collapse it into a subgraph](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260831143122120.png)
+![Workflow canvas and node orchestration](website/public/media/screens/en/workflows.png)
 
 ### Publish to more places from one window
 
@@ -125,7 +126,7 @@ Bilibili, Xiaohongshu, and WeChat Channels. Options a platform does not provide 
 universal features. A separate executor claims publishing tasks, so progress remains traceable across
 app restarts.
 
-![Browser Pool: persistent logins managed in one place](docs/media/browser-pool.png)
+![Browser Pool: persistent logins managed in one place](website/public/media/screens/en/browser-pool.png)
 
 ### Chrome browser extension
 
@@ -320,3 +321,5 @@ The source is visible but **all rights are reserved**. It may be used only for e
 and personal non-commercial purposes; commercial use and redistribution require written permission.
 See [LICENSE](LICENSE). Contact the maker through the [community and contact page](https://mosael.com/en/docs/about/contact),
 or follow [KindaHuaX on X](https://x.com/KindaHuaX), for commercial licensing.
+
+Interface captures are updated for **1.0.0-beta5**. See [Appearance and fonts](https://mosael.com/en/docs/guides/appearance), [Scheduled tasks](https://mosael.com/en/docs/guides/scheduler), and [capture credits](docs/media/README.md).

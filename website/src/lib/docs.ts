@@ -9,7 +9,7 @@ import type { Locale } from "@/i18n/config";
  * 正文是 `content/docs/<locale>/<section>/<slug>.mdx` 里的文件,不进数据库也不过 CMS ——
  * 文档跟着代码走,同一个 PR 里改实现和改说明,评审时能看见它们对不对得上。
  *
- * frontmatter 只有 title / description / order 三个标量,所以这里手写解析而不是拉一个
+ * frontmatter 使用 title / description / order / updated / version 标量,所以这里手写解析而不是拉一个
  * YAML 依赖:字段一旦长出嵌套结构,该做的是换掉这段而不是往里加分支。
  */
 export const DOC_SECTIONS = ["start", "guides", "about"] as const;
@@ -24,6 +24,8 @@ export type DocMeta = {
   order: number;
   title: string;
   description: string;
+  updated: string;
+  version: string;
 };
 
 export type Doc = DocMeta & { body: string };
@@ -53,6 +55,8 @@ function readMeta(locale: Locale, section: DocSection, file: string): DocMeta {
     order: Number(data.order ?? 99),
     title: data.title ?? file,
     description: data.description ?? "",
+    updated: data.updated ?? "",
+    version: data.version ?? "",
   };
 }
 

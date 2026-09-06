@@ -2,13 +2,15 @@
 title: Media library
 description: Import, record, download from a link, tags and filters.
 order: 7
+updated: 2026-09-07
+version: 1.0.0-beta5
 ---
 
 The media library is where every file enters Mosael: local uploads, screen/camera recordings,
 downloads from a link, and the output of renders, dubbing and AI generation. They all go through
 **the same import path**, so thumbnails, waveforms and duration probing are there no matter the source.
 
-![Media library: grid view, tag filters, multi-select](/media/screens/media.png)
+![Media library: grid view, tag filters, multi-select](/media/screens/en/media.png)
 
 ## Importing
 
@@ -47,7 +49,7 @@ from the recorder via **Privacy & Security → Screen & System Audio Recording**
 
 Paste a video or playlist link, look at what is behind it, then decide what to download.
 
-![Import from a link: the listing, multi-select, quality and audio/video choice](/media/screens/url-import.png)
+![Import from a link: the listing, multi-select, quality and audio/video choice](/media/screens/en/url-import.png)
 
 **Probing before downloading is deliberate**: a link may be one video, or a whole playlist —
 hundreds of items and tens of gigabytes. So pasting fetches metadata only (no media streams) and
@@ -64,12 +66,10 @@ shows the listing: a single video is ticked for you, a playlist starts with noth
 
 Members-only videos, private playlists and region-locked content read as "unavailable" without a
 session. This app already keeps every persistent login in the
-[browser pool](/en/docs/guides/publishing), so just **borrow one of those identities** — no need to
+[browser pool](/en/docs/guides/browser-pool), so just **borrow one of those identities** — no need to
 export a cookie jar from somewhere else.
 
-> YouTube makes this obvious: anonymously it now tops out at 360p (measured), and 1440p with a
-> session. So the line "this link tops out at N" is not a guess but a probed fact — if it looks low,
-> that is usually the cue to pick a signed-in identity.
+Available quality depends on the site, asset and sign-in state. Use the options returned by the current probe.
 
 Downloads run as a background job with progress in the task centre. One failure does not sink the
 batch: what downloaded stays in the library, and the failed count is reported.
@@ -86,3 +86,13 @@ Right-click a video and choose **Convert to GIF**. Frame rate, width, start time
 are configurable. Conversion runs as a background job and registers a new GIF with lineage back to
 its source; **the original video is never changed or overwritten**. The same operation is available
 as a Video to GIF workflow node.
+
+## Preview and details
+
+Click an asset to open its preview. Video has dedicated playback controls; audio shows a waveform and progress; images open directly. Names, types and file details sit beside the preview. Long titles and IDs wrap within the panel.
+
+![Audio preview and waveform](/media/screens/en/media-audio.png)
+
+<Recording src="/media/videos/en/media-preview.mp4" poster="/media/screens/en/media.png" caption="Live capture: link import and video, audio and image previews" />
+
+The filter toolbar keeps search and filter controls aligned. Its translucent background changes smoothly while scrolling. Only one card menu opens at a time; click outside or press Escape to dismiss it.

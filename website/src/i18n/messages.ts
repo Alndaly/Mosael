@@ -35,6 +35,8 @@ const zh = {
     prev: "上一篇",
     next: "下一篇",
     editOnGitHub: "在 GitHub 上编辑此页",
+    reviewed: "对应版本",
+    mediaCredits: "实拍演示与素材署名",
     onThisPage: "本页目录",
     allDocs: "文档目录",
     anchor: "链接到本节",
@@ -50,10 +52,10 @@ const zh = {
     titleLead: "从灵感散落，到",
     titleAccent: "作品成形",
     lede: "把无限画布、剪辑时间线、智能体和工作流放进同一个创作空间。从第一张参考图到最后一次导出，不再来回切换。",
-    ctaDownload: "下载 macOS 版",
+    ctaDownload: "下载安装包",
     ctaSource: "在 GitHub 查看",
-    platforms: "macOS 12.0+ · Apple Silicon 与 Intel · Windows 10/11 x64",
-    heroShotAlt: "Mosael 剪辑工作区：逐字稿、播放器、属性面板、AI 智能体与多轨时间线",
+    platforms: "macOS · Apple Silicon · Windows 10/11 x64",
+    heroShotAlt: "Mosael 剪辑工作区：素材栏、中央监看器与多轨时间线",
     storyEyebrow: "一条连续的创作路径",
     storyTitle: "想法在这里生长，不在工具间走失",
     storyBody: "先把灵感铺开，再把画面推进时间线；让智能体理解上下文，把重复动作交给工作流。每一步都连接着上一段思考。",
@@ -72,7 +74,7 @@ const zh = {
         body: "本机导入、链接下载、屏幕录制、AI 生成和导出内容都会进入同一个素材库。用缩略图、类型、标签与搜索快速整理，预览后就能继续创作。",
         points: ["导入、录制与生成统一入库", "缩略图、标签与搜索", "预览后直接进入画布或时间线"],
         cta: "了解素材管理",
-        shotAlt: "Mosael 素材库：图片、视频与音频网格，以及正在录制素材的窗口",
+        shotAlt: "Mosael 素材库：图片、视频与音频网格和类型筛选",
       },
       {
         label: "剪辑",
@@ -80,7 +82,7 @@ const zh = {
         body: "多轨剪辑、逐字稿、字幕、调色与音频工具都围绕同一条时间线展开。需要的能力就在眼前，不必在层层面板里寻找。",
         points: ["多轨时间线", "逐字稿与字幕剪辑", "画面与声音精确控制"],
         cta: "查看剪辑能力",
-        shotAlt: "Mosael 剪辑页面：逐字稿、预览、属性、智能体和多轨时间线",
+        shotAlt: "Mosael 剪辑页面：素材、预览与多轨时间线",
       },
       {
         label: "AI 智能体",
@@ -88,7 +90,7 @@ const zh = {
         body: "智能体能阅读当前工程、分析素材并调用工具完成任务。需要修改工程时先给出确认，让你始终知道它准备做什么。",
         points: ["理解工程上下文", "把复杂任务拆成步骤", "关键改动先确认"],
         cta: "认识 AI 智能体",
-        shotAlt: "Mosael AI 智能体：对话、工程分析与工具调用",
+        shotAlt: "Mosael AI 智能体：对话初始工作区",
       },
       {
         label: "工作流",
@@ -116,7 +118,7 @@ const zh = {
     ],
     makerEyebrow: "由创作者打造",
     makerTitle: "做给认真创作的人",
-    makerBody: "Mosael 是 KindaHuaX 独立开发的开源项目。欢迎分享你的工作方式、问题和想法，让这套工具继续贴近真实的创作过程。",
+    makerBody: "Mosael 是 KindaHuaX 独立开发的源码可见项目。欢迎分享你的工作方式、问题和想法，让这套工具继续贴近真实的创作过程。",
     makerX: "在 X 关注 @KindaHuaX",
     makerGroup: "Mosael 体验交流群",
     makerGroupHint: "微信扫码进群，交流使用体验与创作方法",
@@ -173,7 +175,7 @@ const zh = {
     "stages": "流程步骤",
     "requirements": "运行前需要",
     "importTitle": "如何导入",
-    "importNote": "建议使用 v1.0.0-beta4 或更新版本。模板不会包含账号、密钥或私人素材；模型与素材需要在导入后配置。",
+    "importNote": "建议使用 v1.0.0-beta5 或更新版本。模板不会包含账号、密钥或私人素材；模型与素材需要在导入后配置。",
     "importSteps": [
         {
             "title": "下载模板文件",
@@ -181,7 +183,7 @@ const zh = {
         },
         {
             "title": "导入到工作区",
-            "body": "打开 Mosael，选择工作区，进入「工作流」，使用「导入」选择下载的文件。"
+            "body": "打开 Mosael，选择工作区，进入「工作流」，使用「导入工作流」选择下载的文件。"
         },
         {
             "title": "配置并检查",
@@ -239,6 +241,8 @@ const en: Messages = {
     prev: "Previous",
     next: "Next",
     editOnGitHub: "Edit this page on GitHub",
+    reviewed: "Interface version",
+    mediaCredits: "Capture notes and media credits",
     onThisPage: "On this page",
     allDocs: "All docs",
     anchor: "Link to this section",
@@ -254,10 +258,10 @@ const en: Messages = {
     titleLead: "From scattered ideas to a",
     titleAccent: "finished story",
     lede: "Bring the infinite canvas, timeline editor, AI agent, and visual workflows into one creative space. From the first reference to the final export, your work stays connected.",
-    ctaDownload: "Download for macOS",
+    ctaDownload: "Download Mosael",
     ctaSource: "View on GitHub",
-    platforms: "macOS 12.0+ · Apple Silicon & Intel · Windows 10/11 x64",
-    heroShotAlt: "The Mosael editing workspace with transcript, viewer, properties, AI agent, and multi-track timeline",
+    platforms: "macOS · Apple Silicon · Windows 10/11 x64",
+    heroShotAlt: "The Mosael editing workspace with a media panel, central monitor, and multi-track timeline",
     storyEyebrow: "One continuous creative path",
     storyTitle: "Ideas grow here instead of getting lost between tools.",
     storyBody: "Spread the thought out, move the picture into the timeline, let the agent understand the context, and hand repeated steps to a workflow. Every stage remembers the one before it.",
@@ -276,7 +280,7 @@ const en: Messages = {
         body: "Local imports, link downloads, recordings, AI generations, and exports all land in one media library. Organize them with thumbnails, types, tags, and search, then move straight into making.",
         points: ["Imports, recordings, and generations together", "Thumbnails, tags, and search", "Move directly into the canvas or timeline"],
         cta: "Explore media management",
-        shotAlt: "The Mosael media library with image, video, and audio assets behind an active recording panel",
+        shotAlt: "The Mosael media library with image, video, and audio assets with type filters",
       },
       {
         label: "Editing",
@@ -284,7 +288,7 @@ const en: Messages = {
         body: "Multi-track editing, transcripts, subtitles, color, and audio tools all revolve around the same timeline. The controls you need stay close without crowding the story.",
         points: ["Multi-track timeline", "Transcript and subtitle editing", "Precise picture and sound control"],
         cta: "See the editor",
-        shotAlt: "Mosael editor with transcript, viewer, properties, agent, and multi-track timeline",
+        shotAlt: "Mosael editor with media, viewer and a multi-track timeline",
       },
       {
         label: "AI Agent",
@@ -292,7 +296,7 @@ const en: Messages = {
         body: "The agent can read your project, analyze media, and call tools to complete a task. When an action changes the project, it asks first, so you always know what comes next.",
         points: ["Project-aware context", "Complex work broken into steps", "Confirmation before key changes"],
         cta: "Meet the AI agent",
-        shotAlt: "Mosael AI agent showing project analysis and tool calls",
+        shotAlt: "Mosael AI agent showing the initial conversation workspace",
       },
       {
         label: "Workflows",
@@ -320,7 +324,7 @@ const en: Messages = {
     ],
     makerEyebrow: "Built by a creator",
     makerTitle: "Made for people who care about the work.",
-    makerBody: "Mosael is an open-source project independently built by KindaHuaX. Share how you create, what gets in the way, and what should come next.",
+    makerBody: "Mosael is a source-available project independently built by KindaHuaX. Share how you create, what gets in the way, and what should come next.",
     makerX: "Follow @KindaHuaX on X",
     makerGroup: "Mosael WeChat group",
     makerGroupHint: "Scan to join the product and creator community",
@@ -378,7 +382,7 @@ const en: Messages = {
     "stages": "Workflow steps",
     "requirements": "Before you run",
     "importTitle": "How to import",
-    "importNote": "Use v1.0.0-beta4 or later. Templates contain no accounts, secrets or private media. Configure your own models and assets after import. Template prompts and node names are currently in Chinese.",
+    "importNote": "Use v1.0.0-beta5 or later. Templates contain no accounts, secrets or private media. Configure your own models and assets after import. Template prompts and node names are currently in Chinese.",
     "importSteps": [
         {
             "title": "Download the template",
@@ -386,7 +390,7 @@ const en: Messages = {
         },
         {
             "title": "Import into your workspace",
-            "body": "Open Mosael, choose a workspace, go to Workflows and use Import to select the downloaded file."
+            "body": "Open Mosael, choose a workspace, go to Workflows and use Import workflow to select the downloaded file."
         },
         {
             "title": "Configure and check",

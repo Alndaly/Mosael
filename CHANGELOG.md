@@ -5,6 +5,31 @@ commit list and downloadable artifacts.
 
 ## Unreleased
 
+## [1.0.0-beta5] - 2026-09-07
+
+### Changed
+
+- Unified window navigation, buttons, filters, dialogs and menus; softened separators and introduced
+  translucent blurred overlays that preserve custom backgrounds.
+- Rebuilt the editing workspace with compact toolbars and adaptive panels; redesigned video/audio
+  previews and contained long media titles and timeline-menu names.
+- Refreshed all active website screenshots, GIFs and screen recordings in Chinese/English and
+  light/dark themes, and updated the bilingual guides, homepage and README media.
+
+### Added
+
+- Added global interface font selection with bundled Chinese/English combinations, including
+  Space Grotesk, Newsreader, Caveat and Kalam, with live previews in Appearance.
+- Added Appearance and Scheduled Tasks guides, controllable MP4 documentation players, and
+  capture provenance/integrity checks.
+
+### Fixed
+
+- Kept asset menus exclusive and corrected canvas mention-menu positioning and generation forms.
+- Restored dragging in empty floating-window headers, fixed released connection curves, and
+  centered selected workflow nodes in the unobscured canvas when an assistant panel is open.
+- Removed panel headings duplicated by mode tabs and aligned action-button sizes and list edges.
+
 ## [1.0.0-beta4] - 2026-09-06
 
 ### Added

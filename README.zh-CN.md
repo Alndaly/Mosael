@@ -22,7 +22,9 @@ Mosael 把剪辑、AI 生成、智能体、工作流和发布放在同一个桌�
 
 > 素材和项目默认留在本机；只有你主动配置并调用的 AI 服务会联网。
 
-![Mosael 剪辑页：多轨时间线、监看器与逐字稿](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260902003526649.png)
+![Mosael：剪辑、手写风格工作台与衬线字体素材库的错层展示](docs/media/readme-showcase.png)
+
+<p align="center"><sub>实拍截图拼接展示 · Space Grotesk / Caveat / Newsreader · <a href="docs/media/readme-shots">查看原始截图</a> · <a href="docs/media/README.md">素材署名</a></sub></p>
 
 ## 下载与运行
 
@@ -47,12 +49,11 @@ Mosael 把剪辑、AI 生成、智能体、工作流和发布放在同一个桌�
 - 字幕、翻译和配音集中在同一面板；配音落到独立轨道，不覆盖原声。
 - 曲线、LUT、示波器、滤镜和字幕使用同一套预览/导出契约。
 
-![逐条字幕配音，产物落到独立配音轨](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260902003526649.png)
+![剪辑页中的字幕配音设置](website/public/media/screens/subtitle-dub.png)
 
 ### 让 AI 真正帮你动手
 
-智能体通过 MCP 工具读取和操作素材、时间线、工作流、浏览器池与发布任务。会改变工程或外部状态的
-动作先显示确认卡，由你批准后才执行。
+智能体通过 MCP 工具读取和操作素材、时间线、工作流、浏览器池与发布任务。需要审批的动作会显示确认卡，由你批准后执行。
 
 - AI 工作台、剪辑页、工作流和创意画板共用同一会话池。
 - 工作区助手默认停靠为真实侧栏，也可切换为悬浮，不会在打开时盖住时间线。
@@ -61,7 +62,7 @@ Mosael 把剪辑、AI 生成、智能体、工作流和发布放在同一个桌�
 - 轨迹视图按输入、模型与工具展示执行过程、耗时、参数和结果。
 - 上下文接近上限时可自动或手动整理，整理记录会保留在对话中。
 
-![智能体工作台与会话交互](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260831143139609.png)
+![智能体工作台与会话交互](website/public/media/screens/ai-chat.png)
 
 ### 把想法变成画面和声音
 
@@ -81,16 +82,16 @@ Mosael 把剪辑、AI 生成、智能体、工作流和发布放在同一个桌�
 - 视频转 GIF 时保留原件，并生成新的派生素材；批处理可使用同名工作流节点。
 - 创意画板支持便签、媒体、连线、裁切、`@` 素材引用和 AI 辅助编辑；节点状态与生成生命周期持久化。
 
-![URL 导入：先探测，再选择内容与画质](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260831142758052.png)
+![URL 导入：先探测，再选择内容与画质](website/public/media/screens/url-import.png)
 
-![创意画板](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260901162232470.png)
+![创意画板](website/public/media/screens/boards.png)
 
 ### 把重复步骤画成流程
 
 可视化 DAG 把检索、生成、转写、拼装、导出和发布串成可复用流程，支持手动、定时和 Webhook 触发。
 节点组可以折叠为任意嵌套的子图，跨边界引用会自动重连；循环体与顶层使用同一并行执行引擎。
 
-![框选节点并折叠为子图](https://qingyon-revornix-public.oss-cn-beijing.aliyuncs.com/images/20260831143122120.png)
+![工作流画布与节点编排](website/public/media/screens/workflows.png)
 
 ### 从一个窗口发到多个平台
 
@@ -100,7 +101,7 @@ Mosael 把剪辑、AI 生成、智能体、工作流和发布放在同一个桌�
 发布表单按平台能力生成，支持 TikTok、YouTube、抖音、B 站、小红书和视频号。平台没有的选项不会
 伪装成通用能力；发布任务由独立执行器认领，应用重启后仍可继续追踪。
 
-![浏览器池：集中管理持久登录](docs/media/browser-pool.png)
+![浏览器池：集中管理持久登录](website/public/media/screens/browser-pool.png)
 
 ### Chrome 浏览器扩展
 
@@ -283,3 +284,5 @@ MOSAEL_OAUTH_REDIRECT_BASE=...
 源码可见但**保留所有权利**：仅限评估、学习与个人非商业用途；未经书面授权不得商用或再分发。
 详见 [LICENSE](LICENSE)。商业授权可通过[交流群与作者微信](https://mosael.com/zh/docs/about/contact#%E5%BE%AE%E4%BF%A1)
 联系，也可以在 X 关注 [KindaHuaX](https://x.com/KindaHuaX)。
+
+界面演示已更新至 **1.0.0-beta5**。查看[外观与字体](https://mosael.com/zh/docs/guides/appearance)、[定时任务](https://mosael.com/zh/docs/guides/scheduler)和[实拍素材署名](docs/media/README.md)。

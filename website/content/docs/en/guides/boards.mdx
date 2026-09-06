@@ -2,6 +2,8 @@
 title: Creative boards
 description: An infinite canvas — notes, images, video and audio wired together, where a connection means "use this as input".
 order: 5
+updated: 2026-09-07
+version: 1.0.0-beta5
 ---
 
 A board is where ideas get spread out. Talking to the agent is telling it what you want; a board
@@ -90,3 +92,13 @@ you arranged by hand get flattened.
 <kbd>⌘</kbd><kbd>Z</kbd> undoes, <kbd>⌘</kbd><kbd>⇧</kbd><kbd>Z</kbd> redoes, and the toolbar has
 buttons too. A continuous drag collapses into one step — dragging a node emits dozens of position
 updates, and one-per-update would mean dozens of presses to get back.
+
+## Forms and media selection
+
+![Board: reference frames, notes and a generation node](/media/screens/en/boards.png)
+
+Selecting a node opens a translucent, blurred form above the canvas. Long model names ellipsize; click parameters such as aspect ratio and duration to expand their choices. The `@` media menu follows the input and adjusts to available viewport space.
+
+<Recording src="/media/videos/en/boards.mp4" poster="/media/screens/en/boards.png" caption="Live capture: open a generation form and the @ media picker" />
+
+The demo has no generation provider configured, so the `@` menu explains that no reference inputs are available. Configure a model that supports references to see eligible assets in this menu.

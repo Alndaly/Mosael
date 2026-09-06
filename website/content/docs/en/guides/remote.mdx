@@ -2,14 +2,15 @@
 title: Remote deployment
 description: Move the backend to a server and share one set of data. And why publishing still needs a real desktop.
 order: 13
+updated: 2026-09-07
+version: 1.0.0-beta5
 ---
 
 By default the whole of Mosael runs on your own machine. But the backend can move to a server with
 the desktop app pointed at it — several people sharing one media library, one set of workflows, one
 publishing queue.
 
-> Think this through first: your data now lives on that server. Anyone who can reach it is in your
-> workspace.
+> Think this through first: your data now lives on that server. Access still requires authentication and workspace membership. Ask the administrator to configure members and registration policy.
 
 ## Point the desktop app at a remote backend
 
@@ -35,7 +36,7 @@ the user happens to open could register an account on your backend **and read th
 domains get listed one at a time.
 
 While you are at it: the first thing to do after exposing a deployment is turn **open registration**
-off (Settings → Account).
+off (registration policy in Admin).
 
 ## Workers have to cross the network too
 
@@ -61,7 +62,7 @@ key *is* this deployment's worker.
 
 Publishing is not an HTTP call — it **drives a real browser on your behalf**: sign-in state,
 captchas and platform redesigns all need an actual browser window. So the backend only enqueues,
-and the work is done by the publisher inside Electron. **The web build cannot publish.**
+and the work is done by the publisher inside Electron. **The web interface does not include a desktop publishing worker.**
 
 A backend on a server plus the desktop app on your own machine works fine: the desktop connects out,
 and publish tasks run on your machine.

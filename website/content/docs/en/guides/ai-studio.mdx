@@ -2,15 +2,17 @@
 title: AI Studio
 description: A conversational agent that operates your project, plus text-to-image / text-to-video generation.
 order: 3
+updated: 2026-09-07
+version: 1.0.0-beta5
 ---
 
-**AI Studio** has two modes, toggled at the bottom-left of the composer: **Chat** and **Generate**.
+**AI Studio** switches between **Chat** and **Generate** in the top toolbar. The conversation toolbar also has **Conversation / Trace** and a toggle for the agent environment panel.
 
 ## Chat: the agent operates your project
 
 The agent uses Mosael's MCP tools to **see your project and propose changes**: searching media, arranging the timeline, kicking off generation, even publishing.
 
-![AI Studio chat mode: agent environment panel on the right (context / session / capabilities)](/media/screens/ai-chat.png)
+![AI Studio: initial chat state before a model is configured](/media/screens/en/ai-chat.png)
 
 - **Confirmation cards**: any action that would mutate project / external state pops a confirmation card and only lands after you approve.
 - **Choice cards**: at a genuine fork — two or three routes all make sense and which one is right
@@ -20,22 +22,21 @@ The agent uses Mosael's MCP tools to **see your project and propose changes**: s
   A confirmation card can be set to "always allow in this session"; **a choice card cannot** —
   it is asking precisely because it does not know, and auto-answering would mean it made the
   answer up.
-- **Skills**: preset skills (opencode-style) are available at the bottom-left of the composer.
+- **Skills**: available skills come from the embedded agent runtime and current environment.
 - **Attachments**: images on the current message go straight to the selected model. Images and
   videos imported into the media library are analyzed by `analyze_asset` with the **current
   session model**, not a separate hidden vision model.
 - The left column lists **conversations**; each is independent and can be renamed / deleted.
 
 The editor, workflow canvas and boards reuse this same session pool in a compact assistant panel.
-Its top-left heading is the current conversation title; click it to search or switch sessions.
+Its top-left heading is the current conversation title; click the title or arrow to search or switch sessions. Drag empty header space to move a floating panel.
 Long titles ellipsize, and the control stays visually flat rather than adding a framed selector.
 
-Under the hood it hosts an external coding-agent CLI (opencode-style), not a home-grown chat loop. Requires [model providers](/en/docs/guides/providers) to be configured.
+The embedded Node.js agent runtime uses pi-agent-core / pi-ai. Requires [model providers](/en/docs/guides/providers) to be configured.
 
 ### The composer keeps only what you look at every turn
 
-The composer row carries just the things you touch on every message: the **Chat / Generate** toggle,
-attachments, the **model**, and send. Everything else lives behind the slider icon in **session
+The composer row carries just the things you touch on every message: attachments, microphone, the **model**, and send. Mode switching stays in the top toolbar. Everything else lives behind the slider icon in **session
 settings** — the set-once-and-forget things:
 
 - **Thinking**: off / low / medium / high. When on, the model's reasoning streams into a collapsible
@@ -68,11 +69,11 @@ summary itself.
 
 ### Trajectory: what it did, and where the time went
 
-![Trajectory view: three lanes, a step ledger, and session totals](/media/screens/agent-trace.png)
+![Trace initial state: real steps and usage appear after a session runs](/media/screens/en/agent-trace.png)
 
-![Demo: switch from the conversation to the trajectory, then to the duration projection](/media/gifs/agent-trace.gif)
 
-The conversation answers "what it said". The **Trajectory** tab answers a different question: **what it
+
+The conversation answers "what it said". The **Trace** tab answers a different question: **what it
 did, and where the time went.**
 
 Three lanes (input / model / tools) compress the whole session into blocks, with two projections:
@@ -111,11 +112,11 @@ a busy one queues the message and picks it up when it is free. Messages that arr
 
 In **Generate** mode the left column is the **generation model** catalog, the middle is the results feed, and the composer takes your prompt:
 
-![AI Studio generate mode: results feed and engine parameters on the right](/media/screens/ai-generate.png)
+![AI Studio Generate: initial state before a generation model is configured](/media/screens/en/ai-generate.png)
 
 **Switch between chat and generate in one click** — describe the shot in the bottom input, tune engine parameters on the right; results can be sent straight to the media library:
 
-![Demo: switch to generate mode and type a prompt](/media/gifs/ai-studio.gif)
+![Demo: switch between Chat, Trace and Generate](/media/gifs/en/ai-studio.gif)
 
 - Pick a model → write a prompt → send; the job queues and finished results land in the media library.
 - Whether a model can run depends on **its vendor's key** being configured; with no usable model, a banner at the top links to settings.
@@ -125,8 +126,7 @@ In **Generate** mode the left column is the **generation model** catalog, the mi
 Not every model takes the same parameters: Wan wants a pixel pair like `832*480`, Seedance wants a
 tier like `720p`; some let you pick a duration, some have exactly one. So the right panel shows
 **only what this model actually supports** — switch models and the controls switch with it.
-Manually entered models that are not in the built-in capability catalog remain usable, but Open
-Studio does not guess their duration, resolution, or media-input rules from another model by the
+Manually entered models that are not in the built-in capability catalog remain usable, but Mosael does not guess their duration, resolution, or media-input rules from another model by the
 same vendor.
 
 ### First frame, last frame, reference

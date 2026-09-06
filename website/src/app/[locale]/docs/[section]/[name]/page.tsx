@@ -15,7 +15,7 @@ import { DOC_SECTIONS, docHref, listDocs, readDoc } from "@/lib/docs";
 import { SITE } from "@/lib/site";
 import { tableOfContents } from "@/lib/toc";
 
-/** 24 页 × 2 语言,全部构建期出好 —— 文档是纯静态内容,没有理由到运行时才渲染。 */
+/** Generate every localized guide from the content directory. */
 export function generateStaticParams() {
   return LOCALES.flatMap((locale) => listDocs(locale).map((doc) => ({ locale, section: doc.section, name: doc.name })));
 }
@@ -108,9 +108,12 @@ export default async function DocPage({ params }: { params: Params }) {
             {doc.title}
           </h1>
           {doc.description && <p className="m-0 text-lg text-muted-foreground">{doc.description}</p>}
+          {doc.version && <p className="mt-5 mb-0 text-xs text-muted-foreground">{t.reviewed} {doc.version} · {doc.updated}</p>}
         </header>
 
         <div className="docs-body">{content}</div>
+
+        <p className="mt-10 text-xs text-muted-foreground"><Link href={`/${locale}/docs/about/project#media-credits`}>{t.mediaCredits}</Link></p>
 
         <footer className="mt-20">
           <div className="grid border-t border-border sm:grid-cols-2">

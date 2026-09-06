@@ -79,7 +79,7 @@ export default async function WorkflowsPage({ params }: { params: Params }) {
       </section>
       <section className="bg-paper">
         <div className="mx-auto max-w-[88rem] px-5 py-20 sm:px-8">
-          <Shot src="/media/screens/workflows.png" alt={t.shotAlt} caption={t.shotCaption} framed />
+          <Shot src={locale === "en" ? "/media/screens/en/workflows.png" : "/media/screens/workflows.png"} alt={t.shotAlt} caption={t.shotCaption} framed />
           <p className="mb-0 mt-10 flex flex-wrap items-center justify-between gap-4 text-sm text-muted-foreground"><span>{t.contributeBody}</span><a href={`${SITE.repo}/issues/new`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 font-semibold text-primary hover:underline">{t.contribute}<ArrowUpRight className="size-4" aria-hidden /></a></p>
         </div>
       </section>

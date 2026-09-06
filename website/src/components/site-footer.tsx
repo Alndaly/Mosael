@@ -95,6 +95,7 @@ export function SiteFooter({ locale }: { locale: Locale }) {
             <span>
               © {year} Mosael. {t.footer.rights}
             </span>
+            <Link href={localePath(locale, "/docs/about/project#media-credits")} className="transition-colors hover:text-white">{t.docs.mediaCredits}</Link>
             <a className="ml-auto transition-colors hover:text-foreground" href={SITE.email}>
               {t.footer.contact}
             </a>

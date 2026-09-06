@@ -2,6 +2,8 @@
 title: About the project
 description: Source repository, author, license, downloads and feedback channels.
 order: 1
+updated: 2026-09-07
+version: 1.0.0-beta5
 ---
 
 ## Source repository
@@ -30,7 +32,15 @@ Mosael is **source-available, not open source**, under a proprietary license (fu
 | Desktop shell | Electron (with a built-in publish executor driving embedded browser views for logins / uploads) |
 | Frontend | Vite + React + TypeScript + Tailwind |
 | Backend | FastAPI (Python) + SQLite, single source of truth; packaged with PyInstaller |
-| AI agent | hosts an external coding-agent CLI (opencode-style) using Mosael's MCP server as its tool surface |
+| AI agent | Embedded Node.js sidecar based on pi-agent-core / pi-ai, using Mosael tools |
 | Docs site | Next.js (this site) |
 
 All user data lives locally in `~/.mosael` — no cloud dependency.
+
+<h2 id="media-credits">Capture notes and media credits</h2>
+
+Screenshots, GIFs and MP4s show the interface for 1.0.0-beta5, captured directly in an isolated demo workspace in Chinese/English and light/dark themes. Subtitles are manually prepared exercise text; narration uses system speech synthesis. Empty agent and publishing views mean no run has occurred, not a successful AI result or platform post.
+
+Footage and frames are from **Big Buck Bunny**, © 2008 Blender Foundation / www.bigbuckbunny.org, used under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). The demo trims, resizes and rearranges excerpts; see the [film and license information](https://peach.blender.org/about/).
+
+The [capture guide and media inventory](https://github.com/Alndaly/Mosael/blob/main/docs/media/README.md) describe sources, scenes and repeatable recording.

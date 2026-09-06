@@ -6,7 +6,7 @@ Starlight 文档站。
 ```bash
 pnpm install
 pnpm dev            # http://localhost:3000
-pnpm build          # 构建期静态生成全站页面(文档正文中英各 16 篇)
+pnpm build          # 构建期静态生成全站页面(文档正文中英各 20 篇)
 ```
 
 ## Google Analytics
@@ -25,7 +25,7 @@ NEXT_PUBLIC_GOOGLE_ANALYTICS_ID=G-YDRX2Y5WZS
 
 ```
 content/docs/<语言>/<分区>/<页>.mdx   文档正文(zh / en,分区为 start / guides / about)
-public/media/{home,screens,gifs}     首页产品实拍与文档配图
+public/media/{screens,gifs,videos}     首页产品实拍与文档配图
 src/app/[locale]/                    全站路由;这一层的 layout 就是根布局
 src/i18n/messages.ts                 除文档正文外的全部文案,中英各一份
 src/lib/registry.ts                  插件索引 —— 构建期直接读 plugins/examples 里的 manifest
@@ -68,3 +68,7 @@ props 传。
   协商:那需要 middleware,会让每个请求都过一次边缘函数,还让站点没法纯静态导出。
 - **配图会过期,而过期的配图比没有更糟**。重录用 `scripts/record-doc-media.py`,它同时写
   `website/public/media/`;别退回手工截图。
+
+## 界面实拍
+
+当前文档对应 1.0.0-beta5。中英各 20 篇指南，配套浅色与深色实拍；MP4 使用可暂停的播放器。录制来源、许可、场景与复录方法见 [媒体说明](../docs/media/README.md)。`pnpm test` 会核对媒体清单哈希、主题配对、语言和正文引用，防止旧图混入新版文档。

@@ -1,0 +1,23 @@
+---
+title: Scheduled tasks
+description: Bind a workflow, choose a trigger and inspect run history.
+order: 15
+updated: 2026-09-07
+version: 1.0.0-beta5
+---
+
+**Scheduled tasks** in the sidebar manages execution plans separately from the workflow canvas. Select a task on the left; the detail area shows its trigger, next and previous runs, bound workflow and recent history.
+
+![Scheduled task list and details](/media/screens/en/scheduler.png)
+
+## Create a task
+
+Choose **New task**, enter a name, select a workflow and choose a manual, scheduled or webhook trigger. Configure model connections, media inputs and required fields in the workflow before enabling the plan. Manual tasks do not run on a schedule.
+
+<Recording src="/media/videos/en/scheduler.mp4" poster="/media/screens/en/scheduler.png" caption="Live capture: inspect a task and open the new-task form" />
+
+## Run and disable
+
+Run a task immediately or toggle its enabled state in the detail area. Disabling prevents future automatic triggers; inspect history for work already running. Records show time, duration and result. Read failures and fix the workflow before retrying.
+
+Scheduling runs on the connected backend. In local mode it runs with the app, so fully quitting stops scheduled execution. With a remote backend, that server must stay running. Closing a window and quitting the application are different actions. See [Workflows](/en/docs/guides/workflows) for triggers and variables.

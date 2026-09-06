@@ -2,6 +2,8 @@
 title: 项目信息
 description: 源码地址、作者、许可、下载与反馈渠道。
 order: 1
+updated: 2026-09-07
+version: 1.0.0-beta5
 ---
 
 ## 源码地址
@@ -30,7 +32,15 @@ Mosael **源码开放但非开源软件**，采用专有许可(全文见仓库�
 | 桌面壳 | Electron(内置发布执行器，驱动内嵌浏览器登录 / 上传) |
 | 前端 | Vite + React + TypeScript + Tailwind |
 | 后端 | FastAPI(Python)+ SQLite，单一事实源；PyInstaller 打包进应用 |
-| AI 智能体 | 托管外部 coding-agent CLI(opencode 式)，经 Mosael MCP server 使用工具 |
+| AI 智能体 | 内置 Node.js 边车，基于 pi-agent-core / pi-ai，调用 Mosael 工具 |
 | 文档站 | Next.js（本站） |
 
-所有用户数据落在本机 `~/.mosael`，不依赖云端。
+默认工程数据保存在本机 `~/.mosael`；连接远程后端后则保存在该服务器，浏览器登录分区仍属于桌面执行器。
+
+<h2 id="media-credits">实拍演示与素材署名</h2>
+
+本文档截图、GIF 与 MP4 基于 1.0.0-beta5 对应界面，在隔离的演示工作区直接拍摄。分别录制中文、英文与浅色、深色主题。演示工程的字幕是手工准备的练习文本，旁白由系统语音合成；空白智能体和发布页表示尚未运行，不代表 AI 生成或平台发布成功。
+
+画面片段与截帧来自 **Big Buck Bunny**，© 2008 Blender Foundation / www.bigbuckbunny.org，按 [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) 使用。演示中截取、缩放并重新编排了原片；[影片与许可说明](https://peach.blender.org/about/)。
+
+[录制脚本与媒体清单](https://github.com/Alndaly/Mosael/blob/main/docs/media/README.md)说明场景、来源与复录方式。

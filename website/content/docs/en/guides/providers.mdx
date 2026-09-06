@@ -2,6 +2,8 @@
 title: Configure model providers
 description: Add AI providers per capability, set default models, cost rules.
 order: 1
+updated: 2026-09-07
+version: 1.0.0-beta5
 ---
 
 Mosael's AI features (agent chat, text-to-image / video, voiceover, transcription) are bring-your-own-key: most vendors take an **API key**, subscription plans use **authorized sign-in** (below). Credentials never leave this machine; the settings API returns a masked hint or just "linked / not linked", never the plaintext.
@@ -19,11 +21,11 @@ Settings groups AI providers into four **capability sections**, each configured 
 
 At the top of each section is the **default model**: the default provider and model for that capability, overridable in place wherever it's used. The dropdown lists **models** (e.g. "DeepSeek · deepseek-v4-pro"), not providers — several models under one provider each appear on their own.
 
-![Settings → AI Image: default model + configured provider list](/media/screens/settings-models.png)
+![Settings → AI chat: default model and provider configuration](/media/screens/en/settings-models.png)
 
 **Configure providers per capability** — Chat / Image / Video / Audio each have their own section; after "Add provider" the UI renders exactly the fields that provider declares, and keys are stored locally:
 
-![Demo: provider configuration entries for AI Chat and AI Image](/media/gifs/providers.gif)
+![Demo: provider configuration entries for AI Chat and AI Image](/media/gifs/en/providers.gif)
 
 ## One connection is one endpoint plus one credential
 
@@ -117,7 +119,7 @@ Settings → **AI runtime** sets the retry count. It applies to **every** AI cal
 
 ## Cost rules
 
-Under Settings → **Cost rules** you can price models (per token / per image / per second); Home and the task center accumulate AI spend accordingly. Unpriced usage is labeled "unpriced".
+Under Settings → **Cost rules** you can price models (per token / per image / per second); Statistics and the task center accumulate AI spend accordingly. Unpriced usage is labeled "unpriced".
 
 When a vendor's catalog carries public pricing (OpenRouter, for one), **Prefill from catalog** generates rules in bulk — it only fills what's **missing** and never touches what you've already entered (your prices may include a discount or an enterprise agreement). Catalog entries priced at 0 produce no rule: that means "unpriced / included in the subscription", not "free".
 

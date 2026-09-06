@@ -2,9 +2,11 @@
 title: Download & install
 description: Download channels, system requirements, install notes, where your data lives.
 order: 2
+updated: 2026-09-07
+version: 1.0.0-beta5
 ---
 
-Mosael is a local-first desktop app: editing, export and workflows all run offline; AI features (LLMs / voiceover / generation) need the corresponding API keys configured in Settings.
+Mosael is local-first: editing local media and exporting can work offline. A workflow needs a network when its nodes do. Configure a provider or subscription login for remote AI; download model weights before using local transcription or voice cloning.
 
 ## Download
 
@@ -52,3 +54,5 @@ Official releases are built by CI: maintainers push a `v*` tag and GitHub Action
 Everything (accounts / projects / media / settings) lives on **your own machine** in `~/.mosael` (Windows: `C:\Users\<you>\.mosael`), outside the app bundle — upgrades and reinstalls keep your data.
 
 Next: [Quick start](/en/docs/start/quickstart).
+
+Set the theme, background and interface font in [Appearance](/en/docs/guides/appearance). With a remote backend, project data lives on that server. Back up the active backend data directory before upgrading.

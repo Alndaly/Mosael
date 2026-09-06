@@ -4,6 +4,7 @@ import { CircleAlert, Info, Lightbulb, OctagonAlert } from "lucide-react";
 
 import { QrCards } from "@/components/qr-cards";
 import { localePath, type Locale } from "@/i18n/config";
+import { Recording } from "@/components/recording";
 import { Shot } from "@/components/shot";
 import { cn } from "@/lib/utils";
 
@@ -108,6 +109,7 @@ export function mdxComponents(locale: Locale) {
   Aside,
   Steps,
   Shot,
+  Recording,
   QrCards,
   img: MdxImage,
   p: MdxParagraph,

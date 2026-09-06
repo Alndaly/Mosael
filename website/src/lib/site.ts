@@ -2,7 +2,7 @@
 export const SITE = {
   url: "https://mosael.com",
   repo: "https://github.com/Alndaly/Mosael",
-  releases: "https://github.com/Alndaly/Mosael/releases/latest",
+  releases: "https://github.com/Alndaly/Mosael/releases",
   authorX: "https://x.com/KindaHuaX",
   email: "mailto:1142704468@qq.com",
 } as const;
