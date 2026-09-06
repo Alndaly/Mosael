@@ -11,7 +11,8 @@ import {
   type PluginPermissionGrant,
 } from "@/api/client";
 import { toast } from "sonner";
-import { useI18n } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
+import { docsUrl } from "@/lib/deepLink";
 import { ConfirmDialog } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -203,6 +204,7 @@ function ScanButton({ pending, onScan, size = "sm" }: { pending: boolean; onScan
 
 function PackageDetail({ pkg }: { pkg: PluginPackage }) {
   const t = useI18n();
+  const { locale } = usePreferences();
   const qc = useQueryClient();
   const [confirmUninstall, setConfirmUninstall] = React.useState(false);
   const [draft, setDraft] = React.useState<Record<string, string>>({});
@@ -249,13 +251,21 @@ function PackageDetail({ pkg }: { pkg: PluginPackage }) {
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
           <h2 className="m-0 truncate text-ui-lg font-semibold text-foreground">{pkg.name}</h2>
           <span className="flex shrink-0 items-center gap-1">
-            {/* **文档由插件自己给。** 一个插件带来四十个工具、一串权限和一套要去哪儿申请的
-                凭据 —— 这些怎么用只有作者说得清,我们能做的是把人送到那儿。清单里没写就不画,
-                画一个点不开的按钮比没有更糟。 */}
+            {/* 「文档」指向 **Mosael 自己的插件文档**,不是插件作者的站点。
+                这一页上的问题是"连接是什么、凭据填哪儿、权限为什么要授、工具为什么默认不开"
+                —— 那些是本应用的概念,只有我们说得清;把人送到百度网盘的 API 文档上,
+                他要找的东西那儿一个字都没有。
+                插件作者的站点仍然给,但**标明是它自己的主页**(声明了才画:一个点不开的
+                按钮比没有更糟)。 */}
+            <Button variant="ghost" size="sm" className="text-muted-foreground" asChild>
+              <a href={docsUrl("guides/plugins", locale)} target="_blank" rel="noreferrer noopener">
+                <BookOpen size={13} /> {t("pluginDocs")}
+              </a>
+            </Button>
             {pkg.homepage && (
               <Button variant="ghost" size="sm" className="text-muted-foreground" asChild>
                 <a href={pkg.homepage} target="_blank" rel="noreferrer noopener">
-                  <BookOpen size={13} /> {t("pluginDocs")}
+                  <ExternalLink size={13} /> {t("pluginHomepage")}
                 </a>
               </Button>
             )}
@@ -300,11 +310,19 @@ function PackageDetail({ pkg }: { pkg: PluginPackage }) {
         <div className="grid gap-2 rounded-lg border border-dashed border-border px-3 py-2.5">
           <span className="text-ui-sm font-semibold text-foreground">{t("pluginNewConnection")}</span>
           <p className="m-0 text-ui-xs leading-[1.55] text-muted-foreground">
-            {(pkg.config_fields ?? []).length ? t("pluginNewConnectionDesc") : t("pluginNewConnectionSimple")}
+            {/* 没有配置项时还要分一次:有凭据的插件说"不需要配置"是错的 —— AppKey 这些确实
+                要填,只是填在**建好之后的连接上**(凭据挂在连接上,不是插件上)。 */}
+            {(pkg.config_fields ?? []).length
+              ? t("pluginNewConnectionDesc")
+              : (pkg.credential_fields ?? []).length
+                ? t("pluginNewConnectionCreds")
+                : t("pluginNewConnectionSimple")}
           </p>
           {/* 字段**铺满这一行**,按钮跟在末尾。此前是 flex-wrap + 各自按内容宽度:只有一个
-              字段时,那一格就是一小块漂在一整行空白里,读起来像这块没做完。 */}
-          <div className="flex flex-wrap items-center gap-1.5 [&>*:not(:last-child)]:min-w-0 [&>*:not(:last-child)]:flex-1">
+              字段时,那一格就是一小块漂在一整行空白里,读起来像这块没做完。
+              一个字段都没有时靠右:否则那颗按钮孤零零贴在一整行空白的左端。 */}
+          <div className="flex flex-wrap items-center gap-1.5 [&>*:not(:last-child)]:min-w-0 [&>*:not(:last-child)]:flex-1"
+            style={(pkg.config_fields ?? []).length ? undefined : { justifyContent: "flex-end" }}>
             {(pkg.config_fields ?? []).map((field) => (
               <FieldInput
                 key={field.key}

@@ -2305,9 +2305,14 @@ export const messages = {
     pluginMcpToolsDesc: "工具清单由 MCP 服务提供,不写在 manifest 里。服务升级后点刷新重新拉取。",
     pluginToolReadOnly: "只读",
     pluginConnectionCount: "{n} 个连接",
+    pluginHomepage: "插件主页",
     pluginNewConnection: "新建连接",
     pluginNewConnectionDesc: "填好配置后新建。同一个插件可以接多个(比如每个平台一个)。",
-    pluginNewConnectionSimple: "这个插件不需要配置,直接新建即可。",
+    //: **不说"不需要配置"** —— 那句话在有凭据的插件上是错的:AppKey 这些确实要填,只是
+    //: 在连接建好**之后**填(凭据挂在连接上,不是插件上)。用户看到"不需要配置"再看到一排
+    //: 要填的密钥,只会觉得这两处有一处在骗人。
+    pluginNewConnectionSimple: "直接新建即可,建之前不用填什么。",
+    pluginNewConnectionCreds: "直接新建。建好之后在连接上填凭据。",
     pluginAddConnection: "新建",
     pluginSingleConnection: "已有连接",
     pluginSingleConnectionDesc: "这个插件只支持一个连接。",
@@ -4638,9 +4643,11 @@ export const messages = {
       "The tool list comes from the MCP server itself, not the manifest. Refresh after the server is upgraded.",
     pluginToolReadOnly: "read-only",
     pluginConnectionCount: "{n} connection(s)",
+    pluginHomepage: "Plugin site",
     pluginNewConnection: "New connection",
     pluginNewConnectionDesc: "Fill in the config, then add. One plugin can be connected more than once (e.g. one per platform).",
-    pluginNewConnectionSimple: "This plugin needs no configuration — just add it.",
+    pluginNewConnectionSimple: "Just add it — nothing to fill in first.",
+    pluginNewConnectionCreds: "Just add it, then fill in the credentials on the connection.",
     pluginAddConnection: "Add",
     pluginSingleConnection: "Connection",
     pluginSingleConnectionDesc: "This plugin supports a single connection.",

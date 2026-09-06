@@ -64,3 +64,13 @@ export function listenDesktopDeepLinks(onFiles: (paths: string[]) => void): () =
     window.removeEventListener("mosael:open-files", onOpenFiles);
   };
 }
+
+/** 官网文档的一页。
+ *
+ * 站点按语言分段(`/zh/docs/...`、`/en/docs/...`),而应用里的语言偏好是 zh-CN / en-US
+ * —— 取前缀就够,别处再各拼一次的话,改站点结构时要满仓库找。
+ */
+export function docsUrl(path: string, locale: string): string {
+  const lang = locale.startsWith("zh") ? "zh" : "en";
+  return `https://mosael.com/${lang}/docs/${path.replace(/^\/+/, "")}`;
+}
