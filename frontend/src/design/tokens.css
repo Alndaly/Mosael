@@ -36,6 +36,7 @@
   --color-control: var(--control);
   --color-success: var(--success);
   --color-input: var(--input);
+  --color-field-border: var(--field-border);
   --color-field: var(--field);
   --color-ring: var(--ring);
   /* One desktop type scale: metadata 12, controls/body 14, item headings 16.
@@ -149,10 +150,11 @@
   /* 状态色按正文尺寸校验对比度；不要在组件里回退到 Tailwind 原色。 */
   --success: #247348;
   --warning: #8b590e;
-  --border: #dce2ec;
+  --border: #e1e6ed;
   /* Content separators are quieter than control and container boundaries. */
   --divider: #e8ecf2;
   --input: #8492a8;
+  --field-border: #c6ceda;
   --field: #ffffff;
   --ring: #4466a5;
 
@@ -165,7 +167,7 @@
   --workspace-panel: var(--panel);
   --workspace-subtle: var(--panel-subtle);
   --control: var(--panel);
-  --border-strong: #a2afc2;
+  --border-strong: #bdc7d5;
 
   /* 浮层与 chrome 使用磨玻璃;自定义背景下,内容面板共享外层表面。
      引用 --popover/--panel,自动跟随明暗主题;仅在支持 backdrop-filter 时生效。 */
@@ -178,7 +180,7 @@
   --modal-tint: rgb(250 251 253 / 0.78);
   --modal-border: rgb(255 255 255 / 0.72);
   --modal-field: rgb(255 255 255 / 0.56);
-  --modal-input: rgb(96 113 140 / 0.38);
+  --modal-input: rgb(96 113 140 / 0.24);
   --modal-filter: none;
   --modal-overlay-filter: none;
   --shadow-floating: 0 4px 16px rgb(24 32 48 / 0.10);
@@ -262,22 +264,23 @@
   --destructive: #f28d96;
   --success: #76cfaa;
   --warning: #e8c17a;
-  --border: #34383f;
+  --border: #30343a;
   --divider: #292d33;
   --input: #777f8c;
+  --field-border: #414750;
   --field: #181a1d;
   --ring: #91a9da;
 
   --panel: var(--card);
   --panel-subtle: #191b1e;
   --panel-inset: #101113;
-  --border-strong: #626a76;
+  --border-strong: #444b55;
   --overlay-modal: rgb(6 9 14 / 0.24);
   --modal-solid: #23262c;
   --modal-tint: rgb(35 38 44 / 0.78);
   --modal-border: rgb(220 230 248 / 0.16);
   --modal-field: rgb(12 15 21 / 0.36);
-  --modal-input: rgb(178 192 215 / 0.32);
+  --modal-input: rgb(178 192 215 / 0.20);
   --shadow-floating: 0 4px 16px rgb(0 0 0 / 0.24);
   --shadow-modal: 0 12px 36px rgb(0 0 0 / 0.24);
   --shadow-panel: 0 2px 12px rgb(0 0 0 / 0.2);
@@ -348,7 +351,7 @@
   .modal-surface {
     --field: var(--modal-field);
     --control: var(--modal-field);
-    --input: var(--modal-input);
+    --field-border: var(--modal-input);
     -webkit-backdrop-filter: var(--modal-filter);
     backdrop-filter: var(--modal-filter);
   }
@@ -580,4 +583,20 @@ body {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Interaction colors ease into state changes; never animate layout or media content. */
+@layer base {
+  :where(button, input, textarea, select, [role="tab"], [role="menuitem"], [role="checkbox"], [role="switch"]) {
+    transition-property: color, background-color, border-color, box-shadow;
+    transition-duration: 160ms;
+    transition-timing-function: ease-out;
+  }
+}
+.workspace-sticky {
+  transition: background-color 180ms ease-out, backdrop-filter 180ms ease-out, -webkit-backdrop-filter 180ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(button, input, textarea, select, [role="tab"], [role="menuitem"], [role="checkbox"], [role="switch"]),
+  .workspace-sticky { transition-duration: 0ms !important; }
 }

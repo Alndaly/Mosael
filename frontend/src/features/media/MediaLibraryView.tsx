@@ -77,6 +77,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const [urlImportOpen, setUrlImportOpen] = React.useState(false);
   const filtersRef = React.useRef<HTMLDivElement>(null);
   const [filtersStuck, setFiltersStuck] = React.useState(false);
+  const [actionMenuId, setActionMenuId] = React.useState<string | null>(null);
 
   const assets = useQuery({
     queryKey: ["assets", workspace.id],
@@ -385,7 +386,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
       ) : visible.length === 0 ? <EmptyState icon={<FolderOpen />} title={t("studioNoMatches")} body={t("studioNoMatchesHint")} /> : (
         <div className={cn("py-6", display === "grid" ? "grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-6 gap-y-7" : "grid divide-y divide-divider")}>
           {visible.map((asset) => (
-            <ContextMenu key={asset.id}>
+            <ContextMenu key={asset.id} onOpenChange={open => { if (open) setActionMenuId(null); }}>
               <ContextMenuTrigger asChild>
                 <div
                   className="group relative cursor-pointer"
@@ -399,8 +400,8 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                   <AssetTile asset={asset} list={display === "list"} selected={selectMode && selectedIds.has(asset.id)} />
                   {selectMode && <SelectionCheck selected={selectedIds.has(asset.id)} />}
                   {!selectMode && <div className="absolute right-2 top-2 z-10" onClick={e => e.stopPropagation()}>
-                    <Popover><PopoverTrigger asChild><Button variant="secondary" size="icon-xs" aria-label={`${t("studioActions")}: ${asset.name}`}><MoreHorizontal /></Button></PopoverTrigger>
-                    <PopoverContent className={cn(ACTION_MENU, "w-48")} align="end">
+                    <Popover open={actionMenuId === asset.id} onOpenChange={open => setActionMenuId(current => open ? asset.id : current === asset.id ? null : current)}><PopoverTrigger asChild><Button variant="secondary" size="icon-xs" aria-label={`${t("studioActions")}: ${asset.name}`}><MoreHorizontal /></Button></PopoverTrigger>
+                    <PopoverContent className={cn(ACTION_MENU, "w-48")} align="end" onCloseAutoFocus={event => { if (actionMenuId && actionMenuId !== asset.id) event.preventDefault(); }}>
                       <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => saveAssetToDisk(asset)}><Download />{t("assetSaveLocal")}</Button></PopoverClose>
                       <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setRenaming(asset)}><Pencil />{t("rename")}</Button></PopoverClose>
                       <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setEditingTags(asset)}><Tag />{t("editTags")}</Button></PopoverClose>
