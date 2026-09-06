@@ -14,6 +14,7 @@ import {
 
 import { api, assetThumbnailUrl, type Asset, deleteProject, renameProject, type Project, type ProjectWithStats, type Workspace } from "@/api/client";
 import { useI18n, usePreferences } from "@/app/preferences";
+import { STUDIO_PAGE, CollectionTabs } from "@/components/layout/StudioPage";
 import { HomeHero } from "@/features/home/HomeHero";
 import { poemOfToday, randomPoem, type Poem } from "@/features/home/poems";
 import { relativeTime } from "@/lib/time";
@@ -163,19 +164,24 @@ export function HomeView({
 
 
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch gap-6 overflow-auto px-6 py-8 xl:px-10 xl:py-10 [&>*]:shrink-0">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div><h2 className="m-0 text-4xl font-semibold tracking-tight">{t("homeProjectsTitle")}</h2><p className="mb-0 mt-2 text-ui-md text-muted-foreground">{t("homeProjectsDescription")}</p></div>
-        <Button size="lg" onClick={onCreateProject} disabled={creatingProject}><FolderPlus />{t("createProject")}</Button>
-      </div>
+    <div className={STUDIO_PAGE}>
+      <HomeHero
+        actions={<Button onClick={onCreateProject} loading={creatingProject}><FolderPlus />{t("createProject")}</Button>}
+        greeting={t(greetingKey)}
+        workspaceName={workspace.name}
+        now={now}
+        poem={poem}
+        poemLoading={poemLoading}
+        poemEgg={poemSpins > 0 && poemSpins % 10 === 0 ? t("homePoemEgg") : undefined}
+        onRefreshPoem={() => void spinPoem()}
+        holidayOverride={holidayOverride}
+      />
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-border">
-        <div className="flex self-stretch gap-6" role="group" aria-label={t("homeProjectsTitle")}>
-          {(["recent", "all"] as const).map(mode => <button key={mode} type="button" aria-pressed={collection === mode} onClick={() => { setCollection(mode); if (mode === "recent") setSortKey("updated"); }} className={cn("min-h-12 cursor-pointer border-b-2 border-transparent px-1 text-ui-md font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", collection === mode && "border-primary text-primary")}>{t(mode === "recent" ? "homeRecent" : "homeAll")}</button>)}
-        </div>
+        <CollectionTabs label={t("homeProjectsTitle")} value={collection} onChange={mode => { setCollection(mode); if (mode === "recent") setSortKey("updated"); }} items={[{ value: "recent", label: t("homeRecent") }, { value: "all", label: t("homeAll") }]} />
         <div className="mb-3 flex min-w-0 flex-wrap items-center gap-2">
           <div className="relative"><Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" /><Input aria-label={t("searchProjects")} className="w-52 pl-9" value={search} placeholder={t("searchProjects")} onChange={(event) => setSearch(event.target.value)} /></div>
           <Select value={collection === "recent" ? "updated" : sortKey} onValueChange={(value) => { setSortKey(value as "updated" | "created" | "name"); setCollection("all"); }}>
-            <SelectTrigger className="h-9 w-auto min-w-36 bg-field text-ui-sm" aria-label={t("sortUpdated")}><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-auto min-w-36" aria-label={t("sortUpdated")}><SelectValue /></SelectTrigger>
             <SelectContent className="max-w-none">
               <SelectItem value="updated">{t("sortUpdated")}</SelectItem><SelectItem value="created">{t("sortCreated")}</SelectItem><SelectItem value="name">{t("sortName")}</SelectItem>
             </SelectContent>
@@ -205,17 +211,6 @@ export function HomeView({
           </div>
         </>
       )}
-
-      <HomeHero
-        greeting={t(greetingKey)}
-        workspaceName={workspace.name}
-        now={now}
-        poem={poem}
-        poemLoading={poemLoading}
-        poemEgg={poemSpins > 0 && poemSpins % 10 === 0 ? t("homePoemEgg") : undefined}
-        onRefreshPoem={() => void spinPoem()}
-        holidayOverride={holidayOverride}
-      />
 
       <RenameDialog
         open={renaming !== null}

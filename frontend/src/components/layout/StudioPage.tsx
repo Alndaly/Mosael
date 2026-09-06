@@ -7,8 +7,8 @@ export function PageHeading({ title, description, count, actions, className }: {
 }) {
   return <header data-slot="page-heading" className={cn("flex shrink-0 flex-wrap items-end justify-between gap-x-8 gap-y-4", className)}>
     <div className="min-w-0">
-      <div className="flex items-center gap-3"><h2 className="m-0 text-3xl font-semibold leading-tight tracking-tight">{title}</h2>{count !== undefined && <span className="rounded-md bg-secondary px-2 py-1 text-ui-sm tabular-nums text-muted-foreground">{count}</span>}</div>
-      {description && <p className="mb-0 mt-2 max-w-2xl text-ui-md leading-relaxed text-muted-foreground">{description}</p>}
+      <div className="flex items-center gap-3"><h2 className="m-0 text-ui-title font-semibold leading-tight tracking-tight">{title}</h2>{count !== undefined && <span className="rounded-md bg-secondary px-2 py-1 text-ui-sm tabular-nums text-muted-foreground">{count}</span>}</div>
+      {description && <p className="mb-0 mt-2 max-w-2xl text-ui-sm leading-relaxed text-muted-foreground">{description}</p>}
     </div>
     {actions && <div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div>}
   </header>;

@@ -48,7 +48,6 @@ const GRANDFATHERED = new Set<string>([
   "features/boards/BoardCollaborationDialog.tsx: grid-rows-[auto_minmax(0,1fr)]",
   "features/editor/EditorView.tsx: grid-rows-[auto_minmax(0,1fr)]",
   "features/editor/Inspector.tsx: grid-rows-[auto_minmax(0,1fr)]",
-  "features/editor/Monitor.tsx: grid-rows-[minmax(0,1fr)_auto_auto]",
   "features/editor/timeline/Timeline.tsx: grid-rows-[auto_minmax(0,1fr)]",
   "features/media/AssetCompareView.tsx: grid-rows-[minmax(0,1fr)_auto]",
   "features/media/AssetCompareView.tsx: grid-rows-[auto_minmax(0,1fr)]",

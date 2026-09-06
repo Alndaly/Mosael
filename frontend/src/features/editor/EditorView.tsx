@@ -1,3 +1,4 @@
+import { segmentedTriggerClass } from "@/components/ui/tabs";
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot, Camera, CircleAlert, CircleCheck, Download, FolderPlus, Loader2, Plus, Redo2, Scissors, Sparkles, Type, Undo2 } from "lucide-react";
@@ -944,7 +945,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
             色板,**没有 `white` 这个色阶**,那条类根本不会生成 —— 于是边框退回 preflight 的
             主题色(浅色模式下是一条不透明的浅灰),看着又粗又亮。加 `color:` 前缀是因为
             `border-b-[…]` 的方括号里放长度会被当成边框宽度。 */}
-        <div className="flex items-center gap-1 border-b border-b-[color:rgb(255_255_255/0.08)] px-2 py-1 [&_button]:text-[#c6cbd2] [&_button:hover]:bg-[rgb(255_255_255/0.08)] [&_button:hover]:text-white">
+        <div className="flex flex-wrap items-center gap-1 border-b border-b-[color:rgb(255_255_255/0.08)] px-2 py-1 [&_button]:text-[#c6cbd2] [&_button:hover]:bg-[rgb(255_255_255/0.08)] [&_button:hover]:text-white">
           <Button
             variant="ghost"
             size="xs"
@@ -1181,10 +1182,7 @@ function LeftTabs({
           key={item.key}
           type="button"
           data-active={item.key === tab || undefined}
-          className={cn(
-            "shrink-0 cursor-pointer whitespace-nowrap rounded-md border-0 bg-transparent px-2 py-2 text-ui-sm font-medium text-muted-foreground transition-[background-color,color] duration-100 hover:text-foreground",
-            item.key === tab && "bg-accent text-primary hover:bg-accent",
-          )}
+          className={cn(segmentedTriggerClass(item.key === tab), "px-2")}
           onClick={() => onChange(item.key)}
         >
           {item.label}

@@ -14,7 +14,7 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      "inline-flex h-10 items-stretch justify-start gap-4 border-b border-border text-muted-foreground",
+      "inline-flex h-11 items-stretch justify-start gap-5 border-b border-border text-muted-foreground",
       className
     )}
     {...props}
@@ -53,3 +53,12 @@ const TabsContent = React.forwardRef<
 TabsContent.displayName = TabsPrimitive.Content.displayName
 
 export { Tabs, TabsList, TabsTrigger, TabsContent }
+
+/** Context switches inside a tool use the same surface and selected treatment. */
+export const SEGMENTED_LIST = "inline-flex min-h-10 shrink-0 items-stretch gap-1 rounded-lg bg-panel-subtle p-1";
+export function segmentedTriggerClass(active: boolean) {
+  return cn(
+    "inline-flex min-h-8 shrink-0 cursor-pointer items-center justify-center gap-1 whitespace-nowrap rounded-md border-0 bg-transparent px-3 py-1 text-ui-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+    active && "bg-accent text-accent-foreground hover:bg-accent hover:text-accent-foreground",
+  );
+}

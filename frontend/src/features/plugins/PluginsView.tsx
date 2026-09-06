@@ -74,7 +74,7 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
   const selected = list.find((item) => item.id === selectedId) ?? list[0] ?? null;
 
 
-  const heading = <PageHeading title={t("pluginsTitle")} description={t("studioPluginsDesc")} count={packages.data?.length} className="px-6 py-7 xl:px-9" actions={<><ScanButton pending={scan.isPending} onScan={() => scan.mutate()} /><Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button></>} />;
+  const heading = <PageHeading title={t("pluginsTitle")} description={t("studioPluginsDesc")} count={packages.data?.length} className="px-6 py-7 xl:px-9 xl:py-8" actions={<><ScanButton pending={scan.isPending} onScan={() => scan.mutate()} /><Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button></>} />;
   if (empty) return <div className="flex h-full min-h-0 flex-col bg-panel">
     {heading}<div className="flex flex-1 border-t border-border bg-background"><EmptyState icon={<Plug size={28} />} title={t("pluginsTitle")} body={t("studioPluginsDesc")} action={<Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button>} /></div>
     <PluginMarketDialog open={marketOpen} onOpenChange={setMarketOpen} onInstalled={() => invalidatePlugins(qc)} />
@@ -86,7 +86,7 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
       <div className="relative grid min-h-0 flex-1 grid-cols-[var(--studio-index-width)_minmax(0,1fr)] gap-2 border-t border-border max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]"
         style={{ "--studio-index-width": `${sidebar.width}px` } as React.CSSProperties}>
         <aside className="min-h-0 overflow-hidden border-r border-border bg-panel-subtle grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
-          <div className="flex min-h-10 items-center justify-between border-b border-border px-3">
+          <div className="flex min-h-14 items-center justify-between border-b border-border px-3">
             {/* 「插件」而不是「已安装」:这一栏和右边的详情是**同一件东西的两半**,而标题是在
                 回答"这一栏里是什么",不是在给它们贴状态 —— 没装的插件根本不会出现在这儿。 */}
             <span className="text-ui-sm font-semibold text-muted-foreground">
@@ -146,7 +146,7 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
             在整块可用区域内真正居中,而不是被 content-start 锁在顶部。 */}
         <div
           className={cn(
-            "grid min-h-0 min-w-0 overflow-y-auto bg-panel px-6 py-7 xl:px-9",
+            "grid min-h-0 min-w-0 overflow-y-auto bg-panel px-6 py-7 xl:px-9 xl:py-8",
             selected ? "content-start" : "place-items-center",
           )}
         >
@@ -243,7 +243,7 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
           身份该在版面顶端只出现一次,后面全是它的内容。 */}
       <header className="grid gap-2 border-b border-border pb-3">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-          <h2 className="m-0 truncate text-2xl font-semibold tracking-tight text-foreground">{pkg.name}</h2>
+          <h2 className="m-0 truncate text-xl font-semibold tracking-tight text-foreground">{pkg.name}</h2>
           <span className="flex shrink-0 items-center gap-1">
             {/* 「文档」指向 **Mosael 自己的插件文档**,不是插件作者的站点。
                 这一页上的问题是"连接是什么、凭据填哪儿、权限为什么要授、工具为什么默认不开"
@@ -878,7 +878,7 @@ export const ToolRow = React.memo(function ToolRow({
   const missingRequired = [...required].some((key) => !(values[key] ?? "").trim());
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-panel">
+    <div className="overflow-hidden rounded-lg border border-border bg-panel">
       <div className="flex items-center gap-3 px-4">
         {/* 勾 = 暴不暴露给智能体和工作流。默认关 —— 一个 MCP 端点可能报几十个工具。 */}
         <span className="grid size-7 shrink-0 place-items-center">
@@ -996,7 +996,7 @@ function InvocationRow({ invocation, onDelete }: { invocation: PluginInvocation;
   const [open, setOpen] = React.useState(false);
   const ok = invocation.status === "succeeded";
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-panel">
+    <div className="overflow-hidden rounded-lg border border-border bg-panel">
       <div className="flex items-stretch [&>button:first-child]:min-w-0 [&>button:first-child]:flex-1">
         <button
           type="button"

@@ -1,3 +1,4 @@
+import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
 import React from "react";
 import { StudioIndex } from "@/components/layout/StudioIndex";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -469,7 +470,7 @@ export function ChatWorkspace({
               {activeSession.title}
             </span>
           )}
-          <div className="inline-flex h-9 shrink-0 items-stretch gap-1 rounded-lg bg-panel-subtle p-1" role="tablist">
+          <div className={SEGMENTED_LIST} role="tablist">
             {(["chat", "trace"] as const).map((item) => (
               <button
                 key={item}
@@ -477,10 +478,7 @@ export function ChatWorkspace({
                 role="tab"
                 aria-selected={view === item}
                 onClick={() => setView(item)}
-                className={cn(
-                  "inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-3 py-1 text-ui-sm text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground",
-                  view === item && "bg-panel font-medium text-foreground shadow-sm hover:bg-panel hover:text-foreground",
-                )}
+                className={segmentedTriggerClass(view === item)}
               >
                 {t(item === "chat" ? "chatTabConversation" : "chatTabTrace")}
               </button>

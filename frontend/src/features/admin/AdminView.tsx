@@ -77,7 +77,7 @@ export function AdminView() {
   const spend = (stats?.spend_by_user ?? []).filter((row) => row.cost_micros > 0);
 
   return (
-    <div className="grid h-full min-h-0 content-start gap-8 overflow-y-auto px-6 py-7 xl:px-9 xl:py-8">
+    <div className="grid h-full min-h-0 content-start gap-7 overflow-y-auto px-6 py-7 xl:px-9 xl:py-8">
       <PageHeading title={t("navAdmin")} description={t("studioAdminDesc")} />
       {/* `overflow-y-auto` 只有在**高度被约束**时才会滚:没有 h-full/min-h-0,这个 grid 会一直
           长下去、把溢出甩给外层,而外层并没在滚 —— 于是整页卡住。仓库里能滚的几页都是这个写法。 */}

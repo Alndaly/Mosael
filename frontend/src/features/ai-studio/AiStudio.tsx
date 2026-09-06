@@ -1,4 +1,6 @@
+import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
 import React from "react";
+import { PageHeading } from "@/components/layout/StudioPage";
 import { StudioIndex } from "@/components/layout/StudioIndex";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -217,12 +219,12 @@ export function AiStudio({ workspace }: { workspace: Workspace }) {
   const [tab, setTab] = usePersistentTab<"chat" | "generate">("ai-studio", "chat", ["chat", "generate"]);
 
   const switcher = (
-    <div className="inline-flex h-10 items-stretch gap-1 rounded-lg bg-panel-subtle p-1" role="tablist">
+    <div className={SEGMENTED_LIST} role="tablist">
       <button
         type="button"
         role="tab"
         aria-selected={tab === "chat"}
-        className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-5 py-1 text-ui-sm text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tab === "chat" && "bg-panel font-medium text-foreground shadow-sm hover:bg-panel hover:text-foreground")}
+        className={segmentedTriggerClass(tab === "chat")}
         onClick={() => setTab("chat")}
       >
         {t("aiTabChat")}
@@ -231,7 +233,7 @@ export function AiStudio({ workspace }: { workspace: Workspace }) {
         type="button"
         role="tab"
         aria-selected={tab === "generate"}
-        className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-5 py-1 text-ui-sm text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tab === "generate" && "bg-panel font-medium text-foreground shadow-sm hover:bg-panel hover:text-foreground")}
+        className={segmentedTriggerClass(tab === "generate")}
         onClick={() => setTab("generate")}
       >
         {t("aiTabGenerate")}
@@ -242,7 +244,7 @@ export function AiStudio({ workspace }: { workspace: Workspace }) {
   return (
     // 聊天/生成只在线程内部滚动,页面本身不滚(overflow-hidden)。
     <div className="flex h-full min-h-0 flex-col items-stretch overflow-hidden bg-panel [&>*]:shrink-0">
-      <div className="flex min-h-16 items-center justify-between gap-4 border-b border-border px-6 py-3"><h2 className="text-xl font-semibold tracking-tight">AI Studio</h2>{switcher}</div>
+      <PageHeading title="AI Studio" actions={switcher} className="border-b border-border px-6 py-7 xl:px-9 xl:py-8" />
       {tab === "chat" ? (
         <ChatWorkspace workspace={workspace} />
       ) : (

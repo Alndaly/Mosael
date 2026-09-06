@@ -365,7 +365,7 @@ export function Monitor({
   };
 
   return (
-    <div className="grid h-full grid-rows-[minmax(0,1fr)_auto_auto]">
+    <div className="grid h-full min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto_auto]">
       {/* 音频只有一条路:WebAudio 混音器,它的 AudioContext 同时是时间线的主时钟。
           曾经还有一条「每个活跃音频片段一个 <audio>」的元素路,随画面元素路一并删除——
           两条路并存时混音器与 <video> 会各放一遍,所以引擎选择必须是唯一且稳定的一个。 */}
@@ -538,7 +538,7 @@ export function Monitor({
       </div>
       {/* 底部行:左右缩进与画面/进度条同一刻度(12px);上下留白让按钮离面板底边有呼吸感,
           不再紧贴底边界线(pt 略小于 pb,视觉重心稍稍上抬)。 */}
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 px-3 pb-2.5 pt-1 [&>div:last-child]:justify-end [&_button]:text-[#c6cbd2] [&_button:hover]:bg-[rgb(255_255_255/0.08)] [&_button:hover]:text-white">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-3 pb-2.5 pt-1 [&>div:last-child]:justify-end [&_button]:text-[#c6cbd2] [&_button:hover]:bg-[rgb(255_255_255/0.08)] [&_button:hover]:text-white">
         <div className="flex items-center gap-0.5">
           <Button variant="ghost" size="icon" onClick={() => setPlayhead(0)} aria-label={t("monStart")}>
             <SkipBack size={14} />
@@ -568,7 +568,7 @@ export function Monitor({
             {playbackRate}x
           </button>
         </div>
-        <div className="timecode text-xs text-[#e8eaed]">
+        <div className="timecode whitespace-nowrap text-ui-xs text-[#e8eaed]">
           {formatTimecode(playhead)}
           <span className="text-[#82878f]"> / {formatTimecode(totalDuration)}</span>
         </div>

@@ -507,9 +507,9 @@ export function TranscriptPanel({
     const busy = asrRunning || Boolean(runningJob);
     const busyMessage = asrJob.data?.message || runningJob?.message || "";
     return (
-      <div className="m-auto grid max-w-[260px] content-center justify-items-center gap-1.5 px-3.5 py-5 text-center text-muted-foreground [&_p]:m-0 [&_p]:text-xs [&_p]:leading-[1.55] [&>button]:mt-1">
+      <div className="m-auto grid max-w-[260px] content-center justify-items-center gap-1.5 px-3.5 py-5 text-center text-muted-foreground [&_p]:m-0 text-ui-sm [&_p]:leading-[1.55] [&>button]:mt-1">
         {busy ? <Loader2 size={18} className="animate-mosael-spin" /> : <MessageSquareText size={18} />}
-        <p>{busy ? t("transcribing") : t("transcriptEmpty")}</p>
+        <p className="text-ui-sm">{busy ? t("transcribing") : t("transcriptEmpty")}</p>
         {!busy && (
           <p className="max-w-[220px] text-ui-xs leading-[1.6] text-muted-foreground">{t("transcriptFlowHint")}</p>
         )}

@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { Asset, ProjectWithStats, Workspace } from "@/api/client";
 import { StatisticsView } from "./StatisticsView";
@@ -16,7 +16,6 @@ vi.mock("@/api/client", async original => ({
 }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key, usePreferences: () => ({ locale: "en-US" }) }));
 vi.mock("@/lib/deepLink", () => ({ gotoRecord: mocks.navigate }));
-vi.mock("./HomeHero", () => ({ HomeHero: () => <div>Daily poem</div> }));
 vi.mock("./HomeCharts", () => ({
   ActivityChart: () => <div>Activity chart</div>, AssetKindsChart: () => <div>Asset chart</div>,
   PublishActivityChart: () => <div>Publishing chart</div>, PublishPlatformsChart: () => <div>Platforms chart</div>,
@@ -73,6 +72,12 @@ it("opens and filters projects in both presentations and only uses their own med
   const open = vi.fn();
   const create = vi.fn();
   const view = render(provider(<HomeView workspace={workspace} projects={projects} onOpenProject={open} onCreateProject={create} creatingProject={false} />));
+  const header = screen.getByRole("banner");
+  expect(view.container.firstElementChild?.firstElementChild).toBe(header);
+  expect(within(header).getByText("Studio A")).toBeVisible();
+  expect(await within(header).findByText("A quiet moment")).toBeVisible();
+  expect(within(header).getByRole("button", { name: "homePoemRefresh" })).toBeEnabled();
+  expect(within(header).getByRole("button", { name: "createProject" })).toBeEnabled();
   await waitFor(() => expect(view.container.querySelector('img[src="/thumbnail/cover"]')).not.toBeNull());
   expect(view.container.querySelector('img[src="/thumbnail/unassigned"]')).toBeNull();
   fireEvent.error(view.container.querySelector('img[src="/thumbnail/cover"]')!);

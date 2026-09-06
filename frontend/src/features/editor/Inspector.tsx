@@ -1,3 +1,4 @@
+import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
 import React from "react";
 import { AlignCenter, AlignLeft, AlignRight, Bold, Diamond, Italic, Loader2, RotateCcw, Trash2, Upload, X } from "lucide-react";
 
@@ -150,12 +151,12 @@ export function Inspector({
     <section className="min-h-0 overflow-hidden rounded-lg border border-border bg-panel grid min-h-0 grid-rows-[auto_minmax(0,1fr)]">
       <div className="flex min-h-14 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-sm [&_h2]:font-semibold [&_h2]:text-muted-foreground">
         {selectedClip && !isTextClip ? (
-          <div className="inline-flex h-8 items-stretch gap-0.5 overflow-hidden rounded-md bg-panel-subtle p-0.5" role="tablist">
+          <div className={SEGMENTED_LIST} role="tablist">
             <button
               type="button"
               role="tab"
               aria-selected={tab === "props"}
-              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tab === "props" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+              className={segmentedTriggerClass(tab === "props")}
               onClick={() => setTab("props")}
             >
               {t("inspectorProps")}
@@ -164,7 +165,7 @@ export function Inspector({
               type="button"
               role="tab"
               aria-selected={tab === "color"}
-              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tab === "color" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+              className={segmentedTriggerClass(tab === "color")}
               onClick={() => setTab("color")}
             >
               {t("colorGrade")}

@@ -256,7 +256,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
         </div>
       )}
       <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto px-6 pb-7 xl:px-9 xl:pb-8 [&>*]:shrink-0">
-      <PageHeading title={t("navMedia")} description={t("studioMediaDesc")} count={assets.data?.length} className="py-7" actions={<>
+      <PageHeading title={t("navMedia")} description={t("studioMediaDesc")} count={assets.data?.length} className="py-7 xl:py-8" actions={<>
               <Button asChild size="default">
                 <label className="inline-flex cursor-pointer items-center gap-1.5">
                   <input
@@ -290,13 +290,13 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
             <div className="flex min-w-0 flex-wrap items-center gap-1.5">
               <CollectionTabs value={kindFilter} onChange={setKindFilter} label={t("mediaKindGroup")} items={KIND_FILTERS.map(kind => ({ value: kind, label: kindLabel[kind], count: assets.data?.filter(asset => kind === "all" || asset.kind === kind).length }))} />
               <Input
-                aria-label={t("searchAssets")} className="h-9 w-48 bg-field text-ui-sm"
+                aria-label={t("searchAssets")} className="w-48"
                 value={search}
                 placeholder={t("searchAssets")}
                 onChange={(event) => setSearch(event.target.value)}
               />
               <Select value={sortKey} onValueChange={(value) => setSortKey(value as SortKey)}>
-                <SelectTrigger className="h-8 w-auto min-w-32 bg-field text-xs" aria-label={t("sortNewest")}>
+                <SelectTrigger className="w-auto min-w-36" aria-label={t("sortNewest")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="max-w-none">

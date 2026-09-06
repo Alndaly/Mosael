@@ -188,10 +188,10 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
   return (
     <div className={STUDIO_PAGE}>
       <PageHeading title={t("poolTitle")} description={t("poolSubtitle")} count={items.length} actions={<>
-        <Button variant="outline" size="sm" onClick={() => setAddingAccount(true)}>
+        <Button variant="outline" onClick={() => setAddingAccount(true)}>
           <Users size={14} /> {t("publishAccountAdd")}
         </Button>
-        <Button size="sm" onClick={() => setCreating(true)}>
+        <Button onClick={() => setCreating(true)}>
           <Plus size={14} /> {t("poolCreate")}
         </Button>
       </>} />
@@ -216,7 +216,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                 <ContextMenuTrigger asChild>
                   <div
                     className={cn(
-                      "flex min-h-52 flex-col gap-3 overflow-hidden rounded-xl border border-border bg-panel p-6",
+                      "flex min-h-52 flex-col gap-3 overflow-hidden rounded-lg border border-border bg-panel p-5",
                       !p.enabled && "opacity-55",
                     )}
                   >
@@ -259,7 +259,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                         </em>
                       )}
                     </div>
-                    <strong className="truncate text-xl font-semibold tracking-tight">{p.name}</strong>
+                    <strong className="truncate text-ui-md font-semibold tracking-tight">{p.name}</strong>
                     <small className="text-ui-xs text-muted-foreground">
                       {bound
                         ? p.last_checked_at

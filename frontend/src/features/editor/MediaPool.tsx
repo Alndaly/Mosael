@@ -211,8 +211,8 @@ export function MediaPool({
             </ContextMenuContent>
           </ContextMenu>
         ))}
-        {assets.length === 0 && <div className="empty-inline m-auto grid max-w-60 place-items-center px-3 py-5 text-center text-ui-md leading-[1.6] text-muted-foreground">{t("mediaEmptyBody")}</div>}
-        {assets.length > 0 && visibleAssets.length === 0 && <div className="empty-inline m-auto grid max-w-60 place-items-center px-3 py-5 text-center text-ui-md leading-[1.6] text-muted-foreground">{t("mediaNoMatchingAssets")}</div>}
+        {assets.length === 0 && <div className="empty-inline m-auto grid max-w-60 place-items-center px-3 py-5 text-center text-ui-sm leading-[1.6] text-muted-foreground">{t("mediaEmptyBody")}</div>}
+        {assets.length > 0 && visibleAssets.length === 0 && <div className="empty-inline m-auto grid max-w-60 place-items-center px-3 py-5 text-center text-ui-sm leading-[1.6] text-muted-foreground">{t("mediaNoMatchingAssets")}</div>}
       </div>
 
       <RenameDialog

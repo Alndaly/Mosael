@@ -62,27 +62,27 @@ import { cn } from "@/lib/utils";
     开始=绿 / LLM=紫 / 插件=琥珀 / 转写=青 / 导出=玫红 / 生成=品红;
     其余类型走 --wf-node-color 的 primary 兜底。 */
 const WF_NODE_COLORS: Record<string, string> = {
-  start: "#16a34a",
-  llm: "#7c3aed",
-  plugin_tool: "#d97706",
-  transcribe_asset: "#0891b2",
-  export_sequence: "#e11d48",
-  ai_generate: "#c026d3",
-  browser_open: "#0ea5e9",
-  browser_navigate: "#0ea5e9",
-  browser_click: "#0ea5e9",
-  browser_input: "#0ea5e9",
-  browser_upload: "#0ea5e9",
-  browser_extract: "#0ea5e9",
-  browser_wait: "#0ea5e9",
-  browser_scroll: "#0ea5e9",
-  browser_evaluate: "#0ea5e9",
-  browser_close: "#0ea5e9",
-  call_workflow: "#6366f1",
-  output: "#059669",
-  subgraph: "#8b5cf6",
-  loop_foreach: "#6366f1",
-  loop_while: "#6366f1",
+  start: "var(--success)",
+  llm: "var(--chart-cache)",
+  plugin_tool: "var(--warning)",
+  transcribe_asset: "var(--chart-audio)",
+  export_sequence: "var(--destructive)",
+  ai_generate: "var(--chart-image)",
+  browser_open: "var(--primary)",
+  browser_navigate: "var(--primary)",
+  browser_click: "var(--primary)",
+  browser_input: "var(--primary)",
+  browser_upload: "var(--primary)",
+  browser_extract: "var(--primary)",
+  browser_wait: "var(--primary)",
+  browser_scroll: "var(--primary)",
+  browser_evaluate: "var(--primary)",
+  browser_close: "var(--primary)",
+  call_workflow: "var(--primary)",
+  output: "var(--success)",
+  subgraph: "var(--chart-cache)",
+  loop_foreach: "var(--primary)",
+  loop_while: "var(--primary)",
 };
 
 /** 节点类型 → 图标(与节点面板/画布一致)。 */
@@ -182,7 +182,7 @@ export interface WorkflowNodeData extends Record<string, unknown> {
     缺配置/失效引用/断连的节点在右上角挂一枚告警角标,一眼可辨。 */
 /** 节点上的产出预览:这一步生成了什么,直接摆在节点里 —— 不用再点开历史面板去找。
  *  素材可能已被删除(取不到就不渲染),所以查询失败是正常路径。 */
-function NodeResultPreview({ assetIds }: { assetIds: string[] }) {
+function NodeResultPreview({ assetIds, roundedBottom }: { assetIds: string[]; roundedBottom: boolean }) {
   const assets = useQueries({
     queries: assetIds.slice(0, 2).map((id) => ({
       queryKey: ["asset", id],
@@ -201,9 +201,8 @@ function NodeResultPreview({ assetIds }: { assetIds: string[] }) {
     // 原地点一下照样打开大图。
     // 预览层:**自己就是通栏的**,因为卡片不带内边距(见卡片那段说明)。多份并排时用 1px 的
     // 底色缝隙隔开,不画框 —— 框会让它读成贴上去的独立元件,而它是卡片自己的一段。
-    // 圆角**从卡片的令牌推**(卡片圆角 − 1px 边框),不写死一个数:这里原本是 7px,那是卡片还用
-    // rounded-md(8px)时算的;卡片后来升到 rounded-lg(10px)而这个数没跟,于是底部两角各缺 2px。
-    <div className="grid grid-flow-col justify-stretch gap-px overflow-hidden border-t border-border bg-border [&:last-child]:rounded-b-[calc(var(--radius-lg)-1px)]">
+    // 连接点和角标也是 DOM 子节点,不能用 :last-child 判断视觉上的末层。
+    <div className={cn("grid grid-flow-col justify-stretch gap-px overflow-hidden border-t border-border bg-border", roundedBottom && "rounded-b-[calc(var(--wf-node-radius)-1px)]")}>
       {ready.map((asset) => (
         <AssetInlinePreview
           key={asset.id}
@@ -264,7 +263,7 @@ function WorkflowNode({ data, selected }: NodeProps) {
         // 连接点变成贴边的半圆 —— 而它们正是要突出到边界之外才看得见。
         // 预览夹在标题层和接点层之间,本来就不碰圆角;真正需要圆角的是最底下那一层,
         // 由它自己 rounded-b 处理(见参数层)。
-        "group/node relative flex min-w-[192px] max-w-[280px] flex-col rounded-xl shadow-sm border border-border bg-panel transition-[border-color] duration-100 hover:border-border-strong",
+        "group/node relative flex min-w-[192px] max-w-[280px] flex-col rounded-[var(--wf-node-radius)] [--wf-node-radius:var(--radius-lg)] shadow-sm border border-border bg-panel transition-[border-color] duration-100 hover:border-border-strong",
         // **两侧都有接点时才撑宽。** 单侧接点(比如只有输出的 LLM)撑到 210px 的话,那一列被
         // 推到最右边,左半张卡片是空的 —— 看着像排版坏了,其实是宽度给多了。
         showIo && inputs.length > 0 && outputs.length > 0 && "min-w-[210px]",
@@ -321,14 +320,14 @@ function WorkflowNode({ data, selected }: NodeProps) {
       {/* 配置指向的素材:**没跑之前也该看得见自己指着哪张图**。跑过之后让位给产出预览 ——
           两张图并排会让人分不清哪张是输入哪张是输出。 */}
       {d.configAssetId && (d.runAssets ?? []).length === 0 && (
-        <NodeResultPreview assetIds={[d.configAssetId]} />
+        <NodeResultPreview assetIds={[d.configAssetId]} roundedBottom={!showIo && !d.runSummary} />
       )}
-      <NodeResultPreview assetIds={d.runAssets ?? []} />
+      <NodeResultPreview assetIds={d.runAssets ?? []} roundedBottom={!showIo && !d.runSummary} />
       {/* 非素材的产出:模型回的那段话、抽出来的那个值。**跑完了却看不见**是此前最别扭的地方 ——
           想知道这一步到底给了什么,得在后面再接一个"通知"节点把它打出来。
           两行封顶:节点是张名片,不是日志窗口;全文在检查器里。 */}
       {d.runSummary && (
-        <p className="m-0 line-clamp-2 whitespace-pre-wrap break-words border-t border-border bg-[color-mix(in_srgb,var(--muted)_45%,transparent)] px-3 py-1.5 text-ui-2xs leading-[1.45] text-muted-foreground">
+        <p className={cn("m-0 line-clamp-2 whitespace-pre-wrap break-words border-t border-border bg-[color-mix(in_srgb,var(--muted)_45%,transparent)] px-3 py-1.5 text-ui-2xs leading-[1.45] text-muted-foreground", !showIo && "rounded-b-[calc(var(--wf-node-radius)-1px)]")}>
           {d.runSummary}
         </p>
       )}
@@ -363,7 +362,7 @@ function WorkflowNode({ data, selected }: NodeProps) {
         // 接口区做成卡片"页脚条":压进左右 padding、贴住底边、subtle 底色 —
         // 端口行读作独立的接线区,而不是悬在卡片下半的零散小字(空的一侧也不再是大片留白)。
         // 圆角同上:卡片圆角 − 1px 边框。差 1px 就会在底部两角露出一线卡片底色。
-        <div className="flex justify-between gap-4 rounded-b-[calc(var(--radius-lg)-1px)] border-t border-border bg-panel-subtle px-3 py-[6px]">
+        <div className="flex justify-between gap-4 rounded-b-[calc(var(--wf-node-radius)-1px)] border-t border-border bg-panel-subtle px-3 py-[6px]">
           <div className="flex min-w-0 flex-col gap-[3px]">
             {inputs.map((key) => (
               <div className="relative flex min-h-4 items-center" key={key}>
@@ -371,7 +370,7 @@ function WorkflowNode({ data, selected }: NodeProps) {
                   id={`in:${key}`}
                   type="target"
                   position={Position.Left}
-                  className="h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-primary! bg-panel! data-[dtype=any]:border-border-strong! data-[dtype=asset]:border-[#c026d3]! data-[dtype=json]:border-[#0891b2]! data-[dtype=number]:border-[#d97706]! data-[dtype=sequence]:border-[#e11d48]! data-[dtype=text]:border-[#64748b]! left-[-12px]!"
+                  className="h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-primary! bg-panel! data-[dtype=any]:border-border-strong! data-[dtype=asset]:border-[var(--chart-image)]! data-[dtype=json]:border-[var(--chart-audio)]! data-[dtype=number]:border-warning! data-[dtype=sequence]:border-destructive! data-[dtype=text]:border-muted-foreground! left-[-12px]!"
                   data-dtype={(d.inputTypes ?? {})[key] ?? "any"}
                 />
                 {/* 有声明标签走正文字体;旧服务端没发显示名时才用 mono 显示稳定键。 */}
@@ -397,7 +396,7 @@ function WorkflowNode({ data, selected }: NodeProps) {
                   id={`out:${output}`}
                   type="source"
                   position={Position.Right}
-                  className="h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-primary! bg-panel! data-[dtype=any]:border-border-strong! data-[dtype=asset]:border-[#c026d3]! data-[dtype=json]:border-[#0891b2]! data-[dtype=number]:border-[#d97706]! data-[dtype=sequence]:border-[#e11d48]! data-[dtype=text]:border-[#64748b]! right-[-12px]!"
+                  className="h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-primary! bg-panel! data-[dtype=any]:border-border-strong! data-[dtype=asset]:border-[var(--chart-image)]! data-[dtype=json]:border-[var(--chart-audio)]! data-[dtype=number]:border-warning! data-[dtype=sequence]:border-destructive! data-[dtype=text]:border-muted-foreground! right-[-12px]!"
                   data-dtype={(d.outputTypes ?? {})[output] ?? "any"}
                 />
               </div>

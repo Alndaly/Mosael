@@ -79,7 +79,9 @@ export function HomeHero({
   poemEgg,
   onRefreshPoem,
   holidayOverride,
+  actions,
 }: {
+  actions?: React.ReactNode;
   greeting: string;
   workspaceName: string;
   now: Date;
@@ -99,13 +101,13 @@ export function HomeHero({
   const HolidayIcon = holiday?.Icon;
 
   return (
-    <section className="relative flex items-stretch justify-between gap-2 max-[880px]:flex-col">
+    <header data-slot="page-heading" className="relative flex flex-wrap items-center justify-between gap-x-8 gap-y-5">
       {holiday ? <HolidayParticles holiday={holiday} /> : <IdleDecor />}
 
       <div className="relative flex min-w-0 flex-col justify-center gap-0.5">
-        <h2 className="m-0 flex flex-wrap items-baseline gap-x-2 text-xl font-[650] tracking-[-0.01em]">
+        <h2 className="m-0 flex flex-wrap items-baseline gap-x-2 text-ui-title font-semibold leading-tight tracking-tight">
           {greeting}
-          <span className="text-xs font-normal text-muted-foreground">{workspaceName}</span>
+          <span className="text-ui-sm font-normal text-muted-foreground">{workspaceName}</span>
           {holiday && HolidayIcon && (
             <span
               className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-ui-xs font-medium"
@@ -116,7 +118,7 @@ export function HomeHero({
             </span>
           )}
         </h2>
-        <small className="text-xs tabular-nums text-muted-foreground">
+        <small className="mt-2 text-ui-xs tabular-nums text-muted-foreground">
           {now.toLocaleDateString(dateLocale, { year: "numeric", month: "long", day: "numeric", weekday: "long" })}
           {"  "}
           {now.toLocaleTimeString(dateLocale, { hour12: false })}
@@ -125,43 +127,46 @@ export function HomeHero({
 
       {/* 诗卡:一行三格(图标 / 正文 / 刷新),靠 flex 居中 —— 此前图标和按钮是绝对定位钉在
           左上和右上的,两行文字时看着就像被挂在角上。 */}
-      <figure
-        className="relative m-0 flex max-w-[46ch] items-center gap-2.5 rounded-lg border border-border bg-panel px-2.5 py-2 max-[880px]:max-w-none"
-        aria-live="polite"
-      >
-        <span
-          className="grid size-8 shrink-0 place-items-center rounded-md"
-          style={{
-            color: accent ?? "var(--muted-foreground)",
-            background: accent ? `color-mix(in srgb, ${accent} 12%, transparent)` : "var(--secondary)",
-          }}
+      <div className="relative flex min-w-0 flex-wrap items-center gap-4 max-[880px]:w-full">
+        <figure
+          className="relative m-0 flex max-w-[40ch] items-center gap-3 rounded-lg border border-border bg-panel px-4 py-3 max-[880px]:max-w-none max-[880px]:flex-1"
+          aria-live="polite"
         >
-          <BookText size={15} />
-        </span>
-        <div className="min-w-0 flex-1">
-          {poemEgg ? (
-            <blockquote className="m-0 text-ui-md leading-normal">{poemEgg}</blockquote>
-          ) : (
-            <>
-              <blockquote className="m-0 line-clamp-2 text-ui-md leading-normal">{poem.text}</blockquote>
-              {(poem.author || poem.source) && (
-                <figcaption className="mt-0.5 truncate text-ui-xs text-muted-foreground">
-                  {[poem.author, poem.source && `《${poem.source}》`].filter(Boolean).join(" · ")}
-                </figcaption>
-              )}
-            </>
-          )}
-        </div>
-        <button
-          type="button"
-          className="grid size-7 shrink-0 cursor-pointer place-items-center self-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-default"
-          aria-label={t("homePoemRefresh")}
-          onClick={onRefreshPoem}
-          disabled={poemLoading}
-        >
-          <RefreshCcw size={12} className={poemLoading ? "animate-mosael-spin" : undefined} />
-        </button>
-      </figure>
-    </section>
+          <span
+            className="grid size-8 shrink-0 place-items-center rounded-md"
+            style={{
+              color: accent ?? "var(--muted-foreground)",
+              background: accent ? `color-mix(in srgb, ${accent} 12%, transparent)` : "var(--secondary)",
+            }}
+          >
+            <BookText size={15} />
+          </span>
+          <div className="min-w-0 flex-1">
+            {poemEgg ? (
+              <blockquote className="m-0 text-ui-md leading-normal">{poemEgg}</blockquote>
+            ) : (
+              <>
+                <blockquote className="m-0 line-clamp-2 text-ui-md leading-normal">{poem.text}</blockquote>
+                {(poem.author || poem.source) && (
+                  <figcaption className="mt-0.5 truncate text-ui-xs text-muted-foreground">
+                    {[poem.author, poem.source && `《${poem.source}》`].filter(Boolean).join(" · ")}
+                  </figcaption>
+                )}
+              </>
+            )}
+          </div>
+          <button
+            type="button"
+            className="grid size-7 shrink-0 cursor-pointer place-items-center self-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-default"
+            aria-label={t("homePoemRefresh")}
+            onClick={onRefreshPoem}
+            disabled={poemLoading}
+          >
+            <RefreshCcw size={12} className={poemLoading ? "animate-mosael-spin" : undefined} />
+          </button>
+        </figure>
+      {actions}
+      </div>
+    </header>
   );
 }

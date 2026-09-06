@@ -1,4 +1,5 @@
 import React from "react";
+import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, Clapperboard, Clock3, Coins, Film, Layers, Megaphone, Workflow as WorkflowIcon } from "lucide-react";
 import { workspaceSummary, type ProjectWithStats, type Workspace } from "@/api/client";
@@ -73,8 +74,8 @@ export function StatisticsView({ workspace, projects, onOpenProject }: {
       ] as const)
     : [];
 
-  return <div className="grid h-full min-h-0 content-start gap-6 overflow-auto p-6 xl:p-8">
-    <div><h2 className="m-0 text-3xl font-semibold tracking-tight">{t("navStatistics")}</h2><p className="mb-0 mt-2 text-ui-md text-muted-foreground">{workspace.name} · {t("statsDescription")}</p></div>
+  return <div className={STUDIO_PAGE}>
+    <PageHeading title={t("navStatistics")} description={`${workspace.name} · ${t("statsDescription")}`} />
     {summary.isPending && <p role="status" className="text-muted-foreground">{t("statsLoading")}</p>}
     {summary.isError && <div role="alert" className="flex flex-wrap items-center gap-3 text-destructive"><span>{t("statsUnavailable")}</span><Button variant="outline" size="sm" onClick={() => void summary.refetch()}>{t("retry")}</Button></div>}
       {statTiles.length > 0 && (
@@ -102,24 +103,24 @@ export function StatisticsView({ workspace, projects, onOpenProject }: {
 
       {stats && (
         <section className="grid grid-cols-[2fr_1fr] gap-4 max-[880px]:grid-cols-1">
-          <div className="grid content-start gap-1.5 rounded-lg border border-border bg-panel px-5 pb-4 pt-4">
-            <h2 className="m-0 text-xs font-[650] text-muted-foreground">{t("homeChartActivity")}</h2>
+          <div className="grid content-start gap-4 rounded-lg border border-border bg-panel p-5">
+            <h2 className="m-0 text-ui-sm font-semibold text-foreground">{t("homeChartActivity")}</h2>
             <ActivityChart daily={stats.daily} />
           </div>
-          <div className="grid content-start gap-1.5 rounded-lg border border-border bg-panel px-5 pb-4 pt-4">
-            <h2 className="m-0 text-xs font-[650] text-muted-foreground">{t("homeChartAssets")}</h2>
+          <div className="grid content-start gap-4 rounded-lg border border-border bg-panel p-5">
+            <h2 className="m-0 text-ui-sm font-semibold text-foreground">{t("homeChartAssets")}</h2>
             <AssetKindsChart assetKinds={stats.asset_kinds} />
           </div>
-          <div className="grid content-start gap-1.5 rounded-lg border border-border bg-panel px-5 pb-4 pt-4">
-            <h2 className="m-0 text-xs font-[650] text-muted-foreground">{t("homeChartPublishActivity")}</h2>
+          <div className="grid content-start gap-4 rounded-lg border border-border bg-panel p-5">
+            <h2 className="m-0 text-ui-sm font-semibold text-foreground">{t("homeChartPublishActivity")}</h2>
             <PublishActivityChart daily={stats.publish_daily} />
           </div>
-          <div className="grid content-start gap-1.5 rounded-lg border border-border bg-panel px-5 pb-4 pt-4">
-            <h2 className="m-0 text-xs font-[650] text-muted-foreground">{t("homeChartPublishPlatforms")}</h2>
+          <div className="grid content-start gap-4 rounded-lg border border-border bg-panel p-5">
+            <h2 className="m-0 text-ui-sm font-semibold text-foreground">{t("homeChartPublishPlatforms")}</h2>
             <PublishPlatformsChart platforms={stats.publish_platforms} />
           </div>
-          <div className="grid content-start gap-1.5 rounded-lg border border-border bg-panel px-5 pb-4 pt-4">
-            <h2 className="m-0 text-xs font-[650] text-muted-foreground">{t("homeChartUsage")}</h2>
+          <div className="grid content-start gap-4 rounded-lg border border-border bg-panel p-5">
+            <h2 className="m-0 text-ui-sm font-semibold text-foreground">{t("homeChartUsage")}</h2>
             <UsageCostChart
               daily={stats.usage_daily}
               currency={stats.usage_currency}
@@ -127,8 +128,8 @@ export function StatisticsView({ workspace, projects, onOpenProject }: {
               unpriced={stats.usage_unpriced}
             />
           </div>
-          <div className="grid content-start gap-1.5 rounded-lg border border-border bg-panel px-5 pb-4 pt-4">
-            <h2 className="m-0 flex items-center justify-between gap-2 text-xs font-[650] text-muted-foreground">
+          <div className="grid content-start gap-4 rounded-lg border border-border bg-panel p-5">
+            <h2 className="m-0 flex items-center justify-between gap-2 text-ui-sm font-semibold text-foreground">
               {t("homeChartTokens")}
               {/* 命中率放标题行:图上看的是"哪天多哪天少",这个数回答的是"整段时间省了多少",
                   两者不该抢同一块地方。只在真有缓存时出现 —— 恒定的 0% 只是噪音。 */}
