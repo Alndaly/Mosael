@@ -1,5 +1,5 @@
-import { FLOATING_SURFACE } from "@/components/ui/floating";
 import React from "react";
+import { Music2 } from "lucide-react";
 import {
   EditorContent,
   type JSONContent,
@@ -327,7 +327,7 @@ export function PromptEditor({
     <>
       <EditorContent editor={editor} />
       <menu.Portal
-        className={cn(FLOATING_SURFACE, "fixed left-0 top-0 z-50 max-h-64 w-72 p-1")}
+        className="fixed left-0 top-0 z-50 max-h-[min(360px,calc(100dvh-16px))] w-[360px] max-w-[calc(100vw-16px)] rounded-xl p-1.5"
         header={
           <div className="grid gap-1 border-b border-border px-1 pb-1.5 pt-0.5">
             {/* 快捷分类。**只摆真的有东西的那几档** —— 一个按下去必然空的筛选钮,
@@ -387,12 +387,12 @@ export function PromptEditor({
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => menu.choose(asset)}
             >
-              <img
-                src={assetThumbnailUrl(asset.id)}
-                alt=""
-                className="h-7 w-10 shrink-0 rounded bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] object-cover"
-              />
-              <span className="min-w-0 flex-1 truncate text-ui-2xs text-foreground">
+              {asset.kind === "audio" ? (
+                <span className="grid h-8 w-10 shrink-0 place-items-center rounded bg-control text-muted-foreground"><Music2 size={16} aria-hidden /></span>
+              ) : (
+                <img src={assetThumbnailUrl(asset.id)} alt="" className="h-8 w-10 shrink-0 rounded bg-control object-cover" />
+              )}
+              <span className="min-w-0 flex-1 truncate text-ui-xs text-foreground">
                 {asset.name || asset.original_filename}
               </span>
               {/* **只有一类可选时不标类型。** 每行都写一遍「image」是纯噪音 —— 它没有回答

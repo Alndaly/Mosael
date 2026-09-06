@@ -1,7 +1,7 @@
-import { FLOATING_SURFACE } from "@/components/ui/floating";
+import { MODAL_SURFACE } from "@/components/ui/floating";
 import React from "react";
 import { NodeToolbar, Position } from "@xyflow/react";
-import { ArrowLeftRight, ArrowUp, Loader2, Plus, Sparkles, Volume2, VolumeX } from "lucide-react";
+import { ArrowLeftRight, ArrowUp, Loader2, Plus, SlidersHorizontal, Sparkles } from "lucide-react";
 
 import { useQuery } from "@tanstack/react-query";
 
@@ -55,34 +55,32 @@ import { SourceAssetSlotPreview } from "@/features/boards/SourceAssetSlotPreview
  * 用 NodeToolbar 挂在节点下方 —— 它渲染在 React Flow 的视口层里,平移缩放时自己跟着节点走。
  * 自己算坐标的话,画布一动它就飘(这个仓库在 @ 引用菜单上踩过一次)。
  */
-/** 参数行里的一格。样子统一:没有边框、只有文字,点开才是下拉 —— 一行摆五六个带框的
- *  控件会把面板撑成一张表单,而这里要的是一句话:「首尾帧 · 16:9 · 480p · 5s」。 */
+/** 模型和参数共用选择控件;参数在弹层中显示独立标签。 */
 function Pick({
   value,
   onChange,
   options,
+  label,
 }: {
   value: string;
   onChange: (next: string) => void;
   options: { value: string; label: string }[];
+  label?: string;
 }) {
   if (options.length === 0) return null;
-  return (
+  const control = (
     <Select value={value} onValueChange={onChange}>
-      {/* 不出下拉箭头:一行里五六个箭头是纯噪音,而这一行读起来该像「16:9 · 480p · 5s」。
-          点开仍然是完整的下拉。 */}
-      <SelectTrigger className="h-6 w-auto shrink-0 [&>span]:overflow-visible [&>span]:text-clip gap-0 border-0 bg-transparent px-1 text-ui-2xs text-muted-foreground shadow-none focus:ring-0 data-[state=open]:text-foreground [&>svg]:hidden">
+      <SelectTrigger aria-label={label} className={cn("h-8 min-w-0 gap-1 border-0 px-2 text-ui-xs shadow-none", label ? "w-full bg-control" : "w-full bg-transparent text-muted-foreground")}>
         <SelectValue />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent className="max-w-[min(440px,calc(100vw-16px))]">
         {options.map((one) => (
-          <SelectItem key={one.value} value={one.value}>
-            {one.label}
-          </SelectItem>
+          <SelectItem key={one.value} value={one.value} className="[overflow-wrap:anywhere]">{one.label}</SelectItem>
         ))}
       </SelectContent>
     </Select>
   );
+  return label ? <div className="grid min-w-0 grid-cols-[112px_minmax(0,1fr)] items-center gap-3"><span className="text-ui-xs text-muted-foreground">{label}</span>{control}</div> : control;
 }
 
 /** 区间时长仍用紧凑 Pick，但把 min..max 的每个合法整数都列出来。
@@ -593,7 +591,7 @@ export function NodeComposer({
 
   return (
     <NodeToolbar nodeId={item.id} isVisible position={Position.Bottom} offset={BOARD_NODE_PANEL_OFFSET}>
-      <div className={cn(FLOATING_SURFACE, "nodrag nopan nowheel relative w-[480px] max-w-[calc(100vw-2rem)] p-2.5")}>
+      <div className={cn(MODAL_SURFACE, "nodrag nopan nowheel relative w-[560px] max-w-[calc(100vw-2rem)] rounded-xl p-3")}>
         {/* 输入素材:图片是一排参考图(可多张),视频是首帧 ⇄ 尾帧。**格子按模型声明出** ——
             见 slots 那段。挂满上限就不再给 + ,免得点了才被校验器拦下。 */}
         {slots.length > 0 && (
@@ -759,22 +757,14 @@ export function NodeComposer({
           onSubmit={send}
           emptyHint={() => (slots.length === 0 ? t("boardNoSourceSlots") : "")}
         />
-        {/* 参数行:**按这个模型声明的来**,不写死。
-            后端描述符已经说清楚了每个模型认哪几项(aspect_ratio / resolution /
-            duration_seconds / size / num_images / generate_audio),这里照着出控件 ——
-            换一个模型,这一行自己就变了。写死的话每接一个新模型都要回来改一次,
-            而漏改不会报错,只会让那一项永远调不了。 */}
-        {/* 底部一行分三段:**它是谁**(模型)、**怎么生成**(参数)、**发出去**(次数 + 提交)。
-            参数收进**一个胶囊**里而不是并排六个下拉 —— 它们是同一个决定的几个侧面
-            (「首尾帧 · 16:9 · 480p · 5s」读起来是一句话),各自带框会让这一行像一张表单。
-            胶囊整体有 hover 态,里面每一格点开才是下拉。 */}
-        <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 border-t border-border pt-2">
+        {/* Keep model, settings, and submit on one row; detailed parameters belong in the settings popover. */}
+        <div className="flex min-w-0 items-center gap-2 border-t border-divider pt-2">
           {options.length === 0 ? (
             // 没有可用模型时说清楚 —— 给一个点了没反应的按钮比什么都不给更糟。
             <span className="px-1 text-ui-2xs text-muted-foreground">{t("boardNoGenerationModel")}</span>
           ) : (
             <>
-              <span className="flex shrink-0 items-center gap-0.5 rounded-full px-1 transition-colors hover:bg-secondary">
+              <span className="flex min-w-0 flex-1 items-center gap-1 rounded-md transition-colors hover:bg-secondary">
                 <Sparkles size={12} className="shrink-0 text-muted-foreground" />
                 <Pick
                   value={modelValue}
@@ -805,12 +795,18 @@ export function NodeComposer({
                 />
               </span>
 
-              <span aria-hidden className="h-3.5 w-px shrink-0 bg-border" />
-
-              <span className="flex shrink-0 items-center gap-0 rounded-full px-1 transition-colors hover:bg-secondary">
-                {/* 生成方式排第一格:它决定上面那排槽位是首尾帧还是参考,后面几项都在它之下。 */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button type="button" aria-label={t("boardGenerationSettings")} className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-ui-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+                    <SlidersHorizontal size={14} /><span>{t("boardGenerationSettings")}</span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="end" side="top" className={cn(MODAL_SURFACE, "nodrag nopan nowheel grid max-h-[min(440px,calc(100dvh-32px))] w-[360px] gap-3 overflow-y-auto rounded-xl p-4")}>
+                  <span className="text-ui-sm font-medium">{t("boardGenerationSettings")}</span>
+                  {/* 生成方式排第一格:它决定上面那排槽位是首尾帧还是参考,后面几项都在它之下。 */}
                 {modes.length > 0 && (
                   <Pick
+                    label={t("boardGenerationMode")}
                     value={activeMode?.key ?? ""}
                     onChange={(next) => {
                       touched.current = true;
@@ -820,10 +816,11 @@ export function NodeComposer({
                   />
                 )}
                 {supportsParameter(current, "aspect_ratio") && (
-                  <Pick value={ratio} onChange={setRatio} options={aspectRatioOptions(current).map((one) => ({ value: one, label: one }))} />
+                  <Pick label={t("wfGenAspectRatio")} value={ratio} onChange={setRatio} options={aspectRatioOptions(current).map((one) => ({ value: one, label: one }))} />
                 )}
                 {supportsParameter(current, "resolution") && (
                   <Pick
+                    label={t("wfGenResolution")}
                     value={resolution}
                     onChange={(next) => {
                       setResolution(next);
@@ -834,10 +831,11 @@ export function NodeComposer({
                   />
                 )}
                 {supportsParameter(current, "size") && (
-                  <Pick value={size} onChange={setSize} options={sizeOptions(current).map((one) => ({ value: one, label: one }))} />
+                  <Pick label={t("wfGenSize")} value={size} onChange={setSize} options={sizeOptions(current).map((one) => ({ value: one, label: one }))} />
                 )}
                 {supportsParameter(current, "duration_seconds") && durations.length > 0 && (
                   <Pick
+                    label={t("wfGenDuration")}
                     value={String(duration)}
                     onChange={(next) => setDuration(Number(next))}
                     options={durations.map((one) => ({
@@ -851,11 +849,12 @@ export function NodeComposer({
                   return (
                     <Pick
                       key={key}
+                      label={labelKey ? t(labelKey) : key}
                       value={booleanParameters[key] ? "on" : "off"}
                       onChange={(next) => setBooleanParameters((values) => ({ ...values, [key]: next === "on" }))}
                       options={[
-                        { value: "on", label: labelKey ? `${t(labelKey)} · ${t("wfGenToggleOn")}` : `${key} · on` },
-                        { value: "off", label: labelKey ? `${t(labelKey)} · ${t("wfGenToggleOff")}` : `${key} · off` },
+                        { value: "on", label: t("wfGenToggleOn") },
+                        { value: "off", label: t("wfGenToggleOff") },
                       ]}
                     />
                   );
@@ -865,30 +864,19 @@ export function NodeComposer({
                   return (
                     <Pick
                       key={key}
+                      label={labelKey ? t(labelKey) : key}
                       value={enumParameters[key] ?? capabilityString(current, `default_${key}`, choices[0] ?? "")}
                       onChange={(next) => setEnumParameters((values) => ({ ...values, [key]: next }))}
                       options={choices.map((choice) => ({
                         value: choice,
-                        label: labelKey ? `${t(labelKey)} · ${choice}` : `${key} · ${choice}`,
+                        label: choice,
                       }))}
                     />
                   );
                 })}
-              </span>
-
-              {/* **出声与否是一项独立的配置**,不是那串参数里的一格 —— 它决定成片有没有
-                  声音,和「多大、多长」不是一类事。所以拆出来自成一段,并且写成 有声/静音
-                  两个字:一个喇叭图标读起来像预览的静音键,而它其实是在配置**要不要生成**。 */}
               {supportsParameter(current, "generate_audio") && (
-                <>
-                  <span aria-hidden className="h-3.5 w-px shrink-0 bg-border" />
-                  <span className="flex shrink-0 items-center gap-0.5 rounded-full px-1 transition-colors hover:bg-secondary">
-                    {audio ? (
-                      <Volume2 size={12} className="shrink-0 text-muted-foreground" />
-                    ) : (
-                      <VolumeX size={12} className="shrink-0 text-muted-foreground" />
-                    )}
                     <Pick
+                      label={t("boardGenerationSound")}
                       value={audio ? "on" : "off"}
                       onChange={(next) => setAudio(next === "on")}
                       options={[
@@ -896,13 +884,13 @@ export function NodeComposer({
                         { value: "off", label: t("boardMuted") },
                       ]}
                     />
-                  </span>
-                </>
               )}
+                </PopoverContent>
+              </Popover>
 
               <span className="ml-auto flex shrink-0 items-center gap-1">
                 {maxImages(current) > 1 && (
-                  <span className="flex items-center rounded-full px-1 transition-colors hover:bg-secondary">
+                  <span className="flex w-14 items-center rounded-md transition-colors hover:bg-secondary">
                     <Pick
                       value={String(count)}
                       onChange={(next) => setCount(Number(next))}
@@ -920,7 +908,7 @@ export function NodeComposer({
                   disabled={!prompt.trim() || !current || busy}
                   onClick={send}
                   className={cn(
-                    "grid h-7 w-7 shrink-0 place-items-center rounded-full transition-colors",
+                    "grid h-8 w-8 shrink-0 place-items-center rounded-full transition-colors",
                     !prompt.trim() || !current || busy
                       ? "cursor-not-allowed bg-secondary text-muted-foreground"
                       : "cursor-pointer bg-action text-action-foreground hover:opacity-90",

@@ -34,13 +34,6 @@ describe("画板表单的提交状态", () => {
     expect(source).not.toContain('type="number"');
   });
 
-  it("生成面板留足宽度并让底部参数换行而不是逐项省略", () => {
-    const source = fs.readFileSync(path.join(HERE, "NodeComposer.tsx"), "utf8");
-    expect(source).toContain('w-[480px]');
-    expect(source).toContain('flex flex-wrap items-center');
-    expect(source).toContain('shrink-0 [&>span]:overflow-visible [&>span]:text-clip');
-  });
-
   it("节点上方操作条使用较大的点击区", () => {
     const source = fs.readFileSync(path.join(HERE, "BoardCanvas.tsx"), "utf8");
     expect(source).toContain('rounded-full border border-border-strong bg-panel p-1.5');

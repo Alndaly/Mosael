@@ -1,4 +1,4 @@
-import { FLOATING_SURFACE } from "@/components/ui/floating";
+import { MODAL_SURFACE } from "@/components/ui/floating";
 import React from "react";
 import { createPortal } from "react-dom";
 import { autoUpdate, computePosition, flip, offset, shift } from "@floating-ui/dom";
@@ -80,7 +80,6 @@ export function useSuggestionMenu<T>({
   //: 插件给的**是个函数**,每次调用返回当前的光标矩形。存函数而不是存算好的坐标 ——
   //: 存坐标就成了一张快照:画布一平移,光标动了而菜单不知道,于是它钉在原地。
   const clientRectRef = React.useRef<(() => DOMRect | null) | null>(null);
-  const menuEl = React.useRef<HTMLDivElement | null>(null);
   //: 插件的 onKeyDown 闭包住了创建时的 state,用 ref 读当前高亮项。
   const menuRef = React.useRef(menu);
   menuRef.current = menu;
@@ -166,28 +165,6 @@ export function useSuggestionMenu<T>({
     setMenu((prev) => (prev ? next(prev, raw) : prev));
   }, [view, raw, next]);
 
-  React.useEffect(() => {
-    const floating = menuEl.current;
-    const getRect = clientRectRef.current;
-    if (!menu || !floating || !getRect) return;
-    const reference = { getBoundingClientRect: () => getRect() ?? new DOMRect() };
-    return autoUpdate(
-      reference,
-      floating,
-      () => {
-        void computePosition(reference, floating, {
-          placement: "bottom-start",
-          // 贴着光标下方 6px;放不下就翻到上方;左右不够就往里挪,别被窗口切掉。
-          middleware: [offset(6), flip(), shift({ padding: 8 })],
-        }).then(({ x, y }) => {
-          floating.style.left = `${x}px`;
-          floating.style.top = `${y}px`;
-        });
-      },
-      { animationFrame: true },
-    );
-  }, [menu]);
-
   const choose = React.useCallback((item: T) => commandRef.current?.(item), []);
 
   const Portal = React.useCallback(
@@ -202,34 +179,67 @@ export function useSuggestionMenu<T>({
       header?: React.ReactNode;
       footer?: React.ReactNode;
     }) => {
-      if (!menu) return null;
-      //: 有表头/表尾时,滚动只发生在**中间那一段** —— 整块一起滚的话,筛选钮会跟着列表滚走,
-      //: 而它作用于整份列表。没有表头时保持原样(一整块可滚),不给已有的调用方添麻烦。
-      const banded = Boolean(header || footer);
-      return createPortal(
-        <div
-          ref={menuEl}
-          data-suggestion-menu=""
-          className={cn(
-            FLOATING_SURFACE,
-            className ?? "fixed left-0 top-0 z-50 max-h-48 min-w-48 p-1.5",
-            banded ? "flex flex-col overflow-hidden" : "overflow-auto",
-          )}
-        >
-          {header}
-          <div className={banded ? "min-h-0 flex-1 overflow-auto" : undefined}>
-            {menu.hint ? (
-              <div className="px-2 py-1 text-ui-2xs leading-relaxed text-muted-foreground">{menu.hint}</div>
-            ) : null}
-            {menu.items.map((item, index) => children(item, index))}
-          </div>
-          {footer}
-        </div>,
-        document.body,
-      );
+      return <SuggestionPortal menu={menuRef.current} clientRectRef={clientRectRef} className={className} header={header} footer={footer}>{children}</SuggestionPortal>;
     },
-    [menu],
+    [],
   );
 
   return { menu, all: raw, render, choose, Portal };
+}
+
+
+/** Keep the portal identity and its positioning lifecycle stable across editor updates. */
+function SuggestionPortal<T>({ menu, clientRectRef, className, header, footer, children }: {
+  menu: SuggestionMenuState<T> | null;
+  clientRectRef: React.RefObject<(() => DOMRect | null) | null>;
+  className?: string;
+  header?: React.ReactNode;
+  footer?: React.ReactNode;
+  children: (item: T, index: number) => React.ReactNode;
+}) {
+  const menuEl = React.useRef<HTMLDivElement>(null);
+  const open = Boolean(menu);
+  React.useLayoutEffect(() => {
+    const floating = menuEl.current;
+    if (!open || !floating) return;
+    let active = true;
+    let lastRect: DOMRect | null = null;
+    let revision = 0;
+    floating.style.visibility = "hidden";
+    const readRect = () => {
+      const rect = clientRectRef.current?.();
+      // ProseMirror briefly removes its decoration while replacing the suggestion range.
+      // A missing/empty rectangle is not a caret at the screen origin.
+      if (rect && rect.height > 0 && [rect.x, rect.y, rect.width, rect.height].every(Number.isFinite)) lastRect = rect;
+      return lastRect;
+    };
+    const reference = { getBoundingClientRect: () => readRect() ?? new DOMRect() };
+    const stop = autoUpdate(reference, floating, () => {
+      if (!readRect()) return;
+      const request = ++revision;
+      void computePosition(reference, floating, {
+        strategy: "fixed",
+        placement: "bottom-start",
+        middleware: [offset(6), flip({ padding: 8 }), shift({ padding: 8 })],
+      }).then(({ x, y }) => {
+        if (!active || request !== revision) return;
+        Object.assign(floating.style, { left: `${x}px`, top: `${y}px`, visibility: "visible" });
+      });
+    }, { animationFrame: true });
+    return () => { active = false; stop(); };
+  }, [open, clientRectRef]);
+
+  if (!menu) return null;
+  const banded = Boolean(header || footer);
+  return createPortal(
+    <div ref={menuEl} data-suggestion-menu="" style={{ visibility: "hidden" }}
+      className={cn(MODAL_SURFACE, className ?? "fixed left-0 top-0 z-50 max-h-48 min-w-48 p-1.5", banded ? "flex flex-col overflow-hidden" : "overflow-auto")}>
+      {header}
+      <div className={banded ? "min-h-0 flex-1 overflow-auto" : undefined}>
+        {menu.hint && <div className="px-2 py-1 text-ui-2xs leading-relaxed text-muted-foreground">{menu.hint}</div>}
+        {menu.items.map((item, index) => children(item, index))}
+      </div>
+      {footer}
+    </div>, document.body,
+  );
 }
