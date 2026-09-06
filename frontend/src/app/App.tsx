@@ -547,7 +547,7 @@ function Studio({
         {view === "scheduler" && (
           <SchedulerView workspace={workspace} project={project} />
         )}
-        {view === "plugins" && <PluginsView />}
+        {view === "plugins" && <PluginsView workspaceId={workspace.id} />}
         <CommandPalette
           workspace={workspace}
           projects={projects.data ?? []}

@@ -37,7 +37,7 @@ import { cn } from "@/lib/utils";
  *
  * 设计与取舍见 docs/PLUGIN_ARCHITECTURE.md。
  */
-export function PluginsView() {
+export function PluginsView({ workspaceId }: { workspaceId: string }) {
   // 右栏现在是一块有边框的面板,它的边**就是**列边界 —— 不再需要 nextInset 补偿
   // (那是给"无边框滚动容器 + 内层 px-0.5"那种形状用的,见 handleOffset)。
   const sidebar = useResizableSidebar("plugins", COMPACT_SIDEBAR_BOUNDS);
@@ -157,7 +157,7 @@ export function PluginsView() {
           )}
         >
           {selected ? (
-            <PackageDetail key={selected.id} pkg={selected} />
+            <PackageDetail key={selected.id} pkg={selected} workspaceId={workspaceId} />
           ) : (
             <EmptyState icon={<Plug size={22} />} title={t("pickDetailTitle")} body={t("pickDetailBody")} />
           )}
@@ -202,7 +202,7 @@ function ScanButton({ pending, onScan, size = "sm" }: { pending: boolean; onScan
   );
 }
 
-function PackageDetail({ pkg }: { pkg: PluginPackage }) {
+function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: string }) {
   const t = useI18n();
   const { locale } = usePreferences();
   const qc = useQueryClient();
@@ -299,7 +299,7 @@ function PackageDetail({ pkg }: { pkg: PluginPackage }) {
       {/* 连接是这一页的**主体**。有几个就是几个,新建那一条排在最后 —— 排在最前的话,
           每次进来第一眼看到的是"再建一个",而绝大多数时候用户是来改已有的那个。 */}
       {instances.map((instance) => (
-        <ConnectionCard key={instance.id} pkg={pkg} instance={instance} />
+        <ConnectionCard key={instance.id} pkg={pkg} instance={instance} workspaceId={workspaceId} />
       ))}
 
       {instances.length === 0 && (
@@ -396,7 +396,7 @@ function FieldInput({
   );
 }
 
-function ConnectionCard({ pkg, instance }: { pkg: PluginPackage; instance: PluginInstance }) {
+function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPackage; instance: PluginInstance; workspaceId: string }) {
   const t = useI18n();
   const qc = useQueryClient();
   const [confirmDelete, setConfirmDelete] = React.useState(false);
@@ -524,6 +524,7 @@ function ConnectionCard({ pkg, instance }: { pkg: PluginPackage; instance: Plugi
 
       <CapabilityPicker
         instanceId={instance.id}
+        workspaceId={workspaceId}
         tools={instance.tools ?? []}
         blockedReason={instance.blocked_reason ?? ""}
         onToggle={(tools) => setCapabilities.mutate(tools)}
@@ -544,12 +545,14 @@ function ConnectionCard({ pkg, instance }: { pkg: PluginPackage; instance: Plugi
  */
 function CapabilityPicker({
   instanceId,
+  workspaceId,
   tools,
   blockedReason,
   onToggle,
   pending,
 }: {
   instanceId: string;
+  workspaceId: string;
   tools: ToolState[];
   /** 整个连接为什么还不能用(「未启用」「缺少凭据」…)。空串 = 可以用。
    *  一路传**字符串**而不是布尔:理由在这里被丢掉的话,底下那个灰按钮就再也说不出
@@ -621,6 +624,7 @@ function CapabilityPicker({
               <ToolRow
                 key={tool.name}
                 instanceId={instanceId}
+                workspaceId={workspaceId}
                 tool={tool}
                 // 传**理由**而不是布尔:一个灰着的按钮不说明自己为什么灰,等于没有反馈。
                 blockedReason={blockedReason || (tool.exposed ? "" : t("pluginToolNotExposed"))}
@@ -825,11 +829,13 @@ type InputSchema = { properties?: Record<string, { type?: string; description?: 
  * 每次都要把那段文本重新排版一次。props 没变就别重渲染。 */
 export const ToolRow = React.memo(function ToolRow({
   instanceId,
+  workspaceId,
   tool,
   blockedReason,
   onToggle,
 }: {
   instanceId: string;
+  workspaceId: string;
   tool: ToolState;
   /** 为什么这个工具现在跑不了。空串 = 跑得了。 */
   blockedReason: string;
@@ -863,12 +869,15 @@ export const ToolRow = React.memo(function ToolRow({
       }
       return api<PluginInvocation>(`/api/plugins/instances/${instanceId}/tools/${tool.name}/invoke`, {
         method: "POST",
-        body: JSON.stringify({ input }),
+        body: JSON.stringify({ input, workspace_id: workspaceId }),
       });
     },
     onSuccess: (invocation) => {
       setResult(invocation);
       void qc.invalidateQueries({ queryKey: ["plugin-invocations", instanceId] });
+      if (invocation.status === "succeeded" && invocation.output.asset_id) {
+        void qc.invalidateQueries({ queryKey: ["assets", workspaceId] });
+      }
     },
   });
 

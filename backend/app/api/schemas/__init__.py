@@ -1612,6 +1612,7 @@ class PluginToolOut(ApiModel):
 
 class PluginInvokeRequest(ApiModel):
     input: dict = Field(default_factory=dict)
+    workspace_id: str | None = Field(default=None, min_length=1)
 
 
 class PluginInvocationOut(OrmModel):

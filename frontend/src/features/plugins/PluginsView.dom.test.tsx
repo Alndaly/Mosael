@@ -7,7 +7,7 @@
 
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { api } = vi.hoisted(() => ({ api: vi.fn() }));
@@ -30,7 +30,10 @@ import { CredentialRows, ToolRow } from "./PluginsView";
 
 function wrap(node: React.ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={client}>{node}</QueryClientProvider>);
+  return {
+    ...render(node, { wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider> }),
+    client,
+  };
 }
 
 beforeEach(() => {
@@ -92,7 +95,7 @@ describe("灰着的运行按钮要说明自己为什么灰", () => {
   it("整个连接没启用时，理由摆在按钮旁边", async () => {
     // 「未启用」这句话原本只写在整组的标题下,而工具行可能在它下面好几百像素处 ——
     // 用户看到的就只是一个灰按钮,试不出所以然。
-    wrap(<ToolRow instanceId="i1" tool={tool} blockedReason="未启用" onToggle={() => undefined} />);
+    wrap(<ToolRow workspaceId="workspace-a" instanceId="i1" tool={tool} blockedReason="未启用" onToggle={() => undefined} />);
     const { fireEvent } = await import("@testing-library/react");
     fireEvent.click(screen.getByText("Pan list"));
 
@@ -102,12 +105,48 @@ describe("灰着的运行按钮要说明自己为什么灰", () => {
   });
 
   it("能跑的时候不摆任何理由", async () => {
-    wrap(<ToolRow instanceId="i1" tool={tool} blockedReason="" onToggle={() => undefined} />);
+    wrap(<ToolRow workspaceId="workspace-a" instanceId="i1" tool={tool} blockedReason="" onToggle={() => undefined} />);
     const { fireEvent } = await import("@testing-library/react");
     fireEvent.click(screen.getByText("Pan list"));
 
     const run = await screen.findByRole("button", { name: /运行/ });
     expect(run).not.toBeDisabled();
     expect(screen.queryByText("未启用")).toBeNull();
+  });
+});
+
+describe("素材工具的工作区归属", () => {
+  it.each([
+    { name: "pan_import", input: { fs_id: "230120330866997" }, output: { asset_id: "imported-asset" } },
+    { name: "pan_upload", input: { asset_id: "source-asset", path: "/成片.mp4" }, output: { fs_id: "uploaded-file" } },
+  ])("$name 将当前工作区与工具参数分开传递", async ({ name, input, output }) => {
+    const tool = {
+      name, label: name, description: "", read_only: false, exposed: true,
+      input_schema: { properties: Object.fromEntries(Object.keys(input).map((key) => [key, { type: "string" }])) },
+    };
+    api.mockResolvedValue({ id: "invocation", status: "succeeded", output });
+    const props = { instanceId: "i1", tool, blockedReason: "", onToggle: () => undefined };
+    const { client, rerender } = wrap(<ToolRow {...props} workspaceId="workspace-a" />);
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    fireEvent.click(screen.getByText(name));
+    for (const [key, value] of Object.entries(input)) {
+      fireEvent.change(screen.getByLabelText(key), { target: { value } });
+    }
+    fireEvent.click(screen.getByRole("button", { name: "运行" }));
+    await waitFor(() => expect(api).toHaveBeenCalledWith(
+      `/api/plugins/instances/i1/tools/${name}/invoke`,
+      { method: "POST", body: JSON.stringify({ input, workspace_id: "workspace-a" }) },
+    ));
+    if (name === "pan_import") {
+      await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ["assets", "workspace-a"] }));
+    }
+    await waitFor(() => expect(screen.getByRole("button", { name: "运行" })).not.toBeDisabled());
+
+    rerender(<ToolRow {...props} workspaceId="workspace-b" />);
+    fireEvent.click(screen.getByRole("button", { name: "运行" }));
+    await waitFor(() => expect(api).toHaveBeenLastCalledWith(
+      `/api/plugins/instances/i1/tools/${name}/invoke`,
+      { method: "POST", body: JSON.stringify({ input, workspace_id: "workspace-b" }) },
+    ));
   });
 });

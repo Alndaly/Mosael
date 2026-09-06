@@ -20949,6 +20949,18 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Input"
+          },
+          "workspace_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Id"
           }
         },
         "type": "object",

@@ -7565,6 +7565,8 @@ export interface components {
             input?: {
                 [key: string]: unknown;
             };
+            /** Workspace Id */
+            workspace_id?: string | null;
         };
         /**
          * PluginMarketEntry

@@ -30,7 +30,7 @@ from app.api.schemas import (
     PluginToolOut,
 )
 from app.core.config import settings
-from app.domain.permissions import ensure_deployment_admin
+from app.domain.permissions import ensure_deployment_admin, ensure_workspace_perm
 from app.db.models import PluginInstance, PluginInvocation, PluginPackage
 from app.domain.plugins import PluginDomainError
 from app.domain.plugins import instances as inst
@@ -346,8 +346,11 @@ def invoke_tool(
     instance_id: str, tool_name: str, body: PluginInvokeRequest, db: DbSession, user: CurrentUser
 ) -> PluginInvocation:
     my_instance(db, instance_id, user)  # 归属判定,和这个接入上其余操作同一道门
+    if body.workspace_id is not None:
+        # 工具可能读取素材或产出文件；工作区由调用界面指定，入库前先过写权限。
+        ensure_workspace_perm(db, user, body.workspace_id, "edit")
     try:
-        return tools_domain.invoke(db, instance_id, tool_name, body.input)
+        return tools_domain.invoke(db, instance_id, tool_name, body.input, workspace_id=body.workspace_id)
     except PluginDomainError as exc:
         raise _fail(exc) from exc
 
