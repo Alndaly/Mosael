@@ -1,7 +1,7 @@
 import React from "react";
 import { SaveToNote } from "@/features/notes/SaveToNote";
 import { Handle, NodeResizer, Position, useStore, type NodeProps } from "@xyflow/react";
-import { AlertTriangle, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Loader2, Music, Plus, Square as SquareIcon, StickyNote, type LucideIcon } from "lucide-react";
+import { AlertTriangle, Box, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Loader2, Music, Plus, Square as SquareIcon, StickyNote, type LucideIcon } from "lucide-react";
 
 import type { BoardItem } from "@/api/client";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
@@ -120,6 +120,7 @@ function Ports({ visible, disabled = false }: { visible?: boolean; disabled?: bo
 //: 「boardKindImage」这串 key 本身,而它长得像个正常字符串,一路挂到菜单上都不会有人拦。
 //: 连线菜单就这么漏过一次:四个选项连标题带说明,整整八行显示的全是 key。
 const KIND_META: Record<BoardItem["kind"], { icon: LucideIcon; label: MessageKey; hint: MessageKey }> = {
+  scene: { icon: Box, label: "navScenes", hint: "boardSceneHint" },
   note: { icon: StickyNote, label: "boardKindNote", hint: "boardKindNoteHint" },
   image: { icon: ImageIcon, label: "boardKindImage", hint: "boardKindImageHint" },
   video: { icon: FilmIcon, label: "boardKindVideo", hint: "boardKindVideoHint" },
@@ -487,6 +488,18 @@ function AudioNode({ data, selected }: NodeProps) {
   );
 }
 
+
+function SceneNode({ data, selected }: NodeProps) {
+  const {item, commentMode} = data as unknown as BoardNodeData;
+  const t = useI18n();
+  return <div className="relative flex h-full w-full flex-col overflow-visible rounded-xl bg-panel shadow-sm">
+    <NodeResizer minWidth={180} minHeight={140} isVisible={selected} lineClassName="!border-transparent" />
+    <TypeLabel kind="scene"/><Ports visible={selected} disabled={commentMode}/>
+    <div className="min-h-0 flex-1 overflow-hidden rounded-t-xl">{item.asset_id ? <AssetInlinePreview assetId={item.asset_id} name={item.text || ''} kind="image" plain previewOnClick={false} lazy={false} className="h-full w-full object-cover"/> : <div className="flex h-full items-center justify-center text-muted-foreground"><Box size={40} strokeWidth={1}/></div>}</div>
+    <button className="nodrag nopan flex items-center gap-2 rounded-b-xl px-3 py-3 text-ui-sm transition-colors hover:bg-secondary" onClick={() => {if(item.scene_id)location.hash=`#/scenes?scene=${encodeURIComponent(item.scene_id)}`;}}><Box size={15}/><span className="min-w-0 flex-1 truncate text-left">{item.text || t('navScenes')}</span><span className="text-ui-xs text-muted-foreground">{t('boardSceneOpen')}</span></button>
+  </div>;
+}
+
 //: **写成 Record<kind, …> 而不是随手一个对象** —— 后端加一种 item kind 时,这里漏登记
 //: 不会报错,只会让那种节点在画布上凭空消失。标上类型,漏一种就编译不过。
 export const BOARD_NODE_TYPES: Record<BoardItem["kind"], React.ComponentType<NodeProps>> = {
@@ -495,6 +508,7 @@ export const BOARD_NODE_TYPES: Record<BoardItem["kind"], React.ComponentType<Nod
   video: VideoNode,
   audio: AudioNode,
   frame: FrameNode,
+  scene: SceneNode,
 };
 
 /** 指向素材库一份的那几种。**只此一处** —— 操作条给不给「换一份」、选择器能选什么,
@@ -513,4 +527,5 @@ export const DEFAULT_SIZE: Record<BoardItem["kind"], { width: number; height: nu
   video: { width: 320, height: 200 },
   audio: { width: 280, height: 72 },
   frame: { width: 420, height: 300 },
+  scene: { width: 320, height: 220 },
 };

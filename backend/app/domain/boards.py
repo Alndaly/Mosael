@@ -51,7 +51,7 @@ class BoardRevisionConflict(BoardDomainError):
 #: 图片和视频**分开两种而不是合成一个 media**:它们在画板上的样子和操作都不同 ——
 #: 图片是一张静止的参考,视频要能就地播;而"从这张图生成视频"是图片才有的动作,
 #: 反过来"抽一帧"是视频才有的。合成一种的话每处都要先分辨一次它到底是哪个。
-ITEM_KINDS = ("note", "image", "video", "audio", "frame")
+ITEM_KINDS = ("note", "image", "video", "audio", "frame", "scene")
 
 #: 必须指向素材库一份的那几种。空着的话存得下、打开却是个空白框。
 _NEEDS_ASSET = ("image", "video", "audio")
@@ -228,6 +228,12 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
                 raise BoardDomainError(f"未知的颜色:{color};可用的是 {'、'.join(NOTE_COLORS)}")
             item["color"] = color
 
+        if kind == "scene":
+            scene_id = entry.get("scene_id")
+            if not isinstance(scene_id, str) or not scene_id.strip():
+                raise BoardDomainError("3D 场景节点需要 scene_id")
+            item["scene_id"] = scene_id.strip()
+
         asset_id = entry.get("asset_id")
         if asset_id is not None:
             if not isinstance(asset_id, str) or not asset_id.strip():
@@ -301,6 +307,15 @@ def get_board(db: Session, workspace_id: str, board_id: str) -> Board:
     return board
 
 
+def _validate_scene_references(db: Session, workspace_id: str, canvas: dict) -> None:
+    from app.db.models import Scene3D
+    ids = {item['scene_id'] for item in canvas['items'] if item.get('scene_id')}
+    if ids:
+        owned = set(db.scalars(select(Scene3D.id).where(Scene3D.workspace_id == workspace_id, Scene3D.id.in_(ids))))
+        if owned != ids:
+            raise BoardDomainError('3D 场景不属于当前工作区')
+
+
 def create_board(
     db: Session, *, workspace_id: str, name: str, canvas: Any = None, actor_id: str | None = None
 ) -> Board:
@@ -309,6 +324,7 @@ def create_board(
         name=(name or "").strip() or "新画板",
         canvas=normalize_canvas(canvas),
     )
+    _validate_scene_references(db, workspace_id, board.canvas)
     db.add(board)
     db.flush()
     from app.domain.collaboration import record_activity
@@ -356,6 +372,7 @@ def update_board(
         next_name = cleaned
     if canvas is not None:
         next_canvas = _keep_arrived_results(board.canvas, normalize_canvas(canvas))
+        _validate_scene_references(db, workspace_id, next_canvas)
     if next_name == board.name and next_canvas == board.canvas:
         return board
     result = db.execute(

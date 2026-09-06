@@ -75,6 +75,8 @@ import { SettingsView } from "@/features/settings/SettingsView";
 // 给个合理缓存窗口:短时间切回同页直接用缓存,不重拉不闪;需要实时的 query 各自设了 refetchInterval,
 // 不受影响。获焦不全量重拉(Electron 频繁获焦会加剧闪烁)。
 
+const SceneStudio = React.lazy(() => import("@/features/scenes/SceneStudio").then(m => ({default: m.SceneStudio})));
+
 const queryClient = new QueryClient({
   mutationCache: createMutationCache((message) => toast.error(message)),
   defaultOptions: {
@@ -403,7 +405,7 @@ function readHash(): { view: StudioView; projectId: string | null } {
 }
 
 function writeHash(view: StudioView, projectId: string | null) {
-  const noteQuery = view === "notes" && window.location.hash.startsWith("#/notes?") ? window.location.hash.split("?")[1] : "";
+  const noteQuery = ["notes", "scenes", "boards"].includes(view) && window.location.hash.startsWith(`#/${view}?`) ? window.location.hash.split("?")[1] : "";
   const query = noteQuery ? `?${noteQuery}` : projectId ? `?p=${projectId}` : "";
   const next = `#/${view}${query}`;
   if (window.location.hash !== next)
@@ -479,6 +481,7 @@ function Studio({
       // 白名单在后端 mcp_server._VIEWS 那一侧,这里再挡一道:两边都可能先改。
       if (!VALID_VIEWS.includes(next)) return;
       if (next === "editor" && id) openProject(id);
+      else if (id && ["scenes", "notes", "boards"].includes(next)) window.location.hash = `#/${next}?${next === "scenes" ? "scene" : next === "notes" ? "note" : "board"}=${encodeURIComponent(id)}`;
       else setView(next as StudioView);
     },
   });
@@ -533,6 +536,7 @@ function Studio({
         {view === "statistics" && <StatisticsView workspace={workspace} projects={projects.data ?? []} onOpenProject={openProject} />}
         {view === "media" && <MediaLibraryView workspace={workspace} />}
         {view === "notes" && <NotesView key={workspace.id} workspace={workspace} />}
+        {view === "scenes" && <React.Suspense fallback={<div className="p-8">正在加载 3D 工作台…</div>}><SceneStudio key={workspace.id} workspace={workspace}/></React.Suspense>}
         {view === "editor" && (
           <EditorView
             workspace={workspace}

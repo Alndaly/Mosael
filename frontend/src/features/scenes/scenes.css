@@ -1,0 +1,882 @@
+.scene-library,
+.scene-studio {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  color: var(--foreground);
+  background: transparent;
+  font-size: var(--text-ui-sm);
+}
+.scene-library {
+  display: flex;
+  flex-direction: column;
+  padding: 32px;
+  overflow: auto;
+}
+.scene-library > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.scene-library h1 {
+  font-size: 28px;
+  font-weight: 650;
+  margin: 8px 0;
+}
+.scene-library p,
+.scene-inspector p,
+.scene-objects footer p {
+  color: var(--muted-foreground);
+  line-height: 1.7;
+}
+.scene-eyebrow {
+  letter-spacing: 0.16em;
+  font-size: var(--text-ui-2xs);
+}
+.scene-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.scene-empty {
+  flex: 1;
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  text-align: center;
+  padding: 32px;
+}
+.scene-empty > svg {
+  color: var(--muted-foreground);
+}
+.scene-empty h2 {
+  font-size: 22px;
+}
+.scene-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 28px;
+  margin-top: 32px;
+}
+.scene-cards > button {
+  text-align: left;
+  min-width: 0;
+}
+.scene-cards h2 {
+  margin: 12px 0 4px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scene-card-art {
+  height: 180px;
+  border-radius: 14px;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--primary) 12%, transparent),
+    color-mix(in srgb, var(--foreground) 3%, transparent)
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  color: var(--muted-foreground);
+}
+.scene-card-art span {
+  position: absolute;
+  bottom: 14px;
+  right: 18px;
+  font-family: var(--font-mono);
+  font-size: 24px;
+  opacity: 0.4;
+}
+.scene-studio {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.scene-header {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  flex-wrap: wrap;
+  background: transparent;
+}
+.scene-name {
+  min-width: 100px;
+  max-width: 360px;
+  flex: 1;
+  font-weight: 600;
+  background: transparent;
+  border: 0;
+  padding: 7px;
+  outline: none;
+}
+.scene-name:focus {
+  background: var(--secondary);
+  border-radius: 6px;
+}
+.scene-save {
+  font-size: var(--text-ui-2xs);
+  color: var(--muted-foreground);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-right: auto;
+}
+.scene-tool {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+.scene-tool:hover,
+.scene-object-list button:hover,
+.scene-text-button:hover {
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  color: var(--foreground);
+}
+.scene-tool[aria-pressed="true"],
+.scene-object-list button[aria-pressed="true"],
+.scene-segment button[aria-pressed="true"],
+.scene-keyframes button[aria-pressed="true"] {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+}
+.scene-tool:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.scene-studio button,
+.scene-library button,
+.scene-studio input {
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+.scene-studio button:focus-visible,
+.scene-studio input:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.scene-workspace {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) 300px;
+  gap: 16px;
+  overflow: hidden;
+}
+.scene-objects {
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+  min-height: 0;
+}
+.scene-objects header {
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.scene-objects h2,
+.scene-inspector h2 {
+  font-weight: 600;
+  font-size: var(--text-ui-sm);
+}
+.scene-object-list {
+  flex: 0 1 auto;
+  overflow: auto;
+  max-height: 210px;
+  min-height: 0;
+  padding: 0 6px;
+}
+.scene-object-list button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 9px;
+  text-align: left;
+  padding: 10px;
+  border-radius: 7px;
+}
+.scene-object-list button span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+.scene-object-list svg {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+.scene-objects footer {
+  padding: 14px;
+}
+.scene-objects footer button {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.scene-objects footer p {
+  font-size: var(--text-ui-2xs);
+  margin-top: 12px;
+}
+.scene-stage {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+}
+.scene-stage-bar {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  z-index: 2;
+  pointer-events: none;
+}
+.scene-stage-bar > div {
+  pointer-events: auto;
+  background: var(--modal-surface);
+  backdrop-filter: blur(20px);
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow: 0 4px 18px #0002;
+}
+.scene-segment {
+  display: flex;
+  gap: 2px;
+}
+.scene-segment button {
+  padding: 6px 10px;
+  border-radius: 7px;
+  font-size: var(--text-ui-xs);
+  white-space: nowrap;
+}
+.scene-viewport {
+  flex: 1;
+  min-height: 180px;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+}
+.scene-viewport > canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+.scene-inspector {
+  overflow: auto;
+  min-height: 0;
+  min-width: 0;
+  background: transparent;
+}
+.scene-inspector section {
+  padding: 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.scene-inspector section + section {
+  border-top: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+.scene-inspector p {
+  font-size: var(--text-ui-2xs);
+}
+.scene-field > span {
+  font-size: var(--text-ui-xs);
+  color: var(--muted-foreground);
+  display: block;
+  margin-bottom: 6px;
+}
+.scene-vector {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+}
+.scene-number {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  font-size: var(--text-ui-2xs);
+  color: var(--muted-foreground);
+}
+.scene-number input {
+  width: 100%;
+  min-width: 0;
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+  border: 0;
+  border-radius: 6px;
+  padding: 7px;
+  color: var(--foreground);
+  font-size: var(--text-ui-xs);
+  font-family: var(--font-mono);
+}
+.scene-vector .scene-number > span {
+  font-size: var(--text-ui-2xs);
+}
+.scene-vector .scene-number > span::after {
+  content: "";
+}
+.scene-shape {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+.scene-color {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted-foreground);
+  font-size: var(--text-ui-xs);
+}
+.scene-color input {
+  width: 48px;
+  height: 26px;
+  border: 0;
+  background: transparent;
+}
+.scene-text-button {
+  font-size: var(--text-ui-xs);
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+.scene-frame-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.scene-frame-fields h3 {
+  font-size: var(--text-ui-xs);
+  color: var(--primary);
+}
+.scene-timeline {
+  padding: 10px 16px 14px;
+  background: transparent;
+  min-height: 120px;
+}
+.scene-shot-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.scene-shot-row > [role="combobox"] {
+  width: 180px;
+  flex-shrink: 1;
+  min-width: 70px;
+}
+.scene-spacer {
+  flex: 1;
+}
+.scene-time {
+  font-size: var(--text-ui-2xs);
+  font-family: var(--font-mono);
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+.scene-timeline > input {
+  width: 100%;
+  accent-color: var(--primary);
+  margin: 12px 0 6px;
+}
+.scene-keyframes {
+  display: flex;
+  gap: 8px;
+  overflow: auto;
+}
+.scene-keyframes button {
+  padding: 4px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+  font-size: var(--text-ui-2xs);
+  color: var(--muted-foreground);
+}
+.scene-add,
+.scene-export {
+  display: flex;
+  flex-direction: column;
+  padding: 6px !important;
+  gap: 2px;
+}
+.scene-add button,
+.scene-export button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  text-align: left;
+  font-size: var(--text-ui-sm);
+}
+.scene-add button:hover,
+.scene-export button:hover {
+  background: var(--secondary);
+}
+.scene-export p {
+  font-size: var(--text-ui-2xs);
+  padding: 8px 12px;
+  color: var(--muted-foreground);
+  line-height: 1.6;
+}
+.scene-export hr {
+  border-color: color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+.scene-busy {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  backdrop-filter: blur(8px);
+  background: var(--modal-surface);
+}
+.scene-notice {
+  padding: 10px 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  font-size: var(--text-ui-xs);
+}
+.scene-history {
+  max-height: 55vh;
+  overflow: auto;
+}
+.scene-history > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  gap: 12px;
+}
+.scene-history small {
+  display: block;
+  color: var(--muted-foreground);
+  margin-top: 4px;
+}
+@media (max-width: 1100px) {
+  .scene-workspace {
+    grid-template-columns: minmax(220px, 1fr) 270px;
+  }
+  .scene-stage-bar {
+    flex-wrap: wrap;
+  }
+  .scene-shot-row {
+    flex-wrap: wrap;
+  }
+  .scene-header .scene-save {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scene-studio button,
+  .scene-library button,
+  .scene-studio input {
+    transition: none;
+  }
+}
+
+.scene-workspace[data-agent="true"] {
+  grid-template-columns: minmax(280px, 1fr) minmax(320px, 30%);
+}
+.scene-workspace[data-agent="true"] > .scene-side {
+  display: none;
+}
+.scene-agent-dock {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.scene-agent-floating {
+  display: contents;
+}
+
+/* Share the application's surface hierarchy. The render background belongs to the scene. */
+.scene-studio {
+  --field-border: color-mix(in srgb, var(--border) 60%, transparent);
+  --field: color-mix(in srgb, var(--foreground) 3%, transparent);
+}
+.scene-header {
+  padding: 10px 20px;
+}
+.scene-workspace {
+  padding: 0 20px 18px;
+}
+.scene-stage {
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--workspace-subtle);
+}
+.scene-side {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+}
+.scene-side > .scene-inspector {
+  overflow: visible;
+  flex: none;
+}
+.scene-steps {
+  display: flex;
+  gap: 8px;
+  padding: 4px 20px 16px;
+}
+.scene-steps > button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  color: var(--muted-foreground);
+  text-align: left;
+}
+.scene-steps > button[aria-current] {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--foreground);
+}
+.scene-steps strong {
+  display: block;
+  font-size: var(--text-ui-sm);
+  font-weight: 550;
+}
+.scene-steps small {
+  display: block;
+  font-size: var(--text-ui-2xs);
+  margin-top: 3px;
+  color: var(--muted-foreground);
+}
+.scene-step-number {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  font-size: 12px;
+}
+.scene-steps [aria-current] .scene-step-number {
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+.scene-steps > button > svg {
+  margin-left: 20px;
+  opacity: 0.35;
+}
+.scene-labeled-tool {
+  height: 32px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 0 9px;
+  border-radius: 7px;
+  font-size: var(--text-ui-xs);
+}
+.scene-labeled-tool[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  color: var(--primary);
+}
+.scene-labeled-tool:disabled {
+  opacity: 0.35;
+}
+.scene-stage-bar .scene-actions {
+  flex-wrap: wrap;
+}
+.scene-stage-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 12px;
+  font-size: var(--text-ui-2xs);
+  color: var(--muted-foreground);
+  background: var(--workspace-subtle);
+}
+.scene-help {
+  font-size: var(--text-ui-sm);
+  line-height: 1.9;
+}
+.scene-help p {
+  color: var(--muted-foreground);
+  margin-top: 10px;
+}
+.scene-objects {
+  flex: none;
+}
+.scene-objects header {
+  padding: 10px 12px;
+  gap: 10px;
+}
+.scene-objects h2 span {
+  color: var(--muted-foreground);
+  font-size: var(--text-ui-xs);
+  font-weight: 400;
+  margin-left: 6px;
+}
+.scene-object-list button {
+  padding: 8px 10px;
+}
+.scene-object-list button[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--primary) 9%, transparent);
+}
+.scene-objects footer {
+  padding: 10px 14px;
+}
+.scene-objects footer button {
+  color: var(--muted-foreground);
+  font-size: var(--text-ui-xs);
+}
+.scene-inspector section {
+  padding: 20px 12px;
+  gap: 14px;
+}
+.scene-start {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  padding: 25px 18px;
+}
+.scene-start p {
+  font-size: var(--text-ui-xs);
+  line-height: 1.8;
+  color: var(--muted-foreground);
+}
+.scene-details {
+  font-size: var(--text-ui-xs);
+  color: var(--muted-foreground);
+}
+.scene-details summary {
+  cursor: pointer;
+  padding: 12px 0;
+  font-weight: 500;
+  color: var(--foreground);
+}
+.scene-details > div {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0 14px;
+}
+.scene-details p {
+  font-size: var(--text-ui-xs);
+  color: var(--muted-foreground);
+  line-height: 1.8;
+}
+.scene-side-next {
+  padding: 18px 12px;
+  margin-top: auto;
+}
+.scene-side-next > button {
+  width: 100%;
+}
+.scene-camera-panel {
+  padding: 10px 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.scene-panel-heading h2,
+.scene-output-panel h2 {
+  font-size: 17px;
+  font-weight: 600;
+}
+.scene-panel-heading p,
+.scene-output-panel p {
+  margin-top: 8px;
+  color: var(--muted-foreground);
+  font-size: var(--text-ui-xs);
+  line-height: 1.8;
+}
+.scene-preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.scene-preset-list > button {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  text-align: left;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--foreground) 3%, transparent);
+}
+.scene-preset-list > button:hover {
+  background: color-mix(in srgb, var(--primary) 9%, transparent);
+}
+.scene-preset-list strong,
+.scene-choice strong {
+  display: block;
+  font-size: var(--text-ui-sm);
+  font-weight: 500;
+}
+.scene-preset-list small,
+.scene-choice small {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: var(--text-ui-xs);
+  line-height: 1.6;
+  margin-top: 4px;
+}
+.scene-preset-list > p {
+  font-size: var(--text-ui-2xs);
+  color: var(--muted-foreground);
+  line-height: 1.7;
+  padding: 4px;
+}
+.scene-camera-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.scene-camera-panel > .scene-details {
+  border-top: 1px solid color-mix(in srgb, var(--divider) 60%, transparent);
+}
+.scene-camera-panel .scene-side-next {
+  padding-inline: 0;
+}
+.scene-number [role="combobox"] {
+  height: 32px;
+  font-size: var(--text-ui-xs);
+}
+.scene-output-panel {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.scene-output-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 2px;
+}
+.scene-output-summary small {
+  color: var(--muted-foreground);
+}
+.scene-choice {
+  padding: 16px 12px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+.scene-choice:hover {
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+}
+.scene-choice > span {
+  flex: 1;
+}
+.scene-timeline {
+  min-height: 112px;
+  padding: 12px 16px;
+}
+.scene-timeline > input {
+  appearance: none;
+  height: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--foreground) 12%, transparent);
+  cursor: pointer;
+}
+.scene-timeline > input::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+.scene-timeline > input::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--primary);
+}
+.scene-color input::-webkit-color-swatch-wrapper {
+  padding: 3px;
+}
+.scene-color input::-webkit-color-swatch {
+  border: 0;
+  border-radius: 5px;
+}
+@media (max-width: 1100px) {
+  .scene-workspace {
+    gap: 10px;
+    padding-inline: 12px;
+  }
+  .scene-header {
+    padding-inline: 12px;
+  }
+  .scene-steps {
+    padding-inline: 12px;
+  }
+  .scene-steps > button > svg {
+    display: none;
+  }
+  .scene-stage-bar {
+    left: 8px;
+    right: 8px;
+    top: 8px;
+  }
+  .scene-stage-bar .scene-actions {
+    gap: 2px;
+  }
+  .scene-labeled-tool {
+    padding: 0 6px;
+  }
+}
+@media (max-width: 780px) {
+  .scene-workspace,
+  .scene-workspace[data-agent="true"] {
+    grid-template-columns: minmax(0, 1fr);
+    overflow: auto;
+  }
+  .scene-stage {
+    min-height: 420px;
+  }
+  .scene-side {
+    overflow: visible;
+  }
+  .scene-steps small {
+    display: none;
+  }
+  .scene-steps > button {
+    padding: 8px;
+    gap: 6px;
+  }
+  .scene-name {
+    max-width: 200px;
+  }
+}

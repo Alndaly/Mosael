@@ -3,6 +3,7 @@ import {
   useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BookOpen,
+  Box,
   ChartNoAxesCombined,
   Bot,
   Boxes,
@@ -56,6 +57,7 @@ const ICONS: Record<StudioView, React.ReactNode> = {
   statistics: <ChartNoAxesCombined size={17} />,
   media: <FolderOpen size={17} />,
   notes: <BookOpen size={17} />,
+  scenes: <Box size={17} />,
   editor: <Scissors size={17} />,
   ai: <Bot size={17} />,
   publish: <Rocket size={17} />,

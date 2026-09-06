@@ -84,6 +84,7 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
     boards.data?.map((board) => board.id),
   );
   const open = list.find((board) => board.id === openId) ?? null;
+  React.useEffect(() => { const id = new URLSearchParams(location.hash.split("?")[1] ?? "").get("board"); if (id && list.some(b => b.id === id)) { setOpenId(id); history.replaceState(null, "", "#/boards"); } }, [list, setOpenId]);
   React.useEffect(() => {
     const onOpen = (event: Event) => { const id = (event as CustomEvent<string>).detail; if (list.some(b => b.id === id)) setOpenId(id); };
     window.addEventListener("mosael:open-board", onOpen);
@@ -180,7 +181,7 @@ function BoardCard({ board, onOpen, onDelete }: { board: Board; onOpen: () => vo
     <>
       <div className="group relative min-w-0">
         <button type="button" onClick={onOpen} className="grid w-full gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          <CanvasPreview items={(board.canvas?.items ?? []).map(item => ({ ...item, assetId: item.asset_id, label: item.text || t(({note:"boardsAddNote",image:"kindImage",video:"kindVideo",audio:"kindAudio",frame:"boardsAddFrame"} as const)[item.kind]) }))} edges={board.canvas?.edges} />
+          <CanvasPreview items={(board.canvas?.items ?? []).map(item => ({ ...item, assetId: item.asset_id, label: item.text || t(({note:"boardsAddNote",image:"kindImage",video:"kindVideo",audio:"kindAudio",frame:"boardsAddFrame",scene:"navScenes"} as const)[item.kind]) }))} edges={board.canvas?.edges} />
           <span className="truncate pr-8 text-ui-md font-semibold">{board.name}</span>
           <span className="text-ui-sm text-muted-foreground">{t("boardsItemCount").replace("{n}", String(count))} · {relativeTime(board.updated_at, locale)}</span>
         </button>

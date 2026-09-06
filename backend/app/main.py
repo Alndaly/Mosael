@@ -48,6 +48,7 @@ from app.api.routes.job_worker import router as job_worker_router
 from app.api.routes.browser_worker import router as browser_worker_router
 from app.api.routes.publish_worker import router as publish_worker_router
 from app.api.routes.boards import router as boards_router
+from app.api.routes.scenes import router as scenes_router
 from app.api.routes.notes import router as notes_router
 from app.api.routes.workflows import router as workflows_router
 from app.api.routes.workspaces import router as workspaces_router
@@ -326,6 +327,7 @@ def create_app() -> FastAPI:
     app.include_router(scheduler_router, prefix="/api", dependencies=protected)
     app.include_router(workflows_router, prefix="/api", dependencies=protected)
     app.include_router(boards_router, prefix="/api", dependencies=protected)
+    app.include_router(scenes_router, prefix="/api", dependencies=protected)
     app.include_router(notes_router, prefix="/api", dependencies=protected)
     app.include_router(publish_router, prefix="/api", dependencies=protected)
     app.include_router(settings_router, prefix="/api", dependencies=protected)

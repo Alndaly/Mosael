@@ -15,6 +15,7 @@ export type StudioView =
   | "statistics"
   | "media"
   | "notes"
+  | "scenes"
   | "editor"
   | "ai"
   | "publish"
@@ -32,6 +33,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { view: "home", labelKey: "navHome", group: "primary" },
   { view: "media", labelKey: "navMedia", group: "primary" },
   { view: "notes", labelKey: "navNotes", group: "primary" },
+  { view: "scenes", labelKey: "navScenes", group: "primary" },
   { view: "boards", labelKey: "navBoards", group: "primary" },
   { view: "editor", labelKey: "navEditor", group: "primary" },
   { view: "ai", labelKey: "navAi", group: "primary" },

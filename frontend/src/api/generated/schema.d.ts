@@ -3273,6 +3273,127 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/scenes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Scenes */
+        get: operations["list_scenes_api_scenes_get"];
+        put?: never;
+        /** Create */
+        post: operations["create_api_scenes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/scenes/{scene_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read */
+        get: operations["read_api_scenes__scene_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit */
+        patch: operations["edit_api_scenes__scene_id__patch"];
+        trace?: never;
+    };
+    "/api/scenes/{scene_id}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Revisions */
+        get: operations["revisions_api_scenes__scene_id__revisions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/scenes/{scene_id}/revisions/{revision}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Revision Content */
+        get: operations["revision_content_api_scenes__scene_id__revisions__revision__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/scenes/{scene_id}/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload */
+        post: operations["upload_api_scenes__scene_id__models_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/scenes/{scene_id}/models/{model_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Model Data */
+        get: operations["model_data_api_scenes__scene_id__models__model_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/scenes/{scene_id}/operations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Operations */
+        post: operations["operations_api_scenes__scene_id__operations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/notes/sources/message/{message_id}": {
         parameters: {
             query?: never;
@@ -6384,6 +6505,13 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_upload_api_scenes__scene_id__models_post */
+        Body_upload_api_scenes__scene_id__models_post: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** File */
+            file: string;
+        };
         /** Body_upload_avatar_api_auth_me_avatar_post */
         Body_upload_avatar_api_auth_me_avatar_post: {
             /** File */
@@ -6494,6 +6622,45 @@ export interface components {
             proxy?: string | null;
             /** Enabled */
             enabled?: boolean | null;
+        };
+        /** CameraFrame */
+        CameraFrame: {
+            /**
+             * Time
+             * @default 0
+             */
+            time: number;
+            /**
+             * Position
+             * @default [
+             *       8,
+             *       5,
+             *       8
+             *     ]
+             */
+            position: [
+                number,
+                number,
+                number
+            ];
+            /**
+             * Target
+             * @default [
+             *       0,
+             *       1,
+             *       0
+             *     ]
+             */
+            target: [
+                number,
+                number,
+                number
+            ];
+            /**
+             * Fov
+             * @default 45
+             */
+            fov: number;
         };
         /**
          * CanvasCommentAnchor
@@ -9084,6 +9251,207 @@ export interface components {
             run: components["schemas"]["ScheduledTaskRunOut"];
             job: components["schemas"]["JobOut"];
         };
+        /** SceneContent */
+        SceneContent: {
+            /**
+             * Version
+             * @default 1
+             * @constant
+             */
+            version: 1;
+            /** Objects */
+            objects?: components["schemas"]["SceneObject"][];
+            /** Shots */
+            shots?: components["schemas"]["SceneShot"][];
+            /**
+             * Background
+             * @default #20242c
+             */
+            background: string;
+            /**
+             * Ambient
+             * @default 1.5
+             */
+            ambient: number;
+        };
+        /** SceneCreate */
+        SceneCreate: {
+            /** Workspace Id */
+            workspace_id: string;
+            /**
+             * Name
+             * @default Untitled scene
+             */
+            name: string;
+            content?: components["schemas"]["SceneContent"];
+        };
+        /** SceneObject */
+        SceneObject: {
+            /** Id */
+            id: string;
+            /**
+             * Name
+             * @default Object
+             */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "box" | "sphere" | "cylinder" | "plane" | "room" | "stairs" | "group" | "model" | "light";
+            /** Parent Id */
+            parent_id?: string | null;
+            /**
+             * Position
+             * @default [
+             *       0,
+             *       0,
+             *       0
+             *     ]
+             */
+            position: [
+                number,
+                number,
+                number
+            ];
+            /**
+             * Rotation
+             * @default [
+             *       0,
+             *       0,
+             *       0
+             *     ]
+             */
+            rotation: [
+                number,
+                number,
+                number
+            ];
+            /**
+             * Scale
+             * @default [
+             *       1,
+             *       1,
+             *       1
+             *     ]
+             */
+            scale: [
+                number,
+                number,
+                number
+            ];
+            parameters?: components["schemas"]["ShapeParameters"];
+            /**
+             * Color
+             * @default #b4bccb
+             */
+            color: string;
+            /**
+             * Roughness
+             * @default 0.6
+             */
+            roughness: number;
+            /**
+             * Metalness
+             * @default 0
+             */
+            metalness: number;
+            /**
+             * Intensity
+             * @default 30
+             */
+            intensity: number;
+            /**
+             * Hidden
+             * @default false
+             */
+            hidden: boolean;
+            /** Model Id */
+            model_id?: string | null;
+        };
+        /** SceneOperations */
+        SceneOperations: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Base Revision */
+            base_revision: number;
+            /** Name */
+            name?: string | null;
+            /** Objects */
+            objects?: {
+                [key: string]: unknown;
+            }[];
+            /** Remove Ids */
+            remove_ids?: string[];
+            /** Shots */
+            shots?: {
+                [key: string]: unknown;
+            }[] | null;
+        };
+        /** SceneOut */
+        SceneOut: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Name */
+            name: string;
+            content: components["schemas"]["SceneContent"];
+            /** Revision */
+            revision: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** SceneShot */
+        SceneShot: {
+            /** Id */
+            id: string;
+            /**
+             * Name
+             * @default Shot
+             */
+            name: string;
+            /**
+             * Duration
+             * @default 5
+             */
+            duration: number;
+            /**
+             * Aspect
+             * @default 16:9
+             * @enum {string}
+             */
+            aspect: "16:9" | "9:16" | "1:1";
+            /**
+             * Easing
+             * @default smooth
+             * @enum {string}
+             */
+            easing: "linear" | "smooth";
+            /** Frames */
+            frames?: components["schemas"]["CameraFrame"][];
+        };
+        /** SceneUpdate */
+        SceneUpdate: {
+            /** Workspace Id */
+            workspace_id: string;
+            /**
+             * Name
+             * @default Untitled scene
+             */
+            name: string;
+            content?: components["schemas"]["SceneContent"];
+            /** Base Revision */
+            base_revision: number;
+        };
         /** ScheduledTaskCreate */
         ScheduledTaskCreate: {
             /** Workspace Id */
@@ -9402,6 +9770,44 @@ export interface components {
             solo?: boolean | null;
             /** Duck */
             duck?: boolean | null;
+        };
+        /** ShapeParameters */
+        ShapeParameters: {
+            /**
+             * Width
+             * @default 2
+             */
+            width: number;
+            /**
+             * Height
+             * @default 2
+             */
+            height: number;
+            /**
+             * Depth
+             * @default 2
+             */
+            depth: number;
+            /**
+             * Radius
+             * @default 1
+             */
+            radius: number;
+            /**
+             * Steps
+             * @default 8
+             */
+            steps: number;
+            /**
+             * Door Width
+             * @default 1.4
+             */
+            door_width: number;
+            /**
+             * Door Height
+             * @default 2.3
+             */
+            door_height: number;
         };
         /** ShareRequest */
         ShareRequest: {
@@ -17409,6 +17815,309 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BoardOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_scenes_api_scenes_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_api_scenes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SceneCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SceneOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_api_scenes__scene_id__get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path: {
+                scene_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SceneOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_api_scenes__scene_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scene_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SceneUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SceneOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revisions_api_scenes__scene_id__revisions_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path: {
+                scene_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revision_content_api_scenes__scene_id__revisions__revision__get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path: {
+                scene_id: string;
+                revision: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_api_scenes__scene_id__models_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scene_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_api_scenes__scene_id__models_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    model_data_api_scenes__scene_id__models__model_id__get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path: {
+                scene_id: string;
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    operations_api_scenes__scene_id__operations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scene_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SceneOperations"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SceneOut"];
                 };
             };
             /** @description Validation Error */

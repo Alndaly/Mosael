@@ -7,7 +7,7 @@ summaries — never raw internal schemas.
 
 <!-- BEGIN generated: tools -->
 
-共 **70** 个工具,其中 **17** 个走确认卡。
+共 **74** 个工具,其中 **17** 个走确认卡。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -29,8 +29,10 @@ summaries — never raw internal schemas.
 | `convert_video_to_gif` | 确认卡 | Confirmation required: convert an EXISTING video asset into a NEW GIF asset. |
 | `create_note` | 直接执行 | Create a persistent note when the user asks to save research or writing. Preserve factual |
 | `create_project` | 直接执行 | Runs directly: create a project in the workspace; returns its id. |
+| `create_scene` | 直接执行 | Create an empty persistent 3D scene. Then use edit_scene to add geometry and camera shots. |
 | `create_workflow` | 确认卡 | Confirmation required: create a NEW visual workflow. |
 | `edit_board` | 确认卡 | Confirmation required: edit an EXISTING CREATIVE BOARD with granular canvas ops. |
+| `edit_scene` | 直接执行 | Edit an actual 3D scene atomically, with undoable immutable revisions. Read get_scene first. |
 | `edit_timeline` | 确认卡 | Confirmation required: propose edits to a VIDEO TIMELINE sequence. |
 | `edit_workflow` | 确认卡 | Confirmation required: edit an EXISTING VISUAL WORKFLOW with granular graph ops. |
 | `fetch_url` | 直接执行 | Read-only: fetch one public web page as readable text. |
@@ -44,6 +46,7 @@ summaries — never raw internal schemas.
 | `get_confirmation` | 直接执行 | Read-only: poll one confirmation card by confirmation_id. |
 | `get_current_time` | 直接执行 | Read-only: what time is it right now, on the machine running this studio. |
 | `get_job` | 直接执行 | Read-only: poll one background job (transcription, render, generation) by id. |
+| `get_scene` | 直接执行 | Read the current editable 3D scene, objects, materials, camera shots and revision. |
 | `get_transcript` | 直接执行 | Read-only: read the transcript/subtitles of an asset — timed segments with speakers. |
 | `get_workflow` | 直接执行 | Read-only: inspect one VISUAL WORKFLOW graph in full. |
 | `http_request` | 确认卡 | Confirmation required: call an external HTTP API (POST/PUT/PATCH/DELETE). |
@@ -60,6 +63,7 @@ summaries — never raw internal schemas.
 | `list_projects` | 直接执行 | Read-only: list video projects in a workspace (id, name, active_sequence_id). |
 | `list_provider_models` | 直接执行 | List the AI connections and models this user has actually configured, by capability. |
 | `list_publish_accounts` | 直接执行 | Read-only: the platform accounts already logged in, for publish_asset. |
+| `list_scenes` | 直接执行 | List persistent 3D scenes in the workspace, with object and shot counts. |
 | `list_workflow_node_types` | 直接执行 | Read-only: list allowed workflow node types, or inspect one type in full. |
 | `list_workflows` | 直接执行 | Read-only: list VISUAL WORKFLOWS in a workspace. |
 | `list_workspaces` | 直接执行 | Read-only: list the workspaces this user has, newest first. |

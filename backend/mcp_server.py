@@ -206,6 +206,8 @@ READ_ONLY_TOOLS = frozenset(
         "open_view",
         "list_jobs",
         "list_memories",
+        "list_scenes",
+        "get_scene",
         "search_notes",
         "read_note",
         "list_plugin_tools",
@@ -243,6 +245,8 @@ MUTATING_TOOLS = frozenset(
         "notify_agent_session",
         "notify_workspace",
         "remember",
+        "create_scene",
+        "edit_scene",
         "create_note",
         "append_note",
         "transcribe_asset",
@@ -545,7 +549,7 @@ _SURFACES = ("all", "agent", "direct", "gateway", "automation")
 #: 能跳到哪儿。**白名单**,和前端的 StudioView 一一对应 —— 透传任意字符串等于让模型
 #: 往 location.hash 里塞东西,而它拼错一个字的表现是"点了没反应"。
 _VIEWS = (
-    "home", "statistics", "media", "editor", "ai", "publish", "settings",
+    "home", "statistics", "media", "notes", "scenes", "editor", "ai", "publish", "settings",
     "workflows", "boards", "scheduler", "plugins", "browser-pool", "admin",
 )
 
@@ -566,10 +570,9 @@ def open_view(view: str, id: str = "") -> dict[str, Any]:
     that lists that kind of thing (list_assets, list_projects, list_workflows, list_boards,
     list_publish_accounts, list_jobs), then call this with the page it lives on.
 
-    `view` is one of: home, media, editor, ai, publish, settings, workflows, boards,
-    scheduler, plugins, browser-pool, admin. `id` selects one **project** and only applies to
-    `editor` — the other pages keep their own selection, so an id there would be ignored and
-    the user would land on a list after you told them you were taking them to one thing.
+    `view` is one of: home, statistics, media, notes, scenes, editor, ai, publish, settings,
+    workflows, boards, scheduler, plugins, browser-pool, admin. `id` selects a project in
+    editor, a note in notes, a 3D scene in scenes, or a board in boards. Other pages ignore id.
 
     Do NOT use it to shuffle the user around while you work — a page that changes under
     someone reading it is worse than no navigation at all. One destination, once you have one.
@@ -1156,6 +1159,51 @@ def browser_close(session_id: str, workspace_id: str = "") -> dict[str, Any]:
         "/api/agent-browser/close",
         {"workspace_id": workspace_id or _default_workspace_id(), "session_id": session_id},
     )
+
+
+@mcp.tool()
+def list_scenes(workspace_id: str = "") -> list[dict[str, Any]]:
+    """List persistent 3D scenes in the workspace, with object and shot counts."""
+    return _get("/api/scenes", {"workspace_id": workspace_id or _default_workspace_id()})
+
+
+@mcp.tool()
+def get_scene(scene_id: str, workspace_id: str = "") -> dict[str, Any]:
+    """Read the current editable 3D scene, objects, materials, camera shots and revision.
+    Positions/dimensions are metres; rotations are XYZ degrees. Read before editing.
+    This returns geometry data, not a rendered image; do not claim visual inspection."""
+    return _get(f"/api/scenes/{scene_id}", {"workspace_id": workspace_id or _default_workspace_id()})
+
+
+@mcp.tool()
+def create_scene(name: str, workspace_id: str = "") -> dict[str, Any]:
+    """Create an empty persistent 3D scene. Then use edit_scene to add geometry and camera shots.
+    Uses the user's selected chat model; no specific model or external generation service required."""
+    return _post("/api/scenes", {"workspace_id": workspace_id or _default_workspace_id(), "name": name})
+
+
+@mcp.tool()
+def edit_scene(scene_id: str, base_revision: int, objects: list[dict[str, Any]] | None = None,
+               remove_ids: list[str] | None = None, shots: list[dict[str, Any]] | None = None,
+               name: str | None = None, workspace_id: str = "") -> dict[str, Any]:
+    """Edit an actual 3D scene atomically, with undoable immutable revisions. Read get_scene first.
+    objects: up to 100 partial updates keyed by id, or new objects with id, name and kind.
+    kind: box, sphere, cylinder, plane, room, stairs, group, model, light. Optional position,
+    rotation and scale are XYZ triples (metres/degrees); parent_id must reference a group.
+    parameters: width,height,depth,radius,steps,door_width,door_height. Room has a floor and
+    four walls, centered doors in front/back, no ceiling. Stairs climb along +Z. Primitives
+    stand on local y=0; sphere center is at radius. color is #RRGGBB; roughness/metalness 0..1.
+    Imported models require an existing model_id from this SAME scene; never invent one.
+    remove_ids deletes objects AND descendants. shots, when supplied, replaces the shot list:
+    [{id,name,duration:0.1..120,aspect:'16:9'|'9:16'|'1:1',easing:'linear'|'smooth',
+    frames:[{time,position:[x,y,z],target:[x,y,z],fov:10..120}]}]. Times must start at 0,
+    strictly increase and not exceed duration. Plan collision-free camera paths yourself;
+    interpolation does not perform collision avoidance. No executable code is accepted.
+    If revision conflicts, re-read and merge; never overwrite changes blindly.
+    """
+    return _post(f"/api/scenes/{scene_id}/operations", {"workspace_id": workspace_id or _default_workspace_id(),
+        "base_revision": base_revision, "objects": objects or [], "remove_ids": remove_ids or [],
+        "shots": shots, "name": name})
 
 
 @mcp.tool()

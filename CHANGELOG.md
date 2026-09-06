@@ -5,6 +5,15 @@ commit list and downloadable artifacts.
 
 ## Unreleased
 
+- 笔记工具栏、正文和列表统一主题边界；低频操作收进菜单，修复回收站选择错位和标签输入中断。
+- 3D 工作台按搭建、运镜、生成分步展示，增加常用运镜预设、视角说明和独立的高级参数设置。
+
+- Added an editable 3D scene workspace with primitives, parameterized rooms and stairs,
+  GLB/glTF import, transforms, materials, lights, revision history and camera keyframes.
+- Added deterministic MP4 camera-preview exports, first/last-frame and reference-video
+  handoffs to creative boards, and scene editing tools for the user's selected chat model.
+- Consolidated note formatting, save status and view controls into one document toolbar.
+
 ## [1.0.0] - 2026-09-07
 
 ### Stable release

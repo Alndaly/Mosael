@@ -9626,6 +9626,453 @@
         }
       }
     },
+    "/api/scenes": {
+      "get": {
+        "tags": [
+          "3D scenes"
+        ],
+        "summary": "List Scenes",
+        "operationId": "list_scenes_api_scenes_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "3D scenes"
+        ],
+        "summary": "Create",
+        "operationId": "create_api_scenes_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SceneCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SceneOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/scenes/{scene_id}": {
+      "get": {
+        "tags": [
+          "3D scenes"
+        ],
+        "summary": "Read",
+        "operationId": "read_api_scenes__scene_id__get",
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scene Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SceneOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "3D scenes"
+        ],
+        "summary": "Edit",
+        "operationId": "edit_api_scenes__scene_id__patch",
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scene Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SceneUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SceneOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/scenes/{scene_id}/revisions": {
+      "get": {
+        "tags": [
+          "3D scenes"
+        ],
+        "summary": "Revisions",
+        "operationId": "revisions_api_scenes__scene_id__revisions_get",
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scene Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/scenes/{scene_id}/revisions/{revision}": {
+      "get": {
+        "tags": [
+          "3D scenes"
+        ],
+        "summary": "Revision Content",
+        "operationId": "revision_content_api_scenes__scene_id__revisions__revision__get",
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scene Id"
+            }
+          },
+          {
+            "name": "revision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Revision"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/scenes/{scene_id}/models": {
+      "post": {
+        "tags": [
+          "3D scenes"
+        ],
+        "summary": "Upload",
+        "operationId": "upload_api_scenes__scene_id__models_post",
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scene Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_api_scenes__scene_id__models_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/scenes/{scene_id}/models/{model_id}": {
+      "get": {
+        "tags": [
+          "3D scenes"
+        ],
+        "summary": "Model Data",
+        "operationId": "model_data_api_scenes__scene_id__models__model_id__get",
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scene Id"
+            }
+          },
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Model Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/scenes/{scene_id}/operations": {
+      "post": {
+        "tags": [
+          "3D scenes"
+        ],
+        "summary": "Operations",
+        "operationId": "operations_api_scenes__scene_id__operations_post",
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scene Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SceneOperations"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SceneOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/notes/sources/message/{message_id}": {
       "get": {
         "tags": [
@@ -18280,6 +18727,25 @@
         ],
         "title": "Body_stage_restore_api_settings_data_restore_stage_post"
       },
+      "Body_upload_api_scenes__scene_id__models_post": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "file"
+        ],
+        "title": "Body_upload_api_scenes__scene_id__models_post"
+      },
       "Body_upload_avatar_api_auth_me_avatar_post": {
         "properties": {
           "file": {
@@ -18587,6 +19053,83 @@
         },
         "type": "object",
         "title": "BrowserProfileUpdate"
+      },
+      "CameraFrame": {
+        "properties": {
+          "time": {
+            "type": "number",
+            "maximum": 120.0,
+            "minimum": 0.0,
+            "title": "Time",
+            "default": 0
+          },
+          "position": {
+            "prefixItems": [
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "minimum": -10000.0
+              },
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "minimum": -10000.0
+              },
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "minimum": -10000.0
+              }
+            ],
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 3,
+            "title": "Position",
+            "default": [
+              8,
+              5,
+              8
+            ]
+          },
+          "target": {
+            "prefixItems": [
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "minimum": -10000.0
+              },
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "minimum": -10000.0
+              },
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "minimum": -10000.0
+              }
+            ],
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 3,
+            "title": "Target",
+            "default": [
+              0,
+              1,
+              0
+            ]
+          },
+          "fov": {
+            "type": "number",
+            "maximum": 120.0,
+            "minimum": 10.0,
+            "title": "Fov",
+            "default": 45
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "CameraFrame"
       },
       "CanvasCommentAnchor": {
         "properties": {
@@ -24630,6 +25173,452 @@
         ],
         "title": "RunScheduledTaskResponse"
       },
+      "SceneContent": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "const": 1,
+            "title": "Version",
+            "default": 1
+          },
+          "objects": {
+            "items": {
+              "$ref": "#/components/schemas/SceneObject"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Objects"
+          },
+          "shots": {
+            "items": {
+              "$ref": "#/components/schemas/SceneShot"
+            },
+            "type": "array",
+            "maxItems": 32,
+            "minItems": 1,
+            "title": "Shots"
+          },
+          "background": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$",
+            "title": "Background",
+            "default": "#20242c"
+          },
+          "ambient": {
+            "type": "number",
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Ambient",
+            "default": 1.5
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SceneContent"
+      },
+      "SceneCreate": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "title": "Name",
+            "default": "Untitled scene"
+          },
+          "content": {
+            "$ref": "#/components/schemas/SceneContent"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id"
+        ],
+        "title": "SceneCreate"
+      },
+      "SceneObject": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[\\w-]+$",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "title": "Name",
+            "default": "Object"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "box",
+              "sphere",
+              "cylinder",
+              "plane",
+              "room",
+              "stairs",
+              "group",
+              "model",
+              "light"
+            ],
+            "title": "Kind"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1,
+                "pattern": "^[\\w-]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "position": {
+            "prefixItems": [
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "minimum": -10000.0
+              },
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "minimum": -10000.0
+              },
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "minimum": -10000.0
+              }
+            ],
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 3,
+            "title": "Position",
+            "default": [
+              0,
+              0,
+              0
+            ]
+          },
+          "rotation": {
+            "prefixItems": [
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "minimum": -10000.0
+              },
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "minimum": -10000.0
+              },
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "minimum": -10000.0
+              }
+            ],
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 3,
+            "title": "Rotation",
+            "default": [
+              0,
+              0,
+              0
+            ]
+          },
+          "scale": {
+            "prefixItems": [
+              {
+                "type": "number",
+                "maximum": 1000.0,
+                "minimum": 0.001
+              },
+              {
+                "type": "number",
+                "maximum": 1000.0,
+                "minimum": 0.001
+              },
+              {
+                "type": "number",
+                "maximum": 1000.0,
+                "minimum": 0.001
+              }
+            ],
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 3,
+            "title": "Scale",
+            "default": [
+              1,
+              1,
+              1
+            ]
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/ShapeParameters"
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$",
+            "title": "Color",
+            "default": "#b4bccb"
+          },
+          "roughness": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Roughness",
+            "default": 0.6
+          },
+          "metalness": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Metalness",
+            "default": 0
+          },
+          "intensity": {
+            "type": "number",
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Intensity",
+            "default": 30
+          },
+          "hidden": {
+            "type": "boolean",
+            "title": "Hidden",
+            "default": false
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1,
+                "pattern": "^[\\w-]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "kind"
+        ],
+        "title": "SceneObject"
+      },
+      "SceneOperations": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "base_revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Base Revision"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "objects": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Objects"
+          },
+          "remove_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Remove Ids"
+          },
+          "shots": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array",
+                "maxItems": 32,
+                "minItems": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shots"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "base_revision"
+        ],
+        "title": "SceneOperations"
+      },
+      "SceneOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "content": {
+            "$ref": "#/components/schemas/SceneContent"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "name",
+          "content",
+          "revision",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SceneOut"
+      },
+      "SceneShot": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[\\w-]+$",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "title": "Name",
+            "default": "Shot"
+          },
+          "duration": {
+            "type": "number",
+            "maximum": 120.0,
+            "minimum": 0.1,
+            "title": "Duration",
+            "default": 5
+          },
+          "aspect": {
+            "type": "string",
+            "enum": [
+              "16:9",
+              "9:16",
+              "1:1"
+            ],
+            "title": "Aspect",
+            "default": "16:9"
+          },
+          "easing": {
+            "type": "string",
+            "enum": [
+              "linear",
+              "smooth"
+            ],
+            "title": "Easing",
+            "default": "smooth"
+          },
+          "frames": {
+            "items": {
+              "$ref": "#/components/schemas/CameraFrame"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Frames"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "SceneShot"
+      },
+      "SceneUpdate": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "title": "Name",
+            "default": "Untitled scene"
+          },
+          "content": {
+            "$ref": "#/components/schemas/SceneContent"
+          },
+          "base_revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Base Revision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "base_revision"
+        ],
+        "title": "SceneUpdate"
+      },
       "ScheduledTaskCreate": {
         "properties": {
           "workspace_id": {
@@ -25412,6 +26401,62 @@
         },
         "type": "object",
         "title": "SetTrackStateRequest"
+      },
+      "ShapeParameters": {
+        "properties": {
+          "width": {
+            "type": "number",
+            "maximum": 1000.0,
+            "minimum": 0.01,
+            "title": "Width",
+            "default": 2
+          },
+          "height": {
+            "type": "number",
+            "maximum": 1000.0,
+            "minimum": 0.01,
+            "title": "Height",
+            "default": 2
+          },
+          "depth": {
+            "type": "number",
+            "maximum": 1000.0,
+            "minimum": 0.01,
+            "title": "Depth",
+            "default": 2
+          },
+          "radius": {
+            "type": "number",
+            "maximum": 500.0,
+            "minimum": 0.01,
+            "title": "Radius",
+            "default": 1
+          },
+          "steps": {
+            "type": "integer",
+            "maximum": 64.0,
+            "minimum": 1.0,
+            "title": "Steps",
+            "default": 8
+          },
+          "door_width": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.1,
+            "title": "Door Width",
+            "default": 1.4
+          },
+          "door_height": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.1,
+            "title": "Door Height",
+            "default": 2.3
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ShapeParameters"
       },
       "ShareRequest": {
         "properties": {

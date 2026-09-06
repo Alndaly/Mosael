@@ -34,6 +34,7 @@ DEFAULT_SIZE: dict[str, tuple[int, int]] = {
     "video": (320, 200),
     "audio": (280, 72),
     "frame": (420, 300),
+    "scene": (320, 220),
 }
 
 
@@ -92,6 +93,8 @@ def apply_board_ops(canvas: dict[str, Any], operations: list[dict[str, Any]]) ->
                 item["text"] = str(op["text"])
             if op.get("color") is not None:
                 item["color"] = str(op["color"])
+            if op.get("scene_id"):
+                item["scene_id"] = str(op["scene_id"])
             if op.get("asset_id"):
                 item["asset_id"] = str(op["asset_id"])
             items.append(item)

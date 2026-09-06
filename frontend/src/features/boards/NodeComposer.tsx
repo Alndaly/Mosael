@@ -512,7 +512,7 @@ export function NodeComposer({
 
   //: 上游变了就重挑一次默认方式:一张图 = 首帧,多张 = 参考(TapNow 的那套直觉)。
   //: 用户自己点过之后,这条不再插手 —— touched 记着这件事。
-  const touched = React.useRef(false);
+  const touched = React.useRef(Boolean(saved.mode));
   const feedIds = feed.map((one) => one.assetId).join(",");
   React.useEffect(() => {
     if (touched.current || modes.length === 0) return;
