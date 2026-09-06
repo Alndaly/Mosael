@@ -52,4 +52,18 @@ describe("semantic status colors", () => {
     }
   });
 
+  it("keeps dark secondary text legible on every content and floating surface", () => {
+    const theme = block(".dark");
+    for (const surface of ["background", "card", "popover", "secondary", "field", "panel-subtle", "panel-inset"])
+      for (const ink of ["foreground", "muted-foreground", "primary", "success", "warning", "destructive"])
+        expect(contrast(token(theme, ink), token(theme, surface)), `${ink} on ${surface}`).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("keeps clip labels readable across all dark timeline media types", () => {
+    const theme = block(".dark");
+    for (const kind of ["video", "audio", "subtitle", "overlay"])
+      expect(contrast(token(theme, `track-${kind}-text`), token(theme, `track-${kind}-bg`)), kind).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(token(theme, "ruler-text"), token(theme, "ruler-bg"))).toBeGreaterThanOrEqual(4.5);
+  });
+
 });

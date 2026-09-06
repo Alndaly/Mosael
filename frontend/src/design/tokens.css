@@ -210,73 +210,74 @@
 .dark {
   color-scheme: dark;
 
-  /* Evening Studio: blue-grey layers with brighter action and status colors. */
-  --destructive-foreground: #351216;
-  --background: #171d28;
-  --foreground: #edf2fa;
-  --card: #202938;
-  --card-foreground: #edf2fa;
-  --popover: #283346;
-  --popover-foreground: #edf2fa;
-  --primary: #9ab4ff;
-  --primary-foreground: #162348;
-  --secondary: #2c3749;
-  --secondary-foreground: #dae3f2;
-  --muted: #1c2432;
-  --muted-foreground: #a5b3c8;
-  --accent: #2a3c65;
-  --accent-foreground: #bacdff;
-  --destructive: #ff9397;
-  --success: #77d6a2;
-  --warning: #f3bf68;
-  --border: #364257;
-  --input: #65768f;
-  --field: #1c2432;
-  --ring: #9ab4ff;
+  /* Evening Studio: neutral graphite keeps footage color honest. Blue is reserved
+     for actions; lifted surfaces and quiet edges express depth without a navy wash. */
+  --destructive-foreground: #35191d;
+  --background: #141517;
+  --foreground: #f2f3f5;
+  --card: #1e2023;
+  --card-foreground: #f2f3f5;
+  --popover: #292c30;
+  --popover-foreground: #f2f3f5;
+  --primary: #7194ff;
+  --primary-foreground: #121b35;
+  --secondary: #2b2e33;
+  --secondary-foreground: #dce0e6;
+  --muted: #191b1e;
+  --muted-foreground: #adb2ba;
+  --accent: #253455;
+  --accent-foreground: #c0d0ff;
+  --destructive: #f28d96;
+  --success: #76cfaa;
+  --warning: #e8c17a;
+  --border: #34383f;
+  --input: #777f8c;
+  --field: #181a1d;
+  --ring: #89a6ff;
 
   --panel: var(--card);
-  --panel-subtle: #1c2432;
-  --panel-inset: #151c27;
-  --border-strong: #65768f;
-  --shadow-panel: 0 2px 12px rgb(0 0 0 / 0.24);
-  --shadow-raised: 0 12px 48px rgb(0 0 0 / 0.4);
+  --panel-subtle: #191b1e;
+  --panel-inset: #101113;
+  --border-strong: #626a76;
+  --shadow-panel: 0 2px 12px rgb(0 0 0 / 0.2);
+  --shadow-raised: 0 12px 48px rgb(0 0 0 / 0.48);
 
-  --monitor-bg: #0e1015;
-  --timeline-bg: #19212e;
-  --ruler-bg: #202938;
-  --ruler-tick: #65768f;
-  --ruler-text: #a5b3c8;
-  --playhead: #ff5d61;
-  --track-lane: #202b3b;
-  --track-lane-line: #2c384b;
+  /* Neutral monitor surround and lanes; clip colors identify media types. */
+  --monitor-bg: #0b0c0e;
+  --timeline-bg: #17191c;
+  --ruler-bg: #22252a;
+  --ruler-tick: #777f8c;
+  --ruler-text: #adb2ba;
+  --playhead: #ff7d83;
+  --track-lane: #1e2023;
+  --track-lane-line: #30343a;
 
-  --track-video-bg: #262e52;
-  --track-video-border: #46549b;
-  --track-video-text: #bcc7f5;
-  --track-audio-bg: #1b3a31;
-  --track-audio-border: #2f6b58;
-  --track-audio-text: #a5e0c8;
-  --track-subtitle-bg: #332a4d;
-  --track-subtitle-border: #5c4a94;
-  --track-subtitle-text: #cfc0f2;
-  --track-overlay-bg: #40243f;
-  --track-overlay-border: #7a4677;
-  --track-overlay-text: #eac3e6;
+  --track-video-bg: #253450;
+  --track-video-border: #4e6da2;
+  --track-video-text: #c4d6ff;
+  --track-audio-bg: #173d35;
+  --track-audio-border: #387b68;
+  --track-audio-text: #a2e4cd;
+  --track-subtitle-bg: #45391e;
+  --track-subtitle-border: #8e7740;
+  --track-subtitle-text: #efdaa1;
+  --track-overlay-bg: #403049;
+  --track-overlay-border: #856392;
+  --track-overlay-text: #e0c5ed;
 
-  /* Chart colors for dark surfaces. */
-  --chart-ok: #9ab4ff;
-  --chart-fail: #ff9397;
-  --chart-video: #5c7ce8;
-  --chart-audio: #219e8c;
-  --chart-image: #bb8326;
-  --chart-cache: #9b86d4;
-  --holiday-red: #ff9397;
-  --holiday-amber: #f3bf68;
-  --holiday-pink: #d977a5;
-  --holiday-green: #43a883;
-  --holiday-violet: #9ab4ff;
-  --holiday-sky: #5b9dd6;
-  --holiday-orange: #d98a45;
+  --chart-ok: #7194ff;
+  --chart-fail: #f28d96;
+  --chart-video: #7194ff;
+  --chart-audio: #62bfa7;
+  --chart-image: #dfb56c;
+  --chart-cache: #b59bd9;
+  --holiday-red: #f28d96;
+  --holiday-amber: #e8c17a;
+  --holiday-pink: #d997ba;
+  --holiday-green: #76cfaa;
+  --holiday-violet: #b59bd9;
+  --holiday-sky: #86b7dd;
+  --holiday-orange: #dda171;
 }
 
 /* 自定义外观(opt-in 磨玻璃):有自定义背景时,把核心表面色调成半透明,让
@@ -292,11 +293,11 @@
     --panel-inset: color-mix(in srgb, #eaf0f7 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
   }
   :root[data-appearance="glass"].dark {
-    --background: color-mix(in srgb, #171d28 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
-    --card: color-mix(in srgb, #202938 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
-    --popover: color-mix(in srgb, #283346 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
-    --panel-subtle: color-mix(in srgb, #1c2432 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
-    --panel-inset: color-mix(in srgb, #151c27 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+    --background: color-mix(in srgb, #141517 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+    --card: color-mix(in srgb, #1e2023 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+    --popover: color-mix(in srgb, #292c30 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+    --panel-subtle: color-mix(in srgb, #191b1e calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+    --panel-inset: color-mix(in srgb, #101113 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
   }
 
   /* 磨玻璃**只改两件事:颜色和模糊。几何一律不动。**

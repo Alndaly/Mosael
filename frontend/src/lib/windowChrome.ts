@@ -45,7 +45,7 @@ export function installWindowChrome(
     const pushOverlay = () =>
       desktop.setTitleOverlay!(
         root.classList.contains("dark")
-          ? { color: "#202938", symbolColor: "#edf2fa" }
+          ? { color: "#1e2023", symbolColor: "#f2f3f5" }
           : { color: "#ffffff", symbolColor: "#626e83" },
       );
     pushOverlay();

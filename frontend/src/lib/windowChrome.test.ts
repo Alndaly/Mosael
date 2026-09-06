@@ -79,4 +79,21 @@ describe("窗口装饰让位", () => {
     // 有了 :not() 就不该再出现「全屏时改回去」的补丁类;它一旦回来,配对遗漏的老毛病也就回来了。
     expect(source).not.toContain(".is-fullscreen_&]");
   });
+  it("updates native title buttons to the same dark surface and text as the application", async () => {
+    const root = document.createElement("html");
+    const setTitleOverlay = vi.fn();
+    const cleanup = installWindowChrome({ platform: "win32", setTitleOverlay }, root);
+    const light = setTitleOverlay.mock.lastCall?.[0];
+    root.classList.add("dark");
+    await Promise.resolve();
+    const css = readFileSync(join(SRC, "design", "tokens.css"), "utf8");
+    const dark = css.match(/\.dark \{([\s\S]*?)\n\}/)![1];
+    const value = (name: string) => dark.match(new RegExp(`--${name}:\\s*(#[0-9a-f]{6})`))![1];
+    expect(setTitleOverlay).toHaveBeenLastCalledWith({ color: value("card"), symbolColor: value("foreground") });
+    root.classList.remove("dark");
+    await Promise.resolve();
+    expect(setTitleOverlay).toHaveBeenLastCalledWith(light);
+    cleanup();
+  });
+
 });
