@@ -26,7 +26,6 @@ function setup(preview = false) {
     capture: vi.fn(),
     observe: vi.fn(),
     camera: vi.fn(() => live),
-    onNext: vi.fn(),
   };
   render(<SceneCameraPanel {...props} />);
   return props;

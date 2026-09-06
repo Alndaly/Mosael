@@ -1,13 +1,5 @@
 import React from "react";
-import {
-  Camera,
-  ChevronRight,
-  Play,
-  Pause,
-  RotateCw,
-  MoveRight,
-  Video,
-} from "lucide-react";
+import { Camera, Play, Pause, RotateCw, MoveRight, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { CameraFrame, SceneShot } from "@/api/domains/scenes";
@@ -26,7 +18,6 @@ export function SceneCameraPanel({
   capture,
   observe,
   camera,
-  onNext,
 }: {
   shot: SceneShot;
   time: number;
@@ -39,7 +30,6 @@ export function SceneCameraPanel({
   capture: (time: number) => void;
   observe: () => void;
   camera: () => CameraFrame;
-  onNext: () => void;
 }) {
   const current = sampleCamera(shot, time);
   const frameIndex = shot.frames.findIndex(
@@ -227,12 +217,6 @@ export function SceneCameraPanel({
           )}
         </div>
       </details>
-      <div className="scene-side-next">
-        <Button onClick={onNext}>
-          下一步：生成视频
-          <ChevronRight size={15} />
-        </Button>
-      </div>
     </div>
   );
 }

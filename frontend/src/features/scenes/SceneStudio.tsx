@@ -27,6 +27,7 @@ import {
   RotateCcw,
   RotateCw,
   Scaling,
+  Trash2,
   Sparkles,
   Upload,
 } from "lucide-react";
@@ -384,6 +385,7 @@ function SceneEditor({
   React.useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (
+        e.defaultPrevented ||
         (e.target as HTMLElement).closest(
           "input,textarea,[contenteditable=true],[role=dialog]",
         ) ||
@@ -394,7 +396,11 @@ function SceneEditor({
         e.preventDefault();
         e.shiftKey ? redo() : undo();
       }
-      if (e.key === "Delete" && selected && step === "build") {
+      if (
+        (e.key === "Delete" || e.key === "Backspace") &&
+        selected &&
+        step === "build"
+      ) {
         e.preventDefault();
         update(removeObjects(current.current.content, [selected]));
         setSelected(null);
@@ -1042,217 +1048,238 @@ function SceneEditor({
           )}
         </main>
         <aside className="scene-side">
-          {step === "build" && (
-            <>
-              <div className="scene-objects">
-                <header>
-                  <h2>
-                    场景中的物体 <span>{draft.content.objects.length}</span>
-                  </h2>
-                  <Popover open={addOpen} onOpenChange={setAddOpen}>
-                    <PopoverTrigger asChild>
-                      <Button size="sm" aria-label="添加物体">
-                        <Plus size={15} />
-                        添加
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent align="start" className="scene-add">
-                      {(
-                        [
-                          "box",
-                          "sphere",
-                          "cylinder",
-                          "plane",
-                          "room",
-                          "stairs",
-                          "group",
-                          "light",
-                        ] as const
-                      ).map((k) => (
-                        <button key={k} onClick={() => add(k)}>
-                          <Box size={15} />
-                          {objectLabels[k]}
+          <div className="scene-side-scroll">
+            {step === "build" && (
+              <>
+                <div className="scene-objects">
+                  <header>
+                    <h2>
+                      场景中的物体 <span>{draft.content.objects.length}</span>
+                    </h2>
+                    <Popover open={addOpen} onOpenChange={setAddOpen}>
+                      <PopoverTrigger asChild>
+                        <Button size="sm" aria-label="添加物体">
+                          <Plus size={15} />
+                          添加
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent align="start" className="scene-add">
+                        {(
+                          [
+                            "box",
+                            "sphere",
+                            "cylinder",
+                            "plane",
+                            "room",
+                            "stairs",
+                            "group",
+                            "light",
+                          ] as const
+                        ).map((k) => (
+                          <button key={k} onClick={() => add(k)}>
+                            <Box size={15} />
+                            {objectLabels[k]}
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => {
+                            setAddOpen(false);
+                            file.current?.click();
+                          }}
+                        >
+                          <Upload size={15} />
+                          导入 GLB / glTF
                         </button>
-                      ))}
-                      <button
-                        onClick={() => {
-                          setAddOpen(false);
-                          file.current?.click();
-                        }}
-                      >
-                        <Upload size={15} />
-                        导入 GLB / glTF
-                      </button>
-                    </PopoverContent>
-                  </Popover>
-                </header>
-                {!draft.content.objects.length && (
-                  <div className="scene-start">
-                    <Box size={28} strokeWidth={1.4} />
-                    <strong>先放入一个物体</strong>
-                    <p>点击「添加」选择形状，也可以导入已有的 3D 模型。</p>
+                      </PopoverContent>
+                    </Popover>
+                  </header>
+                  {!draft.content.objects.length && (
+                    <div className="scene-start">
+                      <Box size={28} strokeWidth={1.4} />
+                      <strong>先放入一个物体</strong>
+                      <p>点击「添加」选择形状，也可以导入已有的 3D 模型。</p>
+                    </div>
+                  )}
+                  <div className="scene-object-list">
+                    {draft.content.objects.map((o) => (
+                      <div className="scene-object-row" key={o.id}>
+                        <button
+                          aria-pressed={selected === o.id}
+                          onClick={() => {
+                            setSelected(o.id);
+                            setPreview(false);
+                            requestAnimationFrame(() => view.current?.focus());
+                          }}
+                          onDoubleClick={() => view.current?.focus()}
+                          style={{ paddingLeft: o.parent_id ? 24 : 10 }}
+                        >
+                          <Box size={14} />
+                          <span>{o.name}</span>
+                          {o.hidden && <small>隐藏</small>}
+                        </button>
+                        <button
+                          className="scene-object-delete"
+                          aria-label={`删除物体：${o.name}`}
+                          title={`删除 ${o.name}`}
+                          disabled={!!busy}
+                          onClick={() => {
+                            const content = removeObjects(
+                              current.current.content,
+                              [o.id],
+                            );
+                            update(content);
+                            if (
+                              !content.objects.some(
+                                (item) => item.id === selected,
+                              )
+                            )
+                              setSelected(null);
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                )}
-                <div className="scene-object-list">
-                  {draft.content.objects.map((o) => (
-                    <button
-                      key={o.id}
-                      aria-pressed={selected === o.id}
-                      onClick={() => {
-                        setSelected(o.id);
-                        setPreview(false);
-                        requestAnimationFrame(() => view.current?.focus());
-                      }}
-                      onDoubleClick={() => view.current?.focus()}
-                      style={{ paddingLeft: o.parent_id ? 24 : 10 }}
-                    >
-                      <Box size={14} />
-                      <span>{o.name}</span>
-                      {o.hidden && <small>隐藏</small>}
+                  <footer>
+                    <button onClick={() => file.current?.click()}>
+                      <Upload size={14} />
+                      导入模型
                     </button>
-                  ))}
+                  </footer>
+                  <input
+                    ref={file}
+                    type="file"
+                    hidden
+                    accept=".glb,.gltf"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) void importModel(f);
+                      e.target.value = "";
+                    }}
+                  />
                 </div>
-                <footer>
-                  <button onClick={() => file.current?.click()}>
-                    <Upload size={14} />
-                    导入模型
-                  </button>
-                </footer>
-                <input
-                  ref={file}
-                  type="file"
-                  hidden
-                  accept=".glb,.gltf"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) void importModel(f);
-                    e.target.value = "";
-                  }}
-                />
-              </div>
 
-              <SceneInspector
-                content={draft.content}
-                object={object}
-                objectPatch={objectPatch}
-                update={update}
-                setSelected={setSelected}
+                <SceneInspector
+                  content={draft.content}
+                  object={object}
+                  objectPatch={objectPatch}
+                  update={update}
+                  setSelected={setSelected}
+                />
+              </>
+            )}
+            {step === "camera" && (
+              <SceneCameraPanel
+                shot={shot}
+                time={time}
+                preview={preview}
+                playing={playing}
+                onPatch={shotPatch}
+                onTime={setTime}
+                onPreview={setPreview}
+                onPlaying={setPlaying}
+                capture={recordView}
+                observe={() => {
+                  view.current?.editCamera(shot, time);
+                  setPreview(false);
+                  setPlaying(false);
+                }}
+                camera={() => view.current!.camera()}
               />
-              <div className="scene-side-next">
+            )}
+            {step === "output" && (
+              <section className="scene-output-panel">
+                <h2>把镜头变成视频</h2>
+                <p>先预览构图和运镜，再选择交给视频模型的参考素材。</p>
                 <Button
+                  variant="secondary"
                   onClick={() => {
-                    setStep("camera");
-                    setPreview(false);
-                    setPlaying(false);
+                    setPreview(true);
+                    if (time >= shot.duration) setTime(0);
+                    setPlaying(!playing);
                   }}
                 >
-                  <Camera size={15} />
-                  下一步：设计镜头
-                  <ChevronRight size={15} />
+                  {playing ? <Pause size={15} /> : <Play size={15} />}{" "}
+                  {playing ? "暂停预览" : "播放镜头"}
                 </Button>
-              </div>
-            </>
-          )}
-          {step === "camera" && (
-            <SceneCameraPanel
-              shot={shot}
-              time={time}
-              preview={preview}
-              playing={playing}
-              onPatch={shotPatch}
-              onTime={setTime}
-              onPreview={setPreview}
-              onPlaying={setPlaying}
-              capture={recordView}
-              observe={() => {
-                view.current?.editCamera(shot, time);
-                setPreview(false);
-                setPlaying(false);
-              }}
-              camera={() => view.current!.camera()}
-              onNext={() => {
-                setStep("output");
-                setPreview(true);
-                setPlaying(false);
-              }}
-            />
-          )}
-          {step === "output" && (
-            <section className="scene-output-panel">
-              <h2>把镜头变成视频</h2>
-              <p>先预览构图和运镜，再选择交给视频模型的参考素材。</p>
+                <div className="scene-output-summary">
+                  <span>{shot.name}</span>
+                  <small>
+                    {shot.duration} 秒 · {shot.aspect}
+                  </small>
+                </div>
+                <button
+                  className="scene-choice"
+                  disabled={!!busy}
+                  onClick={() => void bridge("frames")}
+                >
+                  <Camera size={20} />
+                  <span>
+                    <strong>使用首尾帧生成</strong>
+                    <small>用开场和结束画面控制构图</small>
+                  </span>
+                  <ChevronRight size={16} />
+                </button>
+                <button
+                  className="scene-choice"
+                  disabled={!!busy}
+                  onClick={() => void bridge("video")}
+                >
+                  <Play size={20} />
+                  <span>
+                    <strong>使用运镜视频生成</strong>
+                    <small>提供完整镜头作为动作参考</small>
+                  </span>
+                  <ChevronRight size={16} />
+                </button>
+                <p>
+                  下一步会打开创意画板，由你选择视频模型、描述画面风格并开始生成。
+                </p>
+                <details className="scene-details">
+                  <summary>只保存预览素材</summary>
+                  <div>
+                    <Button
+                      variant="ghost"
+                      onClick={() =>
+                        void work("保存画面", async () => {
+                          await assetFrame(time);
+                          toast.success("画面已保存到素材库");
+                        })
+                      }
+                    >
+                      保存当前画面
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() =>
+                        void work("导出镜头预览", async () => {
+                          await exportVideo();
+                          toast.success("镜头预览已保存到素材库");
+                        })
+                      }
+                    >
+                      保存镜头预览视频
+                    </Button>
+                  </div>
+                </details>
+              </section>
+            )}
+          </div>
+          {step !== "output" && (
+            <div className="scene-side-next">
               <Button
-                variant="secondary"
+                disabled={!!busy}
                 onClick={() => {
-                  setPreview(true);
-                  if (time >= shot.duration) setTime(0);
-                  setPlaying(!playing);
+                  setStep(step === "build" ? "camera" : "output");
+                  setPreview(step === "camera");
+                  setPlaying(false);
                 }}
               >
-                {playing ? <Pause size={15} /> : <Play size={15} />}{" "}
-                {playing ? "暂停预览" : "播放镜头"}
+                {step === "build" ? "下一步：设计镜头" : "下一步：生成视频"}
+                <ChevronRight size={15} />
               </Button>
-              <div className="scene-output-summary">
-                <span>{shot.name}</span>
-                <small>
-                  {shot.duration} 秒 · {shot.aspect}
-                </small>
-              </div>
-              <button
-                className="scene-choice"
-                disabled={!!busy}
-                onClick={() => void bridge("frames")}
-              >
-                <Camera size={20} />
-                <span>
-                  <strong>使用首尾帧生成</strong>
-                  <small>用开场和结束画面控制构图</small>
-                </span>
-                <ChevronRight size={16} />
-              </button>
-              <button
-                className="scene-choice"
-                disabled={!!busy}
-                onClick={() => void bridge("video")}
-              >
-                <Play size={20} />
-                <span>
-                  <strong>使用运镜视频生成</strong>
-                  <small>提供完整镜头作为动作参考</small>
-                </span>
-                <ChevronRight size={16} />
-              </button>
-              <p>
-                下一步会打开创意画板，由你选择视频模型、描述画面风格并开始生成。
-              </p>
-              <details className="scene-details">
-                <summary>只保存预览素材</summary>
-                <div>
-                  <Button
-                    variant="ghost"
-                    onClick={() =>
-                      void work("保存画面", async () => {
-                        await assetFrame(time);
-                        toast.success("画面已保存到素材库");
-                      })
-                    }
-                  >
-                    保存当前画面
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() =>
-                      void work("导出镜头预览", async () => {
-                        await exportVideo();
-                        toast.success("镜头预览已保存到素材库");
-                      })
-                    }
-                  >
-                    保存镜头预览视频
-                  </Button>
-                </div>
-              </details>
-            </section>
+            </div>
           )}
         </aside>
         {agent && (
