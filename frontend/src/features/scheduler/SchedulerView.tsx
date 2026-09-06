@@ -22,6 +22,7 @@ import {
   type Workspace,
 } from "@/api/client";
 import { useI18n, usePreferences } from "@/app/preferences";
+import { JobChildrenList, useJobChildren } from "@/components/layout/JobChildren";
 import { relativeTime } from "@/lib/time";
 import { COMPACT_SIDEBAR_BOUNDS, useResizableSidebar } from "@/lib/useResizableSidebar";
 import { Button } from "@/components/ui/button";
@@ -551,9 +552,17 @@ function RunRow({ run, job }: { run: ScheduledTaskRun; job: Job | null }) {
     return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
   })();
   const message = run.error ?? (running ? job?.message : null);
+  //: 这一次运行派生的子任务。**只在跑着的时候拉** —— 历史里几十条各拉一次是白花请求,
+  //: 而"它到底在动没动"这个问题只有当下那一条会问。
+  //:
+  //: 定时任务跑工作流时复用同一个 job(见 workers/scheduler),所以工作流里那些出片、配音
+  //: 都挂在这条运行下面。不摆出来的话,一次十几分钟的成片任务在这里就是一个不动的转圈。
+  const children = useJobChildren(running ? run.job_id ?? null : null, running);
+  const rows = children.data ?? [];
 
   return (
-    <div className="flex items-center gap-2 py-[7px] [&+&]:border-t [&+&]:border-border">
+    <div className="grid gap-1 py-[7px] [&+&]:border-t [&+&]:border-border">
+      <div className="flex items-center gap-2">
       <span
         className={cn(
           "grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full border border-border text-muted-foreground",
@@ -595,6 +604,12 @@ function RunRow({ run, job }: { run: ScheduledTaskRun; job: Job | null }) {
       >
         {t(`runStatus_${running ? "running" : run.status}` as never)}
       </em>
+      </div>
+      {rows.length > 0 && (
+        <div className="pl-[30px]">
+          <JobChildrenList>{rows}</JobChildrenList>
+        </div>
+      )}
     </div>
   );
 }
