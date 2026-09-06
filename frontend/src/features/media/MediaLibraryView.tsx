@@ -75,6 +75,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const [batchTagging, setBatchTagging] = React.useState(false);
   const [batchDeleting, setBatchDeleting] = React.useState(false);
   const [urlImportOpen, setUrlImportOpen] = React.useState(false);
+  const importInputRef = React.useRef<HTMLInputElement>(null);
   const filtersRef = React.useRef<HTMLDivElement>(null);
   const [filtersStuck, setFiltersStuck] = React.useState(false);
   const [actionMenuId, setActionMenuId] = React.useState<string | null>(null);
@@ -267,20 +268,20 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
         }}
       >
       <PageHeading title={t("navMedia")} description={t("studioMediaDesc")} count={assets.data?.length} className="py-7 xl:py-8" actions={<>
-              <Button asChild size="default">
-                <label className="inline-flex cursor-pointer items-center gap-1.5">
-                  <input
-                    type="file"
-                    accept="video/*,audio/*,image/*"
-                    className="hidden"
-                    onChange={(event) => {
-                      const file = event.currentTarget.files?.[0];
-                      if (file) uploadAsset.mutate(file);
-                      event.currentTarget.value = "";
-                    }}
-                  />
-                  <ImagePlus size={13} /> {t("import")}
-                </label>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept="video/*,audio/*,image/*"
+                className="hidden"
+                disabled={uploadAsset.isPending}
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  if (file) uploadAsset.mutate(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+              <Button size="default" loading={uploadAsset.isPending} onClick={() => importInputRef.current?.click()}>
+                <ImagePlus />{t("import")}
               </Button>
               <Button variant="outline" size="default" onClick={() => setUrlImportOpen(true)}>
                 <Link2 size={13} /> {t("urlImport")}
