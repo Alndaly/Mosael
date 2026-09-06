@@ -9,6 +9,7 @@ let imagePreviewOpen = false;
 vi.mock("@/api/client", () => ({
   assetFileUrl: (id: string) => `/file/${id}`,
   assetPreviewUrl: (id: string) => `/preview/${id}`,
+  fetchWaveform: async () => ({ peaks: [] }),
 }));
 
 vi.mock("@/app/preferences", () => ({

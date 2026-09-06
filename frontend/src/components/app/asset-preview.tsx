@@ -1,10 +1,10 @@
 import React from "react";
-import { Maximize2, Paperclip } from "lucide-react";
+import { Paperclip } from "lucide-react";
 
 import { assetFileUrl, assetPreviewUrl } from "@/api/client";
 import { cn } from "@/lib/utils";
 import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
-import { AudioPlayerBar } from "@/components/app/media-playback";
+import { AudioPlayerBar, VideoPlayer } from "@/components/app/media-playback";
 
 /**
  * 一个素材的行内预览:图出图、视频出播放器、音频出音轨,其余退回文件胶囊。
@@ -88,33 +88,14 @@ export function AssetInlinePreview({
   }
   if (kind === "video") {
     return (
-      <div className={cn("relative max-w-full", plain ? "w-full" : "w-fit")}>
-        {/* nodrag:播放条要能点、能拖进度,不能让画布把 pointerdown 抢去拖节点。 */}
-        <video
-          src={src}
-          controls
-          preload="metadata"
-          className={cn(
-            "nodrag",
-            className ?? (plain ? "max-w-full bg-black" : "max-h-[200px] max-w-full rounded-lg border border-border bg-black"),
-          )}
-          onLoadedMetadata={(event) => {
-            const video = event.currentTarget;
-            if (video.videoWidth && video.videoHeight) onNaturalSize?.(video.videoWidth, video.videoHeight);
-          }}
-        />
-        {previewOnClick && (
-          <button
-            type="button"
-            title={name}
-            aria-label={name}
-            className="nodrag absolute right-1.5 top-1.5 inline-flex size-7 cursor-zoom-in items-center justify-center rounded-full border border-white/20 bg-black/55 p-0 text-white backdrop-blur-sm hover:bg-black/75"
-            onClick={openPreview}
-          >
-            <Maximize2 size={13} />
-          </button>
-        )}
-      </div>
+      <VideoPlayer
+        key={assetId}
+        assetSrc={src}
+        compact
+        className={cn("max-w-full", className ?? "h-[160px] w-[260px] rounded-lg")}
+        onNaturalSize={onNaturalSize}
+        onExpand={previewOnClick ? openPreview : undefined}
+      />
     );
   }
   if (kind === "audio") {

@@ -1,12 +1,12 @@
 import * as React from "react";
-import { Check, Copy, FileAudio, Maximize2 } from "lucide-react";
+import { Check, Copy, Maximize2 } from "lucide-react";
 
 import { assetFileUrl, assetPreviewUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useImagePreview } from "@/components/app/image-preview";
-import { AudioPlayerBar } from "@/components/app/media-playback";
+import { MediaPreviewPlayer } from "@/components/app/MediaPreviewPlayer";
 import { formatTimecode } from "@/domain/timeline/geometry";
 import { cn } from "@/lib/utils";
 
@@ -36,8 +36,8 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
 }
 
 /**
- * 素材详情预览:左侧媒体(图片可点开全屏、视频/音频内联播放),右侧完整元数据(类型/尺寸/时长/
- * 帧率/来源/标签/原始文件名/创建时间/ID)。图片也先进这张卡,而不是直接跳全屏,才看得到数据。
+ * 素材详情预览:顶部标题和分类,下方媒体与元数据;窄窗口将元数据移到媒体下方。
+ * 图片可继续点开全屏,视频和音频共用播放控件。
  */
 export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onClose: () => void }) {
   const t = useI18n();
@@ -77,55 +77,41 @@ export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onC
 
   return (
     <Dialog open onOpenChange={handleOpenChange}>
-      <DialogContent className="w-[min(960px,calc(100vw-32px))] max-w-[calc(100vw-32px)] gap-0 overflow-hidden p-0">
-        <div className="grid max-h-[86vh] grid-cols-1 md:grid-cols-[minmax(0,1fr)_340px]">
-          {/* 媒体区 */}
-          <div className="relative grid min-h-[240px] place-items-center overflow-hidden bg-[#0b0b0d] md:min-h-[420px]">
-            {asset.kind === "video" && (
-              <video className="max-h-[86vh] max-w-full" src={src} controls autoPlay playsInline />
+      <DialogContent className={cn("w-[min(1040px,calc(100vw-32px))] max-w-[calc(100vw-32px)] grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0", asset.kind === "audio" ? "h-[min(480px,86dvh)] md:w-[min(880px,calc(100vw-32px))]" : "h-[min(720px,86dvh)]")}>
+        <header className="grid min-w-0 gap-2 border-b border-divider px-5 py-4 pr-14">
+          <DialogTitle className="min-w-0 max-h-24 overflow-y-auto whitespace-normal text-ui-lg leading-snug [overflow-wrap:anywhere]">{asset.name}</DialogTitle>
+          <div className="flex flex-wrap gap-1.5">
+            <Badge variant="secondary">{kindLabel}</Badge>
+            <Badge variant="outline">{sourceLabel}</Badge>
+          </div>
+        </header>
+        <div className="grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(200px,1fr)_minmax(0,180px)] md:grid-cols-[minmax(0,1fr)_300px] md:grid-rows-[minmax(0,1fr)]">
+          <div className="relative grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] overflow-hidden bg-workspace-subtle">
+            {(asset.kind === "video" || asset.kind === "audio") && (
+              <MediaPreviewPlayer key={asset.id} kind={asset.kind} src={src} assetId={asset.id} />
             )}
             {asset.kind === "image" && (
               <button
                 type="button"
                 title={t("assetClickToZoom")}
-                className="group/zoom relative grid h-full w-full cursor-zoom-in place-items-center border-0 bg-transparent p-0"
+                className="group/zoom relative grid h-full min-h-0 w-full min-w-0 cursor-zoom-in place-items-center border-0 bg-transparent p-4"
                 onClick={() => openImagePreview({ src, title: asset.name })}
               >
-                <img className="max-h-[86vh] max-w-full object-contain" src={src} alt={asset.name} />
-                <span className="pointer-events-none absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 rounded-md bg-[rgba(10,12,15,0.7)] px-2 py-1 text-ui-xs text-white opacity-0 transition-opacity duration-100 group-hover/zoom:opacity-100">
+                <img className="h-full min-h-0 w-full min-w-0 object-contain" src={src} alt={asset.name} />
+                <span className="pointer-events-none absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-md bg-black/60 px-2 py-1 text-ui-xs text-white opacity-0 transition-opacity duration-150 group-hover/zoom:opacity-100 group-focus-visible/zoom:opacity-100">
                   <Maximize2 size={12} /> {t("assetClickToZoom")}
                 </span>
               </button>
             )}
-            {asset.kind === "audio" && (
-              <div className="grid w-full max-w-[420px] justify-items-center gap-4 px-6">
-                <span className="grid h-16 w-16 place-items-center rounded-full bg-[rgb(255_255_255/0.06)] text-muted-foreground">
-                  <FileAudio size={26} />
-                </span>
-                <AudioPlayerBar
-                  src={src}
-                  autoPlay
-                  showIcon={false}
-                  className="h-12 rounded-xl border border-[rgb(255_255_255/0.1)] bg-[rgb(255_255_255/0.05)] px-3"
-                />
-              </div>
-            )}
           </div>
-
-          {/* 信息区 */}
-          <div className="grid min-h-0 content-start gap-5 overflow-y-auto border-t border-border bg-panel p-6 md:border-l md:border-t-0">
-            <DialogTitle className="break-words pr-7 text-xl font-semibold leading-snug">{asset.name}</DialogTitle>
-            <div className="flex flex-wrap gap-1.5">
-              <Badge variant="secondary">{kindLabel}</Badge>
-              <Badge variant="outline">{sourceLabel}</Badge>
-            </div>
+          <div className="grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-5 overflow-y-auto border-t border-divider bg-workspace-panel p-5 md:border-l md:border-t-0">
             {tags.length > 0 && (
               <div className="grid gap-1">
                 <span className="text-ui-xs text-muted-foreground">{t("assetTagsLabel")}</span>
                 <div className="flex flex-wrap gap-1">
                   {tags.map((tag) => (
                     <span
-                      className="inline-flex items-center rounded-full border border-border bg-panel-subtle px-2 py-px text-ui-xs text-muted-foreground"
+                      className="inline-flex max-w-full items-center break-all rounded-full bg-control px-2 py-px text-ui-xs text-muted-foreground"
                       key={tag}
                     >
                       {tag}
@@ -134,15 +120,14 @@ export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onC
                 </div>
               </div>
             )}
-            <dl className="m-0 grid gap-4 border-t border-border pt-5">
-              <InfoRow label={t("assetType")}>{kindLabel}</InfoRow>
+            <dl className="m-0 grid min-w-0 gap-4">
               {width > 0 && height > 0 && (
                 <InfoRow label={t("assetDimensions")}>
                   <span className="font-mono tabular-nums">{width}×{height}</span>
                   <span className="ml-1.5 text-muted-foreground">({aspectRatio(width, height)})</span>
                 </InfoRow>
               )}
-              {duration != null && duration > 0 && (
+              {asset.kind !== "image" && duration != null && duration > 0 && (
                 <InfoRow label={t("duration")}>
                   <span className="font-mono tabular-nums">{formatTimecode(duration)}</span>
                 </InfoRow>
@@ -152,7 +137,6 @@ export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onC
                   <span className="font-mono tabular-nums">{Math.round(fps)}fps</span>
                 </InfoRow>
               )}
-              <InfoRow label={t("assetSource")}>{sourceLabel}</InfoRow>
               {asset.original_filename && asset.original_filename !== asset.name && (
                 <InfoRow label={t("assetOriginalName")}>{asset.original_filename}</InfoRow>
               )}

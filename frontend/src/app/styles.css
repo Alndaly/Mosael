@@ -18,3 +18,26 @@
     backdrop-filter: var(--glass-filter);
   }
 }
+
+@layer components {
+  .media-preview-range { appearance: none; background: transparent; outline: none; }
+  .media-preview-range::-webkit-slider-runnable-track {
+    height: 3px;
+    border-radius: 3px;
+    background: linear-gradient(to right, var(--primary) var(--media-progress, 0%), var(--border) var(--media-progress, 0%));
+  }
+  .media-preview-range::-webkit-slider-thumb {
+    appearance: none;
+    width: 10px;
+    height: 10px;
+    margin-top: -3.5px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--primary);
+  }
+  .media-preview-range::-moz-range-track { height: 3px; border-radius: 3px; background: var(--border); }
+  .media-preview-range::-moz-range-progress { height: 3px; background: var(--primary); }
+  .media-preview-range::-moz-range-thumb { width: 10px; height: 10px; border: 0; border-radius: 50%; background: var(--primary); }
+  .media-preview-range:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; border-radius: 4px; }
+  .media-preview-player:fullscreen { background: var(--background); }
+}

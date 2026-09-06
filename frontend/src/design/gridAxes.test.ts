@@ -53,7 +53,6 @@ const GRANDFATHERED = new Set<string>([
   "features/workflows/WorkflowRevisionHistory.tsx: grid-rows-[auto_minmax(0,1fr)]",
   "features/workflows/WorkflowsView.tsx: grid-rows-[minmax(0,1fr)_minmax(0,1fr)]",
   "features/workflows/WorkflowsView.tsx: grid-rows-[minmax(0,1fr)]",
-  "features/workflows/WorkflowsView.tsx: grid-rows-[auto_minmax(0,1fr)]",
 ]);
 
 function sourceFiles(dir: string): string[] {

@@ -414,14 +414,13 @@
   }
   /* Scrolling content may pass behind sticky bars; give only those bars a light veil. */
   :root[data-appearance="glass"] .workspace-sticky {
-    background: color-mix(in srgb, var(--popover) 25%, transparent);
-    -webkit-backdrop-filter: var(--glass-filter);
-    backdrop-filter: var(--glass-filter);
+    --workspace-sticky-presence: 1;
+    background-color: color-mix(in srgb, var(--popover) calc(25% * var(--workspace-sticky-presence)), transparent);
+    -webkit-backdrop-filter: blur(calc(var(--app-blur, 16px) * var(--workspace-sticky-presence))) saturate(calc(1 + .35 * var(--workspace-sticky-presence)));
+    backdrop-filter: blur(calc(var(--app-blur, 16px) * var(--workspace-sticky-presence))) saturate(calc(1 + .35 * var(--workspace-sticky-presence)));
   }
   :root[data-appearance="glass"] .workspace-sticky[data-stuck="false"] {
-    background: transparent;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
+    --workspace-sticky-presence: 0;
   }
   /* Narrow-screen drawers overlay content and need stronger separation than docked panes. */
   :root[data-appearance="glass"] .workspace-overlay {
@@ -593,8 +592,13 @@ body {
     transition-timing-function: ease-out;
   }
 }
+@property --workspace-sticky-presence {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
 .workspace-sticky {
-  transition: background-color 180ms ease-out, backdrop-filter 180ms ease-out, -webkit-backdrop-filter 180ms ease-out;
+  transition: --workspace-sticky-presence 260ms ease-out, background-color 260ms ease-out;
 }
 @media (prefers-reduced-motion: reduce) {
   :where(button, input, textarea, select, [role="tab"], [role="menuitem"], [role="checkbox"], [role="switch"]),

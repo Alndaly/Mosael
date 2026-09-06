@@ -33,11 +33,15 @@ export function usePlayback(ref: React.RefObject<HTMLMediaElement | null>) {
   const [muted, setMuted] = React.useState(false);
   const [at, setAt] = React.useState(0);
   const [total, setTotal] = React.useState(0);
+  const [error, setError] = React.useState(false);
 
   const toggle = React.useCallback(() => {
     const media = ref.current;
     if (!media) return;
-    if (media.paused) void media.play();
+    if (media.paused) {
+      setError(false);
+      void Promise.resolve(media.play()).catch(() => setError(true));
+    }
     else media.pause();
   }, [ref]);
 
@@ -52,10 +56,13 @@ export function usePlayback(ref: React.RefObject<HTMLMediaElement | null>) {
   const bind = {
     onPlay: () => setPlaying(true),
     onPause: () => setPlaying(false),
+    onEnded: () => setPlaying(false),
+    onError: () => setError(true),
+    onVolumeChange: () => setMuted(Boolean(ref.current?.muted)),
     onTimeUpdate: (event: React.SyntheticEvent<HTMLMediaElement>) => setAt(event.currentTarget.currentTime),
   };
 
-  return { playing, muted, at, total, setTotal, toggle, toggleMute, bind };
+  return { playing, muted, at, total, error, setTotal, toggle, toggleMute, bind };
 }
 
 /**
@@ -79,6 +86,7 @@ export function Scrubber({
   className?: string;
   trackClassName?: string;
 }) {
+  const t = useI18n();
   const seek = (event: React.PointerEvent<HTMLDivElement>) => {
     const element = media.current;
     const box = event.currentTarget.getBoundingClientRect();
@@ -89,6 +97,22 @@ export function Scrubber({
 
   return (
     <div
+      role="slider"
+      aria-label={t("mediaSeek")}
+      aria-valuemin={0}
+      aria-valuemax={Number.isFinite(total) ? total : 0}
+      aria-valuenow={at}
+      tabIndex={0}
+      onKeyDown={(event) => {
+        const element = media.current;
+        if (!element || !Number.isFinite(element.duration)) return;
+        const value = event.key === "Home" ? 0 : event.key === "End" ? element.duration
+          : event.key === "ArrowRight" ? element.currentTime + 5 : event.key === "ArrowLeft" ? element.currentTime - 5 : null;
+        if (value === null) return;
+        event.preventDefault();
+        event.stopPropagation();
+        element.currentTime = Math.max(0, Math.min(element.duration, value));
+      }}
       onPointerDown={(event) => {
         event.currentTarget.setPointerCapture(event.pointerId);
         seek(event);
@@ -97,7 +121,7 @@ export function Scrubber({
         if (event.currentTarget.hasPointerCapture(event.pointerId)) seek(event);
       }}
       onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
-      className={cn("nodrag nopan group/bar cursor-pointer py-1.5", className)}
+      className={cn("nodrag nopan group/bar cursor-pointer rounded-sm py-1.5 focus-visible:outline-2 focus-visible:outline-ring", className)}
     >
       <div className={cn("h-0.5 w-full rounded-full transition-all group-hover/bar:h-1", trackClassName)}>
         <div
@@ -126,6 +150,8 @@ export function VideoPlayer({
   autoPlay,
   className,
   onNaturalSize,
+  onExpand,
+  compact = false,
 }: {
   /** 按素材 id 取带令牌的地址。 */
   assetId?: string;
@@ -133,6 +159,8 @@ export function VideoPlayer({
   assetSrc?: string;
   autoPlay?: boolean;
   className?: string;
+  onExpand?: () => void;
+  compact?: boolean;
   /** 画面的自然尺寸 —— 调用方(如画板节点)拿它校正自己的宽高比。 */
   onNaturalSize?: (width: number, height: number) => void;
 }) {
@@ -174,19 +202,19 @@ export function VideoPlayer({
       )}
 
       {/* 控件条悬停才出现;藏起来时连指针事件一起收掉(透明不等于不吃事件)。 */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-black/80 to-transparent px-2 pb-1.5 pt-4 text-white opacity-0 transition-all group-hover/player:pointer-events-auto group-hover/player:translate-y-0 group-hover/player:opacity-100">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-black/80 to-transparent px-2 pb-1.5 pt-4 text-white opacity-0 transition-[opacity,transform] duration-150 group-hover/player:pointer-events-auto group-hover/player:translate-y-0 group-hover/player:opacity-100 group-focus-within/player:pointer-events-auto group-focus-within/player:translate-y-0 group-focus-within/player:opacity-100">
         <Scrubber media={ref} at={at} total={total} className="mb-0.5" trackClassName="bg-white/30" />
         <div className="flex items-center gap-1.5">
-          <button type="button" aria-label={t(playing ? "boardPause" : "boardPlay")} onClick={toggle} className="cursor-pointer opacity-90 hover:opacity-100">
+          <button type="button" aria-label={t(playing ? "boardPause" : "boardPlay")} onClick={toggle} className="grid size-6 shrink-0 cursor-pointer place-items-center rounded-md opacity-90 hover:bg-white/10 hover:opacity-100">
             {playing ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" />}
           </button>
           <span className="text-ui-2xs tabular-nums opacity-90">
-            {mediaClock(at)} / {mediaClock(total)}
+            {compact ? mediaClock(total) : `${mediaClock(at)} / ${mediaClock(total)}`}
           </span>
-          <button type="button" aria-label={t(muted ? "boardUnmute" : "boardMute")} onClick={toggleMute} className="ml-auto cursor-pointer opacity-90 hover:opacity-100">
+          <button type="button" aria-label={t(muted ? "boardUnmute" : "boardMute")} onClick={toggleMute} className="ml-auto grid size-6 shrink-0 cursor-pointer place-items-center rounded-md opacity-90 hover:bg-white/10 hover:opacity-100">
             {muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
           </button>
-          <button type="button" aria-label={t("boardFullscreen")} onClick={() => void ref.current?.requestFullscreen?.()} className="cursor-pointer opacity-90 hover:opacity-100">
+          <button type="button" aria-label={t("boardFullscreen")} onClick={() => onExpand ? onExpand() : void ref.current?.requestFullscreen?.()} className="grid size-6 shrink-0 cursor-pointer place-items-center rounded-md opacity-90 hover:bg-white/10 hover:opacity-100">
             <Maximize2 size={13} />
           </button>
         </div>

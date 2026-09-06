@@ -4,6 +4,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const openImagePreview = vi.fn();
+vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 vi.mock("@/components/app/image-preview", () => ({
   useImagePreview: () => ({ openImagePreview }),
 }));

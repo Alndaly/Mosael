@@ -194,15 +194,11 @@ function NodeResultPreview({ assetIds, roundedBottom }: { assetIds: string[]; ro
   const ready = assets.map((q) => q.data).filter(Boolean) as Asset[];
   if (ready.length === 0) return null;
   return (
-    // 铺满卡片宽度、统一高度、object-cover —— 让它看着是节点的一部分,而不是贴上去的一张方图。
-    //
-    // **只有视频/音频挂 nodrag**。整块都挂的话,缩略图占了节点大半个身体,从图上按下就拖不动
-    // 节点了 —— 用户感觉像"焦点卡住",换个地方按又好了。图片不需要:拖动不会触发 click,
-    // 原地点一下照样打开大图。
+    // 预览统一高度并保留完整画面;只有进度条等拖动控件阻止节点拖动。
     // 预览层:**自己就是通栏的**,因为卡片不带内边距(见卡片那段说明)。多份并排时用 1px 的
     // 底色缝隙隔开,不画框 —— 框会让它读成贴上去的独立元件,而它是卡片自己的一段。
     // 连接点和角标也是 DOM 子节点,不能用 :last-child 判断视觉上的末层。
-    <div className={cn("grid grid-flow-col justify-stretch gap-px overflow-hidden border-t border-border bg-border", roundedBottom && "rounded-b-[calc(var(--wf-node-radius)-1px)]")}>
+    <div className={cn("grid grid-flow-col auto-cols-fr justify-stretch gap-px overflow-hidden border-t border-divider bg-workspace-subtle", roundedBottom && "rounded-b-[calc(var(--wf-node-radius)-1px)]")}>
       {ready.map((asset) => (
         <AssetInlinePreview
           key={asset.id}
@@ -213,9 +209,9 @@ function NodeResultPreview({ assetIds, roundedBottom }: { assetIds: string[]; ro
           plain
           className={
             asset.kind === "image"
-              ? "block h-[74px] w-full object-cover"
+              ? "block h-[108px] w-full object-contain"
               : asset.kind === "video"
-                ? "h-[74px] w-full bg-black object-cover"
+                ? "h-[108px] w-full"
                 : "w-full"
           }
         />
