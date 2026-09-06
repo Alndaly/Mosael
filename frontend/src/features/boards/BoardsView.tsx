@@ -40,7 +40,7 @@ import { CanvasTitle } from "@/components/app/canvasTitle";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { CanvasDetailLoading } from "@/components/layout/CanvasDetailLoading";
-import { Skeleton } from "@/components/ui/skeleton";
+import { CanvasCardSkeleton } from "@/components/layout/CanvasCardSkeleton";
 import { relativeTime } from "@/lib/time";
 import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
@@ -145,7 +145,7 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
         {boards.isLoading ? (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-x-6 gap-y-8">
             {[0, 1, 2].map((n) => (
-              <Skeleton key={n} className="h-[74px] rounded-lg" />
+              <CanvasCardSkeleton key={n} />
             ))}
           </div>
         ) : (

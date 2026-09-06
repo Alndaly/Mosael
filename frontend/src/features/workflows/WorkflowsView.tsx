@@ -102,7 +102,7 @@ import { CanvasTitle } from "@/components/app/canvasTitle";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { CanvasDetailLoading } from "@/components/layout/CanvasDetailLoading";
-import { Skeleton } from "@/components/ui/skeleton";
+import { CanvasCardSkeleton } from "@/components/layout/CanvasCardSkeleton";
 import { ConfigNotice } from "@/components/layout/ConfigNotice";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
@@ -580,7 +580,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
         <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-x-6 gap-y-8">
           {workflows.isLoading &&
             (workflows.data ?? []).length === 0 &&
-            [0, 1, 2, 3].map((i) => <Skeleton key={`sk${i}`} className="h-[104px] rounded-lg" />)}
+            [0, 1, 2, 3].map((i) => <CanvasCardSkeleton key={`sk${i}`} description />)}
           {(workflows.data ?? []).map((workflow) => (
             <ContextMenu key={workflow.id}>
               <ContextMenuTrigger asChild>
