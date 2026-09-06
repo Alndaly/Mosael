@@ -825,7 +825,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     >
     <div
       data-testid="editor-layout"
-      className="relative grid h-full grid-cols-[252px_minmax(0,1fr)_264px] grid-rows-[minmax(0,1fr)_252px] gap-2 p-2"
+      className="relative grid h-full grid-cols-[252px_minmax(0,1fr)_264px] grid-rows-[minmax(0,1fr)_252px] gap-2 bg-panel-subtle p-2"
       style={{
         gridTemplateColumns: editorColumns,
         gridTemplateRows: `minmax(0, 1fr) ${panels.sizes.timeline}px`,
@@ -895,8 +895,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       ) : panels.tab === "voice" ? (
         <VoicePanel workspace={workspace} project={project} tabs={<LeftTabs tab={panels.tab} onChange={panels.setTab} />} />
       ) : (
-        <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
-          <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
+        <section className="min-h-0 overflow-hidden rounded-lg border border-border bg-panel grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
+          <div className="flex min-h-14 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-sm [&_h2]:font-semibold [&_h2]:text-muted-foreground">
             <LeftTabs tab={panels.tab} onChange={panels.setTab} />
           </div>
           {panels.tab === "transcript" ? (
@@ -931,7 +931,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           )}
         </section>
       )}
-      <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-md border border-border shadow-[var(--shadow-panel)] bg-[var(--monitor-bg)]">
+      <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-[var(--monitor-bg)]">
         {/* 监视器上方的操作条:**只放和「此刻这一画面」有关的动作**。
             播放/快进那些在下面的走带条上,和这里不是一类事:那些是「走到哪一帧」,
             这里是「拿这一帧做什么」。
@@ -1015,7 +1015,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
               onClose={panels.compact ? () => useEditorStore.getState().selectClip(null) : undefined}
             />
           );
-          return panels.compact ? <div className="fixed bottom-0 right-0 top-11 z-[60] grid w-[min(320px,calc(100vw-96px))] border-l border-border-strong bg-panel [&>section]:h-full [&>section]:rounded-none [&>section]:border-0">{inspector}</div> : inspector;
+          return panels.compact ? <div className="fixed bottom-0 right-0 top-14 z-[60] grid w-[min(320px,calc(100vw-96px))] border-l border-border-strong bg-panel [&>section]:h-full [&>section]:rounded-none [&>section]:border-0">{inspector}</div> : inspector;
         })()}
       {agentOpen === "on" && (
         // 停靠态是 top row 的最后一列：监视器真实让出宽度，而不是被一块 absolute 面板盖住。
@@ -1036,7 +1036,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           />
         </div>
       )}
-      <section className="col-span-full min-h-0 overflow-hidden rounded-md border border-border shadow-[var(--shadow-panel)] bg-[var(--timeline-bg)]">
+      <section className="col-span-full min-h-0 overflow-hidden rounded-lg border border-border bg-[var(--timeline-bg)]">
         <Timeline
           sequence={sequence}
           assets={assets.data ?? []}
@@ -1182,8 +1182,8 @@ function LeftTabs({
           type="button"
           data-active={item.key === tab || undefined}
           className={cn(
-            "shrink-0 cursor-pointer whitespace-nowrap rounded-md border-0 bg-transparent px-2 py-1 text-ui-xs font-semibold text-muted-foreground transition-[background-color,color] duration-100 hover:text-foreground",
-            item.key === tab && "bg-secondary text-foreground hover:bg-secondary",
+            "shrink-0 cursor-pointer whitespace-nowrap rounded-md border-0 bg-transparent px-2 py-2 text-ui-sm font-medium text-muted-foreground transition-[background-color,color] duration-100 hover:text-foreground",
+            item.key === tab && "bg-accent text-primary hover:bg-accent",
           )}
           onClick={() => onChange(item.key)}
         >

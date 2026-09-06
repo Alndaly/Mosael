@@ -1,7 +1,9 @@
 import React from "react";
+import { StudioIndex } from "@/components/layout/StudioIndex";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
+  SlidersHorizontal,
   CircleAlert,
   Copy,
   ImagePlus,
@@ -215,12 +217,12 @@ export function AiStudio({ workspace }: { workspace: Workspace }) {
   const [tab, setTab] = usePersistentTab<"chat" | "generate">("ai-studio", "chat", ["chat", "generate"]);
 
   const switcher = (
-    <div className="inline-flex h-8 items-stretch overflow-hidden rounded-md border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border" role="tablist">
+    <div className="inline-flex h-10 items-stretch gap-1 rounded-lg bg-panel-subtle p-1" role="tablist">
       <button
         type="button"
         role="tab"
         aria-selected={tab === "chat"}
-        className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tab === "chat" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+        className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-5 py-1 text-ui-sm text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tab === "chat" && "bg-panel font-medium text-foreground shadow-sm hover:bg-panel hover:text-foreground")}
         onClick={() => setTab("chat")}
       >
         {t("aiTabChat")}
@@ -229,7 +231,7 @@ export function AiStudio({ workspace }: { workspace: Workspace }) {
         type="button"
         role="tab"
         aria-selected={tab === "generate"}
-        className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tab === "generate" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+        className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-5 py-1 text-ui-sm text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tab === "generate" && "bg-panel font-medium text-foreground shadow-sm hover:bg-panel hover:text-foreground")}
         onClick={() => setTab("generate")}
       >
         {t("aiTabGenerate")}
@@ -239,11 +241,12 @@ export function AiStudio({ workspace }: { workspace: Workspace }) {
 
   return (
     // 聊天/生成只在线程内部滚动,页面本身不滚(overflow-hidden)。
-    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0 gap-0 overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-hidden bg-panel [&>*]:shrink-0">
+      <div className="flex min-h-16 items-center justify-between gap-4 border-b border-border px-6 py-3"><h2 className="text-xl font-semibold tracking-tight">AI Studio</h2>{switcher}</div>
       {tab === "chat" ? (
-        <ChatWorkspace workspace={workspace} switcher={switcher} />
+        <ChatWorkspace workspace={workspace} />
       ) : (
-        <GenerateWorkspace workspace={workspace} switcher={switcher} />
+        <GenerateWorkspace workspace={workspace} />
       )}
     </div>
   );
@@ -264,11 +267,12 @@ function GenerateWorkspace({
   const panels = useSidePanels("generation", AI_PANEL_BOUNDS);
   const narrowLayout = useMediaMatch("(max-width: 1180px)");
   const singleColumn = useMediaMatch("(max-width: 820px)");
-  const showRightPanel = !narrowLayout;
+  const [parametersOpen, setParametersOpen] = React.useState(() => !narrowLayout);
+  const showRightPanel = parametersOpen && !narrowLayout;
   // 内联 gridTemplateColumns 会覆盖 class 里的 max-[...] 回退,所以断点在 JS 里一起判 ——
-  // 单列时不给内联,交还给 class(对话页踩过同一处)。
+  // 单列也显式指定,避免 CSS 与 matchMedia 在断点处有不同的边界语义。
   const columns = singleColumn
-    ? undefined
+    ? "minmax(0,1fr)"
     : showRightPanel
       ? `${panels.left}px minmax(0,1fr) ${panels.right}px`
       : `${panels.left}px minmax(0,1fr)`;
@@ -423,7 +427,7 @@ function GenerateWorkspace({
     const visibleParams = (comfyParams.data ?? []).filter((param) => !param.role || !hiddenRoles.has(param.role));
     return (
       <>
-        <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
+        <label className="grid gap-2 text-ui-sm font-medium text-foreground">
           <span>{t("comfyWorkflow")}</span>
           <Select
             value={generationConfig.workflow || "__default__"}
@@ -723,7 +727,7 @@ function GenerateWorkspace({
   return (
     <div
       className="relative grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)_300px] grid-rows-[minmax(0,1fr)] gap-2 max-[1180px]:grid-cols-[220px_minmax(0,1fr)] max-[820px]:grid-cols-[minmax(0,1fr)]"
-      style={columns ? { gridTemplateColumns: columns } : undefined}
+      style={{ gridTemplateColumns: columns }}
     >
       {/* 和对话页同一套(lib/useResizableSidebar):同一个形状不该有两份实现,
           而这边此前一条拖柄都没有 —— 右栏那些参数挤在 300px 里,长模型名一个都看不全。 */}
@@ -743,7 +747,7 @@ function GenerateWorkspace({
       )}
       {/* 和对话栏同一个组件:分组、拖进分组、搜索、批量删,两边一份实现。
           布局也照它 —— flex 列而不是定行数的 grid:搜索框是条件渲染的,行数会变。 */}
-      <aside className="flex min-h-0 flex-col overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] max-[820px]:hidden">
+      <StudioIndex label={t("generationSessionsTitle")}>
         <SessionList
           kind="generation"
           workspaceId={workspace.id}
@@ -768,9 +772,10 @@ function GenerateWorkspace({
             void qc.invalidateQueries({ queryKey: ["jobs", workspace.id, "ai_generation"] });
           }}
         />
-      </aside>
+      </StudioIndex>
 
-      <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid min-w-0 grid-rows-[minmax(0,1fr)_auto]">
+      <section className="min-h-0 overflow-hidden bg-panel grid min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto]">
+        <div className="flex min-h-16 min-w-0 items-center justify-between gap-4 border-b border-border px-5 py-3 max-[821px]:pl-14"><span className="truncate text-ui-md font-medium">{activeSession?.title || t("aiTabGenerate")}</span><Button variant={parametersOpen ? "secondary" : "ghost"} size="sm" onClick={() => setParametersOpen(!parametersOpen)} aria-pressed={parametersOpen}><SlidersHorizontal />{t("generationEngineSettings")}</Button></div>
         <div className="relative grid min-h-0 min-w-0">
         <div className="flex min-w-0 flex-col gap-3.5 overflow-y-auto overflow-x-hidden px-4 pb-2.5 pt-7" ref={stick.ref}>
           {/* First load: skeleton turns instead of flashing the "no jobs yet" empty state. */}
@@ -801,11 +806,11 @@ function GenerateWorkspace({
         <JumpToLatest stick={stick} label={t("chatJumpToLatest")} newLabel={t("chatNewBelow")} />
         </div>
         <form
-          className="mx-auto mb-3.5 mt-1.5 flex w-[min(780px,calc(100%-32px))] flex-col gap-1 rounded-[22px] border border-input bg-panel px-2.5 pb-1.5 pl-3 pt-2.5 shadow-[var(--shadow-raised)] transition-[border-color,box-shadow] duration-100 focus-within:border-ring focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--ring)_35%,transparent)]"
+          className="mx-auto mb-3.5 mt-1.5 flex w-[min(780px,calc(100%-32px))] flex-col gap-1 rounded-2xl border border-input bg-panel px-2.5 pb-1.5 pl-3 pt-2.5 shadow-[var(--shadow-raised)] transition-[border-color,box-shadow] duration-100 focus-within:border-ring focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--ring)_35%,transparent)]"
           onSubmit={submit}
         >
           <Textarea
-            rows={2}
+            rows={3}
             className="max-h-[220px] min-h-11 w-full min-w-0 resize-none border-0 bg-transparent px-0 py-0.5 pb-1.5 text-ui-md leading-[1.55] shadow-none outline-none focus-visible:ring-0"
             value={prompt}
             placeholder={t("promptPlaceholder")}
@@ -860,9 +865,9 @@ function GenerateWorkspace({
         </form>
       </section>
 
-      <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] flex min-w-0 flex-col gap-3.5 overflow-y-auto px-3 pb-3.5 max-[1180px]:col-span-full max-[1180px]:grid max-[1180px]:max-h-[220px] max-[1180px]:grid-cols-2 max-[1180px]:content-start max-[820px]:grid-cols-1">
-        <div className="-mx-3 flex min-h-[38px] items-center justify-between border-b border-border px-3 py-2.5 max-[1180px]:col-span-full [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
-          <h2 className="text-xs tracking-[0.02em] text-muted-foreground">{t("generationEngineSettings")}</h2>
+      <aside className={cn("min-h-0 flex min-w-0 flex-col gap-5 overflow-y-auto overflow-x-hidden border-l border-border bg-panel px-5 pb-6", !parametersOpen && "hidden", parametersOpen && narrowLayout && "absolute inset-y-0 right-0 z-30 w-[min(340px,100%)] shadow-xl")}>
+        <div className="-mx-5 flex min-h-16 items-center justify-between gap-3 border-b border-border px-5 py-3">
+          <h2 className="text-ui-md font-semibold">{t("generationEngineSettings")}</h2><Button variant="ghost" size="icon-xs" aria-label={t("close")} onClick={() => setParametersOpen(false)}><X /></Button>
         </div>
         {!selectedModel && !generationModelsLoading && (
           <ConfigNotice
@@ -892,7 +897,7 @@ function GenerateWorkspace({
         )}
         {selectedModel && (
           <>
-            <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
+            <label className="grid gap-2 text-ui-sm font-medium text-foreground">
               <span>{t("wfModelPreset")}</span>
               <Select value={selectedModel.value} onValueChange={selectEngine}>
                 <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground">
@@ -922,7 +927,7 @@ function GenerateWorkspace({
                 此前它锁在 image 分支里,于是一个声明了 size 的视频模型连这一栏都不出现 ——
                 参数描述符说了话而界面没听。 */}
             {supportsParameter(selectedModel, "size") && selectedSizes.length > 0 && (
-              <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
+              <label className="grid gap-2 text-ui-sm font-medium text-foreground">
                 <span>{t("genSize")}</span>
                 <Select value={generationConfig.size} onValueChange={(value) => setConfigValue("size", value)}>
                   <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground">
@@ -941,7 +946,7 @@ function GenerateWorkspace({
             {selectedModel.kind === "image" ? (
               <>
                 {supportsParameter(selectedModel, "num_images") && (
-                  <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
+                  <label className="grid gap-2 text-ui-sm font-medium text-foreground">
                     <span>{t("genNumImages")}</span>
                     <Input
                       className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-ui-sm font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
@@ -954,7 +959,7 @@ function GenerateWorkspace({
                   </label>
                 )}
                 {supportsParameter(selectedModel, "seed") && (
-                  <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
+                  <label className="grid gap-2 text-ui-sm font-medium text-foreground">
                     <span>{t("genSeed")}</span>
                     <Input
                       className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-ui-sm font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
@@ -966,7 +971,7 @@ function GenerateWorkspace({
                   </label>
                 )}
                 {supportsNegativePrompt && (
-                  <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
+                  <label className="grid gap-2 text-ui-sm font-medium text-foreground">
                     <span>{t("genNegativePrompt")}</span>
                     <Input
                       className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-ui-sm font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
@@ -1014,7 +1019,7 @@ function GenerateWorkspace({
             ) : (
               <>
                 {supportsParameter(selectedModel, "duration_seconds") && (
-                  <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
+                  <label className="grid gap-2 text-ui-sm font-medium text-foreground">
                     <span>{t("genDuration")}</span>
                     {selectedDurations.length > 0 ? (
                       <Select value={generationConfig.durationSeconds} onValueChange={(value) => setConfigValue("durationSeconds", value)}>
@@ -1040,7 +1045,7 @@ function GenerateWorkspace({
                   </label>
                 )}
                 {supportsParameter(selectedModel, "generate_audio") && (
-                  <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
+                  <label className="grid gap-2 text-ui-sm font-medium text-foreground">
                     <span>{t("genGenerateAudio")}</span>
                     <Select
                       value={generationConfig.generateAudio ? "true" : "false"}
@@ -1059,7 +1064,7 @@ function GenerateWorkspace({
                   </label>
                 )}
                 {supportsParameter(selectedModel, "resolution") && selectedResolutions.length > 0 && (
-                  <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
+                  <label className="grid gap-2 text-ui-sm font-medium text-foreground">
                     <span>{t("genResolution")}</span>
                     <Select
                       value={generationConfig.resolution}
@@ -1088,7 +1093,7 @@ function GenerateWorkspace({
                   </label>
                 )}
                 {supportsParameter(selectedModel, "aspect_ratio") && selectedAspectRatios.length > 0 && (
-                  <label className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
+                  <label className="grid gap-2 text-ui-sm font-medium text-foreground">
                     <span>{t("genAspectRatio")}</span>
                     <Select value={generationConfig.aspectRatio} onValueChange={(value) => setConfigValue("aspectRatio", value)}>
                       <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground">
@@ -1153,7 +1158,7 @@ function GenerateWorkspace({
             {booleanParameterKeys(selectedModel).filter((key) => key !== "generate_audio").map((key) => {
               const labelKey = GENERATION_BOOLEAN_LABELS[key];
               return (
-                <label key={key} className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
+                <label key={key} className="grid gap-2 text-ui-sm font-medium text-foreground">
                   <span>{labelKey ? t(labelKey) : key}</span>
                   <Select
                     value={generationConfig.booleanParameters[key] ? "true" : "false"}
@@ -1176,7 +1181,7 @@ function GenerateWorkspace({
             {parameterChoiceEntries(selectedModel).map(([key, choices]) => {
               const labelKey = GENERATION_PARAMETER_LABELS[key];
               return (
-                <label key={key} className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
+                <label key={key} className="grid gap-2 text-ui-sm font-medium text-foreground">
                   <span>{labelKey ? t(labelKey) : key}</span>
                   <Select
                     value={generationConfig.enumParameters[key] ?? capabilityString(selectedModel, `default_${key}`, choices[0] ?? "")}

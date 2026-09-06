@@ -1,4 +1,7 @@
 import React from "react";
+import { ActionMenu } from "@/components/layout/ActionMenu";
+import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
+import { CanvasPreview } from "@/components/layout/CanvasPreview";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useStore } from "zustand";
 import {
@@ -221,9 +224,9 @@ interface GenField {
 }
 
 const FIELD_BOX =
-  "grid gap-1.5 [&>span]:flex [&>span]:items-center [&>span]:gap-1 [&>span]:text-ui-sm [&>span]:font-medium [&>span]:text-foreground " +
+  "grid gap-2 [&>span]:flex [&>span]:items-center [&>span]:gap-1 [&>span]:text-ui-sm [&>span]:font-medium [&>span]:text-foreground " +
   "[&_small]:text-ui-xs [&_small]:leading-[1.5] [&_small]:text-muted-foreground " +
-  "[&_input]:h-8 [&_input]:w-full [&_input]:rounded-md [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:px-2.5 [&_input]:text-ui-sm [&_input]:text-foreground " +
+  "[&_input]:h-10 [&_input]:w-full [&_input]:rounded-md [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:px-2.5 [&_input]:text-ui-sm [&_input]:text-foreground " +
   "[&_textarea]:w-full [&_textarea]:resize-y [&_textarea]:rounded-md [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:px-2.5 [&_textarea]:py-2 [&_textarea]:text-ui-sm [&_textarea]:text-foreground " +
   "[&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none " +
   "[&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none";
@@ -455,7 +458,8 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
 
   if (workflows.isSuccess && (workflows.data ?? []).length === 0) {
     return (
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-5 xl:p-6 [&>*]:shrink-0">
+      <div className={STUDIO_PAGE}>
+        <PageHeading title={t("navWorkflows")} description={t("studioWorkflowsDesc")} />
         <EmptyState
           icon={<WorkflowIcon size={22} />}
           title={t("wfEmptyTitle")}
@@ -530,11 +534,8 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   // ── 列表页:卡片 grid。卡面上给的是**判断"是不是这一条"所需的**:名字、说明、
   //     多少个节点、上次改动是什么时候。
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch gap-5 overflow-auto p-5 xl:p-6 [&>*]:shrink-0">
-      <div className="flex items-center justify-between">
-        <h2 className="m-0 inline-flex items-center gap-3 text-2xl font-semibold tracking-tight text-foreground">
-          <WorkflowIcon size={13} /> {t("navWorkflows")}
-        </h2>
+    <div className={STUDIO_PAGE}>
+      <PageHeading title={t("navWorkflows")} description={t("studioWorkflowsDesc")} count={workflows.data?.length} actions={
         <span className="flex flex-wrap items-center gap-1.5">
           {selectMode ? (
             <>
@@ -574,23 +575,27 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
             </>
           )}
         </span>
-      </div>
+      } />
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-x-6 gap-y-8">
           {workflows.isLoading &&
             (workflows.data ?? []).length === 0 &&
             [0, 1, 2, 3].map((i) => <Skeleton key={`sk${i}`} className="h-[104px] rounded-lg" />)}
           {(workflows.data ?? []).map((workflow) => (
             <ContextMenu key={workflow.id}>
               <ContextMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="relative h-full text-left"
-                  onClick={() => (selectMode ? toggle(workflow.id) : setSelectedId(workflow.id))}
-                >
-                  <WorkflowCard workflow={workflow} />
-                  {selectMode && <SelectionCheck selected={selectedIds.has(workflow.id)} />}
-                </button>
+                <div className="relative h-full">
+                  <button type="button" aria-label={workflow.name} className="h-full w-full rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => (selectMode ? toggle(workflow.id) : setSelectedId(workflow.id))}>
+                    <WorkflowCard workflow={workflow} />
+                    {selectMode && <SelectionCheck selected={selectedIds.has(workflow.id)} />}
+                  </button>
+                  {!selectMode && <div className="absolute right-2 top-2 rounded-lg bg-panel"><ActionMenu label={`${t("studioActions")}: ${workflow.name}`} actions={[
+                    {label:t("wfRun"), icon:<Play />, disabled:menuRun.isPending, onSelect:()=>menuRun.mutate(workflow.id)},
+                    {label:t("rename"), icon:<Pencil />, onSelect:()=>setMenuRenaming(workflow)},
+                    {label:t("wfExport"), icon:<Download />, disabled:menuExport.isPending, onSelect:()=>menuExport.mutate(workflow)},
+                    {label:t("delete"), icon:<Trash2 />, destructive:true, onSelect:()=>setMenuDeleting(workflow)},
+                  ]} /></div>}
+                </div>
               </ContextMenuTrigger>
               <ContextMenuContent>
                 <ContextMenuItem onSelect={() => menuRun.mutate(workflow.id)}>
@@ -649,15 +654,16 @@ function WorkflowCard({ workflow }: { workflow: Workflow }) {
   const nodes = (workflow.graph as unknown as WorkflowGraph).nodes ?? [];
   return (
     // 同 PublishCard:名字贴顶、"几个节点 · 版本 · 多久前"贴底,中间留给长短不一的说明。
-    <article className="flex h-full flex-col gap-1.5 rounded-lg border border-border bg-panel p-5 shadow-[var(--shadow-panel)] transition-colors hover:border-border-strong">
-      <div className="flex items-center gap-1.5">
+    <article className="flex h-full flex-col gap-3">
+      <CanvasPreview items={nodes.map((node, i) => ({ id: node.id, x: node.position?.x ?? i * 240, y: node.position?.y ?? 0, label: node.name || node.type, width: 180, height: 80 }))} edges={(workflow.graph as unknown as WorkflowGraph).edges ?? []} />
+      <div className="flex items-center gap-2">
         <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary">
           <WorkflowIcon size={13} />
         </span>
         <strong className="min-w-0 truncate text-ui-md font-[650] text-foreground">{workflow.name}</strong>
       </div>
       {workflow.description ? (
-        <p className="m-0 line-clamp-2 text-ui-xs leading-[1.45] text-muted-foreground [overflow-wrap:anywhere]">
+        <p className="m-0 line-clamp-2 text-ui-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
           {workflow.description}
         </p>
       ) : (
@@ -1632,11 +1638,11 @@ function WorkflowEditor({
                 data-wf-add-node=""
                 // 组里全是圆形图标钮,只有它带文字就会显得突出一截 —— 而它并不比「运行」更重要。
                 // 名字进 title/aria-label,悬停仍然说得出自己是谁。
-                className="grid h-8 w-8 place-items-center rounded-full border-0 bg-transparent text-foreground transition-colors hover:bg-secondary"
+                className="inline-flex h-8 items-center gap-2 rounded-md bg-primary px-3 text-primary-foreground hover:bg-primary/90"
                 aria-label={t("wfAddNode")}
                 title={t("wfAddNode")}
               >
-                <Plus size={15} />
+                <Plus size={15} /> {t("wfAddNode")}
               </button>
             }
           />
@@ -1967,7 +1973,10 @@ function WorkflowEditor({
               // 而他离开时的位置本来就是最有价值的信息。
               requestAnimationFrame(() => {
                 if (viewport.saved) flow.setViewport(viewport.saved);
-                else fitCanvas(flow, 0);
+                else if (nodes.length > 4) {
+                  const first = nodes.find(node => node.data.nodeType === "start") ?? nodes[0];
+                  flow.setCenter(first.position.x + 450, first.position.y + 140, { zoom: 0.8, duration: 0 });
+                } else fitCanvas(flow, 0);
                 canvas.handlers.onInit();
               });
             }}
@@ -2496,7 +2505,7 @@ function LoopBodyEditor({
             trigger={
               <button
                 type="button"
-                className="grid h-8 w-8 place-items-center rounded-full border-0 bg-transparent text-foreground transition-colors hover:bg-secondary"
+                className="inline-flex h-8 items-center gap-2 rounded-md bg-primary px-3 text-primary-foreground hover:bg-primary/90"
                 aria-label={t("wfAddNode")}
                 title={t("wfAddNode")}
               >
@@ -3239,13 +3248,13 @@ function NodeInspector({
         两组都按"有才出":没跑过就没有「本次产出」,不是子图就没有「进入子图」。
         和面板一样长在画布坐标系里,所以同样要挂 nodrag/nopan —— 不然按下去是在拖节点。 */}
     <NodeToolbar nodeId={node.id} isVisible position={Position.Top} align="center" offset={12}>
-      <div className="nodrag nopan flex items-center gap-0.5 rounded-full border border-border-strong bg-panel px-1 py-1 shadow-[var(--shadow-panel)]">
+      <div className="nodrag nopan flex items-center gap-1 rounded-lg border border-border-strong bg-panel px-1 py-1 shadow-[var(--shadow-panel)]">
         {areas.map((id) => (
           <button
             key={id}
             type="button"
             className={cn(
-              "cursor-pointer rounded-full px-3 py-1.5 text-ui-xs font-medium transition-[background,color] duration-100",
+              "cursor-pointer rounded-md px-3 py-2 text-ui-sm font-medium transition-[background,color] duration-100",
               area === id
                 ? "bg-secondary text-foreground"
                 : "text-muted-foreground hover:bg-secondary hover:text-foreground",

@@ -35,7 +35,7 @@ export function SettingsGroup({
 }) {
   const hasContent = React.Children.toArray(children).some(Boolean);
   return (
-    <section data-slot="settings-group" className={cn("grid gap-0", className)}>
+    <section data-slot="settings-group" className={cn("@container/settings grid gap-1", className)}>
       {/* 动作**对齐整个抬头的竖向中心**,不是对齐标题那一行,也不是对齐整块的底边。
           三种都试过:`items-end` 在说明一长时把按钮拖到最后一行旁边,看着像那句话的一部分;
           `items-start` 则在说明有两三行时把按钮顶在最上面,右边空出一大块。
@@ -43,21 +43,21 @@ export function SettingsGroup({
       <header
         data-slot="settings-group-header"
         className={cn(
-          "flex items-center justify-between gap-4 px-0.5",
+          "flex flex-wrap items-start justify-between gap-4 px-0.5",
           hasContent && "border-b border-border/70 pb-4",
         )}
       >
         <div className="min-w-0">
           <h2
             data-slot="settings-group-title"
-            className="m-0 text-[18px] font-[650] leading-[1.25] tracking-[-0.018em]"
+            className="m-0 text-xl font-semibold leading-snug tracking-tight"
           >
             {title}
           </h2>
           {description && (
             <p
               data-slot="settings-group-description"
-              className="mb-0 mt-1.5 max-w-[72rem] text-ui-md leading-[1.55] text-muted-foreground"
+              className="mb-0 mt-1.5 max-w-2xl text-ui-md leading-[1.55] text-muted-foreground"
             >
               {description}
             </p>
@@ -96,24 +96,24 @@ export function SettingsRow({
     <div
       id={id}
       data-slot="settings-row"
-      className={cn("grid grid-cols-[minmax(0,1fr)_auto] items-center gap-5 px-0.5 py-3", className)}
+      className={cn("grid grid-cols-1 items-start gap-3 px-0.5 py-5 @min-[620px]/settings:grid-cols-[minmax(0,1fr)_auto] @min-[620px]/settings:items-center @min-[620px]/settings:gap-8", className)}
     >
       <div className="grid min-w-0 gap-1">
-        <span data-slot="settings-row-label" className="text-[15px] font-semibold leading-[1.35]">{label}</span>
+        <span data-slot="settings-row-label" className="text-ui-md font-medium leading-relaxed">{label}</span>
         {description && (
           <small data-slot="settings-row-description" className="text-ui-sm leading-[1.5] text-muted-foreground">
             {description}
           </small>
         )}
       </div>
-      {children && <div className={cn("flex shrink-0 items-center gap-1.5", controlClassName)}>{children}</div>}
+      {children && <div className={cn("flex min-w-0 flex-wrap items-center gap-2", controlClassName)}>{children}</div>}
     </div>
   );
 }
 
 /** Full-width slot inside a group (forms, QR panels, lists). */
 export function SettingsBlock({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div data-slot="settings-block" className={cn("grid gap-2 px-0.5 py-3", className)}>{children}</div>;
+  return <div data-slot="settings-block" className={cn("grid gap-4 px-0.5 py-5", className)}>{children}</div>;
 }
 
 /** Block 内的小标题不自带外边距；它与后续内容的距离由 SettingsBlock 的 gap 统一控制。 */
@@ -174,7 +174,7 @@ export function SettingsListBlock({
 }
 
 export function SettingsListItem({ className, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="settings-list-item" className={cn("px-0.5 py-3", className)} {...props} />;
+  return <div data-slot="settings-list-item" className={cn("px-0.5 py-5", className)} {...props} />;
 }
 
 function flattenSections(children: React.ReactNode): React.ReactNode[] {
@@ -200,7 +200,7 @@ export function SettingsSectionStack({
     <div
       data-slot="settings-section-stack"
       className={cn(
-        "grid h-full min-h-0 content-start [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-description]]:text-ui-md [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-title]]:text-[22px] [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-title]]:font-bold [&>[data-slot=settings-group]:only-child]:h-full [&>[data-slot=settings-group]:only-child]:min-h-0 [&>[data-slot=settings-group]:only-child]:grid-rows-[auto_minmax(0,1fr)]",
+        "grid h-full min-h-0 content-start [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-description]]:text-ui-md [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-title]]:text-2xl [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-title]]:font-semibold [&>[data-slot=settings-group]:only-child]:h-full [&>[data-slot=settings-group]:only-child]:min-h-0 [&>[data-slot=settings-group]:only-child]:grid-rows-[auto_minmax(0,1fr)]",
         className,
       )}
     >
@@ -210,7 +210,7 @@ export function SettingsSectionStack({
         >
           {/* 分割线属于上一节的收尾：紧贴上一节，只用下边距为下一节标题留出层级。
               如果这里使用 my-*, 会和上一节最后一行的 py-3 叠加，造成视觉上的下宽上窄。 */}
-          {index > 0 && <Separator className="mb-3 bg-border/70" />}
+          {index > 0 && <Separator className="mb-7 mt-3 bg-border/70" />}
           {section}
         </React.Fragment>
       ))}
@@ -238,7 +238,7 @@ export function SettingsField({
 }) {
   return (
     <label data-slot="settings-field" className={cn("grid min-w-0 gap-1.5", className)}>
-      <span className="text-[15px] font-semibold leading-[1.35] text-foreground">{label}</span>
+      <span className="text-ui-md font-medium leading-relaxed text-foreground">{label}</span>
       {description && <small className="text-ui-sm leading-[1.5] text-muted-foreground">{description}</small>}
       {children}
     </label>
@@ -247,5 +247,5 @@ export function SettingsField({
 
 /** 表单负责占满设置内容列；字段是否并排由调用方按信息关系显式组织。 */
 export function SettingsForm({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div data-slot="settings-form" className={cn("grid w-full gap-3", className)}>{children}</div>;
+  return <div data-slot="settings-form" className={cn("grid w-full gap-5", className)}>{children}</div>;
 }

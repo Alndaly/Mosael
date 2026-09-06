@@ -1,4 +1,5 @@
 import React from "react";
+import { PageHeading, STUDIO_PAGE, CollectionTabs } from "@/components/layout/StudioPage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, CheckCircle2, CircleAlert, ExternalLink, FolderOutput, ListChecks, Loader2, Plus, Rocket, Sparkles, Trash2, Users, X } from "lucide-react";
 import { toast } from "sonner";
@@ -107,14 +108,16 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   const [openId, setOpenId] = React.useState<string | null>(null);
   const opened = (tasks.data ?? []).find((task) => task.id === openId) ?? null;
   // 按天分栏。时间是无时区标记的 UTC 串,分组必须按本地日历天算(见 lib/dayGroups)。
+  const [statusFilter, setStatusFilter] = React.useState("all");
+  const filteredTasks = React.useMemo(() => (tasks.data ?? []).filter(task => statusFilter === "all" || (statusFilter === "active" ? ACTIVE.has(task.status) : statusFilter === "succeeded" ? ["succeeded", "success"].includes(task.status) : !ACTIVE.has(task.status) && !["succeeded", "success"].includes(task.status))), [tasks.data, statusFilter]);
   const groups = React.useMemo(
-    () => groupByLocalDay(tasks.data ?? [], (task) => task.created_at),
-    [tasks.data],
+    () => groupByLocalDay(filteredTasks, (task) => task.created_at),
+    [filteredTasks],
   );
   const now = useNow(60_000);
   // 多选与素材页同一份状态机(见 lib/useMultiSelect)。
   const { selectMode, setSelectMode, selectedIds, toggle, selectAll, allSelected, clear, exit } =
-    useMultiSelect(tasks.data ?? [], (task) => task.id);
+    useMultiSelect(filteredTasks, (task) => task.id);
   const [batchDeleting, setBatchDeleting] = React.useState(false);
 
   const dialogs = (
@@ -163,18 +166,15 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
 
   // 账号的「增」和「管」都归口「浏览器池」tab;发布页只做发布(记录 + 新建发布)。
   const seg = (
-    <div className="flex items-center justify-between">
-      <h2 className="m-0 inline-flex items-center gap-3 text-2xl font-semibold tracking-tight text-foreground">
-        <Rocket size={13} /> {t("publishTabRecords")}
-      </h2>
+    <PageHeading title={t("navPublish")} description={t("studioPublishDesc")} count={tasks.data?.length} actions={
       <span className="flex flex-wrap items-center gap-1.5">
         {selectMode ? (
           <>
             <span className="whitespace-nowrap text-xs text-muted-foreground">
               {t("mediaSelectedCount").replace("{n}", String(selectedIds.size))}
             </span>
-            <Button variant="outline" size="sm" onClick={() => selectAll(tasks.data ?? [])}>
-              <ListChecks size={13} /> {allSelected(tasks.data ?? []) ? t("mediaDeselectAll") : t("mediaSelectAll")}
+            <Button variant="outline" size="sm" onClick={() => selectAll(filteredTasks)}>
+              <ListChecks size={13} /> {allSelected(filteredTasks) ? t("mediaDeselectAll") : t("mediaSelectAll")}
             </Button>
             <Button
               variant="outline"
@@ -194,18 +194,19 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
             <Button variant="outline" size="sm" onClick={() => setSelectMode(true)}>
               <Check size={13} /> {t("mediaSelectMode")}
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setCreating(true)}>
+            <Button onClick={() => setCreating(true)}>
               <Plus size={13} /> {t("publishCreate")}
             </Button>
           </>
         )}
       </span>
-    </div>
+    } />
   );
 
   if (tasks.isSuccess && (tasks.data ?? []).length === 0) {
     return (
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-5 xl:p-6 [&>*]:shrink-0">
+      <div className={STUDIO_PAGE}>
+        <PageHeading title={t("navPublish")} description={t("studioPublishDesc")} />
         <EmptyState
           icon={<Rocket size={22} />}
           title={t("publishEmptyTitle")}
@@ -227,29 +228,30 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-5 xl:p-6 [&>*]:shrink-0">
-      <div className="flex h-full min-h-0 flex-col gap-2">
+    <div className={STUDIO_PAGE}>
+      <div className="flex h-full min-h-0 flex-col gap-7">
       {seg}
+      <CollectionTabs label={t("publishTabRecords")} value={statusFilter} onChange={setStatusFilter} items={[{value:"all", label:t("studioAll")}, {value:"active", label:t("batchStatus_running")}, {value:"succeeded", label:t("batchStatus_succeeded")}, {value:"attention", label:t("studioNeedsAttention")}]} />
       <div className="min-h-0 flex-1 overflow-y-auto">
+        {filteredTasks.length === 0 && <EmptyState icon={<Rocket />} title={t("studioNoMatches")} body={t("studioNoMatchesHint")} />}
         {groups.map((group) => {
           const day = dayGroupOf(group.key, now, locale);
           return (
             <section key={group.key || "unknown"} className="grid gap-2 pb-4">
               {/* 日期栏头贴顶:滚很长时也知道现在看的是哪一天。 */}
-              {/* 日期分割**不铺底色**:它是一条标签,不是一块面板。原来那层 bg-background/92 是为了
-                  sticky 时盖住下面滚过的卡片,但换了自定义背景之后,它就成了浮在背景上的一条灰带
-                  (真机截图)。改为只保留 sticky 的模糊 —— 文字读得清,底下的背景照旧透出来。 */}
-              <h3 className="sticky top-0 z-[1] m-0 py-1 text-ui-xs font-semibold text-muted-foreground backdrop-blur-sm">
+              {/* 实底日期条让滚动经过的记录不会与日期叠字。 */}
+              <h3 className="sticky top-0 z-[1] m-0 bg-background py-3 text-ui-sm font-medium text-muted-foreground">
                 {day.kind === "today" ? t("dateToday") : day.kind === "yesterday" ? t("dateYesterday") : day.text}
                 <span className="ml-1.5 font-normal tabular-nums text-muted-foreground/70">{group.items.length}</span>
               </h3>
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
+              <div className="grid divide-y divide-border border-y border-border">
                 {group.items.map((task) => (
                   <ContextMenu key={task.id}>
                     <ContextMenuTrigger asChild>
                       <button
                         type="button"
-                        className="relative h-full text-left"
+                        className="relative h-full rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label={`${task.title || task.asset_name} · ${t(`batchStatus_${task.status}` as never)}`}
                         onClick={() => (selectMode ? toggle(task.id) : setOpenId(task.id))}
                       >
                         <PublishCard task={task} selecting={selectMode} />
@@ -310,28 +312,16 @@ function PublishCard({ task, selecting = false }: { task: PublishTask; selecting
     // **同一种信息落在同一个位置**:状态行贴顶、元信息贴底(mt-auto),中间留给长短不一的标题。
     // 此前全部顺排,于是标题一行和两行的卡片里,"发到哪个号""哪条成片"各自落在不同高度 ——
     // 同一排卡片横着看过去像三种模板。
-    <article className="flex h-full flex-col gap-1.5 rounded-lg border border-border bg-panel p-5 shadow-[var(--shadow-panel)] transition-colors hover:border-border-strong">
-      <div className="flex items-center gap-1.5">
-        <Icon size={13} className={cn("shrink-0", tone, spin && "animate-mosael-spin")} />
-        <span className={cn("text-ui-xs font-semibold", tone)}>{t(`batchStatus_${task.status}` as never)}</span>
-        {/* 选择态下右上角让给勾选圈 —— 两者叠在一起时间会被盖掉一半,不如干脆不显示。 */}
-        {!selecting && (
-          <span className="ml-auto shrink-0 tabular-nums text-ui-xs text-muted-foreground">
-            {localTime(task.created_at, locale)}
-          </span>
-        )}
+    <article className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-5 px-3 py-5 transition-colors hover:bg-panel">
+      <span className={cn("grid size-11 place-items-center rounded-xl bg-panel-subtle", tone)}><Icon size={20} className={spin ? "animate-mosael-spin" : undefined} /></span>
+      <div className="grid min-w-0 gap-2">
+        <strong className="truncate text-ui-md font-semibold">{task.title || task.asset_name}</strong>
+        <span className="truncate text-ui-sm text-muted-foreground">{task.platform} · {task.account_name} · {task.asset_name}</span>
+        {task.status === "failed" && task.error && <p className="line-clamp-2 text-ui-sm text-destructive">{task.error}</p>}
       </div>
-      <strong className="line-clamp-2 text-ui-md font-[650] leading-[1.4] text-foreground [overflow-wrap:anywhere]">
-        {task.title || task.asset_name}
-      </strong>
-      <div className="mt-auto grid gap-1.5 pt-0.5">
-        <p className="m-0 truncate text-ui-xs text-muted-foreground">
-          {task.platform} · {task.account_name}
-        </p>
-        <code className="truncate font-mono text-ui-xs text-muted-foreground/80">{task.asset_name}</code>
-        {task.status === "failed" && task.error && (
-          <p className="m-0 line-clamp-2 text-ui-xs leading-[1.45] text-destructive [overflow-wrap:anywhere]">{task.error}</p>
-        )}
+      <div className={cn("grid gap-2 text-right", selecting && "pr-7")}>
+        <span className={cn("text-ui-sm font-medium", tone)}>{t(`batchStatus_${task.status}` as never)}</span>
+        <span className="text-ui-xs tabular-nums text-muted-foreground">{localTime(task.created_at, locale)}</span>
       </div>
     </article>
   );

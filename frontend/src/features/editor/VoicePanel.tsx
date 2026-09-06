@@ -283,9 +283,9 @@ export function VoicePanel({
   const [speakerOpen, setSpeakerOpen] = React.useState(false);
 
   return (
-    <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
-      <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">{tabs}</div>
-      <div className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto p-2.5">
+    <section className="min-h-0 overflow-hidden rounded-lg border border-border bg-panel grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
+      <div className="flex min-h-14 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-sm [&_h2]:font-semibold [&_h2]:text-muted-foreground">{tabs}</div>
+      <div className="grid min-h-0 flex-1 content-start gap-5 overflow-y-auto overflow-x-hidden p-4">
         <div className="grid gap-[7px] rounded-lg bg-panel">
           <div className="grid gap-1.5">
             <VoiceField label={t("voiceEngine")}>

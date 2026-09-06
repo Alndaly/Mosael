@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { CommandDialog, CommandInput, CommandList } from "./command";
 
 describe("CommandDialog surface", () => {
-  it("keeps the global search surface translucent", () => {
+  it("keeps global search opaque and readable above busy media", () => {
     vi.stubGlobal(
       "ResizeObserver",
       class ResizeObserver {
@@ -23,8 +23,8 @@ describe("CommandDialog surface", () => {
     );
 
     const dialog = screen.getByRole("dialog");
-    expect(dialog.className).toContain("bg-popover/90");
-    expect(dialog.className).toContain("backdrop-blur-xl");
+    expect(dialog.className).toContain("bg-popover");
+    expect(dialog.className).not.toContain("backdrop-blur-xl");
     expect(dialog.firstElementChild?.className).toContain("bg-transparent");
   });
 });

@@ -147,15 +147,15 @@ export function Inspector({
   }, [selectedClip?.id, isTextClip]);
 
   return (
-    <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-      <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
+    <section className="min-h-0 overflow-hidden rounded-lg border border-border bg-panel grid min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+      <div className="flex min-h-14 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-sm [&_h2]:font-semibold [&_h2]:text-muted-foreground">
         {selectedClip && !isTextClip ? (
-          <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border" role="tablist">
+          <div className="inline-flex h-8 items-stretch gap-0.5 overflow-hidden rounded-md bg-panel-subtle p-0.5" role="tablist">
             <button
               type="button"
               role="tab"
               aria-selected={tab === "props"}
-              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tab === "props" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tab === "props" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
               onClick={() => setTab("props")}
             >
               {t("inspectorProps")}
@@ -164,7 +164,7 @@ export function Inspector({
               type="button"
               role="tab"
               aria-selected={tab === "color"}
-              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tab === "color" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tab === "color" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
               onClick={() => setTab("color")}
             >
               {t("colorGrade")}
@@ -208,7 +208,7 @@ export function Inspector({
             onSetEffects={onSetEffects}
           />
         ) : (
-          <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] content-start gap-1.5 overflow-y-auto overflow-x-hidden p-2.5 [&_dl]:m-0 [&_dl]:grid [&_dl]:grid-cols-[92px_minmax(0,1fr)] [&_dl]:gap-[9px] [&_dl]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0">
+          <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] content-start gap-4 overflow-y-auto overflow-x-hidden p-4 [&_dl]:m-0 [&_dl]:grid [&_dl]:grid-cols-[92px_minmax(0,1fr)] [&_dl]:gap-[9px] [&_dl]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0">
             <dl>
               <dt>{t("asset")}</dt>
               <dd className="truncate" title={asset?.name}>
@@ -228,8 +228,8 @@ export function Inspector({
               <dd className="timecode">{selectedClip.speed.toFixed(2)}x</dd>
             </dl>
             {isTextClip && onSetText && (
-              <div className="grid gap-1.5 border-t border-border pt-2.5">
-                <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{isTitleText ? t("titleText") : t("subtitleText")}</span>
+              <div className="grid gap-3 border-t border-border pt-4">
+                <span className="text-ui-sm font-semibold text-muted-foreground">{isTitleText ? t("titleText") : t("subtitleText")}</span>
                 <Textarea
                   key={`text-${selectedClip.id}`}
                   className="w-full resize-y rounded-md border border-border bg-field px-[9px] py-[7px] text-ui-sm leading-normal text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
@@ -253,8 +253,8 @@ export function Inspector({
               />
             )}
             {!isTextClip && onSetSpeed && (
-              <div className="grid gap-1.5 border-t border-border pt-2.5">
-                <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("speed")}</span>
+              <div className="grid gap-3 border-t border-border pt-4">
+                <span className="text-ui-sm font-semibold text-muted-foreground">{t("speed")}</span>
                 <div className="flex flex-wrap gap-1">
                   {SPEED_OPTIONS.map((option) => (
                     <button
@@ -279,9 +279,9 @@ export function Inspector({
                 const shownGain = gainKeyed ? sampleGain(gainKfs, selectedClip.gain, progress) : selectedClip.gain;
                 const onGainKf = gainKeyed && gainKeyTimes(gainKfs).some((tt) => Math.abs(tt - progress) < 0.02);
                 return (
-                  <div className="grid gap-1.5 border-t border-border pt-2.5">
+                  <div className="grid gap-3 border-t border-border pt-4">
                     <div className="flex items-center justify-between">
-                      <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("clipAudio")}</span>
+                      <span className="text-ui-sm font-semibold text-muted-foreground">{t("clipAudio")}</span>
                       <button
                         type="button"
                         className={cn("min-w-[34px] cursor-pointer rounded-md border border-border bg-panel px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", selectedClip.muted && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
@@ -320,7 +320,7 @@ export function Inspector({
                 );
               })()}
             {!isTextClip && (
-              <div className="grid gap-1.5 border-t border-border pt-2.5">
+              <div className="grid gap-3 border-t border-border pt-4">
                 {(
                   [
                     { title: t("videoFade"), inKey: "video_fade_in", outKey: "video_fade_out", inV: effects.video_fade_in, outV: effects.video_fade_out },
@@ -328,7 +328,7 @@ export function Inspector({
                   ] as const
                 ).map((grp) => (
                   <div key={grp.title} className="grid gap-1">
-                    <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{grp.title}</span>
+                    <span className="text-ui-sm font-semibold text-muted-foreground">{grp.title}</span>
                     <div className="grid grid-cols-2 gap-1.5">
                       {(
                         [
@@ -362,7 +362,7 @@ export function Inspector({
             {(!isTextClip || isTitleText) && onSetTransform && (
               <div className="flex flex-col gap-1.5 border-t border-border pt-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="inline-flex items-center gap-1.5 text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5 text-ui-sm font-semibold text-muted-foreground">
                     {t("transformTitle")}
                     {animated && <Diamond size={10} className="text-primary" fill="currentColor" />}
                   </span>
@@ -449,7 +449,7 @@ export function Inspector({
           </div>
         )
       ) : (
-        <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] content-start gap-1.5 overflow-y-auto overflow-x-hidden p-2.5 [&_dl]:m-0 [&_dl]:grid [&_dl]:grid-cols-[92px_minmax(0,1fr)] [&_dl]:gap-[9px] [&_dl]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0">
+        <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] content-start gap-4 overflow-y-auto overflow-x-hidden p-4 [&_dl]:m-0 [&_dl]:grid [&_dl]:grid-cols-[92px_minmax(0,1fr)] [&_dl]:gap-[9px] [&_dl]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0">
           <dl>
             <dt>{t("sequence")}</dt>
             <dd>{sequence.name}</dd>
@@ -461,8 +461,8 @@ export function Inspector({
             </dd>
           </dl>
           {onReframe && (
-            <div className="grid gap-1.5 border-t border-border pt-2.5">
-              <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("reframeTitle")}</span>
+            <div className="grid gap-3 border-t border-border pt-4">
+              <span className="text-ui-sm font-semibold text-muted-foreground">{t("reframeTitle")}</span>
               <div className="flex flex-wrap gap-1">
                 {(
                   [
@@ -485,7 +485,7 @@ export function Inspector({
                   );
                 })}
               </div>
-              <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("reframeFill")}</span>
+              <span className="text-ui-sm font-semibold text-muted-foreground">{t("reframeFill")}</span>
               <div className="flex flex-wrap gap-1">
                 {(
                   [
@@ -584,7 +584,7 @@ function ColorGradePanel({
   };
 
   return (
-    <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] content-start gap-1.5 overflow-y-auto overflow-x-hidden p-2.5">
+    <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] content-start gap-4 overflow-y-auto overflow-x-hidden p-4">
       <div className="flex items-center gap-1.5 border-b border-border pb-0.5 text-xs text-muted-foreground [&_strong]:min-w-0 [&_strong]:flex-1 [&_strong]:truncate [&_strong]:font-semibold [&_strong]:text-foreground">
         <span>{t("colorTarget")}</span>
         <strong title={targetName}>{targetName}</strong>
@@ -596,8 +596,8 @@ function ColorGradePanel({
           )}
         </div>
       </div>
-      <div className="grid gap-1.5 border-t border-border pt-2.5">
-        <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("stylePresets")}</span>
+      <div className="grid gap-3 border-t border-border pt-4">
+        <span className="text-ui-sm font-semibold text-muted-foreground">{t("stylePresets")}</span>
         <div className="flex flex-wrap gap-1">
           <button
             type="button"
@@ -621,8 +621,8 @@ function ColorGradePanel({
         </div>
       </div>
       {GRADE_GROUPS.map((group) => (
-        <div className="grid gap-1.5 border-t border-border pt-2.5" key={group.label}>
-          <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t(group.label as never)}</span>
+        <div className="grid gap-3 border-t border-border pt-4" key={group.label}>
+          <span className="text-ui-sm font-semibold text-muted-foreground">{t(group.label as never)}</span>
           {group.keys.map((key) => (
             <div className="grid grid-cols-[44px_minmax(0,1fr)_30px] items-center gap-1.5 text-ui-xs text-muted-foreground [&_em]:text-right [&_em]:text-ui-2xs [&_em]:not-italic" key={`${key}-${clip.id}`}>
               <span>{t(`grade_${key}` as never)}</span>
@@ -641,8 +641,8 @@ function ColorGradePanel({
           ))}
         </div>
       ))}
-      <div className="grid gap-1.5 border-t border-border pt-2.5">
-        <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("gradeGroupCurves")}</span>
+      <div className="grid gap-3 border-t border-border pt-4">
+        <span className="text-ui-sm font-semibold text-muted-foreground">{t("gradeGroupCurves")}</span>
         <CurveEditor
           key={clip.id}
           curves={curColor.curves as ColorCurves | undefined}
@@ -651,8 +651,8 @@ function ColorGradePanel({
           }
         />
       </div>
-      <div className="grid gap-1.5 border-t border-border pt-2.5">
-        <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("gradeGroupLut")}</span>
+      <div className="grid gap-3 border-t border-border pt-4">
+        <span className="text-ui-sm font-semibold text-muted-foreground">{t("gradeGroupLut")}</span>
         <LutPicker workspaceId={workspaceId} value={curColor.lut as string | undefined} onChange={setLut} />
       </div>
       <p className="mb-0 mt-1 text-ui-xs leading-normal text-muted-foreground">{t("colorScopeHint")}</p>
@@ -701,7 +701,7 @@ function TextStylePanel({
   ];
   return (
     <div className="grid gap-2 border-t border-border pt-2.5">
-      <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("textStyleTitle")}</span>
+      <span className="text-ui-sm font-semibold text-muted-foreground">{t("textStyleTitle")}</span>
       <div className="flex flex-wrap gap-1">
         {TEXT_PRESETS.map((preset) => (
           <button key={preset.key} type="button" className={iconBtn(false)} onClick={() => set(preset.style)}>

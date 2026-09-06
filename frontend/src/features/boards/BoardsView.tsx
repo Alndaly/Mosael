@@ -1,4 +1,6 @@
 import React from "react";
+import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
+import { CanvasPreview } from "@/components/layout/CanvasPreview";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot, LayoutGrid, ListChecks, Map as MapIcon, Maximize2, MessageSquarePlus, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
@@ -117,7 +119,8 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
   // 会让空状态的视觉中心下移，也让同一动作出现两遍；工作流空页已经给出了统一模式。
   if (boards.isSuccess && list.length === 0) {
     return (
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-5 xl:p-6 [&>*]:shrink-0">
+      <div className={STUDIO_PAGE}>
+        <PageHeading title={t("navBoards")} description={t("studioBoardsDesc")} />
         <EmptyState
           icon={<LayoutGrid size={22} />}
           title={t("boardsEmptyTitle")}
@@ -135,25 +138,18 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
   // 容器、内边距、卡片栅格都跟着工作流列表页走 —— 同一层级的两个页面长得不一样,
   // 用户会以为自己切到了别的应用里。
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch gap-5 overflow-auto p-5 xl:p-6 [&>*]:shrink-0">
-      <div className="flex items-center justify-between">
-        <h2 className="m-0 inline-flex items-center gap-3 text-2xl font-semibold tracking-tight text-foreground">
-          <LayoutGrid size={13} /> {t("navBoards")}
-        </h2>
-        <Button size="sm" loading={create.isPending} onClick={() => create.mutate()}>
-          <Plus size={13} /> {t("boardsNew")}
-        </Button>
-      </div>
+    <div className={STUDIO_PAGE}>
+      <PageHeading title={t("navBoards")} description={t("studioBoardsDesc")} count={list.length} actions={<Button loading={create.isPending} onClick={() => create.mutate()}><Plus />{t("boardsNew")}</Button>} />
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {boards.isLoading ? (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-x-6 gap-y-8">
             {[0, 1, 2].map((n) => (
               <Skeleton key={n} className="h-[74px] rounded-lg" />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-x-6 gap-y-8">
             {list.map((board) => (
               <BoardCard
                 key={board.id}
@@ -177,35 +173,14 @@ function BoardCard({ board, onOpen, onDelete }: { board: Board; onOpen: () => vo
 
   return (
     <>
-      <button
-        type="button"
-        onClick={onOpen}
-        className="group grid cursor-pointer gap-1 rounded-lg border border-border bg-panel p-5 text-left transition-colors hover:border-border-strong"
-      >
-        <div className="flex items-start justify-between gap-2">
-          <span className="truncate text-ui-sm font-medium text-foreground">{board.name}</span>
-          <span
-            role="button"
-            tabIndex={0}
-            aria-label={t("delete")}
-            className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
-            onClick={(event) => {
-              event.stopPropagation();
-              setConfirming(true);
-            }}
-            onKeyDown={(event) => {
-              if (event.key !== "Enter" && event.key !== " ") return;
-              event.stopPropagation();
-              setConfirming(true);
-            }}
-          >
-            <Trash2 size={13} />
-          </span>
-        </div>
-        <span className="text-ui-2xs text-muted-foreground">
-          {t("boardsItemCount").replace("{n}", String(count))} · {relativeTime(board.updated_at, locale)}
-        </span>
-      </button>
+      <div className="group relative min-w-0">
+        <button type="button" onClick={onOpen} className="grid w-full gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <CanvasPreview items={(board.canvas?.items ?? []).map(item => ({ ...item, assetId: item.asset_id, label: item.text || t(({note:"boardsAddNote",image:"kindImage",video:"kindVideo",audio:"kindAudio",frame:"boardsAddFrame"} as const)[item.kind]) }))} edges={board.canvas?.edges} />
+          <span className="truncate pr-8 text-ui-md font-semibold">{board.name}</span>
+          <span className="text-ui-sm text-muted-foreground">{t("boardsItemCount").replace("{n}", String(count))} · {relativeTime(board.updated_at, locale)}</span>
+        </button>
+        <Button variant="ghost" size="icon-xs" className="absolute bottom-7 right-0 text-muted-foreground hover:text-destructive" aria-label={`${t("delete")}: ${board.name}`} onClick={() => setConfirming(true)}><Trash2 /></Button>
+      </div>
       <ConfirmDialog
         open={confirming}
         title={t("boardsDeleteTitle")}
@@ -689,11 +664,11 @@ function BoardDetail({
                 <button
                   type="button"
                   data-board-add-item=""
-                  className="grid h-8 w-8 place-items-center rounded-full border-0 bg-transparent text-foreground transition-colors hover:bg-secondary"
+                  className="inline-flex h-8 items-center gap-2 rounded-md bg-primary px-3 text-primary-foreground hover:bg-primary/90"
                   aria-label={t("boardsAddItem")}
                   title={`${t("boardsAddItem")} ⌘N`}
                 >
-                  <Plus size={15} />
+                  <Plus size={15} /> {t("boardsAddItem")}
                 </button>
               }
             />

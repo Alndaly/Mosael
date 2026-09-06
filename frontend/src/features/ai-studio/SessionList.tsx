@@ -310,7 +310,7 @@ export function SessionList({
 
   return (
     <>
-      <div className="flex min-h-10 shrink-0 items-center justify-between gap-1 border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
+      <div className="flex min-h-16 shrink-0 items-center justify-between gap-1 border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-md [&_h2]:font-semibold [&_h2]:text-foreground">
         {selectMode ? (
           // 选择模式下头部换成这一批的动作 —— 和素材/工作流/发布三页同一套语汇。
           <>
@@ -389,15 +389,15 @@ export function SessionList({
           ⌘K 那个全局搜索**不覆盖对话**(只有导航/项目/素材/工作流/发布),所以这里是
           找回一次旧对话的唯一入口。 */}
       {sessions.length > 0 && !selectMode && (
-        <div className="relative shrink-0 border-b border-border px-2 py-1.5">
-          <Search size={12} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <div className="relative shrink-0 px-3 py-3">
+          <Search size={12} className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={t(spec.searchPlaceholder)}
             aria-label={t(spec.searchPlaceholder)}
-            className="h-7 w-full rounded-md border border-transparent bg-field pl-6 pr-2 text-ui-xs text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring [&::-webkit-search-cancel-button]:appearance-none"
+            className="h-9 w-full rounded-md border border-border bg-panel pl-7 pr-2 text-ui-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring [&::-webkit-search-cancel-button]:appearance-none"
           />
         </div>
       )}
@@ -426,7 +426,7 @@ export function SessionList({
                 <ContextMenuTrigger asChild>
                   <button
                     type="button"
-                    className="flex w-full cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-1.5 py-1 text-left text-ui-2xs font-semibold uppercase tracking-[0.06em] text-muted-foreground transition-colors duration-100 hover:bg-muted"
+                    className="flex w-full cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-1.5 py-1 text-left text-ui-xs font-medium text-muted-foreground transition-colors duration-100 hover:bg-muted"
                     onClick={() =>
                       setCollapsed((current) => {
                         const next = new Set(current);
@@ -471,7 +471,7 @@ export function SessionList({
           // separator 变体 = 左右两条细线夹住中间那几个字。它本来就是 Marker 的
           //「带标签的分隔线」那一档 —— 这一段不是标题,是"下面这些没归到任何分组"的分界。
           <Marker variant="separator" className="px-1.5 pt-1">
-            <MarkerContent className="text-ui-2xs font-semibold uppercase tracking-[0.06em]">
+            <MarkerContent className="text-ui-xs font-medium">
               {t("chatUngrouped")}
             </MarkerContent>
           </Marker>
@@ -590,7 +590,7 @@ function SessionRow({
           ref={setNodeRef}
           type="button"
           className={cn(
-            "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)] items-center gap-px rounded-md border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted",
+            "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)] items-center gap-px rounded-md border-0 bg-transparent px-3 py-3 text-left transition-colors duration-100 hover:bg-muted",
             selectMode && "grid-cols-[auto_minmax(0,1fr)] gap-1.5",
             // 选中态:一条**圆角短竖条**贴在左边 + 一层很淡的底色。此前是
             // `shadow-[inset_2px_0_0]` —— 直角、贯穿整行高、颜色还是实心 primary,
@@ -607,7 +607,7 @@ function SessionRow({
           {/* 列表行用**前导勾选框**,不是卡片那种右上角浮标(components/app/SelectionCheck):
               那个是为卡片定的位置与尺寸,压在一行 28px 高的标题上会把字盖掉。 */}
           {selectMode && <Checkbox checked={checked} className="pointer-events-none" tabIndex={-1} />}
-          <span className="truncate text-xs">{session.title}</span>
+          <span className="truncate text-ui-sm">{session.title}</span>
         </button>
       </ContextMenuTrigger>
       <ContextMenuContent>

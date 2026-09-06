@@ -14,11 +14,11 @@ import { CANVAS_GLASS_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
 /** 两个面板共用的标题栏刻度:同样的高度、内边距、按钮间距。
  *  各写各的时候,并排放在右栏里按钮疏密一眼就能看出不一样。 */
 export const PANEL_HEADER_CLASS =
-  "flex h-[34px] cursor-default select-none touch-none items-center gap-1 border-b border-border pl-2.5 pr-1.5 [&_h2]:m-0 [&_h2]:flex [&_h2]:flex-1 [&_h2]:items-center [&_h2]:gap-1.5 [&_h2]:text-ui-sm [&_h2]:font-semibold";
+  "flex h-12 cursor-default select-none touch-none items-center gap-2 border-b border-border pl-4 pr-3 [&_h2]:m-0 [&_h2]:flex [&_h2]:flex-1 [&_h2]:items-center [&_h2]:gap-1.5 [&_h2]:text-ui-sm [&_h2]:font-semibold";
 
 /** 停靠和悬浮面板共用的外框。智能体与执行历史必须是一套圆角和边界。 */
 export const DOCKABLE_PANEL_FRAME_CLASS =
-  `overflow-hidden rounded-lg ${CANVAS_GLASS_SURFACE_CLASS}`;
+  `overflow-hidden rounded-xl ${CANVAS_GLASS_SURFACE_CLASS}`;
 
 /**
  * 悬浮窗的叠放次序:一个从底到顶的 id 序列,z-index = BASE + 下标。

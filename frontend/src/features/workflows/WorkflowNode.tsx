@@ -264,7 +264,7 @@ function WorkflowNode({ data, selected }: NodeProps) {
         // 连接点变成贴边的半圆 —— 而它们正是要突出到边界之外才看得见。
         // 预览夹在标题层和接点层之间,本来就不碰圆角;真正需要圆角的是最底下那一层,
         // 由它自己 rounded-b 处理(见参数层)。
-        "group/node relative flex min-w-[172px] max-w-[264px] flex-col rounded-lg border border-border bg-panel transition-[border-color] duration-100 hover:border-border-strong",
+        "group/node relative flex min-w-[192px] max-w-[280px] flex-col rounded-xl shadow-sm border border-border bg-panel transition-[border-color] duration-100 hover:border-border-strong",
         // **两侧都有接点时才撑宽。** 单侧接点(比如只有输出的 LLM)撑到 210px 的话,那一列被
         // 推到最右边,左半张卡片是空的 —— 看着像排版坏了,其实是宽度给多了。
         showIo && inputs.length > 0 && outputs.length > 0 && "min-w-[210px]",
@@ -282,7 +282,7 @@ function WorkflowNode({ data, selected }: NodeProps) {
     >
       {/* 控制入(左上) */}
       {d.nodeType !== "start" && (
-        <Handle type="target" position={Position.Left} className={cn("h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-border-strong! bg-panel! transition-[border-color,transform] duration-100 after:absolute after:-inset-[7px] after:rounded-full after:content-[''] hover:border-primary! group-hover/node:border-primary! [&.react-flow\_\_handle-left:hover]:[transform:translate(-50%,-50%)_scale(1.35)]! [&.react-flow\_\_handle-right:hover]:[transform:translate(50%,-50%)_scale(1.35)]!", selected && "border-primary!")} style={{ top: 22 }} />
+        <Handle type="target" position={Position.Left} className={cn("h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-border-strong! bg-panel! transition-[border-color,transform] duration-100 after:absolute after:-inset-[7px] after:rounded-full after:content-[''] hover:border-primary! group-hover/node:border-primary! [&.react-flow\_\_handle-left:hover]:[transform:translate(-50%,-50%)_scale(1.35)]! [&.react-flow\_\_handle-right:hover]:[transform:translate(50%,-50%)_scale(1.35)]!", selected && "border-primary!")} style={{ top: 28 }} />
       )}
       {d.run && (
         <span
@@ -306,9 +306,9 @@ function WorkflowNode({ data, selected }: NodeProps) {
           {(d.run.ms / 1000).toFixed(2)}s
         </span>
       )}
-      <div className="flex items-center gap-2 px-3 py-2">
-        <span className="grid h-7 w-7 flex-none place-items-center rounded-md bg-[color-mix(in_srgb,var(--wf-node-color,var(--primary))_12%,transparent)] text-[color:var(--wf-node-color,var(--primary))]" style={{ "--wf-node-color": visual.color } as React.CSSProperties}>{kindIcon ?? visual.icon ?? <Type size={13} />}</span>
-        <span className="grid min-w-0 gap-px [&_small]:truncate [&_small]:text-ui-2xs [&_small]:text-muted-foreground [&_strong]:truncate [&_strong]:text-ui-sm">
+      <div className="flex items-center gap-3 px-4 py-3">
+        <span className="grid size-8 flex-none place-items-center rounded-lg bg-[color-mix(in_srgb,var(--wf-node-color,var(--primary))_12%,transparent)] text-[color:var(--wf-node-color,var(--primary))]" style={{ "--wf-node-color": visual.color } as React.CSSProperties}>{kindIcon ?? visual.icon ?? <Type size={13} />}</span>
+        <span className="grid min-w-0 gap-px [&_small]:truncate [&_small]:text-ui-2xs [&_small]:text-muted-foreground [&_strong]:truncate [&_strong]:text-sm">
           <strong>{d.label}</strong>
           {/* **副标题只有一行**,而且优先说"这个节点被配成做什么"(模型名、被调的工作流),
               其次才是类型名 —— 类型名在同一屏里重复度最高,信息量最低。
@@ -357,7 +357,7 @@ function WorkflowNode({ data, selected }: NodeProps) {
           <span className="pointer-events-none absolute left-full top-[calc(68%-7px)] ml-2 whitespace-nowrap text-ui-2xs font-semibold text-destructive">{t("wfBranchFalse")}</span>
         </>
       ) : (
-        <Handle type="source" position={Position.Right} className={cn("h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-border-strong! bg-panel! transition-[border-color,transform] duration-100 after:absolute after:-inset-[7px] after:rounded-full after:content-[''] hover:border-primary! group-hover/node:border-primary! [&.react-flow\_\_handle-left:hover]:[transform:translate(-50%,-50%)_scale(1.35)]! [&.react-flow\_\_handle-right:hover]:[transform:translate(50%,-50%)_scale(1.35)]!", selected && "border-primary!")} style={{ top: 22 }} />
+        <Handle type="source" position={Position.Right} className={cn("h-[9px]! w-[9px]! rounded-full! border-[1.5px]! border-border-strong! bg-panel! transition-[border-color,transform] duration-100 after:absolute after:-inset-[7px] after:rounded-full after:content-[''] hover:border-primary! group-hover/node:border-primary! [&.react-flow\_\_handle-left:hover]:[transform:translate(-50%,-50%)_scale(1.35)]! [&.react-flow\_\_handle-right:hover]:[transform:translate(50%,-50%)_scale(1.35)]!", selected && "border-primary!")} style={{ top: 28 }} />
       )}
       {showIo && (
         // 接口区做成卡片"页脚条":压进左右 padding、贴住底边、subtle 底色 —

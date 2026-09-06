@@ -37,11 +37,11 @@ describe("ModalShell sticky layout", () => {
     expect(body?.className).toContain("overflow-y-auto");
     expect(body?.className).toContain("bg-popover");
     expect(body?.className).not.toContain("backdrop-blur-xl");
-    expect(body?.className).toContain("py-5");
+    expect(body?.className).toContain("py-6");
     expect(footer?.className).toContain("sticky");
     expect(footer?.className).toContain("bottom-0");
     expect(footer?.className).toContain("sm:items-center");
-    expect(footer?.className).toContain("bg-popover");
+    expect(footer?.className).toContain("bg-panel-subtle");
     expect(footer?.className).not.toContain("backdrop-blur-xl");
   });
 

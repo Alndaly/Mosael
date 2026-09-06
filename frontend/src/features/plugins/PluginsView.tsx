@@ -1,4 +1,7 @@
+import { PageHeading } from "@/components/layout/StudioPage";
 import React from "react";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, Copy, ExternalLink, KeyRound, Play, Plug, Plus, RefreshCcw, Store, Terminal, Trash2 } from "lucide-react";
 
@@ -67,38 +70,29 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
   //: 挤在那条几百像素宽的侧栏里 —— 一个用来浏览的列表被塞进了一个用来选中的列表的位置。
   //: 现在它是头部的一个按钮 + 一张弹窗,宽度归它自己。
   const [marketOpen, setMarketOpen] = React.useState(false);
-  //: 一个插件都没有时**自己把市场打开** —— 「已安装」那一栏这时只会说「你没有插件」,
-  //: 而那句话帮不上任何忙。只在「从有到无」这一刻弹一次:用户关掉之后不该再弹回来。
   const empty = packages.isSuccess && list.length === 0;
-  React.useEffect(() => {
-    if (empty) setMarketOpen(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [empty]);
   const selected = list.find((item) => item.id === selectedId) ?? list[0] ?? null;
 
 
+  const heading = <PageHeading title={t("pluginsTitle")} description={t("studioPluginsDesc")} count={packages.data?.length} className="px-6 py-7 xl:px-9" actions={<><ScanButton pending={scan.isPending} onScan={() => scan.mutate()} /><Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button></>} />;
+  if (empty) return <div className="flex h-full min-h-0 flex-col bg-panel">
+    {heading}<div className="flex flex-1 border-t border-border bg-background"><EmptyState icon={<Plug size={28} />} title={t("pluginsTitle")} body={t("studioPluginsDesc")} action={<Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button>} /></div>
+    <PluginMarketDialog open={marketOpen} onOpenChange={setMarketOpen} onInstalled={() => invalidatePlugins(qc)} />
+  </div>;
+
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-5 xl:p-6 [&>*]:shrink-0">
-      <div className="relative grid min-h-0 flex-1 gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]"
-        style={{ gridTemplateColumns: `${sidebar.width}px minmax(0, 1fr)` }}>
-        <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-panel">
+      {heading}
+      <div className="relative grid min-h-0 flex-1 grid-cols-[var(--studio-index-width)_minmax(0,1fr)] gap-2 border-t border-border max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]"
+        style={{ "--studio-index-width": `${sidebar.width}px` } as React.CSSProperties}>
+        <aside className="min-h-0 overflow-hidden border-r border-border bg-panel-subtle grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
           <div className="flex min-h-10 items-center justify-between border-b border-border px-3">
             {/* 「插件」而不是「已安装」:这一栏和右边的详情是**同一件东西的两半**,而标题是在
                 回答"这一栏里是什么",不是在给它们贴状态 —— 没装的插件根本不会出现在这儿。 */}
-            <span className="text-ui-xs font-semibold uppercase tracking-[0.06em] text-foreground">
+            <span className="text-ui-sm font-semibold text-muted-foreground">
               {t("pluginsTitle")}
             </span>
-            <span className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="xs"
-                className="gap-1 px-2 text-ui-2xs"
-                onClick={() => setMarketOpen(true)}
-              >
-                <Store size={12} /> {t("pluginMarket")}
-              </Button>
-              <ScanButton pending={scan.isPending} onScan={() => scan.mutate()} />
-            </span>
+
           </div>
           <div className="grid content-start gap-1 overflow-y-auto p-1.5 max-[880px]:order-1 max-[880px]:flex max-[880px]:min-w-0 max-[880px]:flex-1 max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:overflow-x-auto max-[880px]:p-0">
             {packages.isLoading &&
@@ -118,8 +112,8 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
                   key={item.id}
                   type="button"
                   className={cn(
-                    "flex cursor-pointer items-center gap-[9px] rounded-md border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted max-[880px]:shrink-0 max-[880px]:py-1",
-                    selected?.id === item.id && "bg-accent hover:bg-accent",
+                    "flex cursor-pointer items-center gap-3 rounded-lg border-0 bg-transparent px-3 py-3 text-left transition-colors duration-100 hover:bg-muted max-[880px]:shrink-0 max-[880px]:py-1",
+                    selected?.id === item.id && "bg-panel shadow-sm hover:bg-panel",
                   )}
                   onClick={() => setSelectedId(item.id)}
                 >
@@ -141,7 +135,7 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
           </div>
         </aside>
         {/* 边缘拖动 —— 和剪辑页同一套(lib/useResizableSidebar)。 */}
-        <div {...sidebar.handleProps} />
+        <div {...sidebar.handleProps} className={cn(sidebar.handleProps.className, "max-[880px]:hidden")} />
 
       {/* 市场:**一张弹窗,宽度归它自己** —— 挤在侧栏里时,一个用来浏览的列表被塞进了
           一个用来选中的列表的位置,每张卡片的说明都要折成五行。 */}
@@ -152,7 +146,7 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
             在整块可用区域内真正居中,而不是被 content-start 锁在顶部。 */}
         <div
           className={cn(
-            "grid min-h-0 min-w-0 overflow-y-auto rounded-md border border-border bg-panel px-3 py-2.5 shadow-[var(--shadow-panel)]",
+            "grid min-h-0 min-w-0 overflow-y-auto bg-panel px-6 py-7 xl:px-9",
             selected ? "content-start" : "place-items-center",
           )}
         >
@@ -249,7 +243,7 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
           身份该在版面顶端只出现一次,后面全是它的内容。 */}
       <header className="grid gap-2 border-b border-border pb-3">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-          <h2 className="m-0 truncate text-ui-lg font-semibold text-foreground">{pkg.name}</h2>
+          <h2 className="m-0 truncate text-2xl font-semibold tracking-tight text-foreground">{pkg.name}</h2>
           <span className="flex shrink-0 items-center gap-1">
             {/* 「文档」指向 **Mosael 自己的插件文档**,不是插件作者的站点。
                 这一页上的问题是"连接是什么、凭据填哪儿、权限为什么要授、工具为什么默认不开"
@@ -884,15 +878,15 @@ export const ToolRow = React.memo(function ToolRow({
   const missingRequired = [...required].some((key) => !(values[key] ?? "").trim());
 
   return (
-    <div className="overflow-hidden rounded-md border border-border bg-panel">
-      <div className="flex items-center gap-1.5 px-2">
+    <div className="overflow-hidden rounded-xl border border-border bg-panel">
+      <div className="flex items-center gap-3 px-4">
         {/* 勾 = 暴不暴露给智能体和工作流。默认关 —— 一个 MCP 端点可能报几十个工具。 */}
         <span className="grid size-7 shrink-0 place-items-center">
           <Checkbox checked={tool.exposed} onCheckedChange={(next) => onToggle(next === true)} aria-label={tool.name} />
         </span>
         <button
           type="button"
-          className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 border-0 bg-transparent py-[9px] text-left"
+          className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 border-0 bg-transparent py-4 text-left"
           onClick={() => setOpen((value) => !value)}
         >
           <Terminal size={14} className="shrink-0" />
@@ -913,10 +907,10 @@ export const ToolRow = React.memo(function ToolRow({
         </button>
       </div>
       {open && (
-        <div className="grid gap-1.5 border-t border-border p-2">
+        <div className="grid gap-5 border-t border-border bg-panel-subtle/40 p-5">
           {fields.map(([key, spec]) => (
             <label
-              className="grid gap-1 [&>span]:text-ui-xs [&>span]:text-muted-foreground [&_em]:not-italic [&_em]:text-destructive"
+              className="grid gap-2 [&>span]:text-ui-sm [&>span]:font-medium [&>span]:text-foreground [&_em]:not-italic [&_em]:text-destructive"
               key={key}
             >
               <span>
@@ -924,11 +918,17 @@ export const ToolRow = React.memo(function ToolRow({
                 {required.has(key) && <em>*</em>}
                 {spec.description ? ` — ${spec.description}` : ""}
               </span>
-              <Input
+              {spec.type === "boolean" ? <Select value={values[key] || "__default__"} onValueChange={(value) => setValues(current => ({ ...current, [key]: value === "__default__" ? "" : value }))}>
+                <SelectTrigger aria-label={key}><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="__default__">{t("studioBooleanDefault")}</SelectItem><SelectItem value="true">{t("studioBooleanTrue")}</SelectItem><SelectItem value="false">{t("studioBooleanFalse")}</SelectItem></SelectContent>
+              </Select> : spec.type === "object" || spec.type === "array" ? <Textarea aria-label={key} rows={4} className="font-mono" value={values[key] ?? ""} placeholder={spec.type === "array" ? "[]" : "{}"} onChange={event => setValues(current => ({ ...current, [key]: event.target.value }))} /> : <Input
+                aria-label={key}
+                type={spec.type === "number" || spec.type === "integer" ? "number" : "text"}
+                step={spec.type === "integer" ? 1 : "any"}
                 value={values[key] ?? ""}
                 placeholder={spec.type ?? "string"}
                 onChange={(event) => setValues((current) => ({ ...current, [key]: event.target.value }))}
-              />
+              />}
             </label>
           ))}
           {/* **把理由摆在按钮旁边。** 「未启用」这句话本来只写在整组的标题下,而工具行
@@ -996,7 +996,7 @@ function InvocationRow({ invocation, onDelete }: { invocation: PluginInvocation;
   const [open, setOpen] = React.useState(false);
   const ok = invocation.status === "succeeded";
   return (
-    <div className="overflow-hidden rounded-md border border-border bg-panel">
+    <div className="overflow-hidden rounded-xl border border-border bg-panel">
       <div className="flex items-stretch [&>button:first-child]:min-w-0 [&>button:first-child]:flex-1">
         <button
           type="button"

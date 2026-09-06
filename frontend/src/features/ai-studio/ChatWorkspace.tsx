@@ -1,6 +1,7 @@
 import React from "react";
+import { StudioIndex } from "@/components/layout/StudioIndex";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Check, ChevronDown, ChevronRight, CircleDot, Copy, CornerDownRight, Database, Loader2, Paperclip, SearchX, Send, Sparkles, Square, Trash2, Wrench, X } from "lucide-react";
+import { Bot, Check, ChevronDown, ChevronRight, CircleDot, Copy, CornerDownRight, Database, Loader2, PanelRight, Paperclip, SearchX, Send, Sparkles, Square, Trash2, Wrench, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { API_BASE, api, getAuthToken, importAsset, type Asset, type Project, type Workspace } from "@/api/client";
@@ -385,11 +386,12 @@ export function ChatWorkspace({
 
   const narrow = useMediaMatch("(max-width: 1180px)");
   const single = useMediaMatch("(max-width: 820px)");
-  const showRight = view !== "trace" && !narrow;
+  const [environmentOpen, setEnvironmentOpen] = React.useState(false);
+  const showRight = view !== "trace" && environmentOpen && !narrow;
   // 内联 gridTemplateColumns 会覆盖 class 里的 max-[...] 回退,所以断点在 JS 里一起判:
-  // 单列(≤820)时不给内联,交还给 class。
+  // 单列也显式指定,避免 matchMedia 的 ≤ 与 CSS max-width 的 < 在断点处不一致。
   const columns = single
-    ? undefined
+    ? "minmax(0,1fr)"
     : showRight
       ? `${panels.left}px minmax(0,1fr) ${panels.right}px`
       : `${panels.left}px minmax(0,1fr)`;
@@ -401,11 +403,11 @@ export function ChatWorkspace({
     <div
       className={cn(
         "relative grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] gap-2 max-[820px]:grid-cols-[minmax(0,1fr)] max-[760px]:grid-rows-[minmax(0,1fr)_auto]",
-        view === "trace"
+        !showRight
           ? "grid-cols-[240px_minmax(0,1fr)] max-[1180px]:grid-cols-[220px_minmax(0,1fr)]"
           : "grid-cols-[240px_minmax(0,1fr)_300px] max-[1180px]:grid-cols-[220px_minmax(0,1fr)]",
       )}
-      style={columns ? { gridTemplateColumns: columns } : undefined}
+      style={{ gridTemplateColumns: columns }}
     >
       {/* 拖柄骑在 8px 的列间隙正中,7px 宽、中间一根会亮的细线 —— 和剪辑页同款。 */}
       {!single && (
@@ -425,7 +427,7 @@ export function ChatWorkspace({
       {/* flex 列而不是定行数的 grid:搜索框是**条件渲染**的(空列表/选择模式下不出现),
           而 `grid-rows-[auto_minmax(0,1fr)]` 一旦子元素从两个变三个,能滚的那一行就落到
           搜索框头上,列表反而掉进隐式行撑破容器。 */}
-      <aside className="flex min-h-0 flex-col overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] max-[820px]:hidden">
+      <StudioIndex label={t("chatSessionsTitle")}>
         <SessionList
           kind="agent"
           workspaceId={workspace.id}
@@ -446,12 +448,12 @@ export function ChatWorkspace({
             }
           }}
         />
-      </aside>
+      </StudioIndex>
 
-      <section className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)_auto]">
+      <section className="min-h-0 overflow-hidden bg-panel grid grid-rows-[auto_minmax(0,1fr)_auto]">
         {/* min-w-0:这行是 grid 子项,默认 min-width:auto —— 面包屑里的长任务名会把它撑到
             section 的 overflow-hidden 上被硬裁,而不是走内部的 truncate 省略号。 */}
-        <div className="flex min-w-0 items-center gap-2 border-b border-border px-3 py-1.5">
+        <div className="flex min-h-16 min-w-0 items-center gap-3 border-b border-border px-5 py-3 max-[821px]:pl-14">
           {viewingSubagent ? (
             <SubagentBreadcrumb
               sessionTitle={activeSession?.title || t("chatSessionsTitle")}
@@ -467,7 +469,7 @@ export function ChatWorkspace({
               {activeSession.title}
             </span>
           )}
-          <div className="inline-flex h-7 shrink-0 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border" role="tablist">
+          <div className="inline-flex h-9 shrink-0 items-stretch gap-1 rounded-lg bg-panel-subtle p-1" role="tablist">
             {(["chat", "trace"] as const).map((item) => (
               <button
                 key={item}
@@ -476,8 +478,8 @@ export function ChatWorkspace({
                 aria-selected={view === item}
                 onClick={() => setView(item)}
                 className={cn(
-                  "inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground",
-                  view === item && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground",
+                  "inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-3 py-1 text-ui-sm text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground",
+                  view === item && "bg-panel font-medium text-foreground shadow-sm hover:bg-panel hover:text-foreground",
                 )}
               >
                 {t(item === "chat" ? "chatTabConversation" : "chatTabTrace")}
@@ -486,6 +488,7 @@ export function ChatWorkspace({
           </div>
           </>
           )}
+          {view === "chat" && <Button variant={environmentOpen ? "secondary" : "ghost"} size="icon-sm" aria-label={t("studioChatEnvironment")} title={t("studioChatEnvironment")} aria-pressed={environmentOpen} onClick={() => setEnvironmentOpen(!environmentOpen)}><PanelRight /></Button>}
           {/* 「N 个子代理」:这个会话派出过的子智能体入口(DSH 同款位置)。没派过就不渲染。 */}
           {!viewingSubagent && (
             <span className="ml-auto shrink-0">
@@ -554,7 +557,12 @@ export function ChatWorkspace({
               )}
               {(messages.data ?? []).length === 0 && !running && (
                 <div className="m-auto w-full max-w-[780px]">
-                  <EmptyState icon={<Bot size={22} />} title={t("chatEmptyTitle")} body={t("chatEmptyBody")} />
+                  <div className="mx-auto max-w-xl px-6 py-10">
+                    <Sparkles className="mb-6 size-9 text-primary" strokeWidth={1.4} />
+                    <h2 className="text-3xl font-semibold leading-tight tracking-tight">{t("studioChatStart")}</h2>
+                    <p className="mb-8 mt-4 max-w-[42ch] text-ui-md leading-relaxed text-muted-foreground">{t("studioChatIntro")}</p>
+                    <div className="flex flex-wrap gap-2">{(["Media", "Edit", "Workflow"] as const).map(kind => <Button key={kind} variant="outline" className="h-auto whitespace-normal py-3 text-left" onClick={() => { setDraft(t(`studioPrompt${kind}Text`)); document.querySelector<HTMLTextAreaElement>("[data-chat-composer]")?.focus(); }}>{t(`studioPrompt${kind}`)}</Button>)}</div>
+                  </div>
                 </div>
               )}
               {sessionId && <InlineConfirmations workspaceId={workspace.id} allowKey={sessionId} />}
@@ -596,13 +604,14 @@ export function ChatWorkspace({
               </div>
             ))}
             <form
-              className="mx-auto mb-3.5 mt-1.5 flex w-[min(780px,calc(100%-32px))] flex-col gap-1 rounded-[22px] border border-input bg-panel pb-1.5 pl-3 pr-2.5 pt-2.5 shadow-[var(--shadow-raised)] transition-[border-color,box-shadow] duration-100 focus-within:border-ring focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--ring)_35%,transparent)]"
+              className="mx-auto mb-3.5 mt-1.5 flex w-[min(780px,calc(100%-32px))] flex-col gap-1 rounded-2xl border border-input bg-panel pb-1.5 pl-3 pr-2.5 pt-2.5 shadow-[var(--shadow-raised)] transition-[border-color,box-shadow] duration-100 focus-within:border-ring focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--ring)_35%,transparent)]"
               onSubmit={submit}
             >
               {/* 附件条属于输入框内部(文本框上方),而不是飘在圆角框外的左上角。 */}
               <AttachmentChips attachments={attach} className="flex flex-wrap gap-1.5 px-0.5 pb-1" />
               <Textarea
-                rows={2}
+                data-chat-composer
+                rows={3}
                 className="max-h-[220px] min-h-11 w-full min-w-0 resize-none border-0 bg-transparent px-0.5 pb-1.5 pt-0.5 text-ui-md leading-[1.55] shadow-none outline-none placeholder:text-muted-foreground placeholder:opacity-100 focus-visible:ring-0"
                 value={draft}
                 placeholder={t("chatPlaceholder")}
@@ -695,7 +704,7 @@ export function ChatWorkspace({
         )}
       </section>
 
-      {view === "chat" && <ChatInspector
+      {view === "chat" && environmentOpen && <div className={cn("min-h-0 overflow-hidden", narrow && "absolute inset-y-0 right-0 z-30 w-[min(380px,100%)] border-l border-border bg-panel shadow-xl")}><div className="flex justify-end bg-panel px-3 pt-2"><Button variant="ghost" size="icon-xs" aria-label={t("close")} onClick={() => setEnvironmentOpen(false)}><X /></Button></div><ChatInspector
         workspace={workspace}
         session={session.data ?? activeSession}
         messages={visibleMessages}
@@ -707,7 +716,7 @@ export function ChatWorkspace({
         tools={tools.data ?? []}
         subagentTimeline={subagentSourceTimeline}
         onOpenSubagent={setViewingSubagent}
-      />}
+      /></div>}
     </div>
   );
 }
@@ -770,7 +779,7 @@ function ChatInspector({
 
   return (
     <aside
-      className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] flex min-w-0 flex-col gap-2.5 overflow-y-auto px-2.5 pb-3 max-[1180px]:col-span-full max-[1180px]:grid max-[1180px]:max-h-60 max-[1180px]:grid-cols-2 max-[1180px]:content-start max-[820px]:grid-cols-1"
+      className="h-[calc(100%-36px)] min-h-0 flex min-w-0 flex-col gap-4 overflow-y-auto overflow-x-hidden bg-panel px-4 pb-5"
       aria-label={t("agentInspectorTitle")}
     >
       <div className="-mx-2.5 flex items-center justify-between gap-2 border-b border-border p-2.5 max-[1180px]:col-span-full">

@@ -203,7 +203,7 @@ export function NoteNode({ data, selected }: NodeProps) {
       className={cn(
         // **不在这一层 overflow-hidden。** 类型标签在框上方、接点在框左右两侧,都在框外 ——
         // 裁在这里等于把它们裁掉(图片/视频那两处已经栽过一次)。裁剪交给里面那层。
-        "group relative h-full w-full rounded-lg border p-2.5 text-ui-sm leading-relaxed shadow-sm transition-shadow",
+        "group relative h-full w-full rounded-xl border p-4 text-ui-md leading-relaxed shadow-sm transition-shadow",
         noteColorClass(item.color),
         state.className,
         //: 选中**不加彩色描边** —— 四角的缩放点已经说明选中了(图片/视频那两处早就这么做,

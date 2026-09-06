@@ -1,4 +1,5 @@
 import React from "react";
+import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { GitBranch, CalendarClock, CheckCircle2, CircleAlert, Copy, Loader2, Play, Plus, Power, Timer, Trash2, Users2 } from "lucide-react";
 import { toast } from "sonner";
@@ -106,7 +107,8 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
 
   if (tasks.isSuccess && (tasks.data ?? []).length === 0) {
     return (
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-5 xl:p-6 [&>*]:shrink-0">
+      <div className={STUDIO_PAGE}>
+        <PageHeading title={t("tasks")} description={t("studioSchedulerDesc")} />
         <EmptyState
           icon={<Timer size={22} />}
           title={t("noTasks")}
@@ -123,11 +125,12 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-5 xl:p-6 [&>*]:shrink-0">
-      <div className="relative grid min-h-0 flex-1  gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]"
-        style={{ gridTemplateColumns: `${sidebar.width}px minmax(0, 1fr)` }}>
-        <aside className="min-h-0 overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
-          <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
+    <div className={STUDIO_PAGE}>
+      <PageHeading title={t("tasks")} description={t("studioSchedulerDesc")} count={tasks.data?.length} actions={<Button onClick={() => setCreating(true)}><Plus />{t("createTask")}</Button>} />
+      <div className="relative grid min-h-0 flex-1 grid-cols-[var(--studio-index-width)_minmax(0,1fr)] gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]"
+        style={{ "--studio-index-width": `${sidebar.width}px` } as React.CSSProperties}>
+        <aside className="min-h-0 overflow-hidden border-r border-border bg-panel-subtle grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
+          <div className="flex min-h-14 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-sm [&_h2]:font-semibold [&_h2]:text-muted-foreground">
             <h2>{t("tasks")}</h2>
             <Button variant="outline" size="icon-xs" title={t("createTask")} aria-label={t("createTask")} onClick={() => setCreating(true)}>
               <Plus size={14} />
@@ -149,7 +152,7 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
                 <ContextMenuTrigger asChild>
                   <button
                     type="button"
-                    className={cn("flex cursor-pointer items-center gap-[9px] rounded-md border-0 bg-transparent px-2 py-1.5 text-left transition-colors duration-100 hover:bg-muted max-[880px]:shrink-0 max-[880px]:py-1", selected?.id === task.id && "bg-accent hover:bg-accent")}
+                    className={cn("flex cursor-pointer items-center gap-[9px] rounded-md border-0 bg-transparent px-3 py-3 text-left transition-colors duration-100 hover:bg-muted max-[880px]:shrink-0 max-[880px]:py-1", selected?.id === task.id && "bg-accent hover:bg-accent")}
                     onClick={() => setSelectedId(task.id)}
                   >
                     <span className={cn("h-[7px] w-[7px] shrink-0 rounded-full bg-border-strong", task.enabled && "bg-success")} />
@@ -183,12 +186,12 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
           </div>
         </aside>
         {/* 边缘拖动 —— 和剪辑页同一套(lib/useResizableSidebar)。 */}
-        <div {...sidebar.handleProps} />
+        <div {...sidebar.handleProps} className={cn(sidebar.handleProps.className, "max-[880px]:hidden")} />
         {/* 右栏是**一块占满高度的面板**,内部滚动 —— 此前它跟着内容走,内容少时就是半截,
             左边是个完整的带边框面板、右边飘着一段,两边看着不像同一层东西。 */}
         <div
           className={cn(
-            "grid min-h-0 min-w-0 overflow-y-auto rounded-md border border-border bg-panel px-3 py-2.5 shadow-[var(--shadow-panel)]",
+            "grid min-h-0 min-w-0 overflow-y-auto bg-panel px-6 py-6 xl:px-8",
             selected ? "content-start" : "place-items-center",
           )}
         >
@@ -456,7 +459,7 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
           两块等重,而真正天天看的是下面那份记录。 */}
       <header className="grid gap-2 border-b border-border pb-3">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-          <h2 className="m-0 truncate text-ui-lg font-semibold text-foreground">{task.name}</h2>
+          <h2 className="m-0 truncate text-xl font-semibold text-foreground">{task.name}</h2>
           <div className="flex shrink-0 items-center gap-1.5">
             <Button size="sm" variant="outline" disabled={!task.enabled} loading={runTask.isPending} onClick={() => runTask.mutate()}>
               <Play size={13} /> {t("runNow")}

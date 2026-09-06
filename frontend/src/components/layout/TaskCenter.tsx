@@ -178,8 +178,8 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
 
       {/* p-0:PopoverContent 基类自带 p-4,而里面的头部和列表各自已经有内边距 ——
           留着就是里外两层留白,行会被推得离弹层边缘很远。 */}
-      <PopoverContent className="w-[340px] overflow-hidden p-0" aria-label={t("taskCenter")}>
-        <div className="flex items-center justify-between border-b border-border px-2.5 py-2 [&_strong]:text-ui-sm">
+      <PopoverContent className="w-[min(440px,calc(100vw-24px))] overflow-hidden p-0" aria-label={t("taskCenter")}>
+        <div className="flex items-center justify-between border-b border-border px-5 py-5 [&_strong]:text-lg">
           <strong>{t("taskCenter")}</strong>
           {finished.length > 0 && (
             <button
@@ -195,7 +195,7 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
         {/* `grid-cols-[minmax(0,1fr)]` 不是装饰:单列 grid 的隐式列是 `auto`,也就是 **max-content**
             —— 一条长提示词(AI 生成任务的 subject)会把这一列撑到内容宽度,整个弹层于是能左右滚,
             而行内那些 truncate 全都失效(它们要一个有定数的列宽才截得动)。 */}
-        <div className="grid max-h-[380px] grid-cols-[minmax(0,1fr)] gap-1 overflow-y-auto overflow-x-hidden p-1.5">
+        <div className="grid max-h-[min(560px,70vh)] grid-cols-[minmax(0,1fr)] gap-0 divide-y divide-border overflow-y-auto overflow-x-hidden px-3 py-2">
           {active.map((job) => (
             <JobRow key={job.id} job={job} onOpen={() => openJob(job)} onCancel={() => cancelJob.mutate(job.id)} />
           ))}
@@ -275,7 +275,7 @@ function JobRow({ job, count = 1, onOpen, onCancel }: { job: Job; count?: number
   const subject = String((job.payload as Record<string, unknown> | null)?.subject ?? "");
   return (
     <div
-      className="grid cursor-pointer grid-cols-[26px_minmax(0,1fr)] items-start gap-1.5 rounded-md px-1.5 py-[7px] hover:bg-secondary"
+      className="grid cursor-pointer grid-cols-[36px_minmax(0,1fr)] items-start gap-3 rounded-lg px-2 py-4 hover:bg-secondary"
       role="button"
       tabIndex={0}
       onClick={onOpen}
@@ -285,7 +285,7 @@ function JobRow({ job, count = 1, onOpen, onCancel }: { job: Job; count?: number
     >
       <span
         className={cn(
-          "grid h-[26px] w-[26px] place-items-center rounded-md bg-accent text-accent-foreground",
+          "grid size-9 place-items-center rounded-lg bg-accent text-accent-foreground",
           failed && "bg-[color-mix(in_oklab,var(--destructive)_12%,var(--background))] text-destructive",
         )}
       >
@@ -295,7 +295,7 @@ function JobRow({ job, count = 1, onOpen, onCancel }: { job: Job; count?: number
           隐式列仍是 max-content,于是里面的 truncate 没有定数可截,内容直接顶出去。
           真机量到:容器已锁到 284px,而每一行的 scrollWidth 还有 992px。 */}
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-[3px]">
-        <div className="flex items-center justify-between gap-1.5 [&_strong]:text-xs [&_strong]:font-semibold">
+        <div className="flex items-center justify-between gap-1.5 [&_strong]:text-ui-sm [&_strong]:font-semibold">
           <span className="flex min-w-0 items-baseline gap-1.5">
             <strong className="shrink-0">{t(meta.labelKey as never)}</strong>
             {/* 干的是谁的活:素材名/序列名/提示词。没有它,一列失败全长一个样。 */}

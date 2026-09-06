@@ -41,13 +41,11 @@ const SRC = join(import.meta.dirname, "..");
  */
 const GRANDFATHERED = new Set<string>([
   "components/agent/SubagentPanel.tsx: grid-rows-[auto_minmax(0,1fr)]",
-  "features/ai-studio/AiStudio.tsx: grid-rows-[minmax(0,1fr)_auto]",
   "features/ai-studio/ChatWorkspace.tsx: grid-rows-[auto_minmax(0,1fr)_auto]",
   "features/ai-studio/trace/TraceView.tsx: grid-rows-[auto_auto_minmax(0,1fr)]",
   "features/ai-studio/trace/TraceView.tsx: grid-rows-[auto_auto_minmax(0,1fr)_auto]",
   "features/auth/LoginView.tsx: grid-rows-[minmax(0,1fr)_auto]",
   "features/boards/BoardCollaborationDialog.tsx: grid-rows-[auto_minmax(0,1fr)]",
-  "features/browser-pool/BrowserPoolView.tsx: grid-rows-[auto_minmax(0,1fr)]",
   "features/editor/EditorView.tsx: grid-rows-[auto_minmax(0,1fr)]",
   "features/editor/Inspector.tsx: grid-rows-[auto_minmax(0,1fr)]",
   "features/editor/Monitor.tsx: grid-rows-[minmax(0,1fr)_auto_auto]",

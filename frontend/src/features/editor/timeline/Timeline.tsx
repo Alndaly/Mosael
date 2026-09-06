@@ -607,12 +607,12 @@ export function Timeline({
 
   return (
     <div className="grid h-full grid-rows-[auto_minmax(0,1fr)]" data-tool={tool} onWheel={handleWheel}>
-      <div className="flex flex-wrap items-center justify-between gap-y-0.5 border-b border-border bg-panel px-1.5 py-0.5">
+      <div className="flex flex-wrap items-center justify-between gap-y-2 border-b border-border bg-panel px-3 py-2">
         <div className="flex min-w-0 flex-nowrap items-center gap-2">
-          <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border whitespace-nowrap" role="group" aria-label={t("editTools")}>
+          <div className="inline-flex h-8 items-stretch gap-0.5 overflow-hidden rounded-md bg-panel-subtle p-0.5 whitespace-nowrap" role="group" aria-label={t("editTools")}>
             <button
               type="button"
-              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tool === "select" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tool === "select" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
               title={t("toolSelectHint")}
               aria-pressed={tool === "select"}
               onClick={() => useEditorStore.getState().setTool("select")}
@@ -621,7 +621,7 @@ export function Timeline({
             </button>
             <button
               type="button"
-              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tool === "blade" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tool === "blade" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
               title={t("toolBladeHint")}
               aria-pressed={tool === "blade"}
               onClick={() => useEditorStore.getState().setTool("blade")}
@@ -629,10 +629,10 @@ export function Timeline({
               <Slice size={12} /> {t("toolBlade")}
             </button>
           </div>
-          <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border whitespace-nowrap" role="group" aria-label={t("editMode")}>
+          <div className="inline-flex h-8 items-stretch gap-0.5 overflow-hidden rounded-md bg-panel-subtle p-0.5 whitespace-nowrap" role="group" aria-label={t("editMode")}>
             <button
               type="button"
-              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", editMode === "overwrite" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", editMode === "overwrite" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
               title={t("editModeOverwriteHint")}
               aria-pressed={editMode === "overwrite"}
               onClick={() => useEditorStore.getState().setEditMode("overwrite")}
@@ -641,7 +641,7 @@ export function Timeline({
             </button>
             <button
               type="button"
-              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", editMode === "insert" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", editMode === "insert" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
               title={t("editModeInsertHint")}
               aria-pressed={editMode === "insert"}
               onClick={() => useEditorStore.getState().setEditMode("insert")}

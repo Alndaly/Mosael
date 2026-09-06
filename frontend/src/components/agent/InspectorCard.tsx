@@ -49,7 +49,7 @@ export function InspectorCard({
     // 那层面板一模一样(都是 --border),而卡片本身还有一层填色:填色已经把它从面板背景里
     // 分出来了,再描一道同色的边就是第三重冗余。圆角同理:内卡 10px 比面板的 8px 还大,
     // 嵌套的角应当向内递减,反过来会显得内卡在往外顶。
-    <section className={cn("grid gap-2 rounded-sm bg-panel-subtle p-2.5", className)}>
+    <section className={cn("grid gap-3 border-b border-border pb-5 pt-2", className)}>
       {/* 排版**只挂在 h3 上**,可折叠时按钮放进去继承它。
           不能把 text-ui-xs font-bold 写在裸 <button> 上:design/tokens.css 里那条
           `button { font: inherit }` 不在任何 layer 内,而 Tailwind 的工具类在 @layer utilities ——
@@ -57,7 +57,7 @@ export function InspectorCard({
           13px/400,和邻座的 11.5px/700 差出一截(这正是「任务计划」比其它两块大一号的原因)。 */}
       {/* aside **在折叠按钮之外**:它可能自己就是个按钮(「全部 61 个 ›」),
           套在折叠按钮里就是 button 套 button —— HTML 非法,点击行为也不可靠。 */}
-      <h3 className="m-0 flex items-center gap-1.5 text-ui-xs font-bold text-muted-foreground">
+      <h3 className="m-0 flex items-center gap-1.5 text-ui-sm font-semibold text-foreground">
         {onToggle ? (
           <button
             type="button"
@@ -80,9 +80,9 @@ export function InspectorCard({
 /** 一行事实:左标签、右值。检查器里所有"某某是什么"都长这样。 */
 export function InspectorRow({ label, value, title }: { label: string; value: React.ReactNode; title?: string }) {
   return (
-    <div className="grid grid-cols-[56px_minmax(0,1fr)] items-center gap-2">
-      <span className="truncate text-ui-xs text-muted-foreground">{label}</span>
-      <span className="min-w-0 truncate text-ui-xs font-[650] text-foreground" title={title}>
+    <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
+      <span className="truncate text-ui-sm text-muted-foreground">{label}</span>
+      <span className="min-w-0 truncate text-ui-sm font-[650] text-foreground" title={title}>
         {value}
       </span>
     </div>

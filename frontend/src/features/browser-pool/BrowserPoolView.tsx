@@ -1,4 +1,6 @@
 import React from "react";
+import { ActionMenu } from "@/components/layout/ActionMenu";
+import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Boxes, ExternalLink, Globe, LogIn, Plus, RefreshCcw, Trash2, Users, Users2 } from "lucide-react";
 import { toast } from "sonner";
@@ -154,7 +156,8 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
   // 页面中心。这样中心按整个内容区计算，不会被一条没有内容价值的顶栏向下推。
   if (profiles.isSuccess && items.length === 0) {
     return (
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-5 xl:p-6 [&>*]:shrink-0">
+      <div className={STUDIO_PAGE}>
+        <PageHeading title={t("poolTitle")} description={t("poolSubtitle")} />
         <EmptyState
           icon={<Boxes size={22} />}
           title={t("poolEmptyTitle")}
@@ -183,22 +186,17 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
   }
 
   return (
-    <div className="grid min-h-full grid-rows-[auto_minmax(0,1fr)] gap-5 p-5 xl:p-6">
-      <div className="flex items-center gap-2">
-        <h2 className="m-0 inline-flex items-center gap-3 text-2xl font-semibold tracking-tight text-foreground">
-          <Boxes size={17} /> {t("poolTitle")}
-        </h2>
-        <small className="text-ui-xs text-muted-foreground">{t("poolSubtitle")}</small>
-        <span className="flex-1" />
+    <div className={STUDIO_PAGE}>
+      <PageHeading title={t("poolTitle")} description={t("poolSubtitle")} count={items.length} actions={<>
         <Button variant="outline" size="sm" onClick={() => setAddingAccount(true)}>
           <Users size={14} /> {t("publishAccountAdd")}
         </Button>
         <Button size="sm" onClick={() => setCreating(true)}>
           <Plus size={14} /> {t("poolCreate")}
         </Button>
-      </div>
+      </>} />
 
-      <div className="grid content-start gap-4 grid-cols-[repeat(auto-fill,minmax(260px,1fr))]">
+      <div className="grid content-start gap-5 grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))]">
         {profiles.isLoading &&
           items.length === 0 &&
           [0, 1, 2, 3].map((i) => (
@@ -218,14 +216,20 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                 <ContextMenuTrigger asChild>
                   <div
                     className={cn(
-                      "flex min-h-32 flex-col gap-[3px] overflow-hidden rounded-lg border border-border bg-panel p-5 shadow-[var(--shadow-panel)]",
+                      "flex min-h-52 flex-col gap-3 overflow-hidden rounded-xl border border-border bg-panel p-6",
                       !p.enabled && "opacity-55",
                     )}
                   >
                     <div className="flex items-center gap-1.5">
-                      <span className="mr-auto text-ui-2xs font-semibold uppercase tracking-[0.04em] text-muted-foreground">
+                      <span className="mr-auto text-ui-sm font-medium text-muted-foreground">
                         {bound ? platformLabel : t("poolGeneric")}
                       </span>
+                      <ActionMenu label={`${t("studioActions")}: ${p.name}`} actions={[
+                        { label: t("rename"), onSelect: () => setRenaming(p) },
+                        { label: t("publishProxySet"), icon: <Globe />, onSelect: () => setProxyEditing(p) },
+                        ...(p.is_mine ? [{ label: p.shared ? t("poolUnshare") : t("poolShare"), icon: <Users2 />, disabled: share.isPending, onSelect: () => share.mutate({p, shared:!p.shared}) }] : []),
+                        { label: t("delete"), icon: <Trash2 />, destructive:true, onSelect: () => setRemoving(p) },
+                      ]} />
                       {p.proxy && (
                         <em
                           className="inline-flex max-w-[130px] items-center gap-[3px] overflow-hidden whitespace-nowrap rounded-full bg-[color-mix(in_oklab,var(--primary)_10%,transparent)] px-1.5 text-ui-2xs not-italic text-primary"
@@ -255,7 +259,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                         </em>
                       )}
                     </div>
-                    <strong className="truncate text-ui-md">{p.name}</strong>
+                    <strong className="truncate text-xl font-semibold tracking-tight">{p.name}</strong>
                     <small className="text-ui-xs text-muted-foreground">
                       {bound
                         ? p.last_checked_at
@@ -273,7 +277,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                         在一张 ~276px 的卡里**任何语言都放不下**,中文只是勉强擦过去而已。
                         所以次要动作一律图标化 —— 它们本就是 ghost,标签退到 title/aria 上,
                         宽度从此与语言无关。 */}
-                    <div className="mt-auto flex min-h-[33px] items-center gap-1 pt-[5px]">
+                    <div className="mt-auto flex min-h-11 items-center gap-2 border-t border-border pt-4">
                       {/* 登录态决定主按钮是什么:已登录 → 打开;其余(需登录/待人工/检测中) → 去登录。 */}
                       <Button
                         size="sm"

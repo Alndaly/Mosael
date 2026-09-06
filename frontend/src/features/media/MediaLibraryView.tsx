@@ -1,3 +1,6 @@
+import { PageHeading, CollectionTabs } from "@/components/layout/StudioPage";
+import { LayoutGrid, List, MoreHorizontal } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger, PopoverClose } from "@/components/ui/popover";
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, Link2, ListChecks, Loader2, Pencil, Tag, Tags, Trash2, Upload, X } from "lucide-react";
@@ -64,6 +67,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   // 搜索词是另一回事:它是"我此刻在找什么",留着反而会让人以为库里只有这几条。
   const [kindFilter, setKindFilter] = usePersistentTab<KindFilter>("media-kind", "all", KIND_FILTERS);
   const [search, setSearch] = React.useState("");
+  const [display, setDisplay] = usePersistentTab<"grid" | "list">("media-display", "grid", ["grid", "list"]);
   const [sortKey, setSortKey] = usePersistentTab<SortKey>("media-sort", "created", SORT_KEYS);
   const [comparing, setComparing] = React.useState(false);
   const [batchTagging, setBatchTagging] = React.useState(false);
@@ -251,17 +255,9 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           </span>
         </div>
       )}
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto px-5 pb-5 xl:px-6 xl:pb-6 [&>*]:shrink-0">
-      {/* 顶部工具条 + 标签筛选 sticky 吸顶:滚动素材网格时保持可见。顶部内边距放在本 sticky 头上
-          (滚动容器不留 pt),吸顶时才能严丝合缝贴顶、不露出上一行卡片;-mx 铺满宽度,bg 盖住滚上来的卡片。 */}
-      {/* 负外边距和外壳的内边距**是同一个数**:它靠 -mx 把自己拉到容器边缘,好让 sticky 时的
-          底色铺满整宽。外壳从 px-3.5 收到 px-2 之后这层耦合就断了 —— 工具条比容器宽出 12px,
-          整页于是能左右滚(真机)。两个数写在一起,下次改 padding 时才看得见要一起改。 */}
-      {(!assets.isSuccess || (assets.data ?? []).length > 0) && (
-        <div className="sticky top-0 z-20 -mx-5 flex flex-col gap-3 border-b border-border bg-background px-5 py-5 xl:-mx-6 xl:px-6">
-          <div className="flex flex-wrap items-center justify-between gap-1.5">
-            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-              <Button asChild size="sm">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto px-6 pb-7 xl:px-9 xl:pb-8 [&>*]:shrink-0">
+      <PageHeading title={t("navMedia")} description={t("studioMediaDesc")} count={assets.data?.length} className="py-7" actions={<>
+              <Button asChild size="default">
                 <label className="inline-flex cursor-pointer items-center gap-1.5">
                   <input
                     type="file"
@@ -276,33 +272,25 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                   <ImagePlus size={13} /> {t("import")}
                 </label>
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setUrlImportOpen(true)}>
+              <Button variant="outline" size="default" onClick={() => setUrlImportOpen(true)}>
                 <Link2 size={13} /> {t("urlImport")}
               </Button>
-              <Button variant="outline" size="sm" onClick={() => openRecorder()}>
+              <Button variant="outline" size="default" onClick={() => openRecorder()}>
                 <CircleDot size={13} /> {t("record")}
               </Button>
-              <div
-                className="inline-flex h-8 overflow-hidden rounded-md border border-border bg-panel text-xs"
-                role="group"
-                aria-label={t("mediaKindGroup")}
-              >
-                {KIND_FILTERS.map((kind) => (
-                  <button
-                    key={kind}
-                    type="button"
-                    className={cn(
-                      "border-r border-border px-3 text-muted-foreground transition-colors last:border-r-0 hover:bg-secondary hover:text-foreground",
-                      kindFilter === kind && "bg-accent text-accent-foreground",
-                    )}
-                    onClick={() => setKindFilter(kind)}
-                  >
-                    {kindLabel[kind]}
-                  </button>
-                ))}
-              </div>
+      </>} />
+      {/* 顶部工具条 + 标签筛选 sticky 吸顶:滚动素材网格时保持可见。顶部内边距放在本 sticky 头上
+          (滚动容器不留 pt),吸顶时才能严丝合缝贴顶、不露出上一行卡片;-mx 铺满宽度,bg 盖住滚上来的卡片。 */}
+      {/* 负外边距和外壳的内边距**是同一个数**:它靠 -mx 把自己拉到容器边缘,好让 sticky 时的
+          底色铺满整宽。外壳从 px-3.5 收到 px-2 之后这层耦合就断了 —— 工具条比容器宽出 12px,
+          整页于是能左右滚(真机)。两个数写在一起,下次改 padding 时才看得见要一起改。 */}
+      {(!assets.isSuccess || (assets.data ?? []).length > 0) && (
+        <div className="sticky top-0 z-20 -mx-6 flex flex-col gap-3 border-b border-border bg-background px-6 pb-3 pt-1 xl:-mx-9 xl:px-9">
+          <div className="flex flex-wrap items-center justify-between gap-1.5">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <CollectionTabs value={kindFilter} onChange={setKindFilter} label={t("mediaKindGroup")} items={KIND_FILTERS.map(kind => ({ value: kind, label: kindLabel[kind], count: assets.data?.filter(asset => kind === "all" || asset.kind === kind).length }))} />
               <Input
-                className="h-8 w-44 border-border bg-panel px-[9px] text-xs focus-visible:border-primary focus-visible:ring-0"
+                aria-label={t("searchAssets")} className="h-9 w-48 bg-field text-ui-sm"
                 value={search}
                 placeholder={t("searchAssets")}
                 onChange={(event) => setSearch(event.target.value)}
@@ -320,6 +308,10 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
               </Select>
             </div>
             <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <div className="flex gap-0.5 rounded-md border border-border bg-panel p-0.5">
+                <Button variant={display === "grid" ? "secondary" : "ghost"} size="icon-xs" aria-label={t("studioGridView")} aria-pressed={display === "grid"} onClick={() => setDisplay("grid")}><LayoutGrid /></Button>
+                <Button variant={display === "list" ? "secondary" : "ghost"} size="icon-xs" aria-label={t("studioListView")} aria-pressed={display === "list"} onClick={() => setDisplay("list")}><List /></Button>
+              </div>
               {selectMode ? (
                 <>
                   <span className="whitespace-nowrap text-xs text-muted-foreground">
@@ -407,47 +399,34 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           icon={<FolderOpen size={22} />}
           title={t("mediaEmptyTitle")}
           body={t("mediaEmptyBody")}
-          action={
-            <span className="inline-flex flex-wrap items-center justify-center gap-2">
-              <Button asChild>
-                <label className="inline-flex cursor-pointer items-center gap-1.5">
-                  <input
-                    type="file"
-                    accept="video/*,audio/*,image/*"
-                    className="hidden"
-                    onChange={(event) => {
-                      const file = event.currentTarget.files?.[0];
-                      if (file) uploadAsset.mutate(file);
-                      event.currentTarget.value = "";
-                    }}
-                  />
-                  <ImagePlus size={15} /> {t("import")}
-                </label>
-              </Button>
-              <Button variant="outline" onClick={() => setUrlImportOpen(true)}>
-                <Link2 size={15} /> {t("urlImport")}
-              </Button>
-              <Button variant="outline" onClick={() => openRecorder()}>
-                <CircleDot size={15} /> {t("record")}
-              </Button>
-            </span>
-          }
+
         />
-      ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-5 pt-5">
+      ) : visible.length === 0 ? <EmptyState icon={<FolderOpen />} title={t("studioNoMatches")} body={t("studioNoMatchesHint")} /> : (
+        <div className={cn("py-6", display === "grid" ? "grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-6 gap-y-7" : "grid divide-y divide-border")}>
           {visible.map((asset) => (
             <ContextMenu key={asset.id}>
               <ContextMenuTrigger asChild>
                 <div
-                  className="relative"
+                  className="group relative cursor-pointer"
                   onClick={() => {
                     // 图片也先进详情卡(看得到尺寸/来源/标签等),要看大图再从卡里点开。
                     if (selectMode) toggleSelected(asset.id);
                     else setPreviewing(asset);
                   }}
                 >
-                  <AssetTile asset={asset} selected={selectMode && selectedIds.has(asset.id)} />
+                  <button type="button" className="absolute inset-0 z-[1] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={asset.name} />
+                  <AssetTile asset={asset} list={display === "list"} selected={selectMode && selectedIds.has(asset.id)} />
                   {selectMode && <SelectionCheck selected={selectedIds.has(asset.id)} />}
+                  {!selectMode && <div className="absolute right-2 top-2 z-10" onClick={e => e.stopPropagation()}>
+                    <Popover><PopoverTrigger asChild><Button variant="secondary" size="icon-xs" aria-label={`${t("studioActions")}: ${asset.name}`}><MoreHorizontal /></Button></PopoverTrigger>
+                    <PopoverContent className="grid w-48 gap-1 p-2" align="end">
+                      <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => saveAssetToDisk(asset)}><Download />{t("assetSaveLocal")}</Button></PopoverClose>
+                      <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setRenaming(asset)}><Pencil />{t("rename")}</Button></PopoverClose>
+                      <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setEditingTags(asset)}><Tag />{t("editTags")}</Button></PopoverClose>
+                      {asset.kind === "video" && <PopoverClose asChild><Button variant="ghost" className="justify-start" loading={convertGif.isPending} onClick={() => convertGif.mutate(asset.id)}><ImagePlus />{t("assetConvertGif")}</Button></PopoverClose>}
+                      <PopoverClose asChild><Button variant="ghost" className="justify-start text-destructive" onClick={() => setDeleting(asset)}><Trash2 />{t("delete")}</Button></PopoverClose>
+                    </PopoverContent></Popover>
+                  </div>}
                 </div>
               </ContextMenuTrigger>
               <ContextMenuContent>
@@ -526,7 +505,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   );
 }
 
-function AssetTile({ asset, selected = false }: { asset: Asset; selected?: boolean }) {
+function AssetTile({ asset, selected = false, list = false }: { asset: Asset; selected?: boolean; list?: boolean }) {
   const t = useI18n();
   const [thumbFailed, setThumbFailed] = React.useState(false);
   const duration = asset.media_info.duration as number | undefined;
@@ -536,11 +515,12 @@ function AssetTile({ asset, selected = false }: { asset: Asset; selected?: boole
   return (
     <article
       className={cn(
-        "cursor-pointer overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)] transition-[border-color,box-shadow] duration-100 hover:border-border-strong hover:shadow-[var(--shadow-raised)]",
+        "cursor-pointer rounded-lg transition-colors",
+        list ? "flex items-center gap-5 py-4 pr-12 hover:bg-secondary/40" : "grid gap-3",
         selected && "border-primary shadow-[0_0_0_1px_var(--primary)]",
       )}
     >
-      <div className="relative grid aspect-video place-items-center bg-panel-inset text-muted-foreground">
+      <div className={cn("relative grid shrink-0 place-items-center overflow-hidden rounded-lg border border-border bg-panel-inset text-muted-foreground", list ? "h-20 w-32" : "aspect-video")}>
         {hasThumb ? (
           <img
             src={assetThumbnailUrl(asset.id)}
@@ -579,12 +559,12 @@ function AssetTile({ asset, selected = false }: { asset: Asset; selected?: boole
           </div>
         )}
       </div>
-      <div className="grid gap-2 px-3 py-3">
-        <strong className="truncate text-xs font-semibold" title={asset.name}>
+      <div className="grid min-w-0 flex-1 gap-1.5 px-0.5">
+        <strong className="truncate text-ui-md font-semibold" title={asset.name}>
           {asset.name}
         </strong>
         <div className="flex items-center gap-1.5">
-          <Badge variant="secondary">{asset.kind}</Badge>
+          <span className="text-ui-xs text-muted-foreground">{t(asset.kind === "image" ? "kindImage" : asset.kind === "audio" ? "kindAudio" : "kindVideo")}</span>
           <small className="text-ui-xs text-muted-foreground">{asset.source === "generated" ? t("mediaSourceGenerated") : asset.source === "exported" ? t("mediaSourceExported") : t("mediaSourceImported")}</small>
         </div>
         <span className="truncate font-mono text-ui-xs tabular-nums text-muted-foreground">

@@ -526,7 +526,7 @@ export function TranscriptPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-wrap gap-1.5 border-b border-border px-2 py-1.5">
+      <div className="flex flex-wrap gap-2 border-b border-border px-3 py-3">
         {transcribeButton}
         <button
           type="button"

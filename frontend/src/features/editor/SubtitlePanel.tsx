@@ -107,7 +107,7 @@ export function SubtitlePanel({
         className={cn(
           // 行与行之间用细分隔线,不用逐行边框(行自己是无框的)。**行不带圆角**:
           // 圆角 + 横贯的分隔线拼在一起,看上去就是一摞缺了口的卡片(试过,被打回)。
-          "grid content-start divide-y divide-border/40 overflow-y-auto px-1.5 py-1",
+          "grid content-start divide-y divide-border overflow-y-auto overflow-x-hidden px-3 py-2",
           // 空态整块居中,有内容时才贴顶 —— `content-start` 恒定的话,空状态会钉在顶上,
           // 下面留一屏空白(会话列表、轨迹视图都是这个处理)。
           subtitles.length === 0 ? "content-center justify-items-center" : "content-start",
@@ -130,7 +130,7 @@ export function SubtitlePanel({
               // 整圈 border-color 一起改掉 —— "透明的左边框"于是显形成一条实线(实测计算样式
               // 里 border-l-transparent 被覆盖成了主题边框色)。选中态的色条用绝对定位画,
               // 不占边框,谁也覆盖不了它。
-              "relative grid gap-0 py-1.5 pl-2 pr-1",
+              "relative grid gap-2 py-3 pl-2 pr-1",
               active && "bg-[color-mix(in_oklab,var(--primary)_5%,transparent)] before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-primary",
             )}>
               <div className="flex items-center justify-between gap-2">
@@ -178,7 +178,7 @@ export function SubtitlePanel({
           );
         })}
       </div>
-      <div className="flex flex-wrap justify-center gap-1.5 border-t border-border px-2 py-1.5">
+      <div className="flex flex-wrap justify-start gap-2 border-t border-border px-3 py-3">
         {onGenerate && (
           <button type="button" className={PILL} title={t("subtitleGenerateHint")} onClick={onGenerate} disabled={generating}>
             {generating ? <Loader2 size={12} className="animate-mosael-spin" /> : <Sparkles size={12} />} {t("subtitleGenerate")}

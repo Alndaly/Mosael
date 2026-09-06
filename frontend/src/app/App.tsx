@@ -365,11 +365,10 @@ function WorkspaceGate() {
   if (!workspace) {
     return (
       <PreShellScreen>
-        <Card className="w-[min(384px,calc(100vw-32px))]">
-          <CardContent className="grid justify-items-center gap-4 px-7 pb-[22px] pt-[30px] text-center [&_h1]:m-0 [&_p]:m-0">
-            <BrandMark size={56} className="block" />
-            <h1>Mosael</h1>
-            <p>{t("welcomeText")}</p>
+        <Card className="w-[min(480px,calc(100vw-32px))] border-0 bg-transparent shadow-none">
+          <CardContent className="grid justify-items-start gap-6 px-7 py-10 text-left [&_h1]:m-0 [&_p]:m-0">
+            <h1 className="text-4xl font-semibold tracking-tighter">Mosael</h1>
+            <p className="text-lg leading-relaxed text-muted-foreground">{t("welcomeText")}</p>
             <Button
               loading={createWorkspace.isPending}
               onClick={() => createWorkspace.mutate()}

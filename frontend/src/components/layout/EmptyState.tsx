@@ -39,14 +39,14 @@ export function EmptyState({
         "empty-state m-auto grid w-full justify-items-center break-words text-center [overflow-wrap:anywhere]",
         compact
           ? "max-w-[260px] gap-1 px-3 py-4 [&_h2]:m-0 [&_h2]:text-ui-sm [&_h2]:font-[620] [&_p]:m-0 [&_p]:text-ui-xs [&_p]:leading-[1.5] [&_p]:text-muted-foreground"
-          : "max-w-[420px] gap-2 px-5 py-8 [&_h2]:mt-0.5 [&_h2]:text-sm [&_h2]:font-[650] [&_p]:mb-1.5 [&_p]:mt-0 [&_p]:text-ui-md [&_p]:leading-[1.55] [&_p]:text-muted-foreground",
+          : "max-w-[480px] gap-3 px-6 py-10 [&_h2]:mt-2 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:tracking-tight [&_p]:mb-3 [&_p]:mt-0 [&_p]:max-w-[40ch] [&_p]:text-ui-md [&_p]:leading-relaxed [&_p]:text-muted-foreground",
         className,
       )}
     >
       <div
         className={cn(
-          "grid place-items-center rounded-lg border border-[color-mix(in_oklab,var(--primary)_18%,var(--border))] bg-[color-mix(in_oklab,var(--primary)_6%,var(--panel))] text-primary",
-          compact ? "h-8 w-8" : "h-11 w-11",
+          "grid place-items-center bg-accent text-primary",
+          compact ? "h-8 w-8 rounded-lg" : "h-16 w-16 rounded-2xl [&_svg]:size-7",
         )}
       >
         {icon}

@@ -1,3 +1,5 @@
+import { PageHeading } from "@/components/layout/StudioPage";
+import { Input } from "@/components/ui/input";
 import React from "react";
 import {
   AudioLines,
@@ -82,6 +84,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
   // 导航项是短标签,不是长内容 —— 用紧凑档,宽度让给右边真正在配的东西。
   const sidebar = useResizableSidebar("settings", COMPACT_SIDEBAR_BOUNDS);
   const t = useI18n();
+  const [navSearch, setNavSearch] = React.useState("");
   const [focusProviderCapability, setFocusProviderCapability] = React.useState<string | null>(null);
   const [section, setSectionState] = React.useState<SectionId>(() => {
     const saved = localStorage.getItem(SECTION_STORAGE_KEY);
@@ -147,32 +150,27 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
   ];
 
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-5 xl:p-6 [&>*]:shrink-0">
-      <div className="relative grid min-h-0 flex-1 items-stretch gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]"
-        style={{ gridTemplateColumns: `${sidebar.width}px minmax(0, 1fr)` }}>
-        <nav className="grid min-h-0 content-start gap-0.5 overflow-y-auto rounded-md border border-border bg-panel p-1.5 shadow-[var(--shadow-panel)] max-[880px]:inline-flex max-[880px]:w-fit max-[880px]:max-w-full max-[880px]:gap-0 max-[880px]:overflow-x-auto max-[880px]:overflow-y-hidden max-[880px]:rounded max-[880px]:p-0 max-[880px]:[&>*+*]:border-l max-[880px]:[&>*+*]:border-border" aria-label={t("settingsTitle")}>
-          {nav.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={cn(
-                "flex cursor-pointer items-center gap-[9px] rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-ui-md text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-foreground max-[880px]:shrink-0 max-[880px]:gap-1.5 max-[880px]:whitespace-nowrap max-[880px]:rounded-none max-[880px]:px-2.5 max-[880px]:py-[5px] max-[880px]:text-ui-sm",
-                section === item.id && "bg-accent font-[550] text-accent-foreground hover:bg-accent hover:text-accent-foreground",
-              )}
-              onClick={() => {
-                setFocusProviderCapability(null);
-                setSection(item.id);
-              }}
-            >
-              {item.icon} {item.label}
-            </button>
-          ))}
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-panel">
+      <PageHeading title={t("settingsTitle")} description={t("studioSettingsDesc")} className="border-b border-border px-6 py-7 xl:px-9" />
+      <div className="relative grid min-h-0 flex-1 grid-cols-[var(--studio-index-width)_minmax(0,1fr)] gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]" style={{ "--studio-index-width": `${sidebar.width}px` } as React.CSSProperties}>
+        <nav className="flex min-h-0 flex-col gap-5 overflow-y-auto border-r border-border bg-panel-subtle px-4 py-5 max-[880px]:max-h-48 max-[880px]:border-b max-[880px]:border-r-0" aria-label={t("settingsTitle")}>
+          <Input className="shrink-0" aria-label={t("studioSettingsSearch")} placeholder={t("studioSettingsSearch")} value={navSearch} onChange={e => setNavSearch(e.target.value)} />
+          {[{ title: t("studioSettingsPersonal"), ids: ["account", "team", "appearance"] }, { title: t("studioSettingsModels"), ids: ["provider-chat", "provider-image", "provider-video", "provider-audio", "provider-pricing", "ai-runtime", "agent-memory", "agent-autopilot"] }, { title: t("studioSettingsServices"), ids: ["transcribe", "voice", "feishu", "data", "backend"] }].map(group => {
+            const items = nav.filter(item => group.ids.includes(item.id) && item.label.toLocaleLowerCase().includes(navSearch.toLocaleLowerCase()));
+            return items.length > 0 && <div key={group.title} className="grid gap-1">
+              <h3 className="m-0 px-2 pb-1 text-ui-xs font-medium text-muted-foreground">{group.title}</h3>
+              {items.map(item => <button key={item.id} type="button" aria-current={section === item.id ? "page" : undefined} className={cn("flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-2 text-left text-ui-sm text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", section === item.id && "bg-panel font-semibold text-primary shadow-sm")} onClick={() => { setFocusProviderCapability(null); setSection(item.id); }}>
+                {item.icon}<span>{item.label}</span>
+              </button>)}
+            </div>;
+          })}
+          {nav.every(item => !item.label.toLocaleLowerCase().includes(navSearch.toLocaleLowerCase())) && <p className="text-ui-sm text-muted-foreground">{t("studioSettingsEmpty")}</p>}
         </nav>
         {/* 边缘拖动 —— 和别处同一套(lib/useResizableSidebar)。 */}
-        <div {...sidebar.handleProps} />
+        <div {...sidebar.handleProps} className={cn(sidebar.handleProps.className, "max-[880px]:hidden")} />
         {/* 右栏是**一块占满高度的面板**,内部滚动 —— 和插件页、定时任务页同一套。此前它跟着
             内容走,内容少时就是半截,而左边是个完整的带边框面板。 */}
-        <SettingsSectionStack className="min-h-0 min-w-0 overflow-y-auto rounded-md border border-border bg-panel px-6 py-5 shadow-[var(--shadow-panel)]">
+        <SettingsSectionStack className="min-h-0 min-w-0 overflow-y-auto bg-panel px-6 py-7 xl:px-10">
           {section === "account" && <AccountSection />}
           {section === "team" && <TeamSection workspace={workspace} />}
           {section === "appearance" && (

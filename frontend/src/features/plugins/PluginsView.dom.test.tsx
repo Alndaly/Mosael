@@ -37,6 +37,7 @@ function wrap(node: React.ReactNode) {
 }
 
 beforeEach(() => {
+  Element.prototype.scrollIntoView = vi.fn();
   api.mockReset();
   api.mockResolvedValue([
     { key: "APP_KEY", label: "AppKey", help: "", secret: true, filled: true, value: "" },
@@ -148,5 +149,23 @@ describe("素材工具的工作区归属", () => {
       `/api/plugins/instances/i1/tools/${name}/invoke`,
       { method: "POST", body: JSON.stringify({ input, workspace_id: "workspace-b" }) },
     ));
+  });
+});
+
+describe("typed plugin controls", () => {
+  it("distinguishes an omitted boolean from an explicit false and preserves workspace scope", async () => {
+    api.mockResolvedValue({ id: "invocation", status: "succeeded", output: {} });
+    const tool = { name: "upload", label: "Upload", description: "", read_only: false, exposed: true,
+      input_schema: { properties: { overwrite: { type: "boolean" }, options: { type: "object" } } } };
+    wrap(<ToolRow workspaceId="workspace-a" instanceId="i1" tool={tool} blockedReason="" onToggle={() => undefined} />);
+    fireEvent.click(screen.getByText("Upload"));
+    fireEvent.click(screen.getByRole("button", { name: "运行" }));
+    await waitFor(() => expect(api).toHaveBeenCalledWith(expect.any(String), { method: "POST", body: JSON.stringify({ input: {}, workspace_id: "workspace-a" }) }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "运行" })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole("combobox", { name: "overwrite" }));
+    fireEvent.click(await screen.findByRole("option", { name: "studioBooleanFalse" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "options" }), { target: { value: '{"copies":2}' } });
+    fireEvent.click(screen.getByRole("button", { name: "运行" }));
+    await waitFor(() => expect(api).toHaveBeenLastCalledWith(expect.any(String), { method: "POST", body: JSON.stringify({ input: { overwrite: false, options: { copies: 2 } }, workspace_id: "workspace-a" }) }));
   });
 });

@@ -32,7 +32,7 @@ describe("settings section layout", () => {
     expect(content).not.toHaveClass("bg-panel");
   });
 
-  it("puts each section divider against the previous content and spaces the next header", () => {
+  it("separates sections and gives the next header more breathing room", () => {
     const { container } = render(
       <SettingsSectionStack>
         <SettingsGroup title="外观" />
@@ -47,12 +47,12 @@ describe("settings section layout", () => {
     const separators = container.querySelectorAll('[data-slot="separator"]');
     expect(separators).toHaveLength(2);
     separators.forEach((separator) => {
-      expect(separator).toHaveClass("mb-3");
-      expect(separator).not.toHaveClass("mt-3", "my-3");
+      expect(separator).toHaveClass("mb-7", "mt-3");
+      expect(separator).not.toHaveClass("my-3");
     });
   });
 
-  it("keeps rows and flat-list items on the same 12px vertical rhythm", () => {
+  it("keeps rows and flat-list items on the same 20px vertical rhythm", () => {
     const { container } = render(
       <SettingsGroup title="模型">
         <SettingsRow label="默认模型">K3</SettingsRow>
@@ -62,8 +62,8 @@ describe("settings section layout", () => {
       </SettingsGroup>,
     );
 
-    expect(container.querySelector('[data-slot="settings-row"]')).toHaveClass("py-3");
-    expect(container.querySelector('[data-slot="settings-list-item"]')).toHaveClass("py-3");
+    expect(container.querySelector('[data-slot="settings-row"]')).toHaveClass("py-5");
+    expect(container.querySelector('[data-slot="settings-list-item"]')).toHaveClass("py-5");
   });
 
   it("gives the page, section, and row copy distinct typography levels", () => {
@@ -84,9 +84,9 @@ describe("settings section layout", () => {
     const rowDescription = container.querySelector('[data-slot="settings-row-description"]');
 
     expect(stack?.className).toContain("first-child_[data-slot=settings-group-title]");
-    expect(titles[0]).toHaveClass("text-[18px]");
-    expect(titles[1]).toHaveClass("text-[18px]");
-    expect(rowLabel).toHaveClass("text-[15px]", "font-semibold");
+    expect(titles[0]).toHaveClass("text-xl");
+    expect(titles[1]).toHaveClass("text-xl");
+    expect(rowLabel).toHaveClass("text-ui-md", "font-medium");
     expect(rowDescription).toHaveClass("text-ui-sm", "leading-[1.5]");
   });
 
@@ -114,7 +114,7 @@ describe("settings section layout", () => {
     const block = container.querySelector('[data-slot="settings-list-block"]');
     expect(block).toBeInTheDocument();
     expect(block?.className).not.toMatch(/\bpy-/);
-    expect(block?.querySelector('[data-slot="settings-list-item"]')).toHaveClass("py-3");
+    expect(block?.querySelector('[data-slot="settings-list-item"]')).toHaveClass("py-5");
   });
 
   it("keeps optional list tools inside the same spacing contract", () => {
@@ -162,7 +162,7 @@ describe("settings section layout", () => {
       </SettingsBlock>,
     );
 
-    expect(container.querySelector('[data-slot="settings-block"]')).toHaveClass("gap-2", "py-3");
+    expect(container.querySelector('[data-slot="settings-block"]')).toHaveClass("gap-4", "py-5");
     const title = container.querySelector('[data-slot="settings-block-title"]');
     expect(title).toHaveClass("m-0");
     expect(title?.className).not.toMatch(/m[tyb]-/);

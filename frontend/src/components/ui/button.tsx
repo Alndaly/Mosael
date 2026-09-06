@@ -15,20 +15,20 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive text-destructive-foreground  hover:bg-destructive/90",
         outline:
-          "border border-border bg-transparent hover:bg-secondary hover:text-foreground",
+          "border border-border bg-panel hover:bg-secondary hover:text-foreground",
         secondary:
           "bg-secondary text-secondary-foreground  hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-9 rounded-md px-4 py-2",
+        default: "h-10 rounded-md px-4 py-2",
         // 28px 的带文字胶囊。工具栏那一行放的都是次要动作,sm(32px)在里面偏高、px-3 偏宽;
         // 高度压到 28 之后 text-ui-sm 会把胶囊顶满,所以这一档自带 text-ui-xs —— 字号跟着
         // 高度走,不必每个调用点再补一遍。
         xs: "h-7 rounded-md px-2.5 text-ui-xs",
         sm: "h-8 rounded-md px-3",
-        lg: "h-10 rounded-md px-8",
+        lg: "h-11 rounded-md px-6",
         icon: "h-9 w-9 rounded-md",
         // 与 sm 同高的方形图标按钮。卡片、工具栏这类窄容器里,次要动作放不下文字标签,
         // 而 icon(36px)在一排 sm(32px)按钮中间会高出一截。

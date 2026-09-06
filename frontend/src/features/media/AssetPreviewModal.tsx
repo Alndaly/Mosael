@@ -28,7 +28,7 @@ function aspectRatio(w: number, h: number): string {
 
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[76px_minmax(0,1fr)] items-baseline gap-3">
+    <div className="grid grid-cols-[88px_minmax(0,1fr)] items-baseline gap-3">
       <dt className="text-ui-xs text-muted-foreground">{label}</dt>
       <dd className="m-0 min-w-0 text-ui-sm text-foreground [overflow-wrap:anywhere]">{children}</dd>
     </div>
@@ -78,7 +78,7 @@ export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onC
   return (
     <Dialog open onOpenChange={handleOpenChange}>
       <DialogContent className="w-[min(960px,calc(100vw-32px))] max-w-[calc(100vw-32px)] gap-0 overflow-hidden p-0">
-        <div className="grid max-h-[86vh] grid-cols-1 md:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="grid max-h-[86vh] grid-cols-1 md:grid-cols-[minmax(0,1fr)_340px]">
           {/* 媒体区 */}
           <div className="relative grid min-h-[240px] place-items-center overflow-hidden bg-[#0b0b0d] md:min-h-[420px]">
             {asset.kind === "video" && (
@@ -113,8 +113,8 @@ export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onC
           </div>
 
           {/* 信息区 */}
-          <div className="grid content-start gap-3 overflow-y-auto border-t border-border bg-panel p-4 md:border-l md:border-t-0">
-            <DialogTitle className="break-all text-[15px] font-[650] leading-snug">{asset.name}</DialogTitle>
+          <div className="grid min-h-0 content-start gap-5 overflow-y-auto border-t border-border bg-panel p-6 md:border-l md:border-t-0">
+            <DialogTitle className="break-words pr-7 text-xl font-semibold leading-snug">{asset.name}</DialogTitle>
             <div className="flex flex-wrap gap-1.5">
               <Badge variant="secondary">{kindLabel}</Badge>
               <Badge variant="outline">{sourceLabel}</Badge>
@@ -134,7 +134,7 @@ export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onC
                 </div>
               </div>
             )}
-            <dl className="m-0 grid gap-2 border-t border-border pt-3">
+            <dl className="m-0 grid gap-4 border-t border-border pt-5">
               <InfoRow label={t("assetType")}>{kindLabel}</InfoRow>
               {width > 0 && height > 0 && (
                 <InfoRow label={t("assetDimensions")}>

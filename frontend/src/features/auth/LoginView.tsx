@@ -9,7 +9,6 @@ import { useQuery } from "@tanstack/react-query";
 import { oauthPending, oauthProviders, oauthStart } from "@/api/client";
 import { useAuth } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
-import { BrandMark } from "@/components/layout/BrandMark";
 import loginHeroUrl from "@/assets/login-hero.jpg";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -84,7 +83,7 @@ export function LoginView() {
   });
 
   return (
-    <div className="relative grid min-h-screen bg-background lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    <div className="relative grid min-h-screen bg-background lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
       {/* 桌面端无边框窗:登录/注册页不挂 AppShell,若不自带拖拽条,整个窗口在登录前完全
           拖不动(只能靠系统快捷键移动)。这条透明带盖住顶栏高度,层级压在语言按钮之下,
           按钮自身标 no-drag 保证可点。 */}
@@ -108,9 +107,9 @@ export function LoginView() {
       </Button>
 
       <main className="grid min-h-screen grid-rows-[minmax(0,1fr)_auto] justify-items-center overflow-y-auto px-6 py-8">
-        <div className="grid w-[min(340px,100%)] content-center gap-6">
-          <div className="grid gap-2.5 [&_h1]:m-0 [&_h1]:text-[22px] [&_h1]:font-[640] [&_h1]:leading-[1.15] [&_h1]:tracking-[-0.02em] [&_h1]:text-foreground [&_p]:m-0 [&_p]:text-ui-md [&_p]:leading-normal [&_p]:text-muted-foreground">
-            <BrandMark size={48} className="mb-1.5 block" />
+        <div className="grid w-[min(400px,100%)] content-center gap-8 py-12">
+          <div className="grid gap-2.5 [&_h1]:m-0 [&_h1]:text-3xl [&_h1]:font-semibold [&_h1]:leading-[1.15] [&_h1]:tracking-[-0.02em] [&_h1]:text-foreground [&_p]:m-0 [&_p]:text-ui-md [&_p]:leading-normal [&_p]:text-muted-foreground">
+            <span className="mb-8 text-3xl font-semibold tracking-tighter">Mosael</span>
             {/* 空库 = 这个部署还没有管理员。直说他正在创建什么,而不是一句泛泛的"创建账户"。 */}
             <h1>{mode === "login" ? t("loginWelcomeBack") : hasUsers ? t("loginCreateTitle") : t("bootstrapTitle")}</h1>
             <p>
@@ -120,7 +119,7 @@ export function LoginView() {
 
           <Form {...form}>
             {/* 组间 16px 明显大于组内标签的 8px,字段归属一眼可辨。 */}
-            <form className="grid gap-4" onSubmit={onSubmit} noValidate>
+            <form className="grid gap-5 [&_input]:h-12" onSubmit={onSubmit} noValidate>
               {form.formState.errors.root && (
                 <Alert variant="destructive">
                   <CircleAlert size={14} />
@@ -205,7 +204,7 @@ export function LoginView() {
                   )}
                 />
               )}
-              <Button type="submit" className="mt-1.5" disabled={form.formState.isSubmitting}>
+              <Button type="submit" className="mt-2 h-12" loading={form.formState.isSubmitting}>
                 {mode === "login" ? t("signIn") : t("createAccount")}
               </Button>
               {mode === "register" && (
@@ -233,7 +232,7 @@ export function LoginView() {
         <LegalDialog doc={legalDoc} onClose={() => setLegalDoc(null)} />
 
         {/* 服务器入口必须在登录前:选定本地/团队后端,再对它认证。 */}
-        <div className="flex w-[min(340px,100%)] justify-center border-t border-border pt-4">
+        <div className="flex w-[min(400px,100%)] justify-center border-t border-border pt-4">
           <ServerPicker />
         </div>
       </main>
@@ -325,7 +324,7 @@ function LoginHero() {
   const t = useI18n();
   const [imageOk, setImageOk] = React.useState(true);
   return (
-    <aside className="relative hidden overflow-hidden lg:block">
+    <aside className="relative m-6 hidden overflow-hidden rounded-2xl lg:block">
       {/* 渐变兜底始终垫底;图片在其上,onError 即撤下。 */}
       <div className="absolute inset-0 bg-[linear-gradient(160deg,color-mix(in_srgb,var(--primary)_58%,var(--background))_0%,color-mix(in_srgb,var(--primary)_24%,var(--background))_46%,var(--background)_100%)]" />
       {imageOk && (
@@ -338,7 +337,7 @@ function LoginHero() {
       )}
       {/* 底部压暗渐变保证文字可读(图片场景);纯渐变兜底时同样成立。 */}
       <div className="absolute inset-x-0 bottom-0 h-[46%] bg-[linear-gradient(to_top,rgba(10,8,16,0.62)_0%,rgba(10,8,16,0.32)_55%,transparent_100%)]" />
-      <div className="absolute inset-x-0 bottom-0 grid gap-1.5 p-10 [&_p]:m-0 [&_p]:max-w-[42ch] [&_p]:text-ui-md [&_p]:leading-relaxed [&_p]:text-white/85 [&_strong]:text-[21px] [&_strong]:font-[640] [&_strong]:leading-tight [&_strong]:tracking-[-0.015em] [&_strong]:text-white">
+      <div className="absolute inset-x-0 bottom-0 grid gap-4 p-12 [&_p]:m-0 [&_p]:max-w-[42ch] [&_p]:text-ui-md [&_p]:leading-relaxed [&_p]:text-white/85 [&_strong]:text-4xl [&_strong]:font-semibold [&_strong]:leading-tight [&_strong]:tracking-[-0.015em] [&_strong]:text-white">
         <strong>{t("loginHeroTitle")}</strong>
         <p>{t("loginHeroBody")}</p>
       </div>

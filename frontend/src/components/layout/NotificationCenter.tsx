@@ -110,8 +110,8 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
 
       {/* p-0:PopoverContent 基类自带 p-4,而里面的头部和列表各自已经有内边距 ——
           留着就是里外两层留白,行会被推得离弹层边缘很远。 */}
-      <PopoverContent className="w-[340px] overflow-hidden p-0" aria-label={t("notifTitle")}>
-        <div className="flex items-center justify-between border-b border-border px-2.5 py-2 [&_strong]:text-ui-sm">
+      <PopoverContent className="w-[min(440px,calc(100vw-24px))] overflow-hidden p-0" aria-label={t("notifTitle")}>
+        <div className="flex items-center justify-between border-b border-border px-5 py-5 [&_strong]:text-lg">
           <strong>{t("notifTitle")}</strong>
           <span className="flex items-center gap-2.5">
             {unread > 0 && (
@@ -140,7 +140,7 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
         </div>
         {/* 单列 grid 的隐式列是 max-content —— 一条长通知正文会把整个弹层撑到能左右滚
             (任务中心同一处坑)。锁住列宽,行内的 truncate 才有定数可截。 */}
-        <div className="grid max-h-[380px] grid-cols-[minmax(0,1fr)] gap-1 overflow-y-auto overflow-x-hidden p-1.5">
+        <div className="grid max-h-[min(560px,70vh)] grid-cols-[minmax(0,1fr)] gap-0 divide-y divide-border overflow-y-auto overflow-x-hidden px-3 py-2">
           {pendingInvites.map((inv) => (
             <div
               key={inv.id}
@@ -176,20 +176,20 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
             <button
               key={item.id}
               type="button"
-              className="grid cursor-pointer grid-cols-[26px_minmax(0,1fr)_12px] items-start gap-1.5 rounded-md border-0 bg-transparent px-1.5 py-[7px] text-left hover:bg-secondary"
+              className="grid cursor-pointer grid-cols-[36px_minmax(0,1fr)_12px] items-start gap-3 rounded-lg border-0 bg-transparent px-2 py-4 text-left hover:bg-secondary"
               onClick={() => openItem(item)}
             >
               <span
                 className={cn(
-                  "grid h-[26px] w-[26px] place-items-center rounded-md border border-border text-muted-foreground",
+                  "grid size-9 place-items-center rounded-lg border border-border text-muted-foreground",
                   !item.read_at && "border-[color-mix(in_srgb,var(--primary)_35%,var(--border))] text-primary",
                 )}
               >
                 {TYPE_ICONS[item.type] ?? <Bell size={13} />}
               </span>
               <span className="grid min-w-0 gap-0.5">
-                <span className={cn("truncate text-xs", !item.read_at && "font-semibold")}>{item.title}</span>
-                {item.body && <small className="truncate text-ui-xs text-muted-foreground">{item.body}</small>}
+                <span className={cn("truncate text-ui-sm", !item.read_at && "font-semibold")}>{item.title}</span>
+                {item.body && <small className="line-clamp-2 text-ui-sm leading-relaxed text-muted-foreground">{item.body}</small>}
                 <small className="text-ui-2xs text-muted-foreground">{relativeTime(item.created_at, locale)}</small>
               </span>
               {!item.read_at && <i className="mt-[5px] h-1.5 w-1.5 rounded-full bg-primary" />}
