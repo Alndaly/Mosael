@@ -14,7 +14,7 @@ export function SelectionCheck({ selected, className }: { selected: boolean; cla
     <span
       className={cn(
         "pointer-events-none absolute right-2 top-2 z-[2] grid size-5 place-items-center rounded-full border",
-        selected ? "border-primary bg-primary text-primary-foreground" : "border-border-strong bg-panel text-transparent",
+        selected ? "border-primary bg-action text-action-foreground" : "border-border-strong bg-panel text-transparent",
         className,
       )}
     >

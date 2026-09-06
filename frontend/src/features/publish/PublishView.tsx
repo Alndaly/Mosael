@@ -173,25 +173,25 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
             <span className="whitespace-nowrap text-xs text-muted-foreground">
               {t("mediaSelectedCount").replace("{n}", String(selectedIds.size))}
             </span>
-            <Button variant="outline" size="sm" onClick={() => selectAll(filteredTasks)}>
+            <Button variant="outline" size="default" onClick={() => selectAll(filteredTasks)}>
               <ListChecks size={13} /> {allSelected(filteredTasks) ? t("mediaDeselectAll") : t("mediaSelectAll")}
             </Button>
             <Button
               variant="outline"
-              size="sm"
+              size="default"
               className="hover:border-destructive/50 hover:text-destructive"
               disabled={selectedIds.size === 0}
               onClick={() => setBatchDeleting(true)}
             >
               <Trash2 size={13} /> {t("delete")}
             </Button>
-            <Button variant="ghost" size="sm" onClick={exit}>
+            <Button variant="ghost" size="default" onClick={exit}>
               <X size={13} /> {t("cancel")}
             </Button>
           </>
         ) : (
           <>
-            <Button variant="outline" size="sm" onClick={() => setSelectMode(true)}>
+            <Button variant="outline" size="default" onClick={() => setSelectMode(true)}>
               <Check size={13} /> {t("mediaSelectMode")}
             </Button>
             <Button onClick={() => setCreating(true)}>

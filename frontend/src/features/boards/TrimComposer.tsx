@@ -149,7 +149,7 @@ export function TrimComposer({
             "flex h-7 shrink-0 items-center gap-1 rounded-full px-3 text-ui-2xs transition-colors",
             !ok || working
               ? "cursor-not-allowed bg-secondary text-muted-foreground"
-              : "cursor-pointer bg-primary text-primary-foreground hover:opacity-90",
+              : "cursor-pointer bg-action text-action-foreground hover:opacity-90",
           )}
         >
           {working ? <Loader2 size={12} className="animate-spin" /> : <Scissors size={12} />} {t("boardTrimSubmit")}

@@ -21,7 +21,7 @@ export function CollectionTabs<T extends string>({ value, onChange, items, label
   value: T; onChange: (value: T) => void; items: { value: T; label: string; count?: number }[]; label: string;
 }) {
   return <div role="group" aria-label={label} className="flex min-w-0 gap-5 overflow-x-auto">
-    {items.map(item => <button key={item.value} type="button" aria-label={`${item.label}${item.count !== undefined ? ` ${item.count}` : ""}`} aria-pressed={value === item.value} onClick={() => onChange(item.value)} className={cn("flex h-11 shrink-0 cursor-pointer items-center gap-2 border-b-2 border-transparent px-1 text-ui-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset", value === item.value && "border-primary text-primary")}>
+    {items.map(item => <button key={item.value} type="button" aria-label={`${item.label}${item.count !== undefined ? ` ${item.count}` : ""}`} aria-pressed={value === item.value} onClick={() => onChange(item.value)} className={cn("flex h-10 shrink-0 cursor-pointer items-center gap-2 border-b-2 border-transparent px-1 text-ui-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset", value === item.value && "border-primary text-primary")}>
       {item.label}{item.count !== undefined && <span className="text-ui-xs tabular-nums text-muted-foreground">{item.count}</span>}
     </button>)}
   </div>;

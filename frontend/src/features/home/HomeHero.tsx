@@ -125,39 +125,19 @@ export function HomeHero({
         </small>
       </div>
 
-      {/* 诗卡:一行三格(图标 / 正文 / 刷新),靠 flex 居中 —— 此前图标和按钮是绝对定位钉在
-          左上和右上的,两行文字时看着就像被挂在角上。 */}
-      <div className="relative flex min-w-0 flex-wrap items-center gap-4 max-[880px]:w-full">
+      {/* 单行辅助信息与主操作共用 40px 高度，完整出处保留在悬停文字中。 */}
+      <div className="relative flex min-w-0 items-center gap-3 max-[1000px]:w-full">
         <figure
-          className="relative m-0 flex max-w-[40ch] items-center gap-3 rounded-lg border border-border bg-panel px-4 py-3 max-[880px]:max-w-none max-[880px]:flex-1"
+          className="m-0 flex h-10 min-w-0 max-w-[420px] items-center gap-2 rounded-md px-2 text-muted-foreground max-[1000px]:max-w-none max-[1000px]:flex-1"
           aria-live="polite"
+          title={poemEgg || [poem.text, poem.author, poem.source && `《${poem.source}》`].filter(Boolean).join(" · ")}
         >
-          <span
-            className="grid size-8 shrink-0 place-items-center rounded-md"
-            style={{
-              color: accent ?? "var(--muted-foreground)",
-              background: accent ? `color-mix(in srgb, ${accent} 12%, transparent)` : "var(--secondary)",
-            }}
-          >
-            <BookText size={15} />
-          </span>
-          <div className="min-w-0 flex-1">
-            {poemEgg ? (
-              <blockquote className="m-0 text-ui-md leading-normal">{poemEgg}</blockquote>
-            ) : (
-              <>
-                <blockquote className="m-0 line-clamp-2 text-ui-md leading-normal">{poem.text}</blockquote>
-                {(poem.author || poem.source) && (
-                  <figcaption className="mt-0.5 truncate text-ui-xs text-muted-foreground">
-                    {[poem.author, poem.source && `《${poem.source}》`].filter(Boolean).join(" · ")}
-                  </figcaption>
-                )}
-              </>
-            )}
-          </div>
+          <BookText size={14} className="shrink-0" style={{ color: accent }} />
+          <blockquote className="m-0 min-w-0 truncate text-ui-xs leading-5">{poemEgg || poem.text}</blockquote>
+          {!poemEgg && poem.author && <figcaption className="shrink-0 whitespace-nowrap text-ui-xs text-muted-foreground">{poem.author}</figcaption>}
           <button
             type="button"
-            className="grid size-7 shrink-0 cursor-pointer place-items-center self-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-default"
+            className="grid size-7 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
             aria-label={t("homePoemRefresh")}
             onClick={onRefreshPoem}
             disabled={poemLoading}

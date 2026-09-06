@@ -1,3 +1,4 @@
+import { CollectionDetail, DETAIL_INDEX_ITEM, DETAIL_INDEX_SELECTED, DETAIL_INDEX_TEXT } from "@/components/layout/CollectionDetail";
 import React from "react";
 import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -25,7 +26,6 @@ import {
 import { useI18n, usePreferences } from "@/app/preferences";
 import { JobChildrenList, useJobChildren } from "@/components/layout/JobChildren";
 import { relativeTime } from "@/lib/time";
-import { COMPACT_SIDEBAR_BOUNDS, useResizableSidebar } from "@/lib/useResizableSidebar";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
@@ -44,9 +44,6 @@ import { cn } from "@/lib/utils";
  * 右侧选中任务的详情(概览行 + 运行记录)。
  */
 export function SchedulerView({ workspace, project }: { workspace: Workspace; project: Project | null }) {
-  // 右栏现在是一块有边框的面板,它的边**就是**列边界 —— 不再需要 nextInset 补偿
-  // (那是给"无边框滚动容器 + 内层 px-0.5"那种形状用的,见 handleOffset)。
-  const sidebar = useResizableSidebar("scheduler", COMPACT_SIDEBAR_BOUNDS);
   const t = useI18n();
   const qc = useQueryClient();
   const [creating, setCreating] = React.useState(false);
@@ -127,16 +124,7 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
   return (
     <div className={STUDIO_PAGE}>
       <PageHeading title={t("tasks")} description={t("studioSchedulerDesc")} count={tasks.data?.length} actions={<Button onClick={() => setCreating(true)}><Plus />{t("createTask")}</Button>} />
-      <div className="relative grid min-h-0 flex-1 grid-cols-[var(--studio-index-width)_minmax(0,1fr)] gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]"
-        style={{ "--studio-index-width": `${sidebar.width}px` } as React.CSSProperties}>
-        <aside className="min-h-0 overflow-hidden border-r border-border bg-panel-subtle grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
-          <div className="flex min-h-14 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-sm [&_h2]:font-semibold [&_h2]:text-muted-foreground">
-            <h2>{t("tasks")}</h2>
-            <Button variant="outline" size="icon-xs" title={t("createTask")} aria-label={t("createTask")} onClick={() => setCreating(true)}>
-              <Plus size={14} />
-            </Button>
-          </div>
-          <div className="grid content-start gap-1 overflow-y-auto p-1.5 [&:has(>.empty-inline:only-child)]:content-stretch max-[880px]:order-1 max-[880px]:flex max-[880px]:min-w-0 max-[880px]:flex-1 max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:overflow-x-auto max-[880px]:p-0">
+      <CollectionDetail storageKey="scheduler" label={t("tasks")} selected={!!selected} index={<>
             {tasks.isLoading &&
               (tasks.data ?? []).length === 0 &&
               [0, 1, 2, 3].map((i) => (
@@ -152,11 +140,12 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
                 <ContextMenuTrigger asChild>
                   <button
                     type="button"
-                    className={cn("flex cursor-pointer items-center gap-[9px] rounded-md border-0 bg-transparent px-3 py-3 text-left transition-colors duration-100 hover:bg-muted max-[880px]:shrink-0 max-[880px]:py-1", selected?.id === task.id && "bg-accent hover:bg-accent")}
+                    className={cn(DETAIL_INDEX_ITEM, selected?.id === task.id && DETAIL_INDEX_SELECTED)}
+                    aria-current={selected?.id === task.id ? "true" : undefined}
                     onClick={() => setSelectedId(task.id)}
                   >
                     <span className={cn("h-[7px] w-[7px] shrink-0 rounded-full bg-border-strong", task.enabled && "bg-success")} />
-                    <span className="min-w-0 [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-ui-sm [&_strong]:font-semibold max-[880px]:[&_small]:hidden">
+                    <span className={DETAIL_INDEX_TEXT}>
                       <strong>{task.name}</strong>
                       <small>
                         {t(`taskKind_${task.kind}` as never)} · {t(`trigger_${task.trigger_type}` as never)}
@@ -183,25 +172,13 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
                 </ContextMenuContent>
               </ContextMenu>
             ))}
-          </div>
-        </aside>
-        {/* 边缘拖动 —— 和剪辑页同一套(lib/useResizableSidebar)。 */}
-        <div {...sidebar.handleProps} className={cn(sidebar.handleProps.className, "max-[880px]:hidden")} />
-        {/* 右栏是**一块占满高度的面板**,内部滚动 —— 此前它跟着内容走,内容少时就是半截,
-            左边是个完整的带边框面板、右边飘着一段,两边看着不像同一层东西。 */}
-        <div
-          className={cn(
-            "grid min-h-0 min-w-0 overflow-y-auto bg-panel px-6 py-6 xl:px-8",
-            selected ? "content-start" : "place-items-center",
-          )}
-        >
+      </>}>
           {selected ? (
             <TaskDetail key={selected.id} task={selected} workspaceId={workspace.id} />
           ) : (
             <EmptyState icon={<Timer size={22} />} title={t("pickDetailTitle")} body={t("pickDetailBody")} />
           )}
-        </div>
-      </div>
+      </CollectionDetail>
       {createDialog}
       <ConfirmDialog
         open={menuDeleting !== null}
@@ -257,8 +234,8 @@ function BoundWorkflowRow({ task, workspaceId }: { task: ScheduledTask; workspac
     >
       {/* 按钮内容是工作流的**名字**,而用户的工作流常叫「新工作流」—— 光秃秃一个名字
           看起来像「新建工作流」动作按钮。图标 + 悬停说明把它钉回「这是当前绑定,点击去看」。 */}
-      <Button size="sm" variant="outline" title={t("taskOpenWorkflow")} onClick={() => (window.location.hash = "#/workflows")}>
-        <GitBranch size={13} /> {workflow ? workflow.name : workflowId || t("taskNoWorkflow")}
+      <Button variant="outline" className="max-w-full" title={t("taskOpenWorkflow")} onClick={() => (window.location.hash = "#/workflows")}>
+        <GitBranch size={13} /><span className="truncate">{workflow ? workflow.name : workflowId || t("taskNoWorkflow")}</span>
       </Button>
     </SettingsRow>
   );
@@ -454,17 +431,17 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
   };
 
   return (
-    <div className="grid w-full content-start gap-4">
+    <div className="grid w-full min-w-0 content-start gap-6">
       {/* **页头,不是卡片。** 任务名是这一页的身份 —— 它此前和运行记录一样是个 SettingsGroup,
           两块等重,而真正天天看的是下面那份记录。 */}
-      <header className="grid gap-2 border-b border-border pb-3">
+      <header className="grid gap-5 border-b border-border pb-5">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
           <h2 className="m-0 truncate text-xl font-semibold text-foreground">{task.name}</h2>
           <div className="flex shrink-0 items-center gap-1.5">
-            <Button size="sm" variant="outline" disabled={!task.enabled} loading={runTask.isPending} onClick={() => runTask.mutate()}>
+            <Button variant="outline" disabled={!task.enabled} loading={runTask.isPending} onClick={() => runTask.mutate()}>
               <Play size={13} /> {t("runNow")}
             </Button>
-            <label className="inline-flex cursor-pointer select-none items-center gap-1.5 text-ui-xs text-muted-foreground">
+            <label className="inline-flex h-10 cursor-pointer select-none items-center gap-2 rounded-md border border-border px-3 text-ui-sm text-muted-foreground">
               <span>{task.enabled ? t("pluginOn") : t("pluginOff")}</span>
               <Switch checked={task.enabled} onCheckedChange={(checked) => toggleTask.mutate(checked)} />
             </label>
@@ -472,19 +449,19 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
         </div>
         {/* 计划 / 下次 / 上次是**三个短事实**,不是三件要操作的事 —— 它们此前各占一整行,
             每行还配一句说明,读三个时间戳要扫过六行字。摆成一排。 */}
-        <dl className="m-0 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-ui-xs [&_dd]:m-0 [&_dd]:text-foreground [&_dt]:text-muted-foreground">
-          <span className="flex items-baseline gap-1.5">
+        <dl className="m-0 grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-4 text-ui-xs [&_dd]:m-0 [&_dd]:text-foreground [&_dt]:text-muted-foreground">
+          <div className="grid min-w-0 content-start gap-1.5 [&_dd]:text-ui-sm [&_dd]:break-words">
             <dt>{t("taskSchedule")}</dt>
-            <dd className="timecode">{scheduleLabel}</dd>
-          </span>
-          <span className="flex items-baseline gap-1.5">
+            <dd className="tabular-nums">{scheduleLabel}</dd>
+          </div>
+          <div className="grid min-w-0 content-start gap-1.5 [&_dd]:text-ui-sm [&_dd]:break-words">
             <dt>{t("taskNextRun")}</dt>
-            <dd className="timecode">{localTime(task.next_run_at) ?? t("manualNoSchedule")}</dd>
-          </span>
-          <span className="flex items-baseline gap-1.5">
+            <dd className="tabular-nums">{localTime(task.next_run_at) ?? t("manualNoSchedule")}</dd>
+          </div>
+          <div className="grid min-w-0 content-start gap-1.5 [&_dd]:text-ui-sm [&_dd]:break-words">
             <dt>{t("taskLastRun")}</dt>
-            <dd className="timecode">{localTime(task.last_run_at) ?? "—"}</dd>
-          </span>
+            <dd className="tabular-nums">{localTime(task.last_run_at) ?? "—"}</dd>
+          </div>
         </dl>
       </header>
 
@@ -499,18 +476,18 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
 
       {/* **运行记录是主体**,所以它占最大一块,而且不再被上面那堆只读行挤到屏幕外。 */}
       <section className="grid gap-2">
-        <div className="flex items-baseline justify-between gap-2">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h3 className="m-0 text-ui-md font-semibold text-foreground">{t("taskRuns")}</h3>
           <span className="text-ui-xs text-muted-foreground">{t("taskRunsDesc")}</span>
         </div>
         {/* 行自己不带边框(靠 [&+&]:border-t 分隔),所以左右内边距要由容器给 ——
             少了它,每一行都贴着边框,而图标离边只有 1px。 */}
-        <div className="overflow-hidden rounded-lg border border-border bg-panel px-3">
+        <div className="overflow-hidden rounded-md border border-border px-4">
           {(runs.data ?? []).map((run) => (
             <RunRow key={run.id} run={run} job={jobs.data?.find((job) => job.id === run.job_id) ?? null} />
           ))}
           {runs.data?.length === 0 && (
-            <p className="m-0 py-4 text-center text-ui-xs text-muted-foreground">{t("noRunsYet")}</p>
+            <EmptyState size="compact" icon={<Timer />} title={t("noRunsYet")} />
           )}
         </div>
       </section>
@@ -564,7 +541,7 @@ function RunRow({ run, job }: { run: ScheduledTaskRun; job: Job | null }) {
   const rows = children.data ?? [];
 
   return (
-    <div className="grid gap-1 py-[7px] [&+&]:border-t [&+&]:border-border">
+    <div className="grid gap-1 py-3 [&+&]:border-t [&+&]:border-border">
       <div className="flex items-center gap-2">
       <span
         className={cn(

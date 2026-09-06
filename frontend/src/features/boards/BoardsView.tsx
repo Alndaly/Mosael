@@ -664,7 +664,7 @@ function BoardDetail({
                 <button
                   type="button"
                   data-board-add-item=""
-                  className="inline-flex h-8 items-center gap-2 rounded-md bg-primary px-3 text-primary-foreground hover:bg-primary/90"
+                  className="inline-flex h-8 items-center gap-2 rounded-md bg-action px-3 text-action-foreground hover:bg-action/90"
                   aria-label={t("boardsAddItem")}
                   title={`${t("boardsAddItem")} ⌘N`}
                 >

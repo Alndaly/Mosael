@@ -44,7 +44,7 @@ describe("semantic status colors", () => {
     for (const theme of [block(":root"), block(".dark")]) {
       for (const [ink, paper] of [
         ["foreground", "background"], ["muted-foreground", "card"],
-        ["primary-foreground", "primary"], ["accent-foreground", "accent"],
+        ["primary-foreground", "primary"], ["action-foreground", "action"], ["accent-foreground", "accent"],
         ["destructive-foreground", "destructive"],
       ]) expect(contrast(token(theme, ink), token(theme, paper)), `${ink} on ${paper}`).toBeGreaterThanOrEqual(4.5);
       for (const edge of ["ring", "input"])

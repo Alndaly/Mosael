@@ -22,8 +22,8 @@ const Checkbox = React.forwardRef<
       "peer grid h-4 w-4 shrink-0 cursor-pointer place-items-center rounded-[4px] border border-input bg-field transition-colors",
       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
       "disabled:cursor-not-allowed disabled:opacity-50",
-      "data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground",
-      "data-[state=indeterminate]:border-primary data-[state=indeterminate]:bg-primary data-[state=indeterminate]:text-primary-foreground",
+      "data-[state=checked]:border-primary data-[state=checked]:bg-action data-[state=checked]:text-action-foreground",
+      "data-[state=indeterminate]:border-primary data-[state=indeterminate]:bg-action data-[state=indeterminate]:text-action-foreground",
       className
     )}
     {...props}

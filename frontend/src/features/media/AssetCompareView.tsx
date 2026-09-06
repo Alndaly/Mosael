@@ -477,7 +477,7 @@ export function AssetCompareView({ assets, onClose }: { assets: Asset[]; onClose
               >
                 <img src={assetPreviewUrl(asset.id)} alt="" className="h-full w-full object-cover" />
                 {slot !== null && (
-                  <span className="pointer-events-none absolute left-0.5 top-0.5 rounded bg-primary px-1 text-[9.5px] font-bold leading-[14px] text-primary-foreground">
+                  <span className="pointer-events-none absolute left-0.5 top-0.5 rounded bg-action px-1 text-[9.5px] font-bold leading-[14px] text-action-foreground">
                     {slot === 0 ? "A" : "B"}
                   </span>
                 )}

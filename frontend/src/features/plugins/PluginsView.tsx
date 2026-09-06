@@ -1,4 +1,5 @@
-import { PageHeading } from "@/components/layout/StudioPage";
+import { CollectionDetail, DETAIL_INDEX_ITEM, DETAIL_INDEX_SELECTED, DETAIL_INDEX_TEXT } from "@/components/layout/CollectionDetail";
+import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import React from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -28,7 +29,6 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
 import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab";
-import { COMPACT_SIDEBAR_BOUNDS, useResizableSidebar } from "@/lib/useResizableSidebar";
 import { cn } from "@/lib/utils";
 
 /**
@@ -41,9 +41,6 @@ import { cn } from "@/lib/utils";
  * 设计与取舍见 docs/PLUGIN_ARCHITECTURE.md。
  */
 export function PluginsView({ workspaceId }: { workspaceId: string }) {
-  // 右栏现在是一块有边框的面板,它的边**就是**列边界 —— 不再需要 nextInset 补偿
-  // (那是给"无边框滚动容器 + 内层 px-0.5"那种形状用的,见 handleOffset)。
-  const sidebar = useResizableSidebar("plugins", COMPACT_SIDEBAR_BOUNDS);
   const t = useI18n();
   const qc = useQueryClient();
 
@@ -74,27 +71,16 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
   const selected = list.find((item) => item.id === selectedId) ?? list[0] ?? null;
 
 
-  const heading = <PageHeading title={t("pluginsTitle")} description={t("studioPluginsDesc")} count={packages.data?.length} className="px-6 py-7 xl:px-9 xl:py-8" actions={<><ScanButton pending={scan.isPending} onScan={() => scan.mutate()} /><Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button></>} />;
-  if (empty) return <div className="flex h-full min-h-0 flex-col bg-panel">
-    {heading}<div className="flex flex-1 border-t border-border bg-background"><EmptyState icon={<Plug size={28} />} title={t("pluginsTitle")} body={t("studioPluginsDesc")} action={<Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button>} /></div>
+  const heading = <PageHeading title={t("pluginsTitle")} description={t("studioPluginsDesc")} count={packages.data?.length} actions={<><ScanButton pending={scan.isPending} onScan={() => scan.mutate()} /><Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button></>} />;
+  if (empty) return <div className={STUDIO_PAGE}>
+    {heading}<div className="flex flex-1"><EmptyState icon={<Plug size={28} />} title={t("pluginsTitle")} body={t("noPluginsGuide").replace("{dir}", pluginsDir.data?.path ?? "")} action={<Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button>} /></div>
     <PluginMarketDialog open={marketOpen} onOpenChange={setMarketOpen} onInstalled={() => invalidatePlugins(qc)} />
   </div>;
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-panel">
+    <div className={STUDIO_PAGE}>
       {heading}
-      <div className="relative grid min-h-0 flex-1 grid-cols-[var(--studio-index-width)_minmax(0,1fr)] gap-2 border-t border-border max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]"
-        style={{ "--studio-index-width": `${sidebar.width}px` } as React.CSSProperties}>
-        <aside className="min-h-0 overflow-hidden border-r border-border bg-panel-subtle grid grid-rows-[auto_minmax(0,1fr)] max-[880px]:flex max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:px-1.5 max-[880px]:py-[5px] max-[880px]:[&>div:first-child]:contents">
-          <div className="flex min-h-14 items-center justify-between border-b border-border px-3">
-            {/* 「插件」而不是「已安装」:这一栏和右边的详情是**同一件东西的两半**,而标题是在
-                回答"这一栏里是什么",不是在给它们贴状态 —— 没装的插件根本不会出现在这儿。 */}
-            <span className="text-ui-sm font-semibold text-muted-foreground">
-              {t("pluginsTitle")}
-            </span>
-
-          </div>
-          <div className="grid content-start gap-1 overflow-y-auto p-1.5 max-[880px]:order-1 max-[880px]:flex max-[880px]:min-w-0 max-[880px]:flex-1 max-[880px]:items-center max-[880px]:gap-1.5 max-[880px]:overflow-x-auto max-[880px]:p-0">
+      <CollectionDetail storageKey="plugins" label={t("pluginsTitle")} selected={!!selected} index={<>
             {packages.isLoading &&
               list.length === 0 &&
               [0, 1, 2].map((i) => (
@@ -111,14 +97,12 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
                 <button
                   key={item.id}
                   type="button"
-                  className={cn(
-                    "flex cursor-pointer items-center gap-3 rounded-lg border-0 bg-transparent px-3 py-3 text-left transition-colors duration-100 hover:bg-muted max-[880px]:shrink-0 max-[880px]:py-1",
-                    selected?.id === item.id && "bg-panel shadow-sm hover:bg-panel",
-                  )}
+                  className={cn(DETAIL_INDEX_ITEM, selected?.id === item.id && DETAIL_INDEX_SELECTED)}
+                  aria-current={selected?.id === item.id ? "true" : undefined}
                   onClick={() => setSelectedId(item.id)}
                 >
                   <span className={cn("h-[7px] w-[7px] shrink-0 rounded-full bg-border-strong", live > 0 && "bg-success")} />
-                  <span className="min-w-0 [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-ui-sm [&_strong]:font-semibold max-[880px]:[&_small]:hidden">
+                  <span className={DETAIL_INDEX_TEXT}>
                     <strong>{item.name}</strong>
                     <small>
                       v{item.version} · {t("pluginConnectionCount").replace("{n}", String((item.instances ?? []).length))}
@@ -132,31 +116,14 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
                 {t("noPluginsGuide").replace("{dir}", pluginsDir.data?.path ?? "")}
               </p>
             )}
-          </div>
-        </aside>
-        {/* 边缘拖动 —— 和剪辑页同一套(lib/useResizableSidebar)。 */}
-        <div {...sidebar.handleProps} className={cn(sidebar.handleProps.className, "max-[880px]:hidden")} />
-
-      {/* 市场:**一张弹窗,宽度归它自己** —— 挤在侧栏里时,一个用来浏览的列表被塞进了
-          一个用来选中的列表的位置,每张卡片的说明都要折成五行。 */}
-      {/* 搜索条钉在头里、列表在滚动体里 —— 滚动由 ModalShell 那一层管,这里**不再自己套一层
-          overflow**:套两层的后果是标题跟着列表滚走,而且贴着裁剪线的搜索框焦点框会缺半圈。 */}
-      <PluginMarketDialog open={marketOpen} onOpenChange={setMarketOpen} onInstalled={() => invalidatePlugins(qc)} />
-        {/* 右栏是**一块占满高度的面板**,内部滚动。详情从顶部开始;没有选中项时则让空状态
-            在整块可用区域内真正居中,而不是被 content-start 锁在顶部。 */}
-        <div
-          className={cn(
-            "grid min-h-0 min-w-0 overflow-y-auto bg-panel px-6 py-7 xl:px-9 xl:py-8",
-            selected ? "content-start" : "place-items-center",
-          )}
-        >
+      </>}>
           {selected ? (
             <PackageDetail key={selected.id} pkg={selected} workspaceId={workspaceId} />
           ) : (
             <EmptyState icon={<Plug size={22} />} title={t("pickDetailTitle")} body={t("pickDetailBody")} />
           )}
-        </div>
-      </div>
+      </CollectionDetail>
+      <PluginMarketDialog open={marketOpen} onOpenChange={setMarketOpen} onInstalled={() => invalidatePlugins(qc)} />
     </div>
   );
 }
@@ -168,32 +135,11 @@ function invalidatePlugins(qc: ReturnType<typeof useQueryClient>) {
 }
 
 /** 扫描按钮:pending 时图标转起来、文案改成「扫描中」—— 以前只是 disabled,点下去像没点上。 */
-function ScanButton({ pending, onScan, size = "sm" }: { pending: boolean; onScan: () => void; size?: "sm" | "default" }) {
+function ScanButton({ pending, onScan }: { pending: boolean; onScan: () => void }) {
   const t = useI18n();
-  const label = pending ? t("scanningPlugins") : t("scanPlugins");
-  // 列表头上是**只有图标的圆钮**:那一行已经有「已安装」在说这是什么,再写一遍"扫描插件"
-  // 只是把标题挤窄。空状态里那个是主动作(整页就它一个按钮),文案得留着。
-  // 两处都在扫描时禁用并转圈 —— 扫描要走磁盘,连点两下就是两趟。
-  if (size === "sm") {
-    return (
-      <Button
-        variant="outline"
-        size="icon-xs"
-        title={label}
-        aria-label={label}
-        disabled={pending}
-        onClick={onScan}
-      >
-        <RefreshCcw size={13} className={pending ? "animate-mosael-spin" : undefined} />
-      </Button>
-    );
-  }
-  return (
-    <Button size="default" disabled={pending} onClick={onScan}>
-      <RefreshCcw size={15} className={pending ? "animate-mosael-spin" : undefined} />
-      {label}
-    </Button>
-  );
+  return <Button variant="outline" loading={pending} onClick={onScan}>
+    <RefreshCcw />{pending ? t("scanningPlugins") : t("scanPlugins")}
+  </Button>;
 }
 
 function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: string }) {
@@ -228,7 +174,7 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
   const live = instances.filter((one) => one.enabled).length;
 
   return (
-    <div className="grid w-full content-start gap-4">
+    <div className="grid w-full min-w-0 content-start gap-6">
       {/* 卸载会删掉磁盘上的插件目录 —— 不可撤销,所以走确认。 */}
       <ConfirmDialog
         open={confirmUninstall}
@@ -241,7 +187,7 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
       {/* **页头,不是卡片。** 包是这一页的身份 —— 它此前和连接一样是个 SettingsGroup,
           于是「TikHub」在屏幕上出现两次、长得一模一样,读的人分不清哪个是包哪个是连接。
           身份该在版面顶端只出现一次,后面全是它的内容。 */}
-      <header className="grid gap-2 border-b border-border pb-3">
+      <header className="grid gap-5 border-b border-border pb-5">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
           <h2 className="m-0 truncate text-xl font-semibold tracking-tight text-foreground">{pkg.name}</h2>
           <span className="flex shrink-0 items-center gap-1">
@@ -251,13 +197,13 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
                 他要找的东西那儿一个字都没有。
                 插件作者的站点仍然给,但**标明是它自己的主页**(声明了才画:一个点不开的
                 按钮比没有更糟)。 */}
-            <Button variant="ghost" size="sm" className="text-muted-foreground" asChild>
+            <Button variant="ghost" size="default" className="text-muted-foreground" asChild>
               <a href={docsUrl("guides/plugins", locale)} target="_blank" rel="noreferrer noopener">
                 <BookOpen size={13} /> {t("pluginDocs")}
               </a>
             </Button>
             {pkg.homepage && (
-              <Button variant="ghost" size="sm" className="text-muted-foreground" asChild>
+              <Button variant="ghost" size="default" className="text-muted-foreground" asChild>
                 <a href={pkg.homepage} target="_blank" rel="noreferrer noopener">
                   <ExternalLink size={13} /> {t("pluginHomepage")}
                 </a>
@@ -265,7 +211,7 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
             )}
             <Button
               variant="ghost"
-              size="sm"
+              size="default"
               className="shrink-0 text-muted-foreground hover:text-destructive"
               loading={uninstall.isPending}
               onClick={() => setConfirmUninstall(true)}
@@ -303,7 +249,7 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
       {canAdd && (() => {
         const fields = pkg.config_fields ?? [];
         const addButton = (
-          <Button className="shrink-0" size="sm" loading={createInstance.isPending} onClick={() => createInstance.mutate()}>
+          <Button className="shrink-0" size="default" loading={createInstance.isPending} onClick={() => createInstance.mutate()}>
             <Plus size={13} /> {t("pluginAddConnection")}
           </Button>
         );
@@ -441,7 +387,8 @@ function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPackage; in
 
   return (
     <SettingsGroup
-      title={instance.name}
+      className="[&_[data-slot=settings-group-title]]:text-ui-md [&_[data-slot=settings-group-description]]:text-ui-sm"
+      title={!pkg.multiple && instance.name === pkg.name ? t("pluginConnectionSettings") : instance.name}
       description={
         instance.blocked_reason
           ? instance.blocked_reason
@@ -449,20 +396,21 @@ function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPackage; in
       }
       actions={
         <div className="flex items-center gap-2">
-          <label className="inline-flex cursor-pointer select-none items-center gap-1.5 text-xs text-muted-foreground">
+          <label className="inline-flex h-10 cursor-pointer select-none items-center gap-2 rounded-md border border-border px-3 text-ui-sm text-muted-foreground">
             <span>{instance.enabled ? t("pluginOn") : t("pluginOff")}</span>
             <Switch checked={instance.enabled} onCheckedChange={(enabled) => patch.mutate({ enabled })} />
           </label>
           {pkg.kind === "mcp" && (
-            <Button variant="outline" size="sm" loading={refresh.isPending} onClick={() => refresh.mutate()}>
+            <Button variant="outline" size="default" loading={refresh.isPending} onClick={() => refresh.mutate()}>
               <RefreshCcw size={13} />
               {t("pluginRefreshTools")}
             </Button>
           )}
           <Button
             variant="outline"
-            size="sm"
-            className="text-destructive hover:text-destructive"
+            size="default"
+            className="px-3 text-muted-foreground hover:text-destructive"
+            aria-label={t("pluginDeleteConnectionTitle").replace("{name}", instance.name)}
             onClick={() => setConfirmDelete(true)}
           >
             <Trash2 size={13} />
@@ -506,7 +454,7 @@ function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPackage; in
 
       {(grants.data ?? []).map((grant) => (
         <SettingsRow key={grant.permission} label={grant.permission} description={t("permissionRowDesc")}>
-          <label className="inline-flex cursor-pointer select-none items-center gap-1.5 text-xs text-muted-foreground">
+          <label className="inline-flex h-10 cursor-pointer select-none items-center gap-2 rounded-md border border-border px-3 text-ui-sm text-muted-foreground">
             <span>{grant.granted ? t("granted") : t("denied")}</span>
             <Switch
               checked={grant.granted}

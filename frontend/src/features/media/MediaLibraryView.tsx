@@ -1,9 +1,9 @@
 import { PageHeading, CollectionTabs } from "@/components/layout/StudioPage";
-import { LayoutGrid, List, MoreHorizontal } from "lucide-react";
+import { LayoutGrid, List, MoreHorizontal, Search } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger, PopoverClose } from "@/components/ui/popover";
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, Link2, ListChecks, Loader2, Pencil, Tag, Tags, Trash2, Upload, X } from "lucide-react";
+import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, Link2, ListChecks, Loader2, Pencil, Tag, Trash2, Upload, X } from "lucide-react";
 
 import { api, assetThumbnailUrl, convertVideoToGif, deleteAsset, importAsset, renameAsset, setAssetTags, type Asset, type Workspace } from "@/api/client";
 import { UrlImportDialog } from "@/features/media/UrlImportDialog";
@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EmptyState } from "@/components/layout/EmptyState";
 import { useRecorder } from "@/features/media/RecordingProvider";
 import { AssetPreviewModal } from "@/features/media/AssetPreviewModal";
+import { MediaTagFilter } from "./MediaTagFilter";
 import { TagsDialog } from "@/features/media/TagsDialog";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { useMultiSelect } from "@/lib/useMultiSelect";
@@ -285,46 +286,48 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           底色铺满整宽。外壳从 px-3.5 收到 px-2 之后这层耦合就断了 —— 工具条比容器宽出 12px,
           整页于是能左右滚(真机)。两个数写在一起,下次改 padding 时才看得见要一起改。 */}
       {(!assets.isSuccess || (assets.data ?? []).length > 0) && (
-        <div className="sticky top-0 z-20 -mx-6 flex flex-col gap-3 border-b border-border bg-background px-6 pb-3 pt-1 xl:-mx-9 xl:px-9">
-          <div className="flex flex-wrap items-center justify-between gap-1.5">
-            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-              <CollectionTabs value={kindFilter} onChange={setKindFilter} label={t("mediaKindGroup")} items={KIND_FILTERS.map(kind => ({ value: kind, label: kindLabel[kind], count: assets.data?.filter(asset => kind === "all" || asset.kind === kind).length }))} />
-              <Input
-                aria-label={t("searchAssets")} className="w-48"
-                value={search}
-                placeholder={t("searchAssets")}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-              <Select value={sortKey} onValueChange={(value) => setSortKey(value as SortKey)}>
-                <SelectTrigger className="w-auto min-w-36" aria-label={t("sortNewest")}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="max-w-none">
-                  <SelectItem value="created">{t("sortNewest")}</SelectItem>
-                  <SelectItem value="updated">{t("sortUpdated")}</SelectItem>
-                  <SelectItem value="name">{t("sortName")}</SelectItem>
-                  <SelectItem value="duration">{t("sortDuration")}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-              <div className="flex gap-0.5 rounded-md border border-border bg-panel p-0.5">
-                <Button variant={display === "grid" ? "secondary" : "ghost"} size="icon-xs" aria-label={t("studioGridView")} aria-pressed={display === "grid"} onClick={() => setDisplay("grid")}><LayoutGrid /></Button>
-                <Button variant={display === "list" ? "secondary" : "ghost"} size="icon-xs" aria-label={t("studioListView")} aria-pressed={display === "list"} onClick={() => setDisplay("list")}><List /></Button>
+        <div className="sticky top-0 z-20 -mx-6 flex flex-col gap-3 border-b border-border bg-background px-6 pb-4 pt-1 xl:-mx-9 xl:px-9">
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+            <CollectionTabs value={kindFilter} onChange={setKindFilter} label={t("mediaKindGroup")} items={KIND_FILTERS.map(kind => ({ value: kind, label: kindLabel[kind], count: assets.data?.filter(asset => kind === "all" || asset.kind === kind).length }))} />
+            <div className="flex items-center gap-2">
+              <div role="group" className="flex gap-1" aria-label={t("studioGridView")}>
+                <Button variant="outline" className={cn("px-3", display === "grid" && "border-primary/40 bg-accent text-primary")} aria-label={t("studioGridView")} aria-pressed={display === "grid"} onClick={() => setDisplay("grid")}><LayoutGrid /></Button>
+                <Button variant="outline" className={cn("px-3", display === "list" && "border-primary/40 bg-accent text-primary")} aria-label={t("studioListView")} aria-pressed={display === "list"} onClick={() => setDisplay("list")}><List /></Button>
               </div>
-              {selectMode ? (
-                <>
+              <Button variant="outline" aria-pressed={selectMode} onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}>
+                {selectMode ? <X /> : <Check />}{selectMode ? t("cancel") : t("mediaSelectMode")}
+              </Button>
+            </div>
+          </div>
+          <div className="flex min-w-0 flex-wrap items-center gap-2" data-media-filter-row>
+            <div className="relative min-w-40 flex-1">
+              <Search size={16} className="pointer-events-none absolute left-3 top-3 text-muted-foreground" />
+              <Input aria-label={t("searchAssets")} className="border-border bg-panel pl-9" value={search} placeholder={t("searchAssets")} onChange={(event) => setSearch(event.target.value)} />
+            </div>
+            <Select value={sortKey} onValueChange={(value) => setSortKey(value as SortKey)}>
+              <SelectTrigger className="w-auto min-w-36 border-border bg-panel" aria-label={t("sortNewest")}><SelectValue /></SelectTrigger>
+              <SelectContent className="max-w-none">
+                <SelectItem value="created">{t("sortNewest")}</SelectItem>
+                <SelectItem value="updated">{t("sortUpdated")}</SelectItem>
+                <SelectItem value="name">{t("sortName")}</SelectItem>
+                <SelectItem value="duration">{t("sortDuration")}</SelectItem>
+              </SelectContent>
+            </Select>
+            {allTags.length > 0 && <MediaTagFilter tags={allTags} value={tagFilter} onChange={setTagFilter} />}
+          </div>
+          {selectMode && <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3" role="group" aria-label={t("mediaSelectMode")}>
+
                   <span className="whitespace-nowrap text-xs text-muted-foreground">
                     {t("mediaSelectedCount").replace("{n}", String(selectedIds.size))}
                   </span>
-                  <Button variant="outline" size="sm" onClick={() => selectAll(visible)}>
+                  <Button variant="outline" size="default" onClick={() => selectAll(visible)}>
                     <ListChecks size={13} />{" "}
                     {allSelected(visible) ? t("mediaDeselectAll") : t("mediaSelectAll")}
                   </Button>
                   {/* 对比只对图片有意义;视频要同步播放/逐帧,是另一套设计。少于两张时禁用并说明原因。 */}
                   <Button
                     variant="outline"
-                    size="sm"
+                    size="default"
                     disabled={comparable.length < 2}
                     title={comparable.length < 2 ? t("mediaCompareHint") : undefined}
                     onClick={() => setComparing(true)}
@@ -333,7 +336,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                   </Button>
                   <Button
                     variant="outline"
-                    size="sm"
+                    size="default"
                     disabled={selectedIds.size === 0}
                     onClick={() => setBatchTagging(true)}
                   >
@@ -341,48 +344,18 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                   </Button>
                   <Button
                     variant="outline"
-                    size="sm"
+                    size="default"
                     className="hover:border-destructive/50 hover:text-destructive"
                     disabled={selectedIds.size === 0}
                     onClick={() => setBatchDeleting(true)}
                   >
                     <Trash2 size={13} /> {t("delete")}
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={exitSelectMode}>
+                  <Button variant="ghost" size="default" onClick={exitSelectMode}>
                     <X size={13} /> {t("cancel")}
                   </Button>
-                </>
-              ) : (
-                <Button variant="outline" size="sm" onClick={() => setSelectMode(true)}>
-                  <Check size={13} /> {t("mediaSelectMode")}
-                </Button>
-              )}
-            </div>
-          </div>
-          {/* 标签筛选单独一行:塞进上面的工具条会把下拉/按钮挤乱,标签多了还会换行错位。 */}
-          {allTags.length > 0 && (
-            <div
-              className="flex flex-wrap items-center gap-1 text-muted-foreground"
-              role="group"
-              aria-label={t("filterByTag")}
-            >
-              <Tags size={13} className="shrink-0" />
-              {allTags.map((tag) => (
-                <button
-                  key={tag}
-                  type="button"
-                  aria-pressed={tagFilter === tag}
-                  className={cn(
-                    "inline-flex max-w-full items-center gap-[3px] truncate rounded-full border border-border bg-panel px-[9px] py-px text-ui-xs text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground",
-                    tagFilter === tag && "border-primary bg-accent text-accent-foreground hover:text-accent-foreground",
-                  )}
-                  onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
-          )}
+
+          </div>}
         </div>
       )}
       <UrlImportDialog

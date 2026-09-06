@@ -240,7 +240,7 @@ export function NoteComposer({
               "ml-auto grid h-7 w-7 shrink-0 place-items-center rounded-full transition-colors",
               !prompt.trim() || !current || working
                 ? "cursor-not-allowed bg-secondary text-muted-foreground"
-                : "cursor-pointer bg-primary text-primary-foreground hover:opacity-90",
+                : "cursor-pointer bg-action text-action-foreground hover:opacity-90",
             )}
           >
             {working ? <Loader2 size={13} className="animate-spin" /> : <ArrowUp size={13} />}

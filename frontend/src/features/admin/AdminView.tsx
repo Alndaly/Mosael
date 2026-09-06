@@ -1,8 +1,7 @@
 import React from "react";
 import { PageHeading } from "@/components/layout/StudioPage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
-import { Activity, Coins, ShieldCheck, Trash2, Users } from "lucide-react";
+import { Coins, ShieldCheck, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { api } from "@/api/client";
@@ -12,12 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/app/modals";
 import { Switch } from "@/components/ui/switch";
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/app/chart";
+import { AdminActivityChart } from "./AdminActivityChart";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { formatMicros } from "@/lib/money";
 import { DeploymentSection } from "@/features/settings/DeploymentSection";
@@ -36,13 +30,6 @@ type Overview = components["schemas"]["AdminOverviewOut"];
  *
  * 入口只对部署管理员显示(见 AppShell),后端每条路由也各自把关 —— 藏起来的入口不是权限。
  */
-
-// 成功 vs 失败,而不是"总数 vs 失败" —— 后者在全失败的部署上等于把同一根柱子画两遍,
-// 一眼看不出任何东西。堆叠之后柱子的高度仍然是当天的总数。
-const jobsConfig = {
-  succeeded: { label: "", color: "var(--chart-ok)" },
-  failed: { label: "", color: "var(--chart-fail)" },
-} satisfies ChartConfig;
 
 export function AdminView() {
   const t = useI18n();
@@ -77,7 +64,7 @@ export function AdminView() {
   const spend = (stats?.spend_by_user ?? []).filter((row) => row.cost_micros > 0);
 
   return (
-    <div className="grid h-full min-h-0 content-start gap-7 overflow-y-auto px-6 py-7 xl:px-9 xl:py-8">
+    <div className="grid h-full min-h-0 content-start gap-7 overflow-y-auto px-6 py-7 xl:px-9 xl:py-8 [&_[data-slot=settings-group-title]]:text-ui-md [&_[data-slot=settings-group-description]]:text-ui-sm">
       <PageHeading title={t("navAdmin")} description={t("studioAdminDesc")} />
       {/* `overflow-y-auto` 只有在**高度被约束**时才会滚:没有 h-full/min-h-0,这个 grid 会一直
           长下去、把溢出甩给外层,而外层并没在滚 —— 于是整页卡住。仓库里能滚的几页都是这个写法。 */}
@@ -90,33 +77,15 @@ export function AdminView() {
       </div>
 
       <SettingsGroup title={t("adminJobsTitle")} description={t("adminJobsDesc")}>
-        <div className="w-full">
-          {(stats?.jobs_by_day ?? []).length === 0 ? (
-            /* 空状态走全局那一个 —— 自己糊一行灰字,和别处的空状态长得不一样,读者会以为
-               "这里坏了"而不是"这里还没有东西"。 */
-            <EmptyState
-              icon={<Activity size={18} />}
-              title={t("adminNoDataTitle")}
-              body={t("adminNoData")}
-            />
-          ) : (
-            <ChartContainer config={jobsConfig} className="h-[180px]">
-              <BarChart data={stats?.jobs_by_day ?? []}>
-                <CartesianGrid vertical={false} />
-                <XAxis dataKey="day" tickLine={false} axisLine={false} tickFormatter={(day: string) => day.slice(5)} />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar dataKey="succeeded" stackId="jobs" fill="var(--color-succeeded)" radius={[0, 0, 2, 2]} />
-                <Bar dataKey="failed" stackId="jobs" fill="var(--color-failed)" radius={[2, 2, 0, 0]} />
-              </BarChart>
-            </ChartContainer>
-          )}
-        </div>
+        <AdminActivityChart points={stats?.jobs_by_day ?? []} loading={overview.isPending} error={overview.isError} onRetry={() => void overview.refetch()} />
       </SettingsGroup>
 
       {/* 花销**按人分**:一个总数说明不了任何该做的决定,而按人分的这一列直接指向要谈的那个人。 */}
       <SettingsGroup title={t("adminSpendTitle")} description={t("adminSpendDesc")}>
         {spend.length === 0 ? (
           <EmptyState
+            size="compact"
+            className="my-3 max-w-none gap-2 rounded-lg border border-border bg-panel py-6"
             icon={<Coins size={18} />}
             title={t("adminNoSpendTitle")}
             body={t("adminNoSpend")}

@@ -178,8 +178,8 @@ export function HomeView({
       />
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-border">
         <CollectionTabs label={t("homeProjectsTitle")} value={collection} onChange={mode => { setCollection(mode); if (mode === "recent") setSortKey("updated"); }} items={[{ value: "recent", label: t("homeRecent") }, { value: "all", label: t("homeAll") }]} />
-        <div className="mb-3 flex min-w-0 flex-wrap items-center gap-2">
-          <div className="relative"><Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" /><Input aria-label={t("searchProjects")} className="w-52 pl-9" value={search} placeholder={t("searchProjects")} onChange={(event) => setSearch(event.target.value)} /></div>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <div className="relative"><Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" /><Input aria-label={t("searchProjects")} className="w-52 pl-9" value={search} placeholder={t("searchProjects")} onChange={(event) => setSearch(event.target.value)} /></div>
           <Select value={collection === "recent" ? "updated" : sortKey} onValueChange={(value) => { setSortKey(value as "updated" | "created" | "name"); setCollection("all"); }}>
             <SelectTrigger className="w-auto min-w-36" aria-label={t("sortUpdated")}><SelectValue /></SelectTrigger>
             <SelectContent className="max-w-none">

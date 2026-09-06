@@ -1637,7 +1637,7 @@ function WorkflowEditor({
                 data-wf-add-node=""
                 // 组里全是圆形图标钮,只有它带文字就会显得突出一截 —— 而它并不比「运行」更重要。
                 // 名字进 title/aria-label,悬停仍然说得出自己是谁。
-                className="inline-flex h-8 items-center gap-2 rounded-md bg-primary px-3 text-primary-foreground hover:bg-primary/90"
+                className="inline-flex h-8 items-center gap-2 rounded-md bg-action px-3 text-action-foreground hover:bg-action/90"
                 aria-label={t("wfAddNode")}
                 title={t("wfAddNode")}
               >
@@ -2504,7 +2504,7 @@ function LoopBodyEditor({
             trigger={
               <button
                 type="button"
-                className="inline-flex h-8 items-center gap-2 rounded-md bg-primary px-3 text-primary-foreground hover:bg-primary/90"
+                className="inline-flex h-8 items-center gap-2 rounded-md bg-action px-3 text-action-foreground hover:bg-action/90"
                 aria-label={t("wfAddNode")}
                 title={t("wfAddNode")}
               >

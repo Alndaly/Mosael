@@ -14,6 +14,8 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-action: var(--action);
+  --color-action-foreground: var(--action-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -128,14 +130,16 @@
   --card-foreground: #20283b;
   --popover: #ffffff;
   --popover-foreground: #20283b;
-  --primary: #315ae8;
+  --primary: #4466a5;
+  --action: #4466a5;
+  --action-foreground: #ffffff;
   --primary-foreground: #ffffff;
   --secondary: #edf1f7;
   --secondary-foreground: #34415a;
   --muted: #f0f3f8;
   --muted-foreground: #626e83;
-  --accent: #e9eeff;
-  --accent-foreground: #2448c2;
+  --accent: #edf2fa;
+  --accent-foreground: #34558e;
   --destructive: #bd383e;
   /* 状态色按正文尺寸校验对比度；不要在组件里回退到 Tailwind 原色。 */
   --success: #247348;
@@ -143,7 +147,7 @@
   --border: #dce2ec;
   --input: #8492a8;
   --field: #ffffff;
-  --ring: #315ae8;
+  --ring: #4466a5;
 
   /* Panel system */
   --panel: var(--card);
@@ -222,21 +226,23 @@
   --card-foreground: #f2f3f5;
   --popover: #292c30;
   --popover-foreground: #f2f3f5;
-  --primary: #7194ff;
+  --primary: #91a9da;
+  --action: #506da8;
+  --action-foreground: #ffffff;
   --primary-foreground: #121b35;
   --secondary: #2b2e33;
   --secondary-foreground: #dce0e6;
   --muted: #191b1e;
   --muted-foreground: #adb2ba;
-  --accent: #253455;
-  --accent-foreground: #c0d0ff;
+  --accent: #2b3548;
+  --accent-foreground: #cfdbf1;
   --destructive: #f28d96;
   --success: #76cfaa;
   --warning: #e8c17a;
   --border: #34383f;
   --input: #777f8c;
   --field: #181a1d;
-  --ring: #89a6ff;
+  --ring: #91a9da;
 
   --panel: var(--card);
   --panel-subtle: #191b1e;

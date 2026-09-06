@@ -949,7 +949,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
                       "grid h-7 w-7 touch-none -translate-x-1/2 -translate-y-1/2 shrink-0 place-items-center rounded-full border text-ui-2xs font-semibold shadow-[var(--shadow-panel)] transition-transform hover:scale-110",
                       movable && "cursor-grab active:cursor-grabbing",
                       active
-                        ? "border-primary bg-primary text-primary-foreground"
+                        ? "border-primary bg-action text-action-foreground"
                         : "border-border-strong bg-panel/90 text-foreground backdrop-blur-xl",
                     )}
                     title={comment.body}
@@ -1063,7 +1063,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
                 <button
                   type="button"
                   data-comment-drag-handle=""
-                  className="grid h-7 w-7 touch-none -translate-x-1/2 -translate-y-1/2 shrink-0 cursor-grab place-items-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-panel)] active:cursor-grabbing"
+                  className="grid h-7 w-7 touch-none -translate-x-1/2 -translate-y-1/2 shrink-0 cursor-grab place-items-center rounded-full bg-action text-action-foreground shadow-[var(--shadow-panel)] active:cursor-grabbing"
                   aria-label={t("comments")}
                   onPointerDown={(event) => {
                     if (event.button !== 0) return;

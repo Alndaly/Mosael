@@ -339,7 +339,7 @@ export function PromptEditor({
                   className={cn(
                     "cursor-pointer rounded-full border-0 px-1.5 py-0.5 text-ui-2xs transition-colors",
                     filter === chip.key
-                      ? "bg-primary text-primary-foreground"
+                      ? "bg-action text-action-foreground"
                       : "bg-secondary text-muted-foreground hover:text-foreground",
                   )}
                   //: 和列表项同一个道理:mousedown 会让编辑器失焦,失焦就收菜单。

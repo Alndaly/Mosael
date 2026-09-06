@@ -231,7 +231,7 @@ export function AudioPlayerBar({
         type="button"
         aria-label={t(playing ? "boardPause" : "boardPlay")}
         onClick={toggle}
-        className="grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90"
+        className="grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-full bg-action text-action-foreground transition-opacity hover:opacity-90"
       >
         {playing ? <Pause size={12} fill="currentColor" /> : <Play size={12} className="translate-x-px" fill="currentColor" />}
       </button>

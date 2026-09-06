@@ -602,7 +602,7 @@ export function ChatWorkspace({
               </div>
             ))}
             <form
-              className="mx-auto mb-3.5 mt-1.5 flex w-[min(780px,calc(100%-32px))] flex-col gap-1 rounded-2xl border border-input bg-panel pb-1.5 pl-3 pr-2.5 pt-2.5 shadow-[var(--shadow-raised)] transition-[border-color,box-shadow] duration-100 focus-within:border-ring focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--ring)_35%,transparent)]"
+              className="mx-auto mb-3.5 mt-1.5 flex w-[min(780px,calc(100%-32px))] flex-col gap-1 rounded-lg border border-border bg-panel pb-1.5 pl-3 pr-2.5 pt-2.5 transition-colors duration-100 focus-within:border-ring"
               onSubmit={submit}
             >
               {/* 附件条属于输入框内部(文本框上方),而不是飘在圆角框外的左上角。 */}

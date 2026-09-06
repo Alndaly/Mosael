@@ -613,7 +613,7 @@ export function CanvasAgentChat({
         </div>
       ))}
       <AttachmentChips attachments={attach} />
-      <div className="mx-2 mb-2 mt-2 flex flex-col gap-0.5 rounded-[20px] border border-border bg-panel px-2 pb-1.5 pt-2 transition-[border-color] duration-100 focus-within:border-ring">
+      <div className="mx-2 mb-2 mt-2 flex flex-col gap-0.5 rounded-lg border border-border bg-panel px-2 pb-1.5 pt-2 transition-[border-color] duration-100 focus-within:border-ring">
         <input
           ref={fileRef}
           type="file"

@@ -51,8 +51,6 @@ const GRANDFATHERED = new Set<string>([
   "features/editor/timeline/Timeline.tsx: grid-rows-[auto_minmax(0,1fr)]",
   "features/media/AssetCompareView.tsx: grid-rows-[minmax(0,1fr)_auto]",
   "features/media/AssetCompareView.tsx: grid-rows-[auto_minmax(0,1fr)]",
-  "features/plugins/PluginsView.tsx: grid-rows-[auto_minmax(0,1fr)]",
-  "features/scheduler/SchedulerView.tsx: grid-rows-[auto_minmax(0,1fr)]",
   "features/workflows/WorkflowRevisionHistory.tsx: grid-rows-[auto_minmax(0,1fr)]",
   "features/workflows/WorkflowsView.tsx: grid-rows-[minmax(0,1fr)_minmax(0,1fr)]",
   "features/workflows/WorkflowsView.tsx: grid-rows-[minmax(0,1fr)]",

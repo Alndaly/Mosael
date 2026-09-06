@@ -206,7 +206,7 @@ export function ModelSettingsDialog({
                   type="button"
                   className={cn(
                     "cursor-pointer rounded-full border px-2.5 py-1 text-ui-xs transition-colors",
-                    explicit && "border-primary bg-primary text-primary-foreground",
+                    explicit && "border-primary bg-action text-action-foreground",
                     inherited && "border-primary/50 bg-[color-mix(in_srgb,var(--primary)_14%,transparent)] text-foreground",
                     !explicit && !inherited && "border-border bg-panel text-muted-foreground hover:border-border-strong",
                   )}
