@@ -164,7 +164,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
       const element = host.current!;
       let renderer: THREE.WebGLRenderer;
       try {
-        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
       } catch {
         setFatal("无法启动 3D 视窗，请检查图形加速设置。");
         return;
@@ -425,6 +425,8 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
             vh = vw / aspect;
           shootingCamera.aspect = aspect;
           pose(shootingCamera, sampleCamera(p.shot, p.time));
+          // The letterbox is interface chrome; scene.background remains inside the shot.
+          renderer.setClearColor(0x000000, 0);
           renderer.clear();
           renderer.setViewport((w - vw) / 2, (h - vh) / 2, vw, vh);
           renderer.setScissor((w - vw) / 2, (h - vh) / 2, vw, vh);

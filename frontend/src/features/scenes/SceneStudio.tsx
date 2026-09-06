@@ -759,6 +759,7 @@ function SceneEditor({
         ).map(([key, label, hint], i) => (
           <button
             key={key}
+            title={hint}
             aria-current={step === key ? "step" : undefined}
             disabled={!!busy}
             onClick={() => {
@@ -768,11 +769,7 @@ function SceneEditor({
             }}
           >
             <span className="scene-step-number">{i + 1}</span>
-            <span>
-              <strong>{label}</strong>
-              <small>{hint}</small>
-            </span>
-            {i < 2 && <ChevronRight size={14} />}
+            <strong>{label}</strong>
           </button>
         ))}
       </nav>

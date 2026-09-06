@@ -153,8 +153,8 @@
 .scene-object-list button[aria-pressed="true"],
 .scene-segment button[aria-pressed="true"],
 .scene-keyframes button[aria-pressed="true"] {
-  color: var(--primary);
-  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  color: var(--accent-foreground);
+  background: var(--accent);
 }
 .scene-tool:disabled {
   opacity: 0.3;
@@ -244,24 +244,20 @@
   position: relative;
 }
 .scene-stage-bar {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  top: 12px;
+  position: relative;
   display: flex;
+  flex-shrink: 0;
   justify-content: space-between;
   align-items: center;
   gap: 8px;
+  padding: 8px;
   z-index: 2;
-  pointer-events: none;
+  background: var(--workspace-subtle);
 }
 .scene-stage-bar > div {
-  pointer-events: auto;
-  background: var(--modal-surface);
-  backdrop-filter: blur(20px);
-  border-radius: 10px;
-  padding: 4px;
-  box-shadow: 0 4px 18px #0002;
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 .scene-segment {
   display: flex;
@@ -270,7 +266,7 @@
 .scene-segment button {
   padding: 6px 10px;
   border-radius: 7px;
-  font-size: var(--text-ui-xs);
+  font-size: var(--text-ui-sm);
   white-space: nowrap;
 }
 .scene-viewport {
@@ -299,7 +295,7 @@
   gap: 14px;
 }
 .scene-inspector section + section {
-  border-top: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent);
+  border-top: 1px solid var(--divider);
 }
 .scene-inspector p {
   font-size: var(--text-ui-2xs);
@@ -493,13 +489,6 @@
     display: none;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .scene-studio button,
-  .scene-library button,
-  .scene-studio input {
-    transition: none;
-  }
-}
 
 .scene-workspace[data-agent="true"] {
   grid-template-columns: minmax(280px, 1fr) minmax(320px, 30%);
@@ -508,19 +497,20 @@
   display: none;
 }
 .scene-agent-dock {
+  border-radius: var(--radius);
+  background: var(--workspace-subtle);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+}
+.scene-agent-dock > aside {
+  background: transparent;
 }
 .scene-agent-floating {
   display: contents;
 }
 
 /* Share the application's surface hierarchy. The render background belongs to the scene. */
-.scene-studio {
-  --field-border: color-mix(in srgb, var(--border) 60%, transparent);
-  --field: color-mix(in srgb, var(--foreground) 3%, transparent);
-}
 .scene-header {
   padding: 10px 20px;
 }
@@ -528,7 +518,7 @@
   padding: 0 20px 18px;
 }
 .scene-stage {
-  border-radius: 14px;
+  border-radius: var(--radius);
   overflow: hidden;
   background: var(--workspace-subtle);
 }
@@ -546,49 +536,39 @@
 }
 .scene-steps {
   display: flex;
-  gap: 8px;
-  padding: 4px 20px 16px;
+  gap: 24px;
+  margin: 0 20px 12px;
+  border-bottom: 1px solid var(--divider);
 }
 .scene-steps > button {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border-radius: 10px;
+  gap: 7px;
+  min-height: 44px;
+  padding: 8px 4px;
+  border-bottom: 2px solid transparent;
   color: var(--muted-foreground);
   text-align: left;
+  white-space: nowrap;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease;
 }
-.scene-steps > button[aria-current] {
-  background: color-mix(in srgb, var(--primary) 10%, transparent);
+.scene-steps > button:hover {
   color: var(--foreground);
 }
-.scene-steps strong {
-  display: block;
-  font-size: var(--text-ui-sm);
-  font-weight: 550;
+.scene-steps > button[aria-current] {
+  border-bottom-color: var(--primary);
+  color: var(--primary);
 }
-.scene-steps small {
-  display: block;
-  font-size: var(--text-ui-2xs);
-  margin-top: 3px;
-  color: var(--muted-foreground);
+.scene-steps strong {
+  font-size: var(--text-ui-sm);
+  font-weight: 500;
 }
 .scene-step-number {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--foreground) 5%, transparent);
-  font-size: 12px;
-}
-.scene-steps [aria-current] .scene-step-number {
-  color: var(--primary-foreground);
-  background: var(--primary);
-}
-.scene-steps > button > svg {
-  margin-left: 20px;
-  opacity: 0.35;
+  font-size: var(--text-ui-xs);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.65;
 }
 .scene-labeled-tool {
   height: 32px;
@@ -596,12 +576,12 @@
   gap: 6px;
   align-items: center;
   padding: 0 9px;
-  border-radius: 7px;
-  font-size: var(--text-ui-xs);
+  border-radius: 6px;
+  font-size: var(--text-ui-sm);
 }
 .scene-labeled-tool[aria-pressed="true"] {
-  background: color-mix(in srgb, var(--primary) 14%, transparent);
-  color: var(--primary);
+  background: var(--accent);
+  color: var(--accent-foreground);
 }
 .scene-labeled-tool:disabled {
   opacity: 0.35;
@@ -727,8 +707,8 @@
   gap: 14px;
   padding: 14px;
   text-align: left;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--foreground) 3%, transparent);
+  border-radius: var(--radius);
+  background: var(--workspace-subtle);
 }
 .scene-preset-list > button:hover {
   background: color-mix(in srgb, var(--primary) 9%, transparent);
@@ -793,7 +773,7 @@
   background: color-mix(in srgb, var(--primary) 8%, transparent);
 }
 .scene-choice:hover {
-  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  background: var(--accent);
 }
 .scene-choice > span {
   flex: 1;
@@ -840,15 +820,10 @@
     padding-inline: 12px;
   }
   .scene-steps {
-    padding-inline: 12px;
-  }
-  .scene-steps > button > svg {
-    display: none;
+    margin-inline: 12px;
   }
   .scene-stage-bar {
-    left: 8px;
-    right: 8px;
-    top: 8px;
+    padding: 6px;
   }
   .scene-stage-bar .scene-actions {
     gap: 2px;
@@ -868,9 +843,6 @@
   }
   .scene-side {
     overflow: visible;
-  }
-  .scene-steps small {
-    display: none;
   }
   .scene-steps > button {
     padding: 8px;
@@ -909,9 +881,7 @@
   border-radius: 0;
 }
 .scene-studio[data-screen-mode="viewport"] .scene-stage-bar {
-  top: 16px;
-  left: 16px;
-  right: 16px;
+  padding: 12px 16px;
 }
 .scene-fullscreen-playback {
   display: flex;
@@ -945,4 +915,12 @@
 .scene-heading .scene-save {
   flex-shrink: 0;
   margin: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scene-studio button,
+  .scene-library button,
+  .scene-studio input {
+    transition: none;
+  }
 }
