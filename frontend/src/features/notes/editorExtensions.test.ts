@@ -32,3 +32,18 @@ it("keeps authenticated image URLs out of clipboard HTML", () => {
   expect(editor.getHTML()).not.toContain('token=');
   editor.destroy();
 });
+
+it("preserves all six heading levels through Markdown and returns a heading to normal text", () => {
+  const editor = new Editor({ extensions: noteExtensions(), content: "相机笔记 Camera notes", contentType: "markdown" });
+  for (const level of [1, 2, 3, 4, 5, 6] as const) {
+    editor.commands.setHeading({ level });
+    const markdown = editor.getMarkdown();
+    expect(markdown.trim()).toBe(`${"#".repeat(level)} 相机笔记 Camera notes`);
+    const reopened = new Editor({ extensions: noteExtensions(), content: markdown, contentType: "markdown" });
+    expect(reopened.getJSON()).toEqual(editor.getJSON());
+    reopened.destroy();
+  }
+  editor.commands.setParagraph();
+  expect(editor.getMarkdown().trim()).toBe("相机笔记 Camera notes");
+  editor.destroy();
+});
