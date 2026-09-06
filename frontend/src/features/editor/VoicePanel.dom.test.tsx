@@ -65,7 +65,7 @@ function renderPanel(voiceData = voices) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <VoicePanel workspace={{ id: "w1", name: "W" } as never} project={{ id: "p1" } as never} tabs={null} />
+      <VoicePanel workspace={{ id: "w1", name: "W" } as never} project={{ id: "p1" } as never} />
     </QueryClientProvider>,
   );
 }

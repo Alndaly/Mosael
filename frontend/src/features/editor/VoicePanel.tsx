@@ -106,11 +106,9 @@ function SpeedPicker({ value, onChange, ariaLabel }: { value: number; onChange: 
 export function VoicePanel({
   workspace,
   project,
-  tabs,
 }: {
   workspace: Workspace;
   project: Project;
-  tabs: React.ReactNode;
 }) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -283,8 +281,7 @@ export function VoicePanel({
   const [speakerOpen, setSpeakerOpen] = React.useState(false);
 
   return (
-    <section className="min-h-0 editor-pane overflow-hidden bg-workspace-panel grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
-      <div className="editor-pane-header flex items-center justify-between px-4 [&_h2]:m-0 [&_h2]:text-ui-sm [&_h2]:font-semibold [&_h2]:text-muted-foreground">{tabs}</div>
+    <section aria-label={t("voiceTab")} className="min-h-0 editor-pane overflow-hidden bg-workspace-panel grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)]">
       <div className="grid min-h-0 flex-1 content-start gap-5 overflow-y-auto overflow-x-hidden p-4">
         <div className="grid gap-3">
           <div className="grid gap-3">

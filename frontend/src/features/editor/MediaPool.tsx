@@ -26,14 +26,12 @@ export function MediaPool({
   onImportFile,
   onRecord,
   onAddToTimeline,
-  tabs,
 }: {
   assets: Asset[];
   uploading: boolean;
   onImportFile: (file: File) => void;
   onRecord: () => void;
   onAddToTimeline: (asset: Asset) => void;
-  tabs?: React.ReactNode;
 }) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -106,9 +104,9 @@ export function MediaPool({
   });
   return (
     // 三行:头 / 筛选条 / 列表(列表占满余高并自滚)。
-    <section className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)] editor-pane overflow-hidden bg-workspace-panel">
+    <section aria-label={t("media")} className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)] editor-pane overflow-hidden bg-workspace-panel">
       <div className="editor-pane-header flex items-center justify-between gap-2 px-4">
-        <div className="flex min-w-0 items-center gap-2">{tabs ?? <h2>{t("media")}</h2>}<span className="text-ui-xs tabular-nums text-muted-foreground">{assets.length}</span></div>
+        <span className="text-ui-xs tabular-nums text-muted-foreground">{assets.length}</span>
         <div className="ml-auto flex shrink-0 gap-1">
           {/* Keep import and recording reachable in every panel width. */}
           <Button asChild variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" disabled={uploading} title={t("import")} aria-label={t("import")}>

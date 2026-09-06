@@ -966,15 +966,11 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           onImportFile={(file) => uploadAsset.mutate(file)}
           onRecord={() => openRecorder({ projectId: project.id })}
           onAddToTimeline={addAssetToTimeline}
-          tabs={<h2>{t("media")}</h2>}
         />
       ) : panels.tab === "voice" ? (
-        <VoicePanel workspace={workspace} project={project} tabs={<h2>{t("voiceTab")}</h2>} />
+        <VoicePanel workspace={workspace} project={project} />
       ) : (
-        <section className="editor-pane min-h-0 overflow-hidden bg-workspace-panel grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
-          <div className="editor-pane-header flex items-center justify-between px-4 [&_h2]:m-0 [&_h2]:text-ui-sm [&_h2]:font-semibold [&_h2]:text-muted-foreground">
-            <h2>{t(panels.tab === "transcript" ? "transcriptTab" : "subtitleTab")}</h2>
-          </div>
+        <section aria-label={t(panels.tab === "transcript" ? "transcriptTab" : "subtitleTab")} className="editor-pane min-h-0 overflow-hidden bg-workspace-panel grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)]">
           {panels.tab === "transcript" ? (
             <TranscriptPanel
               sequence={sequence}

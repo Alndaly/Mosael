@@ -2,7 +2,6 @@
   .editor-workbench { --editor-control-height: 32px; }
   .editor-pane { border-inline-end: 1px solid var(--divider); }
   .editor-pane-header { min-height: 44px; }
-  .editor-pane-header h2 { margin: 0; font-size: var(--text-ui-sm); font-weight: 600; color: var(--muted-foreground); }
   .editor-mode-tab {
     display: inline-flex;
     align-items: center;
