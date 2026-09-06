@@ -183,8 +183,8 @@ metadata 注册，防止“文件移动成功、统一入口漏装配”这种�
 
 **代码节点是内容,隔离是执行器责任**:工作流的 `code` 节点与其他节点一样按
 `edit` 授权。它通过 `app/domain/sandbox` 执行:默认无网、不继承后端环境变量,
-并限制文件、内存与时长。macOS 使用 `sandbox-exec`,其他平台可用 Docker;
-无可用隔离后端时 fail closed。旧的 `PRIVILEGED_NODE_TYPES` 与
+并限制文件、内存、进程数与时长。所有平台统一使用 Docker（预先准备 `python:3.13-alpine`）；
+原 macOS 原生策略因 home 外文件读取与资源约束缺口已移除。无可用隔离后端时 fail closed。旧的 `PRIVILEGED_NODE_TYPES` 与
 `ensure_graph_node_privileges` 已删除,不得以普通子进程作为回落。
 
 - `sequences` / `tracks` / `clips` — 时间线;`sequence_operations` 记录每次编辑及其逆操作(撤销)

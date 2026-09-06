@@ -119,16 +119,11 @@ Mosael 现在反过来:执行器**明确不是沙箱**(见 §2.2),于是只好�
 「能不能跑代码」由是否真的隔离得住决定,不再由开关决定。那个开关连同 `ensure_graph_node_privileges`
 一起撤掉了(`PRIVILEGED_NODE_TYPES` 这个概念也没了):代码跑在隔离里,写它就是普通的内容编辑。
 
-| 后端 | 手段 | 验过 |
-| --- | --- | --- |
-| `darwin` | `sandbox-exec`:deny 网络 / deny 写盘(除临时目录)/ deny 读 home。内核强制,**子进程继承** | 是 |
-| `docker` | `--network=none --read-only --user 65534 --cap-drop ALL --pids-limit --memory` | 是 |
-| Linux 原生 | 还没有。装了 docker 走 docker;没装则如实拒绝 | —— |
+2026-09-06 修订：移除 macOS `sandbox-exec` 后端。原策略只禁止读取 home，仍能读取宿主机其它目录；原生进程也缺少可验证的硬内存边界。现在所有平台统一使用 Docker，不挂载宿主机目录，无网络、只读根、非 root、禁提权；代码仍可读写容器内 64 MiB 临时目录。
 
-三条都不继承后端进程的环境变量 —— 那是独立于文件与网络的第三条路,后端环境里有各家模型的密钥。
+执行预算为 256 MiB 内存（不额外使用 swap）、64 个进程、1 个 CPU，默认运行 15 秒（调用方可指定）。stdout 与 stderr 共用 256 KiB 流式预算，超限立即停止。每次创建独立容器，结束、超时和输出超限都强制移除整个容器，包括脱离父进程的子进程；无法清理时明确报错。Docker CLI 的连接配置只用于宿主机控制，不传入用户代码。
 
-**已知缺口**:Linux 主机上没装 Docker 时不能跑代码。原生 seccomp 后端(dify-sandbox 那种系统调用
-白名单)是下一步;在它到位之前宁可拒绝,也不退回到"没有隔离但照跑"。
+部署准备：安装并启动 Docker，执行 `docker pull python:3.13-alpine`。代码调用不自动拉镜像，缺镜像或没有可用的资源限制时拒绝执行；编辑、保存代码节点不受影响。实现与回归见 `app/domain/sandbox`、`tests/test_sandbox.py`、`tests/test_bounded_process_output.py`。内存与 swap 相等的设置依据 [Docker 资源限制说明](https://docs.docker.com/engine/containers/resource_constraints/)。
 
 ### D3 「某人的」东西加上主人,并且默认不共享
 

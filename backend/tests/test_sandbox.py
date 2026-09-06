@@ -211,3 +211,78 @@ def test_a_syntax_error_is_reported_not_swallowed() -> None:
     with pytest.raises(sandbox.SandboxError) as caught:
         sandbox.run_code("def (:", {})
     assert "SyntaxError" in str(caught.value) or "语法" in str(caught.value)
+
+
+@pytest.mark.parametrize("relative_alias", [False, True])
+def test_host_file_outside_home_is_not_readable(tmp_path, relative_alias):
+    _skip_without_backend()
+    sentinel = tmp_path / "host-only.txt"
+    sentinel.write_text("outside-home-secret")
+    target = str(sentinel)
+    if relative_alias:
+        alias = tmp_path / "alias"
+        alias.symlink_to(sentinel)
+        target = str(alias)
+    got = _run(f"try:\n    output = open({target!r}).read()\nexcept OSError:\n    output = 'blocked'")
+    assert got == "blocked"
+
+
+@pytest.mark.parametrize("fd", [1, 2])
+def test_output_limit_interrupts_continuous_writes(fd):
+    _skip_without_backend()
+    import time
+    started = time.monotonic()
+    with pytest.raises(sandbox.SandboxError, match="输出.*上限"):
+        # Writes without newlines: line-based caps do not protect this path.
+        sandbox.run_code(f"import os, time\nfor _ in range(100):\n    os.write({fd}, b'x' * 65536)\n    time.sleep(0.02)", {}, timeout=0.7)
+    assert time.monotonic() - started < 1.5
+
+
+def test_scratch_files_work_and_kernel_enforces_resource_budgets():
+    _skip_without_backend()
+    result = _run("""import pathlib, tempfile
+with tempfile.TemporaryFile() as f:
+    f.write(b'ok')
+    f.seek(0)
+    text = f.read().decode()
+p = pathlib.Path('/sys/fs/cgroup')
+output = {'scratch': text, 'memory': (p/'memory.max').read_text().strip(),
+          'swap': (p/'memory.swap.max').read_text().strip(), 'pids': (p/'pids.max').read_text().strip()}
+""")
+    assert result == {"scratch": "ok", "memory": str(sandbox.MEMORY_MB * 1024 * 1024), "swap": "0", "pids": "64"}
+
+
+def test_memory_exhaustion_is_confined_to_the_container():
+    _skip_without_backend()
+    with pytest.raises(sandbox.SandboxError):
+        sandbox.run_code("output = len(bytearray(512 * 1024 * 1024))", {}, timeout=5)
+    assert _run("output = 42") == 42
+
+
+def test_timeout_removes_container_and_detached_children(monkeypatch):
+    _skip_without_backend()
+    import uuid
+    fixed = uuid.uuid4()
+    monkeypatch.setattr(sandbox.uuid, "uuid4", lambda: fixed)
+    with pytest.raises(sandbox.SandboxError, match="超时"):
+        sandbox.run_code("import subprocess, sys, time\nsubprocess.Popen([sys.executable, '-c', 'import time;time.sleep(30)'], start_new_session=True)\ntime.sleep(30)", {}, timeout=1)
+    backend = sandbox.active_backend()
+    result = sandbox._spawn([backend.executable, "container", "inspect", "mosael-sandbox-" + fixed.hex], b"", 5)
+    assert result.returncode != 0 and b"No such" in result.stderr
+
+
+def test_docker_proxy_configuration_does_not_reach_user_code(tmp_path, monkeypatch):
+    _skip_without_backend()
+    import json
+    docker = sandbox.active_backend().executable
+    endpoint = sandbox._spawn([docker, "context", "inspect", "--format", "{{.Endpoints.docker.Host}}"], b"", 5)
+    assert endpoint.returncode == 0
+    config = tmp_path / "docker-config"
+    config.mkdir()
+    proxy = "http://review:temporary-proxy-sentinel@127.0.0.1:3128"
+    (config / "config.json").write_text(json.dumps({"proxies": {"default": {"httpProxy": proxy, "httpsProxy": proxy, "ftpProxy": proxy, "allProxy": proxy, "noProxy": "temporary-proxy-sentinel"}}}))
+    monkeypatch.setenv("DOCKER_CONFIG", str(config))
+    monkeypatch.setenv("DOCKER_HOST", endpoint.stdout.decode().strip())
+    monkeypatch.delenv("DOCKER_CONTEXT", raising=False)
+    result = _run("import os\noutput = dict(os.environ)")
+    assert "temporary-proxy-sentinel" not in json.dumps(result)

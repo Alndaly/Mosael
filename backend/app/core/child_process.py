@@ -242,3 +242,70 @@ def run_logged(args, *, what: str, level: int = logging.INFO, **kwargs) -> subpr
             "%s 失败(退出码 %s,%s):%s\n%s", what, result.returncode, took, line, stderr.strip()[-800:]
         )
     return result
+
+
+class ProcessOutputLimitExceeded(RuntimeError):
+    """A child exceeded its combined stdout/stderr byte budget."""
+
+
+def run_bounded(args, *, input: bytes = b"", timeout: float, max_output_bytes: int,
+                env: dict[str, str] | None = None, what: str) -> subprocess.CompletedProcess:
+    """Binary pipes with a deadline covering stdin and bounded, concurrent output collection.
+
+    A line iterator or communicate() would buffer an arbitrarily long line/output before
+    enforcing the budget. Keep at most the combined budget and stop on the first excess byte.
+    """
+    started = time.monotonic()
+    process = popen_text(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                         text=False, env=env)
+    output, errors = bytearray(), bytearray()
+    exceeded = threading.Event()
+    lock = threading.Lock()
+    total = 0
+
+    def drain(stream, target):
+        nonlocal total
+        try:
+            while chunk := stream.read1(16 * 1024):
+                with lock:
+                    remaining = max(0, max_output_bytes - total)
+                    target.extend(chunk[:remaining])
+                    total += len(chunk)
+                    if total > max_output_bytes:
+                        exceeded.set()
+                if exceeded.is_set():
+                    process.kill()
+                    break
+        finally:
+            stream.close()
+
+    def feed():
+        try:
+            process.stdin.write(input)
+            process.stdin.flush()
+        except (BrokenPipeError, OSError):
+            pass
+        finally:
+            try:
+                process.stdin.close()
+            except OSError:
+                pass
+
+    threads = [threading.Thread(target=drain, args=(process.stdout, output), daemon=True),
+               threading.Thread(target=drain, args=(process.stderr, errors), daemon=True),
+               threading.Thread(target=feed, daemon=True)]
+    for thread in threads:
+        thread.start()
+    try:
+        process.wait(timeout=max(0.001, timeout - (time.monotonic() - started)))
+    except BaseException:
+        process.kill()
+        process.wait()
+        raise
+    finally:
+        for thread in threads:
+            thread.join(timeout=1)
+        logger.debug("%s finished (%s): %s", what, _took(time.monotonic() - started), _describe(args))
+    if exceeded.is_set():
+        raise ProcessOutputLimitExceeded(f"output exceeded {max_output_bytes} bytes")
+    return subprocess.CompletedProcess(args, process.returncode, bytes(output), bytes(errors))
