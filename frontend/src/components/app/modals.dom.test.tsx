@@ -28,20 +28,20 @@ describe("ModalShell sticky layout", () => {
     const footer = dialog.querySelector('[data-slot="modal-footer"]');
 
     expect(dialog.className).toContain("overflow-hidden");
-    expect(dialog.className).toContain("bg-popover");
+    expect(dialog.className).toContain("modal-surface");
     expect(dialog.className).not.toContain("backdrop-blur-xl");
     expect(header?.className).toContain("sticky");
     expect(header?.className).toContain("top-0");
-    expect(header?.className).toContain("bg-popover");
+    expect(header?.className).not.toMatch(/bg-(popover|panel|background)/);
     expect(header?.className).not.toContain("backdrop-blur-xl");
     expect(body?.className).toContain("overflow-y-auto");
-    expect(body?.className).toContain("bg-popover");
+    expect(body?.className).not.toMatch(/bg-(popover|panel|background)/);
     expect(body?.className).not.toContain("backdrop-blur-xl");
     expect(body?.className).toContain("py-6");
     expect(footer?.className).toContain("sticky");
     expect(footer?.className).toContain("bottom-0");
     expect(footer?.className).toContain("sm:items-center");
-    expect(footer?.className).toContain("bg-popover");
+    expect(footer?.className).not.toMatch(/bg-(popover|panel|background)/);
     expect(footer?.className).not.toContain("backdrop-blur-xl");
   });
 

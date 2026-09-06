@@ -65,7 +65,7 @@ export const DIALOG_FIELD =
  * 三段之后,滚动只发生在中间那一段,头尾各自有内边距,谁都不贴着裁剪线。中段必须同时有
  * 上下 padding:输入框的 focus ring 会画到 border box 外,若第一项紧贴 overflow 顶边,蓝色顶边仍会被裁掉。
  *
- * `sticky` 段里的 `bg-popover` 不能省:滚上来的内容会从它背后穿过去。
+ * 头尾在滚动区之外，不会被正文穿过；各段保持透明，共享外壳的一层磨砂背景。
  */
 export function ModalShell({
   open,
@@ -109,14 +109,14 @@ export function ModalShell({
           if (!dismissible) event.preventDefault();
         }}
         className={cn(
-          "flex min-w-0 max-h-[90vh] flex-col gap-0 overflow-hidden bg-popover p-0",
+          "flex min-w-0 max-h-[90vh] flex-col gap-0 overflow-hidden p-0",
           className,
         )}
       >
         <DialogHeader
           data-slot="modal-header"
           className={cn(
-            "sticky top-0 z-10 shrink-0 bg-popover px-6 pb-0 pt-6",
+            "sticky top-0 z-10 shrink-0 px-6 pb-0 pt-6",
             header && "gap-2.5",
           )}
         >
@@ -126,7 +126,7 @@ export function ModalShell({
         <div
           data-slot="modal-body"
           className={cn(
-            "min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain bg-popover px-6 py-6 [scrollbar-gutter:stable]",
+            "min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-6 py-6 [scrollbar-gutter:stable]",
             bodyClassName,
           )}
         >
@@ -135,7 +135,7 @@ export function ModalShell({
         {footer && (
           <DialogFooter
             data-slot="modal-footer"
-            className="sticky bottom-0 z-10 shrink-0 gap-2 border-t border-divider bg-popover px-6 py-4 sm:items-center"
+            className="sticky bottom-0 z-10 shrink-0 gap-2 px-6 pb-6 pt-0 sm:items-center"
           >
             {footer}
           </DialogFooter>

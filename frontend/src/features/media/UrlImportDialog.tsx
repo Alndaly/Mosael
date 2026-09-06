@@ -107,6 +107,7 @@ export function UrlImportDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={t("urlImportTitle")}
+      header={<p className="m-0 text-ui-sm leading-relaxed text-muted-foreground">{t("urlImportDescription")}</p>}
       className="w-[min(560px,92vw)] max-w-none"
       footer={
         listing ? (
@@ -116,9 +117,9 @@ export function UrlImportDialog({
         ) : undefined
       }
     >
-      <div className="grid min-w-0 gap-2.5">
+      <div className="grid min-w-0 gap-5">
         <form
-          className="flex min-w-0 items-center gap-1.5"
+          className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-x-2.5 gap-y-2"
           onSubmit={(event) => {
             event.preventDefault();
             if (url.trim()) {
@@ -127,7 +128,9 @@ export function UrlImportDialog({
             }
           }}
         >
+          <label className="col-span-full text-ui-sm font-medium" htmlFor="url-import-link">{t("urlImportLinkLabel")}</label>
           <Input
+            id="url-import-link"
             className="min-w-0 flex-1"
             value={url}
             placeholder={t("urlImportPlaceholder")}
@@ -146,8 +149,8 @@ export function UrlImportDialog({
         </form>
 
         {(profiles.data ?? []).length > 0 && (
-          <label className="grid gap-1 text-xs text-muted-foreground">
-            <span>{t("urlImportProfile")}</span>
+          <label className="grid gap-2 text-ui-sm">
+            <span className="font-medium">{t("urlImportProfile")}</span>
             <Select value={profileId} onValueChange={setProfileId}>
               <SelectTrigger>
                 <SelectValue />

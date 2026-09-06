@@ -163,9 +163,17 @@
   --glass-bg: color-mix(in srgb, var(--popover) 80%, transparent);
   --glass-chrome: color-mix(in srgb, var(--panel) 70%, transparent);
   /* Quiet depth separates floating tools from the canvas beneath them. */
-  --overlay-modal: rgb(20 25 35 / 0.28);
+  --overlay-modal: rgb(28 35 48 / 0.16);
+  --modal-solid: #fafbfd;
+  --modal-surface: var(--modal-solid);
+  --modal-tint: rgb(250 251 253 / 0.78);
+  --modal-border: rgb(255 255 255 / 0.72);
+  --modal-field: rgb(255 255 255 / 0.56);
+  --modal-input: rgb(96 113 140 / 0.38);
+  --modal-filter: none;
+  --modal-overlay-filter: none;
   --shadow-floating: 0 4px 16px rgb(24 32 48 / 0.10);
-  --shadow-modal: 0 16px 48px rgb(24 32 48 / 0.16);
+  --shadow-modal: 0 12px 36px rgb(24 32 48 / 0.12);
   --shadow-panel: 0 2px 8px rgb(32 40 59 / 0.06), 0 8px 24px rgb(32 40 59 / 0.04);
   --shadow-raised: 0 8px 32px rgb(32 40 59 / 0.12), 0 24px 64px rgb(32 40 59 / 0.06);
 
@@ -255,9 +263,14 @@
   --panel-subtle: #191b1e;
   --panel-inset: #101113;
   --border-strong: #626a76;
-  --overlay-modal: rgb(0 0 0 / 0.48);
+  --overlay-modal: rgb(6 9 14 / 0.24);
+  --modal-solid: #23262c;
+  --modal-tint: rgb(35 38 44 / 0.78);
+  --modal-border: rgb(220 230 248 / 0.16);
+  --modal-field: rgb(12 15 21 / 0.36);
+  --modal-input: rgb(178 192 215 / 0.32);
   --shadow-floating: 0 4px 16px rgb(0 0 0 / 0.24);
-  --shadow-modal: 0 16px 48px rgb(0 0 0 / 0.32);
+  --shadow-modal: 0 12px 36px rgb(0 0 0 / 0.24);
   --shadow-panel: 0 2px 12px rgb(0 0 0 / 0.2);
   --shadow-raised: 0 12px 48px rgb(0 0 0 / 0.48);
 
@@ -297,6 +310,36 @@
   --holiday-violet: #b59bd9;
   --holiday-sky: #86b7dd;
   --holiday-orange: #dda171;
+}
+
+/* 弹窗默认使用一层磨砂表面，与自定义页面背景的透明度独立。 */
+@supports ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+  :root {
+    --modal-surface: var(--modal-tint);
+    --modal-filter: blur(24px) saturate(1.12);
+    --modal-overlay-filter: blur(6px);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --modal-surface: var(--modal-solid);
+    --modal-filter: none;
+    --modal-overlay-filter: none;
+  }
+}
+
+@layer components {
+  .modal-surface {
+    --field: var(--modal-field);
+    --input: var(--modal-input);
+    -webkit-backdrop-filter: var(--modal-filter);
+    backdrop-filter: var(--modal-filter);
+  }
+  .modal-overlay {
+    -webkit-backdrop-filter: var(--modal-overlay-filter);
+    backdrop-filter: var(--modal-overlay-filter);
+  }
 }
 
 /* 自定义外观(opt-in 磨玻璃):有自定义背景时,把核心表面色调成半透明,让
