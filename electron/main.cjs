@@ -21,6 +21,7 @@ const {
   writeDiagnosticArchive,
 } = require("./data-management.cjs");
 const { createRecordingPermissionService } = require("./recording-permissions.cjs");
+const { WINDOW_CHROME_HEIGHT, TRAFFIC_LIGHT_POSITION } = require("./window-chrome.cjs");
 const { bindFullscreenState } = require("./window-state.cjs");
 const {
   IPC,
@@ -486,12 +487,12 @@ function createWindow() {
     minHeight: 640,
     title: "Mosael",
     backgroundColor: "#f0f1f3",
-    // 无边框标题栏(参考前身项目):mac 红绿灯悬在左上侧栏顶部,
-    // Win/Linux 用 titleBarOverlay 把窗口控件叠在右上(高度 = 顶栏 44px)。
+    // 无边框标题栏(参考前身项目):mac 红绿灯与顶栏操作垂直居中,
+    // Win/Linux 用 titleBarOverlay 把窗口控件叠在右上(高度与应用顶栏共用 56px)。
     titleBarStyle: "hidden",
     ...(isMac
-      ? { trafficLightPosition: { x: 14, y: 15 } }
-      : { titleBarOverlay: { color: "#ffffff", symbolColor: "#656c78", height: 44 } }),
+      ? { trafficLightPosition: TRAFFIC_LIGHT_POSITION }
+      : { titleBarOverlay: { color: "#ffffff", symbolColor: "#656c78", height: WINDOW_CHROME_HEIGHT } }),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -842,7 +843,7 @@ app.whenReady().then(async () => {
     const colors = parseTitleOverlay(payload);
     const win = BrowserWindow.fromWebContents(event.sender);
     try {
-      win?.setTitleBarOverlay({ color: colors.color, symbolColor: colors.symbolColor, height: 44 });
+      win?.setTitleBarOverlay({ color: colors.color, symbolColor: colors.symbolColor, height: WINDOW_CHROME_HEIGHT });
     } catch {
       // 老版本 / 非 overlay 窗口:忽略。
     }

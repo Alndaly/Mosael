@@ -45,7 +45,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import type { MessageKey } from "@/app/messages";
 import { NAV_ITEMS, navLabelKey, type StudioView } from "@/components/layout/navLabels";
 import { cn } from "@/lib/utils";
-import { WINDOW_CHROME_INSET } from "@/lib/windowChrome";
+import { WINDOW_CHROME_HEIGHT, WINDOW_CHROME_INSET } from "@/lib/windowChrome";
 
 export type { StudioView } from "@/components/layout/navLabels";
 
@@ -152,10 +152,10 @@ export function AppShell({
   }, [t]);
 
   return (
-    <div data-studio-shell data-sidebar-collapsed={compact} className="grid h-screen grid-cols-[var(--studio-sidebar)_minmax(0,1fr)] grid-rows-[56px_minmax(0,1fr)]" style={{ "--studio-sidebar": compact ? "64px" : "224px" } as React.CSSProperties}>
+    <div data-studio-shell data-sidebar-collapsed={compact} className="grid h-screen grid-cols-[var(--studio-sidebar)_minmax(0,1fr)] grid-rows-[var(--window-chrome-height)_minmax(0,1fr)]" style={{ "--window-chrome-height": `${WINDOW_CHROME_HEIGHT}px`, "--studio-sidebar": compact ? "64px" : "224px" } as React.CSSProperties}>
       <header
         data-glass-surface className={cn(
-        "col-span-full flex items-center justify-between border-b border-border bg-panel px-4 [.is-desktop_&]:[-webkit-app-region:drag] [.is-desktop_&_:is(button,a,input,[role=button])]:[-webkit-app-region:no-drag]",
+        "col-span-full flex min-w-0 items-center justify-between gap-4 border-b border-border bg-panel px-4 [.is-desktop_&]:[-webkit-app-region:drag] [.is-desktop_&_:is(button,a,input,[role=button])]:[-webkit-app-region:no-drag]",
         WINDOW_CHROME_INSET,
       )}>
         {(() => {
@@ -168,11 +168,9 @@ export function AppShell({
           const scoped = PROJECT_SCOPED_VIEWS.includes(view);
           return (
             <div className="flex min-w-0 items-center gap-3 text-ui-sm text-muted-foreground">
-              <Button variant="ghost" size="icon-xs" onClick={toggleSidebar} aria-expanded={!compact} aria-controls="studio-navigation" aria-label={compact ? t("navExpand") : t("navCollapse")}>
+              <Button variant="ghost" size="icon" onClick={toggleSidebar} aria-expanded={!compact} aria-controls="studio-navigation" aria-label={compact ? t("navExpand") : t("navCollapse")}>
                 {compact ? <PanelLeftOpen /> : <PanelLeftClose />}
               </Button>
-              <span className="max-w-48 truncate max-[760px]:hidden">{workspaceName}</span>
-              <span className="text-border-strong">/</span>
               <h1 className={cn("m-0 shrink-0 text-ui-sm font-semibold text-foreground", scoped && "font-medium text-muted-foreground")}>{pageLabel}</h1>
               {scoped && (
                 <>
@@ -197,11 +195,12 @@ export function AppShell({
             </div>
           );
         })()}
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           {actions}
           <button
             type="button"
-            className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-transparent px-[9px] text-xs text-muted-foreground transition-[border-color,color] duration-100 hover:border-border-strong hover:text-foreground max-[760px]:[&_kbd]:hidden max-[760px]:[&_span]:hidden [&_kbd]:rounded-sm [&_kbd]:border [&_kbd]:border-border [&_kbd]:px-1 [&_kbd]:text-ui-2xs [&_kbd]:leading-[15px] [&_kbd]:text-muted-foreground [&_kbd]:[font-family:inherit]"
+            aria-label={t("cmdkTitle")}
+            className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-transparent px-[9px] text-xs text-muted-foreground transition-[border-color,color] duration-100 hover:border-border-strong hover:text-foreground max-[760px]:[&_kbd]:hidden max-[760px]:[&_span]:hidden [&_kbd]:rounded-sm [&_kbd]:border [&_kbd]:border-border [&_kbd]:px-1 [&_kbd]:text-ui-2xs [&_kbd]:leading-[15px] [&_kbd]:text-muted-foreground [&_kbd]:[font-family:inherit]"
             onClick={() => window.dispatchEvent(new CustomEvent("mosael:open-cmdk"))}
           >
             <Search size={15} />
@@ -240,11 +239,8 @@ export function AppShell({
           </Tooltip>
         </div>
       </header>
-      <aside data-glass-surface className="col-start-1 row-start-2 flex min-h-0 flex-col border-r border-border bg-panel px-3 pb-3 pt-5 [@media(max-height:850px)]:pt-3">
-        <div className={cn("mb-5 flex h-9 [@media(max-height:850px)]:mb-3 select-none items-center gap-2.5", compact ? "justify-center" : "px-2")} aria-label="Mosael">
-          <span className={cn("font-semibold tracking-[-0.055em]", compact ? "text-2xl text-primary" : "text-3xl")}>{compact ? "M" : "Mosael"}</span>
-        </div>
-        <div className="mb-5 [@media(max-height:850px)]:mb-3">
+      <aside data-glass-surface className="col-start-1 row-start-2 flex min-h-0 flex-col border-r border-border bg-panel px-3 py-3">
+        <div className="mb-4 shrink-0">
           <WorkspaceSwitcher compact={compact} workspaceId={workspaceId} workspaceName={workspaceName} workspaces={workspaces} onSelectWorkspace={onSelectWorkspace} />
         </div>
         <nav id="studio-navigation" aria-label={t("navMain")} className="flex min-h-0 flex-1 flex-col gap-1 [@media(max-height:850px)]:gap-0.5 overflow-y-auto overflow-x-hidden">
@@ -417,14 +413,19 @@ function WorkspaceSwitcher({
   return (
     <>
       <Popover open={open} onOpenChange={(next) => { setOpen(next); setSearch(""); }}>
-        <PopoverTrigger asChild>
-          <button type="button" className={cn("flex w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-lg border border-border bg-panel-subtle p-2 text-left transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", compact && "justify-center border-transparent px-0")} aria-label={t("workspaceSwitch")} title={workspaceName}>
-            <span className="grid size-8 shrink-0 place-items-center rounded-md bg-accent text-primary"><Boxes size={18} /></span>
-            {!compact && <><span className="min-w-0 flex-1"><span className="block truncate text-ui-sm font-semibold">{workspaceName}</span><span className="block text-ui-xs text-muted-foreground">{t("workspaceSwitch")}</span></span><ChevronsUpDown size={14} className="shrink-0 text-muted-foreground" /></>}
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="w-80 p-2" align="start" sideOffset={8}>
-          <div className="px-2 pb-3 pt-2 text-ui-md font-semibold">{t("workspaceSwitch")}</div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <button type="button" className={cn("flex w-full min-w-0 cursor-pointer items-center rounded-lg text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", compact ? "aspect-square justify-center bg-accent p-0 text-primary hover:bg-primary/20 data-[state=open]:ring-2 data-[state=open]:ring-ring" : "h-14 gap-2.5 px-2 hover:bg-secondary data-[state=open]:bg-secondary")} aria-label={t("workspaceSwitch")} title={workspaceName}>
+                <span className={cn("grid shrink-0 place-items-center text-primary", compact ? "size-5" : "size-8 rounded-md bg-accent")}><Boxes size={compact ? 20 : 18} /></span>
+                {!compact && <><span className="min-w-0 flex-1"><span className="block truncate text-ui-sm font-semibold">{workspaceName}</span><span className="block text-ui-xs text-muted-foreground">{t("workspaceSwitch")}</span></span><ChevronsUpDown size={14} className="shrink-0 text-muted-foreground" /></>}
+              </button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          {compact && <TooltipContent side="right">{workspaceName} · {t("workspaceSwitch")}</TooltipContent>}
+        </Tooltip>
+        <PopoverContent className="w-80 p-2" side={compact ? "right" : "bottom"} align="start" sideOffset={12}>
+          <div className="flex items-center justify-between px-2 pb-3 pt-2"><span className="text-ui-md font-semibold">{t("workspaceSwitch")}</span><span className="text-ui-xs font-medium text-muted-foreground">Mosael</span></div>
           <Input aria-label={t("workspaceSearch")} placeholder={t("workspaceSearch")} value={search} onChange={(e) => setSearch(e.target.value)} className="mb-2" />
           <div className="max-h-72 overflow-y-auto">
           {workspaces.filter(ws => ws.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())).map((ws) => {
@@ -434,7 +435,7 @@ function WorkspaceSwitcher({
                 <ContextMenuTrigger asChild>
                   <div className={cn("flex items-center gap-1 rounded-md p-1 hover:bg-secondary", ws.id === workspaceId && "bg-accent")}>
                     <button type="button" className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-left text-ui-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => { setOpen(false); setSearch(""); if (ws.id !== workspaceId) onSelectWorkspace(ws.id); }} aria-current={ws.id === workspaceId ? "true" : undefined}>
-                      <span className="grid size-7 shrink-0 place-items-center rounded-md border border-border bg-panel text-primary">{ws.name.slice(0, 1)}</span>
+                      <span aria-hidden="true" className="grid size-7 shrink-0 place-items-center rounded-md border border-border bg-panel text-primary">{ws.name.slice(0, 1)}</span>
                       <span className="truncate">{ws.name}</span>
                       {ws.id === workspaceId && <Check size={14} className="ml-auto shrink-0 text-primary" />}
                     </button>

@@ -18,11 +18,13 @@
     },
     {
       "name": "embed_header_height_px",
-      "value": 48,
-      "why": "内嵌发布视图从顶部这么多像素处开始铺,上方那条留给「登录中 · 返回」工具栏。Electron 按它定视图边界,前端按它定那条栏的高度。两者不等就会露出一条缝,缝里是 App 自己的顶栏 —— 看着像画面穿帮,而不像一个 bug,所以很容易被当成本来就长这样。",
+      "value": 56,
+      "why": "内嵌发布视图从顶部这么多像素处开始铺,上方那条留给「登录中 · 返回」工具栏。Electron 按它定视图边界,前端按它定那条栏的高度。两者不等就会露出一条缝,缝里是 App 自己的顶栏 —— 看着像画面穿帮,而不像一个 bug,所以很容易被当成本来就长这样。原生窗口按钮、应用和素材对比顶栏也共用这一高度,避免中心偏移。",
       "implementations": [
         { "runtime": "electron", "location": "electron/publish/types.ts", "symbol": "EMBED_HEADER_HEIGHT" },
-        { "runtime": "frontend", "location": "frontend/src/app/App.tsx", "symbol": "PUBLISH_BAR_HEIGHT" }
+        { "runtime": "frontend", "location": "frontend/src/app/App.tsx", "symbol": "PUBLISH_BAR_HEIGHT" },
+        { "runtime": "electron", "location": "electron/window-chrome.cjs", "symbol": "WINDOW_CHROME_HEIGHT" },
+        { "runtime": "frontend", "location": "frontend/src/lib/windowChrome.ts", "symbol": "WINDOW_CHROME_HEIGHT" }
       ]
     }
   ]

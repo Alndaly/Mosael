@@ -42,7 +42,7 @@ export interface LiveViewFrame {
   settled?: boolean;
 }
 
-export const EMBED_HEADER_HEIGHT = 48;
+export const EMBED_HEADER_HEIGHT = 56;
 
 export interface ViewState {
   visible: boolean;

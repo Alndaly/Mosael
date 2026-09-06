@@ -1,3 +1,6 @@
+/** Shared window toolbar geometry, checked against the native window and embedded view contract. */
+export const WINDOW_CHROME_HEIGHT = 56;
+
 /**
  * 无边框窗里,顶栏要给系统按钮让出来的位置 —— **只有这一份**。
  *

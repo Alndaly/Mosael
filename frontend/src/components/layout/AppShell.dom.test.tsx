@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppShell } from "./AppShell";
@@ -17,10 +17,10 @@ vi.mock("@/app/preferences", () => ({
 
 beforeEach(() => { state.admin = false; localStorage.clear(); });
 
-function mount() {
+function mount(overrides: Partial<React.ComponentProps<typeof AppShell>> = {}) {
   const navigate = vi.fn();
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-    <TooltipProvider><AppShell view="home" onViewChange={navigate} workspaceName="Studio" projectName={null}>
+    <TooltipProvider><AppShell view="home" onViewChange={navigate} workspaceName="Studio" projectName={null} {...overrides}>
       <button>Existing workspace content</button>
     </AppShell></TooltipProvider>
   </QueryClientProvider>);
@@ -55,4 +55,26 @@ it("preserves administration for deployment admins and restores compact navigati
   fireEvent.click(await screen.findByRole("button", { name: "navAdmin" }));
   expect(navigate).toHaveBeenLastCalledWith("admin");
   expect(screen.getByRole("button", { name: "navExpand" })).toHaveAttribute("aria-expanded", "false");
+});
+
+it("keeps workspace switching and management reachable from both sidebar sizes", async () => {
+  const select = vi.fn();
+  mount({ workspaces: [
+    { id: "a", name: "Studio", role: "owner" },
+    { id: "b", name: "Second studio", role: "viewer" },
+  ] as React.ComponentProps<typeof AppShell>["workspaces"], onSelectWorkspace: select });
+  for (const compact of [false, true]) {
+    if (compact) fireEvent.click(screen.getByRole("button", { name: "navCollapse" }));
+    fireEvent.click(screen.getByRole("button", { name: "workspaceSwitch" }));
+    const popup = await screen.findByRole("dialog");
+    expect(within(popup).getByRole("button", { name: "rename: Studio" })).toBeEnabled();
+    expect(within(popup).getByRole("button", { name: "rename: Second studio" })).toBeDisabled();
+    expect(within(popup).getByRole("button", { name: "delete: Second studio" })).toBeDisabled();
+    expect(within(popup).getByRole("button", { name: "workspaceNew" })).toBeEnabled();
+    fireEvent.change(within(popup).getByRole("textbox", { name: "workspaceSearch" }), { target: { value: "Second" } });
+    expect(within(popup).queryByRole("button", { name: "rename: Studio" })).not.toBeInTheDocument();
+    fireEvent.click(within(popup).getByRole("button", { name: "Second studio" }));
+    expect(select).toHaveBeenLastCalledWith("b");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  }
 });
