@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useEditor, EditorContent, useEditorState } from "@tiptap/react";
 import Placeholder from "@tiptap/extension-placeholder";
 import React from "react";
@@ -18,9 +19,9 @@ export function NoteReader({ markdown }: { markdown: string }) {
   return <EditorContent editor={editor} />;
 }
 
-export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteId, title, editable = true }: {
+export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteId, title, toolbarTarget, editable = true }: {
   markdown: string; onChange: (value: string) => void; onReference: (note: Note) => void;
-  workspaceId: string; noteId: string; title?: React.ReactNode; editable?: boolean;
+  workspaceId: string; noteId: string; title?: React.ReactNode; toolbarTarget?: HTMLElement | null; editable?: boolean;
 }) {
   const s = useNoteStrings();
   const change = React.useRef(onChange); change.current = onChange;
@@ -110,7 +111,7 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
     { name: s.redo, icon: Redo2, disabled: !state?.redo, action: () => editor.chain().focus().redo().run() },
   ];
   const actionButton = (a: typeof actions[number]) => <button key={a.name} type="button" title={a.name} aria-label={a.name} aria-pressed={a.active} disabled={a.disabled} onMouseDown={e => e.preventDefault()} onClick={a.action}><a.icon size={16} strokeWidth={1.7} /></button>;
-  return <>{editable && <><div ref={sentinel} className="note-format-sentinel" aria-hidden="true" /><div className="note-format" data-stuck={stuck} role="toolbar" aria-label={s.write}>
+  const toolbar = <div className="note-format" data-stuck={stuck} role="toolbar" aria-label={s.write}>
     <div className="note-format-group">{actions.slice(0,4).map(actionButton)}</div>
     <div className="note-format-group">{actions.slice(4,7).map(actionButton)}</div>
     <div className="note-format-group">
@@ -125,7 +126,8 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
     </div>
     <div className="note-format-group note-format-history">{actions.slice(12).map(actionButton)}</div>
     <input type="file" hidden multiple ref={fileInput} accept="image/*" onChange={e => { upload.current(Array.from(e.target.files || [])); e.target.value = ""; }} />
-  </div></>}{title}<EditorContent editor={editor} />
+  </div>;
+  return <>{editable && (toolbarTarget ? createPortal(toolbar, toolbarTarget) : <><div ref={sentinel} className="note-format-sentinel" aria-hidden="true" />{toolbar}</>)}{title}<EditorContent editor={editor} />
   <menu.Portal className="fixed z-[80] w-[340px] max-w-[calc(100vw-24px)] rounded-xl p-1.5" header={<div className="px-3 py-2 text-xs text-muted-foreground">{s.addReference}</div>}>
     {(note, index) => <button type="button" key={note.id} role="option" aria-selected={menu.menu?.active === index} className={`note-list-row ${menu.menu?.active === index ? "bg-secondary" : ""}`} onMouseDown={e => e.preventDefault()} onClick={() => menu.choose(note)}><strong>{note.title || s.untitled}</strong><p>{note.markdown.slice(0,100)}</p></button>}
   </menu.Portal></>;
