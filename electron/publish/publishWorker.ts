@@ -26,6 +26,7 @@ import * as backend from "./publishBackend";
 let views: AccountViewManager | null = null;
 // 正在跑「真发布任务」的账号:size 即并发数,元素即认领时要排除的账号(同账号串行)。
 const running = new Set<string>();
+const taskControllers = new Map<string, AbortController>();
 // 正在后台复检登录态的账号:与 running 分开——否则复检会被误当成"发布任务进行中"挡住用户登录。
 const rechecking = new Set<string>();
 // 用户已开始登录接管的账号:后台复检遇到它直接放弃,避免和登录抢同一个视图 goto(表现为空白)。
@@ -241,12 +242,38 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
   }
   plog("runTask start:", bt.id, bt.platform, bt.video_path);
   const t = toAdapterTask(bt);
-  const driver = views.getDriver(t.accountId); // ensure 视图(不 show);getDriver 不抛
+  const taskViews = views;
+  const driver = taskViews.getDriver(t.accountId); // ensure 视图(不 show);getDriver 不抛
   const platformLabel = resolvePlatform(t.platform).label;
   const mirror = new LiveMirror(t.accountId, driver, `${platformLabel} · ${tr("准备中")}`);
   // 每一步同时进日志和实时窗口。这段之前完全不留痕:一次「表单填好了却没投出去」的故障,日志里
   // 只表现为 checkLogin 之后静默五分钟,画面上也什么都看不到,无从判断卡在上传、填表还是提交。
-  const step = (label: string, settled = false): void => {
+  const controller = new AbortController();
+  taskControllers.set(t.accountId, controller);
+  driver.setAbortSignal(controller.signal);
+  let cancelled = false;
+  const checkpoint = async (): Promise<void> => {
+    controller.signal.throwIfAborted();
+    try {
+      const state = await backend.taskStatus(t.id);
+      if (state.status !== "running") {
+        cancelled = true;
+        controller.abort(new Error("Task is no longer running"));
+      }
+    } catch (error) {
+      // If status cannot be verified, stop before the next platform action.
+      controller.abort(error);
+    }
+    controller.signal.throwIfAborted();
+  };
+  let polling = false;
+  const cancellationTimer = setInterval(() => {
+    if (polling || controller.signal.aborted) return;
+    polling = true;
+    void checkpoint().catch(() => undefined).finally(() => { polling = false; });
+  }, 500);
+  const step = async (label: string, settled = false): Promise<void> => {
+    await checkpoint();
     plog("runTask step:", bt.id, label);
     mirror.step(`${platformLabel} · ${label}`, settled);
   };
@@ -254,19 +281,20 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     // 把视图挂成右下角悬浮面板:参与合成 → 有真实布局与命中测试 → **可信指针输入可用**,
     // 而且画面是真的(不必再截图镜像)。挂不上(窗口没了)时退回 CDP 视口覆盖:那样至少有布局,
     // 点击会自动降级到 DOM 事件。
-    views.panelAttach(t.accountId);
-    if (!views.isPanelled(t.accountId)) {
+    await checkpoint();
+    taskViews.panelAttach(t.accountId);
+    if (!taskViews.isPanelled(t.accountId)) {
       await driver.setMetricsOverride(BACKGROUND_VIEWPORT.width, BACKGROUND_VIEWPORT.height);
     }
     mirror.start();
-    await views.configureAccount(t.accountId, bt.proxy);
+    await taskViews.configureAccount(t.accountId, bt.proxy);
     const adapter = createAdapter(t.platform, driver, t);
-    step(tr("打开创作页"));
+    await step(tr("打开创作页"));
     await adapter.openCreatorPage();
     plog("runTask creator page opened:", bt.id, driver.url());
     await delay(stepDelay());
 
-    step(tr("检查登录态"));
+    await step(tr("检查登录态"));
     const loggedIn = await adapter.checkLogin();
     plog("runTask checkLogin:", bt.id, loggedIn);
     if (!loggedIn) {
@@ -283,26 +311,30 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     }
     await backend.patchAccount(t.accountId, { binding_status: "bound", last_error: null });
 
-    step(tr("上传视频"));
+    await step(tr("上传视频"));
     await adapter.uploadVideo(t.videoPath);
     await delay(stepDelay());
-    step(tr("填写标题"));
+    await step(tr("填写标题"));
     await adapter.fillTitle(t.title);
     await delay(stepDelay());
-    step(tr("填写标签与简介"));
+    await step(tr("填写标签与简介"));
     await adapter.fillTags(t.tags);
     await delay(stepDelay());
 
-    step(tr("提交投稿"));
+    await step(tr("提交投稿"));
     await adapter.submit();
     await delay(stepDelay());
-    step(tr("等待平台确认"));
+    await step(tr("等待平台确认"));
     await adapter.waitResult();
-    step(tr("发布成功"), true);
+    await step(tr("发布成功"), true);
     await backend.reportTask(t.id, { status: "success" });
     plog("runTask success:", t.id);
     settle(t, "success");
   } catch (error) {
+    if (cancelled || stopped) {
+      settle(t, "cancelled");
+      return;
+    }
     const message = error instanceof Error ? error.message : String(error);
     plog("runTask error:", t.id, error instanceof Error ? error : message);
     // 让实时窗口停在失败那一刻的画面与步骤上,而不是无声消失。
@@ -345,13 +377,17 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     })();
     if (hasLive) requestFront(t.accountId);
   } finally {
+    clearInterval(cancellationTimer);
     mirror.stop();
     // 撤面板 + 撤视口覆盖:任务结束后视图可能被用户从「查看页面」亮出来,带着面板缩放或覆盖
     // 都会和窗口尺寸对不上。panelDetach 会顺手把 zoomFactor 还原成 1(它按 origin 持久化)。
-    views?.panelDetach(t.accountId);
+    taskViews.panelDetach(t.accountId);
     await driver.clearMetricsOverride().catch(() => undefined);
-    running.delete(t.accountId);
-    driver.setAbortSignal(null);
+    if (taskControllers.get(t.accountId) === controller) {
+      taskControllers.delete(t.accountId);
+      running.delete(t.accountId);
+      driver.setAbortSignal(null);
+    }
     // 后台任务默认从不 show;占了前台的(准备好/失败现场)留着供查看,这里不主动 hide。
   }
 }
@@ -424,7 +460,7 @@ async function loop(gen: number): Promise<void> {
     // 补发布任务到并发上限。认领时排除正在跑的账号(同账号串行);拿到就后台并发跑(不 await)。
     while (running.size < MAX_CONCURRENT) {
       const { task } = await backend.claimTask([...running]);
-      if (!task) break;
+      if (stopped || gen !== generation || !task) break;
       plog("claimed:", task.id, task.platform, "account:", task.account_id);
       didWork = true;
       running.add(task.account_id);
@@ -491,6 +527,8 @@ export function startPublishWorker(opts: {
 
 export function stopPublishWorker(): void {
   stopped = true;
+  for (const controller of taskControllers.values()) controller.abort();
+  taskControllers.clear();
   // 停掉登录轮询定时器:视图即将销毁,别再让它空转触发(最多 10 分钟)。在途的 checkLogin/loop
   // 迭代靠 generation/stopped 自我了断,不会复活成重复链。
   if (loginPollTimer) {

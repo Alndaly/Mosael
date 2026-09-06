@@ -830,6 +830,50 @@
         }
       }
     },
+    "/api/publish/worker/task/{task_id}": {
+      "get": {
+        "tags": [
+          "publish-worker"
+        ],
+        "summary": "Task Status",
+        "operationId": "task_status_api_publish_worker_task__task_id__get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Task Status Api Publish Worker Task  Task Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/publish/worker/report": {
       "patch": {
         "tags": [

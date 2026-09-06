@@ -159,3 +159,19 @@ def test_account_recheck_and_profile() -> None:
     # 启停
     patched = client.patch(f"/api/publish/accounts/{account['id']}", json={"enabled": False}).json()
     assert patched["enabled"] is False
+
+
+def test_worker_can_observe_cancellation_before_submit():
+    client = fresh_client()
+    client.headers[WORKER_KEY_HEADER] = current_worker_key() or ""
+    _, _, task = setup_browser_task(client)
+    client.post("/api/publish/worker/claim", json={})
+    url = f"/api/publish/worker/task/{task['id']}"
+    assert client.get(url).json()["status"] == "running"
+    assert client.post(f"/api/jobs/{task['job_id']}/cancel").status_code == 200
+    assert client.get(url).json()["status"] == "cancelled"
+    late = client.patch("/api/publish/worker/report", json={"task_id": task["id"], "status": "success"})
+    assert late.json()["status"] == "cancelled"
+    assert client.get("/api/publish/worker/task/missing").status_code == 404
+    del client.headers[WORKER_KEY_HEADER]
+    assert client.get(url).status_code in (401, 403)

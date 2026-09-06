@@ -52,6 +52,7 @@ async function req<T>(path: string, method = "GET", body?: unknown): Promise<T> 
   if (body) headers["Content-Type"] = "application/json";
   const res = await fetch(`${BASE}/api/publish${path}`, {
     method,
+    signal: AbortSignal.timeout(10_000),
     headers,
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -127,6 +128,10 @@ export function claimCheck(): Promise<{ account: CheckAccount | null }> {
 /** 触发一轮全量巡检:把所有账号标记为待复检(执行器开机时调一次)。 */
 export function markDue(): Promise<{ marked: number }> {
   return req("/worker/mark-due", "POST");
+}
+
+export function taskStatus(taskId: string): Promise<{ id: string; status: string }> {
+  return req(`/worker/task/${encodeURIComponent(taskId)}`);
 }
 
 export function reportTask(

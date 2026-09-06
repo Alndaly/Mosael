@@ -360,6 +360,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/publish/worker/task/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Task Status */
+        get: operations["task_status_api_publish_worker_task__task_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/publish/worker/report": {
         parameters: {
             query?: never;
@@ -4974,6 +4991,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agent/sessions/{session_id}/view": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Pending View
+         * @description 智能体要求界面跳到哪儿。**待消费一次**,前端跳完就清。
+         *
+         *     方向是反的:智能体跑在后端,而切页面是前端的事。落在会话行上而不是流里 —— 前端本来就在
+         *     轮询会话状态,而免提浮标那种没开 SSE 的场景照样收得到,那恰恰是"带我过去"最有用的时候。
+         */
+        post: operations["set_pending_view_api_agent_sessions__session_id__view_post"];
+        /**
+         * Clear Pending View
+         * @description 跳完了。**由前端来清,不是读一次就清** —— 读了就清的话,两个开着的界面里
+         *     只有先读到的那个会跳,而另一个永远不知道发生过什么。
+         */
+        delete: operations["clear_pending_view_api_agent_sessions__session_id__view_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/session-groups": {
         parameters: {
             query?: never;
@@ -5466,6 +5511,19 @@ export interface components {
              */
             created_at: string;
         };
+        /**
+         * AgentPendingView
+         * @description 智能体要求界面跳到哪一页。`view` 的合法值由 mcp_server._VIEWS 把关。
+         */
+        AgentPendingView: {
+            /** View */
+            view: string;
+            /**
+             * Id
+             * @default
+             */
+            id: string;
+        };
         /** AgentPlanUpdate */
         AgentPlanUpdate: {
             /** Steps */
@@ -5614,6 +5672,11 @@ export interface components {
             thinking_level: string;
             /** Status */
             status: string;
+            /**
+             * Pending View
+             * @default
+             */
+            pending_view: string;
             context?: components["schemas"]["AgentContextOut"] | null;
             /** Plan */
             plan?: {
@@ -6060,6 +6123,26 @@ export interface components {
              * @default
              */
             voice_id: string;
+            /**
+             * Engine
+             * @default
+             */
+            engine: string;
+            /**
+             * Engine Voice
+             * @default
+             */
+            engine_voice: string;
+            /**
+             * Engine Voice Resource
+             * @default
+             */
+            engine_voice_resource: string;
+            /**
+             * Speed
+             * @default 1
+             */
+            speed: number;
             /**
              * X
              * @default 0
@@ -9919,6 +10002,8 @@ export interface components {
             config: {
                 [key: string]: unknown;
             };
+            /** Required One Of */
+            required_one_of?: string[][];
             /** Outputs */
             outputs: string[];
             /** Output Types */
@@ -10231,6 +10316,11 @@ export interface components {
         app__api__routes__publish_worker__ClaimRequest: {
             /** Exclude Accounts */
             exclude_accounts?: string[];
+            /**
+             * Worker
+             * @default
+             */
+            worker: string;
         };
         /** ReportRequest */
         app__api__routes__publish_worker__ReportRequest: {
@@ -10899,6 +10989,39 @@ export interface operations {
                 "application/json": components["schemas"]["app__api__routes__publish_worker__ClaimRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    task_status_api_publish_worker_task__task_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -20680,6 +20803,72 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_pending_view_api_agent_sessions__session_id__view_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentPendingView"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_pending_view_api_agent_sessions__session_id__view_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

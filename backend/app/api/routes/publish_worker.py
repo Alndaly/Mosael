@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.api.deps import DbSession
-from app.db.models import PublishAccount
+from app.db.models import PublishAccount, PublishTask
 from app.domain.publish import PublishDomainError
 from app.domain.publish import worker as publish_worker
 
@@ -45,6 +45,14 @@ class AccountPatchRequest(BaseModel):
 @router.post("/publish/worker/claim")
 def claim(body: ClaimRequest, db: DbSession) -> dict[str, Any]:
     return {"task": publish_worker.claim_next_pending(db, body.exclude_accounts, worker=body.worker)}
+
+
+@router.get("/publish/worker/task/{task_id}")
+def task_status(task_id: str, db: DbSession) -> dict[str, Any]:
+    task = db.get(PublishTask, task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return {"id": task.id, "status": task.status}
 
 
 @router.patch("/publish/worker/report")
