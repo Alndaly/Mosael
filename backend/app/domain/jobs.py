@@ -155,12 +155,16 @@ def lock_active_job(db: Session, job: Job) -> bool:
     The conditional no-op update closes the refresh→commit cancellation race while
     keeping ORM status history (and terminal receipts) intact. Caller commits promptly.
     """
+    if job.status in TERMINAL_STATUSES:
+        return False
     with db.no_autoflush:
         changed = db.execute(
             Job.__table__.update().where(Job.id == job.id, Job.status.in_(("queued", "running")))
             .values(status=Job.status, updated_at=Job.updated_at)
         ).rowcount
-        db.refresh(job, ["status"] if changed else None)
+        # Preserve this transaction's pending changes, including ORM terminal-state receipts.
+        if not changed:
+            db.refresh(job)
     return bool(changed)
 
 
@@ -639,7 +643,7 @@ def report_job(
     if not lock_active_job(db, job):
         db.commit()
         return job
-    db.refresh(job, ["lease_token", "lease_expires_at", "lease_worker"])
+    db.refresh(job, ["status", "lease_token", "lease_expires_at", "lease_worker"])
     if not job.lease_token or not secrets.compare_digest(job.lease_token, lease_token or ""):
         db.rollback()
         raise ValueError("执行器租约无效,请使用认领返回的 lease_token")

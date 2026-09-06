@@ -116,3 +116,17 @@ def test_cancel_workflow_cascades_to_descendants() -> None:
         assert db.get(Job, ids[1]).status == "failed"  # 发布子任务被级联取消(此前会残留在跑)
         assert db.get(Job, ids[2]).status == "failed"  # 嵌套孙任务
         assert db.get(Job, ids[3]).status == "running"  # 不相干任务不动
+
+
+def test_cannot_spawn_from_a_parent_settled_in_the_same_transaction():
+    import pytest
+    from app.domain.jobs import finish_job
+    _, ws = _workspace()
+    with SessionLocal() as db:
+        parent = create_job(db, workspace_id=ws, kind="workflow", created_by=None, payload={})
+        db.commit()
+        assert finish_job(db, parent, status="failed", error="stopped")
+        with pytest.raises(ValueError, match="父任务已结束"):
+            create_job(db, workspace_id=ws, kind="demo", created_by=None, payload={}, parent_job_id=parent.id)
+        db.commit()
+        assert parent.status == "failed"
