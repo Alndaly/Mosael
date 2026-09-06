@@ -101,7 +101,7 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
         <button
           type="button"
           aria-label={t("agentModelLabel")}
-          className="inline-flex h-7 w-auto min-w-0 max-w-[220px] items-center gap-1 rounded-md border border-input bg-field px-2 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:border-primary focus-visible:outline-none"
+          className="inline-flex h-7 w-auto min-w-0 max-w-[220px] items-center gap-1 rounded-md border border-field-border bg-field px-2 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:border-primary focus-visible:outline-none"
         >
           <span className="truncate">{currentLabel}</span>
           <ChevronDown size={13} className="shrink-0 opacity-50" />

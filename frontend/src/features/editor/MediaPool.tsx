@@ -9,6 +9,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { TagsDialog } from "@/features/media/TagsDialog";
 import { useImagePreview } from "@/components/app/image-preview";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { formatTimecode } from "@/domain/timeline/geometry";
 import { useEditorStore } from "@/stores/editorStore";
@@ -105,11 +106,11 @@ export function MediaPool({
   });
   return (
     // 三行:头 / 筛选条 / 列表(列表占满余高并自滚)。
-    <section className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden rounded-md border border-border bg-workspace-panel shadow-[var(--shadow-panel)]">
-      <div className="flex min-h-10 flex-wrap items-center justify-between gap-1 border-b border-border px-3 py-1.5 [&>div:first-child]:basis-full [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
-        {tabs ?? <h2>{t("media")}</h2>}
+    <section className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)] editor-pane overflow-hidden bg-workspace-panel">
+      <div className="editor-pane-header flex items-center justify-between gap-2 px-4">
+        <div className="flex min-w-0 items-center gap-2">{tabs ?? <h2>{t("media")}</h2>}<span className="text-ui-xs tabular-nums text-muted-foreground">{assets.length}</span></div>
         <div className="ml-auto flex shrink-0 gap-1">
-          {/* Icon-only so the four CJK tabs + these two actions fit the narrow media panel. */}
+          {/* Keep import and recording reachable in every panel width. */}
           <Button asChild variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" disabled={uploading} title={t("import")} aria-label={t("import")}>
             <label>
               <input
@@ -137,53 +138,41 @@ export function MediaPool({
           </Button>
         </div>
       </div>
-      <div className="grid gap-1.5 border-b border-border p-1.5">
-        <div className="relative grid [&_svg]:pointer-events-none [&_svg]:absolute [&_svg]:left-2 [&_svg]:top-1/2 [&_svg]:z-[1] [&_svg]:-translate-y-1/2 [&_svg]:text-muted-foreground [&_input]:h-7 [&_input]:pl-7 [&_input]:text-xs">
-          <Search size={13} />
-          <Input
-            value={search}
-            placeholder={t("searchAssets")}
-            onChange={(event) => setSearch(event.target.value)}
-            aria-label={t("searchAssets")}
-          />
+      <div className="grid gap-3 px-3 pb-3">
+        <div className="flex items-center gap-2">
+          <div className="relative min-w-0 flex-1">
+            <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input className="h-8 pl-8 text-ui-xs" value={search} placeholder={t("searchAssets")} onChange={(event) => setSearch(event.target.value)} aria-label={t("searchAssets")} />
+          </div>
+          {availableTags.length > 0 && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon-sm" aria-label={t("mediaTagFilter")} title={t("mediaTagFilter")} className={cn("relative shrink-0", selectedTags.length > 0 && "bg-accent text-accent-foreground")}>
+                  <Tag size={15} />
+                  {selectedTags.length > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-primary px-1 text-ui-2xs text-primary-foreground">{selectedTags.length}</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-60 p-3">
+                <div className="flex max-h-60 flex-wrap gap-1.5 overflow-auto" role="group" aria-label={t("mediaTagFilter")}>
+                  {availableTags.map((tag) => (
+                    <button key={tag} type="button" aria-pressed={selectedTags.includes(tag)} onClick={() => toggleTag(tag)} className={cn("rounded-md px-2.5 py-1.5 text-ui-xs text-muted-foreground hover:bg-secondary hover:text-foreground", selectedTags.includes(tag) && "bg-accent text-accent-foreground")}>
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
         </div>
-        <div className="grid h-7 w-full grid-cols-4 overflow-hidden rounded-md border border-border bg-control [&>button]:min-w-0 [&>button]:justify-center [&>button]:px-0 [&>button+button]:border-l [&>button+button]:border-border" role="group" aria-label={t("mediaKindGroup")}>
+        <div className="grid grid-cols-4 gap-1" role="group" aria-label={t("mediaKindGroup")}>
           {KIND_FILTERS.map((kind) => (
-            <button
-              key={kind}
-              type="button"
-              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", kindFilter === kind && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
-              onClick={() => setKindFilter(kind)}
-            >
+            <button key={kind} type="button" aria-pressed={kindFilter === kind} className={cn("flex h-8 min-w-0 cursor-pointer items-center justify-center rounded-md text-ui-xs text-muted-foreground hover:bg-secondary hover:text-foreground", kindFilter === kind && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")} onClick={() => setKindFilter(kind)}>
               {kindLabel[kind]}
             </button>
           ))}
         </div>
-        {/* 标签筛选:只列当前类型下真实存在的标签;多选取交集,点亮的再点一下即取消。 */}
-        {availableTags.length > 0 && (
-          <div className="flex max-h-[62px] flex-wrap gap-1 overflow-y-auto" role="group" aria-label={t("mediaTagFilter")}>
-            {availableTags.map((tag) => {
-              const active = selectedTags.includes(tag);
-              return (
-                <button
-                  key={tag}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => toggleTag(tag)}
-                  className={cn(
-                    "inline-flex max-w-full cursor-pointer items-center truncate rounded-full border border-border bg-control px-2 py-[2px] text-ui-xs text-muted-foreground transition-colors duration-100 hover:border-border-strong hover:text-foreground",
-                    active &&
-                      "border-[color-mix(in_srgb,var(--primary)_45%,transparent)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary hover:text-primary",
-                  )}
-                >
-                  {tag}
-                </button>
-              );
-            })}
-          </div>
-        )}
       </div>
-      <div className="grid content-start gap-1.5 overflow-auto p-1.5 [&:has(>.empty-inline:only-child)]:content-stretch [&:has(>.empty-inline:only-child)]:h-full">
+      <div className="grid content-start gap-1 overflow-auto px-2 pb-2 [&:has(>.empty-inline:only-child)]:content-stretch [&:has(>.empty-inline:only-child)]:h-full">
         {visibleAssets.map((asset) => (
           <ContextMenu key={asset.id}>
             <ContextMenuTrigger asChild>
@@ -256,7 +245,7 @@ function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className="group/pool relative grid cursor-grab select-none grid-cols-[64px_minmax(0,1fr)] items-center gap-[9px] rounded-md border border-border bg-control p-1.5 transition-[background-color,border-color] duration-100 hover:border-border-strong hover:bg-muted active:cursor-grabbing"
+      className="group/pool relative grid cursor-grab select-none grid-cols-[80px_minmax(0,1fr)] items-center gap-3 rounded-lg px-2 py-2 transition-colors duration-150 hover:bg-control active:cursor-grabbing"
       onDoubleClick={onAdd}
       title={`${asset.name} — ${t("addToTimeline")}`}
     >
@@ -274,13 +263,13 @@ function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
       >
         {hasThumb ? <img src={assetThumbnailUrl(asset.id)} alt="" loading="lazy" onError={() => setThumbFailed(true)} /> : kindIcon(asset.kind)}
       </div>
-      <div className="min-w-0 [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-xs [&_strong]:font-semibold">
+      <div className="min-w-0 [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-ui-sm [&_strong]:font-medium">
         <strong>{asset.name}</strong>
-        <small className="timecode">{duration != null ? formatTimecode(duration) : asset.kind}</small>
+        <small className="timecode">{duration != null ? formatTimecode(duration) : t(asset.kind === "image" ? "kindImage" : asset.kind === "audio" ? "kindAudio" : "kindVideo")}</small>
       </div>
       <button
         type="button"
-        className="absolute right-2 top-1/2 grid h-[22px] w-[22px] -translate-y-1/2 cursor-pointer place-items-center rounded-md border border-border bg-background text-muted-foreground opacity-0 transition-[opacity,color,border-color] duration-100 hover:border-primary hover:text-primary group-hover/pool:opacity-100"
+        className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 cursor-pointer place-items-center rounded-md bg-popover text-muted-foreground opacity-0 transition-[opacity,color,background-color] duration-150 hover:text-primary group-hover/pool:opacity-100 group-focus-within/pool:opacity-100"
         title={t("addToTimeline")}
         aria-label={t("addToTimeline")}
         onClick={(event) => {

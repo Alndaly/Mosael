@@ -148,8 +148,8 @@ export function Inspector({
   }, [selectedClip?.id, isTextClip]);
 
   return (
-    <section className="min-h-0 overflow-hidden rounded-lg border border-border bg-workspace-panel grid min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-      <div className="flex min-h-14 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-sm [&_h2]:font-semibold [&_h2]:text-muted-foreground">
+    <section className="min-h-0 editor-pane overflow-hidden bg-workspace-panel grid min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+      <div className="editor-pane-header flex items-center justify-between px-4 [&_h2]:m-0 [&_h2]:text-ui-sm [&_h2]:font-semibold [&_h2]:text-muted-foreground">
         {selectedClip && !isTextClip ? (
           <div className={SEGMENTED_LIST} role="tablist">
             <button
@@ -695,7 +695,7 @@ function TextStylePanel({
       active && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground",
     );
   const swatch =
-    "h-6 w-9 shrink-0 cursor-pointer rounded-md border border-input bg-transparent p-0.5 [&::-webkit-color-swatch]:rounded [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0";
+    "h-6 w-9 shrink-0 cursor-pointer rounded-md border border-field-border bg-transparent p-0.5 [&::-webkit-color-swatch]:rounded [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0";
   const bars: Array<{ key: "stroke_width" | "shadow"; label: string }> = [
     { key: "stroke_width", label: t("textStroke") },
     { key: "shadow", label: t("textShadow") },

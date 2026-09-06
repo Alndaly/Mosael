@@ -11,4 +11,4 @@
  * 会把整个面板顶穿,truncate 完全不生效,右侧箭头被挤没。都归零后 w-full 才真正生效。
  */
 export const FIELD_TRIGGER_CLASS =
-  "flex h-10 w-full min-w-0 items-center justify-between gap-1.5 whitespace-nowrap rounded-md border border-input bg-field px-3 py-2 text-ui-sm ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:min-w-0 [&>span]:truncate";
+  "flex h-10 w-full min-w-0 items-center justify-between gap-1.5 whitespace-nowrap rounded-md border border-field-border bg-field px-3 py-2 text-ui-sm ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:min-w-0 [&>span]:truncate";

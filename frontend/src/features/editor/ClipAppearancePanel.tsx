@@ -79,7 +79,7 @@ export function ClipAppearancePanel({
           <label className="grid grid-cols-[52px_1fr] items-center gap-2">
             <span className="text-ui-xs text-muted-foreground">{t("shadowColor")}</span>
             <input
-              className="h-6 w-full cursor-pointer rounded-md border border-input bg-transparent p-0.5 [&::-webkit-color-swatch]:rounded [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0"
+              className="h-6 w-full cursor-pointer rounded-md border border-field-border bg-transparent p-0.5 [&::-webkit-color-swatch]:rounded [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0"
               type="color"
               value={appearance.shadow.color}
               aria-label={t("shadowColor")}

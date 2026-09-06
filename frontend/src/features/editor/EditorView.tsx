@@ -1,4 +1,4 @@
-import { segmentedTriggerClass } from "@/components/ui/tabs";
+import "./editor.css";
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot, Camera, CircleAlert, CircleCheck, Download, FolderPlus, Loader2, Plus, Redo2, Scissors, Sparkles, Type, Undo2 } from "lucide-react";
@@ -67,9 +67,8 @@ import { type LeftTab, useEditorPanels } from "@/features/editor/useEditorPanels
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { HANDLE_COLUMN, HANDLE_ROW, handleOffset, useResizableSidebar } from "@/lib/useResizableSidebar";
 
-//: 剪辑页的 grid **自己**带 p-2(别的页面是外层 flex 带,grid 自己是 0)。
-//: 手柄绝对定位在这个 grid 里,所以偏移要算上它。
-const EDITOR_GRID = { padding: 8 };
+// Shared pane edges use no padding or gutter; resize handles straddle those edges.
+const EDITOR_GRID = { padding: 0, gap: 0 };
 import { useEditorStore } from "@/stores/editorStore";
 import { ConfirmDialog } from "@/components/app/modals";
 import { FontFaces } from "@/features/editor/FontFaces";
@@ -133,6 +132,15 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     "docked",
     "floating",
   ]);
+  const [availableWidth, setAvailableWidth] = React.useState(Infinity);
+  const measureWorkbench = React.useCallback((node: HTMLDivElement | null) => {
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry.contentRect.width > 0) setAvailableWidth(entry.contentRect.width);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
   const agentSidebar = useResizableSidebar("editor-agent", { min: 320, max: 640, fallback: 400 });
 
 
@@ -797,11 +805,12 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   // 检查器只在选中片段时占用右栏 — 空的「未选中片段」面板不该
   // 一直吃掉宽度;紧凑模式(≤1000px)下改为浮动抽屉,不占列。
   const showInspector = selectedClip !== null;
-  // Where the panels row ends, measured from the grid's bottom edge: padding (8) + the
-  // timeline's height + the row gap (8). Keeps the column resizers out of the timeline.
-  const panelsRowBottom = panels.sizes.timeline + 16;
-  const inspectorInGrid = showInspector && !panels.compact;
-  const dockedAgent = agentOpen === "on" && agentMode === "docked";
+  // Contiguous panes share a boundary. Keep vertical resizers above the timeline.
+  const panelsRowBottom = panels.sizes.timeline;
+  const dockedAgent = agentOpen === "on" && agentMode === "docked" &&
+    availableWidth >= panels.leftWidth + agentSidebar.width + 320;
+  const inspectorInGrid = showInspector && !panels.compact &&
+    availableWidth >= panels.leftWidth + panels.sizes.right + (dockedAgent ? agentSidebar.width : 0) + 320;
   const editorColumns = [
     `${panels.leftWidth}px`,
     "minmax(0, 1fr)",
@@ -824,9 +833,75 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       onDragEnd={onAssetDragStop}
       onDragCancel={onAssetDragStop}
     >
+    <div ref={measureWorkbench} className="editor-workbench flex h-full min-h-0 flex-col overflow-hidden bg-workspace">
+      <div role="toolbar" aria-label={t("editTools")} className="editor-commandbar flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-divider px-4 py-1.5">
+        <LeftTabs tab={panels.tab} onChange={panels.setTab} />
+        <div className="flex shrink-0 items-center gap-1">
+          <Button variant="ghost" size="sm" aria-label={t("wfAgentTitle")} aria-pressed={agentOpen === "on"} onClick={() => setAgentOpen(agentOpen === "on" ? "off" : "on")} className={cn(agentOpen === "on" && "bg-accent text-accent-foreground")}><Bot />{t("wfAgentTitle")}</Button>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                disabled={!sequence.can_undo} loading={undoMutation.isPending}
+                onClick={() => undoMutation.mutate()}
+                aria-label={t("undo")}
+              >
+                <Undo2 size={14} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("undo")} (⌘Z)</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                disabled={!sequence.can_redo} loading={redoMutation.isPending}
+                onClick={() => redoMutation.mutate()}
+                aria-label={t("redoAction")}
+              >
+                <Redo2 size={14} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("redoAction")} (⇧⌘Z)</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                loading={addSubtitleMutation.isPending}
+                onClick={() => addSubtitleMutation.mutate()}
+                aria-label={t("addSubtitleAtPlayhead")}
+              >
+                <Type size={14} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("addSubtitleAtPlayhead")}</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                loading={addTextMutation.isPending}
+                onClick={() => addTextMutation.mutate()}
+                aria-label={t("addTextAtPlayhead")}
+              >
+                <Sparkles size={14} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("addTextAtPlayhead")}</TooltipContent>
+          </Tooltip>
+          <ExportControl workspaceId={workspace.id} projectId={project.id} sequence={sequence} />
+
+        </div>
+      </div>
     <div
       data-testid="editor-layout"
-      className="relative grid h-full grid-cols-[252px_minmax(0,1fr)_264px] grid-rows-[minmax(0,1fr)_252px] gap-2 bg-workspace-subtle p-2"
+      className="editor-workspace relative grid min-h-0 flex-1 grid-cols-[252px_minmax(0,1fr)_264px] grid-rows-[minmax(0,1fr)_252px]"
       style={{
         gridTemplateColumns: editorColumns,
         gridTemplateRows: `minmax(0, 1fr) ${panels.sizes.timeline}px`,
@@ -847,23 +922,23 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           removeTrackMutation.mutate({ trackId: trackPendingRemoval.id, withClips: true })
         }
       />
-      {/* Resizers sit on the 8px gap centers; grid pads 12px (Global rhythm). */}
+      {/* Handles straddle the shared pane boundaries without adding visual gutters. */}
       {/* A column resizer must not extend past the row whose columns it separates. These are
           absolutely positioned over the whole grid, so without an explicit bottom they run down
           through the timeline — and a drag started in the timeline, merely aligned with the
           monitor's left edge, resized the panel instead. Stop them at the panels row: grid
           padding + timeline height + row gap. */}
       <div
-        className={`absolute bottom-3 top-3 z-10 ${HANDLE_COLUMN}`}
+        className={`absolute bottom-0 top-0 z-10 ${HANDLE_COLUMN}`}
         style={{ left: handleOffset(panels.leftWidth, EDITOR_GRID), bottom: panelsRowBottom }}
         onPointerDown={panels.startDrag("left")}
       />
       {inspectorInGrid && (
         <div
-          className={`absolute bottom-3 top-3 z-10 ${HANDLE_COLUMN}`}
+          className={`absolute bottom-0 top-0 z-10 ${HANDLE_COLUMN}`}
           style={{
             right: handleOffset(panels.sizes.right, {
-              padding: EDITOR_GRID.padding + (dockedAgent ? agentSidebar.width + 8 : 0),
+              padding: dockedAgent ? agentSidebar.width : 0, gap: 0,
             }),
             bottom: panelsRowBottom,
           }}
@@ -872,7 +947,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       )}
       {dockedAgent && (
         <div
-          className={`absolute bottom-3 top-3 z-10 ${HANDLE_COLUMN}`}
+          className={`absolute bottom-0 top-0 z-10 ${HANDLE_COLUMN}`}
           style={{ right: handleOffset(agentSidebar.width, EDITOR_GRID), bottom: panelsRowBottom }}
           role="separator"
           aria-orientation="vertical"
@@ -880,7 +955,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         />
       )}
       <div
-        className={`absolute left-3 right-3 z-10 ${HANDLE_ROW}`}
+        className={`absolute left-0 right-0 z-10 ${HANDLE_ROW}`}
         style={{ bottom: handleOffset(panels.sizes.timeline, EDITOR_GRID) }}
         onPointerDown={panels.startDrag("timeline")}
       />
@@ -891,14 +966,14 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           onImportFile={(file) => uploadAsset.mutate(file)}
           onRecord={() => openRecorder({ projectId: project.id })}
           onAddToTimeline={addAssetToTimeline}
-          tabs={<LeftTabs tab={panels.tab} onChange={panels.setTab} />}
+          tabs={<h2>{t("media")}</h2>}
         />
       ) : panels.tab === "voice" ? (
-        <VoicePanel workspace={workspace} project={project} tabs={<LeftTabs tab={panels.tab} onChange={panels.setTab} />} />
+        <VoicePanel workspace={workspace} project={project} tabs={<h2>{t("voiceTab")}</h2>} />
       ) : (
-        <section className="min-h-0 overflow-hidden rounded-lg border border-border bg-workspace-panel grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
-          <div className="flex min-h-14 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-sm [&_h2]:font-semibold [&_h2]:text-muted-foreground">
-            <LeftTabs tab={panels.tab} onChange={panels.setTab} />
+        <section className="editor-pane min-h-0 overflow-hidden bg-workspace-panel grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
+          <div className="editor-pane-header flex items-center justify-between px-4 [&_h2]:m-0 [&_h2]:text-ui-sm [&_h2]:font-semibold [&_h2]:text-muted-foreground">
+            <h2>{t(panels.tab === "transcript" ? "transcriptTab" : "subtitleTab")}</h2>
           </div>
           {panels.tab === "transcript" ? (
             <TranscriptPanel
@@ -932,7 +1007,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           )}
         </section>
       )}
-      <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-[var(--monitor-bg)]">
+      <section className="editor-monitor grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-[var(--monitor-bg)]">
         {/* 监视器上方的操作条:**只放和「此刻这一画面」有关的动作**。
             播放/快进那些在下面的走带条上,和这里不是一类事:那些是「走到哪一帧」,
             这里是「拿这一帧做什么」。
@@ -945,11 +1020,11 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
             色板,**没有 `white` 这个色阶**,那条类根本不会生成 —— 于是边框退回 preflight 的
             主题色(浅色模式下是一条不透明的浅灰),看着又粗又亮。加 `color:` 前缀是因为
             `border-b-[…]` 的方括号里放长度会被当成边框宽度。 */}
-        <div className="flex flex-wrap items-center gap-1 border-b border-b-[color:rgb(255_255_255/0.08)] px-2 py-1 [&_button]:text-[#c6cbd2] [&_button:hover]:bg-[rgb(255_255_255/0.08)] [&_button:hover]:text-white">
+        <div className="flex h-11 shrink-0 items-center justify-end gap-1 px-4 [&_button]:text-[#c6cbd2] [&_button:hover]:bg-[rgb(255_255_255/0.08)] [&_button:hover]:text-white">
           <Button
             variant="ghost"
-            size="xs"
-            className="gap-1 px-2 text-ui-2xs"
+            size="sm"
+            className="gap-1.5 px-2 text-ui-xs"
             title={t("editorSplitHere")}
             onClick={() => splitAtPlayhead()}
           >
@@ -957,32 +1032,15 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           </Button>
           <Button
             variant="ghost"
-            size="xs"
-            className="gap-1 px-2 text-ui-2xs"
+            size="sm"
+            className="gap-1.5 px-2 text-ui-xs"
             title={t("editorGrabFrameTitle")}
             loading={grabFrameMutation.isPending}
             onClick={() => grabFrameMutation.mutate()}
           >
             <Camera size={12} /> {t("editorGrabFrame")}
           </Button>
-          {/* 助手针对整条时间线，不属于左边那组“当前帧动作”；推到最右并用分割线隔开，
-              入口始终可见，同时不会让它看起来像第三种截帧工具。 */}
-          <div className="ml-auto border-l border-l-[color:rgb(255_255_255/0.08)] pl-1">
-            <Button
-              variant="ghost"
-              size="xs"
-              className={cn(
-                "gap-1 px-2 text-ui-2xs",
-                agentOpen === "on" && "!bg-[rgb(255_255_255/0.12)] !text-white",
-              )}
-              title={t("wfAgentTitle")}
-              aria-label={t("wfAgentTitle")}
-              aria-pressed={agentOpen === "on"}
-              onClick={() => setAgentOpen(agentOpen === "on" ? "off" : "on")}
-            >
-              <Bot size={12} /> {t("wfAgentTitle")}
-            </Button>
-          </div>
+
         </div>
         <Monitor
           sequence={sequence}
@@ -1013,24 +1071,25 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
               onUploadFont={(file) => uploadFontMutation.mutate(file)}
               onDeleteFont={(fontId) => deleteFontMutation.mutate(fontId)}
               uploadingFont={uploadFontMutation.isPending}
-              onClose={panels.compact ? () => useEditorStore.getState().selectClip(null) : undefined}
+              onClose={!inspectorInGrid ? () => useEditorStore.getState().selectClip(null) : undefined}
             />
           );
-          return panels.compact ? <div className="workspace-overlay fixed bottom-0 right-0 top-14 z-[60] grid w-[min(320px,calc(100vw-96px))] border-l border-border-strong bg-panel [&>section]:h-full [&>section]:rounded-none [&>section]:border-0">{inspector}</div> : inspector;
+          return !inspectorInGrid ? <div className="canvas-overlay-surface absolute right-0 top-0 z-[60] grid w-[min(320px,90%)] border-l border-divider [&>section]:h-full [&>section]:rounded-none [&>section]:border-0" style={{ bottom: panelsRowBottom }}>{inspector}</div> : inspector;
         })()}
       {agentOpen === "on" && (
         // 停靠态是 top row 的最后一列：监视器真实让出宽度，而不是被一块 absolute 面板盖住。
         // 浮动态由 CanvasAgentChat 自己 fixed 定位；contents 防止外层生成一个空 grid 单元。
         <div
           data-testid="editor-agent-slot"
-          className={dockedAgent ? "z-30 grid min-h-0 min-w-0" : "contents"}
+          className={dockedAgent ? "editor-agent-inline z-30 grid min-h-0 min-w-0 border-l border-divider" : agentMode === "docked" ? "absolute right-2 top-2 z-40 grid w-[min(400px,90%)]" : "contents"}
+          style={!dockedAgent && agentMode === "docked" ? { bottom: panelsRowBottom + 8 } : undefined}
         >
           <CanvasAgentChat
             contextLine={agentContext}
             emptyHint={t("editorAgentEmpty")}
             placeholder={t("editorAgentPlaceholder")}
             rectKey="mosael.editor.agent.rect.v1"
-            dockedLayout="inline"
+            dockedLayout={dockedAgent ? "inline" : "overlay"}
             workspaceId={workspace.id}
             mode={agentMode}
             onModeChange={setAgentMode}
@@ -1038,7 +1097,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           />
         </div>
       )}
-      <section className="col-span-full min-h-0 overflow-hidden rounded-lg border border-border bg-[var(--timeline-bg)]">
+      <section className="editor-timeline col-span-full min-h-0 overflow-hidden border-t border-divider bg-[var(--timeline-bg)]">
         <Timeline
           sequence={sequence}
           assets={assets.data ?? []}
@@ -1070,69 +1129,10 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           onDuplicateClip={(clipId) => duplicateClip(clipId)}
           onDetachAudio={(clipId) => detachAudioMutation.mutate(clipId)}
           onSetTrackState={(trackId, body) => trackStateMutation.mutate({ trackId, body })}
-          toolbarExtra={
-            <>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    disabled={!sequence.can_undo} loading={undoMutation.isPending}
-                    onClick={() => undoMutation.mutate()}
-                    aria-label={t("undo")}
-                  >
-                    <Undo2 size={14} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t("undo")} (⌘Z)</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    disabled={!sequence.can_redo} loading={redoMutation.isPending}
-                    onClick={() => redoMutation.mutate()}
-                    aria-label={t("redoAction")}
-                  >
-                    <Redo2 size={14} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t("redoAction")} (⇧⌘Z)</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    loading={addSubtitleMutation.isPending}
-                    onClick={() => addSubtitleMutation.mutate()}
-                    aria-label={t("addSubtitleAtPlayhead")}
-                  >
-                    <Type size={14} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t("addSubtitleAtPlayhead")}</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    loading={addTextMutation.isPending}
-                    onClick={() => addTextMutation.mutate()}
-                    aria-label={t("addTextAtPlayhead")}
-                  >
-                    <Sparkles size={14} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t("addTextAtPlayhead")}</TooltipContent>
-              </Tooltip>
-              <ExportControl workspaceId={workspace.id} projectId={project.id} sequence={sequence} />
-            </>
-          }
+
         />
       </section>
+    </div>
     </div>
     <DragOverlay dropAnimation={null}>
       {dragOverlayAsset && (
@@ -1145,16 +1145,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   );
 }
 
-/**
- * 左栏顶部的四个页签。
- *
- * **占满余宽 + 自己横向滚**,而不是 `shrink-0`:面板拖窄时,四个中文页签会把右边的导入 /
- * 录制两个图标按钮顶出可视区 —— 那两个按钮是这个面板最常用的动作,不该被页签挤走。
- * 现在页签滚,按钮钉在右侧。
- *
- * 切页签时把选中的那个滚进视野:面板重新挂载时滚动位置归零,而选中的可能是最后一个,
- * 不滚的话会看到一条"没有任何一项高亮"的页签栏。
- */
+/** Working modes share the command bar; panel actions stay inside their own pane. */
 function LeftTabs({
   tab,
   onChange,
@@ -1177,13 +1168,14 @@ function LeftTabs({
   ];
 
   return (
-    <div ref={ref} className="flex min-w-0 flex-1 flex-wrap gap-1">
+    <div ref={ref} className="flex min-w-0 flex-wrap items-center gap-1">
       {tabs.map((item) => (
         <button
           key={item.key}
           type="button"
           data-active={item.key === tab || undefined}
-          className={cn(segmentedTriggerClass(item.key === tab), "px-2")}
+          aria-pressed={item.key === tab}
+          className={cn("editor-mode-tab", item.key === tab && "is-active")}
           onClick={() => onChange(item.key)}
         >
           {item.label}
@@ -1272,7 +1264,7 @@ function ExportControl({
           <CircleAlert size={13} /> {t("exportFailed")}
         </span>
       )}
-      <Button size="xs" variant="outline" disabled={busy} onClick={() => setConfigOpen(true)}>
+      <Button size="sm" disabled={busy} onClick={() => setConfigOpen(true)}>
         {busy ? <Loader2 size={13} className="animate-mosael-spin" /> : <Download size={13} />}
         {busy ? t("exporting") : t("exportVideo")}
       </Button>

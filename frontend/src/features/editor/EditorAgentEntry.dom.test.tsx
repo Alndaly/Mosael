@@ -1,11 +1,12 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const apiMocks = vi.hoisted(() => ({
+  resize: null as ResizeObserverCallback | null,
   api: vi.fn(),
   listFonts: vi.fn(),
 }));
@@ -56,6 +57,7 @@ vi.mock("@/features/editor/FontFaces", () => ({ FontFaces: () => null }));
 
 import type { Project, Sequence, Workspace } from "@/api/client";
 import { EditorView } from "@/features/editor/EditorView";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { RecordingProvider } from "@/features/media/RecordingProvider";
 
 const workspace = { id: "workspace-1", name: "工作区" } as Workspace;
@@ -77,9 +79,9 @@ function renderEditor() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <RecordingProvider workspaceId={workspace.id}>
+      <TooltipProvider><RecordingProvider workspaceId={workspace.id}>
         <EditorView workspace={workspace} project={project} onCreateProject={vi.fn()} creatingProject={false} />
-      </RecordingProvider>
+      </RecordingProvider></TooltipProvider>
     </QueryClientProvider>,
   );
 }
@@ -87,6 +89,11 @@ function renderEditor() {
 describe("剪辑页智能体入口", () => {
   beforeEach(() => {
     localStorage.clear();
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(callback: ResizeObserverCallback) { apiMocks.resize = callback; }
+      observe() {}
+      disconnect() {}
+    });
     Element.prototype.scrollIntoView = vi.fn();
     apiMocks.api.mockReset().mockImplementation((path: string) => {
       if (path.startsWith("/api/projects/") && path.endsWith("/sequences")) return Promise.resolve([sequence]);
@@ -96,7 +103,7 @@ describe("剪辑页智能体入口", () => {
     apiMocks.listFonts.mockReset().mockResolvedValue([]);
   });
 
-  it("从监视器操作条打开助手,并把当前项目与时间线传入上下文", async () => {
+  it("从顶部工具栏打开助手,并把当前项目与时间线传入上下文", async () => {
     const user = userEvent.setup();
     renderEditor();
 
@@ -116,6 +123,19 @@ describe("剪辑页智能体入口", () => {
       "project=宣传片;project_id=project-1;sequence=主时间线;sequence_id=sequence-1",
     );
     expect(localStorage.getItem("mosael:tab:editor-agent")).toBe("on");
+  });
+
+  it("窄工作台把助手改为覆盖层,恢复宽度后继续停靠", async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    await user.click(await screen.findByRole("button", { name: "wfAgentTitle" }));
+    act(() => apiMocks.resize?.([{ contentRect: { width: 700 } } as ResizeObserverEntry], {} as ResizeObserver));
+    expect(screen.getByTestId("editor-layout")).toHaveStyle({ gridTemplateColumns: "252px minmax(0, 1fr)" });
+    expect(screen.getByTestId("editor-agent-slot")).toHaveClass("absolute");
+    expect(screen.getByTestId("editor-agent-panel")).toBeInTheDocument();
+    act(() => apiMocks.resize?.([{ contentRect: { width: 1200 } } as ResizeObserverEntry], {} as ResizeObserver));
+    expect(screen.getByTestId("editor-layout")).toHaveStyle({ gridTemplateColumns: "252px minmax(0, 1fr) 400px" });
+    expect(screen.getByTestId("editor-agent-slot")).not.toHaveClass("absolute");
   });
 
   it("助手可从面板关闭,不会留下遮挡编辑区的空容器", async () => {

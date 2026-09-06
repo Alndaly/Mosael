@@ -538,33 +538,33 @@ export function Monitor({
       </div>
       {/* 底部行:左右缩进与画面/进度条同一刻度(12px);上下留白让按钮离面板底边有呼吸感,
           不再紧贴底边界线(pt 略小于 pb,视觉重心稍稍上抬)。 */}
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-3 pb-2.5 pt-1 [&>div:last-child]:justify-end [&_button]:text-[#c6cbd2] [&_button:hover]:bg-[rgb(255_255_255/0.08)] [&_button:hover]:text-white">
+      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-4 pb-3 pt-2 [&>div:last-child]:justify-end [&_button]:text-[#c6cbd2] [&_button:hover]:bg-[rgb(255_255_255/0.08)] [&_button:hover]:text-white">
         <div className="flex items-center gap-0.5">
-          <Button variant="ghost" size="icon" onClick={() => setPlayhead(0)} aria-label={t("monStart")}>
+          <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(0)} aria-label={t("monStart")}>
             <SkipBack size={14} />
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => setPlayhead(Math.max(0, playhead - frameStep))} aria-label={t("monFrameBack")}>
+          <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(Math.max(0, playhead - frameStep))} aria-label={t("monFrameBack")}>
             <StepBack size={14} />
           </Button>
-          <Button variant="secondary" size="icon-xs" className="rounded-full! bg-white! text-[#17181a]! transition-transform duration-[120ms] hover:scale-[1.06] hover:bg-white! hover:text-[#17181a]!" onClick={playToggle} aria-label={t("playPause")}>
+          <Button variant="secondary" size="icon-sm" className="rounded-full! bg-white! text-[#17181a]! transition-transform duration-[120ms] hover:scale-[1.06] hover:bg-white! hover:text-[#17181a]!" onClick={playToggle} aria-label={t("playPause")}>
             {playing ? <Pause size={14} /> : <Play size={14} className="ml-px" />}
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => setPlayhead(Math.min(totalDuration, playhead + frameStep))} aria-label={t("monFrameForward")}>
+          <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(Math.min(totalDuration, playhead + frameStep))} aria-label={t("monFrameForward")}>
             <StepForward size={14} />
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => setPlayhead(totalDuration)} aria-label={t("monEnd")}>
+          <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(totalDuration)} aria-label={t("monEnd")}>
             <SkipForward size={14} />
           </Button>
           <Button
             variant="ghost"
-            size="icon"
+            size="icon-sm"
             className={loop ? "bg-[rgb(255_255_255/0.1)]! text-primary!" : undefined}
             onClick={toggleLoop}
             aria-label={t("monLoop")}
           >
             <Repeat size={13} />
           </Button>
-          <button type="button" className="timecode cursor-pointer rounded-md border border-[rgb(255_255_255/0.18)] bg-transparent px-[7px] py-0.5 text-ui-xs text-[#c6cbd2] hover:bg-[rgb(255_255_255/0.08)] hover:text-white" onClick={cyclePlaybackRate} aria-label={t("monRate")}>
+          <button type="button" className="timecode h-8 min-w-8 cursor-pointer rounded-md bg-transparent px-2 text-ui-xs text-[#c6cbd2] hover:bg-[rgb(255_255_255/0.08)] hover:text-white" onClick={cyclePlaybackRate} aria-label={t("monRate")}>
             {playbackRate}x
           </button>
         </div>
@@ -573,7 +573,7 @@ export function Monitor({
           <span className="text-[#82878f]"> / {formatTimecode(totalDuration)}</span>
         </div>
         <div className="flex items-center gap-0.5">
-          <Button variant="ghost" size="icon" onClick={toggleMuted} aria-label={t("monMute")}>
+          <Button variant="ghost" size="icon-sm" onClick={toggleMuted} aria-label={t("monMute")}>
             {masterMuted || volume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
           </Button>
           <Slider
@@ -585,7 +585,7 @@ export function Monitor({
             onValueChange={([value]) => setVolume(value)}
             aria-label={t("monVolume")}
           />
-          <Button variant="ghost" size="icon" onClick={toggleFullscreen} aria-label={t("monFullscreen")}>
+          <Button variant="ghost" size="icon-sm" onClick={toggleFullscreen} aria-label={t("monFullscreen")}>
             <Maximize2 size={13} />
           </Button>
         </div>

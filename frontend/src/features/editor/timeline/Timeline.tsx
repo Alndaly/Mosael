@@ -5,7 +5,7 @@ import { AudioLines, BetweenHorizontalStart, ChevronDown, ChevronUp, CircleHelp,
 import { fetchWaveform, type Asset, type Clip, type Sequence, type Track, type WaveformData } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   clipEnd,
@@ -606,10 +606,10 @@ export function Timeline({
   };
 
   return (
-    <div className="grid h-full grid-rows-[auto_minmax(0,1fr)]" data-tool={tool} onWheel={handleWheel}>
-      <div className="flex flex-wrap items-center justify-between gap-y-2 border-b border-border bg-workspace-panel px-3 py-2">
+    <div className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto]" data-tool={tool} onWheel={handleWheel}>
+      <div className="editor-timeline-toolbar flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-divider bg-workspace-panel px-3 py-1.5">
         <div className="flex min-w-0 flex-nowrap items-center gap-2">
-          <div className="inline-flex h-8 items-stretch gap-0.5 overflow-hidden rounded-md bg-panel-subtle p-0.5 whitespace-nowrap" role="group" aria-label={t("editTools")}>
+          <div className="inline-flex h-8 items-stretch gap-0.5 whitespace-nowrap" role="group" aria-label={t("editTools")}>
             <button
               type="button"
               className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", tool === "select" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
@@ -629,7 +629,7 @@ export function Timeline({
               <Slice size={12} /> {t("toolBlade")}
             </button>
           </div>
-          <div className="inline-flex h-8 items-stretch gap-0.5 overflow-hidden rounded-md bg-panel-subtle p-0.5 whitespace-nowrap" role="group" aria-label={t("editMode")}>
+          <div className="inline-flex h-8 items-stretch gap-0.5 whitespace-nowrap" role="group" aria-label={t("editMode")}>
             <button
               type="button"
               className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", editMode === "overwrite" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
@@ -649,21 +649,16 @@ export function Timeline({
               <BetweenHorizontalStart size={12} /> {t("editModeInsert")}
             </button>
           </div>
-          <PlayheadReadout total={sequenceDuration(allClips)} />
-          <span className="whitespace-nowrap text-ui-xs text-muted-foreground">
-            {t("clipCount").replace("{n}", String(allClips.length))} · {sequence.width}×{sequence.height} ·{" "}
-            {Math.round(sequence.fps)}fps
-          </span>
         </div>
         <div className="flex items-center gap-0.5">
           {toolbarExtra}
-          {(onSplitClip || onDuplicateClip || onDeleteClip) && <span className="mx-[3px] h-4 w-px bg-border" />}
+          {(onSplitClip || onDuplicateClip || onDeleteClip) && <span className="mx-[3px] h-4 w-px bg-divider" />}
           {onSplitClip && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
-                  size="icon-xs"
+                  size="icon-sm"
                   disabled={!selectedClipIds.length}
                   onClick={() => selectedClipIds[0] && onSplitClip(selectedClipIds[selectedClipIds.length - 1])}
                   aria-label={t("splitAtPlayhead")}
@@ -679,7 +674,7 @@ export function Timeline({
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
-                  size="icon-xs"
+                  size="icon-sm"
                   disabled={!selectedClipIds.length}
                   onClick={() => selectedClipIds[0] && onDuplicateClip(selectedClipIds[selectedClipIds.length - 1])}
                   aria-label={t("duplicateClip")}
@@ -695,7 +690,7 @@ export function Timeline({
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
-                  size="icon-xs"
+                  size="icon-sm"
                   disabled={!selectedClipIds.length}
                   onClick={() =>
                     onRippleDeleteClips
@@ -715,7 +710,7 @@ export function Timeline({
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
-                  size="icon-xs"
+                  size="icon-sm"
                   disabled={!selectedClipIds.length}
                   onClick={() =>
                     onDeleteClips ? onDeleteClips(selectedClipIds) : selectedClipIds.forEach((clipId) => onDeleteClip(clipId))
@@ -728,28 +723,29 @@ export function Timeline({
               <TooltipContent>{t("deleteClip")}</TooltipContent>
             </Tooltip>
           )}
-          <span className="mx-[3px] h-4 w-px bg-border" />
+          <span className="mx-[3px] h-4 w-px bg-divider" />
           {onAddTrack && (
-            <>
-              <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[3px] whitespace-nowrap rounded-md border-0 bg-transparent px-1.5 text-ui-xs text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground" title={t("addVideoTrackHint")} onClick={() => onAddTrack("video")}>
-                <Plus size={11} />
-                <Film size={12} /> {t("trackVideoShort")}
-              </button>
-              <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[3px] whitespace-nowrap rounded-md border-0 bg-transparent px-1.5 text-ui-xs text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground" title={t("addAudioTrackHint")} onClick={() => onAddTrack("audio")}>
-                <Plus size={11} />
-                <AudioLines size={12} /> {t("trackAudioShort")}
-              </button>
-              <button type="button" className="inline-flex h-6 cursor-pointer items-center gap-[3px] whitespace-nowrap rounded-md border-0 bg-transparent px-1.5 text-ui-xs text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground" title={t("addSubtitleTrackHint")} onClick={() => onAddTrack("subtitle")}>
-                <Plus size={11} />
-                <Type size={12} /> {t("trackSubtitleShort")}
-              </button>
-            </>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="sm"><Plus size={14} />{t("editorAddTrack")}<ChevronDown size={12} /></Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="grid w-44 gap-1 p-1.5">
+                {(["video", "audio", "subtitle"] as const).map((kind) => (
+                  <PopoverClose asChild key={kind}>
+                    <Button variant="ghost" size="sm" className="justify-start" title={t(kind === "video" ? "addVideoTrackHint" : kind === "audio" ? "addAudioTrackHint" : "addSubtitleTrackHint")} onClick={() => onAddTrack(kind)}>
+                      {kind === "video" ? <Film /> : kind === "audio" ? <AudioLines /> : <Type />}
+                      {t(kind === "video" ? "trackVideoShort" : kind === "audio" ? "trackAudioShort" : "trackSubtitleShort")}
+                    </Button>
+                  </PopoverClose>
+                ))}
+              </PopoverContent>
+            </Popover>
           )}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon-xs"
+                size="icon-sm"
                 className={cn(snapEnabled && "bg-accent text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
                 onClick={() => setSnapEnabled((value) => !value)}
                 aria-pressed={snapEnabled}
@@ -762,7 +758,7 @@ export function Timeline({
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-xs" onClick={() => applyZoom(1 / 1.3)} aria-label={t("zoomOut")}>
+              <Button variant="ghost" size="icon-sm" onClick={() => applyZoom(1 / 1.3)} aria-label={t("zoomOut")}>
                 <Minus size={14} />
               </Button>
             </TooltipTrigger>
@@ -770,7 +766,7 @@ export function Timeline({
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-xs" onClick={() => applyZoom(1.3)} aria-label={t("zoomIn")}>
+              <Button variant="ghost" size="icon-sm" onClick={() => applyZoom(1.3)} aria-label={t("zoomIn")}>
                 <Plus size={14} />
               </Button>
             </TooltipTrigger>
@@ -780,7 +776,7 @@ export function Timeline({
             <PopoverTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon-xs"
+                size="icon-sm"
                 className={cn(helpOpen && "bg-accent text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
                 aria-label={t("shortcutsHelp")}
               >
@@ -1123,6 +1119,13 @@ export function Timeline({
             </TimelinePlayhead>
           </div>
         </div>
+      </div>
+      <div className="flex min-h-7 flex-wrap items-center justify-between gap-x-4 border-t border-divider px-3 py-1">
+          <PlayheadReadout total={sequenceDuration(allClips)} />
+          <span className="whitespace-nowrap text-ui-xs text-muted-foreground">
+            {t("clipCount").replace("{n}", String(allClips.length))} · {sequence.width}×{sequence.height} ·{" "}
+            {Math.round(sequence.fps)}fps
+          </span>
       </div>
     </div>
   );

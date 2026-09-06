@@ -36,8 +36,8 @@ import { cn } from "@/lib/utils";
     「音色」「语速」「发音人 B」谁是谁 —— 标签贴在控件上方而不是靠占位符。 */
 function VoiceField({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className={cn("grid min-w-0 content-start gap-1", className)}>
-      <span className="text-ui-2xs font-medium leading-none text-muted-foreground">{label}</span>
+    <div className={cn("grid min-w-0 content-start gap-1.5", className)}>
+      <span className="text-ui-xs font-medium leading-snug text-muted-foreground">{label}</span>
       {children}
     </div>
   );
@@ -283,11 +283,11 @@ export function VoicePanel({
   const [speakerOpen, setSpeakerOpen] = React.useState(false);
 
   return (
-    <section className="min-h-0 overflow-hidden rounded-lg border border-border bg-workspace-panel grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
-      <div className="flex min-h-14 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-sm [&_h2]:font-semibold [&_h2]:text-muted-foreground">{tabs}</div>
+    <section className="min-h-0 editor-pane overflow-hidden bg-workspace-panel grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
+      <div className="editor-pane-header flex items-center justify-between px-4 [&_h2]:m-0 [&_h2]:text-ui-sm [&_h2]:font-semibold [&_h2]:text-muted-foreground">{tabs}</div>
       <div className="grid min-h-0 flex-1 content-start gap-5 overflow-y-auto overflow-x-hidden p-4">
-        <div className="grid gap-[7px] rounded-lg bg-workspace-panel">
-          <div className="grid gap-1.5">
+        <div className="grid gap-3">
+          <div className="grid gap-3">
             <VoiceField label={t("voiceEngine")}>
               <Select
                 value={engine}
@@ -498,7 +498,7 @@ export function VoicePanel({
               )}
             </div>
 
-            <div className="grid gap-1.5">
+            <div className="grid gap-3">
               {list.map((voice) => (
             <div
               key={voice.id}

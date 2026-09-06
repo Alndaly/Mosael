@@ -134,7 +134,7 @@ export function AuthPromptField({
                 type="button"
                 // 首项聚焦:pi 把推荐项排在第一个并在 label 里标 (default),回车即可走默认路径。
                 autoFocus={index === 0}
-                className="flex w-full items-center gap-2 rounded-md border border-input bg-field px-3 py-2 text-left transition-colors hover:border-border-strong hover:bg-panel focus:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex w-full items-center gap-2 rounded-md border border-field-border bg-field px-3 py-2 text-left transition-colors hover:border-border-strong hover:bg-panel focus:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={pending}
                 onClick={() => onSubmit(id)}
               >

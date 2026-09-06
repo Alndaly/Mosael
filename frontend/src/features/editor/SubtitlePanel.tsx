@@ -159,7 +159,7 @@ export function SubtitlePanel({
                   </button>
                 </span>
               </div>
-              {/* 原生 textarea,不走 <Textarea>:基础组件的 border-input 在 twMerge 里赢过
+              {/* 原生 textarea,不走 <Textarea>:基础组件的 border-field-border 在 twMerge 里赢过
                   border-transparent(实测计算样式里边框还在),而这里要的是**零装饰** ——
                   静止时它就是一行正文,聚焦才垫一块浅底 + ring 说明"正在编辑"。
                   `field-sizing:content` 让高度贴内容走(实测生效,单行字幕一行高);
@@ -907,7 +907,7 @@ function ColorSwatch({ value, onChange, grow }: { value: string; onChange: (v: s
     <input
       type="color"
       className={cn(
-        "h-7 cursor-pointer rounded-lg border border-input bg-transparent p-0.5 [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0",
+        "h-7 cursor-pointer rounded-lg border border-field-border bg-transparent p-0.5 [&::-webkit-color-swatch]:rounded-md [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0",
         grow ? "min-w-0 flex-1" : "w-9 shrink-0",
       )}
       value={value}

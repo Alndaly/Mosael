@@ -450,7 +450,7 @@ export function CanvasAgentChat({
         // 硬裁」,悬浮态看着是「窗口被内容撑宽」—— 同一个成因的两种样子。
         "grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto]",
         !isFloating && dockedLayout === "inline"
-          ? "overflow-hidden rounded-xl border border-border bg-workspace-panel"
+          ? "overflow-hidden bg-workspace-panel"
           : DOCKABLE_PANEL_FRAME_CLASS,
         isFloating
           ? "fixed min-h-[380px] min-w-[320px] max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)] border-border-strong"

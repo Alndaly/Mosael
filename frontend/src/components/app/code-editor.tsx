@@ -74,7 +74,7 @@ export const CodeEditor = React.forwardRef<
       //    vertical-align:baseline),于是它按文字基线坐,而不是按行框居中,看着整体偏下。
       //    改成 flex 居中,箭头就落在行的正中。不给 leading-none —— 那会让裁切的文字被
       //    削掉顶和底(见 app/clippedText.test.ts 那道护栏),而 flex 居中本身已经够了。
-      className="h-fit overflow-hidden rounded-md border border-input focus-within:border-primary [&_.cm-editor]:rounded-md [&_.cm-editor]:font-mono [&_.cm-editor]:text-xs [&_.cm-editor.cm-focused]:outline-none [&_.cm-gutters]:border-0 [&_.cm-scroller]:font-mono [&_.cm-content]:min-h-[var(--cm-min-h)] [&_.cm-scroller]:min-h-[var(--cm-min-h)] [&_.cm-foldGutter_.cm-gutterElement]:flex [&_.cm-foldGutter_.cm-gutterElement]:items-center [&_.cm-foldGutter_.cm-gutterElement]:justify-center"
+      className="h-fit overflow-hidden rounded-md border border-field-border focus-within:border-primary [&_.cm-editor]:rounded-md [&_.cm-editor]:font-mono [&_.cm-editor]:text-xs [&_.cm-editor.cm-focused]:outline-none [&_.cm-gutters]:border-0 [&_.cm-scroller]:font-mono [&_.cm-content]:min-h-[var(--cm-min-h)] [&_.cm-scroller]:min-h-[var(--cm-min-h)] [&_.cm-foldGutter_.cm-gutterElement]:flex [&_.cm-foldGutter_.cm-gutterElement]:items-center [&_.cm-foldGutter_.cm-gutterElement]:justify-center"
       style={{ "--cm-min-h": `${minHeight}px` } as React.CSSProperties}
     >
       <CodeMirror

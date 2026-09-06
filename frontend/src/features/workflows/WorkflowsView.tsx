@@ -2026,7 +2026,7 @@ function WorkflowEditor({
                   onClick={() => handleCollapse(selectedFlowIds)}
                   // **select-none**:它出现的时机正是框选拖拽刚结束的那一刻,而那一下拖拽会把
                   // 按钮上的字一起选中 —— 于是文字顶着一层系统选区的紫色,看着像坏了。
-                  className="inline-flex select-none items-center gap-1.5 rounded-full border border-input bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-muted"
+                  className="inline-flex select-none items-center gap-1.5 rounded-full border border-field-border bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-muted"
                   title={`${t("wfCollapseHint")} ⌘G`}
                 >
                   <Boxes size={13} /> {t("wfCollapseToSubgraph").replace("{n}", String(selectedFlowIds.length))}
@@ -3336,7 +3336,7 @@ function NodeInspector({
         </Tooltip>
         <div className="grid min-w-0 flex-1 gap-0 [&_small]:pl-0 [&_small]:text-ui-2xs [&_small]:text-muted-foreground">
           {/* 节点名在头部内联编辑(Dify 式),不再单列一个"节点名称"字段。
-              **裸 input**:Input 基础款的 border-input / rounded-md / h-9 都要对抗,
+              **裸 input**:Input 基础款的 border-field-border / rounded-md / h-9 都要对抗,
               而 tokens.css 里那条 `* { border-color: var(--border) }` 和单个 border-* 类
               同优先级、靠顺序决胜 —— 想让边框透明是打不赢的(SubtitlePanel 早就踩过)。
 

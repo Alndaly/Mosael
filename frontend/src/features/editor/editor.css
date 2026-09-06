@@ -1,0 +1,22 @@
+@layer components {
+  .editor-workbench { --editor-control-height: 32px; }
+  .editor-pane { border-inline-end: 1px solid var(--divider); }
+  .editor-pane-header { min-height: 44px; }
+  .editor-pane-header h2 { margin: 0; font-size: var(--text-ui-sm); font-weight: 600; color: var(--muted-foreground); }
+  .editor-mode-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--editor-control-height);
+    padding-inline: 12px;
+    border-radius: 8px;
+    font-size: var(--text-ui-sm);
+    font-weight: 500;
+    color: var(--muted-foreground);
+    cursor: pointer;
+  }
+  .editor-mode-tab:hover { background: var(--secondary); color: var(--foreground); }
+  .editor-mode-tab.is-active { background: var(--accent); color: var(--accent-foreground); }
+  .editor-mode-tab:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  .editor-timeline-toolbar { min-height: 48px; }
+}
