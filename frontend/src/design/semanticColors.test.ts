@@ -39,4 +39,17 @@ describe("semantic status colors", () => {
       expect(contrast(token(theme, "warning"), surface)).toBeGreaterThanOrEqual(4.5);
     }
   });
+
+  it("keeps Open Studio text, actions and keyboard focus readable in both themes", () => {
+    for (const theme of [block(":root"), block(".dark")]) {
+      for (const [ink, paper] of [
+        ["foreground", "background"], ["muted-foreground", "card"],
+        ["primary-foreground", "primary"], ["accent-foreground", "accent"],
+        ["destructive-foreground", "destructive"],
+      ]) expect(contrast(token(theme, ink), token(theme, paper)), `${ink} on ${paper}`).toBeGreaterThanOrEqual(4.5);
+      for (const edge of ["ring", "input"])
+        expect(contrast(token(theme, edge), token(theme, "field")), edge).toBeGreaterThanOrEqual(3);
+    }
+  });
+
 });

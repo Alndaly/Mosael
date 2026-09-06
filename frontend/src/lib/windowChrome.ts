@@ -45,8 +45,8 @@ export function installWindowChrome(
     const pushOverlay = () =>
       desktop.setTitleOverlay!(
         root.classList.contains("dark")
-          ? { color: "#15181e", symbolColor: "#e7eaf0" }
-          : { color: "#ffffff", symbolColor: "#656c78" },
+          ? { color: "#202938", symbolColor: "#edf2fa" }
+          : { color: "#ffffff", symbolColor: "#626e83" },
       );
     pushOverlay();
     observer = new MutationObserver(pushOverlay);

@@ -117,7 +117,7 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
   // 会让空状态的视觉中心下移，也让同一动作出现两遍；工作流空页已经给出了统一模式。
   if (boards.isSuccess && list.length === 0) {
     return (
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-5 xl:p-6 [&>*]:shrink-0">
         <EmptyState
           icon={<LayoutGrid size={22} />}
           title={t("boardsEmptyTitle")}
@@ -135,9 +135,9 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
   // 容器、内边距、卡片栅格都跟着工作流列表页走 —— 同一层级的两个页面长得不一样,
   // 用户会以为自己切到了别的应用里。
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch gap-2 overflow-auto p-2 [&>*]:shrink-0">
+    <div className="flex h-full min-h-0 flex-col items-stretch gap-5 overflow-auto p-5 xl:p-6 [&>*]:shrink-0">
       <div className="flex items-center justify-between">
-        <h2 className="m-0 inline-flex items-center gap-1.5 text-ui-md font-semibold text-foreground">
+        <h2 className="m-0 inline-flex items-center gap-3 text-2xl font-semibold tracking-tight text-foreground">
           <LayoutGrid size={13} /> {t("navBoards")}
         </h2>
         <Button size="sm" loading={create.isPending} onClick={() => create.mutate()}>
@@ -147,13 +147,13 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {boards.isLoading ? (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(232px,1fr))] gap-2">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
             {[0, 1, 2].map((n) => (
               <Skeleton key={n} className="h-[74px] rounded-lg" />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(232px,1fr))] gap-2">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
             {list.map((board) => (
               <BoardCard
                 key={board.id}
@@ -180,7 +180,7 @@ function BoardCard({ board, onOpen, onDelete }: { board: Board; onOpen: () => vo
       <button
         type="button"
         onClick={onOpen}
-        className="group grid cursor-pointer gap-1 rounded-lg border border-border bg-panel p-3 text-left transition-colors hover:border-border-strong"
+        className="group grid cursor-pointer gap-1 rounded-lg border border-border bg-panel p-5 text-left transition-colors hover:border-border-strong"
       >
         <div className="flex items-start justify-between gap-2">
           <span className="truncate text-ui-sm font-medium text-foreground">{board.name}</span>
@@ -663,7 +663,7 @@ function BoardDetail({
             bg-panel/95 + backdrop-blur。分三组是按"这是哪一类动作"分的 ——
             往画布上加东西 / 看画布 / 处置这张板。混成一条的话,删除会挨着「加便签」。 */}
         <div className="flex flex-wrap items-start justify-end gap-2">
-          <div className={cn("flex flex-wrap items-center gap-1 rounded-full p-1", CANVAS_GLASS_SURFACE_CLASS)}>
+          <div className={cn("flex flex-wrap items-center gap-1 rounded-lg p-1", CANVAS_GLASS_SURFACE_CLASS)}>
             {/* 「往画布上加东西」收成一个 + —— 和工作流详情页的「添加节点」同一颗控件
                 (SearchableSelect):六个图标排一排要逐个认,弹层里名字写出来就不用猜。
                 「贴一份现成的」和「放一个空槽去生成」是两件事,弹层里分成两组。 */}
@@ -699,7 +699,7 @@ function BoardDetail({
             />
           </div>
 
-          <div data-board-toolbar-actions="" className={cn("flex flex-wrap items-center gap-1 rounded-full p-1", CANVAS_GLASS_SURFACE_CLASS)}>
+          <div data-board-toolbar-actions="" className={cn("flex flex-wrap items-center gap-1 rounded-lg p-1", CANVAS_GLASS_SURFACE_CLASS)}>
             <Button
               variant="ghost"
               size="icon-sm"
@@ -770,7 +770,7 @@ function BoardDetail({
             </Button>
           </div>
 
-          <div className={cn("flex flex-wrap items-center gap-1 rounded-full p-1", CANVAS_GLASS_SURFACE_CLASS)}>
+          <div className={cn("flex flex-wrap items-center gap-1 rounded-lg p-1", CANVAS_GLASS_SURFACE_CLASS)}>
             <Button
               variant="ghost"
               size="icon-sm"

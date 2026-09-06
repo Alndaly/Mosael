@@ -5,6 +5,7 @@ import {
   Bot,
   Boxes,
   CalendarClock,
+  ChartNoAxesCombined,
   Clapperboard,
   FileAudio,
   FileImage,
@@ -41,6 +42,7 @@ import { emitOpenEvent } from "@/lib/deepLink";
 
 /** 页面导航项:label 走 i18n,keywords 供英文/拼音前缀匹配。 */
 const NAV_ENTRIES: Array<{ view: StudioView; labelKey: string; keywords: string[]; icon: React.ReactNode }> = [
+  { view: "statistics", labelKey: "navStatistics", keywords: ["statistics", "analytics", "tongji", "usage"], icon: <ChartNoAxesCombined size={14} /> },
   { view: "home", labelKey: "navHome", keywords: ["home", "shouye"], icon: <Home size={14} /> },
   { view: "media", labelKey: "navMedia", keywords: ["media", "assets", "sucai"], icon: <FolderOpen size={14} /> },
   { view: "editor", labelKey: "navEditor", keywords: ["editor", "cut", "jianji"], icon: <Scissors size={14} /> },

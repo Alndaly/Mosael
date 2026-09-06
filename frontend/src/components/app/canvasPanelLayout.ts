@@ -3,10 +3,9 @@ export const CANVAS_TOOLBAR_HEIGHT_PX = 42;
 export const CANVAS_PANEL_GAP_PX = 8;
 export const CANVAS_PANEL_EDGE_INSET_PX = 8;
 
-/** Translucent surface shared by controls and utility windows over a canvas. */
+/** Floating tools remain legible over detailed media and canvas content. */
 export const CANVAS_GLASS_SURFACE_CLASS =
-  "border border-border bg-panel/90 shadow-[var(--shadow-panel)] backdrop-blur-xl " +
-  "supports-[backdrop-filter]:bg-panel/80";
+  "border border-border bg-panel shadow-[var(--shadow-panel)]";
 
 /** Keep the panel one standard gap below the floating toolbar. */
 export function canvasPanelTop(toolbarTop: number): number {

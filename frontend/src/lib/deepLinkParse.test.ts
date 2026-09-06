@@ -6,6 +6,7 @@ import { deepLinkFromArgv, parseDeepLink } from "../../../electron/system/deepLi
 
 describe("mosael:// 深链解析", () => {
   it("接受白名单内的 view", () => {
+    expect(parseDeepLink("mosael://open?view=statistics")).toEqual({ view: "statistics" });
     expect(parseDeepLink("mosael://open?view=workflows")).toEqual({ view: "workflows" });
     expect(parseDeepLink("mosael://open?view=publish&id=abc123")).toEqual({ view: "publish", id: "abc123" });
   });

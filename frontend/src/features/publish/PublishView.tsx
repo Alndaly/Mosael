@@ -164,7 +164,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   // 账号的「增」和「管」都归口「浏览器池」tab;发布页只做发布(记录 + 新建发布)。
   const seg = (
     <div className="flex items-center justify-between">
-      <h2 className="m-0 inline-flex items-center gap-1.5 text-ui-md font-semibold text-foreground">
+      <h2 className="m-0 inline-flex items-center gap-3 text-2xl font-semibold tracking-tight text-foreground">
         <Rocket size={13} /> {t("publishTabRecords")}
       </h2>
       <span className="flex flex-wrap items-center gap-1.5">
@@ -205,7 +205,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
 
   if (tasks.isSuccess && (tasks.data ?? []).length === 0) {
     return (
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-5 xl:p-6 [&>*]:shrink-0">
         <EmptyState
           icon={<Rocket size={22} />}
           title={t("publishEmptyTitle")}
@@ -227,7 +227,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-5 xl:p-6 [&>*]:shrink-0">
       <div className="flex h-full min-h-0 flex-col gap-2">
       {seg}
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -243,7 +243,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
                 {day.kind === "today" ? t("dateToday") : day.kind === "yesterday" ? t("dateYesterday") : day.text}
                 <span className="ml-1.5 font-normal tabular-nums text-muted-foreground/70">{group.items.length}</span>
               </h3>
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(232px,1fr))] gap-2">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
                 {group.items.map((task) => (
                   <ContextMenu key={task.id}>
                     <ContextMenuTrigger asChild>
@@ -310,7 +310,7 @@ function PublishCard({ task, selecting = false }: { task: PublishTask; selecting
     // **同一种信息落在同一个位置**:状态行贴顶、元信息贴底(mt-auto),中间留给长短不一的标题。
     // 此前全部顺排,于是标题一行和两行的卡片里,"发到哪个号""哪条成片"各自落在不同高度 ——
     // 同一排卡片横着看过去像三种模板。
-    <article className="flex h-full flex-col gap-1.5 rounded-lg border border-border bg-panel p-2.5 shadow-[var(--shadow-panel)] transition-colors hover:border-border-strong">
+    <article className="flex h-full flex-col gap-1.5 rounded-lg border border-border bg-panel p-5 shadow-[var(--shadow-panel)] transition-colors hover:border-border-strong">
       <div className="flex items-center gap-1.5">
         <Icon size={13} className={cn("shrink-0", tone, spin && "animate-mosael-spin")} />
         <span className={cn("text-ui-xs font-semibold", tone)}>{t(`batchStatus_${task.status}` as never)}</span>

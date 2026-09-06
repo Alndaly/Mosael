@@ -6,7 +6,7 @@ import { CANVAS_GLASS_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
 import { cn } from "@/lib/utils";
 
 /**
- * 画布类页面左上角那颗**身份胶囊**:回哪儿去 · 这是什么。
+ * 画布类页面左上角的标题工具栏:回哪儿去 · 这是什么。
  *
  * 工作流、子图、创意画板三处此前各写了一份 —— 同一句话说三遍,而它们本来就是同一类东西
  * (「你现在在哪儿」)。三份里已经漂出了肉眼可见的差别:画板那份的 `font-semibold` 是死的,
@@ -55,7 +55,7 @@ export function CanvasTitle({
   );
 
   return (
-    <div className={cn("flex items-center gap-1 rounded-full p-1 pr-2.5", CANVAS_GLASS_SURFACE_CLASS)}>
+    <div className={cn("flex items-center gap-1 rounded-lg p-1 pr-2.5", CANVAS_GLASS_SURFACE_CLASS)}>
       {/* 返回键**给它一个底**。透明底的图标钮在胶囊里没有自己的轮廓,左边和胶囊边缘之间那点
           空白就显得忽大忽小 —— 有了底,它的占位是确定的,和右边的竖线、名字也就对齐了。 */}
       <Button
@@ -73,7 +73,7 @@ export function CanvasTitle({
       {onRename ? (
         <button
           type="button"
-          className="inline-flex cursor-pointer items-center rounded-full border-0 bg-transparent px-1.5 py-[3px] text-left text-foreground hover:bg-secondary"
+          className="inline-flex cursor-pointer items-center rounded-lg border-0 bg-transparent px-1.5 py-[3px] text-left text-foreground hover:bg-secondary"
           onClick={onRename}
           title={renameLabel}
         >

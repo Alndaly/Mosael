@@ -20,6 +20,7 @@
 /** 与前端 StudioView 一致。白名单而非透传:避免把任意字符串塞进 location.hash。 */
 const ALLOWED_VIEWS = new Set([
   "home",
+  "statistics",
   "media",
   "editor",
   "ai",

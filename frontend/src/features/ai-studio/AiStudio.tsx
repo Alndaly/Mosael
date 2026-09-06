@@ -215,7 +215,7 @@ export function AiStudio({ workspace }: { workspace: Workspace }) {
   const [tab, setTab] = usePersistentTab<"chat" | "generate">("ai-studio", "chat", ["chat", "generate"]);
 
   const switcher = (
-    <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border" role="tablist">
+    <div className="inline-flex h-8 items-stretch overflow-hidden rounded-md border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border" role="tablist">
       <button
         type="button"
         role="tab"

@@ -106,9 +106,9 @@ export function MediaPool({
   return (
     // 三行:头 / 筛选条 / 列表(列表占满余高并自滚)。
     <section className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)]">
-      <div className="flex min-h-10 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
+      <div className="flex min-h-10 flex-wrap items-center justify-between gap-1 border-b border-border px-3 py-1.5 [&>div:first-child]:basis-full [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
         {tabs ?? <h2>{t("media")}</h2>}
-        <div className="flex shrink-0 gap-1">
+        <div className="ml-auto flex shrink-0 gap-1">
           {/* Icon-only so the four CJK tabs + these two actions fit the narrow media panel. */}
           <Button asChild variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" disabled={uploading} title={t("import")} aria-label={t("import")}>
             <label>
@@ -147,7 +147,7 @@ export function MediaPool({
             aria-label={t("searchAssets")}
           />
         </div>
-        <div className="grid h-7 w-full grid-cols-4 overflow-hidden rounded-full border border-border bg-panel [&>button]:min-w-0 [&>button]:justify-center [&>button]:px-0 [&>button+button]:border-l [&>button+button]:border-border" role="group" aria-label={t("mediaKindGroup")}>
+        <div className="grid h-7 w-full grid-cols-4 overflow-hidden rounded-md border border-border bg-panel [&>button]:min-w-0 [&>button]:justify-center [&>button]:px-0 [&>button+button]:border-l [&>button+button]:border-border" role="group" aria-label={t("mediaKindGroup")}>
           {KIND_FILTERS.map((kind) => (
             <button
               key={kind}

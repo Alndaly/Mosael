@@ -154,7 +154,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
   // 页面中心。这样中心按整个内容区计算，不会被一条没有内容价值的顶栏向下推。
   if (profiles.isSuccess && items.length === 0) {
     return (
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-5 xl:p-6 [&>*]:shrink-0">
         <EmptyState
           icon={<Boxes size={22} />}
           title={t("poolEmptyTitle")}
@@ -183,9 +183,9 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
   }
 
   return (
-    <div className="grid min-h-full grid-rows-[auto_minmax(0,1fr)] gap-2 p-2">
+    <div className="grid min-h-full grid-rows-[auto_minmax(0,1fr)] gap-5 p-5 xl:p-6">
       <div className="flex items-center gap-2">
-        <h2 className="m-0 inline-flex items-center gap-1.5 text-[15px] font-semibold text-foreground">
+        <h2 className="m-0 inline-flex items-center gap-3 text-2xl font-semibold tracking-tight text-foreground">
           <Boxes size={17} /> {t("poolTitle")}
         </h2>
         <small className="text-ui-xs text-muted-foreground">{t("poolSubtitle")}</small>
@@ -198,7 +198,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
         </Button>
       </div>
 
-      <div className="grid content-start gap-1.5 grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
+      <div className="grid content-start gap-4 grid-cols-[repeat(auto-fill,minmax(260px,1fr))]">
         {profiles.isLoading &&
           items.length === 0 &&
           [0, 1, 2, 3].map((i) => (
@@ -218,7 +218,7 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                 <ContextMenuTrigger asChild>
                   <div
                     className={cn(
-                      "flex min-h-32 flex-col gap-[3px] overflow-hidden rounded-lg border border-border bg-panel p-2.5 shadow-[var(--shadow-panel)]",
+                      "flex min-h-32 flex-col gap-[3px] overflow-hidden rounded-lg border border-border bg-panel p-5 shadow-[var(--shadow-panel)]",
                       !p.enabled && "opacity-55",
                     )}
                   >

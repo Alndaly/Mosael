@@ -52,7 +52,7 @@ function useUnlockBodyOnClose(open: boolean): void {
  * 用法:<label className={DIALOG_FIELD}><span>标题</span><Input …/><small>说明</small></label>
  */
 export const DIALOG_FIELD =
-  "grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none";
+  "grid gap-2 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded-md [&_input]:border [&_input]:border-input [&_input]:bg-field [&_input]:px-3 [&_input]:py-2 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded-md [&_textarea]:border [&_textarea]:border-input [&_textarea]:bg-field [&_textarea]:px-3 [&_textarea]:py-2 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none";
 
 /**
  * 全站弹窗的外壳:**三段** —— 钉住的头、能滚的身体、钉住的尾。
@@ -109,14 +109,14 @@ export function ModalShell({
           if (!dismissible) event.preventDefault();
         }}
         className={cn(
-          "flex min-w-0 max-h-[90vh] flex-col gap-0 overflow-hidden bg-transparent p-0 backdrop-blur-xl",
+          "flex min-w-0 max-h-[90vh] flex-col gap-0 overflow-hidden bg-popover p-0",
           className,
         )}
       >
         <DialogHeader
           data-slot="modal-header"
           className={cn(
-            "sticky top-0 z-10 shrink-0 border-b border-border/60 bg-popover/90 px-5 pb-3.5 pt-5 backdrop-blur-xl",
+            "sticky top-0 z-10 shrink-0 border-b border-border/60 bg-popover px-5 pb-3.5 pt-5",
             header && "gap-2.5",
           )}
         >
@@ -126,7 +126,7 @@ export function ModalShell({
         <div
           data-slot="modal-body"
           className={cn(
-            "min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain bg-popover/90 px-5 py-5 backdrop-blur-xl [scrollbar-gutter:stable]",
+            "min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain bg-popover px-5 py-5 [scrollbar-gutter:stable]",
             bodyClassName,
           )}
         >
@@ -135,7 +135,7 @@ export function ModalShell({
         {footer && (
           <DialogFooter
             data-slot="modal-footer"
-            className="sticky bottom-0 z-10 shrink-0 gap-2 border-t border-border/60 bg-popover/90 px-5 py-3.5 backdrop-blur-xl sm:items-center"
+            className="sticky bottom-0 z-10 shrink-0 gap-2 border-t border-border/60 bg-popover px-5 py-3.5 sm:items-center"
           >
             {footer}
           </DialogFooter>

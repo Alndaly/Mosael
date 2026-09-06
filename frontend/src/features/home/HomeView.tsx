@@ -1,34 +1,19 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Activity,
-  BookOpen,
-  BookText,
   Clapperboard,
-  Clock3,
-  Coins,
   Film,
   FolderPlus,
   Layers,
-  Megaphone,
+  MoreHorizontal,
+  Search,
   Pencil,
-  RefreshCcw,
   Scissors,
   Trash2,
-  Workflow as WorkflowIcon,
 } from "lucide-react";
 
-import { api, deleteProject, renameProject, workspaceSummary, type Project, type ProjectWithStats, type Workspace } from "@/api/client";
+import { api, assetThumbnailUrl, type Asset, deleteProject, renameProject, type Project, type ProjectWithStats, type Workspace } from "@/api/client";
 import { useI18n, usePreferences } from "@/app/preferences";
-import { gotoRecord } from "@/lib/deepLink";
-import {
-  ActivityChart,
-  AssetKindsChart,
-  PublishActivityChart,
-  PublishPlatformsChart,
-  UsageCostChart,
-  UsageTokensChart,
-} from "@/features/home/HomeCharts";
 import { HomeHero } from "@/features/home/HomeHero";
 import { poemOfToday, randomPoem, type Poem } from "@/features/home/poems";
 import { relativeTime } from "@/lib/time";
@@ -38,10 +23,11 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 
-const HOME_LIVE_REFRESH_MS = 5_000;
 
 export function HomeView({
   workspace,
@@ -62,6 +48,7 @@ export function HomeView({
   const [renaming, setRenaming] = React.useState<Project | null>(null);
   const [deleting, setDeleting] = React.useState<Project | null>(null);
   const [search, setSearch] = React.useState("");
+  const [collection, setCollection] = usePersistentTab<"recent" | "all">("home-collection", "recent", ["recent", "all"]);
   // 排序方式跟着人走 —— 切走再回来不该重置成默认(见 lib/usePersistentTab)。
   const [sortKey, setSortKey] = usePersistentTab<"updated" | "created" | "name">(
     "home-sort", "updated", ["updated", "created", "name"],
@@ -119,17 +106,8 @@ export function HomeView({
     return "homeGreetingEvening" as const;
   }, []);
 
-  const summary = useQuery({
-    queryKey: ["workspace-summary", workspace.id],
-    queryFn: () => workspaceSummary(workspace.id),
-    staleTime: 0,
-    refetchInterval: HOME_LIVE_REFRESH_MS,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
-  });
 
   React.useEffect(() => {
-    void qc.invalidateQueries({ queryKey: ["workspace-summary", workspace.id] });
     void qc.invalidateQueries({ queryKey: ["projects", workspace.id] });
   }, [qc, workspace.id]);
 
@@ -137,11 +115,24 @@ export function HomeView({
     const query = search.trim().toLowerCase();
     const matched = projects.filter((project) => query === "" || project.name.toLowerCase().includes(query));
     return [...matched].sort((a, b) => {
-      if (sortKey === "name") return a.name.localeCompare(b.name, "zh-CN");
-      if (sortKey === "created") return (b.created_at ?? "").localeCompare(a.created_at ?? "");
+      if (collection === "all" && sortKey === "name") return a.name.localeCompare(b.name, "zh-CN");
+      if (collection === "all" && sortKey === "created") return (b.created_at ?? "").localeCompare(a.created_at ?? "");
       return (b.updated_at ?? "").localeCompare(a.updated_at ?? "");
     });
-  }, [projects, search, sortKey]);
+  }, [projects, search, sortKey, collection]);
+  // Reuse the workspace asset cache. Only project-owned media can illustrate that project.
+  const artwork = useQuery({
+    queryKey: ["assets", workspace.id],
+    queryFn: () => api<Asset[]>(`/api/assets?workspace_id=${workspace.id}`),
+    enabled: projects.length > 0,
+  });
+  const covers = React.useMemo(() => {
+    const result = new Map<string, Asset>();
+    for (const asset of artwork.data ?? []) {
+      if (asset.project_id && (asset.kind === "image" || asset.kind === "video") && !result.has(asset.project_id)) result.set(asset.project_id, asset);
+    }
+    return result;
+  }, [artwork.data]);
   const refresh = () => qc.invalidateQueries({ queryKey: ["projects", workspace.id] });
 
   const rename = useMutation({
@@ -169,161 +160,27 @@ export function HomeView({
     },
   });
 
-  // 每块磁贴都是入口:goto 是 hash 路由,action 是页面内动作(深链事件/打开项目)。
-  const searchRef = React.useRef<HTMLInputElement | null>(null);
-  const latestProject = React.useMemo(
-    () => [...projects].sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))[0],
-    [projects],
-  );
-  const openTaskCenter = () => window.dispatchEvent(new CustomEvent("mosael:open-tasks"));
 
-  const stats = summary.data;
-  const statTiles = stats
-    ? ([
-        {
-          key: "homeStatProjects",
-          value: stats.project_count,
-          icon: <Clapperboard size={13} />,
-          action: () => searchRef.current?.focus(),
-        },
-        { key: "homeStatAssets", value: stats.asset_count, icon: <Film size={13} />, goto: "/media" },
-        {
-          key: "homeStatSequences",
-          value: stats.sequence_count,
-          icon: <Layers size={13} />,
-          action: () => latestProject && onOpenProject(latestProject.id),
-        },
-        { key: "homeStatWorkflows", value: stats.workflow_count, icon: <WorkflowIcon size={13} />, goto: "/workflows" },
-        { key: "homeStatRunningJobs", value: stats.running_jobs, icon: <Activity size={13} />, action: openTaskCenter },
-        {
-          key: "homeStatAiUsage",
-          value: stats.usage_event_count,
-          icon: <Coins size={13} />,
-          goto: "/ai",
-          extra:
-            stats.usage_unknown_cost_events > 0
-              ? t("homeStatUsageUnknownSuffix").replace("{n}", String(stats.usage_unknown_cost_events))
-              : undefined,
-        },
-        {
-          key: "homeStatWeekDone",
-          value: stats.week_jobs_succeeded,
-          icon: <Clock3 size={13} />,
-          action: openTaskCenter,
-          extra:
-            stats.week_jobs_failed > 0
-              ? t("homeStatWeekFailedSuffix").replace("{n}", String(stats.week_jobs_failed))
-              : undefined,
-        },
-        { key: "homeStatWeekPublished", value: stats.week_published, icon: <Megaphone size={13} />, goto: "/publish" },
-      ] as const)
-    : [];
 
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch gap-2 overflow-auto p-2 [&>*]:shrink-0">
-      <HomeHero
-        greeting={t(greetingKey)}
-        workspaceName={workspace.name}
-        now={now}
-        poem={poem}
-        poemLoading={poemLoading}
-        poemEgg={poemSpins > 0 && poemSpins % 10 === 0 ? t("homePoemEgg") : undefined}
-        onRefreshPoem={() => void spinPoem()}
-        holidayOverride={holidayOverride}
-      />
-
-      {statTiles.length > 0 && (
-        <section className="grid grid-cols-[repeat(auto-fit,minmax(128px,1fr))] gap-2">
-          {statTiles.map((tile) => (
-            <button
-              type="button"
-              className="grid cursor-pointer grid-cols-[auto_1fr] grid-rows-[auto_auto] items-center gap-x-2 rounded-lg border border-border bg-panel px-3 py-2 text-left hover:border-border-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-              key={tile.key}
-              onClick={() => {
-                if ("goto" in tile && tile.goto) gotoRecord(tile.goto);
-                else if ("action" in tile && tile.action) tile.action();
-              }}
-            >
-              <span className="row-span-2 inline-flex text-muted-foreground">{tile.icon}</span>
-              <strong className="text-base font-[650] leading-[1.2] tabular-nums">{tile.value}</strong>
-              <span className="truncate text-ui-xs text-muted-foreground">
-                {t(tile.key)}
-                {"extra" in tile && tile.extra ? <em className="not-italic text-destructive"> · {tile.extra}</em> : null}
-              </span>
-            </button>
-          ))}
-        </section>
-      )}
-
-      {stats && (
-        <section className="grid grid-cols-[2fr_1fr] gap-2 max-[880px]:grid-cols-1">
-          <div className="grid content-start gap-1.5 rounded-lg border border-border bg-panel px-3.5 pb-2 pt-2.5">
-            <h2 className="m-0 text-xs font-[650] text-muted-foreground">{t("homeChartActivity")}</h2>
-            <ActivityChart daily={stats.daily} />
-          </div>
-          <div className="grid content-start gap-1.5 rounded-lg border border-border bg-panel px-3.5 pb-2 pt-2.5">
-            <h2 className="m-0 text-xs font-[650] text-muted-foreground">{t("homeChartAssets")}</h2>
-            <AssetKindsChart assetKinds={stats.asset_kinds} />
-          </div>
-          <div className="grid content-start gap-1.5 rounded-lg border border-border bg-panel px-3.5 pb-2 pt-2.5">
-            <h2 className="m-0 text-xs font-[650] text-muted-foreground">{t("homeChartPublishActivity")}</h2>
-            <PublishActivityChart daily={stats.publish_daily} />
-          </div>
-          <div className="grid content-start gap-1.5 rounded-lg border border-border bg-panel px-3.5 pb-2 pt-2.5">
-            <h2 className="m-0 text-xs font-[650] text-muted-foreground">{t("homeChartPublishPlatforms")}</h2>
-            <PublishPlatformsChart platforms={stats.publish_platforms} />
-          </div>
-          <div className="grid content-start gap-1.5 rounded-lg border border-border bg-panel px-3.5 pb-2 pt-2.5">
-            <h2 className="m-0 text-xs font-[650] text-muted-foreground">{t("homeChartUsage")}</h2>
-            <UsageCostChart
-              daily={stats.usage_daily}
-              currency={stats.usage_currency}
-              unknown={stats.usage_unknown_cost_events}
-              unpriced={stats.usage_unpriced}
-            />
-          </div>
-          <div className="grid content-start gap-1.5 rounded-lg border border-border bg-panel px-3.5 pb-2 pt-2.5">
-            <h2 className="m-0 flex items-center justify-between gap-2 text-xs font-[650] text-muted-foreground">
-              {t("homeChartTokens")}
-              {/* 命中率放标题行:图上看的是"哪天多哪天少",这个数回答的是"整段时间省了多少",
-                  两者不该抢同一块地方。只在真有缓存时出现 —— 恒定的 0% 只是噪音。 */}
-              {stats.usage_cache_hit_ratio > 0 && (
-                <span
-                  className="font-normal tabular-nums text-muted-foreground"
-                  title={t("homeCacheHitHint")}
-                >
-                  {t("homeCacheHit")} {Math.round(stats.usage_cache_hit_ratio * 100)}%
-                </span>
-              )}
-            </h2>
-            <UsageTokensChart daily={stats.usage_token_daily} />
-          </div>
-        </section>
-      )}
-
-      <div className="flex flex-wrap items-center justify-between gap-1.5">
-        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-          <Input
-            ref={searchRef}
-            className="h-8 w-48 rounded-md border border-border bg-field px-2.5 text-xs text-foreground transition-[border-color] duration-100 placeholder:text-muted-foreground focus-visible:border-primary focus-visible:outline-none"
-            value={search}
-            placeholder={t("searchProjects")}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-          <Select value={sortKey} onValueChange={(value) => setSortKey(value as "updated" | "created" | "name")}>
-            <SelectTrigger className="h-8 w-auto min-w-32 bg-field text-xs" aria-label={t("sortUpdated")}>
-              <SelectValue />
-            </SelectTrigger>
+    <div className="flex h-full min-h-0 flex-col items-stretch gap-6 overflow-auto px-6 py-8 xl:px-10 xl:py-10 [&>*]:shrink-0">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div><h2 className="m-0 text-4xl font-semibold tracking-tight">{t("homeProjectsTitle")}</h2><p className="mb-0 mt-2 text-ui-md text-muted-foreground">{t("homeProjectsDescription")}</p></div>
+        <Button size="lg" onClick={onCreateProject} disabled={creatingProject}><FolderPlus />{t("createProject")}</Button>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-border">
+        <div className="flex self-stretch gap-6" role="group" aria-label={t("homeProjectsTitle")}>
+          {(["recent", "all"] as const).map(mode => <button key={mode} type="button" aria-pressed={collection === mode} onClick={() => { setCollection(mode); if (mode === "recent") setSortKey("updated"); }} className={cn("min-h-12 cursor-pointer border-b-2 border-transparent px-1 text-ui-md font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", collection === mode && "border-primary text-primary")}>{t(mode === "recent" ? "homeRecent" : "homeAll")}</button>)}
+        </div>
+        <div className="mb-3 flex min-w-0 flex-wrap items-center gap-2">
+          <div className="relative"><Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" /><Input aria-label={t("searchProjects")} className="w-52 pl-9" value={search} placeholder={t("searchProjects")} onChange={(event) => setSearch(event.target.value)} /></div>
+          <Select value={collection === "recent" ? "updated" : sortKey} onValueChange={(value) => { setSortKey(value as "updated" | "created" | "name"); setCollection("all"); }}>
+            <SelectTrigger className="h-9 w-auto min-w-36 bg-field text-ui-sm" aria-label={t("sortUpdated")}><SelectValue /></SelectTrigger>
             <SelectContent className="max-w-none">
-              <SelectItem value="updated">{t("sortUpdated")}</SelectItem>
-              <SelectItem value="created">{t("sortCreated")}</SelectItem>
-              <SelectItem value="name">{t("sortName")}</SelectItem>
+              <SelectItem value="updated">{t("sortUpdated")}</SelectItem><SelectItem value="created">{t("sortCreated")}</SelectItem><SelectItem value="name">{t("sortName")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
-        <Button size="sm" onClick={onCreateProject} disabled={creatingProject}>
-          <FolderPlus size={13} /> {t("createProject")}
-        </Button>
       </div>
 
       {projects.length === 0 ? (
@@ -339,59 +196,26 @@ export function HomeView({
         />
       ) : (
         <>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-2">
-            {visible.map((project) => (
-              <ContextMenu key={project.id}>
-                <ContextMenuTrigger asChild>
-                  <article className="grid grid-cols-[minmax(0,1fr)] gap-2 rounded-lg border border-border bg-panel p-3 shadow-[var(--shadow-panel)] transition-[border-color] duration-100 hover:border-border-strong" onDoubleClick={() => onOpenProject(project.id)}>
-                    <div className="min-w-0">
-                      <strong className="block truncate text-ui-md font-semibold">{project.name}</strong>
-                      <small className="mt-0.5 block text-xs text-muted-foreground">{workspace.name}</small>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2.5 text-ui-xs text-muted-foreground">
-                      <span className="inline-flex items-center gap-1 whitespace-nowrap" title={t("projectStatDuration")}>
-                        <Clock3 size={11} />
-                        <em className="timecode not-italic">{formatSeconds(project.timeline_duration ?? 0)}</em>
-                      </span>
-                      <span className="inline-flex items-center gap-1 whitespace-nowrap" title={t("projectStatAssets")}>
-                        <Film size={11} />
-                        {t("projectStatAssets").replace("{n}", String(project.asset_count ?? 0))}
-                      </span>
-                      <span className="inline-flex items-center gap-1 whitespace-nowrap" title={t("projectStatSequences")}>
-                        <Layers size={11} />
-                        {t("projectStatSequences").replace("{n}", String(project.sequence_count ?? 0))}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-1.5 border-t border-border pt-2.5">
-                      <small className="m-0 min-w-0 flex-1 truncate text-ui-xs text-muted-foreground">
-                        {project.created_at && (
-                          <>{t("projectCreatedAt").replace("{t}", formatShortDate(project.created_at))} · </>
-                        )}
-                        {project.updated_at && t("projectStatUpdated").replace("{t}", relativeTime(project.updated_at, locale))}
-                      </small>
-                      <Button variant="outline" size="sm" onClick={() => onOpenProject(project.id)}>
-                        <Scissors size={13} /> {t("homeOpenEditor")}
-                      </Button>
-                    </div>
-                  </article>
-                </ContextMenuTrigger>
-                <ContextMenuContent>
-                  <ContextMenuItem onSelect={() => onOpenProject(project.id)}>
-                    <Scissors /> {t("homeOpenEditor")}
-                  </ContextMenuItem>
-                  <ContextMenuItem onSelect={() => setRenaming(project)}>
-                    <Pencil /> {t("rename")}
-                  </ContextMenuItem>
-                  <ContextMenuSeparator />
-                  <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting(project)}>
-                    <Trash2 /> {t("delete")}
-                  </ContextMenuItem>
-                </ContextMenuContent>
-              </ContextMenu>
-            ))}
+          {visible.length === 0 && <p className="py-10 text-center text-muted-foreground">{t("homeNoSearchResults")}</p>}
+          {collection === "recent" && !search.trim() && <div className={cn("grid grid-cols-1 gap-6", visible.length >= 3 ? "lg:h-[470px] lg:grid-cols-[1.2fr_1fr] lg:grid-rows-2" : "lg:grid-cols-2")}>
+            {visible.slice(0, 3).map((project, index) => <ProjectPresentation key={project.id} project={project} cover={covers.get(project.id)} featured className={index === 0 && visible.length >= 3 ? "lg:row-span-2" : undefined} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} />)}
+          </div>}
+          <div className="divide-y divide-border border-y border-border">
+            {(collection === "recent" && !search.trim() ? visible.slice(3) : visible).map(project => <ProjectPresentation key={project.id} project={project} cover={covers.get(project.id)} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} />)}
           </div>
         </>
       )}
+
+      <HomeHero
+        greeting={t(greetingKey)}
+        workspaceName={workspace.name}
+        now={now}
+        poem={poem}
+        poemLoading={poemLoading}
+        poemEgg={poemSpins > 0 && poemSpins % 10 === 0 ? t("homePoemEgg") : undefined}
+        onRefreshPoem={() => void spinPoem()}
+        holidayOverride={holidayOverride}
+      />
 
       <RenameDialog
         open={renaming !== null}
@@ -409,4 +233,52 @@ export function HomeView({
       />
     </div>
   );
+}
+
+/** Every presentation shares the same actions; images always belong to this project. */
+function ProjectPresentation({ project, cover, featured = false, className, onOpen, onRename, onDelete }: {
+  project: ProjectWithStats; cover?: Asset; featured?: boolean; className?: string;
+  onOpen: (id: string) => void; onRename: (project: Project) => void; onDelete: (project: Project) => void;
+}) {
+  const t = useI18n();
+  const { locale } = usePreferences();
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const [failed, setFailed] = React.useState(false);
+  React.useEffect(() => setFailed(false), [cover?.id]);
+  const open = () => onOpen(project.id);
+  return <ContextMenu>
+    <ContextMenuTrigger asChild>
+      <article className={cn("group min-h-0 min-w-0", featured ? "flex flex-col gap-3" : "flex items-center gap-4 py-4", className)}>
+        <button type="button" onClick={open} aria-label={`${t("homeOpenEditor")}: ${project.name}`} className={cn("relative flex cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-border bg-panel-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", featured ? "aspect-video min-h-32 w-full flex-1 lg:aspect-auto" : "h-20 w-32 shrink-0 max-[640px]:w-20")}>
+          {cover && !failed ? <img src={assetThumbnailUrl(cover.id)} alt="" loading="lazy" onError={() => setFailed(true)} className="size-full object-cover transition-transform duration-300 motion-safe:group-hover:scale-[1.025]" /> : <span className="flex flex-col items-center gap-3 text-muted-foreground"><Clapperboard size={featured ? 32 : 24} strokeWidth={1.3} />{featured && <span className="text-ui-xs">{t("homeNoCover")}</span>}</span>}
+          {(project.timeline_duration ?? 0) > 0 && <span className="absolute bottom-2 right-2 rounded bg-black/75 px-1.5 py-0.5 font-mono text-xs text-white">{formatSeconds(project.timeline_duration!)}</span>}
+        </button>
+        <div className={cn("flex min-w-0 items-start gap-2", !featured && "flex-1 items-center")}>
+          <div className="min-w-0 flex-1">
+            <button type="button" onClick={open} className={cn("block max-w-full cursor-pointer truncate rounded text-left font-semibold hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", featured ? "text-lg" : "text-ui-md")} title={project.name}>{project.name}</button>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-ui-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1"><Film size={12} />{t("projectStatAssets").replace("{n}", String(project.asset_count ?? 0))}</span>
+              <span className="inline-flex items-center gap-1"><Layers size={12} />{t("projectStatSequences").replace("{n}", String(project.sequence_count ?? 0))}</span>
+              {project.updated_at && <span title={project.created_at ? t("projectCreatedAt").replace("{t}", formatShortDate(project.created_at)) : undefined}>{t("projectStatUpdated").replace("{t}", relativeTime(project.updated_at, locale))}</span>}
+            </div>
+          </div>
+          <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+            <PopoverTrigger asChild><Button variant="ghost" size="icon-sm" aria-label={`${t("projectActions")}: ${project.name}`}><MoreHorizontal /></Button></PopoverTrigger>
+            <PopoverContent className="grid w-48 gap-1 p-1.5" align="end">
+              <Button variant="ghost" className="justify-start" onClick={() => { setMenuOpen(false); open(); }}><Scissors />{t("homeOpenEditor")}</Button>
+              <Button variant="ghost" className="justify-start" onClick={() => { setMenuOpen(false); onRename(project); }}><Pencil />{t("rename")}</Button>
+              <div className="border-t border-border" />
+              <Button variant="ghost" className="justify-start text-destructive hover:text-destructive" onClick={() => { setMenuOpen(false); onDelete(project); }}><Trash2 />{t("delete")}</Button>
+            </PopoverContent>
+          </Popover>
+        </div>
+      </article>
+    </ContextMenuTrigger>
+    <ContextMenuContent>
+      <ContextMenuItem onSelect={open}><Scissors />{t("homeOpenEditor")}</ContextMenuItem>
+      <ContextMenuItem onSelect={() => onRename(project)}><Pencil />{t("rename")}</ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => onDelete(project)}><Trash2 />{t("delete")}</ContextMenuItem>
+    </ContextMenuContent>
+  </ContextMenu>;
 }

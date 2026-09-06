@@ -57,6 +57,7 @@ import { useCreateProject } from "@/lib/useCreateProject";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AiStudio } from "@/features/ai-studio/AiStudio";
 import { EditorView } from "@/features/editor/EditorView";
+import { StatisticsView } from "@/features/home/StatisticsView";
 import { HomeView } from "@/features/home/HomeView";
 import { MediaLibraryView } from "@/features/media/MediaLibraryView";
 import { RecordingProvider } from "@/features/media/RecordingProvider";
@@ -528,6 +529,7 @@ function Studio({
             creatingProject={createProject.isPending}
           />
         )}
+        {view === "statistics" && <StatisticsView workspace={workspace} projects={projects.data ?? []} onOpenProject={openProject} />}
         {view === "media" && <MediaLibraryView workspace={workspace} />}
         {view === "editor" && (
           <EditorView

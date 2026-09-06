@@ -1175,14 +1175,14 @@ function LeftTabs({
   ];
 
   return (
-    <div ref={ref} className="flex min-w-0 flex-1 gap-0.5 overflow-x-auto">
+    <div ref={ref} className="flex min-w-0 flex-1 flex-wrap gap-1">
       {tabs.map((item) => (
         <button
           key={item.key}
           type="button"
           data-active={item.key === tab || undefined}
           className={cn(
-            "shrink-0 cursor-pointer whitespace-nowrap rounded-full border-0 bg-transparent px-2 py-1 text-ui-xs font-semibold uppercase tracking-[0.03em] text-muted-foreground transition-[background-color,color] duration-100 hover:text-foreground",
+            "shrink-0 cursor-pointer whitespace-nowrap rounded-md border-0 bg-transparent px-2 py-1 text-ui-xs font-semibold text-muted-foreground transition-[background-color,color] duration-100 hover:text-foreground",
             item.key === tab && "bg-secondary text-foreground hover:bg-secondary",
           )}
           onClick={() => onChange(item.key)}

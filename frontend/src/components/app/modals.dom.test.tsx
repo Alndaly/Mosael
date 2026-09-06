@@ -28,21 +28,21 @@ describe("ModalShell sticky layout", () => {
     const footer = dialog.querySelector('[data-slot="modal-footer"]');
 
     expect(dialog.className).toContain("overflow-hidden");
-    expect(dialog.className).toContain("bg-transparent");
-    expect(dialog.className).toContain("backdrop-blur-xl");
+    expect(dialog.className).toContain("bg-popover");
+    expect(dialog.className).not.toContain("backdrop-blur-xl");
     expect(header?.className).toContain("sticky");
     expect(header?.className).toContain("top-0");
-    expect(header?.className).toContain("bg-popover/90");
-    expect(header?.className).toContain("backdrop-blur-xl");
+    expect(header?.className).toContain("bg-popover");
+    expect(header?.className).not.toContain("backdrop-blur-xl");
     expect(body?.className).toContain("overflow-y-auto");
-    expect(body?.className).toContain("bg-popover/90");
-    expect(body?.className).toContain("backdrop-blur-xl");
+    expect(body?.className).toContain("bg-popover");
+    expect(body?.className).not.toContain("backdrop-blur-xl");
     expect(body?.className).toContain("py-5");
     expect(footer?.className).toContain("sticky");
     expect(footer?.className).toContain("bottom-0");
     expect(footer?.className).toContain("sm:items-center");
-    expect(footer?.className).toContain("bg-popover/90");
-    expect(footer?.className).toContain("backdrop-blur-xl");
+    expect(footer?.className).toContain("bg-popover");
+    expect(footer?.className).not.toContain("backdrop-blur-xl");
   });
 
   it("uses one gap system and the shared surface radius", () => {
@@ -62,7 +62,7 @@ describe("ModalShell sticky layout", () => {
     const header = dialog.querySelector('[data-slot="modal-header"]');
     const footer = dialog.querySelector('[data-slot="modal-footer"]');
 
-    expect(dialog.className).toContain("rounded-xl");
+    expect(dialog.className).toContain("rounded-2xl");
     expect(dialog.className).not.toContain("sm:rounded-2xl");
     expect(header?.className).toContain("gap-2.5");
     expect(header?.className).not.toMatch(/space-y-/);

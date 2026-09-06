@@ -3,6 +3,7 @@ import {
   useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BookOpen,
+  ChartNoAxesCombined,
   Bot,
   Boxes,
   CalendarClock,
@@ -16,6 +17,8 @@ import {
   MonitorCog,
   Moon,
   Pencil,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plug,
   Rocket,
   Scissors,
@@ -30,12 +33,12 @@ import { toast } from "sonner";
 import { api, createWorkspace, deleteWorkspace, renameWorkspace, userAvatarUrl, type Workspace } from "@/api/client";
 import { useAuth } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { NotificationCenter } from "@/components/layout/NotificationCenter";
 import { TaskCenter } from "@/components/layout/TaskCenter";
-import { BrandMark } from "@/components/layout/BrandMark";
 import { workspaceMenuState } from "@/components/layout/workspaceMenu";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -50,6 +53,7 @@ export type { StudioView } from "@/components/layout/navLabels";
     「哪些页面、各叫什么」在 navLabels 那一份里。 */
 const ICONS: Record<StudioView, React.ReactNode> = {
   home: <Home size={17} />,
+  statistics: <ChartNoAxesCombined size={17} />,
   media: <FolderOpen size={17} />,
   editor: <Scissors size={17} />,
   ai: <Bot size={17} />,
@@ -117,6 +121,24 @@ export function AppShell({
     queryFn: () => api<{ is_deployment_admin: boolean }>("/api/auth/me"),
   });
   const isDeploymentAdmin = me.data?.is_deployment_admin ?? false;
+  const [narrow, setNarrow] = React.useState(() => window.matchMedia("(max-width: 1199px)").matches);
+  const [collapsed, setCollapsed] = React.useState<boolean | null>(() => {
+    try {
+      const saved = localStorage.getItem("mosael.sidebar.collapsed");
+      return saved === null ? null : saved === "true";
+    } catch { return null; }
+  });
+  const compact = collapsed ?? narrow;
+  React.useEffect(() => {
+    const media = window.matchMedia("(max-width: 1199px)");
+    const update = () => setNarrow(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  const toggleSidebar = () => {
+    setCollapsed(!compact);
+    try { localStorage.setItem("mosael.sidebar.collapsed", String(!compact)); } catch { /* memory only */ }
+  };
 
   // 桌面端启动静默更新检查的回报:有新版弹一条可点开发布页的提示(不打断)。
   React.useEffect(() => {
@@ -130,10 +152,10 @@ export function AppShell({
   }, [t]);
 
   return (
-    <div className="grid h-screen grid-cols-[56px_minmax(0,1fr)] grid-rows-[44px_minmax(0,1fr)]">
+    <div data-studio-shell data-sidebar-collapsed={compact} className="grid h-screen grid-cols-[var(--studio-sidebar)_minmax(0,1fr)] grid-rows-[56px_minmax(0,1fr)]" style={{ "--studio-sidebar": compact ? "64px" : "224px" } as React.CSSProperties}>
       <header
         data-glass-surface className={cn(
-        "col-span-full flex items-center justify-between border-b border-border bg-panel px-2.5 supports-[backdrop-filter]:bg-[var(--glass-chrome)] supports-[backdrop-filter]:[-webkit-backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[backdrop-filter:blur(14px)_saturate(1.4)] [.is-desktop_&]:[-webkit-app-region:drag] [.is-desktop_&_:is(button,a,input,[role=button])]:[-webkit-app-region:no-drag]",
+        "col-span-full flex items-center justify-between border-b border-border bg-panel px-4 [.is-desktop_&]:[-webkit-app-region:drag] [.is-desktop_&_:is(button,a,input,[role=button])]:[-webkit-app-region:no-drag]",
         WINDOW_CHROME_INSET,
       )}>
         {(() => {
@@ -145,15 +167,13 @@ export function AppShell({
           const pageLabel = labelKey ? t(labelKey) : "";
           const scoped = PROJECT_SCOPED_VIEWS.includes(view);
           return (
-            <div className="flex min-w-0 items-center gap-[7px] text-ui-md text-muted-foreground">
-              <WorkspaceSwitcher
-                workspaceId={workspaceId}
-                workspaceName={workspaceName}
-                workspaces={workspaces}
-                onSelectWorkspace={onSelectWorkspace}
-              />
+            <div className="flex min-w-0 items-center gap-3 text-ui-sm text-muted-foreground">
+              <Button variant="ghost" size="icon-xs" onClick={toggleSidebar} aria-expanded={!compact} aria-controls="studio-navigation" aria-label={compact ? t("navExpand") : t("navCollapse")}>
+                {compact ? <PanelLeftOpen /> : <PanelLeftClose />}
+              </Button>
+              <span className="max-w-48 truncate max-[760px]:hidden">{workspaceName}</span>
               <span className="text-border-strong">/</span>
-              <h1 className={cn("m-0 shrink-0 text-ui-md font-semibold text-foreground", scoped && "font-medium text-muted-foreground")}>{pageLabel}</h1>
+              <h1 className={cn("m-0 shrink-0 text-ui-sm font-semibold text-foreground", scoped && "font-medium text-muted-foreground")}>{pageLabel}</h1>
               {scoped && (
                 <>
                   <span className="text-border-strong">/</span>
@@ -181,10 +201,10 @@ export function AppShell({
           {actions}
           <button
             type="button"
-            className="inline-flex h-[26px] cursor-pointer items-center gap-1.5 rounded-md border border-border bg-transparent px-[9px] text-xs text-muted-foreground transition-[border-color,color] duration-100 hover:border-border-strong hover:text-foreground max-[760px]:[&_kbd]:hidden max-[760px]:[&_span]:hidden [&_kbd]:rounded-sm [&_kbd]:border [&_kbd]:border-border [&_kbd]:px-1 [&_kbd]:text-ui-2xs [&_kbd]:leading-[15px] [&_kbd]:text-muted-foreground [&_kbd]:[font-family:inherit]"
+            className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-transparent px-[9px] text-xs text-muted-foreground transition-[border-color,color] duration-100 hover:border-border-strong hover:text-foreground max-[760px]:[&_kbd]:hidden max-[760px]:[&_span]:hidden [&_kbd]:rounded-sm [&_kbd]:border [&_kbd]:border-border [&_kbd]:px-1 [&_kbd]:text-ui-2xs [&_kbd]:leading-[15px] [&_kbd]:text-muted-foreground [&_kbd]:[font-family:inherit]"
             onClick={() => window.dispatchEvent(new CustomEvent("mosael:open-cmdk"))}
           >
-            <Search size={13} />
+            <Search size={15} />
             <span>{t("cmdkTitle")}</span>
             <kbd>⌘K</kbd>
           </button>
@@ -220,36 +240,32 @@ export function AppShell({
           </Tooltip>
         </div>
       </header>
-      <aside
-        data-glass-surface
-        className="col-start-1 row-start-2 flex flex-col items-center gap-0.5 border-r border-border bg-panel px-0 py-2 supports-[backdrop-filter]:bg-[var(--glass-chrome)] supports-[backdrop-filter]:[-webkit-backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[backdrop-filter:blur(14px)_saturate(1.4)] [.is-desktop_&]:[-webkit-app-region:drag] [.is-desktop_&_:is(button,a)]:[-webkit-app-region:no-drag]">
-        <div className="grid h-[30px] w-[30px] select-none place-items-center" aria-hidden>
-          <BrandMark size={30} />
+      <aside data-glass-surface className="col-start-1 row-start-2 flex min-h-0 flex-col border-r border-border bg-panel px-3 pb-3 pt-5 [@media(max-height:850px)]:pt-3">
+        <div className={cn("mb-5 flex h-9 [@media(max-height:850px)]:mb-3 select-none items-center gap-2.5", compact ? "justify-center" : "px-2")} aria-label="Mosael">
+          <span className={cn("font-semibold tracking-[-0.055em]", compact ? "text-2xl text-primary" : "text-3xl")}>{compact ? "M" : "Mosael"}</span>
         </div>
-        <div className="my-2 h-px w-6 bg-border" />
-        {PRIMARY_NAV.map((item) => (
-          <RailButton
-            key={item.view}
-            label={t(item.labelKey)}
-            active={view === item.view}
-            onClick={() => onViewChange(item.view)}
-          >
-            {ICONS[item.view]}
+        <div className="mb-5 [@media(max-height:850px)]:mb-3">
+          <WorkspaceSwitcher compact={compact} workspaceId={workspaceId} workspaceName={workspaceName} workspaces={workspaces} onSelectWorkspace={onSelectWorkspace} />
+        </div>
+        <nav id="studio-navigation" aria-label={t("navMain")} className="flex min-h-0 flex-1 flex-col gap-1 [@media(max-height:850px)]:gap-0.5 overflow-y-auto overflow-x-hidden">
+          {PRIMARY_NAV.filter((item) => item.view !== "settings").map((item) => (
+            <RailButton key={item.view} compact={compact} label={t(item.labelKey)} active={view === item.view} onClick={() => onViewChange(item.view)}>
+              {ICONS[item.view]}
+            </RailButton>
+          ))}
+          <div className="mx-2 my-3 [@media(max-height:850px)]:my-2 border-t border-border" />
+          {[...SECONDARY_NAV, ...(isDeploymentAdmin ? ADMIN_NAV : [])].map((item) => (
+            <RailButton key={item.view} compact={compact} label={t(item.labelKey)} active={view === item.view} onClick={() => onViewChange(item.view)}>
+              {ICONS[item.view]}
+            </RailButton>
+          ))}
+        </nav>
+        <div className="mt-3 grid shrink-0 gap-1 border-t border-border pt-3">
+          <RailButton compact={compact} label={t("navSettings")} active={view === "settings"} onClick={() => onViewChange("settings")}>
+            {ICONS.settings}
           </RailButton>
-        ))}
-        <div className="my-2 h-px w-6 bg-border" />
-        {[...SECONDARY_NAV, ...(isDeploymentAdmin ? ADMIN_NAV : [])].map((item) => (
-          <RailButton
-            key={item.view}
-            label={t(item.labelKey)}
-            active={view === item.view}
-            onClick={() => onViewChange(item.view)}
-          >
-            {ICONS[item.view]}
-          </RailButton>
-        ))}
-        <div className="flex-1" />
-        <RailUserMenu onOpenSettings={() => onViewChange("settings")} />
+          <RailUserMenu compact={compact} onOpenSettings={() => onViewChange("settings")} />
+        </div>
       </aside>
       {/* data-glass-surface:开了自定义背景时由 tokens.css 统一给模糊 —— 几何一个字都不改。
           此前这里在 glass 下会长出 m-2/h-auto/rounded-xl/border,内容区于是从铺满变成浮起的卡。 */}
@@ -334,11 +350,13 @@ function ProjectSwitcher({
 }
 
 function WorkspaceSwitcher({
+  compact,
   workspaceId,
   workspaceName,
   workspaces,
   onSelectWorkspace,
 }: {
+  compact: boolean;
   workspaceId?: string;
   workspaceName: string;
   workspaces: Workspace[];
@@ -347,6 +365,7 @@ function WorkspaceSwitcher({
   const t = useI18n();
   const qc = useQueryClient();
   const [open, setOpen] = React.useState(false);
+  const [search, setSearch] = React.useState("");
   const [creating, setCreating] = React.useState(false);
   // 右键菜单要操作的**不一定是当前工作区** —— 所以这两个 state 存的是那一行的对象,
   // 不是一个布尔开关。
@@ -392,69 +411,48 @@ function WorkspaceSwitcher({
   });
 
   if (!onSelectWorkspace) {
-    return <span className="shrink-0">{workspaceName}</span>;
+    return <span className="block truncate px-2 text-ui-sm" title={workspaceName}>{compact ? workspaceName.slice(0, 1) : workspaceName}</span>;
   }
 
   return (
     <>
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={(next) => { setOpen(next); setSearch(""); }}>
         <PopoverTrigger asChild>
-          <button type="button" className="-mx-1 inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-1 py-[3px] text-inherit transition-colors duration-100 [font:inherit] hover:bg-secondary hover:text-foreground [&_svg]:text-muted-foreground" aria-label={t("workspaceSwitch")}>
-            {workspaceName}
-            <ChevronsUpDown size={12} />
+          <button type="button" className={cn("flex w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-lg border border-border bg-panel-subtle p-2 text-left transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", compact && "justify-center border-transparent px-0")} aria-label={t("workspaceSwitch")} title={workspaceName}>
+            <span className="grid size-8 shrink-0 place-items-center rounded-md bg-accent text-primary"><Boxes size={18} /></span>
+            {!compact && <><span className="min-w-0 flex-1"><span className="block truncate text-ui-sm font-semibold">{workspaceName}</span><span className="block text-ui-xs text-muted-foreground">{t("workspaceSwitch")}</span></span><ChevronsUpDown size={14} className="shrink-0 text-muted-foreground" /></>}
           </button>
         </PopoverTrigger>
-        <PopoverContent className="grid w-60 gap-0.5 p-1.5" align="start" sideOffset={8}>
-          <div className="px-2 pb-1.5 pt-1 text-ui-xs font-semibold tracking-[0.02em] text-muted-foreground">{t("workspaceSwitch")}</div>
-          {workspaces.map((ws) => {
-            // 门槛与设置页那两个按钮同源,见 workspaceMenu.ts。角色列表接口就带,
-            // 不必为一个右键菜单再发请求。
+        <PopoverContent className="w-80 p-2" align="start" sideOffset={8}>
+          <div className="px-2 pb-3 pt-2 text-ui-md font-semibold">{t("workspaceSwitch")}</div>
+          <Input aria-label={t("workspaceSearch")} placeholder={t("workspaceSearch")} value={search} onChange={(e) => setSearch(e.target.value)} className="mb-2" />
+          <div className="max-h-72 overflow-y-auto">
+          {workspaces.filter(ws => ws.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())).map((ws) => {
             const gate = workspaceMenuState(ws.role, workspaces.length);
             return (
               <ContextMenu key={ws.id}>
                 <ContextMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className={cn(
-                      "flex cursor-pointer items-center justify-between gap-2 rounded-md border-0 bg-transparent px-2 py-[7px] text-left text-ui-sm text-foreground transition-colors duration-100 hover:bg-secondary [&_svg]:shrink-0 [&_svg]:text-primary",
-                      ws.id === workspaceId && "font-semibold text-primary",
-                    )}
-                    onClick={() => {
-                      setOpen(false);
-                      if (ws.id !== workspaceId) onSelectWorkspace(ws.id);
-                    }}
-                  >
-                    <span className="truncate">{ws.name}</span>
-                    {ws.id === workspaceId && <Check size={13} />}
-                  </button>
+                  <div className={cn("flex items-center gap-1 rounded-md p-1 hover:bg-secondary", ws.id === workspaceId && "bg-accent")}>
+                    <button type="button" className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-left text-ui-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => { setOpen(false); setSearch(""); if (ws.id !== workspaceId) onSelectWorkspace(ws.id); }} aria-current={ws.id === workspaceId ? "true" : undefined}>
+                      <span className="grid size-7 shrink-0 place-items-center rounded-md border border-border bg-panel text-primary">{ws.name.slice(0, 1)}</span>
+                      <span className="truncate">{ws.name}</span>
+                      {ws.id === workspaceId && <Check size={14} className="ml-auto shrink-0 text-primary" />}
+                    </button>
+                    <Button variant="ghost" size="icon-xs" disabled={gate.renameDisabled} aria-label={`${t("rename")}: ${ws.name}`} title={t("rename")} onClick={() => { setOpen(false); setRenaming(ws); }}><Pencil /></Button>
+                    <Button variant="ghost" size="icon-xs" disabled={gate.deleteDisabled} aria-label={`${t("delete")}: ${ws.name}`} title={t("delete")} className="text-destructive hover:text-destructive" onClick={() => { setOpen(false); setRemoving(ws); }}><Trash2 /></Button>
+                  </div>
                 </ContextMenuTrigger>
                 <ContextMenuContent>
-                  <ContextMenuItem disabled={gate.renameDisabled} onSelect={() => { setOpen(false); setRenaming(ws); }}>
-                    <Pencil /> {t("rename")}
-                  </ContextMenuItem>
-                  <ContextMenuItem
-                    disabled={gate.deleteDisabled}
-                    className="text-destructive focus:text-destructive"
-                    onSelect={() => { setOpen(false); setRemoving(ws); }}
-                  >
-                    <Trash2 /> {t("delete")}
-                  </ContextMenuItem>
+                  <ContextMenuItem disabled={gate.renameDisabled} onSelect={() => { setOpen(false); setRenaming(ws); }}><Pencil /> {t("rename")}</ContextMenuItem>
+                  <ContextMenuItem disabled={gate.deleteDisabled} className="text-destructive focus:text-destructive" onSelect={() => { setOpen(false); setRemoving(ws); }}><Trash2 /> {t("delete")}</ContextMenuItem>
                 </ContextMenuContent>
               </ContextMenu>
             );
           })}
-          <div className="mx-0.5 my-1 h-px bg-border" />
-          <button
-            type="button"
-            className="flex cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2 py-[7px] text-left text-ui-sm text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-foreground [&_svg]:shrink-0"
-            onClick={() => {
-              setOpen(false);
-              setCreating(true);
-            }}
-          >
-            <FolderPlus size={13} />
-            {t("workspaceNew")}
-          </button>
+          {workspaces.every(ws => !ws.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())) && <p className="px-2 py-4 text-ui-sm text-muted-foreground">{t("workspaceNoResults")}</p>}
+          </div>
+          <div className="my-2 border-t border-border" />
+          <Button variant="ghost" className="w-full justify-start text-primary" onClick={() => { setOpen(false); setCreating(true); }}><FolderPlus />{t("workspaceNew")}</Button>
         </PopoverContent>
       </Popover>
       <RenameDialog
@@ -496,7 +494,7 @@ function WorkspaceSwitcher({
 }
 
 /** 侧栏底部的用户入口:头像(用户名首字)→ 账号菜单 + 版本号。 */
-function RailUserMenu({ onOpenSettings }: { onOpenSettings: () => void }) {
+function RailUserMenu({ compact, onOpenSettings }: { compact: boolean; onOpenSettings: () => void }) {
   const t = useI18n();
   const { user, logout } = useAuth();
   const [open, setOpen] = React.useState(false);
@@ -507,8 +505,11 @@ function RailUserMenu({ onOpenSettings }: { onOpenSettings: () => void }) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button type="button" className="mx-auto mb-2.5 mt-1.5 grid h-[34px] w-[34px] cursor-pointer place-items-center overflow-hidden rounded-full border border-border bg-secondary text-ui-md font-bold text-foreground transition-[border-color] duration-100 hover:border-primary" aria-label={displayName}>
-          {avatarSrc ? <img src={avatarSrc} className="h-full w-full object-cover" alt="" /> : initial}
+        <button type="button" className={cn("flex h-11 w-full cursor-pointer items-center gap-2.5 rounded-md px-2 text-left hover:bg-secondary", compact && "justify-center px-0")} aria-label={displayName}>
+          <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-secondary text-sm font-semibold">
+            {avatarSrc ? <img src={avatarSrc} className="h-full w-full object-cover" alt="" /> : initial}
+          </span>
+          {!compact && <><span className="min-w-0 flex-1 truncate text-ui-sm font-medium">{displayName}</span><ChevronsUpDown size={14} className="shrink-0 text-muted-foreground" /></>}
         </button>
       </PopoverTrigger>
       <PopoverContent className="grid w-[220px] gap-1.5 p-2" side="right" align="end" sideOffset={10}>
@@ -549,11 +550,13 @@ function RailUserMenu({ onOpenSettings }: { onOpenSettings: () => void }) {
 }
 
 function RailButton({
+  compact,
   label,
   active,
   onClick,
   children,
 }: {
+  compact: boolean;
   label: string;
   active: boolean;
   onClick: () => void;
@@ -565,18 +568,20 @@ function RailButton({
         <button
           type="button"
           className={cn(
-          "relative grid h-9 w-9 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[background-color,color] duration-100 hover:bg-secondary hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
+          "relative flex h-10 [@media(max-height:850px)]:h-9 w-full shrink-0 cursor-pointer items-center gap-3 rounded-md border-0 bg-transparent px-3 text-left text-ui-sm font-medium text-muted-foreground transition-colors duration-150 hover:bg-secondary hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring [&>svg]:shrink-0",
+          compact && "justify-center px-0",
           active &&
-            "bg-accent text-accent-foreground before:absolute before:-left-2.5 before:bottom-[9px] before:top-[9px] before:w-[2.5px] before:rounded-full before:bg-primary before:content-[''] hover:bg-accent hover:text-accent-foreground",
+            "bg-accent font-semibold text-accent-foreground hover:bg-accent hover:text-accent-foreground",
         )}
           onClick={onClick}
           aria-label={label}
           aria-current={active ? "page" : undefined}
         >
           {children}
+          {!compact && <span className="truncate">{label}</span>}
         </button>
       </TooltipTrigger>
-      <TooltipContent side="right">{label}</TooltipContent>
+      {compact && <TooltipContent side="right">{label}</TooltipContent>}
     </Tooltip>
   );
 }

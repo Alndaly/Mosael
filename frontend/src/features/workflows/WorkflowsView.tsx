@@ -455,7 +455,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
 
   if (workflows.isSuccess && (workflows.data ?? []).length === 0) {
     return (
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-5 xl:p-6 [&>*]:shrink-0">
         <EmptyState
           icon={<WorkflowIcon size={22} />}
           title={t("wfEmptyTitle")}
@@ -530,9 +530,9 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   // ── 列表页:卡片 grid。卡面上给的是**判断"是不是这一条"所需的**:名字、说明、
   //     多少个节点、上次改动是什么时候。
   return (
-    <div className="flex h-full min-h-0 flex-col items-stretch gap-2 overflow-auto p-2 [&>*]:shrink-0">
+    <div className="flex h-full min-h-0 flex-col items-stretch gap-5 overflow-auto p-5 xl:p-6 [&>*]:shrink-0">
       <div className="flex items-center justify-between">
-        <h2 className="m-0 inline-flex items-center gap-1.5 text-ui-md font-semibold text-foreground">
+        <h2 className="m-0 inline-flex items-center gap-3 text-2xl font-semibold tracking-tight text-foreground">
           <WorkflowIcon size={13} /> {t("navWorkflows")}
         </h2>
         <span className="flex flex-wrap items-center gap-1.5">
@@ -576,7 +576,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
         </span>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(232px,1fr))] gap-2">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
           {workflows.isLoading &&
             (workflows.data ?? []).length === 0 &&
             [0, 1, 2, 3].map((i) => <Skeleton key={`sk${i}`} className="h-[104px] rounded-lg" />)}
@@ -649,7 +649,7 @@ function WorkflowCard({ workflow }: { workflow: Workflow }) {
   const nodes = (workflow.graph as unknown as WorkflowGraph).nodes ?? [];
   return (
     // 同 PublishCard:名字贴顶、"几个节点 · 版本 · 多久前"贴底,中间留给长短不一的说明。
-    <article className="flex h-full flex-col gap-1.5 rounded-lg border border-border bg-panel p-2.5 shadow-[var(--shadow-panel)] transition-colors hover:border-border-strong">
+    <article className="flex h-full flex-col gap-1.5 rounded-lg border border-border bg-panel p-5 shadow-[var(--shadow-panel)] transition-colors hover:border-border-strong">
       <div className="flex items-center gap-1.5">
         <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary">
           <WorkflowIcon size={13} />
@@ -1619,7 +1619,7 @@ function WorkflowEditor({
             细竖线隔开,找一个键要从头扫到尾。分组是:编辑图 / 理解图 / 跑这张图 / 看的方式 /
             这份文档。竖线换成真正断开,因为断开比线更快被看见。 */}
         <div className="flex flex-wrap items-start justify-end gap-2">
-        <div className={cn("flex flex-wrap items-center gap-1 rounded-full p-1", CANVAS_GLASS_SURFACE_CLASS)}>
+        <div className={cn("flex flex-wrap items-center gap-1 rounded-lg p-1", CANVAS_GLASS_SURFACE_CLASS)}>
           {/* 工具条统一刻度:胶囊(rounded-full)、h-8、text-xs;图标钮 h-8 w-8。 */}
           <SearchableSelect
             value=""
@@ -1647,7 +1647,7 @@ function WorkflowEditor({
             <Redo2 size={14} />
           </Button>
         </div>
-        <div className={cn("flex flex-wrap items-center gap-1 rounded-full p-1", CANVAS_GLASS_SURFACE_CLASS)}>
+        <div className={cn("flex flex-wrap items-center gap-1 rounded-lg p-1", CANVAS_GLASS_SURFACE_CLASS)}>
           <Button
             variant="ghost"
             size="icon-sm"
@@ -1804,7 +1804,7 @@ function WorkflowEditor({
             <Play size={14} />
           </Button>
         </div>
-        <div className={cn("flex flex-wrap items-center gap-1 rounded-full p-1", CANVAS_GLASS_SURFACE_CLASS)}>
+        <div className={cn("flex flex-wrap items-center gap-1 rounded-lg p-1", CANVAS_GLASS_SURFACE_CLASS)}>
           {/* 走线方式:四种够用,直接摆成一排图标钮而不是下拉 —— 它是"试一下看哪种顺眼"的
               设置,藏进下拉就得点两次才能比较一次。 */}
           {/* **不再套一个方框。** 分段控件自带 rounded-md 边框,而外层组是 rounded-full ——
@@ -1856,7 +1856,7 @@ function WorkflowEditor({
             <Maximize2 size={14} />
           </Button>
         </div>
-        <div className={cn("flex flex-wrap items-center gap-1 rounded-full p-1", CANVAS_GLASS_SURFACE_CLASS)}>
+        <div className={cn("flex flex-wrap items-center gap-1 rounded-lg p-1", CANVAS_GLASS_SURFACE_CLASS)}>
           {/* 导出。**放在这一组**(历史/删除)而不是运行旁边:这几个都是对"这份工作流"整体
               做的事,而运行、就绪检查、加节点是对**画布内容**做的事。此前导出只藏在列表页的
               右键菜单里 —— 而人想导出的时机,恰恰是刚在详情页里把它调好的那一刻。 */}
@@ -2487,7 +2487,7 @@ function LoopBodyEditor({
             运行 / 就绪检查 / 导出 / 历史 / 删除都是主图或整份文档的事,放进来只会让人以为
             自己能在子图里跑一次;撤销也没有 —— 子图编辑器没有历史栈,画一个按钮却不能用,
             比没有更糟。 */}
-        <div className={cn("flex flex-wrap items-center gap-1 rounded-full p-1", CANVAS_GLASS_SURFACE_CLASS)}>
+        <div className={cn("flex flex-wrap items-center gap-1 rounded-lg p-1", CANVAS_GLASS_SURFACE_CLASS)}>
           <SearchableSelect
             value=""
             onValueChange={addNode}

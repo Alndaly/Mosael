@@ -12,6 +12,7 @@ import type { MessageKey } from "@/app/messages";
  */
 export type StudioView =
   | "home"
+  | "statistics"
   | "media"
   | "editor"
   | "ai"
@@ -29,15 +30,16 @@ export type NavItem = { view: StudioView; labelKey: MessageKey; group: "primary"
 export const NAV_ITEMS: readonly NavItem[] = [
   { view: "home", labelKey: "navHome", group: "primary" },
   { view: "media", labelKey: "navMedia", group: "primary" },
+  { view: "boards", labelKey: "navBoards", group: "primary" },
   { view: "editor", labelKey: "navEditor", group: "primary" },
   { view: "ai", labelKey: "navAi", group: "primary" },
-  { view: "publish", labelKey: "navPublish", group: "primary" },
+  { view: "publish", labelKey: "navPublish", group: "secondary" },
   { view: "settings", labelKey: "navSettings", group: "primary" },
   { view: "workflows", labelKey: "navWorkflows", group: "secondary" },
-  { view: "boards", labelKey: "navBoards", group: "secondary" },
   { view: "browser-pool", labelKey: "navBrowserPool", group: "secondary" },
   { view: "scheduler", labelKey: "schedulerTitle", group: "secondary" },
   { view: "plugins", labelKey: "pluginsTitle", group: "secondary" },
+  { view: "statistics", labelKey: "navStatistics", group: "secondary" },
   { view: "admin", labelKey: "navAdmin", group: "admin" },
 ];
 
