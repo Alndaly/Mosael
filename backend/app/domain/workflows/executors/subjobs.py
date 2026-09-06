@@ -295,6 +295,7 @@ def inspect_sequence(db: Session, workflow: Workflow, config: dict[str, Any]) ->
                     "timeline_start": clip.timeline_start,
                     "src_in": clip.src_in,
                     "src_out": clip.src_out,
+                    "speed": clip.speed or 1.0,
                 }
                 for clip in (track.clips or [])
             ],
@@ -302,7 +303,7 @@ def inspect_sequence(db: Session, workflow: Workflow, config: dict[str, Any]) ->
         for track in (sequence.tracks or [])
     ]
     duration = max(
-        (clip["timeline_start"] + (clip["src_out"] - clip["src_in"]) for track in tracks for clip in track["clips"]),
+        (clip["timeline_start"] + (clip["src_out"] - clip["src_in"]) / clip["speed"] for track in tracks for clip in track["clips"]),
         default=0.0,
     )
     # 顺手把第一条视频/音频轨的 id 摆出来 —— 下游「接素材」想指定轨道时,不用自己去
@@ -364,7 +365,7 @@ def timeline_append(db: Session, workflow: Workflow, config: dict[str, Any]) -> 
     `{"kind": "insert_clip", "timeline_start": …}` —— 那个 timeline_start 还得自己算,
     而"接到末尾"本来就该由机器算。
     """
-    from app.domain.sequences.operations import InsertClip, insert_clip
+    from app.domain.sequences.operations import InsertClip, insert_clip, timeline_span
 
     sequence = _sequence_in(db, workflow, str(config.get("sequence_id", "")).strip())
     asset_id = str(config.get("asset_id", "")).strip()
@@ -401,7 +402,7 @@ def timeline_append(db: Session, workflow: Workflow, config: dict[str, Any]) -> 
 
     # 接到末尾:这条轨道上最后一个片段的终点。空轨道就是 0。
     timeline_start = max(
-        (clip.timeline_start + (clip.src_out - clip.src_in) for clip in (track.clips or [])),
+        (clip.timeline_start + timeline_span(clip) for clip in (track.clips or [])),
         default=0.0,
     )
     insert_clip(

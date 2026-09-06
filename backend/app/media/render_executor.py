@@ -868,10 +868,14 @@ def build_ffmpeg_command(
         src = overlay.source
         seek, tin, tout = _seek_and_trim(src.src_in, src.src_out)
         args += _image_loop_args(path, tout) + seek + ["-i", str(path)]
+        preset = f",{FILTER_PRESETS[overlay.filter]}" if overlay.filter else ""
+        lut_path = _escape_filter_path(resolve(overlay.lut)) if overlay.lut else ""
+        preset += _grade_filter(dict(overlay.grade), overlay.curves, lut_path)
+        video_fades = _fade_filters(overlay.video_fade_in, overlay.video_fade_out, overlay.duration, audio=False)
         filters.append(
-            f"[{input_index}:v]trim=start={tin}:end={tout},"
-            f"setpts=PTS-STARTPTS+{overlay.start}/TB,"
-            f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}[oelt{i}]"
+            f"[{input_index}:v]trim=start={tin}:end={tout},setpts=(PTS-STARTPTS)/{overlay.speed},"
+            f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}"
+            f"{preset}{video_fades},setpts=PTS+{overlay.start}/TB[oelt{i}]"
         )
         appearance_filters, appearance_label, appearance_sized = _appearance_filters(
             f"oelt{i}", overlay.appearance, width, height, f"oa{i}"
@@ -974,6 +978,7 @@ def build_ffmpeg_command(
                 duck = f",volume=enable='{enable}':volume={DUCK_GAIN}"
             filters.append(
                 f"[{input_index}:a]atrim=start={tin}:end={tout},asetpts=PTS-STARTPTS,"
+                f"{_atempo_chain(item.speed)}"
                 f"{_volume_expr(item.gain, item.gain_keyframes, item.duration)}"
                 f"aresample={AUDIO_RATE},aformat=channel_layouts=stereo{audio_fades},"
                 f"adelay={delay_ms}:all=1{duck}[aov{i}]"

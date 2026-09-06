@@ -159,3 +159,33 @@ def test_fill_mode_contain_letterboxes(monkeypatch) -> None:
 def test_fill_mode_blur_has_blurred_background(monkeypatch) -> None:
     cmd = _cmd_for_fill("blur", monkeypatch)
     assert "gblur" in cmd and "split=2" in cmd
+
+
+def test_upper_tracks_keep_speed_and_all_visual_effects(monkeypatch):
+    monkeypatch.setattr("app.media.render_executor.probe_has_audio_many", lambda paths: {p: True for p in paths})
+    clip = base_clip(id="upper", timeline_start=2, speed=2, effects={
+        "filter": "bw", "color": {"brightness": 0.3, "lut": "lut1"},
+        "video_fade_in": 0.5, "video_fade_out": 1,
+    })
+    plan = build_render_plan(sequence_id="s", revision=1, width=320, height=180, fps=30,
+        clips=[base_clip(src_out=1)], overlay_clips=[clip], audio_clips=[clip], assets=ASSETS,
+        luts={"lut1": "test.cube"})
+    upper = plan.overlays[0]
+    assert upper.duration == plan.audio_overlays[0].duration == 4
+    assert upper.speed == plan.audio_overlays[0].speed == 2
+    assert upper.filter == "bw" and upper.grade == (("brightness", 0.3),) and upper.lut == "test.cube"
+    assert plan.timeline_duration == 6
+    cmd = build_ffmpeg_command(plan, lambda key: Path("/tmp") / key, Path("/tmp/o.mp4"), force_software=True)
+    graph = cmd[cmd.index("-filter_complex") + 1]
+    assert "(PTS-STARTPTS)/2.0" in graph and "atempo=2.0" in graph
+    assert "hue=s=0" in graph and "lut3d=" in graph
+    assert "fade=t=out:st=3.0:d=1.0" in graph
+    assert graph.index("fade=t=out:st=3.0:d=1.0") < graph.index("setpts=PTS+2.0/TB")
+
+
+def test_subtitle_tail_extends_picture_and_audio():
+    plan = build_render_plan(sequence_id="s", revision=1, width=320, height=180, fps=30,
+        clips=[base_clip(src_out=1)], assets=ASSETS,
+        subtitle_clips=[{"id": "sub", "timeline_start": 2, "src_in": 0, "src_out": 3, "text_override": "tail"}])
+    assert plan.timeline_duration == 5
+    assert plan.video_segments[-1].kind == "gap" and plan.video_segments[-1].duration == 4

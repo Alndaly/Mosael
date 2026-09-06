@@ -411,3 +411,24 @@ def test_overlays_hold_last_frame_instead_of_dropping_to_black(tmp_path) -> None
     command = " ".join(build_ffmpeg_command(plan, lambda key: Path("/x/" + key), tmp_path / "o.mp4"))
     assert "eof_action=pass" not in command
     assert command.count("eof_action=repeat") >= 2
+
+
+@pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")
+def test_real_upper_video_speed_filter_and_fade(tmp_path):
+    from app.media.render_executor import build_ffmpeg_command
+    base, upper, output = [tmp_path / name for name in ("base.mp4", "upper.mp4", "out.mp4")]
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "color=black:s=64x64:r=20:d=4", str(base)], check=True, timeout=30)
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "color=red:s=64x64:r=20:d=2", "-f", "lavfi", "-i", "color=blue:s=64x64:r=20:d=2", "-filter_complex", "[0:v][1:v]concat=n=2:v=1:a=0", str(upper)], check=True, timeout=30)
+    plan = build_render_plan(sequence_id="s", revision=1, width=64, height=64, fps=20,
+        clips=[{"id": "base", "asset_id": "base", "timeline_start": 0, "src_in": 0, "src_out": 4}],
+        overlay_clips=[{"id": "upper", "asset_id": "upper", "timeline_start": 1, "src_in": 0, "src_out": 4, "speed": 2, "effects": {"filter": "bw", "video_fade_out": 0.5}}],
+        assets={"base": {"file_key": "base.mp4"}, "upper": {"file_key": "upper.mp4"}})
+    subprocess.run(build_ffmpeg_command(plan, lambda key: tmp_path / key, output, force_software=True), check=True, capture_output=True, timeout=30)
+    def rgb(at):
+        raw = subprocess.check_output(["ffmpeg", "-v", "error", "-ss", str(at), "-i", str(output), "-frames:v", "1", "-vf", "scale=1:1", "-pix_fmt", "rgb24", "-f", "rawvideo", "pipe:1"], timeout=10)
+        return tuple(raw)
+    red, blue, fading, tail = [rgb(t) for t in (1.5, 2.25, 2.85, 3.5)]
+    assert max(red) - min(red) <= 3  # upper-track monochrome reaches real pixels
+    assert red[0] > blue[0] + 20  # source switched to blue after just 1 timeline second
+    assert fading[0] < blue[0] - 8
+    assert max(tail) <= 3

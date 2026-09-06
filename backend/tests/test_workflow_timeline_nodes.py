@@ -217,3 +217,19 @@ def test_看一眼时间线直接给出轨道_id() -> None:
     ws, sequence_id, _ = _setup()
     out = _run("inspect_sequence", ws, {"sequence_id": sequence_id})
     assert "video_track_id" in out and "audio_track_id" in out
+
+
+@pytest.mark.parametrize("speed, end", [(2.0, 4.0), (0.5, 16.0)])
+def test_inspect_and_append_respect_existing_clip_speed(speed, end):
+    from app.db.models import Clip
+    ws, sequence_id, _ = _setup()
+    asset = Test接素材到时间线()._asset(ws, duration=8)
+    first = _run("timeline_append", ws, {"sequence_id": sequence_id, "asset_id": asset})
+    with SessionLocal() as db:
+        db.get(Clip, first["clip_id"]).speed = speed
+        db.commit()
+    inspected = _run("inspect_sequence", ws, {"sequence_id": sequence_id})
+    assert inspected["duration"] == end
+    assert next(c for t in inspected["tracks"] for c in t["clips"])["speed"] == speed
+    appended = _run("timeline_append", ws, {"sequence_id": sequence_id, "asset_id": asset})
+    assert appended["timeline_start"] == end

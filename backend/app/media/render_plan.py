@@ -166,6 +166,14 @@ class OverlayItem:
     source: ClipSource
     transform: Transform = IDENTITY_TRANSFORM
     appearance: ClipAppearance = DEFAULT_APPEARANCE
+    speed: float = 1.0
+    filter: str = ""
+    grade: tuple[tuple[str, float], ...] = ()
+    curves: tuple[tuple[str, str], ...] = ()
+    lut: str = ""
+    video_fade_in: float = 0.0
+    video_fade_out: float = 0.0
+
 
 
 @dataclass(frozen=True)
@@ -176,6 +184,7 @@ class AudioItem:
     duration: float
     source: ClipSource
     gain: float
+    speed: float = 1.0
     fade_in: float = 0.0
     fade_out: float = 0.0
     # Ducking (闪避): timeline-time windows where this clip's gain is lowered because a
@@ -370,12 +379,7 @@ def build_render_plan(
     cursor = 0.0
     for clip in ordered:
         start = float(clip["timeline_start"])
-        speed = float(clip.get("speed") or 1.0)
-        if not (0.25 <= speed <= 4.0):
-            raise RenderPlanError(f"Clip {clip['id']} has speed outside [0.25, 4]")
-        duration = (float(clip["src_out"]) - float(clip["src_in"])) / speed
-        if duration <= 0:
-            raise RenderPlanError(f"Clip {clip['id']} has non-positive duration")
+        speed, duration = _clip_timing(clip)
         if start < cursor - GAP_EPSILON:
             raise RenderPlanError(f"Clip {clip['id']} overlaps the previous clip")
         asset = assets.get(clip["asset_id"])
@@ -384,18 +388,7 @@ def build_render_plan(
         if start > cursor + GAP_EPSILON:
             segments.append(Segment(kind="gap", duration=round(start - cursor, 6)))
         fade_in, fade_out = _clip_fades(clip, duration)
-        video_fade_in, video_fade_out = _video_fades(clip, duration)
         effects = clip.get("effects") or {}
-        preset = str(effects.get("filter") or "")
-        if preset and preset not in FILTER_PRESETS:
-            raise RenderPlanError(f"Clip {clip['id']} uses unknown filter preset {preset!r}")
-        grade = effects.get("color") or {}
-        lut_id = str(grade.get("lut") or "")
-        lut_key = ""
-        if lut_id:
-            lut_key = (luts or {}).get(lut_id, "")
-            if not lut_key:
-                raise RenderPlanError(f"Clip {clip['id']} references an unknown LUT {lut_id!r}")
         segments.append(
             Segment(
                 kind="clip",
@@ -409,19 +402,10 @@ def build_render_plan(
                 speed=speed,
                 fade_in=fade_in,
                 fade_out=fade_out,
-                video_fade_in=video_fade_in,
-                video_fade_out=video_fade_out,
                 gain=float(clip.get("gain", 1.0)),
                 gain_keyframes=_read_gain_keyframes(effects),
                 muted=bool(clip.get("muted")),
-                filter=preset,
-                grade=tuple(
-                    (field, _grade_value(grade, field))
-                    for field in GRADE_FIELDS
-                    if _grade_value(grade, field)
-                ),
-                curves=_curve_specs(grade.get("curves")),
-                lut=lut_key,
+                **_visual_effects(clip, duration, luts),
                 transform=_read_transform(clip),
                 appearance=_read_appearance(effects),
             )
@@ -435,14 +419,14 @@ def build_render_plan(
     overlays: list[OverlayItem] = []
     for clip in sorted(overlay_clips or [], key=lambda c: float(c["timeline_start"])):
         source = _require_source(assets, clip)
-        clip_duration = float(clip["src_out"]) - float(clip["src_in"])
-        if clip_duration <= 0:
-            raise RenderPlanError(f"Clip {clip['id']} has non-positive duration")
+        speed, clip_duration = _clip_timing(clip)
         overlays.append(
             OverlayItem(
                 start=float(clip["timeline_start"]),
                 duration=round(clip_duration, 6),
                 source=source,
+                speed=speed,
+                **_visual_effects(clip, clip_duration, luts),
                 transform=_read_transform(clip),
                 appearance=_read_appearance(clip.get("effects") or {}),
             )
@@ -458,9 +442,7 @@ def build_render_plan(
         if solo_active and not clip.get("solo"):
             continue
         source = _require_source(assets, clip)
-        clip_duration = float(clip["src_out"]) - float(clip["src_in"])
-        if clip_duration <= 0:
-            raise RenderPlanError(f"Clip {clip['id']} has non-positive duration")
+        speed, clip_duration = _clip_timing(clip)
         audible.append((clip, source, float(clip["timeline_start"]), clip_duration))
 
     key_spans = [(start, start + dur) for clip, _, start, dur in audible if not clip.get("duck")]
@@ -473,6 +455,7 @@ def build_render_plan(
                 start=start,
                 duration=round(clip_duration, 6),
                 source=source,
+                speed=_clip_timing(clip)[0],
                 gain=float(clip.get("gain", 1.0)),
                 gain_keyframes=_read_gain_keyframes(clip.get("effects") or {}),
                 fade_in=fade_in,
@@ -488,12 +471,11 @@ def build_render_plan(
         text = str(clip.get("text_override") or "").strip()
         if not text:
             continue
-        clip_duration = float(clip["src_out"]) - float(clip["src_in"])
-        if clip_duration <= 0:
-            raise RenderPlanError(f"Clip {clip['id']} has non-positive duration")
+        speed, clip_duration = _clip_timing(clip)
         subtitles.append(
             SubtitleItem(start=float(clip["timeline_start"]), duration=round(clip_duration, 6), text=text)
         )
+        duration = max(duration, float(clip["timeline_start"]) + clip_duration)
 
     # 花字:video 轨上无 asset 的文本元素,每条自带样式,用 transform 定位(与画面元素同一套)。
     text_items: list[TextOverlayItem] = []
@@ -501,9 +483,7 @@ def build_render_plan(
         text = str(clip.get("text_override") or "").strip()
         if not text:
             continue
-        clip_duration = float(clip["src_out"]) - float(clip["src_in"])
-        if clip_duration <= 0:
-            raise RenderPlanError(f"Clip {clip['id']} has non-positive duration")
+        speed, clip_duration = _clip_timing(clip)
         text_items.append(
             TextOverlayItem(
                 start=float(clip["timeline_start"]),
@@ -538,6 +518,32 @@ def build_render_plan(
         mute_base_audio=mute_base_audio,
     )
     return plan.with_hash()
+
+
+def _clip_timing(clip: dict) -> tuple[float, float]:
+    speed = float(clip.get("speed") if clip.get("speed") is not None else 1.0)
+    if not 0.25 <= speed <= 4.0:
+        raise RenderPlanError(f"Clip {clip['id']} has speed outside [0.25, 4]")
+    duration = (float(clip["src_out"]) - float(clip["src_in"])) / speed
+    if duration <= 0:
+        raise RenderPlanError(f"Clip {clip['id']} has non-positive duration")
+    return speed, duration
+
+
+def _visual_effects(clip: dict, duration: float, luts: dict[str, str] | None) -> dict:
+    effects = clip.get("effects") or {}
+    preset = str(effects.get("filter") or "")
+    if preset and preset not in FILTER_PRESETS:
+        raise RenderPlanError(f"Clip {clip['id']} uses unknown filter preset {preset!r}")
+    grade = effects.get("color") or {}
+    lut_id = str(grade.get("lut") or "")
+    lut_key = (luts or {}).get(lut_id, "")
+    if lut_id and not lut_key:
+        raise RenderPlanError(f"Clip {clip['id']} references an unknown LUT {lut_id!r}")
+    fade_in, fade_out = _video_fades(clip, duration)
+    return dict(filter=preset, grade=tuple((name, _grade_value(grade, name)) for name in GRADE_FIELDS if _grade_value(grade, name)),
+                curves=_curve_specs(grade.get("curves")), lut=lut_key,
+                video_fade_in=fade_in, video_fade_out=fade_out)
 
 
 def _duck_windows(
