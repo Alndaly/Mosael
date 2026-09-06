@@ -33,7 +33,7 @@ export function InspectorCard({
 }) {
   const label = (
     <span className="flex min-w-0 items-center gap-1.5">
-      <Icon size={13} className="shrink-0" />
+      <Icon size={14} className="shrink-0 text-muted-foreground" />
       {title}
       {onToggle && (
         <ChevronRight
@@ -45,11 +45,8 @@ export function InspectorCard({
     </span>
   );
   return (
-        // **不描边、圆角比外框小**。此前是 `rounded-lg border border-border` —— 边框色和外面
-    // 那层面板一模一样(都是 --border),而卡片本身还有一层填色:填色已经把它从面板背景里
-    // 分出来了,再描一道同色的边就是第三重冗余。圆角同理:内卡 10px 比面板的 8px 还大,
-    // 嵌套的角应当向内递减,反过来会显得内卡在往外顶。
-    <section className={cn("grid gap-3 border-b border-border pb-5 pt-2", className)}>
+    // 信息组用留白区分；结构边线只保留在侧栏和工具栏边缘。
+    <section className={cn("grid min-w-0 gap-3", className)}>
       {/* 排版**只挂在 h3 上**,可折叠时按钮放进去继承它。
           不能把 text-ui-xs font-bold 写在裸 <button> 上:design/tokens.css 里那条
           `button { font: inherit }` 不在任何 layer 内,而 Tailwind 的工具类在 @layer utilities ——
@@ -80,9 +77,9 @@ export function InspectorCard({
 /** 一行事实:左标签、右值。检查器里所有"某某是什么"都长这样。 */
 export function InspectorRow({ label, value, title }: { label: string; value: React.ReactNode; title?: string }) {
   return (
-    <div className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2">
+    <div className="grid min-h-6 grid-cols-[64px_minmax(0,1fr)] items-center gap-3">
       <span className="truncate text-ui-sm text-muted-foreground">{label}</span>
-      <span className="min-w-0 truncate text-ui-sm font-[650] text-foreground" title={title}>
+      <span className="min-w-0 truncate text-ui-sm font-medium text-foreground" title={title}>
         {value}
       </span>
     </div>

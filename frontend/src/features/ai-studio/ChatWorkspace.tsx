@@ -2,7 +2,7 @@ import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
 import React from "react";
 import { StudioIndex } from "@/components/layout/StudioIndex";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Check, ChevronDown, ChevronRight, CircleDot, Copy, CornerDownRight, Database, Loader2, PanelRight, Paperclip, SearchX, Send, Sparkles, Square, Trash2, Wrench, X } from "lucide-react";
+import { Bot, Check, ChevronDown, ChevronRight, CircleDot, Copy, CornerDownRight, Database, Loader2, PanelRight, Paperclip, SearchX, Send, Sparkles, Square, Trash2, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
 import { API_BASE, api, getAuthToken, importAsset, type Asset, type Project, type Workspace } from "@/api/client";
@@ -388,6 +388,19 @@ export function ChatWorkspace({
   const narrow = useMediaMatch("(max-width: 1180px)");
   const single = useMediaMatch("(max-width: 820px)");
   const [environmentOpen, setEnvironmentOpen] = React.useState(false);
+  const environmentId = React.useId();
+  const toolbarRef = React.useRef<HTMLDivElement>(null);
+  const [toolbarHeight, setToolbarHeight] = React.useState(56);
+  React.useLayoutEffect(() => {
+    const toolbar = toolbarRef.current;
+    if (!toolbar) return;
+    // 窄窗口工具栏可能换行；抽屉始终从它的下缘开始，保留原开关的点击区域。
+    const measure = () => setToolbarHeight(toolbar.getBoundingClientRect().height);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(toolbar);
+    return () => observer.disconnect();
+  }, []);
   const showRight = view !== "trace" && environmentOpen && !narrow;
   // 内联 gridTemplateColumns 会覆盖 class 里的 max-[...] 回退,所以断点在 JS 里一起判:
   // 单列也显式指定,避免 matchMedia 的 ≤ 与 CSS max-width 的 < 在断点处不一致。
@@ -454,7 +467,7 @@ export function ChatWorkspace({
       <section className="min-h-0 overflow-hidden bg-panel grid grid-rows-[auto_minmax(0,1fr)_auto]">
         {/* min-w-0:这行是 grid 子项,默认 min-width:auto —— 面包屑里的长任务名会把它撑到
             section 的 overflow-hidden 上被硬裁,而不是走内部的 truncate 省略号。 */}
-        <div className="flex min-h-14 min-w-0 flex-wrap items-center gap-2 border-b border-divider px-4 py-1.5 max-[821px]:pl-14">
+        <div ref={toolbarRef} className="flex min-h-14 min-w-0 flex-wrap items-center gap-2 border-b border-divider px-4 py-1.5 max-[821px]:pl-14">
           {switcher}
           {viewingSubagent ? (
             <SubagentBreadcrumb
@@ -485,7 +498,7 @@ export function ChatWorkspace({
           </div>
           </>
           )}
-          {view === "chat" && <Button variant={environmentOpen ? "secondary" : "ghost"} size="icon-sm" aria-label={t("studioChatEnvironment")} title={t("studioChatEnvironment")} aria-pressed={environmentOpen} onClick={() => setEnvironmentOpen(!environmentOpen)}><PanelRight /></Button>}
+          {view === "chat" && <Button variant={environmentOpen ? "secondary" : "ghost"} size="icon-sm" aria-label={t("studioChatEnvironment")} title={t("studioChatEnvironment")} aria-pressed={environmentOpen} aria-expanded={environmentOpen} aria-controls={environmentOpen ? environmentId : undefined} onClick={() => setEnvironmentOpen(!environmentOpen)}><PanelRight /></Button>}
           {/* 「N 个子代理」:这个会话派出过的子智能体入口(DSH 同款位置)。没派过就不渲染。 */}
           {!viewingSubagent && (
             <span className="shrink-0 empty:hidden">
@@ -700,7 +713,11 @@ export function ChatWorkspace({
         )}
       </section>
 
-      {view === "chat" && environmentOpen && <div className={cn("min-h-0 overflow-hidden", narrow && "absolute inset-y-0 right-0 z-30 w-[min(380px,100%)] border-l border-divider bg-panel shadow-xl")}><div className="flex justify-end bg-panel px-3 pt-2"><Button variant="ghost" size="icon-xs" aria-label={t("close")} onClick={() => setEnvironmentOpen(false)}><X /></Button></div><ChatInspector
+      {view === "chat" && environmentOpen && <div id={environmentId}
+        className={cn("min-h-0 min-w-0 overflow-hidden border-l border-divider bg-panel-subtle", narrow && "absolute bottom-0 right-0 z-30 w-[min(360px,100%)]")}
+        style={narrow ? { top: toolbarHeight } : undefined}
+      ><ChatInspector
+        headerHeight={narrow ? 56 : toolbarHeight}
         workspace={workspace}
         session={session.data ?? activeSession}
         messages={visibleMessages}
@@ -718,6 +735,7 @@ export function ChatWorkspace({
 }
 
 function ChatInspector({
+  headerHeight,
   workspace,
   session,
   messages,
@@ -730,6 +748,7 @@ function ChatInspector({
   subagentTimeline,
   onOpenSubagent,
 }: {
+  headerHeight: number;
   workspace: Workspace;
   session: AgentSession | null;
   messages: AgentMessage[];
@@ -775,20 +794,22 @@ function ChatInspector({
 
   return (
     <aside
-      className="h-[calc(100%-36px)] min-h-0 flex min-w-0 flex-col gap-4 overflow-y-auto overflow-x-hidden bg-panel px-4 pb-5"
+      className="flex h-full min-h-0 min-w-0 flex-col"
       aria-label={t("agentInspectorTitle")}
     >
-      <div className="-mx-2.5 flex items-center justify-between gap-2 border-b border-divider p-2.5 max-[1180px]:col-span-full">
-        <h2 className="m-0 text-xs font-bold">{t("agentInspectorTitle")}</h2>
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-divider px-4" style={{ height: headerHeight }}>
+        <h2 className="m-0 text-ui-sm font-semibold">{t("agentInspectorTitle")}</h2>
         <span
           className={cn(
-            "inline-flex shrink-0 items-center gap-[5px] rounded-full border border-border bg-panel-subtle px-2 py-0.5 text-ui-xs font-semibold text-muted-foreground",
-            running && "border-[color-mix(in_srgb,var(--primary)_42%,var(--border))] text-primary",
+            "inline-flex shrink-0 items-center gap-1.5 text-ui-xs tabular-nums text-muted-foreground",
+            running && "text-primary",
           )}
         >
           <CircleDot size={10} /> {statusLabel}
         </span>
       </div>
+
+      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(0,1fr)] content-start gap-6 overflow-y-auto overflow-x-hidden p-4">
 
       {/* 概览。此前是两块:一块五行键值(其中「当前会话」就是你正看着的这个对话、「框架 pi」是
           内部实现、「更新」永远是刚刚),另一块把四个数字铺成盒中盒的砖(消息=用户+助手,三个数
@@ -856,6 +877,7 @@ function ChatInspector({
           version={manifest?.version ?? ""}
         />
       </InspectorCard>
+      </div>
     </aside>
   );
 }
@@ -873,7 +895,8 @@ function RecentToolRow({ call }: { call: ToolCall }) {
     <li className="grid min-w-0">
       <button
         type="button"
-        className="-mx-1 grid min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 rounded border-0 bg-transparent px-1 py-0.5 text-left text-ui-xs text-foreground transition-colors hover:bg-panel"
+        className="-mx-1 grid min-h-8 min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border-0 bg-transparent px-1 py-1.5 text-left text-ui-xs text-foreground transition-colors hover:bg-secondary"
+        aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
         <AgentStatusIcon status={toAgentStatus(call.status)} />
