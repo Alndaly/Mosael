@@ -5,7 +5,7 @@ commit list and downloadable artifacts.
 
 ## Unreleased
 
-## [1.0.0-beta3] - 2026-09-06
+## [1.0.0-beta4] - 2026-09-06
 
 ### Added
 
