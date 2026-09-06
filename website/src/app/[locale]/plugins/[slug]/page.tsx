@@ -7,6 +7,7 @@ import rehypeSlug from "rehype-slug";
 import remarkGfm from "remark-gfm";
 
 import { mdxComponents } from "@/components/mdx";
+import { PageGlow } from "@/components/page-hero";
 import { LOCALES, isLocale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { findPlugin, listPlugins, readPluginDoc } from "@/lib/registry";
@@ -80,7 +81,7 @@ export default async function PluginDetailPage({
   return (
     <div className="-mt-20 bg-paper">
       <div className="relative isolate overflow-hidden px-5 pt-36 pb-18 sm:px-8 sm:pt-44 sm:pb-24">
-        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_12%_20%,rgba(114,87,233,0.15),transparent_34%),radial-gradient(circle_at_88%_0%,rgba(255,139,120,0.13),transparent_30%)]" />
+        <PageGlow />
         <div className="mx-auto max-w-[76rem]">
         <Link
           className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-primary"
