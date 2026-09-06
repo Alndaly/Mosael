@@ -1765,9 +1765,13 @@ def _migrate_job_worker_leases() -> None:
         columns = {row[1] for row in conn.execute(text("PRAGMA table_info(jobs)"))}
         if not columns:
             return
-        for name, kind in (("lease_token", "VARCHAR(64)"), ("lease_worker", "VARCHAR(64)"), ("lease_expires_at", "DATETIME")):
+        for name, ddl in (
+            ("lease_token", "ALTER TABLE jobs ADD COLUMN lease_token VARCHAR(64)"),
+            ("lease_worker", "ALTER TABLE jobs ADD COLUMN lease_worker VARCHAR(64)"),
+            ("lease_expires_at", "ALTER TABLE jobs ADD COLUMN lease_expires_at DATETIME"),
+        ):
             if name not in columns:
-                conn.execute(text(f"ALTER TABLE jobs ADD COLUMN {name} {kind}"))
+                conn.execute(text(ddl))
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_jobs_status_lease_expires ON jobs(status, lease_expires_at)"))
 
 
