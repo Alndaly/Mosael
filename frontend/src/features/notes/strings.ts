@@ -1,5 +1,6 @@
 import { usePreferences } from "@/app/preferences";
 const zh = {
+  actions: "笔记操作", close: "关闭属性",
   insert: "插入",
   chooseVersion: "选择左侧版本查看内容。",
   deleteForever: "彻底删除", deleteWarning: "笔记及所有历史版本将被永久删除，无法恢复。已有引用会保留，但无法再打开来源。", inTrash: "这篇笔记已移入回收站。恢复后可以继续编辑。",
@@ -20,6 +21,7 @@ const zh = {
 };
 type Strings = typeof zh;
 const en: Strings = {
+  actions: "Note actions", close: "Close properties",
   insert: "Insert",
   chooseVersion: "Select a version to preview its contents.",
   deleteForever: "Delete permanently", deleteWarning: "This note and all its revisions will be permanently deleted. Existing references will remain, but their source will no longer open.", inTrash: "This note is in trash. Restore it to continue editing.",
