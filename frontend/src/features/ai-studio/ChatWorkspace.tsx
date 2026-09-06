@@ -454,7 +454,8 @@ export function ChatWorkspace({
       <section className="min-h-0 overflow-hidden bg-panel grid grid-rows-[auto_minmax(0,1fr)_auto]">
         {/* min-w-0:这行是 grid 子项,默认 min-width:auto —— 面包屑里的长任务名会把它撑到
             section 的 overflow-hidden 上被硬裁,而不是走内部的 truncate 省略号。 */}
-        <div className="flex min-h-16 min-w-0 items-center gap-3 border-b border-border px-5 py-3 max-[821px]:pl-14">
+        <div className="flex min-h-14 min-w-0 flex-wrap items-center gap-2 border-b border-border px-4 py-1.5 max-[821px]:pl-14">
+          {switcher}
           {viewingSubagent ? (
             <SubagentBreadcrumb
               sessionTitle={activeSession?.title || t("chatSessionsTitle")}
@@ -464,13 +465,11 @@ export function ChatWorkspace({
           ) : (
           <>
           {/* 当前会话名常驻头部:和子代理视图的面包屑首段(父会话名)是同一个东西 ——
-              进了子代理它变成面包屑的第一段,回来它就是标题本身。没有会话时不占位。 */}
-          {activeSession && (
-            <span className="min-w-0 flex-1 truncate text-ui-sm font-medium text-foreground" title={activeSession.title}>
-              {activeSession.title}
-            </span>
-          )}
-          <div className={SEGMENTED_LIST} role="tablist">
+              进了子代理它变成面包屑的第一段,回来它就是标题本身。空会话仍保留弹性间距,分开模式与视图切换。 */}
+          <span className="min-w-0 flex-1 truncate text-ui-sm font-medium text-foreground" title={activeSession?.title}>
+            {activeSession?.title}
+          </span>
+          <div className={SEGMENTED_LIST} role="tablist" aria-label={t("chatSessionsTitle")}>
             {(["chat", "trace"] as const).map((item) => (
               <button
                 key={item}
@@ -489,7 +488,7 @@ export function ChatWorkspace({
           {view === "chat" && <Button variant={environmentOpen ? "secondary" : "ghost"} size="icon-sm" aria-label={t("studioChatEnvironment")} title={t("studioChatEnvironment")} aria-pressed={environmentOpen} onClick={() => setEnvironmentOpen(!environmentOpen)}><PanelRight /></Button>}
           {/* 「N 个子代理」:这个会话派出过的子智能体入口(DSH 同款位置)。没派过就不渲染。 */}
           {!viewingSubagent && (
-            <span className="ml-auto shrink-0">
+            <span className="shrink-0 empty:hidden">
               <SubagentButton timeline={subagentSourceTimeline} onOpen={setViewingSubagent} />
             </span>
           )}
@@ -628,7 +627,6 @@ export function ChatWorkspace({
               />
               <div className="flex items-center justify-between gap-1.5 pt-0.5">
                 <div className="flex items-center gap-1.5">
-                  {switcher}
                   {/* 28px —— 和画布助手那一行同一个刻度。见那边的说明。 */}
                   <Button asChild variant="ghost" size="icon-xs" aria-label={t("attachFile")} disabled={attach.uploading}>
                     <label>

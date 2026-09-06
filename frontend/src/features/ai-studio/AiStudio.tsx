@@ -1,6 +1,5 @@
 import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
 import React from "react";
-import { PageHeading } from "@/components/layout/StudioPage";
 import { StudioIndex } from "@/components/layout/StudioIndex";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -219,7 +218,7 @@ export function AiStudio({ workspace }: { workspace: Workspace }) {
   const [tab, setTab] = usePersistentTab<"chat" | "generate">("ai-studio", "chat", ["chat", "generate"]);
 
   const switcher = (
-    <div className={SEGMENTED_LIST} role="tablist">
+    <div className={SEGMENTED_LIST} role="tablist" aria-label="AI Studio">
       <button
         type="button"
         role="tab"
@@ -243,12 +242,11 @@ export function AiStudio({ workspace }: { workspace: Workspace }) {
 
   return (
     // 聊天/生成只在线程内部滚动,页面本身不滚(overflow-hidden)。
-    <div className="flex h-full min-h-0 flex-col items-stretch overflow-hidden bg-panel [&>*]:shrink-0">
-      <PageHeading title="AI Studio" actions={switcher} className="border-b border-border px-6 py-7 xl:px-9 xl:py-8" />
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-hidden bg-panel">
       {tab === "chat" ? (
-        <ChatWorkspace workspace={workspace} />
+        <ChatWorkspace workspace={workspace} switcher={switcher} />
       ) : (
-        <GenerateWorkspace workspace={workspace} />
+        <GenerateWorkspace workspace={workspace} switcher={switcher} />
       )}
     </div>
   );
@@ -777,7 +775,11 @@ function GenerateWorkspace({
       </StudioIndex>
 
       <section className="min-h-0 overflow-hidden bg-panel grid min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto]">
-        <div className="flex min-h-16 min-w-0 items-center justify-between gap-4 border-b border-border px-5 py-3 max-[821px]:pl-14"><span className="truncate text-ui-md font-medium">{activeSession?.title || t("aiTabGenerate")}</span><Button variant={parametersOpen ? "secondary" : "ghost"} size="sm" onClick={() => setParametersOpen(!parametersOpen)} aria-pressed={parametersOpen}><SlidersHorizontal />{t("generationEngineSettings")}</Button></div>
+        <div className="flex min-h-14 min-w-0 flex-wrap items-center gap-2 border-b border-border px-4 py-1.5 max-[821px]:pl-14">
+          {switcher}
+          <span className="min-w-0 flex-1 truncate text-ui-sm font-medium" title={activeSession?.title}>{activeSession?.title}</span>
+          <Button variant={parametersOpen ? "secondary" : "ghost"} size="sm" onClick={() => setParametersOpen(!parametersOpen)} aria-pressed={parametersOpen}><SlidersHorizontal />{t("generationEngineSettings")}</Button>
+        </div>
         <div className="relative grid min-h-0 min-w-0">
         <div className="flex min-w-0 flex-col gap-3.5 overflow-y-auto overflow-x-hidden px-4 pb-2.5 pt-7" ref={stick.ref}>
           {/* First load: skeleton turns instead of flashing the "no jobs yet" empty state. */}
@@ -830,7 +832,6 @@ function GenerateWorkspace({
           />
           <div className="flex items-center justify-between gap-1.5 pt-0.5">
             <div className="flex items-center gap-1.5">
-              {switcher}
               {selectedModel && (
                 <span className="inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-full border border-border px-2.5 text-xs text-muted-foreground">
                   {selectedModel.label}
