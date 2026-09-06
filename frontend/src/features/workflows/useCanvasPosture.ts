@@ -1,7 +1,7 @@
 import React from "react";
 
 /**
- * 画布**现在什么姿态** —— 是否已完成首次 fitView、视口动过几次、此刻正不正在平移。
+ * 画布**现在什么姿态** —— 是否已完成首次 fitView、此刻正不正在平移。
  *
  * 抽出来是因为这三个 state 和工作流本身没有一点关系:它们是 React Flow 这个画布的机制,
  * 而 WorkflowEditor 里另外十四个 state 谈的是图、弹窗和搜索。混在一起时,读的人要先分辨
@@ -12,8 +12,13 @@ import React from "react";
 export interface CanvasPosture {
   /** 首次 fitView 之前画布是藏着的 —— 挂载首帧节点在默认视口的错误位置,直接可见会闪一下。 */
   ready: boolean;
-  /** 视口动过的次数。贴靠面板按节点的**屏幕**位置摆放,视口一动就要重算(平移/缩放时跟着节点走)。 */
-  tick: number;
+  //: 这里曾经有一个 `tick`:视口每动一帧加一,给"按节点屏幕位置摆放的贴靠面板"用。
+  //: 那个面板后来改成了 React Flow 的 `<Panel position="bottom-right">`,靠 CSS 定位,
+  //: 而 tick 留了下来 —— **没有任何地方再读它**,却仍然在平移/缩放时每帧 setState 一次,
+  //: 于是整个编辑器(一千七百行,带就绪度分析等几个重 memo)跟着每帧重渲染一次。
+  //:
+  //: 哪天又需要"跟着视口走"的东西,再加回来是几行的事;而留着一个没人读的每帧 setState,
+  //: 代价是持续的、看不见的。
   /**
    * 此刻正在平移。
    *
@@ -27,25 +32,22 @@ export interface CanvasPosture {
   handlers: {
     onInit: () => void;
     onMoveStart: () => void;
-    onMove: () => void;
     onMoveEnd: () => void;
   };
 }
 
 export function useCanvasPosture(): CanvasPosture {
   const [ready, setReady] = React.useState(false);
-  const [tick, setTick] = React.useState(0);
   const [panning, setPanning] = React.useState(false);
 
   const handlers = React.useMemo(
     () => ({
       onInit: () => setReady(true),
       onMoveStart: () => setPanning(true),
-      onMove: () => setTick((n) => n + 1),
       onMoveEnd: () => setPanning(false),
     }),
     [],
   );
 
-  return { ready, tick, panning, handlers };
+  return { ready, panning, handlers };
 }

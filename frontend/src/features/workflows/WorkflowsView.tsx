@@ -1381,7 +1381,6 @@ function WorkflowEditor({
   });
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
   // 拖动时收起(跟着抖没有意义,还挡住落点),松手后 dragging 转 false 自然复现。
-  // canvas.tick / graph 变化都要重算:前者是平移缩放,后者是节点位置被改。
   // 框选中的节点(≥2 才给「折叠为子图」入口),从 React Flow 的 selected 态直接派生。
   const selectedFlowIds = nodes.filter((node) => node.selected).map((node) => node.id);
 
@@ -1975,7 +1974,6 @@ function WorkflowEditor({
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onMoveStart={canvas.handlers.onMoveStart}
-            onMove={canvas.handlers.onMove}
             onMoveEnd={(event, next) => {
               canvas.handlers.onMoveEnd();
               viewport.remember(next);
@@ -2580,7 +2578,6 @@ function LoopBodyEditor({
             });
           }}
           onMoveStart={subCanvas.handlers.onMoveStart}
-          onMove={subCanvas.handlers.onMove}
           onMoveEnd={(event, next) => {
             subCanvas.handlers.onMoveEnd();
             subViewport.remember(next);
