@@ -13,6 +13,8 @@ import { decodeByteFallback } from "@/lib/byteFallback";
 import { formatElapsedSeconds } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { ToolResultCard, detectShape, toolResultData } from "./toolResultShapes";
+import { CitationContext } from "./CitationLink";
+import { collectCitations } from "./citations";
 
 /** 工具调用卡的数据形态:后端从 sidecar 事件累积(host.py),流里实时更新、消息 payload 里持久化。 */
 export type ToolCall = {
@@ -496,6 +498,7 @@ export function AgentTurnContent({
 }: {
   timeline?: AgentTimelineItem[];
 }) {
+  const citations = React.useMemo(() => collectCitations(timeline), [timeline]);
   return (
     // **间距由容器统一给**。此前每种块自带下外边距(思考 10px、工具卡 8px),而正文的
     // 末段被 `last-child:mb-0` 清零 —— 于是三种块之间的缝隙各不相同,正文后面紧跟一张卡时
@@ -504,7 +507,7 @@ export function AgentTurnContent({
     // —— 一个长 URL 或 32 位 session id 会把这一列撑到内容宽度,冲破外面那层 780px,而**同一个
     // grid 里的其它块(思考、正文)跟着一起变宽**,看起来像"整条消息比别的宽"。子项自己的
     // truncate 救不了:truncate 要父级先有确定宽度,而这里父级宽度正是由它的内容定的。
-    <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-2.5">
+    <CitationContext.Provider value={citations}><div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-2.5">
       {turnBlocks(timeline).map((item, index) =>
         item.type === "tools" ? (
           // 连成一串的工具步骤共用**一个** ToolCalls,于是它们之间是块内的 gap-1,
@@ -516,7 +519,7 @@ export function AgentTurnContent({
           <AgentMarkdown key={`text-${index}`}>{decodeByteFallback(item.text)}</AgentMarkdown>
         ) : null,
       )}
-    </div>
+    </div></CitationContext.Provider>
   );
 }
 

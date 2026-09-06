@@ -14,6 +14,7 @@ export type StudioView =
   | "home"
   | "statistics"
   | "media"
+  | "notes"
   | "editor"
   | "ai"
   | "publish"
@@ -30,6 +31,7 @@ export type NavItem = { view: StudioView; labelKey: MessageKey; group: "primary"
 export const NAV_ITEMS: readonly NavItem[] = [
   { view: "home", labelKey: "navHome", group: "primary" },
   { view: "media", labelKey: "navMedia", group: "primary" },
+  { view: "notes", labelKey: "navNotes", group: "primary" },
   { view: "boards", labelKey: "navBoards", group: "primary" },
   { view: "editor", labelKey: "navEditor", group: "primary" },
   { view: "ai", labelKey: "navAi", group: "primary" },

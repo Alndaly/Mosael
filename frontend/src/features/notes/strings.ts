@@ -1,0 +1,41 @@
+import { usePreferences } from "@/app/preferences";
+const zh = {
+  insert: "插入",
+  chooseVersion: "选择左侧版本查看内容。",
+  deleteForever: "彻底删除", deleteWarning: "笔记及所有历史版本将被永久删除，无法恢复。已有引用会保留，但无法再打开来源。", inTrash: "这篇笔记已移入回收站。恢复后可以继续编辑。",
+  bold: "粗体", italic: "斜体", strike: "删除线", heading: "二级标题", bulletList: "无序列表", numberedList: "有序列表", taskList: "任务列表", quote: "引用块", code: "代码块", divider: "分隔线", image: "插入图片（也可粘贴或拖入）", uploading: "图片上传中…", undo: "撤销", redo: "重做", link: "网页链接", apply: "应用", table: "表格", insertTable: "插入 3 × 3 表格", addRow: "在下方插入行", addColumn: "在右侧插入列", deleteRow: "删除当前行", deleteColumn: "删除当前列", deleteTable: "删除表格",
+  listEmpty: "还没有笔记", listEmptyHint: "写下第一个想法，慢慢积累你的创作资料。", trashEmpty: "回收站是空的", trashHint: "移入回收站的笔记可以在这里恢复。", favoriteEmpty: "还没有收藏", favoriteHint: "给常用笔记点亮星标，下次更容易找到。", searchHint: "换个关键词，或清除筛选再看看。", clearSearch: "清除筛选",
+  title: "笔记", all: "全部笔记", favorite: "收藏", trash: "回收站", topics: "专题", tags: "标签",
+  new: "新建笔记", search: "搜索标题、正文或标签", untitled: "未命名笔记", empty: "把值得留下的想法写在这里",
+  emptyHint: "记录灵感，也可以从逐字稿、对话和画板中保存摘录。", noResults: "没有找到笔记",
+  saved: "已保存", saving: "保存中…", draft: "草稿待保存", error: "保存失败，草稿已留在本机", retry: "重试保存",
+  conflict: "笔记已有新版本。本机草稿已保留，请先导出草稿再载入最新版本。", reload: "载入最新版本",
+  source: "来源与属性", history: "版本记录", restore: "恢复此版本", restoreTrash: "移出回收站", moveTrash: "移入回收站",
+  import: "导入 Markdown", export: "导出 Markdown", write: "编辑", preview: "阅读", raw: "Markdown",
+  content: "笔记正文", placeholder: "开始写作，或输入 @ 引用另一篇笔记…", addReference: "引用笔记",
+  topicHint: "专题，用逗号分隔", tagHint: "标签，用逗号分隔", sourcesEmpty: "从素材或对话保存摘录后，可在这里回到来源。",
+  saveTo: "保存到笔记", append: "追加到已有笔记", choose: "选择笔记", excerpt: "摘录", done: "已保存到笔记",
+  historyHint: "恢复会创建新版本，已有版本仍然保留。", localDraft: "已恢复本机未保存草稿", more: "加载更多",
+  focus: "专注写作", exitFocus: "显示列表", unavailable: "来源已删除或无法访问", loading: "正在载入…", version: "版本",
+};
+type Strings = typeof zh;
+const en: Strings = {
+  insert: "Insert",
+  chooseVersion: "Select a version to preview its contents.",
+  deleteForever: "Delete permanently", deleteWarning: "This note and all its revisions will be permanently deleted. Existing references will remain, but their source will no longer open.", inTrash: "This note is in trash. Restore it to continue editing.",
+  bold: "Bold", italic: "Italic", strike: "Strikethrough", heading: "Heading 2", bulletList: "Bullet list", numberedList: "Numbered list", taskList: "Task list", quote: "Blockquote", code: "Code block", divider: "Divider", image: "Insert image (or paste / drop)", uploading: "Uploading image…", undo: "Undo", redo: "Redo", link: "Web link", apply: "Apply", table: "Table", insertTable: "Insert 3 × 3 table", addRow: "Add row below", addColumn: "Add column right", deleteRow: "Delete row", deleteColumn: "Delete column", deleteTable: "Delete table",
+  listEmpty: "No notes yet", listEmptyHint: "Start with one idea. Build a collection as you create.", trashEmpty: "Trash is empty", trashHint: "Notes moved to trash can be restored here.", favoriteEmpty: "No favorites yet", favoriteHint: "Star a note to keep it close for next time.", searchHint: "Try another keyword or clear your filters.", clearSearch: "Clear filters",
+  title: "Notes", all: "All notes", favorite: "Favorites", trash: "Trash", topics: "Topics", tags: "Tags",
+  new: "New note", search: "Search titles, text or tags", untitled: "Untitled note", empty: "Keep an idea worth returning to",
+  emptyHint: "Write a thought, or save an excerpt from a transcript, conversation or board.", noResults: "No notes found",
+  saved: "Saved", saving: "Saving…", draft: "Unsaved draft", error: "Save failed. Your draft is kept on this device.", retry: "Retry save",
+  conflict: "A newer version exists. Export your local draft before loading the latest version.", reload: "Load latest",
+  source: "Sources & properties", history: "Version history", restore: "Restore version", restoreTrash: "Restore from trash", moveTrash: "Move to trash",
+  import: "Import Markdown", export: "Export Markdown", write: "Edit", preview: "Read", raw: "Markdown",
+  content: "Note content", placeholder: "Start writing, or type @ to reference a note…", addReference: "Reference a note",
+  topicHint: "Topics, separated by commas", tagHint: "Tags, separated by commas", sourcesEmpty: "Excerpts saved from media or conversations link back to their sources here.",
+  saveTo: "Save to notes", append: "Append to a note", choose: "Choose a note", excerpt: "Excerpt", done: "Saved to notes",
+  historyHint: "Restoring creates a new version and keeps previous versions.", localDraft: "Recovered a local unsaved draft", more: "Load more",
+  focus: "Focus on writing", exitFocus: "Show list", unavailable: "Source deleted or unavailable", loading: "Loading…", version: "Version",
+};
+export function useNoteStrings() { return usePreferences().locale === "en-US" ? en : zh; }

@@ -1,4 +1,5 @@
 import React from "react";
+import { SaveToNote } from "@/features/notes/SaveToNote";
 import { Handle, NodeResizer, Position, useStore, type NodeProps } from "@xyflow/react";
 import { AlertTriangle, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Loader2, Music, Plus, Square as SquareIcon, StickyNote, type LucideIcon } from "lucide-react";
 
@@ -41,6 +42,8 @@ export function noteColorClass(color: string | undefined): string {
 /** 节点数据 = 画板项本身 + 一个回写文字的回调。React Flow 要求 data 是普通对象。 */
 export type BoardNodeData = {
   item: BoardItem;
+  workspaceId?: string;
+  boardId?: string;
   onText: (id: string, text: string) => void;
   /** 媒体加载出来之后报一次自然宽高比 —— 节点据此把高度校正过来,画面才铺得满。 */
   onAspect: (id: string, ratio: number) => void;
@@ -187,7 +190,7 @@ function nodeRunProps(item: BoardItem) {
 
 /** 便签:双击进入编辑。**单击不进** —— 单击是选中/拖动,想法摆位比改字更频繁。 */
 export function NoteNode({ data, selected }: NodeProps) {
-  const { item, onText, commentMode } = data as unknown as BoardNodeData;
+  const { item, onText, commentMode, workspaceId, boardId } = data as unknown as BoardNodeData;
   const t = useI18n();
   const [editing, setEditing] = React.useState(false);
   const ref = React.useRef<HTMLTextAreaElement | null>(null);
@@ -213,6 +216,7 @@ export function NoteNode({ data, selected }: NodeProps) {
     >
       <NodeResizer minWidth={120} minHeight={80} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
       <TypeLabel kind="note" />
+      {selected && !editing && !commentMode && workspaceId && boardId && <div className="nodrag nowheel absolute right-0 top-full z-10 mt-2 whitespace-nowrap rounded-md bg-popover" onDoubleClick={e => e.stopPropagation()}><SaveToNote workspaceId={workspaceId} content={item.text || ""} sources={[{kind: "board", id: boardId, label: t("navBoards"), quote: item.text || ""}]} /></div>}
       <Ports visible={selected} disabled={commentMode} />
       {editing ? (
         <textarea

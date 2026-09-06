@@ -7,11 +7,12 @@ summaries — never raw internal schemas.
 
 <!-- BEGIN generated: tools -->
 
-共 **66** 个工具,其中 **17** 个走确认卡。
+共 **70** 个工具,其中 **17** 个走确认卡。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
 | `analyze_asset` | 直接执行 | Analyze an EXISTING image/video media asset with a multimodal model. |
+| `append_note` | 直接执行 | Append requested writing or research to a note without replacing existing content. |
 | `ask_user` | 直接执行 | Ask the user to choose between options you cannot decide for them. |
 | `browser_click` | 直接执行 | Click an element by CSS selector or visible text in the open session (one of selector/text). |
 | `browser_close` | 直接执行 | Close a browser session (frees the view; a throwaway session's cookies/storage are wiped). |
@@ -26,6 +27,7 @@ summaries — never raw internal schemas.
 | `browser_upload` | 直接执行 | Put an asset's file into a page's <input type=file> — the key step when uploading a video. |
 | `browser_wait` | 直接执行 | Wait for an element (selector) / URL substring (url_contains) / page text in the open session. |
 | `convert_video_to_gif` | 确认卡 | Confirmation required: convert an EXISTING video asset into a NEW GIF asset. |
+| `create_note` | 直接执行 | Create a persistent note when the user asks to save research or writing. Preserve factual |
 | `create_project` | 直接执行 | Runs directly: create a project in the workspace; returns its id. |
 | `create_workflow` | 确认卡 | Confirmation required: create a NEW visual workflow. |
 | `edit_board` | 确认卡 | Confirmation required: edit an EXISTING CREATIVE BOARD with granular canvas ops. |
@@ -65,10 +67,12 @@ summaries — never raw internal schemas.
 | `notify_workspace` | 直接执行 | Runs directly: push an in-app notification to the workspace members. |
 | `open_view` | 直接执行 | Take the user to a page in Mosael — optionally to one specific record. |
 | `publish_asset` | 确认卡 | Confirmation required: publish an asset to a platform with a logged-in account. |
+| `read_note` | 直接执行 | Read a note with its source references and immutable revision. Cite citation_url after |
 | `remember` | 直接执行 | Runs directly: save a durable fact or convention to cross-session memory. |
 | `render_sequence` | 确认卡 | Confirmation required: export an existing VIDEO TIMELINE sequence to mp4. |
 | `run_code` | 确认卡 | Confirmation required: run a short Python snippet locally and return `output`. |
 | `run_workflow` | 确认卡 | Confirmation required: execute an EXISTING visual workflow. |
+| `search_notes` | 直接执行 | Search workspace notes by title, body and tags, including Chinese. Returns snippets, |
 | `sleep` | 直接执行 | Runs directly: pause for a few seconds before the next step. |
 | `transcribe_asset` | 直接执行 | Runs directly: run speech-to-text on an audio/video asset; returns the job. |
 | `translate_text` | 直接执行 | Runs directly: translate text into a target language. |

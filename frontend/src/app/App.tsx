@@ -65,6 +65,7 @@ import { PublishView } from "@/features/publish/PublishView";
 import { BrowserPoolView } from "@/features/browser-pool/BrowserPoolView";
 import { PluginsView } from "@/features/plugins/PluginsView";
 import { SchedulerView } from "@/features/scheduler/SchedulerView";
+import { NotesView } from "@/features/notes/NotesView";
 import { BoardsView } from "@/features/boards/BoardsView";
 import { WorkflowsView } from "@/features/workflows/WorkflowsView";
 import { AdminView } from "@/features/admin/AdminView";
@@ -402,7 +403,8 @@ function readHash(): { view: StudioView; projectId: string | null } {
 }
 
 function writeHash(view: StudioView, projectId: string | null) {
-  const query = projectId ? `?p=${projectId}` : "";
+  const noteQuery = view === "notes" && window.location.hash.startsWith("#/notes?") ? window.location.hash.split("?")[1] : "";
+  const query = noteQuery ? `?${noteQuery}` : projectId ? `?p=${projectId}` : "";
   const next = `#/${view}${query}`;
   if (window.location.hash !== next)
     window.history.replaceState(null, "", next);
@@ -530,6 +532,7 @@ function Studio({
         )}
         {view === "statistics" && <StatisticsView workspace={workspace} projects={projects.data ?? []} onOpenProject={openProject} />}
         {view === "media" && <MediaLibraryView workspace={workspace} />}
+        {view === "notes" && <NotesView key={workspace.id} workspace={workspace} />}
         {view === "editor" && (
           <EditorView
             workspace={workspace}

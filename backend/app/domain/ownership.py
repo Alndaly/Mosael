@@ -61,6 +61,8 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "Workflow": ("app/domain/workflows/",),
     "WorkflowRevision": ("app/domain/workflows/",),
     "Board": ("app/domain/boards.py",),
+    "Note": ("app/domain/notes.py",),
+    "NoteRevision": ("app/domain/notes.py",),
     # 发布
     "PublishAccount": ("app/domain/publish/",),
     "PublishTask": ("app/domain/publish/",),
