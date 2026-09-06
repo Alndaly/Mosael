@@ -30,6 +30,10 @@
   --color-panel: var(--panel);
   --color-panel-subtle: var(--panel-subtle);
   --color-panel-inset: var(--panel-inset);
+  --color-workspace: var(--workspace);
+  --color-workspace-panel: var(--workspace-panel);
+  --color-workspace-subtle: var(--workspace-subtle);
+  --color-control: var(--control);
   --color-success: var(--success);
   --color-input: var(--input);
   --color-field: var(--field);
@@ -156,10 +160,15 @@
   --panel: var(--card);
   --panel-subtle: #f3f6fa;
   --panel-inset: #eaf0f7;
+  /* Nested workspace panes share the app backdrop; controls retain their own surface. */
+  --workspace: var(--background);
+  --workspace-panel: var(--panel);
+  --workspace-subtle: var(--panel-subtle);
+  --control: var(--panel);
   --border-strong: #a2afc2;
 
-  /* 磨玻璃:仅用于浮层与顶部/侧栏 chrome(内容面板保持不透明,保可读 + 平面身份)。
-     引用 --popover/--panel,故自动跟随明暗主题;仅在支持 backdrop-filter 时生效。 */
+  /* 浮层与 chrome 使用磨玻璃;自定义背景下,内容面板共享外层表面。
+     引用 --popover/--panel,自动跟随明暗主题;仅在支持 backdrop-filter 时生效。 */
   --glass-bg: color-mix(in srgb, var(--popover) 80%, transparent);
   --glass-chrome: color-mix(in srgb, var(--panel) 70%, transparent);
   /* Quiet depth separates floating tools from the canvas beneath them. */
@@ -330,8 +339,15 @@
 }
 
 @layer components {
+  /* Canvas overlays need their own veil, even when docked or using a plain theme. */
+  .canvas-overlay-surface {
+    background: var(--modal-surface);
+    -webkit-backdrop-filter: var(--modal-filter);
+    backdrop-filter: var(--modal-filter);
+  }
   .modal-surface {
     --field: var(--modal-field);
+    --control: var(--modal-field);
     --input: var(--modal-input);
     -webkit-backdrop-filter: var(--modal-filter);
     backdrop-filter: var(--modal-filter);
@@ -348,6 +364,17 @@
    否则表面保持不透明以保可读性。字面色值是各主题的实底,避免 var 自引用。 */
 @supports ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
   :root[data-appearance="glass"] {
+    --workspace: transparent;
+    --workspace-panel: transparent;
+    --workspace-subtle: color-mix(in srgb, var(--panel-subtle) 20%, transparent);
+    --control: var(--field);
+    --field: color-mix(in srgb, #ffffff calc(var(--app-surface-opacity, 0.72) * 55%), transparent);
+    --secondary: color-mix(in srgb, #edf1f7 calc(var(--app-surface-opacity, 0.72) * 60%), transparent);
+    --muted: color-mix(in srgb, #f0f3f8 calc(var(--app-surface-opacity, 0.72) * 50%), transparent);
+    --accent: color-mix(in srgb, #d6e1f5 calc(var(--app-surface-opacity, 0.72) * 75%), transparent);
+    --timeline-bg: transparent;
+    --track-lane: rgb(240 243 248 / 0.12);
+    --ruler-bg: color-mix(in srgb, #ffffff calc(var(--app-surface-opacity, 0.72) * 45%), transparent);
     --background: color-mix(in srgb, #f6f8fb calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
     --card: color-mix(in srgb, #ffffff calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
     --popover: color-mix(in srgb, #ffffff calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
@@ -355,6 +382,12 @@
     --panel-inset: color-mix(in srgb, #eaf0f7 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
   }
   :root[data-appearance="glass"].dark {
+    --field: color-mix(in srgb, #181a1d calc(var(--app-surface-opacity, 0.72) * 55%), transparent);
+    --secondary: color-mix(in srgb, #2a2d33 calc(var(--app-surface-opacity, 0.72) * 60%), transparent);
+    --muted: color-mix(in srgb, #24272d calc(var(--app-surface-opacity, 0.72) * 50%), transparent);
+    --accent: color-mix(in srgb, #344766 calc(var(--app-surface-opacity, 0.72) * 75%), transparent);
+    --track-lane: rgb(30 32 35 / 0.12);
+    --ruler-bg: color-mix(in srgb, #22252a calc(var(--app-surface-opacity, 0.72) * 45%), transparent);
     --background: color-mix(in srgb, #141517 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
     --card: color-mix(in srgb, #1e2023 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
     --popover: color-mix(in srgb, #292c30 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
@@ -375,6 +408,23 @@
    * 层叠上下文。 */
   :root[data-appearance="glass"] {
     --glass-filter: blur(var(--app-blur, 16px)) saturate(1.35);
+  }
+  /* Scrolling content may pass behind sticky bars; give only those bars a light veil. */
+  :root[data-appearance="glass"] .workspace-sticky {
+    background: color-mix(in srgb, var(--popover) 25%, transparent);
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
+  }
+  :root[data-appearance="glass"] .workspace-sticky[data-stuck="false"] {
+    background: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  /* Narrow-screen drawers overlay content and need stronger separation than docked panes. */
+  :root[data-appearance="glass"] .workspace-overlay {
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
   }
   :root[data-appearance="glass"] [data-glass-surface],
   :root[data-appearance="glass"] [data-slot="popover-content"],

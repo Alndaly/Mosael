@@ -62,6 +62,7 @@ export function CanvasAgentChat({
   rectKey,
   workspaceId,
   mode,
+  dockedLayout = "overlay",
   onModeChange,
   onClose,
 }: {
@@ -71,6 +72,8 @@ export function CanvasAgentChat({
   rectKey: string;
   workspaceId: string;
   mode: CanvasAgentMode;
+  /** Canvas docks cover content; the editor reserves a separate grid column. */
+  dockedLayout?: "overlay" | "inline";
   onModeChange: (mode: CanvasAgentMode) => void;
   onClose: () => void;
 }) {
@@ -446,7 +449,9 @@ export function CanvasAgentChat({
         // 三个按钮被推出面板,最后由外框的 overflow-hidden 一刀切掉。停靠态看着是「正文被
         // 硬裁」,悬浮态看着是「窗口被内容撑宽」—— 同一个成因的两种样子。
         "grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto]",
-        DOCKABLE_PANEL_FRAME_CLASS,
+        !isFloating && dockedLayout === "inline"
+          ? "overflow-hidden rounded-xl border border-border bg-workspace-panel"
+          : DOCKABLE_PANEL_FRAME_CLASS,
         isFloating
           ? "fixed min-h-[380px] min-w-[320px] max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)] border-border-strong"
           : "relative z-[1] h-full w-full min-h-0 min-w-0 shadow-none",
@@ -585,7 +590,7 @@ export function CanvasAgentChat({
       </div>
       {(queue.data ?? []).map((message) => (
         <div
-          className="mx-auto mb-1.5 flex w-full max-w-[780px] items-center gap-2 rounded-lg border border-border bg-panel px-2.5 py-[7px] text-xs"
+          className="mx-auto mb-1.5 flex w-full max-w-[780px] items-center gap-2 rounded-lg border border-border bg-control px-2.5 py-[7px] text-xs"
           key={message.id}
         >
           <CornerDownRight size={12} className="shrink-0 text-muted-foreground" />
@@ -613,7 +618,7 @@ export function CanvasAgentChat({
         </div>
       ))}
       <AttachmentChips attachments={attach} />
-      <div className="mx-2 mb-2 mt-2 flex flex-col gap-0.5 rounded-lg border border-border bg-panel px-2 pb-1.5 pt-2 transition-[border-color] duration-100 focus-within:border-ring">
+      <div className="mx-2 mb-2 mt-2 flex flex-col gap-0.5 rounded-lg border border-border bg-control px-2 pb-1.5 pt-2 transition-[border-color] duration-100 focus-within:border-ring">
         <input
           ref={fileRef}
           type="file"

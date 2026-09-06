@@ -240,7 +240,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
             <section key={group.key || "unknown"} className="grid gap-2 pb-4">
               {/* 日期栏头贴顶:滚很长时也知道现在看的是哪一天。 */}
               {/* 实底日期条让滚动经过的记录不会与日期叠字。 */}
-              <h3 className="sticky top-0 z-[1] m-0 bg-background py-3 text-ui-sm font-medium text-muted-foreground">
+              <h3 className="workspace-sticky sticky top-0 z-[1] m-0 bg-background py-3 text-ui-sm font-medium text-muted-foreground">
                 {day.kind === "today" ? t("dateToday") : day.kind === "yesterday" ? t("dateYesterday") : day.text}
                 <span className="ml-1.5 font-normal tabular-nums text-muted-foreground/70">{group.items.length}</span>
               </h3>

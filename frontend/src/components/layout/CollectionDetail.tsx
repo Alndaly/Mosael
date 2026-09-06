@@ -3,7 +3,7 @@ import { COMPACT_SIDEBAR_BOUNDS, handleOffset, useResizableSidebar } from "@/lib
 import { cn } from "@/lib/utils";
 
 /** Full-bleed management pages: transparent heading, then independently scrolling panes. */
-export const COLLECTION_DETAIL_PAGE = "flex h-full min-h-0 flex-col overflow-hidden bg-background";
+export const COLLECTION_DETAIL_PAGE = "flex h-full min-h-0 flex-col overflow-hidden bg-workspace";
 export const COLLECTION_DETAIL_HEADING = "border-b border-divider bg-transparent px-6 py-7 xl:px-9 xl:py-8";
 
 export const DETAIL_INDEX_ITEM = "flex min-w-0 cursor-pointer items-center gap-3 rounded-md border-0 bg-transparent px-3 py-3 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-[880px]:shrink-0 max-[880px]:py-2";
@@ -15,9 +15,9 @@ export function CollectionDetail({ storageKey, label, index, selected, children 
   storageKey: string; label: string; index: React.ReactNode; selected: boolean; children: React.ReactNode;
 }) {
   const sidebar = useResizableSidebar(storageKey, COMPACT_SIDEBAR_BOUNDS);
-  return <div data-slot="collection-detail" className="relative grid min-h-0 flex-1 grid-cols-[var(--studio-index-width)_minmax(0,1fr)] overflow-hidden bg-panel max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]"
+  return <div data-slot="collection-detail" className="relative grid min-h-0 flex-1 grid-cols-[var(--studio-index-width)_minmax(0,1fr)] overflow-hidden bg-workspace-panel max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]"
     style={{ "--studio-index-width": `${sidebar.width}px` } as React.CSSProperties}>
-    <aside aria-label={label} className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-divider bg-panel-subtle max-[880px]:border-r-0 max-[880px]:border-b">
+    <aside aria-label={label} className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-divider bg-workspace-subtle max-[880px]:border-r-0 max-[880px]:border-b">
       <div className="grid content-start gap-1 overflow-y-auto p-1.5 max-[880px]:flex max-[880px]:items-center max-[880px]:overflow-x-auto max-[880px]:p-3">{index}</div>
     </aside>
     <div {...sidebar.handleProps} style={{ left: handleOffset(sidebar.width, { gap: 0 }) }} className={cn(sidebar.handleProps.className, "max-[880px]:hidden")} />

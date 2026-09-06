@@ -105,7 +105,7 @@ export function MediaPool({
   });
   return (
     // 三行:头 / 筛选条 / 列表(列表占满余高并自滚)。
-    <section className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden rounded-md border border-border bg-panel shadow-[var(--shadow-panel)]">
+    <section className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden rounded-md border border-border bg-workspace-panel shadow-[var(--shadow-panel)]">
       <div className="flex min-h-10 flex-wrap items-center justify-between gap-1 border-b border-border px-3 py-1.5 [&>div:first-child]:basis-full [&_h2]:m-0 [&_h2]:text-ui-xs [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-[0.06em] [&_h2]:text-muted-foreground">
         {tabs ?? <h2>{t("media")}</h2>}
         <div className="ml-auto flex shrink-0 gap-1">
@@ -147,7 +147,7 @@ export function MediaPool({
             aria-label={t("searchAssets")}
           />
         </div>
-        <div className="grid h-7 w-full grid-cols-4 overflow-hidden rounded-md border border-border bg-panel [&>button]:min-w-0 [&>button]:justify-center [&>button]:px-0 [&>button+button]:border-l [&>button+button]:border-border" role="group" aria-label={t("mediaKindGroup")}>
+        <div className="grid h-7 w-full grid-cols-4 overflow-hidden rounded-md border border-border bg-control [&>button]:min-w-0 [&>button]:justify-center [&>button]:px-0 [&>button+button]:border-l [&>button+button]:border-border" role="group" aria-label={t("mediaKindGroup")}>
           {KIND_FILTERS.map((kind) => (
             <button
               key={kind}
@@ -171,7 +171,7 @@ export function MediaPool({
                   aria-pressed={active}
                   onClick={() => toggleTag(tag)}
                   className={cn(
-                    "inline-flex max-w-full cursor-pointer items-center truncate rounded-full border border-border bg-panel px-2 py-[2px] text-ui-xs text-muted-foreground transition-colors duration-100 hover:border-border-strong hover:text-foreground",
+                    "inline-flex max-w-full cursor-pointer items-center truncate rounded-full border border-border bg-control px-2 py-[2px] text-ui-xs text-muted-foreground transition-colors duration-100 hover:border-border-strong hover:text-foreground",
                     active &&
                       "border-[color-mix(in_srgb,var(--primary)_45%,transparent)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary hover:text-primary",
                   )}
@@ -256,7 +256,7 @@ function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className="group/pool relative grid cursor-grab select-none grid-cols-[64px_minmax(0,1fr)] items-center gap-[9px] rounded-md border border-border bg-panel p-1.5 transition-[background-color,border-color] duration-100 hover:border-border-strong hover:bg-muted active:cursor-grabbing"
+      className="group/pool relative grid cursor-grab select-none grid-cols-[64px_minmax(0,1fr)] items-center gap-[9px] rounded-md border border-border bg-control p-1.5 transition-[background-color,border-color] duration-100 hover:border-border-strong hover:bg-muted active:cursor-grabbing"
       onDoubleClick={onAdd}
       title={`${asset.name} — ${t("addToTimeline")}`}
     >

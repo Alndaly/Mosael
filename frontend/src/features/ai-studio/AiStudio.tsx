@@ -242,7 +242,7 @@ export function AiStudio({ workspace }: { workspace: Workspace }) {
 
   return (
     // 聊天/生成只在线程内部滚动,页面本身不滚(overflow-hidden)。
-    <div className="flex h-full min-h-0 flex-col items-stretch overflow-hidden bg-panel">
+    <div className="flex h-full min-h-0 flex-col items-stretch overflow-hidden bg-workspace-panel">
       {tab === "chat" ? (
         <ChatWorkspace workspace={workspace} switcher={switcher} />
       ) : (
@@ -774,7 +774,7 @@ function GenerateWorkspace({
         />
       </StudioIndex>
 
-      <section className="min-h-0 overflow-hidden bg-panel grid min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto]">
+      <section className="min-h-0 overflow-hidden bg-workspace-panel grid min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto]">
         <div className="flex min-h-14 min-w-0 flex-wrap items-center gap-2 border-b border-divider px-4 py-1.5 max-[821px]:pl-14">
           {switcher}
           <span className="min-w-0 flex-1 truncate text-ui-sm font-medium" title={activeSession?.title}>{activeSession?.title}</span>
@@ -810,7 +810,7 @@ function GenerateWorkspace({
         <JumpToLatest stick={stick} label={t("chatJumpToLatest")} newLabel={t("chatNewBelow")} />
         </div>
         <form
-          className="mx-auto mb-3.5 mt-1.5 flex w-[min(780px,calc(100%-32px))] flex-col gap-1 rounded-lg border border-border bg-panel px-2.5 pb-1.5 pl-3 pt-2.5 transition-colors duration-100 focus-within:border-ring"
+          className="mx-auto mb-3.5 mt-1.5 flex w-[min(780px,calc(100%-32px))] flex-col gap-1 rounded-lg border border-border bg-control px-2.5 pb-1.5 pl-3 pt-2.5 transition-colors duration-100 focus-within:border-ring"
           onSubmit={submit}
         >
           <Textarea
@@ -868,7 +868,7 @@ function GenerateWorkspace({
         </form>
       </section>
 
-      <aside className={cn("min-h-0 flex min-w-0 flex-col gap-5 overflow-y-auto overflow-x-hidden border-l border-divider bg-panel px-5 pb-6", !parametersOpen && "hidden", parametersOpen && narrowLayout && "absolute inset-y-0 right-0 z-30 w-[min(340px,100%)] shadow-xl")}>
+      <aside className={cn("min-h-0 flex min-w-0 flex-col gap-5 overflow-y-auto overflow-x-hidden border-l border-divider bg-workspace-panel px-5 pb-6", !parametersOpen && "hidden", parametersOpen && narrowLayout && "workspace-overlay absolute inset-y-0 right-0 z-30 w-[min(340px,100%)] shadow-xl")}>
         <div className="-mx-5 flex min-h-16 items-center justify-between gap-3 border-b border-divider px-5 py-3">
           <h2 className="text-ui-md font-semibold">{t("generationEngineSettings")}</h2><Button variant="ghost" size="icon-xs" aria-label={t("close")} onClick={() => setParametersOpen(false)}><X /></Button>
         </div>
@@ -952,7 +952,7 @@ function GenerateWorkspace({
                   <label className="grid gap-2 text-ui-sm font-medium text-foreground">
                     <span>{t("genNumImages")}</span>
                     <Input
-                      className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-ui-sm font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+                      className="h-8 w-full min-w-0 rounded-lg border-border bg-control px-2.5 text-ui-sm font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
                       type="number"
                       min={1}
                       max={maxImages(selectedModel)}
@@ -965,7 +965,7 @@ function GenerateWorkspace({
                   <label className="grid gap-2 text-ui-sm font-medium text-foreground">
                     <span>{t("genSeed")}</span>
                     <Input
-                      className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-ui-sm font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+                      className="h-8 w-full min-w-0 rounded-lg border-border bg-control px-2.5 text-ui-sm font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
                       type="number"
                       placeholder="auto"
                       value={generationConfig.seed}
@@ -977,7 +977,7 @@ function GenerateWorkspace({
                   <label className="grid gap-2 text-ui-sm font-medium text-foreground">
                     <span>{t("genNegativePrompt")}</span>
                     <Input
-                      className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-ui-sm font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+                      className="h-8 w-full min-w-0 rounded-lg border-border bg-control px-2.5 text-ui-sm font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
                       value={generationConfig.negativePrompt}
                       onChange={(event) => setConfigValue("negativePrompt", event.target.value)}
                     />
@@ -1039,7 +1039,7 @@ function GenerateWorkspace({
                       </Select>
                     ) : (
                       <Input
-                        className="h-8 w-full min-w-0 rounded-lg border-border bg-panel px-2.5 text-ui-sm font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+                        className="h-8 w-full min-w-0 rounded-lg border-border bg-control px-2.5 text-ui-sm font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
                         type="number"
                         value={generationConfig.durationSeconds}
                         onChange={(event) => setConfigValue("durationSeconds", event.target.value)}

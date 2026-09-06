@@ -5,7 +5,7 @@ export const CANVAS_PANEL_EDGE_INSET_PX = 8;
 
 /** Floating tools remain legible over detailed media and canvas content. */
 export const CANVAS_GLASS_SURFACE_CLASS =
-  "border border-border bg-panel shadow-[var(--shadow-panel)]";
+  "canvas-overlay-surface border border-border shadow-[var(--shadow-panel)]";
 
 /** Keep the panel one standard gap below the floating toolbar. */
 export function canvasPanelTop(toolbarTop: number): number {

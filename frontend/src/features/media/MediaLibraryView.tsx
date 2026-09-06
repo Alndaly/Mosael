@@ -75,6 +75,8 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const [batchTagging, setBatchTagging] = React.useState(false);
   const [batchDeleting, setBatchDeleting] = React.useState(false);
   const [urlImportOpen, setUrlImportOpen] = React.useState(false);
+  const filtersRef = React.useRef<HTMLDivElement>(null);
+  const [filtersStuck, setFiltersStuck] = React.useState(false);
 
   const assets = useQuery({
     queryKey: ["assets", workspace.id],
@@ -257,7 +259,12 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           </span>
         </div>
       )}
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto px-6 pb-7 xl:px-9 xl:pb-8 [&>*]:shrink-0">
+      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto px-6 pb-7 xl:px-9 xl:pb-8 [&>*]:shrink-0"
+        onScroll={(event) => {
+          const filters = filtersRef.current;
+          setFiltersStuck(!!filters && event.currentTarget.scrollTop > 0 && filters.getBoundingClientRect().top <= event.currentTarget.getBoundingClientRect().top + 1);
+        }}
+      >
       <PageHeading title={t("navMedia")} description={t("studioMediaDesc")} count={assets.data?.length} className="py-7 xl:py-8" actions={<>
               <Button asChild size="default">
                 <label className="inline-flex cursor-pointer items-center gap-1.5">
@@ -287,7 +294,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           底色铺满整宽。外壳从 px-3.5 收到 px-2 之后这层耦合就断了 —— 工具条比容器宽出 12px,
           整页于是能左右滚(真机)。两个数写在一起,下次改 padding 时才看得见要一起改。 */}
       {(!assets.isSuccess || (assets.data ?? []).length > 0) && (
-        <div className="sticky top-0 z-20 -mx-6 flex flex-col gap-3 border-b border-divider bg-background px-6 pb-4 pt-1 xl:-mx-9 xl:px-9">
+        <div ref={filtersRef} data-stuck={filtersStuck} className="workspace-sticky sticky top-0 z-20 -mx-6 flex flex-col gap-3 border-b border-divider bg-background px-6 py-3 xl:-mx-9 xl:px-9">
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
             <CollectionTabs value={kindFilter} onChange={setKindFilter} label={t("mediaKindGroup")} items={KIND_FILTERS.map(kind => ({ value: kind, label: kindLabel[kind], count: assets.data?.filter(asset => kind === "all" || asset.kind === kind).length }))} />
             <div className="flex items-center gap-2">
@@ -303,10 +310,10 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           <div className="flex min-w-0 flex-wrap items-center gap-2" data-media-filter-row>
             <div className="relative min-w-40 flex-1">
               <Search size={16} className="pointer-events-none absolute left-3 top-3 text-muted-foreground" />
-              <Input aria-label={t("searchAssets")} className="border-border bg-panel pl-9" value={search} placeholder={t("searchAssets")} onChange={(event) => setSearch(event.target.value)} />
+              <Input aria-label={t("searchAssets")} className="border-border bg-control pl-9" value={search} placeholder={t("searchAssets")} onChange={(event) => setSearch(event.target.value)} />
             </div>
             <Select value={sortKey} onValueChange={(value) => setSortKey(value as SortKey)}>
-              <SelectTrigger className="w-auto min-w-36 border-border bg-panel" aria-label={t("sortNewest")}><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-auto min-w-36 border-border bg-control" aria-label={t("sortNewest")}><SelectValue /></SelectTrigger>
               <SelectContent className="max-w-none">
                 <SelectItem value="created">{t("sortNewest")}</SelectItem>
                 <SelectItem value="updated">{t("sortUpdated")}</SelectItem>

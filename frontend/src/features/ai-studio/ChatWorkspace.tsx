@@ -464,7 +464,7 @@ export function ChatWorkspace({
         />
       </StudioIndex>
 
-      <section className="min-h-0 overflow-hidden bg-panel grid grid-rows-[auto_minmax(0,1fr)_auto]">
+      <section className="min-h-0 overflow-hidden bg-workspace-panel grid grid-rows-[auto_minmax(0,1fr)_auto]">
         {/* min-w-0:这行是 grid 子项,默认 min-width:auto —— 面包屑里的长任务名会把它撑到
             section 的 overflow-hidden 上被硬裁,而不是走内部的 truncate 省略号。 */}
         <div ref={toolbarRef} className="flex min-h-14 min-w-0 flex-wrap items-center gap-2 border-b border-divider px-4 py-1.5 max-[821px]:pl-14">
@@ -586,7 +586,7 @@ export function ChatWorkspace({
                 dropped — the Codex arrangement. */}
             {(queue.data ?? []).map((message) => (
               <div
-                className="mx-auto mb-1.5 flex w-full max-w-[780px] items-center gap-2 rounded-lg border border-border bg-panel px-2.5 py-[7px] text-xs"
+                className="mx-auto mb-1.5 flex w-full max-w-[780px] items-center gap-2 rounded-lg border border-border bg-control px-2.5 py-[7px] text-xs"
                 key={message.id}
               >
                 <CornerDownRight size={12} className="shrink-0 text-muted-foreground" />
@@ -614,7 +614,7 @@ export function ChatWorkspace({
               </div>
             ))}
             <form
-              className="mx-auto mb-3.5 mt-1.5 flex w-[min(780px,calc(100%-32px))] flex-col gap-1 rounded-lg border border-border bg-panel pb-1.5 pl-3 pr-2.5 pt-2.5 transition-colors duration-100 focus-within:border-ring"
+              className="mx-auto mb-3.5 mt-1.5 flex w-[min(780px,calc(100%-32px))] flex-col gap-1 rounded-lg border border-border bg-control pb-1.5 pl-3 pr-2.5 pt-2.5 transition-colors duration-100 focus-within:border-ring"
               onSubmit={submit}
             >
               {/* 附件条属于输入框内部(文本框上方),而不是飘在圆角框外的左上角。 */}
@@ -714,7 +714,7 @@ export function ChatWorkspace({
       </section>
 
       {view === "chat" && environmentOpen && <div id={environmentId}
-        className={cn("min-h-0 min-w-0 overflow-hidden border-l border-divider bg-panel-subtle", narrow && "absolute bottom-0 right-0 z-30 w-[min(360px,100%)]")}
+        className={cn("min-h-0 min-w-0 overflow-hidden border-l border-divider bg-workspace-subtle", narrow && "workspace-overlay absolute bottom-0 right-0 z-30 w-[min(360px,100%)]")}
         style={narrow ? { top: toolbarHeight } : undefined}
       ><ChatInspector
         headerHeight={narrow ? 56 : toolbarHeight}

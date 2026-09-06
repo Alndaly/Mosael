@@ -7,12 +7,12 @@
 [data-radix-popper-content-wrapper] {
   z-index: 120 !important;
 }
-/* Opaque floating surfaces are the default. Custom backgrounds retain opt-in glass. */
+/* Custom-background menus and canvas panels. Modal surfaces own their independent glass. */
 @supports ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
   :root[data-appearance="glass"] [data-radix-popper-content-wrapper] > *:not([data-tooltip]),
   :root[data-appearance="glass"] [data-radix-menu-content],
-  :root[data-appearance="glass"] [role="dialog"],
-  :root[data-appearance="glass"] [role="alertdialog"] {
+  :root[data-appearance="glass"] [role="dialog"]:not(.modal-surface):not(.canvas-overlay-surface),
+  :root[data-appearance="glass"] [role="alertdialog"]:not(.modal-surface):not(.canvas-overlay-surface) {
     background: var(--glass-bg);
     -webkit-backdrop-filter: var(--glass-filter);
     backdrop-filter: var(--glass-filter);

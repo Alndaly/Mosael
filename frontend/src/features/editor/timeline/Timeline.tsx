@@ -607,7 +607,7 @@ export function Timeline({
 
   return (
     <div className="grid h-full grid-rows-[auto_minmax(0,1fr)]" data-tool={tool} onWheel={handleWheel}>
-      <div className="flex flex-wrap items-center justify-between gap-y-2 border-b border-border bg-panel px-3 py-2">
+      <div className="flex flex-wrap items-center justify-between gap-y-2 border-b border-border bg-workspace-panel px-3 py-2">
         <div className="flex min-w-0 flex-nowrap items-center gap-2">
           <div className="inline-flex h-8 items-stretch gap-0.5 overflow-hidden rounded-md bg-panel-subtle p-0.5 whitespace-nowrap" role="group" aria-label={t("editTools")}>
             <button
@@ -812,8 +812,8 @@ export function Timeline({
         </div>
       </div>
       <div className="grid min-h-0 grid-cols-[112px_minmax(0,1fr)] overflow-hidden">
-        <div className="overflow-hidden border-r border-border bg-panel" ref={labelsRef}>
-          <div className="sticky top-0 z-[6] border-b border-border bg-panel" style={{ height: RULER_HEIGHT }} />
+        <div className="overflow-hidden border-r border-border bg-workspace-panel" ref={labelsRef}>
+          <div className="workspace-sticky sticky top-0 z-[6] border-b border-border bg-panel" style={{ height: RULER_HEIGHT }} />
           {tracks.map((track, trackIndex) => (
             <div className="group/label flex flex-col justify-center gap-1 border-b border-[var(--track-lane-line)] px-2 text-ui-xs font-semibold text-muted-foreground" key={track.id} style={{ height: TRACK_HEIGHT }}>
               <div className="flex min-w-0 items-center gap-1.5">
@@ -910,7 +910,7 @@ export function Timeline({
         >
           <div className="relative min-w-full" ref={canvasRef} style={{ width: contentWidth }}>
             <div
-              className="sticky top-0 z-[5] cursor-ew-resize touch-none overflow-hidden border-b border-border bg-[var(--ruler-bg)]"
+              className="workspace-sticky sticky top-0 z-[5] cursor-ew-resize touch-none overflow-hidden border-b border-border bg-[var(--ruler-bg)]"
               style={{ height: RULER_HEIGHT }}
               onPointerDown={handleRulerPointerDown}
               onPointerMove={handleRulerPointerMove}

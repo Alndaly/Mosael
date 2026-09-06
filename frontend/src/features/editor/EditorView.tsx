@@ -826,7 +826,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     >
     <div
       data-testid="editor-layout"
-      className="relative grid h-full grid-cols-[252px_minmax(0,1fr)_264px] grid-rows-[minmax(0,1fr)_252px] gap-2 bg-panel-subtle p-2"
+      className="relative grid h-full grid-cols-[252px_minmax(0,1fr)_264px] grid-rows-[minmax(0,1fr)_252px] gap-2 bg-workspace-subtle p-2"
       style={{
         gridTemplateColumns: editorColumns,
         gridTemplateRows: `minmax(0, 1fr) ${panels.sizes.timeline}px`,
@@ -896,7 +896,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       ) : panels.tab === "voice" ? (
         <VoicePanel workspace={workspace} project={project} tabs={<LeftTabs tab={panels.tab} onChange={panels.setTab} />} />
       ) : (
-        <section className="min-h-0 overflow-hidden rounded-lg border border-border bg-panel grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
+        <section className="min-h-0 overflow-hidden rounded-lg border border-border bg-workspace-panel grid grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
           <div className="flex min-h-14 items-center justify-between border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-sm [&_h2]:font-semibold [&_h2]:text-muted-foreground">
             <LeftTabs tab={panels.tab} onChange={panels.setTab} />
           </div>
@@ -1016,7 +1016,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
               onClose={panels.compact ? () => useEditorStore.getState().selectClip(null) : undefined}
             />
           );
-          return panels.compact ? <div className="fixed bottom-0 right-0 top-14 z-[60] grid w-[min(320px,calc(100vw-96px))] border-l border-border-strong bg-panel [&>section]:h-full [&>section]:rounded-none [&>section]:border-0">{inspector}</div> : inspector;
+          return panels.compact ? <div className="workspace-overlay fixed bottom-0 right-0 top-14 z-[60] grid w-[min(320px,calc(100vw-96px))] border-l border-border-strong bg-panel [&>section]:h-full [&>section]:rounded-none [&>section]:border-0">{inspector}</div> : inspector;
         })()}
       {agentOpen === "on" && (
         // 停靠态是 top row 的最后一列：监视器真实让出宽度，而不是被一块 absolute 面板盖住。
@@ -1030,6 +1030,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
             emptyHint={t("editorAgentEmpty")}
             placeholder={t("editorAgentPlaceholder")}
             rectKey="mosael.editor.agent.rect.v1"
+            dockedLayout="inline"
             workspaceId={workspace.id}
             mode={agentMode}
             onModeChange={setAgentMode}

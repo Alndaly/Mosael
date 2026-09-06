@@ -149,9 +149,9 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
   ];
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-panel">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-workspace-panel">
       <div className="relative grid min-h-0 flex-1 grid-cols-[var(--studio-index-width)_minmax(0,1fr)] gap-2 max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]" style={{ "--studio-index-width": `${sidebar.width}px` } as React.CSSProperties}>
-        <nav className="flex min-h-0 flex-col gap-5 overflow-y-auto border-r border-divider bg-panel-subtle px-4 py-5 max-[880px]:max-h-48 max-[880px]:border-b max-[880px]:border-r-0" aria-label={t("settingsTitle")}>
+        <nav className="flex min-h-0 flex-col gap-5 overflow-y-auto border-r border-divider bg-workspace-subtle px-4 py-5 max-[880px]:max-h-48 max-[880px]:border-b max-[880px]:border-r-0" aria-label={t("settingsTitle")}>
           <Input className="shrink-0" aria-label={t("studioSettingsSearch")} placeholder={t("studioSettingsSearch")} value={navSearch} onChange={e => setNavSearch(e.target.value)} />
           {[{ title: t("studioSettingsPersonal"), ids: ["account", "team", "appearance"] }, { title: t("studioSettingsModels"), ids: ["provider-chat", "provider-image", "provider-video", "provider-audio", "provider-pricing", "ai-runtime", "agent-memory", "agent-autopilot"] }, { title: t("studioSettingsServices"), ids: ["transcribe", "voice", "feishu", "data", "backend"] }].map(group => {
             const items = nav.filter(item => group.ids.includes(item.id) && item.label.toLocaleLowerCase().includes(navSearch.toLocaleLowerCase()));
@@ -168,7 +168,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
         <div {...sidebar.handleProps} className={cn(sidebar.handleProps.className, "max-[880px]:hidden")} />
         {/* 右栏是**一块占满高度的面板**,内部滚动 —— 和插件页、定时任务页同一套。此前它跟着
             内容走,内容少时就是半截,而左边是个完整的带边框面板。 */}
-        <SettingsSectionStack className="min-h-0 min-w-0 overflow-y-auto bg-panel px-6 py-7 xl:px-10">
+        <SettingsSectionStack className="min-h-0 min-w-0 overflow-y-auto bg-workspace-panel px-6 py-7 xl:px-10">
           {section === "account" && <AccountSection />}
           {section === "team" && <TeamSection workspace={workspace} />}
           {section === "appearance" && (

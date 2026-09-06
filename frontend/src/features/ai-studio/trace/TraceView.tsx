@@ -391,7 +391,7 @@ export function TraceView({
               <React.Fragment key={event.key}>
                 {first && (
                   // 轮头是分隔,上间距要比行距**大**才分得开。此前它比行距还小,反倒像被挤扁的一行。
-                  <div className="sticky top-0 z-[1] mt-2 flex items-center gap-2 border-t border-border bg-panel px-3 pb-1 pt-2 text-ui-2xs uppercase tracking-[0.06em] text-muted-foreground first:mt-0 first:border-t-0">
+                  <div className="workspace-sticky sticky top-0 z-[1] mt-2 flex items-center gap-2 border-t border-border bg-panel px-3 pb-1 pt-2 text-ui-2xs uppercase tracking-[0.06em] text-muted-foreground first:mt-0 first:border-t-0">
                     <span>{t("traceTurn").replace("{n}", String(event.turn))}</span>
                     {(() => {
                       const usage = turns.find((item) => item.turn === event.turn)?.usage;
