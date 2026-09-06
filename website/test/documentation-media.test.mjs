@@ -48,3 +48,17 @@ test('localized docs reference existing media, use the correct language, and hav
     }
   }
 });
+
+
+test('MDX document links resolve after the renderer adds the current locale', () => {
+  for (const file of files(docs).filter(file => file.endsWith('.mdx'))) {
+    const locale = path.relative(docs, file).split(path.sep)[0];
+    const body = fs.readFileSync(file, 'utf8');
+    for (const [, href] of body.matchAll(/\]\((\/[^)]+)\)/g)) {
+      assert.doesNotMatch(href, /^\/(en|zh)\//, `${file}: renderer already adds locale: ${href}`);
+      if (!href.startsWith('/docs/')) continue;
+      const target = href.split(/[?#]/)[0].slice('/docs/'.length);
+      assert.ok(fs.existsSync(path.join(docs, locale, target + '.mdx')), `${file}: ${href}`);
+    }
+  }
+});

@@ -32,7 +32,7 @@ The editor, workflow canvas and boards reuse this same session pool in a compact
 Its top-left heading is the current conversation title; click the title or arrow to search or switch sessions. Drag empty header space to move a floating panel.
 Long titles ellipsize, and the control stays visually flat rather than adding a framed selector.
 
-The embedded Node.js agent runtime uses pi-agent-core / pi-ai. Requires [model providers](/en/docs/guides/providers) to be configured.
+The embedded Node.js agent runtime uses pi-agent-core / pi-ai. Requires [model providers](/docs/guides/providers) to be configured.
 
 ### The composer keeps only what you look at every turn
 
@@ -61,7 +61,7 @@ saying how many messages moved out and roughly how many tokens were freed; expan
 summary itself.
 
 - It triggers at **80%** of the selected model's context window. Windows differ per model and are
-  editable in [model settings](/en/docs/guides/providers).
+  editable in [model settings](/docs/guides/providers).
 - You can compact on demand instead of waiting — it costs one model call, so it's an explicit button
   rather than something that fires on its own.
 - The meter is anchored on **real usage reported by the vendor** (the last call's input + output);

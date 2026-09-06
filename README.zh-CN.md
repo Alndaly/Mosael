@@ -24,7 +24,7 @@ Mosael 把剪辑、AI 生成、智能体、工作流和发布放在同一个桌�
 
 ![Mosael：剪辑、手写风格工作台与衬线字体素材库的错层展示](docs/media/readme-showcase.png)
 
-<p align="center"><sub>实拍截图拼接展示 · Space Grotesk / Caveat / Newsreader · <a href="docs/media/readme-shots">查看原始截图</a> · <a href="docs/media/README.md">素材署名</a></sub></p>
+<p align="center"><sub>实拍截图拼接展示 · Space Grotesk / Caveat / Newsreader · <a href="docs/media/readme-shots">查看原始截图</a> · <a href="docs/media/mosael-promo.mp4">观看操作演示</a> · <a href="docs/media/README.md">素材署名</a></sub></p>
 
 ## 下载与运行
 

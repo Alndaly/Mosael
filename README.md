@@ -25,7 +25,7 @@ the finished story without shuttling the project between a pile of tools.
 
 ![Mosael: layered views of the editor, handwritten Studio and serif media library](docs/media/readme-showcase.png)
 
-<p align="center"><sub>A composed showcase of actual captures · Space Grotesk / Caveat / Newsreader · <a href="docs/media/readme-shots">Original screenshots</a> · <a href="docs/media/README.md">Media credits</a></sub></p>
+<p align="center"><sub>A composed showcase of actual captures · Space Grotesk / Caveat / Newsreader · <a href="docs/media/readme-shots">Original screenshots</a> · <a href="docs/media/mosael-promo.mp4">Watch the tour</a> · <a href="docs/media/README.md">Media credits</a></sub></p>
 
 ## Download and run
 
