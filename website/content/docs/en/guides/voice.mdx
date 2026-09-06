@@ -1,0 +1,74 @@
+---
+title: Voice
+description: Talk instead of typing, have it read replies back, or take your hands off the keyboard entirely.
+order: 4
+---
+
+Voice in Mosael is three separate things. You can use just one of them:
+
+| | What it does | Where |
+| --- | --- | --- |
+| **Speak instead of typing** | Puts what you said into the composer for you to review before sending | Next to the agent composer |
+| **Read this aloud** | Speaks one reply | Under each reply |
+| **Hands-free** | Always listening: sends each sentence when you finish it, then reads the answer back | The dock in the bottom-right corner |
+
+## Speak instead of typing
+
+Hold to talk; on release the recognized text is **appended** to the composer — appended, not
+replaced, because you may have typed half a sentence before switching to speech.
+
+It only fills the box; it does not send. Fixing a misheard word right there is the point:
+recognition will get things wrong sometimes, and sending straight through means the model has to
+guess what you actually meant.
+
+## Read this aloud
+
+Every reply has a play button underneath. **Only one line plays at a time** — start another and
+the first one stops immediately.
+
+Which voice it uses is a setting; see "Dubbing and conversation are two settings" below.
+
+## Hands-free
+
+The dock in the bottom-right corner; click it to start. It has four states, told apart by the
+colour and motion of one set of sound bars:
+
+- **Listening** — waiting for you to speak, breathing slowly.
+- **Hearing you** — the bars follow your actual volume. The moment they **cross half height and
+  turn primary** is the moment it decides you are speaking, so "how loud do I need to be" is not
+  something you have to guess.
+- **Thinking** — a spinner.
+- **Speaking** — a ripple travelling outward.
+
+Drag the dock anywhere; it remembers where you put it. Hovering shows the current state and
+**the last thing it heard you say** — so when it mishears, you see which word went wrong right
+then, instead of working it out from an answer to the wrong question.
+
+**You can interrupt it mid-sentence.** Speak while it is reading and playback stops immediately,
+recording what you are saying. Otherwise you would have to sit through the rest of a wrong answer
+before correcting it, which is the single most irritating thing a voice assistant does.
+
+**Read-only tools can run from voice; anything that changes something still needs on-screen
+confirmation.** Creating a project or editing a workflow raises a confirmation card. Accepting by
+saying "yes" would mean one misheard word actually changes your work — and you are probably not
+looking at the screen.
+
+**Failures speak up.** In voice mode a silent failure reads as "it didn't hear me", so you say it
+again and fail again.
+
+The dock is off by default; turn it on in Settings, under Spoken replies.
+
+## Dubbing and conversation are two settings
+
+The conversation voice is **kept separate from the dubbing default**, deliberately:
+
+- **Dubbing wants quality**: a local zero-shot engine, a cloned voice, a fifteen-minute first load
+  if that is what it takes — that audio is going into the finished video.
+- **Conversation wants latency**: waiting a minute after you finish a sentence is not a
+  conversation.
+
+One default serving both is necessarily wrong for one of them. The Spoken replies section governs
+the conversation voice only; the dubbing default lives with dubbing.
+
+Both draw their engine and voice lists from **the same endpoints** — this is another place to
+choose, not a second catalogue.

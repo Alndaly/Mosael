@@ -1,7 +1,7 @@
 ---
 title: Plugins
 description: A local script or an existing MCP server — wire it in and it becomes a tool for the agent and workflows.
-order: 7
+order: 9
 ---
 
 A plugin brings capability from outside Mosael in — a local script, or an existing MCP
@@ -13,6 +13,34 @@ A process plugin runs as its own child process with a **minimal environment**: `
 app's provider keys, its database, or its API token.
 
 Want to write one? See [Writing a plugin](/docs/guides/writing-plugins).
+
+![The Plugins page: installed packages on the left, this package's connections and the tools it exposes on the right](/media/screens/plugins.png)
+
+## Two kinds
+
+| | **Local script** | **MCP server** |
+| --- | --- | --- |
+| Declared as | `entry` pointing at a Python script | `kind: "mcp"` plus an `mcp` block |
+| Tool list | written in the manifest's `tools` | pulled from the server, never transcribed |
+| Good for | pure computation, a simple one-shot HTTP call | a platform that already ships an MCP server |
+
+## Package / connection / capability
+
+- A **package** is what sits on disk: a directory plus a manifest.
+- A **connection** is one concrete hook-up: some config, some credentials, a name, an on/off
+  switch. One package can be connected several times — TikHub is one package covering a dozen
+  platform endpoints, so you might have one connection for Bilibili and another for Douyin, each
+  with its own key.
+- A **capability** is which tools that connection exposes. You tick them one by one, and
+  **none are on by default**.
+
+![Enable a connection → its tools become available → filter with search when there are many](/media/gifs/plugins.gif)
+
+The page lays those three out left to right: the Installed column is packages, the top right is
+this package's connections, and below that are the tools that connection exposes. **Nothing on by
+default** is deliberate — an MCP server routinely reports dozens of tools, and turning them all on
+drowns the node panel and the agent's tool list. A model picking from forty names picks wrong more
+often, not less.
 
 ## Installing one
 
@@ -40,6 +68,62 @@ and call log. Clearing only the records is not enough — the next scan would in
 and what the user sees is "I deleted it and it came back". Deleting the directory by hand also
 clears the record on the next scan.
 
+## Credentials
+
+The manifest's `credentials` block declares which secrets are needed. You fill them in on the
+Plugins page and they are injected into **the plugin's own process** at run time.
+
+A plugin gets none of Mosael's own credentials — not the provider keys, not the database, not the
+API token. That isolation is the point: it is why a plugin cannot route around the confirmation
+cards and the permission system. Injecting its credentials does not weaken that; it just gives the
+plugin's **own** secrets somewhere to live, instead of making you open a terminal and copy a config
+file into the plugin directory.
+
+A plugin missing a required credential stays out of the tool list — letting the agent call a tool
+that is certain to 401 only burns a turn restating what the settings page already said.
+
+## Letting it do the OAuth for you
+
+A plugin that needs OAuth tokens (cloud drives, photo services) can declare an `oauth` block. When
+it does, the connection grows an **Authorize** button: it opens the provider's sign-in page, and
+you paste back the code it gives you. The tokens land in the right credential fields on their own.
+
+The step that cannot be automated is **registering an app to get the AppKey / SecretKey** — that is
+between you and the provider's developer console. What can be automated is everything after:
+assembling the authorization URL, exchanging the code for tokens, and knowing which fields to store
+them in. Get any of those slightly wrong by hand and what comes back is `invalid_client` or
+similar — an error that never says which box was wrong.
+
+**Why you still paste a code.** The callback does not use a custom protocol (any web page can fire
+one of those), and it does not open a listening port on your machine (the redirect URL has to be
+registered in the provider's console up front, and a local port changes). One extra paste buys a
+path with nothing forgeable on it.
+
+Tokens **renew themselves**: when the plugin hits an "expired" error it fetches a new token, retries
+the call once, and hands the new token back to be stored. Providers often return only an
+access_token on refresh — fields they did not return are left alone, because writing a blank over an
+existing refresh_token would destroy it, and losing that one means authorizing all over again.
+
+The manifest syntax is in `docs/PLUGIN_MANIFEST.md`, under `instance.oauth`.
+
+## In the agent
+
+Tools from an enabled, authorized, fully-credentialed plugin **appear directly in the agent's tool
+list** (named `plugin__<plugin>__<tool>`), indistinguishable from built-in ones. The model sees the
+name and the input schema straight away — it does not have to first *think of* asking whether a
+plugin might help, then spend a turn listing them.
+
+**Why tools are off by default**: an MCP server may report forty or a hundred tools. Exposing them
+all makes the node panel a forty-row haystack, costs tokens on forty descriptions every turn, and
+crowds out the model's choice among the built-in tools. The tool list on the Plugins page is
+searchable (names and descriptions both match) and can be toggled in bulk over the current filter.
+
+**Sub-agents get no plugin tools by default.** A sub-agent only uses read-only tools, and a plugin
+tool with no confirmation gate can still send requests or write files. To allow one, mark it
+`"read_only": true` in the manifest — that is a judgement made by whoever ships the plugin, not
+something the plugin gets to claim about itself. Same for MCP plugins: override by name under the
+manifest's `tools`. That is not a second tool list; only the `read_only` key is read from it.
+
 ## Tools & call log
 
 - **Tools**: the panel lists each tool; fill in parameters and try it in place.
@@ -47,4 +131,25 @@ clears the record on the next scan.
 
 ## In workflows
 
-The workflow **plugin tool** node picks a tool from an enabled plugin and feeds upstream variables in as arguments.
+**Every plugin tool is a node**, each on its own row under the Plugins group of the Add Node
+panel. It behaves like any built-in node — same form, same inputs and outputs, same validation —
+and the form is generated straight from the tool's input schema.
+
+A plugin can also declare what its node looks like (label, description, form, output sockets),
+along the lines of ComfyUI's custom nodes. The syntax is in `docs/PLUGIN_MANIFEST.md`, under
+workflow nodes.
+
+Export a workflow to a machine that lacks the plugin and opening it tells you exactly which tool of
+which plugin is missing.
+
+## Examples
+
+Four of them live under `plugins/examples/` in the repository:
+
+- `text-toolkit` — pure functions, no dependencies, no credentials.
+- `tikhub` — local script plus credentials plus network. Reads public data from Douyin, TikTok,
+  Xiaohongshu, Bilibili and Kuaishou.
+- `baidu-pan` — **the one with OAuth**: it runs the authorization itself and renews its own
+  tokens, and it shows how to hand a large file to the host to download (the plugin only
+  resolves the URL; progress, cancellation and retries belong to the host).
+- `mcp-everything` — an MCP hook-up with not one line of code.

@@ -306,37 +306,56 @@ function PackageDetail({ pkg }: { pkg: PluginPackage }) {
         <EmptyState size="compact" icon={<Plug size={15} />} title={t("pluginNoConnections")} body={t("pluginNoConnectionsBody")} />
       )}
 
-      {canAdd && (
-        <div className="grid gap-2 rounded-lg border border-dashed border-border px-3 py-2.5">
-          <span className="text-ui-sm font-semibold text-foreground">{t("pluginNewConnection")}</span>
-          <p className="m-0 text-ui-xs leading-[1.55] text-muted-foreground">
-            {/* 没有配置项时还要分一次:有凭据的插件说"不需要配置"是错的 —— AppKey 这些确实
-                要填,只是填在**建好之后的连接上**(凭据挂在连接上,不是插件上)。 */}
-            {(pkg.config_fields ?? []).length
-              ? t("pluginNewConnectionDesc")
-              : (pkg.credential_fields ?? []).length
-                ? t("pluginNewConnectionCreds")
-                : t("pluginNewConnectionSimple")}
-          </p>
-          {/* 字段**铺满这一行**,按钮跟在末尾。此前是 flex-wrap + 各自按内容宽度:只有一个
-              字段时,那一格就是一小块漂在一整行空白里,读起来像这块没做完。
-              一个字段都没有时靠右:否则那颗按钮孤零零贴在一整行空白的左端。 */}
-          <div className="flex flex-wrap items-center gap-1.5 [&>*:not(:last-child)]:min-w-0 [&>*:not(:last-child)]:flex-1"
-            style={(pkg.config_fields ?? []).length ? undefined : { justifyContent: "flex-end" }}>
-            {(pkg.config_fields ?? []).map((field) => (
-              <FieldInput
-                key={field.key}
-                field={field}
-                value={draft[field.key] ?? field.default}
-                onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))}
-              />
-            ))}
-            <Button className="shrink-0" size="sm" loading={createInstance.isPending} onClick={() => createInstance.mutate()}>
-              <Plus size={13} /> {t("pluginAddConnection")}
-            </Button>
+      {canAdd && (() => {
+        const fields = pkg.config_fields ?? [];
+        const addButton = (
+          <Button className="shrink-0" size="sm" loading={createInstance.isPending} onClick={() => createInstance.mutate()}>
+            <Plus size={13} /> {t("pluginAddConnection")}
+          </Button>
+        );
+        const heading = (
+          <div className="grid min-w-0 gap-1">
+            <span className="text-ui-sm font-semibold text-foreground">{t("pluginNewConnection")}</span>
+            <p className="m-0 text-ui-xs leading-[1.55] text-muted-foreground">
+              {/* 没有配置项时还要分一次:有凭据的插件说"不需要配置"是错的 —— AppKey 这些确实
+                  要填,只是填在**建好之后的连接上**(凭据挂在连接上,不是插件上)。 */}
+              {fields.length
+                ? t("pluginNewConnectionDesc")
+                : (pkg.credential_fields ?? []).length
+                  ? t("pluginNewConnectionCreds")
+                  : t("pluginNewConnectionSimple")}
+            </p>
           </div>
-        </div>
-      )}
+        );
+        // **没有配置项时是一行两栏**:左边说这是什么,右边一颗按钮,上下居中。
+        // 单独占一行的话,那一行除了按钮什么都没有 —— 一整条空白横在中间,像还没做完。
+        if (!fields.length) {
+          return (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-border px-3 py-2.5">
+              {heading}
+              {addButton}
+            </div>
+          );
+        }
+        return (
+          <div className="grid gap-2 rounded-lg border border-dashed border-border px-3 py-2.5">
+            {heading}
+            {/* 字段**铺满这一行**,按钮跟在末尾。此前是 flex-wrap + 各自按内容宽度:只有一个
+                字段时,那一格就是一小块漂在一整行空白里,读起来像这块没做完。 */}
+            <div className="flex flex-wrap items-center gap-1.5 [&>*:not(:last-child)]:min-w-0 [&>*:not(:last-child)]:flex-1">
+              {fields.map((field) => (
+                <FieldInput
+                  key={field.key}
+                  field={field}
+                  value={draft[field.key] ?? field.default}
+                  onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))}
+                />
+              ))}
+              {addButton}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -1,0 +1,79 @@
+---
+title: Remote deployment
+description: Move the backend to a server and share one set of data. And why publishing still needs a real desktop.
+order: 13
+---
+
+By default the whole of Mosael runs on your own machine. But the backend can move to a server with
+the desktop app pointed at it — several people sharing one media library, one set of workflows, one
+publishing queue.
+
+> Think this through first: your data now lives on that server. Anyone who can reach it is in your
+> workspace.
+
+## Point the desktop app at a remote backend
+
+Change **Server address** in settings to the backend's address. It decides where this desktop app
+sends its requests; locally that defaults to `http://127.0.0.1:8800`.
+
+## The backend has to allow the origin
+
+Browsers block cross-origin requests, and the error they produce looks like "the backend is
+broken". So on the server, list the allowed origins one by one in `MOSAEL_CORS_ORIGINS`
+(comma-separated):
+
+```bash
+MOSAEL_CORS_ORIGINS="https://studio.example.com,https://studio2.example.com"
+```
+
+The desktop app's own origins (Electron's `file://` and friends) are always allowed; setting this
+does not displace them.
+
+**Wildcards are not supported**, deliberately. `/api/auth` is open by nature: on a fresh, empty
+database, registration succeeds for anyone who can reach the port. Under a wildcard, any web page
+the user happens to open could register an account on your backend **and read the token back**. So
+domains get listed one at a time.
+
+While you are at it: the first thing to do after exposing a deployment is turn **open registration**
+off (Settings → Account).
+
+## Workers have to cross the network too
+
+Publishing and browser automation go over the worker channel. It carries no user session; it
+authenticates with a shared key. Locally the backend writes that key into its own data directory and
+the worker reads the file — but **when the backend is on another machine, that file is either stale
+or absent**. The symptom is publishing, browser automation and externally-executed jobs all
+returning 401 at once, which looks like three separate things breaking.
+
+Set the same `MOSAEL_WORKER_KEY` on both sides:
+
+```bash
+# The same value on the server and on the machine running the worker
+MOSAEL_WORKER_KEY="a long random string"
+```
+
+**Why not "trade a user session for a worker token"**: this channel is deployment-wide — claiming a
+pending publish task claims *anyone's* task. Hanging it off a user session would let any logged-in
+user's worker on a shared server claim everyone's tasks, which is an escalation. Whoever holds this
+key *is* this deployment's worker.
+
+## Publishing still needs a desktop
+
+Publishing is not an HTTP call — it **drives a real browser on your behalf**: sign-in state,
+captchas and platform redesigns all need an actual browser window. So the backend only enqueues,
+and the work is done by the publisher inside Electron. **The web build cannot publish.**
+
+A backend on a server plus the desktop app on your own machine works fine: the desktop connects out,
+and publish tasks run on your machine.
+
+### More than one publisher
+
+Supported. Each worker has a stable identity of its own (generated on first run; override with
+`MOSAEL_WORKER_ID` — container data directories are often ephemeral).
+
+The identity is required. Reclaiming a stuck task uses the test "this account is not in the set I am
+currently running", and that sentence only means anything coming from the worker that claimed it.
+Without identities, two workers mark each other's in-flight tasks as failed.
+
+A given platform account is only ever driven by one worker at a time — there is one sign-in state
+and one upload queue.
