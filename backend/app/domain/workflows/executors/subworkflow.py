@@ -50,6 +50,8 @@ def subgraph(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[st
     context, _cancelled = execute_graph(
         body, wf_id=workflow.id, initial_context=seed, entry_is_root=True
     )
+    if _cancelled:
+        raise WorkflowDomainError("已取消")
     output_tpl = config.get("output")
     if output_tpl:
         return {"output": interpolate(output_tpl, context)}

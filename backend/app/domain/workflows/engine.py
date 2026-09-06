@@ -12,6 +12,7 @@ workflow.node.started / finished 事件,job.progress 按已完成节点数推进
 
 from __future__ import annotations
 
+import contextvars
 import logging
 import threading
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
@@ -21,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
 from app.db.models import Job, Workflow, WorkflowRevision
-from app.domain.jobs import create_job, dispatch_job, emit_job_event, reset_parent_job, set_parent_job, say
+from app.domain.jobs import create_job, current_parent_job_id, dispatch_job, emit_job_event, finish_job, reset_parent_job, set_parent_job, say
 from app.domain.notifications import notify
 from app.domain.workflows import (
     NODE_TYPES,
@@ -99,8 +100,9 @@ def _run_workflow_thread(workflow_id: str, revision_id: str, job_id: str, params
         except Exception as exc:  # noqa: BLE001 — 线程内兜底,失败必须落到 job 上
             logger.exception("workflow job %s ('%s') crashed", job_id, workflow.name)
             failure = _failure_payload(exc)
-            job.status = "failed"
-            job.error = failure["error"]
+            if not finish_job(db, job, status="failed", error=failure["error"]):
+                db.commit()
+                return
             # JobOut 也保留一份终态现场。事件流是完整时间线；result.failure 让只读取 job 的
             # 消费方同样能展示诊断，而不是只能看到一句“失败”。
             job.result = {**(job.result or {}), "failure": failure}
@@ -143,7 +145,7 @@ def execute_graph(
 
     - 顶层:传 job + db,发事件/进度、支持取消;只有 start 类型是入口。
     - 子图(循环体等):不传 job;`entry_is_root=True` 让无入边节点也作为入口;用 initial_context
-      播种(如 {loop:{item,index}})。子图节点不重设 parent job(沿用外层节点已设的父上下文)。
+      播种(如 {loop:{item,index}})。子图捕获外层 parent job，并在每层线程池节点里恢复归属和取消边界。
     """
     order = topo_order(graph)  # 校验 DAG + 稳定顺序
     order_ids = [str(node["id"]) for node in order]
@@ -156,13 +158,20 @@ def execute_graph(
         if source in nodes_by_id and target in nodes_by_id:
             incoming[target].append(edge)
     total = max(len(order_ids), 1)
-    wf_job_id = job.id if job is not None else None
+    wf_job_id = job.id if job is not None else current_parent_job_id()
     has_job = job is not None and db is not None
 
     context: dict[str, Any] = dict(initial_context or {})
     executed: set[str] = set()
     done: set[str] = set()  # executed ∪ skipped
     lock = threading.Lock()
+
+    def is_cancelled() -> bool:
+        if wf_job_id is None:
+            return False
+        with SessionLocal() as check_db:
+            parent = check_db.get(Job, wf_job_id)
+            return parent is None or parent.status not in ("queued", "running")
 
     def node_label(nid: str) -> str:
         return str(nodes_by_id[nid].get("name") or NODE_TYPES[node_types[nid]]["label"])
@@ -209,11 +218,12 @@ def execute_graph(
         handler = get_executor(ntype)
         if handler is None:
             raise WorkflowDomainError(f"节点类型 {ntype} 没有执行器")
-        # 顶层:本节点派生的子任务归到这条工作流 job 下(任务中心收纳)。子图不重设——沿用外层
-        # 节点已设的父上下文(见 jobs.create_job / set_parent_job)。
-        token = set_parent_job(wf_job_id) if has_job else None
+        # Each pool has new threads, including nested graphs: restore the captured parent explicitly.
+        token = set_parent_job(wf_job_id)
         try:
             with SessionLocal() as node_db:  # 每节点独立 session(非线程安全),workflow 本 session 重取
+                if is_cancelled():
+                    raise WorkflowDomainError("已取消")
                 wf = node_db.get(Workflow, wf_id)
                 return handler(node_db, wf, config)
         finally:
@@ -229,7 +239,10 @@ def execute_graph(
         futures: dict[Any, str] = {}
 
         def schedule_ready() -> None:
-            nonlocal processed
+            nonlocal processed, cancelled
+            if is_cancelled():
+                cancelled = True
+                return
             for nid in order_ids:
                 if nid in scheduled:
                     continue
@@ -246,25 +259,13 @@ def execute_graph(
                         db.commit()
                     continue
                 event("workflow.node.started", {"node_id": nid, "node_type": node_types[nid], "name": node_label(nid)})
-                futures[pool.submit(run_node, nid)] = nid
+                futures[pool.submit(contextvars.copy_context().run, run_node, nid)] = nid
 
         schedule_ready()
         while futures and error is None and not cancelled:
-            if has_job:
-                # 用户取消(cancel_job 把 job 翻 failed):不再调度新节点,在飞的节点跑完即止。
-                db.refresh(job)
-                if job.status == "failed":
-                    cancelled = True
-                    event("workflow.cancelled", {"pending": len(futures)})
-                    # 在飞的节点必须补一条终态事件再走。否则它们只有 started 没有收尾,
-                    # 前端(WorkflowRunHistory.toSteps 按 started/finished 配对)会把它们永远
-                    # 停在 running —— 转圈不停、耗时按「现在 − 开始」一直往上走(线上见过 95590s)。
-                    for pending_nid in futures.values():
-                        event(
-                            "workflow.node.failed",
-                            {"node_id": pending_nid, "name": node_label(pending_nid), "error": "已取消"},
-                        )
-                    break
+            if is_cancelled():
+                cancelled = True
+                break
             completed, _ = wait(list(futures.keys()), timeout=0.5, return_when=FIRST_COMPLETED)
             for future in completed:
                 nid = futures.pop(future)
@@ -288,8 +289,13 @@ def execute_graph(
                     db.commit()
             if error is None and not cancelled:
                 schedule_ready()
+        if cancelled:
+            event("workflow.cancelled", {"pending": len(futures)})
+            for pending_nid in futures.values():
+                event("workflow.node.failed", {"node_id": pending_nid, "name": node_label(pending_nid), "error": "已取消"})
 
-    if error is not None:
+    cancelled = cancelled or is_cancelled()
+    if error is not None and not cancelled:
         raise error
     return context, cancelled
 
@@ -304,7 +310,9 @@ def run_workflow(
     """执行固定修订；编辑当前工作流不会改变已排队任务的图。"""
     graph = revision.graph
     node_types = {str(node["id"]): str(node.get("type")) for node in (graph.get("nodes") or [])}
-    job.status = "running"
+    if not finish_job(db, job, status="running"):
+        db.commit()
+        return {}
     say(job, "jobMsg_workflowRunning", name=workflow.name)
     db.commit()
 
@@ -318,7 +326,9 @@ def run_workflow(
         if node_types.get(nid) == "output" and isinstance(out, dict):
             output_values.update(out.get("output") or {})
 
-    job.status = "succeeded"
+    if not finish_job(db, job, status="succeeded"):
+        db.commit()
+        return context
     job.progress = 1.0
     say(job, "jobMsg_workflowDone", name=workflow.name)
     job.result = {

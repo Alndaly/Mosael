@@ -37,6 +37,8 @@ def run_subgraph(body: dict[str, Any], base_context: dict[str, Any], *, workflow
     context, _cancelled = execute_graph(
         body, wf_id=workflow_id, initial_context=base_context, entry_is_root=True
     )
+    if _cancelled:
+        raise WorkflowDomainError("已取消")
     return context
 
 
