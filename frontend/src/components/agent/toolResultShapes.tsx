@@ -4,6 +4,8 @@ import { Maximize2, Play } from "lucide-react";
 
 import { assetThumbnailUrl } from "@/api/client";
 import { AssetPreviewModalById } from "@/features/media/AssetPreviewModalById";
+import { gotoJob, gotoRecord } from "@/lib/deepLink";
+import { cn } from "@/lib/utils";
 
 /**
  * Renders a tool result as something you can read, falling back to JSON only when nothing
@@ -394,6 +396,18 @@ function AssetRef({ value }: { value: Record<string, unknown> }) {
   );
 }
 
+/** 每种引用点下去落到哪儿。**没有落点的就不给点** —— 一个跳到"大概相关的那一页"的
+ *  标签比一个静态标签更糟:用户以为自己会看到那条记录,结果落在一个列表上自己找。
+ *
+ *  此前这些标签一律是静态的:智能体跑完一个工作流,你拿到的是 `任务 c5d80984cd05` ——
+ *  一串截断的 UUID,点不了、也拼不回完整 id,想看它跑得怎么样只能自己去任务中心翻。 */
+const REF_TARGETS: Record<string, (id: string) => void> = {
+  workflow_id: (id) => gotoRecord("/workflows", "mosael:open-workflow", id),
+  // 任务不换页:任务中心是覆盖层,跟进进度多半发生在你正干着别的事的时候。
+  job_id: (id) => gotoJob(id),
+  project_id: (id) => gotoRecord(`/editor?p=${encodeURIComponent(id)}`),
+};
+
 function RefSummary({ value }: { value: Record<string, unknown> }) {
   const refs = [
     ["workflow_id", "工作流"],
@@ -405,11 +419,29 @@ function RefSummary({ value }: { value: Record<string, unknown> }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
       <span className="min-w-0 flex-1 truncate text-foreground">{String(value.name ?? value.title ?? "已创建/已提交")}</span>
-      {refs.map(([key, label]) => (
-        <span className="max-w-[140px] truncate rounded-md border border-border bg-muted px-1.5 py-px text-ui-xs text-muted-foreground" key={key}>
-          {label} {String(value[key]).slice(0, 12)}
-        </span>
-      ))}
+      {refs.map(([key, label]) => {
+        const id = String(value[key]);
+        const go = REF_TARGETS[key];
+        const chip = "max-w-[140px] truncate rounded-md border border-border bg-muted px-1.5 py-px text-ui-xs text-muted-foreground";
+        if (!go) {
+          return (
+            <span className={chip} key={key} title={`${label} ${id}`}>
+              {label} {id.slice(0, 12)}
+            </span>
+          );
+        }
+        return (
+          <button
+            type="button"
+            key={key}
+            className={cn(chip, "cursor-pointer transition-colors hover:border-border-strong hover:text-foreground")}
+            title={`${label} ${id}`}
+            onClick={() => go(id)}
+          >
+            {label} {id.slice(0, 12)}
+          </button>
+        );
+      })}
       {value.nodes != null && <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{String(value.nodes)} 节点</span>}
     </div>
   );

@@ -4,7 +4,7 @@ import { Activity, AudioLines, Captions, CheckCircle2, CircleAlert, Clapperboard
 
 import { toast } from "sonner";
 
-import { api, type Job } from "@/api/client";
+import { api, getJob, type Job } from "@/api/client";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { JobDetailDialog } from "@/components/layout/JobDetailDialog";
@@ -25,12 +25,22 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
   const qc = useQueryClient();
   const [open, setOpen] = React.useState(false);
   // 深链通道(与 mosael:open-* 约定一致):首页任务磁贴等入口用事件打开任务中心弹层。
+  const [detailJob, setDetailJob] = React.useState<Job | null>(null);
   React.useEffect(() => {
-    const onOpen = () => setOpen(true);
+    const onOpen = (event: Event) => {
+      setOpen(true);
+      // 带了 id 就直接翻到那一条。**按 id 现取,不在列表里找** —— 这里列的是 top_level,
+      // 而最常想跟进的恰恰是工作流派生的子任务(某一镜的生成),它不在这个列表里。
+      const jobId = (event as CustomEvent<string | undefined>).detail;
+      if (typeof jobId !== "string" || !jobId) return;
+      void getJob(jobId)
+        .then(setDetailJob)
+        // 取不到就只开面板 —— 任务可能已经被清掉了,而"点了没反应"比"开了个空弹窗"好。
+        .catch(() => undefined);
+    };
     window.addEventListener("mosael:open-tasks", onOpen);
     return () => window.removeEventListener("mosael:open-tasks", onOpen);
   }, []);
-  const [detailJob, setDetailJob] = React.useState<Job | null>(null);
 
   const jobs = useQuery({
     queryKey: ["jobs", workspaceId, "all"],

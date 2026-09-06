@@ -19,6 +19,15 @@ export const NOTIFICATION_DEEP_LINKS: Record<string, { event: string; payloadKey
   workflow: { event: "mosael:open-workflow", payloadKey: "workflow_id" },
 };
 
+/** 打开任务中心,并翻到某一条任务的执行详情。
+ *
+ * 不换页:任务中心是个覆盖层,而"跟进这条任务"多半发生在你正干着别的事的时候 ——
+ * 把人从当前页面赶走去看一眼进度,回来还得自己找回原处。
+ */
+export function gotoJob(jobId: string): void {
+  window.dispatchEvent(new CustomEvent("mosael:open-tasks", { detail: jobId }));
+}
+
 /** 跳到设置的某个分区(如未配置模型 → 直达「模型服务」)。SettingsView 监听 mosael:open-settings。 */
 export function gotoSettings(section: string): void {
   gotoRecord("/settings", "mosael:open-settings", section);
