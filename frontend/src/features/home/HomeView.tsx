@@ -242,9 +242,10 @@ function ProjectPresentation({ project, cover, featured = false, className, onOp
   const [failed, setFailed] = React.useState(false);
   React.useEffect(() => setFailed(false), [cover?.id]);
   const open = () => onOpen(project.id);
+  // 列表行的背景向外延伸，抵消自身内边距，让封面和操作按钮对齐上方精选卡片。
   return <ContextMenu>
     <ContextMenuTrigger asChild>
-      <article className={cn("group min-h-0 min-w-0", featured ? "flex flex-col gap-3" : "flex items-center gap-4 rounded-lg px-3 py-4 transition-colors hover:bg-panel focus-within:bg-panel", className)}>
+      <article className={cn("group min-h-0 min-w-0", featured ? "flex flex-col gap-3" : "-mx-3 flex items-center gap-4 rounded-lg px-3 py-4 transition-colors hover:bg-panel focus-within:bg-panel", className)}>
         <button type="button" onClick={open} aria-label={`${t("homeOpenEditor")}: ${project.name}`} className={cn("relative flex cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-divider bg-panel-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", featured ? "aspect-video min-h-32 w-full flex-1 lg:aspect-auto" : "h-20 w-32 shrink-0 max-[640px]:w-20")}>
           {cover && !failed ? <img src={assetThumbnailUrl(cover.id)} alt="" loading="lazy" onError={() => setFailed(true)} className="size-full object-cover transition-transform duration-300 motion-safe:group-hover:scale-[1.025]" /> : <span className="flex flex-col items-center gap-3 text-muted-foreground"><Clapperboard size={featured ? 32 : 24} strokeWidth={1.3} />{featured && <span className="text-ui-xs">{t("homeNoCover")}</span>}</span>}
           {(project.timeline_duration ?? 0) > 0 && <span className="absolute bottom-2 right-2 rounded bg-black/75 px-1.5 py-0.5 font-mono text-xs text-white">{formatSeconds(project.timeline_duration!)}</span>}
