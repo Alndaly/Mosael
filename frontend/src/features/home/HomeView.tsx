@@ -176,7 +176,7 @@ export function HomeView({
         onRefreshPoem={() => void spinPoem()}
         holidayOverride={holidayOverride}
       />
-      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-border">
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <CollectionTabs label={t("homeProjectsTitle")} value={collection} onChange={mode => { setCollection(mode); if (mode === "recent") setSortKey("updated"); }} items={[{ value: "recent", label: t("homeRecent") }, { value: "all", label: t("homeAll") }]} />
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <div className="relative"><Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" /><Input aria-label={t("searchProjects")} className="w-52 pl-9" value={search} placeholder={t("searchProjects")} onChange={(event) => setSearch(event.target.value)} /></div>
@@ -206,7 +206,7 @@ export function HomeView({
           {collection === "recent" && !search.trim() && <div className={cn("grid grid-cols-1 gap-6", visible.length >= 3 ? "lg:h-[470px] lg:grid-cols-[1.2fr_1fr] lg:grid-rows-2" : "lg:grid-cols-2")}>
             {visible.slice(0, 3).map((project, index) => <ProjectPresentation key={project.id} project={project} cover={covers.get(project.id)} featured className={index === 0 && visible.length >= 3 ? "lg:row-span-2" : undefined} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} />)}
           </div>}
-          <div className="divide-y divide-border border-y border-border">
+          <div className="grid gap-1 empty:hidden">
             {(collection === "recent" && !search.trim() ? visible.slice(3) : visible).map(project => <ProjectPresentation key={project.id} project={project} cover={covers.get(project.id)} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} />)}
           </div>
         </>
@@ -243,8 +243,8 @@ function ProjectPresentation({ project, cover, featured = false, className, onOp
   const open = () => onOpen(project.id);
   return <ContextMenu>
     <ContextMenuTrigger asChild>
-      <article className={cn("group min-h-0 min-w-0", featured ? "flex flex-col gap-3" : "flex items-center gap-4 py-4", className)}>
-        <button type="button" onClick={open} aria-label={`${t("homeOpenEditor")}: ${project.name}`} className={cn("relative flex cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-border bg-panel-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", featured ? "aspect-video min-h-32 w-full flex-1 lg:aspect-auto" : "h-20 w-32 shrink-0 max-[640px]:w-20")}>
+      <article className={cn("group min-h-0 min-w-0", featured ? "flex flex-col gap-3" : "flex items-center gap-4 rounded-lg px-3 py-4 transition-colors hover:bg-panel focus-within:bg-panel", className)}>
+        <button type="button" onClick={open} aria-label={`${t("homeOpenEditor")}: ${project.name}`} className={cn("relative flex cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-divider bg-panel-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", featured ? "aspect-video min-h-32 w-full flex-1 lg:aspect-auto" : "h-20 w-32 shrink-0 max-[640px]:w-20")}>
           {cover && !failed ? <img src={assetThumbnailUrl(cover.id)} alt="" loading="lazy" onError={() => setFailed(true)} className="size-full object-cover transition-transform duration-300 motion-safe:group-hover:scale-[1.025]" /> : <span className="flex flex-col items-center gap-3 text-muted-foreground"><Clapperboard size={featured ? 32 : 24} strokeWidth={1.3} />{featured && <span className="text-ui-xs">{t("homeNoCover")}</span>}</span>}
           {(project.timeline_duration ?? 0) > 0 && <span className="absolute bottom-2 right-2 rounded bg-black/75 px-1.5 py-0.5 font-mono text-xs text-white">{formatSeconds(project.timeline_duration!)}</span>}
         </button>

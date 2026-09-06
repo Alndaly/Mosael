@@ -44,7 +44,7 @@ export function SettingsGroup({
         data-slot="settings-group-header"
         className={cn(
           "flex flex-wrap items-start justify-between gap-4 px-0.5",
-          hasContent && "border-b border-border/70 pb-4",
+          hasContent && "pb-2",
         )}
       >
         <div className="min-w-0">
@@ -68,7 +68,7 @@ export function SettingsGroup({
       {hasContent && (
         <div
           data-slot="settings-group-content"
-          className={cn("grid [&>*+*]:border-t [&>*+*]:border-border/70", contentClassName)}
+          className={cn("grid [&>*+*]:border-t [&>*+*]:border-divider", contentClassName)}
         >
           {children}
         </div>
@@ -141,7 +141,7 @@ export function SettingsList({
     <div
       data-slot="settings-list"
       className={cn(
-        "grid divide-y divide-border/70",
+        "grid divide-y divide-divider",
         scrollable && "max-h-80 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]",
         className,
       )}
@@ -210,7 +210,7 @@ export function SettingsSectionStack({
         >
           {/* 分割线属于上一节的收尾：紧贴上一节，只用下边距为下一节标题留出层级。
               如果这里使用 my-*, 会和上一节最后一行的 py-3 叠加，造成视觉上的下宽上窄。 */}
-          {index > 0 && <Separator className="mb-7 mt-3 bg-border/70" />}
+          {index > 0 && <Separator className="mb-7 mt-3 bg-divider" />}
           {section}
         </React.Fragment>
       ))}

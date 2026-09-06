@@ -21,5 +21,5 @@ export function StudioIndex({ label, children }: { label: string; children: Reac
       </div>
     );
   }
-  return <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-border bg-panel-subtle">{children}</aside>;
+  return <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-divider bg-panel-subtle">{children}</aside>;
 }

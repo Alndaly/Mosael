@@ -434,7 +434,7 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
     <div className="grid w-full min-w-0 content-start gap-6">
       {/* **页头,不是卡片。** 任务名是这一页的身份 —— 它此前和运行记录一样是个 SettingsGroup,
           两块等重,而真正天天看的是下面那份记录。 */}
-      <header className="grid gap-5 border-b border-border pb-5">
+      <header className="grid gap-5 border-b border-divider pb-5">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
           <h2 className="m-0 truncate text-xl font-semibold text-foreground">{task.name}</h2>
           <div className="flex shrink-0 items-center gap-1.5">
@@ -468,7 +468,7 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
       {/* 绑定与 webhook 是**要动手的**,但不需要再套卡片。详情页本身已经有完整边界,
           这里用行间分隔就够了;额外的圆角框只会形成框中框。 */}
       {(task.kind === "workflow" || task.trigger_type === "webhook") && (
-        <div className="grid divide-y divide-border/70">
+        <div className="grid divide-y divide-divider">
           {task.kind === "workflow" && <BoundWorkflowRow task={task} workspaceId={workspaceId} />}
           {task.trigger_type === "webhook" && <WebhookUrlRow task={task} />}
         </div>
@@ -493,7 +493,7 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
       </section>
 
       {/* 删除排在最后、样子最轻 —— 危险操作不该和日常操作抢同一个视觉分量。 */}
-      <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
+      <div className="flex items-center justify-between gap-3 border-t border-divider pt-3">
         <p className="m-0 text-ui-xs leading-[1.55] text-muted-foreground">{t("deleteTaskDesc")}</p>
         <Button
           size="sm"
@@ -541,7 +541,7 @@ function RunRow({ run, job }: { run: ScheduledTaskRun; job: Job | null }) {
   const rows = children.data ?? [];
 
   return (
-    <div className="grid gap-1 py-3 [&+&]:border-t [&+&]:border-border">
+    <div className="grid gap-1 py-3 [&+&]:border-t [&+&]:border-divider">
       <div className="flex items-center gap-2">
       <span
         className={cn(

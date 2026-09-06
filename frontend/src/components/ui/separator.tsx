@@ -20,7 +20,7 @@ export function Separator({
       role={decorative ? "presentation" : "separator"}
       aria-orientation={decorative ? undefined : orientation}
       className={cn(
-        "shrink-0 bg-border",
+        "shrink-0 bg-divider",
         orientation === "horizontal" ? "h-px w-full" : "h-full w-px",
         className,
       )}

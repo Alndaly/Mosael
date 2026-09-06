@@ -310,7 +310,7 @@ export function SessionList({
 
   return (
     <>
-      <div className="flex min-h-14 shrink-0 items-center justify-between gap-1 border-b border-border px-3 [&_h2]:m-0 [&_h2]:text-ui-md [&_h2]:font-semibold [&_h2]:text-foreground">
+      <div className="flex min-h-14 shrink-0 items-center justify-between gap-1 border-b border-divider px-3 [&_h2]:m-0 [&_h2]:text-ui-md [&_h2]:font-semibold [&_h2]:text-foreground">
         {selectMode ? (
           // 选择模式下头部换成这一批的动作 —— 和素材/工作流/发布三页同一套语汇。
           <>

@@ -187,7 +187,7 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
       {/* **页头,不是卡片。** 包是这一页的身份 —— 它此前和连接一样是个 SettingsGroup,
           于是「TikHub」在屏幕上出现两次、长得一模一样,读的人分不清哪个是包哪个是连接。
           身份该在版面顶端只出现一次,后面全是它的内容。 */}
-      <header className="grid gap-5 border-b border-border pb-5">
+      <header className="grid gap-5 border-b border-divider pb-5">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
           <h2 className="m-0 truncate text-xl font-semibold tracking-tight text-foreground">{pkg.name}</h2>
           <span className="flex shrink-0 items-center gap-1">
@@ -855,7 +855,7 @@ export const ToolRow = React.memo(function ToolRow({
         </button>
       </div>
       {open && (
-        <div className="grid gap-5 border-t border-border bg-panel-subtle/40 p-5">
+        <div className="grid gap-5 border-t border-divider bg-panel-subtle/40 p-5">
           {fields.map(([key, spec]) => (
             <label
               className="grid gap-2 [&>span]:text-ui-sm [&>span]:font-medium [&>span]:text-foreground [&_em]:not-italic [&_em]:text-destructive"

@@ -25,8 +25,8 @@ describe("settings section layout", () => {
     const content = container.querySelector('[data-slot="settings-group-content"]');
     const header = container.querySelector('[data-slot="settings-group-header"]');
     expect(content).not.toBeNull();
-    expect(header).toHaveClass("border-b");
-    expect(header).toHaveClass("pb-4");
+    expect(header).not.toHaveClass("border-b");
+    expect(header).toHaveClass("pb-2");
     expect(content).not.toHaveClass("rounded-lg");
     expect(content).not.toHaveClass("border");
     expect(content).not.toHaveClass("bg-panel");

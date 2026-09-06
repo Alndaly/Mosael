@@ -155,7 +155,7 @@ export function AppShell({
     <div data-studio-shell data-sidebar-collapsed={compact} className="grid h-screen grid-cols-[var(--studio-sidebar)_minmax(0,1fr)] grid-rows-[var(--window-chrome-height)_minmax(0,1fr)]" style={{ "--window-chrome-height": `${WINDOW_CHROME_HEIGHT}px`, "--studio-sidebar": compact ? "64px" : "224px" } as React.CSSProperties}>
       <header
         data-glass-surface className={cn(
-        "col-span-full flex min-w-0 items-center justify-between gap-4 border-b border-border bg-panel px-4 [.is-desktop_&]:[-webkit-app-region:drag] [.is-desktop_&_:is(button,a,input,[role=button])]:[-webkit-app-region:no-drag]",
+        "col-span-full flex min-w-0 items-center justify-between gap-4 border-b border-divider bg-panel px-4 [.is-desktop_&]:[-webkit-app-region:drag] [.is-desktop_&_:is(button,a,input,[role=button])]:[-webkit-app-region:no-drag]",
         WINDOW_CHROME_INSET,
       )}>
         {(() => {
@@ -239,7 +239,7 @@ export function AppShell({
           </Tooltip>
         </div>
       </header>
-      <aside data-glass-surface className="col-start-1 row-start-2 flex min-h-0 flex-col border-r border-border bg-panel px-3 py-3">
+      <aside data-glass-surface className="col-start-1 row-start-2 flex min-h-0 flex-col border-r border-divider bg-panel px-3 py-3">
         <div className="mb-4 shrink-0">
           <WorkspaceSwitcher compact={compact} workspaceId={workspaceId} workspaceName={workspaceName} workspaces={workspaces} onSelectWorkspace={onSelectWorkspace} />
         </div>
@@ -249,14 +249,14 @@ export function AppShell({
               {ICONS[item.view]}
             </RailButton>
           ))}
-          <div className="mx-2 my-3 [@media(max-height:850px)]:my-2 border-t border-border" />
+          <div className="mx-2 my-3 [@media(max-height:850px)]:my-2 border-t border-divider" />
           {[...SECONDARY_NAV, ...(isDeploymentAdmin ? ADMIN_NAV : [])].map((item) => (
             <RailButton key={item.view} compact={compact} label={t(item.labelKey)} active={view === item.view} onClick={() => onViewChange(item.view)}>
               {ICONS[item.view]}
             </RailButton>
           ))}
         </nav>
-        <div className="mt-3 grid shrink-0 gap-1 border-t border-border pt-3">
+        <div className="mt-3 grid shrink-0 gap-1 border-t border-divider pt-3">
           <RailButton compact={compact} label={t("navSettings")} active={view === "settings"} onClick={() => onViewChange("settings")}>
             {ICONS.settings}
           </RailButton>
@@ -452,7 +452,7 @@ function WorkspaceSwitcher({
           })}
           {workspaces.every(ws => !ws.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())) && <p className="px-2 py-4 text-ui-sm text-muted-foreground">{t("workspaceNoResults")}</p>}
           </div>
-          <div className="my-2 border-t border-border" />
+          <div className="my-2 border-t border-divider" />
           <Button variant="ghost" className="w-full justify-start text-primary" onClick={() => { setOpen(false); setCreating(true); }}><FolderPlus />{t("workspaceNew")}</Button>
         </PopoverContent>
       </Popover>
@@ -523,7 +523,7 @@ function RailUserMenu({ compact, onOpenSettings }: { compact: boolean; onOpenSet
             <small>{user?.username ? `@${user.username} · ${t("railLocalAccount")}` : t("railLocalAccount")}</small>
           </div>
         </div>
-        <div className="grid gap-0.5 border-t border-border pt-2 [&_button]:flex [&_button]:cursor-pointer [&_button]:items-center [&_button]:gap-1.5 [&_button]:rounded [&_button]:border-0 [&_button]:bg-transparent [&_button]:px-1.5 [&_button]:py-[7px] [&_button]:text-left [&_button]:text-ui-sm [&_button]:text-foreground [&_button]:transition-colors [&_button]:duration-100 [&_button:hover]:bg-secondary">
+        <div className="grid gap-0.5 border-t border-divider pt-2 [&_button]:flex [&_button]:cursor-pointer [&_button]:items-center [&_button]:gap-1.5 [&_button]:rounded [&_button]:border-0 [&_button]:bg-transparent [&_button]:px-1.5 [&_button]:py-[7px] [&_button]:text-left [&_button]:text-ui-sm [&_button]:text-foreground [&_button]:transition-colors [&_button]:duration-100 [&_button:hover]:bg-secondary">
           <button
             type="button"
             onClick={() => {
@@ -544,7 +544,7 @@ function RailUserMenu({ compact, onOpenSettings }: { compact: boolean; onOpenSet
             <LogOut size={13} /> {t("signOut")}
           </button>
         </div>
-        <div className="border-t border-border pt-2 text-center text-ui-2xs tabular-nums text-muted-foreground">Mosael v{__APP_VERSION__}</div>
+        <div className="border-t border-divider pt-2 text-center text-ui-2xs tabular-nums text-muted-foreground">Mosael v{__APP_VERSION__}</div>
       </PopoverContent>
     </Popover>
   );

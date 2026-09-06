@@ -13,7 +13,7 @@ export function CollectionDetail({ storageKey, label, index, selected, children 
   const sidebar = useResizableSidebar(storageKey, COMPACT_SIDEBAR_BOUNDS);
   return <div data-slot="collection-detail" className="relative grid min-h-0 flex-1 grid-cols-[var(--studio-index-width)_minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-panel max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]"
     style={{ "--studio-index-width": `${sidebar.width}px` } as React.CSSProperties}>
-    <aside aria-label={label} className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-border max-[880px]:border-r-0 max-[880px]:border-b">
+    <aside aria-label={label} className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-divider max-[880px]:border-r-0 max-[880px]:border-b">
       <div className="grid content-start gap-1 overflow-y-auto p-1.5 max-[880px]:flex max-[880px]:items-center max-[880px]:overflow-x-auto max-[880px]:p-3">{index}</div>
     </aside>
     <div {...sidebar.handleProps} style={{ left: handleOffset(sidebar.width, { gap: 0 }) }} className={cn(sidebar.handleProps.className, "max-[880px]:hidden")} />

@@ -25,6 +25,7 @@
   --color-destructive: var(--destructive);
   --color-warning: var(--warning);
   --color-border: var(--border);
+  --color-divider: var(--divider);
   --color-border-strong: var(--border-strong);
   --color-panel: var(--panel);
   --color-panel-subtle: var(--panel-subtle);
@@ -145,6 +146,8 @@
   --success: #247348;
   --warning: #8b590e;
   --border: #dce2ec;
+  /* Content separators are quieter than control and container boundaries. */
+  --divider: #e8ecf2;
   --input: #8492a8;
   --field: #ffffff;
   --ring: #4466a5;
@@ -240,6 +243,7 @@
   --success: #76cfaa;
   --warning: #e8c17a;
   --border: #34383f;
+  --divider: #292d33;
   --input: #777f8c;
   --field: #181a1d;
   --ring: #91a9da;

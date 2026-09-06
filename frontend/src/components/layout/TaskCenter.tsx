@@ -195,7 +195,7 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
         {/* `grid-cols-[minmax(0,1fr)]` 不是装饰:单列 grid 的隐式列是 `auto`,也就是 **max-content**
             —— 一条长提示词(AI 生成任务的 subject)会把这一列撑到内容宽度,整个弹层于是能左右滚,
             而行内那些 truncate 全都失效(它们要一个有定数的列宽才截得动)。 */}
-        <div className="grid max-h-[min(560px,70vh)] grid-cols-[minmax(0,1fr)] gap-0 divide-y divide-border overflow-y-auto overflow-x-hidden px-3 py-2">
+        <div className="grid max-h-[min(560px,70vh)] grid-cols-[minmax(0,1fr)] gap-0 divide-y divide-divider overflow-y-auto overflow-x-hidden px-3 py-2">
           {active.map((job) => (
             <JobRow key={job.id} job={job} onOpen={() => openJob(job)} onCancel={() => cancelJob.mutate(job.id)} />
           ))}

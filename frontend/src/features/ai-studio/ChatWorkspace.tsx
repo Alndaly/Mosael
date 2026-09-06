@@ -454,7 +454,7 @@ export function ChatWorkspace({
       <section className="min-h-0 overflow-hidden bg-panel grid grid-rows-[auto_minmax(0,1fr)_auto]">
         {/* min-w-0:这行是 grid 子项,默认 min-width:auto —— 面包屑里的长任务名会把它撑到
             section 的 overflow-hidden 上被硬裁,而不是走内部的 truncate 省略号。 */}
-        <div className="flex min-h-14 min-w-0 flex-wrap items-center gap-2 border-b border-border px-4 py-1.5 max-[821px]:pl-14">
+        <div className="flex min-h-14 min-w-0 flex-wrap items-center gap-2 border-b border-divider px-4 py-1.5 max-[821px]:pl-14">
           {switcher}
           {viewingSubagent ? (
             <SubagentBreadcrumb
@@ -700,7 +700,7 @@ export function ChatWorkspace({
         )}
       </section>
 
-      {view === "chat" && environmentOpen && <div className={cn("min-h-0 overflow-hidden", narrow && "absolute inset-y-0 right-0 z-30 w-[min(380px,100%)] border-l border-border bg-panel shadow-xl")}><div className="flex justify-end bg-panel px-3 pt-2"><Button variant="ghost" size="icon-xs" aria-label={t("close")} onClick={() => setEnvironmentOpen(false)}><X /></Button></div><ChatInspector
+      {view === "chat" && environmentOpen && <div className={cn("min-h-0 overflow-hidden", narrow && "absolute inset-y-0 right-0 z-30 w-[min(380px,100%)] border-l border-divider bg-panel shadow-xl")}><div className="flex justify-end bg-panel px-3 pt-2"><Button variant="ghost" size="icon-xs" aria-label={t("close")} onClick={() => setEnvironmentOpen(false)}><X /></Button></div><ChatInspector
         workspace={workspace}
         session={session.data ?? activeSession}
         messages={visibleMessages}
@@ -778,7 +778,7 @@ function ChatInspector({
       className="h-[calc(100%-36px)] min-h-0 flex min-w-0 flex-col gap-4 overflow-y-auto overflow-x-hidden bg-panel px-4 pb-5"
       aria-label={t("agentInspectorTitle")}
     >
-      <div className="-mx-2.5 flex items-center justify-between gap-2 border-b border-border p-2.5 max-[1180px]:col-span-full">
+      <div className="-mx-2.5 flex items-center justify-between gap-2 border-b border-divider p-2.5 max-[1180px]:col-span-full">
         <h2 className="m-0 text-xs font-bold">{t("agentInspectorTitle")}</h2>
         <span
           className={cn(

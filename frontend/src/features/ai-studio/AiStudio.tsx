@@ -775,7 +775,7 @@ function GenerateWorkspace({
       </StudioIndex>
 
       <section className="min-h-0 overflow-hidden bg-panel grid min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto]">
-        <div className="flex min-h-14 min-w-0 flex-wrap items-center gap-2 border-b border-border px-4 py-1.5 max-[821px]:pl-14">
+        <div className="flex min-h-14 min-w-0 flex-wrap items-center gap-2 border-b border-divider px-4 py-1.5 max-[821px]:pl-14">
           {switcher}
           <span className="min-w-0 flex-1 truncate text-ui-sm font-medium" title={activeSession?.title}>{activeSession?.title}</span>
           <Button variant={parametersOpen ? "secondary" : "ghost"} size="sm" onClick={() => setParametersOpen(!parametersOpen)} aria-pressed={parametersOpen}><SlidersHorizontal />{t("generationEngineSettings")}</Button>
@@ -868,8 +868,8 @@ function GenerateWorkspace({
         </form>
       </section>
 
-      <aside className={cn("min-h-0 flex min-w-0 flex-col gap-5 overflow-y-auto overflow-x-hidden border-l border-border bg-panel px-5 pb-6", !parametersOpen && "hidden", parametersOpen && narrowLayout && "absolute inset-y-0 right-0 z-30 w-[min(340px,100%)] shadow-xl")}>
-        <div className="-mx-5 flex min-h-16 items-center justify-between gap-3 border-b border-border px-5 py-3">
+      <aside className={cn("min-h-0 flex min-w-0 flex-col gap-5 overflow-y-auto overflow-x-hidden border-l border-divider bg-panel px-5 pb-6", !parametersOpen && "hidden", parametersOpen && narrowLayout && "absolute inset-y-0 right-0 z-30 w-[min(340px,100%)] shadow-xl")}>
+        <div className="-mx-5 flex min-h-16 items-center justify-between gap-3 border-b border-divider px-5 py-3">
           <h2 className="text-ui-md font-semibold">{t("generationEngineSettings")}</h2><Button variant="ghost" size="icon-xs" aria-label={t("close")} onClick={() => setParametersOpen(false)}><X /></Button>
         </div>
         {!selectedModel && !generationModelsLoading && (

@@ -140,7 +140,7 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
         </div>
         {/* 单列 grid 的隐式列是 max-content —— 一条长通知正文会把整个弹层撑到能左右滚
             (任务中心同一处坑)。锁住列宽,行内的 truncate 才有定数可截。 */}
-        <div className="grid max-h-[min(560px,70vh)] grid-cols-[minmax(0,1fr)] gap-0 divide-y divide-border overflow-y-auto overflow-x-hidden px-3 py-2">
+        <div className="grid max-h-[min(560px,70vh)] grid-cols-[minmax(0,1fr)] gap-0 divide-y divide-divider overflow-y-auto overflow-x-hidden px-3 py-2">
           {pendingInvites.map((inv) => (
             <div
               key={inv.id}

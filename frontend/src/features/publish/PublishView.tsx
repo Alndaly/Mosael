@@ -244,7 +244,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
                 {day.kind === "today" ? t("dateToday") : day.kind === "yesterday" ? t("dateYesterday") : day.text}
                 <span className="ml-1.5 font-normal tabular-nums text-muted-foreground/70">{group.items.length}</span>
               </h3>
-              <div className="grid divide-y divide-border border-y border-border">
+              <div className="grid divide-y divide-divider">
                 {group.items.map((task) => (
                   <ContextMenu key={task.id}>
                     <ContextMenuTrigger asChild>

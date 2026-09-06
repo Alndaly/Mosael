@@ -286,7 +286,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           底色铺满整宽。外壳从 px-3.5 收到 px-2 之后这层耦合就断了 —— 工具条比容器宽出 12px,
           整页于是能左右滚(真机)。两个数写在一起,下次改 padding 时才看得见要一起改。 */}
       {(!assets.isSuccess || (assets.data ?? []).length > 0) && (
-        <div className="sticky top-0 z-20 -mx-6 flex flex-col gap-3 border-b border-border bg-background px-6 pb-4 pt-1 xl:-mx-9 xl:px-9">
+        <div className="sticky top-0 z-20 -mx-6 flex flex-col gap-3 border-b border-divider bg-background px-6 pb-4 pt-1 xl:-mx-9 xl:px-9">
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
             <CollectionTabs value={kindFilter} onChange={setKindFilter} label={t("mediaKindGroup")} items={KIND_FILTERS.map(kind => ({ value: kind, label: kindLabel[kind], count: assets.data?.filter(asset => kind === "all" || asset.kind === kind).length }))} />
             <div className="flex items-center gap-2">
@@ -315,7 +315,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
             </Select>
             {allTags.length > 0 && <MediaTagFilter tags={allTags} value={tagFilter} onChange={setTagFilter} />}
           </div>
-          {selectMode && <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3" role="group" aria-label={t("mediaSelectMode")}>
+          {selectMode && <div className="flex flex-wrap items-center gap-2 border-t border-divider pt-3" role="group" aria-label={t("mediaSelectMode")}>
 
                   <span className="whitespace-nowrap text-xs text-muted-foreground">
                     {t("mediaSelectedCount").replace("{n}", String(selectedIds.size))}
@@ -375,7 +375,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
 
         />
       ) : visible.length === 0 ? <EmptyState icon={<FolderOpen />} title={t("studioNoMatches")} body={t("studioNoMatchesHint")} /> : (
-        <div className={cn("py-6", display === "grid" ? "grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-6 gap-y-7" : "grid divide-y divide-border")}>
+        <div className={cn("py-6", display === "grid" ? "grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-6 gap-y-7" : "grid divide-y divide-divider")}>
           {visible.map((asset) => (
             <ContextMenu key={asset.id}>
               <ContextMenuTrigger asChild>
