@@ -19,6 +19,7 @@ export function SiteHeader({ locale }: { locale: Locale }) {
     { href: localePath(locale), match: localePath(locale), exact: true, label: t.nav.product },
     { href: localePath(locale, "/workflows"), match: localePath(locale, "/workflows"), label: t.nav.workflows },
     { href: localePath(locale, "/plugins"), match: localePath(locale, "/plugins"), label: t.nav.plugins },
+    { href: localePath(locale, "/changelog"), match: localePath(locale, "/changelog"), label: t.nav.changelog },
     { href: docHref(locale, firstDoc(locale)), match: localePath(locale, "/docs"), label: t.nav.docs },
   ];
 

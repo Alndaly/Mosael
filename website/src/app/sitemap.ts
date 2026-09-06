@@ -20,6 +20,7 @@ const STATIC: Entry[] = [
   { path: (locale) => `/${locale}`, priority: 1 },
   { path: (locale) => `/${locale}/plugins`, priority: 0.8 },
   { path: (locale) => `/${locale}/workflows`, priority: 0.8 },
+  { path: (locale) => `/${locale}/changelog`, priority: 0.7 },
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {

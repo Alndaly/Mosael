@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Download, Film, Scissors } from "lucide-react";
 
 import { PageHero } from "@/components/page-hero";
-import { Reveal } from "@/components/reveal";
 import { Shot } from "@/components/shot";
 import { isLocale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
@@ -24,83 +23,64 @@ export default async function WorkflowsPage({ params }: { params: Params }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   const t = getMessages(locale).workflows;
-  const workflows = listWorkflows();
+  const workflows = listWorkflows(locale);
 
   return (
     <>
       <PageHero title={t.title} lede={t.lede} />
-
-      <section className="bg-paper">
+      <section className="bg-paper" aria-labelledby="workflow-library">
         <div className="mx-auto max-w-[88rem] px-5 pb-24 sm:px-8 sm:pb-32">
-          <Reveal>
-            <Shot src="/media/screens/workflows.png" alt={t.shotAlt} caption={t.shotCaption} framed />
-          </Reveal>
-        </div>
-      </section>
-
-      {/* 画廊。空的时候不摆占位卡片 —— 那是在假装已经有内容。 */}
-      <section className="bg-[#17141f] text-[#fbf9ff]">
-        <div className="mx-auto max-w-[88rem] px-5 py-24 sm:px-8 sm:py-32">
-          <h2 className="mt-0 mb-14 max-w-[14ch] font-display text-[clamp(2.5rem,6vw,5rem)] leading-[0.96] font-[700] tracking-[-0.05em]">
-            {t.galleryTitle}
-          </h2>
-
-          {workflows.length === 0 ? (
-            <Reveal className="grid max-w-5xl gap-8 border-t border-white/15 pt-8 md:grid-cols-12 md:items-end">
-              <div className="md:col-span-8"><h3 className="mt-0 mb-4 font-display text-2xl font-semibold tracking-[-0.025em]">{t.galleryEmptyTitle}</h3><p className="m-0 max-w-2xl text-white/58">{t.galleryEmptyBody}</p></div>
-              <a
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-primary px-6 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-85 md:col-span-4 md:justify-self-end"
-                href={`${SITE.repo}/issues/new`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {t.contribute}
-                <ArrowUpRight className="size-4" />
-              </a>
-            </Reveal>
-          ) : (
-            <ul className="m-0 grid list-none gap-6 p-0 lg:grid-cols-3">
-              {workflows.map((workflow) => (
-                <li key={workflow.id} className="m-0 border-t border-white/15 py-6">
-                  <h3 className="m-0 font-display text-lg font-bold tracking-tight">{workflow.name}</h3>
-                  <p className="mt-3 mb-4 text-invert-foreground/70">{workflow.summary}</p>
-                  <p className="m-0 font-mono text-xs text-invert-foreground/60">
-                    {workflow.nodes} · {workflow.requires.join(" · ")} · {workflow.author}
-                  </p>
+          <div className="mb-10 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h2 id="workflow-library" className="m-0 font-display text-3xl font-semibold tracking-tight sm:text-4xl">{t.galleryTitle}</h2>
+              <p className="mb-0 mt-3 max-w-2xl text-muted-foreground">{t.galleryBody}</p>
+            </div>
+            <Link href="#import-workflow" className="text-sm font-semibold text-primary underline-offset-4 hover:underline">{t.importTitle}</Link>
+          </div>
+          <ul className="m-0 grid list-none gap-x-12 p-0 lg:grid-cols-2">
+            {workflows.map((workflow) => {
+              const Icon = workflow.id === "full_video_generation" ? Film : Scissors;
+              return (
+                <li key={workflow.id} className="flex min-w-0 flex-col border-t border-border py-8">
+                  <div className="mb-5 flex items-center justify-between gap-3 text-sm text-muted-foreground">
+                    <span className="inline-flex items-center gap-2 text-primary"><Icon className="size-5" aria-hidden />{t.official}</span>
+                    <span>{t.templateVersion} {workflow.version}</span>
+                  </div>
+                  <h3 className="m-0 font-display text-2xl font-semibold tracking-tight">{workflow.name}</h3>
+                  <p className="mb-6 mt-3 leading-7 text-muted-foreground">{workflow.summary}</p>
+                  <ol className="mb-6 flex list-none flex-wrap gap-x-4 gap-y-2 p-0 text-sm" aria-label={t.stages}>
+                    {workflow.stages.map((stage, index) => <li key={stage} className="flex items-center gap-2"><span className="text-primary">{index + 1}.</span>{stage}</li>)}
+                  </ol>
+                  <div className="mb-7">
+                    <h4 className="mb-2 mt-0 text-sm font-semibold">{t.requirements}</h4>
+                    <ul className="m-0 list-disc space-y-1 pl-5 text-sm leading-6 text-muted-foreground">{workflow.requires.map((item) => <li key={item}>{item}</li>)}</ul>
+                  </div>
+                  <div className="mt-auto flex flex-wrap items-center justify-between gap-4">
+                    <span className="text-sm text-muted-foreground">{workflow.nodes} {t.nodes} · {workflow.author}</span>
+                    <a href={workflow.graph} download className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-85" aria-label={`${t.download}: ${workflow.name}`}>
+                      <Download className="size-4" aria-hidden />{t.download}
+                    </a>
+                  </div>
                 </li>
-              ))}
-            </ul>
-          )}
+              );
+            })}
+          </ul>
         </div>
       </section>
-
-      {/* 条目形状:编号 + 字段名 + 一句解释,像一份表格的说明,而不是四张卡。 */}
+      <section id="import-workflow" className="scroll-mt-24 bg-secondary/40" aria-labelledby="import-title">
+        <div className="mx-auto grid max-w-[88rem] gap-10 px-5 py-20 sm:px-8 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
+          <div>
+            <h2 id="import-title" className="m-0 font-display text-3xl font-semibold tracking-tight">{t.importTitle}</h2>
+            <p className="mt-4 leading-7 text-muted-foreground">{t.importNote}</p>
+            <Link href={localePath(locale, "/docs/guides/workflows")} className="text-sm font-semibold text-primary hover:underline">{t.guideLink}</Link>
+          </div>
+          <ol className="m-0 list-none space-y-6 p-0">{t.importSteps.map((step, index) => <li key={step.title} className="flex items-start gap-4"><span className="grid size-8 shrink-0 place-items-center rounded-full border border-border text-sm font-semibold text-primary">{index + 1}</span><div><h3 className="m-0 text-base font-semibold">{step.title}</h3><p className="mb-0 mt-2 text-sm leading-7 text-muted-foreground">{step.body}</p></div></li>)}</ol>
+        </div>
+      </section>
       <section className="bg-paper">
-        <div className="mx-auto max-w-[88rem] px-5 py-24 sm:px-8 sm:py-32">
-          <h2 className="mt-0 mb-14 max-w-[14ch] font-display text-[clamp(2.5rem,6vw,5rem)] leading-[0.96] font-[700] tracking-[-0.05em]">
-            {t.fieldsTitle}
-          </h2>
-          <dl className="m-0 border-t border-border">
-            {t.fields.map((field, index) => (
-              <Reveal
-                key={field.name}
-                delay={index * 60}
-                className="grid gap-2 border-b border-border py-7 sm:grid-cols-12 sm:items-baseline sm:gap-8"
-              >
-                <span className="font-mono text-xs font-bold tracking-widest text-flame uppercase sm:col-span-1">
-                  {String(index + 1).padStart(2, "0")}
-                </span>
-                <dt className="font-display text-lg font-bold tracking-tight sm:col-span-4">{field.name}</dt>
-                <dd className="m-0 text-muted-foreground sm:col-span-7">{field.body}</dd>
-              </Reveal>
-            ))}
-          </dl>
-
-          <p className="mt-12 mb-0 text-sm font-bold">
-            <Link className="inline-flex items-center gap-2 text-primary hover:opacity-70" href={localePath(locale, "/docs/guides/workflows")}>
-              {t.guideLink}
-            </Link>
-          </p>
+        <div className="mx-auto max-w-[88rem] px-5 py-20 sm:px-8">
+          <Shot src="/media/screens/workflows.png" alt={t.shotAlt} caption={t.shotCaption} framed />
+          <p className="mb-0 mt-10 flex flex-wrap items-center justify-between gap-4 text-sm text-muted-foreground"><span>{t.contributeBody}</span><a href={`${SITE.repo}/issues/new`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 font-semibold text-primary hover:underline">{t.contribute}<ArrowUpRight className="size-4" aria-hidden /></a></p>
         </div>
       </section>
     </>

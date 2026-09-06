@@ -96,26 +96,32 @@ export function readPluginDoc(slug: string): string | null {
   return fs.existsSync(file) ? fs.readFileSync(file, "utf8") : null;
 }
 
-/**
- * 社区工作流的条目形状。
- *
- * 先把形状定下来,内容后补 —— 定义在这里而不是等到有第一条投稿再拍脑袋,是因为形状会
- * 反过来决定投稿要交什么。`graph` 就是 `/api/workflows` 那份图,存下来能直接导入。
- */
+/** Official downloadable templates, generated from the application's template factories. */
 export type WorkflowEntry = {
   id: string;
   name: string;
   summary: string;
-  /** 图里有多少个节点 —— 一眼看出这条工作流多复杂。 */
   nodes: number;
-  /** 跑起来需要先配好哪些能力(AI 对话 / 文生图 / 转写 …)。 */
   requires: string[];
+  stages: string[];
   author: string;
-  /** 可导入的图,相对站点根的 URL。 */
+  version: number;
   graph: string;
 };
 
-/** 还没有收录的工作流。空数组在页面上会渲染成"征集中",不是一个坏掉的画廊。 */
-export function listWorkflows(): WorkflowEntry[] {
-  return [];
+type WorkflowRecord = Omit<WorkflowEntry, "name" | "summary" | "requires" | "stages" | "graph"> & {
+  name: Record<Locale, string>;
+  summary: Record<Locale, string>;
+  requires: Record<Locale, string[]>;
+  stages: Record<Locale, string[]>;
+  download: Record<Locale, string>;
+};
+
+export function listWorkflows(locale: Locale = DEFAULT_LOCALE): WorkflowEntry[] {
+  const catalog = JSON.parse(fs.readFileSync(path.join(process.cwd(), "public/workflows/catalog.json"), "utf8")) as WorkflowRecord[];
+  return catalog.map((entry) => ({
+    id: entry.id, author: entry.author, version: entry.version, nodes: entry.nodes,
+    name: entry.name[locale], summary: entry.summary[locale], requires: entry.requires[locale],
+    stages: entry.stages[locale], graph: entry.download[locale],
+  }));
 }

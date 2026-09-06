@@ -102,8 +102,10 @@ jobs:
       # 官网是独立 pnpm 工作区,不会被根目录的 install/build 顺带覆盖。
       # production build 同时检查 TypeScript、路由、MDX 和服务端渲染边界。
       # 当前 typescript-eslint 拒绝 TS 7,不能把一条必红的 lint 伪装成门禁。
-      - name: Website production build
-        run: pnpm --dir website build
+      - name: Website tests and production build
+        run: |
+          pnpm --dir website test
+          pnpm --dir website build
 
   # 先建好草稿 Release(自动生成变更说明),两个平台的构建往同一个草稿传产物,
   # 全部成功后才转正——避免用户在「检查更新」里看到缺产物的半成品版本。

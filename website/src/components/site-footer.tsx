@@ -41,6 +41,7 @@ export function SiteFooter({ locale }: { locale: Locale }) {
         { label: t.footer.github, href: SITE.repo, external: true },
         { label: t.footer.authorX, href: SITE.authorX, external: true },
         { label: t.footer.download, href: SITE.releases, external: true },
+        { label: t.nav.changelog, href: localePath(locale, "/changelog") },
         { label: t.footer.issues, href: `${SITE.repo}/issues`, external: true },
       ],
     },

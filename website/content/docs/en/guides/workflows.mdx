@@ -6,6 +6,18 @@ order: 6
 
 Workflows orchestrate a chain of actions (retrieval, generation, transcription, export, publishing, …) into a **DAG**, triggered manually, on a schedule, or via webhook. The design takes cues from Dify / Coze.
 
+## Download and import official templates
+
+The [website workflow catalog](/workflows) includes Topic to finished video and Transcript-based video cleanup.
+
+1. Download a `.mosael-workflow.json` file; no extraction is needed.
+2. Choose your workspace in the app, open Workflows, then use Import to select the file.
+3. Open the imported graph, choose your own providers and models, supply the required media and pass the readiness check before running.
+
+Downloads contain no account secrets or private assets, and do not automatically select local default models. Video generation
+requires a text-to-video model; transcript cleanup requires an available transcription engine and a source video.
+Use v1.0.0-beta4 or later. Template node names and prompts are currently in Chinese.
+
 ## Canvas & nodes
 
 ![Workflow canvas: retrieve style guide → write voiceover / titles → assemble copy → notify](/media/screens/workflows.png)

@@ -21,6 +21,7 @@ const zh = {
     docs: "文档",
     plugins: "插件",
     workflows: "工作流",
+    changelog: "更新日志",
     download: "下载",
     github: "GitHub",
     theme: "切换主题",
@@ -159,30 +160,38 @@ const zh = {
     installBody: "在应用的插件页打开「市场」,找到它点安装。装之前会先把它声明的权限摊开给你看。",
   },
   workflows: {
-    title: "工作流",
-    lede: "把检索、生成、转写、拼装、发布串成一张有向无环图，手动跑、定时跑，或者由 Webhook 叫醒。画布上能做的事，对话里的智能体也都能做。",
-    shotAlt: "可视化工作流画布：检索 → 生成 → 拼装 → 通知 的节点连线",
-    shotCaption: "工作流画布 —— 节点分组、连线、就绪检查都在一张图上。",
-    galleryTitle: "社区工作流",
-    galleryEmptyTitle: "还没有收录的工作流",
-    galleryEmptyBody:
-      "条目形状已经定好了 —— 名称、简介、节点数、需要先配好哪些能力，以及一份可以直接导入的图。第一条投稿之后这里就会变成一个画廊。",
-    contribute: "投一条上来",
-    guideLink: "工作流指南",
-    fieldsTitle: "一条工作流要交什么",
-    fields: [
-      { name: "名称 / 简介", body: "一句话说清它替人省掉了哪段重复劳动。" },
-      { name: "节点数", body: "一眼看出复杂度,决定要不要现在打开。" },
-      {
-        name: "需要的能力",
-        body: "跑起来得先在设置里配好哪些供应商 —— 缺哪一样，导入前就知道。",
-      },
-      {
-        name: "可导入的图",
-        body: "就是 /api/workflows 那份 JSON，存下来直接导入。",
-      },
+    "title": "工作流",
+    "lede": "从现成流程开始，把主题变成视频，或把已有口播整理得更清楚。下载官方模板，在 Mosael 中导入、调整并运行。",
+    "shotAlt": "Mosael 工作流画布与节点配置",
+    "shotCaption": "导入后，每个节点和参数都可以继续编辑。",
+    "galleryTitle": "官方工作流",
+    "galleryBody": "直接来自应用内置模板，包含完整节点与连线。下载前先确认所需能力，导入后选择自己的模型和素材。",
+    "official": "官方模板",
+    "templateVersion": "模板版本",
+    "download": "下载工作流",
+    "nodes": "个主流程节点",
+    "stages": "流程步骤",
+    "requirements": "运行前需要",
+    "importTitle": "如何导入",
+    "importNote": "建议使用 v1.0.0-beta4 或更新版本。模板不会包含账号、密钥或私人素材；模型与素材需要在导入后配置。",
+    "importSteps": [
+        {
+            "title": "下载模板文件",
+            "body": "点击「下载工作流」，保存 .mosael-workflow.json 文件，无需解压。"
+        },
+        {
+            "title": "导入到工作区",
+            "body": "打开 Mosael，选择工作区，进入「工作流」，使用「导入」选择下载的文件。"
+        },
+        {
+            "title": "配置并检查",
+            "body": "选择自己的模型、视频素材和可选音色，调整开始节点的参数。通过就绪检查后再运行；模型调用可能产生供应商费用。"
+        }
     ],
-  },
+    "guideLink": "阅读工作流指南",
+    "contribute": "分享你的工作流",
+    "contributeBody": "有可复用的流程？欢迎附上导出文件、使用说明与所需能力。"
+},
   footer: {
     tagline: "让灵感落进时间线",
     community: "社区",
@@ -216,6 +225,7 @@ const en: Messages = {
     docs: "Docs",
     plugins: "Plugins",
     workflows: "Workflows",
+    changelog: "Changelog",
     download: "Download",
     github: "GitHub",
     theme: "Toggle theme",
@@ -355,36 +365,38 @@ const en: Messages = {
     installBody: "Open the Market tab on the app's Plugins page and hit install. You will see the permissions it declares before anything lands.",
   },
   workflows: {
-    title: "Workflows",
-    lede: "Chain retrieval, generation, transcription, assembly and publishing into one directed acyclic graph — run it by hand, on a schedule, or wake it with a webhook. Anything you can do on the canvas the agent can do too.",
-    shotAlt: "The visual workflow canvas: retrieve → generate → assemble → notify, wired as nodes",
-    shotCaption: "The workflow canvas — node groups, edges and readiness checks all on one graph.",
-    galleryTitle: "Community workflows",
-    galleryEmptyTitle: "No workflows collected yet",
-    galleryEmptyBody:
-      "The entry shape is settled — name, summary, node count, which capabilities must be configured first, and a graph you can import as-is. This turns into a gallery with the first submission.",
-    contribute: "Submit one",
-    guideLink: "Workflow guide",
-    fieldsTitle: "What a workflow entry carries",
-    fields: [
-      {
-        name: "Name / summary",
-        body: "One sentence on which piece of repetitive work it removes.",
-      },
-      {
-        name: "Node count",
-        body: "Complexity at a glance — enough to decide whether to open it now.",
-      },
-      {
-        name: "Required capabilities",
-        body: "Which providers must be configured before it runs, so a missing one shows up before the import, not after.",
-      },
-      {
-        name: "Importable graph",
-        body: "The same JSON /api/workflows speaks; save it and import directly.",
-      },
+    "title": "Workflows",
+    "lede": "Start with a ready-made workflow. Turn a topic into a video, or clean up an existing recording. Download an official template, import it into Mosael, then make it yours.",
+    "shotAlt": "Mosael workflow canvas and node configuration",
+    "shotCaption": "Every node and parameter remains editable after import.",
+    "galleryTitle": "Official workflows",
+    "galleryBody": "Built from the same templates included in the app, with complete nodes and connections. Check the requirements, then choose your own models and media after import.",
+    "official": "Official template",
+    "templateVersion": "Template version",
+    "download": "Download workflow",
+    "nodes": "top-level nodes",
+    "stages": "Workflow steps",
+    "requirements": "Before you run",
+    "importTitle": "How to import",
+    "importNote": "Use v1.0.0-beta4 or later. Templates contain no accounts, secrets or private media. Configure your own models and assets after import. Template prompts and node names are currently in Chinese.",
+    "importSteps": [
+        {
+            "title": "Download the template",
+            "body": "Save the .mosael-workflow.json file. No extraction is needed."
+        },
+        {
+            "title": "Import into your workspace",
+            "body": "Open Mosael, choose a workspace, go to Workflows and use Import to select the downloaded file."
+        },
+        {
+            "title": "Configure and check",
+            "body": "Select your models, source video and optional voice. Adjust the Start node, then pass the readiness check before running. Model calls may incur provider charges."
+        }
     ],
-  },
+    "guideLink": "Read the workflow guide",
+    "contribute": "Share a workflow",
+    "contributeBody": "Have a reusable workflow? Submit its exported file, instructions and required capabilities."
+},
   footer: {
     tagline: "Where ideas find their timeline",
     community: "Community",
