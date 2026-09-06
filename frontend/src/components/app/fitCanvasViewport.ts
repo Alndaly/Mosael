@@ -55,3 +55,42 @@ export function fitCanvasViewport<NodeType extends Node = Node, EdgeType extends
     { duration: options.duration ?? 250 },
   );
 }
+
+/** Center a flow-space point in the unobscured surface, at the requested zoom. */
+export function centerCanvasViewport<NodeType extends Node = Node, EdgeType extends Edge = Edge>(
+  instance: ReactFlowInstance<NodeType, EdgeType>,
+  surface: HTMLElement,
+  point: { x: number; y: number },
+  insets: CanvasViewportInsets = {},
+  options: { zoom?: number; duration?: number } = {},
+) {
+  const visible = visibleCanvasSize(surface.clientWidth, surface.clientHeight, insets);
+  const zoom = options.zoom ?? instance.getZoom();
+  return instance.setViewport({
+    x: visible.left + visible.width / 2 - point.x * zoom,
+    y: visible.top + visible.height / 2 - point.y * zoom,
+    zoom,
+  }, { duration: options.duration ?? 350 });
+}
+
+/** Keep the largest clear rectangle around a floating panel (coordinates relative to the surface). */
+export function excludeCanvasOverlay(
+  width: number,
+  height: number,
+  insets: CanvasViewportInsets,
+  overlay: { left: number; top: number; right: number; bottom: number },
+): CanvasViewportInsets {
+  const visible = visibleCanvasSize(width, height, insets);
+  const right = visible.left + visible.width;
+  const bottom = visible.top + visible.height;
+  if (overlay.right <= visible.left || overlay.left >= right || overlay.bottom <= visible.top || overlay.top >= bottom) return insets;
+  const candidates = [
+    { ...visible, width: Math.max(0, overlay.left - 8 - visible.left) },
+    { ...visible, left: overlay.right + 8, width: Math.max(0, right - overlay.right - 8) },
+    { ...visible, height: Math.max(0, overlay.top - 8 - visible.top) },
+    { ...visible, top: overlay.bottom + 8, height: Math.max(0, bottom - overlay.bottom - 8) },
+  ];
+  const clear = candidates.reduce((best, rect) => rect.width * rect.height > best.width * best.height ? rect : best);
+  if (clear.width <= 0 || clear.height <= 0) return insets;
+  return { left: clear.left, top: clear.top, right: width - clear.left - clear.width, bottom: height - clear.top - clear.height };
+}

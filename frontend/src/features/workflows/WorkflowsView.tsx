@@ -121,7 +121,7 @@ import {
   canvasDockedPanelEdges,
   canvasRightDockOcclusion,
 } from "@/components/app/canvasPanelLayout";
-import { fitCanvasViewport } from "@/components/app/fitCanvasViewport";
+import { centerCanvasViewport, excludeCanvasOverlay, fitCanvasViewport, visibleCanvasSize, type CanvasViewportInsets } from "@/components/app/fitCanvasViewport";
 import { RightDockResizeHandle } from "@/components/app/RightDockResizeHandle";
 import { WorkflowRunHistory } from "@/features/workflows/WorkflowRunHistory";
 import { WorkflowRevisionHistory } from "@/features/workflows/WorkflowRevisionHistory";
@@ -804,6 +804,11 @@ function WorkflowEditor({
   const [agentMode, setAgentMode] = usePersistentTab<CanvasAgentMode>("wf-agent-mode", "docked", AGENT_MODES);
   /** 执行历史与助手同一套停靠/悬浮机制,但各记各的模式与几何。 */
   const [historyMode, setHistoryMode] = usePersistentTab<CanvasAgentMode>("wf-history-mode", "docked", AGENT_MODES);
+  const dockedAgent = agentOpen && agentMode === "docked";
+  const dockedHistory = showHistory && historyMode === "docked";
+  const rightPanels = (dockedAgent ? 1 : 0) + (dockedHistory ? 1 : 0);
+  const rightPanel = useResizableSidebar("workflow-right", { min: 320, max: 640, fallback: 400 });
+  const rightOcclusion = rightPanels > 0 ? canvasRightDockOcclusion(rightPanel.width) : 0;
   const [edgeShape, setEdgeShape] = usePersistentTab<EdgeShape>("wf-edge-shape", "default", EDGE_SHAPES);
   //: 右下角的全览。默认开着 —— 大图时它最有用,而"图大不大"只有用户自己知道。
   const [minimapMode, setShowMinimap] = usePersistentTab<"on" | "off">("wf-minimap", "on", ["on", "off"] as const);
@@ -832,6 +837,27 @@ function WorkflowEditor({
   const [editingLoopId, setEditingLoopId] = usePersistentSelection(`workflow-drill:${workflow.id}`, drillableIds);
   const rfRef = React.useRef<ReactFlowInstance | null>(null);
   const canvasSurfaceRef = React.useRef<HTMLDivElement | null>(null);
+  const agentPanelRef = React.useRef<HTMLDivElement | null>(null);
+  const historyPanelRef = React.useRef<HTMLDivElement | null>(null);
+  const getCanvasInsets = React.useCallback(() => {
+    const surface = canvasSurfaceRef.current;
+    let insets: CanvasViewportInsets = { right: rightOcclusion };
+    if (!surface) return insets;
+    const bounds = surface.getBoundingClientRect();
+    const floatingPanels = [
+      agentOpen && agentMode === "floating" ? agentPanelRef.current : null,
+      showHistory && historyMode === "floating" ? historyPanelRef.current : null,
+    ];
+    for (const wrapper of floatingPanels) {
+      const panel = wrapper?.firstElementChild?.getBoundingClientRect();
+      if (!panel) continue;
+      insets = excludeCanvasOverlay(surface.clientWidth, surface.clientHeight, insets, {
+        left: panel.left - bounds.left, top: panel.top - bounds.top,
+        right: panel.right - bounds.left, bottom: panel.bottom - bounds.top,
+      });
+    }
+    return insets;
+  }, [rightOcclusion, agentOpen, agentMode, showHistory, historyMode]);
   // 画布姿态(是否已 fitView、视口动过几次、正不正在平移)。三条各自的来历见 useCanvasPosture
   // —— 它们是 React Flow 的机制,不是工作流的概念,所以不和图 / 弹窗 / 搜索那些 state 混在一起。
   const canvas = useCanvasPosture();
@@ -851,13 +877,18 @@ function WorkflowEditor({
    * 560px 高的面板必然掉出画布底边。面板本身不随画布缩放，所以屏幕像素要除以 zoom
    * 再换回流程坐标。
    */
-  const focusPosition = React.useCallback((x: number, y: number, duration = 350) => {
+  const focusPosition = React.useCallback((x: number, y: number, duration = 350, size = { width: 210, height: 72 }) => {
     const instance = rfRef.current;
-    if (!instance) return;
+    const surface = canvasSurfaceRef.current;
+    if (!instance || !surface) return;
     const zoom = Math.max(instance.getZoom(), 0.6);
-    const inspectorOffset = Math.min(220, window.innerHeight * 0.2) / zoom;
-    instance.setCenter(x + 210 / 2, y + 72 / 2 + inspectorOffset, { zoom, duration });
-  }, []);
+    const insets = getCanvasInsets();
+    const visible = visibleCanvasSize(surface.clientWidth, surface.clientHeight, insets);
+    const inspectorOffset = Math.min(220, visible.height * 0.2) / zoom;
+    void centerCanvasViewport(instance, surface,
+      { x: x + size.width / 2, y: y + size.height / 2 + inspectorOffset },
+      insets, { zoom, duration });
+  }, [getCanvasInsets]);
 
   /** 选中并聚焦某节点(节点搜索用;从当前 graph 取坐标)。 */
   const focusNode = React.useCallback(
@@ -865,7 +896,11 @@ function WorkflowEditor({
       const target = graph.nodes.find((node) => node.id === nodeId);
       if (!target) return;
       selectInspectorNode(nodeId);
-      focusPosition(target.position?.x ?? 0, target.position?.y ?? 0);
+      const measured = rfRef.current?.getNode(nodeId);
+      focusPosition(target.position?.x ?? 0, target.position?.y ?? 0, 350, {
+        width: measured?.measured?.width ?? measured?.width ?? 210,
+        height: measured?.measured?.height ?? measured?.height ?? 72,
+      });
     },
     [graph.nodes, focusPosition, selectInspectorNode],
   );
@@ -1422,13 +1457,8 @@ function WorkflowEditor({
       ? t("wfChecklistWarnOnly").replace("{n}", String(analysis.warnCount))
       : t("wfChecklistReady");
   // 角标信息塞进节点 data(不动 nodes 状态本身,避免打断拖拽)。
-  /** 本次运行真正走过的边:两端都留下了步骤记录。条件分支没走的那一侧因此保持原样 ——
-   *  这正是运行时最想一眼看清的东西。 */
-  const dockedAgent = agentOpen && agentMode === "docked";
-  /** 右栏里停靠着几个面板(助手 / 执行历史)。0 就不开这一列。 */
-  const dockedHistory = showHistory && historyMode === "docked";
   const agentPanel = (
-    <CanvasAgentChat
+    <div ref={agentPanelRef} className="contents"><CanvasAgentChat
       contextLine={t("wfAgentContext").replace("{id}", workflow.id).replace("{name}", workflow.name)}
       emptyHint={t("wfAgentEmpty")}
       placeholder={t("wfAgentPlaceholder")}
@@ -1437,10 +1467,10 @@ function WorkflowEditor({
       mode={agentMode}
       onModeChange={setAgentMode}
       onClose={() => setAgentOpen(false)}
-    />
+    /></div>
   );
   const historyPanel = (
-    <WorkflowRunHistory
+    <div ref={historyPanelRef} className="contents"><WorkflowRunHistory
       workflowId={workflow.id}
       registry={registry}
       // 历史面板据此判断某一步的输出是不是素材(节点注册表里声明为 asset),
@@ -1449,23 +1479,19 @@ function WorkflowEditor({
       mode={historyMode}
       onModeChange={setHistoryMode}
       onClose={() => setShowHistory(false)}
-    />
+    /></div>
   );
-  const rightPanels = (dockedAgent ? 1 : 0) + (dockedHistory ? 1 : 0);
-  // 右栏可拖 —— 和别处同一套(lib/useResizableSidebar)。此前是 minmax(360,420) 的固定范围:
-  // AI 助手里的长回复和执行历史的步骤名在 360px 里都读得很挤,而画布这边常常有大片空白。
-  const rightPanel = useResizableSidebar("workflow-right", { min: 320, max: 640, fallback: 400 });
   const fitCanvas = React.useCallback(
     (instance: ReactFlowInstance, duration = 250) => {
       if (!canvasSurfaceRef.current) return;
       void fitCanvasViewport(
         instance,
         canvasSurfaceRef.current,
-        { right: rightPanels > 0 ? canvasRightDockOcclusion(rightPanel.width) : 0 },
+        getCanvasInsets(),
         { padding: 0.3, duration, maxZoom: 1 },
       );
     },
-    [rightPanel.width, rightPanels],
+    [getCanvasInsets],
   );
   // 助手与执行历史上下分。上界给得宽 —— 只想看助手时把它拉满是合理的用法。
   const agentRow = useResizableRow("workflow-agent", { min: 160, max: 900, fallback: 420 });
@@ -1996,8 +2022,7 @@ function WorkflowEditor({
             connectionLineStyle={{ stroke: "var(--primary)", strokeWidth: 1.5, strokeDasharray: "5 4" }}
             onNodeClick={(_event, node) => {
               blurFloatingPanels(); // 层级快捷键交还给画布
-              if (selectedNodeId === node.id) selectInspectorNode(node.id);
-              else focusNode(node.id);
+              focusNode(node.id);
             }}
             onNodeDoubleClick={(_event, node) => {
               const g = graph.nodes.find((item) => item.id === node.id);
