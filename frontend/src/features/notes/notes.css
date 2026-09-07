@@ -7,8 +7,6 @@
 .notes-filter button[aria-pressed=true] { background:color-mix(in srgb,var(--foreground) 5%,transparent); color:var(--foreground); }
 .notes-list { overflow:auto; min-height:0; flex:1; }
 .note-list-row { display:block; width:100%; text-align:left; padding:12px 10px; border-radius:8px; margin-bottom:3px; }
-.note-list-row:hover { background:color-mix(in srgb,var(--foreground) 3%,transparent); }
-.note-list-row[aria-current=true] { background:color-mix(in srgb,var(--primary) 8%,transparent); }
 .note-list-row strong { font-size:var(--text-ui-sm); font-weight:600; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .note-list-row p { font-size:var(--text-ui-xs); color:var(--muted-foreground); margin-top:5px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow-wrap:anywhere; }
 .note-list-row time { display:block; color:var(--muted-foreground); font-size:var(--text-ui-2xs); margin-top:8px; }
@@ -133,7 +131,6 @@
 .note-document-header { border-bottom:1px solid var(--divider); }
 .note-header-format { margin-left:4px; }
 .note-list-row { padding:12px; }
-.note-list-row[aria-current=true] { background:var(--accent); }
 .note-list-row p { line-height:1.65; }
 .note-prose h4 { font-size:1.05em; }.note-prose h5 { font-size:1em; }.note-prose h6 { font-size:.95em; color:var(--muted-foreground); }
 .note-paper { padding-top:32px; }
@@ -167,13 +164,17 @@
 .note-code-token { color:var(--note-code-light,inherit); }
 .dark .note-code-token { color:var(--note-code-dark,inherit); }
 
+/* **底色画在整行上,不画在按钮上。** 多选模式下勾选框是行的一部分、却在按钮外面 ——
+   底色若只给按钮,悬停时高亮从勾选框右边才开始,左边空着一截,和"已选中"那一档的宽度对不上
+   (已选中一直是画在整行上的)。三档共用同一块底,宽度就只有一个说法。 */
 .note-list-entry { display:flex; align-items:flex-start; min-width:0; border-radius:8px; margin-bottom:3px; transition:background-color 160ms ease,color 160ms ease; }
+.note-list-entry:hover { background:color-mix(in srgb,var(--foreground) 3%,transparent); }
+.note-list-entry:has(.note-list-row[aria-current=true]) { background:var(--accent); }
 .note-list-entry .note-list-row { flex:1; min-width:0; margin:0; }
 .note-list-entry .note-list-row strong { display:flex; align-items:center; gap:5px; }
 .note-list-entry .note-list-row strong span { min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .note-list-entry .note-list-row strong svg { flex-shrink:0; color:var(--primary); }
 .note-list-entry[data-selected=true] { background:var(--accent); color:var(--accent-foreground); }
-.note-list-entry[data-selected=true] .note-list-row { background:transparent; }
 .note-list-check { flex-shrink:0; width:14px; height:14px; margin:16px 0 0 10px; accent-color:var(--primary); cursor:pointer; }
 .notes-list:focus-visible { outline:1px solid color-mix(in srgb,var(--primary) 40%,transparent); outline-offset:2px; border-radius:8px; }
 .note-selection-bar { flex-shrink:0; padding:8px; border-radius:8px; background:var(--workspace-subtle); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--foreground) 6%,transparent); font-size:var(--text-ui-xs); color:var(--muted-foreground); }

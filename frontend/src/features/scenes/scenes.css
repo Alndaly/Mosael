@@ -868,8 +868,14 @@
   gap: 12px;
 }
 
-.scene-camera-panel > .scene-details {
-  border-top: 1px solid var(--border);
+/* 分割线用 --divider,不用 --border:tokens.css 里写着「内容分隔比控件和容器的边界更轻」,
+   而这两条线分的是段落,不是控件。此前用 --border,在一片浅底上看着比它该有的分量重。 */
+.scene-detail-stack {
+  display: flex;
+  flex-direction: column;
+}
+.scene-detail-stack > .scene-details {
+  border-top: 1px solid var(--divider);
 }
 
 .scene-number [role="combobox"] {

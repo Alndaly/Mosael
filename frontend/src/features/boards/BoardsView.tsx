@@ -56,6 +56,7 @@ import { useResizableSidebar } from "@/lib/useResizableSidebar";
 import { BoardCanvas, type BoardCanvasApi } from "@/features/boards/BoardCanvas";
 import { useAutosave } from "@/features/boards/useAutosave";
 import { AssetPickerDialog } from "@/features/boards/AssetPickerDialog";
+import { ScenePickerDialog } from "@/features/scenes/ScenePickerDialog";
 import { boardSettlementPatch, itemError, itemIsRunning, itemJobId } from "@/features/boards/boardItemState";
 import { runNoteWrite, type NoteWriteInput } from "@/features/boards/noteWriteLifecycle";
 import { BoardCollaborationDialog } from "@/features/boards/BoardCollaborationDialog";
@@ -235,6 +236,9 @@ function BoardDetail({
   const showMinimap = minimapMode === "on";
   const [canvas, setCanvas] = React.useState<Canvas | null>(board.canvas);
   const [picking, setPicking] = React.useState<{ kind: MediaKind; place: (assetId: string) => void } | null>(null);
+  //: 3D 场景**先选后放**。后端要求 scene 节点必须带 scene_id(domain/boards.py),
+  //: 所以不能像文档那样先落一个空节点再补 —— 那种节点存不下去。
+  const [pickingScene, setPickingScene] = React.useState(false);
   //: 画布交出来的把手。顶栏那组按钮要和身份胶囊并排,而它们依赖画布内部状态。
   //: **类型从画布导出**,别在这儿再抄一份 —— 抄的那份少一个动作不会报错,只会让按钮点了没反应。
   const [api, setApi] = React.useState<BoardCanvasApi | null>(null);
@@ -651,6 +655,8 @@ function BoardDetail({
               onValueChange={(kind) => {
                 if (kind === "pick-image") {
                   setPicking({ kind: "image", place: (assetId) => api?.add("image", { asset_id: assetId }) });
+                } else if (kind === "scene") {
+                  setPickingScene(true);
                 } else {
                   api?.add(kind as "note" | "image" | "video" | "audio" | "frame" | "document");
                 }
@@ -658,6 +664,7 @@ function BoardDetail({
               searchPlaceholder={t("boardsAddItem")}
               options={[
                 { value: "document", label: t("boardKindDocument"), group: t("boardsGroupAssets") },
+                { value: "scene", label: t("navScenes"), group: t("boardsGroupAssets") },
                 { value: "note", label: t("boardsAddNote"), group: t("boardsGroupCreate") },
                 { value: "image", label: t("boardsAddImage"), group: t("boardsGroupCreate") },
                 { value: "video", label: t("boardsAddVideo"), group: t("boardsGroupCreate") },
@@ -862,6 +869,22 @@ function BoardDetail({
           });
         }}
       />
+
+      {workspaceId && (
+
+        <ScenePickerDialog
+
+          workspaceId={workspaceId}
+
+          open={pickingScene}
+
+          onOpenChange={setPickingScene}
+
+          onPick={(scene) => api?.add("scene", { scene_id: scene.id, text: scene.name })}
+
+        />
+
+      )}
 
       <AssetPickerDialog
         open={picking !== null}

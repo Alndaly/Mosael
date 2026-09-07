@@ -119,7 +119,10 @@ export function SceneCameraPanel({
           </label>
         </div>
       </section>
-      <details className="scene-details scene-manual-camera">
+      {/* 两段折叠收在一个 stack 里。**分割线是每一行自己的上边框**,所以行与行之间不能再叠
+          外层容器那 16px 的 gap —— 叠了之后线上方 28px、下方 12px,线看着黏在下面那行上。 */}
+      <div className="scene-detail-stack">
+        <details className="scene-details scene-manual-camera">
         <summary>自己设置起点和终点</summary>
         <div>
           <p>在编辑视角中调整构图，分别记下镜头从哪里开始、在哪里结束。</p>
@@ -204,6 +207,7 @@ export function SceneCameraPanel({
           )}
         </div>
       </details>
+      </div>
     </div>
   );
 }
