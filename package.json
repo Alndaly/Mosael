@@ -21,7 +21,7 @@
     "watch:preload": "esbuild electron/preload.cjs --bundle --platform=node --format=cjs --external:electron --outfile=electron/preload.bundle.cjs --watch=forever",
     "build:publisher": "pnpm typecheck:electron && esbuild electron/publish/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=electron/publish.bundle.cjs",
     "watch:publisher": "esbuild electron/publish/index.ts --bundle --platform=node --format=cjs --external:electron --outfile=electron/publish.bundle.cjs --watch=forever",
-    "dev:backend": "cd backend && uv run --frozen python -m uvicorn app.main:app --host 127.0.0.1 --port ${MOSAEL_BACKEND_PORT:-8800} --reload",
+    "dev:backend": "cd backend && MOSAEL_LOCAL_DESKTOP=${MOSAEL_LOCAL_DESKTOP:-1} uv run --frozen python -m uvicorn app.main:app --host 127.0.0.1 --port ${MOSAEL_BACKEND_PORT:-8800} --reload",
     "dev": "pnpm --dir frontend electron:dev",
     "fetch:tts-python": "node scripts/fetch-tts-python.mjs",
     "typecheck:electron": "pnpm -C frontend exec tsc --noEmit -p ../electron/tsconfig.json",

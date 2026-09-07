@@ -1,17 +1,21 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
+  AlertTriangle,
   ArrowDownToLine,
   ArrowUpRight,
   Box,
   Check,
   Download,
   Loader2,
+  MonitorSmartphone,
+  Plug,
   RefreshCw,
 } from "lucide-react";
 import { api, API_BASE, getAuthToken } from "@/api/transport";
 import type { Scene } from "@/api/domains/scenes";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/layout/EmptyState";
 import {
   Popover,
   PopoverContent,
@@ -123,26 +127,70 @@ export function SceneBlender({
             <RefreshCw size={15} />
           </Button>
         </div>
+        {/* 四个「还用不了」的状态。**每一个都要答出「接下来做什么」** —— 见 EmptyState 的说明:
+            空状态最有价值的那一半是下一步,不是"这里是空的"。此前只有缺插件那一个给了出路,
+            另外三个是裸的一行灰字,读者从「长得不一样」读出的是"这里坏了"。 */}
         {connections.isPending ? (
-          <p role="status">正在读取连接…</p>
+          <EmptyState
+            size="compact"
+            icon={<Loader2 size={16} className="animate-mosael-spin" />}
+            title="正在读取连接"
+            body="在找这台电脑上可用的 Blender。"
+          />
         ) : connections.error ? (
-          <p role="alert">连接列表读取失败，请刷新重试。</p>
+          <EmptyState
+            size="compact"
+            icon={<AlertTriangle size={16} />}
+            title="读不到连接列表"
+            body={String(connections.error)}
+            action={
+              <Button variant="secondary" size="sm" onClick={() => void connections.refetch()}>
+                <RefreshCw size={14} />
+                重试
+              </Button>
+            }
+          />
         ) : !connections.data?.local ? (
-          <p>请使用本机桌面后端，并在同一台电脑上打开 Blender。</p>
+          /* 团队服务器部署上这是**永久**状态,不是没配好:互通要把 .blend 写到本机磁盘、
+             再由本机的 Blender 打开,而服务器上的后端够不到你的电脑。所以这里不给"去设置",
+             给的是"这条路要怎么走"。 */
+          <EmptyState
+            size="compact"
+            icon={<MonitorSmartphone size={16} />}
+            title="需要桌面版 Mosael"
+            body="互通要把场景写到你这台电脑上、再交给同机的 Blender 打开。当前后端不在你的电脑上，够不到它。"
+            action={
+              <a
+                className="scene-blender-link"
+                href="https://mosael.com"
+                target="_blank"
+                rel="noreferrer"
+              >
+                下载桌面版 <ArrowUpRight size={14} />
+              </a>
+            }
+          />
         ) : !available.length ? (
-          <div className="scene-blender-setup">
-            <p>先安装 Blender MCP 插件和配套 Add-on，在 Blender 中开启连接。</p>
-            <a href="#/plugins" onClick={() => setOpen(false)}>
-              前往插件设置 <ArrowUpRight size={14} />
-            </a>
-            <a
-              href="https://github.com/Alndaly/Mosael/tree/codex/scene-studio/plugins/examples/blender"
-              target="_blank"
-              rel="noreferrer"
-            >
-              查看安装步骤 <ArrowUpRight size={14} />
-            </a>
-          </div>
+          <EmptyState
+            size="compact"
+            icon={<Plug size={16} />}
+            title="还没接上 Blender"
+            body="装好 Blender MCP 插件和配套 Add-on，在 Blender 里开启连接，这里就能选到它。"
+            action={
+              <div className="scene-blender-setup">
+                <a href="#/plugins" onClick={() => setOpen(false)}>
+                  前往插件设置 <ArrowUpRight size={14} />
+                </a>
+                <a
+                  href="https://github.com/Alndaly/Mosael/tree/codex/scene-studio/plugins/examples/blender"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  查看安装步骤 <ArrowUpRight size={14} />
+                </a>
+              </div>
+            }
+          />
         ) : (
           <>
             <div className="scene-blender-connection">

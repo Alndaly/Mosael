@@ -975,7 +975,7 @@
 .scene-blender { width: 370px; display: flex; flex-direction: column; gap: 14px; max-height: calc(100dvh - 100px); overflow-y: auto; }
 .scene-blender-heading, .scene-blender-connection, .scene-blender-result > div { display: flex; align-items: center; gap: 8px; }
 .scene-blender-heading { justify-content: space-between; }
-.scene-blender-heading p, .scene-blender small, .scene-blender-result > span, .scene-blender-setup p { color: var(--muted-foreground); font-size: 12px; line-height: 1.6; }
+.scene-blender-heading p, .scene-blender small, .scene-blender-result > span { color: var(--muted-foreground); font-size: 12px; line-height: 1.6; }
 .scene-blender-heading strong { font-size: 14px; }
 .scene-blender-connection > :first-child { flex: 1; min-width: 0; }
 .scene-blender-action { display: flex; align-items: center; gap: 12px; padding: 13px 12px; border-radius: 10px; text-align: left; background: color-mix(in srgb, var(--muted) 55%, transparent); transition: background-color 180ms ease, color 180ms ease, opacity 180ms ease; }
@@ -988,8 +988,11 @@
 .scene-blender-status, .scene-blender-error { font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .scene-blender-status { display: flex; align-items: center; gap: 6px; color: var(--muted-foreground); }
 .scene-blender-error { color: var(--destructive); }
-.scene-blender-setup { display: grid; gap: 10px; }
-.scene-blender-setup a { font-size: 13px; display: flex; align-items: center; gap: 4px; color: var(--primary); }
+/* 空状态里的下一步链接。EmptyState 是居中布局,所以链接也居中 —— 靠左会在标题下方
+   拉出一条歪的视觉轴。两个链接时并排,窄了自动换行。 */
+.scene-blender-setup { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; }
+.scene-blender-setup a, .scene-blender-link { font-size: 13px; display: inline-flex; align-items: center; gap: 4px; color: var(--primary); }
+.scene-blender-setup a:hover, .scene-blender-link:hover { text-decoration: underline; }
 .scene-blender { -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
 
 .scene-list { margin-top: 24px; }
