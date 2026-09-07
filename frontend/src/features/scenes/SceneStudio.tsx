@@ -611,7 +611,7 @@ function SceneEditor({
     <div
       ref={studioRoot}
       className="scene-studio"
-      data-screen-mode={fullscreen.mode ?? undefined}
+      data-screen-mode={fullscreen.active ? "viewport" : undefined}
     >
       <header className="scene-header">
         <Tool label="返回场景列表" onClick={onBack}>
@@ -648,18 +648,6 @@ function SceneEditor({
           </Tool>
           <Tool label="重做" onClick={redo} disabled={!future.length || !!busy}>
             <RotateCw size={16} />
-          </Tool>
-          <Tool
-            label={
-              fullscreen.mode === "workspace" ? "退出工作台全屏" : "工作台全屏"
-            }
-            onClick={() => void fullscreen.toggle("workspace")}
-          >
-            {fullscreen.mode === "workspace" ? (
-              <Minimize size={16} />
-            ) : (
-              <Maximize size={16} />
-            )}
           </Tool>
           <Tool label="版本记录" onClick={() => setRevisions(true)}>
             <History size={16} />
@@ -910,17 +898,17 @@ function SceneEditor({
               <button
                 className="scene-labeled-tool"
                 aria-label={
-                  fullscreen.mode === "viewport" ? "退出视图全屏" : "视图全屏"
+                  fullscreen.active ? "退出视图全屏" : "视图全屏"
                 }
-                aria-pressed={fullscreen.mode === "viewport"}
-                onClick={() => void fullscreen.toggle("viewport")}
+                aria-pressed={fullscreen.active}
+                onClick={() => void fullscreen.toggle()}
               >
-                {fullscreen.mode === "viewport" ? (
+                {fullscreen.active ? (
                   <Minimize size={15} />
                 ) : (
                   <Maximize size={15} />
                 )}
-                {fullscreen.mode === "viewport" ? "退出全屏" : "全屏"}
+                {fullscreen.active ? "退出全屏" : "全屏"}
               </button>
               <Popover>
                 <PopoverTrigger asChild>
@@ -998,7 +986,7 @@ function SceneEditor({
               )}
             </div>
           )}
-          {(step !== "build" || fullscreen.mode === "viewport") && (
+          {(step !== "build" || fullscreen.active) && (
             <section className="scene-timeline" aria-label="镜头播放控制">
               <div className="scene-shot-row">
                 <Camera size={16} />
@@ -1062,25 +1050,35 @@ function SceneEditor({
                   setPlaying(false);
                 }}
               />
-              <div className="scene-keyframes">
-                {shot.frames.map((f) => (
-                  <button
-                    key={f.time}
-                    aria-pressed={Math.abs(time - f.time) < 0.05}
-                    onClick={() => {
-                      setTime(f.time);
-                      if (!observing) setPreview(true);
-                      setPlaying(false);
-                    }}
-                  >
-                    {f.time === 0
-                      ? "起点"
-                      : f.time === shot.duration
-                        ? "终点"
-                        : "途经点"}{" "}
-                    · {f.time.toFixed(1)}s
-                  </button>
-                ))}
+              {/* **关键帧落在轨道上,位置即时间。** 此前是一排文字标签横向排开,几十个关键帧
+                  就是几十个「途经点 · 0.7s」滚动着 —— 它们本来有时间坐标,却和上面的进度条
+                  完全脱节,读者得靠念秒数把两者对起来。剪辑页的时间线就是靠位置表达时间的,
+                  这里同理:一枚标记钉在它自己的时刻上,与进度条共用一条横轴。 */}
+              <div
+                className="scene-keyframe-track"
+                role="group"
+                aria-label={`${shot.name} 的关键帧`}
+              >
+                {shot.frames.map((f) => {
+                  const at = shot.duration > 0 ? (f.time / shot.duration) * 100 : 0;
+                  const edge = f.time === 0 ? "start" : f.time === shot.duration ? "end" : undefined;
+                  return (
+                    <button
+                      key={f.time}
+                      className="scene-keyframe"
+                      style={{ left: `${at}%` }}
+                      data-edge={edge}
+                      aria-pressed={Math.abs(time - f.time) < 0.05}
+                      title={`${edge === "start" ? "起点" : edge === "end" ? "终点" : "途经点"} · ${f.time.toFixed(1)}s`}
+                      aria-label={`${edge === "start" ? "起点" : edge === "end" ? "终点" : "途经点"} ${f.time.toFixed(1)} 秒`}
+                      onClick={() => {
+                        setTime(f.time);
+                        if (!observing) setPreview(true);
+                        setPlaying(false);
+                      }}
+                    />
+                  );
+                })}
               </div>
             </section>
           )}

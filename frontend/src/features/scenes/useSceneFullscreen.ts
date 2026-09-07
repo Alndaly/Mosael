@@ -1,25 +1,22 @@
 import React from "react";
 
-type Mode = "workspace" | "viewport" | null;
-
 /** Fullscreen the document so portaled menus remain usable above the 3D tools. */
 export function useSceneFullscreen(
   root: React.RefObject<HTMLDivElement | null>,
 ) {
-  const [mode, setMode] = React.useState<Mode>(null);
-  const current = React.useRef<Mode>(null);
-  const previous = React.useRef<Mode>(null);
+  const [active, setActive] = React.useState(false);
+  const current = React.useRef(false);
   const owned = React.useRef(false);
   const pending = React.useRef(false);
   const alive = React.useRef(true);
-  const set = (value: Mode) => {
+  const set = (value: boolean) => {
     current.current = value;
-    setMode(value);
+    setActive(value);
   };
 
   const leave = React.useCallback(async () => {
-    current.current = null;
-    if (alive.current) setMode(null);
+    current.current = false;
+    if (alive.current) setActive(false);
     if (
       owned.current &&
       document.fullscreenElement === document.documentElement
@@ -34,8 +31,8 @@ export function useSceneFullscreen(
     const changed = () => {
       if (!document.fullscreenElement && owned.current) {
         owned.current = false;
-        current.current = null;
-        setMode(null);
+        current.current = false;
+        setActive(false);
       }
     };
     const escape = (event: KeyboardEvent) => {
@@ -59,7 +56,7 @@ export function useSceneFullscreen(
   }, [leave]);
 
   React.useEffect(() => {
-    if (!mode || !root.current) return;
+    if (!active || !root.current) return;
     // Keep keyboard focus out of the covered app chrome without remounting WebGL.
     const hidden: {
       element: HTMLElement;
@@ -85,18 +82,15 @@ export function useSceneFullscreen(
         element.inert = inert;
         element.style.visibility = visibility;
       });
-  }, [mode, root]);
+  }, [active, root]);
 
-  async function toggle(next: Exclude<Mode, null>) {
+  async function toggle() {
     if (pending.current) return;
-    if (current.current === next) {
-      if (next === "viewport" && previous.current === "workspace")
-        set("workspace");
-      else await leave();
+    if (current.current) {
+      await leave();
       return;
     }
-    previous.current = current.current;
-    set(next);
+    set(true);
     if (
       !document.fullscreenElement &&
       document.fullscreenEnabled &&
@@ -114,5 +108,5 @@ export function useSceneFullscreen(
       }
     }
   }
-  return { mode, toggle };
+  return { active, toggle };
 }

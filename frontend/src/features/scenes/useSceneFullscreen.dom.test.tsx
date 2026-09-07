@@ -19,13 +19,8 @@ function Harness() {
         <button>App navigation</button>
       </aside>
       <div ref={root}>
-        <output>{fullscreen.mode ?? "normal"}</output>
-        <button onClick={() => void fullscreen.toggle("workspace")}>
-          Workspace
-        </button>
-        <button onClick={() => void fullscreen.toggle("viewport")}>
-          Viewport
-        </button>
+        <output>{fullscreen.active ? "viewport" : "normal"}</output>
+        <button onClick={() => void fullscreen.toggle()}>Viewport</button>
       </div>
     </div>
   );
@@ -64,18 +59,14 @@ afterEach(() => {
   element = null;
   vi.restoreAllMocks();
 });
-it("keeps menus within document fullscreen, restores workspace after expanding its view, and follows native exit", async () => {
+it("keeps menus within document fullscreen, hides the app chrome, and follows a native exit", async () => {
   const api = native();
   render(<Harness />);
-  fireEvent.click(screen.getByText("Workspace"));
+  fireEvent.click(screen.getByText("Viewport"));
   await waitFor(() => expect(api.request).toHaveBeenCalledOnce());
-  expect(screen.getByRole("status")).toHaveTextContent("workspace");
-  expect(screen.getByTestId("chrome").style.visibility).toBe("hidden");
-  fireEvent.click(screen.getByText("Viewport"));
   expect(screen.getByRole("status")).toHaveTextContent("viewport");
-  fireEvent.click(screen.getByText("Viewport"));
-  expect(screen.getByRole("status")).toHaveTextContent("workspace");
-  expect(api.request).toHaveBeenCalledOnce();
+  expect(screen.getByTestId("chrome").style.visibility).toBe("hidden");
+  // 退出全屏可以不经过我们:浏览器的 Esc、系统手势都会直接触发 fullscreenchange。
   act(() => {
     element = null;
     document.dispatchEvent(new Event("fullscreenchange"));
@@ -83,7 +74,7 @@ it("keeps menus within document fullscreen, restores workspace after expanding i
   expect(screen.getByRole("status")).toHaveTextContent("normal");
   expect(screen.getByTestId("chrome").style.visibility).toBe("");
 });
-it("keeps full-window mode when the host refuses native fullscreen and restores it on Escape", async () => {
+it("keeps full-window mode when the host refuses native fullscreen and leaves it on Escape", async () => {
   const api = native(true);
   render(<Harness />);
   fireEvent.click(screen.getByText("Viewport"));

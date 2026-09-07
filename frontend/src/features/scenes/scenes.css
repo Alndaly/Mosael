@@ -168,8 +168,7 @@
 }
 .scene-tool[aria-pressed="true"],
 .scene-object-list button[aria-pressed="true"],
-.scene-segment button[aria-pressed="true"],
-.scene-keyframes button[aria-pressed="true"] {
+.scene-segment button[aria-pressed="true"] {
   color: var(--accent-foreground);
   background: var(--accent);
 }
@@ -463,26 +462,50 @@
   margin: 14px 0 8px;
 }
 
-/* 关键帧可能有几十个,横向滚动。**两端给淡出**,否则被裁掉的那一枚是硬切的,
-   看起来像渲染坏了而不是"还有更多"。用 mask 而不是渐变遮罩层:遮罩层会挡住点击。 */
-.scene-keyframes {
-  display: flex;
-  gap: 4px;
-  overflow-x: auto;
-  padding-bottom: 2px;
-  scrollbar-width: thin;
-  mask-image: linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
-  margin-inline: -12px;
-  padding-inline: 12px;
+/* **关键帧轨道:位置即时间。** 与上面那条 range 共用横轴,所以左右内距必须一致 ——
+   range 的滑块半径 6px,两端各留出来,标记才会和滑块停在同一个位置上。
+   高度只有 14px:它是一条标尺,不是一排按钮。 */
+.scene-keyframe-track {
+  position: relative;
+  height: 14px;
+  margin-inline: 6px;
 }
-
-.scene-keyframes button {
-  flex-shrink: 0;
-  padding: 4px 8px;
-  border-radius: 4px;
-  white-space: nowrap;
-  font-size: var(--text-ui-2xs);
-  color: var(--muted-foreground);
+.scene-keyframe {
+  position: absolute;
+  top: 0;
+  /* left 是百分比定位的**中心点**,所以要往回挪半个宽度。 */
+  translate: -50% 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  rotate: 45deg;
+  background: color-mix(in srgb, var(--foreground) 30%, transparent);
+  transition: background-color 120ms ease, scale 120ms ease;
+}
+/* 首尾两枚是**镜头的边界**,不是途经点 —— 画成方的,一眼分得出。 */
+.scene-keyframe[data-edge] {
+  rotate: none;
+  border-radius: 2px;
+  width: 7px;
+  height: 11px;
+}
+.scene-keyframe:hover {
+  background: color-mix(in srgb, var(--foreground) 55%, transparent);
+  scale: 1.15;
+}
+.scene-keyframe[aria-pressed="true"] {
+  background: var(--primary);
+  scale: 1.15;
+}
+/* 点击目标要够大,但视觉上仍是一枚小标记 —— 用透明的伪元素撑开命中区。 */
+.scene-keyframe::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  rotate: -45deg;
+}
+.scene-keyframe[data-edge]::after {
+  rotate: none;
 }
 
 .scene-add,
@@ -943,12 +966,18 @@
   }
 }
 
-/* Keep the same viewport mounted: ResizeObserver resizes its renderer and camera. */
+/* 全屏。视口本身**不重新挂载** —— ResizeObserver 会把 renderer 和相机调到新尺寸,
+   模型、相机位置、正在跑的动画都留在原地。
+
+   `inset: 0` 想相对视口生效,就要求**没有祖先成为包含块**。玻璃主题下 AppShell 的
+   `<main data-glass-surface>` 带 `backdrop-filter`,而带它的元素正好会成为后代 fixed 的
+   包含块 —— 画面于是整块偏移、右侧被切掉。那条滤镜在全屏期间由 design/tokens.css 关掉,
+   两处是一对,改动其一要看另一处。 */
 .scene-studio[data-screen-mode] {
   position: fixed;
   inset: 0;
   z-index: 40;
-  width: 100%;
+  width: 100vw;
   height: 100dvh;
   background: var(--background);
 }

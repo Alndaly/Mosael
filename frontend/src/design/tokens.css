@@ -432,6 +432,16 @@
     -webkit-backdrop-filter: var(--glass-filter);
     backdrop-filter: var(--glass-filter);
   }
+
+  /* **全屏期间,主区域不上滤镜。** 带 backdrop-filter 的元素会成为后代 `position: fixed`
+     的**包含块**,于是全屏页面的 `inset: 0` 相对的是那个容器而不是视口 —— 画面整块偏移、
+     右侧被裁掉。判据放在根上(`:root:has([data-screen-mode])`)而不是靠 DOM 层级去匹配:
+     后者依赖精确的嵌套深度,页面结构一改就悄悄失效。
+     全屏时这一层玻璃本来也没人看得见。 */
+  :root[data-appearance="glass"]:has([data-screen-mode]) [data-glass-surface] {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
   :root[data-appearance="glass"] [data-glass-surface],
   :root[data-appearance="glass"] [data-slot="popover-content"],
   :root[data-appearance="glass"] [data-slot="dialog-content"],
