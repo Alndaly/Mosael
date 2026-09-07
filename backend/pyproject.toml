@@ -40,6 +40,7 @@ dev = [
   "pytest>=8.0",
   "httpx>=0.28",
   "pyinstaller>=6.21.0",
+  "ruff>=0.14",
 ]
 
 [tool.uv]
@@ -50,4 +51,40 @@ testpaths = ["tests"]
 pythonpath = ["."]
 filterwarnings = [
   "error::pytest.PytestUnhandledThreadExceptionWarning",
+]
+
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+# **选能抓缺陷的,不选风格。** 打开 ruff 的全套会得到七百多条,其中绝大多数是这个代码库
+# 故意不遵守的排版意见 —— 而一个开局七百条警告的 lint,和没有 lint 是同一回事:没人会看,
+# 于是真的那几条也一起淹掉。
+#
+# 这三组的价值是当场兑现的:第一次跑就抓出两处 F821(未定义名字),其中
+# `domain/agent/judge.py` 那处是活的 NameError —— 它在 autopilot 里被 except 吞成一行日志,
+# 判断者从来没工作过,每次都静默退回问人。两千多条测试没看见,因为它们把 `ask` 整个换掉了。
+#
+#   F   pyflakes —— 未定义名字、没用到的导入与变量
+#   E9  语法/运行时错误
+#   B   bugbear —— 真的会咬人的写法(可变默认值、except 里丢原因)
+select = ["F", "E9", "B"]
+
+# zip 不写 strict:12 处。**这不是"以后再说",是判断题** —— 加上 strict=True 会把
+# "两边不一样长"从静默截断变成抛异常,那是行为改变,该逐处看而不是批量开。
+# 想收的话:一次一处,每处配一条测试说明两边为什么应该一样长。
+ignore = ["B905"]
+
+[tool.ruff.lint.per-file-ignores]
+# 统一装配入口就是干这个的(ADR-0003):导入各领域切片、注册进 Base.metadata、重新导出。
+# 这里的"没用到的导入"正是它的产出。
+"**/__init__.py" = ["F401"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI 的依赖注入**必须**写在参数默认值里 —— 那是框架的接口形状,不是可变默认值的坑。
+extend-immutable-calls = [
+  "fastapi.Depends", "fastapi.File", "fastapi.Form", "fastapi.Body",
+  "fastapi.Query", "fastapi.Header", "fastapi.Path", "fastapi.Cookie",
 ]

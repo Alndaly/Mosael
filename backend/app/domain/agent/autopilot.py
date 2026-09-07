@@ -208,7 +208,7 @@ def _judge_thread(confirmation_id: str, user_id: str) -> None:
         request = judge_module.build_request(tool, payload, _rules_for(db, confirmation))
         detail = dict(confirmation.decision_detail or {})
         try:
-            verdict = judge_module.ask(request)
+            verdict = judge_module.ask(request, user_id=user_id)
         except Exception as exc:  # noqa: BLE001 —— 超时/网络/解析不出来,都算判不了
             logger.warning("judge could not settle confirmation %s: %s", confirmation_id, exc)
             _release(db, confirmation_id, {**detail, "judge_failed": str(exc)[:300]})

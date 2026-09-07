@@ -41,7 +41,7 @@ from app.api.schemas import (
     SplitClipRequest,
     TrimClipRequest,
 )
-from app.db.models import Job, Project, Sequence, Track
+from app.db.models import Asset, Job, Project, Sequence, Track
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, require_sequence_access
 from app.domain.render import start_export
 from app.domain.sequences.errors import SequenceDomainError

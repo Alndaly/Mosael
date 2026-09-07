@@ -103,7 +103,9 @@ def test_the_worker_no_longer_invents_audio(tmp_path) -> None:
     """引擎导不进来时,worker 报错,不写一段正弦音冒充结果。"""
     out = tmp_path / "out.wav"
 
-    with pytest.raises(Exception):
+    # noqa 的理由:这条断言的是**拒绝 + 不留文件**,不是拒绝的方式。引擎没装时抛什么
+    # 随平台和缺失环节而变(缺解释器 / 缺权重 / 缺 torch),钉死一种反而会在别的机器上假绿。
+    with pytest.raises(Exception):  # noqa: B017
         voices_worker_synthesize(out)
 
     assert not out.exists(), "引擎没跑起来却留下了一个 wav —— 它会被注册成素材"

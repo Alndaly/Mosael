@@ -15,7 +15,6 @@
 
 from __future__ import annotations
 
-import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import AgentSession, AuthSession, User, Workspace, WorkspaceMember
@@ -101,7 +100,7 @@ def test_an_ordinary_member_cannot_delete_anyone() -> None:
 def test_nothing_of_anyone_elses_is_touched() -> None:
     """删一个人不该动到另一个人的任何东西。"""
     admin = fresh_client()
-    mate = second_client("mate")
+    second_client("mate")  # 被删的那位:这里只要他存在
     keeper = second_client("keeper")
     keeper_ws = keeper.post("/api/workspaces", json={"name": "留着的"}).json()["id"]
     keeper.post("/api/agent/sessions", json={"workspace_id": keeper_ws, "title": "留着的对话"})
@@ -119,7 +118,7 @@ def test_his_credentials_and_defaults_go_too() -> None:
     from tests.util import add_provider
 
     admin = fresh_client()
-    mate = second_client("mate")
+    second_client("mate")  # 注册他,下面按用户名取 id
     mate_id = _user_id("mate")
     with SessionLocal() as db:
         add_provider(

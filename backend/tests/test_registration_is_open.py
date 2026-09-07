@@ -18,7 +18,6 @@
 
 from __future__ import annotations
 
-from app.core.config import Settings, settings
 from app.core.db import SessionLocal
 from app.db.models import User
 from tests.util import fresh_client, second_client
@@ -50,7 +49,6 @@ def test_a_deployment_can_still_close_it(monkeypatch) -> None:
     with SessionLocal() as db:
         deployment.set_open_registration(db, False)
         db.commit()
-    refused = second_client.__wrapped__ if hasattr(second_client, "__wrapped__") else None
     from fastapi.testclient import TestClient
 
     from app.main import app
@@ -97,7 +95,7 @@ def test_the_registration_state_is_readable_without_logging_in() -> None:
 
 def test_the_first_account_still_becomes_the_deployment_administrator() -> None:
     """空库那一位引导整个部署 —— 没有部署管理员的部署是块砖头。"""
-    client = fresh_client()
+    fresh_client()  # 空库上注册的第一位
     with SessionLocal() as db:
         first = db.query(User).order_by(User.created_at).first()
         assert first.is_deployment_admin is True

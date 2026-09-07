@@ -62,6 +62,7 @@ from app.db.migrations import init_db
 logger = logging.getLogger(__name__)
 from app.api.deps.auth import get_current_user
 from app.domain.permissions import NotVisible, PermissionDenied
+from app.domain.notes import NoteDomainError
 from app.domain.assets import reconcile_broken_media_info
 from app.domain.agent.host import reconcile_orphaned_agent_sessions
 from app.domain.browser import reconcile_browser_state
@@ -169,6 +170,16 @@ def _install_permission_handlers(app: FastAPI) -> None:
     @app.exception_handler(PermissionDenied)
     async def _denied(_request: Request, exc: PermissionDenied) -> JSONResponse:
         return JSONResponse(status_code=403, content={"detail": str(exc)})
+
+    @app.exception_handler(NoteDomainError)
+    async def _note_error(_request: Request, exc: NoteDomainError) -> JSONResponse:
+        """笔记领域的异常按它自己声明的状态码翻。
+
+        和上面两个装在一处、理由也一样:笔记不只从 `routes/notes` 进来 —— 画板保存要校验
+        引用的文档、工作流知识节点要读它。收在边界,那些调用方就不必反过来 catch
+        HTTPException 再翻回自己的领域错误。
+        """
+        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
 
     @app.exception_handler(RequestValidationError)
     async def _invalid_request(_request: Request, exc: RequestValidationError) -> JSONResponse:

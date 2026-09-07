@@ -1,7 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  BookOpen,
   Bot,
   Boxes,
   CalendarClock,
@@ -9,7 +8,6 @@ import {
   Clapperboard,
   FileAudio,
   FileImage,
-  FileText,
   FileVideo,
   FolderOpen,
   FolderPlus,
@@ -25,7 +23,6 @@ import {
 } from "lucide-react";
 
 import { api, listPublishTasks, listWorkflows, type Asset, type ProjectWithStats, type Workspace } from "@/api/client";
-import type { components } from "@/api/generated/schema";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Highlight } from "@/components/app/Highlight";
 import type { StudioView } from "@/components/layout/AppShell";

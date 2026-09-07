@@ -131,7 +131,7 @@ def add_provider(db, *, model: str = "", capability_ids=None, owner_username: st
     传进来的落成**某个人**的钥匙 —— 默认是最早那个账号。要指名给谁就传 owner_username。
     没有"共享钥匙"这回事:每个人配自己的。
     """
-    from app.db.models import Workspace, ProviderProfile, User
+    from app.db.models import ProviderProfile, User
     from app.domain import provider_credentials, provider_models
 
     api_key = fields.pop("api_key", None)

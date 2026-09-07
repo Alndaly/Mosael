@@ -1,6 +1,5 @@
 from unittest.mock import Mock
 
-import pytest
 from sqlalchemy import select
 
 from app.core.db import SessionLocal

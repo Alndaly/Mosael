@@ -9,7 +9,6 @@ import {
   Copy,
   ImagePlus,
   Loader2,
-  Plus,
   Send,
   Sparkles,
   Video,
@@ -26,8 +25,6 @@ import {
   listComfyuiWorkflows,
   listComfyuiWorkflowParams,
   optimizeImagePrompt,
-  type Asset,
-  type ComfyParam,
   type GenerationCreateResponse,
   type GenerationJob,
   type GenerationOption,
@@ -263,7 +260,7 @@ function GenerateWorkspace({
   const t = useI18n();
   const { locale } = usePreferences();
   const qc = useQueryClient();
-  const { openImagePreview } = useImagePreview();
+  
   const panels = useSidePanels("generation", AI_PANEL_BOUNDS);
   const narrowLayout = useMediaMatch("(max-width: 1180px)");
   const singleColumn = useMediaMatch("(max-width: 820px)");
@@ -281,7 +278,7 @@ function GenerateWorkspace({
   const [prompt, setPrompt] = React.useState("");
   const [modelId, setModelId] = React.useState<string | null>(null);
   const [generationConfig, setGenerationConfig] = React.useState<GenerationConfig>(() => defaultGenerationConfig(null));
-  const firstFrameInputRef = React.useRef<HTMLInputElement | null>(null);
+  
 
   const sessions = useQuery({
     queryKey: ["generation-sessions", workspace.id],

@@ -389,7 +389,7 @@ function PublishDetail({
 }) {
   const t = useI18n();
   // 不再需要问「这个平台是不是浏览器平台」:发布任务只可能是平台账号发布。
-  const ok = task.status === "succeeded" || task.status === "success";
+  
   return (
     // 外框和标题由弹窗提供 —— 这里再套一张卡就是盒中盒,标题也会重复一遍。
     <div className="grid w-full content-start gap-2.5">

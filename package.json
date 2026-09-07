@@ -11,6 +11,7 @@
   "packageManager": "pnpm@11.20.0",
   "scripts": {
     "build:frontend": "pnpm --dir frontend build",
+    "lint": "pnpm --dir frontend lint && cd backend && uv run ruff check app tests",
     "build:sidecar": "pnpm --dir agent-sidecar build",
     "build:extension": "pnpm --dir browser-extension build",
     "build:backend": "cd backend && uv run --frozen python -m PyInstaller --noconfirm --clean --onedir --name mosael-backend --hidden-import uvicorn.logging --hidden-import uvicorn.loops.auto --hidden-import uvicorn.protocols.http.auto --hidden-import uvicorn.protocols.websockets.auto --hidden-import uvicorn.lifespan.on --add-data app/ai/runtime/workers/tts.py:app/ai/runtime/workers --add-data app/ai/runtime/workers/tts_protocol.py:app/ai/runtime/workers --add-data app/ai/runtime/workers/asr.py:app/ai/runtime/workers --add-data app/ai/runtime/workers/asr_protocol.py:app/ai/runtime/workers --add-data app/ai/runtime/workers/line_protocol.py:app/ai/runtime/workers run_backend.py",

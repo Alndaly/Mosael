@@ -22,7 +22,6 @@ RATCHET = True
 import ast
 import pathlib
 
-import pytest
 
 from app.core.db import SessionLocal
 from app.core.security import mint_service_session
@@ -59,7 +58,7 @@ def test_only_the_authorising_wrapper_may_approve() -> None:
     """
     strays = _callers_of(KERNEL) - KERNEL_CALLERS
     assert not strays, (
-        f"这些地方绕过授权直接批准了确认卡:\n  "
+        "这些地方绕过授权直接批准了确认卡:\n  "
         + "\n  ".join(f"{path}:{fn}" for path, fn in sorted(strays))
     )
 

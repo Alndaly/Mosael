@@ -31,7 +31,7 @@ def _schema_classes() -> dict[str, type[BaseModel]]:
         importlib.import_module(f"app.api.schemas.{info.name}") for info in pkgutil.iter_modules(pkg.__path__)
     ]
     for module in modules:
-        for name, obj in vars(module).items():
+        for obj in vars(module).values():
             if isinstance(obj, type) and issubclass(obj, BaseModel) and obj is not BaseModel:
                 found.setdefault(obj.__qualname__, obj)
     return found

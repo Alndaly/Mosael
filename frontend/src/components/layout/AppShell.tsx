@@ -42,7 +42,6 @@ import { TaskCenter } from "@/components/layout/TaskCenter";
 import { workspaceMenuState } from "@/components/layout/workspaceMenu";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import type { MessageKey } from "@/app/messages";
 import { NAV_ITEMS, navLabelKey, type StudioView } from "@/components/layout/navLabels";
 import { cn } from "@/lib/utils";
 import { WINDOW_CHROME_HEIGHT, WINDOW_CHROME_INSET } from "@/lib/windowChrome";

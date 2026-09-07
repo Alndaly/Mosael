@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 from app.core.child_process import run_logged
 from app.media.image_preview import browser_compatible_image

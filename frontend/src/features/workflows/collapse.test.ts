@@ -44,7 +44,7 @@ describe("collapseToSubgraph", () => {
 
     // 出边界:out 曾引用 {{b.text}} → 改写成 {{sg.output.b.text}}
     const out = graph.nodes.find((n) => n.id === "out")!;
-    expect((out.config?.values as Record<string, string>).final).toBe("{{sg.output.b.text}}");
+    expect((out.config?.values as Record<string, string> | undefined)?.final).toBe("{{sg.output.b.text}}");
 
     // 边收缩:start→sg、sg→out
     const pairs = graph.edges.map((e) => `${e.source}->${e.target}`).sort();

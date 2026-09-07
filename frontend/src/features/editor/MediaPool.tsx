@@ -12,7 +12,6 @@ import { useImagePreview } from "@/components/app/image-preview";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { formatTimecode } from "@/domain/timeline/geometry";
-import { useEditorStore } from "@/stores/editorStore";
 import { cn } from "@/lib/utils";
 import { saveAssetToDisk } from "@/lib/download";
 import { useDraggable } from "@dnd-kit/core";

@@ -1,11 +1,10 @@
 import React from "react";
 import { Maximize2, Pause, Play, Repeat, SkipBack, SkipForward, StepBack, StepForward, Volume2, VolumeX } from "lucide-react";
 
-import { assetFileUrl, type Asset, type Clip, type Sequence } from "@/api/client";
+import { type Asset, type Sequence } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { clipEnd, formatTimecode, sequenceDuration } from "@/domain/timeline/geometry";
 import { CURVES_FILTER_ID, colorCurvesTables, type ColorCurves } from "@/features/editor/colorCurves";
 import { CanvasCompositor, type CompositorLayer } from "@/features/editor/playback/CanvasCompositor";
@@ -17,7 +16,7 @@ import { blockingPreviewState } from "@/features/editor/playback/previewReadines
 import { readSubtitleStyle, subtitleCss } from "@/features/editor/subtitleStyle";
 import { readTextStyle, textStyleCss } from "@/features/editor/textStyle";
 import { applyTransformCommit, clipProgress, sampleTransform } from "@/features/editor/keyframes";
-import { TransformOverlay, readTransform, transformCss, type Transform } from "@/features/editor/TransformOverlay";
+import { TransformOverlay, readTransform, type Transform } from "@/features/editor/TransformOverlay";
 import { useEditorStore } from "@/stores/editorStore";
 
 /**
@@ -67,7 +66,7 @@ export function Monitor({
   const playbackRate = useEditorStore((state) => state.playbackRate);
   const volume = useEditorStore((state) => state.volume);
   const masterMuted = useEditorStore((state) => state.muted);
-  const { setPlayhead, setPlaying, togglePlaying, toggleLoop, cyclePlaybackRate, setVolume, toggleMuted } =
+  const { setPlayhead, togglePlaying, toggleLoop, cyclePlaybackRate, setVolume, toggleMuted } =
     useEditorStore.getState();
   const stageRef = React.useRef<HTMLDivElement | null>(null);
   const monitorStageRef = React.useRef<HTMLDivElement | null>(null);
@@ -96,10 +95,7 @@ export function Monitor({
         .flatMap((track) => [...(track.clips ?? [])].sort((a, b) => a.timeline_start - b.timeline_start)),
     [videoTracks],
   );
-  const audioTracks = React.useMemo(
-    () => (sequence.tracks ?? []).filter((item) => item.kind === "audio"),
-    [sequence],
-  );
+  
   const subtitleClips = React.useMemo(
     () =>
       (sequence.tracks ?? [])
@@ -127,7 +123,7 @@ export function Monitor({
 
   const activeClip =
     videoClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
-  const activeAsset = activeClip?.asset_id ? (assetById.get(activeClip.asset_id) ?? null) : null;
+  
   // 改画幅:画框宽高比 + 填充模式(cover 裁剪 / contain 留黑边 / blur 模糊背景)。
   const fillMode = ((sequence.reframe as { fill_mode?: string } | undefined)?.fill_mode ?? "cover") as
     | "cover"
@@ -160,7 +156,7 @@ export function Monitor({
     filter?: string;
     color?: Record<string, number> & { curves?: ColorCurves };
   };
-  const { cssFilter, vignette, curveTables } = React.useMemo(() => {
+  const { vignette, curveTables } = React.useMemo(() => {
     const parts: string[] = [];
     const preset = FILTER_CSS[String(activeEffects.filter ?? "")];
     if (preset) parts.push(preset);
@@ -185,7 +181,7 @@ export function Monitor({
     if (tables) parts.push(`url(#${CURVES_FILTER_ID})`);
     return { cssFilter: parts.join(" "), vignette: Math.max(0, v("vignette")), curveTables: tables };
   }, [activeEffects.filter, activeEffects.color]);
-  const isImage = activeAsset?.kind === "image";
+  
   // 画面引擎:WebCodecs 解代理 → 一张 canvas 合成全部活跃视频/图片片段。没有第二条路。
   const webCodecsOk = compositorSupported();
   // 上层视频轨(V2+)当前活跃的片段,按轨道 z 序。合成器把它们和 base 一起画在同一张 canvas 上;
@@ -209,18 +205,7 @@ export function Monitor({
     }
   }, [sequence]);
   const draftFor = (clipId: string | undefined) => (draft && selectedActive?.id === clipId ? draft : null);
-  const clipTransformStyle = React.useMemo<React.CSSProperties>(
-    () =>
-      transformCss(
-        draftFor(activeClip?.id) ??
-          (activeClip
-            ? sampleTransform(readTransform(activeClip.transform), clipProgress(activeClip, playhead))
-            : readTransform(undefined)),
-      ),
-    // 关键帧:base 轨 clip 的预览 transform 也要随播放头插值,故 playhead 入依赖。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [draft, selectedActive?.id, activeClip?.id, activeClip?.transform, playhead],
-  );
+  
 
   // Active video/image clips in z-order (base first = bottom, overlays bottom→top) as
   // compositor layers, each carrying its live drag transform. Memoised so the compositor's

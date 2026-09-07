@@ -1,7 +1,6 @@
 import * as React from "react";
 import { Check, ChevronDown } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { FIELD_TRIGGER_CLASS } from "@/components/ui/field-trigger"

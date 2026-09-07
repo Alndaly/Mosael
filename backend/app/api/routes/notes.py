@@ -4,7 +4,7 @@ from sqlalchemy import select, delete
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas.notes import NoteAppend, NoteContent, NoteCreate, NoteOut, NoteRestore, NoteUpdate, NoteReferenceOut
 from app.db.models import AgentMessage, AgentSession, Note, NoteRevision
-from app.domain.notes import append_note, create_note, get_note, save_note, snapshot, read_reference, query_notes
+from app.domain.notes import append_note, create_note, get_note, save_note, read_reference, query_notes
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 
 router = APIRouter(tags=["notes"])

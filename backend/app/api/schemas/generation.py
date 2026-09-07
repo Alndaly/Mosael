@@ -1,5 +1,5 @@
 from app.api.schemas.base import ApiModel
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from app.ai.providers.contracts.generation import FIRST_FRAME, SOURCE_ROLES
 

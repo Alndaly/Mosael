@@ -101,7 +101,7 @@ def test_run_workflow_stays_ai_cost_for_an_ordinary_graph() -> None:
 def test_authoring_an_external_node_is_itself_external() -> None:
     """写进图里就够了 —— 定时/webhook 会点着它,那时没有卡挡在前面。"""
     client = fresh_client()
-    workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+    client.post("/api/workspaces", json={"name": "W"})
     from app.core.db import SessionLocal
 
     with SessionLocal() as db:

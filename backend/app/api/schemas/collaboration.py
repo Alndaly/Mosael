@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Literal
 
 from app.api.schemas.base import ApiModel
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 
 SubjectType = Literal["board", "workflow", "sequence", "asset"]

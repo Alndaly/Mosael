@@ -3,7 +3,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from app.ai.model_catalog import cached_model, cached_models, clear_cache, fetch_models
+from app.ai.model_catalog import cached_model, clear_cache, fetch_models
 
 """供应商模型目录的解析与缓存。
 

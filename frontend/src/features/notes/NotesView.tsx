@@ -24,6 +24,8 @@ function locationNote() { return new URLSearchParams(window.location.hash.split(
 export function exportMarkdown(note: Pick<Note, "title" | "markdown" | "sources">) {
   const sources = note.sources.map(source => `- ${source.label || source.kind}${source.kind === "url" ? `: ${source.url}` : source.kind === "note" ? `: ${noteHref(source.id, source.revision)}` : ` [${source.kind}:${source.id}${source.start != null ? ` @ ${source.start}–${source.end ?? ""}s` : ""}]`}`).join("\n");
   const blob = new Blob([`# ${note.title}\n\n${note.markdown}${sources ? `\n\n---\n\n${sources}\n` : ""}`], { type: "text/markdown;charset=utf-8" });
+  // 控制字符是故意的:这是文件名净化,\x00-\x1f 在各家文件系统上都非法,和 <>:"/\\|?* 一起替掉。
+  // eslint-disable-next-line no-control-regex
   const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `${(note.title || "note").replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").slice(0, 100)}.md`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 

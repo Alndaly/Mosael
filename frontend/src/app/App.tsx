@@ -34,7 +34,6 @@ import {
 import { Toaster, toast } from "sonner";
 import { LoginView } from "@/features/auth/LoginView";
 import { AppShell, type StudioView } from "@/components/layout/AppShell";
-import { BrandMark } from "@/components/layout/BrandMark";
 import { STUDIO_VIEWS } from "@/components/layout/navLabels";
 import { CommandPalette } from "@/components/layout/CommandPalette";
 import { ConfirmationCenter } from "@/components/layout/ConfirmationCenter";

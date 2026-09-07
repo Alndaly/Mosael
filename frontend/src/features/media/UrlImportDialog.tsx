@@ -45,7 +45,7 @@ export function UrlImportDialog({
   //: 画质上限。0 = 不限 —— 4K 素材动辄几个 GB,而多数剪辑只需要 1080p。
   const [maxHeight, setMaxHeight] = React.useState(0);
   //: 列表翻页的起点。频道能有上万条,而一次探 200 条已经要翻好几页。
-  const [pageStart, setPageStart] = React.useState(1);
+  const [,setPageStart] = React.useState(1);
   //: 借哪个登录身份。会员视频、私享列表不带登录态就只能看到"不可用" —— 而这个应用本来就把
   //: 所有持久登录攒在浏览器池里,没有理由让用户去别处导一份 cookie 出来。
   const [profileId, setProfileId] = React.useState(NONE);

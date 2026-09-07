@@ -311,8 +311,7 @@ def get_board(db: Session, workspace_id: str, board_id: str) -> Board:
 
 
 def _validate_document_references(db: Session, workspace_id: str, canvas: dict, existing: dict | None = None) -> None:
-    from fastapi import HTTPException
-    from app.domain.notes import read_reference
+    from app.domain.notes import NoteDomainError, read_reference
     # Existing broken references remain movable/removable after a source is deleted.
     retained = {(item["id"], item.get("note_id"), item.get("note_revision"))
                 for item in (existing or {}).get("items", []) if item["kind"] == "document"}
@@ -324,8 +323,9 @@ def _validate_document_references(db: Session, workspace_id: str, canvas: dict, 
         try:
             ref = read_reference(db, workspace_id, item["note_id"], item["note_revision"])
             item["text"] = ref["title"]
-        except HTTPException as exc:
-            raise BoardDomainError(str(exc.detail)) from exc
+        except NoteDomainError as exc:
+            # 领域到领域的翻译:引用的文档有问题,对调用方来说是"这块画板存不下"。
+            raise BoardDomainError(str(exc)) from exc
 
 
 def create_board(

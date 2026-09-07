@@ -182,7 +182,7 @@ export function ProviderOAuthDialog({
   const t = useI18n();
   const qc = useQueryClient();
   const [loginId, setLoginId] = React.useState<string | null>(null);
-  const [answer, setAnswer] = React.useState("");
+  const [,setAnswer] = React.useState("");
 
   const start = useMutation({
     mutationFn: () => api<LoginState>(`/api/settings/providers/${profileId}/oauth/login`, { method: "POST" }),

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from app.api.schemas.base import ApiModel
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 
 class BrowserProfileOut(ApiModel):

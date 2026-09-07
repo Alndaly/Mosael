@@ -110,7 +110,7 @@ class TestClaim:
 class TestReport:
     def test_running_report_updates_progress(self, external_demo) -> None:
         workspace_id = _workspace()
-        job_id = _make_job(workspace_id)
+        _make_job(workspace_id)  # 建一个待认领的,下面 claim_next_job 去拿
         with SessionLocal() as db:
             job = claim_next_job(db)
             report_job(db, job, lease_token=job.lease_token, status="running", progress=0.4, message="干活中")

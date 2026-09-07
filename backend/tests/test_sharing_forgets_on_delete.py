@@ -15,7 +15,6 @@ RATCHET = True
 import re
 from pathlib import Path
 
-import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import ResourceShare

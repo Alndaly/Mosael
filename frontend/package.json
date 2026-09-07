@@ -7,6 +7,8 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
     "build": "tsc --noEmit && vite build",
+    "lint": "oxlint src",
+    "lint:fix": "oxlint src --fix",
     "gen:api": "pnpm -w gen:api",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
     "//electron:dev": "wait-on 前面那串清空代理的变量不是可有可无的:回环探活不需要代理,而开发者 shell 里导出了 HTTP_PROXY、NO_PROXY 又没覆盖回环时,wait-on 会把 127.0.0.1 的探活送进代理,连接一直挂着不返回 —— Electron 那一步永远不开始,且整个 [electron] 栏一个字都不打印,现象是「启动看着正常但 app 没打开」,极难往代理上想。",
@@ -95,6 +97,7 @@
     "concurrently": "^10.0.5",
     "electron": "^44.0.0",
     "jsdom": "^30.0.1",
+    "oxlint": "^1.81.0",
     "vitest": "^4.1.11",
     "wait-on": "^9.1.0"
   }

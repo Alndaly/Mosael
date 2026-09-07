@@ -29,7 +29,6 @@ import pytest
 from app.core.db import SessionLocal
 from app.domain.permissions import PermissionDenied, ensure_workspace_access, ensure_workspace_perm
 from app.db.models import User
-from fastapi import HTTPException
 from tests.util import fresh_client, second_client
 
 MUTATING = {"post", "put", "patch", "delete"}
@@ -137,7 +136,7 @@ def test_every_mutating_route_names_the_permission_it_needs() -> None:
     ]
     assert not silent, (
         "这些写路由没有点名它需要的权限(ensure_workspace_perm/…),"
-        f"于是谁都能过:\n  " + "\n  ".join(sorted(silent))
+        "于是谁都能过:\n  " + "\n  ".join(sorted(silent))
     )
 
 

@@ -921,7 +921,7 @@ def build_ffmpeg_command(
             )
             video_label = out_label
             input_index += 1
-        for k, (item, (png, pw, ph)) in enumerate(zip(plan.text_overlays, text_pngs.get("text_overlays", []))):
+        for k, (item, (png, _pw, _ph)) in enumerate(zip(plan.text_overlays, text_pngs.get("text_overlays", []))):
             args += ["-loop", "1", "-framerate", f"{fps:g}", "-t", f"{item.duration + 0.2:.6f}", "-i", str(png)]
             # 花字 PNG 当作一个自由元素:移到时间线起点,再复用元素变换管线施加动画,以文字中心
             # 对齐 (cx,cy)。element_sized=True 让缩放/定位按 PNG 自然尺寸而非画幅尺寸。

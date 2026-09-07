@@ -16,6 +16,7 @@ import {
   detectSilences,
   isFillerToken,
   projectTranscript,
+  transcriptSegmentsFromApi,
   type SegmentLike,
 } from "@/domain/timeline/transcriptProjection";
 import { PILL } from "@/features/editor/pill";
@@ -117,24 +118,7 @@ export function TranscriptPanel({
   const segmentsByAsset = React.useMemo(() => {
     const map = new Map<string, SegmentLike[]>();
     transcriptQueries.forEach((query, index) => {
-      const transcript = query.data;
-      if (transcript) {
-        map.set(
-          assetIds[index],
-          (transcript.segments ?? []).map((segment) => ({
-            id: segment.id,
-            start_time: segment.start_time,
-            end_time: segment.end_time,
-            text: segment.text,
-            speaker: segment.speaker,
-            tokens: (segment.tokens ?? []).map((token) => ({
-              start_time: token.start_time,
-              end_time: token.end_time,
-              text: token.text,
-            })),
-          })),
-        );
-      }
+      if (query.data) map.set(assetIds[index], transcriptSegmentsFromApi(query.data.segments));
     });
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps

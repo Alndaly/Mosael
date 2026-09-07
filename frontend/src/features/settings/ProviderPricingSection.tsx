@@ -368,7 +368,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
             <Select
               value={form.providerProfileId}
               onValueChange={(value) => {
-                const profile = (profiles.data ?? []).find((item) => item.id === value);
+                
                 setForm((current) => ({
                   ...current,
                   providerProfileId: value,

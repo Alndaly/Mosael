@@ -110,7 +110,7 @@ export function Timeline({
   const pxPerSecond = useEditorStore((state) => state.pxPerSecond);
   const rawDragDraft = useEditorStore((state) => state.dragDraft);
   const selectedClipIds = useEditorStore((state) => state.selectedClipIds);
-  const { setPlayhead, selectClip, setDragDraft, setPxPerSecond } = useEditorStore.getState();
+  const { setPlayhead, selectClip, setPxPerSecond } = useEditorStore.getState();
   const [snapEnabled, setSnapEnabled] = React.useState(true);
   const canvasRef = React.useRef<HTMLDivElement | null>(null);
   const hscrollRef = React.useRef<HTMLDivElement | null>(null);

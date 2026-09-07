@@ -20,7 +20,6 @@ import {
   cutClipRangesBatch,
   deleteClip,
   deleteClipsBatch,
-  rippleDeleteClip,
   rippleDeleteClipsBatch,
   exportSequence,
   type ExportParams,
@@ -48,7 +47,6 @@ import {
   trimClip,
   undoSequence,
   type Asset,
-  type Font,
   type Job,
   type Project,
   type Sequence,
@@ -62,12 +60,7 @@ import { ModalShell } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/components/agent/CanvasAgentChat";
 import { clipEnd } from "@/domain/timeline/geometry";
-import { projectTranscript, type SegmentLike, type TokenLike } from "@/domain/timeline/transcriptProjection";
-/** 接口回的一段逐字稿。`tokens` 可缺(老转写没有词级对齐),缺了才走按标点切的兜底。 */
-type TranscriptSegmentLike = {
-  id: string; start_time: number; end_time: number; text: string;
-  speaker?: string; tokens?: TokenLike[];
-};
+import { projectTranscript, transcriptSegmentsFromApi, type SegmentLike } from "@/domain/timeline/transcriptProjection";
 import { type LeftTab, useEditorPanels } from "@/features/editor/useEditorPanels";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { HANDLE_COLUMN, HANDLE_ROW, handleOffset, useResizableSidebar } from "@/lib/useResizableSidebar";
@@ -404,28 +397,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         }),
       );
       const segmentsByAsset = new Map<string, SegmentLike[]>();
-      fetched.forEach((tr, index) => {
-        if (tr) {
-          segmentsByAsset.set(
-            assetIds[index],
-            // **词级时间戳照抄,不要丢。** 丢了 `transcriptSegmentsForEditing` 就退到按标点
-            // 猜句子的兜底路径,于是同一份逐字稿在「逐字稿」那一页是 156 句、生成出来的字幕
-            // 却是几条一分钟的巨块 —— 用户看到的两个数字来自同一个接口,必须来自同一份投影。
-            // 映射与 TranscriptPanel 逐字对应。
-            (tr.segments ?? []).map((s: TranscriptSegmentLike) => ({
-              id: s.id,
-              start_time: s.start_time,
-              end_time: s.end_time,
-              text: s.text,
-              speaker: s.speaker,
-              tokens: (s.tokens ?? []).map((token) => ({
-                start_time: token.start_time,
-                end_time: token.end_time,
-                text: token.text,
-              })),
-            })),
-          );
-        }
+      fetched.forEach((transcript, index) => {
+        // 与逐字稿面板**同一个映射函数** —— 用户在两页看到的句子数必须来自同一份投影。
+        if (transcript) segmentsByAsset.set(assetIds[index], transcriptSegmentsFromApi(transcript.segments));
       });
       const sentences = projectTranscript(clips, segmentsByAsset);
       if (sentences.length === 0) throw new Error(t("subtitleNoTranscript"));

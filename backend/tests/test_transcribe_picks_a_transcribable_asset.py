@@ -59,7 +59,7 @@ def test_the_backend_still_refuses_an_image() -> None:
     from app.domain.voices import transcription
 
     client = fresh_client()
-    sequence_id = _timeline(client)
+    _timeline(client)  # 建出时间线与它的素材,下面按 kind 取
     with SessionLocal() as db:
         image = db.query(Asset).filter(Asset.kind == "image").one()
         try:

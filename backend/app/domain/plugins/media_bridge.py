@@ -19,7 +19,7 @@ domain/jobs 的回执登记处)。真正会 import assets 的是 domain/assets/p
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable, Protocol
+from typing import Protocol
 
 from sqlalchemy.orm import Session
 

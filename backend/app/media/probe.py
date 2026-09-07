@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import mimetypes
-import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from typing import Iterable
 from pathlib import Path

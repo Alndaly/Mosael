@@ -4,13 +4,11 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 
 from app.core.db import Base, engine
 from app.db.migrations import init_db
 from app.core.db import SessionLocal
 from app.db.models import GenerationJob, Job
-from app.main import app
 from tests.util import fresh_client
 
 
