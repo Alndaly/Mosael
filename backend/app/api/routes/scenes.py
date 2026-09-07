@@ -78,3 +78,13 @@ def operations(scene_id: str, body: SceneOperations, db: DbSession, user: Curren
     ensure_workspace_perm(db, user, body.workspace_id, 'edit')
     return apply_scene_operations(db, get_scene(db, body.workspace_id, scene_id), body.base_revision,
                                   body.objects, body.remove_ids, body.shots, body.name)
+
+
+@router.delete("/scenes/{scene_id}", status_code=204)
+def delete_scene(scene_id: str, workspace_id: str, db: DbSession, user: CurrentUser):
+    ensure_workspace_perm(db, user, workspace_id, "edit")
+    scene = get_scene(db, workspace_id, scene_id)
+    # Imported models and immutable revisions belong to this scene and cascade with it.
+    db.delete(scene)
+    db.commit()
+    return Response(status_code=204)

@@ -64,7 +64,7 @@
   gap: 28px;
   margin-top: 32px;
 }
-.scene-cards > button {
+.scene-card-open {
   text-align: left;
   min-width: 0;
 }
@@ -987,3 +987,19 @@
 .scene-blender-setup { display: grid; gap: 10px; }
 .scene-blender-setup a { font-size: 13px; display: flex; align-items: center; gap: 4px; color: var(--primary); }
 .scene-blender { -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+
+.scene-list { margin-top: 24px; }
+.scene-list .scene-cards { margin-top: 8px; padding: 3px; }
+.scene-list-card { position: relative; min-width: 0; border-radius: 14px; }
+.scene-card-open { display: block; width: 100%; border-radius: 14px; padding-bottom: 8px; }
+.scene-card-open:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.scene-list-card[data-selected="true"] { outline: 2px solid var(--primary); outline-offset: 3px; background: var(--accent); }
+.scene-list-card[data-selected="true"] h2, .scene-list-card[data-selected="true"] p { padding-inline: 8px; }
+.scene-card-check { position: absolute; top: 12px; left: 12px; width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer; }
+.scene-card-menu { position: absolute; top: 10px; right: 10px; }
+.scene-selection-bar { position: sticky; top: -32px; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px; margin-bottom: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--background); }
+.scene-selection-bar label, .scene-selection-bar > div { display: flex; align-items: center; gap: 10px; }
+.scene-selection-bar input { accent-color: var(--primary); }
+
+.scene-card-menu > button { background: var(--control); border-color: var(--border); }
+.scene-card-menu > button:hover { background: var(--secondary); }

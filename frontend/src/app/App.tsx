@@ -1,3 +1,4 @@
+import { SceneRouteMemory } from "@/features/scenes/sceneRouteMemory";
 import { LoadingState } from "@/components/layout/LoadingState";
 import React from "react";
 import {
@@ -431,12 +432,26 @@ function Studio({
     initial.projectId,
   );
 
+  const [sceneNavigation] = React.useState(() => {
+    const routes = new SceneRouteMemory();
+    routes.visit(workspace.id, window.location.hash);
+    return routes;
+  });
+  const routeWorkspace = React.useRef(workspace.id);
+  const navigate = (next: StudioView) => {
+    sceneNavigation.visit(workspace.id, window.location.hash);
+    // Set the destination before mounting SceneStudio: its initial state reads the URL.
+    if (next === "scenes") window.location.hash = sceneNavigation.restore(workspace.id);
+    setView(next);
+  };
+
   // Switching workspaces: the open project belongs to the previous workspace, so
   // drop it and return home. The ref skips the initial mount (hash restore).
   const lastWorkspaceRef = React.useRef(workspace.id);
   React.useEffect(() => {
     if (lastWorkspaceRef.current !== workspace.id) {
       lastWorkspaceRef.current = workspace.id;
+      routeWorkspace.current = workspace.id;
       setProjectId(null);
       setView("home");
     }
@@ -449,6 +464,7 @@ function Studio({
   React.useEffect(() => {
     const onHashChange = () => {
       const next = readHash();
+      sceneNavigation.visit(routeWorkspace.current, window.location.hash);
       setView(next.view);
       if (next.projectId) setProjectId(next.projectId);
     };
@@ -483,7 +499,7 @@ function Studio({
       if (!VALID_VIEWS.includes(next)) return;
       if (next === "editor" && id) openProject(id);
       else if (id && ["scenes", "notes", "boards"].includes(next)) window.location.hash = `#/${next}?${next === "scenes" ? "scene" : next === "notes" ? "note" : "board"}=${encodeURIComponent(id)}`;
-      else setView(next as StudioView);
+      else navigate(next as StudioView);
     },
   });
   // 新建项目的入口不止首页一处(顶栏切换器、剪辑页空态也有),所以在这里建一次往下传,
@@ -513,7 +529,7 @@ function Studio({
     <RecordingProvider workspaceId={workspace.id}>
       <AppShell
         view={view}
-        onViewChange={setView}
+        onViewChange={navigate}
         workspaceId={workspace.id}
         workspaceName={workspace.name}
         workspaces={workspaces}
@@ -560,7 +576,7 @@ function Studio({
         <CommandPalette
           workspace={workspace}
           projects={projects.data ?? []}
-          onNavigate={setView}
+          onNavigate={navigate}
           onOpenProject={openProject}
         />
         <ConfirmationCenter workspaceId={workspace.id} />

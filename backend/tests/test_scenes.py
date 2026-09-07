@@ -74,3 +74,24 @@ def test_board_scene_reference_must_belong_to_workspace():
     other = c.post('/api/workspaces', json={'name': 'Other'}).json()['id']
     r = c.post('/api/boards', json={'workspace_id': other, 'name': 'Bad scene board', 'canvas': canvas})
     assert r.status_code == 400, r.text
+
+
+def test_delete_scene_is_workspace_scoped_and_cascades_owned_data():
+    from sqlalchemy import select
+    from app.core.db import SessionLocal
+    from app.db.models import Scene3DModel, Scene3DRevision
+    c, ws, scene = setup_scene()
+    path = f"/api/scenes/{scene['id']}"
+    other = c.post('/api/workspaces', json={'name': 'Other'}).json()['id']
+    assert c.delete(path, params={'workspace_id': other}).status_code == 404
+    assert c.get(path, params={'workspace_id': ws}).status_code == 200
+    model = c.post(path + '/models', data={'workspace_id': ws}, files={'file': ('empty.gltf', json.dumps({'asset': {'version': '2.0'}}).encode(), 'model/gltf+json')})
+    assert model.status_code == 200, model.text
+    retained = c.post('/api/scenes', json={'workspace_id': ws, 'name': 'Keep'}).json()
+    assert c.delete(path, params={'workspace_id': ws}).status_code == 204
+    assert c.get(path, params={'workspace_id': ws}).status_code == 404
+    assert c.get(f"/api/scenes/{retained['id']}", params={'workspace_id': ws}).status_code == 200
+    assert c.delete(path, params={'workspace_id': ws}).status_code == 404
+    with SessionLocal() as db:
+        assert db.get(Scene3DModel, model.json()['id']) is None
+        assert not db.scalars(select(Scene3DRevision).where(Scene3DRevision.scene_id == scene['id'])).all()

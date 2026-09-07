@@ -3388,7 +3388,8 @@ export interface paths {
         get: operations["read_api_scenes__scene_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete Scene */
+        delete: operations["delete_scene_api_scenes__scene_id__delete"];
         options?: never;
         head?: never;
         /** Edit */
@@ -18240,6 +18241,37 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SceneOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_scene_api_scenes__scene_id__delete: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path: {
+                scene_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

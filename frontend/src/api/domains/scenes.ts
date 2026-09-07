@@ -63,3 +63,6 @@ export async function readSceneModel(
   if (!res.ok) throw new Error(`Model load failed (${res.status})`);
   return res.arrayBuffer();
 }
+
+export const deleteScene = (ws: string, id: string) =>
+  api<void>(`/api/scenes/${id}?${query(ws)}`, { method: "DELETE" });

@@ -1,3 +1,4 @@
+import { SceneList } from "./SceneList";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { SceneBlender } from "./SceneBlender";
@@ -15,6 +16,7 @@ import {
   Box,
   Camera,
   Check,
+  CheckSquare,
   Download,
   Maximize,
   Minimize,
@@ -42,6 +44,7 @@ import { importAsset } from "@/api/domains/assets";
 import { createBoard, updateBoard, type BoardItem } from "@/api/domains/boards";
 import {
   createScene,
+  deleteScene,
   getScene,
   listScenes,
   saveScene,
@@ -86,7 +89,8 @@ const readId = () =>
 export function SceneStudio({ workspace }: { workspace: Workspace }) {
   const qc = useQueryClient(),
     [id, setId] = React.useState(readId),
-    [creating, setCreating] = React.useState(false);
+    [creating, setCreating] = React.useState(false),
+    [selecting, setSelecting] = React.useState(false);
   React.useEffect(() => {
     const read = () => setId(readId());
     addEventListener("hashchange", read);
@@ -154,6 +158,7 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
           <p>搭建空间，设计镜头，再把画面交给你选择的视频模型。</p>
         </div>
         <div className="scene-actions">
+          {!!list.data?.length && <Button variant="outline" aria-pressed={selecting} onClick={() => setSelecting(!selecting)}><CheckSquare size={16} />{selecting ? "完成选择" : "选择"}</Button>}
           <Button
             variant="outline"
             disabled={creating}
@@ -178,25 +183,34 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
           <EmptyState icon={<Box />} title="从一个空间开始" body="添加几何体、导入模型，或从三间相连的展厅开始设计运镜。" action={<Button disabled={creating} onClick={() => void create(true)}>体验示例场景</Button>} />
         </div>
       ) : (
-        <div className="scene-cards">
-          {list.data.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => {
-                location.hash = `#/scenes?scene=${s.id}`;
-              }}
-            >
-              <div className="scene-card-art">
-                <Box size={48} strokeWidth={1} />
-                <span>{String(s.object_count).padStart(2, "0")}</span>
-              </div>
-              <h2>{s.name}</h2>
-              <p>
-                {s.object_count} 个对象 · {s.shot_count} 个镜头
-              </p>
-            </button>
-          ))}
-        </div>
+        <SceneList
+          scenes={list.data}
+          selecting={selecting}
+          onSelecting={setSelecting}
+          onOpen={sceneId => { location.hash = `#/scenes?scene=${sceneId}`; }}
+          onRename={async (summary, name) => {
+            try {
+              const scene = await getScene(workspace.id, summary.id);
+              await saveScene({ ...scene, name });
+              await qc.invalidateQueries({ queryKey: ["scenes", workspace.id] });
+              toast.success("场景已重命名");
+              return true;
+            } catch (e) { toast.error(String(e)); return false; }
+          }}
+          onDelete={async scenes => {
+            const results = await Promise.allSettled(scenes.map(scene => deleteScene(workspace.id, scene.id)));
+            const done = scenes.filter((_, i) => results[i].status === "fulfilled").map(scene => scene.id);
+            for (const sceneId of done) {
+              qc.removeQueries({ queryKey: ["scene", workspace.id, sceneId] });
+              localStorage.removeItem(`mosael.scene-draft:${workspace.id}:${sceneId}`);
+            }
+            await qc.invalidateQueries({ queryKey: ["scenes", workspace.id] });
+            if (done.length) toast.success(`已删除 ${done.length} 个场景`);
+            const failure = results.find(r => r.status === "rejected");
+            if (failure?.status === "rejected") toast.error(`部分场景未能删除：${String(failure.reason)}`);
+            return done;
+          }}
+        />
       )}
     </div>
   );
