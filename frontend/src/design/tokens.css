@@ -162,6 +162,10 @@
   --panel: var(--card);
   --panel-subtle: #f3f6fa;
   --panel-inset: #eaf0f7;
+  /* 3D 视口的画布底。**两种主题下都是深色** —— 这不是没跟上主题,是这块画布的功能需要:
+     浅色底上看模型,轮廓、阴影和材质明暗全都糊在一起,这是 3D 工具的通行做法。
+     它也不该做成半透明:透出壁纸会在模型后面留下移动的纹理,干扰对形体的判断。 */
+  --viewport-canvas: #14171c;
   /* Nested workspace panes share the app backdrop; controls retain their own surface. */
   --workspace: var(--background);
   --workspace-panel: var(--panel);
@@ -273,6 +277,7 @@
   --panel: var(--card);
   --panel-subtle: #191b1e;
   --panel-inset: #101113;
+  --viewport-canvas: #0d0f13;
   --border-strong: #444b55;
   --overlay-modal: rgb(6 9 14 / 0.24);
   --modal-solid: #23262c;

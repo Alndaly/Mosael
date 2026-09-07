@@ -178,9 +178,12 @@
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(280px, 1fr) 304px;
-  gap: 12px;
-  padding: 0 20px 16px;
   overflow: hidden;
+  /* **不用卡片,用分割线。** 和剪辑页同构(editor.css 的 `.editor-pane` 就是一行
+     `border-inline-end: 1px solid var(--divider)`):区块之间只有 1px 线,没有圆角、没有
+     间隙、没有各自的面板底色。此前这里是三张浮着的卡片,而它们外面还套着页面本身的容器 ——
+     框中框,而且每张卡片自带的不透明底色把整页的通透感切碎了。 */
+  border-top: 1px solid var(--divider);
 }
 
 .scene-objects {
@@ -190,7 +193,7 @@
   min-height: 0;
 }
 .scene-objects header {
-  padding: 14px 16px;
+  padding: 14px var(--scene-side-gutter) 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -202,12 +205,15 @@
   font-weight: 600;
   font-size: var(--text-ui-sm);
 }
+/* **左右内距只有一个值**(--scene-side-gutter)。此前是三套:header 16px、列表 6px、
+   inspector 16px —— 列表项的文字因此和上面的标题对不齐,而它们本该在同一条竖线上。
+   列表用负外边距把 hover 底色铺得比内距宽一点,这样文字对齐、底色又不显得局促。 */
 .scene-object-list {
   flex: 0 1 auto;
   overflow: auto;
   max-height: 210px;
   min-height: 0;
-  padding: 0 6px;
+  padding: 0 var(--scene-side-gutter);
 }
 .scene-object-list button {
   display: flex;
@@ -215,7 +221,9 @@
   align-items: center;
   gap: 9px;
   text-align: left;
-  padding: 10px;
+  padding: 9px 8px;
+  margin: 0 -8px;
+  width: calc(100% + 16px);
   border-radius: 7px;
 }
 .scene-object-list button span {
@@ -229,7 +237,7 @@
   color: var(--muted-foreground);
 }
 .scene-objects footer {
-  padding: 10px 16px;
+  padding: 10px var(--scene-side-gutter);
 }
 
 .scene-objects footer button {
@@ -242,15 +250,17 @@
   margin-top: 12px;
 }
 .scene-stage {
+  /* 舞台上下四条的左右内距只有一个值。此前是四套(工具条 12、提示 12、时间轴 12、
+     关键帧 0),于是关键帧那一行的文字比它上面的每一行都更靠左。 */
+  --scene-stage-gutter: 12px;
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
   position: relative;
-  border: 1px solid var(--border);
-  border-radius: 12px;
   overflow: hidden;
-  background: var(--panel);
+  /* 底色交给里面的视口(--viewport-canvas);舞台自己只是布局容器。 */
+  background: transparent;
 }
 
 .scene-stage-bar {
@@ -260,10 +270,10 @@
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  padding: 8px 12px;
+  padding: 8px var(--scene-stage-gutter);
   z-index: 2;
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
+  background: transparent;
+  border-bottom: 1px solid var(--divider);
 }
 
 .scene-segment {
@@ -291,11 +301,11 @@
   min-width: 0;
   position: relative;
   overflow: hidden;
-  /* 底色跟着主题走,和创意画板那块画布同一个做法(BoardCanvas 的 bg-background)。
-     此前这里没有底色,画面全靠 three.js 的 scene.background 涂满 —— 那是**场景数据**
-     (导出成片用的也是它),拿它当工作台的底,结果是一整片不透明色块横在一个其余每页都
-     半透明的界面里。现在编辑视角的画布是透明的,底色由这里给。 */
-  background: var(--background);
+  /* **深色是这块画布的功能需要**,不是没跟上主题:浅色底上看模型,轮廓、阴影和材质明暗
+     全糊在一起。所以它有自己的 token(--viewport-canvas),明暗两种主题下都是深色。
+     变的是它**由界面给**,而不再由 three.js 的 `scene.background` 涂 —— 那个值是场景数据
+     (导出成片用同一个),拿它当工作台的底,等于让"这块画布长什么样"随场景内容漂移。 */
+  background: var(--viewport-canvas);
 }
 .scene-viewport > canvas {
   display: block;
@@ -308,9 +318,12 @@
   min-height: 0;
   min-width: 0;
   background: transparent;
+  /* 物体列表和「调整物体」是两件事,此前之间没有任何分隔,读起来是连续的一长条。
+     一条分割线就够 —— 再套一个框会和外层的侧栏边框成为框中框。 */
+  border-top: 1px solid var(--divider, var(--border));
 }
 .scene-inspector section {
-  padding: 16px;
+  padding: 16px var(--scene-side-gutter);
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -394,9 +407,11 @@
 }
 .scene-timeline {
   flex-shrink: 0;
-  padding: 8px 12px 10px;
-  background: var(--panel);
-  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 8px;
+  padding: 10px var(--scene-stage-gutter);
+  background: transparent;
+  border-top: 1px solid var(--divider);
 }
 
 .scene-shot-row {
@@ -431,15 +446,22 @@
   margin: 14px 0 8px;
 }
 
+/* 关键帧可能有几十个,横向滚动。**两端给淡出**,否则被裁掉的那一枚是硬切的,
+   看起来像渲染坏了而不是"还有更多"。用 mask 而不是渐变遮罩层:遮罩层会挡住点击。 */
 .scene-keyframes {
   display: flex;
   gap: 4px;
   overflow-x: auto;
   padding-bottom: 2px;
+  scrollbar-width: thin;
+  mask-image: linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
+  margin-inline: -12px;
+  padding-inline: 12px;
 }
 
 .scene-keyframes button {
-  padding: 3px 6px;
+  flex-shrink: 0;
+  padding: 4px 8px;
   border-radius: 4px;
   white-space: nowrap;
   font-size: var(--text-ui-2xs);
@@ -527,14 +549,25 @@
   }
 }
 
+/* **助手打开时的排法。** 此前无条件把侧栏整块 display:none —— 而助手正在跟你聊场景里的
+   物体,看不到那份列表恰恰最别扭。宽屏放得下三栏(视口 + 物体 + 助手),只有窄到装不下时
+   才二选一,那时留下助手(你刚点开它,那是当下的意图)。780px 以下再退成单栏。 */
 .scene-workspace[data-agent="true"] {
-  grid-template-columns: minmax(280px, 1fr) minmax(320px, 30%);
+  grid-template-columns: minmax(280px, 1fr) 280px 340px;
 }
-.scene-workspace[data-agent="true"] > .scene-side {
-  display: none;
+
+@media (max-width: 1400px) {
+  .scene-workspace[data-agent="true"] {
+    grid-template-columns: minmax(280px, 1fr) 340px;
+  }
+  .scene-workspace[data-agent="true"] > .scene-side {
+    display: none;
+  }
 }
 .scene-agent-dock {
-  border-radius: var(--radius);
+  /* 背景保留 —— 助手这块的通透度是对的。去掉的是圆角:相邻区块靠分割线相接时,
+     圆角会在拐角留下一个对不齐的缺口。 */
+  border-inline-start: 1px solid var(--divider);
   background: var(--workspace-subtle);
   min-width: 0;
   min-height: 0;
@@ -547,15 +580,17 @@
   display: contents;
 }
 .scene-side {
+  /* 侧栏内所有区块共用的左右内距。写成变量是因为它此前有三套值,而"对齐"这件事
+     只有在唯一来源时才守得住。 */
+  --scene-side-gutter: 16px;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  background: transparent;
+  border-inline-start: 1px solid var(--divider);
 }
 
 .scene-side-scroll {
@@ -623,17 +658,25 @@
 .scene-stage-bar .scene-actions {
   flex-wrap: wrap;
 }
-.scene-stage-hint {
+/* 状态浮层:贴在视口左下角,**浮在画面上**而不是占一行。深色画布上用同一套浮层配方
+   (半透明 + 模糊),和应用里其余浮动面板一致。 */
+.scene-stage-status {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 3;
   display: flex;
-  flex-shrink: 0;
   align-items: center;
   gap: 6px;
-  min-height: 28px;
-  padding: 5px 12px;
+  padding: 5px 10px;
+  border-radius: 8px;
   font-size: var(--text-ui-2xs);
   color: var(--muted-foreground);
-  border-top: 1px solid var(--border);
-  line-height: 1.5;
+  background: var(--popover);
+  border: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  pointer-events: none;
 }
 
 .scene-help {
@@ -699,10 +742,10 @@
   line-height: 1.8;
 }
 .scene-side-next {
-  padding: 12px;
+  padding: 12px var(--scene-side-gutter);
   flex-shrink: 0;
-  background: var(--panel);
-  border-top: 1px solid var(--border);
+  background: transparent;
+  border-top: 1px solid var(--divider);
 }
 
 .scene-side-next > button {
@@ -1098,7 +1141,6 @@
   border: 1px solid var(--border);
 }
 .scene-stage-bar,
-.scene-stage-hint,
 .scene-timeline {
   flex-grow: 0;
 }
