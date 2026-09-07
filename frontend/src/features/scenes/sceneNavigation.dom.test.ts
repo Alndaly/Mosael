@@ -133,3 +133,33 @@ it("bounds extreme pinch input and keeps the camera finite", () => {
   expect(camera.position.distanceTo(orbit.target)).toBeCloseTo(1000);
   expect(camera.position.toArray().every(Number.isFinite)).toBe(true);
 });
+
+it("routes trackpad input to the active observation camera without moving the edit camera", () => {
+  const { canvas, camera, orbit, wheel, remove, state } = setup();
+  remove();
+  const observerCamera = camera.clone();
+  const observerOrbit = new OrbitControls(observerCamera, canvas);
+  observerOrbit.target.copy(orbit.target);
+  observerOrbit.update();
+  let observing = true;
+  orbit.enabled = false;
+  const cleanup = attachSceneNavigation(
+    canvas,
+    () => (observing ? observerOrbit : orbit),
+    () => state,
+  );
+  const original = camera.position.clone();
+  const before = observerCamera.position.clone();
+  wheel({ deltaX: 30, deltaY: 40 });
+  expect(observerCamera.position.distanceTo(before)).toBeGreaterThan(0.1);
+  expect(camera.position.equals(original)).toBe(true);
+  const observed = observerCamera.position.clone();
+  observing = false;
+  orbit.enabled = true;
+  observerOrbit.enabled = false;
+  wheel({ deltaY: -30, ctrlKey: true });
+  expect(observerCamera.position.equals(observed)).toBe(true);
+  expect(camera.position.distanceTo(original)).toBeGreaterThan(0.1);
+  cleanup();
+  observerOrbit.dispose();
+});

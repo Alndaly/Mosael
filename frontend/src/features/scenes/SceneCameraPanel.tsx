@@ -1,5 +1,5 @@
 import React from "react";
-import { Camera, Play, Pause, RotateCw, MoveRight, Video } from "lucide-react";
+import { Camera, RotateCw, MoveRight, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { CameraFrame, SceneShot } from "@/api/domains/scenes";
@@ -10,7 +10,6 @@ export function SceneCameraPanel({
   shot,
   time,
   preview,
-  playing,
   onPatch,
   onTime,
   onPreview,
@@ -22,7 +21,6 @@ export function SceneCameraPanel({
   shot: SceneShot;
   time: number;
   preview: boolean;
-  playing: boolean;
   onPatch: (patch: Partial<SceneShot>) => void;
   onTime: (time: number) => void;
   onPreview: (value: boolean) => void;
@@ -120,17 +118,6 @@ export function SceneCameraPanel({
             />
           </label>
         </div>
-        <Button
-          variant="secondary"
-          onClick={() => {
-            onPreview(true);
-            if (time >= shot.duration) onTime(0);
-            onPlaying(!playing);
-          }}
-        >
-          {playing ? <Pause size={15} /> : <Play size={15} />}{" "}
-          {playing ? "暂停预览" : "播放镜头"}
-        </Button>
       </section>
       <details className="scene-details scene-manual-camera">
         <summary>自己设置起点和终点</summary>

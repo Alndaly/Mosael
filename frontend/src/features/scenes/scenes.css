@@ -103,14 +103,14 @@
   position: relative;
 }
 .scene-header {
-  min-height: 54px;
+  min-height: 52px;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 16px;
+  padding: 8px 20px;
   flex-wrap: wrap;
-  background: transparent;
 }
+
 .scene-name {
   min-width: 100px;
   max-width: 360px;
@@ -177,10 +177,12 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(280px, 1fr) 300px;
-  gap: 16px;
+  grid-template-columns: minmax(280px, 1fr) 304px;
+  gap: 12px;
+  padding: 0 20px 16px;
   overflow: hidden;
 }
+
 .scene-objects {
   display: flex;
   flex-direction: column;
@@ -188,11 +190,13 @@
   min-height: 0;
 }
 .scene-objects header {
-  padding: 14px;
+  padding: 14px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
 }
+
 .scene-objects h2,
 .scene-inspector h2 {
   font-weight: 600;
@@ -225,8 +229,9 @@
   color: var(--muted-foreground);
 }
 .scene-objects footer {
-  padding: 14px;
+  padding: 10px 16px;
 }
+
 .scene-objects footer button {
   display: flex;
   gap: 8px;
@@ -242,33 +247,44 @@
   min-width: 0;
   min-height: 0;
   position: relative;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--panel);
 }
+
 .scene-stage-bar {
   position: relative;
   display: flex;
   flex-shrink: 0;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
-  padding: 8px;
+  gap: 12px;
+  padding: 8px 12px;
   z-index: 2;
-  background: var(--workspace-subtle);
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
 }
-.scene-stage-bar > div {
+
+.scene-segment {
   display: flex;
   align-items: center;
   gap: 2px;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--workspace-subtle);
+  border: 1px solid var(--border);
 }
-.scene-segment {
-  display: flex;
-  gap: 2px;
-}
+
 .scene-segment button {
-  padding: 6px 10px;
-  border-radius: 7px;
-  font-size: var(--text-ui-sm);
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 5px;
+  font-size: var(--text-ui-xs);
   white-space: nowrap;
+  color: var(--muted-foreground);
 }
+
 .scene-viewport {
   flex: 1;
   min-height: 180px;
@@ -289,11 +305,12 @@
   background: transparent;
 }
 .scene-inspector section {
-  padding: 18px 14px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
+
 .scene-inspector section + section {
   border-top: 1px solid var(--divider);
 }
@@ -322,14 +339,16 @@
 .scene-number input {
   width: 100%;
   min-width: 0;
-  background: color-mix(in srgb, var(--foreground) 4%, transparent);
-  border: 0;
+  height: 34px;
+  background: var(--control);
+  border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 7px;
+  padding: 7px 9px;
   color: var(--foreground);
   font-size: var(--text-ui-xs);
   font-family: var(--font-mono);
 }
+
 .scene-vector .scene-number > span {
   font-size: var(--text-ui-2xs);
 }
@@ -369,10 +388,12 @@
   color: var(--primary);
 }
 .scene-timeline {
-  padding: 10px 16px 14px;
-  background: transparent;
-  min-height: 120px;
+  flex-shrink: 0;
+  padding: 8px 12px 10px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
 }
+
 .scene-shot-row {
   display: flex;
   align-items: center;
@@ -393,22 +414,33 @@
   white-space: nowrap;
 }
 .scene-timeline > input {
+  display: block;
   width: 100%;
+  appearance: none;
+  height: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--foreground) 14%, transparent);
+  cursor: pointer;
   accent-color: var(--primary);
-  margin: 12px 0 6px;
+  margin: 14px 0 8px;
 }
+
 .scene-keyframes {
   display: flex;
-  gap: 8px;
-  overflow: auto;
+  gap: 4px;
+  overflow-x: auto;
+  padding-bottom: 2px;
 }
+
 .scene-keyframes button {
-  padding: 4px 8px;
-  border-radius: 5px;
+  padding: 3px 6px;
+  border-radius: 4px;
   white-space: nowrap;
   font-size: var(--text-ui-2xs);
   color: var(--muted-foreground);
 }
+
 .scene-add,
 .scene-export {
   display: flex;
@@ -509,19 +541,6 @@
 .scene-agent-floating {
   display: contents;
 }
-
-/* Share the application's surface hierarchy. The render background belongs to the scene. */
-.scene-header {
-  padding: 10px 20px;
-}
-.scene-workspace {
-  padding: 0 20px 18px;
-}
-.scene-stage {
-  border-radius: var(--radius);
-  overflow: hidden;
-  background: var(--workspace-subtle);
-}
 .scene-side {
   min-width: 0;
   min-height: 0;
@@ -529,7 +548,11 @@
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
 }
+
 .scene-side-scroll {
   flex: 1;
   min-height: 0;
@@ -597,14 +620,17 @@
 }
 .scene-stage-hint {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
-  justify-content: center;
   gap: 6px;
-  padding: 10px 12px;
+  min-height: 28px;
+  padding: 5px 12px;
   font-size: var(--text-ui-2xs);
   color: var(--muted-foreground);
-  background: var(--workspace-subtle);
+  border-top: 1px solid var(--border);
+  line-height: 1.5;
 }
+
 .scene-help {
   font-size: var(--text-ui-sm);
   line-height: 1.9;
@@ -615,10 +641,6 @@
 }
 .scene-objects {
   flex: none;
-}
-.scene-objects header {
-  padding: 10px 12px;
-  gap: 10px;
 }
 .scene-objects h2 span {
   color: var(--muted-foreground);
@@ -632,16 +654,9 @@
 .scene-object-list button[aria-pressed="true"] {
   background: color-mix(in srgb, var(--primary) 9%, transparent);
 }
-.scene-objects footer {
-  padding: 10px 14px;
-}
 .scene-objects footer button {
   color: var(--muted-foreground);
   font-size: var(--text-ui-xs);
-}
-.scene-inspector section {
-  padding: 20px 12px;
-  gap: 14px;
 }
 .scene-start {
   display: flex;
@@ -666,6 +681,7 @@
   font-weight: 500;
   color: var(--foreground);
 }
+
 .scene-details > div {
   display: flex;
   flex-direction: column;
@@ -678,46 +694,54 @@
   line-height: 1.8;
 }
 .scene-side-next {
-  padding: 18px 12px;
+  padding: 12px;
   flex-shrink: 0;
-  background: var(--workspace-subtle);
-  border-radius: var(--radius);
+  background: var(--panel);
+  border-top: 1px solid var(--border);
 }
+
 .scene-side-next > button {
   width: 100%;
 }
 .scene-camera-panel {
-  padding: 10px 12px 0;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
 }
+
 .scene-panel-heading h2,
 .scene-output-panel h2 {
-  font-size: 17px;
+  font-size: 16px;
+  line-height: 1.5;
   font-weight: 600;
 }
+
 .scene-panel-heading p,
 .scene-output-panel p {
-  margin-top: 8px;
+  margin-top: 6px;
   color: var(--muted-foreground);
   font-size: var(--text-ui-xs);
-  line-height: 1.8;
+  line-height: 1.65;
 }
+
 .scene-preset-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
+
 .scene-preset-list > button {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 14px;
+  gap: 12px;
+  padding: 12px;
   text-align: left;
-  border-radius: var(--radius);
-  background: var(--workspace-subtle);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--control);
 }
+
 .scene-preset-list > button:hover {
   background: color-mix(in srgb, var(--primary) 9%, transparent);
 }
@@ -738,27 +762,32 @@
 .scene-preset-list > p {
   font-size: var(--text-ui-2xs);
   color: var(--muted-foreground);
-  line-height: 1.7;
-  padding: 4px;
+  line-height: 1.6;
+  padding: 2px 0;
 }
+
 .scene-camera-settings {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
+
 .scene-camera-panel > .scene-details {
-  border-top: 1px solid color-mix(in srgb, var(--divider) 60%, transparent);
+  border-top: 1px solid var(--border);
 }
+
 .scene-number [role="combobox"] {
-  height: 32px;
+  height: 34px;
   font-size: var(--text-ui-xs);
 }
+
 .scene-output-panel {
-  padding: 10px 12px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
 }
+
 .scene-preview-actions > button {
   width: 100%;
   min-height: 40px;
@@ -790,18 +819,6 @@
 }
 .scene-choice > span {
   flex: 1;
-}
-.scene-timeline {
-  min-height: 112px;
-  padding: 12px 16px;
-}
-.scene-timeline > input {
-  appearance: none;
-  height: 4px;
-  border: 0;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--foreground) 12%, transparent);
-  cursor: pointer;
 }
 .scene-timeline > input::-webkit-slider-thumb {
   appearance: none;
@@ -895,19 +912,6 @@
 }
 .scene-studio[data-screen-mode="viewport"] .scene-stage-bar {
   padding: 12px 16px;
-}
-.scene-fullscreen-playback {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 8px;
-  background: var(--workspace-subtle);
-}
-.scene-fullscreen-playback span {
-  color: var(--muted-foreground);
-  font-size: var(--text-ui-xs);
-  font-variant-numeric: tabular-nums;
 }
 
 .scene-heading {
@@ -1003,3 +1007,90 @@
 
 .scene-card-menu > button { background: var(--control); border-color: var(--border); }
 .scene-card-menu > button:hover { background: var(--secondary); }
+
+/* Synchronized camera view overlays share the renderer's CSS-pixel inset rectangle. */
+.scene-motion-legend {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 1;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: calc(100% - 24px);
+  padding: 7px 10px;
+  border-radius: 7px;
+  background: rgb(20 24 30 / 82%);
+  color: #f2f4f8;
+  font-size: 11px;
+  backdrop-filter: blur(12px);
+  border: 1px solid rgb(255 255 255 / 12%);
+}
+.scene-motion-legend > span {
+  width: 16px;
+  height: 2px;
+  background: #e9bc71;
+}
+.scene-motion-legend small {
+  color: #bdc8dc;
+  font-size: 10px;
+}
+.scene-camera-inset {
+  position: absolute;
+  z-index: 1;
+  display: block;
+  background: transparent;
+  border: 1px solid rgb(255 255 255 / 50%);
+  border-radius: 0 0 5px 5px;
+  box-shadow: 0 4px 20px rgb(0 0 0 / 30%);
+  cursor: pointer;
+}
+.scene-camera-inset > span {
+  position: absolute;
+  bottom: 100%;
+  left: -1px;
+  right: -1px;
+  min-height: 25px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 5px 5px 0 0;
+  color: #f2f4f8;
+  background: rgb(20 24 30 / 92%);
+  border: 1px solid rgb(255 255 255 / 25%);
+  font-size: 11px;
+}
+.scene-camera-inset small {
+  color: #bdc8dc;
+  font: 10px var(--font-mono);
+  white-space: nowrap;
+}
+.scene-stage-bar .scene-tool,
+.scene-stage-bar .scene-labeled-tool {
+  height: 32px;
+}
+.scene-stage-bar .scene-labeled-tool {
+  font-size: var(--text-ui-xs);
+}
+.scene-stage-bar .scene-labeled-tool:hover:not(:disabled),
+.scene-segment button:hover {
+  background: var(--secondary);
+}
+.scene-preset-list > button > svg,
+.scene-choice > svg,
+.scene-stage-hint > svg {
+  flex-shrink: 0;
+}
+.scene-shot-row > .scene-tool {
+  background: var(--secondary);
+  border: 1px solid var(--border);
+}
+.scene-stage-bar,
+.scene-stage-hint,
+.scene-timeline {
+  flex-grow: 0;
+}

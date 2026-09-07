@@ -247,13 +247,23 @@ function SceneEditor({
     [snap, setSnap] = React.useState(false),
     [shotId, setShotId] = React.useState(initial.content.shots[0].id),
     [time, setTime] = React.useState(0),
-    [preview, setPreview] = React.useState(false),
+    [viewMode, setViewMode] = React.useState<"edit" | "camera" | "observe">(
+      "edit",
+    ),
     [playing, setPlaying] = React.useState(false),
     [busy, setBusy] = React.useState(""),
     [progress, setProgress] = React.useState(0),
     [agent, setAgent] = React.useState<CanvasAgentMode | null>(null),
     [revisions, setRevisions] = React.useState(false),
     [recovery, setRecovery] = React.useState<typeof draft | null>(null);
+  const preview = viewMode === "camera";
+  const observing = viewMode === "observe";
+  const setPreview = (value: boolean) => setViewMode(value ? "camera" : "edit");
+  function togglePlayback() {
+    if (viewMode === "edit") setViewMode("camera");
+    if (time >= shot.duration) setTime(0);
+    setPlaying(!playing);
+  }
   const view = React.useRef<ViewportHandle>(null),
     file = React.useRef<HTMLInputElement>(null),
     recordAbort = React.useRef<AbortController | null>(null),
@@ -815,28 +825,25 @@ function SceneEditor({
       >
         <main className="scene-stage">
           <div className="scene-stage-bar">
-            <div className="scene-segment">
-              <button
-                aria-pressed={!preview}
-                onClick={() => {
-                  setPreview(false);
-                  setPlaying(false);
-                }}
-              >
-                编辑视角
-              </button>
-              <button
-                aria-pressed={preview}
-                onClick={() => {
-                  setPreview(true);
-                  setPlaying(false);
-                }}
-              >
-                镜头画面
-              </button>
+            <div className="scene-segment" role="group" aria-label="观察方式">
+              {(
+                [
+                  ["edit", "编辑视角"],
+                  ["camera", "镜头画面"],
+                  ["observe", "全局动线"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  aria-pressed={viewMode === value}
+                  onClick={() => setViewMode(value)}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
             <div className="scene-actions">
-              {!preview && step === "build" && (
+              {viewMode === "edit" && step === "build" && (
                 <>
                   {(
                     [
@@ -879,7 +886,7 @@ function SceneEditor({
                       </button>
                     ))}
                     <button onClick={() => view.current?.focus()}>
-                      聚焦选中物体 · F
+                      {observing ? "完整动线 · F" : "聚焦选中物体 · F"}
                     </button>
                   </PopoverContent>
                 </Popover>
@@ -930,7 +937,9 @@ function SceneEditor({
                     )}
                   </p>
                   <p>点击物体选择 · F：找到选中的物体</p>
-                  <p>「镜头画面」用于预览。要改变构图，先切回「编辑视角」。</p>
+                  <p>
+                    编辑视角用于调整构图；镜头画面展示最终取景；全局动线可在播放时观察摄像机位置与朝向。
+                  </p>
                 </PopoverContent>
               </Popover>
             </div>
@@ -947,6 +956,8 @@ function SceneEditor({
             shot={shot}
             time={time}
             preview={preview}
+            observing={observing}
+            onCameraView={() => setViewMode("camera")}
             onSelect={(id) => {
               setSelected(id);
               if (step === "output") setStep("build");
@@ -972,37 +983,20 @@ function SceneEditor({
               )}
             </div>
           )}
-          {fullscreen.mode === "viewport" && step !== "camera" && (
-            <div className="scene-fullscreen-playback">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setPreview(true);
-                  if (time >= shot.duration) setTime(0);
-                  setPlaying(!playing);
-                }}
-              >
-                {playing ? <Pause size={16} /> : <Play size={16} />}{" "}
-                {playing ? "暂停镜头" : "播放镜头"}
-              </Button>
-              <span>
-                {time.toFixed(1)} / {shot.duration.toFixed(1)} s
-              </span>
-            </div>
-          )}
           <div className="scene-stage-hint">
             <MousePointer2 size={13} />
-            {preview
-              ? "正在查看拍摄镜头 · 切回编辑视角可调整构图"
-              : selected && step === "build"
-                ? "拖动彩色箭头调整物体 · 拖动画面环绕观察"
-                : navigation === "trackpad"
-                  ? "双指平移 · 捏合缩放 · Shift + 双指环绕 · 点击物体选择"
-                  : "点击物体选择 · 拖动画面环绕 · 右键平移 · 滚轮缩放"}
+            {observing
+              ? "环绕查看摄像机动线 · 拖动时间轴定位 · 右下角同步显示镜头画面"
+              : preview
+                ? "正在查看拍摄镜头 · 切回编辑视角可调整构图"
+                : selected && step === "build"
+                  ? "拖动彩色箭头调整物体 · 拖动画面环绕观察"
+                  : navigation === "trackpad"
+                    ? "双指平移 · 捏合缩放 · Shift + 双指环绕 · 点击物体选择"
+                    : "点击物体选择 · 拖动画面环绕 · 右键平移 · 滚轮缩放"}
           </div>
-          {step === "camera" && (
-            <section className="scene-timeline">
+          {(step !== "build" || fullscreen.mode === "viewport") && (
+            <section className="scene-timeline" aria-label="镜头播放控制">
               <div className="scene-shot-row">
                 <Camera size={16} />
                 <Pick
@@ -1036,7 +1030,7 @@ function SceneEditor({
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={preview || !!busy}
+                  disabled={viewMode !== "edit" || !!busy}
                   onClick={() => recordView(time)}
                 >
                   <Camera size={15} />
@@ -1045,11 +1039,7 @@ function SceneEditor({
                 <Tool
                   label={playing ? "暂停" : "播放镜头"}
                   disabled={!!busy}
-                  onClick={() => {
-                    setPreview(true);
-                    if (time >= shot.duration) setTime(0);
-                    setPlaying(!playing);
-                  }}
+                  onClick={togglePlayback}
                 >
                   {playing ? <Pause size={17} /> : <Play size={17} />}
                 </Tool>
@@ -1076,7 +1066,7 @@ function SceneEditor({
                     aria-pressed={Math.abs(time - f.time) < 0.05}
                     onClick={() => {
                       setTime(f.time);
-                      setPreview(true);
+                      if (!observing) setPreview(true);
                       setPlaying(false);
                     }}
                   >
@@ -1223,11 +1213,12 @@ function SceneEditor({
               <SceneCameraPanel
                 shot={shot}
                 time={time}
-                preview={preview}
-                playing={playing}
+                preview={viewMode !== "edit"}
                 onPatch={shotPatch}
                 onTime={setTime}
-                onPreview={setPreview}
+                onPreview={(value) => {
+                  if (!value || !observing) setPreview(value);
+                }}
                 onPlaying={setPlaying}
                 capture={recordView}
                 observe={() => {
@@ -1242,17 +1233,6 @@ function SceneEditor({
               <section className="scene-output-panel">
                 <h2>基于场景生成图片或视频</h2>
                 <p>用当前画面生成图片，或将构图与运镜交给视频模型。</p>
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setPreview(true);
-                    if (time >= shot.duration) setTime(0);
-                    setPlaying(!playing);
-                  }}
-                >
-                  {playing ? <Pause size={15} /> : <Play size={15} />}{" "}
-                  {playing ? "暂停预览" : "播放镜头"}
-                </Button>
                 <div className="scene-output-summary">
                   <span>{shot.name}</span>
                   <small>
@@ -1267,7 +1247,9 @@ function SceneEditor({
                   <ImageIcon size={20} />
                   <span>
                     <strong>使用当前画面生成图片</strong>
-                    <small>将当前镜头 {time.toFixed(1)} 秒的画面作为参考图</small>
+                    <small>
+                      将当前镜头 {time.toFixed(1)} 秒的画面作为参考图
+                    </small>
                   </span>
                   <ChevronRight size={16} />
                 </button>

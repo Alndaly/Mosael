@@ -6,15 +6,18 @@ import type { CanvasInputMode as SceneNavigationMode } from "@/components/app/ca
 /** Capture before OrbitControls: pixel scrolling is pan, not a mouse-wheel dolly. */
 export function attachSceneNavigation(
   canvas: HTMLElement,
-  orbit: OrbitControls,
+  controls: OrbitControls | (() => OrbitControls),
   state: () => { mode: SceneNavigationMode; disabled: boolean },
 ) {
+  const activeControls = () =>
+    typeof controls === "function" ? controls() : controls;
   let gestureScale: number | null = null;
   const consume = (event: Event) => {
     event.preventDefault();
     event.stopImmediatePropagation();
   };
   const apply = (action: () => void) => {
+    const orbit = activeControls();
     // Trackpads already supply momentum. Avoid integrating the same delta again as damping.
     const damping = orbit.enableDamping;
     orbit.enableDamping = false;
@@ -25,10 +28,12 @@ export function attachSceneNavigation(
     }
   };
   const zoom = (delta: number) => {
+    const orbit = activeControls();
     const scale = Math.exp(-Math.min(Math.abs(delta), 100) * 0.01);
     apply(() => (delta < 0 ? orbit.dollyIn(scale) : orbit.dollyOut(scale)));
   };
   const wheel = (event: WheelEvent) => {
+    const orbit = activeControls();
     const { mode, disabled } = state();
     // Even a read-only preview must not zoom the surrounding application.
     if (disabled || gestureScale !== null) {

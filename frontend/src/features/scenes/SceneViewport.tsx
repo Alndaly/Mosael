@@ -1,4 +1,10 @@
 import {
+  cameraObserver,
+  observationFrame,
+  cameraInset,
+  shotPathPoints,
+} from "./sceneObservation";
+import {
   attachSceneNavigation,
   type SceneNavigationMode,
 } from "./sceneNavigation";
@@ -45,6 +51,8 @@ type Props = {
   shot: SceneShot;
   time: number;
   preview: boolean;
+  observing?: boolean;
+  onCameraView?: () => void;
   onSelect: (id: string | null) => void;
   onTransform: (id: string, patch: Partial<SceneObject>) => void;
   onError: (error: string) => void;
@@ -151,6 +159,12 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
       handle: ViewportHandle;
     } | null>(null);
     const [fatal, setFatal] = React.useState("");
+    const [inset, setInset] = React.useState({
+      width: 0,
+      height: 0,
+      right: 12,
+      bottom: 12,
+    });
     React.useImperativeHandle(
       ref,
       () => ({
@@ -194,6 +208,15 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
       const editorCamera = new THREE.PerspectiveCamera(45, 1, 0.05, 2000);
       editorCamera.position.set(12, 10, 14);
       const shootingCamera = new THREE.PerspectiveCamera(45, 1, 0.05, 2000);
+      const observerCamera = new THREE.PerspectiveCamera(45, 1, 0.05, 2000);
+      const observerOrbit = new OrbitControls(
+        observerCamera,
+        renderer.domElement,
+      );
+      observerOrbit.enableDamping = true;
+      observerOrbit.enabled = false;
+      const observer = cameraObserver();
+      scene.add(observer.group);
       const orbit = new OrbitControls(editorCamera, renderer.domElement);
       orbit.target.set(0, 1, -3);
       orbit.enableDamping = true;
@@ -203,12 +226,14 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
       );
       const removeNavigation = attachSceneNavigation(
         renderer.domElement,
-        orbit,
+        () => (latest.current.observing ? observerOrbit : orbit),
         () => ({
           mode: latest.current.navigation,
           disabled: latest.current.preview || transform.dragging,
         }),
       );
+      observerOrbit.minDistance = 0.1;
+      observerOrbit.maxDistance = 1000;
       orbit.minDistance = 0.1;
       orbit.maxDistance = 1000;
       scene.add(transform.getHelper());
@@ -262,13 +287,13 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
       function select() {
         const p = latest.current,
           o = p.selected ? objects.get(p.selected) : null;
-        if (o && !p.preview) transform.attach(o);
+        if (o && !p.preview && !p.observing) transform.attach(o);
         else transform.detach();
         transform.setMode(p.mode);
         transform.setTranslationSnap(p.snap ? 0.25 : null);
         transform.setRotationSnap(p.snap ? Math.PI / 12 : null);
         transform.setScaleSnap(p.snap ? 0.1 : null);
-        selection.visible = !!o && !p.preview;
+        selection.visible = !!o && !p.preview && !p.observing;
         if (o) selection.setFromObject(o);
       }
       function sync() {
@@ -314,7 +339,8 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
                 if (
                   !framedModels.has(o.id) &&
                   latest.current.selected === o.id &&
-                  !latest.current.preview
+                  !latest.current.preview &&
+                  !latest.current.observing
                 )
                   handle.focus();
                 framedModels.add(o.id);
@@ -331,7 +357,8 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         select();
       }
       transform.addEventListener("dragging-changed", (event) => {
-        orbit.enabled = !event.value && !latest.current.preview;
+        orbit.enabled =
+          !event.value && !latest.current.preview && !latest.current.observing;
         if (!event.value && transform.object) {
           const o = transform.object;
           latest.current.onTransform(o.userData.sceneObjectId, {
@@ -355,6 +382,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
       const pointerUp = (e: PointerEvent) => {
         if (
           latest.current.preview ||
+          latest.current.observing ||
           transform.axis ||
           Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4 ||
           e.button !== 0
@@ -389,20 +417,48 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           h = element.clientHeight;
         if (w && h) {
           renderer.setSize(w, h);
+          observerCamera.aspect = w / h;
+          observerCamera.updateProjectionMatrix();
+          setInset(cameraInset(w, h, aspectRatio(latest.current.shot)));
           editorCamera.aspect = w / h;
           editorCamera.updateProjectionMatrix();
         }
       });
       resize.observe(element);
-      let lastPath = "";
+      let lastPath = "",
+        observedShot = "";
+      function frameOverview(
+        direction: "perspective" | "front" | "top" = "perspective",
+      ) {
+        const bounds = new THREE.Box3().setFromObject(root);
+        for (const point of shotPathPoints(latest.current.shot))
+          bounds.expandByPoint(point);
+        const frame = observationFrame(
+          bounds,
+          observerCamera.aspect,
+          direction,
+        );
+        observerOrbit.target.copy(frame.center);
+        observerCamera.position.copy(frame.position);
+        observerOrbit.update();
+      }
       function render() {
         if (!alive) return;
         frameId = requestAnimationFrame(render);
         const p = latest.current;
-        orbit.enabled = !p.preview && !transform.dragging;
-        orbit.update();
-        grid.visible = !p.preview;
-        const signature = JSON.stringify(p.shot.frames);
+        orbit.enabled = !p.preview && !p.observing && !transform.dragging;
+        observerOrbit.enabled = !!p.observing;
+        if (p.observing && observedShot !== p.shot.id) {
+          frameOverview();
+          observedShot = p.shot.id;
+        }
+        if (orbit.enabled) orbit.update();
+        if (observerOrbit.enabled) observerOrbit.update();
+        const signature = JSON.stringify([
+          p.shot.frames,
+          p.shot.duration,
+          p.shot.easing,
+        ]);
         if (signature !== lastPath) {
           lastPath = signature;
           if (path) {
@@ -410,44 +466,68 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
             path.geometry.dispose();
             (path.material as THREE.Material).dispose();
           }
-          const points = Array.from(
-            { length: 101 },
-            (_, i) =>
-              new THREE.Vector3(
-                ...sampleCamera(p.shot, (p.shot.duration * i) / 100).position,
-              ),
-          );
           path = new THREE.Line(
-            new THREE.BufferGeometry().setFromPoints(points),
+            new THREE.BufferGeometry().setFromPoints(shotPathPoints(p.shot)),
             new THREE.LineBasicMaterial({
-              color: 0xc3a675,
+              color: 0xe9bc71,
               transparent: true,
-              opacity: 0.65,
+              opacity: 0.9,
+              depthTest: false,
             }),
           );
+          path.renderOrder = 9;
           scene.add(path);
         }
-        if (path) path.visible = !p.preview;
-        transform.enabled = !p.preview;
-        selection.visible = !!p.selected && !p.preview;
+        grid.visible = !p.preview;
+        if (path) path.visible = !!p.observing;
+        observer.group.visible = !!p.observing;
+        transform.enabled = !p.preview && !p.observing;
+        transform.getHelper().visible = transform.enabled && !!p.selected;
+        selection.visible = !!p.selected && !p.preview && !p.observing;
         const w = element.clientWidth,
           h = element.clientHeight;
+        if (!w || !h) return;
+        const aspect = aspectRatio(p.shot),
+          frame = sampleCamera(p.shot, p.time);
+        shootingCamera.aspect = aspect;
+        pose(shootingCamera, frame);
+        observer.update(frame, aspect);
         renderer.setScissorTest(false);
         renderer.setViewport(0, 0, w, h);
         if (p.preview) {
-          const aspect = aspectRatio(p.shot),
-            vw = Math.min(w, h * aspect),
+          const vw = Math.min(w, h * aspect),
             vh = vw / aspect;
-          shootingCamera.aspect = aspect;
-          pose(shootingCamera, sampleCamera(p.shot, p.time));
-          // The letterbox is interface chrome; scene.background remains inside the shot.
           renderer.setClearColor(0x000000, 0);
           renderer.clear();
           renderer.setViewport((w - vw) / 2, (h - vh) / 2, vw, vh);
           renderer.setScissor((w - vw) / 2, (h - vh) / 2, vw, vh);
           renderer.setScissorTest(true);
           renderer.render(scene, shootingCamera);
-        } else renderer.render(scene, editorCamera);
+        } else {
+          renderer.render(scene, p.observing ? observerCamera : editorCamera);
+          if (p.observing) {
+            const box = cameraInset(w, h, aspect);
+            renderer.setViewport(
+              w - box.width - box.right,
+              box.bottom,
+              box.width,
+              box.height,
+            );
+            renderer.setScissor(
+              w - box.width - box.right,
+              box.bottom,
+              box.width,
+              box.height,
+            );
+            renderer.setScissorTest(true);
+            renderer.clearDepth();
+            grid.visible = false;
+            if (path) path.visible = false;
+            observer.group.visible = false;
+            renderer.render(scene, shootingCamera);
+            renderer.setScissorTest(false);
+          }
+        }
       }
       function output(shot: SceneShot) {
         if (modelsPending) throw new Error("模型仍在加载，请稍后导出。");
@@ -501,6 +581,10 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
               ];
         },
         focus: () => {
+          if (latest.current.observing) {
+            frameOverview();
+            return;
+          }
           const target = latest.current.selected
             ? objects.get(latest.current.selected)
             : root;
@@ -527,6 +611,10 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           editorCamera.updateProjectionMatrix();
         },
         view: (direction) => {
+          if (latest.current.observing) {
+            frameOverview(direction);
+            return;
+          }
           const target = orbit.target.clone();
           const distance = Math.max(
             5,
@@ -673,6 +761,8 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         resize.disconnect();
         transform.dispose();
         removeNavigation();
+        observerOrbit.dispose();
+        observer.dispose();
         orbit.dispose();
         selection.geometry.dispose();
         (selection.material as THREE.Material).dispose();
@@ -708,9 +798,40 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
     }, [props.content]);
     React.useEffect(() => {
       runtime.current?.selected();
-    }, [props.selected, props.mode, props.snap, props.preview]);
+    }, [
+      props.selected,
+      props.mode,
+      props.snap,
+      props.preview,
+      props.observing,
+    ]);
+    React.useEffect(() => {
+      const el = host.current;
+      if (el)
+        setInset(
+          cameraInset(el.clientWidth, el.clientHeight, aspectRatio(props.shot)),
+        );
+    }, [props.shot.aspect]);
     return (
       <div className="scene-viewport" ref={host} aria-label="3D 场景视窗">
+        {props.observing && !fatal && (
+          <>
+            <div className="scene-motion-legend">
+              <span />
+              摄像机动线<small>蓝色为当前摄像机，虚线指向取景中心</small>
+            </div>
+            <button
+              className="scene-camera-inset"
+              style={inset}
+              aria-label="放大镜头画面"
+              onClick={props.onCameraView}
+            >
+              <span>
+                镜头画面 <small>{props.time.toFixed(1)} s ↗</small>
+              </span>
+            </button>
+          </>
+        )}
         {fatal && (
           <div className="scene-empty" role="alert">
             {fatal}
