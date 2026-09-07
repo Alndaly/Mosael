@@ -76,6 +76,10 @@ export function SearchableSelect({
   const hasDescriptions = items.some((item) => item.description);
   // 按**相邻**的同名 group 归组,不重排 —— 提供选项的一方已经排好了顺序(节点面板的
   // 分组顺序来自后端的 NODE_CATEGORIES),这里再排一次就成了第二份要维护的顺序。
+  //
+  // 代价是**调用方得把同一组的选项挨着写**:隔开写的话,同一个组名会渲染出两个小标题,
+  // 而且不会报任何错。画板的「添加」菜单栽过这一下 —— 「选一张图片」排在最末,菜单里
+  // 就出现了两个「素材库」。
   const groups = React.useMemo(() => {
     const out: Array<[string, Option[]]> = [];
     for (const item of items) {

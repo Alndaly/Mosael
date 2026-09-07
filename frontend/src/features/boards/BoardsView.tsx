@@ -663,14 +663,17 @@ function BoardDetail({
               }}
               searchPlaceholder={t("boardsAddItem")}
               options={[
+                //: **同一组的选项必须挨在一起。** SearchableSelect 按*相邻*的同名 group 归组
+                //: (它不重排,理由见那边的注释),所以隔开写就会渲染出第二个同名小标题 ——
+                //: 「选一张图片」此前排在最末,菜单里于是有两个「素材库」。
                 { value: "document", label: t("boardKindDocument"), group: t("boardsGroupAssets") },
                 { value: "scene", label: t("navScenes"), group: t("boardsGroupAssets") },
+                { value: "pick-image", label: t("boardsPickImage"), group: t("boardsGroupAssets") },
                 { value: "note", label: t("boardsAddNote"), group: t("boardsGroupCreate") },
                 { value: "image", label: t("boardsAddImage"), group: t("boardsGroupCreate") },
                 { value: "video", label: t("boardsAddVideo"), group: t("boardsGroupCreate") },
                 { value: "audio", label: t("boardsAddAudio"), group: t("boardsGroupCreate") },
                 { value: "frame", label: t("boardsAddFrame"), group: t("boardsGroupCreate") },
-                { value: "pick-image", label: t("boardsPickImage"), group: t("boardsGroupAssets") },
               ]}
               trigger={
                 <button
