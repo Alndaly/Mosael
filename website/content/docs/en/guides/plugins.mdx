@@ -146,7 +146,7 @@ which plugin is missing.
 
 ## Examples
 
-Four of them live under `plugins/examples/` in the repository:
+Five of them live under `plugins/examples/` in the repository:
 
 - `text-toolkit` — pure functions, no dependencies, no credentials.
 - `tikhub` — local script plus credentials plus network. Reads public data from Douyin, TikTok,
@@ -155,3 +155,7 @@ Four of them live under `plugins/examples/` in the repository:
   tokens, and it shows how to hand a large file to the host to download (the plugin only
   resolves the URL; progress, cancellation and retries belong to the host).
 - `mcp-everything` — an MCP hook-up with not one line of code.
+- `blender` — talks to a **Blender running on this machine**. It wraps the existing MCP
+  add-on as a plugin and declares each tool as read-only or writing (inspecting the scene and
+  its objects only read; editing the model writes), so you decide per tool what the agent may
+  do on its own and what needs your confirmation.

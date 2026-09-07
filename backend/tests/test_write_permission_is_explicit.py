@@ -91,6 +91,10 @@ GATED_IN_THE_DOMAIN = {
     "projects.py:create_workspace",
     # 接一个插件时还没有这个接入可查 —— 建出来的就归建的人(见 db.models.PluginInstance)
     "plugins.py:create_instance",
+    # bridge.connection 是取这个接入的唯一入口:不是本人的、不是 Blender 包的、
+    # 或者接入被禁用,都在那里 404/409。判据是**归属**不是角色 —— 这条路由压根没有
+    # workspace_id,它作用在「你自己的那个 Blender 连接」上。
+    "blender.py:check",
 }
 
 

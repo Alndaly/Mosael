@@ -14,10 +14,10 @@ from pathlib import Path
 from uuid import UUID, uuid4
 from pydantic import ValidationError
 from app.core.config import settings
-from app.db.models import PluginInstance, Scene3D, Scene3DModel, Scene3DRevision
+from app.db.models import PluginInstance
 from app.domain.plugins import PluginDomainError, instances, tools
 from app.domain.scene_types import SceneContent
-from app.domain.scenes import validate_model
+from app.domain.scenes import create_scene_with_model, validate_model
 from .scripts import command
 
 class BlenderDomainError(ValueError):
@@ -111,7 +111,7 @@ def load(scene, user, transfer_id):
         if str(UUID(transfer_id)) != transfer_id:
             raise ValueError()
         folder = root(scene) / transfer_id
-        record = json.loads((folder / 'transfer.json').read_text())
+        record = json.loads((folder / 'transfer.json').read_text(encoding='utf-8'))
         if record['owner'] != user.id:
             raise ValueError()
     except (ValueError, OSError, KeyError):
@@ -129,7 +129,7 @@ def history(scene, user):
     records = []
     for path in root(scene).glob('*/transfer.json'):
         try:
-            record = json.loads(path.read_text())
+            record = json.loads(path.read_text(encoding='utf-8'))
             if record['owner'] == user.id:
                 records.append(summary(record))
         except (OSError, ValueError, KeyError):
@@ -146,7 +146,7 @@ def execute(db, instance, operation, payload, workspace_id):
     if result.stat().st_size > 4*1024*1024:
         raise BlenderUnavailable('Blender 返回的数据过大。')
     try:
-        value = json.loads(result.read_text())
+        value = json.loads(result.read_text(encoding='utf-8'))
         if not isinstance(value, dict):
             raise ValueError()
         return value
@@ -207,13 +207,11 @@ def receive(db, user, scene, transfer_id):
                 'objects': [{'id': 'blender-model', 'kind': 'model', 'name': 'Blender 模型', 'model_id': model_id}]})
         except (ValidationError, KeyError) as exc:
             raise BlenderDomainError('Blender 镜头超出当前场景支持范围，未导入。') from exc
-        # Commit the new scene, model and initial revision together; preserve the source.
-        received = Scene3D(workspace_id=scene.workspace_id, name=(record['snapshot']['name']+' · Blender')[:160], content=content.model_dump(mode='json'))
-        db.add(received)
-        db.flush()
-        db.add(Scene3DModel(id=model_id, scene_id=received.id, name='Blender model', format=fmt, data=data))
-        db.add(Scene3DRevision(scene_id=received.id, revision=1, snapshot={'name': received.name, 'content': received.content}))
-        db.commit()
+        # 场景、模型、初始修订一起落地。**建行归场景域**(ADR-0003),这里只描述要建什么。
+        received = create_scene_with_model(
+            db, workspace_id=scene.workspace_id, name=record['snapshot']['name'] + ' · Blender',
+            content=content, model_id=model_id, model_name='Blender model',
+            model_format=fmt, model_data=data)
         record.update(received_scene_id=received.id, warnings=result.get('warnings', []), latest_blend=str(attempt.relative_to(folder) / 'scene.blend'))
         write_record(folder, record)
         return summary(record)

@@ -128,6 +128,32 @@ def import_model(db: Session, scene_id: str, name: str, data: bytes) -> Scene3DM
     return model
 
 
+def create_scene_with_model(db: Session, *, workspace_id: str, name: str, content: SceneContent,
+                            model_id: str, model_name: str, model_format: str,
+                            model_data: bytes) -> Scene3D:
+    """建一个场景,连同它自带的那份导入模型和初始修订,**一个事务里落地**。
+
+    Blender 接回来的场景就是这个形状:场景、模型、修订三样要么一起在,要么一起不在 ——
+    少了模型的场景在编辑器里是个空壳,而没有场景的模型没有任何入口能删掉。
+
+    `create_scene` 明确拒绝内容里带 `model_id`(先建场景、再导模型),这里是那条规则的
+    **唯一例外**:模型的字节此刻就在手上,分两步反而必然留下一个中间态。
+
+    它存在的另一个理由是**数据归属**(ADR-0003):Scene3D / Scene3DModel / Scene3DRevision
+    三张表归这个模块,所以行只在这里建;Blender 互通调它,而不是自己 `Scene3D(...)`。
+    """
+    scene = Scene3D(workspace_id=workspace_id, name=name[:160], content=content.model_dump(mode="json"))
+    db.add(scene)
+    db.flush()
+    db.add(Scene3DModel(id=model_id, scene_id=scene.id, name=model_name[:160],
+                        format=model_format, data=model_data))
+    db.add(Scene3DRevision(scene_id=scene.id, revision=1,
+                           snapshot={"name": scene.name, "content": scene.content}))
+    db.commit()
+    db.refresh(scene)
+    return scene
+
+
 def apply_scene_operations(db: Session, scene: Scene3D, base_revision: int, objects: list[dict], remove_ids: list[str], shots: list[dict] | None, name: str | None) -> Scene3D:
     """Merge object fields atomically; deletion includes descendants. No executable code."""
     from copy import deepcopy
