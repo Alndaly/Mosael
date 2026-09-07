@@ -1,3 +1,4 @@
+import { usePreferences } from "@/app/preferences";
 import { createPortal } from "react-dom";
 import { useEditor, EditorContent, useEditorState } from "@tiptap/react";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -14,7 +15,8 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export function NoteReader({ markdown }: { markdown: string }) {
-  const editor = useEditor({ extensions: noteExtensions(true), content: markdown, contentType: "markdown", editable: false,
+  const { locale } = usePreferences();
+  const editor = useEditor({ extensions: noteExtensions(true, locale), content: markdown, contentType: "markdown", editable: false,
     editorProps: { attributes: { class: "note-prose" } } });
   React.useEffect(() => { editor?.commands.setContent(markdown, {contentType:"markdown", emitUpdate:false}); }, [editor, markdown]);
   return <EditorContent editor={editor} />;
@@ -25,6 +27,7 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
   workspaceId: string; noteId: string; title?: React.ReactNode; toolbarTarget?: HTMLElement | null; editable?: boolean;
 }) {
   const s = useNoteStrings();
+  const { locale } = usePreferences();
   const change = React.useRef(onChange); change.current = onChange;
   const reference = React.useRef(onReference); reference.current = onReference;
   const [insertOpen, setInsertOpen] = React.useState(false);
@@ -36,7 +39,7 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
   const menu = useSuggestionMenu<Note>({ emptyHint: () => s.noResults });
   const upload = React.useRef<(files: File[], at?: number) => void>(() => {});
   const editor = useEditor({
-    extensions: [...noteExtensions(!editable), Placeholder.configure({ placeholder: s.placeholder }), RefSuggestion.configure({ suggestion: {
+    extensions: [...noteExtensions(!editable, locale), Placeholder.configure({ placeholder: s.placeholder }), RefSuggestion.configure({ suggestion: {
       char: "@", allowedPrefixes: null,
       items: async ({ query }) => { try { return (await listNotes(workspaceId, query)).filter(n => n.id !== noteId).slice(0, 12); } catch { return []; } },
       command: ({ editor: instance, range, props }) => {
