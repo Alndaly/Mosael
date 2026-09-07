@@ -23,7 +23,6 @@ import {
   Maximize,
   Minimize,
   ChevronRight,
-  MousePointer2,
   HelpCircle,
   Focus,
   History,
@@ -997,18 +996,6 @@ function SceneEditor({
                   取消
                 </Button>
               )}
-            </div>
-          )}
-          {/* **只说状态,不说操作。** 「双指平移 / 滚轮缩放」这类怎么用的说明在工具栏那个 ?
-              里已经写全了,再钉一条常驻的横条,等于把一句读一次就够的话永久占掉一行画布。
-              留下的两句是**状态**——「你现在看的不是编辑视角」——那是必须随时看得见的;
-              改成视口内的浮层,不再压缩画面。 */}
-          {(observing || preview) && (
-            <div className="scene-stage-status">
-              <MousePointer2 size={12} />
-              {observing
-                ? "环绕查看摄像机动线 · 拖动时间轴定位"
-                : "正在查看拍摄镜头 · 切回编辑视角可调整构图"}
             </div>
           )}
           {(step !== "build" || fullscreen.mode === "viewport") && (

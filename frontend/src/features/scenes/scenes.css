@@ -1,5 +1,10 @@
 .scene-library,
 .scene-studio {
+  /* 整页共用的两个量:左右内距,以及工具条控件的高度。**定义在页面根上** ——
+     它们要同时管到页头、步骤条和舞台内部,写在某个子块里另外几处就只能吃 fallback,
+     而 fallback 就是"看起来对了但改一处不会一起变"的由来。 */
+  --scene-stage-gutter: 12px;
+  --scene-control-height: 32px;
   height: 100%;
   min-height: 0;
   min-width: 0;
@@ -107,7 +112,9 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 20px;
+  /* 与下方内容对齐。工作区改成通栏(分割线相接、无外边距)之后,页头若还留着 20px 内缩,
+     返回箭头和标题就比画布左边缘往里错一截 —— 那正是"看着怪"的来源。 */
+  padding: 8px var(--scene-stage-gutter);
   flex-wrap: wrap;
 }
 
@@ -133,20 +140,30 @@
   gap: 5px;
   margin-right: auto;
 }
+/* 图标按钮。**尺寸跟着 --scene-control-height 走**,和这一页其余控件同高。
+   它此前完全没有可见边界:静止时只有一枚图标浮在那里,读不出按钮有多大 ——
+   返回箭头和标题之间那段空白到底是"按钮的内距"还是"多余的间隔",看不出来。
+   给一层很淡的底:够画出边界,又不至于让一排图标变成一排色块。 */
 .scene-tool {
-  width: 30px;
-  height: 30px;
+  width: var(--scene-control-height);
+  height: var(--scene-control-height);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 7px;
+  border-radius: 8px;
   flex-shrink: 0;
   color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
 }
-.scene-tool:hover,
+/* 无底的那些(列表项、文字按钮)从 0 到 5% 就够;.scene-tool 静止时已经有 4% 的底,
+   跟着 5% 等于几乎没有反应,所以它单独给一档。 */
 .scene-object-list button:hover,
 .scene-text-button:hover {
   background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  color: var(--foreground);
+}
+.scene-tool:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
   color: var(--foreground);
 }
 .scene-tool[aria-pressed="true"],
@@ -182,8 +199,8 @@
   /* **不用卡片,用分割线。** 和剪辑页同构(editor.css 的 `.editor-pane` 就是一行
      `border-inline-end: 1px solid var(--divider)`):区块之间只有 1px 线,没有圆角、没有
      间隙、没有各自的面板底色。此前这里是三张浮着的卡片,而它们外面还套着页面本身的容器 ——
-     框中框,而且每张卡片自带的不透明底色把整页的通透感切碎了。 */
-  border-top: 1px solid var(--divider);
+     框中框,而且每张卡片自带的不透明底色把整页的通透感切碎了。
+     **这里不再画上边线** —— 步骤条底下已经有一条,两条会叠在一起变成一根粗线。 */
 }
 
 .scene-objects {
@@ -252,7 +269,6 @@
 .scene-stage {
   /* 舞台上下四条的左右内距只有一个值。此前是四套(工具条 12、提示 12、时间轴 12、
      关键帧 0),于是关键帧那一行的文字比它上面的每一行都更靠左。 */
-  --scene-stage-gutter: 12px;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -418,6 +434,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-height: var(--scene-control-height);
 }
 .scene-shot-row > [role="combobox"] {
   width: 180px;
@@ -580,8 +597,6 @@
   display: contents;
 }
 .scene-side {
-  /* 侧栏内所有区块共用的左右内距。写成变量是因为它此前有三套值,而"对齐"这件事
-     只有在唯一来源时才守得住。 */
   --scene-side-gutter: 16px;
   min-width: 0;
   min-height: 0;
@@ -606,7 +621,9 @@
 .scene-steps {
   display: flex;
   gap: 24px;
-  margin: 0 20px 12px;
+  /* 线通栏,内容内缩。此前是整块内缩 —— 那条分割线因此左右各短一截,而它下面的工作区
+     是通栏的,两条边缘对不上。 */
+  padding-inline: var(--scene-stage-gutter);
   border-bottom: 1px solid var(--divider);
 }
 .scene-steps > button {
@@ -890,15 +907,10 @@
   border-radius: 5px;
 }
 @media (max-width: 1100px) {
-  .scene-workspace {
-    gap: 10px;
-    padding-inline: 12px;
-  }
-  .scene-header {
-    padding-inline: 12px;
-  }
-  .scene-steps {
-    margin-inline: 12px;
+  /* 窄屏只调这一个量,上面每一处都跟着走 —— 此前是三处各写一遍,而工作区那条还带着
+     旧模型的 gap(现在区块靠分割线相接,没有间隙)。 */
+  .scene-studio {
+    --scene-stage-gutter: 12px;
   }
   .scene-stage-bar {
     padding: 6px;
@@ -1120,9 +1132,11 @@
   font: 10px var(--font-mono);
   white-space: nowrap;
 }
-.scene-stage-bar .scene-tool,
-.scene-stage-bar .scene-labeled-tool {
-  height: 32px;
+.scene-stage-bar .scene-labeled-tool,
+.scene-shot-row > .scene-tool,
+.scene-shot-row > button,
+.scene-shot-row > [role="combobox"] {
+  height: var(--scene-control-height);
 }
 .scene-stage-bar .scene-labeled-tool {
   font-size: var(--text-ui-xs);
@@ -1132,8 +1146,7 @@
   background: var(--secondary);
 }
 .scene-preset-list > button > svg,
-.scene-choice > svg,
-.scene-stage-hint > svg {
+.scene-choice > svg {
   flex-shrink: 0;
 }
 .scene-shot-row > .scene-tool {
