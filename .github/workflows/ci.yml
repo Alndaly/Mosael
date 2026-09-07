@@ -1,0 +1,23 @@
+# 主干与 PR 的测试闸。
+#
+# **这条工作流是补上的。** 在它之前,仓库里只有 release.yml,而那个只在 `v*` tag 上触发 ——
+# 也就是说三千多条测试平时一次都不跑,推到 main 什么都不会发生。证据是 v1.1.0 前夕:主干上
+# 有一条红着的结构性测试随一个 feat 提交进来后一直没人知道,因为没有任何时刻会告诉任何人。
+#
+# release.yml 自己的注释写着「打了 tag 不等于代码是好的,这道闸就是用来把这两件事重新绑在
+# 一起的」。那修好的是 tag → 质量;这条修的是 main → 质量。
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 同一个分支上新的推送作废旧的运行 —— PR 连推几次时不必把队列排满。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    uses: ./.github/workflows/tests.yml

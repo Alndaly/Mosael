@@ -34,78 +34,7 @@ jobs:
   # 只在 ubuntu 上跑一份:这两套测试都不依赖平台。**跨平台**才需要验的那部分(打包产物的
   # 初始化顺序)已经由 build 里的 agent-sidecar 冒烟在每个平台各跑一遍。
   test:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            website/pnpm-lock.yaml
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: backend/uv.lock
-
-      # 没有 ffmpeg 的话,9 个测试文件会整体 skip —— 导出与渲染主流程都在里面。
-      # 那样这道闸看着是绿的,实际没验到最该验的那部分。
-      - name: Install ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
-
-      # 沙箱执行时禁止拉取镜像,所以测试前显式准备。环境不可用必须阻止发版,
-      # 不能让隔离用例被跳过后仍然显示测试通过。
-      - name: Prepare sandbox runtime
-        run: |
-          for i in $(seq 1 30); do
-            docker info >/dev/null 2>&1 && break
-            sleep 1
-          done
-          test "$(docker info --format '{{.OSType}} {{.MemoryLimit}} {{.SwapLimit}} {{.PidsLimit}}')" = "linux true true true"
-          docker pull python:3.13-alpine
-
-      - name: Install dependencies
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm --dir website install --frozen-lockfile
-          cd backend && uv sync --frozen --python 3.13
-
-      - name: Validate release version
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          package_version=$(node -p "require('./package.json').version")
-          tag_version="${GITHUB_REF_NAME#v}"
-          test "$package_version" = "$tag_version" || {
-            echo "::error::package.json is $package_version but release tag is $tag_version"
-            exit 1
-          }
-
-      - name: Backend tests
-        run: cd backend && uv run pytest -q
-
-      # frontend 的 build 脚本本身带 `tsc --noEmit`(见 package.json),所以类型检查
-      # 由 build 阶段覆盖,这里只跑单测。
-      - name: Frontend tests
-        run: cd frontend && pnpm vitest run
-
-      - name: Browser extension tests and build
-        run: |
-          pnpm --dir browser-extension test
-          pnpm --dir browser-extension typecheck
-          pnpm build:extension
-
-      # 官网是独立 pnpm 工作区,不会被根目录的 install/build 顺带覆盖。
-      # production build 同时检查 TypeScript、路由、MDX 和服务端渲染边界。
-      # 当前 typescript-eslint 拒绝 TS 7,不能把一条必红的 lint 伪装成门禁。
-      - name: Website tests and production build
-        run: |
-          pnpm --dir website test
-          pnpm --dir website build
+    uses: ./.github/workflows/tests.yml
 
   # 先建好草稿 Release(自动生成变更说明),两个平台的构建往同一个草稿传产物,
   # 全部成功后才转正——避免用户在「检查更新」里看到缺产物的半成品版本。
