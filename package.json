@@ -29,9 +29,9 @@
     "gen:api": "openapi-typescript backend/openapi.json -o frontend/src/api/generated/schema.d.ts"
   },
   "devDependencies": {
-    "electron": "^44.0.0",
+    "electron": "^44.2.0",
     "electron-builder": "^26.15.3",
-    "esbuild": "^0.28.1",
+    "esbuild": "^0.28.2",
     "openapi-typescript": "^7.13.0"
   },
   "build": {
