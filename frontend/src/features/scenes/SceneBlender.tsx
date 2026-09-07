@@ -261,7 +261,7 @@ export function SceneBlender({
                   )}
                   <Button
                     size="sm"
-                    variant="ghost"
+                    variant="outline"
                     disabled={busy}
                     onClick={() =>
                       void run("下载 Blender 工程", async () => {

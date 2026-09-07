@@ -155,7 +155,7 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
         </div>
         <div className="scene-actions">
           <Button
-            variant="ghost"
+            variant="outline"
             disabled={creating}
             onClick={() => void create(true)}
           >
@@ -1011,11 +1011,12 @@ function SceneEditor({
                 </Tool>
                 <div className="scene-spacer" />
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
                   disabled={preview || !!busy}
                   onClick={() => recordView(time)}
                 >
+                  <Camera size={15} />
                   记录此视角
                 </Button>
                 <Tool
@@ -1163,10 +1164,15 @@ function SceneEditor({
                     ))}
                   </div>
                   <footer>
-                    <button onClick={() => file.current?.click()}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => file.current?.click()}
+                    >
                       <Upload size={14} />
                       导入模型
-                    </button>
+                    </Button>
                   </footer>
                   <input
                     ref={file}
@@ -1259,9 +1265,11 @@ function SceneEditor({
                 </p>
                 <details className="scene-details">
                   <summary>只保存预览素材</summary>
-                  <div>
+                  <div className="scene-preview-actions">
                     <Button
-                      variant="ghost"
+                      variant="outline"
+                      disabled={!!busy}
+                      loading={busy === "保存画面"}
                       onClick={() =>
                         void work("保存画面", async () => {
                           await assetFrame(time);
@@ -1269,10 +1277,13 @@ function SceneEditor({
                         })
                       }
                     >
+                      <Camera size={16} />
                       保存当前画面
                     </Button>
                     <Button
-                      variant="ghost"
+                      variant="outline"
+                      disabled={!!busy}
+                      loading={busy === "导出镜头预览"}
                       onClick={() =>
                         void work("导出镜头预览", async () => {
                           await exportVideo();
@@ -1280,6 +1291,7 @@ function SceneEditor({
                         })
                       }
                     >
+                      <Download size={16} />
                       保存镜头预览视频
                     </Button>
                   </div>

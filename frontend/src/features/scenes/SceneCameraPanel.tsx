@@ -205,7 +205,7 @@ export function SceneCameraPanel({
           />
           {frameIndex > 0 && (
             <Button
-              variant="ghost"
+              variant="outline"
               onClick={() =>
                 onPatch({
                   frames: shot.frames.filter((_, i) => i !== frameIndex),

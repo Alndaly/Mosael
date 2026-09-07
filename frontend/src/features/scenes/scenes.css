@@ -759,6 +759,14 @@
   flex-direction: column;
   gap: 18px;
 }
+.scene-preview-actions > button {
+  width: 100%;
+  min-height: 40px;
+  height: auto;
+  justify-content: flex-start;
+  white-space: normal;
+  text-align: left;
+}
 .scene-output-summary {
   display: flex;
   flex-direction: column;
