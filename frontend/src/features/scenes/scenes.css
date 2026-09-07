@@ -958,3 +958,15 @@
     max-height: 65dvh;
   }
 }
+
+.scene-navigation-choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+.scene-navigation-choice > span {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  font-size: var(--text-ui-xs);
+}

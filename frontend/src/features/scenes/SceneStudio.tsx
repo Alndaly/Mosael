@@ -1,3 +1,8 @@
+import {
+  readSceneNavigation,
+  SCENE_NAVIGATION_KEY,
+  type SceneNavigationMode,
+} from "./sceneNavigation";
 import { useSceneFullscreen } from "./useSceneFullscreen";
 import { SceneHistory } from "./SceneHistory";
 import { SceneCameraPanel } from "./SceneCameraPanel";
@@ -212,6 +217,16 @@ function SceneEditor({
   initial: Scene;
   onBack: () => void;
 }) {
+  const [navigation, setNavigation] = React.useState(readSceneNavigation);
+  function chooseNavigation(value: string) {
+    const mode = value as SceneNavigationMode;
+    setNavigation(mode);
+    try {
+      localStorage.setItem(SCENE_NAVIGATION_KEY, mode);
+    } catch {
+      /* Private storage may be unavailable. */
+    }
+  }
   const studioRoot = React.useRef<HTMLDivElement>(null);
   const fullscreen = useSceneFullscreen(studioRoot);
   const qc = useQueryClient(),
@@ -878,17 +893,40 @@ function SceneEditor({
                 </PopoverTrigger>
                 <PopoverContent className="scene-help" align="end">
                   <strong>如何操作画面</strong>
+                  <div className="scene-navigation-choice">
+                    <span>操作设备</span>
+                    <Pick
+                      label="3D 操作设备"
+                      value={navigation}
+                      onChange={chooseNavigation}
+                      options={[
+                        ["trackpad", "触控板"],
+                        ["mouse", "鼠标"],
+                      ]}
+                    />
+                  </div>
                   <p>
-                    拖动画面：环绕观察
-                    <br />
-                    右键拖动：平移
-                    <br />
-                    滚轮：拉近或拉远
-                    <br />
-                    点击物体：选择
-                    <br />
-                    拖动彩色箭头：移动选中的物体
+                    {navigation === "trackpad" ? (
+                      <>
+                        双指滑动：平移画面
+                        <br />
+                        双指捏合：拉近或拉远
+                        <br />
+                        Shift + 双指滑动：环绕观察
+                        <br />
+                        按住触控板拖动：环绕观察
+                      </>
+                    ) : (
+                      <>
+                        左键拖动：环绕观察
+                        <br />
+                        右键拖动：平移
+                        <br />
+                        滚轮：拉近或拉远
+                      </>
+                    )}
                   </p>
+                  <p>点击物体选择 · F：找到选中的物体</p>
                   <p>「镜头画面」用于预览。要改变构图，先切回「编辑视角」。</p>
                 </PopoverContent>
               </Popover>
@@ -902,6 +940,7 @@ function SceneEditor({
             selected={step === "build" ? selected : null}
             mode={mode}
             snap={snap}
+            navigation={navigation}
             shot={shot}
             time={time}
             preview={preview}
@@ -955,7 +994,9 @@ function SceneEditor({
               ? "正在查看拍摄镜头 · 切回编辑视角可调整构图"
               : selected && step === "build"
                 ? "拖动彩色箭头调整物体 · 拖动画面环绕观察"
-                : "点击物体选择 · 拖动画面环绕 · 右键平移 · 滚轮缩放"}
+                : navigation === "trackpad"
+                  ? "双指平移 · 捏合缩放 · Shift + 双指环绕 · 点击物体选择"
+                  : "点击物体选择 · 拖动画面环绕 · 右键平移 · 滚轮缩放"}
           </div>
           {step === "camera" && (
             <section className="scene-timeline">

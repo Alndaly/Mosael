@@ -1,3 +1,7 @@
+import {
+  attachSceneNavigation,
+  type SceneNavigationMode,
+} from "./sceneNavigation";
 import { encodeShotVideo } from "./encodeVideo";
 import React from "react";
 import * as THREE from "three";
@@ -37,6 +41,7 @@ type Props = {
   selected: string | null;
   mode: "translate" | "rotate" | "scale";
   snap: boolean;
+  navigation: SceneNavigationMode;
   shot: SceneShot;
   time: number;
   preview: boolean;
@@ -196,6 +201,16 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         editorCamera,
         renderer.domElement,
       );
+      const removeNavigation = attachSceneNavigation(
+        renderer.domElement,
+        orbit,
+        () => ({
+          mode: latest.current.navigation,
+          disabled: latest.current.preview || transform.dragging,
+        }),
+      );
+      orbit.minDistance = 0.1;
+      orbit.maxDistance = 1000;
       scene.add(transform.getHelper());
       const selection = new THREE.BoxHelper(new THREE.Object3D(), 0x8da9cf);
       scene.add(selection);
@@ -657,6 +672,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         cancelAnimationFrame(frameId);
         resize.disconnect();
         transform.dispose();
+        removeNavigation();
         orbit.dispose();
         selection.geometry.dispose();
         (selection.material as THREE.Material).dispose();
