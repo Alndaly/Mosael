@@ -4,7 +4,8 @@ import struct
 from pathlib import Path
 from types import SimpleNamespace
 import pytest
-from fastapi import HTTPException
+from app.domain.blender.bridge import BlenderDomainError
+from app.domain.scenes import SceneDomainError
 from sqlalchemy import select
 from app.core.db import SessionLocal
 from app.core.config import settings
@@ -35,9 +36,9 @@ def test_manifest_passes_local_connection_config():
 def test_mcp_string_wrapper_and_missing_completion(monkeypatch, tmp_path):
     monkeypatch.setattr(bridge.tools, 'invoke', lambda *a, **k: SimpleNamespace(status='succeeded', output={'result': '{"objects": [], "name": "Scene"}'}))
     assert bridge.call(None, SimpleNamespace(id='i'), 'get_scene_info', {})['objects'] == []
-    with pytest.raises(HTTPException) as error:
+    with pytest.raises(BlenderDomainError) as error:
         bridge.execute(None, SimpleNamespace(id='i'), 'send', {'result_path':str(tmp_path/'fresh.json')}, 'ws')
-    assert error.value.status_code == 502
+    assert error.value.status == 502
 
 
 def test_connection_requires_local_owner_and_grants(monkeypatch):
@@ -49,13 +50,13 @@ def test_connection_requires_local_owner_and_grants(monkeypatch):
         i=PluginInstance(owner_user_id=user.id,package_id=bridge.PACKAGE,name='Blender',enabled=True,config={})
         db.add(i);db.commit()
         monkeypatch.setattr(settings,'local_desktop',False)
-        with pytest.raises(HTTPException) as e: bridge.connection(db,user,i.id)
-        assert e.value.status_code==409
+        with pytest.raises(BlenderDomainError) as e: bridge.connection(db,user,i.id)
+        assert e.value.status==409
         monkeypatch.setattr(settings,'local_desktop',True)
-        with pytest.raises(HTTPException) as e: bridge.connection(db,other,i.id)
-        assert e.value.status_code==404
-        with pytest.raises(HTTPException) as e: bridge.connection(db,user,i.id)
-        assert e.value.status_code==409
+        with pytest.raises(BlenderDomainError) as e: bridge.connection(db,other,i.id)
+        assert e.value.status==404
+        with pytest.raises(BlenderDomainError) as e: bridge.connection(db,user,i.id)
+        assert e.value.status==409
 
 
 def test_roundtrip_is_new_scene_and_transfers_are_owner_scoped(monkeypatch, tmp_path):
@@ -70,13 +71,13 @@ def test_roundtrip_is_new_scene_and_transfers_are_owner_scoped(monkeypatch, tmp_
     monkeypatch.setattr(bridge,'execute',fake_execute)
     with SessionLocal() as db:
         user=db.scalar(select(User));scene=db.get(Scene3D,initial['id'])
-        with pytest.raises(HTTPException) as e:bridge.send(db,user,scene,'local',0,'camera-1',glb())
-        assert e.value.status_code==409
+        with pytest.raises(BlenderDomainError) as e:bridge.send(db,user,scene,'local',0,'camera-1',glb())
+        assert e.value.status==409
         sent=bridge.send(db,user,scene,'local',scene.revision,'camera-1',glb())
         assert bridge.history(scene,SimpleNamespace(id='other'))==[]
-        with pytest.raises(HTTPException) as e:bridge.load(scene,SimpleNamespace(id='other'),sent['id'])
-        assert e.value.status_code==404
-        with pytest.raises(HTTPException):bridge.load(scene,user,'../../elsewhere')
+        with pytest.raises(BlenderDomainError) as e:bridge.load(scene,SimpleNamespace(id='other'),sent['id'])
+        assert e.value.status==404
+        with pytest.raises(BlenderDomainError):bridge.load(scene,user,'../../elsewhere')
         received=bridge.receive(db,user,scene,sent['id'])
         assert received['received_scene_id']!=scene.id
         new=db.get(Scene3D,received['received_scene_id'])
@@ -89,5 +90,7 @@ def test_roundtrip_is_new_scene_and_transfers_are_owner_scoped(monkeypatch, tmp_
         def invalid(*args):
             result=fake_execute(*args);Path(args[3]['output_path']).write_bytes(b'bad');return result
         monkeypatch.setattr(bridge,'execute',invalid)
-        with pytest.raises(HTTPException):bridge.receive(db,user,scene,sent['id'])
+        # 坏的 GLB 由**场景域**判(validate_model),不是 Blender 域 —— 从前两边都抛
+        # HTTPException,这条断言分不出来。两者边界上都翻成 422,HTTP 行为不变。
+        with pytest.raises(SceneDomainError):bridge.receive(db,user,scene,sent['id'])
         assert len(list(db.scalars(select(Scene3D))))==before

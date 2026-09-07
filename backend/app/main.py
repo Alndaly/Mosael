@@ -65,6 +65,8 @@ logger = logging.getLogger(__name__)
 from app.api.deps.auth import get_current_user
 from app.domain.permissions import NotVisible, PermissionDenied
 from app.domain.notes import NoteDomainError
+from app.domain.scenes import SceneDomainError
+from app.domain.blender.bridge import BlenderDomainError
 from app.domain.assets import reconcile_broken_media_info
 from app.domain.agent.host import reconcile_orphaned_agent_sessions
 from app.domain.browser import reconcile_browser_state
@@ -181,6 +183,15 @@ def _install_permission_handlers(app: FastAPI) -> None:
         引用的文档、工作流知识节点要读它。收在边界,那些调用方就不必反过来 catch
         HTTPException 再翻回自己的领域错误。
         """
+        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
+
+    @app.exception_handler(SceneDomainError)
+    async def _scene_error(_request: Request, exc: SceneDomainError) -> JSONResponse:
+        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
+
+    @app.exception_handler(BlenderDomainError)
+    async def _blender_error(_request: Request, exc: BlenderDomainError) -> JSONResponse:
+        """Blender 互通:502 说的是**上游**没响应,不是调用方请求有错。"""
         return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
 
     @app.exception_handler(RequestValidationError)

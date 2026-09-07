@@ -83,5 +83,6 @@ def test_其余_fastapi_耦合只减不增(path: Path) -> None:
 def test_边界确实在翻领域异常() -> None:
     """反向守卫:上面那条只说领域层不抛 HTTP,不说有人接。**没人接 = 500。**"""
     main = (DOMAIN.parent / "main.py").read_text(encoding="utf-8")
-    for name in ("NotVisible", "PermissionDenied", "NoteDomainError"):
+    for name in ("NotVisible", "PermissionDenied", "NoteDomainError",
+                 "SceneDomainError", "BlenderDomainError"):
         assert f"@app.exception_handler({name})" in main, f"{name} 没有装处理器,漏出去就是 500"
