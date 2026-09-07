@@ -37,6 +37,8 @@ from app.api.routes.fonts import router as fonts_router
 from app.api.routes.luts import router as luts_router
 from app.api.routes.plugins import router as plugins_router
 from app.api.routes.projects import router as projects_router
+from app.api.routes.scenes import router as scenes_router
+from app.api.routes.blender import router as blender_router
 from app.api.routes.scheduler import router as scheduler_router
 from app.api.routes.sequences import router as sequences_router
 from app.api.routes.settings import router as settings_router
@@ -48,8 +50,6 @@ from app.api.routes.job_worker import router as job_worker_router
 from app.api.routes.browser_worker import router as browser_worker_router
 from app.api.routes.publish_worker import router as publish_worker_router
 from app.api.routes.boards import router as boards_router
-from app.api.routes.scenes import router as scenes_router
-from app.api.routes.blender import router as blender_router
 from app.api.routes.notes import router as notes_router
 from app.api.routes.workflows import router as workflows_router
 from app.api.routes.workspaces import router as workspaces_router
@@ -64,6 +64,7 @@ from app.db.migrations import init_db
 logger = logging.getLogger(__name__)
 from app.api.deps.auth import get_current_user
 from app.domain.permissions import NotVisible, PermissionDenied
+from app.domain.notes import NoteDomainError
 from app.domain.assets import reconcile_broken_media_info
 from app.domain.agent.host import reconcile_orphaned_agent_sessions
 from app.domain.browser import reconcile_browser_state
@@ -171,6 +172,16 @@ def _install_permission_handlers(app: FastAPI) -> None:
     @app.exception_handler(PermissionDenied)
     async def _denied(_request: Request, exc: PermissionDenied) -> JSONResponse:
         return JSONResponse(status_code=403, content={"detail": str(exc)})
+
+    @app.exception_handler(NoteDomainError)
+    async def _note_error(_request: Request, exc: NoteDomainError) -> JSONResponse:
+        """笔记领域的异常按它自己声明的状态码翻。
+
+        和上面两个装在一处、理由也一样:笔记不只从 `routes/notes` 进来 —— 画板保存要校验
+        引用的文档、工作流知识节点要读它。收在边界,那些调用方就不必反过来 catch
+        HTTPException 再翻回自己的领域错误。
+        """
+        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
 
     @app.exception_handler(RequestValidationError)
     async def _invalid_request(_request: Request, exc: RequestValidationError) -> JSONResponse:
@@ -325,11 +336,11 @@ def create_app() -> FastAPI:
     app.include_router(notifications_router, prefix="/api", dependencies=protected)
     app.include_router(collaboration_router, prefix="/api", dependencies=protected)
     app.include_router(generation_router, prefix="/api", dependencies=protected)
+    app.include_router(blender_router, prefix="/api", dependencies=protected)
+    app.include_router(scenes_router, prefix="/api", dependencies=protected)
     app.include_router(scheduler_router, prefix="/api", dependencies=protected)
     app.include_router(workflows_router, prefix="/api", dependencies=protected)
     app.include_router(boards_router, prefix="/api", dependencies=protected)
-    app.include_router(blender_router, prefix="/api", dependencies=protected)
-    app.include_router(scenes_router, prefix="/api", dependencies=protected)
     app.include_router(notes_router, prefix="/api", dependencies=protected)
     app.include_router(publish_router, prefix="/api", dependencies=protected)
     app.include_router(settings_router, prefix="/api", dependencies=protected)

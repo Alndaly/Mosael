@@ -6,12 +6,8 @@ import time
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 
 from app.core.config import settings
-from app.core.db import Base, engine
-from app.db.migrations import init_db
-from app.main import app
 from tests.util import fresh_client
 
 pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")

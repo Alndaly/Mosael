@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 from app.core.db import SessionLocal
-from app.db.models import Workspace
 from app.domain.usage import record_usage, summarize_usage
 from tests.util import fresh_client
 

@@ -45,7 +45,7 @@ export function HomeView({
   creatingProject: boolean;
 }) {
   const t = useI18n();
-  const { locale } = usePreferences();
+  
   const qc = useQueryClient();
   const [renaming, setRenaming] = React.useState<Project | null>(null);
   const [deleting, setDeleting] = React.useState<Project | null>(null);

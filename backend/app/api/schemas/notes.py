@@ -29,8 +29,9 @@ class NoteRestore(ApiModel):
 
 
 class NoteAppend(ApiModel):
+    # **没有 base_revision。** 追加到末尾不需要调用方声明它读到的是哪一版 —— 见
+    # domain/notes.append_note:拿一个来自列表查询的旧修订号做 CAS,只会把并存的事判成冲突。
     workspace_id: str
-    base_revision: int = Field(ge=1)
     markdown: str = Field(min_length=1, max_length=500000)
     sources: list[NoteSource] = Field(default_factory=list, max_length=200)
 

@@ -3,10 +3,10 @@ import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
 import React from "react";
 import { StudioIndex } from "@/components/layout/StudioIndex";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Check, ChevronDown, ChevronRight, CircleDot, Copy, CornerDownRight, Database, Loader2, PanelRight, Paperclip, SearchX, Send, Sparkles, Square, Trash2, Wrench } from "lucide-react";
+import { ChevronDown, ChevronRight, CircleDot, CornerDownRight, Database, Loader2, PanelRight, Paperclip, SearchX, Send, Sparkles, Square, Trash2, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
-import { API_BASE, api, getAuthToken, importAsset, type Asset, type Project, type Workspace } from "@/api/client";
+import { API_BASE, api, getAuthToken, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { AttachmentChips, textAttachmentBlock, useComposerAttachments } from "@/components/agent/composerAttachments";
@@ -17,20 +17,20 @@ import { ModalShell } from "@/components/app/modals";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { ChatBubble } from "@/features/ai-studio/ChatBubble";
 import { SessionList } from "@/features/ai-studio/SessionList";
-import { UserMessageContent, attachmentToken, chatMediaGallery } from "@/features/ai-studio/userMessage";
-import { MessageUsageFooter, type AgentUsageEvent } from "@/features/ai-studio/messageUsage";
+import { attachmentToken, chatMediaGallery } from "@/features/ai-studio/userMessage";
+import { type AgentUsageEvent } from "@/features/ai-studio/messageUsage";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { DictateButton } from "@/components/agent/DictateButton";
 import { ModelPicker } from "@/features/ai-studio/ModelPicker";
 import { SessionSettingsMenu } from "@/components/agent/SessionSettingsMenu";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
-import { CompactionNotice, type CompactionInfo, type ContextInfo } from "@/components/agent/ContextMeter";
+import { type CompactionInfo, type ContextInfo } from "@/components/agent/ContextMeter";
 import { InspectorCard, InspectorRow } from "@/components/agent/InspectorCard";
 import { PlanCard, planHistory, type PlanStep } from "@/components/agent/PlanCard";
 import { JumpToLatest, useStickToBottom } from "@/components/agent/stickToBottom";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { InlineQuestions } from "@/components/agent/InlineQuestions";
-import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem, type ToolCall } from "@/components/agent/ToolCalls";
+import { AgentTurnContent, type AgentTimelineItem, type ToolCall } from "@/components/agent/ToolCalls";
 import { formatElapsedSeconds } from "@/lib/time";
 import { AgentStatusIcon, ToolName, toAgentStatus } from "@/components/agent/StatusIcon";
 import { readToolPayload } from "@/features/ai-studio/toolPayload";
@@ -182,19 +182,8 @@ export function ChatWorkspace({
   const running = session.data?.status === "running";
   //: 免提模式念的就是最后一条**成功**的助手回复;失败的那条由 failure 单独念(它的 content
   //: 是「智能体执行失败」这类占位,念它等于什么都没说)。
-  const lastAssistantText = React.useMemo(() => {
-    const rows = messages.data ?? [];
-    for (let index = rows.length - 1; index >= 0; index -= 1) {
-      const row = rows[index];
-      if (row.role === "assistant" && !row.error) return (row.content || "").trim();
-    }
-    return "";
-  }, [messages.data]);
-  const lastFailure = React.useMemo(() => {
-    const rows = messages.data ?? [];
-    const last = rows[rows.length - 1];
-    return last?.role === "assistant" && last.error ? last.error : "";
-  }, [messages.data]);
+  
+  
   const usageEvents = useQuery({
     queryKey: ["agent-usage-events", activeSession?.id],
     enabled: Boolean(activeSession),

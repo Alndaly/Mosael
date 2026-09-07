@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
 from sqlalchemy import select
@@ -23,7 +23,6 @@ from app.domain.publish import (
     BINDING_STATUSES,
     PUBLISH_PLATFORMS,
     TASK_STATUSES,
-    TERMINAL_TASK_STATUSES,
     PublishDomainError,
 )
 from app.media.paths import resolve_key

@@ -7,9 +7,9 @@ import types
 import pytest
 
 from app.core.db import SessionLocal
-from app.db.models import BrowserSession, Workspace
+from app.db.models import BrowserSession
 from app.domain import browser as bdom
-from app.domain.workflows import NODE_TYPES
+from app.domain.workflows import NODE_TYPES, WorkflowDomainError
 from app.domain.workflows.executors import browser as bx, registered_types
 from tests.util import fresh_client
 
@@ -78,5 +78,5 @@ def test_browser_wait_needs_a_target(monkeypatch) -> None:
     monkeypatch.setattr(bdom, "run_action", lambda *a, **k: {})
     ws = _workspace_id()
     with SessionLocal() as db:
-        with pytest.raises(Exception):
+        with pytest.raises(WorkflowDomainError, match="selector / url_contains / text"):
             bx.browser_wait(db, _wf(ws), {"session": "s1"})  # 无 selector/url_contains/text

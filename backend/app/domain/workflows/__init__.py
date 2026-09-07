@@ -438,8 +438,10 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     },
     "note_read": {
         "category": "wfCat_knowledge", "label": "wfNode_note_read", "description": "wfNode_note_read_desc",
+        # 两个字段不分档(见 tests/test_advanced_split_is_sane.py):藏起唯一的可选项,
+        # 省下的空间抵不上多出来的那一次点击。
         "config": {"note_id": {"type": "template", "required": True},
-                   "revision": {"type": "number", "advanced": True}},
+                   "revision": {"type": "number"}},
         "outputs": ["note_id", "title", "text", "markdown", "tags", "revision", "citation_url"],
         "output_types": {"note_id": "text", "text": "text", "markdown": "text", "tags": "json", "revision": "number"},
     },

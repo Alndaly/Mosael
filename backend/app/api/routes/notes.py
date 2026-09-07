@@ -4,7 +4,7 @@ from sqlalchemy import select, delete
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas.notes import NoteAppend, NoteContent, NoteCreate, NoteOut, NoteRestore, NoteUpdate, NoteReferenceOut
 from app.db.models import AgentMessage, AgentSession, Note, NoteRevision
-from app.domain.notes import create_note, get_note, save_note, snapshot, read_reference, query_notes
+from app.domain.notes import append_note, create_note, get_note, save_note, read_reference, query_notes
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 
 router = APIRouter(tags=["notes"])
@@ -71,13 +71,8 @@ def permanently_delete(note_id: str, workspace_id: str, db: DbSession, user: Cur
 @router.post("/notes/{note_id}/append", response_model=NoteOut)
 def append(note_id: str, body: NoteAppend, db: DbSession, user: CurrentUser):
     ensure_workspace_perm(db, user, body.workspace_id, "edit")
-    note = get_note(db, body.workspace_id, note_id)
-    if note.trashed:
-        raise HTTPException(409, "请先从回收站恢复笔记")
-    data = snapshot(note)
-    data["markdown"] = "\n\n".join(filter(None, [note.markdown, body.markdown]))
-    data["sources"] = note.sources + [s.model_dump() for s in body.sources]
-    return save_note(db, body.workspace_id, note_id, body.base_revision, NoteContent.model_validate(data))
+    return append_note(db, body.workspace_id, note_id, body.markdown,
+                       [s.model_dump() for s in body.sources])
 
 
 @router.get("/notes/{note_id}/revisions")

@@ -305,7 +305,7 @@ function synthesize(run: SubagentRun): { timeline: AgentTimelineItem[]; messages
 export function SubagentSessionView({ run, workspaceId }: { run: SubagentRun; workspaceId: string }) {
   const t = useI18n();
   const [view, setView] = React.useState<"chat" | "trace">("chat");
-  const { timeline, messages } = React.useMemo(() => synthesize(run), [run]);
+  const { messages } = React.useMemo(() => synthesize(run), [run]);
   const mediaGallery = React.useMemo(() => chatMediaGallery(messages as ChatMessage[]), [messages]);
 
   if (!run.archive) {

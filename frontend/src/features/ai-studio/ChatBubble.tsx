@@ -64,7 +64,7 @@ export function ChatBubble({
   /** 念这一条记在哪个工作区的账上,也决定要不要 ai 权限(见 routes/agent.speak)。 */
   workspaceId: string;
 }) {
-  const t = useI18n();
+  
   const payload = message.payload as
     | {
         usage?: { duration_seconds?: number };

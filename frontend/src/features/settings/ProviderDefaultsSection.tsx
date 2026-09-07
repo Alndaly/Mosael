@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
-import { Combobox } from "@/components/app/combobox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
@@ -17,18 +16,6 @@ const NONE = "__none__";
  *  也不是"哪些能力能设默认模型"(后端 DEFAULTABLE_CAPABILITIES)。三者名字曾经长得一模一样,
  *  照着错的那份抄过一次(模型设置弹窗漏了 embedding)。 */
 const SECTIONS_SHOWN_BY_DEFAULT = ["chat", "image", "video"] as const;
-
-function uniqueNonEmpty(values: Array<string | null | undefined>): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  values.forEach((value) => {
-    const trimmed = value?.trim();
-    if (!trimmed || seen.has(trimmed)) return;
-    seen.add(trimmed);
-    out.push(trimmed);
-  });
-  return out;
-}
 
 type CapabilityModel = components["schemas"]["CapabilityModelOut"];
 

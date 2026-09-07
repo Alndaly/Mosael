@@ -18,6 +18,7 @@ stderr 尾巴 —— 因为失败时唯一有用的东西就是子进程自己�
 from __future__ import annotations
 
 import logging
+import subprocess
 
 import pytest
 
@@ -75,7 +76,7 @@ def test_secrets_in_the_argv_do_not_reach_the_log(caplog) -> None:
 def test_a_timeout_is_recorded_not_just_raised(caplog) -> None:
     """超时也是一种结果 —— 它比失败更容易被当成"卡住了"。"""
     with caplog.at_level(logging.INFO, logger="app.core.child_process"):
-        with pytest.raises(Exception):
+        with pytest.raises(subprocess.TimeoutExpired):
             run_logged(["/bin/sleep", "5"], what="睡太久的", timeout=0.2, capture_output=True)
 
     warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]

@@ -19,10 +19,8 @@
 
 from __future__ import annotations
 
-import pytest
 from fastapi.testclient import TestClient
 
-from app.core.config import settings
 from app.main import app
 from tests.util import fresh_client
 

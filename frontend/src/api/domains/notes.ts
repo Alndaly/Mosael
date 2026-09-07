@@ -20,7 +20,10 @@ export function listNotes(workspaceId: string, q = "", trashed = false, offset =
 export const getNote = (workspaceId: string, id: string) => api<Note>(`/api/notes/${id}?workspace_id=${encodeURIComponent(workspaceId)}`);
 export const createNote = (workspaceId: string, body: Partial<NoteContent>) => api<Note>("/api/notes", { method: "POST", body: JSON.stringify({ ...emptyNote, ...body, workspace_id: workspaceId }) });
 export const saveNote = (note: Note) => api<Note>(`/api/notes/${note.id}`, { method: "PATCH", body: JSON.stringify({ ...note, base_revision: note.revision }) });
-export const appendNote = (note: Note, markdown: string, sources: NoteSource[]) => api<Note>(`/api/notes/${note.id}/append`, { method: "POST", body: JSON.stringify({ workspace_id: note.workspace_id, base_revision: note.revision, markdown, sources }) });
+// **不带 base_revision。** 追加到末尾与文档别处的编辑可交换,服务端按它当前的修订落库
+// (见 backend/app/domain/notes.append_note);带上手里这份常常是旧的修订号,只会把
+// 一次正常的追加判成冲突。
+export const appendNote = (note: Note, markdown: string, sources: NoteSource[]) => api<Note>(`/api/notes/${note.id}/append`, { method: "POST", body: JSON.stringify({ workspace_id: note.workspace_id, markdown, sources }) });
 export const noteHref = (id: string, revision?: number | null) => `#/notes?note=${encodeURIComponent(id)}${revision ? `&revision=${revision}` : ""}`;
 export function openNote(id: string) { window.location.hash = noteHref(id); }
 

@@ -632,7 +632,6 @@ export function SceneNode({ data, selected }: NodeProps) {
     </footer>
   </div>;
 }
-
 //: **写成 Record<kind, …> 而不是随手一个对象** —— 后端加一种 item kind 时,这里漏登记
 //: 不会报错,只会让那种节点在画布上凭空消失。标上类型,漏一种就编译不过。
 export const BOARD_NODE_TYPES: Record<BoardItem["kind"], React.ComponentType<NodeProps>> = {

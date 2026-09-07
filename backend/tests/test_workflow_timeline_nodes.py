@@ -13,7 +13,7 @@ from __future__ import annotations
 import pytest
 
 from app.core.db import SessionLocal
-from app.db.models import Sequence, Track, Workflow
+from app.db.models import Track, Workflow
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import get_executor
 from tests.util import fresh_client

@@ -1243,7 +1243,6 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         onSpawn={onGenerate ? spawnLinked : undefined}
         onTrimRequest={onTrim ? (id) => setTrimming((current) => (current === id ? null : id)) : undefined}
         trimmingId={trimming}
-        onGroup={groupSelection}
       />
 
       {workspaceId && <NotePickerDialog workspaceId={workspaceId} open={!!pickingDocument} onOpenChange={open => { if (!open) setPickingDocument(null); }} onPick={note => { if (pickingDocument) patch(pickingDocument, {note_id: note.id, note_revision: note.revision, text: note.title}); }}/>}
@@ -1369,7 +1368,6 @@ function ItemToolbar({
   onSpawn,
   onTrimRequest,
   trimmingId,
-  onGroup,
 }: {
   nodes: Node[];
   setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
@@ -1386,7 +1384,6 @@ function ItemToolbar({
   /** 当前开着剪辑面板的那一项 —— 按钮据此变成按下态,再点一次就收起。 */
   trimmingId?: string | null;
   /** 把当前选中的这几项圈成一组。 */
-  onGroup?: () => void;
 }) {
   const t = useI18n();
   const { openImagePreview } = useImagePreview();

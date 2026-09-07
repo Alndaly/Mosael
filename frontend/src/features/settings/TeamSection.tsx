@@ -5,18 +5,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
   Clock,
-  Download,
-  KeyRound,
   LogOut,
   Pencil,
-  Send,
-  ShieldCheck,
-  SlidersHorizontal,
-  Sparkles,
   Trash2,
-  Upload,
   UserPlus,
-  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -39,9 +31,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { SettingsBlock, SettingsBlockTitle, SettingsGroup, SettingsList, SettingsListBlock, SettingsListItem } from "@/features/settings/ui";
 import { relativeTime } from "@/lib/time";
 

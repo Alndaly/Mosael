@@ -4,7 +4,7 @@ from datetime import timedelta
 
 from app.core.db import SessionLocal
 from app.db.models import Job, TaskEvent, now
-from app.domain.jobs import clear_finished_jobs, prune_task_events, reconcile_orphaned_jobs
+from app.domain.jobs import prune_task_events, reconcile_orphaned_jobs
 from tests.util import fresh_client
 
 

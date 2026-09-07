@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import time
 
+import pytest
+
 from app.core.db import SessionLocal
 from app.core.security import mint_service_session
 from app.db.models import ToolConfirmation, User, Workspace
@@ -76,7 +78,9 @@ class Chat:
 
 
 def _stub_judge(monkeypatch, verdict, *, record: list | None = None):
-    def fake(request):
+    # 签名与真的 `ask` 一致 —— 替身悄悄少一个参数,就等于把"调用点有没有传对"这件事
+    # 从测试里挖掉了(那正是 user_id 漏了整整一版没人发现的原因)。
+    def fake(request, *, user_id):
         if record is not None:
             record.append(request)
         if isinstance(verdict, Exception):
@@ -282,7 +286,7 @@ def test_a_card_under_review_is_not_shown_yet(monkeypatch) -> None:
     chat = Chat()
     chat.set_rules({"run_code": "judge"})
 
-    def slow(request):
+    def slow(request, *, user_id):
         time.sleep(0.4)
         return ALLOW
 
@@ -467,3 +471,34 @@ def test_the_lists_are_workspace_level() -> None:
         json={"rules": {"http_allow_hosts": ["api.example.com"]}},
     )
     assert saved.status_code == 200, saved.text
+
+
+def test_判断者拿不到模型时说的是那句话_不是_NameError() -> None:
+    """**这条测试是补写的,因为这条路从没跑过。**
+
+    上面每一条都把 `judge.ask` 整个换掉,于是它内部引用了一个不存在的名字这件事,两千多条
+    测试一条都没看见。而失败在 autopilot 里被 `except` 吞成一行日志——判断者从来没工作过,
+    每次都静默退回问人,看起来只像"这功能不好使"。
+
+    所以这里**不 stub**,真调一次:没有配默认对话模型时,应该说"没有可用于判断的对话模型",
+    而不是抛 NameError。
+    """
+    from app.domain.agent import judge
+
+    request = judge.build_request("publish", {"asset_id": "a1"}, {})
+    with pytest.raises(RuntimeError, match="没有可用于判断的对话模型"):
+        judge.ask(request, user_id=None)
+
+
+def test_judge_ask_必须显式说明替谁判断() -> None:
+    """判断花的是这个人的额度、用的是他的钥匙 —— 做成必填关键字,漏掉的调用点当场报错,
+    而不是安静地退回"没有可用模型"。"""
+    import inspect
+
+    from app.domain.agent import judge
+
+    parameter = inspect.signature(judge.ask).parameters["user_id"]
+    assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameter.default is inspect.Parameter.empty
+    with pytest.raises(TypeError):
+        judge.ask(judge.build_request("publish", {}, {}))  # type: ignore[call-arg]

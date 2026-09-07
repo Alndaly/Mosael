@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from app.core.db import SessionLocal
 from app.core.security import find_session, mint_service_session
-from app.db.models import AuthSession, ToolConfirmation, User
+from app.db.models import ToolConfirmation, User
 from tests.util import fresh_client
 
 

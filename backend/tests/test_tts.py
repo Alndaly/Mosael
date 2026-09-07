@@ -26,7 +26,8 @@ def test_synthesis_fails_instead_of_inventing_audio(tmp_path) -> None:
     import pytest
 
     out = tmp_path / "out.wav"
-    with pytest.raises(Exception):
+    # 同上:断言的是拒绝且不留半个 wav,不是拒绝的方式。
+    with pytest.raises(Exception):  # noqa: B017
         tts_worker.synthesize({"engine": "f5-tts", "text": "你好,测试一段语音合成。"}, str(out))
     assert not out.exists()
 

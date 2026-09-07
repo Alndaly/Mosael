@@ -1,0 +1,133 @@
+---
+title: Notes and knowledge base
+description: The words in your workspace — save excerpts from chats, transcripts and boards, write them up, then feed them to workflows and the canvas.
+order: 8
+updated: 2026-09-07
+version: 1.1.0
+---
+
+The media library holds your **footage**. Notes hold your **words**. Both belong to the workspace,
+so everyone in it sees the same set.
+
+Notes are not just a scratchpad — they are the **other half of your material**: the agent can save
+an answer into one, a whole transcript or subtitle track can land in one, the canvas can reference
+one, and workflows can search and read them. So this page is less about typing and more about
+**how things get in, and how they get back out**.
+
+## Getting things in
+
+Four places offer **Save to notes**, and everything written this way carries its **source**:
+
+| From | What lands in the note |
+| --- | --- |
+| An answer in AI Studio | That answer, sourced back to the message |
+| A sticky note on a board | The note text, sourced back to that board |
+| Editor → Transcript | The whole transcript; with a selection, only the selected lines |
+| Editor → Subtitles | The whole subtitle track; translations are written alongside the original |
+
+The dialog can **create a note** or **append to an existing one**. Transcripts and subtitles add a
+choice of **body shape**:
+
+- **Prose** — consecutive sentences join into paragraphs, with a break after a pause longer than
+  1.5 seconds. Pick this when the text is a draft you intend to rewrite.
+- **Quotes with timecodes** — one quote block per line, followed by the asset name and time. Pick
+  this when you want to check each line back against the video.
+
+Both shapes **share the same sources**: provenance is a fact, and it does not change with layout.
+
+Appending to a note **someone else is editing** does not interrupt them — the appended text merges
+into their current draft and they keep typing, with no conflict prompt.
+
+## Writing
+
+The body is a what-you-see editor with one toolbar row: paragraph style (body text, headings one
+through six), bold, italic, strikethrough, three list kinds (bulleted, numbered, task), an insert
+menu (quote, code block, divider, image), web links, tables, and undo/redo.
+
+A few things worth calling out:
+
+- **Images** can be pasted, dragged in, or inserted from the toolbar; select one to edit its link
+  and alt text in place.
+- **Code blocks** take a language, get syntax highlighting in both light and dark themes, and have
+  a copy button. They stay valid Markdown and participate in undo.
+- **Type `@`** to reference another note. The reference **pins the revision it was made against**,
+  but opens the latest content by default; use **View referenced version** to see the pinned one.
+- Three modes sit at the top right: **Write / Read / Markdown**. The last one shows the source.
+
+The status beside the title says where you stand: `Saved` / `Saving…` / `Draft pending`. **Closing
+the page loses nothing** — an unsaved draft stays on this device and comes back the next time you
+open the note.
+
+### If you hit a conflict
+
+When two people change the same part of the same note, you see *This note has a newer version*.
+**Neither side is overwritten**:
+
+1. Press **Retry save** to try again, or
+2. Press **Load the latest version** — it **exports your draft as a .md file first**, then pulls the
+   server's copy.
+
+So the worst case leaves you with an extra .md file, not with lost words.
+
+## Keeping it tidy
+
+The list on the left supports search (titles, body, tags) plus **Favorites**, **Trash** and
+**Topic** filters.
+
+**Select notes** turns on multi-select: hold <kbd>Shift</kbd> for a range, select the whole current
+list, then favorite, export Markdown, move to trash, restore or delete permanently in bulk.
+Right-clicking one note offers open, rename, duplicate and copy note link.
+
+**Import Markdown** sits in the list header and accepts `.md` / `.markdown` / `.txt`, up to 500 KB
+per file.
+
+**Delete permanently** removes the note **and all of its revisions**, with no way back. Existing
+references stay where they are, but their source can no longer be opened.
+
+## Revision history
+
+Every save is an immutable revision. **More → Revision history** lists them by time; pick one to
+read it. **Restore this version** **creates a new revision** rather than erasing the history after it.
+
+## Sources and properties
+
+**More → Sources and properties** lists where this note came from, plus its **topics** and **tags**
+(both comma-separated). Excerpts saved from assets, chats or boards appear here automatically, and
+clicking one goes back to the original — asset excerpts carry their timecode with them.
+
+## Getting back out: canvas and workflows
+
+### Infinite canvas
+
+Boards gained a **Document** node: pick a note and it pins that revision's content. Connect it to a
+text, image, video or voice node and the content flows downstream as input. The node offers **Open
+original**, **Update to the latest version** and **Replace note**.
+
+When the original is trashed or deleted, the node says **Note unavailable** instead of quietly
+passing an empty string downstream.
+
+### Workflows
+
+The workflow **Knowledge** category has three nodes:
+
+| Node | What it does |
+| --- | --- |
+| **Search notes** | Searches titles, content, tags and topics; returns cited excerpts |
+| **Read note** | Outputs the full Markdown and a source link; leave the revision empty for the latest, or pin one |
+| **Save as note** | Saves text or upstream output as a new note, **without** overwriting existing ones |
+
+**Search notes** returns excerpts rather than full text — connect it to **Read note** when you need
+the whole thing. That keeps a search across dozens of notes from blowing up the context.
+
+## Agent citations
+
+Notes and web sources in an agent's answer are **clickable**, and open the exact revision that was
+cited. What it searched and which version it used stay in the answer for you to check — you are not
+asked to trust that it remembered correctly.
+
+## Related
+
+- [Creative boards](/docs/guides/boards) — how a document node connects to generation nodes
+- [Visual workflows](/docs/guides/workflows) — where the three knowledge nodes sit in a graph
+- [Editing and color](/docs/guides/editing) — where transcripts and subtitles become notes
+- [AI Studio](/docs/guides/ai-studio) — saving excerpts from a conversation

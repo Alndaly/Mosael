@@ -17,8 +17,7 @@ from app.api.schemas import (
     InvitationOut,
     InvitationListOut,
 )
-from app.domain.permissions import PermissionDenied, ensure_deployment_admin, ensure_workspace_access, ensure_workspace_perm, ensure_workspace_role, workspace_role
-from app.core.roles import ROLES
+from app.domain.permissions import PermissionDenied, ensure_workspace_access, ensure_workspace_perm, ensure_workspace_role, workspace_role
 from app.db.models import (
     Asset,
     Job,

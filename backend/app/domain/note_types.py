@@ -23,8 +23,8 @@ class NoteSource(BaseModel):
             from urllib.parse import urlsplit
             try:
                 parsed = urlsplit(self.url)
-            except ValueError:
-                raise PydanticCustomError("note_url", "来源链接必须是有效网址")
+            except ValueError as exc:
+                raise PydanticCustomError("note_url", "来源链接必须是有效网址") from exc
             if parsed.scheme not in ("http", "https") or not parsed.hostname:
                 raise PydanticCustomError("note_url", "来源链接必须是 http 或 https 地址")
         elif not self.id:

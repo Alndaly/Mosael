@@ -20,7 +20,6 @@ import {
   cutClipRangesBatch,
   deleteClip,
   deleteClipsBatch,
-  rippleDeleteClip,
   rippleDeleteClipsBatch,
   exportSequence,
   type ExportParams,
@@ -48,7 +47,6 @@ import {
   trimClip,
   undoSequence,
   type Asset,
-  type Font,
   type Job,
   type Project,
   type Sequence,
@@ -62,7 +60,7 @@ import { ModalShell } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/components/agent/CanvasAgentChat";
 import { clipEnd } from "@/domain/timeline/geometry";
-import { projectTranscript, type SegmentLike } from "@/domain/timeline/transcriptProjection";
+import { projectTranscript, transcriptSegmentsFromApi, type SegmentLike } from "@/domain/timeline/transcriptProjection";
 import { type LeftTab, useEditorPanels } from "@/features/editor/useEditorPanels";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { HANDLE_COLUMN, HANDLE_ROW, handleOffset, useResizableSidebar } from "@/lib/useResizableSidebar";
@@ -399,20 +397,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         }),
       );
       const segmentsByAsset = new Map<string, SegmentLike[]>();
-      fetched.forEach((tr, index) => {
-        if (tr) {
-          segmentsByAsset.set(
-            assetIds[index],
-            (tr.segments ?? []).map((s: { id: string; start_time: number; end_time: number; text: string; speaker?: string }) => ({
-              id: s.id,
-              start_time: s.start_time,
-              end_time: s.end_time,
-              text: s.text,
-              speaker: s.speaker,
-              tokens: [],
-            })),
-          );
-        }
+      fetched.forEach((transcript, index) => {
+        // 与逐字稿面板**同一个映射函数** —— 用户在两页看到的句子数必须来自同一份投影。
+        if (transcript) segmentsByAsset.set(assetIds[index], transcriptSegmentsFromApi(transcript.segments));
       });
       const sentences = projectTranscript(clips, segmentsByAsset);
       if (sentences.length === 0) throw new Error(t("subtitleNoTranscript"));

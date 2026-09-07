@@ -2,11 +2,11 @@ import React from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { CheckCircle2, ChevronDown, ChevronRight, CircleDashed, Clock, History, Loader2, Move, PanelRight, SkipForward, X, XCircle } from "lucide-react";
 
-import { api, listJobEvents, listWorkflowRuns, type Asset, type Job, type TaskEvent } from "@/api/client";
+import { api, listJobEvents, listWorkflowRuns, type Asset, type Job } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
 import type { RegistryLike } from "@/features/workflows/analyze";
-import { assetOutputs, parseIso, toSteps, type Step } from "@/features/workflows/runSteps";
+import { assetOutputs, parseIso, toSteps } from "@/features/workflows/runSteps";
 import { JobChildrenList, useJobChildren } from "@/components/layout/JobChildren";
 import { WorkflowFailureDetails } from "@/features/workflows/WorkflowFailureDetails";
 import { DOCKABLE_PANEL_FRAME_CLASS, PANEL_HEADER_CLASS, useFloatingPanel } from "@/features/workflows/useFloatingPanel";

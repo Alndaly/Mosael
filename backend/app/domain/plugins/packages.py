@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import PluginInstance, PluginPackage
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.manifest import PATH_KEY, ManifestError, manifest_of, parse
+from app.domain.plugins.manifest import PATH_KEY, ManifestError, parse
 from app.domain.plugins.migrations import CANONICAL_FILENAME, LEGACY_FILENAMES, migrate_directory
 
 logger = logging.getLogger(__name__)

@@ -12,8 +12,16 @@
       "value": "mosael",
       "why": "发布账号的登录分区名(persist:<前缀>-<accountId>)。两边拼的是**同一个磁盘目录**:后端按它清理/迁移账号目录,Electron 按它创建会话分区。改了其中一个,所有已登录的发布账号的 cookie 会凭空消失,用户得重新登录每一个平台 —— 而且不会有任何报错。",
       "implementations": [
-        { "runtime": "python", "location": "backend/app/core/db.py", "symbol": "PARTITION_PREFIX" },
-        { "runtime": "electron", "location": "electron/publish/accountViews.ts", "symbol": "PARTITION_PREFIX" }
+        {
+          "runtime": "python",
+          "location": "backend/app/core/db.py",
+          "symbol": "PARTITION_PREFIX"
+        },
+        {
+          "runtime": "electron",
+          "location": "electron/publish/accountViews.ts",
+          "symbol": "PARTITION_PREFIX"
+        }
       ]
     },
     {
@@ -21,10 +29,43 @@
       "value": 56,
       "why": "内嵌发布视图从顶部这么多像素处开始铺,上方那条留给「登录中 · 返回」工具栏。Electron 按它定视图边界,前端按它定那条栏的高度。两者不等就会露出一条缝,缝里是 App 自己的顶栏 —— 看着像画面穿帮,而不像一个 bug,所以很容易被当成本来就长这样。原生窗口按钮、应用和素材对比顶栏也共用这一高度,避免中心偏移。",
       "implementations": [
-        { "runtime": "electron", "location": "electron/publish/types.ts", "symbol": "EMBED_HEADER_HEIGHT" },
-        { "runtime": "frontend", "location": "frontend/src/app/App.tsx", "symbol": "PUBLISH_BAR_HEIGHT" },
-        { "runtime": "electron", "location": "electron/window-chrome.cjs", "symbol": "WINDOW_CHROME_HEIGHT" },
-        { "runtime": "frontend", "location": "frontend/src/lib/windowChrome.ts", "symbol": "WINDOW_CHROME_HEIGHT" }
+        {
+          "runtime": "electron",
+          "location": "electron/publish/types.ts",
+          "symbol": "EMBED_HEADER_HEIGHT"
+        },
+        {
+          "runtime": "frontend",
+          "location": "frontend/src/app/App.tsx",
+          "symbol": "PUBLISH_BAR_HEIGHT"
+        },
+        {
+          "runtime": "electron",
+          "location": "electron/window-chrome.cjs",
+          "symbol": "WINDOW_CHROME_HEIGHT"
+        },
+        {
+          "runtime": "frontend",
+          "location": "frontend/src/lib/windowChrome.ts",
+          "symbol": "WINDOW_CHROME_HEIGHT"
+        }
+      ]
+    },
+    {
+      "name": "note_append_separator",
+      "value": "\\n\\n",
+      "why": "后端把追加的内容用它接到笔记正文后面;前端**按同一个串判断一次改动是不是纯追加**,是才把它并进正在编辑的草稿(见 features/notes/appendMerge)。两边不等时不会报错 —— 前端只是再也认不出追加,于是每次从逐字稿/字幕导出都把正在写作的人推进冲突条,而那看起来像是「协作就是这么难用」,不像一个可修的 bug。",
+      "implementations": [
+        {
+          "runtime": "python",
+          "location": "backend/app/domain/notes.py",
+          "symbol": "APPEND_SEPARATOR"
+        },
+        {
+          "runtime": "frontend",
+          "location": "frontend/src/features/notes/appendMerge.ts",
+          "symbol": "APPEND_SEPARATOR"
+        }
       ]
     }
   ]

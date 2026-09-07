@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.db import SessionLocal
-from app.db.models import Asset, Job
+from app.db.models import Job
 from app.domain.assets import proxies as proxyjobs
 import app.domain.jobs as jobs_bus
 from app.media import proxy as proxymod

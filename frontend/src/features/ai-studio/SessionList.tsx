@@ -13,7 +13,6 @@ import {
   type SessionGroup,
   type SessionGroupKind,
 } from "@/api/client";
-import type { components } from "@/api/generated/schema";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";

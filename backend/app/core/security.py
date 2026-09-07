@@ -7,7 +7,7 @@ from datetime import timedelta
 
 from app.core.config import LOGIN_SESSION_TTL, SERVICE_SESSION_TTL
 # 哈希是纯函数,单独一个模块 —— 迁移那边也要用它,而 core/db 不能认识 core/security(会成环)。
-from app.core.tokens import TOKEN_SCHEME, token_digest
+from app.core.tokens import token_digest
 
 """Password hashing (stdlib PBKDF2) and opaque session tokens."""
 

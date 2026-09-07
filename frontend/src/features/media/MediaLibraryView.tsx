@@ -14,7 +14,6 @@ import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
 import { toast } from "sonner";
 import { useI18n } from "@/app/preferences";
 import { AssetCompareView } from "@/features/media/AssetCompareView";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";

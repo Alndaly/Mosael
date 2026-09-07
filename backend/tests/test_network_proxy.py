@@ -5,7 +5,6 @@ import os
 import pytest
 
 from app.domain.network import (
-    DEFAULT_BYPASS_HOSTS,
     LOOPBACK_NO_PROXY,
     apply_to_process,
     effective_no_proxy,

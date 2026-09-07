@@ -41,6 +41,42 @@ export interface SegmentLike {
   tokens?: TokenLike[];
 }
 
+/** `/api/assets/{id}/transcript` 回的一段。`tokens` 可缺 —— 老转写没有词级对齐。 */
+export interface ApiTranscriptSegment {
+  id: string;
+  start_time: number;
+  end_time: number;
+  text: string;
+  speaker?: string | null;
+  tokens?: Array<{ start_time: number; end_time: number; text: string }> | null;
+}
+
+/**
+ * 把接口回的逐字稿转成可投影的段落。**这是唯一一处做这件事的地方。**
+ *
+ * 它存在是因为它曾经有两份:逐字稿面板照抄了 `tokens`,生成字幕那条路把它写死成 `[]`。
+ * 于是同一份稿子、同一个接口、同一个投影函数,一页显示 156 句,另一页切出几条一分钟的巨块 ——
+ * 因为没有词级时间戳时 `transcriptSegmentsForEditing` 会退到按标点猜句子的兜底路径。
+ *
+ * 两份实现的一致性可以靠契约去钉(这个项目有 7 组),但**同一个函数被两个调用方喂不同数据**
+ * 钉不住:两边代码长得不一样才会引起注意,而这里两边长得几乎一样。所以不是加一条比较两者的
+ * 测试,而是让第二份映射不存在。守卫见 `transcriptProjection.singleSource.test.ts`。
+ */
+export function transcriptSegmentsFromApi(segments: ApiTranscriptSegment[] | null | undefined): SegmentLike[] {
+  return (segments ?? []).map((segment) => ({
+    id: segment.id,
+    start_time: segment.start_time,
+    end_time: segment.end_time,
+    text: segment.text,
+    speaker: segment.speaker,
+    tokens: (segment.tokens ?? []).map((token) => ({
+      start_time: token.start_time,
+      end_time: token.end_time,
+      text: token.text,
+    })),
+  }));
+}
+
 export interface ProjectedSegment {
   segmentId: string;
   clipId: string;
@@ -104,8 +140,13 @@ function restoreTokenFormatting(tokens: TokenLike[], segmentText: string): Token
   return restored;
 }
 
+/**
+ * 句末标点后**必须跟空白**这条要求只对 ASCII 句号成立 —— 它把 `3.5` 挡在切分之外。中文的
+ * `。！？` 后面从不空格,同一条要求会让整段永远匹配不到第一个分支,于是"切不开"降级成
+ * "一整段"。两类标点分开写:ASCII 保留空白守卫,CJK 直接切。
+ */
 function fallbackParagraphSegments(segment: SegmentLike): SegmentLike[] {
-  const parts = segment.text.match(/.*?[.!?。！？…](?:["'”’）)\]]+)?(?:\s+|$)|.+$/gu)
+  const parts = segment.text.match(/.*?(?:[.!?](?:["'”’」』）)\]]+)?(?:\s+|$)|[。！？…](?:["'”’」』）)\]]+)?)|.+$/gu)
     ?.map((part) => part.trim())
     .filter(Boolean) ?? [];
   if (parts.length <= 1) return [segment];

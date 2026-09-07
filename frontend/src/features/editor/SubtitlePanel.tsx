@@ -9,7 +9,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { readSubtitleStyle, SUBTITLE_FONTS, TRANSLATE_LANGS, type SubtitleStyle } from "@/features/editor/subtitleStyle";
 import { uploadedFontStack } from "@/features/editor/FontFaces";
 import type { Font } from "@/api/client";
@@ -33,6 +32,9 @@ import { dubEngineChoices } from "@/features/editor/dubEngines";
 import { detectScript, dubTextOf, hasVoiceFor, pickVoiceFor, unspeakable } from "@/features/editor/dubLanguage";
 import { clipEnd, formatTimecode } from "@/domain/timeline/geometry";
 import { PILL } from "@/features/editor/pill";
+import { SaveToNote } from "@/features/notes/SaveToNote";
+import { useNoteStrings } from "@/features/notes/strings";
+import { noteExportVariants, type NoteExportLine } from "@/features/editor/noteExport";
 import { useEditorStore } from "@/stores/editorStore";
 import { formatBytes } from "@/lib/bytes";
 import { cn } from "@/lib/utils";
@@ -76,6 +78,7 @@ export function SubtitlePanel({
   onDeleteClip: (clipId: string) => void;
 }) {
   const t = useI18n();
+  const noteStrings = useNoteStrings();
   const playhead = useEditorStore((state) => state.playhead);
   const selectClip = useEditorStore((state) => state.selectClip);
 
@@ -86,6 +89,25 @@ export function SubtitlePanel({
         .flatMap((track) => track.clips ?? [])
         .sort((a, b) => a.timeline_start - b.timeline_start),
     [sequence],
+  );
+
+  // 双语字幕存成一条 `原文\n译文`(见下面的 SubtitleTranslate),导出时拆回两行 ——
+  // 揉成一行会让笔记里中英黏在一起,而那正是双语最该分开的地方。
+  const noteLines: NoteExportLine[] = React.useMemo(
+    () => subtitles.map((clip) => {
+      const [primary, ...rest] = (clip.text_override ?? "").split("\n");
+      return {
+        text: primary ?? "", secondary: rest.join("\n") || undefined,
+        start: clip.timeline_start, end: clipEnd(clip),
+        // 字幕是文本片段,没有来源素材;不编一个出处出来(见 buildNoteExport)。
+        assetId: undefined,
+      };
+    }),
+    [subtitles],
+  );
+  const noteVariants = React.useMemo(
+    () => noteExportVariants(noteLines, sequence.name, noteStrings),
+    [noteLines, noteStrings, sequence.name],
   );
 
   // 列轴要和行轴一起锁:不声明 grid-cols 的话隐式列按 max-content 定尺,样式条里任何一段
@@ -191,6 +213,10 @@ export function SubtitlePanel({
           <SubtitleTranslate workspaceId={sequence.workspace_id} subtitles={subtitles} onApplyTexts={onApplyTexts} />
         )}
         {subtitles.length > 0 && <SubtitleDub sequence={sequence} subtitles={subtitles} />}
+        {subtitles.length > 0 && (
+          <SaveToNote workspaceId={sequence.workspace_id} variants={noteVariants} className={PILL}
+            label={noteStrings.saveAll} />
+        )}
       </div>
     </div>
   );

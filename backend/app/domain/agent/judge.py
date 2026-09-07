@@ -85,17 +85,21 @@ def build_request(tool: str, args: dict[str, Any], rules: dict[str, Any]) -> Jud
     return JudgeRequest(tool=tool, args=dict(args or {}), rules=dict(rules or {}))
 
 
-def ask(request: JudgeRequest) -> Verdict:
+def ask(request: JudgeRequest, *, user_id: str | None) -> Verdict:
     """问一次模型。抛异常 = 判不了 —— 调用方按拒绝处理(见 autopilot)。
 
-    单独开一次数据库会话:判断跑在后台线程上,不该借用请求那条。用工作区默认的对话模型,不带
-    思考档位 —— 这是一次分类,不是一次创作。
+    单独开一次数据库会话:判断跑在后台线程上,不该借用请求那条。用**这个人**默认的对话模型
+    (`resolve_default` 只认他自己设的那一行),不带思考档位 —— 这是一次分类,不是一次创作。
+
+    `user_id` 是必填关键字:判断花的是他的额度、用的是他的钥匙。做成必填而不是可选,是因为
+    漏掉的那个调用点会安静地退回"没有可用模型",而调用方把它当成判不了、退回问人 ——
+    一次静默降级,看起来就像"判断者这功能就是不好使"。
     """
     from app.core.db import SessionLocal
     from app.domain.ai_chat import chat, target_for
 
     with SessionLocal() as db:
-        profile = _pick_profile(db)
+        profile = _pick_profile(db, user_id)
         if profile is None:
             raise RuntimeError("没有可用于判断的对话模型")
         target = target_for(db, profile)
@@ -110,7 +114,7 @@ def ask(request: JudgeRequest) -> Verdict:
     return _parse(raw, model=target.model)
 
 
-def _pick_profile(db):
+def _pick_profile(db, user_id: str | None):
     from app.domain import provider_models
 
     default = provider_models.resolve_default(db, "chat", user_id)

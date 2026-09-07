@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from app.db.models import ProviderDefault, ProviderModel, ProviderProfile
+from app.db.models import ProviderDefault, ProviderModel
 
 """每种能力的默认供应商解析(统一到 ProviderProfile)。
 capability: chat / image / video / tts / podcast。"""

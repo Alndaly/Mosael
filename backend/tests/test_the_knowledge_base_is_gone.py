@@ -20,7 +20,6 @@ RATCHET = True
 
 import pathlib
 
-import pytest
 
 BACKEND = pathlib.Path(__file__).resolve().parents[1]
 

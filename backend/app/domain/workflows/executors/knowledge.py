@@ -1,11 +1,10 @@
 """Knowledge nodes share the note domain and never read across workspaces."""
-from fastapi import HTTPException
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.db.models import Workflow
 from app.domain.note_types import NoteContent
-from app.domain.notes import create_note, query_notes, read_reference
+from app.domain.notes import NoteDomainError, create_note, query_notes, read_reference
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import register
 
@@ -47,8 +46,9 @@ def note_read(db: Session, workflow: Workflow, config: dict) -> dict:
     revision = _integer(config.get("revision"), None, 1, 1000000000, "版本")
     try:
         ref = read_reference(db, workflow.workspace_id, str(config.get("note_id") or ""), revision)
-    except HTTPException as exc:
-        raise WorkflowDomainError(str(exc.detail)) from exc
+    except NoteDomainError as exc:
+        # 领域到领域的翻译:笔记读不到,对工作流来说是这个节点失败。
+        raise WorkflowDomainError(str(exc)) from exc
     return {**ref, "text": ref["markdown"]}
 
 
@@ -63,5 +63,5 @@ def note_create(db: Session, workflow: Workflow, config: dict) -> dict:
         note = create_note(db, workflow.workspace_id, content)
         ref = read_reference(db, workflow.workspace_id, note.id)
         return {"note_id": ref["note_id"], "title": ref["title"], "revision": ref["revision"], "citation_url": ref["citation_url"]}
-    except (HTTPException, ValidationError) as exc:
-        raise WorkflowDomainError(str(exc.detail) if isinstance(exc, HTTPException) else str(exc)) from exc
+    except (NoteDomainError, ValidationError) as exc:
+        raise WorkflowDomainError(str(exc)) from exc

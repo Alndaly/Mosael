@@ -18,7 +18,7 @@ Kimi**,而不是显示错了。
 from __future__ import annotations
 
 from app.core.db import SessionLocal
-from app.db.models import ProviderModel, User
+from app.db.models import User
 from app.domain import provider_defaults, provider_models
 from tests.util import add_provider, fresh_client
 

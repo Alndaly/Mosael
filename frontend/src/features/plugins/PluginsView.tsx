@@ -22,13 +22,12 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { EmptyState } from "@/components/layout/EmptyState";
-import { ModalShell } from "@/components/app/modals";
 import { PluginMarketDialog } from "@/features/plugins/PluginMarket";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
-import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab";
+import { usePersistentSelection } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 
 /**

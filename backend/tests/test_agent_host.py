@@ -8,7 +8,6 @@ from app.domain.agent import host
 from app.ai.sidecar.adapters import TurnResult
 from app.core.db import SessionLocal
 from app.core.config import settings
-from app.db.models import ProviderProfile
 from tests.util import add_provider, fresh_client
 
 

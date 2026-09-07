@@ -12,9 +12,6 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from app.core.db import SessionLocal
-from app.db.models import User
-from app.main import app
 from tests.util import fresh_client, second_client
 
 

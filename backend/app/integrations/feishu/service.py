@@ -388,7 +388,6 @@ def handle_incoming(
 
     reply_text = ""
     error: str | None = None
-    new_adapter_session: str | None = None
     new_adapter_state: object | None = None
     try:
         if provider_error:
