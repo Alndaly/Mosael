@@ -3,7 +3,7 @@ import { Check, ChevronDown } from "lucide-react";
 
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { FIELD_TRIGGER_CLASS } from "@/components/ui/field-trigger"
+import { FIELD_TRIGGER_CLASS, FIELD_TRIGGER_CHEVRON } from "@/components/ui/field-trigger"
 import { cn } from "@/lib/utils";
 
 export type ComboboxOption = {
@@ -106,7 +106,7 @@ export function Combobox({
           <span className={value ? "text-foreground" : "text-muted-foreground"}>
             {selected?.label ?? (value || placeholder)}
           </span>
-          <ChevronDown size={14} className="shrink-0 opacity-60" />
+          <ChevronDown className={FIELD_TRIGGER_CHEVRON} />
         </button>
       </PopoverTrigger>
       <PopoverContent className={cn("w-[var(--radix-popover-trigger-width)] p-0", contentClassName)} align="start">

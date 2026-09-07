@@ -3,6 +3,7 @@ import { Check, ChevronDown } from "lucide-react";
 
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { FIELD_TRIGGER_CLASS, FIELD_TRIGGER_CHEVRON } from "@/components/ui/field-trigger";
 import { cn } from "@/lib/utils";
 
 type Option = {
@@ -92,10 +93,11 @@ export function SearchableSelect({
           <button ref={triggerRef}
             type="button"
             disabled={disabled}
-            className={cn(
-              "flex h-8 w-full min-w-0 items-center justify-between gap-1 rounded-md border border-field-border bg-field px-2.5 text-ui-sm text-foreground focus-visible:border-primary focus-visible:outline-none disabled:cursor-default disabled:opacity-50",
-              className,
-            )}
+            /* **共用 FIELD_TRIGGER_CLASS**,不再手抄一份。抄出来的那份是 h-8 / gap-1 /
+               px-2.5,而 Select 和 Combobox 是 h-10 / gap-1.5 / px-3 —— 三种控件并排在同一行
+               表单里时(插件的「新建连接」就是下拉+输入框+按钮),下拉比旁边矮 8px、左右
+               留白也窄一截。那正是这个 token 的注释点名要消灭的情况。 */
+            className={cn(FIELD_TRIGGER_CLASS, "text-foreground", className)}
           >
             {/* min-w-0:flex 子项默认不肯收缩,truncate 会失效(见 field-trigger.ts)。
                 未选中时走 placeholder 色:和输入框的 placeholder 同一个视觉约定 —— 用正文色
@@ -103,7 +105,7 @@ export function SearchableSelect({
             <span className={cn("min-w-0 truncate", !selected && "text-muted-foreground")}>
               {selected?.label ?? placeholder ?? ""}
             </span>
-            <ChevronDown size={14} className="shrink-0 opacity-50" />
+            <ChevronDown className={FIELD_TRIGGER_CHEVRON} />
           </button>
         )}
       </PopoverTrigger>
