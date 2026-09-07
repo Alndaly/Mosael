@@ -1,3 +1,4 @@
+import { NoteReferenceField } from "@/features/notes/NotePickerDialog";
 import { ACTION_MENU } from "@/components/ui/floating";
 import React from "react";
 import { ActionMenu } from "@/components/layout/ActionMenu";
@@ -3185,6 +3186,8 @@ function NodeInspector({
                     </SelectContent>
                   </Select>
                 </div>
+              ) : node.type === "note_read" && key === "note_id" ? (
+                <NoteReferenceField workspaceId={workspaceId} value={String(value ?? "")} onChange={next => setConfig(key, next)} />
               ) : options ? (
                 spec?.options ? (
                   <Select value={String(value ?? spec.default ?? "")} onValueChange={(next) => setConfig(key, next)}>

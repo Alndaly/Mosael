@@ -1,3 +1,4 @@
+import type { components } from "@/api/generated/schema";
 import { api } from "@/api/transport";
 
 export type NoteSource = {
@@ -22,3 +23,11 @@ export const saveNote = (note: Note) => api<Note>(`/api/notes/${note.id}`, { met
 export const appendNote = (note: Note, markdown: string, sources: NoteSource[]) => api<Note>(`/api/notes/${note.id}/append`, { method: "POST", body: JSON.stringify({ workspace_id: note.workspace_id, base_revision: note.revision, markdown, sources }) });
 export const noteHref = (id: string, revision?: number | null) => `#/notes?note=${encodeURIComponent(id)}${revision ? `&revision=${revision}` : ""}`;
 export function openNote(id: string) { window.location.hash = noteHref(id); }
+
+export type NoteReference = components["schemas"]["NoteReferenceOut"];
+export const getNoteReference = (workspaceId: string, id: string, revision?: number) =>
+  api<NoteReference>(`/api/notes/${encodeURIComponent(id)}/reference?${new URLSearchParams({workspace_id: workspaceId, ...(revision ? {revision: String(revision)} : {})})}`);
+export const noteReferenceQuery = (workspaceId: string, id: string, revision?: number) => ({
+  queryKey: ["note-reference", workspaceId, id, revision],
+  queryFn: () => getNoteReference(workspaceId, id, revision), enabled: Boolean(workspaceId && id), retry: false as const,
+});

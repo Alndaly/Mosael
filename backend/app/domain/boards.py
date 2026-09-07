@@ -51,7 +51,7 @@ class BoardRevisionConflict(BoardDomainError):
 #: 图片和视频**分开两种而不是合成一个 media**:它们在画板上的样子和操作都不同 ——
 #: 图片是一张静止的参考,视频要能就地播;而"从这张图生成视频"是图片才有的动作,
 #: 反过来"抽一帧"是视频才有的。合成一种的话每处都要先分辨一次它到底是哪个。
-ITEM_KINDS = ("note", "image", "video", "audio", "frame")
+ITEM_KINDS = ("note", "image", "video", "audio", "frame", "document")
 
 #: 必须指向素材库一份的那几种。空着的话存得下、打开却是个空白框。
 _NEEDS_ASSET = ("image", "video", "audio")
@@ -228,6 +228,15 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
                 raise BoardDomainError(f"未知的颜色:{color};可用的是 {'、'.join(NOTE_COLORS)}")
             item["color"] = color
 
+        if kind == "document":
+            note_id, revision = entry.get("note_id"), entry.get("note_revision")
+            if note_id is not None or revision is not None:
+                if not isinstance(note_id, str) or not note_id.strip() or len(note_id) > 64:
+                    raise BoardDomainError("文档节点需要有效的笔记 ID")
+                if isinstance(revision, bool) or not isinstance(revision, int) or revision < 1:
+                    raise BoardDomainError("文档节点需要有效的引用版本")
+                item["note_id"], item["note_revision"] = note_id.strip(), revision
+
         asset_id = entry.get("asset_id")
         if asset_id is not None:
             if not isinstance(asset_id, str) or not asset_id.strip():
@@ -301,6 +310,24 @@ def get_board(db: Session, workspace_id: str, board_id: str) -> Board:
     return board
 
 
+def _validate_document_references(db: Session, workspace_id: str, canvas: dict, existing: dict | None = None) -> None:
+    from fastapi import HTTPException
+    from app.domain.notes import read_reference
+    # Existing broken references remain movable/removable after a source is deleted.
+    retained = {(item["id"], item.get("note_id"), item.get("note_revision"))
+                for item in (existing or {}).get("items", []) if item["kind"] == "document"}
+    for item in canvas["items"]:
+        if item["kind"] != "document" or not item.get("note_id"):
+            continue
+        if (item["id"], item["note_id"], item["note_revision"]) in retained:
+            continue
+        try:
+            ref = read_reference(db, workspace_id, item["note_id"], item["note_revision"])
+            item["text"] = ref["title"]
+        except HTTPException as exc:
+            raise BoardDomainError(str(exc.detail)) from exc
+
+
 def create_board(
     db: Session, *, workspace_id: str, name: str, canvas: Any = None, actor_id: str | None = None
 ) -> Board:
@@ -309,6 +336,7 @@ def create_board(
         name=(name or "").strip() or "新画板",
         canvas=normalize_canvas(canvas),
     )
+    _validate_document_references(db, workspace_id, board.canvas)
     db.add(board)
     db.flush()
     from app.domain.collaboration import record_activity
@@ -356,6 +384,7 @@ def update_board(
         next_name = cleaned
     if canvas is not None:
         next_canvas = _keep_arrived_results(board.canvas, normalize_canvas(canvas))
+        _validate_document_references(db, workspace_id, next_canvas, board.canvas)
     if next_name == board.name and next_canvas == board.canvas:
         return board
     result = db.execute(

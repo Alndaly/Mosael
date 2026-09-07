@@ -86,3 +86,31 @@ def save_note(db: Session, workspace_id: str, note_id: str, base_revision: int, 
     db.commit()
     db.refresh(note)
     return note
+
+
+def query_notes(db: Session, workspace_id: str, query: str = "", *, limit: int = 20, offset: int = 0, trashed: bool = False) -> list[Note]:
+    """Literal, workspace-scoped knowledge lookup; excludes the recycle bin."""
+    import json
+    from sqlalchemy import or_, cast, String
+    stmt = select(Note).where(Note.workspace_id == workspace_id, Note.trashed == trashed)
+    for term in query.strip().split():
+        escaped = json.dumps(term, ensure_ascii=True)[1:-1]
+        stmt = stmt.where(or_(Note.title.icontains(term, autoescape=True), Note.markdown.icontains(term, autoescape=True),
+                              *(cast(column, String).icontains(value, autoescape=True)
+                                for column in (Note.tags, Note.topics) for value in (term, escaped))))
+    return list(db.scalars(stmt.order_by(Note.updated_at.desc(), Note.id).offset(offset).limit(limit)))
+
+
+def read_reference(db: Session, workspace_id: str, note_id: str, revision: int | None = None) -> dict:
+    """Resolve a source only after checking workspace and recycle-bin state."""
+    from urllib.parse import quote
+    note = get_note(db, workspace_id, note_id)
+    if note.trashed:
+        raise HTTPException(409, "引用的笔记已在回收站，请先恢复笔记")
+    version = note.revision if revision is None else revision
+    row = db.get(NoteRevision, (note.id, version))
+    if row is None:
+        raise HTTPException(404, "引用版本不存在")
+    return {"note_id": note.id, "revision": version, "title": row.snapshot["title"],
+            "markdown": row.snapshot["markdown"], "tags": row.snapshot["tags"],
+            "citation_url": f"#/notes?note={quote(note.id)}&revision={version}"}

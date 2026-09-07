@@ -3,7 +3,7 @@ import { api } from "@/api/transport";
 /** 创意画板上的一项；表单与运行态归节点自己所有。 */
 export interface BoardItem {
   id: string;
-  kind: "note" | "image" | "video" | "audio" | "frame";
+  kind: "note" | "image" | "video" | "audio" | "frame" | "document";
   x: number;
   y: number;
   width?: number;
@@ -11,6 +11,8 @@ export interface BoardItem {
   text?: string;
   color?: string;
   asset_id?: string;
+  note_id?: string;
+  note_revision?: number;
   form?: {
     prompt?: string;
     provider?: string;

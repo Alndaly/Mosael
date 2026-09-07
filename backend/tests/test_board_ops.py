@@ -105,7 +105,7 @@ def test_新建的默认大小两端是同一组数() -> None:
         for key, value in ast.literal_eval(
             body.replace("{ width:", "{'width':").replace(", height:", ", 'height':").replace("\n", " ")
             .replace("note:", "'note':").replace("image:", "'image':").replace("video:", "'video':")
-            .replace("audio:", "'audio':").replace("frame:", "'frame':")
+            .replace("audio:", "'audio':").replace("frame:", "'frame':").replace("document:", "'document':")
         ).items()
     }
     assert front == DEFAULT_SIZE, f"两端的默认大小分了岔:前端 {front} / 后端 {DEFAULT_SIZE}"

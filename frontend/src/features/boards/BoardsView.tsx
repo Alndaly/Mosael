@@ -112,6 +112,7 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
   if (open) {
     return (
       <BoardDetail
+        key={open.id}
         board={open}
         workspaceId={workspace.id}
         onBack={() => setOpenId(null)}
@@ -180,7 +181,7 @@ function BoardCard({ board, onOpen, onDelete }: { board: Board; onOpen: () => vo
     <>
       <div className="group relative min-w-0">
         <button type="button" onClick={onOpen} className="grid w-full gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          <CanvasPreview items={(board.canvas?.items ?? []).map(item => ({ ...item, assetId: item.asset_id, label: item.text || t(({note:"boardsAddNote",image:"kindImage",video:"kindVideo",audio:"kindAudio",frame:"boardsAddFrame"} as const)[item.kind]) }))} edges={board.canvas?.edges} />
+          <CanvasPreview items={(board.canvas?.items ?? []).map(item => ({ ...item, assetId: item.asset_id, label: item.text || t(({note:"boardsAddNote",image:"kindImage",video:"kindVideo",audio:"kindAudio",frame:"boardsAddFrame",document:"boardKindDocument"} as const)[item.kind]) }))} edges={board.canvas?.edges} />
           <span className="truncate pr-8 text-ui-md font-semibold">{board.name}</span>
           <span className="text-ui-sm text-muted-foreground">{t("boardsItemCount").replace("{n}", String(count))} · {relativeTime(board.updated_at, locale)}</span>
         </button>
@@ -230,7 +231,7 @@ function BoardDetail({
   //: 全览默认开着 —— 大图时它最有用,而"图大不大"只有用户自己知道。记在本地。
   const [minimapMode, setMinimap] = usePersistentTab<"on" | "off">("board-minimap", "on", ["on", "off"] as const);
   const showMinimap = minimapMode === "on";
-  const [canvas, setCanvas] = React.useState<Canvas | null>(null);
+  const [canvas, setCanvas] = React.useState<Canvas | null>(board.canvas);
   const [picking, setPicking] = React.useState<{ kind: MediaKind; place: (assetId: string) => void } | null>(null);
   //: 画布交出来的把手。顶栏那组按钮要和身份胶囊并排,而它们依赖画布内部状态。
   //: **类型从画布导出**,别在这儿再抄一份 —— 抄的那份少一个动作不会报错,只会让按钮点了没反应。
@@ -297,11 +298,6 @@ function BoardDetail({
   // The token and the projection it describes are one unit. A background refetch must never advance
   // only the token while leaving an older local canvas in place, or that stale canvas could pass CAS.
   const confirmedCanvas = React.useRef<Canvas>(board.canvas);
-  React.useEffect(() => {
-    revision.current = board.revision;
-    confirmedCanvas.current = board.canvas;
-    setCanvas(null);
-  }, [board.id]);
   const acceptBoard = React.useCallback(
     (fresh: Board) => {
       revision.current = fresh.revision;
@@ -589,6 +585,7 @@ function BoardDetail({
 
   const save = React.useCallback(
     (next: Canvas) => {
+      if (JSON.stringify(next) === JSON.stringify(confirmedCanvas.current)) return Promise.resolve();
       return updateBoard(board.id, { workspace_id: workspaceId, base_revision: revision.current, canvas: next })
         .then((fresh) => {
           acceptBoard(fresh);
@@ -653,11 +650,12 @@ function BoardDetail({
                 if (kind === "pick-image") {
                   setPicking({ kind: "image", place: (assetId) => api?.add("image", { asset_id: assetId }) });
                 } else {
-                  api?.add(kind as "note" | "image" | "video" | "audio" | "frame");
+                  api?.add(kind as "note" | "image" | "video" | "audio" | "frame" | "document");
                 }
               }}
               searchPlaceholder={t("boardsAddItem")}
               options={[
+                { value: "document", label: t("boardKindDocument"), group: t("boardsGroupAssets") },
                 { value: "note", label: t("boardsAddNote"), group: t("boardsGroupCreate") },
                 { value: "image", label: t("boardsAddImage"), group: t("boardsGroupCreate") },
                 { value: "video", label: t("boardsAddVideo"), group: t("boardsGroupCreate") },
