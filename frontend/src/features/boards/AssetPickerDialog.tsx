@@ -10,10 +10,10 @@ import type { MediaKind } from "@/features/boards/boardNodes";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
- * 往画板上贴一张图:从素材库里挑。
+ * 往画板上贴一份现成素材:从素材库里挑。
  *
- * **只列图片。** 画板上的 image 项渲染的是 `<img>`,把视频/音频列出来等于让人选一个贴上去
- * 之后是空白框的东西 —— 选择器里能选到的,就应该是贴上去能看的。
+ * **一次只列一类**(由 `kind` 决定)。给视频节点列图片,等于让人选一个贴上去之后是空白框的
+ * 东西 —— 选择器里能选到的,就应该是贴上去能看的。
  */
 /** 行尾那句说明:尺寸、时长 —— 挑素材时真正要看的东西。取不到就不写,不编。 */
 function describe(asset: Asset): string {

@@ -653,8 +653,11 @@ function BoardDetail({
             <SearchableSelect
               value=""
               onValueChange={(kind) => {
-                if (kind === "pick-image") {
-                  setPicking({ kind: "image", place: (assetId) => api?.add("image", { asset_id: assetId }) });
+                //: `pick-<kind>` 一条分支通吃三类。此前只认死 "pick-image",于是新增视频/音频
+                //: 就得再抄两遍同样的三行 —— 而 AssetPickerDialog 本来就是按 kind 列的。
+                if (kind.startsWith("pick-")) {
+                  const media = kind.slice("pick-".length) as MediaKind;
+                  setPicking({ kind: media, place: (assetId) => api?.add(media, { asset_id: assetId }) });
                 } else if (kind === "scene") {
                   setPickingScene(true);
                 } else {
@@ -669,6 +672,8 @@ function BoardDetail({
                 { value: "document", label: t("boardKindDocument"), group: t("boardsGroupAssets") },
                 { value: "scene", label: t("navScenes"), group: t("boardsGroupAssets") },
                 { value: "pick-image", label: t("boardsPickImage"), group: t("boardsGroupAssets") },
+                { value: "pick-video", label: t("boardsPickVideo"), group: t("boardsGroupAssets") },
+                { value: "pick-audio", label: t("boardsPickAudio"), group: t("boardsGroupAssets") },
                 { value: "note", label: t("boardsAddNote"), group: t("boardsGroupCreate") },
                 { value: "image", label: t("boardsAddImage"), group: t("boardsGroupCreate") },
                 { value: "video", label: t("boardsAddVideo"), group: t("boardsGroupCreate") },
