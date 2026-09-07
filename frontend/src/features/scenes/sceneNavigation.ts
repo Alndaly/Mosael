@@ -1,16 +1,7 @@
 import type { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
-export type SceneNavigationMode = "trackpad" | "mouse";
-export const SCENE_NAVIGATION_KEY = "mosael.scene.navigation";
-export function readSceneNavigation(): SceneNavigationMode {
-  try {
-    return localStorage.getItem(SCENE_NAVIGATION_KEY) === "mouse"
-      ? "mouse"
-      : "trackpad";
-  } catch {
-    return "trackpad";
-  }
-}
+export type { CanvasInputMode as SceneNavigationMode } from "@/components/app/canvasInputMode";
+import type { CanvasInputMode as SceneNavigationMode } from "@/components/app/canvasInputMode";
 
 /** Capture before OrbitControls: pixel scrolling is pan, not a mouse-wheel dolly. */
 export function attachSceneNavigation(

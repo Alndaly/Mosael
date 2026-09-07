@@ -1,3 +1,4 @@
+import { useCanvasInputMode } from "@/components/app/canvasInputMode";
 import { FLOATING_SURFACE } from "@/components/ui/floating";
 import React from "react";
 import { createPortal } from "react-dom";
@@ -266,6 +267,7 @@ interface Props {
 }
 
 function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, onSpeak, onTrim, onGrabFrame, models, showMinimap = true, onDropFiles, uploading, rightOverlayWidth = 0, commentMode = false, comments = [], members = [], currentUserId, activeCommentId, onSelectComment, onCreateComment, onMoveComment, onDeleteComment, onExitCommentMode, onReady }: Props) {
+  const [inputMode] = useCanvasInputMode();
   const t = useI18n();
   const rf = React.useRef<ReactFlowInstance | null>(null);
   const surface = React.useRef<HTMLDivElement | null>(null);
@@ -912,12 +914,8 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         }}
         className={cn(!ready && "opacity-0", commentMode && "cursor-crosshair")}
         proOptions={{ hideAttribution: false }}
-        /* 触控板约定(Figma / Miro 那套):双指滑动 = 平移,捏合 = 缩放。**和工作流画布同一套** ——
-           React Flow 默认 zoomOnScroll:true,而 macOS 触控板双指滑动发出的正是 wheel 事件,
-           于是「想拖画布」变成了「缩放」。捏合发的是 ctrlKey 的 wheel,归 zoomOnPinch 管,
-           所以关掉 zoomOnScroll 不影响捏合;鼠标用户按住 ctrl/⌘ 滚轮同样落进这条,仍可缩放。 */
-        panOnScroll
-        zoomOnScroll={false}
+        panOnScroll={inputMode === "trackpad"}
+        zoomOnScroll={inputMode === "mouse"}
         zoomOnPinch
         maxZoom={2.5}
         deleteKeyCode={["Backspace", "Delete"]}

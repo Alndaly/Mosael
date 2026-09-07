@@ -1,3 +1,5 @@
+import { useCanvasInputMode } from "@/components/app/canvasInputMode";
+import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import { ACTION_MENU } from "@/components/ui/floating";
 import React from "react";
 import { ActionMenu } from "@/components/layout/ActionMenu";
@@ -723,6 +725,7 @@ function WorkflowEditor({
   /** 返回列表。**和标题同一行** —— 单独占一行会把整条工具栏挤下去(第一版就是这么做的)。 */
   onBack: () => void;
 }) {
+  const [inputMode] = useCanvasInputMode();
   const t = useI18n();
   const qc = useQueryClient();
   const registry = React.useMemo(() => new Map(nodeTypes.map((item) => [item.type, item])), [nodeTypes]);
@@ -1861,6 +1864,7 @@ function WorkflowEditor({
               );
             })}
           </div>
+          <CanvasInputModeSwitch />
           {/* 全览可关。它占着右下角一块不小的地方,图小的时候纯属挡视线;而图大的时候
               又是最有用的东西 —— 所以给开关,不替用户决定。记在本地,下次进来还是这个样子。 */}
           <Button
@@ -2033,12 +2037,8 @@ function WorkflowEditor({
               blurFloatingPanels();
               selectInspectorNode(null);
             }}
-            /* 触控板约定(Figma / Miro 那套):双指滑动 = 平移,捏合 = 缩放。
-               React Flow 默认 zoomOnScroll:true,而 macOS 触控板双指滑动发出的正是 wheel 事件,
-               于是「想拖画布」变成了「缩放」。捏合发的是 ctrlKey 的 wheel,归 zoomOnPinch 管,
-               所以关掉 zoomOnScroll 不影响捏合;鼠标用户按住 ctrl/⌘ 滚轮同样落进这条,仍可缩放。 */
-            panOnScroll
-            zoomOnScroll={false}
+            panOnScroll={inputMode === "trackpad"}
+            zoomOnScroll={inputMode === "mouse"}
             zoomOnPinch
           defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
             proOptions={{ hideAttribution: false }}
@@ -2320,6 +2320,7 @@ function LoopBodyEditor({
   undo: () => void;
   redo: () => void;
 }) {
+  const [inputMode] = useCanvasInputMode();
   const t = useI18n();
   const { options: subOptions } = useNodePicker(nodeTypes, t);
   const [bodyViewReady, setBodyViewReady] = React.useState(false);
@@ -2522,6 +2523,7 @@ function LoopBodyEditor({
             自己能在子图里跑一次;撤销也没有 —— 子图编辑器没有历史栈,画一个按钮却不能用,
             比没有更糟。 */}
         <div className={cn("flex flex-wrap items-center gap-1 rounded-lg p-1", CANVAS_GLASS_SURFACE_CLASS)}>
+          <CanvasInputModeSwitch />
           <SearchableSelect
             value=""
             onValueChange={addNode}
@@ -2592,12 +2594,8 @@ function LoopBodyEditor({
           onConnect={onConnect}
           onNodeClick={(_event, node) => setSelectedId(node.id)}
           onPaneClick={() => setSelectedId(null)}
-          /* 触控板约定(Figma / Miro 那套):双指滑动 = 平移,捏合 = 缩放。
-             React Flow 默认 zoomOnScroll:true,而 macOS 触控板双指滑动发出的正是 wheel 事件,
-             于是「想拖画布」变成了「缩放」。捏合发的是 ctrlKey 的 wheel,归 zoomOnPinch 管,
-             所以关掉 zoomOnScroll 不影响捏合;鼠标用户按住 ctrl/⌘ 滚轮同样落进这条,仍可缩放。 */
-          panOnScroll
-          zoomOnScroll={false}
+          panOnScroll={inputMode === "trackpad"}
+          zoomOnScroll={inputMode === "mouse"}
           zoomOnPinch
           connectionLineType={edgeShape as ConnectionLineType}
           defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}

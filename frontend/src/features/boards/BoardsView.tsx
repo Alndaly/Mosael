@@ -1,3 +1,4 @@
+import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import React from "react";
 import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { CanvasPreview } from "@/components/layout/CanvasPreview";
@@ -701,6 +702,7 @@ function BoardDetail({
             >
               <ListChecks size={14} />
             </Button>
+            <CanvasInputModeSwitch />
             {/* 全览可关 —— 它占着右下角一块不小的地方,图小的时候纯属挡视线。记在本地。 */}
             <Button
               variant="ghost"

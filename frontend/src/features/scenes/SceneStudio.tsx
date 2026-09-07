@@ -1,8 +1,5 @@
-import {
-  readSceneNavigation,
-  SCENE_NAVIGATION_KEY,
-  type SceneNavigationMode,
-} from "./sceneNavigation";
+import { useCanvasInputMode } from "@/components/app/canvasInputMode";
+import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import { useSceneFullscreen } from "./useSceneFullscreen";
 import { SceneHistory } from "./SceneHistory";
 import { SceneCameraPanel } from "./SceneCameraPanel";
@@ -217,16 +214,7 @@ function SceneEditor({
   initial: Scene;
   onBack: () => void;
 }) {
-  const [navigation, setNavigation] = React.useState(readSceneNavigation);
-  function chooseNavigation(value: string) {
-    const mode = value as SceneNavigationMode;
-    setNavigation(mode);
-    try {
-      localStorage.setItem(SCENE_NAVIGATION_KEY, mode);
-    } catch {
-      /* Private storage may be unavailable. */
-    }
-  }
+  const [navigation] = useCanvasInputMode();
   const studioRoot = React.useRef<HTMLDivElement>(null);
   const fullscreen = useSceneFullscreen(studioRoot);
   const qc = useQueryClient(),
@@ -870,6 +858,7 @@ function SceneEditor({
                   </PopoverContent>
                 </Popover>
               )}
+              <CanvasInputModeSwitch />
               <button
                 className="scene-labeled-tool"
                 aria-label={
@@ -893,18 +882,6 @@ function SceneEditor({
                 </PopoverTrigger>
                 <PopoverContent className="scene-help" align="end">
                   <strong>如何操作画面</strong>
-                  <div className="scene-navigation-choice">
-                    <span>操作设备</span>
-                    <Pick
-                      label="3D 操作设备"
-                      value={navigation}
-                      onChange={chooseNavigation}
-                      options={[
-                        ["trackpad", "触控板"],
-                        ["mouse", "鼠标"],
-                      ]}
-                    />
-                  </div>
                   <p>
                     {navigation === "trackpad" ? (
                       <>
