@@ -1,5 +1,5 @@
 /** Shared visual language; positioning and focus management belong to each primitive. */
-export const FLOATING_SURFACE = "rounded-lg border border-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)]";
+export const FLOATING_SURFACE = "rounded-lg border border-floating-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)]";
 export const FLOATING_MOTION = "duration-150 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 motion-reduce:animate-none motion-reduce:transition-none";
 export const MODAL_SURFACE = "modal-surface rounded-2xl border border-[var(--modal-border)] bg-[var(--modal-surface)] text-popover-foreground shadow-[var(--shadow-modal)]";
 export const MODAL_OVERLAY = "modal-overlay [.is-desktop_&]:[-webkit-app-region:no-drag] fixed inset-0 z-50 bg-[var(--overlay-modal)]";

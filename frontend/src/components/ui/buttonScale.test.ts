@@ -9,8 +9,13 @@
  * `size="icon"` 渲染成 36px,杵在一排 28px 中间。圆形按钮尤其藏不住这 8px —— 智能体输入框
  * 的工具行就是这么坏的,当时是手工把那几个按钮补上 `h-7 w-7`,而不是补上缺的那一档。
  *
- * 现在四档都有 token:`xs`/`icon-xs` 是 28,`sm`/`icon-sm` 是 32,`default`/`icon` 是 36,
- * `lg` 是 40。想要新的一档就往 `buttonVariants` 里加一档,别在 className 里加。
+ * 刻度是:`xs`/`icon-xs` 28,`sm`/`icon-sm` 32,`icon` 36,`default` 40,`lg` 44。
+ * 想要新的一档就往 `buttonVariants` 里加一档,别在 className 里加。
+ *
+ * **`icon` 是 36,和 `default`(40)不是一对。** 36 是顶栏那一档(⌘K 那颗胶囊就是 h-9),
+ * 而 `size="icon"` 又是写图标按钮时最顺手的名字 —— 于是它常被放进 28px 的工具行或 40px 的
+ * 表单行里,两边都对不上。挑档位要看**这一行其它控件多高**,不是看哪个名字顺手;
+ * `design/controlRhythm.test.ts` 会把混了档的行拦下来。
  *
  * 拦的是「同时写了 `size` 和 `h-N`/`w-N`/`size-N`」这一种形状 —— 光写 className 不写 size 的
  * 那是别的东西(原生 `<button>`、纯布局盒子),不归这条管。

@@ -27,6 +27,7 @@
   --color-border: var(--border);
   --color-divider: var(--divider);
   --color-border-strong: var(--border-strong);
+  --color-floating-border: var(--floating-border);
   --color-panel: var(--panel);
   --color-panel-subtle: var(--panel-subtle);
   --color-panel-inset: var(--panel-inset);
@@ -172,6 +173,15 @@
   --workspace-subtle: var(--panel-subtle);
   --control: var(--panel);
   --border-strong: #bdc7d5;
+  /* **浮层的边框跟着表面一起透。**
+   *
+   * 浮层的表面是半透明的(玻璃态下是 72% 的白),压在深色内容上会合成成一片灰;而边框
+   * 若是 100% 不透明的 `--border`,它就一直是那条原色的亮线 —— 于是浮在 3D 视口这类深底
+   * 上时,窗口四周勾出一圈比表面还亮的白边,看着"贴上去的",而不是"浮在上面的"。
+   * 对话框早就是这么做的(`--modal-border` 带 alpha),浮层没跟上。
+   *
+   * 非玻璃态下它就等于 `--border`:那时表面本来就是实色,边框也该是实的。 */
+  --floating-border: var(--border);
 
   /* 浮层与 chrome 使用磨玻璃;自定义背景下,内容面板共享外层表面。
      引用 --popover/--panel,自动跟随明暗主题;仅在支持 backdrop-filter 时生效。 */
@@ -279,6 +289,7 @@
   --panel-inset: #101113;
   --viewport-canvas: #0d0f13;
   --border-strong: #444b55;
+  --floating-border: var(--border);
   --overlay-modal: rgb(6 9 14 / 0.24);
   --modal-solid: #23262c;
   --modal-tint: rgb(35 38 44 / 0.78);
@@ -387,6 +398,7 @@
     --popover: color-mix(in srgb, #ffffff calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
     --panel-subtle: color-mix(in srgb, #f3f6fa calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
     --panel-inset: color-mix(in srgb, #eaf0f7 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
+    --floating-border: color-mix(in srgb, var(--border) calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
   }
   :root[data-appearance="glass"].dark {
     --field: color-mix(in srgb, #181a1d calc(var(--app-surface-opacity, 0.72) * 55%), transparent);

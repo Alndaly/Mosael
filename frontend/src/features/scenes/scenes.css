@@ -118,14 +118,17 @@
   flex-wrap: wrap;
 }
 
+/* 高度跟着这一页的控件刻度走。此前是靠 7px 内距撑出来的 35px,比同一行的返回键和右侧
+   工具高 3px —— 平时看不出,一聚焦,它那块底色就明显比旁边的按钮高出一截。 */
 .scene-name {
   min-width: 100px;
   max-width: 360px;
   flex: 1;
+  height: var(--scene-control-height);
   font-weight: 600;
   background: transparent;
   border: 0;
-  padding: 7px;
+  padding: 0 7px;
   outline: none;
 }
 .scene-name:focus {
@@ -291,10 +294,15 @@
   border-bottom: 1px solid var(--divider);
 }
 
+/* **整只分段器和旁边的工具同高。** 此前只给里面的按钮定了 30px,外壳的 3px 内距和 1px 边框
+   再往上加,整只就是 38px —— 而同一行右侧的 .scene-labeled-tool 是 32px,两边差 6px,一眼
+   就看得出来。高度钉在外壳上(box-sizing 是 border-box,内距和边框都算在内),里面的按钮
+   撑满剩下的空间,以后改内距也不会再把行撑高。 */
 .scene-segment {
   display: flex;
   align-items: center;
   gap: 2px;
+  height: var(--scene-control-height);
   padding: 3px;
   border-radius: 8px;
   background: var(--workspace-subtle);
@@ -302,7 +310,7 @@
 }
 
 .scene-segment button {
-  height: 30px;
+  height: 100%;
   padding: 0 10px;
   border-radius: 5px;
   font-size: var(--text-ui-xs);
@@ -1063,6 +1071,11 @@
 /* Blender exchange uses the same quiet surfaces as the scene controls. */
 .scene-blender { width: 370px; display: flex; flex-direction: column; gap: 14px; max-height: calc(100dvh - 100px); overflow-y: auto; }
 .scene-blender-heading, .scene-blender-connection, .scene-blender-result > div { display: flex; align-items: center; gap: 8px; }
+/* 这一行原本是 40px 的下拉配 32px 的按钮。浮层走 portal 挂在 body 上,拿不到 .scene-studio
+   上的 --scene-control-height,所以这里自己声明一份(和那边同值)。 */
+.scene-blender { --scene-control-height: 32px; }
+.scene-blender-connection > *,
+.scene-blender-connection [role="combobox"] { height: var(--scene-control-height); }
 .scene-blender-heading { justify-content: space-between; }
 .scene-blender-heading p, .scene-blender small, .scene-blender-result > span { color: var(--muted-foreground); font-size: 12px; line-height: 1.6; }
 .scene-blender-heading strong { font-size: 14px; }

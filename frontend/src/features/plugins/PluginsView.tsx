@@ -720,7 +720,8 @@ function PluginOAuth({ instanceId, save }: { instanceId: string; save?: React.Re
               placeholder={t("pluginOauthCodePlaceholder")}
               onChange={(event) => setCode(event.target.value)}
             />
-            <Button size="sm" disabled={!code.trim()} loading={finish.isPending} onClick={() => finish.mutate()}>
+            {/* 跟着旁边的输入框走(40px)。表单行里输入框是定高的那一个,按钮得让着它。 */}
+            <Button disabled={!code.trim()} loading={finish.isPending} onClick={() => finish.mutate()}>
               <KeyRound size={13} /> {t("pluginOauthExchange")}
             </Button>
             </div>

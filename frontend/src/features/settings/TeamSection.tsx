@@ -263,7 +263,7 @@ function MemberRow({
       <div className="flex shrink-0 items-center gap-1.5">
         {canEditRole ? (
           <Select value={member.role} onValueChange={onRole}>
-            <SelectTrigger className="h-[30px] w-[116px]">
+            <SelectTrigger className="h-8 w-[116px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -283,7 +283,7 @@ function MemberRow({
           <>
             <Button
               variant="ghost"
-              size="icon"
+              size="icon-sm"
               onClick={() => setConfirmOpen(true)}
               aria-label={isSelf ? t("teamLeave") : t("teamRemove")}
             >

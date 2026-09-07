@@ -159,7 +159,8 @@ export function AuthPromptField({
               if (e.key === "Enter" && answer.trim()) onSubmit(answer.trim());
             }}
           />
-          <Button type="button" size="sm" disabled={!answer.trim() || pending} onClick={() => onSubmit(answer.trim())}>
+          {/* 与旁边的输入框同高(40px);size="sm" 是 32px,贴着输入框会矮一截。 */}
+          <Button type="button" disabled={!answer.trim() || pending} onClick={() => onSubmit(answer.trim())}>
             {submitLabel}
           </Button>
         </div>

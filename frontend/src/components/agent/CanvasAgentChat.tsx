@@ -427,7 +427,7 @@ export function CanvasAgentChat({
           ? "overflow-hidden bg-workspace-panel"
           : DOCKABLE_PANEL_FRAME_CLASS,
         isFloating
-          ? "fixed min-h-[380px] min-w-[320px] max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)] border-border-strong"
+          ? "fixed min-h-[380px] min-w-[320px] max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)] border-floating-border"
           : "relative z-[1] h-full w-full min-h-0 min-w-0 shadow-none",
       )}
       style={floatStyle}
