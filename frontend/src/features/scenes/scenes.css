@@ -291,6 +291,11 @@
   min-width: 0;
   position: relative;
   overflow: hidden;
+  /* 底色跟着主题走,和创意画板那块画布同一个做法(BoardCanvas 的 bg-background)。
+     此前这里没有底色,画面全靠 three.js 的 scene.background 涂满 —— 那是**场景数据**
+     (导出成片用的也是它),拿它当工作台的底,结果是一整片不透明色块横在一个其余每页都
+     半透明的界面里。现在编辑视角的画布是透明的,底色由这里给。 */
+  background: var(--background);
 }
 .scene-viewport > canvas {
   display: block;

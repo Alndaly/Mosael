@@ -298,7 +298,9 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
       }
       function sync() {
         const p = latest.current;
-        scene.background = new THREE.Color(p.content.background);
+        // **背景不在这里常设。** 它是场景数据(导出成片时也用它),但编辑视角把它涂满整块
+        // 画布,就成了一整片不透明的色块 —— 而这个应用其余每一页都是半透明、透着用户的
+        // 自定义背景。按视图决定,见下面渲染那一段。
         ambient.intensity = p.content.ambient;
         const signature = JSON.stringify(p.content.objects);
         if (signature === lastSignature) {
@@ -492,6 +494,11 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         shootingCamera.aspect = aspect;
         pose(shootingCamera, frame);
         observer.update(frame, aspect);
+        // **编辑视角透明,镜头画面用场景底色。** 后者是**成片的一部分**(导出用的是同一个
+        // 值),取景时必须看到真实底色;而编辑视角是工作台,它该跟应用其余页面一样透出背景。
+        // 这也让 `p.preview` 分支里那句 setClearColor(…, 0) 真正生效 —— 此前 scene.background
+        // 是不透明的,清成透明也会立刻被它盖掉。
+        scene.background = p.preview ? new THREE.Color(p.content.background) : null;
         renderer.setScissorTest(false);
         renderer.setViewport(0, 0, w, h);
         if (p.preview) {
@@ -504,6 +511,8 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           renderer.setScissorTest(true);
           renderer.render(scene, shootingCamera);
         } else {
+          renderer.setClearColor(0x000000, 0);
+          renderer.clear();
           renderer.render(scene, p.observing ? observerCamera : editorCamera);
           if (p.observing) {
             const box = cameraInset(w, h, aspect);
