@@ -21,7 +21,9 @@ def sample(shot, t):
             u = (t-a['time'])/(b['time']-a['time'])
             if shot['easing'] == 'smooth':
                 u = u*u*(3-2*u)
-            mix = lambda x, y: [v+(y[i]-v)*u for i, v in enumerate(x)]
+            # `u` 在默认值上绑死:lambda 捕获循环变量,这里虽然当场就用、行为是对的,
+            # 但那正是 late binding 出错的形状,写死绑定省得下次有人把它挪出循环。
+            mix = lambda x, y, u=u: [v+(y[i]-v)*u for i, v in enumerate(x)]  # noqa: E731
             return mix(a['position'], b['position']), mix(a['target'], b['target']), a['fov']+(b['fov']-a['fov'])*u
     a = frames[-1]
     return a['position'], a['target'], a['fov']
