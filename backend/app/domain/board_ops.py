@@ -35,6 +35,7 @@ DEFAULT_SIZE: dict[str, tuple[int, int]] = {
     "audio": (280, 72),
     "frame": (420, 300),
     "scene": (320, 220),
+    "document": (320, 300),
 }
 
 
@@ -93,6 +94,9 @@ def apply_board_ops(canvas: dict[str, Any], operations: list[dict[str, Any]]) ->
                 item["text"] = str(op["text"])
             if op.get("color") is not None:
                 item["color"] = str(op["color"])
+            if item_kind == "document" and op.get("note_id"):
+                item["note_id"] = op["note_id"]
+                item["note_revision"] = op.get("note_revision")
             if op.get("scene_id"):
                 item["scene_id"] = str(op["scene_id"])
             if op.get("asset_id"):

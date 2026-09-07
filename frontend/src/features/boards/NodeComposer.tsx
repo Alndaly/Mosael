@@ -1,3 +1,5 @@
+import { noteHref, type NoteReference } from "@/api/domains/notes";
+import { documentPrompt } from "./boardDocumentSources";
 import { MODAL_SURFACE } from "@/components/ui/floating";
 import React from "react";
 import { NodeToolbar, Position } from "@xyflow/react";
@@ -329,6 +331,7 @@ export function NodeComposer({
   onPickAsset,
   upstream,
   upstreamTexts,
+  upstreamDocuments,
   workspaceId,
   onFormChange,
 }: {
@@ -354,6 +357,7 @@ export function NodeComposer({
   /** 上游**便签**给的文字。一张写着描述的便签连过来,意思是「照这段话画」—— 它不是参考图
    *  (便签根本没有图),而是提示词本身。 */
   upstreamTexts?: { itemId: string; text: string }[];
+  upstreamDocuments?: NoteReference[];
   /** `@` 引用素材时去哪个工作区找。 */
   workspaceId: string;
 }) {
@@ -579,7 +583,7 @@ export function NodeComposer({
     );
     run(() =>
       onSubmit({
-        prompt: legend ? `${text}\n\n${t("boardPromptLegend")}${legend}` : text,
+        prompt: documentPrompt(legend ? `${text}\n\n${t("boardPromptLegend")}${legend}` : text, upstreamDocuments ?? []),
         provider: current.provider,
         model: current.model,
         parameters,
@@ -741,6 +745,7 @@ export function NodeComposer({
         {/* 提示词。`@` 在**表单内部**引用素材,菜单跟着光标走 —— 和工作流的上游引用同一套
             机件(TipTap + 共用的 useSuggestionMenu)。自己判 @ 的那一版栽在输入法上:
             中文选词时按回车会被菜单当成「选中候选」吃掉,候选词上不了屏。 */}
+        {!!upstreamDocuments?.length && <div className="mb-2 flex flex-wrap gap-1.5">{upstreamDocuments.map(doc => <a key={doc.note_id} href={noteHref(doc.note_id)} title={t("documentOpen")} className="max-w-full truncate rounded-md bg-primary/10 px-2 py-1 text-ui-xs text-primary">{t("boardKindDocument")} · {doc.title || t("documentUntitled")} · v{doc.revision}</a>)}</div>}
         <PromptEditor
           value={prompt}
           document={promptDocument}

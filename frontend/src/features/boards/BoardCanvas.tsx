@@ -1,3 +1,8 @@
+import { useQueries } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { getNoteReference, noteReferenceQuery, type NoteReference } from "@/api/domains/notes";
+import { NotePickerDialog } from "@/features/notes/NotePickerDialog";
+import { boardSourceText, boardDocumentBlocked, type BoardDocumentState } from "./boardDocumentSources";
 import { useCanvasInputMode } from "@/components/app/canvasInputMode";
 import { FLOATING_SURFACE } from "@/components/ui/floating";
 import React from "react";
@@ -366,6 +371,28 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
   // 拖动都换新对象,引用比对等于每帧都报"变了"。
   //: 选中的那个空槽/生成中的槽 —— 只有一个被选中时才挂面板,多选没有单一的作用对象。
   /** 选中的**还空着**的那一项 —— 空槽就是「等着被填」,面板挂在它下面。 */
+  const [pickingDocument, setPickingDocument] = React.useState<string | null>(null);
+  const [refreshingDocument, setRefreshingDocument] = React.useState<string | null>(null);
+  const documentItems = nodes.map(node => (node.data as {item: BoardItem}).item).filter(item => item.kind === "document");
+  const documentQueries = useQueries({queries: documentItems.map(item => noteReferenceQuery(workspaceId ?? "", item.note_id ?? "", item.note_revision))});
+  const documents = new Map<string, BoardDocumentState>(documentItems.map((item, index) => [item.id, {
+    reference: documentQueries[index].data, pending: !!item.note_id && documentQueries[index].isPending,
+    error: documentQueries[index].error?.message,
+  }]));
+  const refreshDocument = async (id: string) => {
+    const item = documentItems.find(item => item.id === id);
+    if (!item?.note_id || !workspaceId) return;
+    setRefreshingDocument(id);
+    try {
+      const reference = await getNoteReference(workspaceId, item.note_id);
+      setNodes(current => current.map(node => {
+        const currentItem = (node.data as {item: BoardItem}).item;
+        // A delayed request must not replace a different note chosen in the meantime.
+        return node.id === id && currentItem.note_id === item.note_id ? {...node, data: {...node.data, item: {...currentItem, text: reference.title, note_revision: reference.revision}}} : node;
+      }));
+    } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
+    finally { setRefreshingDocument(null); }
+  };
   const composerItem = React.useMemo(() => {
     const picked = nodes.filter((node) => node.selected);
     if (picked.length !== 1) return null;
@@ -387,8 +414,8 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
    * 已经出了产出的项收上来,交给面板照当前生成方式挂进槽位(一张图当首帧、多张当参考)。
    * 还没出产出的上游跳过 —— 它自己都还没有东西可给。
    */
-  const feeding = React.useMemo(() => {
-    if (!composerItem) return { assets: [], texts: [] as { itemId: string; text: string }[] };
+  const feeding = (() => {
+    if (!composerItem) return { assets: [], texts: [] as { itemId: string; text: string }[], blocked: false, pending: false, references: [] as NoteReference[] };
     const byId = new Map(
       nodes.map((node) => [node.id, (node.data as unknown as { item: BoardItem }).item]),
     );
@@ -397,16 +424,19 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       .map((edge) => byId.get(edge.source))
       .filter((item): item is BoardItem => Boolean(item));
     return {
+      references: sources.filter(item => item.kind === "document").map(item => documents.get(item.id)?.reference).filter((ref): ref is NoteReference => !!ref),
+      blocked: sources.some(item => boardDocumentBlocked(item, documents.get(item.id))),
+      pending: sources.some(item => item.kind === "document" && documents.get(item.id)?.pending),
       assets: sources
         .filter((item) => item.asset_id)
         .map((item) => ({ assetId: item.asset_id as string, kind: item.kind })),
       //: **便签给的是提示词,不是素材。** 一张写着描述的便签连到图片上,用户的意思是
       //: 「照这段话画」—— 而不是把便签当参考图(它根本没有图)。
       texts: sources
-        .filter((item) => item.kind === "note" && (item.text ?? "").trim())
-        .map((item) => ({ itemId: item.id, text: (item.text ?? "").trim() })),
+        .map((item) => ({ itemId: item.id, text: boardSourceText(item, documents.get(item.id)) }))
+        .filter(item => !!item.text),
     };
-  }, [composerItem, edges, nodes]);
+  })();
 
   /**
    * 拖动分组框时被它带着走的那几项。
@@ -467,13 +497,10 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
 
   //: 渲染用的节点 = 数据 + 这一轮的回调。**每轮重新贴** —— 回调闭包着最新的 setNodes,
   //: 而把它们存进节点数据会让节点的初值反过来依赖 setNodes,那个循环绕不开。
-  const displayNodes = React.useMemo(
-    () => nodes.map((node) => ({
+  const displayNodes = nodes.map((node) => ({
       ...node,
-      data: { ...node.data, onText: setText, onAspect: setAspect, commentMode, workspaceId, boardId },
-    })),
-    [nodes, setText, setAspect, commentMode, workspaceId, boardId],
-  );
+      data: { ...node.data, onText: setText, onAspect: setAspect, commentMode, workspaceId, boardId, document: documents.get(node.id), onPickDocument: setPickingDocument, onRefreshDocument: refreshDocument, refreshingDocument: refreshingDocument === node.id },
+    }));
 
   const serialized = React.useMemo(() => JSON.stringify(toCanvas(nodes, edges)), [nodes, edges]);
   React.useEffect(() => {
@@ -1220,9 +1247,12 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         onGroup={groupSelection}
       />
 
+      {workspaceId && <NotePickerDialog workspaceId={workspaceId} open={!!pickingDocument} onOpenChange={open => { if (!open) setPickingDocument(null); }} onPick={note => { if (pickingDocument) patch(pickingDocument, {note_id: note.id, note_revision: note.revision, text: note.title}); }}/>}
+      {composerItem && feeding.blocked && <NodeToolbar nodeId={composerItem.id} isVisible position={Position.Bottom} offset={BOARD_NODE_PANEL_OFFSET}><div role={feeding.pending ? "status" : "alert"} className={cn(FLOATING_SURFACE, "max-w-sm px-4 py-3 text-ui-sm text-muted-foreground")}>{t(feeding.pending ? "documentLoading" : "documentBlocked")}</div></NodeToolbar>}
+
       {/* 空便签:挂写文案的面板。**和图片/视频不是同一张表** —— 写字没有比例、时长、参考图
           这些东西,硬塞进同一个组件里会长出一堆「文本的时候不显示」的分支。 */}
-      {composerItem?.kind === "note" && onWrite && (
+      {!feeding.blocked && composerItem?.kind === "note" && onWrite && (
         <NoteComposer
           key={itemFormResetKey(composerItem)}
           item={composerItem}
@@ -1280,7 +1310,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       })()}
 
       {/* 音频:念一段文字。**不是「生成」那条路** —— 出图出片选生成模型,念字选的是音色。 */}
-      {composerItem?.kind === "audio" && onSpeak && (
+      {!feeding.blocked && composerItem?.kind === "audio" && onSpeak && (
         <AudioComposer
           key={itemFormResetKey(composerItem)}
           item={composerItem}
@@ -1294,7 +1324,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       )}
 
       {/* 选中一个**还没有产出**的图片/视频槽时,底下挂提示词面板 —— 节点本身就是生成单元。 */}
-      {composerItem && composerItem.kind !== "note" && composerItem.kind !== "audio" && onGenerate && (
+      {!feeding.blocked && composerItem && composerItem.kind !== "note" && composerItem.kind !== "audio" && onGenerate && (
         <NodeComposer
           key={itemFormResetKey(composerItem)}
           item={composerItem}
@@ -1303,7 +1333,8 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           onPickAsset={onPickAsset}
           workspaceId={workspaceId}
           upstream={feeding.assets}
-          upstreamTexts={feeding.texts}
+          upstreamTexts={feeding.texts.filter(one => !documents.has(one.itemId))}
+          upstreamDocuments={feeding.references}
           onFormChange={(form) => patch(composerItem.id, { form })}
           onSubmit={({ prompt, provider, model, parameters, sourceAssets, form }) =>
             void onGenerate({
@@ -1505,8 +1536,8 @@ function ItemToolbar({
               //: 文案谁都能往下接。空槽自己都还没有东西可给。
               .filter((kind) => {
                 if (kind === "note") return item.kind !== "note" || Boolean((item.text ?? "").trim());
-                if (kind === "audio") return item.kind === "note" && Boolean((item.text ?? "").trim());
-                if (item.kind === "note") return kind === "image";
+                if (kind === "audio") return item.kind === "document" || (item.kind === "note" && Boolean((item.text ?? "").trim()));
+                if (item.kind === "note" || item.kind === "document") return kind === "image" || kind === "video";
                 return Boolean(item.asset_id) && kind === "video";
               })
               .map((kind) => (

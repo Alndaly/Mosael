@@ -1,7 +1,9 @@
 import React from "react";
+import { Streamdown } from "streamdown";
+import { noteHref, type NoteReference } from "@/api/domains/notes";
 import { SaveToNote } from "@/features/notes/SaveToNote";
 import { Handle, NodeResizer, Position, useStore, type NodeProps } from "@xyflow/react";
-import { AlertTriangle, Box, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Loader2, Music, Plus, Square as SquareIcon, StickyNote, type LucideIcon } from "lucide-react";
+import { AlertTriangle, BookOpen, ExternalLink, RefreshCw, Replace, Box, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Loader2, Music, Plus, Square as SquareIcon, StickyNote, type LucideIcon } from "lucide-react";
 
 import type { BoardItem } from "@/api/client";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
@@ -44,6 +46,10 @@ export type BoardNodeData = {
   item: BoardItem;
   workspaceId?: string;
   boardId?: string;
+  document?: { reference?: NoteReference; pending: boolean; error?: string };
+  onPickDocument?: (id: string) => void;
+  onRefreshDocument?: (id: string) => void;
+  refreshingDocument?: boolean;
   onText: (id: string, text: string) => void;
   /** 媒体加载出来之后报一次自然宽高比 —— 节点据此把高度校正过来,画面才铺得满。 */
   onAspect: (id: string, ratio: number) => void;
@@ -120,6 +126,7 @@ function Ports({ visible, disabled = false }: { visible?: boolean; disabled?: bo
 //: 「boardKindImage」这串 key 本身,而它长得像个正常字符串,一路挂到菜单上都不会有人拦。
 //: 连线菜单就这么漏过一次:四个选项连标题带说明,整整八行显示的全是 key。
 const KIND_META: Record<BoardItem["kind"], { icon: LucideIcon; label: MessageKey; hint: MessageKey }> = {
+  document: { icon: BookOpen, label: "boardKindDocument", hint: "boardDocumentHint" },
   scene: { icon: Box, label: "navScenes", hint: "boardSceneHint" },
   note: { icon: StickyNote, label: "boardKindNote", hint: "boardKindNoteHint" },
   image: { icon: ImageIcon, label: "boardKindImage", hint: "boardKindImageHint" },
@@ -144,7 +151,7 @@ export function kindText(t: (key: MessageKey) => string, kind: BoardItem["kind"]
 }
 
 /** 能从一条线的末端长出来的种类。分组框不在其中 —— 它是个容器,不是一份产出。 */
-export const SPAWNABLE_KINDS = ["image", "video", "audio", "note"] as const;
+export const SPAWNABLE_KINDS = ["image", "video", "audio", "note", "document"] as const;
 
 /** 节点上方那行类型标签 —— 一眼看出这格是图片还是视频,不用等它加载出来。 */
 function TypeLabel({ kind }: { kind: BoardItem["kind"] }) {
@@ -489,6 +496,125 @@ function AudioNode({ data, selected }: NodeProps) {
 }
 
 
+function DocumentNode({ data, selected }: NodeProps) {
+  const {
+    item,
+    document,
+    commentMode,
+    onPickDocument,
+    onRefreshDocument,
+    refreshingDocument,
+  } = data as unknown as BoardNodeData;
+  const t = useI18n();
+  const ref = document?.reference;
+  const iconButton =
+    "nodrag nopan inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-40";
+  return (
+    <div
+      className={cn(
+        "group relative flex h-full w-full flex-col rounded-xl border bg-panel shadow-sm transition-colors",
+        selected ? "border-primary ring-1 ring-primary/25" : "border-border",
+      )}
+    >
+      <NodeResizer
+        minWidth={260}
+        minHeight={200}
+        isVisible={selected && !commentMode}
+        lineClassName="!border-primary/40"
+      />
+      <TypeLabel kind="document" />
+      <Ports visible={selected} disabled={commentMode} />
+      <header className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2.5">
+        <BookOpen size={16} className="shrink-0 text-primary" />
+        <span
+          className="min-w-0 flex-1 truncate text-ui-sm font-medium"
+          title={ref?.title || item.text}
+        >
+          {ref?.title || item.text || t("boardKindDocument")}
+        </span>
+        {!commentMode && (
+          <button
+            className={iconButton}
+            title={t("documentReplace")}
+            aria-label={t("documentReplace")}
+            onClick={() => onPickDocument?.(item.id)}
+          >
+            <Replace size={14} />
+          </button>
+        )}
+      </header>
+      {!item.note_id ? (
+        <button
+          disabled={commentMode}
+          className="nodrag nopan flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-5 text-center text-ui-xs text-muted-foreground transition-colors hover:bg-secondary/40"
+          onClick={() => onPickDocument?.(item.id)}
+        >
+          <BookOpen size={28} strokeWidth={1.3} />
+          <span className="font-medium text-foreground">
+            {t("documentPick")}
+          </span>
+          <span>{t("documentEmptyHint")}</span>
+        </button>
+      ) : document?.pending ? (
+        <div
+          className="m-auto p-4 text-ui-xs text-muted-foreground"
+          role="status"
+        >
+          {t("documentLoading")}
+        </div>
+      ) : document?.error ? (
+        <div
+          role="alert"
+          className="m-auto p-4 text-center text-ui-xs text-muted-foreground"
+        >
+          {t("documentUnavailable")}
+        </div>
+      ) : (
+        <div className="nodrag nopan nowheel min-h-0 flex-1 overflow-y-auto break-words px-4 py-3 text-ui-xs leading-relaxed text-foreground/85 [overflow-wrap:anywhere] [&_p]:my-2 [&_h1]:my-3 [&_h1]:text-base [&_h2]:my-3 [&_h2]:text-ui-sm [&_h2]:font-semibold [&_h3]:text-ui-sm [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_pre]:overflow-auto [&_pre]:rounded-md [&_pre]:bg-secondary [&_pre]:p-2 [&_img]:max-w-full [&_a]:text-primary [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3">
+          <Streamdown mode="static" controls={false}>
+            {ref?.markdown.slice(0, 6000) || ""}
+          </Streamdown>
+          {(ref?.markdown.length ?? 0) > 6000 && (
+            <p className="text-muted-foreground">…</p>
+          )}
+        </div>
+      )}
+      {item.note_id && (
+        <footer className="flex shrink-0 items-center gap-2 border-t border-border px-3 py-2">
+          <span
+            title={t("documentPinned")}
+            className="min-w-0 flex-1 text-ui-2xs text-muted-foreground"
+          >
+            v{item.note_revision}
+          </span>
+          {!commentMode && (
+            <button
+              className={iconButton}
+              disabled={refreshingDocument}
+              title={t("documentRefresh")}
+              aria-label={t("documentRefresh")}
+              onClick={() => onRefreshDocument?.(item.id)}
+            >
+              <RefreshCw
+                size={14}
+                className={refreshingDocument ? "animate-mosael-spin" : ""}
+              />
+            </button>
+          )}
+          <a
+            className={iconButton}
+            href={noteHref(item.note_id)}
+            title={t("documentOpen")}
+            aria-label={t("documentOpen")}
+          >
+            <ExternalLink size={14} />
+          </a>
+        </footer>
+      )}
+    </div>
+  );
+}
+
 function SceneNode({ data, selected }: NodeProps) {
   const {item, commentMode} = data as unknown as BoardNodeData;
   const t = useI18n();
@@ -509,6 +635,7 @@ export const BOARD_NODE_TYPES: Record<BoardItem["kind"], React.ComponentType<Nod
   audio: AudioNode,
   frame: FrameNode,
   scene: SceneNode,
+  document: DocumentNode,
 };
 
 /** 指向素材库一份的那几种。**只此一处** —— 操作条给不给「换一份」、选择器能选什么,
@@ -528,4 +655,5 @@ export const DEFAULT_SIZE: Record<BoardItem["kind"], { width: number; height: nu
   audio: { width: 280, height: 72 },
   frame: { width: 420, height: 300 },
   scene: { width: 320, height: 220 },
+  document: { width: 320, height: 300 },
 };

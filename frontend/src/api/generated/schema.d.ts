@@ -3534,6 +3534,23 @@ export interface paths {
         patch: operations["edit_api_notes__note_id__patch"];
         trace?: never;
     };
+    "/api/notes/{note_id}/reference": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reference */
+        get: operations["reference_api_notes__note_id__reference_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/notes/{note_id}/append": {
         parameters: {
             query?: never;
@@ -7808,6 +7825,21 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** NoteReferenceOut */
+        NoteReferenceOut: {
+            /** Note Id */
+            note_id: string;
+            /** Revision */
+            revision: number;
+            /** Title */
+            title: string;
+            /** Markdown */
+            markdown: string;
+            /** Tags */
+            tags: string[];
+            /** Citation Url */
+            citation_url: string;
         };
         /** NoteRestore */
         NoteRestore: {
@@ -18614,6 +18646,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NoteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reference_api_notes__note_id__reference_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+                revision?: number | null;
+            };
+            header?: never;
+            path: {
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteReferenceOut"];
                 };
             };
             /** @description Validation Error */

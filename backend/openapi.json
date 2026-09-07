@@ -10686,6 +10686,74 @@
         }
       }
     },
+    "/api/notes/{note_id}/reference": {
+      "get": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "Reference",
+        "operationId": "reference_api_notes__note_id__reference_get",
+        "parameters": [
+          {
+            "name": "note_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Note Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Revision"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteReferenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/notes/{note_id}/append": {
       "post": {
         "tags": [
@@ -22001,6 +22069,47 @@
           "updated_at"
         ],
         "title": "NoteOut"
+      },
+      "NoteReferenceOut": {
+        "properties": {
+          "note_id": {
+            "type": "string",
+            "title": "Note Id"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "markdown": {
+            "type": "string",
+            "title": "Markdown"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "citation_url": {
+            "type": "string",
+            "title": "Citation Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "note_id",
+          "revision",
+          "title",
+          "markdown",
+          "tags",
+          "citation_url"
+        ],
+        "title": "NoteReferenceOut"
       },
       "NoteRestore": {
         "properties": {

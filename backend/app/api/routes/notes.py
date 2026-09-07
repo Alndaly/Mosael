@@ -1,10 +1,10 @@
 from fastapi import APIRouter, HTTPException, Query, Response
-from sqlalchemy import select, or_, cast, String, delete
+from sqlalchemy import select, delete
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas.notes import NoteAppend, NoteContent, NoteCreate, NoteOut, NoteRestore, NoteUpdate
+from app.api.schemas.notes import NoteAppend, NoteContent, NoteCreate, NoteOut, NoteRestore, NoteUpdate, NoteReferenceOut
 from app.db.models import AgentMessage, AgentSession, Note, NoteRevision
-from app.domain.notes import create_note, get_note, save_note, snapshot
+from app.domain.notes import create_note, get_note, save_note, snapshot, read_reference, query_notes
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 
 router = APIRouter(tags=["notes"])
@@ -24,12 +24,7 @@ def source_message(message_id: str, workspace_id: str, db: DbSession, user: Curr
 def list_notes(workspace_id: str, db: DbSession, user: CurrentUser, q: str = Query("", max_length=300),
                trashed: bool = False, limit: int = Query(100, ge=1, le=200), offset: int = Query(0, ge=0)):
     ensure_workspace_access(db, user, workspace_id)
-    stmt = select(Note).where(Note.workspace_id == workspace_id, Note.trashed == trashed)
-    # Literal substring search works for Chinese without a tokenizer/model dependency.
-    for term in q.strip().split():
-        stmt = stmt.where(or_(*(column.icontains(term, autoescape=True) for column in
-                               (Note.title, Note.markdown, cast(Note.tags, String), cast(Note.topics, String)))))
-    return db.scalars(stmt.order_by(Note.updated_at.desc(), Note.id).offset(offset).limit(limit)).all()
+    return query_notes(db, workspace_id, q, limit=limit, offset=offset, trashed=trashed)
 
 
 @router.post("/notes", response_model=NoteOut)
@@ -42,6 +37,13 @@ def create(body: NoteCreate, db: DbSession, user: CurrentUser):
 def read(note_id: str, workspace_id: str, db: DbSession, user: CurrentUser):
     ensure_workspace_access(db, user, workspace_id)
     return get_note(db, workspace_id, note_id)
+
+
+@router.get("/notes/{note_id}/reference", response_model=NoteReferenceOut)
+def reference(note_id: str, workspace_id: str, db: DbSession, user: CurrentUser,
+              revision: int | None = Query(None, ge=1)):
+    ensure_workspace_access(db, user, workspace_id)
+    return read_reference(db, workspace_id, note_id, revision)
 
 
 @router.patch("/notes/{note_id}", response_model=NoteOut)

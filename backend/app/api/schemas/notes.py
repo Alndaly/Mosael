@@ -33,3 +33,12 @@ class NoteAppend(ApiModel):
     base_revision: int = Field(ge=1)
     markdown: str = Field(min_length=1, max_length=500000)
     sources: list[NoteSource] = Field(default_factory=list, max_length=200)
+
+
+class NoteReferenceOut(ApiModel):
+    note_id: str
+    revision: int
+    title: str
+    markdown: str
+    tags: list[str]
+    citation_url: str

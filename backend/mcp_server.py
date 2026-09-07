@@ -1483,7 +1483,9 @@ def edit_board(board_id: str, operations: list[dict[str, Any]], workspace_id: st
     operations is a list of:
       {"kind":"add_item","type":"note","item_id":"n1","x":80,"y":120,"text":"开场白","color":"yellow"}
           (item_id/x/y/width/height optional — the server auto-ids and lays out to the right)
-          type is one of note / image / video / audio / frame
+          type is one of note / image / video / audio / frame / scene / document
+      {"kind":"add_item","type":"document","note_id":"<read_note id>","note_revision":1}
+          (pins a workspace note revision; connect to writing/image/video/audio nodes to use its full text)
       {"kind":"set_text","item_id":"n1","text":"新内容"}
       {"kind":"set_color","item_id":"n1","color":"green"}      (notes: yellow/blue/green/pink/purple/gray)
       {"kind":"move_item","item_id":"n1","x":400,"y":200}
