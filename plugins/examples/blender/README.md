@@ -8,13 +8,22 @@ Connect your chosen Mosael agent to local Blender, then exchange models and came
 2. 安装 [uv](https://docs.astral.sh/uv/getting-started/installation/)，确保 Mosael 后端可以找到 `uvx`。安装此版本配套的 Add-on：
 
    ```sh
-   uvx --python 3.11 blender-mcp==1.9.1 install-addon
+   uv run plugins/examples/blender/install-extension.py
    ```
 
-   如电脑有多个 Blender 版本，可通过 `--addons-dir` 指定对应版本的 `scripts/addons` 目录。安装后在 Blender 的 Preferences → Add-ons 中启用 **MCP for Blender**。这是社区插件，不是 Blender 官方插件。
+   装成 **Extension**(Blender 4.2+ 的新体系)。上游只发旧式单文件 add-on，而 Blender 5.x 的
+   `Preferences → Add-ons` **默认只列 Extensions** —— 直接跑上游的 `install-addon` 会出现
+   「文件明明在、界面上却找不到」。脚本从上游那份重新生成，因此升级时重跑一遍即可；它同时会
+   删掉同版本的 legacy 副本，两份并存会抢同一个 9876 端口。
+
+   默认装到所有 4.2 及以上的 Blender；`--blender 5.2` 只装一个，`--list` 先看会装到哪里。
+   仍要用旧体系(Blender 4.2 以下)时才跑 `uvx --python 3.11 blender-mcp==1.9.1 install-addon`。
+
+   装好后在 Blender 的 Preferences → Add-ons 中搜 MCP，勾选 **MCP for Blender**。这是社区插件，
+   不是 Blender 官方插件。
 3. 将本目录复制到 Mosael **数据目录的 `plugins/blender/`**，在插件页面点击扫描。默认数据目录是 `~/.mosael`；自定义部署以 `MOSAEL_DATA_DIR` 为准。也可在发布包包含 `dev.mosael.blender.zip` 后从插件市场安装。
 4. 创建 Blender MCP 接入，保留本机主机地址和默认端口 `9876`（若修改，须与 Blender 面板一致），授予清单列出的权限并启用。插件默认关闭上游遥测。
-5. 打开 3D 场景，点击工具栏 **Blender → 检测**。开发模式需以 `MOSAEL_LOCAL_DESKTOP=1` 启动本机后端；不要对远程部署启用此开关来绕过本机限制。
+5. 打开 3D 场景，点击工具栏 **Blender → 检测**。开发模式(`pnpm dev`)已默认带上 `MOSAEL_LOCAL_DESKTOP=1`——dev 后端本来就和你的文件在同一台机器上；想模拟团队服务器时用 `MOSAEL_LOCAL_DESKTOP=0 pnpm dev`。**不要对远程部署启用此开关**来绕过本机限制：互通要把 `.blend` 写到本机磁盘再交给同机 Blender 打开，服务器上的后端够不到你的电脑。
 
 首次启动会下载固定版本的 Python / MCP 包，可能需要等待。该 Add-on 在 Blender 图形界面中运行，不支持用 `--background` 替代交互连接。
 
@@ -40,6 +49,6 @@ Connect your chosen Mosael agent to local Blender, then exchange models and came
 
 ## English quick start
 
-Install `uv`, run `uvx --python 3.11 blender-mcp==1.9.1 install-addon`, and enable **MCP for Blender** in Blender. Copy this plugin folder into the Mosael data directory under `plugins/blender`, scan it in Plugins, create a connection, grant its declared permissions, and enable it. Keep Blender and the desktop backend on the same computer.
+Install `uv`, run `uv run plugins/examples/blender/install-extension.py`, and enable **MCP for Blender** in Blender. The script installs it as an *extension* (Blender 4.2+), because upstream only ships a legacy add-on and Blender 5.x hides those by default — installing upstream's way leaves the file present but invisible in Preferences. Re-run it after upstream upgrades; it also removes the legacy copy, which would otherwise fight for the same port. Copy this plugin folder into the Mosael data directory under `plugins/blender`, scan it in Plugins, create a connection, grant its declared permissions, and enable it. Keep Blender and the desktop backend on the same computer.
 
 Use **3D scene → Blender** to check the connection, send a saved scene, and receive edits into a separate new scene. Cameras return as sampled editable shots; geometry returns as one GLB model. Download the associated `.blend` project for native editing. Agent tools work with the model you choose. See the limitations above before using large scenes or advanced Blender animation/materials.
