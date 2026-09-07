@@ -26,7 +26,7 @@ vi.mock("@/app/preferences", () => ({
     })[key] ?? key,
 }));
 
-import { CredentialRows, ToolRow } from "./PluginsView";
+import { CredentialRows, FieldInput, ToolRow } from "./PluginsView";
 
 function wrap(node: React.ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -167,5 +167,47 @@ describe("typed plugin controls", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "options" }), { target: { value: '{"copies":2}' } });
     fireEvent.click(screen.getByRole("button", { name: "运行" }));
     await waitFor(() => expect(api).toHaveBeenLastCalledWith(expect.any(String), { method: "POST", body: JSON.stringify({ input: { overwrite: false, options: { copies: 2 } }, workspace_id: "workspace-a" }) }));
+  });
+});
+
+describe("配置字段的控件", () => {
+  const field = (over: Partial<Record<string, unknown>> = {}) =>
+    ({ key: "K", label: "标签", type: "string", help: "", required: true, secret: false, options: [], default: "", ...over }) as never;
+
+  it("只有一个选项的枚举不给下拉 —— 它是钉死的值", () => {
+    // Blender 插件的「关闭上游遥测」就是这样:清单里只声明了一个选项。渲染成下拉等于摆一个
+    // 点开只有一项的控件,看起来能操作、实际不能。
+    render(
+      <FieldInput
+        field={field({ type: "enum", label: "关闭上游遥测", options: [{ value: "true", label: "已关闭" }] })}
+        value="true"
+        onChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("已关闭")).toBeTruthy();
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.queryByRole("combobox")).toBeNull();
+  });
+
+  it("两个及以上选项才给下拉", () => {
+    render(
+      <FieldInput
+        field={field({
+          type: "enum",
+          label: "Blender 主机",
+          options: [{ value: "127.0.0.1", label: "127.0.0.1" }, { value: "localhost", label: "localhost" }],
+        })}
+        value="127.0.0.1"
+        onChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("button")).toBeTruthy();
+  });
+
+  it("改动能传出去", () => {
+    const onChange = vi.fn();
+    render(<FieldInput field={field({ label: "连接端口" })} value="9876" onChange={onChange} />);
+    fireEvent.change(screen.getByDisplayValue("9876"), { target: { value: "9877" } });
+    expect(onChange).toHaveBeenCalledWith("9877");
   });
 });

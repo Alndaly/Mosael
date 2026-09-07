@@ -4,7 +4,7 @@ import React from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, Copy, ExternalLink, KeyRound, Play, Plug, Plus, RefreshCcw, Store, Terminal, Trash2 } from "lucide-react";
+import { BookOpen, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, Copy, ExternalLink, KeyRound, Lock, Play, Plug, Plus, RefreshCcw, Store, Terminal, Trash2 } from "lucide-react";
 
 import {
   api,
@@ -17,7 +17,7 @@ import {
 import { toast } from "sonner";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { docsUrl } from "@/lib/deepLink";
-import { ConfirmDialog } from "@/components/app/modals";
+import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
@@ -146,6 +146,7 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
   const { locale } = usePreferences();
   const qc = useQueryClient();
   const [confirmUninstall, setConfirmUninstall] = React.useState(false);
+  const [addOpen, setAddOpen] = React.useState(false);
   const [draft, setDraft] = React.useState<Record<string, string>>({});
 
   const uninstall = useMutation({
@@ -162,6 +163,8 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
         body: JSON.stringify({ config: draft }),
       }),
     onSuccess: () => {
+      // 建好就关窗、清草稿 —— 留着开会让人以为没成功,而新连接已经出现在下面的列表里了。
+      setAddOpen(false);
       setDraft({});
       invalidatePlugins(qc);
     },
@@ -241,92 +244,148 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
         <ConnectionCard key={instance.id} pkg={pkg} instance={instance} workspaceId={workspaceId} />
       ))}
 
-      {instances.length === 0 && (
-        <EmptyState size="compact" icon={<Plug size={15} />} title={t("pluginNoConnections")} body={t("pluginNoConnectionsBody")} />
-      )}
-
-      {canAdd && (() => {
-        const fields = pkg.config_fields ?? [];
-        const addButton = (
-          <Button className="shrink-0" size="default" loading={createInstance.isPending} onClick={() => createInstance.mutate()}>
-            <Plus size={13} /> {t("pluginAddConnection")}
+      {/* **一个按钮进弹窗,不是常驻的内联表单。** 内联那版有两个毛病:已经有连接时它仍然
+          占着版面,而"再建一个"是低频操作;而且一个都没有时,它和空状态在说同一件事 ——
+          后者的说明几乎逐字重复前者("同一个插件可以接多个,比如每个平台一个")。 */}
+      {instances.length === 0 ? (
+        <EmptyState
+          size="compact"
+          icon={<Plug size={15} />}
+          title={t("pluginNoConnections")}
+          body={t("pluginNoConnectionsBody")}
+          action={
+            canAdd ? (
+              <Button size="sm" onClick={() => setAddOpen(true)}>
+                <Plus size={13} /> {t("pluginAddConnection")}
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : canAdd ? (
+        <div className="flex justify-start">
+          <Button variant="secondary" size="sm" onClick={() => setAddOpen(true)}>
+            <Plus size={13} /> {t("pluginNewConnection")}
           </Button>
-        );
-        const heading = (
-          <div className="grid min-w-0 gap-1">
-            <span className="text-ui-sm font-semibold text-foreground">{t("pluginNewConnection")}</span>
-            <p className="m-0 text-ui-xs leading-[1.55] text-muted-foreground">
-              {/* 没有配置项时还要分一次:有凭据的插件说"不需要配置"是错的 —— AppKey 这些确实
-                  要填,只是填在**建好之后的连接上**(凭据挂在连接上,不是插件上)。 */}
-              {fields.length
-                ? t("pluginNewConnectionDesc")
-                : (pkg.credential_fields ?? []).length
-                  ? t("pluginNewConnectionCreds")
-                  : t("pluginNewConnectionSimple")}
-            </p>
-          </div>
-        );
-        // **没有配置项时是一行两栏**:左边说这是什么,右边一颗按钮,上下居中。
-        // 单独占一行的话,那一行除了按钮什么都没有 —— 一整条空白横在中间,像还没做完。
-        if (!fields.length) {
-          return (
-            <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-border px-3 py-2.5">
-              {heading}
-              {addButton}
-            </div>
-          );
-        }
-        return (
-          <div className="grid gap-2 rounded-lg border border-dashed border-border px-3 py-2.5">
-            {heading}
-            {/* 字段**铺满这一行**,按钮跟在末尾。此前是 flex-wrap + 各自按内容宽度:只有一个
-                字段时,那一格就是一小块漂在一整行空白里,读起来像这块没做完。 */}
-            <div className="flex flex-wrap items-center gap-1.5 [&>*:not(:last-child)]:min-w-0 [&>*:not(:last-child)]:flex-1">
-              {fields.map((field) => (
-                <FieldInput
-                  key={field.key}
-                  field={field}
-                  value={draft[field.key] ?? field.default}
-                  onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))}
-                />
-              ))}
-              {addButton}
-            </div>
-          </div>
-        );
-      })()}
+        </div>
+      ) : null}
+
+      {canAdd && (
+        <NewConnectionDialog
+          pkg={pkg}
+          open={addOpen}
+          onOpenChange={setAddOpen}
+          draft={draft}
+          setDraft={setDraft}
+          pending={createInstance.isPending}
+          onCreate={() => createInstance.mutate()}
+        />
+      )}
     </div>
   );
 }
 
-/** 一个配置项 / 凭据项的控件。枚举给下拉、开关给 Switch,别的给文本框 —— 类型是声明出来的。 */
-function FieldInput({
+/**
+ * 新建一个连接。**弹窗而不是常驻表单** —— 建连接是低频操作,而它此前一直占着连接列表下方
+ * 的版面;一个连接都没有时,它的说明还和空状态几乎逐字重复。
+ *
+ * 每个字段自带标签与说明。此前三个控件并排、只显示值:`127.0.0.1` 和 `9876` 还能猜出是主机
+ * 和端口,而 Blender 插件那个「已关闭」(其实是"关闭上游遥测")完全猜不出来 —— 标签一直在
+ * 清单里,只是被塞进了 placeholder,而 placeholder 只在空着时显示。
+ */
+function NewConnectionDialog({
+  pkg, open, onOpenChange, draft, setDraft, pending, onCreate,
+}: {
+  pkg: PluginPackage;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  draft: Record<string, string>;
+  setDraft: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  pending: boolean;
+  onCreate: () => void;
+}) {
+  const t = useI18n();
+  const fields = pkg.config_fields ?? [];
+  // 没有配置项时还要分一次:有凭据的插件说"不需要配置"是错的 —— AppKey 这些确实要填,
+  // 只是填在**建好之后的连接上**(凭据挂在连接上,不是插件上)。
+  const hint = fields.length
+    ? t("pluginNewConnectionDesc")
+    : (pkg.credential_fields ?? []).length
+      ? t("pluginNewConnectionCreds")
+      : t("pluginNewConnectionSimple");
+  return (
+    <ModalShell
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t("pluginNewConnection")}
+      className="w-[420px]"
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" disabled={pending} onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
+          <Button loading={pending} onClick={onCreate}><Plus size={13} /> {t("pluginAddConnection")}</Button>
+        </div>
+      }
+    >
+      <div className="grid gap-4">
+        <p className="m-0 text-ui-sm leading-[1.6] text-muted-foreground">{hint}</p>
+        {fields.map((field) => (
+          <label key={field.key} className="grid gap-1.5">
+            <span className="text-ui-sm font-medium text-foreground">{field.label}</span>
+            <FieldInput
+              field={field}
+              value={draft[field.key] ?? field.default}
+              onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))}
+            />
+            {/* 清单里的 help 此前一个字都没显示。Blender 插件那条正是用户会撞到的限制:
+                「互通要求 Blender 与后端在同一台电脑」。 */}
+            {field.help && <small className="text-ui-xs leading-[1.5] text-muted-foreground">{field.help}</small>}
+          </label>
+        ))}
+      </div>
+    </ModalShell>
+  );
+}
+
+/** 一个配置项 / 凭据项的控件。枚举给下拉、开关给 Switch,别的给文本框 —— 类型是声明出来的。
+ *
+ *  **只有一个选项的枚举不给下拉。** 那是插件作者钉死的值(Blender 插件的「关闭上游遥测」
+ *  就是这样),渲染成下拉等于摆一个点开只有一项的控件 —— 看起来能操作、实际不能,比直接
+ *  说明它是锁定的更让人困惑。 */
+export function FieldInput({
   field,
   value,
   onChange,
+  className,
 }: {
   field: PluginField;
   value: string;
   onChange: (value: string) => void;
+  className?: string;
 }) {
   const t = useI18n();
   if (field.type === "enum") {
+    const options = (field.options as { value: string; label: string }[]) ?? [];
+    if (options.length <= 1) {
+      const only = options[0];
+      return (
+        <p className={cn("m-0 flex h-10 min-w-0 items-center gap-1.5 text-ui-sm text-muted-foreground", className)}>
+          <Lock size={12} className="shrink-0" />
+          <span className="truncate">{only?.label ?? value}</span>
+        </p>
+      );
+    }
     return (
       <SearchableSelect
-        className="w-[180px]"
+        className={className}
         value={value}
         onValueChange={onChange}
         placeholder={t("pluginPickField").replace("{label}", field.label)}
-        options={(field.options as { value: string; label: string }[]).map((option) => ({
-          value: option.value,
-          label: option.label,
-        }))}
+        options={options.map((option) => ({ value: option.value, label: option.label }))}
       />
     );
   }
   return (
     <Input
-      className="w-[220px] max-w-full"
+      className={className}
       type={field.secret ? "password" : field.type === "number" ? "number" : "text"}
       value={value}
       placeholder={field.label}
