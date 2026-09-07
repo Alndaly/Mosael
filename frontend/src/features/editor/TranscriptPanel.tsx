@@ -1,5 +1,6 @@
 import { SaveToNote } from "@/features/notes/SaveToNote";
-import type { NoteSource } from "@/api/domains/notes";
+import { useNoteStrings } from "@/features/notes/strings";
+import { noteExportVariants, type NoteExportLine } from "@/features/editor/noteExport";
 import React from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AudioLines, Captions, Loader2, MessageSquareText, Mic, Scissors, Sparkles, Split, SplitSquareVertical, Trash2, X } from "lucide-react";
@@ -64,6 +65,7 @@ export function TranscriptPanel({
   onSplitPoints?: (cuts: Array<{ clipId: string; srcTimes: number[] }>) => void;
 }) {
   const t = useI18n();
+  const s = useNoteStrings();
   const qc = useQueryClient();
   const playhead = useEditorStore((state) => state.playhead);
   const [selected, setSelected] = React.useState<TokenSelection>(new Map());
@@ -526,21 +528,24 @@ export function TranscriptPanel({
     );
   }
 
-  const excerptSegments = projected.filter(segment => selected.size
-    ? [...selected.values()].some(token => token.clipId === segment.clipId && token.srcStart < segment.srcEnd && token.srcEnd > segment.srcStart)
-    : playhead >= segment.timelineStart && playhead < segment.timelineEnd);
-  const excerptSources: NoteSource[] = excerptSegments.flatMap(segment => {
-    const clip = clipById.get(segment.clipId);
-    return clip?.asset_id ? [{kind: "asset" as const, id: clip.asset_id, label: sequence.name,
-      quote: segment.text, start: segment.srcStart, end: segment.srcEnd}] : [];
-  });
-  const excerptText = excerptSources.map(source => `> ${source.quote.replace(/\n/g, "\n> ")}\n\n${source.label} · ${source.start?.toFixed(1)}–${source.end?.toFixed(1)}s`).join("\n\n");
+  // **有选中就导选中,没选中就导全文。** 此前"没选中"落到播放头那一句 —— 于是把一份
+  // 逐字稿搬进文档只能一句一句点。范围是一条规则,不是对话框里的又一个开关。
+  const exportSegments = selected.size
+    ? projected.filter(segment => [...selected.values()].some(token =>
+        token.clipId === segment.clipId && token.srcStart < segment.srcEnd && token.srcEnd > segment.srcStart))
+    : projected;
+  const exportLines: NoteExportLine[] = exportSegments.map(segment => ({
+    text: segment.text, start: segment.srcStart, end: segment.srcEnd,
+    assetId: clipById.get(segment.clipId)?.asset_id ?? undefined,
+  }));
+  const exportVariants = noteExportVariants(exportLines, sequence.name, s);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-wrap gap-2 border-b border-border px-3 py-3">
         {transcribeButton}
-        <SaveToNote workspaceId={sequence.workspace_id} content={excerptText} sources={excerptSources} className={PILL} />
+        <SaveToNote workspaceId={sequence.workspace_id} variants={exportVariants} className={PILL}
+          label={selected.size ? s.excerpt : s.saveAll} />
         <button
           type="button"
           className={cn(PILL, showSilences && "border-[color-mix(in_oklab,var(--primary)_40%,var(--border))] bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))] text-primary enabled:hover:text-primary")}

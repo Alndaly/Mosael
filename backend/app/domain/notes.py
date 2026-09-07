@@ -88,6 +88,43 @@ def save_note(db: Session, workspace_id: str, note_id: str, base_revision: int, 
     return note
 
 
+#: 追加撞上并发写入时重读当前修订再试几次。冲突只可能来自"另一次写入刚落地",
+#: 重读就能解决;给上限只是不在病态争用下无限打转。
+#: 追加的内容与原文之间用它隔开。**前端按同一个串认出"这次改动是纯追加"**,从而把
+#: 后台追加并进正在编辑的草稿而不打断打字 —— 见 contracts/shared-constants.json。
+APPEND_SEPARATOR = "\n\n"
+
+APPEND_RETRIES = 4
+
+
+def append_note(db: Session, workspace_id: str, note_id: str, markdown: str,
+                sources: list[dict]) -> Note:
+    """把一段内容追加到笔记末尾。
+
+    **不拿调用方的 base_revision 做条件更新。** 追加到末尾与文档别处的编辑可交换,而调用方
+    手里的修订号往往来自一次列表查询,早就旧了 —— 用它做 CAS,只会把两件本可并存的事判成
+    冲突,然后让正在打字的那个人吃 409。
+
+    写入本身仍然是 CAS 的(`save_note` 内部那条条件 UPDATE 一步没少),只是基准取**服务端
+    当前修订**:撞上真正的并发写就重读再追加,而不是把冲突推给用户。
+    """
+    for attempt in range(APPEND_RETRIES):
+        note = get_note(db, workspace_id, note_id)
+        if note.trashed:
+            raise HTTPException(409, "请先从回收站恢复笔记")
+        data = snapshot(note)
+        data["markdown"] = APPEND_SEPARATOR.join(filter(None, [note.markdown, markdown]))
+        data["sources"] = note.sources + sources
+        try:
+            return save_note(db, workspace_id, note_id, note.revision,
+                             NoteContent.model_validate(data))
+        except HTTPException as exc:
+            # 409 = 读到写之间有人抢先落地了一版。重读再追加;其余错误照原样上抛。
+            if exc.status_code != 409 or attempt == APPEND_RETRIES - 1:
+                raise
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
 def query_notes(db: Session, workspace_id: str, query: str = "", *, limit: int = 20, offset: int = 0, trashed: bool = False) -> list[Note]:
     """Literal, workspace-scoped knowledge lookup; excludes the recycle bin."""
     import json

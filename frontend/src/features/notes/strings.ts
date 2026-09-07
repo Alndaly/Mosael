@@ -20,6 +20,10 @@ const zh = {
   content: "笔记正文", placeholder: "开始写作，或输入 @ 引用另一篇笔记…", addReference: "引用笔记",
   topicHint: "专题，用逗号分隔", tagHint: "标签，用逗号分隔", sourcesEmpty: "从素材或对话保存摘录后，可在这里回到来源。",
   saveTo: "保存到笔记", append: "追加到已有笔记", choose: "选择笔记", excerpt: "摘录", done: "已保存到笔记",
+  shape: "正文形状", shapePlain: "正文", shapeCited: "带时间戳引用",
+  willSave: (chars:number, sources:number)=>`将写入约 ${chars} 字，附 ${sources} 条来源`,
+  saveAll: "全部存为笔记", saveAllTranscript: "把整份逐字稿存成一篇笔记。选中了片段就只存选中的那些。",
+  saveAllSubtitles: "把整条字幕轨存成一篇笔记；有译文时原文与译文一起写入。",
   historyHint: "恢复会创建新版本，已有版本仍然保留。", localDraft: "已恢复本机未保存草稿", more: "加载更多",
   focus: "专注写作", exitFocus: "显示列表", unavailable: "来源已删除或无法访问", loading: "正在载入…", version: "版本",
 };
@@ -45,6 +49,10 @@ const en: Strings = {
   content: "Note content", placeholder: "Start writing, or type @ to reference a note…", addReference: "Reference a note",
   topicHint: "Topics, separated by commas", tagHint: "Tags, separated by commas", sourcesEmpty: "Excerpts saved from media or conversations link back to their sources here.",
   saveTo: "Save to notes", append: "Append to a note", choose: "Choose a note", excerpt: "Excerpt", done: "Saved to notes",
+  shape: "Body shape", shapePlain: "Prose", shapeCited: "Quotes with timecodes",
+  willSave: (chars:number, sources:number)=>`About ${chars} characters and ${sources} source references`,
+  saveAll: "Save all to notes", saveAllTranscript: "Save the whole transcript as one note. With a selection, only the selected lines.",
+  saveAllSubtitles: "Save the whole subtitle track as one note; translations are written alongside the original.",
   historyHint: "Restoring creates a new version and keeps previous versions.", localDraft: "Recovered a local unsaved draft", more: "Load more",
   focus: "Focus on writing", exitFocus: "Show list", unavailable: "Source deleted or unavailable", loading: "Loading…", version: "Version",
 };

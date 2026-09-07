@@ -15,6 +15,7 @@ import { NoteEditor, NoteReader } from "./NoteEditor";
 import { SourceLink } from "./NoteSources";
 import { useNoteStrings } from "./strings";
 import { NoteList, type NoteListAction } from "./NoteList";
+import { mergeAppendedNote } from "./appendMerge";
 import "./notes.css";
 type NoteController = { id:string; read:()=>Note; update:(patch:Partial<NoteContent>)=>Promise<Note> };
 
@@ -134,6 +135,25 @@ function NoteDocument({ note, controller, focus, onFocus }: { note: Note; contro
     controller.current = current;
     return () => { if(controller.current===current)controller.current=null; };
   });
+  /**
+   * 后台往这篇文档追加了内容(逐字稿/字幕导出、智能体写入)时,把那一段并进当前草稿,
+   * 而不是等下一次自动保存撞 409、再让用户去点「重新载入」。
+   *
+   * 合并本身是纯函数(`mergeAppendedNote`),它也负责判断这次改动到底算不算一次追加;
+   * 这里只做副作用:落草稿、对齐修订号、把状态从冲突里放出来。
+   */
+  React.useEffect(() => {
+    if (busy.current) return;
+    const known = JSON.parse(saved.current) as Note;
+    const merged = mergeAppendedNote(known, note, latest.current);
+    if (!merged) return;
+    // 服务端那一版就是新的比较基准:下一次自动保存据此判断"还有没有没存的改动"。
+    saved.current = JSON.stringify(note);
+    const settled = JSON.stringify(merged) === saved.current;
+    latest.current = merged; setDraft(merged); setError(""); setStatus(settled ? "saved" : "draft");
+    if (settled) localStorage.removeItem(storageKey);
+    else { try { localStorage.setItem(storageKey, JSON.stringify(merged)); } catch { /* 草稿仍在内存里。 */ } }
+  }, [note, status, storageKey]);
   React.useEffect(() => { if (status === "error") return; const timer = setTimeout(() => void persist(), 700); return () => clearTimeout(timer); }, [draft, status, persist]);
   React.useEffect(() => { mounted.current = true; const unload = (e: BeforeUnloadEvent) => { if (JSON.stringify(latest.current) !== saved.current) { e.preventDefault(); e.returnValue = ""; } }; window.addEventListener("beforeunload", unload); return () => { mounted.current = false; window.removeEventListener("beforeunload", unload); void persist(); }; }, [persist]);
   React.useEffect(() => {

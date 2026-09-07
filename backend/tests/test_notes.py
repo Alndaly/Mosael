@@ -45,7 +45,7 @@ def test_append_preserves_text_and_provenance_and_pins_note_revision():
     c, ws = setup()
     asset = make_video_asset(c, ws)
     n = c.post("/api/notes", json={"workspace_id": ws, "markdown": "研究问题"}).json()
-    appended = c.post(f"/api/notes/{n['id']}/append", json={"workspace_id": ws, "base_revision": 1,
+    appended = c.post(f"/api/notes/{n['id']}/append", json={"workspace_id": ws,
         "markdown": "> 原话", "sources": [{"kind": "asset", "id": asset["id"], "start": 1, "end": 3, "quote": "原话"}]}).json()
     assert appended["markdown"] == "研究问题\n\n> 原话"
     assert appended["sources"][0]["start"] == 1
@@ -84,3 +84,43 @@ def test_permanent_delete_requires_trash_access_and_current_revision():
     from app.db.models import NoteRevision
     with SessionLocal() as db:
         assert db.get(NoteRevision, (n["id"], 1)) is None
+
+
+def test_追加不被过期的修订号挡住_也不覆盖并发编辑():
+    """追加到末尾与文档别处的编辑可交换,不该判成冲突。
+
+    现场:一边从逐字稿往笔记里追加句子,一边有人开着这篇文档在写。此前客户端要带
+    `base_revision`,而它来自笔记列表那次查询——追一句就旧一次,于是第二句起全是 409。
+    """
+    c, ws = setup()
+    n = c.post("/api/notes", json={"workspace_id": ws, "markdown": "开头"}).json()
+    # 有人先编辑了一版,笔记来到 revision 2;下面追加时手里那份仍然是 revision 1。
+    c.patch(f"/api/notes/{n['id']}", json={**n, "base_revision": 1, "markdown": "开头(改过)"})
+
+    for line in ("第一句", "第二句", "第三句"):
+        r = c.post(f"/api/notes/{n['id']}/append", json={"workspace_id": ws, "markdown": line})
+        assert r.status_code == 200, r.text
+
+    latest = c.get(f"/api/notes/{n['id']}", params={"workspace_id": ws}).json()
+    # 编辑的那一版没被覆盖,三句都在,顺序不乱。
+    assert latest["markdown"] == "开头(改过)\n\n第一句\n\n第二句\n\n第三句"
+    assert latest["revision"] == 5
+
+
+def test_追加不能复活回收站里的笔记():
+    c, ws = setup()
+    n = c.post("/api/notes", json={"workspace_id": ws, "markdown": "正文"}).json()
+    c.patch(f"/api/notes/{n['id']}", json={**n, "base_revision": 1, "trashed": True})
+    r = c.post(f"/api/notes/{n['id']}/append", json={"workspace_id": ws, "markdown": "追加"})
+    assert r.status_code == 409
+
+
+def test_追加仍然校验来源归属():
+    """放宽的是修订号,不是鉴权——跨工作区的来源照旧拒绝。"""
+    c, ws = setup()
+    other = c.post("/api/workspaces", json={"name": "别人的"}).json()["id"]
+    asset = make_video_asset(c, other)
+    n = c.post("/api/notes", json={"workspace_id": ws, "markdown": "正文"}).json()
+    r = c.post(f"/api/notes/{n['id']}/append", json={"workspace_id": ws, "markdown": "引用",
+        "sources": [{"kind": "asset", "id": asset["id"], "start": 1, "end": 3}]})
+    assert r.status_code == 404
