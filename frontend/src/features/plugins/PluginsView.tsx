@@ -28,6 +28,8 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
 import { usePersistentSelection } from "@/lib/usePersistentTab";
+import { FIELD_TRIGGER_CHEVRON, FIELD_TRIGGER_CLASS } from "@/components/ui/field-trigger";
+import { formatInvocationResult } from "@/features/plugins/invocationResult";
 import { cn } from "@/lib/utils";
 
 /**
@@ -193,6 +195,13 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
           <h2 className="m-0 truncate text-xl font-semibold tracking-tight text-foreground">{pkg.name}</h2>
           <span className="flex shrink-0 items-center gap-1">
+            {/* 「新建连接」排在最前:它是这一页最常做的事。卸载留在最后 —— 破坏性动作
+                不该和常用动作贴在一起,手滑的代价不对等。 */}
+            {canAdd && (
+              <Button variant="ghost" size="default" className="text-muted-foreground" onClick={() => setAddOpen(true)}>
+                <Plus size={13} /> {t("pluginNewConnection")}
+              </Button>
+            )}
             {/* 「文档」指向 **Mosael 自己的插件文档**,不是插件作者的站点。
                 这一页上的问题是"连接是什么、凭据填哪儿、权限为什么要授、工具为什么默认不开"
                 —— 那些是本应用的概念,只有我们说得清;把人送到百度网盘的 API 文档上,
@@ -244,9 +253,12 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
         <ConnectionCard key={instance.id} pkg={pkg} instance={instance} workspaceId={workspaceId} />
       ))}
 
-      {/* **一个按钮进弹窗,不是常驻的内联表单。** 内联那版有两个毛病:已经有连接时它仍然
-          占着版面,而"再建一个"是低频操作;而且一个都没有时,它和空状态在说同一件事 ——
-          后者的说明几乎逐字重复前者("同一个插件可以接多个,比如每个平台一个")。 */}
+      {/* **入口在页头**(和文档/主页/卸载同一排),点开是弹窗 —— 不再是常驻的内联表单:
+          已经有连接时它占着版面,而"再建一个"是低频操作;一个都没有时,它和空状态还在说
+          同一件事(后者的说明几乎逐字重复前者)。
+          空的时候**两个入口都在**:页头那颗是常驻位置,空状态这颗在屏幕中央 —— 页面空着时
+          人的视线落在中央,右上角容易整个错过。同一个动作出现两次在这里是可以的:重复的是
+          按钮不是说明文字,而后者才是上一版真正的毛病(两块各写一遍"同一个插件可以接多个")。 */}
       {instances.length === 0 ? (
         <EmptyState
           size="compact"
@@ -261,12 +273,6 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
             ) : undefined
           }
         />
-      ) : canAdd ? (
-        <div className="flex justify-start">
-          <Button variant="secondary" size="sm" onClick={() => setAddOpen(true)}>
-            <Plus size={13} /> {t("pluginNewConnection")}
-          </Button>
-        </div>
       ) : null}
 
       {canAdd && (
@@ -366,11 +372,17 @@ export function FieldInput({
     const options = (field.options as { value: string; label: string }[]) ?? [];
     if (options.length <= 1) {
       const only = options[0];
+      // **长得还是一个字段框。** 共用 FIELD_TRIGGER_CLASS,与旁边的下拉逐像素一致 ——
+      // 排成一列时,一行光秃秃的文字读起来像"这块没做完",那比"假下拉"更糟。
+      // 变的只有两处:锁图标占了箭头的位置(说明它是钉死的),以及整块不可点。
       return (
-        <p className={cn("m-0 flex h-10 min-w-0 items-center gap-1.5 text-ui-sm text-muted-foreground", className)}>
-          <Lock size={12} className="shrink-0" />
-          <span className="truncate">{only?.label ?? value}</span>
-        </p>
+        <div
+          aria-readonly="true"
+          className={cn(FIELD_TRIGGER_CLASS, "cursor-default text-muted-foreground", className)}
+        >
+          <span className="min-w-0 truncate">{only?.label ?? value}</span>
+          <Lock className={cn(FIELD_TRIGGER_CHEVRON, "size-3.5")} />
+        </div>
       );
     }
     return (
@@ -1044,17 +1056,21 @@ const RESULT_RENDER_LIMIT = 8000;
 function ResultBlock({ ok, body }: { ok: boolean; body: unknown }) {
   const t = useI18n();
   // 序列化本身不贵,但没必要每次重渲染都跑;真正要防的是下面那段文本被重新排版。
-  const full = React.useMemo(() => (typeof body === "string" ? body : JSON.stringify(body, null, 2)), [body]);
+  // **先展开"被编码成字符串的 JSON"**:MCP 这一侧很常见(FastMCP 把字符串返回值包进
+  // `result`),直接 stringify 会把那层转义再转义一遍 —— 中文变 \u 转义、换行变字面的
+  // \n,一份结构清晰的场景数据糊成一整片。见 invocationResult.ts。
+  const full = React.useMemo(() => formatInvocationResult(body), [body]);
   const clipped = full.length > RESULT_RENDER_LIMIT;
   const shown = clipped ? full.slice(0, RESULT_RENDER_LIMIT) : full;
   return (
-    <div className="grid gap-1">
+    // **一条分割线,不是又一个框。** 外面那张卡片已经有边框了,结果再套一层带色边框 + 圆角 +
+    // 独立底色就成了"框中框",而它并不表达任何新东西 —— 成败在卡片顶部已经由图标和状态文字
+    // 说过一遍。失败时只留文字用红色,那是**这段内容本身**的属性,不需要给它画一个红盒子。
+    <div className="grid gap-1 border-t border-divider px-2 pb-2 pt-2">
       <pre
         className={cn(
-          "m-0 max-h-[200px] overflow-auto whitespace-pre-wrap rounded-md px-2 py-1.5 font-mono text-ui-xs leading-[1.5] [word-break:break-word]",
-          ok
-            ? "border border-[color-mix(in_oklab,var(--success)_30%,var(--border))] bg-[color-mix(in_oklab,var(--success)_8%,var(--background))]"
-            : "border border-[color-mix(in_oklab,var(--destructive)_30%,var(--border))] bg-[color-mix(in_oklab,var(--destructive)_7%,var(--background))] text-destructive",
+          "m-0 max-h-[200px] overflow-auto whitespace-pre-wrap font-mono text-ui-xs leading-[1.5] [word-break:break-word]",
+          ok ? "text-muted-foreground" : "text-destructive",
         )}
       >
         {shown}
