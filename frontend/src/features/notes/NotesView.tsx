@@ -1,6 +1,6 @@
 import React from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, SearchX, MoreHorizontal, Check, X, Plus, Star, Download, Upload, PanelLeftClose, PanelLeftOpen, History, Info, Trash2, RotateCcw } from "lucide-react";
+import { BookOpen, CheckSquare, SearchX, MoreHorizontal, Check, X, Plus, Star, Download, Upload, PanelLeftClose, PanelLeftOpen, History, Info, Trash2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { api, type Workspace } from "@/api/client";
 import { ApiError } from "@/api/transport";
@@ -14,7 +14,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { NoteEditor, NoteReader } from "./NoteEditor";
 import { SourceLink } from "./NoteSources";
 import { useNoteStrings } from "./strings";
+import { NoteList, type NoteListAction } from "./NoteList";
 import "./notes.css";
+type NoteController = { id:string; read:()=>Note; update:(patch:Partial<NoteContent>)=>Promise<Note> };
+
 
 function locationNote() { return new URLSearchParams(window.location.hash.split("?")[1] || "").get("note"); }
 export function exportMarkdown(note: Pick<Note, "title" | "markdown" | "sources">) {
@@ -26,6 +29,9 @@ export function exportMarkdown(note: Pick<Note, "title" | "markdown" | "sources"
 export function NotesView({ workspace }: { workspace: Workspace }) {
   const s = useNoteStrings(); const qc = useQueryClient();
   const [id, setId] = React.useState(locationNote);
+  const [selecting,setSelecting] = React.useState(false);
+  const controller = React.useRef<NoteController | null>(null);
+
   const [q, setQ] = React.useState(""); const search = React.useDeferredValue(q);
   const [filter, setFilter] = React.useState("all"); const [topic, setTopic] = React.useState("");
   const [focus, setFocus] = React.useState(() => !!locationNote() && window.matchMedia("(max-width: 740px)").matches); const input = React.useRef<HTMLInputElement>(null);
@@ -36,20 +42,50 @@ export function NotesView({ workspace }: { workspace: Workspace }) {
   const topics = [...new Set(rows.flatMap(n => n.topics))];
   const shown = rows.filter(n => (filter !== "favorite" || n.favorite) && (!topic || n.topics.includes(topic)));
   const selected = useQuery({ queryKey: ["note", workspace.id, id], queryFn: () => getNote(workspace.id, id!), enabled: !!id });
+  async function listAction(action:NoteListAction, targets:Note[], value?:string) {
+    const done:string[]=[];let failed=0;
+    for(const target of targets) {
+      try {
+        const active=controller.current?.id===target.id?controller.current:null;
+        const current=active?active.read():await getNote(workspace.id,target.id);
+        if(action==="link") {await navigator.clipboard.writeText(noteHref(current.id));toast.success(s.copiedLink);}
+        else if(action==="export") exportMarkdown(current);
+        else if(action==="duplicate") await createNote(workspace.id,{markdown:current.markdown,project_id:current.project_id,tags:current.tags,topics:current.topics,sources:current.sources,title:`${current.title||s.untitled} · ${s.copySuffix}`,trashed:false});
+        else if(action==="delete") {
+          if(!current.trashed)throw new Error("Move to trash first");
+          await api(`/api/notes/${current.id}?workspace_id=${encodeURIComponent(workspace.id)}&base_revision=${current.revision}`,{method:"DELETE"});
+          localStorage.removeItem(`mosael.note.draft.${workspace.id}.${current.id}`);
+          qc.removeQueries({queryKey:["note",workspace.id,current.id]});
+          qc.removeQueries({queryKey:["note-history",current.id]});
+        } else {
+          const patch:Partial<NoteContent>=action==="rename"?{title:value||""}:action==="trash"||action==="restore"?{trashed:action==="trash"}:{favorite:action==="favorite"};
+          const result=active?await active.update(patch):await saveNote({...current,...patch});
+          qc.setQueryData(["note",workspace.id,current.id],result);
+        }
+        done.push(target.id);
+      }catch(e){failed++;toast.error(String(e));}
+    }
+    await qc.invalidateQueries({queryKey:["notes",workspace.id]});
+    if(["trash","restore","delete"].includes(action)&&id&&done.includes(id))window.location.hash="#/notes";
+    if(failed)toast.error(s.partialFailure(failed));
+    return done;
+  }
   async function add(markdown = "", title = "") { try { setFilter("all"); setQ(""); setTopic(""); const n = await createNote(workspace.id, { title, markdown }); void qc.invalidateQueries({ queryKey: ["notes", workspace.id] }); openNote(n.id); if (window.matchMedia("(max-width: 740px)").matches) setFocus(true); } catch (e) { toast.error(String(e)); } }
   return <div className={`notes-layout ${!focus ? "notes-show-list" : ""}`}>
-    {!focus && <aside className="notes-index"><header><h1>{s.title}</h1><button className="note-icon" aria-label={s.new} title={s.new} onClick={() => void add()}><Plus size={17} /></button></header>
+    {!focus && <aside className="notes-index"><header><h1>{s.title}</h1><div className="flex items-center gap-1"><button className="note-icon" title={s.selectNotes} aria-label={s.selectNotes} aria-pressed={selecting} onClick={()=>setSelecting(!selecting)}><CheckSquare size={16}/></button><button className="note-icon" aria-label={s.new} title={s.new} onClick={() => void add()}><Plus size={17} /></button></div></header>
       <Input aria-label={s.search} placeholder={s.search} value={q} onChange={e => setQ(e.target.value)} />
       <nav className="notes-filter">{[["all", s.all], ["favorite", s.favorite], ["trash", s.trash]].map(([key, label]) => <button key={key} aria-pressed={filter === key} onClick={() => { setFilter(key); setTopic(""); window.location.hash = "#/notes"; }}>{label}</button>)}</nav>
       {!!topics.length && <SearchableSelect value={topic} onValueChange={setTopic} options={[{value: "", label: s.topics}, ...topics.map(t => ({value:t,label:t}))]} placeholder={s.topics} />}
-      <div className={`notes-list ${!shown.length ? "notes-list-empty" : ""}`}>{notes.isError ? <p>{String(notes.error)}</p> : notes.isPending ? <p className="p-3 text-xs text-muted-foreground">{s.loading}</p> : shown.length ? shown.map(n => <button key={n.id} className="note-list-row" aria-current={id === n.id} onClick={() => { openNote(n.id); if (window.matchMedia("(max-width: 740px)").matches) setFocus(true); }}><strong>{n.favorite && "☆ "}{n.title || s.untitled}</strong><p>{noteSnippet(n.markdown)}</p><time>{new Date(n.updated_at).toLocaleDateString()}{n.topics.length ? ` · ${n.topics.join(", ")}` : ""}</time></button>) : <div className="note-empty-state"><span className="note-empty-icon">{search || topic ? <SearchX size={24} strokeWidth={1.5} /> : filter === "trash" ? <Trash2 size={24} strokeWidth={1.5} /> : filter === "favorite" ? <Star size={24} strokeWidth={1.5} /> : <BookOpen size={24} strokeWidth={1.5} />}</span><strong>{search || topic ? s.noResults : filter === "trash" ? s.trashEmpty : filter === "favorite" ? s.favoriteEmpty : s.listEmpty}</strong><p>{search || topic ? s.searchHint : filter === "trash" ? s.trashHint : filter === "favorite" ? s.favoriteHint : s.listEmptyHint}</p>{search || topic ? <Button variant="ghost" size="sm" onClick={() => { setQ(""); setTopic(""); }}>{s.clearSearch}</Button> : filter === "all" ? <Button variant="ghost" size="sm" onClick={() => void add()}><Plus size={14} />{s.new}</Button> : null}</div>}{notes.hasNextPage && <Button variant="ghost" onClick={() => void notes.fetchNextPage()}>{s.more}</Button>}</div>
+      <NoteList key={`${workspace.id}:${search}:${filter}:${topic}`} notes={shown} currentId={id} selecting={selecting} onSelecting={setSelecting}
+        onOpen={noteId=>{openNote(noteId);if(window.matchMedia("(max-width: 740px)").matches)setFocus(true);}}
+        onAction={listAction} empty={notes.isError?<p>{String(notes.error)}</p>:notes.isPending?<p className="p-3 text-xs text-muted-foreground">{s.loading}</p>:<div className="note-empty-state"><span className="note-empty-icon">{search || topic ? <SearchX size={24} strokeWidth={1.5} /> : filter === "trash" ? <Trash2 size={24} strokeWidth={1.5} /> : filter === "favorite" ? <Star size={24} strokeWidth={1.5} /> : <BookOpen size={24} strokeWidth={1.5} />}</span><strong>{search || topic ? s.noResults : filter === "trash" ? s.trashEmpty : filter === "favorite" ? s.favoriteEmpty : s.listEmpty}</strong><p>{search || topic ? s.searchHint : filter === "trash" ? s.trashHint : filter === "favorite" ? s.favoriteHint : s.listEmptyHint}</p>{search || topic ? <Button variant="ghost" size="sm" onClick={() => { setQ(""); setTopic(""); }}>{s.clearSearch}</Button> : filter === "all" ? <Button variant="ghost" size="sm" onClick={() => void add()}><Plus size={14} />{s.new}</Button> : null}</div>} more={notes.hasNextPage&&<Button variant="ghost" onClick={()=>void notes.fetchNextPage()}>{s.more}</Button>} />
       <Button variant="ghost" size="sm" onClick={() => input.current?.click()}><Upload size={14} />{s.import}</Button><input hidden ref={input} type="file" accept=".md,.markdown,.txt" onChange={e => { const file = e.target.files?.[0]; if (file) { if (file.size > 500000) toast.error("Maximum 500 KB"); else void file.text().then(text => add(text, file.name.replace(/\.[^.]+$/, ""))); } e.target.value = ""; }} />
     </aside>}
-    {selected.data ? <NoteDocument key={`${workspace.id}:${selected.data.id}`} note={selected.data} focus={focus} onFocus={() => setFocus(!focus)} /> : <main className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-8 text-center"><BookOpen size={28} className="text-muted-foreground" /><h2 className="text-lg font-medium">{selected.isError ? s.unavailable : id ? s.loading : s.empty}</h2><p className="max-w-sm text-sm leading-relaxed text-muted-foreground">{!id && s.emptyHint}</p>{(!id || selected.isError) && <Button onClick={() => void add()}><Plus size={15} />{s.new}</Button>}</main>}
+    {selected.data ? <NoteDocument key={`${workspace.id}:${selected.data.id}`} note={selected.data} controller={controller} focus={focus} onFocus={() => setFocus(!focus)} /> : <main className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-8 text-center"><BookOpen size={28} className="text-muted-foreground" /><h2 className="text-lg font-medium">{selected.isError ? s.unavailable : id ? s.loading : s.empty}</h2><p className="max-w-sm text-sm leading-relaxed text-muted-foreground">{!id && s.emptyHint}</p>{(!id || selected.isError) && <Button onClick={() => void add()}><Plus size={15} />{s.new}</Button>}</main>}
   </div>;
 }
 
-function NoteDocument({ note, focus, onFocus }: { note: Note; focus: boolean; onFocus: () => void }) {
+function NoteDocument({ note, controller, focus, onFocus }: { note: Note; controller: React.MutableRefObject<NoteController | null>; focus: boolean; onFocus: () => void }) {
   const s = useNoteStrings(); const qc = useQueryClient();
   const storageKey = `mosael.note.draft.${note.workspace_id}.${note.id}`;
   const [draft, setDraft] = React.useState<Note>(() => { try { const cached = JSON.parse(localStorage.getItem(storageKey) || "null") as Note | null; return cached?.id === note.id && cached.workspace_id === note.workspace_id ? cached : note; } catch { return note; } });
@@ -59,6 +95,7 @@ function NoteDocument({ note, focus, onFocus }: { note: Note; focus: boolean; on
   const [moreOpen, setMoreOpen] = React.useState(false);
   const [mode, setMode] = React.useState("edit"); const [properties, setProperties] = React.useState(false);
   const [history, setHistory] = React.useState(false);
+  const [referenceRevision,setReferenceRevision] = React.useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = React.useState(false); const [deleting, setDeleting] = React.useState(false);
   const historyPreview = React.useRef<HTMLDivElement>(null);
   const historyRequest = React.useRef(0);
@@ -86,6 +123,17 @@ function NoteDocument({ note, focus, onFocus }: { note: Note; focus: boolean; on
     } catch (e) { if (mounted.current) { setError(e instanceof ApiError && e.status === 409 ? s.conflict : String(e)); setStatus("error"); } }
     finally { busy.current = false; }
   }, [note.id, note.workspace_id, qc, s.conflict, storageKey]);
+  React.useLayoutEffect(() => {
+    const current: NoteController = {id:note.id,read:()=>latest.current,update:async patch=>{
+      change(patch);
+      while(busy.current)await new Promise(resolve=>setTimeout(resolve,20));
+      await persist();
+      if(JSON.stringify(latest.current)!==saved.current)throw new Error(s.conflict);
+      return latest.current;
+    }};
+    controller.current = current;
+    return () => { if(controller.current===current)controller.current=null; };
+  });
   React.useEffect(() => { if (status === "error") return; const timer = setTimeout(() => void persist(), 700); return () => clearTimeout(timer); }, [draft, status, persist]);
   React.useEffect(() => { mounted.current = true; const unload = (e: BeforeUnloadEvent) => { if (JSON.stringify(latest.current) !== saved.current) { e.preventDefault(); e.returnValue = ""; } }; window.addEventListener("beforeunload", unload); return () => { mounted.current = false; window.removeEventListener("beforeunload", unload); void persist(); }; }, [persist]);
   React.useEffect(() => {
@@ -93,11 +141,11 @@ function NoteDocument({ note, focus, onFocus }: { note: Note; focus: boolean; on
       const params = new URLSearchParams(window.location.hash.split("?")[1]);
       if (params.get("note") !== note.id) return;
       const revision = Number(params.get("revision"));
-      if (revision > 0) { setHistory(true); void loadVersion(revision); }
+      setReferenceRevision(Number.isSafeInteger(revision)&&revision>0?revision:null);
     };
     readRevision(); window.addEventListener("hashchange", readRevision);
     return () => window.removeEventListener("hashchange", readRevision);
-  }, [note.id, loadVersion]);
+  }, [note.id]);
   async function restore() { if (!historic || busy.current) return; await persist(); if (JSON.stringify(latest.current) !== saved.current) return; try { const next = await api<Note>(`/api/notes/${note.id}/restore`, {method: "POST", body: JSON.stringify({workspace_id: note.workspace_id, base_revision: latest.current.revision, revision: historic.revision})}); saved.current = JSON.stringify(next); latest.current = next; setDraft(next); setHistoric(null); setHistory(false); setStatus("saved"); localStorage.removeItem(storageKey); qc.setQueryData(["note", note.workspace_id, note.id], next); void qc.invalidateQueries({queryKey: ["notes", note.workspace_id]}); } catch (e) { toast.error(String(e)); } }
   async function deleteForever() {
     if (deleting || busy.current) return;
@@ -125,6 +173,7 @@ function NoteDocument({ note, focus, onFocus }: { note: Note; focus: boolean; on
         <button onClick={() => { setMoreOpen(false); change({trashed: !draft.trashed}); }} className="note-trash-action">{draft.trashed ? <RotateCcw size={16}/> : <Trash2 size={16}/>} {draft.trashed ? s.restoreTrash : s.moveTrash}</button>
       </PopoverContent></Popover>
     </div></header>{draft.trashed && <div className="mx-5 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-secondary/50 px-3 py-2 text-ui-xs text-muted-foreground"><span>{s.inTrash}</span><Button variant="ghost" size="sm" className="text-destructive" disabled={deleting} onClick={() => setConfirmDelete(true)}><Trash2 size={14} />{s.deleteForever}</Button></div>}{error && <div className="px-6 text-sm text-destructive" role="alert">{error}<Button variant="ghost" onClick={() => void persist()}>{s.retry}</Button><Button variant="ghost" onClick={() => { exportMarkdown(draft); void getNote(note.workspace_id, note.id).then(n => { saved.current = JSON.stringify(n); latest.current = n; setDraft(n); setStatus("saved"); setError(""); localStorage.removeItem(storageKey); }); }}>{s.reload}</Button></div>}
+    {referenceRevision&&<div className="note-reference-notice"><span>{s.referenceVersion(referenceRevision)}</span><button onClick={()=>{setHistory(true);void loadVersion(referenceRevision);}}>{s.viewReference}</button></div>}
     <div className="note-body"><article className="note-paper">
       {mode === "raw" ? <><textarea aria-label={s.title} className="note-title" rows={1} placeholder={s.untitled} value={draft.title} maxLength={240} disabled={draft.trashed} onChange={e => change({title: e.target.value})} /><textarea className="note-raw" rows={1} spellCheck={false} maxLength={500000} aria-label={s.content} value={draft.markdown} disabled={draft.trashed} onChange={e => change({markdown: e.target.value})} /></> : <NoteEditor key={mode} toolbarTarget={toolbarTarget} markdown={draft.markdown} onChange={markdown => change({markdown})} editable={mode === "edit" && !draft.trashed} workspaceId={note.workspace_id} noteId={note.id}
         title={<textarea aria-label={s.title} className="note-title" rows={1} placeholder={s.untitled} value={draft.title} maxLength={240} disabled={draft.trashed || mode === "read"} onChange={e => change({title: e.target.value})} />}
@@ -153,7 +202,4 @@ function NoteLabels({label,placeholder,values,disabled,onChange}: {label:string;
   React.useEffect(()=>setText(value),[value]);
   const commit = () => { const next = [...new Set(text.split(/[,，]/).map(v=>v.trim()).filter(Boolean))]; if (next.join(", ") !== value) onChange(next); setText(next.join(", ")); };
   return <Input aria-label={label} placeholder={placeholder} value={text} disabled={disabled} onChange={e=>setText(e.target.value)} onBlur={commit} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}}/>;
-}
-function noteSnippet(markdown:string) {
-  return markdown.replace(/!\[[^\]]*\]\([^)]*\)/g,'').replace(/\[([^\]]+)\]\([^)]*\)/g,'$1').replace(/[#*>`_]/g,'').replace(/\s+/g,' ').trim().slice(0,160);
 }
