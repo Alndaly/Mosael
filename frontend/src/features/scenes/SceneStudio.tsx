@@ -3,6 +3,7 @@ import { LoadingState } from "@/components/layout/LoadingState";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { SceneBlender } from "./SceneBlender";
 import { useCanvasInputMode } from "@/components/app/canvasInputMode";
+import { readSceneSnap, writeSceneSnap } from "./sceneSnap";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import { useSceneFullscreen } from "./useSceneFullscreen";
 import { SceneHistory } from "./SceneHistory";
@@ -244,7 +245,9 @@ function SceneEditor({
     ),
     [step, setStep] = React.useState<"build" | "camera" | "output">("build"),
     [addOpen, setAddOpen] = React.useState(false),
-    [snap, setSnap] = React.useState(false),
+    // 吸附是「我习惯这么干活」,不是这一次的临时状态 —— 和画布输入模式同一类,记住它。
+    // 每次打开场景都退回关闭,等于让常开的人每次先点一下。
+    [snap, setSnap] = React.useState(readSceneSnap),
     [shotId, setShotId] = React.useState(initial.content.shots[0].id),
     [time, setTime] = React.useState(0),
     [viewMode, setViewMode] = React.useState<"edit" | "camera" | "observe">(
@@ -863,6 +866,19 @@ function SceneEditor({
                       {label}
                     </button>
                   ))}
+                  {/* 吸附跟着这三个工具走:它改的正是它们的步长(位移 0.25 米、旋转 15°、
+                      缩放 0.1,见 SceneViewport 的 setTranslationSnap 一带)。所以它和它们
+                      同一排、同一种控件、同一个显示条件 —— 单拎到别处会读成一个无关的开关。
+                      **不跟着 disabled**:没选中物体时它照样可以先打开,下一次拖动就生效。 */}
+                  <button
+                    className="scene-labeled-tool"
+                    aria-pressed={snap}
+                    title="吸附：位移 0.25 米 · 旋转 15° · 缩放 0.1"
+                    onClick={() => setSnap((on) => writeSceneSnap(!on))}
+                  >
+                    <Magnet size={15} />
+                    吸附
+                  </button>
                 </>
               )}
               {!preview && (
