@@ -138,3 +138,31 @@
 .note-prose h4 { font-size:1.05em; }.note-prose h5 { font-size:1em; }.note-prose h6 { font-size:.95em; color:var(--muted-foreground); }
 .note-paper { padding-top:32px; }
 .note-title { margin-bottom:24px; }
+
+/* Node tools stay attached to their content, with the same quiet surfaces as the page. */
+.note-image-node { margin:24px 0; min-width:0; }
+.note-prose .note-image-node img { margin:0 auto; cursor:pointer; }
+.note-image-node.is-selected > img { outline:1px solid color-mix(in srgb,var(--primary) 45%,transparent); outline-offset:4px; }
+.note-image-edit { margin-top:12px; padding:10px 12px; border-radius:10px; background:var(--workspace-subtle); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--foreground) 6%,transparent); font-family:var(--font-sans); font-size:var(--text-ui-xs); line-height:1.5; }
+.note-image-node img[hidden],.note-image-edit[hidden],.note-image-unavailable[hidden],.note-code-header [hidden] { display:none; }
+.note-image-link-row { display:flex; align-items:center; gap:8px; }
+.note-image-link-row > svg { width:16px; height:16px; flex-shrink:0; color:var(--muted-foreground); }
+.note-image-edit input { min-width:0; width:100%; flex:1; padding:6px 8px; border:0; border-radius:5px; background:transparent; color:var(--foreground); outline:none; }
+.note-image-edit input:focus { background:var(--background); box-shadow:0 0 0 1px color-mix(in srgb,var(--primary) 35%,transparent); }
+.note-image-link-row input { font-family:var(--font-mono); }
+.note-image-alt { display:flex; align-items:center; gap:10px; margin:5px 0 0 24px; color:var(--muted-foreground); white-space:nowrap; }
+.note-image-unavailable { padding:32px 16px; background:var(--workspace-subtle); border-radius:8px; color:var(--muted-foreground); text-align:center; cursor:pointer; }
+.note-code-block { margin:22px 0; min-width:0; overflow:hidden; border-radius:10px; background:color-mix(in srgb,var(--foreground) 3%,var(--background)); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--foreground) 5%,transparent); }
+.note-code-header { display:flex; min-height:40px; align-items:center; gap:8px; padding:5px 10px 5px 14px; color:var(--muted-foreground); font-family:var(--font-sans); font-size:var(--text-ui-xs); line-height:1.4; }
+.note-code-language { min-width:0; max-width:50%; border:0; border-radius:5px; padding:5px 20px 5px 6px; background:transparent; color:inherit; font:inherit; cursor:pointer; }
+.note-code-language:hover { background:var(--secondary); color:var(--foreground); }
+.note-code-language option { background:var(--background); color:var(--foreground); }
+.note-code-status { margin-left:auto; font-size:var(--text-ui-2xs); text-align:right; }
+.note-node-button { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:28px; height:28px; border:0; border-radius:6px; padding:0; color:var(--muted-foreground); background:transparent; }
+.note-node-button svg { width:15px; height:15px; }
+.note-node-button:hover { background:var(--secondary); color:var(--foreground); }
+.note-node-button:focus-visible,.note-code-language:focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
+.note-prose .note-code-block pre { margin:0; padding:4px 20px 18px; border-radius:0; background:transparent; overflow-x:auto; white-space:pre; overflow-wrap:normal; tab-size:2; font-family:var(--font-mono); font-size:var(--text-ui-sm); line-height:1.75; }
+.note-prose .note-code-block code { padding:0; font:inherit; background:transparent; }
+.note-code-token { color:var(--note-code-light,inherit); }
+.dark .note-code-token { color:var(--note-code-dark,inherit); }
