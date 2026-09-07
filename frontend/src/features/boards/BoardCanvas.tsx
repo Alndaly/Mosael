@@ -1,3 +1,4 @@
+import { boardAssetSources } from "./boardAssetSources";
 import { useQueries } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getNoteReference, noteReferenceQuery, type NoteReference } from "@/api/domains/notes";
@@ -427,9 +428,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       references: sources.filter(item => item.kind === "document").map(item => documents.get(item.id)?.reference).filter((ref): ref is NoteReference => !!ref),
       blocked: sources.some(item => boardDocumentBlocked(item, documents.get(item.id))),
       pending: sources.some(item => item.kind === "document" && documents.get(item.id)?.pending),
-      assets: sources
-        .filter((item) => item.asset_id)
-        .map((item) => ({ assetId: item.asset_id as string, kind: item.kind })),
+      assets: boardAssetSources(sources),
       //: **便签给的是提示词,不是素材。** 一张写着描述的便签连到图片上,用户的意思是
       //: 「照这段话画」—— 而不是把便签当参考图(它根本没有图)。
       texts: sources

@@ -15,6 +15,7 @@ import {
   ArrowLeft,
   Box,
   Camera,
+  Image as ImageIcon,
   Check,
   CheckSquare,
   Download,
@@ -493,13 +494,16 @@ function SceneEditor({
     recordAbort.current = null;
     return asset;
   }
-  async function bridge(kind: "frames" | "video") {
+  async function bridge(kind: "image" | "frames" | "video") {
     await work("准备生成素材", async () => {
       const sources: NonNullable<
         NonNullable<BoardItem["form"]>["source_assets"]
       > = [];
       const items: BoardItem[] = [];
-      if (kind === "frames") {
+      if (kind === "image") {
+        const a = await assetFrame(time);
+        sources.push({ asset_id: a.id, role: "reference_image" });
+      } else if (kind === "frames") {
         for (const [i, t] of [0, shot.duration].entries()) {
           const a = await assetFrame(t);
           sources.push({
@@ -520,7 +524,7 @@ function SceneEditor({
         items.push({ id: uid(), kind: "video", x: 0, y: 0, asset_id: a.id });
       }
       const thumbnail =
-        kind === "frames" ? sources[0].asset_id : (await assetFrame(0)).id;
+        kind === "video" ? (await assetFrame(0)).id : sources[0].asset_id;
       items.push({
         id: uid(),
         kind: "scene",
@@ -536,20 +540,22 @@ function SceneEditor({
       });
       const generatorId = uid();
       const edges = items
-        .filter((i) => i.kind !== "scene")
+        .filter((i) => kind === "image" ? i.kind === "scene" : i.kind !== "scene")
         .map((i) => ({ id: uid(), source: i.id, target: generatorId }));
       items.push({
         id: generatorId,
-        kind: "video",
-        x: 460,
+        kind: kind === "image" ? "image" : "video",
+        x: kind === "image" ? 0 : 460,
         y: 100,
         form: {
-          prompt: `参考 3D 场景「${draft.name}」的构图、空间布局和运镜，生成最终视频。`,
+          prompt: kind === "image"
+            ? `参考 3D 场景「${draft.name}」的画面构图、空间布局与摄像机视角，生成精细的图片。`
+            : `参考 3D 场景「${draft.name}」的构图、空间布局和运镜，生成最终视频。`,
           source_assets: sources,
           mode: kind === "frames" ? "first_frame" : undefined,
           parameters: {
             aspect_ratio: shot.aspect,
-            duration_seconds: shot.duration,
+            ...(kind !== "image" ? { duration_seconds: shot.duration } : {}),
           },
         },
       });
@@ -562,7 +568,7 @@ function SceneEditor({
         queryKey: ["boards", initial.workspace_id],
       });
       location.hash = `#/boards?board=${board.id}`;
-      toast.success("选择视频节点后，可自行选择模型和参数。");
+      toast.success(kind === "image" ? "场景画面已作为参考图，选择支持参考图的图片模型即可生成。" : "选择视频节点后，可自行选择模型和参数。");
     });
   }
   function recordView(at: number) {
@@ -713,6 +719,9 @@ function SceneEditor({
                 镜头预览视频 → 素材库
               </button>
               <hr />
+              <button onClick={() => void bridge("image")}>
+                当前画面 → 图片生成
+              </button>
               <button onClick={() => void bridge("frames")}>
                 首尾帧 → 视频生成
               </button>
@@ -780,7 +789,7 @@ function SceneEditor({
           [
             ["build", "搭建场景", "添加物体和模型"],
             ["camera", "设计镜头", "构图与运镜"],
-            ["output", "生成视频", "选择生成方式"],
+            ["output", "生成素材", "选择图片或视频"],
           ] as const
         ).map(([key, label, hint], i) => (
           <button
@@ -1231,8 +1240,8 @@ function SceneEditor({
             )}
             {step === "output" && (
               <section className="scene-output-panel">
-                <h2>把镜头变成视频</h2>
-                <p>先预览构图和运镜，再选择交给视频模型的参考素材。</p>
+                <h2>基于场景生成图片或视频</h2>
+                <p>用当前画面生成图片，或将构图与运镜交给视频模型。</p>
                 <Button
                   variant="secondary"
                   onClick={() => {
@@ -1250,6 +1259,18 @@ function SceneEditor({
                     {shot.duration} 秒 · {shot.aspect}
                   </small>
                 </div>
+                <button
+                  className="scene-choice"
+                  disabled={!!busy}
+                  onClick={() => void bridge("image")}
+                >
+                  <ImageIcon size={20} />
+                  <span>
+                    <strong>使用当前画面生成图片</strong>
+                    <small>将当前镜头 {time.toFixed(1)} 秒的画面作为参考图</small>
+                  </span>
+                  <ChevronRight size={16} />
+                </button>
                 <button
                   className="scene-choice"
                   disabled={!!busy}
@@ -1275,7 +1296,7 @@ function SceneEditor({
                   <ChevronRight size={16} />
                 </button>
                 <p>
-                  下一步会打开创意画板，由你选择视频模型、描述画面风格并开始生成。
+                  下一步会打开创意画板，由你选择图片或视频模型、描述画面风格并开始生成。
                 </p>
                 <details className="scene-details">
                   <summary>只保存预览素材</summary>
@@ -1323,7 +1344,7 @@ function SceneEditor({
                   setPlaying(false);
                 }}
               >
-                {step === "build" ? "下一步：设计镜头" : "下一步：生成视频"}
+                {step === "build" ? "下一步：设计镜头" : "下一步：生成素材"}
                 <ChevronRight size={15} />
               </Button>
             </div>

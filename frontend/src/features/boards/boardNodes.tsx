@@ -615,14 +615,21 @@ function DocumentNode({ data, selected }: NodeProps) {
   );
 }
 
-function SceneNode({ data, selected }: NodeProps) {
-  const {item, commentMode} = data as unknown as BoardNodeData;
+export function SceneNode({ data, selected }: NodeProps) {
+  const { item, commentMode } = data as unknown as BoardNodeData;
   const t = useI18n();
-  return <div className="relative flex h-full w-full flex-col overflow-visible rounded-xl bg-panel shadow-sm">
-    <NodeResizer minWidth={180} minHeight={140} isVisible={selected} lineClassName="!border-transparent" />
-    <TypeLabel kind="scene"/><Ports visible={selected} disabled={commentMode}/>
-    <div className="min-h-0 flex-1 overflow-hidden rounded-t-xl">{item.asset_id ? <AssetInlinePreview assetId={item.asset_id} name={item.text || ''} kind="image" plain previewOnClick={false} lazy={false} className="h-full w-full object-cover"/> : <div className="flex h-full items-center justify-center text-muted-foreground"><Box size={40} strokeWidth={1}/></div>}</div>
-    <button className="nodrag nopan flex items-center gap-2 rounded-b-xl px-3 py-3 text-ui-sm transition-colors hover:bg-secondary" onClick={() => {if(item.scene_id)location.hash=`#/scenes?scene=${encodeURIComponent(item.scene_id)}`;}}><Box size={15}/><span className="min-w-0 flex-1 truncate text-left">{item.text || t('navScenes')}</span><span className="text-ui-xs text-muted-foreground">{t('boardSceneOpen')}</span></button>
+  const fallback = <div className="flex h-full flex-col items-center justify-center gap-2 bg-secondary/40 px-5 text-center text-muted-foreground"><Box size={32} strokeWidth={1.2} /><span className="text-ui-xs">{t(item.asset_id ? "boardScenePreviewMissing" : "boardScenePreviewEmpty")}</span></div>;
+  return <div className="relative flex h-full w-full flex-col overflow-visible rounded-xl border border-border bg-panel shadow-sm">
+    <NodeResizer minWidth={240} minHeight={180} isVisible={selected} lineClassName="!border-transparent" />
+    <TypeLabel kind="scene" /><Ports visible={selected} disabled={commentMode} />
+    <div className="min-h-0 flex-1 overflow-hidden rounded-t-xl">
+      {item.asset_id ? <AssetInlinePreview key={item.asset_id} assetId={item.asset_id} name={item.text || ""} kind="image" plain previewOnClick={false} lazy={false} imageFallback={fallback} className="h-full w-full object-contain" /> : fallback}
+    </div>
+    <footer className="flex shrink-0 items-center gap-2 border-t border-border px-3 py-2">
+      <Box size={15} className="shrink-0 text-muted-foreground" />
+      <span className="min-w-0 flex-1 truncate text-ui-sm" title={item.text}>{item.text || t("navScenes")}</span>
+      <a className="nodrag nopan shrink-0 rounded-md border border-border bg-control px-2 py-1 text-ui-xs transition-colors hover:bg-secondary" href={`#/scenes?scene=${encodeURIComponent(item.scene_id ?? "")}`}>{t("boardSceneOpen")}</a>
+    </footer>
   </div>;
 }
 

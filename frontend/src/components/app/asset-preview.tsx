@@ -25,6 +25,7 @@ export function AssetInlinePreview({
   previewOnClick = true,
   onNaturalSize,
   gallery,
+  imageFallback,
 }: {
   assetId: string;
   name: string;
@@ -44,9 +45,13 @@ export function AssetInlinePreview({
   onNaturalSize?: (width: number, height: number) => void;
   /** 同一聊天/生成批次里的媒体。react-photo-view 用它提供左右翻页与计数。 */
   gallery?: ImagePreviewItem[];
+  /** Scene cards can explain a missing preview instead of displaying a broken image. */
+  imageFallback?: React.ReactNode;
 }) {
   const { openImagePreview } = useImagePreview();
-  const src = kind === "image" ? assetPreviewUrl(assetId) : assetFileUrl(assetId);
+  const [imageFailure, setImageFailure] = React.useState({ assetId: "", stage: 0 });
+  const stage = imageFailure.assetId === assetId ? imageFailure.stage : 0;
+  const src = kind === "image" && stage === 0 ? assetPreviewUrl(assetId) : assetFileUrl(assetId);
   const openPreview = () =>
     openImagePreview({
       src,
@@ -56,9 +61,11 @@ export function AssetInlinePreview({
     });
 
   if (kind === "image") {
+    if (stage >= 2 && imageFallback) return <>{imageFallback}</>;
     const picture = (
       <img
         src={src}
+        onError={() => { if (stage < 2) setImageFailure({ assetId, stage: stage + 1 }); }}
         alt={name}
         title={previewOnClick ? undefined : name}
         loading={lazy ? "lazy" : "eager"}

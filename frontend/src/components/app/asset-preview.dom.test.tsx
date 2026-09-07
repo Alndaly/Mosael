@@ -46,3 +46,14 @@ describe("素材行内预览", () => {
     });
   });
 });
+
+it("falls back to original image bytes and shows a helpful state if both endpoints fail", () => {
+  const { container, rerender } = render(<AssetInlinePreview assetId="scene" name="Scene" kind="image" previewOnClick={false} imageFallback={<span>Preview unavailable</span>} />);
+  fireEvent.error(container.querySelector("img")!);
+  expect(container.querySelector("img")?.getAttribute("src")).toBe("/file/scene");
+  fireEvent.error(container.querySelector("img")!);
+  expect(container.querySelector("img")).toBeNull();
+  expect(container.textContent).toBe("Preview unavailable");
+  rerender(<AssetInlinePreview assetId="new-frame" name="Scene" kind="image" previewOnClick={false} imageFallback={<span>Preview unavailable</span>} />);
+  expect(container.querySelector("img")?.getAttribute("src")).toBe("/preview/new-frame");
+});
