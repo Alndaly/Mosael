@@ -1,3 +1,5 @@
+import { LoadingState } from "@/components/layout/LoadingState";
+import { EmptyState } from "@/components/layout/EmptyState";
 import { SceneBlender } from "./SceneBlender";
 import { useCanvasInputMode } from "@/components/app/canvasInputMode";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
@@ -119,22 +121,18 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
   if (id) {
     if (scene.isPending)
       return (
-        <div className="scene-empty">
-          <Loader2 className="animate-spin" />
-          正在打开场景…
-        </div>
+        <LoadingState label="正在打开场景…" />
       );
     if (scene.error)
       return (
-        <div className="scene-empty">
-          <p>{scene.error.message}</p>
-          <Button
+        <div className="flex h-full min-h-0 flex-col overflow-auto">
+          <EmptyState icon={<Box />} title="暂时无法打开场景" body={scene.error.message} action={<Button
             onClick={() => {
               location.hash = "#/scenes";
             }}
           >
             返回场景列表
-          </Button>
+          </Button>} />
         </div>
       );
     return (
@@ -170,19 +168,14 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
         </div>
       </header>
       {list.isPending ? (
-        <div className="scene-empty">正在加载…</div>
+        <LoadingState className="h-auto flex-1" label="正在加载场景…" />
       ) : list.error ? (
-        <div className="scene-empty" role="alert">
-          {list.error.message}
+        <div className="flex min-h-0 flex-1 flex-col" role="alert">
+          <EmptyState icon={<Box />} title="暂时无法加载场景" body={list.error.message} action={<Button variant="secondary" onClick={() => void list.refetch()}>重试</Button>} />
         </div>
       ) : !list.data?.length ? (
-        <div className="scene-empty">
-          <Box size={48} strokeWidth={1} />
-          <h2>从一个空间开始</h2>
-          <p>添加几何体、导入模型，或从三间相连的展厅开始设计运镜。</p>
-          <Button disabled={creating} onClick={() => void create(true)}>
-            体验示例场景
-          </Button>
+        <div className="flex min-h-0 flex-1 flex-col">
+          <EmptyState icon={<Box />} title="从一个空间开始" body="添加几何体、导入模型，或从三间相连的展厅开始设计运镜。" action={<Button disabled={creating} onClick={() => void create(true)}>体验示例场景</Button>} />
         </div>
       ) : (
         <div className="scene-cards">

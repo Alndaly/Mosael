@@ -1,3 +1,4 @@
+import { LoadingState } from "./LoadingState";
 import { CANVAS_GLASS_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -11,6 +12,7 @@ export function CanvasDetailLoading({ testId }: { testId: string }) {
       data-testid={testId}
       aria-busy="true"
     >
+      <LoadingState />
       <div
         className={cn("absolute left-2 top-2 flex h-[42px] items-center gap-2 rounded-lg p-1 pr-3", CANVAS_GLASS_SURFACE_CLASS)}
         aria-hidden="true"

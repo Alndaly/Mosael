@@ -1,3 +1,4 @@
+import { LoadingState } from "@/components/layout/LoadingState";
 import React from "react";
 import { PageHeading, STUDIO_PAGE, CollectionTabs } from "@/components/layout/StudioPage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -232,8 +233,8 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
       <div className="flex h-full min-h-0 flex-col gap-7">
       {seg}
       <CollectionTabs label={t("publishTabRecords")} value={statusFilter} onChange={setStatusFilter} items={[{value:"all", label:t("studioAll")}, {value:"active", label:t("batchStatus_running")}, {value:"succeeded", label:t("batchStatus_succeeded")}, {value:"attention", label:t("studioNeedsAttention")}]} />
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {filteredTasks.length === 0 && <EmptyState icon={<Rocket />} title={t("studioNoMatches")} body={t("studioNoMatchesHint")} />}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto [&>*]:shrink-0">
+        {tasks.isPending ? <LoadingState className="h-auto flex-1" /> : tasks.isError ? <EmptyState icon={<Rocket />} title={t("pageLoadError")} body={tasks.error.message} action={<Button variant="secondary" onClick={() => void tasks.refetch()}>{t("retry")}</Button>} /> : filteredTasks.length === 0 && <EmptyState icon={<Rocket />} title={t("studioNoMatches")} body={t("studioNoMatchesHint")} />}
         {groups.map((group) => {
           const day = dayGroupOf(group.key, now, locale);
           return (

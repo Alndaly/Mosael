@@ -1,3 +1,4 @@
+import { LoadingState } from "@/components/layout/LoadingState";
 import { ACTION_MENU } from "@/components/ui/floating";
 import { PageHeading, CollectionTabs } from "@/components/layout/StudioPage";
 import { LayoutGrid, List, MoreHorizontal, Search } from "lucide-react";
@@ -377,7 +378,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
         onQueued={() => void qc.invalidateQueries({ queryKey: ["assets"] })}
       />
 
-      {assets.isSuccess && (assets.data ?? []).length === 0 ? (
+      {assets.isPending ? <LoadingState className="h-auto flex-1" /> : assets.isError ? <EmptyState icon={<FolderOpen />} title={t("pageLoadError")} body={assets.error.message} action={<Button variant="secondary" onClick={() => void assets.refetch()}>{t("retry")}</Button>} /> : (assets.data ?? []).length === 0 ? (
         <EmptyState
           icon={<FolderOpen size={22} />}
           title={t("mediaEmptyTitle")}

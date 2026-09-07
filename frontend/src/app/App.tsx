@@ -1,3 +1,4 @@
+import { LoadingState } from "@/components/layout/LoadingState";
 import React from "react";
 import {
   QueryClient,
@@ -536,7 +537,7 @@ function Studio({
         {view === "statistics" && <StatisticsView workspace={workspace} projects={projects.data ?? []} onOpenProject={openProject} />}
         {view === "media" && <MediaLibraryView workspace={workspace} />}
         {view === "notes" && <NotesView key={workspace.id} workspace={workspace} />}
-        {view === "scenes" && <React.Suspense fallback={<div className="p-8">正在加载 3D 工作台…</div>}><SceneStudio key={workspace.id} workspace={workspace}/></React.Suspense>}
+        {view === "scenes" && <React.Suspense fallback={<LoadingState label="正在加载 3D 工作台…" />}><SceneStudio key={workspace.id} workspace={workspace}/></React.Suspense>}
         {view === "editor" && (
           <EditorView
             workspace={workspace}
