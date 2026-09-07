@@ -409,7 +409,11 @@ export function FrameNode({ data, selected }: NodeProps) {
         state.className,
       )}
     >
-      <NodeResizer minWidth={160} minHeight={120} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
+      {/* **手柄要自己把指针事件收回来。** 这个框整体是 pointer-events-none 的(见上:中间要让
+          框里的项点得中),而 NodeResizer 的手柄和边线渲染在框**内部** —— 于是四角画得出来、
+          拖不动,看着像坏了。标题栏早就是这么补的(下面那个 pointer-events-auto),手柄漏了。
+          边线一并补上:它们透明但仍是拖拽热区,只有角能拉、边不能拉是同一个毛病挪了个位置。 */}
+      <NodeResizer minWidth={160} minHeight={120} isVisible={selected} lineClassName="pointer-events-auto !border-transparent" handleClassName="pointer-events-auto !h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
       {/* 只有标题吃指针事件 —— 拖它来移动整个框,框内区域让给里面的项。
           **和别的节点同一套**:框外正上方、同样的字号和图标(见 TypeLabel)。此前它是一枚
           带边框和底色的胶囊,摆在一排节点里像是另一个体系的东西。 */}
