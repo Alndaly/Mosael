@@ -1,5 +1,9 @@
 import { usePreferences } from "@/app/preferences";
 const zh = {
+  noteList: "笔记列表", selectNotes: "多选笔记", selectNote: "选择笔记", cancelSelection: "取消多选", selectVisible: "全选当前列表", selectedCount: (count:number)=>`已选 ${count} 篇`, batchActions: "批量操作",
+  openNote: "打开笔记", rename: "重命名", duplicate: "创建副本", copyLink: "复制笔记链接", unfavorite: "取消收藏", copiedLink: "已复制笔记链接", copySuffix: "副本", partialFailure: (count:number)=>`${count} 篇笔记操作失败，请重试。`,
+  referenceVersion: (version:number)=>`引用自版本 ${version}，当前显示最新正文`, viewReference: "查看引用版本",
+
   actions: "笔记操作", close: "关闭属性",
   insert: "插入",
   chooseVersion: "选择左侧版本查看内容。",
@@ -21,6 +25,10 @@ const zh = {
 };
 type Strings = typeof zh;
 const en: Strings = {
+  noteList: "Note list", selectNotes: "Select notes", selectNote: "Select note", cancelSelection: "Cancel selection", selectVisible: "Select current list", selectedCount: (count:number)=>`${count} selected`, batchActions: "Batch actions",
+  openNote: "Open note", rename: "Rename", duplicate: "Duplicate", copyLink: "Copy note link", unfavorite: "Remove favorite", copiedLink: "Note link copied", copySuffix: "Copy", partialFailure: (count:number)=>`${count} notes could not be updated. Please retry.`,
+  referenceVersion: (version:number)=>`Referenced version ${version} · Showing the latest note`, viewReference: "View referenced version",
+
   actions: "Note actions", close: "Close properties",
   insert: "Insert",
   chooseVersion: "Select a version to preview its contents.",

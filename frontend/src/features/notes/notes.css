@@ -166,3 +166,22 @@
 .note-prose .note-code-block code { padding:0; font:inherit; background:transparent; }
 .note-code-token { color:var(--note-code-light,inherit); }
 .dark .note-code-token { color:var(--note-code-dark,inherit); }
+
+.note-list-entry { display:flex; align-items:flex-start; min-width:0; border-radius:8px; margin-bottom:3px; transition:background-color 160ms ease,color 160ms ease; }
+.note-list-entry .note-list-row { flex:1; min-width:0; margin:0; }
+.note-list-entry .note-list-row strong { display:flex; align-items:center; gap:5px; }
+.note-list-entry .note-list-row strong span { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.note-list-entry .note-list-row strong svg { flex-shrink:0; color:var(--primary); }
+.note-list-entry[data-selected=true] { background:var(--accent); color:var(--accent-foreground); }
+.note-list-entry[data-selected=true] .note-list-row { background:transparent; }
+.note-list-check { flex-shrink:0; width:14px; height:14px; margin:16px 0 0 10px; accent-color:var(--primary); cursor:pointer; }
+.notes-list:focus-visible { outline:1px solid color-mix(in srgb,var(--primary) 40%,transparent); outline-offset:2px; border-radius:8px; }
+.note-selection-bar { flex-shrink:0; padding:8px; border-radius:8px; background:var(--workspace-subtle); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--foreground) 6%,transparent); font-size:var(--text-ui-xs); color:var(--muted-foreground); }
+.note-selection-bar > div { display:flex; align-items:center; gap:4px; }
+.note-selection-bar > div:first-child { justify-content:space-between; }
+.note-selection-bar label { display:flex; align-items:center; gap:8px; padding-left:4px; }
+.note-selection-bar input { accent-color:var(--primary); }
+.note-rename-input { width:100%; min-width:0; margin-top:8px; border:0; border-radius:6px; background:var(--secondary); padding:10px 12px; font-size:var(--text-ui-sm); }
+.note-reference-notice { flex-shrink:0; display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; padding:8px 24px; color:var(--muted-foreground); font-size:var(--text-ui-xs); background:var(--workspace-subtle); }
+.note-reference-notice button { color:var(--primary); padding:3px 6px; border-radius:4px; }
+.note-reference-notice button:hover { background:var(--accent); }
