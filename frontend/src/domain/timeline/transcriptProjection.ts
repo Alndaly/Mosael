@@ -104,8 +104,13 @@ function restoreTokenFormatting(tokens: TokenLike[], segmentText: string): Token
   return restored;
 }
 
+/**
+ * 句末标点后**必须跟空白**这条要求只对 ASCII 句号成立 —— 它把 `3.5` 挡在切分之外。中文的
+ * `。！？` 后面从不空格,同一条要求会让整段永远匹配不到第一个分支,于是"切不开"降级成
+ * "一整段"。两类标点分开写:ASCII 保留空白守卫,CJK 直接切。
+ */
 function fallbackParagraphSegments(segment: SegmentLike): SegmentLike[] {
-  const parts = segment.text.match(/.*?[.!?。！？…](?:["'”’）)\]]+)?(?:\s+|$)|.+$/gu)
+  const parts = segment.text.match(/.*?(?:[.!?](?:["'”’」』）)\]]+)?(?:\s+|$)|[。！？…](?:["'”’」』）)\]]+)?)|.+$/gu)
     ?.map((part) => part.trim())
     .filter(Boolean) ?? [];
   if (parts.length <= 1) return [segment];

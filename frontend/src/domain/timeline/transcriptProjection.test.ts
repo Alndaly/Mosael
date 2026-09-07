@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { detectSilences, isFillerToken, projectTranscript, type SegmentLike } from "./transcriptProjection";
+import { detectSilences, isFillerToken, projectTranscript, transcriptSegmentsForEditing, type SegmentLike } from "./transcriptProjection";
 
 const seg = (id: string, start: number, end: number, text: string): SegmentLike => ({
   id,
@@ -216,5 +216,63 @@ describe("speed-adjusted clips (source seconds ≠ timeline seconds)", () => {
     expect(gaps[0].srcStart).toBe(1);
     expect(gaps[0].timelineStart).toBe(0.5);
     expect(gaps[0].duration).toBe(1);
+  });
+});
+
+describe("兜底切分(没有词级时间戳时)", () => {
+  const clip = { id: "c1", asset_id: "a1", timeline_start: 0, src_in: 0, src_out: 60 };
+  // 一整段中文,句号后不空格 —— ASR 直出与 AI 修复后最常见的形状。
+  const chinese = "小小玲珑,但功能异常强大。由于我有很多张手机卡,但出门只带一部手机。出门在外需要用电脑工作。";
+
+  it("中文段落按句号切开,不再退化成一整块", () => {
+    const rows = transcriptSegmentsForEditing([
+      { id: "s1", start_time: 0, end_time: 30, text: chinese, tokens: [] },
+    ]);
+    expect(rows.map((row) => row.text)).toEqual([
+      "小小玲珑,但功能异常强大。",
+      "由于我有很多张手机卡,但出门只带一部手机。",
+      "出门在外需要用电脑工作。",
+    ]);
+    // 时长按字数权重分摊,首尾锚在原段边界上。
+    expect(rows[0].start_time).toBe(0);
+    expect(rows[rows.length - 1].end_time).toBe(30);
+  });
+
+  it("英文小数不被当成句号", () => {
+    const rows = transcriptSegmentsForEditing([
+      { id: "s1", start_time: 0, end_time: 10, text: "The value is 3.5 and 0.8 overall.", tokens: [] },
+    ]);
+    expect(rows).toHaveLength(1);
+  });
+
+  it("句末的中文引号跟着上一句走", () => {
+    const rows = transcriptSegmentsForEditing([
+      { id: "s1", start_time: 0, end_time: 10, text: "他说「很好。」然后走了。", tokens: [] },
+    ]);
+    expect(rows.map((row) => row.text)).toEqual(["他说「很好。」", "然后走了。"]);
+  });
+
+  it("有词级时间戳时切得比按标点更细 —— 生成字幕必须走这条路", () => {
+    // 逐字稿页与生成字幕读同一个接口;两边都带 tokens,结果才会是同一份。
+    const tokens = [
+      { start_time: 0, end_time: 1, text: "小小" },
+      { start_time: 1, end_time: 2, text: "玲珑" },
+      // 停顿 ≥ 0.75s 就断句,即使这里一个句号都没有。
+      { start_time: 3, end_time: 4, text: "但功能" },
+      { start_time: 4, end_time: 5, text: "异常强大" },
+    ];
+    const rows = transcriptSegmentsForEditing([
+      { id: "s1", start_time: 0, end_time: 5, text: "小小玲珑但功能异常强大", tokens },
+    ]);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].text).toBe("小小玲珑");
+    expect(rows[1].text).toBe("但功能异常强大");
+  });
+
+  it("投影到时间线后,句数与逐字稿页一致", () => {
+    const withTokens = projectTranscript([clip], new Map([["a1", [
+      { id: "s1", start_time: 0, end_time: 30, text: chinese, tokens: [] },
+    ]]]));
+    expect(withTokens).toHaveLength(3);
   });
 });
