@@ -1,0 +1,138 @@
+{
+  "manifest_version": 1,
+  "id": "dev.mosael.blender",
+  "name": {
+    "zh": "Blender MCP",
+    "en": "Blender MCP"
+  },
+  "version": "0.1.0",
+  "homepage": "https://github.com/Alndaly/Mosael/tree/main/plugins/examples/blender",
+  "runtime": {
+    "kind": "mcp",
+    "transport": "stdio",
+    "command": "uvx",
+    "args": [
+      "--python",
+      "3.11",
+      "blender-mcp==1.9.1"
+    ]
+  },
+  "permissions": [
+    "process:spawn",
+    "network:localhost",
+    "filesystem:read",
+    "filesystem:write"
+  ],
+  "skills": [
+    {
+      "id": "blender",
+      "description": {
+        "zh": "使用你选择的智能体操作本机 Blender：查询场景、编辑模型和材质。3D 工作台可发送场景与镜头，接收加工结果并保留 .blend 工程。需安装配套 Blender MCP 1.9.1 Add-on。",
+        "en": "Use your chosen agent to inspect and edit local Blender models and materials. Send scenes and cameras from the 3D studio, receive edited models, and keep .blend projects. Requires the matching Blender MCP 1.9.1 add-on."
+      }
+    }
+  ],
+  "tools": {
+    "expose": "selected",
+    "recommended": [
+      "get_scene_info",
+      "get_object_info",
+      "execute_blender_code"
+    ],
+    "overrides": {
+      "get_scene_info": {
+        "label": {
+          "zh": "查看 Blender 场景",
+          "en": "Inspect Blender scene"
+        },
+        "read_only": true
+      },
+      "get_object_info": {
+        "label": {
+          "zh": "查看 Blender 物体",
+          "en": "Inspect Blender object"
+        },
+        "read_only": true
+      },
+      "execute_blender_code": {
+        "label": {
+          "zh": "操作 Blender",
+          "en": "Edit Blender"
+        },
+        "read_only": false,
+        "description": {
+          "zh": "在本机 Blender 内运行 Python 建模操作。可以修改物体、材质、灯光与相机。先查询场景；不要清空其他工程或访问无关文件。发送过的 Mosael 场景使用 Mosael 命名的独立 Scene，接收按钮只读取对应 Scene。",
+          "en": "Run Python modeling operations in local Blender. Inspect the scene first; preserve unrelated projects and files. Mosael transfers use a separate named Scene; receiving reads only that Scene."
+        }
+      }
+    }
+  },
+  "instance": {
+    "multiple": true,
+    "config": [
+      {
+        "key": "BLENDER_HOST",
+        "label": {
+          "zh": "Blender 主机",
+          "en": "Blender host"
+        },
+        "type": "enum",
+        "default": "127.0.0.1",
+        "options": [
+          {
+            "value": "127.0.0.1",
+            "label": {
+              "zh": "127.0.0.1",
+              "en": "127.0.0.1"
+            }
+          },
+          {
+            "value": "localhost",
+            "label": {
+              "zh": "localhost",
+              "en": "localhost"
+            }
+          },
+          {
+            "value": "::1",
+            "label": {
+              "zh": "::1",
+              "en": "::1"
+            }
+          }
+        ],
+        "help": {
+          "zh": "3D 场景互通要求 Blender 与 Mosael 后端运行在同一台电脑。",
+          "en": "Scene exchange requires Blender and the Mosael backend on the same computer."
+        }
+      },
+      {
+        "key": "BLENDER_PORT",
+        "label": {
+          "zh": "连接端口",
+          "en": "Connection port"
+        },
+        "type": "string",
+        "default": "9876"
+      },
+      {
+        "key": "DISABLE_TELEMETRY",
+        "label": {
+          "zh": "关闭上游遥测",
+          "en": "Disable upstream telemetry"
+        },
+        "type": "enum",
+        "default": "true",
+        "options": [
+          {
+            "value": "true",
+            "label": {
+              "zh": "已关闭",
+              "en": "Disabled"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

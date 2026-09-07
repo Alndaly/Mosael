@@ -19,6 +19,27 @@
       ]
     },
     {
+      "id": "dev.mosael.blender",
+      "name": {
+        "zh": "Blender MCP",
+        "en": "Blender MCP"
+      },
+      "version": "0.1.0",
+      "description": {
+        "zh": "使用你选择的智能体操作本机 Blender：查询场景、编辑模型和材质。3D 工作台可发送场景与镜头，接收加工结果并保留 .blend 工程。需安装配套 Blender MCP 1.9.1 Add-on。",
+        "en": "Use your chosen agent to inspect and edit local Blender models and materials. Send scenes and cameras from the 3D studio, receive edited models, and keep .blend projects. Requires the matching Blender MCP 1.9.1 add-on."
+      },
+      "author": "Mosael",
+      "homepage": "https://github.com/Alndaly/Mosael/tree/main/plugins/examples/blender",
+      "download": "https://github.com/Alndaly/Mosael/releases/latest/download/dev.mosael.blender.zip",
+      "permissions": [
+        "process:spawn",
+        "network:localhost",
+        "filesystem:read",
+        "filesystem:write"
+      ]
+    },
+    {
       "id": "dev.mosael.mcp-everything",
       "name": {
         "zh": "MCP 接入范例",

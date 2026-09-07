@@ -958,3 +958,24 @@
     max-height: 65dvh;
   }
 }
+
+/* Blender exchange uses the same quiet surfaces as the scene controls. */
+.scene-blender { width: 370px; display: flex; flex-direction: column; gap: 14px; max-height: calc(100dvh - 100px); overflow-y: auto; }
+.scene-blender-heading, .scene-blender-connection, .scene-blender-result > div { display: flex; align-items: center; gap: 8px; }
+.scene-blender-heading { justify-content: space-between; }
+.scene-blender-heading p, .scene-blender small, .scene-blender-result > span, .scene-blender-setup p { color: var(--muted-foreground); font-size: 12px; line-height: 1.6; }
+.scene-blender-heading strong { font-size: 14px; }
+.scene-blender-connection > :first-child { flex: 1; min-width: 0; }
+.scene-blender-action { display: flex; align-items: center; gap: 12px; padding: 13px 12px; border-radius: 10px; text-align: left; background: color-mix(in srgb, var(--muted) 55%, transparent); transition: background-color 180ms ease, color 180ms ease, opacity 180ms ease; }
+.scene-blender-action:hover:not(:disabled) { background: var(--accent); }
+.scene-blender-action:disabled { opacity: .45; cursor: default; }
+.scene-blender-action > span { display: grid; gap: 3px; min-width: 0; overflow-wrap: anywhere; }
+.scene-blender-action strong { font-size: 13px; font-weight: 500; }
+.scene-blender-result { display: grid; gap: 8px; }
+.scene-blender-result > div { flex-wrap: wrap; }
+.scene-blender-status, .scene-blender-error { font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.scene-blender-status { display: flex; align-items: center; gap: 6px; color: var(--muted-foreground); }
+.scene-blender-error { color: var(--destructive); }
+.scene-blender-setup { display: grid; gap: 10px; }
+.scene-blender-setup a { font-size: 13px; display: flex; align-items: center; gap: 4px; color: var(--primary); }
+.scene-blender { -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }

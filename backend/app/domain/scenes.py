@@ -54,7 +54,7 @@ def save_scene(db: Session, scene: Scene3D, base_revision: int, name: str, conte
     return scene
 
 
-def import_model(db: Session, scene_id: str, name: str, data: bytes) -> Scene3DModel:
+def validate_model(data: bytes) -> str:
     if len(data) > 25 * 1024 * 1024:
         raise HTTPException(413, "Model limit is 25 MB")
     fmt = "glb" if data[:4] == b"glTF" else "gltf"
@@ -85,6 +85,11 @@ def import_model(db: Session, scene_id: str, name: str, data: bytes) -> Scene3DM
             raise ValueError("Model is too complex for real-time editing")
     except (ValueError, TypeError, AttributeError, struct.error, RecursionError) as exc:
         raise HTTPException(422, str(exc)) from exc
+    return fmt
+
+
+def import_model(db: Session, scene_id: str, name: str, data: bytes) -> Scene3DModel:
+    fmt = validate_model(data)
     model = Scene3DModel(scene_id=scene_id, name=name[:160], format=fmt, data=data)
     db.add(model)
     db.commit()

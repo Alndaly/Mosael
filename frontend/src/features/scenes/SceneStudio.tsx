@@ -1,3 +1,4 @@
+import { SceneBlender } from "./SceneBlender";
 import { useCanvasInputMode } from "@/components/app/canvasInputMode";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import { useSceneFullscreen } from "./useSceneFullscreen";
@@ -646,6 +647,15 @@ function SceneEditor({
             <Sparkles size={15} />
             建模助手
           </Button>
+          <SceneBlender scene={initial} pending={autosave.pending || !!error} busy={!!busy} work={work} prepare={async () => {
+            const snapshot = JSON.stringify(current.current);
+            if (snapshot !== saved.current) throw new Error("请等待场景保存完成后重试。");
+            const sourceRevision = revision.current;
+            const blob = await view.current!.glb();
+            if (snapshot !== JSON.stringify(current.current) || revision.current !== sourceRevision)
+              throw new Error("场景在导出时发生变化，请重新发送。");
+            return { revision: sourceRevision, shotId, blob };
+          }} />
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="ghost" size="sm" disabled={!!busy}>

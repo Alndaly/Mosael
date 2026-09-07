@@ -71,3 +71,9 @@
 ## Blender 接入调研
 
 [Blender Bridge 接入方案](design/blender-integration.md) 汇总了网络资料、当前代码的接入位置，以及 Blender 5.2 与现有 3D 视图的实际模型往返验证。该方案尚未实现为可安装插件。
+
+## Blender 加工与场景互通
+
+3D 工具栏新增 **Blender** 入口。安装并启用 Blender MCP 后，可以检测连接、发送当前已保存的模型与镜头，在 Blender 加工后接收为独立新场景，并下载关联的 `.blend` 工程。智能体模型沿用用户选择。
+
+接收的几何体是整体模型，镜头最多采样 100 个关键帧；高级 Blender 材质/物体动画应保留原生工程。本阶段不自动合并覆盖源场景，也没有后台 Cycles 渲染队列。完整安装步骤与范围见 [Blender 插件说明](../plugins/examples/blender/README.md)。
