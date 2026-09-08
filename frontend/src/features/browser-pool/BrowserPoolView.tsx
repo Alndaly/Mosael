@@ -132,7 +132,14 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
     if (p.bound_account_id && p.platform) {
       window.mosaelPublish
         ?.login(p.bound_account_id, p.platform)
-        .then(() => toast.success(t("poolLoginOpened")))
+        .then(() => {
+          toast.success(t("poolLoginOpened"));
+          // **点完登录必须立刻拉一次。** 上面那条 refetchInterval 只在列表里已经有
+          // checking / unknown 时才开始跑,而 openLogin 是在主进程里把状态改成 checking 的 ——
+          // 客户端手上还是旧的 login_required,于是判定"没有过渡态"、一次都不轮询。
+          // 结果就是登录完成后卡片纹丝不动,非要手动刷新一下才更新。
+          refresh();
+        })
         .catch((e: Error) => toast.error(e.message));
     } else if (window.mosaelBrowser?.openLogin) {
       setLoginFor(p); // 通用档案:填登录网址 → 在该档案分区开可见登录窗
@@ -149,6 +156,25 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
       ?.openPage(p.bound_account_id!, p.platform!)
       .catch((e: Error) => toast.error(e.message));
   };
+
+  /**
+   * 内嵌浏览器收起来的那一刻再拉一次。
+   *
+   * 登录轮询最长十分钟,而**用户通常在登完的下一秒就点了返回** —— 那时轮询要么刚写完
+   * (状态已是 bound),要么被 endLogin 收成 unknown。两种都值得马上让界面看到:
+   * 页面焦点事件在这里帮不上忙,内嵌视图是盖在窗口上的一层,收起它不会触发窗口 focus。
+   */
+  const wasVisible = React.useRef(false);
+  React.useEffect(
+    () =>
+      window.mosaelPublish?.onViewState((next) => {
+        if (wasVisible.current && !next.visible) refresh();
+        wasVisible.current = next.visible;
+      }),
+    // refresh 只依赖 qc 与 workspace.id,重建监听没有意义 —— 用 ref 读最新的即可。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [workspace.id],
+  );
 
   const items = profiles.data ?? [];
 

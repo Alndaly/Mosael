@@ -36,6 +36,36 @@ const STEALTH_JS = `(() => {
     patch(window.WebGLRenderingContext && window.WebGLRenderingContext.prototype);
     patch(window.WebGL2RenderingContext && window.WebGL2RenderingContext.prototype);
   } catch (e) {}
+  // **WebAuthn:当场说不,不要让页面一直转。**
+  //
+  // 这个视图里 passkey 走不通,而且是三条路各自走不通:
+  //   * 平台认证器(Touch ID)默认不受理 —— 要 app.configureWebAuthn 才开,而它存的是
+  //     设备绑定、不跟 iCloud 同步的凭据,救不了用户已有的那把 passkey;
+  //   * 手机/跨设备(hybrid)要一个扫码或蓝牙的选择界面,Electron 不提供 —— 请求就悬在那儿;
+  //   * 多凭据选择走 session 的 select-webauthn-account,没有监听者时才会被取消。
+  //
+  // 结果就是 Google 停在「Complete sign-in using your passkey」一直转,而右下角那个
+  // 「Try another way」得用户自己发现。当场 reject 一个 NotAllowedError 之后,站点自己的
+  // 回退路径(密码 + 两步验证)就会接上 —— **这不降低安全性**,只是拒绝一种此处用不了的方式。
+  //
+  // 哪天 Electron 把这几条补齐(或我们决定开 Touch ID),这一段就该删掉。
+  try {
+    if (window.PublicKeyCredential) {
+      window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable = () => Promise.resolve(false);
+      window.PublicKeyCredential.isConditionalMediationAvailable = () => Promise.resolve(false);
+    }
+    const store = navigator.credentials;
+    if (store) {
+      const decline = () =>
+        Promise.reject(new DOMException('This browser has no available authenticator.', 'NotAllowedError'));
+      const get = store.get && store.get.bind(store);
+      const create = store.create && store.create.bind(store);
+      // 只拦 publicKey 那一种 —— 密码和联合登录凭据照常走。
+      if (get) store.get = (options) => (options && options.publicKey ? decline() : get(options));
+
+      if (create) store.create = (options) => (options && options.publicKey ? decline() : create(options));
+    }
+  } catch (e) {}
 })();`;
 try {
   void webFrame.executeJavaScript(STEALTH_JS);
