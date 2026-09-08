@@ -14,18 +14,20 @@ import {
 import type { SceneContent, SceneLighting, SceneObject } from "@/api/domains/scenes";
 import { CUSTOM_PRESET, presetById, presetGroups } from "./lighting";
 import { Num, Vector, Tool } from "./SceneControls";
-import { duplicateObject, groupTargets, makeObject, moveToGroup, removeObjects } from "./sceneGraph";
+import { duplicateObject, groupTargets, makeObject, moveToGroup } from "./sceneGraph";
 export function SceneInspector({
   content,
   object,
   objectPatch,
   update,
+  onRemove,
   setSelected,
 }: {
   content: SceneContent;
   object: SceneObject | undefined;
   objectPatch: (id: string, patch: Partial<SceneObject>) => void;
   update: (c: SceneContent) => void;
+  onRemove: (ids: string[]) => void;
   setSelected: (id: string | null) => void;
 }) {
   //: 外壳、标题、左右内距和竖向节奏全归 ScenePanel(见 .scene-panel-body) —— 这里只出内容,
@@ -97,10 +99,7 @@ export function SceneInspector({
               </Tool>
               <Tool
                 label="删除对象"
-                onClick={() => {
-                  update(removeObjects(content, [object.id]));
-                  setSelected(null);
-                }}
+                onClick={() => onRemove([object.id])}
               >
                 <Trash2 size={15} />
               </Tool>

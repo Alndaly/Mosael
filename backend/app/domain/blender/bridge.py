@@ -175,7 +175,11 @@ def shots_with_frames(content):
             'time': 0, 'position': camera.get('position', [8, 5, 8]),
             'target': camera.get('target', [0, 1, 0]), 'fov': camera.get('fov', 45),
         }]
-        flat.append({**shot, 'frames': track})
+        frames = [{**frame,
+                   'target': frame.get('target') or camera.get('target', [0, 1, 0]),
+                   'fov': frame.get('fov') if frame.get('fov') is not None else camera.get('fov', 45)}
+                  for frame in track]
+        flat.append({**shot, 'frames': frames})
     return flat
 
 
@@ -185,11 +189,14 @@ def apply_shot_frames(content, flat):
     这是 `shots_with_frames` 的反向。写回相机而不是镜头 —— 镜头上已经没有 frames 这个字段了。
     """
     cameras = {o['id']: o for o in content.get('objects', []) if o.get('kind') == 'camera'}
+    shots = {s['id']: s for s in content.get('shots', [])}
     for shot in flat:
         camera = cameras.get(shot.get('camera_id'))
         frames = shot.get('frames')
         if camera is None or not frames:
             continue
+        if shot.get('id') in shots and 'easing' in shot:
+            shots[shot['id']]['easing'] = shot['easing']
         first = frames[0]
         camera['position'] = first.get('position', camera.get('position'))
         camera['target'] = first.get('target', camera.get('target'))
@@ -219,7 +226,9 @@ def send(db, user, scene, instance_id, revision, shot_id, source, *, size=None):
                   'snapshot': snapshot, 'status': 'sending', 'created_at': datetime.now(timezone.utc).isoformat()}
         write_record(folder, record)
         try:
-            result = execute(db, instance, 'send', {'snapshot': snapshot, 'shot_id': shot_id, 'transfer_id': transfer_id,
+            worker_snapshot = {**snapshot, 'content': {**snapshot['content'],
+                'shots': shots_with_frames(snapshot['content'])}}
+            result = execute(db, instance, 'send', {'snapshot': worker_snapshot, 'shot_id': shot_id, 'transfer_id': transfer_id,
                 'input_path': str(folder / 'input.glb'), 'blend_path': str(folder / 'scene.blend'),
                 'result_path': str(folder / 'sent.json')}, scene.workspace_id)
             record.update(status='ready', scene_name=result['scene_name'])
@@ -275,8 +284,10 @@ def receive(db, user, scene, transfer_id, *, into_current=False):
             # 接回来的场景 = 一个 Blender 模型 + 原来那些机位(带回传的运镜)。相机是物体,
             # 所以它们和模型一起进 objects;镜头仍然只是"用哪台机位、拍多久"。
             snapshot = record['snapshot']['content']
-            cameras = [dict(o) for o in snapshot.get('objects', []) if o.get('kind') == 'camera']
-            received = apply_shot_frames({'objects': cameras, 'shots': snapshot.get('shots', [])}, result['shots'])
+            # Returned camera keys are world-space; the geometry's former groups now live
+            # inside the imported GLB, so their IDs cannot remain as camera parents.
+            cameras = [{**o, 'parent_id': None} for o in snapshot.get('objects', []) if o.get('kind') == 'camera']
+            received = apply_shot_frames({'objects': cameras, 'shots': [dict(s) for s in snapshot.get('shots', [])]}, result['shots'])
             content = SceneContent.model_validate({**snapshot, 'shots': received['shots'],
                 'objects': [{'id': 'blender-model', 'kind': 'model', 'name': 'Blender 模型', 'model_id': model_id},
                             *received['objects']]})

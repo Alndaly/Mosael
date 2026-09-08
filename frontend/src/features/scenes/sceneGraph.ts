@@ -259,6 +259,8 @@ export function removeObjects(
         changed = true;
       }
   }
+  // A shot must keep its camera, including when deleting an ancestor group.
+  if (content.shots.some(shot => removed.has(shot.camera_id))) return content;
   return {
     ...content,
     objects: content.objects.filter((o) => !removed.has(o.id)),

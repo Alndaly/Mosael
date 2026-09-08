@@ -9,6 +9,7 @@ import {
   type SceneNavigationMode,
 } from "./sceneNavigation";
 import { encodeShotVideo } from "./encodeVideo";
+import { cloneSceneForExport } from "./sceneExport";
 import React from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -320,7 +321,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         placement: (w) => runtime.current?.handle.placement(w) ?? [0, 0, 0],
         view: (v) => runtime.current?.handle.view(v),
         editCamera: (s, t) => runtime.current?.handle.editCamera(s, t),
-        frame: (s, t) => runtime.current!.handle.frame(s, t),
+        frame: (s, t, options) => runtime.current!.handle.frame(s, t, options),
         glb: () => runtime.current!.handle.glb(),
         record: (s, signal, p) => runtime.current!.handle.record(s, signal, p),
       }),
@@ -824,10 +825,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         exportScene.background = new THREE.Color(
           clay ? "#8a8f96" : latest.current.content.background,
         );
-        const copy = root.clone(true);
-        // 导出的参考帧里不该有机位模型 —— 它是编辑期的道具,不是场景的一部分。
-        for (const node of [...copy.children])
-          if (node.userData.editorOnly) copy.remove(node);
+        const copy = cloneSceneForExport(root);
         if (clay) {
           /** 统一材质的"灰模"。**去掉材质噪音,只留光的结构。**
            *
@@ -973,7 +971,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
             )
           )
             throw new Error("有模型加载失败，请重新打开场景后再导出。");
-          const data = await new GLTFExporter().parseAsync(root, {
+          const data = await new GLTFExporter().parseAsync(cloneSceneForExport(root), {
             binary: true,
           });
           if (!(data instanceof ArrayBuffer)) throw new Error("无法导出 GLB");

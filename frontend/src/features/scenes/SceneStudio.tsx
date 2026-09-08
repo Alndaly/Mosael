@@ -405,6 +405,15 @@ function SceneEditor({
       ),
     });
   }
+  function removeSceneObjects(ids: string[]) {
+    const content = removeObjects(current.current.content, ids);
+    if (content === current.current.content) {
+      toast.error("该物体包含镜头正在使用的机位，无法删除。请保留拍摄机位。");
+      return;
+    }
+    update(content);
+    if (!content.objects.some(object => object.id === selected)) setSelected(null);
+  }
   function undo() {
     if (!history.length) return;
     const next = history[history.length - 1];
@@ -577,8 +586,7 @@ function SceneEditor({
         case "Backspace":
           if (!selected) return;
           e.preventDefault();
-          update(removeObjects(current.current.content, [selected]));
-          setSelected(null);
+          removeSceneObjects([selected]);
           return;
       }
     };
@@ -1393,7 +1401,7 @@ function SceneEditor({
                       emptyText="没有匹配的类型"
                       options={ADD_OPTIONS}
                       trigger={
-                        <Button size="icon-sm" title="添加物体" aria-label="添加物体">
+                        <Button variant="ghost" size="icon-sm" title="添加物体" aria-label="添加物体">
                           <Plus size={16} />
                         </Button>
                       }
@@ -1430,19 +1438,7 @@ function SceneEditor({
                           aria-label={`删除物体：${o.name}`}
                           title={`删除 ${o.name}`}
                           disabled={!!busy}
-                          onClick={() => {
-                            const content = removeObjects(
-                              current.current.content,
-                              [o.id],
-                            );
-                            update(content);
-                            if (
-                              !content.objects.some(
-                                (item) => item.id === selected,
-                              )
-                            )
-                              setSelected(null);
-                          }}
+                          onClick={() => removeSceneObjects([o.id])}
                         >
                           <Trash2 size={14} />
                         </button>
@@ -1475,6 +1471,7 @@ function SceneEditor({
                         : patch);
                     }}
                     update={update}
+                    onRemove={removeSceneObjects}
                     setSelected={setSelected}
                   />
                 </ScenePanel>

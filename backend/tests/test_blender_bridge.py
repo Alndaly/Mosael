@@ -30,6 +30,33 @@ def glb():
     return struct.pack('<4sIIII', b'glTF', 2, 20+len(data), len(data), 0x4E4F534A)+data
 
 
+def test_send_projects_camera_tracks_for_the_worker_without_mutating_the_snapshot(monkeypatch, tmp_path):
+    _, _, initial = setup_scene()
+    monkeypatch.setattr(settings, 'data_dir', tmp_path)
+    monkeypatch.setattr(bridge, 'connection', lambda *args: SimpleNamespace(id='local'))
+    def execute(db, instance, operation, payload, workspace_id):
+        assert operation == 'send'
+        shot = payload['snapshot']['content']['shots'][0]
+        assert shot['frames'][0]['target'] == [0, 1, 0]
+        assert shot['frames'][0]['fov'] == 45
+        return {'scene_name': 'Test'}
+    monkeypatch.setattr(bridge, 'execute', execute)
+    with SessionLocal() as db:
+        user = db.scalar(select(User))
+        scene = db.get(Scene3D, initial['id'])
+        sent = bridge.send(db, user, scene, 'local', scene.revision, scene.content['shots'][0]['id'], BytesIO(glb()))
+        _, record = bridge.load(scene, user, sent['id'])
+        assert 'frames' not in scene.content['shots'][0]
+        assert 'frames' not in record['snapshot']['content']['shots'][0]
+
+
+def test_blender_projection_resolves_optional_key_fields():
+    from app.domain.scene_types import SceneContent
+    content = SceneContent().model_dump(mode='json')
+    content['objects'][0]['track'] = [{'time': 2, 'position': [3, 2, 5], 'target': [0, 1, 0], 'fov': None}]
+    assert bridge.shots_with_frames(content)[0]['frames'][0]['fov'] == 45
+
+
 def test_manifest_passes_local_connection_config():
     manifest = parse(json.loads(MANIFEST.read_text()), str(MANIFEST.parent))
     fields = {f.key:f for f in manifest.config}
@@ -38,6 +65,15 @@ def test_manifest_passes_local_connection_config():
     assert manifest.runtime.kind == 'mcp'
     assert manifest.multiple
     assert [o['value'] for o in fields['BLENDER_HOST'].options] == ['127.0.0.1', 'localhost', '::1']
+
+
+def test_returned_baked_camera_keys_keep_linear_timing():
+    from app.domain.scene_types import SceneContent
+    content = SceneContent().model_dump(mode='json')
+    flat = bridge.shots_with_frames(content)
+    flat[0]['easing'] = 'linear'
+    received = bridge.apply_shot_frames(content, flat)
+    assert received['shots'][0]['easing'] == 'linear'
 
 
 def test_mcp_string_wrapper_and_missing_completion(monkeypatch, tmp_path):
@@ -103,7 +139,8 @@ def test_roundtrip_is_new_scene_and_transfers_are_owner_scoped(monkeypatch, tmp_
         assert len(list(db.scalars(select(Scene3D))))==before
 
 
-def test_receive_into_current_imports_the_model_and_hands_content_back(monkeypatch, tmp_path):
+@pytest.mark.parametrize('grouped', [False, True])
+def test_receive_into_current_imports_the_model_and_hands_content_back(monkeypatch, tmp_path, grouped):
     """接回当前场景时:模型进这个场景的库,内容**交回调用方**,不建新场景、不动库里的内容。
 
     最后那两条是重点。编辑器手上有一份草稿,这里若顺手把场景内容也写了,那份草稿立刻就是旧的
@@ -111,6 +148,15 @@ def test_receive_into_current_imports_the_model_and_hands_content_back(monkeypat
     内容由编辑器当成一次可撤销的改动写下去(见 bridge.receive 的说明)。
     """
     c, ws, initial = setup_scene()
+    if grouped:
+        initial['content']['objects'][0]['parent_id'] = 'camera-group'
+        initial['content']['objects'].append({'id': 'camera-group', 'kind': 'group'})
+        response = c.patch('/api/scenes/' + initial['id'], json={
+            'workspace_id': ws, 'name': initial['name'], 'base_revision': initial['revision'],
+            'content': initial['content'],
+        })
+        assert response.status_code == 200, response.text
+        initial = response.json()
     monkeypatch.setattr(settings,'data_dir',tmp_path)
     monkeypatch.setattr(bridge,'connection',lambda *args: SimpleNamespace(id='local'))
     def fake_execute(db, instance, operation, payload, workspace_id):
@@ -134,7 +180,8 @@ def test_receive_into_current_imports_the_model_and_hands_content_back(monkeypat
         assert [s['id'] for s in content['shots']]==[s['id'] for s in initial['content']['shots']]
 
         db.refresh(scene)
-        assert scene.revision==1 and [o['kind'] for o in scene.content['objects']]==['camera']   # 库里的内容没被动过
+        assert scene.revision == initial['revision'] and scene.content == initial['content']
+        assert all(o['parent_id'] is None for o in content['objects'])
         assert bridge.history(scene,user)[0]['received_scene_id'] is None
 
 

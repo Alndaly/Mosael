@@ -12,6 +12,18 @@ import {
   sampleObject,
 } from "./sceneGraph";
 describe("editable scene graph", () => {
+  it("does not remove a shot camera, including through its containing group", () => {
+    const content = initialScene();
+    const camera = cameraOfShot(content, content.shots[0])!;
+    expect(removeObjects(content, [camera.id])).toBe(content);
+    const group = makeObject("group");
+    camera.parent_id = group.id;
+    content.objects.push(group);
+    expect(removeObjects(content, [group.id])).toBe(content);
+    const spare = makeObject("camera");
+    content.objects.push(spare);
+    expect(removeObjects(content, [spare.id]).objects).not.toContain(spare);
+  });
   it("samples every camera key exactly and holds at the bounds", () => {
     const content = initialScene(true);
     const shot = content.shots[0];

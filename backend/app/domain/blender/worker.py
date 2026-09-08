@@ -16,6 +16,9 @@ def inverse_axis(v):
 
 def sample(shot, t):
     frames = shot['frames']
+    if t <= frames[0]['time']:
+        first = frames[0]
+        return first['position'], first['target'], first['fov']
     for a, b in zip(frames, frames[1:]):
         if t < b['time']:
             u = (t-a['time'])/(b['time']-a['time'])

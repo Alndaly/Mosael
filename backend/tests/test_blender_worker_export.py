@@ -47,6 +47,14 @@ def test_a_clean_export_does_not_degrade():
     assert calls[0].get('export_materials') != 'NONE'
 
 
+def test_camera_sampling_holds_before_the_first_key_instead_of_extrapolating():
+    worker = load(lambda **options: None)
+    first = {'time': 2, 'position': [0, 2, 5], 'target': [0, 0, 0], 'fov': 45}
+    last = {**first, 'time': 4, 'position': [4, 2, 5]}
+    shot = {'easing': 'linear', 'frames': [first, last]}
+    assert worker.sample(shot, 0) == (first['position'], first['target'], first['fov'])
+
+
 def test_material_failure_falls_back_to_geometry_and_says_so():
     # Blender 自带的 glTF 导出器会在某些材质上抛 AssertionError(io/com/gltf2_io.py 的
     # from_union:候选序列化器全失败就 assert False)。那不是我们能修的,但它不该变成一句 502。
