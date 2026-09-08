@@ -100,11 +100,16 @@ def test_delete_scene_is_workspace_scoped_and_cascades_owned_data():
         assert not db.scalars(select(Scene3DRevision).where(Scene3DRevision.scene_id == scene['id'])).all()
 
 
-def test_the_model_size_limit_is_one_number_and_says_what_to_do():
-    """超限的回答要能直接照着做:多大、上限多少、怎么减。
+def test_the_model_size_limit_is_one_number_and_never_contradicts_itself():
+    """超限的回答要能直接照着做,而且**不能自相矛盾**。
 
-    也钉住"**只有一个数**":路由读文件和领域判上限此前各写了一遍 25 MB,改一处漏一处不会
-    有任何提示 —— 只会变成"路由收下了、领域又拒了"。现在两边引同一个常量。
+    这里钉的是一个真出过的错:调用方只读「上限 + 1」个字节(不把一份 500 MB 的文件整个读进
+    内存),于是 `len(data)` 最大就是上限 + 1 —— 拿它当文件大小报出来,500 MB 会变成
+    「模型 100.0 MB,超出上限 100 MB」。读起来像 bug,还把用户往"再减一点点就行"骗。
+    真实大小只有调用方(文件系统 / multipart)知道,所以由它传;传不了就干脆不报大小。
+
+    顺带钉住"**只有一个数**":路由读文件和领域判上限此前各写了一遍 25 MB,改一处漏一处
+    不会有任何提示 —— 只会变成"路由收下了、领域又拒了"。
     """
     from app.api.routes import scenes as scene_routes
     from app.domain.scenes import MODEL_LIMIT_BYTES, MODEL_READ_LIMIT, SceneTooLarge, validate_model
@@ -112,8 +117,24 @@ def test_the_model_size_limit_is_one_number_and_says_what_to_do():
     assert MODEL_READ_LIMIT == MODEL_LIMIT_BYTES + 1
     assert scene_routes.MODEL_READ_LIMIT is MODEL_READ_LIMIT
 
-    with pytest.raises(SceneTooLarge) as excinfo:
-        validate_model(b'glTF' + b'\0' * MODEL_READ_LIMIT)
-    message = str(excinfo.value)
-    assert str(MODEL_LIMIT_BYTES // 1024 // 1024) in message   # 上限多少
-    assert 'MB' in message and 'Blender' in message            # 实际多大 + 怎么减
+    limit = MODEL_LIMIT_BYTES // 1024 // 1024
+    truncated = b'glTF' + b'\0' * MODEL_READ_LIMIT
+
+    def refuse(**kwargs):
+        with pytest.raises(SceneTooLarge) as excinfo:
+            validate_model(truncated, **kwargs)
+        return str(excinfo.value)
+
+    # 知道真实大小:报出来,并且和上限对得上。
+    known = refuse(size=520 * 1024 * 1024)
+    assert '520.0 MB' in known and f'{limit} MB' in known
+
+    # 不知道:只说上限,绝不拿截断后的读数冒充文件大小。
+    unknown = refuse()
+    assert f'{limit} MB' in unknown
+    assert f'{limit}.0 MB' not in unknown
+
+    # 恰好超一个字节:四舍五入会等于上限,同样不报 —— 否则又是那句自相矛盾的话。
+    assert f'{limit}.0 MB' not in refuse(size=MODEL_READ_LIMIT)
+
+    assert 'Blender' in unknown   # 怎么减

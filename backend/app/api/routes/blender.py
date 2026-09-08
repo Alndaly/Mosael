@@ -47,7 +47,7 @@ def send(scene_id: str, db: DbSession, user: CurrentUser, workspace_id: str = Fo
     ensure_workspace_perm(db, user, workspace_id, 'edit')
     scene = get_scene(db, workspace_id, scene_id)
     data = file.file.read(MODEL_READ_LIMIT)
-    return bridge.send(db, user, scene, instance_id, revision, shot_id, data)
+    return bridge.send(db, user, scene, instance_id, revision, shot_id, data, size=file.size)
 
 
 @router.post('/{scene_id}/blender/{transfer_id}/receive')

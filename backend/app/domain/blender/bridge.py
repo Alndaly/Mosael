@@ -155,13 +155,13 @@ def execute(db, instance, operation, payload, workspace_id):
         raise BlenderUnavailable('Blender 同步结果无法读取，请重试。') from exc
 
 
-def send(db, user, scene, instance_id, revision, shot_id, data):
+def send(db, user, scene, instance_id, revision, shot_id, data, *, size=None):
     instance = connection(db, user, instance_id)
     if revision != scene.revision:
         raise BlenderConflict('场景已变更，请等待保存完成后重新发送。')
     if shot_id not in {s['id'] for s in scene.content['shots']}:
         raise BlenderDomainError('Shot not found')
-    if validate_model(data) != 'glb':
+    if validate_model(data, size=size) != 'glb':
         raise BlenderDomainError('场景传输需要 GLB。')
     with exclusive(instance.id):
         transfer_id = str(uuid4())
@@ -214,14 +214,16 @@ def receive(db, user, scene, transfer_id, *, into_current=False):
         result = execute(db, instance, 'receive', {'transfer_id': transfer_id,
             'shots': record['snapshot']['content']['shots'], 'output_path': str(attempt / 'model.glb'),
             'blend_path': str(attempt / 'scene.blend'), 'result_path': str(attempt / 'result.json')}, scene.workspace_id)
+        exported = attempt / 'model.glb'
         try:
-            with (attempt / 'model.glb').open('rb') as stream:
+            size = exported.stat().st_size          # 报错时要说真实大小,而读数被截在上限上
+            with exported.open('rb') as stream:
                 data = stream.read(MODEL_READ_LIMIT)
         except OSError as exc:
             raise BlenderUnavailable('Blender 没有生成可接收的模型，请重试。') from exc
-        fmt = validate_model(data)
+        fmt = validate_model(data, size=size)
         # 落到当前场景:模型先进库(建行归场景域,ADR-0003),内容交回编辑器去写。
-        model_id = import_model(db, scene.id, 'Blender model', data).id if into_current else uuid4().hex
+        model_id = import_model(db, scene.id, 'Blender model', data, size=size).id if into_current else uuid4().hex
         try:
             content = SceneContent.model_validate({**record['snapshot']['content'], 'shots': result['shots'],
                 'objects': [{'id': 'blender-model', 'kind': 'model', 'name': 'Blender 模型', 'model_id': model_id}]})
@@ -261,14 +263,16 @@ def pull(db, user, workspace_id, instance_id):
         try:
             result = execute(db, instance, 'pull', {'output_path': str(folder / 'model.glb'),
                 'result_path': str(folder / 'pulled.json')}, workspace_id)
+            exported = folder / 'model.glb'
             try:
-                with (folder / 'model.glb').open('rb') as stream:
+                size = exported.stat().st_size      # 同上:真实大小只有文件系统知道
+                with exported.open('rb') as stream:
                     data = stream.read(MODEL_READ_LIMIT)
             except OSError as exc:
                 raise BlenderUnavailable('Blender 没有导出可用的模型，请重试。') from exc
         finally:
             shutil.rmtree(folder, ignore_errors=True)
-        fmt = validate_model(data)
+        fmt = validate_model(data, size=size)
         model_id = uuid4().hex
         content = SceneContent.model_validate({'objects': [
             {'id': 'blender-model', 'kind': 'model', 'name': 'Blender 模型', 'model_id': model_id}]})

@@ -57,8 +57,10 @@ def revision_content(scene_id: str, revision: int, workspace_id: str, db: DbSess
 async def upload(scene_id: str, db: DbSession, user: CurrentUser, workspace_id: str = Form(...), file: UploadFile = File(...)):
     ensure_workspace_perm(db, user, workspace_id, "edit")
     get_scene(db, workspace_id, scene_id)
+    # 只读上限 + 1 个字节(不把一份 500 MB 的文件整个读进内存),但**大小要报真的** ——
+    # multipart 解析时整份已经落到临时文件上了,file.size 就是真实字节数。
     data = await file.read(MODEL_READ_LIMIT)
-    model = import_model(db, scene_id, file.filename or "Model", data)
+    model = import_model(db, scene_id, file.filename or "Model", data, size=file.size)
     return {"id": model.id, "name": model.name, "format": model.format}
 
 

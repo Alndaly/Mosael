@@ -97,12 +97,24 @@ MODEL_LIMIT_BYTES = 100 * 1024 * 1024
 MODEL_READ_LIMIT = MODEL_LIMIT_BYTES + 1
 
 
-def validate_model(data: bytes) -> str:
-    if len(data) > MODEL_LIMIT_BYTES:
+def validate_model(data: bytes, *, size: int | None = None) -> str:
+    """校验一份导入模型。`size` 是这份文件的**真实字节数**,调用方知道就传。
+
+    为什么要单独传:调用方只读 `MODEL_READ_LIMIT`(上限 + 1)个字节 —— 不然一份 500 MB 的
+    文件会被整个读进内存,而我们只是要拒绝它。代价是 `len(data)` 最大就是上限 + 1,
+    **拿它当文件大小报出来是错的**:500 MB 会被说成"100.0 MB,超出上限 100 MB",
+    读起来像个 bug,而且把用户往"再减一点点就行"的方向骗。
+    """
+    measured = size if size is not None else len(data)
+    if measured > MODEL_LIMIT_BYTES:
+        limit = MODEL_LIMIT_BYTES // 1024 // 1024
+        actual = f"{measured/1024/1024:.1f}"
+        # 真实大小只在**它能多说一句**的时候才报:不知道大小(size 没传,读数被截在上限上)、
+        # 或者四舍五入之后恰好等于上限时,写出来就成了"100.0 MB 超出上限 100 MB"。
+        excess = f"（这份 {actual} MB）" if actual != f"{limit}.0" else ""
         raise SceneTooLarge(
-            f"模型 {len(data)/1024/1024:.1f} MB，超出上限 {MODEL_LIMIT_BYTES//1024//1024} MB。"
-            "常见的减法:在 Blender 里隐藏或删掉用不到的物体、把贴图降到 2K、"
-            "或者把场景拆成几个分别导入。")
+            f"模型超出上限 {limit} MB{excess}。常见的减法：在 Blender 里隐藏或删掉用不到的物体、"
+            "把贴图降到 2K、或者把场景拆成几个分别导入。")
     fmt = "glb" if data[:4] == b"glTF" else "gltf"
     try:
         if fmt == "glb":
@@ -134,8 +146,8 @@ def validate_model(data: bytes) -> str:
     return fmt
 
 
-def import_model(db: Session, scene_id: str, name: str, data: bytes) -> Scene3DModel:
-    fmt = validate_model(data)
+def import_model(db: Session, scene_id: str, name: str, data: bytes, *, size: int | None = None) -> Scene3DModel:
+    fmt = validate_model(data, size=size)
     model = Scene3DModel(scene_id=scene_id, name=name[:160], format=fmt, data=data)
     db.add(model)
     db.commit()
