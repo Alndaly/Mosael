@@ -45,3 +45,24 @@ After recording, review screenshots and moving frames, update the related biling
 The manifest records `documentedVersion: 1.2.0`. Each file keeps its own capture version and source commit. Some unchanged views still originate from 1.0.0-beta5; fresh files are tagged 1.2.0. The 3D scene and bilingual gallery brief are manually prepared demonstration content, not generated results. Some 3D controls currently remain Chinese in English mode; recordings preserve the real interface.
 
 For the new scenes, use `--only scenes,notes,annotations`. The fixture needs `scene`, `note` and `board` IDs for the gallery example, gallery brief and story board; titles are declared in the capture script. No provider calls, publication or external messages are performed.
+
+## Homepage feature windows (1.2.0)
+
+`website/public/media/homepage/{zh,en}/` contains six fresh, unaltered 2× browser captures taken on 2026-09-09 from the running app at commit `54ecfda1`. Each uses a 1440×940 viewport and an isolated demo workspace:
+
+- `boards.png`: the connected story-study board; light WenKai (Chinese) / Caveat (English).
+- `editor.png`: the working Big Buck Bunny picture, audio and subtitle timeline; dark Newsreader.
+- `scenes.png`: the gallery scene with global camera path, shot inset and object/camera keyframes; dark Space Grotesk.
+
+The homepage composes these original screenshots as overlapping windows in HTML. Its feature selectors bring one complete window forward; phones show one complete window at a time. The surrounding site follows its own light/dark theme while the captures deliberately retain different supported app appearances. The 3D feature chapter uses the same fresh scene capture. No app controls, content or generation results were fabricated. The footage attribution above also applies to these images.
+
+Re-capture with the existing Python Playwright environment and prepared local demo fixtures (tokens are JSON strings in private local files):
+
+```sh
+backend/.venv/bin/python scripts/capture-homepage.py \
+  --scene-api http://127.0.0.1:8813 --scene-token /private/path/scene-token.json \
+  --editor-api http://127.0.0.1:8812 --editor-token /private/path/editor-token.json \
+  --editor-fixture /private/path/editor-fixture.json
+```
+
+The scene demo contains “三间展厅 · Camera study”; the editor demo contains “镜头与灵感 · Story study” and a fixture with its `project` ID. The script records source commit, version, language, theme, font, timestamp, dimensions and SHA-256 in `capture-manifest.json`. Website media tests verify the homepage captures alongside documentation screenshots and recordings.

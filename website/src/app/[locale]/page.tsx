@@ -1,3 +1,5 @@
+import { HomeShowcase, type ShowcaseWindow } from "@/components/home-showcase";
+import { mediaVersion } from "@/lib/media";
 import { Shot } from "@/components/shot";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -14,6 +16,7 @@ import { cn } from "@/lib/utils";
 
 const CHAPTERS = [
   { id: "infinite-canvas", image: "/media/screens/boards.png", width: 2880, height: 1800, href: "/docs/guides/boards" },
+  { id: "3d-scenes", image: "/media/homepage/zh/scenes.png", width: 2880, height: 1880, href: "/docs/guides/scenes" },
   { id: "media-library", image: "/media/screens/media.png", width: 2880, height: 1800, href: "/docs/guides/media" },
   { id: "editing", image: "/media/screens/editor.png", width: 2880, height: 1800, href: "/docs/guides/editing" },
   { id: "agent", image: "/media/screens/ai-chat.png", width: 2880, height: 1800, href: "/docs/guides/ai-studio" },
@@ -22,6 +25,7 @@ const CHAPTERS = [
 
 const CHAPTER_TONES = [
   "bg-[#17141f] text-[#fbf9ff]",
+  "bg-[#e7f1f2] text-[#152b30] dark:bg-[#18282c] dark:text-foreground",
   "bg-[#eee9ff] text-[#18131f] dark:bg-[#211b31] dark:text-foreground",
   "bg-[#f7eaf4] text-[#21141f] dark:bg-[#291b29] dark:text-foreground",
   "bg-[#eaf2ff] text-[#171725] dark:bg-[#171e2d] dark:text-foreground",
@@ -51,21 +55,26 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   const t = getMessages(locale).home;
+  const windows: ShowcaseWindow[] = (["boards", "editor", "scenes"] as const).map((id) => {
+    const src = `/media/homepage/${locale}/${id}.png`;
+    return { id, src: `${src}?v=${mediaVersion(src)}`, ...t.showcase[id],
+      href: localePath(locale, `/docs/guides/${id === "editor" ? "editing" : id}`) };
+  });
 
   return (
     <div className="-mt-20 overflow-hidden bg-paper">
-      <section id="product" className="relative isolate px-5 pt-40 pb-20 sm:px-8 sm:pt-48 sm:pb-28 lg:px-12">
+      <section id="product" className="relative isolate px-5 pt-32 pb-16 sm:px-8 sm:pt-36 sm:pb-24 lg:px-12">
         <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_12%_18%,rgba(114,87,233,0.26),transparent_36%),radial-gradient(circle_at_84%_12%,rgba(255,139,120,0.25),transparent_32%),linear-gradient(180deg,#f7f3ff_0%,#fff7f5_58%,var(--paper)_100%)] dark:bg-[radial-gradient(circle_at_12%_18%,rgba(114,87,233,0.28),transparent_36%),radial-gradient(circle_at_84%_12%,rgba(255,139,120,0.13),transparent_32%),linear-gradient(180deg,#171322_0%,#19131d_58%,var(--paper)_100%)]" />
         <Reveal className="mx-auto flex max-w-5xl flex-col items-center text-center">
           <p className="m-0 inline-flex items-center gap-2 text-xs font-bold tracking-[0.16em] text-primary uppercase"><span className="size-1.5 rounded-full bg-primary" />{t.eyebrow}</p>
-          <h1 className="mt-7 mb-0 max-w-[12ch] font-display text-[clamp(3.8rem,9.5vw,8.6rem)] leading-[0.88] font-[720] tracking-[-0.065em] text-balance">{t.titleLead} <span className="bg-gradient-to-r from-[#5a43ea] via-[#a74fec] to-[#ff8b78] bg-clip-text text-transparent">{t.titleAccent}</span></h1>
+          <h1 className="mt-7 mb-0 max-w-[16ch] font-display text-[clamp(3.4rem,7.5vw,6.8rem)] leading-[0.88] font-[720] tracking-[-0.065em] text-balance">{t.titleLead} <span className="bg-gradient-to-r from-[#5a43ea] via-[#a74fec] to-[#ff8b78] bg-clip-text text-transparent">{t.titleAccent}</span></h1>
           <p className="mt-8 mb-0 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">{t.lede}</p>
           <div className="mt-9"><PrimaryActions download={t.ctaDownload} source={t.ctaSource} /></div>
           <p className="mt-5 mb-0 text-xs leading-5 text-muted-foreground">{t.platforms}</p>
         </Reveal>
-        <Reveal className="relative mx-auto mt-16 max-w-[92rem] sm:mt-20" delay={90}>
+        <Reveal className="relative mx-auto mt-10 max-w-[92rem] sm:mt-12" delay={90}>
           <div className="pointer-events-none absolute -inset-x-20 top-1/4 bottom-0 -z-10 bg-[radial-gradient(ellipse_at_center,rgba(114,87,233,0.2),rgba(255,161,190,0.12)_44%,transparent_72%)]" />
-          <ProductShot src={locale === "en" ? "/media/screens/en/editor.png" : "/media/screens/editor.png"} alt={t.heroShotAlt} width={2880} height={1800} priority />
+          <HomeShowcase windows={windows} label={t.showcaseLabel} explore={t.showcaseExplore} />
         </Reveal>
       </section>
 
@@ -92,7 +101,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
                   <ul className="mt-7 mb-0 grid list-none gap-2 p-0 text-sm">{chapter.points.map((point) => <li key={point} className="flex items-center gap-3"><span className={cn("h-px w-5", dark ? "bg-white/28" : "bg-current/25")} />{point}</li>)}</ul>
                   <Link href={localePath(locale, config.href)} className={cn("mt-8 inline-flex items-center gap-2 text-sm font-semibold transition-opacity hover:opacity-70", dark ? "text-[#c9beff]" : "text-primary")}>{chapter.cta}<ArrowRight className="size-4" aria-hidden /></Link>
                 </div>
-                <div className={cn("lg:col-span-7", reverse && "lg:order-1")}><ProductShot src={locale === "en" ? config.image.replace("/screens/", "/screens/en/") : config.image} alt={chapter.shotAlt} width={config.width} height={config.height} /></div>
+                <div className={cn("lg:col-span-7", reverse && "lg:order-1")}><ProductShot src={locale === "en" ? config.image.replace("/screens/", "/screens/en/").replace("/homepage/zh/", "/homepage/en/") : config.image} alt={chapter.shotAlt} width={config.width} height={config.height} /></div>
               </Reveal>
             </article>
           );

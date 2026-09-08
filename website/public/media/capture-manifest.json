@@ -3079,6 +3079,108 @@
       "capturedAt": "2026-09-08T16:33:55.889783+00:00",
       "bytes": 477687,
       "sha256": "50dc942790541af6c6730043131a8f9d2c9a3d5caadcfccb24184282e32aca80"
+    },
+    "homepage/zh/boards.png": {
+      "scene": "boards",
+      "locale": "zh",
+      "theme": "light",
+      "font": "wenkai",
+      "version": "1.2.0",
+      "sourceCommit": "54ecfda1f066675fe67e34d41dd51d3a947379c8",
+      "capturedAt": "2026-09-08T18:24:01.496835+00:00",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "deviceScaleFactor": 2,
+      "bytes": 1446047,
+      "sha256": "f32bc2891603fb137eaa857a9bf9230658caba9b470793e3d7b625774e357961",
+      "note": "Live app screenshot using isolated demo data and supported appearance preferences. No mocked UI."
+    },
+    "homepage/zh/editor.png": {
+      "scene": "editor",
+      "locale": "zh",
+      "theme": "dark",
+      "font": "newsreader",
+      "version": "1.2.0",
+      "sourceCommit": "54ecfda1f066675fe67e34d41dd51d3a947379c8",
+      "capturedAt": "2026-09-08T18:24:05.290870+00:00",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "deviceScaleFactor": 2,
+      "bytes": 2153067,
+      "sha256": "9b01de06929d828edf2dfa033ea29a98f04ab8e7633e5c74d964a1830308dba2",
+      "note": "Live app screenshot using isolated demo data and supported appearance preferences. No mocked UI."
+    },
+    "homepage/zh/scenes.png": {
+      "scene": "scenes",
+      "locale": "zh",
+      "theme": "dark",
+      "font": "space-grotesk",
+      "version": "1.2.0",
+      "sourceCommit": "54ecfda1f066675fe67e34d41dd51d3a947379c8",
+      "capturedAt": "2026-09-08T18:24:10.582949+00:00",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "deviceScaleFactor": 2,
+      "bytes": 512205,
+      "sha256": "b98f9f2a85f58f96d8294a2842746160f3c33b53bc1fc01cd4d0e80bf911bf85",
+      "note": "Live app screenshot using isolated demo data and supported appearance preferences. No mocked UI."
+    },
+    "homepage/en/boards.png": {
+      "scene": "boards",
+      "locale": "en",
+      "theme": "light",
+      "font": "caveat",
+      "version": "1.2.0",
+      "sourceCommit": "54ecfda1f066675fe67e34d41dd51d3a947379c8",
+      "capturedAt": "2026-09-08T18:24:15.784624+00:00",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "deviceScaleFactor": 2,
+      "bytes": 1436246,
+      "sha256": "a14e8ba15d963d47ed8a8d9617af60d5f5dd12c696cf8c33146cc0aabae963db",
+      "note": "Live app screenshot using isolated demo data and supported appearance preferences. No mocked UI."
+    },
+    "homepage/en/editor.png": {
+      "scene": "editor",
+      "locale": "en",
+      "theme": "dark",
+      "font": "newsreader",
+      "version": "1.2.0",
+      "sourceCommit": "54ecfda1f066675fe67e34d41dd51d3a947379c8",
+      "capturedAt": "2026-09-08T18:24:19.550787+00:00",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "deviceScaleFactor": 2,
+      "bytes": 2156156,
+      "sha256": "3d5a2c5062b3616165549f3f7d94de713f132669e843d4c7931b40284334ef31",
+      "note": "Live app screenshot using isolated demo data and supported appearance preferences. No mocked UI."
+    },
+    "homepage/en/scenes.png": {
+      "scene": "scenes",
+      "locale": "en",
+      "theme": "dark",
+      "font": "space-grotesk",
+      "version": "1.2.0",
+      "sourceCommit": "54ecfda1f066675fe67e34d41dd51d3a947379c8",
+      "capturedAt": "2026-09-08T18:24:24.796606+00:00",
+      "viewport": {
+        "width": 1440,
+        "height": 940
+      },
+      "deviceScaleFactor": 2,
+      "bytes": 511422,
+      "sha256": "e1a13418461e095a463aaa6ec6d7f0f3375cd15dd85e047ae73f0305d704fd9e",
+      "note": "Live app screenshot using isolated demo data and supported appearance preferences. No mocked UI."
     }
   },
   "version": "1.2.0",

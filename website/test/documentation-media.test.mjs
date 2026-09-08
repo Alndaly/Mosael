@@ -12,7 +12,7 @@ const files = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap(e =>
 
 test('every current screenshot and recording has an intact live-capture provenance entry', () => {
   assert.equal(manifest.documentedVersion ?? manifest.version, version);
-  for (const kind of ['screens', 'gifs', 'videos']) {
+  for (const kind of ['screens', 'gifs', 'videos', 'homepage']) {
     for (const file of files(path.join(media, kind))) {
       const relative = path.relative(media, file);
       const record = manifest.captures[relative];
