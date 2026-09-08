@@ -36,6 +36,8 @@
    node test/bundle.smoke.mjs
    ```
 
+App 专用密码撤销后，重新生成密码并再次运行同名 `store-credentials` 命令，替换 `mosael-release` 配置。它会向 Apple 验证新凭据；不要把 Apple 账户登录密码用作公证密码。
+
 遇到 Xcode 登录 `-1200` 或签名时间戳服务不可用时，先核对系统代理是否能正确访问 Apple 服务。可以测试 Apple 域名直连；不应通过禁用 TLS 验证或系统安全检查解决。
 
 ## GitHub Actions
@@ -51,6 +53,8 @@
 | `APPLE_APP_SPECIFIC_PASSWORD` | 该 Apple ID 的 App 专用密码 |
 
 签名与公证凭据仅传给 macOS 打包步骤。Windows 构建不会获得这些凭据。私钥通过加密的 Actions secret 进入临时构建环境；不要将整个登录钥匙串导出到 CI。维护者撤销或更新证书、密码时，同步更新 secrets 和描述文件。
+
+仓库为 `app-builder-lib@26.15.3` 保留了一个 pnpm 补丁：该版本导入证书时，误将 PKCS#12 密码用于临时钥匙串的访问控制设置，导致 `SecKeychainUnlock` 失败。补丁传入创建钥匙串时生成的独立密码，不改变证书密码或签名权限。`electron/mac-signing.test.ts` 覆盖两份独立加密证书的导入；升级打包工具时应先验证上游已修复，再移除补丁。
 
 ## 使用本机钥匙串公证
 

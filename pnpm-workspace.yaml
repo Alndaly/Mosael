@@ -35,6 +35,11 @@ onlyBuiltDependencies:
 overrides:
   "@electron/get": "^5.1.0"
 
+# 26.15.3 导入证书后误用 PKCS#12 密码解锁随机密码的临时钥匙串。
+# 补丁将钥匙串密码传到 ACL 设置；升级并确认上游修复后移除。
+patchedDependencies:
+  app-builder-lib@26.15.3: patches/app-builder-lib@26.15.3.patch
+
 # 另一处依赖布局上的坑(修在 package.json,记在这里以便一起看):`openapi-typescript`(API
 # 类型生成)必须挂在**根**的 devDependencies,不能挂在 frontend。它到 7.13 为止 peer 仍是
 # typescript ^5.x,走 `ts.factory` 这套旧编译器 API;而 TypeScript 7 的 npm 包换成了原生实现,

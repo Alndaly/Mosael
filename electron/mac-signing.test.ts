@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
+import vm from "node:vm";
 import { afterAll, describe, expect, it } from "vitest";
 const { needsCodeSignature } = createRequire(import.meta.url)("../scripts/sign-mac.cjs");
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "mosael-signing-test-"));
@@ -29,5 +30,45 @@ describe("macOS signing scope", () => {
   });
   it("does not silently skip files that cannot be inspected", () => {
     expect(() => needsCodeSignature(path.join(temporary, "missing"))).toThrow();
+  });
+});
+
+describe("release signing keychain", () => {
+  it("unlocks the temporary keychain with its own password when importing separately encrypted certificates", async () => {
+    const rootRequire = createRequire(import.meta.url);
+    const builderRequire = createRequire(rootRequire.resolve("electron-builder"));
+    const sourcePath = builderRequire.resolve("app-builder-lib/out/codeSign/macCodeSign.js");
+    const dependencyRequire = createRequire(sourcePath);
+    const commands: string[][] = [];
+    const context = {
+      exports: {} as { createKeychain: (options: object) => Promise<unknown> },
+      __dirname: path.dirname(sourcePath),
+      process: { env: { TRAVIS: "true" } },
+      require: (name: string) => {
+        if (name === "builder-util") return {
+          ...dependencyRequire(name),
+          exec: async (_executable: string, args: string[]) => { commands.push(args); return ""; },
+        };
+        if (name === "./codesign") return { importCertificate: async (link: string) => link };
+        return dependencyRequire(name);
+      },
+    };
+    vm.runInNewContext(fs.readFileSync(sourcePath, "utf8"), context);
+    await context.exports.createKeychain({
+      tmpDir: {}, currentDir: temporary,
+      cscLink: "/mock/application.p12", cscKeyPassword: "application-certificate-password",
+      cscILink: "/mock/installer.p12", cscIKeyPassword: "installer-certificate-password",
+    });
+    const keychainPassword = commands.find(args => args[0] === "create-keychain")![2];
+    expect(keychainPassword).toBeTruthy();
+    const imports = commands.filter(args => args[0] === "import");
+    expect(imports.map(args => args[args.indexOf("-P") + 1])).toEqual([
+      "application-certificate-password", "installer-certificate-password",
+    ]);
+    const partitions = commands.filter(args => args[0] === "set-key-partition-list");
+    expect(partitions).toHaveLength(2);
+    expect(partitions.map(args => args[args.indexOf("-k") + 1])).toEqual([
+      keychainPassword, keychainPassword,
+    ]);
   });
 });
