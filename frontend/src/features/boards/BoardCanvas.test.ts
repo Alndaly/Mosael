@@ -4,6 +4,7 @@ import type { Node } from "@xyflow/react";
 import {
   canMoveComment,
   canPlaceCommentDraft,
+  boardItems,
   focusBoardNode,
   toCanvas,
   moveCommentAnchorByScreenDelta,
@@ -95,5 +96,19 @@ describe("标记汇出", () => {
     const canvas = toCanvas(nodes, []);
     expect(canvas.items.map((one) => one.id)).toEqual(["note-1"]);
     expect(canvas.markers).toEqual([{ id: "m1", name: "分镜起点", x: 320, y: -41, shortcut: "Alt+1" }]);
+  });
+});
+
+describe("画板项的派生", () => {
+  it("跳过标记 —— 它没有 item,读下去当场抛", () => {
+    // 这条钉的是一次真崩溃:加了标记之后,`nodes.map(n => n.data.item).filter(i => i.kind === …)`
+    // 在标记那一项上读到 undefined,`.kind` 抛在派生里 = 整张画板白屏。加标记就打不开画板了。
+    const nodes = [
+      { id: "note-1", type: "note", position: { x: 0, y: 0 }, data: { item: { id: "note-1", kind: "note", x: 0, y: 0 } } },
+      { id: "marker:m1", type: "marker", position: { x: 0, y: 0 }, data: { marker: { id: "m1", name: "起点", x: 0, y: 0 } } },
+    ] as unknown as Node[];
+
+    expect(() => boardItems(nodes).filter((item) => item.kind === "document")).not.toThrow();
+    expect(boardItems(nodes).map((item) => item.id)).toEqual(["note-1"]);
   });
 });

@@ -147,6 +147,19 @@ export function toCanvas(nodes: Node[], edges: Edge[]): Canvas {
   };
 }
 
+/**
+ * 画布上的**画板项**。标记不是画板项 —— 它的 data 里没有 `item`。
+ *
+ * **只此一处。** 直接对全部节点 `node.data.item` 遍历的地方,加了标记之后就是一次崩溃:
+ * 读到的是 undefined,下一句 `.kind` 当场抛,而抛在派生里就是整张画板白屏 ——
+ * 加一枚标记,这张画板就再也打不开了。收成一个函数,是为了让"标记没有 item"只需要被记住一次。
+ */
+export function boardItems(nodes: Node[]): BoardItem[] {
+  return nodes
+    .filter((node) => node.type !== "marker")
+    .map((node) => (node.data as unknown as { item: BoardItem }).item);
+}
+
 /** 一次普通点击的选择结果。显式收口，避免 React Flow 的内部选择事件与受控 nodes 回写竞态。 */
 export function focusBoardNode(nodes: Node[], nodeId: string): Node[] {
   let changed = false;
@@ -411,7 +424,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
   /** 选中的**还空着**的那一项 —— 空槽就是「等着被填」,面板挂在它下面。 */
   const [pickingDocument, setPickingDocument] = React.useState<string | null>(null);
   const [refreshingDocument, setRefreshingDocument] = React.useState<string | null>(null);
-  const documentItems = nodes.map(node => (node.data as {item: BoardItem}).item).filter(item => item.kind === "document");
+  const documentItems = boardItems(nodes).filter(item => item.kind === "document");
   const documentQueries = useQueries({queries: documentItems.map(item => noteReferenceQuery(workspaceId ?? "", item.note_id ?? "", item.note_revision))});
   const documents = new Map<string, BoardDocumentState>(documentItems.map((item, index) => [item.id, {
     reference: documentQueries[index].data, pending: !!item.note_id && documentQueries[index].isPending,
@@ -454,9 +467,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
    */
   const feeding = (() => {
     if (!composerItem) return { assets: [], texts: [] as { itemId: string; text: string }[], blocked: false, pending: false, references: [] as NoteReference[] };
-    const byId = new Map(
-      nodes.map((node) => [node.id, (node.data as unknown as { item: BoardItem }).item]),
-    );
+    const byId = new Map(boardItems(nodes).map((item) => [item.id, item]));
     const sources = edges
       .filter((edge) => edge.target === composerItem.id)
       .map((edge) => byId.get(edge.source))
@@ -1516,7 +1527,9 @@ function ItemToolbar({
     setNodes((current) => [
       ...current.map((node) => ({ ...node, selected: false })),
       ...current
-        .filter((node) => node.selected)
+        // 标记也可能被选中(它在画布上就是一个节点),但它没有 item —— 而且"复制一枚旗子"
+        // 本来也不成立:两枚指着同一处的标记不表达任何东西。
+        .filter((node) => node.selected && node.type !== "marker")
         .map((node) => {
           const source = (node.data as unknown as { item: BoardItem }).item;
           const copy: BoardItem = { ...source, id: `${source.kind}-${Math.random().toString(36).slice(2, 9)}` };

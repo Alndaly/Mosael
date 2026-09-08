@@ -2118,8 +2118,12 @@ function WorkflowEditor({
               requestAnimationFrame(() => {
                 if (viewport.saved) flow.setViewport(viewport.saved);
                 else if (nodes.length > 4) {
-                  const first = nodes.find(node => node.data.nodeType === "start") ?? nodes[0];
-                  flow.setCenter(first.position.x + 450, first.position.y + 140, { zoom: 0.8, duration: 0 });
+                  // 兜底那一项要排除标记 —— 它排在数组最前,于是"第一次进来"会把视口
+                  // 停在一枚旗子上,而不是图的开头。
+                  const real = nodes.filter((node) => !isMarkerNode(node));
+                  const first = real.find(node => node.data.nodeType === "start") ?? real[0];
+                  // 早退会跳过下面那句 onInit(画布会一直停在"还没定位好"的不可见态)。
+                  if (first) flow.setCenter(first.position.x + 450, first.position.y + 140, { zoom: 0.8, duration: 0 });
                 } else fitCanvas(flow, 0);
                 canvas.handlers.onInit();
               });
