@@ -25,7 +25,7 @@ import {
   type SceneLighting,
   type Vec3,
 } from "@/api/domains/scenes";
-import { cameraOfShot, hasObjectMotion, sampleCamera, sampleObject } from "./sceneGraph";
+import { cameraOfShot, sampleCamera, sampleObject } from "./sceneGraph";
 
 /**
  * 某个 props 快照在某一刻的机位姿态。
@@ -498,7 +498,6 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           return;
         }
         lastSignature = signature;
-        animated = hasObjectMotion(p.content);
         const gen = ++generation;
         transform.detach();
         disposeTree(root);
@@ -627,7 +626,6 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         }
       });
       resize.observe(element);
-      let animated = false;
       let lastPath = "",
         observedShot = "";
       function frameOverview(
@@ -692,16 +690,33 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         // 重摆一次 —— 但只在真的有东西在动的时候做,静态场景一帧也不该多算。
         //
         // 拖动操纵器时跳过:那时用户正在改的是**静止姿态**,每帧再按轨覆盖一次会把它拽回去。
-        if (animated && !transform.dragging)
+        if (!transform.dragging)
           for (const o of p.content.objects) {
-            if (!o.track.length || o.kind === "camera") continue;
+            if (!o.track.length) continue;
             const node = objects.get(o.id);
             if (!node) continue;
+            if (o.kind === "camera") {
+              // **机位模型也要跟着自己的轨走。** 此前这里把相机跳过了,于是它一直停在静止姿态,
+              // 而「俯瞰全场」里那个取景器是按当前时刻算的 —— 同一台相机在画面上出现两个位置,
+              // 看起来就是"机位错配"。会动的东西就该动,不分它是不是相机。
+              const at = sampleCamera(o, p.shot, p.time);
+              node.position.fromArray(at.position);
+              node.lookAt(new THREE.Vector3(...at.target));
+              continue;
+            }
             const at = sampleObject(o, p.shot, p.time);
             node.position.fromArray(at.position);
             node.rotation.set(...(at.rotation.map(THREE.MathUtils.degToRad) as Vec3));
             node.scale.fromArray(at.scale);
           }
+        // 「俯瞰全场」里,当前镜头那台机位由取景器(观察辅助)画 —— 它多画一条视线和目标点。
+        // 两个一起画就是同一台相机重叠出两份,而那正是"明明两台却看见三台"的来源。
+        const observedRig = p.observing ? cameraOfShot(p.content, p.shot) : undefined;
+        for (const o of p.content.objects) {
+          if (o.kind !== "camera") continue;
+          const node = objects.get(o.id);
+          if (node) node.visible = !o.hidden && o.id !== observedRig?.id;
+        }
         grid.visible = !p.preview;
         if (path) path.visible = !!p.observing;
         observer.group.visible = !!p.observing;

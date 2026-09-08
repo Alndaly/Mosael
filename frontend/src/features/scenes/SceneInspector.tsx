@@ -122,7 +122,20 @@ export function SceneInspector({
                 {object.hidden ? "显示" : "隐藏"}
               </button>
             </div>
-            {!["model", "group", "light"].includes(object.kind) && (
+            {/* 相机没有形状,也没有颜色和材质 —— 它有的是视角。此前它跟着几何体一起显示
+                「宽度/高度/深度/粗糙度/金属度」,那些字段对它一个都不成立。 */}
+            {object.kind === "camera" && (
+              <Num
+                label="视角（越小越长焦）"
+                caption="视角°"
+                value={object.fov}
+                min={10}
+                max={120}
+                step={1}
+                onChange={(fov) => objectPatch(object.id, { fov })}
+              />
+            )}
+            {!["model", "group", "light", "camera"].includes(object.kind) && (
               <div className="scene-shape">
                 {(
                   [
@@ -179,7 +192,7 @@ export function SceneInspector({
                   ))}
               </div>
             )}
-            {!["group", "model"].includes(object.kind) && (
+            {!["group", "model", "camera"].includes(object.kind) && (
               <>
                 <label className="scene-color">
                   颜色

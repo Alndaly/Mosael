@@ -51,6 +51,22 @@ describe("editable scene graph", () => {
     expect(camera.track[0].fov).toBe(40);
   });
 
+  it("a camera with a track is somewhere else at a later time —— 机位模型必须跟着走", () => {
+    // 视口此前把相机排除在每帧重摆之外,于是机位模型一直停在静止姿态,而「俯瞰全场」里的
+    // 取景器是按当前时刻算的 —— 同一台相机在画面上出现两个位置,看起来就是"机位错配"。
+    // 这条钉的是"两个时刻确实不同",视口那边照着它摆。
+    const content = initialScene(true);
+    const shot = content.shots[0];
+    const rig = cameraOfShot(content, shot)!;
+    expect(rig.track.length).toBeGreaterThan(1);
+    const start = sampleCamera(rig, shot, 0);
+    const later = sampleCamera(rig, shot, shot.duration);
+    expect(later.position).not.toEqual(start.position);
+    // 静止姿态必须等于第一帧,否则没有轨的那一瞬间(比如刚加载)会先跳一下。
+    expect(start.position).toEqual(rig.position);
+    expect(start.target).toEqual(rig.target);
+  });
+
   it("an object with no track just stays where it is", () => {
     const { shot } = makeShot();
     const box = makeObject("box", { position: [1, 2, 3], rotation: [0, 45, 0], scale: [2, 2, 2] });
