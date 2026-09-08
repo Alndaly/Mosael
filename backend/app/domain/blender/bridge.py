@@ -7,6 +7,7 @@
 **上游**的问题,不是调用方请求有错 —— 用 4xx 会让人去改自己的请求,而该做的是去看 Add-on。
 """
 import json
+import shutil
 import threading
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -238,3 +239,46 @@ def receive(db, user, scene, transfer_id, *, into_current=False):
         record.update(received_scene_id=received.id, warnings=result.get('warnings', []), latest_blend=str(attempt.relative_to(folder) / 'scene.blend'))
         write_record(folder, record)
         return summary(record)
+
+
+def pull(db, user, workspace_id, instance_id):
+    """把 Blender 里当前打开的那个场景取成一个新的 Mosael 场景。
+
+    **不要求先发送过。** send/receive 是一趟往返:receive 靠发送时写在 Scene 上的
+    `mosael_transfer_id` 找回那一份。而人手上常常先有一个 Blender 工程,这条是给它的入口。
+
+    只取几何体。相机取不回来:Mosael 的镜头要知道"看向哪里",发送时那是我们自己写在相机上的
+    `mosael_target_distance`;换成任意一个 Blender 相机,这个距离无从得知,猜一个只会让构图
+    默默错掉。有相机就明说一句,而不是悄悄丢掉。
+
+    落盘的只有一份临时 GLB:它的字节随后进了模型表,文件本身没有第二个读者,所以用完即删 ——
+    留下来就是一个没有任何入口能清理的目录(传输记录那套是按场景归档的,这里还没有场景)。
+    """
+    instance = connection(db, user, instance_id)
+    with exclusive(instance.id):
+        folder = Path(settings.data_dir) / 'blender-bridge' / workspace_id / '_pull' / str(uuid4())
+        folder.mkdir(parents=True)
+        try:
+            result = execute(db, instance, 'pull', {'output_path': str(folder / 'model.glb'),
+                'result_path': str(folder / 'pulled.json')}, workspace_id)
+            try:
+                with (folder / 'model.glb').open('rb') as stream:
+                    data = stream.read(25*1024*1024+1)
+            except OSError as exc:
+                raise BlenderUnavailable('Blender 没有导出可用的模型，请重试。') from exc
+        finally:
+            shutil.rmtree(folder, ignore_errors=True)
+        fmt = validate_model(data)
+        model_id = uuid4().hex
+        content = SceneContent.model_validate({'objects': [
+            {'id': 'blender-model', 'kind': 'model', 'name': 'Blender 模型', 'model_id': model_id}]})
+        scene = create_scene_with_model(
+            db, workspace_id=workspace_id, name=result.get('scene_name') or 'Blender 场景',
+            content=content, model_id=model_id, model_name='Blender model',
+            model_format=fmt, model_data=data)
+        warnings = list(result.get('warnings') or [])
+        if result.get('camera_count'):
+            warnings.append('Blender 里的 %d 个相机没有一起取回 —— 镜头需要「看向哪里」，'
+                            '而这个距离只有从 Mosael 发送过去的相机才带着。请在这里重新设计镜头。'
+                            % result['camera_count'])
+        return {'scene_id': scene.id, 'name': scene.name, 'warnings': warnings}

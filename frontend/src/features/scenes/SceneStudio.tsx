@@ -2,6 +2,7 @@ import { SceneList } from "./SceneList";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { SceneBlender } from "./SceneBlender";
+import { SceneBlenderPull } from "./SceneBlenderPull";
 import { useCanvasInputMode } from "@/components/app/canvasInputMode";
 import { readSceneSnap, writeSceneSnap } from "./sceneSnap";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
@@ -160,6 +161,16 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
         </div>
         <div className="scene-actions">
           {!!list.data?.length && <Button variant="outline" aria-pressed={selecting} onClick={() => setSelecting(!selecting)}><CheckSquare size={16} />{selecting ? "完成选择" : "选择"}</Button>}
+          {/* 入口放在列表页,因为「我手上已经有个 Blender 工程」是**开始**一个场景的方式,
+              不是某个已有场景里的操作 —— 详情页那条互通要求先从这边发送过去。 */}
+          <SceneBlenderPull
+            workspaceId={workspace.id}
+            disabled={creating}
+            onCreated={async (sceneId) => {
+              await qc.invalidateQueries({ queryKey: ["scenes", workspace.id] });
+              location.hash = `#/scenes?scene=${sceneId}`;
+            }}
+          />
           <Button
             variant="outline"
             disabled={creating}

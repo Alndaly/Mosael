@@ -28,6 +28,13 @@ def check(instance_id: str, db: DbSession, user: CurrentUser):
     return {'name': result.get('name', 'Blender'), 'object_count': result.get('object_count', len(result['objects']))}
 
 
+@router.post('/blender/pull')
+def pull(workspace_id: str, instance_id: str, db: DbSession, user: CurrentUser):
+    """把 Blender 里当前打开的场景取成一个新的 Mosael 场景。不要求先发送过。"""
+    ensure_workspace_perm(db, user, workspace_id, 'edit')
+    return bridge.pull(db, user, workspace_id, instance_id)
+
+
 @router.get('/{scene_id}/blender')
 def history(scene_id: str, workspace_id: str, db: DbSession, user: CurrentUser):
     ensure_workspace_access(db, user, workspace_id)

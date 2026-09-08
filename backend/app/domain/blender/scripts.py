@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 def command(operation: str, payload: dict) -> str:
-    if operation not in {"send", "receive"}:
+    if operation not in {"send", "receive", "pull"}:
         raise ValueError("Unknown Blender operation")
     implementation = Path(__file__).with_name("worker.py").read_text(encoding="utf-8")
     # JSON is data, never interpolated into Python statements.

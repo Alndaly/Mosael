@@ -2855,6 +2855,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/scenes/blender/pull": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pull
+         * @description 把 Blender 里当前打开的场景取成一个新的 Mosael 场景。不要求先发送过。
+         */
+        post: operations["pull_api_scenes_blender_pull_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/scenes/{scene_id}/blender": {
         parameters: {
             query?: never;
@@ -16959,6 +16979,38 @@ export interface operations {
             path: {
                 instance_id: string;
             };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pull_api_scenes_blender_pull_post: {
+        parameters: {
+            query: {
+                workspace_id: string;
+                instance_id: string;
+            };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;

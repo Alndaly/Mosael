@@ -129,3 +129,32 @@ def test_receive_into_current_imports_the_model_and_hands_content_back(monkeypat
         db.refresh(scene)
         assert scene.revision==1 and scene.content['objects']==[]   # 库里的内容没被动过
         assert bridge.history(scene,user)[0]['received_scene_id'] is None
+
+
+def test_pull_takes_the_open_blender_scene_without_a_prior_send(monkeypatch, tmp_path):
+    """没发送过也能取:pull 走的是「当前打开的那个 Blender 场景」,不认 transfer_id。
+
+    另外钉两件事:相机不会被悄悄丢掉(有相机就出一条说明),以及那个临时目录**用完即删** ——
+    它的字节已经进了模型表,留着就是一个没有入口能清理的目录。
+    """
+    c, ws, initial = setup_scene()
+    monkeypatch.setattr(settings,'data_dir',tmp_path)
+    monkeypatch.setattr(bridge,'connection',lambda *args: SimpleNamespace(id='local'))
+    def fake_execute(db, instance, operation, payload, workspace_id):
+        assert operation=='pull'
+        Path(payload['output_path']).write_bytes(glb())
+        return {'scene_name':'客厅','object_count':7,'camera_count':2}
+    monkeypatch.setattr(bridge,'execute',fake_execute)
+    with SessionLocal() as db:
+        user=db.scalar(select(User))
+        before=len(list(db.scalars(select(Scene3D))))
+        result=bridge.pull(db,user,ws,'local')
+
+        assert len(list(db.scalars(select(Scene3D))))==before+1
+        scene=db.get(Scene3D,result['scene_id'])
+        assert scene.name=='客厅' and scene.workspace_id==ws
+        model=db.get(Scene3DModel,scene.content['objects'][0]['model_id'])
+        assert model.scene_id==scene.id and model.data==glb()
+        assert len(scene.content['shots'])==1            # 默认镜头,由用户重新设计
+        assert any('相机' in w for w in result['warnings'])
+        assert not list((tmp_path/'blender-bridge'/ws/'_pull').glob('*'))

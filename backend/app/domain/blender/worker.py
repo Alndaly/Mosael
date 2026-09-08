@@ -60,6 +60,33 @@ def add_camera(scene, shot):
     return camera
 
 
+def export_glb(path, **overrides):
+    """导出 GLB。**材质导不出来时退到只导几何体,而不是整趟失败。**
+
+    Blender 自带的 glTF 导出器会在某些材质上抛断言:`io/com/gltf2_io.py` 的 `from_union`
+    逐个试候选序列化器,全失败就 `assert False` —— 错误里看不出是哪个材质、哪个字段。
+    而 `exporter.glTF.to_dict()` 在导出流程里是**无条件**跑的,所以这份场景用 Blender 自带的
+    File → Export → glTF 同样会失败:不是我们传的参数不对,是那份材质导不出去。
+
+    我们修不了它,但可以不让它变成一句"502"。几何体本身通常是好的 —— 第二次尝试关掉材质,
+    把模型拿到手,再明说材质没跟过来。**只在这一层降级,不在别处**:降级过一次就要出一条
+    警告,悄悄少东西比报错更难查。
+    """
+    options = dict(filepath=path, export_format='GLB', use_active_scene=True,
+                   export_apply=True, export_animations=False, export_cameras=False,
+                   export_lights=True, export_extras=True)
+    options.update(overrides)
+    try:
+        bpy.ops.export_scene.gltf(**options)
+        return []
+    except Exception as exc:
+        reason = str(exc).strip().splitlines()[-1][:160] if str(exc).strip() else exc.__class__.__name__
+    options.update(export_materials='NONE', export_extras=False)
+    bpy.ops.export_scene.gltf(**options)
+    return ['Blender 的 glTF 导出器在这个场景的材质上失败了，已只导出几何体。'
+            '材质请在 Mosael 里重新指定，或用 .blend 保留原始设置。（' + reason + '）']
+
+
 def send(payload):
     snapshot = payload['snapshot']
     old = bpy.context.window.scene
@@ -138,9 +165,7 @@ def receive(payload):
             shots.append(shot)
         # Snapshot the geometry at the first frame, without mixing native cameras into the model.
         scene.frame_set(1)
-        bpy.ops.export_scene.gltf(filepath=payload['output_path'], export_format='GLB', use_active_scene=True,
-                                  export_extras=True, export_cameras=False, export_lights=True,
-                                  export_apply=True, export_animations=False)
+        warnings += export_glb(payload['output_path'])
         bpy.data.libraries.write(payload['blend_path'], {scene}, fake_user=True)
         return {'scene_name': scene.name, 'object_count': len(scene.objects), 'shots': shots, 'warnings': warnings}
     finally:
@@ -149,7 +174,28 @@ def receive(payload):
         bpy.context.window.scene = previous
 
 
+def pull(payload):
+    """把**当前正在编辑的那个 Blender 场景**整体导出来。
+
+    和 receive 的区别是它不认 `mosael_transfer_id`:没发送过、纯在 Blender 里做出来的场景
+    也能取回。代价是相机取不回来 —— Mosael 的镜头要知道"看向哪里",而那是发送时由我们写在
+    相机上的 `mosael_target_distance`;换成任意一个 Blender 相机,这个距离无从得知,
+    猜一个只会让构图默默错掉。所以这里只取几何体,镜头留给 Mosael 这边重新设计。
+
+    **不切换场景、不写 .blend**:用户此刻正开着这个工程,动他的当前场景是没必要的越界,
+    而工程文件就在他自己手上。
+    """
+    scene = bpy.context.window.scene
+    if not any(o.type == 'MESH' for o in scene.objects):
+        raise ValueError('当前 Blender 场景里没有网格物体，切换到要导入的场景后重试。')
+    # 别人的工程里什么自定义属性都可能有,而我们从不读 GLB 里的 extras —— 不带它进来。
+    warnings = export_glb(payload['output_path'], export_extras=False)
+    return {'scene_name': scene.name, 'object_count': len(scene.objects),
+            'camera_count': sum(1 for o in scene.objects if o.type == 'CAMERA'),
+            'warnings': warnings, 'blender_version': bpy.app.version_string}
+
+
 def run(operation, payload):
-    value = send(payload) if operation == 'send' else receive(payload)
+    value = {'send': send, 'receive': receive, 'pull': pull}[operation](payload)
     Path(payload['result_path']).write_text(json.dumps(value), encoding='utf-8')
     print('MOSAEL_BRIDGE_COMPLETE')

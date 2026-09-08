@@ -29,6 +29,7 @@ Connect your chosen Mosael agent to local Blender, then exchange models and came
 
 ## 使用
 
+- **从 Blender 获取**（3D 场景列表页）：把 Blender 里**当前打开的那个场景**取成一个新的 Mosael 场景，不要求先发送过 —— 手上已经有 Blender 工程时从这里进来。只取几何体：Mosael 的镜头要知道「看向哪里」，而那个距离只有从 Mosael 发送过去的相机才带着，任意 Blender 相机无从得知，所以相机不一起取回（有相机会明确提示），镜头在 Mosael 这边重新设计。
 - **发送当前场景**：等待保存完成，将当前可见模型、支持的材质/灯光和全部镜头发到一个独立的 `Mosael · 场景名称` Blender Scene，不清空其他 Scene。选中的镜头成为 Blender 活动相机。
 - 在 Blender 中编辑模型、修改器、材质或相机。也可以在 Mosael 的建模助手中，使用已启用的 Blender 插件工具操作该 Scene；智能体模型由用户选择。
 - **接收 Blender 修改**：读取对应发送记录的 Scene，**更新当前场景**。模型作为一个整体 GLB 导入；相机回传为可编辑的镜头关键帧。它是当前场景上的一次普通改动 —— ⌘Z 可撤销，接收前的那一版也留在版本记录里。

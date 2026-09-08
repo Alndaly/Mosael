@@ -8203,6 +8203,56 @@
         }
       }
     },
+    "/api/scenes/blender/pull": {
+      "post": {
+        "tags": [
+          "Blender"
+        ],
+        "summary": "Pull",
+        "description": "把 Blender 里当前打开的场景取成一个新的 Mosael 场景。不要求先发送过。",
+        "operationId": "pull_api_scenes_blender_pull_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "instance_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/scenes/{scene_id}/blender": {
       "get": {
         "tags": [
