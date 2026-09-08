@@ -1,5 +1,5 @@
 import React from "react";
-import { Flag } from "lucide-react";
+import { Flag, List } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -36,7 +36,7 @@ export function MarkerListButton({
           title={t("markers")}
           className={cn(markers.length > 0 && "text-foreground")}
         >
-          <Flag size={14} />
+          <List size={14} />
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-64 p-1">

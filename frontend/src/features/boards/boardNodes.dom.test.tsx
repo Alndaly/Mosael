@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import React from "react";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { BoardItem } from "@/api/client";
@@ -136,4 +136,16 @@ describe("无限画布节点运行状态", () => {
     expect(text.className).toContain("[overflow-wrap:anywhere]");
     expect(text.parentElement?.className).toContain("min-w-0");
   });
+});
+
+it("document contents drag the node and suppress native image dragging", () => {
+  const Node = BOARD_NODE_TYPES.document;
+  const props = { data: { item: { id: "doc", kind: "document", note_id: "note", note_revision: 1 },
+    document: { reference: { title: "Reference", markdown: "![test](https://example.com/image.png)", revision: 1 } } }, selected: false } as unknown as React.ComponentProps<typeof Node>;
+  const { container } = render(<Node {...props} />);
+  const content = container.querySelector("[data-document-preview]")!;
+  expect(content.closest(".nodrag")).toBeNull();
+  const image = container.querySelector("img")!;
+  expect(image).not.toBeNull();
+  expect(fireEvent.dragStart(image)).toBe(false);
 });

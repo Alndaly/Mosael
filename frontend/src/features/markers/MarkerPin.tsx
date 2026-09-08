@@ -12,6 +12,7 @@ import type { CanvasMarker } from "@/features/markers/markers";
 import { formatCombo } from "@/lib/shortcuts";
 
 export type MarkerNodeData = {
+  editable?: boolean;
   marker: CanvasMarker;
   /** 同一张画布上的全部标记 —— 查重要用它(见 markerShortcutConflict)。 */
   markers: CanvasMarker[];
@@ -30,14 +31,18 @@ export type MarkerNodeData = {
  */
 export function MarkerPin({ data, selected }: NodeProps) {
   const t = useI18n();
-  const { marker, markers, onChange, onDelete } = data as unknown as MarkerNodeData;
+  const { marker, markers, onChange, onDelete, editable = false } = data as unknown as MarkerNodeData;
   const [open, setOpen] = React.useState(false);
+  React.useEffect(() => { if (!editable) setOpen(false); }, [editable]);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={editable && open} onOpenChange={(next) => editable && setOpen(next)}>
       <PopoverTrigger asChild>
         <button
           type="button"
+          tabIndex={editable ? 0 : -1}
+          aria-disabled={!editable}
+          style={!editable ? { pointerEvents: "none" } : undefined}
           data-marker-pin={marker.id}
           title={t("markerConfigure")}
           className={cn(

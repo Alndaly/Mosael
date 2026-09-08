@@ -574,8 +574,8 @@ function DocumentNode({ data, selected }: NodeProps) {
           {t("documentUnavailable")}
         </div>
       ) : (
-        <div className="nodrag nopan nowheel min-h-0 flex-1 overflow-y-auto break-words px-4 py-3 text-ui-xs leading-relaxed text-foreground/85 [overflow-wrap:anywhere] [&_p]:my-2 [&_h1]:my-3 [&_h1]:text-base [&_h2]:my-3 [&_h2]:text-ui-sm [&_h2]:font-semibold [&_h3]:text-ui-sm [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_pre]:overflow-auto [&_pre]:rounded-md [&_pre]:bg-secondary [&_pre]:p-2 [&_img]:max-w-full [&_a]:text-primary [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3">
-          <Streamdown mode="static" controls={false}>
+        <div data-document-preview="" onDragStartCapture={(event) => event.preventDefault()} className="nowheel select-none min-h-0 flex-1 overflow-y-auto break-words px-4 py-3 text-ui-xs leading-relaxed text-foreground/85 [overflow-wrap:anywhere] [&_p]:my-2 [&_h1]:my-3 [&_h1]:text-base [&_h2]:my-3 [&_h2]:text-ui-sm [&_h2]:font-semibold [&_h3]:text-ui-sm [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_pre]:overflow-auto [&_pre]:rounded-md [&_pre]:bg-secondary [&_pre]:p-2 [&_img]:max-w-full [&_a]:text-primary [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3">
+          <Streamdown mode="static" controls={false} className="pointer-events-none">
             {ref?.markdown.slice(0, 6000) || ""}
           </Streamdown>
           {(ref?.markdown.length ?? 0) > 6000 && (

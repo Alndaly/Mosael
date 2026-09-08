@@ -12,6 +12,7 @@ const marker: CanvasMarker = { id: "m1", name: "分镜起点", x: 0, y: 0, short
 
 function pin(overrides: Partial<CanvasMarker> = {}, handlers: { onChange?: () => void; onDelete?: () => void } = {}) {
   const data = {
+    editable: true,
     marker: { ...marker, ...overrides },
     markers: [{ ...marker, ...overrides }],
     onChange: handlers.onChange ?? vi.fn(),
@@ -42,4 +43,17 @@ it("点开旗子就能改名、改键、删掉 —— 配置留在这一处位�
   expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ name: "改过的名字" }));
   fireEvent.click(screen.getByRole("button", { name: /markerDelete/ }));
   expect(onDelete).toHaveBeenCalledWith("m1");
+});
+
+it("outside marker mode the pin cannot open or keep its editor focused", () => {
+  const data = { marker, markers: [marker], onChange: vi.fn(), onDelete: vi.fn(), editable: true };
+  const props = { data, selected: false } as unknown as React.ComponentProps<typeof MarkerPin>;
+  const { rerender } = render(<MarkerPin {...props} />);
+  fireEvent.click(screen.getByTitle("markerConfigure"));
+  expect(screen.getByLabelText("markerName")).toBeInTheDocument();
+  rerender(<MarkerPin {...props} data={{ ...data, editable: false }} />);
+  expect(screen.queryByLabelText("markerName")).not.toBeInTheDocument();
+  expect(screen.getByTitle("markerConfigure")).toHaveAttribute("tabindex", "-1");
+  fireEvent.click(screen.getByTitle("markerConfigure"));
+  expect(screen.queryByLabelText("markerName")).not.toBeInTheDocument();
 });

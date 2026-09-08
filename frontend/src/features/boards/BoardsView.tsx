@@ -3,7 +3,7 @@ import React from "react";
 import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { CanvasPreview } from "@/components/layout/CanvasPreview";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, LayoutGrid, ListChecks, Map as MapIcon, Maximize2, MessageSquarePlus, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
+import { Bot, LayoutGrid, ListChecks, Map as MapIcon, Maximize2, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -53,6 +53,7 @@ import {
 } from "@/components/app/canvasPanelLayout";
 import { RightDockResizeHandle } from "@/components/app/RightDockResizeHandle";
 import { useResizableSidebar } from "@/lib/useResizableSidebar";
+import { AnnotationControls } from "@/features/markers/AnnotationControls";
 import { MarkerListButton } from "@/features/markers/MarkerListButton";
 import { BoardCanvas, type BoardCanvasApi } from "@/features/boards/BoardCanvas";
 import { useAutosave } from "@/features/boards/useAutosave";
@@ -223,6 +224,11 @@ function BoardDetail({
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
   const [collaborationOpen, setCollaborationOpen] = React.useState(false);
   const [commentMode, setCommentMode] = React.useState(false);
+  const [markerMode, setMarkerMode] = React.useState(false);
+  const [commentsVisible, setCommentsVisible] = React.useState(true);
+  const [markersVisible, setMarkersVisible] = React.useState(true);
+  const enterMarkerMode = () => { setMarkerMode(true); setMarkersVisible(true); setCommentMode(false); setActiveCommentId(null); };
+
   const [activeCommentId, setActiveCommentId] = React.useState<string | null>(null);
 
   //: 画布上的助手。**和工作流那扇是同一个面板** —— 会话池、消息、确认卡都走同一套 agent
@@ -654,6 +660,7 @@ function BoardDetail({
             <SearchableSelect
               value=""
               onValueChange={(kind) => {
+                setMarkerMode(false); setCommentMode(false); setActiveCommentId(null);
                 //: `pick-<kind>` 一条分支通吃三类。此前只认死 "pick-image",于是新增视频/音频
                 //: 就得再抄两遍同样的三行 —— 而 AssetPickerDialog 本来就是按 kind 列的。
                 if (kind.startsWith("pick-")) {
@@ -661,9 +668,6 @@ function BoardDetail({
                   setPicking({ kind: media, place: (assetId) => api?.add(media, { asset_id: assetId }) });
                 } else if (kind === "scene") {
                   setPickingScene(true);
-                } else if (kind === "marker") {
-                  // 标记不是画板项,所以它不走 api.add(kind) 那条(那条按 kind 建 item)。
-                  api?.addMarker();
                 } else {
                   api?.add(kind as "note" | "image" | "video" | "audio" | "frame" | "document");
                 }
@@ -683,9 +687,6 @@ function BoardDetail({
                 { value: "video", label: t("boardsAddVideo"), group: t("boardsGroupCreate") },
                 { value: "audio", label: t("boardsAddAudio"), group: t("boardsGroupCreate") },
                 { value: "frame", label: t("boardsAddFrame"), group: t("boardsGroupCreate") },
-                //: 标记自成一组,和工作流详情页那边一致 —— 它不是"往画板上放一件东西",
-                //: 是给这块地方插一面旗;混在「创建」里会让人以为它也是一种画板项。
-                { value: "marker", label: t("markerAdd"), group: t("markers") },
               ]}
               trigger={
                 <button
@@ -702,17 +703,12 @@ function BoardDetail({
           </div>
 
           <div data-board-toolbar-actions="" className={cn("flex flex-wrap items-center gap-1 rounded-lg p-1", CANVAS_GLASS_SURFACE_CLASS)}>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className={cn(commentMode && "bg-secondary text-foreground")}
-              title={commentMode ? t("boardCommentModeHint") : t("boardCommentMode")}
-              aria-label={t("boardCommentMode")}
-              aria-pressed={commentMode}
-              onClick={() => setCommentMode((current) => !current)}
-            >
-              <MessageSquarePlus size={14} />
-            </Button>
+            <AnnotationControls kind="comment" active={commentMode} visible={commentsVisible}
+              onMode={() => { setCommentMode(!commentMode); setActiveCommentId(null); setMarkerMode(false); setCommentsVisible(true); }}
+              onVisible={() => { setCommentsVisible(!commentsVisible); setActiveCommentId(null); if (commentsVisible) setCommentMode(false); }} />
+            <AnnotationControls kind="marker" active={markerMode} visible={markersVisible}
+              onMode={() => markerMode ? setMarkerMode(false) : enterMarkerMode()}
+              onVisible={() => { setMarkersVisible(!markersVisible); if (markersVisible) setMarkerMode(false); }} />
             <Button
               variant="ghost"
               size="icon-sm"
@@ -741,8 +737,8 @@ function BoardDetail({
             {/* 标记清单和「全览」放在一起:两个都是「怎么看这张画布」,不是「改这张画布」。 */}
             <MarkerListButton
               markers={api?.markers ?? []}
-              onJump={(marker) => api?.jumpToMarker(marker)}
-              onAdd={() => api?.addMarker()}
+              onJump={(marker) => { setMarkersVisible(true); api?.jumpToMarker(marker); }}
+              onAdd={enterMarkerMode}
             />
             {/* 撤销/重做。画布上最容易「手一滑」—— 拖错一个节点、误删一项,没有退路的话
                 用户只能凭记忆手动摆回去。快捷键是 ⌘Z / ⌘⇧Z,按钮是给不知道有快捷键的人。 */}
@@ -838,6 +834,9 @@ function BoardDetail({
         onDropFiles={(files) => upload.mutateAsync(files)}
         uploading={upload.isPending}
         commentMode={commentMode}
+        markerMode={markerMode}
+        markersVisible={markersVisible}
+        commentsVisible={commentsVisible}
         comments={comments.data ?? []}
         members={members.data?.members ?? []}
         currentUserId={user?.id ?? null}
@@ -853,7 +852,8 @@ function BoardDetail({
         })}
         onMoveComment={(comment, anchor) => moveCommentAnchor.mutateAsync({ comment, anchor })}
         onDeleteComment={(comment) => removeComment.mutateAsync(comment)}
-        onExitCommentMode={() => setCommentMode(false)}
+        onExitCommentMode={() => { setCommentMode(false); setActiveCommentId(null); }}
+        onExitMarkerMode={() => setMarkerMode(false)}
         onReady={setApi}
       />
 
@@ -871,6 +871,8 @@ function BoardDetail({
         board={board}
         onJumpToComment={(comment) => {
           setCommentMode(true);
+          setCommentsVisible(true);
+          setMarkerMode(false);
           setActiveCommentId(comment.id);
           setCollaborationOpen(false);
           requestAnimationFrame(() => api?.focusComment(comment));

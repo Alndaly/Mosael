@@ -28,3 +28,12 @@ describe("画布评论模式提示", () => {
     expect(onCanvasClick).not.toHaveBeenCalled();
   });
 });
+
+it("Escape exits the mode even when an editor holds focus", () => {
+  const onExit = vi.fn();
+  const view = render(<div><input aria-label="draft" /><BoardCommentModeHint onExit={onExit} /></div>);
+  const input = view.getByLabelText("draft");
+  input.focus();
+  fireEvent.keyDown(input, { key: "Escape" });
+  expect(onExit).toHaveBeenCalledOnce();
+});

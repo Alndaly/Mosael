@@ -1,3 +1,4 @@
+import { AnnotationModeHint } from "@/features/markers/AnnotationModeHint";
 import { NoteReferenceField } from "@/features/notes/NotePickerDialog";
 import { useCanvasInputMode } from "@/components/app/canvasInputMode";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
@@ -169,6 +170,8 @@ import {
   workflowNodeVisual,
   type WorkflowNodeData,
 } from "@/features/workflows/WorkflowNode";
+import { AnnotationControls } from "@/features/markers/AnnotationControls";
+import { useWorkflowComments } from "./WorkflowComments";
 import { MarkerListButton } from "@/features/markers/MarkerListButton";
 import { MarkerPin } from "@/features/markers/MarkerPin";
 import { MAX_MARKERS, newMarkerId, nextMarkerName, type CanvasMarker } from "@/features/markers/markers";
@@ -193,7 +196,7 @@ const WORKFLOW_CANVAS_NODE_TYPES = { ...WORKFLOW_NODE_TYPES, marker: MarkerPin }
 const isMarkerNode = (node: { type?: string }): boolean => node.type === "marker";
 
 /** 「添加」菜单里代表标记的那一项。用一个不可能撞上节点类型的值,免得和插件节点重名。 */
-const MARKER_OPTION = "__marker__";
+
 
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
@@ -743,6 +746,12 @@ function WorkflowEditor({
   /** 返回列表。**和标题同一行** —— 单独占一行会把整条工具栏挤下去(第一版就是这么做的)。 */
   onBack: () => void;
 }) {
+  const [markerMode, setMarkerMode] = React.useState(false);
+  const [markersVisible, setMarkersVisible] = React.useState(true);
+  const workflowComments = useWorkflowComments(workspaceId, workflow.id);
+  const annotationMode = markerMode || workflowComments.active;
+  const enterMarkerMode = () => { workflowComments.exit(); setMarkerMode(true); setMarkersVisible(true); };
+
   const [inputMode] = useCanvasInputMode();
   const t = useI18n();
   const qc = useQueryClient();
@@ -763,6 +772,7 @@ function WorkflowEditor({
   const canRedo = useStore(graphStore.temporal, (s) => s.futureStates.length > 0);
   const [nodes, setNodes] = React.useState<Node[]>(() => toWorkflowFlowNodes(workflow.graph as unknown as WorkflowGraph, registry));
   const [edges, setEdges] = React.useState<Edge[]>(() => toWorkflowFlowEdges(workflow.graph as unknown as WorkflowGraph, t, registry));
+  React.useEffect(() => { setNodes(current => current.map(node => ({ ...node, selected: false }))); }, [markerMode, markersVisible, workflowComments.active]);
   const [dirty, setDirty] = React.useState(false);
   const [showHistory, setShowHistory] = React.useState(false);
   const [showRevisions, setShowRevisions] = React.useState(false);
@@ -1025,7 +1035,7 @@ function WorkflowEditor({
   useMarkerShortcuts(markers, jumpToMarker);
 
   /** 在当前视口中心插一枚标记 —— 标记标的是"我现在在看的这块地方"。 */
-  const addMarker = React.useCallback(() => {
+  const addMarker = React.useCallback((point?: { x: number; y: number }) => {
     if (markers.length >= MAX_MARKERS) {
       toast.error(t("markerLimit").replace("{n}", String(MAX_MARKERS)));
       return;
@@ -1034,7 +1044,7 @@ function WorkflowEditor({
     const surface = canvasSurfaceRef.current;
     if (!instance || !surface) return;
     const rect = surface.getBoundingClientRect();
-    const center = instance.screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+    const center = point ?? instance.screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
     applyGraph({
       ...graph,
       markers: [
@@ -1703,7 +1713,7 @@ function WorkflowEditor({
       return nodes.map((node) => {
         // 标记不是工作流节点:它没有类型、没有接点、没有就绪度,下面那一整套算它就是白算。
         if (isMarkerNode(node)) {
-          return { ...node, data: { ...node.data, markers, onChange: patchMarker, onDelete: deleteMarker } };
+          return { ...node, hidden: !markersVisible, focusable: markerMode, draggable: markerMode, selectable: markerMode, selected: markerMode && node.selected, style: { ...node.style, pointerEvents: markerMode ? "auto" as const : "none" as const }, data: { ...node.data, markers, editable: markerMode, onChange: patchMarker, onDelete: deleteMarker } };
         }
         const nodeIssues = analysis.byNode.get(node.id);
         const severity = analysis.severityByNode.get(node.id);
@@ -1714,6 +1724,7 @@ function WorkflowEditor({
         const step = runByNode[node.id];
         return {
           ...node,
+          draggable: !annotationMode, selectable: !annotationMode,
           zIndex: nodeZ[node.id],
           data: {
             ...node.data,
@@ -1731,7 +1742,7 @@ function WorkflowEditor({
       });
     },
     // registry / graph 也要在里面:缩略图和接点类型都读它们,漏了就一直是加载前的空值。
-    [nodes, analysis, t, runByNode, nodeZ, registry, graph, markers, patchMarker, deleteMarker],
+    [nodes, analysis, t, runByNode, nodeZ, registry, graph, markers, patchMarker, deleteMarker, markerMode, markersVisible, annotationMode],
   );
 
   return (
@@ -1767,11 +1778,10 @@ function WorkflowEditor({
           <SearchableSelect
             value=""
             // 标记走单独一条:它不是节点,addNode 会去 registry 里查类型,查不到就什么也不发生。
-            onValueChange={(value) => (value === MARKER_OPTION ? addMarker() : addNode(value))}
+            onValueChange={value => { setMarkerMode(false); workflowComments.exit(); addNode(value); }}
             searchPlaceholder={t("wfAddNode")}
             options={[
               ...nodeOptions.filter((option) => option.value !== "start" || !graphHasStart),
-              { value: MARKER_OPTION, label: t("markerAdd"), group: t("markers") },
             ]}
             trigger={
               <button
@@ -1788,7 +1798,11 @@ function WorkflowEditor({
             }
           />
           {/* 标记清单挨着撤销/重做只是因为它们同属这颗胶囊;它回答的是"这张图上有哪些标记"。 */}
-          <MarkerListButton markers={markers} onJump={jumpToMarker} onAdd={addMarker} />
+          {workflowComments.controls(() => setMarkerMode(false))}
+          <AnnotationControls kind="marker" active={markerMode} visible={markersVisible}
+            onMode={() => markerMode ? setMarkerMode(false) : enterMarkerMode()}
+            onVisible={() => { setMarkersVisible(!markersVisible); if (markersVisible) setMarkerMode(false); }} />
+          <MarkerListButton markers={markers} onJump={marker => { setMarkersVisible(true); jumpToMarker(marker); }} onAdd={enterMarkerMode} />
           <Button variant="ghost" size="icon-sm" title={`${t("undo")} ⌘Z`} aria-label={t("undo")} disabled={!canUndo} onClick={undo}>
             <Undo2 size={14} />
           </Button>
@@ -2102,7 +2116,9 @@ function WorkflowEditor({
           <ReactFlow
             className={cn("[--xy-attribution-background-color:color-mix(in_srgb,var(--panel)_70%,transparent)]", !canvas.ready && "opacity-0")}
             nodes={displayNodes}
-            edges={displayEdges}
+            nodesConnectable={!annotationMode}
+            elementsSelectable={!workflowComments.active}
+            edges={displayEdges.map(edge => ({ ...edge, selectable: !annotationMode }))}
             nodeTypes={WORKFLOW_CANVAS_NODE_TYPES}
             minZoom={0.1}
             onInit={(instance) => {
@@ -2142,16 +2158,22 @@ function WorkflowEditor({
             connectionRadius={36}
             connectionLineType={edgeShape as ConnectionLineType}
             connectionLineStyle={{ stroke: "var(--primary)", strokeWidth: 1.5, strokeDasharray: "5 4" }}
-            onNodeClick={(_event, node) => {
+            onNodeClick={(event, node) => {
+              if (markerMode) return;
+              if (workflowComments.active) { const point = rfRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY }); if (point) workflowComments.place({ ...point, node_id: node.id }); return; }
               blurFloatingPanels(); // 层级快捷键交还给画布
               focusNode(node.id);
             }}
             onNodeDoubleClick={(_event, node) => {
+              if (annotationMode) return;
               const g = graph.nodes.find((item) => item.id === node.id);
               if (g && (g.type === "loop_foreach" || g.type === "loop_while" || g.type === "subgraph"))
                 setEditingLoopId(node.id);
             }}
-            onPaneClick={() => {
+            onPaneClick={(event) => {
+              const point = rfRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+              if (markerMode && point) { addMarker(point); return; }
+              if (workflowComments.active && point) { workflowComments.place(point); return; }
               blurFloatingPanels();
               selectInspectorNode(null);
             }}
@@ -2162,7 +2184,9 @@ function WorkflowEditor({
             proOptions={{ hideAttribution: false }}
             deleteKeyCode={["Backspace", "Delete"]}
           >
-            {selectedFlowIds.length >= 2 && (
+            {workflowComments.layer}
+            {annotationMode && <AnnotationModeHint kind={markerMode ? "marker" : "comment"} onExit={() => { setMarkerMode(false); workflowComments.exit(); }} />}
+            {selectedFlowIds.length >= 2 && !annotationMode && (
               <Panel position="top-center">
                 <button
                   type="button"
@@ -2189,7 +2213,7 @@ function WorkflowEditor({
               nodeColor="var(--border-strong)"
               nodeStrokeColor="transparent"
             />}
-        {selectedNode && !editingLoopId && (
+        {selectedNode && !editingLoopId && !annotationMode && (
           <NodeInspector
             inert={canvas.panning}
             step={runByNode[selectedNode.id] ?? null}

@@ -1,3 +1,4 @@
+import { AnnotationModeHint } from "@/features/markers/AnnotationModeHint";
 import { boardAssetSources } from "./boardAssetSources";
 import { useQueries } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -27,7 +28,7 @@ import {
   type Node,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { Copy, FileUp, Group, Loader2, Maximize2, MessageSquare, Replace, Scissors, Sparkles, Trash2, X } from "lucide-react";
+import { Copy, FileUp, Group, Loader2, Maximize2, MessageSquare, Replace, Scissors, Sparkles, Trash2 } from "lucide-react";
 
 import { assetFileUrl, assetPreviewUrl, type CollaborationComment, type WorkspaceMember } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -226,28 +227,7 @@ export function shouldSuppressCommentPlacement(gesture: {
 }
 
 export function BoardCommentModeHint({ onExit }: { onExit?: () => void }) {
-  const t = useI18n();
-  return (
-    <div
-      data-board-comment-mode-hint=""
-      className="absolute left-1/2 top-2 z-30 flex h-[42px] -translate-x-1/2 items-center rounded-full border border-primary/30 bg-panel/80 py-1 pl-3 pr-1.5 text-ui-xs text-foreground shadow-[var(--shadow-panel)] backdrop-blur-xl"
-      onPointerDown={(event) => event.stopPropagation()}
-      onClick={(event) => event.stopPropagation()}
-    >
-      <span className="font-semibold text-primary">{t("boardCommentMode")}</span>
-      <span className="mx-1.5 text-muted-foreground">·</span>
-      <span className="text-muted-foreground">{t("boardCommentModeHint")}</span>
-      <button
-        type="button"
-        className="ml-2 grid h-7 w-7 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-        title={t("boardExitCommentMode")}
-        aria-label={t("boardExitCommentMode")}
-        onClick={onExit}
-      >
-        <X size={14} />
-      </button>
-    </div>
-  );
+  return <AnnotationModeHint kind="comment" onExit={onExit} />;
 }
 
 interface Props {
@@ -308,6 +288,9 @@ interface Props {
   rightOverlayWidth?: number;
   /** Comment mode is separate: a canvas or node click anchors a discussion instead of editing nodes. */
   commentMode?: boolean;
+  markerMode?: boolean;
+  markersVisible?: boolean;
+  commentsVisible?: boolean;
   comments?: CollaborationComment[];
   members?: WorkspaceMember[];
   currentUserId?: string | null;
@@ -317,12 +300,13 @@ interface Props {
   onMoveComment?: (comment: CollaborationComment, anchor: NonNullable<CollaborationComment["anchor"]>) => Promise<unknown>;
   onDeleteComment?: (comment: CollaborationComment) => Promise<unknown>;
   onExitCommentMode?: () => void;
+  onExitMarkerMode?: () => void;
   /** 把「加一项」交给上层 —— 顶栏那两组胶囊要摆在一起(和工作流详情页一致),
    *  而 add 依赖画布内部的 rf 实例和 setNodes,只能由画布提供。 */
   onReady?: (api: BoardCanvasApi) => void;
 }
 
-function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, onSpeak, onTrim, onGrabFrame, models, showMinimap = true, onDropFiles, uploading, rightOverlayWidth = 0, commentMode = false, comments = [], members = [], currentUserId, activeCommentId, onSelectComment, onCreateComment, onMoveComment, onDeleteComment, onExitCommentMode, onReady }: Props) {
+function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, onSpeak, onTrim, onGrabFrame, models, showMinimap = true, onDropFiles, uploading, rightOverlayWidth = 0, commentMode = false, markerMode = false, markersVisible = true, commentsVisible = true, comments = [], members = [], currentUserId, activeCommentId, onSelectComment, onCreateComment, onMoveComment, onDeleteComment, onExitCommentMode, onExitMarkerMode, onReady }: Props) {
   const [inputMode] = useCanvasInputMode();
   const t = useI18n();
   const rf = React.useRef<ReactFlowInstance | null>(null);
@@ -365,6 +349,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     if (!commentMode) setDraftAnchor(null);
     else setNodes((current) => current.map((node) => (node.selected ? { ...node, selected: false } : node)));
   }, [commentMode, setNodes]);
+  React.useEffect(() => { setNodes(current => current.map(node => ({ ...node, selected: false }))); }, [markerMode, markersVisible, setNodes]);
 
   React.useEffect(() => {
     if (!shouldDismissCommentOverlay(Boolean(activeCommentId), Boolean(draftAnchor), false)) return;
@@ -580,7 +565,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
   useMarkerShortcuts(markers, jumpToMarker, !commentMode);
 
   /** 在当前视口中心放一枚标记。放在**看得见的地方**:标记标的是"我现在在看的这块地方"。 */
-  const addMarker = React.useCallback(() => {
+  const addMarker = React.useCallback((point?: { x: number; y: number }) => {
     const instance = rf.current;
     const pane = surface.current;
     if (!instance || !pane) return;
@@ -591,7 +576,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         .map((node) => (node.data as unknown as { marker: CanvasMarker }).marker);
       if (existing.length >= MAX_MARKERS) return current;
       const rect = pane.getBoundingClientRect();
-      const center = instance.screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+      const center = point ?? instance.screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
       const marker: CanvasMarker = {
         id: newMarkerId(existing),
         name: nextMarkerName(t("markers"), existing),
@@ -606,12 +591,15 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
 
   //: 渲染用的节点 = 数据 + 这一轮的回调。**每轮重新贴** —— 回调闭包着最新的 setNodes,
   //: 而把它们存进节点数据会让节点的初值反过来依赖 setNodes,那个循环绕不开。
-  const displayNodes = nodes.map((node) =>
+  const displayNodes: Node[] = nodes.map((node) =>
     node.type === "marker"
-      ? { ...node, data: { ...node.data, markers, onChange: patchMarker, onDelete: deleteMarker } }
+      ? { ...node, hidden: !markersVisible, focusable: markerMode, draggable: markerMode, selectable: markerMode, selected: markerMode && node.selected,
+          style: { ...node.style, pointerEvents: markerMode ? "auto" : "none" },
+          data: { ...node.data, markers, editable: markerMode, onChange: patchMarker, onDelete: deleteMarker } }
       : {
           ...node,
-          data: { ...node.data, onText: setText, onAspect: setAspect, commentMode, workspaceId, boardId, document: documents.get(node.id), onPickDocument: setPickingDocument, onRefreshDocument: refreshDocument, refreshingDocument: refreshingDocument === node.id },
+          draggable: !commentMode && !markerMode, selectable: !commentMode && !markerMode,
+          data: { ...node.data, onText: setText, onAspect: setAspect, commentMode: commentMode || markerMode, workspaceId, boardId, document: documents.get(node.id), onPickDocument: setPickingDocument, onRefreshDocument: refreshDocument, refreshingDocument: refreshingDocument === node.id },
         },
   );
 
@@ -968,12 +956,13 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     >
       <ReactFlow
         nodes={displayNodes}
-        edges={edges}
+        edges={edges.map(edge => ({ ...edge, selectable: !commentMode && !markerMode }))}
         nodeTypes={CANVAS_NODE_TYPES}
         minZoom={0.1}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={(event, node) => {
+          if (markerMode) return;
           if (commentMode) {
             if (!canPlaceCommentDraft(commentMode, Boolean(draftAnchor), suppressPaneClick.current)) return;
             const instance = rf.current;
@@ -988,12 +977,13 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           setNodes((current) => focusBoardNode(current, node.id));
         }}
         onPaneClick={(event) => {
+          if (markerMode && rf.current) { addMarker(rf.current.screenToFlowPosition({ x: event.clientX, y: event.clientY })); return; }
           if (!canPlaceCommentDraft(commentMode, Boolean(draftAnchor), suppressPaneClick.current) || !rf.current) return;
           const point = rf.current.screenToFlowPosition({ x: event.clientX, y: event.clientY });
           setDraftAnchor({ kind: "canvas", x: point.x, y: point.y });
         }}
         onConnect={(connection: Connection) => {
-          if (commentMode) return;
+          if (commentMode || markerMode) return;
           setEdges((current) => addEdge(connection, current));
         }}
         // 可见的 + 在边界外，而真实锚点贴在边界上。扩大屏幕命中半径后，拖到 + 上即可
@@ -1002,7 +992,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         //: 线拉到空白处松手 —— 用户已经想好了「从这儿接下去」,弹一张单子让他直接选。
         //: 连到别的节点上时 isValid 为真,那是正常连线,不该弹。
         onConnectEnd={(event, connection) => {
-          if (commentMode) return;
+          if (commentMode || markerMode) return;
           const instance = rf.current;
           const from = connection.fromNode?.id;
           if (connection.isValid || !instance || !from || !connection.from || !connection.fromPosition) return;
@@ -1041,7 +1031,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         onMoveEnd={(_event, next) => viewport.remember(next)}
         // 双击空白处直接加一张便签 —— 想法来的时候不该先去找按钮。
         onDoubleClick={(event) => {
-          if (commentMode) return;
+          if (commentMode || markerMode) return;
           if ((event.target as HTMLElement).closest(".react-flow__node")) return;
           const instance = rf.current;
           if (!instance) return;
@@ -1056,7 +1046,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           };
           setNodes((current) => [...current, ...toNodes([item])]);
         }}
-        className={cn(!ready && "opacity-0", commentMode && "cursor-crosshair")}
+        className={cn(!ready && "opacity-0", (commentMode || markerMode) && "cursor-crosshair")}
         proOptions={{ hideAttribution: false }}
         panOnScroll={inputMode === "trackpad"}
         zoomOnScroll={inputMode === "mouse"}
@@ -1064,26 +1054,26 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         maxZoom={2.5}
         deleteKeyCode={["Backspace", "Delete"]}
         nodesDraggable={!commentMode}
-        nodesConnectable={!commentMode}
+        nodesConnectable={!commentMode && !markerMode}
         elementsSelectable={!commentMode}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.2} />
-        {commentMode && (
+        {commentsVisible && (
           <ViewportPortal>
             {comments.map((comment, index) => {
               const preview = commentPositions[comment.id];
               const x = preview?.x ?? comment.anchor?.x;
               const y = preview?.y ?? comment.anchor?.y;
               if (typeof x !== "number" || typeof y !== "number") return null;
-              const active = activeCommentId === comment.id;
-              const movable = Boolean(onMoveComment) && canMoveComment(comment.author_id, currentUserId);
+              const active = commentMode && activeCommentId === comment.id;
+              const movable = commentMode && Boolean(onMoveComment) && canMoveComment(comment.author_id, currentUserId);
               const deletable = Boolean(onDeleteComment) && canMoveComment(comment.author_id, currentUserId);
               return (
                 <div
                   key={comment.id}
                   data-board-comment-overlay=""
                   className="nodrag nopan pointer-events-auto absolute z-10 flex items-start gap-2"
-                  style={{ left: x, top: y }}
+                  style={{ left: x, top: y, pointerEvents: commentMode ? "auto" : "none" }}
                   onPointerDown={(event) => event.stopPropagation()}
                   onMouseDown={(event) => event.stopPropagation()}
                   onClick={(event) => event.stopPropagation()}
@@ -1098,6 +1088,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
                         ? "border-primary bg-action text-action-foreground"
                         : "border-border-strong bg-panel/90 text-foreground backdrop-blur-xl",
                     )}
+                    tabIndex={commentMode ? 0 : -1}
                     title={comment.body}
                     aria-label={`${t("comments")} ${index + 1}`}
                     onPointerDown={(event) => {
@@ -1279,6 +1270,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         />}
       </ReactFlow>
 
+      {markerMode && <AnnotationModeHint kind="marker" onExit={onExitMarkerMode} />}
       {commentMode && (
         <BoardCommentModeHint onExit={onExitCommentMode} />
       )}
