@@ -20,6 +20,7 @@ function sheet(overrides: Partial<React.ComponentProps<typeof SceneDopeSheet>> =
 it("所有物体常驻，只有显式筛选才隐藏空轨", () => {
   const {container} = sheet();
   expect([...container.querySelectorAll('.scene-dope-name span')].map(el => el.textContent)).toEqual(["主机位", "路人", "静止方块"]);
+  fireEvent.click(screen.getByRole('button', {name: '搜索物体'}));
   fireEvent.click(screen.getByRole('button', {name: '仅动画'}));
   expect(screen.queryByRole('button', {name: /静止方块/})).toBeNull();
   fireEvent.click(screen.getByRole('button', {name: '仅动画'}));

@@ -25,7 +25,8 @@ function setup(preview = false) {
     onTime: vi.fn(),
     onPreview: vi.fn(),
     onPlaying: vi.fn(),
-    capture: vi.fn(),
+    applyView: vi.fn(),
+    onPose: vi.fn(),
     observe: vi.fn(),
     camera: vi.fn(() => live),
   };
@@ -45,11 +46,11 @@ it("creates a push from the composition being edited, then shows the resulting s
 });
 it("keeps preview read-only and lets users continue editing from that camera", () => {
   const p = setup(true);
-  expect(screen.getByRole("heading", { name: "自己设置起点和终点" })).toBeVisible();
-  expect(screen.getByRole("button", { name: "设为起点" })).toBeDisabled();
+  expect(screen.getByRole("heading", { name: "机位构图" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "将当前视角应用到机位" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "从当前镜头继续调整" }));
   expect(p.observe).toHaveBeenCalledOnce();
-  expect(p.capture).not.toHaveBeenCalled();
+  expect(p.applyView).not.toHaveBeenCalled();
 });
 it("commits a numeric field once on Enter instead of saving twice through blur", () => {
   const changed = vi.fn();
@@ -59,4 +60,16 @@ it("commits a numeric field once on Enter instead of saving twice through blur",
   fireEvent.change(field, { target: { value: "4" } });
   fireEvent.keyDown(field, { key: "Enter" });
   expect(changed).toHaveBeenCalledExactlyOnceWith(4);
+});
+
+it("applying a view is a pose edit, separate from inserting animation keys", () => {
+  const p = setup();
+  fireEvent.click(screen.getByRole("button", { name: "将当前视角应用到机位" }));
+  expect(p.applyView).toHaveBeenCalledOnce();
+  expect(p.onRig).not.toHaveBeenCalled();
+  const field = screen.getByRole("spinbutton", { name: "视角（广角 / 长焦）" });
+  fireEvent.change(field, { target: { value: "60" } });
+  fireEvent.blur(field);
+  expect(p.onPose).toHaveBeenCalledWith({ fov: 60 });
+  expect(p.onRig).not.toHaveBeenCalled();
 });

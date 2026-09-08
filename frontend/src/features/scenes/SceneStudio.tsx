@@ -384,7 +384,8 @@ function SceneEditor({
     }
   });
   function change(next: typeof draft) {
-    setHistory((h) => [...h.slice(-49), current.current]);
+    const previous = current.current;
+    setHistory((h) => [...h.slice(-49), previous]);
     setFuture([]);
     current.current = next;
     setDraft(next);
@@ -408,7 +409,8 @@ function SceneEditor({
   function undo() {
     if (!history.length) return;
     const next = history[history.length - 1];
-    setFuture((f) => [current.current, ...f]);
+    const previous = current.current;
+    setFuture((f) => [previous, ...f]);
     setHistory((h) => h.slice(0, -1));
     current.current = next;
     setDraft(next);
@@ -417,7 +419,8 @@ function SceneEditor({
   function redo() {
     if (!future.length) return;
     const next = future[0];
-    setHistory((h) => [...h, current.current]);
+    const previous = current.current;
+    setHistory((h) => [...h, previous]);
     setFuture((f) => f.slice(1));
     current.current = next;
     setDraft(next);
@@ -742,23 +745,20 @@ function SceneEditor({
       toast.success(kind === "image" ? "场景画面已作为参考图，选择支持参考图的图片模型即可生成。" : "选择视频节点后，可自行选择模型和参数。");
     });
   }
-  /** 给拍这个镜头的机位在某一刻记一档 —— 用的是**画面里当前的视角**,不是相机存着的静止姿态。 */
-  function recordView(at: number) {
+  function applyCameraPose(patch: Partial<Pick<SceneObject, "position" | "target" | "fov">>) {
     if (!rig) return;
-    const time = Math.min(shot.duration, Math.max(0, at));
-    const track = upsertKey(rig.track, { ...view.current!.camera(), time });
-    if (!track) {
-      toast.error(`单个镜头最多 ${MAX_KEYS} 个途经点，请先移除一个。`);
-      return;
-    }
-    rigPatch({ track });
-    setTime(time);
-    toast.success(
-      time === 0 ? "已设置镜头起点" : time === shot.duration ? "已设置镜头终点" : "已记录当前视角",
-    );
+    const pose = posing === rig.id ? rig : sampleCamera(rig, shot, time);
+    // Viewport samples may also carry time; only pose fields belong on an object.
+    objectPatch(rig.id, {
+      position: patch.position ?? pose.position,
+      target: patch.target ?? pose.target,
+      fov: patch.fov ?? pose.fov,
+    });
+    setPosing(rig.id);
+    setPlaying(false);
   }
   const keyTarget = object;
-  /** 普通打帧只记录物体姿态。采纳自由视角另有明确的「记录此视角」动作。 */
+  /** Every insertion records the selected object pose, including camera poses. */
   function recordKeyframe(id = selected, at = time) {
     const target = current.current.content.objects.find(o => o.id === id);
     if (!target) return;
@@ -809,7 +809,7 @@ function SceneEditor({
     <div
       ref={studioRoot}
       className="scene-studio"
-      data-screen-mode={fullscreen.active ? "viewport" : undefined}
+      data-screen-mode={fullscreen.active ? "editor" : undefined}
     >
       <RenameDialog open={renaming} title="重命名场景" initialValue={draft.name} onCancel={() => setRenaming(false)} onSubmit={(name) => { change({ ...current.current, name }); setRenaming(false); }} />
       <header className="scene-header">
@@ -1188,7 +1188,7 @@ function SceneEditor({
               <button
                 className="scene-labeled-tool"
                 aria-label={
-                  fullscreen.active ? "退出视图全屏" : "视图全屏"
+                  fullscreen.active ? "退出编辑器全屏" : "编辑器全屏"
                 }
                 aria-pressed={fullscreen.active}
                 onClick={() => void fullscreen.toggle()}
@@ -1338,16 +1338,6 @@ function SceneEditor({
                 >
                   <Plus size={16} />
                 </Tool>
-                <div className="scene-spacer" />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={viewMode !== "edit" || !!busy}
-                  onClick={() => recordView(time)}
-                >
-                  <Camera size={15} />
-                  记录此视角
-                </Button>
                 <span className="scene-tool-divider" aria-hidden="true" />
                 <Tool label="回到起点" onClick={() => { setTime(0); setPlaying(false); }}><ChevronFirst size={16} /></Tool>
                 <Tool
@@ -1505,7 +1495,7 @@ function SceneEditor({
             {/* **镜头设置跟着「选中了哪台机位」走。** 相机现在是场景里的物体,它的运镜、
                 时长、比例本来就该在选中它时出现 —— 而不是藏在一个叫「设计镜头」的步骤后面。 */}
             {object?.kind === "camera" && rig && object.id === rig.id && (
-              <ScenePanel id="camera" title="让镜头怎么走">
+              <ScenePanel id="camera" title="镜头设置">
               <SceneCameraPanel
                 shot={shot}
                 rig={rig!}
@@ -1518,7 +1508,9 @@ function SceneEditor({
                   if (!value || !observing) setPreview(value);
                 }}
                 onPlaying={setPlaying}
-                capture={recordView}
+                applyView={() => applyCameraPose(view.current!.camera())}
+                onPose={applyCameraPose}
+                pose={posing === rig.id ? rig : undefined}
                 observe={() => {
                   view.current?.editCamera(shot, time);
                   setPreview(false);

@@ -420,11 +420,12 @@
 .scene-shot-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: nowrap;
+  gap: 4px;
   min-height: var(--scene-control-height);
 }
 .scene-shot-row > [role="combobox"] {
-  width: 180px;
+  width: 150px;
   flex-shrink: 1;
   min-width: 70px;
 }
@@ -432,6 +433,8 @@
   flex: 1;
 }
 .scene-time {
+  width: 100px;
+  text-align: center;
   font-size: var(--text-ui-2xs);
   font-family: var(--font-mono);
   color: var(--muted-foreground);
@@ -443,6 +446,7 @@
    对不齐就不成立了。 */
 .scene-dope {
   --scene-dope-name: 184px;
+  --scene-control-height: 28px;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -454,8 +458,11 @@
 .scene-dope-resize { position: absolute; top: -13px; left: calc(-1 * var(--scene-stage-gutter)); right: calc(-1 * var(--scene-stage-gutter)); z-index: 10; }
 .scene-dope-resize span { display: none; }
 .scene-dope-resize:hover span, .scene-dope-resize:focus-visible span { background: var(--primary); }
-.scene-dope-toolbar { margin-top: 6px; display: flex; align-items: center; gap: 4px; padding: 4px 0 8px; flex-shrink: 0; overflow-x: auto; }
-.scene-dope-search { position: relative; width: var(--scene-dope-name); flex-shrink: 0; }
+/* Narrow panes scroll this single strip; controls never wrap into a second row. */
+.scene-dope-toolbar { display: flex; align-items: center; gap: 4px; padding: 8px 0; min-height: 44px; flex-shrink: 0; overflow-x: auto; }
+.scene-dope-toolbar > * { flex-shrink: 0; }
+.scene-dope-toolbar > .scene-spacer { flex: 1; }
+.scene-dope-search { display: block; position: relative; width: 100%; }
 .scene-dope-search > svg { position: absolute; top: 50%; left: 8px; translate: 0 -50%; color: var(--muted-foreground); }
 .scene-dope-search input { padding-left: 28px; }
 .scene-dope-count { white-space: nowrap; color: var(--muted-foreground); font-size: var(--text-ui-2xs); padding-inline: 4px; }
@@ -561,9 +568,6 @@
   .scene-stage-bar {
     flex-wrap: wrap;
   }
-  .scene-shot-row {
-    flex-wrap: wrap;
-  }
   .scene-header .scene-save {
     display: none;
   }
@@ -660,18 +664,13 @@
 .scene-panel[data-open="false"] .scene-panel-toggle svg {
   transform: rotate(-90deg);
 }
-.scene-panel-toggle h2 {
-  font-size: var(--text-ui-sm);
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.scene-panel-toggle h2 span {
-  color: var(--muted-foreground);
-  font-weight: 400;
-  margin-left: 6px;
-}
+.scene-panel-title { flex: 1; min-width: 0; }
+.scene-panel-toggle { width: 100%; cursor: pointer; border-radius: 4px; }
+.scene-panel-toggle:hover { color: var(--primary); }
+.scene-panel-toggle:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.scene-panel-toggle > span { font-size: var(--text-ui-sm); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scene-panel-toggle small { color: var(--muted-foreground); font-size: inherit; font-weight: 400; margin-left: 6px; }
+.scene-panel-body[hidden] { display: none; }
 /* **右栏只有一个左右边距,而且它归面板体。**
    此前是三套各写各的:检查器 `.scene-inspector section` 16px、运镜面板自己写死 16px、
    物体列表 8px —— 三节内容的左边缘落在三个位置上,而它们上下紧挨着,一眼就看得出来。
@@ -992,26 +991,6 @@
   width: 100vw;
   height: 100dvh;
   background: var(--background);
-}
-.scene-studio[data-screen-mode="viewport"] > .scene-header,
-.scene-studio[data-screen-mode="viewport"] .scene-side,
-.scene-studio[data-screen-mode="viewport"] .scene-agent-dock,
-.scene-studio[data-screen-mode="viewport"] .scene-agent-floating {
-  display: none;
-}
-.scene-studio[data-screen-mode="viewport"] .scene-workspace {
-  display: flex;
-  padding: 0;
-  gap: 0;
-  overflow: hidden;
-}
-.scene-studio[data-screen-mode="viewport"] .scene-stage {
-  flex: 1;
-  min-height: 0;
-  border-radius: 0;
-}
-.scene-studio[data-screen-mode="viewport"] .scene-stage-bar {
-  padding: 12px 16px;
 }
 
 .scene-heading {

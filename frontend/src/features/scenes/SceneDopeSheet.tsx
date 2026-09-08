@@ -1,9 +1,10 @@
 import { HANDLE_ROW } from "@/lib/useResizableSidebar";
 import React from "react";
-import { Box, Video, Lightbulb, Folder, DiamondPlus, Trash2, Search, ZoomIn, ZoomOut, Scan } from "lucide-react";
+import { Box, Video, Lightbulb, Folder, DiamondPlus, Trash2, Search, ListFilter, ZoomIn, ZoomOut, Scan } from "lucide-react";
 import type { SceneContent, SceneShot } from "@/api/domains/scenes";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { trackRows, sameKey, type SceneKey } from "./sceneTracks";
 import { SHOT_FPS } from "./encodeVideo";
@@ -120,14 +121,19 @@ export function SceneDopeSheet({ content, shot, time, selectedId, playing, disab
         onPointerDown={event => {event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId);}}
         onPointerMove={event => {if (event.currentTarget.hasPointerCapture(event.pointerId)) setHeight(h => Math.max(160, Math.min(600, h - event.movementY)));}}
       ><span /></div>
-      {controls}
-      <div className="scene-dope-toolbar">
-        <label className="scene-dope-search"><Search size={14}/><Input className="h-7 text-ui-xs" aria-label={t("sceneAnimSearch")} placeholder={t("sceneAnimSearch")} value={query} onChange={e => setQuery(e.target.value)} /></label>
-        <Button size="xs" variant={animatedOnly ? "secondary" : "outline"} aria-pressed={animatedOnly} onClick={() => setAnimatedOnly(!animatedOnly)}>{t("sceneAnimAnimated")}</Button>
-        <span className="scene-dope-count">{rows.length} / {content.objects.length}</span>
-        <div className="scene-spacer" />
-        <Button size="xs" variant="outline" disabled={!selectedObject || disabled} title={`${t("sceneAnimInsert")} · I`} onClick={() => selectedObject && onInsert(selectedObject.id, time)}><DiamondPlus />{t("sceneAnimInsert")}</Button>
+      <div className="scene-dope-toolbar" role="toolbar" aria-label={t("sceneAnimTimeline")}>
+        {controls}
+        {controls && <span className="scene-tool-divider" aria-hidden="true" />}
+        <Button size="icon-xs" variant="outline" disabled={!selectedObject || disabled} aria-label={t("sceneAnimInsert")} title={`${t("sceneAnimInsert")} · I`} onClick={() => selectedObject && onInsert(selectedObject.id, time)}><DiamondPlus /></Button>
         <Button size="icon-xs" variant="outline" disabled={!selectedKeys.length || disabled} title={t("sceneAnimDelete")} aria-label={t("sceneAnimDelete")} onClick={deleteKeys}><Trash2 /></Button>
+        <div className="scene-spacer" />
+        <Popover>
+          <PopoverTrigger asChild><Button size="icon-xs" variant={query || animatedOnly ? "secondary" : "ghost"} aria-label={t("sceneAnimSearch")} title={t("sceneAnimSearch")}><ListFilter /></Button></PopoverTrigger>
+          <PopoverContent align="end" className="grid w-64 gap-3 p-3">
+            <label className="scene-dope-search"><Search size={14}/><Input className="h-7 text-ui-xs" aria-label={t("sceneAnimSearch")} placeholder={t("sceneAnimSearch")} value={query} onChange={e => setQuery(e.target.value)} /></label>
+            <Button size="xs" variant={animatedOnly ? "secondary" : "outline"} aria-pressed={animatedOnly} onClick={() => setAnimatedOnly(!animatedOnly)}>{t("sceneAnimAnimated")}</Button>
+          </PopoverContent>
+        </Popover>
         <span className="scene-tool-divider" aria-hidden="true" />
         <Button size="icon-xs" variant="ghost" disabled={zoom === 1} aria-label={t("sceneAnimZoomOut")} title={t("sceneAnimZoomOut")} onClick={() => setZoom(z => Math.max(1, z - 1))}><ZoomOut /></Button>
         <Button size="icon-xs" variant="ghost" disabled={zoom === 8} aria-label={t("sceneAnimZoomIn")} title={t("sceneAnimZoomIn")} onClick={() => setZoom(z => Math.min(8, z + 1))}><ZoomIn /></Button>
@@ -169,7 +175,7 @@ export function SceneDopeSheet({ content, shot, time, selectedId, playing, disab
           {!rows.length && <p className="scene-dope-empty">{t("sceneAnimEmpty")}</p>}
         </div>
       </div>
-      <div className="scene-dope-footer"><span>{t("sceneAnimHint")}</span><span>{SHOT_FPS} fps · {selectedKeys.length} {t("sceneAnimSelected")}</span></div>
+      <div className="scene-dope-footer"><span className="scene-dope-count">{rows.length} / {content.objects.length}</span><span>{t("sceneAnimHint")}</span><span>{SHOT_FPS} fps · {selectedKeys.length} {t("sceneAnimSelected")}</span></div>
     </div>
   );
 }

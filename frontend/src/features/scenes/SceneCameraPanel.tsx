@@ -3,10 +3,9 @@ import { SceneSubsection } from "./SceneSubsection";
 import { Camera, RotateCw, MoveRight, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { Keyframe, SceneObject, SceneShot, Vec3 } from "@/api/domains/scenes";
+import type { SceneObject, SceneShot, Vec3 } from "@/api/domains/scenes";
 import { Num, Pick, Vector } from "./SceneControls";
 import { cameraPreset, sampleCamera } from "./sceneGraph";
-import { removeKeyAt } from "./sceneTracks";
 
 export function SceneCameraPanel({
   shot,
@@ -18,7 +17,9 @@ export function SceneCameraPanel({
   onTime,
   onPreview,
   onPlaying,
-  capture,
+  applyView,
+  onPose,
+  pose,
   observe,
   camera,
 }: {
@@ -32,36 +33,13 @@ export function SceneCameraPanel({
   onTime: (time: number) => void;
   onPreview: (value: boolean) => void;
   onPlaying: (value: boolean) => void;
-  capture: (time: number) => void;
+  pose?: Pick<SceneObject, "position" | "target" | "fov">;
+  applyView: () => void;
+  onPose: (patch: Partial<Pick<SceneObject, "position" | "target" | "fov">>) => void;
   observe: () => void;
   camera: () => { position: Vec3; target: Vec3; fov: number };
 }) {
-  const current = sampleCamera(rig, shot, time);
-  const frameIndex = rig.track.findIndex((f) => Math.abs(f.time - time) < 0.001);
-  /**
-   * 改这一刻的机位。
-   *
-   * **轨是空的时候改的是静止姿态**,不是"插入第一个关键帧" —— 一台不动的相机不该因为你调了
-   * 一下位置就突然有了动画。要动画得先选一种运镜,或者在别的时刻记一个视角。
-   */
-  function patchFrame(patch: Partial<Keyframe>) {
-    if (!rig.track.length) {
-      const next = { ...current, ...patch };
-      onRig({
-        position: next.position,
-        target: next.target ?? current.target,
-        fov: next.fov ?? current.fov,
-      });
-      return;
-    }
-    if (frameIndex < 0 && rig.track.length >= 100) return;
-    onRig({
-      track: [
-        ...rig.track.filter((_, i) => i !== frameIndex),
-        { ...current, ...patch },
-      ].sort((a, b) => a.time - b.time),
-    });
-  }
+  const current = pose ?? sampleCamera(rig, shot, time);
   function preset(kind: "orbit" | "push" | "still") {
     const from = preview ? current : camera();
     const rest = { position: from.position, target: from.target, fov: from.fov };
@@ -143,26 +121,12 @@ export function SceneCameraPanel({
           />
         </label>
       </div>
-      {/* 折叠块之间的分割线是**每一块自己的上边框**(见 .scene-subsection + .scene-subsection),
-          右栏里所有折叠块都用同一条规则 —— 此前这条线只存在于这个面板的那个 stack 包装里,
-          于是检查器里的折叠块之间没有线,同一栏里两种样子。 */}
-      <SceneSubsection expanded title="自己设置起点和终点">
-        <p>在编辑视角中调整构图，分别记下镜头从哪里开始、在哪里结束。</p>
-        {preview && (
-          <Button variant="secondary" onClick={observe}>
-            <Camera size={15} />
-            从当前镜头继续调整
-          </Button>
-        )}
-        <div className="scene-shape">
-          <Button variant="secondary" disabled={preview} onClick={() => capture(0)}>
-            设为起点
-          </Button>
-          <Button variant="secondary" disabled={preview} onClick={() => capture(shot.duration)}>
-            设为终点
-          </Button>
-        </div>
-        <p>在底部关键帧视图里选一个中间时刻，再按 I（或点「记录此视角」）就多一个途经点。</p>
+      <SceneSubsection expanded title="机位构图">
+        <Button variant="outline" disabled={preview} onClick={applyView}>
+          <Camera size={15} />将当前视角应用到机位
+        </Button>
+        {preview && <Button variant="outline" onClick={observe}><Camera size={15} />从当前镜头继续调整</Button>}
+        <p>先在时间线上选择时刻，再调整机位，按 I 插入关键帧。切换时刻前请记录需要保留的姿态。</p>
       </SceneSubsection>
       <SceneSubsection expanded title="镜头高级设置">
         <label className="scene-number">
@@ -180,7 +144,7 @@ export function SceneCameraPanel({
           min={10}
           max={120}
           step={1}
-          onChange={(fov) => patchFrame({ fov })}
+          onChange={(fov) => onPose({ fov })}
         />
         <Pick
           label="镜头速度变化"
@@ -191,29 +155,17 @@ export function SceneCameraPanel({
           ]}
           onChange={(easing) => onPatch({ easing: easing as SceneShot["easing"] })}
         />
-        <p>当前时刻 {time.toFixed(1)} 秒。修改坐标会设置该时刻的途经点。</p>
+        <p>当前时刻 {time.toFixed(1)} 秒。修改后按 I 插入关键帧。</p>
         <Vector
           label="相机位置"
           value={current.position}
-          onChange={(position) => patchFrame({ position })}
+          onChange={(position) => onPose({ position })}
         />
         <Vector
           label="注视位置"
           value={current.target}
-          onChange={(target) => patchFrame({ target })}
+          onChange={(target) => onPose({ target })}
         />
-        {frameIndex > 0 && (
-          <Button
-            variant="outline"
-            onClick={() => {
-              const track = removeKeyAt(rig.track, time);
-              if (track) onRig({ track });
-            }}
-          >
-            移除此途经点
-            <kbd>⌥I</kbd>
-          </Button>
-        )}
       </SceneSubsection>
     </>
   );
