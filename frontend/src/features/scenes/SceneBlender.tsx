@@ -13,7 +13,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { api, API_BASE, getAuthToken } from "@/api/transport";
-import type { Scene } from "@/api/domains/scenes";
+import type { Scene, SceneContent } from "@/api/domains/scenes";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/layout/EmptyState";
 import {
@@ -39,12 +39,15 @@ export function SceneBlender({
   pending,
   busy,
   prepare,
+  apply,
   work,
 }: {
   scene: Scene;
   pending: boolean;
   busy: boolean;
   prepare: () => Promise<{ revision: number; shotId: string; blob: Blob }>;
+  /** 把接回来的内容当成当前场景上的一次普通改动写下去 —— 可撤销,由自动保存落库。 */
+  apply: (content: SceneContent) => void;
   work: (label: string, fn: () => Promise<void>) => Promise<void>;
 }) {
   const [open, setOpen] = React.useState(false),
@@ -249,16 +252,21 @@ export function SceneBlender({
                 </small>
               </span>
             </button>
+            {/* **默认落在当前场景上。** 此前只能另建一个新场景 —— 于是「在 Blender 里改一改
+                再回来接着做」这条最常见的路,每走一遍就多出一个场景,镜头和历史都留在上一个里。
+                接收在这里只是一次普通改动:⌘Z 撤得掉,版本记录里也躺着接收前的那一版。
+                真要留原样的,下面还有「另存为新场景」。 */}
             <button
               className="scene-blender-action"
               disabled={unavailable || !latest}
               onClick={() =>
                 void run("接收 Blender 修改", async () => {
-                  await api<Transfer>(
-                    `${base}/${latest!.id}/receive?${query}`,
+                  const result = await api<Transfer & { content: SceneContent }>(
+                    `${base}/${latest!.id}/receive?${query}&into_current=true`,
                     { method: "POST" },
                   );
-                  setMessage("已接收，生成了独立的新场景。");
+                  apply(result.content);
+                  setMessage("已接收，当前场景已更新（⌘Z 可撤销）。");
                 })
               }
             >
@@ -267,7 +275,7 @@ export function SceneBlender({
                 <strong>接收 Blender 修改</strong>
                 <small>
                   {latest
-                    ? `从「${latest.scene_name}」创建新场景`
+                    ? `用「${latest.scene_name}」更新当前场景 · 可撤销`
                     : "发送场景后即可接收加工结果"}
                 </small>
               </span>
@@ -294,6 +302,26 @@ export function SceneBlender({
                   <small key={index}>{warning}</small>
                 ))}
                 <div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={unavailable}
+                    onClick={() =>
+                      void run("接收为新场景", async () => {
+                        const result = await api<Transfer>(
+                          `${base}/${latest.id}/receive?${query}`,
+                          { method: "POST" },
+                        );
+                        setMessage(
+                          result.received_scene_id
+                            ? "已接收，生成了独立的新场景。"
+                            : "已接收。",
+                        );
+                      })
+                    }
+                  >
+                    另存为新场景
+                  </Button>
                   {latest.received_scene_id && (
                     <Button
                       size="sm"

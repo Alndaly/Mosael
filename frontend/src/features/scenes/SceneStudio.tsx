@@ -660,7 +660,11 @@ function SceneEditor({
             <Sparkles size={15} />
             建模助手
           </Button>
-          <SceneBlender scene={initial} pending={autosave.pending || !!error} busy={!!busy} work={work} prepare={async () => {
+          <SceneBlender scene={initial} pending={autosave.pending || !!error} busy={!!busy} work={work}
+            //: 和「恢复历史版本」走同一条路(update → change):进撤销栈、由自动保存落库。
+            //: 接收因此是一次可撤销的编辑,而不是一次绕过编辑器的写库。
+            apply={(content) => { update(content); setSelected(null); setTime(0); setPlaying(false); }}
+            prepare={async () => {
             const snapshot = JSON.stringify(current.current);
             if (snapshot !== saved.current) throw new Error("请等待场景保存完成后重试。");
             const sourceRevision = revision.current;

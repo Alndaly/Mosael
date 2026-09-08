@@ -94,3 +94,38 @@ def test_roundtrip_is_new_scene_and_transfers_are_owner_scoped(monkeypatch, tmp_
         # HTTPException,这条断言分不出来。两者边界上都翻成 422,HTTP 行为不变。
         with pytest.raises(SceneDomainError):bridge.receive(db,user,scene,sent['id'])
         assert len(list(db.scalars(select(Scene3D))))==before
+
+
+def test_receive_into_current_imports_the_model_and_hands_content_back(monkeypatch, tmp_path):
+    """接回当前场景时:模型进这个场景的库,内容**交回调用方**,不建新场景、不动库里的内容。
+
+    最后那两条是重点。编辑器手上有一份草稿,这里若顺手把场景内容也写了,那份草稿立刻就是旧的
+    —— 它的下一次自动保存要么冲突、要么把刚接回来的东西盖掉。所以这里只做"模型进库",
+    内容由编辑器当成一次可撤销的改动写下去(见 bridge.receive 的说明)。
+    """
+    c, ws, initial = setup_scene()
+    monkeypatch.setattr(settings,'data_dir',tmp_path)
+    monkeypatch.setattr(bridge,'connection',lambda *args: SimpleNamespace(id='local'))
+    def fake_execute(db, instance, operation, payload, workspace_id):
+        Path(payload['blend_path']).write_bytes(b'BLENDER')
+        if operation=='send':return {'scene_name':'Mosael Test'}
+        Path(payload['output_path']).write_bytes(glb())
+        return {'shots':payload['shots'], 'warnings':[]}
+    monkeypatch.setattr(bridge,'execute',fake_execute)
+    with SessionLocal() as db:
+        user=db.scalar(select(User));scene=db.get(Scene3D,initial['id'])
+        sent=bridge.send(db,user,scene,'local',scene.revision,'camera-1',glb())
+        before=len(list(db.scalars(select(Scene3D))))
+        received=bridge.receive(db,user,scene,sent['id'],into_current=True)
+
+        assert received['received_scene_id'] is None
+        assert len(list(db.scalars(select(Scene3D))))==before      # 没有新场景
+
+        content=received['content']
+        model=db.get(Scene3DModel,content['objects'][0]['model_id'])
+        assert model.scene_id==scene.id and model.data==glb()      # 模型归当前场景
+        assert content['shots']==initial['content']['shots']
+
+        db.refresh(scene)
+        assert scene.revision==1 and scene.content['objects']==[]   # 库里的内容没被动过
+        assert bridge.history(scene,user)[0]['received_scene_id'] is None

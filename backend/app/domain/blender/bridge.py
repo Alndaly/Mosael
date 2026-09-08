@@ -17,7 +17,7 @@ from app.core.config import settings
 from app.db.models import PluginInstance
 from app.domain.plugins import PluginDomainError, instances, tools
 from app.domain.scene_types import SceneContent
-from app.domain.scenes import create_scene_with_model, validate_model
+from app.domain.scenes import create_scene_with_model, import_model, validate_model
 from .scripts import command
 
 class BlenderDomainError(ValueError):
@@ -184,7 +184,25 @@ def send(db, user, scene, instance_id, revision, shot_id, data):
         return summary(record)
 
 
-def receive(db, user, scene, transfer_id):
+def receive(db, user, scene, transfer_id, *, into_current=False):
+    """把 Blender 里的改动接回来。
+
+    两种去处:
+
+        into_current=False   建一个新场景(默认)。原场景一个字节都不动。
+        into_current=True    **落到当前场景上**,作为它的下一次编辑。
+
+    后者只做一半:把模型导进这个场景,然后**把新内容返回给调用方**,由编辑器像"恢复某个
+    历史版本"那样把它当成一次普通改动写下去。这么分是有原因的 ——
+
+      * 编辑器手上有一份草稿。若这里直接改库,那份草稿立刻就是旧的,它的下一次自动保存
+        要么冲突、要么把刚接回来的东西盖掉;
+      * 走编辑器那条路,接收就**能撤销**(⌘Z),和恢复历史版本同一个手感;
+      * 并发也不必在这里再造一套:自动保存本来就带 base_revision 的 CAS。
+
+    代价是用户若立刻撤销,那份导进来的模型行就没人引用了。它仍归这个场景所有
+    (`check_models` 的约束成立),只是占着存储 —— 比"库改了、草稿旧了"那种错法便宜得多。
+    """
     folder, record = load(scene, user, transfer_id)
     instance = connection(db, user, record['instance_id'])
     if record['status'] != 'ready':
@@ -201,12 +219,17 @@ def receive(db, user, scene, transfer_id):
         except OSError as exc:
             raise BlenderUnavailable('Blender 没有生成可接收的模型，请重试。') from exc
         fmt = validate_model(data)
-        model_id = uuid4().hex
+        # 落到当前场景:模型先进库(建行归场景域,ADR-0003),内容交回编辑器去写。
+        model_id = import_model(db, scene.id, 'Blender model', data).id if into_current else uuid4().hex
         try:
             content = SceneContent.model_validate({**record['snapshot']['content'], 'shots': result['shots'],
                 'objects': [{'id': 'blender-model', 'kind': 'model', 'name': 'Blender 模型', 'model_id': model_id}]})
         except (ValidationError, KeyError) as exc:
             raise BlenderDomainError('Blender 镜头超出当前场景支持范围，未导入。') from exc
+        if into_current:
+            record.update(warnings=result.get('warnings', []), latest_blend=str(attempt.relative_to(folder) / 'scene.blend'))
+            write_record(folder, record)
+            return {**summary(record), 'content': content.model_dump(mode='json')}
         # 场景、模型、初始修订一起落地。**建行归场景域**(ADR-0003),这里只描述要建什么。
         received = create_scene_with_model(
             db, workspace_id=scene.workspace_id, name=record['snapshot']['name'] + ' · Blender',

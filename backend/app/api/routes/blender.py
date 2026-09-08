@@ -44,9 +44,16 @@ def send(scene_id: str, db: DbSession, user: CurrentUser, workspace_id: str = Fo
 
 
 @router.post('/{scene_id}/blender/{transfer_id}/receive')
-def receive(scene_id: str, transfer_id: str, workspace_id: str, db: DbSession, user: CurrentUser):
+def receive(scene_id: str, transfer_id: str, workspace_id: str, db: DbSession, user: CurrentUser,
+            into_current: bool = False):
+    """接回 Blender 的改动。
+
+    `into_current=true` 时不建新场景,而是把模型导进当前场景、把新内容返回给编辑器,
+    由它当成一次可撤销的改动写下去(理由见 bridge.receive 的说明)。
+    """
     ensure_workspace_perm(db, user, workspace_id, 'edit')
-    return bridge.receive(db, user, get_scene(db, workspace_id, scene_id), transfer_id)
+    return bridge.receive(db, user, get_scene(db, workspace_id, scene_id), transfer_id,
+                          into_current=into_current)
 
 
 @router.get('/{scene_id}/blender/{transfer_id}/project')

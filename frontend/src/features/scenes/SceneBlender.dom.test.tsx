@@ -36,7 +36,7 @@ function serve(connections: unknown, { fail = false } = {}) {
   });
 }
 
-function open() {
+function open(apply = vi.fn()) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
@@ -45,11 +45,13 @@ function open() {
         pending={false}
         busy={false}
         prepare={vi.fn(async () => ({ revision: 3, shotId: "shot-1", blob: new Blob() }))}
+        apply={apply}
         work={vi.fn(async (_label: string, fn: () => Promise<void>) => { await fn(); })}
       />
     </QueryClientProvider>,
   );
   screen.getByRole("button", { name: /Blender/ }).click();
+  return apply;
 }
 
 afterEach(cleanup);
@@ -81,5 +83,47 @@ describe("用不了的时候", () => {
     await screen.findByText("读不到连接列表");
     await waitFor(() => expect(screen.getByText(/后端没起来/)).toBeTruthy());
     expect(screen.getByRole("button", { name: /重试/ })).toBeTruthy();
+  });
+});
+
+describe("接收", () => {
+  const ready = {
+    id: "t1", instance_id: "i1", status: "ready", source_revision: 3,
+    scene_name: "Mosael · 展厅", created_at: "2026-09-08T00:00:00Z",
+    received_scene_id: null, warnings: null, error: null,
+  };
+  const content = { shots: [{ id: "shot-1" }], objects: [{ id: "blender-model" }] };
+
+  function serveReady() {
+    api.mockImplementation((path: string, init?: { method?: string }) => {
+      const url = String(path);
+      if (url.includes("/blender/connections"))
+        return Promise.resolve({ local: true, connections: [{ id: "i1", name: "Blender MCP", enabled: true }] });
+      if (init?.method === "POST" && url.includes("/receive"))
+        return Promise.resolve({ ...ready, content });
+      return Promise.resolve([ready]);
+    });
+  }
+
+  it("默认落在当前场景上,而不是另建一个", async () => {
+    // 这条钉的是**去处**,不是文案:接收要走 into_current,并把内容交回编辑器 ——
+    // 由它当成一次可撤销的改动写下去。绕过编辑器直接写库的话,编辑器手上那份草稿立刻就旧了。
+    serveReady();
+    const apply = open();
+    (await screen.findByText("接收 Blender 修改")).click();
+    await waitFor(() => expect(apply).toHaveBeenCalledWith(content));
+    const call = api.mock.calls.find((args) => String(args[0]).includes("/receive"));
+    expect(String(call?.[0])).toContain("into_current=true");
+  });
+
+  it("要留原样的,另存为新场景还在", async () => {
+    serveReady();
+    const apply = open();
+    (await screen.findByRole("button", { name: "另存为新场景" })).click();
+    await waitFor(() => {
+      const call = api.mock.calls.find((args) => String(args[0]).includes("/receive"));
+      expect(call && !String(call[0]).includes("into_current")).toBe(true);
+    });
+    expect(apply).not.toHaveBeenCalled();
   });
 });

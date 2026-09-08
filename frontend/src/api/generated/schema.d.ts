@@ -2882,7 +2882,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Receive */
+        /**
+         * Receive
+         * @description 接回 Blender 的改动。
+         *
+         *     `into_current=true` 时不建新场景,而是把模型导进当前场景、把新内容返回给编辑器,
+         *     由它当成一次可撤销的改动写下去(理由见 bridge.receive 的说明)。
+         */
         post: operations["receive_api_scenes__scene_id__blender__transfer_id__receive_post"];
         delete?: never;
         options?: never;
@@ -17049,6 +17055,7 @@ export interface operations {
         parameters: {
             query: {
                 workspace_id: string;
+                into_current?: boolean;
             };
             header?: never;
             path: {

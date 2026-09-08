@@ -8306,6 +8306,7 @@
           "Blender"
         ],
         "summary": "Receive",
+        "description": "接回 Blender 的改动。\n\n`into_current=true` 时不建新场景,而是把模型导进当前场景、把新内容返回给编辑器,\n由它当成一次可撤销的改动写下去(理由见 bridge.receive 的说明)。",
         "operationId": "receive_api_scenes__scene_id__blender__transfer_id__receive_post",
         "parameters": [
           {
@@ -8333,6 +8334,16 @@
             "schema": {
               "type": "string",
               "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "into_current",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Into Current"
             }
           }
         ],
