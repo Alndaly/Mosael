@@ -267,6 +267,23 @@ function applyTransform(target: THREE.Object3D, o: SceneObject) {
 /** 某一刻的机位姿态。**不是关键帧** —— 关键帧可以只写一部分字段,这个是解算完的结果。 */
 export type CameraPose = { position: Vec3; target: Vec3; fov: number };
 
+/**
+ * 让一个普通对象**按相机的约定**朝向目标(它的 -Z 指过去)。
+ *
+ * **不能直接用 `Object3D.lookAt`。** three 里那个方法对相机和对普通对象是两套约定:
+ *
+ *     if (this.isCamera || this.isLight) m.lookAt(position, target, up);   // -Z 指向目标
+ *     else                               m.lookAt(target, position, up);   // +Z 指向目标
+ *
+ * 机位模型是个 Group,走的是后一条 —— 于是视锥(按 -Z 画的)正好背对目标,画面上就是一台
+ * **方向相反的摄像机**。`Matrix4.lookAt` 没有这个分支,永远是相机那一套。
+ */
+export function aimLikeCamera(node: THREE.Object3D, target: Vec3) {
+  node.quaternion.setFromRotationMatrix(
+    new THREE.Matrix4().lookAt(node.position, new THREE.Vector3(...target), node.up),
+  );
+}
+
 function pose(camera: THREE.PerspectiveCamera, frame: CameraPose) {
   camera.position.fromArray(frame.position);
   camera.up.set(0, 1, 0);
@@ -507,7 +524,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           const node = geometryObject(o);
           applyTransform(node, o);
           // 相机的朝向由 target 决定,不由欧拉角 —— 摆完变换再瞄一次。
-          if (o.kind === "camera") node.lookAt(new THREE.Vector3(...o.target));
+          if (o.kind === "camera") aimLikeCamera(node, o.target);
           objects.set(o.id, node);
         }
         for (const o of p.content.objects) {
@@ -701,7 +718,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
               // 看起来就是"机位错配"。会动的东西就该动,不分它是不是相机。
               const at = sampleCamera(o, p.shot, p.time);
               node.position.fromArray(at.position);
-              node.lookAt(new THREE.Vector3(...at.target));
+              aimLikeCamera(node, at.target);
               continue;
             }
             const at = sampleObject(o, p.shot, p.time);
@@ -722,20 +739,13 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           frame = frameAt(p, p.time);
         shootingCamera.aspect = aspect;
         pose(shootingCamera, frame);
-        observer.update(frame, aspect);
-        // 机位模型什么时候该看得见。**两条规则写在同一处** —— 此前"观察时藏起当前机位"写在
-        // 上面,而这里又无条件 `visible = !p.preview` 把它抹掉了,于是同一台相机在画面上出现
-        // 两份(一份是机位模型、一份是取景器),朝向还相反 —— 取景器画的是视锥,模型画的是
-        // 机身加视锥,两者的锥从同一点向两边张开,看起来就是"两个方向相反的摄像机"。
+        observer.update(frame);
+        // 编辑期的道具(机位模型)不进镜头 —— 相机不拍自己。
         //
-        //   镜头画面里:一律不出现 —— 相机不拍自己;
-        //   俯瞰全场里:当前那台交给取景器画(它多一条视线和目标点),其余的照常画。
-        const observed = p.observing ? cameraOfShot(p.content, p.shot)?.id : undefined;
-        for (const node of root.children) {
-          if (!node.userData.editorOnly) continue;
-          const id = node.userData.sceneObjectId;
-          node.visible = !p.preview && id !== observed;
-        }
+        // 这里**不再**为「俯瞰全场」额外藏掉当前那台:取景器已经不画视锥了(见
+        // sceneObservation),它只补一条视线和目标点。一台相机在画面上只有一份表示。
+        for (const node of root.children)
+          if (node.userData.editorOnly) node.visible = !p.preview;
         // **编辑视角透明,镜头画面用场景底色。** 后者是**成片的一部分**(导出用的是同一个
         // 值),取景时必须看到真实底色;而编辑视角是工作台,它该跟应用其余页面一样透出背景。
         // 这也让 `p.preview` 分支里那句 setClearColor(…, 0) 真正生效 —— 此前 scene.background

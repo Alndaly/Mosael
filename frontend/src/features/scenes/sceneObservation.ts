@@ -20,27 +20,20 @@ export function cameraInset(width: number, height: number, aspect: number) {
   return { width: w, height: h, right: 12, bottom: 12 };
 }
 
-/** Observation aids live outside the scene root, so they can never appear in exported frames. */
+/**
+ * 「俯瞰全场」里的**瞄准提示**:目标点 + 一条从机位射向它的虚线。
+ *
+ * **它不再画视锥和机身。** 相机现在是场景里的物体,自己就有机位模型(带按 fov 画的视锥)——
+ * 这里再画一遍就是同一台相机的两份表示,重叠、抢深度,而且此前两者朝向还相反
+ * (见 SceneViewport 的 aimLikeCamera:Object3D.lookAt 对普通对象是 +Z 朝向目标)。
+ *
+ * 留下来的这两样是机位模型没有的:**它在看哪个点**。运镜设计时那是最要紧的信息 ——
+ * 位置和朝向能从模型上读出来,而"看着哪儿"读不出来。
+ *
+ * 这些辅助放在场景根之外,所以永远不会出现在导出的画面里。
+ */
 export function cameraObserver() {
   const group = new THREE.Group();
-  const camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.2, 1.5);
-  const frustum = new THREE.CameraHelper(camera);
-  const blue = new THREE.Color(0x9fbaff);
-  frustum.setColors(blue, blue, new THREE.Color(0xffffff), blue, blue);
-  for (const material of Array.isArray(frustum.material)
-    ? frustum.material
-    : [frustum.material]) {
-    material.depthTest = false;
-    material.transparent = true;
-    material.opacity = 0.8;
-  }
-  frustum.renderOrder = 10;
-  const marker = new THREE.Mesh(
-    new THREE.BoxGeometry(0.28, 0.2, 0.35),
-    new THREE.MeshBasicMaterial({ color: 0x9fbaff, depthTest: false }),
-  );
-  marker.name = "camera-position";
-  marker.renderOrder = 11;
   const target = new THREE.Mesh(
     new THREE.SphereGeometry(0.09, 12, 8),
     new THREE.MeshBasicMaterial({ color: 0xe9bc71, depthTest: false }),
@@ -61,19 +54,11 @@ export function cameraObserver() {
       depthTest: false,
     }),
   );
-  group.add(frustum, marker, target, sight);
+  group.add(target, sight);
   return {
     group,
-    update(frame: { position: Vec3; target: Vec3; fov: number }, aspect: number) {
-      camera.position.fromArray(frame.position);
-      camera.lookAt(new THREE.Vector3(...frame.target));
-      camera.fov = frame.fov;
-      camera.aspect = aspect;
-      camera.updateProjectionMatrix();
-      camera.updateMatrixWorld(true);
-      frustum.update();
-      marker.position.copy(camera.position);
-      marker.quaternion.copy(camera.quaternion);
+    /** `aspect` 不再需要(视锥归机位模型画),但调用点还传着 —— 留着签名不动,少一处要改的地方。 */
+    update(frame: { position: Vec3; target: Vec3 }) {
       target.position.fromArray(frame.target);
       const points = sight.geometry.attributes.position;
       points.setXYZ(0, ...frame.position);
@@ -83,9 +68,6 @@ export function cameraObserver() {
       sight.computeLineDistances();
     },
     dispose() {
-      frustum.dispose();
-      marker.geometry.dispose();
-      marker.material.dispose();
       target.geometry.dispose();
       target.material.dispose();
       sight.geometry.dispose();
