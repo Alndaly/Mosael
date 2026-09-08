@@ -9429,6 +9429,7 @@ export interface components {
              * @default 1.5
              */
             ambient: number;
+            lighting?: components["schemas"]["SceneLighting"];
         };
         /** SceneCreate */
         SceneCreate: {
@@ -9440,6 +9441,51 @@ export interface components {
              */
             name: string;
             content?: components["schemas"]["SceneContent"];
+        };
+        /**
+         * SceneLighting
+         * @description 主光。**它此前是写死在视口里的一盏白光**(方向 (4,9,5)、强度 2.5),不可调、不可关。
+         *
+         *     而这一页产出的画面是要交给图像/视频模型当参考的 —— 打光对成片的影响极大,用文字又极难
+         *     说准("暖一点""再侧一点"说十遍也对不齐),用角度和色温一摆就精确。所以它该是场景数据,
+         *     和构图、运镜一样能存能改能复用。
+         *
+         *     `preset` 只记**选的是哪一档**,不参与渲染:渲染看下面那几个数。留着它是为了两件事 ——
+         *     界面上要知道当前停在哪一档,以及交给模型时要一并送出那一档的文字描述(灯位由参考帧
+         *     表达"光从哪来",文字表达"这是什么光",两样缺一不可)。用户手动改过数之后 preset 记
+         *     `custom`。
+         */
+        SceneLighting: {
+            /**
+             * Preset
+             * @default studio-soft
+             */
+            preset: string;
+            /**
+             * Azimuth
+             * @default 35
+             */
+            azimuth: number;
+            /**
+             * Elevation
+             * @default 55
+             */
+            elevation: number;
+            /**
+             * Intensity
+             * @default 2.5
+             */
+            intensity: number;
+            /**
+             * Temperature
+             * @default 5500
+             */
+            temperature: number;
+            /**
+             * Softness
+             * @default 0.35
+             */
+            softness: number;
         };
         /** SceneObject */
         SceneObject: {

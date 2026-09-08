@@ -15,6 +15,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
 import { gltfLoader } from "./gltfLoader";
+import { kelvinRgb } from "./lighting";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 import {
   readSceneModel,
@@ -22,6 +23,7 @@ import {
   type SceneContent,
   type SceneObject,
   type SceneShot,
+  type SceneLighting,
   type Vec3,
 } from "@/api/domains/scenes";
 import { sampleCamera } from "./sceneGraph";
@@ -32,7 +34,7 @@ export type ViewportHandle = {
   placement: (halfWidth: number) => Vec3;
   view: (direction: "perspective" | "front" | "top") => void;
   editCamera: (shot: SceneShot, time: number) => void;
-  frame: (shot: SceneShot, time: number) => Promise<Blob>;
+  frame: (shot: SceneShot, time: number, options?: { clay?: boolean }) => Promise<Blob>;
   glb: () => Promise<Blob>;
   record: (
     shot: SceneShot,
@@ -208,6 +210,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
       scene.add(root);
       const ambient = new THREE.HemisphereLight(0xffffff, 0x666879, 1.5);
       scene.add(ambient);
+      const kelvinColor = (kelvin: number) => new THREE.Color(...kelvinRgb(kelvin));
       const sun = new THREE.DirectionalLight(0xffffff, 2.5);
       sun.position.set(4, 9, 5);
       sun.castShadow = true;
@@ -217,10 +220,13 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
       sun.shadow.bias = -0.0004;
       sun.shadow.normalBias = 0.02;
       scene.add(sun, sun.target);
-      /** 平行光的阴影相机是个正交盒子,默认 ±5 —— 展厅那种二十来米的场景一出盒子就没影子。
-       *  所以每次场景变了都按包围球重新框一次:光的**方向**不动(那是打光的一部分),
-       *  只把它挪到罩得住的位置,再把盒子放到刚好包住。 */
-      const SUN_DIRECTION = sun.position.clone().normalize();
+      /** 主光的方向单位向量。方位角 0 是 +Z(相机默认所在的一侧),顺时针转向 +X。 */
+      const sunDirection = (azimuth: number, elevation: number) => {
+        const a = THREE.MathUtils.degToRad(azimuth);
+        const e = THREE.MathUtils.degToRad(elevation);
+        return new THREE.Vector3(Math.sin(a) * Math.cos(e), Math.sin(e), Math.cos(a) * Math.cos(e));
+      };
+      let SUN_DIRECTION = sunDirection(35, 55);
       /** 点光源的阴影是六个面,一盏就抵得上好几盏平行光。场景允许 500 个物体,不封顶的话
        *  一屋子灯能把帧率拖到个位数,而**第五盏灯的影子对画面几乎没有贡献**。
        *  按场景里的先后取前几盏 —— 顺序是用户自己排的,比"随便挑几盏"讲得通。 */
@@ -231,7 +237,12 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           if (node instanceof THREE.PointLight) node.castShadow = remaining-- > 0;
         });
       };
+      /** 平行光的阴影相机是个正交盒子,默认 ±5 —— 展厅那种二十来米的场景一出盒子就没影子。
+       *  所以每次场景或打光变了都按包围球重新框一次:方向来自场景数据,这里只把光挪到罩得住
+       *  的位置,再把盒子放到刚好包住。 */
       const fitShadow = () => {
+        const light = latest.current.content.lighting;
+        if (light) SUN_DIRECTION = sunDirection(light.azimuth, light.elevation);
         const bounds = new THREE.Box3().setFromObject(root);
         if (bounds.isEmpty()) return;
         const sphere = bounds.getBoundingSphere(new THREE.Sphere());
@@ -247,6 +258,16 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         box.near = 0.1;
         box.far = radius * 6;
         box.updateProjectionMatrix();
+      };
+      /** 把主光调到当前场景数据说的样子。 */
+      const applyLighting = (lighting: SceneLighting) => {
+        sun.color.copy(kelvinColor(lighting.temperature));
+        sun.intensity = lighting.intensity;
+        // 软硬只有一个能调的旋钮:PCFSoft 的模糊半径。它不是物理意义上的面光源,但"硬光
+        // 投影边缘锐利、柔光边缘化开"这一条读者看得出来,而那正是要传给模型的信息。
+        sun.shadow.radius = 1 + lighting.softness * 12;
+        sun.shadow.blurSamples = lighting.softness > 0.5 ? 16 : 8;
+        fitShadow();
       };
       const grid = new THREE.GridHelper(40, 40, 0x6b7480, 0x6b7480);
       (grid.material as THREE.Material).transparent = true;
@@ -350,6 +371,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         // 画布,就成了一整片不透明的色块 —— 而这个应用其余每一页都是半透明、透着用户的
         // 自定义背景。按视图决定,见下面渲染那一段。
         ambient.intensity = p.content.ambient;
+        if (p.content.lighting) applyLighting(p.content.lighting);
         const signature = JSON.stringify(p.content.objects);
         if (signature === lastSignature) {
           select();
@@ -593,7 +615,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           }
         }
       }
-      function output(shot: SceneShot) {
+      function output(shot: SceneShot, clay = false) {
         if (modelsPending) throw new Error("模型仍在加载，请稍后导出。");
         if (
           latest.current.content.objects.some(
@@ -617,10 +639,29 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           Math.round((aspect >= 1 ? 1280 : 720) / aspect),
         );
         const exportScene = new THREE.Scene();
+        // 灰模那一张换成中性底:场景自己的背景色会把整张图染上一层色偏,而这张图的用处
+        // 恰恰是"只看光影"。
         exportScene.background = new THREE.Color(
-          latest.current.content.background,
+          clay ? "#8a8f96" : latest.current.content.background,
         );
         const copy = root.clone(true);
+        if (clay) {
+          /** 统一材质的"灰模"。**去掉材质噪音,只留光的结构。**
+           *
+           * 3D 里的占位球和默认色看着塑料,直接当参考图会把模型往塑料感带;而影子、明暗
+           * 过渡、体积这些**光的信息**在灰模上反而更干净。它是配合正片一起送的第二张参考图,
+           * 不是替代。
+           *
+           * clone(true) 不复制材质(是共享引用),所以在这里换掉不会动到视口里的那一份。 */
+          const clayMaterial = new THREE.MeshStandardMaterial({
+            color: 0xbfc3c8,
+            roughness: 0.85,
+            metalness: 0,
+          });
+          copy.traverse((node) => {
+            if (node instanceof THREE.Mesh) node.material = clayMaterial;
+          });
+        }
         const exportSun = sun.clone();
         // 平行光的朝向由 target 决定,而 clone 出来的 target 不在任何场景里 —— 不加进去,
         // 它的世界矩阵就不参与更新,光会照着默认方向(原点)打。
@@ -709,8 +750,8 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           orbit.target.fromArray(frame.target);
           orbit.update();
         },
-        frame: async (shot, time) => {
-          const { r, draw } = output(shot);
+        frame: async (shot, time, options) => {
+          const { r, draw } = output(shot, options?.clay);
           try {
             draw(time);
             return await new Promise<Blob>((resolve, reject) =>

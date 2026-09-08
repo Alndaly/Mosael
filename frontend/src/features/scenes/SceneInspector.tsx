@@ -1,7 +1,17 @@
 import React from "react";
 import { Copy, Group, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import type { SceneContent, SceneObject } from "@/api/domains/scenes";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { SceneContent, SceneLighting, SceneObject } from "@/api/domains/scenes";
+import { CUSTOM_PRESET, presetById, presetGroups } from "./lighting";
 import { Num, Vector, Tool } from "./SceneControls";
 import { duplicateObject, makeObject, removeObjects } from "./sceneGraph";
 export function SceneInspector({
@@ -222,9 +232,116 @@ export function SceneInspector({
               max={10}
               onChange={(ambient) => update({ ...content, ambient })}
             />
+            <LightingSection
+              lighting={content.lighting}
+              onChange={(lighting) => update({ ...content, lighting })}
+            />
           </>
         )}
       </section>
     </aside>
+  );
+}
+
+/**
+ * 主光。**预设在最前,旋钮收在下面。**
+ *
+ * 绝大多数时候用户要的是"我在拍产品/拍人/拍空间",按用途挑一档就走;真要抠角度的人才展开
+ * 那四个数。把旋钮摊在第一屏,等于要求每个人先懂布光才能用这一页。
+ *
+ * 手动改过任何一个数就落到 `custom` —— 那时预设那句写好的提示词已经不描述当前的光了,
+ * 交给模型的话会由 `lightingPrompt` 按当时的数现生成一句。
+ */
+function LightingSection({
+  lighting,
+  onChange,
+}: {
+  lighting: SceneLighting;
+  onChange: (lighting: SceneLighting) => void;
+}) {
+  const tune = (patch: Partial<SceneLighting>) =>
+    onChange({ ...lighting, ...patch, preset: CUSTOM_PRESET });
+  const current = presetById(lighting.preset);
+  return (
+    <details className="scene-details" open>
+      <summary>主光</summary>
+      <div>
+        <label className="scene-number">
+          <span>打光方式</span>
+          <Select
+            value={lighting.preset}
+            onValueChange={(id) => {
+              const picked = presetById(id);
+              if (picked) onChange({ preset: picked.id, ...picked.values });
+            }}
+          >
+            <SelectTrigger aria-label="打光方式">
+              <SelectValue placeholder="自定义" />
+            </SelectTrigger>
+            <SelectContent>
+              {presetGroups().map(([group, presets]) => (
+                <SelectGroup key={group}>
+                  <SelectLabel>{group}</SelectLabel>
+                  {presets.map((preset) => (
+                    <SelectItem key={preset.id} value={preset.id}>
+                      {preset.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+        <p>{current ? current.hint : "已手动调整。选一档预设可以回到成套的参数。"}</p>
+        <div className="scene-shape">
+          <Num
+            label="方位角"
+            caption="方位角°"
+            value={lighting.azimuth}
+            min={0}
+            max={359}
+            step={5}
+            onChange={(azimuth) => tune({ azimuth })}
+          />
+          <Num
+            label="高度角"
+            caption="高度角°"
+            value={lighting.elevation}
+            min={0}
+            max={90}
+            step={5}
+            onChange={(elevation) => tune({ elevation })}
+          />
+          <Num
+            label="强度"
+            caption="强度"
+            value={lighting.intensity}
+            min={0}
+            max={20}
+            step={0.1}
+            onChange={(intensity) => tune({ intensity })}
+          />
+          <Num
+            label="色温"
+            caption="色温 K"
+            value={lighting.temperature}
+            min={1500}
+            max={12000}
+            step={100}
+            onChange={(temperature) => tune({ temperature: Math.round(temperature) })}
+          />
+        </div>
+        <Num
+          label="影子软硬"
+          caption="影子软硬（0 硬 · 1 柔）"
+          value={lighting.softness}
+          min={0}
+          max={1}
+          step={0.05}
+          onChange={(softness) => tune({ softness })}
+        />
+        <p>方位角 0 是正面来光，90 在右侧，180 是逆光；高度角 0 贴地、90 是顶光。</p>
+      </div>
+    </details>
   );
 }

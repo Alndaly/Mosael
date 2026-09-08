@@ -14,6 +14,7 @@ export type SceneContent = Omit<
   Required<components["schemas"]["SceneContent"]>,
   "objects" | "shots"
 > & { objects: SceneObject[]; shots: SceneShot[] };
+export type SceneLighting = Required<components["schemas"]["SceneLighting"]>;
 export type Scene = Omit<components["schemas"]["SceneOut"], "content"> & {
   content: SceneContent;
 };

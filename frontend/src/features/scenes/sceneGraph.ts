@@ -1,3 +1,4 @@
+import { presetById } from "./lighting";
 import type {
   CameraFrame,
   SceneContent,
@@ -57,11 +58,16 @@ export function makeShot(): SceneShot {
     frames: [{ time: 0, position: [8, 5, 8], target: [0, 1, 0], fov: 45 }],
   };
 }
+/** 新场景的默认打光。**和后端 SceneLighting 的默认值同一档**(studio-soft) —— 两边写不一样的
+ *  话,新建出来的场景和"重置为默认"会落在不同的光下,而没有任何地方会报错。 */
+const DEFAULT_LIGHTING = { preset: "studio-soft", ...presetById("studio-soft")!.values };
+
 export function initialScene(demo = false): SceneContent {
   const shot = makeShot();
   if (!demo)
     return {
       version: 1,
+      lighting: DEFAULT_LIGHTING,
       objects: [
         makeObject("plane", {
           name: "地面",
@@ -101,6 +107,7 @@ export function initialScene(demo = false): SceneContent {
   ];
   return {
     version: 1,
+    lighting: DEFAULT_LIGHTING,
     objects: [
       ...rooms,
       makeObject("cylinder", {

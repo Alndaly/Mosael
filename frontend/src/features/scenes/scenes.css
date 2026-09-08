@@ -1099,6 +1099,13 @@
 /* 空状态里的下一步链接。EmptyState 是居中布局,所以链接也居中 —— 靠左会在标题下方
    拉出一条歪的视觉轴。两个链接时并排,窄了自动换行。 */
 .scene-blender-pull-list { display: grid; gap: 8px; }
+/* 「同时送一张灰模」那个勾选。和 .scene-choice 同一套内距,好让它读起来是同一列里的一项。 */
+.scene-toggle { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 10px; cursor: pointer; }
+.scene-toggle:hover { background: color-mix(in srgb, var(--foreground) 4%, transparent); }
+.scene-toggle > input { margin-top: 3px; flex-shrink: 0; accent-color: var(--primary); cursor: pointer; }
+.scene-toggle > span { display: grid; gap: 3px; min-width: 0; }
+.scene-toggle strong { font-size: 13px; font-weight: 500; }
+.scene-toggle small { color: var(--muted-foreground); font-size: var(--text-ui-xs); }
 .scene-blender-setup { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; }
 .scene-blender-setup a, .scene-blender-link { font-size: 13px; display: inline-flex; align-items: center; gap: 4px; color: var(--primary); }
 .scene-blender-setup a:hover, .scene-blender-link:hover { text-decoration: underline; }

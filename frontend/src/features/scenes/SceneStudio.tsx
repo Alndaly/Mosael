@@ -5,6 +5,8 @@ import { SceneBlender } from "./SceneBlender";
 import { SceneBlenderPull } from "./SceneBlenderPull";
 import { useCanvasInputMode } from "@/components/app/canvasInputMode";
 import { readSceneSnap, writeSceneSnap } from "./sceneSnap";
+import { readClayReference, writeClayReference } from "./clayReference";
+import { lightingPrompt, presetById } from "./lighting";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import { useSceneFullscreen } from "./useSceneFullscreen";
 import { SceneHistory } from "./SceneHistory";
@@ -258,6 +260,8 @@ function SceneEditor({
     // 吸附是「我习惯这么干活」,不是这一次的临时状态 —— 和画布输入模式同一类,记住它。
     // 每次打开场景都退回关闭,等于让常开的人每次先点一下。
     [snap, setSnap] = React.useState(readSceneSnap),
+    //: 交给模型时是否附一张灰模参考图。见 clayReference —— 是"我习惯怎么交",不是场景数据。
+    [clay, setClay] = React.useState(readClayReference),
     [shotId, setShotId] = React.useState(initial.content.shots[0].id),
     [time, setTime] = React.useState(0),
     [viewMode, setViewMode] = React.useState<"edit" | "camera" | "observe">(
@@ -487,11 +491,12 @@ function SceneEditor({
       setSelected(o.id);
     });
   }
-  async function assetFrame(t: number) {
-    const blob = await view.current!.frame(shot, t);
+  async function assetFrame(t: number, options?: { clay?: boolean }) {
+    const blob = await view.current!.frame(shot, t, options);
+    const suffix = options?.clay ? "-灰模" : "";
     return importAsset({
       workspaceId: initial.workspace_id,
-      file: new File([blob], `${draft.name}-${shot.name}-${t.toFixed(2)}.png`, {
+      file: new File([blob], `${draft.name}-${shot.name}-${t.toFixed(2)}${suffix}.png`, {
         type: "image/png",
       }),
     });
@@ -526,6 +531,10 @@ function SceneEditor({
       if (kind === "image") {
         const a = await assetFrame(time);
         sources.push({ asset_id: a.id, role: "reference_image" });
+        if (clay) {
+          const gray = await assetFrame(time, { clay: true });
+          sources.push({ asset_id: gray.id, role: "reference_image" });
+        }
       } else if (kind === "frames") {
         for (const [i, t] of [0, shot.duration].entries()) {
           const a = await assetFrame(t);
@@ -571,9 +580,16 @@ function SceneEditor({
         x: kind === "image" ? 0 : 460,
         y: 100,
         form: {
-          prompt: kind === "image"
-            ? `参考 3D 场景「${draft.name}」的画面构图、空间布局与摄像机视角，生成精细的图片。`
-            : `参考 3D 场景「${draft.name}」的构图、空间布局和运镜，生成最终视频。`,
+          // **打光要一起说出去。** 参考帧只表达"光从哪来"(靠影子),而"这是什么光"——
+          // 暖的冷的、硬的柔的、什么场合 —— 只有文字说得清。此前这句只提构图和运镜,
+          // 光完全由模型自己发挥,于是同一场景的两个镜头打光对不上,剪到一起就穿帮。
+          prompt: [
+            kind === "image"
+              ? `参考 3D 场景「${draft.name}」的画面构图、空间布局与摄像机视角，生成精细的图片。`
+              : `参考 3D 场景「${draft.name}」的构图、空间布局和运镜，生成最终视频。`,
+            `打光：${lightingPrompt(draft.content.lighting)}。`,
+            clay ? "另一张灰模参考图只用于读取光影与体积，不要照搬它的灰色材质。" : "",
+          ].filter(Boolean).join(""),
           source_assets: sources,
           mode: kind === "frames" ? "first_frame" : undefined,
           parameters: {
@@ -1293,7 +1309,22 @@ function SceneEditor({
                   </span>
                   <ChevronRight size={16} />
                 </button>
+                {/* **灰模是第二张参考图,不是替代。** 3D 里的占位色看着塑料,会把模型往塑料感
+                    带;而影子、明暗过渡、体积这些光的信息在灰模上反而更干净。生成侧的
+                    reference_image 上限是 9,多送一张是现成能力。 */}
+                <label className="scene-toggle">
+                  <input
+                    type="checkbox"
+                    checked={clay}
+                    onChange={() => setClay((on) => writeClayReference(!on))}
+                  />
+                  <span>
+                    <strong>同时送一张灰模参考图</strong>
+                    <small>统一材质、只留光影，帮模型读准打光</small>
+                  </span>
+                </label>
                 <p>
+                  当前打光「{presetById(draft.content.lighting.preset)?.label ?? "自定义"}」会一并写进提示词。
                   下一步会打开创意画板，由你选择图片或视频模型、描述画面风格并开始生成。
                 </p>
                 <details className="scene-details">

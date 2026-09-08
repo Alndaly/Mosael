@@ -5,7 +5,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
 import pkg from "../package.json" with { type: "json" };
-import { DECODER_FILES, DECODER_PREFIX } from "./src/features/scenes/decoderAssets";
+import { DECODER_FILES, DECODER_PREFIX } from "./src/features/scenes/decoderAssets.ts";
 
 // 版本号只有一个来源:**仓库根** package.json。它是 electron-builder 打包用的版本,也是
 // app.getVersion() 的返回值,发版 CI(release.yml 的 Sync app version from tag)也只 bump 它。

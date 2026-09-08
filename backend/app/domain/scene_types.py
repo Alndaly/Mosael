@@ -76,12 +76,43 @@ class SceneShot(SceneValue):
         return self
 
 
+class SceneLighting(SceneValue):
+    """主光。**它此前是写死在视口里的一盏白光**(方向 (4,9,5)、强度 2.5),不可调、不可关。
+
+    而这一页产出的画面是要交给图像/视频模型当参考的 —— 打光对成片的影响极大,用文字又极难
+    说准("暖一点""再侧一点"说十遍也对不齐),用角度和色温一摆就精确。所以它该是场景数据,
+    和构图、运镜一样能存能改能复用。
+
+    `preset` 只记**选的是哪一档**,不参与渲染:渲染看下面那几个数。留着它是为了两件事 ——
+    界面上要知道当前停在哪一档,以及交给模型时要一并送出那一档的文字描述(灯位由参考帧
+    表达"光从哪来",文字表达"这是什么光",两样缺一不可)。用户手动改过数之后 preset 记
+    `custom`。
+    """
+
+    #: 预设 id,或 "custom"。渲染不看它。
+    preset: str = Field("studio-soft", max_length=40, pattern=r"^[\w-]+$")
+    #: 方位角:0 = 相机正后方(顺光),90 = 右侧,180 = 逆光。**相对场景,不是相对相机** ——
+    #: 相对相机的话,镜头一转光就跟着转,同一场景的两个镜头就对不上了。
+    azimuth: float = Field(35, ge=0, lt=360)
+    #: 高度角:0 = 与地面齐平(贴地侧光),90 = 正顶光。
+    elevation: float = Field(55, ge=0, le=90)
+    intensity: float = Field(2.5, ge=0, le=20)
+    #: 色温(K)。1800 烛光、3200 白炽、5500 日光、7500 阴天。
+    temperature: int = Field(5500, ge=1500, le=12000)
+    #: 影子的软硬:0 是硬边(晴天直射),1 是柔和(阴天/柔光箱)。
+    softness: float = Field(0.35, ge=0, le=1)
+
+
 class SceneContent(SceneValue):
     version: Literal[1] = 1
     objects: list[SceneObject] = Field(default_factory=list, max_length=500)
     shots: list[SceneShot] = Field(default_factory=lambda: [SceneShot(id="camera-1")], min_length=1, max_length=32)
     background: str = Field("#20242c", pattern=r"^#[0-9a-fA-F]{6}$")
+    #: 环境光。**留在这一层而不是并进 lighting**:老场景的 content 里已经存着这个键,挪进去
+    #: 就要迁移所有存量 JSON,而它换来的只是"看着更整齐"。加一个带默认值的新块不需要迁移 ——
+    #: SceneOut 每次读都过一遍这个模型,老场景自动拿到默认的 lighting。
     ambient: float = Field(1.5, ge=0, le=10)
+    lighting: SceneLighting = Field(default_factory=SceneLighting)
 
     @model_validator(mode="after")
     def valid_hierarchy(self):
