@@ -47,7 +47,6 @@ import {
   Scaling,
   Trash2,
   Sparkles,
-  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Workspace } from "@/api/client";
@@ -1381,9 +1380,6 @@ function SceneEditor({
                   count={draft.content.objects.length}
                   actions={
                     <>
-                    {/* **导入只留这一个入口。** 此前「添加」弹层里有一条「导入 GLB / glTF」,
-                        列表底下还有一颗整宽的「导入模型」—— 同一件事两个入口,而且长得完全
-                        不一样,读者要先判断它们是不是同一件事。收成标题栏这一颗图标按钮。 */}
                     {/* 用 SearchableSelect 而不是手写弹层:物体种类只会越来越多,而手写那个
                         既不分组、又没有高度上限(十几项就把屏幕撑满)、也搜不了。这颗控件
                         本来就是给"选项多到普通 Select 会溢出屏幕"准备的。 */}
@@ -1402,15 +1398,6 @@ function SceneEditor({
                         </Button>
                       }
                     />
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      title="导入 GLB / glTF 模型"
-                      aria-label="导入 GLB / glTF 模型"
-                      onClick={() => file.current?.click()}
-                    >
-                      <Upload size={16} />
-                    </Button>
                     </>
                   }
                 >

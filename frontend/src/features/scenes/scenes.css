@@ -411,7 +411,7 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding: 8px var(--scene-stage-gutter);
+  padding: 0 var(--scene-stage-gutter) 8px;
   position: relative;
   background: transparent;
   border-top: 1px solid var(--divider);
@@ -455,7 +455,7 @@
   min-width: 0;
   outline: none;
 }
-.scene-dope-resize { position: absolute; top: -13px; left: calc(-1 * var(--scene-stage-gutter)); right: calc(-1 * var(--scene-stage-gutter)); z-index: 10; }
+.scene-dope-resize { position: absolute; top: -5px; left: calc(-1 * var(--scene-stage-gutter)); right: calc(-1 * var(--scene-stage-gutter)); z-index: 10; }
 .scene-dope-resize span { display: none; }
 .scene-dope-resize:hover span, .scene-dope-resize:focus-visible span { background: var(--primary); }
 /* Narrow panes scroll this single strip; controls never wrap into a second row. */
