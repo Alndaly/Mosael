@@ -32,10 +32,6 @@
 }
 .scene-library p,
 .scene-inspector p,
-.scene-objects footer p {
-  color: var(--muted-foreground);
-  line-height: 1.7;
-}
 .scene-eyebrow {
   letter-spacing: 0.16em;
   font-size: var(--text-ui-2xs);
@@ -160,7 +156,7 @@
 }
 /* 无底的那些(列表项、文字按钮)从 0 到 5% 就够;.scene-tool 静止时已经有 4% 的底,
    跟着 5% 等于几乎没有反应,所以它单独给一档。 */
-.scene-object-list button:hover,
+.scene-object-row:hover,
 .scene-text-button:hover {
   background: color-mix(in srgb, var(--foreground) 5%, transparent);
   color: var(--foreground);
@@ -170,7 +166,6 @@
   color: var(--foreground);
 }
 .scene-tool[aria-pressed="true"],
-.scene-object-list button[aria-pressed="true"],
 .scene-segment button[aria-pressed="true"] {
   color: var(--accent-foreground);
   background: var(--accent);
@@ -215,8 +210,12 @@
   padding: 14px var(--scene-side-gutter) 10px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  /* h2 撑开剩下的空间,两颗按钮因此挨在一起 —— space-between 会把它们也拆到两端。 */
+  gap: 6px;
+}
+.scene-objects header > h2 {
+  flex: 1;
+  min-width: 0;
 }
 
 .scene-objects h2,
@@ -224,15 +223,21 @@
   font-weight: 600;
   font-size: var(--text-ui-sm);
 }
-/* **左右内距只有一个值**(--scene-side-gutter)。此前是三套:header 16px、列表 6px、
-   inspector 16px —— 列表项的文字因此和上面的标题对不齐,而它们本该在同一条竖线上。
-   列表用负外边距把 hover 底色铺得比内距宽一点,这样文字对齐、底色又不显得局促。 */
+/* **底色画在整行上,不画在按钮上。**
+   一行是"名字 + 删除"两个按钮;底色只给名字那个的话,它右边那截(删除键所在的位置)
+   就空着,而 hover 命中的又是整行 —— 看起来就是高亮比行窄一块、还和右边的图标错开。
+
+   此前是用负外边距把按钮铺宽的:那是**列表项还只有一个按钮时**写的,加了删除键、行变成
+   flex 之后,那对负边距同时作用在两个按钮上,于是高亮整体左移 8px、右端又盖过删除键。
+
+   现在容器只留 8px 内距(底色铺到这里),文字的 8px 内距补足到 16px —— 和上面的标题
+   仍在同一条竖线上,而底色不需要任何负值。 */
 .scene-object-list {
   flex: 0 1 auto;
   overflow: auto;
   max-height: 210px;
   min-height: 0;
-  padding: 0 var(--scene-side-gutter);
+  padding: 0 8px;
 }
 .scene-object-list button {
   display: flex;
@@ -241,9 +246,8 @@
   gap: 9px;
   text-align: left;
   padding: 9px 8px;
-  margin: 0 -8px;
-  width: calc(100% + 16px);
   border-radius: 7px;
+  background: transparent;
 }
 .scene-object-list button span {
   overflow: hidden;
@@ -255,19 +259,7 @@
   flex-shrink: 0;
   color: var(--muted-foreground);
 }
-.scene-objects footer {
-  padding: 10px var(--scene-side-gutter);
-}
 
-.scene-objects footer button {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.scene-objects footer p {
-  font-size: var(--text-ui-2xs);
-  margin-top: 12px;
-}
 .scene-stage {
   /* 舞台上下四条的左右内距只有一个值。此前是四套(工具条 12、提示 12、时间轴 12、
      关键帧 0),于是关键帧那一行的文字比它上面的每一行都更靠左。 */
@@ -747,12 +739,8 @@
 .scene-object-list button {
   padding: 8px 10px;
 }
-.scene-object-list button[aria-pressed="true"] {
+.scene-object-row:has([aria-pressed="true"]) {
   background: color-mix(in srgb, var(--primary) 9%, transparent);
-}
-.scene-objects footer button {
-  color: var(--muted-foreground);
-  font-size: var(--text-ui-xs);
 }
 .scene-start {
   display: flex;
@@ -1049,6 +1037,8 @@
   display: flex;
   align-items: center;
   gap: 2px;
+  border-radius: 7px;
+  padding-right: 4px;
 }
 .scene-object-row > button:first-child {
   flex: 1;

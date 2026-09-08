@@ -1146,11 +1146,13 @@ function SceneEditor({
                     <h2>
                       场景中的物体 <span>{draft.content.objects.length}</span>
                     </h2>
+                    {/* **导入只留这一个入口。** 此前「添加」弹层里有一条「导入 GLB / glTF」,
+                        列表底下还有一颗整宽的「导入模型」—— 同一件事两个入口,而且长得完全
+                        不一样,读者要先判断它们是不是同一件事。收成标题栏这一颗图标按钮。 */}
                     <Popover open={addOpen} onOpenChange={setAddOpen}>
                       <PopoverTrigger asChild>
-                        <Button size="sm" aria-label="添加物体">
-                          <Plus size={15} />
-                          添加
+                        <Button size="icon-sm" title="添加物体" aria-label="添加物体">
+                          <Plus size={16} />
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent align="start" className="scene-add">
@@ -1176,17 +1178,17 @@ function SceneEditor({
                             {objectLabels[k]}
                           </button>
                         ))}
-                        <button
-                          onClick={() => {
-                            setAddOpen(false);
-                            file.current?.click();
-                          }}
-                        >
-                          <Upload size={15} />
-                          导入 GLB / glTF
-                        </button>
                       </PopoverContent>
                     </Popover>
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      title="导入 GLB / glTF 模型"
+                      aria-label="导入 GLB / glTF 模型"
+                      onClick={() => file.current?.click()}
+                    >
+                      <Upload size={16} />
+                    </Button>
                   </header>
                   {!draft.content.objects.length && (
                     <div className="scene-start">
@@ -1236,17 +1238,6 @@ function SceneEditor({
                       </div>
                     ))}
                   </div>
-                  <footer>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      onClick={() => file.current?.click()}
-                    >
-                      <Upload size={14} />
-                      导入模型
-                    </Button>
-                  </footer>
                   <input
                     ref={file}
                     type="file"
