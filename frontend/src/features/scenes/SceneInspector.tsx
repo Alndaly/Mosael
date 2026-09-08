@@ -31,10 +31,11 @@ export function SceneInspector({
   update: (c: SceneContent) => void;
   setSelected: (id: string | null) => void;
 }) {
+  //: 外壳和标题都归 ScenePanel —— 这里只出内容。此前它自己带 <aside> 和 <h2>,
+  //: 于是右栏里出现"两层标题"和"两层边框"。
   return (
-    <aside className="scene-inspector">
+    <div className="scene-inspector">
       <section>
-        <h2>{object ? "调整物体" : "场景外观"}</h2>
         {object ? (
           <>
             <Input
@@ -292,7 +293,7 @@ export function SceneInspector({
           </>
         )}
       </section>
-    </aside>
+    </div>
   );
 }
 

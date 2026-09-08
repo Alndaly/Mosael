@@ -13,6 +13,7 @@ import { SceneHistory } from "./SceneHistory";
 import { SceneCameraPanel } from "./SceneCameraPanel";
 import { SceneInspector } from "./SceneInspector";
 import { Pick, Tool } from "./SceneControls";
+import { ScenePanel } from "./ScenePanel";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -1249,11 +1250,12 @@ function SceneEditor({
         <aside className="scene-side">
           <div className="scene-side-scroll">
             <>
-                <div className="scene-objects">
-                  <header>
-                    <h2>
-                      场景中的物体 <span>{draft.content.objects.length}</span>
-                    </h2>
+                <ScenePanel
+                  id="objects"
+                  title="场景中的物体"
+                  count={draft.content.objects.length}
+                  actions={
+                    <>
                     {/* **导入只留这一个入口。** 此前「添加」弹层里有一条「导入 GLB / glTF」,
                         列表底下还有一颗整宽的「导入模型」—— 同一件事两个入口,而且长得完全
                         不一样,读者要先判断它们是不是同一件事。收成标题栏这一颗图标按钮。 */}
@@ -1284,7 +1286,9 @@ function SceneEditor({
                     >
                       <Upload size={16} />
                     </Button>
-                  </header>
+                    </>
+                  }
+                >
                   {!draft.content.objects.length && (
                     <div className="scene-start">
                       <Box size={28} strokeWidth={1.4} />
@@ -1344,20 +1348,23 @@ function SceneEditor({
                       e.target.value = "";
                     }}
                   />
-                </div>
+                </ScenePanel>
 
-                <SceneInspector
-                  content={draft.content}
-                  object={object}
-                  time={time}
-                  objectPatch={objectPatch}
-                  update={update}
-                  setSelected={setSelected}
-                />
+                <ScenePanel id="inspector" title={object ? "调整物体" : "场景外观"}>
+                  <SceneInspector
+                    content={draft.content}
+                    object={object}
+                    time={time}
+                    objectPatch={objectPatch}
+                    update={update}
+                    setSelected={setSelected}
+                  />
+                </ScenePanel>
             </>
             {/* **镜头设置跟着「选中了哪台机位」走。** 相机现在是场景里的物体,它的运镜、
                 时长、比例本来就该在选中它时出现 —— 而不是藏在一个叫「设计镜头」的步骤后面。 */}
             {object?.kind === "camera" && rig && object.id === rig.id && (
+              <ScenePanel id="camera" title="让镜头怎么走">
               <SceneCameraPanel
                 shot={shot}
                 rig={rig!}
@@ -1378,6 +1385,7 @@ function SceneEditor({
                 }}
                 camera={() => view.current!.camera()}
               />
+              </ScenePanel>
             )}
           </div>
         </aside>

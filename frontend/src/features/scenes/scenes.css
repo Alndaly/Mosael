@@ -342,15 +342,17 @@
      一条分割线就够 —— 再套一个框会和外层的侧栏边框成为框中框。 */
   border-top: 1px solid var(--divider, var(--border));
 }
+/* 节奏只有一个值。此前 header 10px、inspector 16px、列表 6px 各写各的,读起来是三种间距。 */
 .scene-inspector section {
-  padding: 16px var(--scene-side-gutter);
+  padding: 4px var(--scene-side-gutter) 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
-
 .scene-inspector section + section {
   border-top: 1px solid var(--divider);
+  padding-top: 12px;
+  margin-top: 4px;
 }
 .scene-inspector p {
   font-size: var(--text-ui-2xs);
@@ -374,17 +376,39 @@
   font-size: var(--text-ui-2xs);
   color: var(--muted-foreground);
 }
-.scene-number input {
+/* **数值字段不常驻边框。**
+   一屏十几个数,每个都套一个框,读到的是十几个方块而不是十几个数 —— 而框本身没有携带任何
+   信息(哪个是可编辑的?全都是)。所以静止时只有一层极淡的底,鼠标移上去加深,聚焦时才给
+   完整的边框和焦点环:**边框出现在需要它的那一刻**。 */
+.scene-number input,
+.scene-number [role="combobox"] {
   width: 100%;
   min-width: 0;
-  height: 34px;
-  background: var(--control);
-  border: 1px solid var(--border);
+  height: var(--scene-control-height);
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+  border: 1px solid transparent;
   border-radius: 6px;
-  padding: 7px 9px;
+  padding: 0 8px;
   color: var(--foreground);
   font-size: var(--text-ui-xs);
   font-family: var(--font-mono);
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+.scene-number input:hover,
+.scene-number [role="combobox"]:hover {
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+.scene-number input:focus,
+.scene-number input:focus-visible,
+.scene-number [role="combobox"]:focus-visible {
+  outline: none;
+  background: var(--control);
+  border-color: var(--ring);
+}
+/* 下拉里的文字是给人读的,不该跟着数字用等宽。 */
+.scene-number [role="combobox"] {
+  font-family: inherit;
+  font-size: var(--text-ui-sm);
 }
 
 .scene-vector .scene-number > span {
@@ -636,15 +660,72 @@
   border-inline-start: 1px solid var(--divider);
 }
 
+/* **每一节自己滚,整栏不滚。**
+   `flex: 1 1 auto` 让每节先按内容取高度,空间不够时按各自的高度比例收缩 —— 短的那节
+   (比如只有几个物体的列表)不会被一节很长的检查器挤没,而长的那一节自己滚。
+   `min-height: 0` 少不了:flex 子项默认不肯缩到内容以下,少了它 overflow 永远不触发。 */
 .scene-side-scroll {
   flex: 1;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.scene-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.scene-panel + .scene-panel {
+  border-top: 1px solid var(--divider);
+}
+.scene-panel[data-open="false"] {
+  flex: 0 0 auto;
+}
+.scene-panel[data-open="true"] {
+  flex: 1 1 auto;
+}
+.scene-panel > header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 10px var(--scene-side-gutter);
+}
+.scene-panel-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  color: var(--foreground);
+}
+.scene-panel-toggle svg {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  transition: transform 140ms ease;
+}
+.scene-panel[data-open="false"] .scene-panel-toggle svg {
+  transform: rotate(-90deg);
+}
+.scene-panel-toggle h2 {
+  font-size: var(--text-ui-sm);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scene-panel-toggle h2 span {
+  color: var(--muted-foreground);
+  font-weight: 400;
+  margin-left: 6px;
+}
+.scene-panel-body {
+  min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-}
-.scene-side-scroll > .scene-inspector {
-  overflow: visible;
-  flex: none;
+  padding-bottom: 10px;
 }
 .scene-labeled-tool {
   height: 32px;
@@ -824,10 +905,7 @@
   border-top: 1px solid var(--divider);
 }
 
-.scene-number [role="combobox"] {
-  height: 34px;
-  font-size: var(--text-ui-xs);
-}
+
 
 .scene-output-panel {
   padding: 16px;

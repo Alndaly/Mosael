@@ -709,14 +709,6 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
             node.rotation.set(...(at.rotation.map(THREE.MathUtils.degToRad) as Vec3));
             node.scale.fromArray(at.scale);
           }
-        // 「俯瞰全场」里,当前镜头那台机位由取景器(观察辅助)画 —— 它多画一条视线和目标点。
-        // 两个一起画就是同一台相机重叠出两份,而那正是"明明两台却看见三台"的来源。
-        const observedRig = p.observing ? cameraOfShot(p.content, p.shot) : undefined;
-        for (const o of p.content.objects) {
-          if (o.kind !== "camera") continue;
-          const node = objects.get(o.id);
-          if (node) node.visible = !o.hidden && o.id !== observedRig?.id;
-        }
         grid.visible = !p.preview;
         if (path) path.visible = !!p.observing;
         observer.group.visible = !!p.observing;
@@ -731,9 +723,19 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         shootingCamera.aspect = aspect;
         pose(shootingCamera, frame);
         observer.update(frame, aspect);
-        // 编辑期的道具(机位模型)不进镜头 —— 相机不拍自己。
-        for (const node of root.children)
-          if (node.userData.editorOnly) node.visible = !p.preview;
+        // 机位模型什么时候该看得见。**两条规则写在同一处** —— 此前"观察时藏起当前机位"写在
+        // 上面,而这里又无条件 `visible = !p.preview` 把它抹掉了,于是同一台相机在画面上出现
+        // 两份(一份是机位模型、一份是取景器),朝向还相反 —— 取景器画的是视锥,模型画的是
+        // 机身加视锥,两者的锥从同一点向两边张开,看起来就是"两个方向相反的摄像机"。
+        //
+        //   镜头画面里:一律不出现 —— 相机不拍自己;
+        //   俯瞰全场里:当前那台交给取景器画(它多一条视线和目标点),其余的照常画。
+        const observed = p.observing ? cameraOfShot(p.content, p.shot)?.id : undefined;
+        for (const node of root.children) {
+          if (!node.userData.editorOnly) continue;
+          const id = node.userData.sceneObjectId;
+          node.visible = !p.preview && id !== observed;
+        }
         // **编辑视角透明,镜头画面用场景底色。** 后者是**成片的一部分**(导出用的是同一个
         // 值),取景时必须看到真实底色;而编辑视角是工作台,它该跟应用其余页面一样透出背景。
         // 这也让 `p.preview` 分支里那句 setClearColor(…, 0) 真正生效 —— 此前 scene.background

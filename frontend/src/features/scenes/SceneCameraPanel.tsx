@@ -75,10 +75,7 @@ export function SceneCameraPanel({
   }
   return (
     <div className="scene-camera-panel">
-      <section className="scene-panel-heading">
-        <h2>让镜头怎么走？</h2>
-        <p>先在画面中找到喜欢的角度，再选择运镜方式。</p>
-      </section>
+      <p className="scene-camera-hint">先在画面中找到喜欢的角度，再选择运镜方式。</p>
       <section className="scene-preset-list" aria-label="运镜方式">
         <button onClick={() => preset("orbit")}>
           <RotateCw size={19} />
