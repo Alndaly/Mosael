@@ -180,26 +180,65 @@ export function removeObjects(
     objects: content.objects.filter((o) => !removed.has(o.id)),
   };
 }
+/** 一个物体和它所有后代的 id。删除、复制、移动都要它 —— 三处此前各写了一遍同一个循环。 */
+export function withDescendants(content: SceneContent, id: string): Set<string> {
+  const family = new Set([id]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const o of content.objects)
+      if (o.parent_id && family.has(o.parent_id) && !family.has(o.id)) {
+        family.add(o.id);
+        changed = true;
+      }
+  }
+  return family;
+}
+
+/**
+ * 把一个物体移进某个组(`groupId` 为 null 就是移回顶层)。
+ *
+ * **这是「组」此前缺的那一半。** 数据模型一直支持 `parent_id`,校验也齐全,但界面上没有任何
+ * 入口能把一个已有的物体放进一个已有的组 —— 于是「添加 → 组」建出来的空组是个建完就废的
+ * 空盒子,而唯一能用的「编组」只包当前选中的那一个。
+ *
+ * 挡住两件会让场景变成非法结构的事(后端的 `valid_hierarchy` 也会拒,但那时用户已经点下去了):
+ * **不能移进自己的后代**(会形成环),**只有组能装东西**。
+ */
+export function moveToGroup(
+  content: SceneContent,
+  id: string,
+  groupId: string | null,
+): SceneContent {
+  const object = content.objects.find((o) => o.id === id);
+  if (!object || groupId === id) return content;
+  if (groupId !== null) {
+    const group = content.objects.find((o) => o.id === groupId);
+    if (!group || group.kind !== "group") return content;
+    if (withDescendants(content, id).has(groupId)) return content;
+  }
+  if ((object.parent_id ?? null) === groupId) return content;
+  return {
+    ...content,
+    objects: content.objects.map((o) =>
+      o.id === id ? { ...o, parent_id: groupId } : o,
+    ),
+  };
+}
+
+/** 可以把 `id` 移进去的那些组 —— 排除它自己和它的后代(否则就成了环)。 */
+export function groupTargets(content: SceneContent, id: string) {
+  const family = withDescendants(content, id);
+  return content.objects.filter((o) => o.kind === "group" && !family.has(o.id));
+}
+
 export function duplicateObject(
   content: SceneContent,
   id: string,
 ): SceneContent {
   const root = content.objects.find((o) => o.id === id);
   if (!root) return content;
-  const descendants = new Set([id]);
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const o of content.objects)
-      if (
-        o.parent_id &&
-        descendants.has(o.parent_id) &&
-        !descendants.has(o.id)
-      ) {
-        descendants.add(o.id);
-        changed = true;
-      }
-  }
+  const descendants = withDescendants(content, id);
   const map = new Map([...descendants].map((id) => [id, uid()]));
   const copies = content.objects
     .filter((o) => descendants.has(o.id))

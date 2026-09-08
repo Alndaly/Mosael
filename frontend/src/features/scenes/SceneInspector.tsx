@@ -13,7 +13,7 @@ import {
 import type { SceneContent, SceneLighting, SceneObject } from "@/api/domains/scenes";
 import { CUSTOM_PRESET, presetById, presetGroups } from "./lighting";
 import { Num, Vector, Tool } from "./SceneControls";
-import { duplicateObject, makeObject, removeObjects } from "./sceneGraph";
+import { duplicateObject, groupTargets, makeObject, moveToGroup, removeObjects } from "./sceneGraph";
 export function SceneInspector({
   content,
   object,
@@ -39,6 +39,32 @@ export function SceneInspector({
               maxLength={160}
               onChange={(e) => objectPatch(object.id, { name: e.target.value })}
             />
+            {/* **「移到…」是「组」此前缺的那一半。** 数据模型一直支持 parent_id,但界面上没有
+                任何入口能把已有的物体放进已有的组 —— 于是菜单里那个空组建完就废。
+                选择器而不是拖拽:长列表 + 触控板上拖拽很难瞄准,而且选择器天生可键盘操作。 */}
+            {!!groupTargets(content, object.id).length && (
+              <label className="scene-number">
+                <span>所属组</span>
+                <Select
+                  value={object.parent_id ?? TOP_LEVEL}
+                  onValueChange={(value) =>
+                    update(moveToGroup(content, object.id, value === TOP_LEVEL ? null : value))
+                  }
+                >
+                  <SelectTrigger aria-label="所属组">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={TOP_LEVEL}>不在组里</SelectItem>
+                    {groupTargets(content, object.id).map((group) => (
+                      <SelectItem key={group.id} value={group.id}>
+                        {group.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+            )}
             <div className="scene-actions">
               <Tool
                 label="复制对象"
@@ -257,6 +283,9 @@ export function SceneInspector({
  */
 /** 少数几类的参数在它自己的语汇里有更准的名字。人物那三个数叫「宽度/高度/深度」是对的但
  *  没用 —— 调的人想的是身高和肩宽,名字贴着它实际是什么,省掉一次心里的换算。 */
+/** 「不在组里」在 Select 里要有一个值 —— 空串会被 Radix 当成"没选" 。 */
+const TOP_LEVEL = "__top__";
+
 const PARAMETER_LABELS: Partial<
   Record<SceneObject["kind"], Partial<Record<keyof SceneObject["parameters"], string>>>
 > = {
