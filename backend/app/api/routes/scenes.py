@@ -1,10 +1,12 @@
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Response
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas.scenes import SceneCreate, SceneUpdate, SceneOut, SceneOperations
 from app.db.models import Scene3D, Scene3DModel, Scene3DRevision
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
-from app.domain.scenes import MODEL_READ_LIMIT, apply_scene_operations, create_scene, get_scene, import_model, save_scene
+from app.domain.scenes import (MODEL_READ_LIMIT, apply_scene_operations, create_scene, delete_scene_model_files,
+                                get_scene, import_model, model_file, save_scene)
 
 router = APIRouter(tags=["3D scenes"])
 
@@ -56,11 +58,11 @@ def revision_content(scene_id: str, revision: int, workspace_id: str, db: DbSess
 @router.post("/scenes/{scene_id}/models")
 async def upload(scene_id: str, db: DbSession, user: CurrentUser, workspace_id: str = Form(...), file: UploadFile = File(...)):
     ensure_workspace_perm(db, user, workspace_id, "edit")
-    get_scene(db, workspace_id, scene_id)
+    scene = get_scene(db, workspace_id, scene_id)
     # 只读上限 + 1 个字节(不把一份 500 MB 的文件整个读进内存),但**大小要报真的** ——
     # multipart 解析时整份已经落到临时文件上了,file.size 就是真实字节数。
     data = await file.read(MODEL_READ_LIMIT)
-    model = import_model(db, scene_id, file.filename or "Model", data, size=file.size)
+    model = import_model(db, scene, file.filename or "Model", data, size=file.size)
     return {"id": model.id, "name": model.name, "format": model.format}
 
 
@@ -71,8 +73,13 @@ def model_data(scene_id: str, model_id: str, workspace_id: str, db: DbSession, u
     model = db.get(Scene3DModel, model_id)
     if model is None or model.scene_id != scene_id:
         raise HTTPException(404, "Model not found")
-    return Response(model.data, media_type="model/gltf-binary" if model.format == "glb" else "model/gltf+json",
-                    headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
+    # **流式发文件,不把它读进内存。** 此前是 `Response(model.data)`:一份 100 MB 的模型,
+    # 每个并发下载各占一份内存。FileResponse 走 sendfile,顺带自带 Range 支持。
+    path = model_file(model)
+    if not path.is_file():
+        raise HTTPException(404, "模型文件已不在,请重新导入。")
+    return FileResponse(path, media_type="model/gltf-binary" if model.format == "glb" else "model/gltf+json",
+                        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
 
 
 @router.post('/scenes/{scene_id}/operations', response_model=SceneOut)
@@ -86,7 +93,8 @@ def operations(scene_id: str, body: SceneOperations, db: DbSession, user: Curren
 def delete_scene(scene_id: str, workspace_id: str, db: DbSession, user: CurrentUser):
     ensure_workspace_perm(db, user, workspace_id, "edit")
     scene = get_scene(db, workspace_id, scene_id)
-    # Imported models and immutable revisions belong to this scene and cascade with it.
+    # 行随场景 CASCADE 一起走;**文件不会** —— 和字体、LUT 同一套,由这里显式清掉。
+    delete_scene_model_files(scene)
     db.delete(scene)
     db.commit()
     return Response(status_code=204)

@@ -5,7 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import pytest
 from app.domain.blender.bridge import BlenderDomainError
-from app.domain.scenes import SceneDomainError
+from app.domain.scenes import SceneDomainError, model_file
 from sqlalchemy import select
 from app.core.db import SessionLocal
 from app.core.config import settings
@@ -82,7 +82,7 @@ def test_roundtrip_is_new_scene_and_transfers_are_owner_scoped(monkeypatch, tmp_
         assert received['received_scene_id']!=scene.id
         new=db.get(Scene3D,received['received_scene_id'])
         model=db.get(Scene3DModel,new.content['objects'][0]['model_id'])
-        assert model.scene_id==new.id and model.data==glb()
+        assert model.scene_id==new.id and model_file(model).read_bytes()==glb()
         assert scene.revision==1 and scene.content['objects']==[]
         assert new.content['shots']==initial['content']['shots']
         assert bridge.history(scene,user)[0]['received_scene_id']==new.id
@@ -123,7 +123,7 @@ def test_receive_into_current_imports_the_model_and_hands_content_back(monkeypat
 
         content=received['content']
         model=db.get(Scene3DModel,content['objects'][0]['model_id'])
-        assert model.scene_id==scene.id and model.data==glb()      # 模型归当前场景
+        assert model.scene_id==scene.id and model_file(model).read_bytes()==glb()   # 模型归当前场景
         assert content['shots']==initial['content']['shots']
 
         db.refresh(scene)
@@ -154,7 +154,7 @@ def test_pull_takes_the_open_blender_scene_without_a_prior_send(monkeypatch, tmp
         scene=db.get(Scene3D,result['scene_id'])
         assert scene.name=='客厅' and scene.workspace_id==ws
         model=db.get(Scene3DModel,scene.content['objects'][0]['model_id'])
-        assert model.scene_id==scene.id and model.data==glb()
+        assert model.scene_id==scene.id and model_file(model).read_bytes()==glb()
         assert len(scene.content['shots'])==1            # 默认镜头,由用户重新设计
         assert any('相机' in w for w in result['warnings'])
         assert not list((tmp_path/'blender-bridge'/ws/'_pull').glob('*'))

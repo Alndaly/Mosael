@@ -6,12 +6,17 @@
 与 `domain/permissions`、`domain/notes` 同构。
 """
 import json
+import shutil
 import struct
+from pathlib import Path
+from uuid import uuid4
+
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 from app.db.models import Scene3D, Scene3DRevision, Scene3DModel
 from app.db.model_base import now
 from app.domain.scene_types import SceneContent
+from app.media.paths import resolve_key, scene_model_dir, scene_model_key
 
 
 class SceneDomainError(ValueError):
@@ -146,13 +151,46 @@ def validate_model(data: bytes, *, size: int | None = None) -> str:
     return fmt
 
 
-def import_model(db: Session, scene_id: str, name: str, data: bytes, *, size: int | None = None) -> Scene3DModel:
+def _store_model(workspace_id: str, scene_id: str, model_id: str, fmt: str, data: bytes) -> tuple[str, int]:
+    """把模型字节落到磁盘,返回 (file_key, 字节数)。
+
+    **先写文件再落行**:反过来的话,行已经指向一个还不存在的文件,中间任何一次读都是 404;
+    而这个顺序下最坏的结果是一个没人引用的文件 —— 调用方在落行失败时把它删掉。
+    """
+    directory = scene_model_dir(workspace_id, scene_id)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / f"{model_id}.{fmt}").write_bytes(data)
+    return scene_model_key(workspace_id, scene_id, f"{model_id}.{fmt}"), len(data)
+
+
+def import_model(db: Session, scene: Scene3D, name: str, data: bytes, *, size: int | None = None) -> Scene3DModel:
     fmt = validate_model(data, size=size)
-    model = Scene3DModel(scene_id=scene_id, name=name[:160], format=fmt, data=data)
+    model_id = uuid4().hex
+    file_key, stored = _store_model(scene.workspace_id, scene.id, model_id, fmt, data)
+    model = Scene3DModel(id=model_id, scene_id=scene.id, name=name[:160], format=fmt,
+                         file_key=file_key, size=stored)
     db.add(model)
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        resolve_key(file_key).unlink(missing_ok=True)   # 行没落成,文件不留
+        raise
     db.refresh(model)
     return model
+
+
+def model_file(model: Scene3DModel) -> Path:
+    """这份模型在磁盘上的位置。"""
+    return resolve_key(model.file_key)
+
+
+def delete_scene_model_files(scene: Scene3D) -> None:
+    """删场景时连它的模型文件一起删。**行是 CASCADE 走的,文件没人管** —— 和字体、LUT 同一套
+    (`delete_font_files`),由删除那条路显式调用。"""
+    directory = scene_model_dir(scene.workspace_id, scene.id)
+    if directory.is_dir():
+        shutil.rmtree(directory, ignore_errors=True)
 
 
 def create_scene_with_model(db: Session, *, workspace_id: str, name: str, content: SceneContent,
@@ -172,11 +210,17 @@ def create_scene_with_model(db: Session, *, workspace_id: str, name: str, conten
     scene = Scene3D(workspace_id=workspace_id, name=name[:160], content=content.model_dump(mode="json"))
     db.add(scene)
     db.flush()
+    file_key, stored = _store_model(workspace_id, scene.id, model_id, model_format, model_data)
     db.add(Scene3DModel(id=model_id, scene_id=scene.id, name=model_name[:160],
-                        format=model_format, data=model_data))
+                        format=model_format, file_key=file_key, size=stored))
     db.add(Scene3DRevision(scene_id=scene.id, revision=1,
                            snapshot={"name": scene.name, "content": scene.content}))
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        resolve_key(file_key).unlink(missing_ok=True)
+        raise
     db.refresh(scene)
     return scene
 

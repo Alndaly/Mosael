@@ -223,7 +223,7 @@ def receive(db, user, scene, transfer_id, *, into_current=False):
             raise BlenderUnavailable('Blender 没有生成可接收的模型，请重试。') from exc
         fmt = validate_model(data, size=size)
         # 落到当前场景:模型先进库(建行归场景域,ADR-0003),内容交回编辑器去写。
-        model_id = import_model(db, scene.id, 'Blender model', data, size=size).id if into_current else uuid4().hex
+        model_id = import_model(db, scene, 'Blender model', data, size=size).id if into_current else uuid4().hex
         try:
             content = SceneContent.model_validate({**record['snapshot']['content'], 'shots': result['shots'],
                 'objects': [{'id': 'blender-model', 'kind': 'model', 'name': 'Blender 模型', 'model_id': model_id}]})

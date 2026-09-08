@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Any
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, LargeBinary, String
+from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.db import Base
 from app.db.model_base import new_id, now
@@ -31,4 +31,8 @@ class Scene3DModel(Base):
     scene_id: Mapped[str] = mapped_column(ForeignKey("scenes_3d.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(160))
     format: Mapped[str] = mapped_column(String(10))
-    data: Mapped[bytes] = mapped_column(LargeBinary)
+    #: 字节在磁盘上(media/scene-models/…),这里只留指路的 key —— 和字体、LUT 同一套。
+    #: 此前是一列 LargeBinary:一份 100 MB 的模型进出一次要 400 MB 峰值内存,而下载那条
+    #: `Response(model.data)` 是整份进内存、每个并发请求各付一次。
+    file_key: Mapped[str] = mapped_column(String(512), default="")
+    size: Mapped[int] = mapped_column(Integer, default=0)

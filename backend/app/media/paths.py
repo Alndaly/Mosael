@@ -37,6 +37,17 @@ def font_key(workspace_id: str, font_id: str, filename: str) -> str:
     return str(Path("media") / "fonts" / workspace_id / font_id / filename)
 
 
+#: 3D 模型的字节。**按场景分目录**,删场景时一次 rmtree 就干净了;而放在 media/ 下面是因为
+#: 备份打包的正是 media(见 domain/data_management 的 BACKUP_DIRECTORIES)—— 另起一个顶层
+#: 目录的话,备份会悄悄不含 3D 模型,而这种缺失只有在恢复之后才发现。
+def scene_model_dir(workspace_id: str, scene_id: str) -> Path:
+    return settings.media_dir / "scene-models" / workspace_id / scene_id
+
+
+def scene_model_key(workspace_id: str, scene_id: str, filename: str) -> str:
+    return str(Path("media") / "scene-models" / workspace_id / scene_id / filename)
+
+
 def resolve_key(key: str) -> Path:
     return settings.data_dir / key
 

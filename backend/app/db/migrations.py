@@ -1407,6 +1407,64 @@ def _migrate_drop_local_publish_accounts() -> None:
         logger.info("清理 %d 个 folder/webhook 发布账号及其空壳浏览器档案", len(rows))
 
 
+def _migrate_scene_models_to_disk() -> None:
+    """把 3D 模型的字节从 `scene_3d_models.data` 挪到磁盘。
+
+    留在库里的代价是实测出来的:一份 100 MB 的模型进出一次约 400 MB 峰值 RSS、300 MB 的约
+    1.6 GB —— 字节要经过 Python bytes、sqlite3 绑定、页缓存、再读回,每一步一份。而下载那条
+    此前是 `Response(model.data)`,整份进内存、**每个并发请求各付一次**。
+
+    **一行一行搬**,不要 `SELECT id, data FROM …` 一次拿完:那等于把所有模型同时读进内存,
+    正是这次要消除的那个毛病。峰值因此只被最大的那一份模型限制住。
+
+    文件落在 `media/scene-models/<workspace>/<scene>/<model>.<fmt>` —— 在 media 下面是因为
+    备份打包的正是它(BACKUP_DIRECTORIES),另起顶层目录会让备份悄悄不含 3D 模型。
+
+    搬完才 DROP 那一列:中途失败的话,下次启动重跑,已经写好的文件被原样覆盖(内容一样),
+    没有半个状态。
+    """
+    from app.media.paths import scene_model_dir, scene_model_key
+
+    inspector = inspect(engine)
+    if "scene_3d_models" not in set(inspector.get_table_names()):
+        return
+    columns = {c["name"] for c in inspector.get_columns("scene_3d_models")}
+    if "data" not in columns:
+        return
+    with engine.begin() as conn:
+        for name, ddl in (("file_key", "TEXT NOT NULL DEFAULT ''"), ("size", "INTEGER NOT NULL DEFAULT 0")):
+            if name not in columns:
+                conn.execute(text(f"ALTER TABLE scene_3d_models ADD COLUMN {name} {ddl}"))
+
+    rows = [
+        (row[0], row[1], row[2])
+        for row in engine.connect().execute(text(
+            "SELECT m.id, m.format, s.workspace_id || '/' || s.id FROM scene_3d_models m "
+            "JOIN scenes_3d s ON s.id = m.scene_id"
+        ))
+    ]
+    moved = 0
+    for model_id, fmt, location in rows:
+        workspace_id, _, scene_id = location.partition("/")
+        with engine.connect() as conn:   # 一次一份,避免把所有模型同时读进内存
+            data = conn.execute(text("SELECT data FROM scene_3d_models WHERE id = :id"), {"id": model_id}).scalar()
+        if data is None:
+            continue
+        directory = scene_model_dir(workspace_id, scene_id)
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / f"{model_id}.{fmt}").write_bytes(data)
+        key = scene_model_key(workspace_id, scene_id, f"{model_id}.{fmt}")
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE scene_3d_models SET file_key = :key, size = :size WHERE id = :id"),
+                         {"key": key, "size": len(data), "id": model_id})
+        moved += 1
+        del data
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE scene_3d_models DROP COLUMN data"))
+    if moved:
+        logger.info("把 %d 份 3D 模型的字节从数据库挪到了 %s", moved, settings.media_dir / "scene-models")
+
+
 def init_db() -> None:
     """Prepare storage, then execute the validated startup migration plan."""
 
@@ -1826,6 +1884,9 @@ def migration_plan() -> MigrationPlan:
                 _migrate_agent_session_plan,
                 _migrate_agent_session_groups,
                 _migrate_session_groups_serve_both,
+                # 它 ALTER 表并搬文件。**必须在 SCHEMA 之前** —— create_all 不会给已有的表补列,
+                # 而 SCHEMA 之后 ORM 上的 Scene3DModel 已经指望 file_key 存在了。
+                _migrate_scene_models_to_disk,
                 _migrate_source_assets_get_a_role,
                 _migrate_workflow_source_assets,
                 _migrate_plugin_registry_url,
