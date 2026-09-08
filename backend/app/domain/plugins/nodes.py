@@ -36,6 +36,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.domain.plugins.manifest import text_of
+
 PLUGIN_NODE_PREFIX = "plugin."
 
 #: 插件节点在节点面板里的分组。与 NODE_CATEGORIES 的最后一项对齐。
@@ -95,7 +97,7 @@ def _config_from_schema(schema: Any) -> dict[str, dict[str, Any]]:
         if key in required:
             entry["required"] = True
         if spec.get("description"):
-            entry["description"] = str(spec["description"])
+            entry["description"] = text_of(spec["description"])
         enum = spec.get("enum")
         if isinstance(enum, list) and enum:
             entry["options"] = [str(value) for value in enum]
@@ -108,6 +110,23 @@ def _config_from_schema(schema: Any) -> dict[str, dict[str, Any]]:
     return config
 
 
+def _readable(entry: Any) -> dict[str, Any]:
+    """插件自己声明的一条 config,把其中给人看的字段本地化。其余原样透传。"""
+    if not isinstance(entry, dict):
+        return {}
+    readable = dict(entry)
+    for field in ("label", "description", "placeholder"):
+        if field in readable:
+            readable[field] = text_of(readable[field])
+    options = readable.get("options")
+    if isinstance(options, list):
+        readable["options"] = [
+            {**option, "label": text_of(option.get("label"))} if isinstance(option, dict) else option
+            for option in options
+        ]
+    return readable
+
+
 def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
     """一个插件工具的节点元数据,形状与 NODE_TYPES 的条目完全一致。
 
@@ -116,7 +135,9 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
     """
     declared = tool.get("node") if isinstance(tool.get("node"), dict) else {}
     config = declared.get("config")
-    if not isinstance(config, dict) or not config:
+    if isinstance(config, dict) and config:
+        config = {str(key): _readable(entry) for key, entry in config.items()}
+    else:
         config = _config_from_schema(tool.get("input_schema"))
     outputs = declared.get("outputs")
     if not isinstance(outputs, list) or not outputs:
@@ -128,8 +149,11 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
     output_labels = declared.get("output_labels")
     if not isinstance(output_labels, dict):
         output_labels = {}
-    label = str(declared.get("label") or tool.get("label") or tool.get("name") or "")
-    description = str(declared.get("description") or tool.get("description") or "")
+    # **给人看的字段一律走 text_of。** 清单里它们可以是 `{"zh": …, "en": …}`,裸 str() 会把
+    # 那个字典按 Python 的样子印出来 —— 界面上就是一行 `{'zh': '从百度网盘导入', …}`。
+    # 工具的 label/description 在上游已经解过了,而 `node` 这一块是原样透传的,所以解在这里。
+    label = text_of(declared.get("label") or tool.get("label") or tool.get("name") or "")
+    description = text_of(declared.get("description") or tool.get("description") or "")
     return {
         "label": label,
         # 面板上每行都有一句说明;插件没写就退到"来自哪个插件",总比空着强。
@@ -149,7 +173,7 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
         "outputs": [str(name) for name in outputs],
         "output_types": {str(name): str(data_type) for name, data_type in output_types.items()},
         # 插件可以给专业术语一个更好的名字;未声明的由共用词典/可读降级兜底。
-        "output_labels": {str(name): str(label) for name, label in output_labels.items()},
+        "output_labels": {str(name): text_of(label) for name, label in output_labels.items()},
         # 前端据此在节点上标出处;也让"缺插件"的报错说得出是谁。
         "plugin_name": tool.get("instance_name", ""),
         "tool_name": tool.get("name", ""),

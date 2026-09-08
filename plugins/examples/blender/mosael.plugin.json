@@ -45,14 +45,22 @@
           "zh": "查看 Blender 场景",
           "en": "Inspect Blender scene"
         },
-        "read_only": true
+        "read_only": true,
+        "description": {
+          "zh": "读取当前 Blender 场景:有哪些物体、各自的类型和位置。只读,不改动任何东西。",
+          "en": "Read the current Blender scene: what objects it holds, their types and positions. Read-only."
+        }
       },
       "get_object_info": {
         "label": {
           "zh": "查看 Blender 物体",
           "en": "Inspect Blender object"
         },
-        "read_only": true
+        "read_only": true,
+        "description": {
+          "zh": "读取某个物体的细节:网格、材质、修改器、变换。只读,不改动任何东西。",
+          "en": "Read one object in detail: mesh, materials, modifiers and transform. Read-only."
+        }
       },
       "execute_blender_code": {
         "label": {

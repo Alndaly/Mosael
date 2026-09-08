@@ -197,3 +197,67 @@ def test_嵌套层里的说明同样要定语言() -> None:
     set_current_locale("zh")
     schema = parse(raw, "x").declared_tools[0]["input_schema"]
     assert schema["properties"]["items"]["items"]["description"] == "一项"
+
+
+def _looks_like_a_stringified_dict(value: object) -> bool:
+    """`str({"zh": …})` 的样子。界面上就是一行 `{'zh': '从百度网盘导入', 'en': …}`。"""
+    return isinstance(value, str) and bool(re.match(r"^\{['\"](zh|en)['\"]:", value.strip()))
+
+
+def _every_string(value: object, path: str = "") -> list[tuple[str, str]]:
+    if isinstance(value, str):
+        return [(path, value)]
+    if isinstance(value, dict):
+        return [pair for key, item in value.items() for pair in _every_string(item, f"{path}.{key}")]
+    if isinstance(value, list):
+        return [pair for index, item in enumerate(value) for pair in _every_string(item, f"{path}[{index}]")]
+    return []
+
+
+def test_工作流节点上的文字也要解出来() -> None:
+    """**声明了翻译不等于有人去解。**
+
+    这条补的是消费端。清单那边一直是对的,而工作流节点目录用的是裸 `str()` —— 一个
+    `{"zh": …, "en": …}` 就被按 Python 的样子印出来,节点列表里赫然一行
+    `{'zh': '从百度网盘导入', 'en': 'Import from Baidu…'}`。
+
+    `input_schema` 里的参数说明此前栽过同一下(见上一条,当时是 `[object Object]`),
+    所以这里不再逐个字段点名,而是把整份节点元数据摊平了扫 —— 以后新增字段自动被盖住。
+    """
+    from app.domain.plugins.nodes import node_meta
+
+    checked = 0
+    for name, raw in _manifests():
+        for tool in (raw.get("tools") or {}).get("declare") or []:
+            if not isinstance(tool, dict) or not isinstance(tool.get("name"), str):
+                continue
+            meta = node_meta({**tool, "instance_name": "X"})
+            for where, text in _every_string(meta):
+                assert not _looks_like_a_stringified_dict(text), f"{name} {tool['name']}{where}: {text}"
+            checked += 1
+    assert checked >= 3, "没扫到几个声明式工具 —— 这条会真空通过"
+
+
+def test_节点标签跟着界面语言走() -> None:
+    """光是"没印出字典"还不够 —— 得真的换语言。"""
+    from app.domain.plugins.nodes import node_meta
+
+    tool = {
+        "name": "pan_import",
+        "description": {"zh": "把文件拉进素材库", "en": "Pull a file into the library"},
+        "node": {"label": {"zh": "从百度网盘导入", "en": "Import from Baidu Netdisk"}},
+        "input_schema": {"properties": {"fs_id": {"type": "string",
+                                                  "description": {"zh": "网盘文件 id", "en": "netdisk file id"}}}},
+    }
+    try:
+        set_current_locale("zh")
+        zh = node_meta(tool)
+        set_current_locale("en")
+        en = node_meta(tool)
+    finally:
+        set_current_locale("zh")
+
+    assert zh["label"] == "从百度网盘导入" and en["label"] == "Import from Baidu Netdisk"
+    assert zh["description"] != en["description"]
+    assert zh["config"]["fs_id"]["description"] == "网盘文件 id"
+    assert en["config"]["fs_id"]["description"] == "netdisk file id"
