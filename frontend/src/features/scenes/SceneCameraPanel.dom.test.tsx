@@ -5,21 +5,23 @@ import { afterEach, expect, it, vi } from "vitest";
 import { SceneCameraPanel } from "./SceneCameraPanel";
 import { Num } from "./SceneControls";
 import { makeShot } from "./sceneGraph";
-import type { CameraFrame } from "@/api/domains/scenes";
+
 afterEach(cleanup);
-const live: CameraFrame = {
-  time: 0,
-  position: [8, 3, 6],
-  target: [4, 1, 2],
+const live = {
+  position: [8, 3, 6] as [number, number, number],
+  target: [4, 1, 2] as [number, number, number],
   fov: 45,
 };
 function setup(preview = false) {
+  const { camera, shot } = makeShot();
   const props = {
-    shot: makeShot(),
+    shot,
+    rig: camera,
     time: 0,
     preview,
     playing: false,
     onPatch: vi.fn(),
+    onRig: vi.fn(),
     onTime: vi.fn(),
     onPreview: vi.fn(),
     onPlaying: vi.fn(),
@@ -33,10 +35,11 @@ function setup(preview = false) {
 it("creates a push from the composition being edited, then shows the resulting shot", () => {
   const p = setup();
   fireEvent.click(screen.getByRole("button", { name: /缓缓推进/ }));
-  const shot = p.onPatch.mock.calls[0][0];
-  expect(shot.frames[0]).toEqual(live);
-  expect(shot.frames.at(-1).target).toEqual(live.target);
-  expect(shot.frames.at(-1).position).toEqual([6, 2, 4]);
+  // 运镜落在**相机**上,不在镜头上 —— 所以看的是 onRig。
+  const rig = p.onRig.mock.calls[0][0];
+  expect(rig.track[0]).toEqual({ time: 0, ...live });
+  expect(rig.track.at(-1).target).toEqual(live.target);
+  expect(rig.track.at(-1).position).toEqual([6, 2, 4]);
   expect(p.onPreview).toHaveBeenCalledWith(true);
   expect(p.onTime).toHaveBeenCalledWith(0);
 });

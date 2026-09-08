@@ -237,7 +237,9 @@
   overflow: auto;
   max-height: 210px;
   min-height: 0;
-  padding: 0 8px;
+  /* 底部留一口气。此前是 0:最后一行紧贴着下面那条分割线,而列表有 max-height、
+     常常正好切在半行上 —— 两件事叠起来,读到的是"布局坏了",不是"还能往下滚"。 */
+  padding: 0 8px 10px;
 }
 .scene-object-list button {
   display: flex;

@@ -1,15 +1,19 @@
 import type { components } from "@/api/generated/schema";
 import { api, API_BASE, getAuthToken } from "@/api/transport";
 export type Vec3 = [number, number, number];
-export type CameraFrame = Required<components["schemas"]["CameraFrame"]>;
+/** 时间轨上的一个时刻。相机用 position + target + fov,物体用 position + rotation + scale。
+ *  没填的字段表示"这一档不控制它" —— 所以这里**不能** Required。 */
+export type Keyframe = components["schemas"]["Keyframe"] & { time: number; position: Vec3 };
 export type SceneObject = Omit<
   Required<components["schemas"]["SceneObject"]>,
-  "parameters"
-> & { parameters: Required<components["schemas"]["ShapeParameters"]> };
-export type SceneShot = Omit<
-  Required<components["schemas"]["SceneShot"]>,
-  "frames"
-> & { frames: CameraFrame[] };
+  "parameters" | "track"
+> & {
+  parameters: Required<components["schemas"]["ShapeParameters"]>;
+  /** 空的就是静止 —— 绝大多数物体都是空的。 */
+  track: Keyframe[];
+};
+/** 镜头 = 用哪台机位、拍多久。运镜是那台相机物体的 track,见 docs/design/scene-time-and-cameras.md。 */
+export type SceneShot = Required<components["schemas"]["SceneShot"]>;
 export type SceneContent = Omit<
   Required<components["schemas"]["SceneContent"]>,
   "objects" | "shots"

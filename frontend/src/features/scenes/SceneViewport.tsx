@@ -19,17 +19,29 @@ import { kelvinRgb } from "./lighting";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 import {
   readSceneModel,
-  type CameraFrame,
   type SceneContent,
   type SceneObject,
   type SceneShot,
   type SceneLighting,
   type Vec3,
 } from "@/api/domains/scenes";
-import { sampleCamera } from "./sceneGraph";
+import { cameraOfShot, sampleCamera } from "./sceneGraph";
+
+/**
+ * 某个 props 快照在某一刻的机位姿态。
+ *
+ * 视口拿到的是「当前镜头」,而运镜长在**那台相机物体**上 —— 所以每次都要先解析出机位。
+ * 机位找不到时(理论上后端会拒这种场景)退到一个能看的默认视角,而不是抛 —— 视口是渲染层,
+ * 让画面黑掉比给一个近似视角更糟。
+ */
+function frameAt(p: Props, time: number): CameraPose {
+  const rig = cameraOfShot(p.content, p.shot);
+  if (!rig) return { position: [8, 5, 8], target: [0, 1, 0], fov: 45 };
+  return sampleCamera(rig, p.shot, time);
+}
 
 export type ViewportHandle = {
-  camera: () => CameraFrame;
+  camera: () => CameraPose;
   focus: () => void;
   placement: (halfWidth: number) => Vec3;
   view: (direction: "perspective" | "front" | "top") => void;
@@ -184,6 +196,44 @@ function geometryObject(o: SceneObject): THREE.Object3D {
           (sz * (p.depth - leg)) / 2 * 0.92,
         );
   }
+  /** 机位。**它是场景里的物体,所以要看得见、选得中、拖得动。**
+   *
+   * 画的是一个概括的机身加一个朝 -Z 的视锥 —— 比一个实心锥更容易看清它对着哪儿。
+   *
+   * 标上 editorOnly:它是**编辑期的道具**,不该出现在镜头画面和导出的参考帧里 ——
+   * 相机不拍自己。 */
+  if (o.kind === "camera") {
+    group.userData.editorOnly = true;
+    group.add(
+      new THREE.Mesh(
+        new THREE.BoxGeometry(0.32, 0.24, 0.5),
+        new THREE.MeshStandardMaterial({ color: "#8fa2c8", roughness: 0.5, metalness: 0.1 }),
+      ),
+    );
+    const d = 0.9,
+      w = 0.42,
+      h = 0.26;
+    const corners: [number, number, number][] = [
+      [-w, -h, -d],
+      [w, -h, -d],
+      [w, h, -d],
+      [-w, h, -d],
+    ];
+    const points: THREE.Vector3[] = [];
+    for (const c of corners)
+      points.push(new THREE.Vector3(0, 0, 0), new THREE.Vector3(...c));
+    for (let i = 0; i < corners.length; i++)
+      points.push(
+        new THREE.Vector3(...corners[i]),
+        new THREE.Vector3(...corners[(i + 1) % 4]),
+      );
+    group.add(
+      new THREE.LineSegments(
+        new THREE.BufferGeometry().setFromPoints(points),
+        new THREE.LineBasicMaterial({ color: "#9fbaff", transparent: true, opacity: 0.85 }),
+      ),
+    );
+  }
   if (o.kind === "light") {
     const lamp = new THREE.PointLight(o.color, o.intensity, 50, 2);
     // 点光源的阴影要渲六个面,比平行光贵得多 —— 给一张小得多的图。它照的通常是局部,
@@ -209,7 +259,10 @@ function applyTransform(target: THREE.Object3D, o: SceneObject) {
   target.name = o.name;
   target.userData.sceneObjectId = o.id;
 }
-function pose(camera: THREE.PerspectiveCamera, frame: CameraFrame) {
+/** 某一刻的机位姿态。**不是关键帧** —— 关键帧可以只写一部分字段,这个是解算完的结果。 */
+export type CameraPose = { position: Vec3; target: Vec3; fov: number };
+
+function pose(camera: THREE.PerspectiveCamera, frame: CameraPose) {
   camera.position.fromArray(frame.position);
   camera.up.set(0, 1, 0);
   camera.lookAt(new THREE.Vector3(...frame.target));
@@ -448,6 +501,8 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         for (const o of p.content.objects) {
           const node = geometryObject(o);
           applyTransform(node, o);
+          // 相机的朝向由 target 决定,不由欧拉角 —— 摆完变换再瞄一次。
+          if (o.kind === "camera") node.lookAt(new THREE.Vector3(...o.target));
           objects.set(o.id, node);
         }
         for (const o of p.content.objects) {
@@ -572,7 +627,10 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         direction: "perspective" | "front" | "top" = "perspective",
       ) {
         const bounds = new THREE.Box3().setFromObject(root);
-        for (const point of shotPathPoints(latest.current.shot))
+        const framingRig = cameraOfShot(latest.current.content, latest.current.shot);
+        for (const point of framingRig
+          ? shotPathPoints(framingRig, latest.current.shot)
+          : [])
           bounds.expandByPoint(point);
         const frame = observationFrame(
           bounds,
@@ -595,8 +653,12 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         }
         if (orbit.enabled) orbit.update();
         if (observerOrbit.enabled) observerOrbit.update();
+        const rig = cameraOfShot(p.content, p.shot);
         const signature = JSON.stringify([
-          p.shot.frames,
+          rig?.track,
+          rig?.position,
+          rig?.target,
+          rig?.fov,
           p.shot.duration,
           p.shot.easing,
         ]);
@@ -608,7 +670,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
             (path.material as THREE.Material).dispose();
           }
           path = new THREE.Line(
-            new THREE.BufferGeometry().setFromPoints(shotPathPoints(p.shot)),
+            new THREE.BufferGeometry().setFromPoints(rig ? shotPathPoints(rig, p.shot) : []),
             new THREE.LineBasicMaterial({
               color: 0xe9bc71,
               transparent: true,
@@ -629,10 +691,13 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           h = element.clientHeight;
         if (!w || !h) return;
         const aspect = aspectRatio(p.shot),
-          frame = sampleCamera(p.shot, p.time);
+          frame = frameAt(p, p.time);
         shootingCamera.aspect = aspect;
         pose(shootingCamera, frame);
         observer.update(frame, aspect);
+        // 编辑期的道具(机位模型)不进镜头 —— 相机不拍自己。
+        for (const node of root.children)
+          if (node.userData.editorOnly) node.visible = !p.preview;
         // **编辑视角透明,镜头画面用场景底色。** 后者是**成片的一部分**(导出用的是同一个
         // 值),取景时必须看到真实底色;而编辑视角是工作台,它该跟应用其余页面一样透出背景。
         // 这也让 `p.preview` 分支里那句 setClearColor(…, 0) 真正生效 —— 此前 scene.background
@@ -707,6 +772,9 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           clay ? "#8a8f96" : latest.current.content.background,
         );
         const copy = root.clone(true);
+        // 导出的参考帧里不该有机位模型 —— 它是编辑期的道具,不是场景的一部分。
+        for (const node of [...copy.children])
+          if (node.userData.editorOnly) copy.remove(node);
         if (clay) {
           /** 统一材质的"灰模"。**去掉材质噪音,只留光的结构。**
            *
@@ -732,7 +800,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         return {
           r,
           draw: (time: number) => {
-            pose(camera, sampleCamera(shot, time));
+            pose(camera, frameAt({ ...latest.current, shot }, time));
             r.render(exportScene, camera);
           },
         };
@@ -806,7 +874,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           handle.focus();
         },
         editCamera: (shot, time) => {
-          const frame = sampleCamera(shot, time);
+          const frame = frameAt({ ...latest.current, shot }, time);
           orbit.update();
           pose(editorCamera, frame);
           orbit.target.fromArray(frame.target);

@@ -6766,45 +6766,6 @@ export interface components {
             /** Enabled */
             enabled?: boolean | null;
         };
-        /** CameraFrame */
-        CameraFrame: {
-            /**
-             * Time
-             * @default 0
-             */
-            time: number;
-            /**
-             * Position
-             * @default [
-             *       8,
-             *       5,
-             *       8
-             *     ]
-             */
-            position: [
-                number,
-                number,
-                number
-            ];
-            /**
-             * Target
-             * @default [
-             *       0,
-             *       1,
-             *       0
-             *     ]
-             */
-            target: [
-                number,
-                number,
-                number
-            ];
-            /**
-             * Fov
-             * @default 45
-             */
-            fov: number;
-        };
         /**
          * CanvasCommentAnchor
          * @description Stable flow-space location for feedback attached to a board.
@@ -7651,6 +7612,57 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /**
+         * Keyframe
+         * @description 时间轨上的一个时刻。**相机和物体共用一种形状**,按各自用得上的字段填。
+         *
+         *     相机用 `position` + `target` + `fov`:瞄一个点比给欧拉角好摆(镜头总是"看着什么"),
+         *     而且 Blender 往返本来就是按这个约定烘焙的。物体用 `position` + `rotation` + `scale`。
+         *     没填的字段表示"这一档不控制它"。
+         *
+         *     共用一种形状而不是分两个类,是因为**时间轴上的插值逻辑只该有一份**:分开写的话,
+         *     "缓动怎么算""端点怎么取"就有两个实现,而它们必然会分岔。
+         */
+        Keyframe: {
+            /**
+             * Time
+             * @default 0
+             */
+            time: number;
+            /**
+             * Position
+             * @default [
+             *       8,
+             *       5,
+             *       8
+             *     ]
+             */
+            position: [
+                number,
+                number,
+                number
+            ];
+            /** Target */
+            target?: [
+                number,
+                number,
+                number
+            ] | null;
+            /** Fov */
+            fov?: number | null;
+            /** Rotation */
+            rotation?: [
+                number,
+                number,
+                number
+            ] | null;
+            /** Scale */
+            scale?: [
+                number,
+                number,
+                number
+            ] | null;
         };
         /** LeaseClaim */
         LeaseClaim: {
@@ -9500,7 +9512,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "box" | "sphere" | "cylinder" | "plane" | "room" | "stairs" | "group" | "model" | "light" | "figure" | "table";
+            kind: "box" | "sphere" | "cylinder" | "plane" | "room" | "stairs" | "group" | "model" | "light" | "figure" | "table" | "camera";
             /** Parent Id */
             parent_id?: string | null;
             /**
@@ -9570,6 +9582,26 @@ export interface components {
             hidden: boolean;
             /** Model Id */
             model_id?: string | null;
+            /**
+             * Target
+             * @default [
+             *       0,
+             *       1,
+             *       0
+             *     ]
+             */
+            target: [
+                number,
+                number,
+                number
+            ];
+            /**
+             * Fov
+             * @default 45
+             */
+            fov: number;
+            /** Track */
+            track?: components["schemas"]["Keyframe"][];
         };
         /** SceneOperations */
         SceneOperations: {
@@ -9612,7 +9644,17 @@ export interface components {
              */
             updated_at: string;
         };
-        /** SceneShot */
+        /**
+         * SceneShot
+         * @description 一个镜头 = **用哪台机位、拍多久**。
+         *
+         *     运镜本身不在这里 —— 它是那台相机物体的 `track`。此前 `frames` 长在镜头上,于是"随时间
+         *     变化"这件事只有相机享受得到,而且相机本身不是场景里的物体:选不中、拖不动、编不了组。
+         *     见 docs/design/scene-time-and-cameras.md。
+         *
+         *     轨上的时间是**场景时间**,镜头目前一律从 0 开始截取。以后要加 `start_time` 不需要迁移
+         *     (默认 0),那时"一段 12 秒的走位被一个 5 秒的镜头截取中间一段"才成立。
+         */
         SceneShot: {
             /** Id */
             id: string;
@@ -9638,8 +9680,8 @@ export interface components {
              * @enum {string}
              */
             easing: "linear" | "smooth";
-            /** Frames */
-            frames?: components["schemas"]["CameraFrame"][];
+            /** Camera Id */
+            camera_id: string;
         };
         /** SceneUpdate */
         SceneUpdate: {

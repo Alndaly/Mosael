@@ -18,13 +18,16 @@ def setup_scene():
 def test_scene_revision_conflict_and_immutable_snapshot():
     c, ws, scene = setup_scene()
     payload = {'workspace_id': ws, 'name': 'Room', 'content': scene['content'], 'base_revision': 1}
-    payload['content']['objects'] = [{'id': 'room', 'kind': 'room'}]
+    # 相机现在是场景里的物体,而镜头指着它 —— 替换 objects 时不能把它丢掉
+    # (丢掉就是一个引用了不存在机位的场景,后端会拒)。
+    camera = next(o for o in scene['content']['objects'] if o['kind'] == 'camera')
+    payload['content']['objects'] = [camera, {'id': 'room', 'kind': 'room'}]
     r = c.patch('/api/scenes/' + scene['id'], json=payload)
     assert r.status_code == 200, r.text
     assert r.json()['revision'] == 2
     assert c.patch('/api/scenes/' + scene['id'], json=payload).status_code == 409
     old = c.get(f"/api/scenes/{scene['id']}/revisions/1", params={'workspace_id': ws}).json()
-    assert old['content']['objects'] == []
+    assert [o['kind'] for o in old['content']['objects']] == ['camera']   # 空场景自带一台机位
     other = c.post('/api/workspaces', json={'name': 'Other'}).json()['id']
     assert c.get('/api/scenes/' + scene['id'], params={'workspace_id': other}).status_code == 404
 
@@ -50,7 +53,10 @@ def test_model_import_is_self_contained_and_scene_scoped():
     mid = model.json()['id']
     second = c.post('/api/scenes', json={'workspace_id': ws}).json()
     assert c.get(f"/api/scenes/{second['id']}/models/{mid}", params={'workspace_id': ws}).status_code == 404
-    second['content']['objects'] = [{'id': 'model', 'kind': 'model', 'model_id': mid}]
+    second['content']['objects'] = [
+        next(o for o in second['content']['objects'] if o['kind'] == 'camera'),
+        {'id': 'model', 'kind': 'model', 'model_id': mid},
+    ]
     r = c.patch('/api/scenes/' + second['id'], json={'workspace_id': ws, 'name': 'Other', 'base_revision': 1, 'content': second['content']})
     assert r.status_code == 422
 
@@ -62,12 +68,13 @@ def test_agent_operations_merge_and_delete_hierarchy_atomically():
     assert r.status_code == 200, r.text
     r = c.post(path, json={'workspace_id': ws, 'base_revision': 2, 'objects': [{'id': 'box', 'parameters': {'height': 3}}]})
     assert r.status_code == 200, r.text
-    obj = r.json()['content']['objects'][1]
+    obj = next(o for o in r.json()['content']['objects'] if o['id'] == 'box')
     assert obj['parameters']['width'] == 4 and obj['parameters']['height'] == 3
     r = c.post(path, json={'workspace_id': ws, 'base_revision': 3, 'objects': [{'id': 'g', 'parent_id': 'box'}]})
     assert r.status_code == 422
     r = c.post(path, json={'workspace_id': ws, 'base_revision': 3, 'remove_ids': ['g']})
-    assert r.status_code == 200 and r.json()['content']['objects'] == []
+    # 删掉组和它的后代之后只剩那台默认机位 —— 它是物体,所以也在这份列表里。
+    assert r.status_code == 200 and [o['kind'] for o in r.json()['content']['objects']] == ['camera']
 
 
 def test_board_scene_reference_must_belong_to_workspace():

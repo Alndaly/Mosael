@@ -1,6 +1,6 @@
 import { presetById } from "./lighting";
 import type {
-  CameraFrame,
+  Keyframe,
   SceneContent,
   SceneObject,
   SceneShot,
@@ -16,6 +16,7 @@ export const objectLabels: Record<SceneObject["kind"], string> = {
   group: "组",
   model: "模型",
   light: "灯光",
+  camera: "机位",
   figure: "人物",
   table: "桌子",
 };
@@ -42,6 +43,9 @@ export function makeObject(
     position: [0, kind === "light" ? 4 : 0, 0],
     rotation: [0, 0, 0],
     scale: [1, 1, 1],
+    target: [0, 1, 0],
+    fov: 45,
+    track: [],
     parameters: {
       width: 2,
       height: 2,
@@ -61,22 +65,28 @@ export function makeObject(
     ...patch,
   };
 }
-export function makeShot(): SceneShot {
+/**
+ * 一台机位 + 一个用它的镜头。**它们成对出现** —— 镜头必须指向一台真实存在的相机
+ * (后端会拒),所以"新建一个镜头"从来不是只建一个对象。
+ */
+export function makeShot(name = "镜头 1"): { camera: SceneObject; shot: SceneShot } {
+  const camera = makeObject("camera", { name, position: [8, 5, 8], target: [0, 1, 0], fov: 45 });
   return {
-    id: uid(),
-    name: "镜头 1",
-    duration: 5,
-    aspect: "16:9",
-    easing: "smooth",
-    frames: [{ time: 0, position: [8, 5, 8], target: [0, 1, 0], fov: 45 }],
+    camera,
+    shot: { id: uid(), name, duration: 5, aspect: "16:9", easing: "smooth", camera_id: camera.id },
   };
+}
+
+/** 拍这个镜头的那台机位。找不到时返回 undefined —— 调用点要自己决定怎么退。 */
+export function cameraOfShot(content: SceneContent, shot: SceneShot): SceneObject | undefined {
+  return content.objects.find((o) => o.id === shot.camera_id && o.kind === "camera");
 }
 /** 新场景的默认打光。**和后端 SceneLighting 的默认值同一档**(studio-soft) —— 两边写不一样的
  *  话,新建出来的场景和"重置为默认"会落在不同的光下,而没有任何地方会报错。 */
 const DEFAULT_LIGHTING = { preset: "studio-soft", ...presetById("studio-soft")!.values };
 
 export function initialScene(demo = false): SceneContent {
-  const shot = makeShot();
+  const { camera, shot } = makeShot();
   if (!demo)
     return {
       version: 1,
@@ -91,6 +101,7 @@ export function initialScene(demo = false): SceneContent {
           },
           color: "#454b51",
         }),
+        camera,
       ],
       shots: [shot],
       background: "#20242c",
@@ -111,7 +122,12 @@ export function initialScene(demo = false): SceneContent {
   );
   shot.name = "穿过三间展厅";
   shot.duration = 10;
-  shot.frames = [
+  camera.name = shot.name;
+  // 静止姿态 = 第一帧。轨为空时按它渲,所以两者要一致 —— 否则镜头刚开始播就会跳一下。
+  camera.position = [0, 1.6, 5];
+  camera.target = [0, 1.6, -1];
+  camera.fov = 55;
+  camera.track = [
     { time: 0, position: [0, 1.6, 5], target: [0, 1.6, -1], fov: 55 },
     { time: 3, position: [0, 1.6, -2], target: [0, 1.6, -8], fov: 55 },
     { time: 6, position: [0, 1.6, -8], target: [0, 1.4, -12], fov: 50 },
@@ -137,23 +153,45 @@ export function initialScene(demo = false): SceneContent {
         metalness: 0.7,
         roughness: 0.2,
       }),
+      camera,
     ],
     shots: [shot],
     background: "#20242c",
     ambient: 1.8,
   };
 }
-export function sampleCamera(shot: SceneShot, time: number): CameraFrame {
-  const frames = shot.frames;
+/**
+ * 某个时刻的机位姿态。
+ *
+ * **空轨就是静止** —— 直接给相机物体自己的姿态。这也是"有没有轨"正好等于"动不动"的地方:
+ * 一台不动的相机不必带一条只有一帧的轨。
+ */
+export function sampleCamera(
+  camera: SceneObject,
+  shot: SceneShot,
+  time: number,
+): { time: number; position: Vec3; target: Vec3; fov: number } {
+  const still = {
+    position: camera.position,
+    target: camera.target,
+    fov: camera.fov,
+  };
+  const track = camera.track;
   const t = Math.max(0, Math.min(time, shot.duration));
-  const next = frames.findIndex((f) => f.time > t);
-  if (next < 0) return { ...frames[frames.length - 1], time: t };
-  if (next === 0) return { ...frames[0], time: t };
-  const a = frames[next - 1],
-    b = frames[next];
-  let u = (t - a.time) / (b.time - a.time);
+  if (!track.length) return { time: t, ...still };
+  const at = (frame: Keyframe) => ({
+    position: frame.position,
+    target: (frame.target ?? still.target) as Vec3,
+    fov: frame.fov ?? still.fov,
+  });
+  const next = track.findIndex((f) => f.time > t);
+  if (next < 0) return { time: t, ...at(track[track.length - 1]) };
+  if (next === 0) return { time: t, ...at(track[0]) };
+  const a = at(track[next - 1]),
+    b = at(track[next]);
+  let u = (t - track[next - 1].time) / (track[next].time - track[next - 1].time);
   if (shot.easing === "smooth") u = u * u * (3 - 2 * u);
-  const mix = (a: Vec3, b: Vec3) => a.map((v, i) => v + (b[i] - v) * u) as Vec3;
+  const mix = (x: Vec3, y: Vec3) => x.map((v, i) => v + (y[i] - v) * u) as Vec3;
   return {
     time: t,
     position: mix(a.position, b.position),
@@ -161,6 +199,7 @@ export function sampleCamera(shot: SceneShot, time: number): CameraFrame {
     fov: a.fov + (b.fov - a.fov) * u,
   };
 }
+
 export function removeObjects(
   content: SceneContent,
   ids: string[],
@@ -254,41 +293,44 @@ export function duplicateObject(
     }));
   return { ...content, objects: [...content.objects, ...copies] };
 }
+/**
+ * 给一台机位套一条现成的运镜。**返回的是相机的轨,不是镜头** —— 运镜现在长在相机上。
+ *
+ * 起点取相机当前的静止姿态:用户先摆好一个满意的机位,再选运镜,这是最自然的顺序。
+ */
 export function cameraPreset(
+  camera: SceneObject,
   shot: SceneShot,
   kind: "orbit" | "push",
-): SceneShot {
-  const first = shot.frames[0],
-    target = first.target;
+): Keyframe[] {
+  const first: Keyframe = {
+    time: 0,
+    position: camera.position,
+    target: camera.target,
+    fov: camera.fov,
+  };
+  const target = camera.target;
   if (kind === "push")
-    return {
-      ...shot,
-      frames: [
-        first,
-        {
-          ...first,
-          time: shot.duration,
-          position: first.position.map(
-            (v, i) => v + (target[i] - v) * 0.5,
-          ) as Vec3,
-        },
-      ],
-    };
+    return [
+      first,
+      {
+        ...first,
+        time: shot.duration,
+        position: first.position.map((v, i) => v + (target[i] - v) * 0.5) as Vec3,
+      },
+    ];
   const dx = first.position[0] - target[0],
     dz = first.position[2] - target[2];
-  return {
-    ...shot,
-    frames: Array.from({ length: 9 }, (_, i) => {
-      const a = (i / 8) * Math.PI * 2;
-      return {
-        ...first,
-        time: (shot.duration * i) / 8,
-        position: [
-          target[0] + dx * Math.cos(a) - dz * Math.sin(a),
-          first.position[1],
-          target[2] + dx * Math.sin(a) + dz * Math.cos(a),
-        ] as Vec3,
-      };
-    }),
-  };
+  return Array.from({ length: 9 }, (_, i) => {
+    const a = (i / 8) * Math.PI * 2;
+    return {
+      ...first,
+      time: (shot.duration * i) / 8,
+      position: [
+        target[0] + dx * Math.cos(a) - dz * Math.sin(a),
+        first.position[1],
+        target[2] + dx * Math.sin(a) + dz * Math.cos(a),
+      ] as Vec3,
+    };
+  });
 }

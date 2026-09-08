@@ -19541,83 +19541,6 @@
         "type": "object",
         "title": "BrowserProfileUpdate"
       },
-      "CameraFrame": {
-        "properties": {
-          "time": {
-            "type": "number",
-            "maximum": 120.0,
-            "minimum": 0.0,
-            "title": "Time",
-            "default": 0
-          },
-          "position": {
-            "prefixItems": [
-              {
-                "type": "number",
-                "maximum": 10000.0,
-                "minimum": -10000.0
-              },
-              {
-                "type": "number",
-                "maximum": 10000.0,
-                "minimum": -10000.0
-              },
-              {
-                "type": "number",
-                "maximum": 10000.0,
-                "minimum": -10000.0
-              }
-            ],
-            "type": "array",
-            "maxItems": 3,
-            "minItems": 3,
-            "title": "Position",
-            "default": [
-              8,
-              5,
-              8
-            ]
-          },
-          "target": {
-            "prefixItems": [
-              {
-                "type": "number",
-                "maximum": 10000.0,
-                "minimum": -10000.0
-              },
-              {
-                "type": "number",
-                "maximum": 10000.0,
-                "minimum": -10000.0
-              },
-              {
-                "type": "number",
-                "maximum": 10000.0,
-                "minimum": -10000.0
-              }
-            ],
-            "type": "array",
-            "maxItems": 3,
-            "minItems": 3,
-            "title": "Target",
-            "default": [
-              0,
-              1,
-              0
-            ]
-          },
-          "fov": {
-            "type": "number",
-            "maximum": 120.0,
-            "minimum": 10.0,
-            "title": "Fov",
-            "default": 45
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "CameraFrame"
-      },
       "CanvasCommentAnchor": {
         "properties": {
           "kind": {
@@ -21703,6 +21626,152 @@
         ],
         "title": "JobOut",
         "description": "任务出口。**message 在这里按请求方的语言翻**。\n\n翻译放在序列化这一层,而不是十二个返回 JobOut 的路由里各翻一次 —— 那是同一个问题十二个答案,\n漏一个,那一屏的任务就还是另一种语言。语言由中间件放进 ContextVar(见 core/i18n)。\n\n老任务没有 key(它们只留下了当年渲染的那句话),原样返回 —— 那是数据本身的界限。"
+      },
+      "Keyframe": {
+        "properties": {
+          "time": {
+            "type": "number",
+            "maximum": 120.0,
+            "minimum": 0.0,
+            "title": "Time",
+            "default": 0
+          },
+          "position": {
+            "prefixItems": [
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "minimum": -10000.0
+              },
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "minimum": -10000.0
+              },
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "minimum": -10000.0
+              }
+            ],
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 3,
+            "title": "Position",
+            "default": [
+              8,
+              5,
+              8
+            ]
+          },
+          "target": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "number",
+                    "maximum": 10000.0,
+                    "minimum": -10000.0
+                  },
+                  {
+                    "type": "number",
+                    "maximum": 10000.0,
+                    "minimum": -10000.0
+                  },
+                  {
+                    "type": "number",
+                    "maximum": 10000.0,
+                    "minimum": -10000.0
+                  }
+                ],
+                "type": "array",
+                "maxItems": 3,
+                "minItems": 3
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "fov": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 120.0,
+                "minimum": 10.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fov"
+          },
+          "rotation": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "number",
+                    "maximum": 10000.0,
+                    "minimum": -10000.0
+                  },
+                  {
+                    "type": "number",
+                    "maximum": 10000.0,
+                    "minimum": -10000.0
+                  },
+                  {
+                    "type": "number",
+                    "maximum": 10000.0,
+                    "minimum": -10000.0
+                  }
+                ],
+                "type": "array",
+                "maxItems": 3,
+                "minItems": 3
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotation"
+          },
+          "scale": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "number",
+                    "maximum": 1000.0,
+                    "minimum": 0.001
+                  },
+                  {
+                    "type": "number",
+                    "maximum": 1000.0,
+                    "minimum": 0.001
+                  },
+                  {
+                    "type": "number",
+                    "maximum": 1000.0,
+                    "minimum": 0.001
+                  }
+                ],
+                "type": "array",
+                "maxItems": 3,
+                "minItems": 3
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scale"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Keyframe",
+        "description": "时间轨上的一个时刻。**相机和物体共用一种形状**,按各自用得上的字段填。\n\n相机用 `position` + `target` + `fov`:瞄一个点比给欧拉角好摆(镜头总是\"看着什么\"),\n而且 Blender 往返本来就是按这个约定烘焙的。物体用 `position` + `rotation` + `scale`。\n没填的字段表示\"这一档不控制它\"。\n\n共用一种形状而不是分两个类,是因为**时间轴上的插值逻辑只该有一份**:分开写的话,\n\"缓动怎么算\"\"端点怎么取\"就有两个实现,而它们必然会分岔。"
       },
       "LeaseClaim": {
         "properties": {
@@ -25841,7 +25910,8 @@
               "model",
               "light",
               "figure",
-              "table"
+              "table",
+              "camera"
             ],
             "title": "Kind"
           },
@@ -25991,6 +26061,49 @@
               }
             ],
             "title": "Model Id"
+          },
+          "target": {
+            "prefixItems": [
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "minimum": -10000.0
+              },
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "minimum": -10000.0
+              },
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "minimum": -10000.0
+              }
+            ],
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 3,
+            "title": "Target",
+            "default": [
+              0,
+              1,
+              0
+            ]
+          },
+          "fov": {
+            "type": "number",
+            "maximum": 120.0,
+            "minimum": 10.0,
+            "title": "Fov",
+            "default": 45
+          },
+          "track": {
+            "items": {
+              "$ref": "#/components/schemas/Keyframe"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Track"
           }
         },
         "additionalProperties": false,
@@ -26151,22 +26264,22 @@
             "title": "Easing",
             "default": "smooth"
           },
-          "frames": {
-            "items": {
-              "$ref": "#/components/schemas/CameraFrame"
-            },
-            "type": "array",
-            "maxItems": 100,
-            "minItems": 1,
-            "title": "Frames"
+          "camera_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[\\w-]+$",
+            "title": "Camera Id"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "id"
+          "id",
+          "camera_id"
         ],
-        "title": "SceneShot"
+        "title": "SceneShot",
+        "description": "一个镜头 = **用哪台机位、拍多久**。\n\n运镜本身不在这里 —— 它是那台相机物体的 `track`。此前 `frames` 长在镜头上,于是\"随时间\n变化\"这件事只有相机享受得到,而且相机本身不是场景里的物体:选不中、拖不动、编不了组。\n见 docs/design/scene-time-and-cameras.md。\n\n轨上的时间是**场景时间**,镜头目前一律从 0 开始截取。以后要加 `start_time` 不需要迁移\n(默认 0),那时\"一段 12 秒的走位被一个 5 秒的镜头截取中间一段\"才成立。"
       },
       "SceneUpdate": {
         "properties": {

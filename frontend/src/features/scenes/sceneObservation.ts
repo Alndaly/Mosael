@@ -1,13 +1,14 @@
 import * as THREE from "three";
-import type { CameraFrame, SceneShot } from "@/api/domains/scenes";
+import type { SceneObject, SceneShot, Vec3 } from "@/api/domains/scenes";
 import { sampleCamera } from "./sceneGraph";
 
-export function shotPathPoints(shot: SceneShot) {
+/** 一台机位在整个镜头里走过的路径。**静止的机位没有路径** —— 它只是一个点。 */
+export function shotPathPoints(camera: SceneObject, shot: SceneShot) {
   return Array.from(
     { length: 101 },
     (_, i) =>
       new THREE.Vector3(
-        ...sampleCamera(shot, (shot.duration * i) / 100).position,
+        ...sampleCamera(camera, shot, (shot.duration * i) / 100).position,
       ),
   );
 }
@@ -63,7 +64,7 @@ export function cameraObserver() {
   group.add(frustum, marker, target, sight);
   return {
     group,
-    update(frame: CameraFrame, aspect: number) {
+    update(frame: { position: Vec3; target: Vec3; fov: number }, aspect: number) {
       camera.position.fromArray(frame.position);
       camera.lookAt(new THREE.Vector3(...frame.target));
       camera.fov = frame.fov;

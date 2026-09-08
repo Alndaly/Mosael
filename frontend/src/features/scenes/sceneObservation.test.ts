@@ -9,8 +9,8 @@ import {
 } from "./sceneObservation";
 
 it("keeps the route and animated camera on the same sampled shot, including easing and FOV", () => {
-  const shot = makeShot();
-  shot.frames = [
+  const { camera, shot } = makeShot();
+  camera.track = [
     { time: 0, position: [0, 2, 8], target: [0, 1, 0], fov: 40 },
     { time: 5, position: [8, 4, 0], target: [1, 1, 0], fov: 70 },
   ];
@@ -18,9 +18,9 @@ it("keeps the route and animated camera on the same sampled shot, including easi
   try {
     for (const easing of ["linear", "smooth"] as const) {
       shot.easing = easing;
-      const points = shotPathPoints(shot);
+      const points = shotPathPoints(camera, shot);
       for (const i of [0, 25, 50, 100]) {
-        const frame = sampleCamera(shot, (shot.duration * i) / 100);
+        const frame = sampleCamera(camera, shot, (shot.duration * i) / 100);
         observer.update(frame, 9 / 16);
         expect(points[i].toArray()).toEqual(frame.position);
         const marker = observer.group.getObjectByName("camera-position")!;

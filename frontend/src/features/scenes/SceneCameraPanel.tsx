@@ -2,15 +2,17 @@ import React from "react";
 import { Camera, RotateCw, MoveRight, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { CameraFrame, SceneShot } from "@/api/domains/scenes";
+import type { Keyframe, SceneObject, SceneShot, Vec3 } from "@/api/domains/scenes";
 import { Num, Pick, Vector } from "./SceneControls";
 import { cameraPreset, sampleCamera } from "./sceneGraph";
 
 export function SceneCameraPanel({
   shot,
+  rig,
   time,
   preview,
   onPatch,
+  onRig,
   onTime,
   onPreview,
   onPlaying,
@@ -19,35 +21,53 @@ export function SceneCameraPanel({
   camera,
 }: {
   shot: SceneShot;
+  /** 拍这个镜头的那台机位 —— **运镜长在它身上**,不在镜头上。 */
+  rig: SceneObject;
   time: number;
   preview: boolean;
   onPatch: (patch: Partial<SceneShot>) => void;
+  onRig: (patch: Partial<SceneObject>) => void;
   onTime: (time: number) => void;
   onPreview: (value: boolean) => void;
   onPlaying: (value: boolean) => void;
   capture: (time: number) => void;
   observe: () => void;
-  camera: () => CameraFrame;
+  camera: () => { position: Vec3; target: Vec3; fov: number };
 }) {
-  const current = sampleCamera(shot, time);
-  const frameIndex = shot.frames.findIndex(
-    (f) => Math.abs(f.time - time) < 0.001,
-  );
-  function patchFrame(patch: Partial<CameraFrame>) {
-    if (frameIndex < 0 && shot.frames.length >= 100) return;
-    onPatch({
-      frames: [
-        ...shot.frames.filter((_, i) => i !== frameIndex),
+  const current = sampleCamera(rig, shot, time);
+  const frameIndex = rig.track.findIndex((f) => Math.abs(f.time - time) < 0.001);
+  /**
+   * 改这一刻的机位。
+   *
+   * **轨是空的时候改的是静止姿态**,不是"插入第一个关键帧" —— 一台不动的相机不该因为你调了
+   * 一下位置就突然有了动画。要动画得先选一种运镜,或者在别的时刻记一个视角。
+   */
+  function patchFrame(patch: Partial<Keyframe>) {
+    if (!rig.track.length) {
+      const next = { ...current, ...patch };
+      onRig({
+        position: next.position,
+        target: next.target ?? current.target,
+        fov: next.fov ?? current.fov,
+      });
+      return;
+    }
+    if (frameIndex < 0 && rig.track.length >= 100) return;
+    onRig({
+      track: [
+        ...rig.track.filter((_, i) => i !== frameIndex),
         { ...current, ...patch },
       ].sort((a, b) => a.time - b.time),
     });
   }
   function preset(kind: "orbit" | "push" | "still") {
-    const first = { ...(preview ? current : camera()), time: 0 };
-    onPatch(
+    const from = preview ? current : camera();
+    const rest = { position: from.position, target: from.target, fov: from.fov };
+    // 「固定机位」= 没有轨。此前它是"一条只有一帧的轨",而"有没有轨"本该正好等于"动不动"。
+    onRig(
       kind === "still"
-        ? { frames: [first] }
-        : cameraPreset({ ...shot, frames: [first] }, kind),
+        ? { ...rest, track: [] }
+        : { ...rest, track: cameraPreset({ ...rig, ...rest }, shot, kind) },
     );
     onTime(0);
     onPreview(true);
@@ -91,13 +111,15 @@ export function SceneCameraPanel({
             min={0.1}
             max={120}
             onChange={(duration) => {
-              onPatch({
-                duration,
-                frames: shot.frames.map((f) => ({
-                  ...f,
-                  time: (f.time / shot.duration) * duration,
-                })),
-              });
+              // 改时长要把轨上的时刻**按比例缩放**,否则运镜的后半段会掉到镜头之外。
+              onPatch({ duration });
+              if (rig.track.length)
+                onRig({
+                  track: rig.track.map((f) => ({
+                    ...f,
+                    time: (f.time / shot.duration) * duration,
+                  })),
+                });
               onTime(0);
               onPlaying(false);
             }}
@@ -197,9 +219,7 @@ export function SceneCameraPanel({
             <Button
               variant="outline"
               onClick={() =>
-                onPatch({
-                  frames: shot.frames.filter((_, i) => i !== frameIndex),
-                })
+                onRig({ track: rig.track.filter((_, i) => i !== frameIndex) })
               }
             >
               移除此途经点

@@ -65,6 +65,7 @@ import {
   type Scene,
   type SceneContent,
   type SceneObject,
+  type Keyframe,
   type SceneShot,
 } from "@/api/domains/scenes";
 import { Button } from "@/components/ui/button";
@@ -79,6 +80,7 @@ import {
 } from "@/components/agent/CanvasAgentChat";
 import { useAutosave } from "@/features/boards/useAutosave";
 import {
+  cameraOfShot,
   initialScene,
   makeObject,
   makeShot,
@@ -419,6 +421,11 @@ function SceneEditor({
       draft.content.shots.find((s) => s.id === shotId) ??
       draft.content.shots[0],
     object = draft.content.objects.find((o) => o.id === selected);
+  /** 拍当前镜头的那台机位。**运镜长在它身上** —— 见 docs/design/scene-time-and-cameras.md。 */
+  const rig = cameraOfShot(draft.content, shot);
+  function rigPatch(patch: Partial<SceneObject>) {
+    if (rig) objectPatch(rig.id, patch);
+  }
   function shotPatch(patch: Partial<SceneShot>) {
     update({
       ...current.current.content,
@@ -634,20 +641,24 @@ function SceneEditor({
     });
   }
   function recordView(at: number) {
+    if (!rig) return;
     const frame = {
       ...view.current!.camera(),
       time: Math.min(shot.duration, Math.max(0, at)),
     };
-    const frames = shot.frames.filter(
-      (f) => Math.abs(f.time - frame.time) > 0.001,
-    );
-    if (frames.length >= 100) {
+    // 轨是空的(固定机位)时,第一次记视角要把**当前的静止姿态**也记成 0 秒那一档 ——
+    // 否则镜头从相机的静止位置突然跳到你记的这一档,而中间那段没有任何东西描述它。
+    const base: Keyframe[] = rig.track.length
+      ? rig.track
+      : [{ time: 0, position: rig.position, target: rig.target, fov: rig.fov }];
+    const track = base.filter((f) => Math.abs(f.time - frame.time) > 0.001);
+    if (track.length >= 100) {
       toast.error("单个镜头最多 100 个途经点，请先移除一个。");
       return;
     }
-    frames.push(frame);
-    frames.sort((a, b) => a.time - b.time);
-    shotPatch({ frames });
+    track.push(frame);
+    track.sort((a, b) => a.time - b.time);
+    rigPatch({ track });
     setTime(frame.time);
     toast.success(
       frame.time === 0
@@ -1058,11 +1069,18 @@ function SceneEditor({
                   label="新建镜头"
                   disabled={draft.content.shots.length >= 32}
                   onClick={() => {
-                    const s = makeShot();
-                    s.name = `镜头 ${draft.content.shots.length + 1}`;
-                    s.frames = [view.current!.camera()];
+                    // 新建镜头 = 新建一台机位 + 一个用它的镜头。**它们成对出现** ——
+                    // 镜头必须指向一台真实存在的相机。机位停在你当前看的那个视角上。
+                    const here = view.current!.camera();
+                    const { camera, shot: s } = makeShot(
+                      `镜头 ${draft.content.shots.length + 1}`,
+                    );
+                    camera.position = here.position;
+                    camera.target = here.target;
+                    camera.fov = here.fov;
                     update({
                       ...draft.content,
+                      objects: [...draft.content.objects, camera],
                       shots: [...draft.content.shots, s],
                     });
                     setShotId(s.id);
@@ -1113,7 +1131,7 @@ function SceneEditor({
                 role="group"
                 aria-label={`${shot.name} 的关键帧`}
               >
-                {shot.frames.map((f) => {
+                {(rig?.track ?? []).map((f) => {
                   const at = shot.duration > 0 ? (f.time / shot.duration) * 100 : 0;
                   const edge = f.time === 0 ? "start" : f.time === shot.duration ? "end" : undefined;
                   return (
@@ -1263,9 +1281,11 @@ function SceneEditor({
             {step === "camera" && (
               <SceneCameraPanel
                 shot={shot}
+                rig={rig!}
                 time={time}
                 preview={viewMode !== "edit"}
                 onPatch={shotPatch}
+                onRig={rigPatch}
                 onTime={setTime}
                 onPreview={(value) => {
                   if (!value || !observing) setPreview(value);

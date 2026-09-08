@@ -1407,6 +1407,87 @@ def _migrate_drop_local_publish_accounts() -> None:
         logger.info("清理 %d 个 folder/webhook 发布账号及其空壳浏览器档案", len(rows))
 
 
+def _rewrite_scene_shots_as_cameras(content: dict) -> bool:
+    """把一份场景内容里的 `shots[].frames` 搬成相机物体的 `track`。改了返回 True。
+
+    每个镜头长出一台同名的相机物体:静态位置取第一帧(没有轨的时候按它渲),`track` 就是原来
+    那串 frames。镜头只留 `camera_id`。
+    """
+    from uuid import uuid4
+
+    shots = content.get("shots")
+    objects = content.get("objects")
+    if not isinstance(shots, list) or not isinstance(objects, list):
+        return False
+    if not any(isinstance(shot, dict) and "frames" in shot for shot in shots):
+        return False
+    for shot in shots:
+        if not isinstance(shot, dict):
+            continue
+        frames = shot.pop("frames", None) or [{}]
+        first = frames[0] if isinstance(frames[0], dict) else {}
+        camera_id = uuid4().hex
+        objects.append({
+            "id": camera_id,
+            "name": shot.get("name") or "机位",
+            "kind": "camera",
+            "position": first.get("position", [8, 5, 8]),
+            "target": first.get("target", [0, 1, 0]),
+            "fov": first.get("fov", 45),
+            # 单帧的镜头是"固定机位":没有运动就不必留一条轨,静态位置已经说完了。
+            "track": frames if len(frames) > 1 else [],
+        })
+        shot["camera_id"] = camera_id
+    return True
+
+
+def _migrate_scene_cameras_become_objects() -> None:
+    """相机从「镜头里的一串关键帧」变成**场景里的物体**。
+
+    此前 `shots` 和 `objects` 是两个平行数组,而整份内容里唯一带 time 的字段是
+    `shots[].frames[].time` —— 于是"随时间变化"只有相机享受得到,相机自己又不是物体:
+    在视口里选不中、拖不动、不能编组。见 docs/design/scene-time-and-cameras.md。
+
+    **历史版本的快照也要一起改写。** 它们平时是原样返回的(不过校验),但"恢复某个版本"
+    会把快照送回保存那条路 —— 不改写的话,升级之后所有旧版本都恢复不了,而报错会出现在
+    很远的地方(一次 422,说的是 shots 缺 camera_id)。
+
+    读取代码里不保留"老形状"这条分支(ADR-0006):迁移跑完,`shots[].frames` 就不存在了。
+    """
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if "scenes_3d" not in tables:
+        return
+    scenes = 0
+    with engine.begin() as conn:
+        for scene_id, raw in conn.execute(text("SELECT id, content FROM scenes_3d")).fetchall():
+            try:
+                content = json.loads(raw) if isinstance(raw, str) else raw
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(content, dict) or not _rewrite_scene_shots_as_cameras(content):
+                continue
+            conn.execute(text("UPDATE scenes_3d SET content = :c WHERE id = :i"),
+                         {"c": json.dumps(content, ensure_ascii=False), "i": scene_id})
+            scenes += 1
+        if "scene_3d_revisions" in tables:
+            rows = conn.execute(text("SELECT scene_id, revision, snapshot FROM scene_3d_revisions")).fetchall()
+            for scene_id, revision, raw in rows:
+                try:
+                    snapshot = json.loads(raw) if isinstance(raw, str) else raw
+                except (TypeError, ValueError):
+                    continue
+                if not isinstance(snapshot, dict) or not isinstance(snapshot.get("content"), dict):
+                    continue
+                if not _rewrite_scene_shots_as_cameras(snapshot["content"]):
+                    continue
+                conn.execute(
+                    text("UPDATE scene_3d_revisions SET snapshot = :s WHERE scene_id = :i AND revision = :r"),
+                    {"s": json.dumps(snapshot, ensure_ascii=False), "i": scene_id, "r": revision})
+    if scenes:
+        logger.info("把 %d 个 3D 场景的镜头改写成了相机物体", scenes)
+
+
 def _migrate_scene_models_to_disk() -> None:
     """把 3D 模型的字节从 `scene_3d_models.data` 挪到磁盘。
 
@@ -1887,6 +1968,7 @@ def migration_plan() -> MigrationPlan:
                 # 它 ALTER 表并搬文件。**必须在 SCHEMA 之前** —— create_all 不会给已有的表补列,
                 # 而 SCHEMA 之后 ORM 上的 Scene3DModel 已经指望 file_key 存在了。
                 _migrate_scene_models_to_disk,
+                _migrate_scene_cameras_become_objects,
                 _migrate_source_assets_get_a_role,
                 _migrate_workflow_source_assets,
                 _migrate_plugin_registry_url,
