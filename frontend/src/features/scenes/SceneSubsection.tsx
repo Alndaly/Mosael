@@ -20,13 +20,16 @@ import {
 export function SceneSubsection({
   title,
   defaultOpen = false,
+  expanded = false,
   children,
 }: {
   title: string;
   defaultOpen?: boolean;
+  expanded?: boolean;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = React.useState(defaultOpen);
+  if (expanded) return <section className="scene-subsection"><h3 className="scene-subsection-toggle">{title}</h3><div className="scene-subsection-body">{children}</div></section>;
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="scene-subsection">
       <CollapsibleTrigger className="scene-subsection-toggle">

@@ -412,6 +412,7 @@
   flex-direction: column;
   gap: 0;
   padding: 8px var(--scene-stage-gutter);
+  position: relative;
   background: transparent;
   border-top: 1px solid var(--divider);
 }
@@ -450,8 +451,8 @@
   min-width: 0;
   outline: none;
 }
-.scene-dope-resize { height: 8px; flex: 0 0 8px; cursor: ns-resize; display: grid; place-items: center; touch-action: none; }
-.scene-dope-resize span { width: 32px; height: 2px; border-radius: 8px; background: var(--border); }
+.scene-dope-resize { position: absolute; top: -13px; left: calc(-1 * var(--scene-stage-gutter)); right: calc(-1 * var(--scene-stage-gutter)); z-index: 10; }
+.scene-dope-resize span { display: none; }
 .scene-dope-resize:hover span, .scene-dope-resize:focus-visible span { background: var(--primary); }
 .scene-dope-toolbar { margin-top: 6px; display: flex; align-items: center; gap: 4px; padding: 4px 0 8px; flex-shrink: 0; overflow-x: auto; }
 .scene-dope-search { position: relative; width: var(--scene-dope-name); flex-shrink: 0; }
@@ -680,7 +681,7 @@
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  padding: 2px var(--scene-side-gutter) 12px;
+  padding: 6px var(--scene-side-gutter) 16px;
   display: grid;
   align-content: start;
   gap: 12px;
@@ -1216,3 +1217,13 @@
 .scene-timeline {
   flex-grow: 0;
 }
+
+/* Group related controls without adding another surface around the viewport. */
+.scene-header > .scene-actions { gap: 8px; }
+
+.scene-name:hover, .scene-name:focus-visible { background: var(--secondary); border-radius: 6px; }
+.scene-name:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.scene-subsection > h3 { cursor: default; font-weight: 600; }
+.scene-panel-body input:focus-visible { outline-offset: -2px; }
+
+.scene-tool-divider { align-self: center; height: 18px; width: 1px; flex: 0 0 1px; margin-inline: 4px; background: var(--divider); }

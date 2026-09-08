@@ -1,3 +1,4 @@
+import { RenameDialog } from "@/components/app/modals";
 import { SceneList } from "./SceneList";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -30,6 +31,8 @@ import {
   Maximize,
   Minimize,
   ChevronRight,
+  ChevronFirst,
+  ChevronLast,
   HelpCircle,
   Focus,
   History,
@@ -285,6 +288,7 @@ function SceneEditor({
   onBack: () => void;
 }) {
   const [navigation] = useCanvasInputMode();
+  const [renaming, setRenaming] = React.useState(false);
   const studioRoot = React.useRef<HTMLDivElement>(null);
   const fullscreen = useSceneFullscreen(studioRoot);
   const qc = useQueryClient(),
@@ -807,18 +811,13 @@ function SceneEditor({
       className="scene-studio"
       data-screen-mode={fullscreen.active ? "viewport" : undefined}
     >
+      <RenameDialog open={renaming} title="重命名场景" initialValue={draft.name} onCancel={() => setRenaming(false)} onSubmit={(name) => { change({ ...current.current, name }); setRenaming(false); }} />
       <header className="scene-header">
         <Tool label="返回场景列表" onClick={onBack}>
           <ArrowLeft size={17} />
         </Tool>
         <div className="scene-heading">
-          <input
-            className="scene-name"
-            aria-label="场景名称"
-            maxLength={160}
-            value={draft.name}
-            onChange={(e) => change({ ...draft, name: e.target.value })}
-          />
+          <button className="scene-name truncate text-left" title="重命名场景" aria-label="重命名场景" onClick={() => setRenaming(true)}>{draft.name}</button>
           <span className="scene-save" role="status">
             {error ? (
               "未保存"
@@ -846,6 +845,7 @@ function SceneEditor({
           <Tool label="版本记录" onClick={() => setRevisions(true)}>
             <History size={16} />
           </Tool>
+          <span className="scene-tool-divider" aria-hidden="true" />
           <Button
             variant="ghost"
             size="sm"
@@ -1157,6 +1157,7 @@ function SceneEditor({
                   </button>
                 </>
               )}
+              {viewMode === "edit" && <span className="scene-tool-divider" aria-hidden="true" />}
               {!preview && (
                 <Popover>
                   <PopoverTrigger asChild>
@@ -1347,6 +1348,8 @@ function SceneEditor({
                   <Camera size={15} />
                   记录此视角
                 </Button>
+                <span className="scene-tool-divider" aria-hidden="true" />
+                <Tool label="回到起点" onClick={() => { setTime(0); setPlaying(false); }}><ChevronFirst size={16} /></Tool>
                 <Tool
                   label={playing ? "暂停" : "播放镜头"}
                   disabled={!!busy}
@@ -1354,6 +1357,7 @@ function SceneEditor({
                 >
                   {playing ? <Pause size={17} /> : <Play size={17} />}
                 </Tool>
+                <Tool label="跳到结尾" onClick={() => { setTime(shot.duration); setPlaying(false); }}><ChevronLast size={16} /></Tool>
                 <span className="scene-time">
                   {time.toFixed(1)} / {shot.duration.toFixed(1)} s
                 </span>

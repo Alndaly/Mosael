@@ -233,7 +233,7 @@ export function SceneInspector({
                 )}
               </>
             )}
-            <SceneSubsection title="精确位置与旋转">
+            <SceneSubsection expanded title="精确位置与旋转">
                 {" "}
                 <Vector
                   label="位置"
@@ -318,7 +318,7 @@ function LightingSection({
     onChange({ ...lighting, ...patch, preset: CUSTOM_PRESET });
   const current = presetById(lighting.preset);
   return (
-    <SceneSubsection title="主光"
+    <SceneSubsection expanded title="主光"
         defaultOpen>
         <label className="scene-number">
           <span>打光方式</span>

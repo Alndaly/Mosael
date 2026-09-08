@@ -1,5 +1,6 @@
+import { HANDLE_ROW } from "@/lib/useResizableSidebar";
 import React from "react";
-import { Box, Video, Lightbulb, Folder, DiamondPlus, Trash2, ChevronFirst, ChevronLast, Search, ZoomIn, ZoomOut, Scan } from "lucide-react";
+import { Box, Video, Lightbulb, Folder, DiamondPlus, Trash2, Search, ZoomIn, ZoomOut, Scan } from "lucide-react";
 import type { SceneContent, SceneShot } from "@/api/domains/scenes";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -113,7 +114,7 @@ export function SceneDopeSheet({ content, shot, time, selectedId, playing, disab
           if (onMove(selectedKeys, delta)) setKeys(selectedKeys.map(key => ({...key, time: Number((key.time + delta).toFixed(6))})));
         }
       }}>
-      <div className="scene-dope-resize" role="separator" aria-orientation="horizontal" aria-label={t("sceneAnimResize")}
+      <div className={`scene-dope-resize ${HANDLE_ROW}`} role="separator" aria-orientation="horizontal" aria-label={t("sceneAnimResize")}
         aria-valuemin={160} aria-valuemax={600} aria-valuenow={height} tabIndex={0}
         onKeyDown={event => { if (["ArrowUp", "ArrowDown"].includes(event.key)) {event.preventDefault(); event.stopPropagation(); setHeight(h => Math.max(160, Math.min(600, h + (event.key === "ArrowUp" ? 32 : -32))));} }}
         onPointerDown={event => {event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId);}}
@@ -125,10 +126,9 @@ export function SceneDopeSheet({ content, shot, time, selectedId, playing, disab
         <Button size="xs" variant={animatedOnly ? "secondary" : "outline"} aria-pressed={animatedOnly} onClick={() => setAnimatedOnly(!animatedOnly)}>{t("sceneAnimAnimated")}</Button>
         <span className="scene-dope-count">{rows.length} / {content.objects.length}</span>
         <div className="scene-spacer" />
-        <Button size="icon-xs" variant="outline" title={t("sceneAnimStart")} aria-label={t("sceneAnimStart")} onClick={() => onSeek(0)}><ChevronFirst /></Button>
-        <Button size="icon-xs" variant="outline" title={t("sceneAnimEnd")} aria-label={t("sceneAnimEnd")} onClick={() => onSeek(shot.duration)}><ChevronLast /></Button>
         <Button size="xs" variant="outline" disabled={!selectedObject || disabled} title={`${t("sceneAnimInsert")} · I`} onClick={() => selectedObject && onInsert(selectedObject.id, time)}><DiamondPlus />{t("sceneAnimInsert")}</Button>
         <Button size="icon-xs" variant="outline" disabled={!selectedKeys.length || disabled} title={t("sceneAnimDelete")} aria-label={t("sceneAnimDelete")} onClick={deleteKeys}><Trash2 /></Button>
+        <span className="scene-tool-divider" aria-hidden="true" />
         <Button size="icon-xs" variant="ghost" disabled={zoom === 1} aria-label={t("sceneAnimZoomOut")} title={t("sceneAnimZoomOut")} onClick={() => setZoom(z => Math.max(1, z - 1))}><ZoomOut /></Button>
         <Button size="icon-xs" variant="ghost" disabled={zoom === 8} aria-label={t("sceneAnimZoomIn")} title={t("sceneAnimZoomIn")} onClick={() => setZoom(z => Math.min(8, z + 1))}><ZoomIn /></Button>
         <Button size="icon-xs" variant="ghost" aria-label={t("sceneAnimFit")} title={t("sceneAnimFit")} onClick={() => setZoom(1)}><Scan /></Button>

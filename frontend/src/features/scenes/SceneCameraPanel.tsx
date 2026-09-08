@@ -146,7 +146,7 @@ export function SceneCameraPanel({
       {/* 折叠块之间的分割线是**每一块自己的上边框**(见 .scene-subsection + .scene-subsection),
           右栏里所有折叠块都用同一条规则 —— 此前这条线只存在于这个面板的那个 stack 包装里,
           于是检查器里的折叠块之间没有线,同一栏里两种样子。 */}
-      <SceneSubsection title="自己设置起点和终点">
+      <SceneSubsection expanded title="自己设置起点和终点">
         <p>在编辑视角中调整构图，分别记下镜头从哪里开始、在哪里结束。</p>
         {preview && (
           <Button variant="secondary" onClick={observe}>
@@ -164,7 +164,7 @@ export function SceneCameraPanel({
         </div>
         <p>在底部关键帧视图里选一个中间时刻，再按 I（或点「记录此视角」）就多一个途经点。</p>
       </SceneSubsection>
-      <SceneSubsection title="镜头高级设置">
+      <SceneSubsection expanded title="镜头高级设置">
         <label className="scene-number">
           <span>镜头名称</span>
           <Input

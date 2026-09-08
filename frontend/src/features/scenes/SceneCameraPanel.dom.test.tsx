@@ -45,9 +45,7 @@ it("creates a push from the composition being edited, then shows the resulting s
 });
 it("keeps preview read-only and lets users continue editing from that camera", () => {
   const p = setup(true);
-  // 「自己设置起点和终点」是次要路径,默认收起 —— 运镜预设才是第一屏该有的东西。
-  // (Radix 的 CollapsibleContent 收起时不挂载,所以要先展开才找得到里面的按钮。)
-  fireEvent.click(screen.getByRole("button", { name: /自己设置起点和终点/ }));
+  expect(screen.getByRole("heading", { name: "自己设置起点和终点" })).toBeVisible();
   expect(screen.getByRole("button", { name: "设为起点" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "从当前镜头继续调整" }));
   expect(p.observe).toHaveBeenCalledOnce();
