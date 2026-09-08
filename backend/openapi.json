@@ -25839,7 +25839,9 @@
               "stairs",
               "group",
               "model",
-              "light"
+              "light",
+              "figure",
+              "table"
             ],
             "title": "Kind"
           },

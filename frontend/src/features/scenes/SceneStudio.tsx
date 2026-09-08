@@ -18,6 +18,15 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Box,
+  Circle,
+  Cylinder,
+  DoorOpen,
+  Group as GroupIcon,
+  Lightbulb,
+  PersonStanding,
+  Square,
+  ChevronsUp,
+  Table2,
   Camera,
   Image as ImageIcon,
   Check,
@@ -88,6 +97,20 @@ function download(blob: Blob, name: string) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+/** 「添加」菜单里每一类的图标。**此前全是同一枚立方体** —— 一列十个一模一样的图标,
+ *  等于没有图标:眼睛只能读文字,那一列宽度就白占了。 */
+const KIND_ICONS: Partial<Record<SceneObject["kind"], React.ReactNode>> = {
+  figure: <PersonStanding size={15} />,
+  table: <Table2 size={15} />,
+  plane: <Square size={15} />,
+  room: <DoorOpen size={15} />,
+  stairs: <ChevronsUp size={15} />,
+  box: <Box size={15} />,
+  sphere: <Circle size={15} />,
+  cylinder: <Cylinder size={15} />,
+  group: <GroupIcon size={15} />,
+  light: <Lightbulb size={15} />,
+};
 const readId = () =>
   new URLSearchParams(location.hash.split("?")[1] ?? "").get("scene");
 export function SceneStudio({ workspace }: { workspace: Workspace }) {
@@ -1131,20 +1154,25 @@ function SceneEditor({
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent align="start" className="scene-add">
+                        {/* 顺序按**用它做什么**排:先是当尺子和舞台的(人物、地面、房间),
+                            再是基本体,最后是组和灯。人物排在最前是因为这一页最常见的用途是
+                            看构图和比例 —— 相机在不在视平线上,靠一个真人尺寸的参照才看得出来。 */}
                         {(
                           [
-                            "box",
-                            "sphere",
-                            "cylinder",
+                            "figure",
+                            "table",
                             "plane",
                             "room",
                             "stairs",
+                            "box",
+                            "sphere",
+                            "cylinder",
                             "group",
                             "light",
                           ] as const
                         ).map((k) => (
                           <button key={k} onClick={() => add(k)}>
-                            <Box size={15} />
+                            {KIND_ICONS[k]}
                             {objectLabels[k]}
                           </button>
                         ))}

@@ -113,6 +113,9 @@ export function SceneInspector({
                     <Num
                       key={k}
                       label={
+                        // 人物那三个数叫"宽度/高度/深度"是对的但没用 —— 调的人想的是身高和
+                        // 肩宽。名字贴着它实际是什么,省掉一次心里的换算。
+                        PARAMETER_LABELS[object.kind]?.[k] ??
                         {
                           width: "宽度",
                           height: "高度",
@@ -252,6 +255,15 @@ export function SceneInspector({
  * 手动改过任何一个数就落到 `custom` —— 那时预设那句写好的提示词已经不描述当前的光了,
  * 交给模型的话会由 `lightingPrompt` 按当时的数现生成一句。
  */
+/** 少数几类的参数在它自己的语汇里有更准的名字。人物那三个数叫「宽度/高度/深度」是对的但
+ *  没用 —— 调的人想的是身高和肩宽,名字贴着它实际是什么,省掉一次心里的换算。 */
+const PARAMETER_LABELS: Partial<
+  Record<SceneObject["kind"], Partial<Record<keyof SceneObject["parameters"], string>>>
+> = {
+  figure: { width: "肩宽", height: "身高", depth: "厚度" },
+  table: { width: "台面宽", height: "桌高", depth: "台面深" },
+};
+
 function LightingSection({
   lighting,
   onChange,

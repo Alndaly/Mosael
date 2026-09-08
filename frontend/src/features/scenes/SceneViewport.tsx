@@ -122,6 +122,68 @@ function geometryObject(o: SceneObject): THREE.Object3D {
         (p.height * (i + 1)) / p.steps / 2,
         -p.depth / 2 + (p.depth * (i + 0.5)) / p.steps,
       );
+  /** 人物。**是给构图当尺子的,不是给人看脸的。**
+   *
+   * 用几个基本体拼一个概括的人形:关键是高度、肩宽、头的位置和站姿的重心 —— 相机在不在
+   * 视平线上、门够不够高、桌子到不到手,靠这几样就判断得出来。做得再细也不会出现在成片里
+   * (成片是模型生成的),反而会让人误以为它决定长相。
+   *
+   * 比例按 1.7 米的常见人体来分:头约 1/7.5 身高,肩宽约 1/4,腿约占下半身。 */
+  if (o.kind === "figure") {
+    const h = p.height;
+    const shoulders = Math.max(p.width, 0.2);
+    const thickness = Math.max(p.depth, 0.12);
+    const headR = h * 0.066;
+    const legH = h * 0.47;
+    const torsoH = h * 0.33;
+    const capsule = (radius: number, length: number, x: number, y: number, z = 0) => {
+      const m = new THREE.Mesh(new THREE.CapsuleGeometry(radius, length, 4, 12), material);
+      m.position.set(x, y, z);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      group.add(m);
+    };
+    // 双腿
+    capsule(thickness * 0.42, legH - thickness * 0.84, -shoulders * 0.22, legH / 2);
+    capsule(thickness * 0.42, legH - thickness * 0.84, shoulders * 0.22, legH / 2);
+    // 躯干:用一个压扁的胶囊,肩比腰宽一点
+    const torso = new THREE.Mesh(
+      new THREE.CapsuleGeometry(thickness * 0.62, torsoH - thickness * 1.24, 4, 14),
+      material,
+    );
+    torso.scale.set(shoulders / (thickness * 1.24), 1, 1);
+    torso.position.y = legH + torsoH / 2;
+    torso.castShadow = true;
+    torso.receiveShadow = true;
+    group.add(torso);
+    // 双臂,自然垂在身侧
+    const armH = h * 0.36;
+    capsule(thickness * 0.3, armH - thickness * 0.6, -shoulders * 0.62, legH + torsoH - armH / 2);
+    capsule(thickness * 0.3, armH - thickness * 0.6, shoulders * 0.62, legH + torsoH - armH / 2);
+    // 头(含一小截脖子)
+    capsule(headR * 0.4, headR * 0.6, 0, legH + torsoH + headR * 0.3);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(headR, 24, 16), material);
+    head.position.y = h - headR;
+    head.castShadow = true;
+    head.receiveShadow = true;
+    group.add(head);
+  }
+  /** 桌子:一块台面 + 四条腿。摆道具、定台面高度用 —— 这一页里它出现的频率仅次于地面。 */
+  if (o.kind === "table") {
+    const top = Math.min(0.06, p.height * 0.1);
+    const leg = Math.min(0.08, Math.min(p.width, p.depth) * 0.09);
+    box(p.width, top, p.depth, 0, p.height - top / 2);
+    for (const sx of [-1, 1])
+      for (const sz of [-1, 1])
+        box(
+          leg,
+          p.height - top,
+          leg,
+          (sx * (p.width - leg)) / 2 * 0.92,
+          (p.height - top) / 2,
+          (sz * (p.depth - leg)) / 2 * 0.92,
+        );
+  }
   if (o.kind === "light") {
     const lamp = new THREE.PointLight(o.color, o.intensity, 50, 2);
     // 点光源的阴影要渲六个面,比平行光贵得多 —— 给一张小得多的图。它照的通常是局部,

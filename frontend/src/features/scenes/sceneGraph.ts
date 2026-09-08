@@ -16,6 +16,18 @@ export const objectLabels: Record<SceneObject["kind"], string> = {
   group: "组",
   model: "模型",
   light: "灯光",
+  figure: "人物",
+  table: "桌子",
+};
+
+/** 每一类新建时的尺寸。**只写和默认值不同的那几个** —— 其余走 makeObject 里那份。
+ *
+ *  人物默认 1.7 米:这一页最常见的用途是**看构图和比例** —— 相机是不是在视平线上、
+ *  门有多高、桌子够不够到手,都靠一个真人尺寸的参照才判断得出来。给个 2 米的默认值,
+ *  它就成了一根不知道多高的柱子。 */
+const KIND_PARAMETERS: Partial<Record<SceneObject["kind"], Partial<SceneObject["parameters"]>>> = {
+  figure: { height: 1.7, width: 0.45, depth: 0.25 },
+  table: { width: 1.4, height: 0.75, depth: 0.8 },
 };
 export const uid = () => crypto.randomUUID();
 export function makeObject(
@@ -38,6 +50,7 @@ export function makeObject(
       steps: 8,
       door_width: 1.6,
       door_height: 2.5,
+      ...KIND_PARAMETERS[kind],
     },
     color: "#c4b8a6",
     roughness: 0.6,

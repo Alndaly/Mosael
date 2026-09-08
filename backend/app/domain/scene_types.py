@@ -27,7 +27,8 @@ class ShapeParameters(SceneValue):
 class SceneObject(SceneValue):
     id: Identifier
     name: str = Field("Object", max_length=160)
-    kind: Literal["box", "sphere", "cylinder", "plane", "room", "stairs", "group", "model", "light"]
+    kind: Literal["box", "sphere", "cylinder", "plane", "room", "stairs", "group", "model", "light",
+                  "figure", "table"]
     parent_id: Identifier | None = None
     position: Vec3 = (0, 0, 0)
     rotation: Vec3 = (0, 0, 0)

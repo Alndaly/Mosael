@@ -9500,7 +9500,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "box" | "sphere" | "cylinder" | "plane" | "room" | "stairs" | "group" | "model" | "light";
+            kind: "box" | "sphere" | "cylinder" | "plane" | "room" | "stairs" | "group" | "model" | "light" | "figure" | "table";
             /** Parent Id */
             parent_id?: string | null;
             /**
