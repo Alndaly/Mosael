@@ -198,26 +198,28 @@ function geometryObject(o: SceneObject): THREE.Object3D {
   }
   /** 机位。**它是场景里的物体,所以要看得见、选得中、拖得动。**
    *
-   * 画的是一个概括的机身加一个朝 -Z 的视锥 —— 比一个实心锥更容易看清它对着哪儿。
+   * 视锥按**这台相机真实的 fov** 画,不是一个固定形状 —— 它要能一眼看出"这台拍得宽还是窄"。
+   * 机身摆在锥顶**后面**(+Z),因为相机看向 -Z:机身骑在锥顶上的话,近处的东西会被自己的
+   * 机身挡住,而且看不出锥是从哪儿发出来的。
    *
    * 标上 editorOnly:它是**编辑期的道具**,不该出现在镜头画面和导出的参考帧里 ——
    * 相机不拍自己。 */
   if (o.kind === "camera") {
     group.userData.editorOnly = true;
-    group.add(
-      new THREE.Mesh(
-        new THREE.BoxGeometry(0.32, 0.24, 0.5),
-        new THREE.MeshStandardMaterial({ color: "#8fa2c8", roughness: 0.5, metalness: 0.1 }),
-      ),
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(0.3, 0.22, 0.42),
+      new THREE.MeshStandardMaterial({ color: "#8fa2c8", roughness: 0.5, metalness: 0.1 }),
     );
-    const d = 0.9,
-      w = 0.42,
-      h = 0.26;
+    body.position.z = 0.24;
+    group.add(body);
+    const reach = 1.1;
+    const half = Math.tan(THREE.MathUtils.degToRad(o.fov) / 2) * reach;
+    const wide = half * (16 / 9); // 视锥按 16:9 画;比例是镜头的属性,不是相机的
     const corners: [number, number, number][] = [
-      [-w, -h, -d],
-      [w, -h, -d],
-      [w, h, -d],
-      [-w, h, -d],
+      [-wide, -half, -reach],
+      [wide, -half, -reach],
+      [wide, half, -reach],
+      [-wide, half, -reach],
     ];
     const points: THREE.Vector3[] = [];
     for (const c of corners)
@@ -227,10 +229,13 @@ function geometryObject(o: SceneObject): THREE.Object3D {
         new THREE.Vector3(...corners[i]),
         new THREE.Vector3(...corners[(i + 1) % 4]),
       );
+    // 顶边中点画一个小三角,标出"哪边朝上" —— 只看一个方框分不出机位有没有翻转。
+    points.push(new THREE.Vector3(-wide * 0.4, half, -reach), new THREE.Vector3(0, half * 1.5, -reach));
+    points.push(new THREE.Vector3(wide * 0.4, half, -reach), new THREE.Vector3(0, half * 1.5, -reach));
     group.add(
       new THREE.LineSegments(
         new THREE.BufferGeometry().setFromPoints(points),
-        new THREE.LineBasicMaterial({ color: "#9fbaff", transparent: true, opacity: 0.85 }),
+        new THREE.LineBasicMaterial({ color: "#9fbaff", transparent: true, opacity: 0.9 }),
       ),
     );
   }

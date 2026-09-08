@@ -646,44 +646,6 @@
   overflow: visible;
   flex: none;
 }
-.scene-steps {
-  display: flex;
-  gap: 24px;
-  /* 线通栏,内容内缩。此前是整块内缩 —— 那条分割线因此左右各短一截,而它下面的工作区
-     是通栏的,两条边缘对不上。 */
-  padding-inline: var(--scene-stage-gutter);
-  border-bottom: 1px solid var(--divider);
-}
-.scene-steps > button {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 44px;
-  padding: 8px 4px;
-  border-bottom: 2px solid transparent;
-  color: var(--muted-foreground);
-  text-align: left;
-  white-space: nowrap;
-  transition:
-    color 160ms ease,
-    border-color 160ms ease;
-}
-.scene-steps > button:hover {
-  color: var(--foreground);
-}
-.scene-steps > button[aria-current] {
-  border-bottom-color: var(--primary);
-  color: var(--primary);
-}
-.scene-steps strong {
-  font-size: var(--text-ui-sm);
-  font-weight: 500;
-}
-.scene-step-number {
-  font-size: var(--text-ui-xs);
-  font-variant-numeric: tabular-nums;
-  opacity: 0.65;
-}
 .scene-labeled-tool {
   height: 32px;
   display: flex;
@@ -782,16 +744,7 @@
   color: var(--muted-foreground);
   line-height: 1.8;
 }
-.scene-side-next {
-  padding: 12px var(--scene-side-gutter);
-  flex-shrink: 0;
-  background: transparent;
-  border-top: 1px solid var(--divider);
-}
 
-.scene-side-next > button {
-  width: 100%;
-}
 .scene-camera-panel {
   padding: 16px;
   display: flex;
@@ -964,11 +917,7 @@
   .scene-side {
     overflow: visible;
   }
-  .scene-steps > button {
-    padding: 8px;
-    gap: 6px;
-  }
-  .scene-name {
+    .scene-name {
     max-width: 200px;
   }
 }
@@ -989,7 +938,6 @@
   background: var(--background);
 }
 .scene-studio[data-screen-mode="viewport"] > .scene-header,
-.scene-studio[data-screen-mode="viewport"] > .scene-steps,
 .scene-studio[data-screen-mode="viewport"] .scene-side,
 .scene-studio[data-screen-mode="viewport"] .scene-agent-dock,
 .scene-studio[data-screen-mode="viewport"] .scene-agent-floating {
@@ -1094,6 +1042,11 @@
 /* 空状态里的下一步链接。EmptyState 是居中布局,所以链接也居中 —— 靠左会在标题下方
    拉出一条歪的视觉轴。两个链接时并排,窄了自动换行。 */
 .scene-blender-pull-list { display: grid; gap: 8px; }
+/* 「生成素材」从侧栏搬进了顶栏的弹层。宽度给足(里面是三条带说明的选项),高度封顶 ——
+   弹层不该长到把屏幕顶穿。 */
+.scene-generate { width: 340px; max-height: min(70vh, 560px); overflow: auto; }
+.scene-generate .scene-output-panel { padding: 0; gap: 10px; }
+.scene-generate h2 { font-size: var(--text-ui-sm); font-weight: 600; }
 /* 「同时送一张灰模」那个勾选。和 .scene-choice 同一套内距,好让它读起来是同一列里的一项。 */
 .scene-toggle { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 10px; cursor: pointer; }
 .scene-toggle:hover { background: color-mix(in srgb, var(--foreground) 4%, transparent); }

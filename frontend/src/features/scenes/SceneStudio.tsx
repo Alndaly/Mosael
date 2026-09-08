@@ -13,20 +13,12 @@ import { SceneHistory } from "./SceneHistory";
 import { SceneCameraPanel } from "./SceneCameraPanel";
 import { SceneInspector } from "./SceneInspector";
 import { Pick, Tool } from "./SceneControls";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Box,
-  Circle,
-  Cylinder,
-  DoorOpen,
-  Group as GroupIcon,
-  Lightbulb,
-  PersonStanding,
-  Square,
-  ChevronsUp,
-  Table2,
   Camera,
   Image as ImageIcon,
   Check,
@@ -81,7 +73,6 @@ import {
 import { useAutosave } from "@/features/boards/useAutosave";
 import {
   cameraOfShot,
-  hasObjectMotion,
   initialScene,
   makeObject,
   makeShot,
@@ -100,20 +91,35 @@ function download(blob: Blob, name: string) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-/** 「添加」菜单里每一类的图标。**此前全是同一枚立方体** —— 一列十个一模一样的图标,
- *  等于没有图标:眼睛只能读文字,那一列宽度就白占了。 */
-const KIND_ICONS: Partial<Record<SceneObject["kind"], React.ReactNode>> = {
-  figure: <PersonStanding size={15} />,
-  table: <Table2 size={15} />,
-  plane: <Square size={15} />,
-  room: <DoorOpen size={15} />,
-  stairs: <ChevronsUp size={15} />,
-  box: <Box size={15} />,
-  sphere: <Circle size={15} />,
-  cylinder: <Cylinder size={15} />,
-  group: <GroupIcon size={15} />,
-  light: <Lightbulb size={15} />,
-};
+/**
+ * 「添加」里能放进场景的东西。**按用途分组**,顺序即呈现顺序(SearchableSelect 不重排)。
+ *
+ * `keywords` 让人按拼音/英文/别名也搜得到 —— 展示名是中文,而很多人手里是英文习惯。
+ */
+const ADD_OPTIONS: {
+  value: string;
+  label: string;
+  description?: string;
+  group: string;
+  keywords: string[];
+}[] = [
+  { value: "camera", label: objectLabels.camera, group: "镜头", keywords: ["camera", "jiwei", "机位", "摄像机"],
+    description: "多一台机位就多一个可切换的视角" },
+  { value: "figure", label: objectLabels.figure, group: "参照与舞台", keywords: ["figure", "person", "renwu"],
+    description: "1.7 米的人形,用来判断构图和比例" },
+  { value: "table", label: objectLabels.table, group: "参照与舞台", keywords: ["table", "zhuozi", "desk"] },
+  { value: "plane", label: objectLabels.plane, group: "参照与舞台", keywords: ["plane", "floor", "dimian", "地板"] },
+  { value: "room", label: objectLabels.room, group: "参照与舞台", keywords: ["room", "fangjian", "wall", "墙"] },
+  { value: "stairs", label: objectLabels.stairs, group: "参照与舞台", keywords: ["stairs", "louti", "step"] },
+  { value: "box", label: objectLabels.box, group: "基本体", keywords: ["box", "cube", "lifangti"] },
+  { value: "sphere", label: objectLabels.sphere, group: "基本体", keywords: ["sphere", "ball", "qiuti"] },
+  { value: "cylinder", label: objectLabels.cylinder, group: "基本体", keywords: ["cylinder", "yuanzhu", "tube"] },
+  { value: "group", label: objectLabels.group, group: "其它", keywords: ["group", "zu", "folder"] },
+  { value: "light", label: objectLabels.light, group: "其它", keywords: ["light", "lamp", "dengguang", "点光源"] },
+  { value: "__import__", label: "导入 GLB / glTF", group: "其它", keywords: ["import", "glb", "gltf", "daoru", "model"],
+    description: "从文件导入已有模型" },
+];
+
 const readId = () =>
   new URLSearchParams(location.hash.split("?")[1] ?? "").get("scene");
 export function SceneStudio({ workspace }: { workspace: Workspace }) {
@@ -281,8 +287,6 @@ function SceneEditor({
     [mode, setMode] = React.useState<"translate" | "rotate" | "scale">(
       "translate",
     ),
-    [step, setStep] = React.useState<"build" | "camera" | "output">("build"),
-    [addOpen, setAddOpen] = React.useState(false),
     // 吸附是「我习惯这么干活」,不是这一次的临时状态 —— 和画布输入模式同一类,记住它。
     // 每次打开场景都退回关闭,等于让常开的人每次先点一下。
     [snap, setSnap] = React.useState(readSceneSnap),
@@ -466,11 +470,7 @@ function SceneEditor({
         e.preventDefault();
         e.shiftKey ? redo() : undo();
       }
-      if (
-        (e.key === "Delete" || e.key === "Backspace") &&
-        selected &&
-        step === "build"
-      ) {
+      if ((e.key === "Delete" || e.key === "Backspace") && selected) {
         e.preventDefault();
         update(removeObjects(current.current.content, [selected]));
         setSelected(null);
@@ -493,7 +493,6 @@ function SceneEditor({
     o.position = view.current?.placement(halfWidth) ?? [0, 0, 0];
     update({ ...draft.content, objects: [...draft.content.objects, o] });
     setSelected(o.id);
-    setAddOpen(false);
     setPreview(false);
     requestAnimationFrame(() => view.current?.focus());
   }
@@ -735,6 +734,118 @@ function SceneEditor({
               throw new Error("场景在导出时发生变化，请重新发送。");
             return { revision: sourceRevision, shotId, blob };
           }} />
+          {/* **「生成素材」从一个步骤变成一个入口。**
+              它不是"搭完场景之后的第三步" —— 它是随时可以做的一件事:摆好一个画面就能去生成,
+              回来改改再生成一次。做成步骤反而把它锁在流程末尾,还占掉一整块侧栏。 */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="sm" disabled={!!busy}>
+                <Sparkles size={15} />
+                生成素材
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="scene-generate">
+              <div className="scene-output-panel">
+                <h2>基于场景生成图片或视频</h2>
+                <p>用当前画面生成图片，或将构图与运镜交给视频模型。</p>
+                <div className="scene-output-summary">
+                  <span>{shot.name}</span>
+                  <small>
+                    {shot.duration} 秒 · {shot.aspect}
+                  </small>
+                </div>
+                <button
+                  className="scene-choice"
+                  disabled={!!busy}
+                  onClick={() => void bridge("image")}
+                >
+                  <ImageIcon size={20} />
+                  <span>
+                    <strong>使用当前画面生成图片</strong>
+                    <small>
+                      将当前镜头 {time.toFixed(1)} 秒的画面作为参考图
+                    </small>
+                  </span>
+                  <ChevronRight size={16} />
+                </button>
+                <button
+                  className="scene-choice"
+                  disabled={!!busy}
+                  onClick={() => void bridge("frames")}
+                >
+                  <Camera size={20} />
+                  <span>
+                    <strong>使用首尾帧生成</strong>
+                    <small>用开场和结束画面控制构图</small>
+                  </span>
+                  <ChevronRight size={16} />
+                </button>
+                <button
+                  className="scene-choice"
+                  disabled={!!busy}
+                  onClick={() => void bridge("video")}
+                >
+                  <Play size={20} />
+                  <span>
+                    <strong>使用运镜视频生成</strong>
+                    <small>提供完整镜头作为动作参考</small>
+                  </span>
+                  <ChevronRight size={16} />
+                </button>
+                {/* **灰模是第二张参考图,不是替代。** 3D 里的占位色看着塑料,会把模型往塑料感
+                    带;而影子、明暗过渡、体积这些光的信息在灰模上反而更干净。生成侧的
+                    reference_image 上限是 9,多送一张是现成能力。 */}
+                <label className="scene-toggle">
+                  <input
+                    type="checkbox"
+                    checked={clay}
+                    onChange={() => setClay((on) => writeClayReference(!on))}
+                  />
+                  <span>
+                    <strong>同时送一张灰模参考图</strong>
+                    <small>统一材质、只留光影，帮模型读准打光</small>
+                  </span>
+                </label>
+                <p>
+                  当前打光「{presetById(draft.content.lighting.preset)?.label ?? "自定义"}」会一并写进提示词。
+                  下一步会打开创意画板，由你选择图片或视频模型、描述画面风格并开始生成。
+                </p>
+                <details className="scene-details">
+                  <summary>只保存预览素材</summary>
+                  <div className="scene-preview-actions">
+                    <Button
+                      variant="outline"
+                      disabled={!!busy}
+                      loading={busy === "保存画面"}
+                      onClick={() =>
+                        void work("保存画面", async () => {
+                          await assetFrame(time);
+                          toast.success("画面已保存到素材库");
+                        })
+                      }
+                    >
+                      <Camera size={16} />
+                      保存当前画面
+                    </Button>
+                    <Button
+                      variant="outline"
+                      disabled={!!busy}
+                      loading={busy === "导出镜头预览"}
+                      onClick={() =>
+                        void work("导出镜头预览", async () => {
+                          await exportVideo();
+                          toast.success("镜头预览已保存到素材库");
+                        })
+                      }
+                    >
+                      <Download size={16} />
+                      保存镜头预览视频
+                    </Button>
+                  </div>
+                </details>
+              </div>
+            </PopoverContent>
+          </Popover>
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="ghost" size="sm" disabled={!!busy}>
@@ -850,47 +961,27 @@ function SceneEditor({
           </Button>
         </div>
       )}
-      <nav className="scene-steps" aria-label="制作步骤">
-        {(
-          [
-            ["build", "搭建场景", "添加物体和模型"],
-            ["camera", "设计镜头", "构图与运镜"],
-            ["output", "生成素材", "选择图片或视频"],
-          ] as const
-        ).map(([key, label, hint], i) => (
-          <button
-            key={key}
-            title={hint}
-            aria-current={step === key ? "step" : undefined}
-            disabled={!!busy}
-            onClick={() => {
-              setStep(key);
-              setPlaying(false);
-              setPreview(key === "output");
-            }}
-          >
-            <span className="scene-step-number">{i + 1}</span>
-            <strong>{label}</strong>
-          </button>
-        ))}
-      </nav>
       <div
         className="scene-workspace"
-        data-step={step}
         data-agent={agent === "docked"}
       >
         <main className="scene-stage">
           <div className="scene-stage-bar">
-            <div className="scene-segment" role="group" aria-label="观察方式">
+            {/* 三个步骤撤掉之后,这三个名字要能自己说清楚在看什么:
+                「自由视角」是你自己在场景里飞,「机位视角」是从当前机位看出去(所见即成片),
+                「俯瞰全场」是拉开看机位和走位的轨迹。此前叫「编辑/镜头画面/全局动线」,
+                前两个像是两种编辑模式,而实际差别是**从谁的眼睛看**。 */}
+            <div className="scene-segment" role="group" aria-label="从哪儿看">
               {(
                 [
-                  ["edit", "编辑视角"],
-                  ["camera", "镜头画面"],
-                  ["observe", "全局动线"],
+                  ["edit", "自由视角", "自己在场景里飞"],
+                  ["camera", "机位视角", "从当前机位看出去,所见即成片"],
+                  ["observe", "俯瞰全场", "拉开看机位和走位的轨迹"],
                 ] as const
-              ).map(([value, label]) => (
+              ).map(([value, label, hint]) => (
                 <button
                   key={value}
+                  title={hint}
                   aria-pressed={viewMode === value}
                   onClick={() => setViewMode(value)}
                 >
@@ -899,7 +990,7 @@ function SceneEditor({
               ))}
             </div>
             <div className="scene-actions">
-              {viewMode === "edit" && step === "build" && (
+              {viewMode === "edit" && (
                 <>
                   {(
                     [
@@ -1018,7 +1109,7 @@ function SceneEditor({
             workspace={initial.workspace_id}
             sceneId={initial.id}
             content={draft.content}
-            selected={step === "build" ? selected : null}
+            selected={selected}
             mode={mode}
             snap={snap}
             navigation={navigation}
@@ -1029,7 +1120,6 @@ function SceneEditor({
             onCameraView={() => setViewMode("camera")}
             onSelect={(id) => {
               setSelected(id);
-              if (step === "output") setStep("build");
             }}
             onTransform={objectPatch}
             onError={(message) => toast.error(message)}
@@ -1052,10 +1142,9 @@ function SceneEditor({
               )}
             </div>
           )}
-          {/* **搭建场景这一步也要有时间条。** 走位是"物体在第几秒在哪儿",没有时间条就无从选
-              那一刻;而运镜和走位本来就在同一条时间轴上。 */}
-          {(step !== "build" || fullscreen.active || hasObjectMotion(draft.content) || !!object) && (
-            <section className="scene-timeline" aria-label="镜头播放控制">
+          {/* **时间条常驻。** 运镜和走位在同一条时间轴上,而"物体在第几秒在哪儿"这件事
+              没有时间条就无从表达 —— 它不该藏在某个步骤后面。 */}
+          <section className="scene-timeline" aria-label="镜头播放控制">
               <div className="scene-shot-row">
                 <Camera size={16} />
                 <Pick
@@ -1156,12 +1245,10 @@ function SceneEditor({
                 })}
               </div>
             </section>
-          )}
         </main>
         <aside className="scene-side">
           <div className="scene-side-scroll">
-            {step === "build" && (
-              <>
+            <>
                 <div className="scene-objects">
                   <header>
                     <h2>
@@ -1170,37 +1257,24 @@ function SceneEditor({
                     {/* **导入只留这一个入口。** 此前「添加」弹层里有一条「导入 GLB / glTF」,
                         列表底下还有一颗整宽的「导入模型」—— 同一件事两个入口,而且长得完全
                         不一样,读者要先判断它们是不是同一件事。收成标题栏这一颗图标按钮。 */}
-                    <Popover open={addOpen} onOpenChange={setAddOpen}>
-                      <PopoverTrigger asChild>
+                    {/* 用 SearchableSelect 而不是手写弹层:物体种类只会越来越多,而手写那个
+                        既不分组、又没有高度上限(十几项就把屏幕撑满)、也搜不了。这颗控件
+                        本来就是给"选项多到普通 Select 会溢出屏幕"准备的。 */}
+                    <SearchableSelect
+                      value=""
+                      onValueChange={(kind) => {
+                        if (kind === "__import__") file.current?.click();
+                        else add(kind as SceneObject["kind"]);
+                      }}
+                      searchPlaceholder="搜索物体类型"
+                      emptyText="没有匹配的类型"
+                      options={ADD_OPTIONS}
+                      trigger={
                         <Button size="icon-sm" title="添加物体" aria-label="添加物体">
                           <Plus size={16} />
                         </Button>
-                      </PopoverTrigger>
-                      <PopoverContent align="start" className="scene-add">
-                        {/* 顺序按**用它做什么**排:先是当尺子和舞台的(人物、地面、房间),
-                            再是基本体,最后是组和灯。人物排在最前是因为这一页最常见的用途是
-                            看构图和比例 —— 相机在不在视平线上,靠一个真人尺寸的参照才看得出来。 */}
-                        {(
-                          [
-                            "figure",
-                            "table",
-                            "plane",
-                            "room",
-                            "stairs",
-                            "box",
-                            "sphere",
-                            "cylinder",
-                            "group",
-                            "light",
-                          ] as const
-                        ).map((k) => (
-                          <button key={k} onClick={() => add(k)}>
-                            {KIND_ICONS[k]}
-                            {objectLabels[k]}
-                          </button>
-                        ))}
-                      </PopoverContent>
-                    </Popover>
+                      }
+                    />
                     <Button
                       variant="outline"
                       size="icon-sm"
@@ -1280,9 +1354,10 @@ function SceneEditor({
                   update={update}
                   setSelected={setSelected}
                 />
-              </>
-            )}
-            {step === "camera" && (
+            </>
+            {/* **镜头设置跟着「选中了哪台机位」走。** 相机现在是场景里的物体,它的运镜、
+                时长、比例本来就该在选中它时出现 —— 而不是藏在一个叫「设计镜头」的步骤后面。 */}
+            {object?.kind === "camera" && rig && object.id === rig.id && (
               <SceneCameraPanel
                 shot={shot}
                 rig={rig!}
@@ -1304,123 +1379,7 @@ function SceneEditor({
                 camera={() => view.current!.camera()}
               />
             )}
-            {step === "output" && (
-              <section className="scene-output-panel">
-                <h2>基于场景生成图片或视频</h2>
-                <p>用当前画面生成图片，或将构图与运镜交给视频模型。</p>
-                <div className="scene-output-summary">
-                  <span>{shot.name}</span>
-                  <small>
-                    {shot.duration} 秒 · {shot.aspect}
-                  </small>
-                </div>
-                <button
-                  className="scene-choice"
-                  disabled={!!busy}
-                  onClick={() => void bridge("image")}
-                >
-                  <ImageIcon size={20} />
-                  <span>
-                    <strong>使用当前画面生成图片</strong>
-                    <small>
-                      将当前镜头 {time.toFixed(1)} 秒的画面作为参考图
-                    </small>
-                  </span>
-                  <ChevronRight size={16} />
-                </button>
-                <button
-                  className="scene-choice"
-                  disabled={!!busy}
-                  onClick={() => void bridge("frames")}
-                >
-                  <Camera size={20} />
-                  <span>
-                    <strong>使用首尾帧生成</strong>
-                    <small>用开场和结束画面控制构图</small>
-                  </span>
-                  <ChevronRight size={16} />
-                </button>
-                <button
-                  className="scene-choice"
-                  disabled={!!busy}
-                  onClick={() => void bridge("video")}
-                >
-                  <Play size={20} />
-                  <span>
-                    <strong>使用运镜视频生成</strong>
-                    <small>提供完整镜头作为动作参考</small>
-                  </span>
-                  <ChevronRight size={16} />
-                </button>
-                {/* **灰模是第二张参考图,不是替代。** 3D 里的占位色看着塑料,会把模型往塑料感
-                    带;而影子、明暗过渡、体积这些光的信息在灰模上反而更干净。生成侧的
-                    reference_image 上限是 9,多送一张是现成能力。 */}
-                <label className="scene-toggle">
-                  <input
-                    type="checkbox"
-                    checked={clay}
-                    onChange={() => setClay((on) => writeClayReference(!on))}
-                  />
-                  <span>
-                    <strong>同时送一张灰模参考图</strong>
-                    <small>统一材质、只留光影，帮模型读准打光</small>
-                  </span>
-                </label>
-                <p>
-                  当前打光「{presetById(draft.content.lighting.preset)?.label ?? "自定义"}」会一并写进提示词。
-                  下一步会打开创意画板，由你选择图片或视频模型、描述画面风格并开始生成。
-                </p>
-                <details className="scene-details">
-                  <summary>只保存预览素材</summary>
-                  <div className="scene-preview-actions">
-                    <Button
-                      variant="outline"
-                      disabled={!!busy}
-                      loading={busy === "保存画面"}
-                      onClick={() =>
-                        void work("保存画面", async () => {
-                          await assetFrame(time);
-                          toast.success("画面已保存到素材库");
-                        })
-                      }
-                    >
-                      <Camera size={16} />
-                      保存当前画面
-                    </Button>
-                    <Button
-                      variant="outline"
-                      disabled={!!busy}
-                      loading={busy === "导出镜头预览"}
-                      onClick={() =>
-                        void work("导出镜头预览", async () => {
-                          await exportVideo();
-                          toast.success("镜头预览已保存到素材库");
-                        })
-                      }
-                    >
-                      <Download size={16} />
-                      保存镜头预览视频
-                    </Button>
-                  </div>
-                </details>
-              </section>
-            )}
           </div>
-          {step !== "output" && (
-            <div className="scene-side-next">
-              <Button
-                disabled={!!busy}
-                onClick={() => {
-                  setStep(step === "build" ? "camera" : "output");
-                  setPreview(step === "camera");
-                  setPlaying(false);
-                }}
-              >
-                {step === "build" ? "下一步：设计镜头" : "下一步：生成素材"}
-                <ChevronRight size={15} />
-              </Button>
-            </div>
-          )}
         </aside>
         {agent && (
           <div
