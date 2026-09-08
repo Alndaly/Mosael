@@ -2,6 +2,7 @@
 import json
 import struct
 from pathlib import Path
+from io import BytesIO
 from types import SimpleNamespace
 import pytest
 from app.domain.blender.bridge import BlenderDomainError
@@ -71,9 +72,9 @@ def test_roundtrip_is_new_scene_and_transfers_are_owner_scoped(monkeypatch, tmp_
     monkeypatch.setattr(bridge,'execute',fake_execute)
     with SessionLocal() as db:
         user=db.scalar(select(User));scene=db.get(Scene3D,initial['id'])
-        with pytest.raises(BlenderDomainError) as e:bridge.send(db,user,scene,'local',0,'camera-1',glb())
+        with pytest.raises(BlenderDomainError) as e:bridge.send(db,user,scene,'local',0,'camera-1',BytesIO(glb()))
         assert e.value.status==409
-        sent=bridge.send(db,user,scene,'local',scene.revision,'camera-1',glb())
+        sent=bridge.send(db,user,scene,'local',scene.revision,'camera-1',BytesIO(glb()))
         assert bridge.history(scene,SimpleNamespace(id='other'))==[]
         with pytest.raises(BlenderDomainError) as e:bridge.load(scene,SimpleNamespace(id='other'),sent['id'])
         assert e.value.status==404
@@ -114,7 +115,7 @@ def test_receive_into_current_imports_the_model_and_hands_content_back(monkeypat
     monkeypatch.setattr(bridge,'execute',fake_execute)
     with SessionLocal() as db:
         user=db.scalar(select(User));scene=db.get(Scene3D,initial['id'])
-        sent=bridge.send(db,user,scene,'local',scene.revision,'camera-1',glb())
+        sent=bridge.send(db,user,scene,'local',scene.revision,'camera-1',BytesIO(glb()))
         before=len(list(db.scalars(select(Scene3D))))
         received=bridge.receive(db,user,scene,sent['id'],into_current=True)
 

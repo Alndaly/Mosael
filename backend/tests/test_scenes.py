@@ -1,4 +1,6 @@
 import json
+import struct
+from pathlib import Path
 
 import pytest
 
@@ -100,41 +102,64 @@ def test_delete_scene_is_workspace_scoped_and_cascades_owned_data():
         assert not db.scalars(select(Scene3DRevision).where(Scene3DRevision.scene_id == scene['id'])).all()
 
 
-def test_the_model_size_limit_is_one_number_and_never_contradicts_itself():
-    """超限的回答要能直接照着做,而且**不能自相矛盾**。
+def _glb(total: int, tmp_path: Path) -> Path:
+    """造一个**声明自己有 total 字节**的合法 GLB,但用稀疏文件占位 —— 建 200 MB 是瞬时的。
 
-    这里钉的是一个真出过的错:调用方只读「上限 + 1」个字节(不把一份 500 MB 的文件整个读进
-    内存),于是 `len(data)` 最大就是上限 + 1 —— 拿它当文件大小报出来,500 MB 会变成
-    「模型 100.0 MB,超出上限 100 MB」。读起来像 bug,还把用户往"再减一点点就行"骗。
-    真实大小只有调用方(文件系统 / multipart)知道,所以由它传;传不了就干脆不报大小。
-
-    顺带钉住"**只有一个数**":路由读文件和领域判上限此前各写了一遍 25 MB,改一处漏一处
-    不会有任何提示 —— 只会变成"路由收下了、领域又拒了"。
+    这正是要测的性质:GLB 的资源都在后面的二进制块里,校验一个字节都不看它,只要文件头和
+    前面那段 JSON。所以后面是不是真的写满了,校验根本不关心。
     """
-    from app.api.routes import scenes as scene_routes
-    from app.domain.scenes import MODEL_LIMIT_BYTES, MODEL_READ_LIMIT, SceneTooLarge, validate_model
+    document = json.dumps({"asset": {"version": "2.0"}}).encode()
+    header = struct.pack("<4sIIII", b"glTF", 2, total, len(document), 0x4E4F534A)
+    path = tmp_path / "big.glb"
+    with path.open("wb") as out:
+        out.write(header + document)
+        out.truncate(total)          # 稀疏:不真的占 200 MB 磁盘
+    return path
 
-    assert MODEL_READ_LIMIT == MODEL_LIMIT_BYTES + 1
-    assert scene_routes.MODEL_READ_LIMIT is MODEL_READ_LIMIT
 
-    limit = MODEL_LIMIT_BYTES // 1024 // 1024
-    truncated = b'glTF' + b'\0' * MODEL_READ_LIMIT
+def test_glb_is_validated_from_its_head_so_it_can_be_much_larger(tmp_path):
+    """GLB 的上限比内嵌 glTF 高得多,**因为两者的代价不同,不是因为产品想让它高**。
 
-    def refuse(**kwargs):
+    GLB 只要读文件头和那段 JSON(几百 KB),而内嵌 glTF 是一整份 JSON、资源是 base64 塞在
+    里面的,校验必须 `json.loads` 整份 —— 那一下就是文件大小的好几倍内存。
+    """
+    from app.domain.scenes import (EMBEDDED_GLTF_LIMIT_BYTES, MODEL_LIMIT_BYTES,
+                                   SceneTooLarge, validate_model_file)
+
+    assert MODEL_LIMIT_BYTES > EMBEDDED_GLTF_LIMIT_BYTES
+
+    # 比内嵌 glTF 的上限还大的 GLB:应当通过,而且不会因为"读整份"而慢或炸。
+    big = EMBEDDED_GLTF_LIMIT_BYTES * 2
+    assert validate_model_file(_glb(big, tmp_path)) == "glb"
+
+    # 超过 GLB 自己的上限才拒。
+    with pytest.raises(SceneTooLarge):
+        validate_model_file(_glb(MODEL_LIMIT_BYTES + 1, tmp_path))
+
+
+def test_refusing_a_too_large_model_never_contradicts_itself():
+    """超限的话要能直接照着做,而且不能自相矛盾。
+
+    钉的是一个真出过的错:调用方只读「上限 + 1」个字节,于是拿 `len(data)` 当文件大小报出来,
+    500 MB 会变成「模型 100.0 MB,超出上限 100 MB」—— 读起来像 bug,还把用户往"再减一点点
+    就行"骗。真实大小由调用方传;传不了就干脆不报大小。
+    """
+    from app.domain.scenes import (EMBEDDED_GLTF_LIMIT_BYTES, MODEL_LIMIT_BYTES,
+                                   SceneTooLarge, validate_model)
+
+    def refuse(data: bytes, **kwargs) -> str:
         with pytest.raises(SceneTooLarge) as excinfo:
-            validate_model(truncated, **kwargs)
+            validate_model(data, **kwargs)
         return str(excinfo.value)
 
-    # 知道真实大小:报出来,并且和上限对得上。
-    known = refuse(size=520 * 1024 * 1024)
-    assert '520.0 MB' in known and f'{limit} MB' in known
+    limit = MODEL_LIMIT_BYTES // 1024 // 1024
+    known = refuse(b"glTF" + b"\0" * 32, size=MODEL_LIMIT_BYTES * 3)
+    assert f"{limit} MB" in known and f"{MODEL_LIMIT_BYTES * 3 / 1024 / 1024:.1f} MB" in known
 
-    # 不知道:只说上限,绝不拿截断后的读数冒充文件大小。
-    unknown = refuse()
-    assert f'{limit} MB' in unknown
-    assert f'{limit}.0 MB' not in unknown
+    # 恰好超一点:四舍五入等于上限,就不报大小 —— 否则又是那句自相矛盾的话。
+    assert f"{limit}.0 MB" not in refuse(b"glTF" + b"\0" * 32, size=MODEL_LIMIT_BYTES + 1)
 
-    # 恰好超一个字节:四舍五入会等于上限,同样不报 —— 否则又是那句自相矛盾的话。
-    assert f'{limit}.0 MB' not in refuse(size=MODEL_READ_LIMIT)
-
-    assert 'Blender' in unknown   # 怎么减
+    # 内嵌 glTF 走另一档,而且要说清楚"改导出 GLB 就能大得多"。
+    embedded = refuse(b"{}" + b"\0" * 32, size=EMBEDDED_GLTF_LIMIT_BYTES + 1024 * 1024)
+    assert f"{EMBEDDED_GLTF_LIMIT_BYTES // 1024 // 1024} MB" in embedded
+    assert "GLB" in embedded and str(limit) in embedded

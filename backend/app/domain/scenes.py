@@ -17,6 +17,7 @@ from app.db.models import Scene3D, Scene3DRevision, Scene3DModel
 from app.db.model_base import now
 from app.domain.scene_types import SceneContent
 from app.media.paths import resolve_key, scene_model_dir, scene_model_key
+from typing import BinaryIO
 
 
 class SceneDomainError(ValueError):
@@ -90,91 +91,178 @@ def save_scene(db: Session, scene: Scene3D, base_revision: int, name: str, conte
     return scene
 
 
-#: 导入模型的体积上限。**只此一处** —— 路由读文件、Blender 互通读回传文件都引它;
-#: 此前 25 MB 这个数字在五个地方各写了一遍,改一处而漏改另一处不会有任何提示,
-#: 只会变成"路由收下了、领域又拒了"这种前后不一。
+#: GLB 的体积上限。**只此一处** —— 路由、Blender 互通都引它。
 #:
-#: 100 MB 是给**真实工程**留的余量:手工准备一个模型时 25 MB 够用,而「取回 Blender 当前
-#: 场景」进来的是别人做好的工程,贴图一嵌进 GLB 就轻松越过 25 MB。真正约束"能不能实时编辑"
-#: 的是下面的节点/网格上限(5000 / 2000),字节数大头是贴图,那部分 three.js 扛得住。
-MODEL_LIMIT_BYTES = 100 * 1024 * 1024
-#: 读文件时多读一个字节,好分辨"正好到上限"和"超了"。
-MODEL_READ_LIMIT = MODEL_LIMIT_BYTES + 1
+#: 512 MB 这个数是这样来的:字节现在既不进数据库、也不整份进内存(落盘走分块拷贝,校验只读
+#: 文件头,下载走 sendfile),后端这边基本不随文件变大而变贵。剩下的天花板在**浏览器**:
+#: 一份 GLB 要先成为 ArrayBuffer、再被 GLTFLoader 解析、贴图再进显存,几份拷贝叠起来。
+#: 超过 300 MB 左右开始明显卡的是那一头,不是这一头。真要更大就该压(Draco / KTX2 都支持了),
+#: 而不是继续抬这个数。
+MODEL_LIMIT_BYTES = 512 * 1024 * 1024
+
+#: 内嵌 glTF 的上限**低得多,而且是有道理的**:它是一整份 JSON,资源全是 base64 塞在里面,
+#: 校验必须 `json.loads` 整份 —— 那一下就是文件大小的好几倍内存,没有"只读文件头"这条路。
+#: GLB 把资源放在二进制块里,我们只解析前面那段 JSON,所以它可以大得多。
+#: 换句话说这不是两个产品决定,是两种格式的代价不同。
+EMBEDDED_GLTF_LIMIT_BYTES = 100 * 1024 * 1024
+
+
+def _limit_for(fmt: str) -> int:
+    return MODEL_LIMIT_BYTES if fmt == "glb" else EMBEDDED_GLTF_LIMIT_BYTES
+
+
+def _refuse_too_large(measured: int, fmt: str) -> None:
+    limit_bytes = _limit_for(fmt)
+    if measured <= limit_bytes:
+        return
+    limit = limit_bytes // 1024 // 1024
+    actual = f"{measured/1024/1024:.1f}"
+    # 真实大小只在**它能多说一句**的时候才报:四舍五入之后恰好等于上限时,写出来就成了
+    # "100.0 MB 超出上限 100 MB",读起来像 bug。
+    excess = f"（这份 {actual} MB）" if actual != f"{limit}.0" else ""
+    advice = (
+        "把贴图换成 KTX2、几何用 Draco 压一下(Mosael 都能解),"
+        if fmt == "glb"
+        else "改导出 GLB —— 内嵌 glTF 要整份解析，所以它的上限低得多。GLB 可以到 "
+             f"{MODEL_LIMIT_BYTES // 1024 // 1024} MB。也可以"
+    )
+    raise SceneTooLarge(
+        f"模型超出上限 {limit} MB{excess}。{advice}"
+        "或者在 Blender 里隐藏用不到的物体、把贴图降到 2K。")
+
+
+def _validate_document(doc: object) -> None:
+    """校验 glTF 文档本身。**只看结构,不看字节** —— 所以 GLB 只要前面那段 JSON 就够。"""
+    if not isinstance(doc, dict) or doc.get("asset", {}).get("version") != "2.0":
+        raise ValueError("需要 glTF 2.0 格式的模型。")
+
+    # 导入的模型永远不许去取网址或本地文件。
+    def inspect(value, depth=0):
+        if depth > 48:
+            raise ValueError("模型的结构嵌套太深，无法导入。")
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key == "uri" and (not isinstance(child, str) or not child.startswith("data:")):
+                    raise ValueError("请导出自包含的 GLB（或把资源内嵌进 glTF）—— 模型里引用的外部文件和网址不会被读取。")
+                inspect(child, depth+1)
+        elif isinstance(value, list):
+            for child in value:
+                inspect(child, depth+1)
+
+    inspect(doc)
+    if len(doc.get("nodes", [])) > 5000 or len(doc.get("meshes", [])) > 2000:
+        raise ValueError(f"模型有 {len(doc.get('nodes', []))} 个节点、{len(doc.get('meshes', []))} 个网格，"
+                         "超出实时编辑的上限（5000 / 2000）。请在 Blender 里合并物体或减少细分后重试。")
+
+
+def validate_model_file(path: Path) -> str:
+    """校验磁盘上的一份模型,返回格式。**不整份读进内存。**
+
+    GLB 的资源都在后面的二进制块里,我们一个字节都不看 —— 只要文件头(20 字节)和它声明的那段
+    JSON。一份 500 MB 的模型,这里读进来的通常是几百 KB。
+
+    内嵌 glTF 没有这条路:它是一整份 JSON,资源是 base64 塞在里面的,不解析完就没法校验。
+    它的上限因此低得多(见 EMBEDDED_GLTF_LIMIT_BYTES)。
+    """
+    size = path.stat().st_size
+    try:
+        with path.open("rb") as stream:
+            head = stream.read(20)
+            if head[:4] == b"glTF":
+                _, version, length, chunk_size, chunk_type = struct.unpack("<4sIIII", head)
+                _refuse_too_large(size, "glb")
+                if version != 2 or length != size or chunk_type != 0x4E4F534A or chunk_size > size - 20:
+                    raise ValueError("这不是一个有效的 GLB 文件（文件头读不通）。")
+                doc = json.loads(stream.read(chunk_size))
+                fmt = "glb"
+            else:
+                _refuse_too_large(size, "gltf")
+                stream.seek(0)
+                doc = json.loads(stream.read())
+                fmt = "gltf"
+        _validate_document(doc)
+    except SceneTooLarge:
+        raise
+    except (ValueError, TypeError, AttributeError, struct.error, RecursionError, OSError) as exc:
+        raise SceneDomainError(str(exc)) from exc
+    return fmt
 
 
 def validate_model(data: bytes, *, size: int | None = None) -> str:
-    """校验一份导入模型。`size` 是这份文件的**真实字节数**,调用方知道就传。
-
-    为什么要单独传:调用方只读 `MODEL_READ_LIMIT`(上限 + 1)个字节 —— 不然一份 500 MB 的
-    文件会被整个读进内存,而我们只是要拒绝它。代价是 `len(data)` 最大就是上限 + 1,
-    **拿它当文件大小报出来是错的**:500 MB 会被说成"100.0 MB,超出上限 100 MB",
-    读起来像个 bug,而且把用户往"再减一点点就行"的方向骗。
-    """
-    measured = size if size is not None else len(data)
-    if measured > MODEL_LIMIT_BYTES:
-        limit = MODEL_LIMIT_BYTES // 1024 // 1024
-        actual = f"{measured/1024/1024:.1f}"
-        # 真实大小只在**它能多说一句**的时候才报:不知道大小(size 没传,读数被截在上限上)、
-        # 或者四舍五入之后恰好等于上限时,写出来就成了"100.0 MB 超出上限 100 MB"。
-        excess = f"（这份 {actual} MB）" if actual != f"{limit}.0" else ""
-        raise SceneTooLarge(
-            f"模型超出上限 {limit} MB{excess}。常见的减法：在 Blender 里隐藏或删掉用不到的物体、"
-            "把贴图降到 2K、或者把场景拆成几个分别导入。")
+    """内存里那一份的版本。**只给已经握着字节的调用方** —— 新代码走 `validate_model_file`。"""
     fmt = "glb" if data[:4] == b"glTF" else "gltf"
+    _refuse_too_large(size if size is not None else len(data), fmt)
     try:
         if fmt == "glb":
-            magic, version, length, chunk_size, chunk_type = struct.unpack("<4sIIII", data[:20])
+            _, version, length, chunk_size, chunk_type = struct.unpack("<4sIIII", data[:20])
             if version != 2 or length != len(data) or chunk_type != 0x4E4F534A or chunk_size > len(data)-20:
                 raise ValueError("这不是一个有效的 GLB 文件（文件头读不通）。")
             doc = json.loads(data[20:20+chunk_size])
         else:
             doc = json.loads(data)
-        if doc.get("asset", {}).get("version") != "2.0":
-            raise ValueError("需要 glTF 2.0 格式的模型。")
-        # Never allow imported models to fetch network URLs or local files.
-        def inspect(value, depth=0):
-            if depth > 48:
-                raise ValueError("模型的结构嵌套太深，无法导入。")
-            if isinstance(value, dict):
-                for key, child in value.items():
-                    if key == "uri" and (not isinstance(child, str) or not child.startswith("data:")):
-                        raise ValueError("请导出自包含的 GLB（或把资源内嵌进 glTF）—— 模型里引用的外部文件和网址不会被读取。")
-                    inspect(child, depth+1)
-            elif isinstance(value, list):
-                for child in value:
-                    inspect(child, depth+1)
-        inspect(doc)
-        if len(doc.get("nodes", [])) > 5000 or len(doc.get("meshes", [])) > 2000:
-            raise ValueError(f"模型有 {len(doc.get('nodes', []))} 个节点、{len(doc.get('meshes', []))} 个网格，超出实时编辑的上限（5000 / 2000）。请在 Blender 里合并物体或减少细分后重试。")
+        _validate_document(doc)
     except (ValueError, TypeError, AttributeError, struct.error, RecursionError) as exc:
         raise SceneDomainError(str(exc)) from exc
     return fmt
 
 
-def _store_model(workspace_id: str, scene_id: str, model_id: str, fmt: str, data: bytes) -> tuple[str, int]:
-    """把模型字节落到磁盘,返回 (file_key, 字节数)。
+CHUNK = 1024 * 1024
 
-    **先写文件再落行**:反过来的话,行已经指向一个还不存在的文件,中间任何一次读都是 404;
-    而这个顺序下最坏的结果是一个没人引用的文件 —— 调用方在落行失败时把它删掉。
-    """
+
+def _model_slot(workspace_id: str, scene_id: str) -> Path:
     directory = scene_model_dir(workspace_id, scene_id)
     directory.mkdir(parents=True, exist_ok=True)
-    (directory / f"{model_id}.{fmt}").write_bytes(data)
-    return scene_model_key(workspace_id, scene_id, f"{model_id}.{fmt}"), len(data)
+    return directory
 
 
-def import_model(db: Session, scene: Scene3D, name: str, data: bytes, *, size: int | None = None) -> Scene3DModel:
-    fmt = validate_model(data, size=size)
+def _peek_format(source: BinaryIO) -> str:
+    """看头 4 个字节判格式,再把位置放回去。两种格式的上限不同,所以要先知道是哪种。"""
+    where = source.tell()
+    magic = source.read(4)
+    source.seek(where)
+    return "glb" if magic == b"glTF" else "gltf"
+
+
+def import_model(db: Session, scene: Scene3D, name: str, source: BinaryIO,
+                 *, declared_size: int | None = None) -> Scene3DModel:
+    """把一份模型收进这个场景。**从流分块搬到磁盘,任何时候都不整份进内存。**
+
+    顺序是:先按声明的大小挡一道(一份 2 GB 的文件不必落盘就能拒绝)、分块拷到 `.part`、
+    校验(GLB 只读文件头和那段 JSON)、改名、落行。
+
+    `.part` 这个中间名是有用的:校验没过或落行失败时删掉它,目录里不会留下一个**看起来像
+    成品**的文件 —— 那种残骸最难认,它和真模型只差在能不能解析。
+    """
+    fmt = _peek_format(source)
+    if declared_size is not None:
+        _refuse_too_large(declared_size, fmt)
+
     model_id = uuid4().hex
-    file_key, stored = _store_model(scene.workspace_id, scene.id, model_id, fmt, data)
+    directory = _model_slot(scene.workspace_id, scene.id)
+    staged = directory / f"{model_id}.part"
+    try:
+        size = 0
+        with staged.open("wb") as out:
+            while chunk := source.read(CHUNK):
+                size += len(chunk)
+                # 边搬边挡:调用方没给大小(或给错了)时,这里仍然不会写下一份超限的文件。
+                _refuse_too_large(size, fmt)
+                out.write(chunk)
+        fmt = validate_model_file(staged)
+        final = directory / f"{model_id}.{fmt}"
+        staged.replace(final)
+    except BaseException:
+        staged.unlink(missing_ok=True)
+        raise
+
     model = Scene3DModel(id=model_id, scene_id=scene.id, name=name[:160], format=fmt,
-                         file_key=file_key, size=stored)
+                         file_key=scene_model_key(scene.workspace_id, scene.id, final.name), size=size)
     db.add(model)
     try:
         db.commit()
     except Exception:
         db.rollback()
-        resolve_key(file_key).unlink(missing_ok=True)   # 行没落成,文件不留
+        final.unlink(missing_ok=True)   # 行没落成,文件不留
         raise
     db.refresh(model)
     return model
@@ -195,31 +283,37 @@ def delete_scene_model_files(scene: Scene3D) -> None:
 
 def create_scene_with_model(db: Session, *, workspace_id: str, name: str, content: SceneContent,
                             model_id: str, model_name: str, model_format: str,
-                            model_data: bytes) -> Scene3D:
+                            model_source: Path) -> Scene3D:
     """建一个场景,连同它自带的那份导入模型和初始修订,**一个事务里落地**。
 
     Blender 接回来的场景就是这个形状:场景、模型、修订三样要么一起在,要么一起不在 ——
     少了模型的场景在编辑器里是个空壳,而没有场景的模型没有任何入口能删掉。
 
     `create_scene` 明确拒绝内容里带 `model_id`(先建场景、再导模型),这里是那条规则的
-    **唯一例外**:模型的字节此刻就在手上,分两步反而必然留下一个中间态。
+    **唯一例外**:模型此刻就在手上,分两步反而必然留下一个中间态。
 
     它存在的另一个理由是**数据归属**(ADR-0003):Scene3D / Scene3DModel / Scene3DRevision
     三张表归这个模块,所以行只在这里建;Blender 互通调它,而不是自己 `Scene3D(...)`。
+
+    收的是**路径不是字节**:一份 500 MB 的模型没有理由为了换个地方而先进内存一趟。
     """
     scene = Scene3D(workspace_id=workspace_id, name=name[:160], content=content.model_dump(mode="json"))
     db.add(scene)
     db.flush()
-    file_key, stored = _store_model(workspace_id, scene.id, model_id, model_format, model_data)
+    directory = _model_slot(workspace_id, scene.id)
+    final = directory / f"{model_id}.{model_format}"
+    shutil.copyfile(model_source, final)
+    size = final.stat().st_size
     db.add(Scene3DModel(id=model_id, scene_id=scene.id, name=model_name[:160],
-                        format=model_format, file_key=file_key, size=stored))
+                        format=model_format, file_key=scene_model_key(workspace_id, scene.id, final.name),
+                        size=size))
     db.add(Scene3DRevision(scene_id=scene.id, revision=1,
                            snapshot={"name": scene.name, "content": scene.content}))
     try:
         db.commit()
     except Exception:
         db.rollback()
-        resolve_key(file_key).unlink(missing_ok=True)
+        final.unlink(missing_ok=True)
         raise
     db.refresh(scene)
     return scene

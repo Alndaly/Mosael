@@ -18,7 +18,7 @@ from app.core.config import settings
 from app.db.models import PluginInstance
 from app.domain.plugins import PluginDomainError, instances, tools
 from app.domain.scene_types import SceneContent
-from app.domain.scenes import MODEL_READ_LIMIT, create_scene_with_model, import_model, validate_model
+from app.domain.scenes import create_scene_with_model, import_model, validate_model_file
 from .scripts import command
 
 class BlenderDomainError(ValueError):
@@ -155,19 +155,21 @@ def execute(db, instance, operation, payload, workspace_id):
         raise BlenderUnavailable('Blender 同步结果无法读取，请重试。') from exc
 
 
-def send(db, user, scene, instance_id, revision, shot_id, data, *, size=None):
+def send(db, user, scene, instance_id, revision, shot_id, source, *, size=None):
     instance = connection(db, user, instance_id)
     if revision != scene.revision:
         raise BlenderConflict('场景已变更，请等待保存完成后重新发送。')
     if shot_id not in {s['id'] for s in scene.content['shots']}:
         raise BlenderDomainError('Shot not found')
-    if validate_model(data, size=size) != 'glb':
-        raise BlenderDomainError('场景传输需要 GLB。')
     with exclusive(instance.id):
         transfer_id = str(uuid4())
         folder = root(scene) / transfer_id
         folder.mkdir(parents=True)
-        (folder / 'input.glb').write_bytes(data)
+        # 分块落盘再从文件校验 —— 这一份是浏览器导出的整个场景,没有理由先进一趟内存。
+        with (folder / 'input.glb').open('wb') as out:
+            shutil.copyfileobj(source, out, 1024 * 1024)
+        if validate_model_file(folder / 'input.glb') != 'glb':
+            raise BlenderDomainError('场景传输需要 GLB。')
         snapshot = {'id': scene.id, 'name': scene.name, 'content': scene.content}
         record = {'id': transfer_id, 'owner': user.id, 'instance_id': instance.id, 'source_revision': revision,
                   'snapshot': snapshot, 'status': 'sending', 'created_at': datetime.now(timezone.utc).isoformat()}
@@ -215,15 +217,16 @@ def receive(db, user, scene, transfer_id, *, into_current=False):
             'shots': record['snapshot']['content']['shots'], 'output_path': str(attempt / 'model.glb'),
             'blend_path': str(attempt / 'scene.blend'), 'result_path': str(attempt / 'result.json')}, scene.workspace_id)
         exported = attempt / 'model.glb'
-        try:
-            size = exported.stat().st_size          # 报错时要说真实大小,而读数被截在上限上
-            with exported.open('rb') as stream:
-                data = stream.read(MODEL_READ_LIMIT)
-        except OSError as exc:
-            raise BlenderUnavailable('Blender 没有生成可接收的模型，请重试。') from exc
-        fmt = validate_model(data, size=size)
+        if not exported.is_file():
+            raise BlenderUnavailable('Blender 没有生成可接收的模型，请重试。')
+        fmt = validate_model_file(exported)
         # 落到当前场景:模型先进库(建行归场景域,ADR-0003),内容交回编辑器去写。
-        model_id = import_model(db, scene, 'Blender model', data, size=size).id if into_current else uuid4().hex
+        if into_current:
+            with exported.open('rb') as stream:
+                model_id = import_model(db, scene, 'Blender model', stream,
+                                        declared_size=exported.stat().st_size).id
+        else:
+            model_id = uuid4().hex
         try:
             content = SceneContent.model_validate({**record['snapshot']['content'], 'shots': result['shots'],
                 'objects': [{'id': 'blender-model', 'kind': 'model', 'name': 'Blender 模型', 'model_id': model_id}]})
@@ -237,7 +240,7 @@ def receive(db, user, scene, transfer_id, *, into_current=False):
         received = create_scene_with_model(
             db, workspace_id=scene.workspace_id, name=record['snapshot']['name'] + ' · Blender',
             content=content, model_id=model_id, model_name='Blender model',
-            model_format=fmt, model_data=data)
+            model_format=fmt, model_source=exported)
         record.update(received_scene_id=received.id, warnings=result.get('warnings', []), latest_blend=str(attempt.relative_to(folder) / 'scene.blend'))
         write_record(folder, record)
         return summary(record)
@@ -264,22 +267,19 @@ def pull(db, user, workspace_id, instance_id):
             result = execute(db, instance, 'pull', {'output_path': str(folder / 'model.glb'),
                 'result_path': str(folder / 'pulled.json')}, workspace_id)
             exported = folder / 'model.glb'
-            try:
-                size = exported.stat().st_size      # 同上:真实大小只有文件系统知道
-                with exported.open('rb') as stream:
-                    data = stream.read(MODEL_READ_LIMIT)
-            except OSError as exc:
-                raise BlenderUnavailable('Blender 没有导出可用的模型，请重试。') from exc
+            if not exported.is_file():
+                raise BlenderUnavailable('Blender 没有导出可用的模型，请重试。')
+            fmt = validate_model_file(exported)
+            model_id = uuid4().hex
+            content = SceneContent.model_validate({'objects': [
+                {'id': 'blender-model', 'kind': 'model', 'name': 'Blender 模型', 'model_id': model_id}]})
+            scene = create_scene_with_model(
+                db, workspace_id=workspace_id, name=result.get('scene_name') or 'Blender 场景',
+                content=content, model_id=model_id, model_name='Blender model',
+                model_format=fmt, model_source=exported)
         finally:
+            #: 临时目录用完即删 —— 字节已经拷进场景的模型目录,这里没有第二个读者。
             shutil.rmtree(folder, ignore_errors=True)
-        fmt = validate_model(data, size=size)
-        model_id = uuid4().hex
-        content = SceneContent.model_validate({'objects': [
-            {'id': 'blender-model', 'kind': 'model', 'name': 'Blender 模型', 'model_id': model_id}]})
-        scene = create_scene_with_model(
-            db, workspace_id=workspace_id, name=result.get('scene_name') or 'Blender 场景',
-            content=content, model_id=model_id, model_name='Blender model',
-            model_format=fmt, model_data=data)
         warnings = list(result.get('warnings') or [])
         if result.get('camera_count'):
             warnings.append('Blender 里的 %d 个相机没有一起取回 —— 镜头需要「看向哪里」，'

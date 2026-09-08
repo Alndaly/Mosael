@@ -43,7 +43,7 @@ Connect your chosen Mosael agent to local Blender, then exchange models and came
 - 发送以 30 fps 烘焙镜头运动及垂直 FOV。接收按镜头时长最多采样 100 帧；长镜头会显示检查提示。
 - 支持无 roll 的透视镜头；正交/倾斜镜头暂保留发送时版本并明确提示。接收沿用源镜头的名称、时长和比例；新建的 Blender 相机不会自动变成 Mosael 镜头。
 - 接收的是第一帧几何快照，并尽可能应用修改器。复杂节点材质、物体动画、世界光和 Area light 无法通过 GLB 完整还原；完整编辑信息留在 `.blend`。环境背景/环境光沿用发送快照。
-- 场景文件最大 100 MB，接收沿用 Mosael 模型复杂度（5000 节点 / 2000 网格）和外部资源校验。撞上上限时先试压缩：Mosael 能解 Draco、KTX2(Basis) 和 meshopt，贴图压下来通常就够了；再不行就隐藏用不到的物体、把贴图降到 2K，或拆成几份分别传输。
+- 场景文件最大 512 MB，接收沿用 Mosael 模型复杂度（5000 节点 / 2000 网格）和外部资源校验。真撞上时先试压缩：Mosael 能解 Draco、KTX2(Basis) 和 meshopt；再不行就隐藏用不到的物体、把贴图降到 2K，或拆成几份分别传输。
 - 本阶段没有自动逐物体合并、持续双向同步或 Cycles 后台渲染队列。
 
 `execute_blender_code` 能执行本机 Blender Python，拥有 Blender 进程的文件权限；它不是沙箱。仅启用信任的接入。界面的同步 API 不接受任意 Python 或自定义文件路径，使用固定脚本，并经过用户、工作区和插件授权检查。
