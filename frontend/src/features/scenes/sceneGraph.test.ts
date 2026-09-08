@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   cameraOfShot,
   cameraPreset,
+  hasObjectMotion,
   duplicateObject,
   initialScene,
   makeObject,
   makeShot,
   removeObjects,
   sampleCamera,
+  sampleObject,
 } from "./sceneGraph";
 describe("editable scene graph", () => {
   it("samples every camera key exactly and holds at the bounds", () => {
@@ -47,6 +49,44 @@ describe("editable scene graph", () => {
       fov: 50,
     });
     expect(camera.track[0].fov).toBe(40);
+  });
+
+  it("an object with no track just stays where it is", () => {
+    const { shot } = makeShot();
+    const box = makeObject("box", { position: [1, 2, 3], rotation: [0, 45, 0], scale: [2, 2, 2] });
+    expect(box.track).toEqual([]);
+    expect(sampleObject(box, shot, 2.5)).toEqual({
+      position: [1, 2, 3],
+      rotation: [0, 45, 0],
+      scale: [2, 2, 2],
+    });
+  });
+
+  it("walks an object between its keys, and keeps the fields a key does not mention", () => {
+    // 关键帧只写一部分字段是常态:"只想让它平移"不该被迫把旋转和缩放也抄一遍。
+    // 没写的沿用物体的静止值 —— 悄悄把它们归零的话,人会一边走一边缩成一个点。
+    const { shot } = makeShot();
+    shot.easing = "linear";
+    const walker = makeObject("figure", { rotation: [0, 90, 0], scale: [1, 1, 1] });
+    walker.track = [
+      { time: 0, position: [0, 0, 0] },
+      { time: 5, position: [10, 0, -4] },
+    ];
+    expect(sampleObject(walker, shot, 2.5)).toEqual({
+      position: [5, 0, -2],
+      rotation: [0, 90, 0],
+      scale: [1, 1, 1],
+    });
+    expect(sampleObject(walker, shot, 99).position).toEqual([10, 0, -4]);
+  });
+
+  it("knows whether anything but the camera is moving", () => {
+    // 视口据此决定要不要每帧重摆一次物体 —— 静态场景一帧也不该多算。
+    const content = initialScene(true);
+    expect(hasObjectMotion(content)).toBe(false);   // 示例场景只有相机在动
+    const walker = makeObject("figure");
+    walker.track = [{ time: 0, position: [0, 0, 0] }, { time: 3, position: [2, 0, 0] }];
+    expect(hasObjectMotion({ ...content, objects: [...content.objects, walker] })).toBe(true);
   });
 
   it("duplicates nested groups with new identities and retains local transforms", () => {

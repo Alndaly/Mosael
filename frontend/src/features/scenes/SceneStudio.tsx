@@ -81,6 +81,7 @@ import {
 import { useAutosave } from "@/features/boards/useAutosave";
 import {
   cameraOfShot,
+  hasObjectMotion,
   initialScene,
   makeObject,
   makeShot,
@@ -1051,7 +1052,9 @@ function SceneEditor({
               )}
             </div>
           )}
-          {(step !== "build" || fullscreen.active) && (
+          {/* **搭建场景这一步也要有时间条。** 走位是"物体在第几秒在哪儿",没有时间条就无从选
+              那一刻;而运镜和走位本来就在同一条时间轴上。 */}
+          {(step !== "build" || fullscreen.active || hasObjectMotion(draft.content) || !!object) && (
             <section className="scene-timeline" aria-label="镜头播放控制">
               <div className="scene-shot-row">
                 <Camera size={16} />
@@ -1272,6 +1275,7 @@ function SceneEditor({
                 <SceneInspector
                   content={draft.content}
                   object={object}
+                  time={time}
                   objectPatch={objectPatch}
                   update={update}
                   setSelected={setSelected}

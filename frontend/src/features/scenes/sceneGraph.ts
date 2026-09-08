@@ -161,6 +161,51 @@ export function initialScene(demo = false): SceneContent {
   };
 }
 /**
+ * 某个时刻的物体姿态。**空轨就是静止** —— 直接给物体自己的变换。
+ *
+ * 和相机那条共用同一套语义(端点保持、按镜头的缓动插值),但插的是 position/rotation/scale。
+ * 关键帧可以只写其中一部分 —— 没写的字段沿用物体的静止值,这样"只想让它平移"不必把旋转和
+ * 缩放也抄一遍。
+ */
+export function sampleObject(
+  object: SceneObject,
+  shot: SceneShot,
+  time: number,
+): { position: Vec3; rotation: Vec3; scale: Vec3 } {
+  const still = {
+    position: object.position,
+    rotation: object.rotation,
+    scale: object.scale,
+  };
+  const track = object.track;
+  if (!track.length) return still;
+  const t = Math.max(0, Math.min(time, shot.duration));
+  const at = (frame: Keyframe) => ({
+    position: frame.position,
+    rotation: (frame.rotation ?? still.rotation) as Vec3,
+    scale: (frame.scale ?? still.scale) as Vec3,
+  });
+  const next = track.findIndex((f) => f.time > t);
+  if (next < 0) return at(track[track.length - 1]);
+  if (next === 0) return at(track[0]);
+  const a = at(track[next - 1]),
+    b = at(track[next]);
+  let u = (t - track[next - 1].time) / (track[next].time - track[next - 1].time);
+  if (shot.easing === "smooth") u = u * u * (3 - 2 * u);
+  const mix = (x: Vec3, y: Vec3) => x.map((v, i) => v + (y[i] - v) * u) as Vec3;
+  return {
+    position: mix(a.position, b.position),
+    rotation: mix(a.rotation, b.rotation),
+    scale: mix(a.scale, b.scale),
+  };
+}
+
+/** 场景里有没有东西在动(相机之外)。决定要不要每帧重算物体的姿态。 */
+export function hasObjectMotion(content: SceneContent): boolean {
+  return content.objects.some((o) => o.kind !== "camera" && o.track.length > 0);
+}
+
+/**
  * 某个时刻的机位姿态。
  *
  * **空轨就是静止** —— 直接给相机物体自己的姿态。这也是"有没有轨"正好等于"动不动"的地方:

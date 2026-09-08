@@ -25,7 +25,7 @@ import {
   type SceneLighting,
   type Vec3,
 } from "@/api/domains/scenes";
-import { cameraOfShot, sampleCamera } from "./sceneGraph";
+import { cameraOfShot, hasObjectMotion, sampleCamera, sampleObject } from "./sceneGraph";
 
 /**
  * 某个 props 快照在某一刻的机位姿态。
@@ -493,6 +493,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           return;
         }
         lastSignature = signature;
+        animated = hasObjectMotion(p.content);
         const gen = ++generation;
         transform.detach();
         disposeTree(root);
@@ -621,6 +622,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         }
       });
       resize.observe(element);
+      let animated = false;
       let lastPath = "",
         observedShot = "";
       function frameOverview(
@@ -681,6 +683,20 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           path.renderOrder = 9;
           scene.add(path);
         }
+        // **场景本身也会动。** 物体的轨和相机的轨在同一条时间轴上,所以每帧都要按当前时刻
+        // 重摆一次 —— 但只在真的有东西在动的时候做,静态场景一帧也不该多算。
+        //
+        // 拖动操纵器时跳过:那时用户正在改的是**静止姿态**,每帧再按轨覆盖一次会把它拽回去。
+        if (animated && !transform.dragging)
+          for (const o of p.content.objects) {
+            if (!o.track.length || o.kind === "camera") continue;
+            const node = objects.get(o.id);
+            if (!node) continue;
+            const at = sampleObject(o, p.shot, p.time);
+            node.position.fromArray(at.position);
+            node.rotation.set(...(at.rotation.map(THREE.MathUtils.degToRad) as Vec3));
+            node.scale.fromArray(at.scale);
+          }
         grid.visible = !p.preview;
         if (path) path.visible = !!p.observing;
         observer.group.visible = !!p.observing;
@@ -797,9 +813,27 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         // 它的世界矩阵就不参与更新,光会照着默认方向(原点)打。
         exportScene.add(copy, ambient.clone(), exportSun, exportSun.target);
         const camera = new THREE.PerspectiveCamera(45, aspect, 0.05, 2000);
+        // **导出的画面里物体也要动。** 克隆出来的是静止姿态,每一帧都要按轨重摆 ——
+        // 否则参考视频里相机在走、人却站着不动,而"人在走"恰恰是交给视频模型最有价值的条件。
+        const moving = latest.current.content.objects.filter(
+          (o) => o.kind !== "camera" && o.track.length,
+        );
+        const byId = new Map<string, THREE.Object3D>();
+        copy.traverse((node) => {
+          const id = node.userData.sceneObjectId;
+          if (typeof id === "string" && !byId.has(id)) byId.set(id, node);
+        });
         return {
           r,
           draw: (time: number) => {
+            for (const object of moving) {
+              const node = byId.get(object.id);
+              if (!node) continue;
+              const at = sampleObject(object, shot, time);
+              node.position.fromArray(at.position);
+              node.rotation.set(...(at.rotation.map(THREE.MathUtils.degToRad) as Vec3));
+              node.scale.fromArray(at.scale);
+            }
             pose(camera, frameAt({ ...latest.current, shot }, time));
             r.render(exportScene, camera);
           },
