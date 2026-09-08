@@ -345,9 +345,8 @@ async function stopManagedBackendForRestore() {
 }
 
 // ---------------- 应用更新(检查-提示式) ----------------
-// macOS 未签名包装不上 Squirrel 自动安装(签名校验必失败),所以走「检查 + 提示 +
-// 打开发布页」的降级路线:GitHub Releases 比对版本号。日后具备 Developer ID 签名
-// 时,可在此平滑升级为 electron-updater 的全自动下载安装,渲染层接口不变。
+// 更新仍使用「检查 + 提示 + 打开发布页」:GitHub Releases 比对版本号。
+// Developer ID 签名不改变更新安装方式；静默安装需独立的更新器实现和验证。
 // 必须是 GitHub 上的规范仓库名(大小写一致)。写错大小写 API 会返回 301,虽然 fetch
 // 默认跟随重定向仍能work,但更新检查的失败是静默的——一旦重定向失效就再没人发现。
 const UPDATE_REPO = "Alndaly/Mosael";
@@ -545,11 +544,15 @@ function createWindow() {
       // the actual sandbox boundary that window chrome and every privileged desktop feature use.
       markSmokeStage("did-finish-load");
       let desktopBridgeReady = false;
+      let platformAuthenticatorAvailable = false;
       let bridgeError = null;
       try {
         desktopBridgeReady = await win.webContents.executeJavaScript(
           `typeof window.mosaelDesktop === "object" && ` +
             `window.mosaelDesktop.platform === ${JSON.stringify(process.platform)}`,
+        );
+        platformAuthenticatorAvailable = await win.webContents.executeJavaScript(
+          `typeof PublicKeyCredential !== "undefined" && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()`,
         );
       } catch (error) {
         // 这个 handler 是 async 的:rejection 此前没人接,于是既不写结果也不退出,外面
@@ -561,6 +564,7 @@ function createWindow() {
         backendHealthy: true,
         rendererLoaded: true,
         desktopBridgeReady,
+        platformAuthenticatorAvailable,
         ...(bridgeError ? { bridgeError } : {}),
       });
       markSmokeStage("quit-requested");
@@ -659,7 +663,8 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   // 平台认证器要在 ready 之后配。没签名时它自己会跳过(见 webauthn.cjs 里的三个前提)。
-  require("./webauthn.cjs").configurePlatformAuthenticator();
+  const platformAuthenticatorConfigured = require("./webauthn.cjs").configurePlatformAuthenticator();
+  reportSmoke({ platformAuthenticatorConfigured });
   const ready = await ensureBackend();
   if (!ready) {
     reportSmoke({ backendHealthy: false, rendererLoaded: false, error: "backend did not become healthy" });

@@ -29,6 +29,7 @@
     "gen:api": "openapi-typescript backend/openapi.json -o frontend/src/api/generated/schema.d.ts"
   },
   "devDependencies": {
+    "@electron/osx-sign": "1.3.3",
     "electron": "^44.2.0",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.2",
@@ -79,10 +80,14 @@
       "target": [
         "dir"
       ],
-      "identity": null,
+      "identity": "Qingyong Technology (hangzhou) Co., Ltd (27W3D2ZUT9)",
+      "forceCodeSigning": true,
       "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist",
-      "hardenedRuntime": true
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "provisioningProfile": "build/mosael.provisionprofile",
+      "notarize": true,
+      "hardenedRuntime": true,
+      "sign": "scripts/sign-mac.cjs"
     },
     "win": {
       "icon": "build/icon.png",

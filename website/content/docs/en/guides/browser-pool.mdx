@@ -84,4 +84,4 @@ switching to a team backend does not carry logins along with it.
 
 ## Passkeys and platform authenticators
 
-The browser pool handles account selection for discoverable credentials and checks actual WebAuthn capabilities. macOS Touch ID requires a signed build with matching keychain entitlements; current unsigned distributions do not enable it. Device-bound credentials remain partitioned by browser profile and do not automatically sync from iCloud or a phone. Cross-device QR passkeys are unavailable; choose another login method when the site offers one.
+The browser pool handles account selection for discoverable credentials and checks actual WebAuthn capabilities. Official macOS builds use Developer ID signing, a matching provisioning profile and Apple notarization. On supported Macs with fingerprints enrolled, Touch ID can register and use device-bound passkeys. Unsigned development builds do not enable this capability. Device-bound credentials remain partitioned by browser profile and do not automatically sync from iCloud or a phone. Cross-device QR passkeys are unavailable; choose another login method when the site offers one.

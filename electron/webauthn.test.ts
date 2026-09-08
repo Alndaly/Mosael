@@ -1,66 +1,134 @@
-/**
- * 内嵌浏览器里的 passkey 接线。
- *
- * 这条链**今天开不起来**(应用未签名),所以它更需要被盯着:一个开不起来的功能,写错了也
- * 没有任何地方会报错 —— 等到哪天真去签名,才发现 keychain group 和 entitlement 对不上,
- * 而那时的症状只是"Touch ID 没反应"。
- */
 import fs from "node:fs";
 import path from "node:path";
-
-import { describe, expect, it } from "vitest";
+import { createRequire } from "node:module";
+import vm from "node:vm";
+import { describe, expect, it, vi } from "vitest";
 
 const ROOT = path.resolve(__dirname, "..");
 const SOURCE = fs.readFileSync(path.join(ROOT, "electron/webauthn.cjs"), "utf8");
 const ENTITLEMENTS = fs.readFileSync(path.join(ROOT, "build/entitlements.mac.plist"), "utf8");
 const PACKAGE = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+const { readWebAuthnKeychainGroup } = createRequire(import.meta.url)("./mac-signature.cjs");
+const team = "27W3D2ZUT9";
+const appId = PACKAGE.build.appId;
+const group = `${team}.${appId}.webauthn`;
+const validEntitlements = {
+  "com.apple.application-identifier": `${team}.${appId}`,
+  "com.apple.developer.team-identifier": team,
+  "keychain-access-groups": [group],
+};
 
-describe("passkey 的三个前提", () => {
-  it("keychain group 和 entitlement、appId 三处对得上", () => {
-    // 传给 configureWebAuthn 的 group **必须**出现在 entitlement 里,而它是拿 appId 拼的。
-    // 三处任意一处改了名字而另两处没跟上,结果都是"静默不生效"。
-    const appId = PACKAGE.build.appId as string;
-    expect(SOURCE).toContain(`const BUNDLE_ID = "${appId}"`);
-    expect(SOURCE).toContain("${TEAM_ID}.${BUNDLE_ID}.webauthn");
-    expect(ENTITLEMENTS).toContain(`${appId}.webauthn`);
-    expect(ENTITLEMENTS).toContain("keychain-access-groups");
+function signatureReader(entitlements: object = validEntitlements, metadata = `TeamIdentifier=${team}\n`) {
+  return vi.fn()
+    .mockReturnValueOnce({ status: 0 })
+    .mockReturnValueOnce({ status: 0, stdout: "signed plist", stderr: metadata })
+    .mockReturnValueOnce({ status: 0, stdout: JSON.stringify(entitlements) });
+}
+
+function loadWebAuthn(platform = "darwin", isPackaged = true, signedGroup = group) {
+  const app = { isPackaged, configureWebAuthn: vi.fn() };
+  const readGroup = vi.fn(() => signedGroup);
+  const target = { on: vi.fn() };
+  const dialog = { showMessageBoxSync: vi.fn() };
+  const context = {
+    module: { exports: {} as Record<string, (...args: any[]) => any> },
+    process: { platform, execPath: "/Applications/Mosael.app/Contents/MacOS/Mosael", env: {} },
+    require: (name: string) => name === "electron"
+      ? { app, dialog, session: { fromPartition: () => target } }
+      : { readWebAuthnKeychainGroup: readGroup },
+  };
+  vm.runInNewContext(SOURCE, context);
+  return { ...context.module.exports, app, readGroup, target, dialog };
+}
+
+describe("installed macOS signature", () => {
+  it("uses the verified executable's team and keychain entitlement without environment variables", () => {
+    const run = signatureReader();
+    expect(readWebAuthnKeychainGroup("/Applications/Mosael.app/Contents/MacOS/Mosael", appId, run)).toBe(group);
+    expect(run.mock.calls[0][1]).toContain("--verify");
+    expect(run.mock.calls[2][2].input).toBe("signed plist");
   });
-
-  it("打包配置真的会带上这份 entitlement", () => {
-    // 文件写好了但没挂进 build.mac,等于没写。
-    expect(PACKAGE.build.mac.entitlements).toBe("build/entitlements.mac.plist");
-    expect(PACKAGE.build.mac.entitlementsInherit).toBe("build/entitlements.mac.plist");
-    expect(PACKAGE.build.mac.hardenedRuntime).toBe(true);
+  it.each([
+    [{ ...validEntitlements, "keychain-access-groups": ["$(AppIdentifierPrefix)dev.mosael.app.webauthn"] }, `TeamIdentifier=${team}`],
+    [{ ...validEntitlements, "com.apple.developer.team-identifier": "WRONGTEAM1" }, `TeamIdentifier=${team}`],
+    [{ ...validEntitlements, "com.apple.application-identifier": `${team}.another.app` }, `TeamIdentifier=${team}`],
+    [validEntitlements, "TeamIdentifier=not set"],
+    [{}, `TeamIdentifier=${team}`],
+  ])("rejects mismatched or missing signature prerequisites", (entitlements, metadata) => {
+    expect(readWebAuthnKeychainGroup("/app", appId, signatureReader(entitlements, metadata))).toBe("");
   });
-
-  it("hardened runtime 下 Electron 起得来", () => {
-    // 少了这三条,签名之后渲染进程直接起不来 —— 比 passkey 用不了严重得多。
-    for (const key of [
-      "com.apple.security.cs.allow-jit",
-      "com.apple.security.cs.allow-unsigned-executable-memory",
-      "com.apple.security.cs.disable-library-validation",
-    ])
-      expect(ENTITLEMENTS).toContain(key);
+  it("rejects invalid signatures before reading their entitlements", () => {
+    const run = vi.fn(() => ({ status: 1 }));
+    expect(readWebAuthnKeychainGroup("/app", appId, run)).toBe("");
+    expect(run).toHaveBeenCalledTimes(1);
   });
-
-  it("没签名时不去调 configureWebAuthn,而不是调了再失败", () => {
-    // 没有 TEAM_ID 就没有合法的 group。调一次抛一次异常没有意义,日志里还多一条噪音。
-    expect(SOURCE).toContain("if (!TEAM_ID) return \"\"");
-    expect(SOURCE).toContain("process.platform !== \"darwin\"");
+  it("fails closed on timeout or malformed plist without breaking application startup", () => {
+    expect(readWebAuthnKeychainGroup("/app", appId, () => { throw new Error("timeout"); })).toBe("");
+    const run = signatureReader();
+    run.mockReset().mockReturnValueOnce({ status: 0 })
+      .mockReturnValueOnce({ status: 0, stderr: `TeamIdentifier=${team}`, stdout: "xml" })
+      .mockReturnValueOnce({ status: 0, stdout: "not json" });
+    expect(readWebAuthnKeychainGroup("/app", appId, run)).toBe("");
+  });
+  it("ships concrete main-app entitlements and keeps restricted groups out of helpers", () => {
+    expect(ENTITLEMENTS).toContain(group);
+    expect(ENTITLEMENTS).not.toContain("$(AppIdentifierPrefix)");
+    expect(PACKAGE.build.mac.forceCodeSigning).toBe(true);
+    expect(PACKAGE.build.mac.identity).toContain(team);
+    expect(PACKAGE.build.mac.provisioningProfile).toBe("build/mosael.provisionprofile");
+    const inherited = fs.readFileSync(path.join(ROOT, PACKAGE.build.mac.entitlementsInherit), "utf8");
+    expect(inherited).not.toContain("keychain-access-groups");
+    expect(inherited).toContain("com.apple.security.cs.allow-jit");
   });
 });
 
-describe("多凭据选择", () => {
-  it("一定会回调,包括出错的那一路", () => {
-    // **不回调请求就永远挂着** —— 正是这一整轮要消灭的那种状态。
-    const handler = SOURCE.slice(SOURCE.indexOf("select-webauthn-account"));
-    expect(handler).toContain("callback(accounts[0]?.credentialId)");
-    expect(handler).toContain("callback(picked < labels.length");
-    expect(handler.slice(handler.indexOf("catch"))).toContain("callback(undefined)");
+describe("platform authenticator wiring", () => {
+  it("configures the authenticator in a signed installation", () => {
+    const api = loadWebAuthn();
+    expect(api.configurePlatformAuthenticator()).toBe(true);
+    expect(api.readGroup).toHaveBeenCalledWith("/Applications/Mosael.app/Contents/MacOS/Mosael", appId);
+    expect(api.app.configureWebAuthn).toHaveBeenCalledWith({ touchID: {
+      keychainAccessGroup: group, promptReason: "verify your identity on $1",
+    } });
   });
+  it.each([["darwin", false], ["win32", true], ["linux", true]])("leaves unsupported builds alone", (platform, packaged) => {
+    const api = loadWebAuthn(platform as string, packaged as boolean);
+    expect(api.configurePlatformAuthenticator()).toBe(false);
+    expect(api.readGroup).not.toHaveBeenCalled();
+    expect(api.app.configureWebAuthn).not.toHaveBeenCalled();
+  });
+  it("does not configure an unsigned installation", () => {
+    const api = loadWebAuthn("darwin", true, "");
+    expect(api.configurePlatformAuthenticator()).toBe(false);
+    expect(api.app.configureWebAuthn).not.toHaveBeenCalled();
+  });
+  it("keeps startup working if Electron cannot enable the authenticator", () => {
+    const api = loadWebAuthn();
+    api.app.configureWebAuthn.mockImplementation(() => { throw new Error("unavailable"); });
+    expect(api.configurePlatformAuthenticator()).toBe(false);
+  });
+});
 
-  it("每个分区只接一次", () => {
-    // openView 和 configureAccount 都会调它,重复接会让一次请求弹出多个选择框。
-    expect(SOURCE).toContain("__mosaelWebauthnBound");
+describe("discoverable account selection", () => {
+  it("binds once and completes single, multiple and cancelled requests", () => {
+    const api = loadWebAuthn();
+    api.handleAccountSelection("persist:account");
+    api.handleAccountSelection("persist:account");
+    expect(api.target.on).toHaveBeenCalledTimes(1);
+    const handler = api.target.on.mock.calls[0][1];
+    const callback = vi.fn();
+    const accounts = [{ name: "Alice", credentialId: "one" }, { name: "Bob", credentialId: "two" }];
+    handler({}, { accounts: accounts.slice(0, 1) }, callback);
+    expect(callback).toHaveBeenLastCalledWith("one");
+    api.dialog.showMessageBoxSync.mockReturnValue(1);
+    handler({}, { accounts, relyingPartyId: "example.com" }, callback);
+    expect(callback).toHaveBeenLastCalledWith("two");
+    api.dialog.showMessageBoxSync.mockReturnValue(2);
+    handler({}, { accounts }, callback);
+    expect(callback).toHaveBeenLastCalledWith(undefined);
+    api.dialog.showMessageBoxSync.mockImplementation(() => { throw new Error("closed"); });
+    handler({}, { accounts }, callback);
+    expect(callback).toHaveBeenLastCalledWith(undefined);
+    expect(callback).toHaveBeenCalledTimes(4);
   });
 });

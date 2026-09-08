@@ -109,10 +109,14 @@ try {
   if (!result.packaged || !result.backendHealthy || !result.rendererLoaded || !result.desktopBridgeReady) {
     throw new Error(`incomplete packaged startup: ${JSON.stringify(result)}`);
   }
+  if (process.platform === "darwin" && !result.platformAuthenticatorConfigured) {
+    throw new Error(`signed macOS build did not configure Touch ID: ${JSON.stringify(result)}`);
+  }
 
   const verified = spawnSync(python, [fixture, "verify", dataDir], { stdio: "inherit" });
   if (verified.status !== 0) throw new Error("database upgrade verification failed");
   console.log(`bundle smoke passed (${process.platform}, app ${result.version})`);
+  console.log(`WebAuthn configured=${result.platformAuthenticatorConfigured}, device available=${result.platformAuthenticatorAvailable}`);
 } finally {
   rmSync(scratch, { recursive: true, force: true });
 }

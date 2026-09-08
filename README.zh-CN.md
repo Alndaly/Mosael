@@ -28,7 +28,7 @@ Mosael 把剪辑、AI 生成、智能体、工作流和发布放在同一个桌�
 
 ## 下载与运行
 
-当前正式版本：**[Mosael 1.2.0](https://github.com/Alndaly/Mosael/releases/tag/v1.2.0)**。
+当前正式版本：**[GitHub Releases](https://github.com/Alndaly/Mosael/releases/latest)**。
 
 从 [GitHub Releases](https://github.com/Alndaly/Mosael/releases) 下载：
 
@@ -244,8 +244,8 @@ Windows NSIS 安装包、Chrome 扩展和插件 zip。两个桌面平台都通�
 Latest；带预发布后缀的 tag（例如 `v1.0.0-beta1`）会发布为 GitHub Pre-release，不会覆盖当前稳定版。
 手动触发同一工作流只生成 workflow artifact，不发布版本。
 
-打包版会检查最新稳定版并提示更新；预发布版需要从 GitHub Releases 主动下载。macOS 安装包当前未签名，
-因此采用“检查并提示下载”，不做静默安装。
+打包版会检查最新稳定版并提示更新；预发布版需要从 GitHub Releases 主动下载。macOS 发布流程要求 Developer ID 签名与 Apple 公证，
+更新仍采用“检查并提示下载”。维护者配置见 [macOS 签名与 Touch ID](docs/MACOS_SIGNING.md)。
 
 ## 数据与日志
 

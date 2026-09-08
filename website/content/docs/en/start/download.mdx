@@ -10,7 +10,7 @@ Mosael is local-first: editing local media and exporting can work offline. A wor
 
 ## Download
 
-Current stable version: **[Mosael 1.2.0](https://github.com/Alndaly/Mosael/releases/tag/v1.2.0)**.
+Current stable version: **[GitHub Releases](https://github.com/Alndaly/Mosael/releases/latest)**.
 
 Installers are published on **[GitHub Releases](https://github.com/Alndaly/Mosael/releases)**:
 
@@ -21,12 +21,11 @@ Installers are published on **[GitHub Releases](https://github.com/Alndaly/Mosae
 
 The app silently checks the latest stable Release after launch and prompts you to download; there is also a "Check for updates" button under Settings → Local backend → Version. GitHub prereleases are opt-in and must be downloaded from the Releases page explicitly.
 
-<Aside type="note" title="Unsigned installers">
+<Aside type="note" title="Installer signing">
 
-Current installers are **not code-signed**:
+Version 1.2.0 is being prepared with Developer ID signing and Apple notarization. Download links still point to the latest published release; the new installer is not yet available.
 
-- **macOS**: if you see "cannot verify the developer" on first launch, **right-click the app → Open**, or run `xattr -cr "/Applications/Mosael.app"` and open again.
-- **Windows**: when SmartScreen appears, click "More info → Run anyway".
+Windows installers remain unsigned and may trigger an unknown-publisher SmartScreen notice. Verify the download source before proceeding.
 
 </Aside>
 
@@ -48,6 +47,8 @@ Package the desktop build:
 pnpm build:mac    # frontend + sidecar + publisher + backend (PyInstaller) + .app
 pnpm dist:mac     # same flow, produces a .dmg for distribution
 ```
+
+Local macOS packaging requires a signing identity, provisioning profile and notarization credentials; see the repository’s [macOS signing guide](https://github.com/Alndaly/Mosael/blob/main/docs/MACOS_SIGNING.md).
 
 Official releases are built by CI: maintainers push a `v*` tag and GitHub Actions packages macOS and Windows and attaches both installers to the Release. Tags with a suffix such as `-beta1` remain prereleases and do not replace the latest stable build (see the repository README).
 

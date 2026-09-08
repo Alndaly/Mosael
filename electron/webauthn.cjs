@@ -12,7 +12,7 @@
 //
 // Touch ID 这条要三个前提同时成立,缺一不可:
 //
-//   1. 应用**已签名**,且 entitlements 里有 keychain-access-groups
+//   1. 应用已签名,主应用的 keychain-access-groups 已由嵌入的描述文件授权
 //   2. 该 group 形如 <TEAM_ID>.<BUNDLE_ID>.webauthn,并与这里传的值完全一致
 //   3. 机器有 Secure Enclave(Apple silicon,或带 T2 的 Intel Mac)
 //
@@ -25,8 +25,7 @@
 // Mosael 里新注册一把**,之后在这个档案里就能用 Touch ID 登录。
 const { app, dialog, session } = require("electron");
 
-/** 签名后的 Team ID。没签名就没有它 —— 那时整条链都不成立。 */
-const TEAM_ID = (process.env.MOSAEL_TEAM_ID || "").trim();
+const { readWebAuthnKeychainGroup } = require("./mac-signature.cjs");
 
 /** 与 package.json 的 `build.appId` 必须一致 —— keychain group 是拿它拼的,对不上就静默失效。
  *  `electron/webauthn.test.ts` 盯着这两个别分岔。 */
@@ -38,19 +37,15 @@ function log(...args) {
 
 /** 平台认证器是否有可能可用。**只判我们能判的那几条**,判不了的交给 Electron。 */
 function touchIdPossible() {
-  if (process.platform !== "darwin") return "";
-  if (!TEAM_ID) return "";
-  return `${TEAM_ID}.${BUNDLE_ID}.webauthn`;
+  if (process.platform !== "darwin" || !app.isPackaged) return "";
+  return readWebAuthnKeychainGroup(process.execPath, BUNDLE_ID);
 }
 
-/**
- * 开启平台认证器。**没签名时什么也不做** —— 这是当前构建的实际情况
- * (package.json 里 mac.identity 是 null,CI 也显式关掉了签名发现)。
- */
+/** 从安装包的有效签名与 entitlement 开启平台认证器；开发态保持关闭。 */
 function configurePlatformAuthenticator() {
   const group = touchIdPossible();
   if (!group) {
-    log("平台认证器未启用:需要 macOS + 已签名(MOSAEL_TEAM_ID)");
+    log("平台认证器未启用:需要 macOS 签名安装包及匹配的钥匙串权限");
     return false;
   }
   try {
@@ -60,10 +55,10 @@ function configurePlatformAuthenticator() {
         promptReason: "verify your identity on $1",
       },
     });
-    log("平台认证器已启用:", group);
+    log("平台认证器配置完成:", group);
     return true;
   } catch (error) {
-    // 没有对应的 entitlement 时会抛。这不是致命错误:passkey 用不了,别的照常。
+    // Electron 初始化失败不应阻断其他浏览器功能。
     log("平台认证器启用失败:", String(error).slice(0, 200));
     return false;
   }

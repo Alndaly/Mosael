@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Electron 在 hardened runtime 下需要这几条,否则渲染进程起不来。 -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+  <!-- 录制相关能力,与 extendInfo 里的用途说明配套。 -->
+  <key>com.apple.security.device.audio-input</key>
+  <true/>
+  <key>com.apple.security.device.camera</key>
+  <true/>
+  <!-- Only the main app owns passkeys. The Developer ID profile must authorize this group. -->
+  <key>com.apple.application-identifier</key>
+  <string>27W3D2ZUT9.dev.mosael.app</string>
+  <key>com.apple.developer.team-identifier</key>
+  <string>27W3D2ZUT9</string>
+  <key>keychain-access-groups</key>
+  <array>
+    <string>27W3D2ZUT9.dev.mosael.app.webauthn</string>
+  </array>
+</dict>
+</plist>

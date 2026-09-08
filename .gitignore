@@ -45,6 +45,8 @@ release/
 !/build/trayTemplate@2x.png
 !/build/icon.icns
 !/build/installer.nsh
+!/build/entitlements.mac.plist
+!/build/entitlements.mac.inherit.plist
 
 # ---------------------------------------------------------------- 工具缓存
 .pytest_cache/

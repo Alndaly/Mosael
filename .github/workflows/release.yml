@@ -27,6 +27,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  signing:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require macOS signing and notarization credentials
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK != '' }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD != '' }}
+          MACOS_PROVISION_PROFILE: ${{ secrets.MACOS_PROVISION_PROFILE != '' }}
+          APPLE_ID: ${{ secrets.APPLE_ID != '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD != '' }}
+        run: |
+          for name in CSC_LINK CSC_KEY_PASSWORD MACOS_PROVISION_PROFILE APPLE_ID APPLE_APP_SPECIFIC_PASSWORD; do
+            if [ "${!name}" != "true" ]; then
+              echo "::error::Missing required signing secret: $name"
+              exit 1
+            fi
+          done
+
   # 测试闸。放在最前面,失败就什么都不发 —— 此前这条工作流**只跑 sidecar 自己的测试和打包
   # 冒烟**,两套主测试(后端 pytest / 前端 vitest)一次都不跑,于是「打了 tag」和「代码是好的」
   # 之间没有任何关系:v0.20.0 就是带着一条红着的棘轮发出去的(那次只是仓库规范检查,下次未必)。
@@ -34,6 +52,7 @@ jobs:
   # 只在 ubuntu 上跑一份:这两套测试都不依赖平台。**跨平台**才需要验的那部分(打包产物的
   # 初始化顺序)已经由 build 里的 agent-sidecar 冒烟在每个平台各跑一遍。
   test:
+    needs: [signing]
     uses: ./.github/workflows/tests.yml
 
   # 先建好草稿 Release(自动生成变更说明),两个平台的构建往同一个草稿传产物,
@@ -112,9 +131,6 @@ jobs:
     defaults:
       run:
         shell: bash
-    env:
-      # 无签名证书:禁用 electron-builder 的证书自动发现,出未签名包
-      CSC_IDENTITY_AUTO_DISCOVERY: "false"
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -169,9 +185,19 @@ jobs:
           pnpm build:backend
 
       - name: Package (electron-builder)
+        env:
+          CSC_LINK: ${{ runner.os == 'macOS' && secrets.CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ runner.os == 'macOS' && secrets.CSC_KEY_PASSWORD || '' }}
+          MACOS_PROVISION_PROFILE: ${{ runner.os == 'macOS' && secrets.MACOS_PROVISION_PROFILE || '' }}
+          APPLE_ID: ${{ runner.os == 'macOS' && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ runner.os == 'macOS' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_TEAM_ID: "27W3D2ZUT9"
         run: |
           if [ "$RUNNER_OS" = "macOS" ]; then
+            umask 077
+            printf '%s' "$MACOS_PROVISION_PROFILE" | base64 --decode > build/mosael.provisionprofile
             pnpm exec electron-builder --mac dmg --publish never
+            node scripts/verify-mac-signing.cjs release/mac-arm64/Mosael.app
           else
             pnpm exec electron-builder --win nsis --publish never
           fi

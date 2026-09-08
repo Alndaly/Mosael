@@ -29,7 +29,7 @@ the finished story without shuttling the project between a pile of tools.
 
 ## Download and run
 
-Current stable release: **[Mosael 1.2.0](https://github.com/Alndaly/Mosael/releases/tag/v1.2.0)**.
+Current stable release: **[GitHub Releases](https://github.com/Alndaly/Mosael/releases/latest)**.
 
 Download a build from [GitHub Releases](https://github.com/Alndaly/Mosael/releases):
 
@@ -279,8 +279,8 @@ a GitHub prerelease and does not replace the latest stable version. Manually dis
 produces artifacts only and does not publish a version.
 
 Packaged builds check the latest stable Release and prompt when an update is available. Prereleases must be
-downloaded explicitly from GitHub Releases. The macOS package is currently unsigned, so updates use
-check-and-download rather than silent installation.
+downloaded explicitly from GitHub Releases. The macOS release pipeline requires Developer ID signing and Apple notarization. Updates still prompt for
+download and installation. See [macOS signing and Touch ID](docs/MACOS_SIGNING.md) for release setup.
 
 ## Data and logs
 
