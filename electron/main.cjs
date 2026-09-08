@@ -658,6 +658,8 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  // 平台认证器要在 ready 之后配。没签名时它自己会跳过(见 webauthn.cjs 里的三个前提)。
+  require("./webauthn.cjs").configurePlatformAuthenticator();
   const ready = await ensureBackend();
   if (!ready) {
     reportSmoke({ backendHealthy: false, rendererLoaded: false, error: "backend did not become healthy" });

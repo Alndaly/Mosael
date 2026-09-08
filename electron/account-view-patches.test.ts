@@ -20,7 +20,7 @@ const SOURCE = fs.readFileSync(
   "utf8",
 );
 
-function runPatches() {
+function runPatches({ platformAuthenticator }: { platformAuthenticator: boolean }) {
   const match = SOURCE.match(/const STEALTH_JS = `([\s\S]*?)`;/);
   if (!match) throw new Error("找不到 STEALTH_JS —— 补丁的取法要跟着改");
   class FakeDomException extends Error {
@@ -41,9 +41,12 @@ function runPatches() {
   };
   const context: Record<string, unknown> = {
     window: {
-      PublicKeyCredential: function PublicKeyCredential() {},
+      PublicKeyCredential: Object.assign(function PublicKeyCredential() {}, {
+        isUserVerifyingPlatformAuthenticatorAvailable: () => Promise.resolve(platformAuthenticator),
+      }),
       chrome: undefined,
     },
+    setTimeout,
     navigator,
     Navigator: { prototype: {} },
     DOMException: FakeDomException,
@@ -58,35 +61,39 @@ function runPatches() {
 }
 
 describe("内嵌账号视图的页面补丁", () => {
-  it("passkey 请求当场被拒,而不是一直挂着", async () => {
-    // 挂着才是最坏的:用户盯着一个转圈的「Verifying it's you…」,而右下角那个
-    // 「Try another way」要靠他自己发现。
-    const { navigator } = runPatches();
+  it("没有平台认证器时,passkey 请求当场被拒", async () => {
+    // 没有认证器时剩下的只可能是 hybrid(手机扫码),而 Electron 没有暴露任何挂钩去承载它 ——
+    // 请求会那么悬着,页面停在「Verifying it's you…」一直转,右下角那个「Try another way」
+    // 得靠用户自己发现。当场 reject,站点自己的回退才接得上。
+    const { navigator } = runPatches({ platformAuthenticator: false });
     await expect(navigator.credentials.get({ publicKey: {} })).rejects.toMatchObject({
-      name: "NotAllowedError",
-    });
-    await expect(navigator.credentials.create({ publicKey: {} })).rejects.toMatchObject({
       name: "NotAllowedError",
     });
   });
 
+  it("有平台认证器时放行 —— 不能把 Touch ID 也一起挡掉", async () => {
+    // 上一版是无条件拒绝,那样等于"永远没有 passkey"。签名 + entitlement 到位之后
+    // Touch ID 是能用的(见 electron/webauthn.cjs),这里必须让它过去。
+    const { navigator } = runPatches({ platformAuthenticator: true });
+    await expect(navigator.credentials.get({ publicKey: {} })).resolves.toMatchObject({
+      kind: "real-get",
+    });
+  });
+
   it("只拦 publicKey —— 密码和联合登录凭据照常走", async () => {
-    const { navigator } = runPatches();
+    const { navigator } = runPatches({ platformAuthenticator: false });
     await expect(navigator.credentials.get({ password: true })).resolves.toMatchObject({
       kind: "real-get",
     });
   });
 
-  it("如实回答「这里没有认证器」", async () => {
-    // 站点是先问再决定要不要走 passkey 的。答 true 再失败,比一开始就答 false 糟得多。
-    const { window } = runPatches();
-    await expect(
-      window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(),
-    ).resolves.toBe(false);
+  it("条件式 UI 一律答不可用", async () => {
+    // 自动填充里的 passkey 在这里同样没有承载它的界面。答 true 再挂住,比一开始答 false 糟。
+    const { window } = runPatches({ platformAuthenticator: true });
     await expect(window.PublicKeyCredential.isConditionalMediationAvailable()).resolves.toBe(false);
   });
 
-  it("反检测那几条还在", async () => {
+  it("反检测那几条还在", () => {
     // 同一段脚本里的东西,别在改 WebAuthn 时把它们碰掉了。
     expect(SOURCE).toContain("webdriver");
     expect(SOURCE).toContain("WebGLRenderingContext");

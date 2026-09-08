@@ -4,6 +4,10 @@ import path from "node:path";
 import { EMBED_HEADER_HEIGHT, type ViewState } from "./types";
 import { PageDriver } from "./pageDriver";
 
+/* eslint-disable @typescript-eslint/no-require-imports */
+const { handleAccountSelection: bindWebauthnAccountSelection } =
+  require("../webauthn.cjs") as { handleAccountSelection: (partition: string) => void };
+
 const noop = (): void => undefined;
 // 账号视图 preload:注入「← 返回 Mosael」悬浮按钮(见 electron/account-view-preload.cjs)。运行时
 // 该文件与打包出的 publish.bundle.cjs 同在 electron/ 下,故按 __dirname 定位。
@@ -147,6 +151,8 @@ export class AccountViewManager {
       return;
     }
     const accountSession = session.fromPartition(partition);
+    // 一次请求解出多把可发现凭据时由我们来选。**不接这个监听器,请求会被直接取消。**
+    bindWebauthnAccountSelection(partition);
     await accountSession.setProxy({
       mode: normalizedProxy ? "fixed_servers" : "direct",
       proxyRules: normalizedProxy ?? undefined,
@@ -164,6 +170,7 @@ export class AccountViewManager {
     const normalizedProxy = opts.proxy?.trim() || null;
     if (this.appliedProxy.get(opts.partition) !== normalizedProxy) {
       const viewSession = session.fromPartition(opts.partition);
+      bindWebauthnAccountSelection(opts.partition);
       await viewSession.setProxy({
         mode: normalizedProxy ? "fixed_servers" : "direct",
         proxyRules: normalizedProxy ?? undefined,

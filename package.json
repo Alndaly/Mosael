@@ -79,7 +79,10 @@
       "target": [
         "dir"
       ],
-      "identity": null
+      "identity": null,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "hardenedRuntime": true
     },
     "win": {
       "icon": "build/icon.png",

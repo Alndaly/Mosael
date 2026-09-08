@@ -36,35 +36,48 @@ const STEALTH_JS = `(() => {
     patch(window.WebGLRenderingContext && window.WebGLRenderingContext.prototype);
     patch(window.WebGL2RenderingContext && window.WebGL2RenderingContext.prototype);
   } catch (e) {}
-  // **WebAuthn:当场说不,不要让页面一直转。**
+  // **WebAuthn:有认证器就放行,没有就当场说不 —— 唯独不能一直挂着。**
   //
-  // 这个视图里 passkey 走不通,而且是三条路各自走不通:
-  //   * 平台认证器(Touch ID)默认不受理 —— 要 app.configureWebAuthn 才开,而它存的是
-  //     设备绑定、不跟 iCloud 同步的凭据,救不了用户已有的那把 passkey;
-  //   * 手机/跨设备(hybrid)要一个扫码或蓝牙的选择界面,Electron 不提供 —— 请求就悬在那儿;
-  //   * 多凭据选择走 session 的 select-webauthn-account,没有监听者时才会被取消。
+  // Electron 44 只给了两条:平台认证器(app.configureWebAuthn,需要签名 + entitlement)和
+  // 多凭据选择(session 的 select-webauthn-account,主进程已接)。**没给的是手机/跨设备
+  // (hybrid,扫码那条)** —— 它的二维码载荷和蓝牙广播都在 Chromium 内部生成,Electron 没有
+  // 暴露任何挂钩。所以那条路我们做不出界面,而 Chromium 又不会替我们报错:请求就那么悬着,
+  // 页面停在「Complete sign-in using your passkey」一直转。
   //
-  // 结果就是 Google 停在「Complete sign-in using your passkey」一直转,而右下角那个
-  // 「Try another way」得用户自己发现。当场 reject 一个 NotAllowedError 之后,站点自己的
-  // 回退路径(密码 + 两步验证)就会接上 —— **这不降低安全性**,只是拒绝一种此处用不了的方式。
+  // 于是分两种情况:
+  //   有平台认证器 → 正常走(Touch ID 弹框、多凭据由主进程选),不插手;
+  //   没有         → 剩下的只可能是 hybrid,**必挂**,当场 reject 让站点回退到密码。
   //
-  // 哪天 Electron 把这几条补齐(或我们决定开 Touch ID),这一段就该删掉。
+  // 再加一道兜底超时:即使有认证器,某些请求仍可能落到没有 UI 的传输上。宁可等久一点也不能
+  // 无限等 —— 45 秒足够按下 Touch ID,又不至于让人以为应用死了。
   try {
-    if (window.PublicKeyCredential) {
-      window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable = () => Promise.resolve(false);
-      window.PublicKeyCredential.isConditionalMediationAvailable = () => Promise.resolve(false);
-    }
     const store = navigator.credentials;
-    if (store) {
-      const decline = () =>
-        Promise.reject(new DOMException('This browser has no available authenticator.', 'NotAllowedError'));
-      const get = store.get && store.get.bind(store);
-      const create = store.create && store.create.bind(store);
-      // 只拦 publicKey 那一种 —— 密码和联合登录凭据照常走。
-      if (get) store.get = (options) => (options && options.publicKey ? decline() : get(options));
-
-      if (create) store.create = (options) => (options && options.publicKey ? decline() : create(options));
-    }
+    const available = () => {
+      try {
+        return window.PublicKeyCredential
+          ? window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
+          : Promise.resolve(false);
+      } catch (e) {
+        return Promise.resolve(false);
+      }
+    };
+    const refuse = () =>
+      new DOMException('This browser has no usable authenticator.', 'NotAllowedError');
+    const guard = (real) => (options) => {
+      if (!options || !options.publicKey) return real(options);   // 密码/联合登录凭据不管
+      return available().then((ok) => {
+        if (!ok) return Promise.reject(refuse());
+        return Promise.race([
+          real(options),
+          new Promise((_, reject) => setTimeout(() => reject(refuse()), 45000)),
+        ]);
+      });
+    };
+    if (store && store.get) store.get = guard(store.get.bind(store));
+    if (store && store.create) store.create = guard(store.create.bind(store));
+    // 条件式 UI(自动填充里的 passkey)在这里同样没有承载它的界面。
+    if (window.PublicKeyCredential)
+      window.PublicKeyCredential.isConditionalMediationAvailable = () => Promise.resolve(false);
   } catch (e) {}
 })();`;
 try {
