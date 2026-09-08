@@ -5,13 +5,9 @@ import Placeholder from "@tiptap/extension-placeholder";
 import {
   EditorContent,
   type JSONContent,
-  Node,
-  NodeViewWrapper,
-  ReactNodeViewRenderer,
-  mergeAttributes,
   useEditor,
 } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
+import { CommentMembers, commentExtensions, COMMENT_TEXT } from "./commentDocument";
 import { Send, X } from "lucide-react";
 
 import type { WorkspaceMember } from "@/api/client";
@@ -27,32 +23,6 @@ export interface CommentDraft {
   bodyDocument: CommentDocument;
   mentionedUserIds: string[];
 }
-
-const UserMention = Node.create({
-  name: "userMention",
-  group: "inline",
-  inline: true,
-  atom: true,
-  selectable: true,
-  addAttributes: () => ({ userId: { default: "" }, label: { default: "" } }),
-  parseHTML: () => [{ tag: "span[data-user-mention]" }],
-  renderHTML: ({ HTMLAttributes }: { HTMLAttributes: Record<string, unknown> }) => [
-    "span",
-    mergeAttributes(HTMLAttributes, { "data-user-mention": "" }),
-  ],
-  renderText: ({ node }: { node: { attrs: Record<string, unknown> } }) => `@${String(node.attrs.label ?? "")}`,
-  addNodeView: () =>
-    ReactNodeViewRenderer(({ node }: { node: { attrs: Record<string, unknown> } }) => (
-      <NodeViewWrapper
-        as="span"
-        data-user-mention=""
-        data-user-id={String(node.attrs.userId ?? "")}
-        className="inline-flex rounded-md bg-primary/15 px-1 py-0.5 text-primary"
-      >
-        @{String(node.attrs.label ?? "")}
-      </NodeViewWrapper>
-    )),
-});
 
 /** Extract immutable user IDs from the editor document; labels are presentation only. */
 export function collectMentionedUserIds(document: CommentDocument | null): string[] {
@@ -72,8 +42,12 @@ export function BoardCommentComposer({
   members,
   onSubmit,
   onCancel,
+  initialContent,
+  editing = false,
 }: {
   members: WorkspaceMember[];
+  initialContent?: CommentDocument;
+  editing?: boolean;
   onSubmit: (draft: CommentDraft) => Promise<unknown>;
   onCancel: () => void;
 }) {
@@ -86,17 +60,10 @@ export function BoardCommentComposer({
   const submitRef = React.useRef<() => void>(() => undefined);
 
   const editor = useEditor({
+    content: initialContent,
+    onCreate: ({ editor: instance }) => setEmpty(!instance.getText().trim()),
     extensions: [
-      UserMention,
-      StarterKit.configure({
-        heading: false,
-        bulletList: false,
-        orderedList: false,
-        listItem: false,
-        blockquote: false,
-        codeBlock: false,
-        horizontalRule: false,
-      }),
+      ...commentExtensions(),
       Placeholder.configure({ placeholder: t("commentCanvasPlaceholder") }),
       RefSuggestion.configure({
         suggestion: {
@@ -134,7 +101,7 @@ export function BoardCommentComposer({
     autofocus: "end",
     editorProps: {
       attributes: {
-        class: "nodrag nopan min-h-20 w-full cursor-text px-3 py-2 text-ui-sm leading-relaxed text-foreground outline-none",
+        class: cn(COMMENT_TEXT, "nodrag nopan min-h-20 max-h-64 overflow-y-auto w-full cursor-text px-3 py-3 outline-none"),
         "aria-label": t("commentCanvasPlaceholder"),
       },
       handleKeyDown: (_view, event) => {
@@ -161,13 +128,14 @@ export function BoardCommentComposer({
       body: editor.getText({ blockSeparator: "\n" }).trim(),
       bodyDocument,
       mentionedUserIds: collectMentionedUserIds(bodyDocument),
-    }).finally(() => setSubmitting(false));
+    }).catch(() => undefined).finally(() => setSubmitting(false));
   }, [editor, onSubmit, submitting]);
   submitRef.current = submit;
 
   return (
+    <CommentMembers.Provider value={members}>
     <div
-      className={cn(FLOATING_SURFACE, "nodrag nopan w-72 cursor-default overflow-hidden")}
+      className={cn(FLOATING_SURFACE, "nodrag nopan pointer-events-auto w-72 cursor-default overflow-hidden")}
       onPointerDown={(event) => event.stopPropagation()}
       onMouseDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
@@ -180,7 +148,7 @@ export function BoardCommentComposer({
           <Button variant="ghost" size="icon-xs" onClick={onCancel} aria-label={t("cancel")}>
             <X size={13} />
           </Button>
-          <Button size="icon-xs" disabled={empty} loading={submitting} onClick={submit} aria-label={t("send")}>
+          <Button size="icon-xs" disabled={empty} loading={submitting} onClick={submit} aria-label={t(editing ? "save" : "send")}>
             <Send size={13} />
           </Button>
         </div>
@@ -205,5 +173,6 @@ export function BoardCommentComposer({
         )}
       </menu.Portal>
     </div>
+    </CommentMembers.Provider>
   );
 }

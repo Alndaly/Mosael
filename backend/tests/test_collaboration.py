@@ -248,3 +248,36 @@ def test_review_can_only_be_decided_by_assigned_reviewer() -> None:
     ]
     assert "review.requested" in actions
     assert "review.approved" in actions
+
+
+def test_comment_edit_preserves_anchor_and_updates_mentions_without_duplicate_notifications() -> None:
+    owner, mate, workspace, users = _team()
+    board = owner.post("/api/boards", json={"workspace_id": workspace["id"]}).json()
+    created = owner.post("/api/comments", json={"workspace_id": workspace["id"], "subject_type": "board",
+        "subject_id": board["id"], "body": "原文", "anchor": {"kind": "canvas", "x": 10, "y": 20}}).json()
+    document = {"type": "doc", "content": [{"type": "paragraph", "content": [
+        {"type": "userMention", "attrs": {"userId": users["mate"], "label": "同事"}},
+        {"type": "text", "text": " 请检查"}]}]}
+    payload = {"workspace_id": workspace["id"], "body": "@同事 请检查", "body_document": document,
+               "mentioned_user_ids": [users["mate"]]}
+    url = f"/api/comments/{created['id']}/content"
+    assert mate.put(url, json=payload).status_code == 403
+    for _ in range(2):
+        response = owner.put(url, json=payload)
+        assert response.status_code == 200, response.text
+        updated = response.json()
+        assert updated["body_document"] == document
+        assert updated["mentioned_user_ids"] == [users["mate"]]
+        assert updated["anchor"] == created["anchor"]
+        assert updated["created_at"] == created["created_at"]
+    notifications = mate.get("/api/notifications", params={"workspace_id": workspace["id"]}).json()["items"]
+    assert len([one for one in notifications if one["payload"].get("comment_id") == created["id"]]) == 1
+    for invalid in [dict(payload, body="  "), dict(payload, body_document={"type": "bad"})]:
+        assert owner.put(url, json=invalid).status_code == 400
+    cleared = owner.put(url, json={"workspace_id": workspace["id"], "body": "已修改"}).json()
+    assert cleared["body_document"] == {}
+    assert cleared["mentioned_user_ids"] == []
+    assert cleared["anchor"] == created["anchor"]
+    assert owner.get(f"/api/boards/{board['id']}", params={"workspace_id": workspace["id"]}).json()["revision"] == board["revision"]
+    other = owner.post("/api/workspaces", json={"name": "另一个工作区"}).json()
+    assert owner.put(url, json=dict(payload, workspace_id=other["id"])).status_code == 404

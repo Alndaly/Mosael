@@ -79,7 +79,7 @@ function Ports({ visible, disabled = false }: { visible?: boolean; disabled?: bo
   //: 点(点不中),拉近时又胀成一个盘子。同一份 transform 里连位移一起抵消,离节点的那段
   //: 距离也就不会跟着变(transform 从右往左作用,先位移再缩放)。
   const zoom = useStore((state) => state.transform[2]) || 1;
-  if (disabled) return null;
+  // Keep handles mounted so undo can remeasure edges in annotation modes.
   //: **锚点是 handle 在那一侧的外边缘,不是中心** —— 源码里 Position.Right 返回 x+width、
   //: Position.Left 返回 x。而默认样式把 handle 居中骑在边线上(translate ±50%),于是线头
   //: 天生就落在边外 width/2 处;handle 越大离得越远(横跨边线的大盒子那版差了 28px)。
@@ -88,21 +88,21 @@ function Ports({ visible, disabled = false }: { visible?: boolean; disabled?: bo
   const anchor = "!h-2 !w-2 !rounded-none !border-0 !bg-transparent !p-0 transition-opacity";
   const dot =
     "grid h-6 w-6 place-items-center rounded-full border border-border-strong bg-panel text-muted-foreground transition-colors hover:border-primary hover:text-primary";
-  const shown = visible ? "opacity-100" : "opacity-0 group-hover:opacity-100";
+  const shown = disabled ? "!opacity-0 !pointer-events-none" : visible ? "opacity-100" : "opacity-0 group-hover:opacity-100";
   const scaled = (offset: number, origin: string) => ({
     transform: `scale(${1 / zoom}) translateX(${offset}px)`,
     transformOrigin: origin,
   });
   return (
     <>
-      <Handle type="target" position={Position.Left} style={flush} className={cn(anchor, shown)}>
+      <Handle isConnectable={!disabled} type="target" position={Position.Left} style={flush} className={cn(anchor, shown)}>
         <span className="absolute right-full top-1/2 -translate-y-1/2">
           <span className={dot} style={scaled(-10, "right center")}>
             <Plus size={13} />
           </span>
         </span>
       </Handle>
-      <Handle type="source" position={Position.Right} style={flush} className={cn(anchor, shown)}>
+      <Handle isConnectable={!disabled} type="source" position={Position.Right} style={flush} className={cn(anchor, shown)}>
         <span className="absolute left-full top-1/2 -translate-y-1/2">
           <span className={dot} style={scaled(10, "left center")}>
             <Plus size={13} />
@@ -528,7 +528,7 @@ function DocumentNode({ data, selected }: NodeProps) {
       />
       <TypeLabel kind="document" />
       <Ports visible={selected} disabled={commentMode} />
-      <header className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2.5">
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
         <BookOpen size={16} className="shrink-0 text-primary" />
         <span
           className="min-w-0 flex-1 truncate text-ui-sm font-medium"

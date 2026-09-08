@@ -1,9 +1,12 @@
+import { CommentCard } from "./CommentCard";
+import { useAuth } from "@/app/auth";
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { LocateFixed, MessageSquare } from "lucide-react";
 
 import {
   listComments,
+  listMembers,
   type Board,
   type CollaborationActor,
   type CollaborationComment,
@@ -29,6 +32,8 @@ export function BoardCollaborationDialog({
   onJumpToComment: (comment: CollaborationComment) => void;
 }) {
   const t = useI18n();
+  const { user } = useAuth();
+  const members = useQuery({ queryKey: ["members", board.workspace_id], queryFn: () => listMembers(board.workspace_id), enabled: open });
   const { locale } = usePreferences();
   const subject = [board.workspace_id, "board", board.id] as const;
   const commentsKey = ["comments", ...subject];
@@ -136,7 +141,7 @@ export function BoardCollaborationDialog({
                       <p className="text-ui-xs text-muted-foreground">{relativeTime(selectedComment.created_at, locale)}</p>
                     </div>
                   </div>
-                  <p className="whitespace-pre-wrap text-ui-sm leading-7 text-foreground">{selectedComment.body}</p>
+                  <CommentCard key={selectedComment.id} comment={selectedComment} members={members.data?.members ?? []} currentUserId={user?.id} />
                   {(selectedComment.anchor?.node_id || selectedComment.mentioned_user_ids.length > 0) && (
                     <div className="flex flex-wrap items-center gap-2 text-ui-xs text-muted-foreground">
                       {selectedComment.anchor?.node_id && (

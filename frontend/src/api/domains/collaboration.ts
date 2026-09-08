@@ -96,6 +96,15 @@ export function moveComment(commentId: string, body: {
   });
 }
 
+export function editComment(commentId: string, body: {
+  workspace_id: string;
+  body: string;
+  body_document: Record<string, unknown>;
+  mentioned_user_ids: string[];
+}): Promise<CollaborationComment> {
+  return api<CollaborationComment>(`/api/comments/${commentId}/content`, { method: "PUT", body: JSON.stringify(body) });
+}
+
 export function deleteComment(commentId: string, workspaceId: string): Promise<void> {
   return api<void>(`/api/comments/${commentId}?workspace_id=${encodeURIComponent(workspaceId)}`, {
     method: "DELETE",

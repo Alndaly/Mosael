@@ -72,7 +72,7 @@ export function ShortcutRecorder({
           }}
           onBlur={() => setRecording(false)}
           className={cn(
-            "h-8 flex-1 rounded-md border border-border bg-panel px-2 text-left text-ui-xs",
+            "h-8 flex-1 rounded-md border border-field-border bg-field px-2 text-left text-ui-xs",
             recording && "border-action text-action",
             !recording && !marker.shortcut && "text-muted-foreground",
           )}

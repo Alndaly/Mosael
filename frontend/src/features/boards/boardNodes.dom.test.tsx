@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BoardItem } from "@/api/client";
 
 vi.mock("@xyflow/react", () => ({
-  Handle: ({ children }: { children?: React.ReactNode }) => <div data-testid="connection-handle">{children}</div>,
+  Handle: ({ children, isConnectable, className }: { children?: React.ReactNode; isConnectable?: boolean; className?: string }) => <div data-testid="connection-handle" data-connectable={isConnectable} className={className}>{children}</div>,
   NodeResizer: () => null,
   Position: { Left: "left", Right: "right" },
   useStore: (selector: (state: { transform: [number, number, number] }) => unknown) =>
@@ -100,7 +100,12 @@ function renderNode(
 describe("无限画布节点运行状态", () => {
   it.each(KINDS)("评论模式下 %s 节点不提供连线入口", (kind) => {
     const { queryAllByTestId } = renderNode(kind, "idle", {}, true);
-    expect(queryAllByTestId("connection-handle")).toHaveLength(0);
+    const handles = queryAllByTestId("connection-handle");
+    expect(handles).toHaveLength(kind === "frame" ? 0 : 2);
+    for (const handle of handles) {
+      expect(handle).toHaveAttribute("data-connectable", "false");
+      expect(handle).toHaveClass("!opacity-0", "!pointer-events-none");
+    }
   });
 
   it.each(KINDS)("%s 节点的六种状态都有自己的节点级样式", (kind) => {

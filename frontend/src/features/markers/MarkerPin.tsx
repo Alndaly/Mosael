@@ -1,5 +1,5 @@
 import React from "react";
-import { Flag, Trash2 } from "lucide-react";
+import { Flag, Trash2, X } from "lucide-react";
 import type { NodeProps } from "@xyflow/react";
 
 import { useI18n } from "@/app/preferences";
@@ -61,34 +61,44 @@ export function MarkerPin({ data, selected }: NodeProps) {
           ) : null}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="grid w-72 gap-3 p-3" onClick={(event) => event.stopPropagation()}>
-        <div className="grid gap-1.5">
-          <label className="text-ui-xs text-muted-foreground" htmlFor={`marker-name-${marker.id}`}>
-            {t("markerName")}
-          </label>
-          <Input
-            id={`marker-name-${marker.id}`}
-            value={marker.name}
-            maxLength={80}
-            onChange={(event) => onChange({ ...marker, name: event.target.value })}
+      <PopoverContent align="start" className="w-72 overflow-hidden p-0" onClick={(event) => event.stopPropagation()}>
+        <div className="flex h-11 items-center gap-2 border-b border-border px-3">
+          <Flag size={14} className="text-primary" />
+          <span className="flex-1 text-ui-xs font-medium">{t("markerConfigure")}</span>
+          <Button variant="ghost" size="icon-xs" aria-label={t("close")} onClick={() => setOpen(false)}><X size={14} /></Button>
+        </div>
+        <div className="grid gap-3 p-3">
+          <div className="grid gap-1.5">
+            <label className="text-ui-xs text-muted-foreground" htmlFor={`marker-name-${marker.id}`}>
+              {t("markerName")}
+            </label>
+            <Input
+              id={`marker-name-${marker.id}`}
+              className="h-8 px-2 text-ui-xs"
+              value={marker.name}
+              maxLength={80}
+              onChange={(event) => onChange({ ...marker, name: event.target.value })}
+            />
+          </div>
+          <ShortcutRecorder
+            marker={marker}
+            markers={markers}
+            onChange={(shortcut) => onChange({ ...marker, shortcut })}
           />
         </div>
-        <ShortcutRecorder
-          marker={marker}
-          markers={markers}
-          onChange={(shortcut) => onChange({ ...marker, shortcut })}
-        />
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start text-destructive hover:text-destructive"
-          onClick={() => {
-            setOpen(false);
-            onDelete(marker.id);
-          }}
-        >
-          <Trash2 size={14} /> {t("markerDelete")}
-        </Button>
+        <div className="border-t border-border px-3 py-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start text-destructive hover:text-destructive"
+            onClick={() => {
+              setOpen(false);
+              onDelete(marker.id);
+            }}
+          >
+            <Trash2 size={14} /> {t("markerDelete")}
+          </Button>
+        </div>
       </PopoverContent>
     </Popover>
   );

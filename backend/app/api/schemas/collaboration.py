@@ -54,6 +54,13 @@ class CommentAnchorUpdate(ApiModel):
     anchor: CanvasCommentAnchor
 
 
+class CommentContentUpdate(ApiModel):
+    workspace_id: str
+    body: str = Field(min_length=1, max_length=5000)
+    mentioned_user_ids: list[str] = Field(default_factory=list)
+    body_document: dict = Field(default_factory=dict)
+
+
 class CommentOut(ApiModel):
     id: str
     workspace_id: str

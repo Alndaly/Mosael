@@ -7,6 +7,7 @@ from app.api.schemas.collaboration import (
     ActivityOut,
     CommentAnchorUpdate,
     CommentCreate,
+    CommentContentUpdate,
     CommentOut,
     ReviewCreate,
     ReviewDecision,
@@ -18,6 +19,7 @@ from app.domain.collaboration import (
     CommentOwnershipError,
     create_comment,
     delete_comment,
+    edit_comment,
     decide_review,
     list_activity,
     list_comments,
@@ -106,6 +108,26 @@ def update_comment_anchor(comment_id: str, body: CommentAnchorUpdate, db: DbSess
             for one in list_comments(db, comment.workspace_id, comment.subject_type, comment.subject_id)
             if one["id"] == comment.id
         )
+    except CommentOwnershipError as exc:
+        db.rollback()
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except CollaborationError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.put("/comments/{comment_id}/content", response_model=CommentOut)
+def update_comment_content(comment_id: str, body: CommentContentUpdate, db: DbSession, user: CurrentUser) -> dict:
+    ensure_workspace_perm(db, user, body.workspace_id, "edit")
+    comment = db.get(Comment, comment_id)
+    if comment is None or comment.workspace_id != body.workspace_id:
+        raise HTTPException(status_code=404, detail="评论不存在")
+    try:
+        edit_comment(db, comment, actor_id=user.id, body=body.body,
+                     body_document=body.body_document, mentioned_user_ids=body.mentioned_user_ids)
+        db.commit()
+        return next(one for one in list_comments(db, comment.workspace_id, comment.subject_type, comment.subject_id)
+                    if one["id"] == comment.id)
     except CommentOwnershipError as exc:
         db.rollback()
         raise HTTPException(status_code=403, detail=str(exc)) from exc

@@ -1,3 +1,4 @@
+import { CommentCard } from "./CommentCard";
 import { AnnotationModeHint } from "@/features/markers/AnnotationModeHint";
 import { boardAssetSources } from "./boardAssetSources";
 import { useQueries } from "@tanstack/react-query";
@@ -1067,13 +1068,12 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
               if (typeof x !== "number" || typeof y !== "number") return null;
               const active = commentMode && activeCommentId === comment.id;
               const movable = commentMode && Boolean(onMoveComment) && canMoveComment(comment.author_id, currentUserId);
-              const deletable = Boolean(onDeleteComment) && canMoveComment(comment.author_id, currentUserId);
               return (
                 <div
                   key={comment.id}
                   data-board-comment-overlay=""
-                  className="nodrag nopan pointer-events-auto absolute z-10 flex items-start gap-2"
-                  style={{ left: x, top: y, pointerEvents: commentMode ? "auto" : "none" }}
+                  className="nodrag nopan pointer-events-none absolute z-10 flex items-start gap-2"
+                  style={{ left: x, top: y }}
                   onPointerDown={(event) => event.stopPropagation()}
                   onMouseDown={(event) => event.stopPropagation()}
                   onClick={(event) => event.stopPropagation()}
@@ -1089,6 +1089,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
                         : "border-border-strong bg-panel/90 text-foreground backdrop-blur-xl",
                     )}
                     tabIndex={commentMode ? 0 : -1}
+                    style={{ pointerEvents: commentMode ? "auto" : "none" }}
                     title={comment.body}
                     aria-label={`${t("comments")} ${index + 1}`}
                     onPointerDown={(event) => {
@@ -1161,27 +1162,9 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
                     {index + 1}
                   </button>
                   {active && (
-                    <div className={cn(FLOATING_SURFACE, "-ml-3.5 -translate-y-3 w-64 p-3 text-left")}>
-                      <div className="mb-1 flex items-center justify-between gap-2">
-                        <p className="min-w-0 truncate text-ui-xs font-semibold text-foreground">
-                          {comment.author?.display_name || comment.author?.username || t("teamSystemActor")}
-                        </p>
-                        {deletable && (
-                          <button
-                            type="button"
-                            data-delete-comment=""
-                            className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                            title={t("delete")}
-                            aria-label={t("delete")}
-                            onClick={() => {
-                              void Promise.resolve(onDeleteComment?.(comment)).catch(() => undefined);
-                            }}
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        )}
-                      </div>
-                      <p className="whitespace-pre-wrap text-ui-sm leading-relaxed text-foreground">{comment.body}</p>
+                    <div className="-ml-3.5 -translate-y-3">
+                      <CommentCard comment={comment} members={members} currentUserId={currentUserId}
+                        onDelete={onDeleteComment ? () => onDeleteComment(comment) : undefined} />
                     </div>
                   )}
                 </div>
@@ -1190,7 +1173,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
             {draftAnchor && typeof draftAnchor.x === "number" && typeof draftAnchor.y === "number" && (
               <div
                 data-board-comment-overlay=""
-                className="nodrag nopan pointer-events-auto absolute z-20 flex items-start gap-2"
+                className="nodrag nopan pointer-events-none absolute z-20 flex items-start gap-2"
                 style={{ left: draftAnchor.x, top: draftAnchor.y }}
                 onPointerDown={(event) => event.stopPropagation()}
                 onMouseDown={(event) => event.stopPropagation()}
@@ -1200,7 +1183,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
                 <button
                   type="button"
                   data-comment-drag-handle=""
-                  className="grid h-7 w-7 touch-none -translate-x-1/2 -translate-y-1/2 shrink-0 cursor-grab place-items-center rounded-full bg-action text-action-foreground shadow-[var(--shadow-panel)] active:cursor-grabbing"
+                  className="pointer-events-auto grid h-7 w-7 touch-none -translate-x-1/2 -translate-y-1/2 shrink-0 cursor-grab place-items-center rounded-full bg-action text-action-foreground shadow-[var(--shadow-panel)] active:cursor-grabbing"
                   aria-label={t("comments")}
                   onPointerDown={(event) => {
                     if (event.button !== 0) return;

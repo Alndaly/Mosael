@@ -27,10 +27,13 @@ afterEach(cleanup);
 it("hiding comments preserves their data and exits editing", async () => {
   const { container } = setup();
   await screen.findByRole("button", { name: "comments 1" });
-  expect(container.querySelector("[data-workflow-comment]")).toHaveStyle({ pointerEvents: "none" });
+  expect(container.querySelector("[data-workflow-comment]")).toHaveClass("pointer-events-none");
+  expect(screen.getByRole("button", { name: "comments 1" })).toHaveStyle({ pointerEvents: "none" });
   fireEvent.click(screen.getByRole("button", { name: "boardCommentMode" }));
   fireEvent.click(screen.getByRole("button", { name: "comments 1" }));
   expect(screen.getByText("Existing comment")).toBeInTheDocument();
+  expect(container.querySelector("[data-workflow-comment]")).toHaveClass("pointer-events-none");
+  expect(screen.getByRole("button", { name: "comments 1" })).toHaveStyle({ pointerEvents: "auto" });
   fireEvent.click(screen.getByRole("button", { name: "commentsHide" }));
   expect(container.querySelector("[data-workflow-comment]")).toBeNull();
   expect(screen.getByRole("button", { name: "boardCommentMode" })).toHaveAttribute("aria-pressed", "false");

@@ -2651,6 +2651,23 @@ export interface paths {
         patch: operations["update_comment_anchor_api_comments__comment_id__patch"];
         trace?: never;
     };
+    "/api/comments/{comment_id}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Comment Content */
+        put: operations["update_comment_content_api_comments__comment_id__content_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reviews": {
         parameters: {
             query?: never;
@@ -6900,6 +6917,19 @@ export interface components {
             /** Workspace Id */
             workspace_id: string;
             anchor: components["schemas"]["CanvasCommentAnchor"];
+        };
+        /** CommentContentUpdate */
+        CommentContentUpdate: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Body */
+            body: string;
+            /** Mentioned User Ids */
+            mentioned_user_ids?: string[];
+            /** Body Document */
+            body_document?: {
+                [key: string]: unknown;
+            };
         };
         /** CommentCreate */
         CommentCreate: {
@@ -16582,6 +16612,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CommentAnchorUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_comment_content_api_comments__comment_id__content_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                comment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommentContentUpdate"];
             };
         };
         responses: {

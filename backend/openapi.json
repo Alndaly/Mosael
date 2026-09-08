@@ -7483,6 +7483,58 @@
         }
       }
     },
+    "/api/comments/{comment_id}/content": {
+      "put": {
+        "tags": [
+          "collaboration"
+        ],
+        "summary": "Update Comment Content",
+        "operationId": "update_comment_content_api_comments__comment_id__content_put",
+        "parameters": [
+          {
+            "name": "comment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Comment Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommentContentUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/reviews": {
       "get": {
         "tags": [
@@ -19884,6 +19936,38 @@
           "anchor"
         ],
         "title": "CommentAnchorUpdate"
+      },
+      "CommentContentUpdate": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Body"
+          },
+          "mentioned_user_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Mentioned User Ids"
+          },
+          "body_document": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Body Document"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "body"
+        ],
+        "title": "CommentContentUpdate"
       },
       "CommentCreate": {
         "properties": {

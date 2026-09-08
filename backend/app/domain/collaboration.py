@@ -273,6 +273,41 @@ def move_comment(
     return comment
 
 
+def edit_comment(
+    db: Session, comment: Comment, *, actor_id: str, body: str,
+    body_document: dict[str, Any], mentioned_user_ids: list[str],
+) -> Comment:
+    if comment.author_id != actor_id:
+        raise CommentOwnershipError("只能编辑自己发布的评论")
+    cleaned = body.strip()
+    if not cleaned or len(cleaned) > 5000:
+        raise CollaborationError("评论需要包含 1 至 5000 字")
+    if body_document and (body_document.get("type") != "doc" or not isinstance(body_document.get("content"), list)):
+        raise CollaborationError("评论格式不合法")
+    previous = list(db.scalars(select(CommentMention).where(CommentMention.comment_id == comment.id)))
+    previous_ids = {mention.user_id for mention in previous}
+    mentioned = _mentioned_members(db, comment.workspace_id, cleaned, mentioned_user_ids)
+    next_ids = {user.id for user in mentioned}
+    for mention in previous:
+        if mention.user_id not in next_ids:
+            db.delete(mention)
+    for user in mentioned:
+        if user.id in previous_ids:
+            continue
+        db.add(CommentMention(comment_id=comment.id, user_id=user.id))
+        if user.id != actor_id:
+            notify(db, comment.workspace_id, type="team", title="你在评论中被提及", body=cleaned[:240],
+                   payload={"comment_id": comment.id, "subject_type": comment.subject_type, "subject_id": comment.subject_id},
+                   user_id=user.id)
+    comment.body = cleaned
+    comment.body_document = body_document
+    record_activity(db, workspace_id=comment.workspace_id, actor_id=actor_id, action="comment.edited",
+                    subject_type=comment.subject_type, subject_id=comment.subject_id, summary="编辑了评论",
+                    payload={"comment_id": comment.id, "mentioned_user_ids": sorted(next_ids)})
+    db.flush()
+    return comment
+
+
 def delete_comment(db: Session, comment: Comment, *, actor_id: str) -> None:
     """Delete an author's own comment while retaining an immutable audit event."""
     if comment.author_id != actor_id:
