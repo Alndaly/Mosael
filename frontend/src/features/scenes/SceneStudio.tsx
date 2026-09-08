@@ -16,6 +16,7 @@ import { Pick, Tool } from "./SceneControls";
 import { ScenePanel } from "./ScenePanel";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import React from "react";
+import { SceneSubsection } from "./SceneSubsection";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -811,8 +812,7 @@ function SceneEditor({
                   当前打光「{presetById(draft.content.lighting.preset)?.label ?? "自定义"}」会一并写进提示词。
                   下一步会打开创意画板，由你选择图片或视频模型、描述画面风格并开始生成。
                 </p>
-                <details className="scene-details">
-                  <summary>只保存预览素材</summary>
+                <SceneSubsection title="只保存预览素材">
                   <div className="scene-preview-actions">
                     <Button
                       variant="outline"
@@ -843,7 +843,7 @@ function SceneEditor({
                       保存镜头预览视频
                     </Button>
                   </div>
-                </details>
+                </SceneSubsection>
               </div>
             </PopoverContent>
           </Popover>

@@ -1,6 +1,12 @@
 import React from "react";
 import { ChevronDown } from "lucide-react";
 
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+
 /**
  * 右栏的一节。**每一节自己滚,整栏不滚**,而且能折成一行。
  *
@@ -47,30 +53,29 @@ export function ScenePanel({
   children: React.ReactNode;
 }) {
   const [open, setOpen] = React.useState(() => readOpen()[id] !== false);
-  const toggle = () => {
-    setOpen((was) => {
-      writeOpen({ ...readOpen(), [id]: !was });
-      return !was;
-    });
+  const toggle = (next: boolean) => {
+    writeOpen({ ...readOpen(), [id]: next });
+    setOpen(next);
   };
   return (
-    <section className="scene-panel" data-open={open}>
-      <header>
-        <button
-          type="button"
-          className="scene-panel-toggle"
-          aria-expanded={open}
-          onClick={toggle}
-        >
-          <ChevronDown size={14} />
-          <h2>
-            {title}
-            {count === undefined ? null : <span>{count}</span>}
-          </h2>
-        </button>
-        {actions}
-      </header>
-      {open && <div className="scene-panel-body">{children}</div>}
-    </section>
+    <Collapsible asChild open={open} onOpenChange={toggle}>
+      <section className="scene-panel" data-open={open}>
+        <header>
+          <CollapsibleTrigger className="scene-panel-toggle">
+            <ChevronDown size={14} />
+            <h2>
+              {title}
+              {count === undefined ? null : <span>{count}</span>}
+            </h2>
+          </CollapsibleTrigger>
+          {actions}
+        </header>
+        {/* 折起来时不渲染内容(而不是只藏起来):右栏里最长的那一节是运镜面板,它挂着
+            若干个受控输入,留在树上白白参与每次 re-render。 */}
+        <CollapsibleContent className="scene-panel-body" forceMount={undefined}>
+          {open && children}
+        </CollapsibleContent>
+      </section>
+    </Collapsible>
   );
 }

@@ -1,4 +1,5 @@
 import React from "react";
+import { SceneSubsection } from "./SceneSubsection";
 import { Camera, RotateCw, MoveRight, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -141,9 +142,7 @@ export function SceneCameraPanel({
       {/* 两段折叠收在一个 stack 里。**分割线是每一行自己的上边框**,所以行与行之间不能再叠
           外层容器那 16px 的 gap —— 叠了之后线上方 28px、下方 12px,线看着黏在下面那行上。 */}
       <div className="scene-detail-stack">
-        <details className="scene-details scene-manual-camera">
-        <summary>自己设置起点和终点</summary>
-        <div>
+        <SceneSubsection title="自己设置起点和终点">
           <p>在编辑视角中调整构图，分别记下镜头从哪里开始、在哪里结束。</p>
           {preview && (
             <Button variant="secondary" onClick={observe}>
@@ -168,11 +167,8 @@ export function SceneCameraPanel({
             </Button>
           </div>
           <p>在底部时间条选择中间时刻，再点「记录此视角」可增加途经点。</p>
-        </div>
-      </details>
-      <details className="scene-details">
-        <summary>镜头高级设置</summary>
-        <div>
+        </SceneSubsection>
+      <SceneSubsection title="镜头高级设置">
           <label className="scene-number">
             <span>镜头名称</span>
             <Input
@@ -222,8 +218,7 @@ export function SceneCameraPanel({
               移除此途经点
             </Button>
           )}
-        </div>
-      </details>
+        </SceneSubsection>
       </div>
     </div>
   );

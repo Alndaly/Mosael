@@ -61,6 +61,26 @@
       transform: rotate(360deg);
     }
   }
+  /* 折叠区块的展开/收起。高度由 Radix 量好写进 --radix-collapsible-content-height ——
+     这是 CSS 自己算不出来的那一个数(内容高度未知时 height: auto 无法过渡)。 */
+  --animate-collapsible-down: collapsible-down 160ms ease-out;
+  @keyframes collapsible-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-collapsible-content-height);
+    }
+  }
+  --animate-collapsible-up: collapsible-up 140ms ease-in;
+  @keyframes collapsible-up {
+    from {
+      height: var(--radix-collapsible-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
   --animate-recorder-blink: recorder-blink 1s steps(2, start) infinite;
   @keyframes recorder-blink {
     50% {

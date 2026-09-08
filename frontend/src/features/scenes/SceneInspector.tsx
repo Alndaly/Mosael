@@ -1,4 +1,5 @@
 import React from "react";
+import { SceneSubsection } from "./SceneSubsection";
 import { Clock, Copy, Group, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -240,9 +241,7 @@ export function SceneInspector({
                 )}
               </>
             )}
-            <details className="scene-details">
-              <summary>精确位置与旋转</summary>
-              <div>
+            <SceneSubsection title="精确位置与旋转">
                 {" "}
                 <Vector
                   label="位置"
@@ -262,8 +261,7 @@ export function SceneInspector({
                   onChange={(scale) => objectPatch(object.id, { scale })}
                 />
                 <p>位置与尺寸单位为米，旋转单位为度。</p>
-              </div>
-            </details>
+              </SceneSubsection>
           </>
         ) : (
           <>
@@ -344,9 +342,8 @@ function ObjectTrackSection({
     onPatch({ track: next });
   };
   return (
-    <details className="scene-details" open={!!track.length}>
-      <summary>走位（随时间移动）</summary>
-      <div>
+    <SceneSubsection title="走位（随时间移动）"
+        defaultOpen>
         <div className="scene-shape">
           <Button variant="secondary" onClick={record}>
             <Clock size={15} />
@@ -376,8 +373,7 @@ function ObjectTrackSection({
         ) : (
           <p>把物体摆到位，再点「记录此刻」。在时间条上换一个时刻、挪一下，它就会在两点之间走过去。</p>
         )}
-      </div>
-    </details>
+    </SceneSubsection>
   );
 }
 
@@ -404,9 +400,8 @@ function LightingSection({
     onChange({ ...lighting, ...patch, preset: CUSTOM_PRESET });
   const current = presetById(lighting.preset);
   return (
-    <details className="scene-details" open>
-      <summary>主光</summary>
-      <div>
+    <SceneSubsection title="主光"
+        defaultOpen>
         <label className="scene-number">
           <span>打光方式</span>
           <Select
@@ -482,7 +477,6 @@ function LightingSection({
           onChange={(softness) => tune({ softness })}
         />
         <p>方位角 0 是正面来光，90 在右侧，180 是逆光；高度角 0 贴地、90 是顶光。</p>
-      </div>
-    </details>
+    </SceneSubsection>
   );
 }

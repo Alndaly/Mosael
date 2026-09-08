@@ -803,27 +803,39 @@
   line-height: 1.8;
   color: var(--muted-foreground);
 }
-.scene-details {
+/* 面板里的次级折叠块(「走位」「精确位置与旋转」…)。
+   触发器就是一行文字 —— 不给它边框和底色:这一层是**分组标题**,不是按钮。 */
+.scene-subsection-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: var(--scene-control-height);
+  text-align: left;
   font-size: var(--text-ui-xs);
+  font-weight: 500;
   color: var(--muted-foreground);
 }
-.scene-details summary {
-  cursor: pointer;
-  padding: 12px 0;
-  font-weight: 500;
+.scene-subsection-toggle:hover {
   color: var(--foreground);
 }
-
-.scene-details > div {
+.scene-subsection-toggle svg {
+  flex-shrink: 0;
+  transition: transform 140ms ease;
+}
+.scene-subsection[data-state="open"] > .scene-subsection-toggle svg {
+  transform: rotate(90deg);
+}
+.scene-subsection-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 4px 0 14px;
-}
-.scene-details p {
+  gap: 10px;
+  padding: 2px 0 8px;
   font-size: var(--text-ui-xs);
   color: var(--muted-foreground);
-  line-height: 1.8;
+}
+.scene-subsection-body p {
+  line-height: 1.75;
 }
 
 .scene-camera-panel {
@@ -896,12 +908,12 @@
 }
 
 /* 分割线用 --divider,不用 --border:tokens.css 里写着「内容分隔比控件和容器的边界更轻」,
-   而这两条线分的是段落,不是控件。此前用 --border,在一片浅底上看着比它该有的分量重。 */
+   而这些线分的是段落,不是控件。 */
 .scene-detail-stack {
   display: flex;
   flex-direction: column;
 }
-.scene-detail-stack > .scene-details {
+.scene-detail-stack > .scene-subsection + .scene-subsection {
   border-top: 1px solid var(--divider);
 }
 
