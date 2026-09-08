@@ -121,7 +121,13 @@ function geometryObject(o: SceneObject): THREE.Object3D {
         -p.depth / 2 + (p.depth * (i + 0.5)) / p.steps,
       );
   if (o.kind === "light") {
-    group.add(new THREE.PointLight(o.color, o.intensity, 50, 2));
+    const lamp = new THREE.PointLight(o.color, o.intensity, 50, 2);
+    // 点光源的阴影要渲六个面,比平行光贵得多 —— 给一张小得多的图。它照的通常是局部,
+    // 分辨率不够的代价远小于"加了盏灯却没有影子"。
+    lamp.castShadow = true;
+    lamp.shadow.mapSize.set(512, 512);
+    lamp.shadow.bias = -0.005;
+    group.add(lamp);
     const bulb = new THREE.Mesh(
       new THREE.SphereGeometry(0.12, 12, 8),
       new THREE.MeshBasicMaterial({ color: o.color }),
@@ -191,6 +197,11 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
       renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
       renderer.outputColorSpace = THREE.SRGBColorSpace;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      // **影子此前从来没渲过。** 每个网格上都写着 castShadow/receiveShadow,但全局这一档
+      // 从没打开 —— 那些标记是死的。而这一页产出的画面是要交给图像/视频模型当参考的:
+      // 影子是模型判断"光从哪来"最强的线索,没有它,参考帧是一张平的图。
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       element.append(renderer.domElement);
       const scene = new THREE.Scene(),
         root = new THREE.Group();
@@ -199,7 +210,44 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
       scene.add(ambient);
       const sun = new THREE.DirectionalLight(0xffffff, 2.5);
       sun.position.set(4, 9, 5);
-      scene.add(sun);
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(2048, 2048);
+      // 斜射到大平面上时的自阴影条纹(shadow acne)。normalBias 沿法线推一点,比单纯加大
+      // bias 好 —— 后者会把接触阴影整体推离物体,脚下那圈"贴地感"就没了。
+      sun.shadow.bias = -0.0004;
+      sun.shadow.normalBias = 0.02;
+      scene.add(sun, sun.target);
+      /** 平行光的阴影相机是个正交盒子,默认 ±5 —— 展厅那种二十来米的场景一出盒子就没影子。
+       *  所以每次场景变了都按包围球重新框一次:光的**方向**不动(那是打光的一部分),
+       *  只把它挪到罩得住的位置,再把盒子放到刚好包住。 */
+      const SUN_DIRECTION = sun.position.clone().normalize();
+      /** 点光源的阴影是六个面,一盏就抵得上好几盏平行光。场景允许 500 个物体,不封顶的话
+       *  一屋子灯能把帧率拖到个位数,而**第五盏灯的影子对画面几乎没有贡献**。
+       *  按场景里的先后取前几盏 —— 顺序是用户自己排的,比"随便挑几盏"讲得通。 */
+      const SHADOW_CASTING_LIGHTS = 4;
+      const capLightShadows = () => {
+        let remaining = SHADOW_CASTING_LIGHTS;
+        root.traverse((node) => {
+          if (node instanceof THREE.PointLight) node.castShadow = remaining-- > 0;
+        });
+      };
+      const fitShadow = () => {
+        const bounds = new THREE.Box3().setFromObject(root);
+        if (bounds.isEmpty()) return;
+        const sphere = bounds.getBoundingSphere(new THREE.Sphere());
+        const radius = Math.max(sphere.radius, 1);
+        sun.position.copy(sphere.center).addScaledVector(SUN_DIRECTION, radius * 3);
+        sun.target.position.copy(sphere.center);
+        sun.target.updateMatrixWorld();
+        const box = sun.shadow.camera;
+        box.left = -radius * 1.25;
+        box.right = radius * 1.25;
+        box.top = radius * 1.25;
+        box.bottom = -radius * 1.25;
+        box.near = 0.1;
+        box.far = radius * 6;
+        box.updateProjectionMatrix();
+      };
       const grid = new THREE.GridHelper(40, 40, 0x6b7480, 0x6b7480);
       (grid.material as THREE.Material).transparent = true;
       (grid.material as THREE.Material).opacity = 0.17;
@@ -330,6 +378,10 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
                 copy.traverse((child) => {
                   delete child.userData.sceneObjectId;
                   if (child instanceof THREE.Mesh) {
+                    // 导入的模型此前既不投影也不接影 —— 一整个 Blender 场景浮在光里,
+                    // 而它恰恰是这一页最主要的内容。
+                    child.castShadow = true;
+                    child.receiveShadow = true;
                     child.geometry = child.geometry.clone();
                     child.material = Array.isArray(child.material)
                       ? child.material.map((m) => m.clone())
@@ -337,6 +389,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
                   }
                 });
                 node.add(copy);
+                fitShadow();   // 模型有多大只有加载完才知道,阴影盒子要跟着重新框
                 select();
                 if (
                   !framedModels.has(o.id) &&
@@ -356,6 +409,8 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
               });
           }
         }
+        capLightShadows();
+        fitShadow();
         select();
       }
       transform.addEventListener("dragging-changed", (event) => {
@@ -552,6 +607,10 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         });
         r.outputColorSpace = THREE.SRGBColorSpace;
         r.toneMapping = renderer.toneMapping;
+        // **导出这一路也要开。** 视口里有影子而导出的参考帧没有,等于白做 —— 交给模型的
+        // 就是这一帧。
+        r.shadowMap.enabled = true;
+        r.shadowMap.type = renderer.shadowMap.type;
         const aspect = aspectRatio(shot);
         r.setSize(
           aspect >= 1 ? 1280 : 720,
@@ -562,7 +621,10 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           latest.current.content.background,
         );
         const copy = root.clone(true);
-        exportScene.add(copy, ambient.clone(), sun.clone());
+        const exportSun = sun.clone();
+        // 平行光的朝向由 target 决定,而 clone 出来的 target 不在任何场景里 —— 不加进去,
+        // 它的世界矩阵就不参与更新,光会照着默认方向(原点)打。
+        exportScene.add(copy, ambient.clone(), exportSun, exportSun.target);
         const camera = new THREE.PerspectiveCamera(45, aspect, 0.05, 2000);
         return {
           r,
