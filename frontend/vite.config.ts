@@ -1,8 +1,11 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
+import { createRequire } from "node:module";
+import fs from "node:fs";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
 import pkg from "../package.json" with { type: "json" };
+import { DECODER_FILES, DECODER_PREFIX } from "./src/features/scenes/decoderAssets";
 
 // 版本号只有一个来源:**仓库根** package.json。它是 electron-builder 打包用的版本,也是
 // app.getVersion() 的返回值,发版 CI(release.yml 的 Sync app version from tag)也只 bump 它。
@@ -17,13 +20,52 @@ import pkg from "../package.json" with { type: "json" };
 // 下不提供 CJS 的 __dirname,当前版本只是警告,默认值一换配置就直接加载失败。
 const here = import.meta.dirname;
 
+/**
+ * 把 three 自带的 KTX2 / Draco 解码器摆到 `/three/` 下。
+ *
+ * **为什么不能走 `?url` 导入**:`KTX2Loader.setTranscoderPath` / `DRACOLoader.setDecoderPath`
+ * 要的是一个**目录**,它们自己去拼 `basis_transcoder.js`、`.wasm` 这些文件名。而 `?url` 会把
+ * 文件哈希改名,拼出来的地址就不存在了。
+ *
+ * **为什么不直接把文件签进 public/**:那样它们会和 node_modules 里的 three 版本脱钩 ——
+ * 升级 three 之后解码器还是旧的,而 wasm 和 loader 是配套的,不匹配时的症状是"某些模型解不开",
+ * 没有任何地方会报"版本对不上"。这里从**装着的那个 three** 里取,升级就自动跟上。
+ *
+ * 都是本地文件,不走 CDN:这个应用要能离线跑。
+ */
+function threeDecoders(): Plugin {
+  //: 从 three 自己的 exports 里解一个真实文件再回推目录 —— `three/package.json` 不在
+  //: exports 映射里,直接 resolve 它会 ERR_PACKAGE_PATH_NOT_EXPORTED。
+  const libs = path.dirname(
+    createRequire(import.meta.url).resolve("three/examples/jsm/libs/meshopt_decoder.module.js"),
+  );
+  const files = DECODER_FILES;
+  return {
+    name: "mosael:three-decoders",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const name = files.find((file) => req.url?.startsWith(`/${DECODER_PREFIX}/${file}`));
+        if (!name) return next();
+        res.setHeader("Content-Type", name.endsWith(".wasm") ? "application/wasm" : "text/javascript");
+        fs.createReadStream(path.join(libs, name)).pipe(res);
+      });
+    },
+    generateBundle() {
+      for (const name of files) {
+        // fileName 原样落盘(不哈希)—— 上面说过,loader 拼的是固定文件名。
+        this.emitFile({ type: "asset", fileName: `${DECODER_PREFIX}/${name}`, source: fs.readFileSync(path.join(libs, name)) });
+      }
+    },
+  };
+}
+
 export default defineConfig({
   // Relative asset paths so the packaged Electron shell can loadFile() dist.
   base: "./",
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), threeDecoders()],
   resolve: {
     alias: {
       "@": path.resolve(here, "src"),

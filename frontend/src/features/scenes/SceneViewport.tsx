@@ -13,8 +13,8 @@ import React from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
+import { gltfLoader } from "./gltfLoader";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 import {
   readSceneModel,
@@ -265,7 +265,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
             abort.signal,
           )
             .then((data) =>
-              new GLTFLoader().parseAsync(
+              gltfLoader(renderer).parseAsync(
                 new TextDecoder().decode(data.slice(0, 4)) === "glTF"
                   ? data
                   : new TextDecoder().decode(data),
