@@ -47,6 +47,9 @@ import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKi
 import { itemFormResetKey, itemIsRunning } from "@/features/boards/boardItemState";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
 import { BoardCommentComposer, type CommentDraft } from "@/features/boards/BoardCommentComposer";
+import { MarkerPin } from "@/features/markers/MarkerPin";
+import { MAX_MARKERS, newMarkerId, nextMarkerName, type CanvasMarker } from "@/features/markers/markers";
+import { useMarkerShortcuts } from "@/features/markers/useMarkerShortcuts";
 
 /**
  * 创意画板的画布。
@@ -74,10 +77,33 @@ export interface BoardCanvasApi {
   replace: (canvas: Canvas) => void;
   fitView: () => void;
   focusComment: (comment: CollaborationComment) => void;
+  /** 位置书签。清单挂在工具条上,而它读的是画布这一份(事实来源在 React Flow 的节点里)。 */
+  markers: CanvasMarker[];
+  addMarker: () => void;
+  jumpToMarker: (marker: CanvasMarker) => void;
   undo: () => void;
   redo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+}
+
+/** 画板的节点 + 标记。**标记不是画板项**,所以它进不了 BOARD_NODE_TYPES 那张按 kind 索引的表。 */
+const CANVAS_NODE_TYPES = { ...BOARD_NODE_TYPES, marker: MarkerPin };
+
+/** 标记在 React Flow 里也是节点(这样拖动、选中、删除都白拿),但 id 带前缀,
+ *  汇出时按类型分回两份 —— 不带前缀的话,一个和画板项重名的标记会把它顶掉。 */
+const MARKER_PREFIX = "marker:";
+
+function toMarkerNodes(markers: CanvasMarker[]): Node[] {
+  return markers.map((marker) => ({
+    id: MARKER_PREFIX + marker.id,
+    type: "marker",
+    position: { x: marker.x, y: marker.y },
+    data: { marker },
+    // 压在分组框(0)和画板项(1)之上:它是一枚贴在画布上的旗子,被别的东西盖住就点不到了。
+    zIndex: 2,
+    connectable: false,
+  }));
 }
 
 function toNodes(items: BoardItem[]): Node[] {
@@ -96,17 +122,28 @@ function toNodes(items: BoardItem[]): Node[] {
 /** 把 React Flow 的当前状态汇成要存的画布。**位置以 React Flow 为准** —— 它才是刚被拖过的那份。 */
 export function toCanvas(nodes: Node[], edges: Edge[]): Canvas {
   return {
-    items: nodes.map((node) => {
-      const { item } = node.data as unknown as { item: BoardItem };
-      return {
-        ...item,
+    items: nodes
+      .filter((node) => node.type !== "marker")
+      .map((node) => {
+        const { item } = node.data as unknown as { item: BoardItem };
+        return {
+          ...item,
+          x: Math.round(node.position.x),
+          y: Math.round(node.position.y),
+          width: Math.round(node.width ?? node.measured?.width ?? DEFAULT_SIZE[item.kind].width),
+          height: Math.round(node.height ?? node.measured?.height ?? DEFAULT_SIZE[item.kind].height),
+        };
+      }),
+    edges: edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target })),
+    // 标记单独一份,不混进 items —— 它没有素材、不生成、连不了线,混进去的话每一处遍历
+    // items 的地方(生成、导出、缩略图、连线校验)都要先分辨一次"这个是不是标记"。
+    markers: nodes
+      .filter((node) => node.type === "marker")
+      .map((node) => ({
+        ...(node.data as unknown as { marker: CanvasMarker }).marker,
         x: Math.round(node.position.x),
         y: Math.round(node.position.y),
-        width: Math.round(node.width ?? node.measured?.width ?? DEFAULT_SIZE[item.kind].width),
-        height: Math.round(node.height ?? node.measured?.height ?? DEFAULT_SIZE[item.kind].height),
-      };
-    }),
-    edges: edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target })),
+      })),
   };
 }
 
@@ -306,7 +343,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
   } | null>(null);
   const suppressCommentClick = React.useRef<string | null>(null);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(toNodes(canvas.items));
+  const [nodes, setNodes, onNodesChange] = useNodesState([...toNodes(canvas.items), ...toMarkerNodes(canvas.markers ?? [])]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(
     canvas.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target })),
   );
@@ -395,7 +432,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     finally { setRefreshingDocument(null); }
   };
   const composerItem = React.useMemo(() => {
-    const picked = nodes.filter((node) => node.selected);
+    const picked = nodes.filter((node) => node.selected && node.type !== "marker");
     if (picked.length !== 1) return null;
     const item = (picked[0].data as unknown as { item: BoardItem }).item;
     if (item.kind === "image" || item.kind === "video" || item.kind === "audio") {
@@ -448,10 +485,11 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
 
   const beginFrameDrag = React.useCallback(
     (node: Node) => {
-      const item = (node.data as unknown as { item: BoardItem }).item;
+      const item = (node.data as unknown as { item?: BoardItem }).item;
       carried.current = [];
       dragFrom.current = null;
-      if (item.kind !== "frame" || !item.move_children) return;
+      // 标记节点没有 item(它不是画板项)—— 不先问一句,拖一枚旗子就会在这里抛。
+      if (!item || item.kind !== "frame" || !item.move_children) return;
       const left = node.position.x;
       const top = node.position.y;
       const right = left + (node.width ?? DEFAULT_SIZE.frame.width);
@@ -494,12 +532,77 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     [setNodes],
   );
 
+  // ── 标记(位置书签)────────────────────────────────────────────────────────
+  //: 事实来源和画板项一样是 React Flow 的 nodes —— 拖动、选中、⌫ 删除因此全是白拿的,
+  //: 撤销/重做也一样(历史存的是整份 toCanvas 快照,里面本来就带着 markers)。
+  //: **经序列化取回一份稳定引用。** 这份清单要交给工具条(见 onReady 那条 effect),而
+  //: `nodes` 每拖一帧就换一次身份 —— 直接 map 出来的话,拖任何一个节点都会让工具条跟着
+  //: 重挂一遍。标记至多几十个,序列化的代价远小于每帧一次的重渲染。
+  const markerKey = React.useMemo(
+    () => JSON.stringify(nodes.filter((node) => node.type === "marker").map((node) => ({
+      ...(node.data as unknown as { marker: CanvasMarker }).marker,
+      x: Math.round(node.position.x),
+      y: Math.round(node.position.y),
+    }))),
+    [nodes],
+  );
+  const markers = React.useMemo(() => JSON.parse(markerKey) as CanvasMarker[], [markerKey]);
+
+  const patchMarker = React.useCallback((next: CanvasMarker) => {
+    setNodes((current) =>
+      current.map((node) => (node.id === MARKER_PREFIX + next.id ? { ...node, data: { ...node.data, marker: next } } : node)),
+    );
+  }, [setNodes]);
+
+  const deleteMarker = React.useCallback((id: string) => {
+    setNodes((current) => current.filter((node) => node.id !== MARKER_PREFIX + id));
+  }, [setNodes]);
+
+  /** 跳到某个标记。视口居中过去,不改选中态 —— 跳转是"我要看那儿",不是"我要改那个"。 */
+  const jumpToMarker = React.useCallback((marker: CanvasMarker) => {
+    const instance = rf.current;
+    if (!instance) return;
+    // 加半枚旗子:节点坐标是左上角,照它居中的话旗子整个偏在右下。
+    void instance.setCenter(marker.x + 60, marker.y + 14, { zoom: Math.max(instance.getZoom(), 0.9), duration: 350 });
+  }, []);
+
+  useMarkerShortcuts(markers, jumpToMarker, !commentMode);
+
+  /** 在当前视口中心放一枚标记。放在**看得见的地方**:标记标的是"我现在在看的这块地方"。 */
+  const addMarker = React.useCallback(() => {
+    const instance = rf.current;
+    const pane = surface.current;
+    if (!instance || !pane) return;
+    let placed = false;
+    setNodes((current) => {
+      const existing = current
+        .filter((node) => node.type === "marker")
+        .map((node) => (node.data as unknown as { marker: CanvasMarker }).marker);
+      if (existing.length >= MAX_MARKERS) return current;
+      const rect = pane.getBoundingClientRect();
+      const center = instance.screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+      const marker: CanvasMarker = {
+        id: newMarkerId(existing),
+        name: nextMarkerName(t("markers"), existing),
+        x: Math.round(center.x),
+        y: Math.round(center.y),
+      };
+      placed = true;
+      return [...current.map((node) => ({ ...node, selected: false })), ...toMarkerNodes([marker]).map((node) => ({ ...node, selected: true }))];
+    });
+    if (!placed) toast.error(t("markerLimit").replace("{n}", String(MAX_MARKERS)));
+  }, [setNodes, t]);
+
   //: 渲染用的节点 = 数据 + 这一轮的回调。**每轮重新贴** —— 回调闭包着最新的 setNodes,
   //: 而把它们存进节点数据会让节点的初值反过来依赖 setNodes,那个循环绕不开。
-  const displayNodes = nodes.map((node) => ({
-      ...node,
-      data: { ...node.data, onText: setText, onAspect: setAspect, commentMode, workspaceId, boardId, document: documents.get(node.id), onPickDocument: setPickingDocument, onRefreshDocument: refreshDocument, refreshingDocument: refreshingDocument === node.id },
-    }));
+  const displayNodes = nodes.map((node) =>
+    node.type === "marker"
+      ? { ...node, data: { ...node.data, markers, onChange: patchMarker, onDelete: deleteMarker } }
+      : {
+          ...node,
+          data: { ...node.data, onText: setText, onAspect: setAspect, commentMode, workspaceId, boardId, document: documents.get(node.id), onPickDocument: setPickingDocument, onRefreshDocument: refreshDocument, refreshingDocument: refreshingDocument === node.id },
+        },
+  );
 
   const serialized = React.useMemo(() => JSON.stringify(toCanvas(nodes, edges)), [nodes, edges]);
   React.useEffect(() => {
@@ -519,7 +622,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     (snapshot: string) => {
       const canvas = JSON.parse(snapshot) as Canvas;
       restoring.current = snapshot;
-      setNodes(toNodes(canvas.items));
+      setNodes([...toNodes(canvas.items), ...toMarkerNodes(canvas.markers ?? [])]);
       setEdges(canvas.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target })));
     },
     [setNodes, setEdges],
@@ -561,7 +664,8 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
    */
   const groupSelection = React.useCallback(() => {
     setNodes((current) => {
-      const picked = current.filter((node) => node.selected);
+      // 分组框圈的是画板项。把一枚旗子算进外接矩形,框就会为了包住它而多出一块空白。
+      const picked = current.filter((node) => node.selected && node.type !== "marker");
       if (picked.length < 2) return current;
       const pad = 32;
       const left = Math.min(...picked.map((one) => one.position.x)) - pad;
@@ -792,12 +896,15 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           void rf.current.setCenter(x, y, { zoom: Math.max(rf.current.getZoom(), 0.9), duration: 350 });
         }
       },
+      markers,
+      addMarker,
+      jumpToMarker,
       undo: stepBack,
       redo: stepForward,
       canUndo: canUndo(history),
       canRedo: canRedo(history),
     });
-  }, [add, patch, onReady, rightOverlayWidth, stepBack, stepForward, history, restore]);
+  }, [add, patch, onReady, rightOverlayWidth, stepBack, stepForward, history, restore, markers, addMarker, jumpToMarker]);
 
   return (
     // 详情页本身就是画布边界:四边满铺,不再套第二层卡片边框或圆角。
@@ -851,7 +958,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       <ReactFlow
         nodes={displayNodes}
         edges={edges}
-        nodeTypes={BOARD_NODE_TYPES}
+        nodeTypes={CANVAS_NODE_TYPES}
         minZoom={0.1}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
@@ -1387,7 +1494,9 @@ function ItemToolbar({
 }) {
   const t = useI18n();
   const { openImagePreview } = useImagePreview();
-  const selected = nodes.filter((node) => node.selected);
+  // 标记不进这条操作条:它没有素材、不生成、不换一份,而这里每个动作都要读它没有的 item
+  // (「复制一份」此前就会在这里抛)。它自己的改名/绑键/删除开在旗子上。
+  const selected = nodes.filter((node) => node.selected && node.type !== "marker");
   // 多选时只给共通的动作 —— 逐个类型的动作在混选下没有一致的含义。
   const single = selected.length === 1 ? selected[0] : null;
   if (selected.length === 0) return null;

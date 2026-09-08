@@ -148,3 +148,26 @@ describe("workflow canvas model", () => {
     expect(configAssetId({ ...node, config: { source: "{{upstream.asset_id}}" } }, registry)).toBe("");
   });
 });
+
+
+describe("标记", () => {
+  it("和节点一起画在画布上,但 id 带前缀、类型不是 wf", () => {
+    const graph = {
+      nodes: [{ id: "start", type: "start", position: { x: 0, y: 0 } }],
+      edges: [],
+      markers: [{ id: "m1", name: "这一段", x: 640, y: 120, shortcut: "Mod+Alt+2" }],
+    } as unknown as WorkflowGraph;
+
+    const nodes = toWorkflowFlowNodes(graph, new Map());
+    const marker = nodes.find((node) => node.type === "marker");
+    // 前缀是必须的:图里 markers 和 nodes 是两份列表,一个和节点重名的标记会把它顶掉。
+    expect(marker?.id).toBe("marker:m1");
+    expect(marker?.position).toEqual({ x: 640, y: 120 });
+    expect(nodes.filter((node) => node.type === "wf").map((node) => node.id)).toEqual(["start"]);
+  });
+
+  it("没有标记的图照旧只有节点", () => {
+    const graph = { nodes: [{ id: "start", type: "start" }], edges: [] } as unknown as WorkflowGraph;
+    expect(toWorkflowFlowNodes(graph, new Map()).every((node) => node.type === "wf")).toBe(true);
+  });
+});

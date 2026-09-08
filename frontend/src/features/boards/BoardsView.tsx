@@ -53,6 +53,7 @@ import {
 } from "@/components/app/canvasPanelLayout";
 import { RightDockResizeHandle } from "@/components/app/RightDockResizeHandle";
 import { useResizableSidebar } from "@/lib/useResizableSidebar";
+import { MarkerListButton } from "@/features/markers/MarkerListButton";
 import { BoardCanvas, type BoardCanvasApi } from "@/features/boards/BoardCanvas";
 import { useAutosave } from "@/features/boards/useAutosave";
 import { AssetPickerDialog } from "@/features/boards/AssetPickerDialog";
@@ -660,6 +661,9 @@ function BoardDetail({
                   setPicking({ kind: media, place: (assetId) => api?.add(media, { asset_id: assetId }) });
                 } else if (kind === "scene") {
                   setPickingScene(true);
+                } else if (kind === "marker") {
+                  // 标记不是画板项,所以它不走 api.add(kind) 那条(那条按 kind 建 item)。
+                  api?.addMarker();
                 } else {
                   api?.add(kind as "note" | "image" | "video" | "audio" | "frame" | "document");
                 }
@@ -679,6 +683,9 @@ function BoardDetail({
                 { value: "video", label: t("boardsAddVideo"), group: t("boardsGroupCreate") },
                 { value: "audio", label: t("boardsAddAudio"), group: t("boardsGroupCreate") },
                 { value: "frame", label: t("boardsAddFrame"), group: t("boardsGroupCreate") },
+                //: 标记自成一组,和工作流详情页那边一致 —— 它不是"往画板上放一件东西",
+                //: 是给这块地方插一面旗;混在「创建」里会让人以为它也是一种画板项。
+                { value: "marker", label: t("markerAdd"), group: t("markers") },
               ]}
               trigger={
                 <button
@@ -731,6 +738,12 @@ function BoardDetail({
             <Button variant="ghost" size="icon-sm" title={t("boardsFitView")} aria-label={t("boardsFitView")} onClick={() => api?.fitView()}>
               <Maximize2 size={14} />
             </Button>
+            {/* 标记清单和「全览」放在一起:两个都是「怎么看这张画布」,不是「改这张画布」。 */}
+            <MarkerListButton
+              markers={api?.markers ?? []}
+              onJump={(marker) => api?.jumpToMarker(marker)}
+              onAdd={() => api?.addMarker()}
+            />
             {/* 撤销/重做。画布上最容易「手一滑」—— 拖错一个节点、误删一项,没有退路的话
                 用户只能凭记忆手动摆回去。快捷键是 ⌘Z / ⌘⇧Z,按钮是给不知道有快捷键的人。 */}
             <Button

@@ -60,7 +60,12 @@ CONTRACT_HINT = re.compile(r"contracts/[\w.-]+\.json")
 
 #: 豁免:写下这类话但**确实不需要**契约的地方,以及为什么。
 #: 名单短而有名有姓 —— 一张越写越长的名单等于没有名单。
-ALLOWED: dict[str, str] = {}
+ALLOWED: dict[str, str] = {
+    # 它说的不是"两侧各有一份语义",是**一个字面量在两个文件里**(package.json 的 build.appId
+    # 与这里的 BUNDLE_ID,keychain group 拿它拼)。契约语料解决不了这个 —— 语料是"同一份输入
+    # 两侧算出同一个答案",而这里根本没有算。盯着它不分岔的是 electron/webauthn.test.ts。
+    "electron/webauthn.cjs": "同一个字面量的两处副本(非语义两份实现),由 electron/webauthn.test.ts 直接比对",
+}
 
 #: 契约自己的测试与语料里当然会提到这些词,不必再点名。
 SKIP_NAME_PARTS = ("parity", "contract")

@@ -41,9 +41,20 @@ export interface BoardEdge {
   label?: string;
 }
 
+/** 位置书签。**和 items 平级,不是一种 item** —— 它不生成、不连线、没有素材;
+ *  共用的形状与冲突规则在 features/markers 与 backend/app/domain/markers.py。 */
+export interface BoardMarker {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  shortcut?: string;
+}
+
 export interface BoardCanvas {
   items: BoardItem[];
   edges: BoardEdge[];
+  markers?: BoardMarker[];
 }
 
 export interface Board {

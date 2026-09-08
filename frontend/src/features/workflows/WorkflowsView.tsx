@@ -169,14 +169,31 @@ import {
   workflowNodeVisual,
   type WorkflowNodeData,
 } from "@/features/workflows/WorkflowNode";
+import { MarkerListButton } from "@/features/markers/MarkerListButton";
+import { MarkerPin } from "@/features/markers/MarkerPin";
+import { MAX_MARKERS, newMarkerId, nextMarkerName, type CanvasMarker } from "@/features/markers/markers";
+import { useMarkerShortcuts } from "@/features/markers/useMarkerShortcuts";
 import {
   configAssetId,
+  MARKER_PREFIX,
   toWorkflowFlowEdges,
   toWorkflowFlowNodes,
   withSingleNodeSelected,
   workflowPortPresentation,
   workflowIssueText,
 } from "@/features/workflows/workflowCanvasModel";
+
+/** 主画布的节点类型。标记不是工作流节点(它不执行、不连线),但它在 React Flow 里得有个
+ *  渲染器 —— 所以它加在这里,而不是加进 WORKFLOW_NODE_TYPES(那张表是"能跑的节点")。
+ *  子图画布也用这张表:那里没有加标记的入口,但一份手写进来的子图里若有 markers,
+ *  少了渲染器就是一块空白 —— 注册一个渲染器比在投影里再筛一遍便宜。 */
+const WORKFLOW_CANVAS_NODE_TYPES = { ...WORKFLOW_NODE_TYPES, marker: MarkerPin };
+
+/** 这个画布节点是标记吗?(标记的 id 带前缀,复制 / 折叠 / 层级那些操作都要绕开它。) */
+const isMarkerNode = (node: { type?: string }): boolean => node.type === "marker";
+
+/** 「添加」菜单里代表标记的那一项。用一个不可能撞上节点类型的值,免得和插件节点重名。 */
+const MARKER_OPTION = "__marker__";
 
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
@@ -960,6 +977,73 @@ function WorkflowEditor({
     [rebuildNodes],
   );
 
+  // ── 标记(位置书签)────────────────────────────────────────────────────────
+  //: 一张几十个节点的图铺开之后,回到"上次在改的那块"要靠拖和缩放。标记把它变成按一下键。
+  //: 它住在 graph.markers 里(不是 nodes)—— 它不执行、不连线,进了 nodes 就要有节点类型,
+  //: 而运行时会在"未知节点类型"上失败。
+  const markers = React.useMemo<CanvasMarker[]>(() => graph.markers ?? [], [graph.markers]);
+
+  const patchMarker = React.useCallback(
+    (next: CanvasMarker) => {
+      // 改名是"一串输入",在历史里塌成一条(和节点重命名同一套);换快捷键是离散的一步。
+      const typing = markers.find((one) => one.id === next.id)?.name !== next.name;
+      applyGraph({ ...graph, markers: markers.map((one) => (one.id === next.id ? next : one)) }, { coalesce: typing });
+    },
+    [graph, markers, applyGraph],
+  );
+
+  const deleteMarker = React.useCallback(
+    (id: string) => {
+      applyGraph({ ...graph, markers: markers.filter((one) => one.id !== id) });
+    },
+    [graph, markers, applyGraph],
+  );
+
+  /**
+   * 跳到某个标记:视口居中过去,不改选中态 —— 跳转是"我要看那儿",不是"我要改那个"。
+   *
+   * **不走 focusPosition。** 那条给的是"选中一个节点"的取景:它会为节点底下的检查器面板
+   * 空出两百来像素,而跳到标记时并没有面板打开 —— 借它的话旗子会稳定地偏在画面上方。
+   */
+  const jumpToMarker = React.useCallback(
+    (marker: CanvasMarker) => {
+      const instance = rfRef.current;
+      const surface = canvasSurfaceRef.current;
+      if (!instance || !surface) return;
+      void centerCanvasViewport(
+        instance,
+        surface,
+        // 加半枚旗子:节点坐标是左上角,照它居中的话旗子整个偏在右下。
+        { x: marker.x + 60, y: marker.y + 14 },
+        getCanvasInsets(),
+        { zoom: Math.max(instance.getZoom(), 0.6), duration: 350 },
+      );
+    },
+    [getCanvasInsets],
+  );
+
+  useMarkerShortcuts(markers, jumpToMarker);
+
+  /** 在当前视口中心插一枚标记 —— 标记标的是"我现在在看的这块地方"。 */
+  const addMarker = React.useCallback(() => {
+    if (markers.length >= MAX_MARKERS) {
+      toast.error(t("markerLimit").replace("{n}", String(MAX_MARKERS)));
+      return;
+    }
+    const instance = rfRef.current;
+    const surface = canvasSurfaceRef.current;
+    if (!instance || !surface) return;
+    const rect = surface.getBoundingClientRect();
+    const center = instance.screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+    applyGraph({
+      ...graph,
+      markers: [
+        ...markers,
+        { id: newMarkerId(markers), name: nextMarkerName(t("markers"), markers), x: Math.round(center.x), y: Math.round(center.y) },
+      ],
+    });
+  }, [graph, markers, applyGraph, t]);
+
   // 框选 → 折叠为子图(ComfyUI 式):把选中节点收进一个 subgraph 节点,进出边界的引用/数据边自动重写。
   const handleCollapse = React.useCallback(
     (ids: string[]) => {
@@ -990,7 +1074,8 @@ function WorkflowEditor({
     edges: [],
   });
   const copySelection = React.useCallback((): boolean => {
-    const selectedIds = new Set(nodes.filter((node) => node.selected).map((node) => node.id));
+    // 标记不进剪贴板:它是一个位置书签,粘一份出来只会得到两枚指着同一处的旗子。
+    const selectedIds = new Set(nodes.filter((node) => node.selected && !isMarkerNode(node)).map((node) => node.id));
     if (selectedIds.size === 0) return false;
     const pickedNodes = graph.nodes.filter((node) => selectedIds.has(node.id));
     // 只带上"两端都被选中"的边:整段子图连内部接线一起复制,不牵连外部节点。
@@ -1075,7 +1160,7 @@ function WorkflowEditor({
         // 少于两个节点时不接管:那时这个操作本来就不成立,让系统的 ⌘G 照常工作。
         // 就地从 nodes 取选中项:selectedFlowIds 声明在这条 effect 后面,而它本来就是
         // nodes 的派生量 —— 为了顺序去搬一个几百行外的声明,只会让下一个人更难读。
-        const picked = nodes.filter((node) => node.selected).map((node) => node.id);
+        const picked = nodes.filter((node) => node.selected && !isMarkerNode(node)).map((node) => node.id);
         if (picked.length >= 2) {
           event.preventDefault();
           handleCollapse(picked);
@@ -1096,6 +1181,24 @@ function WorkflowEditor({
       setGraph((current) => {
         let next = current;
         for (const change of changes) {
+          // 标记住在 graph.markers 里,不在 nodes 里 —— 拖它、删它要落到那一份上去。
+          // 走同一条 onNodesChange 是刻意的:拖拽合并、撤销粒度、脏标记因此都是同一套。
+          if ("id" in change && change.id.startsWith(MARKER_PREFIX)) {
+            const markerId = change.id.slice(MARKER_PREFIX.length);
+            if (change.type === "position" && change.position) {
+              next = {
+                ...next,
+                markers: (next.markers ?? []).map((marker) =>
+                  marker.id === markerId
+                    ? { ...marker, x: Math.round(change.position!.x), y: Math.round(change.position!.y) }
+                    : marker,
+                ),
+              };
+            } else if (change.type === "remove") {
+              next = { ...next, markers: (next.markers ?? []).filter((marker) => marker.id !== markerId) };
+            }
+            continue;
+          }
           if (change.type === "position" && change.position) {
             next = {
               ...next,
@@ -1427,7 +1530,7 @@ function WorkflowEditor({
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
   // 拖动时收起(跟着抖没有意义,还挡住落点),松手后 dragging 转 false 自然复现。
   // 框选中的节点(≥2 才给「折叠为子图」入口),从 React Flow 的 selected 态直接派生。
-  const selectedFlowIds = nodes.filter((node) => node.selected).map((node) => node.id);
+  const selectedFlowIds = nodes.filter((node) => node.selected && !isMarkerNode(node)).map((node) => node.id);
 
   // 就绪度分析:模型/密钥信号在编辑器层拉取(与属性面板共用 queryKey,自动去重),
   // 供画布角标 + 运行前 checklist。只有图里真有对应节点才请求。
@@ -1572,7 +1675,7 @@ function WorkflowEditor({
       if (hasFocusedFloatingPanel()) return;
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
-      const picked = nodes.filter((node) => node.selected).map((node) => node.id);
+      const picked = nodes.filter((node) => node.selected && !isMarkerNode(node)).map((node) => node.id);
       if (picked.length === 0) return;
       event.preventDefault(); // Chromium 里这两个键是后退/前进
       setNodeZ((current) => {
@@ -1598,6 +1701,10 @@ function WorkflowEditor({
       const graphNode = (id: string) =>
         graph.nodes.find((one) => one.id === id) ?? { id, type: "", config: {} };
       return nodes.map((node) => {
+        // 标记不是工作流节点:它没有类型、没有接点、没有就绪度,下面那一整套算它就是白算。
+        if (isMarkerNode(node)) {
+          return { ...node, data: { ...node.data, markers, onChange: patchMarker, onDelete: deleteMarker } };
+        }
         const nodeIssues = analysis.byNode.get(node.id);
         const severity = analysis.severityByNode.get(node.id);
         const badge =
@@ -1624,7 +1731,7 @@ function WorkflowEditor({
       });
     },
     // registry / graph 也要在里面:缩略图和接点类型都读它们,漏了就一直是加载前的空值。
-    [nodes, analysis, t, runByNode, nodeZ, registry, graph],
+    [nodes, analysis, t, runByNode, nodeZ, registry, graph, markers, patchMarker, deleteMarker],
   );
 
   return (
@@ -1659,9 +1766,13 @@ function WorkflowEditor({
           {/* 工具条统一刻度:胶囊(rounded-full)、h-8、text-xs;图标钮 h-8 w-8。 */}
           <SearchableSelect
             value=""
-            onValueChange={addNode}
+            // 标记走单独一条:它不是节点,addNode 会去 registry 里查类型,查不到就什么也不发生。
+            onValueChange={(value) => (value === MARKER_OPTION ? addMarker() : addNode(value))}
             searchPlaceholder={t("wfAddNode")}
-            options={nodeOptions.filter((option) => option.value !== "start" || !graphHasStart)}
+            options={[
+              ...nodeOptions.filter((option) => option.value !== "start" || !graphHasStart),
+              { value: MARKER_OPTION, label: t("markerAdd"), group: t("markers") },
+            ]}
             trigger={
               <button
                 type="button"
@@ -1676,6 +1787,8 @@ function WorkflowEditor({
               </button>
             }
           />
+          {/* 标记清单挨着撤销/重做只是因为它们同属这颗胶囊;它回答的是"这张图上有哪些标记"。 */}
+          <MarkerListButton markers={markers} onJump={jumpToMarker} onAdd={addMarker} />
           <Button variant="ghost" size="icon-sm" title={`${t("undo")} ⌘Z`} aria-label={t("undo")} disabled={!canUndo} onClick={undo}>
             <Undo2 size={14} />
           </Button>
@@ -1990,7 +2103,7 @@ function WorkflowEditor({
             className={cn("[--xy-attribution-background-color:color-mix(in_srgb,var(--panel)_70%,transparent)]", !canvas.ready && "opacity-0")}
             nodes={displayNodes}
             edges={displayEdges}
-            nodeTypes={WORKFLOW_NODE_TYPES}
+            nodeTypes={WORKFLOW_CANVAS_NODE_TYPES}
             minZoom={0.1}
             onInit={(instance) => {
               const flow = instance as unknown as ReactFlowInstance;
@@ -2589,7 +2702,7 @@ function LoopBodyEditor({
           className={cn("[--xy-attribution-background-color:color-mix(in_srgb,var(--panel)_70%,transparent)]", !bodyViewReady && "opacity-0")}
           nodes={nodes}
           edges={shapedEdges}
-          nodeTypes={WORKFLOW_NODE_TYPES}
+          nodeTypes={WORKFLOW_CANVAS_NODE_TYPES}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}

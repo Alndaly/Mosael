@@ -1,0 +1,38 @@
+{
+  "contract": "marker-shortcut",
+  "version": 1,
+  "readme": "contracts/README.md",
+  "description": "画布标记的快捷键怎么归一成一个规范串。前端在「配置」时用它查冲突(features/markers + lib/shortcuts.ts),后端在「保存」时用它查同一份文档里有没有绑重(app/domain/markers.py)。两边归出不同的串,后果是:界面说「没冲突」而后端拒绝保存,或者两个标记在界面上看着绑了不同的键、存进去却是同一个 —— 而其中一个从此再也跳不到。后端 backend/tests/test_marker_shortcut_parity.py 与前端 markerShortcut.parity.test.ts 跑同一份语料。",
+  "notes": [
+    "⌘ 和 Ctrl 归一成同一个 `Mod`:应用里每一处快捷键判的都是 `metaKey || ctrlKey`,分开存的话同一张画板在 macOS 和 Windows 上就是两套绑定,而画板跟着工作区走、不跟着机器走。",
+    "修饰键顺序固定 Mod → Alt → Shift,字母键统一大写:`Shift+Mod+k` 和 `Mod+Shift+K` 是同一个绑定,不归一就查不出重。",
+    "Enter / Escape / Tab / Space / 方向键 / Backspace / Delete 一律拒绝:它们在画布上已经各有各的意思(确认、取消、移动焦点、平移、删除选中),绑走一个就是拿掉一个基本操作。",
+    "功能键名区分大小写(`F1` 行、`f1` 不行):它是一个键名,不是一个字符;放宽会让 `f1` 和字母 F 加数字 1 变得难以分辨。"
+  ],
+  "canonical": [
+    { "name": "modifier-order-and-case", "why": "同一个绑定的两种写法必须归成同一个串,否则查重查不出来。", "raw": "Shift+Mod+k", "combo": "Mod+Shift+K" },
+    { "name": "ctrl-is-mod", "why": "Windows 的 Ctrl 和 macOS 的 ⌘ 是同一件事。", "raw": "ctrl+1", "combo": "Mod+1" },
+    { "name": "cmd-is-mod", "why": "同上,反向。", "raw": "cmd+1", "combo": "Mod+1" },
+    { "name": "meta-is-mod", "why": "浏览器叫它 metaKey。", "raw": "meta+1", "combo": "Mod+1" },
+    { "name": "option-is-alt", "why": "macOS 管 Alt 叫 Option。", "raw": "option+F5", "combo": "Alt+F5" },
+    { "name": "bare-letter", "why": "单键跳转是这个功能的常态用法。", "raw": "m", "combo": "M" },
+    { "name": "all-three-modifiers", "why": "三个修饰位同时用时的顺序。", "raw": "shift+alt+mod+9", "combo": "Mod+Alt+Shift+9" },
+    { "name": "named-key", "why": "功能键原样保留(区分大小写)。", "raw": "F12", "combo": "F12" },
+    { "name": "named-key-word", "why": "多字母键名也在名单里。", "raw": "Mod+PageUp", "combo": "Mod+PageUp" },
+    { "name": "punctuation", "why": "可打印的单字符都能绑。", "raw": "Alt+[", "combo": "Alt+[" },
+    { "name": "whitespace-around-parts", "why": "手写进来的串带空格也认。", "raw": " mod + shift + k ", "combo": "Mod+Shift+K" }
+  ],
+  "rejected": [
+    { "name": "empty", "why": "空串不是一个绑定。", "raw": "" },
+    { "name": "modifier-only", "why": "光按修饰键触发不了任何东西。", "raw": "Mod+" },
+    { "name": "unknown-modifier", "why": "不认识的修饰键说明这串是别处编出来的。", "raw": "Hyper+K" },
+    { "name": "duplicate-modifier", "why": "重复的修饰位是写错,不是写全。", "raw": "Mod+Mod+K" },
+    { "name": "enter-is-confirm", "why": "Enter 在画布上是确认。", "raw": "Mod+Enter" },
+    { "name": "escape-is-cancel", "why": "Escape 是取消,任何时候都得留着。", "raw": "Escape" },
+    { "name": "space-is-pan", "why": "Space 在画布上是平移。", "raw": "Space" },
+    { "name": "arrow-moves-selection", "why": "方向键在画布上是移动选中项。", "raw": "Mod+ArrowUp" },
+    { "name": "delete-removes", "why": "退格/删除是删掉选中项。", "raw": "Backspace" },
+    { "name": "named-key-wrong-case", "why": "键名区分大小写 —— 放宽会让 f1 和「F 加 1」难以分辨。", "raw": "f1" },
+    { "name": "multi-char-garbage", "why": "两个以上的字符既不是键名也不是字符。", "raw": "Mod+ab" }
+  ]
+}

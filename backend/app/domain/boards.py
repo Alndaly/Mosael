@@ -165,7 +165,7 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
     补一个默认值等于替用户猜,而猜错的表现是他的东西挪了位置或者变了颜色。
     """
     if raw is None:
-        return {"items": [], "edges": []}
+        return {"items": [], "edges": [], "markers": []}
     if not isinstance(raw, dict):
         raise BoardDomainError("画布必须是一个对象")
 
@@ -297,7 +297,16 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
             edge["label"] = label[:200]
         edges.append(edge)
 
-    return {"items": items, "edges": edges}
+    # 标记和 items 平级,不混进去 —— 它不是画板项(没有素材、不生成、连不了线),
+    # 混进去的话每一处遍历 items 的地方都要先分辨一次"这个是不是标记"。规则见 domain/markers。
+    from app.domain.markers import MarkerError, normalize_markers
+
+    try:
+        markers = normalize_markers(raw.get("markers"))
+    except MarkerError as exc:
+        raise BoardDomainError(str(exc)) from exc
+
+    return {"items": items, "edges": edges, "markers": markers}
 
 
 def list_boards(db: Session, workspace_id: str) -> list[Board]:

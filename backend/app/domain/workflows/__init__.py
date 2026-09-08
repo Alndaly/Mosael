@@ -1044,6 +1044,12 @@ def validate_graph(
     if any(not isinstance(node, dict) for node in nodes) or any(not isinstance(e, dict) for e in edges):
         return ["节点与连线必须是对象"]
 
+    # 标记(位置书签)不是节点:它不执行、不连线,只是"跳到这儿"。所以它在 graph 里自成一份
+    # 列表,校验也自成一条 —— 规则见 domain/markers,画板那边用的是同一份。
+    from app.domain.markers import marker_errors
+
+    errors.extend(marker_errors(graph.get("markers")))
+
     # 数据边(kind="data")把上游输出绑到目标输入 → 该输入即便字面量为空也算已满足。
     data_bound: set[tuple[str, str]] = {
         (str(edge.get("target", "")), str(edge.get("target_input", "")))

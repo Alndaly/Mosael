@@ -5,6 +5,7 @@ import {
   canMoveComment,
   canPlaceCommentDraft,
   focusBoardNode,
+  toCanvas,
   moveCommentAnchorByScreenDelta,
   shouldDismissCommentOverlay,
   shouldSuppressCommentPlacement,
@@ -79,5 +80,20 @@ describe("画布评论落点", () => {
     expect(shouldDismissCommentOverlay(false, true, false)).toBe(true);
     expect(shouldDismissCommentOverlay(true, false, true)).toBe(false);
     expect(shouldDismissCommentOverlay(false, false, false)).toBe(false);
+  });
+});
+
+
+describe("标记汇出", () => {
+  it("标记不混进 items —— 它没有素材、不生成、连不了线", () => {
+    const nodes = [
+      { id: "note-1", type: "note", position: { x: 0, y: 0 }, data: { item: { id: "note-1", kind: "note", x: 0, y: 0 } } },
+      // 拖过之后位置以 React Flow 为准:汇出时要读节点的 position,而不是 data 里那份旧的。
+      { id: "marker:m1", type: "marker", position: { x: 320.4, y: -40.6 }, data: { marker: { id: "m1", name: "分镜起点", x: 0, y: 0, shortcut: "Alt+1" } } },
+    ] as unknown as Node[];
+
+    const canvas = toCanvas(nodes, []);
+    expect(canvas.items.map((one) => one.id)).toEqual(["note-1"]);
+    expect(canvas.markers).toEqual([{ id: "m1", name: "分镜起点", x: 320, y: -41, shortcut: "Alt+1" }]);
   });
 });

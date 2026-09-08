@@ -47,9 +47,27 @@ export function workflowConfigSummary(node: WorkflowGraph["nodes"][number]): str
   return "";
 }
 
+/**
+ * 标记在 React Flow 里也是节点(拖动、选中、⌫ 删除因此都白拿),但 id 带前缀 —— 图里
+ * 的 `markers` 和 `nodes` 是两份列表,不带前缀的话,一个和节点重名的标记会把它顶掉。
+ */
+export const MARKER_PREFIX = "marker:";
+
+export function toMarkerFlowNodes(graph: WorkflowGraph): Node[] {
+  return (graph.markers ?? []).map((marker) => ({
+    id: MARKER_PREFIX + marker.id,
+    type: "marker",
+    position: { x: marker.x, y: marker.y },
+    data: { marker },
+    // 压在节点之上:它是贴在画布上的一枚旗子,被节点盖住就点不到了。
+    zIndex: 950,
+    connectable: false,
+  }));
+}
+
 /** Domain graph → React Flow presentation. The domain graph remains the source of truth. */
 export function toWorkflowFlowNodes(graph: WorkflowGraph, registry: NodeRegistry): Node[] {
-  return (graph.nodes ?? []).map((node) => ({
+  return [...toMarkerFlowNodes(graph), ...(graph.nodes ?? []).map((node) => ({
     id: node.id,
     type: "wf",
     position: node.position ?? { x: 80, y: 80 },
@@ -63,7 +81,7 @@ export function toWorkflowFlowNodes(graph: WorkflowGraph, registry: NodeRegistry
       configSummary: workflowConfigSummary(node),
     } satisfies WorkflowNodeData,
     deletable: true,
-  }));
+  }))];
 }
 
 /**

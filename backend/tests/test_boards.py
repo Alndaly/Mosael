@@ -32,7 +32,7 @@ def test_建改读删一条龙() -> None:
     created = client.post("/api/boards", json={"workspace_id": ws, "name": "灵感"})
     assert created.status_code == 200, created.text
     board_id = created.json()["id"]
-    assert created.json()["canvas"] == {"items": [], "edges": []}
+    assert created.json()["canvas"] == {"items": [], "edges": [], "markers": []}
 
     canvas = {
         "items": [
@@ -196,8 +196,8 @@ def test_启动迁移把旧节点状态收进run并持久化() -> None:
 
 def test_空画布和缺字段都读得回来() -> None:
     """当前格式允许空画布与可选字段缺省。"""
-    assert normalize_canvas(None) == {"items": [], "edges": []}
-    assert normalize_canvas({}) == {"items": [], "edges": []}
+    assert normalize_canvas(None) == {"items": [], "edges": [], "markers": []}
+    assert normalize_canvas({}) == {"items": [], "edges": [], "markers": []}
     got = normalize_canvas({"items": [{"id": "a", "kind": "note", "x": 1, "y": 2}]})
     assert got["items"][0] == {"id": "a", "kind": "note", "x": 1.0, "y": 2.0}
 

@@ -23,6 +23,9 @@ export interface WorkflowGraph {
     /** 以输入接点(连接态)暴露在节点左侧的 config 字段名。 */
     inputs?: string[];
   }>;
+  /** 位置书签。**和 nodes 平级,不是一种节点** —— 它不执行、不连线,进了 nodes 就要有
+   *  节点类型,而运行时会在"未知节点类型"上失败。规则见 features/markers。 */
+  markers?: Array<{ id: string; name: string; x: number; y: number; shortcut?: string }>;
   edges: Array<{
     id: string;
     source: string;
