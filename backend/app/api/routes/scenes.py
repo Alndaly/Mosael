@@ -4,7 +4,7 @@ from app.api.deps import CurrentUser, DbSession
 from app.api.schemas.scenes import SceneCreate, SceneUpdate, SceneOut, SceneOperations
 from app.db.models import Scene3D, Scene3DModel, Scene3DRevision
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
-from app.domain.scenes import create_scene, get_scene, save_scene, import_model, apply_scene_operations
+from app.domain.scenes import MODEL_READ_LIMIT, apply_scene_operations, create_scene, get_scene, import_model, save_scene
 
 router = APIRouter(tags=["3D scenes"])
 
@@ -57,7 +57,7 @@ def revision_content(scene_id: str, revision: int, workspace_id: str, db: DbSess
 async def upload(scene_id: str, db: DbSession, user: CurrentUser, workspace_id: str = Form(...), file: UploadFile = File(...)):
     ensure_workspace_perm(db, user, workspace_id, "edit")
     get_scene(db, workspace_id, scene_id)
-    data = await file.read(25 * 1024 * 1024 + 1)
+    data = await file.read(MODEL_READ_LIMIT)
     model = import_model(db, scene_id, file.filename or "Model", data)
     return {"id": model.id, "name": model.name, "format": model.format}
 

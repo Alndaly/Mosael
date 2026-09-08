@@ -1,4 +1,7 @@
 import json
+
+import pytest
+
 from tests.util import fresh_client
 
 
@@ -95,3 +98,22 @@ def test_delete_scene_is_workspace_scoped_and_cascades_owned_data():
     with SessionLocal() as db:
         assert db.get(Scene3DModel, model.json()['id']) is None
         assert not db.scalars(select(Scene3DRevision).where(Scene3DRevision.scene_id == scene['id'])).all()
+
+
+def test_the_model_size_limit_is_one_number_and_says_what_to_do():
+    """超限的回答要能直接照着做:多大、上限多少、怎么减。
+
+    也钉住"**只有一个数**":路由读文件和领域判上限此前各写了一遍 25 MB,改一处漏一处不会
+    有任何提示 —— 只会变成"路由收下了、领域又拒了"。现在两边引同一个常量。
+    """
+    from app.api.routes import scenes as scene_routes
+    from app.domain.scenes import MODEL_LIMIT_BYTES, MODEL_READ_LIMIT, SceneTooLarge, validate_model
+
+    assert MODEL_READ_LIMIT == MODEL_LIMIT_BYTES + 1
+    assert scene_routes.MODEL_READ_LIMIT is MODEL_READ_LIMIT
+
+    with pytest.raises(SceneTooLarge) as excinfo:
+        validate_model(b'glTF' + b'\0' * MODEL_READ_LIMIT)
+    message = str(excinfo.value)
+    assert str(MODEL_LIMIT_BYTES // 1024 // 1024) in message   # 上限多少
+    assert 'MB' in message and 'Blender' in message            # 实际多大 + 怎么减

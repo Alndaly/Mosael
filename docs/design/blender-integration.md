@@ -28,7 +28,7 @@
 - [`SceneContent`](../../backend/app/domain/scene_types.py) 已包含对象 ID、父子关系、米制位置、角度旋转、基本材质和镜头关键帧。当前没有任意网格编辑、修改器、几何节点、骨骼动画，也没有相机 roll/up 描述。
 - [`SceneViewport`](../../frontend/src/features/scenes/SceneViewport.tsx) 使用 Three.js，已有真实 GLB 导出。对象的 `sceneObjectId` 写在包装节点上，网格可能是它的子节点。导入模型时会删除子节点的此字段，避免编辑器误选内部对象。因此目前不能靠“重新导入 GLB”恢复独立可编辑的所有场景对象。
 - GLB 导出只导出对象根，不包含 `SceneShot` 运镜；场景 JSON 又只引用模型 ID，没有打包模型文件。发送场景需要统一的快照包，不能只交出其中一个文件。
-- [`模型导入`](../../backend/app/domain/scenes.py) 接受自包含 GLB/内嵌 glTF；当前限 25 MB、5000 个节点、2000 个网格。复杂 Blender 场景需要生成预览版本，并提供明确的超限反馈。
+- [`模型导入`](../../backend/app/domain/scenes.py) 接受自包含 GLB/内嵌 glTF；当前限 100 MB、5000 个节点、2000 个网格。复杂 Blender 场景需要生成预览版本，并提供明确的超限反馈。
 - [`插件调用`](../../backend/app/domain/plugins/tools.py) 已支持进程和 MCP。进程调用上限 60 秒、标准输出上限 1 MB，调用后清理暂存目录。它可以发送短命令，不能承担长渲染或保存 `.blend` 工程。
 - 插件只收到声明的配置、凭据与输入，不获得应用数据库、工作区令牌。场景文件的读取、回传登记与版本写入应由宿主适配层完成，继续执行工作区权限检查。
 - 插件当前产物入口登记一个素材文件；场景模型使用独立的 `Scene3DModel` 存储。不能把 GLB 当成图片/视频素材直接塞进现有产物入口。

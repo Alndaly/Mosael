@@ -18,7 +18,7 @@ from app.core.config import settings
 from app.db.models import PluginInstance
 from app.domain.plugins import PluginDomainError, instances, tools
 from app.domain.scene_types import SceneContent
-from app.domain.scenes import create_scene_with_model, import_model, validate_model
+from app.domain.scenes import MODEL_READ_LIMIT, create_scene_with_model, import_model, validate_model
 from .scripts import command
 
 class BlenderDomainError(ValueError):
@@ -216,7 +216,7 @@ def receive(db, user, scene, transfer_id, *, into_current=False):
             'blend_path': str(attempt / 'scene.blend'), 'result_path': str(attempt / 'result.json')}, scene.workspace_id)
         try:
             with (attempt / 'model.glb').open('rb') as stream:
-                data = stream.read(25*1024*1024+1)
+                data = stream.read(MODEL_READ_LIMIT)
         except OSError as exc:
             raise BlenderUnavailable('Blender 没有生成可接收的模型，请重试。') from exc
         fmt = validate_model(data)
@@ -263,7 +263,7 @@ def pull(db, user, workspace_id, instance_id):
                 'result_path': str(folder / 'pulled.json')}, workspace_id)
             try:
                 with (folder / 'model.glb').open('rb') as stream:
-                    data = stream.read(25*1024*1024+1)
+                    data = stream.read(MODEL_READ_LIMIT)
             except OSError as exc:
                 raise BlenderUnavailable('Blender 没有导出可用的模型，请重试。') from exc
         finally:

@@ -5,7 +5,7 @@ from app.api.deps import CurrentUser, DbSession
 from app.core.config import settings
 from app.db.models import PluginInstance
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
-from app.domain.scenes import get_scene
+from app.domain.scenes import MODEL_READ_LIMIT, get_scene
 from app.domain.blender import bridge
 
 router = APIRouter(prefix='/scenes', tags=['Blender'])
@@ -46,7 +46,7 @@ def send(scene_id: str, db: DbSession, user: CurrentUser, workspace_id: str = Fo
          instance_id: str = Form(...), revision: int = Form(...), shot_id: str = Form(...), file: UploadFile = File(...)):
     ensure_workspace_perm(db, user, workspace_id, 'edit')
     scene = get_scene(db, workspace_id, scene_id)
-    data = file.file.read(25*1024*1024+1)
+    data = file.file.read(MODEL_READ_LIMIT)
     return bridge.send(db, user, scene, instance_id, revision, shot_id, data)
 
 

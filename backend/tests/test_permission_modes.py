@@ -15,6 +15,8 @@
 
 from __future__ import annotations
 
+import time
+
 from app.core.db import SessionLocal
 from app.core.security import mint_service_session
 from app.db.models import AgentSession, ToolConfirmation, User, Workflow
@@ -73,6 +75,11 @@ class Chat:
         )
         assert response.status_code == 200, response.text
         wait_for_idle_autopilot()
+        # 放行和执行是两步:`wait_for_idle_autopilot` 只等到"判完",而放行之后那次调用
+        # (http_request 会真的去连一个端口)还在跑。整套一起跑时机器更忙,于是断言读到的是
+        # `approved` 而不是 `executed`/`failed` —— 测试想问的是"放行之后它有没有真的执行",
+        # 那就得等到一个**终态**再读,而不是赌它已经跑完了。
+        self._settle(response.json()["id"])
         with SessionLocal() as db:
             row = db.get(ToolConfirmation, response.json()["id"])
             return {
@@ -83,6 +90,17 @@ class Chat:
                 "decided_by": row.decided_by,
                 "error": row.error,
             }
+
+    @staticmethod
+    def _settle(card_id: str, timeout: float = 10.0) -> None:
+        """等这张卡走到终态。`approved` 是中间态 —— 已放行、还没执行完。"""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            with SessionLocal() as db:
+                status = db.get(ToolConfirmation, card_id).status
+            if status != "approved":
+                return
+            time.sleep(0.02)
 
     def edit_card(self) -> dict:
         return self.card(

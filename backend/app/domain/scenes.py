@@ -85,35 +85,50 @@ def save_scene(db: Session, scene: Scene3D, base_revision: int, name: str, conte
     return scene
 
 
+#: 导入模型的体积上限。**只此一处** —— 路由读文件、Blender 互通读回传文件都引它;
+#: 此前 25 MB 这个数字在五个地方各写了一遍,改一处而漏改另一处不会有任何提示,
+#: 只会变成"路由收下了、领域又拒了"这种前后不一。
+#:
+#: 100 MB 是给**真实工程**留的余量:手工准备一个模型时 25 MB 够用,而「取回 Blender 当前
+#: 场景」进来的是别人做好的工程,贴图一嵌进 GLB 就轻松越过 25 MB。真正约束"能不能实时编辑"
+#: 的是下面的节点/网格上限(5000 / 2000),字节数大头是贴图,那部分 three.js 扛得住。
+MODEL_LIMIT_BYTES = 100 * 1024 * 1024
+#: 读文件时多读一个字节,好分辨"正好到上限"和"超了"。
+MODEL_READ_LIMIT = MODEL_LIMIT_BYTES + 1
+
+
 def validate_model(data: bytes) -> str:
-    if len(data) > 25 * 1024 * 1024:
-        raise SceneTooLarge("Model limit is 25 MB")
+    if len(data) > MODEL_LIMIT_BYTES:
+        raise SceneTooLarge(
+            f"模型 {len(data)/1024/1024:.1f} MB，超出上限 {MODEL_LIMIT_BYTES//1024//1024} MB。"
+            "常见的减法:在 Blender 里隐藏或删掉用不到的物体、把贴图降到 2K、"
+            "或者把场景拆成几个分别导入。")
     fmt = "glb" if data[:4] == b"glTF" else "gltf"
     try:
         if fmt == "glb":
             magic, version, length, chunk_size, chunk_type = struct.unpack("<4sIIII", data[:20])
             if version != 2 or length != len(data) or chunk_type != 0x4E4F534A or chunk_size > len(data)-20:
-                raise ValueError("Invalid GLB header")
+                raise ValueError("这不是一个有效的 GLB 文件（文件头读不通）。")
             doc = json.loads(data[20:20+chunk_size])
         else:
             doc = json.loads(data)
         if doc.get("asset", {}).get("version") != "2.0":
-            raise ValueError("glTF 2.0 required")
+            raise ValueError("需要 glTF 2.0 格式的模型。")
         # Never allow imported models to fetch network URLs or local files.
         def inspect(value, depth=0):
             if depth > 48:
-                raise ValueError("Model structure too deep")
+                raise ValueError("模型的结构嵌套太深，无法导入。")
             if isinstance(value, dict):
                 for key, child in value.items():
                     if key == "uri" and (not isinstance(child, str) or not child.startswith("data:")):
-                        raise ValueError("Use a self-contained GLB or embedded glTF; external resources are not supported")
+                        raise ValueError("请导出自包含的 GLB（或把资源内嵌进 glTF）—— 模型里引用的外部文件和网址不会被读取。")
                     inspect(child, depth+1)
             elif isinstance(value, list):
                 for child in value:
                     inspect(child, depth+1)
         inspect(doc)
         if len(doc.get("nodes", [])) > 5000 or len(doc.get("meshes", [])) > 2000:
-            raise ValueError("Model is too complex for real-time editing")
+            raise ValueError(f"模型有 {len(doc.get('nodes', []))} 个节点、{len(doc.get('meshes', []))} 个网格，超出实时编辑的上限（5000 / 2000）。请在 Blender 里合并物体或减少细分后重试。")
     except (ValueError, TypeError, AttributeError, struct.error, RecursionError) as exc:
         raise SceneDomainError(str(exc)) from exc
     return fmt
