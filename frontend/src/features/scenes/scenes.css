@@ -205,6 +205,11 @@
   flex-direction: column;
   background: transparent;
   min-height: 0;
+  /* 列表和下面那条分割线之间的空隙。**必须在滚动区外面。**
+     加在 `.scene-object-list` 的 padding-bottom 上是错的:那是内容的一部分,只有滚到底时
+     才看得见 —— 停在中间时最后一行照样贴着线。而列表有 max-height,几乎总是切在半行上,
+     贴着线的半行读起来就是"布局坏了"。 */
+  padding-bottom: 10px;
 }
 .scene-objects header {
   padding: 14px var(--scene-side-gutter) 10px;
@@ -237,9 +242,7 @@
   overflow: auto;
   max-height: 210px;
   min-height: 0;
-  /* 底部留一口气。此前是 0:最后一行紧贴着下面那条分割线,而列表有 max-height、
-     常常正好切在半行上 —— 两件事叠起来,读到的是"布局坏了",不是"还能往下滚"。 */
-  padding: 0 8px 10px;
+  padding: 0 8px;
 }
 .scene-object-list button {
   display: flex;
