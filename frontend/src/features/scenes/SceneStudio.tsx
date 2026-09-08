@@ -11,6 +11,7 @@ import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import { useSceneFullscreen } from "./useSceneFullscreen";
 import { SceneHistory } from "./SceneHistory";
 import { SceneCameraPanel } from "./SceneCameraPanel";
+import { SceneDopeSheet } from "./SceneDopeSheet";
 import { SceneInspector } from "./SceneInspector";
 import { Pick, Tool } from "./SceneControls";
 import { ScenePanel } from "./ScenePanel";
@@ -59,7 +60,6 @@ import {
   type Scene,
   type SceneContent,
   type SceneObject,
-  type Keyframe,
   type SceneShot,
 } from "@/api/domains/scenes";
 import { Button } from "@/components/ui/button";
@@ -74,7 +74,15 @@ import {
 } from "@/components/agent/CanvasAgentChat";
 import { useAutosave } from "@/features/boards/useAutosave";
 import {
+  MAX_KEYS,
+  neighbourKeyTime,
+  removeKeyAt,
+  stillFrame,
+  upsertKey,
+} from "./sceneTracks";
+import {
   cameraOfShot,
+  duplicateObject,
   initialScene,
   makeObject,
   makeShot,
@@ -82,6 +90,7 @@ import {
   removeObjects,
   uid,
 } from "./sceneGraph";
+import { SHOT_FPS } from "./encodeVideo";
 import { SceneViewport, type ViewportHandle } from "./SceneViewport";
 import "./scenes.css";
 
@@ -304,7 +313,16 @@ function SceneEditor({
     [progress, setProgress] = React.useState(0),
     [agent, setAgent] = React.useState<CanvasAgentMode | null>(null),
     [revisions, setRevisions] = React.useState(false),
-    [recovery, setRecovery] = React.useState<typeof draft | null>(null);
+    [recovery, setRecovery] = React.useState<typeof draft | null>(null),
+    /**
+     * 正在手改姿态的那个物体 —— **它此刻不跟着轨走**。
+     *
+     * 一个有走位的物体,每一帧的姿态都由轨采样出来覆盖掉。于是拖动它的操作杆就成了一件
+     * 看不见的事:松手的那一瞬间它就被采样值抹回去,而用户以为自己什么也没做成。
+     * 专业 3D 软件里这一步是成立的 —— 拖动改的是"当前这个样子",按 `I` 才把它记进这一刻,
+     * 换一个时刻它就回到轨上。这个状态就是那段"还没记下来的样子"。
+     */
+    [posing, setPosing] = React.useState<string | null>(null);
   const preview = viewMode === "camera";
   const observing = viewMode === "observe";
   const setPreview = (value: boolean) => setViewMode(value ? "camera" : "edit");
@@ -424,6 +442,8 @@ function SceneEditor({
       clearInterval(timer);
     };
   }, [initial.id, initial.workspace_id]);
+  //: 换一个时刻、换一个物体,那段"还没记下来的样子"就作废 —— 回到轨上。
+  React.useEffect(() => setPosing(null), [time, selected, shotId]);
   const shot =
       draft.content.shots.find((s) => s.id === shotId) ??
       draft.content.shots[0],
@@ -458,27 +478,98 @@ function SceneEditor({
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [playing, shot.id, shot.duration]);
+  /**
+   * 快捷键。**照 Blender 的手势**:这一页的用户多半已经在别处练过这套手指记忆,而重新发明
+   * 一套只会让两边都不顺手。
+   *
+   *   I / ⌥I   在当前时刻记一档 / 移除这一档      G / R / S  移动 / 旋转 / 缩放
+   *   空格      播放暂停                          ⇧D         复制一份
+   *   ← →      逐帧                              X / ⌫      删除
+   *   ↑ ↓      跳到上/下一个关键帧                F          聚焦选中
+   *
+   * 单键的那些一律要求"没有按任何修饰键" —— 否则 ⌘S(保存)会顺手把工具切成缩放,
+   * 而用户完全不知道自己刚才改了什么。
+   */
   React.useEffect(() => {
     const key = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
       if (
         e.defaultPrevented ||
-        (e.target as HTMLElement).closest(
-          "input,textarea,[contenteditable=true],[role=dialog]",
-        ) ||
+        target.closest("input,textarea,[contenteditable=true],[role=dialog]") ||
         busy
       )
         return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         e.shiftKey ? redo() : undo();
+        return;
       }
-      if ((e.key === "Delete" || e.key === "Backspace") && selected) {
+      // ⌥I 是 I 的一对,所以它在"单键"这条线之前先判。macOS 上 ⌥ 会改写 e.key,认 code。
+      if (e.altKey && !e.metaKey && !e.ctrlKey && e.code === "KeyI") {
         e.preventDefault();
-        update(removeObjects(current.current.content, [selected]));
-        setSelected(null);
+        clearKeyframe();
+        return;
       }
-      if (e.key.toLowerCase() === "f" && !e.metaKey && !e.ctrlKey)
-        view.current?.focus();
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      // 逐帧 / 跳帧。**一"帧"和导出的一帧是同一个数**(SHOT_FPS),否则对齐没有意义。
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        e.preventDefault();
+        const step = ((e.key === "ArrowRight" ? 1 : -1) * (e.shiftKey ? 10 : 1)) / SHOT_FPS;
+        setPlaying(false);
+        setTime((now) => Math.min(shot.duration, Math.max(0, now + step)));
+        return;
+      }
+      if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        const times = keyTarget?.track.map((f) => f.time) ?? [];
+        const next = neighbourKeyTime(times, time, e.key === "ArrowDown" ? 1 : -1);
+        if (next === null) return;
+        e.preventDefault();
+        setPlaying(false);
+        setTime(next);
+        return;
+      }
+      if (e.shiftKey) {
+        // ⇧D 复制一份。别的带 Shift 的单键这一页没有,所以到此为止。
+        if (e.code === "KeyD" && selected) {
+          e.preventDefault();
+          update(duplicateObject(current.current.content, selected));
+        }
+        return;
+      }
+      switch (e.code) {
+        case "Space":
+          // 焦点停在某颗按钮上时,空格是"按下这颗按钮" —— 那是浏览器的语义,抢走它会让
+          // 用户点完一个按钮之后再按空格得到两件事。画布和别处才归播放。
+          if (target.closest("button,[role=button],a,[role=slider],summary")) return;
+          e.preventDefault();
+          togglePlayback();
+          return;
+        case "KeyI":
+          e.preventDefault();
+          recordKeyframe();
+          return;
+        case "KeyG":
+          setMode("translate");
+          return;
+        case "KeyR":
+          setMode("rotate");
+          return;
+        case "KeyS":
+          setMode("scale");
+          return;
+        case "KeyF":
+          view.current?.focus();
+          return;
+        case "KeyX":
+        case "Delete":
+        case "Backspace":
+          if (!selected) return;
+          e.preventDefault();
+          update(removeObjects(current.current.content, [selected]));
+          setSelected(null);
+          return;
+      }
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
@@ -642,32 +733,56 @@ function SceneEditor({
       toast.success(kind === "image" ? "场景画面已作为参考图，选择支持参考图的图片模型即可生成。" : "选择视频节点后，可自行选择模型和参数。");
     });
   }
+  /** 给拍这个镜头的机位在某一刻记一档 —— 用的是**画面里当前的视角**,不是相机存着的静止姿态。 */
   function recordView(at: number) {
     if (!rig) return;
-    const frame = {
-      ...view.current!.camera(),
-      time: Math.min(shot.duration, Math.max(0, at)),
-    };
-    // 轨是空的(固定机位)时,第一次记视角要把**当前的静止姿态**也记成 0 秒那一档 ——
-    // 否则镜头从相机的静止位置突然跳到你记的这一档,而中间那段没有任何东西描述它。
-    const base: Keyframe[] = rig.track.length
-      ? rig.track
-      : [{ time: 0, position: rig.position, target: rig.target, fov: rig.fov }];
-    const track = base.filter((f) => Math.abs(f.time - frame.time) > 0.001);
-    if (track.length >= 100) {
-      toast.error("单个镜头最多 100 个途经点，请先移除一个。");
+    const time = Math.min(shot.duration, Math.max(0, at));
+    const track = upsertKey(rig.track, stillFrame(rig), { ...view.current!.camera(), time });
+    if (!track) {
+      toast.error(`单个镜头最多 ${MAX_KEYS} 个途经点，请先移除一个。`);
       return;
     }
-    track.push(frame);
-    track.sort((a, b) => a.time - b.time);
     rigPatch({ track });
-    setTime(frame.time);
+    setTime(time);
     toast.success(
-      frame.time === 0
-        ? "已设置镜头起点"
-        : frame.time === shot.duration
-          ? "已设置镜头终点"
-          : "已记录当前视角",
+      time === 0 ? "已设置镜头起点" : time === shot.duration ? "已设置镜头终点" : "已记录当前视角",
+    );
+  }
+  /** 此刻这条快捷键作用在谁身上:选中的那个物体,没选就是拍这个镜头的机位。 */
+  const keyTarget = object ?? rig;
+  /**
+   * `I` —— 在当前时刻记一档。
+   *
+   * 选中的正是当前机位时走 recordView:那一刻"它是什么样"要取画面里的视角,而不是相机物体
+   * 存着的静止姿态 —— 用户刚在视口里转的那一下还没落到数据上。
+   */
+  function recordKeyframe() {
+    if (!keyTarget) return;
+    if (rig && keyTarget.id === rig.id) {
+      recordView(time);
+      return;
+    }
+    const at = Math.min(shot.duration, Math.max(0, time));
+    const track = upsertKey(keyTarget.track, stillFrame(keyTarget), stillFrame(keyTarget, at));
+    if (!track) {
+      toast.error(`一个物体最多 ${MAX_KEYS} 个关键帧，请先移除一个。`);
+      return;
+    }
+    objectPatch(keyTarget.id, { track });
+    setPosing(null);
+    toast.success(`已记下「${keyTarget.name}」在 ${at.toFixed(1)} 秒的样子`);
+  }
+  /** `⌥I` —— 移除这一刻那一档。和 `I` 成对,所以不去挤 `X`(那个删的是物体)。 */
+  function clearKeyframe() {
+    if (!keyTarget) return;
+    const track = removeKeyAt(keyTarget.track, time);
+    if (!track) {
+      toast.error("这一刻没有关键帧");
+      return;
+    }
+    objectPatch(keyTarget.id, { track });
+    toast.success(
+      track.length ? `已移除 ${time.toFixed(1)} 秒那一档` : `「${keyTarget.name}」不再随时间移动`,
     );
   }
   return (
@@ -1097,10 +1212,23 @@ function SceneEditor({
                       </>
                     )}
                   </p>
-                  <p>点击物体选择 · F：找到选中的物体</p>
                   <p>
                     编辑视角用于调整构图；镜头画面展示最终取景；全局动线可在播放时观察摄像机位置与朝向。
                   </p>
+                  {/* **键位表就放在这里。** 快捷键不写出来等于没有 —— 而这一页照的是 Blender
+                      的手势,用惯了的人会去试,没用过的人得有一处能看见。 */}
+                  <strong>快捷键</strong>
+                  <dl className="scene-keymap">
+                    <dt>G / R / S</dt><dd>移动 / 旋转 / 缩放</dd>
+                    <dt>I / ⌥I</dt><dd>在此刻记一档 / 移除这一档</dd>
+                    <dt>空格</dt><dd>播放、暂停</dd>
+                    <dt>← →</dt><dd>逐帧（按住 ⇧ 走十帧）</dd>
+                    <dt>↑ ↓</dt><dd>跳到上 / 下一个关键帧</dd>
+                    <dt>⇧D</dt><dd>复制一份</dd>
+                    <dt>X</dt><dd>删除选中</dd>
+                    <dt>F</dt><dd>聚焦选中</dd>
+                    <dt>⌘Z / ⇧⌘Z</dt><dd>撤销 / 重做</dd>
+                  </dl>
                 </PopoverContent>
               </Popover>
             </div>
@@ -1122,7 +1250,13 @@ function SceneEditor({
             onSelect={(id) => {
               setSelected(id);
             }}
-            onTransform={objectPatch}
+            posing={posing}
+            onTransform={(id, patch) => {
+              // 记下"这个物体现在被手改过" —— 有走位的物体在下一帧会被采样值抹回去,
+              // 而用户要的是把这个样子留到按下 `I` 为止。
+              setPosing(id);
+              objectPatch(id, patch);
+            }}
             onError={(message) => toast.error(message)}
           />
           {busy && (
@@ -1203,48 +1337,26 @@ function SceneEditor({
                   {time.toFixed(1)} / {shot.duration.toFixed(1)} s
                 </span>
               </div>
-              <input
-                aria-label="镜头时间"
-                type="range"
-                min={0}
-                max={shot.duration}
-                step={0.01}
-                value={Math.min(time, shot.duration)}
-                onChange={(e) => {
-                  setTime(Number(e.target.value));
+              {/* **关键帧视图:按物体分行,位置即时间。** 此前这里只画当前机位的那一条轨 ——
+                  而场景里的物体和运镜共用同一条时间轴,只画相机的话,"第 3 秒人走到门口、
+                  同一刻镜头推进"这件事在界面上没有位置可以表达。时间滑块收进它的标尺行,
+                  两者共用一条横轴才对得齐。 */}
+              <SceneDopeSheet
+                content={draft.content}
+                shot={shot}
+                time={time}
+                selectedId={selected}
+                playing={playing}
+                onSeek={(next) => {
+                  setTime(next);
                   setPlaying(false);
                 }}
+                onSelect={(id) => {
+                  setSelected(id);
+                  // 点机位那一行不该把视角踢回编辑视图 —— 它常常正是"我在看运镜"的时候。
+                  if (id !== rig?.id) setPreview(false);
+                }}
               />
-              {/* **关键帧落在轨道上,位置即时间。** 此前是一排文字标签横向排开,几十个关键帧
-                  就是几十个「途经点 · 0.7s」滚动着 —— 它们本来有时间坐标,却和上面的进度条
-                  完全脱节,读者得靠念秒数把两者对起来。剪辑页的时间线就是靠位置表达时间的,
-                  这里同理:一枚标记钉在它自己的时刻上,与进度条共用一条横轴。 */}
-              <div
-                className="scene-keyframe-track"
-                role="group"
-                aria-label={`${shot.name} 的关键帧`}
-              >
-                {(rig?.track ?? []).map((f) => {
-                  const at = shot.duration > 0 ? (f.time / shot.duration) * 100 : 0;
-                  const edge = f.time === 0 ? "start" : f.time === shot.duration ? "end" : undefined;
-                  return (
-                    <button
-                      key={f.time}
-                      className="scene-keyframe"
-                      style={{ left: `${at}%` }}
-                      data-edge={edge}
-                      aria-pressed={Math.abs(time - f.time) < 0.05}
-                      title={`${edge === "start" ? "起点" : edge === "end" ? "终点" : "途经点"} · ${f.time.toFixed(1)}s`}
-                      aria-label={`${edge === "start" ? "起点" : edge === "end" ? "终点" : "途经点"} ${f.time.toFixed(1)} 秒`}
-                      onClick={() => {
-                        setTime(f.time);
-                        if (!observing) setPreview(true);
-                        setPlaying(false);
-                      }}
-                    />
-                  );
-                })}
-              </div>
             </section>
         </main>
         <aside className="scene-side">

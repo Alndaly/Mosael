@@ -31,7 +31,6 @@
   margin: 8px 0;
 }
 .scene-library p,
-.scene-inspector p,
 .scene-eyebrow {
   letter-spacing: 0.16em;
   font-size: var(--text-ui-2xs);
@@ -200,34 +199,6 @@
      **这里不再画上边线** —— 步骤条底下已经有一条,两条会叠在一起变成一根粗线。 */
 }
 
-.scene-objects {
-  display: flex;
-  flex-direction: column;
-  background: transparent;
-  min-height: 0;
-  /* 列表和下面那条分割线之间的空隙。**必须在滚动区外面。**
-     加在 `.scene-object-list` 的 padding-bottom 上是错的:那是内容的一部分,只有滚到底时
-     才看得见 —— 停在中间时最后一行照样贴着线。而列表有 max-height,几乎总是切在半行上,
-     贴着线的半行读起来就是"布局坏了"。 */
-  padding-bottom: 10px;
-}
-.scene-objects header {
-  padding: 14px var(--scene-side-gutter) 10px;
-  display: flex;
-  align-items: center;
-  /* h2 撑开剩下的空间,两颗按钮因此挨在一起 —— space-between 会把它们也拆到两端。 */
-  gap: 6px;
-}
-.scene-objects header > h2 {
-  flex: 1;
-  min-width: 0;
-}
-
-.scene-objects h2,
-.scene-inspector h2 {
-  font-weight: 600;
-  font-size: var(--text-ui-sm);
-}
 /* **底色画在整行上,不画在按钮上。**
    一行是"名字 + 删除"两个按钮;底色只给名字那个的话,它右边那截(删除键所在的位置)
    就空着,而 hover 命中的又是整行 —— 看起来就是高亮比行窄一块、还和右边的图标错开。
@@ -235,22 +206,19 @@
    此前是用负外边距把按钮铺宽的:那是**列表项还只有一个按钮时**写的,加了删除键、行变成
    flex 之后,那对负边距同时作用在两个按钮上,于是高亮整体左移 8px、右端又盖过删除键。
 
-   现在容器只留 8px 内距(底色铺到这里),文字的 8px 内距补足到 16px —— 和上面的标题
-   仍在同一条竖线上,而底色不需要任何负值。 */
-.scene-object-list {
-  flex: 0 1 auto;
-  overflow: auto;
-  max-height: 210px;
-  min-height: 0;
-  padding: 0 8px;
-}
+   那 8px 现在由 `.scene-panel-body > .scene-object-list` 的负外边距给出(面板体的内距是
+   16px,退回 8px 正好),文字再自己补 8px —— 和上面的标题仍在同一条竖线上。
+
+   **一节里只有一个滚动条。** 列表此前自己带 `max-height: 210px; overflow: auto`,而面板体
+   本身也在滚(见 .scene-panel-body)—— 同一节里两条滚动条套着,而且外层那条几乎总是把内层
+   切在半行上。高度归面板(它按 flex 分配,长的那节自己滚),列表只管内容。 */
 .scene-object-list button {
   display: flex;
   width: 100%;
   align-items: center;
   gap: 9px;
   text-align: left;
-  padding: 9px 8px;
+  padding: 8px;
   border-radius: 7px;
   background: transparent;
 }
@@ -333,28 +301,9 @@
   height: 100%;
   touch-action: none;
 }
-.scene-inspector {
-  overflow: auto;
-  min-height: 0;
-  min-width: 0;
-  background: transparent;
-  /* 物体列表和「调整物体」是两件事,此前之间没有任何分隔,读起来是连续的一长条。
-     一条分割线就够 —— 再套一个框会和外层的侧栏边框成为框中框。 */
-  border-top: 1px solid var(--divider, var(--border));
-}
-/* 节奏只有一个值。此前 header 10px、inspector 16px、列表 6px 各写各的,读起来是三种间距。 */
-.scene-inspector section {
-  padding: 4px var(--scene-side-gutter) 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.scene-inspector section + section {
-  border-top: 1px solid var(--divider);
-  padding-top: 12px;
-  margin-top: 4px;
-}
-.scene-inspector p {
+/* 面板之间的分割线归 `.scene-panel + .scene-panel`;检查器自己不再画边框,也不再有
+   `.scene-inspector > section` 那层壳(它唯一的作用就是再写一套 padding 和 gap)。 */
+.scene-panel-body p {
   font-size: var(--text-ui-2xs);
 }
 .scene-field > span {
@@ -440,6 +389,14 @@
   padding: 6px 10px;
   border-radius: 6px;
 }
+/* 按钮里跟着的那一小块键位。**淡、小、等宽** —— 它是给已经知道有快捷键的人一个提醒,
+   不是这颗按钮的第二个标题;比文字重的话,读到的先是键而不是这颗按钮做什么。 */
+.scene-side kbd {
+  font-family: var(--font-mono);
+  font-size: var(--text-ui-2xs);
+  color: var(--muted-foreground);
+  opacity: 0.75;
+}
 .scene-frame-fields {
   display: flex;
   flex-direction: column;
@@ -478,7 +435,30 @@
   color: var(--muted-foreground);
   white-space: nowrap;
 }
-.scene-timeline > input {
+/* ── 关键帧视图(Dope Sheet)────────────────────────────────────────────────
+   按物体分行,横轴是时间。**名字列的宽度是这张表的骨架** —— 标尺行、每一条轨、
+   播放头都从同一个 `--scene-dope-name` 起算,差一处就全错开,而"位置即时间"一旦
+   对不齐就不成立了。 */
+.scene-dope {
+  --scene-dope-name: 104px;
+  --scene-dope-gap: 8px;
+  /* range 的滑块半径 6px,两端各留出来 —— 轨道也留同样一段,菱形才和滑块停在同一处。 */
+  --scene-dope-inset: 6px;
+  position: relative;
+  display: grid;
+  gap: 2px;
+}
+.scene-dope-ruler,
+.scene-dope-row {
+  display: grid;
+  grid-template-columns: var(--scene-dope-name) minmax(0, 1fr);
+  gap: var(--scene-dope-gap);
+  align-items: center;
+}
+.scene-dope-ruler > div {
+  margin-inline: var(--scene-dope-inset);
+}
+.scene-dope-ruler input {
   display: block;
   width: 100%;
   appearance: none;
@@ -488,53 +468,94 @@
   background: color-mix(in srgb, var(--foreground) 14%, transparent);
   cursor: pointer;
   accent-color: var(--primary);
-  margin: 14px 0 8px;
+  margin: 10px 0 6px;
 }
-
-/* **关键帧轨道:位置即时间。** 与上面那条 range 共用横轴,所以左右内距必须一致 ——
-   range 的滑块半径 6px,两端各留出来,标记才会和滑块停在同一个位置上。
-   高度只有 14px:它是一条标尺,不是一排按钮。 */
-.scene-keyframe-track {
+/* 行数封顶后自己滚 —— 二十个物体在动的时候,这张表不该把 3D 视口挤没。 */
+.scene-dope-rows {
+  display: grid;
+  gap: 2px;
+  max-height: 108px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.scene-dope-row {
+  height: 20px;
+}
+.scene-dope-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  text-align: left;
+  font-size: var(--text-ui-2xs);
+  color: var(--muted-foreground);
+}
+.scene-dope-name svg {
+  flex-shrink: 0;
+}
+.scene-dope-name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scene-dope-name:hover,
+.scene-dope-name[aria-pressed="true"] {
+  color: var(--foreground);
+}
+/* 轨道本身就是那一行的命中区:落点即时刻。菱形只负责看得见,不各自当按钮 ——
+   几十个 3px 宽的按钮排在一条线上,谁也点不准。 */
+.scene-dope-lane {
   position: relative;
-  height: 14px;
-  margin-inline: 6px;
+  height: 100%;
+  margin-inline: var(--scene-dope-inset);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  cursor: pointer;
 }
-.scene-keyframe {
+.scene-dope-row[data-selected] .scene-dope-lane {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+.scene-dope-key {
   position: absolute;
-  top: 0;
-  /* left 是百分比定位的**中心点**,所以要往回挪半个宽度。 */
-  translate: -50% 0;
+  top: 50%;
+  /* left 是百分比定位的**中心点**,所以要往回挪半个。 */
+  translate: -50% -50%;
   width: 9px;
   height: 9px;
-  border-radius: 3px;
-  rotate: 45deg;
-  background: color-mix(in srgb, var(--foreground) 30%, transparent);
-  transition: background-color 120ms ease, scale 120ms ease;
-}
-/* 首尾两枚是**镜头的边界**,不是途经点 —— 画成方的,一眼分得出。 */
-.scene-keyframe[data-edge] {
-  rotate: none;
   border-radius: 2px;
-  width: 7px;
-  height: 11px;
+  rotate: 45deg;
+  background: color-mix(in srgb, var(--foreground) 42%, transparent);
 }
-.scene-keyframe:hover {
-  background: color-mix(in srgb, var(--foreground) 55%, transparent);
-  scale: 1.15;
-}
-.scene-keyframe[aria-pressed="true"] {
-  background: var(--primary);
-  scale: 1.15;
-}
-/* 点击目标要够大,但视觉上仍是一枚小标记 —— 用透明的伪元素撑开命中区。 */
-.scene-keyframe::after {
-  content: "";
-  position: absolute;
-  inset: -7px;
-  rotate: -45deg;
-}
-.scene-keyframe[data-edge]::after {
+/* 首尾两枚是**镜头的边界**,不是途经点 —— 画成竖条,一眼分得出。 */
+.scene-dope-key[data-edge] {
   rotate: none;
+  width: 5px;
+  height: 12px;
+  border-radius: 1px;
+}
+.scene-dope-key[data-here] {
+  background: var(--primary);
+}
+/* 播放头贯穿整张表(标尺行也算) —— 它把滑块此刻的位置和每一行的菱形连起来,
+   而这正是分行之后唯一还缺的那样东西。 */
+.scene-dope-playhead-area {
+  position: absolute;
+  inset-block: 0;
+  left: calc(var(--scene-dope-name) + var(--scene-dope-gap) + var(--scene-dope-inset));
+  right: var(--scene-dope-inset);
+  pointer-events: none;
+}
+.scene-dope-playhead {
+  position: absolute;
+  inset-block: 0;
+  width: 1px;
+  translate: -50% 0;
+  background: color-mix(in srgb, var(--primary) 65%, transparent);
+  transition: left 90ms linear;
+}
+/* 播放时关掉过渡:补间会让它永远落在真实时间后面一点,而这条线的全部意义就是"就是这一刻"。 */
+.scene-dope-playhead[data-playing] {
+  transition: none;
 }
 
 .scene-add,
@@ -721,11 +742,25 @@
   font-weight: 400;
   margin-left: 6px;
 }
+/* **右栏只有一个左右边距,而且它归面板体。**
+   此前是三套各写各的:检查器 `.scene-inspector section` 16px、运镜面板自己写死 16px、
+   物体列表 8px —— 三节内容的左边缘落在三个位置上,而它们上下紧挨着,一眼就看得出来。
+
+   竖向节奏同理:一个 gap 管到底,子块自己不再另加 margin。 */
 .scene-panel-body {
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  padding-bottom: 10px;
+  padding: 2px var(--scene-side-gutter) 12px;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+/* 需要整行底色的那几样从这里反向撑出去 —— 边距仍然只有一份定义。
+   撑到距面板边 8px(不是 0):行自己还有 8px 内距,两段加起来正好等于上面标题的 16px,
+   于是文字对齐,而底色比文字宽出 8px 一圈。 */
+.scene-panel-body > .scene-object-list {
+  margin-inline: calc((var(--scene-side-gutter) - 8px) * -1);
 }
 .scene-labeled-tool {
   height: 32px;
@@ -775,17 +810,30 @@
   color: var(--muted-foreground);
   margin-top: 10px;
 }
-.scene-objects {
-  flex: none;
+/* 键位表:左列键、右列这个键做什么。两列对齐读得快 —— 一行「G：移动,R:旋转…」得逐个数
+   冒号在哪儿。键用等宽,因为它们是要照着按的字符,不是一句话。 */
+.scene-keymap {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 12px;
+  margin-top: 8px;
+  font-size: var(--text-ui-2xs);
+  line-height: 1.7;
 }
-.scene-objects h2 span {
+.scene-keymap dt {
+  font-family: var(--font-mono);
+  color: var(--foreground);
+  white-space: nowrap;
+}
+.scene-keymap dd {
   color: var(--muted-foreground);
-  font-size: var(--text-ui-xs);
-  font-weight: 400;
-  margin-left: 6px;
 }
-.scene-object-list button {
-  padding: 8px 10px;
+.scene-help strong + .scene-keymap {
+  margin-top: 4px;
+}
+.scene-help > strong:not(:first-child) {
+  display: block;
+  margin-top: 14px;
 }
 .scene-object-row:has([aria-pressed="true"]) {
   background: color-mix(in srgb, var(--primary) 9%, transparent);
@@ -838,13 +886,6 @@
   line-height: 1.75;
 }
 
-.scene-camera-panel {
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
 .scene-panel-heading h2,
 .scene-output-panel h2 {
   font-size: 16px;
@@ -860,25 +901,27 @@
   line-height: 1.65;
 }
 
+/* **三档运镜是一组选项,不是三张卡片。** 每档一个边框,在一栏里读到的就是三个方块 ——
+   而框没有携带任何信息(哪个能点?三个都能)。现在只在 hover 时给底,和右栏别处的列表行
+   同一套反应;底色照样比文字宽出 8px 一圈(负外边距那一段),所以它仍然读得出是"一行"。 */
 .scene-preset-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: grid;
+  gap: 2px;
 }
 
 .scene-preset-list > button {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
+  gap: 10px;
+  padding: 8px;
+  margin-inline: -8px;
   text-align: left;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--control);
+  border-radius: 7px;
+  background: transparent;
 }
 
 .scene-preset-list > button:hover {
-  background: color-mix(in srgb, var(--primary) 9%, transparent);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
 }
 .scene-preset-list strong,
 .scene-choice strong {
@@ -901,20 +944,13 @@
   padding: 2px 0;
 }
 
-.scene-camera-settings {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* 分割线用 --divider,不用 --border:tokens.css 里写着「内容分隔比控件和容器的边界更轻」,
-   而这些线分的是段落,不是控件。 */
-.scene-detail-stack {
-  display: flex;
-  flex-direction: column;
-}
-.scene-detail-stack > .scene-subsection + .scene-subsection {
+/* 折叠块之间一条线。分割线用 --divider 不用 --border:tokens.css 里写着「内容分隔比控件和
+   容器的边界更轻」,而这些线分的是段落,不是控件。
+   **规则挂在折叠块上,不挂在某个包装容器上** —— 此前它只在运镜面板的 `.scene-detail-stack`
+   里成立,于是检查器里的折叠块之间没有线:同一栏里两种样子。 */
+.scene-subsection + .scene-subsection {
   border-top: 1px solid var(--divider);
+  padding-top: 10px;
 }
 
 

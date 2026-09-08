@@ -123,11 +123,19 @@ export const RESERVED_COMBOS: ReadonlyArray<{ combo: Combo; owner: MessageKey }>
   { combo: "Mod+F", owner: "shortcutOwnerSearch" },
   { combo: "Mod+[", owner: "shortcutOwnerSendBack" },
   { combo: "Mod+]", owner: "shortcutOwnerBringFront" },
-  // 剪辑页的单键工具:S 切分、A 选择、B 刀。SceneStudio 的 F 是"聚焦选中"。
+  // 剪辑页的单键工具:S 切分、A 选择、B 刀。
   { combo: "S", owner: "shortcutOwnerSplit" },
   { combo: "A", owner: "shortcutOwnerSelectTool" },
   { combo: "B", owner: "shortcutOwnerBladeTool" },
+  // 3D 场景页照 Blender 的手势:G/R/S 移动旋转缩放、I 记关键帧、⌥I 移除、⇧D 复制、
+  // X 删除、F 聚焦。S 和上面那条是同一个键(缩放 / 切分),名单里只留一条。
   { combo: "F", owner: "shortcutOwnerFocus" },
+  { combo: "G", owner: "shortcutOwnerMove" },
+  { combo: "R", owner: "shortcutOwnerRotate" },
+  { combo: "I", owner: "shortcutOwnerKeyframe" },
+  { combo: "Alt+I", owner: "shortcutOwnerKeyframeClear" },
+  { combo: "Shift+D", owner: "shortcutOwnerDuplicate" },
+  { combo: "X", owner: "shortcutOwnerDelete" },
   // 浏览器自己的,劫持不掉(或者劫持了会更糟):新窗口、关标签、刷新、地址栏、打印、缩放。
   { combo: "Mod+W", owner: "shortcutOwnerBrowser" },
   { combo: "Mod+T", owner: "shortcutOwnerBrowser" },

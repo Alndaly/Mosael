@@ -1,5 +1,11 @@
 import { createFile } from "mp4box";
 
+/**
+ * 这一页的帧率。**导出和界面上的「逐帧」用的是同一个数** —— 不然按一下 → 走的那一"帧"
+ * 在成片里不是一帧,而关键帧对齐到哪一帧本来就是这条快捷键唯一的用处。
+ */
+export const SHOT_FPS = 30;
+
 /** Deterministic camera sampling and timestamps, independent of viewport frame rate. */
 export async function encodeShotVideo(
   canvas: HTMLCanvasElement,
@@ -15,13 +21,13 @@ export async function encodeShotVideo(
     width: canvas.width,
     height: canvas.height,
     bitrate: 6_000_000,
-    framerate: 30,
+    framerate: SHOT_FPS,
     latencyMode: "realtime",
     avc: { format: "avc" },
   };
   if (!(await VideoEncoder.isConfigSupported(config)).supported) return null;
   const file = createFile(),
-    count = Math.ceil(duration * 30),
+    count = Math.ceil(duration * SHOT_FPS),
     end = Math.round(duration * 1_000_000);
   let track = 0,
     failure: Error | null = null;
@@ -56,7 +62,7 @@ export async function encodeShotVideo(
       const data = new Uint8Array(chunk.byteLength);
       chunk.copyTo(data);
       file.addSample(track, data, {
-        duration: chunk.duration ?? Math.round(1_000_000 / 30),
+        duration: chunk.duration ?? Math.round(1_000_000 / SHOT_FPS),
         dts: chunk.timestamp,
         cts: chunk.timestamp,
         is_sync: chunk.type === "key",

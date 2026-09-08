@@ -1,6 +1,6 @@
 import React from "react";
 import { SceneSubsection } from "./SceneSubsection";
-import { Clock, Copy, Group, Trash2 } from "lucide-react";
+import { Clock, Copy, Eye, EyeOff, Group, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -16,6 +16,7 @@ import type { SceneContent, SceneLighting, SceneObject } from "@/api/domains/sce
 import { CUSTOM_PRESET, presetById, presetGroups } from "./lighting";
 import { Num, Vector, Tool } from "./SceneControls";
 import { duplicateObject, groupTargets, makeObject, moveToGroup, removeObjects } from "./sceneGraph";
+import { keyIndexAt, removeKeyAt, stillFrame, upsertKey } from "./sceneTracks";
 export function SceneInspector({
   content,
   object,
@@ -32,12 +33,12 @@ export function SceneInspector({
   update: (c: SceneContent) => void;
   setSelected: (id: string | null) => void;
 }) {
-  //: 外壳和标题都归 ScenePanel —— 这里只出内容。此前它自己带 <aside> 和 <h2>,
-  //: 于是右栏里出现"两层标题"和"两层边框"。
+  //: 外壳、标题、左右内距和竖向节奏全归 ScenePanel(见 .scene-panel-body) —— 这里只出内容,
+  //: 连一层 div 都不包。此前这里还套着 `.scene-inspector > section`,而那一层唯一的作用就是
+  //: 再写一套自己的 padding 和 gap:右栏于是有三处各自定义的左边距,三节内容的左边缘对不齐。
   return (
-    <div className="scene-inspector">
-      <section>
-        {object ? (
+    <>
+      {object ? (
           <>
             <Input
               aria-label="对象名称"
@@ -115,14 +116,17 @@ export function SceneInspector({
               >
                 <Trash2 size={15} />
               </Tool>
-              <button
-                className="scene-text-button"
+              {/* 一行里四个动作,四个都是图标钮。此前最后这个是文字钮,于是同一行里
+                  三个方块加一段文字,行高和重心都对不齐 —— 而它和另外三个是同一类操作。 */}
+              <Tool
+                label={object.hidden ? "显示对象" : "隐藏对象"}
+                active={object.hidden}
                 onClick={() =>
                   objectPatch(object.id, { hidden: !object.hidden })
                 }
               >
-                {object.hidden ? "显示" : "隐藏"}
-              </button>
+                {object.hidden ? <EyeOff size={15} /> : <Eye size={15} />}
+              </Tool>
             </div>
             {/* 相机没有形状,也没有颜色和材质 —— 它有的是视角。此前它跟着几何体一起显示
                 「宽度/高度/深度/粗糙度/金属度」,那些字段对它一个都不成立。 */}
@@ -288,10 +292,9 @@ export function SceneInspector({
               lighting={content.lighting}
               onChange={(lighting) => update({ ...content, lighting })}
             />
-          </>
-        )}
-      </section>
-    </div>
+        </>
+      )}
+    </>
   );
 }
 
@@ -324,55 +327,45 @@ function ObjectTrackSection({
   onPatch: (patch: Partial<SceneObject>) => void;
 }) {
   const track = object.track;
-  const index = track.findIndex((f) => Math.abs(f.time - time) < 0.001);
+  const here = keyIndexAt(track, time) >= 0;
   const record = () => {
-    const now = {
-      time: Math.max(0, time),
-      position: object.position,
-      rotation: object.rotation,
-      scale: object.scale,
-    };
-    const base = track.length
-      ? track
-      : [{ time: 0, position: object.position, rotation: object.rotation, scale: object.scale }];
-    const next = [...base.filter((f) => Math.abs(f.time - now.time) > 0.001), now].sort(
-      (a, b) => a.time - b.time,
-    );
-    if (next.length > 100) return;
-    onPatch({ track: next });
+    const at = Math.max(0, time);
+    const next = upsertKey(track, stillFrame(object), stillFrame(object, at));
+    if (next) onPatch({ track: next });
   };
   return (
-    <SceneSubsection title="走位（随时间移动）"
-        defaultOpen>
-        <div className="scene-shape">
-          <Button variant="secondary" onClick={record}>
-            <Clock size={15} />
-            记录此刻
+    <SceneSubsection title="走位（随时间移动）" defaultOpen>
+      {/* **不再把时刻列成一串文字。** 底下的关键帧视图已经按时间画出了每一档,而一行
+          「0.0s、1.3s、2.6s…」既读不出间隔也点不动 —— 它此前是唯一能看见这些档的地方。 */}
+      <p>
+        {track.length
+          ? `${track.length} 档，都画在底下的关键帧视图里。`
+          : "把物体摆到位，再记一档。换一个时刻再摆一次，它就会在两点之间走过去。"}
+      </p>
+      <div className="scene-shape">
+        <Button variant="secondary" onClick={record}>
+          <Clock size={15} />
+          记录此刻
+          <kbd>I</kbd>
+        </Button>
+        {here && (
+          <Button
+            variant="outline"
+            onClick={() => {
+              const next = removeKeyAt(track, time);
+              if (next) onPatch({ track: next });
+            }}
+          >
+            移除这一档
+            <kbd>⌥I</kbd>
           </Button>
-          {!!track.length && (
-            <Button variant="outline" onClick={() => onPatch({ track: [] })}>
-              清除走位
-            </Button>
-          )}
-        </div>
-        {track.length ? (
-          <>
-            <p>
-              {track.length} 个时刻：
-              {track.map((f) => `${f.time.toFixed(1)}s`).join("、")}
-            </p>
-            {index >= 0 && (
-              <Button
-                variant="outline"
-                onClick={() => onPatch({ track: track.filter((_, i) => i !== index) })}
-              >
-                移除 {track[index].time.toFixed(1)}s 这一档
-              </Button>
-            )}
-          </>
-        ) : (
-          <p>把物体摆到位，再点「记录此刻」。在时间条上换一个时刻、挪一下，它就会在两点之间走过去。</p>
         )}
+      </div>
+      {!!track.length && (
+        <button className="scene-text-button" onClick={() => onPatch({ track: [] })}>
+          清除全部走位
+        </button>
+      )}
     </SceneSubsection>
   );
 }

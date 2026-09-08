@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import type { Keyframe, SceneObject, SceneShot, Vec3 } from "@/api/domains/scenes";
 import { Num, Pick, Vector } from "./SceneControls";
 import { cameraPreset, sampleCamera } from "./sceneGraph";
+import { removeKeyAt } from "./sceneTracks";
 
 export function SceneCameraPanel({
   shot,
@@ -74,26 +75,31 @@ export function SceneCameraPanel({
     onPreview(true);
     onPlaying(false);
   }
+  //: 外壳、左右内距、竖向节奏全归 ScenePanel(见 .scene-panel-body)—— 这里只出内容。
+  //: 此前它自己写了一套 `padding: 16px`,于是它的左边缘和上面那节物体列表对不齐。
   return (
-    <div className="scene-camera-panel">
+    <>
       <p className="scene-camera-hint">先在画面中找到喜欢的角度，再选择运镜方式。</p>
+      {/* **三档运镜不再各自装一个框。** 它们是一组同类选项,不是三张卡片 —— 三个边框
+          在一栏里就是三个方块,而框本身没有携带任何信息(哪个能点?三个都能)。
+          现在只有 hover 时才有底,和右栏别处的列表行同一套反应。 */}
       <section className="scene-preset-list" aria-label="运镜方式">
         <button onClick={() => preset("orbit")}>
-          <RotateCw size={19} />
+          <RotateCw size={17} />
           <span>
             <strong>围绕主体</strong>
             <small>以当前观察中心环绕一周</small>
           </span>
         </button>
         <button onClick={() => preset("push")}>
-          <MoveRight size={19} />
+          <MoveRight size={17} />
           <span>
             <strong>缓缓推进</strong>
             <small>从当前视角靠近主体</small>
           </span>
         </button>
         <button onClick={() => preset("still")}>
-          <Video size={19} />
+          <Video size={17} />
           <span>
             <strong>固定镜头</strong>
             <small>保持当前构图不移动</small>
@@ -101,125 +107,114 @@ export function SceneCameraPanel({
         </button>
         <p>选择后会替换当前镜头的运镜，可撤销。</p>
       </section>
-      <section className="scene-camera-settings">
-        <div className="scene-shape">
-          <Num
-            label="时长（秒）"
-            value={shot.duration}
-            min={0.1}
-            max={120}
-            onChange={(duration) => {
-              // 改时长要把轨上的时刻**按比例缩放**,否则运镜的后半段会掉到镜头之外。
-              onPatch({ duration });
-              if (rig.track.length)
-                onRig({
-                  track: rig.track.map((f) => ({
-                    ...f,
-                    time: (f.time / shot.duration) * duration,
-                  })),
-                });
-              onTime(0);
-              onPlaying(false);
-            }}
-          />
-          <label className="scene-number">
-            <span>画面比例</span>
-            <Pick
-              label="画面比例"
-              value={shot.aspect}
-              options={[
-                ["16:9", "横屏 16:9"],
-                ["9:16", "竖屏 9:16"],
-                ["1:1", "方形 1:1"],
-              ]}
-              onChange={(aspect) =>
-                onPatch({ aspect: aspect as SceneShot["aspect"] })
-              }
-            />
-          </label>
-        </div>
-      </section>
-      {/* 两段折叠收在一个 stack 里。**分割线是每一行自己的上边框**,所以行与行之间不能再叠
-          外层容器那 16px 的 gap —— 叠了之后线上方 28px、下方 12px,线看着黏在下面那行上。 */}
-      <div className="scene-detail-stack">
-        <SceneSubsection title="自己设置起点和终点">
-          <p>在编辑视角中调整构图，分别记下镜头从哪里开始、在哪里结束。</p>
-          {preview && (
-            <Button variant="secondary" onClick={observe}>
-              <Camera size={15} />
-              从当前镜头继续调整
-            </Button>
-          )}
-          <div className="scene-shape">
-            <Button
-              variant="secondary"
-              disabled={preview}
-              onClick={() => capture(0)}
-            >
-              设为起点
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={preview}
-              onClick={() => capture(shot.duration)}
-            >
-              设为终点
-            </Button>
-          </div>
-          <p>在底部时间条选择中间时刻，再点「记录此视角」可增加途经点。</p>
-        </SceneSubsection>
-      <SceneSubsection title="镜头高级设置">
-          <label className="scene-number">
-            <span>镜头名称</span>
-            <Input
-              aria-label="镜头名称"
-              value={shot.name}
-              maxLength={160}
-              onChange={(e) => onPatch({ name: e.target.value })}
-            />
-          </label>
-          <Num
-            label="视角（广角 / 长焦）"
-            value={current.fov}
-            min={10}
-            max={120}
-            step={1}
-            onChange={(fov) => patchFrame({ fov })}
-          />
+      <div className="scene-shape">
+        <Num
+          label="时长（秒）"
+          value={shot.duration}
+          min={0.1}
+          max={120}
+          onChange={(duration) => {
+            // 改时长要把轨上的时刻**按比例缩放**,否则运镜的后半段会掉到镜头之外。
+            onPatch({ duration });
+            if (rig.track.length)
+              onRig({
+                track: rig.track.map((f) => ({
+                  ...f,
+                  time: (f.time / shot.duration) * duration,
+                })),
+              });
+            onTime(0);
+            onPlaying(false);
+          }}
+        />
+        <label className="scene-number">
+          <span>画面比例</span>
           <Pick
-            label="镜头速度变化"
-            value={shot.easing}
+            label="画面比例"
+            value={shot.aspect}
             options={[
-              ["smooth", "开始和结束时缓慢"],
-              ["linear", "全程保持匀速"],
+              ["16:9", "横屏 16:9"],
+              ["9:16", "竖屏 9:16"],
+              ["1:1", "方形 1:1"],
             ]}
-            onChange={(easing) =>
-              onPatch({ easing: easing as SceneShot["easing"] })
+            onChange={(aspect) =>
+              onPatch({ aspect: aspect as SceneShot["aspect"] })
             }
           />
-          <p>当前时刻 {time.toFixed(1)} 秒。修改坐标会设置该时刻的途经点。</p>
-          <Vector
-            label="相机位置"
-            value={current.position}
-            onChange={(position) => patchFrame({ position })}
-          />
-          <Vector
-            label="注视位置"
-            value={current.target}
-            onChange={(target) => patchFrame({ target })}
-          />
-          {frameIndex > 0 && (
-            <Button
-              variant="outline"
-              onClick={() =>
-                onRig({ track: rig.track.filter((_, i) => i !== frameIndex) })
-              }
-            >
-              移除此途经点
-            </Button>
-          )}
-        </SceneSubsection>
+        </label>
       </div>
-    </div>
+      {/* 折叠块之间的分割线是**每一块自己的上边框**(见 .scene-subsection + .scene-subsection),
+          右栏里所有折叠块都用同一条规则 —— 此前这条线只存在于这个面板的那个 stack 包装里,
+          于是检查器里的折叠块之间没有线,同一栏里两种样子。 */}
+      <SceneSubsection title="自己设置起点和终点">
+        <p>在编辑视角中调整构图，分别记下镜头从哪里开始、在哪里结束。</p>
+        {preview && (
+          <Button variant="secondary" onClick={observe}>
+            <Camera size={15} />
+            从当前镜头继续调整
+          </Button>
+        )}
+        <div className="scene-shape">
+          <Button variant="secondary" disabled={preview} onClick={() => capture(0)}>
+            设为起点
+          </Button>
+          <Button variant="secondary" disabled={preview} onClick={() => capture(shot.duration)}>
+            设为终点
+          </Button>
+        </div>
+        <p>在底部关键帧视图里选一个中间时刻，再按 I（或点「记录此视角」）就多一个途经点。</p>
+      </SceneSubsection>
+      <SceneSubsection title="镜头高级设置">
+        <label className="scene-number">
+          <span>镜头名称</span>
+          <Input
+            aria-label="镜头名称"
+            value={shot.name}
+            maxLength={160}
+            onChange={(e) => onPatch({ name: e.target.value })}
+          />
+        </label>
+        <Num
+          label="视角（广角 / 长焦）"
+          value={current.fov}
+          min={10}
+          max={120}
+          step={1}
+          onChange={(fov) => patchFrame({ fov })}
+        />
+        <Pick
+          label="镜头速度变化"
+          value={shot.easing}
+          options={[
+            ["smooth", "开始和结束时缓慢"],
+            ["linear", "全程保持匀速"],
+          ]}
+          onChange={(easing) => onPatch({ easing: easing as SceneShot["easing"] })}
+        />
+        <p>当前时刻 {time.toFixed(1)} 秒。修改坐标会设置该时刻的途经点。</p>
+        <Vector
+          label="相机位置"
+          value={current.position}
+          onChange={(position) => patchFrame({ position })}
+        />
+        <Vector
+          label="注视位置"
+          value={current.target}
+          onChange={(target) => patchFrame({ target })}
+        />
+        {frameIndex > 0 && (
+          <Button
+            variant="outline"
+            onClick={() => {
+              const track = removeKeyAt(rig.track, time);
+              if (track) onRig({ track });
+            }}
+          >
+            移除此途经点
+            <kbd>⌥I</kbd>
+          </Button>
+        )}
+      </SceneSubsection>
+    </>
   );
 }

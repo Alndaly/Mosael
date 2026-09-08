@@ -68,6 +68,8 @@ type Props = {
   observing?: boolean;
   onCameraView?: () => void;
   onSelect: (id: string | null) => void;
+  /** 正在被手改姿态的那个物体 —— 它这一刻不跟着自己的轨走。见 SceneStudio 里 `posing`。 */
+  posing?: string | null;
   onTransform: (id: string, patch: Partial<SceneObject>) => void;
   onError: (error: string) => void;
 };
@@ -710,6 +712,9 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         if (!transform.dragging)
           for (const o of p.content.objects) {
             if (!o.track.length) continue;
+            // **正在手改的那个不采样。** 否则拖动操作杆是一件看不见的事:松手的下一帧就被
+            // 采样值抹回去了。留住这个样子,直到用户按 `I` 把它记进这一刻(或换一个时刻)。
+            if (o.id === p.posing) continue;
             const node = objects.get(o.id);
             if (!node) continue;
             if (o.kind === "camera") {

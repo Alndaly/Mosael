@@ -2484,6 +2484,11 @@ export const messages = {
     shortcutOwnerSelectTool: "选择工具",
     shortcutOwnerBladeTool: "刀片工具",
     shortcutOwnerFocus: "聚焦选中",
+    shortcutOwnerMove: "移动",
+    shortcutOwnerRotate: "旋转",
+    shortcutOwnerKeyframe: "记关键帧",
+    shortcutOwnerKeyframeClear: "移除关键帧",
+    shortcutOwnerDelete: "删除",
     shortcutOwnerBrowser: "浏览器自己",
   },
   "en-US": {
@@ -4963,6 +4968,11 @@ export const messages = {
     shortcutOwnerSelectTool: "Select tool",
     shortcutOwnerBladeTool: "Blade tool",
     shortcutOwnerFocus: "Focus selection",
+    shortcutOwnerMove: "Move",
+    shortcutOwnerRotate: "Rotate",
+    shortcutOwnerKeyframe: "Insert keyframe",
+    shortcutOwnerKeyframeClear: "Clear keyframe",
+    shortcutOwnerDelete: "Delete",
     shortcutOwnerBrowser: "the browser",
   },
 } as const;
