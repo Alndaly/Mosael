@@ -17,7 +17,13 @@ name: Release
 on:
   push:
     tags: ["v*"]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      notarization:
+        description: "macOS notarization: cloud credentials or local Keychain handoff"
+        type: choice
+        options: [cloud, local]
+        default: cloud
 
 permissions:
   contents: write
@@ -37,8 +43,12 @@ jobs:
           MACOS_PROVISION_PROFILE: ${{ secrets.MACOS_PROVISION_PROFILE != '' }}
           APPLE_ID: ${{ secrets.APPLE_ID != '' }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD != '' }}
+          LOCAL_NOTARIZATION: ${{ github.event_name == 'workflow_dispatch' && inputs.notarization == 'local' }}
         run: |
           for name in CSC_LINK CSC_KEY_PASSWORD MACOS_PROVISION_PROFILE APPLE_ID APPLE_APP_SPECIFIC_PASSWORD; do
+            if [ "$LOCAL_NOTARIZATION" = "true" ] && [[ "$name" == APPLE_* ]]; then
+              continue
+            fi
             if [ "${!name}" != "true" ]; then
               echo "::error::Missing required signing secret: $name"
               exit 1
@@ -59,7 +69,7 @@ jobs:
   # 全部成功后才转正——避免用户在「检查更新」里看到缺产物的半成品版本。
   draft:
     needs: [test]
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -192,12 +202,20 @@ jobs:
           APPLE_ID: ${{ runner.os == 'macOS' && secrets.APPLE_ID || '' }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ runner.os == 'macOS' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
           APPLE_TEAM_ID: "27W3D2ZUT9"
+          LOCAL_NOTARIZATION: ${{ github.event_name == 'workflow_dispatch' && inputs.notarization == 'local' }}
         run: |
           if [ "$RUNNER_OS" = "macOS" ]; then
             umask 077
             printf '%s' "$MACOS_PROVISION_PROFILE" | base64 --decode > build/mosael.provisionprofile
-            pnpm exec electron-builder --mac dmg --publish never
-            node scripts/verify-mac-signing.cjs release/mac-arm64/Mosael.app
+            if [ "$LOCAL_NOTARIZATION" = "true" ]; then
+              pnpm exec electron-builder --mac dir --publish never -c.mac.notarize=false
+              node scripts/verify-mac-signing.cjs release/mac-arm64/Mosael.app --signature-only
+              version=$(node -p "require('./package.json').version")
+              ditto -c -k --sequesterRsrc --keepParent release/mac-arm64/Mosael.app "release/Mosael-$version-mac-signed.zip"
+            else
+              pnpm exec electron-builder --mac dmg --publish never
+              node scripts/verify-mac-signing.cjs release/mac-arm64/Mosael.app
+            fi
           else
             pnpm exec electron-builder --win nsis --publish never
           fi
@@ -206,7 +224,7 @@ jobs:
         run: node test/bundle.smoke.mjs
 
       - name: Upload to release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber ${{ matrix.asset_glob }}
@@ -216,12 +234,12 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: mosael-${{ runner.os }}
-          path: ${{ matrix.asset_glob }}
+          path: ${{ runner.os == 'macOS' && inputs.notarization == 'local' && 'release/*-mac-signed.zip' || matrix.asset_glob }}
           if-no-files-found: error
 
   publish:
     needs: [build]
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

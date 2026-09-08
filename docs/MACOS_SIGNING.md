@@ -40,7 +40,7 @@
 
 ## GitHub Actions
 
-仓库 Actions secrets 需要以下五项，缺少任一项会在创建发布草稿前失败：
+全自动云端发布需要以下五项 Actions secrets，缺少任一项会在创建发布草稿前失败。本机公证交接模式仅需要前三项：
 
 | 名称 | 内容 |
 | --- | --- |
@@ -51,6 +51,28 @@
 | `APPLE_APP_SPECIFIC_PASSWORD` | 该 Apple ID 的 App 专用密码 |
 
 签名与公证凭据仅传给 macOS 打包步骤。Windows 构建不会获得这些凭据。私钥通过加密的 Actions secret 进入临时构建环境；不要将整个登录钥匙串导出到 CI。维护者撤销或更新证书、密码时，同步更新 secrets 和描述文件。
+
+## 使用本机钥匙串公证
+
+已在本机保存公证凭据时，不必将 Apple ID 和密码导出到 GitHub。使用手动构建的本机交接模式：
+
+```bash
+gh workflow run release.yml --ref main -f notarization=local
+```
+
+此模式先运行完整测试，云端使用证书与描述文件生成带安全时间戳的 macOS 应用，并启动应用验证数据库升级和 WebAuthn 配置；Windows 同时生成安装程序。macOS artifact 中的 `*-mac-signed.zip` 保留应用权限与符号链接。它尚未公证，手动构建不会创建或发布 Release，包括选择 tag 作为构建 ref 的情况。
+
+维护者确认工作流成功、构建 commit 与待发布 tag 一致后，下载产物到本机，解压检查签名并用已保存的钥匙串提交：
+
+```bash
+node scripts/verify-mac-signing.cjs /path/to/Mosael.app --signature-only
+xcrun notarytool submit /path/to/Mosael-1.2.0-mac-signed.zip \
+  --keychain-profile mosael-release --wait
+xcrun stapler staple /path/to/Mosael.app
+node scripts/verify-mac-signing.cjs /path/to/Mosael.app
+```
+
+必须收到 Apple 的 Accepted 结果，完成票据、Gatekeeper 与完整应用验证后，才能将应用封装成最终 DMG 并发布。最终分发容器也应提交公证并附加票据。此流程不使用关闭时间戳的本地 QA 包作为分发产物。
 
 ## Touch ID 的运行条件
 
