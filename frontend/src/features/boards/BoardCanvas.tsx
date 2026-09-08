@@ -50,6 +50,7 @@ import { itemFormResetKey, itemIsRunning } from "@/features/boards/boardItemStat
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
 import { BoardCommentComposer, type CommentDraft } from "@/features/boards/BoardCommentComposer";
 import { MarkerPin } from "@/features/markers/MarkerPin";
+import { MarkerEditorProvider } from "@/features/markers/MarkerEditorProvider";
 import { MAX_MARKERS, newMarkerId, nextMarkerName, type CanvasMarker } from "@/features/markers/markers";
 import { useMarkerShortcuts } from "@/features/markers/useMarkerShortcuts";
 
@@ -955,6 +956,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         paneGesture.current = null;
       }}
     >
+      <MarkerEditorProvider enabled={markerMode && markersVisible}>
       <ReactFlow
         nodes={displayNodes}
         edges={edges.map(edge => ({ ...edge, selectable: !commentMode && !markerMode }))}
@@ -1252,6 +1254,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           nodeStrokeColor="transparent"
         />}
       </ReactFlow>
+      </MarkerEditorProvider>
 
       {markerMode && <AnnotationModeHint kind="marker" onExit={onExitMarkerMode} />}
       {commentMode && (

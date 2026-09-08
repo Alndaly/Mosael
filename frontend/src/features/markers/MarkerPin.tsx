@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { ShortcutRecorder } from "@/features/markers/ShortcutRecorder";
 import type { CanvasMarker } from "@/features/markers/markers";
 import { formatCombo } from "@/lib/shortcuts";
+import { useMarkerEditor } from "./MarkerEditorProvider";
 
 export type MarkerNodeData = {
   editable?: boolean;
@@ -32,8 +33,8 @@ export type MarkerNodeData = {
 export function MarkerPin({ data, selected }: NodeProps) {
   const t = useI18n();
   const { marker, markers, onChange, onDelete, editable = false } = data as unknown as MarkerNodeData;
-  const [open, setOpen] = React.useState(false);
-  React.useEffect(() => { if (!editable) setOpen(false); }, [editable]);
+  const { open, setOpen, onCloseAutoFocus } = useMarkerEditor();
+  React.useEffect(() => { if (!editable) setOpen(false); }, [editable, setOpen]);
 
   return (
     <Popover open={editable && open} onOpenChange={(next) => editable && setOpen(next)}>
@@ -61,7 +62,7 @@ export function MarkerPin({ data, selected }: NodeProps) {
           ) : null}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-72 overflow-hidden p-0" onClick={(event) => event.stopPropagation()}>
+      <PopoverContent align="start" className="w-72 overflow-hidden p-0" onCloseAutoFocus={onCloseAutoFocus} onClick={(event) => event.stopPropagation()}>
         <div className="flex h-11 items-center gap-2 border-b border-border px-3">
           <Flag size={14} className="text-primary" />
           <span className="flex-1 text-ui-xs font-medium">{t("markerConfigure")}</span>
@@ -90,7 +91,7 @@ export function MarkerPin({ data, selected }: NodeProps) {
           <Button
             variant="ghost"
             size="sm"
-            className="w-full justify-start text-destructive hover:text-destructive"
+            className="w-full justify-center text-destructive hover:text-destructive"
             onClick={() => {
               setOpen(false);
               onDelete(marker.id);

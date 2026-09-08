@@ -174,6 +174,7 @@ import { AnnotationControls } from "@/features/markers/AnnotationControls";
 import { useWorkflowComments } from "./WorkflowComments";
 import { MarkerListButton } from "@/features/markers/MarkerListButton";
 import { MarkerPin } from "@/features/markers/MarkerPin";
+import { MarkerEditorProvider } from "@/features/markers/MarkerEditorProvider";
 import { MAX_MARKERS, newMarkerId, nextMarkerName, type CanvasMarker } from "@/features/markers/markers";
 import { useMarkerShortcuts } from "@/features/markers/useMarkerShortcuts";
 import {
@@ -2113,6 +2114,7 @@ function WorkflowEditor({
               </span>
             </div>
           )}
+          <MarkerEditorProvider enabled={markerMode && markersVisible}>
           <ReactFlow
             className={cn("[--xy-attribution-background-color:color-mix(in_srgb,var(--panel)_70%,transparent)]", !canvas.ready && "opacity-0")}
             nodes={displayNodes}
@@ -2257,6 +2259,7 @@ function WorkflowEditor({
           />
         )}
           </ReactFlow>
+          </MarkerEditorProvider>
         </div>
         {/* 右栏:助手与执行历史共用。两个都开就上下平分 —— 运行时经常要一边看画布状态、
             一边翻某一步的输出。助手切到浮动模式时自己脱离文档流,所以只按停靠中的个数分行。 */}

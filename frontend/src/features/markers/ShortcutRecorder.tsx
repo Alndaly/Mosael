@@ -85,7 +85,7 @@ export function ShortcutRecorder({
         </button>
         {marker.shortcut ? (
           <Button
-            variant="ghost"
+            variant="secondary"
             size="icon-sm"
             aria-label={t("markerShortcutClear")}
             title={t("markerShortcutClear")}
