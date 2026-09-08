@@ -170,3 +170,21 @@ def test_refusing_a_too_large_model_never_contradicts_itself():
     embedded = refuse(b"{}" + b"\0" * 32, size=EMBEDDED_GLTF_LIMIT_BYTES + 1024 * 1024)
     assert f"{EMBEDDED_GLTF_LIMIT_BYTES // 1024 // 1024} MB" in embedded
     assert "GLB" in embedded and str(limit) in embedded
+
+
+def test_keyframes_can_start_later_and_deleting_a_key_preserves_the_others():
+    c, ws, scene = setup_scene()
+    objects = scene['content']['objects']
+    camera = next(o for o in objects if o['kind'] == 'camera')
+    camera['track'] = [{'time': 3, 'position': [0, 2, 5], 'target': [0, 1, 0]}]
+    result = c.patch('/api/scenes/' + scene['id'], json={
+        'workspace_id': ws, 'name': scene['name'], 'base_revision': scene['revision'], 'content': scene['content'],
+    })
+    assert result.status_code == 200, result.text
+    restored = next(o for o in result.json()['content']['objects'] if o['id'] == camera['id'])
+    assert [f['time'] for f in restored['track']] == [3]
+    camera['track'].append(dict(camera['track'][0]))
+    invalid = c.patch('/api/scenes/' + scene['id'], json={
+        'workspace_id': ws, 'name': scene['name'], 'base_revision': result.json()['revision'], 'content': scene['content'],
+    })
+    assert invalid.status_code == 422

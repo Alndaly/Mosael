@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { makeObject } from "./sceneGraph";
 import {
   MAX_KEYS,
+  moveSceneKeys,
+  frameForObject,
   keyIndexAt,
   neighbourKeyTime,
   removeKeyAt,
@@ -22,25 +24,20 @@ const shot = (camera_id: string): SceneShot => ({
 });
 
 describe("记一档", () => {
-  it("轨是空的时候会连同静止姿态一起记成 0 秒那一档", () => {
-    // 少了这一档,从物体的静止位置到你记的这一档之间没有任何东西描述它 —— 播放时会突然
-    // 跳过去,而用户只记一档的本意正是"从现在这样,变成那样"。
-    const box = makeObject("box", { position: [0, 0, 0] });
-    const next = upsertKey([], stillFrame(box), stillFrame({ ...box, position: [5, 0, 0] }, 3))!;
-    expect(next.map((f) => f.time)).toEqual([0, 3]);
-    expect(next[0].position).toEqual([0, 0, 0]);
-    expect(next[1].position).toEqual([5, 0, 0]);
+  it("只在指定时刻打帧，不偷偷补零秒帧", () => {
+    const box = makeObject("box");
+    expect(upsertKey([], stillFrame(box, 3))!.map(f => f.time)).toEqual([3]);
   });
 
   it("第一档就记在 0 秒时不补 —— 那一档自己就是起点", () => {
     const box = makeObject("box");
-    expect(upsertKey([], stillFrame(box), stillFrame(box, 0))!.map((f) => f.time)).toEqual([0]);
+    expect(upsertKey([], stillFrame(box, 0))!.map((f) => f.time)).toEqual([0]);
   });
 
   it("同一刻再记一次是替换,不是又加一档", () => {
     const box = makeObject("box");
-    const first = upsertKey([], stillFrame(box), stillFrame(box, 0))!;
-    const again = upsertKey(first, stillFrame(box), stillFrame({ ...box, position: [1, 2, 3] }, 0))!;
+    const first = upsertKey([], stillFrame(box, 0))!;
+    const again = upsertKey(first, stillFrame({ ...box, position: [1, 2, 3] }, 0))!;
     expect(again).toHaveLength(1);
     expect(again[0].position).toEqual([1, 2, 3]);
   });
@@ -48,16 +45,16 @@ describe("记一档", () => {
   it("永远按时间排好序 —— 采样是按顺序找区间的,乱序就会插错段", () => {
     const box = makeObject("box");
     let track: Keyframe[] = [];
-    for (const at of [4, 1, 9, 2]) track = upsertKey(track, stillFrame(box), stillFrame(box, at))!;
-    expect(track.map((f) => f.time)).toEqual([0, 1, 2, 4, 9]);
+    for (const at of [4, 1, 9, 2]) track = upsertKey(track, stillFrame(box, at))!;
+    expect(track.map((f) => f.time)).toEqual([1, 2, 4, 9]);
   });
 
   it("满了就返回 null,而不是悄悄丢一档", () => {
     const box = makeObject("box");
     const full = Array.from({ length: MAX_KEYS }, (_, i) => stillFrame(box, i));
-    expect(upsertKey(full, stillFrame(box), stillFrame(box, 999))).toBeNull();
+    expect(upsertKey(full, stillFrame(box, 999))).toBeNull();
     // 落在已有的那一档上是替换,不增加长度 —— 满了也该让人改得动。
-    expect(upsertKey(full, stillFrame(box), stillFrame(box, 3))).toHaveLength(MAX_KEYS);
+    expect(upsertKey(full, stillFrame(box, 3))).toHaveLength(MAX_KEYS);
   });
 
   it("相机和别的物体记的字段不同,而且不混着记", () => {
@@ -76,11 +73,10 @@ describe("移除一档", () => {
     expect(removeKeyAt([stillFrame(box, 0), stillFrame(box, 5)], 2)).toBeNull();
   });
 
-  it("删到只剩一档就整条清空", () => {
-    // 一条只有一档的轨和没有轨渲染出来一模一样(处处是同一个姿态),但界面上它是"有动画"的
-    // —— 用户于是看着一个说自己在动、实际不动的物体。
+  it("只删指定帧，保留最后一帧及它的姿态", () => {
     const box = makeObject("box");
-    expect(removeKeyAt([stillFrame(box, 0), stillFrame(box, 5)], 5)).toEqual([]);
+    expect(removeKeyAt([stillFrame(box, 0), stillFrame(box, 5)], 0)).toEqual([stillFrame(box, 5)]);
+    expect(removeKeyAt([stillFrame(box, 5)], 5)).toEqual([]);
   });
 
   it("容差认得出同一刻 —— 时间是浮点算出来的,不会正好相等", () => {
@@ -114,24 +110,39 @@ describe("关键帧视图的行", () => {
   const idle = makeObject("box", { id: "idle", name: "不动的方块" });
   const content = { objects: [idle, walker, camera] } as unknown as SceneContent;
 
-  it("只列有话可说的:在动的、选中的、以及拍这个镜头的机位", () => {
-    // 二十个方块的场景全列出来,十九行是空的 —— 而空行不表达任何东西,只是把真正在动的
-    // 那一行推出视野。
-    expect(trackRows(content, shot("cam"), null).map((row) => row.object.id)).toEqual(["cam", "walk"]);
-    expect(trackRows(content, shot("cam"), "idle").map((row) => row.object.id)).toEqual([
-      "cam",
-      "idle",
-      "walk",
-    ]);
+  it("默认显示所有物体，切换选择不会改变轨道集合", () => {
+    expect(trackRows(content, shot("cam")).map(row => row.object.id)).toEqual(["cam", "idle", "walk"]);
   });
 
   it("机位排在最上,而且和物体同列一张表", () => {
-    const rows = trackRows(content, shot("cam"), "idle");
+    const rows = trackRows(content, shot("cam"));
     expect(rows[0].isRig).toBe(true);
     expect(rows.slice(1).every((row) => !row.isRig)).toBe(true);
   });
 
   it("不动的机位也有一行 —— 那是「可以在这儿记一档」的位置", () => {
-    expect(trackRows(content, shot("cam"), null)[0].times).toEqual([]);
+    expect(trackRows(content, shot("cam"))[0].times).toEqual([]);
+  });
+});
+
+ describe("编辑关键帧", () => {
+  const box = makeObject("box", { id: "box", track: [
+    {time: 0, position: [0, 0, 0]}, {time: 2, position: [2, 0, 0]}, {time: 5, position: [5, 0, 0]},
+  ] });
+  const content = { objects: [box] } as unknown as SceneContent;
+  it("多帧一起移动，保留间距、姿态和排序", () => {
+    const moved = moveSceneKeys(content, [{id: "box", time: 0}, {id: "box", time: 2}], 1, 10)!;
+    expect(moved.objects[0].track.map(f => f.time)).toEqual([1, 3, 5]);
+    expect(moved.objects[0].track[1].position).toEqual([2, 0, 0]);
+    expect(box.track[0].time).toBe(0);
+  });
+  it("遇到已有帧或越界时拒绝，不能覆盖另一帧", () => {
+    expect(moveSceneKeys(content, [{id: "box", time: 2}], 3, 10)).toBeNull();
+    expect(moveSceneKeys(content, [{id: "box", time: 0}], -1, 10)).toBeNull();
+  });
+  it("未手改时记录采样姿态，手改后记录修改的姿态", () => {
+    const s = {...shot("cam"), easing: "linear" as const};
+    expect(frameForObject(box, s, 1, false).position).toEqual([1, 0, 0]);
+    expect(frameForObject({...box, position: [9, 0, 0]}, s, 1, true).position).toEqual([9, 0, 0]);
   });
 });

@@ -1,5 +1,22 @@
 export const messages = {
   "zh-CN": {
+    sceneAnimTimeline: "动画时间轴",
+    sceneAnimResize: "调整时间轴高度",
+    sceneAnimSearch: "搜索物体",
+    sceneAnimAnimated: "仅动画",
+    sceneAnimStart: "跳到开始",
+    sceneAnimEnd: "跳到结束",
+    sceneAnimInsert: "插入关键帧",
+    sceneAnimDelete: "删除选中关键帧",
+    sceneAnimZoomOut: "缩小时间轴",
+    sceneAnimZoomIn: "放大时间轴",
+    sceneAnimFit: "显示全部时间",
+    sceneAnimObjects: "物体 / 关键帧",
+    sceneAnimTime: "场景时间",
+    sceneAnimEmpty: "没有匹配的物体",
+    sceneAnimHint: "I 插入 · Shift 多选 · 拖动移帧 · Delete 删除帧",
+    sceneAnimSelected: "帧已选中",
+
     // Shell
     workspaceDefault: "默认工作区",
     workspaceSwitch: "切换工作区",
@@ -2492,6 +2509,23 @@ export const messages = {
     shortcutOwnerBrowser: "浏览器自己",
   },
   "en-US": {
+    sceneAnimTimeline: "Animation timeline",
+    sceneAnimResize: "Resize timeline",
+    sceneAnimSearch: "Search objects",
+    sceneAnimAnimated: "Animated only",
+    sceneAnimStart: "Go to start",
+    sceneAnimEnd: "Go to end",
+    sceneAnimInsert: "Insert keyframe",
+    sceneAnimDelete: "Delete selected keyframes",
+    sceneAnimZoomOut: "Zoom out timeline",
+    sceneAnimZoomIn: "Zoom in timeline",
+    sceneAnimFit: "Fit all time",
+    sceneAnimObjects: "Objects / Keyframes",
+    sceneAnimTime: "Scene time",
+    sceneAnimEmpty: "No matching objects",
+    sceneAnimHint: "I Insert · Shift Select · Drag Move · Delete Keys",
+    sceneAnimSelected: "keys selected",
+
     // Shell
     workspaceDefault: "Default workspace",
     workspaceSwitch: "Switch workspace",

@@ -1,3 +1,4 @@
+import { sampleCamera, sampleObject } from "./sceneGraph";
 import type { Keyframe, SceneContent, SceneObject, SceneShot } from "@/api/domains/scenes";
 
 /**
@@ -33,31 +34,46 @@ export function stillFrame(object: SceneObject, time = 0): Keyframe {
     : { time, position: object.position, rotation: object.rotation, scale: object.scale };
 }
 
-/**
- * 在 `frame.time` 处写入一档。返回新的轨;超过上限返回 null(调用方负责说话)。
- *
- * **轨为空时会连同静止姿态一起记成 0 秒那一档。** 否则从物体的静止位置到你刚记的这一档之间
- * 没有任何东西描述它 —— 播放时会突然跳过去,而用户只记一档的本意是"从现在这样,变成那样"。
- * (在 0 秒记第一档时不需要:那一档本身就是起点。)
- */
-export function upsertKey(track: Keyframe[], still: Keyframe, frame: Keyframe): Keyframe[] | null {
-  const base = track.length ? track : frame.time > EPSILON ? [still] : [];
-  const kept = base.filter((one) => Math.abs(one.time - frame.time) > EPSILON);
+/** 只插入指定时刻；单帧同样是有效动画数据，不能自动补帧或连带删除。 */
+export function upsertKey(track: Keyframe[], frame: Keyframe): Keyframe[] | null {
+  const kept = track.filter(one => Math.abs(one.time - frame.time) >= EPSILON);
   if (kept.length >= MAX_KEYS) return null;
   return [...kept, frame].sort((a, b) => a.time - b.time);
 }
 
-/**
- * 移除这一刻那一档。这一刻没有档就返回 null —— 调用方据此知道"没什么可删的"。
- *
- * 删到只剩一档时**整条轨清空**:一条只有一档的轨和没有轨渲染出来一模一样(处处是同一个
- * 姿态),但界面上它是"有动画"的 —— 于是用户看着一个说自己在动、实际不动的物体。
- */
 export function removeKeyAt(track: Keyframe[], time: number): Keyframe[] | null {
   const index = keyIndexAt(track, time);
-  if (index < 0) return null;
-  const next = track.filter((_, i) => i !== index);
-  return next.length <= 1 ? [] : next;
+  return index < 0 ? null : track.filter((_, i) => i !== index);
+}
+
+/** 打帧记录此刻的采样值；只有手动调整过的物体使用尚未打帧的姿态。 */
+export function frameForObject(object: SceneObject, shot: SceneShot, time: number, posing: boolean): Keyframe {
+  if (posing) return stillFrame(object, time);
+  return object.kind === "camera"
+    ? sampleCamera(object, shot, time)
+    : { time, ...sampleObject(object, shot, time) };
+}
+
+export type SceneKey = { id: string; time: number };
+export function sameKey(a: SceneKey, b: SceneKey) {
+  return a.id === b.id && Math.abs(a.time - b.time) < EPSILON;
+}
+
+/** 批量平移是一次原子操作，碰撞或越界时不覆盖任何已有帧。 */
+export function moveSceneKeys(content: SceneContent, keys: SceneKey[], delta: number, end: number): SceneContent | null {
+  if (!Number.isFinite(delta)) return null;
+  let invalid = false;
+  const objects = content.objects.map(object => {
+    const track = object.track.map(frame => {
+      if (!keys.some(key => sameKey(key, {id: object.id, time: frame.time}))) return frame;
+      const time = Number((frame.time + delta).toFixed(6));
+      if (time < 0 || time > end) invalid = true;
+      return {...frame, time};
+    }).sort((a, b) => a.time - b.time);
+    if (track.some((frame, i) => i > 0 && frame.time - track[i - 1].time < EPSILON)) invalid = true;
+    return {...object, track};
+  });
+  return invalid ? null : {...content, objects};
 }
 
 /** 往前 / 往后最近的那一档的时刻。没有就返回 null(到头了,不循环)。 */
@@ -79,26 +95,10 @@ export interface TrackRow {
   isRig: boolean;
 }
 
-/**
- * 关键帧视图有哪几行。
- *
- * **只列有话可说的物体**:在动的、当前选中的、以及拍这个镜头的机位。一个二十个方块的场景
- * 全列出来的话,十九行是空的 —— 而空行不表达任何东西,只是把真正在动的那一行推出视野。
- *
- * 机位排在最上:这个镜头讲的就是它怎么走,别的物体是在它面前动。相机是场景里的物体
- * (见 docs/design/scene-time-and-cameras.md),所以它和别的物体同列一张表,只是排在第一行。
- */
-export function trackRows(
-  content: SceneContent,
-  shot: SceneShot,
-  selectedId: string | null,
-): TrackRow[] {
-  const rows = content.objects
-    .filter((o) => o.track.length > 0 || o.id === shot.camera_id || o.id === selectedId)
-    .map((object) => ({
-      object,
-      times: object.track.map((frame) => frame.time),
-      isRig: object.id === shot.camera_id,
-    }));
-  return [...rows.filter((row) => row.isRig), ...rows.filter((row) => !row.isRig)];
+/** 默认完整列出场景物体，筛选由界面显式控制，不能随选择改变。 */
+export function trackRows(content: SceneContent, shot: SceneShot): TrackRow[] {
+  const rows = content.objects.map(object => ({
+    object, times: object.track.map(frame => frame.time), isRig: object.id === shot.camera_id,
+  }));
+  return [...rows.filter(row => row.isRig), ...rows.filter(row => !row.isRig)];
 }

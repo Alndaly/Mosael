@@ -1,7 +1,6 @@
 import React from "react";
 import { SceneSubsection } from "./SceneSubsection";
-import { Clock, Copy, Eye, EyeOff, Group, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Copy, Eye, EyeOff, Group, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -16,19 +15,15 @@ import type { SceneContent, SceneLighting, SceneObject } from "@/api/domains/sce
 import { CUSTOM_PRESET, presetById, presetGroups } from "./lighting";
 import { Num, Vector, Tool } from "./SceneControls";
 import { duplicateObject, groupTargets, makeObject, moveToGroup, removeObjects } from "./sceneGraph";
-import { keyIndexAt, removeKeyAt, stillFrame, upsertKey } from "./sceneTracks";
 export function SceneInspector({
   content,
   object,
-  time,
   objectPatch,
   update,
   setSelected,
 }: {
   content: SceneContent;
   object: SceneObject | undefined;
-  /** 当前时刻 —— 走位记在这一刻上。 */
-  time: number;
   objectPatch: (id: string, patch: Partial<SceneObject>) => void;
   update: (c: SceneContent) => void;
   setSelected: (id: string | null) => void;
@@ -71,13 +66,6 @@ export function SceneInspector({
                   </SelectContent>
                 </Select>
               </label>
-            )}
-            {object.kind !== "camera" && (
-              <ObjectTrackSection
-                object={object}
-                time={time}
-                onPatch={(patch) => objectPatch(object.id, patch)}
-              />
             )}
             <div className="scene-actions">
               <Tool
@@ -307,69 +295,6 @@ export function SceneInspector({
  * 手动改过任何一个数就落到 `custom` —— 那时预设那句写好的提示词已经不描述当前的光了,
  * 交给模型的话会由 `lightingPrompt` 按当时的数现生成一句。
  */
-/**
- * 物体的走位。
- *
- * **和相机的运镜是同一条时间轴上的同一件事** —— 只是记的字段不同(物体记位置/旋转/缩放,
- * 相机记位置/注视点/视角)。见 docs/design/scene-time-and-cameras.md。
- *
- * 「记录此刻」而不是"打开动画模式":用户已经把物体摆到想要的地方了,剩下的只是说一句
- * "它在第几秒是这样"。第一次记会**连同当前的静止姿态一起记成 0 秒那一档** ——
- * 否则从静止位置到你记的这一档之间没有任何东西描述它,播放时会突然跳过去。
- */
-function ObjectTrackSection({
-  object,
-  time,
-  onPatch,
-}: {
-  object: SceneObject;
-  time: number;
-  onPatch: (patch: Partial<SceneObject>) => void;
-}) {
-  const track = object.track;
-  const here = keyIndexAt(track, time) >= 0;
-  const record = () => {
-    const at = Math.max(0, time);
-    const next = upsertKey(track, stillFrame(object), stillFrame(object, at));
-    if (next) onPatch({ track: next });
-  };
-  return (
-    <SceneSubsection title="走位（随时间移动）" defaultOpen>
-      {/* **不再把时刻列成一串文字。** 底下的关键帧视图已经按时间画出了每一档,而一行
-          「0.0s、1.3s、2.6s…」既读不出间隔也点不动 —— 它此前是唯一能看见这些档的地方。 */}
-      <p>
-        {track.length
-          ? `${track.length} 档，都画在底下的关键帧视图里。`
-          : "把物体摆到位，再记一档。换一个时刻再摆一次，它就会在两点之间走过去。"}
-      </p>
-      <div className="scene-shape">
-        <Button variant="secondary" onClick={record}>
-          <Clock size={15} />
-          记录此刻
-          <kbd>I</kbd>
-        </Button>
-        {here && (
-          <Button
-            variant="outline"
-            onClick={() => {
-              const next = removeKeyAt(track, time);
-              if (next) onPatch({ track: next });
-            }}
-          >
-            移除这一档
-            <kbd>⌥I</kbd>
-          </Button>
-        )}
-      </div>
-      {!!track.length && (
-        <button className="scene-text-button" onClick={() => onPatch({ track: [] })}>
-          清除全部走位
-        </button>
-      )}
-    </SceneSubsection>
-  );
-}
-
 /** 少数几类的参数在它自己的语汇里有更准的名字。人物那三个数叫「宽度/高度/深度」是对的但
  *  没用 —— 调的人想的是身高和肩宽,名字贴着它实际是什么,省掉一次心里的换算。 */
 /** 「不在组里」在 Select 里要有一个值 —— 空串会被 Radix 当成"没选" 。 */

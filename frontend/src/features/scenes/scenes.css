@@ -408,9 +408,10 @@
 }
 .scene-timeline {
   flex-shrink: 0;
-  display: grid;
-  gap: 8px;
-  padding: 10px var(--scene-stage-gutter);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 8px var(--scene-stage-gutter);
   background: transparent;
   border-top: 1px solid var(--divider);
 }
@@ -440,123 +441,51 @@
    播放头都从同一个 `--scene-dope-name` 起算,差一处就全错开,而"位置即时间"一旦
    对不齐就不成立了。 */
 .scene-dope {
-  --scene-dope-name: 104px;
-  --scene-dope-gap: 8px;
-  /* range 的滑块半径 6px,两端各留出来 —— 轨道也留同样一段,菱形才和滑块停在同一处。 */
-  --scene-dope-inset: 6px;
+  --scene-dope-name: 184px;
   position: relative;
-  display: grid;
-  gap: 2px;
-}
-.scene-dope-ruler,
-.scene-dope-row {
-  display: grid;
-  grid-template-columns: var(--scene-dope-name) minmax(0, 1fr);
-  gap: var(--scene-dope-gap);
-  align-items: center;
-}
-.scene-dope-ruler > div {
-  margin-inline: var(--scene-dope-inset);
-}
-.scene-dope-ruler input {
-  display: block;
-  width: 100%;
-  appearance: none;
-  height: 4px;
-  border: 0;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--foreground) 14%, transparent);
-  cursor: pointer;
-  accent-color: var(--primary);
-  margin: 10px 0 6px;
-}
-/* 行数封顶后自己滚 —— 二十个物体在动的时候,这张表不该把 3D 视口挤没。 */
-.scene-dope-rows {
-  display: grid;
-  gap: 2px;
-  max-height: 108px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-.scene-dope-row {
-  height: 20px;
-}
-.scene-dope-name {
   display: flex;
-  align-items: center;
-  gap: 5px;
+  flex-direction: column;
+  min-height: 160px;
+  max-height: 55vh;
   min-width: 0;
-  text-align: left;
-  font-size: var(--text-ui-2xs);
-  color: var(--muted-foreground);
+  outline: none;
 }
-.scene-dope-name svg {
-  flex-shrink: 0;
-}
-.scene-dope-name span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.scene-dope-name:hover,
-.scene-dope-name[aria-pressed="true"] {
-  color: var(--foreground);
-}
-/* 轨道本身就是那一行的命中区:落点即时刻。菱形只负责看得见,不各自当按钮 ——
-   几十个 3px 宽的按钮排在一条线上,谁也点不准。 */
-.scene-dope-lane {
-  position: relative;
-  height: 100%;
-  margin-inline: var(--scene-dope-inset);
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--foreground) 5%, transparent);
-  cursor: pointer;
-}
-.scene-dope-row[data-selected] .scene-dope-lane {
-  background: color-mix(in srgb, var(--primary) 12%, transparent);
-}
-.scene-dope-key {
-  position: absolute;
-  top: 50%;
-  /* left 是百分比定位的**中心点**,所以要往回挪半个。 */
-  translate: -50% -50%;
-  width: 9px;
-  height: 9px;
-  border-radius: 2px;
-  rotate: 45deg;
-  background: color-mix(in srgb, var(--foreground) 42%, transparent);
-}
-/* 首尾两枚是**镜头的边界**,不是途经点 —— 画成竖条,一眼分得出。 */
-.scene-dope-key[data-edge] {
-  rotate: none;
-  width: 5px;
-  height: 12px;
-  border-radius: 1px;
-}
-.scene-dope-key[data-here] {
-  background: var(--primary);
-}
-/* 播放头贯穿整张表(标尺行也算) —— 它把滑块此刻的位置和每一行的菱形连起来,
-   而这正是分行之后唯一还缺的那样东西。 */
-.scene-dope-playhead-area {
-  position: absolute;
-  inset-block: 0;
-  left: calc(var(--scene-dope-name) + var(--scene-dope-gap) + var(--scene-dope-inset));
-  right: var(--scene-dope-inset);
-  pointer-events: none;
-}
-.scene-dope-playhead {
-  position: absolute;
-  inset-block: 0;
-  width: 1px;
-  translate: -50% 0;
-  background: color-mix(in srgb, var(--primary) 65%, transparent);
-  transition: left 90ms linear;
-}
-/* 播放时关掉过渡:补间会让它永远落在真实时间后面一点,而这条线的全部意义就是"就是这一刻"。 */
-.scene-dope-playhead[data-playing] {
-  transition: none;
-}
+.scene-dope-resize { height: 8px; flex: 0 0 8px; cursor: ns-resize; display: grid; place-items: center; touch-action: none; }
+.scene-dope-resize span { width: 32px; height: 2px; border-radius: 8px; background: var(--border); }
+.scene-dope-resize:hover span, .scene-dope-resize:focus-visible span { background: var(--primary); }
+.scene-dope-toolbar { margin-top: 6px; display: flex; align-items: center; gap: 4px; padding: 4px 0 8px; flex-shrink: 0; overflow-x: auto; }
+.scene-dope-search { position: relative; width: var(--scene-dope-name); flex-shrink: 0; }
+.scene-dope-search > svg { position: absolute; top: 50%; left: 8px; translate: 0 -50%; color: var(--muted-foreground); }
+.scene-dope-search input { padding-left: 28px; }
+.scene-dope-count { white-space: nowrap; color: var(--muted-foreground); font-size: var(--text-ui-2xs); padding-inline: 4px; }
+.scene-dope-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; border-block: 1px solid var(--divider); scrollbar-gutter: stable; }
+.scene-dope-sheet { width: 100%; }
+.scene-dope-ruler, .scene-dope-row { display: grid; grid-template-columns: var(--scene-dope-name) minmax(0, 1fr); height: 30px; }
+.scene-dope-ruler { position: sticky; top: 0; z-index: 4; background: var(--background); border-bottom: 1px solid var(--divider); }
+.scene-dope-heading { display: flex; align-items: center; padding-inline: 8px; font-size: var(--text-ui-2xs); color: var(--muted-foreground); position: sticky; left: 0; z-index: 5; background: var(--background); border-right: 1px solid var(--divider); }
+.scene-dope-row { border-bottom: 1px solid var(--divider); }
+.scene-dope-row:hover, .scene-dope-row[data-selected] { background: color-mix(in srgb, var(--primary) 10%, transparent); }
+.scene-dope-name { position: sticky; left: 0; z-index: 2; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 8px; text-align: left; font-size: var(--text-ui-xs); color: var(--muted-foreground); border-right: 1px solid var(--divider); background: var(--background); }
+.scene-dope-name[aria-pressed="true"] { background: var(--accent); color: var(--foreground); }
+.scene-dope-name svg { flex-shrink: 0; }
+.scene-dope-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.scene-dope-name small { font-size: var(--text-ui-2xs); color: var(--muted-foreground); }
+.scene-dope-lane { min-width: 0; padding-inline: 12px; }
+.scene-dope-track { position: relative; height: 100%; touch-action: none; background-image: linear-gradient(to right, var(--divider) 1px, transparent 1px); background-size: 10% 100%; }
+.scene-dope-tick { position: absolute; top: 5px; translate: -50% 0; color: var(--muted-foreground); font-size: var(--text-ui-2xs); font-variant-numeric: tabular-nums; pointer-events: none; }
+.scene-dope-tick:first-child { translate: 0 0; }
+.scene-dope-tick:nth-child(11) { translate: -100% 0; }
+.scene-dope-key { position: absolute; top: 0; bottom: 0; translate: -50% 0; width: 20px; display: grid; place-items: center; z-index: 2; cursor: ew-resize; touch-action: none; }
+.scene-dope-key > i { width: 8px; height: 8px; rotate: 45deg; border: 1px solid var(--muted-foreground); background: var(--muted-foreground); border-radius: 1px; pointer-events: none; }
+.scene-dope-key[aria-pressed="true"] > i { background: var(--primary); border-color: var(--primary); }
+.scene-dope-key:hover > i { border-color: var(--foreground); }
+.scene-dope-key:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.scene-dope-playhead { position: absolute; inset-block: 0; width: 1px; background: var(--primary); pointer-events: none; z-index: 1; }
+.scene-dope-cursor { position: absolute; bottom: 0; translate: -50% 0; width: 8px; height: 7px; clip-path: polygon(0 0, 100% 0, 100% 50%, 50% 100%, 0 50%); background: var(--primary); pointer-events: none; }
+.scene-dope-outside { position: absolute; inset-block: 0; right: 0; background: color-mix(in srgb, var(--foreground) 7%, transparent); pointer-events: none; }
+.scene-dope-footer { display: flex; justify-content: space-between; gap: 12px; padding-top: 6px; font-size: var(--text-ui-2xs); color: var(--muted-foreground); white-space: nowrap; overflow: hidden; flex-shrink: 0; }
+.scene-dope-footer > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.scene-dope-empty { padding: 24px; text-align: center; color: var(--muted-foreground); font-size: var(--text-ui-xs); }
 
 .scene-add,
 .scene-export {

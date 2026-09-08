@@ -92,7 +92,7 @@ class SceneObject(SceneValue):
 
     @model_validator(mode="after")
     def ordered_track(self):
-        """轨上的时刻**从 0 开始、严格递增**,而且相机的每一档都要有 target。
+        """轨上的时刻**严格递增**,而且相机的每一档都要有 target。
 
         端点和顺序是插值的前提:乱序的轨会让"下一个时刻"找错,表现为画面在某一秒突然跳回去。
         相机缺 target 则是"看向哪里"没定义 —— 那时只能猜一个,而猜错的构图看不出是 bug。
@@ -100,8 +100,8 @@ class SceneObject(SceneValue):
         if not self.track:
             return self
         times = [f.time for f in self.track]
-        if times[0] != 0 or times != sorted(set(times)):
-            raise PydanticCustomError("scene_invalid", "Keyframes must begin at 0 and increase")
+        if times != sorted(set(times)):
+            raise PydanticCustomError("scene_invalid", "Keyframes must strictly increase")
         if self.kind == "camera" and any(f.target is None for f in self.track):
             raise PydanticCustomError("scene_invalid", "Camera keyframes need a target")
         return self

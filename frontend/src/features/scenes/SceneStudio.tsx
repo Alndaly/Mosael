@@ -75,13 +75,18 @@ import {
 import { useAutosave } from "@/features/boards/useAutosave";
 import {
   MAX_KEYS,
+  frameForObject,
+  moveSceneKeys,
+  sameKey,
+  type SceneKey,
   neighbourKeyTime,
   removeKeyAt,
-  stillFrame,
   upsertKey,
 } from "./sceneTracks";
 import {
   cameraOfShot,
+  sampleCamera,
+  sampleObject,
   duplicateObject,
   initialScene,
   makeObject,
@@ -737,7 +742,7 @@ function SceneEditor({
   function recordView(at: number) {
     if (!rig) return;
     const time = Math.min(shot.duration, Math.max(0, at));
-    const track = upsertKey(rig.track, stillFrame(rig), { ...view.current!.camera(), time });
+    const track = upsertKey(rig.track, { ...view.current!.camera(), time });
     if (!track) {
       toast.error(`单个镜头最多 ${MAX_KEYS} 个途经点，请先移除一个。`);
       return;
@@ -748,29 +753,40 @@ function SceneEditor({
       time === 0 ? "已设置镜头起点" : time === shot.duration ? "已设置镜头终点" : "已记录当前视角",
     );
   }
-  /** 此刻这条快捷键作用在谁身上:选中的那个物体,没选就是拍这个镜头的机位。 */
-  const keyTarget = object ?? rig;
-  /**
-   * `I` —— 在当前时刻记一档。
-   *
-   * 选中的正是当前机位时走 recordView:那一刻"它是什么样"要取画面里的视角,而不是相机物体
-   * 存着的静止姿态 —— 用户刚在视口里转的那一下还没落到数据上。
-   */
-  function recordKeyframe() {
-    if (!keyTarget) return;
-    if (rig && keyTarget.id === rig.id) {
-      recordView(time);
-      return;
-    }
-    const at = Math.min(shot.duration, Math.max(0, time));
-    const track = upsertKey(keyTarget.track, stillFrame(keyTarget), stillFrame(keyTarget, at));
+  const keyTarget = object;
+  /** 普通打帧只记录物体姿态。采纳自由视角另有明确的「记录此视角」动作。 */
+  function recordKeyframe(id = selected, at = time) {
+    const target = current.current.content.objects.find(o => o.id === id);
+    if (!target) return;
+    const frame = frameForObject(target, shot, at, posing === target.id);
+    const track = upsertKey(target.track, frame);
     if (!track) {
       toast.error(`一个物体最多 ${MAX_KEYS} 个关键帧，请先移除一个。`);
       return;
     }
-    objectPatch(keyTarget.id, { track });
+    objectPatch(target.id, { track });
     setPosing(null);
-    toast.success(`已记下「${keyTarget.name}」在 ${at.toFixed(1)} 秒的样子`);
+    setPlaying(false);
+  }
+  function samplePose(target: SceneObject) {
+    if (target.kind !== "camera") return sampleObject(target, shot, time);
+    const frame = sampleCamera(target, shot, time);
+    return {position: frame.position, target: frame.target, fov: frame.fov};
+  }
+  function deleteKeys(keys: SceneKey[]) {
+    update({...current.current.content, objects: current.current.content.objects.map(o => ({
+      ...o, track: o.track.filter(f => !keys.some(key => sameKey(key, {id: o.id, time: f.time}))),
+    }))});
+    setPosing(null);
+    setPlaying(false);
+  }
+  function moveKeys(keys: SceneKey[], delta: number) {
+    const content = current.current.content;
+    const end = Math.max(shot.duration, ...content.objects.flatMap(o => o.track.map(f => f.time)));
+    const next = moveSceneKeys(content, keys, delta, end);
+    if (!next) { toast.error("目标时刻已有关键帧，或超出时间范围"); return false; }
+    update(next); setPosing(null); setPlaying(false);
+    return true;
   }
   /** `⌥I` —— 移除这一刻那一档。和 `I` 成对,所以不去挤 `X`(那个删的是物体)。 */
   function clearKeyframe() {
@@ -1280,7 +1296,12 @@ function SceneEditor({
           {/* **时间条常驻。** 运镜和走位在同一条时间轴上,而"物体在第几秒在哪儿"这件事
               没有时间条就无从表达 —— 它不该藏在某个步骤后面。 */}
           <section className="scene-timeline" aria-label="镜头播放控制">
-              <div className="scene-shot-row">
+              {/* **关键帧视图:按物体分行,位置即时间。** 此前这里只画当前机位的那一条轨 ——
+                  而场景里的物体和运镜共用同一条时间轴,只画相机的话,"第 3 秒人走到门口、
+                  同一刻镜头推进"这件事在界面上没有位置可以表达。时间滑块收进它的标尺行,
+                  两者共用一条横轴才对得齐。 */}
+              <SceneDopeSheet
+                controls={<div className="scene-shot-row">
                 <Camera size={16} />
                 <Pick
                   label="当前镜头"
@@ -1336,25 +1357,23 @@ function SceneEditor({
                 <span className="scene-time">
                   {time.toFixed(1)} / {shot.duration.toFixed(1)} s
                 </span>
-              </div>
-              {/* **关键帧视图:按物体分行,位置即时间。** 此前这里只画当前机位的那一条轨 ——
-                  而场景里的物体和运镜共用同一条时间轴,只画相机的话,"第 3 秒人走到门口、
-                  同一刻镜头推进"这件事在界面上没有位置可以表达。时间滑块收进它的标尺行,
-                  两者共用一条横轴才对得齐。 */}
-              <SceneDopeSheet
+              </div>}
                 content={draft.content}
                 shot={shot}
                 time={time}
                 selectedId={selected}
                 playing={playing}
+                disabled={!!busy}
+                onInsert={recordKeyframe}
+                onDelete={deleteKeys}
+                onMove={moveKeys}
                 onSeek={(next) => {
                   setTime(next);
                   setPlaying(false);
                 }}
                 onSelect={(id) => {
                   setSelected(id);
-                  // 点机位那一行不该把视角踢回编辑视图 —— 它常常正是"我在看运镜"的时候。
-                  if (id !== rig?.id) setPreview(false);
+                  // 选择轨道不改变观察方式；打帧与当前显示哪台相机是独立操作。
                 }}
               />
             </section>
@@ -1465,9 +1484,15 @@ function SceneEditor({
                 <ScenePanel id="inspector" title={object ? "调整物体" : "场景外观"}>
                   <SceneInspector
                     content={draft.content}
-                    object={object}
-                    time={time}
-                    objectPatch={objectPatch}
+                    object={object && posing !== object.id ? {...object, ...samplePose(object)} : object}
+                    objectPatch={(id, patch) => {
+                      if (patch.position || patch.rotation || patch.scale || patch.target || patch.fov !== undefined) setPosing(id);
+                      const target = current.current.content.objects.find(o => o.id === id);
+                      const transform = patch.position || patch.rotation || patch.scale || patch.target || patch.fov !== undefined;
+                      objectPatch(id, target && transform && posing !== id
+                        ? {...samplePose(target), ...patch}
+                        : patch);
+                    }}
                     update={update}
                     setSelected={setSelected}
                   />
