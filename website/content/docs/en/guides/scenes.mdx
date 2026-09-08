@@ -1,0 +1,64 @@
+---
+title: 3D scenes and animation
+description: Build a scene, keyframe objects and cameras, and use the composition for image or video generation.
+order: 6
+updated: 2026-09-09
+version: 1.2.0
+---
+
+The workspace combines a viewport, object inspector and animation timeline on one page. Some 3D controls currently retain Chinese labels in the English interface; the labels below match those controls.
+
+## Scenes and views
+
+Open **3D 场景**, create a scene or open the three-room example. The library supports context menus, multiple selection and batch deletion. Switching to another workspace page and returning preserves the open scene. Click its title to rename it in a dialog.
+
+- **自由视角**: orbit, pan and zoom while positioning objects. Moving this observation camera does not insert animation keys.
+- **机位视角**: see the current shot's actual composition and aspect ratio.
+- **俯瞰全场**: observe the moving camera and its path from an independent view, alongside a live shot inset.
+
+The toolbar provides move, rotate, scale, snapping, view presets and fullscreen. Trackpad/mouse preferences are shared with other canvases. F focuses the view. Fullscreen retains the modeling assistant, Blender, generation, export, timeline and inspector; Escape exits.
+
+## Objects and lighting
+
+The **＋** beside **场景中的物体** opens a searchable, grouped menu of primitives, rooms, stairs, tables, figures, lights, groups and model import. Import has one entry in this menu.
+
+Use the gizmo or inspector to edit position, rotation and scale. Units are meters and degrees; snapping uses 0.25 meters, 15 degrees and 0.1 scale steps. Edit object materials and scene background, ambient light, key-light direction, intensity, temperature and softness.
+
+Whole sidebar sections can collapse; properties inside a section remain visible. Drag the panel boundaries to resize them. Objects can be copied, hidden, grouped and deleted. A camera referenced by a shot, or a group containing that camera, cannot be deleted while the shot still uses it.
+
+## One timeline for every object
+
+Every object has a row, including objects with no animation. A camera is an object too; the shot selector chooses which camera to use, its duration and aspect ratio.
+
+1. Select an object in the viewport, object list or timeline.
+2. Move the playhead to a time and adjust its pose.
+3. Click **插入关键帧** or press **I** to record position and rotation/scale, or camera target/FOV.
+4. Move to another time, adjust the pose, insert another key and play the result.
+
+An empty track stays still. Changing a pose does not automatically create a key. Objects and cameras share this workflow; there is no separate movement recorder.
+
+The single toolbar contains shot selection, add shot, playback, time, insert/delete keys, filtering and zoom. The filter menu provides object search and animated-only filtering. Shift selects multiple keys; drag moves them and Delete removes them. Cmd/Ctrl+Z undoes, Cmd/Ctrl+Shift+Z redoes. Tracks support up to 100 keys; shots up to 120 seconds.
+
+## Generate images or videos
+
+**生成素材** can hand the current camera frame to an image node, or first/last frames or a camera-preview video to a video node. Continue in the creative board, choose your model and describe the desired result. The linked scene remains available for further editing.
+
+Lighting information accompanies the prompt. An optional clay reference renders neutral materials to emphasize lighting and composition; it is separate from the normal textured frame. Camera helpers are excluded from frames, videos and GLB exports.
+
+**导出文件** saves frames, camera previews and models. Preview encoding uses deterministic MP4 frames where supported, with a WebM recording fallback when necessary.
+
+## Models and Blender
+
+Import self-contained GLB 2.0 files up to 512 MB or embedded-resource glTF 2.0 up to 100 MB. Draco, KTX2 and meshopt are supported. Real-time limits are 5,000 nodes and 2,000 meshes. External URLs and filesystem references inside models are rejected.
+
+Install and enable the local Blender MCP connection using the [plugin guide](/docs/guides/plugins). **Blender** in the toolbar checks the connection, sends a saved scene and its camera tracks, receives changes and downloads the associated `.blend` file. Receiving replaces the current scene as one undoable edit, or creates a separate scene if requested. **从 Blender 获取** in the library imports geometry from the currently open Blender scene without a previous send.
+
+Received geometry is one model, not an object-by-object merge. Associated cameras are sampled to at most 100 keys with linear timing. Keep advanced materials, skeletal animation, physics and native modifiers in the Blender project. Direct import from an arbitrary open Blender scene does not import cameras and reports that limitation. Mosael does not provide sculpting, Boolean modeling or a background Cycles rendering queue.
+
+## Saving
+
+Edits autosave with revision history. A save conflict does not silently overwrite another draft. Restoring a revision creates a new revision. Scene, model and board references stay scoped to their workspace.
+
+![3D workspace and complete object timeline](/media/screens/en/scenes.png)
+
+<Recording src="/media/videos/en/scenes.mp4" poster="/media/screens/en/scenes.png" caption="Live interaction: camera view, path observation and object keyframes" />

@@ -28,7 +28,7 @@ Mosael 把剪辑、AI 生成、智能体、工作流和发布放在同一个桌�
 
 ## 下载与运行
 
-当前正式版本：**[Mosael 1.0.0](https://github.com/Alndaly/Mosael/releases/tag/v1.0.0)**。
+当前正式版本：**[Mosael 1.2.0](https://github.com/Alndaly/Mosael/releases/tag/v1.2.0)**。
 
 从 [GitHub Releases](https://github.com/Alndaly/Mosael/releases) 下载：
 
@@ -119,6 +119,16 @@ Cookie；受限内容可以选择 Mosael 浏览器池中已有的登录身份与
 
 插件可以是本地子进程脚本，也可以连接现有 MCP 服务。安装前先读取清单并展示权限、凭据与工具；
 启用后，同一工具可被智能体和工作流复用。插件支持素材输入、文件产出和由宿主管理的持久密钥。
+
+## 3D 场景与画布协作
+
+搭建空间后，用同一条物体时间线编辑相机和物体关键帧；在机位画面与全局动线之间切换，将参考帧交给图片模型，或将首尾帧、运镜视频交给视频模型。全屏保留助手与属性编辑，Blender 可接回当前场景或另存为新场景。
+
+文档节点可直接拖动正文，评论和标记各有独立模式与显示开关；评论支持编辑和成员提及。
+
+![3D 场景与关键帧时间线](website/public/media/screens/scenes.png)
+
+[3D 操作指南](https://mosael.com/zh/docs/guides/scenes) · [笔记与知识库](https://mosael.com/zh/docs/guides/notes)
 
 ## 文档
 
@@ -287,4 +297,4 @@ MOSAEL_OAUTH_REDIRECT_BASE=...
 详见 [LICENSE](LICENSE)。商业授权可通过[交流群与作者微信](https://mosael.com/zh/docs/about/contact#%E5%BE%AE%E4%BF%A1)
 联系，也可以在 X 关注 [KindaHuaX](https://x.com/KindaHuaX)。
 
-界面演示已更新至 **1.0.0**。查看[外观与字体](https://mosael.com/zh/docs/guides/appearance)、[定时任务](https://mosael.com/zh/docs/guides/scheduler)和[实拍素材署名](docs/media/README.md)。
+文档对应 **1.2.0**；场景、笔记与标记等变更界面已补录。查看[外观与字体](https://mosael.com/zh/docs/guides/appearance)、[定时任务](https://mosael.com/zh/docs/guides/scheduler)和[实拍素材署名](docs/media/README.md)。

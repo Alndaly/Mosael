@@ -2,8 +2,8 @@
 title: Browser pool
 description: One place for every persistent login, reused by publishing, workflows and the agent — with per-use authorization.
 order: 13
-updated: 2026-09-07
-version: 1.1.0
+updated: 2026-09-09
+version: 1.2.0
 ---
 
 Automating anything on the open web runs into the same wall: **the site wants you logged in**.
@@ -81,3 +81,7 @@ They are per-machine by nature: a browser session is bound to the browser that c
 switching to a team backend does not carry logins along with it.
 
 ![Browser Pool: platform accounts and general profiles](/media/screens/en/browser-pool.png)
+
+## Passkeys and platform authenticators
+
+The browser pool handles account selection for discoverable credentials and checks actual WebAuthn capabilities. macOS Touch ID requires a signed build with matching keychain entitlements; current unsigned distributions do not enable it. Device-bound credentials remain partitioned by browser profile and do not automatically sync from iCloud or a phone. Cross-device QR passkeys are unavailable; choose another login method when the site offers one.

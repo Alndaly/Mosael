@@ -5,1689 +5,3089 @@
       "locale": "zh",
       "theme": "dark",
       "bytes": 641406,
-      "sha256": "38e909ce5966cf6bbeb68419c47388b96ebb9ad6137acf308e604cf4d3648cfa"
+      "sha256": "38e909ce5966cf6bbeb68419c47388b96ebb9ad6137acf308e604cf4d3648cfa",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/dark/home.gif": {
       "scene": "home",
       "locale": "zh",
       "theme": "dark",
       "bytes": 1024759,
-      "sha256": "c56bd07617567d95a4d0748816eb6f38fe761c303dd03cef2275c121de82099a"
+      "sha256": "c56bd07617567d95a4d0748816eb6f38fe761c303dd03cef2275c121de82099a",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/dark/home.mp4": {
       "scene": "home",
       "locale": "zh",
       "theme": "dark",
       "bytes": 223722,
-      "sha256": "22d1f2fc572c66d47eb2832389cfa34c34fc83e77aa32024e45287e8aee7ba1a"
+      "sha256": "22d1f2fc572c66d47eb2832389cfa34c34fc83e77aa32024e45287e8aee7ba1a",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/media.png": {
       "scene": "media-preview",
       "locale": "zh",
       "theme": "dark",
       "bytes": 1253841,
-      "sha256": "f8fc597d7e9f2384361bdcdcc4342a0730c2221d2f170c18190968f06e2a24ce"
+      "sha256": "f8fc597d7e9f2384361bdcdcc4342a0730c2221d2f170c18190968f06e2a24ce",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/url-import.png": {
       "scene": "media-preview",
       "locale": "zh",
       "theme": "dark",
       "bytes": 834914,
-      "sha256": "5631fea99647eaf78e6c771bfa287fe896b27c275fac811d51c43d3294f5102e"
+      "sha256": "5631fea99647eaf78e6c771bfa287fe896b27c275fac811d51c43d3294f5102e",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/media-video.png": {
       "scene": "media-preview",
       "locale": "zh",
       "theme": "dark",
       "bytes": 2167965,
-      "sha256": "1e3a7755b2c046649eb9b0dd0cbca50621bf5850b6fc291d35feadc7aac41be1"
+      "sha256": "1e3a7755b2c046649eb9b0dd0cbca50621bf5850b6fc291d35feadc7aac41be1",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/media-audio.png": {
       "scene": "media-preview",
       "locale": "zh",
       "theme": "dark",
       "bytes": 508902,
-      "sha256": "1237dfa6d69e43ce2293617a056e620984086b64e73cd8e24c4d261224449614"
+      "sha256": "1237dfa6d69e43ce2293617a056e620984086b64e73cd8e24c4d261224449614",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/media-image.png": {
       "scene": "media-preview",
       "locale": "zh",
       "theme": "dark",
       "bytes": 2002430,
-      "sha256": "055558e7f95e6ce05dc9c30bccd7cb5d54efd434b78ed2fa0601843bfc8e47d1"
+      "sha256": "055558e7f95e6ce05dc9c30bccd7cb5d54efd434b78ed2fa0601843bfc8e47d1",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/dark/media-preview.gif": {
       "scene": "media-preview",
       "locale": "zh",
       "theme": "dark",
       "bytes": 7861362,
-      "sha256": "55ff204040525e3cc513501bf607d4d745634fccf77f07581a122b40a99c6261"
+      "sha256": "55ff204040525e3cc513501bf607d4d745634fccf77f07581a122b40a99c6261",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/dark/media-preview.mp4": {
       "scene": "media-preview",
       "locale": "zh",
       "theme": "dark",
       "bytes": 1199303,
-      "sha256": "fc9e6d8eacd8b35ad52cf72ab962da274eb88c19949816642968294f059490a0"
+      "sha256": "fc9e6d8eacd8b35ad52cf72ab962da274eb88c19949816642968294f059490a0",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/editor.png": {
       "scene": "timeline-edit",
       "locale": "zh",
       "theme": "dark",
       "bytes": 2172274,
-      "sha256": "d9d44a6d870ff7dae183ec0624ed1414d81d90f600c561ec46f6d58c158cd763"
+      "sha256": "d9d44a6d870ff7dae183ec0624ed1414d81d90f600c561ec46f6d58c158cd763",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/editor-inspector.png": {
       "scene": "timeline-edit",
       "locale": "zh",
       "theme": "dark",
       "bytes": 1822262,
-      "sha256": "63b8af386a94bb71beb0ac4cbe69d3dccd208d4342c74b3e49e770d2894d4837"
+      "sha256": "63b8af386a94bb71beb0ac4cbe69d3dccd208d4342c74b3e49e770d2894d4837",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/dark/timeline-edit.gif": {
       "scene": "timeline-edit",
       "locale": "zh",
       "theme": "dark",
       "bytes": 2351630,
-      "sha256": "de163ef3be51002f609ae83d14a8325a469b90e9879042abcd0c6e9868cc2cf6"
+      "sha256": "de163ef3be51002f609ae83d14a8325a469b90e9879042abcd0c6e9868cc2cf6",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/dark/timeline-edit.mp4": {
       "scene": "timeline-edit",
       "locale": "zh",
       "theme": "dark",
       "bytes": 406857,
-      "sha256": "15de48aacc6bfba70cc0f518547e7bcd7b81d3553e94d72323af053579babeca"
+      "sha256": "15de48aacc6bfba70cc0f518547e7bcd7b81d3553e94d72323af053579babeca",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/subtitles.png": {
       "scene": "subtitle-dub",
       "locale": "zh",
       "theme": "dark",
       "bytes": 2020988,
-      "sha256": "4164983b5e8f012794753a20eb8b4f048d26c426dc8fbb9baf287c254862d7d4"
+      "sha256": "4164983b5e8f012794753a20eb8b4f048d26c426dc8fbb9baf287c254862d7d4",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/subtitle-dub.png": {
       "scene": "subtitle-dub",
       "locale": "zh",
       "theme": "dark",
       "bytes": 2058372,
-      "sha256": "d3654837ff52e54e50f7f302d0fc267854b9c72d8fbdf1d239a973f1df0731a0"
+      "sha256": "d3654837ff52e54e50f7f302d0fc267854b9c72d8fbdf1d239a973f1df0731a0",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/transcript.png": {
       "scene": "subtitle-dub",
       "locale": "zh",
       "theme": "dark",
       "bytes": 2013845,
-      "sha256": "d4c96ad1a3661a10549c533139a9d98d76faecf7f41809375a462bd17e03aebf"
+      "sha256": "d4c96ad1a3661a10549c533139a9d98d76faecf7f41809375a462bd17e03aebf",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/dark/subtitle-dub.gif": {
       "scene": "subtitle-dub",
       "locale": "zh",
       "theme": "dark",
       "bytes": 1655132,
-      "sha256": "db20051699b7a6e4328ce86a0bafa25f0519aa21b9b84811c6528e60e641d24f"
+      "sha256": "db20051699b7a6e4328ce86a0bafa25f0519aa21b9b84811c6528e60e641d24f",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/dark/subtitle-dub.mp4": {
       "scene": "subtitle-dub",
       "locale": "zh",
       "theme": "dark",
       "bytes": 261264,
-      "sha256": "7cababdd84ec0b5c101c6f5954e590337ad8d22ece31d29a74b5682f71fba493"
+      "sha256": "7cababdd84ec0b5c101c6f5954e590337ad8d22ece31d29a74b5682f71fba493",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/ai-chat.png": {
       "scene": "ai-studio",
       "locale": "zh",
       "theme": "dark",
       "bytes": 200921,
-      "sha256": "69aaee408e6ee011dde40d0e03aa5814598df1064e3f60b7e5f43151a354f204"
+      "sha256": "69aaee408e6ee011dde40d0e03aa5814598df1064e3f60b7e5f43151a354f204",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/agent-trace.png": {
       "scene": "ai-studio",
       "locale": "zh",
       "theme": "dark",
       "bytes": 182724,
-      "sha256": "b467f697fc375b3d8ecf0495ffb5f2f3a8f642e8b072ffb14214723631d82043"
+      "sha256": "b467f697fc375b3d8ecf0495ffb5f2f3a8f642e8b072ffb14214723631d82043",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/ai-generate.png": {
       "scene": "ai-studio",
       "locale": "zh",
       "theme": "dark",
       "bytes": 191904,
-      "sha256": "6c6d3ac29507e0e7bf1bf0c683d6f11da43458b5151215f5aa2ae374ce9320fb"
+      "sha256": "6c6d3ac29507e0e7bf1bf0c683d6f11da43458b5151215f5aa2ae374ce9320fb",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/dark/ai-studio.gif": {
       "scene": "ai-studio",
       "locale": "zh",
       "theme": "dark",
       "bytes": 695905,
-      "sha256": "06f68c6403876505a2390190f04b363a5c563d26c7e8d9543896d2143d999c40"
+      "sha256": "06f68c6403876505a2390190f04b363a5c563d26c7e8d9543896d2143d999c40",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/dark/ai-studio.mp4": {
       "scene": "ai-studio",
       "locale": "zh",
       "theme": "dark",
       "bytes": 102542,
-      "sha256": "ed23f60dcf33282672233e84eb961e954934efe333373998603ced693b1cbfd9"
+      "sha256": "ed23f60dcf33282672233e84eb961e954934efe333373998603ced693b1cbfd9",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/workflow-list.png": {
       "scene": "workflows",
       "locale": "zh",
       "theme": "dark",
-      "bytes": 250121,
-      "sha256": "451215738c5668182229f7e719f7e77e9bd054a74d7c3387ebca0f7fd52c99c1"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 169726,
+      "sha256": "be8e382cfde5ae263532f57e89f5f1d6619e9474ed512aa2f6a9e9a62f032112"
     },
     "screens/dark/workflows.png": {
       "scene": "workflows",
       "locale": "zh",
       "theme": "dark",
-      "bytes": 396038,
-      "sha256": "4b4842025a9235248017e205bd4dffb4beaa66eaebb682ee7b667701660303e7"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 291972,
+      "sha256": "2dd9086cdfe98d27e16af6850ab9de96a83e557602502e920853357473204187"
     },
     "screens/dark/workflow-add-node.png": {
       "scene": "workflows",
       "locale": "zh",
       "theme": "dark",
-      "bytes": 433928,
-      "sha256": "731a4c0db1dc79e8df37acb33dd159f493b7d4146a9e1f9edc5a455b04104c42"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 365769,
+      "sha256": "386ae945b8cb4f65332a73a9378214d115ee1daf7031b6a0f9eee69d8e755057"
     },
     "screens/dark/workflow-node.png": {
       "scene": "workflows",
       "locale": "zh",
       "theme": "dark",
-      "bytes": 464809,
-      "sha256": "6c5b53d81ede8bc5bc20be43eb0f1592a30e368e7aa4adf396c97ce4913215f8"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 360368,
+      "sha256": "2bc82d5dc74526cd3a4821e1b78da9090834677acbf22f967e25a1bfecb657bf"
     },
     "gifs/dark/workflows.gif": {
       "scene": "workflows",
       "locale": "zh",
       "theme": "dark",
-      "bytes": 2568695,
-      "sha256": "f40a62dc967aa88e769117b8921c98ffd6497af033ead2331818e695d17c1577"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 2944616,
+      "sha256": "d413e08442bed4ec35073b46650aedc42e9372410ff7dd93724c795f5b0d956a"
     },
     "videos/dark/workflows.mp4": {
       "scene": "workflows",
       "locale": "zh",
       "theme": "dark",
-      "bytes": 311465,
-      "sha256": "b2d8f0162eda118073e94fc30a7de2ad0e00efcf2f8cc13f3fccb15864eadf54"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 324220,
+      "sha256": "ea310db98d53b43149f374c9560836dd344b36bf7a93a38384fba5715d0c0572"
     },
     "screens/dark/boards.png": {
       "scene": "boards",
       "locale": "zh",
       "theme": "dark",
-      "bytes": 1230645,
-      "sha256": "49f840c84f16c029c984de95df7ec82d49e0e52175ad85291dd56f0b4576ebcf"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 388996,
+      "sha256": "cba3df5aee61880683f9c5d1f74d12bdeae9278891e301b8ed00466aca362198"
     },
     "screens/dark/board-form.png": {
       "scene": "boards",
       "locale": "zh",
       "theme": "dark",
       "bytes": 1173459,
-      "sha256": "9a9c2ea9b78bd66fabcfa063a8e320d8bd755b418d3a9fcf62a279092e427e0c"
+      "sha256": "9a9c2ea9b78bd66fabcfa063a8e320d8bd755b418d3a9fcf62a279092e427e0c",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/board-mention.png": {
       "scene": "boards",
       "locale": "zh",
       "theme": "dark",
       "bytes": 1194721,
-      "sha256": "370e3d9a5028ee8aed7f29aaf15ac12200a3a8d514f3f2cbbfeb7905cdc360db"
+      "sha256": "370e3d9a5028ee8aed7f29aaf15ac12200a3a8d514f3f2cbbfeb7905cdc360db",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/dark/boards.gif": {
       "scene": "boards",
       "locale": "zh",
       "theme": "dark",
-      "bytes": 3450064,
-      "sha256": "afa06d7456ff28db6fc3dd1c48e3ef593938508d9da2d70d7006635bf81a00e3"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 2727818,
+      "sha256": "51f3c77dd7f6068f3a4d7b24a17b77f2567e0c5cf6198483047b420fdea9bfed"
     },
     "videos/dark/boards.mp4": {
       "scene": "boards",
       "locale": "zh",
       "theme": "dark",
-      "bytes": 429745,
-      "sha256": "a36dbace4d38a968074d1e97a10d03273c5ef5f93b48e82e440c523db6ba174d"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 334820,
+      "sha256": "a5b98d18c1631577e4ff4f5125ab01feb87ea759f11e3c363ab6739b4f82de6d"
     },
     "screens/dark/plugins.png": {
       "scene": "plugins",
       "locale": "zh",
       "theme": "dark",
-      "bytes": 293831,
-      "sha256": "17059e3c743a1af828c255de053e272ad0bb16c8335204a09bed4bb6a7199524"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:33:55.889783+00:00",
+      "bytes": 213462,
+      "sha256": "d97ef7e4111f7f3d0b6c07a514b1698357e2f7071d2618ec40d980cda06bfcc1"
     },
     "gifs/dark/plugins.gif": {
       "scene": "plugins",
       "locale": "zh",
       "theme": "dark",
-      "bytes": 891334,
-      "sha256": "32433fbbfb0ebc23ee1eb454a9896d874ede6fae359b267fde559e376cd68267"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:33:55.889783+00:00",
+      "bytes": 2156146,
+      "sha256": "f9562e9dcfc738b2ed60bf4e6a9564068946263b9f9ac57129412403e14e1156"
     },
     "videos/dark/plugins.mp4": {
       "scene": "plugins",
       "locale": "zh",
       "theme": "dark",
-      "bytes": 89820,
-      "sha256": "0b8638385b9dda42fe9eca536e7c8f34eb52edb951c3fa4e61ffc5234ea30559"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:33:55.889783+00:00",
+      "bytes": 202248,
+      "sha256": "29dec3e852e68e7e820760e7514fae865e08e8c8a8b0c889b1d2e0acf9099a50"
     },
     "screens/dark/publish.png": {
       "scene": "publishing",
       "locale": "zh",
       "theme": "dark",
       "bytes": 169698,
-      "sha256": "817bedd7a994f36bb27d01f6e9a4f589c33feab8b21b2cce9be5eeb405665ba9"
+      "sha256": "817bedd7a994f36bb27d01f6e9a4f589c33feab8b21b2cce9be5eeb405665ba9",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/publish-form.png": {
       "scene": "publishing",
       "locale": "zh",
       "theme": "dark",
       "bytes": 292271,
-      "sha256": "2c07689d1dcc96ed5fff028048dc6bc67773d0f0e40a156464df5a6f2eb44a99"
+      "sha256": "2c07689d1dcc96ed5fff028048dc6bc67773d0f0e40a156464df5a6f2eb44a99",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/browser-pool.png": {
       "scene": "publishing",
       "locale": "zh",
       "theme": "dark",
       "bytes": 182750,
-      "sha256": "cd4906e66581df415cbe49672fe3de11ea9fc5b9566f3afc6858245a9bcf0cad"
+      "sha256": "cd4906e66581df415cbe49672fe3de11ea9fc5b9566f3afc6858245a9bcf0cad",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/browser-account.png": {
       "scene": "publishing",
       "locale": "zh",
       "theme": "dark",
       "bytes": 409576,
-      "sha256": "3fcfe2a4df47df93a22073afd2e34c9fbb0a0ef664699376752b89f8d888b637"
+      "sha256": "3fcfe2a4df47df93a22073afd2e34c9fbb0a0ef664699376752b89f8d888b637",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/dark/publishing.gif": {
       "scene": "publishing",
       "locale": "zh",
       "theme": "dark",
       "bytes": 2259631,
-      "sha256": "c88c746bcc9daf03e46f01282b0032d4d68ba3d38e74a34bfca3a56f1a6d0cc0"
+      "sha256": "c88c746bcc9daf03e46f01282b0032d4d68ba3d38e74a34bfca3a56f1a6d0cc0",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/dark/publishing.mp4": {
       "scene": "publishing",
       "locale": "zh",
       "theme": "dark",
       "bytes": 261806,
-      "sha256": "a08370f0a64e4331f34c6420c8b898a2456e949ad839917ea1dc7036f4dd05c3"
+      "sha256": "a08370f0a64e4331f34c6420c8b898a2456e949ad839917ea1dc7036f4dd05c3",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/scheduler.png": {
       "scene": "scheduler",
       "locale": "zh",
       "theme": "dark",
       "bytes": 250802,
-      "sha256": "1fc3ada17458c05affd59a7285a981a16b225d6934bc1c4f2915b0e58c002d31"
+      "sha256": "1fc3ada17458c05affd59a7285a981a16b225d6934bc1c4f2915b0e58c002d31",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/scheduler-form.png": {
       "scene": "scheduler",
       "locale": "zh",
       "theme": "dark",
       "bytes": 400596,
-      "sha256": "a66d5a332f39b430b399bf068693824d8351af9441bbc4f9b797e513f5909587"
+      "sha256": "a66d5a332f39b430b399bf068693824d8351af9441bbc4f9b797e513f5909587",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/dark/scheduler.gif": {
       "scene": "scheduler",
       "locale": "zh",
       "theme": "dark",
       "bytes": 1413394,
-      "sha256": "b1dbb7e201324b4c1dfc76785417457ee37e2e577025e50840637b69acb12c14"
+      "sha256": "b1dbb7e201324b4c1dfc76785417457ee37e2e577025e50840637b69acb12c14",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/dark/scheduler.mp4": {
       "scene": "scheduler",
       "locale": "zh",
       "theme": "dark",
       "bytes": 154675,
-      "sha256": "a37ece10093ed2ca836d00a58beaa56bf064ae9d9efb3a9f1f1ac19fe97bfe0f"
+      "sha256": "a37ece10093ed2ca836d00a58beaa56bf064ae9d9efb3a9f1f1ac19fe97bfe0f",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/settings.png": {
       "scene": "providers",
       "locale": "zh",
       "theme": "dark",
       "bytes": 302130,
-      "sha256": "96bb7ee0ccb4b28f9eaf9bba8218c840e49249f73a6f168af7919b328b3943e3"
+      "sha256": "96bb7ee0ccb4b28f9eaf9bba8218c840e49249f73a6f168af7919b328b3943e3",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/settings-models.png": {
       "scene": "providers",
       "locale": "zh",
       "theme": "dark",
       "bytes": 256079,
-      "sha256": "00370d60fb1929baa2ccba8f0b260722181bc20fa7f4d1117ad2d7fda984dc25"
+      "sha256": "00370d60fb1929baa2ccba8f0b260722181bc20fa7f4d1117ad2d7fda984dc25",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/settings-asr.png": {
       "scene": "providers",
       "locale": "zh",
       "theme": "dark",
       "bytes": 406494,
-      "sha256": "ad289e24df8d39c82f77d536a7db3ada3c5f7c9e3871e050435f5ba408449175"
+      "sha256": "ad289e24df8d39c82f77d536a7db3ada3c5f7c9e3871e050435f5ba408449175",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/dark/providers.gif": {
       "scene": "providers",
       "locale": "zh",
       "theme": "dark",
       "bytes": 1116521,
-      "sha256": "bd1200ce954ee037e10a67bba86d35ec793527a90f4167a353d5629d16c186f9"
+      "sha256": "bd1200ce954ee037e10a67bba86d35ec793527a90f4167a353d5629d16c186f9",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/dark/providers.mp4": {
       "scene": "providers",
       "locale": "zh",
       "theme": "dark",
       "bytes": 121891,
-      "sha256": "be3c92e4e0fa5ad39f429eaba15d656c7dad52d2cde7489bedd12e5272b91d3b"
+      "sha256": "be3c92e4e0fa5ad39f429eaba15d656c7dad52d2cde7489bedd12e5272b91d3b",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/settings-appearance.png": {
       "scene": "appearance",
       "locale": "zh",
       "theme": "dark",
       "bytes": 468969,
-      "sha256": "1afcbb96e51bcc8422e539dc7d21b1e896e4805b57a6426e5aa4b90de3f23c5d"
+      "sha256": "1afcbb96e51bcc8422e539dc7d21b1e896e4805b57a6426e5aa4b90de3f23c5d",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/settings-fonts.png": {
       "scene": "appearance",
       "locale": "zh",
       "theme": "dark",
       "bytes": 468894,
-      "sha256": "eff5900da08b7de55f210463cb625043d6732242aa23ed8ec44fcf5f7d9e0c59"
+      "sha256": "eff5900da08b7de55f210463cb625043d6732242aa23ed8ec44fcf5f7d9e0c59",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/dark/appearance.gif": {
       "scene": "appearance",
       "locale": "zh",
       "theme": "dark",
       "bytes": 1619668,
-      "sha256": "57f1b60eff7ca7353a2feab90631a3dcaf0e9cb9aa46f3ae411dd48429ca1882"
+      "sha256": "57f1b60eff7ca7353a2feab90631a3dcaf0e9cb9aa46f3ae411dd48429ca1882",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/dark/appearance.mp4": {
       "scene": "appearance",
       "locale": "zh",
       "theme": "dark",
       "bytes": 192712,
-      "sha256": "b0e73fcf6103031dbd9ca717fbb14d422aca701fc98087e89c4ecb4a43cda84b"
+      "sha256": "b0e73fcf6103031dbd9ca717fbb14d422aca701fc98087e89c4ecb4a43cda84b",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/dark/login.png": {
       "scene": "login",
       "locale": "zh",
       "theme": "dark",
       "bytes": 1524120,
-      "sha256": "5b153e138fe8263bce7b559c47b562bd9ef64c0b039140113766d180d36cbea7"
+      "sha256": "5b153e138fe8263bce7b559c47b562bd9ef64c0b039140113766d180d36cbea7",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/dark/login.gif": {
       "scene": "login",
       "locale": "zh",
       "theme": "dark",
       "bytes": 349276,
-      "sha256": "b9308f5febedf3fb5a1978190662846d3002cce90b73d1c50d7b02a60d91c1ec"
+      "sha256": "b9308f5febedf3fb5a1978190662846d3002cce90b73d1c50d7b02a60d91c1ec",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/dark/login.mp4": {
       "scene": "login",
       "locale": "zh",
       "theme": "dark",
       "bytes": 64191,
-      "sha256": "7cf9388eb3d3f2b402e428029fd3f7ab49e37ae6760f8b94775ef32d74a895c7"
+      "sha256": "7cf9388eb3d3f2b402e428029fd3f7ab49e37ae6760f8b94775ef32d74a895c7",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/home.png": {
       "scene": "home",
       "locale": "zh",
       "theme": "light",
       "bytes": 641227,
-      "sha256": "78f06fbc35a301087540083588a0a1a9c0370928fb4ecf4a0090b6f62234b2ce"
+      "sha256": "78f06fbc35a301087540083588a0a1a9c0370928fb4ecf4a0090b6f62234b2ce",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/home.gif": {
       "scene": "home",
       "locale": "zh",
       "theme": "light",
       "bytes": 810472,
-      "sha256": "d53f051cab9098c9fee4048add62ed47351f25b39a74930c924b99b3291613f1"
+      "sha256": "d53f051cab9098c9fee4048add62ed47351f25b39a74930c924b99b3291613f1",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/home.mp4": {
       "scene": "home",
       "locale": "zh",
       "theme": "light",
       "bytes": 201132,
-      "sha256": "90dc8b8ca84be8637157b00bf52822c9ad4cedf124dcff3ae923f3e90df1a0e6"
+      "sha256": "90dc8b8ca84be8637157b00bf52822c9ad4cedf124dcff3ae923f3e90df1a0e6",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/media.png": {
       "scene": "media-preview",
       "locale": "zh",
       "theme": "light",
       "bytes": 1252218,
-      "sha256": "8d7a687270a3fde66adad5198dfe5ce1b95073414a19934395482fa18f240fab"
+      "sha256": "8d7a687270a3fde66adad5198dfe5ce1b95073414a19934395482fa18f240fab",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/url-import.png": {
       "scene": "media-preview",
       "locale": "zh",
       "theme": "light",
       "bytes": 889351,
-      "sha256": "d264de248def97a82953e65ac6ed5e6f43884638d53e401fc5605b8092285731"
+      "sha256": "d264de248def97a82953e65ac6ed5e6f43884638d53e401fc5605b8092285731",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/media-video.png": {
       "scene": "media-preview",
       "locale": "zh",
       "theme": "light",
       "bytes": 2126971,
-      "sha256": "b5c1d98fdd389c839f1fa1ede2a3e355cca0c5c10756e2de663eab0681db0047"
+      "sha256": "b5c1d98fdd389c839f1fa1ede2a3e355cca0c5c10756e2de663eab0681db0047",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/media-audio.png": {
       "scene": "media-preview",
       "locale": "zh",
       "theme": "light",
       "bytes": 528686,
-      "sha256": "54ad0382c401941f2a882c5e49c11bbada2706078558ba78c9f44fcd3a5aa4a8"
+      "sha256": "54ad0382c401941f2a882c5e49c11bbada2706078558ba78c9f44fcd3a5aa4a8",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/media-image.png": {
       "scene": "media-preview",
       "locale": "zh",
       "theme": "light",
       "bytes": 2014205,
-      "sha256": "8eb17f198ffb37945c7e71e6d79037f3cb423702f22f763cab58a2c28ffe16d7"
+      "sha256": "8eb17f198ffb37945c7e71e6d79037f3cb423702f22f763cab58a2c28ffe16d7",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/media-preview.gif": {
       "scene": "media-preview",
       "locale": "zh",
       "theme": "light",
       "bytes": 7756551,
-      "sha256": "b44352c4e8bf3065d7dabcd923be722e05ba36cc93b5c4551d454d59d096b0b4"
+      "sha256": "b44352c4e8bf3065d7dabcd923be722e05ba36cc93b5c4551d454d59d096b0b4",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/media-preview.mp4": {
       "scene": "media-preview",
       "locale": "zh",
       "theme": "light",
       "bytes": 1280999,
-      "sha256": "cdd4a6eb683eff0e4ffdc89bd517a5cda328871439ca1fb3970de911156abc52"
+      "sha256": "cdd4a6eb683eff0e4ffdc89bd517a5cda328871439ca1fb3970de911156abc52",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/editor.png": {
       "scene": "timeline-edit",
       "locale": "zh",
       "theme": "light",
       "bytes": 2170020,
-      "sha256": "af8cc9193ea3b086991cdedb34335c03a3b03dae7251fa6d338cbf1277307149"
+      "sha256": "af8cc9193ea3b086991cdedb34335c03a3b03dae7251fa6d338cbf1277307149",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/editor-inspector.png": {
       "scene": "timeline-edit",
       "locale": "zh",
       "theme": "light",
       "bytes": 1819051,
-      "sha256": "430ab8d71f3fda98f56d57eb01f70e74d8a0e3ebe545adf3b084687cd23b399a"
+      "sha256": "430ab8d71f3fda98f56d57eb01f70e74d8a0e3ebe545adf3b084687cd23b399a",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/timeline-edit.gif": {
       "scene": "timeline-edit",
       "locale": "zh",
       "theme": "light",
       "bytes": 2518218,
-      "sha256": "68639e4c331958c51edcf6fadcd9f7660de995e5249db9f60c228b4c9df7fb23"
+      "sha256": "68639e4c331958c51edcf6fadcd9f7660de995e5249db9f60c228b4c9df7fb23",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/timeline-edit.mp4": {
       "scene": "timeline-edit",
       "locale": "zh",
       "theme": "light",
       "bytes": 389474,
-      "sha256": "70b2b7164a4c88ebb641a00fc833635215d13a6fb571ad68c61f8667605c72a2"
+      "sha256": "70b2b7164a4c88ebb641a00fc833635215d13a6fb571ad68c61f8667605c72a2",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/subtitles.png": {
       "scene": "subtitle-dub",
       "locale": "zh",
       "theme": "light",
       "bytes": 2017671,
-      "sha256": "c7788547e099e2d6afa3519bfba3ffdc3c2e851c11883176e768164d925543fb"
+      "sha256": "c7788547e099e2d6afa3519bfba3ffdc3c2e851c11883176e768164d925543fb",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/subtitle-dub.png": {
       "scene": "subtitle-dub",
       "locale": "zh",
       "theme": "light",
       "bytes": 2056624,
-      "sha256": "161a4584a0645974c8e58f0939bc8db52378bbe64ef83509e98b0c7140e77837"
+      "sha256": "161a4584a0645974c8e58f0939bc8db52378bbe64ef83509e98b0c7140e77837",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/transcript.png": {
       "scene": "subtitle-dub",
       "locale": "zh",
       "theme": "light",
       "bytes": 2010634,
-      "sha256": "ee5f023b4f2b10d9040500f41053beb91354d75a046cac01d5fec5073c5cdd50"
+      "sha256": "ee5f023b4f2b10d9040500f41053beb91354d75a046cac01d5fec5073c5cdd50",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/subtitle-dub.gif": {
       "scene": "subtitle-dub",
       "locale": "zh",
       "theme": "light",
       "bytes": 1062817,
-      "sha256": "41d5443f43ba9df537fb1d294f13ada58407d876adcb207c1d0c7a56a87511df"
+      "sha256": "41d5443f43ba9df537fb1d294f13ada58407d876adcb207c1d0c7a56a87511df",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/subtitle-dub.mp4": {
       "scene": "subtitle-dub",
       "locale": "zh",
       "theme": "light",
       "bytes": 202864,
-      "sha256": "25e648db4b3299d04192dc88c601e06ca8182d82c951c98f6917c4dc53ff2660"
+      "sha256": "25e648db4b3299d04192dc88c601e06ca8182d82c951c98f6917c4dc53ff2660",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/ai-chat.png": {
       "scene": "ai-studio",
       "locale": "zh",
       "theme": "light",
       "bytes": 198747,
-      "sha256": "93c3120ee739697ad68a520057efdd6dd28efa9404196272e0ddbc646a94a0d2"
+      "sha256": "93c3120ee739697ad68a520057efdd6dd28efa9404196272e0ddbc646a94a0d2",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/agent-trace.png": {
       "scene": "ai-studio",
       "locale": "zh",
       "theme": "light",
       "bytes": 181094,
-      "sha256": "579ef25c6a57a85ff836ef22ffdc1904434fa92c1d6ee95762dae5df817383e2"
+      "sha256": "579ef25c6a57a85ff836ef22ffdc1904434fa92c1d6ee95762dae5df817383e2",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/ai-generate.png": {
       "scene": "ai-studio",
       "locale": "zh",
       "theme": "light",
       "bytes": 190729,
-      "sha256": "a3d147668026f27907034c0b29d96f31c5137fec71607164effc7a74c3ee1b54"
+      "sha256": "a3d147668026f27907034c0b29d96f31c5137fec71607164effc7a74c3ee1b54",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/ai-studio.gif": {
       "scene": "ai-studio",
       "locale": "zh",
       "theme": "light",
       "bytes": 496144,
-      "sha256": "90842500b5c03e21848e785ac0b6b823adac695b05a9c579ef138ce562beea84"
+      "sha256": "90842500b5c03e21848e785ac0b6b823adac695b05a9c579ef138ce562beea84",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/ai-studio.mp4": {
       "scene": "ai-studio",
       "locale": "zh",
       "theme": "light",
       "bytes": 76886,
-      "sha256": "a08c0c6a2b29a84a1605e188a7c5fdff24dee5c536e1c9eb3f912d187bdcc966"
+      "sha256": "a08c0c6a2b29a84a1605e188a7c5fdff24dee5c536e1c9eb3f912d187bdcc966",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/workflow-list.png": {
       "scene": "workflows",
       "locale": "zh",
       "theme": "light",
-      "bytes": 247400,
-      "sha256": "eeb368566d48b49aa2ea40ec84736531d34e5b7898de093f554ddfd879431e53"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 167971,
+      "sha256": "b1677222f59f6837e8493aacec069ae8fcc5f351fa07589573225daf9c9a2637"
     },
     "screens/workflows.png": {
       "scene": "workflows",
       "locale": "zh",
       "theme": "light",
-      "bytes": 392290,
-      "sha256": "8decbbcda3d5c12d36128977638f55bdc7166c05e80436ceec3e6b8290115f86"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 289063,
+      "sha256": "0dccf8cc43677910435b06b91bf026a34537c9934d1e6e63a886babb6eecadfe"
     },
     "screens/workflow-add-node.png": {
       "scene": "workflows",
       "locale": "zh",
       "theme": "light",
-      "bytes": 431604,
-      "sha256": "48fad48c7302e7f763632e2b55c404d0ab3b1fe3f5591a725c9f505f7b4e1ef0"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 363984,
+      "sha256": "e9274041de06f093f1ed44315507a72ede1c6753d12a556124bf022dc5d9f638"
     },
     "screens/workflow-node.png": {
       "scene": "workflows",
       "locale": "zh",
       "theme": "light",
-      "bytes": 463327,
-      "sha256": "5066fa89165b21fbe098092125b73ffd62b13d0a988884cde61c797767ec16d2"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 359785,
+      "sha256": "98bfb80845faed82413dfd1c69c0f01f7fdbb109033fd6dfe238cffa6ccbb1af"
     },
     "gifs/workflows.gif": {
       "scene": "workflows",
       "locale": "zh",
       "theme": "light",
-      "bytes": 2255257,
-      "sha256": "92acddacd174bccc7f4d9d3446af95e0a479dd701a90cf30433fba8e01082da8"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 2965053,
+      "sha256": "29757a2614550b986ca15568cd19c73b70a743cc72a18545015610ea8a201b1b"
     },
     "videos/workflows.mp4": {
       "scene": "workflows",
       "locale": "zh",
       "theme": "light",
-      "bytes": 292084,
-      "sha256": "0e3fe1e8246bf2eabc9f4e4459c90eebfb62889c7c511c9d59e74b9971741512"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 281313,
+      "sha256": "5d794d55c64428f7724808bf3a01dc63a4457f4d43f1edba216f177e9ab9f01a"
     },
     "screens/boards.png": {
       "scene": "boards",
       "locale": "zh",
       "theme": "light",
-      "bytes": 1226812,
-      "sha256": "f26f1a738db2b411f25ee92f38f9920a2b03a3a1e80b7f526216869d8cfa4213"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 388383,
+      "sha256": "92fda9ed39f5b42bb182fc35ac0952efad703d26385a7b89a6fcce8c51627706"
     },
     "screens/board-form.png": {
       "scene": "boards",
       "locale": "zh",
       "theme": "light",
       "bytes": 1175955,
-      "sha256": "d409281631c24a4d8dbc7ef8675d50261a691054da04cfaf14370db02677d759"
+      "sha256": "d409281631c24a4d8dbc7ef8675d50261a691054da04cfaf14370db02677d759",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/board-mention.png": {
       "scene": "boards",
       "locale": "zh",
       "theme": "light",
       "bytes": 1201751,
-      "sha256": "4b7b6255159309692e730bd5b685b13b19e7dcb4e7276523111904936acf4b11"
+      "sha256": "4b7b6255159309692e730bd5b685b13b19e7dcb4e7276523111904936acf4b11",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/boards.gif": {
       "scene": "boards",
       "locale": "zh",
       "theme": "light",
-      "bytes": 3378673,
-      "sha256": "80a8a64f37721534346333685951e089dad2125fcf0e0607ab2312d9f27da10b"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 2669259,
+      "sha256": "1a0367cb0b68e3358b884dd150a3fb04de38ff72b73ecac03b21289b06dda9bd"
     },
     "videos/boards.mp4": {
       "scene": "boards",
       "locale": "zh",
       "theme": "light",
-      "bytes": 345569,
-      "sha256": "7d10aa57ced82de86196a95b14343360a6aae231a0b44280bbe0dc2f06627194"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 334766,
+      "sha256": "6e1ceab07e5079bb6256dfcca2ee23a2ba7955f042f622e7e9209a6962935044"
     },
     "screens/plugins.png": {
       "scene": "plugins",
       "locale": "zh",
       "theme": "light",
-      "bytes": 290868,
-      "sha256": "285f7e66604f76b765837f7afef0c07c97120f4c77d194547e2c6609a6f2ef66"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:33:55.889783+00:00",
+      "bytes": 211508,
+      "sha256": "c6a586e78c51a65f054c65e3f8292499ffba4fbfb3b96fd047bd8b33bafb6f69"
     },
     "gifs/plugins.gif": {
       "scene": "plugins",
       "locale": "zh",
       "theme": "light",
-      "bytes": 806386,
-      "sha256": "89fda068215498dde85873258141ce3bd21ebd1256353fcb8ed5b6e069f31e2c"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:33:55.889783+00:00",
+      "bytes": 1766799,
+      "sha256": "ba1a6fe24912ec6c04e1a75fc1f2f0ef9b668e71b9495190bcb5fe65ccdae3cc"
     },
     "videos/plugins.mp4": {
       "scene": "plugins",
       "locale": "zh",
       "theme": "light",
-      "bytes": 94569,
-      "sha256": "d4588b4e60af1eb9a2929e6a5538971e3d565b85f24894f89b7779f07e9a51d0"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:33:55.889783+00:00",
+      "bytes": 190276,
+      "sha256": "b019499603035bd617f38d3a91c09415ed48154249a79cd5e6e2cd3cc19fde3e"
     },
     "screens/publish.png": {
       "scene": "publishing",
       "locale": "zh",
       "theme": "light",
       "bytes": 167758,
-      "sha256": "547101b0acfaad0cbba03b4932d7f0f2594ae4fbfe08c8189b407f3819c7b9b8"
+      "sha256": "547101b0acfaad0cbba03b4932d7f0f2594ae4fbfe08c8189b407f3819c7b9b8",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/publish-form.png": {
       "scene": "publishing",
       "locale": "zh",
       "theme": "light",
       "bytes": 304901,
-      "sha256": "405ba6775496a33148417d3a2659f0b76ebea5d517cb7d317acfc6588eac16ef"
+      "sha256": "405ba6775496a33148417d3a2659f0b76ebea5d517cb7d317acfc6588eac16ef",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/browser-pool.png": {
       "scene": "publishing",
       "locale": "zh",
       "theme": "light",
       "bytes": 181529,
-      "sha256": "a16e4ca742cbbf692ea9488b502e7b9a1c2adc6982590b3653fed9abe6ead26f"
+      "sha256": "a16e4ca742cbbf692ea9488b502e7b9a1c2adc6982590b3653fed9abe6ead26f",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/browser-account.png": {
       "scene": "publishing",
       "locale": "zh",
       "theme": "light",
       "bytes": 428134,
-      "sha256": "9f117990360403a4f8e3482f7405b56a2e1abaa65d825af6f18b8b4819f99e19"
+      "sha256": "9f117990360403a4f8e3482f7405b56a2e1abaa65d825af6f18b8b4819f99e19",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/publishing.gif": {
       "scene": "publishing",
       "locale": "zh",
       "theme": "light",
       "bytes": 2520921,
-      "sha256": "fd064564c64e6ac3cbdc966f3a9be8b1eaf2f0634e46cd0dc2b149fb6864273a"
+      "sha256": "fd064564c64e6ac3cbdc966f3a9be8b1eaf2f0634e46cd0dc2b149fb6864273a",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/publishing.mp4": {
       "scene": "publishing",
       "locale": "zh",
       "theme": "light",
       "bytes": 274670,
-      "sha256": "68d15dca4cb87e4c3883a61acc56759069f229978c0332bd2bd825f730834224"
+      "sha256": "68d15dca4cb87e4c3883a61acc56759069f229978c0332bd2bd825f730834224",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/scheduler.png": {
       "scene": "scheduler",
       "locale": "zh",
       "theme": "light",
       "bytes": 248312,
-      "sha256": "325e0c8b61c8c9c8440a23b15c9a8bf1b3c52653fc5d375b06d7b219037cda7a"
+      "sha256": "325e0c8b61c8c9c8440a23b15c9a8bf1b3c52653fc5d375b06d7b219037cda7a",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/scheduler-form.png": {
       "scene": "scheduler",
       "locale": "zh",
       "theme": "light",
       "bytes": 419045,
-      "sha256": "5b8d80878c1ad018595fbded41218c05bb0ce07ccfa073e07f871b25308e32d3"
+      "sha256": "5b8d80878c1ad018595fbded41218c05bb0ce07ccfa073e07f871b25308e32d3",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/scheduler.gif": {
       "scene": "scheduler",
       "locale": "zh",
       "theme": "light",
       "bytes": 1665483,
-      "sha256": "799218051475602de9ad739b8309c20ad7faaaceebf71c926875f02868ab77df"
+      "sha256": "799218051475602de9ad739b8309c20ad7faaaceebf71c926875f02868ab77df",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/scheduler.mp4": {
       "scene": "scheduler",
       "locale": "zh",
       "theme": "light",
       "bytes": 179108,
-      "sha256": "05dfcee1fb06b8d64972f229160a7be0bb03bf7d0691a8f823b203faf14b81bb"
+      "sha256": "05dfcee1fb06b8d64972f229160a7be0bb03bf7d0691a8f823b203faf14b81bb",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/settings.png": {
       "scene": "providers",
       "locale": "zh",
       "theme": "light",
       "bytes": 299991,
-      "sha256": "81066328f322cd14b3ede118f03f7a757ab65fe97ee7a83efc2b978f5479d650"
+      "sha256": "81066328f322cd14b3ede118f03f7a757ab65fe97ee7a83efc2b978f5479d650",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/settings-models.png": {
       "scene": "providers",
       "locale": "zh",
       "theme": "light",
       "bytes": 253606,
-      "sha256": "e3c36b277b09a5d1f5803b9fb19dcf14c96884b1d7724cf5ba3a2dca43e619b2"
+      "sha256": "e3c36b277b09a5d1f5803b9fb19dcf14c96884b1d7724cf5ba3a2dca43e619b2",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/settings-asr.png": {
       "scene": "providers",
       "locale": "zh",
       "theme": "light",
       "bytes": 401907,
-      "sha256": "2c49c69909033ab9d5bab29b3ce2a51f49553c847f752b916ac26adc7af0ea16"
+      "sha256": "2c49c69909033ab9d5bab29b3ce2a51f49553c847f752b916ac26adc7af0ea16",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/providers.gif": {
       "scene": "providers",
       "locale": "zh",
       "theme": "light",
       "bytes": 1177917,
-      "sha256": "0be110e1f37a98dc5a6245c5b20a1282f12d5ecf3b44c9e87886dc0f9bad82c7"
+      "sha256": "0be110e1f37a98dc5a6245c5b20a1282f12d5ecf3b44c9e87886dc0f9bad82c7",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/providers.mp4": {
       "scene": "providers",
       "locale": "zh",
       "theme": "light",
       "bytes": 123996,
-      "sha256": "7b252303f736cb88c0b0664b9a0c1dece3b486661d037a6ed582e734704513cb"
+      "sha256": "7b252303f736cb88c0b0664b9a0c1dece3b486661d037a6ed582e734704513cb",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/settings-appearance.png": {
       "scene": "appearance",
       "locale": "zh",
       "theme": "light",
       "bytes": 460638,
-      "sha256": "15adf20df784875b655dedfa09f3a74ae7ef322b2cffb42335ce4eac207f3cc0"
+      "sha256": "15adf20df784875b655dedfa09f3a74ae7ef322b2cffb42335ce4eac207f3cc0",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/settings-fonts.png": {
       "scene": "appearance",
       "locale": "zh",
       "theme": "light",
       "bytes": 460566,
-      "sha256": "5d0903a1850fac0d348e9ab77ecb5a54d42951e22c848e2d25f50cbc1c52465c"
+      "sha256": "5d0903a1850fac0d348e9ab77ecb5a54d42951e22c848e2d25f50cbc1c52465c",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/appearance.gif": {
       "scene": "appearance",
       "locale": "zh",
       "theme": "light",
       "bytes": 1450747,
-      "sha256": "2b4ee56246b08452bc69771d514b08c289c096065b4a98ee17f6d8630a11a758"
+      "sha256": "2b4ee56246b08452bc69771d514b08c289c096065b4a98ee17f6d8630a11a758",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/appearance.mp4": {
       "scene": "appearance",
       "locale": "zh",
       "theme": "light",
       "bytes": 185123,
-      "sha256": "3697dbf42adbc828d41e7aa3fabf4339f4a6d0cd39088a3f2c6b73d23c51bf3e"
+      "sha256": "3697dbf42adbc828d41e7aa3fabf4339f4a6d0cd39088a3f2c6b73d23c51bf3e",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/login.png": {
       "scene": "login",
       "locale": "zh",
       "theme": "light",
       "bytes": 1528036,
-      "sha256": "c2890a090a559f55bc06b0f5d1b01248b76cc9813e7ded0f346cd74d28d720c6"
+      "sha256": "c2890a090a559f55bc06b0f5d1b01248b76cc9813e7ded0f346cd74d28d720c6",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/login.gif": {
       "scene": "login",
       "locale": "zh",
       "theme": "light",
       "bytes": 340802,
-      "sha256": "a5abfe26b15c2e56e2b7419ddb7da925ec05548a406ff3aa000db295fb1fdf7b"
+      "sha256": "a5abfe26b15c2e56e2b7419ddb7da925ec05548a406ff3aa000db295fb1fdf7b",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/login.mp4": {
       "scene": "login",
       "locale": "zh",
       "theme": "light",
       "bytes": 63889,
-      "sha256": "c404f19a0fd6c9cf032e899596f5ab5e00b46a05a79a1944fb3b0ff8c56482dc"
+      "sha256": "c404f19a0fd6c9cf032e899596f5ab5e00b46a05a79a1944fb3b0ff8c56482dc",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/home.png": {
       "scene": "home",
       "locale": "en",
       "theme": "light",
       "bytes": 665833,
-      "sha256": "22f3fe42828651a82b1f12a741c26f7a286f4637110c0d4b978c5675ebe4dada"
+      "sha256": "22f3fe42828651a82b1f12a741c26f7a286f4637110c0d4b978c5675ebe4dada",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/en/home.gif": {
       "scene": "home",
       "locale": "en",
       "theme": "light",
       "bytes": 1197143,
-      "sha256": "08bf13b489f0b5bee3084f5a1d411c2bb09cb0fe9b7194020ef77140c56ca3c9"
+      "sha256": "08bf13b489f0b5bee3084f5a1d411c2bb09cb0fe9b7194020ef77140c56ca3c9",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/en/home.mp4": {
       "scene": "home",
       "locale": "en",
       "theme": "light",
       "bytes": 246478,
-      "sha256": "6ea151073a5fe14d0ac3c64a4c882213c8bff47dc50f2fab3fe33c947023cddf"
+      "sha256": "6ea151073a5fe14d0ac3c64a4c882213c8bff47dc50f2fab3fe33c947023cddf",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/media.png": {
       "scene": "media-preview",
       "locale": "en",
       "theme": "light",
       "bytes": 1265970,
-      "sha256": "73737c26ba230fc2a878413e857b44ef2f66f7d496334dbde0af776568e84160"
+      "sha256": "73737c26ba230fc2a878413e857b44ef2f66f7d496334dbde0af776568e84160",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/url-import.png": {
       "scene": "media-preview",
       "locale": "en",
       "theme": "light",
       "bytes": 894220,
-      "sha256": "9a4f8b1fc2e3702855d3648d4979c45d92c3206363f33bc5ee22fe78bb3d9c82"
+      "sha256": "9a4f8b1fc2e3702855d3648d4979c45d92c3206363f33bc5ee22fe78bb3d9c82",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/media-video.png": {
       "scene": "media-preview",
       "locale": "en",
       "theme": "light",
       "bytes": 2130153,
-      "sha256": "ae0dc520ec2b12ff253783d437444b7d2f4741fb38bbf78cdcd8409606c6d327"
+      "sha256": "ae0dc520ec2b12ff253783d437444b7d2f4741fb38bbf78cdcd8409606c6d327",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/media-audio.png": {
       "scene": "media-preview",
       "locale": "en",
       "theme": "light",
       "bytes": 540530,
-      "sha256": "83b61b0a7b28c146fc7d205e61a06fa5cdf1f42a5df06e63bfa2846e83545a43"
+      "sha256": "83b61b0a7b28c146fc7d205e61a06fa5cdf1f42a5df06e63bfa2846e83545a43",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/media-image.png": {
       "scene": "media-preview",
       "locale": "en",
       "theme": "light",
       "bytes": 2018299,
-      "sha256": "910eba311c23da0e1e41a0cc7a0693552bd7b86d394dab719c512ceecc7b12c7"
+      "sha256": "910eba311c23da0e1e41a0cc7a0693552bd7b86d394dab719c512ceecc7b12c7",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/en/media-preview.gif": {
       "scene": "media-preview",
       "locale": "en",
       "theme": "light",
       "bytes": 8666255,
-      "sha256": "987759d230ea171a560cfcaeb76a51ce5cd0113c1b236bc7cc34105604dc6ce9"
+      "sha256": "987759d230ea171a560cfcaeb76a51ce5cd0113c1b236bc7cc34105604dc6ce9",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/en/media-preview.mp4": {
       "scene": "media-preview",
       "locale": "en",
       "theme": "light",
       "bytes": 1349309,
-      "sha256": "6dfeb5b9aa9cf99f7c0b3fcc7db6ace59201e00984ac49fa69ed06313a9806a2"
+      "sha256": "6dfeb5b9aa9cf99f7c0b3fcc7db6ace59201e00984ac49fa69ed06313a9806a2",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/editor.png": {
       "scene": "timeline-edit",
       "locale": "en",
       "theme": "light",
       "bytes": 2187595,
-      "sha256": "6f456140c4e6da12661c41da69d5464f58d82b82a71993d8787f0e1b4bddf60c"
+      "sha256": "6f456140c4e6da12661c41da69d5464f58d82b82a71993d8787f0e1b4bddf60c",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/editor-inspector.png": {
       "scene": "timeline-edit",
       "locale": "en",
       "theme": "light",
       "bytes": 1842103,
-      "sha256": "53643ac24bc50dcf3c9349c912df5523b514be87caa1962447ddde3fc6616cf0"
+      "sha256": "53643ac24bc50dcf3c9349c912df5523b514be87caa1962447ddde3fc6616cf0",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/en/timeline-edit.gif": {
       "scene": "timeline-edit",
       "locale": "en",
       "theme": "light",
       "bytes": 2301473,
-      "sha256": "577b66d4d7a4e3ca07e2f124ab542f9caebd9133e43a44594380000c7df7eb71"
+      "sha256": "577b66d4d7a4e3ca07e2f124ab542f9caebd9133e43a44594380000c7df7eb71",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/en/timeline-edit.mp4": {
       "scene": "timeline-edit",
       "locale": "en",
       "theme": "light",
       "bytes": 419714,
-      "sha256": "1b342db8240e1272672fe9fd9fa6732f6cf34bdae03a78b25b89ed2774b5fa41"
+      "sha256": "1b342db8240e1272672fe9fd9fa6732f6cf34bdae03a78b25b89ed2774b5fa41",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/subtitles.png": {
       "scene": "subtitle-dub",
       "locale": "en",
       "theme": "light",
       "bytes": 2031070,
-      "sha256": "d333fa25b790f399d6a03da3731e1bb298870012699e5b2bb9fb989ca25394f3"
+      "sha256": "d333fa25b790f399d6a03da3731e1bb298870012699e5b2bb9fb989ca25394f3",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/subtitle-dub.png": {
       "scene": "subtitle-dub",
       "locale": "en",
       "theme": "light",
       "bytes": 2075111,
-      "sha256": "a10ba800476325e3e76b852a0971f404d5e5fa75a015f66450a6463b4f260337"
+      "sha256": "a10ba800476325e3e76b852a0971f404d5e5fa75a015f66450a6463b4f260337",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/transcript.png": {
       "scene": "subtitle-dub",
       "locale": "en",
       "theme": "light",
       "bytes": 2026069,
-      "sha256": "654b2fe55060b60444170bbb1af2c3020d0ec67159d3f3bab0a8e46b435845db"
+      "sha256": "654b2fe55060b60444170bbb1af2c3020d0ec67159d3f3bab0a8e46b435845db",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/en/subtitle-dub.gif": {
       "scene": "subtitle-dub",
       "locale": "en",
       "theme": "light",
       "bytes": 1634409,
-      "sha256": "d5c2bf06cf89399fe838f1599d4b1eef6789209c24fc836937458c37730a74c8"
+      "sha256": "d5c2bf06cf89399fe838f1599d4b1eef6789209c24fc836937458c37730a74c8",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/en/subtitle-dub.mp4": {
       "scene": "subtitle-dub",
       "locale": "en",
       "theme": "light",
       "bytes": 307976,
-      "sha256": "06bfba4fe33e9471753c7992e7cd373aae534978f3ca26f0c82e8d9ff9a38dfe"
+      "sha256": "06bfba4fe33e9471753c7992e7cd373aae534978f3ca26f0c82e8d9ff9a38dfe",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/ai-chat.png": {
       "scene": "ai-studio",
       "locale": "en",
       "theme": "light",
       "bytes": 211092,
-      "sha256": "7d7d6af47879d437f1afa3b1add1cf6209f473b8b5fecf3252323599f68a675c"
+      "sha256": "7d7d6af47879d437f1afa3b1add1cf6209f473b8b5fecf3252323599f68a675c",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/agent-trace.png": {
       "scene": "ai-studio",
       "locale": "en",
       "theme": "light",
       "bytes": 192572,
-      "sha256": "90426df0dda1c7f467c74d47e880ab00b4069812ce872fde49aaa18b99cfa302"
+      "sha256": "90426df0dda1c7f467c74d47e880ab00b4069812ce872fde49aaa18b99cfa302",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/ai-generate.png": {
       "scene": "ai-studio",
       "locale": "en",
       "theme": "light",
       "bytes": 202268,
-      "sha256": "b33f3bc1d076a373bc42048d5c82ca73e2ff5273c2bab804ac35b3a6b8401550"
+      "sha256": "b33f3bc1d076a373bc42048d5c82ca73e2ff5273c2bab804ac35b3a6b8401550",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/en/ai-studio.gif": {
       "scene": "ai-studio",
       "locale": "en",
       "theme": "light",
       "bytes": 615708,
-      "sha256": "650e869d56e223027f7a0d2e6776676f5af00c12826eb08cb1ff664d78c2c242"
+      "sha256": "650e869d56e223027f7a0d2e6776676f5af00c12826eb08cb1ff664d78c2c242",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/en/ai-studio.mp4": {
       "scene": "ai-studio",
       "locale": "en",
       "theme": "light",
       "bytes": 83780,
-      "sha256": "b51793cc75b5d127009fec7f6457dbdabcc444c4cff55310950f002b8c981b68"
+      "sha256": "b51793cc75b5d127009fec7f6457dbdabcc444c4cff55310950f002b8c981b68",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/workflow-list.png": {
       "scene": "workflows",
       "locale": "en",
       "theme": "light",
-      "bytes": 261431,
-      "sha256": "1e6cc6d4e07ff46b049872097a6786bfaf8c06e75f46bee8ffbe7c903e7392ca"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 183851,
+      "sha256": "d09bbd0e9d3b35436688e5fd8ce4258382af8b0409e8db37da2c66185ddd91f6"
     },
     "screens/en/workflows.png": {
       "scene": "workflows",
       "locale": "en",
       "theme": "light",
-      "bytes": 398624,
-      "sha256": "1df8900683644ec918cb698bbb134e97996a7722ba8a7e2df45780b28328cbc8"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 296301,
+      "sha256": "fc3b53ea975d9f5c954c637acad19db1a9d56992b427faf448b98357e056f4a4"
     },
     "screens/en/workflow-add-node.png": {
       "scene": "workflows",
       "locale": "en",
       "theme": "light",
-      "bytes": 416735,
-      "sha256": "d6fdd5452ebacf5e7c7c170f09e79b889e980e56a1257bb447be98b719616f54"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 352035,
+      "sha256": "e3f629c3eea47b77e6d7e6051d98bcb0dcaca8b0652f2df80be3b162ff413827"
     },
     "screens/en/workflow-node.png": {
       "scene": "workflows",
       "locale": "en",
       "theme": "light",
-      "bytes": 473544,
-      "sha256": "b722b8a470ba72be98504bd91270f88ca450edda98dcc0cf5ff0bfe0df1aafec"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 371119,
+      "sha256": "3d1b812aa4a70ed572976be650a4028e3481a3990559ab909ee9b82343eabf47"
     },
     "gifs/en/workflows.gif": {
       "scene": "workflows",
       "locale": "en",
       "theme": "light",
-      "bytes": 2456016,
-      "sha256": "6be1b096144b984711726ce65e48abf9ffc39ffde7d8ab62f324af47f86f4e7d"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 2631909,
+      "sha256": "adc713614253937823b904fb3f6e52f3d2df57e8294127e071787d9a9429599d"
     },
     "videos/en/workflows.mp4": {
       "scene": "workflows",
       "locale": "en",
       "theme": "light",
-      "bytes": 282385,
-      "sha256": "e8c1d100ce599ec29a978c33a18b5397cbe63722fa5eb2168ed1801f79b93641"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 325500,
+      "sha256": "f644d0cd3ac5e54b3995799bd4bba79cc77300eca7c56cedfdada492b3c9adea"
     },
     "screens/en/boards.png": {
       "scene": "boards",
       "locale": "en",
       "theme": "light",
-      "bytes": 1233609,
-      "sha256": "7c5efc4a448e58301e59560b32b1920784b26c128f3316b608d151184eeb7daa"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 396869,
+      "sha256": "5367ecaefb4c0313f140ef8945d401543b10ae113d01449646ded69fd85ff1b6"
     },
     "screens/en/board-form.png": {
       "scene": "boards",
       "locale": "en",
       "theme": "light",
       "bytes": 1184605,
-      "sha256": "3b8b800e91d7740d2586fbb35e1901b95e6d5b8ae4b9b1044eb2a08227a3c6dd"
+      "sha256": "3b8b800e91d7740d2586fbb35e1901b95e6d5b8ae4b9b1044eb2a08227a3c6dd",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/board-mention.png": {
       "scene": "boards",
       "locale": "en",
       "theme": "light",
       "bytes": 1210453,
-      "sha256": "35d552c0a96207504e9e03c73ab36ab0b0513b4b42cb8e71d9e98307999eba87"
+      "sha256": "35d552c0a96207504e9e03c73ab36ab0b0513b4b42cb8e71d9e98307999eba87",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/en/boards.gif": {
       "scene": "boards",
       "locale": "en",
       "theme": "light",
-      "bytes": 2983370,
-      "sha256": "702ea27b8e7f548db75ccdfa4c0df7737c38d88e03efcae63d6836659fa80626"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 2629866,
+      "sha256": "9626d37fedcc08ce42de0b3d7113eb5e7f081c4370c6a46bb0049903d8125e82"
     },
     "videos/en/boards.mp4": {
       "scene": "boards",
       "locale": "en",
       "theme": "light",
-      "bytes": 333543,
-      "sha256": "89396438e9d5d3d660d4ed6a7a97d9127f09be4cee71c877d15c61606cf04a0d"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 353274,
+      "sha256": "dbecca00a576eb90db8c0e8fb97265cefde2e8e47df45e497afcec7eda0bb0d2"
     },
     "screens/en/plugins.png": {
       "scene": "plugins",
       "locale": "en",
       "theme": "light",
-      "bytes": 298122,
-      "sha256": "3c50f5d1ec122ae0f9a4c43ac3500d535f5229c8994ee8191d84996b49f20a9a"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:33:55.889783+00:00",
+      "bytes": 234478,
+      "sha256": "1ac04d78b686467762e14ee0f0e353e13707b743f565137384e54876f4c5c539"
     },
     "gifs/en/plugins.gif": {
       "scene": "plugins",
       "locale": "en",
       "theme": "light",
-      "bytes": 918073,
-      "sha256": "b158ae0676f2290b80abbe6bb28fc0cc5b06990da0e93e3b4e3c53ea01dc4d9f"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:33:55.889783+00:00",
+      "bytes": 2463980,
+      "sha256": "3c24e99102de649c546c5d811ef7bba97228c94a8acbd66efde4e25f35461bbe"
     },
     "videos/en/plugins.mp4": {
       "scene": "plugins",
       "locale": "en",
       "theme": "light",
-      "bytes": 111008,
-      "sha256": "e312603a553771ac49831b0dab26123dbccbeb9180142f82a0c4f1083fc04b22"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:33:55.889783+00:00",
+      "bytes": 229197,
+      "sha256": "0f5385299b08403df07acf7051761482be687f000306cf2ad6c8b7e293e3f601"
     },
     "screens/en/publish.png": {
       "scene": "publishing",
       "locale": "en",
       "theme": "light",
       "bytes": 171709,
-      "sha256": "eab2f199b377aaff344d9d23e2d7047b299cd841662e0c68478651cf2eff90db"
+      "sha256": "eab2f199b377aaff344d9d23e2d7047b299cd841662e0c68478651cf2eff90db",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/publish-form.png": {
       "scene": "publishing",
       "locale": "en",
       "theme": "light",
       "bytes": 322277,
-      "sha256": "3b07eb5438710402d64fc059a78883dbfe655738f29e5488df98a6a6b47396a0"
+      "sha256": "3b07eb5438710402d64fc059a78883dbfe655738f29e5488df98a6a6b47396a0",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/browser-pool.png": {
       "scene": "publishing",
       "locale": "en",
       "theme": "light",
       "bytes": 187431,
-      "sha256": "3fb0a9751a0e697e17109eb77bf1dc1aa81c0d6182958e70c6ce44a4c6df8190"
+      "sha256": "3fb0a9751a0e697e17109eb77bf1dc1aa81c0d6182958e70c6ce44a4c6df8190",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/browser-account.png": {
       "scene": "publishing",
       "locale": "en",
       "theme": "light",
       "bytes": 451561,
-      "sha256": "6ff79c644a3f1a19e26a19860f89ad7abd72e4e22349ac2b34f3ef163d2ec317"
+      "sha256": "6ff79c644a3f1a19e26a19860f89ad7abd72e4e22349ac2b34f3ef163d2ec317",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/en/publishing.gif": {
       "scene": "publishing",
       "locale": "en",
       "theme": "light",
       "bytes": 2610092,
-      "sha256": "8115defe034e1066258df4af47c2d80a2d374564821f3821b9d1e262a0683599"
+      "sha256": "8115defe034e1066258df4af47c2d80a2d374564821f3821b9d1e262a0683599",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/en/publishing.mp4": {
       "scene": "publishing",
       "locale": "en",
       "theme": "light",
       "bytes": 299946,
-      "sha256": "865bdf0e4a7d69c6de27a4a5d890a175c4fe0fde3f945f29f77bbb01988c673e"
+      "sha256": "865bdf0e4a7d69c6de27a4a5d890a175c4fe0fde3f945f29f77bbb01988c673e",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/scheduler.png": {
       "scene": "scheduler",
       "locale": "en",
       "theme": "light",
       "bytes": 250955,
-      "sha256": "fc1277ddf20067c729854290fc9c4003330ac968d161c2657c98e9a557d1f265"
+      "sha256": "fc1277ddf20067c729854290fc9c4003330ac968d161c2657c98e9a557d1f265",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/scheduler-form.png": {
       "scene": "scheduler",
       "locale": "en",
       "theme": "light",
       "bytes": 419523,
-      "sha256": "3d0f5253a9d3b8eec9de2d1a98c6be0ccc8e413e9bd591f0987c6ca9f169422a"
+      "sha256": "3d0f5253a9d3b8eec9de2d1a98c6be0ccc8e413e9bd591f0987c6ca9f169422a",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/en/scheduler.gif": {
       "scene": "scheduler",
       "locale": "en",
       "theme": "light",
       "bytes": 1700116,
-      "sha256": "6b8dbe653f2b4dd4c055b9497d705359463ca9d38d4db07d2dc301f01d193681"
+      "sha256": "6b8dbe653f2b4dd4c055b9497d705359463ca9d38d4db07d2dc301f01d193681",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/en/scheduler.mp4": {
       "scene": "scheduler",
       "locale": "en",
       "theme": "light",
       "bytes": 177036,
-      "sha256": "f95265b59867ffc215b036f0ce143101506c2fd0460f798bf672d75c712edca8"
+      "sha256": "f95265b59867ffc215b036f0ce143101506c2fd0460f798bf672d75c712edca8",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/settings.png": {
       "scene": "providers",
       "locale": "en",
       "theme": "light",
       "bytes": 331654,
-      "sha256": "23f77eea665807234f307d97efecdab8486aed09507915bdffe1ea2a8ddda5c6"
+      "sha256": "23f77eea665807234f307d97efecdab8486aed09507915bdffe1ea2a8ddda5c6",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/settings-models.png": {
       "scene": "providers",
       "locale": "en",
       "theme": "light",
       "bytes": 264103,
-      "sha256": "be8c4fbd867aab45b1853e1ac1b9ba9fc2ebe79237f68e9e370f559e593fb27a"
+      "sha256": "be8c4fbd867aab45b1853e1ac1b9ba9fc2ebe79237f68e9e370f559e593fb27a",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/settings-asr.png": {
       "scene": "providers",
       "locale": "en",
       "theme": "light",
       "bytes": 415317,
-      "sha256": "194fb37bacab22bb5f96b6769b0ee300a3baf13fe1184b24549fc8c31f5c98ca"
+      "sha256": "194fb37bacab22bb5f96b6769b0ee300a3baf13fe1184b24549fc8c31f5c98ca",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/en/providers.gif": {
       "scene": "providers",
       "locale": "en",
       "theme": "light",
       "bytes": 1378106,
-      "sha256": "de794791db521ad1106975484ea6a14d5e9c92a2ea37cf9e560303c9f1992458"
+      "sha256": "de794791db521ad1106975484ea6a14d5e9c92a2ea37cf9e560303c9f1992458",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/en/providers.mp4": {
       "scene": "providers",
       "locale": "en",
       "theme": "light",
       "bytes": 149077,
-      "sha256": "4ff795865df1153018ad59b22a7e58c8603a53a31b42f808d76e1c23f4bca344"
+      "sha256": "4ff795865df1153018ad59b22a7e58c8603a53a31b42f808d76e1c23f4bca344",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/settings-appearance.png": {
       "scene": "appearance",
       "locale": "en",
       "theme": "light",
       "bytes": 484944,
-      "sha256": "3a8154b3a8b0ea96e7353ad316e7d4b61a95c081ea5c7db55a429e899d1ca4cb"
+      "sha256": "3a8154b3a8b0ea96e7353ad316e7d4b61a95c081ea5c7db55a429e899d1ca4cb",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/settings-fonts.png": {
       "scene": "appearance",
       "locale": "en",
       "theme": "light",
       "bytes": 484583,
-      "sha256": "b34bb1b6bb1a3ff71ca00b20381837ffb27e3161096c955bd97e80e0690cd78a"
+      "sha256": "b34bb1b6bb1a3ff71ca00b20381837ffb27e3161096c955bd97e80e0690cd78a",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/en/appearance.gif": {
       "scene": "appearance",
       "locale": "en",
       "theme": "light",
       "bytes": 1686747,
-      "sha256": "76c7d1cb93abbf559d2a127e1565514b28f0fc519e2c9b150d7130ad4b406f32"
+      "sha256": "76c7d1cb93abbf559d2a127e1565514b28f0fc519e2c9b150d7130ad4b406f32",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/en/appearance.mp4": {
       "scene": "appearance",
       "locale": "en",
       "theme": "light",
       "bytes": 233920,
-      "sha256": "15faa36459ad9ce5bd78771b05a7d8086f88ddac697923e58680990b387e2edd"
+      "sha256": "15faa36459ad9ce5bd78771b05a7d8086f88ddac697923e58680990b387e2edd",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/login.png": {
       "scene": "login",
       "locale": "en",
       "theme": "light",
       "bytes": 1543421,
-      "sha256": "dd5b3ea9479d65db8ceb64f660ae4e7ef50b19fc0a077ea6b9058dc4530dac54"
+      "sha256": "dd5b3ea9479d65db8ceb64f660ae4e7ef50b19fc0a077ea6b9058dc4530dac54",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/en/login.gif": {
       "scene": "login",
       "locale": "en",
       "theme": "light",
       "bytes": 560267,
-      "sha256": "468f27270c06e7dce0b9c13cd64e25efda0110a2910baef8c0e2cc6fb69528be"
+      "sha256": "468f27270c06e7dce0b9c13cd64e25efda0110a2910baef8c0e2cc6fb69528be",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/en/login.mp4": {
       "scene": "login",
       "locale": "en",
       "theme": "light",
       "bytes": 81816,
-      "sha256": "a5068984dd92fb4eea5109c7829c2aa58ba1ac238fb86676296f47d3bec8b234"
+      "sha256": "a5068984dd92fb4eea5109c7829c2aa58ba1ac238fb86676296f47d3bec8b234",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/plugins.png": {
       "scene": "plugins",
       "locale": "en",
       "theme": "dark",
-      "bytes": 302720,
-      "sha256": "090667e3257e6e8bc5f757e0f292e5696044edefc5133552e8ae994c8aaeb6bc"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:33:55.889783+00:00",
+      "bytes": 237382,
+      "sha256": "7e31c441d57009933229c54e8d3856d10bd90b49d843367647faf7cbbe6cede9"
     },
     "gifs/en/dark/plugins.gif": {
       "scene": "plugins",
       "locale": "en",
       "theme": "dark",
-      "bytes": 867138,
-      "sha256": "144e6d66a242d013f2e112b2a5da9920561a3c6749f6fd2869e0984bea1b5619"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:33:55.889783+00:00",
+      "bytes": 2849680,
+      "sha256": "787d549c784421585a4452de5734cafc6db0b5eaae5e3f492477359e28916052"
     },
     "videos/en/dark/plugins.mp4": {
       "scene": "plugins",
       "locale": "en",
       "theme": "dark",
-      "bytes": 110538,
-      "sha256": "a63d309f72bc62fbed4664cb5e63baca739112e513034ad7278b3b685eb0e030"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:33:55.889783+00:00",
+      "bytes": 258029,
+      "sha256": "a76ce3f2689dc1e86bf486b301e1d66dfc5b5008521268ce8345d4a2436c877b"
     },
     "screens/en/dark/publish.png": {
       "scene": "publishing",
       "locale": "en",
       "theme": "dark",
       "bytes": 174048,
-      "sha256": "e437f95f8279f41ad0300bf1099fadec1df859e9fee048a5dba064bad06ec2f4"
+      "sha256": "e437f95f8279f41ad0300bf1099fadec1df859e9fee048a5dba064bad06ec2f4",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/publish-form.png": {
       "scene": "publishing",
       "locale": "en",
       "theme": "dark",
       "bytes": 308040,
-      "sha256": "e314ee6bf8ef61314651c1509094f15f3dba622c26276ed3974073de677c5eeb"
+      "sha256": "e314ee6bf8ef61314651c1509094f15f3dba622c26276ed3974073de677c5eeb",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/browser-pool.png": {
       "scene": "publishing",
       "locale": "en",
       "theme": "dark",
       "bytes": 188972,
-      "sha256": "0b81c2f8bdf02bd334f40caccd20274c7d6424c0aa6ed75bb3650101a0924e88"
+      "sha256": "0b81c2f8bdf02bd334f40caccd20274c7d6424c0aa6ed75bb3650101a0924e88",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/browser-account.png": {
       "scene": "publishing",
       "locale": "en",
       "theme": "dark",
       "bytes": 431551,
-      "sha256": "be9cd65dc9b013275b227d6fafb357c5b2640c1246852e032681b303fc4f3e42"
+      "sha256": "be9cd65dc9b013275b227d6fafb357c5b2640c1246852e032681b303fc4f3e42",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/en/dark/publishing.gif": {
       "scene": "publishing",
       "locale": "en",
       "theme": "dark",
       "bytes": 2464629,
-      "sha256": "a132dca4a7b9f7e07caabffa6fcdc6f3457ef004ae8de9cd118432ec2453bbec"
+      "sha256": "a132dca4a7b9f7e07caabffa6fcdc6f3457ef004ae8de9cd118432ec2453bbec",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/en/dark/publishing.mp4": {
       "scene": "publishing",
       "locale": "en",
       "theme": "dark",
       "bytes": 272902,
-      "sha256": "7d2ed7918ddfacf07db44cd509a6d374d06378936eab5db903231881c83c927a"
+      "sha256": "7d2ed7918ddfacf07db44cd509a6d374d06378936eab5db903231881c83c927a",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/scheduler.png": {
       "scene": "scheduler",
       "locale": "en",
       "theme": "dark",
       "bytes": 254204,
-      "sha256": "2031442730f762d7c63f338fcb5eadf887f4d22ab00283e4a5045b5400086052"
+      "sha256": "2031442730f762d7c63f338fcb5eadf887f4d22ab00283e4a5045b5400086052",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/scheduler-form.png": {
       "scene": "scheduler",
       "locale": "en",
       "theme": "dark",
       "bytes": 399725,
-      "sha256": "86e59f0b78105f12d227e5eec1945eaadd48ea95d6c3f2b891dafc2a5333df5b"
+      "sha256": "86e59f0b78105f12d227e5eec1945eaadd48ea95d6c3f2b891dafc2a5333df5b",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/en/dark/scheduler.gif": {
       "scene": "scheduler",
       "locale": "en",
       "theme": "dark",
       "bytes": 1281335,
-      "sha256": "658c2aa7a566ca446575e5a4f86a4a1ccc20ecfd36fe715ce10e10ae1226b5c2"
+      "sha256": "658c2aa7a566ca446575e5a4f86a4a1ccc20ecfd36fe715ce10e10ae1226b5c2",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/en/dark/scheduler.mp4": {
       "scene": "scheduler",
       "locale": "en",
       "theme": "dark",
       "bytes": 161264,
-      "sha256": "6453ab8f7a6951bf6d8a02d7a0b4af6d2dd9a1cacc1dc5621363dd07c13fffad"
+      "sha256": "6453ab8f7a6951bf6d8a02d7a0b4af6d2dd9a1cacc1dc5621363dd07c13fffad",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/settings.png": {
       "scene": "providers",
       "locale": "en",
       "theme": "dark",
       "bytes": 335587,
-      "sha256": "1fbe659d501ddb887a3abb88dafdf657ef3ac50d335f72e33e8e027c0f94d387"
+      "sha256": "1fbe659d501ddb887a3abb88dafdf657ef3ac50d335f72e33e8e027c0f94d387",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/settings-models.png": {
       "scene": "providers",
       "locale": "en",
       "theme": "dark",
       "bytes": 268150,
-      "sha256": "86e45fd0a5001f807b807d7b4c9e28d6e971781bd44276ca7048bc0df583ae3e"
+      "sha256": "86e45fd0a5001f807b807d7b4c9e28d6e971781bd44276ca7048bc0df583ae3e",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/settings-asr.png": {
       "scene": "providers",
       "locale": "en",
       "theme": "dark",
       "bytes": 420450,
-      "sha256": "5271ba1e67459ccf95b7306af90fc7aa34dad2d1baf15623ce3e21f89100f316"
+      "sha256": "5271ba1e67459ccf95b7306af90fc7aa34dad2d1baf15623ce3e21f89100f316",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/en/dark/providers.gif": {
       "scene": "providers",
       "locale": "en",
       "theme": "dark",
       "bytes": 1519237,
-      "sha256": "3e645e7439e3a709b0f95b5734938adf566ea69ef572af4f7b8cc84afe47164b"
+      "sha256": "3e645e7439e3a709b0f95b5734938adf566ea69ef572af4f7b8cc84afe47164b",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/en/dark/providers.mp4": {
       "scene": "providers",
       "locale": "en",
       "theme": "dark",
       "bytes": 163404,
-      "sha256": "5fd2ba3bb0ce0fe36987f0be459cdb3ee8ceaad2d84351d80eab9b4646e53414"
+      "sha256": "5fd2ba3bb0ce0fe36987f0be459cdb3ee8ceaad2d84351d80eab9b4646e53414",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/settings-appearance.png": {
       "scene": "appearance",
       "locale": "en",
       "theme": "dark",
       "bytes": 494336,
-      "sha256": "ee14d7701f06c0bc625b551825fcae2db2eb3cdda958d97b27f833b1e27503cc"
+      "sha256": "ee14d7701f06c0bc625b551825fcae2db2eb3cdda958d97b27f833b1e27503cc",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/settings-fonts.png": {
       "scene": "appearance",
       "locale": "en",
       "theme": "dark",
       "bytes": 494273,
-      "sha256": "b00e39c028cf8d2b0892b974ef76b5e06f5cb29e79db1bef702e3511c016bf64"
+      "sha256": "b00e39c028cf8d2b0892b974ef76b5e06f5cb29e79db1bef702e3511c016bf64",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/en/dark/appearance.gif": {
       "scene": "appearance",
       "locale": "en",
       "theme": "dark",
       "bytes": 1660509,
-      "sha256": "55e9d8837bf20ecb4187b8a47fee1bbd2523f03ee125b9de211806fff04b9a93"
+      "sha256": "55e9d8837bf20ecb4187b8a47fee1bbd2523f03ee125b9de211806fff04b9a93",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/en/dark/appearance.mp4": {
       "scene": "appearance",
       "locale": "en",
       "theme": "dark",
       "bytes": 222975,
-      "sha256": "dda3e60bb9e962c68ff85903becce0235215b1c24a01577a3ad36e69cf796313"
+      "sha256": "dda3e60bb9e962c68ff85903becce0235215b1c24a01577a3ad36e69cf796313",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/login.png": {
       "scene": "login",
       "locale": "en",
       "theme": "dark",
       "bytes": 1538442,
-      "sha256": "481f5a85dd8e2a13c299f6d595f65ff27e86ebe481868e2f37d5575a79471c9e"
+      "sha256": "481f5a85dd8e2a13c299f6d595f65ff27e86ebe481868e2f37d5575a79471c9e",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/en/dark/login.gif": {
       "scene": "login",
       "locale": "en",
       "theme": "dark",
       "bytes": 557533,
-      "sha256": "28606d6bee85ed8fa9841a4c808946441a5568839c1ff518d1bd3a32fca73d74"
+      "sha256": "28606d6bee85ed8fa9841a4c808946441a5568839c1ff518d1bd3a32fca73d74",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/en/dark/login.mp4": {
       "scene": "login",
       "locale": "en",
       "theme": "dark",
       "bytes": 81357,
-      "sha256": "d4dd2d403b9a82ea4a622c1a7fb27d270fa9809789bf9189d4497a26c27314a8"
+      "sha256": "d4dd2d403b9a82ea4a622c1a7fb27d270fa9809789bf9189d4497a26c27314a8",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/home.png": {
       "scene": "home",
       "locale": "en",
       "theme": "dark",
       "bytes": 669580,
-      "sha256": "4ce1c19e8e4aee9a3720a3458b5be0326e0ab98f54bf3c3781cda0b26d25bd0d"
+      "sha256": "4ce1c19e8e4aee9a3720a3458b5be0326e0ab98f54bf3c3781cda0b26d25bd0d",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/en/dark/home.gif": {
       "scene": "home",
       "locale": "en",
       "theme": "dark",
       "bytes": 1044425,
-      "sha256": "11ae7f1a160c504805de5d88622196cc86f11e66a21f42fd11f22c57aaa5e9fd"
+      "sha256": "11ae7f1a160c504805de5d88622196cc86f11e66a21f42fd11f22c57aaa5e9fd",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/en/dark/home.mp4": {
       "scene": "home",
       "locale": "en",
       "theme": "dark",
       "bytes": 226971,
-      "sha256": "d57577d7828c1f71bee85f3c2ad0151589aed3b2de70fa9c31d04dff351ff7de"
+      "sha256": "d57577d7828c1f71bee85f3c2ad0151589aed3b2de70fa9c31d04dff351ff7de",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/media.png": {
       "scene": "media-preview",
       "locale": "en",
       "theme": "dark",
       "bytes": 1267960,
-      "sha256": "8ef1d92cd19eb0b96efb8ce16a97dbc0f60d4645b8ebbcd57cf7f66bd8925735"
+      "sha256": "8ef1d92cd19eb0b96efb8ce16a97dbc0f60d4645b8ebbcd57cf7f66bd8925735",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/url-import.png": {
       "scene": "media-preview",
       "locale": "en",
       "theme": "dark",
       "bytes": 838757,
-      "sha256": "c6e7d32cb3dc7fb94b2a7f5d904f367c13d2458daefbdeb381df462915cef918"
+      "sha256": "c6e7d32cb3dc7fb94b2a7f5d904f367c13d2458daefbdeb381df462915cef918",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/media-video.png": {
       "scene": "media-preview",
       "locale": "en",
       "theme": "dark",
       "bytes": 2123565,
-      "sha256": "129e4425b2bd8809cef3b4b4d50ffa4f560276481de96898a1aa73bbf0d772df"
+      "sha256": "129e4425b2bd8809cef3b4b4d50ffa4f560276481de96898a1aa73bbf0d772df",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/media-audio.png": {
       "scene": "media-preview",
       "locale": "en",
       "theme": "dark",
       "bytes": 520497,
-      "sha256": "14bfa8684856c41863b663788823d911beb102bbc93a1c74a98001c95af0d811"
+      "sha256": "14bfa8684856c41863b663788823d911beb102bbc93a1c74a98001c95af0d811",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/media-image.png": {
       "scene": "media-preview",
       "locale": "en",
       "theme": "dark",
       "bytes": 2006822,
-      "sha256": "fe98a73c346a4655b506f9b49b2716bf4fac763786eb1d7d3d30a23a526b2173"
+      "sha256": "fe98a73c346a4655b506f9b49b2716bf4fac763786eb1d7d3d30a23a526b2173",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/en/dark/media-preview.gif": {
       "scene": "media-preview",
       "locale": "en",
       "theme": "dark",
       "bytes": 8480926,
-      "sha256": "5fdd5575094450b65259f576a1f7bfa4154e440e73e9dd56c57b2ccaf7090143"
+      "sha256": "5fdd5575094450b65259f576a1f7bfa4154e440e73e9dd56c57b2ccaf7090143",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/en/dark/media-preview.mp4": {
       "scene": "media-preview",
       "locale": "en",
       "theme": "dark",
       "bytes": 1350880,
-      "sha256": "5c0562395e02c2d896b5c10fd307d3071c288f168f68dc783a40d7ef7223b789"
+      "sha256": "5c0562395e02c2d896b5c10fd307d3071c288f168f68dc783a40d7ef7223b789",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/editor.png": {
       "scene": "timeline-edit",
       "locale": "en",
       "theme": "dark",
       "bytes": 2190378,
-      "sha256": "67ce5f46f245cdd8cfea14c56cf512e7523ee33ef4fe40d5b9c19886dcd39f5c"
+      "sha256": "67ce5f46f245cdd8cfea14c56cf512e7523ee33ef4fe40d5b9c19886dcd39f5c",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/editor-inspector.png": {
       "scene": "timeline-edit",
       "locale": "en",
       "theme": "dark",
       "bytes": 1846363,
-      "sha256": "fa6aa294aa4a6b471904a81b87c5495a19dd253bbc08e005102f3f49261c04d9"
+      "sha256": "fa6aa294aa4a6b471904a81b87c5495a19dd253bbc08e005102f3f49261c04d9",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/en/dark/timeline-edit.gif": {
       "scene": "timeline-edit",
       "locale": "en",
       "theme": "dark",
       "bytes": 2478346,
-      "sha256": "c05405f217c6fe76a395462d9e92e75a873833f45c769b792c6f44915e29a450"
+      "sha256": "c05405f217c6fe76a395462d9e92e75a873833f45c769b792c6f44915e29a450",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/en/dark/timeline-edit.mp4": {
       "scene": "timeline-edit",
       "locale": "en",
       "theme": "dark",
       "bytes": 465791,
-      "sha256": "9fb620677b78cd6f8d9845ab631e811d24a8b2b40081d8d12217fd5e4d33a5cb"
+      "sha256": "9fb620677b78cd6f8d9845ab631e811d24a8b2b40081d8d12217fd5e4d33a5cb",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/subtitles.png": {
       "scene": "subtitle-dub",
       "locale": "en",
       "theme": "dark",
       "bytes": 2034478,
-      "sha256": "c3b94205ca1044f4e50b10906735660293fef8a2f895f5f8233b20e10b0ff6cc"
+      "sha256": "c3b94205ca1044f4e50b10906735660293fef8a2f895f5f8233b20e10b0ff6cc",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/subtitle-dub.png": {
       "scene": "subtitle-dub",
       "locale": "en",
       "theme": "dark",
       "bytes": 2077042,
-      "sha256": "3ae0864ebee7e8f1e5100e18658990224197d3aa975db50c83e52de8aac32b4d"
+      "sha256": "3ae0864ebee7e8f1e5100e18658990224197d3aa975db50c83e52de8aac32b4d",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/transcript.png": {
       "scene": "subtitle-dub",
       "locale": "en",
       "theme": "dark",
       "bytes": 2030547,
-      "sha256": "344e5aaf1bcee4a2c53259901070497e43510de6e01444827755e984cbf7d59d"
+      "sha256": "344e5aaf1bcee4a2c53259901070497e43510de6e01444827755e984cbf7d59d",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/en/dark/subtitle-dub.gif": {
       "scene": "subtitle-dub",
       "locale": "en",
       "theme": "dark",
       "bytes": 1598815,
-      "sha256": "940b118470a7b0dcf3b2c7eb15d8f5028b4e29063d796bfb4c9950f4d77a6403"
+      "sha256": "940b118470a7b0dcf3b2c7eb15d8f5028b4e29063d796bfb4c9950f4d77a6403",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/en/dark/subtitle-dub.mp4": {
       "scene": "subtitle-dub",
       "locale": "en",
       "theme": "dark",
       "bytes": 320248,
-      "sha256": "90e48102e44e436bdd3f82d4be237779c3354c2675380f63f822de803546baa5"
+      "sha256": "90e48102e44e436bdd3f82d4be237779c3354c2675380f63f822de803546baa5",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/ai-chat.png": {
       "scene": "ai-studio",
       "locale": "en",
       "theme": "dark",
       "bytes": 214101,
-      "sha256": "6e146735b29c8132b49a1b787467dba5c057883ef9aebdc681f4a837083a174e"
+      "sha256": "6e146735b29c8132b49a1b787467dba5c057883ef9aebdc681f4a837083a174e",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/agent-trace.png": {
       "scene": "ai-studio",
       "locale": "en",
       "theme": "dark",
       "bytes": 195826,
-      "sha256": "f7fc0eab570054e4db0f8de9a854be4937820e1119b2d58944c88dfe7d2e58b1"
+      "sha256": "f7fc0eab570054e4db0f8de9a854be4937820e1119b2d58944c88dfe7d2e58b1",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/ai-generate.png": {
       "scene": "ai-studio",
       "locale": "en",
       "theme": "dark",
       "bytes": 204279,
-      "sha256": "1f52c94ed2bf53d59402a6f96d420a34d7dbf021660589b04a4097da982780b9"
+      "sha256": "1f52c94ed2bf53d59402a6f96d420a34d7dbf021660589b04a4097da982780b9",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/en/dark/ai-studio.gif": {
       "scene": "ai-studio",
       "locale": "en",
       "theme": "dark",
       "bytes": 764413,
-      "sha256": "e05639ec7d4233bb8bbb9fe40e678429714dda29f786583086b9297f0d78202b"
+      "sha256": "e05639ec7d4233bb8bbb9fe40e678429714dda29f786583086b9297f0d78202b",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "videos/en/dark/ai-studio.mp4": {
       "scene": "ai-studio",
       "locale": "en",
       "theme": "dark",
       "bytes": 95129,
-      "sha256": "b15fafd7313acd0817cca55ff71f29e96af33aefd8c44b24c26e732f31240ee3"
+      "sha256": "b15fafd7313acd0817cca55ff71f29e96af33aefd8c44b24c26e732f31240ee3",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/workflow-list.png": {
       "scene": "workflows",
       "locale": "en",
       "theme": "dark",
-      "bytes": 264475,
-      "sha256": "29544b2473a109dbc232e228af5aa80bc34b4c5452565ff31187983854bceda3"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 185388,
+      "sha256": "9047f7d26ac4d407a8e675649762b84338112a00bc2c039e81992b74103e284f"
     },
     "screens/en/dark/workflows.png": {
       "scene": "workflows",
       "locale": "en",
       "theme": "dark",
-      "bytes": 403539,
-      "sha256": "2c3e490b7cefb2656d934885b9fe0b39085d76e726725fd12c830af1e0f4a0e7"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 299673,
+      "sha256": "5bc2d7c25d73fd00f8d8e3742e4f7235ad36d6048fbd7d3a45a9f14ca6c8a352"
     },
     "screens/en/dark/workflow-add-node.png": {
       "scene": "workflows",
       "locale": "en",
       "theme": "dark",
-      "bytes": 420129,
-      "sha256": "a91391b68b1c7fb5cd29e880247de89e6c61be298f8d8b64703d2d2dbe2e3df6"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 355241,
+      "sha256": "f8de89a9dacaae5a4362290bf7c76c44ce3e6c5e3a3f54d46b62d9bdac770a00"
     },
     "screens/en/dark/workflow-node.png": {
       "scene": "workflows",
       "locale": "en",
       "theme": "dark",
-      "bytes": 475778,
-      "sha256": "7a73bb1b85e278576cbf84641bc6768bb8b2d641132aac43e238755276a38189"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 371787,
+      "sha256": "a7742534162925a718b0c66148e461090d57936deec55a28445da3b3e83b85b0"
     },
     "gifs/en/dark/workflows.gif": {
       "scene": "workflows",
       "locale": "en",
       "theme": "dark",
-      "bytes": 2886596,
-      "sha256": "5e77f1b136defe1b84d7a00cf8918b774eb3db8d6e6d2a72ebf9837ac892180d"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 2949000,
+      "sha256": "d3833c0b0cd24a986451f94baae015f2db9ac1102b4679d64c52307a5ba04624"
     },
     "videos/en/dark/workflows.mp4": {
       "scene": "workflows",
       "locale": "en",
       "theme": "dark",
-      "bytes": 352474,
-      "sha256": "4badfb140f3bad18d234977f05c332552db1721531f8a400964a258642244400"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 311434,
+      "sha256": "c37176cb28bf71cb126c7f451c5bdc2a63e373cf00a0cc10e49cd7f9b35b7336"
     },
     "screens/en/dark/boards.png": {
       "scene": "boards",
       "locale": "en",
       "theme": "dark",
-      "bytes": 1237306,
-      "sha256": "0b299009f78a85b3e1d63f44d5583cf16e7d4fd52e5f0c679ec6be569178653e"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 395814,
+      "sha256": "566830fbe9848a67acc4bd3835116dc688ca629964049216864b754c685d27e7"
     },
     "screens/en/dark/board-form.png": {
       "scene": "boards",
       "locale": "en",
       "theme": "dark",
       "bytes": 1182244,
-      "sha256": "71d0d5fcd1d61e09bb9f07d3eb8bb9f487b0db33e5c1feb012ad37bd641cfae1"
+      "sha256": "71d0d5fcd1d61e09bb9f07d3eb8bb9f487b0db33e5c1feb012ad37bd641cfae1",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "screens/en/dark/board-mention.png": {
       "scene": "boards",
       "locale": "en",
       "theme": "dark",
       "bytes": 1204247,
-      "sha256": "a0273e4069a28d9a858f2a912ea387f5123d92930ca0e2ae796efdacb6054acf"
+      "sha256": "a0273e4069a28d9a858f2a912ea387f5123d92930ca0e2ae796efdacb6054acf",
+      "version": "1.0.0-beta5",
+      "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
+      "capturedAt": "2026-09-06T16:16:46.276895+00:00"
     },
     "gifs/en/dark/boards.gif": {
       "scene": "boards",
       "locale": "en",
       "theme": "dark",
-      "bytes": 3694146,
-      "sha256": "587145a8010fff359a47c392afd8d53b9e18463356737b1da6ca182a2d9b3d41"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 2794998,
+      "sha256": "d0a1486b784b6e612305d624ffebcddbfee30d7deb9c9a1149b0c23466c63ffa"
     },
     "videos/en/dark/boards.mp4": {
       "scene": "boards",
       "locale": "en",
       "theme": "dark",
-      "bytes": 414737,
-      "sha256": "3dc29c38f96c43fc751164505001979cfeab1d4cb2c73e9f5f69026e7a523e38"
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 342962,
+      "sha256": "c140b7649b4bb9a8e9778fd234ab60d5da2f1db111e765b46a1f618f15e1cca9"
+    },
+    "screens/scenes.png": {
+      "scene": "scenes",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 443124,
+      "sha256": "f4d79fd3e655e86c488b9bea8937a1d6cc26bd50cbcabd715db0b8b7700820ef"
+    },
+    "screens/scene-add.png": {
+      "scene": "scenes",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 440405,
+      "sha256": "7e05d6277639f2e5c85466a0e4f22b7f712f22270c9a11d0db3388fa6ca149d1"
+    },
+    "screens/scene-camera.png": {
+      "scene": "scenes",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 467683,
+      "sha256": "db5f658ec6b940509a5871286e1b4b441690640ac39e2c68eee5642d64121ade"
+    },
+    "screens/scene-observation.png": {
+      "scene": "scenes",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 489263,
+      "sha256": "f2b4ce87ea334bd0708d6248d6188208ae8aed72548757ea8b94c8603dbcdde5"
+    },
+    "screens/scene-keyframes.png": {
+      "scene": "scenes",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 672273,
+      "sha256": "887abd8d0d5d5769e4578ce328648f818112ea7979fca48e027084c0ca18607a"
+    },
+    "gifs/scenes.gif": {
+      "scene": "scenes",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 2580952,
+      "sha256": "2b453cafd0f524a3313b37cc86b148364aa8243900f5bebd558fb6ee35074972"
+    },
+    "videos/scenes.mp4": {
+      "scene": "scenes",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 382471,
+      "sha256": "113bd485f7f767beb859bc387a9fab9f4cd0b49e77c2d19058a9a20815f44782"
+    },
+    "screens/notes.png": {
+      "scene": "notes",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 387059,
+      "sha256": "48fbb3c62f527382702ae15708d9d60c8ef7e7baa955c003aa4cbea6181e2259"
+    },
+    "screens/notes-read.png": {
+      "scene": "notes",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 379176,
+      "sha256": "563d710511e6f734c6d92bbf32d77be5672fa59aac42c5a727c7e85f6a55f27e"
+    },
+    "screens/notes-markdown.png": {
+      "scene": "notes",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 343637,
+      "sha256": "79ac12a99cc053e985669c67b9ad1c75ab85170a751e2c66348e739b3bab1b2a"
+    },
+    "gifs/notes.gif": {
+      "scene": "notes",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 1933314,
+      "sha256": "542bc09608c4910f45f0cac847924e6b2e77ccc010de5048dcd1976014cf59d5"
+    },
+    "videos/notes.mp4": {
+      "scene": "notes",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 223371,
+      "sha256": "48d58d976437c4b06f6e22846ef1ff94d2df55248c34be8cdaee968d9e91a081"
+    },
+    "screens/annotations.png": {
+      "scene": "boards",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 388315,
+      "sha256": "04f96e5ef97724addf4c1ba9002e78252b9da4409e442f1bbe0f3974090c6c08"
+    },
+    "screens/marker-editor.png": {
+      "scene": "boards",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 428956,
+      "sha256": "791962b0df2b0d61eaed2f4054e6b009a50e252015afe5358d25507932680d8c"
+    },
+    "gifs/annotations.gif": {
+      "scene": "annotations",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 2360293,
+      "sha256": "04672b287203a9e1096ca89d45da0891d7462c5f6c1f3256f27ead0619c49738"
+    },
+    "videos/annotations.mp4": {
+      "scene": "annotations",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 330182,
+      "sha256": "3b8180c541a1d88c81635da1e5c84c2cb455d6dc3f7e7d64d157e408ad59be01"
+    },
+    "screens/dark/scenes.png": {
+      "scene": "scenes",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 449274,
+      "sha256": "cc32223380df6533245e5bde456370d8a01f8e777328ebc10eda0f1ef1b6e41a"
+    },
+    "screens/dark/scene-add.png": {
+      "scene": "scenes",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 446059,
+      "sha256": "e55e67960021b58d19a69f55808b44fe995d1226e954456d0f2765d1f678430f"
+    },
+    "screens/dark/scene-camera.png": {
+      "scene": "scenes",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 470156,
+      "sha256": "334dd47a6a5ee4ba59cd30bf6f376442ceb611b57edc787446d906d148fefa88"
+    },
+    "screens/dark/scene-observation.png": {
+      "scene": "scenes",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 497373,
+      "sha256": "ea2a7df17884a984bc7df386452e8a3a27b7ea66751a057f3a3684934d7c5807"
+    },
+    "screens/dark/scene-keyframes.png": {
+      "scene": "scenes",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 675217,
+      "sha256": "45b10cf001bde2a2df6f1a330ffccec77931d7b1d073969ccf55e6219da189d7"
+    },
+    "gifs/dark/scenes.gif": {
+      "scene": "scenes",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 3151555,
+      "sha256": "3a2653046649cdde6f669f659b400267b0a18bfc1c6808c79c95db6b53d70198"
+    },
+    "videos/dark/scenes.mp4": {
+      "scene": "scenes",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 391678,
+      "sha256": "46f999009011dc380a21839179f102a8819027a05cfc41232b49d20cd9f2f16b"
+    },
+    "screens/dark/notes.png": {
+      "scene": "notes",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 387444,
+      "sha256": "7299a6bb36a90f711c232c3649e780a3a69151dee3570765675608c3729581c1"
+    },
+    "screens/dark/notes-read.png": {
+      "scene": "notes",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 379414,
+      "sha256": "46ac09c7bd860df4723952df7299c2d4143f615736698e5f77f20754885d5212"
+    },
+    "screens/dark/notes-markdown.png": {
+      "scene": "notes",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 343067,
+      "sha256": "ab07189be4dcd350a163ab291ec212500331108f9b1a91e12422935932940629"
+    },
+    "gifs/dark/notes.gif": {
+      "scene": "notes",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 2342985,
+      "sha256": "870c7899cd8213c302350d408d926d284598d9d0b5bfc4084a40f66a37c99d4a"
+    },
+    "videos/dark/notes.mp4": {
+      "scene": "notes",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 268204,
+      "sha256": "1b58b6fbf1b0f640671798f02ada9b7ad90fbebc879a6132df9dd114c16f5a25"
+    },
+    "screens/dark/annotations.png": {
+      "scene": "boards",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 388941,
+      "sha256": "fb41cac23272a0d2cca0deadf235a0775e5d625cdb2b7c9307c5ff0ab460e371"
+    },
+    "screens/dark/marker-editor.png": {
+      "scene": "boards",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 422300,
+      "sha256": "f7082d38045659bce2cced1f79f617ae2f2357f156037935b69e98a7a5d91033"
+    },
+    "gifs/dark/annotations.gif": {
+      "scene": "annotations",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 2711404,
+      "sha256": "cca2c00eb772526ed183bd92d242030aa9d41140bdf97bbbb99451deba726eec"
+    },
+    "videos/dark/annotations.mp4": {
+      "scene": "annotations",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 337989,
+      "sha256": "c9b442465c8be3c7c7e9abc6ab8e837e1f3e33fdbbecbd4ab41220e500d060c7"
+    },
+    "screens/en/scenes.png": {
+      "scene": "scenes",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 454456,
+      "sha256": "4786793e2f33b4bd8a8fc37dc0404a226a285eeac92713ac57573c6398f64ca8"
+    },
+    "screens/en/scene-add.png": {
+      "scene": "scenes",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 451773,
+      "sha256": "b20e97fbc4aebc372fbfe8942faaed9aa044e0017726402fbc81a1911dbc9c20"
+    },
+    "screens/en/scene-camera.png": {
+      "scene": "scenes",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 478541,
+      "sha256": "57d8854cc3b4de09efc197f1e2da68e6a07381c774ea6e6ce0112893244f40a2"
+    },
+    "screens/en/scene-observation.png": {
+      "scene": "scenes",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 504469,
+      "sha256": "94d0583aaca11b13ab5285d69105c28e9152741ba6b8758b1215d2bdb530c015"
+    },
+    "screens/en/scene-keyframes.png": {
+      "scene": "scenes",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 681704,
+      "sha256": "10901f5a83b19d41769d2bc60f48bf18afed875ff59e7953a891622cf06cacdc"
+    },
+    "gifs/en/scenes.gif": {
+      "scene": "scenes",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 2977747,
+      "sha256": "6a8271c8a107a7da75f6137967eda4763805ed352f8f91d16692987f1eacc2c3"
+    },
+    "videos/en/scenes.mp4": {
+      "scene": "scenes",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 393355,
+      "sha256": "ee391edfbffa64538817727d3a1d26f1f76098b9fd23173a502a479eed88310e"
+    },
+    "screens/en/notes.png": {
+      "scene": "notes",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 398126,
+      "sha256": "1084cd0171e8842a3298a61b0587034dca8dc1ba5b67cc692fa1e76390349399"
+    },
+    "screens/en/notes-read.png": {
+      "scene": "notes",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 388810,
+      "sha256": "f79d0c4502eaf74ba10db419d1a4d25bd31acac93c031cbe99122adbd76ec1ac"
+    },
+    "screens/en/notes-markdown.png": {
+      "scene": "notes",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 353445,
+      "sha256": "b11266db41ceb3563a2ac6e5d60a3a4041a565bb090f0975e15ac002a4d9e9e9"
+    },
+    "gifs/en/notes.gif": {
+      "scene": "notes",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 1516636,
+      "sha256": "21fbc2ad7a1f8c1e09776aad519e3878b1f6f022f948d43cab86983c897816f0"
+    },
+    "videos/en/notes.mp4": {
+      "scene": "notes",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:25:49.627779+00:00",
+      "bytes": 189670,
+      "sha256": "990a9efd85132f979fee8a98982c85e2133a240937eb8bca440fe7c7aedd07d5"
+    },
+    "screens/en/annotations.png": {
+      "scene": "boards",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 397853,
+      "sha256": "4d5d05b872fc860eee04b4535afeb464ed431bd9bf7c5bc191f5469c6d57c2c9"
+    },
+    "screens/en/marker-editor.png": {
+      "scene": "boards",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 440594,
+      "sha256": "9f20f670cfde8ffa674c960c7f9b7ae871534652443354c71c270d65b18f1225"
+    },
+    "gifs/en/annotations.gif": {
+      "scene": "annotations",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:29:14.168966+00:00",
+      "bytes": 2553824,
+      "sha256": "93b7f23705a7a56172bf8bac2e860d90d898755ae93c1359b5ac947bb0da9565"
+    },
+    "videos/en/annotations.mp4": {
+      "scene": "annotations",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:29:14.168966+00:00",
+      "bytes": 361424,
+      "sha256": "2aa867289cca72b6f0d4492fdc07670e1312ad9f9b8f6f42cd44c90ff43812c7"
+    },
+    "screens/en/dark/scenes.png": {
+      "scene": "scenes",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:29:31.134843+00:00",
+      "bytes": 459684,
+      "sha256": "2aac143297487172d04f3b6344f9959f67e51472796dcd60d886a461f0a60bfb"
+    },
+    "screens/en/dark/scene-add.png": {
+      "scene": "scenes",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:29:31.134843+00:00",
+      "bytes": 456759,
+      "sha256": "829f25db2d288dc7c3702042c9abee52ab91e3f97154c21d956602450c18e841"
+    },
+    "screens/en/dark/scene-camera.png": {
+      "scene": "scenes",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:29:31.134843+00:00",
+      "bytes": 481069,
+      "sha256": "680f2d64de737b7509ea1777c12f9b360e5b6b791bf96aff60d796b859a2b83e"
+    },
+    "screens/en/dark/scene-observation.png": {
+      "scene": "scenes",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:29:31.134843+00:00",
+      "bytes": 506897,
+      "sha256": "c5c02aa6985ff301cb4c0260120993a4aae3687cde91e672bd5c43f6a2646195"
+    },
+    "screens/en/dark/scene-keyframes.png": {
+      "scene": "scenes",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:29:31.134843+00:00",
+      "bytes": 684994,
+      "sha256": "f370f5e63ad7fe5b06745b1d9a155450849ca6ad84d0e065317f6482b0a008cd"
+    },
+    "gifs/en/dark/scenes.gif": {
+      "scene": "scenes",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:29:31.134843+00:00",
+      "bytes": 3352466,
+      "sha256": "e0f90f1d01da978b9b2fd5cc859755d33da9b0fca06dbd2985a1f5e1203d0a13"
+    },
+    "videos/en/dark/scenes.mp4": {
+      "scene": "scenes",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:29:31.134843+00:00",
+      "bytes": 442799,
+      "sha256": "ba0794ff9a4c278aa14bb3eadba2987d24565b72054399316fca9e3e050e3ee1"
+    },
+    "screens/en/dark/notes.png": {
+      "scene": "notes",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:29:31.134843+00:00",
+      "bytes": 399013,
+      "sha256": "b950d9996df11f81ca716e9ed13535f672daf17828d0045206e9982403b0b873"
+    },
+    "screens/en/dark/notes-read.png": {
+      "scene": "notes",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:29:31.134843+00:00",
+      "bytes": 389564,
+      "sha256": "60d6d602122924ac3c8975dd54a762b52eb6201db6fc020fa2632caff4afcecb"
+    },
+    "screens/en/dark/notes-markdown.png": {
+      "scene": "notes",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:29:31.134843+00:00",
+      "bytes": 353601,
+      "sha256": "17f6dc09be6dea6600f3fa4eabf3204970cb8f07f1aaf3772472ee3a41219538"
+    },
+    "gifs/en/dark/notes.gif": {
+      "scene": "notes",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:29:31.134843+00:00",
+      "bytes": 1969519,
+      "sha256": "a85e6c1ca5c90c02223f927a475ba6d23ac10f887eea45067110e82d63239752"
+    },
+    "videos/en/dark/notes.mp4": {
+      "scene": "notes",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:29:31.134843+00:00",
+      "bytes": 206593,
+      "sha256": "0f9b745d4f70b4a979116ebd79733b5b96c42afb5bc9f759c2c9a265f1b8edb6"
+    },
+    "screens/en/dark/annotations.png": {
+      "scene": "boards",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 399153,
+      "sha256": "5807b306826870cfffd8acaf452b844ed2c4483a1ddf3c694157e5b4f2cd61f1"
+    },
+    "screens/en/dark/marker-editor.png": {
+      "scene": "boards",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:30:47.361202+00:00",
+      "bytes": 432876,
+      "sha256": "1594c333c7adc02aa5085dd3f19c75a6d9708ea0641bfdd5d01f49e374fcff70"
+    },
+    "gifs/en/dark/annotations.gif": {
+      "scene": "annotations",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:29:31.134843+00:00",
+      "bytes": 2660369,
+      "sha256": "cc9a2aa3aa520dca44428d57ce3f19ef8fded824b928b0b64285d10c67fc24cf"
+    },
+    "videos/en/dark/annotations.mp4": {
+      "scene": "annotations",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:29:31.134843+00:00",
+      "bytes": 336731,
+      "sha256": "97252756e60eb4dcb618d90fc1ded79cdf7b5e0fdcfde2ed25ec9d5cf5a36996"
+    },
+    "screens/plugin-connection.png": {
+      "scene": "plugins",
+      "locale": "zh",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:33:55.889783+00:00",
+      "bytes": 460257,
+      "sha256": "67e29618167c5ea4f5bbc7a2017f9eeb98b843f3374368fb58f42228649c8752"
+    },
+    "screens/dark/plugin-connection.png": {
+      "scene": "plugins",
+      "locale": "zh",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:33:55.889783+00:00",
+      "bytes": 444875,
+      "sha256": "920687436673ddd25fa757f9604afb93ccb34221d8a272751055f5b6828c4964"
+    },
+    "screens/en/plugin-connection.png": {
+      "scene": "plugins",
+      "locale": "en",
+      "theme": "light",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:33:55.889783+00:00",
+      "bytes": 494888,
+      "sha256": "eb931346b5517664e6861688fdca892a7a23436d25fa8cd79d95d2805f0f0697"
+    },
+    "screens/en/dark/plugin-connection.png": {
+      "scene": "plugins",
+      "locale": "en",
+      "theme": "dark",
+      "version": "1.2.0",
+      "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+      "capturedAt": "2026-09-08T16:33:55.889783+00:00",
+      "bytes": 477687,
+      "sha256": "50dc942790541af6c6730043131a8f9d2c9a3d5caadcfccb24184282e32aca80"
     }
   },
-  "version": "1.0.0-beta5",
-  "sourceCommit": "8ce2fd9957660648f92ec7e14d75b2475e624dbf",
-  "capturedAt": "2026-09-06T16:16:46.276895+00:00",
+  "version": "1.2.0",
+  "sourceCommit": "431fddf3bebf8f42b8de358e67e16924b2a07183",
+  "capturedAt": "2026-09-08T16:33:55.889783+00:00",
   "viewport": {
     "width": 1440,
     "height": 900
   },
   "note": "Live interface captures. Licensed sample footage and manually prepared editing exercise; no simulated AI replies or publishing successes.",
-  "documentedVersion": "1.1.0"
+  "documentedVersion": "1.2.0"
 }

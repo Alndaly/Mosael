@@ -2,8 +2,8 @@
 title: Visual workflows
 description: Node-based orchestration — nodes, edges, variables, connected inputs, readiness checks, triggers, AI building.
 order: 6
-updated: 2026-09-07
-version: 1.1.0
+updated: 2026-09-09
+version: 1.2.0
 ---
 
 Workflows orchestrate a chain of actions (retrieval, generation, transcription, export, publishing, …) into a **DAG**, triggered manually, on a schedule, or via webhook. The design takes cues from Dify / Coze.
@@ -106,3 +106,11 @@ The toolbar's **AI assistant** uses the shared persistent session pool: describe
 in natural language and it builds / edits nodes for you; changes go through confirmation cards.
 Its top-left title is the active conversation — click it to search or switch sessions — and the
 panel can dock beside the canvas or float above it.
+
+## Comments and markers
+
+The comment and flag buttons enter separate, mutually exclusive modes. Escape exits. Their eye buttons independently show or hide all comments or markers without deleting them. Markers are not listed in Add node.
+
+In marker mode, click empty space to place a position bookmark, then set its name and jump shortcut. Only one marker editor opens per canvas. Clear a binding beside the shortcut field or remove the marker using the footer action. In comment mode, click empty space to write a comment and mention workspace members with `@`. Submitted mentions keep their interactive labels. Use the pencil to edit your own comment. Adjacent comment pins remain directly clickable.
+
+Switching modes or undoing preserves graph connections. Toolbar groups use separators. Comments and markers are collaboration overlays and do not execute as graph nodes.

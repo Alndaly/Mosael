@@ -2,8 +2,8 @@
 title: Plugins
 description: A local script or an existing MCP server — wire it in and it becomes a tool for the agent and workflows.
 order: 10
-updated: 2026-09-07
-version: 1.1.0
+updated: 2026-09-09
+version: 1.2.0
 ---
 
 A plugin brings capability from outside Mosael in — a local script, or an existing MCP
@@ -159,3 +159,9 @@ Five of them live under `plugins/examples/` in the repository:
   add-on as a plugin and declares each tool as read-only or writing (inspecting the scene and
   its objects only read; editing the model writes), so you decide per tool what the agent may
   do on its own and what needs your confirmation.
+
+## Create a connection
+
+Select a plugin and use **New connection** in its header. Enter configuration in the dialog; configuration, permissions and selected tools belong to that connection. A plugin can have multiple connections. For the Blender workbench, see [3D scenes and animation](/docs/guides/scenes).
+
+![Blender connection configuration](/media/screens/en/plugin-connection.png)

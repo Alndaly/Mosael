@@ -53,3 +53,11 @@ Connect your chosen Mosael agent to local Blender, then exchange models and came
 Install `uv`, run `uv run plugins/examples/blender/install-extension.py`, and enable **MCP for Blender** in Blender. The script installs it as an *extension* (Blender 4.2+), because upstream only ships a legacy add-on and Blender 5.x hides those by default — installing upstream's way leaves the file present but invisible in Preferences. Re-run it after upstream upgrades; it also removes the legacy copy, which would otherwise fight for the same port. Copy this plugin folder into the Mosael data directory under `plugins/blender`, scan it in Plugins, create a connection, grant its declared permissions, and enable it. Keep Blender and the desktop backend on the same computer.
 
 Use **3D scene → Blender** to check the connection, send a saved scene, and receive edits back into the current scene as an undoable change (or into a separate new scene with **另存为新场景**). Cameras return as sampled editable shots; geometry returns as one GLB model. Download the associated `.blend` project for native editing. Agent tools work with the model you choose. See the limitations above before using large scenes or advanced Blender animation/materials.
+
+## Mosael 1.2.0 的时间轨
+
+相机与普通物体都在底部时间线中编辑；选中对象、移动播放头、调整姿态后按 **I** 插入关键帧。镜头通过 `camera_id` 选择机位，相机关键帧保存在该物体的 `track` 上。
+
+发送边界会把相机轨道转换为 Blender 使用的逐镜头帧序列，空轨按固定机位发送；未填写的 FOV/目标使用机位自身值。首帧之前保持第一帧，不向外推算。接回时保留线性采样节奏，相机使用回传的世界坐标，不再引用已被整体模型替代的原组。
+
+生成参考图可附带单独渲染的中性灰模；模型与参考帧导出会排除嵌套组内的编辑摄像机辅助物。Mosael 的普通物体动画仍不作为 Blender 原生动画轨往返，复杂动画应保留 `.blend` 工程。

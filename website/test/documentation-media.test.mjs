@@ -23,7 +23,7 @@ test('every current screenshot and recording has an intact live-capture provenan
 });
 
 test('all scenes have light/dark and Chinese/English recordings', () => {
-  for (const scene of ['home', 'media-preview', 'timeline-edit', 'subtitle-dub', 'ai-studio', 'workflows', 'boards', 'plugins', 'publishing', 'scheduler', 'providers', 'appearance', 'login']) {
+  for (const scene of ['scenes', 'notes', 'annotations', 'home', 'media-preview', 'timeline-edit', 'subtitle-dub', 'ai-studio', 'workflows', 'boards', 'plugins', 'publishing', 'scheduler', 'providers', 'appearance', 'login']) {
     for (const locale of ['zh', 'en']) for (const theme of ['light', 'dark']) {
       const directory = `${locale === 'en' ? 'en/' : ''}${theme === 'dark' ? 'dark/' : ''}`;
       for (const [kind, extension] of [['gifs', 'gif'], ['videos', 'mp4']]) {

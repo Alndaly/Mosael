@@ -2,8 +2,8 @@
 title: Creative boards
 description: An infinite canvas — notes, images, video and audio wired together, where a connection means "use this as input".
 order: 5
-updated: 2026-09-07
-version: 1.1.0
+updated: 2026-09-09
+version: 1.2.0
 ---
 
 A board is where ideas get spread out. Talking to the agent is telling it what you want; a board
@@ -99,6 +99,24 @@ updates, and one-per-update would mean dozens of presses to get back.
 
 Selecting a node opens a translucent, blurred form above the canvas. Long model names ellipsize; click parameters such as aspect ratio and duration to expand their choices. The `@` media menu follows the input and adjusts to available viewport space.
 
-<Recording src="/media/videos/en/boards.mp4" poster="/media/screens/en/boards.png" caption="Live capture: open a generation form and the @ media picker" />
+<Recording src="/media/videos/en/boards.mp4" poster="/media/screens/en/boards.png" caption="Live capture: document dragging, marker configuration and modes" />
 
-The demo has no generation provider configured, so the `@` menu explains that no reference inputs are available. Configure a model that supports references to see eligible assets in this menu.
+The recording demonstrates document references and markers without invoking a generation model. Eligible `@` media inputs depend on the selected model.
+
+## Comments and markers
+
+The comment and flag buttons enter separate, mutually exclusive modes. Escape exits. Their eye buttons independently show or hide all comments or markers without deleting them. Markers are not listed in Add node.
+
+In marker mode, click empty space to place a position bookmark, then set its name and jump shortcut. Only one marker editor opens per canvas. Clear a binding beside the shortcut field or remove the marker using the footer action. In comment mode, click empty space to write a comment and mention workspace members with `@`. Submitted mentions keep their interactive labels. Use the pencil to edit your own comment. Adjacent comment pins remain directly clickable.
+
+Switching modes or undoing preserves graph connections. Toolbar groups use separators. Comments and markers are collaboration overlays and do not execute as graph nodes.
+
+## Document and 3D references
+
+Use Add → Document to select a fixed note revision. Dragging its text or embedded image moves the node, and its header keeps the same height across modes. Connect it downstream as reference text; update the revision or open the source from the footer.
+
+Add → 3D scene selects a workspace scene. Generate images from its reference frame, or feed first/last frames or a camera preview into a video model. See [3D scenes and animation](/docs/guides/scenes).
+
+![Document references and canvas markers](/media/screens/en/annotations.png)
+
+<Recording src="/media/videos/en/annotations.mp4" poster="/media/screens/en/annotations.png" caption="Live interaction: document dragging, marker mode and visibility" />

@@ -1,6 +1,14 @@
 {
-  "fetchedAt": "2026-09-06T17:06:38.166217+00:00",
+  "fetchedAt": "2026-09-08T16:28:36.210941+00:00",
   "releases": [
+    {
+      "tag_name": "v1.1.0",
+      "name": "Mosael v1.1.0",
+      "body": "**Full Changelog**: https://github.com/Alndaly/Mosael/compare/v1.0.0...v1.1.0",
+      "draft": false,
+      "prerelease": false,
+      "published_at": "2026-09-07T14:15:11Z"
+    },
     {
       "tag_name": "v1.0.0",
       "name": "Mosael v1.0.0",
@@ -232,14 +240,6 @@
       "draft": false,
       "prerelease": false,
       "published_at": "2026-08-18T14:43:47Z"
-    },
-    {
-      "tag_name": "v0.18.13",
-      "name": "Open Studio v0.18.13",
-      "body": "**Full Changelog**: https://github.com/Alndaly/OpenStudio/compare/v0.18.12...v0.18.13",
-      "draft": false,
-      "prerelease": false,
-      "published_at": "2026-08-18T11:58:26Z"
     }
   ]
 }

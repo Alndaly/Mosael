@@ -1,6 +1,6 @@
 # Current interface captures
 
-The website and both READMEs use the **1.0.0** interface captured from the running app, not reconstructed UI or generated mockups. The canonical files live in [`website/public/media`](../../website/public/media). Historical design-review attachments elsewhere in `docs` are not current product documentation.
+Documentation targets **1.2.0**. Changed 3D, note and annotation views are freshly captured from the running app; unchanged views retain their earlier captures, not reconstructed UI or generated mockups. The canonical files live in [`website/public/media`](../../website/public/media). Historical design-review attachments elsewhere in `docs` are not current product documentation.
 
 ## Source and credit
 
@@ -14,10 +14,10 @@ The demo backend is isolated from personal projects and credentials. Empty AI an
 - `gifs/`: actual browser recordings converted to looping 960 × 600 GIFs.
 - `videos/`: the same interactions as user-controlled 1280 × 800 MP4 recordings.
 - Chinese light files are at each directory root; `dark/` contains Chinese dark; `en/` and `en/dark/` contain English light and dark.
-- `capture-manifest.json` records source commit, capture time, scene, locale, theme, byte count and SHA-256 for every capture.
+- `capture-manifest.json` records per-file source commit, capture version/time, scene, locale, theme, byte count and SHA-256. The batch documentedVersion is not a claim that every file was recaptured.
 - `mosael-promo.mp4` is a concatenation of the current Home, media preview, timeline, board and workflow screen recordings, with no simulated product output.
 
-Scenes: Home and project navigation; import and media previews; timeline selection/playback; subtitle dubbing and Transcript; AI Chat/Trace/Generate; workflow node catalog and parameters; board forms and `@` media picker; plugin connections; publishing form and browser accounts; scheduled tasks; provider/ASR settings; interface fonts; sign-in.
+Scenes: 3D camera views and object keys; note editing/reading/Markdown; document dragging and marker modes; Home and project navigation; import and media previews; timeline selection/playback; subtitle dubbing and Transcript; AI Chat/Trace/Generate; workflow node catalog and parameters; board forms and `@` media picker; plugin connections; publishing form and browser accounts; scheduled tasks; provider/ASR settings; interface fonts; sign-in.
 
 The previous handcrafted promo, obsolete GIF aliases and unused website hero images were retired rather than left beside current captures.
 
@@ -42,4 +42,6 @@ After recording, review screenshots and moving frames, update the related biling
 
 `readme-showcase.png` is an AI-assisted decorative composition of the three unaltered application captures preserved in `readme-shots/`. The layers show dark Space Grotesk editing, light Caveat handwriting, and dark Newsreader media browsing. The composite is promotional artwork; use the original captures and canonical website images to inspect interface details. These additional screenshots share the sample-footage credit above.
 
-The canonical capture manifest retains the original capture version (`1.0.0-beta5`) and records `documentedVersion: 1.0.0`. The stable release uses the same interface code; only release metadata changed after capture.
+The manifest records `documentedVersion: 1.2.0`. Each file keeps its own capture version and source commit. Some unchanged views still originate from 1.0.0-beta5; fresh files are tagged 1.2.0. The 3D scene and bilingual gallery brief are manually prepared demonstration content, not generated results. Some 3D controls currently remain Chinese in English mode; recordings preserve the real interface.
+
+For the new scenes, use `--only scenes,notes,annotations`. The fixture needs `scene`, `note` and `board` IDs for the gallery example, gallery brief and story board; titles are declared in the capture script. No provider calls, publication or external messages are performed.

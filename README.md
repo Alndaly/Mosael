@@ -29,7 +29,7 @@ the finished story without shuttling the project between a pile of tools.
 
 ## Download and run
 
-Current stable release: **[Mosael 1.0.0](https://github.com/Alndaly/Mosael/releases/tag/v1.0.0)**.
+Current stable release: **[Mosael 1.2.0](https://github.com/Alndaly/Mosael/releases/tag/v1.2.0)**.
 
 Download a build from [GitHub Releases](https://github.com/Alndaly/Mosael/releases):
 
@@ -148,6 +148,16 @@ installation, Mosael reads the manifest and shows its permissions, credentials, 
 Once enabled, the same tools are available to both agents and workflows. Plugins can receive media,
 return files, and use persistent secrets managed by the host.
 
+## 3D scenes and canvas collaboration
+
+Build a scene and keyframe objects and cameras in one timeline. Switch between camera composition and global path observation, then hand reference frames to an image model or first/last frames and camera previews to a video model. Fullscreen retains the assistant and inspector; Blender changes can replace the current scene or become a new scene.
+
+Drag document content directly. Comments and markers have separate modes and visibility switches; comments support editing and interactive member mentions.
+
+![3D scene and object timeline](website/public/media/screens/en/scenes.png)
+
+[3D guide](https://mosael.com/en/docs/guides/scenes) · [Notes and knowledge](https://mosael.com/en/docs/guides/notes)
+
 ## Documentation
 
 Complete user guides live at **[mosael.com](https://mosael.com)**; their source is under
@@ -156,7 +166,7 @@ Complete user guides live at **[mosael.com](https://mosael.com)**; their source 
 | Document | Covers |
 | --- | --- |
 | [CHANGELOG.md](CHANGELOG.md) | User-visible changes by release |
-| [docs/3D_SCENES.md](docs/3D_SCENES.md) | Editable 3D scenes, camera paths, exports and model-independent generation (development branch) |
+| [docs/3D_SCENES.md](docs/3D_SCENES.md) | Editable 3D scenes, camera paths, exports and model-independent generation |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Bootstrap, domain boundaries, data model, and key conventions |
 | [docs/PUBLISHING.md](docs/PUBLISHING.md) | Publishing matrix, embedded browser, worker protocol, and troubleshooting |
 | [docs/MCP.md](docs/MCP.md) | Agent tools and confirmation cards |
@@ -325,4 +335,4 @@ and personal non-commercial purposes; commercial use and redistribution require 
 See [LICENSE](LICENSE). Contact the maker through the [community and contact page](https://mosael.com/en/docs/about/contact),
 or follow [KindaHuaX on X](https://x.com/KindaHuaX), for commercial licensing.
 
-Interface captures are updated for **1.0.0**. See [Appearance and fonts](https://mosael.com/en/docs/guides/appearance), [Scheduled tasks](https://mosael.com/en/docs/guides/scheduler), and [capture credits](docs/media/README.md).
+Documentation targets **1.2.0**; changed scene, note and annotation views have fresh captures. See [Appearance and fonts](https://mosael.com/en/docs/guides/appearance), [Scheduled tasks](https://mosael.com/en/docs/guides/scheduler), and [capture credits](docs/media/README.md).

@@ -117,8 +117,9 @@ def boards(c):
 
 def plugins(c):
     c.goto('plugins');c.shot('plugins');c.begin()
-    c.page.get_by_role('button',name=re.compile('百度网盘|Baidu Netdisk')).first.click();c.hold(1400)
-    c.page.get_by_role('button',name=re.compile('Text Toolkit')).first.click();c.hold()
+    c.click('新建连接','New connection');c.hold(1200);c.shot('plugin-connection');c.escape()
+    c.page.get_by_role('button',name=re.compile('百度网盘|Baidu Netdisk')).first.click();c.hold(1100)
+
 
 def publishing(c):
     c.goto('publish');c.shot('publish');c.begin()
@@ -147,7 +148,40 @@ def login(c):
     c.page.reload(wait_until='networkidle');c.hold(1200);c.shot('login');c.begin()
     c.page.get_by_role('textbox').first.fill('creator');c.hold(1800)
 
-SCENES={'home':home,'media-preview':media,'timeline-edit':editor,'subtitle-dub':subtitles,'ai-studio':ai,'workflows':workflows,'boards':boards,'plugins':plugins,'publishing':publishing,'scheduler':scheduler,'providers':settings,'appearance':appearance,'login':login}
+def scenes(c):
+    c.goto('scenes')
+    c.page.get_by_text('三间展厅 · Camera study',exact=True).click();c.hold(1500)
+    c.shot('scenes');c.begin()
+    c.click('添加物体');c.shot('scene-add');c.hold(900);c.escape()
+    c.click('机位视角');c.shot('scene-camera');c.hold(1100)
+    c.click('俯瞰全场');c.click('播放镜头');c.hold(2200);c.click('暂停');c.shot('scene-observation')
+    c.click('自由视角');c.click('回到起点')
+    c.page.locator('button').filter(has_text=re.compile('^产品占位球$')).last.click();c.hold()
+    c.page.keyboard.press('i');c.hold();c.click('跳到结尾');c.page.keyboard.press('i');c.hold()
+    c.shot('scene-keyframes')
+
+def notes(c):
+    c.goto('notes?note='+c.fixture['note']);c.shot('notes');c.begin()
+    c.click('阅读','Read');c.hold(1100);c.shot('notes-read')
+    c.click('Markdown');c.hold(1300);c.shot('notes-markdown')
+    c.click('编辑','Edit');c.hold(1000)
+
+def annotations(c):
+    c.goto('boards');c.page.get_by_text('展厅创作 · Story board',exact=True).click();c.hold(1200)
+    c.click('适应画布','Fit to view');c.shot('annotations');c.begin()
+    doc=c.page.locator('.react-flow__node[data-id="brief"]')
+    box=doc.bounding_box();c.page.mouse.move(box['x']+90,box['y']+140);c.page.mouse.down();c.page.mouse.move(box['x']+130,box['y']+150,steps=15);c.page.mouse.up();c.hold()
+    c.click('标记模式','Marker mode')
+    c.page.get_by_role('button',name='开场 · Opening',exact=True).click();c.hold();c.shot('marker-editor')
+    c.page.get_by_role('button',name='结尾 · Finale',exact=True).click();c.hold();c.escape()
+    c.click('隐藏标记','Hide markers');c.hold();c.click('显示标记','Show markers')
+    c.click('评论模式','Comment mode');c.hold(1100);c.escape();c.hold()
+
+def board_collaboration(c):
+    annotations(c)
+    c.shot('boards')
+
+SCENES={'scenes':scenes,'notes':notes,'annotations':annotations,'home':home,'media-preview':media,'timeline-edit':editor,'subtitle-dub':subtitles,'ai-studio':ai,'workflows':workflows,'boards':board_collaboration,'plugins':plugins,'publishing':publishing,'scheduler':scheduler,'providers':settings,'appearance':appearance,'login':login}
 
 def encode(src,target,start,duration,gif):
     base=['ffmpeg','-y','-v','error','-ss',str(max(0,start)),'-i',str(src),'-t',str(duration),'-an']
@@ -171,6 +205,10 @@ def main():
     locales=['zh','en'] if args.locale=='both' else [args.locale]
     manifest=PUBLIC/'capture-manifest.json';data=json.loads(manifest.read_text()) if manifest.exists() else {'captures':{}}
     version=json.loads((ROOT/'package.json').read_text())['version']
+    # Preserve the provenance of reused captures before updating the batch metadata.
+    for capture in data.get('captures', {}).values():
+        for key in ('version', 'sourceCommit', 'capturedAt'):
+            if key in data: capture.setdefault(key, data[key])
     data.update({'version':version,'documentedVersion':version,'sourceCommit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),'capturedAt':datetime.now(timezone.utc).isoformat(),'viewport':VIEWPORT,'note':'Live interface captures. Licensed sample footage and manually prepared editing exercise; no simulated AI replies or publishing successes.'})
     with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='mosael-record-') as tmp:
         browser=p.chromium.launch()
@@ -196,7 +234,7 @@ def main():
                     for kind,ext in [('gifs','gif'),('videos','mp4')]:
                         target=c.path(kind,f'{name}.{ext}');encode(raw,target,c.start-origin,duration,ext=='gif');c.outputs.append(target)
                     for target in c.outputs:
-                        rel=str(target.relative_to(PUBLIC));data['captures'][rel]={'scene':name,'locale':locale,'theme':theme,'bytes':target.stat().st_size,'sha256':hashlib.sha256(target.read_bytes()).hexdigest()}
+                        rel=str(target.relative_to(PUBLIC));data['captures'][rel]={'scene':name,'locale':locale,'theme':theme,'version':version,'sourceCommit':data['sourceCommit'],'capturedAt':data['capturedAt'],'bytes':target.stat().st_size,'sha256':hashlib.sha256(target.read_bytes()).hexdigest()}
                     manifest.write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n')
                     raw.unlink(missing_ok=True)
         browser.close()

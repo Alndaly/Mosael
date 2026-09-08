@@ -23,7 +23,7 @@ const nextConfig: NextConfig = {
    * 全站路由都在 `[locale]` 段下(见 src/app/[locale]/layout.tsx 的说明),`/` 本身没有页面。
    *
    * 这里不做基于 Accept-Language 的协商:那需要 middleware,而 middleware 会让每个请求都
-   * 过一次边缘函数,还会让站点没法纯静态导出。中文是默认语言,英文用户在站头一键就能切,
+   * 过一次边缘函数,还会让站点没法纯静态导出。英文是默认语言,中文用户在站头一键就能切,
    * 且切换会记在 URL 里 —— 分享出去的链接自带语言,比嗅探来得可预期。
    */
   async redirects() {
