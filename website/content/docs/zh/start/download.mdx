@@ -17,14 +17,14 @@ Mosael 是本地优先的桌面应用：本地素材剪辑与导出可离线。�
 | 平台 | 产物 | 说明 |
 | --- | --- | --- |
 | macOS | `Mosael-<版本>-arm64.dmg` | Apple Silicon(M 系列) |
-| Windows | `Mosael Setup <版本>.exe` | Windows 10 / 11(x64),NSIS 安装器 |
+| Windows | `Mosael.Setup.<版本>.exe` | Windows 10 / 11(x64),NSIS 安装器 |
 
 应用启动后会静默比对 Releases 的最新稳定版，发现新版会提示前往下载；设置 → 本地后端 → 版本 里也有
 「检查更新」按钮。GitHub 预发布版不会主动推送，需要从 Releases 页面明确选择下载。
 
 <Aside type="note" title="安装包签名">
 
-1.2.0 正在准备发布，其 macOS 安装包将通过 Developer ID 签名与 Apple 公证。当前下载链接仍指向最新已发布版本；不要将发布准备状态视为新安装包已经可用。
+1.2.0 已正式发布。macOS 应用与 DMG 均已完成 Developer ID 签名、安全时间戳和 Apple 公证，并附加公证票据。兼容且已录入指纹的 Mac 可在浏览器池使用设备绑定的 Touch ID passkey。
 
 Windows 安装包暂未签名，SmartScreen 可能提示未知发布者；继续安装前请确认下载来源。
 

@@ -40,6 +40,8 @@ App 专用密码撤销后，重新生成密码并再次运行同名 `store-crede
 
 遇到 Xcode 登录 `-1200` 或签名时间戳服务不可用时，先核对系统代理是否能正确访问 Apple 服务。可以测试 Apple 域名直连；不应通过禁用 TLS 验证或系统安全检查解决。
 
+时间戳使用 `timestamp.apple.com`，票据下载和 `stapler validate` 使用 `api.apple-cloudkit.com`。代理的 fake-IP/TUN 模式可能让域名仍解析为虚拟地址，仅添加系统代理例外并不足够；需确认实际 DNS 与转发路径能访问 Apple。即使公证已 Accepted，票据校验仍可能因这条连接失败。网络要求见 [Apple 公证工作流说明](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow)。
+
 ## GitHub Actions
 
 全自动云端发布需要以下五项 Actions secrets，缺少任一项会在创建发布草稿前失败。本机公证交接模式仅需要前三项：

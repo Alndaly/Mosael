@@ -17,13 +17,13 @@ Installers are published on **[GitHub Releases](https://github.com/Alndaly/Mosae
 | Platform | Artifact | Notes |
 | --- | --- | --- |
 | macOS | `Mosael-<version>-arm64.dmg` | Apple Silicon (M-series) |
-| Windows | `Mosael Setup <version>.exe` | Windows 10 / 11 (x64), NSIS installer |
+| Windows | `Mosael.Setup.<version>.exe` | Windows 10 / 11 (x64), NSIS installer |
 
 The app silently checks the latest stable Release after launch and prompts you to download; there is also a "Check for updates" button under Settings → Local backend → Version. GitHub prereleases are opt-in and must be downloaded from the Releases page explicitly.
 
 <Aside type="note" title="Installer signing">
 
-Version 1.2.0 is being prepared with Developer ID signing and Apple notarization. Download links still point to the latest published release; the new installer is not yet available.
+Version 1.2.0 is available. The macOS application and DMG are Developer ID signed, securely timestamped and notarized by Apple, with notarization tickets attached. On supported Macs with fingerprints enrolled, the browser pool can use device-bound Touch ID passkeys.
 
 Windows installers remain unsigned and may trigger an unknown-publisher SmartScreen notice. Verify the download source before proceeding.
 

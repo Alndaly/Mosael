@@ -1,6 +1,14 @@
 {
-  "fetchedAt": "2026-09-08T16:28:36.210941+00:00",
+  "fetchedAt": "2026-09-08T18:15:40.869158+00:00",
   "releases": [
+    {
+      "tag_name": "v1.2.0",
+      "name": "Mosael v1.2.0",
+      "body": "Mosael **1.2.0** 正式版 / Stable release\n\n\n### 3D 场景与动画\n\n- 统一工作台与完整物体时间线：相机和普通物体共用关键帧插入、拖动、多选、删除和撤销；移除重复的走位与记录视角入口。\n- 自由视角、机位视角和全局动线同步预览；全屏保留建模助手、Blender、生成、导出及属性编辑。\n- 场景列表保留详情导航，补齐右键与多选；右栏整体 section 可折叠，属性直接展开，统一单行时间线与面板间距，添加物体使用 ghost 按钮。\n- 场景帧支持图片生成；视频可使用首尾帧或运镜预览。增加灯光预设、灰模参考、压缩模型支持及流式模型存储。\n- Blender MCP 支持发送模型与相机轨道、接回当前场景或新场景，以及直接获取当前 Blender 场景。\n\n### 画布协作\n\n- 工作流与画板的评论、标记使用独立模式，支持 Esc 退出及各自的一键显示隐藏；每张画布仅打开一个标记编辑器。\n- 评论支持编辑与交互式成员提及；修复相邻评论点无法点击、标记模式撤销后连线消失的问题。\n- 文档正文和内嵌图片可拖动节点，模式切换保持标题栏高度；统一标记弹窗布局与操作按钮。\n\n### 发布前修复与文档\n\n- 阻止删除镜头仍在使用的相机或其祖先组，避免场景保存失败。\n- 修复 Blender 发送时缺失相机帧转换、可选 FOV 为空、首帧前错误外推、接回插值节奏及已不存在的相机父组引用。\n- 修复灰模选项未传递，以及嵌套摄像机辅助模型混入参考帧和 GLB 导出。\n- 浏览器池按环境能力处理 WebAuthn 与多凭据选择；macOS 正式包接入 Developer ID 签名、描述文件与 Apple 公证，并从安装包的有效签名启用 Touch ID。\n- 更新中英文指南、3D 与协作文档、发布说明及真实界面截图/录屏。\n\n\n### English\n\n- One timeline for camera and object keyframes, live camera/path views, and a complete fullscreen workbench.\n- Blender scene exchange and image/video reference handoffs; corrected camera conversion, timing and helper-free exports.\n- Dedicated comment/marker modes with Escape, visibility switches, one marker editor per canvas, editable comments and interactive mentions.\n- Fixed document dragging, stable headers and graph edges after annotation undo.\n- Updated 44 bilingual documentation pages and recorded the changed interfaces in both themes and languages.\n\n### 下载与升级 / Downloads and upgrade\n\nmacOS Apple Silicon: DMG. Windows x64: installer. Browser extension and five example plugins are attached below.\n\nExisting data stays outside the application bundle. Scene camera tracks and model storage migrate on startup; update remote clients and their backend together. macOS packages are Developer ID signed and notarized, with device-bound Touch ID passkeys on supported Macs. Windows packages remain unsigned.\n\n[3D guide](https://mosael.com/zh/docs/guides/scenes) · [Notes](https://mosael.com/zh/docs/guides/notes) · [Changelog](https://github.com/Alndaly/Mosael/blob/main/CHANGELOG.md) · [Full diff](https://github.com/Alndaly/Mosael/compare/v1.1.0...v1.2.0)\n",
+      "draft": false,
+      "prerelease": false,
+      "published_at": "2026-09-08T18:15:13Z"
+    },
     {
       "tag_name": "v1.1.0",
       "name": "Mosael v1.1.0",
@@ -232,14 +240,6 @@
       "draft": false,
       "prerelease": false,
       "published_at": "2026-08-18T17:33:37Z"
-    },
-    {
-      "tag_name": "v0.18.14",
-      "name": "Open Studio v0.18.14",
-      "body": "**Full Changelog**: https://github.com/Alndaly/OpenStudio/compare/v0.18.13...v0.18.14",
-      "draft": false,
-      "prerelease": false,
-      "published_at": "2026-08-18T14:43:47Z"
     }
   ]
 }
