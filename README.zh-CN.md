@@ -21,9 +21,9 @@ Mosael 将文档、无限画布、3D 场景、AI 生成、剪辑与发布放在�
 
 > 工程和素材默认保存在本机。云模型、链接下载、联网工具与平台发布需要网络；连接远程后端时，共享数据保存在对应服务器。
 
-![Mosael：剪辑、手写风格工作台与衬线字体素材库的错层展示](docs/media/readme-showcase.png)
+![Mosael：故事板、剪辑时间线，以及带相机动线的 3D 场景，错层叠放](docs/media/readme-showcase.zh.png)
 
-<p align="center"><sub>实拍截图拼接展示 · Space Grotesk / Caveat / Newsreader · <a href="docs/media/readme-shots">查看原始截图</a> · <a href="docs/media/mosael-promo.mp4">观看操作演示</a> · <a href="docs/media/README.md">素材署名</a></sub></p>
+<p align="center"><sub>原始截图,按官网首页同一套版式叠放 · 霞鹜文楷 / Newsreader / Space Grotesk · <a href="website/public/media/homepage/zh">查看原始截图</a> · <a href="docs/media/mosael-promo.mp4">观看操作演示</a> · <a href="docs/media/README.md">素材署名</a></sub></p>
 
 ## 下载与运行
 

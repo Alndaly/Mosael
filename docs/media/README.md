@@ -40,7 +40,9 @@ After recording, review screenshots and moving frames, update the related biling
 
 ## README showcase
 
-`readme-showcase.png` is an AI-assisted decorative composition of the three unaltered application captures preserved in `readme-shots/`. The layers show dark Space Grotesk editing, light Caveat handwriting, and dark Newsreader media browsing. The composite is promotional artwork; use the original captures and canonical website images to inspect interface details. These additional screenshots share the sample-footage credit above.
+`readme-showcase.zh.png` and `readme-showcase.en.png` are composed by `scripts/compose-readme-showcase.py` from the same three unaltered 1.2.0 homepage captures the website uses (`website/public/media/homepage/{zh,en}/{boards,editor,scenes}.png`). The script reproduces the homepage's own layout — boards behind left at -2°, the editor behind right at +2°, the 3D scene in front — reading the percentages from `website/src/components/home-showcase.tsx`. Only rounded corners, a hairline border and a drop shadow are added; the screenshots themselves are untouched. Regenerate with `python3 scripts/compose-readme-showcase.py` after re-capturing the homepage images.
+
+The previous composite was assembled by hand from a separate `readme-shots/` directory. That made it a dead file: when the captures were refreshed nothing pointed at it, while the caption underneath still claimed it showed the current interface. Both it and `readme-shots/` were retired.
 
 The manifest records `documentedVersion: 1.2.0`. Each file keeps its own capture version and source commit. Some unchanged views still originate from 1.0.0-beta5; fresh files are tagged 1.2.0. The 3D scene and bilingual gallery brief are manually prepared demonstration content, not generated results. Some 3D controls currently remain Chinese in English mode; recordings preserve the real interface.
 

@@ -21,9 +21,9 @@ Mosael brings documents, infinite boards, 3D scenes, AI generation, editing and 
 
 > Projects and media stay on your computer by default. Cloud models, URL downloads, online tools and publishing use the network; connecting a remote backend stores shared data on that server.
 
-![Mosael: layered views of the editor, handwritten Studio and serif media library](docs/media/readme-showcase.png)
+![Mosael: the story board, the editing timeline and a 3D scene with its camera path, layered as overlapping windows](docs/media/readme-showcase.en.png)
 
-<p align="center"><sub>A composed showcase of actual captures · Space Grotesk / Caveat / Newsreader · <a href="docs/media/readme-shots">Original screenshots</a> · <a href="docs/media/mosael-promo.mp4">Watch the tour</a> · <a href="docs/media/README.md">Media credits</a></sub></p>
+<p align="center"><sub>Unaltered captures, composed like the homepage · Caveat / Newsreader / Space Grotesk · <a href="website/public/media/homepage/en">Original screenshots</a> · <a href="docs/media/mosael-promo.mp4">Watch the tour</a> · <a href="docs/media/README.md">Media credits</a></sub></p>
 
 ## Download and run
 
