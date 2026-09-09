@@ -1,5 +1,9 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v1.3.0": {
+    zh: ["选项一多的下拉自动带搜索：模型、音色、字体、LUT、发布平台与工作流的上游输出。", "团队讨论改成右侧侧栏，画板与工作流共用；工作流页新增讨论中心。", "「在画布中查看」与加标记会避开右栏面板，不再跳到停靠的智能体底下。", "智能体输入框里的附件与笔记引用收成一排，带缩略图，点开即可预览。"],
+    en: ["Long dropdowns now search: models, voices, fonts, LUTs, publishing platforms and upstream workflow outputs.", "Team discussions moved to a right-side sheet, shared by boards and workflows; workflows gained the discussion centre.", "Jumping to a comment or dropping a marker now avoids docked and floating side panels.", "Composer attachments and note references share one row, with thumbnails and click-to-preview."],
+  },
   "v1.0.0": {
     zh: ["1.0 正式发布，提供 macOS Apple Silicon 与 Windows x64 安装包。", "统一磨砂界面、剪辑与媒体预览，内置中英文及手写字体。", "整合智能体语音、工作流与定时任务、插件连接和多执行器发布。", "更新 40 篇中英文指南与全部当前界面配图、GIF、录屏，README 加入错层截图展示。"],
     en: ["The stable 1.0 release is available for macOS Apple Silicon and Windows x64.", "Unified frosted interface, rebuilt editing and media previews, and bundled multilingual and handwritten fonts.", "Includes agent voice, workflows and scheduling, plugin connections and multi-worker publishing.", "Refreshed 40 bilingual guides and all current captures, GIFs and recordings, with a layered README showcase."],
