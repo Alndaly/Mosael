@@ -14,7 +14,7 @@ export default function PluginDetailLoading() {
       <div className="mx-auto max-w-[72rem] animate-pulse px-5 py-16 sm:px-8">
         <div className="h-4 w-28 bg-muted" />
 
-        <div className="mt-8 border-b-2 border-ink pb-8">
+        <div className="mt-8 border-b border-border pb-8">
           <div className="h-10 w-2/5 bg-muted" />
           <div className="mt-3 h-3 w-56 bg-muted" />
           <div className="mt-4 h-5 w-3/4 bg-muted" />

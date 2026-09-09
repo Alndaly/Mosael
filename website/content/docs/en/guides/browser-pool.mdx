@@ -1,19 +1,12 @@
 ---
-title: Browser pool
-description: One place for every persistent login, reused by publishing, workflows and the agent — with per-use authorization.
+title: Browser profiles
+description: Manage sign-ins, proxies and identity permissions for publishing, imports and automation.
 order: 13
 updated: 2026-09-09
 version: 1.2.0
 ---
 
-Automating anything on the open web runs into the same wall: **the site wants you logged in**.
-Publishing needs an account. A workflow that scrapes a dashboard needs a session. Downloading a
-video at full quality often needs one too. Solving that per feature means the same login copied into
-three places, expiring at three different times.
-
-The **browser pool** is the single place those logins live. Each one is a **profile**: a persistent
-browser session with its own cookies and storage, kept on disk under Electron's `Partitions/`
-directory.
+Browser Pool stores platform accounts and general browser profiles for publishing, workflow automation, URL imports and agents. Each profile has its own sign-in state, site storage and proxy configuration. Profile permissions control which identity can be used.
 
 ## Two kinds of profile
 

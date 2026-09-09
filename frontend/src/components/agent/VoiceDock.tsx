@@ -140,7 +140,7 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
         type="button"
         className={cn(
           "relative grid size-[52px] cursor-grab touch-none place-items-center rounded-full p-0",
-          "border border-border-strong bg-panel/90 shadow-[var(--shadow-panel)] backdrop-blur-xl",
+          "border border-floating-border bg-panel/90 shadow-[var(--shadow-panel)] backdrop-blur-xl",
           "transition-[border-color,box-shadow] active:cursor-grabbing",
           loop.on && "border-primary/60",
           // 听你说的时候多一圈:这是唯一"你的话正在被录"的时刻,值得比别的状态更显眼。
@@ -164,7 +164,7 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
       <div
         className={cn(
           "pointer-events-none absolute top-1/2 -translate-y-1/2 whitespace-nowrap rounded-full",
-          "border border-border-strong bg-panel/95 px-2.5 py-1 text-ui-sm text-foreground",
+          "border border-floating-border bg-panel/95 px-2.5 py-1 text-ui-sm text-foreground",
           "shadow-[var(--shadow-panel)] backdrop-blur-xl transition-opacity duration-200",
           // 听到的原话可能很长,给个上限并省略 —— 一条横穿屏幕的提示比不显示更糟。
           "max-w-[260px] overflow-hidden text-ellipsis",
@@ -182,7 +182,7 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
       <button
         type="button"
         data-no-drag
-        className="absolute -right-1 -top-1 z-[1] hidden size-[18px] cursor-pointer place-items-center rounded-full border border-border-strong bg-panel text-muted-foreground hover:text-destructive group-hover/dock:grid"
+        className="absolute -right-1 -top-1 z-[1] hidden size-[18px] cursor-pointer place-items-center rounded-full border border-floating-border bg-panel text-muted-foreground hover:text-destructive group-hover/dock:grid"
         aria-label={t("voiceDockHide")}
         title={t("voiceDockHide")}
         onClick={() => {

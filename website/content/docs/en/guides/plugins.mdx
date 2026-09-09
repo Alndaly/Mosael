@@ -1,6 +1,6 @@
 ---
-title: Plugins
-description: A local script or an existing MCP server — wire it in and it becomes a tool for the agent and workflows.
+title: Using plugins
+description: Connect local tools or MCP services and configure permissions for agents and workflows.
 order: 10
 updated: 2026-09-09
 version: 1.2.0
@@ -11,8 +11,7 @@ server. Once wired in, **its tools work in both the agent and workflows**, with 
 adaptation for either side.
 
 A process plugin runs as its own child process with a **minimal environment**: `PATH` / `HOME` /
-`LANG` plus the credentials it declared. Not a sandbox — it runs as you — but it cannot reach the
-app's provider keys, its database, or its API token.
+`LANG` plus the credentials it declared. This limits what Mosael passes to the process; it is not an operating-system sandbox. A local plugin runs with your user permissions and may access files and network resources available to you.
 
 Want to write one? See [Writing a plugin](/docs/guides/writing-plugins).
 
@@ -75,11 +74,7 @@ clears the record on the next scan.
 The manifest's `credentials` block declares which secrets are needed. You fill them in on the
 Plugins page and they are injected into **the plugin's own process** at run time.
 
-A plugin gets none of Mosael's own credentials — not the provider keys, not the database, not the
-API token. That isolation is the point: it is why a plugin cannot route around the confirmation
-cards and the permission system. Injecting its credentials does not weaken that; it just gives the
-plugin's **own** secrets somewhere to live, instead of making you open a terminal and copy a config
-file into the plugin directory.
+Mosael does not inject its own provider secrets or API session token into the plugin environment. Local plugins still run with the current user’s operating-system permissions, so install trusted code and review the tools and permissions it declares.
 
 A plugin missing a required credential stays out of the tool list — letting the agent call a tool
 that is certain to 401 only burns a turn restating what the settings page already said.
@@ -162,6 +157,6 @@ Five of them live under `plugins/examples/` in the repository:
 
 ## Create a connection
 
-Select a plugin and use **New connection** in its header. Enter configuration in the dialog; configuration, permissions and selected tools belong to that connection. A plugin can have multiple connections. For the Blender workbench, see [3D scenes and animation](/docs/guides/scenes).
+Select a plugin and use **New connection** in its header. Enter configuration in the dialog; configuration, permissions and selected tools belong to that connection. A plugin can have multiple connections. For the Blender workbench, see [3D scenes & animation](/docs/guides/scenes).
 
 ![Blender connection configuration](/media/screens/en/plugin-connection.png)

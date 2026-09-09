@@ -14,7 +14,7 @@ export function Marquee({ items, className }: { items: string[]; className?: str
   return (
     <div
       aria-hidden
-      className={cn("overflow-hidden border-y-2 border-ink bg-flame text-primary-foreground select-none", className)}
+      className={cn("overflow-hidden border-y border-border bg-flame text-primary-foreground select-none", className)}
     >
       <div className="flex w-max animate-[marquee_38s_linear_infinite] motion-reduce:animate-none">
         {track.map((item, index) => (

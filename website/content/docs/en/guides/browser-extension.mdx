@@ -1,14 +1,12 @@
 ---
 title: Chrome video companion
-description: Read, seek, and translate transcripts, then import a video or its current frame.
+description: Read transcripts, seek through a video and import media or the current frame from Chrome.
 order: 9
 updated: 2026-09-09
 version: 1.2.0
 ---
 
-The Mosael Chrome extension uses the browser's native **Side Panel** and never covers the page
-with a floating window. It currently supports YouTube and Bilibili video pages and follows the active
-tab as you switch between videos.
+The Chrome extension opens Mosael's video companion in the native **Side Panel** and follows the active video tab. It accepts video URLs recognized by the installed yt-dlp build. YouTube and Bilibili use native captions when available; other supported sites can use Mosael transcription. Playback control and frame capture require an accessible HTML5 video player.
 
 ## Install
 
@@ -62,7 +60,7 @@ from Mosael with the matching [Browser Pool](/docs/guides/browser-pool) profile.
 | Side Panel | Open Chrome's native right-hand panel |
 | Tabs / Active Tab | Follow video pages, seek, and capture the visible player |
 | Storage | Keep the Mosael session and destination workspace |
-| YouTube / Bilibili | Read current-page player and caption data |
+| `<all_urls>` | Discover HTML5 players on video pages and capture the video region when direct frame access is restricted |
 | localhost / 127.0.0.1 | Call the local Mosael API |
 
 Chrome 116+ is required. At least part of the player must be visible for frame capture.

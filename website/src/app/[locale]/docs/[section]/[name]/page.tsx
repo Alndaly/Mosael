@@ -7,11 +7,13 @@ import rehypeSlug from "rehype-slug";
 import remarkGfm from "remark-gfm";
 
 import { DocsSidebar, type SidebarGroup } from "@/components/docs-sidebar";
+import { DocsMobileNav } from "@/components/docs-mobile-nav";
+import { DOC_GROUPS } from "@/lib/docs-navigation";
 import { DocsToc } from "@/components/docs-toc";
 import { mdxComponents } from "@/components/mdx";
 import { LOCALES, isLocale, type Locale } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
-import { DOC_SECTIONS, docHref, listDocs, readDoc } from "@/lib/docs";
+import { docHref, listDocs, readDoc } from "@/lib/docs";
 import { SITE } from "@/lib/site";
 import { tableOfContents } from "@/lib/toc";
 
@@ -37,16 +39,6 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   };
 }
 
-/**
- * 一篇文档。
- *
- * **三栏在同一个 grid 里**,不拆成 layout + page 两层 —— 拆开时两个网格各算各的列宽,
- * 中间那栏对不上外层的轨道,于是正文被挤成窄窄一条,而分栏的竖线吊在半空。
- * 侧边栏要的目录树这一页本来就要读,合在一起没有多余开销。
- *
- * 列之间也不画贯穿整页的竖线:导航只有十来行,正文有好几屏,那条线剩下的大半截旁边什么
- * 都没有。分栏靠间距,归属靠每一项自己左边那道短线。
- */
 export default async function DocPage({ params }: { params: Params }) {
   const { locale, section, name } = await params;
   if (!isLocale(locale)) notFound();
@@ -68,12 +60,14 @@ export default async function DocPage({ params }: { params: Params }) {
   });
 
   const all = listDocs(locale);
-  const groups: SidebarGroup[] = DOC_SECTIONS.map((key) => ({
-    label: t.sections[key],
-    items: all
-      .filter((item) => item.section === key)
-      .map((item) => ({ href: docHref(locale, item), title: item.title })),
-  })).filter((group) => group.items.length > 0);
+  const groups: SidebarGroup[] = DOC_GROUPS.map((group) => ({
+    label: t.groups[group.id],
+    items: group.pages.flatMap((page) => {
+      const item = all.find((doc) => `${doc.section}/${doc.name}` === page);
+      return item ? [{ href: docHref(locale, item), title: item.title }] : [];
+    }),
+  }));
+  const currentGroup = DOC_GROUPS.find((group) => (group.pages as readonly string[]).includes(`${section}/${name}`));
 
   const toc = tableOfContents(doc.body);
   const index = all.findIndex((item) => item.section === section && item.name === name);
@@ -81,15 +75,14 @@ export default async function DocPage({ params }: { params: Params }) {
   const next = index >= 0 && index < all.length - 1 ? all[index + 1] : null;
 
   return (
-    // `pt-12` 和两侧的 `top-sticky` 是**配套**的(见 globals.css 里 --spacing-sticky 的算式):
-    // 侧栏一开始就停在它粘住的位置上,于是滚动时不会先往上滑一小段再顿住。
-    <div className="mx-auto grid max-w-[88rem] gap-x-14 gap-y-12 px-5 pt-16 pb-24 sm:px-8 lg:grid-cols-[13rem_minmax(0,1fr)] xl:grid-cols-[13rem_minmax(0,1fr)_13rem]">
+    <div className="mx-auto grid max-w-[88rem] gap-x-10 gap-y-6 px-5 pt-0 pb-16 xl:pt-12 sm:px-8 lg:grid-cols-[13rem_minmax(0,1fr)] xl:grid-cols-[13rem_minmax(0,1fr)_13rem]">
+      <DocsMobileNav groups={groups} entries={toc} labels={t} />
       {/* sticky 要直接挂在 grid item 上,并且配 `self-start`:grid 默认把子项拉伸到整行高,
           被拉满的元素在自己的格子里没有可滑动的余量,`position: sticky` 就完全不起作用。 */}
       <DocsSidebar
         groups={groups}
         label={t.allDocs}
-        className="lg:sticky lg:top-sticky lg:col-start-1 lg:row-start-1 lg:max-h-[calc(100svh-9rem)] lg:self-start lg:overflow-y-auto"
+        className="lg:sticky lg:top-sticky lg:col-start-1 lg:row-start-1 lg:row-span-2 lg:pt-6 xl:pt-0 lg:max-h-[calc(100svh-9rem)] lg:self-start lg:overflow-y-auto"
       />
 
       {/* 本页目录在窄屏上排到正文前面 —— 那时它是"这一页讲了什么"的摘要,读完之后才给没有意义。 */}
@@ -99,15 +92,15 @@ export default async function DocPage({ params }: { params: Params }) {
         className="xl:sticky xl:top-sticky xl:col-start-3 xl:row-start-1 xl:max-h-[calc(100svh-9rem)] xl:self-start xl:overflow-y-auto"
       />
 
-      <article className="min-w-0 lg:col-start-2 lg:row-start-1">
-        <header className="relative mb-14 overflow-hidden border-b border-border pb-10">
+      <article className="min-w-0 lg:col-start-2 lg:row-start-2 xl:row-start-1">
+        <header className="relative mb-8 border-b border-border pb-6 sm:mb-10 sm:pb-8">
           <p className="m-0 mb-4 font-mono text-xs font-bold tracking-widest text-flame uppercase">
-            {t.sections[doc.section]}
+            {currentGroup ? t.groups[currentGroup.id] : t.sections[doc.section]}
           </p>
-          <h1 className="mt-0 mb-4 max-w-[14ch] font-display text-[clamp(2.75rem,6vw,5rem)] leading-[0.96] font-[700] tracking-[-0.05em]">
+          <h1 className="mt-0 mb-4 max-w-[14ch] font-display text-[clamp(2rem,4.5vw,3.75rem)] leading-[1.1] font-[700] tracking-[-0.05em]">
             {doc.title}
           </h1>
-          {doc.description && <p className="m-0 text-lg text-muted-foreground">{doc.description}</p>}
+          {doc.description && <p className="m-0 text-base leading-relaxed text-muted-foreground sm:text-lg">{doc.description}</p>}
           {doc.version && <p className="mt-5 mb-0 text-xs text-muted-foreground">{t.reviewed} {doc.version} · {doc.updated}</p>}
         </header>
 

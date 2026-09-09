@@ -17,10 +17,9 @@
 
 [English](README.md) | **简体中文**
 
-Mosael 把剪辑、AI 生成、智能体、工作流和发布放在同一个桌面应用里。你可以从一段素材开始，
-对着逐字稿剪掉废话，让 AI 找画面或补配音，再把完成的作品直接发出去，不必在不同工具之间反复搬运。
+Mosael 将文档、无限画布、3D 场景、AI 生成、剪辑与发布放在同一个桌面工作区。从收集参考、预演运镜，到生成素材、完成剪辑，让每一步创作连接起来。
 
-> 素材和项目默认留在本机；只有你主动配置并调用的 AI 服务会联网。
+> 工程和素材默认保存在本机。云模型、链接下载、联网工具与平台发布需要网络；连接远程后端时，共享数据保存在对应服务器。
 
 ![Mosael：剪辑、手写风格工作台与衬线字体素材库的错层展示](docs/media/readme-showcase.png)
 
@@ -39,96 +38,65 @@ Mosael 把剪辑、AI 生成、智能体、工作流和发布放在同一个桌�
 不需要手动运行服务。如果 8800 端口已经有健康的 Mosael 后端，桌面端会复用它。
 
 浏览本地功能无需额外配置；使用 AI 对话、绘图、视频生成、配音或转写前，请先到
-**设置 → 供应商**添加连接与模型。
+**设置 → AI 对话 / AI 绘图 / AI 视频 / AI 音频** 中对应分区添加连接与模型。
 
-## 你可以用它做什么
+## 相互连接的创作工作区
 
-### 从逐字稿开始剪片
+### 整理资料，展开构思
 
-- 多时间线、多轨道剪辑，支持切分、吸附、涟漪删除、变速、淡入淡出、画中画和撤销/重做。
-- 逐字稿与时间线共用同一份编辑语义：删除句子或单词，画面同步裁切。
-- 时间、说话人与正文首行对齐；长正文完整换行，不截断有用内容。
-- 字幕、翻译和配音集中在同一面板；配音落到独立轨道，不覆盖原声。
-- 曲线、LUT、示波器、滤镜和字幕使用同一套预览/导出契约。
+将视频、图片与声音导入素材库，也可以录制屏幕、摄像头或下载支持的视频链接。用标签、搜索和预览找到素材；把脚本、逐字稿和智能体回答保存为文档，保留版本历史与来源。
 
-![剪辑页中的字幕配音设置](website/public/media/screens/subtitle-dub.png)
+在无限画布上并排放置文档、媒体和 3D 场景。连线将文字与参考素材传给下游生成节点；评论、成员提及和位置标记帮助讨论与定位。评论和标记各有独立模式与显示开关。
 
-### 让 AI 真正帮你动手
+![创意画板中的文档与素材参考](website/public/media/screens/boards.png)
 
-智能体通过 MCP 工具读取和操作素材、时间线、工作流、浏览器池与发布任务。需要审批的动作会显示确认卡，由你批准后执行。
+[素材库](https://mosael.com/zh/docs/guides/media) · [笔记与文档](https://mosael.com/zh/docs/guides/notes) · [创意画板](https://mosael.com/zh/docs/guides/boards)
 
-- AI 工作台、剪辑页、工作流和创意画板共用同一会话池。
-- 工作区助手默认停靠为真实侧栏，也可切换为悬浮，不会在打开时盖住时间线。
-- 左上角直接显示当前会话名称；点击即可搜索或切换会话。
-- 主智能体可以并行派发只读子智能体；每个子智能体都是可打开、可观察的独立会话。
-- 轨迹视图按输入、模型与工具展示执行过程、耗时、参数和结果。
-- 上下文接近上限时可自动或手动整理，整理记录会保留在对话中。
+### 先搭场景，再生成镜头
 
-![智能体工作台与会话交互](website/public/media/screens/ai-chat.png)
+布置物体与灯光，在同一条时间线上为摄像机和物体添加关键帧。切换镜头构图与全局动线，也可以同时观察两种画面。将当前帧、首尾帧或运镜视频交给自己选择的图片、视频模型作为参考。
 
-### 把想法变成画面和声音
+支持 GLB/glTF 导入、画面与镜头预览导出，以及通过 MCP 与 Blender 交换场景。Mosael 用于场景搭建与镜头预演；精细建模、模拟与 Blender 原生效果仍在 Blender 中完成。
 
-供应商配置分为两层：**连接**保存 Endpoint、API Key 或 OAuth 状态；**模型**声明对话、图像、视频、
-音频能力以及上下文、推理、视觉和生成参数。界面只显示当前模型真正支持的控件，不从相似型号猜测。
+![3D 场景、摄像机动线与动画时间线](website/public/media/screens/scenes.png)
 
-- 支持 API Key 与订阅/OAuth 模型。
-- 素材引用保留首帧、尾帧、参考图、编辑源和续写片段等语义。
-- Evolink 可作为统一图像/视频网关，生成结果会及时下载回本地素材库。
-- 字节跳动接入按产品协议区分：方舟 Ark 承载 Seedream/Seedance，火山语音承载 TTS 与播客接口。
-- 未收录能力描述的自定义模型仍可使用，但不会继承其他模型的参数规则。
+[3D 场景与动画](https://mosael.com/zh/docs/guides/scenes)
 
-### 把灵感铺在画板上
+### 一起处理画面、文字与声音
 
-- 本地导入视频、音频和图片，自动生成缩略图与预览代理。
-- URL 导入先探测清单，再选择条目、音频/视频和实际可用画质；需要登录时可复用浏览器池档案。
-- 视频转 GIF 时保留原件，并生成新的派生素材；批处理可使用同名工作流节点。
-- 创意画板支持便签、媒体、连线、裁切、`@` 素材引用和 AI 辅助编辑；节点状态与生成生命周期持久化。
+多时间线、多轨道支持切分、吸附、涟漪删除、变速、淡入淡出与画中画。根据逐字稿剪辑，添加或翻译字幕，把生成的配音放到独立轨道。通过曲线、LUT 和示波器调整色彩，完成后从剪辑页导出。
 
-![URL 导入：先探测，再选择内容与画质](website/public/media/screens/url-import.png)
+![剪辑页中的字幕与配音](website/public/media/screens/subtitle-dub.png)
 
-![创意画板](website/public/media/screens/boards.png)
+[剪辑与调色](https://mosael.com/zh/docs/guides/editing) · [语音输入与朗读](https://mosael.com/zh/docs/guides/voice)
 
-### 把重复步骤画成流程
+### 按自己的方式使用 AI
 
-可视化 DAG 把检索、生成、转写、拼装、导出和发布串成可复用流程，支持手动、定时和 Webhook 触发。
-节点组可以折叠为任意嵌套的子图，跨边界引用会自动重连；循环体与顶层使用同一并行执行引擎。
+使用 API Key 或支持的订阅登录连接自己的模型服务。连接保存凭据，模型声明对话、图片、视频和音频能力；参数控件与参考素材角色跟随所选模型。生成结果回到素材库继续使用。
 
-![工作流画布与节点编排](website/public/media/screens/workflows.png)
+智能体可以读取工程上下文，调用素材、笔记、画板、场景、剪辑与工作流工具。需要批准的操作显示确认卡；会话、工具结果、来源引用和执行轨迹可随时回看。工作区助手可以停靠在侧边，也可以悬浮显示。
 
-### 从一个窗口发到多个平台
+![AI Studio 会话工作区](website/public/media/screens/ai-chat.png)
 
-所有持久登录统一保存为浏览器档案，供发布、工作流 RPA、URL 导入和智能体复用。智能体借用某个身份
-前必须逐次获得明确授权，确认卡会点名具体档案。
+[模型连接与配置](https://mosael.com/zh/docs/guides/providers) · [AI Studio 与智能体](https://mosael.com/zh/docs/guides/ai-studio)
 
-发布表单按平台能力生成，支持 TikTok、YouTube、抖音、B 站、小红书和视频号。平台没有的选项不会
-伪装成通用能力；发布任务由独立执行器认领，应用重启后仍可继续追踪。
+### 复用流程，发布作品
 
-![浏览器池：集中管理持久登录](website/public/media/screens/browser-pool.png)
+将模型、素材与工具连接成可视化工作流，检查必填输入、运行流程并查看各节点结果。流程可以手动、定时或通过 Webhook 触发；本地定时任务需要后端持续运行。
 
-### Chrome 浏览器扩展
+浏览器池统一管理上传、链接导入和浏览器自动化使用的登录身份与代理。智能体借用档案前会请求授权。发布表单按目标平台显示选项，检查视频、账号与文案后提交并追踪结果。浏览器上传需要已连接的桌面执行器。
 
-Chrome 扩展使用浏览器原生 Side Panel，不在网页上覆盖浮动面板。打开已安装 yt-dlp 能识别的视频链接时，
-点击扩展图标即可在右侧查看逐字稿；YouTube 与 B 站优先读取原生字幕，其余站点可由 Mosael 自动
-下载并转写。存在可用 HTML5 播放器时，逐字稿跟随播放，逐词时间戳支持精确跳转，并可把不含播放器控件
-的纯视频帧导入素材库。扩展使用单独的 Mosael 登录会话且不保存密码，也不读取或导出 Chrome
-Cookie；受限内容可以选择 Mosael 浏览器池中已有的登录身份与代理。界面默认跟随 Chrome 语言，
-也可固定为简体中文或 English。安装、权限与能力边界见
-[browser-extension/README.zh-CN.md](browser-extension/README.zh-CN.md)。
+![可视化工作流与节点连线](website/public/media/screens/workflows.png)
 
-### 插件
+[工作流](https://mosael.com/zh/docs/guides/workflows) · [定时任务](https://mosael.com/zh/docs/guides/scheduler) · [浏览器池与账号](https://mosael.com/zh/docs/guides/browser-pool) · [发布作品](https://mosael.com/zh/docs/guides/publishing)
 
-插件可以是本地子进程脚本，也可以连接现有 MCP 服务。安装前先读取清单并展示权限、凭据与工具；
-启用后，同一工具可被智能体和工作流复用。插件支持素材输入、文件产出和由宿主管理的持久密钥。
+### 扩展工作空间
 
-## 3D 场景与画布协作
+**Chrome 视频助手**在浏览器原生侧栏中显示逐字稿，支持逐词跳转、翻译，以及导入视频或不含播放控件的画面。可导入的链接取决于已安装的 yt-dlp；页面交互需要可用的视频播放器。扩展使用独立的 Mosael 会话，不读取 Chrome Cookie。
 
-搭建空间后，用同一条物体时间线编辑相机和物体关键帧；在机位画面与全局动线之间切换，将参考帧交给图片模型，或将首尾帧、运镜视频交给视频模型。全屏保留助手与属性编辑，Blender 可接回当前场景或另存为新场景。
+**插件**把本地脚本或 MCP 服务接入智能体和工作流。启用连接前检查清单、工具权限与凭据；本地进程插件以当前操作系统用户的权限运行。
 
-文档节点可直接拖动正文，评论和标记各有独立模式与显示开关；评论支持编辑和成员提及。
-
-![3D 场景与关键帧时间线](website/public/media/screens/scenes.png)
-
-[3D 操作指南](https://mosael.com/zh/docs/guides/scenes) · [笔记与知识库](https://mosael.com/zh/docs/guides/notes)
+[Chrome 视频助手](browser-extension/README.zh-CN.md) · [安装与使用插件](https://mosael.com/zh/docs/guides/plugins) · [开发插件](https://mosael.com/zh/docs/guides/writing-plugins)
 
 ## 文档
 
@@ -138,6 +106,7 @@ Cookie；受限内容可以选择 Mosael 浏览器池中已有的登录身份与
 | 文档 | 内容 |
 | --- | --- |
 | [CHANGELOG.md](CHANGELOG.md) | 各版本的用户可见变更 |
+| [docs/3D_SCENES.md](docs/3D_SCENES.md) | 3D 场景、相机轨道、导出与生成参考 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 启动流程、领域边界、数据模型与关键约定 |
 | [docs/PUBLISHING.md](docs/PUBLISHING.md) | 发布矩阵、内嵌浏览器、worker 协议与排错 |
 | [docs/MCP.md](docs/MCP.md) | 智能体工具与确认卡 |
@@ -189,14 +158,14 @@ pnpm dev
 ### 测试与检查
 
 ```bash
-cd backend && uv run --frozen python -m pytest -q
-cd frontend && pnpm vitest run
-cd frontend && pnpm exec tsc -b --noEmit
-cd frontend && pnpm gen:api        # 后端 OpenAPI 变化后运行
-cd website && pnpm build           # 修改官网或文档后运行
+(cd backend && uv run --frozen python -m pytest -q)
+pnpm --dir frontend exec vitest run
+pnpm --dir frontend exec tsc -b --noEmit
+pnpm --dir frontend gen:api        # 后端 OpenAPI 变化后运行
+pnpm --dir website build           # 修改官网或文档后运行
 ```
 
-当前基线：后端 2,451 个用例，前端 818 个用例。
+以上命令从仓库根目录运行。最新检查结果以 [GitHub Actions](https://github.com/Alndaly/Mosael/actions) 为准，用例数量随项目变化。
 
 ### 常见问题
 
@@ -297,4 +266,4 @@ MOSAEL_OAUTH_REDIRECT_BASE=...
 详见 [LICENSE](LICENSE)。商业授权可通过[交流群与作者微信](https://mosael.com/zh/docs/about/contact#%E5%BE%AE%E4%BF%A1)
 联系，也可以在 X 关注 [KindaHuaX](https://x.com/KindaHuaX)。
 
-文档对应 **1.2.0**；场景、笔记与标记等变更界面已补录。查看[外观与字体](https://mosael.com/zh/docs/guides/appearance)、[定时任务](https://mosael.com/zh/docs/guides/scheduler)和[实拍素材署名](docs/media/README.md)。
+使用指南对应当前 1.2.0 界面。截图与录屏使用独立演示数据，拍摄日期、代码版本和素材署名见[实拍素材说明](docs/media/README.md)。

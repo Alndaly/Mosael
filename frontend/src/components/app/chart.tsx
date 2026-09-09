@@ -97,7 +97,7 @@ function ChartTooltipContent({
   const { config } = useChart();
   if (!active || !payload?.length) return null;
   return (
-    <div className="grid min-w-[130px] gap-1 rounded-md border border-border-strong bg-panel px-2.5 py-1.5 text-ui-xs">
+    <div className="grid min-w-[130px] gap-1 rounded-md border border-floating-border bg-panel px-2.5 py-1.5 text-ui-xs">
       {!hideLabel && (
         <div className="font-[650]">{labelFormatter ? labelFormatter(label) : String(label ?? "")}</div>
       )}

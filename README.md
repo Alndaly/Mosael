@@ -17,11 +17,9 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-Mosael brings editing, AI generation, agents, workflows, and publishing into one desktop app. Start
-with a clip, cut the pauses from its transcript, ask AI to find a shot or make a voiceover, and publish
-the finished story without shuttling the project between a pile of tools.
+Mosael brings documents, infinite boards, 3D scenes, AI generation, editing and publishing into one desktop workspace. Gather references, rehearse a camera move, generate media and shape it into a finished piece.
 
-> Your media and projects stay local by default. Only AI services you choose to configure and use go online.
+> Projects and media stay on your computer by default. Cloud models, URL downloads, online tools and publishing use the network; connecting a remote backend stores shared data on that server.
 
 ![Mosael: layered views of the editor, handwritten Studio and serif media library](docs/media/readme-showcase.png)
 
@@ -41,122 +39,65 @@ the frontend, and starts the publishing executor; no services need to be launche
 healthy Mosael backend is already listening on port 8800, the desktop app reuses it.
 
 Local features can be explored without additional setup. Before using AI chat, image or video
-generation, voiceover, or transcription, add a connection and model under **Settings → Providers**.
+generation, voiceover, or transcription, add a connection and model under the appropriate **Settings → AI Chat / AI Image / AI Video / AI Audio** section.
 
-## What you can make with it
+## A connected creative workspace
 
-### Cut from the transcript
+### Collect research and plan the story
 
-- Multiple timelines and tracks with split, snap, ripple delete, speed ramps, fades,
-  picture-in-picture, and undo/redo.
-- The transcript and timeline share the same editing semantics: delete a sentence or word and the
-  corresponding footage is cut.
-- Timestamp, speaker, and the first text line stay aligned; long text wraps in full rather than being
-  truncated.
-- Subtitles, translation, and voiceover live in one panel; dubbed audio lands on a dedicated track
-  without overwriting the original sound.
-- Curves, LUTs, scopes, filters, and subtitles follow the same preview/export contract.
+Import footage, images and sound into the media library, record your screen or camera, or download a supported video URL. Use tags, search and previews to find material again. Save scripts, transcripts and agent answers as documents with revision history and source references.
 
-![Subtitle voiceover settings in the current editor](website/public/media/screens/en/subtitle-dub.png)
+Lay those documents beside images, videos and 3D scenes on an infinite board. Connect nodes to pass text and reference media to generation, and use comments, member mentions and position markers to review the work. Comments and markers have separate modes and visibility controls.
 
-### Let AI lend a real hand
+![Documents and references on a creative board](website/public/media/screens/en/boards.png)
 
-The agent uses MCP tools to inspect and operate media, timelines, workflows, browser profiles, and
-publishing tasks. Actions that require approval surface a confirmation card before execution.
+[Media library](https://mosael.com/en/docs/guides/media) · [Notes & documents](https://mosael.com/en/docs/guides/notes) · [Creative boards](https://mosael.com/en/docs/guides/boards)
 
-- AI Studio, the editor, workflows, and creative boards share one conversation pool.
-- Workspace assistants dock as real layout columns by default and can float when needed, so opening
-  one does not cover the timeline.
-- The top-left heading is the current conversation title; click it to search or switch sessions.
-- The main agent can dispatch read-only subagents in parallel; every subagent is an independent,
-  inspectable session.
-- The trajectory view shows execution across input, model, and tool lanes, including timing,
-  arguments, and results.
-- Context can be compacted automatically near the limit or manually, with the compaction kept in the
-  conversation record.
+### Build the scene before generating the shot
 
-![The agent workspace and conversation experience](website/public/media/screens/en/ai-chat.png)
+Arrange objects and lighting, then keyframe cameras and objects on one timeline. Switch between the camera composition and a global view of its movement, or keep both visible. The resulting frame, first/last frames or camera preview video can guide the image or video model you choose.
 
-### Turn an idea into picture and sound
+Import GLB/glTF models, export a frame or camera preview, and exchange scenes with Blender through its MCP connection. Mosael provides scene layout and shot previsualization; advanced modeling, simulation and Blender-native effects remain in Blender.
 
-Provider configuration has two levels: a **connection** stores the endpoint, API key, or OAuth state;
-a **model** declares chat, image, video, and audio capabilities along with context, reasoning, vision,
-and generation parameters. The UI only shows controls supported by the exact model and does not
-guess from a similar model name.
+![3D scene, camera path and animation timeline](website/public/media/screens/en/scenes.png)
 
-- Supports API-key and subscription/OAuth models.
-- Media inputs preserve semantic roles such as first frame, last frame, reference image, edit source,
-  and extension clip.
-- Evolink can act as a unified image/video gateway; completed results are downloaded into the local
-  media library promptly.
-- ByteDance integrations are separated by product protocol: Ark hosts Seedream/Seedance, while
-  Volcano speech hosts TTS and podcast APIs.
-- Custom models without a catalogued descriptor remain usable but do not inherit another model's
-  parameter rules.
+[3D scenes & animation](https://mosael.com/en/docs/guides/scenes)
 
-### Spread ideas out on a creative board
+### Edit picture, words and sound together
 
-- Import local video, audio, and images with automatic thumbnails and preview proxies.
-- URL import probes a listing first, then lets you choose entries, audio/video, and quality tiers that
-  actually exist; authenticated sources can reuse a Browser Pool profile.
-- Video-to-GIF creates a derived asset without touching the original; a matching workflow node handles
-  batch conversion.
-- Creative boards support notes, media, links, trimming, `@` asset references, and AI-assisted edits;
-  node state and generation lifecycle are persisted.
+Work with multiple timelines and tracks, splitting, snapping, ripple deletion, speed changes, fades and picture-in-picture. Edit from a transcript, add or translate captions, and place generated voiceover on a separate track. Curves, LUTs and scopes help with color; export the finished sequence from the editor.
 
-![URL import: probe first, then choose content and quality](website/public/media/screens/en/url-import.png)
+![Captions and voiceover in the editor](website/public/media/screens/en/subtitle-dub.png)
 
-![Creative board](website/public/media/screens/en/boards.png)
+[Editing & color](https://mosael.com/en/docs/guides/editing) · [Voice interaction](https://mosael.com/en/docs/guides/voice)
 
-### Draw the repetitive part once
+### Work with AI on your terms
 
-The visual DAG connects retrieval, generation, transcription, assembly, export, and publishing into
-reusable flows triggered manually, on a schedule, or by webhook. Node groups collapse into arbitrarily
-nested subgraphs with boundary references reconnected automatically; loops use the same parallel
-execution engine as the top level.
+Connect your own model services through API keys or supported subscription sign-in. Connections store credentials; models declare chat, image, video and audio capabilities. Model-specific controls and reference roles keep inputs appropriate to the selected model. Generated results return to the media library.
 
-![Workflow canvas and node orchestration](website/public/media/screens/en/workflows.png)
+Agents can read project context and use tools across media, notes, boards, scenes, editing and workflows. Actions that need approval show a confirmation card. Sessions, tool results, citations and execution traces stay available for review; workspace assistants can dock beside the work or float above it.
 
-### Publish to more places from one window
+![AI Studio conversation workspace](website/public/media/screens/en/ai-chat.png)
 
-All persistent logins are stored as browser profiles shared by publishing, workflow RPA, URL import,
-and the agent. Before borrowing an identity, the agent must receive explicit per-use authorization;
-the confirmation card names the exact profile.
+[Model connections](https://mosael.com/en/docs/guides/providers) · [AI Studio & agents](https://mosael.com/en/docs/guides/ai-studio)
 
-Publishing forms are generated from each platform's actual capabilities for TikTok, YouTube, Douyin,
-Bilibili, Xiaohongshu, and WeChat Channels. Options a platform does not provide are not presented as
-universal features. A separate executor claims publishing tasks, so progress remains traceable across
-app restarts.
+### Reuse a process and publish the result
 
-![Browser Pool: persistent logins managed in one place](website/public/media/screens/en/browser-pool.png)
+Connect models, media and tools in a visual workflow. Check required inputs, run the flow, inspect node results and reuse it manually, on a schedule or through a webhook. Local schedules need the backend to remain running.
 
-### Chrome browser extension
+Browser Pool manages persistent sign-ins and proxies for uploads, URL imports and browser automation. Agents ask before borrowing a profile. Publishing forms follow each destination's capabilities; review the video, account and post before submitting, then track the result. Browser uploads require a connected desktop executor.
 
-The Chrome extension uses the browser's native Side Panel instead of placing a floating overlay on
-the page. Open any video URL recognized by the installed yt-dlp build: YouTube and Bilibili use native
-captions when available, while Mosael can download and transcribe other sites. Pages with a usable
-HTML5 player get playback following, word-precise seeking, and clean video-frame capture without HTML
-controls. The extension uses a separate Mosael session, never stores the password, and does not
-read or export Chrome cookies; restricted content can use an existing Browser Pool identity and proxy.
-Its UI follows Chrome by default and can be pinned to Simplified Chinese or English. See
-[browser-extension/README.md](browser-extension/README.md) for installation and limitations.
+![Visual workflow and connected nodes](website/public/media/screens/en/workflows.png)
 
-### Plugins
+[Workflows](https://mosael.com/en/docs/guides/workflows) · [Scheduled tasks](https://mosael.com/en/docs/guides/scheduler) · [Browser profiles](https://mosael.com/en/docs/guides/browser-pool) · [Publishing](https://mosael.com/en/docs/guides/publishing)
 
-A plugin can be a local subprocess script or a connection to an existing MCP server. Before
-installation, Mosael reads the manifest and shows its permissions, credentials, and tools.
-Once enabled, the same tools are available to both agents and workflows. Plugins can receive media,
-return files, and use persistent secrets managed by the host.
+### Extend your workspace
 
-## 3D scenes and canvas collaboration
+The **Chrome video companion** opens in the browser's Side Panel to read transcripts, seek to words, translate and import media or clean video frames. Supported URLs depend on the installed yt-dlp build; page controls require a usable video player. It uses its own Mosael session and does not read Chrome cookies.
 
-Build a scene and keyframe objects and cameras in one timeline. Switch between camera composition and global path observation, then hand reference frames to an image model or first/last frames and camera previews to a video model. Fullscreen retains the assistant and inspector; Blender changes can replace the current scene or become a new scene.
+**Plugins** connect local scripts or MCP services to agents and workflows. Review the manifest, tool permissions and credentials before enabling a connection. Local process plugins run with your operating-system user permissions.
 
-Drag document content directly. Comments and markers have separate modes and visibility switches; comments support editing and interactive member mentions.
-
-![3D scene and object timeline](website/public/media/screens/en/scenes.png)
-
-[3D guide](https://mosael.com/en/docs/guides/scenes) · [Notes and knowledge](https://mosael.com/en/docs/guides/notes)
+[Chrome companion](browser-extension/README.md) · [Using plugins](https://mosael.com/en/docs/guides/plugins) · [Writing a plugin](https://mosael.com/en/docs/guides/writing-plugins)
 
 ## Documentation
 
@@ -220,14 +161,14 @@ on macOS is `Cmd+Option+I`.
 ### Tests and checks
 
 ```bash
-cd backend && uv run --frozen python -m pytest -q
-cd frontend && pnpm vitest run
-cd frontend && pnpm exec tsc -b --noEmit
-cd frontend && pnpm gen:api        # after backend OpenAPI changes
-cd website && pnpm build           # after website or documentation changes
+(cd backend && uv run --frozen python -m pytest -q)
+pnpm --dir frontend exec vitest run
+pnpm --dir frontend exec tsc -b --noEmit
+pnpm --dir frontend gen:api        # after backend OpenAPI changes
+pnpm --dir website build           # after website or documentation changes
 ```
 
-Current baseline: 2,451 backend tests and 818 frontend tests.
+Run checks from the repository root. Current results are recorded in [GitHub Actions](https://github.com/Alndaly/Mosael/actions); test counts change as the project grows.
 
 ### Common issues
 
@@ -335,4 +276,4 @@ and personal non-commercial purposes; commercial use and redistribution require 
 See [LICENSE](LICENSE). Contact the maker through the [community and contact page](https://mosael.com/en/docs/about/contact),
 or follow [KindaHuaX on X](https://x.com/KindaHuaX), for commercial licensing.
 
-Documentation targets **1.2.0**; changed scene, note and annotation views have fresh captures. See [Appearance and fonts](https://mosael.com/en/docs/guides/appearance), [Scheduled tasks](https://mosael.com/en/docs/guides/scheduler), and [capture credits](docs/media/README.md).
+User guides cover the current 1.2.0 interface. Screenshots and recordings use isolated demo data; capture dates, source revisions and media credits are documented in [the media guide](docs/media/README.md).

@@ -13,7 +13,7 @@ import type { Locale } from "./config";
 const zh = {
   meta: {
     title: "Mosael · 让灵感落进时间线",
-    description: "从一段灵感到一条成片：剪辑、生成、AI 协作与发布，都在自己的电脑里完成。",
+    description: "在同一桌面工作区整理文档与素材、搭建 3D 场景、生成画面、剪辑并发布作品。",
   },
   nav: {
     product: "产品",
@@ -32,6 +32,7 @@ const zh = {
   docs: {
     title: "文档",
     sections: { start: "开始", guides: "使用指南", about: "关于" },
+    groups: { start: "开始使用", create: "整理与构思", produce: "制作与剪辑", automate: "自动化与发布", extend: "扩展与部署", about: "关于项目" },
     prev: "上一篇",
     next: "下一篇",
     editOnGitHub: "在 GitHub 上编辑此页",
@@ -101,7 +102,7 @@ const zh = {
       {
         label: "AI 智能体",
         title: "理解工程，也能真正动手",
-        body: "智能体能阅读当前工程、分析素材并调用工具完成任务。需要修改工程时先给出确认，让你始终知道它准备做什么。",
+        body: "智能体能阅读当前工程、分析素材并调用工具完成任务。需要批准的操作会显示确认卡，执行过程与结果可随时回看。",
         points: ["理解工程上下文", "把复杂任务拆成步骤", "关键改动先确认"],
         cta: "认识 AI 智能体",
         shotAlt: "Mosael AI 智能体：对话初始工作区",
@@ -157,7 +158,7 @@ const zh = {
       },
     ],
     permissionsTitle: "权限是逐项给的",
-    permissionsBody: "manifest 里声明要什么，安装时你逐项点头；凭据只注入到那一个连接，拿不到应用的其它密钥。",
+    permissionsBody: "启用前检查工具与权限，按连接配置凭据。本地脚本以当前用户权限运行，请使用可信来源。",
     officialTitle: "官方范例",
     officialBody: "下面这几个就在仓库里，可以直接照着改。",
     kindScript: "本地脚本",
@@ -233,7 +234,7 @@ const en: Messages = {
   meta: {
     title: "Mosael · Where ideas find their timeline",
     description:
-      "From a spark to a finished video: edit, generate, work with AI, and publish from your own computer.",
+      "One desktop workspace for documents, media, 3D scenes, AI generation, editing and publishing.",
   },
   nav: {
     product: "Product",
@@ -252,6 +253,7 @@ const en: Messages = {
   docs: {
     title: "Docs",
     sections: { start: "Get started", guides: "Guides", about: "About" },
+    groups: { start: "Get started", create: "Organize & plan", produce: "Produce & edit", automate: "Automate & publish", extend: "Extend & deploy", about: "About" },
     prev: "Previous",
     next: "Next",
     editOnGitHub: "Edit this page on GitHub",
@@ -321,7 +323,7 @@ const en: Messages = {
       {
         label: "AI Agent",
         title: "It understands the project and does the work.",
-        body: "The agent can read your project, analyze media, and call tools to complete a task. When an action changes the project, it asks first, so you always know what comes next.",
+        body: "The agent can read your project, analyze media, and call tools to complete a task. Actions that require approval show a confirmation card; execution details and results remain available for review.",
         points: ["Project-aware context", "Complex work broken into steps", "Confirmation before key changes"],
         cta: "Meet the AI agent",
         shotAlt: "Mosael AI agent showing the initial conversation workspace",
@@ -378,7 +380,7 @@ const en: Messages = {
     ],
     permissionsTitle: "Permissions are granted one by one",
     permissionsBody:
-      "The manifest declares what it wants and you approve each item at install time; credentials are injected into that one connection and cannot reach the app's other secrets.",
+      "Review tools and permissions before enabling a connection. Credentials are configured per connection; local scripts run with your user permissions, so choose trusted sources.",
     officialTitle: "Official examples",
     officialBody: "These live in the repository — copy one and start from there.",
     kindScript: "Local script",

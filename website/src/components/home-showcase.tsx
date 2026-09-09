@@ -50,7 +50,7 @@ export function HomeShowcase({ windows, label, explore }: {
           return (
             <button key={window.id} type="button" onClick={() => setActive(window.id)}
               aria-label={window.label} aria-pressed={front} tabIndex={-1}
-              className={cn("absolute overflow-hidden rounded-lg border border-black/15 bg-card shadow-[0_18px_50px_-16px_rgba(26,17,48,0.4)] transition-[left,top,width,transform] duration-500 motion-reduce:transition-none sm:rounded-xl dark:border-white/20 dark:shadow-[0_18px_50px_-16px_rgba(0,0,0,0.8)]",
+              className={cn("absolute overflow-hidden rounded-lg border border-black/8 bg-card shadow-[0_18px_50px_-16px_rgba(26,17,48,0.4)] transition-[left,top,width,transform] duration-500 motion-reduce:transition-none sm:rounded-xl dark:border-white/10 dark:shadow-[0_18px_50px_-16px_rgba(0,0,0,0.8)]",
                 front ? "inset-x-0 top-0 z-30 w-full cursor-default sm:top-[25%] sm:left-[17%] sm:w-[70%]" :
                   left ? "hidden cursor-pointer sm:top-[2%] sm:left-[1%] sm:z-10 sm:block sm:w-[57%] sm:-rotate-2" :
                     "hidden cursor-pointer sm:top-[6%] sm:left-[44%] sm:z-20 sm:block sm:w-[55%] sm:rotate-2")}>

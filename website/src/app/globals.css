@@ -107,7 +107,7 @@
   --accent: var(--indigo);
   --accent-foreground: #ffffff;
   --destructive: #c93549;
-  --border: #ded9e8;
+  --border: #e9e5ee;
   --input: #d8d2e2;
   --ring: var(--flame);
   --radius: 0.75rem;
@@ -146,7 +146,7 @@
   --accent: var(--indigo);
   --accent-foreground: #ffffff;
   --destructive: #ff6a78;
-  --border: #383143;
+  --border: #302b39;
   --input: #453b51;
   --ring: var(--flame);
   --rule: color-mix(in oklab, var(--ink) 10%, transparent);
@@ -200,7 +200,7 @@
     letter-spacing: 0.01em;
   }
   .docs-body :is(h2, h3, h4) {
-    scroll-margin-top: 6rem; /* 锚点跳转别被 sticky 站头盖住 */
+    scroll-margin-top: 9rem; /* Clear both the site header and the compact docs navigation. */
     font-weight: 600;
     line-height: 1.25;
     letter-spacing: -0.01em;
@@ -259,7 +259,7 @@
   }
   .docs-body blockquote {
     margin: 1.5rem 0;
-    border-left: 3px solid var(--flame);
+    border-left: 2px solid var(--border);
     padding-left: 1rem;
     color: var(--muted-foreground);
   }
@@ -299,14 +299,14 @@
     font-size: 0.875rem;
   }
   .docs-body :is(th, td) {
-    border: 1px solid var(--ink);
+    border: 1px solid var(--border);
     padding: 0.5rem 0.75rem;
     text-align: left;
     vertical-align: top;
   }
   .docs-body th {
-    background: var(--ink);
-    color: var(--paper);
+    background: var(--secondary);
+    color: var(--foreground);
     font-weight: 600;
   }
 }

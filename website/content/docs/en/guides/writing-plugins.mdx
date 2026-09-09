@@ -1,17 +1,14 @@
 ---
 title: Writing a plugin
-description: A directory, a manifest, a script — and how to get it into the market.
+description: Write a manifest, declare tools and permissions, and test file inputs and outputs.
 order: 11
 updated: 2026-09-09
 version: 1.2.0
 ---
 
-A plugin is how capability from outside Mosael gets in. Writing one does not mean reading
-framework source: a directory, a manifest, a script — that is all of it.
+A plugin directory contains a manifest and either a local script or an MCP connection configuration. Declare tools, inputs, outputs, permissions and credentials, test locally, then package for distribution.
 
-This page is about **writing** one; [Plugins](/docs/guides/plugins) is about using them, and the
-[manifest reference](https://github.com/Alndaly/Mosael/blob/main/docs/PLUGIN_MANIFEST.md)
-is the full field list.
+For existing packages, see [Using plugins](/docs/guides/plugins). The [manifest reference](https://github.com/Alndaly/Mosael/blob/main/docs/PLUGIN_MANIFEST.md) lists all fields.
 
 ## First decide: script or MCP
 
@@ -104,10 +101,7 @@ Declare them in the manifest, the user fills them on the Plugins page, and they 
 key = os.environ["MY_API_KEY"]
 ```
 
-**Nothing else reaches you.** The child process gets `PATH` / `HOME` / `LANG` plus the keys you
-declared — not the app's provider keys, not the database, not its API token. That isn't a
-restriction on you; it is what makes people willing to install: the list they see on the Plugins
-page is everything you can touch.
+**Environment injection is not a sandbox.** Mosael passes a minimal environment and the declared credentials. Local plugins still run with the current user’s operating-system permissions and may read accessible files. Declare the permissions your tools need and keep credentials out of logs.
 
 ## Handing over a file
 

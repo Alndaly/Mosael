@@ -1,13 +1,12 @@
 ---
 title: Chrome 视频助手
-description: 在原生侧栏看逐字稿、跳转、翻译，并导入视频或当前帧。
+description: 在浏览器侧栏阅读逐字稿、定位视频片段，并导入视频或当前画面。
 order: 9
 updated: 2026-09-09
 version: 1.2.0
 ---
 
-Mosael 的 Chrome 扩展使用浏览器原生 **Side Panel**，不会在网页上盖一层浮动窗口。当前支持
-YouTube 与 B 站视频页；切换标签页时，侧栏会自动跟随。
+Chrome 扩展在浏览器原生 **Side Panel** 中打开视频助手，并跟随当前视频标签页。可导入已安装 yt-dlp 支持的视频链接；YouTube 与 B 站优先读取站点字幕，其他支持的站点可使用 Mosael 转写。播放定位与截帧需要页面提供可访问的 HTML5 视频播放器。
 
 ## 安装
 
@@ -54,7 +53,7 @@ YouTube 与 B 站视频页；切换标签页时，侧栏会自动跟随。
 | Side Panel | 打开 Chrome 原生右侧栏 |
 | Tabs / Active Tab | 跟随视频页、执行跳转与截取可见画面 |
 | Storage | 保存 Mosael 会话和目标工作区 |
-| YouTube / B 站 | 读取当前页面播放器与字幕信息 |
+| `<all_urls>` | 在视频页面发现 HTML5 播放器，并在无法直接读取视频帧时截取视频区域 |
 | localhost / 127.0.0.1 | 调用本机 Mosael API |
 
 当前要求 Chrome 116+。截帧时播放器必须至少有一部分在视口内。

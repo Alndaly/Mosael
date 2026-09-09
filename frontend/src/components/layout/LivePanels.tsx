@@ -69,7 +69,7 @@ export function LivePanels() {
           <div
             key={card.id}
             // 卡片是外壳,默认不抢点击;只有标题条上的手柄打开 pointer-events。
-            className="pointer-events-none fixed z-[70] overflow-hidden border border-border-strong bg-panel shadow-[var(--shadow-raised)]"
+            className="pointer-events-none fixed z-[70] overflow-hidden border border-floating-border bg-panel shadow-[var(--shadow-raised)]"
             style={{
               left: card.x,
               top: card.y,

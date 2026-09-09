@@ -1,17 +1,14 @@
 ---
-title: 写一个插件
-description: 从一个目录、一份清单、一个脚本开始，到装进市场。
+title: 开发插件
+description: 编写插件清单、声明工具与权限，测试文件输入和输出。
 order: 11
 updated: 2026-09-09
 version: 1.2.0
 ---
 
-插件是把 Mosael 之外的能力接进来的那道口子。写一个不需要读框架源码 —— 一个目录、
-一份清单、一个脚本，就是全部。
+一个插件目录包含清单，以及本地脚本或 MCP 服务的连接配置。先声明工具、输入输出、权限与凭据，再在本地测试，最后打包分发。
 
-这篇讲**怎么写**；[插件](/docs/guides/plugins)讲怎么用；
-[manifest 字段说明](https://github.com/Alndaly/Mosael/blob/main/docs/PLUGIN_MANIFEST.md)
-是完整的字段表。
+安装现成插件见[安装与使用插件](/docs/guides/plugins)，完整字段见[清单参考](https://github.com/Alndaly/Mosael/blob/main/docs/PLUGIN_MANIFEST.md)。
 
 ## 先决定一件事：脚本还是 MCP
 
@@ -102,9 +99,7 @@ except Exception as exc:
 key = os.environ["MY_API_KEY"]
 ```
 
-**拿不到别的东西。** 子进程的环境里只有 `PATH` / `HOME` / `LANG` 加上你自己声明的那几个键 ——
-拿不到应用的供应商密钥、拿不到数据库、拿不到 API 令牌。这不是限制你，是让用户敢装：
-他在插件页看到的那张清单，就是你能碰到的全部。
+**环境注入与系统权限是两回事。** 子进程只接收基础环境和自己声明的凭据，Mosael 不主动传入应用的模型密钥或会话令牌。但本地插件以当前用户权限运行，并不是操作系统沙箱；它仍可能读取该用户有权访问的文件。请明确声明所需权限，并避免在日志中输出凭据。
 
 ## 要交出一个文件
 

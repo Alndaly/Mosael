@@ -153,7 +153,7 @@ function PublishViewBar() {
     <div
       style={{ height: PUBLISH_BAR_HEIGHT }}
       className={cn(
-        "fixed inset-x-0 top-0 z-[200] flex items-center gap-2 border-b border-border-strong bg-panel px-2.5 [-webkit-app-region:drag] supports-[backdrop-filter]:bg-[var(--glass-chrome)] supports-[backdrop-filter]:[-webkit-backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[backdrop-filter:blur(14px)_saturate(1.4)]",
+        "fixed inset-x-0 top-0 z-[200] flex items-center gap-2 border-b border-border bg-panel px-2.5 [-webkit-app-region:drag] supports-[backdrop-filter]:bg-[var(--glass-chrome)] supports-[backdrop-filter]:[-webkit-backdrop-filter:blur(14px)_saturate(1.4)] supports-[backdrop-filter]:[backdrop-filter:blur(14px)_saturate(1.4)]",
         WINDOW_CHROME_INSET,
       )}
     >
@@ -215,7 +215,7 @@ function PublishViewBar() {
       </form>
       <button
         type="button"
-        className="[-webkit-app-region:no-drag] inline-flex cursor-pointer items-center gap-[5px] whitespace-nowrap rounded-md border border-border bg-transparent px-2.5 py-[5px] text-ui-sm text-foreground hover:border-border-strong hover:bg-secondary"
+        className="[-webkit-app-region:no-drag] inline-flex cursor-pointer items-center gap-[5px] whitespace-nowrap rounded-md border border-border bg-transparent px-2.5 py-[5px] text-ui-sm text-foreground hover:bg-secondary"
         onClick={() => void window.mosaelPublish?.hideView()}
       >
         <ArrowLeft size={14} /> {t("publishBackToApp")}
@@ -234,7 +234,7 @@ function AppToaster() {
       gap={8}
       toastOptions={{
         className:
-          "rounded-lg! border! border-border-strong! bg-popover! text-ui-sm! text-foreground! shadow-none!",
+          "rounded-lg! border! border-floating-border! bg-popover! text-ui-sm! text-foreground! shadow-none!",
       }}
     />
   );

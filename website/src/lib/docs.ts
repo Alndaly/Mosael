@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { docNavigationOrder } from "./docs-navigation";
+
 import type { Locale } from "@/i18n/config";
 
 /**
@@ -60,7 +62,7 @@ function readMeta(locale: Locale, section: DocSection, file: string): DocMeta {
   };
 }
 
-/** 某个语言下的全部文档,按 section 顺序 + frontmatter 的 order 排好。 */
+/** 某个语言下的全部文档,按导航分组排序,未编目的新文章排在末尾。 */
 export function listDocs(locale: Locale): DocMeta[] {
   return DOC_SECTIONS.flatMap((section) => {
     const dir = path.join(CONTENT_ROOT, locale, section);
@@ -70,7 +72,7 @@ export function listDocs(locale: Locale): DocMeta[] {
       .filter((file) => file.endsWith(".mdx"))
       .map((file) => readMeta(locale, section, file))
       .sort((a, b) => a.order - b.order);
-  });
+  }).sort((a, b) => docNavigationOrder(a) - docNavigationOrder(b));
 }
 
 export function readDoc(locale: Locale, section: string, name: string): Doc | null {

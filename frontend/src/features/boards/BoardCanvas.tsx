@@ -1088,7 +1088,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
                       movable && "cursor-grab active:cursor-grabbing",
                       active
                         ? "border-primary bg-action text-action-foreground"
-                        : "border-border-strong bg-panel/90 text-foreground backdrop-blur-xl",
+                        : "border-floating-border bg-panel/90 text-foreground backdrop-blur-xl",
                     )}
                     tabIndex={commentMode ? 0 : -1}
                     style={{ pointerEvents: commentMode ? "auto" : "none" }}
@@ -1526,7 +1526,7 @@ function ItemToolbar({
     //: 上下浮层都从**节点边框**量同一段距离。类型标签挂在节点外,但不能因此让上方浮层
     //: 另用一套数字 —— 否则一眼看过去就是上疏下密。
     <NodeToolbar nodeId={selected.map((node) => node.id)} isVisible position={Position.Top} offset={BOARD_NODE_PANEL_OFFSET}>
-      <div className="nodrag nopan flex items-center gap-1 rounded-full border border-border-strong bg-panel p-1.5 shadow-[var(--shadow-panel)]">
+      <div className="nodrag nopan flex items-center gap-1 rounded-full border border-floating-border bg-panel p-1.5 shadow-[var(--shadow-panel)]">
         {/* 按类型来的那几个动作装在这一格里,**分隔线是这一格自己的右边框**。
             于是它不可能在没有动作时出现 —— 此前那道线自己抄了一遍「上面有没有东西」的
             条件,加了音频节点之后就和实际渲染分了岔:音频头上挂着一道悬空的竖线。 */}

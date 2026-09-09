@@ -51,8 +51,8 @@ export function DocsToc({ entries, label, className }: { entries: TocEntry[]; la
                 "-ml-px block border-l py-1 transition-colors",
                 entry.depth === 3 ? "pl-7" : "pl-4",
                 current
-                  ? "border-flame font-bold text-foreground"
-                  : "border-transparent text-muted-foreground hover:border-foreground/35 hover:text-foreground",
+                  ? "border-primary/40 font-medium text-foreground"
+                  : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
               )}
             >
               {entry.text}
@@ -65,14 +65,8 @@ export function DocsToc({ entries, label, className }: { entries: TocEntry[]; la
 
   return (
     <>
-      {/* 窄屏折起来 —— 本页目录排在正文前面时是"这一页讲了什么"的摘要,但摊开十几行就成了
-          一堵墙。桌面端它在右栏,不占正文的位置,照常展开。 */}
-      <details className={cn("rounded-xl bg-secondary/70 text-sm xl:hidden", className)}>
-        <summary className="cursor-pointer list-none px-4 py-3 font-display font-semibold tracking-tight">{label}</summary>
-        <div className="border-t border-border px-4 py-3">{list}</div>
-      </details>
       <nav aria-label={label} className={cn("hidden text-sm xl:block", className)}>
-        <p className="m-0 mb-4 font-mono text-xs font-bold tracking-widest text-flame uppercase">{label}</p>
+        <p className="m-0 mb-4 text-xs font-semibold text-muted-foreground">{label}</p>
         {list}
       </nav>
     </>

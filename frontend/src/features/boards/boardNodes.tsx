@@ -29,12 +29,12 @@ export type NoteColor = (typeof NOTE_COLORS)[number];
 
 /** 每种颜色的底 / 边 / 字。用 color-mix 从主题色调出来,深浅主题各自成立。 */
 const COLOR_CLASS: Record<NoteColor, string> = {
-  yellow: "bg-[color-mix(in_srgb,#f5c518_18%,var(--panel))] border-[color-mix(in_srgb,#f5c518_45%,var(--border))]",
-  blue: "bg-[color-mix(in_srgb,#3b82f6_16%,var(--panel))] border-[color-mix(in_srgb,#3b82f6_42%,var(--border))]",
-  green: "bg-[color-mix(in_srgb,#22c55e_16%,var(--panel))] border-[color-mix(in_srgb,#22c55e_42%,var(--border))]",
-  pink: "bg-[color-mix(in_srgb,#ec4899_15%,var(--panel))] border-[color-mix(in_srgb,#ec4899_40%,var(--border))]",
-  purple: "bg-[color-mix(in_srgb,#8b5cf6_16%,var(--panel))] border-[color-mix(in_srgb,#8b5cf6_42%,var(--border))]",
-  gray: "bg-[color-mix(in_srgb,var(--foreground)_7%,var(--panel))] border-border-strong",
+  yellow: "bg-[color-mix(in_srgb,#f5c518_18%,var(--panel))] border-[color-mix(in_srgb,#f5c518_22%,var(--border))]",
+  blue: "bg-[color-mix(in_srgb,#3b82f6_16%,var(--panel))] border-[color-mix(in_srgb,#3b82f6_22%,var(--border))]",
+  green: "bg-[color-mix(in_srgb,#22c55e_16%,var(--panel))] border-[color-mix(in_srgb,#22c55e_22%,var(--border))]",
+  pink: "bg-[color-mix(in_srgb,#ec4899_15%,var(--panel))] border-[color-mix(in_srgb,#ec4899_22%,var(--border))]",
+  purple: "bg-[color-mix(in_srgb,#8b5cf6_16%,var(--panel))] border-[color-mix(in_srgb,#8b5cf6_22%,var(--border))]",
+  gray: "bg-[color-mix(in_srgb,var(--foreground)_7%,var(--panel))] border-border",
 };
 
 export function noteColorClass(color: string | undefined): string {

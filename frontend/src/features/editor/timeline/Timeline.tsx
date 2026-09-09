@@ -1093,7 +1093,7 @@ export function Timeline({
                 if (trackIndex < 0) return null;
                 return (
                   <div
-                    className="pointer-events-none absolute top-[-1px] z-[8] -translate-x-1/2 whitespace-nowrap rounded-md border border-border-strong bg-popover px-[7px] py-px text-ui-2xs tabular-nums text-foreground"
+                    className="pointer-events-none absolute top-[-1px] z-[8] -translate-x-1/2 whitespace-nowrap rounded-md border border-floating-border bg-popover px-[7px] py-px text-ui-2xs tabular-nums text-foreground"
                     style={{
                       left: timeToPx(edgeTime, pxPerSecond),
                       top: RULER_HEIGHT + trackIndex * TRACK_HEIGHT - 10,

@@ -172,7 +172,7 @@ export function WorkflowRunHistory({
         "flex flex-col",
         DOCKABLE_PANEL_FRAME_CLASS,
         isFloating
-          ? "fixed max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)] border-border-strong"
+          ? "fixed max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)] border-floating-border"
           : "relative min-h-0 min-w-0",
       )}
       style={floatStyle}

@@ -40,7 +40,7 @@ export default function RootNotFound() {
         <p className="mt-0 mb-10 max-w-xl text-lg text-muted-foreground">{t.body}</p>
         <a
           href={localePath(DEFAULT_LOCALE)}
-          className="border-2 border-ink bg-flame px-6 py-3 font-bold text-primary-foreground shadow-block transition-transform hover:translate-x-1 hover:translate-y-1 hover:shadow-none"
+          className="border border-border bg-flame px-6 py-3 font-bold text-primary-foreground shadow-block transition-transform hover:translate-x-1 hover:translate-y-1 hover:shadow-none"
         >
           {t.back}
         </a>

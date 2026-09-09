@@ -2,75 +2,31 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-
 import { cn } from "@/lib/utils";
 
-/**
- * 文档侧边栏。
- *
- * 是客户端组件,只为了一件事:知道当前在哪一页。
- *
- * 分组和顺序在服务端算好了当 props 传进来 —— 这里**不能**从 `@/lib/docs` 里 import 任何
- * 东西,哪怕只是一个常量数组:那个模块 import 了 `node:fs`,而 client component 的 import
- * 会被整个打进浏览器包,构建直接失败。
- */
 export type SidebarGroup = {
   label: string;
   items: { href: string; title: string }[];
 };
 
-export function DocsSidebar({
-  groups,
-  label,
-  className,
-}: {
-  groups: SidebarGroup[];
-  /** 窄屏折叠起来之后,那一行写什么。 */
-  label: string;
-  className?: string;
-}) {
+export function DocsLinks({ groups, onNavigate }: { groups: SidebarGroup[]; onNavigate?: () => void }) {
   const pathname = usePathname();
+  return <div className="space-y-5">
+    {groups.map((group) => <section key={group.label}>
+      <h2 className="m-0 mb-1.5 px-2 text-xs font-semibold text-muted-foreground">{group.label}</h2>
+      <ul className="m-0 list-none space-y-0.5 p-0">
+        {group.items.map((item) => <li key={item.href}>
+          <Link href={item.href} onClick={onNavigate} aria-current={pathname === item.href ? "page" : undefined}
+            className={cn("block rounded-md px-2 py-2 text-sm leading-5 transition-colors focus-visible:outline-2 focus-visible:outline-ring",
+              pathname === item.href ? "bg-secondary font-medium text-foreground" : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground")}>
+            {item.title}
+          </Link>
+        </li>)}
+      </ul>
+    </section>)}
+  </div>;
+}
 
-  const list = (
-    <>
-      {groups.map((group) => (
-        <div key={group.label} className="mb-8">
-          <p className="m-0 mb-3 font-mono text-xs font-bold tracking-widest text-flame uppercase">{group.label}</p>
-          <ul className="m-0 list-none border-l border-border p-0">
-            {group.items.map((item) => {
-              const active = pathname === item.href;
-              return (
-                <li key={item.href} className="m-0">
-                  <Link
-                    href={item.href}
-                    aria-current={active ? "page" : undefined}
-                    className={cn(
-                      "-ml-px block border-l py-1.5 pl-4 transition-colors",
-                      active
-                        ? "border-flame font-bold text-foreground"
-                        : "border-transparent text-muted-foreground hover:border-foreground/35 hover:text-foreground",
-                    )}
-                  >
-                    {item.title}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ))}
-    </>
-  );
-
-  return (
-    <>
-      {/* 手机上把整棵目录塞在正文前面,要滚过两屏导航才看得到内容。折起来,想翻再点开。
-          `<details>` 而不是自己写一套开合状态:无 JS 也能用,键盘和读屏软件都认。 */}
-      <details className="rounded-xl bg-secondary/70 text-sm lg:hidden">
-        <summary className="cursor-pointer list-none px-4 py-3 font-display font-semibold tracking-tight">{label}</summary>
-        <div className="border-t border-border px-4 pt-4 pb-1">{list}</div>
-      </details>
-      <nav className={cn("hidden text-sm lg:block", className)}>{list}</nav>
-    </>
-  );
+export function DocsSidebar({ groups, label, className }: { groups: SidebarGroup[]; label: string; className?: string }) {
+  return <nav aria-label={label} className={cn("hidden text-sm lg:block", className)}><DocsLinks groups={groups} /></nav>;
 }

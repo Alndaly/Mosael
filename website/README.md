@@ -25,7 +25,10 @@ NEXT_PUBLIC_GOOGLE_ANALYTICS_ID=G-YDRX2Y5WZS
 
 ```
 content/docs/<语言>/<分区>/<页>.mdx   文档正文(zh / en,分区为 start / guides / about)
-public/media/{screens,gifs,videos}     首页产品实拍与文档配图
+public/media/{screens,gifs,videos}     文档的中英文、明暗主题实拍
+public/media/homepage/{zh,en}/        首页多窗口展示的实际截图
+src/lib/docs-navigation.ts           六组文档导航与阅读顺序
+src/components/docs-mobile-nav.tsx   手机和平板的单面板目录
 src/app/[locale]/                    全站路由;这一层的 layout 就是根布局
 src/i18n/messages.ts                 除文档正文外的全部文案,中英各一份
 src/lib/registry.ts                  插件索引 —— 构建期直接读 plugins/examples 里的 manifest
@@ -38,11 +41,10 @@ src/lib/registry.ts                  插件索引 —— 构建期直接读 plug
 (`.docs-body`)。和主应用 `frontend/src/app/styles.css` 顶部那条约定一致。
 
 **品牌层级以暖白、墨色和紫色为主。** 暖白负责留白，墨色保证阅读，紫色只用于路径、编号、
-链接和主操作。首页不使用阴影来制造层级，而是依靠间距、字号、细分割线和真实产品截图。
+链接和主操作。正文依靠间距、字号与细分割线区分层级，浮层与叠放截图可使用柔和投影。装饰边框应低对比度，键盘焦点与选中状态仍需清晰。
 颜色都注册在 `@theme` 中，组件只使用 Tailwind utility。
 
-**首页按一条创作路径组织。** 四个核心章节依次是无限画布、时间线剪辑、AI 智能体和可视化
-工作流；知识库和 3D 场景按已实现能力补充，也不要把作者账号写成官方品牌账号。唯一的 X 链接是
+**首页按一条创作路径组织。** 核心章节依次是无限画布、3D 场景与动画、素材管理、剪辑、AI 智能体和工作流；文档与素材引用贯穿这些步骤，也不要把作者账号写成官方品牌账号。唯一的 X 链接是
 `https://x.com/KindaHuaX`。
 
 **文案不要写进 JSX。** JSX 会把源码里的换行 + 缩进折成一个空格,英文里正好是词间距,
@@ -72,3 +74,20 @@ props 传。
 ## 界面实拍
 
 当前文档对应 1.2.0。中英指南，配套浅色与深色实拍；MP4 使用可暂停的播放器。录制来源、许可、场景与复录方法见 [媒体说明](../docs/media/README.md)。`pnpm test` 会核对媒体清单哈希、主题配对、语言和正文引用，防止旧图混入新版文档。
+
+## 文档组织与维护
+
+文档导航按六组组织：开始使用、整理与构思、制作与剪辑、自动化与发布、扩展与部署、关于项目。
+分组和顺序只在 `src/lib/docs-navigation.ts` 中维护；上一篇、下一篇使用同一顺序。物理目录仍是
+`start / guides / about`，保留已发布 URL，不因调整导航改名或移动文件。
+
+新增页面时同时添加 `zh`、`en` 正文和导航条目，填写标题、简短任务描述、版本与更新日期。
+两种语言保持相同的小节层级，正文中的内部链接不带语言前缀，由渲染器补充。过时说明应结合当前界面修订，历史更新日志保留原始版本语境。
+
+移动端将「文档目录」和「本页目录」放在同一条导航栏，使用一个模态面板展示。面板限制在视口内、内部滚动，支持 Esc、点击遮罩及选中链接关闭；关闭后恢复触发按钮的焦点。桌面左侧显示完整文档分组，右侧显示当前页标题。
+
+验证：`pnpm test`、`pnpm build`，以及从仓库根目录运行
+`backend/.venv/bin/python -m pytest backend/tests/test_site_docs_stay_in_sync.py -q`。
+交互验证覆盖 390 / 768 / 1100 / 1440 像素宽度、中英文和明暗主题。
+
+启动构建后的官网后，可从仓库根目录运行 `backend/.venv/bin/python scripts/verify-docs-navigation.py` 复查目录交互；`--base-url` 可指定预览地址，截图与结果默认写入 `output/playwright/`。

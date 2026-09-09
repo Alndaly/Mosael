@@ -1,40 +1,35 @@
 ---
 title: What is Mosael
-description: A video studio that folds editing, AI generation, orchestration and publishing into one desktop app.
+description: Organize research, plan 3D shots, generate media, edit and publish in one workspace.
 order: 1
 updated: 2026-09-09
 version: 1.2.0
 ---
 
-Mosael is a **local-first desktop app** that folds the four legs of content creation into a single window:
+Mosael is a **local-first desktop workspace for creative work**. Media, documents, boards, 3D scenes and editing projects share a workspace, with agents and workflows available to help move work between them.
 
-1. **Editing** — a professional multi-timeline, multi-track editor: ripple editing, speed ramps, transcript-driven cuts, color grading (curves / presets / LUT / scopes), subtitles and filters, one-click export.
-2. **AI generation** — a conversational agent operates your project through tools; text-to-image / text-to-video results land in the media library.
-3. **Orchestration** — visual workflows chain retrieval, generation, transcription, export and publishing into one graph, triggered manually, on a schedule, or via webhook.
-4. **Publishing** — push a finished cut to Douyin / RedNote / WeChat Channels / Bilibili with persistent multi-account logins; the desktop app's embedded browser performs the real upload.
+## From research to a finished piece
+
+- **Collect material**: keep footage, images and sound in the [media library](/docs/guides/media), and scripts, transcripts and research in [notes and documents](/docs/guides/notes).
+- **Plan visually**: connect documents, references and generation nodes on a [creative board](/docs/guides/boards). Use comments for discussion and markers to return to important areas.
+- **Rehearse shots**: arrange space and lighting in [3D scenes](/docs/guides/scenes), animate cameras and objects, then use the resulting shots as image or video references.
+- **Make the edit**: use [AI Studio](/docs/guides/ai-studio) to generate media and work on projects, then [edit](/docs/guides/editing) with timelines, transcripts, captions, color and sound.
+- **Repeat and publish**: reuse steps with [workflows](/docs/guides/workflows), arrange [scheduled runs](/docs/guides/scheduler), and track uploads in [Publish](/docs/guides/publishing).
 
 ![Home: recent edits, all projects and project search](/media/screens/en/home.png)
 
-Home organizes work into **Recently edited** and **All projects**. Create a project or open an existing one to enter the editor. Task and cost summaries live in **Statistics**:
+Create or open a project from Home to enter the editor. Open notes, boards and 3D scenes from the sidebar. Task and cost summaries are available in **Statistics**.
 
 ![Demo: switch project lists and open the sample project](/media/gifs/en/home.gif)
 
-## Architecture at a glance
+## Data and network access
 
-- **Frontend**: Vite + React + TypeScript single-page app, packaged into Electron.
-- **Backend**: FastAPI (Python) + SQLite, the single source of truth for projects, rendering, AI, workflows and publish jobs.
-- **Executor**: a publish executor built into the Electron main process drives embedded browser views for logins and uploads.
-- **AI agent**: an embedded Node.js runtime based on pi-agent-core / pi-ai uses Mosael tools to access projects; operations requiring approval use confirmation cards.
-- **Data**: stored in `~/.mosael` by default, or on the selected backend when using a team server. Local editing and export work offline; remote models, online tools and social publishing require a network.
+Projects and media are stored on your computer by default. Organizing local media, editing and exporting can work offline. Cloud models, URL downloads, online tools and platform publishing need a network connection. Local transcription and voice cloning require their model files to be downloaded first.
 
-## Who it's for
+When connected to a team backend, shared data lives on that server. Browser sign-in profiles remain on the desktop device that runs uploads and automation. See [remote deployment](/docs/guides/remote) and [browser profiles](/docs/guides/browser-pool).
 
-Independent creators and small teams who want to go from editing to multi-platform publishing in one place, automate repetitive work with AI and workflows, and keep their footage off third-party clouds.
+## Where to start
 
-The source code is available on [GitHub](https://github.com/Alndaly/Mosael) (proprietary license — see [About the project](/docs/about/project)).
+[Install the app](/docs/start/download), then follow the [quick start](/docs/start/quickstart) to make an export. [Connect a model service](/docs/guides/providers) when you need AI. The documentation follows this sequence: Get started → Organize & plan → Produce & edit → Automate & publish → Extend & deploy. On a phone, the compact navigation bar opens either the full documentation or this page's headings.
 
-Next: [Quick start](/docs/start/quickstart).
-
-## Creating with 1.2.0
-
-Use [3D scenes and animation](/docs/guides/scenes) to test space, lighting and camera movement before handing references to your model. Keep source material in [Notes and knowledge](/docs/guides/notes), then organize document references, comments and markers on an [idea board](/docs/guides/boards).
+The source is available on [GitHub](https://github.com/Alndaly/Mosael) under a [proprietary license](/docs/about/project). Check the license before commercial use or redistribution.
