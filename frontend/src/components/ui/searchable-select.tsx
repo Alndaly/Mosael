@@ -4,6 +4,7 @@ import { Check, ChevronDown } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { FIELD_TRIGGER_CLASS, FIELD_TRIGGER_CHEVRON } from "@/components/ui/field-trigger";
+import { insideDialog } from "@/components/ui/insideDialog";
 import { cn } from "@/lib/utils";
 
 type Option = {
@@ -26,22 +27,10 @@ type Option = {
  * 时列表明明可滚、滚动条也在,滚轮却完全无效(拖滚动条/方向键仍可用,是这个故障的特征组合)。
  * 加了之后 Popover 自建滚动锁并把自己的内容作为放行区;对话框外的行为也一致(与原生 select 相同)。
  */
-/**
- * 只在**确实位于 Dialog 内**时才开 modal。
- *
- * modal 是为了解决 Dialog 专属的问题:Dialog 用 react-remove-scroll 锁背景滚动,只放行自己
- * shard 内的滚轮,而 PopoverContent 走 Portal 落在 shard 之外 —— 不加 modal 就滚不动列表。
- *
- * 但 modal 会让 Radix 给 `document.body` 挂上 `pointer-events: none`,而这个还原**并不可靠**
- * (多层 Popper 交替开关时会漏)。留下来的后果是**整个应用点击穿透** —— 表现为「点面板上的
- * 输入框,却选中了它背后的画布节点」,而且看不出跟下拉框有任何关系。
- *
- * 所以按位置决定:Dialog 内需要它,Dialog 外不该为它付这个代价。
- */
 function useInsideDialog(ref: React.RefObject<HTMLElement | null>): boolean {
   const [inside, setInside] = React.useState(false);
   React.useEffect(() => {
-    setInside(Boolean(ref.current?.closest('[role="dialog"]')));
+    setInside(insideDialog(ref.current));
   });
   return inside;
 }
@@ -54,6 +43,7 @@ export function SearchableSelect({
   searchPlaceholder,
   emptyText,
   className,
+  contentClassName,
   disabled,
   trigger,
 }: {
@@ -64,13 +54,17 @@ export function SearchableSelect({
   searchPlaceholder?: string;
   emptyText?: string;
   className?: string;
+  /** 浮层自己的类名 —— 主要用来给宽度兜底:触发器只有一枚小胶囊那么宽时,对齐它等于不可读。 */
+  contentClassName?: string;
   disabled?: boolean;
   /** 自定义触发器(替换默认按钮),用于像「添加节点」这类带图标/胶囊样式的触发器。 */
   trigger?: React.ReactNode;
 }) {
   const [open, setOpen] = React.useState(false);
-  const triggerRef = React.useRef<HTMLButtonElement>(null);
-  const modal = useInsideDialog(triggerRef);
+  /* 探针而不是触发器本身:自定义触发器(trigger)接不到这个 ref,而「在不在 Dialog 里」是**位置**
+     问题 —— 同一个位置放一个 display:none 的 span,closest 走出来的祖先链一模一样。 */
+  const probeRef = React.useRef<HTMLSpanElement>(null);
+  const modal = useInsideDialog(probeRef);
   const items: Option[] = options.map((option) => (typeof option === "string" ? { value: option, label: option } : option));
   const selected = items.find((item) => item.value === value);
   const hasDescriptions = items.some((item) => item.description);
@@ -91,73 +85,80 @@ export function SearchableSelect({
     return out;
   }, [items]);
   return (
-    <Popover modal={modal} open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        {trigger ?? (
-          <button ref={triggerRef}
-            type="button"
-            disabled={disabled}
-            /* **共用 FIELD_TRIGGER_CLASS**,不再手抄一份。抄出来的那份是 h-8 / gap-1 /
-               px-2.5,而 Select 和 Combobox 是 h-10 / gap-1.5 / px-3 —— 三种控件并排在同一行
-               表单里时(插件的「新建连接」就是下拉+输入框+按钮),下拉比旁边矮 8px、左右
-               留白也窄一截。那正是这个 token 的注释点名要消灭的情况。 */
-            className={cn(FIELD_TRIGGER_CLASS, "text-foreground", className)}
-          >
-            {/* min-w-0:flex 子项默认不肯收缩,truncate 会失效(见 field-trigger.ts)。
-                未选中时走 placeholder 色:和输入框的 placeholder 同一个视觉约定 —— 用正文色
-                写「平台」,读起来像是**已经选了**一个叫「平台」的东西。 */}
-            <span className={cn("min-w-0 truncate", !selected && "text-muted-foreground")}>
-              {selected?.label ?? placeholder ?? ""}
-            </span>
-            <ChevronDown className={FIELD_TRIGGER_CHEVRON} />
-          </button>
-        )}
-      </PopoverTrigger>
-      {/* 宽度:普通下拉对齐触发器;**带描述时改用固定宽度**。
-          对齐触发器的前提是"选项跟触发器差不多长",而描述行是整整一句话 —— 「添加节点」的
-          触发器只有一枚胶囊那么宽,列表若跟着它就每行都得折成三行;反过来放开让内容撑,
-          一句长描述能把浮层顶到整屏宽(实测就是如此)。给个够读一行的固定宽度,超出截断。 */}
-      <PopoverContent
-        className={cn("p-0", hasDescriptions ? "w-[360px] max-w-[calc(100vw-24px)]" : "w-[--radix-popover-trigger-width]")}
-        align="start"
-      >
-        <Command>
-          <CommandInput placeholder={searchPlaceholder ?? "搜索…"} className="h-9" />
-          <CommandList className="max-h-[300px]">
-            <CommandEmpty>{emptyText ?? "无匹配项"}</CommandEmpty>
-            {groups.map(([heading, groupItems]) => {
-              const rows = groupItems.map((item) => (
-                <CommandItem
-                  key={item.value}
-                  // 描述也参与搜索:用户记得住"发抖音"却未必记得节点叫「发布」。
-                  value={`${item.label} ${item.description ?? ""} ${(item.keywords ?? []).join(" ")}`}
-                  onSelect={() => {
-                    onValueChange(item.value);
-                    setOpen(false);
-                  }}
-                >
-                  {/* 勾在右端、只在选中时渲染:左侧占位勾会让**每一行**都白缩进一个图标宽,
-                      而「添加节点」这类当动作菜单用的场景根本没有选中项,那块缩进纯属浪费。 */}
-                  <span className="grid min-w-0 flex-1 gap-px leading-[1.35]">
-                    <span className="truncate">{item.label}</span>
-                    {item.description && (
-                      <span className="truncate text-ui-xs text-muted-foreground">{item.description}</span>
-                    )}
-                  </span>
-                  {item.value === value && <Check size={14} className="shrink-0 text-primary" />}
-                </CommandItem>
-              ));
-              return heading ? (
-                <CommandGroup key={heading} heading={heading}>
-                  {rows}
-                </CommandGroup>
-              ) : (
-                <React.Fragment key="__ungrouped">{rows}</React.Fragment>
-              );
-            })}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+    <>
+      <span ref={probeRef} aria-hidden className="hidden" />
+      <Popover modal={modal} open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          {trigger ?? (
+            <button
+              type="button"
+              disabled={disabled}
+              /* **共用 FIELD_TRIGGER_CLASS**,不再手抄一份。抄出来的那份是 h-8 / gap-1 /
+                 px-2.5,而 Select 和 Combobox 是 h-10 / gap-1.5 / px-3 —— 三种控件并排在同一行
+                 表单里时(插件的「新建连接」就是下拉+输入框+按钮),下拉比旁边矮 8px、左右
+                 留白也窄一截。那正是这个 token 的注释点名要消灭的情况。 */
+              className={cn(FIELD_TRIGGER_CLASS, "text-foreground", className)}
+            >
+              {/* min-w-0:flex 子项默认不肯收缩,truncate 会失效(见 field-trigger.ts)。
+                  未选中时走 placeholder 色:和输入框的 placeholder 同一个视觉约定 —— 用正文色
+                  写「平台」,读起来像是**已经选了**一个叫「平台」的东西。 */}
+              <span className={cn("min-w-0 truncate", !selected && "text-muted-foreground")}>
+                {selected?.label ?? placeholder ?? ""}
+              </span>
+              <ChevronDown className={FIELD_TRIGGER_CHEVRON} />
+            </button>
+          )}
+        </PopoverTrigger>
+        {/* 宽度:普通下拉对齐触发器;**带描述时改用固定宽度**。
+            对齐触发器的前提是"选项跟触发器差不多长",而描述行是整整一句话 —— 「添加节点」的
+            触发器只有一枚胶囊那么宽,列表若跟着它就每行都得折成三行;反过来放开让内容撑,
+            一句长描述能把浮层顶到整屏宽(实测就是如此)。给个够读一行的固定宽度,超出截断。 */}
+        <PopoverContent
+          className={cn(
+            "p-0",
+            hasDescriptions ? "w-[360px] max-w-[calc(100vw-24px)]" : "w-[--radix-popover-trigger-width]",
+            contentClassName,
+          )}
+          align="start"
+        >
+          <Command>
+            <CommandInput placeholder={searchPlaceholder ?? "搜索…"} className="h-9" />
+            <CommandList className="max-h-[300px]">
+              <CommandEmpty>{emptyText ?? "无匹配项"}</CommandEmpty>
+              {groups.map(([heading, groupItems]) => {
+                const rows = groupItems.map((item) => (
+                  <CommandItem
+                    key={item.value}
+                    // 描述也参与搜索:用户记得住"发抖音"却未必记得节点叫「发布」。
+                    value={`${item.label} ${item.description ?? ""} ${(item.keywords ?? []).join(" ")}`}
+                    onSelect={() => {
+                      onValueChange(item.value);
+                      setOpen(false);
+                    }}
+                  >
+                    {/* 勾在右端、只在选中时渲染:左侧占位勾会让**每一行**都白缩进一个图标宽,
+                        而「添加节点」这类当动作菜单用的场景根本没有选中项,那块缩进纯属浪费。 */}
+                    <span className="grid min-w-0 flex-1 gap-px leading-[1.35]">
+                      <span className="truncate">{item.label}</span>
+                      {item.description && (
+                        <span className="truncate text-ui-xs text-muted-foreground">{item.description}</span>
+                      )}
+                    </span>
+                    {item.value === value && <Check size={14} className="shrink-0 text-primary" />}
+                  </CommandItem>
+                ));
+                return heading ? (
+                  <CommandGroup key={heading} heading={heading}>
+                    {rows}
+                  </CommandGroup>
+                ) : (
+                  <React.Fragment key="__ungrouped">{rows}</React.Fragment>
+                );
+              })}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </>
   );
 }

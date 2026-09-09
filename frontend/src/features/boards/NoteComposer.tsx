@@ -11,7 +11,7 @@ import {
   restorePromptDocument,
   type PromptDocument,
 } from "@/features/boards/PromptEditor";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { OptionPicker } from "@/components/ui/option-picker";
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import { Film, Music, X } from "lucide-react";
 
@@ -217,18 +217,18 @@ export function NoteComposer({
           ) : (
             <span className="flex min-w-0 shrink items-center gap-0.5 rounded-full px-1 transition-colors hover:bg-secondary">
               <Sparkles size={12} className="shrink-0 text-muted-foreground" />
-              <Select value={`${current?.provider_profile_id}:${current?.model}`} onValueChange={setPicked}>
-                <SelectTrigger className="h-6 w-auto gap-0 border-0 bg-transparent px-1 text-ui-2xs text-muted-foreground shadow-none focus:ring-0 data-[state=open]:text-foreground [&>svg]:hidden">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent align="start">
-                  {options.map((one) => (
-                    <SelectItem key={`${one.provider_profile_id}:${one.model}`} value={`${one.provider_profile_id}:${one.model}`}>
-                      {one.display_name || one.model}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* 模型多了自动带搜索(阈值在 OptionPicker 里)。keywords 挂原始 model id:
+                  展示名换成中文之后,记得住 `gpt-4o` 的人仍然搜得到。 */}
+              <OptionPicker
+                value={`${current?.provider_profile_id}:${current?.model}`}
+                onChange={setPicked}
+                options={options.map((one) => ({
+                  value: `${one.provider_profile_id}:${one.model}`,
+                  label: one.display_name || one.model,
+                  keywords: [one.model],
+                }))}
+                className="h-6 w-auto gap-0 border-0 bg-transparent px-1 text-ui-2xs text-muted-foreground shadow-none focus:ring-0 data-[state=open]:text-foreground [&>svg]:hidden"
+              />
             </span>
           )}
           <button

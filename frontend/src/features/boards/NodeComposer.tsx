@@ -19,7 +19,7 @@ import { useSubmitting } from "@/features/boards/useSubmitting";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { ROLE_COPY, SOURCE_ROLES, type SourceRole } from "@/features/ai-studio/sourceFrames";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { OptionPicker } from "@/components/ui/option-picker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   aspectRatioOptions,
@@ -72,18 +72,18 @@ function Pick({
 }) {
   if (options.length === 0) return null;
   const control = (
-    <Select value={value} onValueChange={onChange}>
-      {/* 带标签的排在设置弹层的两列网格里,要撑满自己那一格;不带标签的活在工具行里,
-          **按内容取宽** —— 撑满会把箭头顶到行尾,名字和箭头之间空出一大片。 */}
-      <SelectTrigger aria-label={label} className={cn("h-8 min-w-0 gap-1 border-0 px-2 text-ui-xs shadow-none", label ? "w-full bg-control" : "w-auto max-w-full bg-transparent text-muted-foreground")}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent className="max-w-[min(440px,calc(100vw-16px))]">
-        {options.map((one) => (
-          <SelectItem key={one.value} value={one.value} className="[overflow-wrap:anywhere]">{one.label}</SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    /* 选项一多自动换成可搜索的那一版(阈值在 OptionPicker 里)—— 模型清单动辄十几项,
+       而且名字之间只差一个数字,靠滚是这个界面上最慢的动作。 */
+    <OptionPicker
+      value={value}
+      onChange={onChange}
+      options={options}
+      ariaLabel={label}
+      /* 带标签的排在设置弹层的两列网格里,要撑满自己那一格;不带标签的活在工具行里,
+         **按内容取宽** —— 撑满会把箭头顶到行尾,名字和箭头之间空出一大片。 */
+      className={cn("h-8 min-w-0 gap-1 border-0 px-2 text-ui-xs shadow-none", label ? "w-full bg-control" : "w-auto max-w-full bg-transparent text-muted-foreground")}
+      contentClassName="max-w-[min(440px,calc(100vw-16px))]"
+    />
   );
   return label ? <div className="grid min-w-0 grid-cols-[112px_minmax(0,1fr)] items-center gap-3"><span className="text-ui-xs text-muted-foreground">{label}</span>{control}</div> : control;
 }

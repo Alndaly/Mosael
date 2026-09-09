@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { getAgentVoice, listTtsEngines, listTtsVoices, setAgentVoice } from "@/api/client";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { OptionPicker } from "@/components/ui/option-picker";
 import { Switch } from "@/components/ui/switch";
 import { SettingsGroup, SettingsRow } from "@/features/settings/ui";
 import { SpeakButton } from "@/components/agent/SpeakButton";
@@ -125,18 +126,15 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
       </SettingsRow>
       <SettingsRow label={t("agentVoiceVoice")} description={t("agentVoiceVoiceDesc")}>
         <div className="flex items-center gap-1.5">
-          <Select value={voice} onValueChange={setVoice} disabled={!engine}>
-            <SelectTrigger className="w-[200px]" aria-label={t("agentVoiceVoice")}>
-              <SelectValue placeholder={t("agentVoicePickVoice")} />
-            </SelectTrigger>
-            <SelectContent>
-              {voiceChoices.map((one) => (
-                <SelectItem key={one.value} value={one.value}>
-                  {one.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* 音色目录动辄几十条,超过阈值 OptionPicker 自己换成可搜索的那一版。 */}
+          <OptionPicker
+            value={voice}
+            onChange={setVoice}
+            options={voiceChoices}
+            ariaLabel={t("agentVoiceVoice")}
+            placeholder={t("agentVoicePickVoice")}
+            className="w-[200px]"
+          />
           {/* 试听走的是**和播放按钮同一条路**,所以听到的就是它以后念给你的那个声音 ——
               另写一条试听接口的话,试听好听、真用起来不是它,而这种不一致最难查。 */}
           {enabled && ready && <SpeakButton text={t("agentVoiceSample")} workspaceId={workspaceId} />}

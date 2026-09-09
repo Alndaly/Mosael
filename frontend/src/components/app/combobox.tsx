@@ -4,6 +4,7 @@ import { Check, ChevronDown } from "lucide-react";
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { FIELD_TRIGGER_CLASS, FIELD_TRIGGER_CHEVRON } from "@/components/ui/field-trigger"
+import { insideDialog } from "@/components/ui/insideDialog";
 import { cn } from "@/lib/utils";
 
 export type ComboboxOption = {
@@ -22,22 +23,10 @@ export type ComboboxOption = {
  * 打开期间锁住背景滚动,与原生 select 的行为相同。
  */
 
-/**
- * 只在**确实位于 Dialog 内**时才开 modal。
- *
- * modal 是为了解决 Dialog 专属的问题:Dialog 用 react-remove-scroll 锁背景滚动,只放行自己
- * shard 内的滚轮,而 PopoverContent 走 Portal 落在 shard 之外 —— 不加 modal 就滚不动列表。
- *
- * 但 modal 会让 Radix 给 `document.body` 挂上 `pointer-events: none`,而这个还原**并不可靠**
- * (多层 Popper 交替开关时会漏)。留下来的后果是**整个应用点击穿透** —— 表现为「点面板上的
- * 输入框,却选中了它背后的画布节点」,而且看不出跟下拉框有任何关系。
- *
- * 所以按位置决定:Dialog 内需要它,Dialog 外不该为它付这个代价。
- */
 function useInsideDialog(ref: React.RefObject<HTMLElement | null>): boolean {
   const [inside, setInside] = React.useState(false);
   React.useEffect(() => {
-    setInside(Boolean(ref.current?.closest('[role="dialog"]')));
+    setInside(insideDialog(ref.current));
   });
   return inside;
 }
@@ -73,8 +62,12 @@ export function Combobox({
   const [query, setQuery] = React.useState("");
   const selected = options.find((option) => option.value === value);
   const trimmedQuery = query.trim();
+  // 认 label 也认 value:显示名和真实值不一样时(如 `source_video.asset_id` 背后存的是
+  // `{{source_video.asset_id}}`),照着屏幕上的字打一遍不该被当成"自己新写的字面量"。
   const canUseCustom =
-    allowCustomValue && Boolean(trimmedQuery) && !options.some((option) => option.value === trimmedQuery);
+    allowCustomValue &&
+    Boolean(trimmedQuery) &&
+    !options.some((option) => option.value === trimmedQuery || option.label === trimmedQuery);
 
   const choose = (nextValue: string) => {
     onValueChange(nextValue);

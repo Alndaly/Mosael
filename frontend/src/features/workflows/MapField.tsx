@@ -92,12 +92,13 @@ export function MapField({
     onChange(objectFromRows(next));
   };
 
-  const options = React.useMemo(() => variables.map((ref) => ({ value: ref, label: ref })), [variables]);
-  //: 还没被用掉的上游引用。已经用过的不再列 —— 列着只会让人以为可以加第二遍。
-  const unused = React.useMemo(() => {
-    const used = new Set(rows.map((row) => row.value));
-    return variables.filter((ref) => !used.has(ref));
-  }, [variables, rows]);
+  /* 存进去的是 `{{source_video.asset_id}}`(那是要交给引擎插值的模板),但**屏幕上不摆花括号**:
+     那两对括号是语法,不是信息 —— 一列全是 `{{…}}` 时,眼睛要跨过它们才读得到真正区分彼此的
+     那半截,而右边一截长了还会先被截断。手填的字面量仍原样显示,一眼分得出哪些是引用。 */
+  const options = React.useMemo(
+    () => variables.map((ref) => ({ value: ref, label: bareRef(ref) })),
+    [variables],
+  );
 
   return (
     <div className="grid gap-1.5">
@@ -126,7 +127,15 @@ export function MapField({
             allowCustomValue
             className="h-8 w-full min-w-0 text-ui-xs"
             onValueChange={(next: string) =>
-              push(rows.map((one, i) => (i === index ? { ...one, value: next } : one)))
+              push(
+                rows.map((one, i) =>
+                  i === index
+                    ? // 名字还空着就顺手起一个(`{{llm-1.text}}` → `text`)—— 多数时候那就是他想要的,
+                      // 不合适再改。手填的字面量起不出名字来,那种情况仍然留空。
+                      { ...one, value: next, key: one.key || (variables.includes(next) ? suggestName(next, rows) : "") }
+                    : one,
+                ),
+              )
             }
           />
           <Button
@@ -141,8 +150,9 @@ export function MapField({
         </div>
       ))}
       {/* **左对齐的小按钮,不是居中的大块。** 一行都没有时,居中的"加一项"孤零零悬在那儿,
-          既不像表单也不像空状态 —— 它只是个次要操作,主路径是下面那排上游 chip:
-          多数时候用户就是想把上一个节点的输出接进来,点一下就好,不用先加行再挑值。 */}
+          既不像表单也不像空状态 —— 它只是个次要操作。
+          这里曾经还摆着一排"上游有什么"的 chip,后来撤了:值那一格的下拉本来就把上游输出
+          原样列全,还能搜 —— 同一份清单在同一个面板里出现两遍,第二遍只是噪音。 */}
       <Button
         type="button"
         variant="ghost"
@@ -153,41 +163,18 @@ export function MapField({
         <Plus size={12} />
         {t("wfMapAdd")}
       </Button>
-      {/**
-        * **上游有什么,直接摆出来。**
-        *
-        * 一行都没有的时候,这一栏只有一个"加一项" —— 用户看不出上游到底能给什么,得回画布上
-        * 一个个点开看输出变量叫什么。别处(如子图的「对外输出」)早就把可用引用做成一排 chip 了,
-        * 这里没有纯粹是漏了。
-        *
-        * 点一下就**连名带值加一行**:名字取输出名(`{{llm-1.text}}` → `text`),那多半就是他想要的,
-        * 不合适再改。已经用过的不再列出来 —— 列着只会让人以为可以加第二遍。
-        */}
-      {unused.length > 0 && (
-        <div className="grid gap-1 rounded-md border border-dashed border-border p-1.5">
-          <span className="text-ui-2xs text-muted-foreground">{t("wfMapFromUpstream")}</span>
-          <div className="flex flex-wrap gap-1">
-          {unused.map((ref) => (
-            <button
-              key={ref}
-              type="button"
-              className="cursor-pointer rounded-md border-0 bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] px-1.5 py-0.5 font-mono text-ui-2xs text-primary transition-colors hover:bg-[color-mix(in_srgb,var(--primary)_20%,transparent)]"
-              title={t("wfMapUseRef")}
-              onClick={() => push([...rows, { key: suggestName(ref, rows), value: ref }])}
-            >
-              {ref.replace(/^\{\{|\}\}$/g, "")}
-            </button>
-          ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
+/** `{{llm-1.text}}` → `llm-1.text`。存的是模板,给人看的是里面那截。 */
+export function bareRef(ref: string): string {
+  return ref.replace(/^\{\{|\}\}$/g, "");
+}
+
 /** `{{llm-1.text}}` → `text`;重名就跟上游节点名,再不行加序号。 */
 export function suggestName(ref: string, rows: MapRow[]): string {
-  const inner = ref.replace(/^\{\{|\}\}$/g, "");
+  const inner = bareRef(ref);
   const [nodeId, output] = inner.split(".");
   const taken = new Set(rows.map((row) => row.key));
   for (const candidate of [output, `${nodeId}_${output}`.replace(/-/g, "_")]) {

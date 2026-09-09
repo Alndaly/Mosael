@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { OptionPicker } from "@/components/ui/option-picker";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { readSubtitleStyle, SUBTITLE_FONTS, TRANSLATE_LANGS, type SubtitleStyle } from "@/features/editor/subtitleStyle";
@@ -447,35 +448,21 @@ function SubtitleDub({
           ) : (
             <label className="grid gap-1 text-xs text-muted-foreground">
               <span>{t("subtitleDubVoice")}</span>
-              <Select value={voiceId} onValueChange={setVoiceId}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(voices.data ?? []).map((voice) => (
-                    <SelectItem key={voice.id} value={voice.id}>
-                      {voice.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <OptionPicker
+                value={voiceId}
+                onChange={setVoiceId}
+                options={(voices.data ?? []).map((voice) => ({ value: voice.id, label: voice.name }))}
+              />
             </label>
           )
         ) : voiceChoices.length > 0 ? (
           <label className="grid gap-1 text-xs text-muted-foreground">
             <span>{t("subtitleDubVoice")}</span>
-            <Select value={engineVoice || voiceChoices[0].value} onValueChange={setEngineVoice}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {voiceChoices.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <OptionPicker
+              value={engineVoice || voiceChoices[0].value}
+              onChange={setEngineVoice}
+              options={voiceChoices}
+            />
           </label>
         ) : activeEngine?.needs_voice_id ? (
           // 目录拉不到(没配密钥、或这个引擎本来就要手填)时给输入框,而不是一个空下拉。

@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { OptionPicker } from "@/components/ui/option-picker";
 import { Textarea } from "@/components/ui/textarea";
 import { useSamplePlayer } from "@/features/editor/useSamplePlayer";
 import { UploadVoiceDialog, VoiceFromSpeakerDialog } from "@/features/voice/VoiceCreationDialogs";
@@ -68,20 +69,8 @@ function VoicePicker({
   choices: { value: string; label: string }[];
   ariaLabel: string;
 }) {
-  return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="w-full min-w-0" aria-label={ariaLabel}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {choices.map((voice) => (
-          <SelectItem key={voice.value} value={voice.value}>
-            {voice.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
+  // 一个引擎挂几十个音色是常态 —— 超过阈值 OptionPicker 自己换成可搜索的那一版。
+  return <OptionPicker value={value} onChange={onChange} options={choices} ariaLabel={ariaLabel} className="w-full min-w-0" />;
 }
 
 function SpeedPicker({ value, onChange, ariaLabel }: { value: number; onChange: (value: number) => void; ariaLabel: string }) {
@@ -343,18 +332,14 @@ export function VoicePanel({
                 <FieldRow className="min-w-[12rem] flex-1 flex-nowrap">
                   <VoiceField label={t("voiceLibraryPick")} className="min-w-0 flex-1">
                     {list.length > 0 ? (
-                      <Select value={activeVoice ?? ""} onValueChange={setSelected}>
-                        <SelectTrigger className="w-full min-w-0" aria-label={t("voiceLibraryPick")}>
-                          <SelectValue placeholder={t("voiceLibraryPickPlaceholder")} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {list.map((voice) => (
-                            <SelectItem key={voice.id} value={voice.id}>
-                              {voice.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <OptionPicker
+                        value={activeVoice ?? ""}
+                        onChange={setSelected}
+                        options={list.map((voice) => ({ value: voice.id, label: voice.name }))}
+                        ariaLabel={t("voiceLibraryPick")}
+                        placeholder={t("voiceLibraryPickPlaceholder")}
+                        className="w-full min-w-0"
+                      />
                     ) : (
                       <Input
                         value=""

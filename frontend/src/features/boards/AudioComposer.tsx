@@ -5,7 +5,7 @@ import { ArrowUp, AudioLines, Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import { listVoices, type BoardItem, type Voice } from "@/api/client";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { OptionPicker } from "@/components/ui/option-picker";
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
@@ -95,18 +95,13 @@ export function AudioComposer({
           ) : (
             <span className="flex min-w-0 shrink items-center gap-0.5 rounded-full px-1 transition-colors hover:bg-secondary">
               <AudioLines size={12} className="shrink-0 text-muted-foreground" />
-              <Select value={current?.id ?? ""} onValueChange={setPicked}>
-                <SelectTrigger className="h-6 w-auto gap-0 border-0 bg-transparent px-1 text-ui-2xs text-muted-foreground shadow-none focus:ring-0 data-[state=open]:text-foreground [&>svg]:hidden">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent align="start">
-                  {options.map((one: Voice) => (
-                    <SelectItem key={one.id} value={one.id}>
-                      {one.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* 音色一多自动带搜索 —— 一个供应商挂几十个音色是常态,滚着找「若曦」不现实。 */}
+              <OptionPicker
+                value={current?.id ?? ""}
+                onChange={setPicked}
+                options={options.map((one: Voice) => ({ value: one.id, label: one.name }))}
+                className="h-6 w-auto gap-0 border-0 bg-transparent px-1 text-ui-2xs text-muted-foreground shadow-none focus:ring-0 data-[state=open]:text-foreground [&>svg]:hidden"
+              />
             </span>
           )}
           <button
