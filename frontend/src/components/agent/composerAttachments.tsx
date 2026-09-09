@@ -1,8 +1,10 @@
 import React from "react";
-import { Paperclip, X } from "lucide-react";
+import { FileText, Music } from "lucide-react";
 
-import { importAsset, type Asset } from "@/api/client";
+import { assetFileUrl, assetThumbnailUrl, importAsset, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
+import type { ComposerChip } from "@/components/agent/ComposerChips";
 import { toast } from "sonner";
 
 /**
@@ -45,6 +47,8 @@ export interface ComposerAttachments {
   removeMedia: (index: number) => void;
   removeFile: (index: number) => void;
   clear: () => void;
+  /** 交给 ComposerChips 显示的一排小条 —— 和笔记引用拼在同一排里。 */
+  chips: ComposerChip[];
 }
 
 export function useComposerAttachments(workspaceId: string): ComposerAttachments {
@@ -107,6 +111,45 @@ export function useComposerAttachments(workspaceId: string): ComposerAttachments
     [accept],
   );
 
+  const removeMedia = React.useCallback((index: number) => setMedia((c) => c.filter((_, i) => i !== index)), []);
+  const removeFile = React.useCallback((index: number) => setFiles((c) => c.filter((_, i) => i !== index)), []);
+
+  const { openImagePreview } = useImagePreview();
+  const chips = React.useMemo<ComposerChip[]>(() => {
+    // 图和视频一起进画廊:点开任意一张都能左右翻,不必关掉再点下一张。
+    const gallery: ImagePreviewItem[] = media
+      .filter((asset) => asset.kind === "image" || asset.kind === "video")
+      .map((asset) => ({ src: assetFileUrl(asset.id), title: asset.name, video: asset.kind === "video" }));
+    return [
+      ...media.map((asset, index) => ({
+        id: asset.id,
+        label: asset.name,
+        // 音频没有画面,给个音符;图和视频都有缩略图(视频那张是封面帧)。
+        thumbnail: asset.kind === "audio" ? undefined : assetThumbnailUrl(asset.id),
+        icon: <Music size={11} />,
+        onOpen:
+          asset.kind === "audio"
+            ? undefined
+            : () =>
+                openImagePreview({
+                  src: assetFileUrl(asset.id),
+                  title: asset.name,
+                  video: asset.kind === "video",
+                  gallery,
+                }),
+        onRemove: () => removeMedia(index),
+      })),
+      ...files.map((file, index) => ({
+        id: `${file.name}-${index}`,
+        label: file.name,
+        icon: <FileText size={11} />,
+        // 文本附件是**整段读进上下文**的,点开看到的就是发出去的那段字。
+        text: { title: file.name, body: file.content },
+        onRemove: () => removeFile(index),
+      })),
+    ];
+  }, [media, files, openImagePreview, removeMedia, removeFile]);
+
   return {
     media,
     files,
@@ -114,52 +157,14 @@ export function useComposerAttachments(workspaceId: string): ComposerAttachments
     isEmpty: media.length === 0 && files.length === 0,
     accept,
     onPaste,
-    removeMedia: React.useCallback((index) => setMedia((c) => c.filter((_, i) => i !== index)), []),
-    removeFile: React.useCallback((index) => setFiles((c) => c.filter((_, i) => i !== index)), []),
+    removeMedia,
+    removeFile,
+    chips,
     clear: React.useCallback(() => {
       setMedia([]);
       setFiles([]);
     }, []),
   };
-}
-
-/** 输入框上方那排附件小条。两个输入框共用,免得同一个东西长两个样。 */
-export function AttachmentChips({ attachments, className }: { attachments: ComposerAttachments; className?: string }) {
-  const t = useI18n();
-  const { media, files, uploading, removeMedia, removeFile } = attachments;
-  if (!media.length && !files.length && !uploading) return null;
-  return (
-    <div className={className ?? "flex flex-wrap gap-1 px-3.5 pt-1"}>
-      {media.map((asset, index) => (
-        <Chip key={asset.id} label={asset.name} onRemove={() => removeMedia(index)} />
-      ))}
-      {files.map((file, index) => (
-        <Chip key={`${file.name}-${index}`} label={file.name} onRemove={() => removeFile(index)} />
-      ))}
-      {uploading && <span className="text-ui-xs text-muted-foreground">{t("composerUploading")}</span>}
-    </div>
-  );
-}
-
-function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
-  const t = useI18n();
-  return (
-    <span
-      className="inline-flex max-w-40 items-center gap-1 rounded-md border border-border bg-secondary py-0.5 pl-1.5 pr-1 text-ui-xs text-foreground"
-      title={label}
-    >
-      <Paperclip size={11} className="shrink-0" />
-      <span className="truncate">{label}</span>
-      <button
-        type="button"
-        className="inline-flex cursor-pointer border-0 bg-transparent p-0 text-muted-foreground hover:text-foreground"
-        aria-label={t("close")}
-        onClick={onRemove}
-      >
-        <X size={11} />
-      </button>
-    </span>
-  );
 }
 
 /** 文本附件 → 发给模型的围栏上下文。两边同一种拼法,气泡里也就长得一样。 */

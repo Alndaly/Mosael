@@ -16,7 +16,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { AttachmentChips, textAttachmentBlock, useComposerAttachments } from "@/components/agent/composerAttachments";
+import { textAttachmentBlock, useComposerAttachments } from "@/components/agent/composerAttachments";
+import { ComposerChips } from "@/components/agent/ComposerChips";
 import { DictateButton } from "@/components/agent/DictateButton";
 
 import { API_BASE, api, getAuthToken, type Asset } from "@/api/client";
@@ -606,7 +607,6 @@ export function CanvasAgentChat({
           </button>
         </div>
       ))}
-      <AttachmentChips attachments={attach} />
       <div className="mx-2 mb-2 mt-2 flex flex-col gap-0.5 rounded-lg border border-border bg-control px-2 pb-1.5 pt-2 transition-[border-color] duration-100 focus-within:border-ring">
         <input
           ref={fileRef}
@@ -619,7 +619,9 @@ export function CanvasAgentChat({
           }}
         />
         {/* 内层去底色/边框/焦点环:外层输入卡已是表面,双层盒子叠着难看(对话页同款处理)。 */}
-        {noteAttach.chips}{noteAttach.dialog}
+        {/* 附件和笔记引用是同一件事:这条消息里带了什么。一排,在输入卡里。 */}
+        <ComposerChips chips={[...attach.chips, ...noteAttach.chips]} uploading={attach.uploading} />
+        {noteAttach.dialog}
         <Textarea
           rows={1}
           className="max-h-[220px] min-h-9 w-full min-w-0 resize-none border-0 bg-transparent px-0.5 pb-1.5 pt-0.5 text-ui-md leading-[1.55] shadow-none outline-none placeholder:text-muted-foreground placeholder:opacity-100 focus-visible:ring-0"

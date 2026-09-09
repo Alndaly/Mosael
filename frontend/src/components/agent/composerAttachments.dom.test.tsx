@@ -9,13 +9,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 const importAsset = vi.fn();
-vi.mock("@/api/client", () => ({ importAsset: (...args: unknown[]) => importAsset(...args) }));
+vi.mock("@/api/client", () => ({
+  importAsset: (...args: unknown[]) => importAsset(...args),
+  assetFileUrl: (id: string) => `/file/${id}`,
+  assetThumbnailUrl: (id: string) => `/thumb/${id}`,
+}));
+const openImagePreview = vi.fn();
+vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview }) }));
 // 文案里带上 {name} 占位符:被拒绝的文件必须报出是哪一个,只说"读不了"等于没说。
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => `${key}:{name}` }));
 const toastError = vi.fn();
 vi.mock("sonner", () => ({ toast: { error: (...args: unknown[]) => toastError(...args) } }));
 
-import { AttachmentChips, textAttachmentBlock, useComposerAttachments } from "./composerAttachments";
+import { ComposerChips } from "./ComposerChips";
+import { textAttachmentBlock, useComposerAttachments } from "./composerAttachments";
 
 type Handle = ReturnType<typeof useComposerAttachments>;
 
@@ -24,7 +31,7 @@ function Harness({ onReady }: { onReady: (handle: Handle) => void }) {
   React.useEffect(() => {
     onReady(attach);
   });
-  return <AttachmentChips attachments={attach} />;
+  return <ComposerChips chips={attach.chips} uploading={attach.uploading} />;
 }
 
 function mount() {
@@ -36,6 +43,7 @@ function mount() {
 beforeEach(() => {
   importAsset.mockReset();
   toastError.mockReset();
+  openImagePreview.mockReset();
 });
 
 describe("附件分流", () => {
@@ -56,6 +64,8 @@ describe("附件分流", () => {
     // 两类附件都在同一排小条里,不再是两套长得不一样的东西。
     expect(screen.getByTitle("shot.png")).toBeTruthy();
     expect(screen.getByTitle("script.txt")).toBeTruthy();
+    // 图片带缩略图,点开走全局灯箱;文本附件点开看到的是它真正带上去的那段字。
+    expect(screen.getByTitle("shot.png").querySelector("img")).toHaveAttribute("src", "/thumb/a1");
   });
 
   it("读不了的类型明确拒绝,而不是静默丢掉", async () => {

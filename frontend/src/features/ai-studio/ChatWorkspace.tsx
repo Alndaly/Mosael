@@ -9,7 +9,8 @@ import { toast } from "sonner";
 import { API_BASE, api, getAuthToken, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
-import { AttachmentChips, textAttachmentBlock, useComposerAttachments } from "@/components/agent/composerAttachments";
+import { textAttachmentBlock, useComposerAttachments } from "@/components/agent/composerAttachments";
+import { ComposerChips } from "@/components/agent/ComposerChips";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -612,8 +613,9 @@ export function ChatWorkspace({
               onSubmit={submit}
             >
               {/* 附件条属于输入框内部(文本框上方),而不是飘在圆角框外的左上角。 */}
-              <AttachmentChips attachments={attach} className="flex flex-wrap gap-1.5 px-0.5 pb-1" />
-              {noteAttach.chips}{noteAttach.dialog}
+              {/* 附件和笔记引用是同一件事:这条消息里带了什么。一排,在输入卡里。 */}
+              <ComposerChips chips={[...attach.chips, ...noteAttach.chips]} uploading={attach.uploading} className="px-0.5" />
+              {noteAttach.dialog}
               <Textarea
                 data-chat-composer
                 rows={3}

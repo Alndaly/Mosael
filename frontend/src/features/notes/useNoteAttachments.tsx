@@ -1,9 +1,10 @@
 import React from "react";
-import { BookOpen, X } from "lucide-react";
+import { BookOpen } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { listNotes, type Note } from "@/api/domains/notes";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
+import type { ComposerChip } from "@/components/agent/ComposerChips";
 import { useNoteStrings } from "./strings";
 
 export function useNoteAttachments(workspaceId: string) {
@@ -25,7 +26,15 @@ export function useNoteAttachments(workspaceId: string) {
     hasNotes: selected.length > 0,
     onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === "@" && !event.nativeEvent.isComposing) { event.preventDefault(); show(event.currentTarget); return true; } return false; },
     trigger: <button type="button" className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary" ref={trigger} title={s.addReference} aria-label={s.addReference} onClick={() => show(trigger.current)}><BookOpen size={14} /></button>,
-    chips: <div className="flex flex-wrap gap-1">{selected.map(n => <span className="inline-flex max-w-full items-center gap-1 rounded-md bg-secondary px-2 py-1 text-xs" key={n.id}><BookOpen size={12} /><span className="truncate">{n.title || s.untitled}</span><button type="button" aria-label={`Remove ${n.title}`} onClick={() => setSelected(selected.filter(x => x.id !== n.id))}><X size={12} /></button></span>)}</div>,
+    // 小条自己不画了 —— 和附件拼在同一排里,由 ComposerChips 统一渲染(见那边的注释)。
+    // 正文点开就能看:listNotes 返回的就是完整的笔记,不必为了预览再问一次服务端。
+    chips: selected.map<ComposerChip>(note => ({
+      id: note.id,
+      label: note.title || s.untitled,
+      icon: <BookOpen size={11} />,
+      text: { title: note.title || s.untitled, body: note.markdown },
+      onRemove: () => setSelected(current => current.filter(x => x.id !== note.id)),
+    })),
     dialog: <Popover open={open} onOpenChange={setOpen}><PopoverAnchor virtualRef={virtualAnchor} /><PopoverContent side="top" align="start" className="w-80 p-2" onCloseAutoFocus={event => { event.preventDefault(); anchor.current?.focus(); }}>
       <p className="px-2 py-1 text-xs text-muted-foreground">{s.addReference}</p>
       <Input placeholder={s.search} value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => {
