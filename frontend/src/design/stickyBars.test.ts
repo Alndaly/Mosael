@@ -49,11 +49,28 @@ describe("吸顶栏", () => {
     expect(css).toMatch(/prefers-reduced-motion[\s\S]*?\.workspace-sticky \{ transition-duration: 0ms/);
   });
 
-  it("磨砂外观只加模糊,底色不再另写一份", () => {
-    // 两份底色是上一版真正的分岔:只有磨砂那份认得 data-stuck。
-    const glass = rule(':root[data-appearance="glass"] .workspace-sticky');
-    expect(glass).toContain("backdrop-filter");
-    expect(glass).not.toContain("background-color");
+  it("跟着滚动淡入的栏不许有自己的 backdrop-filter —— 恒等滤镜也不行", () => {
+    /*
+     * 这条钉的是那条"底色明明全透明,页面上却横着一条平板色带"的 bug。
+     *
+     * 任何非 none 的 backdrop-filter 都会让元素成为一个 backdrop root,而它只看得见**外层
+     * backdrop root 内部**画了什么。内容区(main)自己就是一层磨砂,自定义背景图在它后面 ——
+     * 于是这条栏取到的"背景"是内容区那层 72% 的实底,背景图整个丢掉。`blur(0px)` 同样算数:
+     * 恒等滤镜不是免费的。
+     */
+    expect(() => rule(':root[data-appearance="glass"] .workspace-sticky')).toThrow();
+    const alwaysStuck = rule(':root[data-appearance="glass"] .workspace-sticky:not([data-stuck])');
+    expect(alwaysStuck).toContain("backdrop-filter");
+    expect(css).not.toMatch(/\.workspace-sticky\[data-stuck[^{]*\{[^}]*backdrop-filter/);
+  });
+
+  it("吸住时是实色 —— 它得自己盖住底下滚过去的卡片,没有模糊可以指望", () => {
+    expect(rule(".workspace-sticky[data-stuck]")).toContain("var(--surface-solid)");
+    // --surface-solid 不跟着磨砂被调透,否则"吸住时变为不透明"在磨砂下就不成立。
+    for (const theme of [":root", ".dark"] as const) {
+      expect(rule(theme)).toMatch(/--surface-solid:\s*#[0-9a-f]{6}/i);
+    }
+    expect(css).not.toMatch(/data-appearance="glass"[^{]*\{[^}]*--surface-solid/);
   });
 
   it("素材筛选栏交出 data-stuck,而且不自己写死底色", () => {

@@ -152,6 +152,8 @@
   --destructive-foreground: #ffffff;
 
   --background: #f6f8fb;
+  /* 页面底色的实色值。磨砂会把 --background 调成半透明,而吸顶栏吸住时要盖住东西。 */
+  --surface-solid: #f6f8fb;
   --foreground: #20283b;
   --card: #ffffff;
   --card-foreground: #20283b;
@@ -285,6 +287,7 @@
      for actions; lifted surfaces and quiet edges express depth without a navy wash. */
   --destructive-foreground: #35191d;
   --background: #141517;
+  --surface-solid: #141517;
   --foreground: #f2f3f5;
   --card: #1e2023;
   --card-foreground: #f2f3f5;
@@ -472,13 +475,13 @@
   /* 磨砂这边只加**模糊**,底色归上面那条统一的规则(见 .workspace-sticky)——
      此前两处各写一份 background-color,而只有磨砂那份认得 data-stuck:
      于是同一条筛选栏,开了磨砂会跟着滚动淡入,不开就一直铺着实底。 */
-  :root[data-appearance="glass"] .workspace-sticky {
-    -webkit-backdrop-filter: blur(calc(var(--app-blur, 16px) * var(--workspace-sticky-presence))) saturate(calc(1 + .35 * var(--workspace-sticky-presence)));
-    backdrop-filter: blur(calc(var(--app-blur, 16px) * var(--workspace-sticky-presence))) saturate(calc(1 + .35 * var(--workspace-sticky-presence)));
-  }
-  /* 一直吸着顶的那些(时间线标尺、追踪分组标题):底下永远有内容滚过,给一层固定的薄纱。 */
+  /* 一直吸着顶的那些(时间线标尺、追踪分组标题):底下永远有内容滚过,给一层薄纱加模糊。
+     **跟着滚动淡入的那些(带 data-stuck)不给 backdrop-filter** —— 见 .workspace-sticky 下的说明:
+     它们在内容区里,而内容区自己就是一层磨砂,再嵌一层只会把背景图弄丢。 */
   :root[data-appearance="glass"] .workspace-sticky:not([data-stuck]) {
     background-color: color-mix(in srgb, var(--popover) 25%, transparent);
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
   }
   /* Narrow-screen drawers overlay content and need stronger separation than docked panes. */
   :root[data-appearance="glass"] .workspace-overlay {
@@ -674,8 +677,15 @@ body {
  * **`data-stuck` 就是这条行为的开关。** 没有这个属性的吸顶栏(时间线标尺、追踪分组标题)
  * 一直吸着顶,底下永远有内容,不需要淡入 —— 它们沿用自己的 `bg-*`,这条规则碰都不碰。
  *
- * 底色由使用方用 `--workspace-sticky-surface` 指定,默认页面底色。写成变量而不是写死:
- * 面板里的吸顶栏该用面板色,而"用哪层表面"只有那一处知道。
+ * 底色由使用方用 `--workspace-sticky-surface` 指定,默认页面底色的**实色**值。用实色不是偷懒:
+ * 吸住时它要盖住从底下滚过去的卡片,而这一层没有自己的模糊可以指望(见下)。写成变量而不是
+ * 写死:面板里的吸顶栏该用面板色,而"用哪层表面"只有那一处知道。
+ *
+ * **它没有自己的 backdrop-filter,而且不能有。** 任何非 none 的 backdrop-filter 都会让元素成为
+ * 一个 backdrop root,而它只看得见**外层 backdrop root 内部**画了什么 —— 内容区(main)本身
+ * 就是一层磨砂,自定义背景图在它后面。于是这条栏取到的"背景"是内容区那层 72% 的实底,
+ * 背景图整个丢掉:静止时页面上横着一条平板色带,而它的底色明明是全透明的。
+ * `blur(0px)` 也算数 —— 恒等滤镜不是免费的,它照样开一个 backdrop root。
  *
  * 分割线跟着一起淡:它分的是"栏"和"从底下滚过去的内容",没有内容滚过去时,它分的是空气。
  */
@@ -690,7 +700,7 @@ body {
 .workspace-sticky[data-stuck] {
   background-color: color-mix(
     in srgb,
-    var(--workspace-sticky-surface, var(--background)) calc(100% * var(--workspace-sticky-presence)),
+    var(--workspace-sticky-surface, var(--surface-solid)) calc(100% * var(--workspace-sticky-presence)),
     transparent
   );
   border-color: color-mix(
