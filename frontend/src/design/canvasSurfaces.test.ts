@@ -73,6 +73,26 @@ describe("画布浮层", () => {
     }
   });
 
+  it("停靠不等于取消影子 —— 右栏那两块并排,不能一块浮着一块贴着", () => {
+    /*
+     * 智能体面板停靠成右栏时曾经无条件 `shadow-none`,而并排的执行历史面板照旧带影子:
+     * 同一条右栏里上下两块,材质看着不是一套。
+     *
+     * "停靠"在这里不等于"嵌进版面":整条右栏是 absolute、浮在画布之上的。真正嵌进版面的是
+     * 3D 场景页那种 inline 停靠 —— 它走另一条分支,拿的是 bg-workspace-panel,本来就没有影子类。
+     */
+    for (const path of ["components/agent/CanvasAgentChat.tsx", "features/workflows/WorkflowRunHistory.tsx"]) {
+      const text = readFileSync(join(import.meta.dirname, "..", path), "utf8");
+      // 取**最后**一次出现:第一次是 import,那一段里什么都没有,拿它切等于什么也没断言。
+      const at = text.lastIndexOf("DOCKABLE_PANEL_FRAME_CLASS");
+      expect(at, `${path} 该用同一个停靠外框`).toBeGreaterThan(0);
+      // 括号配对在这里找不到边界(类名里就有 `calc(100vh-24px)`);注释里提到 shadow-none 也不算。
+      const rootClasses = text.slice(at, at + 900).replace(/\/\/[^\n]*/g, "");
+      // 只看外框那一段(isFloating ? … : …)—— 面板内部的控件用 shadow-none 是它们自己的事。
+      expect(rootClasses, `${path} 不该把停靠态的影子抹掉`).not.toContain("shadow-none");
+    }
+  });
+
   it("工具条和浮窗是同一种材质,只差一层影子", () => {
     const material = (value: string) =>
       value.split(" ").filter((one) => !one.startsWith("shadow-") && !one.startsWith("rounded-"));

@@ -428,7 +428,11 @@ export function CanvasAgentChat({
           : DOCKABLE_PANEL_FRAME_CLASS,
         isFloating
           ? "fixed min-h-[380px] min-w-[320px] max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)] border-floating-border"
-          : "relative z-[1] h-full w-full min-h-0 min-w-0 shadow-none",
+          // **停靠不等于没有影子。** 停靠成右栏时它仍然浮在画布之上(整条右栏是 absolute),
+          // 和执行历史面板并排 —— 而那一个是有影子的。此前这里无条件 shadow-none,于是同一条
+          // 右栏里上下两块,一块浮着一块贴着。inline 停靠(3D 场景页)本来就走上面那条分支,
+          // 拿的是 bg-workspace-panel、根本没有影子类,不需要在这儿再抹一次。
+          : "relative z-[1] h-full w-full min-h-0 min-w-0",
       )}
       style={floatStyle}
       {...focusProps}
