@@ -31,6 +31,8 @@ import { InlineQuestions } from "@/components/agent/InlineQuestions";
 import { AgentSessionSwitcher } from "@/components/agent/AgentSessionSwitcher";
 import { ModelPicker } from "@/features/ai-studio/ModelPicker";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/components/agent/ToolCalls";
+import { AGENT_ROW_CLASS, AGENT_ROW_ICON_CLASS } from "@/components/agent/agentRow";
+import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { JumpToLatest, useStickToBottom } from "@/components/agent/stickToBottom";
 import { ConfirmDialog } from "@/components/app/modals";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
@@ -543,23 +545,31 @@ export function CanvasAgentChat({
         {running && streamText && (
           <div className="relative w-full min-w-0 max-w-full text-ui-md leading-[1.65] [word-break:break-word]">
             <AgentTurnContent timeline={streamTimeline} />
-            <div className="mt-1.5 flex min-h-[18px] items-center gap-1.5 text-muted-foreground">
-              <Loader2 size={11} className="animate-mosael-spin" />
-              <span className="timecode text-ui-xs text-muted-foreground">
+            {/* 和上面每一条工具/思考行同一个左缘、同一个图标栏、同一个字号(见 agentRow)。 */}
+            <Marker className={cn(AGENT_ROW_CLASS, "mt-1.5 text-muted-foreground")}>
+              <MarkerIcon>
+                <Loader2 className={cn(AGENT_ROW_ICON_CLASS, "animate-mosael-spin")} />
+              </MarkerIcon>
+              <MarkerContent className="timecode">
                 {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
-              </span>
-            </div>
+              </MarkerContent>
+            </Marker>
           </div>
         )}
         {running && !streamText && (
           <div className="relative flex w-full min-w-0 max-w-full flex-col items-stretch gap-1.5 text-ui-md leading-[1.65] text-muted-foreground [word-break:break-word]">
             <AgentTurnContent timeline={streamTimeline} />
-            <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-              <Loader2 size={12} className="animate-mosael-spin" /> {t("chatThinking")}
-              <span className="timecode text-ui-xs text-muted-foreground">
-                {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
-              </span>
-            </span>
+            <Marker className={AGENT_ROW_CLASS}>
+              <MarkerIcon>
+                <Loader2 className={cn(AGENT_ROW_ICON_CLASS, "animate-mosael-spin")} />
+              </MarkerIcon>
+              <MarkerContent className="flex items-center gap-1.5 whitespace-nowrap">
+                {t("chatThinking")}
+                <span className="timecode">
+                  {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
+                </span>
+              </MarkerContent>
+            </Marker>
           </div>
         )}
         {activeSession && <InlineConfirmations workspaceId={workspaceId} allowKey={activeSession.id} />}

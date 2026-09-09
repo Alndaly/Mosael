@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ModalShell } from "@/components/app/modals";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
+import { AGENT_ROW_CLASS, AGENT_ROW_ICON_CLASS } from "@/components/agent/agentRow";
 import { ChatBubble } from "@/features/ai-studio/ChatBubble";
 import { SessionList } from "@/features/ai-studio/SessionList";
 import { attachmentToken, chatMediaGallery } from "@/features/ai-studio/userMessage";
@@ -545,9 +546,9 @@ export function ChatWorkspace({
               {running && !streamText && (
                 <div className="relative mx-auto flex w-full max-w-[780px] shrink-0 flex-col items-stretch gap-[7px] text-ui-md leading-[1.65] text-muted-foreground [word-break:break-word]">
                   <AgentTurnContent timeline={streamTimeline} />
-                  <Marker>
+                  <Marker className={AGENT_ROW_CLASS}>
                     <MarkerIcon>
-                      <Loader2 className="size-3 animate-mosael-spin" />
+                      <Loader2 className={cn(AGENT_ROW_ICON_CLASS, "animate-mosael-spin")} />
                     </MarkerIcon>
                     <MarkerContent className="flex items-center gap-1.5 whitespace-nowrap">
                       {t("chatThinking")}

@@ -9,6 +9,7 @@ import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-p
 import { AudioPlayerBar, VideoPlayer } from "@/components/app/media-playback";
 import { HighlightedCode } from "@/components/agent/HighlightedCode";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
+import { AGENT_ROW_BODY_CLASS, AGENT_ROW_CLASS, AGENT_ROW_ICON_CLASS } from "@/components/agent/agentRow";
 import { decodeByteFallback } from "@/lib/byteFallback";
 import { formatElapsedSeconds } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -215,7 +216,7 @@ function MediaPreviewGrid({ assetIds }: { assetIds: string[] }) {
       video: asset.kind === "video",
     }));
   return (
-    <div className="ml-[13px] mt-1.5 flex flex-wrap gap-2 border-l border-border pl-3">
+    <div className={cn(AGENT_ROW_BODY_CLASS, "mt-1.5 flex flex-wrap gap-2")}>
       {assetIds.map((id) => (
         <MediaPreview key={id} assetId={id} gallery={gallery} />
       ))}
@@ -284,7 +285,8 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
       <Marker
         asChild
         className={cn(
-          "rounded-md px-1.5 py-1 transition-colors duration-100",
+          AGENT_ROW_CLASS,
+          "transition-colors duration-100",
           hasBody && "enabled:cursor-pointer enabled:hover:bg-muted",
           tool.status === "error" && "text-destructive",
         )}
@@ -302,14 +304,12 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
               tool.status === "error" && "text-destructive",
             )}
           >
-            {/* 图标显式带 size-3:Marker 会把没有 size- 类的 svg 统一撑到 16px,
-                而这一行的节奏是按 12px 图标定的。 */}
             {tool.status === "running" ? (
-              <Loader2 className="size-3 animate-mosael-spin" />
+              <Loader2 className={cn(AGENT_ROW_ICON_CLASS, "animate-mosael-spin")} />
             ) : tool.status === "error" ? (
-              <CircleAlert className="size-3" />
+              <CircleAlert className={AGENT_ROW_ICON_CLASS} />
             ) : (
-              <Check className="size-3" />
+              <Check className={AGENT_ROW_ICON_CLASS} />
             )}
           </MarkerIcon>
           <MarkerContent className="flex min-w-0 flex-1 items-baseline gap-1.5">
@@ -342,7 +342,8 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
       {open && hasBody && (
         <div
           className={cn(
-            "ml-[13px] mt-1 flex min-w-0 flex-col gap-2 border-l border-border pl-3",
+            AGENT_ROW_BODY_CLASS,
+            "mt-1 flex min-w-0 flex-col gap-2",
             tool.status === "error" && "border-[color-mix(in_srgb,var(--destructive)_40%,var(--border))]",
           )}
         >
@@ -464,13 +465,11 @@ function ThinkingBlock({ text, done }: { text: string; done?: boolean }) {
     <div className="w-full min-w-0">
       <Marker
         asChild
-        className="gap-1 rounded-md px-1.5 py-1 transition-colors duration-100 enabled:cursor-pointer enabled:hover:bg-muted"
+        className={cn(AGENT_ROW_CLASS, "transition-colors duration-100 enabled:cursor-pointer enabled:hover:bg-muted")}
       >
         <button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open} disabled={!text}>
-          {/* 图标显式带 size-3:Marker 会把没有 size- 类的 svg 统一撑到 16px,
-              而这一行的节奏是按 12px 图标定的(同 ToolCallCard)。 */}
           <MarkerIcon className="inline-flex items-center justify-center">
-            {done ? <Brain className="size-3" /> : <Loader2 className="size-3 animate-mosael-spin" />}
+            {done ? <Brain className={AGENT_ROW_ICON_CLASS} /> : <Loader2 className={cn(AGENT_ROW_ICON_CLASS, "animate-mosael-spin")} />}
           </MarkerIcon>
           <MarkerContent className="flex min-w-0 flex-1 items-baseline gap-1.5">
             <span className="flex-none">{done ? t("agentThought") : t("agentThinking")}</span>
@@ -484,7 +483,7 @@ function ThinkingBlock({ text, done }: { text: string; done?: boolean }) {
         </button>
       </Marker>
       {open && text && (
-        <div className="ml-[13px] mt-1 border-l border-border pl-3">
+        <div className={cn(AGENT_ROW_BODY_CLASS, "mt-1")}>
           <p className="m-0 whitespace-pre-wrap text-ui-sm leading-[1.6] text-muted-foreground">{text}</p>
         </div>
       )}
