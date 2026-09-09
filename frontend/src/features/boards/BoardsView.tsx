@@ -62,7 +62,7 @@ import { AssetPickerDialog } from "@/features/boards/AssetPickerDialog";
 import { ScenePickerDialog } from "@/features/scenes/ScenePickerDialog";
 import { boardSettlementPatch, itemError, itemIsRunning, itemJobId } from "@/features/boards/boardItemState";
 import { runNoteWrite, type NoteWriteInput } from "@/features/boards/noteWriteLifecycle";
-import { BoardCollaborationDialog } from "@/features/boards/BoardCollaborationDialog";
+import { CollaborationSheet } from "@/features/collaboration/CollaborationSheet";
 
 /**
  * 创意画板:除了和智能体对话之外,另一条把想法摊开的路。
@@ -795,7 +795,6 @@ function BoardDetail({
                 setMarkersVisible(true);
                 api?.jumpToMarker(marker);
               }}
-              onAdd={enterMarkerMode}
             />
           </CanvasToolbarGroup>
           <CanvasToolbarGroup label={t("canvasViewTools")}>
@@ -899,10 +898,12 @@ function BoardDetail({
         onSubmit={rename}
       />
 
-      <BoardCollaborationDialog
+      <CollaborationSheet
         open={collaborationOpen}
         onOpenChange={setCollaborationOpen}
-        board={board}
+        workspaceId={board.workspace_id}
+        subjectType="board"
+        subjectId={board.id}
         onJumpToComment={(comment) => {
           setCommentMode(true);
           setCommentsVisible(true);

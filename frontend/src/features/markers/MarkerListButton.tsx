@@ -13,15 +13,17 @@ import { formatCombo } from "@/lib/shortcuts";
  *
  * 快捷键让熟了之后快,清单让还没熟的时候找得到 —— 只有快捷键的话,一个绑了键却想不起来是
  * 哪个键的标记,和没有这个功能是一样的。
+ *
+ * **只读,不生产**:这里曾经在清单底下挂过一个「添加标记」。它和左边那枚进入标记模式的按钮
+ * 是同一件事的两个入口,而放在清单里的那个还得先展开清单才看得见 —— 更远的一条路,做的却是
+ * 旁边那枚按钮已经在做的事。清单回答「有哪些、在哪儿」,加标记是工具条的事。
  */
 export function MarkerListButton({
   markers,
   onJump,
-  onAdd,
 }: {
   markers: CanvasMarker[];
   onJump: (marker: CanvasMarker) => void;
-  onAdd: () => void;
 }) {
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
@@ -66,17 +68,6 @@ export function MarkerListButton({
             ))}
           </div>
         )}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="mt-1 w-full justify-start"
-          onClick={() => {
-            setOpen(false);
-            onAdd();
-          }}
-        >
-          {t("markerAdd")}
-        </Button>
       </PopoverContent>
     </Popover>
   );

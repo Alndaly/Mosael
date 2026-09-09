@@ -174,6 +174,7 @@ import {
 import { AnnotationControls } from "@/features/markers/AnnotationControls";
 import { useWorkflowComments } from "./WorkflowComments";
 import { MarkerListButton } from "@/features/markers/MarkerListButton";
+import { CollaborationSheet } from "@/features/collaboration/CollaborationSheet";
 import { MarkerPin } from "@/features/markers/MarkerPin";
 import { MarkerEditorProvider } from "@/features/markers/MarkerEditorProvider";
 import { MAX_MARKERS, newMarkerId, nextMarkerName, type CanvasMarker } from "@/features/markers/markers";
@@ -752,6 +753,7 @@ function WorkflowEditor({
   const [markerMode, setMarkerMode] = React.useState(false);
   const [markersVisible, setMarkersVisible] = React.useState(true);
   const workflowComments = useWorkflowComments(workspaceId, workflow.id);
+  const [collaborationOpen, setCollaborationOpen] = React.useState(false);
   const annotationMode = markerMode || workflowComments.active;
   const enterMarkerMode = () => { workflowComments.exit(); setMarkerMode(true); setMarkersVisible(true); };
 
@@ -1958,6 +1960,15 @@ function WorkflowEditor({
           </CanvasToolbarGroup>
           <CanvasToolbarGroup label={t("boardCommentMode")}>
             {workflowComments.controls(() => setMarkerMode(false))}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              title={t("boardDiscussionCenter")}
+              aria-label={t("boardDiscussionCenter")}
+              onClick={() => setCollaborationOpen(true)}
+            >
+              <ListChecks size={14} />
+            </Button>
           </CanvasToolbarGroup>
           <CanvasToolbarGroup label={t("markers")}>
             <AnnotationControls
@@ -1976,7 +1987,6 @@ function WorkflowEditor({
                 setMarkersVisible(true);
                 jumpToMarker(marker);
               }}
-              onAdd={enterMarkerMode}
             />
           </CanvasToolbarGroup>
           <CanvasToolbarGroup label={t("canvasViewTools")}>
@@ -2303,6 +2313,30 @@ function WorkflowEditor({
           </ReactFlow>
           </MarkerEditorProvider>
         </div>
+
+        {/* 讨论侧栏。和画板那份是同一个组件 —— 评论对后端来说只是换了个 subject_type。 */}
+        <CollaborationSheet
+          open={collaborationOpen}
+          onOpenChange={setCollaborationOpen}
+          workspaceId={workspaceId}
+          subjectType="workflow"
+          subjectId={workflow.id}
+          onJumpToComment={(comment) => {
+            setMarkerMode(false);
+            workflowComments.focus(comment.id);
+            setCollaborationOpen(false);
+            const instance = rfRef.current;
+            const surface = canvasSurfaceRef.current;
+            const { x, y } = comment.anchor ?? {};
+            if (!instance || !surface || typeof x !== "number" || typeof y !== "number") return;
+            requestAnimationFrame(() =>
+              centerCanvasViewport(instance, surface, { x, y }, getCanvasInsets(), {
+                zoom: Math.max(instance.getZoom(), 0.9),
+                duration: 350,
+              }),
+            );
+          }}
+        />
         {/* 右栏:助手与执行历史共用。两个都开就上下平分 —— 运行时经常要一边看画布状态、
             一边翻某一步的输出。助手切到浮动模式时自己脱离文档流,所以只按停靠中的个数分行。 */}
         {(dockedAgent || dockedHistory) && (

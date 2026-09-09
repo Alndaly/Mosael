@@ -62,7 +62,9 @@ export function useWorkflowComments(workspaceId: string, workflowId: string) {
       <BoardCommentComposer members={members.data?.members ?? []} onSubmit={submit} onCancel={() => setDraft(null)} />
     </div>}
   </ViewportPortal>;
-  return { active, exit, place, layer,
+  /** 从讨论侧栏跳过来:进评论模式、把批注显出来、选中它。视口居中归调用方(它才有 RF 实例)。 */
+  const focus = (id: string) => { setActive(true); setVisible(true); setDraft(null); setSelected(id); };
+  return { active, exit, place, layer, focus,
     controls: (onEnter: () => void) => <AnnotationControls kind="comment" active={active} visible={visible}
       onMode={() => { if (active) exit(); else { onEnter(); setActive(true); setVisible(true); } }}
       onVisible={() => { if (visible) exit(); setVisible(!visible); }} />,
