@@ -292,9 +292,11 @@ export function PromptEditor({
     content: initialDocument,
     editorProps: {
       attributes: {
-        // nodrag / nowheel:这东西活在画布上,不挂的话在里面选文字会变成拖画布。
+        // nodrag:这东西活在画布上,不挂的话在里面选文字会变成拖画布。
+        // **不挂 nowheel**:它只有 min-height、没有上限,内容多了是自己长高而不是滚动 ——
+        // 没有东西可滚,却会把触控板的两指平移在这块区域上截停(见 BoardCommentComposer 那条用例)。
         class:
-          "nodrag nowheel min-h-[66px] w-full border-0 bg-transparent px-1.5 py-1 text-ui-sm leading-relaxed text-foreground outline-none",
+          "nodrag min-h-[66px] w-full border-0 bg-transparent px-1.5 py-1 text-ui-sm leading-relaxed text-foreground outline-none",
       },
       handleKeyDown: (_view, event) => {
         // ⌘/Ctrl+Enter 提交:光按 Enter 会和换行打架,而提示词经常要分行写。

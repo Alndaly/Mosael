@@ -73,7 +73,7 @@ export function TrimComposer({
 
   return (
     <NodeToolbar nodeId={item.id} isVisible position={Position.Bottom} offset={BOARD_NODE_PANEL_OFFSET}>
-      <div className={cn(CANVAS_WINDOW_SURFACE_CLASS, "nodrag nopan nowheel grid w-[420px] gap-2 p-2")}>
+      <div className={cn(CANVAS_WINDOW_SURFACE_CLASS, "nodrag nopan grid w-[420px] gap-2 p-2")}>
         {/* 看着片子本身去剪。**填数字的问题不在麻烦,在于你不知道第 3.2 秒是什么** ——
             要么反复播放去数,要么剪出来再看一眼、不对再来一次。 */}
         {duration ? (

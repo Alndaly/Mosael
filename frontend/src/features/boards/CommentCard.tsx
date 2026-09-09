@@ -41,7 +41,7 @@ export function CommentCard({ comment, members, currentUserId, onDelete, onClose
   const remove = useMutation({ mutationFn: async () => onDelete?.(), onError: error => toast.error(String(error)) });
   if (editing && own) return <BoardCommentComposer key={comment.id} members={members} initialContent={commentDocument(comment)} editing
     onSubmit={draft => save.mutateAsync(draft)} onCancel={() => setEditing(false)} />;
-  return <div data-board-comment-overlay="" className={cn(CANVAS_WINDOW_SURFACE_CLASS, "nodrag nopan nowheel pointer-events-auto w-72 overflow-hidden text-left")}
+  return <div data-board-comment-overlay="" className={cn(CANVAS_WINDOW_SURFACE_CLASS, "nodrag nopan pointer-events-auto w-72 overflow-hidden text-left")}
     onPointerDown={event => event.stopPropagation()} onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}>
     <div className="flex h-11 items-center gap-1 border-b border-border px-3">
       <span className="min-w-0 flex-1 truncate text-ui-xs font-medium">{comment.author?.display_name || comment.author?.username || t("teamSystemActor")}</span>
@@ -50,6 +50,7 @@ export function CommentCard({ comment, members, currentUserId, onDelete, onClose
         className="hover:bg-destructive/10 hover:text-destructive" onClick={() => remove.mutate()}><Trash2 size={13} /></Button>}
       {onClose && <Button variant="ghost" size="icon-xs" aria-label={t("close")} onClick={onClose}><X size={13} /></Button>}
     </div>
-    <div className="max-h-64 overflow-y-auto px-3 py-3"><CommentContent comment={comment} members={members} /></div>
+    {/* 这一块真的会滚,所以 nowheel 挂在它身上 —— 挂在整张卡上会让卡片变成画布上一块滚不动的死区。 */}
+    <div className="nowheel max-h-64 overflow-y-auto px-3 py-3"><CommentContent comment={comment} members={members} /></div>
   </div>;
 }

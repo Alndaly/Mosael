@@ -74,7 +74,7 @@ export function AudioComposer({
 
   return (
     <NodeToolbar nodeId={item.id} isVisible position={Position.Bottom} offset={BOARD_NODE_PANEL_OFFSET}>
-      <div className={cn(CANVAS_WINDOW_SURFACE_CLASS, "nodrag nopan nowheel w-[420px] p-2")}>
+      <div className={cn(CANVAS_WINDOW_SURFACE_CLASS, "nodrag nopan w-[420px] p-2")}>
         <textarea
           value={text}
           onChange={(event) => setText(event.target.value)}
@@ -86,7 +86,7 @@ export function AudioComposer({
           }}
           rows={3}
           placeholder={t("boardSpeakPlaceholder")}
-          className="w-full resize-none border-0 bg-transparent px-1.5 py-1 text-ui-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
+          className="nowheel w-full resize-none border-0 bg-transparent px-1.5 py-1 text-ui-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
         />
         <div className="flex items-center gap-1 border-t border-border pt-1.5">
           {options.length === 0 ? (
