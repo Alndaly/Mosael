@@ -4,6 +4,7 @@ import { BrandWordmark } from "@/components/brand-logo";
 import { GithubMark } from "@/components/icons";
 import { localePath, type Locale } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
+import { DOC_GROUPS } from "@/lib/docs-navigation";
 import { SITE } from "@/lib/site";
 
 /**
@@ -22,11 +23,10 @@ export function SiteFooter({ locale }: { locale: Locale }) {
   const columns = [
     {
       title: t.docs.title,
-      links: [
-        { label: t.docs.sections.start, href: localePath(locale, "/docs/start/intro") },
-        { label: t.docs.sections.guides, href: localePath(locale, "/docs/guides/providers") },
-        { label: t.docs.sections.about, href: localePath(locale, "/docs/about/project") },
-      ],
+      links: DOC_GROUPS.map((group) => ({
+        label: t.docs.groups[group.id],
+        href: localePath(locale, `/docs/${group.pages[0]}`),
+      })),
     },
     {
       title: t.footer.community,
