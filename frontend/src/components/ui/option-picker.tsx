@@ -11,6 +11,8 @@ export type PickerOption = {
   label: string;
   /** 不展示但参与搜索的稳定名/别名(模型 id、供应商名)。展示名换成人话之后仍然搜得到。 */
   keywords?: string[];
+  /** 只作用在这一项的行内样式 —— 用样式本身当信息的清单(字体选择器)。 */
+  style?: React.CSSProperties;
 };
 
 /**
@@ -36,6 +38,7 @@ export function OptionPicker({
   searchPlaceholder,
   emptyText,
   align = "start",
+  ...rest
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -48,7 +51,9 @@ export function OptionPicker({
   searchPlaceholder?: string;
   emptyText?: string;
   align?: "start" | "center" | "end";
-}) {
+  /* 表单里的 FormControl 会把这几个挂到控件上(Radix Slot 克隆时注入)。不转交的话,
+     错误提示和描述文字就和控件断了线 —— 读屏念到这一格时什么都没有。 */
+} & Pick<React.ComponentProps<"button">, "id" | "aria-describedby" | "aria-invalid">) {
   const selected = options.find((one) => one.value === value);
   if (options.length > SEARCHABLE_THRESHOLD) {
     return (
@@ -66,8 +71,8 @@ export function OptionPicker({
           /* 结构照抄 SelectTrigger:一个 span 一个 chevron。调用方那串 `[&>svg]:hidden`、
              `[&>span]:truncate` 才会同样落到实处,而不是只对其中一个分支生效。 */
           /* role=combobox 和 Select 的触发器一致 —— 换了实现不该换掉读屏里听到的东西。 */
-          <button type="button" role="combobox" aria-label={ariaLabel} className={cn(FIELD_TRIGGER_CLASS, className)}>
-            <span className={cn("min-w-0 truncate", !selected && "text-muted-foreground")}>
+          <button type="button" role="combobox" aria-label={ariaLabel} className={cn(FIELD_TRIGGER_CLASS, className)} {...rest}>
+            <span className={cn("min-w-0 truncate", !selected && "text-muted-foreground")} style={selected?.style}>
               {selected?.label ?? placeholder ?? ""}
             </span>
             <ChevronDown className={FIELD_TRIGGER_CHEVRON} />
@@ -78,12 +83,12 @@ export function OptionPicker({
   }
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger aria-label={ariaLabel} className={className}>
+      <SelectTrigger aria-label={ariaLabel} className={className} {...rest}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent align={align} className={contentClassName}>
         {options.map((one) => (
-          <SelectItem key={one.value} value={one.value} className="[overflow-wrap:anywhere]">
+          <SelectItem key={one.value} value={one.value} className="[overflow-wrap:anywhere]" style={one.style}>
             {one.label}
           </SelectItem>
         ))}

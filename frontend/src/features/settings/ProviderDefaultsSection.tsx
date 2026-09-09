@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { OptionPicker } from "@/components/ui/option-picker";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
 
@@ -74,10 +74,11 @@ function DefaultRow({
       controlClassName="w-full min-w-0 shrink"
       label={label}
     >
-      <Select
+      {/* 一条连接下几十个模型是常态,超过阈值 OptionPicker 自己换成可搜索的那一版。 */}
+      <OptionPicker
         key={currentValue}
         value={currentValue}
-        onValueChange={(value) => {
+        onChange={(value) => {
           if (value === NONE) {
             save.mutate({ provider_profile_id: null, model: "" });
             return;
@@ -85,21 +86,18 @@ function DefaultRow({
           const [nextProvider, ...rest] = value.split("::");
           save.mutate({ provider_profile_id: nextProvider, model: rest.join("::") });
         }}
-      >
-        <SelectTrigger className="h-8 w-full min-w-0">
-          <SelectValue
-            placeholder={options.length === 0 ? t("providerDefaultsNoModels") : t("agentModelPlaceholder")}
-          />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={NONE}>—</SelectItem>
-          {options.map((item) => (
-            <SelectItem key={valueOf(item)} value={valueOf(item)}>
-              {item.provider_name} · {item.display_name || item.model}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        options={[
+          { value: NONE, label: "—" },
+          ...options.map((item) => ({
+            value: valueOf(item),
+            label: `${item.provider_name} · ${item.display_name || item.model}`,
+            // 展示名换成人话之后,记得住原始 model id 的人仍然搜得到。
+            keywords: [item.model],
+          })),
+        ]}
+        placeholder={options.length === 0 ? t("providerDefaultsNoModels") : t("agentModelPlaceholder")}
+        className="h-8 w-full min-w-0"
+      />
     </SettingsRow>
   );
 }

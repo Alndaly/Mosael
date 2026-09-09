@@ -8,7 +8,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { DIALOG_FIELD, ModalShell } from "@/components/app/modals";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { OptionPicker } from "@/components/ui/option-picker";
 
 /** 添加发布账号(= 挂平台的浏览器池档案):选平台 + 配置 + 代理。归口「浏览器池」——账号的「增」和
  *  「管」都在池里,发布页专心做发布。建成后同时刷新 publish-accounts 与 browser-profiles 两处列表。 */
@@ -74,24 +74,18 @@ export function AddAccountDialog({
       <div className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
         <label className={DIALOG_FIELD}>
           <span>{t("publishPlatform")}</span>
-          <Select
+          <OptionPicker
             value={platform}
-            onValueChange={(value) => {
+            onChange={(value) => {
               setPlatform(value);
               setConfig({});
             }}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {(platforms.data ?? []).map((item: PublishPlatform) => (
-                <SelectItem key={item.platform} value={item.platform}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            options={(platforms.data ?? []).map((item: PublishPlatform) => ({
+              value: item.platform,
+              label: item.label,
+              keywords: [item.platform],
+            }))}
+          />
           {meta && <small>{meta.description}</small>}
         </label>
         <label className={DIALOG_FIELD}>

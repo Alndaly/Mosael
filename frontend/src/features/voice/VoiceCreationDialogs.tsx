@@ -18,7 +18,7 @@ import { Combobox } from "@/components/app/combobox";
 import { DIALOG_FIELD, ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { OptionPicker } from "@/components/ui/option-picker";
 import { Textarea } from "@/components/ui/textarea";
 import { formatBytes } from "@/lib/bytes";
 import { cn } from "@/lib/utils";
@@ -315,16 +315,13 @@ export function VoiceFromSpeakerDialog({
           ) : speakers.length > 0 ? (
             <label className={DIALOG_FIELD}>
               <span>{t("voicePickSpeaker")}</span>
-              <Select value={speaker} onValueChange={setSpeaker}>
-                <SelectTrigger aria-label={t("voicePickSpeaker")}>
-                  <SelectValue placeholder={t("voicePickSpeaker")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {speakers.map((item) => (
-                    <SelectItem key={item} value={item}>{item}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <OptionPicker
+                value={speaker}
+                onChange={setSpeaker}
+                options={speakers.map((item) => ({ value: item, label: item }))}
+                ariaLabel={t("voicePickSpeaker")}
+                placeholder={t("voicePickSpeaker")}
+              />
             </label>
           ) : transcript.isLoading ? null : (
             <p className="m-0 text-ui-xs leading-[1.45] text-muted-foreground">{t("voiceNoSpeakers")}</p>

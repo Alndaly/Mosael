@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { OptionPicker } from "@/components/ui/option-picker";
 import { Switch } from "@/components/ui/switch";
 import { knownBestHeight, qualityOptions } from "@/features/media/urlImportQuality";
 import { formatTimecode } from "@/domain/timeline/geometry";
@@ -151,22 +152,17 @@ export function UrlImportDialog({
         {(profiles.data ?? []).length > 0 && (
           <label className="grid gap-2 text-ui-sm">
             <span className="font-medium">{t("urlImportProfile")}</span>
-            <Select value={profileId} onValueChange={setProfileId}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {/* 「不用」排第一:绝大多数链接是公开内容,借登录态既没必要也多一次占用。 */}
-                <SelectItem value={NONE}>{t("urlImportProfileNone")}</SelectItem>
-                {(profiles.data ?? [])
+            <OptionPicker
+              value={profileId}
+              onChange={setProfileId}
+              options={[
+                // 「不用」排第一:绝大多数链接是公开内容,借登录态既没必要也多一次占用。
+                { value: NONE, label: t("urlImportProfileNone") },
+                ...(profiles.data ?? [])
                   .filter((profile) => profile.enabled)
-                  .map((profile) => (
-                    <SelectItem key={profile.id} value={profile.id}>
-                      {profile.name}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
+                  .map((profile) => ({ value: profile.id, label: profile.name })),
+              ]}
+            />
           </label>
         )}
 

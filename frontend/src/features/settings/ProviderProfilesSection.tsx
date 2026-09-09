@@ -13,7 +13,7 @@ import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { OptionPicker } from "@/components/ui/option-picker";
 import { Input } from "@/components/ui/input";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { CodeEditor } from "@/components/app/code-editor";
@@ -343,18 +343,17 @@ export function ProviderProfilesSection({
                     <Input value={vendorLabel(field.value)} disabled readOnly />
                   ) : (
                     <FormControl>
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {vendorOptions.map((item) => (
-                            <SelectItem key={item.vendor} value={item.vendor}>
-                              {item.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <OptionPicker
+                        value={field.value}
+                        onChange={field.onChange}
+                        options={vendorOptions.map((item) => ({
+                          value: item.vendor,
+                          label: item.label,
+                          // 目录里的 vendor 标识本身也得搜得到:记得住 `moonshot` 的人未必
+                          // 记得中文展示名。
+                          keywords: [item.vendor],
+                        }))}
+                      />
                     </FormControl>
                   )}
                   {preset?.capabilities && (

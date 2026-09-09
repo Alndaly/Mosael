@@ -7,11 +7,9 @@ import {
   SlidersHorizontal,
   CircleAlert,
   Copy,
-  ImagePlus,
   Loader2,
   Send,
   Sparkles,
-  Video,
   Wand2,
   X,
 } from "lucide-react";
@@ -41,6 +39,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ConfigNotice } from "@/components/layout/ConfigNotice";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { OptionPicker } from "@/components/ui/option-picker";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useImagePreview } from "@/components/app/image-preview";
 import { ChatWorkspace } from "@/features/ai-studio/ChatWorkspace";
@@ -426,22 +425,16 @@ function GenerateWorkspace({
       <>
         <label className="grid gap-2 text-ui-sm font-medium text-foreground">
           <span>{t("comfyWorkflow")}</span>
-          <Select
+          {/* 一个 ComfyUI 装几十上百张图是常态 —— 超过阈值 OptionPicker 自己换成可搜索的那一版。 */}
+          <OptionPicker
             value={generationConfig.workflow || "__default__"}
-            onValueChange={(value) => setConfigValue("workflow", value === "__default__" ? "" : value)}
-          >
-            <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__default__">{t("comfyWorkflowDefault")}</SelectItem>
-              {(comfyWorkflows.data ?? []).map((wf) => (
-                <SelectItem key={wf.path} value={wf.path}>
-                  {wf.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onChange={(value) => setConfigValue("workflow", value === "__default__" ? "" : value)}
+            options={[
+              { value: "__default__", label: t("comfyWorkflowDefault") },
+              ...(comfyWorkflows.data ?? []).map((wf) => ({ value: wf.path, label: wf.name, keywords: [wf.path] })),
+            ]}
+            className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground"
+          />
           <span className="text-ui-2xs font-normal text-muted-foreground">
             {comfyWorkflows.isError
               ? t("comfyWorkflowError")
@@ -899,28 +892,22 @@ function GenerateWorkspace({
           <>
             <label className="grid gap-2 text-ui-sm font-medium text-foreground">
               <span>{t("wfModelPreset")}</span>
-              <Select value={selectedModel.value} onValueChange={selectEngine}>
-                <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="max-h-[min(320px,var(--radix-select-content-available-height))] w-[var(--radix-select-trigger-width)] p-1.5">
-                  {modelGroups.map((group) => (
-                    <React.Fragment key={group.kind}>
-                      <div className="px-2 pb-1 pt-[7px] text-ui-2xs font-bold leading-none text-muted-foreground">
-                        {capabilityLabel(group.kind)}
-                      </div>
-                      {group.models.map((model) => (
-                        <SelectItem key={model.value} value={model.value} className="min-h-[30px] px-2 py-[5px]">
-                          <span className="flex w-full min-w-0 items-center gap-[7px] leading-[1.45] [&_svg]:block [&_svg]:shrink-0 [&_svg]:text-muted-foreground">
-                            {model.kind === "image" ? <ImagePlus size={12} /> : <Video size={12} />}
-                            <span className="truncate">{model.label}</span>
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </React.Fragment>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* 模型清单按能力分组,且**一定**是长清单 —— 直接给可搜索的那一版,不走阈值。
+                  每行的图标撤了:它编码的是"图片还是视频",而分组标题已经说了同一件事,
+                  搜索框在的时候那枚重复的小图标只是占掉了名字的位置。 */}
+              <SearchableSelect
+                value={selectedModel.value}
+                onValueChange={selectEngine}
+                options={modelGroups.flatMap((group) =>
+                  group.models.map((model) => ({
+                    value: model.value,
+                    label: model.label,
+                    group: capabilityLabel(group.kind),
+                  })),
+                )}
+                emptyText={t("cmdkEmpty")}
+                className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground"
+              />
             </label>
             {comfyWorkflowSection}
             {/* 尺寸**不属于任何一支**:图像收 `1024x1024`,万相视频收 `832*480`,都是"出多大"。

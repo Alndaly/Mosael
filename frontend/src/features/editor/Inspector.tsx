@@ -5,7 +5,7 @@ import { AlignCenter, AlignLeft, AlignRight, Bold, Diamond, Italic, Loader2, Rot
 import type { Asset, Clip, Font, Sequence } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { OptionPicker } from "@/components/ui/option-picker";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/app/preferences";
@@ -712,9 +712,9 @@ function TextStylePanel({
       </div>
       <div className="grid grid-cols-[40px_1fr] items-center gap-2">
         <span className="text-ui-xs text-muted-foreground">{t("textFont")}</span>
-        <Select
+        <OptionPicker
           value={style.font_id ? `${FONT_UPLOAD_PREFIX}${style.font_id}` : style.font_family}
-          onValueChange={(value) => {
+          onChange={(value) => {
             if (!value.startsWith(FONT_UPLOAD_PREFIX)) {
               set({ font_family: value, font_id: "" });
               return;
@@ -723,23 +723,20 @@ function TextStylePanel({
             const picked = fonts.find((font) => font.id === id);
             if (picked) set({ font_id: id, font_family: uploadedFontStack(picked.family) });
           }}
-        >
-          <SelectTrigger className="h-[26px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {SUBTITLE_FONTS.map((font) => (
-              <SelectItem key={font.value} value={font.value} style={{ fontFamily: font.value }}>
-                {t(font.labelKey as Parameters<typeof t>[0])}
-              </SelectItem>
-            ))}
-            {fonts.map((font) => (
-              <SelectItem key={font.id} value={`${FONT_UPLOAD_PREFIX}${font.id}`} style={{ fontFamily: uploadedFontStack(font.family) }}>
-                {font.family}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          options={[
+            ...SUBTITLE_FONTS.map((font) => ({
+              value: font.value,
+              label: t(font.labelKey as Parameters<typeof t>[0]),
+              style: { fontFamily: font.value },
+            })),
+            ...fonts.map((font) => ({
+              value: `${FONT_UPLOAD_PREFIX}${font.id}`,
+              label: font.family,
+              style: { fontFamily: uploadedFontStack(font.family) },
+            })),
+          ]}
+          className="h-[26px]"
+        />
       </div>
       {onUploadFont && (
         <div className="flex items-center gap-1 pl-[48px]">

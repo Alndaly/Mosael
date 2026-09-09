@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { BulkActionBar, BulkCheckbox, BulkSelectTrigger, useBulkSelection } from "@/components/app/bulkSelection";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { OptionPicker } from "@/components/ui/option-picker";
 import { Textarea } from "@/components/ui/textarea";
 import { SettingsBlock, SettingsGroup, SettingsListBlock, SettingsListItem } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
@@ -365,29 +366,20 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
           </label>
           <label className="grid gap-1.5 text-xs font-semibold text-foreground">
             <span>{t("pricingProviderProfile")}</span>
-            <Select
+            <OptionPicker
               value={form.providerProfileId}
-              onValueChange={(value) => {
-                
-                setForm((current) => ({
-                  ...current,
-                  providerProfileId: value,
-                  model: current.model,
-                }));
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ANY_PROFILE}>{t("pricingAnyProvider")}</SelectItem>
-                {visibleProfiles.map((profile) => (
-                  <SelectItem key={profile.id} value={profile.id}>
-                    {profile.name} · {profile.vendor}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onChange={(value) =>
+                setForm((current) => ({ ...current, providerProfileId: value, model: current.model }))
+              }
+              options={[
+                { value: ANY_PROFILE, label: t("pricingAnyProvider") },
+                ...visibleProfiles.map((profile) => ({
+                  value: profile.id,
+                  label: `${profile.name} · ${profile.vendor}`,
+                  keywords: [profile.vendor],
+                })),
+              ]}
+            />
           </label>
           <label className="grid gap-1.5 text-xs font-semibold text-foreground">
             <span>{t("pricingModel")}</span>

@@ -16,6 +16,8 @@ type Option = {
   group?: string;
   /** 不展示但参与搜索的稳定名/别名。展示名变成人话后，仍可按内部标识精确查找。 */
   keywords?: string[];
+  /** 只作用在这一项的行内样式。用于**用样式本身当信息**的清单:字体选择器按各自的字体渲染。 */
+  style?: React.CSSProperties;
 };
 
 /**
@@ -138,7 +140,7 @@ export function SearchableSelect({
                   >
                     {/* 勾在右端、只在选中时渲染:左侧占位勾会让**每一行**都白缩进一个图标宽,
                         而「添加节点」这类当动作菜单用的场景根本没有选中项,那块缩进纯属浪费。 */}
-                    <span className="grid min-w-0 flex-1 gap-px leading-[1.35]">
+                    <span className="grid min-w-0 flex-1 gap-px leading-[1.35]" style={item.style}>
                       <span className="truncate">{item.label}</span>
                       {item.description && (
                         <span className="truncate text-ui-xs text-muted-foreground">{item.description}</span>

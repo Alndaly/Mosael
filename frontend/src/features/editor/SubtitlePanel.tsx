@@ -736,9 +736,11 @@ function SubtitleStyleControls({
         <div className="grid gap-1.5 px-2.5 pb-2.5 pt-0.5">
           <StyleGroup label={t("subGroupText")} first />
           <StyleRow label={t("subFont")}>
-            <Select
+            {/* 每一项按自己的字体渲染 —— 字体是用**样子**挑的,名字帮不上忙。装了几十个字体
+                之后名字就帮得上了,所以超过阈值 OptionPicker 会换成可搜索的那一版。 */}
+            <OptionPicker
               value={s.font_id ? `${UPLOAD_PREFIX}${s.font_id}` : s.font_family}
-              onValueChange={(v) => {
+              onChange={(v) => {
                 if (!v.startsWith(UPLOAD_PREFIX)) {
                   patch({ font_family: v, font_id: "" });
                   return;
@@ -747,27 +749,20 @@ function SubtitleStyleControls({
                 const picked = fonts.find((font) => font.id === id);
                 if (picked) patch({ font_id: id, font_family: uploadedFontStack(picked.family) });
               }}
-            >
-              <SelectTrigger className="h-7 min-w-0 flex-1 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SUBTITLE_FONTS.map((font) => (
-                  <SelectItem key={font.value} value={font.value} style={{ fontFamily: font.value }}>
-                    {t(font.labelKey as Parameters<typeof t>[0])}
-                  </SelectItem>
-                ))}
-                {fonts.map((font) => (
-                  <SelectItem
-                    key={font.id}
-                    value={`${UPLOAD_PREFIX}${font.id}`}
-                    style={{ fontFamily: uploadedFontStack(font.family) }}
-                  >
-                    {font.family}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              options={[
+                ...SUBTITLE_FONTS.map((font) => ({
+                  value: font.value,
+                  label: t(font.labelKey as Parameters<typeof t>[0]),
+                  style: { fontFamily: font.value },
+                })),
+                ...fonts.map((font) => ({
+                  value: `${UPLOAD_PREFIX}${font.id}`,
+                  label: font.family,
+                  style: { fontFamily: uploadedFontStack(font.family) },
+                })),
+              ]}
+              className="h-7 min-w-0 flex-1 text-xs"
+            />
             {/* 上传/移除跟在字体选择器旁边,而不是独占一行 —— 它们就是对这个选择器的操作。 */}
             {onUploadFont && (
               <Button

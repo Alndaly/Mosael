@@ -1,12 +1,6 @@
 import React from "react";
 import type { Vec3 } from "@/api/domains/scenes";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { OptionPicker } from "@/components/ui/option-picker";
 export function Pick({
   value,
   options,
@@ -18,19 +12,14 @@ export function Pick({
   onChange: (v: string) => void;
   label: string;
 }) {
+  // 物体/机位清单跟着场景走,一多就得能搜(阈值在 OptionPicker 里)。
   return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger aria-label={label}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {options.map(([id, label]) => (
-          <SelectItem key={id} value={id}>
-            {label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <OptionPicker
+      value={value}
+      onChange={onChange}
+      options={options.map(([id, name]) => ({ value: id, label: name }))}
+      ariaLabel={label}
+    />
   );
 }
 export function Num({

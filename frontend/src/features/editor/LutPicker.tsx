@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Trash2, Upload } from "lucide-react";
 
 import { deleteLut, listLuts, uploadLut, type Lut } from "@/api/client";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { OptionPicker } from "@/components/ui/option-picker";
 import { useI18n } from "@/app/preferences";
 
 const NONE = "__none__";
@@ -55,22 +55,17 @@ export function LutPicker({
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       <div className="flex min-w-0 items-center gap-1.5">
-        <Select
+        {/* 调色预设是**攒出来**的:装几十个 .cube 很常见,超过阈值就换成可搜索的那一版。 */}
+        <OptionPicker
           value={selectValue}
-          onValueChange={(next) => onChange(next === NONE ? undefined : next)}
-        >
-          <SelectTrigger className="min-w-0 flex-1" aria-label={t("gradeGroupLut")}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={NONE}>{t("lutNone")}</SelectItem>
-            {items.map((lut) => (
-              <SelectItem key={lut.id} value={lut.id}>
-                {lut.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          onChange={(next) => onChange(next === NONE ? undefined : next)}
+          options={[
+            { value: NONE, label: t("lutNone") },
+            ...items.map((lut) => ({ value: lut.id, label: lut.name })),
+          ]}
+          ariaLabel={t("gradeGroupLut")}
+          className="min-w-0 flex-1"
+        />
         <button
           type="button"
           className="inline-flex h-[22px] w-[22px] shrink-0 cursor-pointer items-center justify-center rounded-md border border-border bg-transparent text-muted-foreground enabled:hover:bg-muted enabled:hover:text-foreground disabled:cursor-default disabled:opacity-40"

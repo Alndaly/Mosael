@@ -114,6 +114,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { OptionPicker } from "@/components/ui/option-picker";
 import { useCanvasPosture } from "@/features/workflows/useCanvasPosture";
 import { withDependentsCleared } from "@/features/workflows/dependents";
 import { speechFieldVisible } from "@/features/workflows/speechFields";
@@ -3346,41 +3347,31 @@ function NodeInspector({
               </span>
               {connected ? (
                 <div className="relative pl-3 before:absolute before:left-0 before:top-1/2 before:h-[7px] before:w-[7px] before:-translate-y-1/2 before:rounded-full before:bg-primary before:content-[''] [&_:where(button,[role=combobox])]:w-full">
-                  <Select
+                  {/* 上游输出会长到几十条(每个上游节点各带一串),超过阈值 OptionPicker 自己
+                      换成可搜索的那一版 —— 在一列 `source_video.*` 里滚着找一个后缀最费眼。 */}
+                  <OptionPicker
                     value={boundValue}
-                    onValueChange={(next) => {
+                    onChange={(next) => {
                       const dot = next.indexOf(".");
                       bindInput(key, next.slice(0, dot), next.slice(dot + 1));
                     }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={t("wfPickUpstream")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {upstreamOptions.map((option) => (
-                        <SelectItem key={option.ref} value={`${option.sourceId}.${option.output}`}>
-                          {option.sourceId}.{option.output}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    options={upstreamOptions.map((option) => ({
+                      value: `${option.sourceId}.${option.output}`,
+                      label: `${option.sourceId}.${option.output}`,
+                    }))}
+                    placeholder={t("wfPickUpstream")}
+                  />
                 </div>
               ) : node.type === "note_read" && key === "note_id" ? (
                 <NoteReferenceField workspaceId={workspaceId} value={String(value ?? "")} onChange={next => setConfig(key, next)} />
               ) : options ? (
                 spec?.options ? (
-                  <Select value={String(value ?? spec.default ?? "")} onValueChange={(next) => setConfig(key, next)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder={t("wfPickOption")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {options.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <OptionPicker
+                    value={String(value ?? spec.default ?? "")}
+                    onChange={(next) => setConfig(key, next)}
+                    options={options}
+                    placeholder={t("wfPickOption")}
+                  />
                 ) : (
                   // 动态资源列表(素材/账号/数据集/音色…)可能很长 → 可搜索。
                   <Combobox
@@ -3715,18 +3706,15 @@ function NodeInspector({
                         onChange={(event) => setGenParam(key, event.target.value)}
                       />
                     ) : (
-                      <Select value={String(genParams[key] ?? "")} onValueChange={(next) => setGenParam(key, next)}>
-                        <SelectTrigger>
-                          <SelectValue placeholder={t("wfPickOption")} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {options.map((option) => (
-                            <SelectItem key={option} value={option}>
-                              {key === "duration_seconds" && option === "-1" ? t("genDurationAuto") : option}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <OptionPicker
+                        value={String(genParams[key] ?? "")}
+                        onChange={(next) => setGenParam(key, next)}
+                        options={options.map((option) => ({
+                          value: option,
+                          label: key === "duration_seconds" && option === "-1" ? t("genDurationAuto") : option,
+                        }))}
+                        placeholder={t("wfPickOption")}
+                      />
                     )}
                   </div>
                 ))}
