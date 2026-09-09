@@ -1,3 +1,5 @@
+import { CanvasToolbar, CanvasToolbarGroup } from "@/components/app/CanvasToolbar";
+import { ActionMenu } from "@/components/layout/ActionMenu";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import React from "react";
 import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
@@ -47,7 +49,6 @@ import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab
 import { cn } from "@/lib/utils";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/components/agent/CanvasAgentChat";
 import {
-  CANVAS_GLASS_SURFACE_CLASS,
   canvasDockedPanelEdges,
   canvasRightDockOcclusion,
 } from "@/components/app/canvasPanelLayout";
@@ -635,7 +636,7 @@ function BoardDetail({
   // 右边是操作。悬浮不等于没有边界:两组各有自己的底,否则它们会散在画布上和内容抢注意力。
   return (
     <div className="relative grid h-full min-h-0">
-      <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex flex-wrap items-start justify-between gap-2 [&>*]:pointer-events-auto">
+      <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex items-start justify-between gap-2 [&>*]:pointer-events-auto">
         {/* 和工作流详情页、子图共用同一颗胶囊(components/app/canvasTitle)—— 它们是同一类
             东西:「你现在在哪儿」。此前这里是自己写的一份,标题的 font-semibold 挂在 <button>
             上,被 tokens.css 那条无层级的 `button { font: inherit }` 压掉了,于是画板的标题
@@ -649,18 +650,47 @@ function BoardDetail({
         />
 
 
-        {/* 右上角**分组胶囊**,刻度和工作流详情页一致:胶囊 rounded-full、图标钮 h-8 w-8、
-            bg-panel/95 + backdrop-blur。分三组是按"这是哪一类动作"分的 ——
-            往画布上加东西 / 看画布 / 处置这张板。混成一条的话,删除会挨着「加便签」。 */}
-        <div className="flex flex-wrap items-start justify-end gap-2">
-          <div className={cn("flex flex-wrap items-center gap-1 rounded-lg p-1", CANVAS_GLASS_SURFACE_CLASS)}>
-            {/* 「往画布上加东西」收成一个 + —— 和工作流详情页的「添加节点」同一颗控件
-                (SearchableSelect):六个图标排一排要逐个认,弹层里名字写出来就不用猜。
-                「贴一份现成的」和「放一个空槽去生成」是两件事,弹层里分成两组。 */}
+        <CanvasToolbar
+          label={t("canvasTools")}
+          data-board-toolbar-actions=""
+          end={
+            <>
+              <CanvasToolbarGroup label={t("wfAgentTitle")}>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className={cn(agentOpen === "on" && "bg-secondary text-foreground")}
+                  title={t("wfAgentTitle")}
+                  aria-label={t("wfAgentTitle")}
+                  aria-pressed={agentOpen === "on"}
+                  onClick={() => setAgentOpen(agentOpen === "on" ? "off" : "on")}
+                >
+                  <Bot size={14} />
+                </Button>
+              </CanvasToolbarGroup>
+              <CanvasToolbarGroup label={t("more")}>
+                <ActionMenu
+                  label={t("more")}
+                  actions={[
+                    {
+                      label: t("delete"),
+                      icon: <Trash2 size={14} />,
+                      destructive: true,
+                      onSelect: () => setConfirmingDelete(true),
+                    },
+                  ]}
+                />
+              </CanvasToolbarGroup>
+            </>
+          }
+        >
+          <CanvasToolbarGroup label={t("canvasEditTools")}>
             <SearchableSelect
               value=""
               onValueChange={(kind) => {
-                setMarkerMode(false); setCommentMode(false); setActiveCommentId(null);
+                setMarkerMode(false);
+                setCommentMode(false);
+                setActiveCommentId(null);
                 //: `pick-<kind>` 一条分支通吃三类。此前只认死 "pick-image",于是新增视频/音频
                 //: 就得再抄两遍同样的三行 —— 而 AssetPickerDialog 本来就是按 kind 列的。
                 if (kind.startsWith("pick-")) {
@@ -700,48 +730,6 @@ function BoardDetail({
                 </button>
               }
             />
-          </div>
-
-          <div data-board-toolbar-actions="" className={cn("flex flex-wrap items-center gap-1 rounded-lg p-1", CANVAS_GLASS_SURFACE_CLASS)}>
-            <AnnotationControls kind="comment" active={commentMode} visible={commentsVisible}
-              onMode={() => { setCommentMode(!commentMode); setActiveCommentId(null); setMarkerMode(false); setCommentsVisible(true); }}
-              onVisible={() => { setCommentsVisible(!commentsVisible); setActiveCommentId(null); if (commentsVisible) setCommentMode(false); }} />
-            <AnnotationControls kind="marker" active={markerMode} visible={markersVisible}
-              onMode={() => markerMode ? setMarkerMode(false) : enterMarkerMode()}
-              onVisible={() => { setMarkersVisible(!markersVisible); if (markersVisible) setMarkerMode(false); }} />
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              title={t("boardDiscussionCenter")}
-              aria-label={t("boardDiscussionCenter")}
-              onClick={() => setCollaborationOpen(true)}
-            >
-              <ListChecks size={14} />
-            </Button>
-            <CanvasInputModeSwitch />
-            {/* 全览可关 —— 它占着右下角一块不小的地方,图小的时候纯属挡视线。记在本地。 */}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className={cn(showMinimap && "bg-secondary text-foreground")}
-              title={t("wfMinimap")}
-              aria-label={t("wfMinimap")}
-              aria-pressed={showMinimap}
-              onClick={() => setMinimap(showMinimap ? "off" : "on")}
-            >
-              <MapIcon size={14} />
-            </Button>
-            <Button variant="ghost" size="icon-sm" title={t("boardsFitView")} aria-label={t("boardsFitView")} onClick={() => api?.fitView()}>
-              <Maximize2 size={14} />
-            </Button>
-            {/* 标记清单和「全览」放在一起:两个都是「怎么看这张画布」,不是「改这张画布」。 */}
-            <MarkerListButton
-              markers={api?.markers ?? []}
-              onJump={(marker) => { setMarkersVisible(true); api?.jumpToMarker(marker); }}
-              onAdd={enterMarkerMode}
-            />
-            {/* 撤销/重做。画布上最容易「手一滑」—— 拖错一个节点、误删一项,没有退路的话
-                用户只能凭记忆手动摆回去。快捷键是 ⌘Z / ⌘⇧Z,按钮是给不知道有快捷键的人。 */}
             <Button
               variant="ghost"
               size="icon-sm"
@@ -762,32 +750,78 @@ function BoardDetail({
             >
               <Redo2 size={14} />
             </Button>
+          </CanvasToolbarGroup>
+          <CanvasToolbarGroup label={t("boardCommentMode")}>
+            <AnnotationControls
+              kind="comment"
+              active={commentMode}
+              visible={commentsVisible}
+              onMode={() => {
+                setCommentMode(!commentMode);
+                setActiveCommentId(null);
+                setMarkerMode(false);
+                setCommentsVisible(true);
+              }}
+              onVisible={() => {
+                setCommentsVisible(!commentsVisible);
+                setActiveCommentId(null);
+                if (commentsVisible) setCommentMode(false);
+              }}
+            />
             <Button
               variant="ghost"
               size="icon-sm"
-              className={cn(agentOpen === "on" && "bg-secondary text-foreground")}
-              title={t("wfAgentTitle")}
-              aria-label={t("wfAgentTitle")}
-              aria-pressed={agentOpen === "on"}
-              onClick={() => setAgentOpen(agentOpen === "on" ? "off" : "on")}
+              title={t("boardDiscussionCenter")}
+              aria-label={t("boardDiscussionCenter")}
+              onClick={() => setCollaborationOpen(true)}
             >
-              <Bot size={14} />
+              <ListChecks size={14} />
             </Button>
-          </div>
-
-          <div className={cn("flex flex-wrap items-center gap-1 rounded-lg p-1", CANVAS_GLASS_SURFACE_CLASS)}>
+          </CanvasToolbarGroup>
+          <CanvasToolbarGroup label={t("markers")}>
+            <AnnotationControls
+              kind="marker"
+              active={markerMode}
+              visible={markersVisible}
+              onMode={() => (markerMode ? setMarkerMode(false) : enterMarkerMode())}
+              onVisible={() => {
+                setMarkersVisible(!markersVisible);
+                if (markersVisible) setMarkerMode(false);
+              }}
+            />
+            <MarkerListButton
+              markers={api?.markers ?? []}
+              onJump={(marker) => {
+                setMarkersVisible(true);
+                api?.jumpToMarker(marker);
+              }}
+              onAdd={enterMarkerMode}
+            />
+          </CanvasToolbarGroup>
+          <CanvasToolbarGroup label={t("canvasViewTools")}>
+            <CanvasInputModeSwitch />
             <Button
               variant="ghost"
               size="icon-sm"
-              className="hover:text-destructive"
-              title={t("delete")}
-              aria-label={t("delete")}
-              onClick={() => setConfirmingDelete(true)}
+              className={cn(showMinimap && "bg-secondary text-foreground")}
+              title={t("wfMinimap")}
+              aria-label={t("wfMinimap")}
+              aria-pressed={showMinimap}
+              onClick={() => setMinimap(showMinimap ? "off" : "on")}
             >
-              <Trash2 size={14} />
+              <MapIcon size={14} />
             </Button>
-          </div>
-        </div>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              title={t("boardsFitView")}
+              aria-label={t("boardsFitView")}
+              onClick={() => api?.fitView()}
+            >
+              <Maximize2 size={14} />
+            </Button>
+          </CanvasToolbarGroup>
+        </CanvasToolbar>
       </div>
 
       {agentOpen === "on" && (

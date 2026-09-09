@@ -1,8 +1,9 @@
+import { CanvasToolbar, CanvasToolbarGroup } from "@/components/app/CanvasToolbar";
 import { AnnotationModeHint } from "@/features/markers/AnnotationModeHint";
 import { NoteReferenceField } from "@/features/notes/NotePickerDialog";
 import { useCanvasInputMode } from "@/components/app/canvasInputMode";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
-import { ACTION_MENU } from "@/components/ui/floating";
+import { ACTION_MENU, MODAL_SURFACE } from "@/components/ui/floating";
 import React from "react";
 import { ActionMenu } from "@/components/layout/ActionMenu";
 import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
@@ -121,7 +122,6 @@ import { MapField } from "@/features/workflows/MapField";
 import { CodeEditor } from "@/components/app/code-editor";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/components/agent/CanvasAgentChat";
 import {
-  CANVAS_GLASS_SURFACE_CLASS,
   canvasDockedPanelEdges,
   canvasRightDockOcclusion,
 } from "@/components/app/canvasPanelLayout";
@@ -248,13 +248,14 @@ interface GenField {
   toggle?: boolean;
 }
 
+// Nested controls (such as MapField rows) own their dimensions and field styling.
 const FIELD_BOX =
   "grid gap-2 [&>span]:flex [&>span]:items-center [&>span]:gap-1 [&>span]:text-ui-sm [&>span]:font-medium [&>span]:text-foreground " +
   "[&_small]:text-ui-xs [&_small]:leading-[1.5] [&_small]:text-muted-foreground " +
-  "[&_input]:h-10 [&_input]:w-full [&_input]:rounded-md [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:px-2.5 [&_input]:text-ui-sm [&_input]:text-foreground " +
-  "[&_textarea]:w-full [&_textarea]:resize-y [&_textarea]:rounded-md [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:px-2.5 [&_textarea]:py-2 [&_textarea]:text-ui-sm [&_textarea]:text-foreground " +
-  "[&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none " +
-  "[&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none";
+  "[&>input]:h-10 [&>input]:w-full [&>input]:rounded-md [&>input]:border [&>input]:border-border [&>input]:bg-field [&>input]:px-2.5 [&>input]:text-ui-sm [&>input]:text-foreground " +
+  "[&>textarea]:w-full [&>textarea]:resize-y [&>textarea]:rounded-md [&>textarea]:border [&>textarea]:border-border [&>textarea]:bg-field [&>textarea]:px-2.5 [&>textarea]:py-2 [&>textarea]:text-ui-sm [&>textarea]:text-foreground " +
+  "[&>input:focus-visible]:border-primary [&>input:focus-visible]:outline-none " +
+  "[&>textarea:focus-visible]:border-primary [&>textarea:focus-visible]:outline-none";
 
 /** 助手面板的开合记忆。 */
 const AGENT_PANEL_KEY = "mosael:workflow-agent-open";
@@ -1756,7 +1757,7 @@ function WorkflowEditor({
     // 两条并排的竖条,用户得先分辨"哪条是应用的、哪条是这一页的"。所以横向成组、浮在顶部,
     // 保持"这一页的操作"和"整个应用的导航"在方向上就分得开。
     <div className="relative grid min-h-0">
-      <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex flex-wrap items-start justify-between gap-2 [&>*]:pointer-events-auto">
+      <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex items-start justify-between gap-2 [&>*]:pointer-events-auto">
         {/* 左边这组是**身份**(回哪儿去、这是谁),右边那组是**操作**。浮起来之后两组各自要有
             自己的底,否则它们会散在画布上,和节点抢注意力 —— 悬浮不等于没有边界。 */}
         {/* 工作流图标去掉了:左边导航栏里那一格已经亮着"工作流",顶上再画一次是同一句话说两遍,
@@ -1770,297 +1771,337 @@ function WorkflowEditor({
           onRename={() => setRenaming(true)}
           renameLabel={t("rename")}
         />
-        {/* 右边按**作用对象**分组,每组自己一颗胶囊 —— 此前十来个按钮挤在一条里,只靠两道
-            细竖线隔开,找一个键要从头扫到尾。分组是:编辑图 / 理解图 / 跑这张图 / 看的方式 /
-            这份文档。竖线换成真正断开,因为断开比线更快被看见。 */}
-        <div className="flex flex-wrap items-start justify-end gap-2">
-        <div className={cn("flex flex-wrap items-center gap-1 rounded-lg p-1", CANVAS_GLASS_SURFACE_CLASS)}>
-          {/* 工具条统一刻度:胶囊(rounded-full)、h-8、text-xs;图标钮 h-8 w-8。 */}
-          <SearchableSelect
-            value=""
-            // 标记走单独一条:它不是节点,addNode 会去 registry 里查类型,查不到就什么也不发生。
-            onValueChange={value => { setMarkerMode(false); workflowComments.exit(); addNode(value); }}
-            searchPlaceholder={t("wfAddNode")}
-            options={[
-              ...nodeOptions.filter((option) => option.value !== "start" || !graphHasStart),
-            ]}
-            trigger={
-              <button
-                type="button"
-                data-wf-add-node=""
-                // 组里全是圆形图标钮,只有它带文字就会显得突出一截 —— 而它并不比「运行」更重要。
-                // 名字进 title/aria-label,悬停仍然说得出自己是谁。
-                className="inline-flex h-8 items-center gap-2 rounded-md bg-action px-3 text-action-foreground hover:bg-action/90"
-                aria-label={t("wfAddNode")}
-                title={t("wfAddNode")}
-              >
-                <Plus size={15} /> {t("wfAddNode")}
-              </button>
-            }
-          />
-          {/* 标记清单挨着撤销/重做只是因为它们同属这颗胶囊;它回答的是"这张图上有哪些标记"。 */}
-          {workflowComments.controls(() => setMarkerMode(false))}
-          <AnnotationControls kind="marker" active={markerMode} visible={markersVisible}
-            onMode={() => markerMode ? setMarkerMode(false) : enterMarkerMode()}
-            onVisible={() => { setMarkersVisible(!markersVisible); if (markersVisible) setMarkerMode(false); }} />
-          <MarkerListButton markers={markers} onJump={marker => { setMarkersVisible(true); jumpToMarker(marker); }} onAdd={enterMarkerMode} />
-          <Button variant="ghost" size="icon-sm" title={`${t("undo")} ⌘Z`} aria-label={t("undo")} disabled={!canUndo} onClick={undo}>
-            <Undo2 size={14} />
-          </Button>
-          <Button variant="ghost" size="icon-sm" title={`${t("redo")} ⇧⌘Z`} aria-label={t("redo")} disabled={!canRedo} onClick={redo}>
-            <Redo2 size={14} />
-          </Button>
-        </div>
-        <div className={cn("flex flex-wrap items-center gap-1 rounded-lg p-1", CANVAS_GLASS_SURFACE_CLASS)}>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className={cn(agentOpen && "bg-secondary text-foreground")}
-            aria-label={t("wfAgentTitle")}
-            title={t("wfAgentTitle")}
-            aria-pressed={agentOpen}
-            onClick={() => {
-              setAgentOpen((value) => !value);
-              if (!agentOpen) setAgentMode("docked");
-            }}
-          >
-            <Bot size={14} />
-          </Button>
-          <Popover
-            open={nodeSearchOpen}
-            onOpenChange={(open) => {
-              setNodeSearchOpen(open);
-              if (!open) setNodeSearch("");
-            }}
-          >
-            <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" aria-label={t("wfNodeSearch")} title={t("wfNodeSearch")}>
-                <Search size={14} />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-[280px] p-1.5">
-              {/* 单层输入框 + 内置图标(与素材搜索同款):此前外壳自带边框、内层 Input
-                  又画自己的边框和焦点环,聚焦时两层框套着一枚游离的放大镜。 */}
-              <div className="relative">
-                <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  autoFocus
-                  className="h-8 pl-[30px] pr-2 text-ui-sm focus-visible:border-primary focus-visible:ring-0"
-                  value={nodeSearch}
-                  onChange={(event) => setNodeSearch(event.target.value)}
-                  placeholder={t("wfNodeSearchPlaceholder")}
+        <CanvasToolbar
+          label={t("canvasTools")}
+          data-workflow-toolbar-actions=""
+          end={
+            <>
+              <CanvasToolbarGroup label={t("wfAgentTitle")}>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className={cn(agentOpen && "bg-secondary text-foreground")}
+                  aria-label={t("wfAgentTitle")}
+                  title={t("wfAgentTitle")}
+                  aria-pressed={agentOpen}
+                  onClick={() => {
+                    setAgentOpen((value) => !value);
+                    if (!agentOpen) setAgentMode("docked");
+                  }}
+                >
+                  <Bot size={14} />
+                </Button>
+              </CanvasToolbarGroup>
+              <CanvasToolbarGroup label={t("wfRun")}>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className={cn(
+                        // 组已经有自己的边框和底了,按钮**不再各带一层** —— 那是胶囊套胶囊。
+                        // 状态靠颜色说,不靠再画一圈线。
+                        "inline-flex h-8 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border-0 bg-transparent text-xs font-[650] text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground",
+                        checklistCount > 0 ? "gap-1 px-2" : "w-8 justify-center",
+                        analysis.errorCount
+                          ? "bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] text-destructive hover:bg-[color-mix(in_srgb,var(--destructive)_18%,transparent)] hover:text-destructive"
+                          : analysis.warnCount
+                            ? "bg-[color-mix(in_srgb,var(--warning)_12%,transparent)] text-warning hover:bg-[color-mix(in_srgb,var(--warning)_18%,transparent)] hover:text-warning"
+                            : "bg-[color-mix(in_srgb,var(--success)_10%,transparent)] text-success hover:bg-[color-mix(in_srgb,var(--success)_16%,transparent)] hover:text-success",
+                      )}
+                      aria-label={`${t("wfChecklist")}: ${checklistLabel}`}
+                      title={checklistLabel}
+                    >
+                      {checklistCount > 0 ? <AlertTriangle size={13} /> : <CircleCheck size={14} />}
+                      {checklistCount > 0 && (
+                        <em className="inline-grid h-[15px] min-w-[15px] place-items-center rounded-full bg-[color-mix(in_srgb,currentColor_18%,transparent)] px-1 text-ui-2xs font-bold not-italic leading-none text-current">
+                          {checklistCount}
+                        </em>
+                      )}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-80 p-1.5">
+                    {analysis.issues.length === 0 ? (
+                      <div className="flex items-center gap-1.5 p-2 text-ui-sm text-success">
+                        <CircleCheck size={14} /> {t("wfChecklistReady")}
+                      </div>
+                    ) : (
+                      <>
+                        <div className="px-2 pb-1.5 pt-1 text-ui-xs font-semibold uppercase tracking-[0.04em] text-muted-foreground">
+                          {analysis.errorCount
+                            ? t("wfChecklistBlocked").replace("{n}", String(analysis.errorCount))
+                            : t("wfChecklistWarnOnly").replace("{n}", String(analysis.warnCount))}
+                        </div>
+                        <div className="flex max-h-80 flex-col gap-0.5 overflow-auto">
+                          {[...analysis.issues]
+                            .sort((a, b) => (a.severity === b.severity ? 0 : a.severity === "error" ? -1 : 1))
+                            .map((issue, i) => (
+                              <button
+                                key={`${issue.nodeId}-${issue.code}-${i}`}
+                                type="button"
+                                className={cn(
+                                  "grid cursor-pointer grid-cols-[14px_auto_1fr] items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1.5 text-left hover:bg-muted",
+                                  issue.severity === "error" ? "[&>svg]:text-destructive" : "[&>svg]:text-warning",
+                                )}
+                                onClick={() => focusNode(issue.nodeId)}
+                              >
+                                <AlertTriangle size={12} />
+                                <span className="whitespace-nowrap text-xs font-semibold">{issue.nodeName}</span>
+                                <span className="truncate text-ui-xs text-muted-foreground">
+                                  {workflowIssueText(t, issue, registry)}
+                                </span>
+                              </button>
+                            ))}
+                        </div>
+                      </>
+                    )}
+                  </PopoverContent>
+                </Popover>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={t("wfHistory")}
+                  title={t("wfHistory")}
+                  aria-pressed={showHistory}
+                  className={cn(showHistory && "bg-secondary text-foreground")}
+                  onClick={() => setShowHistory((v) => !v)}
+                >
+                  <History size={14} />
+                </Button>
+                <Button
+                  size="icon-sm"
+                  disabled={dirty || !analysis.runnable}
+                  loading={run.isPending}
+                  aria-label={t("wfRun")}
+                  title={dirty ? t("wfSaving") : !analysis.runnable ? t("wfRunBlocked") : t("wfRun")}
+                  onClick={() => run.mutate()}
+                >
+                  <Play size={14} />
+                </Button>
+              </CanvasToolbarGroup>
+              <CanvasToolbarGroup label={t("more")}>
+                <ActionMenu
+                  label={t("more")}
+                  actions={[
+                    {
+                      label: `${t("wfRevisionHistory")} · v${workflow.revision}`,
+                      icon: <GitCommitVertical size={14} />,
+                      disabled: save.isPending,
+                      onSelect: () => {
+                        void openRevisions();
+                      },
+                    },
+                    {
+                      label: t("wfExport"),
+                      icon: <Download size={14} />,
+                      disabled: exportFile.isPending,
+                      onSelect: () => exportFile.mutate(),
+                    },
+                    {
+                      label: t("delete"),
+                      icon: <Trash2 size={14} />,
+                      destructive: true,
+                      separatorBefore: true,
+                      onSelect: () => setDeleting(true),
+                    },
+                  ]}
                 />
-              </div>
-              <div className="mt-1.5 flex max-h-80 flex-col gap-0.5 overflow-auto">
-                {(() => {
-                  const query = nodeSearch.trim().toLowerCase();
-                  const matches = graph.nodes.filter((node) => {
-                    if (!query) return true;
-                    const label = (registry.get(node.type)?.label ?? node.type).toLowerCase();
-                    return (
-                      (node.name || "").toLowerCase().includes(query) ||
-                      node.type.toLowerCase().includes(query) ||
-                      label.includes(query)
-                    );
-                  });
-                  if (matches.length === 0)
-                    return <div className="px-2 py-2.5 text-center text-xs text-muted-foreground">{t("wfNodeSearchEmpty")}</div>;
-                  return matches.map((node) => {
-                    const label = registry.get(node.type)?.label ?? node.type;
-                    // 未改名时 name 就是类型标签,再补一列类型纯属重复 → 仅改过名才显示类型。
-                    const typeSub = node.name && node.name !== label ? label : null;
-                    return (
-                      <button
-                        key={node.id}
-                        type="button"
-                        className={cn(
-                          "flex cursor-pointer items-baseline justify-between gap-2.5 rounded-md border-0 bg-transparent px-2 py-1.5 text-left hover:bg-muted",
-                          node.id === selectedNodeId && "bg-accent hover:bg-accent",
-                        )}
-                        onClick={() => {
-                          focusNode(node.id);
-                          setNodeSearchOpen(false);
-                          setNodeSearch("");
-                        }}
-                      >
-                        <span className="truncate text-ui-sm font-semibold text-foreground">{node.name || label}</span>
-                        {typeSub && <span className="shrink-0 text-ui-xs text-muted-foreground">{typeSub}</span>}
-                      </button>
-                    );
-                  });
-                })()}
-              </div>
-            </PopoverContent>
-          </Popover>
-          <Popover>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className={cn(
-                  // 组已经有自己的边框和底了,按钮**不再各带一层** —— 那是胶囊套胶囊。
-                  // 状态靠颜色说,不靠再画一圈线。
-                  "inline-flex h-8 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border-0 bg-transparent text-xs font-[650] text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground",
-                  checklistCount > 0 ? "gap-1 px-2" : "w-8 justify-center",
-                  analysis.errorCount
-                    ? "bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] text-destructive hover:bg-[color-mix(in_srgb,var(--destructive)_18%,transparent)] hover:text-destructive"
-                    : analysis.warnCount
-                      ? "bg-[color-mix(in_srgb,var(--warning)_12%,transparent)] text-warning hover:bg-[color-mix(in_srgb,var(--warning)_18%,transparent)] hover:text-warning"
-                      : "bg-[color-mix(in_srgb,var(--success)_10%,transparent)] text-success hover:bg-[color-mix(in_srgb,var(--success)_16%,transparent)] hover:text-success",
-                )}
-                aria-label={`${t("wfChecklist")}: ${checklistLabel}`}
-                title={checklistLabel}
-              >
-                {/* **没问题时缩成一个图标。** "一切就绪"是无聊的默认态,不该占一整个词的宽度;
-                    有问题时才值得展开 —— 那时数字才是要看的东西。
-                    图标 + 文字 + 数字三样一起上,是同一个状态编码了三遍。 */}
-                {checklistCount > 0 ? <AlertTriangle size={13} /> : <CircleCheck size={14} />}
-                {checklistCount > 0 && (
-                  <em className="inline-grid h-[15px] min-w-[15px] place-items-center rounded-full bg-[color-mix(in_srgb,currentColor_18%,transparent)] px-1 text-ui-2xs font-bold not-italic leading-none text-current">
-                    {checklistCount}
-                  </em>
-                )}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-80 p-1.5">
-              {analysis.issues.length === 0 ? (
-                <div className="flex items-center gap-1.5 p-2 text-ui-sm text-success">
-                  <CircleCheck size={14} /> {t("wfChecklistReady")}
+              </CanvasToolbarGroup>
+            </>
+          }
+        >
+          <CanvasToolbarGroup label={t("canvasEditTools")}>
+            <SearchableSelect
+              value=""
+              // 标记走单独一条:它不是节点,addNode 会去 registry 里查类型,查不到就什么也不发生。
+              onValueChange={(value) => {
+                setMarkerMode(false);
+                workflowComments.exit();
+                addNode(value);
+              }}
+              searchPlaceholder={t("wfAddNode")}
+              options={[...nodeOptions.filter((option) => option.value !== "start" || !graphHasStart)]}
+              trigger={
+                <button
+                  type="button"
+                  data-wf-add-node=""
+                  // 组里全是圆形图标钮,只有它带文字就会显得突出一截 —— 而它并不比「运行」更重要。
+                  // 名字进 title/aria-label,悬停仍然说得出自己是谁。
+                  className="inline-flex h-8 items-center gap-2 rounded-md bg-action px-3 text-action-foreground hover:bg-action/90"
+                  aria-label={t("wfAddNode")}
+                  title={t("wfAddNode")}
+                >
+                  <Plus size={15} /> {t("wfAddNode")}
+                </button>
+              }
+            />
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              title={`${t("undo")} ⌘Z`}
+              aria-label={t("undo")}
+              disabled={!canUndo}
+              onClick={undo}
+            >
+              <Undo2 size={14} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              title={`${t("redo")} ⇧⌘Z`}
+              aria-label={t("redo")}
+              disabled={!canRedo}
+              onClick={redo}
+            >
+              <Redo2 size={14} />
+            </Button>
+          </CanvasToolbarGroup>
+          <CanvasToolbarGroup label={t("boardCommentMode")}>
+            {workflowComments.controls(() => setMarkerMode(false))}
+          </CanvasToolbarGroup>
+          <CanvasToolbarGroup label={t("markers")}>
+            <AnnotationControls
+              kind="marker"
+              active={markerMode}
+              visible={markersVisible}
+              onMode={() => (markerMode ? setMarkerMode(false) : enterMarkerMode())}
+              onVisible={() => {
+                setMarkersVisible(!markersVisible);
+                if (markersVisible) setMarkerMode(false);
+              }}
+            />
+            <MarkerListButton
+              markers={markers}
+              onJump={(marker) => {
+                setMarkersVisible(true);
+                jumpToMarker(marker);
+              }}
+              onAdd={enterMarkerMode}
+            />
+          </CanvasToolbarGroup>
+          <CanvasToolbarGroup label={t("canvasViewTools")}>
+            <Popover
+              open={nodeSearchOpen}
+              onOpenChange={(open) => {
+                setNodeSearchOpen(open);
+                if (!open) setNodeSearch("");
+              }}
+            >
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground hover:text-foreground"
+                  aria-label={t("wfNodeSearch")}
+                  title={t("wfNodeSearch")}
+                >
+                  <Search size={14} />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-[280px] p-1.5">
+                <div className="relative">
+                  <Search
+                    size={13}
+                    className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  />
+                  <Input
+                    autoFocus
+                    className="h-8 pl-[30px] pr-2 text-ui-sm focus-visible:border-primary focus-visible:ring-0"
+                    value={nodeSearch}
+                    onChange={(event) => setNodeSearch(event.target.value)}
+                    placeholder={t("wfNodeSearchPlaceholder")}
+                  />
                 </div>
-              ) : (
-                <>
-                  <div className="px-2 pb-1.5 pt-1 text-ui-xs font-semibold uppercase tracking-[0.04em] text-muted-foreground">
-                    {analysis.errorCount
-                      ? t("wfChecklistBlocked").replace("{n}", String(analysis.errorCount))
-                      : t("wfChecklistWarnOnly").replace("{n}", String(analysis.warnCount))}
-                  </div>
-                  <div className="flex max-h-80 flex-col gap-0.5 overflow-auto">
-                    {[...analysis.issues]
-                      .sort((a, b) => (a.severity === b.severity ? 0 : a.severity === "error" ? -1 : 1))
-                      .map((issue, i) => (
+                <div className="mt-1.5 flex max-h-80 flex-col gap-0.5 overflow-auto">
+                  {(() => {
+                    const query = nodeSearch.trim().toLowerCase();
+                    const matches = graph.nodes.filter((node) => {
+                      if (!query) return true;
+                      const label = (registry.get(node.type)?.label ?? node.type).toLowerCase();
+                      return (
+                        (node.name || "").toLowerCase().includes(query) ||
+                        node.type.toLowerCase().includes(query) ||
+                        label.includes(query)
+                      );
+                    });
+                    if (matches.length === 0)
+                      return (
+                        <div className="px-2 py-2.5 text-center text-xs text-muted-foreground">
+                          {t("wfNodeSearchEmpty")}
+                        </div>
+                      );
+                    return matches.map((node) => {
+                      const label = registry.get(node.type)?.label ?? node.type;
+                      // 未改名时 name 就是类型标签,再补一列类型纯属重复 → 仅改过名才显示类型。
+                      const typeSub = node.name && node.name !== label ? label : null;
+                      return (
                         <button
-                          key={`${issue.nodeId}-${issue.code}-${i}`}
+                          key={node.id}
                           type="button"
                           className={cn(
-                            "grid cursor-pointer grid-cols-[14px_auto_1fr] items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1.5 text-left hover:bg-muted",
-                            issue.severity === "error" ? "[&>svg]:text-destructive" : "[&>svg]:text-warning",
+                            "flex cursor-pointer items-baseline justify-between gap-2.5 rounded-md border-0 bg-transparent px-2 py-1.5 text-left hover:bg-muted",
+                            node.id === selectedNodeId && "bg-accent hover:bg-accent",
                           )}
-                          onClick={() => focusNode(issue.nodeId)}
+                          onClick={() => {
+                            focusNode(node.id);
+                            setNodeSearchOpen(false);
+                            setNodeSearch("");
+                          }}
                         >
-                          <AlertTriangle size={12} />
-                          <span className="whitespace-nowrap text-xs font-semibold">{issue.nodeName}</span>
-                          <span className="truncate text-ui-xs text-muted-foreground">{workflowIssueText(t, issue, registry)}</span>
+                          <span className="truncate text-ui-sm font-semibold text-foreground">
+                            {node.name || label}
+                          </span>
+                          {typeSub && <span className="shrink-0 text-ui-xs text-muted-foreground">{typeSub}</span>}
                         </button>
-                      ))}
-                  </div>
-                </>
-              )}
-            </PopoverContent>
-          </Popover>
-          {/* 不再挂「未保存/保存中」文案:自动保存本就静默,状态条只会闪来闪去制造焦虑;
-              脏状态期间运行按钮自会禁用并带「保存中」提示,足够了。 */}
-          <Button
-            size="icon-sm"
-            disabled={dirty || !analysis.runnable} loading={run.isPending}
-            aria-label={t("wfRun")}
-            title={dirty ? t("wfSaving") : !analysis.runnable ? t("wfRunBlocked") : t("wfRun")}
-            onClick={() => run.mutate()}
-          >
-            <Play size={14} />
-          </Button>
-        </div>
-        <div className={cn("flex flex-wrap items-center gap-1 rounded-lg p-1", CANVAS_GLASS_SURFACE_CLASS)}>
-          {/* 走线方式:四种够用,直接摆成一排图标钮而不是下拉 —— 它是"试一下看哪种顺眼"的
-              设置,藏进下拉就得点两次才能比较一次。 */}
-          {/* **不再套一个方框。** 分段控件自带 rounded-md 边框,而外层组是 rounded-full ——
-              方框套胶囊,两种圆角打架,而且组里别的按钮都是圆的。选中态用填色表达就够了,
-              不需要再画一圈线把它们框起来。 */}
-          <div className="flex items-center gap-1">
-            {EDGE_SHAPES.map((shape) => {
-              const Icon = EDGE_SHAPE_ICON[shape];
-              return (
-                <Button
-                  key={shape}
-                  variant={edgeShape === shape ? "secondary" : "ghost"}
-                  size="icon-sm"
-                  className={cn(edgeShape === shape && "bg-secondary text-foreground")}
-                  aria-label={t(EDGE_SHAPE_LABEL[shape])}
-                  title={t(EDGE_SHAPE_LABEL[shape])}
-                  aria-pressed={edgeShape === shape}
-                  onClick={() => setEdgeShape(shape)}
-                >
-                  <Icon size={13} />
-                </Button>
-              );
-            })}
-          </div>
-          <CanvasInputModeSwitch />
-          {/* 全览可关。它占着右下角一块不小的地方,图小的时候纯属挡视线;而图大的时候
-              又是最有用的东西 —— 所以给开关,不替用户决定。记在本地,下次进来还是这个样子。 */}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className={cn(showMinimap && "bg-secondary text-foreground")}
-            aria-label={t("wfMinimap")}
-            title={t("wfMinimap")}
-            aria-pressed={showMinimap}
-            onClick={() => setShowMinimap(showMinimap ? "off" : "on")}
-          >
-            <MapIcon size={14} />
-          </Button>
-          {/* 全览:把整张图框回视野里。此前它藏在左下角 React Flow 自带的那组控件里,
-              而那组控件被撤掉了 —— 缩放有触控板和滚轮,「我找不到我的图了」却只有它能解。 */}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t("boardsFitView")}
-            title={t("boardsFitView")}
-            onClick={() => {
-              if (rfRef.current) fitCanvas(rfRef.current);
-            }}
-          >
-            <Maximize2 size={14} />
-          </Button>
-        </div>
-        <div className={cn("flex flex-wrap items-center gap-1 rounded-lg p-1", CANVAS_GLASS_SURFACE_CLASS)}>
-          {/* 导出。**放在这一组**(历史/删除)而不是运行旁边:这几个都是对"这份工作流"整体
-              做的事,而运行、就绪检查、加节点是对**画布内容**做的事。此前导出只藏在列表页的
-              右键菜单里 —— 而人想导出的时机,恰恰是刚在详情页里把它调好的那一刻。 */}
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label={t("wfRevisionHistory")}
-            title={t("wfRevisionHistory")}
-            className="gap-1 px-2 font-mono text-ui-xs"
-            loading={save.isPending}
-            onClick={() => void openRevisions()}
-          >
-            <GitCommitVertical size={14} />
-            v{workflow.revision}
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t("wfExport")}
-            title={t("wfExport")}
-            loading={exportFile.isPending}
-            onClick={() => exportFile.mutate()}
-          >
-            <Download size={14} />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t("wfHistory")}
-            title={t("wfHistory")}
-            onClick={() => setShowHistory((v) => !v)}
-          >
-            <History size={14} />
-          </Button>
-          <Button variant="ghost" size="icon-sm" aria-label={t("delete")} onClick={() => setDeleting(true)}>
-            <Trash2 size={14} />
-          </Button>
-        </div>
-        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </PopoverContent>
+            </Popover>
+            <div className="flex items-center gap-1">
+              {EDGE_SHAPES.map((shape) => {
+                const Icon = EDGE_SHAPE_ICON[shape];
+                return (
+                  <Button
+                    key={shape}
+                    variant={edgeShape === shape ? "secondary" : "ghost"}
+                    size="icon-sm"
+                    className={cn(edgeShape === shape && "bg-secondary text-foreground")}
+                    aria-label={t(EDGE_SHAPE_LABEL[shape])}
+                    title={t(EDGE_SHAPE_LABEL[shape])}
+                    aria-pressed={edgeShape === shape}
+                    onClick={() => setEdgeShape(shape)}
+                  >
+                    <Icon size={13} />
+                  </Button>
+                );
+              })}
+            </div>
+            <CanvasInputModeSwitch />
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className={cn(showMinimap && "bg-secondary text-foreground")}
+              aria-label={t("wfMinimap")}
+              title={t("wfMinimap")}
+              aria-pressed={showMinimap}
+              onClick={() => setShowMinimap(showMinimap ? "off" : "on")}
+            >
+              <MapIcon size={14} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t("boardsFitView")}
+              title={t("boardsFitView")}
+              onClick={() => {
+                if (rfRef.current) fitCanvas(rfRef.current);
+              }}
+            >
+              <Maximize2 size={14} />
+            </Button>
+          </CanvasToolbarGroup>
+        </CanvasToolbar>
       </div>
 
       <div className={cn(
@@ -2652,7 +2693,7 @@ function LoopBodyEditor({
     //: 底色用 bg-background,和创意画板那张画布同一个 —— 画布是「摊开东西的地方」,
     //: 而 bg-panel 是「一块面板」;两种画布用两种底色,切过去时会觉得走进了另一个应用。
     <div className="absolute inset-0 z-30 grid overflow-hidden rounded-lg border border-border bg-background">
-      <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex flex-wrap items-start justify-between gap-2 [&>*]:pointer-events-auto">
+      <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex items-start justify-between gap-2 [&>*]:pointer-events-auto">
         {/* 和主画布、创意画板同一颗胶囊 —— 它们是同一类东西:「你现在在哪儿」。
             返回键在这里是「离开这一层」而不是「回上一层清单」,所以用 ←。
             名字在它自己的节点上改,这里不给 onRename。 */}
@@ -2663,70 +2704,66 @@ function LoopBodyEditor({
           icon={loopNode.type === "subgraph" ? <Boxes size={13} /> : <Repeat size={13} />}
           name={`${loopNode.name} · ${t(loopNode.type === "subgraph" ? "wfSubgraphBody" : "wfLoopBody")}`}
         />
-        {/* 这里**只放子图自己用得上的**:加节点、走线方式。
-            运行 / 就绪检查 / 导出 / 历史 / 删除都是主图或整份文档的事,放进来只会让人以为
-            自己能在子图里跑一次;撤销也没有 —— 子图编辑器没有历史栈,画一个按钮却不能用,
-            比没有更糟。 */}
-        <div className={cn("flex flex-wrap items-center gap-1 rounded-lg p-1", CANVAS_GLASS_SURFACE_CLASS)}>
-          <CanvasInputModeSwitch />
-          <SearchableSelect
-            value=""
-            onValueChange={addNode}
-            searchPlaceholder={t("wfAddNode")}
-            options={subOptions.filter((option) => option.value !== "start")}
-            trigger={
-              <button
-                type="button"
-                className="inline-flex h-8 items-center gap-2 rounded-md bg-action px-3 text-action-foreground hover:bg-action/90"
-                aria-label={t("wfAddNode")}
-                title={t("wfAddNode")}
-              >
-                <Plus size={15} />
-              </button>
-            }
-          />
-          {/* 撤销/重做走的是**主图那一套历史** —— 子图的每次编辑本来就是主图的一次变更
-              (body 存在父节点的 config 里),所以这里不该另开一个栈:两个栈会各记各的,
-              退出子图之后再按撤销,退回去的是哪一步就说不清了。 */}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            title={`${t("undo")} ⌘Z`}
-            aria-label={t("undo")}
-            disabled={!canUndo}
-            onClick={undo}
-          >
-            <Undo2 size={14} />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            title={`${t("redo")} ⇧⌘Z`}
-            aria-label={t("redo")}
-            disabled={!canRedo}
-            onClick={redo}
-          >
-            <Redo2 size={14} />
-          </Button>
-          <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-border" />
-          {EDGE_SHAPES.map((shape) => {
-            const Icon = EDGE_SHAPE_ICON[shape];
-            return (
-              <Button
-                key={shape}
-                variant={edgeShape === shape ? "secondary" : "ghost"}
-                size="icon-sm"
-                className={cn(edgeShape === shape && "bg-secondary text-foreground")}
-                aria-label={t(EDGE_SHAPE_LABEL[shape])}
-                title={t(EDGE_SHAPE_LABEL[shape])}
-                aria-pressed={edgeShape === shape}
-                onClick={() => setEdgeShape(shape)}
-              >
-                <Icon size={13} />
-              </Button>
-            );
-          })}
-        </div>
+        <CanvasToolbar label={t("canvasTools")}>
+          <CanvasToolbarGroup label={t("canvasEditTools")}>
+            <SearchableSelect
+              value=""
+              onValueChange={addNode}
+              searchPlaceholder={t("wfAddNode")}
+              options={subOptions.filter((option) => option.value !== "start")}
+              trigger={
+                <button
+                  type="button"
+                  className="inline-flex h-8 items-center gap-2 rounded-md bg-action px-3 text-action-foreground hover:bg-action/90"
+                  aria-label={t("wfAddNode")}
+                  title={t("wfAddNode")}
+                >
+                  <Plus size={15} />
+                </button>
+              }
+            />
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              title={`${t("undo")} ⌘Z`}
+              aria-label={t("undo")}
+              disabled={!canUndo}
+              onClick={undo}
+            >
+              <Undo2 size={14} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              title={`${t("redo")} ⇧⌘Z`}
+              aria-label={t("redo")}
+              disabled={!canRedo}
+              onClick={redo}
+            >
+              <Redo2 size={14} />
+            </Button>
+          </CanvasToolbarGroup>
+          <CanvasToolbarGroup label={t("canvasViewTools")}>
+            {EDGE_SHAPES.map((shape) => {
+              const Icon = EDGE_SHAPE_ICON[shape];
+              return (
+                <Button
+                  key={shape}
+                  variant={edgeShape === shape ? "secondary" : "ghost"}
+                  size="icon-sm"
+                  className={cn(edgeShape === shape && "bg-secondary text-foreground")}
+                  aria-label={t(EDGE_SHAPE_LABEL[shape])}
+                  title={t(EDGE_SHAPE_LABEL[shape])}
+                  aria-pressed={edgeShape === shape}
+                  onClick={() => setEdgeShape(shape)}
+                >
+                  <Icon size={13} />
+                </Button>
+              );
+            })}
+            <CanvasInputModeSwitch />
+          </CanvasToolbarGroup>
+        </CanvasToolbar>
       </div>
       <div className="relative min-h-0">
         <ReactFlow
@@ -3418,17 +3455,18 @@ function NodeInspector({
         两组都按"有才出":没跑过就没有「本次产出」,不是子图就没有「进入子图」。
         和面板一样长在画布坐标系里,所以同样要挂 nodrag/nopan —— 不然按下去是在拖节点。 */}
     <NodeToolbar nodeId={node.id} isVisible position={Position.Top} align="center" offset={12}>
-      <div className={cn(CANVAS_GLASS_SURFACE_CLASS, "rounded-lg nodrag nopan flex items-center gap-1 px-1 py-1")}>
+      <div className="nodrag nopan flex items-center gap-1 rounded-full border border-floating-border bg-panel p-1.5 shadow-[var(--shadow-panel)]">
         {areas.map((id) => (
           <button
             key={id}
             type="button"
             className={cn(
-              "cursor-pointer rounded-md px-3 py-2 text-ui-sm font-medium transition-[background,color] duration-100",
+              "cursor-pointer rounded-full px-2.5 py-1.5 text-ui-xs font-medium transition-[background,color] duration-100",
               area === id
                 ? "bg-secondary text-foreground"
                 : "text-muted-foreground hover:bg-secondary hover:text-foreground",
             )}
+            aria-pressed={area === id}
             onClick={() => setPickedArea(id)}
           >
             {t(AREA_LABELS[id])}
@@ -3467,10 +3505,8 @@ function NodeInspector({
     <NodeToolbar nodeId={node.id} isVisible position={Position.Bottom} align="center" offset={12}>
     <aside
       className={cn(
-        // 380 而不是 320:两列并排的参数(Temperature / Top P 这种)在 320 里各自只剩 130px,
-        // 长一点的标签就换行。
-        CANVAS_GLASS_SURFACE_CLASS,
-        "rounded-lg grid max-h-[min(560px,calc(100vh-210px))] min-h-0 w-[380px] grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden",
+        MODAL_SURFACE,
+        "grid max-h-[min(560px,calc(100dvh-210px))] min-h-0 w-[460px] max-w-[calc(100vw-2rem)] grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl",
         // **搬进画布之后必须挂这三个。** 面板现在长在 React Flow 里面,而画布自己要监听
         // pointerdown 来平移、滚轮来缩放 —— 不声明的话这些事件在到达输入框之前就被画布截走:
         // 点输入框不聚焦、打字没反应、下拉点不开。此前面板是 fixed 在画布外面的,画布看不到
@@ -3484,8 +3520,7 @@ function NodeInspector({
       )}
       aria-label={node.name || meta?.label || node.type}
     >
-      <div // 头部只有一行(类型进了图标的 tooltip),38px 是给两行留的高度。
-        className="flex min-h-9 items-center justify-between gap-2 border-b border-border px-2.5 py-1.5">
+      <div className="flex min-h-11 items-center justify-between gap-2 border-b border-divider px-3 py-2">
         {/* 节点说明挂在图标上,不占正文一行 —— 那句话每个节点都有,而只在第一次看时有用,
             之后每次打开都要从它上面跨过去才能到真正要改的参数。 */}
         <Tooltip>
@@ -3513,7 +3548,7 @@ function NodeInspector({
               所以**零边框**,用背景说状态:静止就是标题,悬停浅底(这儿能改),
               聚焦垫底 + ring(正在改)。 */}
           <input
-            className="-ml-1 h-7 min-w-0 rounded-md border-0 bg-transparent px-1.5 text-ui-md font-semibold text-foreground outline-none transition-colors duration-100 placeholder:font-normal placeholder:text-muted-foreground hover:bg-[color-mix(in_oklab,var(--foreground)_5%,transparent)] focus-visible:bg-field focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="-ml-1 h-7 min-w-0 rounded-md border-0 bg-transparent px-1.5 text-ui-sm font-medium text-foreground outline-none transition-colors duration-100 placeholder:font-normal placeholder:text-muted-foreground hover:bg-[color-mix(in_oklab,var(--foreground)_5%,transparent)] focus-visible:bg-field focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             value={node.name ?? ""}
             placeholder={meta?.label ?? node.type}
             aria-label={t("wfNodeName")}
@@ -3527,7 +3562,7 @@ function NodeInspector({
           </button>
         )}
       </div>
-      <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] content-start gap-2 overflow-x-hidden overflow-y-auto p-2.5">
+      <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] content-start gap-3 overflow-x-hidden overflow-y-auto p-3">
         {bindingNotice && (
           <ConfigNotice
             message={bindingNotice.message}

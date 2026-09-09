@@ -45,17 +45,17 @@ export function CanvasTitle({
   renameLabel?: string;
 }) {
   const body = (
-    <span className="grid leading-[1.3] [&_small]:text-ui-xs [&_small]:font-normal [&_small]:text-muted-foreground [&_strong]:text-ui-md [&_strong]:font-semibold">
-      <strong className="inline-flex items-center gap-[5px]">
+    <span className="grid min-w-0 leading-[1.3] [&_small]:text-ui-xs [&_small]:font-normal [&_small]:text-muted-foreground [&_strong]:text-ui-md [&_strong]:font-semibold">
+      <strong className="inline-flex min-w-0 items-center gap-[5px]">
         {icon}
-        {name}
+        <span className="truncate">{name}</span>
       </strong>
       {sub ? <small>{sub}</small> : null}
     </span>
   );
 
   return (
-    <div className={cn("flex items-center gap-1 rounded-lg p-1 pr-2.5", CANVAS_GLASS_SURFACE_CLASS)}>
+    <div data-canvas-title="" className={cn("flex h-[42px] min-w-0 max-w-[min(28vw,320px)] shrink-0 items-center gap-1 rounded-lg p-1 pr-2.5", CANVAS_GLASS_SURFACE_CLASS)}>
       {/* 返回键**给它一个底**。透明底的图标钮在胶囊里没有自己的轮廓,左边和胶囊边缘之间那点
           空白就显得忽大忽小 —— 有了底,它的占位是确定的,和右边的竖线、名字也就对齐了。 */}
       <Button
@@ -73,14 +73,15 @@ export function CanvasTitle({
       {onRename ? (
         <button
           type="button"
-          className="inline-flex cursor-pointer items-center rounded-lg border-0 bg-transparent px-1.5 py-[3px] text-left text-foreground hover:bg-secondary"
+          className="inline-flex min-w-0 cursor-pointer items-center rounded-md border-0 bg-transparent px-1.5 py-[3px] text-left text-foreground hover:bg-secondary"
           onClick={onRename}
-          title={renameLabel}
+          title={typeof name === "string" ? `${name} · ${renameLabel}` : renameLabel}
+          aria-label={renameLabel}
         >
           {body}
         </button>
       ) : (
-        <span className="inline-flex items-center px-1.5 py-[3px] text-foreground">{body}</span>
+        <span className="inline-flex min-w-0 items-center px-1.5 py-[3px] text-foreground" title={typeof name === "string" ? name : undefined}>{body}</span>
       )}
     </div>
   );
