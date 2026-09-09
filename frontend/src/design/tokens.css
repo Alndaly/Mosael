@@ -677,15 +677,16 @@ body {
  * **`data-stuck` 就是这条行为的开关。** 没有这个属性的吸顶栏(时间线标尺、追踪分组标题)
  * 一直吸着顶,底下永远有内容,不需要淡入 —— 它们沿用自己的 `bg-*`,这条规则碰都不碰。
  *
- * 底色由使用方用 `--workspace-sticky-surface` 指定,默认页面底色的**实色**值。用实色不是偷懒:
- * 吸住时它要盖住从底下滚过去的卡片,而这一层没有自己的模糊可以指望(见下)。写成变量而不是
- * 写死:面板里的吸顶栏该用面板色,而"用哪层表面"只有那一处知道。
+ * 吸住时是**半透 + 高度模糊**,不是一块实色板:底下滚过去的卡片糊成一片、读不出来就够了,
+ * 而盖成实色等于在页面中间插一条不透光的横带。底色跟着外观自己的表面透明度
+ * (`--app-surface-opacity`),使用方可以用 `--workspace-sticky-surface` 换一层表面 ——
+ * 面板里的吸顶栏该用面板色,而"用哪层表面"只有那一处知道。
  *
- * **它没有自己的 backdrop-filter,而且不能有。** 任何非 none 的 backdrop-filter 都会让元素成为
- * 一个 backdrop root,而它只看得见**外层 backdrop root 内部**画了什么 —— 内容区(main)本身
- * 就是一层磨砂,自定义背景图在它后面。于是这条栏取到的"背景"是内容区那层 72% 的实底,
- * 背景图整个丢掉:静止时页面上横着一条平板色带,而它的底色明明是全透明的。
- * `blur(0px)` 也算数 —— 恒等滤镜不是免费的,它照样开一个 backdrop root。
+ * **模糊只在吸住时给,静止时必须是 none。** 任何非 none 的 backdrop-filter 都会让元素成为一个
+ * backdrop root,而它只看得见**外层 backdrop root 内部**画了什么。内容区(main)自己就是一层
+ * 磨砂,自定义背景图在它后面 —— 静止时这条栏底下什么都没有,取到的"背景"就是内容区那层
+ * 实底,背景图整个丢掉:页面上横着一条平板色带,而它的底色明明是全透明的。
+ * `blur(0px)` 同样算数,恒等滤镜不是免费的。吸住时底下真的有卡片在滚,模糊才有东西可糊。
  *
  * 分割线跟着一起淡:它分的是"栏"和"从底下滚过去的内容",没有内容滚过去时,它分的是空气。
  */
@@ -697,10 +698,18 @@ body {
 .workspace-sticky[data-stuck="false"] {
   --workspace-sticky-presence: 0;
 }
+/* 比别处更重的一档模糊:这条栏底下是整幅整幅滚过去的缩略图,普通强度糊不掉。
+   不写进 transition —— 从 none 开始本来就无法插值,而切换发生在滚到顶那一刻,
+   那时栏底下什么都没有,看不出突变。 */
+.workspace-sticky[data-stuck="true"] {
+  -webkit-backdrop-filter: blur(calc(var(--app-blur, 16px) * 1.75)) saturate(1.35);
+  backdrop-filter: blur(calc(var(--app-blur, 16px) * 1.75)) saturate(1.35);
+}
 .workspace-sticky[data-stuck] {
   background-color: color-mix(
     in srgb,
-    var(--workspace-sticky-surface, var(--surface-solid)) calc(100% * var(--workspace-sticky-presence)),
+    var(--workspace-sticky-surface, var(--surface-solid))
+      calc(var(--app-surface-opacity, 0.72) * 100% * var(--workspace-sticky-presence)),
     transparent
   );
   border-color: color-mix(

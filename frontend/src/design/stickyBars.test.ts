@@ -49,28 +49,32 @@ describe("吸顶栏", () => {
     expect(css).toMatch(/prefers-reduced-motion[\s\S]*?\.workspace-sticky \{ transition-duration: 0ms/);
   });
 
-  it("跟着滚动淡入的栏不许有自己的 backdrop-filter —— 恒等滤镜也不行", () => {
+  it("模糊只在吸住时给 —— 静止时任何非 none 的值都会把背景图弄丢", () => {
     /*
      * 这条钉的是那条"底色明明全透明,页面上却横着一条平板色带"的 bug。
      *
      * 任何非 none 的 backdrop-filter 都会让元素成为一个 backdrop root,而它只看得见**外层
      * backdrop root 内部**画了什么。内容区(main)自己就是一层磨砂,自定义背景图在它后面 ——
-     * 于是这条栏取到的"背景"是内容区那层 72% 的实底,背景图整个丢掉。`blur(0px)` 同样算数:
-     * 恒等滤镜不是免费的。
+     * 静止时这条栏底下什么都没有,取到的"背景"就是内容区那层实底,背景图整个丢掉。
+     * `blur(0px)` 同样算数:恒等滤镜不是免费的。
      */
+    expect(rule('.workspace-sticky[data-stuck="true"]')).toContain("backdrop-filter");
+    // 静止态和"两个状态都吃到"的写法都不行:必须是 [data-stuck="true"] 这一档独占。
+    expect(css).not.toMatch(/\.workspace-sticky\[data-stuck\]\s*\{[^}]*backdrop-filter/);
+    expect(css).not.toMatch(/\.workspace-sticky\[data-stuck="false"\]\s*\{[^}]*backdrop-filter/);
     expect(() => rule(':root[data-appearance="glass"] .workspace-sticky')).toThrow();
-    const alwaysStuck = rule(':root[data-appearance="glass"] .workspace-sticky:not([data-stuck])');
-    expect(alwaysStuck).toContain("backdrop-filter");
-    expect(css).not.toMatch(/\.workspace-sticky\[data-stuck[^{]*\{[^}]*backdrop-filter/);
   });
 
-  it("吸住时是实色 —— 它得自己盖住底下滚过去的卡片,没有模糊可以指望", () => {
-    expect(rule(".workspace-sticky[data-stuck]")).toContain("var(--surface-solid)");
-    // --surface-solid 不跟着磨砂被调透,否则"吸住时变为不透明"在磨砂下就不成立。
-    for (const theme of [":root", ".dark"] as const) {
-      expect(rule(theme)).toMatch(/--surface-solid:\s*#[0-9a-f]{6}/i);
-    }
-    expect(css).not.toMatch(/data-appearance="glass"[^{]*\{[^}]*--surface-solid/);
+  it("吸住时是半透 + 高度模糊,不是一块实色板", () => {
+    // 盖成实色等于在页面中间插一条不透光的横带;底下的卡片糊到读不出来就够了。
+    const painted = rule(".workspace-sticky[data-stuck]");
+    expect(painted).toContain("var(--app-surface-opacity, 0.72)");
+    const blur = /blur\(calc\(var\(--app-blur, 16px\) \* ([0-9.]+)\)\)/.exec(
+      rule('.workspace-sticky[data-stuck="true"]'),
+    );
+    expect(blur, "模糊要挂在 --app-blur 上,跟着外观设置走").not.toBeNull();
+    // 比别处更重的一档:底下是整幅整幅滚过去的缩略图,普通强度糊不掉。
+    expect(Number(blur![1])).toBeGreaterThan(1);
   });
 
   it("素材筛选栏交出 data-stuck,而且不自己写死底色", () => {
