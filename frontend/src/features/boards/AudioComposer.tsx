@@ -1,4 +1,4 @@
-import { FLOATING_SURFACE } from "@/components/ui/floating";
+import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
 import React from "react";
 import { NodeToolbar, Position } from "@xyflow/react";
 import { ArrowUp, AudioLines, Loader2 } from "lucide-react";
@@ -74,7 +74,7 @@ export function AudioComposer({
 
   return (
     <NodeToolbar nodeId={item.id} isVisible position={Position.Bottom} offset={BOARD_NODE_PANEL_OFFSET}>
-      <div className={cn(FLOATING_SURFACE, "nodrag nopan nowheel w-[420px] p-2")}>
+      <div className={cn(CANVAS_WINDOW_SURFACE_CLASS, "nodrag nopan nowheel w-[420px] p-2")}>
         <textarea
           value={text}
           onChange={(event) => setText(event.target.value)}

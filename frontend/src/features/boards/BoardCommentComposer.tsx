@@ -1,4 +1,4 @@
-import { FLOATING_SURFACE } from "@/components/ui/floating";
+import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
 import { cn } from "@/lib/utils";
 import React from "react";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -135,7 +135,7 @@ export function BoardCommentComposer({
   return (
     <CommentMembers.Provider value={members}>
     <div
-      className={cn(FLOATING_SURFACE, "nodrag nopan pointer-events-auto w-72 cursor-default overflow-hidden")}
+      className={cn(CANVAS_WINDOW_SURFACE_CLASS, "nodrag nopan pointer-events-auto w-72 cursor-default overflow-hidden")}
       onPointerDown={(event) => event.stopPropagation()}
       onMouseDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}

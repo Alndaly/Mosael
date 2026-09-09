@@ -1,3 +1,4 @@
+import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
 import React from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -7,7 +8,6 @@ import type { CollaborationComment, WorkspaceMember } from "@/api/client";
 import { editComment } from "@/api/domains/collaboration";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
-import { FLOATING_SURFACE } from "@/components/ui/floating";
 import { cn } from "@/lib/utils";
 import { BoardCommentComposer, type CommentDraft } from "./BoardCommentComposer";
 import { CommentMembers, commentDocument, commentExtensions, COMMENT_TEXT } from "./commentDocument";
@@ -41,7 +41,7 @@ export function CommentCard({ comment, members, currentUserId, onDelete, onClose
   const remove = useMutation({ mutationFn: async () => onDelete?.(), onError: error => toast.error(String(error)) });
   if (editing && own) return <BoardCommentComposer key={comment.id} members={members} initialContent={commentDocument(comment)} editing
     onSubmit={draft => save.mutateAsync(draft)} onCancel={() => setEditing(false)} />;
-  return <div data-board-comment-overlay="" className={cn(FLOATING_SURFACE, "nodrag nopan nowheel pointer-events-auto w-72 overflow-hidden text-left")}
+  return <div data-board-comment-overlay="" className={cn(CANVAS_WINDOW_SURFACE_CLASS, "nodrag nopan nowheel pointer-events-auto w-72 overflow-hidden text-left")}
     onPointerDown={event => event.stopPropagation()} onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}>
     <div className="flex h-11 items-center gap-1 border-b border-border px-3">
       <span className="min-w-0 flex-1 truncate text-ui-xs font-medium">{comment.author?.display_name || comment.author?.username || t("teamSystemActor")}</span>

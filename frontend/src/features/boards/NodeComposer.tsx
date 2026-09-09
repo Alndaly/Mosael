@@ -1,3 +1,4 @@
+import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
 import { noteHref, type NoteReference } from "@/api/domains/notes";
 import { documentPrompt } from "./boardDocumentSources";
 import { MODAL_SURFACE } from "@/components/ui/floating";
@@ -595,7 +596,7 @@ export function NodeComposer({
 
   return (
     <NodeToolbar nodeId={item.id} isVisible position={Position.Bottom} offset={BOARD_NODE_PANEL_OFFSET}>
-      <div className={cn(MODAL_SURFACE, "nodrag nopan nowheel relative w-[560px] max-w-[calc(100vw-2rem)] rounded-xl p-3")}>
+      <div className={cn(CANVAS_WINDOW_SURFACE_CLASS, "nodrag nopan nowheel relative w-[560px] max-w-[calc(100vw-2rem)] p-3")}>
         {/* 输入素材:图片是一排参考图(可多张),视频是首帧 ⇄ 尾帧。**格子按模型声明出** ——
             见 slots 那段。挂满上限就不再给 + ,免得点了才被校验器拦下。 */}
         {slots.length > 0 && (

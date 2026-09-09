@@ -1,7 +1,7 @@
 import React from "react";
 
 import { cn } from "@/lib/utils";
-import { CANVAS_GLASS_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
+import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
 
 /**
  * 「可停靠 / 可悬浮」面板的几何与交互:标题栏拖动 + 八向缩放 + 位置尺寸记忆。
@@ -16,9 +16,10 @@ import { CANVAS_GLASS_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
 export const PANEL_HEADER_CLASS =
   "flex h-12 cursor-default select-none touch-none items-center gap-2 border-b border-border pl-4 pr-3 [&_h2]:m-0 [&_h2]:flex [&_h2]:flex-1 [&_h2]:items-center [&_h2]:gap-1.5 [&_h2]:text-ui-sm [&_h2]:font-semibold";
 
-/** 停靠和悬浮面板共用的外框。智能体与执行历史必须是一套圆角和边界。 */
+/** 停靠和悬浮面板共用的外框。智能体与执行历史必须是一套圆角和边界 ——
+ *  而它和画布上别的浮窗(合成器、评论卡)也是同一套,见 CANVAS_WINDOW_SURFACE_CLASS。 */
 export const DOCKABLE_PANEL_FRAME_CLASS =
-  `overflow-hidden rounded-xl ${CANVAS_GLASS_SURFACE_CLASS}`;
+  `overflow-hidden ${CANVAS_WINDOW_SURFACE_CLASS}`;
 
 /**
  * 悬浮窗的叠放次序:一个从底到顶的 id 序列,z-index = BASE + 下标。

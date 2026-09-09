@@ -210,9 +210,22 @@
   --modal-input: rgb(96 113 140 / 0.24);
   --modal-filter: none;
   --modal-overlay-filter: none;
+  /* 画布上的浮窗:比模态更透。**模态压着一层遮罩,浮窗底下是用户正在看的画布** ——
+     它挡住的每一块都是用户还想看见的东西,所以背景要真的透得出来,而不是"技术上带 alpha"。 */
+  --canvas-window-solid: #fbfcfe;
+  --canvas-window-tint: rgb(251 252 254 / 0.70);
+  --canvas-window: var(--canvas-window-solid);
+  --canvas-window-filter: none;
   --shadow-floating: 0 4px 16px rgb(24 32 48 / 0.10);
   --shadow-modal: 0 12px 36px rgb(24 32 48 / 0.12);
   --shadow-panel: 0 2px 8px rgb(32 40 59 / 0.06), 0 8px 24px rgb(32 40 59 / 0.04);
+  /* 浮窗的影子要能看见。**这是它和工具条胶囊唯一的区别** —— 同一种材质,不同的高度:
+     胶囊贴着画布(--shadow-panel),窗口浮在画布之上,而且会互相叠放,没有影子就分不出谁在上面。
+     三层是为了同时给出接触感(1px)、形体(24px)和远处的软阴影(56px);单独一层做不到。 */
+  --shadow-canvas-window:
+    0 1px 2px rgb(24 32 48 / 0.08),
+    0 10px 24px -8px rgb(24 32 48 / 0.18),
+    0 28px 56px -16px rgb(24 32 48 / 0.14);
   --shadow-raised: 0 8px 32px rgb(32 40 59 / 0.12), 0 24px 64px rgb(32 40 59 / 0.06);
 
   /* Editor surfaces */
@@ -309,9 +322,15 @@
   --modal-border: rgb(220 230 248 / 0.09);
   --modal-field: rgb(12 15 21 / 0.36);
   --modal-input: rgb(178 192 215 / 0.20);
+  --canvas-window-solid: #24272c;
+  --canvas-window-tint: rgb(36 39 44 / 0.70);
   --shadow-floating: 0 4px 16px rgb(0 0 0 / 0.24);
   --shadow-modal: 0 12px 36px rgb(0 0 0 / 0.24);
   --shadow-panel: 0 2px 12px rgb(0 0 0 / 0.2);
+  --shadow-canvas-window:
+    0 1px 2px rgb(0 0 0 / 0.36),
+    0 10px 24px -8px rgb(0 0 0 / 0.5),
+    0 28px 56px -16px rgb(0 0 0 / 0.44);
   --shadow-raised: 0 12px 48px rgb(0 0 0 / 0.48);
 
   /* Neutral monitor surround and lanes; clip colors identify media types. */
@@ -358,6 +377,8 @@
     --modal-surface: var(--modal-tint);
     --modal-filter: blur(24px) saturate(1.12);
     --modal-overlay-filter: blur(6px);
+    --canvas-window: var(--canvas-window-tint);
+    --canvas-window-filter: blur(22px) saturate(1.15);
   }
 }
 
@@ -366,15 +387,22 @@
     --modal-surface: var(--modal-solid);
     --modal-filter: none;
     --modal-overlay-filter: none;
+    --canvas-window: var(--canvas-window-solid);
+    --canvas-window-filter: none;
   }
 }
 
 @layer components {
-  /* Canvas overlays need their own veil, even when docked or using a plain theme. */
+  /* 画布上的浮窗与工具条:一种材质,即便停靠或用朴素主题也自带这层纱。
+     **里面的输入框跟着一起透。** 少了这三行,一个 `--field: #ffffff` 的输入框就是浮窗里
+     最大的一块实色 —— 窗口本身有 alpha,读起来却完全不透明,而用户看见的正是那块白。 */
   .canvas-overlay-surface {
-    background: var(--modal-surface);
-    -webkit-backdrop-filter: var(--modal-filter);
-    backdrop-filter: var(--modal-filter);
+    --field: var(--modal-field);
+    --control: var(--modal-field);
+    --field-border: var(--modal-input);
+    background: var(--canvas-window);
+    -webkit-backdrop-filter: var(--canvas-window-filter);
+    backdrop-filter: var(--canvas-window-filter);
   }
   .modal-surface {
     --field: var(--modal-field);
