@@ -300,33 +300,42 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           整页于是能左右滚(真机)。两个数写在一起,下次改 padding 时才看得见要一起改。 */}
       {(!assets.isSuccess || (assets.data ?? []).length > 0) && (
         <div ref={filtersRef} data-stuck={filtersStuck} className="workspace-sticky sticky top-0 z-20 -mx-6 flex flex-col gap-3 border-b border-divider px-6 py-3 xl:-mx-9 xl:px-9">
-          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+          {/* **一行,按"这是哪一类动作"分三段。**
+              类型标签是最粗的那一刀,锚在左边 —— 它的下划线指示器需要一条稳定的左基线;
+              搜索/排序/标签是在这一刀之内再筛再排,占中间那段弹性宽度(搜索吃掉全部余量,
+              它是这里最常用、也最吃宽度的一个);视图切换和多选改的不是"看哪些",是"怎么看、
+              要不要动它们",所以推到最右,并用一条竖线断开。
+
+              **窄了就换行,不横向滚。** 这一行里全是要读的标签和要打字的输入框,滚动条会把
+              其中一半藏起来 —— 而它们没有主次之分,藏哪一半都是错的。 */}
+          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3" data-media-filter-row>
             <CollectionTabs value={kindFilter} onChange={setKindFilter} label={t("mediaKindGroup")} items={KIND_FILTERS.map(kind => ({ value: kind, label: kindLabel[kind], count: assets.data?.filter(asset => kind === "all" || asset.kind === kind).length }))} />
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <div className="relative min-w-40 flex-1">
+                <Search size={16} className="pointer-events-none absolute left-3 top-3 text-muted-foreground" />
+                <Input aria-label={t("searchAssets")} className="border-border bg-control pl-9" value={search} placeholder={t("searchAssets")} onChange={(event) => setSearch(event.target.value)} />
+              </div>
+              <Select value={sortKey} onValueChange={(value) => setSortKey(value as SortKey)}>
+                <SelectTrigger className="w-auto min-w-32 border-border bg-control" aria-label={t("sortNewest")}><SelectValue /></SelectTrigger>
+                <SelectContent className="max-w-none">
+                  <SelectItem value="created">{t("sortNewest")}</SelectItem>
+                  <SelectItem value="updated">{t("sortUpdated")}</SelectItem>
+                  <SelectItem value="name">{t("sortName")}</SelectItem>
+                  <SelectItem value="duration">{t("sortDuration")}</SelectItem>
+                </SelectContent>
+              </Select>
+              {allTags.length > 0 && <MediaTagFilter tags={allTags} value={tagFilter} onChange={setTagFilter} />}
+            </div>
+            {/* 竖线只在这一段真的排在别人右边时才画 —— 换行之后它会变成一条悬在行首的线。 */}
+            <div className="flex items-center gap-2 border-divider max-lg:w-full lg:border-l lg:pl-4">
               <div role="group" className="flex gap-1" aria-label={t("studioGridView")}>
                 <Button variant="outline" className={cn("px-3", display === "grid" && "border-primary/40 bg-accent text-primary")} aria-label={t("studioGridView")} aria-pressed={display === "grid"} onClick={() => setDisplay("grid")}><LayoutGrid /></Button>
                 <Button variant="outline" className={cn("px-3", display === "list" && "border-primary/40 bg-accent text-primary")} aria-label={t("studioListView")} aria-pressed={display === "list"} onClick={() => setDisplay("list")}><List /></Button>
               </div>
-              <Button variant="outline" aria-pressed={selectMode} onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}>
+              <Button variant="outline" className="ml-auto" aria-pressed={selectMode} onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}>
                 {selectMode ? <X /> : <Check />}{selectMode ? t("cancel") : t("mediaSelectMode")}
               </Button>
             </div>
-          </div>
-          <div className="flex min-w-0 flex-wrap items-center gap-2" data-media-filter-row>
-            <div className="relative min-w-40 flex-1">
-              <Search size={16} className="pointer-events-none absolute left-3 top-3 text-muted-foreground" />
-              <Input aria-label={t("searchAssets")} className="border-border bg-control pl-9" value={search} placeholder={t("searchAssets")} onChange={(event) => setSearch(event.target.value)} />
-            </div>
-            <Select value={sortKey} onValueChange={(value) => setSortKey(value as SortKey)}>
-              <SelectTrigger className="w-auto min-w-36 border-border bg-control" aria-label={t("sortNewest")}><SelectValue /></SelectTrigger>
-              <SelectContent className="max-w-none">
-                <SelectItem value="created">{t("sortNewest")}</SelectItem>
-                <SelectItem value="updated">{t("sortUpdated")}</SelectItem>
-                <SelectItem value="name">{t("sortName")}</SelectItem>
-                <SelectItem value="duration">{t("sortDuration")}</SelectItem>
-              </SelectContent>
-            </Select>
-            {allTags.length > 0 && <MediaTagFilter tags={allTags} value={tagFilter} onChange={setTagFilter} />}
           </div>
           {selectMode && <div className="flex flex-wrap items-center gap-2 border-t border-divider pt-3" role="group" aria-label={t("mediaSelectMode")}>
 
