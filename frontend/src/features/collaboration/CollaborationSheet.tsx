@@ -98,8 +98,13 @@ export function CollaborationSheet({
               ))}
             </div>
           ) : items.length === 0 ? (
-            // 空态只写一次。此前左右两栏各写了一遍,读起来像是出了两个不同的问题。
-            <div className="grid content-start justify-items-center gap-2 px-8 py-16 text-center">
+            /* 空态只写一次(此前左右两栏各写了一遍,读起来像是出了两个不同的问题),
+               而且**在整块空白里居中**:内容区是整条侧栏那么高,把这几行贴在顶上,
+               底下就空出一屏找不到边的灰,读起来像是列表没加载完。 */
+            <div
+              data-collaboration-empty
+              className="grid h-full place-content-center justify-items-center gap-2 px-8 text-center"
+            >
               <MessageSquare size={22} className="text-muted-foreground" />
               <p className="m-0 text-ui-sm font-medium">{t("commentsEmpty")}</p>
               <p className="m-0 text-ui-xs leading-relaxed text-muted-foreground">{t("boardCommentModeHint")}</p>

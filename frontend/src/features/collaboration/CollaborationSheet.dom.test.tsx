@@ -102,9 +102,14 @@ describe("讨论侧栏", () => {
     }
   });
 
-  it("空态只写一次", async () => {
+  it("空态只写一次,并且撑满内容区居中", async () => {
+    // 贴在顶上的话,底下会空出一屏找不到边的灰 —— 看着像是列表还没加载完。
+    // jsdom 不做排版,所以这里钉的是那两条把它撑满并居中的类。
     listComments.mockResolvedValueOnce([]);
     open("board");
     expect(await screen.findAllByText("还没有评论")).toHaveLength(1);
+    const empty = document.querySelector("[data-collaboration-empty]");
+    expect(empty?.className).toContain("h-full");
+    expect(empty?.className).toContain("place-content-center");
   });
 });
