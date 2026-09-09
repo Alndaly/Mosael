@@ -469,15 +469,16 @@
   :root[data-appearance="glass"] {
     --glass-filter: blur(var(--app-blur, 16px)) saturate(1.35);
   }
-  /* Scrolling content may pass behind sticky bars; give only those bars a light veil. */
+  /* 磨砂这边只加**模糊**,底色归上面那条统一的规则(见 .workspace-sticky)——
+     此前两处各写一份 background-color,而只有磨砂那份认得 data-stuck:
+     于是同一条筛选栏,开了磨砂会跟着滚动淡入,不开就一直铺着实底。 */
   :root[data-appearance="glass"] .workspace-sticky {
-    --workspace-sticky-presence: 1;
-    background-color: color-mix(in srgb, var(--popover) calc(25% * var(--workspace-sticky-presence)), transparent);
     -webkit-backdrop-filter: blur(calc(var(--app-blur, 16px) * var(--workspace-sticky-presence))) saturate(calc(1 + .35 * var(--workspace-sticky-presence)));
     backdrop-filter: blur(calc(var(--app-blur, 16px) * var(--workspace-sticky-presence))) saturate(calc(1 + .35 * var(--workspace-sticky-presence)));
   }
-  :root[data-appearance="glass"] .workspace-sticky[data-stuck="false"] {
-    --workspace-sticky-presence: 0;
+  /* 一直吸着顶的那些(时间线标尺、追踪分组标题):底下永远有内容滚过,给一层固定的薄纱。 */
+  :root[data-appearance="glass"] .workspace-sticky:not([data-stuck]) {
+    background-color: color-mix(in srgb, var(--popover) 25%, transparent);
   }
   /* Narrow-screen drawers overlay content and need stronger separation than docked panes. */
   :root[data-appearance="glass"] .workspace-overlay {
@@ -664,8 +665,39 @@ body {
   inherits: false;
   initial-value: 0;
 }
+/**
+ * 吸顶栏的底色跟着"有没有东西从下面滚过去"淡入淡出。
+ *
+ * **没滚动的时候它不该挡住背景。** 停在顶上的筛选栏此前一直铺着一层实底 —— 页面还没动过,
+ * 那层底就已经在那儿了,把自定义背景切掉一条;而它存在的唯一理由是"盖住滚上来的卡片"。
+ *
+ * **`data-stuck` 就是这条行为的开关。** 没有这个属性的吸顶栏(时间线标尺、追踪分组标题)
+ * 一直吸着顶,底下永远有内容,不需要淡入 —— 它们沿用自己的 `bg-*`,这条规则碰都不碰。
+ *
+ * 底色由使用方用 `--workspace-sticky-surface` 指定,默认页面底色。写成变量而不是写死:
+ * 面板里的吸顶栏该用面板色,而"用哪层表面"只有那一处知道。
+ *
+ * 分割线跟着一起淡:它分的是"栏"和"从底下滚过去的内容",没有内容滚过去时,它分的是空气。
+ */
 .workspace-sticky {
-  transition: --workspace-sticky-presence 260ms ease-out, background-color 260ms ease-out;
+  --workspace-sticky-presence: 1;
+  transition: --workspace-sticky-presence 260ms ease-out, background-color 260ms ease-out,
+    border-color 260ms ease-out;
+}
+.workspace-sticky[data-stuck="false"] {
+  --workspace-sticky-presence: 0;
+}
+.workspace-sticky[data-stuck] {
+  background-color: color-mix(
+    in srgb,
+    var(--workspace-sticky-surface, var(--background)) calc(100% * var(--workspace-sticky-presence)),
+    transparent
+  );
+  border-color: color-mix(
+    in srgb,
+    var(--divider) calc(100% * var(--workspace-sticky-presence)),
+    transparent
+  );
 }
 @media (prefers-reduced-motion: reduce) {
   :where(button, input, textarea, select, [role="tab"], [role="menuitem"], [role="checkbox"], [role="switch"]),

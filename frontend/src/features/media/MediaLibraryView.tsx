@@ -291,12 +291,15 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
               </Button>
       </>} />
       {/* 顶部工具条 + 标签筛选 sticky 吸顶:滚动素材网格时保持可见。顶部内边距放在本 sticky 头上
-          (滚动容器不留 pt),吸顶时才能严丝合缝贴顶、不露出上一行卡片;-mx 铺满宽度,bg 盖住滚上来的卡片。 */}
+          (滚动容器不留 pt),吸顶时才能严丝合缝贴顶、不露出上一行卡片;-mx 铺满宽度,底色盖住滚上来的卡片。 */}
+      {/* **底色不写在这儿。** `data-stuck` 一交出去,底色和分割线就由 .workspace-sticky 按
+          "有没有东西从下面滚过去"淡入淡出(见 design/tokens.css)—— 页面还没动过的时候,
+          这条栏不该先把背景切掉一块。写死一个 bg-* 会盖过那条规则,等于把开关按住不放。 */}
       {/* 负外边距和外壳的内边距**是同一个数**:它靠 -mx 把自己拉到容器边缘,好让 sticky 时的
           底色铺满整宽。外壳从 px-3.5 收到 px-2 之后这层耦合就断了 —— 工具条比容器宽出 12px,
           整页于是能左右滚(真机)。两个数写在一起,下次改 padding 时才看得见要一起改。 */}
       {(!assets.isSuccess || (assets.data ?? []).length > 0) && (
-        <div ref={filtersRef} data-stuck={filtersStuck} className="workspace-sticky sticky top-0 z-20 -mx-6 flex flex-col gap-3 border-b border-divider bg-background px-6 py-3 xl:-mx-9 xl:px-9">
+        <div ref={filtersRef} data-stuck={filtersStuck} className="workspace-sticky sticky top-0 z-20 -mx-6 flex flex-col gap-3 border-b border-divider px-6 py-3 xl:-mx-9 xl:px-9">
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
             <CollectionTabs value={kindFilter} onChange={setKindFilter} label={t("mediaKindGroup")} items={KIND_FILTERS.map(kind => ({ value: kind, label: kindLabel[kind], count: assets.data?.filter(asset => kind === "all" || asset.kind === kind).length }))} />
             <div className="flex items-center gap-2">
