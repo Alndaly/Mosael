@@ -56,6 +56,7 @@ import { RightDockResizeHandle } from "@/components/app/RightDockResizeHandle";
 import { useResizableSidebar } from "@/lib/useResizableSidebar";
 import { AnnotationControls } from "@/features/markers/AnnotationControls";
 import { MarkerListButton } from "@/features/markers/MarkerListButton";
+import { canvasInsets } from "@/components/app/fitCanvasViewport";
 import { BoardCanvas, type BoardCanvasApi } from "@/features/boards/BoardCanvas";
 import { useAutosave } from "@/features/boards/useAutosave";
 import { AssetPickerDialog } from "@/features/boards/AssetPickerDialog";
@@ -239,6 +240,19 @@ function BoardDetail({
   const [agentMode, setAgentMode] = usePersistentTab<CanvasAgentMode>("board-agent-mode", "docked", ["docked", "floating"]);
   const agentPanel = useResizableSidebar("board-right", { min: 320, max: 640, fallback: 400 });
   const dockedAgent = agentOpen === "on" && agentMode === "docked";
+  /*
+   * 智能体是**盖在画布上**的,不占版面。全览、跳标记、跳评论都得照"看得见的那块"来算,
+   * 否则目标正好落在它底下 —— 用户报过:点「在画布中查看」,评论跳到了智能体那一栏后面。
+   * 悬浮时外层 wrapper 是 display:contents(量它拿到空矩形),所以量里面那块面板。
+   */
+  const agentWrapperRef = React.useRef<HTMLDivElement | null>(null);
+  const getCanvasInsets = React.useCallback(
+    (surface: HTMLElement) =>
+      canvasInsets(surface, dockedAgent ? canvasRightDockOcclusion(agentPanel.width) : 0, [
+        agentOpen === "on" && agentMode === "floating" ? agentWrapperRef.current?.firstElementChild : null,
+      ]),
+    [dockedAgent, agentPanel.width, agentOpen, agentMode],
+  );
   //: 全览默认开着 —— 大图时它最有用,而"图大不大"只有用户自己知道。记在本地。
   const [minimapMode, setMinimap] = usePersistentTab<"on" | "off">("board-minimap", "on", ["on", "off"] as const);
   const showMinimap = minimapMode === "on";
@@ -828,6 +842,7 @@ function BoardDetail({
         // 悬浮时 wrapper 必须是 display:contents:助手自身已经 fixed 脱离文档流；若这个空 wrapper
         // 仍作为 grid item，根网格会凭空多出一行，把 React Flow 压到页面下半截。
         <div
+          ref={agentWrapperRef}
           className={dockedAgent ? "absolute z-10 grid min-h-0 min-w-0" : "contents"}
           style={dockedAgent ? {
             width: agentPanel.width,
@@ -854,7 +869,7 @@ function BoardDetail({
         boardId={board.id}
         workspaceId={workspaceId}
         canvas={board.canvas ?? { items: [], edges: [] }}
-        rightOverlayWidth={dockedAgent ? canvasRightDockOcclusion(agentPanel.width) : 0}
+        getInsets={getCanvasInsets}
         onChange={setCanvas}
         onPickAsset={(kind, place) => setPicking({ kind, place })}
         onGenerate={generate}

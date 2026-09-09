@@ -73,6 +73,37 @@ export function centerCanvasViewport<NodeType extends Node = Node, EdgeType exte
   }, { duration: options.duration ?? 350 });
 }
 
+/**
+ * 一张画布上「真正看得见的那块」。
+ *
+ * 右栏面板(智能体、执行历史)是**盖在画布上**的,不占版面 —— React Flow 量到的永远是整块
+ * 画布,照它居中的话,目标正好落在面板底下(用户报过:点「在画布中查看」,评论跳到了智能体
+ * 那一栏后面)。停靠的按宽度让开,悬浮的按它此刻的矩形挖掉。
+ *
+ * 两张画布(创意画板、工作流)的遮挡关系是同一套,所以算法只此一份 —— 各自算一遍的结果是
+ * 其中一边先被修好,另一边继续把评论跳到面板底下。
+ */
+export function canvasInsets(
+  surface: HTMLElement | null,
+  dockedRight: number,
+  floating: Array<Element | null | undefined> = [],
+): CanvasViewportInsets {
+  let insets: CanvasViewportInsets = { right: dockedRight };
+  if (!surface) return insets;
+  const bounds = surface.getBoundingClientRect();
+  for (const element of floating) {
+    if (!element) continue;
+    const panel = element.getBoundingClientRect();
+    insets = excludeCanvasOverlay(surface.clientWidth, surface.clientHeight, insets, {
+      left: panel.left - bounds.left,
+      top: panel.top - bounds.top,
+      right: panel.right - bounds.left,
+      bottom: panel.bottom - bounds.top,
+    });
+  }
+  return insets;
+}
+
 /** Keep the largest clear rectangle around a floating panel (coordinates relative to the surface). */
 export function excludeCanvasOverlay(
   width: number,

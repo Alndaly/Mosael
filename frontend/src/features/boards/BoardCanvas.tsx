@@ -35,7 +35,7 @@ import { Copy, FileUp, Group, Loader2, Maximize2, MessageSquare, Replace, Scisso
 import { assetFileUrl, assetPreviewUrl, type CollaborationComment, type WorkspaceMember } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
-import { fitCanvasViewport } from "@/components/app/fitCanvasViewport";
+import { centerCanvasViewport, fitCanvasViewport, visibleCanvasSize, type CanvasViewportInsets } from "@/components/app/fitCanvasViewport";
 
 import type { BoardCanvas as Canvas, BoardItem, GenerationOption } from "@/api/client";
 import { NodeComposer } from "@/features/boards/NodeComposer";
@@ -287,8 +287,14 @@ interface Props {
   /** 系统里拖进来的文件:上层负责传进素材库,回来的每一份就地摆到落点上。 */
   onDropFiles?: (files: File[]) => Promise<{ id: string; name: string; kind: "image" | "video" }[]>;
   uploading?: boolean;
-  /** Pixels covered by a docked panel on the right; excluded from fit-to-content. */
-  rightOverlayWidth?: number;
+  /**
+   * 画布上被右栏面板盖住多少 —— 每次要用时现算(面板会拖宽、会在停靠和悬浮之间切)。
+   * 全览、跳标记、跳评论、放标记都照这块**看得见的**区域来,否则目标会落在面板底下。
+   *
+   * 参数是画布自己的 DOM:**谁盖住了画布**由页面知道,**画布多大**由画布知道,
+   * 两边各说各的那一半。
+   */
+  getInsets?: (surface: HTMLElement) => CanvasViewportInsets;
   /** Comment mode is separate: a canvas or node click anchors a discussion instead of editing nodes. */
   commentMode?: boolean;
   markerMode?: boolean;
@@ -309,7 +315,7 @@ interface Props {
   onReady?: (api: BoardCanvasApi) => void;
 }
 
-function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, onSpeak, onTrim, onGrabFrame, models, showMinimap = true, onDropFiles, uploading, rightOverlayWidth = 0, commentMode = false, markerMode = false, markersVisible = true, commentsVisible = true, comments = [], members = [], currentUserId, activeCommentId, onSelectComment, onCreateComment, onMoveComment, onDeleteComment, onExitCommentMode, onExitMarkerMode, onReady }: Props) {
+function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate, onWrite, onSpeak, onTrim, onGrabFrame, models, showMinimap = true, onDropFiles, uploading, getInsets, commentMode = false, markerMode = false, markersVisible = true, commentsVisible = true, comments = [], members = [], currentUserId, activeCommentId, onSelectComment, onCreateComment, onMoveComment, onDeleteComment, onExitCommentMode, onExitMarkerMode, onReady }: Props) {
   const [inputMode] = useCanvasInputMode();
   const t = useI18n();
   const rf = React.useRef<ReactFlowInstance | null>(null);
@@ -557,13 +563,33 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
     setNodes((current) => current.filter((node) => node.id !== MARKER_PREFIX + id));
   }, [setNodes]);
 
+  /** 画布上没被右栏盖住的那块。页面没给就是整块。 */
+  const insetsOf = React.useCallback(
+    (pane: HTMLElement): CanvasViewportInsets => getInsets?.(pane) ?? {},
+    [getInsets],
+  );
+
+  /**
+   * 把一个流坐标点摆到**看得见的那块**的正中。
+   *
+   * 不是 `instance.setCenter` —— 它照整块画布居中,而右栏的智能体是盖在画布上的:
+   * 目标正好落在它底下,看着像"点了没反应"。跳标记、跳评论都从这里走。
+   */
+  const centerOn = React.useCallback((point: { x: number; y: number }) => {
+    const instance = rf.current;
+    const pane = surface.current;
+    if (!instance || !pane) return;
+    void centerCanvasViewport(instance, pane, point, insetsOf(pane), {
+      zoom: Math.max(instance.getZoom(), 0.9),
+      duration: 350,
+    });
+  }, [insetsOf]);
+
   /** 跳到某个标记。视口居中过去,不改选中态 —— 跳转是"我要看那儿",不是"我要改那个"。 */
   const jumpToMarker = React.useCallback((marker: CanvasMarker) => {
-    const instance = rf.current;
-    if (!instance) return;
     // 加半枚旗子:节点坐标是左上角,照它居中的话旗子整个偏在右下。
-    void instance.setCenter(marker.x + 60, marker.y + 14, { zoom: Math.max(instance.getZoom(), 0.9), duration: 350 });
-  }, []);
+    centerOn({ x: marker.x + 60, y: marker.y + 14 });
+  }, [centerOn]);
 
   useMarkerShortcuts(markers, jumpToMarker, !commentMode);
 
@@ -578,8 +604,13 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         .filter((node) => node.type === "marker")
         .map((node) => (node.data as unknown as { marker: CanvasMarker }).marker);
       if (existing.length >= MAX_MARKERS) return current;
+      // 同样避开右栏:一枚落在智能体底下的标记,加完就看不见。
       const rect = pane.getBoundingClientRect();
-      const center = point ?? instance.screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+      const visible = visibleCanvasSize(pane.clientWidth, pane.clientHeight, insetsOf(pane));
+      const center = point ?? instance.screenToFlowPosition({
+        x: rect.left + visible.left + visible.width / 2,
+        y: rect.top + visible.top + visible.height / 2,
+      });
       const marker: CanvasMarker = {
         id: newMarkerId(existing),
         name: nextMarkerName(t("markers"), existing),
@@ -590,7 +621,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       return [...current.map((node) => ({ ...node, selected: false })), ...toMarkerNodes([marker]).map((node) => ({ ...node, selected: true }))];
     });
     if (!placed) toast.error(t("markerLimit").replace("{n}", String(MAX_MARKERS)));
-  }, [setNodes, t]);
+  }, [setNodes, t, insetsOf]);
 
   //: 渲染用的节点 = 数据 + 这一轮的回调。**每轮重新贴** —— 回调闭包着最新的 setNodes,
   //: 而把它们存进节点数据会让节点的初值反过来依赖 setNodes,那个循环绕不开。
@@ -888,15 +919,13 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       replace: (next) => restore(JSON.stringify(next)),
       fitView: () => {
         if (rf.current && surface.current) {
-          void fitCanvasViewport(rf.current, surface.current, { right: rightOverlayWidth });
+          void fitCanvasViewport(rf.current, surface.current, insetsOf(surface.current));
         }
       },
       focusComment: (comment) => {
         const x = comment.anchor?.x;
         const y = comment.anchor?.y;
-        if (rf.current && typeof x === "number" && typeof y === "number") {
-          void rf.current.setCenter(x, y, { zoom: Math.max(rf.current.getZoom(), 0.9), duration: 350 });
-        }
+        if (typeof x === "number" && typeof y === "number") centerOn({ x, y });
       },
       markers,
       addMarker,
@@ -906,7 +935,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       canUndo: canUndo(history),
       canRedo: canRedo(history),
     });
-  }, [add, patch, onReady, rightOverlayWidth, stepBack, stepForward, history, restore, markers, addMarker, jumpToMarker]);
+  }, [add, patch, onReady, insetsOf, centerOn, stepBack, stepForward, history, restore, markers, addMarker, jumpToMarker]);
 
   return (
     // 详情页本身就是画布边界:四边满铺,不再套第二层卡片边框或圆角。
@@ -1026,7 +1055,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
           requestAnimationFrame(() => {
             if (viewport.saved) instance.setViewport(viewport.saved);
             else if (surface.current) {
-              void fitCanvasViewport(instance, surface.current, { right: rightOverlayWidth }, { maxZoom: 1 });
+              void fitCanvasViewport(instance, surface.current, insetsOf(surface.current), { maxZoom: 1 });
             }
             setReady(true);
           });

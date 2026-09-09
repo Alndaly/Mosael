@@ -126,7 +126,7 @@ import {
   canvasDockedPanelEdges,
   canvasRightDockOcclusion,
 } from "@/components/app/canvasPanelLayout";
-import { centerCanvasViewport, excludeCanvasOverlay, fitCanvasViewport, visibleCanvasSize, type CanvasViewportInsets } from "@/components/app/fitCanvasViewport";
+import { canvasInsets, centerCanvasViewport, fitCanvasViewport, visibleCanvasSize } from "@/components/app/fitCanvasViewport";
 import { RightDockResizeHandle } from "@/components/app/RightDockResizeHandle";
 import { WorkflowRunHistory } from "@/features/workflows/WorkflowRunHistory";
 import { WorkflowRevisionHistory } from "@/features/workflows/WorkflowRevisionHistory";
@@ -875,25 +875,15 @@ function WorkflowEditor({
   const canvasSurfaceRef = React.useRef<HTMLDivElement | null>(null);
   const agentPanelRef = React.useRef<HTMLDivElement | null>(null);
   const historyPanelRef = React.useRef<HTMLDivElement | null>(null);
-  const getCanvasInsets = React.useCallback(() => {
-    const surface = canvasSurfaceRef.current;
-    let insets: CanvasViewportInsets = { right: rightOcclusion };
-    if (!surface) return insets;
-    const bounds = surface.getBoundingClientRect();
-    const floatingPanels = [
-      agentOpen && agentMode === "floating" ? agentPanelRef.current : null,
-      showHistory && historyMode === "floating" ? historyPanelRef.current : null,
-    ];
-    for (const wrapper of floatingPanels) {
-      const panel = wrapper?.firstElementChild?.getBoundingClientRect();
-      if (!panel) continue;
-      insets = excludeCanvasOverlay(surface.clientWidth, surface.clientHeight, insets, {
-        left: panel.left - bounds.left, top: panel.top - bounds.top,
-        right: panel.right - bounds.left, bottom: panel.bottom - bounds.top,
-      });
-    }
-    return insets;
-  }, [rightOcclusion, agentOpen, agentMode, showHistory, historyMode]);
+  // 悬浮时 wrapper 是 display:contents,量它自己拿到的是空矩形 —— 要量的是里面那块面板。
+  const getCanvasInsets = React.useCallback(
+    () =>
+      canvasInsets(canvasSurfaceRef.current, rightOcclusion, [
+        agentOpen && agentMode === "floating" ? agentPanelRef.current?.firstElementChild : null,
+        showHistory && historyMode === "floating" ? historyPanelRef.current?.firstElementChild : null,
+      ]),
+    [rightOcclusion, agentOpen, agentMode, showHistory, historyMode],
+  );
   // 画布姿态(是否已 fitView、视口动过几次、正不正在平移)。三条各自的来历见 useCanvasPosture
   // —— 它们是 React Flow 的机制,不是工作流的概念,所以不和图 / 弹窗 / 搜索那些 state 混在一起。
   const canvas = useCanvasPosture();
