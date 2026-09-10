@@ -9,6 +9,11 @@ vi.mock("@/api/client", () => ({
   assetThumbnailUrl: (id: string) => `/thumb/${id}`,
   assetFileUrl: (id: string) => `/file/${id}`,
 }));
+vi.mock("@/app/preferences", () => ({
+  useI18n: () => (key: string) => key,
+  usePreferences: () => ({ locale: "zh-CN" }),
+}));
+vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 const openImagePreview = vi.fn();
 vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview }) }));
 
@@ -81,7 +86,7 @@ describe("点开引用", () => {
     }) as JSONContent;
 
   it("素材走全局灯箱 —— 那里已经有翻页、Esc 和层级", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ id: "a1", name: "图", kind: "image" }))));
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ id: "a1", name: "图", kind: "image" }), { headers: { "content-type": "application/json" } })));
     render(<ReferenceDocument document={bubble("asset", "a1")} />);
     await userEvent.click(screen.getByRole("button"));
     await vi.waitFor(() => expect(openImagePreview).toHaveBeenCalled());

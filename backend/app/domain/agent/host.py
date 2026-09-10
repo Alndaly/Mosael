@@ -626,11 +626,36 @@ _REFERENCE_HOW = {
 }
 
 
-def references_context(references: list[dict] | None) -> str:
+#: 每一类去哪张表里找。用来核对"这个 id 现在还在不在、在不在这个工作区里"。
+def _reference_row(db: Session, kind: str, workspace_id: str, ident: str):
+    from app.db.model_slices.boards import Board
+    from app.db.model_slices.notes import Note
+    from app.db.model_slices.workflows import Workflow
+
+    table = {"asset": Asset, "note": Note, "board": Board, "workflow": Workflow}.get(kind)
+    if table is None:
+        return None
+    row = db.get(table, ident)
+    #: **跨工作区的 id 当作不存在。** 引用是前端交上来的,而一条消息不该因为拼错(或者被塞)
+    #: 一个别处的 id,就让模型知道那边有什么东西。
+    return row if row is not None and getattr(row, "workspace_id", None) == workspace_id else None
+
+
+def references_context(
+    references: list[dict] | None,
+    *,
+    db: Session | None = None,
+    workspace_id: str = "",
+) -> str:
     """用户在正文里 `@` 出来的那些对象,给模型的一段清单。
 
     正文里它们是 `@名字` —— 读起来是人话,但名字不是标识。这段清单把名字和 id 对上,
     并说明去哪儿读。**没有引用就返回空串**,别在每条消息前面挂一段空清单。
+
+    **给了 db 就核对一遍。** 名字是发送那一刻抄下来的快照,而对象会改名、会被删:
+    - 改过名 → 用**库里当前的名字**。拿旧名字去跟模型说话,它会照着那个名字去找,找不到。
+    - 已经删了 → 明说「已不存在」,而不是给一个会 404 的 id。模型白跑一轮之后,多半会
+      自己编一个理由继续往下走 —— 那比直接告诉它"这个没了"坏得多。
     """
     lines = []
     for reference in references or []:
@@ -640,6 +665,12 @@ def references_context(references: list[dict] | None) -> str:
         ident = str(reference.get("id") or "")
         if not ident:
             continue
+        if db is not None:
+            row = _reference_row(db, kind, workspace_id, ident)
+            if row is None:
+                lines.append(f"- {label}「{name}」已不存在(可能已被删除),别去读它")
+                continue
+            name = str(getattr(row, "name", None) or getattr(row, "title", None) or name)
         how = f",用 {tool} 读" if tool else ""
         lines.append(f"- {label}「{name}」id={ident}{how}")
     if not lines:
@@ -731,7 +762,9 @@ def post_user_message(
     # 两样都不进 content —— content 是**用户在对话里看到的**那份。
     # 引用清单排在用户自己给的上下文**前面**:它说的是"这句话里的 @ 指谁",
     # 先说清指代再说别的,读起来才顺。
-    prompt = _prompt_with_context(content, references_context(references))
+    prompt = _prompt_with_context(
+        content, references_context(references, db=db, workspace_id=session.workspace_id)
+    )
     prompt = _prompt_with_context(prompt, context)
     # 第三样:失败的那几轮模型没见过(失败不回存 adapter_state),而用户以为它见过。
     prompt = _prompt_with_context(prompt, unseen_since_last_success(db, session))

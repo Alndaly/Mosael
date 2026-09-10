@@ -353,6 +353,8 @@ export const messages = {
 
     // Media library
     mediaTitle: "素材库",
+    agentRefGone: "「{name}」已经不在了",
+    agentRefGoneHint: "它可能已被删除。这条消息里的引用保留着当时的名字。",
     mediaDescription: "工作区内所有导入与 AI 生成的素材。",
     mediaEmptyTitle: "素材库是空的",
     mediaEmptyBody: "导入视频、音频或图片，素材会带缩略图出现在这里。",
@@ -2866,6 +2868,8 @@ export const messages = {
 
     // Media library
     mediaTitle: "Media library",
+    agentRefGone: "“{name}” is gone",
+    agentRefGoneHint: "It was probably deleted. The message keeps the name it had at the time.",
     mediaDescription: "Every imported and AI-generated asset in this workspace.",
     mediaEmptyTitle: "The library is empty",
     mediaEmptyBody: "Import video, audio, or images and they appear here with thumbnails.",

@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+from app.core.db import SessionLocal
 from app.domain.agent import host
 
 
@@ -53,3 +54,68 @@ def test_落库的正文里没有id() -> None:
     assert "a1" not in body.content
     assert body.references[0].id == "a1"
     assert body.body_document is not None
+
+
+def test_清单里点名的工具真的存在() -> None:
+    """引用清单会告诉模型「用 read_note 读」—— 那个名字必须真的是一个工具。
+
+    这是一处**跨文件的耦合**:名字写在 host._REFERENCE_HOW 里,而工具定义在 mcp_server.py。
+    改名的一方不会知道另一方在引用它,而错了也不报错 —— 模型会去调一个不存在的工具,
+    白跑一轮,然后大概率自己编一个理由继续往下走。
+
+    (这四个名字当初是我按命名习惯猜的,恰好全中。这条用例把"恰好"换成"一定"。)
+    """
+    import mcp_server
+
+    for _label, tool in host._REFERENCE_HOW.values():
+        if not tool:
+            continue
+        assert callable(getattr(mcp_server, tool, None)), f"{tool} 不是 mcp_server 里的工具"
+
+
+def test_删掉的对象明说已不存在(tmp_path) -> None:
+    """名字是发送那一刻抄下来的快照,而对象会改名、会被删。
+
+    给模型一个会 404 的 id,它白跑一轮之后多半会自己编个理由继续往下走 —— 那比直接
+    告诉它"这个没了"坏得多。
+    """
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    board = client.post("/api/boards", json={"workspace_id": ws["id"], "name": "故事板"}).json()
+
+    with SessionLocal() as db:
+        text = host.references_context(
+            [
+                {"kind": "board", "id": board["id"], "name": "旧名字"},
+                {"kind": "board", "id": "没有这个", "name": "幽灵"},
+            ],
+            db=db,
+            workspace_id=ws["id"],
+        )
+
+    # 改过名的用**库里当前的名字**:拿旧名字跟模型说话,它会照着那个名字去找,找不到。
+    assert "「故事板」" in text
+    assert "旧名字" not in text
+    # 已经删了的明说,而且不给 id。
+    assert "「幽灵」已不存在" in text
+    assert "没有这个" not in text
+
+
+def test_别的工作区的_id_当作不存在(tmp_path) -> None:
+    """引用是前端交上来的。一条消息不该因为塞了一个别处的 id,就让模型知道那边有什么。"""
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    mine = client.post("/api/workspaces", json={"name": "我的"}).json()
+    theirs = client.post("/api/workspaces", json={"name": "别人的"}).json()
+    board = client.post("/api/boards", json={"workspace_id": theirs["id"], "name": "机密"}).json()
+
+    with SessionLocal() as db:
+        text = host.references_context(
+            [{"kind": "board", "id": board["id"], "name": "机密"}], db=db, workspace_id=mine["id"]
+        )
+
+    assert "已不存在" in text
+    assert board["id"] not in text
