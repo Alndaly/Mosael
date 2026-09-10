@@ -1,5 +1,9 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v1.3.1": {
+    zh: ["智能体对话框支持 `@` 引用素材、笔记、画板与工作流：正文写名字，id 走结构化字段；发出去仍是可点开的胶囊。", "思考档位按供应商查表：关不掉的模型不再给「关闭」，发不出档位的连接说得出原因。", "修复深色下菜单分组线与页面同色而看不见 —— 菜单、命令面板、通知与任务面板一并恢复。", "生成页「引擎参数」重排为引擎／出片规格／输入素材／调参四块，标题行不再随滚动移出视野。"],
+    en: ["The agent composer supports `@` references to assets, notes, boards and workflows: names in the text, ids in structured fields, and clickable chips after sending.", "Thinking levels now come from a per-vendor table: models that cannot stop thinking no longer offer \"Off\", and connections that cannot carry a level say why.", "Fixed menu separators being the same colour as the surface in dark mode — menus, the command palette and the notification and task panels all get their dividers back.", "The generation engine-settings panel is grouped into engine, output, inputs and tuning, with a header that no longer scrolls away."],
+  },
   "v1.3.0": {
     zh: ["选项一多的下拉自动带搜索：模型、音色、字体、LUT、发布平台与工作流的上游输出。", "团队讨论改成右侧侧栏，画板与工作流共用；工作流页新增讨论中心。", "「在画布中查看」与加标记会避开右栏面板，不再跳到停靠的智能体底下。", "智能体输入框里的附件与笔记引用收成一排，带缩略图，点开即可预览。"],
     en: ["Long dropdowns now search: models, voices, fonts, LUTs, publishing platforms and upstream workflow outputs.", "Team discussions moved to a right-side sheet, shared by boards and workflows; workflows gained the discussion centre.", "Jumping to a comment or dropping a marker now avoids docked and floating side panels.", "Composer attachments and note references share one row, with thumbnails and click-to-preview."],
