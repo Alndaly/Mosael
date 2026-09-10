@@ -29,7 +29,7 @@ import { ModelPicker } from "@/features/ai-studio/ModelPicker";
 import { SessionSettingsMenu } from "@/components/agent/SessionSettingsMenu";
 import { agentSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
 import { type CompactionInfo, type ContextInfo } from "@/components/agent/ContextMeter";
-import { InspectorCard, InspectorRow } from "@/components/agent/InspectorCard";
+import { InspectorCard, InspectorRow } from "@/components/layout/InspectorCard";
 import { PlanCard, planHistory, type PlanStep } from "@/components/agent/PlanCard";
 import { JumpToLatest, useStickToBottom } from "@/components/agent/stickToBottom";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";

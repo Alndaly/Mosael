@@ -7,7 +7,7 @@ import { chatMediaGallery } from "@/features/ai-studio/userMessage";
 import { TraceView } from "@/features/ai-studio/trace/TraceView";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
-import { InspectorCard } from "@/components/agent/InspectorCard";
+import { InspectorCard } from "@/components/layout/InspectorCard";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatElapsedSeconds } from "@/lib/time";
 import { cn } from "@/lib/utils";

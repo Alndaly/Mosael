@@ -2,7 +2,7 @@ import React from "react";
 import { ListChecks } from "lucide-react";
 import { useI18n } from "@/app/preferences";
 import { AgentStatusIcon, toAgentStatus } from "@/components/agent/StatusIcon";
-import { InspectorCard } from "@/components/agent/InspectorCard";
+import { InspectorCard } from "@/components/layout/InspectorCard";
 import type { AgentTimelineItem } from "@/components/agent/ToolCalls";
 import { cn } from "@/lib/utils";
 

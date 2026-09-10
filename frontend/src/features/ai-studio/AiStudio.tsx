@@ -4,6 +4,9 @@ import { StudioIndex } from "@/components/layout/StudioIndex";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
+  Cpu,
+  Images,
+  Ratio,
   SlidersHorizontal,
   CircleAlert,
   Copy,
@@ -44,6 +47,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useImagePreview } from "@/components/app/image-preview";
 import { ChatWorkspace } from "@/features/ai-studio/ChatWorkspace";
 import { generationSessionSelectionKey } from "@/features/ai-studio/sessionSelection";
+import { PARAMETER_CONTROL_CLASS, ParameterField, ParameterSection } from "@/features/ai-studio/parameterPanel";
 import { elapsedSecondsBetween, formatElapsedSeconds, useNow } from "@/lib/time";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { MessageFooter, MessageTime, formatCostMicros } from "@/features/ai-studio/messageUsage";
@@ -358,6 +362,8 @@ function GenerateWorkspace({
       setGenerationConfig((config) => ({ ...config, durationSeconds: String(selectedDurations[0]) }));
     }
   }, [generationConfig.durationSeconds, selectedDurations]);
+  // 图像和视频分走两套栏目(张数 vs 时长/分辨率/画幅),这个判断在下面出现十来次。
+  const isImageModel = selectedModel?.kind === "image";
   const supportsNegativePrompt = supportsParameter(selectedModel, "negative_prompt");
   const supportsReferenceImage = supportsParameter(selectedModel, "reference_image");
   const supportsFirstFrame = selectedModel?.kind === "video" && supportsParameter(selectedModel, "first_frame");
@@ -423,8 +429,16 @@ function GenerateWorkspace({
     const visibleParams = (comfyParams.data ?? []).filter((param) => !param.role || !hiddenRoles.has(param.role));
     return (
       <>
-        <label className="grid gap-2 text-ui-sm font-medium text-foreground">
-          <span>{t("comfyWorkflow")}</span>
+        <ParameterField
+          label={t("comfyWorkflow")}
+          hint={
+            comfyWorkflows.isError
+              ? t("comfyWorkflowError")
+              : comfyWorkflows.data && comfyWorkflows.data.length === 0
+                ? t("comfyWorkflowEmpty")
+                : t("comfyWorkflowHint")
+          }
+        >
           {/* 一个 ComfyUI 装几十上百张图是常态 —— 超过阈值 OptionPicker 自己换成可搜索的那一版。 */}
           <OptionPicker
             value={generationConfig.workflow || "__default__"}
@@ -433,16 +447,9 @@ function GenerateWorkspace({
               { value: "__default__", label: t("comfyWorkflowDefault") },
               ...(comfyWorkflows.data ?? []).map((wf) => ({ value: wf.path, label: wf.name, keywords: [wf.path] })),
             ]}
-            className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground"
+            className={PARAMETER_CONTROL_CLASS}
           />
-          <span className="text-ui-2xs font-normal text-muted-foreground">
-            {comfyWorkflows.isError
-              ? t("comfyWorkflowError")
-              : comfyWorkflows.data && comfyWorkflows.data.length === 0
-                ? t("comfyWorkflowEmpty")
-                : t("comfyWorkflowHint")}
-          </span>
-        </label>
+        </ParameterField>
         {generationConfig.workflow && visibleParams.length > 0 && (
           <div className="grid gap-2 rounded-lg border border-border bg-panel/50 p-2.5">
             <span className="text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{t("comfyParams")}</span>
@@ -858,116 +865,204 @@ function GenerateWorkspace({
         </form>
       </section>
 
-      <aside className={cn("min-h-0 flex min-w-0 flex-col gap-5 overflow-y-auto overflow-x-hidden border-l border-divider bg-workspace-panel px-5 pb-6", !parametersOpen && "hidden", parametersOpen && narrowLayout && "workspace-overlay absolute inset-y-0 right-0 z-30 w-[min(340px,100%)] shadow-xl")}>
-        <div className="-mx-5 flex min-h-16 items-center justify-between gap-3 border-b border-divider px-5 py-3">
-          <h2 className="text-ui-md font-semibold">{t("generationEngineSettings")}</h2><Button variant="ghost" size="icon-xs" aria-label={t("close")} onClick={() => setParametersOpen(false)}><X /></Button>
+      {/* 参数栏和对话页右侧的智能体检查器是同一件东西:同一侧、同为"若干块各自成组"。
+          所以壳子也用同一个(InspectorCard)—— 标题行的字号字重、块与块之间的 gap-6、
+          正文的 p-4,都跟着那边走,不再自成一套。 */}
+      <aside
+        className={cn(
+          "flex min-h-0 min-w-0 flex-col border-l border-divider bg-workspace-panel",
+          !parametersOpen && "hidden",
+          parametersOpen && narrowLayout && "workspace-overlay absolute inset-y-0 right-0 z-30 w-[min(340px,100%)] shadow-xl",
+        )}
+        aria-label={t("generationEngineSettings")}
+      >
+        {/* 标题行**不跟着滚** —— 滚动挪到下面那层。此前整个 aside 是滚动容器,往下翻两栏,
+            标题和那个关闭按钮就一起滚出视野。高度对齐左边工具栏的 min-h-14,两条分隔线连成一条。 */}
+        <div className="flex min-h-14 shrink-0 items-center justify-between gap-2 border-b border-divider px-4">
+          <h2 className="m-0 text-ui-sm font-semibold">{t("generationEngineSettings")}</h2>
+          <Button variant="ghost" size="icon-xs" aria-label={t("close")} onClick={() => setParametersOpen(false)}>
+            <X />
+          </Button>
         </div>
-        {!selectedModel && !generationModelsLoading && (
-          <ConfigNotice
-            message={t("aiCapabilityNotConfigured").replace("{capability}", capabilityLabel("image"))}
-            actionLabel={t("wfGoConfigure")}
-            section="providers:image"
-            className="items-center gap-[7px] rounded-lg px-[9px] py-2 text-ui-xs leading-[1.45]"
-            textClassName="line-clamp-3"
-            actionClassName="self-center"
-          />
-        )}
-        {selectedModel && selectedCapabilityMissing && (
-          <ConfigNotice
-            message={t("aiCapabilityNotConfigured").replace("{capability}", capabilityLabel(selectedModel.kind))}
-            actionLabel={t("wfGoConfigure")}
-            section={`providers:${selectedModel.kind}`}
-            className="items-center gap-[7px] rounded-lg px-[9px] py-2 text-ui-xs leading-[1.45]"
-            textClassName="line-clamp-2"
-            actionClassName="self-center"
-          />
-        )}
-        {selectedModel && !selectedAdapterAvailable && (
-          <div className="flex items-center gap-1.5 text-ui-xs text-destructive">
-            <CircleAlert size={13} />
-            {t("generationAdapterUnavailable").replace("{engine}", `${selectedModel.provider} · ${selectedModel.model}`)}
-          </div>
-        )}
-        {selectedModel && (
-          <>
-            <label className="grid gap-2 text-ui-sm font-medium text-foreground">
-              <span>{t("wfModelPreset")}</span>
-              {/* 模型清单按能力分组,且**一定**是长清单 —— 直接给可搜索的那一版,不走阈值。
-                  每行的图标撤了:它编码的是"图片还是视频",而分组标题已经说了同一件事,
-                  搜索框在的时候那枚重复的小图标只是占掉了名字的位置。 */}
-              <SearchableSelect
-                value={selectedModel.value}
-                onValueChange={selectEngine}
-                options={modelGroups.flatMap((group) =>
-                  group.models.map((model) => ({
-                    value: model.value,
-                    label: model.label,
-                    group: capabilityLabel(group.kind),
-                  })),
+
+        <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(0,1fr)] content-start gap-6 overflow-y-auto overflow-x-hidden p-4">
+          {!selectedModel && !generationModelsLoading && (
+            <ConfigNotice
+              message={t("aiCapabilityNotConfigured").replace("{capability}", capabilityLabel("image"))}
+              actionLabel={t("wfGoConfigure")}
+              section="providers:image"
+              className="items-center gap-[7px] rounded-lg px-[9px] py-2 text-ui-xs leading-[1.45]"
+              textClassName="line-clamp-3"
+              actionClassName="self-center"
+            />
+          )}
+          {selectedModel && selectedCapabilityMissing && (
+            <ConfigNotice
+              message={t("aiCapabilityNotConfigured").replace("{capability}", capabilityLabel(selectedModel.kind))}
+              actionLabel={t("wfGoConfigure")}
+              section={`providers:${selectedModel.kind}`}
+              className="items-center gap-[7px] rounded-lg px-[9px] py-2 text-ui-xs leading-[1.45]"
+              textClassName="line-clamp-2"
+              actionClassName="self-center"
+            />
+          )}
+          {selectedModel && !selectedAdapterAvailable && (
+            <div className="flex items-center gap-1.5 text-ui-xs text-destructive">
+              <CircleAlert size={13} />
+              {t("generationAdapterUnavailable").replace("{engine}", `${selectedModel.provider} · ${selectedModel.model}`)}
+            </div>
+          )}
+          {selectedModel && (
+            <>
+              <ParameterSection icon={Cpu} title={t("genSectionEngine")}>
+                <ParameterField label={t("wfModelPreset")}>
+                  {/* 模型清单按能力分组,且**一定**是长清单 —— 直接给可搜索的那一版,不走阈值。
+                      每行的图标撤了:它编码的是"图片还是视频",而分组标题已经说了同一件事,
+                      搜索框在的时候那枚重复的小图标只是占掉了名字的位置。 */}
+                  <SearchableSelect
+                    value={selectedModel.value}
+                    onValueChange={selectEngine}
+                    options={modelGroups.flatMap((group) =>
+                      group.models.map((model) => ({
+                        value: model.value,
+                        label: model.label,
+                        group: capabilityLabel(group.kind),
+                      })),
+                    )}
+                    emptyText={t("cmdkEmpty")}
+                    className={PARAMETER_CONTROL_CLASS}
+                  />
+                </ParameterField>
+                {comfyWorkflowSection}
+              </ParameterSection>
+
+              {/* 出片规格 = "出多大、出几张、出多久、带不带声" —— 看一眼就知道成片长什么样的那几栏。
+                  怎么出(seed、反向提示词、各家自己加的开关)在下面那块。 */}
+              <ParameterSection icon={Ratio} title={t("genSectionOutput")}>
+                {/* 尺寸**不属于任何一支**:图像收 `1024x1024`,万相视频收 `832*480`,都是"出多大"。
+                    此前它锁在 image 分支里,于是一个声明了 size 的视频模型连这一栏都不出现 ——
+                    参数描述符说了话而界面没听。 */}
+                {supportsParameter(selectedModel, "size") && selectedSizes.length > 0 && (
+                  <ParameterField label={t("genSize")}>
+                    <Select value={generationConfig.size} onValueChange={(value) => setConfigValue("size", value)}>
+                      <SelectTrigger className={PARAMETER_CONTROL_CLASS}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {selectedSizes.map((size) => (
+                          <SelectItem key={size} value={size}>
+                            {size}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </ParameterField>
                 )}
-                emptyText={t("cmdkEmpty")}
-                className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground"
-              />
-            </label>
-            {comfyWorkflowSection}
-            {/* 尺寸**不属于任何一支**:图像收 `1024x1024`,万相视频收 `832*480`,都是"出多大"。
-                此前它锁在 image 分支里,于是一个声明了 size 的视频模型连这一栏都不出现 ——
-                参数描述符说了话而界面没听。 */}
-            {supportsParameter(selectedModel, "size") && selectedSizes.length > 0 && (
-              <label className="grid gap-2 text-ui-sm font-medium text-foreground">
-                <span>{t("genSize")}</span>
-                <Select value={generationConfig.size} onValueChange={(value) => setConfigValue("size", value)}>
-                  <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {selectedSizes.map((size) => (
-                      <SelectItem key={size} value={size}>
-                        {size}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
-            )}
-            {selectedModel.kind === "image" ? (
-              <>
-                {supportsParameter(selectedModel, "num_images") && (
-                  <label className="grid gap-2 text-ui-sm font-medium text-foreground">
-                    <span>{t("genNumImages")}</span>
+                {isImageModel && supportsParameter(selectedModel, "num_images") && (
+                  <ParameterField label={t("genNumImages")}>
                     <Input
-                      className="h-8 w-full min-w-0 rounded-lg border-border bg-control px-2.5 text-ui-sm font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+                      className={PARAMETER_CONTROL_CLASS}
                       type="number"
                       min={1}
                       max={maxImages(selectedModel)}
                       value={generationConfig.numImages}
                       onChange={(event) => setConfigValue("numImages", event.target.value)}
                     />
-                  </label>
+                  </ParameterField>
                 )}
-                {supportsParameter(selectedModel, "seed") && (
-                  <label className="grid gap-2 text-ui-sm font-medium text-foreground">
-                    <span>{t("genSeed")}</span>
-                    <Input
-                      className="h-8 w-full min-w-0 rounded-lg border-border bg-control px-2.5 text-ui-sm font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
-                      type="number"
-                      placeholder="auto"
-                      value={generationConfig.seed}
-                      onChange={(event) => setConfigValue("seed", event.target.value)}
-                    />
-                  </label>
+                {!isImageModel && supportsParameter(selectedModel, "resolution") && selectedResolutions.length > 0 && (
+                  <ParameterField label={t("genResolution")}>
+                    <Select
+                      value={generationConfig.resolution}
+                      onValueChange={(value) => {
+                        const durations = durationChoices(selectedModel, value);
+                        setGenerationConfig((current) => ({
+                          ...current,
+                          resolution: value,
+                          durationSeconds: durations.length > 0 && !durations.includes(Number(current.durationSeconds))
+                            ? String(durations[0])
+                            : current.durationSeconds,
+                        }));
+                      }}
+                    >
+                      <SelectTrigger className={PARAMETER_CONTROL_CLASS}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {selectedResolutions.map((resolution) => (
+                          <SelectItem key={resolution} value={resolution}>
+                            {resolution}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </ParameterField>
                 )}
-                {supportsNegativePrompt && (
-                  <label className="grid gap-2 text-ui-sm font-medium text-foreground">
-                    <span>{t("genNegativePrompt")}</span>
-                    <Input
-                      className="h-8 w-full min-w-0 rounded-lg border-border bg-control px-2.5 text-ui-sm font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
-                      value={generationConfig.negativePrompt}
-                      onChange={(event) => setConfigValue("negativePrompt", event.target.value)}
-                    />
-                  </label>
+                {!isImageModel && supportsParameter(selectedModel, "aspect_ratio") && selectedAspectRatios.length > 0 && (
+                  <ParameterField label={t("genAspectRatio")}>
+                    <Select value={generationConfig.aspectRatio} onValueChange={(value) => setConfigValue("aspectRatio", value)}>
+                      <SelectTrigger className={PARAMETER_CONTROL_CLASS}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {selectedAspectRatios.map((ratio) => (
+                          <SelectItem key={ratio} value={ratio}>
+                            {ratio}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </ParameterField>
                 )}
-                {supportsReferenceImage && (
+                {!isImageModel && supportsParameter(selectedModel, "duration_seconds") && (
+                  <ParameterField label={t("genDuration")}>
+                    {selectedDurations.length > 0 ? (
+                      <Select value={generationConfig.durationSeconds} onValueChange={(value) => setConfigValue("durationSeconds", value)}>
+                        <SelectTrigger className={PARAMETER_CONTROL_CLASS}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {selectedDurations.map((duration) => (
+                            <SelectItem key={duration} value={String(duration)}>
+                              {duration === -1 ? t("genDurationAuto") : `${duration}s`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        className={PARAMETER_CONTROL_CLASS}
+                        type="number"
+                        value={generationConfig.durationSeconds}
+                        onChange={(event) => setConfigValue("durationSeconds", event.target.value)}
+                      />
+                    )}
+                  </ParameterField>
+                )}
+                {!isImageModel && supportsParameter(selectedModel, "generate_audio") && (
+                  <ParameterField label={t("genGenerateAudio")}>
+                    <Select
+                      value={generationConfig.generateAudio ? "true" : "false"}
+                      onValueChange={(value) =>
+                        setGenerationConfig((current) => ({ ...current, generateAudio: value === "true" }))
+                      }
+                    >
+                      <SelectTrigger className={PARAMETER_CONTROL_CLASS}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="true">{t("boardWithSound")}</SelectItem>
+                        <SelectItem value="false">{t("boardMuted")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </ParameterField>
+                )}
+              </ParameterSection>
+
+              {/* 挂进去的素材:首尾帧、参考图/视频/音频、要编辑或续写的那段片子。
+                  它们都是"你给模型什么",和上面那块"模型给你什么"正好是两头。 */}
+              <ParameterSection icon={Images} title={t("genSectionSources")}>
+                {isImageModel && supportsReferenceImage && (
                   // 图像的参考图和视频那边**是同一件事**,所以用同一个控件:一行缩略图、一次能选
                   // 多张、上限读描述符(seedream 4 十四张、qwen 三张、gpt-image 十六张)。
                   // 此前这里自成一套 —— 单张、老样式,于是同一个"参考图"在两个 tab 里长得不一样,
@@ -1001,100 +1096,6 @@ function GenerateWorkspace({
                       </Button>
                     )}
                   </div>
-                )}
-              </>
-            ) : (
-              <>
-                {supportsParameter(selectedModel, "duration_seconds") && (
-                  <label className="grid gap-2 text-ui-sm font-medium text-foreground">
-                    <span>{t("genDuration")}</span>
-                    {selectedDurations.length > 0 ? (
-                      <Select value={generationConfig.durationSeconds} onValueChange={(value) => setConfigValue("durationSeconds", value)}>
-                        <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {selectedDurations.map((duration) => (
-                            <SelectItem key={duration} value={String(duration)}>
-                              {duration === -1 ? t("genDurationAuto") : `${duration}s`}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Input
-                        className="h-8 w-full min-w-0 rounded-lg border-border bg-control px-2.5 text-ui-sm font-medium text-foreground focus-visible:border-primary focus-visible:ring-primary/20"
-                        type="number"
-                        value={generationConfig.durationSeconds}
-                        onChange={(event) => setConfigValue("durationSeconds", event.target.value)}
-                      />
-                    )}
-                  </label>
-                )}
-                {supportsParameter(selectedModel, "generate_audio") && (
-                  <label className="grid gap-2 text-ui-sm font-medium text-foreground">
-                    <span>{t("genGenerateAudio")}</span>
-                    <Select
-                      value={generationConfig.generateAudio ? "true" : "false"}
-                      onValueChange={(value) =>
-                        setGenerationConfig((current) => ({ ...current, generateAudio: value === "true" }))
-                      }
-                    >
-                      <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="true">{t("boardWithSound")}</SelectItem>
-                        <SelectItem value="false">{t("boardMuted")}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </label>
-                )}
-                {supportsParameter(selectedModel, "resolution") && selectedResolutions.length > 0 && (
-                  <label className="grid gap-2 text-ui-sm font-medium text-foreground">
-                    <span>{t("genResolution")}</span>
-                    <Select
-                      value={generationConfig.resolution}
-                      onValueChange={(value) => {
-                        const durations = durationChoices(selectedModel, value);
-                        setGenerationConfig((current) => ({
-                          ...current,
-                          resolution: value,
-                          durationSeconds: durations.length > 0 && !durations.includes(Number(current.durationSeconds))
-                            ? String(durations[0])
-                            : current.durationSeconds,
-                        }));
-                      }}
-                    >
-                      <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {selectedResolutions.map((resolution) => (
-                          <SelectItem key={resolution} value={resolution}>
-                            {resolution}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
-                )}
-                {supportsParameter(selectedModel, "aspect_ratio") && selectedAspectRatios.length > 0 && (
-                  <label className="grid gap-2 text-ui-sm font-medium text-foreground">
-                    <span>{t("genAspectRatio")}</span>
-                    <Select value={generationConfig.aspectRatio} onValueChange={(value) => setConfigValue("aspectRatio", value)}>
-                      <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {selectedAspectRatios.map((ratio) => (
-                          <SelectItem key={ratio} value={ratio}>
-                            {ratio}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
                 )}
                 {supportsFirstFrame && (
                   <KeyframePairField
@@ -1140,55 +1141,78 @@ function GenerateWorkspace({
                     disabledReason={t("genSourceGroupsExclusive")}
                   />
                 ))}
-              </>
-            )}
-            {booleanParameterKeys(selectedModel).filter((key) => key !== "generate_audio").map((key) => {
-              const labelKey = GENERATION_BOOLEAN_LABELS[key];
-              return (
-                <label key={key} className="grid gap-2 text-ui-sm font-medium text-foreground">
-                  <span>{labelKey ? t(labelKey) : key}</span>
-                  <Select
-                    value={generationConfig.booleanParameters[key] ? "true" : "false"}
-                    onValueChange={(value) => setGenerationConfig((current) => ({
-                      ...current,
-                      booleanParameters: { ...current.booleanParameters, [key]: value === "true" },
-                    }))}
-                  >
-                    <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="true">{t("wfGenToggleOn")}</SelectItem>
-                      <SelectItem value="false">{t("wfGenToggleOff")}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </label>
-              );
-            })}
-            {parameterChoiceEntries(selectedModel).map(([key, choices]) => {
-              const labelKey = GENERATION_PARAMETER_LABELS[key];
-              return (
-                <label key={key} className="grid gap-2 text-ui-sm font-medium text-foreground">
-                  <span>{labelKey ? t(labelKey) : key}</span>
-                  <Select
-                    value={generationConfig.enumParameters[key] ?? capabilityString(selectedModel, `default_${key}`, choices[0] ?? "")}
-                    onValueChange={(value) => setGenerationConfig((current) => ({
-                      ...current,
-                      enumParameters: { ...current.enumParameters, [key]: value },
-                    }))}
-                  >
-                    <SelectTrigger className="h-8 w-full rounded-lg border-border bg-field text-ui-sm font-medium text-foreground">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {choices.map((choice) => <SelectItem key={choice} value={choice}>{choice}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </label>
-              );
-            })}
-          </>
-        )}
+              </ParameterSection>
+
+              {/* 调参:seed、反向提示词,以及各家自己加的开关和枚举。它们决定"怎么出",
+                  多数时候不用动 —— 所以排在最后,而不是和尺寸、张数混在一起。 */}
+              <ParameterSection icon={SlidersHorizontal} title={t("genSectionAdvanced")}>
+                {isImageModel && supportsParameter(selectedModel, "seed") && (
+                  <ParameterField label={t("genSeed")}>
+                    <Input
+                      className={PARAMETER_CONTROL_CLASS}
+                      type="number"
+                      placeholder="auto"
+                      value={generationConfig.seed}
+                      onChange={(event) => setConfigValue("seed", event.target.value)}
+                    />
+                  </ParameterField>
+                )}
+                {isImageModel && supportsNegativePrompt && (
+                  <ParameterField label={t("genNegativePrompt")}>
+                    <Input
+                      className={PARAMETER_CONTROL_CLASS}
+                      value={generationConfig.negativePrompt}
+                      onChange={(event) => setConfigValue("negativePrompt", event.target.value)}
+                    />
+                  </ParameterField>
+                )}
+                {booleanParameterKeys(selectedModel).filter((key) => key !== "generate_audio").map((key) => {
+                  const labelKey = GENERATION_BOOLEAN_LABELS[key];
+                  return (
+                    <ParameterField key={key} label={labelKey ? t(labelKey) : key}>
+                      <Select
+                        value={generationConfig.booleanParameters[key] ? "true" : "false"}
+                        onValueChange={(value) => setGenerationConfig((current) => ({
+                          ...current,
+                          booleanParameters: { ...current.booleanParameters, [key]: value === "true" },
+                        }))}
+                      >
+                        <SelectTrigger className={PARAMETER_CONTROL_CLASS}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="true">{t("wfGenToggleOn")}</SelectItem>
+                          <SelectItem value="false">{t("wfGenToggleOff")}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </ParameterField>
+                  );
+                })}
+                {parameterChoiceEntries(selectedModel).map(([key, choices]) => {
+                  const labelKey = GENERATION_PARAMETER_LABELS[key];
+                  return (
+                    <ParameterField key={key} label={labelKey ? t(labelKey) : key}>
+                      <Select
+                        value={generationConfig.enumParameters[key] ?? capabilityString(selectedModel, `default_${key}`, choices[0] ?? "")}
+                        onValueChange={(value) => setGenerationConfig((current) => ({
+                          ...current,
+                          enumParameters: { ...current.enumParameters, [key]: value },
+                        }))}
+                      >
+                        <SelectTrigger className={PARAMETER_CONTROL_CLASS}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {choices.map((choice) => <SelectItem key={choice} value={choice}>{choice}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </ParameterField>
+                  );
+                })}
+              </ParameterSection>
+            </>
+          )}
+        </div>
       </aside>
     </div>
   );
