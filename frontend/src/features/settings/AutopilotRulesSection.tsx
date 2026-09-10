@@ -8,7 +8,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SettingsGroup, SettingsRow } from "@/features/settings/ui";
+import { SETTINGS_FIELD_WIDTH, SettingsGroup, SettingsRow } from "@/features/settings/ui";
 
 type Level = "ask" | "judge" | "always";
 type Rules = {
@@ -97,7 +97,7 @@ export function AutopilotRulesSection({ workspace }: { workspace: Workspace }) {
             disabled={!canEdit}
             onValueChange={(value) => patch({ [gate.key]: value as Level })}
           >
-            <SelectTrigger className="h-8 w-[180px] text-xs">
+            <SelectTrigger className={SETTINGS_FIELD_WIDTH}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

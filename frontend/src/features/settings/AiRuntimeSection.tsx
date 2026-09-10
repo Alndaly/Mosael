@@ -47,12 +47,13 @@ export function AiRuntimeSection() {
           type="number"
           min={0}
           max={10}
+          // 0–10 的两位数,标准字段宽度在这儿只会拖一条空槽。
           className="w-20"
           value={String(current)}
           disabled={config.isLoading}
           onChange={(e) => setDraft(e.target.value === "" ? 0 : clampRetries(Number(e.target.value)))}
         />
-        <Button size="sm" disabled={!dirty} loading={save.isPending} onClick={() => save.mutate(clampRetries(current))}>
+        <Button disabled={!dirty} loading={save.isPending} onClick={() => save.mutate(clampRetries(current))}>
           {t("save")}
         </Button>
       </SettingsRow>

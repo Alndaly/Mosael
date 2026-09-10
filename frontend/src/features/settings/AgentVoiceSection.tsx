@@ -18,7 +18,7 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Switch } from "@/components/ui/switch";
-import { SettingsGroup, SettingsRow } from "@/features/settings/ui";
+import { SETTINGS_FIELD_WIDTH, SettingsGroup, SettingsRow } from "@/features/settings/ui";
 import { SpeakButton } from "@/components/agent/SpeakButton";
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
@@ -109,7 +109,7 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
             setVoice("");
           }}
         >
-          <SelectTrigger className="w-[200px]" aria-label={t("agentVoiceEngine")}>
+          <SelectTrigger className={SETTINGS_FIELD_WIDTH} aria-label={t("agentVoiceEngine")}>
             <SelectValue placeholder={t("agentVoicePickEngine")} />
           </SelectTrigger>
           <SelectContent>
@@ -133,7 +133,7 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
             options={voiceChoices}
             ariaLabel={t("agentVoiceVoice")}
             placeholder={t("agentVoicePickVoice")}
-            className="w-[200px]"
+            className={SETTINGS_FIELD_WIDTH}
           />
           {/* 试听走的是**和播放按钮同一条路**,所以听到的就是它以后念给你的那个声音 ——
               另写一条试听接口的话,试听好听、真用起来不是它,而这种不一致最难查。 */}
@@ -142,7 +142,8 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
       </SettingsRow>
       <SettingsRow label={t("agentVoiceSpeed")} description={t("agentVoiceSpeedDesc")}>
         <Select value={String(speed)} onValueChange={(next) => setSpeed(Number(next))}>
-          <SelectTrigger className="w-[110px]" aria-label={t("agentVoiceSpeed")}>
+          {/* 语速只装得下「1.25×」—— 给它标准宽度等于在一个数字后面拖一条空槽。 */}
+        <SelectTrigger className="w-[110px]" aria-label={t("agentVoiceSpeed")}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

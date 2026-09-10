@@ -111,6 +111,19 @@ export function SettingsRow({
   );
 }
 
+/**
+ * 设置行右边那一格的**标准宽度**。
+ *
+ * 那一格是 `auto` 列 —— 控件要多宽就多宽。于是各个 tab 各写各的:实测过一遍是
+ * 320 / 260 / 200 / 180 六种宽度并存,而它们在版面上是同一个位置。一个 tab 切到另一个 tab,
+ * 右边那一列会跟着跳,看起来像每一页的表单都是另一套刻度。
+ *
+ * 文字类的字段(地址、备注、下拉选名字)一律走这个宽度。**真的只装得下几个字符的不走** ——
+ * 0–10 的重试次数、1.0× 的语速,给它 280px 只会在一个数字后面拖一条空槽;那种就地写死,
+ * 并且写清楚为什么。
+ */
+export const SETTINGS_FIELD_WIDTH = "w-[280px] max-w-full";
+
 /** Full-width slot inside a group (forms, QR panels, lists). */
 export function SettingsBlock({ children, className }: { children: React.ReactNode; className?: string }) {
   return <div data-slot="settings-block" className={cn("grid gap-4 px-0.5 py-5", className)}>{children}</div>;

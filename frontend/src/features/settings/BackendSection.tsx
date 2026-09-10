@@ -10,7 +10,7 @@ import { ServerPicker } from "@/components/layout/ServerPicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { SettingsGroup, SettingsRow, SettingsSectionStack } from "@/features/settings/ui";
+import { SETTINGS_FIELD_WIDTH, SettingsGroup, SettingsRow, SettingsSectionStack } from "@/features/settings/ui";
 
 type NetworkConfig = components["schemas"]["NetworkConfigOut"];
 
@@ -130,7 +130,7 @@ function ProxySection() {
     <SettingsGroup title={t("proxyTitle")} description={t("proxyDesc")}>
       <SettingsRow label={t("proxyUrl")} description={t("proxyUrlDesc")}>
         <Input
-          className="w-[320px] max-w-full"
+          className={SETTINGS_FIELD_WIDTH}
           placeholder="http://127.0.0.1:7890"
           value={current.proxy_url}
           onChange={(e) => setForm({ ...current, proxy_url: e.target.value })}
@@ -138,7 +138,7 @@ function ProxySection() {
       </SettingsRow>
       <SettingsRow label={t("proxyNoProxy")} description={t("proxyNoProxyDesc")}>
         <Input
-          className="w-[320px] max-w-full"
+          className={SETTINGS_FIELD_WIDTH}
           placeholder="example.com, 10.0.0.0/8"
           value={current.no_proxy}
           onChange={(e) => setForm({ ...current, no_proxy: e.target.value })}

@@ -71,6 +71,14 @@ const PORTALED = new Set([
 ]);
 /** 文字节点,不是控件。 */
 const TEXT = new Set(["span", "p", "strong", "em", "small", "code", "Skeleton", "svg"]);
+/**
+ * **自己把 children 摆成一行的组件。**
+ *
+ * 判据本来是"父元素身上写着 flex + items-center" —— 而 SettingsRow 的那一行写在组件里
+ * (`ui.tsx` 的控件槽),调用点只看得见 `<SettingsRow>`。于是设置页的每一行控件对这条棘轮
+ * 都是隐形的:一个 40px 的输入框旁边配 32px 的保存键,一直没人拦。
+ */
+const ROW_COMPONENT = new Set(["SettingsRow", "SettingsField"]);
 
 function files(dir: string, ext: RegExp): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -195,7 +203,8 @@ function measure(tag: string, attrs: string, parentClass: string | undefined): n
   }
   return null;
 }
-function rowOf(attrs: string): { cls?: string } | null {
+function rowOf(attrs: string, tag?: string): { cls?: string } | null {
+  if (tag && ROW_COMPONENT.has(tag)) return {};
   const cls = classOf(attrs);
   if (/\bflex\b/.test(cls) && !/\bflex-col\b/.test(cls) && /\bitems-(center|stretch|baseline)\b/.test(cls))
     return {};
@@ -242,7 +251,7 @@ function scan(file: string) {
     const cls = classOf(attrs);
     const at = decls.get(cls.split(/\s+/).find((n) => decls.has(n)) ?? "");
     const padding = at ? blockPadding(at) : null;
-    stack.push({ tag, cls, row: rowOf(attrs), kids: [], self: own, pad: padding ? padding[0] + padding[1] : 0 });
+    stack.push({ tag, cls, row: rowOf(attrs, tag), kids: [], self: own, pad: padding ? padding[0] + padding[1] : 0 });
   }
   while (stack.length) {
     const frame = stack.pop()!;

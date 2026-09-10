@@ -175,7 +175,7 @@ function VoiceRow({
       <div className="grid min-w-0 flex-1 gap-0.5">
         {editing ? (
           <Input
-            className="h-7 min-w-0"
+            className="h-8 min-w-0"
             value={name}
             onChange={(event) => setName(event.target.value)}
             autoFocus

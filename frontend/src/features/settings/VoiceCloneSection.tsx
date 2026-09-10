@@ -243,7 +243,7 @@ export function VoiceCloneSection() {
                       不用「加 key 让它重挂」那招:重挂本身同样会带出一次 change。 */}
                   {!loaded ? (
                     // 占位不能用 SelectTrigger —— 它必须长在 Select 里面。
-                    <div className="flex h-9 w-full items-center rounded-md border border-field-border bg-transparent px-3 py-2 text-sm text-muted-foreground">
+                    <div className="flex h-10 w-full items-center rounded-md border border-field-border bg-transparent px-3 py-2 text-ui-sm text-muted-foreground">
                       {t("optionsLoading")}
                     </div>
                   ) : (

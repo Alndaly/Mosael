@@ -17,6 +17,7 @@ import {
   SettingsListItem,
   SettingsRow,
   SettingsSectionStack,
+  SETTINGS_FIELD_WIDTH,
 } from "@/features/settings/ui";
 
 type DeploymentUser = {
@@ -124,7 +125,7 @@ export function DeploymentSection({ showAdmins = true }: { showAdmins?: boolean 
         >
           <div className="flex w-full flex-wrap gap-1.5">
             <Input
-              className="h-8 max-w-[260px] text-xs"
+              className={SETTINGS_FIELD_WIDTH}
               value={note}
               placeholder={t("deployInviteNotePlaceholder")}
               onChange={(event) => setNote(event.currentTarget.value)}
@@ -135,7 +136,7 @@ export function DeploymentSection({ showAdmins = true }: { showAdmins?: boolean 
                 }
               }}
             />
-            <Button size="sm" loading={createInvite.isPending} onClick={() => createInvite.mutate()}>
+            <Button loading={createInvite.isPending} onClick={() => createInvite.mutate()}>
               <Plus size={13} /> {t("deployInviteCreate")}
             </Button>
           </div>

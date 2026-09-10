@@ -96,7 +96,7 @@ function DefaultRow({
           })),
         ]}
         placeholder={options.length === 0 ? t("providerDefaultsNoModels") : t("agentModelPlaceholder")}
-        className="h-8 w-full min-w-0"
+        className="w-full min-w-0"
       />
     </SettingsRow>
   );
