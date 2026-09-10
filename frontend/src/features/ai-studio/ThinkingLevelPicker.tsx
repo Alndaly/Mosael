@@ -103,21 +103,34 @@ export function ThinkingLevelPicker({ session }: { session: AgentSession | null 
       </button>
     );
   }
-  const raw = levels.includes(session.thinking_level) ? session.thinking_level : "off";
-  // 只能开/关的模型上,会话里存着的 medium/high 要落到"开"这一档,否则触发器是空的。
-  const value = raw === "off" || levels.includes(raw) ? raw : levels[1] ?? "off";
-  const binary = levels.length === 2;
+  /*
+   * **「没挑过」这个状态一直都在,清单里就得有它。**
+   *
+   * 会话的 thinking_level 建表默认是 `off`(见 db/models.py),而关不掉的模型(k3)清单里
+   * 没有 `off` —— 于是 Select 拿着一个清单里不存在的值,Radix 找不到对应的 ItemText,
+   * **触发器整个是空的**。每一个 k3 会话打开都是这样,而它正是这个功能要解决的那个模型。
+   *
+   * 补一档,但**不叫「关闭」**:我们确实没有关掉它(k3 关不掉),我们只是没提要求,由模型
+   * 自己决定 —— 所以这一档叫「模型默认」。这和当初那个 bug 不是一回事:那时的错在于嘴上说
+   * 「关闭」而实际什么都没发生;现在说的就是实际发生的事。
+   */
+  const offered = levels.includes("off") ? levels : ["off", ...levels];
+  const value = offered.includes(session.thinking_level) ? session.thinking_level : "off";
+  // 只有开/关两档时,「低」这个名字没有意义 —— 它不是三档里的低,它就是"开"。
+  // 判据看**这个清单**有几档:k3 补上「模型默认」之后是三档,那时「低」就是低。
+  const binary = offered.length === 2;
   const label = (level: string) =>
-    // 只有两档时,「低」这个名字没有意义 —— 它不是三档里的低,它就是"开"。
-    binary && level === "low"
-      ? t("agentThinkingOn")
-      : level === "low"
-      ? t("agentThinkingLow")
-      : level === "medium"
-        ? t("agentThinkingMedium")
-        : level === "high"
-          ? t("agentThinkingHigh")
-          : t("agentThinkingOff");
+    level === "off"
+      ? levels.includes("off")
+        ? t("agentThinkingOff")
+        : t("agentThinkingModelDefault")
+      : binary && level === "low"
+        ? t("agentThinkingOn")
+        : level === "low"
+          ? t("agentThinkingLow")
+          : level === "medium"
+            ? t("agentThinkingMedium")
+            : t("agentThinkingHigh");
   return (
     // key 随 value 重挂,规避 Radix 对初始受控值不刷新触发器文本的问题(与分析方式同一处理)。
     <Select key={value} value={value} onValueChange={(next) => setLevel.mutate(next)}>
@@ -132,7 +145,7 @@ export function ThinkingLevelPicker({ session }: { session: AgentSession | null 
         </span>
       </SelectTrigger>
       <SelectContent className="max-w-none">
-        {levels.map((level) => (
+        {offered.map((level) => (
           <SelectItem key={level} value={level}>
             {label(level)}
           </SelectItem>

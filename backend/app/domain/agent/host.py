@@ -678,6 +678,32 @@ def references_context(
     return "用户在这条消息里明确引用了下面这些对象(正文里写作 @名字):\n" + "\n".join(lines)
 
 
+def user_prompt(
+    content: str,
+    payload: dict | None,
+    *,
+    db: Session | None = None,
+    workspace_id: str = "",
+) -> str:
+    """用户那句话,**模型看到的**那一份。
+
+    落库的 `content` 只有用户自己写的字;模型还需要两样从 payload 里长出来的东西:这句话里
+    `@` 的是谁(引用清单),以及用户随手挂上的上下文集锦。
+
+    **两条路共用这一个函数是有原因的。** 直发和排队(agent 忙时)走的是同一件事,只是晚一点
+    跑,可它们此前各拼各的:排队那条只补了 context 和信封,引用清单漏了 —— 落库的 payload 里
+    有引用、气泡照它把胶囊画了回来,模型收到的却只是「@运镜练习」四个字,一个 id 都没有,
+    于是它去搜一个同名的,或者干脆编一个。信封当年漏的就是同一处,补的时候只补了一条路。
+
+    顺序:引用清单最里(先说清指代),用户上下文在外。
+    """
+    payload = payload or {}
+    prompt = _prompt_with_context(
+        content, references_context(payload.get("references"), db=db, workspace_id=workspace_id)
+    )
+    return _prompt_with_context(prompt, payload.get("context"))
+
+
 def agent_notice_envelope(content: str, origin_session_id: str) -> str:
     """另一个智能体会话发来的消息,**给模型看的**那一份。
 
@@ -758,15 +784,16 @@ def post_user_message(
     origin_job_id: str | None = None,
 ) -> AgentMessage:
     """Store the user message and run the agent turn on a worker thread."""
-    # 模型收到的那一份可以比落库的正文多两样东西:上下文集锦,以及"这条是别的会话发来的"信封。
-    # 两样都不进 content —— content 是**用户在对话里看到的**那份。
-    # 引用清单排在用户自己给的上下文**前面**:它说的是"这句话里的 @ 指谁",
-    # 先说清指代再说别的,读起来才顺。
-    prompt = _prompt_with_context(
-        content, references_context(references, db=db, workspace_id=session.workspace_id)
+    # 模型收到的那一份可以比落库的正文多几样东西:引用清单、上下文集锦,以及"这条是别的
+    # 会话发来的"信封。都不进 content —— content 是**用户在对话里看到的**那份。
+    # 前两样和排队那条共用 user_prompt,免得两条路各拼各的(引用当初就是这么漏掉的)。
+    prompt = user_prompt(
+        content,
+        {"references": references, "context": context},
+        db=db,
+        workspace_id=session.workspace_id,
     )
-    prompt = _prompt_with_context(prompt, context)
-    # 第三样:失败的那几轮模型没见过(失败不回存 adapter_state),而用户以为它见过。
+    # 再一样:失败的那几轮模型没见过(失败不回存 adapter_state),而用户以为它见过。
     prompt = _prompt_with_context(prompt, unseen_since_last_success(db, session))
     prompt = with_origin_envelope(prompt, origin_marker_for(origin_session_id, origin_job_id))
     # 另一个智能体会话发来的通知:落库带结构化来源(前端画徽章靠它),
@@ -1093,7 +1120,7 @@ def _drain_queue_locked(session_id: str) -> None:
         db.commit()
         token = _mint_service_token(db, owner, session_id)
         payload = message.payload or {}
-        content = _prompt_with_context(message.content, payload.get("context"))
+        content = user_prompt(message.content, payload, db=db, workspace_id=session.workspace_id)
         # 排队那条也要补信封:它和直发走的是同一件事,只是晚一点跑。漏在这儿的话,
         # 「对方正忙」时收到的消息,模型就不知道它是谁发的。
         content = with_origin_envelope(content, payload)

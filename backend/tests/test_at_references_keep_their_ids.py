@@ -119,3 +119,35 @@ def test_别的工作区的_id_当作不存在(tmp_path) -> None:
 
     assert "已不存在" in text
     assert board["id"] not in text
+
+
+def test_排队发出的那条也带着引用清单() -> None:
+    """agent 正忙时消息会先排队,晚一点由后台线程跑 —— 那条也得带上引用。
+
+    这处漏过一次:排队那条只补了 context 和信封,引用清单没补。落库的 payload 里有引用、
+    气泡照它把胶囊画了回来,**模型收到的却是另一份** —— 「@运镜练习」在它眼里只是四个字,
+    一个 id 都没有。这种漏没有任何报错:模型会去搜一个同名的,或者干脆编一个理由往下走。
+
+    所以两条路现在共用 user_prompt,这条钉的就是"共用"这件事本身。
+    """
+    payload = {
+        "queued": True,
+        "references": [{"kind": "asset", "id": "a1", "name": "运镜练习"}],
+        "context": "先看看这个",
+    }
+    queued = host.user_prompt("把 @运镜练习 改长一点", payload)
+    direct = host.user_prompt("把 @运镜练习 改长一点", {"references": payload["references"], "context": payload["context"]})
+
+    assert queued == direct
+    assert "id=a1" in queued
+    assert "analyze_asset" in queued
+    assert "先看看这个" in queued
+
+
+def test_排队的路径真的走的是那一个函数() -> None:
+    """上一条只证明函数对;这条盯着调用点 —— 漏掉的从来是"忘了调",不是"调错了"。"""
+    import inspect
+
+    drain = inspect.getsource(host._drain_queue_locked)
+    assert "user_prompt(" in drain, "排队这条路又自己拼 prompt 了"
+    assert "references_context(" not in drain, "拼法应当只有 user_prompt 一处"

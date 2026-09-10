@@ -9,6 +9,7 @@ vi.mock("@/app/preferences", () => ({
     ({
       agentThinkingLevel: "思考",
       agentThinkingOff: "关闭",
+      agentThinkingModelDefault: "模型默认",
       agentThinkingOn: "开启",
       agentThinkingLow: "低",
       agentThinkingMedium: "中",
@@ -96,6 +97,29 @@ describe("思考档位", () => {
     mount();
     await screen.findByRole("combobox");
     expect(screen.queryByText("关闭")).not.toBeInTheDocument();
+  });
+
+  /**
+   * 上一条只说了"不该有什么",而漏掉的一直是"那该有什么"。
+   *
+   * 会话的 thinking_level 建表默认是 off,而 k3 的清单里没有 off —— Select 拿着一个清单里
+   * 不存在的值,Radix 找不到对应的 ItemText,**触发器整个是空的**。每个 k3 会话打开都这样,
+   * 而它正是这个功能针对的那个模型。空白读起来是"坏了",不是"还没挑"。
+   */
+  it("k3 会话默认那一档:写的是「模型默认」,不是一片空白", async () => {
+    catalog = [model({ reasoning: true, thinking_levels: ["low", "high"] })];
+    mount();
+    const trigger = await screen.findByRole("combobox");
+    expect(trigger.textContent).not.toBe("");
+    expect(trigger.textContent).toContain("模型默认");
+  });
+
+  it("能关的模型照旧说「关闭」", async () => {
+    catalog = [model({ reasoning: true, thinking_levels: ["off", "low", "medium", "high"] })];
+    mount();
+    const trigger = await screen.findByRole("combobox");
+    expect(trigger.textContent).toContain("关闭");
+    expect(trigger.textContent).not.toContain("模型默认");
   });
 
   it("目录还没到时说「读取中」,不说「发不出去」", () => {

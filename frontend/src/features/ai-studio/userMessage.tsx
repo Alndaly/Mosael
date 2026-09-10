@@ -2,6 +2,7 @@ import React from "react";
 import type { JSONContent } from "@tiptap/react";
 
 import { AssetInlinePreview } from "@/components/app/asset-preview";
+import { documentText } from "@/features/agent/ChatComposer";
 import { ReferenceDocument } from "@/features/agent/ReferenceDocument";
 import { assetFileUrl, assetPreviewUrl } from "@/api/client";
 import type { ImagePreviewItem } from "@/components/app/image-preview";
@@ -61,6 +62,10 @@ export function chatMediaGallery(messages: readonly { role?: string; content: st
  * 抹平成一串 `@名字` —— 而那正是这次要修的毛病。
  *
  * 没有文档就走老路(纯文本 + 附件标记):**老消息还得能看**,而它们只有 content。
+ *
+ * **文档只覆盖用户敲的那一段。** 发出去的 content 后面还接着别的:笔记引用的 `@标题`、
+ * 文本附件内联成的围栏块 —— 它们是发送时拼上去的,不在编辑器里。只画文档的话,挂了三条
+ * 笔记发出去,气泡里一点痕迹都没有。所以文档之后把 content 剩下的那截接着画出来。
  */
 export function UserMessageContent({
   content,
@@ -72,10 +77,18 @@ export function UserMessageContent({
   mediaGallery?: ImagePreviewItem[];
 }) {
   const { text, attachments } = React.useMemo(() => parseUserContent(content), [content]);
+  //: 文档画的是用户敲的那一段,它是 content 的**前缀**(拼接顺序见 ChatWorkspace.submit)。
+  //: 对不上前缀时宁可不画尾巴,也不要把同一句话画两遍。
+  const trailing = React.useMemo(() => {
+    if (!document) return "";
+    const head = documentText(document).trim();
+    return text.startsWith(head) ? text.slice(head.length).trim() : "";
+  }, [document, text]);
   if (document) {
     return (
       <div className="grid gap-1.5">
         <ReferenceDocument document={document} />
+        {trailing && <div className="whitespace-pre-wrap">{trailing}</div>}
         {attachments.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {attachments.map((att) => (

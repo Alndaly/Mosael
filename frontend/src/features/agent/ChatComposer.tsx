@@ -13,16 +13,6 @@ import { cn } from "@/lib/utils";
 /** 菜单里最多摆几条。再多就该靠打字缩范围,而不是滚一整屏(同画布的提示词框)。 */
 const LIMIT = 12;
 
-/** 一次发送的内容:给模型看的那句话 + 结构化的引用。 */
-export interface ChatDraft {
-  /** `editor.getText()` —— 引用在里面是 `@名字`。 */
-  text: string;
-  /** 正文里出现过的引用,按出现顺序、去重。id 只走这里。 */
-  references: AgentReference[];
-  /** 原样的编辑器文档。落库之后气泡照它渲染,引用**仍然是胶囊**而不是一串字。 */
-  document: JSONContent;
-}
-
 /** 从文档里收出所有引用,按出现顺序去重。 */
 export function collectReferences(document: JSONContent | undefined): AgentReference[] {
   const out: AgentReference[] = [];
@@ -119,8 +109,13 @@ export function ChatComposer({
   workspaceId: string;
   value: JSONContent;
   onChange: (next: JSONContent) => void;
-  /** 回车发送(Shift+回车换行)。拿到的就是要发出去的那一份。 */
-  onSubmit: (draft: ChatDraft) => void;
+  /** 回车发送(Shift+回车换行)。
+   *
+   *  **不带参数**:要发的那一份就是 `value`(受控文档),调用方手上已经有它,而且它还要跟
+   *  附件、笔记引用拼在一起才成一条消息。此前这里另拼了一个 draft 交出去,两个调用方都
+   *  没接 —— 白算一趟,还多出一套 `editor.getText()` 的序列化(段落之间是 `\n\n`,而
+   *  documentText 是 `\n`),两套迟早对不上。 */
+  onSubmit: () => void;
   onPaste?: (event: React.ClipboardEvent) => boolean;
   placeholder?: string;
   className?: string;
@@ -200,11 +195,8 @@ export function ChatComposer({
       handlePaste: (_view, event) => (onPaste ? onPaste(event as unknown as React.ClipboardEvent) : false),
       handleKeyDown: (_view, event) => {
         if (!sendsOnEnter(event, menuOpenRef.current)) return false;
-        const instance = editorRef.current;
-        if (!instance) return false;
         event.preventDefault();
-        const document = instance.getJSON();
-        submitRef.current({ text: instance.getText().trim(), references: collectReferences(document), document });
+        submitRef.current();
         return true;
       },
     },
@@ -214,8 +206,6 @@ export function ChatComposer({
       onChange(next);
     },
   });
-  const editorRef = React.useRef(editor);
-  editorRef.current = editor;
 
   //: 外面改了(清空、把说的话填进来)才回灌 —— 自己发出去的那一版不跟,否则每敲一个字
   //: 都会被 prop 回流重建文档,光标跳到开头(画布那边同一个处理)。
