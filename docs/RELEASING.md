@@ -79,7 +79,7 @@ xcrun stapler validate /path/to/Mosael-VERSION-arm64.dmg
 spctl --assess --type open --context context:primary-signature --verbose=2 /path/to/Mosael-VERSION-arm64.dmg
 ```
 
-只读挂载最终 DMG，再次核对内部应用版本、签名与票据。记录两个公证 ID、安装包 SHA-256 和完整启动检查结果。代理问题参见签名说明；保留 TLS 验证，不修改系统安全策略。
+只读挂载最终 DMG，再次核对内部应用版本、签名与票据。记录两个公证 ID、安装包 SHA-256 和完整启动检查结果。代理问题参见签名说明；保留 TLS 验证，不修改系统安全策略。若 `codesign` 的时间戳失败但普通 HTTP 探测正常，注意它使用系统网络代理，而终端工具可能使用另一组代理环境变量。本机实际成功的处理是保存当前网络服务的代理例外列表，临时将 Apple 域名加入直连例外、仅为签名命令清除 HTTP/HTTPS/ALL_PROXY 环境变量，并在 finally/trap 中还原例外列表。先确认活跃网络服务名称；不要假定所有设备都叫 Wi-Fi，也不要把临时网络变更永久保留。
 
 ## 4. 整理发布附件
 
