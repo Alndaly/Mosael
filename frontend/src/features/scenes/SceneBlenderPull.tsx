@@ -4,6 +4,8 @@ import { Box, Loader2, MonitorSmartphone, Plug, ArrowUpRight } from "lucide-reac
 import { toast } from "sonner";
 import { api } from "@/api/transport";
 import { Button } from "@/components/ui/button";
+import { usePreferences } from "@/app/preferences";
+import { docsUrl } from "@/lib/deepLink";
 import { EmptyState } from "@/components/layout/EmptyState";
 import {
   Popover,
@@ -27,6 +29,7 @@ export function SceneBlenderPull({
   disabled?: boolean;
   onCreated: (sceneId: string) => void;
 }) {
+  const { locale } = usePreferences();
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState("");
   const connections = useQuery({
@@ -100,7 +103,7 @@ export function SceneBlenderPull({
             title="需要桌面版 Mosael"
             body="取回要读你这台电脑上的 Blender。当前后端不在你的电脑上，够不到它。"
             action={
-              <a className="scene-blender-link" href="https://mosael.com" target="_blank" rel="noreferrer">
+              <a className="scene-blender-link" href={docsUrl("start/download", locale)} target="_blank" rel="noreferrer">
                 下载桌面版 <ArrowUpRight size={14} />
               </a>
             }

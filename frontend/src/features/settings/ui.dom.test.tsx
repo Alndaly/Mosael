@@ -44,12 +44,32 @@ describe("settings section layout", () => {
     );
 
     expect(screen.getAllByRole("heading")).toHaveLength(3);
-    const separators = container.querySelectorAll('[data-slot="separator"]');
-    expect(separators).toHaveLength(2);
-    separators.forEach((separator) => {
-      expect(separator).toHaveClass("mb-7", "mt-3");
-      expect(separator).not.toHaveClass("my-3");
-    });
+    // 线画在**后一节**身上,由相邻兄弟触发 —— 不再插一个独立的 Separator 元素。
+    const stack = container.querySelector('[data-slot="settings-section-stack"]')!;
+    expect(stack.querySelectorAll('[data-slot="separator"]')).toHaveLength(0);
+    expect(stack.className).toContain("[&>[data-slot=settings-group]+[data-slot=settings-group]]:border-t");
+    // 紧贴上一节,下面留出下一节标题的层级;不用 my-*,那会和上一节最后一行的内边距叠起来。
+    expect(stack.className).toContain("[&>[data-slot=settings-group]+[data-slot=settings-group]]:mt-3");
+    expect(stack.className).toContain("[&>[data-slot=settings-group]+[data-slot=settings-group]]:pt-7");
+  });
+
+  it("走 portal 的孩子不算一节 —— 末尾不会多出一条底下什么都没有的线", () => {
+    /*
+     * 数据与诊断那一页把 AlertDialog 放在了 stack 里(它行内什么都不渲染),而此前的实现是
+     * 「index > 0 就先插一条 Separator」—— 于是页面末尾多出一条横线,底下什么都没有。
+     * 同类的还有 `{cond && <Group/>}` 里那个 false。
+     */
+    const { container } = render(
+      <SettingsSectionStack>
+        <SettingsGroup title="数据与诊断" />
+        {false && <SettingsGroup title="不会出现" />}
+        {/* 一个只走 portal 的孩子 */}
+        <>{null}</>
+      </SettingsSectionStack>,
+    );
+    const stack = container.querySelector('[data-slot="settings-section-stack"]')!;
+    expect(stack.querySelectorAll('[data-slot="settings-group"]')).toHaveLength(1);
+    expect(stack.querySelectorAll('[data-slot="separator"]')).toHaveLength(0);
   });
 
   it("keeps rows and flat-list items on the same 20px vertical rhythm", () => {

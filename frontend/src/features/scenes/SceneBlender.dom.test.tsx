@@ -14,6 +14,10 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.fn();
+vi.mock("@/app/preferences", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  usePreferences: () => ({ locale: "zh-CN" }),
+}));
 vi.mock("@/api/transport", () => ({
   api: (...args: unknown[]) => api(...args),
   API_BASE: "",

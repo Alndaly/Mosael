@@ -1,7 +1,6 @@
 import React from "react";
 
 import { EmptyState } from "@/components/layout/EmptyState";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 /**
@@ -219,16 +218,18 @@ export function SettingsListItem({ className, ...props }: React.ComponentProps<"
   return <div data-slot="settings-list-item" className={cn("px-0.5 py-5", className)} {...props} />;
 }
 
-function flattenSections(children: React.ReactNode): React.ReactNode[] {
-  return React.Children.toArray(children).flatMap((child) => {
-    if (React.isValidElement<{ children?: React.ReactNode }>(child) && child.type === React.Fragment) {
-      return flattenSections(child.props.children);
-    }
-    return [child];
-  });
-}
-
-/** Places real separators between settings sections instead of wrapping each section in a card. */
+/**
+ * 各节之间画一条分割线,而不是把每一节裹成一张卡片。
+ *
+ * **线由 CSS 的相邻兄弟画,不由 JS 数第几个孩子。** 此前是「index > 0 就先插一条 Separator」——
+ * 而"孩子"不等于"节":数据与诊断那一页在这里放了一个 AlertDialog(它走 portal,行内什么都不渲染),
+ * 于是页面末尾多出一条**底下什么都没有的横线**。同类的还有 `{cond && <Group/>}` 里那个 false、
+ * 以及任何顺手塞进来的对话框。
+ *
+ * 换成 `[data-slot=settings-group] + [data-slot=settings-group]`:只有真的画出来的两节相邻时
+ * 才有线,portal 和 false 天然不参与。间距也照旧 —— 线紧贴上一节(mt-3),下面留 pt-7 给下一节的
+ * 标题;不用 my-*,那会和上一节最后一行的内边距叠起来,看着上窄下宽。
+ */
 export function SettingsSectionStack({
   children,
   className,
@@ -236,26 +237,17 @@ export function SettingsSectionStack({
   children: React.ReactNode;
   className?: string;
 }) {
-  const sections = flattenSections(children).filter(Boolean);
-
   return (
     <div
       data-slot="settings-section-stack"
       className={cn(
-        "grid h-full min-h-0 content-start [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-description]]:text-ui-md [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-title]]:text-2xl [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-title]]:font-semibold [&>[data-slot=settings-group]:only-child]:h-full [&>[data-slot=settings-group]:only-child]:min-h-0 [&>[data-slot=settings-group]:only-child]:grid-rows-[auto_minmax(0,1fr)]",
+        "grid h-full min-h-0 content-start",
+        "[&>[data-slot=settings-group]+[data-slot=settings-group]]:mt-3 [&>[data-slot=settings-group]+[data-slot=settings-group]]:border-t [&>[data-slot=settings-group]+[data-slot=settings-group]]:border-divider [&>[data-slot=settings-group]+[data-slot=settings-group]]:pt-7",
+        "[&>[data-slot=settings-group]:first-child_[data-slot=settings-group-description]]:text-ui-md [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-title]]:text-2xl [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-title]]:font-semibold [&>[data-slot=settings-group]:only-child]:h-full [&>[data-slot=settings-group]:only-child]:min-h-0 [&>[data-slot=settings-group]:only-child]:grid-rows-[auto_minmax(0,1fr)]",
         className,
       )}
     >
-      {sections.map((section, index) => (
-        <React.Fragment
-          key={`settings-section-${index}-${React.isValidElement(section) && section.key != null ? String(section.key) : ""}`}
-        >
-          {/* 分割线属于上一节的收尾：紧贴上一节，只用下边距为下一节标题留出层级。
-              如果这里使用 my-*, 会和上一节最后一行的 py-3 叠加，造成视觉上的下宽上窄。 */}
-          {index > 0 && <Separator className="mb-7 mt-3 bg-divider" />}
-          {section}
-        </React.Fragment>
-      ))}
+      {children}
     </div>
   );
 }

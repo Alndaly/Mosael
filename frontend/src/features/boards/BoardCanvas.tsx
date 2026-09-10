@@ -125,6 +125,8 @@ function toNodes(items: BoardItem[]): Node[] {
 
 /** 把 React Flow 的当前状态汇成要存的画布。**位置以 React Flow 为准** —— 它才是刚被拖过的那份。 */
 export function toCanvas(nodes: Node[], edges: Edge[]): Canvas {
+  // 标记不是画板项,也连不了线 —— 所以它不进这张表。
+  const alive = new Set(nodes.filter((node) => node.type !== "marker").map((node) => node.id));
   return {
     items: nodes
       .filter((node) => node.type !== "marker")
@@ -138,7 +140,15 @@ export function toCanvas(nodes: Node[], edges: Edge[]): Canvas {
           height: Math.round(node.height ?? node.measured?.height ?? DEFAULT_SIZE[item.kind].height),
         };
       }),
-    edges: edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target })),
+    /*
+     * **不放出悬空的线。** 后端校验「连线两端必须都是画板上的项」,一根指向已删节点的线会让
+     * **整张画板存不下去** —— 用户看到的是「画板没能保存」,而画面上那个节点早就不见了,
+     * 根本联想不到是它。删除按钮那条路已经一并删线(见 removeSelected),这里是最后一道:
+     * 序列化是唯一知道 items 和 edges 全貌的地方,别的路径再漏一次也漏不出去。
+     */
+    edges: edges
+      .filter((edge) => alive.has(edge.source) && alive.has(edge.target))
+      .map((edge) => ({ id: edge.id, source: edge.source, target: edge.target })),
     // 标记单独一份,不混进 items —— 它没有素材、不生成、连不了线,混进去的话每一处遍历
     // items 的地方(生成、导出、缩略图、连线校验)都要先分辨一次"这个是不是标记"。
     markers: nodes
@@ -558,6 +568,25 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       current.map((node) => (node.id === MARKER_PREFIX + next.id ? { ...node, data: { ...node.data, marker: next } } : node)),
     );
   }, [setNodes]);
+
+  /**
+   * 删掉选中的这几项,**连同挂在它们上面的线**。
+   *
+   * 只删节点的话会留下一根两端悬空的线:画面上它跟着消失(React Flow 不画找不到端点的线),
+   * 但它还在 edges 里 —— 于是下一次自动保存被后端整个拒掉(「连线两端必须都是画板上的项」),
+   * 而用户只看到「画板没能保存」,和刚才删掉的那个节点对不上号。
+   *
+   * 键盘删除(Delete/Backspace)走的是 React Flow 自己的 deleteElements,它一直是连线一起删的
+   * —— 所以这个毛病只在工具条那颗垃圾桶上,也因此更难被发现。
+   */
+  const removeSelected = React.useCallback(() => {
+    // 两个 setter 分开调,不在 setNodes 的更新函数里顺手改 edges —— 那个函数在 StrictMode 下
+    // 会被调用两次,把副作用放进去就是跑两遍。
+    const gone = new Set(nodes.filter((node) => node.selected).map((node) => node.id));
+    if (gone.size === 0) return;
+    setNodes((current) => current.filter((node) => !gone.has(node.id)));
+    setEdges((current) => current.filter((edge) => !gone.has(edge.source) && !gone.has(edge.target)));
+  }, [nodes, setNodes, setEdges]);
 
   const deleteMarker = React.useCallback((id: string) => {
     setNodes((current) => current.filter((node) => node.id !== MARKER_PREFIX + id));
@@ -1365,6 +1394,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
       <ItemToolbar
         nodes={nodes}
         setNodes={setNodes}
+        onRemoveSelected={removeSelected}
         onPickAsset={onPickAsset}
         onSpawn={onGenerate ? spawnLinked : undefined}
         onTrimRequest={onTrim ? (id) => setTrimming((current) => (current === id ? null : id)) : undefined}
@@ -1490,6 +1520,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
 function ItemToolbar({
   nodes,
   setNodes,
+  onRemoveSelected,
   onPickAsset,
   onSpawn,
   onTrimRequest,
@@ -1497,6 +1528,8 @@ function ItemToolbar({
 }: {
   nodes: Node[];
   setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
+  /** 删掉选中的这几项 —— **连同挂在它们上面的线**。见 Inner 里的实现。 */
+  onRemoveSelected: () => void;
   onPickAsset: Props["onPickAsset"];
   /** 从这一项长出下一项并连上。没给 = 这张画板不支持生成(上层没接生成能力)。 */
   onSpawn?: (
@@ -1713,7 +1746,7 @@ function ItemToolbar({
           aria-label={t("delete")}
           title={t("delete")}
           className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:text-destructive"
-          onClick={() => setNodes((current) => current.filter((node) => !node.selected))}
+          onClick={onRemoveSelected}
         >
           <Trash2 size={13} />
         </button>

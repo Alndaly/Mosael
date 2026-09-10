@@ -13,6 +13,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { api, API_BASE, getAuthToken } from "@/api/transport";
+import { usePreferences } from "@/app/preferences";
+import { docsUrl } from "@/lib/deepLink";
 import type { Scene, SceneContent } from "@/api/domains/scenes";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -50,6 +52,7 @@ export function SceneBlender({
   apply: (content: SceneContent) => void;
   work: (label: string, fn: () => Promise<void>) => Promise<void>;
 }) {
+  const { locale } = usePreferences();
   const [open, setOpen] = React.useState(false),
     [chosen, setChosen] = React.useState(""),
     [selectedTransfer, setSelectedTransfer] = React.useState("");
@@ -165,7 +168,7 @@ export function SceneBlender({
             action={
               <a
                 className="scene-blender-link"
-                href="https://mosael.com"
+                href={docsUrl("start/download", locale)}
                 target="_blank"
                 rel="noreferrer"
               >
@@ -184,11 +187,9 @@ export function SceneBlender({
                 <a href="#/plugins" onClick={() => setOpen(false)}>
                   前往插件设置 <ArrowUpRight size={14} />
                 </a>
-                <a
-                  href="https://github.com/Alndaly/Mosael/tree/codex/scene-studio/plugins/examples/blender"
-                  target="_blank"
-                  rel="noreferrer"
-                >
+                {/* 曾经指向 `tree/codex/scene-studio/...` —— 那是一条**开发分支**,远端只有 main,
+                    所有人点进去都是 404。指南本来就有这一节,而且跟着界面语言走。 */}
+                <a href={docsUrl("guides/scenes", locale)} target="_blank" rel="noreferrer">
                   查看安装步骤 <ArrowUpRight size={14} />
                 </a>
               </div>
