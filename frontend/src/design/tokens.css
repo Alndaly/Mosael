@@ -414,6 +414,22 @@
     -webkit-backdrop-filter: var(--modal-filter);
     backdrop-filter: var(--modal-filter);
   }
+  /* 画在浮层/弹窗表面上的那条发丝线 —— 菜单里的分组线、面板里的行间线都是它。
+
+     `--divider` 是给**页面**那层调的:浅色 #e8ecf2 踩在 #f6f8fb / #ffffff 上,深色 #292d33
+     踩在 #141517 / #1e2023 上,对比 1.11~1.32。可 popover 的底色是 #292c30(深色),和
+     #292d33 差了 (0,1,3) —— 实测对比 **1.013**,那条线画了等于没画:用户看到的是"右键菜单
+     明明分了组却没有分割线"。modal 上也偏弱(1.09)。
+
+     换成前景色的低透明度叠加就没有这个问题:它合成在**当前这层**上,不管底下是 popover、
+     modal、画布浮窗,还是磨玻璃外观下半透的那几层,拉开的都是同一个相对差。实测浅色 1.16
+     (原本 1.15~1.19,几乎没变)、深色 1.25 —— 回到和页面上那条线同一个分量。
+     (Skeleton 从 bg-muted 改成 bg-foreground/12% 是同一个毛病的同一个解法。) */
+  .floating-surface,
+  .canvas-overlay-surface,
+  .modal-surface {
+    --divider: color-mix(in srgb, var(--foreground) 8%, transparent);
+  }
   .modal-overlay {
     -webkit-backdrop-filter: var(--modal-overlay-filter);
     backdrop-filter: var(--modal-overlay-filter);
