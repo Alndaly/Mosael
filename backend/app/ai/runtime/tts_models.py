@@ -16,6 +16,7 @@ import sys
 import subprocess
 import threading
 import time
+from datetime import datetime
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -145,6 +146,10 @@ def effective_source(engine_id: str, source: str) -> str:
     return source if source in sources_for(engine_id) else "hf"
 
 
+#: HuggingFace 下到一半的 blob。文件名形如 `<sha>.incomplete`。
+_PARTIAL_SUFFIX = ".incomplete"
+
+
 def _hf_roots() -> list[Path]:
     roots: list[Path] = []
     env = os.environ.get("HF_HUB_CACHE") or os.environ.get("HUGGINGFACE_HUB_CACHE")
@@ -158,11 +163,21 @@ def _hf_roots() -> list[Path]:
 
 
 def _dir_size(path: Path) -> int:
+    """目录里**已经落定**的字节数。
+
+    `*.incomplete` 不算:那是 HuggingFace 正在写(或者曾经写了一半)的 blob,它既不能加载,
+    也不代表进度已经到手 —— 下一次续传可能整个重来。而这个数同时当着三样东西用:进度条的
+    分子、"装好了没有"的体积兜底、以及失败日志里那句"量到多少"。
+
+    把半个文件算进去的后果,这个文件顶上已经写过一次(分片 2 才下三分之一、总量已经过线,
+    于是设置页写着「已安装」而合成在加载权重时炸)。用户机器上量到 1.40 GB / 需要 0.90 GB
+    却判"未装好",看着像自相矛盾 —— 其实是那 1.40 GB 里有一截根本不能用。
+    """
     total = 0
     try:
         for child in path.rglob("*"):
             try:
-                if child.is_file():
+                if child.is_file() and not child.name.endswith(_PARTIAL_SUFFIX):
                     total += child.stat().st_size
             except OSError:
                 continue
@@ -248,14 +263,25 @@ def _fish_manifest_complete(model: Path) -> bool | None:
     return actual >= expected if expected else True
 
 
-def _has_partial_downloads(engine: TtsEngine) -> bool:
-    """HuggingFace 缓存里下载中的 blob 叫 `*.incomplete` —— 它在就说明还没下完。"""
+def _partial_downloads(engine: TtsEngine) -> list[Path]:
+    """HuggingFace 缓存里下到一半的 blob(`*.incomplete`)。
+
+    **它们不会自己消失。** 一次中断的下载留下的残片会一直躺在 blobs 里,而"有残片就算没装好"
+    是个一票否决 —— 于是那个引擎会永远显示未装好,重下也不管用(重下产生的是新 blob,
+    老残片还在原地)。所以这里返回的是**路径**而不是布尔:日志要说得出是哪个文件、多大、
+    什么时候写的,用户才分得清"刚才那次还在下"和"八月那次的尸体"。
+    """
+    found: list[Path] = []
     for name in engine.cache_dirs:
         for root in _hf_roots():
-            found = root / name
-            if found.is_dir() and any(found.rglob("*.incomplete")):
-                return True
-    return False
+            cached = root / name
+            if cached.is_dir():
+                found.extend(sorted(cached.rglob(f"*{_PARTIAL_SUFFIX}")))
+    return found
+
+
+def _has_partial_downloads(engine: TtsEngine) -> bool:
+    return bool(_partial_downloads(engine))
 
 
 def _install_verdict(engine: TtsEngine) -> str:
@@ -277,8 +303,16 @@ def _install_verdict(engine: TtsEngine) -> str:
             lines.append(f"  权重目录 {managed}")
             lines.append(f"  检查点 {ckpt or '(没有)'}")
             lines.append(f"  vocab {vocab or '(没有)'}")
+        for partial in _partial_downloads(engine):
+            try:
+                stat = partial.stat()
+                written = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M")
+                lines.append(f"  **没下完的分片** {partial}({stat.st_size:,} 字节,最后写于 {written})")
+            except OSError:
+                lines.append(f"  **没下完的分片** {partial}")
         if _has_partial_downloads(engine):
-            lines.append("  **有没下完的分片(*.incomplete)**")
+            # 一票否决,而且残片不会自己消失 —— 说清楚下一步,否则用户只会一遍遍重下。
+            lines.append("  上面这些删掉之后再下一次;它们不会被自动清理,重下也不会覆盖。")
     except Exception as exc:  # noqa: BLE001 — 诊断信息取不到不该盖住真正的失败
         logger.debug("取 %s 的安装判定依据时出错", engine.id, exc_info=True)
         lines.append(f"  (取判定依据时出错:{exc})")
