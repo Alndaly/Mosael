@@ -116,6 +116,13 @@ def test_session_turn_lifecycle_with_fake_adapter(monkeypatch) -> None:
     assert messages[1]["content"] == "echo: 帮我看看时间线"
     assert messages[1]["payload"]["usage"]["duration_seconds"] >= 0
 
+    # 「助手消息落库」和「这一轮彻底结束」不是同一刻:一轮跑完会顺手 drain 一次队列,而 drain
+    # 是**先抢占再看有没有活**(见 _drain_queue_locked 的注释:两个 drain 同时通过检查会把同一条
+    # 消息答两遍)。队列是空的时候,这一抢一放就是一段 idle → running → idle 的空转,
+    # 而它发生在消息**之后**。照消息条数判定"跑完了"就会正好落在这段窗口里 —— 本机零点几毫秒,
+    # CI 上偶尔够长,于是这条用例在远程红了两次。等线程真的收尾,而不是猜。
+    assert host.wait_for_idle_turns(), "轮次线程没有在超时内结束"
+
     refreshed = client.get(f"/api/agent/sessions/{session['id']}").json()
     assert refreshed["status"] == "idle"
     assert refreshed["title"] == "帮我看看时间线"
