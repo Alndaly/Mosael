@@ -5876,6 +5876,12 @@ export interface components {
             content: string;
             /** Context */
             context?: string | null;
+            /** References */
+            references?: components["schemas"]["AgentReferenceIn"][];
+            /** Body Document */
+            body_document?: {
+                [key: string]: unknown;
+            } | null;
             /** Origin Session Id */
             origin_session_id?: string | null;
         };
@@ -5987,6 +5993,28 @@ export interface components {
             created_at: string;
             /** Answered At */
             answered_at?: string | null;
+        };
+        /**
+         * AgentReferenceIn
+         * @description 正文里 `@` 出来的一个对象。
+         *
+         *     **正文只写名字,id 走这里。** 名字会重、会改、会带空格,拿它当标识迟早出事;而把 32 位
+         *     十六进制塞进句子会把真正的话挤没。两件事分开:模型读到的是「把 @运镜练习 改长一点」,
+         *     要动手时从这份清单里拿 id。
+         */
+        AgentReferenceIn: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "asset" | "note" | "board" | "workflow";
+            /** Id */
+            id: string;
+            /**
+             * Name
+             * @default
+             */
+            name: string;
         };
         /** AgentSessionCreate */
         AgentSessionCreate: {

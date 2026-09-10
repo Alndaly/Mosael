@@ -17539,6 +17539,26 @@
             ],
             "title": "Context"
           },
+          "references": {
+            "items": {
+              "$ref": "#/components/schemas/AgentReferenceIn"
+            },
+            "type": "array",
+            "maxItems": 32,
+            "title": "References"
+          },
+          "body_document": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body Document"
+          },
           "origin_session_id": {
             "anyOf": [
               {
@@ -17795,6 +17815,39 @@
           "created_at"
         ],
         "title": "AgentQuestionOut"
+      },
+      "AgentReferenceIn": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "asset",
+              "note",
+              "board",
+              "workflow"
+            ],
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Name",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "id"
+        ],
+        "title": "AgentReferenceIn",
+        "description": "正文里 `@` 出来的一个对象。\n\n**正文只写名字,id 走这里。** 名字会重、会改、会带空格,拿它当标识迟早出事;而把 32 位\n十六进制塞进句子会把真正的话挤没。两件事分开:模型读到的是「把 @运镜练习 改长一点」,\n要动手时从这份清单里拿 id。"
       },
       "AgentSessionCreate": {
         "properties": {

@@ -40,4 +40,18 @@
   .media-preview-range::-moz-range-thumb { width: 10px; height: 10px; border: 0; border-radius: 50%; background: var(--primary); }
   .media-preview-range:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; border-radius: 4px; }
   .media-preview-player:fullscreen { background: var(--background); }
+
+  /* TipTap 的空文档占位符。
+   *
+   * `@tiptap/extension-placeholder` 只负责把 `data-placeholder` 挂到空的第一段上 ——
+   * **画出来是 CSS 的事**,而这条规则此前只存在于 notes.css 里、还被 `.note-prose` 圈着。
+   * 于是画布的提示词框、评论框、智能体输入框都配置了 placeholder,却一个都没显示出来:
+   * 一个空输入框,什么提示都没有。放到这里,凡是 tiptap 编辑器都管用。 */
+  .tiptap p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+    color: var(--muted-foreground);
+  }
 }

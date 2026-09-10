@@ -616,6 +616,37 @@ def _prompt_with_context(content: str, context: str | None) -> str:
     return f"{context}\n\n用户消息:\n{content}"
 
 
+#: 引用清单里每一类叫什么、该用哪个工具去读。**说出工具名**是有意的:只给 id 的话,
+#: 模型得先猜"笔记要用哪个工具",而猜错一次就是一轮白跑。
+_REFERENCE_HOW = {
+    "asset": ("素材", "analyze_asset"),
+    "note": ("笔记", "read_note"),
+    "board": ("画板", "get_board"),
+    "workflow": ("工作流", "get_workflow"),
+}
+
+
+def references_context(references: list[dict] | None) -> str:
+    """用户在正文里 `@` 出来的那些对象,给模型的一段清单。
+
+    正文里它们是 `@名字` —— 读起来是人话,但名字不是标识。这段清单把名字和 id 对上,
+    并说明去哪儿读。**没有引用就返回空串**,别在每条消息前面挂一段空清单。
+    """
+    lines = []
+    for reference in references or []:
+        kind = str(reference.get("kind") or "")
+        label, tool = _REFERENCE_HOW.get(kind, (kind, ""))
+        name = str(reference.get("name") or "")
+        ident = str(reference.get("id") or "")
+        if not ident:
+            continue
+        how = f",用 {tool} 读" if tool else ""
+        lines.append(f"- {label}「{name}」id={ident}{how}")
+    if not lines:
+        return ""
+    return "用户在这条消息里明确引用了下面这些对象(正文里写作 @名字):\n" + "\n".join(lines)
+
+
 def agent_notice_envelope(content: str, origin_session_id: str) -> str:
     """另一个智能体会话发来的消息,**给模型看的**那一份。
 
@@ -690,13 +721,18 @@ def post_user_message(
     user: User,
     *,
     context: str | None = None,
+    references: list[dict] | None = None,
+    body_document: dict | None = None,
     origin_session_id: str | None = None,
     origin_job_id: str | None = None,
 ) -> AgentMessage:
     """Store the user message and run the agent turn on a worker thread."""
     # 模型收到的那一份可以比落库的正文多两样东西:上下文集锦,以及"这条是别的会话发来的"信封。
     # 两样都不进 content —— content 是**用户在对话里看到的**那份。
-    prompt = _prompt_with_context(content, context)
+    # 引用清单排在用户自己给的上下文**前面**:它说的是"这句话里的 @ 指谁",
+    # 先说清指代再说别的,读起来才顺。
+    prompt = _prompt_with_context(content, references_context(references))
+    prompt = _prompt_with_context(prompt, context)
     # 第三样:失败的那几轮模型没见过(失败不回存 adapter_state),而用户以为它见过。
     prompt = _prompt_with_context(prompt, unseen_since_last_success(db, session))
     prompt = with_origin_envelope(prompt, origin_marker_for(origin_session_id, origin_job_id))
@@ -720,6 +756,8 @@ def post_user_message(
             payload={
                 "queued": True,
                 "queued_by": user.id,
+                **({"references": references} if references else {}),
+                **({"body_document": body_document} if body_document else {}),
                 **({"context": context.strip()} if context and context.strip() else {}),
                 **origin_marker,
             },
@@ -743,6 +781,8 @@ def post_user_message(
         role="user",
         content=content,
         payload={
+            **({"references": references} if references else {}),
+            **({"body_document": body_document} if body_document else {}),
             **({"context": context.strip()} if context and context.strip() else {}),
             **origin_marker,
         },

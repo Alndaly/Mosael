@@ -1760,9 +1760,27 @@ class AgentMemoryUpdate(ApiModel):
     content: str = Field(min_length=1, max_length=500)
 
 
+class AgentReferenceIn(ApiModel):
+    """正文里 `@` 出来的一个对象。
+
+    **正文只写名字,id 走这里。** 名字会重、会改、会带空格,拿它当标识迟早出事;而把 32 位
+    十六进制塞进句子会把真正的话挤没。两件事分开:模型读到的是「把 @运镜练习 改长一点」,
+    要动手时从这份清单里拿 id。
+    """
+
+    kind: Literal["asset", "note", "board", "workflow"]
+    id: str = Field(min_length=1, max_length=64)
+    name: str = Field(default="", max_length=200)
+
+
 class AgentMessageCreate(ApiModel):
     content: str = Field(min_length=1, max_length=8000)
     context: str | None = Field(default=None, max_length=4000)
+    #: 正文里引用到的对象。落库进 payload(气泡照它把胶囊画回来),同时拼成一段给模型的清单。
+    references: list[AgentReferenceIn] = Field(default_factory=list, max_length=32)
+    #: 编辑器原样的文档。**气泡靠它把引用渲染成胶囊**,而不是把 `@名字` 当成一串普通的字。
+    #: 没有它的话,发送这个动作本身会把用户刚放进去的结构抹平。
+    body_document: dict | None = None
     #: 发起方是另一个智能体会话时带上它的 id(notify_agent_session)。结构化而不是靠文案前缀:
     #: 标题自动命名要跳过它,前端要给它画来源徽章 —— 两件事都不该建立在字符串匹配上。
     origin_session_id: str | None = Field(default=None, max_length=64)

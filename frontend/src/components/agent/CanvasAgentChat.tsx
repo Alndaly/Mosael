@@ -25,7 +25,10 @@ import { UserMessageContent, attachmentToken } from "@/features/ai-studio/userMe
 import { MessageUsageFooter, type AgentUsageEvent } from "@/features/ai-studio/messageUsage";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import type { JSONContent } from "@tiptap/react";
+
+import { ChatComposer, collectReferences, documentText, emptyDocument } from "@/features/agent/ChatComposer";
+import type { AgentReference } from "@/features/agent/references";
 import { InlineConfirmations } from "@/components/agent/InlineConfirmations";
 import { InlineQuestions } from "@/components/agent/InlineQuestions";
 import { AgentSessionSwitcher } from "@/components/agent/AgentSessionSwitcher";
@@ -80,7 +83,11 @@ export function CanvasAgentChat({
 }) {
   const t = useI18n();
   const qc = useQueryClient();
-  const [draft, setDraft] = React.useState("");
+  //: 草稿是**编辑器文档**,不是字符串 —— `@` 出来的引用是原子节点,存成字符串就散了。
+  //: 要发出去的那句话由 `draftText` 从文档派生(引用序列化成 `@名字`)。
+  const [draft, setDraft] = React.useState<JSONContent>(emptyDocument);
+  const draftText = React.useMemo(() => documentText(draft), [draft]);
+  const draftRefs = React.useMemo(() => collectReferences(draft), [draft]);
   const noteAttach = useNoteAttachments(workspaceId);
   const [streamText, setStreamText] = React.useState("");
   const [streamTimeline, setStreamTimeline] = React.useState<AgentTimelineItem[]>([]);
@@ -266,7 +273,7 @@ export function CanvasAgentChat({
       api<{ steered: boolean }>(`/api/agent/sessions/${sessionId}/queue/${messageId}/steer`, { method: "POST" }),
     onSuccess: refreshQueue,
   });
-  const showStop = running && !draft.trim() && attach.isEmpty && !noteAttach.hasNotes;
+  const showStop = running && !draftText.trim() && attach.isEmpty && !noteAttach.hasNotes;
   const stopTurn = useMutation({
     mutationFn: () => api(`/api/agent/sessions/${sessionId}/stop`, { method: "POST" }),
     meta: { silentError: true },
@@ -365,10 +372,14 @@ export function CanvasAgentChat({
   const send = useMutation({
     mutationFn: async ({
       text,
+      references,
+      document,
       files,
       mediaAssets,
     }: {
       text: string;
+      references: AgentReference[];
+      document: JSONContent;
       files: { name: string; content: string }[];
       mediaAssets: Asset[];
     }) => {
@@ -394,12 +405,14 @@ export function CanvasAgentChat({
       }
       const message = await api<AgentMessage>(`/api/agent/sessions/${targetId}/messages`, {
         method: "POST",
-        body: JSON.stringify({ content: visibleContent, context }),
+        // references / body_document:正文只写 @名字,id 走结构化字段;文档留着让气泡把
+        // 引用画回胶囊(见 domain/agent/host.references_context 与 ReferenceDocument)。
+        body: JSON.stringify({ content: visibleContent, context, references, body_document: document }),
       });
       return { message, targetId };
     },
     onSuccess: ({ targetId }) => {
-      setDraft("");
+      setDraft(emptyDocument);
       noteAttach.clear();
       attach.clear();
       void qc.invalidateQueries({ queryKey: ["agent-queue", targetId] });
@@ -411,8 +424,14 @@ export function CanvasAgentChat({
 
   const submit = () => {
     // `running` is deliberately not a guard: the backend steers a mid-turn message.
-    if ((!draft.trim() && attach.isEmpty && !noteAttach.hasNotes) || send.isPending) return;
-    send.mutate({ text: draft.trim(), files: attach.files, mediaAssets: attach.media });
+    if ((!draftText.trim() && attach.isEmpty && !noteAttach.hasNotes) || send.isPending) return;
+    send.mutate({
+      text: draftText.trim(),
+      references: draftRefs,
+      document: draft,
+      files: attach.files,
+      mediaAssets: attach.media,
+    });
   };
 
   return (
@@ -497,7 +516,13 @@ export function CanvasAgentChat({
         )}
         {(messages.data ?? []).map((message) => {
           const payload = message.payload as
-            | { usage?: { duration_seconds?: number }; timeline?: AgentTimelineItem[]; compaction?: CompactionInfo }
+            | {
+                usage?: { duration_seconds?: number };
+                timeline?: AgentTimelineItem[];
+                compaction?: CompactionInfo;
+                /** 用户消息:编辑器原样的文档,气泡照它把引用画回胶囊。 */
+                body_document?: JSONContent;
+              }
             | null;
           const duration = payload?.usage?.duration_seconds;
           if (queuedIds.has(message.id)) return null;
@@ -526,7 +551,7 @@ export function CanvasAgentChat({
                   <AgentTurnContent timeline={payload?.timeline} />
                 )
               ) : (
-                <UserMessageContent content={message.content} />
+                <UserMessageContent content={message.content} document={payload?.body_document} />
               )}
               {message.role === "assistant" && (
                 <MessageUsageFooter
@@ -602,20 +627,14 @@ export function CanvasAgentChat({
         {/* 附件和笔记引用是同一件事:这条消息里带了什么。一排,在输入卡里。 */}
         <ComposerChips chips={[...attach.chips, ...noteAttach.chips]} uploading={attach.uploading} />
         {noteAttach.dialog}
-        <Textarea
-          rows={1}
-          className="max-h-[220px] min-h-9 w-full min-w-0 resize-none border-0 bg-transparent px-0.5 pb-1.5 pt-0.5 text-ui-md leading-[1.55] shadow-none outline-none placeholder:text-muted-foreground placeholder:opacity-100 focus-visible:ring-0"
+        {/* `@` 唤起素材 / 笔记 / 画板 / 工作流的引用。引用是原子节点,不是一段可以被删掉半个的字。 */}
+        <ChatComposer
+          workspaceId={workspaceId}
           value={draft}
-          placeholder={placeholder}
-          onChange={(event) => setDraft(event.target.value)}
+          onChange={setDraft}
+          onSubmit={() => submit()}
           onPaste={attach.onPaste}
-          onKeyDown={(event) => {
-            if (noteAttach.onKeyDown(event)) return;
-            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-              event.preventDefault();
-              submit();
-            }
-          }}
+          placeholder={placeholder}
         />
         <div className="flex items-center justify-between gap-1.5">
           <div className="flex min-w-0 items-center gap-1">
@@ -669,7 +688,7 @@ export function CanvasAgentChat({
               size="icon"
               className="rounded-full"
               aria-label={running ? t("chatSteer") : t("chatSend")}
-              disabled={(!draft.trim() && attach.isEmpty && !noteAttach.hasNotes) || attach.uploading} loading={send.isPending}
+              disabled={(!draftText.trim() && attach.isEmpty && !noteAttach.hasNotes) || attach.uploading} loading={send.isPending}
               onClick={submit}
             >
               <Send size={14} />

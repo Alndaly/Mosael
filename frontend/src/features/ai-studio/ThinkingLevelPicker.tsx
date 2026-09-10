@@ -79,7 +79,14 @@ export function ThinkingLevelPicker({ session }: { session: AgentSession | null 
    * 一个结论,而多数连接其实是发得出的。
    */
   if (!current || levels.length === 0) {
-    const reason = current ? t("agentThinkingUnavailable") : t("modelListLoading");
+    /*
+     * **「还在读」和「读完了但目录里没有这个模型」是两件事,后者是永久的。**
+     *
+     * 只看 `current` 为空的话,会话用的模型一旦不在 chat 目录里(换过连接、模型被停用、
+     * 手填的别名),这一格就永远停在「读取模型…」—— 用户看到的是一个一直转不完的东西,
+     * 而它其实已经有结论了:我们不认识这个模型,发不出档位。
+     */
+    const reason = models.isPending ? t("modelListLoading") : t("agentThinkingUnavailable");
     return (
       <button
         type="button"
@@ -89,7 +96,7 @@ export function ThinkingLevelPicker({ session }: { session: AgentSession | null 
           "h-8 justify-start gap-1.5 px-2.5 text-xs text-muted-foreground",
         )}
         aria-label={reason}
-        title={current ? `${reason}\n${t("agentThinkingUnavailableHint")}` : reason}
+        title={models.isPending ? reason : `${reason}\n${t("agentThinkingUnavailableHint")}`}
       >
         <Brain size={13} className="shrink-0 opacity-70" />
         <span className="min-w-0 truncate">{reason}</span>

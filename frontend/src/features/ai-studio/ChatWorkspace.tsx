@@ -13,7 +13,10 @@ import { textAttachmentBlock, useComposerAttachments } from "@/components/agent/
 import { ComposerChips } from "@/components/agent/ComposerChips";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import type { JSONContent } from "@tiptap/react";
+
+import { ChatComposer, collectReferences, documentText, emptyDocument } from "@/features/agent/ChatComposer";
+import type { AgentReference } from "@/features/agent/references";
 import { ModalShell } from "@/components/app/modals";
 import { AgentStatusRow } from "@/components/agent/AgentStatusRow";
 import { ChatBubble } from "@/features/ai-studio/ChatBubble";
@@ -65,7 +68,9 @@ export function ChatWorkspace({
   const qc = useQueryClient();
   const sessionKey = agentSessionSelectionKey(workspace.id);
   const [sessionId, setSessionId] = React.useState<string | null>(() => window.localStorage.getItem(sessionKey));
-  const [draft, setDraft] = React.useState("");
+  //: 草稿是**编辑器文档**,不是字符串 —— `@` 出来的引用是原子节点(见 ChatComposer)。
+  const [draft, setDraft] = React.useState<JSONContent>(emptyDocument);
+  const draftText = React.useMemo(() => documentText(draft), [draft]);
   const noteAttach = useNoteAttachments(workspace.id);
   // 附件三种入口(选文件 / 拖放 / 粘贴)与工作流助手共用同一套逻辑,见 composerAttachments。
   const attach = useComposerAttachments(workspace.id);
@@ -222,7 +227,7 @@ export function ChatWorkspace({
       refreshQueue();
     },
   });
-  const showStop = running && !draft.trim() && attach.isEmpty && !noteAttach.hasNotes;
+  const showStop = running && !draftText.trim() && attach.isEmpty && !noteAttach.hasNotes;
   const stopTurn = useMutation({
     mutationFn: () => api<{ stopped: boolean }>(`/api/agent/sessions/${activeSession?.id}/stop`, { method: "POST" }),
     // Nothing to report either way: a successful stop is visible as the turn ending, and
@@ -259,7 +264,7 @@ export function ChatWorkspace({
   });
   // 发送时没有会话就先建一个(生成页同款「输入框直达」交互)。
   const sendMessage = useMutation({
-    mutationFn: async (content: string) => {
+    mutationFn: async ({ content, references, document }: { content: string; references: AgentReference[]; document: JSONContent }) => {
       let targetId = activeSession?.id;
       if (!targetId) {
         const created = await api<AgentSession>("/api/agent/sessions", {
@@ -272,12 +277,13 @@ export function ChatWorkspace({
       }
       const message = await api<AgentMessage>(`/api/agent/sessions/${targetId}/messages`, {
         method: "POST",
-        body: JSON.stringify({ content, context: noteAttach.context }),
+        // 正文只写 @名字,id 走 references;document 留着让气泡把引用画回胶囊。
+        body: JSON.stringify({ content, context: noteAttach.context, references, body_document: document }),
       });
       return { message, targetId };
     },
     onSuccess: ({ targetId }, _content, _ctx) => {
-      setDraft("");
+      setDraft(emptyDocument);
       noteAttach.clear();
       void qc.invalidateQueries({ queryKey: ["agent-queue", targetId] });
       void qc.invalidateQueries({ queryKey: ["agent-messages", targetId] });
@@ -307,15 +313,19 @@ export function ChatWorkspace({
     event.preventDefault();
     // `running` is deliberately NOT a guard any more: a message typed while the agent works
     // is a correction, and the backend injects it into the running turn (pi steering queue).
-    if ((!draft.trim() && attach.isEmpty && !noteAttach.hasNotes) || sendMessage.isPending) return;
+    if ((!draftText.trim() && attach.isEmpty && !noteAttach.hasNotes) || sendMessage.isPending) return;
     stick.scrollToBottom(); // 自己发的消息一定要看得见
     // 文本文件内联成围栏上下文、媒体编码成附件标记 —— 与工作流助手同一种拼法,
     // 于是两边发出来的气泡也长得一样。
     const fileBlock = textAttachmentBlock(attach.files, t("chatAttached"));
-    let content = draft.trim() || attach.files.map((file) => `[${t("chatAttached")} ${file.name}]`).join("\n");
+    let content = draftText.trim() || attach.files.map((file) => `[${t("chatAttached")} ${file.name}]`).join("\n");
     if (noteAttach.hasNotes) content += `\n${noteAttach.summary}`;
     for (const asset of attach.media) content += attachmentToken(asset);
-    sendMessage.mutate([content.trim(), fileBlock].filter(Boolean).join("\n\n"));
+    sendMessage.mutate({
+      content: [content.trim(), fileBlock].filter(Boolean).join("\n\n"),
+      references: collectReferences(draft),
+      document: draft,
+    });
     attach.clear();
   };
 
@@ -546,7 +556,7 @@ export function ChatWorkspace({
                     <Sparkles className="mb-6 size-9 text-primary" strokeWidth={1.4} />
                     <h2 className="text-3xl font-semibold leading-tight tracking-tight">{t("studioChatStart")}</h2>
                     <p className="mb-8 mt-4 max-w-[42ch] text-ui-md leading-relaxed text-muted-foreground">{t("studioChatIntro")}</p>
-                    <div className="flex flex-wrap gap-2">{(["Media", "Edit", "Workflow"] as const).map(kind => <Button key={kind} variant="outline" className="h-auto whitespace-normal py-3 text-left" onClick={() => { setDraft(t(`studioPrompt${kind}Text`)); document.querySelector<HTMLTextAreaElement>("[data-chat-composer]")?.focus(); }}>{t(`studioPrompt${kind}`)}</Button>)}</div>
+                    <div className="flex flex-wrap gap-2">{(["Media", "Edit", "Workflow"] as const).map(kind => <Button key={kind} variant="outline" className="h-auto whitespace-normal py-3 text-left" onClick={() => setDraft({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: t(`studioPrompt${kind}Text`) }] }] })}>{t(`studioPrompt${kind}`)}</Button>)}</div>
                   </div>
                 </div>
               )}
@@ -596,25 +606,16 @@ export function ChatWorkspace({
               {/* 附件和笔记引用是同一件事:这条消息里带了什么。一排,在输入卡里。 */}
               <ComposerChips chips={[...attach.chips, ...noteAttach.chips]} uploading={attach.uploading} className="px-0.5" />
               {noteAttach.dialog}
-              <Textarea
-                data-chat-composer
-                rows={3}
-                className="max-h-[220px] min-h-11 w-full min-w-0 resize-none border-0 bg-transparent px-0.5 pb-1.5 pt-0.5 text-ui-md leading-[1.55] shadow-none outline-none placeholder:text-muted-foreground placeholder:opacity-100 focus-visible:ring-0"
+              {/* `@` 唤起素材 / 笔记 / 画板 / 工作流。和画布助手共用一份 —— 同一个输入框在两个
+                  地方能力不同的话,用户没有任何办法预期哪个能干什么(附件那条也是这个理由)。 */}
+              <ChatComposer
+                workspaceId={workspace.id}
                 value={draft}
-                placeholder={t("chatPlaceholder")}
-                onChange={(event) => {
-                  setDraft(event.target.value);
-                  event.target.style.height = "auto";
-                  event.target.style.height = `${Math.min(event.target.scrollHeight, 220)}px`;
-                }}
+                onChange={setDraft}
+                onSubmit={() => submit(new Event("submit") as unknown as React.FormEvent)}
                 onPaste={attach.onPaste}
-                onKeyDown={(event) => {
-                  if (noteAttach.onKeyDown(event)) return;
-                  if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-                    event.preventDefault();
-                    submit(event);
-                  }
-                }}
+                placeholder={t("chatPlaceholder")}
+                className="min-h-11"
               />
               <div className="flex items-center justify-between gap-1.5 pt-0.5">
                 <div className="flex items-center gap-1.5">
@@ -673,7 +674,7 @@ export function ChatWorkspace({
                     size="icon"
                     className="shrink-0 rounded-full"
                     aria-label={running ? t("chatSteer") : t("chatSend")}
-                    disabled={(!draft.trim() && attach.isEmpty && !noteAttach.hasNotes) || attach.uploading} loading={sendMessage.isPending}
+                    disabled={(!draftText.trim() && attach.isEmpty && !noteAttach.hasNotes) || attach.uploading} loading={sendMessage.isPending}
                   >
                     <Send size={15} />
                   </Button>

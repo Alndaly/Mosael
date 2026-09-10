@@ -9,6 +9,8 @@ import { useI18n } from "@/app/preferences";
 import { CompactionNotice, type CompactionInfo } from "@/components/agent/ContextMeter";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/components/agent/ToolCalls";
 import { MessageFooter, MessageTime, MessageUsageFooter, type AgentUsageEvent } from "@/features/ai-studio/messageUsage";
+import type { JSONContent } from "@tiptap/react";
+
 import { UserMessageContent } from "@/features/ai-studio/userMessage";
 import type { ImagePreviewItem } from "@/components/app/image-preview";
 import { cn } from "@/lib/utils";
@@ -70,6 +72,8 @@ export function ChatBubble({
         usage?: { duration_seconds?: number };
         timeline?: AgentTimelineItem[];
         compaction?: CompactionInfo;
+        /** 用户消息:编辑器原样的文档,气泡照它把引用画回胶囊。 */
+        body_document?: JSONContent;
         /** notify_agent_session 发来的:发起会话的 id(结构化来源,不靠信封文案)。 */
         from_agent_session?: string;
       }
@@ -122,7 +126,7 @@ export function ChatBubble({
         >
           {fromAgent && <AgentOrigin sessionId={fromAgent} />}
           <div className={fromAgent ? "whitespace-pre-wrap" : undefined}>
-            <UserMessageContent content={message.content} mediaGallery={mediaGallery} />
+            <UserMessageContent content={message.content} document={payload?.body_document} mediaGallery={mediaGallery} />
           </div>
         </div>
       )}

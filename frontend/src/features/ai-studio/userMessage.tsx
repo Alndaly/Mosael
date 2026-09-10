@@ -1,5 +1,8 @@
 import React from "react";
+import type { JSONContent } from "@tiptap/react";
+
 import { AssetInlinePreview } from "@/components/app/asset-preview";
+import { ReferenceDocument } from "@/features/agent/ReferenceDocument";
 import { assetFileUrl, assetPreviewUrl } from "@/api/client";
 import type { ImagePreviewItem } from "@/components/app/image-preview";
 
@@ -50,8 +53,45 @@ export function chatMediaGallery(messages: readonly { role?: string; content: st
   return gallery;
 }
 
-export function UserMessageContent({ content, mediaGallery }: { content: string; mediaGallery?: ImagePreviewItem[] }) {
+/**
+ * 用户消息的正文。
+ *
+ * **优先照编辑器文档渲染**:`@` 出来的引用在库里是原子节点(payload.body_document),
+ * 照它画回来才是胶囊。只按 content 渲染的话,发送这个动作本身会把用户刚放进去的结构
+ * 抹平成一串 `@名字` —— 而那正是这次要修的毛病。
+ *
+ * 没有文档就走老路(纯文本 + 附件标记):**老消息还得能看**,而它们只有 content。
+ */
+export function UserMessageContent({
+  content,
+  document,
+  mediaGallery,
+}: {
+  content: string;
+  document?: JSONContent | null;
+  mediaGallery?: ImagePreviewItem[];
+}) {
   const { text, attachments } = React.useMemo(() => parseUserContent(content), [content]);
+  if (document) {
+    return (
+      <div className="grid gap-1.5">
+        <ReferenceDocument document={document} />
+        {attachments.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {attachments.map((att) => (
+              <AssetInlinePreview
+                key={att.assetId}
+                assetId={att.assetId}
+                name={att.name}
+                kind={att.kind}
+                gallery={mediaGallery}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
   if (attachments.length === 0) return <div>{content}</div>;
   return (
     <div className="grid gap-1.5">

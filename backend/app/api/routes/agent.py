@@ -117,7 +117,14 @@ def post_agent_message(
     ensure_workspace_perm(db, user, session.workspace_id, "ai")
     try:
         return host.post_user_message(
-            db, session, body.content, user, context=body.context, origin_session_id=body.origin_session_id
+            db,
+            session,
+            body.content,
+            user,
+            context=body.context,
+            references=[reference.model_dump() for reference in body.references],
+            body_document=body.body_document,
+            origin_session_id=body.origin_session_id,
         )
     except host.HostError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
