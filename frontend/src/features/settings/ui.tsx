@@ -140,9 +140,10 @@ export function SettingsBlock({ children, className }: { children: React.ReactNo
  *    `h-full min-h-0`,不管用:SettingsSectionStack 是 `content-start`,行高按内容算,
  *    `h-full` 回头去问一个由内容决定的高度,等于没写。
  *
- *    这里给的是**下限高度 + 居中**,而不是真的撑满剩余空间。撑满要求从可滚容器到这一层
- *    每一级都交出确定高度,而分节堆叠**本来就该把各节顶到上面**(多节的设置页正是靠它)。
- *    为一个空态把那条规则改掉,代价落在所有正常的页面上。
+ *    这里给的是**下限高度 + 居中**,不是真的撑满剩余空间 —— 这一条是踩出来的:让那一节吃掉
+ *    整列高度(给堆叠加 `content-stretch`)确实把空态摆到了正中,但**有内容的页面一起被拉开了**:
+ *    转写模型那四张卡片被撑成整屏高。行拉伸分不清"这一节空着"和"这一节有东西",而分节堆叠
+ *    本来就该把各节顶到上面。所以代价只能由空态自己付:给一段足够大的高度,在里面居中。
  *
  * 2. **用 section 那一档尺寸。** 见 EmptyState 的说明:整页那一档在设置页里比节标题还重。
  */
@@ -150,7 +151,7 @@ export function SettingsEmpty({ className, ...props }: React.ComponentProps<type
   return (
     <div
       data-slot="settings-empty"
-      className={cn("grid min-h-[clamp(220px,38vh,360px)] place-content-center place-items-center", className)}
+      className={cn("grid min-h-[clamp(280px,52vh,520px)] place-content-center place-items-center", className)}
     >
       <EmptyState size="section" {...props} />
     </div>
@@ -241,7 +242,7 @@ export function SettingsSectionStack({
     <div
       data-slot="settings-section-stack"
       className={cn(
-        "grid h-full min-h-0 content-start has-[>[data-slot=settings-group]:only-child]:content-stretch [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-description]]:text-ui-md [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-title]]:text-2xl [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-title]]:font-semibold [&>[data-slot=settings-group]:only-child]:h-full [&>[data-slot=settings-group]:only-child]:min-h-0 [&>[data-slot=settings-group]:only-child]:grid-rows-[auto_minmax(0,1fr)]",
+        "grid h-full min-h-0 content-start [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-description]]:text-ui-md [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-title]]:text-2xl [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-title]]:font-semibold [&>[data-slot=settings-group]:only-child]:h-full [&>[data-slot=settings-group]:only-child]:min-h-0 [&>[data-slot=settings-group]:only-child]:grid-rows-[auto_minmax(0,1fr)]",
         className,
       )}
     >

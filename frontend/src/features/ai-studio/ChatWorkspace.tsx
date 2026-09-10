@@ -15,8 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ModalShell } from "@/components/app/modals";
-import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
-import { AGENT_ROW_CLASS, AGENT_ROW_ICON_CLASS } from "@/components/agent/agentRow";
+import { AgentStatusRow } from "@/components/agent/AgentStatusRow";
 import { ChatBubble } from "@/features/ai-studio/ChatBubble";
 import { SessionList } from "@/features/ai-studio/SessionList";
 import { attachmentToken, chatMediaGallery } from "@/features/ai-studio/userMessage";
@@ -532,32 +531,13 @@ export function ChatWorkspace({
               {running && streamText && (
                 <div className="relative mx-auto w-full max-w-[780px] shrink-0 text-ui-md leading-[1.65] [word-break:break-word]">
                   <AgentTurnContent timeline={streamTimeline} />
-                  {/* 「还在跑」是一条**状态标记**,不是一段内容 —— 走 Marker,和工具行、
-                      分隔线同一种语汇。图标显式 size-3:Marker 会把没有 size- 类的 svg 撑到 16px。 */}
-                  <Marker className="mt-1.5 min-h-[18px]">
-                    <MarkerIcon>
-                      <Loader2 className="size-3 animate-mosael-spin" />
-                    </MarkerIcon>
-                    <MarkerContent className="timecode">
-                      {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
-                    </MarkerContent>
-                  </Marker>
+                  <AgentStatusRow className="mt-1.5" meta={t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))} />
                 </div>
               )}
               {running && !streamText && (
                 <div className="relative mx-auto flex w-full max-w-[780px] shrink-0 flex-col items-stretch gap-[7px] text-ui-md leading-[1.65] text-muted-foreground [word-break:break-word]">
                   <AgentTurnContent timeline={streamTimeline} />
-                  <Marker className={AGENT_ROW_CLASS}>
-                    <MarkerIcon>
-                      <Loader2 className={cn(AGENT_ROW_ICON_CLASS, "animate-mosael-spin")} />
-                    </MarkerIcon>
-                    <MarkerContent className="flex items-center gap-1.5 whitespace-nowrap">
-                      {t("chatThinking")}
-                      <span className="timecode">
-                        {t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
-                      </span>
-                    </MarkerContent>
-                  </Marker>
+                  <AgentStatusRow label={t("chatThinking")} meta={t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))} />
                 </div>
               )}
               {(messages.data ?? []).length === 0 && !running && (
