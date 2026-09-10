@@ -308,7 +308,9 @@ def _install_verdict(engine: TtsEngine) -> str:
                 stat = partial.stat()
                 written = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M")
                 lines.append(f"  **没下完的分片** {partial}({stat.st_size:,} 字节,最后写于 {written})")
-            except OSError:
+            except OSError as exc:
+                # 取不到细节不该让这一行消失 —— 路径本身就是诊断里最要紧的那部分。
+                logger.debug("取 %s 的大小/时间失败:%s", partial, exc)
                 lines.append(f"  **没下完的分片** {partial}")
         if _has_partial_downloads(engine):
             # 一票否决,而且残片不会自己消失 —— 说清楚下一步,否则用户只会一遍遍重下。
