@@ -13,6 +13,8 @@ export type PickerOption = {
   keywords?: string[];
   /** 只作用在这一项的行内样式 —— 用样式本身当信息的清单(字体选择器)。 */
   style?: React.CSSProperties;
+  /** 副标题,解释"选它会怎样"。短清单和可搜索那版都要渲染 —— 换个分支说法就没了不行。 */
+  description?: string;
 };
 
 /**
@@ -34,6 +36,7 @@ export function OptionPicker({
   className,
   contentClassName,
   ariaLabel,
+  disabled,
   placeholder,
   searchPlaceholder,
   emptyText,
@@ -47,6 +50,8 @@ export function OptionPicker({
   className?: string;
   contentClassName?: string;
   ariaLabel?: string;
+  /** 没得选的时候要说得出来,而不是给一个点开是空的下拉。 */
+  disabled?: boolean;
   placeholder?: string;
   searchPlaceholder?: string;
   emptyText?: string;
@@ -60,6 +65,7 @@ export function OptionPicker({
       <SearchableSelect
         value={value}
         onValueChange={onChange}
+        disabled={disabled}
         options={options}
         placeholder={placeholder}
         searchPlaceholder={searchPlaceholder}
@@ -71,7 +77,7 @@ export function OptionPicker({
           /* 结构照抄 SelectTrigger:一个 span 一个 chevron。调用方那串 `[&>svg]:hidden`、
              `[&>span]:truncate` 才会同样落到实处,而不是只对其中一个分支生效。 */
           /* role=combobox 和 Select 的触发器一致 —— 换了实现不该换掉读屏里听到的东西。 */
-          <button type="button" role="combobox" aria-label={ariaLabel} className={cn(FIELD_TRIGGER_CLASS, className)} {...rest}>
+          <button type="button" role="combobox" aria-label={ariaLabel} disabled={disabled} className={cn(FIELD_TRIGGER_CLASS, className)} {...rest}>
             <span className={cn("min-w-0 truncate", !selected && "text-muted-foreground")} style={selected?.style}>
               {selected?.label ?? placeholder ?? ""}
             </span>
@@ -82,13 +88,19 @@ export function OptionPicker({
     );
   }
   return (
-    <Select value={value} onValueChange={onChange}>
+    <Select value={value} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger aria-label={ariaLabel} className={className} {...rest}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent align={align} className={contentClassName}>
         {options.map((one) => (
-          <SelectItem key={one.value} value={one.value} className="[overflow-wrap:anywhere]" style={one.style}>
+          <SelectItem
+            key={one.value}
+            value={one.value}
+            className="[overflow-wrap:anywhere]"
+            style={one.style}
+            description={one.description}
+          >
             {one.label}
           </SelectItem>
         ))}

@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import * as React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { OptionPicker, SEARCHABLE_THRESHOLD } from "./option-picker";
@@ -57,6 +58,37 @@ describe("选项一多就带搜索", () => {
  * 麻烦在于 Radix 给 PopoverContent 也挂了 `role="dialog"`,而且两边都**不**挂 `aria-modal`。
  * 分辨的记号只剩 popper 包装层。
  */
+describe("选项的副标题", () => {
+  it("副标题出现在清单里,而不是挤进触发器", async () => {
+    // 供应商默认模型那一格永远有值(没配就是"未设置"),placeholder 轮不上;
+    // 解释只能挂在选项自己身上。但触发器只该显示"当前选的是什么" —— 把那句解释也塞进去,
+    // 这一行就成了两行字的控件,和旁边每一格都不一样高。
+    // 两个分支都要测:副标题在可搜索那版和短清单那版是两段不同的代码,只测一边等于没测。
+    for (const count of [SEARCHABLE_THRESHOLD + 1, 3]) {
+      const view = render(
+        <OptionPicker
+          value="m0"
+          onChange={vi.fn()}
+          options={[{ value: "m0", label: "未设置", description: "用到时按能力挑" }, ...options(count)]}
+        />,
+      );
+      const trigger = screen.getByRole("combobox");
+      expect(trigger.textContent, `${count} 项:触发器该只说当前选了什么`).toContain("未设置");
+      expect(trigger.textContent).not.toContain("用到时按能力挑");
+      // Radix 的 Select 在 jsdom 里靠键盘开;可搜索那版是普通按钮,点开即可。
+      if (count > SEARCHABLE_THRESHOLD) await userEvent.click(trigger);
+      else fireEvent.keyDown(trigger, { key: "Enter" });
+      expect(await screen.findByText("用到时按能力挑"), `${count} 项时丢了副标题`).toBeInTheDocument();
+      view.unmount();
+    }
+  });
+
+  it("没得选的时候是禁用的,而不是点开一片空", () => {
+    render(<OptionPicker value="x" onChange={vi.fn()} options={[{ value: "x", label: "还没有可用模型" }]} disabled />);
+    expect(screen.getByRole("combobox")).toBeDisabled();
+  });
+});
+
 describe("认不认得出「真的在对话框里」", () => {
   const build = (html: string) => {
     const host = document.createElement("div");

@@ -15,12 +15,11 @@ import {
 import { useI18n } from "@/app/preferences";
 import { ConfirmDialog } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useSamplePlayer } from "@/features/editor/useSamplePlayer";
 import { UploadVoiceDialog } from "@/features/voice/VoiceCreationDialogs";
-import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
+import { SettingsBlock, SettingsEmpty, SettingsGroup } from "@/features/settings/ui";
 
 /**
  * Settings →「声音克隆」里的音色库。
@@ -78,7 +77,7 @@ export function VoiceLibrarySection({ workspace }: { workspace: Workspace }) {
         <div className="grid gap-2">
         {voices.data && list.length === 0 ? (
           // 空状态要说清**去哪儿建另一种** —— 否则"这里不做说话人克隆"就成了死胡同。
-          <EmptyState icon={<Mic size={20} />} title={t("voiceLibraryEmpty")} body={t("voiceLibraryEmptyHint")} />
+          <SettingsEmpty icon={<Mic size={20} />} title={t("voiceLibraryEmpty")} body={t("voiceLibraryEmptyHint")} />
         ) : (
           // 分隔线,不是一行一个边框:这是一个列表,不是一叠卡片。
           <div className="grid divide-y divide-border">

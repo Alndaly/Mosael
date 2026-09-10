@@ -122,14 +122,22 @@ const SelectLabel = React.forwardRef<
 ))
 SelectLabel.displayName = SelectPrimitive.Label.displayName
 
+/**
+ * 选项。`description` 是解释"选它会怎样"的副标题。
+ *
+ * **它必须待在 ItemText 外面。** Radix 把选中项的 ItemText **原样克隆进触发器** —— 副标题
+ * 写进 children 的话,那一格就变成两行字,和旁边每一格都不一样高。副标题属于清单,
+ * 不属于"当前选了什么"。
+ */
 const SelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item> & { description?: React.ReactNode }
+>(({ className, children, description, ...props }, ref) => (
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex min-h-9 w-full min-w-0 cursor-default select-none items-center rounded-md py-2 pl-2.5 pr-8 text-ui-sm leading-5 outline-none focus:bg-secondary data-[disabled]:pointer-events-none data-[disabled]:opacity-40 [&>span:last-child]:block [&>span:last-child]:min-w-0 [&>span:last-child]:truncate",
+      "relative flex min-h-9 w-full min-w-0 cursor-default select-none rounded-md py-2 pl-2.5 pr-8 text-ui-sm leading-5 outline-none focus:bg-secondary data-[disabled]:pointer-events-none data-[disabled]:opacity-40 [&>span:last-child]:block [&>span:last-child]:min-w-0 [&>span:last-child]:truncate",
+      description ? "flex-col items-start gap-px" : "items-center",
       className
     )}
     {...props}
@@ -140,6 +148,7 @@ const SelectItem = React.forwardRef<
       </SelectPrimitive.ItemIndicator>
     </span>
     <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+    {description && <span className="min-w-0 truncate text-ui-xs text-muted-foreground">{description}</span>}
   </SelectPrimitive.Item>
 ))
 SelectItem.displayName = SelectPrimitive.Item.displayName

@@ -78,6 +78,7 @@ function DefaultRow({
       <OptionPicker
         key={currentValue}
         value={currentValue}
+        disabled={options.length === 0}
         onChange={(value) => {
           if (value === NONE) {
             save.mutate({ provider_profile_id: null, model: "" });
@@ -87,7 +88,16 @@ function DefaultRow({
           save.mutate({ provider_profile_id: nextProvider, model: rest.join("::") });
         }}
         options={[
-          { value: NONE, label: "—" },
+          {
+            value: NONE,
+            /*
+             * **不要用一条横线。** 这一格永远有值(没配就是 NONE),所以 placeholder 从来轮不上,
+             * 用户看到的就是那条 `—` —— 它既没说"这里还没配",也没说"选它会怎样",读起来像是
+             * 这一行坏了。没有可用模型时更要说清:那不是"未设置",是"还没有东西可选"。
+             */
+            label: options.length === 0 ? t("providerDefaultsEmpty") : t("providerDefaultsUnset"),
+            description: options.length === 0 ? undefined : t("providerDefaultsUnsetHint"),
+          },
           ...options.map((item) => ({
             value: valueOf(item),
             label: `${item.provider_name} · ${item.display_name || item.model}`,
@@ -95,7 +105,6 @@ function DefaultRow({
             keywords: [item.model],
           })),
         ]}
-        placeholder={options.length === 0 ? t("providerDefaultsNoModels") : t("agentModelPlaceholder")}
         className="w-full min-w-0"
       />
     </SettingsRow>

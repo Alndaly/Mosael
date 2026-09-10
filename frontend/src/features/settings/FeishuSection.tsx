@@ -8,10 +8,9 @@ import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
 import { ModalShell } from "@/components/app/modals";
-import { SettingsBlock, SettingsGroup, SettingsList, SettingsListBlock, SettingsListItem } from "@/features/settings/ui";
+import { SettingsBlock, SettingsEmpty, SettingsGroup, SettingsList, SettingsListBlock, SettingsListItem } from "@/features/settings/ui";
 
 type FeishuBot = components["schemas"]["FeishuBotOut"];
 type Onboarding = components["schemas"]["FeishuOnboardingOut"];
@@ -216,9 +215,7 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
           ))}
         </SettingsListBlock>
       ) : (
-        <SettingsBlock className="h-full min-h-0">
-          <EmptyState icon={<MessageSquare size={22} />} title={t("feishuNoBots")} body={t("feishuEmptyBody")} />
-        </SettingsBlock>
+        <SettingsEmpty icon={<MessageSquare size={20} />} title={t("feishuNoBots")} body={t("feishuEmptyBody")} />
       )}
 
       <ModalShell

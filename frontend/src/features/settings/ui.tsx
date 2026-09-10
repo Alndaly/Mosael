@@ -1,5 +1,6 @@
 import React from "react";
 
+import { EmptyState } from "@/components/layout/EmptyState";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
@@ -129,6 +130,33 @@ export function SettingsBlock({ children, className }: { children: React.ReactNo
   return <div data-slot="settings-block" className={cn("grid gap-4 px-0.5 py-5", className)}>{children}</div>;
 }
 
+/**
+ * **一整节的正文空着**时用它 —— 飞书没有机器人、音色库没有音色、计价没有规则。
+ *
+ * 两件事收在这里,而不是每个调用点各写一遍:
+ *
+ * 1. **占住一片地方,并在里面居中。** 此前空态直接摆进 SettingsBlock,而 Block 是内容高度 ——
+ *    于是「还没有机器人」贴在标题下面,底下空着三百多像素(实测 366px)。有两处试过写
+ *    `h-full min-h-0`,不管用:SettingsSectionStack 是 `content-start`,行高按内容算,
+ *    `h-full` 回头去问一个由内容决定的高度,等于没写。
+ *
+ *    这里给的是**下限高度 + 居中**,而不是真的撑满剩余空间。撑满要求从可滚容器到这一层
+ *    每一级都交出确定高度,而分节堆叠**本来就该把各节顶到上面**(多节的设置页正是靠它)。
+ *    为一个空态把那条规则改掉,代价落在所有正常的页面上。
+ *
+ * 2. **用 section 那一档尺寸。** 见 EmptyState 的说明:整页那一档在设置页里比节标题还重。
+ */
+export function SettingsEmpty({ className, ...props }: React.ComponentProps<typeof EmptyState>) {
+  return (
+    <div
+      data-slot="settings-empty"
+      className={cn("grid min-h-[clamp(220px,38vh,360px)] place-content-center place-items-center", className)}
+    >
+      <EmptyState size="section" {...props} />
+    </div>
+  );
+}
+
 /** Block 内的小标题不自带外边距；它与后续内容的距离由 SettingsBlock 的 gap 统一控制。 */
 export function SettingsBlockTitle({ className, ...props }: React.ComponentProps<"h3">) {
   return (
@@ -213,7 +241,7 @@ export function SettingsSectionStack({
     <div
       data-slot="settings-section-stack"
       className={cn(
-        "grid h-full min-h-0 content-start [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-description]]:text-ui-md [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-title]]:text-2xl [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-title]]:font-semibold [&>[data-slot=settings-group]:only-child]:h-full [&>[data-slot=settings-group]:only-child]:min-h-0 [&>[data-slot=settings-group]:only-child]:grid-rows-[auto_minmax(0,1fr)]",
+        "grid h-full min-h-0 content-start has-[>[data-slot=settings-group]:only-child]:content-stretch [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-description]]:text-ui-md [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-title]]:text-2xl [&>[data-slot=settings-group]:first-child_[data-slot=settings-group-title]]:font-semibold [&>[data-slot=settings-group]:only-child]:h-full [&>[data-slot=settings-group]:only-child]:min-h-0 [&>[data-slot=settings-group]:only-child]:grid-rows-[auto_minmax(0,1fr)]",
         className,
       )}
     >

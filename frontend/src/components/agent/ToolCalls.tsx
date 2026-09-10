@@ -9,7 +9,7 @@ import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-p
 import { AudioPlayerBar, VideoPlayer } from "@/components/app/media-playback";
 import { HighlightedCode } from "@/components/agent/HighlightedCode";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
-import { AGENT_ROW_BODY_CLASS, AGENT_ROW_CLASS, AGENT_ROW_ICON_CLASS } from "@/components/agent/agentRow";
+import { AGENT_ROW_BODY_CLASS, AGENT_ROW_CLASS, AGENT_ROW_ICON_CLASS, AGENT_TEXT_BLOCK_CLASS } from "@/components/agent/agentRow";
 import { decodeByteFallback } from "@/lib/byteFallback";
 import { formatElapsedSeconds } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -502,11 +502,15 @@ export function AgentTurnContent({
     // **间距由容器统一给**。此前每种块自带下外边距(思考 10px、工具卡 8px),而正文的
     // 末段被 `last-child:mb-0` 清零 —— 于是三种块之间的缝隙各不相同,正文后面紧跟一张卡时
     // 干脆贴在一起。grid + gap 一处说了算,也符合仓库里"纵向堆叠一律 grid/flex + gap"的约定。
+    //
+    // gap 之外还有一层:标记行自带 `py-1` 的热区,正文块没有,于是同一个 gap 在不同的邻居之间
+    // 看着是三个值。正文块补上同一份内缩(AGENT_TEXT_BLOCK_CLASS),gap 相应收到 1.5 —— 加起来
+    // 仍是原先最常见的那一档,只把"标记行挨着标记行"那 22px 收回来。
     // `grid-cols-[minmax(0,1fr)]` 不是装饰:单列 grid 的隐式列是 `auto`,也就是 **max-content**
     // —— 一个长 URL 或 32 位 session id 会把这一列撑到内容宽度,冲破外面那层 780px,而**同一个
     // grid 里的其它块(思考、正文)跟着一起变宽**,看起来像"整条消息比别的宽"。子项自己的
     // truncate 救不了:truncate 要父级先有确定宽度,而这里父级宽度正是由它的内容定的。
-    <CitationContext.Provider value={citations}><div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-2.5">
+    <CitationContext.Provider value={citations}><div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-1.5">
       {turnBlocks(timeline).map((item, index) =>
         item.type === "tools" ? (
           // 连成一串的工具步骤共用**一个** ToolCalls,于是它们之间是块内的 gap-1,
@@ -515,7 +519,10 @@ export function AgentTurnContent({
         ) : item.type === "thinking" ? (
           <ThinkingBlock key={`thinking-${index}`} text={item.text} done={item.done} />
         ) : item.type === "text" && item.text ? (
-          <AgentMarkdown key={`text-${index}`}>{decodeByteFallback(item.text)}</AgentMarkdown>
+          // 补上和标记行同一份上下内缩(见 AGENT_TEXT_BLOCK_CLASS):不然"一个空行"会有三种宽度。
+          <div key={`text-${index}`} className={AGENT_TEXT_BLOCK_CLASS}>
+            <AgentMarkdown>{decodeByteFallback(item.text)}</AgentMarkdown>
+          </div>
         ) : null,
       )}
     </div></CitationContext.Provider>

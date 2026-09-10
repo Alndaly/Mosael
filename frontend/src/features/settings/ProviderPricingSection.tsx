@@ -5,7 +5,6 @@ import { Pencil, Plus, ReceiptText, Sparkles, Trash2 } from "lucide-react";
 import { api, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import type { MessageKey } from "@/app/messages";
-import { EmptyState } from "@/components/layout/EmptyState";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +13,7 @@ import { BulkActionBar, BulkCheckbox, BulkSelectTrigger, useBulkSelection } from
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Textarea } from "@/components/ui/textarea";
-import { SettingsBlock, SettingsGroup, SettingsListBlock, SettingsListItem } from "@/features/settings/ui";
+import { SettingsEmpty, SettingsGroup, SettingsListBlock, SettingsListItem } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -446,11 +445,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
       />
 
       {rules.data && ruleList.length === 0 ? (
-        <SettingsBlock className="h-full min-h-0">
-          <div className="grid min-h-full">
-            <EmptyState icon={<ReceiptText size={22} />} title={t("pricingRulesEmpty")} />
-          </div>
-        </SettingsBlock>
+        <SettingsEmpty icon={<ReceiptText size={20} />} title={t("pricingRulesEmpty")} />
       ) : (
         <SettingsListBlock
           toolbar={bulk.active ? (
