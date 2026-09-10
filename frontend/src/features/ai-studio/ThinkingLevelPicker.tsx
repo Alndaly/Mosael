@@ -31,6 +31,28 @@ function levelsFor(model: CapabilityModel | undefined): readonly string[] {
 }
 
 /**
+ * 这条连接**能不能把档位发出去**。
+ *
+ * 这和"这个模型会不会思考"是两件事,而混淆它们正是用户报的那个 bug:选了「关闭」,Kimi k3
+ * 照样在思考。
+ *
+ * 原因在链路的末端。我们给 pi 造的是一个**合成模型**(provider 是我们自己的 id,不带
+ * thinkingFormat),所以 pi 里那些按供应商匹配的思考分支(deepseek 的 `thinking:{type:"disabled"}`、
+ * qwen 的 `enable_thinking:false`、openrouter 的 `reasoning:{effort:"none"}`…)一条都不命中,
+ * 全部落到最后那对通用的 `reasoning_effort` 分支上 —— 而**那两条都要求
+ * `compat.supportsReasoningEffort`**,它来自模型行上的 `reasoning_effort`,默认是空。
+ *
+ * 于是默认配置下:关闭 / 低 / 中 / 高 发出去的请求**逐字节相同**(什么思考参数都没有),
+ * 模型按它自己的默认来。一个四选一的开关,四个选项做同一件事。
+ *
+ * 所以发不出去的时候就别装作发得出去:控件留着(它说明这个能力存在),但禁用并说清楚
+ * 去哪儿打开。
+ */
+function canSendLevel(model: CapabilityModel | undefined): boolean {
+  return model?.reasoning_effort === true;
+}
+
+/**
  * 思考档位(会话级)。
  *
  * **「关闭」只表示我们不主动要求思考**,不表示模型不会思考:Kimi k3、DeepSeek reasoner
@@ -69,8 +91,26 @@ export function ThinkingLevelPicker({ session }: { session: AgentSession | null 
   );
   const levels = levelsFor(current);
   if (!session) return null;
+  // 目录还没到、或者这个模型不在聊天目录里 —— **什么都别渲染**。"还不知道"不能长成
+  // "发不出去":那会让每次开会话都先闪一下「这条连接发不出思考档位」,而多数连接是发得出的。
+  if (!current) return null;
   // 这个模型不思考 —— 不给控件,而不是给一个点了没用的。
   if (levels.length === 0) return null;
+  // 发不出去的时候,给一个禁用的控件加一句为什么 —— 而不是四个做同一件事的选项。
+  if (!canSendLevel(current)) {
+    return (
+      <button
+        type="button"
+        disabled
+        className="flex h-8 w-full min-w-0 cursor-not-allowed items-center gap-1.5 rounded-md px-2.5 text-left text-xs text-muted-foreground opacity-60"
+        aria-label={t("agentThinkingUnavailable")}
+        title={`${t("agentThinkingUnavailable")}\n${t("agentThinkingUnavailableHint")}`}
+      >
+        <Brain size={13} className="shrink-0 opacity-70" />
+        <span className="min-w-0 truncate">{t("agentThinkingUnavailable")}</span>
+      </button>
+    );
+  }
   const raw = levels.includes(session.thinking_level) ? session.thinking_level : "off";
   // 只能开/关的模型上,会话里存着的 medium/high 要落到"开"这一档,否则触发器是空的。
   const value = raw === "off" || levels.includes(raw) ? raw : levels[1] ?? "off";
