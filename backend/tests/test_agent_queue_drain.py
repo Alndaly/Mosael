@@ -44,20 +44,26 @@ def _queue_one(session_id: str, content: str = "排队的") -> None:
         db.commit()
 
 
-def _settle(session_id: str, seconds: float = 10) -> None:
+def _settle(seconds: float = 20) -> None:
     """**退出前等自己起的那几轮跑完。**
 
     不等的话,后台那个线程会活过这条测试,而下一条测试一上来就把库 drop 掉重建 —— 掉队的
     线程正握着 SQLite 的写锁往里写,于是下一条测试的写全被堵住,表现成"莫名其妙卡三十秒"。
     单独跑它是绿的,一起跑就红,而红的地方和真正的原因隔着一整条测试。
+
+    **判据是线程,不是 status** —— 这一条是被 CI 抓出来的。原先等的是「status 不再是
+    running」,可一轮结束到 drain 起下一轮之间,status 会**先落回 idle**:轮结束时 finally
+    把它置 idle 并提交,`_drain_queue` 是在那之后才跑的。慢机器上这道缝拉得开,`_settle`
+    就在缝里返回了,而排队的那条随后才被捞起来跑 —— 那一轮活到了下一条测试里,并且调到了
+    下一条测试 patch 上去的 run_turn 上,于是「跑起来的轮数」凭空多一。CI 报的是
+    `13 != 12`,而多出来的那一轮根本不属于那条测试。
+    (同一个陷阱下面那条测试的注释里已经写过:drain 是先抢占再看队列,status 会短暂翻转。
+    那边绕开了它,这里没有。)
+
+    turn 线程末尾就是 `_drain_queue`,所以线程还活着就说明可能还会起下一轮;线程全退了,
+    就再没有人来起新的了。`wait_for_idle_turns` 正是为此而存在的。
     """
-    deadline = time.time() + seconds
-    while time.time() < deadline:
-        with SessionLocal() as db:
-            session = db.get(AgentSession, session_id)
-            if session is None or session.status != "running":
-                return
-        time.sleep(0.05)
+    assert host.wait_for_idle_turns(seconds), "还有轮次没跑完就退出了 —— 它会串进下一条测试"
 
 
 def _set_status(session_id: str, status: str) -> None:
@@ -123,7 +129,7 @@ def test_排队落库之后自己再_drain_一次(monkeypatch) -> None:
     client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "排队的"})
 
     assert sid in drained, "排队落库之后没有再 drain —— 丢唤醒的那道缝还开着"
-    _settle(sid)
+    _settle()
 
 
 def test_排队的消息最终会跑起来(monkeypatch) -> None:

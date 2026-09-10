@@ -34,6 +34,32 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
+def _no_stragglers_from_the_previous_test():
+    """上一条测试掉队的后台线程,不许写进这一条的账。
+
+    `fresh_client()` 已经会在 drop_all 之前等它们收尾(见 tests/util 里那段说明),但那发生在
+    **测试函数体里** —— 而多数测试是先 `monkeypatch.setattr(host, "run_turn", ...)`、后
+    `fresh_client()`。上一条掉队的那一轮恰好在被等到的前一刻调用 `host.run_turn`,那时它已经
+    指向本条测试打的桩了,于是本条测试凭空多记一轮。
+
+    CI 上报出来是「跑起来的轮数不对(应为 12):13」,而多出来的那一轮根本不属于那条测试 ——
+    本机复现不了(窗口太窄),把 drain 起下一轮的时机推后 0.25 秒就 100% 稳定复现。
+    这类失败最难查的地方在于:红的那条测试是无辜的,肇事的是它前面那条。
+
+    在测试函数体**之前**等,monkeypatch 就永远碰不到上一条的尾巴。没有掉队线程时三个 wait
+    立刻返回,代价只是一次 threading.enumerate()。
+    """
+    from app.domain.agent.autopilot import wait_for_idle_autopilot
+    from app.domain.agent.host import wait_for_idle_turns
+    from app.domain.jobs import wait_for_idle_jobs
+
+    wait_for_idle_turns()
+    wait_for_idle_autopilot()
+    wait_for_idle_jobs()
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _reset_asr_runtime_probe():
     """`asr_models.runtime_ready` / `transcription.resolve_transcription_runtime` 都带进程级缓存,而它们探测的是
     **真实机器**(起子进程 import funasr)。不清的话,一个用例 monkeypatch 出来的结果会渗给下一个,
