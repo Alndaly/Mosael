@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import ProviderModel, ProviderProfile
+from app.domain import thinking
 from app.domain.providers import capability_ids_for_vendor, normalize_capability_ids
 
 #: 模型行上可被用户覆盖的运行时参数。留空表示跟随目录/保守默认 —— 与 False 是两回事。
@@ -181,6 +182,11 @@ def runtime_limits(model: ProviderModel | None) -> dict[str, Any]:
         value = getattr(model, field, None)
         if value is not None:
             values[field] = value
+    # 各家的思考参数不是同一套词,而**猜错一个值就是整轮 400**。查证过的按 vendor 给,
+    # 其余不声明(见 domain/thinking)。pi 拿 thinkingLevelMap 决定某一档发什么、发不发。
+    profile = thinking.profile_for(model.profile.vendor if model.profile else "", model.model_id)
+    if any(mapped is not None for mapped in profile.level_map.values()):
+        values["thinking_level_map"] = profile.level_map
     return values
 
 

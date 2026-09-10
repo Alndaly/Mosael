@@ -94,6 +94,8 @@ def gateway_complete(
             "reasoning": provider.get("reasoning"),
             "vision": provider.get("vision"),
             "reasoningEffort": provider.get("reasoning_effort"),
+            # 某一档发什么值、发不发得出去 —— 各家不是同一套词,见 domain/thinking。
+            "thinkingLevelMap": provider.get("thinking_level_map"),
             "developerRole": provider.get("developer_role"),
             "piProvider": provider.get("pi_provider", ""),
             "credential": provider.get("credential"),
@@ -321,6 +323,8 @@ def _run_pi(
             "reasoning": provider.get("reasoning"),
             "vision": provider.get("vision"),
             "reasoningEffort": provider.get("reasoning_effort"),
+            # 某一档发什么值、发不发得出去 —— 各家不是同一套词,见 domain/thinking。
+            "thinkingLevelMap": provider.get("thinking_level_map"),
             "developerRole": provider.get("developer_role"),
             # 订阅计划(OAuth):pi 内置 Provider 的 id + 当前凭据。刷新后由 sidecar 写回后端。
             "piProvider": provider.get("pi_provider", ""),

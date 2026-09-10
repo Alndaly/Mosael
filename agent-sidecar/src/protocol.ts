@@ -34,6 +34,7 @@ export interface RunTurnRequest {
     reasoning?: boolean | null;
     vision?: boolean | null;
     reasoningEffort?: boolean | null;
+    thinkingLevelMap?: Record<string, string | null> | null;
     developerRole?: boolean | null;
     /** 订阅计划:pi 内置 Provider 的 id(端点/模型目录/授权流程都在它里面)。 */
     piProvider?: string;

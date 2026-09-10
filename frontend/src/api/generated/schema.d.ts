@@ -6824,6 +6824,11 @@ export interface components {
             reasoning?: boolean | null;
             /** Reasoning Effort */
             reasoning_effort?: boolean | null;
+            /**
+             * Thinking Levels
+             * @default []
+             */
+            thinking_levels: string[];
         };
         /**
          * ClipIdsRequest

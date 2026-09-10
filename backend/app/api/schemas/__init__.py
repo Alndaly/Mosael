@@ -878,6 +878,11 @@ class CapabilityModelOut(ApiModel):
     reasoning: bool | None = None
     #: 能不能**分档**(low/medium/high)。False/None 而 reasoning 为真 = 只能开/关。
     reasoning_effort: bool | None = None
+    #: 这个模型**真正发得出去**的思考档位(见 domain/thinking)。空 = 一档都发不出,
+    #: 界面据此说"这条连接发不出思考档位",而不是摆四个做同一件事的选项。
+    #: 这和上面两个字段是两回事:那两个说"这个模型会不会思考、能不能分档",
+    #: 这个说"**我们**能不能把话传过去"。Kimi k3 会思考、也分档,但关不掉。
+    thinking_levels: list[str] = []
 
 
 class AgentPendingView(ApiModel):

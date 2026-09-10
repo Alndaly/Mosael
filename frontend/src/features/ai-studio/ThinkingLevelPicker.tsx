@@ -5,51 +5,27 @@ import { Brain } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
+import { FIELD_TRIGGER_CLASS } from "@/components/ui/field-trigger";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
 type CapabilityModel = components["schemas"]["CapabilityModelOut"];
 
-const LEVELS = ["off", "low", "medium", "high"] as const;
-
 /**
- * 这个模型能给几档。
+ * 这个模型**真正发得出去**的档位。
  *
- * **不支持思考的模型不该有这个控件** —— 一个点了没用的开关比没有开关更坏:它让人以为
- * 关掉就不思考了,而事实是这个模型压根不思考,或者(反过来)它无论如何都会思考。
+ * 由后端按 vendor + 模型名给(见 backend/app/domain/thinking.py),不再在这里推 ——
+ * 各家的思考参数不是同一套词,而**猜错一个值就是整轮 400**。查证过的几家才有档位,
+ * 其余是空清单,界面据此说"这条连接发不出思考档位"。
  *
- * 只能开/关的(DeepSeek、Qwen 这类混合模型)给两档:供应商那边只认"要不要",没有 effort。
- * 给出低/中/高只是让人挑一个发不出去的值。
- *
- * **拿不准的时候给全档**(reasoning 为 null:端点没报、或者这条连接还没细分过能力)。
- * 少一个档位是"想深想但没得选",多一个档位最多是"选了个没生效的值" —— 前者更坏。
+ * 这和「这个模型会不会思考」是两回事,而混淆它们正是用户报的那个 bug:选了「关闭」,
+ * Kimi k3 照样在思考。查证下来 k3 **一直思考**(`reasoning_effort` 只收 low/high/max),
+ * 所以正确的界面不是"关闭没生效",是这个模型压根不提供关闭 —— 而且它也没有「中」,
+ * 此前那一档是个发出去会被拒的值。
  */
 function levelsFor(model: CapabilityModel | undefined): readonly string[] {
-  if (model?.reasoning === false) return [];
-  if (model?.reasoning === true && model.reasoning_effort !== true) return ["off", "low"] as const;
-  return LEVELS;
-}
-
-/**
- * 这条连接**能不能把档位发出去**。
- *
- * 这和"这个模型会不会思考"是两件事,而混淆它们正是用户报的那个 bug:选了「关闭」,Kimi k3
- * 照样在思考。
- *
- * 原因在链路的末端。我们给 pi 造的是一个**合成模型**(provider 是我们自己的 id,不带
- * thinkingFormat),所以 pi 里那些按供应商匹配的思考分支(deepseek 的 `thinking:{type:"disabled"}`、
- * qwen 的 `enable_thinking:false`、openrouter 的 `reasoning:{effort:"none"}`…)一条都不命中,
- * 全部落到最后那对通用的 `reasoning_effort` 分支上 —— 而**那两条都要求
- * `compat.supportsReasoningEffort`**,它来自模型行上的 `reasoning_effort`,默认是空。
- *
- * 于是默认配置下:关闭 / 低 / 中 / 高 发出去的请求**逐字节相同**(什么思考参数都没有),
- * 模型按它自己的默认来。一个四选一的开关,四个选项做同一件事。
- *
- * 所以发不出去的时候就别装作发得出去:控件留着(它说明这个能力存在),但禁用并说清楚
- * 去哪儿打开。
- */
-function canSendLevel(model: CapabilityModel | undefined): boolean {
-  return model?.reasoning_effort === true;
+  return model?.thinking_levels ?? [];
 }
 
 /**
@@ -91,23 +67,32 @@ export function ThinkingLevelPicker({ session }: { session: AgentSession | null 
   );
   const levels = levelsFor(current);
   if (!session) return null;
-  // 目录还没到、或者这个模型不在聊天目录里 —— **什么都别渲染**。"还不知道"不能长成
-  // "发不出去":那会让每次开会话都先闪一下「这条连接发不出思考档位」,而多数连接是发得出的。
-  if (!current) return null;
-  // 这个模型不思考 —— 不给控件,而不是给一个点了没用的。
-  if (levels.length === 0) return null;
-  // 发不出去的时候,给一个禁用的控件加一句为什么 —— 而不是四个做同一件事的选项。
-  if (!canSendLevel(current)) {
+
+  /*
+   * **发不出档位时也要占住这一格。**
+   *
+   * 标题「思考」是外面那个面板画的,不是这里 —— 这里返回 null 的话,面板上就留下一个
+   * 底下什么都没有的标题(用户截图里正是如此:「思考」和「视频分析方式」之间是一片空)。
+   * 所以给一个**和旁边两个下拉同形状的禁用输入**:位置还在、读得出为什么,只是按不动。
+   *
+   * 目录还没到(current 为空)时说的是「读取中」而不是「发不出去」:"还不知道"不能长成
+   * 一个结论,而多数连接其实是发得出的。
+   */
+  if (!current || levels.length === 0) {
+    const reason = current ? t("agentThinkingUnavailable") : t("modelListLoading");
     return (
       <button
         type="button"
         disabled
-        className="flex h-8 w-full min-w-0 cursor-not-allowed items-center gap-1.5 rounded-md px-2.5 text-left text-xs text-muted-foreground opacity-60"
-        aria-label={t("agentThinkingUnavailable")}
-        title={`${t("agentThinkingUnavailable")}\n${t("agentThinkingUnavailableHint")}`}
+        className={cn(
+          FIELD_TRIGGER_CLASS,
+          "h-8 justify-start gap-1.5 px-2.5 text-xs text-muted-foreground",
+        )}
+        aria-label={reason}
+        title={current ? `${reason}\n${t("agentThinkingUnavailableHint")}` : reason}
       >
         <Brain size={13} className="shrink-0 opacity-70" />
-        <span className="min-w-0 truncate">{t("agentThinkingUnavailable")}</span>
+        <span className="min-w-0 truncate">{reason}</span>
       </button>
     );
   }

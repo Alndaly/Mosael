@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import AgentVoiceOut, AgentVoiceUpdate, CapabilityModelOut, ProviderDefaultOut, ProviderDefaultUpdate
 from app.db.models import ProviderModel
+from app.domain import thinking
 from app.domain import provider_models
 from app.domain.provider_defaults import DEFAULTABLE_CAPABILITIES, set_default
 from app.domain.providers import capability_ids_for_vendor
@@ -63,6 +64,11 @@ def list_capability_models(
             # 界面据此决定给几个选项 —— 给一个点了没用的开关,比没有这个开关更坏。
             reasoning=model.reasoning,
             reasoning_effort=model.reasoning_effort,
+            # 「会不会思考」和「我们能不能把档位传过去」是两回事:Kimi k3 会思考、也分档,
+            # 但它关不掉,而且没有「中」。界面照这份清单渲染,不再自己推。
+            thinking_levels=thinking.profile_for(
+                model.profile.vendor if model.profile is not None else "", model.model_id
+            ).levels(),
         )
         for model in provider_models.models_for_capability(db, capability, user.id, surface=surface)
     ]

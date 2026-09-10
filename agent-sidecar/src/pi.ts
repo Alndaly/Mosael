@@ -216,6 +216,8 @@ export function buildModels(
     contextWindow?: number | null;
     maxOutputTokens?: number | null;
     reasoning?: boolean | null;
+    /** 档位 → 供应商接受的值。null = 这一档这个模型不支持(pi 据此把它从可选清单里去掉)。 */
+    thinkingLevelMap?: Record<string, string | null> | null;
     vision?: boolean | null;
     reasoningEffort?: boolean | null;
     developerRole?: boolean | null;
@@ -242,6 +244,10 @@ export function buildModels(
     // (deepseek.com / z.ai / openrouter.ai…),通用 OpenAI 兼容端点走的是最后两条
     // reasoning_effort 分支,而它们额外要求 supportsReasoningEffort —— 那一项仍然默认关。
     reasoning: limits.reasoning ?? true,
+    // 某一档发什么值、发不发得出去。**各家不是同一套词**,而猜错一个值就是整轮 400:
+    // Kimi k3 只收 low/high/max 且关不掉,OpenAI 的关闭是 reasoning_effort:"none"。
+    // 后端按 vendor 给查证过的那几家(见 domain/thinking),其余不给 —— 不给就是今天的行为。
+    ...(limits.thinkingLevelMap ? { thinkingLevelMap: limits.thinkingLevelMap } : {}),
     input: limits.vision ? ["text", "image"] : ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow:

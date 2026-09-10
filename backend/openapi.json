@@ -19670,6 +19670,14 @@
               }
             ],
             "title": "Reasoning Effort"
+          },
+          "thinking_levels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Thinking Levels",
+            "default": []
           }
         },
         "type": "object",
