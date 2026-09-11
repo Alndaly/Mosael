@@ -7,6 +7,9 @@ export interface ActionOutcome {
 
 const s = (v: unknown): string => (v == null ? "" : String(v));
 
+/** 放进错误里的短版本。选择器和网址都可能很长,糊满一屏之后反而看不清关键那几个字。 */
+const brief = (v: string, max = 80): string => (v.length <= max ? v : `${v.slice(0, max - 1)}…`);
+
 /**
  * 把一个后端动作分派到 PageDriver:navigate/click/input/upload/press_key/extract/evaluate/wait/
  * scroll/screenshot。upload 经 CDP setFileInputFiles 塞文件(与发布上传同一套 driver.setFiles)。
@@ -75,7 +78,18 @@ export async function executeBrowserAction(
       } else {
         throw new Error("wait 需要 selector / url_contains / text 之一");
       }
-      if (!ok) throw new Error("等待超时");
+      if (!ok) {
+        // 「等待超时」四个字是**站点改版之后最常撞见的那条错误**,而它当时什么都不说:等的哪个
+        // 选择器、等了多久、页面那会儿停在哪一页。这三样就在手边,不带上就得让人回去翻节点配置
+        // 再猜一遍。带上之后一眼能分出「选择器写错了」和「页面根本没跳过去」。
+        const waited = (timeout / 1000).toFixed(1);
+        const what = args.selector
+          ? `${args.gone ? "元素始终没有消失" : "元素一直没出现"}:${brief(s(args.selector))}`
+          : args.url_contains
+            ? `网址里一直没有出现:${brief(s(args.url_contains))}`
+            : `页面上一直没有出现文字:${brief(s(args.text))}`;
+        throw new Error(`等待超时(${waited}s):${what};当前停在 ${brief(driver.url(), 120)}`);
+      }
       return { lastUrl: driver.url() };
     }
     case "scroll": {
