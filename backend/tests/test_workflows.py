@@ -522,6 +522,51 @@ def test_loop_while_respects_max_iterations() -> None:
     assert job["result"]["context"]["loop"]["iterations"] == 4
 
 
+def test_循环体炸了要说清是第几项() -> None:
+    """一项失败会带崩整条循环(fail-fast,是设计)。那就更得说清是哪一项。
+
+    没有这个定位,跑 200 个素材时用户只看到「代码执行出错:ValueError: ...」,
+    而"第几项"恰恰是唯一能让人动手去查的信息。原异常仍在 __cause__ 上,栈不丢。
+    """
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    body = {
+        "nodes": [
+            {
+                "id": "boom",
+                "type": "code",
+                "config": {
+                    "code": "if inputs['it'] == 'bravo':\n    raise ValueError('炸')\noutput = inputs['it']",
+                    "input": {"it": "{{loop.item}}"},
+                },
+            }
+        ],
+        "edges": [],
+    }
+    graph = {
+        "nodes": [
+            {"id": "start", "type": "start", "config": {"params": {"xs": ["alpha", "bravo", "charlie"]}}},
+            {"id": "loop", "type": "loop_foreach", "config": {"items": "{{start.xs}}", "body": body}},
+        ],
+        "edges": [{"id": "e1", "source": "start", "target": "loop"}],
+    }
+    workflow = client.post("/api/workflows", json={"workspace_id": ws["id"], "name": "炸在中间", "graph": graph})
+    run = client.post(f"/api/workflows/{workflow.json()['id']}/run", json={"params": {}})
+    job_id = run.json()["id"]
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        job = client.get(f"/api/jobs/{job_id}").json()
+        if job["status"] in ("succeeded", "failed"):
+            break
+        time.sleep(0.2)
+    assert job["status"] == "failed", job
+    error = job["error"] or ""
+    # 第几项、哪一项、以及子图原本那句话,三样都得在。
+    assert "第 2/3 次迭代" in error, error
+    assert "bravo" in error, error
+    assert "炸" in error, error
+
+
 def test_loop_foreach_rejects_start_in_body() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
