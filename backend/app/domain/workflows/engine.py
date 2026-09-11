@@ -106,7 +106,7 @@ def _run_workflow_thread(workflow_id: str, revision_id: str, job_id: str, params
             # JobOut 也保留一份终态现场。事件流是完整时间线；result.failure 让只读取 job 的
             # 消费方同样能展示诊断，而不是只能看到一句“失败”。
             job.result = {**(job.result or {}), "failure": failure}
-            say(job, "jobMsg_workflowFailed")
+            say(job, "jobMsg_workflowFailed", name=workflow.name)
             emit_job_event(db, job.id, "workflow.failed", failure)
             notify(
                 db,

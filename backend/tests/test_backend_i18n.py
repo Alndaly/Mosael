@@ -303,3 +303,28 @@ def test_工作流节点目录写的_key_都翻得出来() -> None:
             if value and value not in MESSAGES:
                 unknown.append(f"{node}.{name}={value}")
     assert unknown == []
+
+
+def test_失败的任务消息说清是哪一条() -> None:
+    """成功带名字、失败不带,那失败就是唯一说不清「是哪一条」的那种消息。
+
+    一个工作区里同时跑着几条工作流时,「工作流失败」四个字等于没说 —— 而它恰恰是最需要
+    被认出来的那一条。发布侧的失败/取消是同一个形状,一并钉住。
+    """
+    assert t("jobMsg_workflowFailed", "zh", name="夜间转码") == "工作流失败: 夜间转码"
+    assert t("jobMsg_workflowFailed", "en", name="Nightly") == "Workflow failed: Nightly"
+    assert t("jobMsg_publishFailed", "zh", title="预告片") == "发布失败: 预告片"
+    assert t("jobMsg_publishCancelled", "en", title="Teaser") == "Publishing cancelled: Teaser"
+
+
+def test_参数没给全时抹掉占位符而不是把大括号交给用户() -> None:
+    """message_params 这一列是后加的,它之前落库的行参数是空的,而接口按 key 重翻。
+
+    所以给一个 key 补占位符,就等于让所有历史行走「参数缺失」这条路。退回未格式化的模板会让
+    用户看见一个 `{name}`;抹掉之后它们回到补占位符之前的样子 —— 正是当初存进去的那句。
+    """
+    assert t("jobMsg_workflowFailed", "zh") == "工作流失败"
+    assert t("jobMsg_workflowFailed", "en") == "Workflow failed"
+    assert t("jobMsg_publishFailed", "zh") == "发布失败"
+    # 没有占位符的句子不受影响。
+    assert t("jobMsg_cancelled", "zh") == "已取消"

@@ -169,12 +169,12 @@ MESSAGES: dict[str, dict[str, str]] = {
     "jobMsg_workflowQueued": {"zh": "工作流排队中: {name}", "en": "Workflow queued: {name}"},
     "jobMsg_workflowRunning": {"zh": "工作流运行中: {name}", "en": "Workflow running: {name}"},
     "jobMsg_workflowDone": {"zh": "工作流完成: {name}", "en": "Workflow complete: {name}"},
-    "jobMsg_workflowFailed": {"zh": "工作流失败", "en": "Workflow failed"},
+    "jobMsg_workflowFailed": {"zh": "工作流失败: {name}", "en": "Workflow failed: {name}"},
     "jobMsg_publishWaiting": {"zh": "等待桌面发布器认领: {title}", "en": "Waiting for the desktop publisher: {title}"},
     "jobMsg_publishRunning": {"zh": "桌面发布器执行中: {title}", "en": "Desktop publisher running: {title}"},
     "jobMsg_publishDone": {"zh": "发布完成: {title}", "en": "Published: {title}"},
-    "jobMsg_publishFailed": {"zh": "发布失败", "en": "Publishing failed"},
-    "jobMsg_publishCancelled": {"zh": "发布已取消", "en": "Publishing cancelled"},
+    "jobMsg_publishFailed": {"zh": "发布失败: {title}", "en": "Publishing failed: {title}"},
+    "jobMsg_publishCancelled": {"zh": "发布已取消: {title}", "en": "Publishing cancelled: {title}"},
     "jobMsg_publishStatus": {"zh": "发布 {status}: {title}", "en": "Publish {status}: {title}"},
     "jobMsg_proxyQueued": {"zh": "生成预览代理排队中", "en": "Proxy generation queued"},
     #: 配置字段的名字(节点检查器上每一行的标题)。按**键名**给,不按节点给 ——
@@ -664,6 +664,21 @@ def normalize_locale(raw: str | None) -> str:
     return DEFAULT_LOCALE
 
 
+def _drop_placeholders(text: str) -> str:
+    """把填不上的占位符连同它的标点一起抹掉,只留字面部分。
+
+    退路不能是「原样返回模板」:那样用户脸上就糊着一个 `{name}`。而这条路真正会被走到的
+    是**旧任务记录** —— message_params 这一列是后加的,它之前落库的那些行参数是空的,
+    而接口按 key 重翻。给一个 key 补上占位符(「工作流失败」→「工作流失败: {name}」)时,
+    历史行就都走这里:抹掉之后它们回到补占位符之前的样子,正是当初存进去的那句。
+    """
+    from string import Formatter
+
+    literals = [literal for literal, field, _, _ in Formatter().parse(text) if literal]
+    # 占位符没了,它前面那个引导标点也就没有要引导的东西了。
+    return "".join(literals).strip().rstrip(":：,，、-—").strip()
+
+
 def t(key: str, locale: str = DEFAULT_LOCALE, **params: object) -> str:
     """翻一个 key,可带参数。
 
@@ -672,18 +687,16 @@ def t(key: str, locale: str = DEFAULT_LOCALE, **params: object) -> str:
 
     带参数的句子(「安装 {engine} 运行依赖…」)是模板 —— **参数在产生它的地方就算好、跟着 key 一起
     传出来**,而不是把值直接拼进句子。拼进去就没法翻了:那句话从此只有一种语言。
-    格式化失败(模板少写了一个占位符)同样不抛错,退回未格式化的原句 —— 少个词好过整页 500。
+    参数给不全时不抛错,**把填不上的占位符整段抹掉**(见 _drop_placeholders)。
     """
     entry = MESSAGES.get(key)
     if entry is None:
         return key
     text = entry.get(locale) or entry.get(DEFAULT_LOCALE) or key
-    if not params:
-        return text
     try:
         return text.format(**params)
     except (KeyError, IndexError, ValueError):
-        return text
+        return _drop_placeholders(text)
 
 
 #: 状态字典里放模板参数的那一栏。翻完就摘掉 —— 它是给翻译用的,不该出现在 API 响应里。

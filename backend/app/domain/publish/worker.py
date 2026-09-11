@@ -234,7 +234,7 @@ def _sync_job(db: Session, task: PublishTask) -> None:
     elif task.status in ("failed", "cancelled"):
         job.status = "failed"
         job.error = task.error_message or task.status
-        say(job, "jobMsg_publishFailed" if task.status == "failed" else "jobMsg_publishCancelled")
+        say(job, "jobMsg_publishFailed" if task.status == "failed" else "jobMsg_publishCancelled", title=task.title)
         emit_job_event(db, job.id, "publish.failed", {"status": task.status, "error": job.error})
     else:
         job.status = "running"
