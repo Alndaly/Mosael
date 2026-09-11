@@ -32,7 +32,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Combobox } from "@/components/app/combobox";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
-import { EmptyState } from "@/components/layout/EmptyState";
+import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsRow } from "@/features/settings/ui";
@@ -137,6 +137,9 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
                   </div>
                 </div>
               ))}
+            {tasks.isError && (tasks.data ?? []).length === 0 && (
+              <PageLoadError size="compact" icon={<Timer size={15} />} error={tasks.error} onRetry={() => void tasks.refetch()} />
+            )}
             {(tasks.data ?? []).map((task) => (
               <ContextMenu key={task.id}>
                 <ContextMenuTrigger asChild>

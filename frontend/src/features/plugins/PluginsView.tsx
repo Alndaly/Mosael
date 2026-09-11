@@ -21,7 +21,7 @@ import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { EmptyState } from "@/components/layout/EmptyState";
+import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { PluginMarketDialog } from "@/features/plugins/PluginMarket";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -112,6 +112,9 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
                 </button>
               );
             })}
+            {packages.isError && list.length === 0 && (
+              <PageLoadError size="compact" icon={<Plug size={15} />} error={packages.error} onRetry={() => void packages.refetch()} />
+            )}
             {packages.isSuccess && list.length === 0 && (
               <p className="m-0 px-2 py-3 text-ui-xs leading-[1.6] text-muted-foreground">
                 {t("noPluginsGuide").replace("{dir}", pluginsDir.data?.path ?? "")}

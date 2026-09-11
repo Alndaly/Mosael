@@ -1,5 +1,7 @@
 import React from "react";
 
+import { useI18n } from "@/app/preferences";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
@@ -70,5 +72,43 @@ export function EmptyState({
       {body && <p>{body}</p>}
       {action}
     </div>
+  );
+}
+
+/**
+ * 「这一页的数据没取回来」的统一说法。
+ *
+ * **它和空态是两件事,而把前者显示成后者是在撒谎**:后端连不上时,画板页此前渲染的是
+ * 「创意画板 0」加一个「新建画板」按钮 —— 用户看到的是"我一个画板都没有",而不是"没连上"。
+ * 一个说"这里是空的"的界面,在真的空和取不到之间必须分得清,否则它在其中一种情况下必然骗人。
+ *
+ * 素材页和发布页本来就做对了,这里只是把那段照抄了五遍的 JSX 收成一处,让别的页也能接上。
+ * `retry` 给的是 react-query 的 refetch —— 连回来之后不该逼用户刷新整页。
+ */
+export function PageLoadError({
+  icon,
+  error,
+  onRetry,
+  size,
+  className,
+}: {
+  icon: React.ReactNode;
+  error: unknown;
+  onRetry?: () => void;
+  /** 主从布局的窄索引列里用 `compact`,整页用默认。 */
+  size?: "full" | "section" | "compact";
+  className?: string;
+}) {
+  const t = useI18n();
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return (
+    <EmptyState
+      icon={icon}
+      title={t("pageLoadError")}
+      body={message}
+      size={size}
+      className={className}
+      action={onRetry ? <Button variant="secondary" onClick={onRetry}>{t("retry")}</Button> : undefined}
+    />
   );
 }

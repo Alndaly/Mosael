@@ -106,7 +106,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { Combobox } from "@/components/app/combobox";
 import { CanvasTitle } from "@/components/app/canvasTitle";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
-import { EmptyState } from "@/components/layout/EmptyState";
+import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { CanvasDetailLoading } from "@/components/layout/CanvasDetailLoading";
 import { CanvasCardSkeleton } from "@/components/layout/CanvasCardSkeleton";
 import { ConfigNotice } from "@/components/layout/ConfigNotice";
@@ -606,6 +606,11 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
         </span>
       } />
       <div className="min-h-0 flex-1 overflow-y-auto">
+        {/* 取不到**不是**一个都没有。缓存里还有旧数据时照常显示它(总比一片空白强),
+            但一条都没有又取不回来时,得说清是没连上而不是"你还没有工作流"。 */}
+        {workflows.isError && (workflows.data ?? []).length === 0 ? (
+          <PageLoadError icon={<WorkflowIcon size={22} />} error={workflows.error} onRetry={() => void workflows.refetch()} />
+        ) : (
         <div className={CARD_GRID}>
           {workflows.isLoading &&
             (workflows.data ?? []).length === 0 &&
@@ -644,6 +649,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
             </ContextMenu>
           ))}
         </div>
+        )}
       </div>
       {importControl}
       {communityDialog}

@@ -41,7 +41,7 @@ import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { CanvasTitle } from "@/components/app/canvasTitle";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
-import { EmptyState } from "@/components/layout/EmptyState";
+import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { CanvasDetailLoading } from "@/components/layout/CanvasDetailLoading";
 import { CanvasCardSkeleton } from "@/components/layout/CanvasCardSkeleton";
 import { relativeTime } from "@/lib/time";
@@ -152,7 +152,7 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
   // 用户会以为自己切到了别的应用里。
   return (
     <div className={STUDIO_PAGE}>
-      <PageHeading title={t("navBoards")} description={t("studioBoardsDesc")} count={list.length} actions={<Button loading={create.isPending} onClick={() => create.mutate()}><Plus />{t("boardsNew")}</Button>} />
+      <PageHeading title={t("navBoards")} description={t("studioBoardsDesc")} count={boards.data?.length} actions={<Button loading={create.isPending} onClick={() => create.mutate()}><Plus />{t("boardsNew")}</Button>} />
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {boards.isLoading ? (
@@ -161,6 +161,10 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
               <CanvasCardSkeleton key={n} />
             ))}
           </div>
+        ) : boards.isError ? (
+          // 取不到**不是**空的。少了这一支,后端连不上时这页显示的是「创意画板 0」加一个
+          // 「新建画板」—— 用户读到的是"我一个画板都没有"。
+          <PageLoadError icon={<LayoutGrid size={22} />} error={boards.error} onRetry={() => void boards.refetch()} />
         ) : (
           <div className={CARD_GRID}>
             {list.map((board) => (
