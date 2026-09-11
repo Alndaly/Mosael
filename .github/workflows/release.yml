@@ -33,10 +33,25 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # 凭据闸。**分两类,红与不红的判据不同**:
+  #
+  # `CSC_*` 和描述文件是签名本身的前提,任何路径都不能少 —— 少了就是真问题,必须红。
+  #
+  # `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` 只有**云端公证**那条路要。当前实际用的是
+  # 本机钥匙串公证交接(见 docs/RELEASING.md),这两项一直没配。而 `gh release create` 建
+  # Release 会顺带推出 tag,tag 又会触发这条工作流的自动发布路径 —— 于是**每发一次版,
+  # 这里就红一次**,红的却是一条我们根本没打算走的路。发布本身是好的,红叉是假的。
+  #
+  # 假红叉比没有红叉更坏:它教人忽略这个工作流的红色,而下一次可能是真的。所以缺云端凭据时
+  # 这里不再失败,而是把结论交给下游 —— 后面的 job 一律跳过,run 干净结束,摘要里留一条
+  # notice 说明为什么。真配上那两项之后,tag 自动发布会自己恢复,不用改这里。
   signing:
     runs-on: ubuntu-latest
+    outputs:
+      cloud_notarization: ${{ steps.check.outputs.cloud_notarization }}
     steps:
       - name: Require macOS signing and notarization credentials
+        id: check
         env:
           CSC_LINK: ${{ secrets.CSC_LINK != '' }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD != '' }}
@@ -45,15 +60,27 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD != '' }}
           LOCAL_NOTARIZATION: ${{ github.event_name == 'workflow_dispatch' && inputs.notarization == 'local' }}
         run: |
-          for name in CSC_LINK CSC_KEY_PASSWORD MACOS_PROVISION_PROFILE APPLE_ID APPLE_APP_SPECIFIC_PASSWORD; do
-            if [ "$LOCAL_NOTARIZATION" = "true" ] && [[ "$name" == APPLE_* ]]; then
-              continue
-            fi
+          # 签名前提:缺一不可,任何路径都一样。
+          for name in CSC_LINK CSC_KEY_PASSWORD MACOS_PROVISION_PROFILE; do
             if [ "${!name}" != "true" ]; then
               echo "::error::Missing required signing secret: $name"
               exit 1
             fi
           done
+          cloud=true
+          for name in APPLE_ID APPLE_APP_SPECIFIC_PASSWORD; do
+            if [ "${!name}" != "true" ]; then
+              cloud=false
+              missing="$missing $name"
+            fi
+          done
+          echo "cloud_notarization=$cloud" >> "$GITHUB_OUTPUT"
+          if [ "$LOCAL_NOTARIZATION" = "true" ] || [ "$cloud" = "true" ]; then
+            exit 0
+          fi
+          echo "::notice::缺少云端公证凭据:${missing# } —— tag 自动发布这条路走不了,本次跳过后续步骤。"
+          echo "::notice::当前发布流程是「云端签名 + 本机钥匙串公证交接」,见 docs/RELEASING.md。"
+          echo "::notice::这不是失败:v1.3.1 等版本都是按那条流程发出去的,tag 只是顺带推上来的。"
 
   # 测试闸。放在最前面,失败就什么都不发 —— 此前这条工作流**只跑 sidecar 自己的测试和打包
   # 冒烟**,两套主测试(后端 pytest / 前端 vitest)一次都不跑,于是「打了 tag」和「代码是好的」
@@ -63,6 +90,8 @@ jobs:
   # 初始化顺序)已经由 build 里的 agent-sidecar 冒烟在每个平台各跑一遍。
   test:
     needs: [signing]
+    # 云端凭据不全、又不是本机交接模式 —— 这条路本来就走不完,不必跑一个多小时的测试。
+    if: ${{ needs.signing.outputs.cloud_notarization == 'true' || (github.event_name == 'workflow_dispatch' && inputs.notarization == 'local') }}
     uses: ./.github/workflows/tests.yml
 
   # 先建好草稿 Release(自动生成变更说明),两个平台的构建往同一个草稿传产物,

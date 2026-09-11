@@ -8,7 +8,14 @@
 - 阅读 `CHANGELOG.md`、`package.json` 和 [macOS 签名说明](MACOS_SIGNING.md)。如果版本已准备好，沿用它，不重复升级。
 - 比较最新 GitHub Release 与待发布版本，检查相同 tag/草稿是否已存在。公开版本不可覆盖或移动 tag。
 - 版本号、变更说明和必要文档同步后，提交并推送用户授权发布的源码。记录待构建的完整 commit SHA。
-- 截图批次的 sourceCommit/capturedAt/version 是拍摄来源，不因发版而伪造更新。
+- 版本号要改的地方不止 `package.json`。官网的测试会逐项核对，漏一处就红在 `'1.3.0' !== '1.3.1'`：
+  `website/public/media/capture-manifest.json` 顶层的 `documentedVersion`、每篇
+  `website/content/docs/**/*.mdx` frontmatter 的 `version`、中英下载页的「已正式发布」、
+  `website/README.md` 的「当前文档对应」，以及 `website/src/lib/release-copy.ts` 里这一版的中英亮点。
+- 截图批次的 sourceCommit/capturedAt/**批次内的 version** 是拍摄来源，不因发版而伪造更新。
+  它和上面那个 `documentedVersion` 是两回事：前者说「这批是什么时候拍的」，后者说「这份文档对应哪个版本」。
+  （这两个曾被读成一个，于是整节都没改，CI 才红的。）
+- 「哪些画面尚未补录实拍」那句要**按这一版实际改过的界面重写**，不要沿用上一版的措辞 —— 照抄就是谎报。
 
 ```bash
 git status --short
