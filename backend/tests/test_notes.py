@@ -124,3 +124,26 @@ def test_追加仍然校验来源归属():
     r = c.post(f"/api/notes/{n['id']}/append", json={"workspace_id": ws, "markdown": "引用",
         "sources": [{"kind": "asset", "id": asset["id"], "start": 1, "end": 3}]})
     assert r.status_code == 404
+
+
+def test_笔记和画板的详情路由不带_workspace_id_也能读():
+    """引用胶囊的探活用的是 /api/notes/{id} 这个形状,不带查询参数。
+
+    它此前是必填的,于是点笔记和画板的胶囊**永远** 422 —— 而 useReferencePreview 把任何
+    失败都当成「它已经不在了」,界面于是对着一条明明还在的笔记说它没了。素材和工作流的
+    详情路由本来就不需要(资源自带归属),这两条是少数派。
+
+    带上 workspace_id 仍按它查:拿到别的工作区的 id 也不该读得出来。
+    """
+    c = fresh_client()
+    mine = c.post('/api/workspaces', json={'name': '我的'}).json()['id']
+    other = c.post('/api/workspaces', json={'name': '别人的'}).json()['id']
+    note = c.post('/api/notes', json={'workspace_id': mine, 'title': '引用目标'}).json()
+    board = c.post('/api/boards', json={'workspace_id': mine, 'name': '画板目标'}).json()
+
+    assert c.get(f"/api/notes/{note['id']}").status_code == 200
+    assert c.get(f"/api/boards/{board['id']}").status_code == 200
+    # 带上就按它查 —— 换一个工作区的 id 读不出来。
+    assert c.get(f"/api/notes/{note['id']}?workspace_id={mine}").status_code == 200
+    assert c.get(f"/api/notes/{note['id']}?workspace_id={other}").status_code == 404
+    assert c.get(f"/api/boards/{board['id']}?workspace_id={other}").status_code == 404

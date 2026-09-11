@@ -163,6 +163,21 @@ def require_asset(db: Session, user: User, asset_id: str, *, perm: str | None = 
     return asset
 
 
+def owning_workspace(db: Session, model: type, resource_id: str) -> str:
+    """这份资源属于哪个工作区 —— 给**不带 workspace_id** 的只读详情路由用。
+
+    素材和工作流的详情路由本来就不要 workspace_id(资源自带归属,见 require_asset),
+    而笔记和画板要。这个不一致本身不是小事:引用胶囊的探活用的是同一个形状的 URL,
+    于是点笔记和画板的胶囊**永远** 422 —— 界面上说的是「它已经不在了」,而它明明在。
+
+    仍然要过闸:归属只决定"去哪个工作区问",能不能看由调用方的 ensure_* 说了算。
+    """
+    resource = db.get(model, resource_id)
+    if resource is None:
+        raise NotVisible("Not found")
+    return str(resource.workspace_id)
+
+
 def require_sequence_access(db: Session, user: User, sequence_id: str, *, perm: str | None = None) -> Sequence:
     """取序列并过闸。写路由传 `perm="edit"` —— 权限写在调用点上,而不是从请求方法推。"""
     sequence = db.get(Sequence, sequence_id)

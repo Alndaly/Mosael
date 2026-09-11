@@ -20,7 +20,7 @@ from app.domain.boards import (
     update_board,
     write_text,
 )
-from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
+from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, owning_workspace
 
 router = APIRouter(tags=["boards"])
 
@@ -46,10 +46,12 @@ def list_all(workspace_id: str, db: DbSession, user: CurrentUser) -> list[Board]
 
 
 @router.get("/boards/{board_id}", response_model=BoardOut)
-def read(board_id: str, workspace_id: str, db: DbSession, user: CurrentUser) -> Board:
-    ensure_workspace_access(db, user, workspace_id)
+def read(board_id: str, db: DbSession, user: CurrentUser, workspace_id: str | None = None) -> Board:
+    """`workspace_id` **可选** —— 画板自带归属,和素材/工作流那两条详情路由一致(同 notes.read)。"""
+    ws = workspace_id or owning_workspace(db, Board, board_id)
+    ensure_workspace_access(db, user, ws)
     try:
-        return get_board(db, workspace_id, board_id)
+        return get_board(db, ws, board_id)
     except BoardDomainError as exc:
         raise _board_http_error(exc, default_status=404) from exc
 

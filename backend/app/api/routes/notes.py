@@ -5,7 +5,7 @@ from app.api.deps import CurrentUser, DbSession
 from app.api.schemas.notes import NoteAppend, NoteContent, NoteCreate, NoteOut, NoteRestore, NoteUpdate, NoteReferenceOut
 from app.db.models import AgentMessage, AgentSession, Note, NoteRevision
 from app.domain.notes import append_note, create_note, get_note, save_note, read_reference, query_notes
-from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
+from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, owning_workspace
 
 router = APIRouter(tags=["notes"])
 
@@ -34,9 +34,15 @@ def create(body: NoteCreate, db: DbSession, user: CurrentUser):
 
 
 @router.get("/notes/{note_id}", response_model=NoteOut)
-def read(note_id: str, workspace_id: str, db: DbSession, user: CurrentUser):
-    ensure_workspace_access(db, user, workspace_id)
-    return get_note(db, workspace_id, note_id)
+def read(note_id: str, db: DbSession, user: CurrentUser, workspace_id: str | None = None):
+    """`workspace_id` **可选** —— 笔记自带归属,和素材/工作流那两条详情路由一致。
+
+    它此前是必填的,而引用胶囊的探活用的是同一个形状的 URL(/api/notes/{id}),于是点笔记
+    胶囊永远 422 → 界面报「它已经不在了」,可它明明在。带上时仍按它查(跨工作区的 id 读不出来)。
+    """
+    ws = workspace_id or owning_workspace(db, Note, note_id)
+    ensure_workspace_access(db, user, ws)
+    return get_note(db, ws, note_id)
 
 
 @router.get("/notes/{note_id}/reference", response_model=NoteReferenceOut)
