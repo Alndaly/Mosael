@@ -327,7 +327,7 @@ function ProjectSwitcher({
         ))}
         {onCreateProject && (
           <>
-            <div className="mx-0.5 my-1 h-px bg-border" />
+            <div className="mx-0.5 my-1 h-px bg-divider" />
             <button
               type="button"
               disabled={creatingProject}

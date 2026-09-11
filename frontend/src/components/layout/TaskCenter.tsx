@@ -199,7 +199,9 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
           {active.map((job) => (
             <JobRow key={job.id} job={job} onOpen={() => openJob(job)} onCancel={() => cancelJob.mutate(job.id)} />
           ))}
-          {active.length > 0 && finished.length > 0 && <div className="mx-1.5 my-1 h-px bg-border" />}
+          {/* 走 --divider 而不是 --border:浮层上那两个色差得很远(深色下 border 对面板只有 1.057,
+              等于没画),而 --divider 在浮层里会被换成贴着这层算的那一版。 */}
+          {active.length > 0 && finished.length > 0 && <div className="mx-1.5 my-1 h-px bg-divider" />}
           {finished.map(({ job, count }) => (
             <JobRow key={job.id} job={job} count={count} onOpen={() => openJob(job)} />
           ))}

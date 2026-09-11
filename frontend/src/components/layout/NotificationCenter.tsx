@@ -172,11 +172,16 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
               </div>
             </div>
           ))}
+          {/* 行上**不要加 border-0**。外层是 `divide-y divide-divider`,而 Tailwind v4 把它编译成
+              `:where(.divide-y > :not(:last-child))` —— `:where()` 的特异性是 **0**,行上随便一个
+              `border-0`(特异性 0-1-0,且同在 utilities 层)就把它压成 0 宽,线一条都画不出来。
+              这条线此前就是这么没的:颜色一直是对的(量到 foreground 8%),宽度是 0。
+              preflight 已经给所有元素 `border: 0 solid`,button 本来就没有边框,那个类是多余的。 */}
           {items.map((item) => (
             <button
               key={item.id}
               type="button"
-              className="grid cursor-pointer grid-cols-[36px_minmax(0,1fr)_12px] items-start gap-3 rounded-lg border-0 bg-transparent px-2 py-4 text-left hover:bg-secondary"
+              className="grid cursor-pointer grid-cols-[36px_minmax(0,1fr)_12px] items-start gap-3 rounded-lg bg-transparent px-2 py-4 text-left hover:bg-secondary"
               onClick={() => openItem(item)}
             >
               <span
