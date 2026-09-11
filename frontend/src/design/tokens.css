@@ -459,6 +459,15 @@
     --panel-subtle: color-mix(in srgb, #f3f6fa calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
     --panel-inset: color-mix(in srgb, #eaf0f7 calc(var(--app-surface-opacity, 0.72) * 100%), transparent);
     --floating-border: color-mix(in srgb, var(--border) calc(var(--app-surface-opacity, 0.72) * 65%), transparent);
+    /* 分隔线也得跟着表面走。上面每一个表面都变成了半透明,于是它们的**最终颜色随背景漂**;
+       而 --divider 还是一个实色,两者的相对对比度就跟着背景乱跑。实测极光预设:深蓝段 1.07、
+       青色段 1.22,而紫色段 **1.01** —— 那已经不是"不明显",是整条线消失。
+       (1.3.1 修过浮层上的同一个毛病,但那次只覆盖了 .floating-surface 那几层,没管开磨玻璃
+       之后的页面级表面。)
+       用前景色的低透明度叠加就没有这个问题:它合成在**当前这层**上面,不管底下透出来的是
+       蓝是紫,拉开的都是同一个相对差。foreground 本身跟着主题走,而 12% 这个数在两个主题的最难情形下(浅色纯白底 1.26、
+       深色紫底 1.41)正好落在 1.3.1 给浮层定的那一档上,所以深浅共用这一行。 */
+    --divider: color-mix(in srgb, var(--foreground) 12%, transparent);
   }
   :root[data-appearance="glass"].dark {
     --field: color-mix(in srgb, #181a1d calc(var(--app-surface-opacity, 0.72) * 55%), transparent);
