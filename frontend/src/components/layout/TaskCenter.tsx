@@ -12,6 +12,7 @@ import { gotoRecord } from "@/lib/deepLink";
 import { relativeTime } from "@/lib/time";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { LIST_HAIRLINE } from "@/components/ui/floating";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -179,7 +180,7 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
       {/* p-0:PopoverContent 基类自带 p-4,而里面的头部和列表各自已经有内边距 ——
           留着就是里外两层留白,行会被推得离弹层边缘很远。 */}
       <PopoverContent className="w-[min(440px,calc(100vw-24px))] overflow-hidden p-0" aria-label={t("taskCenter")}>
-        <div className="flex items-center justify-between border-b border-border px-5 py-5 [&_strong]:text-lg">
+        <div className="flex items-center justify-between border-b border-divider px-5 py-5 [&_strong]:text-lg">
           <strong>{t("taskCenter")}</strong>
           {finished.length > 0 && (
             <button
@@ -195,15 +196,22 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
         {/* `grid-cols-[minmax(0,1fr)]` 不是装饰:单列 grid 的隐式列是 `auto`,也就是 **max-content**
             —— 一条长提示词(AI 生成任务的 subject)会把这一列撑到内容宽度,整个弹层于是能左右滚,
             而行内那些 truncate 全都失效(它们要一个有定数的列宽才截得动)。 */}
-        <div className="grid max-h-[min(560px,70vh)] grid-cols-[minmax(0,1fr)] gap-0 divide-y divide-divider overflow-y-auto overflow-x-hidden px-3 py-2">
-          {active.map((job) => (
-            <JobRow key={job.id} job={job} onOpen={() => openJob(job)} onCancel={() => cancelJob.mutate(job.id)} />
+        {/* 行间的线**不用 `divide-y`**:那会把它画成上一行的 border-bottom,而这些行带着
+            `rounded-lg`(hover 高亮要圆角),border 跟着圆角走,横线两端就翘成弧。
+            改成独立的 1px 块(LIST_HAIRLINE),线是直的,左右还能收进来一点。 */}
+        <div className="grid max-h-[min(560px,70vh)] grid-cols-[minmax(0,1fr)] gap-0 overflow-y-auto overflow-x-hidden px-3 py-2">
+          {active.map((job, index) => (
+            <React.Fragment key={job.id}>
+              {index > 0 && <div className={LIST_HAIRLINE} />}
+              <JobRow job={job} onOpen={() => openJob(job)} onCancel={() => cancelJob.mutate(job.id)} />
+            </React.Fragment>
           ))}
-          {/* 走 --divider 而不是 --border:浮层上那两个色差得很远(深色下 border 对面板只有 1.057,
-              等于没画),而 --divider 在浮层里会被换成贴着这层算的那一版。 */}
-          {active.length > 0 && finished.length > 0 && <div className="mx-1.5 my-1 h-px bg-divider" />}
-          {finished.map(({ job, count }) => (
-            <JobRow key={job.id} job={job} count={count} onOpen={() => openJob(job)} />
+          {active.length > 0 && finished.length > 0 && <div className={LIST_HAIRLINE} />}
+          {finished.map(({ job, count }, index) => (
+            <React.Fragment key={job.id}>
+              {index > 0 && <div className={LIST_HAIRLINE} />}
+              <JobRow job={job} count={count} onOpen={() => openJob(job)} />
+            </React.Fragment>
           ))}
           {all.length === 0 && (
             <EmptyState size="compact" icon={<ListChecks size={15} />} title={t("noJobsTitle")} body={t("noJobs")} />

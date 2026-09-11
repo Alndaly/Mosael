@@ -16,6 +16,7 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { LIST_HAIRLINE } from "@/components/ui/floating";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { NOTIFICATION_DEEP_LINKS, gotoRecord } from "@/lib/deepLink";
 import { relativeTime } from "@/lib/time";
@@ -111,7 +112,7 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
       {/* p-0:PopoverContent 基类自带 p-4,而里面的头部和列表各自已经有内边距 ——
           留着就是里外两层留白,行会被推得离弹层边缘很远。 */}
       <PopoverContent className="w-[min(440px,calc(100vw-24px))] overflow-hidden p-0" aria-label={t("notifTitle")}>
-        <div className="flex items-center justify-between border-b border-border px-5 py-5 [&_strong]:text-lg">
+        <div className="flex items-center justify-between border-b border-divider px-5 py-5 [&_strong]:text-lg">
           <strong>{t("notifTitle")}</strong>
           <span className="flex items-center gap-2.5">
             {unread > 0 && (
@@ -140,7 +141,7 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
         </div>
         {/* 单列 grid 的隐式列是 max-content —— 一条长通知正文会把整个弹层撑到能左右滚
             (任务中心同一处坑)。锁住列宽,行内的 truncate 才有定数可截。 */}
-        <div className="grid max-h-[min(560px,70vh)] grid-cols-[minmax(0,1fr)] gap-0 divide-y divide-divider overflow-y-auto overflow-x-hidden px-3 py-2">
+        <div className="grid max-h-[min(560px,70vh)] grid-cols-[minmax(0,1fr)] gap-0 overflow-y-auto overflow-x-hidden px-3 py-2">
           {pendingInvites.map((inv) => (
             <div
               key={inv.id}
@@ -172,14 +173,17 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
               </div>
             </div>
           ))}
-          {/* 行上**不要加 border-0**。外层是 `divide-y divide-divider`,而 Tailwind v4 把它编译成
-              `:where(.divide-y > :not(:last-child))` —— `:where()` 的特异性是 **0**,行上随便一个
-              `border-0`(特异性 0-1-0,且同在 utilities 层)就把它压成 0 宽,线一条都画不出来。
-              这条线此前就是这么没的:颜色一直是对的(量到 foreground 8%),宽度是 0。
-              preflight 已经给所有元素 `border: 0 solid`,button 本来就没有边框,那个类是多余的。 */}
-          {items.map((item) => (
+          {/* 行间的线**不用 `divide-y`**,理由有两个,都是实测出来的:
+              一、行上曾有个 `border-0`,而 Tailwind v4 把 divide-y 编译成
+                 `:where(.divide-y > :not(:last-child))` —— `:where()` 特异性是 0,被 `border-0`
+                 (0-1-0、同层)稳稳压过,`border-bottom-width` 算成 0,线一条都画不出来;
+              二、就算宽度对了,这些行为了 hover 高亮带着 `rounded-lg`,border 跟着圆角走,
+                 横线两端会翘成弧。
+              独立的 1px 块(LIST_HAIRLINE)两样都不沾。 */}
+          {items.map((item, index) => (
+            <React.Fragment key={item.id}>
+              {index > 0 && <div className={LIST_HAIRLINE} />}
             <button
-              key={item.id}
               type="button"
               className="grid cursor-pointer grid-cols-[36px_minmax(0,1fr)_12px] items-start gap-3 rounded-lg bg-transparent px-2 py-4 text-left hover:bg-secondary"
               onClick={() => openItem(item)}
@@ -199,6 +203,7 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
               </span>
               {!item.read_at && <i className="mt-[5px] h-1.5 w-1.5 rounded-full bg-primary" />}
             </button>
+            </React.Fragment>
           ))}
           {items.length === 0 && pendingInvites.length === 0 && (
             <EmptyState size="compact" icon={<BellOff size={15} />} title={t("notifEmptyTitle")} body={t("notifEmpty")} />
