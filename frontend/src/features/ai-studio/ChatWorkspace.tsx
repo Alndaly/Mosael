@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import type { JSONContent } from "@tiptap/react";
 
 import { ChatComposer, collectReferences, documentText, emptyDocument } from "@/features/agent/ChatComposer";
+import { useEffectiveChatModel } from "@/features/ai-studio/effectiveModel";
 import type { AgentReference } from "@/features/agent/references";
 import { ModalShell } from "@/components/app/modals";
 import { AgentStatusRow } from "@/components/agent/AgentStatusRow";
@@ -744,13 +745,7 @@ function ChatInspector({
   const t = useI18n();
   // 会话没显式设模型时,后端按供应商默认回退——与底部模型选择器同源,取生效模型而不是裸 session.model
   // (否则这里显示 —,底部却显示 deepseek-v4-pro,对不上)。
-  const defaults = useQuery({
-    queryKey: ["provider-defaults"],
-    queryFn: () => api<components["schemas"]["ProviderDefaultOut"][]>("/api/settings/provider-defaults"),
-    staleTime: 60_000,
-  });
-  const defaultChatModel = (defaults.data ?? []).find((item) => item.capability === "chat")?.model ?? "";
-  const effectiveModel = session?.model || defaultChatModel;
+  const effectiveModel = useEffectiveChatModel(session).model;
   // 历次计划:从消息时间线里的 update_plan 调用还原(见 PlanCard.planHistory)。
   const plans = React.useMemo(
     () => planHistory(messages.map((message) => (message.payload as { timeline?: AgentTimelineItem[] } | null)?.timeline)),

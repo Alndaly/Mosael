@@ -21,12 +21,16 @@ vi.mock("@/app/preferences", () => ({
 }));
 
 let catalog: unknown[] = [];
-const api = vi.fn(async () => catalog);
-vi.mock("@/api/client", () => ({ api: () => api() }));
+//: 会话没写死模型时,档位要靠「设置 → AI 对话」的默认回退。两个端点得分开答。
+let defaults: unknown[] = [{ capability: "chat", provider_profile_id: "p1", model: "kimi-k3" }];
+const api = vi.fn(async (url: string) => (url.includes("provider-defaults") ? defaults : catalog));
+vi.mock("@/api/client", () => ({ api: (url: string) => api(url) }));
 
 import { ThinkingLevelPicker } from "./ThinkingLevelPicker";
 
 const session = { id: "s1", model: "kimi-k3", provider_profile_id: "p1", thinking_level: "off" };
+//: 库里几乎每条会话都长这样 —— 不写死模型,跟着默认走。
+const inheriting = { id: "s2", model: null, provider_profile_id: null, thinking_level: "off" };
 const model = (extra: Record<string, unknown>) => ({
   model: "kimi-k3",
   provider_profile_id: "p1",
@@ -35,12 +39,12 @@ const model = (extra: Record<string, unknown>) => ({
   ...extra,
 });
 
-function mount() {
+function mount(which: unknown = session) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      <ThinkingLevelPicker session={session as any} />
+      <ThinkingLevelPicker session={which as any} />
     </QueryClientProvider>,
   );
 }
@@ -126,6 +130,32 @@ describe("思考档位", () => {
     catalog = [model({ reasoning: true, thinking_levels: ["off", "low"] })];
     const { container } = mount();
     // 首帧:查询还没落地。"还不知道"不能长成一个结论 —— 而这条连接其实是发得出的。
+    expect(container.textContent).toContain("读取模型…");
+    expect(container.textContent).not.toContain("发不出思考档位");
+  });
+
+  /**
+   * **会话不写死模型才是常态。**
+   *
+   * 新建会话的 `model` / `provider_profile_id` 都是 NULL,跟着「设置 → AI 对话」的默认走
+   * (线上库里翻出来的每一条都是这样)。而这个组件原先直接拿 `session.model` 去目录里找 ——
+   * 空值匹配不上任何一行,于是**每一个没手动指定模型的会话**都被判成「这条连接发不出思考
+   * 档位」,哪怕那个模型明明支持。开关等于没有,而且不报错。
+   *
+   * 浏览器里实测发现:用户的 Kimi k3 会话正是如此。ModelPicker 一直做了这个回退,所以底部
+   * 显示的模型是对的 —— 两处各算各的,才让这个洞藏了下来。
+   */
+  it("会话没写死模型时,按默认模型取档位,而不是判成发不出去", async () => {
+    catalog = [model({ reasoning: true, thinking_levels: ["low", "high"] })];
+    mount(inheriting);
+    const trigger = await screen.findByRole("combobox");
+    expect(trigger.textContent).toContain("模型默认");
+    expect(screen.queryByText("这条连接发不出思考档位")).not.toBeInTheDocument();
+  });
+
+  it("默认模型还没到时说「读取中」,不说「发不出去」", () => {
+    catalog = [model({ reasoning: true, thinking_levels: ["low", "high"] })];
+    const { container } = mount(inheriting);
     expect(container.textContent).toContain("读取模型…");
     expect(container.textContent).not.toContain("发不出思考档位");
   });

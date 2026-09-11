@@ -7,6 +7,7 @@ import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { FIELD_TRIGGER_CLASS } from "@/components/ui/field-trigger";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useEffectiveChatModel } from "@/features/ai-studio/effectiveModel";
 import { cn } from "@/lib/utils";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
@@ -62,8 +63,11 @@ export function ThinkingLevelPicker({ session }: { session: AgentSession | null 
     queryFn: () => api<CapabilityModel[]>("/api/settings/capability-models/chat"),
     staleTime: 60_000,
   });
+  // **不能直接拿 session.model 去匹配**:它平时是空的(会话跟默认走),空值匹配不上目录里
+  // 任何一行,于是每个没手动指定模型的会话都被判成"发不出档位"。见 effectiveModel 的说明。
+  const effective = useEffectiveChatModel(session);
   const current = (models.data ?? []).find(
-    (item) => item.model === session?.model && item.provider_profile_id === session?.provider_profile_id,
+    (item) => item.model === effective.model && item.provider_profile_id === effective.providerProfileId,
   );
   const levels = levelsFor(current);
   if (!session) return null;
@@ -86,7 +90,7 @@ export function ThinkingLevelPicker({ session }: { session: AgentSession | null 
      * 手填的别名),这一格就永远停在「读取模型…」—— 用户看到的是一个一直转不完的东西,
      * 而它其实已经有结论了:我们不认识这个模型,发不出档位。
      */
-    const reason = models.isPending ? t("modelListLoading") : t("agentThinkingUnavailable");
+    const reason = models.isPending || effective.pending ? t("modelListLoading") : t("agentThinkingUnavailable");
     return (
       <button
         type="button"

@@ -3,6 +3,7 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import { ChevronDown, Settings2 } from "lucide-react";
 
 import { api, listProviderModels } from "@/api/client";
+import { useEffectiveChatModel } from "@/features/ai-studio/effectiveModel";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,8 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
   });
   const enabled = (providers.data ?? []).filter((profile) => profile.enabled);
   const defaultChat = (defaults.data ?? []).find((item) => item.capability === "chat");
+  // 「这轮实际用哪个模型」只有一处算法(effectiveModel),思考档位那边用的是同一个。
+  const effective = useEffectiveChatModel(session);
 
   const modelQueries = useQueries({
     queries: enabled.map((profile) => ({
@@ -84,8 +87,7 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
     );
   }
   if (!session) return null;
-  const currentProfileId = session.provider_profile_id ?? defaultChat?.provider_profile_id ?? "";
-  const currentModel = session.model ?? defaultChat?.model ?? "";
+  const { providerProfileId: currentProfileId, model: currentModel } = effective;
   const current = currentProfileId && currentModel ? `${currentProfileId}${SEP}${currentModel}` : "";
   const currentLabel = options.find((option) => option.value === current)?.label ?? t("agentModelPlaceholder");
 
