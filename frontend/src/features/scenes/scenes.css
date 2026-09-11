@@ -49,29 +49,7 @@
    三个列表页并排时,卡片该是一样宽、行列该是一样疏。这里留着自己那份只会把它盖回去:
    240 的最小列宽让卡片更窄、多挤出一列,而 margin-top 又叠在页面自己的间距上,离页头更远。 */
 .scene-card-open {
-  text-align: left;
   min-width: 0;
-}
-.scene-cards h2 {
-  margin: 12px 0 4px;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* 只做定位容器:画面(比例、边框、底色)由 ScenePreview 自己给,和画板/工作流卡片用的
-   CanvasPreview 对齐 —— 三种卡片并排时该是同一种东西。这里再叠一层渐变和圆角就是框中框。 */
-.scene-card-art {
-  position: relative;
-  color: var(--muted-foreground);
-}
-.scene-card-art span {
-  position: absolute;
-  bottom: 14px;
-  right: 18px;
-  font-family: var(--font-mono);
-  font-size: 24px;
-  opacity: 0.4;
 }
 .scene-studio {
   display: flex;
@@ -1070,12 +1048,16 @@
 .scene-blender-setup a:hover, .scene-blender-link:hover { text-decoration: underline; }
 .scene-blender { -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
 
-/* 页面自己的 gap 已经管了它和页头的距离,这里再加 margin 就是两份间距叠在一起。
-   padding 留着:卡片的 focus ring 是往外扩的,贴着容器边会被裁掉。 */
-.scene-list .scene-cards { padding: 3px; }
+/* 这里曾经有 margin-top: 24px 和 padding: 3px。两个都得走:
+   页面自己的 gap 已经管了它和页头的距离,而那 3px padding 把整个网格又往下推了 3px ——
+   并排看就是「3D 场景这一列莫名其妙比别人低一点」。焦点圈改用不占位的写法(见下)。 */
 .scene-list-card { position: relative; min-width: 0; border-radius: 14px; }
-.scene-card-open { display: block; width: 100%; border-radius: 14px; padding-bottom: 8px; }
-.scene-card-open:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+/* display/width/gap 由卡片自己的 grid 类给(与画板卡片同一套),这里只留焦点圈和圆角。
+   padding-bottom 去掉:行与行的距离该由网格的 row gap 一处说了算。 */
+.scene-card-open { border-radius: 14px; }
+/* 焦点圈用 box-shadow 而不是带 offset 的 outline:outline-offset 要占外侧空间,为它留白就得给
+   网格加 padding,而那 padding 会把整列卡片推下去。box-shadow 画在盒子外但不参与布局。 */
+.scene-card-open:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ring); }
 .scene-list-card[data-selected="true"] { outline: 2px solid var(--primary); outline-offset: 3px; background: var(--accent); }
 .scene-list-card[data-selected="true"] h2, .scene-list-card[data-selected="true"] p { padding-inline: 8px; }
 .scene-card-check { position: absolute; top: 12px; left: 12px; width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer; }

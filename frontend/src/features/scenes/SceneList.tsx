@@ -114,7 +114,7 @@ export function SceneList({
   }
   return (
     <div
-      className="scene-list"
+      className={cn("scene-list", "flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto")}
       onKeyDown={(e) => {
         if (
           busy ||
@@ -201,7 +201,7 @@ export function SceneList({
                 data-selected={selected.has(scene.id)}
               >
                 <button
-                  className="scene-card-open"
+                  className={cn("scene-card-open", "grid w-full gap-3 rounded-lg text-left")}
                   aria-label={`打开场景 ${scene.name}`}
                   disabled={busy}
                   onClick={(e) => {
@@ -210,14 +210,17 @@ export function SceneList({
                     else onOpen(scene.id);
                   }}
                 >
-                  <div className="scene-card-art">
-                    <ScenePreview data={scene.preview} />
-                    <span>{String(scene.object_count).padStart(2, "0")}</span>
-                  </div>
-                  <h2 title={scene.name}>{scene.name}</h2>
-                  <p>
+                  {/* 卡片正文排版与画板/工作流卡片逐项对齐:标题 text-ui-md、副行 muted,
+                      间距一律走 gap 而不是各自的 margin。此前标题是 14px(比另外两页小一号)、
+                      副行用的是前景色(比另外两页重),并排看像另一个产品里的东西。
+
+                      右下角那个大写的对象数角标也去掉了 —— 它和副行的「N 个对象」是同一个数,
+                      预览图能看见内容之后更没有必要,而另外两页的卡片上也没有这种角标。 */}
+                  <ScenePreview data={scene.preview} />
+                  <span className="truncate pr-8 text-ui-md font-semibold" title={scene.name}>{scene.name}</span>
+                  <span className="text-ui-sm text-muted-foreground">
                     {scene.object_count} 个对象 · {scene.shot_count} 个镜头
-                  </p>
+                  </span>
                 </button>
                 {selecting && (
                   <input
