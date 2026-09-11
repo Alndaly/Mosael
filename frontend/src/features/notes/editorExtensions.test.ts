@@ -19,6 +19,34 @@ describe("note Markdown persistence", () => {
     expect(saved).not.toContain('token=');
     editor.destroy(); reopened.destroy();
   });
+  it("keeps an ordinary link — NoteReference took over the link token and swallowed every non-note URL", () => {
+    // 往返一致**不能**证明链接还在:第一次解析就被吃掉的话,存下来的和再读回来的都没有它,
+    // 两边 JSON 照样相等。所以这里断言的是"链接确实在",而不是"前后一样"。
+    const editor = new Editor({
+      extensions: noteExtensions(),
+      content: "看[这个页面](https://example.com/a?b=1)吧",
+      contentType: "markdown",
+    });
+    const anchor = editor.view.dom.querySelector("a:not([data-note-reference])");
+    expect(anchor?.getAttribute("href")).toBe("https://example.com/a?b=1");
+    expect(anchor?.textContent).toBe("这个页面");
+    // 链接文字也不能掉:曾经整段变成「看吧」,连字都没了。
+    expect(editor.getText()).toBe("看这个页面吧");
+    expect(editor.getMarkdown().trim()).toBe("看[这个页面](https://example.com/a?b=1)吧");
+    editor.destroy();
+  });
+
+  it("still routes note deep links to the atomic reference node, not a plain link", () => {
+    const editor = new Editor({
+      extensions: noteExtensions(),
+      content: "[@参考](#/notes?note=abc&revision=3)",
+      contentType: "markdown",
+    });
+    expect(editor.view.dom.querySelectorAll("[data-note-reference]")).toHaveLength(1);
+    expect(editor.getMarkdown().trim()).toBe("[@参考](#/notes?note=abc&revision=3)");
+    editor.destroy();
+  });
+
   it("does not render executable URLs or unsupported local paths as images", () => {
     expect(noteImageUrl('javascript:alert(1)')).toBe('');
     expect(noteImageUrl('file:///etc/passwd')).toBe('');
