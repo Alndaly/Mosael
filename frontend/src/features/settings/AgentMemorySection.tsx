@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2 } from "lucide-react";
+import { Brain, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { api, type Workspace } from "@/api/client";
@@ -9,7 +9,7 @@ import { useI18n } from "@/app/preferences";
 import { BulkActionBar, BulkCheckbox, BulkSelectTrigger, useBulkSelection } from "@/components/app/bulkSelection";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { SettingsBlock, SettingsGroup } from "@/features/settings/ui";
+import { SettingsBlock, SettingsEmpty, SettingsGroup } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
 
 type AgentMemory = components["schemas"]["AgentMemoryOut"];
@@ -176,8 +176,10 @@ export function AgentMemorySection({ workspace }: { workspace: Workspace }) {
             </ul>
           )}
 
+          {/* 这一节的正文就是这张清单,空了就用整节的空态 —— 和声音库、飞书、计价规则同一种说法。
+              此前是一行贴着按钮的小灰字,底下留着大半屏空白,读起来像"加载没完"而不是"还没有"。 */}
           {rows.length === 0 && !memories.isPending && !adding && (
-            <p className="m-0 text-xs leading-[1.55] text-muted-foreground">{t("agentMemoryEmpty")}</p>
+            <SettingsEmpty icon={<Brain size={20} />} title={t("agentMemoryEmpty")} body={t("agentMemoryEmptyHint")} />
           )}
 
           {/* 添加区只在要添加时出现 —— 常驻一个空输入框会让"还没有记忆"这件事被一个大框盖住。 */}
