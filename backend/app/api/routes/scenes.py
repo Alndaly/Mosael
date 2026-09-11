@@ -6,7 +6,7 @@ from app.api.schemas.scenes import SceneCreate, SceneUpdate, SceneOut, SceneOper
 from app.db.models import Scene3D, Scene3DModel, Scene3DRevision
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.domain.scenes import (apply_scene_operations, create_scene, delete_scene_model_files,
-                                get_scene, import_model, model_file, save_scene)
+                                get_scene, import_model, model_file, save_scene, scene_preview)
 
 router = APIRouter(tags=["3D scenes"])
 
@@ -16,7 +16,8 @@ def list_scenes(workspace_id: str, db: DbSession, user: CurrentUser):
     ensure_workspace_access(db, user, workspace_id)
     rows = db.scalars(select(Scene3D).where(Scene3D.workspace_id == workspace_id).order_by(Scene3D.updated_at.desc()).limit(200))
     return [{"id": r.id, "name": r.name, "revision": r.revision, "updated_at": r.updated_at,
-             "object_count": len(r.content.get("objects", [])), "shot_count": len(r.content.get("shots", []))} for r in rows]
+             "object_count": len(r.content.get("objects", [])), "shot_count": len(r.content.get("shots", [])),
+             "preview": scene_preview(r.content)} for r in rows]
 
 
 @router.post("/scenes", response_model=SceneOut)

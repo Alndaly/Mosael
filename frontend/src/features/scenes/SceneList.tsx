@@ -1,6 +1,5 @@
 import React from "react";
 import {
-  Box,
   CheckSquare,
   Pencil,
   ArrowUpRight,
@@ -19,6 +18,7 @@ import {
   ContextMenuSeparator,
 } from "@/components/ui/context-menu";
 import { ActionMenu } from "@/components/layout/ActionMenu";
+import { ScenePreview } from "./ScenePreview";
 
 export function SceneList({
   scenes,
@@ -209,7 +209,7 @@ export function SceneList({
                   }}
                 >
                   <div className="scene-card-art">
-                    <Box size={48} strokeWidth={1} />
+                    <ScenePreview data={scene.preview} />
                     <span>{String(scene.object_count).padStart(2, "0")}</span>
                   </div>
                   <h2 title={scene.name}>{scene.name}</h2>

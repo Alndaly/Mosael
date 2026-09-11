@@ -188,3 +188,46 @@ def test_keyframes_can_start_later_and_deleting_a_key_preserves_the_others():
         'workspace_id': ws, 'name': scene['name'], 'base_revision': result.json()['revision'], 'content': scene['content'],
     })
     assert invalid.status_code == 422
+
+
+def test_场景列表带着画缩略图要的字段_但不背整条运镜轨():
+    """卡片上的缩略图是**从场景数据直出**的(同画板/工作流),所以列表得带上画得着的那几个字段。
+
+    带什么和不带什么都要钉住:带少了缩略图画不出来,带多了列表就背着 200 个场景的全部关键帧 ——
+    一条轨可以有 100 帧,而缩略图只需要相机走过哪儿。隐藏的物体不该出现在图上。
+    """
+    c, ws, scene = setup_scene()
+    content = {
+        **scene['content'],
+        'objects': [
+            {'id': 'a', 'name': '箱', 'kind': 'box', 'position': [1, 0, 2], 'color': '#ff0000',
+             'parameters': {'width': 3, 'depth': 4}},
+            {'id': 'hidden', 'name': '藏', 'kind': 'box', 'hidden': True},
+            {'id': 'cam', 'name': '机位', 'kind': 'camera', 'position': [8, 5, 8], 'target': [0, 1, 0],
+             'track': [{'time': 0, 'position': [0, 2, 0], 'target': [1, 0, 1]},
+                       {'time': 3, 'position': [5, 2, 6], 'target': [1, 0, 1]}]},
+        ],
+        'shots': [{'id': 's1', 'name': '镜头 1', 'duration': 3, 'camera_id': 'cam'}],
+    }
+    saved = c.patch(f"/api/scenes/{scene['id']}",
+                    json={'workspace_id': ws, 'name': 'Studio', 'content': content, 'base_revision': scene['revision']})
+    assert saved.status_code == 200, saved.text
+
+    row = next(item for item in c.get(f'/api/scenes?workspace_id={ws}').json() if item['id'] == scene['id'])
+    objects = row['preview']['objects']
+    assert [o['kind'] for o in objects] == ['box', 'camera'], '隐藏的物体不该进缩略图'
+    box = objects[0]
+    assert box['position'] == [1, 0, 2] and box['color'] == '#ff0000'
+    # 只挑画得着的三个:width/depth 给方体,radius 给球和柱。门洞、台阶数这些俯视图上没有。
+    assert box['parameters'] == {'width': 3, 'depth': 4, 'radius': 1}, '只挑画得着的参数'
+    # 相机只带走过的位置点,不带整帧(target/fov 这些缩略图用不上)。
+    assert objects[1]['path'] == [[0, 2, 0], [5, 2, 6]]
+    assert 'track' not in objects[1] and 'track' not in box
+
+
+def test_场景缩略图的物体数有上限():
+    """列表一次最多 200 个场景。不设限的话,一个大场景就能把列表页的响应拖垮。"""
+    from app.domain.scenes import PREVIEW_OBJECT_LIMIT, scene_preview
+
+    many = {'objects': [{'id': f'o{i}', 'kind': 'box'} for i in range(PREVIEW_OBJECT_LIMIT + 25)]}
+    assert len(scene_preview(many)['objects']) == PREVIEW_OBJECT_LIMIT

@@ -46,6 +46,42 @@ class SceneTooLarge(SceneDomainError):
     status = 413
 
 
+#: 卡片上画得下的物体数。上限存在的理由是**响应体积**:列表一次最多 200 个场景,
+#: 每个都带着它的物体,不设限一个大场景就能把列表页拖垮。40 个之后缩略图上也早已看不清谁是谁。
+PREVIEW_OBJECT_LIMIT = 40
+
+
+def scene_preview(content: dict) -> dict:
+    """列表卡片要画的那点东西。
+
+    **这里只挑字段,不解释几何** —— "一个 room 俯视占多大"属于造型知识,它在前端
+    (SceneViewport 按同一批 parameters 建 mesh);后端再算一遍就是同一份知识的第二个实现,
+    而两份实现必然分岔。所以这里只负责把画得着的字段挑出来、把画不着的留下。
+
+    留下的大头是 `track`:一条运镜轨可以有 100 个关键帧,而缩略图只需要相机走过哪儿,
+    所以相机只带位置点,别的物体的轨整条不带(静物的缩略图本来就画它的静止姿态)。
+    """
+    objects: list[dict] = []
+    for raw in content.get("objects", []):
+        if len(objects) >= PREVIEW_OBJECT_LIMIT:
+            break
+        if raw.get("hidden"):
+            continue
+        parameters = raw.get("parameters") or {}
+        item = {
+            "kind": raw.get("kind"),
+            "position": raw.get("position"),
+            "rotation": raw.get("rotation"),
+            "scale": raw.get("scale"),
+            "color": raw.get("color"),
+            "parameters": {k: parameters[k] for k in ("width", "depth", "radius") if k in parameters},
+        }
+        if raw.get("kind") == "camera":
+            item["path"] = [frame.get("position") for frame in (raw.get("track") or []) if frame.get("position")]
+        objects.append(item)
+    return {"objects": objects}
+
+
 def get_scene(db: Session, workspace_id: str, scene_id: str) -> Scene3D:
     scene = db.scalar(select(Scene3D).where(Scene3D.id == scene_id, Scene3D.workspace_id == workspace_id))
     if scene is None:

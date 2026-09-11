@@ -1,4 +1,5 @@
 import type { components } from "@/api/generated/schema";
+import type { ScenePreviewData } from "@/features/scenes/sceneFootprint";
 import { api, API_BASE, getAuthToken } from "@/api/transport";
 export type Vec3 = [number, number, number];
 /** 时间轨上的一个时刻。相机用 position + target + fov,物体用 position + rotation + scale。
@@ -25,7 +26,7 @@ export type Scene = Omit<components["schemas"]["SceneOut"], "content"> & {
 export type SceneSummary = Pick<
   Scene,
   "id" | "name" | "revision" | "updated_at"
-> & { object_count: number; shot_count: number };
+> & { object_count: number; shot_count: number; preview?: ScenePreviewData };
 const query = (ws: string) => `workspace_id=${encodeURIComponent(ws)}`;
 export const listScenes = (ws: string) =>
   api<SceneSummary[]>(`/api/scenes?${query(ws)}`);

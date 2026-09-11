@@ -75,17 +75,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 只做定位容器:画面(比例、边框、底色)由 ScenePreview 自己给,和画板/工作流卡片用的
+   CanvasPreview 对齐 —— 三种卡片并排时该是同一种东西。这里再叠一层渐变和圆角就是框中框。 */
 .scene-card-art {
-  height: 180px;
-  border-radius: 14px;
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--primary) 12%, transparent),
-    color-mix(in srgb, var(--foreground) 3%, transparent)
-  );
-  display: flex;
-  align-items: center;
-  justify-content: center;
   position: relative;
   color: var(--muted-foreground);
 }
