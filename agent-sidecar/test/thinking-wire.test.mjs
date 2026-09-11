@@ -78,3 +78,65 @@ test("思考=关 → 请求里带 thinking disabled", async () => {
   assert.ok(body, "应当抓到一个请求");
   assert.deepEqual(body.thinking, { type: "disabled" }, `实际 body.thinking=${JSON.stringify(body.thinking)}`);
 });
+
+/**
+ * 上面两条走的是 **api.deepseek.com** —— 那会命中 pi 里按 baseUrl 认出 deepseek 的分支,
+ * 发的是 `thinking: {type}`。而**第三方中转**(通用 OpenAI 兼容端点)认不出供应商,走的是
+ * 最后那两条 `reasoning_effort` 分支 —— 那条路此前一条测试都没有,于是漏了整整一个 bug:
+ *
+ * 后端查证过 deepseek-v4 收 reasoning_effort 的哪几个值、把 thinkingLevelMap 给了下来、
+ * 界面上也据此列出了档位,而 compat.supportsReasoningEffort 默认 false 在最后一步把它丢了。
+ * 结果和 1.3.1 修的那个 bug 一模一样:**四个档位发出去的请求逐字节相同**。
+ */
+async function captureVia(provider, thinkingLevel, model = "deepseek-v4") {
+  const original = globalThis.fetch;
+  let captured = null;
+  globalThis.fetch = async (url, init) => {
+    if (captured === null && init?.body) captured = JSON.parse(String(init.body));
+    return new Response("nope", { status: 500, statusText: "stubbed" });
+  };
+  try {
+    await runPiTurn(
+      { systemPrompt: "s", prompt: "1+1", provider, model, tools: [], apiBase: "http://127.0.0.1:1", token: "t", thinkingLevel },
+      { onDelta: () => {}, onThinking: () => {}, onThinkingEnd: () => {}, onToolStart: () => {}, onToolEnd: () => {} },
+    );
+  } catch {
+    /* 500 是故意的,body 已经拿到 */
+  } finally {
+    globalThis.fetch = original;
+  }
+  return captured;
+}
+
+/** 第三方中转:认不出供应商,只能靠后端给的 thinkingLevelMap。 */
+const relay = {
+  baseUrl: "https://relay.example.com/v1",
+  apiKey: "k",
+  vendor: "openai-compatible",
+  thinkingLevelMap: { off: null, low: "low", medium: null, high: "high" },
+};
+
+test("中转端点:给了 thinkingLevelMap 就该发 reasoning_effort,不能再被 supportsReasoningEffort 默认关掉", async () => {
+  const low = await captureVia(relay, "low");
+  const high = await captureVia(relay, "high");
+  assert.equal(low?.reasoning_effort, "low", `低档实际 body=${JSON.stringify(low)}`);
+  assert.equal(high?.reasoning_effort, "high", `高档实际 body=${JSON.stringify(high)}`);
+});
+
+test("中转端点:四个档位发出去的东西必须彼此不同 —— 这正是上一版的 bug", async () => {
+  const seen = new Map();
+  for (const level of ["off", "low", "medium", "high"]) {
+    const body = await captureVia(relay, level);
+    seen.set(level, body?.reasoning_effort ?? null);
+  }
+  // off 和 medium 这个模型不支持(map 里是 null),该发不出去;low/high 必须各是各的。
+  assert.equal(seen.get("low"), "low");
+  assert.equal(seen.get("high"), "high");
+  assert.notEqual(seen.get("low"), seen.get("high"), "低和高不能发出同一个值");
+});
+
+test("没给 thinkingLevelMap 的端点仍然保守 —— 不认识的模型不硬塞 reasoning_effort", async () => {
+  const unknown = { baseUrl: "https://relay.example.com/v1", apiKey: "k", vendor: "openai-compatible" };
+  const body = await captureVia(unknown, "high", "some-local-model");
+  assert.equal(body?.reasoning_effort, undefined, `不该带 reasoning_effort,实际 body=${JSON.stringify(body)}`);
+});

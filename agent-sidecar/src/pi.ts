@@ -261,7 +261,19 @@ export function buildModels(
     // Ollama / vLLM / LM Studio 等本地 OpenAI 兼容服务不认 developer role 与 reasoning_effort
     compat: {
       supportsDeveloperRole: limits.developerRole ?? false,
-      supportsReasoningEffort: limits.reasoningEffort ?? false,
+      // **thinkingLevelMap 一旦给了,就蕴含 supportsReasoningEffort。**
+      //
+      // 上面那段说"通用兼容端点走 reasoning_effort 分支,而它们额外要求 supportsReasoningEffort
+      // —— 那一项仍然默认关",那句话本身没错,错在它和 thinkingLevelMap 一起就成了自相矛盾:
+      // 后端给出 thinkingLevelMap 的**前提**正是"我们查证过这个模型收 reasoning_effort 的哪几个
+      // 值"(见 backend/app/domain/thinking),而这里再默认关一次,等于当场把刚查证的结论否掉。
+      //
+      // 后果和 1.3.1 修的那个 bug 一模一样,只是换了位置:界面上有档位(档位清单也来自同一张表)、
+      // 用户选得了、会话也存下了,而**四个档位发出去的请求逐字节相同**,一个思考参数都没有。
+      //
+      // 所以只在"我们并不知道这个模型收什么"时才保守:没有 thinkingLevelMap 就维持默认关,
+      // 用户仍可在设置里按模型手动放开(显式值优先)。
+      supportsReasoningEffort: limits.reasoningEffort ?? Boolean(limits.thinkingLevelMap),
     },
   };
   const provider = createProvider({
