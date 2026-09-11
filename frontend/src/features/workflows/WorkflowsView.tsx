@@ -321,7 +321,7 @@ const DEFAULT_EDGE_OPTIONS = {
 const EMPTY_SCOPE_VARIABLES: string[] = [];
 
 export function WorkflowsView({ workspace }: { workspace: Workspace }) {
-  const { t, locale } = usePreferences();
+  const { t } = usePreferences();
   const qc = useQueryClient();
   const [menuRenaming, setMenuRenaming] = React.useState<Workflow | null>(null);
   const [menuDeleting, setMenuDeleting] = React.useState<Workflow | null>(null);
@@ -344,9 +344,11 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
     refetchInterval: 5000,
   });
   const nodeTypes = useQuery({
-    // 节点名、字段名和输出接点名都由后端按 Accept-Language 翻译。
-    // 语言不进 key 会让 Infinity 缓存把上一种语言永久留在画布上。
-    queryKey: ["workflow-node-types", locale],
+    // 节点名、字段名和输出接点名都由后端按 Accept-Language 翻译,所以换了语言这份得重取。
+    // 那件事由 PreferencesProvider 统一做(切语言时作废全部查询)—— 此前这里是把 locale 拼进
+    // key 自己解决的,但那要求**每个**取后端翻译内容的地方都记得带上它,漏一处就错一处,
+    // 而漏的那处不报错(插件详情就是这么漏的)。一种机制,一处说明。
+    queryKey: ["workflow-node-types"],
     queryFn: fetchWorkflowNodeTypes,
     staleTime: Infinity,
   });
