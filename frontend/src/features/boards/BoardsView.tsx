@@ -2,7 +2,7 @@ import { CanvasToolbar, CanvasToolbarGroup } from "@/components/app/CanvasToolba
 import { ActionMenu } from "@/components/layout/ActionMenu";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import React from "react";
-import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
+import { CARD_GRID, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { CanvasPreview } from "@/components/layout/CanvasPreview";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot, LayoutGrid, ListChecks, Map as MapIcon, Maximize2, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
@@ -156,13 +156,13 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {boards.isLoading ? (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-x-6 gap-y-8">
+          <div className={CARD_GRID}>
             {[0, 1, 2].map((n) => (
               <CanvasCardSkeleton key={n} />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-x-6 gap-y-8">
+          <div className={CARD_GRID}>
             {list.map((board) => (
               <BoardCard
                 key={board.id}

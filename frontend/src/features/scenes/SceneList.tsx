@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/context-menu";
 import { ActionMenu } from "@/components/layout/ActionMenu";
 import { ScenePreview } from "./ScenePreview";
+import { CARD_GRID } from "@/components/layout/StudioPage";
+import { cn } from "@/lib/utils";
 
 export function SceneList({
   scenes,
@@ -178,7 +180,7 @@ export function SceneList({
       <ContextMenu>
         <ContextMenuTrigger asChild disabled={busy}>
           <div
-            className="scene-cards"
+            className={cn("scene-cards", CARD_GRID)}
             role="group"
             aria-label="场景列表"
             tabIndex={0}

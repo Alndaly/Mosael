@@ -12,25 +12,12 @@
   background: transparent;
   font-size: var(--text-ui-sm);
 }
-.scene-library {
-  display: flex;
-  flex-direction: column;
-  padding: 32px;
-  overflow: auto;
-}
-.scene-library > header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  flex-wrap: wrap;
-}
-.scene-library h1 {
-  font-size: 28px;
-  font-weight: 650;
-  margin: 8px 0;
-}
-.scene-library p,
+/* 布局和页头交给 STUDIO_PAGE + PageHeading(画板/工作流用的同一套)。这里曾经自己写了
+   一份:padding 32 对 px-6/py-7、标题 28px 对 text-ui-title、页头 align-items:center 对
+   items-end —— 三个同级列表页于是没有一处对得上。留在这里只会把共用的那套盖回去。
+
+   `.scene-library p` 也一并去掉:它把页头描述和卡片副行套上了 .scene-eyebrow 的宽字距小字号,
+   而 eyebrow 是给全大写小标签用的 —— 同样的一行字,这页和画板那页看着不像同一个产品。 */
 .scene-eyebrow {
   letter-spacing: 0.16em;
   font-size: var(--text-ui-2xs);
@@ -58,12 +45,9 @@
 .scene-empty h2 {
   font-size: 22px;
 }
-.scene-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 28px;
-  margin-top: 32px;
-}
+/* 网格本身交给共用的 CARD_GRID(见 components/layout/StudioPage) —— 画板、工作流、3D 场景
+   三个列表页并排时,卡片该是一样宽、行列该是一样疏。这里留着自己那份只会把它盖回去:
+   240 的最小列宽让卡片更窄、多挤出一列,而 margin-top 又叠在页面自己的间距上,离页头更远。 */
 .scene-card-open {
   text-align: left;
   min-width: 0;
@@ -1086,8 +1070,9 @@
 .scene-blender-setup a:hover, .scene-blender-link:hover { text-decoration: underline; }
 .scene-blender { -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
 
-.scene-list { margin-top: 24px; }
-.scene-list .scene-cards { margin-top: 8px; padding: 3px; }
+/* 页面自己的 gap 已经管了它和页头的距离,这里再加 margin 就是两份间距叠在一起。
+   padding 留着:卡片的 focus ring 是往外扩的,贴着容器边会被裁掉。 */
+.scene-list .scene-cards { padding: 3px; }
 .scene-list-card { position: relative; min-width: 0; border-radius: 14px; }
 .scene-card-open { display: block; width: 100%; border-radius: 14px; padding-bottom: 8px; }
 .scene-card-open:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }

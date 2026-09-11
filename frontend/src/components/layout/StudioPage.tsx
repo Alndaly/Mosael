@@ -14,6 +14,11 @@ export function PageHeading({ title, description, count, actions, className }: {
   </header>;
 }
 
+/** 列表页的卡片网格。**三个列表页共用同一串** —— 画板、工作流、3D 场景并排时,卡片该是一样宽、
+ *  行列该是一样疏。此前 3D 场景自己写了一份(最小列宽 240 而不是 280、gap 一个数而不是分行列,
+ *  外加一个 margin-top 叠在页面自己的间距上),于是它的卡片更窄、列更多、离页头更远。 */
+export const CARD_GRID = "grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-x-6 gap-y-8";
+
 export const STUDIO_PAGE = "flex h-full min-h-0 flex-col gap-7 overflow-auto px-6 py-7 xl:px-9 xl:py-8 [&>*]:shrink-0";
 
 /** A compact, keyboard-accessible choice strip; selection is explicit even without color. */

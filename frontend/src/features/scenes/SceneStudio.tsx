@@ -1,4 +1,7 @@
 import { RenameDialog } from "@/components/app/modals";
+import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
+import { useI18n } from "@/app/preferences";
+import { cn } from "@/lib/utils";
 import { SceneList } from "./SceneList";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -141,6 +144,7 @@ const ADD_OPTIONS: {
 const readId = () =>
   new URLSearchParams(location.hash.split("?")[1] ?? "").get("scene");
 export function SceneStudio({ workspace }: { workspace: Workspace }) {
+  const t = useI18n();
   const qc = useQueryClient(),
     [id, setId] = React.useState(readId),
     [creating, setCreating] = React.useState(false),
@@ -205,39 +209,43 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
     );
   }
   return (
-    <div className="scene-library">
-      <header>
-        <div>
-          <h1>3D 场景</h1>
-          <p>搭建空间，设计镜头，再把画面交给你选择的视频模型。</p>
-        </div>
-        <div className="scene-actions">
-          {!!list.data?.length && <Button variant="outline" aria-pressed={selecting} onClick={() => setSelecting(!selecting)}><CheckSquare size={16} />{selecting ? "完成选择" : "选择"}</Button>}
-          {/* 入口放在列表页,因为「我手上已经有个 Blender 工程」是**开始**一个场景的方式,
-              不是某个已有场景里的操作 —— 详情页那条互通要求先从这边发送过去。 */}
-          <SceneBlenderPull
-            workspaceId={workspace.id}
-            disabled={creating}
-            onCreated={async (sceneId) => {
-              await qc.invalidateQueries({ queryKey: ["scenes", workspace.id] });
-              location.hash = `#/scenes?scene=${sceneId}`;
-            }}
-          />
-          <Button
-            variant="outline"
-            disabled={creating}
-            onClick={() => void create(true)}
-          >
-            打开三间展厅示例
-          </Button>
-          <Button disabled={creating} onClick={() => void create(false)}>
-            <Plus size={16} />
-            新建场景
-          </Button>
-        </div>
-      </header>
+    <div className={cn("scene-library", STUDIO_PAGE)}>
+      {/* 页头用**和画板/工作流同一个** PageHeading:此前这里是一套手写的 header,于是三个
+          同级列表页的标题字号、按钮对齐(居中 vs 与描述行齐平)、页面内距各不相同,并排一看就
+          知道不是一家的。计数徽章也是它带来的 —— 另外两页都有,只有这页没有。 */}
+      <PageHeading
+        title={t("navScenes")}
+        description={t("studioScenesDesc")}
+        count={list.data?.length}
+        actions={
+          <>
+            {!!list.data?.length && <Button variant="outline" aria-pressed={selecting} onClick={() => setSelecting(!selecting)}><CheckSquare size={16} />{selecting ? t("scenesSelectDone") : t("bulkSelect")}</Button>}
+            {/* 入口放在列表页,因为「我手上已经有个 Blender 工程」是**开始**一个场景的方式,
+                不是某个已有场景里的操作 —— 详情页那条互通要求先从这边发送过去。 */}
+            <SceneBlenderPull
+              workspaceId={workspace.id}
+              disabled={creating}
+              onCreated={async (sceneId) => {
+                await qc.invalidateQueries({ queryKey: ["scenes", workspace.id] });
+                location.hash = `#/scenes?scene=${sceneId}`;
+              }}
+            />
+            <Button
+              variant="outline"
+              disabled={creating}
+              onClick={() => void create(true)}
+            >
+              {t("scenesOpenSample")}
+            </Button>
+            <Button disabled={creating} onClick={() => void create(false)}>
+              <Plus size={16} />
+              {t("scenesNew")}
+            </Button>
+          </>
+        }
+      />
       {list.isPending ? (
-        <LoadingState className="h-auto flex-1" label="正在加载场景…" />
+        <LoadingState className="h-auto flex-1" label={t("scenesLoading")} />
       ) : list.error ? (
         <div className="flex min-h-0 flex-1 flex-col" role="alert">
           <EmptyState icon={<Box />} title="暂时无法加载场景" body={list.error.message} action={<Button variant="secondary" onClick={() => void list.refetch()}>重试</Button>} />

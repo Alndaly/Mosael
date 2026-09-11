@@ -23,6 +23,17 @@ describe("studio browsing controls", () => {
     expect(x).toBeLessThan(-200); expect(y).toBeLessThan(-100);
     expect(x+width).toBeGreaterThan(500); expect(y+height).toBeGreaterThan(230);
   });
+  it("falls back to the placeholder when a thumbnail cannot load, instead of a broken-image icon", () => {
+    // 节点指着的素材可能还没生成完、已经被删了,或者这会儿取不到。SVG <image> 在这三种情况下
+    // 都会画一个撕裂的图片图标 —— 既不说这里是什么,也不说出了什么事,只是看着像坏了。
+    const { container } = render(<CanvasPreview items={[{ id:"a", x:0, y:0, assetId:"gone", label:"图片" }]} />);
+    expect(container.querySelector("image")).not.toBeNull();
+    fireEvent.error(container.querySelector("image")!);
+    expect(container.querySelector("image")).toBeNull();
+    // 退回的是"一个图片节点,暂时没有画面",所以那个节点本身还在,标签也还在。
+    expect(container.querySelectorAll("rect").length).toBeGreaterThan(1);
+    expect(container.querySelector("text")?.textContent).toBe("图片");
+  });
   it("closes the action surface before returning to the collection", () => {
     const rename = vi.fn();
     render(<ActionMenu label="Project actions" actions={[{label:"Rename", onSelect:rename}]} />);

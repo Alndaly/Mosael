@@ -6,7 +6,7 @@ import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import { ACTION_MENU, MODAL_SURFACE } from "@/components/ui/floating";
 import React from "react";
 import { ActionMenu } from "@/components/layout/ActionMenu";
-import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
+import { CARD_GRID, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { CanvasPreview } from "@/components/layout/CanvasPreview";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useStore } from "zustand";
@@ -606,7 +606,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
         </span>
       } />
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-x-6 gap-y-8">
+        <div className={CARD_GRID}>
           {workflows.isLoading &&
             (workflows.data ?? []).length === 0 &&
             [0, 1, 2, 3].map((i) => <CanvasCardSkeleton key={`sk${i}`} description />)}
