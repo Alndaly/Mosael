@@ -40,8 +40,18 @@ export const REFERENCE_META: Record<ReferenceKind, { icon: LucideIcon; labelKey:
   workflow: { icon: WorkflowIcon, labelKey: "navWorkflows" },
 };
 
+/**
+ * 菜单里一次摆几条。**配额按它均分给四类,菜单也按它截断 —— 所以只能有一个数。**
+ *
+ * 此前是两个:候选按"limit 的四倍"去取(每类配额 12),菜单再截到 12 条。素材通常就有
+ * 12 条以上,于是它一家占满前 12 条,笔记/画板/工作流一条都露不出来 —— 封顶写了,却封在
+ * 屏幕装不下的地方。两个数各自看都合理,凑一起才出事,而这种错写测试盯着也容易盯漏
+ * (盯的是函数,漏的是调用点)。所以现在只有这一个常量,两边都从这儿取。
+ */
+export const REFERENCE_MENU_LIMIT = 12;
+
 /** 一次候选查询的结果。名字为空的对象照样能引用 —— 拿它的 id 兜底,总比不出现好。 */
-export async function searchReferences(workspaceId: string, query: string, limit: number): Promise<AgentReference[]> {
+export async function searchReferences(workspaceId: string, query: string): Promise<AgentReference[]> {
   const needle = query.trim().toLowerCase();
   const matches = (name: string) => !needle || name.toLowerCase().includes(needle);
   // 四类并发问,慢的那一类不拖住其余的。任何一类挂掉只丢它自己(菜单是辅助,不该整块消失)。
@@ -62,6 +72,6 @@ export async function searchReferences(workspaceId: string, query: string, limit
   // **按类成段**,不再轮转:菜单是分组显示的(每组一个标题),轮转会把同一类拆散到各处。
   // 每类各自封顶,免得素材把其余三类挤出屏幕 —— 素材通常最多,不封顶的话笔记和工作流
   // 永远露不了面,用户会以为只能引用素材。
-  const perKind = Math.max(2, Math.floor(limit / REFERENCE_KINDS.length));
+  const perKind = Math.max(2, Math.floor(REFERENCE_MENU_LIMIT / REFERENCE_KINDS.length));
   return REFERENCE_KINDS.flatMap((kind) => out.filter((one) => one.kind === kind).slice(0, perKind));
 }

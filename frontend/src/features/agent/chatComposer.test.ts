@@ -1,5 +1,5 @@
 import type { JSONContent } from "@tiptap/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { collectReferences, documentText, sendsOnEnter } from "./ChatComposer";
 import { REFERENCE_NODE } from "./ReferenceChip";
@@ -93,5 +93,36 @@ describe("回车归谁", () => {
 
   it("别的键一律不管", () => {
     expect(sendsOnEnter(enter({ key: "a" }), false)).toBe(false);
+  });
+});
+
+describe("候选清单的配额", () => {
+  /**
+   * 空查询时素材把另外三类挤没过一次:候选按"上限的四倍"去取(每类配额 12),菜单再截到 12 条,
+   * 而素材通常就有 12 条以上 —— 它一家占满,笔记/画板/工作流一条都露不出来。
+   *
+   * 两个数各自看都合理,凑一起才出事。**所以这条不测"函数在某个参数下对不对"** —— 那样测
+   * 恰好会漏掉真正出错的地方(调用点),我第一版就是这么写的,把调用点改回四倍它照样绿。
+   * 现在配额和截断共用 REFERENCE_MENU_LIMIT,这条钉的是"素材再多,四类也都在结果里"。
+   */
+  it("素材再多也留得下另外三类的位置", async () => {
+    const many = (n: number, prefix: string) =>
+      Array.from({ length: n }, (_, i) => ({ id: `${prefix}${i}`, name: `${prefix}-${i}` }));
+    vi.resetModules();
+    vi.doMock("@/api/client", () => ({
+      listAssets: async () => many(50, "a"),
+      listBoards: async () => many(50, "b"),
+      listWorkflows: async () => many(50, "w"),
+      assetThumbnailUrl: (id: string) => `/t/${id}`,
+    }));
+    //: 笔记走的是另一个模块(api/domains/notes),漏 mock 它的话这条会"少一类"地假绿。
+    vi.doMock("@/api/domains/notes", () => ({
+      listNotes: async () => many(50, "n").map((x) => ({ id: x.id, title: x.name })),
+    }));
+    const { searchReferences, REFERENCE_MENU_LIMIT } = await import("./references");
+
+    const out = await searchReferences("ws", "");
+    expect([...new Set(out.map((one) => one.kind))].sort()).toEqual(["asset", "board", "note", "workflow"]);
+    expect(out.length).toBeLessThanOrEqual(REFERENCE_MENU_LIMIT);
   });
 });

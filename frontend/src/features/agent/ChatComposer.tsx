@@ -7,11 +7,14 @@ import { useI18n } from "@/app/preferences";
 import { RefSuggestion } from "@/components/app/refSuggestion";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
 import { ReferenceChip, ReferenceThumb, REFERENCE_NODE } from "@/features/agent/ReferenceChip";
-import { REFERENCE_META, searchReferences, type AgentReference, type ReferenceKind } from "@/features/agent/references";
+import {
+  REFERENCE_MENU_LIMIT,
+  REFERENCE_META,
+  searchReferences,
+  type AgentReference,
+  type ReferenceKind,
+} from "@/features/agent/references";
 import { cn } from "@/lib/utils";
-
-/** 菜单里最多摆几条。再多就该靠打字缩范围,而不是滚一整屏(同画布的提示词框)。 */
-const LIMIT = 12;
 
 /** 从文档里收出所有引用,按出现顺序去重。 */
 export function collectReferences(document: JSONContent | undefined): AgentReference[] {
@@ -121,7 +124,7 @@ export function ChatComposer({
   className?: string;
   /** 候选从哪儿来。默认问工作区;**留这个口子是为了测得动** —— 菜单的排版和键盘行为
    *  不该为了验证一次就得起一个后端。 */
-  search?: (workspaceId: string, query: string, limit: number) => Promise<AgentReference[]>;
+  search?: (workspaceId: string, query: string) => Promise<AgentReference[]>;
 }) {
   const t = useI18n();
   //: 插件的回调在创建时一次性装好,拿不到后续渲染的闭包 —— 用 ref 兜住当前值(同画布)。
@@ -137,7 +140,7 @@ export function ChatComposer({
   const menu = useSuggestionMenu<AgentReference>({
     emptyHint: () => t("boardNoAssetsToMention"),
     sameItems: (a, b) => a.length === b.length && a.every((one, at) => one.id === b[at].id),
-    view: (items) => items.slice(0, LIMIT),
+    view: (items) => items.slice(0, REFERENCE_MENU_LIMIT),
   });
 
   menuOpenRef.current = Boolean(menu.menu);
@@ -166,7 +169,7 @@ export function ChatComposer({
           //: **`@` 前面是什么都认**。默认要求它跟在空格后面,而中文正文里不打空格 ——
           //: 那条规则等于让这个功能在中文下时灵时不灵(画布那边同一段说明)。
           allowedPrefixes: null,
-          items: ({ query }) => searchRef.current(workspaceRef.current, query, LIMIT * 4),
+          items: ({ query }) => searchRef.current(workspaceRef.current, query),
           command: ({ editor: instance, range, props }) => {
             const picked = props as unknown as AgentReference;
             //: 换成胶囊之后补一个空格 —— 不补的话光标紧贴原子节点,接着打字会被当成还在挑。
