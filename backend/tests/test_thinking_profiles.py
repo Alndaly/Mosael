@@ -42,3 +42,39 @@ def test_不声明的表也说得出自己关不掉() -> None:
     # can_disable=False + 没有档位 = "这条连接发不出思考档位",而不是"这个模型不思考"。
     assert UNKNOWN.can_disable is False
     assert UNKNOWN.levels() == []
+
+
+def test_查证过的那几家都发得出档位() -> None:
+    """用户实测反馈:"很多应该支持的模型都没有档位选择"。
+
+    此前表里只实现了 Kimi 和 OpenAI 两家,而模块头的查证结果列了六家 —— 看起来像漏了四家。
+    实际上 qwen 和 GLM 是**发不出去**(它们不用 reasoning_effort),留空是对的;
+    真正漏掉的是 DeepSeek 和 Grok,这两家用的就是 reasoning_effort。
+    """
+    assert profile_for("deepseek", "deepseek-v4-pro").levels() == ["low", "high"]
+    assert profile_for("xai", "grok-4.3").levels() == ["low", "medium", "high"]
+    # 都关不掉:DeepSeek 要发 thinking:{type:disabled} 才关得掉(这条路发不出),
+    # Grok 的官方文档直接写了 "Reasoning cannot be disabled"。
+    assert "off" not in profile_for("deepseek", "deepseek-v4-pro").levels()
+    assert "off" not in profile_for("xai", "grok-4.3").levels()
+
+
+def test_中转端点按模型名认家族() -> None:
+    """第三方中转的 vendor 一律是 openai-compatible,按 vendor 查表必然落空。
+
+    走中转配 gpt-5 的人不该因为"我们认不出这个 vendor"就一个档位都拿不到。
+    """
+    assert profile_for("openai-compatible", "gpt-5.2").levels() == ["off", "low", "medium", "high"]
+    assert profile_for("openai-compatible", "deepseek-v4-pro").levels() == ["low", "high"]
+    assert profile_for("openai-compatible", "grok-4.5").levels() == ["low", "medium", "high"]
+    # 认不出的仍然不声明 —— 保守是这张表的立身之本。
+    assert profile_for("openai-compatible", "gemma4").levels() == []
+
+
+def test_用不了_reasoning_effort_的那两家不声明() -> None:
+    """qwen 用 enable_thinking、GLM 用 thinking:{type},合成模型这条路发不出去。
+
+    声明了等于给用户一个点了没反应的开关 —— 那比没有开关更坏。
+    """
+    assert profile_for("alibaba", "qwen3-max").levels() == []
+    assert profile_for("zhipu", "glm-5").levels() == []
