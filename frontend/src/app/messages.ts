@@ -2290,6 +2290,9 @@ export const messages = {
     manualNoSchedule: "手动触发,不排期",
     taskOpenWorkflow: "打开工作流页面",
     taskNoWorkflow: "未绑定",
+    taskWorkflowGone: "绑定的工作流已删除",
+    taskWorkflowGoneDesc: "这个任务触发时会失败 —— 它绑的工作流已经不在了。请改绑一个,或删掉这个任务。",
+    taskWorkflowLoading: "读取中…",
 
     // Plugins
     pluginsTitle: "插件",
@@ -4803,6 +4806,9 @@ export const messages = {
     manualNoSchedule: "Manual — not scheduled",
     taskOpenWorkflow: "Open workflows page",
     taskNoWorkflow: "Not bound",
+    taskWorkflowGone: "Bound workflow was deleted",
+    taskWorkflowGoneDesc: "This task will fail when it fires — the workflow it points at no longer exists. Bind another one, or delete the task.",
+    taskWorkflowLoading: "Loading…",
 
     // Plugins
     pluginsTitle: "Plugins",

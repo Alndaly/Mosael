@@ -2,7 +2,7 @@ import { CollectionDetail, COLLECTION_DETAIL_PAGE, COLLECTION_DETAIL_HEADING, DE
 import React from "react";
 import { PageHeading } from "@/components/layout/StudioPage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { GitBranch, CalendarClock, CheckCircle2, CircleAlert, Copy, Loader2, Play, Plus, Power, Timer, Trash2, Users2 } from "lucide-react";
+import { AlertTriangle, GitBranch, CalendarClock, CheckCircle2, CircleAlert, Copy, Loader2, Play, Plus, Power, Timer, Trash2, Users2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -229,15 +229,39 @@ function BoundWorkflowRow({ task, workspaceId }: { task: ScheduledTask; workspac
   });
   const workflowId = String((task.payload as { workflow_id?: string })?.workflow_id ?? "");
   const workflow = (workflows.data ?? []).find((item) => item.id === workflowId) ?? null;
+  /**
+   * 绑了一个 id、却在列表里找不到它 —— 说明那个工作流**已经被删了**,而任务还指着它:
+   * 这个任务一旦触发就会失败。此前这种情况下按钮里显示的是**那串裸 UUID**,既看不出是哪个
+   * 工作流(它已经没有名字了),也看不出这是个故障 —— 一个 32 位十六进制串是给人看的东西里
+   * 最无用的那种。
+   *
+   * 「还没读到」和「读过了,不在」必须分开:前者是暂时的,后者才是结论。混成一个的话,
+   * 列表还在路上时每个任务都会先诬告自己一遍「工作流已删除」。
+   */
+  const pending = workflows.isPending;
+  const missing = Boolean(workflowId) && !pending && !workflow;
+  const label = !workflowId
+    ? t("taskNoWorkflow")
+    : workflow
+      ? workflow.name
+      : pending
+        ? t("taskWorkflowLoading")
+        : t("taskWorkflowGone");
   return (
     <SettingsRow
       label={t("wfBoundWorkflow")}
-      description={workflow?.description || t("taskWorkflowDesc")}
+      description={missing ? t("taskWorkflowGoneDesc") : workflow?.description || t("taskWorkflowDesc")}
     >
       {/* 按钮内容是工作流的**名字**,而用户的工作流常叫「新工作流」—— 光秃秃一个名字
           看起来像「新建工作流」动作按钮。图标 + 悬停说明把它钉回「这是当前绑定,点击去看」。 */}
-      <Button variant="outline" className="max-w-full" title={t("taskOpenWorkflow")} onClick={() => (window.location.hash = "#/workflows")}>
-        <GitBranch size={13} /><span className="truncate">{workflow ? workflow.name : workflowId || t("taskNoWorkflow")}</span>
+      <Button
+        variant="outline"
+        className={cn("max-w-full", missing && "border-destructive/50 text-destructive")}
+        title={t("taskOpenWorkflow")}
+        onClick={() => (window.location.hash = "#/workflows")}
+      >
+        {missing ? <AlertTriangle size={13} /> : <GitBranch size={13} />}
+        <span className="truncate">{label}</span>
       </Button>
     </SettingsRow>
   );
