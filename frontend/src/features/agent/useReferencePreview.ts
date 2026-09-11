@@ -4,16 +4,33 @@ import { assetFileUrl, type Asset } from "@/api/client";
 import { api } from "@/api/transport";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
+import { gotoRecord } from "@/lib/deepLink";
 import type { AgentReference, ReferenceKind } from "@/features/agent/references";
 
-/** 每一类去哪儿问"它还在不在",以及在的话跳哪儿。 */
-const ROUTES: Record<ReferenceKind, { probe: (id: string) => string; href?: (id: string) => string }> = {
+/**
+ * 每一类去哪儿问"它还在不在",在的话跳哪儿,以及**跳过去之后靠什么把那条记录打开**。
+ *
+ * `event` 不是可选的装饰:改 `location.hash` 只在**目标页还没挂载**时够用 —— 那时页面挂载、
+ * 读一遍 hash、把记录打开。而人已经在那一页上时(正开着画板 A,点了画板 B 的引用),
+ * hash 变了却没有任何东西去重读它:`location.hash` 不是响应式的,那个 effect 的依赖里也没有它。
+ * 结果就是点了没反应。
+ *
+ * 仓库里本来就有这条通道(lib/deepLink 的 gotoRecord + 三连发),画板和工作流也早就在听
+ * 对应的事件了 —— 这里此前绕过它直接写 hash,才把自己关在了"只有跨页才灵"的一半里。
+ * 笔记不需要事件:NotesView 自己听着 hashchange。
+ */
+const ROUTES: Record<ReferenceKind, { probe: (id: string) => string; href?: (id: string) => string; event?: string }> = {
   asset: { probe: (id) => `/api/assets/${id}` },
   note: { probe: (id) => `/api/notes/${id}`, href: (id) => `#/notes?note=${encodeURIComponent(id)}` },
-  board: { probe: (id) => `/api/boards/${id}`, href: (id) => `#/boards?board=${encodeURIComponent(id)}` },
+  board: {
+    probe: (id) => `/api/boards/${id}`,
+    href: (id) => `#/boards?board=${encodeURIComponent(id)}`,
+    event: "mosael:open-board",
+  },
   workflow: {
     probe: (id) => `/api/workflows/${id}`,
     href: (id) => `#/workflows?workflow=${encodeURIComponent(id)}`,
+    event: "mosael:open-workflow",
   },
 };
 
@@ -53,7 +70,7 @@ export function useReferencePreview() {
       return;
     }
     if (route.href) {
-      window.location.hash = route.href(reference.id);
+      gotoRecord(route.href(reference.id), route.event, reference.id);
       return;
     }
     // 素材:要知道它是图还是视频才决定灯箱怎么放,而胶囊上只有 id 和名字。

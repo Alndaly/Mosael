@@ -58,6 +58,30 @@ describe("点开引用", () => {
     expect(toastError).not.toHaveBeenCalled();
   });
 
+  it("画板和工作流还要派一个打开事件 —— 只改 hash 的话,人已经在那一页上时点了没反应", async () => {
+    // location.hash 不是响应式的:BoardsView / WorkflowsView 挂载时读一次 hash,之后只听
+    // mosael:open-* 事件。所以正开着画板 A 时点画板 B 的引用,光改 hash 什么也不会发生。
+    // 仓库里本来就有这条通道(gotoRecord 的三连发),此前绕过它直接写 hash 才把自己关在
+    // "只有跨页才灵"的一半里。
+    vi.useFakeTimers();
+    try {
+      const opened: string[] = [];
+      const onBoard = (e: Event) => opened.push(String((e as CustomEvent).detail));
+      window.addEventListener("mosael:open-board", onBoard);
+      apiCall.mockResolvedValue({ id: "b9" });
+
+      const view = render(<Probe reference={{ kind: "board", id: "b9", name: "分镜板" }} />);
+      view.getByRole("button").click();
+      await vi.waitFor(() => expect(window.location.hash).toContain("board=b9"));
+      await vi.advanceTimersByTimeAsync(1000);   // 三连发 80/300/800ms
+
+      expect(opened).toContain("b9");
+      window.removeEventListener("mosael:open-board", onBoard);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("图片走灯箱", async () => {
     apiCall.mockResolvedValue({ id: "a1", name: "图", kind: "image" });
     await click({ kind: "asset", id: "a1", name: "图" });
