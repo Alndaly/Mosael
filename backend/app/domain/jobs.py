@@ -142,11 +142,11 @@ def say(job: Job, key: str, **params: object) -> None:
     为什么不只存 key:这一列**落库**,任务记录活得比一次请求久,写入时就翻会把语言冻死在那一刻 ——
     用户切成英文后历史任务仍是中文,而那正是这次要修的毛病。
     """
-    from app.core.i18n import DEFAULT_LOCALE, t
+    from app.core.i18n import DEFAULT_LOCALE, render_message
 
     job.message_key = key
     job.message_params = {k: str(v) for k, v in params.items()}
-    job.message = t(key, DEFAULT_LOCALE, **job.message_params)
+    job.message = render_message(key, DEFAULT_LOCALE, job.message_params)
 
 
 def lock_active_job(db: Session, job: Job) -> bool:

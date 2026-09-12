@@ -322,9 +322,27 @@ def test_参数没给全时抹掉占位符而不是把大括号交给用户() ->
 
     所以给一个 key 补占位符,就等于让所有历史行走「参数缺失」这条路。退回未格式化的模板会让
     用户看见一个 `{name}`;抹掉之后它们回到补占位符之前的样子 —— 正是当初存进去的那句。
+
+    走的是 render_message 而不是 t():界面文案对花括号的期待正相反(见下一条),两者已经分家。
     """
-    assert t("jobMsg_workflowFailed", "zh") == "工作流失败"
-    assert t("jobMsg_workflowFailed", "en") == "Workflow failed"
-    assert t("jobMsg_publishFailed", "zh") == "发布失败"
+    from app.core.i18n import render_message
+
+    assert render_message("jobMsg_workflowFailed", "zh") == "工作流失败"
+    assert render_message("jobMsg_workflowFailed", "en") == "Workflow failed"
+    assert render_message("jobMsg_workflowFailed", "zh", {"name": "译配"}) == "工作流失败: 译配"
+    assert render_message("jobMsg_publishFailed", "zh") == "发布失败"
     # 没有占位符的句子不受影响。
-    assert t("jobMsg_cancelled", "zh") == "已取消"
+    assert render_message("jobMsg_cancelled", "zh") == "已取消"
+
+
+def test_界面文案里的花括号原样留着() -> None:
+    """节点提示里的花括号是**给人照抄的写法**,不是待填的槽。
+
+    此前它和任务消息共用一条路:`t()` 一律跑 format,于是 `{{转写.segments}}` 被吃掉一层花括号
+    (照抄下去不生效),而 `{名: 引用}` 这种示例干脆被当成一个填不上的槽整段抹掉 ——
+    「{名: 引用},如 …」在界面上只剩下一个",如"。
+    """
+    assert t("wfNode_generate_subtitles_segments", "zh").count("{{转写.segments}}") == 1
+    values = t("wfNode_output_values", "zh")
+    assert values.startswith("{名: 引用}") and "{{llm_1.text}}" in values
+    assert "{{input.名}}" in t("wfNode_loop_foreach_inputs", "zh")

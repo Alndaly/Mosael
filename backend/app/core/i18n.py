@@ -702,22 +702,46 @@ def _drop_placeholders(text: str) -> str:
     return "".join(literals).strip().rstrip(":：,，、-—").strip()
 
 
-def t(key: str, locale: str = DEFAULT_LOCALE, **params: object) -> str:
-    """翻一个 key,可带参数。
-
-    **查不到就原样返回 key**,不抛错:一条文案缺翻译不该让整个接口 500。它会以 key 的样子出现在
-    界面上——难看,但看得见,而棘轮保证它进不了主干。
-
-    带参数的句子(「安装 {engine} 运行依赖…」)是模板 —— **参数在产生它的地方就算好、跟着 key 一起
-    传出来**,而不是把值直接拼进句子。拼进去就没法翻了:那句话从此只有一种语言。
-    参数给不全时不抛错,**把填不上的占位符整段抹掉**(见 _drop_placeholders)。
-    """
+def _text(key: str, locale: str) -> str:
+    """这条 key 在这个语言下的原文。**查不到就原样返回 key**,不抛错:一条文案缺翻译不该让整个
+    接口 500。它会以 key 的样子出现在界面上——难看,但看得见,而棘轮保证它进不了主干。"""
     entry = MESSAGES.get(key)
     if entry is None:
         return key
-    text = entry.get(locale) or entry.get(DEFAULT_LOCALE) or key
+    return entry.get(locale) or entry.get(DEFAULT_LOCALE) or key
+
+
+def t(key: str, locale: str = DEFAULT_LOCALE, **params: object) -> str:
+    """翻一个 key,可带参数。
+
+    带参数的句子(「安装 {engine} 运行依赖…」)是模板 —— **参数在产生它的地方就算好、跟着 key 一起
+    传出来**,而不是把值直接拼进句子。拼进去就没法翻了:那句话从此只有一种语言。
+
+    **没传参数就原样返回,不跑 format。** 界面文案里的花括号是**给人照抄的写法**,不是待填的槽:
+    节点提示里的 `{{转写.segments}}` 正是用户要往输入框里敲的那串字,而 format 会把它吃掉一层
+    花括号,照抄下去不生效;`{名: 值}` 这种示例更惨——它会被当成一个填不上的槽整段抹掉
+    (「{名: 引用},如 …」曾经在界面上只剩下一个",如")。
+    任务消息那条路要的正相反(槽填不上就该消失),走 render_message。
+    """
+    text = _text(key, locale)
+    if not params:
+        return text
     try:
         return text.format(**params)
+    except (KeyError, IndexError, ValueError):
+        return _drop_placeholders(text)
+
+
+def render_message(key: str, locale: str = DEFAULT_LOCALE, params: dict[str, Any] | None = None) -> str:
+    """渲染一条**任务消息**:占位符必须被填掉,填不上就连同标点一起抹掉(见 _drop_placeholders)。
+
+    和 t() 分家,是因为两类文案对花括号的期待正相反:任务消息里的 `{name}` 是待填的槽,没有参数
+    就该消失;而界面文案里的花括号是要给人看的写法,碰都不该碰。此前两者共用一条路,于是给任务
+    消息补占位符的那次改动,顺手把三条节点提示打成了残句。
+    """
+    text = _text(key, locale)
+    try:
+        return text.format(**(params or {}))
     except (KeyError, IndexError, ValueError):
         return _drop_placeholders(text)
 
@@ -735,7 +759,8 @@ def translate_fields(payload: dict[str, Any], keys: tuple[str, ...], locale: str
     out = {
         **payload,
         **{
-            k: t(payload[k], locale, **(params if k == "message" else {}))
+            # message 是任务消息,填不上的槽要抹掉;其余字段是界面文案,原样翻。
+            k: (render_message(payload[k], locale, params) if k == "message" else t(payload[k], locale))
             for k in keys
             if isinstance(payload.get(k), str)
         },

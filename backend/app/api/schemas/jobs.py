@@ -46,10 +46,10 @@ class JobOut(OrmModel):
     @field_validator("message", mode="before")
     @classmethod
     def _translate(cls, value: object, info: ValidationInfo) -> object:
-        from app.core.i18n import get_current_locale, t
+        from app.core.i18n import get_current_locale, render_message
 
         data = info.data if isinstance(info.data, dict) else {}
         key = data.get("message_key") or ""
         if not key:
             return value
-        return t(key, get_current_locale(), **(data.get("message_params") or {}))
+        return render_message(key, get_current_locale(), data.get("message_params") or {})

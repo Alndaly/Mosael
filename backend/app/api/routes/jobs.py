@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import JobOut, TaskEventOut
-from app.core.i18n import normalize_locale, t
+from app.core.i18n import normalize_locale, render_message
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import Job, TaskEvent
 from app.domain.jobs import cancel_job, clear_finished_jobs
@@ -100,7 +100,7 @@ def list_job_events(request: Request, job_id: str, db: DbSession, user: CurrentU
         key = payload.get("message_key")
         if isinstance(key, str) and key:
             params = payload.get("message_params")
-            payload["message"] = t(key, locale, **(params if isinstance(params, dict) else {}))
+            payload["message"] = render_message(key, locale, params if isinstance(params, dict) else {})
         out.append({
             "id": event.id,
             "job_id": event.job_id,
