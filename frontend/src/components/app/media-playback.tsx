@@ -152,6 +152,8 @@ export function VideoPlayer({
   onNaturalSize,
   onExpand,
   compact = false,
+  startAt,
+  onPlaybackChange,
 }: {
   /** 按素材 id 取带令牌的地址。 */
   assetId?: string;
@@ -163,10 +165,20 @@ export function VideoPlayer({
   compact?: boolean;
   /** 画面的自然尺寸 —— 调用方(如画板节点)拿它校正自己的宽高比。 */
   onNaturalSize?: (width: number, height: number) => void;
+  /** 挂上来就从第几秒开始。给「卸掉又挂回来」的调用方(画板离屏卸载)接上进度,不是跳回开头。 */
+  startAt?: number;
+  /** 播放状态与进度变化时报一声。调用方据此决定卸不卸、以及下次从哪儿接着放。 */
+  onPlaybackChange?: (state: { playing: boolean; at: number }) => void;
 }) {
   const t = useI18n();
   const ref = React.useRef<HTMLVideoElement | null>(null);
   const { playing, muted, at, total, setTotal, toggle, toggleMute, bind } = usePlayback(ref);
+
+  //: 报给调用方,不自己存 —— 谁关心谁留着。effect 而不是在回调里直接叫,是因为 at/playing
+  //: 是 usePlayback 的状态:在它更新之前叫,报出去的是上一拍的数。
+  React.useEffect(() => {
+    onPlaybackChange?.({ playing, at });
+  }, [playing, at, onPlaybackChange]);
 
   return (
     <div className={cn("group/player relative h-full w-full overflow-hidden bg-black", className)}>
@@ -182,6 +194,11 @@ export function VideoPlayer({
         onLoadedMetadata={(event) => {
           const video = event.currentTarget;
           setTotal(video.duration);
+          // 接上上次播到的位置。必须等到这里 —— 元数据回来之前 duration 是 NaN,
+          // 而给 currentTime 赋一个超出时长的值,浏览器直接忽略。
+          if (startAt && Number.isFinite(video.duration) && startAt < video.duration) {
+            video.currentTime = startAt;
+          }
           if (video.videoWidth && video.videoHeight) onNaturalSize?.(video.videoWidth, video.videoHeight);
         }}
         {...bind}

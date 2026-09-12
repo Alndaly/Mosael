@@ -4,7 +4,7 @@ import { PhotoSlider } from "react-photo-view";
 import "react-photo-view/dist/react-photo-view.css";
 
 import { useI18n } from "@/app/preferences";
-import { BoardVideo } from "@/features/boards/BoardPlayer";
+import { VideoPlayer } from "@/components/app/media-playback";
 import { cn } from "@/lib/utils";
 
 export type ImagePreviewItem = {
@@ -95,7 +95,9 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
             ? ({ attrs }) => (
                 <div {...attrs}>
                   {/* 播放器铺满这个盒子;画面按 object-contain 收进去,不会被拉变形。 */}
-                  <BoardVideo assetSrc={item.src} autoPlay className="!bg-transparent" />
+                  {/* 直接用共用播放器,不借画板那个包装:画板那层管的是「离屏就卸掉」,
+                      而这里是屏幕正中唯一的那个播放器,没有"离屏"可言。 */}
+                  <VideoPlayer assetSrc={item.src} autoPlay className="!bg-transparent" />
                 </div>
               )
             : undefined,
