@@ -13,9 +13,14 @@ CHILD_JOB_TIMEOUT_SECONDS = 15 * 60
 CHILD_POLL_SECONDS = 2.0
 
 
-def wait_for_job(job_id: str) -> Job:
-    """轮询子 job 到终态(用独立会话,避免长事务)。"""
-    deadline = time.monotonic() + CHILD_JOB_TIMEOUT_SECONDS
+def wait_for_job(job_id: str, timeout_seconds: float = CHILD_JOB_TIMEOUT_SECONDS) -> Job:
+    """轮询子 job 到终态(用独立会话,避免长事务)。
+
+    `timeout_seconds` 可调,是因为「一个子任务」的规模并不齐:字幕配音那一个任务里排着**每条
+    字幕各一次**合成,而这里的通用上限是按单次调用定的 —— 一段几十句的视频照那个上限必然被
+    判成超时,可那时前面几十条配音已经落到轨上了,「超时」这个说法本身就是错的。
+    """
+    deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
         with SessionLocal() as db:
             job = db.get(Job, job_id)

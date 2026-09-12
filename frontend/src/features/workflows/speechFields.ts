@@ -19,9 +19,18 @@ export function speechUsesClonedVoice(engine: unknown): boolean {
   return (String(engine ?? "").trim() || "clone") === "clone";
 }
 
-/** 这一格现在该不该出现在表单里。非语音合成节点的字段一律照旧。 */
+/** 收同一对「引擎 + 音色」的节点。字幕配音和语音合成念的是同一套嗓子,表单也就该是同一个样子
+ *  —— 按节点类型集合判而不是写死一个名字,是因为这条规则属于那对字段,不属于某一个节点。 */
+const SPEECH_NODE_TYPES = new Set(["synthesize_speech", "dub_subtitles"]);
+
+/** 这个节点收不收音色。音色清单、引擎清单、选中音色顺带填资源号——那几件事都跟着它走。 */
+export function nodePicksVoice(nodeType: string): boolean {
+  return SPEECH_NODE_TYPES.has(nodeType);
+}
+
+/** 这一格现在该不该出现在表单里。不收音色的节点,字段一律照旧。 */
 export function speechFieldVisible(nodeType: string, key: string, engine: unknown): boolean {
-  if (nodeType !== "synthesize_speech") return true;
+  if (!SPEECH_NODE_TYPES.has(nodeType)) return true;
   const clone = speechUsesClonedVoice(engine);
   if (key === "voice_id") return clone;
   if (key === "engine_voice" || key === "engine_voice_resource") return !clone;

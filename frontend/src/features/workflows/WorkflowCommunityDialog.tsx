@@ -1,5 +1,5 @@
 import React from "react";
-import { Bot, CheckCircle2, Film, Search, SearchX, Scissors, Video } from "lucide-react";
+import { Bot, CheckCircle2, Film, Languages, Search, SearchX, Scissors, Video } from "lucide-react";
 
 import type { Workflow, WorkflowGraph, WorkflowTemplateId } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
@@ -16,6 +16,11 @@ interface TemplateDefinition {
   stages: MessageKey[];
   requirements: MessageKey[];
   icon: typeof Film;
+}
+
+export function workflowTemplateText(templateId: WorkflowTemplateId): { title: MessageKey; description: MessageKey } {
+  const template = TEMPLATES.find((one) => one.id === templateId) ?? TEMPLATES[0];
+  return { title: template.title, description: template.description };
 }
 
 const TEMPLATES: TemplateDefinition[] = [
@@ -46,6 +51,22 @@ const TEMPLATES: TemplateDefinition[] = [
     ],
     requirements: ["wfCommunityRequirementChat"],
     icon: Scissors,
+  },
+  {
+    id: "translated_dub",
+    title: "wfTranslatedDubTemplateName",
+    description: "wfTranslatedDubTemplateDescription",
+    stages: [
+      "wfCommunityStageDubProject",
+      "wfCommunityStageTranscript",
+      "wfCommunityStageTranslateLines",
+      "wfCommunityStageSubtitles",
+      "wfCommunityStageDub",
+      "wfCommunityStageExport",
+    ],
+    // 翻译走 Google 免费接口,不要对话模型;要的是一把嗓子。
+    requirements: ["wfCommunityRequirementVoice"],
+    icon: Languages,
   },
 ];
 

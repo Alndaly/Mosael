@@ -117,7 +117,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { useCanvasPosture } from "@/features/workflows/useCanvasPosture";
 import { withDependentsCleared } from "@/features/workflows/dependents";
-import { speechFieldVisible } from "@/features/workflows/speechFields";
+import { nodePicksVoice, speechFieldVisible } from "@/features/workflows/speechFields";
 import { RefEditor } from "@/features/workflows/RefEditor";
 import { MapField } from "@/features/workflows/MapField";
 import { CodeEditor } from "@/components/app/code-editor";
@@ -130,7 +130,7 @@ import { canvasInsets, centerCanvasViewport, fitCanvasViewport, visibleCanvasSiz
 import { RightDockResizeHandle } from "@/components/app/RightDockResizeHandle";
 import { WorkflowRunHistory } from "@/features/workflows/WorkflowRunHistory";
 import { WorkflowRevisionHistory } from "@/features/workflows/WorkflowRevisionHistory";
-import { WorkflowCommunityDialog } from "@/features/workflows/WorkflowCommunityDialog";
+import { WorkflowCommunityDialog, workflowTemplateText } from "@/features/workflows/WorkflowCommunityDialog";
 import { createWorkflowGraphStore } from "@/stores/workflowGraphStore";
 import { saveJsonToDisk } from "@/lib/download";
 import { ROW_HANDLE_CLASS, handleOffset, useResizableRow, useResizableSidebar } from "@/lib/useResizableSidebar";
@@ -358,13 +358,13 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
       if (!templateId) {
         return createWorkflow({ workspace_id: workspace.id, name: t("wfDefaultName"), description: "" });
       }
-      const transcriptCleanup = templateId === "transcript_video_cleanup";
+      // 名称和描述从模板声明里取(社区对话框那一份)—— 此前是一句三元判断,加第三个模板时
+      // 它不会报错,只会把新模板的名字显示成第一个模板的。
+      const text = workflowTemplateText(templateId);
       return createWorkflow({
         workspace_id: workspace.id,
-        name: t(transcriptCleanup ? "wfTranscriptCleanupTemplateName" : "wfFullVideoTemplateName"),
-        description: t(
-          transcriptCleanup ? "wfTranscriptCleanupTemplateDescription" : "wfFullVideoTemplateDescription",
-        ),
+        name: t(text.title),
+        description: t(text.description),
         template_id: templateId,
       });
     },
@@ -2980,21 +2980,21 @@ function NodeInspector({
   const voices = useQuery({
     queryKey: ["workflow-voices", workspaceId],
     queryFn: () => listVoices(workspaceId),
-    enabled: node.type === "synthesize_speech",
+    enabled: nodePicksVoice(node.type),
   });
   // 引擎音色那条路。和配音、智能体语音问的是**同一组接口** —— 这里只是另一处选择,
   // 不是另一份目录。
   const ttsEngines = useQuery({
     queryKey: ["tts-engines"],
     queryFn: listTtsEngines,
-    enabled: node.type === "synthesize_speech",
+    enabled: nodePicksVoice(node.type),
     staleTime: 30_000,
   });
   const pickedEngine = String(config.engine ?? "");
   const ttsVoices = useQuery({
     queryKey: ["tts-voices", pickedEngine],
     queryFn: () => listTtsVoices(pickedEngine),
-    enabled: node.type === "synthesize_speech" && Boolean(pickedEngine),
+    enabled: nodePicksVoice(node.type) && Boolean(pickedEngine),
   });
   // 强类型 asset 字段(如 素材转写.asset_id)手动模式下,给工作区素材下拉,免手填 UUID。
   const hasAssetField = specs.some(([, spec]) => fieldDataType(spec) === "asset");
@@ -3065,7 +3065,7 @@ function NodeInspector({
     // 少数引擎(火山)的音色还带一个资源号,而它只有在**列音色时**才拿得到(那份清单是用
     // 用户自己的密钥现查的)。选了音色顺手填上,否则用户得自己去别处把它抄过来 —— 而不抄
     // 的后果是合成时那个音色不生效,并且不报错。
-    if (node.type === "synthesize_speech" && key === "engine_voice") {
+    if (nodePicksVoice(node.type) && key === "engine_voice") {
       const picked = (ttsVoices.data ?? []).find((one) => one.value === value);
       next = { ...next, engine_voice_resource: picked?.resource_id ?? "" };
     }
@@ -3267,10 +3267,10 @@ function NodeInspector({
     if (node.type === "publish" && key === "account_id") {
       return (publishAccounts.data ?? []).map((account) => ({ value: account.id, label: account.name }));
     }
-    if (node.type === "synthesize_speech" && key === "voice_id") {
+    if (nodePicksVoice(node.type) && key === "voice_id") {
       return (voices.data ?? []).map((voice) => ({ value: voice.id, label: voice.name }));
     }
-    if (node.type === "synthesize_speech" && key === "engine") {
+    if (nodePicksVoice(node.type) && key === "engine") {
       // 「克隆音色」排在引擎清单最前面:它和各个引擎是**同一个层次的选择** —— 嗓子从哪来。
       // 把它单独做成另一个字段的话,界面上就会出现两格都叫"音色"的东西(用户报过)。
       return [
@@ -3279,7 +3279,7 @@ function NodeInspector({
         ...(ttsEngines.data ?? []).filter((one) => one.ready).map((one) => ({ value: one.id, label: one.label })),
       ];
     }
-    if (node.type === "synthesize_speech" && key === "engine_voice") {
+    if (nodePicksVoice(node.type) && key === "engine_voice") {
       return (ttsVoices.data ?? []).map((one) => ({ value: one.value, label: one.label }));
     }
     if (node.type === "call_workflow" && key === "workflow_id") {

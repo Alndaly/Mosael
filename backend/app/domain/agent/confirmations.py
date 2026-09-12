@@ -32,6 +32,9 @@ TOOL_DEFS: dict[str, dict[str, str]] = {
     "generate_video": {"permission": "ai-cost", "cost": "ai"},
     "generate_audio": {"permission": "ai-cost", "cost": "ai"},
     "generate_podcast": {"permission": "ai-cost", "cost": "ai"},
+    # 配音同时花 AI 的钱、改时间线。按高的那一档要确认 —— 「改时间线」最坏撤得回,
+    # 「花钱」撤不回,而一次字幕配音排的是每条字幕各一次合成。
+    "dub_subtitles": {"permission": "ai-cost", "cost": "ai"},
     # 工作流:建/改是编辑权限;运行可能触发渲染与 AI 消耗,按最高档要求确认。
     "create_workflow": {"permission": "edit", "cost": "none"},
     "update_workflow": {"permission": "edit", "cost": "none"},
@@ -273,7 +276,7 @@ def _validate_payload(db: Session, tool: str, workspace_id: str, payload: dict[s
         payload["profile_name"] = profile.name
         account = db.scalar(select(PublishAccount).where(PublishAccount.profile_id == profile.id))
         payload["platform"] = account.platform if account else None
-    if tool in ("edit_timeline", "render_sequence"):
+    if tool in ("edit_timeline", "render_sequence", "dub_subtitles"):
         sequence = db.get(Sequence, str(payload.get("sequence_id", "")))
         if sequence is None or sequence.workspace_id != workspace_id:
             raise ConfirmationError("Sequence not found in this workspace")
@@ -306,6 +309,14 @@ def _validate_payload(db: Session, tool: str, workspace_id: str, payload: dict[s
     if tool in ("generate_image", "generate_video", "generate_audio"):
         if not str(payload.get("prompt") or payload.get("text") or "").strip():
             raise ConfirmationError("Generation requires a prompt")
+    if tool == "dub_subtitles":
+        # 归属由上面那条和 edit_timeline / render_sequence 一起判 —— 都是「拿一个 sequence_id
+        # 去动一条时间线」,没有理由各判各的。
+        if str(payload.get("line") or "all") not in {"all", "first", "last"}:
+            raise ConfirmationError("line 只能是 all / first / last")
+        clip_ids = payload.get("clip_ids")
+        if clip_ids is not None and not isinstance(clip_ids, list):
+            raise ConfirmationError("clip_ids 要是一个数组(留空表示整条字幕轨)")
     if tool == "generate_podcast":
         mode = str(payload.get("mode") or "summarize")
         if mode not in {"summarize", "read", "research"}:
@@ -405,6 +416,12 @@ def _summarize(tool: str, payload: dict[str, Any], external: set[str] | None = N
         return f"{len(kinds)} 个时间线操作: {', '.join(kinds[:6])}{'…' if len(kinds) > 6 else ''}"
     if tool == "render_sequence":
         return "导出时间线为 mp4"
+    if tool == "dub_subtitles":
+        count = len(payload.get("clip_ids") or [])
+        # 留空 = 整条字幕轨。确认卡上不能写「0 条」—— 用户看到 0 会以为什么都不会发生。
+        scope = f"{count} 条字幕" if count else "整条字幕轨"
+        fit = ",并变速压回原段落长度" if payload.get("match_duration", True) else ""
+        return f"给{scope}配音{fit}(新开一条配音轨,原声不动)"
     if tool == "convert_video_to_gif":
         duration = payload.get("duration")
         clip = f"，截取 {duration} 秒" if duration not in (None, "") else ""
@@ -635,6 +652,31 @@ def _execute_approved(db: Session, confirmation: ToolConfirmation) -> dict[str, 
             speed=float(payload.get("speed") or 1.0),
             provider_profile_id=profile_id or None,
             engine_model=model,
+        )
+        return {"job_id": job.id}
+    if confirmation.tool == "dub_subtitles":
+        from app.domain.voices.subtitle_dub import start_subtitle_dub, subtitle_clip_ids
+
+        sequence_id = str(payload.get("sequence_id") or "")
+        clip_ids = [str(one) for one in (payload.get("clip_ids") or []) if str(one).strip()]
+        if not clip_ids:
+            clip_ids = subtitle_clip_ids(db, sequence_id, str(payload.get("track_id") or ""))
+        engine = str(payload.get("engine") or "").strip() or "clone"
+        synthesis: dict[str, Any] = {"engine": engine, "speed": float(payload.get("speed") or 1.0)}
+        if engine == "clone":
+            synthesis["voice_id"] = str(payload.get("voice_id") or "")
+        else:
+            synthesis["engine_voice"] = str(payload.get("engine_voice") or "")
+            synthesis["engine_voice_resource"] = str(payload.get("engine_voice_resource") or "")
+            synthesis["workspace_id"] = confirmation.workspace_id
+        job = start_subtitle_dub(
+            db,
+            sequence_id=sequence_id,
+            clip_ids=clip_ids,
+            match_duration=bool(payload.get("match_duration", True)),
+            line=str(payload.get("line") or "all"),
+            created_by=actor,
+            synthesis=synthesis,
         )
         return {"job_id": job.id}
     if confirmation.tool == "generate_podcast":

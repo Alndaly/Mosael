@@ -6,7 +6,10 @@ export type Workflow = components["schemas"]["WorkflowOut"];
 export type WorkflowRevision = components["schemas"]["WorkflowRevisionOut"];
 export type WorkflowRevisionDetail = components["schemas"]["WorkflowRevisionDetailOut"];
 export type WorkflowNodeType = components["schemas"]["WorkflowNodeTypeOut"];
-export type WorkflowTemplateId = "full_video_generation" | "transcript_video_cleanup";
+export type WorkflowTemplateId =
+  | "full_video_generation"
+  | "transcript_video_cleanup"
+  | "translated_dub";
 
 export interface WorkflowGraph {
   meta?: {

@@ -233,3 +233,25 @@ def test_inspect_and_append_respect_existing_clip_speed(speed, end):
     assert next(c for t in inspected["tracks"] for c in t["clips"])["speed"] == speed
     appended = _run("timeline_append", ws, {"sequence_id": sequence_id, "asset_id": asset})
     assert appended["timeline_start"] == end
+
+
+def test_字幕条也在这份清单里() -> None:
+    """一条字幕就是一段没有素材的文本片段。它此前不在 EDIT_OP_KINDS 里 —— 于是「给这个视频
+    加字幕」在对话里根本做不到,而那是这个应用最常被要求做的几件事之一。"""
+    from app.db.models import Clip
+    from app.domain.sequences.operations import EDIT_OP_KINDS
+
+    assert "insert_text_clip" in EDIT_OP_KINDS
+    ws, sequence_id, _ = _setup()
+    subtitle = _run("timeline_add_track", ws, {"sequence_id": sequence_id, "kind": "subtitle"})
+    out = _run("edit_timeline", ws, {
+        "sequence_id": sequence_id,
+        "operations": [
+            {"kind": "insert_text_clip", "track_id": subtitle["track_id"],
+             "text": "你好", "timeline_start": 1.0, "duration": 3.0},
+        ],
+    })
+    assert out["applied"] == 1
+    with SessionLocal() as db:
+        clip = db.query(Clip).filter(Clip.track_id == subtitle["track_id"]).one()
+        assert clip.text_override == "你好" and clip.asset_id is None

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { speechFieldVisible, speechUsesClonedVoice } from "@/features/workflows/speechFields";
+import { nodePicksVoice, speechFieldVisible, speechUsesClonedVoice } from "@/features/workflows/speechFields";
 
 /**
  * 钉的是用户报的那句「音色和引擎音色 重复了」。
@@ -43,5 +43,16 @@ describe("语音合成的音色那一格", () => {
   it("别的节点一律照旧", () => {
     expect(speechFieldVisible("llm", "voice_id", "edge")).toBe(true);
     expect(speechFieldVisible("publish", "engine_voice", "clone")).toBe(true);
+    expect(nodePicksVoice("llm")).toBe(false);
+  });
+
+  it("字幕配音收的是同一对字段,所以走同一条规则", () => {
+    // 这条规则属于那对字段,不属于某一个节点。写死成一个节点名的话,第二个收音色的节点
+    // 会得到两格并排的"音色"和"引擎音色"—— 正是用户当初报的那个样子。
+    expect(nodePicksVoice("dub_subtitles")).toBe(true);
+    expect(speechFieldVisible("dub_subtitles", "voice_id", "clone")).toBe(true);
+    expect(speechFieldVisible("dub_subtitles", "engine_voice", "clone")).toBe(false);
+    expect(speechFieldVisible("dub_subtitles", "voice_id", "edge")).toBe(false);
+    expect(speechFieldVisible("dub_subtitles", "engine_voice", "edge")).toBe(true);
   });
 });

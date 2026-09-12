@@ -158,6 +158,7 @@ CONFIRMATION_TOOLS = frozenset(
         "generate_video",
         "generate_audio",
         "generate_podcast",
+        "dub_subtitles",
         "create_workflow",
         "edit_board",
         "edit_workflow",
@@ -350,16 +351,22 @@ def inspect_sequence(sequence_id: str = "", project_id: str = "") -> dict[str, A
         for clip in track.get("clips", []):
             clip_duration = clip["src_out"] - clip["src_in"]
             duration = max(duration, clip["timeline_start"] + clip_duration)
-            clips_summary.append(
-                {
-                    "clip_id": clip["id"],
-                    "asset": workspaces_assets.get(clip["asset_id"], clip["asset_id"]),
-                    "timeline_start": clip["timeline_start"],
-                    "duration": round(clip_duration, 3),
-                }
-            )
+            row = {
+                "clip_id": clip["id"],
+                "asset": workspaces_assets.get(clip["asset_id"], clip["asset_id"]),
+                "timeline_start": clip["timeline_start"],
+                "duration": round(clip_duration, 3),
+            }
+            # 字幕条没有素材,它的内容就是那行字。不给出来的话,一条字幕在这里显示成
+            # 「asset: null」—— 模型既看不出写的是什么,也就没法说"把这几条配音"。
+            text = str(clip.get("text_override") or "").strip()
+            if text:
+                row["text"] = text
+            clips_summary.append(row)
         tracks_summary.append(
             {
+                # 插入字幕/片段都要 track_id,而此前这里只给名字 —— 模型只能猜,或者去翻原始接口。
+                "track_id": track["id"],
                 "name": track["name"],
                 "kind": track["kind"],
                 "clip_count": len(clips_summary),
@@ -412,7 +419,9 @@ def edit_timeline(sequence_id: str, operations: list[dict[str, Any]], workspace_
     src_out), delete_clip (clip_id), cut_clip_range (clip_id, src_start,
     src_end), add_track (track_kind), remove_track (track_id),
     set_clip_effects (clip_id, effects), set_clip_transform (clip_id, transform:
-    scale / position / rotation / opacity — reframe, pan, zoom or fade one clip).
+    scale / position / rotation / opacity — reframe, pan, zoom or fade one clip),
+    insert_text_clip (track_id of a SUBTITLE track, text, timeline_start, duration)
+    — one subtitle cue; send one operation per cue to caption a video.
     Every applied edit is undoable by the user.
     """
     if _looks_like_workflow_graph_ops(operations):
@@ -1604,6 +1613,53 @@ def transcribe_asset(asset_id: str) -> dict[str, Any]:
     video looks like; that is analyze_asset.
     """
     return _post(f"/api/assets/{asset_id}/transcribe", {})
+
+
+@mcp.tool()
+def dub_subtitles(
+    sequence_id: str,
+    clip_ids: list[str] | None = None,
+    track_id: str = "",
+    match_duration: bool = True,
+    line: str = "all",
+    voice_id: str = "",
+    engine: str = "",
+    engine_voice: str = "",
+    workspace_id: str = "",
+) -> dict[str, Any]:
+    """Confirmation required: speak subtitle cues aloud onto a new dub track.
+
+    Use when the user wants an existing timeline's subtitles voiced — dubbing a video
+    into another language, or narrating captions. Run inspect_sequence first to see the
+    subtitle track and its cues. Leave clip_ids empty to dub every cue on `track_id`
+    (or on the only subtitle track). Requires approval because it spends AI budget.
+
+    match_duration speeds each spoken line up or down so it fills the original cue's
+    slot and stays in sync with the picture. `line` picks which line of a bilingual
+    cue to speak: all / first / last. Voice: either voice_id (a cloned voice from the
+    user's voice library) or engine + engine_voice (a stock voice). The dub lands on
+    its own audio track, so the user undoes the whole thing by deleting that one track.
+    Do NOT use to create the subtitles themselves — use edit_timeline's insert_text_clip.
+    """
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "dub_subtitles",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {
+                "sequence_id": sequence_id,
+                "clip_ids": list(clip_ids or []),
+                "track_id": track_id,
+                "match_duration": bool(match_duration),
+                "line": line,
+                "voice_id": voice_id,
+                "engine": engine,
+                "engine_voice": engine_voice,
+            },
+        },
+    )
+    return _confirmation_reply(confirmation)
 
 
 @mcp.tool()

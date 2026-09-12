@@ -75,6 +75,29 @@ def _subtitle_clips(db: Session, sequence_id: str, clip_ids: list[str], line: st
     return sorted(chosen, key=lambda clip: clip.timeline_start)
 
 
+def subtitle_clip_ids(db: Session, sequence_id: str, track_id: str = "") -> list[str]:
+    """「要配的那批」的默认答案:一条字幕轨上的全部字幕条,按时间顺序。
+
+    剪辑台上这批是用户框选出来的,所以接口收的是一列 id。但别的入口没有选区 —— 智能体那边
+    "把这个视频配上音"说的就是整条轨,让模型先跑一遍检视、把几十个 id 抄回来只是仪式,而且
+    抄漏一条就是少配一句。规则放在这儿而不是某个入口里:两边说的是同一件事。
+    """
+    tracks = [
+        track
+        for track in db.scalars(select(Track).where(Track.sequence_id == sequence_id))
+        if track.kind == "subtitle" and (not track_id or track.id == track_id)
+    ]
+    if track_id and not tracks:
+        raise DubError("这条时间线上没有那条字幕轨")
+    if not tracks:
+        raise DubError("这条时间线上没有字幕轨")
+    if not track_id and len(tracks) > 1:
+        # 多条字幕轨时不替用户挑:双语视频常见的形态就是原文一条、译文一条,挑错了配出来的是另一种语言。
+        raise DubError("这条时间线上有多条字幕轨,请指明配哪一条")
+    clips = [clip for clip in db.scalars(select(Clip).where(Clip.track_id == tracks[0].id))]
+    return [clip.id for clip in sorted(clips, key=lambda clip: clip.timeline_start)]
+
+
 def start_subtitle_dub(
     db: Session,
     *,

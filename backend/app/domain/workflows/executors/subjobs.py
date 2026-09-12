@@ -18,7 +18,7 @@ from app.domain.sequences.errors import SequenceDomainError
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import register
 from app.domain.jobs import current_actor
-from app.domain.workflows.executors.common import wait_for_job
+from app.domain.workflows.executors.common import CHILD_JOB_TIMEOUT_SECONDS, id_list, truthy, wait_for_job
 
 
 def _compact_timed_text(segments: list[dict[str, Any]]) -> str:
@@ -554,6 +554,228 @@ def _merged_ranges(ranges: list[tuple[float, float]]) -> list[tuple[float, float
         else:
             merged.append([start, end])
     return [(start, end) for start, end in merged]
+
+
+def _yes_no(config: dict[str, Any], key: str, *, default: bool) -> bool:
+    """是/否型配置。**留空不是"否"** —— 它是"没设过",该落到节点自己的默认值上。
+
+    节点声明里的 `default` 是给表单预选用的,不会写进 config(见 WorkflowsView 的 OptionPicker),
+    所以执行体得自己兜住那一档;否则"默认开"的选项对每一条没动过它的工作流都是关的。
+    """
+    raw = str(config.get(key, "")).strip()
+    return truthy(raw) if raw else default
+
+
+def _segments_in(value: Any) -> list[dict[str, Any]]:
+    """上游给的逐字稿段落。接列表,也接一串 JSON —— 手填时它只能是文本。"""
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        try:
+            value = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise WorkflowDomainError(f"segments 不是合法 JSON:{exc}") from exc
+    if not isinstance(value, list):
+        raise WorkflowDomainError("segments 要是一个段落数组(如 {{转写.segments}})")
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _lines_in(value: Any) -> list[str]:
+    """逐条替换的文本。**不能按逗号拆** —— 句子里全是逗号,id_list 那套在这里会把一句话拆成五句。"""
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    text = str(value or "").strip()
+    if not text:
+        return []
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        # 一行一条:手填时最自然的写法,也是 loop_foreach 的 items 认的那种。
+        return text.splitlines()
+    if not isinstance(parsed, list):
+        raise WorkflowDomainError("texts 要是一个字符串数组,或者一行一条的文本")
+    return [str(item) for item in parsed]
+
+
+def _subtitle_track(db: Session, sequence: Sequence, track_id: str) -> str:
+    """字幕落到哪条轨:指定了就用它,没指定就用第一条字幕轨,一条都没有就新建。
+
+    「没有就新建」不是省事,是这个节点在工作流里的常态 —— 上游 project_sequence_create 建出来的
+    新时间线只有视频轨和音频轨,而逼用户先接一个「加轨道」节点,只是把机器能算的事推给人。
+    """
+    from app.domain.sequences.operations import AddTrack, add_track
+
+    tracks = list(sequence.tracks or [])
+    if track_id:
+        track = next((one for one in tracks if one.id == track_id), None)
+        if track is None:
+            raise WorkflowDomainError("这条时间线上没有那条轨道")
+        if track.kind != "subtitle":
+            raise WorkflowDomainError("字幕只能放在字幕轨上")
+        return track.id
+    existing = [one for one in tracks if one.kind == "subtitle"]
+    if existing:
+        return min(existing, key=lambda one: one.position).id
+    before = {one.id for one in tracks}
+    add_track(db, sequence.id, AddTrack(kind="subtitle"))
+    db.commit()
+    db.refresh(sequence)
+    created = next((one.id for one in (sequence.tracks or []) if one.id not in before), "")
+    if not created:
+        raise WorkflowDomainError("新建字幕轨失败")
+    return created
+
+
+@register("generate_subtitles")
+def generate_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    """把逐字稿段落批量插成时间线上的字幕条。
+
+    **时间码来自 segments,文本可以来自别处**:这正是"翻译后配字幕"需要的形状 —— 译文是逐条
+    重写的,而每一条该出现在第几秒完全由原始段落决定。两者分成两个入参而不是让上游拼出一份
+    新段落数组,是因为模板插值产出的是字符串:把译文塞回 JSON 里,遇到带引号的台词就散架。
+
+    条数对不上直接报错,不截断。少一条就意味着从那一条起**每一句字幕都配错了时间**,而截断后
+    的成片看起来是完整的 —— 那种错要等到有人从头看一遍才发现。
+    """
+    from app.domain.sequences.operations import GenerateSubtitles
+    from app.domain.sequences.operations import generate_subtitles as generate
+
+    sequence = _sequence_in(db, workflow, str(config.get("sequence_id", "")).strip())
+    segments = _segments_in(config.get("segments"))
+    if not segments:
+        raise WorkflowDomainError("没有可用来生成字幕的逐字稿段落")
+    lines = _lines_in(config.get("texts"))
+    if lines and len(lines) != len(segments):
+        raise WorkflowDomainError(f"译文有 {len(lines)} 条,逐字稿有 {len(segments)} 段,对不上")
+    keep_original = _yes_no(config, "keep_original", default=False)
+    try:
+        offset = float(config.get("offset") or 0.0)
+    except (TypeError, ValueError):
+        raise WorkflowDomainError("offset 要是一个秒数") from None
+
+    cues: list[tuple[str, float, float]] = []
+    for index, segment in enumerate(segments):
+        try:
+            start = float(segment.get("start") or 0.0)
+            end = float(segment.get("end") or 0.0)
+        except (TypeError, ValueError):
+            raise WorkflowDomainError(f"第 {index + 1} 段的时间码不是数字") from None
+        original = str(segment.get("text") or "").strip()
+        text = lines[index].strip() if lines else original
+        if keep_original and lines and original and original != text:
+            # 原文在上、译文在下 —— 和「字幕配音」的 line=last 正好配套:看两行,只念译文。
+            text = f"{original}\n{text}"
+        if text and end > start:
+            cues.append((text, start + offset, end - start))
+    if not cues:
+        raise WorkflowDomainError("这些段落里没有一条能生成字幕(文本为空或时长为 0)")
+
+    track_id = _subtitle_track(db, sequence, str(config.get("track_id", "")).strip())
+    before = {clip.id for track in (sequence.tracks or []) for clip in (track.clips or [])}
+    try:
+        generate(db, sequence.id, GenerateSubtitles(track_id=track_id, cues=tuple(cues)))
+    except SequenceDomainError as exc:
+        raise WorkflowDomainError(str(exc)) from exc
+    db.refresh(sequence)
+    # 新插进去的那些。按落点排序 —— 下游要按时间顺序配音,而库里的返回顺序没有这个保证。
+    created = sorted(
+        (clip for track in (sequence.tracks or []) for clip in (track.clips or []) if clip.id not in before),
+        key=lambda clip: clip.timeline_start,
+    )
+    return {
+        "track_id": track_id,
+        "clip_ids": [clip.id for clip in created],
+        "count": len(created),
+        "sequence_id": sequence.id,
+    }
+
+
+@register("dub_subtitles")
+def dub_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) -> dict[str, Any]:
+    """给这些字幕条配音,落到一条专门的配音轨。
+
+    和「语音合成」的分工:那个念一段文本、交出一份音频素材,由谁摆到哪一秒是下游的事;这个念
+    的是**已经在时间线上、各自带着时间码**的一批字幕,所以它自己知道每一条该落在第几秒,也
+    因此才谈得上「把配音压进原段落的长度」—— match_duration 改的是片段的 speed,渲染时由
+    atempo 变速(见 media/render_executor),无损、可撤销、事后还能在检查器里手动微调。
+    """
+    from app.domain.voices.subtitle_dub import DubError, start_subtitle_dub
+
+    sequence = _sequence_in(db, workflow, str(config.get("sequence_id", "")).strip())
+    clip_ids = id_list(config.get("clip_ids"))
+    if not clip_ids:
+        raise WorkflowDomainError("没有要配音的字幕条")
+
+    engine = str(config.get("engine") or "").strip() or "clone"
+    voice_id = str(config.get("voice_id") or "").strip()
+    if engine == "clone" and not voice_id:
+        raise WorkflowDomainError("字幕配音要么选一个克隆音色(配音库),要么选一个引擎音色")
+    # 两条路要的参数不是一个集合:克隆那条按 Voice 行找工作区,引擎那条得显式告诉它产出归谁。
+    # 把两边的键都塞过去,start_synthesis 会收到它这条路上根本没有的参数。
+    synthesis: dict[str, Any] = {"engine": engine, "speed": float(config.get("speed") or 1.0)}
+    if engine == "clone":
+        synthesis["voice_id"] = voice_id
+    else:
+        synthesis["engine_voice"] = str(config.get("engine_voice") or "")
+        synthesis["engine_voice_resource"] = str(config.get("engine_voice_resource") or "")
+        synthesis["workspace_id"] = workflow.workspace_id
+
+    actor = current_actor(db)
+    try:
+        job = start_subtitle_dub(
+            db,
+            sequence_id=sequence.id,
+            clip_ids=clip_ids,
+            match_duration=_yes_no(config, "match_duration", default=True),
+            line=str(config.get("line") or "all"),
+            created_by=actor,
+            synthesis=synthesis,
+        )
+    except DubError as exc:
+        raise WorkflowDomainError(str(exc)) from exc
+    # 等待预算按条数走:这一个任务里排着 N 次合成,而通用的 15 分钟上限在一段几十句的视频上
+    # 必然误判成超时 —— 而那时前面几十条配音已经落到轨上了,「超时」这个说法是错的。
+    final = wait_for_job(job.id, timeout_seconds=max(CHILD_JOB_TIMEOUT_SECONDS, 60 * len(clip_ids)))
+    # 这一等的功夫,配音 worker 在**别的会话里**把这条时间线改了一遍(加轨、插片段、改倍速)。
+    # 本会话手里那份还是等待之前的样子,而序列的 revision 是乐观锁的判据 —— 拿着旧版本号再写
+    # 一次,会被「这个序列刚被改过」当场挡掉。等完就当作什么都不认识,重新读。
+    db.expire_all()
+    result = final.result or {}
+    track_id = str(result.get("track_id") or "")
+    if track_id and _yes_no(config, "duck_original", default=True):
+        _duck_other_audio(db, sequence.id, track_id, actor_id=actor)
+    return {
+        "track_id": track_id,
+        "done": int(result.get("done") or 0),
+        "failed": int(result.get("failed") or 0),
+    }
+
+
+def _duck_other_audio(db: Session, sequence_id: str, dub_track_id: str, *, actor_id: str | None) -> None:
+    """让原有音轨在配音说话的那几段自动压低。
+
+    **不压低的话,成片里是两个人同时说话** —— 原声一个字没删(那是配音这套设计的前提:整条轨
+    删掉就回到原样),所以译配和原声会重叠。闪避是时间线本来就有的能力(轨道右键·闪避,渲染侧
+    见 render_plan._duck_windows),这里只是替用户按下它。
+
+    压的是**原有的**音轨,不是全部:配音轨自己必须不闪避,否则没有任何一条轨是"关键音源",
+    闪避窗口算出来是空的。同样地,已经闪避过的轨不重复记一次操作 —— 那只会在撤销栈里堆空步。
+    """
+    from app.domain.sequences.operations import SetTrackState, set_track_state
+
+    sequence = db.get(Sequence, sequence_id)
+    if sequence is None:
+        return
+    # 先把要改的那几条挑出来:set_track_state 会 commit,而 commit 之后 sequence.tracks
+    # 上的对象全部过期 —— 边遍历边改的话,下一圈读 track.kind 会去重新查一遍库。
+    targets = [
+        track.id
+        for track in (sequence.tracks or [])
+        if track.kind == "audio" and track.id != dub_track_id and not track.duck
+    ]
+    for track_id in targets:
+        set_track_state(db, sequence_id, SetTrackState(track_id=track_id, duck=True, actor_id=actor_id))
 
 
 @register("asset")

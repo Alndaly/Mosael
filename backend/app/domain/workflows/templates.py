@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 FULL_VIDEO_GENERATION = "full_video_generation"
 TRANSCRIPT_VIDEO_CLEANUP = "transcript_video_cleanup"
+TRANSLATED_DUB = "translated_dub"
 
 
 @dataclass(frozen=True)
@@ -163,6 +164,9 @@ def built_in_template_graph(
         )
     if template_id == TRANSCRIPT_VIDEO_CLEANUP:
         return transcript_video_cleanup_graph(chat=chat)
+    if template_id == TRANSLATED_DUB:
+        # 音色和整片生成那条一样按工作区取:克隆音色存在工作区名下,不跟人走。
+        return translated_dub_graph(voice_id=_first_voice_id(db, workspace_id))
     raise WorkflowDomainError(f"未知的内置工作流模板:{template_id}")
 
 
@@ -465,6 +469,189 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
     ]
     graph = {
         "meta": {"template_id": TRANSCRIPT_VIDEO_CLEANUP, "template_version": 3, "source": "official"},
+        "nodes": nodes,
+        "edges": edges,
+    }
+    return canonicalize_data_bindings(graph, node_types=NODE_TYPES)
+
+
+def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
+    """视频 → 逐字稿 → 逐句翻译 → 译文字幕 → 变速配音 → 导出。
+
+    **逐句翻译,不是整篇翻译。** 配音要对得上画面,所以每一句必须知道自己是第几秒到第几秒的 ——
+    而那个时间码只存在于原始段落里。整篇丢给翻译再切回句子,切点不可能和原来一致(译文的句数
+    本来就和原文不一样),于是每一句都会往后错一点,越到后面错得越多。逐句走,时间码是白拿的:
+    第 i 条译文配第 i 段的时间,按构造对齐。
+
+    **配音靠变速塞回原长度,不是靠裁剪。** 同一句话译成另一种语言,长度天然对不上;裁掉尾巴等于
+    把话说一半,留空则对不上口型。变速改的是片段的 speed(渲染时 atempo),无损、可撤销、事后
+    还能在检查器里逐条微调 —— 这是 `dub_subtitles` 的 match_duration。
+    """
+    translate_body = {
+        "nodes": [
+            {
+                "id": "translate_line",
+                "type": "translate",
+                "name": "翻译这一句",
+                "position": {"x": 80, "y": 120},
+                "config": {
+                    # 整段逐字稿里的一段。**不能用 {{loop.item}}** —— 那是整个段落对象
+                    # (带 start/end/tokens),交给翻译引擎就是把一坨 JSON 送去翻译。
+                    "text": "{{loop.item.text}}",
+                    "target_lang": "en",
+                    "engine": "google",
+                },
+            },
+        ],
+        "edges": [],
+    }
+
+    nodes: list[dict[str, Any]] = [
+        {
+            "id": "start",
+            "type": "start",
+            "name": "开始译配",
+            "position": {"x": -270, "y": 260},
+            "config": {"params": {}},
+        },
+        {
+            "id": "source_video",
+            "type": "asset",
+            "name": "选择要配音的视频",
+            "position": {"x": 40, "y": 260},
+            "config": {"asset_id": ""},
+        },
+        {
+            "id": "dub_project",
+            "type": "project_sequence_create",
+            "name": "建立非破坏性配音副本",
+            "position": {"x": 350, "y": 420},
+            "config": {
+                "name": "{{source_video.name}} · 译配版",
+                "width": "{{source_video.width}}",
+                "height": "{{source_video.height}}",
+                "fps": "{{source_video.fps}}",
+            },
+        },
+        {
+            "id": "video_on_timeline",
+            "type": "timeline_append",
+            "name": "把原视频接到时间线",
+            "position": {"x": 670, "y": 420},
+            "config": {
+                "sequence_id": "{{dub_project.sequence_id}}",
+                "asset_id": "{{source_video.asset_id}}",
+                "track_id": "{{dub_project.video_track_id}}",
+                "start": 0,
+                "end": "{{source_video.duration}}",
+            },
+        },
+        {
+            "id": "verbatim_transcript",
+            "type": "transcribe_asset",
+            "name": "生成带时间码逐字稿",
+            "position": {"x": 350, "y": 120},
+            "config": {"asset_id": "{{source_video.asset_id}}", "engine": "auto"},
+        },
+        {
+            "id": "translate_lines",
+            "type": "loop_foreach",
+            "name": "逐句翻译成目标语言",
+            "position": {"x": 990, "y": 120},
+            "config": {
+                "items": "{{verbatim_transcript.segments}}",
+                "body": translate_body,
+                # 每次迭代只收一句译文 —— 留空的话收的是整个子作用域,而下游要的是一列字符串。
+                "output": "{{translate_line.text}}",
+            },
+        },
+        {
+            "id": "translated_subtitles",
+            "type": "generate_subtitles",
+            "name": "按原时间码铺译文字幕",
+            "position": {"x": 1310, "y": 260},
+            "config": {
+                "sequence_id": "{{dub_project.sequence_id}}",
+                "segments": "{{verbatim_transcript.segments}}",
+                "texts": "{{translate_lines.results}}",
+                # 只念译文的话就把这里改成 yes、并把下一个节点的 line 改成 last:
+                # 屏幕上两行(原文/译文),嘴里只念下面那行。
+                "keep_original": "no",
+                # 逐字稿的时间是**素材内**的时间;视频接在第几秒由上一步说了算。
+                "offset": "{{video_on_timeline.timeline_start}}",
+            },
+        },
+        {
+            "id": "dubbing",
+            "type": "dub_subtitles",
+            "name": "逐条配音并压回原段落长度",
+            "position": {"x": 1630, "y": 260},
+            "config": {
+                "sequence_id": "{{dub_project.sequence_id}}",
+                "clip_ids": "{{translated_subtitles.clip_ids}}",
+                "match_duration": "yes",
+                "line": "all",
+                "duck_original": "yes",
+                "voice_id": voice_id,
+            },
+        },
+        {
+            "id": "export_dubbed_video",
+            "type": "export_sequence",
+            "name": "导出译配成片(字幕烧进画面)",
+            "position": {"x": 1950, "y": 260},
+            "config": {"sequence_id": "{{dub_project.sequence_id}}"},
+        },
+        {
+            "id": "done_notice",
+            "type": "notify",
+            "name": "译配完成通知",
+            "position": {"x": 2260, "y": 260},
+            "config": {
+                "title": "视频译配与字幕已完成",
+                "body": "{{source_video.name}} 已生成 {{dubbing.done}} 条配音(失败 {{dubbing.failed}} 条),配音在单独一条轨上,整条删掉即可回到原样。",
+            },
+        },
+        {
+            "id": "output",
+            "type": "output",
+            "name": "交付逐字稿、译文、字幕与成片",
+            "position": {"x": 2570, "y": 260},
+            "config": {
+                "values": {
+                    "source_asset_id": "{{source_video.asset_id}}",
+                    "source_language": "{{verbatim_transcript.language}}",
+                    "verbatim_transcript": "{{verbatim_transcript.text}}",
+                    "translated_lines": "{{translate_lines.results}}",
+                    "subtitle_track_id": "{{translated_subtitles.track_id}}",
+                    "subtitle_count": "{{translated_subtitles.count}}",
+                    "dub_track_id": "{{dubbing.track_id}}",
+                    "dubbed_lines": "{{dubbing.done}}",
+                    "failed_lines": "{{dubbing.failed}}",
+                    "project_id": "{{dub_project.project_id}}",
+                    "sequence_id": "{{dub_project.sequence_id}}",
+                    "final_asset_id": "{{export_dubbed_video.asset_id}}",
+                }
+            },
+        },
+    ]
+    edges = [
+        {"id": "start_source", "source": "start", "target": "source_video"},
+        {"id": "source_transcript", "source": "source_video", "target": "verbatim_transcript"},
+        {"id": "source_project", "source": "source_video", "target": "dub_project"},
+        {"id": "project_append", "source": "dub_project", "target": "video_on_timeline"},
+        {"id": "source_append", "source": "source_video", "target": "video_on_timeline"},
+        {"id": "transcript_translate", "source": "verbatim_transcript", "target": "translate_lines"},
+        {"id": "translate_subtitles", "source": "translate_lines", "target": "translated_subtitles"},
+        # 字幕要等视频真的落到时间线上才铺 —— 它的落点是 video_on_timeline 算出来的。
+        {"id": "append_subtitles", "source": "video_on_timeline", "target": "translated_subtitles"},
+        {"id": "subtitles_dub", "source": "translated_subtitles", "target": "dubbing"},
+        {"id": "dub_export", "source": "dubbing", "target": "export_dubbed_video"},
+        {"id": "export_notice", "source": "export_dubbed_video", "target": "done_notice"},
+        {"id": "notice_output", "source": "done_notice", "target": "output"},
+    ]
+    graph = {
+        "meta": {"template_id": TRANSLATED_DUB, "template_version": 1, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

@@ -250,3 +250,52 @@ def test_backfill_does_not_promote_an_empty_track() -> None:
     backfill_dub_tracks()
     with SessionLocal() as db:
         assert db.get(Track, empty).role == ""
+
+
+def test_整条字幕轨是要配的那批的默认答案() -> None:
+    """剪辑台上这批是框选出来的,但别的入口没有选区 —— 智能体那边「把这个视频配上音」说的就是
+    整条轨。让模型先跑一遍检视、把几十个 id 抄回来只是仪式,而抄漏一条就是少配一句。"""
+    from app.domain.voices.subtitle_dub import subtitle_clip_ids
+    from app.db.models import Clip, Track
+
+    client = fresh_client()
+    sequence_id, first_clip = _sequence_with_subtitle(client, "第一句")
+    with SessionLocal() as db:
+        track_id = db.get(Clip, first_clip).track_id
+        # 第二条排在第一条前面,用来确认返回的是**时间顺序**而不是入库顺序。
+        db.add(Clip(
+            workspace_id=db.get(Clip, first_clip).workspace_id,
+            sequence_id=sequence_id, track_id=track_id, asset_id=None,
+            timeline_start=0.0, src_in=0, src_out=1.0, text_override="第零句",
+        ))
+        db.commit()
+        ids = subtitle_clip_ids(db, sequence_id)
+        assert len(ids) == 2 and ids[1] == first_clip
+
+
+def test_有多条字幕轨时不替用户挑() -> None:
+    """双语视频常见的形态就是原文一条、译文一条 —— 挑错了配出来的是另一种语言,
+    而那要听完才发现。"""
+    from app.domain.voices.subtitle_dub import subtitle_clip_ids
+
+    client = fresh_client()
+    sequence_id, _ = _sequence_with_subtitle(client)
+    client.post(f"/api/sequences/{sequence_id}/tracks", json={"kind": "subtitle"})
+    with SessionLocal() as db:
+        with pytest.raises(DubError, match="多条字幕轨"):
+            subtitle_clip_ids(db, sequence_id)
+
+
+def test_一条字幕轨都没有时说的是没有字幕轨() -> None:
+    from app.domain.voices.subtitle_dub import subtitle_clip_ids
+
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+    project = client.post("/api/projects", json={"workspace_id": workspace["id"], "name": "P"}).json()
+    sequence = client.post(
+        "/api/sequences",
+        json={"workspace_id": workspace["id"], "project_id": project["id"], "name": "S"},
+    ).json()
+    with SessionLocal() as db:
+        with pytest.raises(DubError, match="没有字幕轨"):
+            subtitle_clip_ids(db, sequence["id"])

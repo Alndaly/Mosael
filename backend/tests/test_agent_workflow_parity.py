@@ -35,6 +35,10 @@ NODE_TO_TOOL: dict[str, str] = {
     "timeline_add_track": "edit_timeline",
     "timeline_clear": "edit_timeline",
     "timeline_cut_ranges": "edit_timeline",
+    # 同上:一条字幕就是一段文本片段(edit_timeline 的 insert_text_clip)。画布上"按逐字稿
+    # 批量铺字幕"值得一个表单,而智能体本来就是在逐条写那个操作。
+    "generate_subtitles": "edit_timeline",
+    "dub_subtitles": "dub_subtitles",
     "llm": "",  # 见 NOT_A_TOOL
     "plugin_tool": "",  # 插件工具已展开成一等公民(plugin__<连接>__<工具>),不是固定的一个名字
     "transcribe_asset": "transcribe_asset",

@@ -1779,6 +1779,9 @@ EDIT_OP_KINDS = (
     "remove_track",
     "set_clip_effects",
     "set_clip_transform",
+    # 字幕条就是一段没有素材的文本片段。它此前不在清单里,于是"给这个视频加字幕"在对话里
+    # 根本做不到 —— 而那是这个应用最常被要求做的几件事之一。
+    "insert_text_clip",
 )
 
 
@@ -1812,6 +1815,8 @@ def apply_edit_operations(db: Session, sequence_id: str, operations: list[dict[s
             set_clip_effects(db, sequence_id, SetClipEffects(**args))
         elif kind == "set_clip_transform":
             set_clip_transform(db, sequence_id, SetClipTransform(**args))
+        elif kind == "insert_text_clip":
+            insert_text_clip(db, sequence_id, InsertTextClip(**args))
         else:
             raise SequenceDomainError(f"不认识的时间线操作: {kind}")
         applied += 1

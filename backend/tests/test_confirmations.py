@@ -324,6 +324,13 @@ def test_invalid_payloads_rejected() -> None:
         json={"workspace_id": ws["id"], "tool": "edit_timeline", "payload": {"sequence_id": "nope", "operations": []}},
     )
     assert empty_ops.status_code == 422
+    # 拿一个 sequence_id 去动一条时间线的,归属都在同一处判 —— 配音是第三个。
+    foreign_dub = client.post(
+        "/api/confirmations",
+        json={"workspace_id": ws["id"], "tool": "dub_subtitles",
+              "payload": {"sequence_id": "nope", "clip_ids": ["c1"], "voice_id": "v1"}},
+    )
+    assert foreign_dub.status_code == 422
 
 
 def test_confirmations_scoped_by_session() -> None:
