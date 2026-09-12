@@ -14,7 +14,7 @@ import pytest
 from sqlalchemy import select
 
 from app.core.db import SessionLocal
-from app.db.models import Asset, Clip, Job, Track, Transcript, TranscriptSegment, Workflow
+from app.db.models import Asset, Clip, Track, Transcript, TranscriptSegment, Workflow
 from app.domain.jobs import create_job
 from app.domain.workflows.engine import execute_graph
 from app.domain.workflows.templates import translated_dub_graph

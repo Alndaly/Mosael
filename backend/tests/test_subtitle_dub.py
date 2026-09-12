@@ -256,7 +256,7 @@ def test_整条字幕轨是要配的那批的默认答案() -> None:
     """剪辑台上这批是框选出来的,但别的入口没有选区 —— 智能体那边「把这个视频配上音」说的就是
     整条轨。让模型先跑一遍检视、把几十个 id 抄回来只是仪式,而抄漏一条就是少配一句。"""
     from app.domain.voices.subtitle_dub import subtitle_clip_ids
-    from app.db.models import Clip, Track
+    from app.db.models import Clip
 
     client = fresh_client()
     sequence_id, first_clip = _sequence_with_subtitle(client, "第一句")
