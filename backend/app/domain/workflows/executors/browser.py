@@ -37,13 +37,48 @@ def _int(value: Any, default: int) -> int:
         return default
 
 
+#: 失败现场的截图给多大。captureBase64 已经缩到 480 宽,这道闸防的是意外(超大 DPR、
+#: 执行器换实现)——失败记录进的是任务总线的 payload,不该由它把库撑起来。
+_SHOT_MAX_CHARS = 400_000
+#: 截图本身也要能失败得快。这一步是**补充说明**,不是任务的一部分:会话已经没了的时候,
+#: 等它 60 秒只是把一次失败拖成两次。
+_SHOT_TIMEOUT_SECONDS = 8.0
+
+
+def _failure_scene(session_id: str, action: str, args: dict[str, Any]) -> dict[str, Any]:
+    """这一步失败的时候,页面长什么样。
+
+    **「等待超时」之后最想知道的就是这个**:选择器没写错的话,那一刻屏幕上是登录墙、是验证码,
+    还是页面根本没跳过去?URL 我们已经能说了(1d33ab27),但站点改版之后光有 URL 不够 ——
+    一张图能省掉「把节点配置重贴一遍、手动复现一次」那整个来回。
+
+    整段最多值一张图:拿不到就算了,绝不让取证本身变成第二次失败。
+    """
+    scene: dict[str, Any] = {"action": action}
+    for key in ("selector", "url", "url_contains", "text", "expression"):
+        value = str(args.get(key) or "").strip()
+        if value:
+            scene[key] = value[:200]
+    try:
+        shot = browser.run_action(session_id, "screenshot", {}, timeout=_SHOT_TIMEOUT_SECONDS)
+    except Exception:  # noqa: BLE001 — 会话已经关掉、执行器没响应……都只意味着"这次没有图"
+        return scene
+    image = str(shot.get("value") or "")
+    if image.startswith("data:image/") and len(image) <= _SHOT_MAX_CHARS:
+        scene["screenshot"] = image
+    last_url = str(shot.get("lastUrl") or "").strip()
+    if last_url:
+        scene["page_url"] = last_url[:500]
+    return scene
+
+
 def _run(session_id: str, action: str, args: dict[str, Any], *, timeout: float | None = None) -> dict[str, Any]:
     try:
         if timeout is None:
             return browser.run_action(session_id, action, args)
         return browser.run_action(session_id, action, args, timeout=timeout)
     except browser.BrowserDomainError as exc:
-        raise WorkflowDomainError(str(exc)) from exc
+        raise WorkflowDomainError(str(exc), details=_failure_scene(session_id, action, args)) from exc
 
 
 @register("browser_open")
