@@ -100,3 +100,28 @@ def test_上一代的结果不许写回来(module, engine, resolver, stale, fres
     time.sleep(0.3)  # 给上一代那条写回的机会
 
     assert module.runtime_status(engine)[0] is True, "上一代的过期答案把新的覆盖掉了"
+
+
+def test_客户端说不知道类型时要看扩展名_而不是一律当成视频():
+    """`application/octet-stream` 是「我不知道这是什么」,**不是一个类型判断**。
+
+    此前只写 `content_type or 扩展名` —— 只要客户端给了任何字符串就不再看扩展名。而
+    octet-stream 恰恰是最常见的那一个:命令行工具、浏览器扩展、机器人、智能体工具上传时
+    基本都发它(只有浏览器拖拽才给得出真类型)。后果是**一切图片都被当成视频**:一张
+    .png/.heic 进了「视频」筛选、按视频去放、时长空着还编出个 fps=1.0。
+    iPhone 照片默认就是 HEIC,这条路上进来的照片全中。
+    """
+    from pathlib import Path
+
+    from app.media.probe import guess_kind
+
+    for name in ("photo.heic", "photo.heif", "shot.png", "shot.jpg", "art.webp"):
+        assert guess_kind(Path(f"/tmp/{name}"), "application/octet-stream") == "image", name
+        assert guess_kind(Path(f"/tmp/{name}"), None) == "image", name
+    # 客户端给了真类型时仍然听它的 —— 扩展名骗人的情况比 octet-stream 少见得多。
+    assert guess_kind(Path("/tmp/clip.mov"), "video/quicktime") == "video"
+    assert guess_kind(Path("/tmp/x.png"), "image/png") == "image"
+    # 认不出扩展名的仍然落到 video(维持既有的保守回退)。
+    assert guess_kind(Path("/tmp/weird.bin"), "application/octet-stream") == "video"
+    # 音频扩展名那条捷径不受影响。
+    assert guess_kind(Path("/tmp/song.flac"), "application/octet-stream") == "audio"

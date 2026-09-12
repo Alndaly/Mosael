@@ -15,10 +15,23 @@ import logging
 AUDIO_EXTENSIONS = {".m4a", ".mp3", ".wav", ".aac", ".flac", ".ogg", ".opus", ".wma"}
 
 
+#: 客户端说「我不知道这是什么」的那几种说法。**它们不是类型判断,不该压过扩展名。**
+#:
+#: 此前只写了 `content_type or 扩展名` —— 只要客户端给了任何字符串就不再看扩展名,而
+#: `application/octet-stream` 恰恰是最常见的那一个:命令行工具、浏览器扩展、机器人和智能体
+#: 工具上传时基本都发它(浏览器拖拽才会给出真类型)。后果是**一切图片都被当成视频**:
+#: 一张 .png / .heic 进了「视频」筛选、按视频去放、时长空着还编出个 fps=1.0。
+#: iPhone 照片默认就是 HEIC,这条路上进来的照片全中。
+_UNKNOWN_MIMES = {"application/octet-stream", "binary/octet-stream", "application/unknown"}
+
+
 def guess_kind(path: Path, content_type: str | None = None) -> str:
     if path.suffix.lower() in AUDIO_EXTENSIONS:
         return "audio"
-    mime = content_type or mimetypes.guess_type(path.name)[0] or ""
+    mime = (content_type or "").strip().lower()
+    if not mime or mime in _UNKNOWN_MIMES:
+        # 客户端没给或说不知道 —— 扩展名这时是唯一的线索,而它多半是对的。
+        mime = mimetypes.guess_type(path.name)[0] or ""
     if mime.startswith("image/"):
         return "image"
     if mime.startswith("audio/"):
