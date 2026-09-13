@@ -317,6 +317,11 @@ def _explain(exc: Exception) -> str:
         return "这个链接里没有可下载的视频。"
     if "unavailable" in lowered or "removed" in lowered:
         return "这条内容已下架或在当前地区不可用。"
+    if "http error 404" in lowered or "http error 410" in lowered:
+        # 最常见的一种,却一直漏在兜底里 —— 用户看到的是
+        # 「ERROR: [BiliBili] 1xx…: Unable to download webpage: HTTP Error 404: Not Found」。
+        # 链接打错和内容被删对用户是同一件事:这个地址现在指不到东西。
+        return "这个地址取不到内容(404)。链接可能打错了,或者这条内容已经被删除。"
     if "ffmpeg exited" in lowered:
         # 视频和声音是两条流,合并由 ffmpeg 做。它失败时报的是一个退出码,对用户毫无意义。
         return "音视频合并失败(ffmpeg)。改成「只要音频」通常能绕开;若一直如此,可能是这条流的格式特殊。"

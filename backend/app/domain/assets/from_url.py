@@ -97,6 +97,7 @@ def _run(job_id: str) -> None:
 
     done = 0
     failed = 0
+    failures: list[tuple[str, str]] = []
     asset_ids: list[str] = []
     total = len(items)
     workdir = Path(tempfile.mkdtemp(prefix="mosael-url-import-"))
@@ -126,6 +127,10 @@ def _run(job_id: str) -> None:
                 )
             except ytdlp.YtdlpError as exc:
                 failed += 1
+                # 原因**本来就是现成的**:ytdlp._explain 已经把「HTTP Error 403」这类翻成了
+                # 「站点拒绝了匿名取流,请选择已登录的浏览器档案」。它此前只进日志,而用户看到的
+                # 是一句「没有一条下载成功」—— 既不说是哪一条,也不说该怎么办。
+                failures.append((title[:40] or str(item.get("url") or "")[:40], str(exc)))
                 logger.warning("从链接导入:第 %s 条失败:%s", index + 1, str(exc)[:200])
                 continue
 
@@ -151,7 +156,7 @@ def _run(job_id: str) -> None:
             if done == 0:
                 job.status = "failed"
                 say(job, "jobMsg_urlImportFailed")
-                job.error = "没有一条下载成功"
+                job.error = failure_report(failures)
                 emit_job_event(db, job.id, "job.failed", {})
             else:
                 job.status = "succeeded"
@@ -160,6 +165,9 @@ def _run(job_id: str) -> None:
                 # 而少掉的几条只有说出来用户才知道要去补。
                 if failed:
                     say(job, "jobMsg_urlImportPartial", done=done, failed=failed)
+                    # 成功的任务也带 error:任务详情里它就显示在消息下面。「20 条成功 3 条失败」
+                    # 里的那 3 条,不说清是哪几条、为什么,用户只能自己一条条比对。
+                    job.error = failure_report(failures)
                 else:
                     say(job, "jobMsg_urlImportDone", done=done)
                 job.result = {"asset_ids": asset_ids, "done": done, "failed": failed}
@@ -177,6 +185,29 @@ def _run(job_id: str) -> None:
                 db.commit()
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
+
+
+#: 失败清单最多列几条。一批 50 条全挂时,把 50 行原因糊进任务详情只会让人一行都不看;
+#: 前几条加一句「还有 N 条」足够定位,而完整的那份仍在日志里。
+_MAX_LISTED_FAILURES = 8
+
+
+def failure_report(failures: list[tuple[str, str]]) -> str:
+    """没下成的那几条各自为什么。
+
+    yt-dlp 的原始报错混着 URL、格式 id 和 traceback,但 ytdlp._explain 已经把它翻成了一句
+    能行动的话。这里只负责把那几句**带着是哪一条**交到用户面前。
+    """
+    if not failures:
+        return "没有一条下载成功"
+    reasons = {reason for _, reason in failures}
+    if len(reasons) == 1 and len(failures) > 1:
+        # 整批同一个原因(多半是登录态或代理),说一遍就够 —— 逐条重复同一句话只是噪音。
+        return f"{len(failures)} 条都失败了:{failures[0][1]}"
+    lines = [f"「{title}」:{reason}" for title, reason in failures[:_MAX_LISTED_FAILURES]]
+    if len(failures) > _MAX_LISTED_FAILURES:
+        lines.append(f"…… 还有 {len(failures) - _MAX_LISTED_FAILURES} 条,完整清单见日志")
+    return "\n".join(lines)
 
 
 def _cookie_file(workspace_id: str, profile_id: str, workdir: Path) -> Path | None:

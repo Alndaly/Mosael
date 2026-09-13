@@ -87,6 +87,13 @@ def test_error_messages_say_what_to_do() -> None:
     assert "超时" in ytdlp._explain(Exception("ERROR: The read operation timed out"))
     assert "浏览器档案" in ytdlp._explain(Exception("HTTP Error 412: Precondition Failed"))
     assert "代理" in ytdlp._explain(Exception("Your IP address is blocked from accessing this post"))
+    # 404 是最常见的一种(链接打错、内容被删),却一直漏在兜底里 —— 用户看到的是
+    # 「ERROR: [BiliBili] 1xx…: Unable to download webpage: HTTP Error 404: Not Found」。
+    explained = ytdlp._explain(Exception(
+        "ERROR: [BiliBili] 1xx411c7X: Unable to download webpage: HTTP Error 404: Not Found"
+    ))
+    assert "404" in explained and "删除" in explained
+    assert "Unable to download webpage" not in explained
     # 认不出来的照样要给一句话,而不是空串。
     assert ytdlp._explain(Exception("something else entirely")).strip()
 
@@ -274,3 +281,47 @@ def test_every_ytdlp_site_extractor_with_a_sample_remains_routable() -> None:
             unmatched.append(f"{extractor.IE_NAME} routed to {matched}: {sample}")
     assert checked >= 1_000
     assert unmatched == []
+
+
+class Test没下成的那几条要说清为什么:
+    """原因本来就是现成的,只是从来没交到用户手上。
+
+    ytdlp._explain 已经把「HTTP Error 403」翻成了「站点拒绝了匿名取流,请选择已登录的浏览器
+    档案」—— 一句能照着做的话。而任务上写的却是常量「没有一条下载成功」:既不说是哪一条,
+    也不说该怎么办。一批 20 条里挂了 3 条时更糟,连哪 3 条都找不出来。
+    """
+
+    def test_全挂时把原因端出来(self) -> None:
+        from app.domain.assets.from_url import failure_report
+
+        report = failure_report([("某条视频", "这条内容是私有的 / 会员专属,没有登录态就取不到。")])
+        assert "某条视频" in report and "私有" in report
+
+    def test_整批同一个原因只说一遍(self) -> None:
+        """多半是登录态或代理的问题 —— 逐条重复同一句话只是噪音,还会把真正不同的那条淹掉。"""
+        from app.domain.assets.from_url import failure_report
+
+        same = [(f"第{i}条", "站点要求登录或人机验证才能取这条内容。") for i in range(5)]
+        report = failure_report(same)
+        assert report.count("站点要求登录") == 1
+        assert "5 条都失败了" in report
+
+    def test_原因不同就逐条列(self) -> None:
+        from app.domain.assets.from_url import failure_report
+
+        report = failure_report([("甲", "已下架"), ("乙", "需要登录")])
+        assert "「甲」:已下架" in report and "「乙」:需要登录" in report
+
+    def test_太多条时截断并说还有几条(self) -> None:
+        """一批 50 条全挂,把 50 行糊进任务详情只会让人一行都不看。"""
+        from app.domain.assets.from_url import failure_report
+
+        many = [(f"第{i}条", f"原因{i}") for i in range(20)]
+        report = failure_report(many)
+        assert report.count("\n") < 12
+        assert "还有 12 条" in report
+
+    def test_一条都没记下来时仍有话说(self) -> None:
+        from app.domain.assets.from_url import failure_report
+
+        assert failure_report([]) == "没有一条下载成功"
