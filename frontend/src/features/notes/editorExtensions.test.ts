@@ -75,3 +75,21 @@ it("preserves all six heading levels through Markdown and returns a heading to n
   expect(editor.getMarkdown().trim()).toBe("相机笔记 Camera notes");
   editor.destroy();
 });
+
+it("接管了 link token 就得连标题一起还回去", () => {
+  // NoteReference 用 markdownTokenName:"link" 接管了**所有**链接,所以它继承了上游 Link 的义务。
+  // 第一版只还了 href —— `[文字](地址 "悬浮提示")` 的标题被吞掉,形状和当初吞掉整条链接一样:
+  // 接管了别人的 token,只还回自己看得懂的那部分。
+  const source = '读一读[这篇](https://example.com/a "悬浮提示")再说。';
+  const editor = new Editor({ extensions: noteExtensions(), content: source, contentType: "markdown" });
+  expect(editor.getMarkdown().trim()).toBe(source);
+  // 笔记深链仍然走原子引用节点,不受影响。
+  const reference = new Editor({
+    extensions: noteExtensions(),
+    content: "见 [@某笔记](#/notes?note=abc-123)",
+    contentType: "markdown",
+  });
+  expect(reference.getJSON().content?.[0]?.content?.[1]?.type).toBe("noteReference");
+  editor.destroy();
+  reference.destroy();
+});

@@ -24,10 +24,17 @@ export const NoteReference = Node.create({
    * 丢了链接的文档就被写回去，链接从此真的没了，且没有任何提示。
    *
    * 所以非笔记链接要交还成一个正常的 link mark，而不是丢掉。
+   *
+   * **还回去就要还完整。** 第一版只还了 href，`[文字](地址 "悬浮提示")` 的标题被吞掉了 ——
+   * 上游 Link 自己的 parseMarkdown 是带 title 的，而我们把它整个接管了，就继承了它的义务。
+   * 丢的东西比丢链接小，但形状一模一样：接管了别人的 token，却只还回自己看得懂的那部分。
    */
   parseMarkdown: (token, h) => /^#\/notes\?note=[\w-]+(?:&revision=\d+)?$/.test(String(token.href))
     ? h.createNode("noteReference", { href: token.href, label: String(token.text || "").replace(/^@/, "") })
-    : h.applyMark("link", h.parseInline(token.tokens ?? []), { href: String(token.href ?? "") }),
+    : h.applyMark("link", h.parseInline(token.tokens ?? []), {
+        href: String(token.href ?? ""),
+        title: token.title || null,
+      }),
   renderMarkdown: node => `[@${String(node.attrs?.label || "").replace(/[\\[\]]/g, "\\$&")}](${node.attrs?.href})`,
 });
 

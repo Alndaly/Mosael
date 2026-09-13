@@ -132,3 +132,19 @@ it("moves the model selection from an image into code before immediate typing", 
   expect(editor.getMarkdown()).toContain("![image](https://example.com/a.png)");
   expect(editor.state.doc.child(1).textContent).toContain("// comment");
 });
+
+it("代码块里写 Markdown 时,围栏要比内容里最长那串反引号更长", () => {
+  // 上游写死三个反引号,于是一段讲 Markdown 的代码块会把自己拆掉:内层那行提前收尾,
+  // 剩下的内容掉到正文里。而且再存一次形状还会继续变 —— 两遍不收敛,所以这里验到第二遍。
+  const source = "````md\n```js\ncode\n```\n````";
+  const { editor } = setup(source);
+  const once = editor.getMarkdown().trim();
+  expect(once).toBe(source);
+  expect(setup(once).editor.getMarkdown().trim()).toBe(source);
+});
+
+it("普通代码块仍然是三个反引号", () => {
+  // 围栏只在需要时才加长 —— 不能因为修了套娃就让每个代码块都变成四个反引号。
+  const { editor } = setup("```ts\nconst a = 1;\n```");
+  expect(editor.getMarkdown().trim()).toBe("```ts\nconst a = 1;\n```");
+});

@@ -118,6 +118,24 @@ const LANGUAGES: [string, string][] = [
 export function createNoteCodeBlock(locale: string) {
   const labels = nodeLabels(locale);
   return CodeBlock.extend({
+    /**
+     * 围栏要比正文里最长的那串反引号更长。
+     *
+     * 上游写死了三个反引号(extension-code-block 的 renderMarkdown),于是**一段讲 Markdown 的
+     * 代码块会把自己拆掉**:```` ```md ```` 里包着 ``` ```js ``` 时,内层那行提前把块收尾了,
+     * 剩下的内容掉到正文里变成普通段落 —— 而且再存一次形状还会继续变(实测两遍不收敛)。
+     * CommonMark 对这件事有明确规定,照它办即可。
+     *
+     * 这在这个应用里不是边角情况:笔记里写技术文档、或者把模型回答里的代码示例存成笔记,
+     * 一段带 ``` 的内容就够了。
+     */
+    renderMarkdown(node, h) {
+      const language = String(node.attrs?.language || "");
+      const body = node.content ? h.renderChildren(node.content) : "";
+      const longest = Math.max(0, ...Array.from(String(body).matchAll(/`+/g), (m) => m[0].length));
+      const fence = "`".repeat(Math.max(3, longest + 1));
+      return `${fence}${language}\n${body}\n${fence}`;
+    },
     addProseMirrorPlugins() {
       return [...(this.parent?.() || []), syntaxHighlighting()];
     },
