@@ -36,7 +36,7 @@ from app.api.schemas import (
 )
 from app.core.config import app_version
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, ensure_workspace_role
-from app.db.models import AgentMessage, AgentQuestion, AgentSession, ProviderUsageEvent, now
+from app.db.models import AgentMessage, AgentQuestion, AgentSession, ProviderProfile, ProviderUsageEvent, now
 from app.domain.agent import list_agent_skills
 from app.domain import session_groups
 from app.domain.agent import memory as agent_memory
@@ -44,6 +44,26 @@ from app.domain.agent import questions as agent_questions
 from app.domain.agent import plan as agent_plan
 
 router = APIRouter(tags=["agent"])
+
+
+def _checked_profile_id(db: DbSession, user: CurrentUser, profile_id: str | None) -> str | None:
+    """会话钉在哪条连接上。**不存在就当场说不存在,不要留给数据库去炸。**
+
+    provider_profile_id 是外键。给一个不存在的 id(界面开着时被另一处删掉、客户端拿着过期的
+    id、或者有人手抄时截断了),插入会以 FOREIGN KEY constraint failed 结束 —— 接口回的是
+    一个裸 500,既不说是哪个字段,也不说该怎么办,还会在监控里记成服务端故障。
+
+    **不要求它是启用的**:停用只是「暂时别用」,把会话钉在上面仍然合理(运行时 resolve_chat_provider
+    自己会回退到默认连接)。这里挡的只是「指向一条根本不存在、或者不属于你的连接」。
+    """
+    wanted = (profile_id or "").strip()
+    if not wanted:
+        return None
+    profile = db.get(ProviderProfile, wanted)
+    # 连接归人。别人的和不存在的对他是同一件事 —— 分开说等于确认了这个 id 有效。
+    if profile is None or (profile.owner_user_id is not None and profile.owner_user_id != user.id):
+        raise HTTPException(status_code=422, detail="这条 AI 供应商连接不存在")
+    return profile.id
 
 
 @router.post("/agent/sessions", response_model=AgentSessionOut)
@@ -55,7 +75,7 @@ def create_agent_session(body: AgentSessionCreate, db: DbSession, user: CurrentU
         project_id=body.project_id,
         title=body.title,
         adapter=body.adapter,
-        provider_profile_id=body.provider_profile_id,
+        provider_profile_id=_checked_profile_id(db, user, body.provider_profile_id),
         model=body.model,
     )
     # 对话是**他的** —— 默认不共享给工作区(见 domain/sharing.KINDS)。
@@ -199,7 +219,7 @@ def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSessio
     if body.title is not None:
         session.title = body.title
     if body.provider_profile_id is not None:
-        session.provider_profile_id = body.provider_profile_id or None
+        session.provider_profile_id = _checked_profile_id(db, user, body.provider_profile_id)
     if body.model is not None:
         session.model = body.model or None
     if body.analysis_video_mode is not None:

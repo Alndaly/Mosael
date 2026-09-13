@@ -64,19 +64,27 @@ def estimate_tokens(message: Any) -> int:
     return math.ceil(len(_text_of(message)) / CHARS_PER_TOKEN)
 
 
-def context_tokens(messages: Any) -> int:
-    """当前上下文占了多少 token。messages 是 pi 的消息数组(session.adapter_state)。"""
-    if not isinstance(messages, list) or not messages:
-        return 0
-    anchor = -1
+def _anchor_index(messages: list) -> int:
+    """最近一条带 usage 的 assistant 消息 —— **供应商上次实际看到多少**的唯一凭据。
+
+    它之所以重要,不只是因为准:锚点之前的那一段是供应商**量**出来的,而我们这边只能估。
+    两者不是同一把尺,混着用会出事(见 context_breakdown)。
+    """
     for index in range(len(messages) - 1, -1, -1):
         message = messages[index]
         if not isinstance(message, dict) or message.get("role") != "assistant":
             continue
         usage = message.get("usage")
         if isinstance(usage, dict) and (usage.get("input") or usage.get("output")):
-            anchor = index
-            break
+            return index
+    return -1
+
+
+def context_tokens(messages: Any) -> int:
+    """当前上下文占了多少 token。messages 是 pi 的消息数组(session.adapter_state)。"""
+    if not isinstance(messages, list) or not messages:
+        return 0
+    anchor = _anchor_index(messages)
     if anchor < 0:
         return sum(estimate_tokens(message) for message in messages)
     usage = messages[anchor]["usage"]
@@ -107,8 +115,35 @@ def context_breakdown(
     """
     system = math.ceil(len(system_prompt) / CHARS_PER_TOKEN)
     used = context_tokens(messages)
-    # 会话那部分 = 总占用减去随每次请求重发的固定开销。锚点用量里已经含了它们。
-    conversation = max(0, used - system - tool_tokens)
+    rows = messages if isinstance(messages, list) else []
+    spoken = sum(estimate_tokens(message) for message in rows)
+    fixed = system + tool_tokens
+
+    if not rows or _anchor_index(rows) < 0:
+        # 没有锚点时 used 本来就只是消息的估算,不含固定开销 —— 直接用它,别再减一遍。
+        # (一条都还没说时也走这里:那时该显示的正是"你还没开口就用掉了这么多"。)
+        conversation = used
+    else:
+        # 会话那部分 = 总占用减去随每次请求重发的固定开销。锚点用量里已经含了它们。
+        derived = used - fixed
+        if derived >= spoken:
+            conversation = derived
+        else:
+            # **减出来的数不可信了。** 总量是供应商**量**的,而 system/tools 是我们按
+            # chars/3.5 **估**的 —— JSON schema 那种密集文本会高估不少。估多了,减出来就是
+            # 负数,然后被 max(0, …) 悄悄夹成 0:占用条无论聊多久都停在同一个数字上。
+            # (在真实数据上量过:39 个会话里 27 个的「消息」分项因此恒为 0。)
+            # 这时对话改用直接估算,固定开销按剩下的空间等比收 —— 总量仍以供应商说的为准,
+            # 而分项之间的**相对大小**才是这条水位要回答的问题(该清对话还是该减工具)。
+            conversation = min(spoken, used)
+            room = max(0, used - conversation)
+            scale = room / fixed if fixed else 0.0
+            system = int(system * scale)
+            # 余数全给工具那一项,好让三项之和**正好**等于供应商给的总量 ——
+            # 两次 int() 各丢掉不到 1 个 token,但占用条上会显示成比实际少 1,
+            # 而这条水位存在的意义之一就是"和账单上的数对得上"。
+            tool_tokens = max(0, room - system)
+
     occupied = min(window, system + tool_tokens + conversation)
     return {
         "window": window,

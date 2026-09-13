@@ -94,3 +94,45 @@ def test_default_chat_model_uses_its_resolved_profile_catalog_window(monkeypatch
     assert context is not None
     assert context["window"] == 1_048_576
     assert context["used"] == 0
+
+
+def test_对话不为空时_消息那一项就不能是零() -> None:
+    """这条水位最核心的一件事:**聊得越多,条子越长**。
+
+    此前它做不到。总量是供应商**量**的(锚点 usage),而 system/tools 是我们按 chars/3.5
+    **估**的 —— JSON schema 那种密集文本会高估不少。估多了,`used - system - tools` 就是
+    负数,再被 max(0, …) 夹成 0:「消息」恒为 0,占用条无论聊多久都停在同一个数字。
+    在真实数据上量过:39 个会话里 27 个中招。
+    """
+    messages = [
+        {"role": "user", "content": "问题" * 300},
+        _assistant("回答" * 300, input=9000, output=400),
+    ]
+    # 固定开销估成 20000,而供应商量到的整条 prompt 才 9400 —— 典型的高估。
+    parts = context_breakdown(messages, system_prompt="系统" * 500, tool_tokens=20000, window=32000)
+    by_kind = {part["kind"]: part["tokens"] for part in parts["parts"]}
+    assert by_kind["messages"] > 0, "聊了两轮,消息那一项却是 0"
+    # 总量仍以供应商说的为准,而且分项之和正好等于它。
+    assert parts["used"] == 9400
+    assert by_kind["messages"] + by_kind["tools"] + by_kind["system"] == 9400
+    # 工具仍然是大头 —— 这条水位要回答的正是"该清对话还是该减工具"。
+    assert by_kind["tools"] > by_kind["messages"]
+
+
+def test_估得准的时候照旧按减法来() -> None:
+    """高估时才走兜底。估算靠谱时,减法比直接估更准,不该被替掉。"""
+    messages = [{"role": "user", "content": "hi"}, _assistant("ok", input=12000, output=200)]
+    parts = context_breakdown(messages, system_prompt="", tool_tokens=9000, window=32000)
+    by_kind = {part["kind"]: part["tokens"] for part in parts["parts"]}
+    assert by_kind["tools"] == 9000, "估算没问题时不该改动固定开销"
+    assert by_kind["messages"] == 12200 - 9000
+
+
+def test_还没有锚点时_对话就是消息本身() -> None:
+    """一次都还没成功跑过(或供应商不报 usage)时,总量只是消息的估算,不含固定开销 ——
+    这时再减一遍就会把对话减没。"""
+    messages = [{"role": "user", "content": "很长的一段话" * 200}]
+    parts = context_breakdown(messages, system_prompt="系统", tool_tokens=9000, window=32000)
+    by_kind = {part["kind"]: part["tokens"] for part in parts["parts"]}
+    assert by_kind["messages"] == context_tokens(messages) > 0
+    assert by_kind["tools"] == 9000

@@ -264,7 +264,16 @@ export async function compact(
     // 不静默 —— info 里带上空摘要,界面照样显示"已压缩",只是没有交接说明。
     summary = "";
   }
-  const next = summary ? [summaryMessage(summary), ...messages.slice(cut)] : [...messages.slice(cut)];
+  // 保留下来的那几条还带着**压缩之前**的 usage —— 那是供应商对一个**已经不存在的上下文**
+  // 的计数(它含着刚被丢掉的那些消息)。锚点规则的前提是「锚点之前的内容没动过」,而压缩恰恰
+  // 动了前缀,所以这些 usage 不再是合法的锚:留着它们,水位在压缩之后会一直报压缩前的数字。
+  //
+  // 实测:一段 26002 token 的会话压掉 8 条消息之后,水位仍然显示 26002 —— 用户点完
+  // 「立即整理」看到占用条纹丝不动,以为整理没生效。清掉之后退回估算,下一轮真实请求会
+  // 重新锚定。usage 没有别的消费者:本轮计费走 collectUsage(messages, turnStartIndex),
+  // 只从这一轮的起点往后数,而压缩发生在轮与轮之间。
+  const kept = messages.slice(cut).map(({ usage: _stale, ...rest }) => rest);
+  const next = summary ? [summaryMessage(summary), ...kept] : [...kept];
   const tokensAfter = estimateAll(next);
   // **压完反而更大就不算压缩**。早期部分很短时,摘要加上它的说明抬头可能比被换掉的原文还长
   // (手动点「立即整理」在短对话上就会撞到这种情况)。这时保留原文并如实报告"没压" ——

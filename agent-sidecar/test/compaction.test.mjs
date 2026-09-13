@@ -212,3 +212,46 @@ test("压完反而更大就不算压缩 —— 短对话上手动点「立即整
   assert.equal(result.info, null, "变大就该报「没压」");
   assert.deepEqual(result.messages, messages, "原文必须原样保留");
 });
+
+test("压缩之后,保留下来的消息不再当锚点 —— 否则水位停在压缩前的数字", async () => {
+  // 锚点规则的前提是「锚点之前的内容没动过」。压缩恰恰动了前缀:它把早期那一段换成一句摘要。
+  // 保留下来的助手消息还带着压缩**之前**的 usage,而那个数字里含着刚被丢掉的那些消息 ——
+  // 留着它当锚,水位在压缩之后会一直报压缩前的数字。
+  //
+  // 真机撞到过:26002 token 的会话压掉 8 条之后仍然显示 26002,用户点完「立即整理」
+  // 看到占用条纹丝不动,以为整理没生效。
+  const messages = [
+    user("第一批资料".repeat(400)),
+    assistant("收到", { input: 1000, output: 20 }),
+    user("第二批资料".repeat(400)),
+    assistant("收到", { input: 2000, output: 20 }),
+    user("第三批资料".repeat(400)),
+    assistant("收到", { input: 26000, output: 20 }),
+    user("第四批资料".repeat(400)),
+    assistant("收到", { input: 26002, output: 20 }),
+  ];
+  const before = contextTokens(messages);
+  const result = await compact(messages, { contextWindow: 8000, force: true, summarize: async () => "交接说明" });
+  assert.ok(result.info, "应该真的压缩了");
+
+  const stale = result.messages.filter((m) => m.usage);
+  assert.deepEqual(stale, [], "保留下来的消息还带着压缩前的 usage");
+  assert.ok(
+    contextTokens(result.messages) < before,
+    `压缩后水位应当下降,实际 ${before} → ${contextTokens(result.messages)}`,
+  );
+});
+
+test("压缩不改动消息本身的内容和角色", () => {
+  // 清掉的只该是 usage 这一个字段 —— 顺手改掉正文或角色的话,下一轮请求发出去的就不是原话了。
+  const kept = { role: "user", content: "保留的原话", extra: "别的字段" };
+  return compact([user("早".repeat(400)), assistant("回", { input: 9000, output: 9 }), kept], {
+    contextWindow: 4000,
+    force: true,
+    summarize: async () => "摘要",
+  }).then((result) => {
+    const found = result.messages.find((m) => m.content === "保留的原话");
+    assert.ok(found, "保留的那条应该还在");
+    assert.equal(found.extra, "别的字段", "除了 usage,别的字段不该被动");
+  });
+});
