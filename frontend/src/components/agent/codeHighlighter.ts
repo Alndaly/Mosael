@@ -55,6 +55,17 @@ function normalize(language: string): string | null {
   return resolved in LANGS ? resolved : null;
 }
 
+/**
+ * `shell` 和 `bash` 是同一种语言 —— 这张别名表就在上面,别处不该再抄一份。
+ *
+ * 笔记的代码块语言选择器要用它:markdown 里写 ```shell 存下来就是 `shell`,而选择器的选项值
+ * 是 `bash`,对不上就会在列表末尾再补一个「自定义」的 shell —— 同一种语言出现两遍。
+ * 认不出的语言返回空串(那时它确实不在列表里,补一条自定义才是对的)。
+ */
+export function canonicalLanguage(language: string): string {
+  return normalize(language) ?? "";
+}
+
 type Highlighter = {
   codeToTokens: (code: string, options: Record<string, unknown>) => HighlightResult;
   getLoadedLanguages: () => string[];

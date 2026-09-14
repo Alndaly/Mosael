@@ -6,7 +6,7 @@ import React from "react";
 import { Bold, Italic, List, ListOrdered, Quote, Undo2, Redo2, AtSign, ImagePlus, Table2, ListTodo, Code2, Link, Minus, Strikethrough, Plus, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { useNoteStrings } from "./strings";
-import { noteExtensions } from "./editorExtensions";
+import { noteExtensions, notePlaceholder } from "./editorExtensions";
 import { RefSuggestion } from "@/components/app/refSuggestion";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
 import { listNotes, noteHref, type Note } from "@/api/domains/notes";
@@ -39,8 +39,9 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
   const fileInput = React.useRef<HTMLInputElement>(null);
   const menu = useSuggestionMenu<Note>({ emptyHint: () => s.noResults });
   const upload = React.useRef<(files: File[], at?: number) => void>(() => {});
+  const markdownPaste = React.useRef<(text: string) => void>(() => {});
   const editor = useEditor({
-    extensions: [...noteExtensions(!editable, locale), Placeholder.configure({ placeholder: s.placeholder }), RefSuggestion.configure({ suggestion: {
+    extensions: [...noteExtensions(!editable, locale), Placeholder.configure({ placeholder: notePlaceholder(s.placeholder) }), RefSuggestion.configure({ suggestion: {
       char: "@", allowedPrefixes: null,
       items: async ({ query }) => { try { return (await listNotes(workspaceId, query)).filter(n => n.id !== noteId).slice(0, 12); } catch { return []; } },
       command: ({ editor: instance, range, props }) => {
@@ -51,10 +52,19 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
     } })],
     content: markdown, contentType: "markdown", editable,
     editorProps: { attributes: { class: "note-prose outline-none", "aria-label": s.content },
-      handlePaste: (_view, event) => {
+      handlePaste: (view, event) => {
         const files = Array.from(event.clipboardData?.files || []).filter(f => f.type.startsWith("image/"));
-        if (!files.length) return false;
-        event.preventDefault(); upload.current(files); return true;
+        if (files.length) { event.preventDefault(); upload.current(files); return true; }
+        // 这篇文档本来就是 Markdown 存的(有 Markdown 视图、保存的也是 Markdown),所以粘进来的
+        // 纯文本也按 Markdown 读 —— 此前 `![](地址)` 粘进来是一串字面文字,再被自动链接把地址
+        // 包成链接,存下来就成了 `!\[\]([地址](地址))`。带 HTML 的粘贴不动(那条路已经对了),
+        // 代码块里也不动(那里粘什么就是什么)。
+        const text = event.clipboardData?.getData("text/plain") || "";
+        if (!text.trim() || event.clipboardData?.getData("text/html")) return false;
+        if (view.state.selection.$from.parent.type.spec.code) return false;
+        event.preventDefault();
+        markdownPaste.current(text);
+        return true;
       },
       handleDrop: (view, event, _slice, moved) => {
         const files = Array.from(event.dataTransfer?.files || []).filter(f => f.type.startsWith("image/"));
@@ -80,6 +90,7 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
   // Compare against the last emitted value: parent autosave must not rebuild the document or move the caret.
   React.useEffect(() => { if (editor && editor.getMarkdown() !== markdown) editor.commands.setContent(markdown, { contentType: "markdown", emitUpdate: false }); }, [editor, markdown]);
   React.useEffect(() => { editor?.setEditable(editable, false); }, [editor, editable]);
+  markdownPaste.current = (text) => { editor?.chain().focus().insertContent(text, { contentType: "markdown" }).run(); };
   upload.current = async (files, at) => {
     if (!editor || !editable || uploading) return;
     setUploading(true);

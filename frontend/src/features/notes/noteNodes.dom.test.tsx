@@ -1,7 +1,9 @@
 /** @vitest-environment jsdom */
-import { Editor } from "@tiptap/react";
+import React from "react";
+import { Editor, EditorContent } from "@tiptap/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { noteExtensions } from "./editorExtensions";
 const editors: Editor[] = [];
 afterEach(() => {
@@ -9,19 +11,26 @@ afterEach(() => {
   document.body.replaceChildren();
   vi.restoreAllMocks();
 });
+/**
+ * 代码块的节点视图是 React 的(要用仓库自己的下拉),而 React 节点视图只有挂在 React 根上
+ * 才会渲染 —— 裸 `new Editor({element})` 没有那个根,节点视图整块不出现。所以这里走
+ * `EditorContent`,和应用里一样。
+ */
 function setup(markdown: string, editable = true) {
-  const element = document.createElement("div");
-  document.body.append(element);
   const editor = new Editor({
-    element,
     extensions: noteExtensions(!editable),
     content: markdown,
     contentType: "markdown",
     editable,
   });
   editors.push(editor);
-  return { editor, element };
+  const { container } = render(React.createElement(EditorContent, { editor }));
+  return { editor, element: container };
 }
+
+/** React 节点视图是下一轮 React 渲染才填进去的,碰它之前得等它挂上。 */
+const codeMounted = (element: HTMLElement) =>
+  waitFor(() => expect(element.querySelector(".note-code-block")).not.toBeNull());
 it("edits an image beside the selection, preserves its title and supports undo and Markdown reload", () => {
   const { editor, element } = setup(
     '![Before](https://example.com/old.png "Caption")\n\nAfter',
@@ -66,6 +75,7 @@ it("highlights editable code, changes language without changing text, and copies
   const { editor, element } = setup(
     '```js\nconst greeting = "你好";\nconsole.log(greeting);\n```',
   );
+  await codeMounted(element);
   await waitFor(
     () =>
       expect(
@@ -79,10 +89,10 @@ it("highlights editable code, changes language without changing text, and copies
   expect(
     element.querySelector(".note-code-token")!.getAttribute("style"),
   ).toMatch(/--note-code-light:\s*#[0-9A-Fa-f]+/);
-  const language = element.querySelector("select")!;
-  expect(language.value).toBe("js");
-  language.value = "typescript";
-  language.dispatchEvent(new Event("change", { bubbles: true }));
+  const language = element.querySelector(".note-code-language") as HTMLElement;
+  expect(language.textContent).toBe("JavaScript");
+  await userEvent.click(language);
+  await userEvent.click(await screen.findByRole("option", { name: "TypeScript" }));
   expect(editor.getMarkdown()).toContain("```typescript");
   const copy = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", {
@@ -102,26 +112,29 @@ it("highlights editable code, changes language without changing text, and copies
   await waitFor(() =>
     expect(element.querySelector("pre")!.textContent).toContain("// Updated"),
   );
-  expect(editor.getHTML()).not.toContain("<select");
   expect(editor.getMarkdown()).not.toContain("已复制");
   const reopened = setup(editor.getMarkdown(), false);
-  expect(reopened.element.querySelector("select")!.hidden).toBe(true);
+  await codeMounted(reopened.element);
+  // 只读时不给选择器,只给一行标签。
+  expect(reopened.element.querySelector(".note-code-language")).toBeNull();
   expect(
     reopened.element.querySelector(".note-code-language-label")!.textContent,
   ).toBe("TypeScript");
   expect(reopened.editor.getJSON()).toEqual(editor.getJSON());
 });
-it("preserves unknown code languages as plain text without breaking editing", () => {
+it("preserves unknown code languages as plain text without breaking editing", async () => {
   const { editor, element } = setup("```custom-lang\n<not-an-element>\n```");
-  expect(element.querySelector("select")!.value).toBe("custom-lang");
+  await codeMounted(element);
+  expect((element.querySelector(".note-code-language") as HTMLElement).textContent).toBe("custom-lang");
   expect(element.querySelector("pre")!.textContent).toBe("<not-an-element>");
   expect(editor.getMarkdown()).toContain("```custom-lang");
 });
 
-it("moves the model selection from an image into code before immediate typing", () => {
+it("moves the model selection from an image into code before immediate typing", async () => {
   const { editor, element } = setup(
     "![image](https://example.com/a.png)\n\n```js\nconst x = 1;\n```",
   );
+  await codeMounted(element);
   (element.querySelector("img") as HTMLElement).click();
   expect(editor.state.selection.toJSON().type).toBe("node");
   vi.spyOn(editor.view, "posAtCoords").mockReturnValue({ pos: 2, inside: 1 });

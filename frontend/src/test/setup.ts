@@ -44,5 +44,14 @@ if (typeof document !== "undefined") {
         dispatchEvent: () => false,
       }) as MediaQueryList;
   }
+
+  // radix 的下拉走 Pointer Events 和 scrollIntoView,jsdom 两样都没有 —— 缺了它们,
+  // 点一下触发器就在 radix 内部炸,报的是库里的栈,看不出是环境缺口。
+  if (!Element.prototype.hasPointerCapture) {
+    Element.prototype.hasPointerCapture = () => false;
+    Element.prototype.setPointerCapture = () => {};
+    Element.prototype.releasePointerCapture = () => {};
+  }
+  Element.prototype.scrollIntoView ??= () => {};
 }
 export {};

@@ -51,6 +51,10 @@
 .note-prose a.note-reference { display:inline-block; max-width:100%; vertical-align:bottom; border-radius:5px; padding:0 6px; background:var(--secondary); color:var(--primary); text-decoration:none; font-size:.92em; }
 .note-prose { min-height:300px; font-size:var(--text-ui-md); line-height:1.85; overflow-wrap:anywhere; }
 .note-prose p { margin:0 0 1em; }
+/* 列表项里的段落不该背着整段的下边距 —— 三条 `- das` 之间会拉开一整行。 */
+.note-prose li > p { margin:0; }
+.note-prose li > p + p { margin-top:.6em; }
+.note-prose li + li { margin-top:.25em; }
 .note-prose h1,.note-prose h2,.note-prose h3,.note-prose h4,.note-prose h5,.note-prose h6 { font-weight:650; line-height:1.4; margin:1.3em 0 .6em; }
 .note-prose h1 { font-size:26px; }.note-prose h2 { font-size:21px; }.note-prose h3 { font-size:var(--text-ui-lg); }
 .note-prose ul,.note-prose ol { padding-left:1.5em; margin-bottom:1em; }.note-prose ul { list-style:disc; }.note-prose ol { list-style:decimal; }
@@ -153,14 +157,15 @@
 .note-image-unavailable { padding:32px 16px; background:var(--workspace-subtle); border-radius:8px; color:var(--muted-foreground); text-align:center; cursor:pointer; }
 .note-code-block { margin:22px 0; min-width:0; overflow:hidden; border-radius:10px; background:color-mix(in srgb,var(--foreground) 3%,var(--background)); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--foreground) 5%,transparent); }
 .note-code-header { display:flex; min-height:40px; align-items:center; gap:8px; padding:5px 10px 5px 14px; color:var(--muted-foreground); font-family:var(--font-sans); font-size:var(--text-ui-xs); line-height:1.4; }
-.note-code-language { min-width:0; max-width:50%; border:0; border-radius:5px; padding:5px 20px 5px 6px; background:transparent; color:inherit; font:inherit; cursor:pointer; }
-.note-code-language:hover { background:var(--secondary); color:var(--foreground); }
-.note-code-language option { background:var(--background); color:var(--foreground); }
+/* 语言选择器用的是仓库自己的 Select,底色和边框由 FIELD_TRIGGER_CLASS 给 —— 这里只把它收窄、
+   压矮到能塞进这条 40px 的头里(默认是整行宽、40px 高的表单控件)。 */
+.note-code-language { width:auto; min-width:0; max-width:50%; height:28px; padding:0 8px; gap:6px; font-size:var(--text-ui-xs); color:var(--muted-foreground); cursor:pointer; }
+.note-code-language:hover { color:var(--foreground); }
 .note-code-status { margin-left:auto; font-size:var(--text-ui-2xs); text-align:right; }
 .note-node-button { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:28px; height:28px; border:0; border-radius:6px; padding:0; color:var(--muted-foreground); background:transparent; }
 .note-node-button svg { width:15px; height:15px; }
 .note-node-button:hover { background:var(--secondary); color:var(--foreground); }
-.note-node-button:focus-visible,.note-code-language:focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
+.note-node-button:focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
 .note-prose .note-code-block pre { margin:0; padding:4px 20px 18px; border-radius:0; background:transparent; overflow-x:auto; white-space:pre; overflow-wrap:normal; tab-size:2; font-family:var(--font-mono); font-size:var(--text-ui-sm); line-height:1.75; }
 .note-prose .note-code-block code { padding:0; font:inherit; background:transparent; }
 .note-code-token { color:var(--note-code-light,inherit); }

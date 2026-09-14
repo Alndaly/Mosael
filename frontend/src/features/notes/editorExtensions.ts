@@ -39,6 +39,17 @@ export const NoteReference = Node.create({
   renderMarkdown: node => `[@${String(node.attrs?.label || "").replace(/[\\[\]]/g, "\\$&")}](${node.attrs?.href})`,
 });
 
+/**
+ * 占位符只属于**空段落**。
+ *
+ * `editor.isEmpty` 把「文档里只有一个空代码块」也算作空文档,于是占位符被挂到代码块上,
+ * 它的 `::before` 浮在代码块头部那一行 —— 正好压住语言选择器,两段文字叠在一起。
+ */
+export const notePlaceholder =
+  (text: string) =>
+  ({ node }: { node: { type: { name: string } } }) =>
+    node.type.name === "paragraph" ? text : "";
+
 export function noteExtensions(readonly = false, locale = "zh-CN") {
   return [StarterKit.configure({ codeBlock: false, link: { openOnClick: readonly } }), NoteReference, createNoteImage(locale), createNoteCodeBlock(locale),
     TableKit.configure({ table: false }), NoteTable, TaskList, TaskItem.configure({ nested: true }), Markdown];

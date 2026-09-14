@@ -1,8 +1,13 @@
+import React from "react";
 import CodeBlock from "@tiptap/extension-code-block";
+import { NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from "@tiptap/react";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
-import { codeHighlighter } from "@/components/agent/codeHighlighter";
-import { nodeButton, nodeIcon, nodeLabels } from "./noteNodeUI";
+import { Check, Copy } from "lucide-react";
+import { canonicalLanguage, codeHighlighter } from "@/components/agent/codeHighlighter";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { NONE, optionalValue } from "@/components/ui/selectSentinel";
+import { nodeLabels } from "./noteNodeUI";
 
 type Highlight = NonNullable<ReturnType<typeof codeHighlighter.highlight>>;
 const highlightKey = new PluginKey<DecorationSet>("note-code-highlight");
@@ -140,125 +145,84 @@ export function createNoteCodeBlock(locale: string) {
       return [...(this.parent?.() || []), syntaxHighlighting()];
     },
     addNodeView() {
-      return ({ node: initial, editor, getPos }) => {
-        let node = initial,
-          destroyed = false;
-        let copiedTimer: ReturnType<typeof setTimeout>;
-        const dom = document.createElement("div");
-        dom.className = "note-code-block";
-        const header = document.createElement("div");
-        header.className = "note-code-header";
-        header.contentEditable = "false";
-        const language = document.createElement("select");
-        language.className = "note-code-language";
-        language.setAttribute("aria-label", labels.language);
-        for (const [value, label] of [["", labels.plain], ...LANGUAGES]) {
-          language.add(new Option(label, value));
-        }
-        const label = document.createElement("span");
-        label.className = "note-code-language-label";
-        const status = document.createElement("span");
-        status.className = "note-code-status";
-        status.setAttribute("role", "status");
-        const copy = nodeButton(labels.copy, "copy");
-        const pre = document.createElement("pre"),
-          contentDOM = document.createElement("code");
-        pre.spellcheck = false;
-        pre.append(contentDOM);
-        header.append(language, label, status, copy);
-        dom.append(header, pre);
-        function render() {
-          const value = String(node.attrs.language || "");
-          for (const option of Array.from(language.options))
-            if (option.dataset.custom) option.remove();
-          if (
-            value &&
-            !Array.from(language.options).some(
-              (option) => option.value === value,
-            )
-          ) {
-            const custom = new Option(value, value);
-            custom.dataset.custom = "true";
-            language.add(custom);
-          }
-          language.value = value;
-          language.hidden = !editor.isEditable;
-          label.hidden = editor.isEditable;
-          label.textContent = language.selectedOptions[0]?.text || labels.plain;
-          const className = value ? `language-${value}` : "";
-          if (contentDOM.className !== className)
-            contentDOM.className = className;
-        }
-        // Commit the pointer position before the next key event. A selected image can
-        // otherwise remain the model selection until the browser's selectionchange arrives.
-        pre.onmousedown = (event) => {
-          if (
-            !editor.isEditable ||
-            event.button !== 0 ||
-            event.shiftKey ||
-            event.detail > 1
-          )
-            return;
-          const hit = editor.view.posAtCoords({
-            left: event.clientX,
-            top: event.clientY,
-          });
-          const pos = getPos();
-          if (
-            hit &&
-            typeof pos === "number" &&
-            hit.pos > pos &&
-            hit.pos < pos + node.nodeSize
-          ) {
-            editor.commands.setTextSelection(hit.pos);
-          }
-        };
-        language.onchange = () => {
-          const pos = getPos();
-          if (!editor.isEditable || typeof pos !== "number") return;
-          editor.view.dispatch(
-            editor.state.tr.setNodeMarkup(pos, undefined, {
-              ...node.attrs,
-              language: language.value || null,
-            }),
-          );
-        };
-        copy.onclick = async () => {
-          try {
-            await navigator.clipboard.writeText(node.textContent);
-            if (destroyed) return;
-            status.textContent = labels.copied;
-            copy.replaceChildren(nodeIcon("check"));
-            clearTimeout(copiedTimer);
-            copiedTimer = setTimeout(() => {
-              status.textContent = "";
-              copy.replaceChildren(nodeIcon("copy"));
-            }, 1800);
-          } catch {
-            if (!destroyed) status.textContent = labels.failed;
-          }
-        };
-        render();
-        return {
-          dom,
-          contentDOM,
-          update(next) {
-            if (next.type !== node.type) return false;
-            node = next;
-            render();
-            return true;
-          },
-          stopEvent: (event) =>
-            header.contains(event.target as globalThis.Node),
-          ignoreMutation: (mutation) =>
-            mutation.type !== "selection" &&
-            !contentDOM.contains(mutation.target),
-          destroy() {
-            destroyed = true;
-            clearTimeout(copiedTimer);
-          },
-        };
-      };
+      return ReactNodeViewRenderer(CodeBlockView(labels));
     },
   });
+}
+
+/**
+ * 代码块的头部:语言选择器、复制按钮,和 ProseMirror 自己管的那块代码正文。
+ *
+ * 此前这一块是手写 DOM,语言用的是原生 `<select>` —— 展开是系统菜单,和应用里别处的下拉长得
+ * 不是一回事,收起时又没有背景,看不出是个能点的控件。换成仓库自己的 Select。
+ */
+function CodeBlockView(labels: ReturnType<typeof nodeLabels>) {
+  return function View({ node, editor, getPos, updateAttributes }: NodeViewProps) {
+    const [status, setStatus] = React.useState("");
+    const timer = React.useRef<ReturnType<typeof setTimeout>>(undefined);
+    React.useEffect(() => () => clearTimeout(timer.current), []);
+
+    const stored = String(node.attrs.language || "");
+    // ```shell 存下来就是 shell,而选项值是 bash —— 同一种语言,别在列表末尾再补一个。
+    const value = canonicalLanguage(stored) || stored;
+    const known = LANGUAGES.some(([id]) => id === value);
+    const label = LANGUAGES.find(([id]) => id === value)?.[1] || value || labels.plain;
+
+    const copy = async () => {
+      try {
+        await navigator.clipboard.writeText(node.textContent);
+        setStatus(labels.copied);
+      } catch {
+        setStatus(labels.failed);
+      }
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => setStatus(""), 1800);
+    };
+
+    return (
+      <NodeViewWrapper className="note-code-block">
+        <div className="note-code-header" contentEditable={false}>
+          {editor.isEditable ? (
+            <Select value={value || NONE} onValueChange={(next) => updateAttributes({ language: optionalValue(next) })}>
+              <SelectTrigger className="note-code-language" aria-label={labels.language}>
+                <SelectValue placeholder={labels.plain} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE}>{labels.plain}</SelectItem>
+                {!known && value && <SelectItem value={value}>{value}</SelectItem>}
+                {LANGUAGES.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          ) : (
+            <span className="note-code-language-label">{label}</span>
+          )}
+          <span className="note-code-status" role="status">{status}</span>
+          <button
+            type="button"
+            className="note-node-button"
+            title={labels.copy}
+            aria-label={labels.copy}
+            onClick={() => void copy()}
+          >
+            {status === labels.copied ? <Check size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}
+          </button>
+        </div>
+        <pre
+          spellCheck={false}
+          // 先把光标落到点下去的位置,再等下一个按键。否则被选中的图片会一直是模型里的选区,
+          // 直到浏览器那边的 selectionchange 姗姗来迟。
+          onMouseDown={(event) => {
+            if (!editor.isEditable || event.button !== 0 || event.shiftKey || event.detail > 1) return;
+            const hit = editor.view.posAtCoords({ left: event.clientX, top: event.clientY });
+            const pos = getPos();
+            if (hit && typeof pos === "number" && hit.pos > pos && hit.pos < pos + node.nodeSize) {
+              editor.commands.setTextSelection(hit.pos);
+            }
+          }}
+        >
+          <NodeViewContent<"code"> as="code" className={value ? `language-${value}` : ""} />
+        </pre>
+      </NodeViewWrapper>
+    );
+  };
 }

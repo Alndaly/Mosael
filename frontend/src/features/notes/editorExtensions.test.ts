@@ -1,7 +1,8 @@
 /** @vitest-environment jsdom */
 import { Editor } from "@tiptap/react";
+import Placeholder from "@tiptap/extension-placeholder";
 import { describe, expect, it } from "vitest";
-import { noteExtensions, noteImageUrl } from "./editorExtensions";
+import { noteExtensions, noteImageUrl, notePlaceholder } from "./editorExtensions";
 
 describe("note Markdown persistence", () => {
   it("retains images, tables, task state, code, links and atomic references through editing and reload", () => {
@@ -118,5 +119,30 @@ describe("表格单元格里的竖线", () => {
     // 这才是这条最要命的地方:此前一遍丢转义、两遍真的裂成两列,反复保存会一路劣化。
     const once = roundTrip("| a | b |\n| --- | --- |\n| x \\| y | 2 |");
     expect(roundTrip(once).trim()).toBe(once.trim());
+  });
+});
+
+describe("占位符落在哪个节点上", () => {
+  const placeholders = (markdown: string) => {
+    const editor = new Editor({
+      extensions: [...noteExtensions(), Placeholder.configure({ placeholder: notePlaceholder("开始写作…") })],
+      content: markdown,
+      contentType: "markdown",
+    });
+    const found = Array.from(editor.view.dom.querySelectorAll("[data-placeholder]"), (el) =>
+      el.getAttribute("data-placeholder"),
+    ).filter(Boolean);
+    editor.destroy();
+    return found;
+  };
+
+  it("空文档上有一条", () => {
+    expect(placeholders("")).toEqual(["开始写作…"]);
+  });
+
+  it("只有一个空代码块时,一条都不该有", () => {
+    // editor.isEmpty 把这种文档也算作空,于是占位符挂到了代码块上,它的 ::before 浮在代码块
+    // 头部那一行,和语言选择器叠在一起 —— 用户截图里看到的就是这个。
+    expect(placeholders("```shell\n```")).toEqual([]);
   });
 });
