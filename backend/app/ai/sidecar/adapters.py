@@ -37,11 +37,18 @@ class AdapterError(RuntimeError):
     自己已经改过那些东西,于是会再做一遍。
 
     拿不到就是 None(sidecar 整个进程没了、协议出错),那时候确实无从补起。
+
+    `human` 是**这次失败能对用户说的那句话**,有就用它当气泡正文。原因往往就在手边(超过 600 秒
+    没返回、模型一个字都没回),而气泡上却是一句「请稍后重试」—— 对一次超时来说,那还是**错的
+    建议**:同一个慢模型再跑一遍仍然会超时。拿不到人话时(比如只有 sidecar 的 stderr)才退回常量。
     """
 
-    def __init__(self, message: str, adapter_state: object | None = None) -> None:
+    def __init__(
+        self, message: str, adapter_state: object | None = None, *, human: str = ""
+    ) -> None:
         super().__init__(message)
         self.adapter_state = adapter_state
+        self.human = human
 
 
 @dataclass(frozen=True)
@@ -424,8 +431,9 @@ def _run_pi(
                     del _LIVE[session_id]
         stderr_tail = _tail(child.finish())
     if child.timed_out:
+        timed_out = f"智能体运行超过 {TURN_TIMEOUT_SECONDS} 秒未返回,已终止。"
         raise AdapterError(
-            f"智能体运行超过 {TURN_TIMEOUT_SECONDS} 秒未返回,已终止。" + (f"\n{stderr_tail}" if stderr_tail else "")
+            timed_out + (f"\n{stderr_tail}" if stderr_tail else ""), human=timed_out
         )
     if result_text is None:
         raise AdapterError(stderr_tail or f"pi sidecar exited with code {process.returncode}")
@@ -437,7 +445,8 @@ def _run_pi(
         # A turn that finished with neither text nor tool calls means the model call itself failed
         # (unreachable base_url, wrong model name, bad key) and pi swallowed it. Never let that
         # surface as an empty chat bubble — the user has to be told why nothing came back.
-        raise AdapterError(stderr_tail or f"模型没有返回任何内容。{_PROVIDER_HINT}")
+        nothing_back = f"模型没有返回任何内容。{_PROVIDER_HINT}"
+        raise AdapterError(stderr_tail or nothing_back, human="" if stderr_tail else nothing_back)
     return TurnResult(
         text=result_text.strip(),
         adapter_state=result_state,

@@ -232,6 +232,60 @@ def test_turn_error_becomes_assistant_error_message(monkeypatch) -> None:
     assert client.get(f"/api/agent/sessions/{session['id']}").json()["status"] == "idle"
 
 
+def test_失败气泡说得出原因时就别说套话(monkeypatch) -> None:
+    """原因往往就在手边,而气泡上是一句常量 —— 对一次超时来说那还是**错的建议**。
+
+    线上撞见的:本地模型跑一个多步任务 604 秒没回来,看门狗砍掉了它。`error` 里写着
+    「智能体运行超过 600 秒未返回,已终止。」,气泡上却是「请稍后重试」—— 同一个慢模型
+    再跑一遍仍然会超时,照着这句做只会再等十分钟。
+    """
+    timed_out = "智能体运行超过 600 秒未返回,已终止。"
+
+    def slow_run_turn(*args, **kwargs):
+        raise adapters.AdapterError(f"{timed_out}\n[sidecar] boot log", human=timed_out)
+
+    monkeypatch.setattr(host, "run_turn", slow_run_turn)
+    client = fresh_client()
+    _configured(client)
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
+    client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "hi"})
+
+    deadline = time.time() + 10
+    messages = []
+    while time.time() < deadline:
+        messages = client.get(f"/api/agent/sessions/{session['id']}/messages").json()
+        if len(messages) >= 2:
+            break
+        time.sleep(0.1)
+    assert messages[1]["content"] == timed_out
+    # 诊断信息留在 error 里给展开看,不进气泡。
+    assert "[sidecar]" in messages[1]["error"]
+    assert "[sidecar]" not in messages[1]["content"]
+
+
+def test_只有一段日志时仍然退回那句常量(monkeypatch) -> None:
+    def crashed_run_turn(*args, **kwargs):
+        raise adapters.AdapterError("Traceback (most recent call last): ...")
+
+    monkeypatch.setattr(host, "run_turn", crashed_run_turn)
+    client = fresh_client()
+    _configured(client)
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    session = client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()
+    client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "hi"})
+
+    deadline = time.time() + 10
+    messages = []
+    while time.time() < deadline:
+        messages = client.get(f"/api/agent/sessions/{session['id']}/messages").json()
+        if len(messages) >= 2:
+            break
+        time.sleep(0.1)
+    assert messages[1]["content"] == "智能体执行失败，请稍后重试。"
+    assert "Traceback" in messages[1]["error"]
+
+
 def test_empty_turn_surfaces_error_not_blank_bubble(monkeypatch) -> None:
     """供应商配错时模型返回空 —— 必须报错,不能写一条空消息(界面上看着像什么都没发生)。"""
 

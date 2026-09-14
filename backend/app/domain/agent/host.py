@@ -995,7 +995,8 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
             assistant_message = AgentMessage(
                 session_id=session.id,
                 role="assistant",
-                content="智能体执行失败，请稍后重试。",
+                # 说得出原因就说原因 —— 「请稍后重试」对一次超时是错的建议。
+                content=getattr(exc, "human", "") or "智能体执行失败，请稍后重试。",
                 error=str(exc)[:800],
                 payload={"usage": usage},
             )
