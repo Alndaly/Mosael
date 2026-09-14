@@ -64,11 +64,17 @@ function Pick({
   onChange,
   options,
   label,
+  icon,
+  className,
 }: {
   value: string;
   onChange: (next: string) => void;
   options: { value: string; label: string }[];
   label?: string;
+  /** 值左侧的装饰图标。**交给 OptionPicker 画在触发器里面** —— 见那边的注释:
+   *  包在外面就成了两个盒子,hover 和焦点环各高亮一个,而且左右内边距对不齐。 */
+  icon?: React.ReactNode;
+  className?: string;
 }) {
   if (options.length === 0) return null;
   const control = (
@@ -79,9 +85,14 @@ function Pick({
       onChange={onChange}
       options={options}
       ariaLabel={label}
+      icon={icon}
       /* 带标签的排在设置弹层的两列网格里,要撑满自己那一格;不带标签的活在工具行里,
          **按内容取宽** —— 撑满会把箭头顶到行尾,名字和箭头之间空出一大片。 */
-      className={cn("h-8 min-w-0 gap-1 border-0 px-2 text-ui-xs shadow-none", label ? "w-full bg-control" : "w-auto max-w-full bg-transparent text-muted-foreground")}
+      className={cn(
+        "h-8 min-w-0 gap-1 border-0 px-2 text-ui-xs shadow-none",
+        label ? "w-full bg-control" : "w-auto max-w-full bg-transparent text-muted-foreground transition-colors hover:bg-secondary",
+        className,
+      )}
       contentClassName="max-w-[min(440px,calc(100vw-16px))]"
     />
   );
@@ -773,37 +784,38 @@ export function NodeComposer({
           ) : (
             <>
               {/* 上限而不是 flex-1:模型名短的时候这一格就该短。名字长了在上限处截断,
-                  而不是把「参数」推到行尾 —— 它和模型是一组,该挨着。 */}
-              <span className="flex min-w-0 max-w-[min(15rem,45%)] items-center gap-1 rounded-md transition-colors hover:bg-secondary">
-                <Sparkles size={12} className="shrink-0 text-muted-foreground" />
-                <Pick
-                  value={modelValue}
-                  onChange={(next) => {
-                    setPicked(next);
-                    const target = options.find((one) => `${one.provider}/${one.model}` === next) ?? null;
-                    setRatio(capabilityString(target, "default_aspect_ratio", aspectRatioOptions(target)[0] ?? ""));
-                    setResolution(capabilityString(target, "default_resolution", videoResolutionOptions(target)[0] ?? ""));
-                    setSize(capabilityString(target, "default_size", sizeOptions(target)[0] ?? ""));
-                    setDuration(defaultDuration(target));
-                    setAudio(capabilityBoolean(target, "default_generate_audio"));
-                    setBooleanParameters(Object.fromEntries(
-                      booleanParameterKeys(target)
-                        .filter((key) => key !== "generate_audio")
-                        .map((key) => [key, capabilityBoolean(target, `default_${key}`)]),
-                    ));
-                    setEnumParameters(Object.fromEntries(
-                      parameterChoiceEntries(target).map(([key, choices]) => [
-                        key,
-                        capabilityString(target, `default_${key}`, choices[0] ?? ""),
-                      ]),
-                    ));
-                    setCount(1);
-                    setMode("");
-                    touched.current = false;
-                  }}
-                  options={options.map((one) => ({ value: `${one.provider}/${one.model}`, label: one.model }))}
-                />
-              </span>
+                  而不是把「参数」推到行尾 —— 它和模型是一组,该挨着。
+                  上限落在触发器本身而不是外面包一层:那一层曾经同时担着 hover 底色,
+                  于是和触发器的焦点环成了两个大小不同的高亮框(见 OptionPicker 的 icon)。 */}
+              <Pick
+                className="max-w-[min(15rem,45%)]"
+                icon={<Sparkles size={12} className="shrink-0 text-muted-foreground" />}
+                value={modelValue}
+                onChange={(next) => {
+                  setPicked(next);
+                  const target = options.find((one) => `${one.provider}/${one.model}` === next) ?? null;
+                  setRatio(capabilityString(target, "default_aspect_ratio", aspectRatioOptions(target)[0] ?? ""));
+                  setResolution(capabilityString(target, "default_resolution", videoResolutionOptions(target)[0] ?? ""));
+                  setSize(capabilityString(target, "default_size", sizeOptions(target)[0] ?? ""));
+                  setDuration(defaultDuration(target));
+                  setAudio(capabilityBoolean(target, "default_generate_audio"));
+                  setBooleanParameters(Object.fromEntries(
+                    booleanParameterKeys(target)
+                      .filter((key) => key !== "generate_audio")
+                      .map((key) => [key, capabilityBoolean(target, `default_${key}`)]),
+                  ));
+                  setEnumParameters(Object.fromEntries(
+                    parameterChoiceEntries(target).map(([key, choices]) => [
+                      key,
+                      capabilityString(target, `default_${key}`, choices[0] ?? ""),
+                    ]),
+                  ));
+                  setCount(1);
+                  setMode("");
+                  touched.current = false;
+                }}
+                options={options.map((one) => ({ value: `${one.provider}/${one.model}`, label: one.model }))}
+              />
 
               <Popover>
                 <PopoverTrigger asChild>

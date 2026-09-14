@@ -36,6 +36,7 @@ export function OptionPicker({
   className,
   contentClassName,
   ariaLabel,
+  icon,
   disabled,
   placeholder,
   searchPlaceholder,
@@ -48,6 +49,15 @@ export function OptionPicker({
   options: PickerOption[];
   /** 触发器类名 —— 两个分支共用,长短列表在版面上必须**看不出区别**。 */
   className?: string;
+  /**
+   * 值左侧的一枚装饰图标(说明这一格选的是什么)。
+   *
+   * **画在触发器里面,不在外面包一层。** 包在外面的话就有了两个盒子:hover 底色画在外层,
+   * 而焦点环来自触发器 —— 于是同一个控件在悬停和聚焦时高亮出两个不同大小的方框,图标被环
+   * 排除在外;左边紧贴图标没有内边距,右边却留着触发器自己的 px,左右不对称。放进来之后
+   * 内边距、hover、焦点环共用同一个圆角框。
+   */
+  icon?: React.ReactNode;
   contentClassName?: string;
   ariaLabel?: string;
   /** 没得选的时候要说得出来,而不是给一个点开是空的下拉。 */
@@ -78,6 +88,7 @@ export function OptionPicker({
              `[&>span]:truncate` 才会同样落到实处,而不是只对其中一个分支生效。 */
           /* role=combobox 和 Select 的触发器一致 —— 换了实现不该换掉读屏里听到的东西。 */
           <button type="button" role="combobox" aria-label={ariaLabel} disabled={disabled} className={cn(FIELD_TRIGGER_CLASS, className)} {...rest}>
+            {icon}
             <span className={cn("min-w-0 truncate", !selected && "text-muted-foreground")} style={selected?.style}>
               {selected?.label ?? placeholder ?? ""}
             </span>
@@ -90,6 +101,7 @@ export function OptionPicker({
   return (
     <Select value={value} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger aria-label={ariaLabel} className={className} {...rest}>
+        {icon}
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent align={align} className={contentClassName}>
