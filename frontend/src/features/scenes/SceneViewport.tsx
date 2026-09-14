@@ -27,6 +27,7 @@ import {
   type Vec3,
 } from "@/api/domains/scenes";
 import { cameraOfShot, sampleCamera, sampleObject } from "./sceneGraph";
+import { errorText } from "@/api/errorMessage";
 
 /**
  * 某个 props 快照在某一刻的机位姿态。
@@ -463,7 +464,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         abort = new AbortController();
       const report = (e: unknown) => {
         if (alive)
-          latest.current.onError(e instanceof Error ? e.message : String(e));
+          latest.current.onError(errorText(e));
       };
       const loadModel = (id: string) => {
         if (!models.has(id)) {

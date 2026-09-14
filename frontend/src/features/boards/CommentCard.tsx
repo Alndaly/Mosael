@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { BoardCommentComposer, type CommentDraft } from "./BoardCommentComposer";
 import { CommentMembers, commentDocument, commentExtensions, COMMENT_TEXT } from "./commentDocument";
+import { errorText } from "@/api/errorMessage";
 
 export function CommentContent({ comment, members }: { comment: CollaborationComment; members: WorkspaceMember[] }) {
   const editor = useEditor({ extensions: commentExtensions(), content: commentDocument(comment), editable: false,
@@ -36,9 +37,9 @@ export function CommentCard({ comment, members, currentUserId, onDelete, onClose
       void qc.invalidateQueries({ queryKey: ["activity", comment.workspace_id] });
       setEditing(false);
     },
-    onError: error => toast.error(String(error)),
+    onError: error => toast.error(errorText(error)),
   });
-  const remove = useMutation({ mutationFn: async () => onDelete?.(), onError: error => toast.error(String(error)) });
+  const remove = useMutation({ mutationFn: async () => onDelete?.(), onError: error => toast.error(errorText(error)) });
   if (editing && own) return <BoardCommentComposer key={comment.id} members={members} initialContent={commentDocument(comment)} editing
     onSubmit={draft => save.mutateAsync(draft)} onCancel={() => setEditing(false)} />;
   return <div data-board-comment-overlay="" className={cn(CANVAS_WINDOW_SURFACE_CLASS, "nodrag nopan pointer-events-auto w-72 overflow-hidden text-left")}

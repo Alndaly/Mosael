@@ -1,4 +1,5 @@
 import type { Board, BoardItem } from "@/api/client";
+import { errorText } from "@/api/errorMessage";
 
 export interface NoteWriteInput {
   itemId: string;
@@ -43,7 +44,7 @@ export async function runNoteWrite({
     });
     return board;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorText(error);
     patch(input.itemId, {
       run: { status: "failed", error: message },
     });

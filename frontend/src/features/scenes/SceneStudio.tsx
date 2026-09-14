@@ -102,6 +102,7 @@ import {
 } from "./sceneGraph";
 import { SHOT_FPS } from "./encodeVideo";
 import { SceneViewport, type ViewportHandle } from "./SceneViewport";
+import { errorText } from "@/api/errorMessage";
 import "./scenes.css";
 
 function download(blob: Blob, name: string) {
@@ -175,7 +176,7 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
       await qc.invalidateQueries({ queryKey: ["scenes", workspace.id] });
       location.hash = `#/scenes?scene=${s.id}`;
     } catch (e) {
-      toast.error(String(e));
+      toast.error(errorText(e));
     } finally {
       setCreating(false);
     }
@@ -267,7 +268,7 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
               await qc.invalidateQueries({ queryKey: ["scenes", workspace.id] });
               toast.success("场景已重命名");
               return true;
-            } catch (e) { toast.error(String(e)); return false; }
+            } catch (e) { toast.error(errorText(e)); return false; }
           }}
           onDelete={async scenes => {
             const results = await Promise.allSettled(scenes.map(scene => deleteScene(workspace.id, scene.id)));
@@ -386,7 +387,7 @@ function SceneEditor({
         localStorage.removeItem(cacheKey);
       if (mounted.current) setError("");
     } catch (e) {
-      if (mounted.current) setError(e instanceof Error ? e.message : String(e));
+      if (mounted.current) setError(errorText(e));
       throw e;
     }
   });
@@ -622,7 +623,7 @@ function SceneEditor({
     try {
       await fn();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+      toast.error(errorText(e));
     } finally {
       if (mounted.current) {
         setBusy("");

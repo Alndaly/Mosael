@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { usePreferences } from "@/app/preferences";
 import { docsUrl } from "@/lib/deepLink";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { errorText } from "@/api/errorMessage";
 import {
   Popover,
   PopoverContent,
@@ -56,7 +57,7 @@ export function SceneBlenderPull({
       for (const warning of result.warnings) toast.warning(warning, { duration: 8000 });
       onCreated(result.scene_id);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+      toast.error(errorText(e));
     } finally {
       setBusy("");
     }

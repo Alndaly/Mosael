@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { humanError } from "@/api/errorMessage";
+import { errorText, humanError } from "@/api/errorMessage";
+import { ApiError } from "@/api/transport";
 
 /**
  * 后端已经写好了一句给人看的话,别把它埋进 HTTP 噪音里。
@@ -26,5 +27,16 @@ describe("接口报错", () => {
 
   it("完全没有 body 也不能是空串", () => {
     expect(humanError(503, "Service Unavailable", "")).toContain("503");
+  });
+});
+
+describe("errorText", () => {
+  it("只取 Error 的那句话,不带类名", () => {
+    // `String(err)` 会渲染成 "ApiError: 笔记不存在" —— 前半截对使用者没有意义。
+    expect(errorText(new ApiError("笔记不存在", 404, "{}"))).toBe("笔记不存在");
+  });
+  it("不是 Error 的照旧转成字符串", () => {
+    expect(errorText("连不上")).toBe("连不上");
+    expect(errorText(undefined)).toBe("undefined");
   });
 });

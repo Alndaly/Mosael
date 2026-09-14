@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { errorText } from "@/api/errorMessage";
 
 export function SceneHistory({
   scene,
@@ -60,7 +61,7 @@ export function SceneHistory({
                     `/api/scenes/${scene.id}/revisions/${r.revision}?workspace_id=${scene.workspace_id}`,
                   )
                     .then(onRestore)
-                    .catch((e) => toast.error(String(e)))
+                    .catch((e) => toast.error(errorText(e)))
                 }
               >
                 恢复

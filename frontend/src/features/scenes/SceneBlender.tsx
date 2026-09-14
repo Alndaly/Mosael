@@ -24,6 +24,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Pick } from "./SceneControls";
+import { errorText } from "@/api/errorMessage";
 
 type Transfer = {
   id: string;
@@ -99,7 +100,7 @@ export function SceneBlender({
       try {
         await action();
       } catch (e) {
-        setFailure(e instanceof Error ? e.message : String(e));
+        setFailure(errorText(e));
       } finally {
         void transfers.refetch();
       }

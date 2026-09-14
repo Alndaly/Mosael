@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { SettingsBlock, SettingsEmpty, SettingsGroup } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
+import { errorText } from "@/api/errorMessage";
 
 type AgentMemory = components["schemas"]["AgentMemoryOut"];
 
@@ -36,7 +37,7 @@ export function AgentMemorySection({ workspace }: { workspace: Workspace }) {
     queryFn: () => api<AgentMemory[]>(`/api/agent/memories?workspace_id=${encodeURIComponent(workspace.id)}`),
   });
   const refresh = () => qc.invalidateQueries({ queryKey: ["agent-memories", workspace.id] });
-  const fail = (error: unknown) => toast.error(error instanceof Error ? error.message : String(error));
+  const fail = (error: unknown) => toast.error(errorText(error));
 
   const create = useMutation({
     mutationFn: (content: string) =>

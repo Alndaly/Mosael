@@ -8,6 +8,7 @@ import { useI18n } from "@/app/preferences";
 import { CommentCard } from "@/features/boards/CommentCard";
 import { BoardCommentComposer, type CommentDraft } from "@/features/boards/BoardCommentComposer";
 import { AnnotationControls } from "@/features/markers/AnnotationControls";
+import { errorText } from "@/api/errorMessage";
 
 type Point = { x: number; y: number; node_id?: string };
 
@@ -25,7 +26,7 @@ export function useWorkflowComments(workspaceId: string, workflowId: string) {
   const remove = useMutation({
     mutationFn: (id: string) => deleteComment(id, workspaceId),
     onSuccess: () => { setSelected(null); void qc.invalidateQueries({ queryKey: key }); },
-    onError: error => toast.error(String(error)),
+    onError: error => toast.error(errorText(error)),
   });
   const exit = () => { setActive(false); setDraft(null); setSelected(null); };
   const place = (point: Point) => {
@@ -41,7 +42,7 @@ export function useWorkflowComments(workspaceId: string, workflowId: string) {
         anchor: { kind: "canvas", ...draft } });
       await qc.invalidateQueries({ queryKey: key });
       setDraft(null); setSelected(result.id);
-    } catch (error) { toast.error(String(error)); throw error; }
+    } catch (error) { toast.error(errorText(error)); throw error; }
   };
   const layer = visible && <ViewportPortal>
     {(comments.data ?? []).map((comment, index) => {

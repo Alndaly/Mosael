@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { SettingsBlock, SettingsField, SettingsForm, SettingsGroup } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
+import { errorText } from "@/api/errorMessage";
 
 export function AccountSection() {
   const t = useI18n();
@@ -88,7 +89,7 @@ export function AccountSection() {
       await updateAvatar(file);
       toast.success(t("avatarUpdated"));
     } catch (error) {
-      toast.error(t("avatarUpdateFailed"), { description: error instanceof Error ? error.message : String(error) });
+      toast.error(t("avatarUpdateFailed"), { description: errorText(error) });
     } finally {
       setAvatarPending(false);
     }

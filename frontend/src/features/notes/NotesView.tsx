@@ -1,6 +1,6 @@
 import React from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, CheckSquare, SearchX, MoreHorizontal, Check, X, Plus, Star, Download, Upload, PanelLeftClose, PanelLeftOpen, History, Info, Trash2, RotateCcw } from "lucide-react";
+import { AlertCircle, BookOpen, CheckSquare, SearchX, MoreHorizontal, Check, Loader2, PenLine, X, Plus, Star, Download, Upload, PanelLeftClose, PanelLeftOpen, History, Info, Trash2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { api, type Workspace } from "@/api/client";
 import { ApiError } from "@/api/transport";
@@ -17,6 +17,7 @@ import { SourceLink } from "./NoteSources";
 import { useNoteStrings } from "./strings";
 import { NoteList, type NoteListAction } from "./NoteList";
 import { mergeAppendedNote } from "./appendMerge";
+import { errorText } from "@/api/errorMessage";
 import "./notes.css";
 type NoteController = { id:string; read:()=>Note; update:(patch:Partial<NoteContent>)=>Promise<Note> };
 
@@ -67,14 +68,14 @@ export function NotesView({ workspace }: { workspace: Workspace }) {
           qc.setQueryData(["note",workspace.id,current.id],result);
         }
         done.push(target.id);
-      }catch(e){failed++;toast.error(String(e));}
+      }catch(e){failed++;toast.error(errorText(e));}
     }
     await qc.invalidateQueries({queryKey:["notes",workspace.id]});
     if(["trash","restore","delete"].includes(action)&&id&&done.includes(id))window.location.hash="#/notes";
     if(failed)toast.error(s.partialFailure(failed));
     return done;
   }
-  async function add(markdown = "", title = "") { try { setFilter("all"); setQ(""); setTopic(""); const n = await createNote(workspace.id, { title, markdown }); void qc.invalidateQueries({ queryKey: ["notes", workspace.id] }); openNote(n.id); if (window.matchMedia("(max-width: 740px)").matches) setFocus(true); } catch (e) { toast.error(String(e)); } }
+  async function add(markdown = "", title = "") { try { setFilter("all"); setQ(""); setTopic(""); const n = await createNote(workspace.id, { title, markdown }); void qc.invalidateQueries({ queryKey: ["notes", workspace.id] }); openNote(n.id); if (window.matchMedia("(max-width: 740px)").matches) setFocus(true); } catch (e) { toast.error(errorText(e)); } }
   return <div className={`notes-layout ${!focus ? "notes-show-list" : ""}`}>
     {!focus && <aside className="notes-index"><header><h1>{s.title}</h1><div className="flex shrink-0 items-center gap-1"><button className="note-icon" aria-label={s.import} title={s.import} onClick={() => input.current?.click()}><Upload size={16} /></button><button className="note-icon" title={s.selectNotes} aria-label={s.selectNotes} aria-pressed={selecting} onClick={()=>setSelecting(!selecting)}><CheckSquare size={16}/></button><button className="note-icon" aria-label={s.new} title={s.new} onClick={() => void add()}><Plus size={16} /></button></div></header>
       <Input aria-label={s.search} placeholder={s.search} value={q} onChange={e => setQ(e.target.value)} />
@@ -89,7 +90,7 @@ export function NotesView({ workspace }: { workspace: Workspace }) {
   </div>;
 }
 
-function NoteDocument({ note, controller, focus, onFocus }: { note: Note; controller: React.MutableRefObject<NoteController | null>; focus: boolean; onFocus: () => void }) {
+export function NoteDocument({ note, controller, focus, onFocus }: { note: Note; controller: React.MutableRefObject<NoteController | null>; focus: boolean; onFocus: () => void }) {
   const s = useNoteStrings(); const qc = useQueryClient();
   const storageKey = `mosael.note.draft.${note.workspace_id}.${note.id}`;
   const [draft, setDraft] = React.useState<Note>(() => { try { const cached = JSON.parse(localStorage.getItem(storageKey) || "null") as Note | null; return cached?.id === note.id && cached.workspace_id === note.workspace_id ? cached : note; } catch { return note; } });
@@ -111,7 +112,7 @@ function NoteDocument({ note, controller, focus, onFocus }: { note: Note; contro
     try {
       const value = await api<NoteContent & {revision: number}>(`/api/notes/${note.id}/revisions/${revision}?workspace_id=${note.workspace_id}`);
       if (request === historyRequest.current) { setHistoric(value); if (historyPreview.current) historyPreview.current.scrollTop = 0; }
-    } catch (e) { if (request === historyRequest.current) toast.error(String(e)); }
+    } catch (e) { if (request === historyRequest.current) toast.error(errorText(e)); }
     finally { if (request === historyRequest.current) setPendingVersion(null); }
   }, [note.id, note.workspace_id]);
   React.useEffect(() => { if (historyPreview.current) historyPreview.current.scrollTop = 0; }, [historic?.revision]);
@@ -124,7 +125,7 @@ function NoteDocument({ note, controller, focus, onFocus }: { note: Note; contro
       if (current === sent) localStorage.removeItem(storageKey); else { try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch { /* Keep the live draft. */ } }
       if (mounted.current) { setDraft(next); setStatus(current === sent ? "saved" : "draft"); setError(""); }
       qc.setQueryData(["note", note.workspace_id, note.id], result); void qc.invalidateQueries({queryKey: ["notes", note.workspace_id]});
-    } catch (e) { if (mounted.current) { setError(e instanceof ApiError && e.status === 409 ? s.conflict : String(e)); setStatus("error"); } }
+    } catch (e) { if (mounted.current) { setError(e instanceof ApiError && e.status === 409 ? s.conflict : errorText(e)); setStatus("error"); } }
     finally { busy.current = false; }
   }, [note.id, note.workspace_id, qc, s.conflict, storageKey]);
   React.useLayoutEffect(() => {
@@ -169,7 +170,7 @@ function NoteDocument({ note, controller, focus, onFocus }: { note: Note; contro
     readRevision(); window.addEventListener("hashchange", readRevision);
     return () => window.removeEventListener("hashchange", readRevision);
   }, [note.id]);
-  async function restore() { if (!historic || busy.current) return; await persist(); if (JSON.stringify(latest.current) !== saved.current) return; try { const next = await api<Note>(`/api/notes/${note.id}/restore`, {method: "POST", body: JSON.stringify({workspace_id: note.workspace_id, base_revision: latest.current.revision, revision: historic.revision})}); saved.current = JSON.stringify(next); latest.current = next; setDraft(next); setHistoric(null); setHistory(false); setStatus("saved"); localStorage.removeItem(storageKey); qc.setQueryData(["note", note.workspace_id, note.id], next); void qc.invalidateQueries({queryKey: ["notes", note.workspace_id]}); } catch (e) { toast.error(String(e)); } }
+  async function restore() { if (!historic || busy.current) return; await persist(); if (JSON.stringify(latest.current) !== saved.current) return; try { const next = await api<Note>(`/api/notes/${note.id}/restore`, {method: "POST", body: JSON.stringify({workspace_id: note.workspace_id, base_revision: latest.current.revision, revision: historic.revision})}); saved.current = JSON.stringify(next); latest.current = next; setDraft(next); setHistoric(null); setHistory(false); setStatus("saved"); localStorage.removeItem(storageKey); qc.setQueryData(["note", note.workspace_id, note.id], next); void qc.invalidateQueries({queryKey: ["notes", note.workspace_id]}); } catch (e) { toast.error(errorText(e)); } }
   async function deleteForever() {
     if (deleting || busy.current) return;
     await persist();
@@ -182,10 +183,10 @@ function NoteDocument({ note, controller, focus, onFocus }: { note: Note; contro
       qc.removeQueries({queryKey:["note", note.workspace_id, note.id]});
       qc.removeQueries({queryKey:["note-history", note.id]});
       void qc.invalidateQueries({queryKey:["notes", note.workspace_id]});
-    } catch (e) { toast.error(String(e)); setDeleting(false); }
+    } catch (e) { toast.error(errorText(e)); setDeleting(false); }
   }
   const [toolbarTarget, setToolbarTarget] = React.useState<HTMLDivElement | null>(null);
-  return <><main className="note-document"><header className="note-document-header"><button className="note-icon" aria-label={focus ? s.exitFocus : s.focus} title={focus ? s.exitFocus : s.focus} onClick={onFocus}>{focus ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}</button><span className="note-status" role="status"><Check size={12} aria-hidden="true"/>{status === "saving" ? s.saving : status === "error" ? s.error : status === "draft" ? s.draft : s.saved}</span>
+  return <><main className="note-document"><header className="note-document-header"><button className="note-icon" aria-label={focus ? s.exitFocus : s.focus} title={focus ? s.exitFocus : s.focus} onClick={onFocus}>{focus ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}</button><span className="note-status" role="status" data-state={status}>{status === "saving" ? <Loader2 size={12} className="animate-mosael-spin" aria-hidden="true"/> : status === "error" ? <AlertCircle size={12} aria-hidden="true"/> : status === "draft" ? <PenLine size={12} aria-hidden="true"/> : <Check size={12} aria-hidden="true"/>}{status === "saving" ? s.saving : status === "error" ? s.error : status === "draft" ? s.draft : s.saved}</span>
       <div className="note-header-format" ref={setToolbarTarget} />
       <div className="note-header-actions">{(["edit", "read", "raw"] as const).map((m, i) => <button key={m} className="note-mode" aria-pressed={mode === m} onClick={() => setMode(m)}>{[s.write, s.preview, s.raw][i]}</button>)}
       <button className="note-icon" aria-label={s.favorite} aria-pressed={draft.favorite} onClick={() => change({favorite: !draft.favorite})}><Star size={15} fill={draft.favorite ? "currentColor" : "none"} /></button>
@@ -195,8 +196,8 @@ function NoteDocument({ note, controller, focus, onFocus }: { note: Note; contro
         <button onClick={() => { setMoreOpen(false); setProperties(!properties); }}><Info size={16}/>{s.source}</button>
         <button onClick={() => { setMoreOpen(false); change({trashed: !draft.trashed}); }} className="note-trash-action">{draft.trashed ? <RotateCcw size={16}/> : <Trash2 size={16}/>} {draft.trashed ? s.restoreTrash : s.moveTrash}</button>
       </PopoverContent></Popover>
-    </div></header>{draft.trashed && <div className="mx-5 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-secondary/50 px-3 py-2 text-ui-xs text-muted-foreground"><span>{s.inTrash}</span><Button variant="ghost" size="sm" className="text-destructive" disabled={deleting} onClick={() => setConfirmDelete(true)}><Trash2 size={14} />{s.deleteForever}</Button></div>}{error && <div className="px-6 text-sm text-destructive" role="alert">{error}<Button variant="ghost" onClick={() => void persist()}>{s.retry}</Button><Button variant="ghost" onClick={() => { exportMarkdown(draft); void getNote(note.workspace_id, note.id).then(n => { saved.current = JSON.stringify(n); latest.current = n; setDraft(n); setStatus("saved"); setError(""); localStorage.removeItem(storageKey); }); }}>{s.reload}</Button></div>}
-    {referenceRevision&&<div className="note-reference-notice"><span>{s.referenceVersion(referenceRevision)}</span><button onClick={()=>{setHistory(true);void loadVersion(referenceRevision);}}>{s.viewReference}</button></div>}
+    </div></header>{draft.trashed && <div className="mx-5 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-secondary/50 px-3 py-2 text-ui-xs text-muted-foreground"><span>{s.inTrash}</span><Button variant="ghost" size="sm" className="text-destructive" disabled={deleting} onClick={() => setConfirmDelete(true)}><Trash2 size={14} />{s.deleteForever}</Button></div>}{error && <div className="note-error-notice" role="alert"><div className="note-notice-row"><span><AlertCircle size={13} aria-hidden="true"/>{error}</span><button onClick={() => void persist()}>{s.retry}</button><button onClick={() => { exportMarkdown(draft); void getNote(note.workspace_id, note.id).then(n => { saved.current = JSON.stringify(n); latest.current = n; setDraft(n); setStatus("saved"); setError(""); localStorage.removeItem(storageKey); }).catch(e => toast.error(errorText(e))); }}>{s.reload}</button></div></div>}
+    {referenceRevision&&<div className="note-reference-notice"><div className="note-notice-row"><span>{s.referenceVersion(referenceRevision)}</span><button onClick={()=>{setHistory(true);void loadVersion(referenceRevision);}}>{s.viewReference}</button></div></div>}
     <div className="note-body"><article className="note-paper">
       {mode === "raw" ? <><textarea aria-label={s.title} className="note-title" rows={1} placeholder={s.untitled} value={draft.title} maxLength={240} disabled={draft.trashed} onChange={e => change({title: e.target.value})} /><textarea className="note-raw" rows={1} spellCheck={false} maxLength={500000} aria-label={s.content} value={draft.markdown} disabled={draft.trashed} onChange={e => change({markdown: e.target.value})} /></> : <NoteEditor key={mode} toolbarTarget={toolbarTarget} markdown={draft.markdown} onChange={markdown => change({markdown})} editable={mode === "edit" && !draft.trashed} workspaceId={note.workspace_id} noteId={note.id}
         title={<textarea aria-label={s.title} className="note-title" rows={1} placeholder={s.untitled} value={draft.title} maxLength={240} disabled={draft.trashed || mode === "read"} onChange={e => change({title: e.target.value})} />}

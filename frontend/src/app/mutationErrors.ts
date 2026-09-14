@@ -1,4 +1,5 @@
 import { MutationCache } from "@tanstack/react-query";
+import { errorText } from "@/api/errorMessage";
 
 /**
  * A failed mutation must never be silent.
@@ -20,7 +21,7 @@ export function createMutationCache(report: (message: string) => void): Mutation
   return new MutationCache({
     onError: (error, _variables, _context, mutation) => {
       if (mutation.options.onError || mutation.meta?.silentError) return;
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorText(error);
       report(message.slice(0, 300) || "操作失败");
     },
   });

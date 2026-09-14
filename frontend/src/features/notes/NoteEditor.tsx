@@ -13,6 +13,7 @@ import { listNotes, noteHref, type Note } from "@/api/domains/notes";
 import { importAsset } from "@/api/domains/assets";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { errorText } from "@/api/errorMessage";
 
 export function NoteReader({ markdown }: { markdown: string }) {
   const { locale } = usePreferences();
@@ -94,7 +95,7 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
         const selection = bookmark.resolve(editor.state.doc);
         editor.chain().focus().setTextSelection(selection.from).setImage({ src: `mosael-asset:${asset.id}`, alt: file.name }).run();
       }
-    } catch (e) { toast.error(String(e)); }
+    } catch (e) { toast.error(errorText(e)); }
     finally { editor.off("transaction", map); setUploading(false); }
   };
   if (!editor) return null;

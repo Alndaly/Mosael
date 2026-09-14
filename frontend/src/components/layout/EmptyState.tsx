@@ -3,6 +3,7 @@ import React from "react";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { errorText } from "@/api/errorMessage";
 
 /**
  * 「这里还没有东西」的统一说法。
@@ -100,7 +101,7 @@ export function PageLoadError({
   className?: string;
 }) {
   const t = useI18n();
-  const message = error instanceof Error ? error.message : String(error ?? "");
+  const message = errorText(error ?? "");
   return (
     <EmptyState
       icon={icon}

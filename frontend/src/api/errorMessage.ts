@@ -24,3 +24,14 @@ export function humanError(status: number, statusText: string, body: string): st
   }
   return `${status} ${statusText}`.trim();
 }
+
+/**
+ * 错误对象里**该给人看的那一句**。
+ *
+ * `String(err)` 走的是 `Error.prototype.toString()`,它会把 `name` 贴回句首 —— 于是
+ * 后端那句干净的「笔记不存在」在界面上变成「ApiError: 笔记不存在」。类名是给写代码的人
+ * 看的,不是给正在写笔记的人看的。
+ */
+export function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}

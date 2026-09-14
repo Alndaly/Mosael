@@ -54,6 +54,7 @@ import { MarkerPin } from "@/features/markers/MarkerPin";
 import { MarkerEditorProvider } from "@/features/markers/MarkerEditorProvider";
 import { MAX_MARKERS, newMarkerId, nextMarkerName, type CanvasMarker } from "@/features/markers/markers";
 import { useMarkerShortcuts } from "@/features/markers/useMarkerShortcuts";
+import { errorText } from "@/api/errorMessage";
 
 /**
  * 创意画板的画布。
@@ -445,7 +446,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onGenerate
         // A delayed request must not replace a different note chosen in the meantime.
         return node.id === id && currentItem.note_id === item.note_id ? {...node, data: {...node.data, item: {...currentItem, text: reference.title, note_revision: reference.revision}}} : node;
       }));
-    } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
+    } catch (error) { toast.error(errorText(error)); }
     finally { setRefreshingDocument(null); }
   };
   const composerItem = React.useMemo(() => {

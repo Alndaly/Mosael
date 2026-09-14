@@ -85,6 +85,7 @@ import {
   type FrameSlots,
 } from "@/features/ai-studio/sourceFrames";
 import { cn } from "@/lib/utils";
+import { errorText } from "@/api/errorMessage";
 
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
@@ -681,7 +682,7 @@ function GenerateWorkspace({
       toast.success(`${t("optimizePrompt")} · ${result.platform}`, { description: result.notes || undefined });
     },
     onError: (error) => {
-      toast.error(t("optimizePromptFailed"), { description: error instanceof Error ? error.message : String(error) });
+      toast.error(t("optimizePromptFailed"), { description: errorText(error) });
     },
   });
   const updateSessionEngine = useMutation({

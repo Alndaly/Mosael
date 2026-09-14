@@ -6,6 +6,7 @@ import { assetThumbnailUrl } from "@/api/client";
 import { AssetPreviewModalById } from "@/features/media/AssetPreviewModalById";
 import { gotoJob, gotoRecord } from "@/lib/deepLink";
 import { cn } from "@/lib/utils";
+import { errorText } from "@/api/errorMessage";
 
 /**
  * Renders a tool result as something you can read, falling back to JSON only when nothing
@@ -456,7 +457,7 @@ function PluginOutput({ value }: { value: Record<string, unknown> }) {
         <span className="min-w-0 flex-1 truncate text-foreground">插件工具</span>
         <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{String(value.status ?? "done")}</span>
       </div>
-      {error ? <LongText text={String(error)} /> : <ToolResultCard value={output} />}
+      {error ? <LongText text={errorText(error)} /> : <ToolResultCard value={output} />}
     </div>
   );
 }

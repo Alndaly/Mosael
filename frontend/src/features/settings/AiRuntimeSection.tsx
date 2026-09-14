@@ -8,6 +8,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SettingsGroup, SettingsRow } from "@/features/settings/ui";
+import { errorText } from "@/api/errorMessage";
 
 type AiRuntimeConfig = components["schemas"]["AiRuntimeConfigOut"];
 
@@ -34,7 +35,7 @@ export function AiRuntimeSection() {
       setDraft(data.max_retries);
       toast.success(t("saved"));
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : String(e)),
+    onError: (e) => toast.error(errorText(e)),
   });
 
   const current = draft ?? config.data?.max_retries ?? 3;

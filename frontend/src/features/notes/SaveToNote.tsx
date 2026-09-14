@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useNoteStrings } from "./strings";
+import { errorText } from "@/api/errorMessage";
 
 /** 一种可选的正文形状。给了两份以上,对话框就多一排切换;只给正文的调用方什么都不用改。 */
 export type SaveToNoteVariant = { id: string; label: string; markdown: string; sources: NoteSource[] };
@@ -27,7 +28,7 @@ export function SaveToNote({workspaceId, content, sources = [], variants, classN
     const n = target ? await appendNote(target, markdown, chosenSources) : await createNote(workspaceId, {title: title.trim() || markdown.replace(/[#*>\n]/g, " ").slice(0, 60), markdown, sources: chosenSources});
     void qc.invalidateQueries({queryKey: ["notes", workspaceId]}); void qc.invalidateQueries({queryKey: ["note-picker", workspaceId]}); void qc.invalidateQueries({queryKey: ["note", workspaceId, n.id]});
     toast.success(s.done); onSaved?.(n); setOpen(false);
-  } catch (e) { toast.error(String(e)); } finally { setBusy(false); } }
+  } catch (e) { toast.error(errorText(e)); } finally { setBusy(false); } }
   return <><button type="button" className={className || "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary"} title={label || s.saveTo} disabled={!markdown.trim()} onClick={() => setOpen(true)}><BookPlus size={13} />{label || s.saveTo}</button>
     <Dialog open={open} onOpenChange={value => { if (!busy) setOpen(value); }}><DialogContent><DialogTitle>{label || s.saveTo}</DialogTitle>
       {variants && variants.length > 1 && <div className="flex gap-1" role="radiogroup" aria-label={s.shape}>{variants.map(variant =>
