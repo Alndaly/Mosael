@@ -432,3 +432,54 @@ def test_real_upper_video_speed_filter_and_fade(tmp_path):
     assert red[0] > blue[0] + 20  # source switched to blue after just 1 timeline second
     assert fading[0] < blue[0] - 8
     assert max(tail) <= 3
+
+
+def test_base_video_track_audio_can_be_ducked() -> None:
+    """原片在**基底视频轨**上、配音在音频轨上 —— 译配就是这个形状。
+
+    基底轨的声音不在 audio_overlays 里(它是 concat 出来的一整条),所以闪避必须单独有一条路。
+    漏了它的时候,症状是「开关按下去了、成片里两个人同时说话」,而且从计划上一点看不出来。
+    """
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=320, height=180, fps=30,
+        clips=_BASE_CLIP, assets=_AUDIO_ASSETS,
+        audio_clips=[
+            # 配音:2..5 秒,不闪避 —— 它是关键音源。
+            {"id": "dub", "asset_id": "v", "timeline_start": 2, "src_in": 0, "src_out": 3, "solo": False, "duck": False},
+        ],
+        duck_base_audio=True,
+    )
+    assert plan.base_audio_duck_windows == ((2.0, 5.0),)
+
+    from app.media.render_executor import build_ffmpeg_command
+
+    graph = " ".join(build_ffmpeg_command(plan, lambda key: Path(f"/x/{key}"), Path("/tmp/o.mp4")))
+    assert "[abase]volume=enable='between(t,2.0,5.0)':volume=0.3[abaseduck]" in graph
+    # 进混音的必须是压过的那一条。只看「图里有 [abaseduck]」不够 —— 定义它而不用它,
+    # 正是这个 bug 修一半的样子。
+    assert "[abaseduck][aov0]amix=" in graph
+
+
+def test_base_audio_duck_is_off_unless_the_track_says_so() -> None:
+    """没标闪避就一个窗口都不该有 —— 否则每条有配音的时间线都会无声地压低原片。"""
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=320, height=180, fps=30,
+        clips=_BASE_CLIP, assets=_AUDIO_ASSETS,
+        audio_clips=[
+            {"id": "dub", "asset_id": "v", "timeline_start": 2, "src_in": 0, "src_out": 3, "solo": False, "duck": False},
+        ],
+    )
+    assert plan.base_audio_duck_windows == ()
+
+
+def test_muted_base_track_needs_no_ducking() -> None:
+    """已经静音的基底轨再压一次是空操作,而且会让滤镜图多一段没用的 volume。"""
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=320, height=180, fps=30,
+        clips=_BASE_CLIP, assets=_AUDIO_ASSETS,
+        audio_clips=[
+            {"id": "dub", "asset_id": "v", "timeline_start": 2, "src_in": 0, "src_out": 3, "solo": False, "duck": False},
+        ],
+        duck_base_audio=True, mute_base_audio=True,
+    )
+    assert plan.base_audio_duck_windows == ()

@@ -133,10 +133,15 @@ def test_整条链路跑完之后时间线上该有什么(stubs) -> None:
         assert [round(c.speed, 3) for c in dubbed] == [2.0, 2.0]
 
         # 原声不删,只闪避 —— 整条配音轨删掉就回到原样。
-        original_audio = [t for t in tracks.values() if t.kind == "audio" and t.id != dub_track.id]
-        assert original_audio and all(t.duck for t in original_audio)
         video_clips = by_kind["video"]
         assert len(video_clips) == 1 and video_clips[0].asset_id == asset_id
+        # **按「声音在哪」断言,不是按「轨是什么类型」。** 这条流程把原片整段放在**视频轨**上,
+        # 音频轨是空的 —— 只查 kind=="audio" 的话,标记落在一条没有片段的空轨上也算通过,
+        # 而成片里原声一分贝没降(实测最小二乘增益 0.996)。
+        original = tracks[video_clips[0].track_id]
+        assert original.id != dub_track.id
+        assert original.duck, "装着原声的那条轨必须被闪避,不管它是音频轨还是视频轨"
+        assert not dub_track.duck, "配音轨自己不能闪避,否则没有关键音源、窗口算出来是空的"
 
     assert context["dubbing"]["done"] == 2 and context["dubbing"]["failed"] == 0
     assert context["translated_subtitles"]["count"] == 2

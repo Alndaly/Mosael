@@ -33,6 +33,18 @@ AUDIO_RATE = 48000
 DUCK_GAIN = 0.3  # ≈ −10.5 dB: how far a ducked track drops under overlapping audio (闪避)
 
 
+def _duck_volume(windows: tuple[tuple[float, float], ...]) -> str:
+    """闪避那一段 volume 滤镜(带前导逗号,可直接拼在滤镜链上);没有窗口就是空串。
+
+    上层轨和基底轨共用它 —— 两边的窗口都已经是时间线上的绝对时间(overlay 那路是 adelay
+    之后,基底那路是 concat 之后),所以 enable 表达式的写法必须一模一样。
+    """
+    if not windows:
+        return ""
+    enable = "+".join(f"between(t,{a},{b})" for a, b in windows)
+    return f",volume=enable='{enable}':volume={DUCK_GAIN}"
+
+
 class RenderExecutionError(RuntimeError):
     def __init__(self, message: str, *, stderr_tail: str = "") -> None:
         super().__init__(message)
@@ -958,9 +970,17 @@ def build_ffmpeg_command(
     # Audio-track clips + overlay video-track clips' audio, mixed over the base audio. An
     # overlay source may be a video without an audio stream (or an image) — probe and skip it,
     # since mapping [n:a] on a source with no audio would fail the whole render.
-    audio_label = "[abase]"
+    # 基底视频轨的声音也能被闪避。**它不在 audio_overlays 里** —— 上层轨的声音是 overlay,
+    # 基底轨的声音是 concat 出来的 [abase]。配音压原声正是这个形状(原片在基底轨上),漏了这一路
+    # 就等于整条闪避没生效:成片里两个人同时说话,而界面上那个开关是按下去了的。
+    base_audio_label = "[abase]"
+    duck_base = _duck_volume(plan.base_audio_duck_windows)
+    if duck_base:
+        filters.append(f"[abase]{duck_base.lstrip(',')}[abaseduck]")
+        base_audio_label = "[abaseduck]"
+    audio_label = base_audio_label
     if plan.audio_overlays:
-        mix_inputs = ["[abase]"]
+        mix_inputs = [base_audio_label]
         for i, item in enumerate(plan.audio_overlays):
             path = resolve(item.source.file_key)
             if item.optional and not has_audio.get(path, False):
@@ -972,10 +992,7 @@ def build_ffmpeg_command(
             audio_fades = _fade_filters(item.fade_in, item.fade_out, item.duration, audio=True)
             # Ducking: after adelay the stream is on timeline time, so the enable windows are
             # absolute — drop to DUCK_GAIN while a non-ducked clip overlaps, full gain elsewhere.
-            duck = ""
-            if item.duck_windows:
-                enable = "+".join(f"between(t,{a},{b})" for a, b in item.duck_windows)
-                duck = f",volume=enable='{enable}':volume={DUCK_GAIN}"
+            duck = _duck_volume(item.duck_windows)
             filters.append(
                 f"[{input_index}:a]atrim=start={tin}:end={tout},asetpts=PTS-STARTPTS,"
                 f"{_atempo_chain(item.speed)}"

@@ -180,6 +180,9 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
     base_video_soloed = bool(base_track and base_track.solo)
     # base 轨自己被静音时也要闭嘴——画面留着,声音去掉,与 overlay 轨同一条规则。
     mute_base_audio = (solo_active and not base_video_soloed) or bool(base_track and base_track.muted)
+    # 基底轨也可以标闪避(轨道右键·闪避)。它的声音不走 audio_overlays,所以要单独告诉计划一声 ——
+    # 不然界面上按下去了、渲染侧什么都不做。译配就是这个形状:原片在基底轨,配音在音频轨。
+    duck_base_audio = bool(base_track and base_track.duck)
 
     asset_ids = {clip["asset_id"] for clip in base_clips + overlay_clips + audio_clips if clip["asset_id"]}
     assets = {
@@ -215,6 +218,7 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
         luts=luts,
         solo_active=solo_active,
         mute_base_audio=mute_base_audio,
+        duck_base_audio=duck_base_audio,
         crf=crf,
         encode_preset=encode_preset,
     )

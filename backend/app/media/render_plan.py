@@ -274,6 +274,10 @@ class RenderPlan:
     text_overlays: tuple[TextOverlayItem, ...] = ()
     # Solo: silence the base video track's audio (a soloed track elsewhere took over).
     mute_base_audio: bool = False
+    # 基底视频轨自己的声音被闪避的时间窗。**它和 AudioItem.duck_windows 不是一回事**:
+    # 上层视频轨的声音走 audio_overlays(每段一份窗口),而基底轨的声音是 concat 出来的
+    # 一整条,只能整条压 —— 译配正是这个形状(原片在基底轨上,配音在音频轨上)。
+    base_audio_duck_windows: tuple[tuple[float, float], ...] = ()
     render_plan_hash: str = field(default="")
 
     def with_hash(self) -> "RenderPlan":
@@ -292,6 +296,7 @@ class RenderPlan:
             subtitle_style=self.subtitle_style,
             text_overlays=self.text_overlays,
             mute_base_audio=self.mute_base_audio,
+            base_audio_duck_windows=self.base_audio_duck_windows,
             render_plan_hash=digest,
         )
 
@@ -364,6 +369,7 @@ def build_render_plan(
     fill_mode: str = "cover",
     solo_active: bool = False,
     mute_base_audio: bool = False,
+    duck_base_audio: bool = False,
     crf: int = 20,
     encode_preset: str = "veryfast",
 ) -> RenderPlan:
@@ -516,6 +522,11 @@ def build_render_plan(
         subtitle_style=_read_subtitle_style(subtitle_style),
         text_overlays=tuple(text_items),
         mute_base_audio=mute_base_audio,
+        # 基底轨被静音时无所谓闪避;窗口按整条时间线算 —— 基底声音是 concat 出来的一整条,
+        # 哪几段有声音要到执行时探过才知道,而在没有声音的地方压音量本来就是空操作。
+        base_audio_duck_windows=(
+            _duck_windows(0.0, duration, key_spans) if duck_base_audio and not mute_base_audio else ()
+        ),
     )
     return plan.with_hash()
 

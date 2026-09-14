@@ -13,7 +13,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Asset, Clip, Sequence, Transcript, Workflow
+from app.db.models import Asset, Clip, Sequence, Track, Transcript, Workflow
 from app.domain.sequences.errors import SequenceDomainError
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import register
@@ -752,6 +752,15 @@ def dub_subtitles(db: Session, workflow: Workflow, config: dict[str, Any]) -> di
     }
 
 
+def _carries_audio(track: Track) -> bool:
+    """这条轨上有没有可能发出声音 —— 音频轨算,带媒体片段的视频轨也算。"""
+    if track.kind == "audio":
+        return True
+    if track.kind != "video":
+        return False
+    return any(clip.asset_id for clip in (track.clips or []))
+
+
 def _duck_other_audio(db: Session, sequence_id: str, dub_track_id: str, *, actor_id: str | None) -> None:
     """让原有音轨在配音说话的那几段自动压低。
 
@@ -761,6 +770,11 @@ def _duck_other_audio(db: Session, sequence_id: str, dub_track_id: str, *, actor
 
     压的是**原有的**音轨,不是全部:配音轨自己必须不闪避,否则没有任何一条轨是"关键音源",
     闪避窗口算出来是空的。同样地,已经闪避过的轨不重复记一次操作 —— 那只会在撤销栈里堆空步。
+
+    **视频轨也要压。** 一条视频片段自带的声音和音频轨上的声音一样会被听见,而译配这条流程
+    恰恰把原片整段放在视频轨上(音频轨是空的)—— 只挑 kind=="audio" 的话,标记落在一条没有
+    片段的空轨上,成片里原声一分贝没降。带画面的轨只在真有媒体片段时才算数:纯文字/纯占位的
+    轨没有声音可压。
     """
     from app.domain.sequences.operations import SetTrackState, set_track_state
 
@@ -772,7 +786,7 @@ def _duck_other_audio(db: Session, sequence_id: str, dub_track_id: str, *, actor
     targets = [
         track.id
         for track in (sequence.tracks or [])
-        if track.kind == "audio" and track.id != dub_track_id and not track.duck
+        if track.id != dub_track_id and not track.duck and _carries_audio(track)
     ]
     for track_id in targets:
         set_track_state(db, sequence_id, SetTrackState(track_id=track_id, duck=True, actor_id=actor_id))
