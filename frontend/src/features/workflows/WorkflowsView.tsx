@@ -119,6 +119,7 @@ import { useCanvasPosture } from "@/features/workflows/useCanvasPosture";
 import { withDependentsCleared } from "@/features/workflows/dependents";
 import { nodePicksVoice, speechFieldVisible } from "@/features/workflows/speechFields";
 import { RefEditor } from "@/features/workflows/RefEditor";
+import { syncFromServer } from "@/features/workflows/serverSync";
 import { MapField } from "@/features/workflows/MapField";
 import { CodeEditor } from "@/components/app/code-editor";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/components/agent/CanvasAgentChat";
@@ -961,23 +962,17 @@ function WorkflowEditor({
   );
 
   React.useEffect(() => {
-    if (workflow.updated_at === lastSyncedRef.current) return;
-    if (selfSaveRef.current) {
-      selfSaveRef.current = false;
-      lastSyncedRef.current = workflow.updated_at;
-      return;
-    }
-    // Only mark a revision as synced once it has actually been applied. Marking first meant an
-    // agent edit arriving while the canvas was dirty was recorded as seen, never applied, and
-    // then overwritten by the pending autosave — the agent's change vanished with nothing said.
-    // Left unmarked, it is applied as soon as the local edit saves and `dirty` clears.
-    if (!dirty) {
-      lastSyncedRef.current = workflow.updated_at;
-      const next = structuredClone(workflow.graph as unknown as WorkflowGraph);
-      setGraph(next);
-      rebuildNodes(next);
-      setEdges(toWorkflowFlowEdges(next, t, registry));
-    }
+    const { action, next: synced } = syncFromServer(
+      { accounted: lastSyncedRef.current, ours: selfSaveRef.current },
+      { updatedAt: workflow.updated_at, dirty },
+    );
+    lastSyncedRef.current = synced.accounted;
+    selfSaveRef.current = synced.ours;
+    if (action !== "apply") return;
+    const next = structuredClone(workflow.graph as unknown as WorkflowGraph);
+    setGraph(next);
+    rebuildNodes(next);
+    setEdges(toWorkflowFlowEdges(next, t, registry));
   }, [workflow.updated_at, workflow.graph, dirty, rebuildNodes]);
 
   const applyGraph = React.useCallback(
@@ -1427,14 +1422,14 @@ function WorkflowEditor({
     mutationFn: () => updateWorkflow(workflow.id, { graph }),
     onSuccess: (saved) => {
       setDirty(false);
-      // Our own save bumps updated_at. Record it as "already synced" so the sync-from-server
-      // effect below treats the imminent refetch as our own change and does NOT rebuild the
-      // React Flow nodes array. A rebuild drops React Flow's measured dimensions, which re-hides
-      // nodes for a frame (visibility:hidden) — during that window a node grab lands on the pane
-      // and pans the canvas instead of dragging the node. With auto-save firing after every edit,
-      // that window recurred constantly and made nodes feel undraggable.
-      lastSyncedRef.current = saved.updated_at;
-      selfSaveRef.current = true; // 兜底:即便两端 updated_at 序列化不一致也不重建画布
+      // 自己存的这一版一会儿会随重新拉取回来。标一下,让同步 effect 认下它而**不重建画布** ——
+      // 重建会丢掉 React Flow 量好的尺寸,节点有一帧是 visibility:hidden;那一帧里抓节点会抓到
+      // 画布上变成平移,而自动保存每次编辑都跑,于是节点一直"抓不住"。
+      //
+      // **这里不写 lastSyncedRef。** 它的含义是「我们在 props 上见过的那一版」,而 props 这会儿
+      // 还是旧的。提前写成 saved.updated_at 会让紧接着那一轮(setDirty 引起的重渲染)看到
+      // 「旧 ≠ 新」,把这张底牌当场用掉 —— 等真正的新版本回来时已经没人挡着了。见 serverSync。
+      selfSaveRef.current = true;
       void qc.invalidateQueries({ queryKey: ["workflows", workspaceId] });
       // 纯布局保存不会成版，也不需要重拉历史；执行语义变化时才同步版本面板。
       if (saved.revision !== workflow.revision) {
