@@ -68,7 +68,9 @@ def create_generation_job(
     _validate_source_assets(db, workspace_id, source_assets)
     negative_prompt = requested_negative_prompt(negative_prompt, parameters)
 
-    session = _resolve_session(db, workspace_id=workspace_id, session_id=session_id, prompt=prompt)
+    session = _resolve_session(
+        db, workspace_id=workspace_id, session_id=session_id, prompt=prompt, created_by=created_by
+    )
     request = {
         "project_id": project_id,
         "prompt": prompt,
@@ -140,7 +142,19 @@ def _resolve_provider_profile(
     return profile
 
 
-def _resolve_session(db: Session, *, workspace_id: str, session_id: str | None, prompt: str) -> GenerationSession:
+def _resolve_session(
+    db: Session, *, workspace_id: str, session_id: str | None, prompt: str, created_by: str | None
+) -> GenerationSession:
+    """这一次生成收在哪条会话线程里。没点名就现开一条。
+
+    **现开的那条必须有主。** 生成会话和对话一样是某人的私人线程,列表按
+    `owner_user_id == 我 或 被共享` 过滤 —— 不设主人的话它是 NULL,谁都匹配不上,
+    于是这条记录**连创建它的人自己都看不见**:图进了素材库,而带着提示词、参数和花费的
+    那条记录成了孤儿,既回不到历史里,也不进成本核算。
+
+    界面那条路一直是传 session_id 的,所以这件事只在**另外四个入口**上发生:从画板生成、
+    工作流的 ai_generate、智能体生成、定时任务 —— 它们都传 session_id=None。
+    """
     if session_id:
         session = db.get(GenerationSession, session_id)
         if session is None or session.workspace_id != workspace_id:
@@ -148,7 +162,9 @@ def _resolve_session(db: Session, *, workspace_id: str, session_id: str | None, 
         if session.title == "新生成":
             session.title = _title_from_prompt(prompt)
         return session
-    session = GenerationSession(workspace_id=workspace_id, title=_title_from_prompt(prompt))
+    session = GenerationSession(
+        workspace_id=workspace_id, title=_title_from_prompt(prompt), owner_user_id=created_by
+    )
     db.add(session)
     db.flush()
     return session
