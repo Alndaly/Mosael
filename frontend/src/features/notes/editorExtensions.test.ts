@@ -93,3 +93,30 @@ it("接管了 link token 就得连标题一起还回去", () => {
   editor.destroy();
   reference.destroy();
 });
+
+describe("表格单元格里的竖线", () => {
+  const roundTrip = (markdown: string) => {
+    const editor = new Editor({ extensions: noteExtensions(), content: markdown, contentType: "markdown" });
+    const out = editor.getMarkdown();
+    editor.destroy();
+    return out;
+  };
+
+  it("竖线要转义,否则那一格被读成两格", () => {
+    // 上游的序列化器把 `|` 当成永远的列分隔符,正文里出现它就当场把单元格切开。
+    const once = roundTrip("| a | b |\n| --- | --- |\n| x \\| y | 2 |");
+    expect(once).toContain("x \\| y");
+
+    const editor = new Editor({ extensions: noteExtensions(), content: once, contentType: "markdown" });
+    const cells = Array.from(editor.view.dom.querySelectorAll("tbody td"), (td) => td.textContent);
+    editor.destroy();
+    // 两列,不是三列:那一格仍然是完整的一格。
+    expect(cells).toEqual(["x | y", "2"]);
+  });
+
+  it("再存一次形状不再继续变", () => {
+    // 这才是这条最要命的地方:此前一遍丢转义、两遍真的裂成两列,反复保存会一路劣化。
+    const once = roundTrip("| a | b |\n| --- | --- |\n| x \\| y | 2 |");
+    expect(roundTrip(once).trim()).toBe(once.trim());
+  });
+});

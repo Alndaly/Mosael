@@ -4,6 +4,7 @@ import { createNoteImage } from "./NoteImage";
 import { createNoteCodeBlock } from "./NoteCodeBlock";
 export { noteImageUrl } from "./NoteImage";
 import { TableKit } from "@tiptap/extension-table";
+import { NoteTable } from "./NoteMarkdownFixes";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { Markdown } from "@tiptap/markdown";
@@ -40,5 +41,5 @@ export const NoteReference = Node.create({
 
 export function noteExtensions(readonly = false, locale = "zh-CN") {
   return [StarterKit.configure({ codeBlock: false, link: { openOnClick: readonly } }), NoteReference, createNoteImage(locale), createNoteCodeBlock(locale),
-    TableKit, TaskList, TaskItem.configure({ nested: true }), Markdown];
+    TableKit.configure({ table: false }), NoteTable, TaskList, TaskItem.configure({ nested: true }), Markdown];
 }
