@@ -853,7 +853,7 @@ def post_user_message(
     db.commit()
 
     token = _mint_service_token(db, user, session.id)
-    threading.Thread(target=_run_turn_thread, args=(session.id, prompt, token), daemon=True, name=TURN_THREAD_NAME).start()
+    _start_turn(session.id, prompt, token)
     db.refresh(message)
     return message
 
@@ -873,9 +873,24 @@ def _mint_service_token(db: Session, user: User, agent_session_id: str | None = 
     return mint_service_session(db, user.id, agent_session_id=agent_session_id)
 
 
+def _start_turn(session_id: str, prompt: str, token: str) -> None:
+    """开一轮。
+
+    **流要在起线程之前备好。** 界面拿到 POST 的回应之后才去连 `/stream`,而这一轮的流状态
+    此前是在工作线程里建的 —— 中间那个窗口里 `get_stream_state` 返回的是「没有回合在跑」,
+    SSE 当场就把连接关掉,于是那一整轮的轨迹面板是空的(思考、工具卡片一条都不出现,
+    直到回合结束才一次性补上)。窗口很窄,所以它表现为「偶尔整轮没有轨迹」。
+
+    备好流是纯内存操作,放在调用方这一侧,POST 返回时它已经在了。
+    """
+    _stream_reset(session_id)
+    threading.Thread(
+        target=_run_turn_thread, args=(session_id, prompt, token), daemon=True, name=TURN_THREAD_NAME
+    ).start()
+
+
 def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
     api_base = f"http://{settings.backend_host}:{settings.backend_port}"
-    _stream_reset(session_id)
     final_text = ""
     turn_started = time.monotonic()
     with SessionLocal() as db:
@@ -1125,7 +1140,7 @@ def _drain_queue_locked(session_id: str) -> None:
         # 排队那条也要补信封:它和直发走的是同一件事,只是晚一点跑。漏在这儿的话,
         # 「对方正忙」时收到的消息,模型就不知道它是谁发的。
         content = with_origin_envelope(content, payload)
-    threading.Thread(target=_run_turn_thread, args=(session_id, content, token), daemon=True, name=TURN_THREAD_NAME).start()
+    _start_turn(session_id, content, token)
 
 
 def reconcile_orphaned_agent_sessions(db: Session) -> int:
