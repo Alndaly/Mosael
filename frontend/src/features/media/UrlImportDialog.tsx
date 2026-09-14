@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Switch } from "@/components/ui/switch";
-import { knownBestHeight, qualityOptions } from "@/features/media/urlImportQuality";
+import { knownBestHeight, qualityHint, qualityOptions } from "@/features/media/urlImportQuality";
 import { formatTimecode } from "@/domain/timeline/geometry";
 import { cn } from "@/lib/utils";
 
@@ -55,6 +55,9 @@ export function UrlImportDialog({
     queryFn: () => listBrowserProfiles(workspace.id),
     enabled: open,
   });
+  //: 探这一次用的是哪个身份(没挑就是空)。上限提示要据此换一种说法 —— 见 qualityHint。
+  const probedProfileName =
+    (profiles.data ?? []).find((profile) => profile.id === optionalValue(profileId))?.name ?? "";
 
   React.useEffect(() => {
     if (!open) {
@@ -99,6 +102,7 @@ export function UrlImportDialog({
 
   const entries = listing?.entries ?? [];
   const bestKnown = knownBestHeight(entries);
+  const hint = qualityHint(bestKnown, probedProfileName);
   const allSelected = entries.length > 0 && entries.every((entry) => selected.has(entry.url));
   const toggleAll = () =>
     setSelected(allSelected ? new Set() : new Set(entries.map((entry) => entry.url)));
@@ -280,11 +284,13 @@ export function UrlImportDialog({
                     ))}
                   </SelectContent>
                 </Select>
-                {bestKnown > 0 && (
+                {hint && (
                   // 站点实际能给多少,要说出来 —— 不带登录态的 YouTube 现在只给到 360p,
-                  // 而用户会以为是这个功能不行。
+                  // 而用户会以为是这个功能不行。说哪一句见 qualityHint。
                   <span className="text-ui-2xs leading-[1.5] text-muted-foreground">
-                    {t("urlImportQualityKnown").replace("{n}", String(bestKnown))}
+                    {t(hint.key)
+                      .replace("{n}", String(hint.n))
+                      .replace("{name}", "name" in hint ? hint.name : "")}
                   </span>
                 )}
               </label>

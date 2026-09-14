@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { knownBestHeight, qualityOptions, QUALITY_STEPS } from "./urlImportQuality";
+import { knownBestHeight, qualityHint, qualityOptions, QUALITY_STEPS } from "./urlImportQuality";
 
 describe("画质档位", () => {
   it("知道实际画质时,不列比它更高的档 —— 选了也只会拿到同一个流", () => {
@@ -32,5 +32,26 @@ describe("画质档位", () => {
   it("一批里能确证的最高画质:有一条给出就算数,一条都没有才是未知", () => {
     expect(knownBestHeight([{ heights: [360] }, { heights: [1080, 720] }])).toBe(1080);
     expect(knownBestHeight([{ heights: [] }, {}])).toBe(0);
+  });
+});
+
+describe("上限提示说哪一句", () => {
+  it("还没挑登录身份时,劝他挑一个", () => {
+    expect(qualityHint(1080, "")).toEqual({ key: "urlImportQualityKnown", n: 1080 });
+  });
+
+  it("已经挑了就别再劝 —— 换成「这已经是那个身份看到的上限」", () => {
+    // 挑过身份的人读到「选一个登录身份再试」只会困惑:我不是选了吗。真界面上撞见的:
+    // 登录身份是 BiliBili,下面那行还在让他去选一个。
+    expect(qualityHint(1080, "BiliBili")).toEqual({
+      key: "urlImportQualityKnownSignedIn",
+      n: 1080,
+      name: "BiliBili",
+    });
+  });
+
+  it("不知道上限就什么都不说 —— 空占一行比不说更糟", () => {
+    expect(qualityHint(0, "BiliBili")).toBeNull();
+    expect(qualityHint(0, "")).toBeNull();
   });
 });
