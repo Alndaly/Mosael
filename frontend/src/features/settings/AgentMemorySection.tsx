@@ -5,13 +5,13 @@ import { toast } from "sonner";
 
 import { api, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
+import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { BulkActionBar, BulkCheckbox, BulkSelectTrigger, useBulkSelection } from "@/components/app/bulkSelection";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { SettingsBlock, SettingsEmpty, SettingsGroup } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
-import { errorText } from "@/api/errorMessage";
 
 type AgentMemory = components["schemas"]["AgentMemoryOut"];
 

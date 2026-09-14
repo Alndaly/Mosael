@@ -4,11 +4,11 @@ import { toast } from "sonner";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
+import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SettingsGroup, SettingsRow } from "@/features/settings/ui";
-import { errorText } from "@/api/errorMessage";
 
 type AiRuntimeConfig = components["schemas"]["AiRuntimeConfigOut"];
 

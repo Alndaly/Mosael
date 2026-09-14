@@ -2,11 +2,11 @@ import React from "react";
 import { Loader2, Server } from "lucide-react";
 
 import { API_BASE, DEFAULT_API_BASE, isCustomServer, setServerUrl } from "@/api/client";
+import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { errorText } from "@/api/errorMessage";
 
 /** 后端服务器入口(本地/团队)。必须先于登录:hasUsers 探测与 login 都打向 API_BASE,
  *  而 API_BASE 在模块加载时从 localStorage 解析一次——切服务器 = 写 localStorage + 整页重载

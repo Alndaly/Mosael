@@ -3,11 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookPlus } from "lucide-react";
 import { toast } from "sonner";
 import { appendNote, createNote, listNotes, type Note, type NoteSource } from "@/api/domains/notes";
+import { errorText } from "@/api/errorMessage";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useNoteStrings } from "./strings";
-import { errorText } from "@/api/errorMessage";
 
 /** 一种可选的正文形状。给了两份以上,对话框就多一排切换;只给正文的调用方什么都不用改。 */
 export type SaveToNoteVariant = { id: string; label: string; markdown: string; sources: NoteSource[] };

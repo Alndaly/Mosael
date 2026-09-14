@@ -38,6 +38,7 @@ import { useImagePreview } from "@/components/app/image-preview";
 import { centerCanvasViewport, fitCanvasViewport, visibleCanvasSize, type CanvasViewportInsets } from "@/components/app/fitCanvasViewport";
 
 import type { BoardCanvas as Canvas, BoardItem, GenerationOption } from "@/api/client";
+import { errorText } from "@/api/errorMessage";
 import { NodeComposer } from "@/features/boards/NodeComposer";
 import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
 import { usePersistentViewport } from "@/lib/usePersistentTab";
@@ -54,7 +55,6 @@ import { MarkerPin } from "@/features/markers/MarkerPin";
 import { MarkerEditorProvider } from "@/features/markers/MarkerEditorProvider";
 import { MAX_MARKERS, newMarkerId, nextMarkerName, type CanvasMarker } from "@/features/markers/markers";
 import { useMarkerShortcuts } from "@/features/markers/useMarkerShortcuts";
-import { errorText } from "@/api/errorMessage";
 
 /**
  * 创意画板的画布。

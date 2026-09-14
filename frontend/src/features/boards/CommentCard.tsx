@@ -6,12 +6,12 @@ import { Pencil, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import type { CollaborationComment, WorkspaceMember } from "@/api/client";
 import { editComment } from "@/api/domains/collaboration";
+import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { BoardCommentComposer, type CommentDraft } from "./BoardCommentComposer";
 import { CommentMembers, commentDocument, commentExtensions, COMMENT_TEXT } from "./commentDocument";
-import { errorText } from "@/api/errorMessage";
 
 export function CommentContent({ comment, members }: { comment: CollaborationComment; members: WorkspaceMember[] }) {
   const editor = useEditor({ extensions: commentExtensions(), content: commentDocument(comment), editable: false,

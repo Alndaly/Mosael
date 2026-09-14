@@ -11,9 +11,9 @@ import { RefSuggestion } from "@/components/app/refSuggestion";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
 import { listNotes, noteHref, type Note } from "@/api/domains/notes";
 import { importAsset } from "@/api/domains/assets";
+import { errorText } from "@/api/errorMessage";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { errorText } from "@/api/errorMessage";
 
 export function NoteReader({ markdown }: { markdown: string }) {
   const { locale } = usePreferences();

@@ -3,12 +3,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ViewportPortal } from "@xyflow/react";
 import { toast } from "sonner";
 import { addComment, deleteComment, listComments, listMembers } from "@/api/client";
+import { errorText } from "@/api/errorMessage";
 import { useAuth } from "@/app/auth";
 import { useI18n } from "@/app/preferences";
 import { CommentCard } from "@/features/boards/CommentCard";
 import { BoardCommentComposer, type CommentDraft } from "@/features/boards/BoardCommentComposer";
 import { AnnotationControls } from "@/features/markers/AnnotationControls";
-import { errorText } from "@/api/errorMessage";
 
 type Point = { x: number; y: number; node_id?: string };
 

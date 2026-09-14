@@ -16,6 +16,7 @@ import { api, API_BASE, getAuthToken } from "@/api/transport";
 import { usePreferences } from "@/app/preferences";
 import { docsUrl } from "@/lib/deepLink";
 import type { Scene, SceneContent } from "@/api/domains/scenes";
+import { errorText } from "@/api/errorMessage";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/layout/EmptyState";
 import {
@@ -24,7 +25,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Pick } from "./SceneControls";
-import { errorText } from "@/api/errorMessage";
 
 type Transfer = {
   id: string;

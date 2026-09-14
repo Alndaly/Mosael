@@ -3,11 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Box, Loader2, MonitorSmartphone, Plug, ArrowUpRight } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/api/transport";
+import { errorText } from "@/api/errorMessage";
 import { Button } from "@/components/ui/button";
 import { usePreferences } from "@/app/preferences";
 import { docsUrl } from "@/lib/deepLink";
 import { EmptyState } from "@/components/layout/EmptyState";
-import { errorText } from "@/api/errorMessage";
 import {
   Popover,
   PopoverContent,

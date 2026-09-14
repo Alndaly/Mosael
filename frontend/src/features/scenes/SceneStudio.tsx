@@ -55,6 +55,7 @@ import { toast } from "sonner";
 import type { Workspace } from "@/api/client";
 import { importAsset } from "@/api/domains/assets";
 import { createBoard, updateBoard, type BoardItem } from "@/api/domains/boards";
+import { errorText } from "@/api/errorMessage";
 import {
   createScene,
   deleteScene,
@@ -102,7 +103,6 @@ import {
 } from "./sceneGraph";
 import { SHOT_FPS } from "./encodeVideo";
 import { SceneViewport, type ViewportHandle } from "./SceneViewport";
-import { errorText } from "@/api/errorMessage";
 import "./scenes.css";
 
 function download(blob: Blob, name: string) {

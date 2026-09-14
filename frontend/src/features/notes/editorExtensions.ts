@@ -4,7 +4,7 @@ import { createNoteImage } from "./NoteImage";
 import { createNoteCodeBlock } from "./NoteCodeBlock";
 export { noteImageUrl } from "./NoteImage";
 import { TableKit } from "@tiptap/extension-table";
-import { NoteTable } from "./NoteMarkdownFixes";
+import { NoteTable } from "./NoteTable";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { Markdown } from "@tiptap/markdown";

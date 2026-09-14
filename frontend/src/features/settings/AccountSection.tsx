@@ -3,6 +3,7 @@ import { Camera, Check, Loader2, LogOut } from "lucide-react";
 import { toast } from "sonner";
 
 import { userAvatarUrl } from "@/api/client";
+import { errorText } from "@/api/errorMessage";
 import { useAuth } from "@/app/auth";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { SettingsBlock, SettingsField, SettingsForm, SettingsGroup } from "@/features/settings/ui";
 import { cn } from "@/lib/utils";
-import { errorText } from "@/api/errorMessage";
 
 export function AccountSection() {
   const t = useI18n();

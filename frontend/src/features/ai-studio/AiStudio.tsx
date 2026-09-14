@@ -33,6 +33,7 @@ import {
   type Workspace,
 } from "@/api/client";
 import type { components } from "@/api/generated/schema";
+import { errorText } from "@/api/errorMessage";
 import { JumpToLatest, useStickToBottom } from "@/components/agent/stickToBottom";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n, usePreferences } from "@/app/preferences";
@@ -85,7 +86,6 @@ import {
   type FrameSlots,
 } from "@/features/ai-studio/sourceFrames";
 import { cn } from "@/lib/utils";
-import { errorText } from "@/api/errorMessage";
 
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];

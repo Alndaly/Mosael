@@ -2,6 +2,7 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/transport";
 import type { Scene, SceneContent } from "@/api/domains/scenes";
+import { errorText } from "@/api/errorMessage";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,7 +11,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { errorText } from "@/api/errorMessage";
 
 export function SceneHistory({
   scene,

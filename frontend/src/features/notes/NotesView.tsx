@@ -6,6 +6,7 @@ import { api, type Workspace } from "@/api/client";
 import { ApiError } from "@/api/transport";
 import { PageLoadError } from "@/components/layout/EmptyState";
 import { createNote, getNote, listNotes, noteHref, openNote, saveNote, type Note, type NoteContent } from "@/api/domains/notes";
+import { errorText } from "@/api/errorMessage";
 import { ConfirmDialog } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +18,6 @@ import { SourceLink } from "./NoteSources";
 import { useNoteStrings } from "./strings";
 import { NoteList, type NoteListAction } from "./NoteList";
 import { mergeAppendedNote } from "./appendMerge";
-import { errorText } from "@/api/errorMessage";
 import "./notes.css";
 type NoteController = { id:string; read:()=>Note; update:(patch:Partial<NoteContent>)=>Promise<Note> };
 
@@ -90,13 +90,24 @@ export function NotesView({ workspace }: { workspace: Workspace }) {
   </div>;
 }
 
+/** 保存状态的四个取值。图标和文案都按它查表 —— 它们是同一件事的两面,不该各写一遍四分支。 */
+type NoteStatus = "saved" | "saving" | "draft" | "error";
+const STATUS_ICON = { saved: Check, saving: Loader2, draft: PenLine, error: AlertCircle } as const;
+
+function NoteStatusBadge({ status, label }: { status: NoteStatus; label: string }) {
+  const Icon = STATUS_ICON[status];
+  return <span className="note-status" role="status" data-state={status}>
+    <Icon size={12} className={status === "saving" ? "animate-mosael-spin" : undefined} aria-hidden="true" />{label}
+  </span>;
+}
+
 export function NoteDocument({ note, controller, focus, onFocus }: { note: Note; controller: React.MutableRefObject<NoteController | null>; focus: boolean; onFocus: () => void }) {
   const s = useNoteStrings(); const qc = useQueryClient();
   const storageKey = `mosael.note.draft.${note.workspace_id}.${note.id}`;
   const [draft, setDraft] = React.useState<Note>(() => { try { const cached = JSON.parse(localStorage.getItem(storageKey) || "null") as Note | null; return cached?.id === note.id && cached.workspace_id === note.workspace_id ? cached : note; } catch { return note; } });
   const latest = React.useRef(draft); latest.current = draft;
   const saved = React.useRef(JSON.stringify(note)); const busy = React.useRef(false); const mounted = React.useRef(true);
-  const [status, setStatus] = React.useState(JSON.stringify(draft) === JSON.stringify(note) ? "saved" : "draft"); const [error, setError] = React.useState("");
+  const [status, setStatus] = React.useState<NoteStatus>(JSON.stringify(draft) === JSON.stringify(note) ? "saved" : "draft"); const [error, setError] = React.useState("");
   const [moreOpen, setMoreOpen] = React.useState(false);
   const [mode, setMode] = React.useState("edit"); const [properties, setProperties] = React.useState(false);
   const [history, setHistory] = React.useState(false);
@@ -186,7 +197,7 @@ export function NoteDocument({ note, controller, focus, onFocus }: { note: Note;
     } catch (e) { toast.error(errorText(e)); setDeleting(false); }
   }
   const [toolbarTarget, setToolbarTarget] = React.useState<HTMLDivElement | null>(null);
-  return <><main className="note-document"><header className="note-document-header"><button className="note-icon" aria-label={focus ? s.exitFocus : s.focus} title={focus ? s.exitFocus : s.focus} onClick={onFocus}>{focus ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}</button><span className="note-status" role="status" data-state={status}>{status === "saving" ? <Loader2 size={12} className="animate-mosael-spin" aria-hidden="true"/> : status === "error" ? <AlertCircle size={12} aria-hidden="true"/> : status === "draft" ? <PenLine size={12} aria-hidden="true"/> : <Check size={12} aria-hidden="true"/>}{status === "saving" ? s.saving : status === "error" ? s.error : status === "draft" ? s.draft : s.saved}</span>
+  return <><main className="note-document"><header className="note-document-header"><button className="note-icon" aria-label={focus ? s.exitFocus : s.focus} title={focus ? s.exitFocus : s.focus} onClick={onFocus}>{focus ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}</button><NoteStatusBadge status={status} label={s[status]} />
       <div className="note-header-format" ref={setToolbarTarget} />
       <div className="note-header-actions">{(["edit", "read", "raw"] as const).map((m, i) => <button key={m} className="note-mode" aria-pressed={mode === m} onClick={() => setMode(m)}>{[s.write, s.preview, s.raw][i]}</button>)}
       <button className="note-icon" aria-label={s.favorite} aria-pressed={draft.favorite} onClick={() => change({favorite: !draft.favorite})}><Star size={15} fill={draft.favorite ? "currentColor" : "none"} /></button>

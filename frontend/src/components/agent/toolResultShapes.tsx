@@ -3,10 +3,10 @@ import React from "react";
 import { Maximize2, Play } from "lucide-react";
 
 import { assetThumbnailUrl } from "@/api/client";
+import { errorText } from "@/api/errorMessage";
 import { AssetPreviewModalById } from "@/features/media/AssetPreviewModalById";
 import { gotoJob, gotoRecord } from "@/lib/deepLink";
 import { cn } from "@/lib/utils";
-import { errorText } from "@/api/errorMessage";
 
 /**
  * Renders a tool result as something you can read, falling back to JSON only when nothing
