@@ -155,18 +155,24 @@
 .note-image-link-row input { font-family:var(--font-mono); }
 .note-image-alt { display:flex; align-items:center; gap:10px; margin:5px 0 0 24px; color:var(--muted-foreground); white-space:nowrap; }
 .note-image-unavailable { padding:32px 16px; background:var(--workspace-subtle); border-radius:8px; color:var(--muted-foreground); text-align:center; cursor:pointer; }
-.note-code-block { margin:22px 0; min-width:0; overflow:hidden; border-radius:10px; background:color-mix(in srgb,var(--foreground) 3%,var(--background)); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--foreground) 5%,transparent); }
-.note-code-header { display:flex; min-height:40px; align-items:center; gap:8px; padding:5px 10px 5px 14px; color:var(--muted-foreground); font-family:var(--font-sans); font-size:var(--text-ui-xs); line-height:1.4; }
-/* 语言选择器用的是仓库自己的 Select,底色和边框由 FIELD_TRIGGER_CLASS 给 —— 这里只把它收窄、
-   压矮到能塞进这条 40px 的头里(默认是整行宽、40px 高的表单控件)。 */
-.note-code-language { width:auto; min-width:0; max-width:50%; height:28px; padding:0 8px; gap:6px; font-size:var(--text-ui-xs); color:var(--muted-foreground); cursor:pointer; }
-.note-code-language:hover { color:var(--foreground); }
+/* 一块代码只有**一条左边线**:语言、代码、以及右边那颗复制按钮都对着它排。
+   此前头部的左内边距是 14px、代码是 20px,而语言控件自己还有 8px —— 于是「Shell」落在 22px、
+   `echo a` 落在 20px,差这 2px 就足以看出来没对齐。收成一个量,三处都从它算。 */
+.note-code-block { --code-inset:16px; margin:22px 0; min-width:0; overflow:hidden; border-radius:10px; background:color-mix(in srgb,var(--foreground) 3%,var(--background)); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--foreground) 4%,transparent); }
+/* 左右都减掉控件自己的 6px 内边距:文字和图标的**光学边缘**才落在那条线上,而不是它们的盒子边缘。 */
+.note-code-header { display:flex; min-height:32px; align-items:center; gap:4px; padding:6px calc(var(--code-inset) - 6px) 0; color:var(--muted-foreground); font-family:var(--font-sans); font-size:var(--text-ui-xs); line-height:1.4; }
+/* 代码块里唯一该抢眼的是代码。语言选择器仍是仓库自己的 Select(展开、键盘、焦点都跟着它走),
+   但边框和底色摘掉 —— 带框的它读起来是"一个表单输入框掉进了代码块里"。悬停才浮起来,
+   而边框留着 1px 透明的,免得浮起来时整行跳一下。 */
+.note-code-language { width:auto; min-width:0; max-width:50%; height:26px; padding:0 6px; gap:4px; border-color:transparent; background:transparent; font-size:var(--text-ui-xs); color:var(--muted-foreground); cursor:pointer; }
+.note-code-language:hover { background:color-mix(in srgb,var(--foreground) 6%,transparent); color:var(--foreground); }
+.note-code-language[data-state=open] { background:color-mix(in srgb,var(--foreground) 6%,transparent); color:var(--foreground); }
 .note-code-status { margin-left:auto; font-size:var(--text-ui-2xs); text-align:right; }
 .note-node-button { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; width:28px; height:28px; border:0; border-radius:6px; padding:0; color:var(--muted-foreground); background:transparent; }
 .note-node-button svg { width:15px; height:15px; }
 .note-node-button:hover { background:var(--secondary); color:var(--foreground); }
 .note-node-button:focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
-.note-prose .note-code-block pre { margin:0; padding:4px 20px 18px; border-radius:0; background:transparent; overflow-x:auto; white-space:pre; overflow-wrap:normal; tab-size:2; font-family:var(--font-mono); font-size:var(--text-ui-sm); line-height:1.75; }
+.note-prose .note-code-block pre { margin:0; padding:4px var(--code-inset) 14px; border-radius:0; background:transparent; overflow-x:auto; white-space:pre; overflow-wrap:normal; tab-size:2; font-family:var(--font-mono); font-size:var(--text-ui-sm); line-height:1.75; }
 .note-prose .note-code-block code { padding:0; font:inherit; background:transparent; }
 .note-code-token { color:var(--note-code-light,inherit); }
 .dark .note-code-token { color:var(--note-code-dark,inherit); }
