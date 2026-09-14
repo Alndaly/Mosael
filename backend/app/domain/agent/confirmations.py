@@ -79,7 +79,7 @@ def request_confirmation(
         workspace_id=workspace_id,
         tool=tool,
         permission="external" if external else definition["permission"],
-        summary=_summarize(tool, payload, external),
+        summary=_summarize(tool, payload, external, subtitle_cues=_subtitle_cues(db, tool, payload)),
         payload=payload,
         requested_by=requested_by,
         session_id=session_id,
@@ -410,7 +410,26 @@ def _external_warning(external: set[str] | None) -> str:
     return f"  ⚠️ 含{'、'.join(labels)}节点(后果在本应用之外,撤不回)"
 
 
-def _summarize(tool: str, payload: dict[str, Any], external: set[str] | None = None) -> str:
+def _subtitle_cues(db: Session, tool: str, payload: dict[str, Any]) -> int | None:
+    """整条字幕轨到底有多少条 —— **用执行时的那一个函数去数**。
+
+    卡上说的必须就是待会儿真要做的:另写一遍「怎么算整条轨」的话,两份实现迟早分叉,
+    而分叉了没有任何地方会报错 —— 用户看到的条数和真正配的条数不一样,却只有账单知道。
+
+    只在 clip_ids 留空(= 整条轨)时需要;点名了条目的话条数本来就在 payload 里。
+    数不出来就返回 None,卡照旧退回不带条数的说法 —— 为了一个数字让确认卡开不出来是本末倒置。
+    """
+    if tool != "dub_subtitles" or (payload.get("clip_ids") or []):
+        return None
+    try:
+        from app.domain.voices.subtitle_dub import subtitle_clip_ids
+
+        return len(subtitle_clip_ids(db, str(payload.get("sequence_id") or ""), str(payload.get("track_id") or "")))
+    except Exception:  # noqa: BLE001 — 数不出来不该挡住确认卡
+        return None
+
+
+def _summarize(tool: str, payload: dict[str, Any], external: set[str] | None = None, *, subtitle_cues: int | None = None) -> str:
     if tool == "edit_timeline":
         kinds = [operation.get("kind", "?") for operation in payload.get("operations", [])]
         return f"{len(kinds)} 个时间线操作: {', '.join(kinds[:6])}{'…' if len(kinds) > 6 else ''}"
@@ -418,8 +437,16 @@ def _summarize(tool: str, payload: dict[str, Any], external: set[str] | None = N
         return "导出时间线为 mp4"
     if tool == "dub_subtitles":
         count = len(payload.get("clip_ids") or [])
-        # 留空 = 整条字幕轨。确认卡上不能写「0 条」—— 用户看到 0 会以为什么都不会发生。
-        scope = f"{count} 条字幕" if count else "整条字幕轨"
+        # **这里有两个不同的零。** `len(clip_ids) == 0` 的意思是「没点名 = 整条轨」,不是
+        # 「零条字幕」—— 直接写成「0 条」会让人以为什么都不会发生,所以此前退回了「整条字幕轨」。
+        # 但那一退把**量级**也丢了:这是一次花钱的动作(卡上挂着「AI 成本」),而整条轨可能是
+        # 3 条也可能是 300 条。真去数一遍,零就是真的零,那时写出来反而是对的。
+        if count:
+            scope = f"{count} 条字幕"
+        elif subtitle_cues is None:
+            scope = "整条字幕轨"
+        else:
+            scope = f"整条字幕轨({subtitle_cues} 条字幕)"
         fit = ",并变速压回原段落长度" if payload.get("match_duration", True) else ""
         return f"给{scope}配音{fit}(新开一条配音轨,原声不动)"
     if tool == "convert_video_to_gif":
